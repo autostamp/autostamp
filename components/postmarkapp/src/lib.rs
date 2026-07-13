@@ -44,10 +44,15 @@ pub(crate) enum FieldLocation {
     Body,
 }
 
-/// A single operation parameter: the snake-case key it carries in the params JSON and where
-/// it belongs in the request.
+/// A single operation parameter. `snake` keys the field in the internal params JSON (and, for a
+/// path field, matches the `{snake}` placeholder in the path template); `wire` is the verbatim name
+/// the field takes on the HTTP wire (query key, header name, or body property). The two differ
+/// whenever the source name isn't already snake_case (e.g. `dryRun` → snake `dry_run`, wire
+/// `dryRun`), and let distinct inputs that share a snake key (`DateCreated`, `DateCreated<`) still
+/// travel under their true names.
 pub(crate) struct FieldSpec {
     pub(crate) snake: &'static str,
+    pub(crate) wire: &'static str,
     pub(crate) location: FieldLocation,
 }
 
@@ -71,6 +76,16 @@ pub(crate) struct AuthApply {
     pub(crate) kind: AuthKind,
 }
 
+/// The failure modes of [`dispatch`], kept structured so each generated operation can map them
+/// onto its own typed error: an `Http` failure carries the response status and body (routed to
+/// the matching error-variant case), while a `Transport` failure carries a message for the
+/// catch-all case (a secret lookup, connection, or decode failure that never produced an HTTP
+/// status).
+pub(crate) enum DispatchError {
+    Http { status: u16, body: String },
+    Transport(String),
+}
+
 /// A single API operation: HTTP method, path template (with `{snake}` placeholders), the
 /// parameter fields, and the security schemes to apply.
 pub(crate) struct OpSpec {
@@ -81,8 +96,9 @@ pub(crate) struct OpSpec {
 }
 
 /// Execute `op` with the supplied `params` (a JSON object keyed by snake-case field names)
-/// and return the response body as a string, or an error message.
-pub(crate) fn dispatch(op: &OpSpec, params: Value) -> Result<String, String> {
+/// and return the raw 2xx response body, or a structured [`DispatchError`] the caller maps
+/// onto the operation's typed error.
+pub(crate) fn dispatch(op: &OpSpec, params: Value) -> Result<String, DispatchError> {
     let obj = match &params {
         Value::Object(map) => Some(map),
         _ => None,
@@ -105,10 +121,10 @@ pub(crate) fn dispatch(op: &OpSpec, params: Value) -> Result<String, String> {
                 let placeholder = format!("{{{}}}", field.snake);
                 path = path.replace(&placeholder, &percent_encode(&scalar(value)));
             }
-            FieldLocation::Query => query.push((field.snake.to_string(), scalar(value))),
-            FieldLocation::Header => headers.push((field.snake.to_string(), scalar(value))),
+            FieldLocation::Query => query.push((field.wire.to_string(), scalar(value))),
+            FieldLocation::Header => headers.push((field.wire.to_string(), scalar(value))),
             FieldLocation::Body => {
-                body.insert(field.snake.to_string(), value.clone());
+                body.insert(field.wire.to_string(), value.clone());
             }
         }
     }
@@ -116,7 +132,7 @@ pub(crate) fn dispatch(op: &OpSpec, params: Value) -> Result<String, String> {
     // Apply each resolved security scheme, sourcing its value from wasmcloud:secrets.
     let mut cookies: Vec<String> = Vec::new();
     for apply in op.auth {
-        let secret = fetch_secret(apply.secret_key)?;
+        let secret = fetch_secret(apply.secret_key).map_err(DispatchError::Transport)?;
         match &apply.kind {
             AuthKind::Bearer => headers.push(("authorization".into(), format!("Bearer {secret}"))),
             AuthKind::Basic => {
@@ -177,17 +193,18 @@ fn fetch_secret(key: &str) -> Result<String, String> {
 }
 
 /// Build and send the outgoing request with `wstd`, returning the response body on a 2xx
-/// status. The generated guest exports are synchronous, so the async `wstd` client is driven
-/// to completion on a local reactor via `wstd::runtime::block_on`.
+/// status and a structured [`DispatchError`] otherwise. The generated guest exports are
+/// synchronous, so the async `wstd` client is driven to completion on a local reactor via
+/// `wstd::runtime::block_on`.
 fn perform(
     method: &str,
     path_with_query: &str,
     headers: &[(String, String)],
     body: &[u8],
-) -> Result<String, String> {
+) -> Result<String, DispatchError> {
     let url = join_url(crate::BASE_URL, path_with_query);
     let method = Method::from_bytes(method.as_bytes())
-        .map_err(|err| format!("invalid HTTP method `{method}`: {err}"))?;
+        .map_err(|err| DispatchError::Transport(format!("invalid HTTP method `{method}`: {err}")))?;
 
     let mut builder = Request::builder().method(method).uri(url);
     for (name, value) in headers {
@@ -199,27 +216,29 @@ fn perform(
         } else {
             Body::from(body.to_vec())
         })
-        .map_err(|err| format!("failed to build request: {err}"))?;
+        .map_err(|err| DispatchError::Transport(format!("failed to build request: {err}")))?;
 
     wstd::runtime::block_on(async move {
         let client = Client::new();
         let response = client
             .send(request)
             .await
-            .map_err(|err| format!("request failed: {err:#}"))?;
+            .map_err(|err| DispatchError::Transport(format!("request failed: {err:#}")))?;
 
         let status = response.status().as_u16();
         let mut response_body = response.into_body();
-        let bytes = response_body
-            .contents()
-            .await
-            .map_err(|err| format!("failed to read response body: {err:#}"))?;
+        let bytes = response_body.contents().await.map_err(|err| {
+            DispatchError::Transport(format!("failed to read response body: {err:#}"))
+        })?;
         let body_text = String::from_utf8_lossy(bytes).into_owned();
 
         if (200..300).contains(&status) {
             Ok(body_text)
         } else {
-            Err(format!("HTTP {status}: {body_text}"))
+            Err(DispatchError::Http {
+                status,
+                body: body_text,
+            })
         }
     })
 }
@@ -288,9 +307,9 @@ const OP_DOMAINS_API_LIST_DOMAINS: OpSpec = OpSpec {
     method: "GET",
     path_template: "/domains",
     fields: &[
-        FieldSpec { snake: "x_postmark_account_token", location: FieldLocation::Header },
-        FieldSpec { snake: "count", location: FieldLocation::Query },
-        FieldSpec { snake: "offset", location: FieldLocation::Query },
+        FieldSpec { snake: "x_postmark_account_token", wire: "X-Postmark-Account-Token", location: FieldLocation::Header },
+        FieldSpec { snake: "count", wire: "count", location: FieldLocation::Query },
+        FieldSpec { snake: "offset", wire: "offset", location: FieldLocation::Query },
     ],
     auth: &[
     ],
@@ -300,9 +319,9 @@ const OP_DOMAINS_API_CREATE_DOMAIN: OpSpec = OpSpec {
     method: "POST",
     path_template: "/domains",
     fields: &[
-        FieldSpec { snake: "x_postmark_account_token", location: FieldLocation::Header },
-        FieldSpec { snake: "name", location: FieldLocation::Body },
-        FieldSpec { snake: "return_path_domain", location: FieldLocation::Body },
+        FieldSpec { snake: "x_postmark_account_token", wire: "X-Postmark-Account-Token", location: FieldLocation::Header },
+        FieldSpec { snake: "name", wire: "Name", location: FieldLocation::Body },
+        FieldSpec { snake: "return_path_domain", wire: "ReturnPathDomain", location: FieldLocation::Body },
     ],
     auth: &[
     ],
@@ -312,8 +331,8 @@ const OP_DOMAINS_API_GET_DOMAIN: OpSpec = OpSpec {
     method: "GET",
     path_template: "/domains/{domainid}",
     fields: &[
-        FieldSpec { snake: "x_postmark_account_token", location: FieldLocation::Header },
-        FieldSpec { snake: "domainid", location: FieldLocation::Path },
+        FieldSpec { snake: "x_postmark_account_token", wire: "X-Postmark-Account-Token", location: FieldLocation::Header },
+        FieldSpec { snake: "domainid", wire: "domainid", location: FieldLocation::Path },
     ],
     auth: &[
     ],
@@ -323,9 +342,9 @@ const OP_DOMAINS_API_EDIT_DOMAIN: OpSpec = OpSpec {
     method: "PUT",
     path_template: "/domains/{domainid}",
     fields: &[
-        FieldSpec { snake: "x_postmark_account_token", location: FieldLocation::Header },
-        FieldSpec { snake: "domainid", location: FieldLocation::Path },
-        FieldSpec { snake: "return_path_domain", location: FieldLocation::Body },
+        FieldSpec { snake: "x_postmark_account_token", wire: "X-Postmark-Account-Token", location: FieldLocation::Header },
+        FieldSpec { snake: "domainid", wire: "domainid", location: FieldLocation::Path },
+        FieldSpec { snake: "return_path_domain", wire: "ReturnPathDomain", location: FieldLocation::Body },
     ],
     auth: &[
     ],
@@ -335,8 +354,8 @@ const OP_DOMAINS_API_DELETE_DOMAIN: OpSpec = OpSpec {
     method: "DELETE",
     path_template: "/domains/{domainid}",
     fields: &[
-        FieldSpec { snake: "x_postmark_account_token", location: FieldLocation::Header },
-        FieldSpec { snake: "domainid", location: FieldLocation::Path },
+        FieldSpec { snake: "x_postmark_account_token", wire: "X-Postmark-Account-Token", location: FieldLocation::Header },
+        FieldSpec { snake: "domainid", wire: "domainid", location: FieldLocation::Path },
     ],
     auth: &[
     ],
@@ -346,8 +365,8 @@ const OP_DOMAINS_API_ROTATE_DKIM_KEY_FOR_DOMAIN: OpSpec = OpSpec {
     method: "POST",
     path_template: "/domains/{domainid}/rotatedkim",
     fields: &[
-        FieldSpec { snake: "x_postmark_account_token", location: FieldLocation::Header },
-        FieldSpec { snake: "domainid", location: FieldLocation::Path },
+        FieldSpec { snake: "x_postmark_account_token", wire: "X-Postmark-Account-Token", location: FieldLocation::Header },
+        FieldSpec { snake: "domainid", wire: "domainid", location: FieldLocation::Path },
     ],
     auth: &[
     ],
@@ -357,8 +376,8 @@ const OP_DOMAINS_API_REQUEST_DKIM_VERIFICATION_FOR_DOMAIN: OpSpec = OpSpec {
     method: "PUT",
     path_template: "/domains/{domainid}/verifydkim",
     fields: &[
-        FieldSpec { snake: "x_postmark_account_token", location: FieldLocation::Header },
-        FieldSpec { snake: "domainid", location: FieldLocation::Path },
+        FieldSpec { snake: "x_postmark_account_token", wire: "X-Postmark-Account-Token", location: FieldLocation::Header },
+        FieldSpec { snake: "domainid", wire: "domainid", location: FieldLocation::Path },
     ],
     auth: &[
     ],
@@ -368,8 +387,8 @@ const OP_DOMAINS_API_REQUEST_RETURN_PATH_VERIFICATION_FOR_DOMAIN: OpSpec = OpSpe
     method: "PUT",
     path_template: "/domains/{domainid}/verifyreturnpath",
     fields: &[
-        FieldSpec { snake: "x_postmark_account_token", location: FieldLocation::Header },
-        FieldSpec { snake: "domainid", location: FieldLocation::Path },
+        FieldSpec { snake: "x_postmark_account_token", wire: "X-Postmark-Account-Token", location: FieldLocation::Header },
+        FieldSpec { snake: "domainid", wire: "domainid", location: FieldLocation::Path },
     ],
     auth: &[
     ],
@@ -379,12 +398,85 @@ const OP_DOMAINS_API_REQUEST_SPF_VERIFICATION_FOR_DOMAIN: OpSpec = OpSpec {
     method: "POST",
     path_template: "/domains/{domainid}/verifyspf",
     fields: &[
-        FieldSpec { snake: "x_postmark_account_token", location: FieldLocation::Header },
-        FieldSpec { snake: "domainid", location: FieldLocation::Path },
+        FieldSpec { snake: "x_postmark_account_token", wire: "X-Postmark-Account-Token", location: FieldLocation::Header },
+        FieldSpec { snake: "domainid", wire: "domainid", location: FieldLocation::Path },
     ],
     auth: &[
     ],
 };
+
+fn iface_domains_api__domain_listing_results__to_json(p: &iface_domains_api::DomainListingResults) -> Value {
+    let mut m = Map::new();
+    m.insert("Domains".into(), match (&p.domains) { Some(v) => Value::Array((v).iter().map(|v| iface_domains_api__domain_information__to_json(v)).collect()), None => Value::Null });
+    m.insert("TotalCount".into(), match (&p.total_count) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_domains_api__domain_information__to_json(p: &iface_domains_api::DomainInformation) -> Value {
+    let mut m = Map::new();
+    m.insert("DKIMVerified".into(), match (&p.dkim_verified) { Some(v) => Value::Bool(*(v)), None => Value::Null });
+    m.insert("ID".into(), match (&p.id) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("Name".into(), match (&p.name) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("ReturnPathDomainVerified".into(), match (&p.return_path_domain_verified) { Some(v) => Value::Bool(*(v)), None => Value::Null });
+    m.insert("SPFVerified".into(), match (&p.spf_verified) { Some(v) => Value::Bool(*(v)), None => Value::Null });
+    m.insert("WeakDKIM".into(), match (&p.weak_dkim) { Some(v) => Value::Bool(*(v)), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_domains_api__domain_extended_information__to_json(p: &iface_domains_api::DomainExtendedInformation) -> Value {
+    let mut m = Map::new();
+    m.insert("DKIMHost".into(), match (&p.dkim_host) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("DKIMPendingHost".into(), match (&p.dkim_pending_host) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("DKIMPendingTextValue".into(), match (&p.dkim_pending_text_value) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("DKIMRevokedHost".into(), match (&p.dkim_revoked_host) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("DKIMRevokedTextValue".into(), match (&p.dkim_revoked_text_value) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("DKIMTestValue".into(), match (&p.dkim_test_value) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("DKIMUpdateStatus".into(), match (&p.dkim_update_status) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("DKIMVerified".into(), match (&p.dkim_verified) { Some(v) => Value::Bool(*(v)), None => Value::Null });
+    m.insert("ID".into(), match (&p.id) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("Name".into(), match (&p.name) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("ReturnPathDomain".into(), match (&p.return_path_domain) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("ReturnPathDomainCNAMEValue".into(), match (&p.return_path_domain_cname_value) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("ReturnPathDomainVerified".into(), match (&p.return_path_domain_verified) { Some(v) => Value::Bool(*(v)), None => Value::Null });
+    m.insert("SPFHost".into(), match (&p.spf_host) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("SPFTextValue".into(), match (&p.spf_text_value) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("SPFVerified".into(), match (&p.spf_verified) { Some(v) => Value::Bool(*(v)), None => Value::Null });
+    m.insert("SafeToRemoveRevokedKeyFromDNS".into(), match (&p.safe_to_remove_revoked_key_from_dns) { Some(v) => Value::Bool(*(v)), None => Value::Null });
+    m.insert("WeakDKIM".into(), match (&p.weak_dkim) { Some(v) => Value::Bool(*(v)), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_domains_api__standard_postmark_response__to_json(p: &iface_domains_api::StandardPostmarkResponse) -> Value {
+    let mut m = Map::new();
+    m.insert("ErrorCode".into(), match (&p.error_code) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("Message".into(), match (&p.message) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_domains_api__dkim_rotation_response__to_json(p: &iface_domains_api::DkimRotationResponse) -> Value {
+    let mut m = Map::new();
+    m.insert("DKIMHost".into(), match (&p.dkim_host) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("DKIMPendingHost".into(), match (&p.dkim_pending_host) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("DKIMPendingTextValue".into(), match (&p.dkim_pending_text_value) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("DKIMRevokedHost".into(), match (&p.dkim_revoked_host) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("DKIMRevokedTextValue".into(), match (&p.dkim_revoked_text_value) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("DKIMTestValue".into(), match (&p.dkim_test_value) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("DKIMUpdateStatus".into(), match (&p.dkim_update_status) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("DKIMVerified".into(), match (&p.dkim_verified) { Some(v) => Value::Bool(*(v)), None => Value::Null });
+    m.insert("ID".into(), match (&p.id) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("Name".into(), match (&p.name) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("SafeToRemoveRevokedKeyFromDNS".into(), match (&p.safe_to_remove_revoked_key_from_dns) { Some(v) => Value::Bool(*(v)), None => Value::Null });
+    m.insert("WeakDKIM".into(), match (&p.weak_dkim) { Some(v) => Value::Bool(*(v)), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_domains_api__domain_spf_result__to_json(p: &iface_domains_api::DomainSpfResult) -> Value {
+    let mut m = Map::new();
+    m.insert("SPFHost".into(), match (&p.spf_host) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("SPFTextValue".into(), match (&p.spf_text_value) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("SPFVerified".into(), match (&p.spf_verified) { Some(v) => Value::Bool(*(v)), None => Value::Null });
+    Value::Object(m)
+}
 
 fn iface_domains_api__list_domains_params__to_json(p: &iface_domains_api::ListDomainsParams) -> Value {
     let mut m = Map::new();
@@ -452,42 +544,346 @@ fn iface_domains_api__request_spf_verification_for_domain_params__to_json(p: &if
     Value::Object(m)
 }
 
+fn iface_domains_api__domain_listing_results__from_json(v: &Value) -> Option<iface_domains_api::DomainListingResults> {
+    let m = v.as_object()?;
+    Some(iface_domains_api::DomainListingResults {
+        domains: m.get("Domains").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| iface_domains_api__domain_information__from_json(x)).collect())),
+        total_count: m.get("TotalCount").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+    })
+}
+
+fn iface_domains_api__domain_information__from_json(v: &Value) -> Option<iface_domains_api::DomainInformation> {
+    let m = v.as_object()?;
+    Some(iface_domains_api::DomainInformation {
+        dkim_verified: m.get("DKIMVerified").filter(|v| !v.is_null()).and_then(|v| (v).as_bool()),
+        id: m.get("ID").filter(|v| !v.is_null()).and_then(|v| (v).as_i64()),
+        name: m.get("Name").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        return_path_domain_verified: m.get("ReturnPathDomainVerified").filter(|v| !v.is_null()).and_then(|v| (v).as_bool()),
+        spf_verified: m.get("SPFVerified").filter(|v| !v.is_null()).and_then(|v| (v).as_bool()),
+        weak_dkim: m.get("WeakDKIM").filter(|v| !v.is_null()).and_then(|v| (v).as_bool()),
+    })
+}
+
+fn iface_domains_api__domain_extended_information__from_json(v: &Value) -> Option<iface_domains_api::DomainExtendedInformation> {
+    let m = v.as_object()?;
+    Some(iface_domains_api::DomainExtendedInformation {
+        dkim_host: m.get("DKIMHost").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        dkim_pending_host: m.get("DKIMPendingHost").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        dkim_pending_text_value: m.get("DKIMPendingTextValue").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        dkim_revoked_host: m.get("DKIMRevokedHost").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        dkim_revoked_text_value: m.get("DKIMRevokedTextValue").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        dkim_test_value: m.get("DKIMTestValue").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        dkim_update_status: m.get("DKIMUpdateStatus").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        dkim_verified: m.get("DKIMVerified").filter(|v| !v.is_null()).and_then(|v| (v).as_bool()),
+        id: m.get("ID").filter(|v| !v.is_null()).and_then(|v| (v).as_i64()),
+        name: m.get("Name").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        return_path_domain: m.get("ReturnPathDomain").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        return_path_domain_cname_value: m.get("ReturnPathDomainCNAMEValue").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        return_path_domain_verified: m.get("ReturnPathDomainVerified").filter(|v| !v.is_null()).and_then(|v| (v).as_bool()),
+        spf_host: m.get("SPFHost").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        spf_text_value: m.get("SPFTextValue").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        spf_verified: m.get("SPFVerified").filter(|v| !v.is_null()).and_then(|v| (v).as_bool()),
+        safe_to_remove_revoked_key_from_dns: m.get("SafeToRemoveRevokedKeyFromDNS").filter(|v| !v.is_null()).and_then(|v| (v).as_bool()),
+        weak_dkim: m.get("WeakDKIM").filter(|v| !v.is_null()).and_then(|v| (v).as_bool()),
+    })
+}
+
+fn iface_domains_api__standard_postmark_response__from_json(v: &Value) -> Option<iface_domains_api::StandardPostmarkResponse> {
+    let m = v.as_object()?;
+    Some(iface_domains_api::StandardPostmarkResponse {
+        error_code: m.get("ErrorCode").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        message: m.get("Message").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    })
+}
+
+fn iface_domains_api__dkim_rotation_response__from_json(v: &Value) -> Option<iface_domains_api::DkimRotationResponse> {
+    let m = v.as_object()?;
+    Some(iface_domains_api::DkimRotationResponse {
+        dkim_host: m.get("DKIMHost").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        dkim_pending_host: m.get("DKIMPendingHost").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        dkim_pending_text_value: m.get("DKIMPendingTextValue").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        dkim_revoked_host: m.get("DKIMRevokedHost").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        dkim_revoked_text_value: m.get("DKIMRevokedTextValue").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        dkim_test_value: m.get("DKIMTestValue").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        dkim_update_status: m.get("DKIMUpdateStatus").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        dkim_verified: m.get("DKIMVerified").filter(|v| !v.is_null()).and_then(|v| (v).as_bool()),
+        id: m.get("ID").filter(|v| !v.is_null()).and_then(|v| (v).as_i64()),
+        name: m.get("Name").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        safe_to_remove_revoked_key_from_dns: m.get("SafeToRemoveRevokedKeyFromDNS").filter(|v| !v.is_null()).and_then(|v| (v).as_bool()),
+        weak_dkim: m.get("WeakDKIM").filter(|v| !v.is_null()).and_then(|v| (v).as_bool()),
+    })
+}
+
+fn iface_domains_api__domain_spf_result__from_json(v: &Value) -> Option<iface_domains_api::DomainSpfResult> {
+    let m = v.as_object()?;
+    Some(iface_domains_api::DomainSpfResult {
+        spf_host: m.get("SPFHost").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        spf_text_value: m.get("SPFTextValue").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        spf_verified: m.get("SPFVerified").filter(|v| !v.is_null()).and_then(|v| (v).as_bool()),
+    })
+}
+
+fn iface_domains_api__list_domains__ok(body: String) -> Result<iface_domains_api::DomainListingResults, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match iface_domains_api__domain_listing_results__from_json(&v) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_domains_api__list_domains__err(e: crate::runtime::DispatchError) -> iface_domains_api::ListDomainsError {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => match status {
+            422u16 => iface_domains_api::ListDomainsError::UnprocessableEntity(body),
+            500u16 => iface_domains_api::ListDomainsError::InternalServerError(body),
+            _ => iface_domains_api::ListDomainsError::Other(body),
+        },
+        crate::runtime::DispatchError::Transport(m) => iface_domains_api::ListDomainsError::Other(m),
+    }
+}
+
+fn iface_domains_api__create_domain__ok(body: String) -> Result<iface_domains_api::DomainExtendedInformation, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match iface_domains_api__domain_extended_information__from_json(&v) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_domains_api__create_domain__err(e: crate::runtime::DispatchError) -> iface_domains_api::CreateDomainError {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => match status {
+            422u16 => iface_domains_api::CreateDomainError::UnprocessableEntity(body),
+            500u16 => iface_domains_api::CreateDomainError::InternalServerError(body),
+            _ => iface_domains_api::CreateDomainError::Other(body),
+        },
+        crate::runtime::DispatchError::Transport(m) => iface_domains_api::CreateDomainError::Other(m),
+    }
+}
+
+fn iface_domains_api__get_domain__ok(body: String) -> Result<iface_domains_api::DomainExtendedInformation, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match iface_domains_api__domain_extended_information__from_json(&v) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_domains_api__get_domain__err(e: crate::runtime::DispatchError) -> iface_domains_api::GetDomainError {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => match status {
+            422u16 => iface_domains_api::GetDomainError::UnprocessableEntity(body),
+            500u16 => iface_domains_api::GetDomainError::InternalServerError(body),
+            _ => iface_domains_api::GetDomainError::Other(body),
+        },
+        crate::runtime::DispatchError::Transport(m) => iface_domains_api::GetDomainError::Other(m),
+    }
+}
+
+fn iface_domains_api__edit_domain__ok(body: String) -> Result<iface_domains_api::DomainExtendedInformation, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match iface_domains_api__domain_extended_information__from_json(&v) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_domains_api__edit_domain__err(e: crate::runtime::DispatchError) -> iface_domains_api::EditDomainError {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => match status {
+            422u16 => iface_domains_api::EditDomainError::UnprocessableEntity(body),
+            500u16 => iface_domains_api::EditDomainError::InternalServerError(body),
+            _ => iface_domains_api::EditDomainError::Other(body),
+        },
+        crate::runtime::DispatchError::Transport(m) => iface_domains_api::EditDomainError::Other(m),
+    }
+}
+
+fn iface_domains_api__delete_domain__ok(body: String) -> Result<iface_domains_api::StandardPostmarkResponse, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match iface_domains_api__standard_postmark_response__from_json(&v) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_domains_api__delete_domain__err(e: crate::runtime::DispatchError) -> iface_domains_api::DeleteDomainError {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => match status {
+            422u16 => iface_domains_api::DeleteDomainError::UnprocessableEntity(body),
+            500u16 => iface_domains_api::DeleteDomainError::InternalServerError(body),
+            _ => iface_domains_api::DeleteDomainError::Other(body),
+        },
+        crate::runtime::DispatchError::Transport(m) => iface_domains_api::DeleteDomainError::Other(m),
+    }
+}
+
+fn iface_domains_api__rotate_dkim_key_for_domain__ok(body: String) -> Result<iface_domains_api::DkimRotationResponse, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match iface_domains_api__dkim_rotation_response__from_json(&v) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_domains_api__rotate_dkim_key_for_domain__err(e: crate::runtime::DispatchError) -> iface_domains_api::RotateDkimKeyForDomainError {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => match status {
+            422u16 => iface_domains_api::RotateDkimKeyForDomainError::UnprocessableEntity(body),
+            500u16 => iface_domains_api::RotateDkimKeyForDomainError::InternalServerError(body),
+            _ => iface_domains_api::RotateDkimKeyForDomainError::Other(body),
+        },
+        crate::runtime::DispatchError::Transport(m) => iface_domains_api::RotateDkimKeyForDomainError::Other(m),
+    }
+}
+
+fn iface_domains_api__request_dkim_verification_for_domain__ok(body: String) -> Result<iface_domains_api::DomainExtendedInformation, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match iface_domains_api__domain_extended_information__from_json(&v) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_domains_api__request_dkim_verification_for_domain__err(e: crate::runtime::DispatchError) -> iface_domains_api::RequestDkimVerificationForDomainError {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => match status {
+            422u16 => iface_domains_api::RequestDkimVerificationForDomainError::UnprocessableEntity(body),
+            500u16 => iface_domains_api::RequestDkimVerificationForDomainError::InternalServerError(body),
+            _ => iface_domains_api::RequestDkimVerificationForDomainError::Other(body),
+        },
+        crate::runtime::DispatchError::Transport(m) => iface_domains_api::RequestDkimVerificationForDomainError::Other(m),
+    }
+}
+
+fn iface_domains_api__request_return_path_verification_for_domain__ok(body: String) -> Result<iface_domains_api::DomainExtendedInformation, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match iface_domains_api__domain_extended_information__from_json(&v) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_domains_api__request_return_path_verification_for_domain__err(e: crate::runtime::DispatchError) -> iface_domains_api::RequestReturnPathVerificationForDomainError {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => match status {
+            422u16 => iface_domains_api::RequestReturnPathVerificationForDomainError::UnprocessableEntity(body),
+            500u16 => iface_domains_api::RequestReturnPathVerificationForDomainError::InternalServerError(body),
+            _ => iface_domains_api::RequestReturnPathVerificationForDomainError::Other(body),
+        },
+        crate::runtime::DispatchError::Transport(m) => iface_domains_api::RequestReturnPathVerificationForDomainError::Other(m),
+    }
+}
+
+fn iface_domains_api__request_spf_verification_for_domain__ok(body: String) -> Result<iface_domains_api::DomainSpfResult, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match iface_domains_api__domain_spf_result__from_json(&v) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_domains_api__request_spf_verification_for_domain__err(e: crate::runtime::DispatchError) -> iface_domains_api::RequestSpfVerificationForDomainError {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => match status {
+            422u16 => iface_domains_api::RequestSpfVerificationForDomainError::UnprocessableEntity(body),
+            500u16 => iface_domains_api::RequestSpfVerificationForDomainError::InternalServerError(body),
+            _ => iface_domains_api::RequestSpfVerificationForDomainError::Other(body),
+        },
+        crate::runtime::DispatchError::Transport(m) => iface_domains_api::RequestSpfVerificationForDomainError::Other(m),
+    }
+}
+
 impl iface_domains_api::Guest for crate::Component {
-    fn list_domains(params: iface_domains_api::ListDomainsParams) -> Result<String, String> {
+    fn list_domains(params: iface_domains_api::ListDomainsParams) -> Result<iface_domains_api::DomainListingResults, iface_domains_api::ListDomainsError> {
         let json = iface_domains_api__list_domains_params__to_json(&params);
-        dispatch(&OP_DOMAINS_API_LIST_DOMAINS, json)
+        match dispatch(&OP_DOMAINS_API_LIST_DOMAINS, json).and_then(iface_domains_api__list_domains__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_domains_api__list_domains__err(e)),
+        }
     }
-    fn create_domain(params: iface_domains_api::CreateDomainParams) -> Result<String, String> {
+    fn create_domain(params: iface_domains_api::CreateDomainParams) -> Result<iface_domains_api::DomainExtendedInformation, iface_domains_api::CreateDomainError> {
         let json = iface_domains_api__create_domain_params__to_json(&params);
-        dispatch(&OP_DOMAINS_API_CREATE_DOMAIN, json)
+        match dispatch(&OP_DOMAINS_API_CREATE_DOMAIN, json).and_then(iface_domains_api__create_domain__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_domains_api__create_domain__err(e)),
+        }
     }
-    fn get_domain(params: iface_domains_api::GetDomainParams) -> Result<String, String> {
+    fn get_domain(params: iface_domains_api::GetDomainParams) -> Result<iface_domains_api::DomainExtendedInformation, iface_domains_api::GetDomainError> {
         let json = iface_domains_api__get_domain_params__to_json(&params);
-        dispatch(&OP_DOMAINS_API_GET_DOMAIN, json)
+        match dispatch(&OP_DOMAINS_API_GET_DOMAIN, json).and_then(iface_domains_api__get_domain__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_domains_api__get_domain__err(e)),
+        }
     }
-    fn edit_domain(params: iface_domains_api::EditDomainParams) -> Result<String, String> {
+    fn edit_domain(params: iface_domains_api::EditDomainParams) -> Result<iface_domains_api::DomainExtendedInformation, iface_domains_api::EditDomainError> {
         let json = iface_domains_api__edit_domain_params__to_json(&params);
-        dispatch(&OP_DOMAINS_API_EDIT_DOMAIN, json)
+        match dispatch(&OP_DOMAINS_API_EDIT_DOMAIN, json).and_then(iface_domains_api__edit_domain__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_domains_api__edit_domain__err(e)),
+        }
     }
-    fn delete_domain(params: iface_domains_api::DeleteDomainParams) -> Result<String, String> {
+    fn delete_domain(params: iface_domains_api::DeleteDomainParams) -> Result<iface_domains_api::StandardPostmarkResponse, iface_domains_api::DeleteDomainError> {
         let json = iface_domains_api__delete_domain_params__to_json(&params);
-        dispatch(&OP_DOMAINS_API_DELETE_DOMAIN, json)
+        match dispatch(&OP_DOMAINS_API_DELETE_DOMAIN, json).and_then(iface_domains_api__delete_domain__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_domains_api__delete_domain__err(e)),
+        }
     }
-    fn rotate_dkim_key_for_domain(params: iface_domains_api::RotateDkimKeyForDomainParams) -> Result<String, String> {
+    fn rotate_dkim_key_for_domain(params: iface_domains_api::RotateDkimKeyForDomainParams) -> Result<iface_domains_api::DkimRotationResponse, iface_domains_api::RotateDkimKeyForDomainError> {
         let json = iface_domains_api__rotate_dkim_key_for_domain_params__to_json(&params);
-        dispatch(&OP_DOMAINS_API_ROTATE_DKIM_KEY_FOR_DOMAIN, json)
+        match dispatch(&OP_DOMAINS_API_ROTATE_DKIM_KEY_FOR_DOMAIN, json).and_then(iface_domains_api__rotate_dkim_key_for_domain__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_domains_api__rotate_dkim_key_for_domain__err(e)),
+        }
     }
-    fn request_dkim_verification_for_domain(params: iface_domains_api::RequestDkimVerificationForDomainParams) -> Result<String, String> {
+    fn request_dkim_verification_for_domain(params: iface_domains_api::RequestDkimVerificationForDomainParams) -> Result<iface_domains_api::DomainExtendedInformation, iface_domains_api::RequestDkimVerificationForDomainError> {
         let json = iface_domains_api__request_dkim_verification_for_domain_params__to_json(&params);
-        dispatch(&OP_DOMAINS_API_REQUEST_DKIM_VERIFICATION_FOR_DOMAIN, json)
+        match dispatch(&OP_DOMAINS_API_REQUEST_DKIM_VERIFICATION_FOR_DOMAIN, json).and_then(iface_domains_api__request_dkim_verification_for_domain__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_domains_api__request_dkim_verification_for_domain__err(e)),
+        }
     }
-    fn request_return_path_verification_for_domain(params: iface_domains_api::RequestReturnPathVerificationForDomainParams) -> Result<String, String> {
+    fn request_return_path_verification_for_domain(params: iface_domains_api::RequestReturnPathVerificationForDomainParams) -> Result<iface_domains_api::DomainExtendedInformation, iface_domains_api::RequestReturnPathVerificationForDomainError> {
         let json = iface_domains_api__request_return_path_verification_for_domain_params__to_json(&params);
-        dispatch(&OP_DOMAINS_API_REQUEST_RETURN_PATH_VERIFICATION_FOR_DOMAIN, json)
+        match dispatch(&OP_DOMAINS_API_REQUEST_RETURN_PATH_VERIFICATION_FOR_DOMAIN, json).and_then(iface_domains_api__request_return_path_verification_for_domain__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_domains_api__request_return_path_verification_for_domain__err(e)),
+        }
     }
-    fn request_spf_verification_for_domain(params: iface_domains_api::RequestSpfVerificationForDomainParams) -> Result<String, String> {
+    fn request_spf_verification_for_domain(params: iface_domains_api::RequestSpfVerificationForDomainParams) -> Result<iface_domains_api::DomainSpfResult, iface_domains_api::RequestSpfVerificationForDomainError> {
         let json = iface_domains_api__request_spf_verification_for_domain_params__to_json(&params);
-        dispatch(&OP_DOMAINS_API_REQUEST_SPF_VERIFICATION_FOR_DOMAIN, json)
+        match dispatch(&OP_DOMAINS_API_REQUEST_SPF_VERIFICATION_FOR_DOMAIN, json).and_then(iface_domains_api__request_spf_verification_for_domain__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_domains_api__request_spf_verification_for_domain__err(e)),
+        }
     }
 }
 use crate::exports::autostamp::postmarkapp::sender_signatures_api as iface_sender_signatures_api;
@@ -496,9 +892,9 @@ const OP_SENDER_SIGNATURES_API_LIST_SENDER_SIGNATURES: OpSpec = OpSpec {
     method: "GET",
     path_template: "/senders",
     fields: &[
-        FieldSpec { snake: "x_postmark_account_token", location: FieldLocation::Header },
-        FieldSpec { snake: "count", location: FieldLocation::Query },
-        FieldSpec { snake: "offset", location: FieldLocation::Query },
+        FieldSpec { snake: "x_postmark_account_token", wire: "X-Postmark-Account-Token", location: FieldLocation::Header },
+        FieldSpec { snake: "count", wire: "count", location: FieldLocation::Query },
+        FieldSpec { snake: "offset", wire: "offset", location: FieldLocation::Query },
     ],
     auth: &[
     ],
@@ -508,11 +904,11 @@ const OP_SENDER_SIGNATURES_API_CREATE_SENDER_SIGNATURE: OpSpec = OpSpec {
     method: "POST",
     path_template: "/senders",
     fields: &[
-        FieldSpec { snake: "x_postmark_account_token", location: FieldLocation::Header },
-        FieldSpec { snake: "from_email", location: FieldLocation::Body },
-        FieldSpec { snake: "name", location: FieldLocation::Body },
-        FieldSpec { snake: "reply_to_email", location: FieldLocation::Body },
-        FieldSpec { snake: "return_path_domain", location: FieldLocation::Body },
+        FieldSpec { snake: "x_postmark_account_token", wire: "X-Postmark-Account-Token", location: FieldLocation::Header },
+        FieldSpec { snake: "from_email", wire: "FromEmail", location: FieldLocation::Body },
+        FieldSpec { snake: "name", wire: "Name", location: FieldLocation::Body },
+        FieldSpec { snake: "reply_to_email", wire: "ReplyToEmail", location: FieldLocation::Body },
+        FieldSpec { snake: "return_path_domain", wire: "ReturnPathDomain", location: FieldLocation::Body },
     ],
     auth: &[
     ],
@@ -522,8 +918,8 @@ const OP_SENDER_SIGNATURES_API_GET_SENDER_SIGNATURE: OpSpec = OpSpec {
     method: "GET",
     path_template: "/senders/{signatureid}",
     fields: &[
-        FieldSpec { snake: "x_postmark_account_token", location: FieldLocation::Header },
-        FieldSpec { snake: "signatureid", location: FieldLocation::Path },
+        FieldSpec { snake: "x_postmark_account_token", wire: "X-Postmark-Account-Token", location: FieldLocation::Header },
+        FieldSpec { snake: "signatureid", wire: "signatureid", location: FieldLocation::Path },
     ],
     auth: &[
     ],
@@ -533,11 +929,11 @@ const OP_SENDER_SIGNATURES_API_EDIT_SENDER_SIGNATURE: OpSpec = OpSpec {
     method: "PUT",
     path_template: "/senders/{signatureid}",
     fields: &[
-        FieldSpec { snake: "x_postmark_account_token", location: FieldLocation::Header },
-        FieldSpec { snake: "signatureid", location: FieldLocation::Path },
-        FieldSpec { snake: "name", location: FieldLocation::Body },
-        FieldSpec { snake: "reply_to_email", location: FieldLocation::Body },
-        FieldSpec { snake: "return_path_domain", location: FieldLocation::Body },
+        FieldSpec { snake: "x_postmark_account_token", wire: "X-Postmark-Account-Token", location: FieldLocation::Header },
+        FieldSpec { snake: "signatureid", wire: "signatureid", location: FieldLocation::Path },
+        FieldSpec { snake: "name", wire: "Name", location: FieldLocation::Body },
+        FieldSpec { snake: "reply_to_email", wire: "ReplyToEmail", location: FieldLocation::Body },
+        FieldSpec { snake: "return_path_domain", wire: "ReturnPathDomain", location: FieldLocation::Body },
     ],
     auth: &[
     ],
@@ -547,8 +943,8 @@ const OP_SENDER_SIGNATURES_API_DELETE_SENDER_SIGNATURE: OpSpec = OpSpec {
     method: "DELETE",
     path_template: "/senders/{signatureid}",
     fields: &[
-        FieldSpec { snake: "x_postmark_account_token", location: FieldLocation::Header },
-        FieldSpec { snake: "signatureid", location: FieldLocation::Path },
+        FieldSpec { snake: "x_postmark_account_token", wire: "X-Postmark-Account-Token", location: FieldLocation::Header },
+        FieldSpec { snake: "signatureid", wire: "signatureid", location: FieldLocation::Path },
     ],
     auth: &[
     ],
@@ -558,8 +954,8 @@ const OP_SENDER_SIGNATURES_API_REQUEST_NEW_DKIM_KEY_FOR_SENDER_SIGNATURE: OpSpec
     method: "POST",
     path_template: "/senders/{signatureid}/requestnewdkim",
     fields: &[
-        FieldSpec { snake: "x_postmark_account_token", location: FieldLocation::Header },
-        FieldSpec { snake: "signatureid", location: FieldLocation::Path },
+        FieldSpec { snake: "x_postmark_account_token", wire: "X-Postmark-Account-Token", location: FieldLocation::Header },
+        FieldSpec { snake: "signatureid", wire: "signatureid", location: FieldLocation::Path },
     ],
     auth: &[
     ],
@@ -569,8 +965,8 @@ const OP_SENDER_SIGNATURES_API_RESEND_SENDER_SIGNATURE_CONFIRMATION_EMAIL: OpSpe
     method: "POST",
     path_template: "/senders/{signatureid}/resend",
     fields: &[
-        FieldSpec { snake: "x_postmark_account_token", location: FieldLocation::Header },
-        FieldSpec { snake: "signatureid", location: FieldLocation::Path },
+        FieldSpec { snake: "x_postmark_account_token", wire: "X-Postmark-Account-Token", location: FieldLocation::Header },
+        FieldSpec { snake: "signatureid", wire: "signatureid", location: FieldLocation::Path },
     ],
     auth: &[
     ],
@@ -580,12 +976,64 @@ const OP_SENDER_SIGNATURES_API_REQUEST_SPF_VERIFICATION_FOR_SENDER_SIGNATURE: Op
     method: "POST",
     path_template: "/senders/{signatureid}/verifyspf",
     fields: &[
-        FieldSpec { snake: "x_postmark_account_token", location: FieldLocation::Header },
-        FieldSpec { snake: "signatureid", location: FieldLocation::Path },
+        FieldSpec { snake: "x_postmark_account_token", wire: "X-Postmark-Account-Token", location: FieldLocation::Header },
+        FieldSpec { snake: "signatureid", wire: "signatureid", location: FieldLocation::Path },
     ],
     auth: &[
     ],
 };
+
+fn iface_sender_signatures_api__sender_listing_results__to_json(p: &iface_sender_signatures_api::SenderListingResults) -> Value {
+    let mut m = Map::new();
+    m.insert("SenderSignatures".into(), match (&p.sender_signatures) { Some(v) => Value::Array((v).iter().map(|v| iface_sender_signatures_api__sender_signature_information__to_json(v)).collect()), None => Value::Null });
+    m.insert("TotalCount".into(), match (&p.total_count) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_sender_signatures_api__sender_signature_information__to_json(p: &iface_sender_signatures_api::SenderSignatureInformation) -> Value {
+    let mut m = Map::new();
+    m.insert("Confirmed".into(), match (&p.confirmed) { Some(v) => Value::Bool(*(v)), None => Value::Null });
+    m.insert("Domain".into(), match (&p.domain) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("EmailAddress".into(), match (&p.email_address) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("ID".into(), match (&p.id) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("Name".into(), match (&p.name) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("ReplyToEmailAddress".into(), match (&p.reply_to_email_address) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_sender_signatures_api__sender_signature_extended_information__to_json(p: &iface_sender_signatures_api::SenderSignatureExtendedInformation) -> Value {
+    let mut m = Map::new();
+    m.insert("Confirmed".into(), match (&p.confirmed) { Some(v) => Value::Bool(*(v)), None => Value::Null });
+    m.insert("DKIMHost".into(), match (&p.dkim_host) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("DKIMPendingHost".into(), match (&p.dkim_pending_host) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("DKIMPendingTextValue".into(), match (&p.dkim_pending_text_value) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("DKIMRevokedHost".into(), match (&p.dkim_revoked_host) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("DKIMRevokedTextValue".into(), match (&p.dkim_revoked_text_value) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("DKIMTestValue".into(), match (&p.dkim_test_value) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("DKIMUpdateStatus".into(), match (&p.dkim_update_status) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("DKIMVerified".into(), match (&p.dkim_verified) { Some(v) => Value::Bool(*(v)), None => Value::Null });
+    m.insert("Domain".into(), match (&p.domain) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("EmailAddress".into(), match (&p.email_address) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("ID".into(), match (&p.id) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("Name".into(), match (&p.name) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("ReplyToEmailAddress".into(), match (&p.reply_to_email_address) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("ReturnPathDomain".into(), match (&p.return_path_domain) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("ReturnPathDomainCNAMEValue".into(), match (&p.return_path_domain_cname_value) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("ReturnPathDomainVerified".into(), match (&p.return_path_domain_verified) { Some(v) => Value::Bool(*(v)), None => Value::Null });
+    m.insert("SPFHost".into(), match (&p.spf_host) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("SPFTextValue".into(), match (&p.spf_text_value) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("SPFVerified".into(), match (&p.spf_verified) { Some(v) => Value::Bool(*(v)), None => Value::Null });
+    m.insert("SafeToRemoveRevokedKeyFromDNS".into(), match (&p.safe_to_remove_revoked_key_from_dns) { Some(v) => Value::Bool(*(v)), None => Value::Null });
+    m.insert("WeakDKIM".into(), match (&p.weak_dkim) { Some(v) => Value::Bool(*(v)), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_sender_signatures_api__standard_postmark_response__to_json(p: &iface_sender_signatures_api::StandardPostmarkResponse) -> Value {
+    let mut m = Map::new();
+    m.insert("ErrorCode".into(), match (&p.error_code) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("Message".into(), match (&p.message) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
 
 fn iface_sender_signatures_api__list_sender_signatures_params__to_json(p: &iface_sender_signatures_api::ListSenderSignaturesParams) -> Value {
     let mut m = Map::new();
@@ -650,38 +1098,294 @@ fn iface_sender_signatures_api__request_spf_verification_for_sender_signature_pa
     Value::Object(m)
 }
 
+fn iface_sender_signatures_api__sender_listing_results__from_json(v: &Value) -> Option<iface_sender_signatures_api::SenderListingResults> {
+    let m = v.as_object()?;
+    Some(iface_sender_signatures_api::SenderListingResults {
+        sender_signatures: m.get("SenderSignatures").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| iface_sender_signatures_api__sender_signature_information__from_json(x)).collect())),
+        total_count: m.get("TotalCount").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+    })
+}
+
+fn iface_sender_signatures_api__sender_signature_information__from_json(v: &Value) -> Option<iface_sender_signatures_api::SenderSignatureInformation> {
+    let m = v.as_object()?;
+    Some(iface_sender_signatures_api::SenderSignatureInformation {
+        confirmed: m.get("Confirmed").filter(|v| !v.is_null()).and_then(|v| (v).as_bool()),
+        domain: m.get("Domain").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        email_address: m.get("EmailAddress").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        id: m.get("ID").filter(|v| !v.is_null()).and_then(|v| (v).as_i64()),
+        name: m.get("Name").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        reply_to_email_address: m.get("ReplyToEmailAddress").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    })
+}
+
+fn iface_sender_signatures_api__sender_signature_extended_information__from_json(v: &Value) -> Option<iface_sender_signatures_api::SenderSignatureExtendedInformation> {
+    let m = v.as_object()?;
+    Some(iface_sender_signatures_api::SenderSignatureExtendedInformation {
+        confirmed: m.get("Confirmed").filter(|v| !v.is_null()).and_then(|v| (v).as_bool()),
+        dkim_host: m.get("DKIMHost").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        dkim_pending_host: m.get("DKIMPendingHost").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        dkim_pending_text_value: m.get("DKIMPendingTextValue").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        dkim_revoked_host: m.get("DKIMRevokedHost").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        dkim_revoked_text_value: m.get("DKIMRevokedTextValue").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        dkim_test_value: m.get("DKIMTestValue").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        dkim_update_status: m.get("DKIMUpdateStatus").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        dkim_verified: m.get("DKIMVerified").filter(|v| !v.is_null()).and_then(|v| (v).as_bool()),
+        domain: m.get("Domain").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        email_address: m.get("EmailAddress").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        id: m.get("ID").filter(|v| !v.is_null()).and_then(|v| (v).as_i64()),
+        name: m.get("Name").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        reply_to_email_address: m.get("ReplyToEmailAddress").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        return_path_domain: m.get("ReturnPathDomain").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        return_path_domain_cname_value: m.get("ReturnPathDomainCNAMEValue").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        return_path_domain_verified: m.get("ReturnPathDomainVerified").filter(|v| !v.is_null()).and_then(|v| (v).as_bool()),
+        spf_host: m.get("SPFHost").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        spf_text_value: m.get("SPFTextValue").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        spf_verified: m.get("SPFVerified").filter(|v| !v.is_null()).and_then(|v| (v).as_bool()),
+        safe_to_remove_revoked_key_from_dns: m.get("SafeToRemoveRevokedKeyFromDNS").filter(|v| !v.is_null()).and_then(|v| (v).as_bool()),
+        weak_dkim: m.get("WeakDKIM").filter(|v| !v.is_null()).and_then(|v| (v).as_bool()),
+    })
+}
+
+fn iface_sender_signatures_api__standard_postmark_response__from_json(v: &Value) -> Option<iface_sender_signatures_api::StandardPostmarkResponse> {
+    let m = v.as_object()?;
+    Some(iface_sender_signatures_api::StandardPostmarkResponse {
+        error_code: m.get("ErrorCode").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        message: m.get("Message").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    })
+}
+
+fn iface_sender_signatures_api__list_sender_signatures__ok(body: String) -> Result<iface_sender_signatures_api::SenderListingResults, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match iface_sender_signatures_api__sender_listing_results__from_json(&v) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_sender_signatures_api__list_sender_signatures__err(e: crate::runtime::DispatchError) -> iface_sender_signatures_api::ListSenderSignaturesError {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => match status {
+            422u16 => iface_sender_signatures_api::ListSenderSignaturesError::UnprocessableEntity(body),
+            500u16 => iface_sender_signatures_api::ListSenderSignaturesError::InternalServerError(body),
+            _ => iface_sender_signatures_api::ListSenderSignaturesError::Other(body),
+        },
+        crate::runtime::DispatchError::Transport(m) => iface_sender_signatures_api::ListSenderSignaturesError::Other(m),
+    }
+}
+
+fn iface_sender_signatures_api__create_sender_signature__ok(body: String) -> Result<iface_sender_signatures_api::SenderSignatureExtendedInformation, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match iface_sender_signatures_api__sender_signature_extended_information__from_json(&v) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_sender_signatures_api__create_sender_signature__err(e: crate::runtime::DispatchError) -> iface_sender_signatures_api::CreateSenderSignatureError {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => match status {
+            422u16 => iface_sender_signatures_api::CreateSenderSignatureError::UnprocessableEntity(body),
+            500u16 => iface_sender_signatures_api::CreateSenderSignatureError::InternalServerError(body),
+            _ => iface_sender_signatures_api::CreateSenderSignatureError::Other(body),
+        },
+        crate::runtime::DispatchError::Transport(m) => iface_sender_signatures_api::CreateSenderSignatureError::Other(m),
+    }
+}
+
+fn iface_sender_signatures_api__get_sender_signature__ok(body: String) -> Result<iface_sender_signatures_api::SenderSignatureExtendedInformation, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match iface_sender_signatures_api__sender_signature_extended_information__from_json(&v) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_sender_signatures_api__get_sender_signature__err(e: crate::runtime::DispatchError) -> iface_sender_signatures_api::GetSenderSignatureError {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => match status {
+            422u16 => iface_sender_signatures_api::GetSenderSignatureError::UnprocessableEntity(body),
+            500u16 => iface_sender_signatures_api::GetSenderSignatureError::InternalServerError(body),
+            _ => iface_sender_signatures_api::GetSenderSignatureError::Other(body),
+        },
+        crate::runtime::DispatchError::Transport(m) => iface_sender_signatures_api::GetSenderSignatureError::Other(m),
+    }
+}
+
+fn iface_sender_signatures_api__edit_sender_signature__ok(body: String) -> Result<iface_sender_signatures_api::SenderSignatureExtendedInformation, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match iface_sender_signatures_api__sender_signature_extended_information__from_json(&v) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_sender_signatures_api__edit_sender_signature__err(e: crate::runtime::DispatchError) -> iface_sender_signatures_api::EditSenderSignatureError {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => match status {
+            422u16 => iface_sender_signatures_api::EditSenderSignatureError::UnprocessableEntity(body),
+            500u16 => iface_sender_signatures_api::EditSenderSignatureError::InternalServerError(body),
+            _ => iface_sender_signatures_api::EditSenderSignatureError::Other(body),
+        },
+        crate::runtime::DispatchError::Transport(m) => iface_sender_signatures_api::EditSenderSignatureError::Other(m),
+    }
+}
+
+fn iface_sender_signatures_api__delete_sender_signature__ok(body: String) -> Result<iface_sender_signatures_api::StandardPostmarkResponse, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match iface_sender_signatures_api__standard_postmark_response__from_json(&v) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_sender_signatures_api__delete_sender_signature__err(e: crate::runtime::DispatchError) -> iface_sender_signatures_api::DeleteSenderSignatureError {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => match status {
+            422u16 => iface_sender_signatures_api::DeleteSenderSignatureError::UnprocessableEntity(body),
+            500u16 => iface_sender_signatures_api::DeleteSenderSignatureError::InternalServerError(body),
+            _ => iface_sender_signatures_api::DeleteSenderSignatureError::Other(body),
+        },
+        crate::runtime::DispatchError::Transport(m) => iface_sender_signatures_api::DeleteSenderSignatureError::Other(m),
+    }
+}
+
+fn iface_sender_signatures_api__request_new_dkim_key_for_sender_signature__ok(body: String) -> Result<iface_sender_signatures_api::StandardPostmarkResponse, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match iface_sender_signatures_api__standard_postmark_response__from_json(&v) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_sender_signatures_api__request_new_dkim_key_for_sender_signature__err(e: crate::runtime::DispatchError) -> iface_sender_signatures_api::RequestNewDkimKeyForSenderSignatureError {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => match status {
+            422u16 => iface_sender_signatures_api::RequestNewDkimKeyForSenderSignatureError::UnprocessableEntity(body),
+            500u16 => iface_sender_signatures_api::RequestNewDkimKeyForSenderSignatureError::InternalServerError(body),
+            _ => iface_sender_signatures_api::RequestNewDkimKeyForSenderSignatureError::Other(body),
+        },
+        crate::runtime::DispatchError::Transport(m) => iface_sender_signatures_api::RequestNewDkimKeyForSenderSignatureError::Other(m),
+    }
+}
+
+fn iface_sender_signatures_api__resend_sender_signature_confirmation_email__ok(body: String) -> Result<iface_sender_signatures_api::StandardPostmarkResponse, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match iface_sender_signatures_api__standard_postmark_response__from_json(&v) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_sender_signatures_api__resend_sender_signature_confirmation_email__err(e: crate::runtime::DispatchError) -> iface_sender_signatures_api::ResendSenderSignatureConfirmationEmailError {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => match status {
+            422u16 => iface_sender_signatures_api::ResendSenderSignatureConfirmationEmailError::UnprocessableEntity(body),
+            500u16 => iface_sender_signatures_api::ResendSenderSignatureConfirmationEmailError::InternalServerError(body),
+            _ => iface_sender_signatures_api::ResendSenderSignatureConfirmationEmailError::Other(body),
+        },
+        crate::runtime::DispatchError::Transport(m) => iface_sender_signatures_api::ResendSenderSignatureConfirmationEmailError::Other(m),
+    }
+}
+
+fn iface_sender_signatures_api__request_spf_verification_for_sender_signature__ok(body: String) -> Result<iface_sender_signatures_api::SenderSignatureExtendedInformation, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match iface_sender_signatures_api__sender_signature_extended_information__from_json(&v) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_sender_signatures_api__request_spf_verification_for_sender_signature__err(e: crate::runtime::DispatchError) -> iface_sender_signatures_api::RequestSpfVerificationForSenderSignatureError {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => match status {
+            422u16 => iface_sender_signatures_api::RequestSpfVerificationForSenderSignatureError::UnprocessableEntity(body),
+            500u16 => iface_sender_signatures_api::RequestSpfVerificationForSenderSignatureError::InternalServerError(body),
+            _ => iface_sender_signatures_api::RequestSpfVerificationForSenderSignatureError::Other(body),
+        },
+        crate::runtime::DispatchError::Transport(m) => iface_sender_signatures_api::RequestSpfVerificationForSenderSignatureError::Other(m),
+    }
+}
+
 impl iface_sender_signatures_api::Guest for crate::Component {
-    fn list_sender_signatures(params: iface_sender_signatures_api::ListSenderSignaturesParams) -> Result<String, String> {
+    fn list_sender_signatures(params: iface_sender_signatures_api::ListSenderSignaturesParams) -> Result<iface_sender_signatures_api::SenderListingResults, iface_sender_signatures_api::ListSenderSignaturesError> {
         let json = iface_sender_signatures_api__list_sender_signatures_params__to_json(&params);
-        dispatch(&OP_SENDER_SIGNATURES_API_LIST_SENDER_SIGNATURES, json)
+        match dispatch(&OP_SENDER_SIGNATURES_API_LIST_SENDER_SIGNATURES, json).and_then(iface_sender_signatures_api__list_sender_signatures__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_sender_signatures_api__list_sender_signatures__err(e)),
+        }
     }
-    fn create_sender_signature(params: iface_sender_signatures_api::CreateSenderSignatureParams) -> Result<String, String> {
+    fn create_sender_signature(params: iface_sender_signatures_api::CreateSenderSignatureParams) -> Result<iface_sender_signatures_api::SenderSignatureExtendedInformation, iface_sender_signatures_api::CreateSenderSignatureError> {
         let json = iface_sender_signatures_api__create_sender_signature_params__to_json(&params);
-        dispatch(&OP_SENDER_SIGNATURES_API_CREATE_SENDER_SIGNATURE, json)
+        match dispatch(&OP_SENDER_SIGNATURES_API_CREATE_SENDER_SIGNATURE, json).and_then(iface_sender_signatures_api__create_sender_signature__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_sender_signatures_api__create_sender_signature__err(e)),
+        }
     }
-    fn get_sender_signature(params: iface_sender_signatures_api::GetSenderSignatureParams) -> Result<String, String> {
+    fn get_sender_signature(params: iface_sender_signatures_api::GetSenderSignatureParams) -> Result<iface_sender_signatures_api::SenderSignatureExtendedInformation, iface_sender_signatures_api::GetSenderSignatureError> {
         let json = iface_sender_signatures_api__get_sender_signature_params__to_json(&params);
-        dispatch(&OP_SENDER_SIGNATURES_API_GET_SENDER_SIGNATURE, json)
+        match dispatch(&OP_SENDER_SIGNATURES_API_GET_SENDER_SIGNATURE, json).and_then(iface_sender_signatures_api__get_sender_signature__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_sender_signatures_api__get_sender_signature__err(e)),
+        }
     }
-    fn edit_sender_signature(params: iface_sender_signatures_api::EditSenderSignatureParams) -> Result<String, String> {
+    fn edit_sender_signature(params: iface_sender_signatures_api::EditSenderSignatureParams) -> Result<iface_sender_signatures_api::SenderSignatureExtendedInformation, iface_sender_signatures_api::EditSenderSignatureError> {
         let json = iface_sender_signatures_api__edit_sender_signature_params__to_json(&params);
-        dispatch(&OP_SENDER_SIGNATURES_API_EDIT_SENDER_SIGNATURE, json)
+        match dispatch(&OP_SENDER_SIGNATURES_API_EDIT_SENDER_SIGNATURE, json).and_then(iface_sender_signatures_api__edit_sender_signature__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_sender_signatures_api__edit_sender_signature__err(e)),
+        }
     }
-    fn delete_sender_signature(params: iface_sender_signatures_api::DeleteSenderSignatureParams) -> Result<String, String> {
+    fn delete_sender_signature(params: iface_sender_signatures_api::DeleteSenderSignatureParams) -> Result<iface_sender_signatures_api::StandardPostmarkResponse, iface_sender_signatures_api::DeleteSenderSignatureError> {
         let json = iface_sender_signatures_api__delete_sender_signature_params__to_json(&params);
-        dispatch(&OP_SENDER_SIGNATURES_API_DELETE_SENDER_SIGNATURE, json)
+        match dispatch(&OP_SENDER_SIGNATURES_API_DELETE_SENDER_SIGNATURE, json).and_then(iface_sender_signatures_api__delete_sender_signature__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_sender_signatures_api__delete_sender_signature__err(e)),
+        }
     }
-    fn request_new_dkim_key_for_sender_signature(params: iface_sender_signatures_api::RequestNewDkimKeyForSenderSignatureParams) -> Result<String, String> {
+    fn request_new_dkim_key_for_sender_signature(params: iface_sender_signatures_api::RequestNewDkimKeyForSenderSignatureParams) -> Result<iface_sender_signatures_api::StandardPostmarkResponse, iface_sender_signatures_api::RequestNewDkimKeyForSenderSignatureError> {
         let json = iface_sender_signatures_api__request_new_dkim_key_for_sender_signature_params__to_json(&params);
-        dispatch(&OP_SENDER_SIGNATURES_API_REQUEST_NEW_DKIM_KEY_FOR_SENDER_SIGNATURE, json)
+        match dispatch(&OP_SENDER_SIGNATURES_API_REQUEST_NEW_DKIM_KEY_FOR_SENDER_SIGNATURE, json).and_then(iface_sender_signatures_api__request_new_dkim_key_for_sender_signature__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_sender_signatures_api__request_new_dkim_key_for_sender_signature__err(e)),
+        }
     }
-    fn resend_sender_signature_confirmation_email(params: iface_sender_signatures_api::ResendSenderSignatureConfirmationEmailParams) -> Result<String, String> {
+    fn resend_sender_signature_confirmation_email(params: iface_sender_signatures_api::ResendSenderSignatureConfirmationEmailParams) -> Result<iface_sender_signatures_api::StandardPostmarkResponse, iface_sender_signatures_api::ResendSenderSignatureConfirmationEmailError> {
         let json = iface_sender_signatures_api__resend_sender_signature_confirmation_email_params__to_json(&params);
-        dispatch(&OP_SENDER_SIGNATURES_API_RESEND_SENDER_SIGNATURE_CONFIRMATION_EMAIL, json)
+        match dispatch(&OP_SENDER_SIGNATURES_API_RESEND_SENDER_SIGNATURE_CONFIRMATION_EMAIL, json).and_then(iface_sender_signatures_api__resend_sender_signature_confirmation_email__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_sender_signatures_api__resend_sender_signature_confirmation_email__err(e)),
+        }
     }
-    fn request_spf_verification_for_sender_signature(params: iface_sender_signatures_api::RequestSpfVerificationForSenderSignatureParams) -> Result<String, String> {
+    fn request_spf_verification_for_sender_signature(params: iface_sender_signatures_api::RequestSpfVerificationForSenderSignatureParams) -> Result<iface_sender_signatures_api::SenderSignatureExtendedInformation, iface_sender_signatures_api::RequestSpfVerificationForSenderSignatureError> {
         let json = iface_sender_signatures_api__request_spf_verification_for_sender_signature_params__to_json(&params);
-        dispatch(&OP_SENDER_SIGNATURES_API_REQUEST_SPF_VERIFICATION_FOR_SENDER_SIGNATURE, json)
+        match dispatch(&OP_SENDER_SIGNATURES_API_REQUEST_SPF_VERIFICATION_FOR_SENDER_SIGNATURE, json).and_then(iface_sender_signatures_api__request_spf_verification_for_sender_signature__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_sender_signatures_api__request_spf_verification_for_sender_signature__err(e)),
+        }
     }
 }
 use crate::exports::autostamp::postmarkapp::server_management_api as iface_server_management_api;
@@ -690,10 +1394,10 @@ const OP_SERVER_MANAGEMENT_API_LIST_SERVERS: OpSpec = OpSpec {
     method: "GET",
     path_template: "/servers",
     fields: &[
-        FieldSpec { snake: "x_postmark_account_token", location: FieldLocation::Header },
-        FieldSpec { snake: "count", location: FieldLocation::Query },
-        FieldSpec { snake: "offset", location: FieldLocation::Query },
-        FieldSpec { snake: "name", location: FieldLocation::Query },
+        FieldSpec { snake: "x_postmark_account_token", wire: "X-Postmark-Account-Token", location: FieldLocation::Header },
+        FieldSpec { snake: "count", wire: "count", location: FieldLocation::Query },
+        FieldSpec { snake: "offset", wire: "offset", location: FieldLocation::Query },
+        FieldSpec { snake: "name", wire: "name", location: FieldLocation::Query },
     ],
     auth: &[
     ],
@@ -703,21 +1407,21 @@ const OP_SERVER_MANAGEMENT_API_CREATE_SERVER: OpSpec = OpSpec {
     method: "POST",
     path_template: "/servers",
     fields: &[
-        FieldSpec { snake: "x_postmark_account_token", location: FieldLocation::Header },
-        FieldSpec { snake: "bounce_hook_url", location: FieldLocation::Body },
-        FieldSpec { snake: "click_hook_url", location: FieldLocation::Body },
-        FieldSpec { snake: "color", location: FieldLocation::Body },
-        FieldSpec { snake: "delivery_hook_url", location: FieldLocation::Body },
-        FieldSpec { snake: "inbound_domain", location: FieldLocation::Body },
-        FieldSpec { snake: "inbound_hook_url", location: FieldLocation::Body },
-        FieldSpec { snake: "inbound_spam_threshold", location: FieldLocation::Body },
-        FieldSpec { snake: "name", location: FieldLocation::Body },
-        FieldSpec { snake: "open_hook_url", location: FieldLocation::Body },
-        FieldSpec { snake: "post_first_open_only", location: FieldLocation::Body },
-        FieldSpec { snake: "raw_email_enabled", location: FieldLocation::Body },
-        FieldSpec { snake: "smtp_api_activated", location: FieldLocation::Body },
-        FieldSpec { snake: "track_links", location: FieldLocation::Body },
-        FieldSpec { snake: "track_opens", location: FieldLocation::Body },
+        FieldSpec { snake: "x_postmark_account_token", wire: "X-Postmark-Account-Token", location: FieldLocation::Header },
+        FieldSpec { snake: "bounce_hook_url", wire: "BounceHookUrl", location: FieldLocation::Body },
+        FieldSpec { snake: "click_hook_url", wire: "ClickHookUrl", location: FieldLocation::Body },
+        FieldSpec { snake: "color", wire: "Color", location: FieldLocation::Body },
+        FieldSpec { snake: "delivery_hook_url", wire: "DeliveryHookUrl", location: FieldLocation::Body },
+        FieldSpec { snake: "inbound_domain", wire: "InboundDomain", location: FieldLocation::Body },
+        FieldSpec { snake: "inbound_hook_url", wire: "InboundHookUrl", location: FieldLocation::Body },
+        FieldSpec { snake: "inbound_spam_threshold", wire: "InboundSpamThreshold", location: FieldLocation::Body },
+        FieldSpec { snake: "name", wire: "Name", location: FieldLocation::Body },
+        FieldSpec { snake: "open_hook_url", wire: "OpenHookUrl", location: FieldLocation::Body },
+        FieldSpec { snake: "post_first_open_only", wire: "PostFirstOpenOnly", location: FieldLocation::Body },
+        FieldSpec { snake: "raw_email_enabled", wire: "RawEmailEnabled", location: FieldLocation::Body },
+        FieldSpec { snake: "smtp_api_activated", wire: "SmtpApiActivated", location: FieldLocation::Body },
+        FieldSpec { snake: "track_links", wire: "TrackLinks", location: FieldLocation::Body },
+        FieldSpec { snake: "track_opens", wire: "TrackOpens", location: FieldLocation::Body },
     ],
     auth: &[
     ],
@@ -727,8 +1431,8 @@ const OP_SERVER_MANAGEMENT_API_GET_SERVER_INFORMATION: OpSpec = OpSpec {
     method: "GET",
     path_template: "/servers/{serverid}",
     fields: &[
-        FieldSpec { snake: "x_postmark_account_token", location: FieldLocation::Header },
-        FieldSpec { snake: "serverid", location: FieldLocation::Path },
+        FieldSpec { snake: "x_postmark_account_token", wire: "X-Postmark-Account-Token", location: FieldLocation::Header },
+        FieldSpec { snake: "serverid", wire: "serverid", location: FieldLocation::Path },
     ],
     auth: &[
     ],
@@ -738,22 +1442,22 @@ const OP_SERVER_MANAGEMENT_API_EDIT_SERVER_INFORMATION: OpSpec = OpSpec {
     method: "PUT",
     path_template: "/servers/{serverid}",
     fields: &[
-        FieldSpec { snake: "x_postmark_account_token", location: FieldLocation::Header },
-        FieldSpec { snake: "serverid", location: FieldLocation::Path },
-        FieldSpec { snake: "bounce_hook_url", location: FieldLocation::Body },
-        FieldSpec { snake: "click_hook_url", location: FieldLocation::Body },
-        FieldSpec { snake: "color", location: FieldLocation::Body },
-        FieldSpec { snake: "delivery_hook_url", location: FieldLocation::Body },
-        FieldSpec { snake: "inbound_domain", location: FieldLocation::Body },
-        FieldSpec { snake: "inbound_hook_url", location: FieldLocation::Body },
-        FieldSpec { snake: "inbound_spam_threshold", location: FieldLocation::Body },
-        FieldSpec { snake: "name", location: FieldLocation::Body },
-        FieldSpec { snake: "open_hook_url", location: FieldLocation::Body },
-        FieldSpec { snake: "post_first_open_only", location: FieldLocation::Body },
-        FieldSpec { snake: "raw_email_enabled", location: FieldLocation::Body },
-        FieldSpec { snake: "smtp_api_activated", location: FieldLocation::Body },
-        FieldSpec { snake: "track_links", location: FieldLocation::Body },
-        FieldSpec { snake: "track_opens", location: FieldLocation::Body },
+        FieldSpec { snake: "x_postmark_account_token", wire: "X-Postmark-Account-Token", location: FieldLocation::Header },
+        FieldSpec { snake: "serverid", wire: "serverid", location: FieldLocation::Path },
+        FieldSpec { snake: "bounce_hook_url", wire: "BounceHookUrl", location: FieldLocation::Body },
+        FieldSpec { snake: "click_hook_url", wire: "ClickHookUrl", location: FieldLocation::Body },
+        FieldSpec { snake: "color", wire: "Color", location: FieldLocation::Body },
+        FieldSpec { snake: "delivery_hook_url", wire: "DeliveryHookUrl", location: FieldLocation::Body },
+        FieldSpec { snake: "inbound_domain", wire: "InboundDomain", location: FieldLocation::Body },
+        FieldSpec { snake: "inbound_hook_url", wire: "InboundHookUrl", location: FieldLocation::Body },
+        FieldSpec { snake: "inbound_spam_threshold", wire: "InboundSpamThreshold", location: FieldLocation::Body },
+        FieldSpec { snake: "name", wire: "Name", location: FieldLocation::Body },
+        FieldSpec { snake: "open_hook_url", wire: "OpenHookUrl", location: FieldLocation::Body },
+        FieldSpec { snake: "post_first_open_only", wire: "PostFirstOpenOnly", location: FieldLocation::Body },
+        FieldSpec { snake: "raw_email_enabled", wire: "RawEmailEnabled", location: FieldLocation::Body },
+        FieldSpec { snake: "smtp_api_activated", wire: "SmtpApiActivated", location: FieldLocation::Body },
+        FieldSpec { snake: "track_links", wire: "TrackLinks", location: FieldLocation::Body },
+        FieldSpec { snake: "track_opens", wire: "TrackOpens", location: FieldLocation::Body },
     ],
     auth: &[
     ],
@@ -763,20 +1467,51 @@ const OP_SERVER_MANAGEMENT_API_DELETE_SERVER: OpSpec = OpSpec {
     method: "DELETE",
     path_template: "/servers/{serverid}",
     fields: &[
-        FieldSpec { snake: "x_postmark_account_token", location: FieldLocation::Header },
-        FieldSpec { snake: "serverid", location: FieldLocation::Path },
+        FieldSpec { snake: "x_postmark_account_token", wire: "X-Postmark-Account-Token", location: FieldLocation::Header },
+        FieldSpec { snake: "serverid", wire: "serverid", location: FieldLocation::Path },
     ],
     auth: &[
     ],
 };
 
-fn iface_server_management_api__create_server_payload_track_links_enum__to_str(e: &iface_server_management_api::CreateServerPayloadTrackLinksEnum) -> &'static str {
+fn iface_server_management_api__extended_server_info_track_links_enum__to_str(e: &iface_server_management_api::ExtendedServerInfoTrackLinksEnum) -> &'static str {
     match e {
-        iface_server_management_api::CreateServerPayloadTrackLinksEnum::None => "None",
-        iface_server_management_api::CreateServerPayloadTrackLinksEnum::HtmlAndTextTracking => "HtmlAndTextTracking",
-        iface_server_management_api::CreateServerPayloadTrackLinksEnum::HtmlOnlyTracking => "HtmlOnlyTracking",
-        iface_server_management_api::CreateServerPayloadTrackLinksEnum::TextOnlyTracking => "TextOnlyTracking",
+        iface_server_management_api::ExtendedServerInfoTrackLinksEnum::None => "None",
+        iface_server_management_api::ExtendedServerInfoTrackLinksEnum::HtmlAndTextTracking => "HtmlAndTextTracking",
+        iface_server_management_api::ExtendedServerInfoTrackLinksEnum::HtmlOnlyTracking => "HtmlOnlyTracking",
+        iface_server_management_api::ExtendedServerInfoTrackLinksEnum::TextOnlyTracking => "TextOnlyTracking",
     }
+}
+
+fn iface_server_management_api__server_listing_response__to_json(p: &iface_server_management_api::ServerListingResponse) -> Value {
+    let mut m = Map::new();
+    m.insert("Servers".into(), match (&p.servers) { Some(v) => Value::Array((v).iter().map(|v| iface_server_management_api__extended_server_info__to_json(v)).collect()), None => Value::Null });
+    m.insert("TotalCount".into(), match (&p.total_count) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_server_management_api__extended_server_info__to_json(p: &iface_server_management_api::ExtendedServerInfo) -> Value {
+    let mut m = Map::new();
+    m.insert("ApiTokens".into(), match (&p.api_tokens) { Some(v) => Value::Array((v).iter().map(|v| Value::String((v).clone())).collect()), None => Value::Null });
+    m.insert("BounceHookUrl".into(), match (&p.bounce_hook_url) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("ClickHookUrl".into(), match (&p.click_hook_url) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("Color".into(), match (&p.color) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("DeliveryHookUrl".into(), match (&p.delivery_hook_url) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("ID".into(), match (&p.id) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("InboundAddress".into(), match (&p.inbound_address) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("InboundDomain".into(), match (&p.inbound_domain) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("InboundHash".into(), match (&p.inbound_hash) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("InboundHookUrl".into(), match (&p.inbound_hook_url) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("InboundSpamThreshold".into(), match (&p.inbound_spam_threshold) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("Name".into(), match (&p.name) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("OpenHookUrl".into(), match (&p.open_hook_url) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("PostFirstOpenOnly".into(), match (&p.post_first_open_only) { Some(v) => Value::Bool(*(v)), None => Value::Null });
+    m.insert("RawEmailEnabled".into(), match (&p.raw_email_enabled) { Some(v) => Value::Bool(*(v)), None => Value::Null });
+    m.insert("ServerLink".into(), match (&p.server_link) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("SmtpApiActivated".into(), match (&p.smtp_api_activated) { Some(v) => Value::Bool(*(v)), None => Value::Null });
+    m.insert("TrackLinks".into(), match (&p.track_links) { Some(v) => Value::String(iface_server_management_api__extended_server_info_track_links_enum__to_str(v).into()), None => Value::Null });
+    m.insert("TrackOpens".into(), match (&p.track_opens) { Some(v) => Value::Bool(*(v)), None => Value::Null });
+    Value::Object(m)
 }
 
 fn iface_server_management_api__list_servers_params__to_json(p: &iface_server_management_api::ListServersParams) -> Value {
@@ -803,7 +1538,7 @@ fn iface_server_management_api__create_server_params__to_json(p: &iface_server_m
     m.insert("post_first_open_only".into(), match (&p.post_first_open_only) { Some(v) => Value::Bool(*(v)), None => Value::Null });
     m.insert("raw_email_enabled".into(), match (&p.raw_email_enabled) { Some(v) => Value::Bool(*(v)), None => Value::Null });
     m.insert("smtp_api_activated".into(), match (&p.smtp_api_activated) { Some(v) => Value::Bool(*(v)), None => Value::Null });
-    m.insert("track_links".into(), match (&p.track_links) { Some(v) => Value::String(iface_server_management_api__create_server_payload_track_links_enum__to_str(v).into()), None => Value::Null });
+    m.insert("track_links".into(), match (&p.track_links) { Some(v) => Value::String(iface_server_management_api__extended_server_info_track_links_enum__to_str(v).into()), None => Value::Null });
     m.insert("track_opens".into(), match (&p.track_opens) { Some(v) => Value::Bool(*(v)), None => Value::Null });
     Value::Object(m)
 }
@@ -831,7 +1566,7 @@ fn iface_server_management_api__edit_server_information_params__to_json(p: &ifac
     m.insert("post_first_open_only".into(), match (&p.post_first_open_only) { Some(v) => Value::Bool(*(v)), None => Value::Null });
     m.insert("raw_email_enabled".into(), match (&p.raw_email_enabled) { Some(v) => Value::Bool(*(v)), None => Value::Null });
     m.insert("smtp_api_activated".into(), match (&p.smtp_api_activated) { Some(v) => Value::Bool(*(v)), None => Value::Null });
-    m.insert("track_links".into(), match (&p.track_links) { Some(v) => Value::String(iface_server_management_api__create_server_payload_track_links_enum__to_str(v).into()), None => Value::Null });
+    m.insert("track_links".into(), match (&p.track_links) { Some(v) => Value::String(iface_server_management_api__extended_server_info_track_links_enum__to_str(v).into()), None => Value::Null });
     m.insert("track_opens".into(), match (&p.track_opens) { Some(v) => Value::Bool(*(v)), None => Value::Null });
     Value::Object(m)
 }
@@ -843,26 +1578,187 @@ fn iface_server_management_api__delete_server_params__to_json(p: &iface_server_m
     Value::Object(m)
 }
 
+fn iface_server_management_api__server_listing_response__from_json(v: &Value) -> Option<iface_server_management_api::ServerListingResponse> {
+    let m = v.as_object()?;
+    Some(iface_server_management_api::ServerListingResponse {
+        servers: m.get("Servers").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| iface_server_management_api__extended_server_info__from_json(x)).collect())),
+        total_count: m.get("TotalCount").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+    })
+}
+
+fn iface_server_management_api__extended_server_info__from_json(v: &Value) -> Option<iface_server_management_api::ExtendedServerInfo> {
+    let m = v.as_object()?;
+    Some(iface_server_management_api::ExtendedServerInfo {
+        api_tokens: m.get("ApiTokens").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| (x).as_str().map(|s| s.to_string())).collect())),
+        bounce_hook_url: m.get("BounceHookUrl").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        click_hook_url: m.get("ClickHookUrl").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        color: m.get("Color").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        delivery_hook_url: m.get("DeliveryHookUrl").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        id: m.get("ID").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        inbound_address: m.get("InboundAddress").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        inbound_domain: m.get("InboundDomain").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        inbound_hash: m.get("InboundHash").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        inbound_hook_url: m.get("InboundHookUrl").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        inbound_spam_threshold: m.get("InboundSpamThreshold").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        name: m.get("Name").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        open_hook_url: m.get("OpenHookUrl").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        post_first_open_only: m.get("PostFirstOpenOnly").filter(|v| !v.is_null()).and_then(|v| (v).as_bool()),
+        raw_email_enabled: m.get("RawEmailEnabled").filter(|v| !v.is_null()).and_then(|v| (v).as_bool()),
+        server_link: m.get("ServerLink").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        smtp_api_activated: m.get("SmtpApiActivated").filter(|v| !v.is_null()).and_then(|v| (v).as_bool()),
+        track_links: m.get("TrackLinks").filter(|v| !v.is_null()).and_then(|v| (v).as_str().and_then(iface_server_management_api__extended_server_info_track_links_enum__from_str)),
+        track_opens: m.get("TrackOpens").filter(|v| !v.is_null()).and_then(|v| (v).as_bool()),
+    })
+}
+
+fn iface_server_management_api__extended_server_info_track_links_enum__from_str(s: &str) -> Option<iface_server_management_api::ExtendedServerInfoTrackLinksEnum> {
+    match s {
+        "None" => Some(iface_server_management_api::ExtendedServerInfoTrackLinksEnum::None),
+        "HtmlAndTextTracking" => Some(iface_server_management_api::ExtendedServerInfoTrackLinksEnum::HtmlAndTextTracking),
+        "HtmlOnlyTracking" => Some(iface_server_management_api::ExtendedServerInfoTrackLinksEnum::HtmlOnlyTracking),
+        "TextOnlyTracking" => Some(iface_server_management_api::ExtendedServerInfoTrackLinksEnum::TextOnlyTracking),
+        _ => None,
+    }
+}
+
+fn iface_server_management_api__list_servers__ok(body: String) -> Result<iface_server_management_api::ServerListingResponse, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match iface_server_management_api__server_listing_response__from_json(&v) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_server_management_api__list_servers__err(e: crate::runtime::DispatchError) -> iface_server_management_api::ListServersError {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => match status {
+            422u16 => iface_server_management_api::ListServersError::UnprocessableEntity(body),
+            500u16 => iface_server_management_api::ListServersError::InternalServerError(body),
+            _ => iface_server_management_api::ListServersError::Other(body),
+        },
+        crate::runtime::DispatchError::Transport(m) => iface_server_management_api::ListServersError::Other(m),
+    }
+}
+
+fn iface_server_management_api__create_server__ok(body: String) -> Result<iface_server_management_api::ExtendedServerInfo, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match iface_server_management_api__extended_server_info__from_json(&v) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_server_management_api__create_server__err(e: crate::runtime::DispatchError) -> iface_server_management_api::CreateServerError {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => match status {
+            422u16 => iface_server_management_api::CreateServerError::UnprocessableEntity(body),
+            500u16 => iface_server_management_api::CreateServerError::InternalServerError(body),
+            _ => iface_server_management_api::CreateServerError::Other(body),
+        },
+        crate::runtime::DispatchError::Transport(m) => iface_server_management_api::CreateServerError::Other(m),
+    }
+}
+
+fn iface_server_management_api__get_server_information__ok(body: String) -> Result<iface_server_management_api::ExtendedServerInfo, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match iface_server_management_api__extended_server_info__from_json(&v) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_server_management_api__get_server_information__err(e: crate::runtime::DispatchError) -> iface_server_management_api::GetServerInformationError {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => match status {
+            422u16 => iface_server_management_api::GetServerInformationError::UnprocessableEntity(body),
+            500u16 => iface_server_management_api::GetServerInformationError::InternalServerError(body),
+            _ => iface_server_management_api::GetServerInformationError::Other(body),
+        },
+        crate::runtime::DispatchError::Transport(m) => iface_server_management_api::GetServerInformationError::Other(m),
+    }
+}
+
+fn iface_server_management_api__edit_server_information__ok(body: String) -> Result<iface_server_management_api::ExtendedServerInfo, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match iface_server_management_api__extended_server_info__from_json(&v) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_server_management_api__edit_server_information__err(e: crate::runtime::DispatchError) -> iface_server_management_api::EditServerInformationError {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => match status {
+            422u16 => iface_server_management_api::EditServerInformationError::UnprocessableEntity(body),
+            500u16 => iface_server_management_api::EditServerInformationError::InternalServerError(body),
+            _ => iface_server_management_api::EditServerInformationError::Other(body),
+        },
+        crate::runtime::DispatchError::Transport(m) => iface_server_management_api::EditServerInformationError::Other(m),
+    }
+}
+
+fn iface_server_management_api__delete_server__ok(body: String) -> Result<String, crate::runtime::DispatchError> {
+    Ok(body)
+}
+
+fn iface_server_management_api__delete_server__err(e: crate::runtime::DispatchError) -> iface_server_management_api::DeleteServerError {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => match status {
+            422u16 => iface_server_management_api::DeleteServerError::UnprocessableEntity(body),
+            500u16 => iface_server_management_api::DeleteServerError::InternalServerError(body),
+            _ => iface_server_management_api::DeleteServerError::Other(body),
+        },
+        crate::runtime::DispatchError::Transport(m) => iface_server_management_api::DeleteServerError::Other(m),
+    }
+}
+
 impl iface_server_management_api::Guest for crate::Component {
-    fn list_servers(params: iface_server_management_api::ListServersParams) -> Result<String, String> {
+    fn list_servers(params: iface_server_management_api::ListServersParams) -> Result<iface_server_management_api::ServerListingResponse, iface_server_management_api::ListServersError> {
         let json = iface_server_management_api__list_servers_params__to_json(&params);
-        dispatch(&OP_SERVER_MANAGEMENT_API_LIST_SERVERS, json)
+        match dispatch(&OP_SERVER_MANAGEMENT_API_LIST_SERVERS, json).and_then(iface_server_management_api__list_servers__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_server_management_api__list_servers__err(e)),
+        }
     }
-    fn create_server(params: iface_server_management_api::CreateServerParams) -> Result<String, String> {
+    fn create_server(params: iface_server_management_api::CreateServerParams) -> Result<iface_server_management_api::ExtendedServerInfo, iface_server_management_api::CreateServerError> {
         let json = iface_server_management_api__create_server_params__to_json(&params);
-        dispatch(&OP_SERVER_MANAGEMENT_API_CREATE_SERVER, json)
+        match dispatch(&OP_SERVER_MANAGEMENT_API_CREATE_SERVER, json).and_then(iface_server_management_api__create_server__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_server_management_api__create_server__err(e)),
+        }
     }
-    fn get_server_information(params: iface_server_management_api::GetServerInformationParams) -> Result<String, String> {
+    fn get_server_information(params: iface_server_management_api::GetServerInformationParams) -> Result<iface_server_management_api::ExtendedServerInfo, iface_server_management_api::GetServerInformationError> {
         let json = iface_server_management_api__get_server_information_params__to_json(&params);
-        dispatch(&OP_SERVER_MANAGEMENT_API_GET_SERVER_INFORMATION, json)
+        match dispatch(&OP_SERVER_MANAGEMENT_API_GET_SERVER_INFORMATION, json).and_then(iface_server_management_api__get_server_information__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_server_management_api__get_server_information__err(e)),
+        }
     }
-    fn edit_server_information(params: iface_server_management_api::EditServerInformationParams) -> Result<String, String> {
+    fn edit_server_information(params: iface_server_management_api::EditServerInformationParams) -> Result<iface_server_management_api::ExtendedServerInfo, iface_server_management_api::EditServerInformationError> {
         let json = iface_server_management_api__edit_server_information_params__to_json(&params);
-        dispatch(&OP_SERVER_MANAGEMENT_API_EDIT_SERVER_INFORMATION, json)
+        match dispatch(&OP_SERVER_MANAGEMENT_API_EDIT_SERVER_INFORMATION, json).and_then(iface_server_management_api__edit_server_information__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_server_management_api__edit_server_information__err(e)),
+        }
     }
-    fn delete_server(params: iface_server_management_api::DeleteServerParams) -> Result<String, String> {
+    fn delete_server(params: iface_server_management_api::DeleteServerParams) -> Result<String, iface_server_management_api::DeleteServerError> {
         let json = iface_server_management_api__delete_server_params__to_json(&params);
-        dispatch(&OP_SERVER_MANAGEMENT_API_DELETE_SERVER, json)
+        match dispatch(&OP_SERVER_MANAGEMENT_API_DELETE_SERVER, json).and_then(iface_server_management_api__delete_server__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_server_management_api__delete_server__err(e)),
+        }
     }
 }
 use crate::exports::autostamp::postmarkapp::templates_api as iface_templates_api;
@@ -871,14 +1767,30 @@ const OP_TEMPLATES_API_PUSH_TEMPLATES: OpSpec = OpSpec {
     method: "PUT",
     path_template: "/templates/push",
     fields: &[
-        FieldSpec { snake: "x_postmark_account_token", location: FieldLocation::Header },
-        FieldSpec { snake: "destination_server_id", location: FieldLocation::Body },
-        FieldSpec { snake: "perform_changes", location: FieldLocation::Body },
-        FieldSpec { snake: "source_server_id", location: FieldLocation::Body },
+        FieldSpec { snake: "x_postmark_account_token", wire: "X-Postmark-Account-Token", location: FieldLocation::Header },
+        FieldSpec { snake: "destination_server_id", wire: "DestinationServerId", location: FieldLocation::Body },
+        FieldSpec { snake: "perform_changes", wire: "PerformChanges", location: FieldLocation::Body },
+        FieldSpec { snake: "source_server_id", wire: "SourceServerId", location: FieldLocation::Body },
     ],
     auth: &[
     ],
 };
+
+fn iface_templates_api__templates_push_response__to_json(p: &iface_templates_api::TemplatesPushResponse) -> Value {
+    let mut m = Map::new();
+    m.insert("Templates".into(), match (&p.templates) { Some(v) => Value::Array((v).iter().map(|v| iface_templates_api__templates_push_response_templates_item__to_json(v)).collect()), None => Value::Null });
+    m.insert("TotalCount".into(), match (&p.total_count) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_templates_api__templates_push_response_templates_item__to_json(p: &iface_templates_api::TemplatesPushResponseTemplatesItem) -> Value {
+    let mut m = Map::new();
+    m.insert("Action".into(), match (&p.action) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("Alias".into(), match (&p.alias) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("Name".into(), match (&p.name) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("TemplateId".into(), match (&p.template_id) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    Value::Object(m)
+}
 
 fn iface_templates_api__push_templates_params__to_json(p: &iface_templates_api::PushTemplatesParams) -> Value {
     let mut m = Map::new();
@@ -889,10 +1801,53 @@ fn iface_templates_api__push_templates_params__to_json(p: &iface_templates_api::
     Value::Object(m)
 }
 
+fn iface_templates_api__templates_push_response__from_json(v: &Value) -> Option<iface_templates_api::TemplatesPushResponse> {
+    let m = v.as_object()?;
+    Some(iface_templates_api::TemplatesPushResponse {
+        templates: m.get("Templates").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| iface_templates_api__templates_push_response_templates_item__from_json(x)).collect())),
+        total_count: m.get("TotalCount").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+    })
+}
+
+fn iface_templates_api__templates_push_response_templates_item__from_json(v: &Value) -> Option<iface_templates_api::TemplatesPushResponseTemplatesItem> {
+    let m = v.as_object()?;
+    Some(iface_templates_api::TemplatesPushResponseTemplatesItem {
+        action: m.get("Action").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        alias: m.get("Alias").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        name: m.get("Name").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        template_id: m.get("TemplateId").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+    })
+}
+
+fn iface_templates_api__push_templates__ok(body: String) -> Result<iface_templates_api::TemplatesPushResponse, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match iface_templates_api__templates_push_response__from_json(&v) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_templates_api__push_templates__err(e: crate::runtime::DispatchError) -> iface_templates_api::PushTemplatesError {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => match status {
+            422u16 => iface_templates_api::PushTemplatesError::UnprocessableEntity(body),
+            500u16 => iface_templates_api::PushTemplatesError::InternalServerError(body),
+            _ => iface_templates_api::PushTemplatesError::Other(body),
+        },
+        crate::runtime::DispatchError::Transport(m) => iface_templates_api::PushTemplatesError::Other(m),
+    }
+}
+
 impl iface_templates_api::Guest for crate::Component {
-    fn push_templates(params: iface_templates_api::PushTemplatesParams) -> Result<String, String> {
+    fn push_templates(params: iface_templates_api::PushTemplatesParams) -> Result<iface_templates_api::TemplatesPushResponse, iface_templates_api::PushTemplatesError> {
         let json = iface_templates_api__push_templates_params__to_json(&params);
-        dispatch(&OP_TEMPLATES_API_PUSH_TEMPLATES, json)
+        match dispatch(&OP_TEMPLATES_API_PUSH_TEMPLATES, json).and_then(iface_templates_api__push_templates__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_templates_api__push_templates__err(e)),
+        }
     }
 }
 

@@ -44,10 +44,15 @@ pub(crate) enum FieldLocation {
     Body,
 }
 
-/// A single operation parameter: the snake-case key it carries in the params JSON and where
-/// it belongs in the request.
+/// A single operation parameter. `snake` keys the field in the internal params JSON (and, for a
+/// path field, matches the `{snake}` placeholder in the path template); `wire` is the verbatim name
+/// the field takes on the HTTP wire (query key, header name, or body property). The two differ
+/// whenever the source name isn't already snake_case (e.g. `dryRun` → snake `dry_run`, wire
+/// `dryRun`), and let distinct inputs that share a snake key (`DateCreated`, `DateCreated<`) still
+/// travel under their true names.
 pub(crate) struct FieldSpec {
     pub(crate) snake: &'static str,
+    pub(crate) wire: &'static str,
     pub(crate) location: FieldLocation,
 }
 
@@ -71,6 +76,16 @@ pub(crate) struct AuthApply {
     pub(crate) kind: AuthKind,
 }
 
+/// The failure modes of [`dispatch`], kept structured so each generated operation can map them
+/// onto its own typed error: an `Http` failure carries the response status and body (routed to
+/// the matching error-variant case), while a `Transport` failure carries a message for the
+/// catch-all case (a secret lookup, connection, or decode failure that never produced an HTTP
+/// status).
+pub(crate) enum DispatchError {
+    Http { status: u16, body: String },
+    Transport(String),
+}
+
 /// A single API operation: HTTP method, path template (with `{snake}` placeholders), the
 /// parameter fields, and the security schemes to apply.
 pub(crate) struct OpSpec {
@@ -81,8 +96,9 @@ pub(crate) struct OpSpec {
 }
 
 /// Execute `op` with the supplied `params` (a JSON object keyed by snake-case field names)
-/// and return the response body as a string, or an error message.
-pub(crate) fn dispatch(op: &OpSpec, params: Value) -> Result<String, String> {
+/// and return the raw 2xx response body, or a structured [`DispatchError`] the caller maps
+/// onto the operation's typed error.
+pub(crate) fn dispatch(op: &OpSpec, params: Value) -> Result<String, DispatchError> {
     let obj = match &params {
         Value::Object(map) => Some(map),
         _ => None,
@@ -105,10 +121,10 @@ pub(crate) fn dispatch(op: &OpSpec, params: Value) -> Result<String, String> {
                 let placeholder = format!("{{{}}}", field.snake);
                 path = path.replace(&placeholder, &percent_encode(&scalar(value)));
             }
-            FieldLocation::Query => query.push((field.snake.to_string(), scalar(value))),
-            FieldLocation::Header => headers.push((field.snake.to_string(), scalar(value))),
+            FieldLocation::Query => query.push((field.wire.to_string(), scalar(value))),
+            FieldLocation::Header => headers.push((field.wire.to_string(), scalar(value))),
             FieldLocation::Body => {
-                body.insert(field.snake.to_string(), value.clone());
+                body.insert(field.wire.to_string(), value.clone());
             }
         }
     }
@@ -116,7 +132,7 @@ pub(crate) fn dispatch(op: &OpSpec, params: Value) -> Result<String, String> {
     // Apply each resolved security scheme, sourcing its value from wasmcloud:secrets.
     let mut cookies: Vec<String> = Vec::new();
     for apply in op.auth {
-        let secret = fetch_secret(apply.secret_key)?;
+        let secret = fetch_secret(apply.secret_key).map_err(DispatchError::Transport)?;
         match &apply.kind {
             AuthKind::Bearer => headers.push(("authorization".into(), format!("Bearer {secret}"))),
             AuthKind::Basic => {
@@ -177,17 +193,18 @@ fn fetch_secret(key: &str) -> Result<String, String> {
 }
 
 /// Build and send the outgoing request with `wstd`, returning the response body on a 2xx
-/// status. The generated guest exports are synchronous, so the async `wstd` client is driven
-/// to completion on a local reactor via `wstd::runtime::block_on`.
+/// status and a structured [`DispatchError`] otherwise. The generated guest exports are
+/// synchronous, so the async `wstd` client is driven to completion on a local reactor via
+/// `wstd::runtime::block_on`.
 fn perform(
     method: &str,
     path_with_query: &str,
     headers: &[(String, String)],
     body: &[u8],
-) -> Result<String, String> {
+) -> Result<String, DispatchError> {
     let url = join_url(crate::BASE_URL, path_with_query);
     let method = Method::from_bytes(method.as_bytes())
-        .map_err(|err| format!("invalid HTTP method `{method}`: {err}"))?;
+        .map_err(|err| DispatchError::Transport(format!("invalid HTTP method `{method}`: {err}")))?;
 
     let mut builder = Request::builder().method(method).uri(url);
     for (name, value) in headers {
@@ -199,27 +216,29 @@ fn perform(
         } else {
             Body::from(body.to_vec())
         })
-        .map_err(|err| format!("failed to build request: {err}"))?;
+        .map_err(|err| DispatchError::Transport(format!("failed to build request: {err}")))?;
 
     wstd::runtime::block_on(async move {
         let client = Client::new();
         let response = client
             .send(request)
             .await
-            .map_err(|err| format!("request failed: {err:#}"))?;
+            .map_err(|err| DispatchError::Transport(format!("request failed: {err:#}")))?;
 
         let status = response.status().as_u16();
         let mut response_body = response.into_body();
-        let bytes = response_body
-            .contents()
-            .await
-            .map_err(|err| format!("failed to read response body: {err:#}"))?;
+        let bytes = response_body.contents().await.map_err(|err| {
+            DispatchError::Transport(format!("failed to read response body: {err:#}"))
+        })?;
         let body_text = String::from_utf8_lossy(bytes).into_owned();
 
         if (200..300).contains(&status) {
             Ok(body_text)
         } else {
-            Err(format!("HTTP {status}: {body_text}"))
+            Err(DispatchError::Http {
+                status,
+                body: body_text,
+            })
         }
     })
 }
@@ -288,14 +307,154 @@ const OP_VIOLATING_SITES_ABUSIVEEXPERIENCEREPORT_VIOLATING_SITES_LIST: OpSpec = 
     method: "GET",
     path_template: "/v1/violatingSites",
     fields: &[
+        FieldSpec { snake: "xgafv", wire: "$.xgafv", location: FieldLocation::Query },
+        FieldSpec { snake: "access_token", wire: "access_token", location: FieldLocation::Query },
+        FieldSpec { snake: "alt", wire: "alt", location: FieldLocation::Query },
+        FieldSpec { snake: "callback", wire: "callback", location: FieldLocation::Query },
+        FieldSpec { snake: "fields", wire: "fields", location: FieldLocation::Query },
+        FieldSpec { snake: "key", wire: "key", location: FieldLocation::Query },
+        FieldSpec { snake: "oauth_token", wire: "oauth_token", location: FieldLocation::Query },
+        FieldSpec { snake: "pretty_print", wire: "prettyPrint", location: FieldLocation::Query },
+        FieldSpec { snake: "quota_user", wire: "quotaUser", location: FieldLocation::Query },
+        FieldSpec { snake: "upload_protocol", wire: "upload_protocol", location: FieldLocation::Query },
+        FieldSpec { snake: "upload_type", wire: "uploadType", location: FieldLocation::Query },
     ],
     auth: &[
     ],
 };
 
+fn iface_violating_sites__abusiveexperiencereport_violating_sites_list_xgafv_enum__to_str(e: &iface_violating_sites::AbusiveexperiencereportViolatingSitesListXgafvEnum) -> &'static str {
+    match e {
+        iface_violating_sites::AbusiveexperiencereportViolatingSitesListXgafvEnum::V1 => "1",
+        iface_violating_sites::AbusiveexperiencereportViolatingSitesListXgafvEnum::V2 => "2",
+    }
+}
+
+fn iface_violating_sites__abusiveexperiencereport_violating_sites_list_alt_enum__to_str(e: &iface_violating_sites::AbusiveexperiencereportViolatingSitesListAltEnum) -> &'static str {
+    match e {
+        iface_violating_sites::AbusiveexperiencereportViolatingSitesListAltEnum::Json => "json",
+        iface_violating_sites::AbusiveexperiencereportViolatingSitesListAltEnum::Media => "media",
+        iface_violating_sites::AbusiveexperiencereportViolatingSitesListAltEnum::Proto => "proto",
+    }
+}
+
+fn iface_violating_sites__site_summary_response_abusive_status_enum__to_str(e: &iface_violating_sites::SiteSummaryResponseAbusiveStatusEnum) -> &'static str {
+    match e {
+        iface_violating_sites::SiteSummaryResponseAbusiveStatusEnum::Unknown => "UNKNOWN",
+        iface_violating_sites::SiteSummaryResponseAbusiveStatusEnum::Passing => "PASSING",
+        iface_violating_sites::SiteSummaryResponseAbusiveStatusEnum::Failing => "FAILING",
+    }
+}
+
+fn iface_violating_sites__site_summary_response_filter_status_enum__to_str(e: &iface_violating_sites::SiteSummaryResponseFilterStatusEnum) -> &'static str {
+    match e {
+        iface_violating_sites::SiteSummaryResponseFilterStatusEnum::Unknown => "UNKNOWN",
+        iface_violating_sites::SiteSummaryResponseFilterStatusEnum::On => "ON",
+        iface_violating_sites::SiteSummaryResponseFilterStatusEnum::Off => "OFF",
+        iface_violating_sites::SiteSummaryResponseFilterStatusEnum::Paused => "PAUSED",
+        iface_violating_sites::SiteSummaryResponseFilterStatusEnum::Pending => "PENDING",
+    }
+}
+
+fn iface_violating_sites__response__to_json(p: &iface_violating_sites::Response) -> Value {
+    let mut m = Map::new();
+    m.insert("violatingSites".into(), match (&p.violating_sites) { Some(v) => Value::Array((v).iter().map(|v| iface_violating_sites__site_summary_response__to_json(v)).collect()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_violating_sites__site_summary_response__to_json(p: &iface_violating_sites::SiteSummaryResponse) -> Value {
+    let mut m = Map::new();
+    m.insert("abusiveStatus".into(), match (&p.abusive_status) { Some(v) => Value::String(iface_violating_sites__site_summary_response_abusive_status_enum__to_str(v).into()), None => Value::Null });
+    m.insert("enforcementTime".into(), match (&p.enforcement_time) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("filterStatus".into(), match (&p.filter_status) { Some(v) => Value::String(iface_violating_sites__site_summary_response_filter_status_enum__to_str(v).into()), None => Value::Null });
+    m.insert("lastChangeTime".into(), match (&p.last_change_time) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("reportUrl".into(), match (&p.report_url) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("reviewedSite".into(), match (&p.reviewed_site) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("underReview".into(), match (&p.under_review) { Some(v) => Value::Bool(*(v)), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_violating_sites__abusiveexperiencereport_violating_sites_list_params__to_json(p: &iface_violating_sites::AbusiveexperiencereportViolatingSitesListParams) -> Value {
+    let mut m = Map::new();
+    m.insert("xgafv".into(), match (&p.xgafv) { Some(v) => Value::String(iface_violating_sites__abusiveexperiencereport_violating_sites_list_xgafv_enum__to_str(v).into()), None => Value::Null });
+    m.insert("access_token".into(), match (&p.access_token) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("alt".into(), match (&p.alt) { Some(v) => Value::String(iface_violating_sites__abusiveexperiencereport_violating_sites_list_alt_enum__to_str(v).into()), None => Value::Null });
+    m.insert("callback".into(), match (&p.callback) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("fields".into(), match (&p.fields) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("key".into(), match (&p.key) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("oauth_token".into(), match (&p.oauth_token) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("pretty_print".into(), match (&p.pretty_print) { Some(v) => Value::Bool(*(v)), None => Value::Null });
+    m.insert("quota_user".into(), match (&p.quota_user) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("upload_protocol".into(), match (&p.upload_protocol) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("upload_type".into(), match (&p.upload_type) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_violating_sites__response__from_json(v: &Value) -> Option<iface_violating_sites::Response> {
+    let m = v.as_object()?;
+    Some(iface_violating_sites::Response {
+        violating_sites: m.get("violatingSites").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| iface_violating_sites__site_summary_response__from_json(x)).collect())),
+    })
+}
+
+fn iface_violating_sites__site_summary_response__from_json(v: &Value) -> Option<iface_violating_sites::SiteSummaryResponse> {
+    let m = v.as_object()?;
+    Some(iface_violating_sites::SiteSummaryResponse {
+        abusive_status: m.get("abusiveStatus").filter(|v| !v.is_null()).and_then(|v| (v).as_str().and_then(iface_violating_sites__site_summary_response_abusive_status_enum__from_str)),
+        enforcement_time: m.get("enforcementTime").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        filter_status: m.get("filterStatus").filter(|v| !v.is_null()).and_then(|v| (v).as_str().and_then(iface_violating_sites__site_summary_response_filter_status_enum__from_str)),
+        last_change_time: m.get("lastChangeTime").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        report_url: m.get("reportUrl").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        reviewed_site: m.get("reviewedSite").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        under_review: m.get("underReview").filter(|v| !v.is_null()).and_then(|v| (v).as_bool()),
+    })
+}
+
+fn iface_violating_sites__site_summary_response_abusive_status_enum__from_str(s: &str) -> Option<iface_violating_sites::SiteSummaryResponseAbusiveStatusEnum> {
+    match s {
+        "UNKNOWN" => Some(iface_violating_sites::SiteSummaryResponseAbusiveStatusEnum::Unknown),
+        "PASSING" => Some(iface_violating_sites::SiteSummaryResponseAbusiveStatusEnum::Passing),
+        "FAILING" => Some(iface_violating_sites::SiteSummaryResponseAbusiveStatusEnum::Failing),
+        _ => None,
+    }
+}
+
+fn iface_violating_sites__site_summary_response_filter_status_enum__from_str(s: &str) -> Option<iface_violating_sites::SiteSummaryResponseFilterStatusEnum> {
+    match s {
+        "UNKNOWN" => Some(iface_violating_sites::SiteSummaryResponseFilterStatusEnum::Unknown),
+        "ON" => Some(iface_violating_sites::SiteSummaryResponseFilterStatusEnum::On),
+        "OFF" => Some(iface_violating_sites::SiteSummaryResponseFilterStatusEnum::Off),
+        "PAUSED" => Some(iface_violating_sites::SiteSummaryResponseFilterStatusEnum::Paused),
+        "PENDING" => Some(iface_violating_sites::SiteSummaryResponseFilterStatusEnum::Pending),
+        _ => None,
+    }
+}
+
+fn iface_violating_sites__abusiveexperiencereport_violating_sites_list__ok(body: String) -> Result<iface_violating_sites::Response, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match iface_violating_sites__response__from_json(&v) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_violating_sites__abusiveexperiencereport_violating_sites_list__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
 impl iface_violating_sites::Guest for crate::Component {
-    fn abusiveexperiencereport_violating_sites_list() -> Result<String, String> {
-        dispatch(&OP_VIOLATING_SITES_ABUSIVEEXPERIENCEREPORT_VIOLATING_SITES_LIST, Value::Object(Map::new()))
+    fn abusiveexperiencereport_violating_sites_list(params: iface_violating_sites::AbusiveexperiencereportViolatingSitesListParams) -> Result<iface_violating_sites::Response, String> {
+        let json = iface_violating_sites__abusiveexperiencereport_violating_sites_list_params__to_json(&params);
+        match dispatch(&OP_VIOLATING_SITES_ABUSIVEEXPERIENCEREPORT_VIOLATING_SITES_LIST, json).and_then(iface_violating_sites__abusiveexperiencereport_violating_sites_list__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_violating_sites__abusiveexperiencereport_violating_sites_list__err(e)),
+        }
     }
 }
 use crate::exports::autostamp::googleapis::sites as iface_sites;
@@ -304,22 +463,143 @@ const OP_SITES_ABUSIVEEXPERIENCEREPORT_SITES_GET: OpSpec = OpSpec {
     method: "GET",
     path_template: "/v1/{name}",
     fields: &[
-        FieldSpec { snake: "name", location: FieldLocation::Path },
+        FieldSpec { snake: "xgafv", wire: "$.xgafv", location: FieldLocation::Query },
+        FieldSpec { snake: "access_token", wire: "access_token", location: FieldLocation::Query },
+        FieldSpec { snake: "alt", wire: "alt", location: FieldLocation::Query },
+        FieldSpec { snake: "callback", wire: "callback", location: FieldLocation::Query },
+        FieldSpec { snake: "fields", wire: "fields", location: FieldLocation::Query },
+        FieldSpec { snake: "key", wire: "key", location: FieldLocation::Query },
+        FieldSpec { snake: "oauth_token", wire: "oauth_token", location: FieldLocation::Query },
+        FieldSpec { snake: "pretty_print", wire: "prettyPrint", location: FieldLocation::Query },
+        FieldSpec { snake: "quota_user", wire: "quotaUser", location: FieldLocation::Query },
+        FieldSpec { snake: "upload_protocol", wire: "upload_protocol", location: FieldLocation::Query },
+        FieldSpec { snake: "upload_type", wire: "uploadType", location: FieldLocation::Query },
+        FieldSpec { snake: "name", wire: "name", location: FieldLocation::Path },
     ],
     auth: &[
     ],
 };
 
+fn iface_sites__abusiveexperiencereport_sites_get_xgafv_enum__to_str(e: &iface_sites::AbusiveexperiencereportSitesGetXgafvEnum) -> &'static str {
+    match e {
+        iface_sites::AbusiveexperiencereportSitesGetXgafvEnum::V1 => "1",
+        iface_sites::AbusiveexperiencereportSitesGetXgafvEnum::V2 => "2",
+    }
+}
+
+fn iface_sites__abusiveexperiencereport_sites_get_alt_enum__to_str(e: &iface_sites::AbusiveexperiencereportSitesGetAltEnum) -> &'static str {
+    match e {
+        iface_sites::AbusiveexperiencereportSitesGetAltEnum::Json => "json",
+        iface_sites::AbusiveexperiencereportSitesGetAltEnum::Media => "media",
+        iface_sites::AbusiveexperiencereportSitesGetAltEnum::Proto => "proto",
+    }
+}
+
+fn iface_sites__site_summary_response_abusive_status_enum__to_str(e: &iface_sites::SiteSummaryResponseAbusiveStatusEnum) -> &'static str {
+    match e {
+        iface_sites::SiteSummaryResponseAbusiveStatusEnum::Unknown => "UNKNOWN",
+        iface_sites::SiteSummaryResponseAbusiveStatusEnum::Passing => "PASSING",
+        iface_sites::SiteSummaryResponseAbusiveStatusEnum::Failing => "FAILING",
+    }
+}
+
+fn iface_sites__site_summary_response_filter_status_enum__to_str(e: &iface_sites::SiteSummaryResponseFilterStatusEnum) -> &'static str {
+    match e {
+        iface_sites::SiteSummaryResponseFilterStatusEnum::Unknown => "UNKNOWN",
+        iface_sites::SiteSummaryResponseFilterStatusEnum::On => "ON",
+        iface_sites::SiteSummaryResponseFilterStatusEnum::Off => "OFF",
+        iface_sites::SiteSummaryResponseFilterStatusEnum::Paused => "PAUSED",
+        iface_sites::SiteSummaryResponseFilterStatusEnum::Pending => "PENDING",
+    }
+}
+
+fn iface_sites__site_summary_response__to_json(p: &iface_sites::SiteSummaryResponse) -> Value {
+    let mut m = Map::new();
+    m.insert("abusiveStatus".into(), match (&p.abusive_status) { Some(v) => Value::String(iface_sites__site_summary_response_abusive_status_enum__to_str(v).into()), None => Value::Null });
+    m.insert("enforcementTime".into(), match (&p.enforcement_time) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("filterStatus".into(), match (&p.filter_status) { Some(v) => Value::String(iface_sites__site_summary_response_filter_status_enum__to_str(v).into()), None => Value::Null });
+    m.insert("lastChangeTime".into(), match (&p.last_change_time) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("reportUrl".into(), match (&p.report_url) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("reviewedSite".into(), match (&p.reviewed_site) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("underReview".into(), match (&p.under_review) { Some(v) => Value::Bool(*(v)), None => Value::Null });
+    Value::Object(m)
+}
+
 fn iface_sites__abusiveexperiencereport_sites_get_params__to_json(p: &iface_sites::AbusiveexperiencereportSitesGetParams) -> Value {
     let mut m = Map::new();
+    m.insert("xgafv".into(), match (&p.xgafv) { Some(v) => Value::String(iface_sites__abusiveexperiencereport_sites_get_xgafv_enum__to_str(v).into()), None => Value::Null });
+    m.insert("access_token".into(), match (&p.access_token) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("alt".into(), match (&p.alt) { Some(v) => Value::String(iface_sites__abusiveexperiencereport_sites_get_alt_enum__to_str(v).into()), None => Value::Null });
+    m.insert("callback".into(), match (&p.callback) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("fields".into(), match (&p.fields) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("key".into(), match (&p.key) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("oauth_token".into(), match (&p.oauth_token) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("pretty_print".into(), match (&p.pretty_print) { Some(v) => Value::Bool(*(v)), None => Value::Null });
+    m.insert("quota_user".into(), match (&p.quota_user) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("upload_protocol".into(), match (&p.upload_protocol) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("upload_type".into(), match (&p.upload_type) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("name".into(), Value::String((&p.name).clone()));
     Value::Object(m)
 }
 
+fn iface_sites__site_summary_response__from_json(v: &Value) -> Option<iface_sites::SiteSummaryResponse> {
+    let m = v.as_object()?;
+    Some(iface_sites::SiteSummaryResponse {
+        abusive_status: m.get("abusiveStatus").filter(|v| !v.is_null()).and_then(|v| (v).as_str().and_then(iface_sites__site_summary_response_abusive_status_enum__from_str)),
+        enforcement_time: m.get("enforcementTime").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        filter_status: m.get("filterStatus").filter(|v| !v.is_null()).and_then(|v| (v).as_str().and_then(iface_sites__site_summary_response_filter_status_enum__from_str)),
+        last_change_time: m.get("lastChangeTime").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        report_url: m.get("reportUrl").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        reviewed_site: m.get("reviewedSite").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        under_review: m.get("underReview").filter(|v| !v.is_null()).and_then(|v| (v).as_bool()),
+    })
+}
+
+fn iface_sites__site_summary_response_abusive_status_enum__from_str(s: &str) -> Option<iface_sites::SiteSummaryResponseAbusiveStatusEnum> {
+    match s {
+        "UNKNOWN" => Some(iface_sites::SiteSummaryResponseAbusiveStatusEnum::Unknown),
+        "PASSING" => Some(iface_sites::SiteSummaryResponseAbusiveStatusEnum::Passing),
+        "FAILING" => Some(iface_sites::SiteSummaryResponseAbusiveStatusEnum::Failing),
+        _ => None,
+    }
+}
+
+fn iface_sites__site_summary_response_filter_status_enum__from_str(s: &str) -> Option<iface_sites::SiteSummaryResponseFilterStatusEnum> {
+    match s {
+        "UNKNOWN" => Some(iface_sites::SiteSummaryResponseFilterStatusEnum::Unknown),
+        "ON" => Some(iface_sites::SiteSummaryResponseFilterStatusEnum::On),
+        "OFF" => Some(iface_sites::SiteSummaryResponseFilterStatusEnum::Off),
+        "PAUSED" => Some(iface_sites::SiteSummaryResponseFilterStatusEnum::Paused),
+        "PENDING" => Some(iface_sites::SiteSummaryResponseFilterStatusEnum::Pending),
+        _ => None,
+    }
+}
+
+fn iface_sites__abusiveexperiencereport_sites_get__ok(body: String) -> Result<iface_sites::SiteSummaryResponse, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match iface_sites__site_summary_response__from_json(&v) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_sites__abusiveexperiencereport_sites_get__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
 impl iface_sites::Guest for crate::Component {
-    fn abusiveexperiencereport_sites_get(params: iface_sites::AbusiveexperiencereportSitesGetParams) -> Result<String, String> {
+    fn abusiveexperiencereport_sites_get(params: iface_sites::AbusiveexperiencereportSitesGetParams) -> Result<iface_sites::SiteSummaryResponse, String> {
         let json = iface_sites__abusiveexperiencereport_sites_get_params__to_json(&params);
-        dispatch(&OP_SITES_ABUSIVEEXPERIENCEREPORT_SITES_GET, json)
+        match dispatch(&OP_SITES_ABUSIVEEXPERIENCEREPORT_SITES_GET, json).and_then(iface_sites__abusiveexperiencereport_sites_get__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_sites__abusiveexperiencereport_sites_get__err(e)),
+        }
     }
 }
 

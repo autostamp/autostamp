@@ -44,10 +44,15 @@ pub(crate) enum FieldLocation {
     Body,
 }
 
-/// A single operation parameter: the snake-case key it carries in the params JSON and where
-/// it belongs in the request.
+/// A single operation parameter. `snake` keys the field in the internal params JSON (and, for a
+/// path field, matches the `{snake}` placeholder in the path template); `wire` is the verbatim name
+/// the field takes on the HTTP wire (query key, header name, or body property). The two differ
+/// whenever the source name isn't already snake_case (e.g. `dryRun` → snake `dry_run`, wire
+/// `dryRun`), and let distinct inputs that share a snake key (`DateCreated`, `DateCreated<`) still
+/// travel under their true names.
 pub(crate) struct FieldSpec {
     pub(crate) snake: &'static str,
+    pub(crate) wire: &'static str,
     pub(crate) location: FieldLocation,
 }
 
@@ -71,6 +76,16 @@ pub(crate) struct AuthApply {
     pub(crate) kind: AuthKind,
 }
 
+/// The failure modes of [`dispatch`], kept structured so each generated operation can map them
+/// onto its own typed error: an `Http` failure carries the response status and body (routed to
+/// the matching error-variant case), while a `Transport` failure carries a message for the
+/// catch-all case (a secret lookup, connection, or decode failure that never produced an HTTP
+/// status).
+pub(crate) enum DispatchError {
+    Http { status: u16, body: String },
+    Transport(String),
+}
+
 /// A single API operation: HTTP method, path template (with `{snake}` placeholders), the
 /// parameter fields, and the security schemes to apply.
 pub(crate) struct OpSpec {
@@ -81,8 +96,9 @@ pub(crate) struct OpSpec {
 }
 
 /// Execute `op` with the supplied `params` (a JSON object keyed by snake-case field names)
-/// and return the response body as a string, or an error message.
-pub(crate) fn dispatch(op: &OpSpec, params: Value) -> Result<String, String> {
+/// and return the raw 2xx response body, or a structured [`DispatchError`] the caller maps
+/// onto the operation's typed error.
+pub(crate) fn dispatch(op: &OpSpec, params: Value) -> Result<String, DispatchError> {
     let obj = match &params {
         Value::Object(map) => Some(map),
         _ => None,
@@ -105,10 +121,10 @@ pub(crate) fn dispatch(op: &OpSpec, params: Value) -> Result<String, String> {
                 let placeholder = format!("{{{}}}", field.snake);
                 path = path.replace(&placeholder, &percent_encode(&scalar(value)));
             }
-            FieldLocation::Query => query.push((field.snake.to_string(), scalar(value))),
-            FieldLocation::Header => headers.push((field.snake.to_string(), scalar(value))),
+            FieldLocation::Query => query.push((field.wire.to_string(), scalar(value))),
+            FieldLocation::Header => headers.push((field.wire.to_string(), scalar(value))),
             FieldLocation::Body => {
-                body.insert(field.snake.to_string(), value.clone());
+                body.insert(field.wire.to_string(), value.clone());
             }
         }
     }
@@ -116,7 +132,7 @@ pub(crate) fn dispatch(op: &OpSpec, params: Value) -> Result<String, String> {
     // Apply each resolved security scheme, sourcing its value from wasmcloud:secrets.
     let mut cookies: Vec<String> = Vec::new();
     for apply in op.auth {
-        let secret = fetch_secret(apply.secret_key)?;
+        let secret = fetch_secret(apply.secret_key).map_err(DispatchError::Transport)?;
         match &apply.kind {
             AuthKind::Bearer => headers.push(("authorization".into(), format!("Bearer {secret}"))),
             AuthKind::Basic => {
@@ -177,17 +193,18 @@ fn fetch_secret(key: &str) -> Result<String, String> {
 }
 
 /// Build and send the outgoing request with `wstd`, returning the response body on a 2xx
-/// status. The generated guest exports are synchronous, so the async `wstd` client is driven
-/// to completion on a local reactor via `wstd::runtime::block_on`.
+/// status and a structured [`DispatchError`] otherwise. The generated guest exports are
+/// synchronous, so the async `wstd` client is driven to completion on a local reactor via
+/// `wstd::runtime::block_on`.
 fn perform(
     method: &str,
     path_with_query: &str,
     headers: &[(String, String)],
     body: &[u8],
-) -> Result<String, String> {
+) -> Result<String, DispatchError> {
     let url = join_url(crate::BASE_URL, path_with_query);
     let method = Method::from_bytes(method.as_bytes())
-        .map_err(|err| format!("invalid HTTP method `{method}`: {err}"))?;
+        .map_err(|err| DispatchError::Transport(format!("invalid HTTP method `{method}`: {err}")))?;
 
     let mut builder = Request::builder().method(method).uri(url);
     for (name, value) in headers {
@@ -199,27 +216,29 @@ fn perform(
         } else {
             Body::from(body.to_vec())
         })
-        .map_err(|err| format!("failed to build request: {err}"))?;
+        .map_err(|err| DispatchError::Transport(format!("failed to build request: {err}")))?;
 
     wstd::runtime::block_on(async move {
         let client = Client::new();
         let response = client
             .send(request)
             .await
-            .map_err(|err| format!("request failed: {err:#}"))?;
+            .map_err(|err| DispatchError::Transport(format!("request failed: {err:#}")))?;
 
         let status = response.status().as_u16();
         let mut response_body = response.into_body();
-        let bytes = response_body
-            .contents()
-            .await
-            .map_err(|err| format!("failed to read response body: {err:#}"))?;
+        let bytes = response_body.contents().await.map_err(|err| {
+            DispatchError::Transport(format!("failed to read response body: {err:#}"))
+        })?;
         let body_text = String::from_utf8_lossy(bytes).into_owned();
 
         if (200..300).contains(&status) {
             Ok(body_text)
         } else {
-            Err(format!("HTTP {status}: {body_text}"))
+            Err(DispatchError::Http {
+                status,
+                body: body_text,
+            })
         }
     })
 }
@@ -288,20 +307,20 @@ const OP_SHOPPING_GET_FLIGHT_OFFERS: OpSpec = OpSpec {
     method: "GET",
     path_template: "/shopping/flight-offers",
     fields: &[
-        FieldSpec { snake: "origin_location_code", location: FieldLocation::Query },
-        FieldSpec { snake: "destination_location_code", location: FieldLocation::Query },
-        FieldSpec { snake: "departure_date", location: FieldLocation::Query },
-        FieldSpec { snake: "return_date", location: FieldLocation::Query },
-        FieldSpec { snake: "adults", location: FieldLocation::Query },
-        FieldSpec { snake: "children", location: FieldLocation::Query },
-        FieldSpec { snake: "infants", location: FieldLocation::Query },
-        FieldSpec { snake: "travel_class", location: FieldLocation::Query },
-        FieldSpec { snake: "included_airline_codes", location: FieldLocation::Query },
-        FieldSpec { snake: "excluded_airline_codes", location: FieldLocation::Query },
-        FieldSpec { snake: "non_stop", location: FieldLocation::Query },
-        FieldSpec { snake: "currency_code", location: FieldLocation::Query },
-        FieldSpec { snake: "max_price", location: FieldLocation::Query },
-        FieldSpec { snake: "max", location: FieldLocation::Query },
+        FieldSpec { snake: "origin_location_code", wire: "originLocationCode", location: FieldLocation::Query },
+        FieldSpec { snake: "destination_location_code", wire: "destinationLocationCode", location: FieldLocation::Query },
+        FieldSpec { snake: "departure_date", wire: "departureDate", location: FieldLocation::Query },
+        FieldSpec { snake: "return_date", wire: "returnDate", location: FieldLocation::Query },
+        FieldSpec { snake: "adults", wire: "adults", location: FieldLocation::Query },
+        FieldSpec { snake: "children", wire: "children", location: FieldLocation::Query },
+        FieldSpec { snake: "infants", wire: "infants", location: FieldLocation::Query },
+        FieldSpec { snake: "travel_class", wire: "travelClass", location: FieldLocation::Query },
+        FieldSpec { snake: "included_airline_codes", wire: "includedAirlineCodes", location: FieldLocation::Query },
+        FieldSpec { snake: "excluded_airline_codes", wire: "excludedAirlineCodes", location: FieldLocation::Query },
+        FieldSpec { snake: "non_stop", wire: "nonStop", location: FieldLocation::Query },
+        FieldSpec { snake: "currency_code", wire: "currencyCode", location: FieldLocation::Query },
+        FieldSpec { snake: "max_price", wire: "maxPrice", location: FieldLocation::Query },
+        FieldSpec { snake: "max", wire: "max", location: FieldLocation::Query },
     ],
     auth: &[
     ],
@@ -311,7 +330,12 @@ const OP_SHOPPING_SEARCH_FLIGHT_OFFERS: OpSpec = OpSpec {
     method: "POST",
     path_template: "/shopping/flight-offers",
     fields: &[
-        FieldSpec { snake: "x_http_method_override", location: FieldLocation::Header },
+        FieldSpec { snake: "x_http_method_override", wire: "X-HTTP-Method-Override", location: FieldLocation::Header },
+        FieldSpec { snake: "currency_code", wire: "currencyCode", location: FieldLocation::Body },
+        FieldSpec { snake: "origin_destinations", wire: "originDestinations", location: FieldLocation::Body },
+        FieldSpec { snake: "search_criteria", wire: "searchCriteria", location: FieldLocation::Body },
+        FieldSpec { snake: "sources", wire: "sources", location: FieldLocation::Body },
+        FieldSpec { snake: "travelers", wire: "travelers", location: FieldLocation::Body },
     ],
     auth: &[
     ],
@@ -324,6 +348,430 @@ fn iface_shopping__get_flight_offers_travel_class_enum__to_str(e: &iface_shoppin
         iface_shopping::GetFlightOffersTravelClassEnum::Business => "BUSINESS",
         iface_shopping::GetFlightOffersTravelClassEnum::First => "FIRST",
     }
+}
+
+fn iface_shopping__get_flight_offers_response__to_json(p: &iface_shopping::GetFlightOffersResponse) -> Value {
+    let mut m = Map::new();
+    m.insert("data".into(), Value::Array((&p.data).iter().map(|v| iface_shopping__flight_offer__to_json(v)).collect()));
+    m.insert("dictionaries".into(), match (&p.dictionaries) { Some(v) => iface_shopping__dictionaries__to_json(v), None => Value::Null });
+    m.insert("meta".into(), match (&p.meta) { Some(v) => iface_shopping__collection_meta_link__to_json(v), None => Value::Null });
+    m.insert("warnings".into(), match (&p.warnings) { Some(v) => Value::Array((v).iter().map(|v| iface_shopping__issue__to_json(v)).collect()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_shopping__flight_offer__to_json(p: &iface_shopping::FlightOffer) -> Value {
+    let mut m = Map::new();
+    m.insert("disablePricing".into(), match (&p.disable_pricing) { Some(v) => Value::Bool(*(v)), None => Value::Null });
+    m.insert("id".into(), Value::String((&p.id).clone()));
+    m.insert("instantTicketingRequired".into(), match (&p.instant_ticketing_required) { Some(v) => Value::Bool(*(v)), None => Value::Null });
+    m.insert("itineraries".into(), match (&p.itineraries) { Some(v) => Value::Array((v).iter().map(|v| iface_shopping__flight_offer_itineraries_item__to_json(v)).collect()), None => Value::Null });
+    m.insert("lastTicketingDate".into(), match (&p.last_ticketing_date) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("nonHomogeneous".into(), match (&p.non_homogeneous) { Some(v) => Value::Bool(*(v)), None => Value::Null });
+    m.insert("numberOfBookableSeats".into(), match (&p.number_of_bookable_seats) { Some(v) => serde_json::Number::from_f64(*(v)).map(Value::Number).unwrap_or(Value::Null), None => Value::Null });
+    m.insert("oneWay".into(), match (&p.one_way) { Some(v) => Value::Bool(*(v)), None => Value::Null });
+    m.insert("paymentCardRequired".into(), match (&p.payment_card_required) { Some(v) => Value::Bool(*(v)), None => Value::Null });
+    m.insert("price".into(), match (&p.price) { Some(v) => iface_shopping__extended_price__to_json(v), None => Value::Null });
+    m.insert("pricingOptions".into(), match (&p.pricing_options) { Some(v) => iface_shopping__flight_offer_pricing_options__to_json(v), None => Value::Null });
+    m.insert("source".into(), match (&p.source) { Some(v) => iface_shopping__flight_offer_source__to_json(v), None => Value::Null });
+    m.insert("travelerPricings".into(), match (&p.traveler_pricings) { Some(v) => Value::Array((v).iter().map(|v| iface_shopping__flight_offer_traveler_pricings_item__to_json(v)).collect()), None => Value::Null });
+    m.insert("type".into(), Value::String((&p.type_op).clone()));
+    m.insert("validatingAirlineCodes".into(), match (&p.validating_airline_codes) { Some(v) => Value::Array((v).iter().map(|v| Value::String((v).clone())).collect()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_shopping__flight_offer_itineraries_item__to_json(p: &iface_shopping::FlightOfferItinerariesItem) -> Value {
+    let mut m = Map::new();
+    m.insert("duration".into(), match (&p.duration) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("segments".into(), Value::Array((&p.segments).iter().map(|v| iface_shopping__segment__to_json(v)).collect()));
+    Value::Object(m)
+}
+
+fn iface_shopping__segment__to_json(p: &iface_shopping::Segment) -> Value {
+    let mut m = Map::new();
+    m.insert("blacklistedInEU".into(), match (&p.blacklisted_in_eu) { Some(v) => Value::Bool(*(v)), None => Value::Null });
+    m.insert("co2Emissions".into(), match (&p.co2_emissions) { Some(v) => Value::Array((v).iter().map(|v| iface_shopping__co2_emission__to_json(v)).collect()), None => Value::Null });
+    m.insert("id".into(), match (&p.id) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("numberOfStops".into(), match (&p.number_of_stops) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("aircraft".into(), match (&p.aircraft) { Some(v) => iface_shopping__aircraft_equipment__to_json(v), None => Value::Null });
+    m.insert("arrival".into(), match (&p.arrival) { Some(v) => iface_shopping__flight_end_point__to_json(v), None => Value::Null });
+    m.insert("carrierCode".into(), match (&p.carrier_code) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("departure".into(), match (&p.departure) { Some(v) => iface_shopping__flight_end_point__to_json(v), None => Value::Null });
+    m.insert("duration".into(), match (&p.duration) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("number".into(), match (&p.number) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("operating".into(), match (&p.operating) { Some(v) => iface_shopping__operating_flight__to_json(v), None => Value::Null });
+    m.insert("stops".into(), match (&p.stops) { Some(v) => Value::Array((v).iter().map(|v| iface_shopping__flight_stop__to_json(v)).collect()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_shopping__co2_emission__to_json(p: &iface_shopping::Co2Emission) -> Value {
+    let mut m = Map::new();
+    m.insert("cabin".into(), match (&p.cabin) { Some(v) => iface_shopping__travel_class__to_json(v), None => Value::Null });
+    m.insert("weight".into(), match (&p.weight) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("weightUnit".into(), match (&p.weight_unit) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_shopping__travel_class__to_json(p: &iface_shopping::TravelClass) -> Value {
+    let mut m = Map::new();
+    m.insert("value".into(), Value::String((&p.value).clone()));
+    Value::Object(m)
+}
+
+fn iface_shopping__aircraft_equipment__to_json(p: &iface_shopping::AircraftEquipment) -> Value {
+    let mut m = Map::new();
+    m.insert("code".into(), match (&p.code) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_shopping__flight_end_point__to_json(p: &iface_shopping::FlightEndPoint) -> Value {
+    let mut m = Map::new();
+    m.insert("iataCode".into(), match (&p.iata_code) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("terminal".into(), match (&p.terminal) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("at".into(), match (&p.at) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_shopping__operating_flight__to_json(p: &iface_shopping::OperatingFlight) -> Value {
+    let mut m = Map::new();
+    m.insert("carrierCode".into(), match (&p.carrier_code) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_shopping__flight_stop__to_json(p: &iface_shopping::FlightStop) -> Value {
+    let mut m = Map::new();
+    m.insert("duration".into(), match (&p.duration) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("iataCode".into(), match (&p.iata_code) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("arrivalAt".into(), match (&p.arrival_at) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("departureAt".into(), match (&p.departure_at) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_shopping__extended_price__to_json(p: &iface_shopping::ExtendedPrice) -> Value {
+    let mut m = Map::new();
+    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_shopping__flight_offer_pricing_options__to_json(p: &iface_shopping::FlightOfferPricingOptions) -> Value {
+    let mut m = Map::new();
+    m.insert("fareType".into(), match (&p.fare_type) { Some(v) => iface_shopping__pricing_options_fare_type__to_json(v), None => Value::Null });
+    m.insert("includedCheckedBagsOnly".into(), match (&p.included_checked_bags_only) { Some(v) => Value::Bool(*(v)), None => Value::Null });
+    m.insert("noPenaltyFare".into(), match (&p.no_penalty_fare) { Some(v) => Value::Bool(*(v)), None => Value::Null });
+    m.insert("noRestrictionFare".into(), match (&p.no_restriction_fare) { Some(v) => Value::Bool(*(v)), None => Value::Null });
+    m.insert("refundableFare".into(), match (&p.refundable_fare) { Some(v) => Value::Bool(*(v)), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_shopping__pricing_options_fare_type__to_json(p: &iface_shopping::PricingOptionsFareType) -> Value {
+    let mut m = Map::new();
+    m.insert("value".into(), Value::String((&p.value).clone()));
+    Value::Object(m)
+}
+
+fn iface_shopping__flight_offer_source__to_json(p: &iface_shopping::FlightOfferSource) -> Value {
+    let mut m = Map::new();
+    m.insert("value".into(), Value::String((&p.value).clone()));
+    Value::Object(m)
+}
+
+fn iface_shopping__flight_offer_traveler_pricings_item__to_json(p: &iface_shopping::FlightOfferTravelerPricingsItem) -> Value {
+    let mut m = Map::new();
+    m.insert("associatedAdultId".into(), match (&p.associated_adult_id) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("fareDetailsBySegment".into(), Value::Array((&p.fare_details_by_segment).iter().map(|v| iface_shopping__flight_offer_traveler_pricings_item_fare_details_by_segment_item__to_json(v)).collect()));
+    m.insert("fareOption".into(), iface_shopping__traveler_pricing_fare_option__to_json(&p.fare_option));
+    m.insert("price".into(), match (&p.price) { Some(v) => iface_shopping__price__to_json(v), None => Value::Null });
+    m.insert("travelerId".into(), Value::String((&p.traveler_id).clone()));
+    m.insert("travelerType".into(), iface_shopping__traveler_type__to_json(&p.traveler_type));
+    Value::Object(m)
+}
+
+fn iface_shopping__flight_offer_traveler_pricings_item_fare_details_by_segment_item__to_json(p: &iface_shopping::FlightOfferTravelerPricingsItemFareDetailsBySegmentItem) -> Value {
+    let mut m = Map::new();
+    m.insert("additionalServices".into(), match (&p.additional_services) { Some(v) => iface_shopping__flight_offer_traveler_pricings_item_fare_details_by_segment_item_additional_services__to_json(v), None => Value::Null });
+    m.insert("allotmentDetails".into(), match (&p.allotment_details) { Some(v) => iface_shopping__flight_offer_traveler_pricings_item_fare_details_by_segment_item_allotment_details__to_json(v), None => Value::Null });
+    m.insert("brandedFare".into(), match (&p.branded_fare) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("cabin".into(), match (&p.cabin) { Some(v) => iface_shopping__travel_class__to_json(v), None => Value::Null });
+    m.insert("class".into(), match (&p.class) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("fareBasis".into(), match (&p.fare_basis) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("includedCheckedBags".into(), match (&p.included_checked_bags) { Some(v) => iface_shopping__baggage_allowance__to_json(v), None => Value::Null });
+    m.insert("isAllotment".into(), match (&p.is_allotment) { Some(v) => Value::Bool(*(v)), None => Value::Null });
+    m.insert("segmentId".into(), Value::String((&p.segment_id).clone()));
+    m.insert("sliceDiceIndicator".into(), match (&p.slice_dice_indicator) { Some(v) => iface_shopping__slice_dice_indicator__to_json(v), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_shopping__flight_offer_traveler_pricings_item_fare_details_by_segment_item_additional_services__to_json(p: &iface_shopping::FlightOfferTravelerPricingsItemFareDetailsBySegmentItemAdditionalServices) -> Value {
+    let mut m = Map::new();
+    m.insert("chargeableCheckedBags".into(), match (&p.chargeable_checked_bags) { Some(v) => iface_shopping__baggage_allowance__to_json(v), None => Value::Null });
+    m.insert("chargeableSeatNumber".into(), match (&p.chargeable_seat_number) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("otherServices".into(), match (&p.other_services) { Some(v) => Value::Array((v).iter().map(|v| iface_shopping__service_name__to_json(v)).collect()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_shopping__baggage_allowance__to_json(p: &iface_shopping::BaggageAllowance) -> Value {
+    let mut m = Map::new();
+    m.insert("quantity".into(), match (&p.quantity) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("weight".into(), match (&p.weight) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("weightUnit".into(), match (&p.weight_unit) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_shopping__service_name__to_json(p: &iface_shopping::ServiceName) -> Value {
+    let mut m = Map::new();
+    m.insert("value".into(), Value::String((&p.value).clone()));
+    Value::Object(m)
+}
+
+fn iface_shopping__flight_offer_traveler_pricings_item_fare_details_by_segment_item_allotment_details__to_json(p: &iface_shopping::FlightOfferTravelerPricingsItemFareDetailsBySegmentItemAllotmentDetails) -> Value {
+    let mut m = Map::new();
+    m.insert("tourName".into(), match (&p.tour_name) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("tourReference".into(), match (&p.tour_reference) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_shopping__slice_dice_indicator__to_json(p: &iface_shopping::SliceDiceIndicator) -> Value {
+    let mut m = Map::new();
+    m.insert("value".into(), Value::String((&p.value).clone()));
+    Value::Object(m)
+}
+
+fn iface_shopping__traveler_pricing_fare_option__to_json(p: &iface_shopping::TravelerPricingFareOption) -> Value {
+    let mut m = Map::new();
+    m.insert("value".into(), Value::String((&p.value).clone()));
+    Value::Object(m)
+}
+
+fn iface_shopping__price__to_json(p: &iface_shopping::Price) -> Value {
+    let mut m = Map::new();
+    m.insert("base".into(), match (&p.base) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("currency".into(), match (&p.currency) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("fees".into(), match (&p.fees) { Some(v) => Value::Array((v).iter().map(|v| iface_shopping__fee__to_json(v)).collect()), None => Value::Null });
+    m.insert("refundableTaxes".into(), match (&p.refundable_taxes) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("taxes".into(), match (&p.taxes) { Some(v) => Value::Array((v).iter().map(|v| iface_shopping__tax__to_json(v)).collect()), None => Value::Null });
+    m.insert("total".into(), match (&p.total) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_shopping__fee__to_json(p: &iface_shopping::Fee) -> Value {
+    let mut m = Map::new();
+    m.insert("amount".into(), match (&p.amount) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("type".into(), match (&p.type_op) { Some(v) => iface_shopping__fee_type__to_json(v), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_shopping__fee_type__to_json(p: &iface_shopping::FeeType) -> Value {
+    let mut m = Map::new();
+    m.insert("value".into(), Value::String((&p.value).clone()));
+    Value::Object(m)
+}
+
+fn iface_shopping__tax__to_json(p: &iface_shopping::Tax) -> Value {
+    let mut m = Map::new();
+    m.insert("amount".into(), match (&p.amount) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("code".into(), match (&p.code) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_shopping__traveler_type__to_json(p: &iface_shopping::TravelerType) -> Value {
+    let mut m = Map::new();
+    m.insert("value".into(), Value::String((&p.value).clone()));
+    Value::Object(m)
+}
+
+fn iface_shopping__dictionaries__to_json(p: &iface_shopping::Dictionaries) -> Value {
+    let mut m = Map::new();
+    m.insert("aircraft".into(), match (&p.aircraft) { Some(v) => iface_shopping__aircraft_entry__to_json(v), None => Value::Null });
+    m.insert("carriers".into(), match (&p.carriers) { Some(v) => iface_shopping__carrier_entry__to_json(v), None => Value::Null });
+    m.insert("currencies".into(), match (&p.currencies) { Some(v) => iface_shopping__currency_entry__to_json(v), None => Value::Null });
+    m.insert("locations".into(), match (&p.locations) { Some(v) => iface_shopping__location_entry__to_json(v), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_shopping__aircraft_entry__to_json(p: &iface_shopping::AircraftEntry) -> Value {
+    let mut m = Map::new();
+    m.insert("key".into(), match (&p.key) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_shopping__carrier_entry__to_json(p: &iface_shopping::CarrierEntry) -> Value {
+    let mut m = Map::new();
+    m.insert("key".into(), match (&p.key) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_shopping__currency_entry__to_json(p: &iface_shopping::CurrencyEntry) -> Value {
+    let mut m = Map::new();
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    Value::Object(m)
+}
+
+fn iface_shopping__location_entry__to_json(p: &iface_shopping::LocationEntry) -> Value {
+    let mut m = Map::new();
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    Value::Object(m)
+}
+
+fn iface_shopping__collection_meta_link__to_json(p: &iface_shopping::CollectionMetaLink) -> Value {
+    let mut m = Map::new();
+    m.insert("count".into(), match (&p.count) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("links".into(), match (&p.links) { Some(v) => iface_shopping__collection_meta_link_links__to_json(v), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_shopping__collection_meta_link_links__to_json(p: &iface_shopping::CollectionMetaLinkLinks) -> Value {
+    let mut m = Map::new();
+    m.insert("first".into(), match (&p.first) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("last".into(), match (&p.last) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("next".into(), match (&p.next) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("previous".into(), match (&p.previous) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("self".into(), match (&p.self_) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("up".into(), match (&p.up) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_shopping__issue__to_json(p: &iface_shopping::Issue) -> Value {
+    let mut m = Map::new();
+    m.insert("code".into(), match (&p.code) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("detail".into(), match (&p.detail) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("source".into(), match (&p.source) { Some(v) => iface_shopping__issue_source__to_json(v), None => Value::Null });
+    m.insert("status".into(), match (&p.status) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("title".into(), match (&p.title) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_shopping__issue_source__to_json(p: &iface_shopping::IssueSource) -> Value {
+    let mut m = Map::new();
+    m.insert("example".into(), match (&p.example) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("parameter".into(), match (&p.parameter) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("pointer".into(), match (&p.pointer) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_shopping__origin_destination__to_json(p: &iface_shopping::OriginDestination) -> Value {
+    let mut m = Map::new();
+    m.insert("alternativeDestinationsCodes".into(), match (&p.alternative_destinations_codes) { Some(v) => Value::Array((v).iter().map(|v| Value::String((v).clone())).collect()), None => Value::Null });
+    m.insert("alternativeOriginsCodes".into(), match (&p.alternative_origins_codes) { Some(v) => Value::Array((v).iter().map(|v| Value::String((v).clone())).collect()), None => Value::Null });
+    m.insert("arrivalDateTimeRange".into(), match (&p.arrival_date_time_range) { Some(v) => iface_shopping__date_time_range__to_json(v), None => Value::Null });
+    m.insert("departureDateTimeRange".into(), match (&p.departure_date_time_range) { Some(v) => iface_shopping__date_time_range__to_json(v), None => Value::Null });
+    m.insert("destinationLocationCode".into(), match (&p.destination_location_code) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("destinationRadius".into(), match (&p.destination_radius) { Some(v) => serde_json::Number::from_f64(*(v)).map(Value::Number).unwrap_or(Value::Null), None => Value::Null });
+    m.insert("excludedConnectionPoints".into(), match (&p.excluded_connection_points) { Some(v) => Value::Array((v).iter().map(|v| Value::String((v).clone())).collect()), None => Value::Null });
+    m.insert("id".into(), match (&p.id) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("includedConnectionPoints".into(), match (&p.included_connection_points) { Some(v) => Value::Array((v).iter().map(|v| Value::String((v).clone())).collect()), None => Value::Null });
+    m.insert("originLocationCode".into(), match (&p.origin_location_code) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("originRadius".into(), match (&p.origin_radius) { Some(v) => serde_json::Number::from_f64(*(v)).map(Value::Number).unwrap_or(Value::Null), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_shopping__date_time_range__to_json(p: &iface_shopping::DateTimeRange) -> Value {
+    let mut m = Map::new();
+    m.insert("date".into(), Value::String((&p.date).clone()));
+    m.insert("dateWindow".into(), match (&p.date_window) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("time".into(), match (&p.time) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("timeWindow".into(), match (&p.time_window) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_shopping__search_criteria__to_json(p: &iface_shopping::SearchCriteria) -> Value {
+    let mut m = Map::new();
+    m.insert("addOneWayOffers".into(), match (&p.add_one_way_offers) { Some(v) => Value::Bool(*(v)), None => Value::Null });
+    m.insert("additionalInformation".into(), match (&p.additional_information) { Some(v) => iface_shopping__search_criteria_additional_information__to_json(v), None => Value::Null });
+    m.insert("allowAlternativeFareOptions".into(), match (&p.allow_alternative_fare_options) { Some(v) => Value::Bool(*(v)), None => Value::Null });
+    m.insert("excludeAllotments".into(), match (&p.exclude_allotments) { Some(v) => Value::Bool(*(v)), None => Value::Null });
+    m.insert("flightFilters".into(), match (&p.flight_filters) { Some(v) => iface_shopping__search_criteria_flight_filters__to_json(v), None => Value::Null });
+    m.insert("maxFlightOffers".into(), match (&p.max_flight_offers) { Some(v) => serde_json::Number::from_f64(*(v)).map(Value::Number).unwrap_or(Value::Null), None => Value::Null });
+    m.insert("maxPrice".into(), match (&p.max_price) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("oneFlightOfferPerDay".into(), match (&p.one_flight_offer_per_day) { Some(v) => Value::Bool(*(v)), None => Value::Null });
+    m.insert("pricingOptions".into(), match (&p.pricing_options) { Some(v) => iface_shopping__extended_pricing_options__to_json(v), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_shopping__search_criteria_additional_information__to_json(p: &iface_shopping::SearchCriteriaAdditionalInformation) -> Value {
+    let mut m = Map::new();
+    m.insert("brandedFares".into(), match (&p.branded_fares) { Some(v) => Value::Bool(*(v)), None => Value::Null });
+    m.insert("chargeableCheckedBags".into(), match (&p.chargeable_checked_bags) { Some(v) => Value::Bool(*(v)), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_shopping__search_criteria_flight_filters__to_json(p: &iface_shopping::SearchCriteriaFlightFilters) -> Value {
+    let mut m = Map::new();
+    m.insert("busSegmentAllowed".into(), match (&p.bus_segment_allowed) { Some(v) => Value::Bool(*(v)), None => Value::Null });
+    m.insert("cabinRestrictions".into(), match (&p.cabin_restrictions) { Some(v) => Value::Array((v).iter().map(|v| iface_shopping__search_criteria_flight_filters_cabin_restrictions_item__to_json(v)).collect()), None => Value::Null });
+    m.insert("carrierRestrictions".into(), match (&p.carrier_restrictions) { Some(v) => iface_shopping__search_criteria_flight_filters_carrier_restrictions__to_json(v), None => Value::Null });
+    m.insert("connectionRestriction".into(), match (&p.connection_restriction) { Some(v) => iface_shopping__search_criteria_flight_filters_connection_restriction__to_json(v), None => Value::Null });
+    m.insert("crossBorderAllowed".into(), match (&p.cross_border_allowed) { Some(v) => Value::Bool(*(v)), None => Value::Null });
+    m.insert("maxFlightTime".into(), match (&p.max_flight_time) { Some(v) => serde_json::Number::from_f64(*(v)).map(Value::Number).unwrap_or(Value::Null), None => Value::Null });
+    m.insert("moreOvernightsAllowed".into(), match (&p.more_overnights_allowed) { Some(v) => Value::Bool(*(v)), None => Value::Null });
+    m.insert("railSegmentAllowed".into(), match (&p.rail_segment_allowed) { Some(v) => Value::Bool(*(v)), None => Value::Null });
+    m.insert("returnToDepartureAirport".into(), match (&p.return_to_departure_airport) { Some(v) => Value::Bool(*(v)), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_shopping__search_criteria_flight_filters_cabin_restrictions_item__to_json(p: &iface_shopping::SearchCriteriaFlightFiltersCabinRestrictionsItem) -> Value {
+    let mut m = Map::new();
+    m.insert("cabin".into(), match (&p.cabin) { Some(v) => iface_shopping__travel_class__to_json(v), None => Value::Null });
+    m.insert("coverage".into(), match (&p.coverage) { Some(v) => iface_shopping__coverage__to_json(v), None => Value::Null });
+    m.insert("originDestinationIds".into(), match (&p.origin_destination_ids) { Some(v) => Value::Array((v).iter().map(|v| Value::String((v).clone())).collect()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_shopping__coverage__to_json(p: &iface_shopping::Coverage) -> Value {
+    let mut m = Map::new();
+    m.insert("value".into(), Value::String((&p.value).clone()));
+    Value::Object(m)
+}
+
+fn iface_shopping__search_criteria_flight_filters_carrier_restrictions__to_json(p: &iface_shopping::SearchCriteriaFlightFiltersCarrierRestrictions) -> Value {
+    let mut m = Map::new();
+    m.insert("blacklistedInEUAllowed".into(), match (&p.blacklisted_in_eu_allowed) { Some(v) => Value::Bool(*(v)), None => Value::Null });
+    m.insert("excludedCarrierCodes".into(), match (&p.excluded_carrier_codes) { Some(v) => Value::Array((v).iter().map(|v| Value::String((v).clone())).collect()), None => Value::Null });
+    m.insert("includedCarrierCodes".into(), match (&p.included_carrier_codes) { Some(v) => Value::Array((v).iter().map(|v| Value::String((v).clone())).collect()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_shopping__search_criteria_flight_filters_connection_restriction__to_json(p: &iface_shopping::SearchCriteriaFlightFiltersConnectionRestriction) -> Value {
+    let mut m = Map::new();
+    m.insert("airportChangeAllowed".into(), match (&p.airport_change_allowed) { Some(v) => Value::Bool(*(v)), None => Value::Null });
+    m.insert("maxNumberOfConnections".into(), match (&p.max_number_of_connections) { Some(v) => serde_json::Number::from_f64(*(v)).map(Value::Number).unwrap_or(Value::Null), None => Value::Null });
+    m.insert("technicalStopsAllowed".into(), match (&p.technical_stops_allowed) { Some(v) => Value::Bool(*(v)), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_shopping__extended_pricing_options__to_json(p: &iface_shopping::ExtendedPricingOptions) -> Value {
+    let mut m = Map::new();
+    m.insert("includedCheckedBagsOnly".into(), match (&p.included_checked_bags_only) { Some(v) => Value::Bool(*(v)), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_shopping__traveler__to_json(p: &iface_shopping::Traveler) -> Value {
+    let mut m = Map::new();
+    m.insert("associatedAdultId".into(), match (&p.associated_adult_id) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("id".into(), Value::String((&p.id).clone()));
+    m.insert("travelerType".into(), iface_shopping__traveler_type__to_json(&p.traveler_type));
+    Value::Object(m)
+}
+
+fn iface_shopping__search_flight_offers_response__to_json(p: &iface_shopping::SearchFlightOffersResponse) -> Value {
+    let mut m = Map::new();
+    m.insert("data".into(), Value::Array((&p.data).iter().map(|v| iface_shopping__flight_offer__to_json(v)).collect()));
+    m.insert("dictionaries".into(), match (&p.dictionaries) { Some(v) => iface_shopping__dictionaries__to_json(v), None => Value::Null });
+    m.insert("meta".into(), match (&p.meta) { Some(v) => iface_shopping__collection_meta__to_json(v), None => Value::Null });
+    m.insert("warnings".into(), match (&p.warnings) { Some(v) => Value::Array((v).iter().map(|v| iface_shopping__issue__to_json(v)).collect()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_shopping__collection_meta__to_json(p: &iface_shopping::CollectionMeta) -> Value {
+    let mut m = Map::new();
+    m.insert("count".into(), match (&p.count) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("oneWayCombinations".into(), match (&p.one_way_combinations) { Some(v) => Value::Array((v).iter().map(|v| iface_shopping__collection_meta_one_way_combinations_item__to_json(v)).collect()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_shopping__collection_meta_one_way_combinations_item__to_json(p: &iface_shopping::CollectionMetaOneWayCombinationsItem) -> Value {
+    let mut m = Map::new();
+    m.insert("flightOfferIds".into(), match (&p.flight_offer_ids) { Some(v) => Value::Array((v).iter().map(|v| Value::String((v).clone())).collect()), None => Value::Null });
+    m.insert("originDestinationId".into(), match (&p.origin_destination_id) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
 }
 
 fn iface_shopping__get_flight_offers_params__to_json(p: &iface_shopping::GetFlightOffersParams) -> Value {
@@ -348,17 +796,429 @@ fn iface_shopping__get_flight_offers_params__to_json(p: &iface_shopping::GetFlig
 fn iface_shopping__search_flight_offers_params__to_json(p: &iface_shopping::SearchFlightOffersParams) -> Value {
     let mut m = Map::new();
     m.insert("x_http_method_override".into(), Value::String((&p.x_http_method_override).clone()));
+    m.insert("currency_code".into(), match (&p.currency_code) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("origin_destinations".into(), Value::Array((&p.origin_destinations).iter().map(|v| iface_shopping__origin_destination__to_json(v)).collect()));
+    m.insert("search_criteria".into(), match (&p.search_criteria) { Some(v) => iface_shopping__search_criteria__to_json(v), None => Value::Null });
+    m.insert("sources".into(), Value::Array((&p.sources).iter().map(|v| iface_shopping__flight_offer_source__to_json(v)).collect()));
+    m.insert("travelers".into(), Value::Array((&p.travelers).iter().map(|v| iface_shopping__traveler__to_json(v)).collect()));
     Value::Object(m)
 }
 
-impl iface_shopping::Guest for crate::Component {
-    fn get_flight_offers(params: iface_shopping::GetFlightOffersParams) -> Result<String, String> {
-        let json = iface_shopping__get_flight_offers_params__to_json(&params);
-        dispatch(&OP_SHOPPING_GET_FLIGHT_OFFERS, json)
+fn iface_shopping__get_flight_offers_response__from_json(v: &Value) -> Option<iface_shopping::GetFlightOffersResponse> {
+    let m = v.as_object()?;
+    Some(iface_shopping::GetFlightOffersResponse {
+        data: m.get("data").and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| iface_shopping__flight_offer__from_json(x)).collect())).unwrap_or_default(),
+        dictionaries: m.get("dictionaries").filter(|v| !v.is_null()).and_then(|v| iface_shopping__dictionaries__from_json(v)),
+        meta: m.get("meta").filter(|v| !v.is_null()).and_then(|v| iface_shopping__collection_meta_link__from_json(v)),
+        warnings: m.get("warnings").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| iface_shopping__issue__from_json(x)).collect())),
+    })
+}
+
+fn iface_shopping__flight_offer__from_json(v: &Value) -> Option<iface_shopping::FlightOffer> {
+    let m = v.as_object()?;
+    Some(iface_shopping::FlightOffer {
+        disable_pricing: m.get("disablePricing").filter(|v| !v.is_null()).and_then(|v| (v).as_bool()),
+        id: m.get("id").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        instant_ticketing_required: m.get("instantTicketingRequired").filter(|v| !v.is_null()).and_then(|v| (v).as_bool()),
+        itineraries: m.get("itineraries").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| iface_shopping__flight_offer_itineraries_item__from_json(x)).collect())),
+        last_ticketing_date: m.get("lastTicketingDate").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        non_homogeneous: m.get("nonHomogeneous").filter(|v| !v.is_null()).and_then(|v| (v).as_bool()),
+        number_of_bookable_seats: m.get("numberOfBookableSeats").filter(|v| !v.is_null()).and_then(|v| (v).as_f64()),
+        one_way: m.get("oneWay").filter(|v| !v.is_null()).and_then(|v| (v).as_bool()),
+        payment_card_required: m.get("paymentCardRequired").filter(|v| !v.is_null()).and_then(|v| (v).as_bool()),
+        price: m.get("price").filter(|v| !v.is_null()).and_then(|v| iface_shopping__extended_price__from_json(v)),
+        pricing_options: m.get("pricingOptions").filter(|v| !v.is_null()).and_then(|v| iface_shopping__flight_offer_pricing_options__from_json(v)),
+        source: m.get("source").filter(|v| !v.is_null()).and_then(|v| iface_shopping__flight_offer_source__from_json(v)),
+        traveler_pricings: m.get("travelerPricings").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| iface_shopping__flight_offer_traveler_pricings_item__from_json(x)).collect())),
+        type_op: m.get("type").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        validating_airline_codes: m.get("validatingAirlineCodes").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| (x).as_str().map(|s| s.to_string())).collect())),
+    })
+}
+
+fn iface_shopping__flight_offer_itineraries_item__from_json(v: &Value) -> Option<iface_shopping::FlightOfferItinerariesItem> {
+    let m = v.as_object()?;
+    Some(iface_shopping::FlightOfferItinerariesItem {
+        duration: m.get("duration").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        segments: m.get("segments").and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| iface_shopping__segment__from_json(x)).collect())).unwrap_or_default(),
+    })
+}
+
+fn iface_shopping__segment__from_json(v: &Value) -> Option<iface_shopping::Segment> {
+    let m = v.as_object()?;
+    Some(iface_shopping::Segment {
+        blacklisted_in_eu: m.get("blacklistedInEU").filter(|v| !v.is_null()).and_then(|v| (v).as_bool()),
+        co2_emissions: m.get("co2Emissions").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| iface_shopping__co2_emission__from_json(x)).collect())),
+        id: m.get("id").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        number_of_stops: m.get("numberOfStops").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        aircraft: m.get("aircraft").filter(|v| !v.is_null()).and_then(|v| iface_shopping__aircraft_equipment__from_json(v)),
+        arrival: m.get("arrival").filter(|v| !v.is_null()).and_then(|v| iface_shopping__flight_end_point__from_json(v)),
+        carrier_code: m.get("carrierCode").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        departure: m.get("departure").filter(|v| !v.is_null()).and_then(|v| iface_shopping__flight_end_point__from_json(v)),
+        duration: m.get("duration").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        number: m.get("number").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        operating: m.get("operating").filter(|v| !v.is_null()).and_then(|v| iface_shopping__operating_flight__from_json(v)),
+        stops: m.get("stops").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| iface_shopping__flight_stop__from_json(x)).collect())),
+    })
+}
+
+fn iface_shopping__co2_emission__from_json(v: &Value) -> Option<iface_shopping::Co2Emission> {
+    let m = v.as_object()?;
+    Some(iface_shopping::Co2Emission {
+        cabin: m.get("cabin").filter(|v| !v.is_null()).and_then(|v| iface_shopping__travel_class__from_json(v)),
+        weight: m.get("weight").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        weight_unit: m.get("weightUnit").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    })
+}
+
+fn iface_shopping__travel_class__from_json(v: &Value) -> Option<iface_shopping::TravelClass> {
+    let m = v.as_object()?;
+    Some(iface_shopping::TravelClass {
+        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+    })
+}
+
+fn iface_shopping__aircraft_equipment__from_json(v: &Value) -> Option<iface_shopping::AircraftEquipment> {
+    let m = v.as_object()?;
+    Some(iface_shopping::AircraftEquipment {
+        code: m.get("code").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    })
+}
+
+fn iface_shopping__flight_end_point__from_json(v: &Value) -> Option<iface_shopping::FlightEndPoint> {
+    let m = v.as_object()?;
+    Some(iface_shopping::FlightEndPoint {
+        iata_code: m.get("iataCode").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        terminal: m.get("terminal").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        at: m.get("at").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    })
+}
+
+fn iface_shopping__operating_flight__from_json(v: &Value) -> Option<iface_shopping::OperatingFlight> {
+    let m = v.as_object()?;
+    Some(iface_shopping::OperatingFlight {
+        carrier_code: m.get("carrierCode").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    })
+}
+
+fn iface_shopping__flight_stop__from_json(v: &Value) -> Option<iface_shopping::FlightStop> {
+    let m = v.as_object()?;
+    Some(iface_shopping::FlightStop {
+        duration: m.get("duration").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        iata_code: m.get("iataCode").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        arrival_at: m.get("arrivalAt").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        departure_at: m.get("departureAt").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    })
+}
+
+fn iface_shopping__extended_price__from_json(v: &Value) -> Option<iface_shopping::ExtendedPrice> {
+    let m = v.as_object()?;
+    Some(iface_shopping::ExtendedPrice {
+        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    })
+}
+
+fn iface_shopping__flight_offer_pricing_options__from_json(v: &Value) -> Option<iface_shopping::FlightOfferPricingOptions> {
+    let m = v.as_object()?;
+    Some(iface_shopping::FlightOfferPricingOptions {
+        fare_type: m.get("fareType").filter(|v| !v.is_null()).and_then(|v| iface_shopping__pricing_options_fare_type__from_json(v)),
+        included_checked_bags_only: m.get("includedCheckedBagsOnly").filter(|v| !v.is_null()).and_then(|v| (v).as_bool()),
+        no_penalty_fare: m.get("noPenaltyFare").filter(|v| !v.is_null()).and_then(|v| (v).as_bool()),
+        no_restriction_fare: m.get("noRestrictionFare").filter(|v| !v.is_null()).and_then(|v| (v).as_bool()),
+        refundable_fare: m.get("refundableFare").filter(|v| !v.is_null()).and_then(|v| (v).as_bool()),
+    })
+}
+
+fn iface_shopping__pricing_options_fare_type__from_json(v: &Value) -> Option<iface_shopping::PricingOptionsFareType> {
+    let m = v.as_object()?;
+    Some(iface_shopping::PricingOptionsFareType {
+        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+    })
+}
+
+fn iface_shopping__flight_offer_source__from_json(v: &Value) -> Option<iface_shopping::FlightOfferSource> {
+    let m = v.as_object()?;
+    Some(iface_shopping::FlightOfferSource {
+        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+    })
+}
+
+fn iface_shopping__flight_offer_traveler_pricings_item__from_json(v: &Value) -> Option<iface_shopping::FlightOfferTravelerPricingsItem> {
+    let m = v.as_object()?;
+    Some(iface_shopping::FlightOfferTravelerPricingsItem {
+        associated_adult_id: m.get("associatedAdultId").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        fare_details_by_segment: m.get("fareDetailsBySegment").and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| iface_shopping__flight_offer_traveler_pricings_item_fare_details_by_segment_item__from_json(x)).collect())).unwrap_or_default(),
+        fare_option: match m.get("fareOption").and_then(|v| iface_shopping__traveler_pricing_fare_option__from_json(v)) { Some(x) => x, None => return None },
+        price: m.get("price").filter(|v| !v.is_null()).and_then(|v| iface_shopping__price__from_json(v)),
+        traveler_id: m.get("travelerId").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        traveler_type: match m.get("travelerType").and_then(|v| iface_shopping__traveler_type__from_json(v)) { Some(x) => x, None => return None },
+    })
+}
+
+fn iface_shopping__flight_offer_traveler_pricings_item_fare_details_by_segment_item__from_json(v: &Value) -> Option<iface_shopping::FlightOfferTravelerPricingsItemFareDetailsBySegmentItem> {
+    let m = v.as_object()?;
+    Some(iface_shopping::FlightOfferTravelerPricingsItemFareDetailsBySegmentItem {
+        additional_services: m.get("additionalServices").filter(|v| !v.is_null()).and_then(|v| iface_shopping__flight_offer_traveler_pricings_item_fare_details_by_segment_item_additional_services__from_json(v)),
+        allotment_details: m.get("allotmentDetails").filter(|v| !v.is_null()).and_then(|v| iface_shopping__flight_offer_traveler_pricings_item_fare_details_by_segment_item_allotment_details__from_json(v)),
+        branded_fare: m.get("brandedFare").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        cabin: m.get("cabin").filter(|v| !v.is_null()).and_then(|v| iface_shopping__travel_class__from_json(v)),
+        class: m.get("class").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        fare_basis: m.get("fareBasis").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        included_checked_bags: m.get("includedCheckedBags").filter(|v| !v.is_null()).and_then(|v| iface_shopping__baggage_allowance__from_json(v)),
+        is_allotment: m.get("isAllotment").filter(|v| !v.is_null()).and_then(|v| (v).as_bool()),
+        segment_id: m.get("segmentId").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        slice_dice_indicator: m.get("sliceDiceIndicator").filter(|v| !v.is_null()).and_then(|v| iface_shopping__slice_dice_indicator__from_json(v)),
+    })
+}
+
+fn iface_shopping__flight_offer_traveler_pricings_item_fare_details_by_segment_item_additional_services__from_json(v: &Value) -> Option<iface_shopping::FlightOfferTravelerPricingsItemFareDetailsBySegmentItemAdditionalServices> {
+    let m = v.as_object()?;
+    Some(iface_shopping::FlightOfferTravelerPricingsItemFareDetailsBySegmentItemAdditionalServices {
+        chargeable_checked_bags: m.get("chargeableCheckedBags").filter(|v| !v.is_null()).and_then(|v| iface_shopping__baggage_allowance__from_json(v)),
+        chargeable_seat_number: m.get("chargeableSeatNumber").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        other_services: m.get("otherServices").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| iface_shopping__service_name__from_json(x)).collect())),
+    })
+}
+
+fn iface_shopping__baggage_allowance__from_json(v: &Value) -> Option<iface_shopping::BaggageAllowance> {
+    let m = v.as_object()?;
+    Some(iface_shopping::BaggageAllowance {
+        quantity: m.get("quantity").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        weight: m.get("weight").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        weight_unit: m.get("weightUnit").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    })
+}
+
+fn iface_shopping__service_name__from_json(v: &Value) -> Option<iface_shopping::ServiceName> {
+    let m = v.as_object()?;
+    Some(iface_shopping::ServiceName {
+        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+    })
+}
+
+fn iface_shopping__flight_offer_traveler_pricings_item_fare_details_by_segment_item_allotment_details__from_json(v: &Value) -> Option<iface_shopping::FlightOfferTravelerPricingsItemFareDetailsBySegmentItemAllotmentDetails> {
+    let m = v.as_object()?;
+    Some(iface_shopping::FlightOfferTravelerPricingsItemFareDetailsBySegmentItemAllotmentDetails {
+        tour_name: m.get("tourName").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        tour_reference: m.get("tourReference").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    })
+}
+
+fn iface_shopping__slice_dice_indicator__from_json(v: &Value) -> Option<iface_shopping::SliceDiceIndicator> {
+    let m = v.as_object()?;
+    Some(iface_shopping::SliceDiceIndicator {
+        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+    })
+}
+
+fn iface_shopping__traveler_pricing_fare_option__from_json(v: &Value) -> Option<iface_shopping::TravelerPricingFareOption> {
+    let m = v.as_object()?;
+    Some(iface_shopping::TravelerPricingFareOption {
+        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+    })
+}
+
+fn iface_shopping__price__from_json(v: &Value) -> Option<iface_shopping::Price> {
+    let m = v.as_object()?;
+    Some(iface_shopping::Price {
+        base: m.get("base").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        currency: m.get("currency").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        fees: m.get("fees").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| iface_shopping__fee__from_json(x)).collect())),
+        refundable_taxes: m.get("refundableTaxes").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        taxes: m.get("taxes").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| iface_shopping__tax__from_json(x)).collect())),
+        total: m.get("total").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    })
+}
+
+fn iface_shopping__fee__from_json(v: &Value) -> Option<iface_shopping::Fee> {
+    let m = v.as_object()?;
+    Some(iface_shopping::Fee {
+        amount: m.get("amount").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        type_op: m.get("type").filter(|v| !v.is_null()).and_then(|v| iface_shopping__fee_type__from_json(v)),
+    })
+}
+
+fn iface_shopping__fee_type__from_json(v: &Value) -> Option<iface_shopping::FeeType> {
+    let m = v.as_object()?;
+    Some(iface_shopping::FeeType {
+        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+    })
+}
+
+fn iface_shopping__tax__from_json(v: &Value) -> Option<iface_shopping::Tax> {
+    let m = v.as_object()?;
+    Some(iface_shopping::Tax {
+        amount: m.get("amount").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        code: m.get("code").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    })
+}
+
+fn iface_shopping__traveler_type__from_json(v: &Value) -> Option<iface_shopping::TravelerType> {
+    let m = v.as_object()?;
+    Some(iface_shopping::TravelerType {
+        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+    })
+}
+
+fn iface_shopping__dictionaries__from_json(v: &Value) -> Option<iface_shopping::Dictionaries> {
+    let m = v.as_object()?;
+    Some(iface_shopping::Dictionaries {
+        aircraft: m.get("aircraft").filter(|v| !v.is_null()).and_then(|v| iface_shopping__aircraft_entry__from_json(v)),
+        carriers: m.get("carriers").filter(|v| !v.is_null()).and_then(|v| iface_shopping__carrier_entry__from_json(v)),
+        currencies: m.get("currencies").filter(|v| !v.is_null()).and_then(|v| iface_shopping__currency_entry__from_json(v)),
+        locations: m.get("locations").filter(|v| !v.is_null()).and_then(|v| iface_shopping__location_entry__from_json(v)),
+    })
+}
+
+fn iface_shopping__aircraft_entry__from_json(v: &Value) -> Option<iface_shopping::AircraftEntry> {
+    let m = v.as_object()?;
+    Some(iface_shopping::AircraftEntry {
+        key: m.get("key").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    })
+}
+
+fn iface_shopping__carrier_entry__from_json(v: &Value) -> Option<iface_shopping::CarrierEntry> {
+    let m = v.as_object()?;
+    Some(iface_shopping::CarrierEntry {
+        key: m.get("key").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    })
+}
+
+fn iface_shopping__currency_entry__from_json(v: &Value) -> Option<iface_shopping::CurrencyEntry> {
+    let m = v.as_object()?;
+    Some(iface_shopping::CurrencyEntry {
+        key: m.get("key").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+    })
+}
+
+fn iface_shopping__location_entry__from_json(v: &Value) -> Option<iface_shopping::LocationEntry> {
+    let m = v.as_object()?;
+    Some(iface_shopping::LocationEntry {
+        key: m.get("key").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+    })
+}
+
+fn iface_shopping__collection_meta_link__from_json(v: &Value) -> Option<iface_shopping::CollectionMetaLink> {
+    let m = v.as_object()?;
+    Some(iface_shopping::CollectionMetaLink {
+        count: m.get("count").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        links: m.get("links").filter(|v| !v.is_null()).and_then(|v| iface_shopping__collection_meta_link_links__from_json(v)),
+    })
+}
+
+fn iface_shopping__collection_meta_link_links__from_json(v: &Value) -> Option<iface_shopping::CollectionMetaLinkLinks> {
+    let m = v.as_object()?;
+    Some(iface_shopping::CollectionMetaLinkLinks {
+        first: m.get("first").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        last: m.get("last").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        next: m.get("next").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        previous: m.get("previous").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        self_: m.get("self").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        up: m.get("up").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    })
+}
+
+fn iface_shopping__issue__from_json(v: &Value) -> Option<iface_shopping::Issue> {
+    let m = v.as_object()?;
+    Some(iface_shopping::Issue {
+        code: m.get("code").filter(|v| !v.is_null()).and_then(|v| (v).as_i64()),
+        detail: m.get("detail").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        source: m.get("source").filter(|v| !v.is_null()).and_then(|v| iface_shopping__issue_source__from_json(v)),
+        status: m.get("status").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        title: m.get("title").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    })
+}
+
+fn iface_shopping__issue_source__from_json(v: &Value) -> Option<iface_shopping::IssueSource> {
+    let m = v.as_object()?;
+    Some(iface_shopping::IssueSource {
+        example: m.get("example").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        parameter: m.get("parameter").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        pointer: m.get("pointer").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    })
+}
+
+fn iface_shopping__search_flight_offers_response__from_json(v: &Value) -> Option<iface_shopping::SearchFlightOffersResponse> {
+    let m = v.as_object()?;
+    Some(iface_shopping::SearchFlightOffersResponse {
+        data: m.get("data").and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| iface_shopping__flight_offer__from_json(x)).collect())).unwrap_or_default(),
+        dictionaries: m.get("dictionaries").filter(|v| !v.is_null()).and_then(|v| iface_shopping__dictionaries__from_json(v)),
+        meta: m.get("meta").filter(|v| !v.is_null()).and_then(|v| iface_shopping__collection_meta__from_json(v)),
+        warnings: m.get("warnings").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| iface_shopping__issue__from_json(x)).collect())),
+    })
+}
+
+fn iface_shopping__collection_meta__from_json(v: &Value) -> Option<iface_shopping::CollectionMeta> {
+    let m = v.as_object()?;
+    Some(iface_shopping::CollectionMeta {
+        count: m.get("count").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        one_way_combinations: m.get("oneWayCombinations").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| iface_shopping__collection_meta_one_way_combinations_item__from_json(x)).collect())),
+    })
+}
+
+fn iface_shopping__collection_meta_one_way_combinations_item__from_json(v: &Value) -> Option<iface_shopping::CollectionMetaOneWayCombinationsItem> {
+    let m = v.as_object()?;
+    Some(iface_shopping::CollectionMetaOneWayCombinationsItem {
+        flight_offer_ids: m.get("flightOfferIds").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| (x).as_str().map(|s| s.to_string())).collect())),
+        origin_destination_id: m.get("originDestinationId").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    })
+}
+
+fn iface_shopping__get_flight_offers__ok(body: String) -> Result<iface_shopping::GetFlightOffersResponse, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match iface_shopping__get_flight_offers_response__from_json(&v) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
     }
-    fn search_flight_offers(params: iface_shopping::SearchFlightOffersParams) -> Result<String, String> {
+}
+
+fn iface_shopping__get_flight_offers__err(e: crate::runtime::DispatchError) -> iface_shopping::GetFlightOffersError {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => match status {
+            400u16 => iface_shopping::GetFlightOffersError::BadRequest(body),
+            _ => iface_shopping::GetFlightOffersError::Other(body),
+        },
+        crate::runtime::DispatchError::Transport(m) => iface_shopping::GetFlightOffersError::Other(m),
+    }
+}
+
+fn iface_shopping__search_flight_offers__ok(body: String) -> Result<iface_shopping::SearchFlightOffersResponse, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match iface_shopping__search_flight_offers_response__from_json(&v) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_shopping__search_flight_offers__err(e: crate::runtime::DispatchError) -> iface_shopping::SearchFlightOffersError {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => match status {
+            400u16 => iface_shopping::SearchFlightOffersError::BadRequest(body),
+            _ => iface_shopping::SearchFlightOffersError::Other(body),
+        },
+        crate::runtime::DispatchError::Transport(m) => iface_shopping::SearchFlightOffersError::Other(m),
+    }
+}
+
+impl iface_shopping::Guest for crate::Component {
+    fn get_flight_offers(params: iface_shopping::GetFlightOffersParams) -> Result<iface_shopping::GetFlightOffersResponse, iface_shopping::GetFlightOffersError> {
+        let json = iface_shopping__get_flight_offers_params__to_json(&params);
+        match dispatch(&OP_SHOPPING_GET_FLIGHT_OFFERS, json).and_then(iface_shopping__get_flight_offers__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_shopping__get_flight_offers__err(e)),
+        }
+    }
+    fn search_flight_offers(params: iface_shopping::SearchFlightOffersParams) -> Result<iface_shopping::SearchFlightOffersResponse, iface_shopping::SearchFlightOffersError> {
         let json = iface_shopping__search_flight_offers_params__to_json(&params);
-        dispatch(&OP_SHOPPING_SEARCH_FLIGHT_OFFERS, json)
+        match dispatch(&OP_SHOPPING_SEARCH_FLIGHT_OFFERS, json).and_then(iface_shopping__search_flight_offers__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_shopping__search_flight_offers__err(e)),
+        }
     }
 }
 

@@ -20,8 +20,8 @@ triggered.
 
 | Setting | Value |
 | --- | --- |
-| Package | `autostamp:interactivebrokers@0.3.0` |
-| Published version | `0.3.0+interactivebrokers-1.0.0` |
+| Package | `autostamp:interactivebrokers@0.5.0` |
+| Published version | `0.5.0+interactivebrokers-1.0.0` |
 | Tag filter | all tags |
 | Operations generated | 16 |
 | Infer API-key credentials | enabled — not triggered |

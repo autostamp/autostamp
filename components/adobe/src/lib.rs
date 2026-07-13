@@ -44,10 +44,15 @@ pub(crate) enum FieldLocation {
     Body,
 }
 
-/// A single operation parameter: the snake-case key it carries in the params JSON and where
-/// it belongs in the request.
+/// A single operation parameter. `snake` keys the field in the internal params JSON (and, for a
+/// path field, matches the `{snake}` placeholder in the path template); `wire` is the verbatim name
+/// the field takes on the HTTP wire (query key, header name, or body property). The two differ
+/// whenever the source name isn't already snake_case (e.g. `dryRun` → snake `dry_run`, wire
+/// `dryRun`), and let distinct inputs that share a snake key (`DateCreated`, `DateCreated<`) still
+/// travel under their true names.
 pub(crate) struct FieldSpec {
     pub(crate) snake: &'static str,
+    pub(crate) wire: &'static str,
     pub(crate) location: FieldLocation,
 }
 
@@ -71,6 +76,16 @@ pub(crate) struct AuthApply {
     pub(crate) kind: AuthKind,
 }
 
+/// The failure modes of [`dispatch`], kept structured so each generated operation can map them
+/// onto its own typed error: an `Http` failure carries the response status and body (routed to
+/// the matching error-variant case), while a `Transport` failure carries a message for the
+/// catch-all case (a secret lookup, connection, or decode failure that never produced an HTTP
+/// status).
+pub(crate) enum DispatchError {
+    Http { status: u16, body: String },
+    Transport(String),
+}
+
 /// A single API operation: HTTP method, path template (with `{snake}` placeholders), the
 /// parameter fields, and the security schemes to apply.
 pub(crate) struct OpSpec {
@@ -81,8 +96,9 @@ pub(crate) struct OpSpec {
 }
 
 /// Execute `op` with the supplied `params` (a JSON object keyed by snake-case field names)
-/// and return the response body as a string, or an error message.
-pub(crate) fn dispatch(op: &OpSpec, params: Value) -> Result<String, String> {
+/// and return the raw 2xx response body, or a structured [`DispatchError`] the caller maps
+/// onto the operation's typed error.
+pub(crate) fn dispatch(op: &OpSpec, params: Value) -> Result<String, DispatchError> {
     let obj = match &params {
         Value::Object(map) => Some(map),
         _ => None,
@@ -105,10 +121,10 @@ pub(crate) fn dispatch(op: &OpSpec, params: Value) -> Result<String, String> {
                 let placeholder = format!("{{{}}}", field.snake);
                 path = path.replace(&placeholder, &percent_encode(&scalar(value)));
             }
-            FieldLocation::Query => query.push((field.snake.to_string(), scalar(value))),
-            FieldLocation::Header => headers.push((field.snake.to_string(), scalar(value))),
+            FieldLocation::Query => query.push((field.wire.to_string(), scalar(value))),
+            FieldLocation::Header => headers.push((field.wire.to_string(), scalar(value))),
             FieldLocation::Body => {
-                body.insert(field.snake.to_string(), value.clone());
+                body.insert(field.wire.to_string(), value.clone());
             }
         }
     }
@@ -116,7 +132,7 @@ pub(crate) fn dispatch(op: &OpSpec, params: Value) -> Result<String, String> {
     // Apply each resolved security scheme, sourcing its value from wasmcloud:secrets.
     let mut cookies: Vec<String> = Vec::new();
     for apply in op.auth {
-        let secret = fetch_secret(apply.secret_key)?;
+        let secret = fetch_secret(apply.secret_key).map_err(DispatchError::Transport)?;
         match &apply.kind {
             AuthKind::Bearer => headers.push(("authorization".into(), format!("Bearer {secret}"))),
             AuthKind::Basic => {
@@ -177,17 +193,18 @@ fn fetch_secret(key: &str) -> Result<String, String> {
 }
 
 /// Build and send the outgoing request with `wstd`, returning the response body on a 2xx
-/// status. The generated guest exports are synchronous, so the async `wstd` client is driven
-/// to completion on a local reactor via `wstd::runtime::block_on`.
+/// status and a structured [`DispatchError`] otherwise. The generated guest exports are
+/// synchronous, so the async `wstd` client is driven to completion on a local reactor via
+/// `wstd::runtime::block_on`.
 fn perform(
     method: &str,
     path_with_query: &str,
     headers: &[(String, String)],
     body: &[u8],
-) -> Result<String, String> {
+) -> Result<String, DispatchError> {
     let url = join_url(crate::BASE_URL, path_with_query);
     let method = Method::from_bytes(method.as_bytes())
-        .map_err(|err| format!("invalid HTTP method `{method}`: {err}"))?;
+        .map_err(|err| DispatchError::Transport(format!("invalid HTTP method `{method}`: {err}")))?;
 
     let mut builder = Request::builder().method(method).uri(url);
     for (name, value) in headers {
@@ -199,27 +216,29 @@ fn perform(
         } else {
             Body::from(body.to_vec())
         })
-        .map_err(|err| format!("failed to build request: {err}"))?;
+        .map_err(|err| DispatchError::Transport(format!("failed to build request: {err}")))?;
 
     wstd::runtime::block_on(async move {
         let client = Client::new();
         let response = client
             .send(request)
             .await
-            .map_err(|err| format!("request failed: {err:#}"))?;
+            .map_err(|err| DispatchError::Transport(format!("request failed: {err:#}")))?;
 
         let status = response.status().as_u16();
         let mut response_body = response.into_body();
-        let bytes = response_body
-            .contents()
-            .await
-            .map_err(|err| format!("failed to read response body: {err:#}"))?;
+        let bytes = response_body.contents().await.map_err(|err| {
+            DispatchError::Transport(format!("failed to read response body: {err:#}"))
+        })?;
         let body_text = String::from_utf8_lossy(bytes).into_owned();
 
         if (200..300).contains(&status) {
             Ok(body_text)
         } else {
-            Err(format!("HTTP {status}: {body_text}"))
+            Err(DispatchError::Http {
+                status,
+                body: body_text,
+            })
         }
     })
 }
@@ -288,8 +307,8 @@ const OP_CQ_POST_CQ_ACTIONS: OpSpec = OpSpec {
     method: "POST",
     path_template: "/.cqactions.html",
     fields: &[
-        FieldSpec { snake: "authorizable_id", location: FieldLocation::Query },
-        FieldSpec { snake: "changelog", location: FieldLocation::Query },
+        FieldSpec { snake: "authorizable_id", wire: "authorizableId", location: FieldLocation::Query },
+        FieldSpec { snake: "changelog", wire: "changelog", location: FieldLocation::Query },
     ],
     auth: &[
         AuthApply { secret_key: "aemAuth", kind: AuthKind::Basic },
@@ -312,13 +331,41 @@ fn iface_cq__post_cq_actions_params__to_json(p: &iface_cq::PostCqActionsParams) 
     Value::Object(m)
 }
 
+fn iface_cq__post_cq_actions__ok(body: String) -> Result<String, crate::runtime::DispatchError> {
+    Ok(body)
+}
+
+fn iface_cq__post_cq_actions__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
+fn iface_cq__get_login_page__ok(body: String) -> Result<String, crate::runtime::DispatchError> {
+    Ok(body)
+}
+
+fn iface_cq__get_login_page__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
 impl iface_cq::Guest for crate::Component {
     fn post_cq_actions(params: iface_cq::PostCqActionsParams) -> Result<String, String> {
         let json = iface_cq__post_cq_actions_params__to_json(&params);
-        dispatch(&OP_CQ_POST_CQ_ACTIONS, json)
+        match dispatch(&OP_CQ_POST_CQ_ACTIONS, json).and_then(iface_cq__post_cq_actions__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_cq__post_cq_actions__err(e)),
+        }
     }
     fn get_login_page() -> Result<String, String> {
-        dispatch(&OP_CQ_GET_LOGIN_PAGE, Value::Object(Map::new()))
+        match dispatch(&OP_CQ_GET_LOGIN_PAGE, Value::Object(Map::new())).and_then(iface_cq__get_login_page__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_cq__get_login_page__err(e)),
+        }
     }
 }
 use crate::exports::autostamp::adobe::sling as iface_sling;
@@ -327,54 +374,54 @@ const OP_SLING_POST_CONFIG_ADOBE_GRANITE_SAML_AUTHENTICATION_HANDLER: OpSpec = O
     method: "POST",
     path_template: "/apps/system/config/com.adobe.granite.auth.saml.SamlAuthenticationHandler.config",
     fields: &[
-        FieldSpec { snake: "key_store_password", location: FieldLocation::Query },
-        FieldSpec { snake: "key_store_password_type_hint", location: FieldLocation::Query },
-        FieldSpec { snake: "service_ranking", location: FieldLocation::Query },
-        FieldSpec { snake: "service_ranking_type_hint", location: FieldLocation::Query },
-        FieldSpec { snake: "idp_http_redirect", location: FieldLocation::Query },
-        FieldSpec { snake: "idp_http_redirect_type_hint", location: FieldLocation::Query },
-        FieldSpec { snake: "create_user", location: FieldLocation::Query },
-        FieldSpec { snake: "create_user_type_hint", location: FieldLocation::Query },
-        FieldSpec { snake: "default_redirect_url", location: FieldLocation::Query },
-        FieldSpec { snake: "default_redirect_url_type_hint", location: FieldLocation::Query },
-        FieldSpec { snake: "user_id_attribute", location: FieldLocation::Query },
-        FieldSpec { snake: "user_id_attribute_type_hint", location: FieldLocation::Query },
-        FieldSpec { snake: "default_groups", location: FieldLocation::Query },
-        FieldSpec { snake: "default_groups_type_hint", location: FieldLocation::Query },
-        FieldSpec { snake: "idp_cert_alias", location: FieldLocation::Query },
-        FieldSpec { snake: "idp_cert_alias_type_hint", location: FieldLocation::Query },
-        FieldSpec { snake: "add_group_memberships", location: FieldLocation::Query },
-        FieldSpec { snake: "add_group_memberships_type_hint", location: FieldLocation::Query },
-        FieldSpec { snake: "path", location: FieldLocation::Query },
-        FieldSpec { snake: "path_type_hint", location: FieldLocation::Query },
-        FieldSpec { snake: "synchronize_attributes", location: FieldLocation::Query },
-        FieldSpec { snake: "synchronize_attributes_type_hint", location: FieldLocation::Query },
-        FieldSpec { snake: "clock_tolerance", location: FieldLocation::Query },
-        FieldSpec { snake: "clock_tolerance_type_hint", location: FieldLocation::Query },
-        FieldSpec { snake: "group_membership_attribute", location: FieldLocation::Query },
-        FieldSpec { snake: "group_membership_attribute_type_hint", location: FieldLocation::Query },
-        FieldSpec { snake: "idp_url", location: FieldLocation::Query },
-        FieldSpec { snake: "idp_url_type_hint", location: FieldLocation::Query },
-        FieldSpec { snake: "logout_url", location: FieldLocation::Query },
-        FieldSpec { snake: "logout_url_type_hint", location: FieldLocation::Query },
-        FieldSpec { snake: "service_provider_entity_id", location: FieldLocation::Query },
-        FieldSpec { snake: "service_provider_entity_id_type_hint", location: FieldLocation::Query },
-        FieldSpec { snake: "assertion_consumer_service_url", location: FieldLocation::Query },
-        FieldSpec { snake: "assertion_consumer_service_url_type_hint", location: FieldLocation::Query },
-        FieldSpec { snake: "handle_logout", location: FieldLocation::Query },
-        FieldSpec { snake: "handle_logout_type_hint", location: FieldLocation::Query },
-        FieldSpec { snake: "sp_private_key_alias", location: FieldLocation::Query },
-        FieldSpec { snake: "sp_private_key_alias_type_hint", location: FieldLocation::Query },
-        FieldSpec { snake: "use_encryption", location: FieldLocation::Query },
-        FieldSpec { snake: "use_encryption_type_hint", location: FieldLocation::Query },
-        FieldSpec { snake: "name_id_format", location: FieldLocation::Query },
-        FieldSpec { snake: "name_id_format_type_hint", location: FieldLocation::Query },
-        FieldSpec { snake: "digest_method", location: FieldLocation::Query },
-        FieldSpec { snake: "digest_method_type_hint", location: FieldLocation::Query },
-        FieldSpec { snake: "signature_method", location: FieldLocation::Query },
-        FieldSpec { snake: "signature_method_type_hint", location: FieldLocation::Query },
-        FieldSpec { snake: "user_intermediate_path", location: FieldLocation::Query },
-        FieldSpec { snake: "user_intermediate_path_type_hint", location: FieldLocation::Query },
+        FieldSpec { snake: "key_store_password", wire: "keyStorePassword", location: FieldLocation::Query },
+        FieldSpec { snake: "key_store_password_type_hint", wire: "keyStorePassword@TypeHint", location: FieldLocation::Query },
+        FieldSpec { snake: "service_ranking", wire: "service.ranking", location: FieldLocation::Query },
+        FieldSpec { snake: "service_ranking_type_hint", wire: "service.ranking@TypeHint", location: FieldLocation::Query },
+        FieldSpec { snake: "idp_http_redirect", wire: "idpHttpRedirect", location: FieldLocation::Query },
+        FieldSpec { snake: "idp_http_redirect_type_hint", wire: "idpHttpRedirect@TypeHint", location: FieldLocation::Query },
+        FieldSpec { snake: "create_user", wire: "createUser", location: FieldLocation::Query },
+        FieldSpec { snake: "create_user_type_hint", wire: "createUser@TypeHint", location: FieldLocation::Query },
+        FieldSpec { snake: "default_redirect_url", wire: "defaultRedirectUrl", location: FieldLocation::Query },
+        FieldSpec { snake: "default_redirect_url_type_hint", wire: "defaultRedirectUrl@TypeHint", location: FieldLocation::Query },
+        FieldSpec { snake: "user_id_attribute", wire: "userIDAttribute", location: FieldLocation::Query },
+        FieldSpec { snake: "user_id_attribute_type_hint", wire: "userIDAttribute@TypeHint", location: FieldLocation::Query },
+        FieldSpec { snake: "default_groups", wire: "defaultGroups", location: FieldLocation::Query },
+        FieldSpec { snake: "default_groups_type_hint", wire: "defaultGroups@TypeHint", location: FieldLocation::Query },
+        FieldSpec { snake: "idp_cert_alias", wire: "idpCertAlias", location: FieldLocation::Query },
+        FieldSpec { snake: "idp_cert_alias_type_hint", wire: "idpCertAlias@TypeHint", location: FieldLocation::Query },
+        FieldSpec { snake: "add_group_memberships", wire: "addGroupMemberships", location: FieldLocation::Query },
+        FieldSpec { snake: "add_group_memberships_type_hint", wire: "addGroupMemberships@TypeHint", location: FieldLocation::Query },
+        FieldSpec { snake: "path", wire: "path", location: FieldLocation::Query },
+        FieldSpec { snake: "path_type_hint", wire: "path@TypeHint", location: FieldLocation::Query },
+        FieldSpec { snake: "synchronize_attributes", wire: "synchronizeAttributes", location: FieldLocation::Query },
+        FieldSpec { snake: "synchronize_attributes_type_hint", wire: "synchronizeAttributes@TypeHint", location: FieldLocation::Query },
+        FieldSpec { snake: "clock_tolerance", wire: "clockTolerance", location: FieldLocation::Query },
+        FieldSpec { snake: "clock_tolerance_type_hint", wire: "clockTolerance@TypeHint", location: FieldLocation::Query },
+        FieldSpec { snake: "group_membership_attribute", wire: "groupMembershipAttribute", location: FieldLocation::Query },
+        FieldSpec { snake: "group_membership_attribute_type_hint", wire: "groupMembershipAttribute@TypeHint", location: FieldLocation::Query },
+        FieldSpec { snake: "idp_url", wire: "idpUrl", location: FieldLocation::Query },
+        FieldSpec { snake: "idp_url_type_hint", wire: "idpUrl@TypeHint", location: FieldLocation::Query },
+        FieldSpec { snake: "logout_url", wire: "logoutUrl", location: FieldLocation::Query },
+        FieldSpec { snake: "logout_url_type_hint", wire: "logoutUrl@TypeHint", location: FieldLocation::Query },
+        FieldSpec { snake: "service_provider_entity_id", wire: "serviceProviderEntityId", location: FieldLocation::Query },
+        FieldSpec { snake: "service_provider_entity_id_type_hint", wire: "serviceProviderEntityId@TypeHint", location: FieldLocation::Query },
+        FieldSpec { snake: "assertion_consumer_service_url", wire: "assertionConsumerServiceURL", location: FieldLocation::Query },
+        FieldSpec { snake: "assertion_consumer_service_url_type_hint", wire: "assertionConsumerServiceURL@TypeHint", location: FieldLocation::Query },
+        FieldSpec { snake: "handle_logout", wire: "handleLogout", location: FieldLocation::Query },
+        FieldSpec { snake: "handle_logout_type_hint", wire: "handleLogout@TypeHint", location: FieldLocation::Query },
+        FieldSpec { snake: "sp_private_key_alias", wire: "spPrivateKeyAlias", location: FieldLocation::Query },
+        FieldSpec { snake: "sp_private_key_alias_type_hint", wire: "spPrivateKeyAlias@TypeHint", location: FieldLocation::Query },
+        FieldSpec { snake: "use_encryption", wire: "useEncryption", location: FieldLocation::Query },
+        FieldSpec { snake: "use_encryption_type_hint", wire: "useEncryption@TypeHint", location: FieldLocation::Query },
+        FieldSpec { snake: "name_id_format", wire: "nameIdFormat", location: FieldLocation::Query },
+        FieldSpec { snake: "name_id_format_type_hint", wire: "nameIdFormat@TypeHint", location: FieldLocation::Query },
+        FieldSpec { snake: "digest_method", wire: "digestMethod", location: FieldLocation::Query },
+        FieldSpec { snake: "digest_method_type_hint", wire: "digestMethod@TypeHint", location: FieldLocation::Query },
+        FieldSpec { snake: "signature_method", wire: "signatureMethod", location: FieldLocation::Query },
+        FieldSpec { snake: "signature_method_type_hint", wire: "signatureMethod@TypeHint", location: FieldLocation::Query },
+        FieldSpec { snake: "user_intermediate_path", wire: "userIntermediatePath", location: FieldLocation::Query },
+        FieldSpec { snake: "user_intermediate_path_type_hint", wire: "userIntermediatePath@TypeHint", location: FieldLocation::Query },
     ],
     auth: &[
         AuthApply { secret_key: "aemAuth", kind: AuthKind::Basic },
@@ -385,26 +432,26 @@ const OP_SLING_POST_CONFIG_APACHE_FELIX_JETTY_BASED_HTTP_SERVICE: OpSpec = OpSpe
     method: "POST",
     path_template: "/apps/system/config/org.apache.felix.http",
     fields: &[
-        FieldSpec { snake: "org_apache_felix_https_nio", location: FieldLocation::Query },
-        FieldSpec { snake: "org_apache_felix_https_nio_type_hint", location: FieldLocation::Query },
-        FieldSpec { snake: "org_apache_felix_https_keystore", location: FieldLocation::Query },
-        FieldSpec { snake: "org_apache_felix_https_keystore_type_hint", location: FieldLocation::Query },
-        FieldSpec { snake: "org_apache_felix_https_keystore_password", location: FieldLocation::Query },
-        FieldSpec { snake: "org_apache_felix_https_keystore_password_type_hint", location: FieldLocation::Query },
-        FieldSpec { snake: "org_apache_felix_https_keystore_key", location: FieldLocation::Query },
-        FieldSpec { snake: "org_apache_felix_https_keystore_key_type_hint", location: FieldLocation::Query },
-        FieldSpec { snake: "org_apache_felix_https_keystore_key_password", location: FieldLocation::Query },
-        FieldSpec { snake: "org_apache_felix_https_keystore_key_password_type_hint", location: FieldLocation::Query },
-        FieldSpec { snake: "org_apache_felix_https_truststore", location: FieldLocation::Query },
-        FieldSpec { snake: "org_apache_felix_https_truststore_type_hint", location: FieldLocation::Query },
-        FieldSpec { snake: "org_apache_felix_https_truststore_password", location: FieldLocation::Query },
-        FieldSpec { snake: "org_apache_felix_https_truststore_password_type_hint", location: FieldLocation::Query },
-        FieldSpec { snake: "org_apache_felix_https_clientcertificate", location: FieldLocation::Query },
-        FieldSpec { snake: "org_apache_felix_https_clientcertificate_type_hint", location: FieldLocation::Query },
-        FieldSpec { snake: "org_apache_felix_https_enable", location: FieldLocation::Query },
-        FieldSpec { snake: "org_apache_felix_https_enable_type_hint", location: FieldLocation::Query },
-        FieldSpec { snake: "org_osgi_service_http_port_secure", location: FieldLocation::Query },
-        FieldSpec { snake: "org_osgi_service_http_port_secure_type_hint", location: FieldLocation::Query },
+        FieldSpec { snake: "org_apache_felix_https_nio", wire: "org.apache.felix.https.nio", location: FieldLocation::Query },
+        FieldSpec { snake: "org_apache_felix_https_nio_type_hint", wire: "org.apache.felix.https.nio@TypeHint", location: FieldLocation::Query },
+        FieldSpec { snake: "org_apache_felix_https_keystore", wire: "org.apache.felix.https.keystore", location: FieldLocation::Query },
+        FieldSpec { snake: "org_apache_felix_https_keystore_type_hint", wire: "org.apache.felix.https.keystore@TypeHint", location: FieldLocation::Query },
+        FieldSpec { snake: "org_apache_felix_https_keystore_password", wire: "org.apache.felix.https.keystore.password", location: FieldLocation::Query },
+        FieldSpec { snake: "org_apache_felix_https_keystore_password_type_hint", wire: "org.apache.felix.https.keystore.password@TypeHint", location: FieldLocation::Query },
+        FieldSpec { snake: "org_apache_felix_https_keystore_key", wire: "org.apache.felix.https.keystore.key", location: FieldLocation::Query },
+        FieldSpec { snake: "org_apache_felix_https_keystore_key_type_hint", wire: "org.apache.felix.https.keystore.key@TypeHint", location: FieldLocation::Query },
+        FieldSpec { snake: "org_apache_felix_https_keystore_key_password", wire: "org.apache.felix.https.keystore.key.password", location: FieldLocation::Query },
+        FieldSpec { snake: "org_apache_felix_https_keystore_key_password_type_hint", wire: "org.apache.felix.https.keystore.key.password@TypeHint", location: FieldLocation::Query },
+        FieldSpec { snake: "org_apache_felix_https_truststore", wire: "org.apache.felix.https.truststore", location: FieldLocation::Query },
+        FieldSpec { snake: "org_apache_felix_https_truststore_type_hint", wire: "org.apache.felix.https.truststore@TypeHint", location: FieldLocation::Query },
+        FieldSpec { snake: "org_apache_felix_https_truststore_password", wire: "org.apache.felix.https.truststore.password", location: FieldLocation::Query },
+        FieldSpec { snake: "org_apache_felix_https_truststore_password_type_hint", wire: "org.apache.felix.https.truststore.password@TypeHint", location: FieldLocation::Query },
+        FieldSpec { snake: "org_apache_felix_https_clientcertificate", wire: "org.apache.felix.https.clientcertificate", location: FieldLocation::Query },
+        FieldSpec { snake: "org_apache_felix_https_clientcertificate_type_hint", wire: "org.apache.felix.https.clientcertificate@TypeHint", location: FieldLocation::Query },
+        FieldSpec { snake: "org_apache_felix_https_enable", wire: "org.apache.felix.https.enable", location: FieldLocation::Query },
+        FieldSpec { snake: "org_apache_felix_https_enable_type_hint", wire: "org.apache.felix.https.enable@TypeHint", location: FieldLocation::Query },
+        FieldSpec { snake: "org_osgi_service_http_port_secure", wire: "org.osgi.service.http.port.secure", location: FieldLocation::Query },
+        FieldSpec { snake: "org_osgi_service_http_port_secure_type_hint", wire: "org.osgi.service.http.port.secure@TypeHint", location: FieldLocation::Query },
     ],
     auth: &[
         AuthApply { secret_key: "aemAuth", kind: AuthKind::Basic },
@@ -415,18 +462,18 @@ const OP_SLING_POST_CONFIG_APACHE_HTTP_COMPONENTS_PROXY_CONFIGURATION: OpSpec = 
     method: "POST",
     path_template: "/apps/system/config/org.apache.http.proxyconfigurator.config",
     fields: &[
-        FieldSpec { snake: "proxy_host", location: FieldLocation::Query },
-        FieldSpec { snake: "proxy_host_type_hint", location: FieldLocation::Query },
-        FieldSpec { snake: "proxy_port", location: FieldLocation::Query },
-        FieldSpec { snake: "proxy_port_type_hint", location: FieldLocation::Query },
-        FieldSpec { snake: "proxy_exceptions", location: FieldLocation::Query },
-        FieldSpec { snake: "proxy_exceptions_type_hint", location: FieldLocation::Query },
-        FieldSpec { snake: "proxy_enabled", location: FieldLocation::Query },
-        FieldSpec { snake: "proxy_enabled_type_hint", location: FieldLocation::Query },
-        FieldSpec { snake: "proxy_user", location: FieldLocation::Query },
-        FieldSpec { snake: "proxy_user_type_hint", location: FieldLocation::Query },
-        FieldSpec { snake: "proxy_password", location: FieldLocation::Query },
-        FieldSpec { snake: "proxy_password_type_hint", location: FieldLocation::Query },
+        FieldSpec { snake: "proxy_host", wire: "proxy.host", location: FieldLocation::Query },
+        FieldSpec { snake: "proxy_host_type_hint", wire: "proxy.host@TypeHint", location: FieldLocation::Query },
+        FieldSpec { snake: "proxy_port", wire: "proxy.port", location: FieldLocation::Query },
+        FieldSpec { snake: "proxy_port_type_hint", wire: "proxy.port@TypeHint", location: FieldLocation::Query },
+        FieldSpec { snake: "proxy_exceptions", wire: "proxy.exceptions", location: FieldLocation::Query },
+        FieldSpec { snake: "proxy_exceptions_type_hint", wire: "proxy.exceptions@TypeHint", location: FieldLocation::Query },
+        FieldSpec { snake: "proxy_enabled", wire: "proxy.enabled", location: FieldLocation::Query },
+        FieldSpec { snake: "proxy_enabled_type_hint", wire: "proxy.enabled@TypeHint", location: FieldLocation::Query },
+        FieldSpec { snake: "proxy_user", wire: "proxy.user", location: FieldLocation::Query },
+        FieldSpec { snake: "proxy_user_type_hint", wire: "proxy.user@TypeHint", location: FieldLocation::Query },
+        FieldSpec { snake: "proxy_password", wire: "proxy.password", location: FieldLocation::Query },
+        FieldSpec { snake: "proxy_password_type_hint", wire: "proxy.password@TypeHint", location: FieldLocation::Query },
     ],
     auth: &[
         AuthApply { secret_key: "aemAuth", kind: AuthKind::Basic },
@@ -437,10 +484,10 @@ const OP_SLING_POST_CONFIG_APACHE_SLING_DAV_EX_SERVLET: OpSpec = OpSpec {
     method: "POST",
     path_template: "/apps/system/config/org.apache.sling.jcr.davex.impl.servlets.SlingDavExServlet",
     fields: &[
-        FieldSpec { snake: "alias", location: FieldLocation::Query },
-        FieldSpec { snake: "alias_type_hint", location: FieldLocation::Query },
-        FieldSpec { snake: "dav_create_absolute_uri", location: FieldLocation::Query },
-        FieldSpec { snake: "dav_create_absolute_uri_type_hint", location: FieldLocation::Query },
+        FieldSpec { snake: "alias", wire: "alias", location: FieldLocation::Query },
+        FieldSpec { snake: "alias_type_hint", wire: "alias@TypeHint", location: FieldLocation::Query },
+        FieldSpec { snake: "dav_create_absolute_uri", wire: "dav.create-absolute-uri", location: FieldLocation::Query },
+        FieldSpec { snake: "dav_create_absolute_uri_type_hint", wire: "dav.create-absolute-uri@TypeHint", location: FieldLocation::Query },
     ],
     auth: &[
         AuthApply { secret_key: "aemAuth", kind: AuthKind::Basic },
@@ -451,14 +498,14 @@ const OP_SLING_POST_CONFIG_APACHE_SLING_REFERRER_FILTER: OpSpec = OpSpec {
     method: "POST",
     path_template: "/apps/system/config/org.apache.sling.security.impl.ReferrerFilter",
     fields: &[
-        FieldSpec { snake: "allow_empty", location: FieldLocation::Query },
-        FieldSpec { snake: "allow_empty_type_hint", location: FieldLocation::Query },
-        FieldSpec { snake: "allow_hosts", location: FieldLocation::Query },
-        FieldSpec { snake: "allow_hosts_type_hint", location: FieldLocation::Query },
-        FieldSpec { snake: "allow_hosts_regexp", location: FieldLocation::Query },
-        FieldSpec { snake: "allow_hosts_regexp_type_hint", location: FieldLocation::Query },
-        FieldSpec { snake: "filter_methods", location: FieldLocation::Query },
-        FieldSpec { snake: "filter_methods_type_hint", location: FieldLocation::Query },
+        FieldSpec { snake: "allow_empty", wire: "allow.empty", location: FieldLocation::Query },
+        FieldSpec { snake: "allow_empty_type_hint", wire: "allow.empty@TypeHint", location: FieldLocation::Query },
+        FieldSpec { snake: "allow_hosts", wire: "allow.hosts", location: FieldLocation::Query },
+        FieldSpec { snake: "allow_hosts_type_hint", wire: "allow.hosts@TypeHint", location: FieldLocation::Query },
+        FieldSpec { snake: "allow_hosts_regexp", wire: "allow.hosts.regexp", location: FieldLocation::Query },
+        FieldSpec { snake: "allow_hosts_regexp_type_hint", wire: "allow.hosts.regexp@TypeHint", location: FieldLocation::Query },
+        FieldSpec { snake: "filter_methods", wire: "filter.methods", location: FieldLocation::Query },
+        FieldSpec { snake: "filter_methods_type_hint", wire: "filter.methods@TypeHint", location: FieldLocation::Query },
     ],
     auth: &[
         AuthApply { secret_key: "aemAuth", kind: AuthKind::Basic },
@@ -469,14 +516,14 @@ const OP_SLING_POST_CONFIG_APACHE_SLING_GET_SERVLET: OpSpec = OpSpec {
     method: "POST",
     path_template: "/apps/system/config/org.apache.sling.servlets.get.DefaultGetServlet",
     fields: &[
-        FieldSpec { snake: "json_maximumresults", location: FieldLocation::Query },
-        FieldSpec { snake: "json_maximumresults_type_hint", location: FieldLocation::Query },
-        FieldSpec { snake: "enable_html", location: FieldLocation::Query },
-        FieldSpec { snake: "enable_html_type_hint", location: FieldLocation::Query },
-        FieldSpec { snake: "enable_txt", location: FieldLocation::Query },
-        FieldSpec { snake: "enable_txt_type_hint", location: FieldLocation::Query },
-        FieldSpec { snake: "enable_xml", location: FieldLocation::Query },
-        FieldSpec { snake: "enable_xml_type_hint", location: FieldLocation::Query },
+        FieldSpec { snake: "json_maximumresults", wire: "json.maximumresults", location: FieldLocation::Query },
+        FieldSpec { snake: "json_maximumresults_type_hint", wire: "json.maximumresults@TypeHint", location: FieldLocation::Query },
+        FieldSpec { snake: "enable_html", wire: "enable.html", location: FieldLocation::Query },
+        FieldSpec { snake: "enable_html_type_hint", wire: "enable.html@TypeHint", location: FieldLocation::Query },
+        FieldSpec { snake: "enable_txt", wire: "enable.txt", location: FieldLocation::Query },
+        FieldSpec { snake: "enable_txt_type_hint", wire: "enable.txt@TypeHint", location: FieldLocation::Query },
+        FieldSpec { snake: "enable_xml", wire: "enable.xml", location: FieldLocation::Query },
+        FieldSpec { snake: "enable_xml_type_hint", wire: "enable.xml@TypeHint", location: FieldLocation::Query },
     ],
     auth: &[
         AuthApply { secret_key: "aemAuth", kind: AuthKind::Basic },
@@ -487,7 +534,7 @@ const OP_SLING_POST_CONFIG_PROPERTY: OpSpec = OpSpec {
     method: "POST",
     path_template: "/apps/system/config/{config_node_name}",
     fields: &[
-        FieldSpec { snake: "config_node_name", location: FieldLocation::Path },
+        FieldSpec { snake: "config_node_name", wire: "configNodeName", location: FieldLocation::Path },
     ],
     auth: &[
         AuthApply { secret_key: "aemAuth", kind: AuthKind::Basic },
@@ -498,10 +545,10 @@ const OP_SLING_GET_QUERY: OpSpec = OpSpec {
     method: "GET",
     path_template: "/bin/querybuilder.json",
     fields: &[
-        FieldSpec { snake: "path", location: FieldLocation::Query },
-        FieldSpec { snake: "p_limit", location: FieldLocation::Query },
-        FieldSpec { snake: "1_property", location: FieldLocation::Query },
-        FieldSpec { snake: "1_property_value", location: FieldLocation::Query },
+        FieldSpec { snake: "path", wire: "path", location: FieldLocation::Query },
+        FieldSpec { snake: "p_limit", wire: "p.limit", location: FieldLocation::Query },
+        FieldSpec { snake: "1_property", wire: "1_property", location: FieldLocation::Query },
+        FieldSpec { snake: "1_property_value", wire: "1_property.value", location: FieldLocation::Query },
     ],
     auth: &[
         AuthApply { secret_key: "aemAuth", kind: AuthKind::Basic },
@@ -512,10 +559,10 @@ const OP_SLING_POST_QUERY: OpSpec = OpSpec {
     method: "POST",
     path_template: "/bin/querybuilder.json",
     fields: &[
-        FieldSpec { snake: "path", location: FieldLocation::Query },
-        FieldSpec { snake: "p_limit", location: FieldLocation::Query },
-        FieldSpec { snake: "1_property", location: FieldLocation::Query },
-        FieldSpec { snake: "1_property_value", location: FieldLocation::Query },
+        FieldSpec { snake: "path", wire: "path", location: FieldLocation::Query },
+        FieldSpec { snake: "p_limit", wire: "p.limit", location: FieldLocation::Query },
+        FieldSpec { snake: "1_property", wire: "1_property", location: FieldLocation::Query },
+        FieldSpec { snake: "1_property_value", wire: "1_property.value", location: FieldLocation::Query },
     ],
     auth: &[
         AuthApply { secret_key: "aemAuth", kind: AuthKind::Basic },
@@ -526,9 +573,9 @@ const OP_SLING_GET_PACKAGE: OpSpec = OpSpec {
     method: "GET",
     path_template: "/etc/packages/{group}/{name}-{version}.zip",
     fields: &[
-        FieldSpec { snake: "group", location: FieldLocation::Path },
-        FieldSpec { snake: "name", location: FieldLocation::Path },
-        FieldSpec { snake: "version", location: FieldLocation::Path },
+        FieldSpec { snake: "group", wire: "group", location: FieldLocation::Path },
+        FieldSpec { snake: "name", wire: "name", location: FieldLocation::Path },
+        FieldSpec { snake: "version", wire: "version", location: FieldLocation::Path },
     ],
     auth: &[
         AuthApply { secret_key: "aemAuth", kind: AuthKind::Basic },
@@ -539,9 +586,9 @@ const OP_SLING_GET_PACKAGE_FILTER: OpSpec = OpSpec {
     method: "GET",
     path_template: "/etc/packages/{group}/{name}-{version}.zip/jcr:content/vlt:definition/filter.tidy.2.json",
     fields: &[
-        FieldSpec { snake: "group", location: FieldLocation::Path },
-        FieldSpec { snake: "name", location: FieldLocation::Path },
-        FieldSpec { snake: "version", location: FieldLocation::Path },
+        FieldSpec { snake: "group", wire: "group", location: FieldLocation::Path },
+        FieldSpec { snake: "name", wire: "name", location: FieldLocation::Path },
+        FieldSpec { snake: "version", wire: "version", location: FieldLocation::Path },
     ],
     auth: &[
         AuthApply { secret_key: "aemAuth", kind: AuthKind::Basic },
@@ -552,7 +599,7 @@ const OP_SLING_GET_AGENTS: OpSpec = OpSpec {
     method: "GET",
     path_template: "/etc/replication/agents.{runmode}.-1.json",
     fields: &[
-        FieldSpec { snake: "runmode", location: FieldLocation::Path },
+        FieldSpec { snake: "runmode", wire: "runmode", location: FieldLocation::Path },
     ],
     auth: &[
         AuthApply { secret_key: "aemAuth", kind: AuthKind::Basic },
@@ -563,8 +610,8 @@ const OP_SLING_GET_AGENT: OpSpec = OpSpec {
     method: "GET",
     path_template: "/etc/replication/agents.{runmode}/{name}",
     fields: &[
-        FieldSpec { snake: "runmode", location: FieldLocation::Path },
-        FieldSpec { snake: "name", location: FieldLocation::Path },
+        FieldSpec { snake: "runmode", wire: "runmode", location: FieldLocation::Path },
+        FieldSpec { snake: "name", wire: "name", location: FieldLocation::Path },
     ],
     auth: &[
         AuthApply { secret_key: "aemAuth", kind: AuthKind::Basic },
@@ -575,58 +622,58 @@ const OP_SLING_POST_AGENT: OpSpec = OpSpec {
     method: "POST",
     path_template: "/etc/replication/agents.{runmode}/{name}",
     fields: &[
-        FieldSpec { snake: "runmode", location: FieldLocation::Path },
-        FieldSpec { snake: "name", location: FieldLocation::Path },
-        FieldSpec { snake: "jcr_content_cq_distribute", location: FieldLocation::Query },
-        FieldSpec { snake: "jcr_content_cq_distribute_type_hint", location: FieldLocation::Query },
-        FieldSpec { snake: "jcr_content_cq_name", location: FieldLocation::Query },
-        FieldSpec { snake: "jcr_content_cq_template", location: FieldLocation::Query },
-        FieldSpec { snake: "jcr_content_enabled", location: FieldLocation::Query },
-        FieldSpec { snake: "jcr_content_jcr_description", location: FieldLocation::Query },
-        FieldSpec { snake: "jcr_content_jcr_last_modified", location: FieldLocation::Query },
-        FieldSpec { snake: "jcr_content_jcr_last_modified_by", location: FieldLocation::Query },
-        FieldSpec { snake: "jcr_content_jcr_mixin_types", location: FieldLocation::Query },
-        FieldSpec { snake: "jcr_content_jcr_title", location: FieldLocation::Query },
-        FieldSpec { snake: "jcr_content_log_level", location: FieldLocation::Query },
-        FieldSpec { snake: "jcr_content_no_status_update", location: FieldLocation::Query },
-        FieldSpec { snake: "jcr_content_no_versioning", location: FieldLocation::Query },
-        FieldSpec { snake: "jcr_content_protocol_connect_timeout", location: FieldLocation::Query },
-        FieldSpec { snake: "jcr_content_protocol_http_connection_closed", location: FieldLocation::Query },
-        FieldSpec { snake: "jcr_content_protocol_http_expired", location: FieldLocation::Query },
-        FieldSpec { snake: "jcr_content_protocol_http_headers", location: FieldLocation::Query },
-        FieldSpec { snake: "jcr_content_protocol_http_headers_type_hint", location: FieldLocation::Query },
-        FieldSpec { snake: "jcr_content_protocol_http_method", location: FieldLocation::Query },
-        FieldSpec { snake: "jcr_content_protocol_https_relaxed", location: FieldLocation::Query },
-        FieldSpec { snake: "jcr_content_protocol_interface", location: FieldLocation::Query },
-        FieldSpec { snake: "jcr_content_protocol_socket_timeout", location: FieldLocation::Query },
-        FieldSpec { snake: "jcr_content_protocol_version", location: FieldLocation::Query },
-        FieldSpec { snake: "jcr_content_proxy_ntlm_domain", location: FieldLocation::Query },
-        FieldSpec { snake: "jcr_content_proxy_ntlm_host", location: FieldLocation::Query },
-        FieldSpec { snake: "jcr_content_proxy_host", location: FieldLocation::Query },
-        FieldSpec { snake: "jcr_content_proxy_password", location: FieldLocation::Query },
-        FieldSpec { snake: "jcr_content_proxy_port", location: FieldLocation::Query },
-        FieldSpec { snake: "jcr_content_proxy_user", location: FieldLocation::Query },
-        FieldSpec { snake: "jcr_content_queue_batch_max_size", location: FieldLocation::Query },
-        FieldSpec { snake: "jcr_content_queue_batch_mode", location: FieldLocation::Query },
-        FieldSpec { snake: "jcr_content_queue_batch_wait_time", location: FieldLocation::Query },
-        FieldSpec { snake: "jcr_content_retry_delay", location: FieldLocation::Query },
-        FieldSpec { snake: "jcr_content_reverse_replication", location: FieldLocation::Query },
-        FieldSpec { snake: "jcr_content_serialization_type", location: FieldLocation::Query },
-        FieldSpec { snake: "jcr_content_sling_resource_type", location: FieldLocation::Query },
-        FieldSpec { snake: "jcr_content_ssl", location: FieldLocation::Query },
-        FieldSpec { snake: "jcr_content_transport_ntlm_domain", location: FieldLocation::Query },
-        FieldSpec { snake: "jcr_content_transport_ntlm_host", location: FieldLocation::Query },
-        FieldSpec { snake: "jcr_content_transport_password", location: FieldLocation::Query },
-        FieldSpec { snake: "jcr_content_transport_uri", location: FieldLocation::Query },
-        FieldSpec { snake: "jcr_content_transport_user", location: FieldLocation::Query },
-        FieldSpec { snake: "jcr_content_trigger_distribute", location: FieldLocation::Query },
-        FieldSpec { snake: "jcr_content_trigger_modified", location: FieldLocation::Query },
-        FieldSpec { snake: "jcr_content_trigger_on_off_time", location: FieldLocation::Query },
-        FieldSpec { snake: "jcr_content_trigger_receive", location: FieldLocation::Query },
-        FieldSpec { snake: "jcr_content_trigger_specific", location: FieldLocation::Query },
-        FieldSpec { snake: "jcr_content_user_id", location: FieldLocation::Query },
-        FieldSpec { snake: "jcr_primary_type", location: FieldLocation::Query },
-        FieldSpec { snake: "operation", location: FieldLocation::Query },
+        FieldSpec { snake: "runmode", wire: "runmode", location: FieldLocation::Path },
+        FieldSpec { snake: "name", wire: "name", location: FieldLocation::Path },
+        FieldSpec { snake: "jcr_content_cq_distribute", wire: "jcr:content/cq:distribute", location: FieldLocation::Query },
+        FieldSpec { snake: "jcr_content_cq_distribute_type_hint", wire: "jcr:content/cq:distribute@TypeHint", location: FieldLocation::Query },
+        FieldSpec { snake: "jcr_content_cq_name", wire: "jcr:content/cq:name", location: FieldLocation::Query },
+        FieldSpec { snake: "jcr_content_cq_template", wire: "jcr:content/cq:template", location: FieldLocation::Query },
+        FieldSpec { snake: "jcr_content_enabled", wire: "jcr:content/enabled", location: FieldLocation::Query },
+        FieldSpec { snake: "jcr_content_jcr_description", wire: "jcr:content/jcr:description", location: FieldLocation::Query },
+        FieldSpec { snake: "jcr_content_jcr_last_modified", wire: "jcr:content/jcr:lastModified", location: FieldLocation::Query },
+        FieldSpec { snake: "jcr_content_jcr_last_modified_by", wire: "jcr:content/jcr:lastModifiedBy", location: FieldLocation::Query },
+        FieldSpec { snake: "jcr_content_jcr_mixin_types", wire: "jcr:content/jcr:mixinTypes", location: FieldLocation::Query },
+        FieldSpec { snake: "jcr_content_jcr_title", wire: "jcr:content/jcr:title", location: FieldLocation::Query },
+        FieldSpec { snake: "jcr_content_log_level", wire: "jcr:content/logLevel", location: FieldLocation::Query },
+        FieldSpec { snake: "jcr_content_no_status_update", wire: "jcr:content/noStatusUpdate", location: FieldLocation::Query },
+        FieldSpec { snake: "jcr_content_no_versioning", wire: "jcr:content/noVersioning", location: FieldLocation::Query },
+        FieldSpec { snake: "jcr_content_protocol_connect_timeout", wire: "jcr:content/protocolConnectTimeout", location: FieldLocation::Query },
+        FieldSpec { snake: "jcr_content_protocol_http_connection_closed", wire: "jcr:content/protocolHTTPConnectionClosed", location: FieldLocation::Query },
+        FieldSpec { snake: "jcr_content_protocol_http_expired", wire: "jcr:content/protocolHTTPExpired", location: FieldLocation::Query },
+        FieldSpec { snake: "jcr_content_protocol_http_headers", wire: "jcr:content/protocolHTTPHeaders", location: FieldLocation::Query },
+        FieldSpec { snake: "jcr_content_protocol_http_headers_type_hint", wire: "jcr:content/protocolHTTPHeaders@TypeHint", location: FieldLocation::Query },
+        FieldSpec { snake: "jcr_content_protocol_http_method", wire: "jcr:content/protocolHTTPMethod", location: FieldLocation::Query },
+        FieldSpec { snake: "jcr_content_protocol_https_relaxed", wire: "jcr:content/protocolHTTPSRelaxed", location: FieldLocation::Query },
+        FieldSpec { snake: "jcr_content_protocol_interface", wire: "jcr:content/protocolInterface", location: FieldLocation::Query },
+        FieldSpec { snake: "jcr_content_protocol_socket_timeout", wire: "jcr:content/protocolSocketTimeout", location: FieldLocation::Query },
+        FieldSpec { snake: "jcr_content_protocol_version", wire: "jcr:content/protocolVersion", location: FieldLocation::Query },
+        FieldSpec { snake: "jcr_content_proxy_ntlm_domain", wire: "jcr:content/proxyNTLMDomain", location: FieldLocation::Query },
+        FieldSpec { snake: "jcr_content_proxy_ntlm_host", wire: "jcr:content/proxyNTLMHost", location: FieldLocation::Query },
+        FieldSpec { snake: "jcr_content_proxy_host", wire: "jcr:content/proxyHost", location: FieldLocation::Query },
+        FieldSpec { snake: "jcr_content_proxy_password", wire: "jcr:content/proxyPassword", location: FieldLocation::Query },
+        FieldSpec { snake: "jcr_content_proxy_port", wire: "jcr:content/proxyPort", location: FieldLocation::Query },
+        FieldSpec { snake: "jcr_content_proxy_user", wire: "jcr:content/proxyUser", location: FieldLocation::Query },
+        FieldSpec { snake: "jcr_content_queue_batch_max_size", wire: "jcr:content/queueBatchMaxSize", location: FieldLocation::Query },
+        FieldSpec { snake: "jcr_content_queue_batch_mode", wire: "jcr:content/queueBatchMode", location: FieldLocation::Query },
+        FieldSpec { snake: "jcr_content_queue_batch_wait_time", wire: "jcr:content/queueBatchWaitTime", location: FieldLocation::Query },
+        FieldSpec { snake: "jcr_content_retry_delay", wire: "jcr:content/retryDelay", location: FieldLocation::Query },
+        FieldSpec { snake: "jcr_content_reverse_replication", wire: "jcr:content/reverseReplication", location: FieldLocation::Query },
+        FieldSpec { snake: "jcr_content_serialization_type", wire: "jcr:content/serializationType", location: FieldLocation::Query },
+        FieldSpec { snake: "jcr_content_sling_resource_type", wire: "jcr:content/sling:resourceType", location: FieldLocation::Query },
+        FieldSpec { snake: "jcr_content_ssl", wire: "jcr:content/ssl", location: FieldLocation::Query },
+        FieldSpec { snake: "jcr_content_transport_ntlm_domain", wire: "jcr:content/transportNTLMDomain", location: FieldLocation::Query },
+        FieldSpec { snake: "jcr_content_transport_ntlm_host", wire: "jcr:content/transportNTLMHost", location: FieldLocation::Query },
+        FieldSpec { snake: "jcr_content_transport_password", wire: "jcr:content/transportPassword", location: FieldLocation::Query },
+        FieldSpec { snake: "jcr_content_transport_uri", wire: "jcr:content/transportUri", location: FieldLocation::Query },
+        FieldSpec { snake: "jcr_content_transport_user", wire: "jcr:content/transportUser", location: FieldLocation::Query },
+        FieldSpec { snake: "jcr_content_trigger_distribute", wire: "jcr:content/triggerDistribute", location: FieldLocation::Query },
+        FieldSpec { snake: "jcr_content_trigger_modified", wire: "jcr:content/triggerModified", location: FieldLocation::Query },
+        FieldSpec { snake: "jcr_content_trigger_on_off_time", wire: "jcr:content/triggerOnOffTime", location: FieldLocation::Query },
+        FieldSpec { snake: "jcr_content_trigger_receive", wire: "jcr:content/triggerReceive", location: FieldLocation::Query },
+        FieldSpec { snake: "jcr_content_trigger_specific", wire: "jcr:content/triggerSpecific", location: FieldLocation::Query },
+        FieldSpec { snake: "jcr_content_user_id", wire: "jcr:content/userId", location: FieldLocation::Query },
+        FieldSpec { snake: "jcr_primary_type", wire: "jcr:primaryType", location: FieldLocation::Query },
+        FieldSpec { snake: "operation", wire: ":operation", location: FieldLocation::Query },
     ],
     auth: &[
         AuthApply { secret_key: "aemAuth", kind: AuthKind::Basic },
@@ -637,8 +684,8 @@ const OP_SLING_DELETE_AGENT: OpSpec = OpSpec {
     method: "DELETE",
     path_template: "/etc/replication/agents.{runmode}/{name}",
     fields: &[
-        FieldSpec { snake: "runmode", location: FieldLocation::Path },
-        FieldSpec { snake: "name", location: FieldLocation::Path },
+        FieldSpec { snake: "runmode", wire: "runmode", location: FieldLocation::Path },
+        FieldSpec { snake: "name", wire: "name", location: FieldLocation::Path },
     ],
     auth: &[
         AuthApply { secret_key: "aemAuth", kind: AuthKind::Basic },
@@ -649,6 +696,7 @@ const OP_SLING_POST_TRUSTSTORE_PKCS12: OpSpec = OpSpec {
     method: "POST",
     path_template: "/etc/truststore",
     fields: &[
+        FieldSpec { snake: "truststore_p12", wire: "truststore.p12", location: FieldLocation::Body },
     ],
     auth: &[
         AuthApply { secret_key: "aemAuth", kind: AuthKind::Basic },
@@ -669,12 +717,12 @@ const OP_SLING_POST_AUTHORIZABLES: OpSpec = OpSpec {
     method: "POST",
     path_template: "/libs/granite/security/post/authorizables",
     fields: &[
-        FieldSpec { snake: "authorizable_id", location: FieldLocation::Query },
-        FieldSpec { snake: "intermediate_path", location: FieldLocation::Query },
-        FieldSpec { snake: "create_user", location: FieldLocation::Query },
-        FieldSpec { snake: "create_group", location: FieldLocation::Query },
-        FieldSpec { snake: "rep_password", location: FieldLocation::Query },
-        FieldSpec { snake: "profile_given_name", location: FieldLocation::Query },
+        FieldSpec { snake: "authorizable_id", wire: "authorizableId", location: FieldLocation::Query },
+        FieldSpec { snake: "intermediate_path", wire: "intermediatePath", location: FieldLocation::Query },
+        FieldSpec { snake: "create_user", wire: "createUser", location: FieldLocation::Query },
+        FieldSpec { snake: "create_group", wire: "createGroup", location: FieldLocation::Query },
+        FieldSpec { snake: "rep_password", wire: "rep:password", location: FieldLocation::Query },
+        FieldSpec { snake: "profile_given_name", wire: "profile/givenName", location: FieldLocation::Query },
     ],
     auth: &[
         AuthApply { secret_key: "aemAuth", kind: AuthKind::Basic },
@@ -685,11 +733,12 @@ const OP_SLING_POST_TRUSTSTORE: OpSpec = OpSpec {
     method: "POST",
     path_template: "/libs/granite/security/post/truststore",
     fields: &[
-        FieldSpec { snake: "operation", location: FieldLocation::Query },
-        FieldSpec { snake: "new_password", location: FieldLocation::Query },
-        FieldSpec { snake: "re_password", location: FieldLocation::Query },
-        FieldSpec { snake: "key_store_type", location: FieldLocation::Query },
-        FieldSpec { snake: "remove_alias", location: FieldLocation::Query },
+        FieldSpec { snake: "operation", wire: ":operation", location: FieldLocation::Query },
+        FieldSpec { snake: "new_password", wire: "newPassword", location: FieldLocation::Query },
+        FieldSpec { snake: "re_password", wire: "rePassword", location: FieldLocation::Query },
+        FieldSpec { snake: "key_store_type", wire: "keyStoreType", location: FieldLocation::Query },
+        FieldSpec { snake: "remove_alias", wire: "removeAlias", location: FieldLocation::Query },
+        FieldSpec { snake: "certificate", wire: "certificate", location: FieldLocation::Body },
     ],
     auth: &[
         AuthApply { secret_key: "aemAuth", kind: AuthKind::Basic },
@@ -710,10 +759,10 @@ const OP_SLING_POST_TREE_ACTIVATION: OpSpec = OpSpec {
     method: "POST",
     path_template: "/libs/replication/treeactivation.html",
     fields: &[
-        FieldSpec { snake: "ignoredeactivated", location: FieldLocation::Query },
-        FieldSpec { snake: "onlymodified", location: FieldLocation::Query },
-        FieldSpec { snake: "path", location: FieldLocation::Query },
-        FieldSpec { snake: "cmd", location: FieldLocation::Query },
+        FieldSpec { snake: "ignoredeactivated", wire: "ignoredeactivated", location: FieldLocation::Query },
+        FieldSpec { snake: "onlymodified", wire: "onlymodified", location: FieldLocation::Query },
+        FieldSpec { snake: "path", wire: "path", location: FieldLocation::Query },
+        FieldSpec { snake: "cmd", wire: "cmd", location: FieldLocation::Query },
     ],
     auth: &[
         AuthApply { secret_key: "aemAuth", kind: AuthKind::Basic },
@@ -724,17 +773,20 @@ const OP_SLING_POST_AUTHORIZABLE_KEYSTORE: OpSpec = OpSpec {
     method: "POST",
     path_template: "/{intermediate_path}/{authorizable_id}.ks.html",
     fields: &[
-        FieldSpec { snake: "intermediate_path", location: FieldLocation::Path },
-        FieldSpec { snake: "authorizable_id", location: FieldLocation::Path },
-        FieldSpec { snake: "operation", location: FieldLocation::Query },
-        FieldSpec { snake: "current_password", location: FieldLocation::Query },
-        FieldSpec { snake: "new_password", location: FieldLocation::Query },
-        FieldSpec { snake: "re_password", location: FieldLocation::Query },
-        FieldSpec { snake: "key_password", location: FieldLocation::Query },
-        FieldSpec { snake: "key_store_pass", location: FieldLocation::Query },
-        FieldSpec { snake: "alias", location: FieldLocation::Query },
-        FieldSpec { snake: "new_alias", location: FieldLocation::Query },
-        FieldSpec { snake: "remove_alias", location: FieldLocation::Query },
+        FieldSpec { snake: "intermediate_path", wire: "intermediatePath", location: FieldLocation::Path },
+        FieldSpec { snake: "authorizable_id", wire: "authorizableId", location: FieldLocation::Path },
+        FieldSpec { snake: "operation", wire: ":operation", location: FieldLocation::Query },
+        FieldSpec { snake: "current_password", wire: "currentPassword", location: FieldLocation::Query },
+        FieldSpec { snake: "new_password", wire: "newPassword", location: FieldLocation::Query },
+        FieldSpec { snake: "re_password", wire: "rePassword", location: FieldLocation::Query },
+        FieldSpec { snake: "key_password", wire: "keyPassword", location: FieldLocation::Query },
+        FieldSpec { snake: "key_store_pass", wire: "keyStorePass", location: FieldLocation::Query },
+        FieldSpec { snake: "alias", wire: "alias", location: FieldLocation::Query },
+        FieldSpec { snake: "new_alias", wire: "newAlias", location: FieldLocation::Query },
+        FieldSpec { snake: "remove_alias", wire: "removeAlias", location: FieldLocation::Query },
+        FieldSpec { snake: "cert_chain", wire: "cert-chain", location: FieldLocation::Body },
+        FieldSpec { snake: "key_store", wire: "keyStore", location: FieldLocation::Body },
+        FieldSpec { snake: "pk", wire: "pk", location: FieldLocation::Body },
     ],
     auth: &[
         AuthApply { secret_key: "aemAuth", kind: AuthKind::Basic },
@@ -745,8 +797,8 @@ const OP_SLING_GET_AUTHORIZABLE_KEYSTORE: OpSpec = OpSpec {
     method: "GET",
     path_template: "/{intermediate_path}/{authorizable_id}.ks.json",
     fields: &[
-        FieldSpec { snake: "intermediate_path", location: FieldLocation::Path },
-        FieldSpec { snake: "authorizable_id", location: FieldLocation::Path },
+        FieldSpec { snake: "intermediate_path", wire: "intermediatePath", location: FieldLocation::Path },
+        FieldSpec { snake: "authorizable_id", wire: "authorizableId", location: FieldLocation::Path },
     ],
     auth: &[
         AuthApply { secret_key: "aemAuth", kind: AuthKind::Basic },
@@ -757,8 +809,8 @@ const OP_SLING_GET_KEYSTORE: OpSpec = OpSpec {
     method: "GET",
     path_template: "/{intermediate_path}/{authorizable_id}/keystore/store.p12",
     fields: &[
-        FieldSpec { snake: "intermediate_path", location: FieldLocation::Path },
-        FieldSpec { snake: "authorizable_id", location: FieldLocation::Path },
+        FieldSpec { snake: "intermediate_path", wire: "intermediatePath", location: FieldLocation::Path },
+        FieldSpec { snake: "authorizable_id", wire: "authorizableId", location: FieldLocation::Path },
     ],
     auth: &[
         AuthApply { secret_key: "aemAuth", kind: AuthKind::Basic },
@@ -769,9 +821,9 @@ const OP_SLING_POST_PATH: OpSpec = OpSpec {
     method: "POST",
     path_template: "/{path}/",
     fields: &[
-        FieldSpec { snake: "path", location: FieldLocation::Path },
-        FieldSpec { snake: "jcr_primary_type", location: FieldLocation::Query },
-        FieldSpec { snake: "name", location: FieldLocation::Query },
+        FieldSpec { snake: "path", wire: "path", location: FieldLocation::Path },
+        FieldSpec { snake: "jcr_primary_type", wire: "jcr:primaryType", location: FieldLocation::Query },
+        FieldSpec { snake: "name", wire: ":name", location: FieldLocation::Query },
     ],
     auth: &[
         AuthApply { secret_key: "aemAuth", kind: AuthKind::Basic },
@@ -782,8 +834,8 @@ const OP_SLING_GET_NODE: OpSpec = OpSpec {
     method: "GET",
     path_template: "/{path}/{name}",
     fields: &[
-        FieldSpec { snake: "path", location: FieldLocation::Path },
-        FieldSpec { snake: "name", location: FieldLocation::Path },
+        FieldSpec { snake: "path", wire: "path", location: FieldLocation::Path },
+        FieldSpec { snake: "name", wire: "name", location: FieldLocation::Path },
     ],
     auth: &[
         AuthApply { secret_key: "aemAuth", kind: AuthKind::Basic },
@@ -794,10 +846,11 @@ const OP_SLING_POST_NODE: OpSpec = OpSpec {
     method: "POST",
     path_template: "/{path}/{name}",
     fields: &[
-        FieldSpec { snake: "path", location: FieldLocation::Path },
-        FieldSpec { snake: "name", location: FieldLocation::Path },
-        FieldSpec { snake: "operation", location: FieldLocation::Query },
-        FieldSpec { snake: "delete_authorizable", location: FieldLocation::Query },
+        FieldSpec { snake: "path", wire: "path", location: FieldLocation::Path },
+        FieldSpec { snake: "name", wire: "name", location: FieldLocation::Path },
+        FieldSpec { snake: "operation", wire: ":operation", location: FieldLocation::Query },
+        FieldSpec { snake: "delete_authorizable", wire: "deleteAuthorizable", location: FieldLocation::Query },
+        FieldSpec { snake: "file", wire: "file", location: FieldLocation::Body },
     ],
     auth: &[
         AuthApply { secret_key: "aemAuth", kind: AuthKind::Basic },
@@ -808,8 +861,8 @@ const OP_SLING_DELETE_NODE: OpSpec = OpSpec {
     method: "DELETE",
     path_template: "/{path}/{name}",
     fields: &[
-        FieldSpec { snake: "path", location: FieldLocation::Path },
-        FieldSpec { snake: "name", location: FieldLocation::Path },
+        FieldSpec { snake: "path", wire: "path", location: FieldLocation::Path },
+        FieldSpec { snake: "name", wire: "name", location: FieldLocation::Path },
     ],
     auth: &[
         AuthApply { secret_key: "aemAuth", kind: AuthKind::Basic },
@@ -820,14 +873,60 @@ const OP_SLING_POST_NODE_RW: OpSpec = OpSpec {
     method: "POST",
     path_template: "/{path}/{name}.rw.html",
     fields: &[
-        FieldSpec { snake: "path", location: FieldLocation::Path },
-        FieldSpec { snake: "name", location: FieldLocation::Path },
-        FieldSpec { snake: "add_members", location: FieldLocation::Query },
+        FieldSpec { snake: "path", wire: "path", location: FieldLocation::Path },
+        FieldSpec { snake: "name", wire: "name", location: FieldLocation::Path },
+        FieldSpec { snake: "add_members", wire: "addMembers", location: FieldLocation::Query },
     ],
     auth: &[
         AuthApply { secret_key: "aemAuth", kind: AuthKind::Basic },
     ],
 };
+
+fn iface_sling__truststore_info__to_json(p: &iface_sling::TruststoreInfo) -> Value {
+    let mut m = Map::new();
+    m.insert("aliases".into(), match (&p.aliases) { Some(v) => Value::Array((v).iter().map(|v| iface_sling__truststore_items__to_json(v)).collect()), None => Value::Null });
+    m.insert("exists".into(), match (&p.exists) { Some(v) => Value::Bool(*(v)), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_sling__truststore_items__to_json(p: &iface_sling::TruststoreItems) -> Value {
+    let mut m = Map::new();
+    m.insert("alias".into(), match (&p.alias) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("entryType".into(), match (&p.entry_type) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("issuer".into(), match (&p.issuer) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("notAfter".into(), match (&p.not_after) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("notBefore".into(), match (&p.not_before) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("serialNumber".into(), match (&p.serial_number) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("subject".into(), match (&p.subject) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_sling__keystore_info__to_json(p: &iface_sling::KeystoreInfo) -> Value {
+    let mut m = Map::new();
+    m.insert("aliases".into(), match (&p.aliases) { Some(v) => Value::Array((v).iter().map(|v| iface_sling__keystore_items__to_json(v)).collect()), None => Value::Null });
+    m.insert("exists".into(), match (&p.exists) { Some(v) => Value::Bool(*(v)), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_sling__keystore_items__to_json(p: &iface_sling::KeystoreItems) -> Value {
+    let mut m = Map::new();
+    m.insert("algorithm".into(), match (&p.algorithm) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("alias".into(), match (&p.alias) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("chain".into(), match (&p.chain) { Some(v) => Value::Array((v).iter().map(|v| iface_sling__keystore_chain_items__to_json(v)).collect()), None => Value::Null });
+    m.insert("entryType".into(), match (&p.entry_type) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("format".into(), match (&p.format) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_sling__keystore_chain_items__to_json(p: &iface_sling::KeystoreChainItems) -> Value {
+    let mut m = Map::new();
+    m.insert("issuer".into(), match (&p.issuer) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("notAfter".into(), match (&p.not_after) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("notBefore".into(), match (&p.not_before) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("serialNumber".into(), match (&p.serial_number) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("subject".into(), match (&p.subject) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
 
 fn iface_sling__post_config_adobe_granite_saml_authentication_handler_params__to_json(p: &iface_sling::PostConfigAdobeGraniteSamlAuthenticationHandlerParams) -> Value {
     let mut m = Map::new();
@@ -1076,6 +1175,12 @@ fn iface_sling__delete_agent_params__to_json(p: &iface_sling::DeleteAgentParams)
     Value::Object(m)
 }
 
+fn iface_sling__post_truststore_pkcs12_params__to_json(p: &iface_sling::PostTruststorePkcs12Params) -> Value {
+    let mut m = Map::new();
+    m.insert("truststore_p12".into(), match (&p.truststore_p12) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
 fn iface_sling__post_authorizables_params__to_json(p: &iface_sling::PostAuthorizablesParams) -> Value {
     let mut m = Map::new();
     m.insert("authorizable_id".into(), Value::String((&p.authorizable_id).clone()));
@@ -1094,6 +1199,7 @@ fn iface_sling__post_truststore_params__to_json(p: &iface_sling::PostTruststoreP
     m.insert("re_password".into(), match (&p.re_password) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("key_store_type".into(), match (&p.key_store_type) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("remove_alias".into(), match (&p.remove_alias) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("certificate".into(), match (&p.certificate) { Some(v) => Value::String((v).clone()), None => Value::Null });
     Value::Object(m)
 }
 
@@ -1119,6 +1225,9 @@ fn iface_sling__post_authorizable_keystore_params__to_json(p: &iface_sling::Post
     m.insert("alias".into(), match (&p.alias) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("new_alias".into(), match (&p.new_alias) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("remove_alias".into(), match (&p.remove_alias) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("cert_chain".into(), match (&p.cert_chain) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("key_store".into(), match (&p.key_store) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("pk".into(), match (&p.pk) { Some(v) => Value::String((v).clone()), None => Value::Null });
     Value::Object(m)
 }
 
@@ -1157,6 +1266,7 @@ fn iface_sling__post_node_params__to_json(p: &iface_sling::PostNodeParams) -> Va
     m.insert("name".into(), Value::String((&p.name).clone()));
     m.insert("operation".into(), match (&p.operation) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("delete_authorizable".into(), match (&p.delete_authorizable) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("file".into(), match (&p.file) { Some(v) => Value::String((v).clone()), None => Value::Null });
     Value::Object(m)
 }
 
@@ -1175,119 +1285,598 @@ fn iface_sling__post_node_rw_params__to_json(p: &iface_sling::PostNodeRwParams) 
     Value::Object(m)
 }
 
+fn iface_sling__truststore_info__from_json(v: &Value) -> Option<iface_sling::TruststoreInfo> {
+    let m = v.as_object()?;
+    Some(iface_sling::TruststoreInfo {
+        aliases: m.get("aliases").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| iface_sling__truststore_items__from_json(x)).collect())),
+        exists: m.get("exists").filter(|v| !v.is_null()).and_then(|v| (v).as_bool()),
+    })
+}
+
+fn iface_sling__truststore_items__from_json(v: &Value) -> Option<iface_sling::TruststoreItems> {
+    let m = v.as_object()?;
+    Some(iface_sling::TruststoreItems {
+        alias: m.get("alias").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        entry_type: m.get("entryType").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        issuer: m.get("issuer").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        not_after: m.get("notAfter").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        not_before: m.get("notBefore").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        serial_number: m.get("serialNumber").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        subject: m.get("subject").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    })
+}
+
+fn iface_sling__keystore_info__from_json(v: &Value) -> Option<iface_sling::KeystoreInfo> {
+    let m = v.as_object()?;
+    Some(iface_sling::KeystoreInfo {
+        aliases: m.get("aliases").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| iface_sling__keystore_items__from_json(x)).collect())),
+        exists: m.get("exists").filter(|v| !v.is_null()).and_then(|v| (v).as_bool()),
+    })
+}
+
+fn iface_sling__keystore_items__from_json(v: &Value) -> Option<iface_sling::KeystoreItems> {
+    let m = v.as_object()?;
+    Some(iface_sling::KeystoreItems {
+        algorithm: m.get("algorithm").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        alias: m.get("alias").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        chain: m.get("chain").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| iface_sling__keystore_chain_items__from_json(x)).collect())),
+        entry_type: m.get("entryType").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        format: m.get("format").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    })
+}
+
+fn iface_sling__keystore_chain_items__from_json(v: &Value) -> Option<iface_sling::KeystoreChainItems> {
+    let m = v.as_object()?;
+    Some(iface_sling::KeystoreChainItems {
+        issuer: m.get("issuer").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        not_after: m.get("notAfter").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        not_before: m.get("notBefore").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        serial_number: m.get("serialNumber").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        subject: m.get("subject").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    })
+}
+
+fn iface_sling__post_config_adobe_granite_saml_authentication_handler__ok(body: String) -> Result<String, crate::runtime::DispatchError> {
+    Ok(body)
+}
+
+fn iface_sling__post_config_adobe_granite_saml_authentication_handler__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
+fn iface_sling__post_config_apache_felix_jetty_based_http_service__ok(body: String) -> Result<String, crate::runtime::DispatchError> {
+    Ok(body)
+}
+
+fn iface_sling__post_config_apache_felix_jetty_based_http_service__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
+fn iface_sling__post_config_apache_http_components_proxy_configuration__ok(body: String) -> Result<String, crate::runtime::DispatchError> {
+    Ok(body)
+}
+
+fn iface_sling__post_config_apache_http_components_proxy_configuration__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
+fn iface_sling__post_config_apache_sling_dav_ex_servlet__ok(body: String) -> Result<String, crate::runtime::DispatchError> {
+    Ok(body)
+}
+
+fn iface_sling__post_config_apache_sling_dav_ex_servlet__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
+fn iface_sling__post_config_apache_sling_referrer_filter__ok(body: String) -> Result<String, crate::runtime::DispatchError> {
+    Ok(body)
+}
+
+fn iface_sling__post_config_apache_sling_referrer_filter__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
+fn iface_sling__post_config_apache_sling_get_servlet__ok(body: String) -> Result<String, crate::runtime::DispatchError> {
+    Ok(body)
+}
+
+fn iface_sling__post_config_apache_sling_get_servlet__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
+fn iface_sling__post_config_property__ok(body: String) -> Result<String, crate::runtime::DispatchError> {
+    Ok(body)
+}
+
+fn iface_sling__post_config_property__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
+fn iface_sling__get_query__ok(body: String) -> Result<String, crate::runtime::DispatchError> {
+    Ok(body)
+}
+
+fn iface_sling__get_query__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
+fn iface_sling__post_query__ok(body: String) -> Result<String, crate::runtime::DispatchError> {
+    Ok(body)
+}
+
+fn iface_sling__post_query__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
+fn iface_sling__get_package__ok(body: String) -> Result<String, crate::runtime::DispatchError> {
+    Ok(body)
+}
+
+fn iface_sling__get_package__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
+fn iface_sling__get_package_filter__ok(body: String) -> Result<String, crate::runtime::DispatchError> {
+    Ok(body)
+}
+
+fn iface_sling__get_package_filter__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
+fn iface_sling__get_agents__ok(body: String) -> Result<String, crate::runtime::DispatchError> {
+    Ok(body)
+}
+
+fn iface_sling__get_agents__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
+fn iface_sling__get_agent__ok(body: String) -> Result<String, crate::runtime::DispatchError> {
+    Ok(body)
+}
+
+fn iface_sling__get_agent__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
+fn iface_sling__post_agent__ok(body: String) -> Result<String, crate::runtime::DispatchError> {
+    Ok(body)
+}
+
+fn iface_sling__post_agent__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
+fn iface_sling__delete_agent__ok(body: String) -> Result<String, crate::runtime::DispatchError> {
+    Ok(body)
+}
+
+fn iface_sling__delete_agent__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
+fn iface_sling__post_truststore_pkcs12__ok(body: String) -> Result<String, crate::runtime::DispatchError> {
+    Ok(body)
+}
+
+fn iface_sling__post_truststore_pkcs12__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
+fn iface_sling__get_truststore__ok(body: String) -> Result<String, crate::runtime::DispatchError> {
+    Ok(body)
+}
+
+fn iface_sling__get_truststore__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
+fn iface_sling__post_authorizables__ok(body: String) -> Result<String, crate::runtime::DispatchError> {
+    Ok(body)
+}
+
+fn iface_sling__post_authorizables__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
+fn iface_sling__post_truststore__ok(body: String) -> Result<String, crate::runtime::DispatchError> {
+    Ok(body)
+}
+
+fn iface_sling__post_truststore__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
+fn iface_sling__get_truststore_info__ok(body: String) -> Result<iface_sling::TruststoreInfo, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match iface_sling__truststore_info__from_json(&v) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_sling__get_truststore_info__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
+fn iface_sling__post_tree_activation__ok(body: String) -> Result<String, crate::runtime::DispatchError> {
+    Ok(body)
+}
+
+fn iface_sling__post_tree_activation__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
+fn iface_sling__post_authorizable_keystore__ok(body: String) -> Result<iface_sling::KeystoreInfo, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match iface_sling__keystore_info__from_json(&v) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_sling__post_authorizable_keystore__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
+fn iface_sling__get_authorizable_keystore__ok(body: String) -> Result<iface_sling::KeystoreInfo, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match iface_sling__keystore_info__from_json(&v) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_sling__get_authorizable_keystore__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
+fn iface_sling__get_keystore__ok(body: String) -> Result<String, crate::runtime::DispatchError> {
+    Ok(body)
+}
+
+fn iface_sling__get_keystore__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
+fn iface_sling__post_path__ok(body: String) -> Result<String, crate::runtime::DispatchError> {
+    Ok(body)
+}
+
+fn iface_sling__post_path__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
+fn iface_sling__get_node__ok(body: String) -> Result<String, crate::runtime::DispatchError> {
+    Ok(body)
+}
+
+fn iface_sling__get_node__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
+fn iface_sling__post_node__ok(body: String) -> Result<String, crate::runtime::DispatchError> {
+    Ok(body)
+}
+
+fn iface_sling__post_node__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
+fn iface_sling__delete_node__ok(body: String) -> Result<String, crate::runtime::DispatchError> {
+    Ok(body)
+}
+
+fn iface_sling__delete_node__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
+fn iface_sling__post_node_rw__ok(body: String) -> Result<String, crate::runtime::DispatchError> {
+    Ok(body)
+}
+
+fn iface_sling__post_node_rw__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
 impl iface_sling::Guest for crate::Component {
     fn post_config_adobe_granite_saml_authentication_handler(params: iface_sling::PostConfigAdobeGraniteSamlAuthenticationHandlerParams) -> Result<String, String> {
         let json = iface_sling__post_config_adobe_granite_saml_authentication_handler_params__to_json(&params);
-        dispatch(&OP_SLING_POST_CONFIG_ADOBE_GRANITE_SAML_AUTHENTICATION_HANDLER, json)
+        match dispatch(&OP_SLING_POST_CONFIG_ADOBE_GRANITE_SAML_AUTHENTICATION_HANDLER, json).and_then(iface_sling__post_config_adobe_granite_saml_authentication_handler__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_sling__post_config_adobe_granite_saml_authentication_handler__err(e)),
+        }
     }
     fn post_config_apache_felix_jetty_based_http_service(params: iface_sling::PostConfigApacheFelixJettyBasedHttpServiceParams) -> Result<String, String> {
         let json = iface_sling__post_config_apache_felix_jetty_based_http_service_params__to_json(&params);
-        dispatch(&OP_SLING_POST_CONFIG_APACHE_FELIX_JETTY_BASED_HTTP_SERVICE, json)
+        match dispatch(&OP_SLING_POST_CONFIG_APACHE_FELIX_JETTY_BASED_HTTP_SERVICE, json).and_then(iface_sling__post_config_apache_felix_jetty_based_http_service__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_sling__post_config_apache_felix_jetty_based_http_service__err(e)),
+        }
     }
     fn post_config_apache_http_components_proxy_configuration(params: iface_sling::PostConfigApacheHttpComponentsProxyConfigurationParams) -> Result<String, String> {
         let json = iface_sling__post_config_apache_http_components_proxy_configuration_params__to_json(&params);
-        dispatch(&OP_SLING_POST_CONFIG_APACHE_HTTP_COMPONENTS_PROXY_CONFIGURATION, json)
+        match dispatch(&OP_SLING_POST_CONFIG_APACHE_HTTP_COMPONENTS_PROXY_CONFIGURATION, json).and_then(iface_sling__post_config_apache_http_components_proxy_configuration__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_sling__post_config_apache_http_components_proxy_configuration__err(e)),
+        }
     }
     fn post_config_apache_sling_dav_ex_servlet(params: iface_sling::PostConfigApacheSlingDavExServletParams) -> Result<String, String> {
         let json = iface_sling__post_config_apache_sling_dav_ex_servlet_params__to_json(&params);
-        dispatch(&OP_SLING_POST_CONFIG_APACHE_SLING_DAV_EX_SERVLET, json)
+        match dispatch(&OP_SLING_POST_CONFIG_APACHE_SLING_DAV_EX_SERVLET, json).and_then(iface_sling__post_config_apache_sling_dav_ex_servlet__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_sling__post_config_apache_sling_dav_ex_servlet__err(e)),
+        }
     }
     fn post_config_apache_sling_referrer_filter(params: iface_sling::PostConfigApacheSlingReferrerFilterParams) -> Result<String, String> {
         let json = iface_sling__post_config_apache_sling_referrer_filter_params__to_json(&params);
-        dispatch(&OP_SLING_POST_CONFIG_APACHE_SLING_REFERRER_FILTER, json)
+        match dispatch(&OP_SLING_POST_CONFIG_APACHE_SLING_REFERRER_FILTER, json).and_then(iface_sling__post_config_apache_sling_referrer_filter__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_sling__post_config_apache_sling_referrer_filter__err(e)),
+        }
     }
     fn post_config_apache_sling_get_servlet(params: iface_sling::PostConfigApacheSlingGetServletParams) -> Result<String, String> {
         let json = iface_sling__post_config_apache_sling_get_servlet_params__to_json(&params);
-        dispatch(&OP_SLING_POST_CONFIG_APACHE_SLING_GET_SERVLET, json)
+        match dispatch(&OP_SLING_POST_CONFIG_APACHE_SLING_GET_SERVLET, json).and_then(iface_sling__post_config_apache_sling_get_servlet__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_sling__post_config_apache_sling_get_servlet__err(e)),
+        }
     }
     fn post_config_property(params: iface_sling::PostConfigPropertyParams) -> Result<String, String> {
         let json = iface_sling__post_config_property_params__to_json(&params);
-        dispatch(&OP_SLING_POST_CONFIG_PROPERTY, json)
+        match dispatch(&OP_SLING_POST_CONFIG_PROPERTY, json).and_then(iface_sling__post_config_property__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_sling__post_config_property__err(e)),
+        }
     }
     fn get_query(params: iface_sling::GetQueryParams) -> Result<String, String> {
         let json = iface_sling__get_query_params__to_json(&params);
-        dispatch(&OP_SLING_GET_QUERY, json)
+        match dispatch(&OP_SLING_GET_QUERY, json).and_then(iface_sling__get_query__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_sling__get_query__err(e)),
+        }
     }
     fn post_query(params: iface_sling::PostQueryParams) -> Result<String, String> {
         let json = iface_sling__post_query_params__to_json(&params);
-        dispatch(&OP_SLING_POST_QUERY, json)
+        match dispatch(&OP_SLING_POST_QUERY, json).and_then(iface_sling__post_query__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_sling__post_query__err(e)),
+        }
     }
     fn get_package(params: iface_sling::GetPackageParams) -> Result<String, String> {
         let json = iface_sling__get_package_params__to_json(&params);
-        dispatch(&OP_SLING_GET_PACKAGE, json)
+        match dispatch(&OP_SLING_GET_PACKAGE, json).and_then(iface_sling__get_package__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_sling__get_package__err(e)),
+        }
     }
     fn get_package_filter(params: iface_sling::GetPackageFilterParams) -> Result<String, String> {
         let json = iface_sling__get_package_filter_params__to_json(&params);
-        dispatch(&OP_SLING_GET_PACKAGE_FILTER, json)
+        match dispatch(&OP_SLING_GET_PACKAGE_FILTER, json).and_then(iface_sling__get_package_filter__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_sling__get_package_filter__err(e)),
+        }
     }
     fn get_agents(params: iface_sling::GetAgentsParams) -> Result<String, String> {
         let json = iface_sling__get_agents_params__to_json(&params);
-        dispatch(&OP_SLING_GET_AGENTS, json)
+        match dispatch(&OP_SLING_GET_AGENTS, json).and_then(iface_sling__get_agents__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_sling__get_agents__err(e)),
+        }
     }
     fn get_agent(params: iface_sling::GetAgentParams) -> Result<String, String> {
         let json = iface_sling__get_agent_params__to_json(&params);
-        dispatch(&OP_SLING_GET_AGENT, json)
+        match dispatch(&OP_SLING_GET_AGENT, json).and_then(iface_sling__get_agent__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_sling__get_agent__err(e)),
+        }
     }
     fn post_agent(params: iface_sling::PostAgentParams) -> Result<String, String> {
         let json = iface_sling__post_agent_params__to_json(&params);
-        dispatch(&OP_SLING_POST_AGENT, json)
+        match dispatch(&OP_SLING_POST_AGENT, json).and_then(iface_sling__post_agent__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_sling__post_agent__err(e)),
+        }
     }
     fn delete_agent(params: iface_sling::DeleteAgentParams) -> Result<String, String> {
         let json = iface_sling__delete_agent_params__to_json(&params);
-        dispatch(&OP_SLING_DELETE_AGENT, json)
+        match dispatch(&OP_SLING_DELETE_AGENT, json).and_then(iface_sling__delete_agent__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_sling__delete_agent__err(e)),
+        }
     }
-    fn post_truststore_pkcs12() -> Result<String, String> {
-        dispatch(&OP_SLING_POST_TRUSTSTORE_PKCS12, Value::Object(Map::new()))
+    fn post_truststore_pkcs12(params: iface_sling::PostTruststorePkcs12Params) -> Result<String, String> {
+        let json = iface_sling__post_truststore_pkcs12_params__to_json(&params);
+        match dispatch(&OP_SLING_POST_TRUSTSTORE_PKCS12, json).and_then(iface_sling__post_truststore_pkcs12__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_sling__post_truststore_pkcs12__err(e)),
+        }
     }
     fn get_truststore() -> Result<String, String> {
-        dispatch(&OP_SLING_GET_TRUSTSTORE, Value::Object(Map::new()))
+        match dispatch(&OP_SLING_GET_TRUSTSTORE, Value::Object(Map::new())).and_then(iface_sling__get_truststore__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_sling__get_truststore__err(e)),
+        }
     }
     fn post_authorizables(params: iface_sling::PostAuthorizablesParams) -> Result<String, String> {
         let json = iface_sling__post_authorizables_params__to_json(&params);
-        dispatch(&OP_SLING_POST_AUTHORIZABLES, json)
+        match dispatch(&OP_SLING_POST_AUTHORIZABLES, json).and_then(iface_sling__post_authorizables__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_sling__post_authorizables__err(e)),
+        }
     }
     fn post_truststore(params: iface_sling::PostTruststoreParams) -> Result<String, String> {
         let json = iface_sling__post_truststore_params__to_json(&params);
-        dispatch(&OP_SLING_POST_TRUSTSTORE, json)
+        match dispatch(&OP_SLING_POST_TRUSTSTORE, json).and_then(iface_sling__post_truststore__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_sling__post_truststore__err(e)),
+        }
     }
-    fn get_truststore_info() -> Result<String, String> {
-        dispatch(&OP_SLING_GET_TRUSTSTORE_INFO, Value::Object(Map::new()))
+    fn get_truststore_info() -> Result<iface_sling::TruststoreInfo, String> {
+        match dispatch(&OP_SLING_GET_TRUSTSTORE_INFO, Value::Object(Map::new())).and_then(iface_sling__get_truststore_info__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_sling__get_truststore_info__err(e)),
+        }
     }
     fn post_tree_activation(params: iface_sling::PostTreeActivationParams) -> Result<String, String> {
         let json = iface_sling__post_tree_activation_params__to_json(&params);
-        dispatch(&OP_SLING_POST_TREE_ACTIVATION, json)
+        match dispatch(&OP_SLING_POST_TREE_ACTIVATION, json).and_then(iface_sling__post_tree_activation__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_sling__post_tree_activation__err(e)),
+        }
     }
-    fn post_authorizable_keystore(params: iface_sling::PostAuthorizableKeystoreParams) -> Result<String, String> {
+    fn post_authorizable_keystore(params: iface_sling::PostAuthorizableKeystoreParams) -> Result<iface_sling::KeystoreInfo, String> {
         let json = iface_sling__post_authorizable_keystore_params__to_json(&params);
-        dispatch(&OP_SLING_POST_AUTHORIZABLE_KEYSTORE, json)
+        match dispatch(&OP_SLING_POST_AUTHORIZABLE_KEYSTORE, json).and_then(iface_sling__post_authorizable_keystore__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_sling__post_authorizable_keystore__err(e)),
+        }
     }
-    fn get_authorizable_keystore(params: iface_sling::GetAuthorizableKeystoreParams) -> Result<String, String> {
+    fn get_authorizable_keystore(params: iface_sling::GetAuthorizableKeystoreParams) -> Result<iface_sling::KeystoreInfo, String> {
         let json = iface_sling__get_authorizable_keystore_params__to_json(&params);
-        dispatch(&OP_SLING_GET_AUTHORIZABLE_KEYSTORE, json)
+        match dispatch(&OP_SLING_GET_AUTHORIZABLE_KEYSTORE, json).and_then(iface_sling__get_authorizable_keystore__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_sling__get_authorizable_keystore__err(e)),
+        }
     }
     fn get_keystore(params: iface_sling::GetKeystoreParams) -> Result<String, String> {
         let json = iface_sling__get_keystore_params__to_json(&params);
-        dispatch(&OP_SLING_GET_KEYSTORE, json)
+        match dispatch(&OP_SLING_GET_KEYSTORE, json).and_then(iface_sling__get_keystore__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_sling__get_keystore__err(e)),
+        }
     }
     fn post_path(params: iface_sling::PostPathParams) -> Result<String, String> {
         let json = iface_sling__post_path_params__to_json(&params);
-        dispatch(&OP_SLING_POST_PATH, json)
+        match dispatch(&OP_SLING_POST_PATH, json).and_then(iface_sling__post_path__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_sling__post_path__err(e)),
+        }
     }
     fn get_node(params: iface_sling::GetNodeParams) -> Result<String, String> {
         let json = iface_sling__get_node_params__to_json(&params);
-        dispatch(&OP_SLING_GET_NODE, json)
+        match dispatch(&OP_SLING_GET_NODE, json).and_then(iface_sling__get_node__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_sling__get_node__err(e)),
+        }
     }
     fn post_node(params: iface_sling::PostNodeParams) -> Result<String, String> {
         let json = iface_sling__post_node_params__to_json(&params);
-        dispatch(&OP_SLING_POST_NODE, json)
+        match dispatch(&OP_SLING_POST_NODE, json).and_then(iface_sling__post_node__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_sling__post_node__err(e)),
+        }
     }
     fn delete_node(params: iface_sling::DeleteNodeParams) -> Result<String, String> {
         let json = iface_sling__delete_node_params__to_json(&params);
-        dispatch(&OP_SLING_DELETE_NODE, json)
+        match dispatch(&OP_SLING_DELETE_NODE, json).and_then(iface_sling__delete_node__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_sling__delete_node__err(e)),
+        }
     }
     fn post_node_rw(params: iface_sling::PostNodeRwParams) -> Result<String, String> {
         let json = iface_sling__post_node_rw_params__to_json(&params);
-        dispatch(&OP_SLING_POST_NODE_RW, json)
+        match dispatch(&OP_SLING_POST_NODE_RW, json).and_then(iface_sling__post_node_rw__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_sling__post_node_rw__err(e)),
+        }
     }
 }
 use crate::exports::autostamp::adobe::custom as iface_custom;
@@ -1296,8 +1885,8 @@ const OP_CUSTOM_POST_CONFIG_AEM_PASSWORD_RESET: OpSpec = OpSpec {
     method: "POST",
     path_template: "/apps/system/config/com.shinesolutions.aem.passwordreset.Activator",
     fields: &[
-        FieldSpec { snake: "pwdreset_authorizables", location: FieldLocation::Query },
-        FieldSpec { snake: "pwdreset_authorizables_type_hint", location: FieldLocation::Query },
+        FieldSpec { snake: "pwdreset_authorizables", wire: "pwdreset.authorizables", location: FieldLocation::Query },
+        FieldSpec { snake: "pwdreset_authorizables_type_hint", wire: "pwdreset.authorizables@TypeHint", location: FieldLocation::Query },
     ],
     auth: &[
         AuthApply { secret_key: "aemAuth", kind: AuthKind::Basic },
@@ -1308,8 +1897,8 @@ const OP_CUSTOM_POST_CONFIG_AEM_HEALTH_CHECK_SERVLET: OpSpec = OpSpec {
     method: "POST",
     path_template: "/apps/system/config/com.shinesolutions.healthcheck.hc.impl.ActiveBundleHealthCheck",
     fields: &[
-        FieldSpec { snake: "bundles_ignored", location: FieldLocation::Query },
-        FieldSpec { snake: "bundles_ignored_type_hint", location: FieldLocation::Query },
+        FieldSpec { snake: "bundles_ignored", wire: "bundles.ignored", location: FieldLocation::Query },
+        FieldSpec { snake: "bundles_ignored_type_hint", wire: "bundles.ignored@TypeHint", location: FieldLocation::Query },
     ],
     auth: &[
         AuthApply { secret_key: "aemAuth", kind: AuthKind::Basic },
@@ -1320,8 +1909,8 @@ const OP_CUSTOM_GET_AEM_HEALTH_CHECK: OpSpec = OpSpec {
     method: "GET",
     path_template: "/system/health",
     fields: &[
-        FieldSpec { snake: "tags", location: FieldLocation::Query },
-        FieldSpec { snake: "combine_tags_or", location: FieldLocation::Query },
+        FieldSpec { snake: "tags", wire: "tags", location: FieldLocation::Query },
+        FieldSpec { snake: "combine_tags_or", wire: "combineTagsOr", location: FieldLocation::Query },
     ],
     auth: &[
         AuthApply { secret_key: "aemAuth", kind: AuthKind::Basic },
@@ -1349,18 +1938,60 @@ fn iface_custom__get_aem_health_check_params__to_json(p: &iface_custom::GetAemHe
     Value::Object(m)
 }
 
+fn iface_custom__post_config_aem_password_reset__ok(body: String) -> Result<String, crate::runtime::DispatchError> {
+    Ok(body)
+}
+
+fn iface_custom__post_config_aem_password_reset__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
+fn iface_custom__post_config_aem_health_check_servlet__ok(body: String) -> Result<String, crate::runtime::DispatchError> {
+    Ok(body)
+}
+
+fn iface_custom__post_config_aem_health_check_servlet__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
+fn iface_custom__get_aem_health_check__ok(body: String) -> Result<String, crate::runtime::DispatchError> {
+    Ok(body)
+}
+
+fn iface_custom__get_aem_health_check__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
 impl iface_custom::Guest for crate::Component {
     fn post_config_aem_password_reset(params: iface_custom::PostConfigAemPasswordResetParams) -> Result<String, String> {
         let json = iface_custom__post_config_aem_password_reset_params__to_json(&params);
-        dispatch(&OP_CUSTOM_POST_CONFIG_AEM_PASSWORD_RESET, json)
+        match dispatch(&OP_CUSTOM_POST_CONFIG_AEM_PASSWORD_RESET, json).and_then(iface_custom__post_config_aem_password_reset__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_custom__post_config_aem_password_reset__err(e)),
+        }
     }
     fn post_config_aem_health_check_servlet(params: iface_custom::PostConfigAemHealthCheckServletParams) -> Result<String, String> {
         let json = iface_custom__post_config_aem_health_check_servlet_params__to_json(&params);
-        dispatch(&OP_CUSTOM_POST_CONFIG_AEM_HEALTH_CHECK_SERVLET, json)
+        match dispatch(&OP_CUSTOM_POST_CONFIG_AEM_HEALTH_CHECK_SERVLET, json).and_then(iface_custom__post_config_aem_health_check_servlet__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_custom__post_config_aem_health_check_servlet__err(e)),
+        }
     }
     fn get_aem_health_check(params: iface_custom::GetAemHealthCheckParams) -> Result<String, String> {
         let json = iface_custom__get_aem_health_check_params__to_json(&params);
-        dispatch(&OP_CUSTOM_GET_AEM_HEALTH_CHECK, json)
+        match dispatch(&OP_CUSTOM_GET_AEM_HEALTH_CHECK, json).and_then(iface_custom__get_aem_health_check__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_custom__get_aem_health_check__err(e)),
+        }
     }
 }
 use crate::exports::autostamp::adobe::crx as iface_crx;
@@ -1369,9 +2000,9 @@ const OP_CRX_POST_SET_PASSWORD: OpSpec = OpSpec {
     method: "POST",
     path_template: "/crx/explorer/ui/setpassword.jsp",
     fields: &[
-        FieldSpec { snake: "old", location: FieldLocation::Query },
-        FieldSpec { snake: "plain", location: FieldLocation::Query },
-        FieldSpec { snake: "verify", location: FieldLocation::Query },
+        FieldSpec { snake: "old", wire: "old", location: FieldLocation::Query },
+        FieldSpec { snake: "plain", wire: "plain", location: FieldLocation::Query },
+        FieldSpec { snake: "verify", wire: "verify", location: FieldLocation::Query },
     ],
     auth: &[
         AuthApply { secret_key: "aemAuth", kind: AuthKind::Basic },
@@ -1392,7 +2023,7 @@ const OP_CRX_POST_PACKAGE_SERVICE: OpSpec = OpSpec {
     method: "POST",
     path_template: "/crx/packmgr/service.jsp",
     fields: &[
-        FieldSpec { snake: "cmd", location: FieldLocation::Query },
+        FieldSpec { snake: "cmd", wire: "cmd", location: FieldLocation::Query },
     ],
     auth: &[
         AuthApply { secret_key: "aemAuth", kind: AuthKind::Basic },
@@ -1403,14 +2034,15 @@ const OP_CRX_POST_PACKAGE_SERVICE_JSON: OpSpec = OpSpec {
     method: "POST",
     path_template: "/crx/packmgr/service/.json/{path}",
     fields: &[
-        FieldSpec { snake: "path", location: FieldLocation::Path },
-        FieldSpec { snake: "cmd", location: FieldLocation::Query },
-        FieldSpec { snake: "group_name", location: FieldLocation::Query },
-        FieldSpec { snake: "package_name", location: FieldLocation::Query },
-        FieldSpec { snake: "package_version", location: FieldLocation::Query },
-        FieldSpec { snake: "charset", location: FieldLocation::Query },
-        FieldSpec { snake: "force", location: FieldLocation::Query },
-        FieldSpec { snake: "recursive", location: FieldLocation::Query },
+        FieldSpec { snake: "path", wire: "path", location: FieldLocation::Path },
+        FieldSpec { snake: "cmd", wire: "cmd", location: FieldLocation::Query },
+        FieldSpec { snake: "group_name", wire: "groupName", location: FieldLocation::Query },
+        FieldSpec { snake: "package_name", wire: "packageName", location: FieldLocation::Query },
+        FieldSpec { snake: "package_version", wire: "packageVersion", location: FieldLocation::Query },
+        FieldSpec { snake: "charset", wire: "_charset_", location: FieldLocation::Query },
+        FieldSpec { snake: "force", wire: "force", location: FieldLocation::Query },
+        FieldSpec { snake: "recursive", wire: "recursive", location: FieldLocation::Query },
+        FieldSpec { snake: "package", wire: "package", location: FieldLocation::Body },
     ],
     auth: &[
         AuthApply { secret_key: "aemAuth", kind: AuthKind::Basic },
@@ -1431,12 +2063,12 @@ const OP_CRX_POST_PACKAGE_UPDATE: OpSpec = OpSpec {
     method: "POST",
     path_template: "/crx/packmgr/update.jsp",
     fields: &[
-        FieldSpec { snake: "group_name", location: FieldLocation::Query },
-        FieldSpec { snake: "package_name", location: FieldLocation::Query },
-        FieldSpec { snake: "version", location: FieldLocation::Query },
-        FieldSpec { snake: "path", location: FieldLocation::Query },
-        FieldSpec { snake: "filter", location: FieldLocation::Query },
-        FieldSpec { snake: "charset", location: FieldLocation::Query },
+        FieldSpec { snake: "group_name", wire: "groupName", location: FieldLocation::Query },
+        FieldSpec { snake: "package_name", wire: "packageName", location: FieldLocation::Query },
+        FieldSpec { snake: "version", wire: "version", location: FieldLocation::Query },
+        FieldSpec { snake: "path", wire: "path", location: FieldLocation::Query },
+        FieldSpec { snake: "filter", wire: "filter", location: FieldLocation::Query },
+        FieldSpec { snake: "charset", wire: "_charset_", location: FieldLocation::Query },
     ],
     auth: &[
         AuthApply { secret_key: "aemAuth", kind: AuthKind::Basic },
@@ -1452,6 +2084,19 @@ const OP_CRX_GET_CRXDE_STATUS: OpSpec = OpSpec {
         AuthApply { secret_key: "aemAuth", kind: AuthKind::Basic },
     ],
 };
+
+fn iface_crx__install_status__to_json(p: &iface_crx::InstallStatus) -> Value {
+    let mut m = Map::new();
+    m.insert("status".into(), match (&p.status) { Some(v) => iface_crx__install_status_status__to_json(v), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_crx__install_status_status__to_json(p: &iface_crx::InstallStatusStatus) -> Value {
+    let mut m = Map::new();
+    m.insert("finished".into(), match (&p.finished) { Some(v) => Value::Bool(*(v)), None => Value::Null });
+    m.insert("itemCount".into(), match (&p.item_count) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    Value::Object(m)
+}
 
 fn iface_crx__post_set_password_params__to_json(p: &iface_crx::PostSetPasswordParams) -> Value {
     let mut m = Map::new();
@@ -1477,6 +2122,7 @@ fn iface_crx__post_package_service_json_params__to_json(p: &iface_crx::PostPacka
     m.insert("charset".into(), match (&p.charset) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("force".into(), match (&p.force) { Some(v) => Value::Bool(*(v)), None => Value::Null });
     m.insert("recursive".into(), match (&p.recursive) { Some(v) => Value::Bool(*(v)), None => Value::Null });
+    m.insert("package".into(), match (&p.package_op) { Some(v) => Value::String((v).clone()), None => Value::Null });
     Value::Object(m)
 }
 
@@ -1491,31 +2137,158 @@ fn iface_crx__post_package_update_params__to_json(p: &iface_crx::PostPackageUpda
     Value::Object(m)
 }
 
+fn iface_crx__install_status__from_json(v: &Value) -> Option<iface_crx::InstallStatus> {
+    let m = v.as_object()?;
+    Some(iface_crx::InstallStatus {
+        status: m.get("status").filter(|v| !v.is_null()).and_then(|v| iface_crx__install_status_status__from_json(v)),
+    })
+}
+
+fn iface_crx__install_status_status__from_json(v: &Value) -> Option<iface_crx::InstallStatusStatus> {
+    let m = v.as_object()?;
+    Some(iface_crx::InstallStatusStatus {
+        finished: m.get("finished").filter(|v| !v.is_null()).and_then(|v| (v).as_bool()),
+        item_count: m.get("itemCount").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+    })
+}
+
+fn iface_crx__post_set_password__ok(body: String) -> Result<String, crate::runtime::DispatchError> {
+    Ok(body)
+}
+
+fn iface_crx__post_set_password__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
+fn iface_crx__get_install_status__ok(body: String) -> Result<iface_crx::InstallStatus, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match iface_crx__install_status__from_json(&v) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_crx__get_install_status__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
+fn iface_crx__post_package_service__ok(body: String) -> Result<String, crate::runtime::DispatchError> {
+    Ok(body)
+}
+
+fn iface_crx__post_package_service__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
+fn iface_crx__post_package_service_json__ok(body: String) -> Result<String, crate::runtime::DispatchError> {
+    Ok(body)
+}
+
+fn iface_crx__post_package_service_json__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
+fn iface_crx__get_package_manager_servlet__ok(body: String) -> Result<String, crate::runtime::DispatchError> {
+    Ok(body)
+}
+
+fn iface_crx__get_package_manager_servlet__err(e: crate::runtime::DispatchError) -> iface_crx::GetPackageManagerServletError {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => match status {
+            404u16 => iface_crx::GetPackageManagerServletError::NotFound(body),
+            405u16 => iface_crx::GetPackageManagerServletError::MethodNotAllowed(body),
+            _ => iface_crx::GetPackageManagerServletError::Other(body),
+        },
+        crate::runtime::DispatchError::Transport(m) => iface_crx::GetPackageManagerServletError::Other(m),
+    }
+}
+
+fn iface_crx__post_package_update__ok(body: String) -> Result<String, crate::runtime::DispatchError> {
+    Ok(body)
+}
+
+fn iface_crx__post_package_update__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
+fn iface_crx__get_crxde_status__ok(body: String) -> Result<String, crate::runtime::DispatchError> {
+    Ok(body)
+}
+
+fn iface_crx__get_crxde_status__err(e: crate::runtime::DispatchError) -> iface_crx::GetCrxdeStatusError {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => match status {
+            404u16 => iface_crx::GetCrxdeStatusError::NotFound(body),
+            _ => iface_crx::GetCrxdeStatusError::Other(body),
+        },
+        crate::runtime::DispatchError::Transport(m) => iface_crx::GetCrxdeStatusError::Other(m),
+    }
+}
+
 impl iface_crx::Guest for crate::Component {
     fn post_set_password(params: iface_crx::PostSetPasswordParams) -> Result<String, String> {
         let json = iface_crx__post_set_password_params__to_json(&params);
-        dispatch(&OP_CRX_POST_SET_PASSWORD, json)
+        match dispatch(&OP_CRX_POST_SET_PASSWORD, json).and_then(iface_crx__post_set_password__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_crx__post_set_password__err(e)),
+        }
     }
-    fn get_install_status() -> Result<String, String> {
-        dispatch(&OP_CRX_GET_INSTALL_STATUS, Value::Object(Map::new()))
+    fn get_install_status() -> Result<iface_crx::InstallStatus, String> {
+        match dispatch(&OP_CRX_GET_INSTALL_STATUS, Value::Object(Map::new())).and_then(iface_crx__get_install_status__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_crx__get_install_status__err(e)),
+        }
     }
     fn post_package_service(params: iface_crx::PostPackageServiceParams) -> Result<String, String> {
         let json = iface_crx__post_package_service_params__to_json(&params);
-        dispatch(&OP_CRX_POST_PACKAGE_SERVICE, json)
+        match dispatch(&OP_CRX_POST_PACKAGE_SERVICE, json).and_then(iface_crx__post_package_service__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_crx__post_package_service__err(e)),
+        }
     }
     fn post_package_service_json(params: iface_crx::PostPackageServiceJsonParams) -> Result<String, String> {
         let json = iface_crx__post_package_service_json_params__to_json(&params);
-        dispatch(&OP_CRX_POST_PACKAGE_SERVICE_JSON, json)
+        match dispatch(&OP_CRX_POST_PACKAGE_SERVICE_JSON, json).and_then(iface_crx__post_package_service_json__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_crx__post_package_service_json__err(e)),
+        }
     }
-    fn get_package_manager_servlet() -> Result<String, String> {
-        dispatch(&OP_CRX_GET_PACKAGE_MANAGER_SERVLET, Value::Object(Map::new()))
+    fn get_package_manager_servlet() -> Result<String, iface_crx::GetPackageManagerServletError> {
+        match dispatch(&OP_CRX_GET_PACKAGE_MANAGER_SERVLET, Value::Object(Map::new())).and_then(iface_crx__get_package_manager_servlet__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_crx__get_package_manager_servlet__err(e)),
+        }
     }
     fn post_package_update(params: iface_crx::PostPackageUpdateParams) -> Result<String, String> {
         let json = iface_crx__post_package_update_params__to_json(&params);
-        dispatch(&OP_CRX_POST_PACKAGE_UPDATE, json)
+        match dispatch(&OP_CRX_POST_PACKAGE_UPDATE, json).and_then(iface_crx__post_package_update__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_crx__post_package_update__err(e)),
+        }
     }
-    fn get_crxde_status() -> Result<String, String> {
-        dispatch(&OP_CRX_GET_CRXDE_STATUS, Value::Object(Map::new()))
+    fn get_crxde_status() -> Result<String, iface_crx::GetCrxdeStatusError> {
+        match dispatch(&OP_CRX_GET_CRXDE_STATUS, Value::Object(Map::new())).and_then(iface_crx__get_crxde_status__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_crx__get_crxde_status__err(e)),
+        }
     }
 }
 use crate::exports::autostamp::adobe::granite as iface_granite;
@@ -1524,12 +2297,14 @@ const OP_GRANITE_SSL_SETUP: OpSpec = OpSpec {
     method: "POST",
     path_template: "/libs/granite/security/post/sslSetup.html",
     fields: &[
-        FieldSpec { snake: "keystore_password", location: FieldLocation::Query },
-        FieldSpec { snake: "keystore_password_confirm", location: FieldLocation::Query },
-        FieldSpec { snake: "truststore_password", location: FieldLocation::Query },
-        FieldSpec { snake: "truststore_password_confirm", location: FieldLocation::Query },
-        FieldSpec { snake: "https_hostname", location: FieldLocation::Query },
-        FieldSpec { snake: "https_port", location: FieldLocation::Query },
+        FieldSpec { snake: "keystore_password", wire: "keystorePassword", location: FieldLocation::Query },
+        FieldSpec { snake: "keystore_password_confirm", wire: "keystorePasswordConfirm", location: FieldLocation::Query },
+        FieldSpec { snake: "truststore_password", wire: "truststorePassword", location: FieldLocation::Query },
+        FieldSpec { snake: "truststore_password_confirm", wire: "truststorePasswordConfirm", location: FieldLocation::Query },
+        FieldSpec { snake: "https_hostname", wire: "httpsHostname", location: FieldLocation::Query },
+        FieldSpec { snake: "https_port", wire: "httpsPort", location: FieldLocation::Query },
+        FieldSpec { snake: "certificate_file", wire: "certificateFile", location: FieldLocation::Body },
+        FieldSpec { snake: "privatekey_file", wire: "privatekeyFile", location: FieldLocation::Body },
     ],
     auth: &[
         AuthApply { secret_key: "aemAuth", kind: AuthKind::Basic },
@@ -1544,13 +2319,29 @@ fn iface_granite__ssl_setup_params__to_json(p: &iface_granite::SslSetupParams) -
     m.insert("truststore_password_confirm".into(), Value::String((&p.truststore_password_confirm).clone()));
     m.insert("https_hostname".into(), Value::String((&p.https_hostname).clone()));
     m.insert("https_port".into(), Value::String((&p.https_port).clone()));
+    m.insert("certificate_file".into(), match (&p.certificate_file) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("privatekey_file".into(), match (&p.privatekey_file) { Some(v) => Value::String((v).clone()), None => Value::Null });
     Value::Object(m)
+}
+
+fn iface_granite__ssl_setup__ok(body: String) -> Result<String, crate::runtime::DispatchError> {
+    Ok(body)
+}
+
+fn iface_granite__ssl_setup__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
 }
 
 impl iface_granite::Guest for crate::Component {
     fn ssl_setup(params: iface_granite::SslSetupParams) -> Result<String, String> {
         let json = iface_granite__ssl_setup_params__to_json(&params);
-        dispatch(&OP_GRANITE_SSL_SETUP, json)
+        match dispatch(&OP_GRANITE_SSL_SETUP, json).and_then(iface_granite__ssl_setup__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_granite__ssl_setup__err(e)),
+        }
     }
 }
 use crate::exports::autostamp::adobe::console as iface_console;
@@ -1559,8 +2350,8 @@ const OP_CONSOLE_POST_BUNDLE: OpSpec = OpSpec {
     method: "POST",
     path_template: "/system/console/bundles/{name}",
     fields: &[
-        FieldSpec { snake: "name", location: FieldLocation::Path },
-        FieldSpec { snake: "action", location: FieldLocation::Query },
+        FieldSpec { snake: "name", wire: "name", location: FieldLocation::Path },
+        FieldSpec { snake: "action", wire: "action", location: FieldLocation::Query },
     ],
     auth: &[
         AuthApply { secret_key: "aemAuth", kind: AuthKind::Basic },
@@ -1571,7 +2362,7 @@ const OP_CONSOLE_GET_BUNDLE_INFO: OpSpec = OpSpec {
     method: "GET",
     path_template: "/system/console/bundles/{name}.json",
     fields: &[
-        FieldSpec { snake: "name", location: FieldLocation::Path },
+        FieldSpec { snake: "name", wire: "name", location: FieldLocation::Path },
     ],
     auth: &[
         AuthApply { secret_key: "aemAuth", kind: AuthKind::Basic },
@@ -1592,36 +2383,36 @@ const OP_CONSOLE_POST_SAML_CONFIGURATION: OpSpec = OpSpec {
     method: "POST",
     path_template: "/system/console/configMgr/com.adobe.granite.auth.saml.SamlAuthenticationHandler",
     fields: &[
-        FieldSpec { snake: "post", location: FieldLocation::Query },
-        FieldSpec { snake: "apply", location: FieldLocation::Query },
-        FieldSpec { snake: "delete", location: FieldLocation::Query },
-        FieldSpec { snake: "action", location: FieldLocation::Query },
-        FieldSpec { snake: "location", location: FieldLocation::Query },
-        FieldSpec { snake: "path", location: FieldLocation::Query },
-        FieldSpec { snake: "service_ranking", location: FieldLocation::Query },
-        FieldSpec { snake: "idp_url", location: FieldLocation::Query },
-        FieldSpec { snake: "idp_cert_alias", location: FieldLocation::Query },
-        FieldSpec { snake: "idp_http_redirect", location: FieldLocation::Query },
-        FieldSpec { snake: "service_provider_entity_id", location: FieldLocation::Query },
-        FieldSpec { snake: "assertion_consumer_service_url", location: FieldLocation::Query },
-        FieldSpec { snake: "sp_private_key_alias", location: FieldLocation::Query },
-        FieldSpec { snake: "key_store_password", location: FieldLocation::Query },
-        FieldSpec { snake: "default_redirect_url", location: FieldLocation::Query },
-        FieldSpec { snake: "user_id_attribute", location: FieldLocation::Query },
-        FieldSpec { snake: "use_encryption", location: FieldLocation::Query },
-        FieldSpec { snake: "create_user", location: FieldLocation::Query },
-        FieldSpec { snake: "add_group_memberships", location: FieldLocation::Query },
-        FieldSpec { snake: "group_membership_attribute", location: FieldLocation::Query },
-        FieldSpec { snake: "default_groups", location: FieldLocation::Query },
-        FieldSpec { snake: "name_id_format", location: FieldLocation::Query },
-        FieldSpec { snake: "synchronize_attributes", location: FieldLocation::Query },
-        FieldSpec { snake: "handle_logout", location: FieldLocation::Query },
-        FieldSpec { snake: "logout_url", location: FieldLocation::Query },
-        FieldSpec { snake: "clock_tolerance", location: FieldLocation::Query },
-        FieldSpec { snake: "digest_method", location: FieldLocation::Query },
-        FieldSpec { snake: "signature_method", location: FieldLocation::Query },
-        FieldSpec { snake: "user_intermediate_path", location: FieldLocation::Query },
-        FieldSpec { snake: "propertylist", location: FieldLocation::Query },
+        FieldSpec { snake: "post", wire: "post", location: FieldLocation::Query },
+        FieldSpec { snake: "apply", wire: "apply", location: FieldLocation::Query },
+        FieldSpec { snake: "delete", wire: "delete", location: FieldLocation::Query },
+        FieldSpec { snake: "action", wire: "action", location: FieldLocation::Query },
+        FieldSpec { snake: "location", wire: "$location", location: FieldLocation::Query },
+        FieldSpec { snake: "path", wire: "path", location: FieldLocation::Query },
+        FieldSpec { snake: "service_ranking", wire: "service.ranking", location: FieldLocation::Query },
+        FieldSpec { snake: "idp_url", wire: "idpUrl", location: FieldLocation::Query },
+        FieldSpec { snake: "idp_cert_alias", wire: "idpCertAlias", location: FieldLocation::Query },
+        FieldSpec { snake: "idp_http_redirect", wire: "idpHttpRedirect", location: FieldLocation::Query },
+        FieldSpec { snake: "service_provider_entity_id", wire: "serviceProviderEntityId", location: FieldLocation::Query },
+        FieldSpec { snake: "assertion_consumer_service_url", wire: "assertionConsumerServiceURL", location: FieldLocation::Query },
+        FieldSpec { snake: "sp_private_key_alias", wire: "spPrivateKeyAlias", location: FieldLocation::Query },
+        FieldSpec { snake: "key_store_password", wire: "keyStorePassword", location: FieldLocation::Query },
+        FieldSpec { snake: "default_redirect_url", wire: "defaultRedirectUrl", location: FieldLocation::Query },
+        FieldSpec { snake: "user_id_attribute", wire: "userIDAttribute", location: FieldLocation::Query },
+        FieldSpec { snake: "use_encryption", wire: "useEncryption", location: FieldLocation::Query },
+        FieldSpec { snake: "create_user", wire: "createUser", location: FieldLocation::Query },
+        FieldSpec { snake: "add_group_memberships", wire: "addGroupMemberships", location: FieldLocation::Query },
+        FieldSpec { snake: "group_membership_attribute", wire: "groupMembershipAttribute", location: FieldLocation::Query },
+        FieldSpec { snake: "default_groups", wire: "defaultGroups", location: FieldLocation::Query },
+        FieldSpec { snake: "name_id_format", wire: "nameIdFormat", location: FieldLocation::Query },
+        FieldSpec { snake: "synchronize_attributes", wire: "synchronizeAttributes", location: FieldLocation::Query },
+        FieldSpec { snake: "handle_logout", wire: "handleLogout", location: FieldLocation::Query },
+        FieldSpec { snake: "logout_url", wire: "logoutUrl", location: FieldLocation::Query },
+        FieldSpec { snake: "clock_tolerance", wire: "clockTolerance", location: FieldLocation::Query },
+        FieldSpec { snake: "digest_method", wire: "digestMethod", location: FieldLocation::Query },
+        FieldSpec { snake: "signature_method", wire: "signatureMethod", location: FieldLocation::Query },
+        FieldSpec { snake: "user_intermediate_path", wire: "userIntermediatePath", location: FieldLocation::Query },
+        FieldSpec { snake: "propertylist", wire: "propertylist", location: FieldLocation::Query },
     ],
     auth: &[
         AuthApply { secret_key: "aemAuth", kind: AuthKind::Basic },
@@ -1632,7 +2423,7 @@ const OP_CONSOLE_POST_JMX_REPOSITORY: OpSpec = OpSpec {
     method: "POST",
     path_template: "/system/console/jmx/com.adobe.granite:type=Repository/op/{action}",
     fields: &[
-        FieldSpec { snake: "action", location: FieldLocation::Path },
+        FieldSpec { snake: "action", wire: "action", location: FieldLocation::Path },
     ],
     auth: &[
         AuthApply { secret_key: "aemAuth", kind: AuthKind::Basic },
@@ -1648,6 +2439,119 @@ const OP_CONSOLE_GET_AEM_PRODUCT_INFO: OpSpec = OpSpec {
         AuthApply { secret_key: "aemAuth", kind: AuthKind::Basic },
     ],
 };
+
+fn iface_console__bundle_info__to_json(p: &iface_console::BundleInfo) -> Value {
+    let mut m = Map::new();
+    m.insert("data".into(), match (&p.data) { Some(v) => Value::Array((v).iter().map(|v| iface_console__bundle_data__to_json(v)).collect()), None => Value::Null });
+    m.insert("s".into(), match (&p.s) { Some(v) => Value::Array((v).iter().map(|v| Value::Number(serde_json::Number::from(*(v)))).collect()), None => Value::Null });
+    m.insert("status".into(), match (&p.status) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_console__bundle_data__to_json(p: &iface_console::BundleData) -> Value {
+    let mut m = Map::new();
+    m.insert("category".into(), match (&p.category) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("fragment".into(), match (&p.fragment) { Some(v) => Value::Bool(*(v)), None => Value::Null });
+    m.insert("id".into(), match (&p.id) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("name".into(), match (&p.name) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("props".into(), match (&p.props) { Some(v) => Value::Array((v).iter().map(|v| iface_console__bundle_data_prop__to_json(v)).collect()), None => Value::Null });
+    m.insert("state".into(), match (&p.state) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("stateRaw".into(), match (&p.state_raw) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("symbolicName".into(), match (&p.symbolic_name) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("version".into(), match (&p.version) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_console__bundle_data_prop__to_json(p: &iface_console::BundleDataProp) -> Value {
+    let mut m = Map::new();
+    m.insert("key".into(), match (&p.key) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("value".into(), match (&p.value) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_console__saml_configuration_info__to_json(p: &iface_console::SamlConfigurationInfo) -> Value {
+    let mut m = Map::new();
+    m.insert("bundle_location".into(), match (&p.bundle_location) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("description".into(), match (&p.description) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("pid".into(), match (&p.pid) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("properties".into(), match (&p.properties) { Some(v) => iface_console__saml_configuration_properties__to_json(v), None => Value::Null });
+    m.insert("service_location".into(), match (&p.service_location) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("title".into(), match (&p.title) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_console__saml_configuration_properties__to_json(p: &iface_console::SamlConfigurationProperties) -> Value {
+    let mut m = Map::new();
+    m.insert("addGroupMemberships".into(), match (&p.add_group_memberships) { Some(v) => iface_console__saml_configuration_property_items_boolean__to_json(v), None => Value::Null });
+    m.insert("assertionConsumerServiceURL".into(), match (&p.assertion_consumer_service_url) { Some(v) => iface_console__saml_configuration_property_items_string__to_json(v), None => Value::Null });
+    m.insert("clockTolerance".into(), match (&p.clock_tolerance) { Some(v) => iface_console__saml_configuration_property_items_long__to_json(v), None => Value::Null });
+    m.insert("createUser".into(), match (&p.create_user) { Some(v) => iface_console__saml_configuration_property_items_boolean__to_json(v), None => Value::Null });
+    m.insert("defaultGroups".into(), match (&p.default_groups) { Some(v) => iface_console__saml_configuration_property_items_array__to_json(v), None => Value::Null });
+    m.insert("defaultRedirectUrl".into(), match (&p.default_redirect_url) { Some(v) => iface_console__saml_configuration_property_items_string__to_json(v), None => Value::Null });
+    m.insert("digestMethod".into(), match (&p.digest_method) { Some(v) => iface_console__saml_configuration_property_items_string__to_json(v), None => Value::Null });
+    m.insert("groupMembershipAttribute".into(), match (&p.group_membership_attribute) { Some(v) => iface_console__saml_configuration_property_items_string__to_json(v), None => Value::Null });
+    m.insert("handleLogout".into(), match (&p.handle_logout) { Some(v) => iface_console__saml_configuration_property_items_boolean__to_json(v), None => Value::Null });
+    m.insert("idpCertAlias".into(), match (&p.idp_cert_alias) { Some(v) => iface_console__saml_configuration_property_items_string__to_json(v), None => Value::Null });
+    m.insert("idpHttpRedirect".into(), match (&p.idp_http_redirect) { Some(v) => iface_console__saml_configuration_property_items_boolean__to_json(v), None => Value::Null });
+    m.insert("idpUrl".into(), match (&p.idp_url) { Some(v) => iface_console__saml_configuration_property_items_string__to_json(v), None => Value::Null });
+    m.insert("keyStorePassword".into(), match (&p.key_store_password) { Some(v) => iface_console__saml_configuration_property_items_string__to_json(v), None => Value::Null });
+    m.insert("logoutUrl".into(), match (&p.logout_url) { Some(v) => iface_console__saml_configuration_property_items_string__to_json(v), None => Value::Null });
+    m.insert("nameIdFormat".into(), match (&p.name_id_format) { Some(v) => iface_console__saml_configuration_property_items_string__to_json(v), None => Value::Null });
+    m.insert("path".into(), match (&p.path) { Some(v) => iface_console__saml_configuration_property_items_array__to_json(v), None => Value::Null });
+    m.insert("service.ranking".into(), match (&p.service_ranking) { Some(v) => iface_console__saml_configuration_property_items_long__to_json(v), None => Value::Null });
+    m.insert("serviceProviderEntityId".into(), match (&p.service_provider_entity_id) { Some(v) => iface_console__saml_configuration_property_items_string__to_json(v), None => Value::Null });
+    m.insert("signatureMethod".into(), match (&p.signature_method) { Some(v) => iface_console__saml_configuration_property_items_string__to_json(v), None => Value::Null });
+    m.insert("spPrivateKeyAlias".into(), match (&p.sp_private_key_alias) { Some(v) => iface_console__saml_configuration_property_items_string__to_json(v), None => Value::Null });
+    m.insert("synchronizeAttributes".into(), match (&p.synchronize_attributes) { Some(v) => iface_console__saml_configuration_property_items_array__to_json(v), None => Value::Null });
+    m.insert("useEncryption".into(), match (&p.use_encryption) { Some(v) => iface_console__saml_configuration_property_items_boolean__to_json(v), None => Value::Null });
+    m.insert("userIDAttribute".into(), match (&p.user_id_attribute) { Some(v) => iface_console__saml_configuration_property_items_string__to_json(v), None => Value::Null });
+    m.insert("userIntermediatePath".into(), match (&p.user_intermediate_path) { Some(v) => iface_console__saml_configuration_property_items_string__to_json(v), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_console__saml_configuration_property_items_boolean__to_json(p: &iface_console::SamlConfigurationPropertyItemsBoolean) -> Value {
+    let mut m = Map::new();
+    m.insert("description".into(), match (&p.description) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("is_set".into(), match (&p.is_set) { Some(v) => Value::Bool(*(v)), None => Value::Null });
+    m.insert("name".into(), match (&p.name) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("optional".into(), match (&p.optional) { Some(v) => Value::Bool(*(v)), None => Value::Null });
+    m.insert("type".into(), match (&p.type_op) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("value".into(), match (&p.value) { Some(v) => Value::Bool(*(v)), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_console__saml_configuration_property_items_string__to_json(p: &iface_console::SamlConfigurationPropertyItemsString) -> Value {
+    let mut m = Map::new();
+    m.insert("description".into(), match (&p.description) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("is_set".into(), match (&p.is_set) { Some(v) => Value::Bool(*(v)), None => Value::Null });
+    m.insert("name".into(), match (&p.name) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("optional".into(), match (&p.optional) { Some(v) => Value::Bool(*(v)), None => Value::Null });
+    m.insert("type".into(), match (&p.type_op) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("value".into(), match (&p.value) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_console__saml_configuration_property_items_long__to_json(p: &iface_console::SamlConfigurationPropertyItemsLong) -> Value {
+    let mut m = Map::new();
+    m.insert("description".into(), match (&p.description) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("is_set".into(), match (&p.is_set) { Some(v) => Value::Bool(*(v)), None => Value::Null });
+    m.insert("name".into(), match (&p.name) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("optional".into(), match (&p.optional) { Some(v) => Value::Bool(*(v)), None => Value::Null });
+    m.insert("type".into(), match (&p.type_op) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("value".into(), match (&p.value) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_console__saml_configuration_property_items_array__to_json(p: &iface_console::SamlConfigurationPropertyItemsArray) -> Value {
+    let mut m = Map::new();
+    m.insert("description".into(), match (&p.description) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("is_set".into(), match (&p.is_set) { Some(v) => Value::Bool(*(v)), None => Value::Null });
+    m.insert("name".into(), match (&p.name) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("optional".into(), match (&p.optional) { Some(v) => Value::Bool(*(v)), None => Value::Null });
+    m.insert("type".into(), match (&p.type_op) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("values".into(), match (&p.values) { Some(v) => Value::Array((v).iter().map(|v| Value::String((v).clone())).collect()), None => Value::Null });
+    Value::Object(m)
+}
 
 fn iface_console__post_bundle_params__to_json(p: &iface_console::PostBundleParams) -> Value {
     let mut m = Map::new();
@@ -1703,28 +2607,254 @@ fn iface_console__post_jmx_repository_params__to_json(p: &iface_console::PostJmx
     Value::Object(m)
 }
 
+fn iface_console__bundle_info__from_json(v: &Value) -> Option<iface_console::BundleInfo> {
+    let m = v.as_object()?;
+    Some(iface_console::BundleInfo {
+        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| iface_console__bundle_data__from_json(x)).collect())),
+        s: m.get("s").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| (x).as_i64().map(|n| n as i32)).collect())),
+        status: m.get("status").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    })
+}
+
+fn iface_console__bundle_data__from_json(v: &Value) -> Option<iface_console::BundleData> {
+    let m = v.as_object()?;
+    Some(iface_console::BundleData {
+        category: m.get("category").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        fragment: m.get("fragment").filter(|v| !v.is_null()).and_then(|v| (v).as_bool()),
+        id: m.get("id").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        name: m.get("name").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        props: m.get("props").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| iface_console__bundle_data_prop__from_json(x)).collect())),
+        state: m.get("state").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        state_raw: m.get("stateRaw").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        symbolic_name: m.get("symbolicName").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        version: m.get("version").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    })
+}
+
+fn iface_console__bundle_data_prop__from_json(v: &Value) -> Option<iface_console::BundleDataProp> {
+    let m = v.as_object()?;
+    Some(iface_console::BundleDataProp {
+        key: m.get("key").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        value: m.get("value").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    })
+}
+
+fn iface_console__saml_configuration_info__from_json(v: &Value) -> Option<iface_console::SamlConfigurationInfo> {
+    let m = v.as_object()?;
+    Some(iface_console::SamlConfigurationInfo {
+        bundle_location: m.get("bundle_location").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        description: m.get("description").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        pid: m.get("pid").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        properties: m.get("properties").filter(|v| !v.is_null()).and_then(|v| iface_console__saml_configuration_properties__from_json(v)),
+        service_location: m.get("service_location").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        title: m.get("title").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    })
+}
+
+fn iface_console__saml_configuration_properties__from_json(v: &Value) -> Option<iface_console::SamlConfigurationProperties> {
+    let m = v.as_object()?;
+    Some(iface_console::SamlConfigurationProperties {
+        add_group_memberships: m.get("addGroupMemberships").filter(|v| !v.is_null()).and_then(|v| iface_console__saml_configuration_property_items_boolean__from_json(v)),
+        assertion_consumer_service_url: m.get("assertionConsumerServiceURL").filter(|v| !v.is_null()).and_then(|v| iface_console__saml_configuration_property_items_string__from_json(v)),
+        clock_tolerance: m.get("clockTolerance").filter(|v| !v.is_null()).and_then(|v| iface_console__saml_configuration_property_items_long__from_json(v)),
+        create_user: m.get("createUser").filter(|v| !v.is_null()).and_then(|v| iface_console__saml_configuration_property_items_boolean__from_json(v)),
+        default_groups: m.get("defaultGroups").filter(|v| !v.is_null()).and_then(|v| iface_console__saml_configuration_property_items_array__from_json(v)),
+        default_redirect_url: m.get("defaultRedirectUrl").filter(|v| !v.is_null()).and_then(|v| iface_console__saml_configuration_property_items_string__from_json(v)),
+        digest_method: m.get("digestMethod").filter(|v| !v.is_null()).and_then(|v| iface_console__saml_configuration_property_items_string__from_json(v)),
+        group_membership_attribute: m.get("groupMembershipAttribute").filter(|v| !v.is_null()).and_then(|v| iface_console__saml_configuration_property_items_string__from_json(v)),
+        handle_logout: m.get("handleLogout").filter(|v| !v.is_null()).and_then(|v| iface_console__saml_configuration_property_items_boolean__from_json(v)),
+        idp_cert_alias: m.get("idpCertAlias").filter(|v| !v.is_null()).and_then(|v| iface_console__saml_configuration_property_items_string__from_json(v)),
+        idp_http_redirect: m.get("idpHttpRedirect").filter(|v| !v.is_null()).and_then(|v| iface_console__saml_configuration_property_items_boolean__from_json(v)),
+        idp_url: m.get("idpUrl").filter(|v| !v.is_null()).and_then(|v| iface_console__saml_configuration_property_items_string__from_json(v)),
+        key_store_password: m.get("keyStorePassword").filter(|v| !v.is_null()).and_then(|v| iface_console__saml_configuration_property_items_string__from_json(v)),
+        logout_url: m.get("logoutUrl").filter(|v| !v.is_null()).and_then(|v| iface_console__saml_configuration_property_items_string__from_json(v)),
+        name_id_format: m.get("nameIdFormat").filter(|v| !v.is_null()).and_then(|v| iface_console__saml_configuration_property_items_string__from_json(v)),
+        path: m.get("path").filter(|v| !v.is_null()).and_then(|v| iface_console__saml_configuration_property_items_array__from_json(v)),
+        service_ranking: m.get("service.ranking").filter(|v| !v.is_null()).and_then(|v| iface_console__saml_configuration_property_items_long__from_json(v)),
+        service_provider_entity_id: m.get("serviceProviderEntityId").filter(|v| !v.is_null()).and_then(|v| iface_console__saml_configuration_property_items_string__from_json(v)),
+        signature_method: m.get("signatureMethod").filter(|v| !v.is_null()).and_then(|v| iface_console__saml_configuration_property_items_string__from_json(v)),
+        sp_private_key_alias: m.get("spPrivateKeyAlias").filter(|v| !v.is_null()).and_then(|v| iface_console__saml_configuration_property_items_string__from_json(v)),
+        synchronize_attributes: m.get("synchronizeAttributes").filter(|v| !v.is_null()).and_then(|v| iface_console__saml_configuration_property_items_array__from_json(v)),
+        use_encryption: m.get("useEncryption").filter(|v| !v.is_null()).and_then(|v| iface_console__saml_configuration_property_items_boolean__from_json(v)),
+        user_id_attribute: m.get("userIDAttribute").filter(|v| !v.is_null()).and_then(|v| iface_console__saml_configuration_property_items_string__from_json(v)),
+        user_intermediate_path: m.get("userIntermediatePath").filter(|v| !v.is_null()).and_then(|v| iface_console__saml_configuration_property_items_string__from_json(v)),
+    })
+}
+
+fn iface_console__saml_configuration_property_items_boolean__from_json(v: &Value) -> Option<iface_console::SamlConfigurationPropertyItemsBoolean> {
+    let m = v.as_object()?;
+    Some(iface_console::SamlConfigurationPropertyItemsBoolean {
+        description: m.get("description").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        is_set: m.get("is_set").filter(|v| !v.is_null()).and_then(|v| (v).as_bool()),
+        name: m.get("name").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        optional: m.get("optional").filter(|v| !v.is_null()).and_then(|v| (v).as_bool()),
+        type_op: m.get("type").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        value: m.get("value").filter(|v| !v.is_null()).and_then(|v| (v).as_bool()),
+    })
+}
+
+fn iface_console__saml_configuration_property_items_string__from_json(v: &Value) -> Option<iface_console::SamlConfigurationPropertyItemsString> {
+    let m = v.as_object()?;
+    Some(iface_console::SamlConfigurationPropertyItemsString {
+        description: m.get("description").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        is_set: m.get("is_set").filter(|v| !v.is_null()).and_then(|v| (v).as_bool()),
+        name: m.get("name").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        optional: m.get("optional").filter(|v| !v.is_null()).and_then(|v| (v).as_bool()),
+        type_op: m.get("type").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        value: m.get("value").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    })
+}
+
+fn iface_console__saml_configuration_property_items_long__from_json(v: &Value) -> Option<iface_console::SamlConfigurationPropertyItemsLong> {
+    let m = v.as_object()?;
+    Some(iface_console::SamlConfigurationPropertyItemsLong {
+        description: m.get("description").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        is_set: m.get("is_set").filter(|v| !v.is_null()).and_then(|v| (v).as_bool()),
+        name: m.get("name").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        optional: m.get("optional").filter(|v| !v.is_null()).and_then(|v| (v).as_bool()),
+        type_op: m.get("type").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        value: m.get("value").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+    })
+}
+
+fn iface_console__saml_configuration_property_items_array__from_json(v: &Value) -> Option<iface_console::SamlConfigurationPropertyItemsArray> {
+    let m = v.as_object()?;
+    Some(iface_console::SamlConfigurationPropertyItemsArray {
+        description: m.get("description").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        is_set: m.get("is_set").filter(|v| !v.is_null()).and_then(|v| (v).as_bool()),
+        name: m.get("name").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        optional: m.get("optional").filter(|v| !v.is_null()).and_then(|v| (v).as_bool()),
+        type_op: m.get("type").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        values: m.get("values").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| (x).as_str().map(|s| s.to_string())).collect())),
+    })
+}
+
+fn iface_console__post_bundle__ok(body: String) -> Result<String, crate::runtime::DispatchError> {
+    Ok(body)
+}
+
+fn iface_console__post_bundle__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
+fn iface_console__get_bundle_info__ok(body: String) -> Result<iface_console::BundleInfo, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match iface_console__bundle_info__from_json(&v) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_console__get_bundle_info__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
+fn iface_console__get_config_mgr__ok(body: String) -> Result<String, crate::runtime::DispatchError> {
+    Ok(body)
+}
+
+fn iface_console__get_config_mgr__err(e: crate::runtime::DispatchError) -> iface_console::GetConfigMgrError {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => match status {
+            s if (500u16..600u16).contains(&s) => iface_console::GetConfigMgrError::ServerError(body),
+            _ => iface_console::GetConfigMgrError::Other(body),
+        },
+        crate::runtime::DispatchError::Transport(m) => iface_console::GetConfigMgrError::Other(m),
+    }
+}
+
+fn iface_console__post_saml_configuration__ok(body: String) -> Result<iface_console::SamlConfigurationInfo, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match iface_console__saml_configuration_info__from_json(&v) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_console__post_saml_configuration__err(e: crate::runtime::DispatchError) -> iface_console::PostSamlConfigurationError {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => match status {
+            302u16 => iface_console::PostSamlConfigurationError::Found(body),
+            _ => iface_console::PostSamlConfigurationError::Other(body),
+        },
+        crate::runtime::DispatchError::Transport(m) => iface_console::PostSamlConfigurationError::Other(m),
+    }
+}
+
+fn iface_console__post_jmx_repository__ok(body: String) -> Result<String, crate::runtime::DispatchError> {
+    Ok(body)
+}
+
+fn iface_console__post_jmx_repository__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
+fn iface_console__get_aem_product_info__ok(body: String) -> Result<String, crate::runtime::DispatchError> {
+    Ok(body)
+}
+
+fn iface_console__get_aem_product_info__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
 impl iface_console::Guest for crate::Component {
     fn post_bundle(params: iface_console::PostBundleParams) -> Result<String, String> {
         let json = iface_console__post_bundle_params__to_json(&params);
-        dispatch(&OP_CONSOLE_POST_BUNDLE, json)
+        match dispatch(&OP_CONSOLE_POST_BUNDLE, json).and_then(iface_console__post_bundle__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_console__post_bundle__err(e)),
+        }
     }
-    fn get_bundle_info(params: iface_console::GetBundleInfoParams) -> Result<String, String> {
+    fn get_bundle_info(params: iface_console::GetBundleInfoParams) -> Result<iface_console::BundleInfo, String> {
         let json = iface_console__get_bundle_info_params__to_json(&params);
-        dispatch(&OP_CONSOLE_GET_BUNDLE_INFO, json)
+        match dispatch(&OP_CONSOLE_GET_BUNDLE_INFO, json).and_then(iface_console__get_bundle_info__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_console__get_bundle_info__err(e)),
+        }
     }
-    fn get_config_mgr() -> Result<String, String> {
-        dispatch(&OP_CONSOLE_GET_CONFIG_MGR, Value::Object(Map::new()))
+    fn get_config_mgr() -> Result<String, iface_console::GetConfigMgrError> {
+        match dispatch(&OP_CONSOLE_GET_CONFIG_MGR, Value::Object(Map::new())).and_then(iface_console__get_config_mgr__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_console__get_config_mgr__err(e)),
+        }
     }
-    fn post_saml_configuration(params: iface_console::PostSamlConfigurationParams) -> Result<String, String> {
+    fn post_saml_configuration(params: iface_console::PostSamlConfigurationParams) -> Result<iface_console::SamlConfigurationInfo, iface_console::PostSamlConfigurationError> {
         let json = iface_console__post_saml_configuration_params__to_json(&params);
-        dispatch(&OP_CONSOLE_POST_SAML_CONFIGURATION, json)
+        match dispatch(&OP_CONSOLE_POST_SAML_CONFIGURATION, json).and_then(iface_console__post_saml_configuration__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_console__post_saml_configuration__err(e)),
+        }
     }
     fn post_jmx_repository(params: iface_console::PostJmxRepositoryParams) -> Result<String, String> {
         let json = iface_console__post_jmx_repository_params__to_json(&params);
-        dispatch(&OP_CONSOLE_POST_JMX_REPOSITORY, json)
+        match dispatch(&OP_CONSOLE_POST_JMX_REPOSITORY, json).and_then(iface_console__post_jmx_repository__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_console__post_jmx_repository__err(e)),
+        }
     }
     fn get_aem_product_info() -> Result<String, String> {
-        dispatch(&OP_CONSOLE_GET_AEM_PRODUCT_INFO, Value::Object(Map::new()))
+        match dispatch(&OP_CONSOLE_GET_AEM_PRODUCT_INFO, Value::Object(Map::new())).and_then(iface_console__get_aem_product_info__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_console__get_aem_product_info__err(e)),
+        }
     }
 }
 

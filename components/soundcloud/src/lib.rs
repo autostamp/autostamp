@@ -44,10 +44,15 @@ pub(crate) enum FieldLocation {
     Body,
 }
 
-/// A single operation parameter: the snake-case key it carries in the params JSON and where
-/// it belongs in the request.
+/// A single operation parameter. `snake` keys the field in the internal params JSON (and, for a
+/// path field, matches the `{snake}` placeholder in the path template); `wire` is the verbatim name
+/// the field takes on the HTTP wire (query key, header name, or body property). The two differ
+/// whenever the source name isn't already snake_case (e.g. `dryRun` → snake `dry_run`, wire
+/// `dryRun`), and let distinct inputs that share a snake key (`DateCreated`, `DateCreated<`) still
+/// travel under their true names.
 pub(crate) struct FieldSpec {
     pub(crate) snake: &'static str,
+    pub(crate) wire: &'static str,
     pub(crate) location: FieldLocation,
 }
 
@@ -71,6 +76,16 @@ pub(crate) struct AuthApply {
     pub(crate) kind: AuthKind,
 }
 
+/// The failure modes of [`dispatch`], kept structured so each generated operation can map them
+/// onto its own typed error: an `Http` failure carries the response status and body (routed to
+/// the matching error-variant case), while a `Transport` failure carries a message for the
+/// catch-all case (a secret lookup, connection, or decode failure that never produced an HTTP
+/// status).
+pub(crate) enum DispatchError {
+    Http { status: u16, body: String },
+    Transport(String),
+}
+
 /// A single API operation: HTTP method, path template (with `{snake}` placeholders), the
 /// parameter fields, and the security schemes to apply.
 pub(crate) struct OpSpec {
@@ -81,8 +96,9 @@ pub(crate) struct OpSpec {
 }
 
 /// Execute `op` with the supplied `params` (a JSON object keyed by snake-case field names)
-/// and return the response body as a string, or an error message.
-pub(crate) fn dispatch(op: &OpSpec, params: Value) -> Result<String, String> {
+/// and return the raw 2xx response body, or a structured [`DispatchError`] the caller maps
+/// onto the operation's typed error.
+pub(crate) fn dispatch(op: &OpSpec, params: Value) -> Result<String, DispatchError> {
     let obj = match &params {
         Value::Object(map) => Some(map),
         _ => None,
@@ -105,10 +121,10 @@ pub(crate) fn dispatch(op: &OpSpec, params: Value) -> Result<String, String> {
                 let placeholder = format!("{{{}}}", field.snake);
                 path = path.replace(&placeholder, &percent_encode(&scalar(value)));
             }
-            FieldLocation::Query => query.push((field.snake.to_string(), scalar(value))),
-            FieldLocation::Header => headers.push((field.snake.to_string(), scalar(value))),
+            FieldLocation::Query => query.push((field.wire.to_string(), scalar(value))),
+            FieldLocation::Header => headers.push((field.wire.to_string(), scalar(value))),
             FieldLocation::Body => {
-                body.insert(field.snake.to_string(), value.clone());
+                body.insert(field.wire.to_string(), value.clone());
             }
         }
     }
@@ -116,7 +132,7 @@ pub(crate) fn dispatch(op: &OpSpec, params: Value) -> Result<String, String> {
     // Apply each resolved security scheme, sourcing its value from wasmcloud:secrets.
     let mut cookies: Vec<String> = Vec::new();
     for apply in op.auth {
-        let secret = fetch_secret(apply.secret_key)?;
+        let secret = fetch_secret(apply.secret_key).map_err(DispatchError::Transport)?;
         match &apply.kind {
             AuthKind::Bearer => headers.push(("authorization".into(), format!("Bearer {secret}"))),
             AuthKind::Basic => {
@@ -177,17 +193,18 @@ fn fetch_secret(key: &str) -> Result<String, String> {
 }
 
 /// Build and send the outgoing request with `wstd`, returning the response body on a 2xx
-/// status. The generated guest exports are synchronous, so the async `wstd` client is driven
-/// to completion on a local reactor via `wstd::runtime::block_on`.
+/// status and a structured [`DispatchError`] otherwise. The generated guest exports are
+/// synchronous, so the async `wstd` client is driven to completion on a local reactor via
+/// `wstd::runtime::block_on`.
 fn perform(
     method: &str,
     path_with_query: &str,
     headers: &[(String, String)],
     body: &[u8],
-) -> Result<String, String> {
+) -> Result<String, DispatchError> {
     let url = join_url(crate::BASE_URL, path_with_query);
     let method = Method::from_bytes(method.as_bytes())
-        .map_err(|err| format!("invalid HTTP method `{method}`: {err}"))?;
+        .map_err(|err| DispatchError::Transport(format!("invalid HTTP method `{method}`: {err}")))?;
 
     let mut builder = Request::builder().method(method).uri(url);
     for (name, value) in headers {
@@ -199,27 +216,29 @@ fn perform(
         } else {
             Body::from(body.to_vec())
         })
-        .map_err(|err| format!("failed to build request: {err}"))?;
+        .map_err(|err| DispatchError::Transport(format!("failed to build request: {err}")))?;
 
     wstd::runtime::block_on(async move {
         let client = Client::new();
         let response = client
             .send(request)
             .await
-            .map_err(|err| format!("request failed: {err:#}"))?;
+            .map_err(|err| DispatchError::Transport(format!("request failed: {err:#}")))?;
 
         let status = response.status().as_u16();
         let mut response_body = response.into_body();
-        let bytes = response_body
-            .contents()
-            .await
-            .map_err(|err| format!("failed to read response body: {err:#}"))?;
+        let bytes = response_body.contents().await.map_err(|err| {
+            DispatchError::Transport(format!("failed to read response body: {err:#}"))
+        })?;
         let body_text = String::from_utf8_lossy(bytes).into_owned();
 
         if (200..300).contains(&status) {
             Ok(body_text)
         } else {
-            Err(format!("HTTP {status}: {body_text}"))
+            Err(DispatchError::Http {
+                status,
+                body: body_text,
+            })
         }
     })
 }
@@ -288,10 +307,10 @@ const OP_OAUTH_GET_CONNECT: OpSpec = OpSpec {
     method: "GET",
     path_template: "/connect",
     fields: &[
-        FieldSpec { snake: "redirect_uri", location: FieldLocation::Query },
-        FieldSpec { snake: "response_type", location: FieldLocation::Query },
-        FieldSpec { snake: "scope", location: FieldLocation::Query },
-        FieldSpec { snake: "state", location: FieldLocation::Query },
+        FieldSpec { snake: "redirect_uri", wire: "redirect_uri", location: FieldLocation::Query },
+        FieldSpec { snake: "response_type", wire: "response_type", location: FieldLocation::Query },
+        FieldSpec { snake: "scope", wire: "scope", location: FieldLocation::Query },
+        FieldSpec { snake: "state", wire: "state", location: FieldLocation::Query },
     ],
     auth: &[
         AuthApply { secret_key: "AuthHeader", kind: AuthKind::ApiKeyHeader("Authorization") },
@@ -303,6 +322,7 @@ const OP_OAUTH_POST_OAUTH2_TOKEN: OpSpec = OpSpec {
     method: "POST",
     path_template: "/oauth2/token",
     fields: &[
+        FieldSpec { snake: "body", wire: "body", location: FieldLocation::Body },
     ],
     auth: &[
         AuthApply { secret_key: "ClientId", kind: AuthKind::ApiKeyQuery("client_id") },
@@ -326,13 +346,56 @@ fn iface_oauth__get_connect_params__to_json(p: &iface_oauth::GetConnectParams) -
     Value::Object(m)
 }
 
-impl iface_oauth::Guest for crate::Component {
-    fn get_connect(params: iface_oauth::GetConnectParams) -> Result<String, String> {
-        let json = iface_oauth__get_connect_params__to_json(&params);
-        dispatch(&OP_OAUTH_GET_CONNECT, json)
+fn iface_oauth__post_oauth2_token_params__to_json(p: &iface_oauth::PostOauth2TokenParams) -> Value {
+    let mut m = Map::new();
+    m.insert("body".into(), match (&p.body) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_oauth__get_connect__ok(body: String) -> Result<String, crate::runtime::DispatchError> {
+    Ok(body)
+}
+
+fn iface_oauth__get_connect__err(e: crate::runtime::DispatchError) -> iface_oauth::GetConnectError {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => match status {
+            302u16 => iface_oauth::GetConnectError::Found(body),
+            401u16 => iface_oauth::GetConnectError::Unauthorized(body),
+            _ => iface_oauth::GetConnectError::Other(body),
+        },
+        crate::runtime::DispatchError::Transport(m) => iface_oauth::GetConnectError::Other(m),
     }
-    fn post_oauth2_token() -> Result<String, String> {
-        dispatch(&OP_OAUTH_POST_OAUTH2_TOKEN, Value::Object(Map::new()))
+}
+
+fn iface_oauth__post_oauth2_token__ok(body: String) -> Result<String, crate::runtime::DispatchError> {
+    Ok(body)
+}
+
+fn iface_oauth__post_oauth2_token__err(e: crate::runtime::DispatchError) -> iface_oauth::PostOauth2TokenError {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => match status {
+            400u16 => iface_oauth::PostOauth2TokenError::BadRequest(body),
+            401u16 => iface_oauth::PostOauth2TokenError::Unauthorized(body),
+            _ => iface_oauth::PostOauth2TokenError::Other(body),
+        },
+        crate::runtime::DispatchError::Transport(m) => iface_oauth::PostOauth2TokenError::Other(m),
+    }
+}
+
+impl iface_oauth::Guest for crate::Component {
+    fn get_connect(params: iface_oauth::GetConnectParams) -> Result<String, iface_oauth::GetConnectError> {
+        let json = iface_oauth__get_connect_params__to_json(&params);
+        match dispatch(&OP_OAUTH_GET_CONNECT, json).and_then(iface_oauth__get_connect__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_oauth__get_connect__err(e)),
+        }
+    }
+    fn post_oauth2_token(params: iface_oauth::PostOauth2TokenParams) -> Result<String, iface_oauth::PostOauth2TokenError> {
+        let json = iface_oauth__post_oauth2_token_params__to_json(&params);
+        match dispatch(&OP_OAUTH_POST_OAUTH2_TOKEN, json).and_then(iface_oauth__post_oauth2_token__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_oauth__post_oauth2_token__err(e)),
+        }
     }
 }
 use crate::exports::autostamp::soundcloud::likes as iface_likes;
@@ -341,7 +404,7 @@ const OP_LIKES_POST_LIKES_PLAYLISTS_PLAYLIST_ID: OpSpec = OpSpec {
     method: "POST",
     path_template: "/likes/playlists/{playlist_id}",
     fields: &[
-        FieldSpec { snake: "playlist_id", location: FieldLocation::Path },
+        FieldSpec { snake: "playlist_id", wire: "playlist_id", location: FieldLocation::Path },
     ],
     auth: &[
         AuthApply { secret_key: "AuthHeader", kind: AuthKind::ApiKeyHeader("Authorization") },
@@ -352,7 +415,7 @@ const OP_LIKES_DELETE_LIKES_PLAYLISTS_PLAYLIST_ID: OpSpec = OpSpec {
     method: "DELETE",
     path_template: "/likes/playlists/{playlist_id}",
     fields: &[
-        FieldSpec { snake: "playlist_id", location: FieldLocation::Path },
+        FieldSpec { snake: "playlist_id", wire: "playlist_id", location: FieldLocation::Path },
     ],
     auth: &[
         AuthApply { secret_key: "AuthHeader", kind: AuthKind::ApiKeyHeader("Authorization") },
@@ -363,7 +426,7 @@ const OP_LIKES_POST_LIKES_TRACKS_TRACK_ID: OpSpec = OpSpec {
     method: "POST",
     path_template: "/likes/tracks/{track_id}",
     fields: &[
-        FieldSpec { snake: "track_id", location: FieldLocation::Path },
+        FieldSpec { snake: "track_id", wire: "track_id", location: FieldLocation::Path },
     ],
     auth: &[
         AuthApply { secret_key: "AuthHeader", kind: AuthKind::ApiKeyHeader("Authorization") },
@@ -374,7 +437,7 @@ const OP_LIKES_DELETE_LIKES_TRACKS_TRACK_ID: OpSpec = OpSpec {
     method: "DELETE",
     path_template: "/likes/tracks/{track_id}",
     fields: &[
-        FieldSpec { snake: "track_id", location: FieldLocation::Path },
+        FieldSpec { snake: "track_id", wire: "track_id", location: FieldLocation::Path },
     ],
     auth: &[
         AuthApply { secret_key: "AuthHeader", kind: AuthKind::ApiKeyHeader("Authorization") },
@@ -405,22 +468,98 @@ fn iface_likes__delete_likes_tracks_track_id_params__to_json(p: &iface_likes::De
     Value::Object(m)
 }
 
+fn iface_likes__post_likes_playlists_playlist_id__ok(body: String) -> Result<String, crate::runtime::DispatchError> {
+    Ok(body)
+}
+
+fn iface_likes__post_likes_playlists_playlist_id__err(e: crate::runtime::DispatchError) -> iface_likes::PostLikesPlaylistsPlaylistIdError {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => match status {
+            400u16 => iface_likes::PostLikesPlaylistsPlaylistIdError::BadRequest(body),
+            401u16 => iface_likes::PostLikesPlaylistsPlaylistIdError::Unauthorized(body),
+            404u16 => iface_likes::PostLikesPlaylistsPlaylistIdError::NotFound(body),
+            429u16 => iface_likes::PostLikesPlaylistsPlaylistIdError::TooManyRequests(body),
+            _ => iface_likes::PostLikesPlaylistsPlaylistIdError::Other(body),
+        },
+        crate::runtime::DispatchError::Transport(m) => iface_likes::PostLikesPlaylistsPlaylistIdError::Other(m),
+    }
+}
+
+fn iface_likes__delete_likes_playlists_playlist_id__ok(body: String) -> Result<String, crate::runtime::DispatchError> {
+    Ok(body)
+}
+
+fn iface_likes__delete_likes_playlists_playlist_id__err(e: crate::runtime::DispatchError) -> iface_likes::DeleteLikesPlaylistsPlaylistIdError {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => match status {
+            400u16 => iface_likes::DeleteLikesPlaylistsPlaylistIdError::BadRequest(body),
+            404u16 => iface_likes::DeleteLikesPlaylistsPlaylistIdError::NotFound(body),
+            _ => iface_likes::DeleteLikesPlaylistsPlaylistIdError::Other(body),
+        },
+        crate::runtime::DispatchError::Transport(m) => iface_likes::DeleteLikesPlaylistsPlaylistIdError::Other(m),
+    }
+}
+
+fn iface_likes__post_likes_tracks_track_id__ok(body: String) -> Result<String, crate::runtime::DispatchError> {
+    Ok(body)
+}
+
+fn iface_likes__post_likes_tracks_track_id__err(e: crate::runtime::DispatchError) -> iface_likes::PostLikesTracksTrackIdError {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => match status {
+            400u16 => iface_likes::PostLikesTracksTrackIdError::BadRequest(body),
+            401u16 => iface_likes::PostLikesTracksTrackIdError::Unauthorized(body),
+            404u16 => iface_likes::PostLikesTracksTrackIdError::NotFound(body),
+            429u16 => iface_likes::PostLikesTracksTrackIdError::TooManyRequests(body),
+            _ => iface_likes::PostLikesTracksTrackIdError::Other(body),
+        },
+        crate::runtime::DispatchError::Transport(m) => iface_likes::PostLikesTracksTrackIdError::Other(m),
+    }
+}
+
+fn iface_likes__delete_likes_tracks_track_id__ok(body: String) -> Result<String, crate::runtime::DispatchError> {
+    Ok(body)
+}
+
+fn iface_likes__delete_likes_tracks_track_id__err(e: crate::runtime::DispatchError) -> iface_likes::DeleteLikesTracksTrackIdError {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => match status {
+            400u16 => iface_likes::DeleteLikesTracksTrackIdError::BadRequest(body),
+            404u16 => iface_likes::DeleteLikesTracksTrackIdError::NotFound(body),
+            _ => iface_likes::DeleteLikesTracksTrackIdError::Other(body),
+        },
+        crate::runtime::DispatchError::Transport(m) => iface_likes::DeleteLikesTracksTrackIdError::Other(m),
+    }
+}
+
 impl iface_likes::Guest for crate::Component {
-    fn post_likes_playlists_playlist_id(params: iface_likes::PostLikesPlaylistsPlaylistIdParams) -> Result<String, String> {
+    fn post_likes_playlists_playlist_id(params: iface_likes::PostLikesPlaylistsPlaylistIdParams) -> Result<String, iface_likes::PostLikesPlaylistsPlaylistIdError> {
         let json = iface_likes__post_likes_playlists_playlist_id_params__to_json(&params);
-        dispatch(&OP_LIKES_POST_LIKES_PLAYLISTS_PLAYLIST_ID, json)
+        match dispatch(&OP_LIKES_POST_LIKES_PLAYLISTS_PLAYLIST_ID, json).and_then(iface_likes__post_likes_playlists_playlist_id__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_likes__post_likes_playlists_playlist_id__err(e)),
+        }
     }
-    fn delete_likes_playlists_playlist_id(params: iface_likes::DeleteLikesPlaylistsPlaylistIdParams) -> Result<String, String> {
+    fn delete_likes_playlists_playlist_id(params: iface_likes::DeleteLikesPlaylistsPlaylistIdParams) -> Result<String, iface_likes::DeleteLikesPlaylistsPlaylistIdError> {
         let json = iface_likes__delete_likes_playlists_playlist_id_params__to_json(&params);
-        dispatch(&OP_LIKES_DELETE_LIKES_PLAYLISTS_PLAYLIST_ID, json)
+        match dispatch(&OP_LIKES_DELETE_LIKES_PLAYLISTS_PLAYLIST_ID, json).and_then(iface_likes__delete_likes_playlists_playlist_id__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_likes__delete_likes_playlists_playlist_id__err(e)),
+        }
     }
-    fn post_likes_tracks_track_id(params: iface_likes::PostLikesTracksTrackIdParams) -> Result<String, String> {
+    fn post_likes_tracks_track_id(params: iface_likes::PostLikesTracksTrackIdParams) -> Result<String, iface_likes::PostLikesTracksTrackIdError> {
         let json = iface_likes__post_likes_tracks_track_id_params__to_json(&params);
-        dispatch(&OP_LIKES_POST_LIKES_TRACKS_TRACK_ID, json)
+        match dispatch(&OP_LIKES_POST_LIKES_TRACKS_TRACK_ID, json).and_then(iface_likes__post_likes_tracks_track_id__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_likes__post_likes_tracks_track_id__err(e)),
+        }
     }
-    fn delete_likes_tracks_track_id(params: iface_likes::DeleteLikesTracksTrackIdParams) -> Result<String, String> {
+    fn delete_likes_tracks_track_id(params: iface_likes::DeleteLikesTracksTrackIdParams) -> Result<String, iface_likes::DeleteLikesTracksTrackIdError> {
         let json = iface_likes__delete_likes_tracks_track_id_params__to_json(&params);
-        dispatch(&OP_LIKES_DELETE_LIKES_TRACKS_TRACK_ID, json)
+        match dispatch(&OP_LIKES_DELETE_LIKES_TRACKS_TRACK_ID, json).and_then(iface_likes__delete_likes_tracks_track_id__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_likes__delete_likes_tracks_track_id__err(e)),
+        }
     }
 }
 use crate::exports::autostamp::soundcloud::me as iface_me;
@@ -439,8 +578,8 @@ const OP_ME_GET_ME_ACTIVITIES: OpSpec = OpSpec {
     method: "GET",
     path_template: "/me/activities",
     fields: &[
-        FieldSpec { snake: "access", location: FieldLocation::Query },
-        FieldSpec { snake: "limit", location: FieldLocation::Query },
+        FieldSpec { snake: "access", wire: "access", location: FieldLocation::Query },
+        FieldSpec { snake: "limit", wire: "limit", location: FieldLocation::Query },
     ],
     auth: &[
         AuthApply { secret_key: "AuthHeader", kind: AuthKind::ApiKeyHeader("Authorization") },
@@ -451,8 +590,8 @@ const OP_ME_GET_ME_ACTIVITIES_ALL_OWN: OpSpec = OpSpec {
     method: "GET",
     path_template: "/me/activities/all/own",
     fields: &[
-        FieldSpec { snake: "access", location: FieldLocation::Query },
-        FieldSpec { snake: "limit", location: FieldLocation::Query },
+        FieldSpec { snake: "access", wire: "access", location: FieldLocation::Query },
+        FieldSpec { snake: "limit", wire: "limit", location: FieldLocation::Query },
     ],
     auth: &[
         AuthApply { secret_key: "AuthHeader", kind: AuthKind::ApiKeyHeader("Authorization") },
@@ -463,8 +602,8 @@ const OP_ME_GET_ME_ACTIVITIES_TRACKS: OpSpec = OpSpec {
     method: "GET",
     path_template: "/me/activities/tracks",
     fields: &[
-        FieldSpec { snake: "access", location: FieldLocation::Query },
-        FieldSpec { snake: "limit", location: FieldLocation::Query },
+        FieldSpec { snake: "access", wire: "access", location: FieldLocation::Query },
+        FieldSpec { snake: "limit", wire: "limit", location: FieldLocation::Query },
     ],
     auth: &[
         AuthApply { secret_key: "AuthHeader", kind: AuthKind::ApiKeyHeader("Authorization") },
@@ -475,8 +614,8 @@ const OP_ME_GET_ME_CONNECTIONS: OpSpec = OpSpec {
     method: "GET",
     path_template: "/me/connections",
     fields: &[
-        FieldSpec { snake: "limit", location: FieldLocation::Query },
-        FieldSpec { snake: "offset", location: FieldLocation::Query },
+        FieldSpec { snake: "limit", wire: "limit", location: FieldLocation::Query },
+        FieldSpec { snake: "offset", wire: "offset", location: FieldLocation::Query },
     ],
     auth: &[
         AuthApply { secret_key: "AuthHeader", kind: AuthKind::ApiKeyHeader("Authorization") },
@@ -487,7 +626,7 @@ const OP_ME_GET_ME_CONNECTIONS_CONNECTION_ID: OpSpec = OpSpec {
     method: "GET",
     path_template: "/me/connections/{connection_id}",
     fields: &[
-        FieldSpec { snake: "connection_id", location: FieldLocation::Path },
+        FieldSpec { snake: "connection_id", wire: "connection_id", location: FieldLocation::Path },
     ],
     auth: &[
         AuthApply { secret_key: "AuthHeader", kind: AuthKind::ApiKeyHeader("Authorization") },
@@ -498,7 +637,7 @@ const OP_ME_GET_ME_FAVORITES_IDS: OpSpec = OpSpec {
     method: "GET",
     path_template: "/me/favorites/ids",
     fields: &[
-        FieldSpec { snake: "limit", location: FieldLocation::Query },
+        FieldSpec { snake: "limit", wire: "limit", location: FieldLocation::Query },
     ],
     auth: &[
         AuthApply { secret_key: "AuthHeader", kind: AuthKind::ApiKeyHeader("Authorization") },
@@ -509,7 +648,7 @@ const OP_ME_GET_ME_FOLLOWERS: OpSpec = OpSpec {
     method: "GET",
     path_template: "/me/followers",
     fields: &[
-        FieldSpec { snake: "limit", location: FieldLocation::Query },
+        FieldSpec { snake: "limit", wire: "limit", location: FieldLocation::Query },
     ],
     auth: &[
         AuthApply { secret_key: "AuthHeader", kind: AuthKind::ApiKeyHeader("Authorization") },
@@ -520,7 +659,7 @@ const OP_ME_GET_ME_FOLLOWERS_FOLLOWER_ID: OpSpec = OpSpec {
     method: "GET",
     path_template: "/me/followers/{follower_id}",
     fields: &[
-        FieldSpec { snake: "follower_id", location: FieldLocation::Path },
+        FieldSpec { snake: "follower_id", wire: "follower_id", location: FieldLocation::Path },
     ],
     auth: &[
         AuthApply { secret_key: "AuthHeader", kind: AuthKind::ApiKeyHeader("Authorization") },
@@ -531,8 +670,8 @@ const OP_ME_GET_ME_FOLLOWINGS: OpSpec = OpSpec {
     method: "GET",
     path_template: "/me/followings",
     fields: &[
-        FieldSpec { snake: "limit", location: FieldLocation::Query },
-        FieldSpec { snake: "offset", location: FieldLocation::Query },
+        FieldSpec { snake: "limit", wire: "limit", location: FieldLocation::Query },
+        FieldSpec { snake: "offset", wire: "offset", location: FieldLocation::Query },
     ],
     auth: &[
         AuthApply { secret_key: "AuthHeader", kind: AuthKind::ApiKeyHeader("Authorization") },
@@ -543,9 +682,9 @@ const OP_ME_GET_ME_FOLLOWINGS_TRACKS: OpSpec = OpSpec {
     method: "GET",
     path_template: "/me/followings/tracks",
     fields: &[
-        FieldSpec { snake: "access", location: FieldLocation::Query },
-        FieldSpec { snake: "limit", location: FieldLocation::Query },
-        FieldSpec { snake: "offset", location: FieldLocation::Query },
+        FieldSpec { snake: "access", wire: "access", location: FieldLocation::Query },
+        FieldSpec { snake: "limit", wire: "limit", location: FieldLocation::Query },
+        FieldSpec { snake: "offset", wire: "offset", location: FieldLocation::Query },
     ],
     auth: &[
         AuthApply { secret_key: "AuthHeader", kind: AuthKind::ApiKeyHeader("Authorization") },
@@ -556,7 +695,7 @@ const OP_ME_GET_ME_FOLLOWINGS_USER_ID: OpSpec = OpSpec {
     method: "GET",
     path_template: "/me/followings/{user_id}",
     fields: &[
-        FieldSpec { snake: "user_id", location: FieldLocation::Path },
+        FieldSpec { snake: "user_id", wire: "user_id", location: FieldLocation::Path },
     ],
     auth: &[
         AuthApply { secret_key: "AuthHeader", kind: AuthKind::ApiKeyHeader("Authorization") },
@@ -567,7 +706,7 @@ const OP_ME_PUT_ME_FOLLOWINGS_USER_ID: OpSpec = OpSpec {
     method: "PUT",
     path_template: "/me/followings/{user_id}",
     fields: &[
-        FieldSpec { snake: "user_id", location: FieldLocation::Path },
+        FieldSpec { snake: "user_id", wire: "user_id", location: FieldLocation::Path },
     ],
     auth: &[
         AuthApply { secret_key: "AuthHeader", kind: AuthKind::ApiKeyHeader("Authorization") },
@@ -578,7 +717,7 @@ const OP_ME_DELETE_ME_FOLLOWINGS_USER_ID: OpSpec = OpSpec {
     method: "DELETE",
     path_template: "/me/followings/{user_id}",
     fields: &[
-        FieldSpec { snake: "user_id", location: FieldLocation::Path },
+        FieldSpec { snake: "user_id", wire: "user_id", location: FieldLocation::Path },
     ],
     auth: &[
         AuthApply { secret_key: "AuthHeader", kind: AuthKind::ApiKeyHeader("Authorization") },
@@ -589,8 +728,8 @@ const OP_ME_GET_ME_LIKES_TRACKS: OpSpec = OpSpec {
     method: "GET",
     path_template: "/me/likes/tracks",
     fields: &[
-        FieldSpec { snake: "limit", location: FieldLocation::Query },
-        FieldSpec { snake: "linked_partitioning", location: FieldLocation::Query },
+        FieldSpec { snake: "limit", wire: "limit", location: FieldLocation::Query },
+        FieldSpec { snake: "linked_partitioning", wire: "linked_partitioning", location: FieldLocation::Query },
     ],
     auth: &[
         AuthApply { secret_key: "AuthHeader", kind: AuthKind::ApiKeyHeader("Authorization") },
@@ -601,7 +740,7 @@ const OP_ME_GET_ME_PLAYLISTS: OpSpec = OpSpec {
     method: "GET",
     path_template: "/me/playlists",
     fields: &[
-        FieldSpec { snake: "limit", location: FieldLocation::Query },
+        FieldSpec { snake: "limit", wire: "limit", location: FieldLocation::Query },
     ],
     auth: &[
         AuthApply { secret_key: "AuthHeader", kind: AuthKind::ApiKeyHeader("Authorization") },
@@ -612,7 +751,7 @@ const OP_ME_GET_ME_PLAYLISTS_PLAYLIST_ID: OpSpec = OpSpec {
     method: "GET",
     path_template: "/me/playlists/{playlist_id}",
     fields: &[
-        FieldSpec { snake: "playlist_id", location: FieldLocation::Path },
+        FieldSpec { snake: "playlist_id", wire: "playlist_id", location: FieldLocation::Path },
     ],
     auth: &[
         AuthApply { secret_key: "AuthHeader", kind: AuthKind::ApiKeyHeader("Authorization") },
@@ -623,8 +762,8 @@ const OP_ME_GET_ME_TRACKS: OpSpec = OpSpec {
     method: "GET",
     path_template: "/me/tracks",
     fields: &[
-        FieldSpec { snake: "limit", location: FieldLocation::Query },
-        FieldSpec { snake: "linked_partitioning", location: FieldLocation::Query },
+        FieldSpec { snake: "limit", wire: "limit", location: FieldLocation::Query },
+        FieldSpec { snake: "linked_partitioning", wire: "linked_partitioning", location: FieldLocation::Query },
     ],
     auth: &[
         AuthApply { secret_key: "AuthHeader", kind: AuthKind::ApiKeyHeader("Authorization") },
@@ -635,7 +774,7 @@ const OP_ME_GET_ME_TRACKS_TRACK_ID: OpSpec = OpSpec {
     method: "GET",
     path_template: "/me/tracks/{track_id}",
     fields: &[
-        FieldSpec { snake: "track_id", location: FieldLocation::Path },
+        FieldSpec { snake: "track_id", wire: "track_id", location: FieldLocation::Path },
     ],
     auth: &[
         AuthApply { secret_key: "AuthHeader", kind: AuthKind::ApiKeyHeader("Authorization") },
@@ -648,6 +787,231 @@ fn iface_me__get_me_activities_access_item_enum__to_str(e: &iface_me::GetMeActiv
         iface_me::GetMeActivitiesAccessItemEnum::Preview => "preview",
         iface_me::GetMeActivitiesAccessItemEnum::Blocked => "blocked",
     }
+}
+
+fn iface_me__complete_user__to_json(p: &iface_me::CompleteUser) -> Value {
+    let mut m = Map::new();
+    m.insert("avatar_url".into(), match (&p.avatar_url) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("city".into(), match (&p.city) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("country".into(), match (&p.country) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("description".into(), match (&p.description) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("discogs_name".into(), match (&p.discogs_name) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("first_name".into(), match (&p.first_name) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("followers_count".into(), match (&p.followers_count) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("followings_count".into(), match (&p.followings_count) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("full_name".into(), match (&p.full_name) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("id".into(), match (&p.id) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("kind".into(), match (&p.kind) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("last_modified".into(), match (&p.last_modified) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("last_name".into(), match (&p.last_name) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("locale".into(), match (&p.locale) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("myspace_name".into(), match (&p.myspace_name) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("permalink".into(), match (&p.permalink) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("permalink_url".into(), match (&p.permalink_url) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("plan".into(), match (&p.plan) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("playlist_count".into(), match (&p.playlist_count) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("primary_email_confirmed".into(), match (&p.primary_email_confirmed) { Some(v) => Value::Bool(*(v)), None => Value::Null });
+    m.insert("private_playlists_count".into(), match (&p.private_playlists_count) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("private_tracks_count".into(), match (&p.private_tracks_count) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("public_favorites_count".into(), match (&p.public_favorites_count) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("quota".into(), match (&p.quota) { Some(v) => iface_me__complete_user_quota__to_json(v), None => Value::Null });
+    m.insert("reposts_count".into(), match (&p.reposts_count) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("subscriptions".into(), match (&p.subscriptions) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("track_count".into(), match (&p.track_count) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("uri".into(), match (&p.uri) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("username".into(), match (&p.username) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("website".into(), match (&p.website) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("website_title".into(), match (&p.website_title) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_me__complete_user_quota__to_json(p: &iface_me::CompleteUserQuota) -> Value {
+    let mut m = Map::new();
+    m.insert("unlimited_upload_quota".into(), match (&p.unlimited_upload_quota) { Some(v) => Value::Bool(*(v)), None => Value::Null });
+    m.insert("upload_seconds_used".into(), match (&p.upload_seconds_used) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_me__activities__to_json(p: &iface_me::Activities) -> Value {
+    let mut m = Map::new();
+    m.insert("collection".into(), match (&p.collection) { Some(v) => Value::Array((v).iter().map(|v| iface_me__activities_collection_item__to_json(v)).collect()), None => Value::Null });
+    m.insert("future_href".into(), match (&p.future_href) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("next_href".into(), match (&p.next_href) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_me__activities_collection_item__to_json(p: &iface_me::ActivitiesCollectionItem) -> Value {
+    let mut m = Map::new();
+    m.insert("created_at".into(), match (&p.created_at) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("origin".into(), match (&p.origin) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("type".into(), match (&p.type_op) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_me__connections__to_json(p: &iface_me::Connections) -> Value {
+    let mut m = Map::new();
+    m.insert("value".into(), Value::String((&p.value).clone()));
+    Value::Object(m)
+}
+
+fn iface_me__connection__to_json(p: &iface_me::Connection) -> Value {
+    let mut m = Map::new();
+    m.insert("created_at".into(), match (&p.created_at) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("display_name".into(), match (&p.display_name) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("id".into(), match (&p.id) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("kind".into(), match (&p.kind) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("post_favorite".into(), match (&p.post_favorite) { Some(v) => Value::Bool(*(v)), None => Value::Null });
+    m.insert("post_publish".into(), match (&p.post_publish) { Some(v) => Value::Bool(*(v)), None => Value::Null });
+    m.insert("service".into(), match (&p.service) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("type".into(), match (&p.type_op) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("uri".into(), match (&p.uri) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_me__user__to_json(p: &iface_me::User) -> Value {
+    let mut m = Map::new();
+    m.insert("avatar_url".into(), match (&p.avatar_url) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("city".into(), match (&p.city) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("country".into(), match (&p.country) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("created_at".into(), match (&p.created_at) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("description".into(), match (&p.description) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("discogs_name".into(), match (&p.discogs_name) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("first_name".into(), match (&p.first_name) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("followers_count".into(), match (&p.followers_count) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("followings_count".into(), match (&p.followings_count) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("full_name".into(), match (&p.full_name) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("id".into(), match (&p.id) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("kind".into(), match (&p.kind) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("last_modified".into(), match (&p.last_modified) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("last_name".into(), match (&p.last_name) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("myspace_name".into(), match (&p.myspace_name) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("permalink".into(), match (&p.permalink) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("permalink_url".into(), match (&p.permalink_url) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("plan".into(), match (&p.plan) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("playlist_count".into(), match (&p.playlist_count) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("public_favorites_count".into(), match (&p.public_favorites_count) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("reposts_count".into(), match (&p.reposts_count) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("subscriptions".into(), match (&p.subscriptions) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("track_count".into(), match (&p.track_count) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("uri".into(), match (&p.uri) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("username".into(), match (&p.username) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("website".into(), match (&p.website) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("website_title".into(), match (&p.website_title) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_me__tracks_list__to_json(p: &iface_me::TracksList) -> Value {
+    let mut m = Map::new();
+    m.insert("value".into(), Value::String((&p.value).clone()));
+    Value::Object(m)
+}
+
+fn iface_me__playlists_array__to_json(p: &iface_me::PlaylistsArray) -> Value {
+    let mut m = Map::new();
+    m.insert("value".into(), Value::String((&p.value).clone()));
+    Value::Object(m)
+}
+
+fn iface_me__playlist__to_json(p: &iface_me::Playlist) -> Value {
+    let mut m = Map::new();
+    m.insert("artwork_url".into(), match (&p.artwork_url) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("created_at".into(), match (&p.created_at) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("description".into(), match (&p.description) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("downloadable".into(), match (&p.downloadable) { Some(v) => Value::Bool(*(v)), None => Value::Null });
+    m.insert("duration".into(), match (&p.duration) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("ean".into(), match (&p.ean) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("embeddable_by".into(), match (&p.embeddable_by) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("genre".into(), match (&p.genre) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("id".into(), match (&p.id) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("kind".into(), match (&p.kind) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("label".into(), match (&p.label) { Some(v) => iface_me__meta_user__to_json(v), None => Value::Null });
+    m.insert("label_id".into(), match (&p.label_id) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("label_name".into(), match (&p.label_name) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("last_modified".into(), match (&p.last_modified) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("license".into(), match (&p.license) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("likes_count".into(), match (&p.likes_count) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("permalink".into(), match (&p.permalink) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("permalink_url".into(), match (&p.permalink_url) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("playlist_type".into(), match (&p.playlist_type) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("purchase_title".into(), match (&p.purchase_title) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("purchase_url".into(), match (&p.purchase_url) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("release".into(), match (&p.release) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("release_day".into(), match (&p.release_day) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("release_month".into(), match (&p.release_month) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("release_year".into(), match (&p.release_year) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("sharing".into(), match (&p.sharing) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("streamable".into(), match (&p.streamable) { Some(v) => Value::Bool(*(v)), None => Value::Null });
+    m.insert("tag_list".into(), match (&p.tag_list) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("tags".into(), match (&p.tags) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("title".into(), match (&p.title) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("track_count".into(), match (&p.track_count) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("tracks".into(), match (&p.tracks) { Some(v) => Value::Array((v).iter().map(|v| iface_me__track__to_json(v)).collect()), None => Value::Null });
+    m.insert("tracks_uri".into(), match (&p.tracks_uri) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("type".into(), match (&p.type_op) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("uri".into(), match (&p.uri) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("user".into(), match (&p.user) { Some(v) => iface_me__meta_user__to_json(v), None => Value::Null });
+    m.insert("user_id".into(), match (&p.user_id) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_me__meta_user__to_json(p: &iface_me::MetaUser) -> Value {
+    let mut m = Map::new();
+    m.insert("avatar_url".into(), match (&p.avatar_url) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("created_at".into(), match (&p.created_at) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("id".into(), match (&p.id) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("kind".into(), match (&p.kind) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("last_modified".into(), match (&p.last_modified) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("permalink".into(), match (&p.permalink) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("permalink_url".into(), match (&p.permalink_url) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("uri".into(), match (&p.uri) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("username".into(), match (&p.username) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_me__track__to_json(p: &iface_me::Track) -> Value {
+    let mut m = Map::new();
+    m.insert("access".into(), match (&p.access) { Some(v) => Value::String(iface_me__get_me_activities_access_item_enum__to_str(v).into()), None => Value::Null });
+    m.insert("artwork_url".into(), match (&p.artwork_url) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("available_country_codes".into(), match (&p.available_country_codes) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("bpm".into(), match (&p.bpm) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("comment_count".into(), match (&p.comment_count) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("commentable".into(), match (&p.commentable) { Some(v) => Value::Bool(*(v)), None => Value::Null });
+    m.insert("created_at".into(), match (&p.created_at) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("description".into(), match (&p.description) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("download_count".into(), match (&p.download_count) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("download_url".into(), match (&p.download_url) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("downloadable".into(), match (&p.downloadable) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("duration".into(), match (&p.duration) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("embeddable_by".into(), match (&p.embeddable_by) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("favoritings_count".into(), match (&p.favoritings_count) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("genre".into(), match (&p.genre) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("id".into(), match (&p.id) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("isrc".into(), match (&p.isrc) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("key_signature".into(), match (&p.key_signature) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("kind".into(), match (&p.kind) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("label_name".into(), match (&p.label_name) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("license".into(), match (&p.license) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("permalink_url".into(), match (&p.permalink_url) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("playback_count".into(), match (&p.playback_count) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("purchase_title".into(), match (&p.purchase_title) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("purchase_url".into(), match (&p.purchase_url) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("release".into(), match (&p.release) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("release_day".into(), match (&p.release_day) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("release_month".into(), match (&p.release_month) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("release_year".into(), match (&p.release_year) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("reposts_count".into(), match (&p.reposts_count) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("secret_uri".into(), match (&p.secret_uri) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("sharing".into(), match (&p.sharing) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("stream_url".into(), match (&p.stream_url) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("streamable".into(), match (&p.streamable) { Some(v) => Value::Bool(*(v)), None => Value::Null });
+    m.insert("tag_list".into(), match (&p.tag_list) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("title".into(), match (&p.title) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("uri".into(), match (&p.uri) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("user".into(), match (&p.user) { Some(v) => iface_me__meta_user__to_json(v), None => Value::Null });
+    m.insert("user_favorite".into(), match (&p.user_favorite) { Some(v) => Value::Bool(*(v)), None => Value::Null });
+    m.insert("user_playback_count".into(), match (&p.user_playback_count) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("waveform_url".into(), match (&p.waveform_url) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
 }
 
 fn iface_me__get_me_activities_params__to_json(p: &iface_me::GetMeActivitiesParams) -> Value {
@@ -767,81 +1131,734 @@ fn iface_me__get_me_tracks_track_id_params__to_json(p: &iface_me::GetMeTracksTra
     Value::Object(m)
 }
 
+fn iface_me__complete_user__from_json(v: &Value) -> Option<iface_me::CompleteUser> {
+    let m = v.as_object()?;
+    Some(iface_me::CompleteUser {
+        avatar_url: m.get("avatar_url").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        city: m.get("city").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        country: m.get("country").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        description: m.get("description").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        discogs_name: m.get("discogs_name").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        first_name: m.get("first_name").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        followers_count: m.get("followers_count").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        followings_count: m.get("followings_count").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        full_name: m.get("full_name").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        id: m.get("id").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        kind: m.get("kind").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        last_modified: m.get("last_modified").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        last_name: m.get("last_name").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        locale: m.get("locale").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        myspace_name: m.get("myspace_name").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        permalink: m.get("permalink").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        permalink_url: m.get("permalink_url").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        plan: m.get("plan").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        playlist_count: m.get("playlist_count").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        primary_email_confirmed: m.get("primary_email_confirmed").filter(|v| !v.is_null()).and_then(|v| (v).as_bool()),
+        private_playlists_count: m.get("private_playlists_count").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        private_tracks_count: m.get("private_tracks_count").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        public_favorites_count: m.get("public_favorites_count").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        quota: m.get("quota").filter(|v| !v.is_null()).and_then(|v| iface_me__complete_user_quota__from_json(v)),
+        reposts_count: m.get("reposts_count").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        subscriptions: m.get("subscriptions").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        track_count: m.get("track_count").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        uri: m.get("uri").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        username: m.get("username").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        website: m.get("website").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        website_title: m.get("website_title").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    })
+}
+
+fn iface_me__complete_user_quota__from_json(v: &Value) -> Option<iface_me::CompleteUserQuota> {
+    let m = v.as_object()?;
+    Some(iface_me::CompleteUserQuota {
+        unlimited_upload_quota: m.get("unlimited_upload_quota").filter(|v| !v.is_null()).and_then(|v| (v).as_bool()),
+        upload_seconds_used: m.get("upload_seconds_used").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+    })
+}
+
+fn iface_me__activities__from_json(v: &Value) -> Option<iface_me::Activities> {
+    let m = v.as_object()?;
+    Some(iface_me::Activities {
+        collection: m.get("collection").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| iface_me__activities_collection_item__from_json(x)).collect())),
+        future_href: m.get("future_href").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        next_href: m.get("next_href").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    })
+}
+
+fn iface_me__activities_collection_item__from_json(v: &Value) -> Option<iface_me::ActivitiesCollectionItem> {
+    let m = v.as_object()?;
+    Some(iface_me::ActivitiesCollectionItem {
+        created_at: m.get("created_at").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        origin: m.get("origin").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        type_op: m.get("type").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    })
+}
+
+fn iface_me__connections__from_json(v: &Value) -> Option<iface_me::Connections> {
+    let m = v.as_object()?;
+    Some(iface_me::Connections {
+        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+    })
+}
+
+fn iface_me__connection__from_json(v: &Value) -> Option<iface_me::Connection> {
+    let m = v.as_object()?;
+    Some(iface_me::Connection {
+        created_at: m.get("created_at").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        display_name: m.get("display_name").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        id: m.get("id").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        kind: m.get("kind").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        post_favorite: m.get("post_favorite").filter(|v| !v.is_null()).and_then(|v| (v).as_bool()),
+        post_publish: m.get("post_publish").filter(|v| !v.is_null()).and_then(|v| (v).as_bool()),
+        service: m.get("service").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        type_op: m.get("type").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        uri: m.get("uri").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    })
+}
+
+fn iface_me__user__from_json(v: &Value) -> Option<iface_me::User> {
+    let m = v.as_object()?;
+    Some(iface_me::User {
+        avatar_url: m.get("avatar_url").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        city: m.get("city").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        country: m.get("country").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        created_at: m.get("created_at").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        description: m.get("description").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        discogs_name: m.get("discogs_name").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        first_name: m.get("first_name").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        followers_count: m.get("followers_count").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        followings_count: m.get("followings_count").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        full_name: m.get("full_name").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        id: m.get("id").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        kind: m.get("kind").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        last_modified: m.get("last_modified").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        last_name: m.get("last_name").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        myspace_name: m.get("myspace_name").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        permalink: m.get("permalink").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        permalink_url: m.get("permalink_url").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        plan: m.get("plan").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        playlist_count: m.get("playlist_count").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        public_favorites_count: m.get("public_favorites_count").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        reposts_count: m.get("reposts_count").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        subscriptions: m.get("subscriptions").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        track_count: m.get("track_count").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        uri: m.get("uri").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        username: m.get("username").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        website: m.get("website").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        website_title: m.get("website_title").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    })
+}
+
+fn iface_me__tracks_list__from_json(v: &Value) -> Option<iface_me::TracksList> {
+    let m = v.as_object()?;
+    Some(iface_me::TracksList {
+        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+    })
+}
+
+fn iface_me__playlists_array__from_json(v: &Value) -> Option<iface_me::PlaylistsArray> {
+    let m = v.as_object()?;
+    Some(iface_me::PlaylistsArray {
+        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+    })
+}
+
+fn iface_me__playlist__from_json(v: &Value) -> Option<iface_me::Playlist> {
+    let m = v.as_object()?;
+    Some(iface_me::Playlist {
+        artwork_url: m.get("artwork_url").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        created_at: m.get("created_at").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        description: m.get("description").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        downloadable: m.get("downloadable").filter(|v| !v.is_null()).and_then(|v| (v).as_bool()),
+        duration: m.get("duration").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        ean: m.get("ean").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        embeddable_by: m.get("embeddable_by").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        genre: m.get("genre").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        id: m.get("id").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        kind: m.get("kind").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        label: m.get("label").filter(|v| !v.is_null()).and_then(|v| iface_me__meta_user__from_json(v)),
+        label_id: m.get("label_id").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        label_name: m.get("label_name").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        last_modified: m.get("last_modified").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        license: m.get("license").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        likes_count: m.get("likes_count").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        permalink: m.get("permalink").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        permalink_url: m.get("permalink_url").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        playlist_type: m.get("playlist_type").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        purchase_title: m.get("purchase_title").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        purchase_url: m.get("purchase_url").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        release: m.get("release").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        release_day: m.get("release_day").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        release_month: m.get("release_month").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        release_year: m.get("release_year").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        sharing: m.get("sharing").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        streamable: m.get("streamable").filter(|v| !v.is_null()).and_then(|v| (v).as_bool()),
+        tag_list: m.get("tag_list").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        tags: m.get("tags").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        title: m.get("title").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        track_count: m.get("track_count").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        tracks: m.get("tracks").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| iface_me__track__from_json(x)).collect())),
+        tracks_uri: m.get("tracks_uri").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        type_op: m.get("type").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        uri: m.get("uri").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        user: m.get("user").filter(|v| !v.is_null()).and_then(|v| iface_me__meta_user__from_json(v)),
+        user_id: m.get("user_id").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+    })
+}
+
+fn iface_me__meta_user__from_json(v: &Value) -> Option<iface_me::MetaUser> {
+    let m = v.as_object()?;
+    Some(iface_me::MetaUser {
+        avatar_url: m.get("avatar_url").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        created_at: m.get("created_at").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        id: m.get("id").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        kind: m.get("kind").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        last_modified: m.get("last_modified").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        permalink: m.get("permalink").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        permalink_url: m.get("permalink_url").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        uri: m.get("uri").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        username: m.get("username").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    })
+}
+
+fn iface_me__track__from_json(v: &Value) -> Option<iface_me::Track> {
+    let m = v.as_object()?;
+    Some(iface_me::Track {
+        access: m.get("access").filter(|v| !v.is_null()).and_then(|v| (v).as_str().and_then(iface_me__get_me_activities_access_item_enum__from_str)),
+        artwork_url: m.get("artwork_url").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        available_country_codes: m.get("available_country_codes").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        bpm: m.get("bpm").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        comment_count: m.get("comment_count").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        commentable: m.get("commentable").filter(|v| !v.is_null()).and_then(|v| (v).as_bool()),
+        created_at: m.get("created_at").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        description: m.get("description").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        download_count: m.get("download_count").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        download_url: m.get("download_url").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        downloadable: m.get("downloadable").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        duration: m.get("duration").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        embeddable_by: m.get("embeddable_by").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        favoritings_count: m.get("favoritings_count").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        genre: m.get("genre").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        id: m.get("id").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        isrc: m.get("isrc").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        key_signature: m.get("key_signature").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        kind: m.get("kind").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        label_name: m.get("label_name").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        license: m.get("license").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        permalink_url: m.get("permalink_url").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        playback_count: m.get("playback_count").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        purchase_title: m.get("purchase_title").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        purchase_url: m.get("purchase_url").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        release: m.get("release").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        release_day: m.get("release_day").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        release_month: m.get("release_month").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        release_year: m.get("release_year").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        reposts_count: m.get("reposts_count").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        secret_uri: m.get("secret_uri").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        sharing: m.get("sharing").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        stream_url: m.get("stream_url").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        streamable: m.get("streamable").filter(|v| !v.is_null()).and_then(|v| (v).as_bool()),
+        tag_list: m.get("tag_list").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        title: m.get("title").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        uri: m.get("uri").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        user: m.get("user").filter(|v| !v.is_null()).and_then(|v| iface_me__meta_user__from_json(v)),
+        user_favorite: m.get("user_favorite").filter(|v| !v.is_null()).and_then(|v| (v).as_bool()),
+        user_playback_count: m.get("user_playback_count").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        waveform_url: m.get("waveform_url").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    })
+}
+
+fn iface_me__get_me_activities_access_item_enum__from_str(s: &str) -> Option<iface_me::GetMeActivitiesAccessItemEnum> {
+    match s {
+        "playable" => Some(iface_me::GetMeActivitiesAccessItemEnum::Playable),
+        "preview" => Some(iface_me::GetMeActivitiesAccessItemEnum::Preview),
+        "blocked" => Some(iface_me::GetMeActivitiesAccessItemEnum::Blocked),
+        _ => None,
+    }
+}
+
+fn iface_me__get_me__ok(body: String) -> Result<iface_me::CompleteUser, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match iface_me__complete_user__from_json(&v) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_me__get_me__err(e: crate::runtime::DispatchError) -> iface_me::GetMeError {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => match status {
+            401u16 => iface_me::GetMeError::Unauthorized(body),
+            _ => iface_me::GetMeError::Other(body),
+        },
+        crate::runtime::DispatchError::Transport(m) => iface_me::GetMeError::Other(m),
+    }
+}
+
+fn iface_me__get_me_activities__ok(body: String) -> Result<iface_me::Activities, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match iface_me__activities__from_json(&v) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_me__get_me_activities__err(e: crate::runtime::DispatchError) -> iface_me::GetMeActivitiesError {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => match status {
+            401u16 => iface_me::GetMeActivitiesError::Unauthorized(body),
+            _ => iface_me::GetMeActivitiesError::Other(body),
+        },
+        crate::runtime::DispatchError::Transport(m) => iface_me::GetMeActivitiesError::Other(m),
+    }
+}
+
+fn iface_me__get_me_activities_all_own__ok(body: String) -> Result<iface_me::Activities, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match iface_me__activities__from_json(&v) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_me__get_me_activities_all_own__err(e: crate::runtime::DispatchError) -> iface_me::GetMeActivitiesAllOwnError {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => match status {
+            401u16 => iface_me::GetMeActivitiesAllOwnError::Unauthorized(body),
+            _ => iface_me::GetMeActivitiesAllOwnError::Other(body),
+        },
+        crate::runtime::DispatchError::Transport(m) => iface_me::GetMeActivitiesAllOwnError::Other(m),
+    }
+}
+
+fn iface_me__get_me_activities_tracks__ok(body: String) -> Result<iface_me::Activities, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match iface_me__activities__from_json(&v) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_me__get_me_activities_tracks__err(e: crate::runtime::DispatchError) -> iface_me::GetMeActivitiesTracksError {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => match status {
+            401u16 => iface_me::GetMeActivitiesTracksError::Unauthorized(body),
+            _ => iface_me::GetMeActivitiesTracksError::Other(body),
+        },
+        crate::runtime::DispatchError::Transport(m) => iface_me::GetMeActivitiesTracksError::Other(m),
+    }
+}
+
+fn iface_me__get_me_connections__ok(body: String) -> Result<iface_me::Connections, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match iface_me__connections__from_json(&v) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_me__get_me_connections__err(e: crate::runtime::DispatchError) -> iface_me::GetMeConnectionsError {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => match status {
+            401u16 => iface_me::GetMeConnectionsError::Unauthorized(body),
+            _ => iface_me::GetMeConnectionsError::Other(body),
+        },
+        crate::runtime::DispatchError::Transport(m) => iface_me::GetMeConnectionsError::Other(m),
+    }
+}
+
+fn iface_me__get_me_connections_connection_id__ok(body: String) -> Result<iface_me::Connection, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match iface_me__connection__from_json(&v) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_me__get_me_connections_connection_id__err(e: crate::runtime::DispatchError) -> iface_me::GetMeConnectionsConnectionIdError {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => match status {
+            401u16 => iface_me::GetMeConnectionsConnectionIdError::Unauthorized(body),
+            404u16 => iface_me::GetMeConnectionsConnectionIdError::NotFound(body),
+            _ => iface_me::GetMeConnectionsConnectionIdError::Other(body),
+        },
+        crate::runtime::DispatchError::Transport(m) => iface_me::GetMeConnectionsConnectionIdError::Other(m),
+    }
+}
+
+fn iface_me__get_me_favorites_ids__ok(body: String) -> Result<String, crate::runtime::DispatchError> {
+    Ok(body)
+}
+
+fn iface_me__get_me_favorites_ids__err(e: crate::runtime::DispatchError) -> iface_me::GetMeFavoritesIdsError {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => match status {
+            404u16 => iface_me::GetMeFavoritesIdsError::NotFound(body),
+            _ => iface_me::GetMeFavoritesIdsError::Other(body),
+        },
+        crate::runtime::DispatchError::Transport(m) => iface_me::GetMeFavoritesIdsError::Other(m),
+    }
+}
+
+fn iface_me__get_me_followers__ok(body: String) -> Result<String, crate::runtime::DispatchError> {
+    Ok(body)
+}
+
+fn iface_me__get_me_followers__err(e: crate::runtime::DispatchError) -> iface_me::GetMeFollowersError {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => match status {
+            401u16 => iface_me::GetMeFollowersError::Unauthorized(body),
+            _ => iface_me::GetMeFollowersError::Other(body),
+        },
+        crate::runtime::DispatchError::Transport(m) => iface_me::GetMeFollowersError::Other(m),
+    }
+}
+
+fn iface_me__get_me_followers_follower_id__ok(body: String) -> Result<iface_me::User, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match iface_me__user__from_json(&v) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_me__get_me_followers_follower_id__err(e: crate::runtime::DispatchError) -> iface_me::GetMeFollowersFollowerIdError {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => match status {
+            401u16 => iface_me::GetMeFollowersFollowerIdError::Unauthorized(body),
+            _ => iface_me::GetMeFollowersFollowerIdError::Other(body),
+        },
+        crate::runtime::DispatchError::Transport(m) => iface_me::GetMeFollowersFollowerIdError::Other(m),
+    }
+}
+
+fn iface_me__get_me_followings__ok(body: String) -> Result<String, crate::runtime::DispatchError> {
+    Ok(body)
+}
+
+fn iface_me__get_me_followings__err(e: crate::runtime::DispatchError) -> iface_me::GetMeFollowingsError {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => match status {
+            401u16 => iface_me::GetMeFollowingsError::Unauthorized(body),
+            _ => iface_me::GetMeFollowingsError::Other(body),
+        },
+        crate::runtime::DispatchError::Transport(m) => iface_me::GetMeFollowingsError::Other(m),
+    }
+}
+
+fn iface_me__get_me_followings_tracks__ok(body: String) -> Result<iface_me::TracksList, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match iface_me__tracks_list__from_json(&v) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_me__get_me_followings_tracks__err(e: crate::runtime::DispatchError) -> iface_me::GetMeFollowingsTracksError {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => match status {
+            401u16 => iface_me::GetMeFollowingsTracksError::Unauthorized(body),
+            _ => iface_me::GetMeFollowingsTracksError::Other(body),
+        },
+        crate::runtime::DispatchError::Transport(m) => iface_me::GetMeFollowingsTracksError::Other(m),
+    }
+}
+
+fn iface_me__get_me_followings_user_id__ok(body: String) -> Result<iface_me::User, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match iface_me__user__from_json(&v) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_me__get_me_followings_user_id__err(e: crate::runtime::DispatchError) -> iface_me::GetMeFollowingsUserIdError {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => match status {
+            401u16 => iface_me::GetMeFollowingsUserIdError::Unauthorized(body),
+            404u16 => iface_me::GetMeFollowingsUserIdError::NotFound(body),
+            _ => iface_me::GetMeFollowingsUserIdError::Other(body),
+        },
+        crate::runtime::DispatchError::Transport(m) => iface_me::GetMeFollowingsUserIdError::Other(m),
+    }
+}
+
+fn iface_me__put_me_followings_user_id__ok(body: String) -> Result<String, crate::runtime::DispatchError> {
+    Ok(body)
+}
+
+fn iface_me__put_me_followings_user_id__err(e: crate::runtime::DispatchError) -> iface_me::PutMeFollowingsUserIdError {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => match status {
+            401u16 => iface_me::PutMeFollowingsUserIdError::Unauthorized(body),
+            404u16 => iface_me::PutMeFollowingsUserIdError::NotFound(body),
+            _ => iface_me::PutMeFollowingsUserIdError::Other(body),
+        },
+        crate::runtime::DispatchError::Transport(m) => iface_me::PutMeFollowingsUserIdError::Other(m),
+    }
+}
+
+fn iface_me__delete_me_followings_user_id__ok(body: String) -> Result<String, crate::runtime::DispatchError> {
+    Ok(body)
+}
+
+fn iface_me__delete_me_followings_user_id__err(e: crate::runtime::DispatchError) -> iface_me::DeleteMeFollowingsUserIdError {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => match status {
+            401u16 => iface_me::DeleteMeFollowingsUserIdError::Unauthorized(body),
+            404u16 => iface_me::DeleteMeFollowingsUserIdError::NotFound(body),
+            422u16 => iface_me::DeleteMeFollowingsUserIdError::UnprocessableEntity(body),
+            _ => iface_me::DeleteMeFollowingsUserIdError::Other(body),
+        },
+        crate::runtime::DispatchError::Transport(m) => iface_me::DeleteMeFollowingsUserIdError::Other(m),
+    }
+}
+
+fn iface_me__get_me_likes_tracks__ok(body: String) -> Result<String, crate::runtime::DispatchError> {
+    Ok(body)
+}
+
+fn iface_me__get_me_likes_tracks__err(e: crate::runtime::DispatchError) -> iface_me::GetMeLikesTracksError {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => match status {
+            401u16 => iface_me::GetMeLikesTracksError::Unauthorized(body),
+            _ => iface_me::GetMeLikesTracksError::Other(body),
+        },
+        crate::runtime::DispatchError::Transport(m) => iface_me::GetMeLikesTracksError::Other(m),
+    }
+}
+
+fn iface_me__get_me_playlists__ok(body: String) -> Result<iface_me::PlaylistsArray, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match iface_me__playlists_array__from_json(&v) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_me__get_me_playlists__err(e: crate::runtime::DispatchError) -> iface_me::GetMePlaylistsError {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => match status {
+            401u16 => iface_me::GetMePlaylistsError::Unauthorized(body),
+            404u16 => iface_me::GetMePlaylistsError::NotFound(body),
+            _ => iface_me::GetMePlaylistsError::Other(body),
+        },
+        crate::runtime::DispatchError::Transport(m) => iface_me::GetMePlaylistsError::Other(m),
+    }
+}
+
+fn iface_me__get_me_playlists_playlist_id__ok(body: String) -> Result<iface_me::Playlist, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match iface_me__playlist__from_json(&v) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_me__get_me_playlists_playlist_id__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
+fn iface_me__get_me_tracks__ok(body: String) -> Result<String, crate::runtime::DispatchError> {
+    Ok(body)
+}
+
+fn iface_me__get_me_tracks__err(e: crate::runtime::DispatchError) -> iface_me::GetMeTracksError {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => match status {
+            401u16 => iface_me::GetMeTracksError::Unauthorized(body),
+            _ => iface_me::GetMeTracksError::Other(body),
+        },
+        crate::runtime::DispatchError::Transport(m) => iface_me::GetMeTracksError::Other(m),
+    }
+}
+
+fn iface_me__get_me_tracks_track_id__ok(body: String) -> Result<iface_me::Track, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match iface_me__track__from_json(&v) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_me__get_me_tracks_track_id__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
 impl iface_me::Guest for crate::Component {
-    fn get_me() -> Result<String, String> {
-        dispatch(&OP_ME_GET_ME, Value::Object(Map::new()))
+    fn get_me() -> Result<iface_me::CompleteUser, iface_me::GetMeError> {
+        match dispatch(&OP_ME_GET_ME, Value::Object(Map::new())).and_then(iface_me__get_me__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_me__get_me__err(e)),
+        }
     }
-    fn get_me_activities(params: iface_me::GetMeActivitiesParams) -> Result<String, String> {
+    fn get_me_activities(params: iface_me::GetMeActivitiesParams) -> Result<iface_me::Activities, iface_me::GetMeActivitiesError> {
         let json = iface_me__get_me_activities_params__to_json(&params);
-        dispatch(&OP_ME_GET_ME_ACTIVITIES, json)
+        match dispatch(&OP_ME_GET_ME_ACTIVITIES, json).and_then(iface_me__get_me_activities__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_me__get_me_activities__err(e)),
+        }
     }
-    fn get_me_activities_all_own(params: iface_me::GetMeActivitiesAllOwnParams) -> Result<String, String> {
+    fn get_me_activities_all_own(params: iface_me::GetMeActivitiesAllOwnParams) -> Result<iface_me::Activities, iface_me::GetMeActivitiesAllOwnError> {
         let json = iface_me__get_me_activities_all_own_params__to_json(&params);
-        dispatch(&OP_ME_GET_ME_ACTIVITIES_ALL_OWN, json)
+        match dispatch(&OP_ME_GET_ME_ACTIVITIES_ALL_OWN, json).and_then(iface_me__get_me_activities_all_own__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_me__get_me_activities_all_own__err(e)),
+        }
     }
-    fn get_me_activities_tracks(params: iface_me::GetMeActivitiesTracksParams) -> Result<String, String> {
+    fn get_me_activities_tracks(params: iface_me::GetMeActivitiesTracksParams) -> Result<iface_me::Activities, iface_me::GetMeActivitiesTracksError> {
         let json = iface_me__get_me_activities_tracks_params__to_json(&params);
-        dispatch(&OP_ME_GET_ME_ACTIVITIES_TRACKS, json)
+        match dispatch(&OP_ME_GET_ME_ACTIVITIES_TRACKS, json).and_then(iface_me__get_me_activities_tracks__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_me__get_me_activities_tracks__err(e)),
+        }
     }
-    fn get_me_connections(params: iface_me::GetMeConnectionsParams) -> Result<String, String> {
+    fn get_me_connections(params: iface_me::GetMeConnectionsParams) -> Result<iface_me::Connections, iface_me::GetMeConnectionsError> {
         let json = iface_me__get_me_connections_params__to_json(&params);
-        dispatch(&OP_ME_GET_ME_CONNECTIONS, json)
+        match dispatch(&OP_ME_GET_ME_CONNECTIONS, json).and_then(iface_me__get_me_connections__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_me__get_me_connections__err(e)),
+        }
     }
-    fn get_me_connections_connection_id(params: iface_me::GetMeConnectionsConnectionIdParams) -> Result<String, String> {
+    fn get_me_connections_connection_id(params: iface_me::GetMeConnectionsConnectionIdParams) -> Result<iface_me::Connection, iface_me::GetMeConnectionsConnectionIdError> {
         let json = iface_me__get_me_connections_connection_id_params__to_json(&params);
-        dispatch(&OP_ME_GET_ME_CONNECTIONS_CONNECTION_ID, json)
+        match dispatch(&OP_ME_GET_ME_CONNECTIONS_CONNECTION_ID, json).and_then(iface_me__get_me_connections_connection_id__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_me__get_me_connections_connection_id__err(e)),
+        }
     }
-    fn get_me_favorites_ids(params: iface_me::GetMeFavoritesIdsParams) -> Result<String, String> {
+    fn get_me_favorites_ids(params: iface_me::GetMeFavoritesIdsParams) -> Result<String, iface_me::GetMeFavoritesIdsError> {
         let json = iface_me__get_me_favorites_ids_params__to_json(&params);
-        dispatch(&OP_ME_GET_ME_FAVORITES_IDS, json)
+        match dispatch(&OP_ME_GET_ME_FAVORITES_IDS, json).and_then(iface_me__get_me_favorites_ids__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_me__get_me_favorites_ids__err(e)),
+        }
     }
-    fn get_me_followers(params: iface_me::GetMeFollowersParams) -> Result<String, String> {
+    fn get_me_followers(params: iface_me::GetMeFollowersParams) -> Result<String, iface_me::GetMeFollowersError> {
         let json = iface_me__get_me_followers_params__to_json(&params);
-        dispatch(&OP_ME_GET_ME_FOLLOWERS, json)
+        match dispatch(&OP_ME_GET_ME_FOLLOWERS, json).and_then(iface_me__get_me_followers__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_me__get_me_followers__err(e)),
+        }
     }
-    fn get_me_followers_follower_id(params: iface_me::GetMeFollowersFollowerIdParams) -> Result<String, String> {
+    fn get_me_followers_follower_id(params: iface_me::GetMeFollowersFollowerIdParams) -> Result<iface_me::User, iface_me::GetMeFollowersFollowerIdError> {
         let json = iface_me__get_me_followers_follower_id_params__to_json(&params);
-        dispatch(&OP_ME_GET_ME_FOLLOWERS_FOLLOWER_ID, json)
+        match dispatch(&OP_ME_GET_ME_FOLLOWERS_FOLLOWER_ID, json).and_then(iface_me__get_me_followers_follower_id__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_me__get_me_followers_follower_id__err(e)),
+        }
     }
-    fn get_me_followings(params: iface_me::GetMeFollowingsParams) -> Result<String, String> {
+    fn get_me_followings(params: iface_me::GetMeFollowingsParams) -> Result<String, iface_me::GetMeFollowingsError> {
         let json = iface_me__get_me_followings_params__to_json(&params);
-        dispatch(&OP_ME_GET_ME_FOLLOWINGS, json)
+        match dispatch(&OP_ME_GET_ME_FOLLOWINGS, json).and_then(iface_me__get_me_followings__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_me__get_me_followings__err(e)),
+        }
     }
-    fn get_me_followings_tracks(params: iface_me::GetMeFollowingsTracksParams) -> Result<String, String> {
+    fn get_me_followings_tracks(params: iface_me::GetMeFollowingsTracksParams) -> Result<iface_me::TracksList, iface_me::GetMeFollowingsTracksError> {
         let json = iface_me__get_me_followings_tracks_params__to_json(&params);
-        dispatch(&OP_ME_GET_ME_FOLLOWINGS_TRACKS, json)
+        match dispatch(&OP_ME_GET_ME_FOLLOWINGS_TRACKS, json).and_then(iface_me__get_me_followings_tracks__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_me__get_me_followings_tracks__err(e)),
+        }
     }
-    fn get_me_followings_user_id(params: iface_me::GetMeFollowingsUserIdParams) -> Result<String, String> {
+    fn get_me_followings_user_id(params: iface_me::GetMeFollowingsUserIdParams) -> Result<iface_me::User, iface_me::GetMeFollowingsUserIdError> {
         let json = iface_me__get_me_followings_user_id_params__to_json(&params);
-        dispatch(&OP_ME_GET_ME_FOLLOWINGS_USER_ID, json)
+        match dispatch(&OP_ME_GET_ME_FOLLOWINGS_USER_ID, json).and_then(iface_me__get_me_followings_user_id__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_me__get_me_followings_user_id__err(e)),
+        }
     }
-    fn put_me_followings_user_id(params: iface_me::PutMeFollowingsUserIdParams) -> Result<String, String> {
+    fn put_me_followings_user_id(params: iface_me::PutMeFollowingsUserIdParams) -> Result<String, iface_me::PutMeFollowingsUserIdError> {
         let json = iface_me__put_me_followings_user_id_params__to_json(&params);
-        dispatch(&OP_ME_PUT_ME_FOLLOWINGS_USER_ID, json)
+        match dispatch(&OP_ME_PUT_ME_FOLLOWINGS_USER_ID, json).and_then(iface_me__put_me_followings_user_id__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_me__put_me_followings_user_id__err(e)),
+        }
     }
-    fn delete_me_followings_user_id(params: iface_me::DeleteMeFollowingsUserIdParams) -> Result<String, String> {
+    fn delete_me_followings_user_id(params: iface_me::DeleteMeFollowingsUserIdParams) -> Result<String, iface_me::DeleteMeFollowingsUserIdError> {
         let json = iface_me__delete_me_followings_user_id_params__to_json(&params);
-        dispatch(&OP_ME_DELETE_ME_FOLLOWINGS_USER_ID, json)
+        match dispatch(&OP_ME_DELETE_ME_FOLLOWINGS_USER_ID, json).and_then(iface_me__delete_me_followings_user_id__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_me__delete_me_followings_user_id__err(e)),
+        }
     }
-    fn get_me_likes_tracks(params: iface_me::GetMeLikesTracksParams) -> Result<String, String> {
+    fn get_me_likes_tracks(params: iface_me::GetMeLikesTracksParams) -> Result<String, iface_me::GetMeLikesTracksError> {
         let json = iface_me__get_me_likes_tracks_params__to_json(&params);
-        dispatch(&OP_ME_GET_ME_LIKES_TRACKS, json)
+        match dispatch(&OP_ME_GET_ME_LIKES_TRACKS, json).and_then(iface_me__get_me_likes_tracks__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_me__get_me_likes_tracks__err(e)),
+        }
     }
-    fn get_me_playlists(params: iface_me::GetMePlaylistsParams) -> Result<String, String> {
+    fn get_me_playlists(params: iface_me::GetMePlaylistsParams) -> Result<iface_me::PlaylistsArray, iface_me::GetMePlaylistsError> {
         let json = iface_me__get_me_playlists_params__to_json(&params);
-        dispatch(&OP_ME_GET_ME_PLAYLISTS, json)
+        match dispatch(&OP_ME_GET_ME_PLAYLISTS, json).and_then(iface_me__get_me_playlists__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_me__get_me_playlists__err(e)),
+        }
     }
-    fn get_me_playlists_playlist_id(params: iface_me::GetMePlaylistsPlaylistIdParams) -> Result<String, String> {
+    fn get_me_playlists_playlist_id(params: iface_me::GetMePlaylistsPlaylistIdParams) -> Result<iface_me::Playlist, String> {
         let json = iface_me__get_me_playlists_playlist_id_params__to_json(&params);
-        dispatch(&OP_ME_GET_ME_PLAYLISTS_PLAYLIST_ID, json)
+        match dispatch(&OP_ME_GET_ME_PLAYLISTS_PLAYLIST_ID, json).and_then(iface_me__get_me_playlists_playlist_id__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_me__get_me_playlists_playlist_id__err(e)),
+        }
     }
-    fn get_me_tracks(params: iface_me::GetMeTracksParams) -> Result<String, String> {
+    fn get_me_tracks(params: iface_me::GetMeTracksParams) -> Result<String, iface_me::GetMeTracksError> {
         let json = iface_me__get_me_tracks_params__to_json(&params);
-        dispatch(&OP_ME_GET_ME_TRACKS, json)
+        match dispatch(&OP_ME_GET_ME_TRACKS, json).and_then(iface_me__get_me_tracks__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_me__get_me_tracks__err(e)),
+        }
     }
-    fn get_me_tracks_track_id(params: iface_me::GetMeTracksTrackIdParams) -> Result<String, String> {
+    fn get_me_tracks_track_id(params: iface_me::GetMeTracksTrackIdParams) -> Result<iface_me::Track, String> {
         let json = iface_me__get_me_tracks_track_id_params__to_json(&params);
-        dispatch(&OP_ME_GET_ME_TRACKS_TRACK_ID, json)
+        match dispatch(&OP_ME_GET_ME_TRACKS_TRACK_ID, json).and_then(iface_me__get_me_tracks_track_id__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_me__get_me_tracks_track_id__err(e)),
+        }
     }
 }
 use crate::exports::autostamp::soundcloud::search as iface_search;
@@ -850,11 +1867,11 @@ const OP_SEARCH_GET_PLAYLISTS: OpSpec = OpSpec {
     method: "GET",
     path_template: "/playlists",
     fields: &[
-        FieldSpec { snake: "q", location: FieldLocation::Query },
-        FieldSpec { snake: "access", location: FieldLocation::Query },
-        FieldSpec { snake: "limit", location: FieldLocation::Query },
-        FieldSpec { snake: "offset", location: FieldLocation::Query },
-        FieldSpec { snake: "linked_partitioning", location: FieldLocation::Query },
+        FieldSpec { snake: "q", wire: "q", location: FieldLocation::Query },
+        FieldSpec { snake: "access", wire: "access", location: FieldLocation::Query },
+        FieldSpec { snake: "limit", wire: "limit", location: FieldLocation::Query },
+        FieldSpec { snake: "offset", wire: "offset", location: FieldLocation::Query },
+        FieldSpec { snake: "linked_partitioning", wire: "linked_partitioning", location: FieldLocation::Query },
     ],
     auth: &[
         AuthApply { secret_key: "AuthHeader", kind: AuthKind::ApiKeyHeader("Authorization") },
@@ -866,17 +1883,17 @@ const OP_SEARCH_GET_TRACKS: OpSpec = OpSpec {
     method: "GET",
     path_template: "/tracks",
     fields: &[
-        FieldSpec { snake: "q", location: FieldLocation::Query },
-        FieldSpec { snake: "ids", location: FieldLocation::Query },
-        FieldSpec { snake: "genres", location: FieldLocation::Query },
-        FieldSpec { snake: "tags", location: FieldLocation::Query },
-        FieldSpec { snake: "bpm", location: FieldLocation::Query },
-        FieldSpec { snake: "duration", location: FieldLocation::Query },
-        FieldSpec { snake: "created_at", location: FieldLocation::Query },
-        FieldSpec { snake: "access", location: FieldLocation::Query },
-        FieldSpec { snake: "limit", location: FieldLocation::Query },
-        FieldSpec { snake: "offset", location: FieldLocation::Query },
-        FieldSpec { snake: "linked_partitioning", location: FieldLocation::Query },
+        FieldSpec { snake: "q", wire: "q", location: FieldLocation::Query },
+        FieldSpec { snake: "ids", wire: "ids", location: FieldLocation::Query },
+        FieldSpec { snake: "genres", wire: "genres", location: FieldLocation::Query },
+        FieldSpec { snake: "tags", wire: "tags", location: FieldLocation::Query },
+        FieldSpec { snake: "bpm", wire: "bpm", location: FieldLocation::Query },
+        FieldSpec { snake: "duration", wire: "duration", location: FieldLocation::Query },
+        FieldSpec { snake: "created_at", wire: "created_at", location: FieldLocation::Query },
+        FieldSpec { snake: "access", wire: "access", location: FieldLocation::Query },
+        FieldSpec { snake: "limit", wire: "limit", location: FieldLocation::Query },
+        FieldSpec { snake: "offset", wire: "offset", location: FieldLocation::Query },
+        FieldSpec { snake: "linked_partitioning", wire: "linked_partitioning", location: FieldLocation::Query },
     ],
     auth: &[
         AuthApply { secret_key: "AuthHeader", kind: AuthKind::ApiKeyHeader("Authorization") },
@@ -888,11 +1905,11 @@ const OP_SEARCH_GET_USERS: OpSpec = OpSpec {
     method: "GET",
     path_template: "/users",
     fields: &[
-        FieldSpec { snake: "q", location: FieldLocation::Query },
-        FieldSpec { snake: "ids", location: FieldLocation::Query },
-        FieldSpec { snake: "limit", location: FieldLocation::Query },
-        FieldSpec { snake: "offset", location: FieldLocation::Query },
-        FieldSpec { snake: "linked_partitioning", location: FieldLocation::Query },
+        FieldSpec { snake: "q", wire: "q", location: FieldLocation::Query },
+        FieldSpec { snake: "ids", wire: "ids", location: FieldLocation::Query },
+        FieldSpec { snake: "limit", wire: "limit", location: FieldLocation::Query },
+        FieldSpec { snake: "offset", wire: "offset", location: FieldLocation::Query },
+        FieldSpec { snake: "linked_partitioning", wire: "linked_partitioning", location: FieldLocation::Query },
     ],
     auth: &[
         AuthApply { secret_key: "AuthHeader", kind: AuthKind::ApiKeyHeader("Authorization") },
@@ -944,18 +1961,73 @@ fn iface_search__get_users_params__to_json(p: &iface_search::GetUsersParams) -> 
     Value::Object(m)
 }
 
+fn iface_search__get_playlists__ok(body: String) -> Result<String, crate::runtime::DispatchError> {
+    Ok(body)
+}
+
+fn iface_search__get_playlists__err(e: crate::runtime::DispatchError) -> iface_search::GetPlaylistsError {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => match status {
+            400u16 => iface_search::GetPlaylistsError::BadRequest(body),
+            401u16 => iface_search::GetPlaylistsError::Unauthorized(body),
+            _ => iface_search::GetPlaylistsError::Other(body),
+        },
+        crate::runtime::DispatchError::Transport(m) => iface_search::GetPlaylistsError::Other(m),
+    }
+}
+
+fn iface_search__get_tracks__ok(body: String) -> Result<String, crate::runtime::DispatchError> {
+    Ok(body)
+}
+
+fn iface_search__get_tracks__err(e: crate::runtime::DispatchError) -> iface_search::GetTracksError {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => match status {
+            400u16 => iface_search::GetTracksError::BadRequest(body),
+            401u16 => iface_search::GetTracksError::Unauthorized(body),
+            500u16 => iface_search::GetTracksError::InternalServerError(body),
+            _ => iface_search::GetTracksError::Other(body),
+        },
+        crate::runtime::DispatchError::Transport(m) => iface_search::GetTracksError::Other(m),
+    }
+}
+
+fn iface_search__get_users__ok(body: String) -> Result<String, crate::runtime::DispatchError> {
+    Ok(body)
+}
+
+fn iface_search__get_users__err(e: crate::runtime::DispatchError) -> iface_search::GetUsersError {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => match status {
+            400u16 => iface_search::GetUsersError::BadRequest(body),
+            401u16 => iface_search::GetUsersError::Unauthorized(body),
+            _ => iface_search::GetUsersError::Other(body),
+        },
+        crate::runtime::DispatchError::Transport(m) => iface_search::GetUsersError::Other(m),
+    }
+}
+
 impl iface_search::Guest for crate::Component {
-    fn get_playlists(params: iface_search::GetPlaylistsParams) -> Result<String, String> {
+    fn get_playlists(params: iface_search::GetPlaylistsParams) -> Result<String, iface_search::GetPlaylistsError> {
         let json = iface_search__get_playlists_params__to_json(&params);
-        dispatch(&OP_SEARCH_GET_PLAYLISTS, json)
+        match dispatch(&OP_SEARCH_GET_PLAYLISTS, json).and_then(iface_search__get_playlists__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_search__get_playlists__err(e)),
+        }
     }
-    fn get_tracks(params: iface_search::GetTracksParams) -> Result<String, String> {
+    fn get_tracks(params: iface_search::GetTracksParams) -> Result<String, iface_search::GetTracksError> {
         let json = iface_search__get_tracks_params__to_json(&params);
-        dispatch(&OP_SEARCH_GET_TRACKS, json)
+        match dispatch(&OP_SEARCH_GET_TRACKS, json).and_then(iface_search__get_tracks__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_search__get_tracks__err(e)),
+        }
     }
-    fn get_users(params: iface_search::GetUsersParams) -> Result<String, String> {
+    fn get_users(params: iface_search::GetUsersParams) -> Result<String, iface_search::GetUsersError> {
         let json = iface_search__get_users_params__to_json(&params);
-        dispatch(&OP_SEARCH_GET_USERS, json)
+        match dispatch(&OP_SEARCH_GET_USERS, json).and_then(iface_search__get_users__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_search__get_users__err(e)),
+        }
     }
 }
 use crate::exports::autostamp::soundcloud::playlists as iface_playlists;
@@ -964,7 +2036,7 @@ const OP_PLAYLISTS_POST_PLAYLISTS: OpSpec = OpSpec {
     method: "POST",
     path_template: "/playlists",
     fields: &[
-        FieldSpec { snake: "playlist", location: FieldLocation::Body },
+        FieldSpec { snake: "playlist", wire: "playlist", location: FieldLocation::Body },
     ],
     auth: &[
         AuthApply { secret_key: "AuthHeader", kind: AuthKind::ApiKeyHeader("Authorization") },
@@ -975,9 +2047,9 @@ const OP_PLAYLISTS_GET_PLAYLISTS_PLAYLIST_ID: OpSpec = OpSpec {
     method: "GET",
     path_template: "/playlists/{playlist_id}",
     fields: &[
-        FieldSpec { snake: "playlist_id", location: FieldLocation::Path },
-        FieldSpec { snake: "secret_token", location: FieldLocation::Query },
-        FieldSpec { snake: "access", location: FieldLocation::Query },
+        FieldSpec { snake: "playlist_id", wire: "playlist_id", location: FieldLocation::Path },
+        FieldSpec { snake: "secret_token", wire: "secret_token", location: FieldLocation::Query },
+        FieldSpec { snake: "access", wire: "access", location: FieldLocation::Query },
     ],
     auth: &[
         AuthApply { secret_key: "AuthHeader", kind: AuthKind::ApiKeyHeader("Authorization") },
@@ -989,8 +2061,8 @@ const OP_PLAYLISTS_PUT_PLAYLISTS_PLAYLIST_ID: OpSpec = OpSpec {
     method: "PUT",
     path_template: "/playlists/{playlist_id}",
     fields: &[
-        FieldSpec { snake: "playlist_id", location: FieldLocation::Path },
-        FieldSpec { snake: "playlist", location: FieldLocation::Body },
+        FieldSpec { snake: "playlist_id", wire: "playlist_id", location: FieldLocation::Path },
+        FieldSpec { snake: "playlist", wire: "playlist", location: FieldLocation::Body },
     ],
     auth: &[
         AuthApply { secret_key: "AuthHeader", kind: AuthKind::ApiKeyHeader("Authorization") },
@@ -1001,7 +2073,7 @@ const OP_PLAYLISTS_DELETE_PLAYLISTS_PLAYLIST_ID: OpSpec = OpSpec {
     method: "DELETE",
     path_template: "/playlists/{playlist_id}",
     fields: &[
-        FieldSpec { snake: "playlist_id", location: FieldLocation::Path },
+        FieldSpec { snake: "playlist_id", wire: "playlist_id", location: FieldLocation::Path },
     ],
     auth: &[
         AuthApply { secret_key: "AuthHeader", kind: AuthKind::ApiKeyHeader("Authorization") },
@@ -1013,8 +2085,8 @@ const OP_PLAYLISTS_GET_PLAYLISTS_PLAYLIST_ID_REPOSTERS: OpSpec = OpSpec {
     method: "GET",
     path_template: "/playlists/{playlist_id}/reposters",
     fields: &[
-        FieldSpec { snake: "playlist_id", location: FieldLocation::Path },
-        FieldSpec { snake: "limit", location: FieldLocation::Query },
+        FieldSpec { snake: "playlist_id", wire: "playlist_id", location: FieldLocation::Path },
+        FieldSpec { snake: "limit", wire: "limit", location: FieldLocation::Query },
     ],
     auth: &[
         AuthApply { secret_key: "ClientId", kind: AuthKind::ApiKeyQuery("client_id") },
@@ -1025,10 +2097,10 @@ const OP_PLAYLISTS_GET_PLAYLISTS_PLAYLIST_ID_TRACKS: OpSpec = OpSpec {
     method: "GET",
     path_template: "/playlists/{playlist_id}/tracks",
     fields: &[
-        FieldSpec { snake: "playlist_id", location: FieldLocation::Path },
-        FieldSpec { snake: "secret_token", location: FieldLocation::Query },
-        FieldSpec { snake: "access", location: FieldLocation::Query },
-        FieldSpec { snake: "linked_partitioning", location: FieldLocation::Query },
+        FieldSpec { snake: "playlist_id", wire: "playlist_id", location: FieldLocation::Path },
+        FieldSpec { snake: "secret_token", wire: "secret_token", location: FieldLocation::Query },
+        FieldSpec { snake: "access", wire: "access", location: FieldLocation::Query },
+        FieldSpec { snake: "linked_partitioning", wire: "linked_partitioning", location: FieldLocation::Query },
     ],
     auth: &[
         AuthApply { secret_key: "AuthHeader", kind: AuthKind::ApiKeyHeader("Authorization") },
@@ -1063,6 +2135,273 @@ fn iface_playlists__create_update_playlist_request_playlist__to_json(p: &iface_p
 fn iface_playlists__create_update_playlist_request_playlist_tracks_item__to_json(p: &iface_playlists::CreateUpdatePlaylistRequestPlaylistTracksItem) -> Value {
     let mut m = Map::new();
     m.insert("id".into(), Value::String((&p.id).clone()));
+    Value::Object(m)
+}
+
+fn iface_playlists__post_playlists_response__to_json(p: &iface_playlists::PostPlaylistsResponse) -> Value {
+    let mut m = Map::new();
+    m.insert("artwork_url".into(), match (&p.artwork_url) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("created_at".into(), match (&p.created_at) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("description".into(), match (&p.description) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("downloadable".into(), match (&p.downloadable) { Some(v) => Value::Bool(*(v)), None => Value::Null });
+    m.insert("duration".into(), match (&p.duration) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("ean".into(), match (&p.ean) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("embeddable_by".into(), match (&p.embeddable_by) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("genre".into(), match (&p.genre) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("id".into(), match (&p.id) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("kind".into(), match (&p.kind) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("label_id".into(), match (&p.label_id) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("label_name".into(), match (&p.label_name) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("last_modified".into(), match (&p.last_modified) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("license".into(), match (&p.license) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("permalink".into(), match (&p.permalink) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("permalink_url".into(), match (&p.permalink_url) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("playlist_type".into(), match (&p.playlist_type) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("purchase_title".into(), match (&p.purchase_title) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("purchase_url".into(), match (&p.purchase_url) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("release".into(), match (&p.release) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("release_day".into(), match (&p.release_day) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("release_month".into(), match (&p.release_month) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("release_year".into(), match (&p.release_year) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("sharing".into(), match (&p.sharing) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("streamable".into(), match (&p.streamable) { Some(v) => Value::Bool(*(v)), None => Value::Null });
+    m.insert("tag_list".into(), match (&p.tag_list) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("title".into(), match (&p.title) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("track_count".into(), match (&p.track_count) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("tracks".into(), match (&p.tracks) { Some(v) => Value::Array((v).iter().map(|v| iface_playlists__post_playlists_response_tracks_item__to_json(v)).collect()), None => Value::Null });
+    m.insert("type".into(), match (&p.type_op) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("uri".into(), match (&p.uri) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("user".into(), match (&p.user) { Some(v) => iface_playlists__meta_user__to_json(v), None => Value::Null });
+    m.insert("user_id".into(), match (&p.user_id) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_playlists__post_playlists_response_tracks_item__to_json(p: &iface_playlists::PostPlaylistsResponseTracksItem) -> Value {
+    let mut m = Map::new();
+    m.insert("artwork_url".into(), match (&p.artwork_url) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("bpm".into(), match (&p.bpm) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("comment_count".into(), match (&p.comment_count) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("commentable".into(), match (&p.commentable) { Some(v) => Value::Bool(*(v)), None => Value::Null });
+    m.insert("created_at".into(), match (&p.created_at) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("description".into(), match (&p.description) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("download_count".into(), match (&p.download_count) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("downloadable".into(), match (&p.downloadable) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("duration".into(), match (&p.duration) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("embeddable_by".into(), match (&p.embeddable_by) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("favoritings_count".into(), match (&p.favoritings_count) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("genre".into(), match (&p.genre) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("id".into(), match (&p.id) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("isrc".into(), match (&p.isrc) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("key_signature".into(), match (&p.key_signature) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("kind".into(), match (&p.kind) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("label_name".into(), match (&p.label_name) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("license".into(), match (&p.license) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("permalink_url".into(), match (&p.permalink_url) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("playback_count".into(), match (&p.playback_count) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("purchase_title".into(), match (&p.purchase_title) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("purchase_url".into(), match (&p.purchase_url) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("release".into(), match (&p.release) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("release_day".into(), match (&p.release_day) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("release_month".into(), match (&p.release_month) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("release_year".into(), match (&p.release_year) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("sharing".into(), match (&p.sharing) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("stream_url".into(), match (&p.stream_url) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("streamable".into(), match (&p.streamable) { Some(v) => Value::Bool(*(v)), None => Value::Null });
+    m.insert("tag_list".into(), match (&p.tag_list) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("title".into(), match (&p.title) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("uri".into(), match (&p.uri) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("user".into(), match (&p.user) { Some(v) => iface_playlists__meta_user__to_json(v), None => Value::Null });
+    m.insert("user_favorite".into(), match (&p.user_favorite) { Some(v) => Value::Bool(*(v)), None => Value::Null });
+    m.insert("user_playback_count".into(), match (&p.user_playback_count) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("waveform_url".into(), match (&p.waveform_url) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_playlists__meta_user__to_json(p: &iface_playlists::MetaUser) -> Value {
+    let mut m = Map::new();
+    m.insert("avatar_url".into(), match (&p.avatar_url) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("created_at".into(), match (&p.created_at) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("id".into(), match (&p.id) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("kind".into(), match (&p.kind) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("last_modified".into(), match (&p.last_modified) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("permalink".into(), match (&p.permalink) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("permalink_url".into(), match (&p.permalink_url) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("uri".into(), match (&p.uri) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("username".into(), match (&p.username) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_playlists__playlist__to_json(p: &iface_playlists::Playlist) -> Value {
+    let mut m = Map::new();
+    m.insert("artwork_url".into(), match (&p.artwork_url) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("created_at".into(), match (&p.created_at) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("description".into(), match (&p.description) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("downloadable".into(), match (&p.downloadable) { Some(v) => Value::Bool(*(v)), None => Value::Null });
+    m.insert("duration".into(), match (&p.duration) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("ean".into(), match (&p.ean) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("embeddable_by".into(), match (&p.embeddable_by) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("genre".into(), match (&p.genre) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("id".into(), match (&p.id) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("kind".into(), match (&p.kind) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("label".into(), match (&p.label) { Some(v) => iface_playlists__meta_user__to_json(v), None => Value::Null });
+    m.insert("label_id".into(), match (&p.label_id) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("label_name".into(), match (&p.label_name) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("last_modified".into(), match (&p.last_modified) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("license".into(), match (&p.license) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("likes_count".into(), match (&p.likes_count) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("permalink".into(), match (&p.permalink) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("permalink_url".into(), match (&p.permalink_url) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("playlist_type".into(), match (&p.playlist_type) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("purchase_title".into(), match (&p.purchase_title) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("purchase_url".into(), match (&p.purchase_url) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("release".into(), match (&p.release) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("release_day".into(), match (&p.release_day) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("release_month".into(), match (&p.release_month) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("release_year".into(), match (&p.release_year) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("sharing".into(), match (&p.sharing) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("streamable".into(), match (&p.streamable) { Some(v) => Value::Bool(*(v)), None => Value::Null });
+    m.insert("tag_list".into(), match (&p.tag_list) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("tags".into(), match (&p.tags) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("title".into(), match (&p.title) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("track_count".into(), match (&p.track_count) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("tracks".into(), match (&p.tracks) { Some(v) => Value::Array((v).iter().map(|v| iface_playlists__track__to_json(v)).collect()), None => Value::Null });
+    m.insert("tracks_uri".into(), match (&p.tracks_uri) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("type".into(), match (&p.type_op) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("uri".into(), match (&p.uri) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("user".into(), match (&p.user) { Some(v) => iface_playlists__meta_user__to_json(v), None => Value::Null });
+    m.insert("user_id".into(), match (&p.user_id) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_playlists__track__to_json(p: &iface_playlists::Track) -> Value {
+    let mut m = Map::new();
+    m.insert("access".into(), match (&p.access) { Some(v) => Value::String(iface_playlists__get_playlists_playlist_id_access_item_enum__to_str(v).into()), None => Value::Null });
+    m.insert("artwork_url".into(), match (&p.artwork_url) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("available_country_codes".into(), match (&p.available_country_codes) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("bpm".into(), match (&p.bpm) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("comment_count".into(), match (&p.comment_count) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("commentable".into(), match (&p.commentable) { Some(v) => Value::Bool(*(v)), None => Value::Null });
+    m.insert("created_at".into(), match (&p.created_at) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("description".into(), match (&p.description) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("download_count".into(), match (&p.download_count) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("download_url".into(), match (&p.download_url) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("downloadable".into(), match (&p.downloadable) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("duration".into(), match (&p.duration) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("embeddable_by".into(), match (&p.embeddable_by) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("favoritings_count".into(), match (&p.favoritings_count) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("genre".into(), match (&p.genre) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("id".into(), match (&p.id) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("isrc".into(), match (&p.isrc) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("key_signature".into(), match (&p.key_signature) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("kind".into(), match (&p.kind) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("label_name".into(), match (&p.label_name) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("license".into(), match (&p.license) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("permalink_url".into(), match (&p.permalink_url) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("playback_count".into(), match (&p.playback_count) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("purchase_title".into(), match (&p.purchase_title) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("purchase_url".into(), match (&p.purchase_url) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("release".into(), match (&p.release) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("release_day".into(), match (&p.release_day) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("release_month".into(), match (&p.release_month) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("release_year".into(), match (&p.release_year) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("reposts_count".into(), match (&p.reposts_count) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("secret_uri".into(), match (&p.secret_uri) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("sharing".into(), match (&p.sharing) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("stream_url".into(), match (&p.stream_url) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("streamable".into(), match (&p.streamable) { Some(v) => Value::Bool(*(v)), None => Value::Null });
+    m.insert("tag_list".into(), match (&p.tag_list) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("title".into(), match (&p.title) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("uri".into(), match (&p.uri) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("user".into(), match (&p.user) { Some(v) => iface_playlists__meta_user__to_json(v), None => Value::Null });
+    m.insert("user_favorite".into(), match (&p.user_favorite) { Some(v) => Value::Bool(*(v)), None => Value::Null });
+    m.insert("user_playback_count".into(), match (&p.user_playback_count) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("waveform_url".into(), match (&p.waveform_url) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_playlists__put_playlists_playlist_id_response__to_json(p: &iface_playlists::PutPlaylistsPlaylistIdResponse) -> Value {
+    let mut m = Map::new();
+    m.insert("artwork_url".into(), match (&p.artwork_url) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("created_at".into(), match (&p.created_at) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("description".into(), match (&p.description) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("downloadable".into(), match (&p.downloadable) { Some(v) => Value::Bool(*(v)), None => Value::Null });
+    m.insert("duration".into(), match (&p.duration) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("ean".into(), match (&p.ean) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("embeddable_by".into(), match (&p.embeddable_by) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("genre".into(), match (&p.genre) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("id".into(), match (&p.id) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("kind".into(), match (&p.kind) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("label_id".into(), match (&p.label_id) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("label_name".into(), match (&p.label_name) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("last_modified".into(), match (&p.last_modified) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("license".into(), match (&p.license) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("permalink".into(), match (&p.permalink) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("permalink_url".into(), match (&p.permalink_url) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("playlist_type".into(), match (&p.playlist_type) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("purchase_title".into(), match (&p.purchase_title) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("purchase_url".into(), match (&p.purchase_url) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("release".into(), match (&p.release) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("release_day".into(), match (&p.release_day) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("release_month".into(), match (&p.release_month) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("release_year".into(), match (&p.release_year) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("sharing".into(), match (&p.sharing) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("streamable".into(), match (&p.streamable) { Some(v) => Value::Bool(*(v)), None => Value::Null });
+    m.insert("tag_list".into(), match (&p.tag_list) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("title".into(), match (&p.title) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("track_count".into(), match (&p.track_count) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("tracks".into(), match (&p.tracks) { Some(v) => Value::Array((v).iter().map(|v| iface_playlists__put_playlists_playlist_id_response_tracks_item__to_json(v)).collect()), None => Value::Null });
+    m.insert("type".into(), match (&p.type_op) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("uri".into(), match (&p.uri) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("user".into(), match (&p.user) { Some(v) => iface_playlists__meta_user__to_json(v), None => Value::Null });
+    m.insert("user_id".into(), match (&p.user_id) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_playlists__put_playlists_playlist_id_response_tracks_item__to_json(p: &iface_playlists::PutPlaylistsPlaylistIdResponseTracksItem) -> Value {
+    let mut m = Map::new();
+    m.insert("artwork_url".into(), match (&p.artwork_url) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("bpm".into(), match (&p.bpm) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("comment_count".into(), match (&p.comment_count) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("commentable".into(), match (&p.commentable) { Some(v) => Value::Bool(*(v)), None => Value::Null });
+    m.insert("created_at".into(), match (&p.created_at) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("description".into(), match (&p.description) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("download_count".into(), match (&p.download_count) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("downloadable".into(), match (&p.downloadable) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("duration".into(), match (&p.duration) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("embeddable_by".into(), match (&p.embeddable_by) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("favoritings_count".into(), match (&p.favoritings_count) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("genre".into(), match (&p.genre) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("id".into(), match (&p.id) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("isrc".into(), match (&p.isrc) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("key_signature".into(), match (&p.key_signature) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("kind".into(), match (&p.kind) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("label_name".into(), match (&p.label_name) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("license".into(), match (&p.license) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("permalink_url".into(), match (&p.permalink_url) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("playback_count".into(), match (&p.playback_count) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("purchase_title".into(), match (&p.purchase_title) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("purchase_url".into(), match (&p.purchase_url) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("release".into(), match (&p.release) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("release_day".into(), match (&p.release_day) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("release_month".into(), match (&p.release_month) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("release_year".into(), match (&p.release_year) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("sharing".into(), match (&p.sharing) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("stream_url".into(), match (&p.stream_url) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("streamable".into(), match (&p.streamable) { Some(v) => Value::Bool(*(v)), None => Value::Null });
+    m.insert("tag_list".into(), match (&p.tag_list) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("title".into(), match (&p.title) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("uri".into(), match (&p.uri) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("user".into(), match (&p.user) { Some(v) => iface_playlists__meta_user__to_json(v), None => Value::Null });
+    m.insert("user_favorite".into(), match (&p.user_favorite) { Some(v) => Value::Bool(*(v)), None => Value::Null });
+    m.insert("user_playback_count".into(), match (&p.user_playback_count) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("waveform_url".into(), match (&p.waveform_url) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_playlists__meta_users__to_json(p: &iface_playlists::MetaUsers) -> Value {
+    let mut m = Map::new();
+    m.insert("collection".into(), match (&p.collection) { Some(v) => Value::Array((v).iter().map(|v| iface_playlists__meta_user__to_json(v)).collect()), None => Value::Null });
+    m.insert("next_href".into(), match (&p.next_href) { Some(v) => Value::String((v).clone()), None => Value::Null });
     Value::Object(m)
 }
 
@@ -1109,30 +2448,449 @@ fn iface_playlists__get_playlists_playlist_id_tracks_params__to_json(p: &iface_p
     Value::Object(m)
 }
 
+fn iface_playlists__post_playlists_response__from_json(v: &Value) -> Option<iface_playlists::PostPlaylistsResponse> {
+    let m = v.as_object()?;
+    Some(iface_playlists::PostPlaylistsResponse {
+        artwork_url: m.get("artwork_url").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        created_at: m.get("created_at").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        description: m.get("description").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        downloadable: m.get("downloadable").filter(|v| !v.is_null()).and_then(|v| (v).as_bool()),
+        duration: m.get("duration").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        ean: m.get("ean").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        embeddable_by: m.get("embeddable_by").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        genre: m.get("genre").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        id: m.get("id").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        kind: m.get("kind").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        label_id: m.get("label_id").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        label_name: m.get("label_name").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        last_modified: m.get("last_modified").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        license: m.get("license").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        permalink: m.get("permalink").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        permalink_url: m.get("permalink_url").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        playlist_type: m.get("playlist_type").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        purchase_title: m.get("purchase_title").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        purchase_url: m.get("purchase_url").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        release: m.get("release").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        release_day: m.get("release_day").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        release_month: m.get("release_month").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        release_year: m.get("release_year").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        sharing: m.get("sharing").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        streamable: m.get("streamable").filter(|v| !v.is_null()).and_then(|v| (v).as_bool()),
+        tag_list: m.get("tag_list").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        title: m.get("title").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        track_count: m.get("track_count").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        tracks: m.get("tracks").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| iface_playlists__post_playlists_response_tracks_item__from_json(x)).collect())),
+        type_op: m.get("type").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        uri: m.get("uri").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        user: m.get("user").filter(|v| !v.is_null()).and_then(|v| iface_playlists__meta_user__from_json(v)),
+        user_id: m.get("user_id").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+    })
+}
+
+fn iface_playlists__post_playlists_response_tracks_item__from_json(v: &Value) -> Option<iface_playlists::PostPlaylistsResponseTracksItem> {
+    let m = v.as_object()?;
+    Some(iface_playlists::PostPlaylistsResponseTracksItem {
+        artwork_url: m.get("artwork_url").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        bpm: m.get("bpm").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        comment_count: m.get("comment_count").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        commentable: m.get("commentable").filter(|v| !v.is_null()).and_then(|v| (v).as_bool()),
+        created_at: m.get("created_at").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        description: m.get("description").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        download_count: m.get("download_count").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        downloadable: m.get("downloadable").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        duration: m.get("duration").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        embeddable_by: m.get("embeddable_by").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        favoritings_count: m.get("favoritings_count").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        genre: m.get("genre").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        id: m.get("id").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        isrc: m.get("isrc").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        key_signature: m.get("key_signature").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        kind: m.get("kind").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        label_name: m.get("label_name").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        license: m.get("license").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        permalink_url: m.get("permalink_url").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        playback_count: m.get("playback_count").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        purchase_title: m.get("purchase_title").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        purchase_url: m.get("purchase_url").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        release: m.get("release").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        release_day: m.get("release_day").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        release_month: m.get("release_month").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        release_year: m.get("release_year").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        sharing: m.get("sharing").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        stream_url: m.get("stream_url").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        streamable: m.get("streamable").filter(|v| !v.is_null()).and_then(|v| (v).as_bool()),
+        tag_list: m.get("tag_list").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        title: m.get("title").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        uri: m.get("uri").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        user: m.get("user").filter(|v| !v.is_null()).and_then(|v| iface_playlists__meta_user__from_json(v)),
+        user_favorite: m.get("user_favorite").filter(|v| !v.is_null()).and_then(|v| (v).as_bool()),
+        user_playback_count: m.get("user_playback_count").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        waveform_url: m.get("waveform_url").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    })
+}
+
+fn iface_playlists__meta_user__from_json(v: &Value) -> Option<iface_playlists::MetaUser> {
+    let m = v.as_object()?;
+    Some(iface_playlists::MetaUser {
+        avatar_url: m.get("avatar_url").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        created_at: m.get("created_at").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        id: m.get("id").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        kind: m.get("kind").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        last_modified: m.get("last_modified").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        permalink: m.get("permalink").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        permalink_url: m.get("permalink_url").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        uri: m.get("uri").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        username: m.get("username").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    })
+}
+
+fn iface_playlists__playlist__from_json(v: &Value) -> Option<iface_playlists::Playlist> {
+    let m = v.as_object()?;
+    Some(iface_playlists::Playlist {
+        artwork_url: m.get("artwork_url").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        created_at: m.get("created_at").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        description: m.get("description").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        downloadable: m.get("downloadable").filter(|v| !v.is_null()).and_then(|v| (v).as_bool()),
+        duration: m.get("duration").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        ean: m.get("ean").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        embeddable_by: m.get("embeddable_by").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        genre: m.get("genre").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        id: m.get("id").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        kind: m.get("kind").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        label: m.get("label").filter(|v| !v.is_null()).and_then(|v| iface_playlists__meta_user__from_json(v)),
+        label_id: m.get("label_id").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        label_name: m.get("label_name").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        last_modified: m.get("last_modified").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        license: m.get("license").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        likes_count: m.get("likes_count").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        permalink: m.get("permalink").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        permalink_url: m.get("permalink_url").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        playlist_type: m.get("playlist_type").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        purchase_title: m.get("purchase_title").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        purchase_url: m.get("purchase_url").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        release: m.get("release").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        release_day: m.get("release_day").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        release_month: m.get("release_month").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        release_year: m.get("release_year").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        sharing: m.get("sharing").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        streamable: m.get("streamable").filter(|v| !v.is_null()).and_then(|v| (v).as_bool()),
+        tag_list: m.get("tag_list").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        tags: m.get("tags").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        title: m.get("title").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        track_count: m.get("track_count").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        tracks: m.get("tracks").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| iface_playlists__track__from_json(x)).collect())),
+        tracks_uri: m.get("tracks_uri").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        type_op: m.get("type").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        uri: m.get("uri").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        user: m.get("user").filter(|v| !v.is_null()).and_then(|v| iface_playlists__meta_user__from_json(v)),
+        user_id: m.get("user_id").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+    })
+}
+
+fn iface_playlists__track__from_json(v: &Value) -> Option<iface_playlists::Track> {
+    let m = v.as_object()?;
+    Some(iface_playlists::Track {
+        access: m.get("access").filter(|v| !v.is_null()).and_then(|v| (v).as_str().and_then(iface_playlists__get_playlists_playlist_id_access_item_enum__from_str)),
+        artwork_url: m.get("artwork_url").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        available_country_codes: m.get("available_country_codes").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        bpm: m.get("bpm").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        comment_count: m.get("comment_count").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        commentable: m.get("commentable").filter(|v| !v.is_null()).and_then(|v| (v).as_bool()),
+        created_at: m.get("created_at").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        description: m.get("description").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        download_count: m.get("download_count").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        download_url: m.get("download_url").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        downloadable: m.get("downloadable").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        duration: m.get("duration").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        embeddable_by: m.get("embeddable_by").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        favoritings_count: m.get("favoritings_count").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        genre: m.get("genre").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        id: m.get("id").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        isrc: m.get("isrc").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        key_signature: m.get("key_signature").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        kind: m.get("kind").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        label_name: m.get("label_name").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        license: m.get("license").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        permalink_url: m.get("permalink_url").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        playback_count: m.get("playback_count").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        purchase_title: m.get("purchase_title").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        purchase_url: m.get("purchase_url").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        release: m.get("release").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        release_day: m.get("release_day").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        release_month: m.get("release_month").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        release_year: m.get("release_year").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        reposts_count: m.get("reposts_count").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        secret_uri: m.get("secret_uri").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        sharing: m.get("sharing").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        stream_url: m.get("stream_url").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        streamable: m.get("streamable").filter(|v| !v.is_null()).and_then(|v| (v).as_bool()),
+        tag_list: m.get("tag_list").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        title: m.get("title").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        uri: m.get("uri").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        user: m.get("user").filter(|v| !v.is_null()).and_then(|v| iface_playlists__meta_user__from_json(v)),
+        user_favorite: m.get("user_favorite").filter(|v| !v.is_null()).and_then(|v| (v).as_bool()),
+        user_playback_count: m.get("user_playback_count").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        waveform_url: m.get("waveform_url").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    })
+}
+
+fn iface_playlists__put_playlists_playlist_id_response__from_json(v: &Value) -> Option<iface_playlists::PutPlaylistsPlaylistIdResponse> {
+    let m = v.as_object()?;
+    Some(iface_playlists::PutPlaylistsPlaylistIdResponse {
+        artwork_url: m.get("artwork_url").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        created_at: m.get("created_at").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        description: m.get("description").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        downloadable: m.get("downloadable").filter(|v| !v.is_null()).and_then(|v| (v).as_bool()),
+        duration: m.get("duration").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        ean: m.get("ean").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        embeddable_by: m.get("embeddable_by").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        genre: m.get("genre").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        id: m.get("id").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        kind: m.get("kind").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        label_id: m.get("label_id").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        label_name: m.get("label_name").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        last_modified: m.get("last_modified").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        license: m.get("license").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        permalink: m.get("permalink").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        permalink_url: m.get("permalink_url").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        playlist_type: m.get("playlist_type").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        purchase_title: m.get("purchase_title").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        purchase_url: m.get("purchase_url").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        release: m.get("release").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        release_day: m.get("release_day").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        release_month: m.get("release_month").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        release_year: m.get("release_year").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        sharing: m.get("sharing").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        streamable: m.get("streamable").filter(|v| !v.is_null()).and_then(|v| (v).as_bool()),
+        tag_list: m.get("tag_list").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        title: m.get("title").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        track_count: m.get("track_count").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        tracks: m.get("tracks").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| iface_playlists__put_playlists_playlist_id_response_tracks_item__from_json(x)).collect())),
+        type_op: m.get("type").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        uri: m.get("uri").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        user: m.get("user").filter(|v| !v.is_null()).and_then(|v| iface_playlists__meta_user__from_json(v)),
+        user_id: m.get("user_id").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+    })
+}
+
+fn iface_playlists__put_playlists_playlist_id_response_tracks_item__from_json(v: &Value) -> Option<iface_playlists::PutPlaylistsPlaylistIdResponseTracksItem> {
+    let m = v.as_object()?;
+    Some(iface_playlists::PutPlaylistsPlaylistIdResponseTracksItem {
+        artwork_url: m.get("artwork_url").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        bpm: m.get("bpm").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        comment_count: m.get("comment_count").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        commentable: m.get("commentable").filter(|v| !v.is_null()).and_then(|v| (v).as_bool()),
+        created_at: m.get("created_at").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        description: m.get("description").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        download_count: m.get("download_count").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        downloadable: m.get("downloadable").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        duration: m.get("duration").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        embeddable_by: m.get("embeddable_by").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        favoritings_count: m.get("favoritings_count").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        genre: m.get("genre").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        id: m.get("id").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        isrc: m.get("isrc").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        key_signature: m.get("key_signature").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        kind: m.get("kind").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        label_name: m.get("label_name").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        license: m.get("license").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        permalink_url: m.get("permalink_url").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        playback_count: m.get("playback_count").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        purchase_title: m.get("purchase_title").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        purchase_url: m.get("purchase_url").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        release: m.get("release").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        release_day: m.get("release_day").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        release_month: m.get("release_month").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        release_year: m.get("release_year").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        sharing: m.get("sharing").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        stream_url: m.get("stream_url").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        streamable: m.get("streamable").filter(|v| !v.is_null()).and_then(|v| (v).as_bool()),
+        tag_list: m.get("tag_list").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        title: m.get("title").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        uri: m.get("uri").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        user: m.get("user").filter(|v| !v.is_null()).and_then(|v| iface_playlists__meta_user__from_json(v)),
+        user_favorite: m.get("user_favorite").filter(|v| !v.is_null()).and_then(|v| (v).as_bool()),
+        user_playback_count: m.get("user_playback_count").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        waveform_url: m.get("waveform_url").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    })
+}
+
+fn iface_playlists__meta_users__from_json(v: &Value) -> Option<iface_playlists::MetaUsers> {
+    let m = v.as_object()?;
+    Some(iface_playlists::MetaUsers {
+        collection: m.get("collection").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| iface_playlists__meta_user__from_json(x)).collect())),
+        next_href: m.get("next_href").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    })
+}
+
+fn iface_playlists__get_playlists_playlist_id_access_item_enum__from_str(s: &str) -> Option<iface_playlists::GetPlaylistsPlaylistIdAccessItemEnum> {
+    match s {
+        "playable" => Some(iface_playlists::GetPlaylistsPlaylistIdAccessItemEnum::Playable),
+        "preview" => Some(iface_playlists::GetPlaylistsPlaylistIdAccessItemEnum::Preview),
+        "blocked" => Some(iface_playlists::GetPlaylistsPlaylistIdAccessItemEnum::Blocked),
+        _ => None,
+    }
+}
+
+fn iface_playlists__post_playlists__ok(body: String) -> Result<iface_playlists::PostPlaylistsResponse, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match iface_playlists__post_playlists_response__from_json(&v) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_playlists__post_playlists__err(e: crate::runtime::DispatchError) -> iface_playlists::PostPlaylistsError {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => match status {
+            401u16 => iface_playlists::PostPlaylistsError::Unauthorized(body),
+            404u16 => iface_playlists::PostPlaylistsError::NotFound(body),
+            _ => iface_playlists::PostPlaylistsError::Other(body),
+        },
+        crate::runtime::DispatchError::Transport(m) => iface_playlists::PostPlaylistsError::Other(m),
+    }
+}
+
+fn iface_playlists__get_playlists_playlist_id__ok(body: String) -> Result<iface_playlists::Playlist, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match iface_playlists__playlist__from_json(&v) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_playlists__get_playlists_playlist_id__err(e: crate::runtime::DispatchError) -> iface_playlists::GetPlaylistsPlaylistIdError {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => match status {
+            400u16 => iface_playlists::GetPlaylistsPlaylistIdError::BadRequest(body),
+            401u16 => iface_playlists::GetPlaylistsPlaylistIdError::Unauthorized(body),
+            _ => iface_playlists::GetPlaylistsPlaylistIdError::Other(body),
+        },
+        crate::runtime::DispatchError::Transport(m) => iface_playlists::GetPlaylistsPlaylistIdError::Other(m),
+    }
+}
+
+fn iface_playlists__put_playlists_playlist_id__ok(body: String) -> Result<iface_playlists::PutPlaylistsPlaylistIdResponse, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match iface_playlists__put_playlists_playlist_id_response__from_json(&v) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_playlists__put_playlists_playlist_id__err(e: crate::runtime::DispatchError) -> iface_playlists::PutPlaylistsPlaylistIdError {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => match status {
+            401u16 => iface_playlists::PutPlaylistsPlaylistIdError::Unauthorized(body),
+            404u16 => iface_playlists::PutPlaylistsPlaylistIdError::NotFound(body),
+            _ => iface_playlists::PutPlaylistsPlaylistIdError::Other(body),
+        },
+        crate::runtime::DispatchError::Transport(m) => iface_playlists::PutPlaylistsPlaylistIdError::Other(m),
+    }
+}
+
+fn iface_playlists__delete_playlists_playlist_id__ok(body: String) -> Result<String, crate::runtime::DispatchError> {
+    Ok(body)
+}
+
+fn iface_playlists__delete_playlists_playlist_id__err(e: crate::runtime::DispatchError) -> iface_playlists::DeletePlaylistsPlaylistIdError {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => match status {
+            404u16 => iface_playlists::DeletePlaylistsPlaylistIdError::NotFound(body),
+            _ => iface_playlists::DeletePlaylistsPlaylistIdError::Other(body),
+        },
+        crate::runtime::DispatchError::Transport(m) => iface_playlists::DeletePlaylistsPlaylistIdError::Other(m),
+    }
+}
+
+fn iface_playlists__get_playlists_playlist_id_reposters__ok(body: String) -> Result<iface_playlists::MetaUsers, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match iface_playlists__meta_users__from_json(&v) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_playlists__get_playlists_playlist_id_reposters__err(e: crate::runtime::DispatchError) -> iface_playlists::GetPlaylistsPlaylistIdRepostersError {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => match status {
+            401u16 => iface_playlists::GetPlaylistsPlaylistIdRepostersError::Unauthorized(body),
+            404u16 => iface_playlists::GetPlaylistsPlaylistIdRepostersError::NotFound(body),
+            _ => iface_playlists::GetPlaylistsPlaylistIdRepostersError::Other(body),
+        },
+        crate::runtime::DispatchError::Transport(m) => iface_playlists::GetPlaylistsPlaylistIdRepostersError::Other(m),
+    }
+}
+
+fn iface_playlists__get_playlists_playlist_id_tracks__ok(body: String) -> Result<String, crate::runtime::DispatchError> {
+    Ok(body)
+}
+
+fn iface_playlists__get_playlists_playlist_id_tracks__err(e: crate::runtime::DispatchError) -> iface_playlists::GetPlaylistsPlaylistIdTracksError {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => match status {
+            400u16 => iface_playlists::GetPlaylistsPlaylistIdTracksError::BadRequest(body),
+            401u16 => iface_playlists::GetPlaylistsPlaylistIdTracksError::Unauthorized(body),
+            _ => iface_playlists::GetPlaylistsPlaylistIdTracksError::Other(body),
+        },
+        crate::runtime::DispatchError::Transport(m) => iface_playlists::GetPlaylistsPlaylistIdTracksError::Other(m),
+    }
+}
+
 impl iface_playlists::Guest for crate::Component {
-    fn post_playlists(params: iface_playlists::PostPlaylistsParams) -> Result<String, String> {
+    fn post_playlists(params: iface_playlists::PostPlaylistsParams) -> Result<iface_playlists::PostPlaylistsResponse, iface_playlists::PostPlaylistsError> {
         let json = iface_playlists__post_playlists_params__to_json(&params);
-        dispatch(&OP_PLAYLISTS_POST_PLAYLISTS, json)
+        match dispatch(&OP_PLAYLISTS_POST_PLAYLISTS, json).and_then(iface_playlists__post_playlists__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_playlists__post_playlists__err(e)),
+        }
     }
-    fn get_playlists_playlist_id(params: iface_playlists::GetPlaylistsPlaylistIdParams) -> Result<String, String> {
+    fn get_playlists_playlist_id(params: iface_playlists::GetPlaylistsPlaylistIdParams) -> Result<iface_playlists::Playlist, iface_playlists::GetPlaylistsPlaylistIdError> {
         let json = iface_playlists__get_playlists_playlist_id_params__to_json(&params);
-        dispatch(&OP_PLAYLISTS_GET_PLAYLISTS_PLAYLIST_ID, json)
+        match dispatch(&OP_PLAYLISTS_GET_PLAYLISTS_PLAYLIST_ID, json).and_then(iface_playlists__get_playlists_playlist_id__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_playlists__get_playlists_playlist_id__err(e)),
+        }
     }
-    fn put_playlists_playlist_id(params: iface_playlists::PutPlaylistsPlaylistIdParams) -> Result<String, String> {
+    fn put_playlists_playlist_id(params: iface_playlists::PutPlaylistsPlaylistIdParams) -> Result<iface_playlists::PutPlaylistsPlaylistIdResponse, iface_playlists::PutPlaylistsPlaylistIdError> {
         let json = iface_playlists__put_playlists_playlist_id_params__to_json(&params);
-        dispatch(&OP_PLAYLISTS_PUT_PLAYLISTS_PLAYLIST_ID, json)
+        match dispatch(&OP_PLAYLISTS_PUT_PLAYLISTS_PLAYLIST_ID, json).and_then(iface_playlists__put_playlists_playlist_id__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_playlists__put_playlists_playlist_id__err(e)),
+        }
     }
-    fn delete_playlists_playlist_id(params: iface_playlists::DeletePlaylistsPlaylistIdParams) -> Result<String, String> {
+    fn delete_playlists_playlist_id(params: iface_playlists::DeletePlaylistsPlaylistIdParams) -> Result<String, iface_playlists::DeletePlaylistsPlaylistIdError> {
         let json = iface_playlists__delete_playlists_playlist_id_params__to_json(&params);
-        dispatch(&OP_PLAYLISTS_DELETE_PLAYLISTS_PLAYLIST_ID, json)
+        match dispatch(&OP_PLAYLISTS_DELETE_PLAYLISTS_PLAYLIST_ID, json).and_then(iface_playlists__delete_playlists_playlist_id__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_playlists__delete_playlists_playlist_id__err(e)),
+        }
     }
-    fn get_playlists_playlist_id_reposters(params: iface_playlists::GetPlaylistsPlaylistIdRepostersParams) -> Result<String, String> {
+    fn get_playlists_playlist_id_reposters(params: iface_playlists::GetPlaylistsPlaylistIdRepostersParams) -> Result<iface_playlists::MetaUsers, iface_playlists::GetPlaylistsPlaylistIdRepostersError> {
         let json = iface_playlists__get_playlists_playlist_id_reposters_params__to_json(&params);
-        dispatch(&OP_PLAYLISTS_GET_PLAYLISTS_PLAYLIST_ID_REPOSTERS, json)
+        match dispatch(&OP_PLAYLISTS_GET_PLAYLISTS_PLAYLIST_ID_REPOSTERS, json).and_then(iface_playlists__get_playlists_playlist_id_reposters__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_playlists__get_playlists_playlist_id_reposters__err(e)),
+        }
     }
-    fn get_playlists_playlist_id_tracks(params: iface_playlists::GetPlaylistsPlaylistIdTracksParams) -> Result<String, String> {
+    fn get_playlists_playlist_id_tracks(params: iface_playlists::GetPlaylistsPlaylistIdTracksParams) -> Result<String, iface_playlists::GetPlaylistsPlaylistIdTracksError> {
         let json = iface_playlists__get_playlists_playlist_id_tracks_params__to_json(&params);
-        dispatch(&OP_PLAYLISTS_GET_PLAYLISTS_PLAYLIST_ID_TRACKS, json)
+        match dispatch(&OP_PLAYLISTS_GET_PLAYLISTS_PLAYLIST_ID_TRACKS, json).and_then(iface_playlists__get_playlists_playlist_id_tracks__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_playlists__get_playlists_playlist_id_tracks__err(e)),
+        }
     }
 }
 use crate::exports::autostamp::soundcloud::reposts as iface_reposts;
@@ -1141,7 +2899,7 @@ const OP_REPOSTS_POST_REPOSTS_PLAYLISTS_PLAYLIST_ID: OpSpec = OpSpec {
     method: "POST",
     path_template: "/reposts/playlists/{playlist_id}",
     fields: &[
-        FieldSpec { snake: "playlist_id", location: FieldLocation::Path },
+        FieldSpec { snake: "playlist_id", wire: "playlist_id", location: FieldLocation::Path },
     ],
     auth: &[
         AuthApply { secret_key: "AuthHeader", kind: AuthKind::ApiKeyHeader("Authorization") },
@@ -1152,7 +2910,7 @@ const OP_REPOSTS_DELETE_REPOSTS_PLAYLISTS_PLAYLIST_ID: OpSpec = OpSpec {
     method: "DELETE",
     path_template: "/reposts/playlists/{playlist_id}",
     fields: &[
-        FieldSpec { snake: "playlist_id", location: FieldLocation::Path },
+        FieldSpec { snake: "playlist_id", wire: "playlist_id", location: FieldLocation::Path },
     ],
     auth: &[
         AuthApply { secret_key: "AuthHeader", kind: AuthKind::ApiKeyHeader("Authorization") },
@@ -1163,7 +2921,7 @@ const OP_REPOSTS_POST_REPOSTS_TRACKS_TRACK_ID: OpSpec = OpSpec {
     method: "POST",
     path_template: "/reposts/tracks/{track_id}",
     fields: &[
-        FieldSpec { snake: "track_id", location: FieldLocation::Path },
+        FieldSpec { snake: "track_id", wire: "track_id", location: FieldLocation::Path },
     ],
     auth: &[
         AuthApply { secret_key: "AuthHeader", kind: AuthKind::ApiKeyHeader("Authorization") },
@@ -1174,7 +2932,7 @@ const OP_REPOSTS_DELETE_REPOSTS_TRACKS_TRACK_ID: OpSpec = OpSpec {
     method: "DELETE",
     path_template: "/reposts/tracks/{track_id}",
     fields: &[
-        FieldSpec { snake: "track_id", location: FieldLocation::Path },
+        FieldSpec { snake: "track_id", wire: "track_id", location: FieldLocation::Path },
     ],
     auth: &[
         AuthApply { secret_key: "AuthHeader", kind: AuthKind::ApiKeyHeader("Authorization") },
@@ -1205,22 +2963,94 @@ fn iface_reposts__delete_reposts_tracks_track_id_params__to_json(p: &iface_repos
     Value::Object(m)
 }
 
+fn iface_reposts__post_reposts_playlists_playlist_id__ok(body: String) -> Result<String, crate::runtime::DispatchError> {
+    Ok(body)
+}
+
+fn iface_reposts__post_reposts_playlists_playlist_id__err(e: crate::runtime::DispatchError) -> iface_reposts::PostRepostsPlaylistsPlaylistIdError {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => match status {
+            401u16 => iface_reposts::PostRepostsPlaylistsPlaylistIdError::Unauthorized(body),
+            404u16 => iface_reposts::PostRepostsPlaylistsPlaylistIdError::NotFound(body),
+            _ => iface_reposts::PostRepostsPlaylistsPlaylistIdError::Other(body),
+        },
+        crate::runtime::DispatchError::Transport(m) => iface_reposts::PostRepostsPlaylistsPlaylistIdError::Other(m),
+    }
+}
+
+fn iface_reposts__delete_reposts_playlists_playlist_id__ok(body: String) -> Result<String, crate::runtime::DispatchError> {
+    Ok(body)
+}
+
+fn iface_reposts__delete_reposts_playlists_playlist_id__err(e: crate::runtime::DispatchError) -> iface_reposts::DeleteRepostsPlaylistsPlaylistIdError {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => match status {
+            401u16 => iface_reposts::DeleteRepostsPlaylistsPlaylistIdError::Unauthorized(body),
+            404u16 => iface_reposts::DeleteRepostsPlaylistsPlaylistIdError::NotFound(body),
+            _ => iface_reposts::DeleteRepostsPlaylistsPlaylistIdError::Other(body),
+        },
+        crate::runtime::DispatchError::Transport(m) => iface_reposts::DeleteRepostsPlaylistsPlaylistIdError::Other(m),
+    }
+}
+
+fn iface_reposts__post_reposts_tracks_track_id__ok(body: String) -> Result<String, crate::runtime::DispatchError> {
+    Ok(body)
+}
+
+fn iface_reposts__post_reposts_tracks_track_id__err(e: crate::runtime::DispatchError) -> iface_reposts::PostRepostsTracksTrackIdError {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => match status {
+            401u16 => iface_reposts::PostRepostsTracksTrackIdError::Unauthorized(body),
+            404u16 => iface_reposts::PostRepostsTracksTrackIdError::NotFound(body),
+            _ => iface_reposts::PostRepostsTracksTrackIdError::Other(body),
+        },
+        crate::runtime::DispatchError::Transport(m) => iface_reposts::PostRepostsTracksTrackIdError::Other(m),
+    }
+}
+
+fn iface_reposts__delete_reposts_tracks_track_id__ok(body: String) -> Result<String, crate::runtime::DispatchError> {
+    Ok(body)
+}
+
+fn iface_reposts__delete_reposts_tracks_track_id__err(e: crate::runtime::DispatchError) -> iface_reposts::DeleteRepostsTracksTrackIdError {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => match status {
+            401u16 => iface_reposts::DeleteRepostsTracksTrackIdError::Unauthorized(body),
+            404u16 => iface_reposts::DeleteRepostsTracksTrackIdError::NotFound(body),
+            _ => iface_reposts::DeleteRepostsTracksTrackIdError::Other(body),
+        },
+        crate::runtime::DispatchError::Transport(m) => iface_reposts::DeleteRepostsTracksTrackIdError::Other(m),
+    }
+}
+
 impl iface_reposts::Guest for crate::Component {
-    fn post_reposts_playlists_playlist_id(params: iface_reposts::PostRepostsPlaylistsPlaylistIdParams) -> Result<String, String> {
+    fn post_reposts_playlists_playlist_id(params: iface_reposts::PostRepostsPlaylistsPlaylistIdParams) -> Result<String, iface_reposts::PostRepostsPlaylistsPlaylistIdError> {
         let json = iface_reposts__post_reposts_playlists_playlist_id_params__to_json(&params);
-        dispatch(&OP_REPOSTS_POST_REPOSTS_PLAYLISTS_PLAYLIST_ID, json)
+        match dispatch(&OP_REPOSTS_POST_REPOSTS_PLAYLISTS_PLAYLIST_ID, json).and_then(iface_reposts__post_reposts_playlists_playlist_id__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_reposts__post_reposts_playlists_playlist_id__err(e)),
+        }
     }
-    fn delete_reposts_playlists_playlist_id(params: iface_reposts::DeleteRepostsPlaylistsPlaylistIdParams) -> Result<String, String> {
+    fn delete_reposts_playlists_playlist_id(params: iface_reposts::DeleteRepostsPlaylistsPlaylistIdParams) -> Result<String, iface_reposts::DeleteRepostsPlaylistsPlaylistIdError> {
         let json = iface_reposts__delete_reposts_playlists_playlist_id_params__to_json(&params);
-        dispatch(&OP_REPOSTS_DELETE_REPOSTS_PLAYLISTS_PLAYLIST_ID, json)
+        match dispatch(&OP_REPOSTS_DELETE_REPOSTS_PLAYLISTS_PLAYLIST_ID, json).and_then(iface_reposts__delete_reposts_playlists_playlist_id__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_reposts__delete_reposts_playlists_playlist_id__err(e)),
+        }
     }
-    fn post_reposts_tracks_track_id(params: iface_reposts::PostRepostsTracksTrackIdParams) -> Result<String, String> {
+    fn post_reposts_tracks_track_id(params: iface_reposts::PostRepostsTracksTrackIdParams) -> Result<String, iface_reposts::PostRepostsTracksTrackIdError> {
         let json = iface_reposts__post_reposts_tracks_track_id_params__to_json(&params);
-        dispatch(&OP_REPOSTS_POST_REPOSTS_TRACKS_TRACK_ID, json)
+        match dispatch(&OP_REPOSTS_POST_REPOSTS_TRACKS_TRACK_ID, json).and_then(iface_reposts__post_reposts_tracks_track_id__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_reposts__post_reposts_tracks_track_id__err(e)),
+        }
     }
-    fn delete_reposts_tracks_track_id(params: iface_reposts::DeleteRepostsTracksTrackIdParams) -> Result<String, String> {
+    fn delete_reposts_tracks_track_id(params: iface_reposts::DeleteRepostsTracksTrackIdParams) -> Result<String, iface_reposts::DeleteRepostsTracksTrackIdError> {
         let json = iface_reposts__delete_reposts_tracks_track_id_params__to_json(&params);
-        dispatch(&OP_REPOSTS_DELETE_REPOSTS_TRACKS_TRACK_ID, json)
+        match dispatch(&OP_REPOSTS_DELETE_REPOSTS_TRACKS_TRACK_ID, json).and_then(iface_reposts__delete_reposts_tracks_track_id__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_reposts__delete_reposts_tracks_track_id__err(e)),
+        }
     }
 }
 use crate::exports::autostamp::soundcloud::miscellaneous as iface_miscellaneous;
@@ -1229,7 +3059,7 @@ const OP_MISCELLANEOUS_GET_RESOLVE: OpSpec = OpSpec {
     method: "GET",
     path_template: "/resolve",
     fields: &[
-        FieldSpec { snake: "url", location: FieldLocation::Query },
+        FieldSpec { snake: "url", wire: "url", location: FieldLocation::Query },
     ],
     auth: &[
         AuthApply { secret_key: "AuthHeader", kind: AuthKind::ApiKeyHeader("Authorization") },
@@ -1243,10 +3073,27 @@ fn iface_miscellaneous__get_resolve_params__to_json(p: &iface_miscellaneous::Get
     Value::Object(m)
 }
 
+fn iface_miscellaneous__get_resolve__ok(body: String) -> Result<String, crate::runtime::DispatchError> {
+    Ok(body)
+}
+
+fn iface_miscellaneous__get_resolve__err(e: crate::runtime::DispatchError) -> iface_miscellaneous::GetResolveError {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => match status {
+            302u16 => iface_miscellaneous::GetResolveError::Found(body),
+            _ => iface_miscellaneous::GetResolveError::Other(body),
+        },
+        crate::runtime::DispatchError::Transport(m) => iface_miscellaneous::GetResolveError::Other(m),
+    }
+}
+
 impl iface_miscellaneous::Guest for crate::Component {
-    fn get_resolve(params: iface_miscellaneous::GetResolveParams) -> Result<String, String> {
+    fn get_resolve(params: iface_miscellaneous::GetResolveParams) -> Result<String, iface_miscellaneous::GetResolveError> {
         let json = iface_miscellaneous__get_resolve_params__to_json(&params);
-        dispatch(&OP_MISCELLANEOUS_GET_RESOLVE, json)
+        match dispatch(&OP_MISCELLANEOUS_GET_RESOLVE, json).and_then(iface_miscellaneous__get_resolve__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_miscellaneous__get_resolve__err(e)),
+        }
     }
 }
 use crate::exports::autostamp::soundcloud::tracks as iface_tracks;
@@ -1255,6 +3102,24 @@ const OP_TRACKS_POST_TRACKS: OpSpec = OpSpec {
     method: "POST",
     path_template: "/tracks",
     fields: &[
+        FieldSpec { snake: "track_artwork_data", wire: "track[artwork_data]", location: FieldLocation::Body },
+        FieldSpec { snake: "track_asset_data", wire: "track[asset_data]", location: FieldLocation::Body },
+        FieldSpec { snake: "track_commentable", wire: "track[commentable]", location: FieldLocation::Body },
+        FieldSpec { snake: "track_description", wire: "track[description]", location: FieldLocation::Body },
+        FieldSpec { snake: "track_downloadable", wire: "track[downloadable]", location: FieldLocation::Body },
+        FieldSpec { snake: "track_embeddable_by", wire: "track[embeddable_by]", location: FieldLocation::Body },
+        FieldSpec { snake: "track_genre", wire: "track[genre]", location: FieldLocation::Body },
+        FieldSpec { snake: "track_isrc", wire: "track[isrc]", location: FieldLocation::Body },
+        FieldSpec { snake: "track_label_name", wire: "track[label_name]", location: FieldLocation::Body },
+        FieldSpec { snake: "track_license", wire: "track[license]", location: FieldLocation::Body },
+        FieldSpec { snake: "track_permalink", wire: "track[permalink]", location: FieldLocation::Body },
+        FieldSpec { snake: "track_purchase_url", wire: "track[purchase_url]", location: FieldLocation::Body },
+        FieldSpec { snake: "track_release", wire: "track[release]", location: FieldLocation::Body },
+        FieldSpec { snake: "track_release_date", wire: "track[release_date]", location: FieldLocation::Body },
+        FieldSpec { snake: "track_sharing", wire: "track[sharing]", location: FieldLocation::Body },
+        FieldSpec { snake: "track_streamable", wire: "track[streamable]", location: FieldLocation::Body },
+        FieldSpec { snake: "track_tag_list", wire: "track[tag_list]", location: FieldLocation::Body },
+        FieldSpec { snake: "track_title", wire: "track[title]", location: FieldLocation::Body },
     ],
     auth: &[
         AuthApply { secret_key: "AuthHeader", kind: AuthKind::ApiKeyHeader("Authorization") },
@@ -1266,8 +3131,8 @@ const OP_TRACKS_GET_TRACKS_TRACK_ID: OpSpec = OpSpec {
     method: "GET",
     path_template: "/tracks/{track_id}",
     fields: &[
-        FieldSpec { snake: "track_id", location: FieldLocation::Path },
-        FieldSpec { snake: "secret_token", location: FieldLocation::Query },
+        FieldSpec { snake: "track_id", wire: "track_id", location: FieldLocation::Path },
+        FieldSpec { snake: "secret_token", wire: "secret_token", location: FieldLocation::Query },
     ],
     auth: &[
         AuthApply { secret_key: "ClientId", kind: AuthKind::ApiKeyQuery("client_id") },
@@ -1278,8 +3143,8 @@ const OP_TRACKS_PUT_TRACKS_TRACK_ID: OpSpec = OpSpec {
     method: "PUT",
     path_template: "/tracks/{track_id}",
     fields: &[
-        FieldSpec { snake: "track_id", location: FieldLocation::Path },
-        FieldSpec { snake: "track", location: FieldLocation::Body },
+        FieldSpec { snake: "track_id", wire: "track_id", location: FieldLocation::Path },
+        FieldSpec { snake: "track", wire: "track", location: FieldLocation::Body },
     ],
     auth: &[
         AuthApply { secret_key: "AuthHeader", kind: AuthKind::ApiKeyHeader("Authorization") },
@@ -1290,7 +3155,7 @@ const OP_TRACKS_DELETE_TRACKS_TRACK_ID: OpSpec = OpSpec {
     method: "DELETE",
     path_template: "/tracks/{track_id}",
     fields: &[
-        FieldSpec { snake: "track_id", location: FieldLocation::Path },
+        FieldSpec { snake: "track_id", wire: "track_id", location: FieldLocation::Path },
     ],
     auth: &[
         AuthApply { secret_key: "AuthHeader", kind: AuthKind::ApiKeyHeader("Authorization") },
@@ -1301,10 +3166,10 @@ const OP_TRACKS_GET_TRACKS_TRACK_ID_COMMENTS: OpSpec = OpSpec {
     method: "GET",
     path_template: "/tracks/{track_id}/comments",
     fields: &[
-        FieldSpec { snake: "track_id", location: FieldLocation::Path },
-        FieldSpec { snake: "limit", location: FieldLocation::Query },
-        FieldSpec { snake: "offset", location: FieldLocation::Query },
-        FieldSpec { snake: "linked_partitioning", location: FieldLocation::Query },
+        FieldSpec { snake: "track_id", wire: "track_id", location: FieldLocation::Path },
+        FieldSpec { snake: "limit", wire: "limit", location: FieldLocation::Query },
+        FieldSpec { snake: "offset", wire: "offset", location: FieldLocation::Query },
+        FieldSpec { snake: "linked_partitioning", wire: "linked_partitioning", location: FieldLocation::Query },
     ],
     auth: &[
         AuthApply { secret_key: "ClientId", kind: AuthKind::ApiKeyQuery("client_id") },
@@ -1315,7 +3180,8 @@ const OP_TRACKS_POST_TRACKS_TRACK_ID_COMMENTS: OpSpec = OpSpec {
     method: "POST",
     path_template: "/tracks/{track_id}/comments",
     fields: &[
-        FieldSpec { snake: "track_id", location: FieldLocation::Path },
+        FieldSpec { snake: "track_id", wire: "track_id", location: FieldLocation::Path },
+        FieldSpec { snake: "comment", wire: "comment", location: FieldLocation::Body },
     ],
     auth: &[
         AuthApply { secret_key: "AuthHeader", kind: AuthKind::ApiKeyHeader("Authorization") },
@@ -1327,9 +3193,9 @@ const OP_TRACKS_GET_TRACKS_TRACK_ID_FAVORITERS: OpSpec = OpSpec {
     method: "GET",
     path_template: "/tracks/{track_id}/favoriters",
     fields: &[
-        FieldSpec { snake: "track_id", location: FieldLocation::Path },
-        FieldSpec { snake: "limit", location: FieldLocation::Query },
-        FieldSpec { snake: "offset", location: FieldLocation::Query },
+        FieldSpec { snake: "track_id", wire: "track_id", location: FieldLocation::Path },
+        FieldSpec { snake: "limit", wire: "limit", location: FieldLocation::Query },
+        FieldSpec { snake: "offset", wire: "offset", location: FieldLocation::Query },
     ],
     auth: &[
         AuthApply { secret_key: "ClientId", kind: AuthKind::ApiKeyQuery("client_id") },
@@ -1340,11 +3206,11 @@ const OP_TRACKS_GET_TRACKS_TRACK_ID_RELATED: OpSpec = OpSpec {
     method: "GET",
     path_template: "/tracks/{track_id}/related",
     fields: &[
-        FieldSpec { snake: "track_id", location: FieldLocation::Path },
-        FieldSpec { snake: "access", location: FieldLocation::Query },
-        FieldSpec { snake: "limit", location: FieldLocation::Query },
-        FieldSpec { snake: "offset", location: FieldLocation::Query },
-        FieldSpec { snake: "linked_partitioning", location: FieldLocation::Query },
+        FieldSpec { snake: "track_id", wire: "track_id", location: FieldLocation::Path },
+        FieldSpec { snake: "access", wire: "access", location: FieldLocation::Query },
+        FieldSpec { snake: "limit", wire: "limit", location: FieldLocation::Query },
+        FieldSpec { snake: "offset", wire: "offset", location: FieldLocation::Query },
+        FieldSpec { snake: "linked_partitioning", wire: "linked_partitioning", location: FieldLocation::Query },
     ],
     auth: &[
         AuthApply { secret_key: "ClientId", kind: AuthKind::ApiKeyQuery("client_id") },
@@ -1355,8 +3221,8 @@ const OP_TRACKS_GET_TRACKS_TRACK_ID_REPOSTERS: OpSpec = OpSpec {
     method: "GET",
     path_template: "/tracks/{track_id}/reposters",
     fields: &[
-        FieldSpec { snake: "track_id", location: FieldLocation::Path },
-        FieldSpec { snake: "limit", location: FieldLocation::Query },
+        FieldSpec { snake: "track_id", wire: "track_id", location: FieldLocation::Path },
+        FieldSpec { snake: "limit", wire: "limit", location: FieldLocation::Query },
     ],
     auth: &[
         AuthApply { secret_key: "ClientId", kind: AuthKind::ApiKeyQuery("client_id") },
@@ -1367,48 +3233,108 @@ const OP_TRACKS_GET_TRACKS_TRACK_ID_STREAMS: OpSpec = OpSpec {
     method: "GET",
     path_template: "/tracks/{track_id}/streams",
     fields: &[
-        FieldSpec { snake: "track_id", location: FieldLocation::Path },
-        FieldSpec { snake: "secret_token", location: FieldLocation::Query },
+        FieldSpec { snake: "track_id", wire: "track_id", location: FieldLocation::Path },
+        FieldSpec { snake: "secret_token", wire: "secret_token", location: FieldLocation::Query },
     ],
     auth: &[
         AuthApply { secret_key: "ClientId", kind: AuthKind::ApiKeyQuery("client_id") },
     ],
 };
 
-fn iface_tracks__track_metadata_request_track_embeddable_by_enum__to_str(e: &iface_tracks::TrackMetadataRequestTrackEmbeddableByEnum) -> &'static str {
+fn iface_tracks__track_data_request_track_embeddable_by_enum__to_str(e: &iface_tracks::TrackDataRequestTrackEmbeddableByEnum) -> &'static str {
     match e {
-        iface_tracks::TrackMetadataRequestTrackEmbeddableByEnum::All => "all",
-        iface_tracks::TrackMetadataRequestTrackEmbeddableByEnum::Me => "me",
-        iface_tracks::TrackMetadataRequestTrackEmbeddableByEnum::None => "none",
+        iface_tracks::TrackDataRequestTrackEmbeddableByEnum::All => "all",
+        iface_tracks::TrackDataRequestTrackEmbeddableByEnum::Me => "me",
+        iface_tracks::TrackDataRequestTrackEmbeddableByEnum::None => "none",
     }
 }
 
-fn iface_tracks__track_metadata_request_track_license_enum__to_str(e: &iface_tracks::TrackMetadataRequestTrackLicenseEnum) -> &'static str {
+fn iface_tracks__track_data_request_track_license_enum__to_str(e: &iface_tracks::TrackDataRequestTrackLicenseEnum) -> &'static str {
     match e {
-        iface_tracks::TrackMetadataRequestTrackLicenseEnum::NoRightsReserved => "no-rights-reserved",
-        iface_tracks::TrackMetadataRequestTrackLicenseEnum::AllRightsReserved => "all-rights-reserved",
-        iface_tracks::TrackMetadataRequestTrackLicenseEnum::CcBy => "cc-by",
-        iface_tracks::TrackMetadataRequestTrackLicenseEnum::CcByNc => "cc-by-nc",
-        iface_tracks::TrackMetadataRequestTrackLicenseEnum::CcByNd => "cc-by-nd",
-        iface_tracks::TrackMetadataRequestTrackLicenseEnum::CcBySa => "cc-by-sa",
-        iface_tracks::TrackMetadataRequestTrackLicenseEnum::CcByNcNd => "cc-by-nc-nd",
-        iface_tracks::TrackMetadataRequestTrackLicenseEnum::CcByNcSa => "cc-by-nc-sa",
+        iface_tracks::TrackDataRequestTrackLicenseEnum::NoRightsReserved => "no-rights-reserved",
+        iface_tracks::TrackDataRequestTrackLicenseEnum::AllRightsReserved => "all-rights-reserved",
+        iface_tracks::TrackDataRequestTrackLicenseEnum::CcBy => "cc-by",
+        iface_tracks::TrackDataRequestTrackLicenseEnum::CcByNc => "cc-by-nc",
+        iface_tracks::TrackDataRequestTrackLicenseEnum::CcByNd => "cc-by-nd",
+        iface_tracks::TrackDataRequestTrackLicenseEnum::CcBySa => "cc-by-sa",
+        iface_tracks::TrackDataRequestTrackLicenseEnum::CcByNcNd => "cc-by-nc-nd",
+        iface_tracks::TrackDataRequestTrackLicenseEnum::CcByNcSa => "cc-by-nc-sa",
     }
 }
 
-fn iface_tracks__track_metadata_request_track_sharing_enum__to_str(e: &iface_tracks::TrackMetadataRequestTrackSharingEnum) -> &'static str {
+fn iface_tracks__track_data_request_track_sharing_enum__to_str(e: &iface_tracks::TrackDataRequestTrackSharingEnum) -> &'static str {
     match e {
-        iface_tracks::TrackMetadataRequestTrackSharingEnum::Public => "public",
-        iface_tracks::TrackMetadataRequestTrackSharingEnum::Private => "private",
+        iface_tracks::TrackDataRequestTrackSharingEnum::Public => "public",
+        iface_tracks::TrackDataRequestTrackSharingEnum::Private => "private",
     }
 }
 
-fn iface_tracks__get_tracks_track_id_related_access_item_enum__to_str(e: &iface_tracks::GetTracksTrackIdRelatedAccessItemEnum) -> &'static str {
+fn iface_tracks__track_access_enum__to_str(e: &iface_tracks::TrackAccessEnum) -> &'static str {
     match e {
-        iface_tracks::GetTracksTrackIdRelatedAccessItemEnum::Playable => "playable",
-        iface_tracks::GetTracksTrackIdRelatedAccessItemEnum::Preview => "preview",
-        iface_tracks::GetTracksTrackIdRelatedAccessItemEnum::Blocked => "blocked",
+        iface_tracks::TrackAccessEnum::Playable => "playable",
+        iface_tracks::TrackAccessEnum::Preview => "preview",
+        iface_tracks::TrackAccessEnum::Blocked => "blocked",
     }
+}
+
+fn iface_tracks__track__to_json(p: &iface_tracks::Track) -> Value {
+    let mut m = Map::new();
+    m.insert("access".into(), match (&p.access) { Some(v) => Value::String(iface_tracks__track_access_enum__to_str(v).into()), None => Value::Null });
+    m.insert("artwork_url".into(), match (&p.artwork_url) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("available_country_codes".into(), match (&p.available_country_codes) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("bpm".into(), match (&p.bpm) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("comment_count".into(), match (&p.comment_count) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("commentable".into(), match (&p.commentable) { Some(v) => Value::Bool(*(v)), None => Value::Null });
+    m.insert("created_at".into(), match (&p.created_at) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("description".into(), match (&p.description) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("download_count".into(), match (&p.download_count) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("download_url".into(), match (&p.download_url) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("downloadable".into(), match (&p.downloadable) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("duration".into(), match (&p.duration) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("embeddable_by".into(), match (&p.embeddable_by) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("favoritings_count".into(), match (&p.favoritings_count) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("genre".into(), match (&p.genre) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("id".into(), match (&p.id) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("isrc".into(), match (&p.isrc) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("key_signature".into(), match (&p.key_signature) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("kind".into(), match (&p.kind) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("label_name".into(), match (&p.label_name) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("license".into(), match (&p.license) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("permalink_url".into(), match (&p.permalink_url) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("playback_count".into(), match (&p.playback_count) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("purchase_title".into(), match (&p.purchase_title) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("purchase_url".into(), match (&p.purchase_url) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("release".into(), match (&p.release) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("release_day".into(), match (&p.release_day) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("release_month".into(), match (&p.release_month) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("release_year".into(), match (&p.release_year) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("reposts_count".into(), match (&p.reposts_count) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("secret_uri".into(), match (&p.secret_uri) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("sharing".into(), match (&p.sharing) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("stream_url".into(), match (&p.stream_url) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("streamable".into(), match (&p.streamable) { Some(v) => Value::Bool(*(v)), None => Value::Null });
+    m.insert("tag_list".into(), match (&p.tag_list) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("title".into(), match (&p.title) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("uri".into(), match (&p.uri) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("user".into(), match (&p.user) { Some(v) => iface_tracks__meta_user__to_json(v), None => Value::Null });
+    m.insert("user_favorite".into(), match (&p.user_favorite) { Some(v) => Value::Bool(*(v)), None => Value::Null });
+    m.insert("user_playback_count".into(), match (&p.user_playback_count) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("waveform_url".into(), match (&p.waveform_url) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_tracks__meta_user__to_json(p: &iface_tracks::MetaUser) -> Value {
+    let mut m = Map::new();
+    m.insert("avatar_url".into(), match (&p.avatar_url) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("created_at".into(), match (&p.created_at) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("id".into(), match (&p.id) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("kind".into(), match (&p.kind) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("last_modified".into(), match (&p.last_modified) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("permalink".into(), match (&p.permalink) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("permalink_url".into(), match (&p.permalink_url) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("uri".into(), match (&p.uri) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("username".into(), match (&p.username) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
 }
 
 fn iface_tracks__track_metadata_request_track__to_json(p: &iface_tracks::TrackMetadataRequestTrack) -> Value {
@@ -1416,19 +3342,101 @@ fn iface_tracks__track_metadata_request_track__to_json(p: &iface_tracks::TrackMe
     m.insert("commentable".into(), match (&p.commentable) { Some(v) => Value::Bool(*(v)), None => Value::Null });
     m.insert("description".into(), match (&p.description) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("downloadable".into(), match (&p.downloadable) { Some(v) => Value::Bool(*(v)), None => Value::Null });
-    m.insert("embeddable_by".into(), match (&p.embeddable_by) { Some(v) => Value::String(iface_tracks__track_metadata_request_track_embeddable_by_enum__to_str(v).into()), None => Value::Null });
+    m.insert("embeddable_by".into(), match (&p.embeddable_by) { Some(v) => Value::String(iface_tracks__track_data_request_track_embeddable_by_enum__to_str(v).into()), None => Value::Null });
     m.insert("genre".into(), match (&p.genre) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("isrc".into(), match (&p.isrc) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("label_name".into(), match (&p.label_name) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    m.insert("license".into(), match (&p.license) { Some(v) => Value::String(iface_tracks__track_metadata_request_track_license_enum__to_str(v).into()), None => Value::Null });
+    m.insert("license".into(), match (&p.license) { Some(v) => Value::String(iface_tracks__track_data_request_track_license_enum__to_str(v).into()), None => Value::Null });
     m.insert("permalink".into(), match (&p.permalink) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("purchase_url".into(), match (&p.purchase_url) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("release".into(), match (&p.release) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("release_date".into(), match (&p.release_date) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    m.insert("sharing".into(), match (&p.sharing) { Some(v) => Value::String(iface_tracks__track_metadata_request_track_sharing_enum__to_str(v).into()), None => Value::Null });
+    m.insert("sharing".into(), match (&p.sharing) { Some(v) => Value::String(iface_tracks__track_data_request_track_sharing_enum__to_str(v).into()), None => Value::Null });
     m.insert("streamable".into(), match (&p.streamable) { Some(v) => Value::Bool(*(v)), None => Value::Null });
     m.insert("tag_list".into(), match (&p.tag_list) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("title".into(), match (&p.title) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_tracks__post_tracks_track_id_comments_body_comment__to_json(p: &iface_tracks::PostTracksTrackIdCommentsBodyComment) -> Value {
+    let mut m = Map::new();
+    m.insert("body".into(), Value::String((&p.body).clone()));
+    m.insert("timestamp".into(), match (&p.timestamp) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_tracks__comment__to_json(p: &iface_tracks::Comment) -> Value {
+    let mut m = Map::new();
+    m.insert("body".into(), match (&p.body) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("created_at".into(), match (&p.created_at) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("id".into(), match (&p.id) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("kind".into(), match (&p.kind) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("timestamp".into(), match (&p.timestamp) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("track_id".into(), match (&p.track_id) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("uri".into(), match (&p.uri) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("user".into(), match (&p.user) { Some(v) => iface_tracks__comment_user__to_json(v), None => Value::Null });
+    m.insert("user_id".into(), match (&p.user_id) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_tracks__comment_user__to_json(p: &iface_tracks::CommentUser) -> Value {
+    let mut m = Map::new();
+    m.insert("avatar_url".into(), match (&p.avatar_url) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("followers_count".into(), match (&p.followers_count) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("followings_count".into(), match (&p.followings_count) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("id".into(), match (&p.id) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("kind".into(), match (&p.kind) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("last_modified".into(), match (&p.last_modified) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("permalink".into(), match (&p.permalink) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("permalink_url".into(), match (&p.permalink_url) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("reposts_count".into(), match (&p.reposts_count) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("uri".into(), match (&p.uri) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("username".into(), match (&p.username) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_tracks__users_list__to_json(p: &iface_tracks::UsersList) -> Value {
+    let mut m = Map::new();
+    m.insert("value".into(), Value::String((&p.value).clone()));
+    Value::Object(m)
+}
+
+fn iface_tracks__meta_users__to_json(p: &iface_tracks::MetaUsers) -> Value {
+    let mut m = Map::new();
+    m.insert("collection".into(), match (&p.collection) { Some(v) => Value::Array((v).iter().map(|v| iface_tracks__meta_user__to_json(v)).collect()), None => Value::Null });
+    m.insert("next_href".into(), match (&p.next_href) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_tracks__streams__to_json(p: &iface_tracks::Streams) -> Value {
+    let mut m = Map::new();
+    m.insert("hls_mp3_128_url".into(), match (&p.hls_mp3_v128_url) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("hls_opus_64_url".into(), match (&p.hls_opus_v64_url) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("http_mp3_128_url".into(), match (&p.http_mp3_v128_url) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("preview_mp3_128_url".into(), match (&p.preview_mp3_v128_url) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_tracks__post_tracks_params__to_json(p: &iface_tracks::PostTracksParams) -> Value {
+    let mut m = Map::new();
+    m.insert("track_artwork_data".into(), match (&p.track_artwork_data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("track_asset_data".into(), match (&p.track_asset_data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("track_commentable".into(), match (&p.track_commentable) { Some(v) => Value::Bool(*(v)), None => Value::Null });
+    m.insert("track_description".into(), match (&p.track_description) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("track_downloadable".into(), match (&p.track_downloadable) { Some(v) => Value::Bool(*(v)), None => Value::Null });
+    m.insert("track_embeddable_by".into(), match (&p.track_embeddable_by) { Some(v) => Value::String(iface_tracks__track_data_request_track_embeddable_by_enum__to_str(v).into()), None => Value::Null });
+    m.insert("track_genre".into(), match (&p.track_genre) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("track_isrc".into(), match (&p.track_isrc) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("track_label_name".into(), match (&p.track_label_name) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("track_license".into(), match (&p.track_license) { Some(v) => Value::String(iface_tracks__track_data_request_track_license_enum__to_str(v).into()), None => Value::Null });
+    m.insert("track_permalink".into(), match (&p.track_permalink) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("track_purchase_url".into(), match (&p.track_purchase_url) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("track_release".into(), match (&p.track_release) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("track_release_date".into(), match (&p.track_release_date) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("track_sharing".into(), match (&p.track_sharing) { Some(v) => Value::String(iface_tracks__track_data_request_track_sharing_enum__to_str(v).into()), None => Value::Null });
+    m.insert("track_streamable".into(), match (&p.track_streamable) { Some(v) => Value::Bool(*(v)), None => Value::Null });
+    m.insert("track_tag_list".into(), match (&p.track_tag_list) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("track_title".into(), match (&p.track_title) { Some(v) => Value::String((v).clone()), None => Value::Null });
     Value::Object(m)
 }
 
@@ -1464,6 +3472,7 @@ fn iface_tracks__get_tracks_track_id_comments_params__to_json(p: &iface_tracks::
 fn iface_tracks__post_tracks_track_id_comments_params__to_json(p: &iface_tracks::PostTracksTrackIdCommentsParams) -> Value {
     let mut m = Map::new();
     m.insert("track_id".into(), Value::String((&p.track_id).clone()));
+    m.insert("comment".into(), match (&p.comment) { Some(v) => iface_tracks__post_tracks_track_id_comments_body_comment__to_json(v), None => Value::Null });
     Value::Object(m)
 }
 
@@ -1478,7 +3487,7 @@ fn iface_tracks__get_tracks_track_id_favoriters_params__to_json(p: &iface_tracks
 fn iface_tracks__get_tracks_track_id_related_params__to_json(p: &iface_tracks::GetTracksTrackIdRelatedParams) -> Value {
     let mut m = Map::new();
     m.insert("track_id".into(), Value::String((&p.track_id).clone()));
-    m.insert("access".into(), match (&p.access) { Some(v) => Value::Array((v).iter().map(|v| Value::String(iface_tracks__get_tracks_track_id_related_access_item_enum__to_str(v).into())).collect()), None => Value::Null });
+    m.insert("access".into(), match (&p.access) { Some(v) => Value::Array((v).iter().map(|v| Value::String(iface_tracks__track_access_enum__to_str(v).into())).collect()), None => Value::Null });
     m.insert("limit".into(), match (&p.limit) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
     m.insert("offset".into(), match (&p.offset) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
     m.insert("linked_partitioning".into(), match (&p.linked_partitioning) { Some(v) => Value::Bool(*(v)), None => Value::Null });
@@ -1499,45 +3508,402 @@ fn iface_tracks__get_tracks_track_id_streams_params__to_json(p: &iface_tracks::G
     Value::Object(m)
 }
 
+fn iface_tracks__track__from_json(v: &Value) -> Option<iface_tracks::Track> {
+    let m = v.as_object()?;
+    Some(iface_tracks::Track {
+        access: m.get("access").filter(|v| !v.is_null()).and_then(|v| (v).as_str().and_then(iface_tracks__track_access_enum__from_str)),
+        artwork_url: m.get("artwork_url").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        available_country_codes: m.get("available_country_codes").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        bpm: m.get("bpm").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        comment_count: m.get("comment_count").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        commentable: m.get("commentable").filter(|v| !v.is_null()).and_then(|v| (v).as_bool()),
+        created_at: m.get("created_at").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        description: m.get("description").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        download_count: m.get("download_count").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        download_url: m.get("download_url").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        downloadable: m.get("downloadable").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        duration: m.get("duration").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        embeddable_by: m.get("embeddable_by").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        favoritings_count: m.get("favoritings_count").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        genre: m.get("genre").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        id: m.get("id").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        isrc: m.get("isrc").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        key_signature: m.get("key_signature").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        kind: m.get("kind").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        label_name: m.get("label_name").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        license: m.get("license").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        permalink_url: m.get("permalink_url").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        playback_count: m.get("playback_count").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        purchase_title: m.get("purchase_title").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        purchase_url: m.get("purchase_url").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        release: m.get("release").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        release_day: m.get("release_day").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        release_month: m.get("release_month").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        release_year: m.get("release_year").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        reposts_count: m.get("reposts_count").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        secret_uri: m.get("secret_uri").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        sharing: m.get("sharing").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        stream_url: m.get("stream_url").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        streamable: m.get("streamable").filter(|v| !v.is_null()).and_then(|v| (v).as_bool()),
+        tag_list: m.get("tag_list").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        title: m.get("title").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        uri: m.get("uri").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        user: m.get("user").filter(|v| !v.is_null()).and_then(|v| iface_tracks__meta_user__from_json(v)),
+        user_favorite: m.get("user_favorite").filter(|v| !v.is_null()).and_then(|v| (v).as_bool()),
+        user_playback_count: m.get("user_playback_count").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        waveform_url: m.get("waveform_url").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    })
+}
+
+fn iface_tracks__meta_user__from_json(v: &Value) -> Option<iface_tracks::MetaUser> {
+    let m = v.as_object()?;
+    Some(iface_tracks::MetaUser {
+        avatar_url: m.get("avatar_url").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        created_at: m.get("created_at").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        id: m.get("id").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        kind: m.get("kind").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        last_modified: m.get("last_modified").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        permalink: m.get("permalink").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        permalink_url: m.get("permalink_url").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        uri: m.get("uri").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        username: m.get("username").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    })
+}
+
+fn iface_tracks__comment__from_json(v: &Value) -> Option<iface_tracks::Comment> {
+    let m = v.as_object()?;
+    Some(iface_tracks::Comment {
+        body: m.get("body").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        created_at: m.get("created_at").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        id: m.get("id").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        kind: m.get("kind").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        timestamp: m.get("timestamp").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        track_id: m.get("track_id").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        uri: m.get("uri").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        user: m.get("user").filter(|v| !v.is_null()).and_then(|v| iface_tracks__comment_user__from_json(v)),
+        user_id: m.get("user_id").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+    })
+}
+
+fn iface_tracks__comment_user__from_json(v: &Value) -> Option<iface_tracks::CommentUser> {
+    let m = v.as_object()?;
+    Some(iface_tracks::CommentUser {
+        avatar_url: m.get("avatar_url").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        followers_count: m.get("followers_count").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        followings_count: m.get("followings_count").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        id: m.get("id").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        kind: m.get("kind").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        last_modified: m.get("last_modified").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        permalink: m.get("permalink").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        permalink_url: m.get("permalink_url").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        reposts_count: m.get("reposts_count").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        uri: m.get("uri").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        username: m.get("username").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    })
+}
+
+fn iface_tracks__users_list__from_json(v: &Value) -> Option<iface_tracks::UsersList> {
+    let m = v.as_object()?;
+    Some(iface_tracks::UsersList {
+        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+    })
+}
+
+fn iface_tracks__meta_users__from_json(v: &Value) -> Option<iface_tracks::MetaUsers> {
+    let m = v.as_object()?;
+    Some(iface_tracks::MetaUsers {
+        collection: m.get("collection").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| iface_tracks__meta_user__from_json(x)).collect())),
+        next_href: m.get("next_href").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    })
+}
+
+fn iface_tracks__streams__from_json(v: &Value) -> Option<iface_tracks::Streams> {
+    let m = v.as_object()?;
+    Some(iface_tracks::Streams {
+        hls_mp3_v128_url: m.get("hls_mp3_128_url").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        hls_opus_v64_url: m.get("hls_opus_64_url").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        http_mp3_v128_url: m.get("http_mp3_128_url").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        preview_mp3_v128_url: m.get("preview_mp3_128_url").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    })
+}
+
+fn iface_tracks__track_access_enum__from_str(s: &str) -> Option<iface_tracks::TrackAccessEnum> {
+    match s {
+        "playable" => Some(iface_tracks::TrackAccessEnum::Playable),
+        "preview" => Some(iface_tracks::TrackAccessEnum::Preview),
+        "blocked" => Some(iface_tracks::TrackAccessEnum::Blocked),
+        _ => None,
+    }
+}
+
+fn iface_tracks__post_tracks__ok(body: String) -> Result<iface_tracks::Track, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match iface_tracks__track__from_json(&v) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_tracks__post_tracks__err(e: crate::runtime::DispatchError) -> iface_tracks::PostTracksError {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => match status {
+            400u16 => iface_tracks::PostTracksError::BadRequest(body),
+            401u16 => iface_tracks::PostTracksError::Unauthorized(body),
+            _ => iface_tracks::PostTracksError::Other(body),
+        },
+        crate::runtime::DispatchError::Transport(m) => iface_tracks::PostTracksError::Other(m),
+    }
+}
+
+fn iface_tracks__get_tracks_track_id__ok(body: String) -> Result<iface_tracks::Track, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match iface_tracks__track__from_json(&v) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_tracks__get_tracks_track_id__err(e: crate::runtime::DispatchError) -> iface_tracks::GetTracksTrackIdError {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => match status {
+            401u16 => iface_tracks::GetTracksTrackIdError::Unauthorized(body),
+            404u16 => iface_tracks::GetTracksTrackIdError::NotFound(body),
+            _ => iface_tracks::GetTracksTrackIdError::Other(body),
+        },
+        crate::runtime::DispatchError::Transport(m) => iface_tracks::GetTracksTrackIdError::Other(m),
+    }
+}
+
+fn iface_tracks__put_tracks_track_id__ok(body: String) -> Result<iface_tracks::Track, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match iface_tracks__track__from_json(&v) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_tracks__put_tracks_track_id__err(e: crate::runtime::DispatchError) -> iface_tracks::PutTracksTrackIdError {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => match status {
+            400u16 => iface_tracks::PutTracksTrackIdError::BadRequest(body),
+            401u16 => iface_tracks::PutTracksTrackIdError::Unauthorized(body),
+            _ => iface_tracks::PutTracksTrackIdError::Other(body),
+        },
+        crate::runtime::DispatchError::Transport(m) => iface_tracks::PutTracksTrackIdError::Other(m),
+    }
+}
+
+fn iface_tracks__delete_tracks_track_id__ok(body: String) -> Result<String, crate::runtime::DispatchError> {
+    Ok(body)
+}
+
+fn iface_tracks__delete_tracks_track_id__err(e: crate::runtime::DispatchError) -> iface_tracks::DeleteTracksTrackIdError {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => match status {
+            404u16 => iface_tracks::DeleteTracksTrackIdError::NotFound(body),
+            _ => iface_tracks::DeleteTracksTrackIdError::Other(body),
+        },
+        crate::runtime::DispatchError::Transport(m) => iface_tracks::DeleteTracksTrackIdError::Other(m),
+    }
+}
+
+fn iface_tracks__get_tracks_track_id_comments__ok(body: String) -> Result<String, crate::runtime::DispatchError> {
+    Ok(body)
+}
+
+fn iface_tracks__get_tracks_track_id_comments__err(e: crate::runtime::DispatchError) -> iface_tracks::GetTracksTrackIdCommentsError {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => match status {
+            401u16 => iface_tracks::GetTracksTrackIdCommentsError::Unauthorized(body),
+            404u16 => iface_tracks::GetTracksTrackIdCommentsError::NotFound(body),
+            _ => iface_tracks::GetTracksTrackIdCommentsError::Other(body),
+        },
+        crate::runtime::DispatchError::Transport(m) => iface_tracks::GetTracksTrackIdCommentsError::Other(m),
+    }
+}
+
+fn iface_tracks__post_tracks_track_id_comments__ok(body: String) -> Result<iface_tracks::Comment, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match iface_tracks__comment__from_json(&v) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_tracks__post_tracks_track_id_comments__err(e: crate::runtime::DispatchError) -> iface_tracks::PostTracksTrackIdCommentsError {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => match status {
+            422u16 => iface_tracks::PostTracksTrackIdCommentsError::UnprocessableEntity(body),
+            429u16 => iface_tracks::PostTracksTrackIdCommentsError::TooManyRequests(body),
+            _ => iface_tracks::PostTracksTrackIdCommentsError::Other(body),
+        },
+        crate::runtime::DispatchError::Transport(m) => iface_tracks::PostTracksTrackIdCommentsError::Other(m),
+    }
+}
+
+fn iface_tracks__get_tracks_track_id_favoriters__ok(body: String) -> Result<iface_tracks::UsersList, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match iface_tracks__users_list__from_json(&v) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_tracks__get_tracks_track_id_favoriters__err(e: crate::runtime::DispatchError) -> iface_tracks::GetTracksTrackIdFavoritersError {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => match status {
+            401u16 => iface_tracks::GetTracksTrackIdFavoritersError::Unauthorized(body),
+            404u16 => iface_tracks::GetTracksTrackIdFavoritersError::NotFound(body),
+            _ => iface_tracks::GetTracksTrackIdFavoritersError::Other(body),
+        },
+        crate::runtime::DispatchError::Transport(m) => iface_tracks::GetTracksTrackIdFavoritersError::Other(m),
+    }
+}
+
+fn iface_tracks__get_tracks_track_id_related__ok(body: String) -> Result<String, crate::runtime::DispatchError> {
+    Ok(body)
+}
+
+fn iface_tracks__get_tracks_track_id_related__err(e: crate::runtime::DispatchError) -> iface_tracks::GetTracksTrackIdRelatedError {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => match status {
+            401u16 => iface_tracks::GetTracksTrackIdRelatedError::Unauthorized(body),
+            404u16 => iface_tracks::GetTracksTrackIdRelatedError::NotFound(body),
+            _ => iface_tracks::GetTracksTrackIdRelatedError::Other(body),
+        },
+        crate::runtime::DispatchError::Transport(m) => iface_tracks::GetTracksTrackIdRelatedError::Other(m),
+    }
+}
+
+fn iface_tracks__get_tracks_track_id_reposters__ok(body: String) -> Result<iface_tracks::MetaUsers, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match iface_tracks__meta_users__from_json(&v) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_tracks__get_tracks_track_id_reposters__err(e: crate::runtime::DispatchError) -> iface_tracks::GetTracksTrackIdRepostersError {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => match status {
+            401u16 => iface_tracks::GetTracksTrackIdRepostersError::Unauthorized(body),
+            404u16 => iface_tracks::GetTracksTrackIdRepostersError::NotFound(body),
+            _ => iface_tracks::GetTracksTrackIdRepostersError::Other(body),
+        },
+        crate::runtime::DispatchError::Transport(m) => iface_tracks::GetTracksTrackIdRepostersError::Other(m),
+    }
+}
+
+fn iface_tracks__get_tracks_track_id_streams__ok(body: String) -> Result<iface_tracks::Streams, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match iface_tracks__streams__from_json(&v) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_tracks__get_tracks_track_id_streams__err(e: crate::runtime::DispatchError) -> iface_tracks::GetTracksTrackIdStreamsError {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => match status {
+            401u16 => iface_tracks::GetTracksTrackIdStreamsError::Unauthorized(body),
+            404u16 => iface_tracks::GetTracksTrackIdStreamsError::NotFound(body),
+            _ => iface_tracks::GetTracksTrackIdStreamsError::Other(body),
+        },
+        crate::runtime::DispatchError::Transport(m) => iface_tracks::GetTracksTrackIdStreamsError::Other(m),
+    }
+}
+
 impl iface_tracks::Guest for crate::Component {
-    fn post_tracks() -> Result<String, String> {
-        dispatch(&OP_TRACKS_POST_TRACKS, Value::Object(Map::new()))
+    fn post_tracks(params: iface_tracks::PostTracksParams) -> Result<iface_tracks::Track, iface_tracks::PostTracksError> {
+        let json = iface_tracks__post_tracks_params__to_json(&params);
+        match dispatch(&OP_TRACKS_POST_TRACKS, json).and_then(iface_tracks__post_tracks__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_tracks__post_tracks__err(e)),
+        }
     }
-    fn get_tracks_track_id(params: iface_tracks::GetTracksTrackIdParams) -> Result<String, String> {
+    fn get_tracks_track_id(params: iface_tracks::GetTracksTrackIdParams) -> Result<iface_tracks::Track, iface_tracks::GetTracksTrackIdError> {
         let json = iface_tracks__get_tracks_track_id_params__to_json(&params);
-        dispatch(&OP_TRACKS_GET_TRACKS_TRACK_ID, json)
+        match dispatch(&OP_TRACKS_GET_TRACKS_TRACK_ID, json).and_then(iface_tracks__get_tracks_track_id__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_tracks__get_tracks_track_id__err(e)),
+        }
     }
-    fn put_tracks_track_id(params: iface_tracks::PutTracksTrackIdParams) -> Result<String, String> {
+    fn put_tracks_track_id(params: iface_tracks::PutTracksTrackIdParams) -> Result<iface_tracks::Track, iface_tracks::PutTracksTrackIdError> {
         let json = iface_tracks__put_tracks_track_id_params__to_json(&params);
-        dispatch(&OP_TRACKS_PUT_TRACKS_TRACK_ID, json)
+        match dispatch(&OP_TRACKS_PUT_TRACKS_TRACK_ID, json).and_then(iface_tracks__put_tracks_track_id__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_tracks__put_tracks_track_id__err(e)),
+        }
     }
-    fn delete_tracks_track_id(params: iface_tracks::DeleteTracksTrackIdParams) -> Result<String, String> {
+    fn delete_tracks_track_id(params: iface_tracks::DeleteTracksTrackIdParams) -> Result<String, iface_tracks::DeleteTracksTrackIdError> {
         let json = iface_tracks__delete_tracks_track_id_params__to_json(&params);
-        dispatch(&OP_TRACKS_DELETE_TRACKS_TRACK_ID, json)
+        match dispatch(&OP_TRACKS_DELETE_TRACKS_TRACK_ID, json).and_then(iface_tracks__delete_tracks_track_id__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_tracks__delete_tracks_track_id__err(e)),
+        }
     }
-    fn get_tracks_track_id_comments(params: iface_tracks::GetTracksTrackIdCommentsParams) -> Result<String, String> {
+    fn get_tracks_track_id_comments(params: iface_tracks::GetTracksTrackIdCommentsParams) -> Result<String, iface_tracks::GetTracksTrackIdCommentsError> {
         let json = iface_tracks__get_tracks_track_id_comments_params__to_json(&params);
-        dispatch(&OP_TRACKS_GET_TRACKS_TRACK_ID_COMMENTS, json)
+        match dispatch(&OP_TRACKS_GET_TRACKS_TRACK_ID_COMMENTS, json).and_then(iface_tracks__get_tracks_track_id_comments__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_tracks__get_tracks_track_id_comments__err(e)),
+        }
     }
-    fn post_tracks_track_id_comments(params: iface_tracks::PostTracksTrackIdCommentsParams) -> Result<String, String> {
+    fn post_tracks_track_id_comments(params: iface_tracks::PostTracksTrackIdCommentsParams) -> Result<iface_tracks::Comment, iface_tracks::PostTracksTrackIdCommentsError> {
         let json = iface_tracks__post_tracks_track_id_comments_params__to_json(&params);
-        dispatch(&OP_TRACKS_POST_TRACKS_TRACK_ID_COMMENTS, json)
+        match dispatch(&OP_TRACKS_POST_TRACKS_TRACK_ID_COMMENTS, json).and_then(iface_tracks__post_tracks_track_id_comments__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_tracks__post_tracks_track_id_comments__err(e)),
+        }
     }
-    fn get_tracks_track_id_favoriters(params: iface_tracks::GetTracksTrackIdFavoritersParams) -> Result<String, String> {
+    fn get_tracks_track_id_favoriters(params: iface_tracks::GetTracksTrackIdFavoritersParams) -> Result<iface_tracks::UsersList, iface_tracks::GetTracksTrackIdFavoritersError> {
         let json = iface_tracks__get_tracks_track_id_favoriters_params__to_json(&params);
-        dispatch(&OP_TRACKS_GET_TRACKS_TRACK_ID_FAVORITERS, json)
+        match dispatch(&OP_TRACKS_GET_TRACKS_TRACK_ID_FAVORITERS, json).and_then(iface_tracks__get_tracks_track_id_favoriters__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_tracks__get_tracks_track_id_favoriters__err(e)),
+        }
     }
-    fn get_tracks_track_id_related(params: iface_tracks::GetTracksTrackIdRelatedParams) -> Result<String, String> {
+    fn get_tracks_track_id_related(params: iface_tracks::GetTracksTrackIdRelatedParams) -> Result<String, iface_tracks::GetTracksTrackIdRelatedError> {
         let json = iface_tracks__get_tracks_track_id_related_params__to_json(&params);
-        dispatch(&OP_TRACKS_GET_TRACKS_TRACK_ID_RELATED, json)
+        match dispatch(&OP_TRACKS_GET_TRACKS_TRACK_ID_RELATED, json).and_then(iface_tracks__get_tracks_track_id_related__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_tracks__get_tracks_track_id_related__err(e)),
+        }
     }
-    fn get_tracks_track_id_reposters(params: iface_tracks::GetTracksTrackIdRepostersParams) -> Result<String, String> {
+    fn get_tracks_track_id_reposters(params: iface_tracks::GetTracksTrackIdRepostersParams) -> Result<iface_tracks::MetaUsers, iface_tracks::GetTracksTrackIdRepostersError> {
         let json = iface_tracks__get_tracks_track_id_reposters_params__to_json(&params);
-        dispatch(&OP_TRACKS_GET_TRACKS_TRACK_ID_REPOSTERS, json)
+        match dispatch(&OP_TRACKS_GET_TRACKS_TRACK_ID_REPOSTERS, json).and_then(iface_tracks__get_tracks_track_id_reposters__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_tracks__get_tracks_track_id_reposters__err(e)),
+        }
     }
-    fn get_tracks_track_id_streams(params: iface_tracks::GetTracksTrackIdStreamsParams) -> Result<String, String> {
+    fn get_tracks_track_id_streams(params: iface_tracks::GetTracksTrackIdStreamsParams) -> Result<iface_tracks::Streams, iface_tracks::GetTracksTrackIdStreamsError> {
         let json = iface_tracks__get_tracks_track_id_streams_params__to_json(&params);
-        dispatch(&OP_TRACKS_GET_TRACKS_TRACK_ID_STREAMS, json)
+        match dispatch(&OP_TRACKS_GET_TRACKS_TRACK_ID_STREAMS, json).and_then(iface_tracks__get_tracks_track_id_streams__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_tracks__get_tracks_track_id_streams__err(e)),
+        }
     }
 }
 use crate::exports::autostamp::soundcloud::users as iface_users;
@@ -1546,7 +3912,7 @@ const OP_USERS_GET_USERS_USER_ID: OpSpec = OpSpec {
     method: "GET",
     path_template: "/users/{user_id}",
     fields: &[
-        FieldSpec { snake: "user_id", location: FieldLocation::Path },
+        FieldSpec { snake: "user_id", wire: "user_id", location: FieldLocation::Path },
     ],
     auth: &[
         AuthApply { secret_key: "AuthHeader", kind: AuthKind::ApiKeyHeader("Authorization") },
@@ -1558,9 +3924,9 @@ const OP_USERS_GET_USERS_USER_ID_COMMENTS: OpSpec = OpSpec {
     method: "GET",
     path_template: "/users/{user_id}/comments",
     fields: &[
-        FieldSpec { snake: "user_id", location: FieldLocation::Path },
-        FieldSpec { snake: "limit", location: FieldLocation::Query },
-        FieldSpec { snake: "offset", location: FieldLocation::Query },
+        FieldSpec { snake: "user_id", wire: "user_id", location: FieldLocation::Path },
+        FieldSpec { snake: "limit", wire: "limit", location: FieldLocation::Query },
+        FieldSpec { snake: "offset", wire: "offset", location: FieldLocation::Query },
     ],
     auth: &[
         AuthApply { secret_key: "AuthHeader", kind: AuthKind::ApiKeyHeader("Authorization") },
@@ -1572,9 +3938,9 @@ const OP_USERS_GET_USERS_USER_ID_FAVORITES: OpSpec = OpSpec {
     method: "GET",
     path_template: "/users/{user_id}/favorites",
     fields: &[
-        FieldSpec { snake: "user_id", location: FieldLocation::Path },
-        FieldSpec { snake: "limit", location: FieldLocation::Query },
-        FieldSpec { snake: "linked_partitioning", location: FieldLocation::Query },
+        FieldSpec { snake: "user_id", wire: "user_id", location: FieldLocation::Path },
+        FieldSpec { snake: "limit", wire: "limit", location: FieldLocation::Query },
+        FieldSpec { snake: "linked_partitioning", wire: "linked_partitioning", location: FieldLocation::Query },
     ],
     auth: &[
         AuthApply { secret_key: "AuthHeader", kind: AuthKind::ApiKeyHeader("Authorization") },
@@ -1586,8 +3952,8 @@ const OP_USERS_GET_USERS_USER_ID_FOLLOWERS: OpSpec = OpSpec {
     method: "GET",
     path_template: "/users/{user_id}/followers",
     fields: &[
-        FieldSpec { snake: "user_id", location: FieldLocation::Path },
-        FieldSpec { snake: "limit", location: FieldLocation::Query },
+        FieldSpec { snake: "user_id", wire: "user_id", location: FieldLocation::Path },
+        FieldSpec { snake: "limit", wire: "limit", location: FieldLocation::Query },
     ],
     auth: &[
         AuthApply { secret_key: "AuthHeader", kind: AuthKind::ApiKeyHeader("Authorization") },
@@ -1599,8 +3965,8 @@ const OP_USERS_GET_USERS_USER_ID_FOLLOWINGS: OpSpec = OpSpec {
     method: "GET",
     path_template: "/users/{user_id}/followings",
     fields: &[
-        FieldSpec { snake: "user_id", location: FieldLocation::Path },
-        FieldSpec { snake: "limit", location: FieldLocation::Query },
+        FieldSpec { snake: "user_id", wire: "user_id", location: FieldLocation::Path },
+        FieldSpec { snake: "limit", wire: "limit", location: FieldLocation::Query },
     ],
     auth: &[
         AuthApply { secret_key: "AuthHeader", kind: AuthKind::ApiKeyHeader("Authorization") },
@@ -1612,8 +3978,8 @@ const OP_USERS_GET_USERS_USER_ID_FOLLOWINGS_FOLLOWING_ID: OpSpec = OpSpec {
     method: "GET",
     path_template: "/users/{user_id}/followings/{following_id}",
     fields: &[
-        FieldSpec { snake: "user_id", location: FieldLocation::Path },
-        FieldSpec { snake: "following_id", location: FieldLocation::Path },
+        FieldSpec { snake: "user_id", wire: "user_id", location: FieldLocation::Path },
+        FieldSpec { snake: "following_id", wire: "following_id", location: FieldLocation::Path },
     ],
     auth: &[
         AuthApply { secret_key: "AuthHeader", kind: AuthKind::ApiKeyHeader("Authorization") },
@@ -1625,10 +3991,10 @@ const OP_USERS_GET_USERS_USER_ID_LIKES_TRACKS: OpSpec = OpSpec {
     method: "GET",
     path_template: "/users/{user_id}/likes/tracks",
     fields: &[
-        FieldSpec { snake: "user_id", location: FieldLocation::Path },
-        FieldSpec { snake: "access", location: FieldLocation::Query },
-        FieldSpec { snake: "limit", location: FieldLocation::Query },
-        FieldSpec { snake: "linked_partitioning", location: FieldLocation::Query },
+        FieldSpec { snake: "user_id", wire: "user_id", location: FieldLocation::Path },
+        FieldSpec { snake: "access", wire: "access", location: FieldLocation::Query },
+        FieldSpec { snake: "limit", wire: "limit", location: FieldLocation::Query },
+        FieldSpec { snake: "linked_partitioning", wire: "linked_partitioning", location: FieldLocation::Query },
     ],
     auth: &[
         AuthApply { secret_key: "AuthHeader", kind: AuthKind::ApiKeyHeader("Authorization") },
@@ -1640,10 +4006,10 @@ const OP_USERS_GET_USERS_USER_ID_PLAYLISTS: OpSpec = OpSpec {
     method: "GET",
     path_template: "/users/{user_id}/playlists",
     fields: &[
-        FieldSpec { snake: "user_id", location: FieldLocation::Path },
-        FieldSpec { snake: "access", location: FieldLocation::Query },
-        FieldSpec { snake: "limit", location: FieldLocation::Query },
-        FieldSpec { snake: "linked_partitioning", location: FieldLocation::Query },
+        FieldSpec { snake: "user_id", wire: "user_id", location: FieldLocation::Path },
+        FieldSpec { snake: "access", wire: "access", location: FieldLocation::Query },
+        FieldSpec { snake: "limit", wire: "limit", location: FieldLocation::Query },
+        FieldSpec { snake: "linked_partitioning", wire: "linked_partitioning", location: FieldLocation::Query },
     ],
     auth: &[
         AuthApply { secret_key: "AuthHeader", kind: AuthKind::ApiKeyHeader("Authorization") },
@@ -1655,10 +4021,10 @@ const OP_USERS_GET_USERS_USER_ID_TRACKS: OpSpec = OpSpec {
     method: "GET",
     path_template: "/users/{user_id}/tracks",
     fields: &[
-        FieldSpec { snake: "user_id", location: FieldLocation::Path },
-        FieldSpec { snake: "access", location: FieldLocation::Query },
-        FieldSpec { snake: "limit", location: FieldLocation::Query },
-        FieldSpec { snake: "linked_partitioning", location: FieldLocation::Query },
+        FieldSpec { snake: "user_id", wire: "user_id", location: FieldLocation::Path },
+        FieldSpec { snake: "access", wire: "access", location: FieldLocation::Query },
+        FieldSpec { snake: "limit", wire: "limit", location: FieldLocation::Query },
+        FieldSpec { snake: "linked_partitioning", wire: "linked_partitioning", location: FieldLocation::Query },
     ],
     auth: &[
         AuthApply { secret_key: "AuthHeader", kind: AuthKind::ApiKeyHeader("Authorization") },
@@ -1670,8 +4036,8 @@ const OP_USERS_GET_USERS_USER_ID_WEB_PROFILES: OpSpec = OpSpec {
     method: "GET",
     path_template: "/users/{user_id}/web-profiles",
     fields: &[
-        FieldSpec { snake: "user_id", location: FieldLocation::Path },
-        FieldSpec { snake: "limit", location: FieldLocation::Query },
+        FieldSpec { snake: "user_id", wire: "user_id", location: FieldLocation::Path },
+        FieldSpec { snake: "limit", wire: "limit", location: FieldLocation::Query },
     ],
     auth: &[
         AuthApply { secret_key: "AuthHeader", kind: AuthKind::ApiKeyHeader("Authorization") },
@@ -1685,6 +4051,61 @@ fn iface_users__get_users_user_id_likes_tracks_access_item_enum__to_str(e: &ifac
         iface_users::GetUsersUserIdLikesTracksAccessItemEnum::Preview => "preview",
         iface_users::GetUsersUserIdLikesTracksAccessItemEnum::Blocked => "blocked",
     }
+}
+
+fn iface_users__complete_user__to_json(p: &iface_users::CompleteUser) -> Value {
+    let mut m = Map::new();
+    m.insert("avatar_url".into(), match (&p.avatar_url) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("city".into(), match (&p.city) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("country".into(), match (&p.country) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("description".into(), match (&p.description) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("discogs_name".into(), match (&p.discogs_name) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("first_name".into(), match (&p.first_name) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("followers_count".into(), match (&p.followers_count) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("followings_count".into(), match (&p.followings_count) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("full_name".into(), match (&p.full_name) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("id".into(), match (&p.id) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("kind".into(), match (&p.kind) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("last_modified".into(), match (&p.last_modified) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("last_name".into(), match (&p.last_name) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("locale".into(), match (&p.locale) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("myspace_name".into(), match (&p.myspace_name) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("permalink".into(), match (&p.permalink) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("permalink_url".into(), match (&p.permalink_url) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("plan".into(), match (&p.plan) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("playlist_count".into(), match (&p.playlist_count) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("primary_email_confirmed".into(), match (&p.primary_email_confirmed) { Some(v) => Value::Bool(*(v)), None => Value::Null });
+    m.insert("private_playlists_count".into(), match (&p.private_playlists_count) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("private_tracks_count".into(), match (&p.private_tracks_count) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("public_favorites_count".into(), match (&p.public_favorites_count) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("quota".into(), match (&p.quota) { Some(v) => iface_users__complete_user_quota__to_json(v), None => Value::Null });
+    m.insert("reposts_count".into(), match (&p.reposts_count) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("subscriptions".into(), match (&p.subscriptions) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("track_count".into(), match (&p.track_count) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("uri".into(), match (&p.uri) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("username".into(), match (&p.username) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("website".into(), match (&p.website) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("website_title".into(), match (&p.website_title) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_users__complete_user_quota__to_json(p: &iface_users::CompleteUserQuota) -> Value {
+    let mut m = Map::new();
+    m.insert("unlimited_upload_quota".into(), match (&p.unlimited_upload_quota) { Some(v) => Value::Bool(*(v)), None => Value::Null });
+    m.insert("upload_seconds_used".into(), match (&p.upload_seconds_used) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_users__comments_list__to_json(p: &iface_users::CommentsList) -> Value {
+    let mut m = Map::new();
+    m.insert("value".into(), Value::String((&p.value).clone()));
+    Value::Object(m)
+}
+
+fn iface_users__web_profiles__to_json(p: &iface_users::WebProfiles) -> Value {
+    let mut m = Map::new();
+    m.insert("value".into(), Value::String((&p.value).clone()));
+    Value::Object(m)
 }
 
 fn iface_users__get_users_user_id_params__to_json(p: &iface_users::GetUsersUserIdParams) -> Value {
@@ -1764,46 +4185,309 @@ fn iface_users__get_users_user_id_web_profiles_params__to_json(p: &iface_users::
     Value::Object(m)
 }
 
+fn iface_users__complete_user__from_json(v: &Value) -> Option<iface_users::CompleteUser> {
+    let m = v.as_object()?;
+    Some(iface_users::CompleteUser {
+        avatar_url: m.get("avatar_url").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        city: m.get("city").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        country: m.get("country").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        description: m.get("description").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        discogs_name: m.get("discogs_name").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        first_name: m.get("first_name").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        followers_count: m.get("followers_count").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        followings_count: m.get("followings_count").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        full_name: m.get("full_name").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        id: m.get("id").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        kind: m.get("kind").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        last_modified: m.get("last_modified").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        last_name: m.get("last_name").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        locale: m.get("locale").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        myspace_name: m.get("myspace_name").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        permalink: m.get("permalink").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        permalink_url: m.get("permalink_url").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        plan: m.get("plan").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        playlist_count: m.get("playlist_count").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        primary_email_confirmed: m.get("primary_email_confirmed").filter(|v| !v.is_null()).and_then(|v| (v).as_bool()),
+        private_playlists_count: m.get("private_playlists_count").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        private_tracks_count: m.get("private_tracks_count").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        public_favorites_count: m.get("public_favorites_count").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        quota: m.get("quota").filter(|v| !v.is_null()).and_then(|v| iface_users__complete_user_quota__from_json(v)),
+        reposts_count: m.get("reposts_count").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        subscriptions: m.get("subscriptions").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        track_count: m.get("track_count").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        uri: m.get("uri").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        username: m.get("username").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        website: m.get("website").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        website_title: m.get("website_title").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    })
+}
+
+fn iface_users__complete_user_quota__from_json(v: &Value) -> Option<iface_users::CompleteUserQuota> {
+    let m = v.as_object()?;
+    Some(iface_users::CompleteUserQuota {
+        unlimited_upload_quota: m.get("unlimited_upload_quota").filter(|v| !v.is_null()).and_then(|v| (v).as_bool()),
+        upload_seconds_used: m.get("upload_seconds_used").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+    })
+}
+
+fn iface_users__comments_list__from_json(v: &Value) -> Option<iface_users::CommentsList> {
+    let m = v.as_object()?;
+    Some(iface_users::CommentsList {
+        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+    })
+}
+
+fn iface_users__web_profiles__from_json(v: &Value) -> Option<iface_users::WebProfiles> {
+    let m = v.as_object()?;
+    Some(iface_users::WebProfiles {
+        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+    })
+}
+
+fn iface_users__get_users_user_id__ok(body: String) -> Result<iface_users::CompleteUser, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match iface_users__complete_user__from_json(&v) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_users__get_users_user_id__err(e: crate::runtime::DispatchError) -> iface_users::GetUsersUserIdError {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => match status {
+            401u16 => iface_users::GetUsersUserIdError::Unauthorized(body),
+            404u16 => iface_users::GetUsersUserIdError::NotFound(body),
+            _ => iface_users::GetUsersUserIdError::Other(body),
+        },
+        crate::runtime::DispatchError::Transport(m) => iface_users::GetUsersUserIdError::Other(m),
+    }
+}
+
+fn iface_users__get_users_user_id_comments__ok(body: String) -> Result<iface_users::CommentsList, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match iface_users__comments_list__from_json(&v) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_users__get_users_user_id_comments__err(e: crate::runtime::DispatchError) -> iface_users::GetUsersUserIdCommentsError {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => match status {
+            401u16 => iface_users::GetUsersUserIdCommentsError::Unauthorized(body),
+            404u16 => iface_users::GetUsersUserIdCommentsError::NotFound(body),
+            _ => iface_users::GetUsersUserIdCommentsError::Other(body),
+        },
+        crate::runtime::DispatchError::Transport(m) => iface_users::GetUsersUserIdCommentsError::Other(m),
+    }
+}
+
+fn iface_users__get_users_user_id_favorites__ok(body: String) -> Result<String, crate::runtime::DispatchError> {
+    Ok(body)
+}
+
+fn iface_users__get_users_user_id_favorites__err(e: crate::runtime::DispatchError) -> iface_users::GetUsersUserIdFavoritesError {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => match status {
+            401u16 => iface_users::GetUsersUserIdFavoritesError::Unauthorized(body),
+            _ => iface_users::GetUsersUserIdFavoritesError::Other(body),
+        },
+        crate::runtime::DispatchError::Transport(m) => iface_users::GetUsersUserIdFavoritesError::Other(m),
+    }
+}
+
+fn iface_users__get_users_user_id_followers__ok(body: String) -> Result<String, crate::runtime::DispatchError> {
+    Ok(body)
+}
+
+fn iface_users__get_users_user_id_followers__err(e: crate::runtime::DispatchError) -> iface_users::GetUsersUserIdFollowersError {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => match status {
+            401u16 => iface_users::GetUsersUserIdFollowersError::Unauthorized(body),
+            _ => iface_users::GetUsersUserIdFollowersError::Other(body),
+        },
+        crate::runtime::DispatchError::Transport(m) => iface_users::GetUsersUserIdFollowersError::Other(m),
+    }
+}
+
+fn iface_users__get_users_user_id_followings__ok(body: String) -> Result<String, crate::runtime::DispatchError> {
+    Ok(body)
+}
+
+fn iface_users__get_users_user_id_followings__err(e: crate::runtime::DispatchError) -> iface_users::GetUsersUserIdFollowingsError {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => match status {
+            401u16 => iface_users::GetUsersUserIdFollowingsError::Unauthorized(body),
+            _ => iface_users::GetUsersUserIdFollowingsError::Other(body),
+        },
+        crate::runtime::DispatchError::Transport(m) => iface_users::GetUsersUserIdFollowingsError::Other(m),
+    }
+}
+
+fn iface_users__get_users_user_id_followings_following_id__ok(body: String) -> Result<iface_users::CompleteUser, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match iface_users__complete_user__from_json(&v) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_users__get_users_user_id_followings_following_id__err(e: crate::runtime::DispatchError) -> iface_users::GetUsersUserIdFollowingsFollowingIdError {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => match status {
+            401u16 => iface_users::GetUsersUserIdFollowingsFollowingIdError::Unauthorized(body),
+            404u16 => iface_users::GetUsersUserIdFollowingsFollowingIdError::NotFound(body),
+            _ => iface_users::GetUsersUserIdFollowingsFollowingIdError::Other(body),
+        },
+        crate::runtime::DispatchError::Transport(m) => iface_users::GetUsersUserIdFollowingsFollowingIdError::Other(m),
+    }
+}
+
+fn iface_users__get_users_user_id_likes_tracks__ok(body: String) -> Result<String, crate::runtime::DispatchError> {
+    Ok(body)
+}
+
+fn iface_users__get_users_user_id_likes_tracks__err(e: crate::runtime::DispatchError) -> iface_users::GetUsersUserIdLikesTracksError {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => match status {
+            400u16 => iface_users::GetUsersUserIdLikesTracksError::BadRequest(body),
+            401u16 => iface_users::GetUsersUserIdLikesTracksError::Unauthorized(body),
+            404u16 => iface_users::GetUsersUserIdLikesTracksError::NotFound(body),
+            _ => iface_users::GetUsersUserIdLikesTracksError::Other(body),
+        },
+        crate::runtime::DispatchError::Transport(m) => iface_users::GetUsersUserIdLikesTracksError::Other(m),
+    }
+}
+
+fn iface_users__get_users_user_id_playlists__ok(body: String) -> Result<String, crate::runtime::DispatchError> {
+    Ok(body)
+}
+
+fn iface_users__get_users_user_id_playlists__err(e: crate::runtime::DispatchError) -> iface_users::GetUsersUserIdPlaylistsError {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => match status {
+            401u16 => iface_users::GetUsersUserIdPlaylistsError::Unauthorized(body),
+            _ => iface_users::GetUsersUserIdPlaylistsError::Other(body),
+        },
+        crate::runtime::DispatchError::Transport(m) => iface_users::GetUsersUserIdPlaylistsError::Other(m),
+    }
+}
+
+fn iface_users__get_users_user_id_tracks__ok(body: String) -> Result<String, crate::runtime::DispatchError> {
+    Ok(body)
+}
+
+fn iface_users__get_users_user_id_tracks__err(e: crate::runtime::DispatchError) -> iface_users::GetUsersUserIdTracksError {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => match status {
+            401u16 => iface_users::GetUsersUserIdTracksError::Unauthorized(body),
+            _ => iface_users::GetUsersUserIdTracksError::Other(body),
+        },
+        crate::runtime::DispatchError::Transport(m) => iface_users::GetUsersUserIdTracksError::Other(m),
+    }
+}
+
+fn iface_users__get_users_user_id_web_profiles__ok(body: String) -> Result<iface_users::WebProfiles, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match iface_users__web_profiles__from_json(&v) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_users__get_users_user_id_web_profiles__err(e: crate::runtime::DispatchError) -> iface_users::GetUsersUserIdWebProfilesError {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => match status {
+            401u16 => iface_users::GetUsersUserIdWebProfilesError::Unauthorized(body),
+            404u16 => iface_users::GetUsersUserIdWebProfilesError::NotFound(body),
+            _ => iface_users::GetUsersUserIdWebProfilesError::Other(body),
+        },
+        crate::runtime::DispatchError::Transport(m) => iface_users::GetUsersUserIdWebProfilesError::Other(m),
+    }
+}
+
 impl iface_users::Guest for crate::Component {
-    fn get_users_user_id(params: iface_users::GetUsersUserIdParams) -> Result<String, String> {
+    fn get_users_user_id(params: iface_users::GetUsersUserIdParams) -> Result<iface_users::CompleteUser, iface_users::GetUsersUserIdError> {
         let json = iface_users__get_users_user_id_params__to_json(&params);
-        dispatch(&OP_USERS_GET_USERS_USER_ID, json)
+        match dispatch(&OP_USERS_GET_USERS_USER_ID, json).and_then(iface_users__get_users_user_id__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_users__get_users_user_id__err(e)),
+        }
     }
-    fn get_users_user_id_comments(params: iface_users::GetUsersUserIdCommentsParams) -> Result<String, String> {
+    fn get_users_user_id_comments(params: iface_users::GetUsersUserIdCommentsParams) -> Result<iface_users::CommentsList, iface_users::GetUsersUserIdCommentsError> {
         let json = iface_users__get_users_user_id_comments_params__to_json(&params);
-        dispatch(&OP_USERS_GET_USERS_USER_ID_COMMENTS, json)
+        match dispatch(&OP_USERS_GET_USERS_USER_ID_COMMENTS, json).and_then(iface_users__get_users_user_id_comments__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_users__get_users_user_id_comments__err(e)),
+        }
     }
-    fn get_users_user_id_favorites(params: iface_users::GetUsersUserIdFavoritesParams) -> Result<String, String> {
+    fn get_users_user_id_favorites(params: iface_users::GetUsersUserIdFavoritesParams) -> Result<String, iface_users::GetUsersUserIdFavoritesError> {
         let json = iface_users__get_users_user_id_favorites_params__to_json(&params);
-        dispatch(&OP_USERS_GET_USERS_USER_ID_FAVORITES, json)
+        match dispatch(&OP_USERS_GET_USERS_USER_ID_FAVORITES, json).and_then(iface_users__get_users_user_id_favorites__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_users__get_users_user_id_favorites__err(e)),
+        }
     }
-    fn get_users_user_id_followers(params: iface_users::GetUsersUserIdFollowersParams) -> Result<String, String> {
+    fn get_users_user_id_followers(params: iface_users::GetUsersUserIdFollowersParams) -> Result<String, iface_users::GetUsersUserIdFollowersError> {
         let json = iface_users__get_users_user_id_followers_params__to_json(&params);
-        dispatch(&OP_USERS_GET_USERS_USER_ID_FOLLOWERS, json)
+        match dispatch(&OP_USERS_GET_USERS_USER_ID_FOLLOWERS, json).and_then(iface_users__get_users_user_id_followers__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_users__get_users_user_id_followers__err(e)),
+        }
     }
-    fn get_users_user_id_followings(params: iface_users::GetUsersUserIdFollowingsParams) -> Result<String, String> {
+    fn get_users_user_id_followings(params: iface_users::GetUsersUserIdFollowingsParams) -> Result<String, iface_users::GetUsersUserIdFollowingsError> {
         let json = iface_users__get_users_user_id_followings_params__to_json(&params);
-        dispatch(&OP_USERS_GET_USERS_USER_ID_FOLLOWINGS, json)
+        match dispatch(&OP_USERS_GET_USERS_USER_ID_FOLLOWINGS, json).and_then(iface_users__get_users_user_id_followings__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_users__get_users_user_id_followings__err(e)),
+        }
     }
-    fn get_users_user_id_followings_following_id(params: iface_users::GetUsersUserIdFollowingsFollowingIdParams) -> Result<String, String> {
+    fn get_users_user_id_followings_following_id(params: iface_users::GetUsersUserIdFollowingsFollowingIdParams) -> Result<iface_users::CompleteUser, iface_users::GetUsersUserIdFollowingsFollowingIdError> {
         let json = iface_users__get_users_user_id_followings_following_id_params__to_json(&params);
-        dispatch(&OP_USERS_GET_USERS_USER_ID_FOLLOWINGS_FOLLOWING_ID, json)
+        match dispatch(&OP_USERS_GET_USERS_USER_ID_FOLLOWINGS_FOLLOWING_ID, json).and_then(iface_users__get_users_user_id_followings_following_id__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_users__get_users_user_id_followings_following_id__err(e)),
+        }
     }
-    fn get_users_user_id_likes_tracks(params: iface_users::GetUsersUserIdLikesTracksParams) -> Result<String, String> {
+    fn get_users_user_id_likes_tracks(params: iface_users::GetUsersUserIdLikesTracksParams) -> Result<String, iface_users::GetUsersUserIdLikesTracksError> {
         let json = iface_users__get_users_user_id_likes_tracks_params__to_json(&params);
-        dispatch(&OP_USERS_GET_USERS_USER_ID_LIKES_TRACKS, json)
+        match dispatch(&OP_USERS_GET_USERS_USER_ID_LIKES_TRACKS, json).and_then(iface_users__get_users_user_id_likes_tracks__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_users__get_users_user_id_likes_tracks__err(e)),
+        }
     }
-    fn get_users_user_id_playlists(params: iface_users::GetUsersUserIdPlaylistsParams) -> Result<String, String> {
+    fn get_users_user_id_playlists(params: iface_users::GetUsersUserIdPlaylistsParams) -> Result<String, iface_users::GetUsersUserIdPlaylistsError> {
         let json = iface_users__get_users_user_id_playlists_params__to_json(&params);
-        dispatch(&OP_USERS_GET_USERS_USER_ID_PLAYLISTS, json)
+        match dispatch(&OP_USERS_GET_USERS_USER_ID_PLAYLISTS, json).and_then(iface_users__get_users_user_id_playlists__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_users__get_users_user_id_playlists__err(e)),
+        }
     }
-    fn get_users_user_id_tracks(params: iface_users::GetUsersUserIdTracksParams) -> Result<String, String> {
+    fn get_users_user_id_tracks(params: iface_users::GetUsersUserIdTracksParams) -> Result<String, iface_users::GetUsersUserIdTracksError> {
         let json = iface_users__get_users_user_id_tracks_params__to_json(&params);
-        dispatch(&OP_USERS_GET_USERS_USER_ID_TRACKS, json)
+        match dispatch(&OP_USERS_GET_USERS_USER_ID_TRACKS, json).and_then(iface_users__get_users_user_id_tracks__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_users__get_users_user_id_tracks__err(e)),
+        }
     }
-    fn get_users_user_id_web_profiles(params: iface_users::GetUsersUserIdWebProfilesParams) -> Result<String, String> {
+    fn get_users_user_id_web_profiles(params: iface_users::GetUsersUserIdWebProfilesParams) -> Result<iface_users::WebProfiles, iface_users::GetUsersUserIdWebProfilesError> {
         let json = iface_users__get_users_user_id_web_profiles_params__to_json(&params);
-        dispatch(&OP_USERS_GET_USERS_USER_ID_WEB_PROFILES, json)
+        match dispatch(&OP_USERS_GET_USERS_USER_ID_WEB_PROFILES, json).and_then(iface_users__get_users_user_id_web_profiles__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_users__get_users_user_id_web_profiles__err(e)),
+        }
     }
 }
 

@@ -44,10 +44,15 @@ pub(crate) enum FieldLocation {
     Body,
 }
 
-/// A single operation parameter: the snake-case key it carries in the params JSON and where
-/// it belongs in the request.
+/// A single operation parameter. `snake` keys the field in the internal params JSON (and, for a
+/// path field, matches the `{snake}` placeholder in the path template); `wire` is the verbatim name
+/// the field takes on the HTTP wire (query key, header name, or body property). The two differ
+/// whenever the source name isn't already snake_case (e.g. `dryRun` → snake `dry_run`, wire
+/// `dryRun`), and let distinct inputs that share a snake key (`DateCreated`, `DateCreated<`) still
+/// travel under their true names.
 pub(crate) struct FieldSpec {
     pub(crate) snake: &'static str,
+    pub(crate) wire: &'static str,
     pub(crate) location: FieldLocation,
 }
 
@@ -71,6 +76,16 @@ pub(crate) struct AuthApply {
     pub(crate) kind: AuthKind,
 }
 
+/// The failure modes of [`dispatch`], kept structured so each generated operation can map them
+/// onto its own typed error: an `Http` failure carries the response status and body (routed to
+/// the matching error-variant case), while a `Transport` failure carries a message for the
+/// catch-all case (a secret lookup, connection, or decode failure that never produced an HTTP
+/// status).
+pub(crate) enum DispatchError {
+    Http { status: u16, body: String },
+    Transport(String),
+}
+
 /// A single API operation: HTTP method, path template (with `{snake}` placeholders), the
 /// parameter fields, and the security schemes to apply.
 pub(crate) struct OpSpec {
@@ -81,8 +96,9 @@ pub(crate) struct OpSpec {
 }
 
 /// Execute `op` with the supplied `params` (a JSON object keyed by snake-case field names)
-/// and return the response body as a string, or an error message.
-pub(crate) fn dispatch(op: &OpSpec, params: Value) -> Result<String, String> {
+/// and return the raw 2xx response body, or a structured [`DispatchError`] the caller maps
+/// onto the operation's typed error.
+pub(crate) fn dispatch(op: &OpSpec, params: Value) -> Result<String, DispatchError> {
     let obj = match &params {
         Value::Object(map) => Some(map),
         _ => None,
@@ -105,10 +121,10 @@ pub(crate) fn dispatch(op: &OpSpec, params: Value) -> Result<String, String> {
                 let placeholder = format!("{{{}}}", field.snake);
                 path = path.replace(&placeholder, &percent_encode(&scalar(value)));
             }
-            FieldLocation::Query => query.push((field.snake.to_string(), scalar(value))),
-            FieldLocation::Header => headers.push((field.snake.to_string(), scalar(value))),
+            FieldLocation::Query => query.push((field.wire.to_string(), scalar(value))),
+            FieldLocation::Header => headers.push((field.wire.to_string(), scalar(value))),
             FieldLocation::Body => {
-                body.insert(field.snake.to_string(), value.clone());
+                body.insert(field.wire.to_string(), value.clone());
             }
         }
     }
@@ -116,7 +132,7 @@ pub(crate) fn dispatch(op: &OpSpec, params: Value) -> Result<String, String> {
     // Apply each resolved security scheme, sourcing its value from wasmcloud:secrets.
     let mut cookies: Vec<String> = Vec::new();
     for apply in op.auth {
-        let secret = fetch_secret(apply.secret_key)?;
+        let secret = fetch_secret(apply.secret_key).map_err(DispatchError::Transport)?;
         match &apply.kind {
             AuthKind::Bearer => headers.push(("authorization".into(), format!("Bearer {secret}"))),
             AuthKind::Basic => {
@@ -177,17 +193,18 @@ fn fetch_secret(key: &str) -> Result<String, String> {
 }
 
 /// Build and send the outgoing request with `wstd`, returning the response body on a 2xx
-/// status. The generated guest exports are synchronous, so the async `wstd` client is driven
-/// to completion on a local reactor via `wstd::runtime::block_on`.
+/// status and a structured [`DispatchError`] otherwise. The generated guest exports are
+/// synchronous, so the async `wstd` client is driven to completion on a local reactor via
+/// `wstd::runtime::block_on`.
 fn perform(
     method: &str,
     path_with_query: &str,
     headers: &[(String, String)],
     body: &[u8],
-) -> Result<String, String> {
+) -> Result<String, DispatchError> {
     let url = join_url(crate::BASE_URL, path_with_query);
     let method = Method::from_bytes(method.as_bytes())
-        .map_err(|err| format!("invalid HTTP method `{method}`: {err}"))?;
+        .map_err(|err| DispatchError::Transport(format!("invalid HTTP method `{method}`: {err}")))?;
 
     let mut builder = Request::builder().method(method).uri(url);
     for (name, value) in headers {
@@ -199,27 +216,29 @@ fn perform(
         } else {
             Body::from(body.to_vec())
         })
-        .map_err(|err| format!("failed to build request: {err}"))?;
+        .map_err(|err| DispatchError::Transport(format!("failed to build request: {err}")))?;
 
     wstd::runtime::block_on(async move {
         let client = Client::new();
         let response = client
             .send(request)
             .await
-            .map_err(|err| format!("request failed: {err:#}"))?;
+            .map_err(|err| DispatchError::Transport(format!("request failed: {err:#}")))?;
 
         let status = response.status().as_u16();
         let mut response_body = response.into_body();
-        let bytes = response_body
-            .contents()
-            .await
-            .map_err(|err| format!("failed to read response body: {err:#}"))?;
+        let bytes = response_body.contents().await.map_err(|err| {
+            DispatchError::Transport(format!("failed to read response body: {err:#}"))
+        })?;
         let body_text = String::from_utf8_lossy(bytes).into_owned();
 
         if (200..300).contains(&status) {
             Ok(body_text)
         } else {
-            Err(format!("HTTP {status}: {body_text}"))
+            Err(DispatchError::Http {
+                status,
+                body: body_text,
+            })
         }
     })
 }
@@ -288,17 +307,17 @@ const OP_OM_DB_GET_OM_DB_SEARCH: OpSpec = OpSpec {
     method: "GET",
     path_template: "/",
     fields: &[
-        FieldSpec { snake: "t", location: FieldLocation::Query },
-        FieldSpec { snake: "i", location: FieldLocation::Query },
-        FieldSpec { snake: "s", location: FieldLocation::Query },
-        FieldSpec { snake: "y", location: FieldLocation::Query },
-        FieldSpec { snake: "type", location: FieldLocation::Query },
-        FieldSpec { snake: "plot", location: FieldLocation::Query },
-        FieldSpec { snake: "tomatoes", location: FieldLocation::Query },
-        FieldSpec { snake: "r", location: FieldLocation::Query },
-        FieldSpec { snake: "v", location: FieldLocation::Query },
-        FieldSpec { snake: "page", location: FieldLocation::Query },
-        FieldSpec { snake: "callback", location: FieldLocation::Query },
+        FieldSpec { snake: "t", wire: "t", location: FieldLocation::Query },
+        FieldSpec { snake: "i", wire: "i", location: FieldLocation::Query },
+        FieldSpec { snake: "s", wire: "s", location: FieldLocation::Query },
+        FieldSpec { snake: "y", wire: "y", location: FieldLocation::Query },
+        FieldSpec { snake: "type", wire: "type", location: FieldLocation::Query },
+        FieldSpec { snake: "plot", wire: "plot", location: FieldLocation::Query },
+        FieldSpec { snake: "tomatoes", wire: "tomatoes", location: FieldLocation::Query },
+        FieldSpec { snake: "r", wire: "r", location: FieldLocation::Query },
+        FieldSpec { snake: "v", wire: "v", location: FieldLocation::Query },
+        FieldSpec { snake: "page", wire: "page", location: FieldLocation::Query },
+        FieldSpec { snake: "callback", wire: "callback", location: FieldLocation::Query },
     ],
     auth: &[
     ],
@@ -326,6 +345,59 @@ fn iface_om_db__get_om_db_search_r_enum__to_str(e: &iface_om_db::GetOmDbSearchRE
     }
 }
 
+fn iface_om_db__combined_result__to_json(p: &iface_om_db::CombinedResult) -> Value {
+    let mut m = Map::new();
+    m.insert("Actors".into(), match (&p.actors) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("Awards".into(), match (&p.awards) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("BoxOffice".into(), match (&p.box_office) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("Country".into(), match (&p.country) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("DVD".into(), match (&p.dvd) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("Director".into(), match (&p.director) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("Genre".into(), match (&p.genre) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("Language".into(), match (&p.language) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("Metascore".into(), match (&p.metascore) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("Plot".into(), match (&p.plot) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("Poster".into(), match (&p.poster) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("Production".into(), match (&p.production) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("Rated".into(), match (&p.rated) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("Released".into(), match (&p.released) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("Response".into(), Value::String((&p.response).clone()));
+    m.insert("Runtime".into(), match (&p.runtime) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("Search".into(), match (&p.search) { Some(v) => Value::Array((v).iter().map(|v| iface_om_db__combined_result_search_item__to_json(v)).collect()), None => Value::Null });
+    m.insert("Title".into(), match (&p.title) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("Type".into(), match (&p.type_op) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("Website".into(), match (&p.website) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("Writer".into(), match (&p.writer) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("Year".into(), match (&p.year) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("imdbID".into(), match (&p.imdb_id) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("imdbRating".into(), match (&p.imdb_rating) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("imdbVotes".into(), match (&p.imdb_votes) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("tomatoConsensus".into(), match (&p.tomato_consensus) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("tomatoFresh".into(), match (&p.tomato_fresh) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("tomatoImage".into(), match (&p.tomato_image) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("tomatoMeter".into(), match (&p.tomato_meter) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("tomatoRating".into(), match (&p.tomato_rating) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("tomatoReviews".into(), match (&p.tomato_reviews) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("tomatoRotten".into(), match (&p.tomato_rotten) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("tomatoURL".into(), match (&p.tomato_url) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("tomatoUserMeter".into(), match (&p.tomato_user_meter) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("tomatoUserRating".into(), match (&p.tomato_user_rating) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("tomatoUserReviews".into(), match (&p.tomato_user_reviews) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("totalResults".into(), match (&p.total_results) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("totalSeasons".into(), match (&p.total_seasons) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_om_db__combined_result_search_item__to_json(p: &iface_om_db::CombinedResultSearchItem) -> Value {
+    let mut m = Map::new();
+    m.insert("Poster".into(), Value::String((&p.poster).clone()));
+    m.insert("Title".into(), Value::String((&p.title).clone()));
+    m.insert("Type".into(), Value::String((&p.type_op).clone()));
+    m.insert("Year".into(), Value::String((&p.year).clone()));
+    m.insert("imdbID".into(), Value::String((&p.imdb_id).clone()));
+    Value::Object(m)
+}
+
 fn iface_om_db__get_om_db_search_params__to_json(p: &iface_om_db::GetOmDbSearchParams) -> Value {
     let mut m = Map::new();
     m.insert("t".into(), match (&p.t) { Some(v) => Value::String((v).clone()), None => Value::Null });
@@ -342,10 +414,86 @@ fn iface_om_db__get_om_db_search_params__to_json(p: &iface_om_db::GetOmDbSearchP
     Value::Object(m)
 }
 
+fn iface_om_db__combined_result__from_json(v: &Value) -> Option<iface_om_db::CombinedResult> {
+    let m = v.as_object()?;
+    Some(iface_om_db::CombinedResult {
+        actors: m.get("Actors").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        awards: m.get("Awards").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        box_office: m.get("BoxOffice").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        country: m.get("Country").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        dvd: m.get("DVD").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        director: m.get("Director").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        genre: m.get("Genre").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        language: m.get("Language").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        metascore: m.get("Metascore").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        plot: m.get("Plot").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        poster: m.get("Poster").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        production: m.get("Production").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        rated: m.get("Rated").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        released: m.get("Released").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        response: m.get("Response").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        runtime: m.get("Runtime").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        search: m.get("Search").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| iface_om_db__combined_result_search_item__from_json(x)).collect())),
+        title: m.get("Title").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        type_op: m.get("Type").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        website: m.get("Website").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        writer: m.get("Writer").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        year: m.get("Year").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        imdb_id: m.get("imdbID").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        imdb_rating: m.get("imdbRating").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        imdb_votes: m.get("imdbVotes").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        tomato_consensus: m.get("tomatoConsensus").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        tomato_fresh: m.get("tomatoFresh").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        tomato_image: m.get("tomatoImage").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        tomato_meter: m.get("tomatoMeter").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        tomato_rating: m.get("tomatoRating").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        tomato_reviews: m.get("tomatoReviews").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        tomato_rotten: m.get("tomatoRotten").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        tomato_url: m.get("tomatoURL").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        tomato_user_meter: m.get("tomatoUserMeter").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        tomato_user_rating: m.get("tomatoUserRating").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        tomato_user_reviews: m.get("tomatoUserReviews").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        total_results: m.get("totalResults").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        total_seasons: m.get("totalSeasons").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    })
+}
+
+fn iface_om_db__combined_result_search_item__from_json(v: &Value) -> Option<iface_om_db::CombinedResultSearchItem> {
+    let m = v.as_object()?;
+    Some(iface_om_db::CombinedResultSearchItem {
+        poster: m.get("Poster").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        title: m.get("Title").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        type_op: m.get("Type").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        year: m.get("Year").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        imdb_id: m.get("imdbID").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+    })
+}
+
+fn iface_om_db__get_om_db_search__ok(body: String) -> Result<iface_om_db::CombinedResult, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match iface_om_db__combined_result__from_json(&v) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_om_db__get_om_db_search__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
 impl iface_om_db::Guest for crate::Component {
-    fn get_om_db_search(params: iface_om_db::GetOmDbSearchParams) -> Result<String, String> {
+    fn get_om_db_search(params: iface_om_db::GetOmDbSearchParams) -> Result<iface_om_db::CombinedResult, String> {
         let json = iface_om_db__get_om_db_search_params__to_json(&params);
-        dispatch(&OP_OM_DB_GET_OM_DB_SEARCH, json)
+        match dispatch(&OP_OM_DB_GET_OM_DB_SEARCH, json).and_then(iface_om_db__get_om_db_search__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_om_db__get_om_db_search__err(e)),
+        }
     }
 }
 

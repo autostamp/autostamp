@@ -44,10 +44,15 @@ pub(crate) enum FieldLocation {
     Body,
 }
 
-/// A single operation parameter: the snake-case key it carries in the params JSON and where
-/// it belongs in the request.
+/// A single operation parameter. `snake` keys the field in the internal params JSON (and, for a
+/// path field, matches the `{snake}` placeholder in the path template); `wire` is the verbatim name
+/// the field takes on the HTTP wire (query key, header name, or body property). The two differ
+/// whenever the source name isn't already snake_case (e.g. `dryRun` → snake `dry_run`, wire
+/// `dryRun`), and let distinct inputs that share a snake key (`DateCreated`, `DateCreated<`) still
+/// travel under their true names.
 pub(crate) struct FieldSpec {
     pub(crate) snake: &'static str,
+    pub(crate) wire: &'static str,
     pub(crate) location: FieldLocation,
 }
 
@@ -71,6 +76,16 @@ pub(crate) struct AuthApply {
     pub(crate) kind: AuthKind,
 }
 
+/// The failure modes of [`dispatch`], kept structured so each generated operation can map them
+/// onto its own typed error: an `Http` failure carries the response status and body (routed to
+/// the matching error-variant case), while a `Transport` failure carries a message for the
+/// catch-all case (a secret lookup, connection, or decode failure that never produced an HTTP
+/// status).
+pub(crate) enum DispatchError {
+    Http { status: u16, body: String },
+    Transport(String),
+}
+
 /// A single API operation: HTTP method, path template (with `{snake}` placeholders), the
 /// parameter fields, and the security schemes to apply.
 pub(crate) struct OpSpec {
@@ -81,8 +96,9 @@ pub(crate) struct OpSpec {
 }
 
 /// Execute `op` with the supplied `params` (a JSON object keyed by snake-case field names)
-/// and return the response body as a string, or an error message.
-pub(crate) fn dispatch(op: &OpSpec, params: Value) -> Result<String, String> {
+/// and return the raw 2xx response body, or a structured [`DispatchError`] the caller maps
+/// onto the operation's typed error.
+pub(crate) fn dispatch(op: &OpSpec, params: Value) -> Result<String, DispatchError> {
     let obj = match &params {
         Value::Object(map) => Some(map),
         _ => None,
@@ -105,10 +121,10 @@ pub(crate) fn dispatch(op: &OpSpec, params: Value) -> Result<String, String> {
                 let placeholder = format!("{{{}}}", field.snake);
                 path = path.replace(&placeholder, &percent_encode(&scalar(value)));
             }
-            FieldLocation::Query => query.push((field.snake.to_string(), scalar(value))),
-            FieldLocation::Header => headers.push((field.snake.to_string(), scalar(value))),
+            FieldLocation::Query => query.push((field.wire.to_string(), scalar(value))),
+            FieldLocation::Header => headers.push((field.wire.to_string(), scalar(value))),
             FieldLocation::Body => {
-                body.insert(field.snake.to_string(), value.clone());
+                body.insert(field.wire.to_string(), value.clone());
             }
         }
     }
@@ -116,7 +132,7 @@ pub(crate) fn dispatch(op: &OpSpec, params: Value) -> Result<String, String> {
     // Apply each resolved security scheme, sourcing its value from wasmcloud:secrets.
     let mut cookies: Vec<String> = Vec::new();
     for apply in op.auth {
-        let secret = fetch_secret(apply.secret_key)?;
+        let secret = fetch_secret(apply.secret_key).map_err(DispatchError::Transport)?;
         match &apply.kind {
             AuthKind::Bearer => headers.push(("authorization".into(), format!("Bearer {secret}"))),
             AuthKind::Basic => {
@@ -177,17 +193,18 @@ fn fetch_secret(key: &str) -> Result<String, String> {
 }
 
 /// Build and send the outgoing request with `wstd`, returning the response body on a 2xx
-/// status. The generated guest exports are synchronous, so the async `wstd` client is driven
-/// to completion on a local reactor via `wstd::runtime::block_on`.
+/// status and a structured [`DispatchError`] otherwise. The generated guest exports are
+/// synchronous, so the async `wstd` client is driven to completion on a local reactor via
+/// `wstd::runtime::block_on`.
 fn perform(
     method: &str,
     path_with_query: &str,
     headers: &[(String, String)],
     body: &[u8],
-) -> Result<String, String> {
+) -> Result<String, DispatchError> {
     let url = join_url(crate::BASE_URL, path_with_query);
     let method = Method::from_bytes(method.as_bytes())
-        .map_err(|err| format!("invalid HTTP method `{method}`: {err}"))?;
+        .map_err(|err| DispatchError::Transport(format!("invalid HTTP method `{method}`: {err}")))?;
 
     let mut builder = Request::builder().method(method).uri(url);
     for (name, value) in headers {
@@ -199,27 +216,29 @@ fn perform(
         } else {
             Body::from(body.to_vec())
         })
-        .map_err(|err| format!("failed to build request: {err}"))?;
+        .map_err(|err| DispatchError::Transport(format!("failed to build request: {err}")))?;
 
     wstd::runtime::block_on(async move {
         let client = Client::new();
         let response = client
             .send(request)
             .await
-            .map_err(|err| format!("request failed: {err:#}"))?;
+            .map_err(|err| DispatchError::Transport(format!("request failed: {err:#}")))?;
 
         let status = response.status().as_u16();
         let mut response_body = response.into_body();
-        let bytes = response_body
-            .contents()
-            .await
-            .map_err(|err| format!("failed to read response body: {err:#}"))?;
+        let bytes = response_body.contents().await.map_err(|err| {
+            DispatchError::Transport(format!("failed to read response body: {err:#}"))
+        })?;
         let body_text = String::from_utf8_lossy(bytes).into_owned();
 
         if (200..300).contains(&status) {
             Ok(body_text)
         } else {
-            Err(format!("HTTP {status}: {body_text}"))
+            Err(DispatchError::Http {
+                status,
+                body: body_text,
+            })
         }
     })
 }
@@ -293,9 +312,63 @@ const OP_ROOT_GET_ROOT: OpSpec = OpSpec {
     ],
 };
 
+fn iface_root__links__to_json(p: &iface_root::Links) -> Value {
+    let mut m = Map::new();
+    m.insert("next".into(), match (&p.next) { Some(v) => iface_root__link__to_json(v), None => Value::Null });
+    m.insert("self".into(), match (&p.self_) { Some(v) => iface_root__link__to_json(v), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_root__link__to_json(p: &iface_root::Link) -> Value {
+    let mut m = Map::new();
+    m.insert("href".into(), match (&p.href) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("type".into(), match (&p.type_op) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_root__links__from_json(v: &Value) -> Option<iface_root::Links> {
+    let m = v.as_object()?;
+    Some(iface_root::Links {
+        next: m.get("next").filter(|v| !v.is_null()).and_then(|v| iface_root__link__from_json(v)),
+        self_: m.get("self").filter(|v| !v.is_null()).and_then(|v| iface_root__link__from_json(v)),
+    })
+}
+
+fn iface_root__link__from_json(v: &Value) -> Option<iface_root::Link> {
+    let m = v.as_object()?;
+    Some(iface_root::Link {
+        href: m.get("href").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        type_op: m.get("type").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    })
+}
+
+fn iface_root__get_root__ok(body: String) -> Result<iface_root::Links, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match iface_root__links__from_json(&v) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_root__get_root__err(e: crate::runtime::DispatchError) -> iface_root::GetRootError {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => match status {
+            401u16 => iface_root::GetRootError::Unauthorized(body),
+            _ => iface_root::GetRootError::Other(body),
+        },
+        crate::runtime::DispatchError::Transport(m) => iface_root::GetRootError::Other(m),
+    }
+}
+
 impl iface_root::Guest for crate::Component {
-    fn get_root() -> Result<String, String> {
-        dispatch(&OP_ROOT_GET_ROOT, Value::Object(Map::new()))
+    fn get_root() -> Result<iface_root::Links, iface_root::GetRootError> {
+        match dispatch(&OP_ROOT_GET_ROOT, Value::Object(Map::new())).and_then(iface_root__get_root__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_root__get_root__err(e)),
+        }
     }
 }
 use crate::exports::autostamp::launchdarkly::relay_proxy_configurations as iface_relay_proxy_configurations;
@@ -322,7 +395,7 @@ const OP_RELAY_PROXY_CONFIGURATIONS_GET_RELAY_PROXY_CONFIG: OpSpec = OpSpec {
     method: "GET",
     path_template: "/account/relay-auto-configs/{id}",
     fields: &[
-        FieldSpec { snake: "id", location: FieldLocation::Path },
+        FieldSpec { snake: "id", wire: "id", location: FieldLocation::Path },
     ],
     auth: &[
     ],
@@ -332,7 +405,7 @@ const OP_RELAY_PROXY_CONFIGURATIONS_PATCH_RELAY_PROXY_CONFIG: OpSpec = OpSpec {
     method: "PATCH",
     path_template: "/account/relay-auto-configs/{id}",
     fields: &[
-        FieldSpec { snake: "id", location: FieldLocation::Path },
+        FieldSpec { snake: "id", wire: "id", location: FieldLocation::Path },
     ],
     auth: &[
     ],
@@ -342,7 +415,7 @@ const OP_RELAY_PROXY_CONFIGURATIONS_DELETE_RELAY_PROXY_CONFIG: OpSpec = OpSpec {
     method: "DELETE",
     path_template: "/account/relay-auto-configs/{id}",
     fields: &[
-        FieldSpec { snake: "id", location: FieldLocation::Path },
+        FieldSpec { snake: "id", wire: "id", location: FieldLocation::Path },
     ],
     auth: &[
     ],
@@ -352,12 +425,90 @@ const OP_RELAY_PROXY_CONFIGURATIONS_RESET_RELAY_PROXY_CONFIG: OpSpec = OpSpec {
     method: "POST",
     path_template: "/account/relay-auto-configs/{id}/reset",
     fields: &[
-        FieldSpec { snake: "id", location: FieldLocation::Path },
-        FieldSpec { snake: "expiry", location: FieldLocation::Query },
+        FieldSpec { snake: "id", wire: "id", location: FieldLocation::Path },
+        FieldSpec { snake: "expiry", wire: "expiry", location: FieldLocation::Query },
     ],
     auth: &[
     ],
 };
+
+fn iface_relay_proxy_configurations__relay_proxy_configs__to_json(p: &iface_relay_proxy_configurations::RelayProxyConfigs) -> Value {
+    let mut m = Map::new();
+    m.insert("items".into(), match (&p.items) { Some(v) => Value::Array((v).iter().map(|v| iface_relay_proxy_configurations__relay_proxy_config__to_json(v)).collect()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_relay_proxy_configurations__relay_proxy_config__to_json(p: &iface_relay_proxy_configurations::RelayProxyConfig) -> Value {
+    let mut m = Map::new();
+    m.insert("_creator".into(), iface_relay_proxy_configurations__member__to_json(&p.creator));
+    m.insert("_id".into(), iface_relay_proxy_configurations__id__to_json(&p.id));
+    m.insert("creationDate".into(), Value::Number(serde_json::Number::from(*(&p.creation_date))));
+    m.insert("displayKey".into(), Value::String((&p.display_key).clone()));
+    m.insert("fullKey".into(), match (&p.full_key) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("lastModified".into(), Value::Number(serde_json::Number::from(*(&p.last_modified))));
+    m.insert("name".into(), Value::String((&p.name).clone()));
+    m.insert("policy".into(), Value::Array((&p.policy).iter().map(|v| iface_relay_proxy_configurations__policy__to_json(v)).collect()));
+    Value::Object(m)
+}
+
+fn iface_relay_proxy_configurations__member__to_json(p: &iface_relay_proxy_configurations::Member) -> Value {
+    let mut m = Map::new();
+    m.insert("_id".into(), match (&p.id) { Some(v) => iface_relay_proxy_configurations__id__to_json(v), None => Value::Null });
+    m.insert("_lastSeen".into(), match (&p.last_seen) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("_lastSeenMetadata".into(), match (&p.last_seen_metadata) { Some(v) => iface_relay_proxy_configurations__member_last_seen_metadata__to_json(v), None => Value::Null });
+    m.insert("_links".into(), match (&p.links) { Some(v) => iface_relay_proxy_configurations__links__to_json(v), None => Value::Null });
+    m.insert("_pendingInvite".into(), match (&p.pending_invite) { Some(v) => Value::Bool(*(v)), None => Value::Null });
+    m.insert("_verified".into(), match (&p.verified) { Some(v) => Value::Bool(*(v)), None => Value::Null });
+    m.insert("customRoles".into(), match (&p.custom_roles) { Some(v) => Value::Array((v).iter().map(|v| iface_relay_proxy_configurations__id__to_json(v)).collect()), None => Value::Null });
+    m.insert("email".into(), match (&p.email) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("firstName".into(), match (&p.first_name) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("isBeta".into(), match (&p.is_beta) { Some(v) => Value::Bool(*(v)), None => Value::Null });
+    m.insert("lastName".into(), match (&p.last_name) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("role".into(), match (&p.role) { Some(v) => iface_relay_proxy_configurations__role__to_json(v), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_relay_proxy_configurations__id__to_json(p: &iface_relay_proxy_configurations::Id) -> Value {
+    let mut m = Map::new();
+    m.insert("value".into(), Value::String((&p.value).clone()));
+    Value::Object(m)
+}
+
+fn iface_relay_proxy_configurations__member_last_seen_metadata__to_json(p: &iface_relay_proxy_configurations::MemberLastSeenMetadata) -> Value {
+    let mut m = Map::new();
+    m.insert("tokenId".into(), match (&p.token_id) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_relay_proxy_configurations__links__to_json(p: &iface_relay_proxy_configurations::Links) -> Value {
+    let mut m = Map::new();
+    m.insert("next".into(), match (&p.next) { Some(v) => iface_relay_proxy_configurations__link__to_json(v), None => Value::Null });
+    m.insert("self".into(), match (&p.self_) { Some(v) => iface_relay_proxy_configurations__link__to_json(v), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_relay_proxy_configurations__link__to_json(p: &iface_relay_proxy_configurations::Link) -> Value {
+    let mut m = Map::new();
+    m.insert("href".into(), match (&p.href) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("type".into(), match (&p.type_op) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_relay_proxy_configurations__role__to_json(p: &iface_relay_proxy_configurations::Role) -> Value {
+    let mut m = Map::new();
+    m.insert("value".into(), Value::String((&p.value).clone()));
+    Value::Object(m)
+}
+
+fn iface_relay_proxy_configurations__policy__to_json(p: &iface_relay_proxy_configurations::Policy) -> Value {
+    let mut m = Map::new();
+    m.insert("actions".into(), match (&p.actions) { Some(v) => Value::Array((v).iter().map(|v| Value::String((v).clone())).collect()), None => Value::Null });
+    m.insert("effect".into(), match (&p.effect) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("notActions".into(), match (&p.not_actions) { Some(v) => Value::Array((v).iter().map(|v| Value::String((v).clone())).collect()), None => Value::Null });
+    m.insert("notResources".into(), match (&p.not_resources) { Some(v) => Value::Array((v).iter().map(|v| Value::String((v).clone())).collect()), None => Value::Null });
+    m.insert("resources".into(), match (&p.resources) { Some(v) => Value::Array((v).iter().map(|v| Value::String((v).clone())).collect()), None => Value::Null });
+    Value::Object(m)
+}
 
 fn iface_relay_proxy_configurations__get_relay_proxy_config_params__to_json(p: &iface_relay_proxy_configurations::GetRelayProxyConfigParams) -> Value {
     let mut m = Map::new();
@@ -384,28 +535,254 @@ fn iface_relay_proxy_configurations__reset_relay_proxy_config_params__to_json(p:
     Value::Object(m)
 }
 
+fn iface_relay_proxy_configurations__relay_proxy_configs__from_json(v: &Value) -> Option<iface_relay_proxy_configurations::RelayProxyConfigs> {
+    let m = v.as_object()?;
+    Some(iface_relay_proxy_configurations::RelayProxyConfigs {
+        items: m.get("items").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| iface_relay_proxy_configurations__relay_proxy_config__from_json(x)).collect())),
+    })
+}
+
+fn iface_relay_proxy_configurations__relay_proxy_config__from_json(v: &Value) -> Option<iface_relay_proxy_configurations::RelayProxyConfig> {
+    let m = v.as_object()?;
+    Some(iface_relay_proxy_configurations::RelayProxyConfig {
+        creator: match m.get("_creator").and_then(|v| iface_relay_proxy_configurations__member__from_json(v)) { Some(x) => x, None => return None },
+        id: match m.get("_id").and_then(|v| iface_relay_proxy_configurations__id__from_json(v)) { Some(x) => x, None => return None },
+        creation_date: m.get("creationDate").and_then(|v| (v).as_i64()).unwrap_or_default(),
+        display_key: m.get("displayKey").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        full_key: m.get("fullKey").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        last_modified: m.get("lastModified").and_then(|v| (v).as_i64()).unwrap_or_default(),
+        name: m.get("name").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        policy: m.get("policy").and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| iface_relay_proxy_configurations__policy__from_json(x)).collect())).unwrap_or_default(),
+    })
+}
+
+fn iface_relay_proxy_configurations__member__from_json(v: &Value) -> Option<iface_relay_proxy_configurations::Member> {
+    let m = v.as_object()?;
+    Some(iface_relay_proxy_configurations::Member {
+        id: m.get("_id").filter(|v| !v.is_null()).and_then(|v| iface_relay_proxy_configurations__id__from_json(v)),
+        last_seen: m.get("_lastSeen").filter(|v| !v.is_null()).and_then(|v| (v).as_i64()),
+        last_seen_metadata: m.get("_lastSeenMetadata").filter(|v| !v.is_null()).and_then(|v| iface_relay_proxy_configurations__member_last_seen_metadata__from_json(v)),
+        links: m.get("_links").filter(|v| !v.is_null()).and_then(|v| iface_relay_proxy_configurations__links__from_json(v)),
+        pending_invite: m.get("_pendingInvite").filter(|v| !v.is_null()).and_then(|v| (v).as_bool()),
+        verified: m.get("_verified").filter(|v| !v.is_null()).and_then(|v| (v).as_bool()),
+        custom_roles: m.get("customRoles").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| iface_relay_proxy_configurations__id__from_json(x)).collect())),
+        email: m.get("email").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        first_name: m.get("firstName").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        is_beta: m.get("isBeta").filter(|v| !v.is_null()).and_then(|v| (v).as_bool()),
+        last_name: m.get("lastName").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        role: m.get("role").filter(|v| !v.is_null()).and_then(|v| iface_relay_proxy_configurations__role__from_json(v)),
+    })
+}
+
+fn iface_relay_proxy_configurations__id__from_json(v: &Value) -> Option<iface_relay_proxy_configurations::Id> {
+    let m = v.as_object()?;
+    Some(iface_relay_proxy_configurations::Id {
+        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+    })
+}
+
+fn iface_relay_proxy_configurations__member_last_seen_metadata__from_json(v: &Value) -> Option<iface_relay_proxy_configurations::MemberLastSeenMetadata> {
+    let m = v.as_object()?;
+    Some(iface_relay_proxy_configurations::MemberLastSeenMetadata {
+        token_id: m.get("tokenId").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    })
+}
+
+fn iface_relay_proxy_configurations__links__from_json(v: &Value) -> Option<iface_relay_proxy_configurations::Links> {
+    let m = v.as_object()?;
+    Some(iface_relay_proxy_configurations::Links {
+        next: m.get("next").filter(|v| !v.is_null()).and_then(|v| iface_relay_proxy_configurations__link__from_json(v)),
+        self_: m.get("self").filter(|v| !v.is_null()).and_then(|v| iface_relay_proxy_configurations__link__from_json(v)),
+    })
+}
+
+fn iface_relay_proxy_configurations__link__from_json(v: &Value) -> Option<iface_relay_proxy_configurations::Link> {
+    let m = v.as_object()?;
+    Some(iface_relay_proxy_configurations::Link {
+        href: m.get("href").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        type_op: m.get("type").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    })
+}
+
+fn iface_relay_proxy_configurations__role__from_json(v: &Value) -> Option<iface_relay_proxy_configurations::Role> {
+    let m = v.as_object()?;
+    Some(iface_relay_proxy_configurations::Role {
+        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+    })
+}
+
+fn iface_relay_proxy_configurations__policy__from_json(v: &Value) -> Option<iface_relay_proxy_configurations::Policy> {
+    let m = v.as_object()?;
+    Some(iface_relay_proxy_configurations::Policy {
+        actions: m.get("actions").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| (x).as_str().map(|s| s.to_string())).collect())),
+        effect: m.get("effect").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        not_actions: m.get("notActions").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| (x).as_str().map(|s| s.to_string())).collect())),
+        not_resources: m.get("notResources").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| (x).as_str().map(|s| s.to_string())).collect())),
+        resources: m.get("resources").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| (x).as_str().map(|s| s.to_string())).collect())),
+    })
+}
+
+fn iface_relay_proxy_configurations__get_relay_proxy_configs__ok(body: String) -> Result<iface_relay_proxy_configurations::RelayProxyConfigs, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match iface_relay_proxy_configurations__relay_proxy_configs__from_json(&v) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_relay_proxy_configurations__get_relay_proxy_configs__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
+fn iface_relay_proxy_configurations__post_relay_auto_config__ok(body: String) -> Result<iface_relay_proxy_configurations::RelayProxyConfig, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match iface_relay_proxy_configurations__relay_proxy_config__from_json(&v) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_relay_proxy_configurations__post_relay_auto_config__err(e: crate::runtime::DispatchError) -> iface_relay_proxy_configurations::PostRelayAutoConfigError {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => match status {
+            400u16 => iface_relay_proxy_configurations::PostRelayAutoConfigError::BadRequest(body),
+            403u16 => iface_relay_proxy_configurations::PostRelayAutoConfigError::Forbidden(body),
+            _ => iface_relay_proxy_configurations::PostRelayAutoConfigError::Other(body),
+        },
+        crate::runtime::DispatchError::Transport(m) => iface_relay_proxy_configurations::PostRelayAutoConfigError::Other(m),
+    }
+}
+
+fn iface_relay_proxy_configurations__get_relay_proxy_config__ok(body: String) -> Result<iface_relay_proxy_configurations::RelayProxyConfig, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match iface_relay_proxy_configurations__relay_proxy_config__from_json(&v) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_relay_proxy_configurations__get_relay_proxy_config__err(e: crate::runtime::DispatchError) -> iface_relay_proxy_configurations::GetRelayProxyConfigError {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => match status {
+            404u16 => iface_relay_proxy_configurations::GetRelayProxyConfigError::NotFound(body),
+            _ => iface_relay_proxy_configurations::GetRelayProxyConfigError::Other(body),
+        },
+        crate::runtime::DispatchError::Transport(m) => iface_relay_proxy_configurations::GetRelayProxyConfigError::Other(m),
+    }
+}
+
+fn iface_relay_proxy_configurations__patch_relay_proxy_config__ok(body: String) -> Result<iface_relay_proxy_configurations::RelayProxyConfig, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match iface_relay_proxy_configurations__relay_proxy_config__from_json(&v) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_relay_proxy_configurations__patch_relay_proxy_config__err(e: crate::runtime::DispatchError) -> iface_relay_proxy_configurations::PatchRelayProxyConfigError {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => match status {
+            400u16 => iface_relay_proxy_configurations::PatchRelayProxyConfigError::BadRequest(body),
+            404u16 => iface_relay_proxy_configurations::PatchRelayProxyConfigError::NotFound(body),
+            409u16 => iface_relay_proxy_configurations::PatchRelayProxyConfigError::Conflict(body),
+            _ => iface_relay_proxy_configurations::PatchRelayProxyConfigError::Other(body),
+        },
+        crate::runtime::DispatchError::Transport(m) => iface_relay_proxy_configurations::PatchRelayProxyConfigError::Other(m),
+    }
+}
+
+fn iface_relay_proxy_configurations__delete_relay_proxy_config__ok(body: String) -> Result<String, crate::runtime::DispatchError> {
+    Ok(body)
+}
+
+fn iface_relay_proxy_configurations__delete_relay_proxy_config__err(e: crate::runtime::DispatchError) -> iface_relay_proxy_configurations::DeleteRelayProxyConfigError {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => match status {
+            400u16 => iface_relay_proxy_configurations::DeleteRelayProxyConfigError::BadRequest(body),
+            404u16 => iface_relay_proxy_configurations::DeleteRelayProxyConfigError::NotFound(body),
+            _ => iface_relay_proxy_configurations::DeleteRelayProxyConfigError::Other(body),
+        },
+        crate::runtime::DispatchError::Transport(m) => iface_relay_proxy_configurations::DeleteRelayProxyConfigError::Other(m),
+    }
+}
+
+fn iface_relay_proxy_configurations__reset_relay_proxy_config__ok(body: String) -> Result<iface_relay_proxy_configurations::RelayProxyConfig, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match iface_relay_proxy_configurations__relay_proxy_config__from_json(&v) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_relay_proxy_configurations__reset_relay_proxy_config__err(e: crate::runtime::DispatchError) -> iface_relay_proxy_configurations::ResetRelayProxyConfigError {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => match status {
+            400u16 => iface_relay_proxy_configurations::ResetRelayProxyConfigError::BadRequest(body),
+            404u16 => iface_relay_proxy_configurations::ResetRelayProxyConfigError::NotFound(body),
+            _ => iface_relay_proxy_configurations::ResetRelayProxyConfigError::Other(body),
+        },
+        crate::runtime::DispatchError::Transport(m) => iface_relay_proxy_configurations::ResetRelayProxyConfigError::Other(m),
+    }
+}
+
 impl iface_relay_proxy_configurations::Guest for crate::Component {
-    fn get_relay_proxy_configs() -> Result<String, String> {
-        dispatch(&OP_RELAY_PROXY_CONFIGURATIONS_GET_RELAY_PROXY_CONFIGS, Value::Object(Map::new()))
+    fn get_relay_proxy_configs() -> Result<iface_relay_proxy_configurations::RelayProxyConfigs, String> {
+        match dispatch(&OP_RELAY_PROXY_CONFIGURATIONS_GET_RELAY_PROXY_CONFIGS, Value::Object(Map::new())).and_then(iface_relay_proxy_configurations__get_relay_proxy_configs__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_relay_proxy_configurations__get_relay_proxy_configs__err(e)),
+        }
     }
-    fn post_relay_auto_config() -> Result<String, String> {
-        dispatch(&OP_RELAY_PROXY_CONFIGURATIONS_POST_RELAY_AUTO_CONFIG, Value::Object(Map::new()))
+    fn post_relay_auto_config() -> Result<iface_relay_proxy_configurations::RelayProxyConfig, iface_relay_proxy_configurations::PostRelayAutoConfigError> {
+        match dispatch(&OP_RELAY_PROXY_CONFIGURATIONS_POST_RELAY_AUTO_CONFIG, Value::Object(Map::new())).and_then(iface_relay_proxy_configurations__post_relay_auto_config__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_relay_proxy_configurations__post_relay_auto_config__err(e)),
+        }
     }
-    fn get_relay_proxy_config(params: iface_relay_proxy_configurations::GetRelayProxyConfigParams) -> Result<String, String> {
+    fn get_relay_proxy_config(params: iface_relay_proxy_configurations::GetRelayProxyConfigParams) -> Result<iface_relay_proxy_configurations::RelayProxyConfig, iface_relay_proxy_configurations::GetRelayProxyConfigError> {
         let json = iface_relay_proxy_configurations__get_relay_proxy_config_params__to_json(&params);
-        dispatch(&OP_RELAY_PROXY_CONFIGURATIONS_GET_RELAY_PROXY_CONFIG, json)
+        match dispatch(&OP_RELAY_PROXY_CONFIGURATIONS_GET_RELAY_PROXY_CONFIG, json).and_then(iface_relay_proxy_configurations__get_relay_proxy_config__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_relay_proxy_configurations__get_relay_proxy_config__err(e)),
+        }
     }
-    fn patch_relay_proxy_config(params: iface_relay_proxy_configurations::PatchRelayProxyConfigParams) -> Result<String, String> {
+    fn patch_relay_proxy_config(params: iface_relay_proxy_configurations::PatchRelayProxyConfigParams) -> Result<iface_relay_proxy_configurations::RelayProxyConfig, iface_relay_proxy_configurations::PatchRelayProxyConfigError> {
         let json = iface_relay_proxy_configurations__patch_relay_proxy_config_params__to_json(&params);
-        dispatch(&OP_RELAY_PROXY_CONFIGURATIONS_PATCH_RELAY_PROXY_CONFIG, json)
+        match dispatch(&OP_RELAY_PROXY_CONFIGURATIONS_PATCH_RELAY_PROXY_CONFIG, json).and_then(iface_relay_proxy_configurations__patch_relay_proxy_config__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_relay_proxy_configurations__patch_relay_proxy_config__err(e)),
+        }
     }
-    fn delete_relay_proxy_config(params: iface_relay_proxy_configurations::DeleteRelayProxyConfigParams) -> Result<String, String> {
+    fn delete_relay_proxy_config(params: iface_relay_proxy_configurations::DeleteRelayProxyConfigParams) -> Result<String, iface_relay_proxy_configurations::DeleteRelayProxyConfigError> {
         let json = iface_relay_proxy_configurations__delete_relay_proxy_config_params__to_json(&params);
-        dispatch(&OP_RELAY_PROXY_CONFIGURATIONS_DELETE_RELAY_PROXY_CONFIG, json)
+        match dispatch(&OP_RELAY_PROXY_CONFIGURATIONS_DELETE_RELAY_PROXY_CONFIG, json).and_then(iface_relay_proxy_configurations__delete_relay_proxy_config__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_relay_proxy_configurations__delete_relay_proxy_config__err(e)),
+        }
     }
-    fn reset_relay_proxy_config(params: iface_relay_proxy_configurations::ResetRelayProxyConfigParams) -> Result<String, String> {
+    fn reset_relay_proxy_config(params: iface_relay_proxy_configurations::ResetRelayProxyConfigParams) -> Result<iface_relay_proxy_configurations::RelayProxyConfig, iface_relay_proxy_configurations::ResetRelayProxyConfigError> {
         let json = iface_relay_proxy_configurations__reset_relay_proxy_config_params__to_json(&params);
-        dispatch(&OP_RELAY_PROXY_CONFIGURATIONS_RESET_RELAY_PROXY_CONFIG, json)
+        match dispatch(&OP_RELAY_PROXY_CONFIGURATIONS_RESET_RELAY_PROXY_CONFIG, json).and_then(iface_relay_proxy_configurations__reset_relay_proxy_config__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_relay_proxy_configurations__reset_relay_proxy_config__err(e)),
+        }
     }
 }
 use crate::exports::autostamp::launchdarkly::audit_log as iface_audit_log;
@@ -414,11 +791,11 @@ const OP_AUDIT_LOG_GET_AUDIT_LOG_ENTRIES: OpSpec = OpSpec {
     method: "GET",
     path_template: "/auditlog",
     fields: &[
-        FieldSpec { snake: "before", location: FieldLocation::Query },
-        FieldSpec { snake: "after", location: FieldLocation::Query },
-        FieldSpec { snake: "q", location: FieldLocation::Query },
-        FieldSpec { snake: "limit", location: FieldLocation::Query },
-        FieldSpec { snake: "spec", location: FieldLocation::Query },
+        FieldSpec { snake: "before", wire: "before", location: FieldLocation::Query },
+        FieldSpec { snake: "after", wire: "after", location: FieldLocation::Query },
+        FieldSpec { snake: "q", wire: "q", location: FieldLocation::Query },
+        FieldSpec { snake: "limit", wire: "limit", location: FieldLocation::Query },
+        FieldSpec { snake: "spec", wire: "spec", location: FieldLocation::Query },
     ],
     auth: &[
     ],
@@ -428,11 +805,92 @@ const OP_AUDIT_LOG_GET_AUDIT_LOG_ENTRY: OpSpec = OpSpec {
     method: "GET",
     path_template: "/auditlog/{resource_id}",
     fields: &[
-        FieldSpec { snake: "resource_id", location: FieldLocation::Path },
+        FieldSpec { snake: "resource_id", wire: "resourceId", location: FieldLocation::Path },
     ],
     auth: &[
     ],
 };
+
+fn iface_audit_log__entries__to_json(p: &iface_audit_log::Entries) -> Value {
+    let mut m = Map::new();
+    m.insert("_links".into(), match (&p.links) { Some(v) => iface_audit_log__links__to_json(v), None => Value::Null });
+    m.insert("items".into(), match (&p.items) { Some(v) => Value::Array((v).iter().map(|v| iface_audit_log__entry__to_json(v)).collect()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_audit_log__links__to_json(p: &iface_audit_log::Links) -> Value {
+    let mut m = Map::new();
+    m.insert("next".into(), match (&p.next) { Some(v) => iface_audit_log__link__to_json(v), None => Value::Null });
+    m.insert("self".into(), match (&p.self_) { Some(v) => iface_audit_log__link__to_json(v), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_audit_log__link__to_json(p: &iface_audit_log::Link) -> Value {
+    let mut m = Map::new();
+    m.insert("href".into(), match (&p.href) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("type".into(), match (&p.type_op) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_audit_log__entry__to_json(p: &iface_audit_log::Entry) -> Value {
+    let mut m = Map::new();
+    m.insert("_id".into(), match (&p.id) { Some(v) => iface_audit_log__id__to_json(v), None => Value::Null });
+    m.insert("_links".into(), match (&p.links) { Some(v) => iface_audit_log__links__to_json(v), None => Value::Null });
+    m.insert("comment".into(), match (&p.comment) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("date".into(), match (&p.date) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("description".into(), match (&p.description) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("kind".into(), match (&p.kind) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("member".into(), match (&p.member) { Some(v) => iface_audit_log__member__to_json(v), None => Value::Null });
+    m.insert("name".into(), match (&p.name) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("shortDescription".into(), match (&p.short_description) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("target".into(), match (&p.target) { Some(v) => iface_audit_log__entry_target__to_json(v), None => Value::Null });
+    m.insert("title".into(), match (&p.title) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("titleVerb".into(), match (&p.title_verb) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_audit_log__id__to_json(p: &iface_audit_log::Id) -> Value {
+    let mut m = Map::new();
+    m.insert("value".into(), Value::String((&p.value).clone()));
+    Value::Object(m)
+}
+
+fn iface_audit_log__member__to_json(p: &iface_audit_log::Member) -> Value {
+    let mut m = Map::new();
+    m.insert("_id".into(), match (&p.id) { Some(v) => iface_audit_log__id__to_json(v), None => Value::Null });
+    m.insert("_lastSeen".into(), match (&p.last_seen) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("_lastSeenMetadata".into(), match (&p.last_seen_metadata) { Some(v) => iface_audit_log__member_last_seen_metadata__to_json(v), None => Value::Null });
+    m.insert("_links".into(), match (&p.links) { Some(v) => iface_audit_log__links__to_json(v), None => Value::Null });
+    m.insert("_pendingInvite".into(), match (&p.pending_invite) { Some(v) => Value::Bool(*(v)), None => Value::Null });
+    m.insert("_verified".into(), match (&p.verified) { Some(v) => Value::Bool(*(v)), None => Value::Null });
+    m.insert("customRoles".into(), match (&p.custom_roles) { Some(v) => Value::Array((v).iter().map(|v| iface_audit_log__id__to_json(v)).collect()), None => Value::Null });
+    m.insert("email".into(), match (&p.email) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("firstName".into(), match (&p.first_name) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("isBeta".into(), match (&p.is_beta) { Some(v) => Value::Bool(*(v)), None => Value::Null });
+    m.insert("lastName".into(), match (&p.last_name) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("role".into(), match (&p.role) { Some(v) => iface_audit_log__role__to_json(v), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_audit_log__member_last_seen_metadata__to_json(p: &iface_audit_log::MemberLastSeenMetadata) -> Value {
+    let mut m = Map::new();
+    m.insert("tokenId".into(), match (&p.token_id) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_audit_log__role__to_json(p: &iface_audit_log::Role) -> Value {
+    let mut m = Map::new();
+    m.insert("value".into(), Value::String((&p.value).clone()));
+    Value::Object(m)
+}
+
+fn iface_audit_log__entry_target__to_json(p: &iface_audit_log::EntryTarget) -> Value {
+    let mut m = Map::new();
+    m.insert("_links".into(), match (&p.links) { Some(v) => iface_audit_log__links__to_json(v), None => Value::Null });
+    m.insert("name".into(), match (&p.name) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("resources".into(), match (&p.resources) { Some(v) => Value::Array((v).iter().map(|v| Value::String((v).clone())).collect()), None => Value::Null });
+    Value::Object(m)
+}
 
 fn iface_audit_log__get_audit_log_entries_params__to_json(p: &iface_audit_log::GetAuditLogEntriesParams) -> Value {
     let mut m = Map::new();
@@ -450,14 +908,154 @@ fn iface_audit_log__get_audit_log_entry_params__to_json(p: &iface_audit_log::Get
     Value::Object(m)
 }
 
-impl iface_audit_log::Guest for crate::Component {
-    fn get_audit_log_entries(params: iface_audit_log::GetAuditLogEntriesParams) -> Result<String, String> {
-        let json = iface_audit_log__get_audit_log_entries_params__to_json(&params);
-        dispatch(&OP_AUDIT_LOG_GET_AUDIT_LOG_ENTRIES, json)
+fn iface_audit_log__entries__from_json(v: &Value) -> Option<iface_audit_log::Entries> {
+    let m = v.as_object()?;
+    Some(iface_audit_log::Entries {
+        links: m.get("_links").filter(|v| !v.is_null()).and_then(|v| iface_audit_log__links__from_json(v)),
+        items: m.get("items").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| iface_audit_log__entry__from_json(x)).collect())),
+    })
+}
+
+fn iface_audit_log__links__from_json(v: &Value) -> Option<iface_audit_log::Links> {
+    let m = v.as_object()?;
+    Some(iface_audit_log::Links {
+        next: m.get("next").filter(|v| !v.is_null()).and_then(|v| iface_audit_log__link__from_json(v)),
+        self_: m.get("self").filter(|v| !v.is_null()).and_then(|v| iface_audit_log__link__from_json(v)),
+    })
+}
+
+fn iface_audit_log__link__from_json(v: &Value) -> Option<iface_audit_log::Link> {
+    let m = v.as_object()?;
+    Some(iface_audit_log::Link {
+        href: m.get("href").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        type_op: m.get("type").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    })
+}
+
+fn iface_audit_log__entry__from_json(v: &Value) -> Option<iface_audit_log::Entry> {
+    let m = v.as_object()?;
+    Some(iface_audit_log::Entry {
+        id: m.get("_id").filter(|v| !v.is_null()).and_then(|v| iface_audit_log__id__from_json(v)),
+        links: m.get("_links").filter(|v| !v.is_null()).and_then(|v| iface_audit_log__links__from_json(v)),
+        comment: m.get("comment").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        date: m.get("date").filter(|v| !v.is_null()).and_then(|v| (v).as_i64()),
+        description: m.get("description").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        kind: m.get("kind").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        member: m.get("member").filter(|v| !v.is_null()).and_then(|v| iface_audit_log__member__from_json(v)),
+        name: m.get("name").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        short_description: m.get("shortDescription").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        target: m.get("target").filter(|v| !v.is_null()).and_then(|v| iface_audit_log__entry_target__from_json(v)),
+        title: m.get("title").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        title_verb: m.get("titleVerb").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    })
+}
+
+fn iface_audit_log__id__from_json(v: &Value) -> Option<iface_audit_log::Id> {
+    let m = v.as_object()?;
+    Some(iface_audit_log::Id {
+        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+    })
+}
+
+fn iface_audit_log__member__from_json(v: &Value) -> Option<iface_audit_log::Member> {
+    let m = v.as_object()?;
+    Some(iface_audit_log::Member {
+        id: m.get("_id").filter(|v| !v.is_null()).and_then(|v| iface_audit_log__id__from_json(v)),
+        last_seen: m.get("_lastSeen").filter(|v| !v.is_null()).and_then(|v| (v).as_i64()),
+        last_seen_metadata: m.get("_lastSeenMetadata").filter(|v| !v.is_null()).and_then(|v| iface_audit_log__member_last_seen_metadata__from_json(v)),
+        links: m.get("_links").filter(|v| !v.is_null()).and_then(|v| iface_audit_log__links__from_json(v)),
+        pending_invite: m.get("_pendingInvite").filter(|v| !v.is_null()).and_then(|v| (v).as_bool()),
+        verified: m.get("_verified").filter(|v| !v.is_null()).and_then(|v| (v).as_bool()),
+        custom_roles: m.get("customRoles").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| iface_audit_log__id__from_json(x)).collect())),
+        email: m.get("email").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        first_name: m.get("firstName").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        is_beta: m.get("isBeta").filter(|v| !v.is_null()).and_then(|v| (v).as_bool()),
+        last_name: m.get("lastName").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        role: m.get("role").filter(|v| !v.is_null()).and_then(|v| iface_audit_log__role__from_json(v)),
+    })
+}
+
+fn iface_audit_log__member_last_seen_metadata__from_json(v: &Value) -> Option<iface_audit_log::MemberLastSeenMetadata> {
+    let m = v.as_object()?;
+    Some(iface_audit_log::MemberLastSeenMetadata {
+        token_id: m.get("tokenId").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    })
+}
+
+fn iface_audit_log__role__from_json(v: &Value) -> Option<iface_audit_log::Role> {
+    let m = v.as_object()?;
+    Some(iface_audit_log::Role {
+        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+    })
+}
+
+fn iface_audit_log__entry_target__from_json(v: &Value) -> Option<iface_audit_log::EntryTarget> {
+    let m = v.as_object()?;
+    Some(iface_audit_log::EntryTarget {
+        links: m.get("_links").filter(|v| !v.is_null()).and_then(|v| iface_audit_log__links__from_json(v)),
+        name: m.get("name").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        resources: m.get("resources").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| (x).as_str().map(|s| s.to_string())).collect())),
+    })
+}
+
+fn iface_audit_log__get_audit_log_entries__ok(body: String) -> Result<iface_audit_log::Entries, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match iface_audit_log__entries__from_json(&v) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
     }
-    fn get_audit_log_entry(params: iface_audit_log::GetAuditLogEntryParams) -> Result<String, String> {
+}
+
+fn iface_audit_log__get_audit_log_entries__err(e: crate::runtime::DispatchError) -> iface_audit_log::GetAuditLogEntriesError {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => match status {
+            400u16 => iface_audit_log::GetAuditLogEntriesError::BadRequest(body),
+            401u16 => iface_audit_log::GetAuditLogEntriesError::Unauthorized(body),
+            _ => iface_audit_log::GetAuditLogEntriesError::Other(body),
+        },
+        crate::runtime::DispatchError::Transport(m) => iface_audit_log::GetAuditLogEntriesError::Other(m),
+    }
+}
+
+fn iface_audit_log__get_audit_log_entry__ok(body: String) -> Result<iface_audit_log::Entry, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match iface_audit_log__entry__from_json(&v) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_audit_log__get_audit_log_entry__err(e: crate::runtime::DispatchError) -> iface_audit_log::GetAuditLogEntryError {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => match status {
+            401u16 => iface_audit_log::GetAuditLogEntryError::Unauthorized(body),
+            404u16 => iface_audit_log::GetAuditLogEntryError::NotFound(body),
+            _ => iface_audit_log::GetAuditLogEntryError::Other(body),
+        },
+        crate::runtime::DispatchError::Transport(m) => iface_audit_log::GetAuditLogEntryError::Other(m),
+    }
+}
+
+impl iface_audit_log::Guest for crate::Component {
+    fn get_audit_log_entries(params: iface_audit_log::GetAuditLogEntriesParams) -> Result<iface_audit_log::Entries, iface_audit_log::GetAuditLogEntriesError> {
+        let json = iface_audit_log__get_audit_log_entries_params__to_json(&params);
+        match dispatch(&OP_AUDIT_LOG_GET_AUDIT_LOG_ENTRIES, json).and_then(iface_audit_log__get_audit_log_entries__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_audit_log__get_audit_log_entries__err(e)),
+        }
+    }
+    fn get_audit_log_entry(params: iface_audit_log::GetAuditLogEntryParams) -> Result<iface_audit_log::Entry, iface_audit_log::GetAuditLogEntryError> {
         let json = iface_audit_log__get_audit_log_entry_params__to_json(&params);
-        dispatch(&OP_AUDIT_LOG_GET_AUDIT_LOG_ENTRY, json)
+        match dispatch(&OP_AUDIT_LOG_GET_AUDIT_LOG_ENTRY, json).and_then(iface_audit_log__get_audit_log_entry__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_audit_log__get_audit_log_entry__err(e)),
+        }
     }
 }
 use crate::exports::autostamp::launchdarkly::data_export_destinations as iface_data_export_destinations;
@@ -475,8 +1073,8 @@ const OP_DATA_EXPORT_DESTINATIONS_POST_DESTINATION: OpSpec = OpSpec {
     method: "POST",
     path_template: "/destinations/{project_key}/{environment_key}",
     fields: &[
-        FieldSpec { snake: "project_key", location: FieldLocation::Path },
-        FieldSpec { snake: "environment_key", location: FieldLocation::Path },
+        FieldSpec { snake: "project_key", wire: "projectKey", location: FieldLocation::Path },
+        FieldSpec { snake: "environment_key", wire: "environmentKey", location: FieldLocation::Path },
     ],
     auth: &[
     ],
@@ -486,9 +1084,9 @@ const OP_DATA_EXPORT_DESTINATIONS_GET_DESTINATION: OpSpec = OpSpec {
     method: "GET",
     path_template: "/destinations/{project_key}/{environment_key}/{destination_id}",
     fields: &[
-        FieldSpec { snake: "project_key", location: FieldLocation::Path },
-        FieldSpec { snake: "environment_key", location: FieldLocation::Path },
-        FieldSpec { snake: "destination_id", location: FieldLocation::Path },
+        FieldSpec { snake: "project_key", wire: "projectKey", location: FieldLocation::Path },
+        FieldSpec { snake: "environment_key", wire: "environmentKey", location: FieldLocation::Path },
+        FieldSpec { snake: "destination_id", wire: "destinationId", location: FieldLocation::Path },
     ],
     auth: &[
     ],
@@ -498,9 +1096,9 @@ const OP_DATA_EXPORT_DESTINATIONS_PATCH_DESTINATION: OpSpec = OpSpec {
     method: "PATCH",
     path_template: "/destinations/{project_key}/{environment_key}/{destination_id}",
     fields: &[
-        FieldSpec { snake: "project_key", location: FieldLocation::Path },
-        FieldSpec { snake: "environment_key", location: FieldLocation::Path },
-        FieldSpec { snake: "destination_id", location: FieldLocation::Path },
+        FieldSpec { snake: "project_key", wire: "projectKey", location: FieldLocation::Path },
+        FieldSpec { snake: "environment_key", wire: "environmentKey", location: FieldLocation::Path },
+        FieldSpec { snake: "destination_id", wire: "destinationId", location: FieldLocation::Path },
     ],
     auth: &[
     ],
@@ -510,13 +1108,61 @@ const OP_DATA_EXPORT_DESTINATIONS_DELETE_DESTINATION: OpSpec = OpSpec {
     method: "DELETE",
     path_template: "/destinations/{project_key}/{environment_key}/{destination_id}",
     fields: &[
-        FieldSpec { snake: "project_key", location: FieldLocation::Path },
-        FieldSpec { snake: "environment_key", location: FieldLocation::Path },
-        FieldSpec { snake: "destination_id", location: FieldLocation::Path },
+        FieldSpec { snake: "project_key", wire: "projectKey", location: FieldLocation::Path },
+        FieldSpec { snake: "environment_key", wire: "environmentKey", location: FieldLocation::Path },
+        FieldSpec { snake: "destination_id", wire: "destinationId", location: FieldLocation::Path },
     ],
     auth: &[
     ],
 };
+
+fn iface_data_export_destinations__destination_kind_enum__to_str(e: &iface_data_export_destinations::DestinationKindEnum) -> &'static str {
+    match e {
+        iface_data_export_destinations::DestinationKindEnum::GooglePubsub => "google-pubsub",
+        iface_data_export_destinations::DestinationKindEnum::Kinesis => "kinesis",
+        iface_data_export_destinations::DestinationKindEnum::Mparticle => "mparticle",
+        iface_data_export_destinations::DestinationKindEnum::Segment => "segment",
+    }
+}
+
+fn iface_data_export_destinations__destinations__to_json(p: &iface_data_export_destinations::Destinations) -> Value {
+    let mut m = Map::new();
+    m.insert("_links".into(), match (&p.links) { Some(v) => iface_data_export_destinations__links__to_json(v), None => Value::Null });
+    m.insert("items".into(), match (&p.items) { Some(v) => Value::Array((v).iter().map(|v| iface_data_export_destinations__destination__to_json(v)).collect()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_data_export_destinations__links__to_json(p: &iface_data_export_destinations::Links) -> Value {
+    let mut m = Map::new();
+    m.insert("next".into(), match (&p.next) { Some(v) => iface_data_export_destinations__link__to_json(v), None => Value::Null });
+    m.insert("self".into(), match (&p.self_) { Some(v) => iface_data_export_destinations__link__to_json(v), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_data_export_destinations__link__to_json(p: &iface_data_export_destinations::Link) -> Value {
+    let mut m = Map::new();
+    m.insert("href".into(), match (&p.href) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("type".into(), match (&p.type_op) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_data_export_destinations__destination__to_json(p: &iface_data_export_destinations::Destination) -> Value {
+    let mut m = Map::new();
+    m.insert("_id".into(), match (&p.id) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("_links".into(), match (&p.links) { Some(v) => iface_data_export_destinations__links__to_json(v), None => Value::Null });
+    m.insert("config".into(), match (&p.config) { Some(v) => iface_data_export_destinations__destination_config__to_json(v), None => Value::Null });
+    m.insert("kind".into(), match (&p.kind) { Some(v) => Value::String(iface_data_export_destinations__destination_kind_enum__to_str(v).into()), None => Value::Null });
+    m.insert("name".into(), match (&p.name) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("on".into(), match (&p.on) { Some(v) => Value::Bool(*(v)), None => Value::Null });
+    m.insert("version".into(), match (&p.version) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_data_export_destinations__destination_config__to_json(p: &iface_data_export_destinations::DestinationConfig) -> Value {
+    let mut m = Map::new();
+    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
 
 fn iface_data_export_destinations__post_destination_params__to_json(p: &iface_data_export_destinations::PostDestinationParams) -> Value {
     let mut m = Map::new();
@@ -549,25 +1195,199 @@ fn iface_data_export_destinations__delete_destination_params__to_json(p: &iface_
     Value::Object(m)
 }
 
+fn iface_data_export_destinations__destinations__from_json(v: &Value) -> Option<iface_data_export_destinations::Destinations> {
+    let m = v.as_object()?;
+    Some(iface_data_export_destinations::Destinations {
+        links: m.get("_links").filter(|v| !v.is_null()).and_then(|v| iface_data_export_destinations__links__from_json(v)),
+        items: m.get("items").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| iface_data_export_destinations__destination__from_json(x)).collect())),
+    })
+}
+
+fn iface_data_export_destinations__links__from_json(v: &Value) -> Option<iface_data_export_destinations::Links> {
+    let m = v.as_object()?;
+    Some(iface_data_export_destinations::Links {
+        next: m.get("next").filter(|v| !v.is_null()).and_then(|v| iface_data_export_destinations__link__from_json(v)),
+        self_: m.get("self").filter(|v| !v.is_null()).and_then(|v| iface_data_export_destinations__link__from_json(v)),
+    })
+}
+
+fn iface_data_export_destinations__link__from_json(v: &Value) -> Option<iface_data_export_destinations::Link> {
+    let m = v.as_object()?;
+    Some(iface_data_export_destinations::Link {
+        href: m.get("href").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        type_op: m.get("type").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    })
+}
+
+fn iface_data_export_destinations__destination__from_json(v: &Value) -> Option<iface_data_export_destinations::Destination> {
+    let m = v.as_object()?;
+    Some(iface_data_export_destinations::Destination {
+        id: m.get("_id").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        links: m.get("_links").filter(|v| !v.is_null()).and_then(|v| iface_data_export_destinations__links__from_json(v)),
+        config: m.get("config").filter(|v| !v.is_null()).and_then(|v| iface_data_export_destinations__destination_config__from_json(v)),
+        kind: m.get("kind").filter(|v| !v.is_null()).and_then(|v| (v).as_str().and_then(iface_data_export_destinations__destination_kind_enum__from_str)),
+        name: m.get("name").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        on: m.get("on").filter(|v| !v.is_null()).and_then(|v| (v).as_bool()),
+        version: m.get("version").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+    })
+}
+
+fn iface_data_export_destinations__destination_config__from_json(v: &Value) -> Option<iface_data_export_destinations::DestinationConfig> {
+    let m = v.as_object()?;
+    Some(iface_data_export_destinations::DestinationConfig {
+        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    })
+}
+
+fn iface_data_export_destinations__destination_kind_enum__from_str(s: &str) -> Option<iface_data_export_destinations::DestinationKindEnum> {
+    match s {
+        "google-pubsub" => Some(iface_data_export_destinations::DestinationKindEnum::GooglePubsub),
+        "kinesis" => Some(iface_data_export_destinations::DestinationKindEnum::Kinesis),
+        "mparticle" => Some(iface_data_export_destinations::DestinationKindEnum::Mparticle),
+        "segment" => Some(iface_data_export_destinations::DestinationKindEnum::Segment),
+        _ => None,
+    }
+}
+
+fn iface_data_export_destinations__get_destinations__ok(body: String) -> Result<iface_data_export_destinations::Destinations, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match iface_data_export_destinations__destinations__from_json(&v) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_data_export_destinations__get_destinations__err(e: crate::runtime::DispatchError) -> iface_data_export_destinations::GetDestinationsError {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => match status {
+            401u16 => iface_data_export_destinations::GetDestinationsError::Unauthorized(body),
+            _ => iface_data_export_destinations::GetDestinationsError::Other(body),
+        },
+        crate::runtime::DispatchError::Transport(m) => iface_data_export_destinations::GetDestinationsError::Other(m),
+    }
+}
+
+fn iface_data_export_destinations__post_destination__ok(body: String) -> Result<iface_data_export_destinations::Destination, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match iface_data_export_destinations__destination__from_json(&v) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_data_export_destinations__post_destination__err(e: crate::runtime::DispatchError) -> iface_data_export_destinations::PostDestinationError {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => match status {
+            400u16 => iface_data_export_destinations::PostDestinationError::BadRequest(body),
+            401u16 => iface_data_export_destinations::PostDestinationError::Unauthorized(body),
+            409u16 => iface_data_export_destinations::PostDestinationError::Conflict(body),
+            _ => iface_data_export_destinations::PostDestinationError::Other(body),
+        },
+        crate::runtime::DispatchError::Transport(m) => iface_data_export_destinations::PostDestinationError::Other(m),
+    }
+}
+
+fn iface_data_export_destinations__get_destination__ok(body: String) -> Result<iface_data_export_destinations::Destination, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match iface_data_export_destinations__destination__from_json(&v) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_data_export_destinations__get_destination__err(e: crate::runtime::DispatchError) -> iface_data_export_destinations::GetDestinationError {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => match status {
+            401u16 => iface_data_export_destinations::GetDestinationError::Unauthorized(body),
+            404u16 => iface_data_export_destinations::GetDestinationError::NotFound(body),
+            _ => iface_data_export_destinations::GetDestinationError::Other(body),
+        },
+        crate::runtime::DispatchError::Transport(m) => iface_data_export_destinations::GetDestinationError::Other(m),
+    }
+}
+
+fn iface_data_export_destinations__patch_destination__ok(body: String) -> Result<iface_data_export_destinations::Destination, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match iface_data_export_destinations__destination__from_json(&v) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_data_export_destinations__patch_destination__err(e: crate::runtime::DispatchError) -> iface_data_export_destinations::PatchDestinationError {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => match status {
+            400u16 => iface_data_export_destinations::PatchDestinationError::BadRequest(body),
+            401u16 => iface_data_export_destinations::PatchDestinationError::Unauthorized(body),
+            404u16 => iface_data_export_destinations::PatchDestinationError::NotFound(body),
+            409u16 => iface_data_export_destinations::PatchDestinationError::Conflict(body),
+            _ => iface_data_export_destinations::PatchDestinationError::Other(body),
+        },
+        crate::runtime::DispatchError::Transport(m) => iface_data_export_destinations::PatchDestinationError::Other(m),
+    }
+}
+
+fn iface_data_export_destinations__delete_destination__ok(body: String) -> Result<String, crate::runtime::DispatchError> {
+    Ok(body)
+}
+
+fn iface_data_export_destinations__delete_destination__err(e: crate::runtime::DispatchError) -> iface_data_export_destinations::DeleteDestinationError {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => match status {
+            401u16 => iface_data_export_destinations::DeleteDestinationError::Unauthorized(body),
+            404u16 => iface_data_export_destinations::DeleteDestinationError::NotFound(body),
+            _ => iface_data_export_destinations::DeleteDestinationError::Other(body),
+        },
+        crate::runtime::DispatchError::Transport(m) => iface_data_export_destinations::DeleteDestinationError::Other(m),
+    }
+}
+
 impl iface_data_export_destinations::Guest for crate::Component {
-    fn get_destinations() -> Result<String, String> {
-        dispatch(&OP_DATA_EXPORT_DESTINATIONS_GET_DESTINATIONS, Value::Object(Map::new()))
+    fn get_destinations() -> Result<iface_data_export_destinations::Destinations, iface_data_export_destinations::GetDestinationsError> {
+        match dispatch(&OP_DATA_EXPORT_DESTINATIONS_GET_DESTINATIONS, Value::Object(Map::new())).and_then(iface_data_export_destinations__get_destinations__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_data_export_destinations__get_destinations__err(e)),
+        }
     }
-    fn post_destination(params: iface_data_export_destinations::PostDestinationParams) -> Result<String, String> {
+    fn post_destination(params: iface_data_export_destinations::PostDestinationParams) -> Result<iface_data_export_destinations::Destination, iface_data_export_destinations::PostDestinationError> {
         let json = iface_data_export_destinations__post_destination_params__to_json(&params);
-        dispatch(&OP_DATA_EXPORT_DESTINATIONS_POST_DESTINATION, json)
+        match dispatch(&OP_DATA_EXPORT_DESTINATIONS_POST_DESTINATION, json).and_then(iface_data_export_destinations__post_destination__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_data_export_destinations__post_destination__err(e)),
+        }
     }
-    fn get_destination(params: iface_data_export_destinations::GetDestinationParams) -> Result<String, String> {
+    fn get_destination(params: iface_data_export_destinations::GetDestinationParams) -> Result<iface_data_export_destinations::Destination, iface_data_export_destinations::GetDestinationError> {
         let json = iface_data_export_destinations__get_destination_params__to_json(&params);
-        dispatch(&OP_DATA_EXPORT_DESTINATIONS_GET_DESTINATION, json)
+        match dispatch(&OP_DATA_EXPORT_DESTINATIONS_GET_DESTINATION, json).and_then(iface_data_export_destinations__get_destination__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_data_export_destinations__get_destination__err(e)),
+        }
     }
-    fn patch_destination(params: iface_data_export_destinations::PatchDestinationParams) -> Result<String, String> {
+    fn patch_destination(params: iface_data_export_destinations::PatchDestinationParams) -> Result<iface_data_export_destinations::Destination, iface_data_export_destinations::PatchDestinationError> {
         let json = iface_data_export_destinations__patch_destination_params__to_json(&params);
-        dispatch(&OP_DATA_EXPORT_DESTINATIONS_PATCH_DESTINATION, json)
+        match dispatch(&OP_DATA_EXPORT_DESTINATIONS_PATCH_DESTINATION, json).and_then(iface_data_export_destinations__patch_destination__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_data_export_destinations__patch_destination__err(e)),
+        }
     }
-    fn delete_destination(params: iface_data_export_destinations::DeleteDestinationParams) -> Result<String, String> {
+    fn delete_destination(params: iface_data_export_destinations::DeleteDestinationParams) -> Result<String, iface_data_export_destinations::DeleteDestinationError> {
         let json = iface_data_export_destinations__delete_destination_params__to_json(&params);
-        dispatch(&OP_DATA_EXPORT_DESTINATIONS_DELETE_DESTINATION, json)
+        match dispatch(&OP_DATA_EXPORT_DESTINATIONS_DELETE_DESTINATION, json).and_then(iface_data_export_destinations__delete_destination__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_data_export_destinations__delete_destination__err(e)),
+        }
     }
 }
 use crate::exports::autostamp::launchdarkly::feature_flags as iface_feature_flags;
@@ -576,8 +1396,8 @@ const OP_FEATURE_FLAGS_GET_FEATURE_FLAG_STATUS_ACROSS_ENVIRONMENTS: OpSpec = OpS
     method: "GET",
     path_template: "/flag-status/{project_key}/{feature_flag_key}",
     fields: &[
-        FieldSpec { snake: "project_key", location: FieldLocation::Path },
-        FieldSpec { snake: "feature_flag_key", location: FieldLocation::Path },
+        FieldSpec { snake: "project_key", wire: "projectKey", location: FieldLocation::Path },
+        FieldSpec { snake: "feature_flag_key", wire: "featureFlagKey", location: FieldLocation::Path },
     ],
     auth: &[
     ],
@@ -587,8 +1407,8 @@ const OP_FEATURE_FLAGS_GET_FEATURE_FLAG_STATUSES: OpSpec = OpSpec {
     method: "GET",
     path_template: "/flag-statuses/{project_key}/{environment_key}",
     fields: &[
-        FieldSpec { snake: "project_key", location: FieldLocation::Path },
-        FieldSpec { snake: "environment_key", location: FieldLocation::Path },
+        FieldSpec { snake: "project_key", wire: "projectKey", location: FieldLocation::Path },
+        FieldSpec { snake: "environment_key", wire: "environmentKey", location: FieldLocation::Path },
     ],
     auth: &[
     ],
@@ -598,9 +1418,9 @@ const OP_FEATURE_FLAGS_GET_FEATURE_FLAG_STATUS: OpSpec = OpSpec {
     method: "GET",
     path_template: "/flag-statuses/{project_key}/{environment_key}/{feature_flag_key}",
     fields: &[
-        FieldSpec { snake: "project_key", location: FieldLocation::Path },
-        FieldSpec { snake: "environment_key", location: FieldLocation::Path },
-        FieldSpec { snake: "feature_flag_key", location: FieldLocation::Path },
+        FieldSpec { snake: "project_key", wire: "projectKey", location: FieldLocation::Path },
+        FieldSpec { snake: "environment_key", wire: "environmentKey", location: FieldLocation::Path },
+        FieldSpec { snake: "feature_flag_key", wire: "featureFlagKey", location: FieldLocation::Path },
     ],
     auth: &[
     ],
@@ -610,15 +1430,15 @@ const OP_FEATURE_FLAGS_GET_FEATURE_FLAGS: OpSpec = OpSpec {
     method: "GET",
     path_template: "/flags/{project_key}",
     fields: &[
-        FieldSpec { snake: "project_key", location: FieldLocation::Path },
-        FieldSpec { snake: "env", location: FieldLocation::Query },
-        FieldSpec { snake: "summary", location: FieldLocation::Query },
-        FieldSpec { snake: "archived", location: FieldLocation::Query },
-        FieldSpec { snake: "limit", location: FieldLocation::Query },
-        FieldSpec { snake: "offset", location: FieldLocation::Query },
-        FieldSpec { snake: "filter", location: FieldLocation::Query },
-        FieldSpec { snake: "sort", location: FieldLocation::Query },
-        FieldSpec { snake: "tag", location: FieldLocation::Query },
+        FieldSpec { snake: "project_key", wire: "projectKey", location: FieldLocation::Path },
+        FieldSpec { snake: "env", wire: "env", location: FieldLocation::Query },
+        FieldSpec { snake: "summary", wire: "summary", location: FieldLocation::Query },
+        FieldSpec { snake: "archived", wire: "archived", location: FieldLocation::Query },
+        FieldSpec { snake: "limit", wire: "limit", location: FieldLocation::Query },
+        FieldSpec { snake: "offset", wire: "offset", location: FieldLocation::Query },
+        FieldSpec { snake: "filter", wire: "filter", location: FieldLocation::Query },
+        FieldSpec { snake: "sort", wire: "sort", location: FieldLocation::Query },
+        FieldSpec { snake: "tag", wire: "tag", location: FieldLocation::Query },
     ],
     auth: &[
     ],
@@ -628,8 +1448,8 @@ const OP_FEATURE_FLAGS_POST_FEATURE_FLAG: OpSpec = OpSpec {
     method: "POST",
     path_template: "/flags/{project_key}",
     fields: &[
-        FieldSpec { snake: "project_key", location: FieldLocation::Path },
-        FieldSpec { snake: "clone", location: FieldLocation::Query },
+        FieldSpec { snake: "project_key", wire: "projectKey", location: FieldLocation::Path },
+        FieldSpec { snake: "clone", wire: "clone", location: FieldLocation::Query },
     ],
     auth: &[
     ],
@@ -639,9 +1459,9 @@ const OP_FEATURE_FLAGS_GET_FLAGS_PROJECT_KEY_ENVIRONMENT_KEY_FEATURE_FLAG_KEY_DE
     method: "GET",
     path_template: "/flags/{project_key}/{environment_key}/{feature_flag_key}/dependent-flags",
     fields: &[
-        FieldSpec { snake: "project_key", location: FieldLocation::Path },
-        FieldSpec { snake: "environment_key", location: FieldLocation::Path },
-        FieldSpec { snake: "feature_flag_key", location: FieldLocation::Path },
+        FieldSpec { snake: "project_key", wire: "projectKey", location: FieldLocation::Path },
+        FieldSpec { snake: "environment_key", wire: "environmentKey", location: FieldLocation::Path },
+        FieldSpec { snake: "feature_flag_key", wire: "featureFlagKey", location: FieldLocation::Path },
     ],
     auth: &[
     ],
@@ -651,9 +1471,9 @@ const OP_FEATURE_FLAGS_GET_FEATURE_FLAG: OpSpec = OpSpec {
     method: "GET",
     path_template: "/flags/{project_key}/{feature_flag_key}",
     fields: &[
-        FieldSpec { snake: "project_key", location: FieldLocation::Path },
-        FieldSpec { snake: "feature_flag_key", location: FieldLocation::Path },
-        FieldSpec { snake: "env", location: FieldLocation::Query },
+        FieldSpec { snake: "project_key", wire: "projectKey", location: FieldLocation::Path },
+        FieldSpec { snake: "feature_flag_key", wire: "featureFlagKey", location: FieldLocation::Path },
+        FieldSpec { snake: "env", wire: "env", location: FieldLocation::Query },
     ],
     auth: &[
     ],
@@ -663,8 +1483,8 @@ const OP_FEATURE_FLAGS_PATCH_FEATURE_FLAG: OpSpec = OpSpec {
     method: "PATCH",
     path_template: "/flags/{project_key}/{feature_flag_key}",
     fields: &[
-        FieldSpec { snake: "project_key", location: FieldLocation::Path },
-        FieldSpec { snake: "feature_flag_key", location: FieldLocation::Path },
+        FieldSpec { snake: "project_key", wire: "projectKey", location: FieldLocation::Path },
+        FieldSpec { snake: "feature_flag_key", wire: "featureFlagKey", location: FieldLocation::Path },
     ],
     auth: &[
     ],
@@ -674,8 +1494,8 @@ const OP_FEATURE_FLAGS_DELETE_FEATURE_FLAG: OpSpec = OpSpec {
     method: "DELETE",
     path_template: "/flags/{project_key}/{feature_flag_key}",
     fields: &[
-        FieldSpec { snake: "project_key", location: FieldLocation::Path },
-        FieldSpec { snake: "feature_flag_key", location: FieldLocation::Path },
+        FieldSpec { snake: "project_key", wire: "projectKey", location: FieldLocation::Path },
+        FieldSpec { snake: "feature_flag_key", wire: "featureFlagKey", location: FieldLocation::Path },
     ],
     auth: &[
     ],
@@ -685,8 +1505,8 @@ const OP_FEATURE_FLAGS_COPY_FEATURE_FLAG: OpSpec = OpSpec {
     method: "POST",
     path_template: "/flags/{project_key}/{feature_flag_key}/copy",
     fields: &[
-        FieldSpec { snake: "project_key", location: FieldLocation::Path },
-        FieldSpec { snake: "feature_flag_key", location: FieldLocation::Path },
+        FieldSpec { snake: "project_key", wire: "projectKey", location: FieldLocation::Path },
+        FieldSpec { snake: "feature_flag_key", wire: "featureFlagKey", location: FieldLocation::Path },
     ],
     auth: &[
     ],
@@ -696,8 +1516,8 @@ const OP_FEATURE_FLAGS_GET_FLAGS_PROJECT_KEY_FEATURE_FLAG_KEY_DEPENDENT_FLAGS: O
     method: "GET",
     path_template: "/flags/{project_key}/{feature_flag_key}/dependent-flags",
     fields: &[
-        FieldSpec { snake: "project_key", location: FieldLocation::Path },
-        FieldSpec { snake: "feature_flag_key", location: FieldLocation::Path },
+        FieldSpec { snake: "project_key", wire: "projectKey", location: FieldLocation::Path },
+        FieldSpec { snake: "feature_flag_key", wire: "featureFlagKey", location: FieldLocation::Path },
     ],
     auth: &[
     ],
@@ -707,9 +1527,9 @@ const OP_FEATURE_FLAGS_GET_EXPIRING_USER_TARGETS: OpSpec = OpSpec {
     method: "GET",
     path_template: "/flags/{project_key}/{feature_flag_key}/expiring-user-targets/{environment_key}",
     fields: &[
-        FieldSpec { snake: "project_key", location: FieldLocation::Path },
-        FieldSpec { snake: "environment_key", location: FieldLocation::Path },
-        FieldSpec { snake: "feature_flag_key", location: FieldLocation::Path },
+        FieldSpec { snake: "project_key", wire: "projectKey", location: FieldLocation::Path },
+        FieldSpec { snake: "environment_key", wire: "environmentKey", location: FieldLocation::Path },
+        FieldSpec { snake: "feature_flag_key", wire: "featureFlagKey", location: FieldLocation::Path },
     ],
     auth: &[
     ],
@@ -719,9 +1539,9 @@ const OP_FEATURE_FLAGS_PATCH_EXPIRING_USER_TARGETS: OpSpec = OpSpec {
     method: "PATCH",
     path_template: "/flags/{project_key}/{feature_flag_key}/expiring-user-targets/{environment_key}",
     fields: &[
-        FieldSpec { snake: "project_key", location: FieldLocation::Path },
-        FieldSpec { snake: "environment_key", location: FieldLocation::Path },
-        FieldSpec { snake: "feature_flag_key", location: FieldLocation::Path },
+        FieldSpec { snake: "project_key", wire: "projectKey", location: FieldLocation::Path },
+        FieldSpec { snake: "environment_key", wire: "environmentKey", location: FieldLocation::Path },
+        FieldSpec { snake: "feature_flag_key", wire: "featureFlagKey", location: FieldLocation::Path },
     ],
     auth: &[
     ],
@@ -731,9 +1551,9 @@ const OP_FEATURE_FLAGS_GET_APPROVAL_REQUESTS: OpSpec = OpSpec {
     method: "GET",
     path_template: "/projects/{project_key}/flags/{feature_flag_key}/environments/{environment_key}/approval-requests",
     fields: &[
-        FieldSpec { snake: "project_key", location: FieldLocation::Path },
-        FieldSpec { snake: "feature_flag_key", location: FieldLocation::Path },
-        FieldSpec { snake: "environment_key", location: FieldLocation::Path },
+        FieldSpec { snake: "project_key", wire: "projectKey", location: FieldLocation::Path },
+        FieldSpec { snake: "feature_flag_key", wire: "featureFlagKey", location: FieldLocation::Path },
+        FieldSpec { snake: "environment_key", wire: "environmentKey", location: FieldLocation::Path },
     ],
     auth: &[
     ],
@@ -743,10 +1563,10 @@ const OP_FEATURE_FLAGS_GET_APPROVAL_REQUEST: OpSpec = OpSpec {
     method: "GET",
     path_template: "/projects/{project_key}/flags/{feature_flag_key}/environments/{environment_key}/approval-requests/{approval_request_id}",
     fields: &[
-        FieldSpec { snake: "project_key", location: FieldLocation::Path },
-        FieldSpec { snake: "feature_flag_key", location: FieldLocation::Path },
-        FieldSpec { snake: "environment_key", location: FieldLocation::Path },
-        FieldSpec { snake: "approval_request_id", location: FieldLocation::Path },
+        FieldSpec { snake: "project_key", wire: "projectKey", location: FieldLocation::Path },
+        FieldSpec { snake: "feature_flag_key", wire: "featureFlagKey", location: FieldLocation::Path },
+        FieldSpec { snake: "environment_key", wire: "environmentKey", location: FieldLocation::Path },
+        FieldSpec { snake: "approval_request_id", wire: "approvalRequestId", location: FieldLocation::Path },
     ],
     auth: &[
     ],
@@ -756,10 +1576,10 @@ const OP_FEATURE_FLAGS_POST_APPROVAL_REQUEST: OpSpec = OpSpec {
     method: "POST",
     path_template: "/projects/{project_key}/flags/{feature_flag_key}/environments/{environment_key}/approval-requests/{approval_request_id}",
     fields: &[
-        FieldSpec { snake: "project_key", location: FieldLocation::Path },
-        FieldSpec { snake: "feature_flag_key", location: FieldLocation::Path },
-        FieldSpec { snake: "environment_key", location: FieldLocation::Path },
-        FieldSpec { snake: "approval_request_id", location: FieldLocation::Path },
+        FieldSpec { snake: "project_key", wire: "projectKey", location: FieldLocation::Path },
+        FieldSpec { snake: "feature_flag_key", wire: "featureFlagKey", location: FieldLocation::Path },
+        FieldSpec { snake: "environment_key", wire: "environmentKey", location: FieldLocation::Path },
+        FieldSpec { snake: "approval_request_id", wire: "approvalRequestId", location: FieldLocation::Path },
     ],
     auth: &[
     ],
@@ -769,10 +1589,10 @@ const OP_FEATURE_FLAGS_DELETE_APPROVAL_REQUEST: OpSpec = OpSpec {
     method: "DELETE",
     path_template: "/projects/{project_key}/flags/{feature_flag_key}/environments/{environment_key}/approval-requests/{approval_request_id}",
     fields: &[
-        FieldSpec { snake: "project_key", location: FieldLocation::Path },
-        FieldSpec { snake: "environment_key", location: FieldLocation::Path },
-        FieldSpec { snake: "feature_flag_key", location: FieldLocation::Path },
-        FieldSpec { snake: "approval_request_id", location: FieldLocation::Path },
+        FieldSpec { snake: "project_key", wire: "projectKey", location: FieldLocation::Path },
+        FieldSpec { snake: "environment_key", wire: "environmentKey", location: FieldLocation::Path },
+        FieldSpec { snake: "feature_flag_key", wire: "featureFlagKey", location: FieldLocation::Path },
+        FieldSpec { snake: "approval_request_id", wire: "approvalRequestId", location: FieldLocation::Path },
     ],
     auth: &[
     ],
@@ -782,10 +1602,10 @@ const OP_FEATURE_FLAGS_POST_APPLY_APPROVAL_REQUEST: OpSpec = OpSpec {
     method: "POST",
     path_template: "/projects/{project_key}/flags/{feature_flag_key}/environments/{environment_key}/approval-requests/{approval_request_id}/apply",
     fields: &[
-        FieldSpec { snake: "project_key", location: FieldLocation::Path },
-        FieldSpec { snake: "feature_flag_key", location: FieldLocation::Path },
-        FieldSpec { snake: "environment_key", location: FieldLocation::Path },
-        FieldSpec { snake: "approval_request_id", location: FieldLocation::Path },
+        FieldSpec { snake: "project_key", wire: "projectKey", location: FieldLocation::Path },
+        FieldSpec { snake: "feature_flag_key", wire: "featureFlagKey", location: FieldLocation::Path },
+        FieldSpec { snake: "environment_key", wire: "environmentKey", location: FieldLocation::Path },
+        FieldSpec { snake: "approval_request_id", wire: "approvalRequestId", location: FieldLocation::Path },
     ],
     auth: &[
     ],
@@ -795,10 +1615,10 @@ const OP_FEATURE_FLAGS_POST_REVIEW_APPROVAL_REQUEST: OpSpec = OpSpec {
     method: "POST",
     path_template: "/projects/{project_key}/flags/{feature_flag_key}/environments/{environment_key}/approval-requests/{approval_request_id}/review",
     fields: &[
-        FieldSpec { snake: "project_key", location: FieldLocation::Path },
-        FieldSpec { snake: "feature_flag_key", location: FieldLocation::Path },
-        FieldSpec { snake: "environment_key", location: FieldLocation::Path },
-        FieldSpec { snake: "approval_request_id", location: FieldLocation::Path },
+        FieldSpec { snake: "project_key", wire: "projectKey", location: FieldLocation::Path },
+        FieldSpec { snake: "feature_flag_key", wire: "featureFlagKey", location: FieldLocation::Path },
+        FieldSpec { snake: "environment_key", wire: "environmentKey", location: FieldLocation::Path },
+        FieldSpec { snake: "approval_request_id", wire: "approvalRequestId", location: FieldLocation::Path },
     ],
     auth: &[
     ],
@@ -808,9 +1628,9 @@ const OP_FEATURE_FLAGS_GET_FLAG_CONFIG_SCHEDULED_CHANGES: OpSpec = OpSpec {
     method: "GET",
     path_template: "/projects/{project_key}/flags/{feature_flag_key}/environments/{environment_key}/scheduled-changes",
     fields: &[
-        FieldSpec { snake: "project_key", location: FieldLocation::Path },
-        FieldSpec { snake: "feature_flag_key", location: FieldLocation::Path },
-        FieldSpec { snake: "environment_key", location: FieldLocation::Path },
+        FieldSpec { snake: "project_key", wire: "projectKey", location: FieldLocation::Path },
+        FieldSpec { snake: "feature_flag_key", wire: "featureFlagKey", location: FieldLocation::Path },
+        FieldSpec { snake: "environment_key", wire: "environmentKey", location: FieldLocation::Path },
     ],
     auth: &[
     ],
@@ -820,9 +1640,9 @@ const OP_FEATURE_FLAGS_POST_FLAG_CONFIG_SCHEDULED_CHANGES: OpSpec = OpSpec {
     method: "POST",
     path_template: "/projects/{project_key}/flags/{feature_flag_key}/environments/{environment_key}/scheduled-changes",
     fields: &[
-        FieldSpec { snake: "project_key", location: FieldLocation::Path },
-        FieldSpec { snake: "feature_flag_key", location: FieldLocation::Path },
-        FieldSpec { snake: "environment_key", location: FieldLocation::Path },
+        FieldSpec { snake: "project_key", wire: "projectKey", location: FieldLocation::Path },
+        FieldSpec { snake: "feature_flag_key", wire: "featureFlagKey", location: FieldLocation::Path },
+        FieldSpec { snake: "environment_key", wire: "environmentKey", location: FieldLocation::Path },
     ],
     auth: &[
     ],
@@ -832,9 +1652,9 @@ const OP_FEATURE_FLAGS_GET_FLAG_CONFIG_SCHEDULED_CHANGES_CONFLICTS: OpSpec = OpS
     method: "POST",
     path_template: "/projects/{project_key}/flags/{feature_flag_key}/environments/{environment_key}/scheduled-changes-conflicts",
     fields: &[
-        FieldSpec { snake: "project_key", location: FieldLocation::Path },
-        FieldSpec { snake: "feature_flag_key", location: FieldLocation::Path },
-        FieldSpec { snake: "environment_key", location: FieldLocation::Path },
+        FieldSpec { snake: "project_key", wire: "projectKey", location: FieldLocation::Path },
+        FieldSpec { snake: "feature_flag_key", wire: "featureFlagKey", location: FieldLocation::Path },
+        FieldSpec { snake: "environment_key", wire: "environmentKey", location: FieldLocation::Path },
     ],
     auth: &[
     ],
@@ -844,10 +1664,10 @@ const OP_FEATURE_FLAGS_GET_FLAG_CONFIG_SCHEDULED_CHANGE: OpSpec = OpSpec {
     method: "GET",
     path_template: "/projects/{project_key}/flags/{feature_flag_key}/environments/{environment_key}/scheduled-changes/{scheduled_change_id}",
     fields: &[
-        FieldSpec { snake: "project_key", location: FieldLocation::Path },
-        FieldSpec { snake: "feature_flag_key", location: FieldLocation::Path },
-        FieldSpec { snake: "environment_key", location: FieldLocation::Path },
-        FieldSpec { snake: "scheduled_change_id", location: FieldLocation::Path },
+        FieldSpec { snake: "project_key", wire: "projectKey", location: FieldLocation::Path },
+        FieldSpec { snake: "feature_flag_key", wire: "featureFlagKey", location: FieldLocation::Path },
+        FieldSpec { snake: "environment_key", wire: "environmentKey", location: FieldLocation::Path },
+        FieldSpec { snake: "scheduled_change_id", wire: "scheduledChangeId", location: FieldLocation::Path },
     ],
     auth: &[
     ],
@@ -857,10 +1677,10 @@ const OP_FEATURE_FLAGS_PATCH_FLAG_CONFIG_SCHEDULED_CHANGE: OpSpec = OpSpec {
     method: "PATCH",
     path_template: "/projects/{project_key}/flags/{feature_flag_key}/environments/{environment_key}/scheduled-changes/{scheduled_change_id}",
     fields: &[
-        FieldSpec { snake: "project_key", location: FieldLocation::Path },
-        FieldSpec { snake: "feature_flag_key", location: FieldLocation::Path },
-        FieldSpec { snake: "environment_key", location: FieldLocation::Path },
-        FieldSpec { snake: "scheduled_change_id", location: FieldLocation::Path },
+        FieldSpec { snake: "project_key", wire: "projectKey", location: FieldLocation::Path },
+        FieldSpec { snake: "feature_flag_key", wire: "featureFlagKey", location: FieldLocation::Path },
+        FieldSpec { snake: "environment_key", wire: "environmentKey", location: FieldLocation::Path },
+        FieldSpec { snake: "scheduled_change_id", wire: "scheduledChangeId", location: FieldLocation::Path },
     ],
     auth: &[
     ],
@@ -870,14 +1690,380 @@ const OP_FEATURE_FLAGS_DELETE_FLAG_CONFIG_SCHEDULED_CHANGES: OpSpec = OpSpec {
     method: "DELETE",
     path_template: "/projects/{project_key}/flags/{feature_flag_key}/environments/{environment_key}/scheduled-changes/{scheduled_change_id}",
     fields: &[
-        FieldSpec { snake: "project_key", location: FieldLocation::Path },
-        FieldSpec { snake: "feature_flag_key", location: FieldLocation::Path },
-        FieldSpec { snake: "environment_key", location: FieldLocation::Path },
-        FieldSpec { snake: "scheduled_change_id", location: FieldLocation::Path },
+        FieldSpec { snake: "project_key", wire: "projectKey", location: FieldLocation::Path },
+        FieldSpec { snake: "feature_flag_key", wire: "featureFlagKey", location: FieldLocation::Path },
+        FieldSpec { snake: "environment_key", wire: "environmentKey", location: FieldLocation::Path },
+        FieldSpec { snake: "scheduled_change_id", wire: "scheduledChangeId", location: FieldLocation::Path },
     ],
     auth: &[
     ],
 };
+
+fn iface_feature_flags__feature_flag_status_name_enum__to_str(e: &iface_feature_flags::FeatureFlagStatusNameEnum) -> &'static str {
+    match e {
+        iface_feature_flags::FeatureFlagStatusNameEnum::New => "new",
+        iface_feature_flags::FeatureFlagStatusNameEnum::Active => "active",
+        iface_feature_flags::FeatureFlagStatusNameEnum::Inactive => "inactive",
+        iface_feature_flags::FeatureFlagStatusNameEnum::Launched => "launched",
+    }
+}
+
+fn iface_feature_flags__approval_request_status_enum__to_str(e: &iface_feature_flags::ApprovalRequestStatusEnum) -> &'static str {
+    match e {
+        iface_feature_flags::ApprovalRequestStatusEnum::Pending => "pending",
+        iface_feature_flags::ApprovalRequestStatusEnum::Completed => "completed",
+        iface_feature_flags::ApprovalRequestStatusEnum::Scheduled => "scheduled",
+        iface_feature_flags::ApprovalRequestStatusEnum::Failed => "failed",
+    }
+}
+
+fn iface_feature_flags__feature_flag_status_across_environments__to_json(p: &iface_feature_flags::FeatureFlagStatusAcrossEnvironments) -> Value {
+    let mut m = Map::new();
+    m.insert("_links".into(), match (&p.links) { Some(v) => iface_feature_flags__feature_flag_status_links__to_json(v), None => Value::Null });
+    m.insert("environments".into(), match (&p.environments) { Some(v) => iface_feature_flags__feature_flag_status_across_environments_environments__to_json(v), None => Value::Null });
+    m.insert("key".into(), match (&p.key) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_feature_flags__feature_flag_status_links__to_json(p: &iface_feature_flags::FeatureFlagStatusLinks) -> Value {
+    let mut m = Map::new();
+    m.insert("parent".into(), match (&p.parent) { Some(v) => iface_feature_flags__link__to_json(v), None => Value::Null });
+    m.insert("self".into(), match (&p.self_) { Some(v) => iface_feature_flags__link__to_json(v), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_feature_flags__link__to_json(p: &iface_feature_flags::Link) -> Value {
+    let mut m = Map::new();
+    m.insert("href".into(), match (&p.href) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("type".into(), match (&p.type_op) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_feature_flags__feature_flag_status_across_environments_environments__to_json(p: &iface_feature_flags::FeatureFlagStatusAcrossEnvironmentsEnvironments) -> Value {
+    let mut m = Map::new();
+    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_feature_flags__feature_flag_statuses__to_json(p: &iface_feature_flags::FeatureFlagStatuses) -> Value {
+    let mut m = Map::new();
+    m.insert("_links".into(), match (&p.links) { Some(v) => iface_feature_flags__feature_flag_status_links__to_json(v), None => Value::Null });
+    m.insert("items".into(), match (&p.items) { Some(v) => Value::Array((v).iter().map(|v| iface_feature_flags__feature_flag_status__to_json(v)).collect()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_feature_flags__feature_flag_status__to_json(p: &iface_feature_flags::FeatureFlagStatus) -> Value {
+    let mut m = Map::new();
+    m.insert("_links".into(), match (&p.links) { Some(v) => iface_feature_flags__feature_flag_status_links__to_json(v), None => Value::Null });
+    m.insert("default".into(), match (&p.default) { Some(v) => iface_feature_flags__feature_flag_status_default__to_json(v), None => Value::Null });
+    m.insert("lastRequested".into(), match (&p.last_requested) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("name".into(), match (&p.name) { Some(v) => Value::String(iface_feature_flags__feature_flag_status_name_enum__to_str(v).into()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_feature_flags__feature_flag_status_default__to_json(p: &iface_feature_flags::FeatureFlagStatusDefault) -> Value {
+    let mut m = Map::new();
+    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_feature_flags__feature_flags__to_json(p: &iface_feature_flags::FeatureFlags) -> Value {
+    let mut m = Map::new();
+    m.insert("_links".into(), match (&p.links) { Some(v) => iface_feature_flags__links__to_json(v), None => Value::Null });
+    m.insert("items".into(), match (&p.items) { Some(v) => Value::Array((v).iter().map(|v| iface_feature_flags__feature_flag__to_json(v)).collect()), None => Value::Null });
+    m.insert("totalCount".into(), match (&p.total_count) { Some(v) => serde_json::Number::from_f64(*(v)).map(Value::Number).unwrap_or(Value::Null), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_feature_flags__links__to_json(p: &iface_feature_flags::Links) -> Value {
+    let mut m = Map::new();
+    m.insert("next".into(), match (&p.next) { Some(v) => iface_feature_flags__link__to_json(v), None => Value::Null });
+    m.insert("self".into(), match (&p.self_) { Some(v) => iface_feature_flags__link__to_json(v), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_feature_flags__feature_flag__to_json(p: &iface_feature_flags::FeatureFlag) -> Value {
+    let mut m = Map::new();
+    m.insert("_links".into(), match (&p.links) { Some(v) => iface_feature_flags__links__to_json(v), None => Value::Null });
+    m.insert("_maintainer".into(), match (&p.maintainer) { Some(v) => iface_feature_flags__member__to_json(v), None => Value::Null });
+    m.insert("_version".into(), match (&p.version) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("archived".into(), match (&p.archived) { Some(v) => Value::Bool(*(v)), None => Value::Null });
+    m.insert("archivedDate".into(), match (&p.archived_date) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("clientSideAvailability".into(), match (&p.client_side_availability) { Some(v) => iface_feature_flags__client_side_availability__to_json(v), None => Value::Null });
+    m.insert("creationDate".into(), match (&p.creation_date) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("customProperties".into(), match (&p.custom_properties) { Some(v) => iface_feature_flags__feature_flag_custom_properties__to_json(v), None => Value::Null });
+    m.insert("defaults".into(), match (&p.defaults) { Some(v) => iface_feature_flags__defaults__to_json(v), None => Value::Null });
+    m.insert("description".into(), match (&p.description) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("environments".into(), match (&p.environments) { Some(v) => iface_feature_flags__feature_flag_environments__to_json(v), None => Value::Null });
+    m.insert("goalIds".into(), match (&p.goal_ids) { Some(v) => Value::Array((v).iter().map(|v| Value::String((v).clone())).collect()), None => Value::Null });
+    m.insert("includeInSnippet".into(), match (&p.include_in_snippet) { Some(v) => Value::Bool(*(v)), None => Value::Null });
+    m.insert("key".into(), match (&p.key) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("kind".into(), match (&p.kind) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("maintainerId".into(), match (&p.maintainer_id) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("name".into(), match (&p.name) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("tags".into(), match (&p.tags) { Some(v) => Value::Array((v).iter().map(|v| Value::String((v).clone())).collect()), None => Value::Null });
+    m.insert("temporary".into(), match (&p.temporary) { Some(v) => Value::Bool(*(v)), None => Value::Null });
+    m.insert("variations".into(), match (&p.variations) { Some(v) => Value::Array((v).iter().map(|v| iface_feature_flags__variation__to_json(v)).collect()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_feature_flags__member__to_json(p: &iface_feature_flags::Member) -> Value {
+    let mut m = Map::new();
+    m.insert("_id".into(), match (&p.id) { Some(v) => iface_feature_flags__id__to_json(v), None => Value::Null });
+    m.insert("_lastSeen".into(), match (&p.last_seen) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("_lastSeenMetadata".into(), match (&p.last_seen_metadata) { Some(v) => iface_feature_flags__member_last_seen_metadata__to_json(v), None => Value::Null });
+    m.insert("_links".into(), match (&p.links) { Some(v) => iface_feature_flags__links__to_json(v), None => Value::Null });
+    m.insert("_pendingInvite".into(), match (&p.pending_invite) { Some(v) => Value::Bool(*(v)), None => Value::Null });
+    m.insert("_verified".into(), match (&p.verified) { Some(v) => Value::Bool(*(v)), None => Value::Null });
+    m.insert("customRoles".into(), match (&p.custom_roles) { Some(v) => Value::Array((v).iter().map(|v| iface_feature_flags__id__to_json(v)).collect()), None => Value::Null });
+    m.insert("email".into(), match (&p.email) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("firstName".into(), match (&p.first_name) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("isBeta".into(), match (&p.is_beta) { Some(v) => Value::Bool(*(v)), None => Value::Null });
+    m.insert("lastName".into(), match (&p.last_name) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("role".into(), match (&p.role) { Some(v) => iface_feature_flags__role__to_json(v), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_feature_flags__id__to_json(p: &iface_feature_flags::Id) -> Value {
+    let mut m = Map::new();
+    m.insert("value".into(), Value::String((&p.value).clone()));
+    Value::Object(m)
+}
+
+fn iface_feature_flags__member_last_seen_metadata__to_json(p: &iface_feature_flags::MemberLastSeenMetadata) -> Value {
+    let mut m = Map::new();
+    m.insert("tokenId".into(), match (&p.token_id) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_feature_flags__role__to_json(p: &iface_feature_flags::Role) -> Value {
+    let mut m = Map::new();
+    m.insert("value".into(), Value::String((&p.value).clone()));
+    Value::Object(m)
+}
+
+fn iface_feature_flags__client_side_availability__to_json(p: &iface_feature_flags::ClientSideAvailability) -> Value {
+    let mut m = Map::new();
+    m.insert("usingEnvironmentId".into(), match (&p.using_environment_id) { Some(v) => Value::Bool(*(v)), None => Value::Null });
+    m.insert("usingMobileKey".into(), match (&p.using_mobile_key) { Some(v) => Value::Bool(*(v)), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_feature_flags__feature_flag_custom_properties__to_json(p: &iface_feature_flags::FeatureFlagCustomProperties) -> Value {
+    let mut m = Map::new();
+    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_feature_flags__defaults__to_json(p: &iface_feature_flags::Defaults) -> Value {
+    let mut m = Map::new();
+    m.insert("offVariation".into(), Value::Number(serde_json::Number::from(*(&p.off_variation))));
+    m.insert("onVariation".into(), Value::Number(serde_json::Number::from(*(&p.on_variation))));
+    Value::Object(m)
+}
+
+fn iface_feature_flags__feature_flag_environments__to_json(p: &iface_feature_flags::FeatureFlagEnvironments) -> Value {
+    let mut m = Map::new();
+    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_feature_flags__variation__to_json(p: &iface_feature_flags::Variation) -> Value {
+    let mut m = Map::new();
+    m.insert("_id".into(), match (&p.id) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("description".into(), match (&p.description) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("name".into(), match (&p.name) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("value".into(), iface_feature_flags__variation_value__to_json(&p.value));
+    Value::Object(m)
+}
+
+fn iface_feature_flags__variation_value__to_json(p: &iface_feature_flags::VariationValue) -> Value {
+    let mut m = Map::new();
+    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_feature_flags__dependent_flags_by_environment__to_json(p: &iface_feature_flags::DependentFlagsByEnvironment) -> Value {
+    let mut m = Map::new();
+    m.insert("_links".into(), match (&p.links) { Some(v) => iface_feature_flags__dependent_flags_links__to_json(v), None => Value::Null });
+    m.insert("_site".into(), match (&p.site) { Some(v) => iface_feature_flags__site__to_json(v), None => Value::Null });
+    m.insert("items".into(), match (&p.items) { Some(v) => Value::Array((v).iter().map(|v| iface_feature_flags__dependent_flag__to_json(v)).collect()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_feature_flags__dependent_flags_links__to_json(p: &iface_feature_flags::DependentFlagsLinks) -> Value {
+    let mut m = Map::new();
+    m.insert("parent".into(), match (&p.parent) { Some(v) => iface_feature_flags__link__to_json(v), None => Value::Null });
+    m.insert("self".into(), match (&p.self_) { Some(v) => iface_feature_flags__link__to_json(v), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_feature_flags__site__to_json(p: &iface_feature_flags::Site) -> Value {
+    let mut m = Map::new();
+    m.insert("href".into(), match (&p.href) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("type".into(), match (&p.type_op) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_feature_flags__dependent_flag__to_json(p: &iface_feature_flags::DependentFlag) -> Value {
+    let mut m = Map::new();
+    m.insert("_links".into(), match (&p.links) { Some(v) => iface_feature_flags__dependent_flag_links__to_json(v), None => Value::Null });
+    m.insert("_site".into(), match (&p.site) { Some(v) => iface_feature_flags__site__to_json(v), None => Value::Null });
+    m.insert("key".into(), match (&p.key) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("name".into(), match (&p.name) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_feature_flags__dependent_flag_links__to_json(p: &iface_feature_flags::DependentFlagLinks) -> Value {
+    let mut m = Map::new();
+    m.insert("self".into(), match (&p.self_) { Some(v) => iface_feature_flags__link__to_json(v), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_feature_flags__multi_environment_dependent_flags__to_json(p: &iface_feature_flags::MultiEnvironmentDependentFlags) -> Value {
+    let mut m = Map::new();
+    m.insert("_links".into(), match (&p.links) { Some(v) => iface_feature_flags__dependent_flags_links__to_json(v), None => Value::Null });
+    m.insert("_site".into(), match (&p.site) { Some(v) => iface_feature_flags__site__to_json(v), None => Value::Null });
+    m.insert("items".into(), match (&p.items) { Some(v) => Value::Array((v).iter().map(|v| iface_feature_flags__multi_environment_dependent_flag__to_json(v)).collect()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_feature_flags__multi_environment_dependent_flag__to_json(p: &iface_feature_flags::MultiEnvironmentDependentFlag) -> Value {
+    let mut m = Map::new();
+    m.insert("_links".into(), match (&p.links) { Some(v) => iface_feature_flags__dependent_flags_links__to_json(v), None => Value::Null });
+    m.insert("_site".into(), match (&p.site) { Some(v) => iface_feature_flags__site__to_json(v), None => Value::Null });
+    m.insert("environments".into(), match (&p.environments) { Some(v) => Value::Array((v).iter().map(|v| iface_feature_flags__dependent_flag_environment__to_json(v)).collect()), None => Value::Null });
+    m.insert("key".into(), match (&p.key) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("name".into(), match (&p.name) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_feature_flags__dependent_flag_environment__to_json(p: &iface_feature_flags::DependentFlagEnvironment) -> Value {
+    let mut m = Map::new();
+    m.insert("_links".into(), match (&p.links) { Some(v) => iface_feature_flags__dependent_flag_environment_links__to_json(v), None => Value::Null });
+    m.insert("_site".into(), match (&p.site) { Some(v) => iface_feature_flags__site__to_json(v), None => Value::Null });
+    m.insert("key".into(), match (&p.key) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("name".into(), match (&p.name) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_feature_flags__dependent_flag_environment_links__to_json(p: &iface_feature_flags::DependentFlagEnvironmentLinks) -> Value {
+    let mut m = Map::new();
+    m.insert("flagLink".into(), match (&p.flag_link) { Some(v) => iface_feature_flags__link__to_json(v), None => Value::Null });
+    m.insert("self".into(), match (&p.self_) { Some(v) => iface_feature_flags__link__to_json(v), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_feature_flags__user_targeting_expiration_for_flags__to_json(p: &iface_feature_flags::UserTargetingExpirationForFlags) -> Value {
+    let mut m = Map::new();
+    m.insert("_links".into(), match (&p.links) { Some(v) => iface_feature_flags__links__to_json(v), None => Value::Null });
+    m.insert("items".into(), match (&p.items) { Some(v) => Value::Array((v).iter().map(|v| iface_feature_flags__user_targeting_expiration_for_flag__to_json(v)).collect()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_feature_flags__user_targeting_expiration_for_flag__to_json(p: &iface_feature_flags::UserTargetingExpirationForFlag) -> Value {
+    let mut m = Map::new();
+    m.insert("_id".into(), match (&p.id) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("_links".into(), match (&p.links) { Some(v) => iface_feature_flags__links__to_json(v), None => Value::Null });
+    m.insert("_resourceId".into(), match (&p.resource_id) { Some(v) => iface_feature_flags__user_targeting_expiration_resource_id_for_flag__to_json(v), None => Value::Null });
+    m.insert("_version".into(), match (&p.version) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("expirationDate".into(), match (&p.expiration_date) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("userKey".into(), match (&p.user_key) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("variationId".into(), match (&p.variation_id) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_feature_flags__user_targeting_expiration_resource_id_for_flag__to_json(p: &iface_feature_flags::UserTargetingExpirationResourceIdForFlag) -> Value {
+    let mut m = Map::new();
+    m.insert("environmentKey".into(), match (&p.environment_key) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("flagKey".into(), match (&p.flag_key) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("key".into(), match (&p.key) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("kind".into(), match (&p.kind) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("projectKey".into(), match (&p.project_key) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_feature_flags__approval_requests__to_json(p: &iface_feature_flags::ApprovalRequests) -> Value {
+    let mut m = Map::new();
+    m.insert("_links".into(), match (&p.links) { Some(v) => iface_feature_flags__links__to_json(v), None => Value::Null });
+    m.insert("items".into(), match (&p.items) { Some(v) => Value::Array((v).iter().map(|v| iface_feature_flags__approval_request__to_json(v)).collect()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_feature_flags__approval_request__to_json(p: &iface_feature_flags::ApprovalRequest) -> Value {
+    let mut m = Map::new();
+    m.insert("_id".into(), match (&p.id) { Some(v) => iface_feature_flags__id__to_json(v), None => Value::Null });
+    m.insert("_version".into(), match (&p.version) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("allReviews".into(), match (&p.all_reviews) { Some(v) => Value::Array((v).iter().map(|v| iface_feature_flags__approval_request_review__to_json(v)).collect()), None => Value::Null });
+    m.insert("appliedByMemberID".into(), match (&p.applied_by_member_id) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("appliedDate".into(), match (&p.applied_date) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("creationDate".into(), match (&p.creation_date) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("executionDate".into(), match (&p.execution_date) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("instructions".into(), match (&p.instructions) { Some(v) => iface_feature_flags__semantic_patch_instruction__to_json(v), None => Value::Null });
+    m.insert("notifyMemberIds".into(), match (&p.notify_member_ids) { Some(v) => Value::Array((v).iter().map(|v| Value::String((v).clone())).collect()), None => Value::Null });
+    m.insert("operatingOnId".into(), match (&p.operating_on_id) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("requestorId".into(), match (&p.requestor_id) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("reviewStatus".into(), match (&p.review_status) { Some(v) => iface_feature_flags__approval_request_review_status__to_json(v), None => Value::Null });
+    m.insert("status".into(), match (&p.status) { Some(v) => Value::String(iface_feature_flags__approval_request_status_enum__to_str(v).into()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_feature_flags__approval_request_review__to_json(p: &iface_feature_flags::ApprovalRequestReview) -> Value {
+    let mut m = Map::new();
+    m.insert("_id".into(), match (&p.id) { Some(v) => iface_feature_flags__id__to_json(v), None => Value::Null });
+    m.insert("creationDate".into(), match (&p.creation_date) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("kind".into(), match (&p.kind) { Some(v) => iface_feature_flags__approval_request_review_status__to_json(v), None => Value::Null });
+    m.insert("memberId".into(), match (&p.member_id) { Some(v) => iface_feature_flags__id__to_json(v), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_feature_flags__approval_request_review_status__to_json(p: &iface_feature_flags::ApprovalRequestReviewStatus) -> Value {
+    let mut m = Map::new();
+    m.insert("value".into(), Value::String((&p.value).clone()));
+    Value::Object(m)
+}
+
+fn iface_feature_flags__semantic_patch_instruction__to_json(p: &iface_feature_flags::SemanticPatchInstruction) -> Value {
+    let mut m = Map::new();
+    m.insert("value".into(), Value::String((&p.value).clone()));
+    Value::Object(m)
+}
+
+fn iface_feature_flags__feature_flag_scheduled_changes__to_json(p: &iface_feature_flags::FeatureFlagScheduledChanges) -> Value {
+    let mut m = Map::new();
+    m.insert("_links".into(), match (&p.links) { Some(v) => iface_feature_flags__links__to_json(v), None => Value::Null });
+    m.insert("items".into(), match (&p.items) { Some(v) => Value::Array((v).iter().map(|v| iface_feature_flags__feature_flag_scheduled_change__to_json(v)).collect()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_feature_flags__feature_flag_scheduled_change__to_json(p: &iface_feature_flags::FeatureFlagScheduledChange) -> Value {
+    let mut m = Map::new();
+    m.insert("_id".into(), match (&p.id) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("_version".into(), match (&p.version) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("executionDate".into(), match (&p.execution_date) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("instructions".into(), match (&p.instructions) { Some(v) => iface_feature_flags__semantic_patch_instruction__to_json(v), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_feature_flags__feature_flag_scheduled_changes_conflicts__to_json(p: &iface_feature_flags::FeatureFlagScheduledChangesConflicts) -> Value {
+    let mut m = Map::new();
+    m.insert("instructions".into(), match (&p.instructions) { Some(v) => Value::Array((v).iter().map(|v| iface_feature_flags__feature_flag_scheduled_changes_conflicts_instructions_item__to_json(v)).collect()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_feature_flags__feature_flag_scheduled_changes_conflicts_instructions_item__to_json(p: &iface_feature_flags::FeatureFlagScheduledChangesConflictsInstructionsItem) -> Value {
+    let mut m = Map::new();
+    m.insert("conflicts".into(), match (&p.conflicts) { Some(v) => Value::Array((v).iter().map(|v| iface_feature_flags__scheduled_changes_feature_flag_conflict__to_json(v)).collect()), None => Value::Null });
+    m.insert("kind".into(), match (&p.kind) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_feature_flags__scheduled_changes_feature_flag_conflict__to_json(p: &iface_feature_flags::ScheduledChangesFeatureFlagConflict) -> Value {
+    let mut m = Map::new();
+    m.insert("_id".into(), match (&p.id) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("reason".into(), match (&p.reason) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
 
 fn iface_feature_flags__get_feature_flag_status_across_environments_params__to_json(p: &iface_feature_flags::GetFeatureFlagStatusAcrossEnvironmentsParams) -> Value {
     let mut m = Map::new();
@@ -1086,106 +2272,1126 @@ fn iface_feature_flags__delete_flag_config_scheduled_changes_params__to_json(p: 
     Value::Object(m)
 }
 
+fn iface_feature_flags__feature_flag_status_across_environments__from_json(v: &Value) -> Option<iface_feature_flags::FeatureFlagStatusAcrossEnvironments> {
+    let m = v.as_object()?;
+    Some(iface_feature_flags::FeatureFlagStatusAcrossEnvironments {
+        links: m.get("_links").filter(|v| !v.is_null()).and_then(|v| iface_feature_flags__feature_flag_status_links__from_json(v)),
+        environments: m.get("environments").filter(|v| !v.is_null()).and_then(|v| iface_feature_flags__feature_flag_status_across_environments_environments__from_json(v)),
+        key: m.get("key").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    })
+}
+
+fn iface_feature_flags__feature_flag_status_links__from_json(v: &Value) -> Option<iface_feature_flags::FeatureFlagStatusLinks> {
+    let m = v.as_object()?;
+    Some(iface_feature_flags::FeatureFlagStatusLinks {
+        parent: m.get("parent").filter(|v| !v.is_null()).and_then(|v| iface_feature_flags__link__from_json(v)),
+        self_: m.get("self").filter(|v| !v.is_null()).and_then(|v| iface_feature_flags__link__from_json(v)),
+    })
+}
+
+fn iface_feature_flags__link__from_json(v: &Value) -> Option<iface_feature_flags::Link> {
+    let m = v.as_object()?;
+    Some(iface_feature_flags::Link {
+        href: m.get("href").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        type_op: m.get("type").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    })
+}
+
+fn iface_feature_flags__feature_flag_status_across_environments_environments__from_json(v: &Value) -> Option<iface_feature_flags::FeatureFlagStatusAcrossEnvironmentsEnvironments> {
+    let m = v.as_object()?;
+    Some(iface_feature_flags::FeatureFlagStatusAcrossEnvironmentsEnvironments {
+        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    })
+}
+
+fn iface_feature_flags__feature_flag_statuses__from_json(v: &Value) -> Option<iface_feature_flags::FeatureFlagStatuses> {
+    let m = v.as_object()?;
+    Some(iface_feature_flags::FeatureFlagStatuses {
+        links: m.get("_links").filter(|v| !v.is_null()).and_then(|v| iface_feature_flags__feature_flag_status_links__from_json(v)),
+        items: m.get("items").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| iface_feature_flags__feature_flag_status__from_json(x)).collect())),
+    })
+}
+
+fn iface_feature_flags__feature_flag_status__from_json(v: &Value) -> Option<iface_feature_flags::FeatureFlagStatus> {
+    let m = v.as_object()?;
+    Some(iface_feature_flags::FeatureFlagStatus {
+        links: m.get("_links").filter(|v| !v.is_null()).and_then(|v| iface_feature_flags__feature_flag_status_links__from_json(v)),
+        default: m.get("default").filter(|v| !v.is_null()).and_then(|v| iface_feature_flags__feature_flag_status_default__from_json(v)),
+        last_requested: m.get("lastRequested").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        name: m.get("name").filter(|v| !v.is_null()).and_then(|v| (v).as_str().and_then(iface_feature_flags__feature_flag_status_name_enum__from_str)),
+    })
+}
+
+fn iface_feature_flags__feature_flag_status_default__from_json(v: &Value) -> Option<iface_feature_flags::FeatureFlagStatusDefault> {
+    let m = v.as_object()?;
+    Some(iface_feature_flags::FeatureFlagStatusDefault {
+        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    })
+}
+
+fn iface_feature_flags__feature_flags__from_json(v: &Value) -> Option<iface_feature_flags::FeatureFlags> {
+    let m = v.as_object()?;
+    Some(iface_feature_flags::FeatureFlags {
+        links: m.get("_links").filter(|v| !v.is_null()).and_then(|v| iface_feature_flags__links__from_json(v)),
+        items: m.get("items").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| iface_feature_flags__feature_flag__from_json(x)).collect())),
+        total_count: m.get("totalCount").filter(|v| !v.is_null()).and_then(|v| (v).as_f64()),
+    })
+}
+
+fn iface_feature_flags__links__from_json(v: &Value) -> Option<iface_feature_flags::Links> {
+    let m = v.as_object()?;
+    Some(iface_feature_flags::Links {
+        next: m.get("next").filter(|v| !v.is_null()).and_then(|v| iface_feature_flags__link__from_json(v)),
+        self_: m.get("self").filter(|v| !v.is_null()).and_then(|v| iface_feature_flags__link__from_json(v)),
+    })
+}
+
+fn iface_feature_flags__feature_flag__from_json(v: &Value) -> Option<iface_feature_flags::FeatureFlag> {
+    let m = v.as_object()?;
+    Some(iface_feature_flags::FeatureFlag {
+        links: m.get("_links").filter(|v| !v.is_null()).and_then(|v| iface_feature_flags__links__from_json(v)),
+        maintainer: m.get("_maintainer").filter(|v| !v.is_null()).and_then(|v| iface_feature_flags__member__from_json(v)),
+        version: m.get("_version").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        archived: m.get("archived").filter(|v| !v.is_null()).and_then(|v| (v).as_bool()),
+        archived_date: m.get("archivedDate").filter(|v| !v.is_null()).and_then(|v| (v).as_i64()),
+        client_side_availability: m.get("clientSideAvailability").filter(|v| !v.is_null()).and_then(|v| iface_feature_flags__client_side_availability__from_json(v)),
+        creation_date: m.get("creationDate").filter(|v| !v.is_null()).and_then(|v| (v).as_i64()),
+        custom_properties: m.get("customProperties").filter(|v| !v.is_null()).and_then(|v| iface_feature_flags__feature_flag_custom_properties__from_json(v)),
+        defaults: m.get("defaults").filter(|v| !v.is_null()).and_then(|v| iface_feature_flags__defaults__from_json(v)),
+        description: m.get("description").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        environments: m.get("environments").filter(|v| !v.is_null()).and_then(|v| iface_feature_flags__feature_flag_environments__from_json(v)),
+        goal_ids: m.get("goalIds").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| (x).as_str().map(|s| s.to_string())).collect())),
+        include_in_snippet: m.get("includeInSnippet").filter(|v| !v.is_null()).and_then(|v| (v).as_bool()),
+        key: m.get("key").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        kind: m.get("kind").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        maintainer_id: m.get("maintainerId").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        name: m.get("name").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        tags: m.get("tags").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| (x).as_str().map(|s| s.to_string())).collect())),
+        temporary: m.get("temporary").filter(|v| !v.is_null()).and_then(|v| (v).as_bool()),
+        variations: m.get("variations").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| iface_feature_flags__variation__from_json(x)).collect())),
+    })
+}
+
+fn iface_feature_flags__member__from_json(v: &Value) -> Option<iface_feature_flags::Member> {
+    let m = v.as_object()?;
+    Some(iface_feature_flags::Member {
+        id: m.get("_id").filter(|v| !v.is_null()).and_then(|v| iface_feature_flags__id__from_json(v)),
+        last_seen: m.get("_lastSeen").filter(|v| !v.is_null()).and_then(|v| (v).as_i64()),
+        last_seen_metadata: m.get("_lastSeenMetadata").filter(|v| !v.is_null()).and_then(|v| iface_feature_flags__member_last_seen_metadata__from_json(v)),
+        links: m.get("_links").filter(|v| !v.is_null()).and_then(|v| iface_feature_flags__links__from_json(v)),
+        pending_invite: m.get("_pendingInvite").filter(|v| !v.is_null()).and_then(|v| (v).as_bool()),
+        verified: m.get("_verified").filter(|v| !v.is_null()).and_then(|v| (v).as_bool()),
+        custom_roles: m.get("customRoles").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| iface_feature_flags__id__from_json(x)).collect())),
+        email: m.get("email").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        first_name: m.get("firstName").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        is_beta: m.get("isBeta").filter(|v| !v.is_null()).and_then(|v| (v).as_bool()),
+        last_name: m.get("lastName").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        role: m.get("role").filter(|v| !v.is_null()).and_then(|v| iface_feature_flags__role__from_json(v)),
+    })
+}
+
+fn iface_feature_flags__id__from_json(v: &Value) -> Option<iface_feature_flags::Id> {
+    let m = v.as_object()?;
+    Some(iface_feature_flags::Id {
+        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+    })
+}
+
+fn iface_feature_flags__member_last_seen_metadata__from_json(v: &Value) -> Option<iface_feature_flags::MemberLastSeenMetadata> {
+    let m = v.as_object()?;
+    Some(iface_feature_flags::MemberLastSeenMetadata {
+        token_id: m.get("tokenId").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    })
+}
+
+fn iface_feature_flags__role__from_json(v: &Value) -> Option<iface_feature_flags::Role> {
+    let m = v.as_object()?;
+    Some(iface_feature_flags::Role {
+        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+    })
+}
+
+fn iface_feature_flags__client_side_availability__from_json(v: &Value) -> Option<iface_feature_flags::ClientSideAvailability> {
+    let m = v.as_object()?;
+    Some(iface_feature_flags::ClientSideAvailability {
+        using_environment_id: m.get("usingEnvironmentId").filter(|v| !v.is_null()).and_then(|v| (v).as_bool()),
+        using_mobile_key: m.get("usingMobileKey").filter(|v| !v.is_null()).and_then(|v| (v).as_bool()),
+    })
+}
+
+fn iface_feature_flags__feature_flag_custom_properties__from_json(v: &Value) -> Option<iface_feature_flags::FeatureFlagCustomProperties> {
+    let m = v.as_object()?;
+    Some(iface_feature_flags::FeatureFlagCustomProperties {
+        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    })
+}
+
+fn iface_feature_flags__defaults__from_json(v: &Value) -> Option<iface_feature_flags::Defaults> {
+    let m = v.as_object()?;
+    Some(iface_feature_flags::Defaults {
+        off_variation: m.get("offVariation").and_then(|v| (v).as_i64().map(|n| n as i32)).unwrap_or_default(),
+        on_variation: m.get("onVariation").and_then(|v| (v).as_i64().map(|n| n as i32)).unwrap_or_default(),
+    })
+}
+
+fn iface_feature_flags__feature_flag_environments__from_json(v: &Value) -> Option<iface_feature_flags::FeatureFlagEnvironments> {
+    let m = v.as_object()?;
+    Some(iface_feature_flags::FeatureFlagEnvironments {
+        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    })
+}
+
+fn iface_feature_flags__variation__from_json(v: &Value) -> Option<iface_feature_flags::Variation> {
+    let m = v.as_object()?;
+    Some(iface_feature_flags::Variation {
+        id: m.get("_id").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        description: m.get("description").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        name: m.get("name").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        value: match m.get("value").and_then(|v| iface_feature_flags__variation_value__from_json(v)) { Some(x) => x, None => return None },
+    })
+}
+
+fn iface_feature_flags__variation_value__from_json(v: &Value) -> Option<iface_feature_flags::VariationValue> {
+    let m = v.as_object()?;
+    Some(iface_feature_flags::VariationValue {
+        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    })
+}
+
+fn iface_feature_flags__dependent_flags_by_environment__from_json(v: &Value) -> Option<iface_feature_flags::DependentFlagsByEnvironment> {
+    let m = v.as_object()?;
+    Some(iface_feature_flags::DependentFlagsByEnvironment {
+        links: m.get("_links").filter(|v| !v.is_null()).and_then(|v| iface_feature_flags__dependent_flags_links__from_json(v)),
+        site: m.get("_site").filter(|v| !v.is_null()).and_then(|v| iface_feature_flags__site__from_json(v)),
+        items: m.get("items").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| iface_feature_flags__dependent_flag__from_json(x)).collect())),
+    })
+}
+
+fn iface_feature_flags__dependent_flags_links__from_json(v: &Value) -> Option<iface_feature_flags::DependentFlagsLinks> {
+    let m = v.as_object()?;
+    Some(iface_feature_flags::DependentFlagsLinks {
+        parent: m.get("parent").filter(|v| !v.is_null()).and_then(|v| iface_feature_flags__link__from_json(v)),
+        self_: m.get("self").filter(|v| !v.is_null()).and_then(|v| iface_feature_flags__link__from_json(v)),
+    })
+}
+
+fn iface_feature_flags__site__from_json(v: &Value) -> Option<iface_feature_flags::Site> {
+    let m = v.as_object()?;
+    Some(iface_feature_flags::Site {
+        href: m.get("href").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        type_op: m.get("type").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    })
+}
+
+fn iface_feature_flags__dependent_flag__from_json(v: &Value) -> Option<iface_feature_flags::DependentFlag> {
+    let m = v.as_object()?;
+    Some(iface_feature_flags::DependentFlag {
+        links: m.get("_links").filter(|v| !v.is_null()).and_then(|v| iface_feature_flags__dependent_flag_links__from_json(v)),
+        site: m.get("_site").filter(|v| !v.is_null()).and_then(|v| iface_feature_flags__site__from_json(v)),
+        key: m.get("key").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        name: m.get("name").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    })
+}
+
+fn iface_feature_flags__dependent_flag_links__from_json(v: &Value) -> Option<iface_feature_flags::DependentFlagLinks> {
+    let m = v.as_object()?;
+    Some(iface_feature_flags::DependentFlagLinks {
+        self_: m.get("self").filter(|v| !v.is_null()).and_then(|v| iface_feature_flags__link__from_json(v)),
+    })
+}
+
+fn iface_feature_flags__multi_environment_dependent_flags__from_json(v: &Value) -> Option<iface_feature_flags::MultiEnvironmentDependentFlags> {
+    let m = v.as_object()?;
+    Some(iface_feature_flags::MultiEnvironmentDependentFlags {
+        links: m.get("_links").filter(|v| !v.is_null()).and_then(|v| iface_feature_flags__dependent_flags_links__from_json(v)),
+        site: m.get("_site").filter(|v| !v.is_null()).and_then(|v| iface_feature_flags__site__from_json(v)),
+        items: m.get("items").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| iface_feature_flags__multi_environment_dependent_flag__from_json(x)).collect())),
+    })
+}
+
+fn iface_feature_flags__multi_environment_dependent_flag__from_json(v: &Value) -> Option<iface_feature_flags::MultiEnvironmentDependentFlag> {
+    let m = v.as_object()?;
+    Some(iface_feature_flags::MultiEnvironmentDependentFlag {
+        links: m.get("_links").filter(|v| !v.is_null()).and_then(|v| iface_feature_flags__dependent_flags_links__from_json(v)),
+        site: m.get("_site").filter(|v| !v.is_null()).and_then(|v| iface_feature_flags__site__from_json(v)),
+        environments: m.get("environments").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| iface_feature_flags__dependent_flag_environment__from_json(x)).collect())),
+        key: m.get("key").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        name: m.get("name").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    })
+}
+
+fn iface_feature_flags__dependent_flag_environment__from_json(v: &Value) -> Option<iface_feature_flags::DependentFlagEnvironment> {
+    let m = v.as_object()?;
+    Some(iface_feature_flags::DependentFlagEnvironment {
+        links: m.get("_links").filter(|v| !v.is_null()).and_then(|v| iface_feature_flags__dependent_flag_environment_links__from_json(v)),
+        site: m.get("_site").filter(|v| !v.is_null()).and_then(|v| iface_feature_flags__site__from_json(v)),
+        key: m.get("key").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        name: m.get("name").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    })
+}
+
+fn iface_feature_flags__dependent_flag_environment_links__from_json(v: &Value) -> Option<iface_feature_flags::DependentFlagEnvironmentLinks> {
+    let m = v.as_object()?;
+    Some(iface_feature_flags::DependentFlagEnvironmentLinks {
+        flag_link: m.get("flagLink").filter(|v| !v.is_null()).and_then(|v| iface_feature_flags__link__from_json(v)),
+        self_: m.get("self").filter(|v| !v.is_null()).and_then(|v| iface_feature_flags__link__from_json(v)),
+    })
+}
+
+fn iface_feature_flags__user_targeting_expiration_for_flags__from_json(v: &Value) -> Option<iface_feature_flags::UserTargetingExpirationForFlags> {
+    let m = v.as_object()?;
+    Some(iface_feature_flags::UserTargetingExpirationForFlags {
+        links: m.get("_links").filter(|v| !v.is_null()).and_then(|v| iface_feature_flags__links__from_json(v)),
+        items: m.get("items").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| iface_feature_flags__user_targeting_expiration_for_flag__from_json(x)).collect())),
+    })
+}
+
+fn iface_feature_flags__user_targeting_expiration_for_flag__from_json(v: &Value) -> Option<iface_feature_flags::UserTargetingExpirationForFlag> {
+    let m = v.as_object()?;
+    Some(iface_feature_flags::UserTargetingExpirationForFlag {
+        id: m.get("_id").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        links: m.get("_links").filter(|v| !v.is_null()).and_then(|v| iface_feature_flags__links__from_json(v)),
+        resource_id: m.get("_resourceId").filter(|v| !v.is_null()).and_then(|v| iface_feature_flags__user_targeting_expiration_resource_id_for_flag__from_json(v)),
+        version: m.get("_version").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        expiration_date: m.get("expirationDate").filter(|v| !v.is_null()).and_then(|v| (v).as_i64()),
+        user_key: m.get("userKey").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        variation_id: m.get("variationId").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    })
+}
+
+fn iface_feature_flags__user_targeting_expiration_resource_id_for_flag__from_json(v: &Value) -> Option<iface_feature_flags::UserTargetingExpirationResourceIdForFlag> {
+    let m = v.as_object()?;
+    Some(iface_feature_flags::UserTargetingExpirationResourceIdForFlag {
+        environment_key: m.get("environmentKey").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        flag_key: m.get("flagKey").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        key: m.get("key").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        kind: m.get("kind").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        project_key: m.get("projectKey").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    })
+}
+
+fn iface_feature_flags__approval_requests__from_json(v: &Value) -> Option<iface_feature_flags::ApprovalRequests> {
+    let m = v.as_object()?;
+    Some(iface_feature_flags::ApprovalRequests {
+        links: m.get("_links").filter(|v| !v.is_null()).and_then(|v| iface_feature_flags__links__from_json(v)),
+        items: m.get("items").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| iface_feature_flags__approval_request__from_json(x)).collect())),
+    })
+}
+
+fn iface_feature_flags__approval_request__from_json(v: &Value) -> Option<iface_feature_flags::ApprovalRequest> {
+    let m = v.as_object()?;
+    Some(iface_feature_flags::ApprovalRequest {
+        id: m.get("_id").filter(|v| !v.is_null()).and_then(|v| iface_feature_flags__id__from_json(v)),
+        version: m.get("_version").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        all_reviews: m.get("allReviews").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| iface_feature_flags__approval_request_review__from_json(x)).collect())),
+        applied_by_member_id: m.get("appliedByMemberID").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        applied_date: m.get("appliedDate").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        creation_date: m.get("creationDate").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        execution_date: m.get("executionDate").filter(|v| !v.is_null()).and_then(|v| (v).as_i64()),
+        instructions: m.get("instructions").filter(|v| !v.is_null()).and_then(|v| iface_feature_flags__semantic_patch_instruction__from_json(v)),
+        notify_member_ids: m.get("notifyMemberIds").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| (x).as_str().map(|s| s.to_string())).collect())),
+        operating_on_id: m.get("operatingOnId").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        requestor_id: m.get("requestorId").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        review_status: m.get("reviewStatus").filter(|v| !v.is_null()).and_then(|v| iface_feature_flags__approval_request_review_status__from_json(v)),
+        status: m.get("status").filter(|v| !v.is_null()).and_then(|v| (v).as_str().and_then(iface_feature_flags__approval_request_status_enum__from_str)),
+    })
+}
+
+fn iface_feature_flags__approval_request_review__from_json(v: &Value) -> Option<iface_feature_flags::ApprovalRequestReview> {
+    let m = v.as_object()?;
+    Some(iface_feature_flags::ApprovalRequestReview {
+        id: m.get("_id").filter(|v| !v.is_null()).and_then(|v| iface_feature_flags__id__from_json(v)),
+        creation_date: m.get("creationDate").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        kind: m.get("kind").filter(|v| !v.is_null()).and_then(|v| iface_feature_flags__approval_request_review_status__from_json(v)),
+        member_id: m.get("memberId").filter(|v| !v.is_null()).and_then(|v| iface_feature_flags__id__from_json(v)),
+    })
+}
+
+fn iface_feature_flags__approval_request_review_status__from_json(v: &Value) -> Option<iface_feature_flags::ApprovalRequestReviewStatus> {
+    let m = v.as_object()?;
+    Some(iface_feature_flags::ApprovalRequestReviewStatus {
+        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+    })
+}
+
+fn iface_feature_flags__semantic_patch_instruction__from_json(v: &Value) -> Option<iface_feature_flags::SemanticPatchInstruction> {
+    let m = v.as_object()?;
+    Some(iface_feature_flags::SemanticPatchInstruction {
+        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+    })
+}
+
+fn iface_feature_flags__feature_flag_scheduled_changes__from_json(v: &Value) -> Option<iface_feature_flags::FeatureFlagScheduledChanges> {
+    let m = v.as_object()?;
+    Some(iface_feature_flags::FeatureFlagScheduledChanges {
+        links: m.get("_links").filter(|v| !v.is_null()).and_then(|v| iface_feature_flags__links__from_json(v)),
+        items: m.get("items").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| iface_feature_flags__feature_flag_scheduled_change__from_json(x)).collect())),
+    })
+}
+
+fn iface_feature_flags__feature_flag_scheduled_change__from_json(v: &Value) -> Option<iface_feature_flags::FeatureFlagScheduledChange> {
+    let m = v.as_object()?;
+    Some(iface_feature_flags::FeatureFlagScheduledChange {
+        id: m.get("_id").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        version: m.get("_version").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        execution_date: m.get("executionDate").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        instructions: m.get("instructions").filter(|v| !v.is_null()).and_then(|v| iface_feature_flags__semantic_patch_instruction__from_json(v)),
+    })
+}
+
+fn iface_feature_flags__feature_flag_scheduled_changes_conflicts__from_json(v: &Value) -> Option<iface_feature_flags::FeatureFlagScheduledChangesConflicts> {
+    let m = v.as_object()?;
+    Some(iface_feature_flags::FeatureFlagScheduledChangesConflicts {
+        instructions: m.get("instructions").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| iface_feature_flags__feature_flag_scheduled_changes_conflicts_instructions_item__from_json(x)).collect())),
+    })
+}
+
+fn iface_feature_flags__feature_flag_scheduled_changes_conflicts_instructions_item__from_json(v: &Value) -> Option<iface_feature_flags::FeatureFlagScheduledChangesConflictsInstructionsItem> {
+    let m = v.as_object()?;
+    Some(iface_feature_flags::FeatureFlagScheduledChangesConflictsInstructionsItem {
+        conflicts: m.get("conflicts").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| iface_feature_flags__scheduled_changes_feature_flag_conflict__from_json(x)).collect())),
+        kind: m.get("kind").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    })
+}
+
+fn iface_feature_flags__scheduled_changes_feature_flag_conflict__from_json(v: &Value) -> Option<iface_feature_flags::ScheduledChangesFeatureFlagConflict> {
+    let m = v.as_object()?;
+    Some(iface_feature_flags::ScheduledChangesFeatureFlagConflict {
+        id: m.get("_id").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        reason: m.get("reason").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    })
+}
+
+fn iface_feature_flags__feature_flag_status_name_enum__from_str(s: &str) -> Option<iface_feature_flags::FeatureFlagStatusNameEnum> {
+    match s {
+        "new" => Some(iface_feature_flags::FeatureFlagStatusNameEnum::New),
+        "active" => Some(iface_feature_flags::FeatureFlagStatusNameEnum::Active),
+        "inactive" => Some(iface_feature_flags::FeatureFlagStatusNameEnum::Inactive),
+        "launched" => Some(iface_feature_flags::FeatureFlagStatusNameEnum::Launched),
+        _ => None,
+    }
+}
+
+fn iface_feature_flags__approval_request_status_enum__from_str(s: &str) -> Option<iface_feature_flags::ApprovalRequestStatusEnum> {
+    match s {
+        "pending" => Some(iface_feature_flags::ApprovalRequestStatusEnum::Pending),
+        "completed" => Some(iface_feature_flags::ApprovalRequestStatusEnum::Completed),
+        "scheduled" => Some(iface_feature_flags::ApprovalRequestStatusEnum::Scheduled),
+        "failed" => Some(iface_feature_flags::ApprovalRequestStatusEnum::Failed),
+        _ => None,
+    }
+}
+
+fn iface_feature_flags__get_feature_flag_status_across_environments__ok(body: String) -> Result<iface_feature_flags::FeatureFlagStatusAcrossEnvironments, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match iface_feature_flags__feature_flag_status_across_environments__from_json(&v) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_feature_flags__get_feature_flag_status_across_environments__err(e: crate::runtime::DispatchError) -> iface_feature_flags::GetFeatureFlagStatusAcrossEnvironmentsError {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => match status {
+            401u16 => iface_feature_flags::GetFeatureFlagStatusAcrossEnvironmentsError::Unauthorized(body),
+            403u16 => iface_feature_flags::GetFeatureFlagStatusAcrossEnvironmentsError::Forbidden(body),
+            _ => iface_feature_flags::GetFeatureFlagStatusAcrossEnvironmentsError::Other(body),
+        },
+        crate::runtime::DispatchError::Transport(m) => iface_feature_flags::GetFeatureFlagStatusAcrossEnvironmentsError::Other(m),
+    }
+}
+
+fn iface_feature_flags__get_feature_flag_statuses__ok(body: String) -> Result<iface_feature_flags::FeatureFlagStatuses, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match iface_feature_flags__feature_flag_statuses__from_json(&v) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_feature_flags__get_feature_flag_statuses__err(e: crate::runtime::DispatchError) -> iface_feature_flags::GetFeatureFlagStatusesError {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => match status {
+            401u16 => iface_feature_flags::GetFeatureFlagStatusesError::Unauthorized(body),
+            _ => iface_feature_flags::GetFeatureFlagStatusesError::Other(body),
+        },
+        crate::runtime::DispatchError::Transport(m) => iface_feature_flags::GetFeatureFlagStatusesError::Other(m),
+    }
+}
+
+fn iface_feature_flags__get_feature_flag_status__ok(body: String) -> Result<iface_feature_flags::FeatureFlagStatus, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match iface_feature_flags__feature_flag_status__from_json(&v) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_feature_flags__get_feature_flag_status__err(e: crate::runtime::DispatchError) -> iface_feature_flags::GetFeatureFlagStatusError {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => match status {
+            401u16 => iface_feature_flags::GetFeatureFlagStatusError::Unauthorized(body),
+            _ => iface_feature_flags::GetFeatureFlagStatusError::Other(body),
+        },
+        crate::runtime::DispatchError::Transport(m) => iface_feature_flags::GetFeatureFlagStatusError::Other(m),
+    }
+}
+
+fn iface_feature_flags__get_feature_flags__ok(body: String) -> Result<iface_feature_flags::FeatureFlags, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match iface_feature_flags__feature_flags__from_json(&v) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_feature_flags__get_feature_flags__err(e: crate::runtime::DispatchError) -> iface_feature_flags::GetFeatureFlagsError {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => match status {
+            401u16 => iface_feature_flags::GetFeatureFlagsError::Unauthorized(body),
+            _ => iface_feature_flags::GetFeatureFlagsError::Other(body),
+        },
+        crate::runtime::DispatchError::Transport(m) => iface_feature_flags::GetFeatureFlagsError::Other(m),
+    }
+}
+
+fn iface_feature_flags__post_feature_flag__ok(body: String) -> Result<iface_feature_flags::FeatureFlag, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match iface_feature_flags__feature_flag__from_json(&v) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_feature_flags__post_feature_flag__err(e: crate::runtime::DispatchError) -> iface_feature_flags::PostFeatureFlagError {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => match status {
+            400u16 => iface_feature_flags::PostFeatureFlagError::BadRequest(body),
+            401u16 => iface_feature_flags::PostFeatureFlagError::Unauthorized(body),
+            409u16 => iface_feature_flags::PostFeatureFlagError::Conflict(body),
+            _ => iface_feature_flags::PostFeatureFlagError::Other(body),
+        },
+        crate::runtime::DispatchError::Transport(m) => iface_feature_flags::PostFeatureFlagError::Other(m),
+    }
+}
+
+fn iface_feature_flags__get_flags_project_key_environment_key_feature_flag_key_dependent_flags__ok(body: String) -> Result<iface_feature_flags::DependentFlagsByEnvironment, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match iface_feature_flags__dependent_flags_by_environment__from_json(&v) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_feature_flags__get_flags_project_key_environment_key_feature_flag_key_dependent_flags__err(e: crate::runtime::DispatchError) -> iface_feature_flags::GetFlagsProjectKeyEnvironmentKeyFeatureFlagKeyDependentFlagsError {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => match status {
+            401u16 => iface_feature_flags::GetFlagsProjectKeyEnvironmentKeyFeatureFlagKeyDependentFlagsError::Unauthorized(body),
+            403u16 => iface_feature_flags::GetFlagsProjectKeyEnvironmentKeyFeatureFlagKeyDependentFlagsError::Forbidden(body),
+            404u16 => iface_feature_flags::GetFlagsProjectKeyEnvironmentKeyFeatureFlagKeyDependentFlagsError::NotFound(body),
+            _ => iface_feature_flags::GetFlagsProjectKeyEnvironmentKeyFeatureFlagKeyDependentFlagsError::Other(body),
+        },
+        crate::runtime::DispatchError::Transport(m) => iface_feature_flags::GetFlagsProjectKeyEnvironmentKeyFeatureFlagKeyDependentFlagsError::Other(m),
+    }
+}
+
+fn iface_feature_flags__get_feature_flag__ok(body: String) -> Result<iface_feature_flags::FeatureFlag, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match iface_feature_flags__feature_flag__from_json(&v) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_feature_flags__get_feature_flag__err(e: crate::runtime::DispatchError) -> iface_feature_flags::GetFeatureFlagError {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => match status {
+            401u16 => iface_feature_flags::GetFeatureFlagError::Unauthorized(body),
+            404u16 => iface_feature_flags::GetFeatureFlagError::NotFound(body),
+            _ => iface_feature_flags::GetFeatureFlagError::Other(body),
+        },
+        crate::runtime::DispatchError::Transport(m) => iface_feature_flags::GetFeatureFlagError::Other(m),
+    }
+}
+
+fn iface_feature_flags__patch_feature_flag__ok(body: String) -> Result<iface_feature_flags::FeatureFlag, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match iface_feature_flags__feature_flag__from_json(&v) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_feature_flags__patch_feature_flag__err(e: crate::runtime::DispatchError) -> iface_feature_flags::PatchFeatureFlagError {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => match status {
+            400u16 => iface_feature_flags::PatchFeatureFlagError::BadRequest(body),
+            401u16 => iface_feature_flags::PatchFeatureFlagError::Unauthorized(body),
+            404u16 => iface_feature_flags::PatchFeatureFlagError::NotFound(body),
+            409u16 => iface_feature_flags::PatchFeatureFlagError::Conflict(body),
+            _ => iface_feature_flags::PatchFeatureFlagError::Other(body),
+        },
+        crate::runtime::DispatchError::Transport(m) => iface_feature_flags::PatchFeatureFlagError::Other(m),
+    }
+}
+
+fn iface_feature_flags__delete_feature_flag__ok(body: String) -> Result<String, crate::runtime::DispatchError> {
+    Ok(body)
+}
+
+fn iface_feature_flags__delete_feature_flag__err(e: crate::runtime::DispatchError) -> iface_feature_flags::DeleteFeatureFlagError {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => match status {
+            401u16 => iface_feature_flags::DeleteFeatureFlagError::Unauthorized(body),
+            404u16 => iface_feature_flags::DeleteFeatureFlagError::NotFound(body),
+            _ => iface_feature_flags::DeleteFeatureFlagError::Other(body),
+        },
+        crate::runtime::DispatchError::Transport(m) => iface_feature_flags::DeleteFeatureFlagError::Other(m),
+    }
+}
+
+fn iface_feature_flags__copy_feature_flag__ok(body: String) -> Result<iface_feature_flags::FeatureFlag, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match iface_feature_flags__feature_flag__from_json(&v) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_feature_flags__copy_feature_flag__err(e: crate::runtime::DispatchError) -> iface_feature_flags::CopyFeatureFlagError {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => match status {
+            400u16 => iface_feature_flags::CopyFeatureFlagError::BadRequest(body),
+            401u16 => iface_feature_flags::CopyFeatureFlagError::Unauthorized(body),
+            409u16 => iface_feature_flags::CopyFeatureFlagError::Conflict(body),
+            _ => iface_feature_flags::CopyFeatureFlagError::Other(body),
+        },
+        crate::runtime::DispatchError::Transport(m) => iface_feature_flags::CopyFeatureFlagError::Other(m),
+    }
+}
+
+fn iface_feature_flags__get_flags_project_key_feature_flag_key_dependent_flags__ok(body: String) -> Result<iface_feature_flags::MultiEnvironmentDependentFlags, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match iface_feature_flags__multi_environment_dependent_flags__from_json(&v) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_feature_flags__get_flags_project_key_feature_flag_key_dependent_flags__err(e: crate::runtime::DispatchError) -> iface_feature_flags::GetFlagsProjectKeyFeatureFlagKeyDependentFlagsError {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => match status {
+            401u16 => iface_feature_flags::GetFlagsProjectKeyFeatureFlagKeyDependentFlagsError::Unauthorized(body),
+            403u16 => iface_feature_flags::GetFlagsProjectKeyFeatureFlagKeyDependentFlagsError::Forbidden(body),
+            404u16 => iface_feature_flags::GetFlagsProjectKeyFeatureFlagKeyDependentFlagsError::NotFound(body),
+            _ => iface_feature_flags::GetFlagsProjectKeyFeatureFlagKeyDependentFlagsError::Other(body),
+        },
+        crate::runtime::DispatchError::Transport(m) => iface_feature_flags::GetFlagsProjectKeyFeatureFlagKeyDependentFlagsError::Other(m),
+    }
+}
+
+fn iface_feature_flags__get_expiring_user_targets__ok(body: String) -> Result<iface_feature_flags::UserTargetingExpirationForFlags, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match iface_feature_flags__user_targeting_expiration_for_flags__from_json(&v) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_feature_flags__get_expiring_user_targets__err(e: crate::runtime::DispatchError) -> iface_feature_flags::GetExpiringUserTargetsError {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => match status {
+            401u16 => iface_feature_flags::GetExpiringUserTargetsError::Unauthorized(body),
+            _ => iface_feature_flags::GetExpiringUserTargetsError::Other(body),
+        },
+        crate::runtime::DispatchError::Transport(m) => iface_feature_flags::GetExpiringUserTargetsError::Other(m),
+    }
+}
+
+fn iface_feature_flags__patch_expiring_user_targets__ok(body: String) -> Result<iface_feature_flags::UserTargetingExpirationForFlags, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match iface_feature_flags__user_targeting_expiration_for_flags__from_json(&v) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_feature_flags__patch_expiring_user_targets__err(e: crate::runtime::DispatchError) -> iface_feature_flags::PatchExpiringUserTargetsError {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => match status {
+            400u16 => iface_feature_flags::PatchExpiringUserTargetsError::BadRequest(body),
+            401u16 => iface_feature_flags::PatchExpiringUserTargetsError::Unauthorized(body),
+            404u16 => iface_feature_flags::PatchExpiringUserTargetsError::NotFound(body),
+            409u16 => iface_feature_flags::PatchExpiringUserTargetsError::Conflict(body),
+            _ => iface_feature_flags::PatchExpiringUserTargetsError::Other(body),
+        },
+        crate::runtime::DispatchError::Transport(m) => iface_feature_flags::PatchExpiringUserTargetsError::Other(m),
+    }
+}
+
+fn iface_feature_flags__get_approval_requests__ok(body: String) -> Result<iface_feature_flags::ApprovalRequests, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match iface_feature_flags__approval_requests__from_json(&v) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_feature_flags__get_approval_requests__err(e: crate::runtime::DispatchError) -> iface_feature_flags::GetApprovalRequestsError {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => match status {
+            401u16 => iface_feature_flags::GetApprovalRequestsError::Unauthorized(body),
+            404u16 => iface_feature_flags::GetApprovalRequestsError::NotFound(body),
+            _ => iface_feature_flags::GetApprovalRequestsError::Other(body),
+        },
+        crate::runtime::DispatchError::Transport(m) => iface_feature_flags::GetApprovalRequestsError::Other(m),
+    }
+}
+
+fn iface_feature_flags__get_approval_request__ok(body: String) -> Result<iface_feature_flags::ApprovalRequests, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match iface_feature_flags__approval_requests__from_json(&v) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_feature_flags__get_approval_request__err(e: crate::runtime::DispatchError) -> iface_feature_flags::GetApprovalRequestError {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => match status {
+            401u16 => iface_feature_flags::GetApprovalRequestError::Unauthorized(body),
+            404u16 => iface_feature_flags::GetApprovalRequestError::NotFound(body),
+            _ => iface_feature_flags::GetApprovalRequestError::Other(body),
+        },
+        crate::runtime::DispatchError::Transport(m) => iface_feature_flags::GetApprovalRequestError::Other(m),
+    }
+}
+
+fn iface_feature_flags__post_approval_request__ok(body: String) -> Result<iface_feature_flags::ApprovalRequest, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match iface_feature_flags__approval_request__from_json(&v) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_feature_flags__post_approval_request__err(e: crate::runtime::DispatchError) -> iface_feature_flags::PostApprovalRequestError {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => match status {
+            401u16 => iface_feature_flags::PostApprovalRequestError::Unauthorized(body),
+            404u16 => iface_feature_flags::PostApprovalRequestError::NotFound(body),
+            _ => iface_feature_flags::PostApprovalRequestError::Other(body),
+        },
+        crate::runtime::DispatchError::Transport(m) => iface_feature_flags::PostApprovalRequestError::Other(m),
+    }
+}
+
+fn iface_feature_flags__delete_approval_request__ok(body: String) -> Result<String, crate::runtime::DispatchError> {
+    Ok(body)
+}
+
+fn iface_feature_flags__delete_approval_request__err(e: crate::runtime::DispatchError) -> iface_feature_flags::DeleteApprovalRequestError {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => match status {
+            401u16 => iface_feature_flags::DeleteApprovalRequestError::Unauthorized(body),
+            404u16 => iface_feature_flags::DeleteApprovalRequestError::NotFound(body),
+            _ => iface_feature_flags::DeleteApprovalRequestError::Other(body),
+        },
+        crate::runtime::DispatchError::Transport(m) => iface_feature_flags::DeleteApprovalRequestError::Other(m),
+    }
+}
+
+fn iface_feature_flags__post_apply_approval_request__ok(body: String) -> Result<iface_feature_flags::ApprovalRequests, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match iface_feature_flags__approval_requests__from_json(&v) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_feature_flags__post_apply_approval_request__err(e: crate::runtime::DispatchError) -> iface_feature_flags::PostApplyApprovalRequestError {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => match status {
+            401u16 => iface_feature_flags::PostApplyApprovalRequestError::Unauthorized(body),
+            404u16 => iface_feature_flags::PostApplyApprovalRequestError::NotFound(body),
+            _ => iface_feature_flags::PostApplyApprovalRequestError::Other(body),
+        },
+        crate::runtime::DispatchError::Transport(m) => iface_feature_flags::PostApplyApprovalRequestError::Other(m),
+    }
+}
+
+fn iface_feature_flags__post_review_approval_request__ok(body: String) -> Result<iface_feature_flags::ApprovalRequests, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match iface_feature_flags__approval_requests__from_json(&v) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_feature_flags__post_review_approval_request__err(e: crate::runtime::DispatchError) -> iface_feature_flags::PostReviewApprovalRequestError {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => match status {
+            401u16 => iface_feature_flags::PostReviewApprovalRequestError::Unauthorized(body),
+            404u16 => iface_feature_flags::PostReviewApprovalRequestError::NotFound(body),
+            _ => iface_feature_flags::PostReviewApprovalRequestError::Other(body),
+        },
+        crate::runtime::DispatchError::Transport(m) => iface_feature_flags::PostReviewApprovalRequestError::Other(m),
+    }
+}
+
+fn iface_feature_flags__get_flag_config_scheduled_changes__ok(body: String) -> Result<iface_feature_flags::FeatureFlagScheduledChanges, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match iface_feature_flags__feature_flag_scheduled_changes__from_json(&v) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_feature_flags__get_flag_config_scheduled_changes__err(e: crate::runtime::DispatchError) -> iface_feature_flags::GetFlagConfigScheduledChangesError {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => match status {
+            401u16 => iface_feature_flags::GetFlagConfigScheduledChangesError::Unauthorized(body),
+            404u16 => iface_feature_flags::GetFlagConfigScheduledChangesError::NotFound(body),
+            _ => iface_feature_flags::GetFlagConfigScheduledChangesError::Other(body),
+        },
+        crate::runtime::DispatchError::Transport(m) => iface_feature_flags::GetFlagConfigScheduledChangesError::Other(m),
+    }
+}
+
+fn iface_feature_flags__post_flag_config_scheduled_changes__ok(body: String) -> Result<iface_feature_flags::FeatureFlagScheduledChange, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match iface_feature_flags__feature_flag_scheduled_change__from_json(&v) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_feature_flags__post_flag_config_scheduled_changes__err(e: crate::runtime::DispatchError) -> iface_feature_flags::PostFlagConfigScheduledChangesError {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => match status {
+            400u16 => iface_feature_flags::PostFlagConfigScheduledChangesError::BadRequest(body),
+            401u16 => iface_feature_flags::PostFlagConfigScheduledChangesError::Unauthorized(body),
+            409u16 => iface_feature_flags::PostFlagConfigScheduledChangesError::Conflict(body),
+            _ => iface_feature_flags::PostFlagConfigScheduledChangesError::Other(body),
+        },
+        crate::runtime::DispatchError::Transport(m) => iface_feature_flags::PostFlagConfigScheduledChangesError::Other(m),
+    }
+}
+
+fn iface_feature_flags__get_flag_config_scheduled_changes_conflicts__ok(body: String) -> Result<iface_feature_flags::FeatureFlagScheduledChangesConflicts, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match iface_feature_flags__feature_flag_scheduled_changes_conflicts__from_json(&v) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_feature_flags__get_flag_config_scheduled_changes_conflicts__err(e: crate::runtime::DispatchError) -> iface_feature_flags::GetFlagConfigScheduledChangesConflictsError {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => match status {
+            401u16 => iface_feature_flags::GetFlagConfigScheduledChangesConflictsError::Unauthorized(body),
+            404u16 => iface_feature_flags::GetFlagConfigScheduledChangesConflictsError::NotFound(body),
+            _ => iface_feature_flags::GetFlagConfigScheduledChangesConflictsError::Other(body),
+        },
+        crate::runtime::DispatchError::Transport(m) => iface_feature_flags::GetFlagConfigScheduledChangesConflictsError::Other(m),
+    }
+}
+
+fn iface_feature_flags__get_flag_config_scheduled_change__ok(body: String) -> Result<iface_feature_flags::FeatureFlagScheduledChange, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match iface_feature_flags__feature_flag_scheduled_change__from_json(&v) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_feature_flags__get_flag_config_scheduled_change__err(e: crate::runtime::DispatchError) -> iface_feature_flags::GetFlagConfigScheduledChangeError {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => match status {
+            401u16 => iface_feature_flags::GetFlagConfigScheduledChangeError::Unauthorized(body),
+            404u16 => iface_feature_flags::GetFlagConfigScheduledChangeError::NotFound(body),
+            _ => iface_feature_flags::GetFlagConfigScheduledChangeError::Other(body),
+        },
+        crate::runtime::DispatchError::Transport(m) => iface_feature_flags::GetFlagConfigScheduledChangeError::Other(m),
+    }
+}
+
+fn iface_feature_flags__patch_flag_config_scheduled_change__ok(body: String) -> Result<iface_feature_flags::FeatureFlagScheduledChange, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match iface_feature_flags__feature_flag_scheduled_change__from_json(&v) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_feature_flags__patch_flag_config_scheduled_change__err(e: crate::runtime::DispatchError) -> iface_feature_flags::PatchFlagConfigScheduledChangeError {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => match status {
+            400u16 => iface_feature_flags::PatchFlagConfigScheduledChangeError::BadRequest(body),
+            401u16 => iface_feature_flags::PatchFlagConfigScheduledChangeError::Unauthorized(body),
+            409u16 => iface_feature_flags::PatchFlagConfigScheduledChangeError::Conflict(body),
+            _ => iface_feature_flags::PatchFlagConfigScheduledChangeError::Other(body),
+        },
+        crate::runtime::DispatchError::Transport(m) => iface_feature_flags::PatchFlagConfigScheduledChangeError::Other(m),
+    }
+}
+
+fn iface_feature_flags__delete_flag_config_scheduled_changes__ok(body: String) -> Result<String, crate::runtime::DispatchError> {
+    Ok(body)
+}
+
+fn iface_feature_flags__delete_flag_config_scheduled_changes__err(e: crate::runtime::DispatchError) -> iface_feature_flags::DeleteFlagConfigScheduledChangesError {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => match status {
+            401u16 => iface_feature_flags::DeleteFlagConfigScheduledChangesError::Unauthorized(body),
+            404u16 => iface_feature_flags::DeleteFlagConfigScheduledChangesError::NotFound(body),
+            _ => iface_feature_flags::DeleteFlagConfigScheduledChangesError::Other(body),
+        },
+        crate::runtime::DispatchError::Transport(m) => iface_feature_flags::DeleteFlagConfigScheduledChangesError::Other(m),
+    }
+}
+
 impl iface_feature_flags::Guest for crate::Component {
-    fn get_feature_flag_status_across_environments(params: iface_feature_flags::GetFeatureFlagStatusAcrossEnvironmentsParams) -> Result<String, String> {
+    fn get_feature_flag_status_across_environments(params: iface_feature_flags::GetFeatureFlagStatusAcrossEnvironmentsParams) -> Result<iface_feature_flags::FeatureFlagStatusAcrossEnvironments, iface_feature_flags::GetFeatureFlagStatusAcrossEnvironmentsError> {
         let json = iface_feature_flags__get_feature_flag_status_across_environments_params__to_json(&params);
-        dispatch(&OP_FEATURE_FLAGS_GET_FEATURE_FLAG_STATUS_ACROSS_ENVIRONMENTS, json)
+        match dispatch(&OP_FEATURE_FLAGS_GET_FEATURE_FLAG_STATUS_ACROSS_ENVIRONMENTS, json).and_then(iface_feature_flags__get_feature_flag_status_across_environments__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_feature_flags__get_feature_flag_status_across_environments__err(e)),
+        }
     }
-    fn get_feature_flag_statuses(params: iface_feature_flags::GetFeatureFlagStatusesParams) -> Result<String, String> {
+    fn get_feature_flag_statuses(params: iface_feature_flags::GetFeatureFlagStatusesParams) -> Result<iface_feature_flags::FeatureFlagStatuses, iface_feature_flags::GetFeatureFlagStatusesError> {
         let json = iface_feature_flags__get_feature_flag_statuses_params__to_json(&params);
-        dispatch(&OP_FEATURE_FLAGS_GET_FEATURE_FLAG_STATUSES, json)
+        match dispatch(&OP_FEATURE_FLAGS_GET_FEATURE_FLAG_STATUSES, json).and_then(iface_feature_flags__get_feature_flag_statuses__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_feature_flags__get_feature_flag_statuses__err(e)),
+        }
     }
-    fn get_feature_flag_status(params: iface_feature_flags::GetFeatureFlagStatusParams) -> Result<String, String> {
+    fn get_feature_flag_status(params: iface_feature_flags::GetFeatureFlagStatusParams) -> Result<iface_feature_flags::FeatureFlagStatus, iface_feature_flags::GetFeatureFlagStatusError> {
         let json = iface_feature_flags__get_feature_flag_status_params__to_json(&params);
-        dispatch(&OP_FEATURE_FLAGS_GET_FEATURE_FLAG_STATUS, json)
+        match dispatch(&OP_FEATURE_FLAGS_GET_FEATURE_FLAG_STATUS, json).and_then(iface_feature_flags__get_feature_flag_status__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_feature_flags__get_feature_flag_status__err(e)),
+        }
     }
-    fn get_feature_flags(params: iface_feature_flags::GetFeatureFlagsParams) -> Result<String, String> {
+    fn get_feature_flags(params: iface_feature_flags::GetFeatureFlagsParams) -> Result<iface_feature_flags::FeatureFlags, iface_feature_flags::GetFeatureFlagsError> {
         let json = iface_feature_flags__get_feature_flags_params__to_json(&params);
-        dispatch(&OP_FEATURE_FLAGS_GET_FEATURE_FLAGS, json)
+        match dispatch(&OP_FEATURE_FLAGS_GET_FEATURE_FLAGS, json).and_then(iface_feature_flags__get_feature_flags__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_feature_flags__get_feature_flags__err(e)),
+        }
     }
-    fn post_feature_flag(params: iface_feature_flags::PostFeatureFlagParams) -> Result<String, String> {
+    fn post_feature_flag(params: iface_feature_flags::PostFeatureFlagParams) -> Result<iface_feature_flags::FeatureFlag, iface_feature_flags::PostFeatureFlagError> {
         let json = iface_feature_flags__post_feature_flag_params__to_json(&params);
-        dispatch(&OP_FEATURE_FLAGS_POST_FEATURE_FLAG, json)
+        match dispatch(&OP_FEATURE_FLAGS_POST_FEATURE_FLAG, json).and_then(iface_feature_flags__post_feature_flag__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_feature_flags__post_feature_flag__err(e)),
+        }
     }
-    fn get_flags_project_key_environment_key_feature_flag_key_dependent_flags(params: iface_feature_flags::GetFlagsProjectKeyEnvironmentKeyFeatureFlagKeyDependentFlagsParams) -> Result<String, String> {
+    fn get_flags_project_key_environment_key_feature_flag_key_dependent_flags(params: iface_feature_flags::GetFlagsProjectKeyEnvironmentKeyFeatureFlagKeyDependentFlagsParams) -> Result<iface_feature_flags::DependentFlagsByEnvironment, iface_feature_flags::GetFlagsProjectKeyEnvironmentKeyFeatureFlagKeyDependentFlagsError> {
         let json = iface_feature_flags__get_flags_project_key_environment_key_feature_flag_key_dependent_flags_params__to_json(&params);
-        dispatch(&OP_FEATURE_FLAGS_GET_FLAGS_PROJECT_KEY_ENVIRONMENT_KEY_FEATURE_FLAG_KEY_DEPENDENT_FLAGS, json)
+        match dispatch(&OP_FEATURE_FLAGS_GET_FLAGS_PROJECT_KEY_ENVIRONMENT_KEY_FEATURE_FLAG_KEY_DEPENDENT_FLAGS, json).and_then(iface_feature_flags__get_flags_project_key_environment_key_feature_flag_key_dependent_flags__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_feature_flags__get_flags_project_key_environment_key_feature_flag_key_dependent_flags__err(e)),
+        }
     }
-    fn get_feature_flag(params: iface_feature_flags::GetFeatureFlagParams) -> Result<String, String> {
+    fn get_feature_flag(params: iface_feature_flags::GetFeatureFlagParams) -> Result<iface_feature_flags::FeatureFlag, iface_feature_flags::GetFeatureFlagError> {
         let json = iface_feature_flags__get_feature_flag_params__to_json(&params);
-        dispatch(&OP_FEATURE_FLAGS_GET_FEATURE_FLAG, json)
+        match dispatch(&OP_FEATURE_FLAGS_GET_FEATURE_FLAG, json).and_then(iface_feature_flags__get_feature_flag__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_feature_flags__get_feature_flag__err(e)),
+        }
     }
-    fn patch_feature_flag(params: iface_feature_flags::PatchFeatureFlagParams) -> Result<String, String> {
+    fn patch_feature_flag(params: iface_feature_flags::PatchFeatureFlagParams) -> Result<iface_feature_flags::FeatureFlag, iface_feature_flags::PatchFeatureFlagError> {
         let json = iface_feature_flags__patch_feature_flag_params__to_json(&params);
-        dispatch(&OP_FEATURE_FLAGS_PATCH_FEATURE_FLAG, json)
+        match dispatch(&OP_FEATURE_FLAGS_PATCH_FEATURE_FLAG, json).and_then(iface_feature_flags__patch_feature_flag__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_feature_flags__patch_feature_flag__err(e)),
+        }
     }
-    fn delete_feature_flag(params: iface_feature_flags::DeleteFeatureFlagParams) -> Result<String, String> {
+    fn delete_feature_flag(params: iface_feature_flags::DeleteFeatureFlagParams) -> Result<String, iface_feature_flags::DeleteFeatureFlagError> {
         let json = iface_feature_flags__delete_feature_flag_params__to_json(&params);
-        dispatch(&OP_FEATURE_FLAGS_DELETE_FEATURE_FLAG, json)
+        match dispatch(&OP_FEATURE_FLAGS_DELETE_FEATURE_FLAG, json).and_then(iface_feature_flags__delete_feature_flag__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_feature_flags__delete_feature_flag__err(e)),
+        }
     }
-    fn copy_feature_flag(params: iface_feature_flags::CopyFeatureFlagParams) -> Result<String, String> {
+    fn copy_feature_flag(params: iface_feature_flags::CopyFeatureFlagParams) -> Result<iface_feature_flags::FeatureFlag, iface_feature_flags::CopyFeatureFlagError> {
         let json = iface_feature_flags__copy_feature_flag_params__to_json(&params);
-        dispatch(&OP_FEATURE_FLAGS_COPY_FEATURE_FLAG, json)
+        match dispatch(&OP_FEATURE_FLAGS_COPY_FEATURE_FLAG, json).and_then(iface_feature_flags__copy_feature_flag__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_feature_flags__copy_feature_flag__err(e)),
+        }
     }
-    fn get_flags_project_key_feature_flag_key_dependent_flags(params: iface_feature_flags::GetFlagsProjectKeyFeatureFlagKeyDependentFlagsParams) -> Result<String, String> {
+    fn get_flags_project_key_feature_flag_key_dependent_flags(params: iface_feature_flags::GetFlagsProjectKeyFeatureFlagKeyDependentFlagsParams) -> Result<iface_feature_flags::MultiEnvironmentDependentFlags, iface_feature_flags::GetFlagsProjectKeyFeatureFlagKeyDependentFlagsError> {
         let json = iface_feature_flags__get_flags_project_key_feature_flag_key_dependent_flags_params__to_json(&params);
-        dispatch(&OP_FEATURE_FLAGS_GET_FLAGS_PROJECT_KEY_FEATURE_FLAG_KEY_DEPENDENT_FLAGS, json)
+        match dispatch(&OP_FEATURE_FLAGS_GET_FLAGS_PROJECT_KEY_FEATURE_FLAG_KEY_DEPENDENT_FLAGS, json).and_then(iface_feature_flags__get_flags_project_key_feature_flag_key_dependent_flags__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_feature_flags__get_flags_project_key_feature_flag_key_dependent_flags__err(e)),
+        }
     }
-    fn get_expiring_user_targets(params: iface_feature_flags::GetExpiringUserTargetsParams) -> Result<String, String> {
+    fn get_expiring_user_targets(params: iface_feature_flags::GetExpiringUserTargetsParams) -> Result<iface_feature_flags::UserTargetingExpirationForFlags, iface_feature_flags::GetExpiringUserTargetsError> {
         let json = iface_feature_flags__get_expiring_user_targets_params__to_json(&params);
-        dispatch(&OP_FEATURE_FLAGS_GET_EXPIRING_USER_TARGETS, json)
+        match dispatch(&OP_FEATURE_FLAGS_GET_EXPIRING_USER_TARGETS, json).and_then(iface_feature_flags__get_expiring_user_targets__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_feature_flags__get_expiring_user_targets__err(e)),
+        }
     }
-    fn patch_expiring_user_targets(params: iface_feature_flags::PatchExpiringUserTargetsParams) -> Result<String, String> {
+    fn patch_expiring_user_targets(params: iface_feature_flags::PatchExpiringUserTargetsParams) -> Result<iface_feature_flags::UserTargetingExpirationForFlags, iface_feature_flags::PatchExpiringUserTargetsError> {
         let json = iface_feature_flags__patch_expiring_user_targets_params__to_json(&params);
-        dispatch(&OP_FEATURE_FLAGS_PATCH_EXPIRING_USER_TARGETS, json)
+        match dispatch(&OP_FEATURE_FLAGS_PATCH_EXPIRING_USER_TARGETS, json).and_then(iface_feature_flags__patch_expiring_user_targets__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_feature_flags__patch_expiring_user_targets__err(e)),
+        }
     }
-    fn get_approval_requests(params: iface_feature_flags::GetApprovalRequestsParams) -> Result<String, String> {
+    fn get_approval_requests(params: iface_feature_flags::GetApprovalRequestsParams) -> Result<iface_feature_flags::ApprovalRequests, iface_feature_flags::GetApprovalRequestsError> {
         let json = iface_feature_flags__get_approval_requests_params__to_json(&params);
-        dispatch(&OP_FEATURE_FLAGS_GET_APPROVAL_REQUESTS, json)
+        match dispatch(&OP_FEATURE_FLAGS_GET_APPROVAL_REQUESTS, json).and_then(iface_feature_flags__get_approval_requests__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_feature_flags__get_approval_requests__err(e)),
+        }
     }
-    fn get_approval_request(params: iface_feature_flags::GetApprovalRequestParams) -> Result<String, String> {
+    fn get_approval_request(params: iface_feature_flags::GetApprovalRequestParams) -> Result<iface_feature_flags::ApprovalRequests, iface_feature_flags::GetApprovalRequestError> {
         let json = iface_feature_flags__get_approval_request_params__to_json(&params);
-        dispatch(&OP_FEATURE_FLAGS_GET_APPROVAL_REQUEST, json)
+        match dispatch(&OP_FEATURE_FLAGS_GET_APPROVAL_REQUEST, json).and_then(iface_feature_flags__get_approval_request__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_feature_flags__get_approval_request__err(e)),
+        }
     }
-    fn post_approval_request(params: iface_feature_flags::PostApprovalRequestParams) -> Result<String, String> {
+    fn post_approval_request(params: iface_feature_flags::PostApprovalRequestParams) -> Result<iface_feature_flags::ApprovalRequest, iface_feature_flags::PostApprovalRequestError> {
         let json = iface_feature_flags__post_approval_request_params__to_json(&params);
-        dispatch(&OP_FEATURE_FLAGS_POST_APPROVAL_REQUEST, json)
+        match dispatch(&OP_FEATURE_FLAGS_POST_APPROVAL_REQUEST, json).and_then(iface_feature_flags__post_approval_request__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_feature_flags__post_approval_request__err(e)),
+        }
     }
-    fn delete_approval_request(params: iface_feature_flags::DeleteApprovalRequestParams) -> Result<String, String> {
+    fn delete_approval_request(params: iface_feature_flags::DeleteApprovalRequestParams) -> Result<String, iface_feature_flags::DeleteApprovalRequestError> {
         let json = iface_feature_flags__delete_approval_request_params__to_json(&params);
-        dispatch(&OP_FEATURE_FLAGS_DELETE_APPROVAL_REQUEST, json)
+        match dispatch(&OP_FEATURE_FLAGS_DELETE_APPROVAL_REQUEST, json).and_then(iface_feature_flags__delete_approval_request__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_feature_flags__delete_approval_request__err(e)),
+        }
     }
-    fn post_apply_approval_request(params: iface_feature_flags::PostApplyApprovalRequestParams) -> Result<String, String> {
+    fn post_apply_approval_request(params: iface_feature_flags::PostApplyApprovalRequestParams) -> Result<iface_feature_flags::ApprovalRequests, iface_feature_flags::PostApplyApprovalRequestError> {
         let json = iface_feature_flags__post_apply_approval_request_params__to_json(&params);
-        dispatch(&OP_FEATURE_FLAGS_POST_APPLY_APPROVAL_REQUEST, json)
+        match dispatch(&OP_FEATURE_FLAGS_POST_APPLY_APPROVAL_REQUEST, json).and_then(iface_feature_flags__post_apply_approval_request__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_feature_flags__post_apply_approval_request__err(e)),
+        }
     }
-    fn post_review_approval_request(params: iface_feature_flags::PostReviewApprovalRequestParams) -> Result<String, String> {
+    fn post_review_approval_request(params: iface_feature_flags::PostReviewApprovalRequestParams) -> Result<iface_feature_flags::ApprovalRequests, iface_feature_flags::PostReviewApprovalRequestError> {
         let json = iface_feature_flags__post_review_approval_request_params__to_json(&params);
-        dispatch(&OP_FEATURE_FLAGS_POST_REVIEW_APPROVAL_REQUEST, json)
+        match dispatch(&OP_FEATURE_FLAGS_POST_REVIEW_APPROVAL_REQUEST, json).and_then(iface_feature_flags__post_review_approval_request__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_feature_flags__post_review_approval_request__err(e)),
+        }
     }
-    fn get_flag_config_scheduled_changes(params: iface_feature_flags::GetFlagConfigScheduledChangesParams) -> Result<String, String> {
+    fn get_flag_config_scheduled_changes(params: iface_feature_flags::GetFlagConfigScheduledChangesParams) -> Result<iface_feature_flags::FeatureFlagScheduledChanges, iface_feature_flags::GetFlagConfigScheduledChangesError> {
         let json = iface_feature_flags__get_flag_config_scheduled_changes_params__to_json(&params);
-        dispatch(&OP_FEATURE_FLAGS_GET_FLAG_CONFIG_SCHEDULED_CHANGES, json)
+        match dispatch(&OP_FEATURE_FLAGS_GET_FLAG_CONFIG_SCHEDULED_CHANGES, json).and_then(iface_feature_flags__get_flag_config_scheduled_changes__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_feature_flags__get_flag_config_scheduled_changes__err(e)),
+        }
     }
-    fn post_flag_config_scheduled_changes(params: iface_feature_flags::PostFlagConfigScheduledChangesParams) -> Result<String, String> {
+    fn post_flag_config_scheduled_changes(params: iface_feature_flags::PostFlagConfigScheduledChangesParams) -> Result<iface_feature_flags::FeatureFlagScheduledChange, iface_feature_flags::PostFlagConfigScheduledChangesError> {
         let json = iface_feature_flags__post_flag_config_scheduled_changes_params__to_json(&params);
-        dispatch(&OP_FEATURE_FLAGS_POST_FLAG_CONFIG_SCHEDULED_CHANGES, json)
+        match dispatch(&OP_FEATURE_FLAGS_POST_FLAG_CONFIG_SCHEDULED_CHANGES, json).and_then(iface_feature_flags__post_flag_config_scheduled_changes__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_feature_flags__post_flag_config_scheduled_changes__err(e)),
+        }
     }
-    fn get_flag_config_scheduled_changes_conflicts(params: iface_feature_flags::GetFlagConfigScheduledChangesConflictsParams) -> Result<String, String> {
+    fn get_flag_config_scheduled_changes_conflicts(params: iface_feature_flags::GetFlagConfigScheduledChangesConflictsParams) -> Result<iface_feature_flags::FeatureFlagScheduledChangesConflicts, iface_feature_flags::GetFlagConfigScheduledChangesConflictsError> {
         let json = iface_feature_flags__get_flag_config_scheduled_changes_conflicts_params__to_json(&params);
-        dispatch(&OP_FEATURE_FLAGS_GET_FLAG_CONFIG_SCHEDULED_CHANGES_CONFLICTS, json)
+        match dispatch(&OP_FEATURE_FLAGS_GET_FLAG_CONFIG_SCHEDULED_CHANGES_CONFLICTS, json).and_then(iface_feature_flags__get_flag_config_scheduled_changes_conflicts__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_feature_flags__get_flag_config_scheduled_changes_conflicts__err(e)),
+        }
     }
-    fn get_flag_config_scheduled_change(params: iface_feature_flags::GetFlagConfigScheduledChangeParams) -> Result<String, String> {
+    fn get_flag_config_scheduled_change(params: iface_feature_flags::GetFlagConfigScheduledChangeParams) -> Result<iface_feature_flags::FeatureFlagScheduledChange, iface_feature_flags::GetFlagConfigScheduledChangeError> {
         let json = iface_feature_flags__get_flag_config_scheduled_change_params__to_json(&params);
-        dispatch(&OP_FEATURE_FLAGS_GET_FLAG_CONFIG_SCHEDULED_CHANGE, json)
+        match dispatch(&OP_FEATURE_FLAGS_GET_FLAG_CONFIG_SCHEDULED_CHANGE, json).and_then(iface_feature_flags__get_flag_config_scheduled_change__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_feature_flags__get_flag_config_scheduled_change__err(e)),
+        }
     }
-    fn patch_flag_config_scheduled_change(params: iface_feature_flags::PatchFlagConfigScheduledChangeParams) -> Result<String, String> {
+    fn patch_flag_config_scheduled_change(params: iface_feature_flags::PatchFlagConfigScheduledChangeParams) -> Result<iface_feature_flags::FeatureFlagScheduledChange, iface_feature_flags::PatchFlagConfigScheduledChangeError> {
         let json = iface_feature_flags__patch_flag_config_scheduled_change_params__to_json(&params);
-        dispatch(&OP_FEATURE_FLAGS_PATCH_FLAG_CONFIG_SCHEDULED_CHANGE, json)
+        match dispatch(&OP_FEATURE_FLAGS_PATCH_FLAG_CONFIG_SCHEDULED_CHANGE, json).and_then(iface_feature_flags__patch_flag_config_scheduled_change__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_feature_flags__patch_flag_config_scheduled_change__err(e)),
+        }
     }
-    fn delete_flag_config_scheduled_changes(params: iface_feature_flags::DeleteFlagConfigScheduledChangesParams) -> Result<String, String> {
+    fn delete_flag_config_scheduled_changes(params: iface_feature_flags::DeleteFlagConfigScheduledChangesParams) -> Result<String, iface_feature_flags::DeleteFlagConfigScheduledChangesError> {
         let json = iface_feature_flags__delete_flag_config_scheduled_changes_params__to_json(&params);
-        dispatch(&OP_FEATURE_FLAGS_DELETE_FLAG_CONFIG_SCHEDULED_CHANGES, json)
+        match dispatch(&OP_FEATURE_FLAGS_DELETE_FLAG_CONFIG_SCHEDULED_CHANGES, json).and_then(iface_feature_flags__delete_flag_config_scheduled_changes__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_feature_flags__delete_flag_config_scheduled_changes__err(e)),
+        }
     }
 }
 use crate::exports::autostamp::launchdarkly::integrations as iface_integrations;
@@ -1203,7 +3409,7 @@ const OP_INTEGRATIONS_GET_INTEGRATION_SUBSCRIPTIONS: OpSpec = OpSpec {
     method: "GET",
     path_template: "/integrations/{integration_key}",
     fields: &[
-        FieldSpec { snake: "integration_key", location: FieldLocation::Path },
+        FieldSpec { snake: "integration_key", wire: "integrationKey", location: FieldLocation::Path },
     ],
     auth: &[
     ],
@@ -1213,7 +3419,7 @@ const OP_INTEGRATIONS_POST_INTEGRATION_SUBSCRIPTION: OpSpec = OpSpec {
     method: "POST",
     path_template: "/integrations/{integration_key}",
     fields: &[
-        FieldSpec { snake: "integration_key", location: FieldLocation::Path },
+        FieldSpec { snake: "integration_key", wire: "integrationKey", location: FieldLocation::Path },
     ],
     auth: &[
     ],
@@ -1223,8 +3429,8 @@ const OP_INTEGRATIONS_GET_INTEGRATION_SUBSCRIPTION: OpSpec = OpSpec {
     method: "GET",
     path_template: "/integrations/{integration_key}/{integration_id}",
     fields: &[
-        FieldSpec { snake: "integration_key", location: FieldLocation::Path },
-        FieldSpec { snake: "integration_id", location: FieldLocation::Path },
+        FieldSpec { snake: "integration_key", wire: "integrationKey", location: FieldLocation::Path },
+        FieldSpec { snake: "integration_id", wire: "integrationId", location: FieldLocation::Path },
     ],
     auth: &[
     ],
@@ -1234,8 +3440,8 @@ const OP_INTEGRATIONS_PATCH_INTEGRATION_SUBSCRIPTION: OpSpec = OpSpec {
     method: "PATCH",
     path_template: "/integrations/{integration_key}/{integration_id}",
     fields: &[
-        FieldSpec { snake: "integration_key", location: FieldLocation::Path },
-        FieldSpec { snake: "integration_id", location: FieldLocation::Path },
+        FieldSpec { snake: "integration_key", wire: "integrationKey", location: FieldLocation::Path },
+        FieldSpec { snake: "integration_id", wire: "integrationId", location: FieldLocation::Path },
     ],
     auth: &[
     ],
@@ -1245,12 +3451,103 @@ const OP_INTEGRATIONS_DELETE_INTEGRATION_SUBSCRIPTION: OpSpec = OpSpec {
     method: "DELETE",
     path_template: "/integrations/{integration_key}/{integration_id}",
     fields: &[
-        FieldSpec { snake: "integration_key", location: FieldLocation::Path },
-        FieldSpec { snake: "integration_id", location: FieldLocation::Path },
+        FieldSpec { snake: "integration_key", wire: "integrationKey", location: FieldLocation::Path },
+        FieldSpec { snake: "integration_id", wire: "integrationId", location: FieldLocation::Path },
     ],
     auth: &[
     ],
 };
+
+fn iface_integrations__statement_effect_enum__to_str(e: &iface_integrations::StatementEffectEnum) -> &'static str {
+    match e {
+        iface_integrations::StatementEffectEnum::Allow => "allow",
+        iface_integrations::StatementEffectEnum::Deny => "deny",
+    }
+}
+
+fn iface_integrations__integrations__to_json(p: &iface_integrations::Integrations) -> Value {
+    let mut m = Map::new();
+    m.insert("_links".into(), match (&p.links) { Some(v) => iface_integrations__integrations_links__to_json(v), None => Value::Null });
+    m.insert("items".into(), match (&p.items) { Some(v) => Value::Array((v).iter().map(|v| iface_integrations__integration_subscription__to_json(v)).collect()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_integrations__integrations_links__to_json(p: &iface_integrations::IntegrationsLinks) -> Value {
+    let mut m = Map::new();
+    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_integrations__integration_subscription__to_json(p: &iface_integrations::IntegrationSubscription) -> Value {
+    let mut m = Map::new();
+    m.insert("_id".into(), match (&p.id) { Some(v) => iface_integrations__id__to_json(v), None => Value::Null });
+    m.insert("_links".into(), match (&p.links) { Some(v) => iface_integrations__hierarchical_links__to_json(v), None => Value::Null });
+    m.insert("_status".into(), match (&p.status) { Some(v) => iface_integrations__integration_subscription_status__to_json(v), None => Value::Null });
+    m.insert("config".into(), match (&p.config) { Some(v) => iface_integrations__integration_subscription_config__to_json(v), None => Value::Null });
+    m.insert("kind".into(), match (&p.kind) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("name".into(), match (&p.name) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("on".into(), match (&p.on) { Some(v) => Value::Bool(*(v)), None => Value::Null });
+    m.insert("statements".into(), match (&p.statements) { Some(v) => Value::Array((v).iter().map(|v| iface_integrations__statement__to_json(v)).collect()), None => Value::Null });
+    m.insert("tags".into(), match (&p.tags) { Some(v) => Value::Array((v).iter().map(|v| Value::String((v).clone())).collect()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_integrations__id__to_json(p: &iface_integrations::Id) -> Value {
+    let mut m = Map::new();
+    m.insert("value".into(), Value::String((&p.value).clone()));
+    Value::Object(m)
+}
+
+fn iface_integrations__hierarchical_links__to_json(p: &iface_integrations::HierarchicalLinks) -> Value {
+    let mut m = Map::new();
+    m.insert("parent".into(), match (&p.parent) { Some(v) => iface_integrations__link__to_json(v), None => Value::Null });
+    m.insert("self".into(), match (&p.self_) { Some(v) => iface_integrations__link__to_json(v), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_integrations__link__to_json(p: &iface_integrations::Link) -> Value {
+    let mut m = Map::new();
+    m.insert("href".into(), match (&p.href) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("type".into(), match (&p.type_op) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_integrations__integration_subscription_status__to_json(p: &iface_integrations::IntegrationSubscriptionStatus) -> Value {
+    let mut m = Map::new();
+    m.insert("errorCount".into(), match (&p.error_count) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("lastSuccess".into(), match (&p.last_success) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("successCount".into(), match (&p.success_count) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_integrations__integration_subscription_config__to_json(p: &iface_integrations::IntegrationSubscriptionConfig) -> Value {
+    let mut m = Map::new();
+    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_integrations__statement__to_json(p: &iface_integrations::Statement) -> Value {
+    let mut m = Map::new();
+    m.insert("actions".into(), match (&p.actions) { Some(v) => Value::Array((v).iter().map(|v| Value::String((v).clone())).collect()), None => Value::Null });
+    m.insert("effect".into(), match (&p.effect) { Some(v) => Value::String(iface_integrations__statement_effect_enum__to_str(v).into()), None => Value::Null });
+    m.insert("notActions".into(), match (&p.not_actions) { Some(v) => Value::Array((v).iter().map(|v| Value::String((v).clone())).collect()), None => Value::Null });
+    m.insert("notResources".into(), match (&p.not_resources) { Some(v) => Value::Array((v).iter().map(|v| Value::String((v).clone())).collect()), None => Value::Null });
+    m.insert("resources".into(), match (&p.resources) { Some(v) => Value::Array((v).iter().map(|v| Value::String((v).clone())).collect()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_integrations__integration__to_json(p: &iface_integrations::Integration) -> Value {
+    let mut m = Map::new();
+    m.insert("_links".into(), match (&p.links) { Some(v) => iface_integrations__integration_links__to_json(v), None => Value::Null });
+    m.insert("items".into(), match (&p.items) { Some(v) => Value::Array((v).iter().map(|v| iface_integrations__integration_subscription__to_json(v)).collect()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_integrations__integration_links__to_json(p: &iface_integrations::IntegrationLinks) -> Value {
+    let mut m = Map::new();
+    m.insert("self".into(), match (&p.self_) { Some(v) => iface_integrations__link__to_json(v), None => Value::Null });
+    Value::Object(m)
+}
 
 fn iface_integrations__get_integration_subscriptions_params__to_json(p: &iface_integrations::GetIntegrationSubscriptionsParams) -> Value {
     let mut m = Map::new();
@@ -1285,29 +3582,276 @@ fn iface_integrations__delete_integration_subscription_params__to_json(p: &iface
     Value::Object(m)
 }
 
+fn iface_integrations__integrations__from_json(v: &Value) -> Option<iface_integrations::Integrations> {
+    let m = v.as_object()?;
+    Some(iface_integrations::Integrations {
+        links: m.get("_links").filter(|v| !v.is_null()).and_then(|v| iface_integrations__integrations_links__from_json(v)),
+        items: m.get("items").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| iface_integrations__integration_subscription__from_json(x)).collect())),
+    })
+}
+
+fn iface_integrations__integrations_links__from_json(v: &Value) -> Option<iface_integrations::IntegrationsLinks> {
+    let m = v.as_object()?;
+    Some(iface_integrations::IntegrationsLinks {
+        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    })
+}
+
+fn iface_integrations__integration_subscription__from_json(v: &Value) -> Option<iface_integrations::IntegrationSubscription> {
+    let m = v.as_object()?;
+    Some(iface_integrations::IntegrationSubscription {
+        id: m.get("_id").filter(|v| !v.is_null()).and_then(|v| iface_integrations__id__from_json(v)),
+        links: m.get("_links").filter(|v| !v.is_null()).and_then(|v| iface_integrations__hierarchical_links__from_json(v)),
+        status: m.get("_status").filter(|v| !v.is_null()).and_then(|v| iface_integrations__integration_subscription_status__from_json(v)),
+        config: m.get("config").filter(|v| !v.is_null()).and_then(|v| iface_integrations__integration_subscription_config__from_json(v)),
+        kind: m.get("kind").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        name: m.get("name").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        on: m.get("on").filter(|v| !v.is_null()).and_then(|v| (v).as_bool()),
+        statements: m.get("statements").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| iface_integrations__statement__from_json(x)).collect())),
+        tags: m.get("tags").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| (x).as_str().map(|s| s.to_string())).collect())),
+    })
+}
+
+fn iface_integrations__id__from_json(v: &Value) -> Option<iface_integrations::Id> {
+    let m = v.as_object()?;
+    Some(iface_integrations::Id {
+        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+    })
+}
+
+fn iface_integrations__hierarchical_links__from_json(v: &Value) -> Option<iface_integrations::HierarchicalLinks> {
+    let m = v.as_object()?;
+    Some(iface_integrations::HierarchicalLinks {
+        parent: m.get("parent").filter(|v| !v.is_null()).and_then(|v| iface_integrations__link__from_json(v)),
+        self_: m.get("self").filter(|v| !v.is_null()).and_then(|v| iface_integrations__link__from_json(v)),
+    })
+}
+
+fn iface_integrations__link__from_json(v: &Value) -> Option<iface_integrations::Link> {
+    let m = v.as_object()?;
+    Some(iface_integrations::Link {
+        href: m.get("href").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        type_op: m.get("type").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    })
+}
+
+fn iface_integrations__integration_subscription_status__from_json(v: &Value) -> Option<iface_integrations::IntegrationSubscriptionStatus> {
+    let m = v.as_object()?;
+    Some(iface_integrations::IntegrationSubscriptionStatus {
+        error_count: m.get("errorCount").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        last_success: m.get("lastSuccess").filter(|v| !v.is_null()).and_then(|v| (v).as_i64()),
+        success_count: m.get("successCount").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+    })
+}
+
+fn iface_integrations__integration_subscription_config__from_json(v: &Value) -> Option<iface_integrations::IntegrationSubscriptionConfig> {
+    let m = v.as_object()?;
+    Some(iface_integrations::IntegrationSubscriptionConfig {
+        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    })
+}
+
+fn iface_integrations__statement__from_json(v: &Value) -> Option<iface_integrations::Statement> {
+    let m = v.as_object()?;
+    Some(iface_integrations::Statement {
+        actions: m.get("actions").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| (x).as_str().map(|s| s.to_string())).collect())),
+        effect: m.get("effect").filter(|v| !v.is_null()).and_then(|v| (v).as_str().and_then(iface_integrations__statement_effect_enum__from_str)),
+        not_actions: m.get("notActions").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| (x).as_str().map(|s| s.to_string())).collect())),
+        not_resources: m.get("notResources").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| (x).as_str().map(|s| s.to_string())).collect())),
+        resources: m.get("resources").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| (x).as_str().map(|s| s.to_string())).collect())),
+    })
+}
+
+fn iface_integrations__integration__from_json(v: &Value) -> Option<iface_integrations::Integration> {
+    let m = v.as_object()?;
+    Some(iface_integrations::Integration {
+        links: m.get("_links").filter(|v| !v.is_null()).and_then(|v| iface_integrations__integration_links__from_json(v)),
+        items: m.get("items").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| iface_integrations__integration_subscription__from_json(x)).collect())),
+    })
+}
+
+fn iface_integrations__integration_links__from_json(v: &Value) -> Option<iface_integrations::IntegrationLinks> {
+    let m = v.as_object()?;
+    Some(iface_integrations::IntegrationLinks {
+        self_: m.get("self").filter(|v| !v.is_null()).and_then(|v| iface_integrations__link__from_json(v)),
+    })
+}
+
+fn iface_integrations__statement_effect_enum__from_str(s: &str) -> Option<iface_integrations::StatementEffectEnum> {
+    match s {
+        "allow" => Some(iface_integrations::StatementEffectEnum::Allow),
+        "deny" => Some(iface_integrations::StatementEffectEnum::Deny),
+        _ => None,
+    }
+}
+
+fn iface_integrations__get_integrations__ok(body: String) -> Result<iface_integrations::Integrations, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match iface_integrations__integrations__from_json(&v) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_integrations__get_integrations__err(e: crate::runtime::DispatchError) -> iface_integrations::GetIntegrationsError {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => match status {
+            403u16 => iface_integrations::GetIntegrationsError::Forbidden(body),
+            _ => iface_integrations::GetIntegrationsError::Other(body),
+        },
+        crate::runtime::DispatchError::Transport(m) => iface_integrations::GetIntegrationsError::Other(m),
+    }
+}
+
+fn iface_integrations__get_integration_subscriptions__ok(body: String) -> Result<iface_integrations::Integration, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match iface_integrations__integration__from_json(&v) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_integrations__get_integration_subscriptions__err(e: crate::runtime::DispatchError) -> iface_integrations::GetIntegrationSubscriptionsError {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => match status {
+            403u16 => iface_integrations::GetIntegrationSubscriptionsError::Forbidden(body),
+            404u16 => iface_integrations::GetIntegrationSubscriptionsError::NotFound(body),
+            _ => iface_integrations::GetIntegrationSubscriptionsError::Other(body),
+        },
+        crate::runtime::DispatchError::Transport(m) => iface_integrations::GetIntegrationSubscriptionsError::Other(m),
+    }
+}
+
+fn iface_integrations__post_integration_subscription__ok(body: String) -> Result<iface_integrations::IntegrationSubscription, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match iface_integrations__integration_subscription__from_json(&v) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_integrations__post_integration_subscription__err(e: crate::runtime::DispatchError) -> iface_integrations::PostIntegrationSubscriptionError {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => match status {
+            400u16 => iface_integrations::PostIntegrationSubscriptionError::BadRequest(body),
+            401u16 => iface_integrations::PostIntegrationSubscriptionError::Unauthorized(body),
+            409u16 => iface_integrations::PostIntegrationSubscriptionError::Conflict(body),
+            _ => iface_integrations::PostIntegrationSubscriptionError::Other(body),
+        },
+        crate::runtime::DispatchError::Transport(m) => iface_integrations::PostIntegrationSubscriptionError::Other(m),
+    }
+}
+
+fn iface_integrations__get_integration_subscription__ok(body: String) -> Result<iface_integrations::IntegrationSubscription, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match iface_integrations__integration_subscription__from_json(&v) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_integrations__get_integration_subscription__err(e: crate::runtime::DispatchError) -> iface_integrations::GetIntegrationSubscriptionError {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => match status {
+            403u16 => iface_integrations::GetIntegrationSubscriptionError::Forbidden(body),
+            404u16 => iface_integrations::GetIntegrationSubscriptionError::NotFound(body),
+            _ => iface_integrations::GetIntegrationSubscriptionError::Other(body),
+        },
+        crate::runtime::DispatchError::Transport(m) => iface_integrations::GetIntegrationSubscriptionError::Other(m),
+    }
+}
+
+fn iface_integrations__patch_integration_subscription__ok(body: String) -> Result<iface_integrations::IntegrationSubscription, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match iface_integrations__integration_subscription__from_json(&v) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_integrations__patch_integration_subscription__err(e: crate::runtime::DispatchError) -> iface_integrations::PatchIntegrationSubscriptionError {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => match status {
+            400u16 => iface_integrations::PatchIntegrationSubscriptionError::BadRequest(body),
+            401u16 => iface_integrations::PatchIntegrationSubscriptionError::Unauthorized(body),
+            404u16 => iface_integrations::PatchIntegrationSubscriptionError::NotFound(body),
+            _ => iface_integrations::PatchIntegrationSubscriptionError::Other(body),
+        },
+        crate::runtime::DispatchError::Transport(m) => iface_integrations::PatchIntegrationSubscriptionError::Other(m),
+    }
+}
+
+fn iface_integrations__delete_integration_subscription__ok(body: String) -> Result<String, crate::runtime::DispatchError> {
+    Ok(body)
+}
+
+fn iface_integrations__delete_integration_subscription__err(e: crate::runtime::DispatchError) -> iface_integrations::DeleteIntegrationSubscriptionError {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => match status {
+            401u16 => iface_integrations::DeleteIntegrationSubscriptionError::Unauthorized(body),
+            404u16 => iface_integrations::DeleteIntegrationSubscriptionError::NotFound(body),
+            _ => iface_integrations::DeleteIntegrationSubscriptionError::Other(body),
+        },
+        crate::runtime::DispatchError::Transport(m) => iface_integrations::DeleteIntegrationSubscriptionError::Other(m),
+    }
+}
+
 impl iface_integrations::Guest for crate::Component {
-    fn get_integrations() -> Result<String, String> {
-        dispatch(&OP_INTEGRATIONS_GET_INTEGRATIONS, Value::Object(Map::new()))
+    fn get_integrations() -> Result<iface_integrations::Integrations, iface_integrations::GetIntegrationsError> {
+        match dispatch(&OP_INTEGRATIONS_GET_INTEGRATIONS, Value::Object(Map::new())).and_then(iface_integrations__get_integrations__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_integrations__get_integrations__err(e)),
+        }
     }
-    fn get_integration_subscriptions(params: iface_integrations::GetIntegrationSubscriptionsParams) -> Result<String, String> {
+    fn get_integration_subscriptions(params: iface_integrations::GetIntegrationSubscriptionsParams) -> Result<iface_integrations::Integration, iface_integrations::GetIntegrationSubscriptionsError> {
         let json = iface_integrations__get_integration_subscriptions_params__to_json(&params);
-        dispatch(&OP_INTEGRATIONS_GET_INTEGRATION_SUBSCRIPTIONS, json)
+        match dispatch(&OP_INTEGRATIONS_GET_INTEGRATION_SUBSCRIPTIONS, json).and_then(iface_integrations__get_integration_subscriptions__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_integrations__get_integration_subscriptions__err(e)),
+        }
     }
-    fn post_integration_subscription(params: iface_integrations::PostIntegrationSubscriptionParams) -> Result<String, String> {
+    fn post_integration_subscription(params: iface_integrations::PostIntegrationSubscriptionParams) -> Result<iface_integrations::IntegrationSubscription, iface_integrations::PostIntegrationSubscriptionError> {
         let json = iface_integrations__post_integration_subscription_params__to_json(&params);
-        dispatch(&OP_INTEGRATIONS_POST_INTEGRATION_SUBSCRIPTION, json)
+        match dispatch(&OP_INTEGRATIONS_POST_INTEGRATION_SUBSCRIPTION, json).and_then(iface_integrations__post_integration_subscription__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_integrations__post_integration_subscription__err(e)),
+        }
     }
-    fn get_integration_subscription(params: iface_integrations::GetIntegrationSubscriptionParams) -> Result<String, String> {
+    fn get_integration_subscription(params: iface_integrations::GetIntegrationSubscriptionParams) -> Result<iface_integrations::IntegrationSubscription, iface_integrations::GetIntegrationSubscriptionError> {
         let json = iface_integrations__get_integration_subscription_params__to_json(&params);
-        dispatch(&OP_INTEGRATIONS_GET_INTEGRATION_SUBSCRIPTION, json)
+        match dispatch(&OP_INTEGRATIONS_GET_INTEGRATION_SUBSCRIPTION, json).and_then(iface_integrations__get_integration_subscription__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_integrations__get_integration_subscription__err(e)),
+        }
     }
-    fn patch_integration_subscription(params: iface_integrations::PatchIntegrationSubscriptionParams) -> Result<String, String> {
+    fn patch_integration_subscription(params: iface_integrations::PatchIntegrationSubscriptionParams) -> Result<iface_integrations::IntegrationSubscription, iface_integrations::PatchIntegrationSubscriptionError> {
         let json = iface_integrations__patch_integration_subscription_params__to_json(&params);
-        dispatch(&OP_INTEGRATIONS_PATCH_INTEGRATION_SUBSCRIPTION, json)
+        match dispatch(&OP_INTEGRATIONS_PATCH_INTEGRATION_SUBSCRIPTION, json).and_then(iface_integrations__patch_integration_subscription__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_integrations__patch_integration_subscription__err(e)),
+        }
     }
-    fn delete_integration_subscription(params: iface_integrations::DeleteIntegrationSubscriptionParams) -> Result<String, String> {
+    fn delete_integration_subscription(params: iface_integrations::DeleteIntegrationSubscriptionParams) -> Result<String, iface_integrations::DeleteIntegrationSubscriptionError> {
         let json = iface_integrations__delete_integration_subscription_params__to_json(&params);
-        dispatch(&OP_INTEGRATIONS_DELETE_INTEGRATION_SUBSCRIPTION, json)
+        match dispatch(&OP_INTEGRATIONS_DELETE_INTEGRATION_SUBSCRIPTION, json).and_then(iface_integrations__delete_integration_subscription__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_integrations__delete_integration_subscription__err(e)),
+        }
     }
 }
 use crate::exports::autostamp::launchdarkly::team_members as iface_team_members;
@@ -1316,10 +3860,10 @@ const OP_TEAM_MEMBERS_GET_MEMBERS: OpSpec = OpSpec {
     method: "GET",
     path_template: "/members",
     fields: &[
-        FieldSpec { snake: "limit", location: FieldLocation::Query },
-        FieldSpec { snake: "offset", location: FieldLocation::Query },
-        FieldSpec { snake: "filter", location: FieldLocation::Query },
-        FieldSpec { snake: "sort", location: FieldLocation::Query },
+        FieldSpec { snake: "limit", wire: "limit", location: FieldLocation::Query },
+        FieldSpec { snake: "offset", wire: "offset", location: FieldLocation::Query },
+        FieldSpec { snake: "filter", wire: "filter", location: FieldLocation::Query },
+        FieldSpec { snake: "sort", wire: "sort", location: FieldLocation::Query },
     ],
     auth: &[
     ],
@@ -1347,7 +3891,7 @@ const OP_TEAM_MEMBERS_GET_MEMBER: OpSpec = OpSpec {
     method: "GET",
     path_template: "/members/{member_id}",
     fields: &[
-        FieldSpec { snake: "member_id", location: FieldLocation::Path },
+        FieldSpec { snake: "member_id", wire: "memberId", location: FieldLocation::Path },
     ],
     auth: &[
     ],
@@ -1357,7 +3901,7 @@ const OP_TEAM_MEMBERS_PATCH_MEMBER: OpSpec = OpSpec {
     method: "PATCH",
     path_template: "/members/{member_id}",
     fields: &[
-        FieldSpec { snake: "member_id", location: FieldLocation::Path },
+        FieldSpec { snake: "member_id", wire: "memberId", location: FieldLocation::Path },
     ],
     auth: &[
     ],
@@ -1367,11 +3911,68 @@ const OP_TEAM_MEMBERS_DELETE_MEMBER: OpSpec = OpSpec {
     method: "DELETE",
     path_template: "/members/{member_id}",
     fields: &[
-        FieldSpec { snake: "member_id", location: FieldLocation::Path },
+        FieldSpec { snake: "member_id", wire: "memberId", location: FieldLocation::Path },
     ],
     auth: &[
     ],
 };
+
+fn iface_team_members__members__to_json(p: &iface_team_members::Members) -> Value {
+    let mut m = Map::new();
+    m.insert("_links".into(), match (&p.links) { Some(v) => iface_team_members__links__to_json(v), None => Value::Null });
+    m.insert("items".into(), match (&p.items) { Some(v) => Value::Array((v).iter().map(|v| iface_team_members__member__to_json(v)).collect()), None => Value::Null });
+    m.insert("totalCount".into(), match (&p.total_count) { Some(v) => serde_json::Number::from_f64(*(v)).map(Value::Number).unwrap_or(Value::Null), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_team_members__links__to_json(p: &iface_team_members::Links) -> Value {
+    let mut m = Map::new();
+    m.insert("next".into(), match (&p.next) { Some(v) => iface_team_members__link__to_json(v), None => Value::Null });
+    m.insert("self".into(), match (&p.self_) { Some(v) => iface_team_members__link__to_json(v), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_team_members__link__to_json(p: &iface_team_members::Link) -> Value {
+    let mut m = Map::new();
+    m.insert("href".into(), match (&p.href) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("type".into(), match (&p.type_op) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_team_members__member__to_json(p: &iface_team_members::Member) -> Value {
+    let mut m = Map::new();
+    m.insert("_id".into(), match (&p.id) { Some(v) => iface_team_members__id__to_json(v), None => Value::Null });
+    m.insert("_lastSeen".into(), match (&p.last_seen) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("_lastSeenMetadata".into(), match (&p.last_seen_metadata) { Some(v) => iface_team_members__member_last_seen_metadata__to_json(v), None => Value::Null });
+    m.insert("_links".into(), match (&p.links) { Some(v) => iface_team_members__links__to_json(v), None => Value::Null });
+    m.insert("_pendingInvite".into(), match (&p.pending_invite) { Some(v) => Value::Bool(*(v)), None => Value::Null });
+    m.insert("_verified".into(), match (&p.verified) { Some(v) => Value::Bool(*(v)), None => Value::Null });
+    m.insert("customRoles".into(), match (&p.custom_roles) { Some(v) => Value::Array((v).iter().map(|v| iface_team_members__id__to_json(v)).collect()), None => Value::Null });
+    m.insert("email".into(), match (&p.email) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("firstName".into(), match (&p.first_name) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("isBeta".into(), match (&p.is_beta) { Some(v) => Value::Bool(*(v)), None => Value::Null });
+    m.insert("lastName".into(), match (&p.last_name) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("role".into(), match (&p.role) { Some(v) => iface_team_members__role__to_json(v), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_team_members__id__to_json(p: &iface_team_members::Id) -> Value {
+    let mut m = Map::new();
+    m.insert("value".into(), Value::String((&p.value).clone()));
+    Value::Object(m)
+}
+
+fn iface_team_members__member_last_seen_metadata__to_json(p: &iface_team_members::MemberLastSeenMetadata) -> Value {
+    let mut m = Map::new();
+    m.insert("tokenId".into(), match (&p.token_id) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_team_members__role__to_json(p: &iface_team_members::Role) -> Value {
+    let mut m = Map::new();
+    m.insert("value".into(), Value::String((&p.value).clone()));
+    Value::Object(m)
+}
 
 fn iface_team_members__get_members_params__to_json(p: &iface_team_members::GetMembersParams) -> Value {
     let mut m = Map::new();
@@ -1400,28 +4001,237 @@ fn iface_team_members__delete_member_params__to_json(p: &iface_team_members::Del
     Value::Object(m)
 }
 
+fn iface_team_members__members__from_json(v: &Value) -> Option<iface_team_members::Members> {
+    let m = v.as_object()?;
+    Some(iface_team_members::Members {
+        links: m.get("_links").filter(|v| !v.is_null()).and_then(|v| iface_team_members__links__from_json(v)),
+        items: m.get("items").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| iface_team_members__member__from_json(x)).collect())),
+        total_count: m.get("totalCount").filter(|v| !v.is_null()).and_then(|v| (v).as_f64()),
+    })
+}
+
+fn iface_team_members__links__from_json(v: &Value) -> Option<iface_team_members::Links> {
+    let m = v.as_object()?;
+    Some(iface_team_members::Links {
+        next: m.get("next").filter(|v| !v.is_null()).and_then(|v| iface_team_members__link__from_json(v)),
+        self_: m.get("self").filter(|v| !v.is_null()).and_then(|v| iface_team_members__link__from_json(v)),
+    })
+}
+
+fn iface_team_members__link__from_json(v: &Value) -> Option<iface_team_members::Link> {
+    let m = v.as_object()?;
+    Some(iface_team_members::Link {
+        href: m.get("href").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        type_op: m.get("type").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    })
+}
+
+fn iface_team_members__member__from_json(v: &Value) -> Option<iface_team_members::Member> {
+    let m = v.as_object()?;
+    Some(iface_team_members::Member {
+        id: m.get("_id").filter(|v| !v.is_null()).and_then(|v| iface_team_members__id__from_json(v)),
+        last_seen: m.get("_lastSeen").filter(|v| !v.is_null()).and_then(|v| (v).as_i64()),
+        last_seen_metadata: m.get("_lastSeenMetadata").filter(|v| !v.is_null()).and_then(|v| iface_team_members__member_last_seen_metadata__from_json(v)),
+        links: m.get("_links").filter(|v| !v.is_null()).and_then(|v| iface_team_members__links__from_json(v)),
+        pending_invite: m.get("_pendingInvite").filter(|v| !v.is_null()).and_then(|v| (v).as_bool()),
+        verified: m.get("_verified").filter(|v| !v.is_null()).and_then(|v| (v).as_bool()),
+        custom_roles: m.get("customRoles").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| iface_team_members__id__from_json(x)).collect())),
+        email: m.get("email").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        first_name: m.get("firstName").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        is_beta: m.get("isBeta").filter(|v| !v.is_null()).and_then(|v| (v).as_bool()),
+        last_name: m.get("lastName").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        role: m.get("role").filter(|v| !v.is_null()).and_then(|v| iface_team_members__role__from_json(v)),
+    })
+}
+
+fn iface_team_members__id__from_json(v: &Value) -> Option<iface_team_members::Id> {
+    let m = v.as_object()?;
+    Some(iface_team_members::Id {
+        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+    })
+}
+
+fn iface_team_members__member_last_seen_metadata__from_json(v: &Value) -> Option<iface_team_members::MemberLastSeenMetadata> {
+    let m = v.as_object()?;
+    Some(iface_team_members::MemberLastSeenMetadata {
+        token_id: m.get("tokenId").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    })
+}
+
+fn iface_team_members__role__from_json(v: &Value) -> Option<iface_team_members::Role> {
+    let m = v.as_object()?;
+    Some(iface_team_members::Role {
+        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+    })
+}
+
+fn iface_team_members__get_members__ok(body: String) -> Result<iface_team_members::Members, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match iface_team_members__members__from_json(&v) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_team_members__get_members__err(e: crate::runtime::DispatchError) -> iface_team_members::GetMembersError {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => match status {
+            401u16 => iface_team_members::GetMembersError::Unauthorized(body),
+            _ => iface_team_members::GetMembersError::Other(body),
+        },
+        crate::runtime::DispatchError::Transport(m) => iface_team_members::GetMembersError::Other(m),
+    }
+}
+
+fn iface_team_members__post_members__ok(body: String) -> Result<iface_team_members::Members, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match iface_team_members__members__from_json(&v) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_team_members__post_members__err(e: crate::runtime::DispatchError) -> iface_team_members::PostMembersError {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => match status {
+            400u16 => iface_team_members::PostMembersError::BadRequest(body),
+            401u16 => iface_team_members::PostMembersError::Unauthorized(body),
+            409u16 => iface_team_members::PostMembersError::Conflict(body),
+            _ => iface_team_members::PostMembersError::Other(body),
+        },
+        crate::runtime::DispatchError::Transport(m) => iface_team_members::PostMembersError::Other(m),
+    }
+}
+
+fn iface_team_members__get_me__ok(body: String) -> Result<iface_team_members::Member, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match iface_team_members__member__from_json(&v) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_team_members__get_me__err(e: crate::runtime::DispatchError) -> iface_team_members::GetMeError {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => match status {
+            400u16 => iface_team_members::GetMeError::BadRequest(body),
+            401u16 => iface_team_members::GetMeError::Unauthorized(body),
+            _ => iface_team_members::GetMeError::Other(body),
+        },
+        crate::runtime::DispatchError::Transport(m) => iface_team_members::GetMeError::Other(m),
+    }
+}
+
+fn iface_team_members__get_member__ok(body: String) -> Result<iface_team_members::Member, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match iface_team_members__member__from_json(&v) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_team_members__get_member__err(e: crate::runtime::DispatchError) -> iface_team_members::GetMemberError {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => match status {
+            400u16 => iface_team_members::GetMemberError::BadRequest(body),
+            401u16 => iface_team_members::GetMemberError::Unauthorized(body),
+            _ => iface_team_members::GetMemberError::Other(body),
+        },
+        crate::runtime::DispatchError::Transport(m) => iface_team_members::GetMemberError::Other(m),
+    }
+}
+
+fn iface_team_members__patch_member__ok(body: String) -> Result<iface_team_members::Member, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match iface_team_members__member__from_json(&v) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_team_members__patch_member__err(e: crate::runtime::DispatchError) -> iface_team_members::PatchMemberError {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => match status {
+            400u16 => iface_team_members::PatchMemberError::BadRequest(body),
+            401u16 => iface_team_members::PatchMemberError::Unauthorized(body),
+            404u16 => iface_team_members::PatchMemberError::NotFound(body),
+            409u16 => iface_team_members::PatchMemberError::Conflict(body),
+            _ => iface_team_members::PatchMemberError::Other(body),
+        },
+        crate::runtime::DispatchError::Transport(m) => iface_team_members::PatchMemberError::Other(m),
+    }
+}
+
+fn iface_team_members__delete_member__ok(body: String) -> Result<String, crate::runtime::DispatchError> {
+    Ok(body)
+}
+
+fn iface_team_members__delete_member__err(e: crate::runtime::DispatchError) -> iface_team_members::DeleteMemberError {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => match status {
+            401u16 => iface_team_members::DeleteMemberError::Unauthorized(body),
+            404u16 => iface_team_members::DeleteMemberError::NotFound(body),
+            _ => iface_team_members::DeleteMemberError::Other(body),
+        },
+        crate::runtime::DispatchError::Transport(m) => iface_team_members::DeleteMemberError::Other(m),
+    }
+}
+
 impl iface_team_members::Guest for crate::Component {
-    fn get_members(params: iface_team_members::GetMembersParams) -> Result<String, String> {
+    fn get_members(params: iface_team_members::GetMembersParams) -> Result<iface_team_members::Members, iface_team_members::GetMembersError> {
         let json = iface_team_members__get_members_params__to_json(&params);
-        dispatch(&OP_TEAM_MEMBERS_GET_MEMBERS, json)
+        match dispatch(&OP_TEAM_MEMBERS_GET_MEMBERS, json).and_then(iface_team_members__get_members__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_team_members__get_members__err(e)),
+        }
     }
-    fn post_members() -> Result<String, String> {
-        dispatch(&OP_TEAM_MEMBERS_POST_MEMBERS, Value::Object(Map::new()))
+    fn post_members() -> Result<iface_team_members::Members, iface_team_members::PostMembersError> {
+        match dispatch(&OP_TEAM_MEMBERS_POST_MEMBERS, Value::Object(Map::new())).and_then(iface_team_members__post_members__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_team_members__post_members__err(e)),
+        }
     }
-    fn get_me() -> Result<String, String> {
-        dispatch(&OP_TEAM_MEMBERS_GET_ME, Value::Object(Map::new()))
+    fn get_me() -> Result<iface_team_members::Member, iface_team_members::GetMeError> {
+        match dispatch(&OP_TEAM_MEMBERS_GET_ME, Value::Object(Map::new())).and_then(iface_team_members__get_me__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_team_members__get_me__err(e)),
+        }
     }
-    fn get_member(params: iface_team_members::GetMemberParams) -> Result<String, String> {
+    fn get_member(params: iface_team_members::GetMemberParams) -> Result<iface_team_members::Member, iface_team_members::GetMemberError> {
         let json = iface_team_members__get_member_params__to_json(&params);
-        dispatch(&OP_TEAM_MEMBERS_GET_MEMBER, json)
+        match dispatch(&OP_TEAM_MEMBERS_GET_MEMBER, json).and_then(iface_team_members__get_member__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_team_members__get_member__err(e)),
+        }
     }
-    fn patch_member(params: iface_team_members::PatchMemberParams) -> Result<String, String> {
+    fn patch_member(params: iface_team_members::PatchMemberParams) -> Result<iface_team_members::Member, iface_team_members::PatchMemberError> {
         let json = iface_team_members__patch_member_params__to_json(&params);
-        dispatch(&OP_TEAM_MEMBERS_PATCH_MEMBER, json)
+        match dispatch(&OP_TEAM_MEMBERS_PATCH_MEMBER, json).and_then(iface_team_members__patch_member__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_team_members__patch_member__err(e)),
+        }
     }
-    fn delete_member(params: iface_team_members::DeleteMemberParams) -> Result<String, String> {
+    fn delete_member(params: iface_team_members::DeleteMemberParams) -> Result<String, iface_team_members::DeleteMemberError> {
         let json = iface_team_members__delete_member_params__to_json(&params);
-        dispatch(&OP_TEAM_MEMBERS_DELETE_MEMBER, json)
+        match dispatch(&OP_TEAM_MEMBERS_DELETE_MEMBER, json).and_then(iface_team_members__delete_member__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_team_members__delete_member__err(e)),
+        }
     }
 }
 use crate::exports::autostamp::launchdarkly::projects as iface_projects;
@@ -1448,7 +4258,7 @@ const OP_PROJECTS_GET_PROJECT: OpSpec = OpSpec {
     method: "GET",
     path_template: "/projects/{project_key}",
     fields: &[
-        FieldSpec { snake: "project_key", location: FieldLocation::Path },
+        FieldSpec { snake: "project_key", wire: "projectKey", location: FieldLocation::Path },
     ],
     auth: &[
     ],
@@ -1458,7 +4268,7 @@ const OP_PROJECTS_PATCH_PROJECT: OpSpec = OpSpec {
     method: "PATCH",
     path_template: "/projects/{project_key}",
     fields: &[
-        FieldSpec { snake: "project_key", location: FieldLocation::Path },
+        FieldSpec { snake: "project_key", wire: "projectKey", location: FieldLocation::Path },
     ],
     auth: &[
     ],
@@ -1468,11 +4278,95 @@ const OP_PROJECTS_DELETE_PROJECT: OpSpec = OpSpec {
     method: "DELETE",
     path_template: "/projects/{project_key}",
     fields: &[
-        FieldSpec { snake: "project_key", location: FieldLocation::Path },
+        FieldSpec { snake: "project_key", wire: "projectKey", location: FieldLocation::Path },
     ],
     auth: &[
     ],
 };
+
+fn iface_projects__environment_approval_settings_service_kind_enum__to_str(e: &iface_projects::EnvironmentApprovalSettingsServiceKindEnum) -> &'static str {
+    match e {
+        iface_projects::EnvironmentApprovalSettingsServiceKindEnum::Launchdarkly => "launchdarkly",
+        iface_projects::EnvironmentApprovalSettingsServiceKindEnum::ServiceNow => "service-now",
+    }
+}
+
+fn iface_projects__projects__to_json(p: &iface_projects::Projects) -> Value {
+    let mut m = Map::new();
+    m.insert("_links".into(), match (&p.links) { Some(v) => iface_projects__links__to_json(v), None => Value::Null });
+    m.insert("items".into(), match (&p.items) { Some(v) => Value::Array((v).iter().map(|v| iface_projects__project__to_json(v)).collect()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_projects__links__to_json(p: &iface_projects::Links) -> Value {
+    let mut m = Map::new();
+    m.insert("next".into(), match (&p.next) { Some(v) => iface_projects__link__to_json(v), None => Value::Null });
+    m.insert("self".into(), match (&p.self_) { Some(v) => iface_projects__link__to_json(v), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_projects__link__to_json(p: &iface_projects::Link) -> Value {
+    let mut m = Map::new();
+    m.insert("href".into(), match (&p.href) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("type".into(), match (&p.type_op) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_projects__project__to_json(p: &iface_projects::Project) -> Value {
+    let mut m = Map::new();
+    m.insert("_id".into(), match (&p.id) { Some(v) => iface_projects__id__to_json(v), None => Value::Null });
+    m.insert("_links".into(), match (&p.links) { Some(v) => iface_projects__links__to_json(v), None => Value::Null });
+    m.insert("defaultClientSideAvailability".into(), match (&p.default_client_side_availability) { Some(v) => iface_projects__client_side_availability__to_json(v), None => Value::Null });
+    m.insert("environments".into(), match (&p.environments) { Some(v) => Value::Array((v).iter().map(|v| iface_projects__environment__to_json(v)).collect()), None => Value::Null });
+    m.insert("includeInSnippetByDefault".into(), match (&p.include_in_snippet_by_default) { Some(v) => Value::Bool(*(v)), None => Value::Null });
+    m.insert("key".into(), match (&p.key) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("name".into(), match (&p.name) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("tags".into(), match (&p.tags) { Some(v) => Value::Array((v).iter().map(|v| Value::String((v).clone())).collect()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_projects__id__to_json(p: &iface_projects::Id) -> Value {
+    let mut m = Map::new();
+    m.insert("value".into(), Value::String((&p.value).clone()));
+    Value::Object(m)
+}
+
+fn iface_projects__client_side_availability__to_json(p: &iface_projects::ClientSideAvailability) -> Value {
+    let mut m = Map::new();
+    m.insert("usingEnvironmentId".into(), match (&p.using_environment_id) { Some(v) => Value::Bool(*(v)), None => Value::Null });
+    m.insert("usingMobileKey".into(), match (&p.using_mobile_key) { Some(v) => Value::Bool(*(v)), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_projects__environment__to_json(p: &iface_projects::Environment) -> Value {
+    let mut m = Map::new();
+    m.insert("_id".into(), match (&p.id) { Some(v) => iface_projects__id__to_json(v), None => Value::Null });
+    m.insert("_links".into(), match (&p.links) { Some(v) => iface_projects__links__to_json(v), None => Value::Null });
+    m.insert("apiKey".into(), match (&p.api_key) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("approvalSettings".into(), match (&p.approval_settings) { Some(v) => iface_projects__environment_approval_settings__to_json(v), None => Value::Null });
+    m.insert("color".into(), match (&p.color) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("confirmChanges".into(), match (&p.confirm_changes) { Some(v) => Value::Bool(*(v)), None => Value::Null });
+    m.insert("defaultTrackEvents".into(), match (&p.default_track_events) { Some(v) => Value::Bool(*(v)), None => Value::Null });
+    m.insert("defaultTtl".into(), match (&p.default_ttl) { Some(v) => serde_json::Number::from_f64(*(v)).map(Value::Number).unwrap_or(Value::Null), None => Value::Null });
+    m.insert("key".into(), match (&p.key) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("mobileKey".into(), match (&p.mobile_key) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("name".into(), match (&p.name) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("requireComments".into(), match (&p.require_comments) { Some(v) => Value::Bool(*(v)), None => Value::Null });
+    m.insert("secureMode".into(), match (&p.secure_mode) { Some(v) => Value::Bool(*(v)), None => Value::Null });
+    m.insert("tags".into(), match (&p.tags) { Some(v) => Value::Array((v).iter().map(|v| Value::String((v).clone())).collect()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_projects__environment_approval_settings__to_json(p: &iface_projects::EnvironmentApprovalSettings) -> Value {
+    let mut m = Map::new();
+    m.insert("canApplyDeclinedChanges".into(), match (&p.can_apply_declined_changes) { Some(v) => Value::Bool(*(v)), None => Value::Null });
+    m.insert("canReviewOwnRequest".into(), match (&p.can_review_own_request) { Some(v) => Value::Bool(*(v)), None => Value::Null });
+    m.insert("minNumApprovals".into(), match (&p.min_num_approvals) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("required".into(), match (&p.required) { Some(v) => Value::Bool(*(v)), None => Value::Null });
+    m.insert("requiredApprovalTags".into(), match (&p.required_approval_tags) { Some(v) => Value::Array((v).iter().map(|v| Value::String((v).clone())).collect()), None => Value::Null });
+    m.insert("serviceKind".into(), match (&p.service_kind) { Some(v) => Value::String(iface_projects__environment_approval_settings_service_kind_enum__to_str(v).into()), None => Value::Null });
+    Value::Object(m)
+}
 
 fn iface_projects__get_project_params__to_json(p: &iface_projects::GetProjectParams) -> Value {
     let mut m = Map::new();
@@ -1492,24 +4386,237 @@ fn iface_projects__delete_project_params__to_json(p: &iface_projects::DeleteProj
     Value::Object(m)
 }
 
+fn iface_projects__projects__from_json(v: &Value) -> Option<iface_projects::Projects> {
+    let m = v.as_object()?;
+    Some(iface_projects::Projects {
+        links: m.get("_links").filter(|v| !v.is_null()).and_then(|v| iface_projects__links__from_json(v)),
+        items: m.get("items").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| iface_projects__project__from_json(x)).collect())),
+    })
+}
+
+fn iface_projects__links__from_json(v: &Value) -> Option<iface_projects::Links> {
+    let m = v.as_object()?;
+    Some(iface_projects::Links {
+        next: m.get("next").filter(|v| !v.is_null()).and_then(|v| iface_projects__link__from_json(v)),
+        self_: m.get("self").filter(|v| !v.is_null()).and_then(|v| iface_projects__link__from_json(v)),
+    })
+}
+
+fn iface_projects__link__from_json(v: &Value) -> Option<iface_projects::Link> {
+    let m = v.as_object()?;
+    Some(iface_projects::Link {
+        href: m.get("href").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        type_op: m.get("type").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    })
+}
+
+fn iface_projects__project__from_json(v: &Value) -> Option<iface_projects::Project> {
+    let m = v.as_object()?;
+    Some(iface_projects::Project {
+        id: m.get("_id").filter(|v| !v.is_null()).and_then(|v| iface_projects__id__from_json(v)),
+        links: m.get("_links").filter(|v| !v.is_null()).and_then(|v| iface_projects__links__from_json(v)),
+        default_client_side_availability: m.get("defaultClientSideAvailability").filter(|v| !v.is_null()).and_then(|v| iface_projects__client_side_availability__from_json(v)),
+        environments: m.get("environments").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| iface_projects__environment__from_json(x)).collect())),
+        include_in_snippet_by_default: m.get("includeInSnippetByDefault").filter(|v| !v.is_null()).and_then(|v| (v).as_bool()),
+        key: m.get("key").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        name: m.get("name").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        tags: m.get("tags").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| (x).as_str().map(|s| s.to_string())).collect())),
+    })
+}
+
+fn iface_projects__id__from_json(v: &Value) -> Option<iface_projects::Id> {
+    let m = v.as_object()?;
+    Some(iface_projects::Id {
+        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+    })
+}
+
+fn iface_projects__client_side_availability__from_json(v: &Value) -> Option<iface_projects::ClientSideAvailability> {
+    let m = v.as_object()?;
+    Some(iface_projects::ClientSideAvailability {
+        using_environment_id: m.get("usingEnvironmentId").filter(|v| !v.is_null()).and_then(|v| (v).as_bool()),
+        using_mobile_key: m.get("usingMobileKey").filter(|v| !v.is_null()).and_then(|v| (v).as_bool()),
+    })
+}
+
+fn iface_projects__environment__from_json(v: &Value) -> Option<iface_projects::Environment> {
+    let m = v.as_object()?;
+    Some(iface_projects::Environment {
+        id: m.get("_id").filter(|v| !v.is_null()).and_then(|v| iface_projects__id__from_json(v)),
+        links: m.get("_links").filter(|v| !v.is_null()).and_then(|v| iface_projects__links__from_json(v)),
+        api_key: m.get("apiKey").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        approval_settings: m.get("approvalSettings").filter(|v| !v.is_null()).and_then(|v| iface_projects__environment_approval_settings__from_json(v)),
+        color: m.get("color").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        confirm_changes: m.get("confirmChanges").filter(|v| !v.is_null()).and_then(|v| (v).as_bool()),
+        default_track_events: m.get("defaultTrackEvents").filter(|v| !v.is_null()).and_then(|v| (v).as_bool()),
+        default_ttl: m.get("defaultTtl").filter(|v| !v.is_null()).and_then(|v| (v).as_f64()),
+        key: m.get("key").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        mobile_key: m.get("mobileKey").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        name: m.get("name").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        require_comments: m.get("requireComments").filter(|v| !v.is_null()).and_then(|v| (v).as_bool()),
+        secure_mode: m.get("secureMode").filter(|v| !v.is_null()).and_then(|v| (v).as_bool()),
+        tags: m.get("tags").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| (x).as_str().map(|s| s.to_string())).collect())),
+    })
+}
+
+fn iface_projects__environment_approval_settings__from_json(v: &Value) -> Option<iface_projects::EnvironmentApprovalSettings> {
+    let m = v.as_object()?;
+    Some(iface_projects::EnvironmentApprovalSettings {
+        can_apply_declined_changes: m.get("canApplyDeclinedChanges").filter(|v| !v.is_null()).and_then(|v| (v).as_bool()),
+        can_review_own_request: m.get("canReviewOwnRequest").filter(|v| !v.is_null()).and_then(|v| (v).as_bool()),
+        min_num_approvals: m.get("minNumApprovals").filter(|v| !v.is_null()).and_then(|v| (v).as_i64()),
+        required: m.get("required").filter(|v| !v.is_null()).and_then(|v| (v).as_bool()),
+        required_approval_tags: m.get("requiredApprovalTags").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| (x).as_str().map(|s| s.to_string())).collect())),
+        service_kind: m.get("serviceKind").filter(|v| !v.is_null()).and_then(|v| (v).as_str().and_then(iface_projects__environment_approval_settings_service_kind_enum__from_str)),
+    })
+}
+
+fn iface_projects__environment_approval_settings_service_kind_enum__from_str(s: &str) -> Option<iface_projects::EnvironmentApprovalSettingsServiceKindEnum> {
+    match s {
+        "launchdarkly" => Some(iface_projects::EnvironmentApprovalSettingsServiceKindEnum::Launchdarkly),
+        "service-now" => Some(iface_projects::EnvironmentApprovalSettingsServiceKindEnum::ServiceNow),
+        _ => None,
+    }
+}
+
+fn iface_projects__get_projects__ok(body: String) -> Result<iface_projects::Projects, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match iface_projects__projects__from_json(&v) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_projects__get_projects__err(e: crate::runtime::DispatchError) -> iface_projects::GetProjectsError {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => match status {
+            401u16 => iface_projects::GetProjectsError::Unauthorized(body),
+            _ => iface_projects::GetProjectsError::Other(body),
+        },
+        crate::runtime::DispatchError::Transport(m) => iface_projects::GetProjectsError::Other(m),
+    }
+}
+
+fn iface_projects__post_project__ok(body: String) -> Result<iface_projects::Project, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match iface_projects__project__from_json(&v) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_projects__post_project__err(e: crate::runtime::DispatchError) -> iface_projects::PostProjectError {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => match status {
+            400u16 => iface_projects::PostProjectError::BadRequest(body),
+            401u16 => iface_projects::PostProjectError::Unauthorized(body),
+            409u16 => iface_projects::PostProjectError::Conflict(body),
+            _ => iface_projects::PostProjectError::Other(body),
+        },
+        crate::runtime::DispatchError::Transport(m) => iface_projects::PostProjectError::Other(m),
+    }
+}
+
+fn iface_projects__get_project__ok(body: String) -> Result<iface_projects::Project, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match iface_projects__project__from_json(&v) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_projects__get_project__err(e: crate::runtime::DispatchError) -> iface_projects::GetProjectError {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => match status {
+            401u16 => iface_projects::GetProjectError::Unauthorized(body),
+            404u16 => iface_projects::GetProjectError::NotFound(body),
+            _ => iface_projects::GetProjectError::Other(body),
+        },
+        crate::runtime::DispatchError::Transport(m) => iface_projects::GetProjectError::Other(m),
+    }
+}
+
+fn iface_projects__patch_project__ok(body: String) -> Result<iface_projects::Project, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match iface_projects__project__from_json(&v) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_projects__patch_project__err(e: crate::runtime::DispatchError) -> iface_projects::PatchProjectError {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => match status {
+            400u16 => iface_projects::PatchProjectError::BadRequest(body),
+            401u16 => iface_projects::PatchProjectError::Unauthorized(body),
+            404u16 => iface_projects::PatchProjectError::NotFound(body),
+            409u16 => iface_projects::PatchProjectError::Conflict(body),
+            _ => iface_projects::PatchProjectError::Other(body),
+        },
+        crate::runtime::DispatchError::Transport(m) => iface_projects::PatchProjectError::Other(m),
+    }
+}
+
+fn iface_projects__delete_project__ok(body: String) -> Result<String, crate::runtime::DispatchError> {
+    Ok(body)
+}
+
+fn iface_projects__delete_project__err(e: crate::runtime::DispatchError) -> iface_projects::DeleteProjectError {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => match status {
+            401u16 => iface_projects::DeleteProjectError::Unauthorized(body),
+            404u16 => iface_projects::DeleteProjectError::NotFound(body),
+            _ => iface_projects::DeleteProjectError::Other(body),
+        },
+        crate::runtime::DispatchError::Transport(m) => iface_projects::DeleteProjectError::Other(m),
+    }
+}
+
 impl iface_projects::Guest for crate::Component {
-    fn get_projects() -> Result<String, String> {
-        dispatch(&OP_PROJECTS_GET_PROJECTS, Value::Object(Map::new()))
+    fn get_projects() -> Result<iface_projects::Projects, iface_projects::GetProjectsError> {
+        match dispatch(&OP_PROJECTS_GET_PROJECTS, Value::Object(Map::new())).and_then(iface_projects__get_projects__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_projects__get_projects__err(e)),
+        }
     }
-    fn post_project() -> Result<String, String> {
-        dispatch(&OP_PROJECTS_POST_PROJECT, Value::Object(Map::new()))
+    fn post_project() -> Result<iface_projects::Project, iface_projects::PostProjectError> {
+        match dispatch(&OP_PROJECTS_POST_PROJECT, Value::Object(Map::new())).and_then(iface_projects__post_project__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_projects__post_project__err(e)),
+        }
     }
-    fn get_project(params: iface_projects::GetProjectParams) -> Result<String, String> {
+    fn get_project(params: iface_projects::GetProjectParams) -> Result<iface_projects::Project, iface_projects::GetProjectError> {
         let json = iface_projects__get_project_params__to_json(&params);
-        dispatch(&OP_PROJECTS_GET_PROJECT, json)
+        match dispatch(&OP_PROJECTS_GET_PROJECT, json).and_then(iface_projects__get_project__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_projects__get_project__err(e)),
+        }
     }
-    fn patch_project(params: iface_projects::PatchProjectParams) -> Result<String, String> {
+    fn patch_project(params: iface_projects::PatchProjectParams) -> Result<iface_projects::Project, iface_projects::PatchProjectError> {
         let json = iface_projects__patch_project_params__to_json(&params);
-        dispatch(&OP_PROJECTS_PATCH_PROJECT, json)
+        match dispatch(&OP_PROJECTS_PATCH_PROJECT, json).and_then(iface_projects__patch_project__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_projects__patch_project__err(e)),
+        }
     }
-    fn delete_project(params: iface_projects::DeleteProjectParams) -> Result<String, String> {
+    fn delete_project(params: iface_projects::DeleteProjectParams) -> Result<String, iface_projects::DeleteProjectError> {
         let json = iface_projects__delete_project_params__to_json(&params);
-        dispatch(&OP_PROJECTS_DELETE_PROJECT, json)
+        match dispatch(&OP_PROJECTS_DELETE_PROJECT, json).and_then(iface_projects__delete_project__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_projects__delete_project__err(e)),
+        }
     }
 }
 use crate::exports::autostamp::launchdarkly::environments as iface_environments;
@@ -1518,7 +4625,7 @@ const OP_ENVIRONMENTS_POST_ENVIRONMENT: OpSpec = OpSpec {
     method: "POST",
     path_template: "/projects/{project_key}/environments",
     fields: &[
-        FieldSpec { snake: "project_key", location: FieldLocation::Path },
+        FieldSpec { snake: "project_key", wire: "projectKey", location: FieldLocation::Path },
     ],
     auth: &[
     ],
@@ -1528,8 +4635,8 @@ const OP_ENVIRONMENTS_GET_ENVIRONMENT: OpSpec = OpSpec {
     method: "GET",
     path_template: "/projects/{project_key}/environments/{environment_key}",
     fields: &[
-        FieldSpec { snake: "project_key", location: FieldLocation::Path },
-        FieldSpec { snake: "environment_key", location: FieldLocation::Path },
+        FieldSpec { snake: "project_key", wire: "projectKey", location: FieldLocation::Path },
+        FieldSpec { snake: "environment_key", wire: "environmentKey", location: FieldLocation::Path },
     ],
     auth: &[
     ],
@@ -1539,8 +4646,8 @@ const OP_ENVIRONMENTS_PATCH_ENVIRONMENT: OpSpec = OpSpec {
     method: "PATCH",
     path_template: "/projects/{project_key}/environments/{environment_key}",
     fields: &[
-        FieldSpec { snake: "project_key", location: FieldLocation::Path },
-        FieldSpec { snake: "environment_key", location: FieldLocation::Path },
+        FieldSpec { snake: "project_key", wire: "projectKey", location: FieldLocation::Path },
+        FieldSpec { snake: "environment_key", wire: "environmentKey", location: FieldLocation::Path },
     ],
     auth: &[
     ],
@@ -1550,8 +4657,8 @@ const OP_ENVIRONMENTS_DELETE_ENVIRONMENT: OpSpec = OpSpec {
     method: "DELETE",
     path_template: "/projects/{project_key}/environments/{environment_key}",
     fields: &[
-        FieldSpec { snake: "project_key", location: FieldLocation::Path },
-        FieldSpec { snake: "environment_key", location: FieldLocation::Path },
+        FieldSpec { snake: "project_key", wire: "projectKey", location: FieldLocation::Path },
+        FieldSpec { snake: "environment_key", wire: "environmentKey", location: FieldLocation::Path },
     ],
     auth: &[
     ],
@@ -1561,9 +4668,9 @@ const OP_ENVIRONMENTS_RESET_ENVIRONMENT_SDK_KEY: OpSpec = OpSpec {
     method: "POST",
     path_template: "/projects/{project_key}/environments/{environment_key}/apiKey",
     fields: &[
-        FieldSpec { snake: "project_key", location: FieldLocation::Path },
-        FieldSpec { snake: "environment_key", location: FieldLocation::Path },
-        FieldSpec { snake: "expiry", location: FieldLocation::Query },
+        FieldSpec { snake: "project_key", wire: "projectKey", location: FieldLocation::Path },
+        FieldSpec { snake: "environment_key", wire: "environmentKey", location: FieldLocation::Path },
+        FieldSpec { snake: "expiry", wire: "expiry", location: FieldLocation::Query },
     ],
     auth: &[
     ],
@@ -1573,13 +4680,70 @@ const OP_ENVIRONMENTS_RESET_ENVIRONMENT_MOBILE_KEY: OpSpec = OpSpec {
     method: "POST",
     path_template: "/projects/{project_key}/environments/{environment_key}/mobileKey",
     fields: &[
-        FieldSpec { snake: "project_key", location: FieldLocation::Path },
-        FieldSpec { snake: "environment_key", location: FieldLocation::Path },
-        FieldSpec { snake: "expiry", location: FieldLocation::Query },
+        FieldSpec { snake: "project_key", wire: "projectKey", location: FieldLocation::Path },
+        FieldSpec { snake: "environment_key", wire: "environmentKey", location: FieldLocation::Path },
+        FieldSpec { snake: "expiry", wire: "expiry", location: FieldLocation::Query },
     ],
     auth: &[
     ],
 };
+
+fn iface_environments__environment_approval_settings_service_kind_enum__to_str(e: &iface_environments::EnvironmentApprovalSettingsServiceKindEnum) -> &'static str {
+    match e {
+        iface_environments::EnvironmentApprovalSettingsServiceKindEnum::Launchdarkly => "launchdarkly",
+        iface_environments::EnvironmentApprovalSettingsServiceKindEnum::ServiceNow => "service-now",
+    }
+}
+
+fn iface_environments__environment__to_json(p: &iface_environments::Environment) -> Value {
+    let mut m = Map::new();
+    m.insert("_id".into(), match (&p.id) { Some(v) => iface_environments__id__to_json(v), None => Value::Null });
+    m.insert("_links".into(), match (&p.links) { Some(v) => iface_environments__links__to_json(v), None => Value::Null });
+    m.insert("apiKey".into(), match (&p.api_key) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("approvalSettings".into(), match (&p.approval_settings) { Some(v) => iface_environments__environment_approval_settings__to_json(v), None => Value::Null });
+    m.insert("color".into(), match (&p.color) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("confirmChanges".into(), match (&p.confirm_changes) { Some(v) => Value::Bool(*(v)), None => Value::Null });
+    m.insert("defaultTrackEvents".into(), match (&p.default_track_events) { Some(v) => Value::Bool(*(v)), None => Value::Null });
+    m.insert("defaultTtl".into(), match (&p.default_ttl) { Some(v) => serde_json::Number::from_f64(*(v)).map(Value::Number).unwrap_or(Value::Null), None => Value::Null });
+    m.insert("key".into(), match (&p.key) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("mobileKey".into(), match (&p.mobile_key) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("name".into(), match (&p.name) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("requireComments".into(), match (&p.require_comments) { Some(v) => Value::Bool(*(v)), None => Value::Null });
+    m.insert("secureMode".into(), match (&p.secure_mode) { Some(v) => Value::Bool(*(v)), None => Value::Null });
+    m.insert("tags".into(), match (&p.tags) { Some(v) => Value::Array((v).iter().map(|v| Value::String((v).clone())).collect()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_environments__id__to_json(p: &iface_environments::Id) -> Value {
+    let mut m = Map::new();
+    m.insert("value".into(), Value::String((&p.value).clone()));
+    Value::Object(m)
+}
+
+fn iface_environments__links__to_json(p: &iface_environments::Links) -> Value {
+    let mut m = Map::new();
+    m.insert("next".into(), match (&p.next) { Some(v) => iface_environments__link__to_json(v), None => Value::Null });
+    m.insert("self".into(), match (&p.self_) { Some(v) => iface_environments__link__to_json(v), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_environments__link__to_json(p: &iface_environments::Link) -> Value {
+    let mut m = Map::new();
+    m.insert("href".into(), match (&p.href) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("type".into(), match (&p.type_op) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_environments__environment_approval_settings__to_json(p: &iface_environments::EnvironmentApprovalSettings) -> Value {
+    let mut m = Map::new();
+    m.insert("canApplyDeclinedChanges".into(), match (&p.can_apply_declined_changes) { Some(v) => Value::Bool(*(v)), None => Value::Null });
+    m.insert("canReviewOwnRequest".into(), match (&p.can_review_own_request) { Some(v) => Value::Bool(*(v)), None => Value::Null });
+    m.insert("minNumApprovals".into(), match (&p.min_num_approvals) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("required".into(), match (&p.required) { Some(v) => Value::Bool(*(v)), None => Value::Null });
+    m.insert("requiredApprovalTags".into(), match (&p.required_approval_tags) { Some(v) => Value::Array((v).iter().map(|v| Value::String((v).clone())).collect()), None => Value::Null });
+    m.insert("serviceKind".into(), match (&p.service_kind) { Some(v) => Value::String(iface_environments__environment_approval_settings_service_kind_enum__to_str(v).into()), None => Value::Null });
+    Value::Object(m)
+}
 
 fn iface_environments__post_environment_params__to_json(p: &iface_environments::PostEnvironmentParams) -> Value {
     let mut m = Map::new();
@@ -1624,30 +4788,239 @@ fn iface_environments__reset_environment_mobile_key_params__to_json(p: &iface_en
     Value::Object(m)
 }
 
+fn iface_environments__environment__from_json(v: &Value) -> Option<iface_environments::Environment> {
+    let m = v.as_object()?;
+    Some(iface_environments::Environment {
+        id: m.get("_id").filter(|v| !v.is_null()).and_then(|v| iface_environments__id__from_json(v)),
+        links: m.get("_links").filter(|v| !v.is_null()).and_then(|v| iface_environments__links__from_json(v)),
+        api_key: m.get("apiKey").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        approval_settings: m.get("approvalSettings").filter(|v| !v.is_null()).and_then(|v| iface_environments__environment_approval_settings__from_json(v)),
+        color: m.get("color").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        confirm_changes: m.get("confirmChanges").filter(|v| !v.is_null()).and_then(|v| (v).as_bool()),
+        default_track_events: m.get("defaultTrackEvents").filter(|v| !v.is_null()).and_then(|v| (v).as_bool()),
+        default_ttl: m.get("defaultTtl").filter(|v| !v.is_null()).and_then(|v| (v).as_f64()),
+        key: m.get("key").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        mobile_key: m.get("mobileKey").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        name: m.get("name").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        require_comments: m.get("requireComments").filter(|v| !v.is_null()).and_then(|v| (v).as_bool()),
+        secure_mode: m.get("secureMode").filter(|v| !v.is_null()).and_then(|v| (v).as_bool()),
+        tags: m.get("tags").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| (x).as_str().map(|s| s.to_string())).collect())),
+    })
+}
+
+fn iface_environments__id__from_json(v: &Value) -> Option<iface_environments::Id> {
+    let m = v.as_object()?;
+    Some(iface_environments::Id {
+        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+    })
+}
+
+fn iface_environments__links__from_json(v: &Value) -> Option<iface_environments::Links> {
+    let m = v.as_object()?;
+    Some(iface_environments::Links {
+        next: m.get("next").filter(|v| !v.is_null()).and_then(|v| iface_environments__link__from_json(v)),
+        self_: m.get("self").filter(|v| !v.is_null()).and_then(|v| iface_environments__link__from_json(v)),
+    })
+}
+
+fn iface_environments__link__from_json(v: &Value) -> Option<iface_environments::Link> {
+    let m = v.as_object()?;
+    Some(iface_environments::Link {
+        href: m.get("href").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        type_op: m.get("type").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    })
+}
+
+fn iface_environments__environment_approval_settings__from_json(v: &Value) -> Option<iface_environments::EnvironmentApprovalSettings> {
+    let m = v.as_object()?;
+    Some(iface_environments::EnvironmentApprovalSettings {
+        can_apply_declined_changes: m.get("canApplyDeclinedChanges").filter(|v| !v.is_null()).and_then(|v| (v).as_bool()),
+        can_review_own_request: m.get("canReviewOwnRequest").filter(|v| !v.is_null()).and_then(|v| (v).as_bool()),
+        min_num_approvals: m.get("minNumApprovals").filter(|v| !v.is_null()).and_then(|v| (v).as_i64()),
+        required: m.get("required").filter(|v| !v.is_null()).and_then(|v| (v).as_bool()),
+        required_approval_tags: m.get("requiredApprovalTags").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| (x).as_str().map(|s| s.to_string())).collect())),
+        service_kind: m.get("serviceKind").filter(|v| !v.is_null()).and_then(|v| (v).as_str().and_then(iface_environments__environment_approval_settings_service_kind_enum__from_str)),
+    })
+}
+
+fn iface_environments__environment_approval_settings_service_kind_enum__from_str(s: &str) -> Option<iface_environments::EnvironmentApprovalSettingsServiceKindEnum> {
+    match s {
+        "launchdarkly" => Some(iface_environments::EnvironmentApprovalSettingsServiceKindEnum::Launchdarkly),
+        "service-now" => Some(iface_environments::EnvironmentApprovalSettingsServiceKindEnum::ServiceNow),
+        _ => None,
+    }
+}
+
+fn iface_environments__post_environment__ok(body: String) -> Result<iface_environments::Environment, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match iface_environments__environment__from_json(&v) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_environments__post_environment__err(e: crate::runtime::DispatchError) -> iface_environments::PostEnvironmentError {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => match status {
+            400u16 => iface_environments::PostEnvironmentError::BadRequest(body),
+            401u16 => iface_environments::PostEnvironmentError::Unauthorized(body),
+            409u16 => iface_environments::PostEnvironmentError::Conflict(body),
+            _ => iface_environments::PostEnvironmentError::Other(body),
+        },
+        crate::runtime::DispatchError::Transport(m) => iface_environments::PostEnvironmentError::Other(m),
+    }
+}
+
+fn iface_environments__get_environment__ok(body: String) -> Result<iface_environments::Environment, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match iface_environments__environment__from_json(&v) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_environments__get_environment__err(e: crate::runtime::DispatchError) -> iface_environments::GetEnvironmentError {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => match status {
+            401u16 => iface_environments::GetEnvironmentError::Unauthorized(body),
+            404u16 => iface_environments::GetEnvironmentError::NotFound(body),
+            _ => iface_environments::GetEnvironmentError::Other(body),
+        },
+        crate::runtime::DispatchError::Transport(m) => iface_environments::GetEnvironmentError::Other(m),
+    }
+}
+
+fn iface_environments__patch_environment__ok(body: String) -> Result<iface_environments::Environment, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match iface_environments__environment__from_json(&v) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_environments__patch_environment__err(e: crate::runtime::DispatchError) -> iface_environments::PatchEnvironmentError {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => match status {
+            400u16 => iface_environments::PatchEnvironmentError::BadRequest(body),
+            401u16 => iface_environments::PatchEnvironmentError::Unauthorized(body),
+            404u16 => iface_environments::PatchEnvironmentError::NotFound(body),
+            409u16 => iface_environments::PatchEnvironmentError::Conflict(body),
+            _ => iface_environments::PatchEnvironmentError::Other(body),
+        },
+        crate::runtime::DispatchError::Transport(m) => iface_environments::PatchEnvironmentError::Other(m),
+    }
+}
+
+fn iface_environments__delete_environment__ok(body: String) -> Result<String, crate::runtime::DispatchError> {
+    Ok(body)
+}
+
+fn iface_environments__delete_environment__err(e: crate::runtime::DispatchError) -> iface_environments::DeleteEnvironmentError {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => match status {
+            401u16 => iface_environments::DeleteEnvironmentError::Unauthorized(body),
+            404u16 => iface_environments::DeleteEnvironmentError::NotFound(body),
+            _ => iface_environments::DeleteEnvironmentError::Other(body),
+        },
+        crate::runtime::DispatchError::Transport(m) => iface_environments::DeleteEnvironmentError::Other(m),
+    }
+}
+
+fn iface_environments__reset_environment_sdk_key__ok(body: String) -> Result<iface_environments::Environment, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match iface_environments__environment__from_json(&v) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_environments__reset_environment_sdk_key__err(e: crate::runtime::DispatchError) -> iface_environments::ResetEnvironmentSdkKeyError {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => match status {
+            404u16 => iface_environments::ResetEnvironmentSdkKeyError::NotFound(body),
+            409u16 => iface_environments::ResetEnvironmentSdkKeyError::Conflict(body),
+            _ => iface_environments::ResetEnvironmentSdkKeyError::Other(body),
+        },
+        crate::runtime::DispatchError::Transport(m) => iface_environments::ResetEnvironmentSdkKeyError::Other(m),
+    }
+}
+
+fn iface_environments__reset_environment_mobile_key__ok(body: String) -> Result<iface_environments::Environment, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match iface_environments__environment__from_json(&v) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_environments__reset_environment_mobile_key__err(e: crate::runtime::DispatchError) -> iface_environments::ResetEnvironmentMobileKeyError {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => match status {
+            404u16 => iface_environments::ResetEnvironmentMobileKeyError::NotFound(body),
+            409u16 => iface_environments::ResetEnvironmentMobileKeyError::Conflict(body),
+            _ => iface_environments::ResetEnvironmentMobileKeyError::Other(body),
+        },
+        crate::runtime::DispatchError::Transport(m) => iface_environments::ResetEnvironmentMobileKeyError::Other(m),
+    }
+}
+
 impl iface_environments::Guest for crate::Component {
-    fn post_environment(params: iface_environments::PostEnvironmentParams) -> Result<String, String> {
+    fn post_environment(params: iface_environments::PostEnvironmentParams) -> Result<iface_environments::Environment, iface_environments::PostEnvironmentError> {
         let json = iface_environments__post_environment_params__to_json(&params);
-        dispatch(&OP_ENVIRONMENTS_POST_ENVIRONMENT, json)
+        match dispatch(&OP_ENVIRONMENTS_POST_ENVIRONMENT, json).and_then(iface_environments__post_environment__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_environments__post_environment__err(e)),
+        }
     }
-    fn get_environment(params: iface_environments::GetEnvironmentParams) -> Result<String, String> {
+    fn get_environment(params: iface_environments::GetEnvironmentParams) -> Result<iface_environments::Environment, iface_environments::GetEnvironmentError> {
         let json = iface_environments__get_environment_params__to_json(&params);
-        dispatch(&OP_ENVIRONMENTS_GET_ENVIRONMENT, json)
+        match dispatch(&OP_ENVIRONMENTS_GET_ENVIRONMENT, json).and_then(iface_environments__get_environment__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_environments__get_environment__err(e)),
+        }
     }
-    fn patch_environment(params: iface_environments::PatchEnvironmentParams) -> Result<String, String> {
+    fn patch_environment(params: iface_environments::PatchEnvironmentParams) -> Result<iface_environments::Environment, iface_environments::PatchEnvironmentError> {
         let json = iface_environments__patch_environment_params__to_json(&params);
-        dispatch(&OP_ENVIRONMENTS_PATCH_ENVIRONMENT, json)
+        match dispatch(&OP_ENVIRONMENTS_PATCH_ENVIRONMENT, json).and_then(iface_environments__patch_environment__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_environments__patch_environment__err(e)),
+        }
     }
-    fn delete_environment(params: iface_environments::DeleteEnvironmentParams) -> Result<String, String> {
+    fn delete_environment(params: iface_environments::DeleteEnvironmentParams) -> Result<String, iface_environments::DeleteEnvironmentError> {
         let json = iface_environments__delete_environment_params__to_json(&params);
-        dispatch(&OP_ENVIRONMENTS_DELETE_ENVIRONMENT, json)
+        match dispatch(&OP_ENVIRONMENTS_DELETE_ENVIRONMENT, json).and_then(iface_environments__delete_environment__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_environments__delete_environment__err(e)),
+        }
     }
-    fn reset_environment_sdk_key(params: iface_environments::ResetEnvironmentSdkKeyParams) -> Result<String, String> {
+    fn reset_environment_sdk_key(params: iface_environments::ResetEnvironmentSdkKeyParams) -> Result<iface_environments::Environment, iface_environments::ResetEnvironmentSdkKeyError> {
         let json = iface_environments__reset_environment_sdk_key_params__to_json(&params);
-        dispatch(&OP_ENVIRONMENTS_RESET_ENVIRONMENT_SDK_KEY, json)
+        match dispatch(&OP_ENVIRONMENTS_RESET_ENVIRONMENT_SDK_KEY, json).and_then(iface_environments__reset_environment_sdk_key__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_environments__reset_environment_sdk_key__err(e)),
+        }
     }
-    fn reset_environment_mobile_key(params: iface_environments::ResetEnvironmentMobileKeyParams) -> Result<String, String> {
+    fn reset_environment_mobile_key(params: iface_environments::ResetEnvironmentMobileKeyParams) -> Result<iface_environments::Environment, iface_environments::ResetEnvironmentMobileKeyError> {
         let json = iface_environments__reset_environment_mobile_key_params__to_json(&params);
-        dispatch(&OP_ENVIRONMENTS_RESET_ENVIRONMENT_MOBILE_KEY, json)
+        match dispatch(&OP_ENVIRONMENTS_RESET_ENVIRONMENT_MOBILE_KEY, json).and_then(iface_environments__reset_environment_mobile_key__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_environments__reset_environment_mobile_key__err(e)),
+        }
     }
 }
 use crate::exports::autostamp::launchdarkly::custom_roles as iface_custom_roles;
@@ -1674,7 +5047,7 @@ const OP_CUSTOM_ROLES_GET_CUSTOM_ROLE: OpSpec = OpSpec {
     method: "GET",
     path_template: "/roles/{custom_role_key}",
     fields: &[
-        FieldSpec { snake: "custom_role_key", location: FieldLocation::Path },
+        FieldSpec { snake: "custom_role_key", wire: "customRoleKey", location: FieldLocation::Path },
     ],
     auth: &[
     ],
@@ -1684,7 +5057,7 @@ const OP_CUSTOM_ROLES_PATCH_CUSTOM_ROLE: OpSpec = OpSpec {
     method: "PATCH",
     path_template: "/roles/{custom_role_key}",
     fields: &[
-        FieldSpec { snake: "custom_role_key", location: FieldLocation::Path },
+        FieldSpec { snake: "custom_role_key", wire: "customRoleKey", location: FieldLocation::Path },
     ],
     auth: &[
     ],
@@ -1694,11 +5067,59 @@ const OP_CUSTOM_ROLES_DELETE_CUSTOM_ROLE: OpSpec = OpSpec {
     method: "DELETE",
     path_template: "/roles/{custom_role_key}",
     fields: &[
-        FieldSpec { snake: "custom_role_key", location: FieldLocation::Path },
+        FieldSpec { snake: "custom_role_key", wire: "customRoleKey", location: FieldLocation::Path },
     ],
     auth: &[
     ],
 };
+
+fn iface_custom_roles__custom_roles__to_json(p: &iface_custom_roles::CustomRoles) -> Value {
+    let mut m = Map::new();
+    m.insert("_links".into(), match (&p.links) { Some(v) => iface_custom_roles__links__to_json(v), None => Value::Null });
+    m.insert("items".into(), match (&p.items) { Some(v) => Value::Array((v).iter().map(|v| iface_custom_roles__custom_role__to_json(v)).collect()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_custom_roles__links__to_json(p: &iface_custom_roles::Links) -> Value {
+    let mut m = Map::new();
+    m.insert("next".into(), match (&p.next) { Some(v) => iface_custom_roles__link__to_json(v), None => Value::Null });
+    m.insert("self".into(), match (&p.self_) { Some(v) => iface_custom_roles__link__to_json(v), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_custom_roles__link__to_json(p: &iface_custom_roles::Link) -> Value {
+    let mut m = Map::new();
+    m.insert("href".into(), match (&p.href) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("type".into(), match (&p.type_op) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_custom_roles__custom_role__to_json(p: &iface_custom_roles::CustomRole) -> Value {
+    let mut m = Map::new();
+    m.insert("_id".into(), match (&p.id) { Some(v) => iface_custom_roles__id__to_json(v), None => Value::Null });
+    m.insert("_links".into(), match (&p.links) { Some(v) => iface_custom_roles__links__to_json(v), None => Value::Null });
+    m.insert("description".into(), match (&p.description) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("key".into(), match (&p.key) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("name".into(), match (&p.name) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("policy".into(), match (&p.policy) { Some(v) => Value::Array((v).iter().map(|v| iface_custom_roles__policy__to_json(v)).collect()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_custom_roles__id__to_json(p: &iface_custom_roles::Id) -> Value {
+    let mut m = Map::new();
+    m.insert("value".into(), Value::String((&p.value).clone()));
+    Value::Object(m)
+}
+
+fn iface_custom_roles__policy__to_json(p: &iface_custom_roles::Policy) -> Value {
+    let mut m = Map::new();
+    m.insert("actions".into(), match (&p.actions) { Some(v) => Value::Array((v).iter().map(|v| Value::String((v).clone())).collect()), None => Value::Null });
+    m.insert("effect".into(), match (&p.effect) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("notActions".into(), match (&p.not_actions) { Some(v) => Value::Array((v).iter().map(|v| Value::String((v).clone())).collect()), None => Value::Null });
+    m.insert("notResources".into(), match (&p.not_resources) { Some(v) => Value::Array((v).iter().map(|v| Value::String((v).clone())).collect()), None => Value::Null });
+    m.insert("resources".into(), match (&p.resources) { Some(v) => Value::Array((v).iter().map(|v| Value::String((v).clone())).collect()), None => Value::Null });
+    Value::Object(m)
+}
 
 fn iface_custom_roles__get_custom_role_params__to_json(p: &iface_custom_roles::GetCustomRoleParams) -> Value {
     let mut m = Map::new();
@@ -1718,24 +5139,198 @@ fn iface_custom_roles__delete_custom_role_params__to_json(p: &iface_custom_roles
     Value::Object(m)
 }
 
+fn iface_custom_roles__custom_roles__from_json(v: &Value) -> Option<iface_custom_roles::CustomRoles> {
+    let m = v.as_object()?;
+    Some(iface_custom_roles::CustomRoles {
+        links: m.get("_links").filter(|v| !v.is_null()).and_then(|v| iface_custom_roles__links__from_json(v)),
+        items: m.get("items").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| iface_custom_roles__custom_role__from_json(x)).collect())),
+    })
+}
+
+fn iface_custom_roles__links__from_json(v: &Value) -> Option<iface_custom_roles::Links> {
+    let m = v.as_object()?;
+    Some(iface_custom_roles::Links {
+        next: m.get("next").filter(|v| !v.is_null()).and_then(|v| iface_custom_roles__link__from_json(v)),
+        self_: m.get("self").filter(|v| !v.is_null()).and_then(|v| iface_custom_roles__link__from_json(v)),
+    })
+}
+
+fn iface_custom_roles__link__from_json(v: &Value) -> Option<iface_custom_roles::Link> {
+    let m = v.as_object()?;
+    Some(iface_custom_roles::Link {
+        href: m.get("href").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        type_op: m.get("type").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    })
+}
+
+fn iface_custom_roles__custom_role__from_json(v: &Value) -> Option<iface_custom_roles::CustomRole> {
+    let m = v.as_object()?;
+    Some(iface_custom_roles::CustomRole {
+        id: m.get("_id").filter(|v| !v.is_null()).and_then(|v| iface_custom_roles__id__from_json(v)),
+        links: m.get("_links").filter(|v| !v.is_null()).and_then(|v| iface_custom_roles__links__from_json(v)),
+        description: m.get("description").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        key: m.get("key").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        name: m.get("name").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        policy: m.get("policy").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| iface_custom_roles__policy__from_json(x)).collect())),
+    })
+}
+
+fn iface_custom_roles__id__from_json(v: &Value) -> Option<iface_custom_roles::Id> {
+    let m = v.as_object()?;
+    Some(iface_custom_roles::Id {
+        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+    })
+}
+
+fn iface_custom_roles__policy__from_json(v: &Value) -> Option<iface_custom_roles::Policy> {
+    let m = v.as_object()?;
+    Some(iface_custom_roles::Policy {
+        actions: m.get("actions").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| (x).as_str().map(|s| s.to_string())).collect())),
+        effect: m.get("effect").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        not_actions: m.get("notActions").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| (x).as_str().map(|s| s.to_string())).collect())),
+        not_resources: m.get("notResources").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| (x).as_str().map(|s| s.to_string())).collect())),
+        resources: m.get("resources").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| (x).as_str().map(|s| s.to_string())).collect())),
+    })
+}
+
+fn iface_custom_roles__get_custom_roles__ok(body: String) -> Result<iface_custom_roles::CustomRoles, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match iface_custom_roles__custom_roles__from_json(&v) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_custom_roles__get_custom_roles__err(e: crate::runtime::DispatchError) -> iface_custom_roles::GetCustomRolesError {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => match status {
+            401u16 => iface_custom_roles::GetCustomRolesError::Unauthorized(body),
+            _ => iface_custom_roles::GetCustomRolesError::Other(body),
+        },
+        crate::runtime::DispatchError::Transport(m) => iface_custom_roles::GetCustomRolesError::Other(m),
+    }
+}
+
+fn iface_custom_roles__post_custom_role__ok(body: String) -> Result<iface_custom_roles::CustomRole, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match iface_custom_roles__custom_role__from_json(&v) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_custom_roles__post_custom_role__err(e: crate::runtime::DispatchError) -> iface_custom_roles::PostCustomRoleError {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => match status {
+            400u16 => iface_custom_roles::PostCustomRoleError::BadRequest(body),
+            401u16 => iface_custom_roles::PostCustomRoleError::Unauthorized(body),
+            409u16 => iface_custom_roles::PostCustomRoleError::Conflict(body),
+            _ => iface_custom_roles::PostCustomRoleError::Other(body),
+        },
+        crate::runtime::DispatchError::Transport(m) => iface_custom_roles::PostCustomRoleError::Other(m),
+    }
+}
+
+fn iface_custom_roles__get_custom_role__ok(body: String) -> Result<iface_custom_roles::CustomRole, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match iface_custom_roles__custom_role__from_json(&v) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_custom_roles__get_custom_role__err(e: crate::runtime::DispatchError) -> iface_custom_roles::GetCustomRoleError {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => match status {
+            400u16 => iface_custom_roles::GetCustomRoleError::BadRequest(body),
+            401u16 => iface_custom_roles::GetCustomRoleError::Unauthorized(body),
+            _ => iface_custom_roles::GetCustomRoleError::Other(body),
+        },
+        crate::runtime::DispatchError::Transport(m) => iface_custom_roles::GetCustomRoleError::Other(m),
+    }
+}
+
+fn iface_custom_roles__patch_custom_role__ok(body: String) -> Result<iface_custom_roles::CustomRole, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match iface_custom_roles__custom_role__from_json(&v) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_custom_roles__patch_custom_role__err(e: crate::runtime::DispatchError) -> iface_custom_roles::PatchCustomRoleError {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => match status {
+            400u16 => iface_custom_roles::PatchCustomRoleError::BadRequest(body),
+            401u16 => iface_custom_roles::PatchCustomRoleError::Unauthorized(body),
+            404u16 => iface_custom_roles::PatchCustomRoleError::NotFound(body),
+            409u16 => iface_custom_roles::PatchCustomRoleError::Conflict(body),
+            _ => iface_custom_roles::PatchCustomRoleError::Other(body),
+        },
+        crate::runtime::DispatchError::Transport(m) => iface_custom_roles::PatchCustomRoleError::Other(m),
+    }
+}
+
+fn iface_custom_roles__delete_custom_role__ok(body: String) -> Result<String, crate::runtime::DispatchError> {
+    Ok(body)
+}
+
+fn iface_custom_roles__delete_custom_role__err(e: crate::runtime::DispatchError) -> iface_custom_roles::DeleteCustomRoleError {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => match status {
+            401u16 => iface_custom_roles::DeleteCustomRoleError::Unauthorized(body),
+            404u16 => iface_custom_roles::DeleteCustomRoleError::NotFound(body),
+            _ => iface_custom_roles::DeleteCustomRoleError::Other(body),
+        },
+        crate::runtime::DispatchError::Transport(m) => iface_custom_roles::DeleteCustomRoleError::Other(m),
+    }
+}
+
 impl iface_custom_roles::Guest for crate::Component {
-    fn get_custom_roles() -> Result<String, String> {
-        dispatch(&OP_CUSTOM_ROLES_GET_CUSTOM_ROLES, Value::Object(Map::new()))
+    fn get_custom_roles() -> Result<iface_custom_roles::CustomRoles, iface_custom_roles::GetCustomRolesError> {
+        match dispatch(&OP_CUSTOM_ROLES_GET_CUSTOM_ROLES, Value::Object(Map::new())).and_then(iface_custom_roles__get_custom_roles__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_custom_roles__get_custom_roles__err(e)),
+        }
     }
-    fn post_custom_role() -> Result<String, String> {
-        dispatch(&OP_CUSTOM_ROLES_POST_CUSTOM_ROLE, Value::Object(Map::new()))
+    fn post_custom_role() -> Result<iface_custom_roles::CustomRole, iface_custom_roles::PostCustomRoleError> {
+        match dispatch(&OP_CUSTOM_ROLES_POST_CUSTOM_ROLE, Value::Object(Map::new())).and_then(iface_custom_roles__post_custom_role__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_custom_roles__post_custom_role__err(e)),
+        }
     }
-    fn get_custom_role(params: iface_custom_roles::GetCustomRoleParams) -> Result<String, String> {
+    fn get_custom_role(params: iface_custom_roles::GetCustomRoleParams) -> Result<iface_custom_roles::CustomRole, iface_custom_roles::GetCustomRoleError> {
         let json = iface_custom_roles__get_custom_role_params__to_json(&params);
-        dispatch(&OP_CUSTOM_ROLES_GET_CUSTOM_ROLE, json)
+        match dispatch(&OP_CUSTOM_ROLES_GET_CUSTOM_ROLE, json).and_then(iface_custom_roles__get_custom_role__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_custom_roles__get_custom_role__err(e)),
+        }
     }
-    fn patch_custom_role(params: iface_custom_roles::PatchCustomRoleParams) -> Result<String, String> {
+    fn patch_custom_role(params: iface_custom_roles::PatchCustomRoleParams) -> Result<iface_custom_roles::CustomRole, iface_custom_roles::PatchCustomRoleError> {
         let json = iface_custom_roles__patch_custom_role_params__to_json(&params);
-        dispatch(&OP_CUSTOM_ROLES_PATCH_CUSTOM_ROLE, json)
+        match dispatch(&OP_CUSTOM_ROLES_PATCH_CUSTOM_ROLE, json).and_then(iface_custom_roles__patch_custom_role__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_custom_roles__patch_custom_role__err(e)),
+        }
     }
-    fn delete_custom_role(params: iface_custom_roles::DeleteCustomRoleParams) -> Result<String, String> {
+    fn delete_custom_role(params: iface_custom_roles::DeleteCustomRoleParams) -> Result<String, iface_custom_roles::DeleteCustomRoleError> {
         let json = iface_custom_roles__delete_custom_role_params__to_json(&params);
-        dispatch(&OP_CUSTOM_ROLES_DELETE_CUSTOM_ROLE, json)
+        match dispatch(&OP_CUSTOM_ROLES_DELETE_CUSTOM_ROLE, json).and_then(iface_custom_roles__delete_custom_role__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_custom_roles__delete_custom_role__err(e)),
+        }
     }
 }
 use crate::exports::autostamp::launchdarkly::user_segments as iface_user_segments;
@@ -1744,9 +5339,9 @@ const OP_USER_SEGMENTS_GET_USER_SEGMENTS: OpSpec = OpSpec {
     method: "GET",
     path_template: "/segments/{project_key}/{environment_key}",
     fields: &[
-        FieldSpec { snake: "project_key", location: FieldLocation::Path },
-        FieldSpec { snake: "environment_key", location: FieldLocation::Path },
-        FieldSpec { snake: "tag", location: FieldLocation::Query },
+        FieldSpec { snake: "project_key", wire: "projectKey", location: FieldLocation::Path },
+        FieldSpec { snake: "environment_key", wire: "environmentKey", location: FieldLocation::Path },
+        FieldSpec { snake: "tag", wire: "tag", location: FieldLocation::Query },
     ],
     auth: &[
     ],
@@ -1756,8 +5351,8 @@ const OP_USER_SEGMENTS_POST_USER_SEGMENT: OpSpec = OpSpec {
     method: "POST",
     path_template: "/segments/{project_key}/{environment_key}",
     fields: &[
-        FieldSpec { snake: "project_key", location: FieldLocation::Path },
-        FieldSpec { snake: "environment_key", location: FieldLocation::Path },
+        FieldSpec { snake: "project_key", wire: "projectKey", location: FieldLocation::Path },
+        FieldSpec { snake: "environment_key", wire: "environmentKey", location: FieldLocation::Path },
     ],
     auth: &[
     ],
@@ -1767,9 +5362,9 @@ const OP_USER_SEGMENTS_GET_USER_SEGMENT: OpSpec = OpSpec {
     method: "GET",
     path_template: "/segments/{project_key}/{environment_key}/{user_segment_key}",
     fields: &[
-        FieldSpec { snake: "project_key", location: FieldLocation::Path },
-        FieldSpec { snake: "environment_key", location: FieldLocation::Path },
-        FieldSpec { snake: "user_segment_key", location: FieldLocation::Path },
+        FieldSpec { snake: "project_key", wire: "projectKey", location: FieldLocation::Path },
+        FieldSpec { snake: "environment_key", wire: "environmentKey", location: FieldLocation::Path },
+        FieldSpec { snake: "user_segment_key", wire: "userSegmentKey", location: FieldLocation::Path },
     ],
     auth: &[
     ],
@@ -1779,9 +5374,9 @@ const OP_USER_SEGMENTS_PATCH_USER_SEGMENT: OpSpec = OpSpec {
     method: "PATCH",
     path_template: "/segments/{project_key}/{environment_key}/{user_segment_key}",
     fields: &[
-        FieldSpec { snake: "project_key", location: FieldLocation::Path },
-        FieldSpec { snake: "environment_key", location: FieldLocation::Path },
-        FieldSpec { snake: "user_segment_key", location: FieldLocation::Path },
+        FieldSpec { snake: "project_key", wire: "projectKey", location: FieldLocation::Path },
+        FieldSpec { snake: "environment_key", wire: "environmentKey", location: FieldLocation::Path },
+        FieldSpec { snake: "user_segment_key", wire: "userSegmentKey", location: FieldLocation::Path },
     ],
     auth: &[
     ],
@@ -1791,9 +5386,9 @@ const OP_USER_SEGMENTS_DELETE_USER_SEGMENT: OpSpec = OpSpec {
     method: "DELETE",
     path_template: "/segments/{project_key}/{environment_key}/{user_segment_key}",
     fields: &[
-        FieldSpec { snake: "project_key", location: FieldLocation::Path },
-        FieldSpec { snake: "environment_key", location: FieldLocation::Path },
-        FieldSpec { snake: "user_segment_key", location: FieldLocation::Path },
+        FieldSpec { snake: "project_key", wire: "projectKey", location: FieldLocation::Path },
+        FieldSpec { snake: "environment_key", wire: "environmentKey", location: FieldLocation::Path },
+        FieldSpec { snake: "user_segment_key", wire: "userSegmentKey", location: FieldLocation::Path },
     ],
     auth: &[
     ],
@@ -1803,9 +5398,9 @@ const OP_USER_SEGMENTS_UPDATE_BIG_SEGMENT_TARGETS: OpSpec = OpSpec {
     method: "POST",
     path_template: "/segments/{project_key}/{environment_key}/{user_segment_key}/users",
     fields: &[
-        FieldSpec { snake: "project_key", location: FieldLocation::Path },
-        FieldSpec { snake: "environment_key", location: FieldLocation::Path },
-        FieldSpec { snake: "user_segment_key", location: FieldLocation::Path },
+        FieldSpec { snake: "project_key", wire: "projectKey", location: FieldLocation::Path },
+        FieldSpec { snake: "environment_key", wire: "environmentKey", location: FieldLocation::Path },
+        FieldSpec { snake: "user_segment_key", wire: "userSegmentKey", location: FieldLocation::Path },
     ],
     auth: &[
     ],
@@ -1815,9 +5410,9 @@ const OP_USER_SEGMENTS_GET_EXPIRING_USER_TARGETS_ON_SEGMENT: OpSpec = OpSpec {
     method: "GET",
     path_template: "/segments/{project_key}/{user_segment_key}/expiring-user-targets/{environment_key}",
     fields: &[
-        FieldSpec { snake: "project_key", location: FieldLocation::Path },
-        FieldSpec { snake: "environment_key", location: FieldLocation::Path },
-        FieldSpec { snake: "user_segment_key", location: FieldLocation::Path },
+        FieldSpec { snake: "project_key", wire: "projectKey", location: FieldLocation::Path },
+        FieldSpec { snake: "environment_key", wire: "environmentKey", location: FieldLocation::Path },
+        FieldSpec { snake: "user_segment_key", wire: "userSegmentKey", location: FieldLocation::Path },
     ],
     auth: &[
     ],
@@ -1827,13 +5422,113 @@ const OP_USER_SEGMENTS_PATCH_EXPIRING_USER_TARGETS_ON_SEGMENT: OpSpec = OpSpec {
     method: "PATCH",
     path_template: "/segments/{project_key}/{user_segment_key}/expiring-user-targets/{environment_key}",
     fields: &[
-        FieldSpec { snake: "project_key", location: FieldLocation::Path },
-        FieldSpec { snake: "environment_key", location: FieldLocation::Path },
-        FieldSpec { snake: "user_segment_key", location: FieldLocation::Path },
+        FieldSpec { snake: "project_key", wire: "projectKey", location: FieldLocation::Path },
+        FieldSpec { snake: "environment_key", wire: "environmentKey", location: FieldLocation::Path },
+        FieldSpec { snake: "user_segment_key", wire: "userSegmentKey", location: FieldLocation::Path },
     ],
     auth: &[
     ],
 };
+
+fn iface_user_segments__user_segments__to_json(p: &iface_user_segments::UserSegments) -> Value {
+    let mut m = Map::new();
+    m.insert("_links".into(), match (&p.links) { Some(v) => iface_user_segments__links__to_json(v), None => Value::Null });
+    m.insert("items".into(), match (&p.items) { Some(v) => Value::Array((v).iter().map(|v| iface_user_segments__user_segment__to_json(v)).collect()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_user_segments__links__to_json(p: &iface_user_segments::Links) -> Value {
+    let mut m = Map::new();
+    m.insert("next".into(), match (&p.next) { Some(v) => iface_user_segments__link__to_json(v), None => Value::Null });
+    m.insert("self".into(), match (&p.self_) { Some(v) => iface_user_segments__link__to_json(v), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_user_segments__link__to_json(p: &iface_user_segments::Link) -> Value {
+    let mut m = Map::new();
+    m.insert("href".into(), match (&p.href) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("type".into(), match (&p.type_op) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_user_segments__user_segment__to_json(p: &iface_user_segments::UserSegment) -> Value {
+    let mut m = Map::new();
+    m.insert("_flags".into(), match (&p.flags_op) { Some(v) => Value::Array((v).iter().map(|v| iface_user_segments__flag_list_item__to_json(v)).collect()), None => Value::Null });
+    m.insert("_links".into(), match (&p.links) { Some(v) => iface_user_segments__links__to_json(v), None => Value::Null });
+    m.insert("creationDate".into(), Value::Number(serde_json::Number::from(*(&p.creation_date))));
+    m.insert("description".into(), match (&p.description) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("excluded".into(), match (&p.excluded) { Some(v) => Value::Array((v).iter().map(|v| Value::String((v).clone())).collect()), None => Value::Null });
+    m.insert("included".into(), match (&p.included) { Some(v) => Value::Array((v).iter().map(|v| Value::String((v).clone())).collect()), None => Value::Null });
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("name".into(), Value::String((&p.name).clone()));
+    m.insert("rules".into(), match (&p.rules) { Some(v) => Value::Array((v).iter().map(|v| iface_user_segments__user_segment_rule__to_json(v)).collect()), None => Value::Null });
+    m.insert("tags".into(), match (&p.tags) { Some(v) => Value::Array((v).iter().map(|v| Value::String((v).clone())).collect()), None => Value::Null });
+    m.insert("unbounded".into(), match (&p.unbounded) { Some(v) => Value::Bool(*(v)), None => Value::Null });
+    m.insert("version".into(), match (&p.version) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_user_segments__flag_list_item__to_json(p: &iface_user_segments::FlagListItem) -> Value {
+    let mut m = Map::new();
+    m.insert("_links".into(), match (&p.links) { Some(v) => iface_user_segments__links__to_json(v), None => Value::Null });
+    m.insert("_site".into(), match (&p.site) { Some(v) => iface_user_segments__site__to_json(v), None => Value::Null });
+    m.insert("key".into(), match (&p.key) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("name".into(), match (&p.name) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_user_segments__site__to_json(p: &iface_user_segments::Site) -> Value {
+    let mut m = Map::new();
+    m.insert("href".into(), match (&p.href) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("type".into(), match (&p.type_op) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_user_segments__user_segment_rule__to_json(p: &iface_user_segments::UserSegmentRule) -> Value {
+    let mut m = Map::new();
+    m.insert("bucketBy".into(), match (&p.bucket_by) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("clauses".into(), match (&p.clauses) { Some(v) => Value::Array((v).iter().map(|v| iface_user_segments__clause__to_json(v)).collect()), None => Value::Null });
+    m.insert("weight".into(), match (&p.weight) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_user_segments__clause__to_json(p: &iface_user_segments::Clause) -> Value {
+    let mut m = Map::new();
+    m.insert("_id".into(), match (&p.id) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("attribute".into(), match (&p.attribute) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("negate".into(), match (&p.negate) { Some(v) => Value::Bool(*(v)), None => Value::Null });
+    m.insert("op".into(), match (&p.op) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("values".into(), match (&p.values) { Some(v) => Value::Array((v).iter().map(|v| iface_user_segments__clause_values_item__to_json(v)).collect()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_user_segments__clause_values_item__to_json(p: &iface_user_segments::ClauseValuesItem) -> Value {
+    let mut m = Map::new();
+    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_user_segments__user_targeting_expiration_for_segment__to_json(p: &iface_user_segments::UserTargetingExpirationForSegment) -> Value {
+    let mut m = Map::new();
+    m.insert("_id".into(), match (&p.id) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("_links".into(), match (&p.links) { Some(v) => iface_user_segments__links__to_json(v), None => Value::Null });
+    m.insert("_resourceId".into(), match (&p.resource_id) { Some(v) => iface_user_segments__user_targeting_expiration_resource_id_for_flag__to_json(v), None => Value::Null });
+    m.insert("_version".into(), match (&p.version) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("expirationDate".into(), match (&p.expiration_date) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("targetType".into(), match (&p.target_type) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("userKey".into(), match (&p.user_key) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_user_segments__user_targeting_expiration_resource_id_for_flag__to_json(p: &iface_user_segments::UserTargetingExpirationResourceIdForFlag) -> Value {
+    let mut m = Map::new();
+    m.insert("environmentKey".into(), match (&p.environment_key) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("flagKey".into(), match (&p.flag_key) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("key".into(), match (&p.key) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("kind".into(), match (&p.kind) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("projectKey".into(), match (&p.project_key) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
 
 fn iface_user_segments__get_user_segments_params__to_json(p: &iface_user_segments::GetUserSegmentsParams) -> Value {
     let mut m = Map::new();
@@ -1898,38 +5593,339 @@ fn iface_user_segments__patch_expiring_user_targets_on_segment_params__to_json(p
     Value::Object(m)
 }
 
+fn iface_user_segments__user_segments__from_json(v: &Value) -> Option<iface_user_segments::UserSegments> {
+    let m = v.as_object()?;
+    Some(iface_user_segments::UserSegments {
+        links: m.get("_links").filter(|v| !v.is_null()).and_then(|v| iface_user_segments__links__from_json(v)),
+        items: m.get("items").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| iface_user_segments__user_segment__from_json(x)).collect())),
+    })
+}
+
+fn iface_user_segments__links__from_json(v: &Value) -> Option<iface_user_segments::Links> {
+    let m = v.as_object()?;
+    Some(iface_user_segments::Links {
+        next: m.get("next").filter(|v| !v.is_null()).and_then(|v| iface_user_segments__link__from_json(v)),
+        self_: m.get("self").filter(|v| !v.is_null()).and_then(|v| iface_user_segments__link__from_json(v)),
+    })
+}
+
+fn iface_user_segments__link__from_json(v: &Value) -> Option<iface_user_segments::Link> {
+    let m = v.as_object()?;
+    Some(iface_user_segments::Link {
+        href: m.get("href").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        type_op: m.get("type").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    })
+}
+
+fn iface_user_segments__user_segment__from_json(v: &Value) -> Option<iface_user_segments::UserSegment> {
+    let m = v.as_object()?;
+    Some(iface_user_segments::UserSegment {
+        flags_op: m.get("_flags").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| iface_user_segments__flag_list_item__from_json(x)).collect())),
+        links: m.get("_links").filter(|v| !v.is_null()).and_then(|v| iface_user_segments__links__from_json(v)),
+        creation_date: m.get("creationDate").and_then(|v| (v).as_i64()).unwrap_or_default(),
+        description: m.get("description").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        excluded: m.get("excluded").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| (x).as_str().map(|s| s.to_string())).collect())),
+        included: m.get("included").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| (x).as_str().map(|s| s.to_string())).collect())),
+        key: m.get("key").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        name: m.get("name").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        rules: m.get("rules").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| iface_user_segments__user_segment_rule__from_json(x)).collect())),
+        tags: m.get("tags").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| (x).as_str().map(|s| s.to_string())).collect())),
+        unbounded: m.get("unbounded").filter(|v| !v.is_null()).and_then(|v| (v).as_bool()),
+        version: m.get("version").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+    })
+}
+
+fn iface_user_segments__flag_list_item__from_json(v: &Value) -> Option<iface_user_segments::FlagListItem> {
+    let m = v.as_object()?;
+    Some(iface_user_segments::FlagListItem {
+        links: m.get("_links").filter(|v| !v.is_null()).and_then(|v| iface_user_segments__links__from_json(v)),
+        site: m.get("_site").filter(|v| !v.is_null()).and_then(|v| iface_user_segments__site__from_json(v)),
+        key: m.get("key").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        name: m.get("name").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    })
+}
+
+fn iface_user_segments__site__from_json(v: &Value) -> Option<iface_user_segments::Site> {
+    let m = v.as_object()?;
+    Some(iface_user_segments::Site {
+        href: m.get("href").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        type_op: m.get("type").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    })
+}
+
+fn iface_user_segments__user_segment_rule__from_json(v: &Value) -> Option<iface_user_segments::UserSegmentRule> {
+    let m = v.as_object()?;
+    Some(iface_user_segments::UserSegmentRule {
+        bucket_by: m.get("bucketBy").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        clauses: m.get("clauses").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| iface_user_segments__clause__from_json(x)).collect())),
+        weight: m.get("weight").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+    })
+}
+
+fn iface_user_segments__clause__from_json(v: &Value) -> Option<iface_user_segments::Clause> {
+    let m = v.as_object()?;
+    Some(iface_user_segments::Clause {
+        id: m.get("_id").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        attribute: m.get("attribute").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        negate: m.get("negate").filter(|v| !v.is_null()).and_then(|v| (v).as_bool()),
+        op: m.get("op").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        values: m.get("values").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| iface_user_segments__clause_values_item__from_json(x)).collect())),
+    })
+}
+
+fn iface_user_segments__clause_values_item__from_json(v: &Value) -> Option<iface_user_segments::ClauseValuesItem> {
+    let m = v.as_object()?;
+    Some(iface_user_segments::ClauseValuesItem {
+        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    })
+}
+
+fn iface_user_segments__user_targeting_expiration_for_segment__from_json(v: &Value) -> Option<iface_user_segments::UserTargetingExpirationForSegment> {
+    let m = v.as_object()?;
+    Some(iface_user_segments::UserTargetingExpirationForSegment {
+        id: m.get("_id").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        links: m.get("_links").filter(|v| !v.is_null()).and_then(|v| iface_user_segments__links__from_json(v)),
+        resource_id: m.get("_resourceId").filter(|v| !v.is_null()).and_then(|v| iface_user_segments__user_targeting_expiration_resource_id_for_flag__from_json(v)),
+        version: m.get("_version").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        expiration_date: m.get("expirationDate").filter(|v| !v.is_null()).and_then(|v| (v).as_i64()),
+        target_type: m.get("targetType").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        user_key: m.get("userKey").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    })
+}
+
+fn iface_user_segments__user_targeting_expiration_resource_id_for_flag__from_json(v: &Value) -> Option<iface_user_segments::UserTargetingExpirationResourceIdForFlag> {
+    let m = v.as_object()?;
+    Some(iface_user_segments::UserTargetingExpirationResourceIdForFlag {
+        environment_key: m.get("environmentKey").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        flag_key: m.get("flagKey").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        key: m.get("key").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        kind: m.get("kind").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        project_key: m.get("projectKey").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    })
+}
+
+fn iface_user_segments__get_user_segments__ok(body: String) -> Result<iface_user_segments::UserSegments, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match iface_user_segments__user_segments__from_json(&v) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_user_segments__get_user_segments__err(e: crate::runtime::DispatchError) -> iface_user_segments::GetUserSegmentsError {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => match status {
+            401u16 => iface_user_segments::GetUserSegmentsError::Unauthorized(body),
+            _ => iface_user_segments::GetUserSegmentsError::Other(body),
+        },
+        crate::runtime::DispatchError::Transport(m) => iface_user_segments::GetUserSegmentsError::Other(m),
+    }
+}
+
+fn iface_user_segments__post_user_segment__ok(body: String) -> Result<iface_user_segments::UserSegment, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match iface_user_segments__user_segment__from_json(&v) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_user_segments__post_user_segment__err(e: crate::runtime::DispatchError) -> iface_user_segments::PostUserSegmentError {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => match status {
+            400u16 => iface_user_segments::PostUserSegmentError::BadRequest(body),
+            401u16 => iface_user_segments::PostUserSegmentError::Unauthorized(body),
+            409u16 => iface_user_segments::PostUserSegmentError::Conflict(body),
+            _ => iface_user_segments::PostUserSegmentError::Other(body),
+        },
+        crate::runtime::DispatchError::Transport(m) => iface_user_segments::PostUserSegmentError::Other(m),
+    }
+}
+
+fn iface_user_segments__get_user_segment__ok(body: String) -> Result<iface_user_segments::UserSegment, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match iface_user_segments__user_segment__from_json(&v) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_user_segments__get_user_segment__err(e: crate::runtime::DispatchError) -> iface_user_segments::GetUserSegmentError {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => match status {
+            401u16 => iface_user_segments::GetUserSegmentError::Unauthorized(body),
+            404u16 => iface_user_segments::GetUserSegmentError::NotFound(body),
+            _ => iface_user_segments::GetUserSegmentError::Other(body),
+        },
+        crate::runtime::DispatchError::Transport(m) => iface_user_segments::GetUserSegmentError::Other(m),
+    }
+}
+
+fn iface_user_segments__patch_user_segment__ok(body: String) -> Result<iface_user_segments::UserSegment, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match iface_user_segments__user_segment__from_json(&v) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_user_segments__patch_user_segment__err(e: crate::runtime::DispatchError) -> iface_user_segments::PatchUserSegmentError {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => match status {
+            400u16 => iface_user_segments::PatchUserSegmentError::BadRequest(body),
+            401u16 => iface_user_segments::PatchUserSegmentError::Unauthorized(body),
+            404u16 => iface_user_segments::PatchUserSegmentError::NotFound(body),
+            409u16 => iface_user_segments::PatchUserSegmentError::Conflict(body),
+            _ => iface_user_segments::PatchUserSegmentError::Other(body),
+        },
+        crate::runtime::DispatchError::Transport(m) => iface_user_segments::PatchUserSegmentError::Other(m),
+    }
+}
+
+fn iface_user_segments__delete_user_segment__ok(body: String) -> Result<String, crate::runtime::DispatchError> {
+    Ok(body)
+}
+
+fn iface_user_segments__delete_user_segment__err(e: crate::runtime::DispatchError) -> iface_user_segments::DeleteUserSegmentError {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => match status {
+            401u16 => iface_user_segments::DeleteUserSegmentError::Unauthorized(body),
+            404u16 => iface_user_segments::DeleteUserSegmentError::NotFound(body),
+            _ => iface_user_segments::DeleteUserSegmentError::Other(body),
+        },
+        crate::runtime::DispatchError::Transport(m) => iface_user_segments::DeleteUserSegmentError::Other(m),
+    }
+}
+
+fn iface_user_segments__update_big_segment_targets__ok(body: String) -> Result<String, crate::runtime::DispatchError> {
+    Ok(body)
+}
+
+fn iface_user_segments__update_big_segment_targets__err(e: crate::runtime::DispatchError) -> iface_user_segments::UpdateBigSegmentTargetsError {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => match status {
+            400u16 => iface_user_segments::UpdateBigSegmentTargetsError::BadRequest(body),
+            401u16 => iface_user_segments::UpdateBigSegmentTargetsError::Unauthorized(body),
+            _ => iface_user_segments::UpdateBigSegmentTargetsError::Other(body),
+        },
+        crate::runtime::DispatchError::Transport(m) => iface_user_segments::UpdateBigSegmentTargetsError::Other(m),
+    }
+}
+
+fn iface_user_segments__get_expiring_user_targets_on_segment__ok(body: String) -> Result<iface_user_segments::UserTargetingExpirationForSegment, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match iface_user_segments__user_targeting_expiration_for_segment__from_json(&v) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_user_segments__get_expiring_user_targets_on_segment__err(e: crate::runtime::DispatchError) -> iface_user_segments::GetExpiringUserTargetsOnSegmentError {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => match status {
+            401u16 => iface_user_segments::GetExpiringUserTargetsOnSegmentError::Unauthorized(body),
+            404u16 => iface_user_segments::GetExpiringUserTargetsOnSegmentError::NotFound(body),
+            _ => iface_user_segments::GetExpiringUserTargetsOnSegmentError::Other(body),
+        },
+        crate::runtime::DispatchError::Transport(m) => iface_user_segments::GetExpiringUserTargetsOnSegmentError::Other(m),
+    }
+}
+
+fn iface_user_segments__patch_expiring_user_targets_on_segment__ok(body: String) -> Result<iface_user_segments::UserTargetingExpirationForSegment, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match iface_user_segments__user_targeting_expiration_for_segment__from_json(&v) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_user_segments__patch_expiring_user_targets_on_segment__err(e: crate::runtime::DispatchError) -> iface_user_segments::PatchExpiringUserTargetsOnSegmentError {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => match status {
+            400u16 => iface_user_segments::PatchExpiringUserTargetsOnSegmentError::BadRequest(body),
+            401u16 => iface_user_segments::PatchExpiringUserTargetsOnSegmentError::Unauthorized(body),
+            404u16 => iface_user_segments::PatchExpiringUserTargetsOnSegmentError::NotFound(body),
+            409u16 => iface_user_segments::PatchExpiringUserTargetsOnSegmentError::Conflict(body),
+            _ => iface_user_segments::PatchExpiringUserTargetsOnSegmentError::Other(body),
+        },
+        crate::runtime::DispatchError::Transport(m) => iface_user_segments::PatchExpiringUserTargetsOnSegmentError::Other(m),
+    }
+}
+
 impl iface_user_segments::Guest for crate::Component {
-    fn get_user_segments(params: iface_user_segments::GetUserSegmentsParams) -> Result<String, String> {
+    fn get_user_segments(params: iface_user_segments::GetUserSegmentsParams) -> Result<iface_user_segments::UserSegments, iface_user_segments::GetUserSegmentsError> {
         let json = iface_user_segments__get_user_segments_params__to_json(&params);
-        dispatch(&OP_USER_SEGMENTS_GET_USER_SEGMENTS, json)
+        match dispatch(&OP_USER_SEGMENTS_GET_USER_SEGMENTS, json).and_then(iface_user_segments__get_user_segments__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_user_segments__get_user_segments__err(e)),
+        }
     }
-    fn post_user_segment(params: iface_user_segments::PostUserSegmentParams) -> Result<String, String> {
+    fn post_user_segment(params: iface_user_segments::PostUserSegmentParams) -> Result<iface_user_segments::UserSegment, iface_user_segments::PostUserSegmentError> {
         let json = iface_user_segments__post_user_segment_params__to_json(&params);
-        dispatch(&OP_USER_SEGMENTS_POST_USER_SEGMENT, json)
+        match dispatch(&OP_USER_SEGMENTS_POST_USER_SEGMENT, json).and_then(iface_user_segments__post_user_segment__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_user_segments__post_user_segment__err(e)),
+        }
     }
-    fn get_user_segment(params: iface_user_segments::GetUserSegmentParams) -> Result<String, String> {
+    fn get_user_segment(params: iface_user_segments::GetUserSegmentParams) -> Result<iface_user_segments::UserSegment, iface_user_segments::GetUserSegmentError> {
         let json = iface_user_segments__get_user_segment_params__to_json(&params);
-        dispatch(&OP_USER_SEGMENTS_GET_USER_SEGMENT, json)
+        match dispatch(&OP_USER_SEGMENTS_GET_USER_SEGMENT, json).and_then(iface_user_segments__get_user_segment__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_user_segments__get_user_segment__err(e)),
+        }
     }
-    fn patch_user_segment(params: iface_user_segments::PatchUserSegmentParams) -> Result<String, String> {
+    fn patch_user_segment(params: iface_user_segments::PatchUserSegmentParams) -> Result<iface_user_segments::UserSegment, iface_user_segments::PatchUserSegmentError> {
         let json = iface_user_segments__patch_user_segment_params__to_json(&params);
-        dispatch(&OP_USER_SEGMENTS_PATCH_USER_SEGMENT, json)
+        match dispatch(&OP_USER_SEGMENTS_PATCH_USER_SEGMENT, json).and_then(iface_user_segments__patch_user_segment__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_user_segments__patch_user_segment__err(e)),
+        }
     }
-    fn delete_user_segment(params: iface_user_segments::DeleteUserSegmentParams) -> Result<String, String> {
+    fn delete_user_segment(params: iface_user_segments::DeleteUserSegmentParams) -> Result<String, iface_user_segments::DeleteUserSegmentError> {
         let json = iface_user_segments__delete_user_segment_params__to_json(&params);
-        dispatch(&OP_USER_SEGMENTS_DELETE_USER_SEGMENT, json)
+        match dispatch(&OP_USER_SEGMENTS_DELETE_USER_SEGMENT, json).and_then(iface_user_segments__delete_user_segment__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_user_segments__delete_user_segment__err(e)),
+        }
     }
-    fn update_big_segment_targets(params: iface_user_segments::UpdateBigSegmentTargetsParams) -> Result<String, String> {
+    fn update_big_segment_targets(params: iface_user_segments::UpdateBigSegmentTargetsParams) -> Result<String, iface_user_segments::UpdateBigSegmentTargetsError> {
         let json = iface_user_segments__update_big_segment_targets_params__to_json(&params);
-        dispatch(&OP_USER_SEGMENTS_UPDATE_BIG_SEGMENT_TARGETS, json)
+        match dispatch(&OP_USER_SEGMENTS_UPDATE_BIG_SEGMENT_TARGETS, json).and_then(iface_user_segments__update_big_segment_targets__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_user_segments__update_big_segment_targets__err(e)),
+        }
     }
-    fn get_expiring_user_targets_on_segment(params: iface_user_segments::GetExpiringUserTargetsOnSegmentParams) -> Result<String, String> {
+    fn get_expiring_user_targets_on_segment(params: iface_user_segments::GetExpiringUserTargetsOnSegmentParams) -> Result<iface_user_segments::UserTargetingExpirationForSegment, iface_user_segments::GetExpiringUserTargetsOnSegmentError> {
         let json = iface_user_segments__get_expiring_user_targets_on_segment_params__to_json(&params);
-        dispatch(&OP_USER_SEGMENTS_GET_EXPIRING_USER_TARGETS_ON_SEGMENT, json)
+        match dispatch(&OP_USER_SEGMENTS_GET_EXPIRING_USER_TARGETS_ON_SEGMENT, json).and_then(iface_user_segments__get_expiring_user_targets_on_segment__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_user_segments__get_expiring_user_targets_on_segment__err(e)),
+        }
     }
-    fn patch_expiring_user_targets_on_segment(params: iface_user_segments::PatchExpiringUserTargetsOnSegmentParams) -> Result<String, String> {
+    fn patch_expiring_user_targets_on_segment(params: iface_user_segments::PatchExpiringUserTargetsOnSegmentParams) -> Result<iface_user_segments::UserTargetingExpirationForSegment, iface_user_segments::PatchExpiringUserTargetsOnSegmentError> {
         let json = iface_user_segments__patch_expiring_user_targets_on_segment_params__to_json(&params);
-        dispatch(&OP_USER_SEGMENTS_PATCH_EXPIRING_USER_TARGETS_ON_SEGMENT, json)
+        match dispatch(&OP_USER_SEGMENTS_PATCH_EXPIRING_USER_TARGETS_ON_SEGMENT, json).and_then(iface_user_segments__patch_expiring_user_targets_on_segment__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_user_segments__patch_expiring_user_targets_on_segment__err(e)),
+        }
     }
 }
 use crate::exports::autostamp::launchdarkly::access_tokens as iface_access_tokens;
@@ -1938,7 +5934,7 @@ const OP_ACCESS_TOKENS_GET_TOKENS: OpSpec = OpSpec {
     method: "GET",
     path_template: "/tokens",
     fields: &[
-        FieldSpec { snake: "show_all", location: FieldLocation::Query },
+        FieldSpec { snake: "show_all", wire: "showAll", location: FieldLocation::Query },
     ],
     auth: &[
     ],
@@ -1957,7 +5953,7 @@ const OP_ACCESS_TOKENS_GET_TOKEN: OpSpec = OpSpec {
     method: "GET",
     path_template: "/tokens/{token_id}",
     fields: &[
-        FieldSpec { snake: "token_id", location: FieldLocation::Path },
+        FieldSpec { snake: "token_id", wire: "tokenId", location: FieldLocation::Path },
     ],
     auth: &[
     ],
@@ -1967,7 +5963,7 @@ const OP_ACCESS_TOKENS_PATCH_TOKEN: OpSpec = OpSpec {
     method: "PATCH",
     path_template: "/tokens/{token_id}",
     fields: &[
-        FieldSpec { snake: "token_id", location: FieldLocation::Path },
+        FieldSpec { snake: "token_id", wire: "tokenId", location: FieldLocation::Path },
     ],
     auth: &[
     ],
@@ -1977,7 +5973,7 @@ const OP_ACCESS_TOKENS_DELETE_TOKEN: OpSpec = OpSpec {
     method: "DELETE",
     path_template: "/tokens/{token_id}",
     fields: &[
-        FieldSpec { snake: "token_id", location: FieldLocation::Path },
+        FieldSpec { snake: "token_id", wire: "tokenId", location: FieldLocation::Path },
     ],
     auth: &[
     ],
@@ -1987,12 +5983,105 @@ const OP_ACCESS_TOKENS_RESET_TOKEN: OpSpec = OpSpec {
     method: "POST",
     path_template: "/tokens/{token_id}/reset",
     fields: &[
-        FieldSpec { snake: "token_id", location: FieldLocation::Path },
-        FieldSpec { snake: "expiry", location: FieldLocation::Query },
+        FieldSpec { snake: "token_id", wire: "tokenId", location: FieldLocation::Path },
+        FieldSpec { snake: "expiry", wire: "expiry", location: FieldLocation::Query },
     ],
     auth: &[
     ],
 };
+
+fn iface_access_tokens__statement_effect_enum__to_str(e: &iface_access_tokens::StatementEffectEnum) -> &'static str {
+    match e {
+        iface_access_tokens::StatementEffectEnum::Allow => "allow",
+        iface_access_tokens::StatementEffectEnum::Deny => "deny",
+    }
+}
+
+fn iface_access_tokens__tokens__to_json(p: &iface_access_tokens::Tokens) -> Value {
+    let mut m = Map::new();
+    m.insert("_links".into(), match (&p.links) { Some(v) => iface_access_tokens__links__to_json(v), None => Value::Null });
+    m.insert("items".into(), match (&p.items) { Some(v) => Value::Array((v).iter().map(|v| iface_access_tokens__token__to_json(v)).collect()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_access_tokens__links__to_json(p: &iface_access_tokens::Links) -> Value {
+    let mut m = Map::new();
+    m.insert("next".into(), match (&p.next) { Some(v) => iface_access_tokens__link__to_json(v), None => Value::Null });
+    m.insert("self".into(), match (&p.self_) { Some(v) => iface_access_tokens__link__to_json(v), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_access_tokens__link__to_json(p: &iface_access_tokens::Link) -> Value {
+    let mut m = Map::new();
+    m.insert("href".into(), match (&p.href) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("type".into(), match (&p.type_op) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_access_tokens__token__to_json(p: &iface_access_tokens::Token) -> Value {
+    let mut m = Map::new();
+    m.insert("_id".into(), match (&p.id) { Some(v) => iface_access_tokens__id__to_json(v), None => Value::Null });
+    m.insert("_links".into(), match (&p.links) { Some(v) => iface_access_tokens__links__to_json(v), None => Value::Null });
+    m.insert("_member".into(), match (&p.member) { Some(v) => iface_access_tokens__member__to_json(v), None => Value::Null });
+    m.insert("creationDate".into(), match (&p.creation_date) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("customRoleIds".into(), match (&p.custom_role_ids) { Some(v) => Value::Array((v).iter().map(|v| Value::String((v).clone())).collect()), None => Value::Null });
+    m.insert("defaultApiVersion".into(), match (&p.default_api_version) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("inlineRole".into(), match (&p.inline_role) { Some(v) => Value::Array((v).iter().map(|v| iface_access_tokens__statement__to_json(v)).collect()), None => Value::Null });
+    m.insert("lastModified".into(), match (&p.last_modified) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("lastUsed".into(), match (&p.last_used) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("memberId".into(), match (&p.member_id) { Some(v) => iface_access_tokens__id__to_json(v), None => Value::Null });
+    m.insert("name".into(), match (&p.name) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("ownerId".into(), match (&p.owner_id) { Some(v) => iface_access_tokens__id__to_json(v), None => Value::Null });
+    m.insert("role".into(), match (&p.role) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("serviceToken".into(), match (&p.service_token) { Some(v) => Value::Bool(*(v)), None => Value::Null });
+    m.insert("token".into(), match (&p.token) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_access_tokens__id__to_json(p: &iface_access_tokens::Id) -> Value {
+    let mut m = Map::new();
+    m.insert("value".into(), Value::String((&p.value).clone()));
+    Value::Object(m)
+}
+
+fn iface_access_tokens__member__to_json(p: &iface_access_tokens::Member) -> Value {
+    let mut m = Map::new();
+    m.insert("_id".into(), match (&p.id) { Some(v) => iface_access_tokens__id__to_json(v), None => Value::Null });
+    m.insert("_lastSeen".into(), match (&p.last_seen) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("_lastSeenMetadata".into(), match (&p.last_seen_metadata) { Some(v) => iface_access_tokens__member_last_seen_metadata__to_json(v), None => Value::Null });
+    m.insert("_links".into(), match (&p.links) { Some(v) => iface_access_tokens__links__to_json(v), None => Value::Null });
+    m.insert("_pendingInvite".into(), match (&p.pending_invite) { Some(v) => Value::Bool(*(v)), None => Value::Null });
+    m.insert("_verified".into(), match (&p.verified) { Some(v) => Value::Bool(*(v)), None => Value::Null });
+    m.insert("customRoles".into(), match (&p.custom_roles) { Some(v) => Value::Array((v).iter().map(|v| iface_access_tokens__id__to_json(v)).collect()), None => Value::Null });
+    m.insert("email".into(), match (&p.email) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("firstName".into(), match (&p.first_name) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("isBeta".into(), match (&p.is_beta) { Some(v) => Value::Bool(*(v)), None => Value::Null });
+    m.insert("lastName".into(), match (&p.last_name) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("role".into(), match (&p.role) { Some(v) => iface_access_tokens__role__to_json(v), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_access_tokens__member_last_seen_metadata__to_json(p: &iface_access_tokens::MemberLastSeenMetadata) -> Value {
+    let mut m = Map::new();
+    m.insert("tokenId".into(), match (&p.token_id) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_access_tokens__role__to_json(p: &iface_access_tokens::Role) -> Value {
+    let mut m = Map::new();
+    m.insert("value".into(), Value::String((&p.value).clone()));
+    Value::Object(m)
+}
+
+fn iface_access_tokens__statement__to_json(p: &iface_access_tokens::Statement) -> Value {
+    let mut m = Map::new();
+    m.insert("actions".into(), match (&p.actions) { Some(v) => Value::Array((v).iter().map(|v| Value::String((v).clone())).collect()), None => Value::Null });
+    m.insert("effect".into(), match (&p.effect) { Some(v) => Value::String(iface_access_tokens__statement_effect_enum__to_str(v).into()), None => Value::Null });
+    m.insert("notActions".into(), match (&p.not_actions) { Some(v) => Value::Array((v).iter().map(|v| Value::String((v).clone())).collect()), None => Value::Null });
+    m.insert("notResources".into(), match (&p.not_resources) { Some(v) => Value::Array((v).iter().map(|v| Value::String((v).clone())).collect()), None => Value::Null });
+    m.insert("resources".into(), match (&p.resources) { Some(v) => Value::Array((v).iter().map(|v| Value::String((v).clone())).collect()), None => Value::Null });
+    Value::Object(m)
+}
 
 fn iface_access_tokens__get_tokens_params__to_json(p: &iface_access_tokens::GetTokensParams) -> Value {
     let mut m = Map::new();
@@ -2025,29 +6114,277 @@ fn iface_access_tokens__reset_token_params__to_json(p: &iface_access_tokens::Res
     Value::Object(m)
 }
 
+fn iface_access_tokens__tokens__from_json(v: &Value) -> Option<iface_access_tokens::Tokens> {
+    let m = v.as_object()?;
+    Some(iface_access_tokens::Tokens {
+        links: m.get("_links").filter(|v| !v.is_null()).and_then(|v| iface_access_tokens__links__from_json(v)),
+        items: m.get("items").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| iface_access_tokens__token__from_json(x)).collect())),
+    })
+}
+
+fn iface_access_tokens__links__from_json(v: &Value) -> Option<iface_access_tokens::Links> {
+    let m = v.as_object()?;
+    Some(iface_access_tokens::Links {
+        next: m.get("next").filter(|v| !v.is_null()).and_then(|v| iface_access_tokens__link__from_json(v)),
+        self_: m.get("self").filter(|v| !v.is_null()).and_then(|v| iface_access_tokens__link__from_json(v)),
+    })
+}
+
+fn iface_access_tokens__link__from_json(v: &Value) -> Option<iface_access_tokens::Link> {
+    let m = v.as_object()?;
+    Some(iface_access_tokens::Link {
+        href: m.get("href").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        type_op: m.get("type").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    })
+}
+
+fn iface_access_tokens__token__from_json(v: &Value) -> Option<iface_access_tokens::Token> {
+    let m = v.as_object()?;
+    Some(iface_access_tokens::Token {
+        id: m.get("_id").filter(|v| !v.is_null()).and_then(|v| iface_access_tokens__id__from_json(v)),
+        links: m.get("_links").filter(|v| !v.is_null()).and_then(|v| iface_access_tokens__links__from_json(v)),
+        member: m.get("_member").filter(|v| !v.is_null()).and_then(|v| iface_access_tokens__member__from_json(v)),
+        creation_date: m.get("creationDate").filter(|v| !v.is_null()).and_then(|v| (v).as_i64()),
+        custom_role_ids: m.get("customRoleIds").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| (x).as_str().map(|s| s.to_string())).collect())),
+        default_api_version: m.get("defaultApiVersion").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        inline_role: m.get("inlineRole").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| iface_access_tokens__statement__from_json(x)).collect())),
+        last_modified: m.get("lastModified").filter(|v| !v.is_null()).and_then(|v| (v).as_i64()),
+        last_used: m.get("lastUsed").filter(|v| !v.is_null()).and_then(|v| (v).as_i64()),
+        member_id: m.get("memberId").filter(|v| !v.is_null()).and_then(|v| iface_access_tokens__id__from_json(v)),
+        name: m.get("name").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        owner_id: m.get("ownerId").filter(|v| !v.is_null()).and_then(|v| iface_access_tokens__id__from_json(v)),
+        role: m.get("role").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        service_token: m.get("serviceToken").filter(|v| !v.is_null()).and_then(|v| (v).as_bool()),
+        token: m.get("token").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    })
+}
+
+fn iface_access_tokens__id__from_json(v: &Value) -> Option<iface_access_tokens::Id> {
+    let m = v.as_object()?;
+    Some(iface_access_tokens::Id {
+        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+    })
+}
+
+fn iface_access_tokens__member__from_json(v: &Value) -> Option<iface_access_tokens::Member> {
+    let m = v.as_object()?;
+    Some(iface_access_tokens::Member {
+        id: m.get("_id").filter(|v| !v.is_null()).and_then(|v| iface_access_tokens__id__from_json(v)),
+        last_seen: m.get("_lastSeen").filter(|v| !v.is_null()).and_then(|v| (v).as_i64()),
+        last_seen_metadata: m.get("_lastSeenMetadata").filter(|v| !v.is_null()).and_then(|v| iface_access_tokens__member_last_seen_metadata__from_json(v)),
+        links: m.get("_links").filter(|v| !v.is_null()).and_then(|v| iface_access_tokens__links__from_json(v)),
+        pending_invite: m.get("_pendingInvite").filter(|v| !v.is_null()).and_then(|v| (v).as_bool()),
+        verified: m.get("_verified").filter(|v| !v.is_null()).and_then(|v| (v).as_bool()),
+        custom_roles: m.get("customRoles").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| iface_access_tokens__id__from_json(x)).collect())),
+        email: m.get("email").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        first_name: m.get("firstName").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        is_beta: m.get("isBeta").filter(|v| !v.is_null()).and_then(|v| (v).as_bool()),
+        last_name: m.get("lastName").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        role: m.get("role").filter(|v| !v.is_null()).and_then(|v| iface_access_tokens__role__from_json(v)),
+    })
+}
+
+fn iface_access_tokens__member_last_seen_metadata__from_json(v: &Value) -> Option<iface_access_tokens::MemberLastSeenMetadata> {
+    let m = v.as_object()?;
+    Some(iface_access_tokens::MemberLastSeenMetadata {
+        token_id: m.get("tokenId").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    })
+}
+
+fn iface_access_tokens__role__from_json(v: &Value) -> Option<iface_access_tokens::Role> {
+    let m = v.as_object()?;
+    Some(iface_access_tokens::Role {
+        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+    })
+}
+
+fn iface_access_tokens__statement__from_json(v: &Value) -> Option<iface_access_tokens::Statement> {
+    let m = v.as_object()?;
+    Some(iface_access_tokens::Statement {
+        actions: m.get("actions").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| (x).as_str().map(|s| s.to_string())).collect())),
+        effect: m.get("effect").filter(|v| !v.is_null()).and_then(|v| (v).as_str().and_then(iface_access_tokens__statement_effect_enum__from_str)),
+        not_actions: m.get("notActions").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| (x).as_str().map(|s| s.to_string())).collect())),
+        not_resources: m.get("notResources").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| (x).as_str().map(|s| s.to_string())).collect())),
+        resources: m.get("resources").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| (x).as_str().map(|s| s.to_string())).collect())),
+    })
+}
+
+fn iface_access_tokens__statement_effect_enum__from_str(s: &str) -> Option<iface_access_tokens::StatementEffectEnum> {
+    match s {
+        "allow" => Some(iface_access_tokens::StatementEffectEnum::Allow),
+        "deny" => Some(iface_access_tokens::StatementEffectEnum::Deny),
+        _ => None,
+    }
+}
+
+fn iface_access_tokens__get_tokens__ok(body: String) -> Result<iface_access_tokens::Tokens, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match iface_access_tokens__tokens__from_json(&v) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_access_tokens__get_tokens__err(e: crate::runtime::DispatchError) -> iface_access_tokens::GetTokensError {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => match status {
+            401u16 => iface_access_tokens::GetTokensError::Unauthorized(body),
+            _ => iface_access_tokens::GetTokensError::Other(body),
+        },
+        crate::runtime::DispatchError::Transport(m) => iface_access_tokens::GetTokensError::Other(m),
+    }
+}
+
+fn iface_access_tokens__post_token__ok(body: String) -> Result<iface_access_tokens::Token, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match iface_access_tokens__token__from_json(&v) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_access_tokens__post_token__err(e: crate::runtime::DispatchError) -> iface_access_tokens::PostTokenError {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => match status {
+            400u16 => iface_access_tokens::PostTokenError::BadRequest(body),
+            401u16 => iface_access_tokens::PostTokenError::Unauthorized(body),
+            409u16 => iface_access_tokens::PostTokenError::Conflict(body),
+            _ => iface_access_tokens::PostTokenError::Other(body),
+        },
+        crate::runtime::DispatchError::Transport(m) => iface_access_tokens::PostTokenError::Other(m),
+    }
+}
+
+fn iface_access_tokens__get_token__ok(body: String) -> Result<iface_access_tokens::Token, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match iface_access_tokens__token__from_json(&v) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_access_tokens__get_token__err(e: crate::runtime::DispatchError) -> iface_access_tokens::GetTokenError {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => match status {
+            400u16 => iface_access_tokens::GetTokenError::BadRequest(body),
+            401u16 => iface_access_tokens::GetTokenError::Unauthorized(body),
+            _ => iface_access_tokens::GetTokenError::Other(body),
+        },
+        crate::runtime::DispatchError::Transport(m) => iface_access_tokens::GetTokenError::Other(m),
+    }
+}
+
+fn iface_access_tokens__patch_token__ok(body: String) -> Result<iface_access_tokens::Token, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match iface_access_tokens__token__from_json(&v) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_access_tokens__patch_token__err(e: crate::runtime::DispatchError) -> iface_access_tokens::PatchTokenError {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => match status {
+            400u16 => iface_access_tokens::PatchTokenError::BadRequest(body),
+            401u16 => iface_access_tokens::PatchTokenError::Unauthorized(body),
+            404u16 => iface_access_tokens::PatchTokenError::NotFound(body),
+            409u16 => iface_access_tokens::PatchTokenError::Conflict(body),
+            _ => iface_access_tokens::PatchTokenError::Other(body),
+        },
+        crate::runtime::DispatchError::Transport(m) => iface_access_tokens::PatchTokenError::Other(m),
+    }
+}
+
+fn iface_access_tokens__delete_token__ok(body: String) -> Result<String, crate::runtime::DispatchError> {
+    Ok(body)
+}
+
+fn iface_access_tokens__delete_token__err(e: crate::runtime::DispatchError) -> iface_access_tokens::DeleteTokenError {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => match status {
+            401u16 => iface_access_tokens::DeleteTokenError::Unauthorized(body),
+            404u16 => iface_access_tokens::DeleteTokenError::NotFound(body),
+            _ => iface_access_tokens::DeleteTokenError::Other(body),
+        },
+        crate::runtime::DispatchError::Transport(m) => iface_access_tokens::DeleteTokenError::Other(m),
+    }
+}
+
+fn iface_access_tokens__reset_token__ok(body: String) -> Result<iface_access_tokens::Token, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match iface_access_tokens__token__from_json(&v) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_access_tokens__reset_token__err(e: crate::runtime::DispatchError) -> iface_access_tokens::ResetTokenError {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => match status {
+            400u16 => iface_access_tokens::ResetTokenError::BadRequest(body),
+            401u16 => iface_access_tokens::ResetTokenError::Unauthorized(body),
+            _ => iface_access_tokens::ResetTokenError::Other(body),
+        },
+        crate::runtime::DispatchError::Transport(m) => iface_access_tokens::ResetTokenError::Other(m),
+    }
+}
+
 impl iface_access_tokens::Guest for crate::Component {
-    fn get_tokens(params: iface_access_tokens::GetTokensParams) -> Result<String, String> {
+    fn get_tokens(params: iface_access_tokens::GetTokensParams) -> Result<iface_access_tokens::Tokens, iface_access_tokens::GetTokensError> {
         let json = iface_access_tokens__get_tokens_params__to_json(&params);
-        dispatch(&OP_ACCESS_TOKENS_GET_TOKENS, json)
+        match dispatch(&OP_ACCESS_TOKENS_GET_TOKENS, json).and_then(iface_access_tokens__get_tokens__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_access_tokens__get_tokens__err(e)),
+        }
     }
-    fn post_token() -> Result<String, String> {
-        dispatch(&OP_ACCESS_TOKENS_POST_TOKEN, Value::Object(Map::new()))
+    fn post_token() -> Result<iface_access_tokens::Token, iface_access_tokens::PostTokenError> {
+        match dispatch(&OP_ACCESS_TOKENS_POST_TOKEN, Value::Object(Map::new())).and_then(iface_access_tokens__post_token__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_access_tokens__post_token__err(e)),
+        }
     }
-    fn get_token(params: iface_access_tokens::GetTokenParams) -> Result<String, String> {
+    fn get_token(params: iface_access_tokens::GetTokenParams) -> Result<iface_access_tokens::Token, iface_access_tokens::GetTokenError> {
         let json = iface_access_tokens__get_token_params__to_json(&params);
-        dispatch(&OP_ACCESS_TOKENS_GET_TOKEN, json)
+        match dispatch(&OP_ACCESS_TOKENS_GET_TOKEN, json).and_then(iface_access_tokens__get_token__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_access_tokens__get_token__err(e)),
+        }
     }
-    fn patch_token(params: iface_access_tokens::PatchTokenParams) -> Result<String, String> {
+    fn patch_token(params: iface_access_tokens::PatchTokenParams) -> Result<iface_access_tokens::Token, iface_access_tokens::PatchTokenError> {
         let json = iface_access_tokens__patch_token_params__to_json(&params);
-        dispatch(&OP_ACCESS_TOKENS_PATCH_TOKEN, json)
+        match dispatch(&OP_ACCESS_TOKENS_PATCH_TOKEN, json).and_then(iface_access_tokens__patch_token__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_access_tokens__patch_token__err(e)),
+        }
     }
-    fn delete_token(params: iface_access_tokens::DeleteTokenParams) -> Result<String, String> {
+    fn delete_token(params: iface_access_tokens::DeleteTokenParams) -> Result<String, iface_access_tokens::DeleteTokenError> {
         let json = iface_access_tokens__delete_token_params__to_json(&params);
-        dispatch(&OP_ACCESS_TOKENS_DELETE_TOKEN, json)
+        match dispatch(&OP_ACCESS_TOKENS_DELETE_TOKEN, json).and_then(iface_access_tokens__delete_token__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_access_tokens__delete_token__err(e)),
+        }
     }
-    fn reset_token(params: iface_access_tokens::ResetTokenParams) -> Result<String, String> {
+    fn reset_token(params: iface_access_tokens::ResetTokenParams) -> Result<iface_access_tokens::Token, iface_access_tokens::ResetTokenError> {
         let json = iface_access_tokens__reset_token_params__to_json(&params);
-        dispatch(&OP_ACCESS_TOKENS_RESET_TOKEN, json)
+        match dispatch(&OP_ACCESS_TOKENS_RESET_TOKEN, json).and_then(iface_access_tokens__reset_token__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_access_tokens__reset_token__err(e)),
+        }
     }
 }
 use crate::exports::autostamp::launchdarkly::customer_metrics as iface_customer_metrics;
@@ -2065,8 +6402,8 @@ const OP_CUSTOMER_METRICS_GET_EVALUATIONS: OpSpec = OpSpec {
     method: "GET",
     path_template: "/usage/evaluations/{env_id}/{flag_key}",
     fields: &[
-        FieldSpec { snake: "env_id", location: FieldLocation::Path },
-        FieldSpec { snake: "flag_key", location: FieldLocation::Path },
+        FieldSpec { snake: "env_id", wire: "envId", location: FieldLocation::Path },
+        FieldSpec { snake: "flag_key", wire: "flagKey", location: FieldLocation::Path },
     ],
     auth: &[
     ],
@@ -2085,7 +6422,7 @@ const OP_CUSTOMER_METRICS_GET_EVENT: OpSpec = OpSpec {
     method: "GET",
     path_template: "/usage/events/{type}",
     fields: &[
-        FieldSpec { snake: "type", location: FieldLocation::Path },
+        FieldSpec { snake: "type", wire: "type", location: FieldLocation::Path },
     ],
     auth: &[
     ],
@@ -2122,7 +6459,7 @@ const OP_CUSTOMER_METRICS_GET_STREAM: OpSpec = OpSpec {
     method: "GET",
     path_template: "/usage/streams/{source}",
     fields: &[
-        FieldSpec { snake: "source", location: FieldLocation::Path },
+        FieldSpec { snake: "source", wire: "source", location: FieldLocation::Path },
     ],
     auth: &[
     ],
@@ -2132,7 +6469,7 @@ const OP_CUSTOMER_METRICS_GET_STREAM_BY_SDK: OpSpec = OpSpec {
     method: "GET",
     path_template: "/usage/streams/{source}/bysdkversion",
     fields: &[
-        FieldSpec { snake: "source", location: FieldLocation::Path },
+        FieldSpec { snake: "source", wire: "source", location: FieldLocation::Path },
     ],
     auth: &[
     ],
@@ -2142,11 +6479,135 @@ const OP_CUSTOMER_METRICS_GET_STREAM_SDK_VERSION: OpSpec = OpSpec {
     method: "GET",
     path_template: "/usage/streams/{source}/sdkversions",
     fields: &[
-        FieldSpec { snake: "source", location: FieldLocation::Path },
+        FieldSpec { snake: "source", wire: "source", location: FieldLocation::Path },
     ],
     auth: &[
     ],
 };
+
+fn iface_customer_metrics__usage__to_json(p: &iface_customer_metrics::Usage) -> Value {
+    let mut m = Map::new();
+    m.insert("_links".into(), match (&p.links) { Some(v) => iface_customer_metrics__usage_links__to_json(v), None => Value::Null });
+    m.insert("series".into(), match (&p.series) { Some(v) => Value::Array((v).iter().map(|v| iface_customer_metrics__stream_usage_series__to_json(v)).collect()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_customer_metrics__usage_links__to_json(p: &iface_customer_metrics::UsageLinks) -> Value {
+    let mut m = Map::new();
+    m.insert("parent".into(), match (&p.parent) { Some(v) => iface_customer_metrics__link__to_json(v), None => Value::Null });
+    m.insert("self".into(), match (&p.self_) { Some(v) => iface_customer_metrics__link__to_json(v), None => Value::Null });
+    m.insert("subseries".into(), match (&p.subseries) { Some(v) => Value::Array((v).iter().map(|v| iface_customer_metrics__link__to_json(v)).collect()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_customer_metrics__link__to_json(p: &iface_customer_metrics::Link) -> Value {
+    let mut m = Map::new();
+    m.insert("href".into(), match (&p.href) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("type".into(), match (&p.type_op) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_customer_metrics__stream_usage_series__to_json(p: &iface_customer_metrics::StreamUsageSeries) -> Value {
+    let mut m = Map::new();
+    m.insert("0".into(), match (&p.v0) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("time".into(), match (&p.time) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_customer_metrics__stream_sdk_version__to_json(p: &iface_customer_metrics::StreamSdkVersion) -> Value {
+    let mut m = Map::new();
+    m.insert("_links".into(), match (&p.links) { Some(v) => iface_customer_metrics__stream_by_sdk_links__to_json(v), None => Value::Null });
+    m.insert("sdkVersions".into(), match (&p.sdk_versions) { Some(v) => Value::Array((v).iter().map(|v| iface_customer_metrics__stream_sdk_version_data__to_json(v)).collect()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_customer_metrics__stream_by_sdk_links__to_json(p: &iface_customer_metrics::StreamBySdkLinks) -> Value {
+    let mut m = Map::new();
+    m.insert("parent".into(), match (&p.parent) { Some(v) => iface_customer_metrics__link__to_json(v), None => Value::Null });
+    m.insert("self".into(), match (&p.self_) { Some(v) => iface_customer_metrics__link__to_json(v), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_customer_metrics__stream_sdk_version_data__to_json(p: &iface_customer_metrics::StreamSdkVersionData) -> Value {
+    let mut m = Map::new();
+    m.insert("sdk".into(), match (&p.sdk) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("version".into(), match (&p.version) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_customer_metrics__events__to_json(p: &iface_customer_metrics::Events) -> Value {
+    let mut m = Map::new();
+    m.insert("links".into(), match (&p.links) { Some(v) => iface_customer_metrics__usage_links__to_json(v), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_customer_metrics__mau__to_json(p: &iface_customer_metrics::Mau) -> Value {
+    let mut m = Map::new();
+    m.insert("_links".into(), match (&p.links) { Some(v) => iface_customer_metrics__usage_links__to_json(v), None => Value::Null });
+    m.insert("metadata".into(), match (&p.metadata) { Some(v) => Value::Array((v).iter().map(|v| iface_customer_metrics__stream_by_sdk_links_metadata__to_json(v)).collect()), None => Value::Null });
+    m.insert("series".into(), match (&p.series) { Some(v) => Value::Array((v).iter().map(|v| iface_customer_metrics__stream_usage_series__to_json(v)).collect()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_customer_metrics__stream_by_sdk_links_metadata__to_json(p: &iface_customer_metrics::StreamBySdkLinksMetadata) -> Value {
+    let mut m = Map::new();
+    m.insert("sdk".into(), match (&p.sdk) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("source".into(), match (&p.source) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("version".into(), match (&p.version) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_customer_metrics__ma_uby_category__to_json(p: &iface_customer_metrics::MaUbyCategory) -> Value {
+    let mut m = Map::new();
+    m.insert("_links".into(), match (&p.links) { Some(v) => iface_customer_metrics__stream_by_sdk_links__to_json(v), None => Value::Null });
+    m.insert("metadata".into(), match (&p.metadata) { Some(v) => Value::Array((v).iter().map(|v| iface_customer_metrics__mau_metadata__to_json(v)).collect()), None => Value::Null });
+    m.insert("series".into(), match (&p.series) { Some(v) => Value::Array((v).iter().map(|v| iface_customer_metrics__stream_usage_series__to_json(v)).collect()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_customer_metrics__mau_metadata__to_json(p: &iface_customer_metrics::MauMetadata) -> Value {
+    let mut m = Map::new();
+    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_customer_metrics__streams__to_json(p: &iface_customer_metrics::Streams) -> Value {
+    let mut m = Map::new();
+    m.insert("_links".into(), match (&p.links) { Some(v) => iface_customer_metrics__stream_usage_links__to_json(v), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_customer_metrics__stream_usage_links__to_json(p: &iface_customer_metrics::StreamUsageLinks) -> Value {
+    let mut m = Map::new();
+    m.insert("parent".into(), match (&p.parent) { Some(v) => iface_customer_metrics__link__to_json(v), None => Value::Null });
+    m.insert("self".into(), match (&p.self_) { Some(v) => iface_customer_metrics__link__to_json(v), None => Value::Null });
+    m.insert("subseries".into(), match (&p.subseries) { Some(v) => Value::Array((v).iter().map(|v| iface_customer_metrics__link__to_json(v)).collect()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_customer_metrics__stream_op__to_json(p: &iface_customer_metrics::StreamOp) -> Value {
+    let mut m = Map::new();
+    m.insert("_links".into(), match (&p.links) { Some(v) => iface_customer_metrics__stream_usage_links__to_json(v), None => Value::Null });
+    m.insert("metadata".into(), match (&p.metadata) { Some(v) => Value::Array((v).iter().map(|v| iface_customer_metrics__stream_usage_metadata__to_json(v)).collect()), None => Value::Null });
+    m.insert("series".into(), match (&p.series) { Some(v) => Value::Array((v).iter().map(|v| iface_customer_metrics__stream_usage_series__to_json(v)).collect()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_customer_metrics__stream_usage_metadata__to_json(p: &iface_customer_metrics::StreamUsageMetadata) -> Value {
+    let mut m = Map::new();
+    m.insert("sdk".into(), match (&p.sdk) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("source".into(), match (&p.source) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("version".into(), match (&p.version) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_customer_metrics__stream_by_sdk__to_json(p: &iface_customer_metrics::StreamBySdk) -> Value {
+    let mut m = Map::new();
+    m.insert("_links".into(), match (&p.links) { Some(v) => iface_customer_metrics__stream_by_sdk_links__to_json(v), None => Value::Null });
+    m.insert("metadata".into(), match (&p.metadata) { Some(v) => Value::Array((v).iter().map(|v| iface_customer_metrics__stream_by_sdk_links_metadata__to_json(v)).collect()), None => Value::Null });
+    m.insert("series".into(), match (&p.series) { Some(v) => Value::Array((v).iter().map(|v| iface_customer_metrics__stream_usage_series__to_json(v)).collect()), None => Value::Null });
+    Value::Object(m)
+}
 
 fn iface_customer_metrics__get_evaluations_params__to_json(p: &iface_customer_metrics::GetEvaluationsParams) -> Value {
     let mut m = Map::new();
@@ -2179,41 +6640,427 @@ fn iface_customer_metrics__get_stream_sdk_version_params__to_json(p: &iface_cust
     Value::Object(m)
 }
 
+fn iface_customer_metrics__usage__from_json(v: &Value) -> Option<iface_customer_metrics::Usage> {
+    let m = v.as_object()?;
+    Some(iface_customer_metrics::Usage {
+        links: m.get("_links").filter(|v| !v.is_null()).and_then(|v| iface_customer_metrics__usage_links__from_json(v)),
+        series: m.get("series").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| iface_customer_metrics__stream_usage_series__from_json(x)).collect())),
+    })
+}
+
+fn iface_customer_metrics__usage_links__from_json(v: &Value) -> Option<iface_customer_metrics::UsageLinks> {
+    let m = v.as_object()?;
+    Some(iface_customer_metrics::UsageLinks {
+        parent: m.get("parent").filter(|v| !v.is_null()).and_then(|v| iface_customer_metrics__link__from_json(v)),
+        self_: m.get("self").filter(|v| !v.is_null()).and_then(|v| iface_customer_metrics__link__from_json(v)),
+        subseries: m.get("subseries").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| iface_customer_metrics__link__from_json(x)).collect())),
+    })
+}
+
+fn iface_customer_metrics__link__from_json(v: &Value) -> Option<iface_customer_metrics::Link> {
+    let m = v.as_object()?;
+    Some(iface_customer_metrics::Link {
+        href: m.get("href").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        type_op: m.get("type").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    })
+}
+
+fn iface_customer_metrics__stream_usage_series__from_json(v: &Value) -> Option<iface_customer_metrics::StreamUsageSeries> {
+    let m = v.as_object()?;
+    Some(iface_customer_metrics::StreamUsageSeries {
+        v0: m.get("0").filter(|v| !v.is_null()).and_then(|v| (v).as_i64()),
+        time: m.get("time").filter(|v| !v.is_null()).and_then(|v| (v).as_i64()),
+    })
+}
+
+fn iface_customer_metrics__stream_sdk_version__from_json(v: &Value) -> Option<iface_customer_metrics::StreamSdkVersion> {
+    let m = v.as_object()?;
+    Some(iface_customer_metrics::StreamSdkVersion {
+        links: m.get("_links").filter(|v| !v.is_null()).and_then(|v| iface_customer_metrics__stream_by_sdk_links__from_json(v)),
+        sdk_versions: m.get("sdkVersions").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| iface_customer_metrics__stream_sdk_version_data__from_json(x)).collect())),
+    })
+}
+
+fn iface_customer_metrics__stream_by_sdk_links__from_json(v: &Value) -> Option<iface_customer_metrics::StreamBySdkLinks> {
+    let m = v.as_object()?;
+    Some(iface_customer_metrics::StreamBySdkLinks {
+        parent: m.get("parent").filter(|v| !v.is_null()).and_then(|v| iface_customer_metrics__link__from_json(v)),
+        self_: m.get("self").filter(|v| !v.is_null()).and_then(|v| iface_customer_metrics__link__from_json(v)),
+    })
+}
+
+fn iface_customer_metrics__stream_sdk_version_data__from_json(v: &Value) -> Option<iface_customer_metrics::StreamSdkVersionData> {
+    let m = v.as_object()?;
+    Some(iface_customer_metrics::StreamSdkVersionData {
+        sdk: m.get("sdk").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        version: m.get("version").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    })
+}
+
+fn iface_customer_metrics__events__from_json(v: &Value) -> Option<iface_customer_metrics::Events> {
+    let m = v.as_object()?;
+    Some(iface_customer_metrics::Events {
+        links: m.get("links").filter(|v| !v.is_null()).and_then(|v| iface_customer_metrics__usage_links__from_json(v)),
+    })
+}
+
+fn iface_customer_metrics__mau__from_json(v: &Value) -> Option<iface_customer_metrics::Mau> {
+    let m = v.as_object()?;
+    Some(iface_customer_metrics::Mau {
+        links: m.get("_links").filter(|v| !v.is_null()).and_then(|v| iface_customer_metrics__usage_links__from_json(v)),
+        metadata: m.get("metadata").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| iface_customer_metrics__stream_by_sdk_links_metadata__from_json(x)).collect())),
+        series: m.get("series").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| iface_customer_metrics__stream_usage_series__from_json(x)).collect())),
+    })
+}
+
+fn iface_customer_metrics__stream_by_sdk_links_metadata__from_json(v: &Value) -> Option<iface_customer_metrics::StreamBySdkLinksMetadata> {
+    let m = v.as_object()?;
+    Some(iface_customer_metrics::StreamBySdkLinksMetadata {
+        sdk: m.get("sdk").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        source: m.get("source").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        version: m.get("version").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    })
+}
+
+fn iface_customer_metrics__ma_uby_category__from_json(v: &Value) -> Option<iface_customer_metrics::MaUbyCategory> {
+    let m = v.as_object()?;
+    Some(iface_customer_metrics::MaUbyCategory {
+        links: m.get("_links").filter(|v| !v.is_null()).and_then(|v| iface_customer_metrics__stream_by_sdk_links__from_json(v)),
+        metadata: m.get("metadata").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| iface_customer_metrics__mau_metadata__from_json(x)).collect())),
+        series: m.get("series").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| iface_customer_metrics__stream_usage_series__from_json(x)).collect())),
+    })
+}
+
+fn iface_customer_metrics__mau_metadata__from_json(v: &Value) -> Option<iface_customer_metrics::MauMetadata> {
+    let m = v.as_object()?;
+    Some(iface_customer_metrics::MauMetadata {
+        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    })
+}
+
+fn iface_customer_metrics__streams__from_json(v: &Value) -> Option<iface_customer_metrics::Streams> {
+    let m = v.as_object()?;
+    Some(iface_customer_metrics::Streams {
+        links: m.get("_links").filter(|v| !v.is_null()).and_then(|v| iface_customer_metrics__stream_usage_links__from_json(v)),
+    })
+}
+
+fn iface_customer_metrics__stream_usage_links__from_json(v: &Value) -> Option<iface_customer_metrics::StreamUsageLinks> {
+    let m = v.as_object()?;
+    Some(iface_customer_metrics::StreamUsageLinks {
+        parent: m.get("parent").filter(|v| !v.is_null()).and_then(|v| iface_customer_metrics__link__from_json(v)),
+        self_: m.get("self").filter(|v| !v.is_null()).and_then(|v| iface_customer_metrics__link__from_json(v)),
+        subseries: m.get("subseries").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| iface_customer_metrics__link__from_json(x)).collect())),
+    })
+}
+
+fn iface_customer_metrics__stream_op__from_json(v: &Value) -> Option<iface_customer_metrics::StreamOp> {
+    let m = v.as_object()?;
+    Some(iface_customer_metrics::StreamOp {
+        links: m.get("_links").filter(|v| !v.is_null()).and_then(|v| iface_customer_metrics__stream_usage_links__from_json(v)),
+        metadata: m.get("metadata").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| iface_customer_metrics__stream_usage_metadata__from_json(x)).collect())),
+        series: m.get("series").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| iface_customer_metrics__stream_usage_series__from_json(x)).collect())),
+    })
+}
+
+fn iface_customer_metrics__stream_usage_metadata__from_json(v: &Value) -> Option<iface_customer_metrics::StreamUsageMetadata> {
+    let m = v.as_object()?;
+    Some(iface_customer_metrics::StreamUsageMetadata {
+        sdk: m.get("sdk").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        source: m.get("source").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        version: m.get("version").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    })
+}
+
+fn iface_customer_metrics__stream_by_sdk__from_json(v: &Value) -> Option<iface_customer_metrics::StreamBySdk> {
+    let m = v.as_object()?;
+    Some(iface_customer_metrics::StreamBySdk {
+        links: m.get("_links").filter(|v| !v.is_null()).and_then(|v| iface_customer_metrics__stream_by_sdk_links__from_json(v)),
+        metadata: m.get("metadata").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| iface_customer_metrics__stream_by_sdk_links_metadata__from_json(x)).collect())),
+        series: m.get("series").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| iface_customer_metrics__stream_usage_series__from_json(x)).collect())),
+    })
+}
+
+fn iface_customer_metrics__get_usage__ok(body: String) -> Result<iface_customer_metrics::Usage, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match iface_customer_metrics__usage__from_json(&v) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_customer_metrics__get_usage__err(e: crate::runtime::DispatchError) -> iface_customer_metrics::GetUsageError {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => match status {
+            403u16 => iface_customer_metrics::GetUsageError::Forbidden(body),
+            _ => iface_customer_metrics::GetUsageError::Other(body),
+        },
+        crate::runtime::DispatchError::Transport(m) => iface_customer_metrics::GetUsageError::Other(m),
+    }
+}
+
+fn iface_customer_metrics__get_evaluations__ok(body: String) -> Result<iface_customer_metrics::StreamSdkVersion, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match iface_customer_metrics__stream_sdk_version__from_json(&v) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_customer_metrics__get_evaluations__err(e: crate::runtime::DispatchError) -> iface_customer_metrics::GetEvaluationsError {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => match status {
+            403u16 => iface_customer_metrics::GetEvaluationsError::Forbidden(body),
+            404u16 => iface_customer_metrics::GetEvaluationsError::NotFound(body),
+            _ => iface_customer_metrics::GetEvaluationsError::Other(body),
+        },
+        crate::runtime::DispatchError::Transport(m) => iface_customer_metrics::GetEvaluationsError::Other(m),
+    }
+}
+
+fn iface_customer_metrics__get_events__ok(body: String) -> Result<iface_customer_metrics::Events, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match iface_customer_metrics__events__from_json(&v) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_customer_metrics__get_events__err(e: crate::runtime::DispatchError) -> iface_customer_metrics::GetEventsError {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => match status {
+            403u16 => iface_customer_metrics::GetEventsError::Forbidden(body),
+            _ => iface_customer_metrics::GetEventsError::Other(body),
+        },
+        crate::runtime::DispatchError::Transport(m) => iface_customer_metrics::GetEventsError::Other(m),
+    }
+}
+
+fn iface_customer_metrics__get_event__ok(body: String) -> Result<iface_customer_metrics::StreamSdkVersion, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match iface_customer_metrics__stream_sdk_version__from_json(&v) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_customer_metrics__get_event__err(e: crate::runtime::DispatchError) -> iface_customer_metrics::GetEventError {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => match status {
+            403u16 => iface_customer_metrics::GetEventError::Forbidden(body),
+            404u16 => iface_customer_metrics::GetEventError::NotFound(body),
+            _ => iface_customer_metrics::GetEventError::Other(body),
+        },
+        crate::runtime::DispatchError::Transport(m) => iface_customer_metrics::GetEventError::Other(m),
+    }
+}
+
+fn iface_customer_metrics__get_mau__ok(body: String) -> Result<iface_customer_metrics::Mau, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match iface_customer_metrics__mau__from_json(&v) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_customer_metrics__get_mau__err(e: crate::runtime::DispatchError) -> iface_customer_metrics::GetMauError {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => match status {
+            403u16 => iface_customer_metrics::GetMauError::Forbidden(body),
+            _ => iface_customer_metrics::GetMauError::Other(body),
+        },
+        crate::runtime::DispatchError::Transport(m) => iface_customer_metrics::GetMauError::Other(m),
+    }
+}
+
+fn iface_customer_metrics__get_mau_by_category__ok(body: String) -> Result<iface_customer_metrics::MaUbyCategory, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match iface_customer_metrics__ma_uby_category__from_json(&v) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_customer_metrics__get_mau_by_category__err(e: crate::runtime::DispatchError) -> iface_customer_metrics::GetMauByCategoryError {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => match status {
+            403u16 => iface_customer_metrics::GetMauByCategoryError::Forbidden(body),
+            _ => iface_customer_metrics::GetMauByCategoryError::Other(body),
+        },
+        crate::runtime::DispatchError::Transport(m) => iface_customer_metrics::GetMauByCategoryError::Other(m),
+    }
+}
+
+fn iface_customer_metrics__get_streams__ok(body: String) -> Result<iface_customer_metrics::Streams, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match iface_customer_metrics__streams__from_json(&v) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_customer_metrics__get_streams__err(e: crate::runtime::DispatchError) -> iface_customer_metrics::GetStreamsError {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => match status {
+            403u16 => iface_customer_metrics::GetStreamsError::Forbidden(body),
+            _ => iface_customer_metrics::GetStreamsError::Other(body),
+        },
+        crate::runtime::DispatchError::Transport(m) => iface_customer_metrics::GetStreamsError::Other(m),
+    }
+}
+
+fn iface_customer_metrics__get_stream__ok(body: String) -> Result<iface_customer_metrics::StreamOp, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match iface_customer_metrics__stream_op__from_json(&v) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_customer_metrics__get_stream__err(e: crate::runtime::DispatchError) -> iface_customer_metrics::GetStreamError {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => match status {
+            403u16 => iface_customer_metrics::GetStreamError::Forbidden(body),
+            404u16 => iface_customer_metrics::GetStreamError::NotFound(body),
+            _ => iface_customer_metrics::GetStreamError::Other(body),
+        },
+        crate::runtime::DispatchError::Transport(m) => iface_customer_metrics::GetStreamError::Other(m),
+    }
+}
+
+fn iface_customer_metrics__get_stream_by_sdk__ok(body: String) -> Result<iface_customer_metrics::StreamBySdk, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match iface_customer_metrics__stream_by_sdk__from_json(&v) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_customer_metrics__get_stream_by_sdk__err(e: crate::runtime::DispatchError) -> iface_customer_metrics::GetStreamBySdkError {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => match status {
+            403u16 => iface_customer_metrics::GetStreamBySdkError::Forbidden(body),
+            404u16 => iface_customer_metrics::GetStreamBySdkError::NotFound(body),
+            _ => iface_customer_metrics::GetStreamBySdkError::Other(body),
+        },
+        crate::runtime::DispatchError::Transport(m) => iface_customer_metrics::GetStreamBySdkError::Other(m),
+    }
+}
+
+fn iface_customer_metrics__get_stream_sdk_version__ok(body: String) -> Result<iface_customer_metrics::StreamSdkVersion, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match iface_customer_metrics__stream_sdk_version__from_json(&v) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_customer_metrics__get_stream_sdk_version__err(e: crate::runtime::DispatchError) -> iface_customer_metrics::GetStreamSdkVersionError {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => match status {
+            403u16 => iface_customer_metrics::GetStreamSdkVersionError::Forbidden(body),
+            404u16 => iface_customer_metrics::GetStreamSdkVersionError::NotFound(body),
+            _ => iface_customer_metrics::GetStreamSdkVersionError::Other(body),
+        },
+        crate::runtime::DispatchError::Transport(m) => iface_customer_metrics::GetStreamSdkVersionError::Other(m),
+    }
+}
+
 impl iface_customer_metrics::Guest for crate::Component {
-    fn get_usage() -> Result<String, String> {
-        dispatch(&OP_CUSTOMER_METRICS_GET_USAGE, Value::Object(Map::new()))
+    fn get_usage() -> Result<iface_customer_metrics::Usage, iface_customer_metrics::GetUsageError> {
+        match dispatch(&OP_CUSTOMER_METRICS_GET_USAGE, Value::Object(Map::new())).and_then(iface_customer_metrics__get_usage__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_customer_metrics__get_usage__err(e)),
+        }
     }
-    fn get_evaluations(params: iface_customer_metrics::GetEvaluationsParams) -> Result<String, String> {
+    fn get_evaluations(params: iface_customer_metrics::GetEvaluationsParams) -> Result<iface_customer_metrics::StreamSdkVersion, iface_customer_metrics::GetEvaluationsError> {
         let json = iface_customer_metrics__get_evaluations_params__to_json(&params);
-        dispatch(&OP_CUSTOMER_METRICS_GET_EVALUATIONS, json)
+        match dispatch(&OP_CUSTOMER_METRICS_GET_EVALUATIONS, json).and_then(iface_customer_metrics__get_evaluations__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_customer_metrics__get_evaluations__err(e)),
+        }
     }
-    fn get_events() -> Result<String, String> {
-        dispatch(&OP_CUSTOMER_METRICS_GET_EVENTS, Value::Object(Map::new()))
+    fn get_events() -> Result<iface_customer_metrics::Events, iface_customer_metrics::GetEventsError> {
+        match dispatch(&OP_CUSTOMER_METRICS_GET_EVENTS, Value::Object(Map::new())).and_then(iface_customer_metrics__get_events__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_customer_metrics__get_events__err(e)),
+        }
     }
-    fn get_event(params: iface_customer_metrics::GetEventParams) -> Result<String, String> {
+    fn get_event(params: iface_customer_metrics::GetEventParams) -> Result<iface_customer_metrics::StreamSdkVersion, iface_customer_metrics::GetEventError> {
         let json = iface_customer_metrics__get_event_params__to_json(&params);
-        dispatch(&OP_CUSTOMER_METRICS_GET_EVENT, json)
+        match dispatch(&OP_CUSTOMER_METRICS_GET_EVENT, json).and_then(iface_customer_metrics__get_event__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_customer_metrics__get_event__err(e)),
+        }
     }
-    fn get_mau() -> Result<String, String> {
-        dispatch(&OP_CUSTOMER_METRICS_GET_MAU, Value::Object(Map::new()))
+    fn get_mau() -> Result<iface_customer_metrics::Mau, iface_customer_metrics::GetMauError> {
+        match dispatch(&OP_CUSTOMER_METRICS_GET_MAU, Value::Object(Map::new())).and_then(iface_customer_metrics__get_mau__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_customer_metrics__get_mau__err(e)),
+        }
     }
-    fn get_mau_by_category() -> Result<String, String> {
-        dispatch(&OP_CUSTOMER_METRICS_GET_MAU_BY_CATEGORY, Value::Object(Map::new()))
+    fn get_mau_by_category() -> Result<iface_customer_metrics::MaUbyCategory, iface_customer_metrics::GetMauByCategoryError> {
+        match dispatch(&OP_CUSTOMER_METRICS_GET_MAU_BY_CATEGORY, Value::Object(Map::new())).and_then(iface_customer_metrics__get_mau_by_category__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_customer_metrics__get_mau_by_category__err(e)),
+        }
     }
-    fn get_streams() -> Result<String, String> {
-        dispatch(&OP_CUSTOMER_METRICS_GET_STREAMS, Value::Object(Map::new()))
+    fn get_streams() -> Result<iface_customer_metrics::Streams, iface_customer_metrics::GetStreamsError> {
+        match dispatch(&OP_CUSTOMER_METRICS_GET_STREAMS, Value::Object(Map::new())).and_then(iface_customer_metrics__get_streams__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_customer_metrics__get_streams__err(e)),
+        }
     }
-    fn get_stream(params: iface_customer_metrics::GetStreamParams) -> Result<String, String> {
+    fn get_stream(params: iface_customer_metrics::GetStreamParams) -> Result<iface_customer_metrics::StreamOp, iface_customer_metrics::GetStreamError> {
         let json = iface_customer_metrics__get_stream_params__to_json(&params);
-        dispatch(&OP_CUSTOMER_METRICS_GET_STREAM, json)
+        match dispatch(&OP_CUSTOMER_METRICS_GET_STREAM, json).and_then(iface_customer_metrics__get_stream__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_customer_metrics__get_stream__err(e)),
+        }
     }
-    fn get_stream_by_sdk(params: iface_customer_metrics::GetStreamBySdkParams) -> Result<String, String> {
+    fn get_stream_by_sdk(params: iface_customer_metrics::GetStreamBySdkParams) -> Result<iface_customer_metrics::StreamBySdk, iface_customer_metrics::GetStreamBySdkError> {
         let json = iface_customer_metrics__get_stream_by_sdk_params__to_json(&params);
-        dispatch(&OP_CUSTOMER_METRICS_GET_STREAM_BY_SDK, json)
+        match dispatch(&OP_CUSTOMER_METRICS_GET_STREAM_BY_SDK, json).and_then(iface_customer_metrics__get_stream_by_sdk__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_customer_metrics__get_stream_by_sdk__err(e)),
+        }
     }
-    fn get_stream_sdk_version(params: iface_customer_metrics::GetStreamSdkVersionParams) -> Result<String, String> {
+    fn get_stream_sdk_version(params: iface_customer_metrics::GetStreamSdkVersionParams) -> Result<iface_customer_metrics::StreamSdkVersion, iface_customer_metrics::GetStreamSdkVersionError> {
         let json = iface_customer_metrics__get_stream_sdk_version_params__to_json(&params);
-        dispatch(&OP_CUSTOMER_METRICS_GET_STREAM_SDK_VERSION, json)
+        match dispatch(&OP_CUSTOMER_METRICS_GET_STREAM_SDK_VERSION, json).and_then(iface_customer_metrics__get_stream_sdk_version__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_customer_metrics__get_stream_sdk_version__err(e)),
+        }
     }
 }
 use crate::exports::autostamp::launchdarkly::users as iface_users;
@@ -2222,12 +7069,12 @@ const OP_USERS_GET_SEARCH_USERS: OpSpec = OpSpec {
     method: "GET",
     path_template: "/user-search/{project_key}/{environment_key}",
     fields: &[
-        FieldSpec { snake: "project_key", location: FieldLocation::Path },
-        FieldSpec { snake: "environment_key", location: FieldLocation::Path },
-        FieldSpec { snake: "q", location: FieldLocation::Query },
-        FieldSpec { snake: "limit", location: FieldLocation::Query },
-        FieldSpec { snake: "offset", location: FieldLocation::Query },
-        FieldSpec { snake: "after", location: FieldLocation::Query },
+        FieldSpec { snake: "project_key", wire: "projectKey", location: FieldLocation::Path },
+        FieldSpec { snake: "environment_key", wire: "environmentKey", location: FieldLocation::Path },
+        FieldSpec { snake: "q", wire: "q", location: FieldLocation::Query },
+        FieldSpec { snake: "limit", wire: "limit", location: FieldLocation::Query },
+        FieldSpec { snake: "offset", wire: "offset", location: FieldLocation::Query },
+        FieldSpec { snake: "after", wire: "after", location: FieldLocation::Query },
     ],
     auth: &[
     ],
@@ -2237,11 +7084,11 @@ const OP_USERS_GET_USERS: OpSpec = OpSpec {
     method: "GET",
     path_template: "/users/{project_key}/{environment_key}",
     fields: &[
-        FieldSpec { snake: "project_key", location: FieldLocation::Path },
-        FieldSpec { snake: "environment_key", location: FieldLocation::Path },
-        FieldSpec { snake: "limit", location: FieldLocation::Query },
-        FieldSpec { snake: "h", location: FieldLocation::Query },
-        FieldSpec { snake: "scroll_id", location: FieldLocation::Query },
+        FieldSpec { snake: "project_key", wire: "projectKey", location: FieldLocation::Path },
+        FieldSpec { snake: "environment_key", wire: "environmentKey", location: FieldLocation::Path },
+        FieldSpec { snake: "limit", wire: "limit", location: FieldLocation::Query },
+        FieldSpec { snake: "h", wire: "h", location: FieldLocation::Query },
+        FieldSpec { snake: "scroll_id", wire: "scrollId", location: FieldLocation::Query },
     ],
     auth: &[
     ],
@@ -2251,9 +7098,9 @@ const OP_USERS_GET_USER: OpSpec = OpSpec {
     method: "GET",
     path_template: "/users/{project_key}/{environment_key}/{user_key}",
     fields: &[
-        FieldSpec { snake: "project_key", location: FieldLocation::Path },
-        FieldSpec { snake: "environment_key", location: FieldLocation::Path },
-        FieldSpec { snake: "user_key", location: FieldLocation::Path },
+        FieldSpec { snake: "project_key", wire: "projectKey", location: FieldLocation::Path },
+        FieldSpec { snake: "environment_key", wire: "environmentKey", location: FieldLocation::Path },
+        FieldSpec { snake: "user_key", wire: "userKey", location: FieldLocation::Path },
     ],
     auth: &[
     ],
@@ -2263,13 +7110,73 @@ const OP_USERS_DELETE_USER: OpSpec = OpSpec {
     method: "DELETE",
     path_template: "/users/{project_key}/{environment_key}/{user_key}",
     fields: &[
-        FieldSpec { snake: "project_key", location: FieldLocation::Path },
-        FieldSpec { snake: "environment_key", location: FieldLocation::Path },
-        FieldSpec { snake: "user_key", location: FieldLocation::Path },
+        FieldSpec { snake: "project_key", wire: "projectKey", location: FieldLocation::Path },
+        FieldSpec { snake: "environment_key", wire: "environmentKey", location: FieldLocation::Path },
+        FieldSpec { snake: "user_key", wire: "userKey", location: FieldLocation::Path },
     ],
     auth: &[
     ],
 };
+
+fn iface_users__users__to_json(p: &iface_users::Users) -> Value {
+    let mut m = Map::new();
+    m.insert("_links".into(), match (&p.links) { Some(v) => iface_users__links__to_json(v), None => Value::Null });
+    m.insert("items".into(), match (&p.items) { Some(v) => Value::Array((v).iter().map(|v| iface_users__user_record__to_json(v)).collect()), None => Value::Null });
+    m.insert("totalCount".into(), match (&p.total_count) { Some(v) => serde_json::Number::from_f64(*(v)).map(Value::Number).unwrap_or(Value::Null), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_users__links__to_json(p: &iface_users::Links) -> Value {
+    let mut m = Map::new();
+    m.insert("next".into(), match (&p.next) { Some(v) => iface_users__link__to_json(v), None => Value::Null });
+    m.insert("self".into(), match (&p.self_) { Some(v) => iface_users__link__to_json(v), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_users__link__to_json(p: &iface_users::Link) -> Value {
+    let mut m = Map::new();
+    m.insert("href".into(), match (&p.href) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("type".into(), match (&p.type_op) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_users__user_record__to_json(p: &iface_users::UserRecord) -> Value {
+    let mut m = Map::new();
+    m.insert("avatar".into(), match (&p.avatar) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("environmentId".into(), match (&p.environment_id) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("lastPing".into(), match (&p.last_ping) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("ownerId".into(), match (&p.owner_id) { Some(v) => iface_users__id__to_json(v), None => Value::Null });
+    m.insert("user".into(), match (&p.user) { Some(v) => iface_users__user__to_json(v), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_users__id__to_json(p: &iface_users::Id) -> Value {
+    let mut m = Map::new();
+    m.insert("value".into(), Value::String((&p.value).clone()));
+    Value::Object(m)
+}
+
+fn iface_users__user__to_json(p: &iface_users::User) -> Value {
+    let mut m = Map::new();
+    m.insert("anonymous".into(), match (&p.anonymous) { Some(v) => Value::Bool(*(v)), None => Value::Null });
+    m.insert("avatar".into(), match (&p.avatar) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("country".into(), match (&p.country) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("custom".into(), match (&p.custom) { Some(v) => iface_users__user_custom__to_json(v), None => Value::Null });
+    m.insert("email".into(), match (&p.email) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("firstName".into(), match (&p.first_name) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("ip".into(), match (&p.ip) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("key".into(), match (&p.key) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("lastName".into(), match (&p.last_name) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("name".into(), match (&p.name) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("secondary".into(), match (&p.secondary) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_users__user_custom__to_json(p: &iface_users::UserCustom) -> Value {
+    let mut m = Map::new();
+    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
 
 fn iface_users__get_search_users_params__to_json(p: &iface_users::GetSearchUsersParams) -> Value {
     let mut m = Map::new();
@@ -2308,22 +7215,180 @@ fn iface_users__delete_user_params__to_json(p: &iface_users::DeleteUserParams) -
     Value::Object(m)
 }
 
+fn iface_users__users__from_json(v: &Value) -> Option<iface_users::Users> {
+    let m = v.as_object()?;
+    Some(iface_users::Users {
+        links: m.get("_links").filter(|v| !v.is_null()).and_then(|v| iface_users__links__from_json(v)),
+        items: m.get("items").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| iface_users__user_record__from_json(x)).collect())),
+        total_count: m.get("totalCount").filter(|v| !v.is_null()).and_then(|v| (v).as_f64()),
+    })
+}
+
+fn iface_users__links__from_json(v: &Value) -> Option<iface_users::Links> {
+    let m = v.as_object()?;
+    Some(iface_users::Links {
+        next: m.get("next").filter(|v| !v.is_null()).and_then(|v| iface_users__link__from_json(v)),
+        self_: m.get("self").filter(|v| !v.is_null()).and_then(|v| iface_users__link__from_json(v)),
+    })
+}
+
+fn iface_users__link__from_json(v: &Value) -> Option<iface_users::Link> {
+    let m = v.as_object()?;
+    Some(iface_users::Link {
+        href: m.get("href").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        type_op: m.get("type").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    })
+}
+
+fn iface_users__user_record__from_json(v: &Value) -> Option<iface_users::UserRecord> {
+    let m = v.as_object()?;
+    Some(iface_users::UserRecord {
+        avatar: m.get("avatar").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        environment_id: m.get("environmentId").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        last_ping: m.get("lastPing").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        owner_id: m.get("ownerId").filter(|v| !v.is_null()).and_then(|v| iface_users__id__from_json(v)),
+        user: m.get("user").filter(|v| !v.is_null()).and_then(|v| iface_users__user__from_json(v)),
+    })
+}
+
+fn iface_users__id__from_json(v: &Value) -> Option<iface_users::Id> {
+    let m = v.as_object()?;
+    Some(iface_users::Id {
+        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+    })
+}
+
+fn iface_users__user__from_json(v: &Value) -> Option<iface_users::User> {
+    let m = v.as_object()?;
+    Some(iface_users::User {
+        anonymous: m.get("anonymous").filter(|v| !v.is_null()).and_then(|v| (v).as_bool()),
+        avatar: m.get("avatar").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        country: m.get("country").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        custom: m.get("custom").filter(|v| !v.is_null()).and_then(|v| iface_users__user_custom__from_json(v)),
+        email: m.get("email").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        first_name: m.get("firstName").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        ip: m.get("ip").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        key: m.get("key").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        last_name: m.get("lastName").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        name: m.get("name").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        secondary: m.get("secondary").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    })
+}
+
+fn iface_users__user_custom__from_json(v: &Value) -> Option<iface_users::UserCustom> {
+    let m = v.as_object()?;
+    Some(iface_users::UserCustom {
+        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    })
+}
+
+fn iface_users__get_search_users__ok(body: String) -> Result<iface_users::Users, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match iface_users__users__from_json(&v) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_users__get_search_users__err(e: crate::runtime::DispatchError) -> iface_users::GetSearchUsersError {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => match status {
+            401u16 => iface_users::GetSearchUsersError::Unauthorized(body),
+            _ => iface_users::GetSearchUsersError::Other(body),
+        },
+        crate::runtime::DispatchError::Transport(m) => iface_users::GetSearchUsersError::Other(m),
+    }
+}
+
+fn iface_users__get_users__ok(body: String) -> Result<iface_users::Users, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match iface_users__users__from_json(&v) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_users__get_users__err(e: crate::runtime::DispatchError) -> iface_users::GetUsersError {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => match status {
+            401u16 => iface_users::GetUsersError::Unauthorized(body),
+            _ => iface_users::GetUsersError::Other(body),
+        },
+        crate::runtime::DispatchError::Transport(m) => iface_users::GetUsersError::Other(m),
+    }
+}
+
+fn iface_users__get_user__ok(body: String) -> Result<iface_users::UserRecord, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match iface_users__user_record__from_json(&v) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_users__get_user__err(e: crate::runtime::DispatchError) -> iface_users::GetUserError {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => match status {
+            401u16 => iface_users::GetUserError::Unauthorized(body),
+            404u16 => iface_users::GetUserError::NotFound(body),
+            _ => iface_users::GetUserError::Other(body),
+        },
+        crate::runtime::DispatchError::Transport(m) => iface_users::GetUserError::Other(m),
+    }
+}
+
+fn iface_users__delete_user__ok(body: String) -> Result<String, crate::runtime::DispatchError> {
+    Ok(body)
+}
+
+fn iface_users__delete_user__err(e: crate::runtime::DispatchError) -> iface_users::DeleteUserError {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => match status {
+            401u16 => iface_users::DeleteUserError::Unauthorized(body),
+            404u16 => iface_users::DeleteUserError::NotFound(body),
+            _ => iface_users::DeleteUserError::Other(body),
+        },
+        crate::runtime::DispatchError::Transport(m) => iface_users::DeleteUserError::Other(m),
+    }
+}
+
 impl iface_users::Guest for crate::Component {
-    fn get_search_users(params: iface_users::GetSearchUsersParams) -> Result<String, String> {
+    fn get_search_users(params: iface_users::GetSearchUsersParams) -> Result<iface_users::Users, iface_users::GetSearchUsersError> {
         let json = iface_users__get_search_users_params__to_json(&params);
-        dispatch(&OP_USERS_GET_SEARCH_USERS, json)
+        match dispatch(&OP_USERS_GET_SEARCH_USERS, json).and_then(iface_users__get_search_users__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_users__get_search_users__err(e)),
+        }
     }
-    fn get_users(params: iface_users::GetUsersParams) -> Result<String, String> {
+    fn get_users(params: iface_users::GetUsersParams) -> Result<iface_users::Users, iface_users::GetUsersError> {
         let json = iface_users__get_users_params__to_json(&params);
-        dispatch(&OP_USERS_GET_USERS, json)
+        match dispatch(&OP_USERS_GET_USERS, json).and_then(iface_users__get_users__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_users__get_users__err(e)),
+        }
     }
-    fn get_user(params: iface_users::GetUserParams) -> Result<String, String> {
+    fn get_user(params: iface_users::GetUserParams) -> Result<iface_users::UserRecord, iface_users::GetUserError> {
         let json = iface_users__get_user_params__to_json(&params);
-        dispatch(&OP_USERS_GET_USER, json)
+        match dispatch(&OP_USERS_GET_USER, json).and_then(iface_users__get_user__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_users__get_user__err(e)),
+        }
     }
-    fn delete_user(params: iface_users::DeleteUserParams) -> Result<String, String> {
+    fn delete_user(params: iface_users::DeleteUserParams) -> Result<String, iface_users::DeleteUserError> {
         let json = iface_users__delete_user_params__to_json(&params);
-        dispatch(&OP_USERS_DELETE_USER, json)
+        match dispatch(&OP_USERS_DELETE_USER, json).and_then(iface_users__delete_user__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_users__delete_user__err(e)),
+        }
     }
 }
 use crate::exports::autostamp::launchdarkly::user_settings as iface_user_settings;
@@ -2332,9 +7397,9 @@ const OP_USER_SETTINGS_GET_USER_FLAG_SETTINGS: OpSpec = OpSpec {
     method: "GET",
     path_template: "/users/{project_key}/{environment_key}/{user_key}/flags",
     fields: &[
-        FieldSpec { snake: "project_key", location: FieldLocation::Path },
-        FieldSpec { snake: "environment_key", location: FieldLocation::Path },
-        FieldSpec { snake: "user_key", location: FieldLocation::Path },
+        FieldSpec { snake: "project_key", wire: "projectKey", location: FieldLocation::Path },
+        FieldSpec { snake: "environment_key", wire: "environmentKey", location: FieldLocation::Path },
+        FieldSpec { snake: "user_key", wire: "userKey", location: FieldLocation::Path },
     ],
     auth: &[
     ],
@@ -2344,10 +7409,10 @@ const OP_USER_SETTINGS_GET_USER_FLAG_SETTING: OpSpec = OpSpec {
     method: "GET",
     path_template: "/users/{project_key}/{environment_key}/{user_key}/flags/{feature_flag_key}",
     fields: &[
-        FieldSpec { snake: "project_key", location: FieldLocation::Path },
-        FieldSpec { snake: "environment_key", location: FieldLocation::Path },
-        FieldSpec { snake: "user_key", location: FieldLocation::Path },
-        FieldSpec { snake: "feature_flag_key", location: FieldLocation::Path },
+        FieldSpec { snake: "project_key", wire: "projectKey", location: FieldLocation::Path },
+        FieldSpec { snake: "environment_key", wire: "environmentKey", location: FieldLocation::Path },
+        FieldSpec { snake: "user_key", wire: "userKey", location: FieldLocation::Path },
+        FieldSpec { snake: "feature_flag_key", wire: "featureFlagKey", location: FieldLocation::Path },
     ],
     auth: &[
     ],
@@ -2357,10 +7422,10 @@ const OP_USER_SETTINGS_PUT_FLAG_SETTING: OpSpec = OpSpec {
     method: "PUT",
     path_template: "/users/{project_key}/{environment_key}/{user_key}/flags/{feature_flag_key}",
     fields: &[
-        FieldSpec { snake: "project_key", location: FieldLocation::Path },
-        FieldSpec { snake: "environment_key", location: FieldLocation::Path },
-        FieldSpec { snake: "user_key", location: FieldLocation::Path },
-        FieldSpec { snake: "feature_flag_key", location: FieldLocation::Path },
+        FieldSpec { snake: "project_key", wire: "projectKey", location: FieldLocation::Path },
+        FieldSpec { snake: "environment_key", wire: "environmentKey", location: FieldLocation::Path },
+        FieldSpec { snake: "user_key", wire: "userKey", location: FieldLocation::Path },
+        FieldSpec { snake: "feature_flag_key", wire: "featureFlagKey", location: FieldLocation::Path },
     ],
     auth: &[
     ],
@@ -2370,9 +7435,9 @@ const OP_USER_SETTINGS_GET_EXPIRING_USER_TARGETS_FOR_USER: OpSpec = OpSpec {
     method: "GET",
     path_template: "/users/{project_key}/{user_key}/expiring-user-targets/{environment_key}",
     fields: &[
-        FieldSpec { snake: "project_key", location: FieldLocation::Path },
-        FieldSpec { snake: "environment_key", location: FieldLocation::Path },
-        FieldSpec { snake: "user_key", location: FieldLocation::Path },
+        FieldSpec { snake: "project_key", wire: "projectKey", location: FieldLocation::Path },
+        FieldSpec { snake: "environment_key", wire: "environmentKey", location: FieldLocation::Path },
+        FieldSpec { snake: "user_key", wire: "userKey", location: FieldLocation::Path },
     ],
     auth: &[
     ],
@@ -2382,13 +7447,77 @@ const OP_USER_SETTINGS_PATCH_EXPIRING_USER_TARGETS_FOR_FLAGS: OpSpec = OpSpec {
     method: "PATCH",
     path_template: "/users/{project_key}/{user_key}/expiring-user-targets/{environment_key}",
     fields: &[
-        FieldSpec { snake: "project_key", location: FieldLocation::Path },
-        FieldSpec { snake: "environment_key", location: FieldLocation::Path },
-        FieldSpec { snake: "user_key", location: FieldLocation::Path },
+        FieldSpec { snake: "project_key", wire: "projectKey", location: FieldLocation::Path },
+        FieldSpec { snake: "environment_key", wire: "environmentKey", location: FieldLocation::Path },
+        FieldSpec { snake: "user_key", wire: "userKey", location: FieldLocation::Path },
     ],
     auth: &[
     ],
 };
+
+fn iface_user_settings__user_flag_settings__to_json(p: &iface_user_settings::UserFlagSettings) -> Value {
+    let mut m = Map::new();
+    m.insert("_links".into(), match (&p.links) { Some(v) => iface_user_settings__links__to_json(v), None => Value::Null });
+    m.insert("items".into(), match (&p.items) { Some(v) => iface_user_settings__user_flag_settings_items__to_json(v), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_user_settings__links__to_json(p: &iface_user_settings::Links) -> Value {
+    let mut m = Map::new();
+    m.insert("next".into(), match (&p.next) { Some(v) => iface_user_settings__link__to_json(v), None => Value::Null });
+    m.insert("self".into(), match (&p.self_) { Some(v) => iface_user_settings__link__to_json(v), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_user_settings__link__to_json(p: &iface_user_settings::Link) -> Value {
+    let mut m = Map::new();
+    m.insert("href".into(), match (&p.href) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("type".into(), match (&p.type_op) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_user_settings__user_flag_settings_items__to_json(p: &iface_user_settings::UserFlagSettingsItems) -> Value {
+    let mut m = Map::new();
+    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_user_settings__user_flag_setting__to_json(p: &iface_user_settings::UserFlagSetting) -> Value {
+    let mut m = Map::new();
+    m.insert("_links".into(), match (&p.links) { Some(v) => iface_user_settings__links__to_json(v), None => Value::Null });
+    m.insert("_value".into(), match (&p.value) { Some(v) => Value::Bool(*(v)), None => Value::Null });
+    m.insert("setting".into(), match (&p.setting) { Some(v) => Value::Bool(*(v)), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_user_settings__user_targeting_expiration_on_flags_for_user__to_json(p: &iface_user_settings::UserTargetingExpirationOnFlagsForUser) -> Value {
+    let mut m = Map::new();
+    m.insert("_links".into(), match (&p.links) { Some(v) => iface_user_settings__links__to_json(v), None => Value::Null });
+    m.insert("items".into(), match (&p.items) { Some(v) => Value::Array((v).iter().map(|v| iface_user_settings__user_targeting_expiration_for_flag__to_json(v)).collect()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_user_settings__user_targeting_expiration_for_flag__to_json(p: &iface_user_settings::UserTargetingExpirationForFlag) -> Value {
+    let mut m = Map::new();
+    m.insert("_id".into(), match (&p.id) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("_links".into(), match (&p.links) { Some(v) => iface_user_settings__links__to_json(v), None => Value::Null });
+    m.insert("_resourceId".into(), match (&p.resource_id) { Some(v) => iface_user_settings__user_targeting_expiration_resource_id_for_flag__to_json(v), None => Value::Null });
+    m.insert("_version".into(), match (&p.version) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("expirationDate".into(), match (&p.expiration_date) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("userKey".into(), match (&p.user_key) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("variationId".into(), match (&p.variation_id) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_user_settings__user_targeting_expiration_resource_id_for_flag__to_json(p: &iface_user_settings::UserTargetingExpirationResourceIdForFlag) -> Value {
+    let mut m = Map::new();
+    m.insert("environmentKey".into(), match (&p.environment_key) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("flagKey".into(), match (&p.flag_key) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("key".into(), match (&p.key) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("kind".into(), match (&p.kind) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("projectKey".into(), match (&p.project_key) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
 
 fn iface_user_settings__get_user_flag_settings_params__to_json(p: &iface_user_settings::GetUserFlagSettingsParams) -> Value {
     let mut m = Map::new();
@@ -2432,26 +7561,218 @@ fn iface_user_settings__patch_expiring_user_targets_for_flags_params__to_json(p:
     Value::Object(m)
 }
 
+fn iface_user_settings__user_flag_settings__from_json(v: &Value) -> Option<iface_user_settings::UserFlagSettings> {
+    let m = v.as_object()?;
+    Some(iface_user_settings::UserFlagSettings {
+        links: m.get("_links").filter(|v| !v.is_null()).and_then(|v| iface_user_settings__links__from_json(v)),
+        items: m.get("items").filter(|v| !v.is_null()).and_then(|v| iface_user_settings__user_flag_settings_items__from_json(v)),
+    })
+}
+
+fn iface_user_settings__links__from_json(v: &Value) -> Option<iface_user_settings::Links> {
+    let m = v.as_object()?;
+    Some(iface_user_settings::Links {
+        next: m.get("next").filter(|v| !v.is_null()).and_then(|v| iface_user_settings__link__from_json(v)),
+        self_: m.get("self").filter(|v| !v.is_null()).and_then(|v| iface_user_settings__link__from_json(v)),
+    })
+}
+
+fn iface_user_settings__link__from_json(v: &Value) -> Option<iface_user_settings::Link> {
+    let m = v.as_object()?;
+    Some(iface_user_settings::Link {
+        href: m.get("href").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        type_op: m.get("type").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    })
+}
+
+fn iface_user_settings__user_flag_settings_items__from_json(v: &Value) -> Option<iface_user_settings::UserFlagSettingsItems> {
+    let m = v.as_object()?;
+    Some(iface_user_settings::UserFlagSettingsItems {
+        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    })
+}
+
+fn iface_user_settings__user_flag_setting__from_json(v: &Value) -> Option<iface_user_settings::UserFlagSetting> {
+    let m = v.as_object()?;
+    Some(iface_user_settings::UserFlagSetting {
+        links: m.get("_links").filter(|v| !v.is_null()).and_then(|v| iface_user_settings__links__from_json(v)),
+        value: m.get("_value").filter(|v| !v.is_null()).and_then(|v| (v).as_bool()),
+        setting: m.get("setting").filter(|v| !v.is_null()).and_then(|v| (v).as_bool()),
+    })
+}
+
+fn iface_user_settings__user_targeting_expiration_on_flags_for_user__from_json(v: &Value) -> Option<iface_user_settings::UserTargetingExpirationOnFlagsForUser> {
+    let m = v.as_object()?;
+    Some(iface_user_settings::UserTargetingExpirationOnFlagsForUser {
+        links: m.get("_links").filter(|v| !v.is_null()).and_then(|v| iface_user_settings__links__from_json(v)),
+        items: m.get("items").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| iface_user_settings__user_targeting_expiration_for_flag__from_json(x)).collect())),
+    })
+}
+
+fn iface_user_settings__user_targeting_expiration_for_flag__from_json(v: &Value) -> Option<iface_user_settings::UserTargetingExpirationForFlag> {
+    let m = v.as_object()?;
+    Some(iface_user_settings::UserTargetingExpirationForFlag {
+        id: m.get("_id").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        links: m.get("_links").filter(|v| !v.is_null()).and_then(|v| iface_user_settings__links__from_json(v)),
+        resource_id: m.get("_resourceId").filter(|v| !v.is_null()).and_then(|v| iface_user_settings__user_targeting_expiration_resource_id_for_flag__from_json(v)),
+        version: m.get("_version").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        expiration_date: m.get("expirationDate").filter(|v| !v.is_null()).and_then(|v| (v).as_i64()),
+        user_key: m.get("userKey").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        variation_id: m.get("variationId").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    })
+}
+
+fn iface_user_settings__user_targeting_expiration_resource_id_for_flag__from_json(v: &Value) -> Option<iface_user_settings::UserTargetingExpirationResourceIdForFlag> {
+    let m = v.as_object()?;
+    Some(iface_user_settings::UserTargetingExpirationResourceIdForFlag {
+        environment_key: m.get("environmentKey").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        flag_key: m.get("flagKey").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        key: m.get("key").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        kind: m.get("kind").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        project_key: m.get("projectKey").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    })
+}
+
+fn iface_user_settings__get_user_flag_settings__ok(body: String) -> Result<iface_user_settings::UserFlagSettings, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match iface_user_settings__user_flag_settings__from_json(&v) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_user_settings__get_user_flag_settings__err(e: crate::runtime::DispatchError) -> iface_user_settings::GetUserFlagSettingsError {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => match status {
+            401u16 => iface_user_settings::GetUserFlagSettingsError::Unauthorized(body),
+            404u16 => iface_user_settings::GetUserFlagSettingsError::NotFound(body),
+            _ => iface_user_settings::GetUserFlagSettingsError::Other(body),
+        },
+        crate::runtime::DispatchError::Transport(m) => iface_user_settings::GetUserFlagSettingsError::Other(m),
+    }
+}
+
+fn iface_user_settings__get_user_flag_setting__ok(body: String) -> Result<iface_user_settings::UserFlagSetting, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match iface_user_settings__user_flag_setting__from_json(&v) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_user_settings__get_user_flag_setting__err(e: crate::runtime::DispatchError) -> iface_user_settings::GetUserFlagSettingError {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => match status {
+            401u16 => iface_user_settings::GetUserFlagSettingError::Unauthorized(body),
+            404u16 => iface_user_settings::GetUserFlagSettingError::NotFound(body),
+            _ => iface_user_settings::GetUserFlagSettingError::Other(body),
+        },
+        crate::runtime::DispatchError::Transport(m) => iface_user_settings::GetUserFlagSettingError::Other(m),
+    }
+}
+
+fn iface_user_settings__put_flag_setting__ok(body: String) -> Result<String, crate::runtime::DispatchError> {
+    Ok(body)
+}
+
+fn iface_user_settings__put_flag_setting__err(e: crate::runtime::DispatchError) -> iface_user_settings::PutFlagSettingError {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => match status {
+            400u16 => iface_user_settings::PutFlagSettingError::BadRequest(body),
+            401u16 => iface_user_settings::PutFlagSettingError::Unauthorized(body),
+            404u16 => iface_user_settings::PutFlagSettingError::NotFound(body),
+            _ => iface_user_settings::PutFlagSettingError::Other(body),
+        },
+        crate::runtime::DispatchError::Transport(m) => iface_user_settings::PutFlagSettingError::Other(m),
+    }
+}
+
+fn iface_user_settings__get_expiring_user_targets_for_user__ok(body: String) -> Result<iface_user_settings::UserTargetingExpirationOnFlagsForUser, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match iface_user_settings__user_targeting_expiration_on_flags_for_user__from_json(&v) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_user_settings__get_expiring_user_targets_for_user__err(e: crate::runtime::DispatchError) -> iface_user_settings::GetExpiringUserTargetsForUserError {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => match status {
+            401u16 => iface_user_settings::GetExpiringUserTargetsForUserError::Unauthorized(body),
+            _ => iface_user_settings::GetExpiringUserTargetsForUserError::Other(body),
+        },
+        crate::runtime::DispatchError::Transport(m) => iface_user_settings::GetExpiringUserTargetsForUserError::Other(m),
+    }
+}
+
+fn iface_user_settings__patch_expiring_user_targets_for_flags__ok(body: String) -> Result<iface_user_settings::UserTargetingExpirationOnFlagsForUser, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match iface_user_settings__user_targeting_expiration_on_flags_for_user__from_json(&v) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_user_settings__patch_expiring_user_targets_for_flags__err(e: crate::runtime::DispatchError) -> iface_user_settings::PatchExpiringUserTargetsForFlagsError {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => match status {
+            400u16 => iface_user_settings::PatchExpiringUserTargetsForFlagsError::BadRequest(body),
+            401u16 => iface_user_settings::PatchExpiringUserTargetsForFlagsError::Unauthorized(body),
+            404u16 => iface_user_settings::PatchExpiringUserTargetsForFlagsError::NotFound(body),
+            409u16 => iface_user_settings::PatchExpiringUserTargetsForFlagsError::Conflict(body),
+            _ => iface_user_settings::PatchExpiringUserTargetsForFlagsError::Other(body),
+        },
+        crate::runtime::DispatchError::Transport(m) => iface_user_settings::PatchExpiringUserTargetsForFlagsError::Other(m),
+    }
+}
+
 impl iface_user_settings::Guest for crate::Component {
-    fn get_user_flag_settings(params: iface_user_settings::GetUserFlagSettingsParams) -> Result<String, String> {
+    fn get_user_flag_settings(params: iface_user_settings::GetUserFlagSettingsParams) -> Result<iface_user_settings::UserFlagSettings, iface_user_settings::GetUserFlagSettingsError> {
         let json = iface_user_settings__get_user_flag_settings_params__to_json(&params);
-        dispatch(&OP_USER_SETTINGS_GET_USER_FLAG_SETTINGS, json)
+        match dispatch(&OP_USER_SETTINGS_GET_USER_FLAG_SETTINGS, json).and_then(iface_user_settings__get_user_flag_settings__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_user_settings__get_user_flag_settings__err(e)),
+        }
     }
-    fn get_user_flag_setting(params: iface_user_settings::GetUserFlagSettingParams) -> Result<String, String> {
+    fn get_user_flag_setting(params: iface_user_settings::GetUserFlagSettingParams) -> Result<iface_user_settings::UserFlagSetting, iface_user_settings::GetUserFlagSettingError> {
         let json = iface_user_settings__get_user_flag_setting_params__to_json(&params);
-        dispatch(&OP_USER_SETTINGS_GET_USER_FLAG_SETTING, json)
+        match dispatch(&OP_USER_SETTINGS_GET_USER_FLAG_SETTING, json).and_then(iface_user_settings__get_user_flag_setting__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_user_settings__get_user_flag_setting__err(e)),
+        }
     }
-    fn put_flag_setting(params: iface_user_settings::PutFlagSettingParams) -> Result<String, String> {
+    fn put_flag_setting(params: iface_user_settings::PutFlagSettingParams) -> Result<String, iface_user_settings::PutFlagSettingError> {
         let json = iface_user_settings__put_flag_setting_params__to_json(&params);
-        dispatch(&OP_USER_SETTINGS_PUT_FLAG_SETTING, json)
+        match dispatch(&OP_USER_SETTINGS_PUT_FLAG_SETTING, json).and_then(iface_user_settings__put_flag_setting__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_user_settings__put_flag_setting__err(e)),
+        }
     }
-    fn get_expiring_user_targets_for_user(params: iface_user_settings::GetExpiringUserTargetsForUserParams) -> Result<String, String> {
+    fn get_expiring_user_targets_for_user(params: iface_user_settings::GetExpiringUserTargetsForUserParams) -> Result<iface_user_settings::UserTargetingExpirationOnFlagsForUser, iface_user_settings::GetExpiringUserTargetsForUserError> {
         let json = iface_user_settings__get_expiring_user_targets_for_user_params__to_json(&params);
-        dispatch(&OP_USER_SETTINGS_GET_EXPIRING_USER_TARGETS_FOR_USER, json)
+        match dispatch(&OP_USER_SETTINGS_GET_EXPIRING_USER_TARGETS_FOR_USER, json).and_then(iface_user_settings__get_expiring_user_targets_for_user__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_user_settings__get_expiring_user_targets_for_user__err(e)),
+        }
     }
-    fn patch_expiring_user_targets_for_flags(params: iface_user_settings::PatchExpiringUserTargetsForFlagsParams) -> Result<String, String> {
+    fn patch_expiring_user_targets_for_flags(params: iface_user_settings::PatchExpiringUserTargetsForFlagsParams) -> Result<iface_user_settings::UserTargetingExpirationOnFlagsForUser, iface_user_settings::PatchExpiringUserTargetsForFlagsError> {
         let json = iface_user_settings__patch_expiring_user_targets_for_flags_params__to_json(&params);
-        dispatch(&OP_USER_SETTINGS_PATCH_EXPIRING_USER_TARGETS_FOR_FLAGS, json)
+        match dispatch(&OP_USER_SETTINGS_PATCH_EXPIRING_USER_TARGETS_FOR_FLAGS, json).and_then(iface_user_settings__patch_expiring_user_targets_for_flags__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_user_settings__patch_expiring_user_targets_for_flags__err(e)),
+        }
     }
 }
 use crate::exports::autostamp::launchdarkly::webhooks as iface_webhooks;
@@ -2478,7 +7799,7 @@ const OP_WEBHOOKS_GET_WEBHOOK: OpSpec = OpSpec {
     method: "GET",
     path_template: "/webhooks/{resource_id}",
     fields: &[
-        FieldSpec { snake: "resource_id", location: FieldLocation::Path },
+        FieldSpec { snake: "resource_id", wire: "resourceId", location: FieldLocation::Path },
     ],
     auth: &[
     ],
@@ -2488,7 +7809,7 @@ const OP_WEBHOOKS_PATCH_WEBHOOK: OpSpec = OpSpec {
     method: "PATCH",
     path_template: "/webhooks/{resource_id}",
     fields: &[
-        FieldSpec { snake: "resource_id", location: FieldLocation::Path },
+        FieldSpec { snake: "resource_id", wire: "resourceId", location: FieldLocation::Path },
     ],
     auth: &[
     ],
@@ -2498,11 +7819,68 @@ const OP_WEBHOOKS_DELETE_WEBHOOK: OpSpec = OpSpec {
     method: "DELETE",
     path_template: "/webhooks/{resource_id}",
     fields: &[
-        FieldSpec { snake: "resource_id", location: FieldLocation::Path },
+        FieldSpec { snake: "resource_id", wire: "resourceId", location: FieldLocation::Path },
     ],
     auth: &[
     ],
 };
+
+fn iface_webhooks__statement_effect_enum__to_str(e: &iface_webhooks::StatementEffectEnum) -> &'static str {
+    match e {
+        iface_webhooks::StatementEffectEnum::Allow => "allow",
+        iface_webhooks::StatementEffectEnum::Deny => "deny",
+    }
+}
+
+fn iface_webhooks__webhooks__to_json(p: &iface_webhooks::Webhooks) -> Value {
+    let mut m = Map::new();
+    m.insert("_links".into(), match (&p.links) { Some(v) => iface_webhooks__links__to_json(v), None => Value::Null });
+    m.insert("items".into(), match (&p.items) { Some(v) => Value::Array((v).iter().map(|v| iface_webhooks__webhook__to_json(v)).collect()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_webhooks__links__to_json(p: &iface_webhooks::Links) -> Value {
+    let mut m = Map::new();
+    m.insert("next".into(), match (&p.next) { Some(v) => iface_webhooks__link__to_json(v), None => Value::Null });
+    m.insert("self".into(), match (&p.self_) { Some(v) => iface_webhooks__link__to_json(v), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_webhooks__link__to_json(p: &iface_webhooks::Link) -> Value {
+    let mut m = Map::new();
+    m.insert("href".into(), match (&p.href) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("type".into(), match (&p.type_op) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_webhooks__webhook__to_json(p: &iface_webhooks::Webhook) -> Value {
+    let mut m = Map::new();
+    m.insert("_id".into(), match (&p.id) { Some(v) => iface_webhooks__id__to_json(v), None => Value::Null });
+    m.insert("_links".into(), match (&p.links) { Some(v) => iface_webhooks__links__to_json(v), None => Value::Null });
+    m.insert("name".into(), match (&p.name) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("on".into(), match (&p.on) { Some(v) => Value::Bool(*(v)), None => Value::Null });
+    m.insert("secret".into(), match (&p.secret) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("statements".into(), match (&p.statements) { Some(v) => Value::Array((v).iter().map(|v| iface_webhooks__statement__to_json(v)).collect()), None => Value::Null });
+    m.insert("tags".into(), match (&p.tags) { Some(v) => Value::Array((v).iter().map(|v| Value::String((v).clone())).collect()), None => Value::Null });
+    m.insert("url".into(), match (&p.url) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_webhooks__id__to_json(p: &iface_webhooks::Id) -> Value {
+    let mut m = Map::new();
+    m.insert("value".into(), Value::String((&p.value).clone()));
+    Value::Object(m)
+}
+
+fn iface_webhooks__statement__to_json(p: &iface_webhooks::Statement) -> Value {
+    let mut m = Map::new();
+    m.insert("actions".into(), match (&p.actions) { Some(v) => Value::Array((v).iter().map(|v| Value::String((v).clone())).collect()), None => Value::Null });
+    m.insert("effect".into(), match (&p.effect) { Some(v) => Value::String(iface_webhooks__statement_effect_enum__to_str(v).into()), None => Value::Null });
+    m.insert("notActions".into(), match (&p.not_actions) { Some(v) => Value::Array((v).iter().map(|v| Value::String((v).clone())).collect()), None => Value::Null });
+    m.insert("notResources".into(), match (&p.not_resources) { Some(v) => Value::Array((v).iter().map(|v| Value::String((v).clone())).collect()), None => Value::Null });
+    m.insert("resources".into(), match (&p.resources) { Some(v) => Value::Array((v).iter().map(|v| Value::String((v).clone())).collect()), None => Value::Null });
+    Value::Object(m)
+}
 
 fn iface_webhooks__get_webhook_params__to_json(p: &iface_webhooks::GetWebhookParams) -> Value {
     let mut m = Map::new();
@@ -2522,24 +7900,207 @@ fn iface_webhooks__delete_webhook_params__to_json(p: &iface_webhooks::DeleteWebh
     Value::Object(m)
 }
 
+fn iface_webhooks__webhooks__from_json(v: &Value) -> Option<iface_webhooks::Webhooks> {
+    let m = v.as_object()?;
+    Some(iface_webhooks::Webhooks {
+        links: m.get("_links").filter(|v| !v.is_null()).and_then(|v| iface_webhooks__links__from_json(v)),
+        items: m.get("items").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| iface_webhooks__webhook__from_json(x)).collect())),
+    })
+}
+
+fn iface_webhooks__links__from_json(v: &Value) -> Option<iface_webhooks::Links> {
+    let m = v.as_object()?;
+    Some(iface_webhooks::Links {
+        next: m.get("next").filter(|v| !v.is_null()).and_then(|v| iface_webhooks__link__from_json(v)),
+        self_: m.get("self").filter(|v| !v.is_null()).and_then(|v| iface_webhooks__link__from_json(v)),
+    })
+}
+
+fn iface_webhooks__link__from_json(v: &Value) -> Option<iface_webhooks::Link> {
+    let m = v.as_object()?;
+    Some(iface_webhooks::Link {
+        href: m.get("href").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        type_op: m.get("type").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    })
+}
+
+fn iface_webhooks__webhook__from_json(v: &Value) -> Option<iface_webhooks::Webhook> {
+    let m = v.as_object()?;
+    Some(iface_webhooks::Webhook {
+        id: m.get("_id").filter(|v| !v.is_null()).and_then(|v| iface_webhooks__id__from_json(v)),
+        links: m.get("_links").filter(|v| !v.is_null()).and_then(|v| iface_webhooks__links__from_json(v)),
+        name: m.get("name").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        on: m.get("on").filter(|v| !v.is_null()).and_then(|v| (v).as_bool()),
+        secret: m.get("secret").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        statements: m.get("statements").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| iface_webhooks__statement__from_json(x)).collect())),
+        tags: m.get("tags").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| (x).as_str().map(|s| s.to_string())).collect())),
+        url: m.get("url").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    })
+}
+
+fn iface_webhooks__id__from_json(v: &Value) -> Option<iface_webhooks::Id> {
+    let m = v.as_object()?;
+    Some(iface_webhooks::Id {
+        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+    })
+}
+
+fn iface_webhooks__statement__from_json(v: &Value) -> Option<iface_webhooks::Statement> {
+    let m = v.as_object()?;
+    Some(iface_webhooks::Statement {
+        actions: m.get("actions").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| (x).as_str().map(|s| s.to_string())).collect())),
+        effect: m.get("effect").filter(|v| !v.is_null()).and_then(|v| (v).as_str().and_then(iface_webhooks__statement_effect_enum__from_str)),
+        not_actions: m.get("notActions").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| (x).as_str().map(|s| s.to_string())).collect())),
+        not_resources: m.get("notResources").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| (x).as_str().map(|s| s.to_string())).collect())),
+        resources: m.get("resources").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| (x).as_str().map(|s| s.to_string())).collect())),
+    })
+}
+
+fn iface_webhooks__statement_effect_enum__from_str(s: &str) -> Option<iface_webhooks::StatementEffectEnum> {
+    match s {
+        "allow" => Some(iface_webhooks::StatementEffectEnum::Allow),
+        "deny" => Some(iface_webhooks::StatementEffectEnum::Deny),
+        _ => None,
+    }
+}
+
+fn iface_webhooks__get_webhooks__ok(body: String) -> Result<iface_webhooks::Webhooks, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match iface_webhooks__webhooks__from_json(&v) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_webhooks__get_webhooks__err(e: crate::runtime::DispatchError) -> iface_webhooks::GetWebhooksError {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => match status {
+            401u16 => iface_webhooks::GetWebhooksError::Unauthorized(body),
+            _ => iface_webhooks::GetWebhooksError::Other(body),
+        },
+        crate::runtime::DispatchError::Transport(m) => iface_webhooks::GetWebhooksError::Other(m),
+    }
+}
+
+fn iface_webhooks__post_webhook__ok(body: String) -> Result<iface_webhooks::Webhook, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match iface_webhooks__webhook__from_json(&v) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_webhooks__post_webhook__err(e: crate::runtime::DispatchError) -> iface_webhooks::PostWebhookError {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => match status {
+            400u16 => iface_webhooks::PostWebhookError::BadRequest(body),
+            401u16 => iface_webhooks::PostWebhookError::Unauthorized(body),
+            _ => iface_webhooks::PostWebhookError::Other(body),
+        },
+        crate::runtime::DispatchError::Transport(m) => iface_webhooks::PostWebhookError::Other(m),
+    }
+}
+
+fn iface_webhooks__get_webhook__ok(body: String) -> Result<iface_webhooks::Webhook, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match iface_webhooks__webhook__from_json(&v) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_webhooks__get_webhook__err(e: crate::runtime::DispatchError) -> iface_webhooks::GetWebhookError {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => match status {
+            401u16 => iface_webhooks::GetWebhookError::Unauthorized(body),
+            404u16 => iface_webhooks::GetWebhookError::NotFound(body),
+            _ => iface_webhooks::GetWebhookError::Other(body),
+        },
+        crate::runtime::DispatchError::Transport(m) => iface_webhooks::GetWebhookError::Other(m),
+    }
+}
+
+fn iface_webhooks__patch_webhook__ok(body: String) -> Result<iface_webhooks::Webhook, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match iface_webhooks__webhook__from_json(&v) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_webhooks__patch_webhook__err(e: crate::runtime::DispatchError) -> iface_webhooks::PatchWebhookError {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => match status {
+            400u16 => iface_webhooks::PatchWebhookError::BadRequest(body),
+            401u16 => iface_webhooks::PatchWebhookError::Unauthorized(body),
+            404u16 => iface_webhooks::PatchWebhookError::NotFound(body),
+            409u16 => iface_webhooks::PatchWebhookError::Conflict(body),
+            _ => iface_webhooks::PatchWebhookError::Other(body),
+        },
+        crate::runtime::DispatchError::Transport(m) => iface_webhooks::PatchWebhookError::Other(m),
+    }
+}
+
+fn iface_webhooks__delete_webhook__ok(body: String) -> Result<String, crate::runtime::DispatchError> {
+    Ok(body)
+}
+
+fn iface_webhooks__delete_webhook__err(e: crate::runtime::DispatchError) -> iface_webhooks::DeleteWebhookError {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => match status {
+            401u16 => iface_webhooks::DeleteWebhookError::Unauthorized(body),
+            404u16 => iface_webhooks::DeleteWebhookError::NotFound(body),
+            _ => iface_webhooks::DeleteWebhookError::Other(body),
+        },
+        crate::runtime::DispatchError::Transport(m) => iface_webhooks::DeleteWebhookError::Other(m),
+    }
+}
+
 impl iface_webhooks::Guest for crate::Component {
-    fn get_webhooks() -> Result<String, String> {
-        dispatch(&OP_WEBHOOKS_GET_WEBHOOKS, Value::Object(Map::new()))
+    fn get_webhooks() -> Result<iface_webhooks::Webhooks, iface_webhooks::GetWebhooksError> {
+        match dispatch(&OP_WEBHOOKS_GET_WEBHOOKS, Value::Object(Map::new())).and_then(iface_webhooks__get_webhooks__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_webhooks__get_webhooks__err(e)),
+        }
     }
-    fn post_webhook() -> Result<String, String> {
-        dispatch(&OP_WEBHOOKS_POST_WEBHOOK, Value::Object(Map::new()))
+    fn post_webhook() -> Result<iface_webhooks::Webhook, iface_webhooks::PostWebhookError> {
+        match dispatch(&OP_WEBHOOKS_POST_WEBHOOK, Value::Object(Map::new())).and_then(iface_webhooks__post_webhook__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_webhooks__post_webhook__err(e)),
+        }
     }
-    fn get_webhook(params: iface_webhooks::GetWebhookParams) -> Result<String, String> {
+    fn get_webhook(params: iface_webhooks::GetWebhookParams) -> Result<iface_webhooks::Webhook, iface_webhooks::GetWebhookError> {
         let json = iface_webhooks__get_webhook_params__to_json(&params);
-        dispatch(&OP_WEBHOOKS_GET_WEBHOOK, json)
+        match dispatch(&OP_WEBHOOKS_GET_WEBHOOK, json).and_then(iface_webhooks__get_webhook__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_webhooks__get_webhook__err(e)),
+        }
     }
-    fn patch_webhook(params: iface_webhooks::PatchWebhookParams) -> Result<String, String> {
+    fn patch_webhook(params: iface_webhooks::PatchWebhookParams) -> Result<iface_webhooks::Webhook, iface_webhooks::PatchWebhookError> {
         let json = iface_webhooks__patch_webhook_params__to_json(&params);
-        dispatch(&OP_WEBHOOKS_PATCH_WEBHOOK, json)
+        match dispatch(&OP_WEBHOOKS_PATCH_WEBHOOK, json).and_then(iface_webhooks__patch_webhook__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_webhooks__patch_webhook__err(e)),
+        }
     }
-    fn delete_webhook(params: iface_webhooks::DeleteWebhookParams) -> Result<String, String> {
+    fn delete_webhook(params: iface_webhooks::DeleteWebhookParams) -> Result<String, iface_webhooks::DeleteWebhookError> {
         let json = iface_webhooks__delete_webhook_params__to_json(&params);
-        dispatch(&OP_WEBHOOKS_DELETE_WEBHOOK, json)
+        match dispatch(&OP_WEBHOOKS_DELETE_WEBHOOK, json).and_then(iface_webhooks__delete_webhook__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_webhooks__delete_webhook__err(e)),
+        }
     }
 }
 

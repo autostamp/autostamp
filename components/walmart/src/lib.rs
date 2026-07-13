@@ -44,10 +44,15 @@ pub(crate) enum FieldLocation {
     Body,
 }
 
-/// A single operation parameter: the snake-case key it carries in the params JSON and where
-/// it belongs in the request.
+/// A single operation parameter. `snake` keys the field in the internal params JSON (and, for a
+/// path field, matches the `{snake}` placeholder in the path template); `wire` is the verbatim name
+/// the field takes on the HTTP wire (query key, header name, or body property). The two differ
+/// whenever the source name isn't already snake_case (e.g. `dryRun` → snake `dry_run`, wire
+/// `dryRun`), and let distinct inputs that share a snake key (`DateCreated`, `DateCreated<`) still
+/// travel under their true names.
 pub(crate) struct FieldSpec {
     pub(crate) snake: &'static str,
+    pub(crate) wire: &'static str,
     pub(crate) location: FieldLocation,
 }
 
@@ -71,6 +76,16 @@ pub(crate) struct AuthApply {
     pub(crate) kind: AuthKind,
 }
 
+/// The failure modes of [`dispatch`], kept structured so each generated operation can map them
+/// onto its own typed error: an `Http` failure carries the response status and body (routed to
+/// the matching error-variant case), while a `Transport` failure carries a message for the
+/// catch-all case (a secret lookup, connection, or decode failure that never produced an HTTP
+/// status).
+pub(crate) enum DispatchError {
+    Http { status: u16, body: String },
+    Transport(String),
+}
+
 /// A single API operation: HTTP method, path template (with `{snake}` placeholders), the
 /// parameter fields, and the security schemes to apply.
 pub(crate) struct OpSpec {
@@ -81,8 +96,9 @@ pub(crate) struct OpSpec {
 }
 
 /// Execute `op` with the supplied `params` (a JSON object keyed by snake-case field names)
-/// and return the response body as a string, or an error message.
-pub(crate) fn dispatch(op: &OpSpec, params: Value) -> Result<String, String> {
+/// and return the raw 2xx response body, or a structured [`DispatchError`] the caller maps
+/// onto the operation's typed error.
+pub(crate) fn dispatch(op: &OpSpec, params: Value) -> Result<String, DispatchError> {
     let obj = match &params {
         Value::Object(map) => Some(map),
         _ => None,
@@ -105,10 +121,10 @@ pub(crate) fn dispatch(op: &OpSpec, params: Value) -> Result<String, String> {
                 let placeholder = format!("{{{}}}", field.snake);
                 path = path.replace(&placeholder, &percent_encode(&scalar(value)));
             }
-            FieldLocation::Query => query.push((field.snake.to_string(), scalar(value))),
-            FieldLocation::Header => headers.push((field.snake.to_string(), scalar(value))),
+            FieldLocation::Query => query.push((field.wire.to_string(), scalar(value))),
+            FieldLocation::Header => headers.push((field.wire.to_string(), scalar(value))),
             FieldLocation::Body => {
-                body.insert(field.snake.to_string(), value.clone());
+                body.insert(field.wire.to_string(), value.clone());
             }
         }
     }
@@ -116,7 +132,7 @@ pub(crate) fn dispatch(op: &OpSpec, params: Value) -> Result<String, String> {
     // Apply each resolved security scheme, sourcing its value from wasmcloud:secrets.
     let mut cookies: Vec<String> = Vec::new();
     for apply in op.auth {
-        let secret = fetch_secret(apply.secret_key)?;
+        let secret = fetch_secret(apply.secret_key).map_err(DispatchError::Transport)?;
         match &apply.kind {
             AuthKind::Bearer => headers.push(("authorization".into(), format!("Bearer {secret}"))),
             AuthKind::Basic => {
@@ -177,17 +193,18 @@ fn fetch_secret(key: &str) -> Result<String, String> {
 }
 
 /// Build and send the outgoing request with `wstd`, returning the response body on a 2xx
-/// status. The generated guest exports are synchronous, so the async `wstd` client is driven
-/// to completion on a local reactor via `wstd::runtime::block_on`.
+/// status and a structured [`DispatchError`] otherwise. The generated guest exports are
+/// synchronous, so the async `wstd` client is driven to completion on a local reactor via
+/// `wstd::runtime::block_on`.
 fn perform(
     method: &str,
     path_with_query: &str,
     headers: &[(String, String)],
     body: &[u8],
-) -> Result<String, String> {
+) -> Result<String, DispatchError> {
     let url = join_url(crate::BASE_URL, path_with_query);
     let method = Method::from_bytes(method.as_bytes())
-        .map_err(|err| format!("invalid HTTP method `{method}`: {err}"))?;
+        .map_err(|err| DispatchError::Transport(format!("invalid HTTP method `{method}`: {err}")))?;
 
     let mut builder = Request::builder().method(method).uri(url);
     for (name, value) in headers {
@@ -199,27 +216,29 @@ fn perform(
         } else {
             Body::from(body.to_vec())
         })
-        .map_err(|err| format!("failed to build request: {err}"))?;
+        .map_err(|err| DispatchError::Transport(format!("failed to build request: {err}")))?;
 
     wstd::runtime::block_on(async move {
         let client = Client::new();
         let response = client
             .send(request)
             .await
-            .map_err(|err| format!("request failed: {err:#}"))?;
+            .map_err(|err| DispatchError::Transport(format!("request failed: {err:#}")))?;
 
         let status = response.status().as_u16();
         let mut response_body = response.into_body();
-        let bytes = response_body
-            .contents()
-            .await
-            .map_err(|err| format!("failed to read response body: {err:#}"))?;
+        let bytes = response_body.contents().await.map_err(|err| {
+            DispatchError::Transport(format!("failed to read response body: {err:#}"))
+        })?;
         let body_text = String::from_utf8_lossy(bytes).into_owned();
 
         if (200..300).contains(&status) {
             Ok(body_text)
         } else {
-            Err(format!("HTTP {status}: {body_text}"))
+            Err(DispatchError::Http {
+                status,
+                body: body_text,
+            })
         }
     })
 }
@@ -288,12 +307,13 @@ const OP_INVENTORY_UPDATE_BULK_INVENTORY: OpSpec = OpSpec {
     method: "POST",
     path_template: "/v3/feeds",
     fields: &[
-        FieldSpec { snake: "feed_type", location: FieldLocation::Query },
-        FieldSpec { snake: "ship_node", location: FieldLocation::Query },
-        FieldSpec { snake: "wm_sec_access_token", location: FieldLocation::Header },
-        FieldSpec { snake: "wm_consumer_channel_type", location: FieldLocation::Header },
-        FieldSpec { snake: "wm_qos_correlation_id", location: FieldLocation::Header },
-        FieldSpec { snake: "wm_svc_name", location: FieldLocation::Header },
+        FieldSpec { snake: "feed_type", wire: "feedType", location: FieldLocation::Query },
+        FieldSpec { snake: "ship_node", wire: "shipNode", location: FieldLocation::Query },
+        FieldSpec { snake: "wm_sec_access_token", wire: "WM_SEC.ACCESS_TOKEN", location: FieldLocation::Header },
+        FieldSpec { snake: "wm_consumer_channel_type", wire: "WM_CONSUMER.CHANNEL.TYPE", location: FieldLocation::Header },
+        FieldSpec { snake: "wm_qos_correlation_id", wire: "WM_QOS.CORRELATION_ID", location: FieldLocation::Header },
+        FieldSpec { snake: "wm_svc_name", wire: "WM_SVC.NAME", location: FieldLocation::Header },
+        FieldSpec { snake: "file", wire: "file", location: FieldLocation::Body },
     ],
     auth: &[
     ],
@@ -303,15 +323,15 @@ const OP_INVENTORY_GET_WFS_INVENTORY: OpSpec = OpSpec {
     method: "GET",
     path_template: "/v3/fulfillment/inventory",
     fields: &[
-        FieldSpec { snake: "sku", location: FieldLocation::Query },
-        FieldSpec { snake: "from_modified_date", location: FieldLocation::Query },
-        FieldSpec { snake: "to_modified_date", location: FieldLocation::Query },
-        FieldSpec { snake: "limit", location: FieldLocation::Query },
-        FieldSpec { snake: "offset", location: FieldLocation::Query },
-        FieldSpec { snake: "wm_sec_access_token", location: FieldLocation::Header },
-        FieldSpec { snake: "wm_consumer_channel_type", location: FieldLocation::Header },
-        FieldSpec { snake: "wm_qos_correlation_id", location: FieldLocation::Header },
-        FieldSpec { snake: "wm_svc_name", location: FieldLocation::Header },
+        FieldSpec { snake: "sku", wire: "sku", location: FieldLocation::Query },
+        FieldSpec { snake: "from_modified_date", wire: "fromModifiedDate", location: FieldLocation::Query },
+        FieldSpec { snake: "to_modified_date", wire: "toModifiedDate", location: FieldLocation::Query },
+        FieldSpec { snake: "limit", wire: "limit", location: FieldLocation::Query },
+        FieldSpec { snake: "offset", wire: "offset", location: FieldLocation::Query },
+        FieldSpec { snake: "wm_sec_access_token", wire: "WM_SEC.ACCESS_TOKEN", location: FieldLocation::Header },
+        FieldSpec { snake: "wm_consumer_channel_type", wire: "WM_CONSUMER.CHANNEL.TYPE", location: FieldLocation::Header },
+        FieldSpec { snake: "wm_qos_correlation_id", wire: "WM_QOS.CORRELATION_ID", location: FieldLocation::Header },
+        FieldSpec { snake: "wm_svc_name", wire: "WM_SVC.NAME", location: FieldLocation::Header },
     ],
     auth: &[
     ],
@@ -321,12 +341,12 @@ const OP_INVENTORY_GET_MULTI_NODE_INVENTORY_FOR_ALL_SKU_AND_ALL_SHIP_NODES: OpSp
     method: "GET",
     path_template: "/v3/inventories",
     fields: &[
-        FieldSpec { snake: "limit", location: FieldLocation::Query },
-        FieldSpec { snake: "next_cursor", location: FieldLocation::Query },
-        FieldSpec { snake: "wm_sec_access_token", location: FieldLocation::Header },
-        FieldSpec { snake: "wm_consumer_channel_type", location: FieldLocation::Header },
-        FieldSpec { snake: "wm_qos_correlation_id", location: FieldLocation::Header },
-        FieldSpec { snake: "wm_svc_name", location: FieldLocation::Header },
+        FieldSpec { snake: "limit", wire: "limit", location: FieldLocation::Query },
+        FieldSpec { snake: "next_cursor", wire: "nextCursor", location: FieldLocation::Query },
+        FieldSpec { snake: "wm_sec_access_token", wire: "WM_SEC.ACCESS_TOKEN", location: FieldLocation::Header },
+        FieldSpec { snake: "wm_consumer_channel_type", wire: "WM_CONSUMER.CHANNEL.TYPE", location: FieldLocation::Header },
+        FieldSpec { snake: "wm_qos_correlation_id", wire: "WM_QOS.CORRELATION_ID", location: FieldLocation::Header },
+        FieldSpec { snake: "wm_svc_name", wire: "WM_SVC.NAME", location: FieldLocation::Header },
     ],
     auth: &[
     ],
@@ -336,12 +356,12 @@ const OP_INVENTORY_GET_MULTI_NODE_INVENTORY_FOR_SKU_AND_ALL_SHIPNODES: OpSpec = 
     method: "GET",
     path_template: "/v3/inventories/{sku}",
     fields: &[
-        FieldSpec { snake: "sku", location: FieldLocation::Path },
-        FieldSpec { snake: "ship_node", location: FieldLocation::Query },
-        FieldSpec { snake: "wm_sec_access_token", location: FieldLocation::Header },
-        FieldSpec { snake: "wm_consumer_channel_type", location: FieldLocation::Header },
-        FieldSpec { snake: "wm_qos_correlation_id", location: FieldLocation::Header },
-        FieldSpec { snake: "wm_svc_name", location: FieldLocation::Header },
+        FieldSpec { snake: "sku", wire: "sku", location: FieldLocation::Path },
+        FieldSpec { snake: "ship_node", wire: "shipNode", location: FieldLocation::Query },
+        FieldSpec { snake: "wm_sec_access_token", wire: "WM_SEC.ACCESS_TOKEN", location: FieldLocation::Header },
+        FieldSpec { snake: "wm_consumer_channel_type", wire: "WM_CONSUMER.CHANNEL.TYPE", location: FieldLocation::Header },
+        FieldSpec { snake: "wm_qos_correlation_id", wire: "WM_QOS.CORRELATION_ID", location: FieldLocation::Header },
+        FieldSpec { snake: "wm_svc_name", wire: "WM_SVC.NAME", location: FieldLocation::Header },
     ],
     auth: &[
     ],
@@ -351,12 +371,12 @@ const OP_INVENTORY_UPDATE_MULTI_NODE_INVENTORY: OpSpec = OpSpec {
     method: "PUT",
     path_template: "/v3/inventories/{sku}",
     fields: &[
-        FieldSpec { snake: "sku", location: FieldLocation::Path },
-        FieldSpec { snake: "wm_sec_access_token", location: FieldLocation::Header },
-        FieldSpec { snake: "wm_consumer_channel_type", location: FieldLocation::Header },
-        FieldSpec { snake: "wm_qos_correlation_id", location: FieldLocation::Header },
-        FieldSpec { snake: "wm_svc_name", location: FieldLocation::Header },
-        FieldSpec { snake: "inventories", location: FieldLocation::Body },
+        FieldSpec { snake: "sku", wire: "sku", location: FieldLocation::Path },
+        FieldSpec { snake: "wm_sec_access_token", wire: "WM_SEC.ACCESS_TOKEN", location: FieldLocation::Header },
+        FieldSpec { snake: "wm_consumer_channel_type", wire: "WM_CONSUMER.CHANNEL.TYPE", location: FieldLocation::Header },
+        FieldSpec { snake: "wm_qos_correlation_id", wire: "WM_QOS.CORRELATION_ID", location: FieldLocation::Header },
+        FieldSpec { snake: "wm_svc_name", wire: "WM_SVC.NAME", location: FieldLocation::Header },
+        FieldSpec { snake: "inventories", wire: "inventories", location: FieldLocation::Body },
     ],
     auth: &[
     ],
@@ -366,12 +386,12 @@ const OP_INVENTORY_GET_INVENTORY: OpSpec = OpSpec {
     method: "GET",
     path_template: "/v3/inventory",
     fields: &[
-        FieldSpec { snake: "sku", location: FieldLocation::Query },
-        FieldSpec { snake: "ship_node", location: FieldLocation::Query },
-        FieldSpec { snake: "wm_sec_access_token", location: FieldLocation::Header },
-        FieldSpec { snake: "wm_consumer_channel_type", location: FieldLocation::Header },
-        FieldSpec { snake: "wm_qos_correlation_id", location: FieldLocation::Header },
-        FieldSpec { snake: "wm_svc_name", location: FieldLocation::Header },
+        FieldSpec { snake: "sku", wire: "sku", location: FieldLocation::Query },
+        FieldSpec { snake: "ship_node", wire: "shipNode", location: FieldLocation::Query },
+        FieldSpec { snake: "wm_sec_access_token", wire: "WM_SEC.ACCESS_TOKEN", location: FieldLocation::Header },
+        FieldSpec { snake: "wm_consumer_channel_type", wire: "WM_CONSUMER.CHANNEL.TYPE", location: FieldLocation::Header },
+        FieldSpec { snake: "wm_qos_correlation_id", wire: "WM_QOS.CORRELATION_ID", location: FieldLocation::Header },
+        FieldSpec { snake: "wm_svc_name", wire: "WM_SVC.NAME", location: FieldLocation::Header },
     ],
     auth: &[
     ],
@@ -381,13 +401,14 @@ const OP_INVENTORY_UPDATE_INVENTORY_FOR_AN_ITEM: OpSpec = OpSpec {
     method: "PUT",
     path_template: "/v3/inventory",
     fields: &[
-        FieldSpec { snake: "sku", location: FieldLocation::Query },
-        FieldSpec { snake: "ship_node", location: FieldLocation::Query },
-        FieldSpec { snake: "wm_sec_access_token", location: FieldLocation::Header },
-        FieldSpec { snake: "wm_consumer_channel_type", location: FieldLocation::Header },
-        FieldSpec { snake: "wm_qos_correlation_id", location: FieldLocation::Header },
-        FieldSpec { snake: "wm_svc_name", location: FieldLocation::Header },
-        FieldSpec { snake: "quantity", location: FieldLocation::Body },
+        FieldSpec { snake: "sku", wire: "sku", location: FieldLocation::Query },
+        FieldSpec { snake: "ship_node", wire: "shipNode", location: FieldLocation::Query },
+        FieldSpec { snake: "wm_sec_access_token", wire: "WM_SEC.ACCESS_TOKEN", location: FieldLocation::Header },
+        FieldSpec { snake: "wm_consumer_channel_type", wire: "WM_CONSUMER.CHANNEL.TYPE", location: FieldLocation::Header },
+        FieldSpec { snake: "wm_qos_correlation_id", wire: "WM_QOS.CORRELATION_ID", location: FieldLocation::Header },
+        FieldSpec { snake: "wm_svc_name", wire: "WM_SVC.NAME", location: FieldLocation::Header },
+        FieldSpec { snake: "quantity", wire: "quantity", location: FieldLocation::Body },
+        FieldSpec { snake: "sku_v2", wire: "sku", location: FieldLocation::Body },
     ],
     auth: &[
     ],
@@ -400,10 +421,207 @@ fn iface_inventory__update_bulk_inventory_feed_type_enum__to_str(e: &iface_inven
     }
 }
 
-fn iface_inventory__update_multi_node_inventory_body_inventories_nodes_item_input_qty_unit_enum__to_str(e: &iface_inventory::UpdateMultiNodeInventoryBodyInventoriesNodesItemInputQtyUnitEnum) -> &'static str {
+fn iface_inventory__get_multi_node_inventory_for_all_sku_and_all_ship_nodes_response_elements_inventories_item_nodes_item_avail_to_sell_qty_unit_enum__to_str(e: &iface_inventory::GetMultiNodeInventoryForAllSkuAndAllShipNodesResponseElementsInventoriesItemNodesItemAvailToSellQtyUnitEnum) -> &'static str {
     match e {
-        iface_inventory::UpdateMultiNodeInventoryBodyInventoriesNodesItemInputQtyUnitEnum::Each => "EACH",
+        iface_inventory::GetMultiNodeInventoryForAllSkuAndAllShipNodesResponseElementsInventoriesItemNodesItemAvailToSellQtyUnitEnum::Each => "EACH",
     }
+}
+
+fn iface_inventory__get_multi_node_inventory_for_sku_and_all_shipnodes_response_nodes_item_errors_item_category_enum__to_str(e: &iface_inventory::GetMultiNodeInventoryForSkuAndAllShipnodesResponseNodesItemErrorsItemCategoryEnum) -> &'static str {
+    match e {
+        iface_inventory::GetMultiNodeInventoryForSkuAndAllShipnodesResponseNodesItemErrorsItemCategoryEnum::Application => "APPLICATION",
+        iface_inventory::GetMultiNodeInventoryForSkuAndAllShipnodesResponseNodesItemErrorsItemCategoryEnum::System => "SYSTEM",
+        iface_inventory::GetMultiNodeInventoryForSkuAndAllShipnodesResponseNodesItemErrorsItemCategoryEnum::Request => "REQUEST",
+        iface_inventory::GetMultiNodeInventoryForSkuAndAllShipnodesResponseNodesItemErrorsItemCategoryEnum::Data => "DATA",
+    }
+}
+
+fn iface_inventory__get_multi_node_inventory_for_sku_and_all_shipnodes_response_nodes_item_errors_item_severity_enum__to_str(e: &iface_inventory::GetMultiNodeInventoryForSkuAndAllShipnodesResponseNodesItemErrorsItemSeverityEnum) -> &'static str {
+    match e {
+        iface_inventory::GetMultiNodeInventoryForSkuAndAllShipnodesResponseNodesItemErrorsItemSeverityEnum::Info => "INFO",
+        iface_inventory::GetMultiNodeInventoryForSkuAndAllShipnodesResponseNodesItemErrorsItemSeverityEnum::Warn => "WARN",
+        iface_inventory::GetMultiNodeInventoryForSkuAndAllShipnodesResponseNodesItemErrorsItemSeverityEnum::Error => "ERROR",
+    }
+}
+
+fn iface_inventory__update_bulk_inventory_response__to_json(p: &iface_inventory::UpdateBulkInventoryResponse) -> Value {
+    let mut m = Map::new();
+    m.insert("additionalAttributes".into(), match (&p.additional_attributes) { Some(v) => iface_inventory__update_bulk_inventory_response_additional_attributes__to_json(v), None => Value::Null });
+    m.insert("errors".into(), match (&p.errors) { Some(v) => iface_inventory__update_bulk_inventory_response_errors__to_json(v), None => Value::Null });
+    m.insert("feedId".into(), match (&p.feed_id) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_inventory__update_bulk_inventory_response_additional_attributes__to_json(p: &iface_inventory::UpdateBulkInventoryResponseAdditionalAttributes) -> Value {
+    let mut m = Map::new();
+    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_inventory__update_bulk_inventory_response_errors__to_json(p: &iface_inventory::UpdateBulkInventoryResponseErrors) -> Value {
+    let mut m = Map::new();
+    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_inventory__get_wfs_inventory_response__to_json(p: &iface_inventory::GetWfsInventoryResponse) -> Value {
+    let mut m = Map::new();
+    m.insert("headers".into(), match (&p.headers) { Some(v) => iface_inventory__get_wfs_inventory_response_headers__to_json(v), None => Value::Null });
+    m.insert("payload".into(), match (&p.payload) { Some(v) => iface_inventory__get_wfs_inventory_response_payload__to_json(v), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_inventory__get_wfs_inventory_response_headers__to_json(p: &iface_inventory::GetWfsInventoryResponseHeaders) -> Value {
+    let mut m = Map::new();
+    m.insert("limit".into(), match (&p.limit) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("offset".into(), match (&p.offset) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("totalCount".into(), match (&p.total_count) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_inventory__get_wfs_inventory_response_payload__to_json(p: &iface_inventory::GetWfsInventoryResponsePayload) -> Value {
+    let mut m = Map::new();
+    m.insert("inventory".into(), match (&p.inventory) { Some(v) => Value::Array((v).iter().map(|v| iface_inventory__get_wfs_inventory_response_payload_inventory_item__to_json(v)).collect()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_inventory__get_wfs_inventory_response_payload_inventory_item__to_json(p: &iface_inventory::GetWfsInventoryResponsePayloadInventoryItem) -> Value {
+    let mut m = Map::new();
+    m.insert("shipNodes".into(), match (&p.ship_nodes) { Some(v) => Value::Array((v).iter().map(|v| iface_inventory__get_wfs_inventory_response_payload_inventory_item_ship_nodes_item__to_json(v)).collect()), None => Value::Null });
+    m.insert("sku".into(), match (&p.sku) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_inventory__get_wfs_inventory_response_payload_inventory_item_ship_nodes_item__to_json(p: &iface_inventory::GetWfsInventoryResponsePayloadInventoryItemShipNodesItem) -> Value {
+    let mut m = Map::new();
+    m.insert("availToSellQty".into(), match (&p.avail_to_sell_qty) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("modifiedDate".into(), match (&p.modified_date) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("onHandQty".into(), match (&p.on_hand_qty) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("shipNodeType".into(), match (&p.ship_node_type) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_inventory__get_multi_node_inventory_for_all_sku_and_all_ship_nodes_response__to_json(p: &iface_inventory::GetMultiNodeInventoryForAllSkuAndAllShipNodesResponse) -> Value {
+    let mut m = Map::new();
+    m.insert("elements".into(), match (&p.elements) { Some(v) => iface_inventory__get_multi_node_inventory_for_all_sku_and_all_ship_nodes_response_elements__to_json(v), None => Value::Null });
+    m.insert("meta".into(), match (&p.meta) { Some(v) => iface_inventory__get_multi_node_inventory_for_all_sku_and_all_ship_nodes_response_meta__to_json(v), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_inventory__get_multi_node_inventory_for_all_sku_and_all_ship_nodes_response_elements__to_json(p: &iface_inventory::GetMultiNodeInventoryForAllSkuAndAllShipNodesResponseElements) -> Value {
+    let mut m = Map::new();
+    m.insert("inventories".into(), match (&p.inventories) { Some(v) => Value::Array((v).iter().map(|v| iface_inventory__get_multi_node_inventory_for_all_sku_and_all_ship_nodes_response_elements_inventories_item__to_json(v)).collect()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_inventory__get_multi_node_inventory_for_all_sku_and_all_ship_nodes_response_elements_inventories_item__to_json(p: &iface_inventory::GetMultiNodeInventoryForAllSkuAndAllShipNodesResponseElementsInventoriesItem) -> Value {
+    let mut m = Map::new();
+    m.insert("nodes".into(), match (&p.nodes) { Some(v) => Value::Array((v).iter().map(|v| iface_inventory__get_multi_node_inventory_for_all_sku_and_all_ship_nodes_response_elements_inventories_item_nodes_item__to_json(v)).collect()), None => Value::Null });
+    m.insert("sku".into(), match (&p.sku) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_inventory__get_multi_node_inventory_for_all_sku_and_all_ship_nodes_response_elements_inventories_item_nodes_item__to_json(p: &iface_inventory::GetMultiNodeInventoryForAllSkuAndAllShipNodesResponseElementsInventoriesItemNodesItem) -> Value {
+    let mut m = Map::new();
+    m.insert("availToSellQty".into(), match (&p.avail_to_sell_qty) { Some(v) => iface_inventory__get_multi_node_inventory_for_all_sku_and_all_ship_nodes_response_elements_inventories_item_nodes_item_avail_to_sell_qty__to_json(v), None => Value::Null });
+    m.insert("inputQty".into(), match (&p.input_qty) { Some(v) => iface_inventory__get_multi_node_inventory_for_all_sku_and_all_ship_nodes_response_elements_inventories_item_nodes_item_input_qty__to_json(v), None => Value::Null });
+    m.insert("reservedQty".into(), match (&p.reserved_qty) { Some(v) => iface_inventory__get_multi_node_inventory_for_all_sku_and_all_ship_nodes_response_elements_inventories_item_nodes_item_reserved_qty__to_json(v), None => Value::Null });
+    m.insert("shipNode".into(), match (&p.ship_node) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_inventory__get_multi_node_inventory_for_all_sku_and_all_ship_nodes_response_elements_inventories_item_nodes_item_avail_to_sell_qty__to_json(p: &iface_inventory::GetMultiNodeInventoryForAllSkuAndAllShipNodesResponseElementsInventoriesItemNodesItemAvailToSellQty) -> Value {
+    let mut m = Map::new();
+    m.insert("amount".into(), serde_json::Number::from_f64(*(&p.amount)).map(Value::Number).unwrap_or(Value::Null));
+    m.insert("unit".into(), Value::String(iface_inventory__get_multi_node_inventory_for_all_sku_and_all_ship_nodes_response_elements_inventories_item_nodes_item_avail_to_sell_qty_unit_enum__to_str(&p.unit).into()));
+    Value::Object(m)
+}
+
+fn iface_inventory__get_multi_node_inventory_for_all_sku_and_all_ship_nodes_response_elements_inventories_item_nodes_item_input_qty__to_json(p: &iface_inventory::GetMultiNodeInventoryForAllSkuAndAllShipNodesResponseElementsInventoriesItemNodesItemInputQty) -> Value {
+    let mut m = Map::new();
+    m.insert("amount".into(), serde_json::Number::from_f64(*(&p.amount)).map(Value::Number).unwrap_or(Value::Null));
+    m.insert("unit".into(), Value::String(iface_inventory__get_multi_node_inventory_for_all_sku_and_all_ship_nodes_response_elements_inventories_item_nodes_item_avail_to_sell_qty_unit_enum__to_str(&p.unit).into()));
+    Value::Object(m)
+}
+
+fn iface_inventory__get_multi_node_inventory_for_all_sku_and_all_ship_nodes_response_elements_inventories_item_nodes_item_reserved_qty__to_json(p: &iface_inventory::GetMultiNodeInventoryForAllSkuAndAllShipNodesResponseElementsInventoriesItemNodesItemReservedQty) -> Value {
+    let mut m = Map::new();
+    m.insert("amount".into(), serde_json::Number::from_f64(*(&p.amount)).map(Value::Number).unwrap_or(Value::Null));
+    m.insert("unit".into(), Value::String(iface_inventory__get_multi_node_inventory_for_all_sku_and_all_ship_nodes_response_elements_inventories_item_nodes_item_avail_to_sell_qty_unit_enum__to_str(&p.unit).into()));
+    Value::Object(m)
+}
+
+fn iface_inventory__get_multi_node_inventory_for_all_sku_and_all_ship_nodes_response_meta__to_json(p: &iface_inventory::GetMultiNodeInventoryForAllSkuAndAllShipNodesResponseMeta) -> Value {
+    let mut m = Map::new();
+    m.insert("nextCursor".into(), match (&p.next_cursor) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("totalCount".into(), match (&p.total_count) { Some(v) => serde_json::Number::from_f64(*(v)).map(Value::Number).unwrap_or(Value::Null), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_inventory__get_multi_node_inventory_for_sku_and_all_shipnodes_response__to_json(p: &iface_inventory::GetMultiNodeInventoryForSkuAndAllShipnodesResponse) -> Value {
+    let mut m = Map::new();
+    m.insert("nodes".into(), match (&p.nodes) { Some(v) => Value::Array((v).iter().map(|v| iface_inventory__get_multi_node_inventory_for_sku_and_all_shipnodes_response_nodes_item__to_json(v)).collect()), None => Value::Null });
+    m.insert("sku".into(), match (&p.sku) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_inventory__get_multi_node_inventory_for_sku_and_all_shipnodes_response_nodes_item__to_json(p: &iface_inventory::GetMultiNodeInventoryForSkuAndAllShipnodesResponseNodesItem) -> Value {
+    let mut m = Map::new();
+    m.insert("availToSellQty".into(), match (&p.avail_to_sell_qty) { Some(v) => iface_inventory__get_multi_node_inventory_for_sku_and_all_shipnodes_response_nodes_item_avail_to_sell_qty__to_json(v), None => Value::Null });
+    m.insert("errors".into(), match (&p.errors) { Some(v) => Value::Array((v).iter().map(|v| iface_inventory__get_multi_node_inventory_for_sku_and_all_shipnodes_response_nodes_item_errors_item__to_json(v)).collect()), None => Value::Null });
+    m.insert("inputQty".into(), match (&p.input_qty) { Some(v) => iface_inventory__get_multi_node_inventory_for_sku_and_all_shipnodes_response_nodes_item_input_qty__to_json(v), None => Value::Null });
+    m.insert("reservedQty".into(), match (&p.reserved_qty) { Some(v) => iface_inventory__get_multi_node_inventory_for_sku_and_all_shipnodes_response_nodes_item_reserved_qty__to_json(v), None => Value::Null });
+    m.insert("shipNode".into(), match (&p.ship_node) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_inventory__get_multi_node_inventory_for_sku_and_all_shipnodes_response_nodes_item_avail_to_sell_qty__to_json(p: &iface_inventory::GetMultiNodeInventoryForSkuAndAllShipnodesResponseNodesItemAvailToSellQty) -> Value {
+    let mut m = Map::new();
+    m.insert("amount".into(), serde_json::Number::from_f64(*(&p.amount)).map(Value::Number).unwrap_or(Value::Null));
+    m.insert("unit".into(), Value::String(iface_inventory__get_multi_node_inventory_for_all_sku_and_all_ship_nodes_response_elements_inventories_item_nodes_item_avail_to_sell_qty_unit_enum__to_str(&p.unit).into()));
+    Value::Object(m)
+}
+
+fn iface_inventory__get_multi_node_inventory_for_sku_and_all_shipnodes_response_nodes_item_errors_item__to_json(p: &iface_inventory::GetMultiNodeInventoryForSkuAndAllShipnodesResponseNodesItemErrorsItem) -> Value {
+    let mut m = Map::new();
+    m.insert("category".into(), match (&p.category) { Some(v) => Value::String(iface_inventory__get_multi_node_inventory_for_sku_and_all_shipnodes_response_nodes_item_errors_item_category_enum__to_str(v).into()), None => Value::Null });
+    m.insert("causes".into(), match (&p.causes) { Some(v) => Value::Array((v).iter().map(|v| iface_inventory__get_multi_node_inventory_for_sku_and_all_shipnodes_response_nodes_item_errors_item_causes_item__to_json(v)).collect()), None => Value::Null });
+    m.insert("code".into(), Value::String((&p.code).clone()));
+    m.insert("description".into(), match (&p.description) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("errorIdentifiers".into(), match (&p.error_identifiers) { Some(v) => iface_inventory__get_multi_node_inventory_for_sku_and_all_shipnodes_response_nodes_item_errors_item_error_identifiers__to_json(v), None => Value::Null });
+    m.insert("field".into(), match (&p.field) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("info".into(), match (&p.info) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("severity".into(), match (&p.severity) { Some(v) => Value::String(iface_inventory__get_multi_node_inventory_for_sku_and_all_shipnodes_response_nodes_item_errors_item_severity_enum__to_str(v).into()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_inventory__get_multi_node_inventory_for_sku_and_all_shipnodes_response_nodes_item_errors_item_causes_item__to_json(p: &iface_inventory::GetMultiNodeInventoryForSkuAndAllShipnodesResponseNodesItemErrorsItemCausesItem) -> Value {
+    let mut m = Map::new();
+    m.insert("code".into(), match (&p.code) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("description".into(), match (&p.description) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("field".into(), match (&p.field) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("type".into(), match (&p.type_op) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_inventory__get_multi_node_inventory_for_sku_and_all_shipnodes_response_nodes_item_errors_item_error_identifiers__to_json(p: &iface_inventory::GetMultiNodeInventoryForSkuAndAllShipnodesResponseNodesItemErrorsItemErrorIdentifiers) -> Value {
+    let mut m = Map::new();
+    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_inventory__get_multi_node_inventory_for_sku_and_all_shipnodes_response_nodes_item_input_qty__to_json(p: &iface_inventory::GetMultiNodeInventoryForSkuAndAllShipnodesResponseNodesItemInputQty) -> Value {
+    let mut m = Map::new();
+    m.insert("amount".into(), serde_json::Number::from_f64(*(&p.amount)).map(Value::Number).unwrap_or(Value::Null));
+    m.insert("unit".into(), Value::String(iface_inventory__get_multi_node_inventory_for_all_sku_and_all_ship_nodes_response_elements_inventories_item_nodes_item_avail_to_sell_qty_unit_enum__to_str(&p.unit).into()));
+    Value::Object(m)
+}
+
+fn iface_inventory__get_multi_node_inventory_for_sku_and_all_shipnodes_response_nodes_item_reserved_qty__to_json(p: &iface_inventory::GetMultiNodeInventoryForSkuAndAllShipnodesResponseNodesItemReservedQty) -> Value {
+    let mut m = Map::new();
+    m.insert("amount".into(), serde_json::Number::from_f64(*(&p.amount)).map(Value::Number).unwrap_or(Value::Null));
+    m.insert("unit".into(), Value::String(iface_inventory__get_multi_node_inventory_for_all_sku_and_all_ship_nodes_response_elements_inventories_item_nodes_item_avail_to_sell_qty_unit_enum__to_str(&p.unit).into()));
+    Value::Object(m)
 }
 
 fn iface_inventory__update_multi_node_inventory_body_inventories__to_json(p: &iface_inventory::UpdateMultiNodeInventoryBodyInventories) -> Value {
@@ -414,22 +632,93 @@ fn iface_inventory__update_multi_node_inventory_body_inventories__to_json(p: &if
 
 fn iface_inventory__update_multi_node_inventory_body_inventories_nodes_item__to_json(p: &iface_inventory::UpdateMultiNodeInventoryBodyInventoriesNodesItem) -> Value {
     let mut m = Map::new();
-    m.insert("input_qty".into(), iface_inventory__update_multi_node_inventory_body_inventories_nodes_item_input_qty__to_json(&p.input_qty));
-    m.insert("ship_node".into(), Value::String((&p.ship_node).clone()));
+    m.insert("inputQty".into(), iface_inventory__update_multi_node_inventory_body_inventories_nodes_item_input_qty__to_json(&p.input_qty));
+    m.insert("shipNode".into(), Value::String((&p.ship_node).clone()));
     Value::Object(m)
 }
 
 fn iface_inventory__update_multi_node_inventory_body_inventories_nodes_item_input_qty__to_json(p: &iface_inventory::UpdateMultiNodeInventoryBodyInventoriesNodesItemInputQty) -> Value {
     let mut m = Map::new();
     m.insert("amount".into(), serde_json::Number::from_f64(*(&p.amount)).map(Value::Number).unwrap_or(Value::Null));
-    m.insert("unit".into(), Value::String(iface_inventory__update_multi_node_inventory_body_inventories_nodes_item_input_qty_unit_enum__to_str(&p.unit).into()));
+    m.insert("unit".into(), Value::String(iface_inventory__get_multi_node_inventory_for_all_sku_and_all_ship_nodes_response_elements_inventories_item_nodes_item_avail_to_sell_qty_unit_enum__to_str(&p.unit).into()));
+    Value::Object(m)
+}
+
+fn iface_inventory__update_multi_node_inventory_response__to_json(p: &iface_inventory::UpdateMultiNodeInventoryResponse) -> Value {
+    let mut m = Map::new();
+    m.insert("nodes".into(), match (&p.nodes) { Some(v) => Value::Array((v).iter().map(|v| iface_inventory__update_multi_node_inventory_response_nodes_item__to_json(v)).collect()), None => Value::Null });
+    m.insert("sku".into(), match (&p.sku) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_inventory__update_multi_node_inventory_response_nodes_item__to_json(p: &iface_inventory::UpdateMultiNodeInventoryResponseNodesItem) -> Value {
+    let mut m = Map::new();
+    m.insert("errors".into(), match (&p.errors) { Some(v) => Value::Array((v).iter().map(|v| iface_inventory__update_multi_node_inventory_response_nodes_item_errors_item__to_json(v)).collect()), None => Value::Null });
+    m.insert("shipNode".into(), match (&p.ship_node) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("status".into(), match (&p.status) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_inventory__update_multi_node_inventory_response_nodes_item_errors_item__to_json(p: &iface_inventory::UpdateMultiNodeInventoryResponseNodesItemErrorsItem) -> Value {
+    let mut m = Map::new();
+    m.insert("category".into(), match (&p.category) { Some(v) => Value::String(iface_inventory__get_multi_node_inventory_for_sku_and_all_shipnodes_response_nodes_item_errors_item_category_enum__to_str(v).into()), None => Value::Null });
+    m.insert("causes".into(), match (&p.causes) { Some(v) => Value::Array((v).iter().map(|v| iface_inventory__update_multi_node_inventory_response_nodes_item_errors_item_causes_item__to_json(v)).collect()), None => Value::Null });
+    m.insert("code".into(), Value::String((&p.code).clone()));
+    m.insert("description".into(), match (&p.description) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("errorIdentifiers".into(), match (&p.error_identifiers) { Some(v) => iface_inventory__update_multi_node_inventory_response_nodes_item_errors_item_error_identifiers__to_json(v), None => Value::Null });
+    m.insert("field".into(), match (&p.field) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("info".into(), match (&p.info) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("severity".into(), match (&p.severity) { Some(v) => Value::String(iface_inventory__get_multi_node_inventory_for_sku_and_all_shipnodes_response_nodes_item_errors_item_severity_enum__to_str(v).into()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_inventory__update_multi_node_inventory_response_nodes_item_errors_item_causes_item__to_json(p: &iface_inventory::UpdateMultiNodeInventoryResponseNodesItemErrorsItemCausesItem) -> Value {
+    let mut m = Map::new();
+    m.insert("code".into(), match (&p.code) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("description".into(), match (&p.description) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("field".into(), match (&p.field) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("type".into(), match (&p.type_op) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_inventory__update_multi_node_inventory_response_nodes_item_errors_item_error_identifiers__to_json(p: &iface_inventory::UpdateMultiNodeInventoryResponseNodesItemErrorsItemErrorIdentifiers) -> Value {
+    let mut m = Map::new();
+    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_inventory__get_inventory_response__to_json(p: &iface_inventory::GetInventoryResponse) -> Value {
+    let mut m = Map::new();
+    m.insert("quantity".into(), iface_inventory__get_inventory_response_quantity__to_json(&p.quantity));
+    m.insert("sku".into(), Value::String((&p.sku).clone()));
+    Value::Object(m)
+}
+
+fn iface_inventory__get_inventory_response_quantity__to_json(p: &iface_inventory::GetInventoryResponseQuantity) -> Value {
+    let mut m = Map::new();
+    m.insert("amount".into(), serde_json::Number::from_f64(*(&p.amount)).map(Value::Number).unwrap_or(Value::Null));
+    m.insert("unit".into(), Value::String(iface_inventory__get_multi_node_inventory_for_all_sku_and_all_ship_nodes_response_elements_inventories_item_nodes_item_avail_to_sell_qty_unit_enum__to_str(&p.unit).into()));
     Value::Object(m)
 }
 
 fn iface_inventory__update_inventory_for_an_item_body_quantity__to_json(p: &iface_inventory::UpdateInventoryForAnItemBodyQuantity) -> Value {
     let mut m = Map::new();
     m.insert("amount".into(), serde_json::Number::from_f64(*(&p.amount)).map(Value::Number).unwrap_or(Value::Null));
-    m.insert("unit".into(), Value::String(iface_inventory__update_multi_node_inventory_body_inventories_nodes_item_input_qty_unit_enum__to_str(&p.unit).into()));
+    m.insert("unit".into(), Value::String(iface_inventory__get_multi_node_inventory_for_all_sku_and_all_ship_nodes_response_elements_inventories_item_nodes_item_avail_to_sell_qty_unit_enum__to_str(&p.unit).into()));
+    Value::Object(m)
+}
+
+fn iface_inventory__update_inventory_for_an_item_response__to_json(p: &iface_inventory::UpdateInventoryForAnItemResponse) -> Value {
+    let mut m = Map::new();
+    m.insert("quantity".into(), iface_inventory__update_inventory_for_an_item_response_quantity__to_json(&p.quantity));
+    m.insert("sku".into(), Value::String((&p.sku).clone()));
+    Value::Object(m)
+}
+
+fn iface_inventory__update_inventory_for_an_item_response_quantity__to_json(p: &iface_inventory::UpdateInventoryForAnItemResponseQuantity) -> Value {
+    let mut m = Map::new();
+    m.insert("amount".into(), serde_json::Number::from_f64(*(&p.amount)).map(Value::Number).unwrap_or(Value::Null));
+    m.insert("unit".into(), Value::String(iface_inventory__get_multi_node_inventory_for_all_sku_and_all_ship_nodes_response_elements_inventories_item_nodes_item_avail_to_sell_qty_unit_enum__to_str(&p.unit).into()));
     Value::Object(m)
 }
 
@@ -441,6 +730,7 @@ fn iface_inventory__update_bulk_inventory_params__to_json(p: &iface_inventory::U
     m.insert("wm_consumer_channel_type".into(), match (&p.wm_consumer_channel_type) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("wm_qos_correlation_id".into(), Value::String((&p.wm_qos_correlation_id).clone()));
     m.insert("wm_svc_name".into(), Value::String((&p.wm_svc_name).clone()));
+    m.insert("file".into(), Value::String((&p.file).clone()));
     Value::Object(m)
 }
 
@@ -511,37 +801,495 @@ fn iface_inventory__update_inventory_for_an_item_params__to_json(p: &iface_inven
     m.insert("wm_qos_correlation_id".into(), Value::String((&p.wm_qos_correlation_id).clone()));
     m.insert("wm_svc_name".into(), Value::String((&p.wm_svc_name).clone()));
     m.insert("quantity".into(), iface_inventory__update_inventory_for_an_item_body_quantity__to_json(&p.quantity));
+    m.insert("sku_v2".into(), Value::String((&p.sku_v2).clone()));
     Value::Object(m)
 }
 
+fn iface_inventory__update_bulk_inventory_response__from_json(v: &Value) -> Option<iface_inventory::UpdateBulkInventoryResponse> {
+    let m = v.as_object()?;
+    Some(iface_inventory::UpdateBulkInventoryResponse {
+        additional_attributes: m.get("additionalAttributes").filter(|v| !v.is_null()).and_then(|v| iface_inventory__update_bulk_inventory_response_additional_attributes__from_json(v)),
+        errors: m.get("errors").filter(|v| !v.is_null()).and_then(|v| iface_inventory__update_bulk_inventory_response_errors__from_json(v)),
+        feed_id: m.get("feedId").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    })
+}
+
+fn iface_inventory__update_bulk_inventory_response_additional_attributes__from_json(v: &Value) -> Option<iface_inventory::UpdateBulkInventoryResponseAdditionalAttributes> {
+    let m = v.as_object()?;
+    Some(iface_inventory::UpdateBulkInventoryResponseAdditionalAttributes {
+        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    })
+}
+
+fn iface_inventory__update_bulk_inventory_response_errors__from_json(v: &Value) -> Option<iface_inventory::UpdateBulkInventoryResponseErrors> {
+    let m = v.as_object()?;
+    Some(iface_inventory::UpdateBulkInventoryResponseErrors {
+        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    })
+}
+
+fn iface_inventory__get_wfs_inventory_response__from_json(v: &Value) -> Option<iface_inventory::GetWfsInventoryResponse> {
+    let m = v.as_object()?;
+    Some(iface_inventory::GetWfsInventoryResponse {
+        headers: m.get("headers").filter(|v| !v.is_null()).and_then(|v| iface_inventory__get_wfs_inventory_response_headers__from_json(v)),
+        payload: m.get("payload").filter(|v| !v.is_null()).and_then(|v| iface_inventory__get_wfs_inventory_response_payload__from_json(v)),
+    })
+}
+
+fn iface_inventory__get_wfs_inventory_response_headers__from_json(v: &Value) -> Option<iface_inventory::GetWfsInventoryResponseHeaders> {
+    let m = v.as_object()?;
+    Some(iface_inventory::GetWfsInventoryResponseHeaders {
+        limit: m.get("limit").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        offset: m.get("offset").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        total_count: m.get("totalCount").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+    })
+}
+
+fn iface_inventory__get_wfs_inventory_response_payload__from_json(v: &Value) -> Option<iface_inventory::GetWfsInventoryResponsePayload> {
+    let m = v.as_object()?;
+    Some(iface_inventory::GetWfsInventoryResponsePayload {
+        inventory: m.get("inventory").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| iface_inventory__get_wfs_inventory_response_payload_inventory_item__from_json(x)).collect())),
+    })
+}
+
+fn iface_inventory__get_wfs_inventory_response_payload_inventory_item__from_json(v: &Value) -> Option<iface_inventory::GetWfsInventoryResponsePayloadInventoryItem> {
+    let m = v.as_object()?;
+    Some(iface_inventory::GetWfsInventoryResponsePayloadInventoryItem {
+        ship_nodes: m.get("shipNodes").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| iface_inventory__get_wfs_inventory_response_payload_inventory_item_ship_nodes_item__from_json(x)).collect())),
+        sku: m.get("sku").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    })
+}
+
+fn iface_inventory__get_wfs_inventory_response_payload_inventory_item_ship_nodes_item__from_json(v: &Value) -> Option<iface_inventory::GetWfsInventoryResponsePayloadInventoryItemShipNodesItem> {
+    let m = v.as_object()?;
+    Some(iface_inventory::GetWfsInventoryResponsePayloadInventoryItemShipNodesItem {
+        avail_to_sell_qty: m.get("availToSellQty").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        modified_date: m.get("modifiedDate").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        on_hand_qty: m.get("onHandQty").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        ship_node_type: m.get("shipNodeType").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    })
+}
+
+fn iface_inventory__get_multi_node_inventory_for_all_sku_and_all_ship_nodes_response__from_json(v: &Value) -> Option<iface_inventory::GetMultiNodeInventoryForAllSkuAndAllShipNodesResponse> {
+    let m = v.as_object()?;
+    Some(iface_inventory::GetMultiNodeInventoryForAllSkuAndAllShipNodesResponse {
+        elements: m.get("elements").filter(|v| !v.is_null()).and_then(|v| iface_inventory__get_multi_node_inventory_for_all_sku_and_all_ship_nodes_response_elements__from_json(v)),
+        meta: m.get("meta").filter(|v| !v.is_null()).and_then(|v| iface_inventory__get_multi_node_inventory_for_all_sku_and_all_ship_nodes_response_meta__from_json(v)),
+    })
+}
+
+fn iface_inventory__get_multi_node_inventory_for_all_sku_and_all_ship_nodes_response_elements__from_json(v: &Value) -> Option<iface_inventory::GetMultiNodeInventoryForAllSkuAndAllShipNodesResponseElements> {
+    let m = v.as_object()?;
+    Some(iface_inventory::GetMultiNodeInventoryForAllSkuAndAllShipNodesResponseElements {
+        inventories: m.get("inventories").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| iface_inventory__get_multi_node_inventory_for_all_sku_and_all_ship_nodes_response_elements_inventories_item__from_json(x)).collect())),
+    })
+}
+
+fn iface_inventory__get_multi_node_inventory_for_all_sku_and_all_ship_nodes_response_elements_inventories_item__from_json(v: &Value) -> Option<iface_inventory::GetMultiNodeInventoryForAllSkuAndAllShipNodesResponseElementsInventoriesItem> {
+    let m = v.as_object()?;
+    Some(iface_inventory::GetMultiNodeInventoryForAllSkuAndAllShipNodesResponseElementsInventoriesItem {
+        nodes: m.get("nodes").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| iface_inventory__get_multi_node_inventory_for_all_sku_and_all_ship_nodes_response_elements_inventories_item_nodes_item__from_json(x)).collect())),
+        sku: m.get("sku").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    })
+}
+
+fn iface_inventory__get_multi_node_inventory_for_all_sku_and_all_ship_nodes_response_elements_inventories_item_nodes_item__from_json(v: &Value) -> Option<iface_inventory::GetMultiNodeInventoryForAllSkuAndAllShipNodesResponseElementsInventoriesItemNodesItem> {
+    let m = v.as_object()?;
+    Some(iface_inventory::GetMultiNodeInventoryForAllSkuAndAllShipNodesResponseElementsInventoriesItemNodesItem {
+        avail_to_sell_qty: m.get("availToSellQty").filter(|v| !v.is_null()).and_then(|v| iface_inventory__get_multi_node_inventory_for_all_sku_and_all_ship_nodes_response_elements_inventories_item_nodes_item_avail_to_sell_qty__from_json(v)),
+        input_qty: m.get("inputQty").filter(|v| !v.is_null()).and_then(|v| iface_inventory__get_multi_node_inventory_for_all_sku_and_all_ship_nodes_response_elements_inventories_item_nodes_item_input_qty__from_json(v)),
+        reserved_qty: m.get("reservedQty").filter(|v| !v.is_null()).and_then(|v| iface_inventory__get_multi_node_inventory_for_all_sku_and_all_ship_nodes_response_elements_inventories_item_nodes_item_reserved_qty__from_json(v)),
+        ship_node: m.get("shipNode").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    })
+}
+
+fn iface_inventory__get_multi_node_inventory_for_all_sku_and_all_ship_nodes_response_elements_inventories_item_nodes_item_avail_to_sell_qty__from_json(v: &Value) -> Option<iface_inventory::GetMultiNodeInventoryForAllSkuAndAllShipNodesResponseElementsInventoriesItemNodesItemAvailToSellQty> {
+    let m = v.as_object()?;
+    Some(iface_inventory::GetMultiNodeInventoryForAllSkuAndAllShipNodesResponseElementsInventoriesItemNodesItemAvailToSellQty {
+        amount: m.get("amount").and_then(|v| (v).as_f64()).unwrap_or_default(),
+        unit: match m.get("unit").and_then(|v| (v).as_str().and_then(iface_inventory__get_multi_node_inventory_for_all_sku_and_all_ship_nodes_response_elements_inventories_item_nodes_item_avail_to_sell_qty_unit_enum__from_str)) { Some(x) => x, None => return None },
+    })
+}
+
+fn iface_inventory__get_multi_node_inventory_for_all_sku_and_all_ship_nodes_response_elements_inventories_item_nodes_item_input_qty__from_json(v: &Value) -> Option<iface_inventory::GetMultiNodeInventoryForAllSkuAndAllShipNodesResponseElementsInventoriesItemNodesItemInputQty> {
+    let m = v.as_object()?;
+    Some(iface_inventory::GetMultiNodeInventoryForAllSkuAndAllShipNodesResponseElementsInventoriesItemNodesItemInputQty {
+        amount: m.get("amount").and_then(|v| (v).as_f64()).unwrap_or_default(),
+        unit: match m.get("unit").and_then(|v| (v).as_str().and_then(iface_inventory__get_multi_node_inventory_for_all_sku_and_all_ship_nodes_response_elements_inventories_item_nodes_item_avail_to_sell_qty_unit_enum__from_str)) { Some(x) => x, None => return None },
+    })
+}
+
+fn iface_inventory__get_multi_node_inventory_for_all_sku_and_all_ship_nodes_response_elements_inventories_item_nodes_item_reserved_qty__from_json(v: &Value) -> Option<iface_inventory::GetMultiNodeInventoryForAllSkuAndAllShipNodesResponseElementsInventoriesItemNodesItemReservedQty> {
+    let m = v.as_object()?;
+    Some(iface_inventory::GetMultiNodeInventoryForAllSkuAndAllShipNodesResponseElementsInventoriesItemNodesItemReservedQty {
+        amount: m.get("amount").and_then(|v| (v).as_f64()).unwrap_or_default(),
+        unit: match m.get("unit").and_then(|v| (v).as_str().and_then(iface_inventory__get_multi_node_inventory_for_all_sku_and_all_ship_nodes_response_elements_inventories_item_nodes_item_avail_to_sell_qty_unit_enum__from_str)) { Some(x) => x, None => return None },
+    })
+}
+
+fn iface_inventory__get_multi_node_inventory_for_all_sku_and_all_ship_nodes_response_meta__from_json(v: &Value) -> Option<iface_inventory::GetMultiNodeInventoryForAllSkuAndAllShipNodesResponseMeta> {
+    let m = v.as_object()?;
+    Some(iface_inventory::GetMultiNodeInventoryForAllSkuAndAllShipNodesResponseMeta {
+        next_cursor: m.get("nextCursor").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        total_count: m.get("totalCount").filter(|v| !v.is_null()).and_then(|v| (v).as_f64()),
+    })
+}
+
+fn iface_inventory__get_multi_node_inventory_for_sku_and_all_shipnodes_response__from_json(v: &Value) -> Option<iface_inventory::GetMultiNodeInventoryForSkuAndAllShipnodesResponse> {
+    let m = v.as_object()?;
+    Some(iface_inventory::GetMultiNodeInventoryForSkuAndAllShipnodesResponse {
+        nodes: m.get("nodes").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| iface_inventory__get_multi_node_inventory_for_sku_and_all_shipnodes_response_nodes_item__from_json(x)).collect())),
+        sku: m.get("sku").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    })
+}
+
+fn iface_inventory__get_multi_node_inventory_for_sku_and_all_shipnodes_response_nodes_item__from_json(v: &Value) -> Option<iface_inventory::GetMultiNodeInventoryForSkuAndAllShipnodesResponseNodesItem> {
+    let m = v.as_object()?;
+    Some(iface_inventory::GetMultiNodeInventoryForSkuAndAllShipnodesResponseNodesItem {
+        avail_to_sell_qty: m.get("availToSellQty").filter(|v| !v.is_null()).and_then(|v| iface_inventory__get_multi_node_inventory_for_sku_and_all_shipnodes_response_nodes_item_avail_to_sell_qty__from_json(v)),
+        errors: m.get("errors").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| iface_inventory__get_multi_node_inventory_for_sku_and_all_shipnodes_response_nodes_item_errors_item__from_json(x)).collect())),
+        input_qty: m.get("inputQty").filter(|v| !v.is_null()).and_then(|v| iface_inventory__get_multi_node_inventory_for_sku_and_all_shipnodes_response_nodes_item_input_qty__from_json(v)),
+        reserved_qty: m.get("reservedQty").filter(|v| !v.is_null()).and_then(|v| iface_inventory__get_multi_node_inventory_for_sku_and_all_shipnodes_response_nodes_item_reserved_qty__from_json(v)),
+        ship_node: m.get("shipNode").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    })
+}
+
+fn iface_inventory__get_multi_node_inventory_for_sku_and_all_shipnodes_response_nodes_item_avail_to_sell_qty__from_json(v: &Value) -> Option<iface_inventory::GetMultiNodeInventoryForSkuAndAllShipnodesResponseNodesItemAvailToSellQty> {
+    let m = v.as_object()?;
+    Some(iface_inventory::GetMultiNodeInventoryForSkuAndAllShipnodesResponseNodesItemAvailToSellQty {
+        amount: m.get("amount").and_then(|v| (v).as_f64()).unwrap_or_default(),
+        unit: match m.get("unit").and_then(|v| (v).as_str().and_then(iface_inventory__get_multi_node_inventory_for_all_sku_and_all_ship_nodes_response_elements_inventories_item_nodes_item_avail_to_sell_qty_unit_enum__from_str)) { Some(x) => x, None => return None },
+    })
+}
+
+fn iface_inventory__get_multi_node_inventory_for_sku_and_all_shipnodes_response_nodes_item_errors_item__from_json(v: &Value) -> Option<iface_inventory::GetMultiNodeInventoryForSkuAndAllShipnodesResponseNodesItemErrorsItem> {
+    let m = v.as_object()?;
+    Some(iface_inventory::GetMultiNodeInventoryForSkuAndAllShipnodesResponseNodesItemErrorsItem {
+        category: m.get("category").filter(|v| !v.is_null()).and_then(|v| (v).as_str().and_then(iface_inventory__get_multi_node_inventory_for_sku_and_all_shipnodes_response_nodes_item_errors_item_category_enum__from_str)),
+        causes: m.get("causes").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| iface_inventory__get_multi_node_inventory_for_sku_and_all_shipnodes_response_nodes_item_errors_item_causes_item__from_json(x)).collect())),
+        code: m.get("code").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        description: m.get("description").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        error_identifiers: m.get("errorIdentifiers").filter(|v| !v.is_null()).and_then(|v| iface_inventory__get_multi_node_inventory_for_sku_and_all_shipnodes_response_nodes_item_errors_item_error_identifiers__from_json(v)),
+        field: m.get("field").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        info: m.get("info").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        severity: m.get("severity").filter(|v| !v.is_null()).and_then(|v| (v).as_str().and_then(iface_inventory__get_multi_node_inventory_for_sku_and_all_shipnodes_response_nodes_item_errors_item_severity_enum__from_str)),
+    })
+}
+
+fn iface_inventory__get_multi_node_inventory_for_sku_and_all_shipnodes_response_nodes_item_errors_item_causes_item__from_json(v: &Value) -> Option<iface_inventory::GetMultiNodeInventoryForSkuAndAllShipnodesResponseNodesItemErrorsItemCausesItem> {
+    let m = v.as_object()?;
+    Some(iface_inventory::GetMultiNodeInventoryForSkuAndAllShipnodesResponseNodesItemErrorsItemCausesItem {
+        code: m.get("code").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        description: m.get("description").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        field: m.get("field").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        type_op: m.get("type").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    })
+}
+
+fn iface_inventory__get_multi_node_inventory_for_sku_and_all_shipnodes_response_nodes_item_errors_item_error_identifiers__from_json(v: &Value) -> Option<iface_inventory::GetMultiNodeInventoryForSkuAndAllShipnodesResponseNodesItemErrorsItemErrorIdentifiers> {
+    let m = v.as_object()?;
+    Some(iface_inventory::GetMultiNodeInventoryForSkuAndAllShipnodesResponseNodesItemErrorsItemErrorIdentifiers {
+        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    })
+}
+
+fn iface_inventory__get_multi_node_inventory_for_sku_and_all_shipnodes_response_nodes_item_input_qty__from_json(v: &Value) -> Option<iface_inventory::GetMultiNodeInventoryForSkuAndAllShipnodesResponseNodesItemInputQty> {
+    let m = v.as_object()?;
+    Some(iface_inventory::GetMultiNodeInventoryForSkuAndAllShipnodesResponseNodesItemInputQty {
+        amount: m.get("amount").and_then(|v| (v).as_f64()).unwrap_or_default(),
+        unit: match m.get("unit").and_then(|v| (v).as_str().and_then(iface_inventory__get_multi_node_inventory_for_all_sku_and_all_ship_nodes_response_elements_inventories_item_nodes_item_avail_to_sell_qty_unit_enum__from_str)) { Some(x) => x, None => return None },
+    })
+}
+
+fn iface_inventory__get_multi_node_inventory_for_sku_and_all_shipnodes_response_nodes_item_reserved_qty__from_json(v: &Value) -> Option<iface_inventory::GetMultiNodeInventoryForSkuAndAllShipnodesResponseNodesItemReservedQty> {
+    let m = v.as_object()?;
+    Some(iface_inventory::GetMultiNodeInventoryForSkuAndAllShipnodesResponseNodesItemReservedQty {
+        amount: m.get("amount").and_then(|v| (v).as_f64()).unwrap_or_default(),
+        unit: match m.get("unit").and_then(|v| (v).as_str().and_then(iface_inventory__get_multi_node_inventory_for_all_sku_and_all_ship_nodes_response_elements_inventories_item_nodes_item_avail_to_sell_qty_unit_enum__from_str)) { Some(x) => x, None => return None },
+    })
+}
+
+fn iface_inventory__update_multi_node_inventory_response__from_json(v: &Value) -> Option<iface_inventory::UpdateMultiNodeInventoryResponse> {
+    let m = v.as_object()?;
+    Some(iface_inventory::UpdateMultiNodeInventoryResponse {
+        nodes: m.get("nodes").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| iface_inventory__update_multi_node_inventory_response_nodes_item__from_json(x)).collect())),
+        sku: m.get("sku").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    })
+}
+
+fn iface_inventory__update_multi_node_inventory_response_nodes_item__from_json(v: &Value) -> Option<iface_inventory::UpdateMultiNodeInventoryResponseNodesItem> {
+    let m = v.as_object()?;
+    Some(iface_inventory::UpdateMultiNodeInventoryResponseNodesItem {
+        errors: m.get("errors").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| iface_inventory__update_multi_node_inventory_response_nodes_item_errors_item__from_json(x)).collect())),
+        ship_node: m.get("shipNode").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        status: m.get("status").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    })
+}
+
+fn iface_inventory__update_multi_node_inventory_response_nodes_item_errors_item__from_json(v: &Value) -> Option<iface_inventory::UpdateMultiNodeInventoryResponseNodesItemErrorsItem> {
+    let m = v.as_object()?;
+    Some(iface_inventory::UpdateMultiNodeInventoryResponseNodesItemErrorsItem {
+        category: m.get("category").filter(|v| !v.is_null()).and_then(|v| (v).as_str().and_then(iface_inventory__get_multi_node_inventory_for_sku_and_all_shipnodes_response_nodes_item_errors_item_category_enum__from_str)),
+        causes: m.get("causes").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| iface_inventory__update_multi_node_inventory_response_nodes_item_errors_item_causes_item__from_json(x)).collect())),
+        code: m.get("code").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        description: m.get("description").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        error_identifiers: m.get("errorIdentifiers").filter(|v| !v.is_null()).and_then(|v| iface_inventory__update_multi_node_inventory_response_nodes_item_errors_item_error_identifiers__from_json(v)),
+        field: m.get("field").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        info: m.get("info").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        severity: m.get("severity").filter(|v| !v.is_null()).and_then(|v| (v).as_str().and_then(iface_inventory__get_multi_node_inventory_for_sku_and_all_shipnodes_response_nodes_item_errors_item_severity_enum__from_str)),
+    })
+}
+
+fn iface_inventory__update_multi_node_inventory_response_nodes_item_errors_item_causes_item__from_json(v: &Value) -> Option<iface_inventory::UpdateMultiNodeInventoryResponseNodesItemErrorsItemCausesItem> {
+    let m = v.as_object()?;
+    Some(iface_inventory::UpdateMultiNodeInventoryResponseNodesItemErrorsItemCausesItem {
+        code: m.get("code").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        description: m.get("description").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        field: m.get("field").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        type_op: m.get("type").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    })
+}
+
+fn iface_inventory__update_multi_node_inventory_response_nodes_item_errors_item_error_identifiers__from_json(v: &Value) -> Option<iface_inventory::UpdateMultiNodeInventoryResponseNodesItemErrorsItemErrorIdentifiers> {
+    let m = v.as_object()?;
+    Some(iface_inventory::UpdateMultiNodeInventoryResponseNodesItemErrorsItemErrorIdentifiers {
+        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    })
+}
+
+fn iface_inventory__get_inventory_response__from_json(v: &Value) -> Option<iface_inventory::GetInventoryResponse> {
+    let m = v.as_object()?;
+    Some(iface_inventory::GetInventoryResponse {
+        quantity: match m.get("quantity").and_then(|v| iface_inventory__get_inventory_response_quantity__from_json(v)) { Some(x) => x, None => return None },
+        sku: m.get("sku").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+    })
+}
+
+fn iface_inventory__get_inventory_response_quantity__from_json(v: &Value) -> Option<iface_inventory::GetInventoryResponseQuantity> {
+    let m = v.as_object()?;
+    Some(iface_inventory::GetInventoryResponseQuantity {
+        amount: m.get("amount").and_then(|v| (v).as_f64()).unwrap_or_default(),
+        unit: match m.get("unit").and_then(|v| (v).as_str().and_then(iface_inventory__get_multi_node_inventory_for_all_sku_and_all_ship_nodes_response_elements_inventories_item_nodes_item_avail_to_sell_qty_unit_enum__from_str)) { Some(x) => x, None => return None },
+    })
+}
+
+fn iface_inventory__update_inventory_for_an_item_response__from_json(v: &Value) -> Option<iface_inventory::UpdateInventoryForAnItemResponse> {
+    let m = v.as_object()?;
+    Some(iface_inventory::UpdateInventoryForAnItemResponse {
+        quantity: match m.get("quantity").and_then(|v| iface_inventory__update_inventory_for_an_item_response_quantity__from_json(v)) { Some(x) => x, None => return None },
+        sku: m.get("sku").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+    })
+}
+
+fn iface_inventory__update_inventory_for_an_item_response_quantity__from_json(v: &Value) -> Option<iface_inventory::UpdateInventoryForAnItemResponseQuantity> {
+    let m = v.as_object()?;
+    Some(iface_inventory::UpdateInventoryForAnItemResponseQuantity {
+        amount: m.get("amount").and_then(|v| (v).as_f64()).unwrap_or_default(),
+        unit: match m.get("unit").and_then(|v| (v).as_str().and_then(iface_inventory__get_multi_node_inventory_for_all_sku_and_all_ship_nodes_response_elements_inventories_item_nodes_item_avail_to_sell_qty_unit_enum__from_str)) { Some(x) => x, None => return None },
+    })
+}
+
+fn iface_inventory__get_multi_node_inventory_for_all_sku_and_all_ship_nodes_response_elements_inventories_item_nodes_item_avail_to_sell_qty_unit_enum__from_str(s: &str) -> Option<iface_inventory::GetMultiNodeInventoryForAllSkuAndAllShipNodesResponseElementsInventoriesItemNodesItemAvailToSellQtyUnitEnum> {
+    match s {
+        "EACH" => Some(iface_inventory::GetMultiNodeInventoryForAllSkuAndAllShipNodesResponseElementsInventoriesItemNodesItemAvailToSellQtyUnitEnum::Each),
+        _ => None,
+    }
+}
+
+fn iface_inventory__get_multi_node_inventory_for_sku_and_all_shipnodes_response_nodes_item_errors_item_category_enum__from_str(s: &str) -> Option<iface_inventory::GetMultiNodeInventoryForSkuAndAllShipnodesResponseNodesItemErrorsItemCategoryEnum> {
+    match s {
+        "APPLICATION" => Some(iface_inventory::GetMultiNodeInventoryForSkuAndAllShipnodesResponseNodesItemErrorsItemCategoryEnum::Application),
+        "SYSTEM" => Some(iface_inventory::GetMultiNodeInventoryForSkuAndAllShipnodesResponseNodesItemErrorsItemCategoryEnum::System),
+        "REQUEST" => Some(iface_inventory::GetMultiNodeInventoryForSkuAndAllShipnodesResponseNodesItemErrorsItemCategoryEnum::Request),
+        "DATA" => Some(iface_inventory::GetMultiNodeInventoryForSkuAndAllShipnodesResponseNodesItemErrorsItemCategoryEnum::Data),
+        _ => None,
+    }
+}
+
+fn iface_inventory__get_multi_node_inventory_for_sku_and_all_shipnodes_response_nodes_item_errors_item_severity_enum__from_str(s: &str) -> Option<iface_inventory::GetMultiNodeInventoryForSkuAndAllShipnodesResponseNodesItemErrorsItemSeverityEnum> {
+    match s {
+        "INFO" => Some(iface_inventory::GetMultiNodeInventoryForSkuAndAllShipnodesResponseNodesItemErrorsItemSeverityEnum::Info),
+        "WARN" => Some(iface_inventory::GetMultiNodeInventoryForSkuAndAllShipnodesResponseNodesItemErrorsItemSeverityEnum::Warn),
+        "ERROR" => Some(iface_inventory::GetMultiNodeInventoryForSkuAndAllShipnodesResponseNodesItemErrorsItemSeverityEnum::Error),
+        _ => None,
+    }
+}
+
+fn iface_inventory__update_bulk_inventory__ok(body: String) -> Result<iface_inventory::UpdateBulkInventoryResponse, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match iface_inventory__update_bulk_inventory_response__from_json(&v) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_inventory__update_bulk_inventory__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
+fn iface_inventory__get_wfs_inventory__ok(body: String) -> Result<iface_inventory::GetWfsInventoryResponse, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match iface_inventory__get_wfs_inventory_response__from_json(&v) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_inventory__get_wfs_inventory__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
+fn iface_inventory__get_multi_node_inventory_for_all_sku_and_all_ship_nodes__ok(body: String) -> Result<iface_inventory::GetMultiNodeInventoryForAllSkuAndAllShipNodesResponse, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match iface_inventory__get_multi_node_inventory_for_all_sku_and_all_ship_nodes_response__from_json(&v) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_inventory__get_multi_node_inventory_for_all_sku_and_all_ship_nodes__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
+fn iface_inventory__get_multi_node_inventory_for_sku_and_all_shipnodes__ok(body: String) -> Result<iface_inventory::GetMultiNodeInventoryForSkuAndAllShipnodesResponse, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match iface_inventory__get_multi_node_inventory_for_sku_and_all_shipnodes_response__from_json(&v) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_inventory__get_multi_node_inventory_for_sku_and_all_shipnodes__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
+fn iface_inventory__update_multi_node_inventory__ok(body: String) -> Result<iface_inventory::UpdateMultiNodeInventoryResponse, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match iface_inventory__update_multi_node_inventory_response__from_json(&v) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_inventory__update_multi_node_inventory__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
+fn iface_inventory__get_inventory__ok(body: String) -> Result<iface_inventory::GetInventoryResponse, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match iface_inventory__get_inventory_response__from_json(&v) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_inventory__get_inventory__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
+fn iface_inventory__update_inventory_for_an_item__ok(body: String) -> Result<iface_inventory::UpdateInventoryForAnItemResponse, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match iface_inventory__update_inventory_for_an_item_response__from_json(&v) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_inventory__update_inventory_for_an_item__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
 impl iface_inventory::Guest for crate::Component {
-    fn update_bulk_inventory(params: iface_inventory::UpdateBulkInventoryParams) -> Result<String, String> {
+    fn update_bulk_inventory(params: iface_inventory::UpdateBulkInventoryParams) -> Result<iface_inventory::UpdateBulkInventoryResponse, String> {
         let json = iface_inventory__update_bulk_inventory_params__to_json(&params);
-        dispatch(&OP_INVENTORY_UPDATE_BULK_INVENTORY, json)
+        match dispatch(&OP_INVENTORY_UPDATE_BULK_INVENTORY, json).and_then(iface_inventory__update_bulk_inventory__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_inventory__update_bulk_inventory__err(e)),
+        }
     }
-    fn get_wfs_inventory(params: iface_inventory::GetWfsInventoryParams) -> Result<String, String> {
+    fn get_wfs_inventory(params: iface_inventory::GetWfsInventoryParams) -> Result<iface_inventory::GetWfsInventoryResponse, String> {
         let json = iface_inventory__get_wfs_inventory_params__to_json(&params);
-        dispatch(&OP_INVENTORY_GET_WFS_INVENTORY, json)
+        match dispatch(&OP_INVENTORY_GET_WFS_INVENTORY, json).and_then(iface_inventory__get_wfs_inventory__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_inventory__get_wfs_inventory__err(e)),
+        }
     }
-    fn get_multi_node_inventory_for_all_sku_and_all_ship_nodes(params: iface_inventory::GetMultiNodeInventoryForAllSkuAndAllShipNodesParams) -> Result<String, String> {
+    fn get_multi_node_inventory_for_all_sku_and_all_ship_nodes(params: iface_inventory::GetMultiNodeInventoryForAllSkuAndAllShipNodesParams) -> Result<iface_inventory::GetMultiNodeInventoryForAllSkuAndAllShipNodesResponse, String> {
         let json = iface_inventory__get_multi_node_inventory_for_all_sku_and_all_ship_nodes_params__to_json(&params);
-        dispatch(&OP_INVENTORY_GET_MULTI_NODE_INVENTORY_FOR_ALL_SKU_AND_ALL_SHIP_NODES, json)
+        match dispatch(&OP_INVENTORY_GET_MULTI_NODE_INVENTORY_FOR_ALL_SKU_AND_ALL_SHIP_NODES, json).and_then(iface_inventory__get_multi_node_inventory_for_all_sku_and_all_ship_nodes__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_inventory__get_multi_node_inventory_for_all_sku_and_all_ship_nodes__err(e)),
+        }
     }
-    fn get_multi_node_inventory_for_sku_and_all_shipnodes(params: iface_inventory::GetMultiNodeInventoryForSkuAndAllShipnodesParams) -> Result<String, String> {
+    fn get_multi_node_inventory_for_sku_and_all_shipnodes(params: iface_inventory::GetMultiNodeInventoryForSkuAndAllShipnodesParams) -> Result<iface_inventory::GetMultiNodeInventoryForSkuAndAllShipnodesResponse, String> {
         let json = iface_inventory__get_multi_node_inventory_for_sku_and_all_shipnodes_params__to_json(&params);
-        dispatch(&OP_INVENTORY_GET_MULTI_NODE_INVENTORY_FOR_SKU_AND_ALL_SHIPNODES, json)
+        match dispatch(&OP_INVENTORY_GET_MULTI_NODE_INVENTORY_FOR_SKU_AND_ALL_SHIPNODES, json).and_then(iface_inventory__get_multi_node_inventory_for_sku_and_all_shipnodes__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_inventory__get_multi_node_inventory_for_sku_and_all_shipnodes__err(e)),
+        }
     }
-    fn update_multi_node_inventory(params: iface_inventory::UpdateMultiNodeInventoryParams) -> Result<String, String> {
+    fn update_multi_node_inventory(params: iface_inventory::UpdateMultiNodeInventoryParams) -> Result<iface_inventory::UpdateMultiNodeInventoryResponse, String> {
         let json = iface_inventory__update_multi_node_inventory_params__to_json(&params);
-        dispatch(&OP_INVENTORY_UPDATE_MULTI_NODE_INVENTORY, json)
+        match dispatch(&OP_INVENTORY_UPDATE_MULTI_NODE_INVENTORY, json).and_then(iface_inventory__update_multi_node_inventory__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_inventory__update_multi_node_inventory__err(e)),
+        }
     }
-    fn get_inventory(params: iface_inventory::GetInventoryParams) -> Result<String, String> {
+    fn get_inventory(params: iface_inventory::GetInventoryParams) -> Result<iface_inventory::GetInventoryResponse, String> {
         let json = iface_inventory__get_inventory_params__to_json(&params);
-        dispatch(&OP_INVENTORY_GET_INVENTORY, json)
+        match dispatch(&OP_INVENTORY_GET_INVENTORY, json).and_then(iface_inventory__get_inventory__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_inventory__get_inventory__err(e)),
+        }
     }
-    fn update_inventory_for_an_item(params: iface_inventory::UpdateInventoryForAnItemParams) -> Result<String, String> {
+    fn update_inventory_for_an_item(params: iface_inventory::UpdateInventoryForAnItemParams) -> Result<iface_inventory::UpdateInventoryForAnItemResponse, String> {
         let json = iface_inventory__update_inventory_for_an_item_params__to_json(&params);
-        dispatch(&OP_INVENTORY_UPDATE_INVENTORY_FOR_AN_ITEM, json)
+        match dispatch(&OP_INVENTORY_UPDATE_INVENTORY_FOR_AN_ITEM, json).and_then(iface_inventory__update_inventory_for_an_item__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_inventory__update_inventory_for_an_item__err(e)),
+        }
     }
 }
 

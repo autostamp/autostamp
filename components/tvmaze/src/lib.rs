@@ -44,10 +44,15 @@ pub(crate) enum FieldLocation {
     Body,
 }
 
-/// A single operation parameter: the snake-case key it carries in the params JSON and where
-/// it belongs in the request.
+/// A single operation parameter. `snake` keys the field in the internal params JSON (and, for a
+/// path field, matches the `{snake}` placeholder in the path template); `wire` is the verbatim name
+/// the field takes on the HTTP wire (query key, header name, or body property). The two differ
+/// whenever the source name isn't already snake_case (e.g. `dryRun` → snake `dry_run`, wire
+/// `dryRun`), and let distinct inputs that share a snake key (`DateCreated`, `DateCreated<`) still
+/// travel under their true names.
 pub(crate) struct FieldSpec {
     pub(crate) snake: &'static str,
+    pub(crate) wire: &'static str,
     pub(crate) location: FieldLocation,
 }
 
@@ -71,6 +76,16 @@ pub(crate) struct AuthApply {
     pub(crate) kind: AuthKind,
 }
 
+/// The failure modes of [`dispatch`], kept structured so each generated operation can map them
+/// onto its own typed error: an `Http` failure carries the response status and body (routed to
+/// the matching error-variant case), while a `Transport` failure carries a message for the
+/// catch-all case (a secret lookup, connection, or decode failure that never produced an HTTP
+/// status).
+pub(crate) enum DispatchError {
+    Http { status: u16, body: String },
+    Transport(String),
+}
+
 /// A single API operation: HTTP method, path template (with `{snake}` placeholders), the
 /// parameter fields, and the security schemes to apply.
 pub(crate) struct OpSpec {
@@ -81,8 +96,9 @@ pub(crate) struct OpSpec {
 }
 
 /// Execute `op` with the supplied `params` (a JSON object keyed by snake-case field names)
-/// and return the response body as a string, or an error message.
-pub(crate) fn dispatch(op: &OpSpec, params: Value) -> Result<String, String> {
+/// and return the raw 2xx response body, or a structured [`DispatchError`] the caller maps
+/// onto the operation's typed error.
+pub(crate) fn dispatch(op: &OpSpec, params: Value) -> Result<String, DispatchError> {
     let obj = match &params {
         Value::Object(map) => Some(map),
         _ => None,
@@ -105,10 +121,10 @@ pub(crate) fn dispatch(op: &OpSpec, params: Value) -> Result<String, String> {
                 let placeholder = format!("{{{}}}", field.snake);
                 path = path.replace(&placeholder, &percent_encode(&scalar(value)));
             }
-            FieldLocation::Query => query.push((field.snake.to_string(), scalar(value))),
-            FieldLocation::Header => headers.push((field.snake.to_string(), scalar(value))),
+            FieldLocation::Query => query.push((field.wire.to_string(), scalar(value))),
+            FieldLocation::Header => headers.push((field.wire.to_string(), scalar(value))),
             FieldLocation::Body => {
-                body.insert(field.snake.to_string(), value.clone());
+                body.insert(field.wire.to_string(), value.clone());
             }
         }
     }
@@ -116,7 +132,7 @@ pub(crate) fn dispatch(op: &OpSpec, params: Value) -> Result<String, String> {
     // Apply each resolved security scheme, sourcing its value from wasmcloud:secrets.
     let mut cookies: Vec<String> = Vec::new();
     for apply in op.auth {
-        let secret = fetch_secret(apply.secret_key)?;
+        let secret = fetch_secret(apply.secret_key).map_err(DispatchError::Transport)?;
         match &apply.kind {
             AuthKind::Bearer => headers.push(("authorization".into(), format!("Bearer {secret}"))),
             AuthKind::Basic => {
@@ -177,17 +193,18 @@ fn fetch_secret(key: &str) -> Result<String, String> {
 }
 
 /// Build and send the outgoing request with `wstd`, returning the response body on a 2xx
-/// status. The generated guest exports are synchronous, so the async `wstd` client is driven
-/// to completion on a local reactor via `wstd::runtime::block_on`.
+/// status and a structured [`DispatchError`] otherwise. The generated guest exports are
+/// synchronous, so the async `wstd` client is driven to completion on a local reactor via
+/// `wstd::runtime::block_on`.
 fn perform(
     method: &str,
     path_with_query: &str,
     headers: &[(String, String)],
     body: &[u8],
-) -> Result<String, String> {
+) -> Result<String, DispatchError> {
     let url = join_url(crate::BASE_URL, path_with_query);
     let method = Method::from_bytes(method.as_bytes())
-        .map_err(|err| format!("invalid HTTP method `{method}`: {err}"))?;
+        .map_err(|err| DispatchError::Transport(format!("invalid HTTP method `{method}`: {err}")))?;
 
     let mut builder = Request::builder().method(method).uri(url);
     for (name, value) in headers {
@@ -199,27 +216,29 @@ fn perform(
         } else {
             Body::from(body.to_vec())
         })
-        .map_err(|err| format!("failed to build request: {err}"))?;
+        .map_err(|err| DispatchError::Transport(format!("failed to build request: {err}")))?;
 
     wstd::runtime::block_on(async move {
         let client = Client::new();
         let response = client
             .send(request)
             .await
-            .map_err(|err| format!("request failed: {err:#}"))?;
+            .map_err(|err| DispatchError::Transport(format!("request failed: {err:#}")))?;
 
         let status = response.status().as_u16();
         let mut response_body = response.into_body();
-        let bytes = response_body
-            .contents()
-            .await
-            .map_err(|err| format!("failed to read response body: {err:#}"))?;
+        let bytes = response_body.contents().await.map_err(|err| {
+            DispatchError::Transport(format!("failed to read response body: {err:#}"))
+        })?;
         let body_text = String::from_utf8_lossy(bytes).into_owned();
 
         if (200..300).contains(&status) {
             Ok(body_text)
         } else {
-            Err(format!("HTTP {status}: {body_text}"))
+            Err(DispatchError::Http {
+                status,
+                body: body_text,
+            })
         }
     })
 }
@@ -288,7 +307,7 @@ const OP_AUTH_POST_AUTH_POLL: OpSpec = OpSpec {
     method: "POST",
     path_template: "/auth/poll",
     fields: &[
-        FieldSpec { snake: "token", location: FieldLocation::Body },
+        FieldSpec { snake: "token", wire: "token", location: FieldLocation::Body },
     ],
     auth: &[
         AuthApply { secret_key: "usertoken", kind: AuthKind::Basic },
@@ -299,8 +318,8 @@ const OP_AUTH_POST_AUTH_START: OpSpec = OpSpec {
     method: "POST",
     path_template: "/auth/start",
     fields: &[
-        FieldSpec { snake: "email", location: FieldLocation::Body },
-        FieldSpec { snake: "email_confirmation", location: FieldLocation::Body },
+        FieldSpec { snake: "email", wire: "email", location: FieldLocation::Body },
+        FieldSpec { snake: "email_confirmation", wire: "email_confirmation", location: FieldLocation::Body },
     ],
     auth: &[
         AuthApply { secret_key: "usertoken", kind: AuthKind::Basic },
@@ -317,6 +336,26 @@ const OP_AUTH_GET_AUTH_VALIDATE: OpSpec = OpSpec {
     ],
 };
 
+fn iface_auth__post_auth_poll_response__to_json(p: &iface_auth::PostAuthPollResponse) -> Value {
+    let mut m = Map::new();
+    m.insert("apikey".into(), match (&p.apikey) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("username".into(), match (&p.username) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_auth__post_auth_start_response__to_json(p: &iface_auth::PostAuthStartResponse) -> Value {
+    let mut m = Map::new();
+    m.insert("confirm_url".into(), match (&p.confirm_url) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("token".into(), match (&p.token) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_auth__get_auth_validate_response__to_json(p: &iface_auth::GetAuthValidateResponse) -> Value {
+    let mut m = Map::new();
+    m.insert("premium".into(), match (&p.premium) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    Value::Object(m)
+}
+
 fn iface_auth__post_auth_poll_params__to_json(p: &iface_auth::PostAuthPollParams) -> Value {
     let mut m = Map::new();
     m.insert("token".into(), match (&p.token) { Some(v) => Value::String((v).clone()), None => Value::Null });
@@ -330,17 +369,116 @@ fn iface_auth__post_auth_start_params__to_json(p: &iface_auth::PostAuthStartPara
     Value::Object(m)
 }
 
+fn iface_auth__post_auth_poll_response__from_json(v: &Value) -> Option<iface_auth::PostAuthPollResponse> {
+    let m = v.as_object()?;
+    Some(iface_auth::PostAuthPollResponse {
+        apikey: m.get("apikey").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        username: m.get("username").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    })
+}
+
+fn iface_auth__post_auth_start_response__from_json(v: &Value) -> Option<iface_auth::PostAuthStartResponse> {
+    let m = v.as_object()?;
+    Some(iface_auth::PostAuthStartResponse {
+        confirm_url: m.get("confirm_url").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        token: m.get("token").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    })
+}
+
+fn iface_auth__get_auth_validate_response__from_json(v: &Value) -> Option<iface_auth::GetAuthValidateResponse> {
+    let m = v.as_object()?;
+    Some(iface_auth::GetAuthValidateResponse {
+        premium: m.get("premium").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+    })
+}
+
+fn iface_auth__post_auth_poll__ok(body: String) -> Result<iface_auth::PostAuthPollResponse, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match iface_auth__post_auth_poll_response__from_json(&v) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_auth__post_auth_poll__err(e: crate::runtime::DispatchError) -> iface_auth::PostAuthPollError {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => match status {
+            403u16 => iface_auth::PostAuthPollError::Forbidden(body),
+            404u16 => iface_auth::PostAuthPollError::NotFound(body),
+            429u16 => iface_auth::PostAuthPollError::TooManyRequests(body),
+            _ => iface_auth::PostAuthPollError::Other(body),
+        },
+        crate::runtime::DispatchError::Transport(m) => iface_auth::PostAuthPollError::Other(m),
+    }
+}
+
+fn iface_auth__post_auth_start__ok(body: String) -> Result<iface_auth::PostAuthStartResponse, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match iface_auth__post_auth_start_response__from_json(&v) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_auth__post_auth_start__err(e: crate::runtime::DispatchError) -> iface_auth::PostAuthStartError {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => match status {
+            401u16 => iface_auth::PostAuthStartError::Unauthorized(body),
+            404u16 => iface_auth::PostAuthStartError::NotFound(body),
+            429u16 => iface_auth::PostAuthStartError::TooManyRequests(body),
+            _ => iface_auth::PostAuthStartError::Other(body),
+        },
+        crate::runtime::DispatchError::Transport(m) => iface_auth::PostAuthStartError::Other(m),
+    }
+}
+
+fn iface_auth__get_auth_validate__ok(body: String) -> Result<iface_auth::GetAuthValidateResponse, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match iface_auth__get_auth_validate_response__from_json(&v) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_auth__get_auth_validate__err(e: crate::runtime::DispatchError) -> iface_auth::GetAuthValidateError {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => match status {
+            401u16 => iface_auth::GetAuthValidateError::Unauthorized(body),
+            _ => iface_auth::GetAuthValidateError::Other(body),
+        },
+        crate::runtime::DispatchError::Transport(m) => iface_auth::GetAuthValidateError::Other(m),
+    }
+}
+
 impl iface_auth::Guest for crate::Component {
-    fn post_auth_poll(params: iface_auth::PostAuthPollParams) -> Result<String, String> {
+    fn post_auth_poll(params: iface_auth::PostAuthPollParams) -> Result<iface_auth::PostAuthPollResponse, iface_auth::PostAuthPollError> {
         let json = iface_auth__post_auth_poll_params__to_json(&params);
-        dispatch(&OP_AUTH_POST_AUTH_POLL, json)
+        match dispatch(&OP_AUTH_POST_AUTH_POLL, json).and_then(iface_auth__post_auth_poll__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_auth__post_auth_poll__err(e)),
+        }
     }
-    fn post_auth_start(params: iface_auth::PostAuthStartParams) -> Result<String, String> {
+    fn post_auth_start(params: iface_auth::PostAuthStartParams) -> Result<iface_auth::PostAuthStartResponse, iface_auth::PostAuthStartError> {
         let json = iface_auth__post_auth_start_params__to_json(&params);
-        dispatch(&OP_AUTH_POST_AUTH_START, json)
+        match dispatch(&OP_AUTH_POST_AUTH_START, json).and_then(iface_auth__post_auth_start__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_auth__post_auth_start__err(e)),
+        }
     }
-    fn get_auth_validate() -> Result<String, String> {
-        dispatch(&OP_AUTH_GET_AUTH_VALIDATE, Value::Object(Map::new()))
+    fn get_auth_validate() -> Result<iface_auth::GetAuthValidateResponse, iface_auth::GetAuthValidateError> {
+        match dispatch(&OP_AUTH_GET_AUTH_VALIDATE, Value::Object(Map::new())).and_then(iface_auth__get_auth_validate__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_auth__get_auth_validate__err(e)),
+        }
     }
 }
 use crate::exports::autostamp::tvmaze::scrobbling as iface_scrobbling;
@@ -349,7 +487,7 @@ const OP_SCROBBLING_POST_SCROBBLE_EPISODES: OpSpec = OpSpec {
     method: "POST",
     path_template: "/scrobble/episodes",
     fields: &[
-        FieldSpec { snake: "body", location: FieldLocation::Body },
+        FieldSpec { snake: "body", wire: "body", location: FieldLocation::Body },
     ],
     auth: &[
         AuthApply { secret_key: "usertoken", kind: AuthKind::Basic },
@@ -360,10 +498,11 @@ const OP_SCROBBLING_PUT_SCROBBLE_EPISODES_EPISODE_ID: OpSpec = OpSpec {
     method: "PUT",
     path_template: "/scrobble/episodes/{episode_id}",
     fields: &[
-        FieldSpec { snake: "embedded", location: FieldLocation::Body },
-        FieldSpec { snake: "episode_id", location: FieldLocation::Body },
-        FieldSpec { snake: "marked_at", location: FieldLocation::Body },
-        FieldSpec { snake: "type", location: FieldLocation::Body },
+        FieldSpec { snake: "episode_id", wire: "episode_id", location: FieldLocation::Path },
+        FieldSpec { snake: "embedded", wire: "_embedded", location: FieldLocation::Body },
+        FieldSpec { snake: "episode_id_v2", wire: "episode_id", location: FieldLocation::Body },
+        FieldSpec { snake: "marked_at", wire: "marked_at", location: FieldLocation::Body },
+        FieldSpec { snake: "type", wire: "type", location: FieldLocation::Body },
     ],
     auth: &[
         AuthApply { secret_key: "usertoken", kind: AuthKind::Basic },
@@ -374,10 +513,10 @@ const OP_SCROBBLING_POST_SCROBBLE_SHOWS: OpSpec = OpSpec {
     method: "POST",
     path_template: "/scrobble/shows",
     fields: &[
-        FieldSpec { snake: "tvmaze_id", location: FieldLocation::Query },
-        FieldSpec { snake: "thetvdb_id", location: FieldLocation::Query },
-        FieldSpec { snake: "imdb_id", location: FieldLocation::Query },
-        FieldSpec { snake: "body", location: FieldLocation::Body },
+        FieldSpec { snake: "tvmaze_id", wire: "tvmaze_id", location: FieldLocation::Query },
+        FieldSpec { snake: "thetvdb_id", wire: "thetvdb_id", location: FieldLocation::Query },
+        FieldSpec { snake: "imdb_id", wire: "imdb_id", location: FieldLocation::Query },
+        FieldSpec { snake: "body", wire: "body", location: FieldLocation::Body },
     ],
     auth: &[
         AuthApply { secret_key: "usertoken", kind: AuthKind::Basic },
@@ -388,11 +527,19 @@ const OP_SCROBBLING_GET_SCROBBLE_SHOWS_SHOW_ID: OpSpec = OpSpec {
     method: "GET",
     path_template: "/scrobble/shows/{show_id}",
     fields: &[
+        FieldSpec { snake: "show_id", wire: "show_id", location: FieldLocation::Path },
+        FieldSpec { snake: "embed", wire: "embed", location: FieldLocation::Query },
     ],
     auth: &[
         AuthApply { secret_key: "usertoken", kind: AuthKind::Basic },
     ],
 };
+
+fn iface_scrobbling__get_scrobble_shows_show_id_embed_enum__to_str(e: &iface_scrobbling::GetScrobbleShowsShowIdEmbedEnum) -> &'static str {
+    match e {
+        iface_scrobbling::GetScrobbleShowsShowIdEmbedEnum::Episode => "episode",
+    }
+}
 
 fn iface_scrobbling__post_scrobble_episodes_body_item__to_json(p: &iface_scrobbling::PostScrobbleEpisodesBodyItem) -> Value {
     let mut m = Map::new();
@@ -405,6 +552,21 @@ fn iface_scrobbling__post_scrobble_episodes_body_item__to_json(p: &iface_scrobbl
 fn iface_scrobbling__mark_type__to_json(p: &iface_scrobbling::MarkType) -> Value {
     let mut m = Map::new();
     m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_scrobbling__bulk_response__to_json(p: &iface_scrobbling::BulkResponse) -> Value {
+    let mut m = Map::new();
+    m.insert("value".into(), Value::String((&p.value).clone()));
+    Value::Object(m)
+}
+
+fn iface_scrobbling__marked_episode__to_json(p: &iface_scrobbling::MarkedEpisode) -> Value {
+    let mut m = Map::new();
+    m.insert("_embedded".into(), match (&p.embedded) { Some(v) => iface_scrobbling__marked_episode_embedded__to_json(v), None => Value::Null });
+    m.insert("episode_id".into(), match (&p.episode_id) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("marked_at".into(), match (&p.marked_at) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("type".into(), match (&p.type_op) { Some(v) => iface_scrobbling__mark_type__to_json(v), None => Value::Null });
     Value::Object(m)
 }
 
@@ -438,8 +600,9 @@ fn iface_scrobbling__post_scrobble_episodes_params__to_json(p: &iface_scrobbling
 
 fn iface_scrobbling__put_scrobble_episodes_episode_id_params__to_json(p: &iface_scrobbling::PutScrobbleEpisodesEpisodeIdParams) -> Value {
     let mut m = Map::new();
+    m.insert("episode_id".into(), Value::String((&p.episode_id).clone()));
     m.insert("embedded".into(), match (&p.embedded) { Some(v) => iface_scrobbling__marked_episode_embedded__to_json(v), None => Value::Null });
-    m.insert("episode_id".into(), match (&p.episode_id) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("episode_id_v2".into(), match (&p.episode_id_v2) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
     m.insert("marked_at".into(), match (&p.marked_at) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
     m.insert("type".into(), match (&p.type_op) { Some(v) => iface_scrobbling__mark_type__to_json(v), None => Value::Null });
     Value::Object(m)
@@ -454,21 +617,161 @@ fn iface_scrobbling__post_scrobble_shows_params__to_json(p: &iface_scrobbling::P
     Value::Object(m)
 }
 
+fn iface_scrobbling__get_scrobble_shows_show_id_params__to_json(p: &iface_scrobbling::GetScrobbleShowsShowIdParams) -> Value {
+    let mut m = Map::new();
+    m.insert("show_id".into(), Value::String((&p.show_id).clone()));
+    m.insert("embed".into(), match (&p.embed) { Some(v) => Value::String(iface_scrobbling__get_scrobble_shows_show_id_embed_enum__to_str(v).into()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_scrobbling__mark_type__from_json(v: &Value) -> Option<iface_scrobbling::MarkType> {
+    let m = v.as_object()?;
+    Some(iface_scrobbling::MarkType {
+        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    })
+}
+
+fn iface_scrobbling__bulk_response__from_json(v: &Value) -> Option<iface_scrobbling::BulkResponse> {
+    let m = v.as_object()?;
+    Some(iface_scrobbling::BulkResponse {
+        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+    })
+}
+
+fn iface_scrobbling__marked_episode__from_json(v: &Value) -> Option<iface_scrobbling::MarkedEpisode> {
+    let m = v.as_object()?;
+    Some(iface_scrobbling::MarkedEpisode {
+        embedded: m.get("_embedded").filter(|v| !v.is_null()).and_then(|v| iface_scrobbling__marked_episode_embedded__from_json(v)),
+        episode_id: m.get("episode_id").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        marked_at: m.get("marked_at").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        type_op: m.get("type").filter(|v| !v.is_null()).and_then(|v| iface_scrobbling__mark_type__from_json(v)),
+    })
+}
+
+fn iface_scrobbling__marked_episode_embedded__from_json(v: &Value) -> Option<iface_scrobbling::MarkedEpisodeEmbedded> {
+    let m = v.as_object()?;
+    Some(iface_scrobbling::MarkedEpisodeEmbedded {
+        episode: m.get("episode").filter(|v| !v.is_null()).and_then(|v| iface_scrobbling__episode__from_json(v)),
+    })
+}
+
+fn iface_scrobbling__episode__from_json(v: &Value) -> Option<iface_scrobbling::Episode> {
+    let m = v.as_object()?;
+    Some(iface_scrobbling::Episode {
+        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    })
+}
+
+fn iface_scrobbling__post_scrobble_episodes__ok(body: String) -> Result<iface_scrobbling::BulkResponse, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match iface_scrobbling__bulk_response__from_json(&v) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_scrobbling__post_scrobble_episodes__err(e: crate::runtime::DispatchError) -> iface_scrobbling::PostScrobbleEpisodesError {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => match status {
+            422u16 => iface_scrobbling::PostScrobbleEpisodesError::UnprocessableEntity(body),
+            _ => iface_scrobbling::PostScrobbleEpisodesError::Other(body),
+        },
+        crate::runtime::DispatchError::Transport(m) => iface_scrobbling::PostScrobbleEpisodesError::Other(m),
+    }
+}
+
+fn iface_scrobbling__put_scrobble_episodes_episode_id__ok(body: String) -> Result<iface_scrobbling::MarkedEpisode, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match iface_scrobbling__marked_episode__from_json(&v) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_scrobbling__put_scrobble_episodes_episode_id__err(e: crate::runtime::DispatchError) -> iface_scrobbling::PutScrobbleEpisodesEpisodeIdError {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => match status {
+            404u16 => iface_scrobbling::PutScrobbleEpisodesEpisodeIdError::NotFound(body),
+            422u16 => iface_scrobbling::PutScrobbleEpisodesEpisodeIdError::UnprocessableEntity(body),
+            _ => iface_scrobbling::PutScrobbleEpisodesEpisodeIdError::Other(body),
+        },
+        crate::runtime::DispatchError::Transport(m) => iface_scrobbling::PutScrobbleEpisodesEpisodeIdError::Other(m),
+    }
+}
+
+fn iface_scrobbling__post_scrobble_shows__ok(body: String) -> Result<iface_scrobbling::BulkResponse, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match iface_scrobbling__bulk_response__from_json(&v) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_scrobbling__post_scrobble_shows__err(e: crate::runtime::DispatchError) -> iface_scrobbling::PostScrobbleShowsError {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => match status {
+            422u16 => iface_scrobbling::PostScrobbleShowsError::UnprocessableEntity(body),
+            _ => iface_scrobbling::PostScrobbleShowsError::Other(body),
+        },
+        crate::runtime::DispatchError::Transport(m) => iface_scrobbling::PostScrobbleShowsError::Other(m),
+    }
+}
+
+fn iface_scrobbling__get_scrobble_shows_show_id__ok(body: String) -> Result<Vec<iface_scrobbling::MarkedEpisode>, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match (&v).as_array().map(|a| a.iter().filter_map(|x| iface_scrobbling__marked_episode__from_json(x)).collect()) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_scrobbling__get_scrobble_shows_show_id__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
 impl iface_scrobbling::Guest for crate::Component {
-    fn post_scrobble_episodes(params: iface_scrobbling::PostScrobbleEpisodesParams) -> Result<String, String> {
+    fn post_scrobble_episodes(params: iface_scrobbling::PostScrobbleEpisodesParams) -> Result<iface_scrobbling::BulkResponse, iface_scrobbling::PostScrobbleEpisodesError> {
         let json = iface_scrobbling__post_scrobble_episodes_params__to_json(&params);
-        dispatch(&OP_SCROBBLING_POST_SCROBBLE_EPISODES, json)
+        match dispatch(&OP_SCROBBLING_POST_SCROBBLE_EPISODES, json).and_then(iface_scrobbling__post_scrobble_episodes__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_scrobbling__post_scrobble_episodes__err(e)),
+        }
     }
-    fn put_scrobble_episodes_episode_id(params: iface_scrobbling::PutScrobbleEpisodesEpisodeIdParams) -> Result<String, String> {
+    fn put_scrobble_episodes_episode_id(params: iface_scrobbling::PutScrobbleEpisodesEpisodeIdParams) -> Result<iface_scrobbling::MarkedEpisode, iface_scrobbling::PutScrobbleEpisodesEpisodeIdError> {
         let json = iface_scrobbling__put_scrobble_episodes_episode_id_params__to_json(&params);
-        dispatch(&OP_SCROBBLING_PUT_SCROBBLE_EPISODES_EPISODE_ID, json)
+        match dispatch(&OP_SCROBBLING_PUT_SCROBBLE_EPISODES_EPISODE_ID, json).and_then(iface_scrobbling__put_scrobble_episodes_episode_id__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_scrobbling__put_scrobble_episodes_episode_id__err(e)),
+        }
     }
-    fn post_scrobble_shows(params: iface_scrobbling::PostScrobbleShowsParams) -> Result<String, String> {
+    fn post_scrobble_shows(params: iface_scrobbling::PostScrobbleShowsParams) -> Result<iface_scrobbling::BulkResponse, iface_scrobbling::PostScrobbleShowsError> {
         let json = iface_scrobbling__post_scrobble_shows_params__to_json(&params);
-        dispatch(&OP_SCROBBLING_POST_SCROBBLE_SHOWS, json)
+        match dispatch(&OP_SCROBBLING_POST_SCROBBLE_SHOWS, json).and_then(iface_scrobbling__post_scrobble_shows__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_scrobbling__post_scrobble_shows__err(e)),
+        }
     }
-    fn get_scrobble_shows_show_id() -> Result<String, String> {
-        dispatch(&OP_SCROBBLING_GET_SCROBBLE_SHOWS_SHOW_ID, Value::Object(Map::new()))
+    fn get_scrobble_shows_show_id(params: iface_scrobbling::GetScrobbleShowsShowIdParams) -> Result<Vec<iface_scrobbling::MarkedEpisode>, String> {
+        let json = iface_scrobbling__get_scrobble_shows_show_id_params__to_json(&params);
+        match dispatch(&OP_SCROBBLING_GET_SCROBBLE_SHOWS_SHOW_ID, json).and_then(iface_scrobbling__get_scrobble_shows_show_id__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_scrobbling__get_scrobble_shows_show_id__err(e)),
+        }
     }
 }
 use crate::exports::autostamp::tvmaze::marked_episodes as iface_marked_episodes;
@@ -477,7 +780,7 @@ const OP_MARKED_EPISODES_GET_USER_EPISODES: OpSpec = OpSpec {
     method: "GET",
     path_template: "/user/episodes",
     fields: &[
-        FieldSpec { snake: "show_id", location: FieldLocation::Query },
+        FieldSpec { snake: "show_id", wire: "show_id", location: FieldLocation::Query },
     ],
     auth: &[
         AuthApply { secret_key: "usertoken", kind: AuthKind::Basic },
@@ -488,6 +791,7 @@ const OP_MARKED_EPISODES_GET_USER_EPISODES_EPISODE_ID: OpSpec = OpSpec {
     method: "GET",
     path_template: "/user/episodes/{episode_id}",
     fields: &[
+        FieldSpec { snake: "episode_id", wire: "episode_id", location: FieldLocation::Path },
     ],
     auth: &[
         AuthApply { secret_key: "usertoken", kind: AuthKind::Basic },
@@ -498,10 +802,11 @@ const OP_MARKED_EPISODES_PUT_USER_EPISODES_EPISODE_ID: OpSpec = OpSpec {
     method: "PUT",
     path_template: "/user/episodes/{episode_id}",
     fields: &[
-        FieldSpec { snake: "embedded", location: FieldLocation::Body },
-        FieldSpec { snake: "episode_id", location: FieldLocation::Body },
-        FieldSpec { snake: "marked_at", location: FieldLocation::Body },
-        FieldSpec { snake: "type", location: FieldLocation::Body },
+        FieldSpec { snake: "episode_id", wire: "episode_id", location: FieldLocation::Path },
+        FieldSpec { snake: "embedded", wire: "_embedded", location: FieldLocation::Body },
+        FieldSpec { snake: "episode_id_v2", wire: "episode_id", location: FieldLocation::Body },
+        FieldSpec { snake: "marked_at", wire: "marked_at", location: FieldLocation::Body },
+        FieldSpec { snake: "type", wire: "type", location: FieldLocation::Body },
     ],
     auth: &[
         AuthApply { secret_key: "usertoken", kind: AuthKind::Basic },
@@ -512,11 +817,21 @@ const OP_MARKED_EPISODES_DELETE_USER_EPISODES_EPISODE_ID: OpSpec = OpSpec {
     method: "DELETE",
     path_template: "/user/episodes/{episode_id}",
     fields: &[
+        FieldSpec { snake: "episode_id", wire: "episode_id", location: FieldLocation::Path },
     ],
     auth: &[
         AuthApply { secret_key: "usertoken", kind: AuthKind::Basic },
     ],
 };
+
+fn iface_marked_episodes__marked_episode__to_json(p: &iface_marked_episodes::MarkedEpisode) -> Value {
+    let mut m = Map::new();
+    m.insert("_embedded".into(), match (&p.embedded) { Some(v) => iface_marked_episodes__marked_episode_embedded__to_json(v), None => Value::Null });
+    m.insert("episode_id".into(), match (&p.episode_id) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("marked_at".into(), match (&p.marked_at) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("type".into(), match (&p.type_op) { Some(v) => iface_marked_episodes__mark_type__to_json(v), None => Value::Null });
+    Value::Object(m)
+}
 
 fn iface_marked_episodes__marked_episode_embedded__to_json(p: &iface_marked_episodes::MarkedEpisodeEmbedded) -> Value {
     let mut m = Map::new();
@@ -542,29 +857,162 @@ fn iface_marked_episodes__get_user_episodes_params__to_json(p: &iface_marked_epi
     Value::Object(m)
 }
 
+fn iface_marked_episodes__get_user_episodes_episode_id_params__to_json(p: &iface_marked_episodes::GetUserEpisodesEpisodeIdParams) -> Value {
+    let mut m = Map::new();
+    m.insert("episode_id".into(), Value::String((&p.episode_id).clone()));
+    Value::Object(m)
+}
+
 fn iface_marked_episodes__put_user_episodes_episode_id_params__to_json(p: &iface_marked_episodes::PutUserEpisodesEpisodeIdParams) -> Value {
     let mut m = Map::new();
+    m.insert("episode_id".into(), Value::String((&p.episode_id).clone()));
     m.insert("embedded".into(), match (&p.embedded) { Some(v) => iface_marked_episodes__marked_episode_embedded__to_json(v), None => Value::Null });
-    m.insert("episode_id".into(), match (&p.episode_id) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("episode_id_v2".into(), match (&p.episode_id_v2) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
     m.insert("marked_at".into(), match (&p.marked_at) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
     m.insert("type".into(), match (&p.type_op) { Some(v) => iface_marked_episodes__mark_type__to_json(v), None => Value::Null });
     Value::Object(m)
 }
 
+fn iface_marked_episodes__delete_user_episodes_episode_id_params__to_json(p: &iface_marked_episodes::DeleteUserEpisodesEpisodeIdParams) -> Value {
+    let mut m = Map::new();
+    m.insert("episode_id".into(), Value::String((&p.episode_id).clone()));
+    Value::Object(m)
+}
+
+fn iface_marked_episodes__marked_episode__from_json(v: &Value) -> Option<iface_marked_episodes::MarkedEpisode> {
+    let m = v.as_object()?;
+    Some(iface_marked_episodes::MarkedEpisode {
+        embedded: m.get("_embedded").filter(|v| !v.is_null()).and_then(|v| iface_marked_episodes__marked_episode_embedded__from_json(v)),
+        episode_id: m.get("episode_id").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        marked_at: m.get("marked_at").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        type_op: m.get("type").filter(|v| !v.is_null()).and_then(|v| iface_marked_episodes__mark_type__from_json(v)),
+    })
+}
+
+fn iface_marked_episodes__marked_episode_embedded__from_json(v: &Value) -> Option<iface_marked_episodes::MarkedEpisodeEmbedded> {
+    let m = v.as_object()?;
+    Some(iface_marked_episodes::MarkedEpisodeEmbedded {
+        episode: m.get("episode").filter(|v| !v.is_null()).and_then(|v| iface_marked_episodes__episode__from_json(v)),
+    })
+}
+
+fn iface_marked_episodes__episode__from_json(v: &Value) -> Option<iface_marked_episodes::Episode> {
+    let m = v.as_object()?;
+    Some(iface_marked_episodes::Episode {
+        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    })
+}
+
+fn iface_marked_episodes__mark_type__from_json(v: &Value) -> Option<iface_marked_episodes::MarkType> {
+    let m = v.as_object()?;
+    Some(iface_marked_episodes::MarkType {
+        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    })
+}
+
+fn iface_marked_episodes__get_user_episodes__ok(body: String) -> Result<Vec<iface_marked_episodes::MarkedEpisode>, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match (&v).as_array().map(|a| a.iter().filter_map(|x| iface_marked_episodes__marked_episode__from_json(x)).collect()) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_marked_episodes__get_user_episodes__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
+fn iface_marked_episodes__get_user_episodes_episode_id__ok(body: String) -> Result<iface_marked_episodes::MarkedEpisode, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match iface_marked_episodes__marked_episode__from_json(&v) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_marked_episodes__get_user_episodes_episode_id__err(e: crate::runtime::DispatchError) -> iface_marked_episodes::GetUserEpisodesEpisodeIdError {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => match status {
+            404u16 => iface_marked_episodes::GetUserEpisodesEpisodeIdError::NotFound(body),
+            _ => iface_marked_episodes::GetUserEpisodesEpisodeIdError::Other(body),
+        },
+        crate::runtime::DispatchError::Transport(m) => iface_marked_episodes::GetUserEpisodesEpisodeIdError::Other(m),
+    }
+}
+
+fn iface_marked_episodes__put_user_episodes_episode_id__ok(body: String) -> Result<iface_marked_episodes::MarkedEpisode, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match iface_marked_episodes__marked_episode__from_json(&v) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_marked_episodes__put_user_episodes_episode_id__err(e: crate::runtime::DispatchError) -> iface_marked_episodes::PutUserEpisodesEpisodeIdError {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => match status {
+            404u16 => iface_marked_episodes::PutUserEpisodesEpisodeIdError::NotFound(body),
+            422u16 => iface_marked_episodes::PutUserEpisodesEpisodeIdError::UnprocessableEntity(body),
+            _ => iface_marked_episodes::PutUserEpisodesEpisodeIdError::Other(body),
+        },
+        crate::runtime::DispatchError::Transport(m) => iface_marked_episodes::PutUserEpisodesEpisodeIdError::Other(m),
+    }
+}
+
+fn iface_marked_episodes__delete_user_episodes_episode_id__ok(body: String) -> Result<String, crate::runtime::DispatchError> {
+    Ok(body)
+}
+
+fn iface_marked_episodes__delete_user_episodes_episode_id__err(e: crate::runtime::DispatchError) -> iface_marked_episodes::DeleteUserEpisodesEpisodeIdError {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => match status {
+            404u16 => iface_marked_episodes::DeleteUserEpisodesEpisodeIdError::NotFound(body),
+            _ => iface_marked_episodes::DeleteUserEpisodesEpisodeIdError::Other(body),
+        },
+        crate::runtime::DispatchError::Transport(m) => iface_marked_episodes::DeleteUserEpisodesEpisodeIdError::Other(m),
+    }
+}
+
 impl iface_marked_episodes::Guest for crate::Component {
-    fn get_user_episodes(params: iface_marked_episodes::GetUserEpisodesParams) -> Result<String, String> {
+    fn get_user_episodes(params: iface_marked_episodes::GetUserEpisodesParams) -> Result<Vec<iface_marked_episodes::MarkedEpisode>, String> {
         let json = iface_marked_episodes__get_user_episodes_params__to_json(&params);
-        dispatch(&OP_MARKED_EPISODES_GET_USER_EPISODES, json)
+        match dispatch(&OP_MARKED_EPISODES_GET_USER_EPISODES, json).and_then(iface_marked_episodes__get_user_episodes__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_marked_episodes__get_user_episodes__err(e)),
+        }
     }
-    fn get_user_episodes_episode_id() -> Result<String, String> {
-        dispatch(&OP_MARKED_EPISODES_GET_USER_EPISODES_EPISODE_ID, Value::Object(Map::new()))
+    fn get_user_episodes_episode_id(params: iface_marked_episodes::GetUserEpisodesEpisodeIdParams) -> Result<iface_marked_episodes::MarkedEpisode, iface_marked_episodes::GetUserEpisodesEpisodeIdError> {
+        let json = iface_marked_episodes__get_user_episodes_episode_id_params__to_json(&params);
+        match dispatch(&OP_MARKED_EPISODES_GET_USER_EPISODES_EPISODE_ID, json).and_then(iface_marked_episodes__get_user_episodes_episode_id__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_marked_episodes__get_user_episodes_episode_id__err(e)),
+        }
     }
-    fn put_user_episodes_episode_id(params: iface_marked_episodes::PutUserEpisodesEpisodeIdParams) -> Result<String, String> {
+    fn put_user_episodes_episode_id(params: iface_marked_episodes::PutUserEpisodesEpisodeIdParams) -> Result<iface_marked_episodes::MarkedEpisode, iface_marked_episodes::PutUserEpisodesEpisodeIdError> {
         let json = iface_marked_episodes__put_user_episodes_episode_id_params__to_json(&params);
-        dispatch(&OP_MARKED_EPISODES_PUT_USER_EPISODES_EPISODE_ID, json)
+        match dispatch(&OP_MARKED_EPISODES_PUT_USER_EPISODES_EPISODE_ID, json).and_then(iface_marked_episodes__put_user_episodes_episode_id__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_marked_episodes__put_user_episodes_episode_id__err(e)),
+        }
     }
-    fn delete_user_episodes_episode_id() -> Result<String, String> {
-        dispatch(&OP_MARKED_EPISODES_DELETE_USER_EPISODES_EPISODE_ID, Value::Object(Map::new()))
+    fn delete_user_episodes_episode_id(params: iface_marked_episodes::DeleteUserEpisodesEpisodeIdParams) -> Result<String, iface_marked_episodes::DeleteUserEpisodesEpisodeIdError> {
+        let json = iface_marked_episodes__delete_user_episodes_episode_id_params__to_json(&params);
+        match dispatch(&OP_MARKED_EPISODES_DELETE_USER_EPISODES_EPISODE_ID, json).and_then(iface_marked_episodes__delete_user_episodes_episode_id__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_marked_episodes__delete_user_episodes_episode_id__err(e)),
+        }
     }
 }
 use crate::exports::autostamp::tvmaze::followed_networks as iface_followed_networks;
@@ -573,7 +1021,7 @@ const OP_FOLLOWED_NETWORKS_GET_USER_FOLLOWS_NETWORKS: OpSpec = OpSpec {
     method: "GET",
     path_template: "/user/follows/networks",
     fields: &[
-        FieldSpec { snake: "embed", location: FieldLocation::Query },
+        FieldSpec { snake: "embed", wire: "embed", location: FieldLocation::Query },
     ],
     auth: &[
         AuthApply { secret_key: "usertoken", kind: AuthKind::Basic },
@@ -584,6 +1032,7 @@ const OP_FOLLOWED_NETWORKS_GET_USER_FOLLOWS_NETWORKS_NETWORK_ID: OpSpec = OpSpec
     method: "GET",
     path_template: "/user/follows/networks/{network_id}",
     fields: &[
+        FieldSpec { snake: "network_id", wire: "network_id", location: FieldLocation::Path },
     ],
     auth: &[
         AuthApply { secret_key: "usertoken", kind: AuthKind::Basic },
@@ -594,6 +1043,7 @@ const OP_FOLLOWED_NETWORKS_PUT_USER_FOLLOWS_NETWORKS_NETWORK_ID: OpSpec = OpSpec
     method: "PUT",
     path_template: "/user/follows/networks/{network_id}",
     fields: &[
+        FieldSpec { snake: "network_id", wire: "network_id", location: FieldLocation::Path },
     ],
     auth: &[
         AuthApply { secret_key: "usertoken", kind: AuthKind::Basic },
@@ -604,6 +1054,7 @@ const OP_FOLLOWED_NETWORKS_DELETE_USER_FOLLOWS_NETWORKS_NETWORK_ID: OpSpec = OpS
     method: "DELETE",
     path_template: "/user/follows/networks/{network_id}",
     fields: &[
+        FieldSpec { snake: "network_id", wire: "network_id", location: FieldLocation::Path },
     ],
     auth: &[
         AuthApply { secret_key: "usertoken", kind: AuthKind::Basic },
@@ -616,25 +1067,173 @@ fn iface_followed_networks__get_user_follows_networks_embed_enum__to_str(e: &ifa
     }
 }
 
+fn iface_followed_networks__network_follow__to_json(p: &iface_followed_networks::NetworkFollow) -> Value {
+    let mut m = Map::new();
+    m.insert("_embedded".into(), match (&p.embedded) { Some(v) => iface_followed_networks__network_follow_embedded__to_json(v), None => Value::Null });
+    m.insert("network_id".into(), match (&p.network_id) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_followed_networks__network_follow_embedded__to_json(p: &iface_followed_networks::NetworkFollowEmbedded) -> Value {
+    let mut m = Map::new();
+    m.insert("network".into(), match (&p.network) { Some(v) => iface_followed_networks__network__to_json(v), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_followed_networks__network__to_json(p: &iface_followed_networks::Network) -> Value {
+    let mut m = Map::new();
+    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
 fn iface_followed_networks__get_user_follows_networks_params__to_json(p: &iface_followed_networks::GetUserFollowsNetworksParams) -> Value {
     let mut m = Map::new();
     m.insert("embed".into(), match (&p.embed) { Some(v) => Value::String(iface_followed_networks__get_user_follows_networks_embed_enum__to_str(v).into()), None => Value::Null });
     Value::Object(m)
 }
 
+fn iface_followed_networks__get_user_follows_networks_network_id_params__to_json(p: &iface_followed_networks::GetUserFollowsNetworksNetworkIdParams) -> Value {
+    let mut m = Map::new();
+    m.insert("network_id".into(), Value::String((&p.network_id).clone()));
+    Value::Object(m)
+}
+
+fn iface_followed_networks__put_user_follows_networks_network_id_params__to_json(p: &iface_followed_networks::PutUserFollowsNetworksNetworkIdParams) -> Value {
+    let mut m = Map::new();
+    m.insert("network_id".into(), Value::String((&p.network_id).clone()));
+    Value::Object(m)
+}
+
+fn iface_followed_networks__delete_user_follows_networks_network_id_params__to_json(p: &iface_followed_networks::DeleteUserFollowsNetworksNetworkIdParams) -> Value {
+    let mut m = Map::new();
+    m.insert("network_id".into(), Value::String((&p.network_id).clone()));
+    Value::Object(m)
+}
+
+fn iface_followed_networks__network_follow__from_json(v: &Value) -> Option<iface_followed_networks::NetworkFollow> {
+    let m = v.as_object()?;
+    Some(iface_followed_networks::NetworkFollow {
+        embedded: m.get("_embedded").filter(|v| !v.is_null()).and_then(|v| iface_followed_networks__network_follow_embedded__from_json(v)),
+        network_id: m.get("network_id").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+    })
+}
+
+fn iface_followed_networks__network_follow_embedded__from_json(v: &Value) -> Option<iface_followed_networks::NetworkFollowEmbedded> {
+    let m = v.as_object()?;
+    Some(iface_followed_networks::NetworkFollowEmbedded {
+        network: m.get("network").filter(|v| !v.is_null()).and_then(|v| iface_followed_networks__network__from_json(v)),
+    })
+}
+
+fn iface_followed_networks__network__from_json(v: &Value) -> Option<iface_followed_networks::Network> {
+    let m = v.as_object()?;
+    Some(iface_followed_networks::Network {
+        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    })
+}
+
+fn iface_followed_networks__get_user_follows_networks__ok(body: String) -> Result<Vec<iface_followed_networks::NetworkFollow>, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match (&v).as_array().map(|a| a.iter().filter_map(|x| iface_followed_networks__network_follow__from_json(x)).collect()) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_followed_networks__get_user_follows_networks__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
+fn iface_followed_networks__get_user_follows_networks_network_id__ok(body: String) -> Result<iface_followed_networks::NetworkFollow, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match iface_followed_networks__network_follow__from_json(&v) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_followed_networks__get_user_follows_networks_network_id__err(e: crate::runtime::DispatchError) -> iface_followed_networks::GetUserFollowsNetworksNetworkIdError {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => match status {
+            404u16 => iface_followed_networks::GetUserFollowsNetworksNetworkIdError::NotFound(body),
+            _ => iface_followed_networks::GetUserFollowsNetworksNetworkIdError::Other(body),
+        },
+        crate::runtime::DispatchError::Transport(m) => iface_followed_networks::GetUserFollowsNetworksNetworkIdError::Other(m),
+    }
+}
+
+fn iface_followed_networks__put_user_follows_networks_network_id__ok(body: String) -> Result<iface_followed_networks::NetworkFollow, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match iface_followed_networks__network_follow__from_json(&v) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_followed_networks__put_user_follows_networks_network_id__err(e: crate::runtime::DispatchError) -> iface_followed_networks::PutUserFollowsNetworksNetworkIdError {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => match status {
+            404u16 => iface_followed_networks::PutUserFollowsNetworksNetworkIdError::NotFound(body),
+            _ => iface_followed_networks::PutUserFollowsNetworksNetworkIdError::Other(body),
+        },
+        crate::runtime::DispatchError::Transport(m) => iface_followed_networks::PutUserFollowsNetworksNetworkIdError::Other(m),
+    }
+}
+
+fn iface_followed_networks__delete_user_follows_networks_network_id__ok(body: String) -> Result<String, crate::runtime::DispatchError> {
+    Ok(body)
+}
+
+fn iface_followed_networks__delete_user_follows_networks_network_id__err(e: crate::runtime::DispatchError) -> iface_followed_networks::DeleteUserFollowsNetworksNetworkIdError {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => match status {
+            404u16 => iface_followed_networks::DeleteUserFollowsNetworksNetworkIdError::NotFound(body),
+            _ => iface_followed_networks::DeleteUserFollowsNetworksNetworkIdError::Other(body),
+        },
+        crate::runtime::DispatchError::Transport(m) => iface_followed_networks::DeleteUserFollowsNetworksNetworkIdError::Other(m),
+    }
+}
+
 impl iface_followed_networks::Guest for crate::Component {
-    fn get_user_follows_networks(params: iface_followed_networks::GetUserFollowsNetworksParams) -> Result<String, String> {
+    fn get_user_follows_networks(params: iface_followed_networks::GetUserFollowsNetworksParams) -> Result<Vec<iface_followed_networks::NetworkFollow>, String> {
         let json = iface_followed_networks__get_user_follows_networks_params__to_json(&params);
-        dispatch(&OP_FOLLOWED_NETWORKS_GET_USER_FOLLOWS_NETWORKS, json)
+        match dispatch(&OP_FOLLOWED_NETWORKS_GET_USER_FOLLOWS_NETWORKS, json).and_then(iface_followed_networks__get_user_follows_networks__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_followed_networks__get_user_follows_networks__err(e)),
+        }
     }
-    fn get_user_follows_networks_network_id() -> Result<String, String> {
-        dispatch(&OP_FOLLOWED_NETWORKS_GET_USER_FOLLOWS_NETWORKS_NETWORK_ID, Value::Object(Map::new()))
+    fn get_user_follows_networks_network_id(params: iface_followed_networks::GetUserFollowsNetworksNetworkIdParams) -> Result<iface_followed_networks::NetworkFollow, iface_followed_networks::GetUserFollowsNetworksNetworkIdError> {
+        let json = iface_followed_networks__get_user_follows_networks_network_id_params__to_json(&params);
+        match dispatch(&OP_FOLLOWED_NETWORKS_GET_USER_FOLLOWS_NETWORKS_NETWORK_ID, json).and_then(iface_followed_networks__get_user_follows_networks_network_id__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_followed_networks__get_user_follows_networks_network_id__err(e)),
+        }
     }
-    fn put_user_follows_networks_network_id() -> Result<String, String> {
-        dispatch(&OP_FOLLOWED_NETWORKS_PUT_USER_FOLLOWS_NETWORKS_NETWORK_ID, Value::Object(Map::new()))
+    fn put_user_follows_networks_network_id(params: iface_followed_networks::PutUserFollowsNetworksNetworkIdParams) -> Result<iface_followed_networks::NetworkFollow, iface_followed_networks::PutUserFollowsNetworksNetworkIdError> {
+        let json = iface_followed_networks__put_user_follows_networks_network_id_params__to_json(&params);
+        match dispatch(&OP_FOLLOWED_NETWORKS_PUT_USER_FOLLOWS_NETWORKS_NETWORK_ID, json).and_then(iface_followed_networks__put_user_follows_networks_network_id__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_followed_networks__put_user_follows_networks_network_id__err(e)),
+        }
     }
-    fn delete_user_follows_networks_network_id() -> Result<String, String> {
-        dispatch(&OP_FOLLOWED_NETWORKS_DELETE_USER_FOLLOWS_NETWORKS_NETWORK_ID, Value::Object(Map::new()))
+    fn delete_user_follows_networks_network_id(params: iface_followed_networks::DeleteUserFollowsNetworksNetworkIdParams) -> Result<String, iface_followed_networks::DeleteUserFollowsNetworksNetworkIdError> {
+        let json = iface_followed_networks__delete_user_follows_networks_network_id_params__to_json(&params);
+        match dispatch(&OP_FOLLOWED_NETWORKS_DELETE_USER_FOLLOWS_NETWORKS_NETWORK_ID, json).and_then(iface_followed_networks__delete_user_follows_networks_network_id__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_followed_networks__delete_user_follows_networks_network_id__err(e)),
+        }
     }
 }
 use crate::exports::autostamp::tvmaze::followed_people as iface_followed_people;
@@ -643,7 +1242,7 @@ const OP_FOLLOWED_PEOPLE_GET_USER_FOLLOWS_PEOPLE: OpSpec = OpSpec {
     method: "GET",
     path_template: "/user/follows/people",
     fields: &[
-        FieldSpec { snake: "embed", location: FieldLocation::Query },
+        FieldSpec { snake: "embed", wire: "embed", location: FieldLocation::Query },
     ],
     auth: &[
         AuthApply { secret_key: "usertoken", kind: AuthKind::Basic },
@@ -654,6 +1253,7 @@ const OP_FOLLOWED_PEOPLE_GET_USER_FOLLOWS_PEOPLE_PERSON_ID: OpSpec = OpSpec {
     method: "GET",
     path_template: "/user/follows/people/{person_id}",
     fields: &[
+        FieldSpec { snake: "person_id", wire: "person_id", location: FieldLocation::Path },
     ],
     auth: &[
         AuthApply { secret_key: "usertoken", kind: AuthKind::Basic },
@@ -664,6 +1264,7 @@ const OP_FOLLOWED_PEOPLE_PUT_USER_FOLLOWS_PEOPLE_PERSON_ID: OpSpec = OpSpec {
     method: "PUT",
     path_template: "/user/follows/people/{person_id}",
     fields: &[
+        FieldSpec { snake: "person_id", wire: "person_id", location: FieldLocation::Path },
     ],
     auth: &[
         AuthApply { secret_key: "usertoken", kind: AuthKind::Basic },
@@ -674,6 +1275,7 @@ const OP_FOLLOWED_PEOPLE_DELETE_USER_FOLLOWS_PEOPLE_PERSON_ID: OpSpec = OpSpec {
     method: "DELETE",
     path_template: "/user/follows/people/{person_id}",
     fields: &[
+        FieldSpec { snake: "person_id", wire: "person_id", location: FieldLocation::Path },
     ],
     auth: &[
         AuthApply { secret_key: "usertoken", kind: AuthKind::Basic },
@@ -686,25 +1288,173 @@ fn iface_followed_people__get_user_follows_people_embed_enum__to_str(e: &iface_f
     }
 }
 
+fn iface_followed_people__person_follow__to_json(p: &iface_followed_people::PersonFollow) -> Value {
+    let mut m = Map::new();
+    m.insert("_embedded".into(), match (&p.embedded) { Some(v) => iface_followed_people__person_follow_embedded__to_json(v), None => Value::Null });
+    m.insert("person_id".into(), match (&p.person_id) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_followed_people__person_follow_embedded__to_json(p: &iface_followed_people::PersonFollowEmbedded) -> Value {
+    let mut m = Map::new();
+    m.insert("person".into(), match (&p.person) { Some(v) => iface_followed_people__person__to_json(v), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_followed_people__person__to_json(p: &iface_followed_people::Person) -> Value {
+    let mut m = Map::new();
+    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
 fn iface_followed_people__get_user_follows_people_params__to_json(p: &iface_followed_people::GetUserFollowsPeopleParams) -> Value {
     let mut m = Map::new();
     m.insert("embed".into(), match (&p.embed) { Some(v) => Value::String(iface_followed_people__get_user_follows_people_embed_enum__to_str(v).into()), None => Value::Null });
     Value::Object(m)
 }
 
+fn iface_followed_people__get_user_follows_people_person_id_params__to_json(p: &iface_followed_people::GetUserFollowsPeoplePersonIdParams) -> Value {
+    let mut m = Map::new();
+    m.insert("person_id".into(), Value::String((&p.person_id).clone()));
+    Value::Object(m)
+}
+
+fn iface_followed_people__put_user_follows_people_person_id_params__to_json(p: &iface_followed_people::PutUserFollowsPeoplePersonIdParams) -> Value {
+    let mut m = Map::new();
+    m.insert("person_id".into(), Value::String((&p.person_id).clone()));
+    Value::Object(m)
+}
+
+fn iface_followed_people__delete_user_follows_people_person_id_params__to_json(p: &iface_followed_people::DeleteUserFollowsPeoplePersonIdParams) -> Value {
+    let mut m = Map::new();
+    m.insert("person_id".into(), Value::String((&p.person_id).clone()));
+    Value::Object(m)
+}
+
+fn iface_followed_people__person_follow__from_json(v: &Value) -> Option<iface_followed_people::PersonFollow> {
+    let m = v.as_object()?;
+    Some(iface_followed_people::PersonFollow {
+        embedded: m.get("_embedded").filter(|v| !v.is_null()).and_then(|v| iface_followed_people__person_follow_embedded__from_json(v)),
+        person_id: m.get("person_id").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+    })
+}
+
+fn iface_followed_people__person_follow_embedded__from_json(v: &Value) -> Option<iface_followed_people::PersonFollowEmbedded> {
+    let m = v.as_object()?;
+    Some(iface_followed_people::PersonFollowEmbedded {
+        person: m.get("person").filter(|v| !v.is_null()).and_then(|v| iface_followed_people__person__from_json(v)),
+    })
+}
+
+fn iface_followed_people__person__from_json(v: &Value) -> Option<iface_followed_people::Person> {
+    let m = v.as_object()?;
+    Some(iface_followed_people::Person {
+        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    })
+}
+
+fn iface_followed_people__get_user_follows_people__ok(body: String) -> Result<Vec<iface_followed_people::PersonFollow>, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match (&v).as_array().map(|a| a.iter().filter_map(|x| iface_followed_people__person_follow__from_json(x)).collect()) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_followed_people__get_user_follows_people__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
+fn iface_followed_people__get_user_follows_people_person_id__ok(body: String) -> Result<iface_followed_people::PersonFollow, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match iface_followed_people__person_follow__from_json(&v) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_followed_people__get_user_follows_people_person_id__err(e: crate::runtime::DispatchError) -> iface_followed_people::GetUserFollowsPeoplePersonIdError {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => match status {
+            404u16 => iface_followed_people::GetUserFollowsPeoplePersonIdError::NotFound(body),
+            _ => iface_followed_people::GetUserFollowsPeoplePersonIdError::Other(body),
+        },
+        crate::runtime::DispatchError::Transport(m) => iface_followed_people::GetUserFollowsPeoplePersonIdError::Other(m),
+    }
+}
+
+fn iface_followed_people__put_user_follows_people_person_id__ok(body: String) -> Result<iface_followed_people::PersonFollow, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match iface_followed_people__person_follow__from_json(&v) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_followed_people__put_user_follows_people_person_id__err(e: crate::runtime::DispatchError) -> iface_followed_people::PutUserFollowsPeoplePersonIdError {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => match status {
+            404u16 => iface_followed_people::PutUserFollowsPeoplePersonIdError::NotFound(body),
+            _ => iface_followed_people::PutUserFollowsPeoplePersonIdError::Other(body),
+        },
+        crate::runtime::DispatchError::Transport(m) => iface_followed_people::PutUserFollowsPeoplePersonIdError::Other(m),
+    }
+}
+
+fn iface_followed_people__delete_user_follows_people_person_id__ok(body: String) -> Result<String, crate::runtime::DispatchError> {
+    Ok(body)
+}
+
+fn iface_followed_people__delete_user_follows_people_person_id__err(e: crate::runtime::DispatchError) -> iface_followed_people::DeleteUserFollowsPeoplePersonIdError {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => match status {
+            404u16 => iface_followed_people::DeleteUserFollowsPeoplePersonIdError::NotFound(body),
+            _ => iface_followed_people::DeleteUserFollowsPeoplePersonIdError::Other(body),
+        },
+        crate::runtime::DispatchError::Transport(m) => iface_followed_people::DeleteUserFollowsPeoplePersonIdError::Other(m),
+    }
+}
+
 impl iface_followed_people::Guest for crate::Component {
-    fn get_user_follows_people(params: iface_followed_people::GetUserFollowsPeopleParams) -> Result<String, String> {
+    fn get_user_follows_people(params: iface_followed_people::GetUserFollowsPeopleParams) -> Result<Vec<iface_followed_people::PersonFollow>, String> {
         let json = iface_followed_people__get_user_follows_people_params__to_json(&params);
-        dispatch(&OP_FOLLOWED_PEOPLE_GET_USER_FOLLOWS_PEOPLE, json)
+        match dispatch(&OP_FOLLOWED_PEOPLE_GET_USER_FOLLOWS_PEOPLE, json).and_then(iface_followed_people__get_user_follows_people__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_followed_people__get_user_follows_people__err(e)),
+        }
     }
-    fn get_user_follows_people_person_id() -> Result<String, String> {
-        dispatch(&OP_FOLLOWED_PEOPLE_GET_USER_FOLLOWS_PEOPLE_PERSON_ID, Value::Object(Map::new()))
+    fn get_user_follows_people_person_id(params: iface_followed_people::GetUserFollowsPeoplePersonIdParams) -> Result<iface_followed_people::PersonFollow, iface_followed_people::GetUserFollowsPeoplePersonIdError> {
+        let json = iface_followed_people__get_user_follows_people_person_id_params__to_json(&params);
+        match dispatch(&OP_FOLLOWED_PEOPLE_GET_USER_FOLLOWS_PEOPLE_PERSON_ID, json).and_then(iface_followed_people__get_user_follows_people_person_id__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_followed_people__get_user_follows_people_person_id__err(e)),
+        }
     }
-    fn put_user_follows_people_person_id() -> Result<String, String> {
-        dispatch(&OP_FOLLOWED_PEOPLE_PUT_USER_FOLLOWS_PEOPLE_PERSON_ID, Value::Object(Map::new()))
+    fn put_user_follows_people_person_id(params: iface_followed_people::PutUserFollowsPeoplePersonIdParams) -> Result<iface_followed_people::PersonFollow, iface_followed_people::PutUserFollowsPeoplePersonIdError> {
+        let json = iface_followed_people__put_user_follows_people_person_id_params__to_json(&params);
+        match dispatch(&OP_FOLLOWED_PEOPLE_PUT_USER_FOLLOWS_PEOPLE_PERSON_ID, json).and_then(iface_followed_people__put_user_follows_people_person_id__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_followed_people__put_user_follows_people_person_id__err(e)),
+        }
     }
-    fn delete_user_follows_people_person_id() -> Result<String, String> {
-        dispatch(&OP_FOLLOWED_PEOPLE_DELETE_USER_FOLLOWS_PEOPLE_PERSON_ID, Value::Object(Map::new()))
+    fn delete_user_follows_people_person_id(params: iface_followed_people::DeleteUserFollowsPeoplePersonIdParams) -> Result<String, iface_followed_people::DeleteUserFollowsPeoplePersonIdError> {
+        let json = iface_followed_people__delete_user_follows_people_person_id_params__to_json(&params);
+        match dispatch(&OP_FOLLOWED_PEOPLE_DELETE_USER_FOLLOWS_PEOPLE_PERSON_ID, json).and_then(iface_followed_people__delete_user_follows_people_person_id__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_followed_people__delete_user_follows_people_person_id__err(e)),
+        }
     }
 }
 use crate::exports::autostamp::tvmaze::followed_shows as iface_followed_shows;
@@ -713,7 +1463,7 @@ const OP_FOLLOWED_SHOWS_GET_USER_FOLLOWS_SHOWS: OpSpec = OpSpec {
     method: "GET",
     path_template: "/user/follows/shows",
     fields: &[
-        FieldSpec { snake: "embed", location: FieldLocation::Query },
+        FieldSpec { snake: "embed", wire: "embed", location: FieldLocation::Query },
     ],
     auth: &[
         AuthApply { secret_key: "usertoken", kind: AuthKind::Basic },
@@ -724,6 +1474,7 @@ const OP_FOLLOWED_SHOWS_GET_USER_FOLLOWS_SHOWS_SHOW_ID: OpSpec = OpSpec {
     method: "GET",
     path_template: "/user/follows/shows/{show_id}",
     fields: &[
+        FieldSpec { snake: "show_id", wire: "show_id", location: FieldLocation::Path },
     ],
     auth: &[
         AuthApply { secret_key: "usertoken", kind: AuthKind::Basic },
@@ -734,6 +1485,7 @@ const OP_FOLLOWED_SHOWS_PUT_USER_FOLLOWS_SHOWS_SHOW_ID: OpSpec = OpSpec {
     method: "PUT",
     path_template: "/user/follows/shows/{show_id}",
     fields: &[
+        FieldSpec { snake: "show_id", wire: "show_id", location: FieldLocation::Path },
     ],
     auth: &[
         AuthApply { secret_key: "usertoken", kind: AuthKind::Basic },
@@ -744,6 +1496,7 @@ const OP_FOLLOWED_SHOWS_DELETE_USER_FOLLOWS_SHOWS_SHOW_ID: OpSpec = OpSpec {
     method: "DELETE",
     path_template: "/user/follows/shows/{show_id}",
     fields: &[
+        FieldSpec { snake: "show_id", wire: "show_id", location: FieldLocation::Path },
     ],
     auth: &[
         AuthApply { secret_key: "usertoken", kind: AuthKind::Basic },
@@ -756,25 +1509,173 @@ fn iface_followed_shows__get_user_follows_shows_embed_enum__to_str(e: &iface_fol
     }
 }
 
+fn iface_followed_shows__show_follow__to_json(p: &iface_followed_shows::ShowFollow) -> Value {
+    let mut m = Map::new();
+    m.insert("_embedded".into(), match (&p.embedded) { Some(v) => iface_followed_shows__show_follow_embedded__to_json(v), None => Value::Null });
+    m.insert("show_id".into(), match (&p.show_id) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_followed_shows__show_follow_embedded__to_json(p: &iface_followed_shows::ShowFollowEmbedded) -> Value {
+    let mut m = Map::new();
+    m.insert("show".into(), match (&p.show) { Some(v) => iface_followed_shows__show__to_json(v), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_followed_shows__show__to_json(p: &iface_followed_shows::Show) -> Value {
+    let mut m = Map::new();
+    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
 fn iface_followed_shows__get_user_follows_shows_params__to_json(p: &iface_followed_shows::GetUserFollowsShowsParams) -> Value {
     let mut m = Map::new();
     m.insert("embed".into(), match (&p.embed) { Some(v) => Value::String(iface_followed_shows__get_user_follows_shows_embed_enum__to_str(v).into()), None => Value::Null });
     Value::Object(m)
 }
 
+fn iface_followed_shows__get_user_follows_shows_show_id_params__to_json(p: &iface_followed_shows::GetUserFollowsShowsShowIdParams) -> Value {
+    let mut m = Map::new();
+    m.insert("show_id".into(), Value::String((&p.show_id).clone()));
+    Value::Object(m)
+}
+
+fn iface_followed_shows__put_user_follows_shows_show_id_params__to_json(p: &iface_followed_shows::PutUserFollowsShowsShowIdParams) -> Value {
+    let mut m = Map::new();
+    m.insert("show_id".into(), Value::String((&p.show_id).clone()));
+    Value::Object(m)
+}
+
+fn iface_followed_shows__delete_user_follows_shows_show_id_params__to_json(p: &iface_followed_shows::DeleteUserFollowsShowsShowIdParams) -> Value {
+    let mut m = Map::new();
+    m.insert("show_id".into(), Value::String((&p.show_id).clone()));
+    Value::Object(m)
+}
+
+fn iface_followed_shows__show_follow__from_json(v: &Value) -> Option<iface_followed_shows::ShowFollow> {
+    let m = v.as_object()?;
+    Some(iface_followed_shows::ShowFollow {
+        embedded: m.get("_embedded").filter(|v| !v.is_null()).and_then(|v| iface_followed_shows__show_follow_embedded__from_json(v)),
+        show_id: m.get("show_id").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+    })
+}
+
+fn iface_followed_shows__show_follow_embedded__from_json(v: &Value) -> Option<iface_followed_shows::ShowFollowEmbedded> {
+    let m = v.as_object()?;
+    Some(iface_followed_shows::ShowFollowEmbedded {
+        show: m.get("show").filter(|v| !v.is_null()).and_then(|v| iface_followed_shows__show__from_json(v)),
+    })
+}
+
+fn iface_followed_shows__show__from_json(v: &Value) -> Option<iface_followed_shows::Show> {
+    let m = v.as_object()?;
+    Some(iface_followed_shows::Show {
+        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    })
+}
+
+fn iface_followed_shows__get_user_follows_shows__ok(body: String) -> Result<Vec<iface_followed_shows::ShowFollow>, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match (&v).as_array().map(|a| a.iter().filter_map(|x| iface_followed_shows__show_follow__from_json(x)).collect()) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_followed_shows__get_user_follows_shows__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
+fn iface_followed_shows__get_user_follows_shows_show_id__ok(body: String) -> Result<iface_followed_shows::ShowFollow, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match iface_followed_shows__show_follow__from_json(&v) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_followed_shows__get_user_follows_shows_show_id__err(e: crate::runtime::DispatchError) -> iface_followed_shows::GetUserFollowsShowsShowIdError {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => match status {
+            404u16 => iface_followed_shows::GetUserFollowsShowsShowIdError::NotFound(body),
+            _ => iface_followed_shows::GetUserFollowsShowsShowIdError::Other(body),
+        },
+        crate::runtime::DispatchError::Transport(m) => iface_followed_shows::GetUserFollowsShowsShowIdError::Other(m),
+    }
+}
+
+fn iface_followed_shows__put_user_follows_shows_show_id__ok(body: String) -> Result<iface_followed_shows::ShowFollow, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match iface_followed_shows__show_follow__from_json(&v) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_followed_shows__put_user_follows_shows_show_id__err(e: crate::runtime::DispatchError) -> iface_followed_shows::PutUserFollowsShowsShowIdError {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => match status {
+            404u16 => iface_followed_shows::PutUserFollowsShowsShowIdError::NotFound(body),
+            _ => iface_followed_shows::PutUserFollowsShowsShowIdError::Other(body),
+        },
+        crate::runtime::DispatchError::Transport(m) => iface_followed_shows::PutUserFollowsShowsShowIdError::Other(m),
+    }
+}
+
+fn iface_followed_shows__delete_user_follows_shows_show_id__ok(body: String) -> Result<String, crate::runtime::DispatchError> {
+    Ok(body)
+}
+
+fn iface_followed_shows__delete_user_follows_shows_show_id__err(e: crate::runtime::DispatchError) -> iface_followed_shows::DeleteUserFollowsShowsShowIdError {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => match status {
+            404u16 => iface_followed_shows::DeleteUserFollowsShowsShowIdError::NotFound(body),
+            _ => iface_followed_shows::DeleteUserFollowsShowsShowIdError::Other(body),
+        },
+        crate::runtime::DispatchError::Transport(m) => iface_followed_shows::DeleteUserFollowsShowsShowIdError::Other(m),
+    }
+}
+
 impl iface_followed_shows::Guest for crate::Component {
-    fn get_user_follows_shows(params: iface_followed_shows::GetUserFollowsShowsParams) -> Result<String, String> {
+    fn get_user_follows_shows(params: iface_followed_shows::GetUserFollowsShowsParams) -> Result<Vec<iface_followed_shows::ShowFollow>, String> {
         let json = iface_followed_shows__get_user_follows_shows_params__to_json(&params);
-        dispatch(&OP_FOLLOWED_SHOWS_GET_USER_FOLLOWS_SHOWS, json)
+        match dispatch(&OP_FOLLOWED_SHOWS_GET_USER_FOLLOWS_SHOWS, json).and_then(iface_followed_shows__get_user_follows_shows__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_followed_shows__get_user_follows_shows__err(e)),
+        }
     }
-    fn get_user_follows_shows_show_id() -> Result<String, String> {
-        dispatch(&OP_FOLLOWED_SHOWS_GET_USER_FOLLOWS_SHOWS_SHOW_ID, Value::Object(Map::new()))
+    fn get_user_follows_shows_show_id(params: iface_followed_shows::GetUserFollowsShowsShowIdParams) -> Result<iface_followed_shows::ShowFollow, iface_followed_shows::GetUserFollowsShowsShowIdError> {
+        let json = iface_followed_shows__get_user_follows_shows_show_id_params__to_json(&params);
+        match dispatch(&OP_FOLLOWED_SHOWS_GET_USER_FOLLOWS_SHOWS_SHOW_ID, json).and_then(iface_followed_shows__get_user_follows_shows_show_id__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_followed_shows__get_user_follows_shows_show_id__err(e)),
+        }
     }
-    fn put_user_follows_shows_show_id() -> Result<String, String> {
-        dispatch(&OP_FOLLOWED_SHOWS_PUT_USER_FOLLOWS_SHOWS_SHOW_ID, Value::Object(Map::new()))
+    fn put_user_follows_shows_show_id(params: iface_followed_shows::PutUserFollowsShowsShowIdParams) -> Result<iface_followed_shows::ShowFollow, iface_followed_shows::PutUserFollowsShowsShowIdError> {
+        let json = iface_followed_shows__put_user_follows_shows_show_id_params__to_json(&params);
+        match dispatch(&OP_FOLLOWED_SHOWS_PUT_USER_FOLLOWS_SHOWS_SHOW_ID, json).and_then(iface_followed_shows__put_user_follows_shows_show_id__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_followed_shows__put_user_follows_shows_show_id__err(e)),
+        }
     }
-    fn delete_user_follows_shows_show_id() -> Result<String, String> {
-        dispatch(&OP_FOLLOWED_SHOWS_DELETE_USER_FOLLOWS_SHOWS_SHOW_ID, Value::Object(Map::new()))
+    fn delete_user_follows_shows_show_id(params: iface_followed_shows::DeleteUserFollowsShowsShowIdParams) -> Result<String, iface_followed_shows::DeleteUserFollowsShowsShowIdError> {
+        let json = iface_followed_shows__delete_user_follows_shows_show_id_params__to_json(&params);
+        match dispatch(&OP_FOLLOWED_SHOWS_DELETE_USER_FOLLOWS_SHOWS_SHOW_ID, json).and_then(iface_followed_shows__delete_user_follows_shows_show_id__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_followed_shows__delete_user_follows_shows_show_id__err(e)),
+        }
     }
 }
 use crate::exports::autostamp::tvmaze::followed_webchannels as iface_followed_webchannels;
@@ -783,7 +1684,7 @@ const OP_FOLLOWED_WEBCHANNELS_GET_USER_FOLLOWS_WEBCHANNELS: OpSpec = OpSpec {
     method: "GET",
     path_template: "/user/follows/webchannels",
     fields: &[
-        FieldSpec { snake: "embed", location: FieldLocation::Query },
+        FieldSpec { snake: "embed", wire: "embed", location: FieldLocation::Query },
     ],
     auth: &[
         AuthApply { secret_key: "usertoken", kind: AuthKind::Basic },
@@ -794,6 +1695,7 @@ const OP_FOLLOWED_WEBCHANNELS_GET_USER_FOLLOWS_WEBCHANNELS_WEBCHANNEL_ID: OpSpec
     method: "GET",
     path_template: "/user/follows/webchannels/{webchannel_id}",
     fields: &[
+        FieldSpec { snake: "webchannel_id", wire: "webchannel_id", location: FieldLocation::Path },
     ],
     auth: &[
         AuthApply { secret_key: "usertoken", kind: AuthKind::Basic },
@@ -804,6 +1706,7 @@ const OP_FOLLOWED_WEBCHANNELS_PUT_USER_FOLLOWS_WEBCHANNELS_WEBCHANNEL_ID: OpSpec
     method: "PUT",
     path_template: "/user/follows/webchannels/{webchannel_id}",
     fields: &[
+        FieldSpec { snake: "webchannel_id", wire: "webchannel_id", location: FieldLocation::Path },
     ],
     auth: &[
         AuthApply { secret_key: "usertoken", kind: AuthKind::Basic },
@@ -814,6 +1717,7 @@ const OP_FOLLOWED_WEBCHANNELS_DELETE_USER_FOLLOWS_WEBCHANNELS_WEBCHANNEL_ID: OpS
     method: "DELETE",
     path_template: "/user/follows/webchannels/{webchannel_id}",
     fields: &[
+        FieldSpec { snake: "webchannel_id", wire: "webchannel_id", location: FieldLocation::Path },
     ],
     auth: &[
         AuthApply { secret_key: "usertoken", kind: AuthKind::Basic },
@@ -826,25 +1730,173 @@ fn iface_followed_webchannels__get_user_follows_webchannels_embed_enum__to_str(e
     }
 }
 
+fn iface_followed_webchannels__webchannel_follow__to_json(p: &iface_followed_webchannels::WebchannelFollow) -> Value {
+    let mut m = Map::new();
+    m.insert("_embedded".into(), match (&p.embedded) { Some(v) => iface_followed_webchannels__webchannel_follow_embedded__to_json(v), None => Value::Null });
+    m.insert("webchannel_id".into(), match (&p.webchannel_id) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_followed_webchannels__webchannel_follow_embedded__to_json(p: &iface_followed_webchannels::WebchannelFollowEmbedded) -> Value {
+    let mut m = Map::new();
+    m.insert("webchannel".into(), match (&p.webchannel) { Some(v) => iface_followed_webchannels__webchannel__to_json(v), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_followed_webchannels__webchannel__to_json(p: &iface_followed_webchannels::Webchannel) -> Value {
+    let mut m = Map::new();
+    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
 fn iface_followed_webchannels__get_user_follows_webchannels_params__to_json(p: &iface_followed_webchannels::GetUserFollowsWebchannelsParams) -> Value {
     let mut m = Map::new();
     m.insert("embed".into(), match (&p.embed) { Some(v) => Value::String(iface_followed_webchannels__get_user_follows_webchannels_embed_enum__to_str(v).into()), None => Value::Null });
     Value::Object(m)
 }
 
+fn iface_followed_webchannels__get_user_follows_webchannels_webchannel_id_params__to_json(p: &iface_followed_webchannels::GetUserFollowsWebchannelsWebchannelIdParams) -> Value {
+    let mut m = Map::new();
+    m.insert("webchannel_id".into(), Value::String((&p.webchannel_id).clone()));
+    Value::Object(m)
+}
+
+fn iface_followed_webchannels__put_user_follows_webchannels_webchannel_id_params__to_json(p: &iface_followed_webchannels::PutUserFollowsWebchannelsWebchannelIdParams) -> Value {
+    let mut m = Map::new();
+    m.insert("webchannel_id".into(), Value::String((&p.webchannel_id).clone()));
+    Value::Object(m)
+}
+
+fn iface_followed_webchannels__delete_user_follows_webchannels_webchannel_id_params__to_json(p: &iface_followed_webchannels::DeleteUserFollowsWebchannelsWebchannelIdParams) -> Value {
+    let mut m = Map::new();
+    m.insert("webchannel_id".into(), Value::String((&p.webchannel_id).clone()));
+    Value::Object(m)
+}
+
+fn iface_followed_webchannels__webchannel_follow__from_json(v: &Value) -> Option<iface_followed_webchannels::WebchannelFollow> {
+    let m = v.as_object()?;
+    Some(iface_followed_webchannels::WebchannelFollow {
+        embedded: m.get("_embedded").filter(|v| !v.is_null()).and_then(|v| iface_followed_webchannels__webchannel_follow_embedded__from_json(v)),
+        webchannel_id: m.get("webchannel_id").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+    })
+}
+
+fn iface_followed_webchannels__webchannel_follow_embedded__from_json(v: &Value) -> Option<iface_followed_webchannels::WebchannelFollowEmbedded> {
+    let m = v.as_object()?;
+    Some(iface_followed_webchannels::WebchannelFollowEmbedded {
+        webchannel: m.get("webchannel").filter(|v| !v.is_null()).and_then(|v| iface_followed_webchannels__webchannel__from_json(v)),
+    })
+}
+
+fn iface_followed_webchannels__webchannel__from_json(v: &Value) -> Option<iface_followed_webchannels::Webchannel> {
+    let m = v.as_object()?;
+    Some(iface_followed_webchannels::Webchannel {
+        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    })
+}
+
+fn iface_followed_webchannels__get_user_follows_webchannels__ok(body: String) -> Result<Vec<iface_followed_webchannels::WebchannelFollow>, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match (&v).as_array().map(|a| a.iter().filter_map(|x| iface_followed_webchannels__webchannel_follow__from_json(x)).collect()) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_followed_webchannels__get_user_follows_webchannels__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
+fn iface_followed_webchannels__get_user_follows_webchannels_webchannel_id__ok(body: String) -> Result<iface_followed_webchannels::WebchannelFollow, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match iface_followed_webchannels__webchannel_follow__from_json(&v) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_followed_webchannels__get_user_follows_webchannels_webchannel_id__err(e: crate::runtime::DispatchError) -> iface_followed_webchannels::GetUserFollowsWebchannelsWebchannelIdError {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => match status {
+            404u16 => iface_followed_webchannels::GetUserFollowsWebchannelsWebchannelIdError::NotFound(body),
+            _ => iface_followed_webchannels::GetUserFollowsWebchannelsWebchannelIdError::Other(body),
+        },
+        crate::runtime::DispatchError::Transport(m) => iface_followed_webchannels::GetUserFollowsWebchannelsWebchannelIdError::Other(m),
+    }
+}
+
+fn iface_followed_webchannels__put_user_follows_webchannels_webchannel_id__ok(body: String) -> Result<iface_followed_webchannels::WebchannelFollow, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match iface_followed_webchannels__webchannel_follow__from_json(&v) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_followed_webchannels__put_user_follows_webchannels_webchannel_id__err(e: crate::runtime::DispatchError) -> iface_followed_webchannels::PutUserFollowsWebchannelsWebchannelIdError {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => match status {
+            404u16 => iface_followed_webchannels::PutUserFollowsWebchannelsWebchannelIdError::NotFound(body),
+            _ => iface_followed_webchannels::PutUserFollowsWebchannelsWebchannelIdError::Other(body),
+        },
+        crate::runtime::DispatchError::Transport(m) => iface_followed_webchannels::PutUserFollowsWebchannelsWebchannelIdError::Other(m),
+    }
+}
+
+fn iface_followed_webchannels__delete_user_follows_webchannels_webchannel_id__ok(body: String) -> Result<String, crate::runtime::DispatchError> {
+    Ok(body)
+}
+
+fn iface_followed_webchannels__delete_user_follows_webchannels_webchannel_id__err(e: crate::runtime::DispatchError) -> iface_followed_webchannels::DeleteUserFollowsWebchannelsWebchannelIdError {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => match status {
+            404u16 => iface_followed_webchannels::DeleteUserFollowsWebchannelsWebchannelIdError::NotFound(body),
+            _ => iface_followed_webchannels::DeleteUserFollowsWebchannelsWebchannelIdError::Other(body),
+        },
+        crate::runtime::DispatchError::Transport(m) => iface_followed_webchannels::DeleteUserFollowsWebchannelsWebchannelIdError::Other(m),
+    }
+}
+
 impl iface_followed_webchannels::Guest for crate::Component {
-    fn get_user_follows_webchannels(params: iface_followed_webchannels::GetUserFollowsWebchannelsParams) -> Result<String, String> {
+    fn get_user_follows_webchannels(params: iface_followed_webchannels::GetUserFollowsWebchannelsParams) -> Result<Vec<iface_followed_webchannels::WebchannelFollow>, String> {
         let json = iface_followed_webchannels__get_user_follows_webchannels_params__to_json(&params);
-        dispatch(&OP_FOLLOWED_WEBCHANNELS_GET_USER_FOLLOWS_WEBCHANNELS, json)
+        match dispatch(&OP_FOLLOWED_WEBCHANNELS_GET_USER_FOLLOWS_WEBCHANNELS, json).and_then(iface_followed_webchannels__get_user_follows_webchannels__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_followed_webchannels__get_user_follows_webchannels__err(e)),
+        }
     }
-    fn get_user_follows_webchannels_webchannel_id() -> Result<String, String> {
-        dispatch(&OP_FOLLOWED_WEBCHANNELS_GET_USER_FOLLOWS_WEBCHANNELS_WEBCHANNEL_ID, Value::Object(Map::new()))
+    fn get_user_follows_webchannels_webchannel_id(params: iface_followed_webchannels::GetUserFollowsWebchannelsWebchannelIdParams) -> Result<iface_followed_webchannels::WebchannelFollow, iface_followed_webchannels::GetUserFollowsWebchannelsWebchannelIdError> {
+        let json = iface_followed_webchannels__get_user_follows_webchannels_webchannel_id_params__to_json(&params);
+        match dispatch(&OP_FOLLOWED_WEBCHANNELS_GET_USER_FOLLOWS_WEBCHANNELS_WEBCHANNEL_ID, json).and_then(iface_followed_webchannels__get_user_follows_webchannels_webchannel_id__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_followed_webchannels__get_user_follows_webchannels_webchannel_id__err(e)),
+        }
     }
-    fn put_user_follows_webchannels_webchannel_id() -> Result<String, String> {
-        dispatch(&OP_FOLLOWED_WEBCHANNELS_PUT_USER_FOLLOWS_WEBCHANNELS_WEBCHANNEL_ID, Value::Object(Map::new()))
+    fn put_user_follows_webchannels_webchannel_id(params: iface_followed_webchannels::PutUserFollowsWebchannelsWebchannelIdParams) -> Result<iface_followed_webchannels::WebchannelFollow, iface_followed_webchannels::PutUserFollowsWebchannelsWebchannelIdError> {
+        let json = iface_followed_webchannels__put_user_follows_webchannels_webchannel_id_params__to_json(&params);
+        match dispatch(&OP_FOLLOWED_WEBCHANNELS_PUT_USER_FOLLOWS_WEBCHANNELS_WEBCHANNEL_ID, json).and_then(iface_followed_webchannels__put_user_follows_webchannels_webchannel_id__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_followed_webchannels__put_user_follows_webchannels_webchannel_id__err(e)),
+        }
     }
-    fn delete_user_follows_webchannels_webchannel_id() -> Result<String, String> {
-        dispatch(&OP_FOLLOWED_WEBCHANNELS_DELETE_USER_FOLLOWS_WEBCHANNELS_WEBCHANNEL_ID, Value::Object(Map::new()))
+    fn delete_user_follows_webchannels_webchannel_id(params: iface_followed_webchannels::DeleteUserFollowsWebchannelsWebchannelIdParams) -> Result<String, iface_followed_webchannels::DeleteUserFollowsWebchannelsWebchannelIdError> {
+        let json = iface_followed_webchannels__delete_user_follows_webchannels_webchannel_id_params__to_json(&params);
+        match dispatch(&OP_FOLLOWED_WEBCHANNELS_DELETE_USER_FOLLOWS_WEBCHANNELS_WEBCHANNEL_ID, json).and_then(iface_followed_webchannels__delete_user_follows_webchannels_webchannel_id__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_followed_webchannels__delete_user_follows_webchannels_webchannel_id__err(e)),
+        }
     }
 }
 use crate::exports::autostamp::tvmaze::tagged_shows as iface_tagged_shows;
@@ -863,8 +1915,8 @@ const OP_TAGGED_SHOWS_POST_USER_TAGS: OpSpec = OpSpec {
     method: "POST",
     path_template: "/user/tags",
     fields: &[
-        FieldSpec { snake: "id", location: FieldLocation::Body },
-        FieldSpec { snake: "name", location: FieldLocation::Body },
+        FieldSpec { snake: "id", wire: "id", location: FieldLocation::Body },
+        FieldSpec { snake: "name", wire: "name", location: FieldLocation::Body },
     ],
     auth: &[
         AuthApply { secret_key: "usertoken", kind: AuthKind::Basic },
@@ -875,9 +1927,9 @@ const OP_TAGGED_SHOWS_PATCH_USER_TAGS_TAG_ID: OpSpec = OpSpec {
     method: "PATCH",
     path_template: "/user/tags/{tag_id}",
     fields: &[
-        FieldSpec { snake: "tag_id", location: FieldLocation::Path },
-        FieldSpec { snake: "id", location: FieldLocation::Body },
-        FieldSpec { snake: "name", location: FieldLocation::Body },
+        FieldSpec { snake: "tag_id", wire: "tag_id", location: FieldLocation::Path },
+        FieldSpec { snake: "id", wire: "id", location: FieldLocation::Body },
+        FieldSpec { snake: "name", wire: "name", location: FieldLocation::Body },
     ],
     auth: &[
         AuthApply { secret_key: "usertoken", kind: AuthKind::Basic },
@@ -888,7 +1940,7 @@ const OP_TAGGED_SHOWS_DELETE_USER_TAGS_TAG_ID: OpSpec = OpSpec {
     method: "DELETE",
     path_template: "/user/tags/{tag_id}",
     fields: &[
-        FieldSpec { snake: "tag_id", location: FieldLocation::Path },
+        FieldSpec { snake: "tag_id", wire: "tag_id", location: FieldLocation::Path },
     ],
     auth: &[
         AuthApply { secret_key: "usertoken", kind: AuthKind::Basic },
@@ -899,8 +1951,8 @@ const OP_TAGGED_SHOWS_GET_USER_TAGS_TAG_ID_SHOWS: OpSpec = OpSpec {
     method: "GET",
     path_template: "/user/tags/{tag_id}/shows",
     fields: &[
-        FieldSpec { snake: "tag_id", location: FieldLocation::Path },
-        FieldSpec { snake: "embed", location: FieldLocation::Query },
+        FieldSpec { snake: "tag_id", wire: "tag_id", location: FieldLocation::Path },
+        FieldSpec { snake: "embed", wire: "embed", location: FieldLocation::Query },
     ],
     auth: &[
         AuthApply { secret_key: "usertoken", kind: AuthKind::Basic },
@@ -911,8 +1963,8 @@ const OP_TAGGED_SHOWS_PUT_USER_TAGS_TAG_ID_SHOWS_SHOW_ID: OpSpec = OpSpec {
     method: "PUT",
     path_template: "/user/tags/{tag_id}/shows/{show_id}",
     fields: &[
-        FieldSpec { snake: "tag_id", location: FieldLocation::Path },
-        FieldSpec { snake: "show_id", location: FieldLocation::Path },
+        FieldSpec { snake: "tag_id", wire: "tag_id", location: FieldLocation::Path },
+        FieldSpec { snake: "show_id", wire: "show_id", location: FieldLocation::Path },
     ],
     auth: &[
         AuthApply { secret_key: "usertoken", kind: AuthKind::Basic },
@@ -923,8 +1975,8 @@ const OP_TAGGED_SHOWS_DELETE_USER_TAGS_TAG_ID_SHOWS_SHOW_ID: OpSpec = OpSpec {
     method: "DELETE",
     path_template: "/user/tags/{tag_id}/shows/{show_id}",
     fields: &[
-        FieldSpec { snake: "tag_id", location: FieldLocation::Path },
-        FieldSpec { snake: "show_id", location: FieldLocation::Path },
+        FieldSpec { snake: "tag_id", wire: "tag_id", location: FieldLocation::Path },
+        FieldSpec { snake: "show_id", wire: "show_id", location: FieldLocation::Path },
     ],
     auth: &[
         AuthApply { secret_key: "usertoken", kind: AuthKind::Basic },
@@ -935,6 +1987,32 @@ fn iface_tagged_shows__get_user_tags_tag_id_shows_embed_enum__to_str(e: &iface_t
     match e {
         iface_tagged_shows::GetUserTagsTagIdShowsEmbedEnum::Show => "show",
     }
+}
+
+fn iface_tagged_shows__tag__to_json(p: &iface_tagged_shows::Tag) -> Value {
+    let mut m = Map::new();
+    m.insert("id".into(), match (&p.id) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("name".into(), match (&p.name) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_tagged_shows__tag_instance__to_json(p: &iface_tagged_shows::TagInstance) -> Value {
+    let mut m = Map::new();
+    m.insert("_embedded".into(), match (&p.embedded) { Some(v) => iface_tagged_shows__tag_instance_embedded__to_json(v), None => Value::Null });
+    m.insert("show_id".into(), match (&p.show_id) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_tagged_shows__tag_instance_embedded__to_json(p: &iface_tagged_shows::TagInstanceEmbedded) -> Value {
+    let mut m = Map::new();
+    m.insert("show".into(), match (&p.show) { Some(v) => iface_tagged_shows__show__to_json(v), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_tagged_shows__show__to_json(p: &iface_tagged_shows::Show) -> Value {
+    let mut m = Map::new();
+    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
 }
 
 fn iface_tagged_shows__post_user_tags_params__to_json(p: &iface_tagged_shows::PostUserTagsParams) -> Value {
@@ -979,33 +2057,215 @@ fn iface_tagged_shows__delete_user_tags_tag_id_shows_show_id_params__to_json(p: 
     Value::Object(m)
 }
 
+fn iface_tagged_shows__tag__from_json(v: &Value) -> Option<iface_tagged_shows::Tag> {
+    let m = v.as_object()?;
+    Some(iface_tagged_shows::Tag {
+        id: m.get("id").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        name: m.get("name").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    })
+}
+
+fn iface_tagged_shows__tag_instance__from_json(v: &Value) -> Option<iface_tagged_shows::TagInstance> {
+    let m = v.as_object()?;
+    Some(iface_tagged_shows::TagInstance {
+        embedded: m.get("_embedded").filter(|v| !v.is_null()).and_then(|v| iface_tagged_shows__tag_instance_embedded__from_json(v)),
+        show_id: m.get("show_id").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+    })
+}
+
+fn iface_tagged_shows__tag_instance_embedded__from_json(v: &Value) -> Option<iface_tagged_shows::TagInstanceEmbedded> {
+    let m = v.as_object()?;
+    Some(iface_tagged_shows::TagInstanceEmbedded {
+        show: m.get("show").filter(|v| !v.is_null()).and_then(|v| iface_tagged_shows__show__from_json(v)),
+    })
+}
+
+fn iface_tagged_shows__show__from_json(v: &Value) -> Option<iface_tagged_shows::Show> {
+    let m = v.as_object()?;
+    Some(iface_tagged_shows::Show {
+        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    })
+}
+
+fn iface_tagged_shows__get_user_tags__ok(body: String) -> Result<Vec<iface_tagged_shows::Tag>, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match (&v).as_array().map(|a| a.iter().filter_map(|x| iface_tagged_shows__tag__from_json(x)).collect()) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_tagged_shows__get_user_tags__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
+fn iface_tagged_shows__post_user_tags__ok(body: String) -> Result<iface_tagged_shows::Tag, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match iface_tagged_shows__tag__from_json(&v) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_tagged_shows__post_user_tags__err(e: crate::runtime::DispatchError) -> iface_tagged_shows::PostUserTagsError {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => match status {
+            422u16 => iface_tagged_shows::PostUserTagsError::UnprocessableEntity(body),
+            _ => iface_tagged_shows::PostUserTagsError::Other(body),
+        },
+        crate::runtime::DispatchError::Transport(m) => iface_tagged_shows::PostUserTagsError::Other(m),
+    }
+}
+
+fn iface_tagged_shows__patch_user_tags_tag_id__ok(body: String) -> Result<iface_tagged_shows::Tag, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match iface_tagged_shows__tag__from_json(&v) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_tagged_shows__patch_user_tags_tag_id__err(e: crate::runtime::DispatchError) -> iface_tagged_shows::PatchUserTagsTagIdError {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => match status {
+            404u16 => iface_tagged_shows::PatchUserTagsTagIdError::NotFound(body),
+            422u16 => iface_tagged_shows::PatchUserTagsTagIdError::UnprocessableEntity(body),
+            _ => iface_tagged_shows::PatchUserTagsTagIdError::Other(body),
+        },
+        crate::runtime::DispatchError::Transport(m) => iface_tagged_shows::PatchUserTagsTagIdError::Other(m),
+    }
+}
+
+fn iface_tagged_shows__delete_user_tags_tag_id__ok(body: String) -> Result<String, crate::runtime::DispatchError> {
+    Ok(body)
+}
+
+fn iface_tagged_shows__delete_user_tags_tag_id__err(e: crate::runtime::DispatchError) -> iface_tagged_shows::DeleteUserTagsTagIdError {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => match status {
+            404u16 => iface_tagged_shows::DeleteUserTagsTagIdError::NotFound(body),
+            _ => iface_tagged_shows::DeleteUserTagsTagIdError::Other(body),
+        },
+        crate::runtime::DispatchError::Transport(m) => iface_tagged_shows::DeleteUserTagsTagIdError::Other(m),
+    }
+}
+
+fn iface_tagged_shows__get_user_tags_tag_id_shows__ok(body: String) -> Result<Vec<iface_tagged_shows::TagInstance>, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match (&v).as_array().map(|a| a.iter().filter_map(|x| iface_tagged_shows__tag_instance__from_json(x)).collect()) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_tagged_shows__get_user_tags_tag_id_shows__err(e: crate::runtime::DispatchError) -> iface_tagged_shows::GetUserTagsTagIdShowsError {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => match status {
+            404u16 => iface_tagged_shows::GetUserTagsTagIdShowsError::NotFound(body),
+            _ => iface_tagged_shows::GetUserTagsTagIdShowsError::Other(body),
+        },
+        crate::runtime::DispatchError::Transport(m) => iface_tagged_shows::GetUserTagsTagIdShowsError::Other(m),
+    }
+}
+
+fn iface_tagged_shows__put_user_tags_tag_id_shows_show_id__ok(body: String) -> Result<iface_tagged_shows::TagInstance, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match iface_tagged_shows__tag_instance__from_json(&v) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_tagged_shows__put_user_tags_tag_id_shows_show_id__err(e: crate::runtime::DispatchError) -> iface_tagged_shows::PutUserTagsTagIdShowsShowIdError {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => match status {
+            404u16 => iface_tagged_shows::PutUserTagsTagIdShowsShowIdError::NotFound(body),
+            _ => iface_tagged_shows::PutUserTagsTagIdShowsShowIdError::Other(body),
+        },
+        crate::runtime::DispatchError::Transport(m) => iface_tagged_shows::PutUserTagsTagIdShowsShowIdError::Other(m),
+    }
+}
+
+fn iface_tagged_shows__delete_user_tags_tag_id_shows_show_id__ok(body: String) -> Result<String, crate::runtime::DispatchError> {
+    Ok(body)
+}
+
+fn iface_tagged_shows__delete_user_tags_tag_id_shows_show_id__err(e: crate::runtime::DispatchError) -> iface_tagged_shows::DeleteUserTagsTagIdShowsShowIdError {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => match status {
+            404u16 => iface_tagged_shows::DeleteUserTagsTagIdShowsShowIdError::NotFound(body),
+            _ => iface_tagged_shows::DeleteUserTagsTagIdShowsShowIdError::Other(body),
+        },
+        crate::runtime::DispatchError::Transport(m) => iface_tagged_shows::DeleteUserTagsTagIdShowsShowIdError::Other(m),
+    }
+}
+
 impl iface_tagged_shows::Guest for crate::Component {
-    fn get_user_tags() -> Result<String, String> {
-        dispatch(&OP_TAGGED_SHOWS_GET_USER_TAGS, Value::Object(Map::new()))
+    fn get_user_tags() -> Result<Vec<iface_tagged_shows::Tag>, String> {
+        match dispatch(&OP_TAGGED_SHOWS_GET_USER_TAGS, Value::Object(Map::new())).and_then(iface_tagged_shows__get_user_tags__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_tagged_shows__get_user_tags__err(e)),
+        }
     }
-    fn post_user_tags(params: iface_tagged_shows::PostUserTagsParams) -> Result<String, String> {
+    fn post_user_tags(params: iface_tagged_shows::PostUserTagsParams) -> Result<iface_tagged_shows::Tag, iface_tagged_shows::PostUserTagsError> {
         let json = iface_tagged_shows__post_user_tags_params__to_json(&params);
-        dispatch(&OP_TAGGED_SHOWS_POST_USER_TAGS, json)
+        match dispatch(&OP_TAGGED_SHOWS_POST_USER_TAGS, json).and_then(iface_tagged_shows__post_user_tags__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_tagged_shows__post_user_tags__err(e)),
+        }
     }
-    fn patch_user_tags_tag_id(params: iface_tagged_shows::PatchUserTagsTagIdParams) -> Result<String, String> {
+    fn patch_user_tags_tag_id(params: iface_tagged_shows::PatchUserTagsTagIdParams) -> Result<iface_tagged_shows::Tag, iface_tagged_shows::PatchUserTagsTagIdError> {
         let json = iface_tagged_shows__patch_user_tags_tag_id_params__to_json(&params);
-        dispatch(&OP_TAGGED_SHOWS_PATCH_USER_TAGS_TAG_ID, json)
+        match dispatch(&OP_TAGGED_SHOWS_PATCH_USER_TAGS_TAG_ID, json).and_then(iface_tagged_shows__patch_user_tags_tag_id__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_tagged_shows__patch_user_tags_tag_id__err(e)),
+        }
     }
-    fn delete_user_tags_tag_id(params: iface_tagged_shows::DeleteUserTagsTagIdParams) -> Result<String, String> {
+    fn delete_user_tags_tag_id(params: iface_tagged_shows::DeleteUserTagsTagIdParams) -> Result<String, iface_tagged_shows::DeleteUserTagsTagIdError> {
         let json = iface_tagged_shows__delete_user_tags_tag_id_params__to_json(&params);
-        dispatch(&OP_TAGGED_SHOWS_DELETE_USER_TAGS_TAG_ID, json)
+        match dispatch(&OP_TAGGED_SHOWS_DELETE_USER_TAGS_TAG_ID, json).and_then(iface_tagged_shows__delete_user_tags_tag_id__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_tagged_shows__delete_user_tags_tag_id__err(e)),
+        }
     }
-    fn get_user_tags_tag_id_shows(params: iface_tagged_shows::GetUserTagsTagIdShowsParams) -> Result<String, String> {
+    fn get_user_tags_tag_id_shows(params: iface_tagged_shows::GetUserTagsTagIdShowsParams) -> Result<Vec<iface_tagged_shows::TagInstance>, iface_tagged_shows::GetUserTagsTagIdShowsError> {
         let json = iface_tagged_shows__get_user_tags_tag_id_shows_params__to_json(&params);
-        dispatch(&OP_TAGGED_SHOWS_GET_USER_TAGS_TAG_ID_SHOWS, json)
+        match dispatch(&OP_TAGGED_SHOWS_GET_USER_TAGS_TAG_ID_SHOWS, json).and_then(iface_tagged_shows__get_user_tags_tag_id_shows__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_tagged_shows__get_user_tags_tag_id_shows__err(e)),
+        }
     }
-    fn put_user_tags_tag_id_shows_show_id(params: iface_tagged_shows::PutUserTagsTagIdShowsShowIdParams) -> Result<String, String> {
+    fn put_user_tags_tag_id_shows_show_id(params: iface_tagged_shows::PutUserTagsTagIdShowsShowIdParams) -> Result<iface_tagged_shows::TagInstance, iface_tagged_shows::PutUserTagsTagIdShowsShowIdError> {
         let json = iface_tagged_shows__put_user_tags_tag_id_shows_show_id_params__to_json(&params);
-        dispatch(&OP_TAGGED_SHOWS_PUT_USER_TAGS_TAG_ID_SHOWS_SHOW_ID, json)
+        match dispatch(&OP_TAGGED_SHOWS_PUT_USER_TAGS_TAG_ID_SHOWS_SHOW_ID, json).and_then(iface_tagged_shows__put_user_tags_tag_id_shows_show_id__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_tagged_shows__put_user_tags_tag_id_shows_show_id__err(e)),
+        }
     }
-    fn delete_user_tags_tag_id_shows_show_id(params: iface_tagged_shows::DeleteUserTagsTagIdShowsShowIdParams) -> Result<String, String> {
+    fn delete_user_tags_tag_id_shows_show_id(params: iface_tagged_shows::DeleteUserTagsTagIdShowsShowIdParams) -> Result<String, iface_tagged_shows::DeleteUserTagsTagIdShowsShowIdError> {
         let json = iface_tagged_shows__delete_user_tags_tag_id_shows_show_id_params__to_json(&params);
-        dispatch(&OP_TAGGED_SHOWS_DELETE_USER_TAGS_TAG_ID_SHOWS_SHOW_ID, json)
+        match dispatch(&OP_TAGGED_SHOWS_DELETE_USER_TAGS_TAG_ID_SHOWS_SHOW_ID, json).and_then(iface_tagged_shows__delete_user_tags_tag_id_shows_show_id__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_tagged_shows__delete_user_tags_tag_id_shows_show_id__err(e)),
+        }
     }
 }
 use crate::exports::autostamp::tvmaze::voted_episodes as iface_voted_episodes;
@@ -1024,6 +2284,7 @@ const OP_VOTED_EPISODES_GET_USER_VOTES_EPISODES_EPISODE_ID: OpSpec = OpSpec {
     method: "GET",
     path_template: "/user/votes/episodes/{episode_id}",
     fields: &[
+        FieldSpec { snake: "episode_id", wire: "episode_id", location: FieldLocation::Path },
     ],
     auth: &[
         AuthApply { secret_key: "usertoken", kind: AuthKind::Basic },
@@ -1034,9 +2295,10 @@ const OP_VOTED_EPISODES_PUT_USER_VOTES_EPISODES_EPISODE_ID: OpSpec = OpSpec {
     method: "PUT",
     path_template: "/user/votes/episodes/{episode_id}",
     fields: &[
-        FieldSpec { snake: "episode_id", location: FieldLocation::Body },
-        FieldSpec { snake: "vote", location: FieldLocation::Body },
-        FieldSpec { snake: "voted_at", location: FieldLocation::Body },
+        FieldSpec { snake: "episode_id", wire: "episode_id", location: FieldLocation::Path },
+        FieldSpec { snake: "episode_id_v2", wire: "episode_id", location: FieldLocation::Body },
+        FieldSpec { snake: "vote", wire: "vote", location: FieldLocation::Body },
+        FieldSpec { snake: "voted_at", wire: "voted_at", location: FieldLocation::Body },
     ],
     auth: &[
         AuthApply { secret_key: "usertoken", kind: AuthKind::Basic },
@@ -1047,13 +2309,14 @@ const OP_VOTED_EPISODES_DELETE_USER_VOTES_EPISODES_EPISODE_ID: OpSpec = OpSpec {
     method: "DELETE",
     path_template: "/user/votes/episodes/{episode_id}",
     fields: &[
+        FieldSpec { snake: "episode_id", wire: "episode_id", location: FieldLocation::Path },
     ],
     auth: &[
         AuthApply { secret_key: "usertoken", kind: AuthKind::Basic },
     ],
 };
 
-fn iface_voted_episodes__put_user_votes_episodes_episode_id_params__to_json(p: &iface_voted_episodes::PutUserVotesEpisodesEpisodeIdParams) -> Value {
+fn iface_voted_episodes__episode_vote__to_json(p: &iface_voted_episodes::EpisodeVote) -> Value {
     let mut m = Map::new();
     m.insert("episode_id".into(), match (&p.episode_id) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
     m.insert("vote".into(), match (&p.vote) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
@@ -1061,19 +2324,138 @@ fn iface_voted_episodes__put_user_votes_episodes_episode_id_params__to_json(p: &
     Value::Object(m)
 }
 
+fn iface_voted_episodes__get_user_votes_episodes_episode_id_params__to_json(p: &iface_voted_episodes::GetUserVotesEpisodesEpisodeIdParams) -> Value {
+    let mut m = Map::new();
+    m.insert("episode_id".into(), Value::String((&p.episode_id).clone()));
+    Value::Object(m)
+}
+
+fn iface_voted_episodes__put_user_votes_episodes_episode_id_params__to_json(p: &iface_voted_episodes::PutUserVotesEpisodesEpisodeIdParams) -> Value {
+    let mut m = Map::new();
+    m.insert("episode_id".into(), Value::String((&p.episode_id).clone()));
+    m.insert("episode_id_v2".into(), match (&p.episode_id_v2) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("vote".into(), match (&p.vote) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("voted_at".into(), match (&p.voted_at) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_voted_episodes__delete_user_votes_episodes_episode_id_params__to_json(p: &iface_voted_episodes::DeleteUserVotesEpisodesEpisodeIdParams) -> Value {
+    let mut m = Map::new();
+    m.insert("episode_id".into(), Value::String((&p.episode_id).clone()));
+    Value::Object(m)
+}
+
+fn iface_voted_episodes__episode_vote__from_json(v: &Value) -> Option<iface_voted_episodes::EpisodeVote> {
+    let m = v.as_object()?;
+    Some(iface_voted_episodes::EpisodeVote {
+        episode_id: m.get("episode_id").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        vote: m.get("vote").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        voted_at: m.get("voted_at").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+    })
+}
+
+fn iface_voted_episodes__get_user_votes_episodes__ok(body: String) -> Result<Vec<iface_voted_episodes::EpisodeVote>, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match (&v).as_array().map(|a| a.iter().filter_map(|x| iface_voted_episodes__episode_vote__from_json(x)).collect()) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_voted_episodes__get_user_votes_episodes__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
+fn iface_voted_episodes__get_user_votes_episodes_episode_id__ok(body: String) -> Result<iface_voted_episodes::EpisodeVote, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match iface_voted_episodes__episode_vote__from_json(&v) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_voted_episodes__get_user_votes_episodes_episode_id__err(e: crate::runtime::DispatchError) -> iface_voted_episodes::GetUserVotesEpisodesEpisodeIdError {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => match status {
+            404u16 => iface_voted_episodes::GetUserVotesEpisodesEpisodeIdError::NotFound(body),
+            _ => iface_voted_episodes::GetUserVotesEpisodesEpisodeIdError::Other(body),
+        },
+        crate::runtime::DispatchError::Transport(m) => iface_voted_episodes::GetUserVotesEpisodesEpisodeIdError::Other(m),
+    }
+}
+
+fn iface_voted_episodes__put_user_votes_episodes_episode_id__ok(body: String) -> Result<iface_voted_episodes::EpisodeVote, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match iface_voted_episodes__episode_vote__from_json(&v) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_voted_episodes__put_user_votes_episodes_episode_id__err(e: crate::runtime::DispatchError) -> iface_voted_episodes::PutUserVotesEpisodesEpisodeIdError {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => match status {
+            404u16 => iface_voted_episodes::PutUserVotesEpisodesEpisodeIdError::NotFound(body),
+            422u16 => iface_voted_episodes::PutUserVotesEpisodesEpisodeIdError::UnprocessableEntity(body),
+            _ => iface_voted_episodes::PutUserVotesEpisodesEpisodeIdError::Other(body),
+        },
+        crate::runtime::DispatchError::Transport(m) => iface_voted_episodes::PutUserVotesEpisodesEpisodeIdError::Other(m),
+    }
+}
+
+fn iface_voted_episodes__delete_user_votes_episodes_episode_id__ok(body: String) -> Result<String, crate::runtime::DispatchError> {
+    Ok(body)
+}
+
+fn iface_voted_episodes__delete_user_votes_episodes_episode_id__err(e: crate::runtime::DispatchError) -> iface_voted_episodes::DeleteUserVotesEpisodesEpisodeIdError {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => match status {
+            404u16 => iface_voted_episodes::DeleteUserVotesEpisodesEpisodeIdError::NotFound(body),
+            _ => iface_voted_episodes::DeleteUserVotesEpisodesEpisodeIdError::Other(body),
+        },
+        crate::runtime::DispatchError::Transport(m) => iface_voted_episodes::DeleteUserVotesEpisodesEpisodeIdError::Other(m),
+    }
+}
+
 impl iface_voted_episodes::Guest for crate::Component {
-    fn get_user_votes_episodes() -> Result<String, String> {
-        dispatch(&OP_VOTED_EPISODES_GET_USER_VOTES_EPISODES, Value::Object(Map::new()))
+    fn get_user_votes_episodes() -> Result<Vec<iface_voted_episodes::EpisodeVote>, String> {
+        match dispatch(&OP_VOTED_EPISODES_GET_USER_VOTES_EPISODES, Value::Object(Map::new())).and_then(iface_voted_episodes__get_user_votes_episodes__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_voted_episodes__get_user_votes_episodes__err(e)),
+        }
     }
-    fn get_user_votes_episodes_episode_id() -> Result<String, String> {
-        dispatch(&OP_VOTED_EPISODES_GET_USER_VOTES_EPISODES_EPISODE_ID, Value::Object(Map::new()))
+    fn get_user_votes_episodes_episode_id(params: iface_voted_episodes::GetUserVotesEpisodesEpisodeIdParams) -> Result<iface_voted_episodes::EpisodeVote, iface_voted_episodes::GetUserVotesEpisodesEpisodeIdError> {
+        let json = iface_voted_episodes__get_user_votes_episodes_episode_id_params__to_json(&params);
+        match dispatch(&OP_VOTED_EPISODES_GET_USER_VOTES_EPISODES_EPISODE_ID, json).and_then(iface_voted_episodes__get_user_votes_episodes_episode_id__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_voted_episodes__get_user_votes_episodes_episode_id__err(e)),
+        }
     }
-    fn put_user_votes_episodes_episode_id(params: iface_voted_episodes::PutUserVotesEpisodesEpisodeIdParams) -> Result<String, String> {
+    fn put_user_votes_episodes_episode_id(params: iface_voted_episodes::PutUserVotesEpisodesEpisodeIdParams) -> Result<iface_voted_episodes::EpisodeVote, iface_voted_episodes::PutUserVotesEpisodesEpisodeIdError> {
         let json = iface_voted_episodes__put_user_votes_episodes_episode_id_params__to_json(&params);
-        dispatch(&OP_VOTED_EPISODES_PUT_USER_VOTES_EPISODES_EPISODE_ID, json)
+        match dispatch(&OP_VOTED_EPISODES_PUT_USER_VOTES_EPISODES_EPISODE_ID, json).and_then(iface_voted_episodes__put_user_votes_episodes_episode_id__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_voted_episodes__put_user_votes_episodes_episode_id__err(e)),
+        }
     }
-    fn delete_user_votes_episodes_episode_id() -> Result<String, String> {
-        dispatch(&OP_VOTED_EPISODES_DELETE_USER_VOTES_EPISODES_EPISODE_ID, Value::Object(Map::new()))
+    fn delete_user_votes_episodes_episode_id(params: iface_voted_episodes::DeleteUserVotesEpisodesEpisodeIdParams) -> Result<String, iface_voted_episodes::DeleteUserVotesEpisodesEpisodeIdError> {
+        let json = iface_voted_episodes__delete_user_votes_episodes_episode_id_params__to_json(&params);
+        match dispatch(&OP_VOTED_EPISODES_DELETE_USER_VOTES_EPISODES_EPISODE_ID, json).and_then(iface_voted_episodes__delete_user_votes_episodes_episode_id__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_voted_episodes__delete_user_votes_episodes_episode_id__err(e)),
+        }
     }
 }
 use crate::exports::autostamp::tvmaze::voted_shows as iface_voted_shows;
@@ -1082,7 +2464,7 @@ const OP_VOTED_SHOWS_GET_USER_VOTES_SHOWS: OpSpec = OpSpec {
     method: "GET",
     path_template: "/user/votes/shows",
     fields: &[
-        FieldSpec { snake: "embed", location: FieldLocation::Query },
+        FieldSpec { snake: "embed", wire: "embed", location: FieldLocation::Query },
     ],
     auth: &[
         AuthApply { secret_key: "usertoken", kind: AuthKind::Basic },
@@ -1093,6 +2475,7 @@ const OP_VOTED_SHOWS_GET_USER_VOTES_SHOWS_SHOW_ID: OpSpec = OpSpec {
     method: "GET",
     path_template: "/user/votes/shows/{show_id}",
     fields: &[
+        FieldSpec { snake: "show_id", wire: "show_id", location: FieldLocation::Path },
     ],
     auth: &[
         AuthApply { secret_key: "usertoken", kind: AuthKind::Basic },
@@ -1103,9 +2486,10 @@ const OP_VOTED_SHOWS_PUT_USER_VOTES_SHOWS_SHOW_ID: OpSpec = OpSpec {
     method: "PUT",
     path_template: "/user/votes/shows/{show_id}",
     fields: &[
-        FieldSpec { snake: "show_id", location: FieldLocation::Body },
-        FieldSpec { snake: "vote", location: FieldLocation::Body },
-        FieldSpec { snake: "voted_at", location: FieldLocation::Body },
+        FieldSpec { snake: "show_id", wire: "show_id", location: FieldLocation::Path },
+        FieldSpec { snake: "show_id_v2", wire: "show_id", location: FieldLocation::Body },
+        FieldSpec { snake: "vote", wire: "vote", location: FieldLocation::Body },
+        FieldSpec { snake: "voted_at", wire: "voted_at", location: FieldLocation::Body },
     ],
     auth: &[
         AuthApply { secret_key: "usertoken", kind: AuthKind::Basic },
@@ -1116,6 +2500,7 @@ const OP_VOTED_SHOWS_DELETE_USER_VOTES_SHOWS_SHOW_ID: OpSpec = OpSpec {
     method: "DELETE",
     path_template: "/user/votes/shows/{show_id}",
     fields: &[
+        FieldSpec { snake: "show_id", wire: "show_id", location: FieldLocation::Path },
     ],
     auth: &[
         AuthApply { secret_key: "usertoken", kind: AuthKind::Basic },
@@ -1128,13 +2513,7 @@ fn iface_voted_shows__get_user_votes_shows_embed_enum__to_str(e: &iface_voted_sh
     }
 }
 
-fn iface_voted_shows__get_user_votes_shows_params__to_json(p: &iface_voted_shows::GetUserVotesShowsParams) -> Value {
-    let mut m = Map::new();
-    m.insert("embed".into(), match (&p.embed) { Some(v) => Value::String(iface_voted_shows__get_user_votes_shows_embed_enum__to_str(v).into()), None => Value::Null });
-    Value::Object(m)
-}
-
-fn iface_voted_shows__put_user_votes_shows_show_id_params__to_json(p: &iface_voted_shows::PutUserVotesShowsShowIdParams) -> Value {
+fn iface_voted_shows__show_vote__to_json(p: &iface_voted_shows::ShowVote) -> Value {
     let mut m = Map::new();
     m.insert("show_id".into(), match (&p.show_id) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
     m.insert("vote".into(), match (&p.vote) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
@@ -1142,20 +2521,145 @@ fn iface_voted_shows__put_user_votes_shows_show_id_params__to_json(p: &iface_vot
     Value::Object(m)
 }
 
+fn iface_voted_shows__get_user_votes_shows_params__to_json(p: &iface_voted_shows::GetUserVotesShowsParams) -> Value {
+    let mut m = Map::new();
+    m.insert("embed".into(), match (&p.embed) { Some(v) => Value::String(iface_voted_shows__get_user_votes_shows_embed_enum__to_str(v).into()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_voted_shows__get_user_votes_shows_show_id_params__to_json(p: &iface_voted_shows::GetUserVotesShowsShowIdParams) -> Value {
+    let mut m = Map::new();
+    m.insert("show_id".into(), Value::String((&p.show_id).clone()));
+    Value::Object(m)
+}
+
+fn iface_voted_shows__put_user_votes_shows_show_id_params__to_json(p: &iface_voted_shows::PutUserVotesShowsShowIdParams) -> Value {
+    let mut m = Map::new();
+    m.insert("show_id".into(), Value::String((&p.show_id).clone()));
+    m.insert("show_id_v2".into(), match (&p.show_id_v2) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("vote".into(), match (&p.vote) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("voted_at".into(), match (&p.voted_at) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_voted_shows__delete_user_votes_shows_show_id_params__to_json(p: &iface_voted_shows::DeleteUserVotesShowsShowIdParams) -> Value {
+    let mut m = Map::new();
+    m.insert("show_id".into(), Value::String((&p.show_id).clone()));
+    Value::Object(m)
+}
+
+fn iface_voted_shows__show_vote__from_json(v: &Value) -> Option<iface_voted_shows::ShowVote> {
+    let m = v.as_object()?;
+    Some(iface_voted_shows::ShowVote {
+        show_id: m.get("show_id").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        vote: m.get("vote").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        voted_at: m.get("voted_at").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+    })
+}
+
+fn iface_voted_shows__get_user_votes_shows__ok(body: String) -> Result<Vec<iface_voted_shows::ShowVote>, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match (&v).as_array().map(|a| a.iter().filter_map(|x| iface_voted_shows__show_vote__from_json(x)).collect()) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_voted_shows__get_user_votes_shows__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
+fn iface_voted_shows__get_user_votes_shows_show_id__ok(body: String) -> Result<iface_voted_shows::ShowVote, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match iface_voted_shows__show_vote__from_json(&v) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_voted_shows__get_user_votes_shows_show_id__err(e: crate::runtime::DispatchError) -> iface_voted_shows::GetUserVotesShowsShowIdError {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => match status {
+            404u16 => iface_voted_shows::GetUserVotesShowsShowIdError::NotFound(body),
+            _ => iface_voted_shows::GetUserVotesShowsShowIdError::Other(body),
+        },
+        crate::runtime::DispatchError::Transport(m) => iface_voted_shows::GetUserVotesShowsShowIdError::Other(m),
+    }
+}
+
+fn iface_voted_shows__put_user_votes_shows_show_id__ok(body: String) -> Result<iface_voted_shows::ShowVote, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match iface_voted_shows__show_vote__from_json(&v) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_voted_shows__put_user_votes_shows_show_id__err(e: crate::runtime::DispatchError) -> iface_voted_shows::PutUserVotesShowsShowIdError {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => match status {
+            404u16 => iface_voted_shows::PutUserVotesShowsShowIdError::NotFound(body),
+            422u16 => iface_voted_shows::PutUserVotesShowsShowIdError::UnprocessableEntity(body),
+            _ => iface_voted_shows::PutUserVotesShowsShowIdError::Other(body),
+        },
+        crate::runtime::DispatchError::Transport(m) => iface_voted_shows::PutUserVotesShowsShowIdError::Other(m),
+    }
+}
+
+fn iface_voted_shows__delete_user_votes_shows_show_id__ok(body: String) -> Result<String, crate::runtime::DispatchError> {
+    Ok(body)
+}
+
+fn iface_voted_shows__delete_user_votes_shows_show_id__err(e: crate::runtime::DispatchError) -> iface_voted_shows::DeleteUserVotesShowsShowIdError {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => match status {
+            404u16 => iface_voted_shows::DeleteUserVotesShowsShowIdError::NotFound(body),
+            _ => iface_voted_shows::DeleteUserVotesShowsShowIdError::Other(body),
+        },
+        crate::runtime::DispatchError::Transport(m) => iface_voted_shows::DeleteUserVotesShowsShowIdError::Other(m),
+    }
+}
+
 impl iface_voted_shows::Guest for crate::Component {
-    fn get_user_votes_shows(params: iface_voted_shows::GetUserVotesShowsParams) -> Result<String, String> {
+    fn get_user_votes_shows(params: iface_voted_shows::GetUserVotesShowsParams) -> Result<Vec<iface_voted_shows::ShowVote>, String> {
         let json = iface_voted_shows__get_user_votes_shows_params__to_json(&params);
-        dispatch(&OP_VOTED_SHOWS_GET_USER_VOTES_SHOWS, json)
+        match dispatch(&OP_VOTED_SHOWS_GET_USER_VOTES_SHOWS, json).and_then(iface_voted_shows__get_user_votes_shows__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_voted_shows__get_user_votes_shows__err(e)),
+        }
     }
-    fn get_user_votes_shows_show_id() -> Result<String, String> {
-        dispatch(&OP_VOTED_SHOWS_GET_USER_VOTES_SHOWS_SHOW_ID, Value::Object(Map::new()))
+    fn get_user_votes_shows_show_id(params: iface_voted_shows::GetUserVotesShowsShowIdParams) -> Result<iface_voted_shows::ShowVote, iface_voted_shows::GetUserVotesShowsShowIdError> {
+        let json = iface_voted_shows__get_user_votes_shows_show_id_params__to_json(&params);
+        match dispatch(&OP_VOTED_SHOWS_GET_USER_VOTES_SHOWS_SHOW_ID, json).and_then(iface_voted_shows__get_user_votes_shows_show_id__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_voted_shows__get_user_votes_shows_show_id__err(e)),
+        }
     }
-    fn put_user_votes_shows_show_id(params: iface_voted_shows::PutUserVotesShowsShowIdParams) -> Result<String, String> {
+    fn put_user_votes_shows_show_id(params: iface_voted_shows::PutUserVotesShowsShowIdParams) -> Result<iface_voted_shows::ShowVote, iface_voted_shows::PutUserVotesShowsShowIdError> {
         let json = iface_voted_shows__put_user_votes_shows_show_id_params__to_json(&params);
-        dispatch(&OP_VOTED_SHOWS_PUT_USER_VOTES_SHOWS_SHOW_ID, json)
+        match dispatch(&OP_VOTED_SHOWS_PUT_USER_VOTES_SHOWS_SHOW_ID, json).and_then(iface_voted_shows__put_user_votes_shows_show_id__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_voted_shows__put_user_votes_shows_show_id__err(e)),
+        }
     }
-    fn delete_user_votes_shows_show_id() -> Result<String, String> {
-        dispatch(&OP_VOTED_SHOWS_DELETE_USER_VOTES_SHOWS_SHOW_ID, Value::Object(Map::new()))
+    fn delete_user_votes_shows_show_id(params: iface_voted_shows::DeleteUserVotesShowsShowIdParams) -> Result<String, iface_voted_shows::DeleteUserVotesShowsShowIdError> {
+        let json = iface_voted_shows__delete_user_votes_shows_show_id_params__to_json(&params);
+        match dispatch(&OP_VOTED_SHOWS_DELETE_USER_VOTES_SHOWS_SHOW_ID, json).and_then(iface_voted_shows__delete_user_votes_shows_show_id__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_voted_shows__delete_user_votes_shows_show_id__err(e)),
+        }
     }
 }
 

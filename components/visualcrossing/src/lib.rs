@@ -44,10 +44,15 @@ pub(crate) enum FieldLocation {
     Body,
 }
 
-/// A single operation parameter: the snake-case key it carries in the params JSON and where
-/// it belongs in the request.
+/// A single operation parameter. `snake` keys the field in the internal params JSON (and, for a
+/// path field, matches the `{snake}` placeholder in the path template); `wire` is the verbatim name
+/// the field takes on the HTTP wire (query key, header name, or body property). The two differ
+/// whenever the source name isn't already snake_case (e.g. `dryRun` → snake `dry_run`, wire
+/// `dryRun`), and let distinct inputs that share a snake key (`DateCreated`, `DateCreated<`) still
+/// travel under their true names.
 pub(crate) struct FieldSpec {
     pub(crate) snake: &'static str,
+    pub(crate) wire: &'static str,
     pub(crate) location: FieldLocation,
 }
 
@@ -71,6 +76,16 @@ pub(crate) struct AuthApply {
     pub(crate) kind: AuthKind,
 }
 
+/// The failure modes of [`dispatch`], kept structured so each generated operation can map them
+/// onto its own typed error: an `Http` failure carries the response status and body (routed to
+/// the matching error-variant case), while a `Transport` failure carries a message for the
+/// catch-all case (a secret lookup, connection, or decode failure that never produced an HTTP
+/// status).
+pub(crate) enum DispatchError {
+    Http { status: u16, body: String },
+    Transport(String),
+}
+
 /// A single API operation: HTTP method, path template (with `{snake}` placeholders), the
 /// parameter fields, and the security schemes to apply.
 pub(crate) struct OpSpec {
@@ -81,8 +96,9 @@ pub(crate) struct OpSpec {
 }
 
 /// Execute `op` with the supplied `params` (a JSON object keyed by snake-case field names)
-/// and return the response body as a string, or an error message.
-pub(crate) fn dispatch(op: &OpSpec, params: Value) -> Result<String, String> {
+/// and return the raw 2xx response body, or a structured [`DispatchError`] the caller maps
+/// onto the operation's typed error.
+pub(crate) fn dispatch(op: &OpSpec, params: Value) -> Result<String, DispatchError> {
     let obj = match &params {
         Value::Object(map) => Some(map),
         _ => None,
@@ -105,10 +121,10 @@ pub(crate) fn dispatch(op: &OpSpec, params: Value) -> Result<String, String> {
                 let placeholder = format!("{{{}}}", field.snake);
                 path = path.replace(&placeholder, &percent_encode(&scalar(value)));
             }
-            FieldLocation::Query => query.push((field.snake.to_string(), scalar(value))),
-            FieldLocation::Header => headers.push((field.snake.to_string(), scalar(value))),
+            FieldLocation::Query => query.push((field.wire.to_string(), scalar(value))),
+            FieldLocation::Header => headers.push((field.wire.to_string(), scalar(value))),
             FieldLocation::Body => {
-                body.insert(field.snake.to_string(), value.clone());
+                body.insert(field.wire.to_string(), value.clone());
             }
         }
     }
@@ -116,7 +132,7 @@ pub(crate) fn dispatch(op: &OpSpec, params: Value) -> Result<String, String> {
     // Apply each resolved security scheme, sourcing its value from wasmcloud:secrets.
     let mut cookies: Vec<String> = Vec::new();
     for apply in op.auth {
-        let secret = fetch_secret(apply.secret_key)?;
+        let secret = fetch_secret(apply.secret_key).map_err(DispatchError::Transport)?;
         match &apply.kind {
             AuthKind::Bearer => headers.push(("authorization".into(), format!("Bearer {secret}"))),
             AuthKind::Basic => {
@@ -177,17 +193,18 @@ fn fetch_secret(key: &str) -> Result<String, String> {
 }
 
 /// Build and send the outgoing request with `wstd`, returning the response body on a 2xx
-/// status. The generated guest exports are synchronous, so the async `wstd` client is driven
-/// to completion on a local reactor via `wstd::runtime::block_on`.
+/// status and a structured [`DispatchError`] otherwise. The generated guest exports are
+/// synchronous, so the async `wstd` client is driven to completion on a local reactor via
+/// `wstd::runtime::block_on`.
 fn perform(
     method: &str,
     path_with_query: &str,
     headers: &[(String, String)],
     body: &[u8],
-) -> Result<String, String> {
+) -> Result<String, DispatchError> {
     let url = join_url(crate::BASE_URL, path_with_query);
     let method = Method::from_bytes(method.as_bytes())
-        .map_err(|err| format!("invalid HTTP method `{method}`: {err}"))?;
+        .map_err(|err| DispatchError::Transport(format!("invalid HTTP method `{method}`: {err}")))?;
 
     let mut builder = Request::builder().method(method).uri(url);
     for (name, value) in headers {
@@ -199,27 +216,29 @@ fn perform(
         } else {
             Body::from(body.to_vec())
         })
-        .map_err(|err| format!("failed to build request: {err}"))?;
+        .map_err(|err| DispatchError::Transport(format!("failed to build request: {err}")))?;
 
     wstd::runtime::block_on(async move {
         let client = Client::new();
         let response = client
             .send(request)
             .await
-            .map_err(|err| format!("request failed: {err:#}"))?;
+            .map_err(|err| DispatchError::Transport(format!("request failed: {err:#}")))?;
 
         let status = response.status().as_u16();
         let mut response_body = response.into_body();
-        let bytes = response_body
-            .contents()
-            .await
-            .map_err(|err| format!("failed to read response body: {err:#}"))?;
+        let bytes = response_body.contents().await.map_err(|err| {
+            DispatchError::Transport(format!("failed to read response body: {err:#}"))
+        })?;
         let body_text = String::from_utf8_lossy(bytes).into_owned();
 
         if (200..300).contains(&status) {
             Ok(body_text)
         } else {
-            Err(format!("HTTP {status}: {body_text}"))
+            Err(DispatchError::Http {
+                status,
+                body: body_text,
+            })
         }
     })
 }
@@ -288,12 +307,12 @@ const OP_TIMELINE_WEATHER_API_V15_DAY_FORECAST_REQUEST_GET_VISUAL_CROSSING_WEB_S
     method: "GET",
     path_template: "/VisualCrossingWebServices/rest/services/timeline/{location}",
     fields: &[
-        FieldSpec { snake: "location", location: FieldLocation::Path },
-        FieldSpec { snake: "content_type", location: FieldLocation::Query },
-        FieldSpec { snake: "unit_group", location: FieldLocation::Query },
-        FieldSpec { snake: "include", location: FieldLocation::Query },
-        FieldSpec { snake: "lang", location: FieldLocation::Query },
-        FieldSpec { snake: "key", location: FieldLocation::Query },
+        FieldSpec { snake: "location", wire: "location", location: FieldLocation::Path },
+        FieldSpec { snake: "content_type", wire: "contentType", location: FieldLocation::Query },
+        FieldSpec { snake: "unit_group", wire: "unitGroup", location: FieldLocation::Query },
+        FieldSpec { snake: "include", wire: "include", location: FieldLocation::Query },
+        FieldSpec { snake: "lang", wire: "lang", location: FieldLocation::Query },
+        FieldSpec { snake: "key", wire: "key", location: FieldLocation::Query },
     ],
     auth: &[
     ],
@@ -310,10 +329,24 @@ fn iface_timeline_weather_api_v15_day_forecast_request__get_visual_crossing_web_
     Value::Object(m)
 }
 
+fn iface_timeline_weather_api_v15_day_forecast_request__get_visual_crossing_web_services_rest_services_timeline_location__ok(body: String) -> Result<String, crate::runtime::DispatchError> {
+    Ok(body)
+}
+
+fn iface_timeline_weather_api_v15_day_forecast_request__get_visual_crossing_web_services_rest_services_timeline_location__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
 impl iface_timeline_weather_api_v15_day_forecast_request::Guest for crate::Component {
     fn get_visual_crossing_web_services_rest_services_timeline_location(params: iface_timeline_weather_api_v15_day_forecast_request::GetVisualCrossingWebServicesRestServicesTimelineLocationParams) -> Result<String, String> {
         let json = iface_timeline_weather_api_v15_day_forecast_request__get_visual_crossing_web_services_rest_services_timeline_location_params__to_json(&params);
-        dispatch(&OP_TIMELINE_WEATHER_API_V15_DAY_FORECAST_REQUEST_GET_VISUAL_CROSSING_WEB_SERVICES_REST_SERVICES_TIMELINE_LOCATION, json)
+        match dispatch(&OP_TIMELINE_WEATHER_API_V15_DAY_FORECAST_REQUEST_GET_VISUAL_CROSSING_WEB_SERVICES_REST_SERVICES_TIMELINE_LOCATION, json).and_then(iface_timeline_weather_api_v15_day_forecast_request__get_visual_crossing_web_services_rest_services_timeline_location__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_timeline_weather_api_v15_day_forecast_request__get_visual_crossing_web_services_rest_services_timeline_location__err(e)),
+        }
     }
 }
 use crate::exports::autostamp::visualcrossing::timeline_weather_api_single_date_request as iface_timeline_weather_api_single_date_request;
@@ -322,13 +355,13 @@ const OP_TIMELINE_WEATHER_API_SINGLE_DATE_REQUEST_GET_VISUAL_CROSSING_WEB_SERVIC
     method: "GET",
     path_template: "/VisualCrossingWebServices/rest/services/timeline/{location}/{startdate}",
     fields: &[
-        FieldSpec { snake: "location", location: FieldLocation::Path },
-        FieldSpec { snake: "startdate", location: FieldLocation::Path },
-        FieldSpec { snake: "content_type", location: FieldLocation::Query },
-        FieldSpec { snake: "unit_group", location: FieldLocation::Query },
-        FieldSpec { snake: "include", location: FieldLocation::Query },
-        FieldSpec { snake: "lang", location: FieldLocation::Query },
-        FieldSpec { snake: "key", location: FieldLocation::Query },
+        FieldSpec { snake: "location", wire: "location", location: FieldLocation::Path },
+        FieldSpec { snake: "startdate", wire: "startdate", location: FieldLocation::Path },
+        FieldSpec { snake: "content_type", wire: "contentType", location: FieldLocation::Query },
+        FieldSpec { snake: "unit_group", wire: "unitGroup", location: FieldLocation::Query },
+        FieldSpec { snake: "include", wire: "include", location: FieldLocation::Query },
+        FieldSpec { snake: "lang", wire: "lang", location: FieldLocation::Query },
+        FieldSpec { snake: "key", wire: "key", location: FieldLocation::Query },
     ],
     auth: &[
     ],
@@ -346,10 +379,24 @@ fn iface_timeline_weather_api_single_date_request__get_visual_crossing_web_servi
     Value::Object(m)
 }
 
+fn iface_timeline_weather_api_single_date_request__get_visual_crossing_web_services_rest_services_timeline_location_startdate__ok(body: String) -> Result<String, crate::runtime::DispatchError> {
+    Ok(body)
+}
+
+fn iface_timeline_weather_api_single_date_request__get_visual_crossing_web_services_rest_services_timeline_location_startdate__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
 impl iface_timeline_weather_api_single_date_request::Guest for crate::Component {
     fn get_visual_crossing_web_services_rest_services_timeline_location_startdate(params: iface_timeline_weather_api_single_date_request::GetVisualCrossingWebServicesRestServicesTimelineLocationStartdateParams) -> Result<String, String> {
         let json = iface_timeline_weather_api_single_date_request__get_visual_crossing_web_services_rest_services_timeline_location_startdate_params__to_json(&params);
-        dispatch(&OP_TIMELINE_WEATHER_API_SINGLE_DATE_REQUEST_GET_VISUAL_CROSSING_WEB_SERVICES_REST_SERVICES_TIMELINE_LOCATION_STARTDATE, json)
+        match dispatch(&OP_TIMELINE_WEATHER_API_SINGLE_DATE_REQUEST_GET_VISUAL_CROSSING_WEB_SERVICES_REST_SERVICES_TIMELINE_LOCATION_STARTDATE, json).and_then(iface_timeline_weather_api_single_date_request__get_visual_crossing_web_services_rest_services_timeline_location_startdate__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_timeline_weather_api_single_date_request__get_visual_crossing_web_services_rest_services_timeline_location_startdate__err(e)),
+        }
     }
 }
 use crate::exports::autostamp::visualcrossing::timeline_weather_api_date_range_request as iface_timeline_weather_api_date_range_request;
@@ -358,14 +405,14 @@ const OP_TIMELINE_WEATHER_API_DATE_RANGE_REQUEST_GET_VISUAL_CROSSING_WEB_SERVICE
     method: "GET",
     path_template: "/VisualCrossingWebServices/rest/services/timeline/{location}/{startdate}/{enddate}",
     fields: &[
-        FieldSpec { snake: "location", location: FieldLocation::Path },
-        FieldSpec { snake: "startdate", location: FieldLocation::Path },
-        FieldSpec { snake: "enddate", location: FieldLocation::Path },
-        FieldSpec { snake: "content_type", location: FieldLocation::Query },
-        FieldSpec { snake: "unit_group", location: FieldLocation::Query },
-        FieldSpec { snake: "include", location: FieldLocation::Query },
-        FieldSpec { snake: "lang", location: FieldLocation::Query },
-        FieldSpec { snake: "key", location: FieldLocation::Query },
+        FieldSpec { snake: "location", wire: "location", location: FieldLocation::Path },
+        FieldSpec { snake: "startdate", wire: "startdate", location: FieldLocation::Path },
+        FieldSpec { snake: "enddate", wire: "enddate", location: FieldLocation::Path },
+        FieldSpec { snake: "content_type", wire: "contentType", location: FieldLocation::Query },
+        FieldSpec { snake: "unit_group", wire: "unitGroup", location: FieldLocation::Query },
+        FieldSpec { snake: "include", wire: "include", location: FieldLocation::Query },
+        FieldSpec { snake: "lang", wire: "lang", location: FieldLocation::Query },
+        FieldSpec { snake: "key", wire: "key", location: FieldLocation::Query },
     ],
     auth: &[
     ],
@@ -384,10 +431,24 @@ fn iface_timeline_weather_api_date_range_request__get_visual_crossing_web_servic
     Value::Object(m)
 }
 
+fn iface_timeline_weather_api_date_range_request__get_visual_crossing_web_services_rest_services_timeline_location_startdate_enddate__ok(body: String) -> Result<String, crate::runtime::DispatchError> {
+    Ok(body)
+}
+
+fn iface_timeline_weather_api_date_range_request__get_visual_crossing_web_services_rest_services_timeline_location_startdate_enddate__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
 impl iface_timeline_weather_api_date_range_request::Guest for crate::Component {
     fn get_visual_crossing_web_services_rest_services_timeline_location_startdate_enddate(params: iface_timeline_weather_api_date_range_request::GetVisualCrossingWebServicesRestServicesTimelineLocationStartdateEnddateParams) -> Result<String, String> {
         let json = iface_timeline_weather_api_date_range_request__get_visual_crossing_web_services_rest_services_timeline_location_startdate_enddate_params__to_json(&params);
-        dispatch(&OP_TIMELINE_WEATHER_API_DATE_RANGE_REQUEST_GET_VISUAL_CROSSING_WEB_SERVICES_REST_SERVICES_TIMELINE_LOCATION_STARTDATE_ENDDATE, json)
+        match dispatch(&OP_TIMELINE_WEATHER_API_DATE_RANGE_REQUEST_GET_VISUAL_CROSSING_WEB_SERVICES_REST_SERVICES_TIMELINE_LOCATION_STARTDATE_ENDDATE, json).and_then(iface_timeline_weather_api_date_range_request__get_visual_crossing_web_services_rest_services_timeline_location_startdate_enddate__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_timeline_weather_api_date_range_request__get_visual_crossing_web_services_rest_services_timeline_location_startdate_enddate__err(e)),
+        }
     }
 }
 use crate::exports::autostamp::visualcrossing::weather_forecast as iface_weather_forecast;
@@ -396,14 +457,14 @@ const OP_WEATHER_FORECAST_GET_VISUAL_CROSSING_WEB_SERVICES_REST_SERVICES_WEATHER
     method: "GET",
     path_template: "/VisualCrossingWebServices/rest/services/weatherdata/forecast",
     fields: &[
-        FieldSpec { snake: "send_as_datasource", location: FieldLocation::Query },
-        FieldSpec { snake: "allow_asynch", location: FieldLocation::Query },
-        FieldSpec { snake: "short_column_names", location: FieldLocation::Query },
-        FieldSpec { snake: "locations", location: FieldLocation::Query },
-        FieldSpec { snake: "aggregate_hours", location: FieldLocation::Query },
-        FieldSpec { snake: "content_type", location: FieldLocation::Query },
-        FieldSpec { snake: "unit_group", location: FieldLocation::Query },
-        FieldSpec { snake: "key", location: FieldLocation::Query },
+        FieldSpec { snake: "send_as_datasource", wire: "sendAsDatasource", location: FieldLocation::Query },
+        FieldSpec { snake: "allow_asynch", wire: "allowAsynch", location: FieldLocation::Query },
+        FieldSpec { snake: "short_column_names", wire: "shortColumnNames", location: FieldLocation::Query },
+        FieldSpec { snake: "locations", wire: "locations", location: FieldLocation::Query },
+        FieldSpec { snake: "aggregate_hours", wire: "aggregateHours", location: FieldLocation::Query },
+        FieldSpec { snake: "content_type", wire: "contentType", location: FieldLocation::Query },
+        FieldSpec { snake: "unit_group", wire: "unitGroup", location: FieldLocation::Query },
+        FieldSpec { snake: "key", wire: "key", location: FieldLocation::Query },
     ],
     auth: &[
     ],
@@ -422,10 +483,24 @@ fn iface_weather_forecast__get_visual_crossing_web_services_rest_services_weathe
     Value::Object(m)
 }
 
+fn iface_weather_forecast__get_visual_crossing_web_services_rest_services_weatherdata_forecast__ok(body: String) -> Result<String, crate::runtime::DispatchError> {
+    Ok(body)
+}
+
+fn iface_weather_forecast__get_visual_crossing_web_services_rest_services_weatherdata_forecast__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
 impl iface_weather_forecast::Guest for crate::Component {
     fn get_visual_crossing_web_services_rest_services_weatherdata_forecast(params: iface_weather_forecast::GetVisualCrossingWebServicesRestServicesWeatherdataForecastParams) -> Result<String, String> {
         let json = iface_weather_forecast__get_visual_crossing_web_services_rest_services_weatherdata_forecast_params__to_json(&params);
-        dispatch(&OP_WEATHER_FORECAST_GET_VISUAL_CROSSING_WEB_SERVICES_REST_SERVICES_WEATHERDATA_FORECAST, json)
+        match dispatch(&OP_WEATHER_FORECAST_GET_VISUAL_CROSSING_WEB_SERVICES_REST_SERVICES_WEATHERDATA_FORECAST, json).and_then(iface_weather_forecast__get_visual_crossing_web_services_rest_services_weatherdata_forecast__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_weather_forecast__get_visual_crossing_web_services_rest_services_weatherdata_forecast__err(e)),
+        }
     }
 }
 use crate::exports::autostamp::visualcrossing::historical_weather as iface_historical_weather;
@@ -434,19 +509,19 @@ const OP_HISTORICAL_WEATHER_GET_VISUAL_CROSSING_WEB_SERVICES_REST_SERVICES_WEATH
     method: "GET",
     path_template: "/VisualCrossingWebServices/rest/services/weatherdata/history",
     fields: &[
-        FieldSpec { snake: "max_distance", location: FieldLocation::Query },
-        FieldSpec { snake: "short_column_names", location: FieldLocation::Query },
-        FieldSpec { snake: "end_date_time", location: FieldLocation::Query },
-        FieldSpec { snake: "aggregate_hours", location: FieldLocation::Query },
-        FieldSpec { snake: "collect_station_contributions", location: FieldLocation::Query },
-        FieldSpec { snake: "start_date_time", location: FieldLocation::Query },
-        FieldSpec { snake: "max_stations", location: FieldLocation::Query },
-        FieldSpec { snake: "allow_asynch", location: FieldLocation::Query },
-        FieldSpec { snake: "locations", location: FieldLocation::Query },
-        FieldSpec { snake: "include_normals", location: FieldLocation::Query },
-        FieldSpec { snake: "content_type", location: FieldLocation::Query },
-        FieldSpec { snake: "unit_group", location: FieldLocation::Query },
-        FieldSpec { snake: "key", location: FieldLocation::Query },
+        FieldSpec { snake: "max_distance", wire: "maxDistance", location: FieldLocation::Query },
+        FieldSpec { snake: "short_column_names", wire: "shortColumnNames", location: FieldLocation::Query },
+        FieldSpec { snake: "end_date_time", wire: "endDateTime", location: FieldLocation::Query },
+        FieldSpec { snake: "aggregate_hours", wire: "aggregateHours", location: FieldLocation::Query },
+        FieldSpec { snake: "collect_station_contributions", wire: "collectStationContributions", location: FieldLocation::Query },
+        FieldSpec { snake: "start_date_time", wire: "startDateTime", location: FieldLocation::Query },
+        FieldSpec { snake: "max_stations", wire: "maxStations", location: FieldLocation::Query },
+        FieldSpec { snake: "allow_asynch", wire: "allowAsynch", location: FieldLocation::Query },
+        FieldSpec { snake: "locations", wire: "locations", location: FieldLocation::Query },
+        FieldSpec { snake: "include_normals", wire: "includeNormals", location: FieldLocation::Query },
+        FieldSpec { snake: "content_type", wire: "contentType", location: FieldLocation::Query },
+        FieldSpec { snake: "unit_group", wire: "unitGroup", location: FieldLocation::Query },
+        FieldSpec { snake: "key", wire: "key", location: FieldLocation::Query },
     ],
     auth: &[
     ],
@@ -470,10 +545,24 @@ fn iface_historical_weather__get_visual_crossing_web_services_rest_services_weat
     Value::Object(m)
 }
 
+fn iface_historical_weather__get_visual_crossing_web_services_rest_services_weatherdata_history__ok(body: String) -> Result<String, crate::runtime::DispatchError> {
+    Ok(body)
+}
+
+fn iface_historical_weather__get_visual_crossing_web_services_rest_services_weatherdata_history__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
 impl iface_historical_weather::Guest for crate::Component {
     fn get_visual_crossing_web_services_rest_services_weatherdata_history(params: iface_historical_weather::GetVisualCrossingWebServicesRestServicesWeatherdataHistoryParams) -> Result<String, String> {
         let json = iface_historical_weather__get_visual_crossing_web_services_rest_services_weatherdata_history_params__to_json(&params);
-        dispatch(&OP_HISTORICAL_WEATHER_GET_VISUAL_CROSSING_WEB_SERVICES_REST_SERVICES_WEATHERDATA_HISTORY, json)
+        match dispatch(&OP_HISTORICAL_WEATHER_GET_VISUAL_CROSSING_WEB_SERVICES_REST_SERVICES_WEATHERDATA_HISTORY, json).and_then(iface_historical_weather__get_visual_crossing_web_services_rest_services_weatherdata_history__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_historical_weather__get_visual_crossing_web_services_rest_services_weatherdata_history__err(e)),
+        }
     }
 }
 

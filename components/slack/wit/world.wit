@@ -6,25 +6,60 @@
 /// | Secret name | Applied to each request as |
 /// | --- | --- |
 /// | `slackAuth` | `Authorization: Bearer <secret>` |
-package autostamp:slack@0.3.0;
+package autostamp:slack@0.5.0;
 
 interface admin-apps {
+  /// This method either only returns a brief _OK_ response or a verbose schema is not available for this method.
+  record approve-response {
+    ok: defs-ok-true
+  }
+
+  record defs-ok-true {
+    /// opaque schema; raw JSON
+    value: string
+  }
+
+  /// This method either only returns a brief _OK_ response or a verbose schema is not available for this method.
+  record restrict-response {
+    ok: defs-ok-true
+  }
+
   record approve-params {
     /// Authentication token. Requires scope: `admin.apps:write`
-    token: string
+    token: string,
+    /// The id of the app to approve.
+    app-id: option<string>,
+    /// The id of the request to approve.
+    request-id: option<string>,
+    team-id: option<string>
   }
-  approve: func(params: approve-params) -> result<string, string>;
+  approve: func(params: approve-params) -> result<approve-response, string>;
 
   record restrict-params {
     /// Authentication token. Requires scope: `admin.apps:write`
-    token: string
+    token: string,
+    /// The id of the app to restrict.
+    app-id: option<string>,
+    /// The id of the request to restrict.
+    request-id: option<string>,
+    team-id: option<string>
   }
-  restrict: func(params: restrict-params) -> result<string, string>;
+  restrict: func(params: restrict-params) -> result<restrict-response, string>;
 
 }
 
 
 interface admin-apps-approved {
+  /// This method either only returns a brief _OK_ response or a verbose schema is not available for this method.
+  record list-op-response {
+    ok: defs-ok-true
+  }
+
+  record defs-ok-true {
+    /// opaque schema; raw JSON
+    value: string
+  }
+
   record list-op-params {
     /// Authentication token. Requires scope: `admin.apps:read`
     token: string,
@@ -35,11 +70,21 @@ interface admin-apps-approved {
     team-id: option<string>,
     enterprise-id: option<string>
   }
-  list-op: func(params: list-op-params) -> result<string, string>;
+  list-op: func(params: list-op-params) -> result<list-op-response, string>;
 
 }
 
 interface admin-apps-requests {
+  /// This method either only returns a brief _OK_ response or a verbose schema is not available for this method.
+  record list-op-response {
+    ok: defs-ok-true
+  }
+
+  record defs-ok-true {
+    /// opaque schema; raw JSON
+    value: string
+  }
+
   record list-op-params {
     /// Authentication token. Requires scope: `admin.apps:read`
     token: string,
@@ -49,11 +94,21 @@ interface admin-apps-requests {
     cursor: option<string>,
     team-id: option<string>
   }
-  list-op: func(params: list-op-params) -> result<string, string>;
+  list-op: func(params: list-op-params) -> result<list-op-response, string>;
 
 }
 
 interface admin-apps-restricted {
+  /// This method either only returns a brief _OK_ response or a verbose schema is not available for this method.
+  record list-op-response {
+    ok: defs-ok-true
+  }
+
+  record defs-ok-true {
+    /// opaque schema; raw JSON
+    value: string
+  }
+
   record list-op-params {
     /// Authentication token. Requires scope: `admin.apps:read`
     token: string,
@@ -64,40 +119,231 @@ interface admin-apps-restricted {
     team-id: option<string>,
     enterprise-id: option<string>
   }
-  list-op: func(params: list-op-params) -> result<string, string>;
+  list-op: func(params: list-op-params) -> result<list-op-response, string>;
 
 }
 
 interface admin-conversations {
+  /// Schema for successful response of admin.conversations.archive
+  record archive-response {
+    ok: defs-ok-true
+  }
+
+  record defs-ok-true {
+    /// opaque schema; raw JSON
+    value: string
+  }
+
+  /// Schema for successful response of admin.conversations.convertToPrivate
+  record convert-to-private-response {
+    ok: defs-ok-true
+  }
+
+  /// Schema for successful response of admin.conversations.create
+  record create-response {
+    channel-id: option<defs-channel-id>,
+    ok: defs-ok-true
+  }
+
+  record defs-channel-id {
+    /// opaque schema; raw JSON
+    value: string
+  }
+
+  /// Schema for successful response of admin.conversations.delete
+  record delete-response {
+    ok: defs-ok-true
+  }
+
+  /// Schema for successful response of admin.conversations.disconnectShared
+  record disconnect-shared-response {
+    ok: defs-ok-true
+  }
+
+  /// Schema for successful response of admin.conversations.getConversationPrefs
+  record get-conversation-prefs-response {
+    ok: defs-ok-true,
+    prefs: option<get-conversation-prefs-response-prefs>
+  }
+
+  record get-conversation-prefs-response-prefs {
+    can-thread: option<get-conversation-prefs-response-prefs-can-thread>,
+    who-can-post: option<get-conversation-prefs-response-prefs-who-can-post>
+  }
+
+  record get-conversation-prefs-response-prefs-can-thread {
+    type-op: option<list<string>>,
+    user: option<list<string>>
+  }
+
+  record get-conversation-prefs-response-prefs-who-can-post {
+    type-op: option<list<string>>,
+    user: option<list<string>>
+  }
+
+  /// Schema for successful response of admin.conversations.getTeams
+  record get-teams-response {
+    ok: defs-ok-true,
+    response-metadata: option<get-teams-response-response-metadata>,
+    team-ids: list<defs-team>
+  }
+
+  record get-teams-response-response-metadata {
+    next-cursor: string
+  }
+
+  record defs-team {
+    /// opaque schema; raw JSON
+    value: string
+  }
+
+  /// Schema for successful response of admin.conversations.invite
+  record invite-response {
+    ok: defs-ok-true
+  }
+
+  /// Schema for successful response of admin.conversations.rename
+  record rename-response {
+    ok: defs-ok-true
+  }
+
+  /// Schema for successful response of admin.conversations.search
+  record search-response {
+    channels: list<objs-channel>,
+    next-cursor: string
+  }
+
+  record objs-channel {
+    accepted-user: option<defs-user-id>,
+    created: s32,
+    creator: defs-user-id,
+    id: defs-channel-id,
+    is-archived: option<bool>,
+    is-channel: bool,
+    is-frozen: option<bool>,
+    is-general: option<bool>,
+    is-member: option<bool>,
+    is-moved: option<s32>,
+    is-mpim: bool,
+    is-non-threadable: option<bool>,
+    is-org-shared: bool,
+    is-pending-ext-shared: option<bool>,
+    is-private: bool,
+    is-read-only: option<bool>,
+    is-shared: bool,
+    is-thread-only: option<bool>,
+    last-read: option<defs-ts>,
+    latest: option<string>,
+    members: list<defs-user-id>,
+    name: string,
+    name-normalized: string,
+    num-members: option<s32>,
+    pending-shared: option<list<defs-team>>,
+    previous-names: option<list<defs-channel-name>>,
+    priority: option<f64>,
+    purpose: objs-channel-purpose,
+    topic: objs-channel-topic,
+    unlinked: option<s32>,
+    unread-count: option<s32>,
+    unread-count-display: option<s32>
+  }
+
+  record defs-user-id {
+    /// opaque schema; raw JSON
+    value: string
+  }
+
+  record defs-ts {
+    /// opaque schema; raw JSON
+    value: string
+  }
+
+  record defs-channel-name {
+    /// opaque schema; raw JSON
+    value: string
+  }
+
+  record objs-channel-purpose {
+    creator: defs-topic-purpose-creator,
+    last-set: s32,
+    value: string
+  }
+
+  record defs-topic-purpose-creator {
+    /// opaque schema; raw JSON
+    value: string
+  }
+
+  record objs-channel-topic {
+    creator: defs-topic-purpose-creator,
+    last-set: s32,
+    value: string
+  }
+
+  /// Schema for successful response of admin.conversations.setConversationPrefs
+  record set-conversation-prefs-response {
+    ok: defs-ok-true
+  }
+
+  /// This method either only returns a brief _OK_ response or a verbose schema is not available for this method.
+  record set-teams-response {
+    ok: defs-ok-true
+  }
+
+  /// Schema for successful response of admin.conversations.unarchive
+  record unarchive-response {
+    ok: defs-ok-true
+  }
+
   record archive-params {
     /// Authentication token. Requires scope: `admin.conversations:write`
-    token: string
+    token: string,
+    /// The channel to archive.
+    channel-id: string
   }
-  archive: func(params: archive-params) -> result<string, string>;
+  archive: func(params: archive-params) -> result<archive-response, string>;
 
   record convert-to-private-params {
     /// Authentication token. Requires scope: `admin.conversations:write`
-    token: string
+    token: string,
+    /// The channel to convert to private.
+    channel-id: string
   }
-  convert-to-private: func(params: convert-to-private-params) -> result<string, string>;
+  convert-to-private: func(params: convert-to-private-params) -> result<convert-to-private-response, string>;
 
   record create-params {
     /// Authentication token. Requires scope: `admin.conversations:write`
-    token: string
+    token: string,
+    /// Description of the public or private channel to create.
+    description: option<string>,
+    /// When `true`, creates a private channel instead of a public channel
+    is-private: bool,
+    /// Name of the public or private channel to create.
+    name: string,
+    /// When `true`, the channel will be available org-wide. Note: if the channel is not `org_wide=true`, you must specify a `team_id` for this channel
+    org-wide: option<bool>,
+    /// The workspace to create the channel in. Note: this argument is required unless you set `org_wide=true`.
+    team-id: option<string>
   }
-  create: func(params: create-params) -> result<string, string>;
+  create: func(params: create-params) -> result<create-response, string>;
 
   record delete-params {
     /// Authentication token. Requires scope: `admin.conversations:write`
-    token: string
+    token: string,
+    /// The channel to delete.
+    channel-id: string
   }
-  delete: func(params: delete-params) -> result<string, string>;
+  delete: func(params: delete-params) -> result<delete-response, string>;
 
   record disconnect-shared-params {
     /// Authentication token. Requires scope: `admin.conversations:write`
-    token: string
+    token: string,
+    /// The channel to be disconnected from some workspaces.
+    channel-id: string,
+    /// The team to be removed from the channel. Currently only a single team id can be specified.
+    leaving-team-ids: option<string>
   }
-  disconnect-shared: func(params: disconnect-shared-params) -> result<string, string>;
+  disconnect-shared: func(params: disconnect-shared-params) -> result<disconnect-shared-response, string>;
 
   record get-conversation-prefs-params {
     /// Authentication token. Requires scope: `admin.conversations:read`
@@ -105,7 +351,7 @@ interface admin-conversations {
     /// The channel to get preferences for.
     channel-id: string
   }
-  get-conversation-prefs: func(params: get-conversation-prefs-params) -> result<string, string>;
+  get-conversation-prefs: func(params: get-conversation-prefs-params) -> result<get-conversation-prefs-response, string>;
 
   record get-teams-params {
     /// Authentication token. Requires scope: `admin.conversations:read`
@@ -117,19 +363,26 @@ interface admin-conversations {
     /// The maximum number of items to return. Must be between 1 - 1000 both inclusive.
     limit: option<s32>
   }
-  get-teams: func(params: get-teams-params) -> result<string, string>;
+  get-teams: func(params: get-teams-params) -> result<get-teams-response, string>;
 
   record invite-params {
     /// Authentication token. Requires scope: `admin.conversations:write`
-    token: string
+    token: string,
+    /// The channel that the users will be invited to.
+    channel-id: string,
+    /// The users to invite.
+    user-ids: string
   }
-  invite: func(params: invite-params) -> result<string, string>;
+  invite: func(params: invite-params) -> result<invite-response, string>;
 
   record rename-params {
     /// Authentication token. Requires scope: `admin.conversations:write`
-    token: string
+    token: string,
+    /// The channel to rename.
+    channel-id: string,
+    name: string
   }
-  rename: func(params: rename-params) -> result<string, string>;
+  rename: func(params: rename-params) -> result<rename-response, string>;
 
   record search-params {
     /// Authentication token. Requires scope: `admin.conversations:read`
@@ -149,29 +402,53 @@ interface admin-conversations {
     /// Sort direction. Possible values are `asc` for ascending order like (1, 2, 3) or (a, b, c), and `desc` for descending order like (3, 2, 1) or (c, b, a)
     sort-dir: option<string>
   }
-  search: func(params: search-params) -> result<string, string>;
+  search: func(params: search-params) -> result<search-response, string>;
 
   record set-conversation-prefs-params {
     /// Authentication token. Requires scope: `admin.conversations:write`
-    token: string
+    token: string,
+    /// The channel to set the prefs for
+    channel-id: string,
+    /// The prefs for this channel in a stringified JSON format.
+    prefs: string
   }
-  set-conversation-prefs: func(params: set-conversation-prefs-params) -> result<string, string>;
+  set-conversation-prefs: func(params: set-conversation-prefs-params) -> result<set-conversation-prefs-response, string>;
 
   record set-teams-params {
     /// Authentication token. Requires scope: `admin.conversations:write`
-    token: string
+    token: string,
+    /// The encoded `channel_id` to add or remove to workspaces.
+    channel-id: string,
+    /// True if channel has to be converted to an org channel
+    org-channel: option<bool>,
+    /// A comma-separated list of workspaces to which the channel should be shared. Not required if the channel is being shared org-wide.
+    target-team-ids: option<string>,
+    /// The workspace to which the channel belongs. Omit this argument if the channel is a cross-workspace shared channel.
+    team-id: option<string>
   }
-  set-teams: func(params: set-teams-params) -> result<string, string>;
+  set-teams: func(params: set-teams-params) -> result<set-teams-response, string>;
 
   record unarchive-params {
     /// Authentication token. Requires scope: `admin.conversations:write`
-    token: string
+    token: string,
+    /// The channel to unarchive.
+    channel-id: string
   }
-  unarchive: func(params: unarchive-params) -> result<string, string>;
+  unarchive: func(params: unarchive-params) -> result<unarchive-response, string>;
 
 }
 
 interface admin-conversations-ekm {
+  /// This method either only returns a brief _OK_ response or a verbose schema is not available for this method.
+  record list-original-connected-channel-info-response {
+    ok: defs-ok-true
+  }
+
+  record defs-ok-true {
+    /// opaque schema; raw JSON
+    value: string
+  }
+
   record list-original-connected-channel-info-params {
     /// Authentication token. Requires scope: `admin.conversations:read`
     token: string,
@@ -184,12 +461,42 @@ interface admin-conversations-ekm {
     /// Set `cursor` to `next_cursor` returned by the previous call to list items in the next page.
     cursor: option<string>
   }
-  list-original-connected-channel-info: func(params: list-original-connected-channel-info-params) -> result<string, string>;
+  list-original-connected-channel-info: func(params: list-original-connected-channel-info-params) -> result<list-original-connected-channel-info-response, string>;
 
 }
 
 interface admin-conversations-restrict-access {
-  add-group: func() -> result<string, string>;
+  /// This method either only returns a brief _OK_ response or a verbose schema is not available for this method.
+  record add-group-response {
+    ok: defs-ok-true
+  }
+
+  record defs-ok-true {
+    /// opaque schema; raw JSON
+    value: string
+  }
+
+  /// This method either only returns a brief _OK_ response or a verbose schema is not available for this method.
+  record list-groups-response {
+    ok: defs-ok-true
+  }
+
+  /// This method either only returns a brief _OK_ response or a verbose schema is not available for this method.
+  record remove-group-response {
+    ok: defs-ok-true
+  }
+
+  record add-group-params {
+    /// The channel to link this group to.
+    channel-id: string,
+    /// The [IDP Group](https://slack.com/help/articles/115001435788-Connect-identity-provider-groups-to-your-Enterprise-Grid-org) ID to be an allowlist for the private channel.
+    group-id: string,
+    /// The workspace where the channel exists. This argument is required for channels only tied to one workspace, and optional for channels that are shared across an organization.
+    team-id: option<string>,
+    /// Authentication token. Requires scope: `admin.conversations:write`
+    token: string
+  }
+  add-group: func(params: add-group-params) -> result<add-group-response, string>;
 
   record list-groups-params {
     /// Authentication token. Requires scope: `admin.conversations:read`
@@ -198,16 +505,72 @@ interface admin-conversations-restrict-access {
     /// The workspace where the channel exists. This argument is required for channels only tied to one workspace, and optional for channels that are shared across an organization.
     team-id: option<string>
   }
-  list-groups: func(params: list-groups-params) -> result<string, string>;
+  list-groups: func(params: list-groups-params) -> result<list-groups-response, string>;
 
-  remove-group: func() -> result<string, string>;
+  record remove-group-params {
+    /// The channel to remove the linked group from.
+    channel-id: string,
+    /// The [IDP Group](https://slack.com/help/articles/115001435788-Connect-identity-provider-groups-to-your-Enterprise-Grid-org) ID to remove from the private channel.
+    group-id: string,
+    /// The workspace where the channel exists. This argument is required for channels only tied to one workspace, and optional for channels that are shared across an organization.
+    team-id: string,
+    /// Authentication token. Requires scope: `admin.conversations:write`
+    token: string
+  }
+  remove-group: func(params: remove-group-params) -> result<remove-group-response, string>;
 
 }
 
 interface admin-emoji {
-  add: func() -> result<string, string>;
+  /// This method either only returns a brief _OK_ response or a verbose schema is not available for this method.
+  record add-response {
+    ok: defs-ok-true
+  }
 
-  add-alias: func() -> result<string, string>;
+  record defs-ok-true {
+    /// opaque schema; raw JSON
+    value: string
+  }
+
+  /// This method either only returns a brief _OK_ response or a verbose schema is not available for this method.
+  record add-alias-response {
+    ok: defs-ok-true
+  }
+
+  /// This method either only returns a brief _OK_ response or a verbose schema is not available for this method.
+  record list-op-response {
+    ok: defs-ok-true
+  }
+
+  /// This method either only returns a brief _OK_ response or a verbose schema is not available for this method.
+  record remove-response {
+    ok: defs-ok-true
+  }
+
+  /// This method either only returns a brief _OK_ response or a verbose schema is not available for this method.
+  record rename-response {
+    ok: defs-ok-true
+  }
+
+  record add-params {
+    /// The name of the emoji to be removed. Colons (`:myemoji:`) around the value are not required, although they may be included.
+    name: string,
+    /// Authentication token. Requires scope: `admin.teams:write`
+    token: string,
+    /// The URL of a file to use as an image for the emoji. Square images under 128KB and with transparent backgrounds work best.
+    url: string
+  }
+  add: func(params: add-params) -> result<add-response, string>;
+
+  record add-alias-params {
+    /// The alias of the emoji.
+    alias-for: string,
+    /// The name of the emoji to be aliased. Colons (`:myemoji:`) around the value are not required, although they may be included.
+    name: string,
+    /// Authentication token. Requires scope: `admin.teams:write`
+    token: string
+  }
+  add-alias: func(params: add-alias-params) -> result<add-alias-response, string>;
 
   record list-op-params {
     /// Authentication token. Requires scope: `admin.teams:read`
@@ -217,26 +580,68 @@ interface admin-emoji {
     /// The maximum number of items to return. Must be between 1 - 1000 both inclusive.
     limit: option<s32>
   }
-  list-op: func(params: list-op-params) -> result<string, string>;
+  list-op: func(params: list-op-params) -> result<list-op-response, string>;
 
-  remove: func() -> result<string, string>;
+  record remove-params {
+    /// The name of the emoji to be removed. Colons (`:myemoji:`) around the value are not required, although they may be included.
+    name: string,
+    /// Authentication token. Requires scope: `admin.teams:write`
+    token: string
+  }
+  remove: func(params: remove-params) -> result<remove-response, string>;
 
-  rename: func() -> result<string, string>;
+  record rename-params {
+    /// The name of the emoji to be renamed. Colons (`:myemoji:`) around the value are not required, although they may be included.
+    name: string,
+    /// The new name of the emoji.
+    new-name: string,
+    /// Authentication token. Requires scope: `admin.teams:write`
+    token: string
+  }
+  rename: func(params: rename-params) -> result<rename-response, string>;
 
 }
 
 interface admin-invite-requests {
+  /// This method either only returns a brief _OK_ response or a verbose schema is not available for this method.
+  record approve-response {
+    ok: defs-ok-true
+  }
+
+  record defs-ok-true {
+    /// opaque schema; raw JSON
+    value: string
+  }
+
+  /// This method either only returns a brief _OK_ response or a verbose schema is not available for this method.
+  record deny-response {
+    ok: defs-ok-true
+  }
+
+  /// This method either only returns a brief _OK_ response or a verbose schema is not available for this method.
+  record list-op-response {
+    ok: defs-ok-true
+  }
+
   record approve-params {
     /// Authentication token. Requires scope: `admin.invites:write`
-    token: string
+    token: string,
+    /// ID of the request to invite.
+    invite-request-id: string,
+    /// ID for the workspace where the invite request was made.
+    team-id: option<string>
   }
-  approve: func(params: approve-params) -> result<string, string>;
+  approve: func(params: approve-params) -> result<approve-response, string>;
 
   record deny-params {
     /// Authentication token. Requires scope: `admin.invites:write`
-    token: string
+    token: string,
+    /// ID of the request to invite.
+    invite-request-id: string,
+    /// ID for the workspace where the invite request was made.
+    team-id: option<string>
   }
-  deny: func(params: deny-params) -> result<string, string>;
+  deny: func(params: deny-params) -> result<deny-response, string>;
 
   record list-op-params {
     /// Authentication token. Requires scope: `admin.invites:read`
@@ -248,11 +653,21 @@ interface admin-invite-requests {
     /// The number of results that will be returned by the API on each invocation. Must be between 1 - 1000, both inclusive
     limit: option<s32>
   }
-  list-op: func(params: list-op-params) -> result<string, string>;
+  list-op: func(params: list-op-params) -> result<list-op-response, string>;
 
 }
 
 interface admin-invite-requests-approved {
+  /// This method either only returns a brief _OK_ response or a verbose schema is not available for this method.
+  record list-op-response {
+    ok: defs-ok-true
+  }
+
+  record defs-ok-true {
+    /// opaque schema; raw JSON
+    value: string
+  }
+
   record list-op-params {
     /// Authentication token. Requires scope: `admin.invites:read`
     token: string,
@@ -263,11 +678,21 @@ interface admin-invite-requests-approved {
     /// The number of results that will be returned by the API on each invocation. Must be between 1 - 1000, both inclusive
     limit: option<s32>
   }
-  list-op: func(params: list-op-params) -> result<string, string>;
+  list-op: func(params: list-op-params) -> result<list-op-response, string>;
 
 }
 
 interface admin-invite-requests-denied {
+  /// This method either only returns a brief _OK_ response or a verbose schema is not available for this method.
+  record list-op-response {
+    ok: defs-ok-true
+  }
+
+  record defs-ok-true {
+    /// opaque schema; raw JSON
+    value: string
+  }
+
   record list-op-params {
     /// Authentication token. Requires scope: `admin.invites:read`
     token: string,
@@ -278,11 +703,21 @@ interface admin-invite-requests-denied {
     /// The number of results that will be returned by the API on each invocation. Must be between 1 - 1000 both inclusive
     limit: option<s32>
   }
-  list-op: func(params: list-op-params) -> result<string, string>;
+  list-op: func(params: list-op-params) -> result<list-op-response, string>;
 
 }
 
 interface admin-teams-admins {
+  /// This method either only returns a brief _OK_ response or a verbose schema is not available for this method.
+  record list-op-response {
+    ok: defs-ok-true
+  }
+
+  record defs-ok-true {
+    /// opaque schema; raw JSON
+    value: string
+  }
+
   record list-op-params {
     /// Authentication token. Requires scope: `admin.teams:read`
     token: string,
@@ -292,16 +727,39 @@ interface admin-teams-admins {
     cursor: option<string>,
     team-id: string
   }
-  list-op: func(params: list-op-params) -> result<string, string>;
+  list-op: func(params: list-op-params) -> result<list-op-response, string>;
 
 }
 
 interface admin-teams {
+  /// This method either only returns a brief _OK_ response or a verbose schema is not available for this method.
+  record create-response {
+    ok: defs-ok-true
+  }
+
+  record defs-ok-true {
+    /// opaque schema; raw JSON
+    value: string
+  }
+
+  /// This method either only returns a brief _OK_ response or a verbose schema is not available for this method.
+  record list-op-response {
+    ok: defs-ok-true
+  }
+
   record create-params {
     /// Authentication token. Requires scope: `admin.teams:write`
-    token: string
+    token: string,
+    /// Description for the team.
+    team-description: option<string>,
+    /// Who can join the team. A team's discoverability can be `open`, `closed`, `invite_only`, or `unlisted`.
+    team-discoverability: option<string>,
+    /// Team domain (for example, slacksoftballteam).
+    team-domain: string,
+    /// Team name (for example, Slack Softball Team).
+    team-name: string
   }
-  create: func(params: create-params) -> result<string, string>;
+  create: func(params: create-params) -> result<create-response, string>;
 
   record list-op-params {
     /// Authentication token. Requires scope: `admin.teams:read`
@@ -311,11 +769,21 @@ interface admin-teams {
     /// Set `cursor` to `next_cursor` returned by the previous call to list items in the next page.
     cursor: option<string>
   }
-  list-op: func(params: list-op-params) -> result<string, string>;
+  list-op: func(params: list-op-params) -> result<list-op-response, string>;
 
 }
 
 interface admin-teams-owners {
+  /// This method either only returns a brief _OK_ response or a verbose schema is not available for this method.
+  record list-op-response {
+    ok: defs-ok-true
+  }
+
+  record defs-ok-true {
+    /// opaque schema; raw JSON
+    value: string
+  }
+
   record list-op-params {
     /// Authentication token. Requires scope: `admin.teams:read`
     token: string,
@@ -325,54 +793,154 @@ interface admin-teams-owners {
     /// Set `cursor` to `next_cursor` returned by the previous call to list items in the next page.
     cursor: option<string>
   }
-  list-op: func(params: list-op-params) -> result<string, string>;
+  list-op: func(params: list-op-params) -> result<list-op-response, string>;
 
 }
 
 interface admin-teams-settings {
+  /// This method either only returns a brief _OK_ response or a verbose schema is not available for this method.
+  record info-response {
+    ok: defs-ok-true
+  }
+
+  record defs-ok-true {
+    /// opaque schema; raw JSON
+    value: string
+  }
+
+  /// This method either only returns a brief _OK_ response or a verbose schema is not available for this method.
+  record set-default-channels-response {
+    ok: defs-ok-true
+  }
+
+  /// This method either only returns a brief _OK_ response or a verbose schema is not available for this method.
+  record set-description-response {
+    ok: defs-ok-true
+  }
+
+  /// This method either only returns a brief _OK_ response or a verbose schema is not available for this method.
+  record set-discoverability-response {
+    ok: defs-ok-true
+  }
+
+  /// This method either only returns a brief _OK_ response or a verbose schema is not available for this method.
+  record set-icon-response {
+    ok: defs-ok-true
+  }
+
+  /// This method either only returns a brief _OK_ response or a verbose schema is not available for this method.
+  record set-name-response {
+    ok: defs-ok-true
+  }
+
   record info-params {
     /// Authentication token. Requires scope: `admin.teams:read`
     token: string,
     team-id: string
   }
-  info: func(params: info-params) -> result<string, string>;
+  info: func(params: info-params) -> result<info-response, string>;
 
-  set-default-channels: func() -> result<string, string>;
+  record set-default-channels-params {
+    /// An array of channel IDs.
+    channel-ids: string,
+    /// ID for the workspace to set the default channel for.
+    team-id: string,
+    /// Authentication token. Requires scope: `admin.teams:write`
+    token: string
+  }
+  set-default-channels: func(params: set-default-channels-params) -> result<set-default-channels-response, string>;
 
   record set-description-params {
     /// Authentication token. Requires scope: `admin.teams:write`
-    token: string
+    token: string,
+    /// The new description for the workspace.
+    description: string,
+    /// ID for the workspace to set the description for.
+    team-id: string
   }
-  set-description: func(params: set-description-params) -> result<string, string>;
+  set-description: func(params: set-description-params) -> result<set-description-response, string>;
 
   record set-discoverability-params {
     /// Authentication token. Requires scope: `admin.teams:write`
-    token: string
+    token: string,
+    /// This workspace's discovery setting. It must be set to one of `open`, `invite_only`, `closed`, or `unlisted`.
+    discoverability: string,
+    /// The ID of the workspace to set discoverability on.
+    team-id: string
   }
-  set-discoverability: func(params: set-discoverability-params) -> result<string, string>;
+  set-discoverability: func(params: set-discoverability-params) -> result<set-discoverability-response, string>;
 
-  set-icon: func() -> result<string, string>;
-
-  record set-name-params {
+  record set-icon-params {
+    /// Image URL for the icon
+    image-url: string,
+    /// ID for the workspace to set the icon for.
+    team-id: string,
     /// Authentication token. Requires scope: `admin.teams:write`
     token: string
   }
-  set-name: func(params: set-name-params) -> result<string, string>;
+  set-icon: func(params: set-icon-params) -> result<set-icon-response, string>;
+
+  record set-name-params {
+    /// Authentication token. Requires scope: `admin.teams:write`
+    token: string,
+    /// The new name of the workspace.
+    name: string,
+    /// ID for the workspace to set the name for.
+    team-id: string
+  }
+  set-name: func(params: set-name-params) -> result<set-name-response, string>;
 
 }
 
 interface admin-usergroups {
+  /// This method either only returns a brief _OK_ response or a verbose schema is not available for this method.
+  record add-channels-response {
+    ok: defs-ok-true
+  }
+
+  record defs-ok-true {
+    /// opaque schema; raw JSON
+    value: string
+  }
+
+  /// This method either only returns a brief _OK_ response or a verbose schema is not available for this method.
+  record add-teams-response {
+    ok: defs-ok-true
+  }
+
+  /// This method either only returns a brief _OK_ response or a verbose schema is not available for this method.
+  record list-channels-response {
+    ok: defs-ok-true
+  }
+
+  /// This method either only returns a brief _OK_ response or a verbose schema is not available for this method.
+  record remove-channels-response {
+    ok: defs-ok-true
+  }
+
   record add-channels-params {
     /// Authentication token. Requires scope: `admin.usergroups:write`
-    token: string
+    token: string,
+    /// Comma separated string of channel IDs.
+    channel-ids: string,
+    /// The workspace to add default channels in.
+    team-id: option<string>,
+    /// ID of the IDP group to add default channels for.
+    usergroup-id: string
   }
-  add-channels: func(params: add-channels-params) -> result<string, string>;
+  add-channels: func(params: add-channels-params) -> result<add-channels-response, string>;
 
   record add-teams-params {
     /// Authentication token. Requires scope: `admin.teams:write`
-    token: string
+    token: string,
+    /// When `true`, this method automatically creates new workspace accounts for the IDP group members.
+    auto-provision: option<bool>,
+    /// A comma separated list of encoded team (workspace) IDs. Each workspace *MUST* belong to the organization associated with the token.
+    team-ids: string,
+    /// An encoded usergroup (IDP Group) ID.
+    usergroup-id: string
   }
-  add-teams: func(params: add-teams-params) -> result<string, string>;
+  add-teams: func(params: add-teams-params) -> result<add-teams-response, string>;
 
   record list-channels-params {
     /// Authentication token. Requires scope: `admin.usergroups:read`
@@ -384,28 +952,105 @@ interface admin-usergroups {
     /// Flag to include or exclude the count of members per channel.
     include-num-members: option<bool>
   }
-  list-channels: func(params: list-channels-params) -> result<string, string>;
+  list-channels: func(params: list-channels-params) -> result<list-channels-response, string>;
 
   record remove-channels-params {
     /// Authentication token. Requires scope: `admin.usergroups:write`
-    token: string
+    token: string,
+    /// Comma-separated string of channel IDs
+    channel-ids: string,
+    /// ID of the IDP Group
+    usergroup-id: string
   }
-  remove-channels: func(params: remove-channels-params) -> result<string, string>;
+  remove-channels: func(params: remove-channels-params) -> result<remove-channels-response, string>;
 
 }
 
 interface admin-users {
+  /// This method either only returns a brief _OK_ response or a verbose schema is not available for this method.
+  record assign-response {
+    ok: defs-ok-true
+  }
+
+  record defs-ok-true {
+    /// opaque schema; raw JSON
+    value: string
+  }
+
+  /// This method either only returns a brief _OK_ response or a verbose schema is not available for this method.
+  record invite-response {
+    ok: defs-ok-true
+  }
+
+  /// This method either only returns a brief _OK_ response or a verbose schema is not available for this method.
+  record list-op-response {
+    ok: defs-ok-true
+  }
+
+  /// This method either only returns a brief _OK_ response or a verbose schema is not available for this method.
+  record remove-response {
+    ok: defs-ok-true
+  }
+
+  /// This method either only returns a brief _OK_ response or a verbose schema is not available for this method.
+  record set-admin-response {
+    ok: defs-ok-true
+  }
+
+  /// This method either only returns a brief _OK_ response or a verbose schema is not available for this method.
+  record set-expiration-response {
+    ok: defs-ok-true
+  }
+
+  /// This method either only returns a brief _OK_ response or a verbose schema is not available for this method.
+  record set-owner-response {
+    ok: defs-ok-true
+  }
+
+  /// This method either only returns a brief _OK_ response or a verbose schema is not available for this method.
+  record set-regular-response {
+    ok: defs-ok-true
+  }
+
   record assign-params {
     /// Authentication token. Requires scope: `admin.users:write`
-    token: string
+    token: string,
+    /// Comma separated values of channel IDs to add user in the new workspace.
+    channel-ids: option<string>,
+    /// True if user should be added to the workspace as a guest.
+    is-restricted: option<bool>,
+    /// True if user should be added to the workspace as a single-channel guest.
+    is-ultra-restricted: option<bool>,
+    /// The ID (`T1234`) of the workspace.
+    team-id: string,
+    /// The ID of the user to add to the workspace.
+    user-id: string
   }
-  assign: func(params: assign-params) -> result<string, string>;
+  assign: func(params: assign-params) -> result<assign-response, string>;
 
   record invite-params {
     /// Authentication token. Requires scope: `admin.users:write`
-    token: string
+    token: string,
+    /// A comma-separated list of `channel_id`s for this user to join. At least one channel is required.
+    channel-ids: string,
+    /// An optional message to send to the user in the invite email.
+    custom-message: option<string>,
+    /// The email address of the person to invite.
+    email: string,
+    /// Timestamp when guest account should be disabled. Only include this timestamp if you are inviting a guest user and you want their account to expire on a certain date.
+    guest-expiration-ts: option<string>,
+    /// Is this user a multi-channel guest user? (default: false)
+    is-restricted: option<bool>,
+    /// Is this user a single channel guest user? (default: false)
+    is-ultra-restricted: option<bool>,
+    /// Full name of the user.
+    real-name: option<string>,
+    /// Allow this invite to be resent in the future if a user has not signed up yet. (default: false)
+    resend: option<bool>,
+    /// The ID (`T1234`) of the workspace.
+    team-id: string
   }
-  invite: func(params: invite-params) -> result<string, string>;
+  invite: func(params: invite-params) -> result<invite-response, string>;
 
   record list-op-params {
     /// Authentication token. Requires scope: `admin.users:read`
@@ -417,67 +1062,133 @@ interface admin-users {
     /// Limit for how many users to be retrieved per page
     limit: option<s32>
   }
-  list-op: func(params: list-op-params) -> result<string, string>;
+  list-op: func(params: list-op-params) -> result<list-op-response, string>;
 
   record remove-params {
     /// Authentication token. Requires scope: `admin.users:write`
-    token: string
+    token: string,
+    /// The ID (`T1234`) of the workspace.
+    team-id: string,
+    /// The ID of the user to remove.
+    user-id: string
   }
-  remove: func(params: remove-params) -> result<string, string>;
+  remove: func(params: remove-params) -> result<remove-response, string>;
 
   record set-admin-params {
     /// Authentication token. Requires scope: `admin.users:write`
-    token: string
+    token: string,
+    /// The ID (`T1234`) of the workspace.
+    team-id: string,
+    /// The ID of the user to designate as an admin.
+    user-id: string
   }
-  set-admin: func(params: set-admin-params) -> result<string, string>;
+  set-admin: func(params: set-admin-params) -> result<set-admin-response, string>;
 
   record set-expiration-params {
     /// Authentication token. Requires scope: `admin.users:write`
-    token: string
+    token: string,
+    /// Timestamp when guest account should be disabled.
+    expiration-ts: s32,
+    /// The ID (`T1234`) of the workspace.
+    team-id: string,
+    /// The ID of the user to set an expiration for.
+    user-id: string
   }
-  set-expiration: func(params: set-expiration-params) -> result<string, string>;
+  set-expiration: func(params: set-expiration-params) -> result<set-expiration-response, string>;
 
   record set-owner-params {
     /// Authentication token. Requires scope: `admin.users:write`
-    token: string
+    token: string,
+    /// The ID (`T1234`) of the workspace.
+    team-id: string,
+    /// Id of the user to promote to owner.
+    user-id: string
   }
-  set-owner: func(params: set-owner-params) -> result<string, string>;
+  set-owner: func(params: set-owner-params) -> result<set-owner-response, string>;
 
   record set-regular-params {
     /// Authentication token. Requires scope: `admin.users:write`
-    token: string
+    token: string,
+    /// The ID (`T1234`) of the workspace.
+    team-id: string,
+    /// The ID of the user to designate as a regular user.
+    user-id: string
   }
-  set-regular: func(params: set-regular-params) -> result<string, string>;
+  set-regular: func(params: set-regular-params) -> result<set-regular-response, string>;
 
 }
 
 interface admin-users-session {
+  /// This method either only returns a brief _OK_ response or a verbose schema is not available for this method.
+  record invalidate-response {
+    ok: defs-ok-true
+  }
+
+  record defs-ok-true {
+    /// opaque schema; raw JSON
+    value: string
+  }
+
+  /// This method either only returns a brief _OK_ response or a verbose schema is not available for this method.
+  record reset-response {
+    ok: defs-ok-true
+  }
+
   record invalidate-params {
     /// Authentication token. Requires scope: `admin.users:write`
-    token: string
+    token: string,
+    session-id: s32,
+    /// ID of the team that the session belongs to
+    team-id: string
   }
-  invalidate: func(params: invalidate-params) -> result<string, string>;
+  invalidate: func(params: invalidate-params) -> result<invalidate-response, string>;
 
   record reset-params {
     /// Authentication token. Requires scope: `admin.users:write`
-    token: string
+    token: string,
+    /// Only expire mobile sessions (default: false)
+    mobile-only: option<bool>,
+    /// The ID of the user to wipe sessions for
+    user-id: string,
+    /// Only expire web sessions (default: false)
+    web-only: option<bool>
   }
-  reset: func(params: reset-params) -> result<string, string>;
+  reset: func(params: reset-params) -> result<reset-response, string>;
 
 }
 
 interface api {
+  /// Schema for successful response api.test method
+  record test-response {
+    ok: defs-ok-true
+  }
+
+  record defs-ok-true {
+    /// opaque schema; raw JSON
+    value: string
+  }
+
   record test-params {
     /// Error response to return
     error: option<string>,
     /// example property to return
     foo: option<string>
   }
-  test: func(params: test-params) -> result<string, string>;
+  test: func(params: test-params) -> result<test-response, string>;
 
 }
 
 interface apps-event-authorizations {
+  /// This method either only returns a brief _OK_ response or a verbose schema is not available for this method.
+  record list-op-response {
+    ok: defs-ok-true
+  }
+
+  record defs-ok-true {
+    /// opaque schema; raw JSON
+    value: string
+  }
+
   record list-op-params {
     /// Authentication token. Requires scope: `authorizations:read`
     token: string,
@@ -485,16 +1196,82 @@ interface apps-event-authorizations {
     cursor: option<string>,
     limit: option<s32>
   }
-  list-op: func(params: list-op-params) -> result<string, string>;
+  list-op: func(params: list-op-params) -> result<list-op-response, string>;
 
 }
 
 interface apps-permissions {
+  /// Schema for successful response from apps.permissions.info method
+  record info-response {
+    info: info-response-info,
+    ok: defs-ok-true
+  }
+
+  record info-response-info {
+    app-home: info-response-info-app-home,
+    channel: info-response-info-channel,
+    group: info-response-info-group,
+    im: info-response-info-im,
+    mpim: info-response-info-mpim,
+    team: info-response-info-team
+  }
+
+  record info-response-info-app-home {
+    resources: option<objs-resources>,
+    scopes: option<objs-scopes>
+  }
+
+  record objs-resources {
+    excluded-ids: option<list<string>>,
+    ids: list<string>,
+    wildcard: option<bool>
+  }
+
+  record objs-scopes {
+    /// opaque schema; raw JSON
+    value: string
+  }
+
+  record info-response-info-channel {
+    resources: option<objs-resources>,
+    scopes: option<objs-scopes>
+  }
+
+  record info-response-info-group {
+    resources: option<objs-resources>,
+    scopes: option<objs-scopes>
+  }
+
+  record info-response-info-im {
+    resources: option<objs-resources>,
+    scopes: option<objs-scopes>
+  }
+
+  record info-response-info-mpim {
+    resources: option<objs-resources>,
+    scopes: option<objs-scopes>
+  }
+
+  record info-response-info-team {
+    resources: objs-resources,
+    scopes: objs-scopes
+  }
+
+  record defs-ok-true {
+    /// opaque schema; raw JSON
+    value: string
+  }
+
+  /// Schema for successful response from apps.permissions.request method
+  record request-response {
+    ok: defs-ok-true
+  }
+
   record info-params {
     /// Authentication token. Requires scope: `none`
     token: option<string>
   }
-  info: func(params: info-params) -> result<string, string>;
+  info: func(params: info-params) -> result<info-response, string>;
 
   record request-params {
     /// Authentication token. Requires scope: `none`
@@ -504,11 +1281,32 @@ interface apps-permissions {
     /// Token used to trigger the permissions API
     trigger-id: string
   }
-  request: func(params: request-params) -> result<string, string>;
+  request: func(params: request-params) -> result<request-response, string>;
 
 }
 
 interface apps-permissions-resources {
+  /// Schema for successful response apps.permissions.resources.list method
+  record list-op-response {
+    ok: defs-ok-true,
+    resources: list<list-op-response-resources-item>,
+    response-metadata: option<list-op-response-response-metadata>
+  }
+
+  record defs-ok-true {
+    /// opaque schema; raw JSON
+    value: string
+  }
+
+  record list-op-response-resources-item {
+    id: option<string>,
+    type-op: option<string>
+  }
+
+  record list-op-response-response-metadata {
+    next-cursor: string
+  }
+
   record list-op-params {
     /// Authentication token. Requires scope: `none`
     token: string,
@@ -517,20 +1315,61 @@ interface apps-permissions-resources {
     /// The maximum number of items to return.
     limit: option<s32>
   }
-  list-op: func(params: list-op-params) -> result<string, string>;
+  list-op: func(params: list-op-params) -> result<list-op-response, string>;
 
 }
 
 interface apps-permissions-scopes {
+  /// Schema for successful response api.permissions.scopes.list method
+  record list-op-response {
+    ok: defs-ok-true,
+    scopes: list-op-response-scopes
+  }
+
+  record defs-ok-true {
+    /// opaque schema; raw JSON
+    value: string
+  }
+
+  record list-op-response-scopes {
+    app-home: option<objs-scopes>,
+    channel: option<objs-scopes>,
+    group: option<objs-scopes>,
+    im: option<objs-scopes>,
+    mpim: option<objs-scopes>,
+    team: option<objs-scopes>,
+    user: option<objs-scopes>
+  }
+
+  record objs-scopes {
+    /// opaque schema; raw JSON
+    value: string
+  }
+
   record list-op-params {
     /// Authentication token. Requires scope: `none`
     token: string
   }
-  list-op: func(params: list-op-params) -> result<string, string>;
+  list-op: func(params: list-op-params) -> result<list-op-response, string>;
 
 }
 
 interface apps-permissions-users {
+  /// This method either only returns a brief _OK_ response or a verbose schema is not available for this method.
+  record list-op-response {
+    ok: defs-ok-true
+  }
+
+  record defs-ok-true {
+    /// opaque schema; raw JSON
+    value: string
+  }
+
+  /// This method either only returns a brief _OK_ response or a verbose schema is not available for this method.
+  record request-response {
+    ok: defs-ok-true
+  }
+
   record list-op-params {
     /// Authentication token. Requires scope: `none`
     token: string,
@@ -539,7 +1378,7 @@ interface apps-permissions-users {
     /// The maximum number of items to return.
     limit: option<s32>
   }
-  list-op: func(params: list-op-params) -> result<string, string>;
+  list-op: func(params: list-op-params) -> result<list-op-response, string>;
 
   record request-params {
     /// Authentication token. Requires scope: `none`
@@ -551,11 +1390,21 @@ interface apps-permissions-users {
     /// The user this scope is being requested for
     user: string
   }
-  request: func(params: request-params) -> result<string, string>;
+  request: func(params: request-params) -> result<request-response, string>;
 
 }
 
 interface apps {
+  /// Schema for successful response from apps.uninstall method
+  record uninstall-response {
+    ok: defs-ok-true
+  }
+
+  record defs-ok-true {
+    /// opaque schema; raw JSON
+    value: string
+  }
+
   record uninstall-params {
     /// Authentication token. Requires scope: `none`
     token: option<string>,
@@ -564,50 +1413,175 @@ interface apps {
     /// Issued when you created your application.
     client-secret: option<string>
   }
-  uninstall: func(params: uninstall-params) -> result<string, string>;
+  uninstall: func(params: uninstall-params) -> result<uninstall-response, string>;
 
 }
 
 interface auth {
+  /// Schema for successful response from auth.revoke method
+  record revoke-response {
+    ok: defs-ok-true,
+    revoked: bool
+  }
+
+  record defs-ok-true {
+    /// opaque schema; raw JSON
+    value: string
+  }
+
+  /// Schema for successful response auth.test method
+  record test-response {
+    bot-id: option<defs-bot-id>,
+    is-enterprise-install: option<bool>,
+    ok: defs-ok-true,
+    team: string,
+    team-id: defs-team,
+    url: string,
+    user: string,
+    user-id: defs-user-id
+  }
+
+  record defs-bot-id {
+    /// opaque schema; raw JSON
+    value: string
+  }
+
+  record defs-team {
+    /// opaque schema; raw JSON
+    value: string
+  }
+
+  record defs-user-id {
+    /// opaque schema; raw JSON
+    value: string
+  }
+
   record revoke-params {
     /// Authentication token. Requires scope: `none`
     token: string,
     /// Setting this parameter to `1` triggers a _testing mode_ where the specified token will not actually be revoked.
     test: option<bool>
   }
-  revoke: func(params: revoke-params) -> result<string, string>;
+  revoke: func(params: revoke-params) -> result<revoke-response, string>;
 
   record test-params {
     /// Authentication token. Requires scope: `none`
     token: string
   }
-  test: func(params: test-params) -> result<string, string>;
+  test: func(params: test-params) -> result<test-response, string>;
 
 }
 
 interface bots {
+  /// Schema for successful response from bots.info method
+  record info-response {
+    bot: info-response-bot,
+    ok: defs-ok-true
+  }
+
+  record info-response-bot {
+    app-id: defs-app-id,
+    deleted: bool,
+    icons: info-response-bot-icons,
+    id: defs-bot-id,
+    name: string,
+    updated: s32,
+    user-id: option<defs-user-id>
+  }
+
+  record defs-app-id {
+    /// opaque schema; raw JSON
+    value: string
+  }
+
+  record info-response-bot-icons {
+    image-v36: string,
+    image-v48: string,
+    image-v72: string
+  }
+
+  record defs-bot-id {
+    /// opaque schema; raw JSON
+    value: string
+  }
+
+  record defs-user-id {
+    /// opaque schema; raw JSON
+    value: string
+  }
+
+  record defs-ok-true {
+    /// opaque schema; raw JSON
+    value: string
+  }
+
   record info-params {
     /// Authentication token. Requires scope: `users:read`
     token: string,
     /// Bot user to get info on
     bot: option<string>
   }
-  info: func(params: info-params) -> result<string, string>;
+  info: func(params: info-params) -> result<info-response, string>;
 
 }
 
 interface calls {
+  /// This method either only returns a brief _OK_ response or a verbose schema is not available for this method.
+  record add-response {
+    ok: defs-ok-true
+  }
+
+  record defs-ok-true {
+    /// opaque schema; raw JSON
+    value: string
+  }
+
+  /// This method either only returns a brief _OK_ response or a verbose schema is not available for this method.
+  record end-response {
+    ok: defs-ok-true
+  }
+
+  /// This method either only returns a brief _OK_ response or a verbose schema is not available for this method.
+  record info-response {
+    ok: defs-ok-true
+  }
+
+  /// This method either only returns a brief _OK_ response or a verbose schema is not available for this method.
+  record update-response {
+    ok: defs-ok-true
+  }
+
   record add-params {
     /// Authentication token. Requires scope: `calls:write`
-    token: string
+    token: string,
+    /// The valid Slack user ID of the user who created this Call. When this method is called with a user token, the `created_by` field is optional and defaults to the authed user of the token. Otherwise, the field is required.
+    created-by: option<string>,
+    /// Call start time in UTC UNIX timestamp format
+    date-start: option<s32>,
+    /// When supplied, available Slack clients will attempt to directly launch the 3rd-party Call with this URL.
+    desktop-app-join-url: option<string>,
+    /// An optional, human-readable ID supplied by the 3rd-party Call provider. If supplied, this ID will be displayed in the Call object.
+    external-display-id: option<string>,
+    /// An ID supplied by the 3rd-party Call provider. It must be unique across all Calls from that service.
+    external-unique-id: string,
+    /// The URL required for a client to join the Call.
+    join-url: string,
+    /// The name of the Call.
+    title: option<string>,
+    /// The list of users to register as participants in the Call. [Read more on how to specify users here](/apis/calls#users).
+    users: option<string>
   }
-  add: func(params: add-params) -> result<string, string>;
+  add: func(params: add-params) -> result<add-response, string>;
 
   record end-params {
     /// Authentication token. Requires scope: `calls:write`
-    token: string
+    token: string,
+    /// Call duration in seconds
+    duration: option<s32>,
+    /// `id` returned when registering the call using the [`calls.add`](/methods/calls.add) method.
+    id: string
   }
-  end: func(params: end-params) -> result<string, string>;
+  end: func(params: end-params) -> result<end-response, string>;
 
   record info-params {
     /// Authentication token. Requires scope: `calls:read`
@@ -615,43 +1589,437 @@ interface calls {
     /// `id` of the Call returned by the [`calls.add`](/methods/calls.add) method.
     id: string
   }
-  info: func(params: info-params) -> result<string, string>;
+  info: func(params: info-params) -> result<info-response, string>;
 
   record update-params {
     /// Authentication token. Requires scope: `calls:write`
-    token: string
+    token: string,
+    /// When supplied, available Slack clients will attempt to directly launch the 3rd-party Call with this URL.
+    desktop-app-join-url: option<string>,
+    /// `id` returned by the [`calls.add`](/methods/calls.add) method.
+    id: string,
+    /// The URL required for a client to join the Call.
+    join-url: option<string>,
+    /// The name of the Call.
+    title: option<string>
   }
-  update: func(params: update-params) -> result<string, string>;
+  update: func(params: update-params) -> result<update-response, string>;
 
 }
 
 interface calls-participants {
+  /// This method either only returns a brief _OK_ response or a verbose schema is not available for this method.
+  record add-response {
+    ok: defs-ok-true
+  }
+
+  record defs-ok-true {
+    /// opaque schema; raw JSON
+    value: string
+  }
+
+  /// This method either only returns a brief _OK_ response or a verbose schema is not available for this method.
+  record remove-response {
+    ok: defs-ok-true
+  }
+
   record add-params {
     /// Authentication token. Requires scope: `calls:write`
-    token: string
+    token: string,
+    /// `id` returned by the [`calls.add`](/methods/calls.add) method.
+    id: string,
+    /// The list of users to add as participants in the Call. [Read more on how to specify users here](/apis/calls#users).
+    users: string
   }
-  add: func(params: add-params) -> result<string, string>;
+  add: func(params: add-params) -> result<add-response, string>;
 
   record remove-params {
     /// Authentication token. Requires scope: `calls:write`
-    token: string
+    token: string,
+    /// `id` returned by the [`calls.add`](/methods/calls.add) method.
+    id: string,
+    /// The list of users to remove as participants in the Call. [Read more on how to specify users here](/apis/calls#users).
+    users: string
   }
-  remove: func(params: remove-params) -> result<string, string>;
+  remove: func(params: remove-params) -> result<remove-response, string>;
 
 }
 
 interface chat {
+  /// Schema for successful response of chat.delete method
+  record delete-response {
+    channel: defs-channel,
+    ok: defs-ok-true,
+    ts: defs-ts
+  }
+
+  record defs-channel {
+    /// opaque schema; raw JSON
+    value: string
+  }
+
+  record defs-ok-true {
+    /// opaque schema; raw JSON
+    value: string
+  }
+
+  record defs-ts {
+    /// opaque schema; raw JSON
+    value: string
+  }
+
+  /// Schema for successful response from chat.deleteScheduledMessage method
+  record delete-scheduled-message-response {
+    ok: defs-ok-true
+  }
+
+  /// Schema for successful response chat.getPermalink
+  record get-permalink-response {
+    channel: defs-channel,
+    ok: defs-ok-true,
+    permalink: string
+  }
+
+  /// Schema for successful response from chat.meMessage method
+  record me-message-response {
+    channel: option<defs-channel>,
+    ok: defs-ok-true,
+    ts: option<defs-ts>
+  }
+
+  /// Schema for successful response from chat.postEphemeral method
+  record post-ephemeral-response {
+    message-ts: defs-ts,
+    ok: defs-ok-true
+  }
+
+  /// Schema for successful response of chat.postMessage method
+  record post-message-response {
+    channel: defs-channel,
+    message: objs-message,
+    ok: defs-ok-true,
+    ts: defs-ts
+  }
+
+  record objs-message {
+    attachments: option<list<objs-message-attachments-item>>,
+    blocks: option<blocks>,
+    bot-id: option<string>,
+    bot-profile: option<objs-bot-profile>,
+    client-msg-id: option<string>,
+    comment: option<objs-comment>,
+    display-as-bot: option<bool>,
+    file: option<objs-file>,
+    files: option<list<objs-file>>,
+    icons: option<objs-message-icons>,
+    inviter: option<defs-user-id>,
+    is-delayed-message: option<bool>,
+    is-intro: option<bool>,
+    is-starred: option<bool>,
+    last-read: option<defs-ts>,
+    latest-reply: option<defs-ts>,
+    name: option<string>,
+    old-name: option<string>,
+    parent-user-id: option<defs-user-id>,
+    permalink: option<string>,
+    pinned-to: option<list<defs-channel>>,
+    purpose: option<string>,
+    reactions: option<list<objs-reaction>>,
+    reply-count: option<s32>,
+    reply-users: option<list<defs-user-id>>,
+    reply-users-count: option<s32>,
+    source-team: option<defs-workspace-id>,
+    subscribed: option<bool>,
+    subtype: option<string>,
+    team: option<defs-workspace-id>,
+    text: string,
+    thread-ts: option<defs-ts>,
+    topic: option<string>,
+    ts: defs-ts,
+    type-op: string,
+    unread-count: option<s32>,
+    upload: option<bool>,
+    user: option<defs-user-id>,
+    user-profile: option<objs-user-profile-short>,
+    user-team: option<defs-workspace-id>,
+    username: option<string>
+  }
+
+  record objs-message-attachments-item {
+    fallback: option<string>,
+    id: s32,
+    image-bytes: option<s32>,
+    image-height: option<s32>,
+    image-url: option<string>,
+    image-width: option<s32>
+  }
+
+  /// This is a very loose definition, in the future, we'll populate this with deeper schema in this definition namespace.
+  record blocks {
+    /// opaque schema; raw JSON
+    value: string
+  }
+
+  record objs-bot-profile {
+    app-id: defs-app-id,
+    deleted: bool,
+    icons: objs-bot-profile-icons,
+    id: defs-bot-id,
+    name: string,
+    team-id: defs-team,
+    updated: s32
+  }
+
+  record defs-app-id {
+    /// opaque schema; raw JSON
+    value: string
+  }
+
+  record objs-bot-profile-icons {
+    image-v36: string,
+    image-v48: string,
+    image-v72: string
+  }
+
+  record defs-bot-id {
+    /// opaque schema; raw JSON
+    value: string
+  }
+
+  record defs-team {
+    /// opaque schema; raw JSON
+    value: string
+  }
+
+  record objs-comment {
+    comment: string,
+    created: s32,
+    id: defs-comment-id,
+    is-intro: bool,
+    is-starred: option<bool>,
+    num-stars: option<s32>,
+    pinned-info: option<defs-pinned-info>,
+    pinned-to: option<list<defs-channel>>,
+    reactions: option<list<objs-reaction>>,
+    timestamp: s32,
+    user: defs-user-id
+  }
+
+  record defs-comment-id {
+    /// opaque schema; raw JSON
+    value: string
+  }
+
+  record defs-pinned-info {
+    /// JSON-encoded free-form object payload
+    data: option<string>
+  }
+
+  record objs-reaction {
+    count: s32,
+    name: string,
+    users: list<defs-user-id>
+  }
+
+  record defs-user-id {
+    /// opaque schema; raw JSON
+    value: string
+  }
+
+  record objs-file {
+    channels: option<list<defs-channel-id>>,
+    comments-count: option<s32>,
+    created: option<s32>,
+    date-delete: option<s32>,
+    display-as-bot: option<bool>,
+    editable: option<bool>,
+    editor: option<defs-user-id>,
+    external-id: option<string>,
+    external-type: option<string>,
+    external-url: option<string>,
+    filetype: option<string>,
+    groups: option<list<defs-group-id>>,
+    has-rich-preview: option<bool>,
+    id: option<defs-file-id>,
+    image-exif-rotation: option<s32>,
+    ims: option<list<defs-dm-id>>,
+    is-external: option<bool>,
+    is-public: option<bool>,
+    is-starred: option<bool>,
+    is-tombstoned: option<bool>,
+    last-editor: option<defs-user-id>,
+    mimetype: option<string>,
+    mode: option<string>,
+    name: option<string>,
+    non-owner-editable: option<bool>,
+    num-stars: option<s32>,
+    original-h: option<s32>,
+    original-w: option<s32>,
+    permalink: option<string>,
+    permalink-public: option<string>,
+    pinned-info: option<defs-pinned-info>,
+    pinned-to: option<list<defs-channel>>,
+    pretty-type: option<string>,
+    preview: option<string>,
+    public-url-shared: option<bool>,
+    reactions: option<list<objs-reaction>>,
+    shares: option<objs-file-shares>,
+    size: option<s32>,
+    source-team: option<defs-team>,
+    state: option<string>,
+    thumb-v1024: option<string>,
+    thumb-v1024-h: option<s32>,
+    thumb-v1024-w: option<s32>,
+    thumb-v160: option<string>,
+    thumb-v360: option<string>,
+    thumb-v360-h: option<s32>,
+    thumb-v360-w: option<s32>,
+    thumb-v480: option<string>,
+    thumb-v480-h: option<s32>,
+    thumb-v480-w: option<s32>,
+    thumb-v64: option<string>,
+    thumb-v720: option<string>,
+    thumb-v720-h: option<s32>,
+    thumb-v720-w: option<s32>,
+    thumb-v80: option<string>,
+    thumb-v800: option<string>,
+    thumb-v800-h: option<s32>,
+    thumb-v800-w: option<s32>,
+    thumb-v960: option<string>,
+    thumb-v960-h: option<s32>,
+    thumb-v960-w: option<s32>,
+    thumb-tiny: option<string>,
+    timestamp: option<s32>,
+    title: option<string>,
+    updated: option<s32>,
+    url-private: option<string>,
+    url-private-download: option<string>,
+    user: option<string>,
+    user-team: option<defs-team>,
+    username: option<string>
+  }
+
+  record defs-channel-id {
+    /// opaque schema; raw JSON
+    value: string
+  }
+
+  record defs-group-id {
+    /// opaque schema; raw JSON
+    value: string
+  }
+
+  record defs-file-id {
+    /// opaque schema; raw JSON
+    value: string
+  }
+
+  record defs-dm-id {
+    /// opaque schema; raw JSON
+    value: string
+  }
+
+  record objs-file-shares {
+    private: option<string>,
+    public: option<string>
+  }
+
+  record objs-message-icons {
+    emoji: option<string>,
+    image-v64: option<string>
+  }
+
+  record defs-workspace-id {
+    /// opaque schema; raw JSON
+    value: string
+  }
+
+  record objs-user-profile-short {
+    avatar-hash: string,
+    display-name: string,
+    display-name-normalized: option<string>,
+    first-name: string,
+    image-v72: string,
+    is-restricted: bool,
+    is-ultra-restricted: bool,
+    name: string,
+    real-name: string,
+    real-name-normalized: option<string>,
+    team: defs-workspace-id
+  }
+
+  /// Schema for successful response of chat.scheduleMessage method
+  record schedule-message-response {
+    channel: defs-channel,
+    message: schedule-message-response-message,
+    ok: defs-ok-true,
+    post-at: string,
+    scheduled-message-id: string
+  }
+
+  record schedule-message-response-message {
+    bot-id: defs-bot-id,
+    bot-profile: option<objs-bot-profile>,
+    team: defs-team,
+    text: string,
+    type-op: string,
+    user: defs-user-id,
+    username: option<string>
+  }
+
+  /// Schema for successful response from chat.unfurl method
+  record unfurl-response {
+    ok: defs-ok-true
+  }
+
+  /// Schema for successful response of chat.update method
+  record update-response {
+    channel: string,
+    message: update-response-message,
+    ok: defs-ok-true,
+    text: string,
+    ts: string
+  }
+
+  record update-response-message {
+    attachments: option<list<update-response-message-attachments-item>>,
+    blocks: option<update-response-message-blocks>,
+    text: string
+  }
+
+  record update-response-message-attachments-item {
+    /// JSON-encoded free-form object payload
+    data: option<string>
+  }
+
+  record update-response-message-blocks {
+    /// JSON-encoded free-form object payload
+    data: option<string>
+  }
+
   record delete-params {
     /// Authentication token. Requires scope: `chat:write`
-    token: option<string>
+    token: option<string>,
+    /// Pass true to delete the message as the authed user with `chat:write:user` scope. [Bot users](/bot-users) in this context are considered authed users. If unused or false, the message will be deleted with `chat:write:bot` scope.
+    as-user: option<bool>,
+    /// Channel containing the message to be deleted.
+    channel: option<string>,
+    /// Timestamp of the message to be deleted.
+    ts: option<f64>
   }
-  delete: func(params: delete-params) -> result<string, string>;
+  delete: func(params: delete-params) -> result<delete-response, string>;
 
   record delete-scheduled-message-params {
     /// Authentication token. Requires scope: `chat:write`
-    token: string
+    token: string,
+    /// Pass true to delete the message as the authed user with `chat:write:user` scope. [Bot users](/bot-users) in this context are considered authed users. If unused or false, the message will be deleted with `chat:write:bot` scope.
+    as-user: option<bool>,
+    /// The channel the scheduled_message is posting to
+    channel: string,
+    /// `scheduled_message_id` returned from call to chat.scheduleMessage
+    scheduled-message-id: string
   }
-  delete-scheduled-message: func(params: delete-scheduled-message-params) -> result<string, string>;
+  delete-scheduled-message: func(params: delete-scheduled-message-params) -> result<delete-scheduled-message-response, string>;
 
   record get-permalink-params {
     /// Authentication token. Requires scope: `none`
@@ -661,47 +2029,186 @@ interface chat {
     /// A message's `ts` value, uniquely identifying it within a channel
     message-ts: string
   }
-  get-permalink: func(params: get-permalink-params) -> result<string, string>;
+  get-permalink: func(params: get-permalink-params) -> result<get-permalink-response, string>;
 
   record me-message-params {
     /// Authentication token. Requires scope: `chat:write`
-    token: option<string>
+    token: option<string>,
+    /// Channel to send message to. Can be a public channel, private group or IM channel. Can be an encoded ID, or a name.
+    channel: option<string>,
+    /// Text of the message to send.
+    text: option<string>
   }
-  me-message: func(params: me-message-params) -> result<string, string>;
+  me-message: func(params: me-message-params) -> result<me-message-response, string>;
 
   record post-ephemeral-params {
     /// Authentication token. Requires scope: `chat:write`
-    token: string
+    token: string,
+    /// Pass true to post the message as the authed user. Defaults to true if the chat:write:bot scope is not included. Otherwise, defaults to false.
+    as-user: option<bool>,
+    /// A JSON-based array of structured attachments, presented as a URL-encoded string.
+    attachments: option<string>,
+    /// A JSON-based array of structured blocks, presented as a URL-encoded string.
+    blocks: option<string>,
+    /// Channel, private group, or IM channel to send message to. Can be an encoded ID, or a name.
+    channel: string,
+    /// Emoji to use as the icon for this message. Overrides `icon_url`. Must be used in conjunction with `as_user` set to `false`, otherwise ignored. See [authorship](#authorship) below.
+    icon-emoji: option<string>,
+    /// URL to an image to use as the icon for this message. Must be used in conjunction with `as_user` set to false, otherwise ignored. See [authorship](#authorship) below.
+    icon-url: option<string>,
+    /// Find and link channel names and usernames.
+    link-names: option<bool>,
+    /// Change how messages are treated. Defaults to `none`. See [below](#formatting).
+    parse: option<string>,
+    /// How this field works and whether it is required depends on other fields you use in your API call. [See below](#text_usage) for more detail.
+    text: option<string>,
+    /// Provide another message's `ts` value to post this message in a thread. Avoid using a reply's `ts` value; use its parent's value instead. Ephemeral messages in threads are only shown if there is already an active thread.
+    thread-ts: option<string>,
+    /// `id` of the user who will receive the ephemeral message. The user should be in the channel specified by the `channel` argument.
+    user: string,
+    /// Set your bot's user name. Must be used in conjunction with `as_user` set to false, otherwise ignored. See [authorship](#authorship) below.
+    username: option<string>
   }
-  post-ephemeral: func(params: post-ephemeral-params) -> result<string, string>;
+  post-ephemeral: func(params: post-ephemeral-params) -> result<post-ephemeral-response, string>;
 
   record post-message-params {
     /// Authentication token. Requires scope: `chat:write`
-    token: string
+    token: string,
+    /// Pass true to post the message as the authed user, instead of as a bot. Defaults to false. See [authorship](#authorship) below.
+    as-user: option<string>,
+    /// A JSON-based array of structured attachments, presented as a URL-encoded string.
+    attachments: option<string>,
+    /// A JSON-based array of structured blocks, presented as a URL-encoded string.
+    blocks: option<string>,
+    /// Channel, private group, or IM channel to send message to. Can be an encoded ID, or a name. See [below](#channels) for more details.
+    channel: string,
+    /// Emoji to use as the icon for this message. Overrides `icon_url`. Must be used in conjunction with `as_user` set to `false`, otherwise ignored. See [authorship](#authorship) below.
+    icon-emoji: option<string>,
+    /// URL to an image to use as the icon for this message. Must be used in conjunction with `as_user` set to false, otherwise ignored. See [authorship](#authorship) below.
+    icon-url: option<string>,
+    /// Find and link channel names and usernames.
+    link-names: option<bool>,
+    /// Disable Slack markup parsing by setting to `false`. Enabled by default.
+    mrkdwn: option<bool>,
+    /// Change how messages are treated. Defaults to `none`. See [below](#formatting).
+    parse: option<string>,
+    /// Used in conjunction with `thread_ts` and indicates whether reply should be made visible to everyone in the channel or conversation. Defaults to `false`.
+    reply-broadcast: option<bool>,
+    /// How this field works and whether it is required depends on other fields you use in your API call. [See below](#text_usage) for more detail.
+    text: option<string>,
+    /// Provide another message's `ts` value to make this message a reply. Avoid using a reply's `ts` value; use its parent instead.
+    thread-ts: option<string>,
+    /// Pass true to enable unfurling of primarily text-based content.
+    unfurl-links: option<bool>,
+    /// Pass false to disable unfurling of media content.
+    unfurl-media: option<bool>,
+    /// Set your bot's user name. Must be used in conjunction with `as_user` set to false, otherwise ignored. See [authorship](#authorship) below.
+    username: option<string>
   }
-  post-message: func(params: post-message-params) -> result<string, string>;
+  post-message: func(params: post-message-params) -> result<post-message-response, string>;
 
   record schedule-message-params {
     /// Authentication token. Requires scope: `chat:write`
-    token: option<string>
+    token: option<string>,
+    /// Pass true to post the message as the authed user, instead of as a bot. Defaults to false. See [chat.postMessage](chat.postMessage#authorship).
+    as-user: option<bool>,
+    /// A JSON-based array of structured attachments, presented as a URL-encoded string.
+    attachments: option<string>,
+    /// A JSON-based array of structured blocks, presented as a URL-encoded string.
+    blocks: option<string>,
+    /// Channel, private group, or DM channel to send message to. Can be an encoded ID, or a name. See [below](#channels) for more details.
+    channel: option<string>,
+    /// Find and link channel names and usernames.
+    link-names: option<bool>,
+    /// Change how messages are treated. Defaults to `none`. See [chat.postMessage](chat.postMessage#formatting).
+    parse: option<string>,
+    /// Unix EPOCH timestamp of time in future to send the message.
+    post-at: option<string>,
+    /// Used in conjunction with `thread_ts` and indicates whether reply should be made visible to everyone in the channel or conversation. Defaults to `false`.
+    reply-broadcast: option<bool>,
+    /// How this field works and whether it is required depends on other fields you use in your API call. [See below](#text_usage) for more detail.
+    text: option<string>,
+    /// Provide another message's `ts` value to make this message a reply. Avoid using a reply's `ts` value; use its parent instead.
+    thread-ts: option<f64>,
+    /// Pass true to enable unfurling of primarily text-based content.
+    unfurl-links: option<bool>,
+    /// Pass false to disable unfurling of media content.
+    unfurl-media: option<bool>
   }
-  schedule-message: func(params: schedule-message-params) -> result<string, string>;
+  schedule-message: func(params: schedule-message-params) -> result<schedule-message-response, string>;
 
   record unfurl-params {
     /// Authentication token. Requires scope: `links:write`
-    token: string
+    token: string,
+    /// Channel ID of the message
+    channel: string,
+    /// Timestamp of the message to add unfurl behavior to.
+    ts: string,
+    /// URL-encoded JSON map with keys set to URLs featured in the the message, pointing to their unfurl blocks or message attachments.
+    unfurls: option<string>,
+    /// Provide a simply-formatted string to send as an ephemeral message to the user as invitation to authenticate further and enable full unfurling behavior
+    user-auth-message: option<string>,
+    /// Set to `true` or `1` to indicate the user must install your Slack app to trigger unfurls for this domain
+    user-auth-required: option<bool>,
+    /// Send users to this custom URL where they will complete authentication in your app to fully trigger unfurling. Value should be properly URL-encoded.
+    user-auth-url: option<string>
   }
-  unfurl: func(params: unfurl-params) -> result<string, string>;
+  unfurl: func(params: unfurl-params) -> result<unfurl-response, string>;
 
   record update-params {
     /// Authentication token. Requires scope: `chat:write`
-    token: string
+    token: string,
+    /// Pass true to update the message as the authed user. [Bot users](/bot-users) in this context are considered authed users.
+    as-user: option<string>,
+    /// A JSON-based array of structured attachments, presented as a URL-encoded string. This field is required when not presenting `text`. If you don't include this field, the message's previous `attachments` will be retained. To remove previous `attachments`, include an empty array for this field.
+    attachments: option<string>,
+    /// A JSON-based array of [structured blocks](/block-kit/building), presented as a URL-encoded string. If you don't include this field, the message's previous `blocks` will be retained. To remove previous `blocks`, include an empty array for this field.
+    blocks: option<string>,
+    /// Channel containing the message to be updated.
+    channel: string,
+    /// Find and link channel names and usernames. Defaults to `none`. If you do not specify a value for this field, the original value set for the message will be overwritten with the default, `none`.
+    link-names: option<string>,
+    /// Change how messages are treated. Defaults to `client`, unlike `chat.postMessage`. Accepts either `none` or `full`. If you do not specify a value for this field, the original value set for the message will be overwritten with the default, `client`.
+    parse: option<string>,
+    /// New text for the message, using the [default formatting rules](/reference/surfaces/formatting). It's not required when presenting `blocks` or `attachments`.
+    text: option<string>,
+    /// Timestamp of the message to be updated.
+    ts: string
   }
-  update: func(params: update-params) -> result<string, string>;
+  update: func(params: update-params) -> result<update-response, string>;
 
 }
 
 interface chat-scheduled-messages {
+  /// Schema for successful response from chat.scheduledMessages.list method
+  record list-op-response {
+    ok: defs-ok-true,
+    response-metadata: list-op-response-response-metadata,
+    scheduled-messages: list<list-op-response-scheduled-messages-item>
+  }
+
+  record defs-ok-true {
+    /// opaque schema; raw JSON
+    value: string
+  }
+
+  record list-op-response-response-metadata {
+    next-cursor: string
+  }
+
+  record list-op-response-scheduled-messages-item {
+    channel-id: defs-channel-id,
+    date-created: string,
+    id: string,
+    post-at: string,
+    text: option<string>
+  }
+
+  record defs-channel-id {
+    /// opaque schema; raw JSON
+    value: string
+  }
+
   record list-op-params {
     /// Authentication token. Requires scope: `none`
     token: option<string>,
@@ -716,28 +2223,431 @@ interface chat-scheduled-messages {
     /// For pagination purposes, this is the `cursor` value returned from a previous call to `chat.scheduledmessages.list` indicating where you want to start this call from.
     cursor: option<string>
   }
-  list-op: func(params: list-op-params) -> result<string, string>;
+  list-op: func(params: list-op-params) -> result<list-op-response, string>;
 
 }
 
 interface conversations {
+  /// Schema for successful response conversations.archive method
+  record archive-response {
+    ok: defs-ok-true
+  }
+
+  record defs-ok-true {
+    /// opaque schema; raw JSON
+    value: string
+  }
+
+  /// Schema for successful response conversations.close method
+  record close-response {
+    already-closed: option<bool>,
+    no-op: option<bool>,
+    ok: defs-ok-true
+  }
+
+  /// Schema for successful response conversations.create method
+  record create-response {
+    channel: objs-conversation,
+    ok: defs-ok-true
+  }
+
+  record objs-conversation {
+    /// JSON-encoded free-form object payload
+    data: option<string>
+  }
+
+  /// Schema for successful response from conversations.history method
+  record history-response {
+    channel-actions-count: s32,
+    channel-actions-ts: string,
+    has-more: bool,
+    messages: list<objs-message>,
+    ok: defs-ok-true,
+    pin-count: s32
+  }
+
+  record objs-message {
+    attachments: option<list<objs-message-attachments-item>>,
+    blocks: option<blocks>,
+    bot-id: option<string>,
+    bot-profile: option<objs-bot-profile>,
+    client-msg-id: option<string>,
+    comment: option<objs-comment>,
+    display-as-bot: option<bool>,
+    file: option<objs-file>,
+    files: option<list<objs-file>>,
+    icons: option<objs-message-icons>,
+    inviter: option<defs-user-id>,
+    is-delayed-message: option<bool>,
+    is-intro: option<bool>,
+    is-starred: option<bool>,
+    last-read: option<defs-ts>,
+    latest-reply: option<defs-ts>,
+    name: option<string>,
+    old-name: option<string>,
+    parent-user-id: option<defs-user-id>,
+    permalink: option<string>,
+    pinned-to: option<list<defs-channel>>,
+    purpose: option<string>,
+    reactions: option<list<objs-reaction>>,
+    reply-count: option<s32>,
+    reply-users: option<list<defs-user-id>>,
+    reply-users-count: option<s32>,
+    source-team: option<defs-workspace-id>,
+    subscribed: option<bool>,
+    subtype: option<string>,
+    team: option<defs-workspace-id>,
+    text: string,
+    thread-ts: option<defs-ts>,
+    topic: option<string>,
+    ts: defs-ts,
+    type-op: string,
+    unread-count: option<s32>,
+    upload: option<bool>,
+    user: option<defs-user-id>,
+    user-profile: option<objs-user-profile-short>,
+    user-team: option<defs-workspace-id>,
+    username: option<string>
+  }
+
+  record objs-message-attachments-item {
+    fallback: option<string>,
+    id: s32,
+    image-bytes: option<s32>,
+    image-height: option<s32>,
+    image-url: option<string>,
+    image-width: option<s32>
+  }
+
+  /// This is a very loose definition, in the future, we'll populate this with deeper schema in this definition namespace.
+  record blocks {
+    /// opaque schema; raw JSON
+    value: string
+  }
+
+  record objs-bot-profile {
+    app-id: defs-app-id,
+    deleted: bool,
+    icons: objs-bot-profile-icons,
+    id: defs-bot-id,
+    name: string,
+    team-id: defs-team,
+    updated: s32
+  }
+
+  record defs-app-id {
+    /// opaque schema; raw JSON
+    value: string
+  }
+
+  record objs-bot-profile-icons {
+    image-v36: string,
+    image-v48: string,
+    image-v72: string
+  }
+
+  record defs-bot-id {
+    /// opaque schema; raw JSON
+    value: string
+  }
+
+  record defs-team {
+    /// opaque schema; raw JSON
+    value: string
+  }
+
+  record objs-comment {
+    comment: string,
+    created: s32,
+    id: defs-comment-id,
+    is-intro: bool,
+    is-starred: option<bool>,
+    num-stars: option<s32>,
+    pinned-info: option<defs-pinned-info>,
+    pinned-to: option<list<defs-channel>>,
+    reactions: option<list<objs-reaction>>,
+    timestamp: s32,
+    user: defs-user-id
+  }
+
+  record defs-comment-id {
+    /// opaque schema; raw JSON
+    value: string
+  }
+
+  record defs-pinned-info {
+    /// JSON-encoded free-form object payload
+    data: option<string>
+  }
+
+  record defs-channel {
+    /// opaque schema; raw JSON
+    value: string
+  }
+
+  record objs-reaction {
+    count: s32,
+    name: string,
+    users: list<defs-user-id>
+  }
+
+  record defs-user-id {
+    /// opaque schema; raw JSON
+    value: string
+  }
+
+  record objs-file {
+    channels: option<list<defs-channel-id>>,
+    comments-count: option<s32>,
+    created: option<s32>,
+    date-delete: option<s32>,
+    display-as-bot: option<bool>,
+    editable: option<bool>,
+    editor: option<defs-user-id>,
+    external-id: option<string>,
+    external-type: option<string>,
+    external-url: option<string>,
+    filetype: option<string>,
+    groups: option<list<defs-group-id>>,
+    has-rich-preview: option<bool>,
+    id: option<defs-file-id>,
+    image-exif-rotation: option<s32>,
+    ims: option<list<defs-dm-id>>,
+    is-external: option<bool>,
+    is-public: option<bool>,
+    is-starred: option<bool>,
+    is-tombstoned: option<bool>,
+    last-editor: option<defs-user-id>,
+    mimetype: option<string>,
+    mode: option<string>,
+    name: option<string>,
+    non-owner-editable: option<bool>,
+    num-stars: option<s32>,
+    original-h: option<s32>,
+    original-w: option<s32>,
+    permalink: option<string>,
+    permalink-public: option<string>,
+    pinned-info: option<defs-pinned-info>,
+    pinned-to: option<list<defs-channel>>,
+    pretty-type: option<string>,
+    preview: option<string>,
+    public-url-shared: option<bool>,
+    reactions: option<list<objs-reaction>>,
+    shares: option<objs-file-shares>,
+    size: option<s32>,
+    source-team: option<defs-team>,
+    state: option<string>,
+    thumb-v1024: option<string>,
+    thumb-v1024-h: option<s32>,
+    thumb-v1024-w: option<s32>,
+    thumb-v160: option<string>,
+    thumb-v360: option<string>,
+    thumb-v360-h: option<s32>,
+    thumb-v360-w: option<s32>,
+    thumb-v480: option<string>,
+    thumb-v480-h: option<s32>,
+    thumb-v480-w: option<s32>,
+    thumb-v64: option<string>,
+    thumb-v720: option<string>,
+    thumb-v720-h: option<s32>,
+    thumb-v720-w: option<s32>,
+    thumb-v80: option<string>,
+    thumb-v800: option<string>,
+    thumb-v800-h: option<s32>,
+    thumb-v800-w: option<s32>,
+    thumb-v960: option<string>,
+    thumb-v960-h: option<s32>,
+    thumb-v960-w: option<s32>,
+    thumb-tiny: option<string>,
+    timestamp: option<s32>,
+    title: option<string>,
+    updated: option<s32>,
+    url-private: option<string>,
+    url-private-download: option<string>,
+    user: option<string>,
+    user-team: option<defs-team>,
+    username: option<string>
+  }
+
+  record defs-channel-id {
+    /// opaque schema; raw JSON
+    value: string
+  }
+
+  record defs-group-id {
+    /// opaque schema; raw JSON
+    value: string
+  }
+
+  record defs-file-id {
+    /// opaque schema; raw JSON
+    value: string
+  }
+
+  record defs-dm-id {
+    /// opaque schema; raw JSON
+    value: string
+  }
+
+  record objs-file-shares {
+    private: option<string>,
+    public: option<string>
+  }
+
+  record objs-message-icons {
+    emoji: option<string>,
+    image-v64: option<string>
+  }
+
+  record defs-ts {
+    /// opaque schema; raw JSON
+    value: string
+  }
+
+  record defs-workspace-id {
+    /// opaque schema; raw JSON
+    value: string
+  }
+
+  record objs-user-profile-short {
+    avatar-hash: string,
+    display-name: string,
+    display-name-normalized: option<string>,
+    first-name: string,
+    image-v72: string,
+    is-restricted: bool,
+    is-ultra-restricted: bool,
+    name: string,
+    real-name: string,
+    real-name-normalized: option<string>,
+    team: defs-workspace-id
+  }
+
+  /// Schema for successful response conversations.info
+  record info-response {
+    channel: objs-conversation,
+    ok: defs-ok-true
+  }
+
+  /// Schema for successful response from conversations.invite method
+  record invite-response {
+    channel: objs-conversation,
+    ok: defs-ok-true
+  }
+
+  /// Schema for successful response from conversations.join method
+  record join-response {
+    channel: objs-conversation,
+    ok: defs-ok-true,
+    response-metadata: option<join-response-response-metadata>,
+    warning: option<string>
+  }
+
+  record join-response-response-metadata {
+    warnings: option<list<string>>
+  }
+
+  /// Schema for successful response conversations.kick method
+  record kick-response {
+    ok: defs-ok-true
+  }
+
+  /// Schema for successful response from conversations.leave method
+  record leave-response {
+    not-in-channel: option<bool>,
+    ok: defs-ok-true
+  }
+
+  /// Schema for successful response from conversations.list method
+  record list-op-response {
+    channels: list<objs-conversation>,
+    ok: defs-ok-true,
+    response-metadata: option<list-op-response-response-metadata>
+  }
+
+  record list-op-response-response-metadata {
+    next-cursor: string
+  }
+
+  /// Schema for successful response conversations.mark method
+  record mark-response {
+    ok: defs-ok-true
+  }
+
+  /// Schema for successful response conversations.members method
+  record members-response {
+    members: list<defs-user-id>,
+    ok: defs-ok-true,
+    response-metadata: members-response-response-metadata
+  }
+
+  record members-response-response-metadata {
+    next-cursor: string
+  }
+
+  /// Schema for successful response from conversations.open method when opening channels, ims, mpims
+  record open-response {
+    already-open: option<bool>,
+    channel: string,
+    no-op: option<bool>,
+    ok: defs-ok-true
+  }
+
+  /// Schema for successful response from conversations.rename method
+  record rename-response {
+    channel: objs-conversation,
+    ok: defs-ok-true
+  }
+
+  /// Schema for successful response from conversations.replies method
+  record replies-response {
+    has-more: option<bool>,
+    messages: list<string>,
+    ok: defs-ok-true
+  }
+
+  /// Schema for successful response from conversations.setPurpose method
+  record set-purpose-response {
+    channel: objs-conversation,
+    ok: defs-ok-true
+  }
+
+  /// Schema for successful response from conversations.setTopic method
+  record set-topic-response {
+    channel: objs-conversation,
+    ok: defs-ok-true
+  }
+
+  /// Schema for successful response from conversations.unarchive method
+  record unarchive-response {
+    ok: defs-ok-true
+  }
+
   record archive-params {
     /// Authentication token. Requires scope: `conversations:write`
-    token: option<string>
+    token: option<string>,
+    /// ID of conversation to archive
+    channel: option<string>
   }
-  archive: func(params: archive-params) -> result<string, string>;
+  archive: func(params: archive-params) -> result<archive-response, string>;
 
   record close-params {
     /// Authentication token. Requires scope: `conversations:write`
-    token: option<string>
+    token: option<string>,
+    /// Conversation to close.
+    channel: option<string>
   }
-  close: func(params: close-params) -> result<string, string>;
+  close: func(params: close-params) -> result<close-response, string>;
 
   record create-params {
     /// Authentication token. Requires scope: `conversations:write`
-    token: option<string>
+    token: option<string>,
+    /// Create a private channel instead of a public one
+    is-private: option<bool>,
+    /// Name of the public or private channel to create
+    name: option<string>
   }
-  create: func(params: create-params) -> result<string, string>;
+  create: func(params: create-params) -> result<create-response, string>;
 
   record history-params {
     /// Authentication token. Requires scope: `conversations:history`
@@ -755,7 +2665,7 @@ interface conversations {
     /// Paginate through collections of data by setting the `cursor` parameter to a `next_cursor` attribute returned by a previous request's `response_metadata`. Default value fetches the first "page" of the collection. See [pagination](/docs/pagination) for more detail.
     cursor: option<string>
   }
-  history: func(params: history-params) -> result<string, string>;
+  history: func(params: history-params) -> result<history-response, string>;
 
   record info-params {
     /// Authentication token. Requires scope: `conversations:read`
@@ -767,31 +2677,43 @@ interface conversations {
     /// Set to `true` to include the member count for the specified conversation. Defaults to `false`
     include-num-members: option<bool>
   }
-  info: func(params: info-params) -> result<string, string>;
+  info: func(params: info-params) -> result<info-response, string>;
 
   record invite-params {
     /// Authentication token. Requires scope: `conversations:write`
-    token: option<string>
+    token: option<string>,
+    /// The ID of the public or private channel to invite user(s) to.
+    channel: option<string>,
+    /// A comma separated list of user IDs. Up to 1000 users may be listed.
+    users: option<string>
   }
-  invite: func(params: invite-params) -> result<string, string>;
+  invite: func(params: invite-params) -> result<invite-response, string>;
 
   record join-params {
     /// Authentication token. Requires scope: `channels:write`
-    token: option<string>
+    token: option<string>,
+    /// ID of conversation to join
+    channel: option<string>
   }
-  join: func(params: join-params) -> result<string, string>;
+  join: func(params: join-params) -> result<join-response, string>;
 
   record kick-params {
     /// Authentication token. Requires scope: `conversations:write`
-    token: option<string>
+    token: option<string>,
+    /// ID of conversation to remove user from.
+    channel: option<string>,
+    /// User ID to be removed.
+    user: option<string>
   }
-  kick: func(params: kick-params) -> result<string, string>;
+  kick: func(params: kick-params) -> result<kick-response, string>;
 
   record leave-params {
     /// Authentication token. Requires scope: `conversations:write`
-    token: option<string>
+    token: option<string>,
+    /// Conversation to leave
+    channel: option<string>
   }
-  leave: func(params: leave-params) -> result<string, string>;
+  leave: func(params: leave-params) -> result<leave-response, string>;
 
   record list-op-params {
     /// Authentication token. Requires scope: `conversations:read`
@@ -805,13 +2727,17 @@ interface conversations {
     /// Paginate through collections of data by setting the `cursor` parameter to a `next_cursor` attribute returned by a previous request's `response_metadata`. Default value fetches the first "page" of the collection. See [pagination](/docs/pagination) for more detail.
     cursor: option<string>
   }
-  list-op: func(params: list-op-params) -> result<string, string>;
+  list-op: func(params: list-op-params) -> result<list-op-response, string>;
 
   record mark-params {
     /// Authentication token. Requires scope: `conversations:write`
-    token: option<string>
+    token: option<string>,
+    /// Channel or conversation to set the read cursor for.
+    channel: option<string>,
+    /// Unique identifier of message you want marked as most recently seen in this conversation.
+    ts: option<f64>
   }
-  mark: func(params: mark-params) -> result<string, string>;
+  mark: func(params: mark-params) -> result<mark-response, string>;
 
   record members-params {
     /// Authentication token. Requires scope: `conversations:read`
@@ -823,19 +2749,29 @@ interface conversations {
     /// Paginate through collections of data by setting the `cursor` parameter to a `next_cursor` attribute returned by a previous request's `response_metadata`. Default value fetches the first "page" of the collection. See [pagination](/docs/pagination) for more detail.
     cursor: option<string>
   }
-  members: func(params: members-params) -> result<string, string>;
+  members: func(params: members-params) -> result<members-response, string>;
 
   record open-params {
     /// Authentication token. Requires scope: `conversations:write`
-    token: option<string>
+    token: option<string>,
+    /// Resume a conversation by supplying an `im` or `mpim`'s ID. Or provide the `users` field instead.
+    channel: option<string>,
+    /// Boolean, indicates you want the full IM channel definition in the response.
+    return-im: option<bool>,
+    /// Comma separated lists of users. If only one user is included, this creates a 1:1 DM.  The ordering of the users is preserved whenever a multi-person direct message is returned. Supply a `channel` when not supplying `users`.
+    users: option<string>
   }
-  open: func(params: open-params) -> result<string, string>;
+  open: func(params: open-params) -> result<open-response, string>;
 
   record rename-params {
     /// Authentication token. Requires scope: `conversations:write`
-    token: option<string>
+    token: option<string>,
+    /// ID of conversation to rename
+    channel: option<string>,
+    /// New name for conversation.
+    name: option<string>
   }
-  rename: func(params: rename-params) -> result<string, string>;
+  rename: func(params: rename-params) -> result<rename-response, string>;
 
   record replies-params {
     /// Authentication token. Requires scope: `conversations:history`
@@ -855,29 +2791,49 @@ interface conversations {
     /// Paginate through collections of data by setting the `cursor` parameter to a `next_cursor` attribute returned by a previous request's `response_metadata`. Default value fetches the first "page" of the collection. See [pagination](/docs/pagination) for more detail.
     cursor: option<string>
   }
-  replies: func(params: replies-params) -> result<string, string>;
+  replies: func(params: replies-params) -> result<replies-response, string>;
 
   record set-purpose-params {
     /// Authentication token. Requires scope: `conversations:write`
-    token: option<string>
+    token: option<string>,
+    /// Conversation to set the purpose of
+    channel: option<string>,
+    /// A new, specialer purpose
+    purpose: option<string>
   }
-  set-purpose: func(params: set-purpose-params) -> result<string, string>;
+  set-purpose: func(params: set-purpose-params) -> result<set-purpose-response, string>;
 
   record set-topic-params {
     /// Authentication token. Requires scope: `conversations:write`
-    token: option<string>
+    token: option<string>,
+    /// Conversation to set the topic of
+    channel: option<string>,
+    /// The new topic string. Does not support formatting or linkification.
+    topic: option<string>
   }
-  set-topic: func(params: set-topic-params) -> result<string, string>;
+  set-topic: func(params: set-topic-params) -> result<set-topic-response, string>;
 
   record unarchive-params {
     /// Authentication token. Requires scope: `conversations:write`
-    token: option<string>
+    token: option<string>,
+    /// ID of conversation to unarchive
+    channel: option<string>
   }
-  unarchive: func(params: unarchive-params) -> result<string, string>;
+  unarchive: func(params: unarchive-params) -> result<unarchive-response, string>;
 
 }
 
 interface dialog {
+  /// Schema for successful response from dialog.open method
+  record open-response {
+    ok: defs-ok-true
+  }
+
+  record defs-ok-true {
+    /// opaque schema; raw JSON
+    value: string
+  }
+
   record open-params {
     /// Authentication token. Requires scope: `none`
     token: string,
@@ -886,22 +2842,65 @@ interface dialog {
     /// Exchange a trigger to post to the user.
     trigger-id: string
   }
-  open: func(params: open-params) -> result<string, string>;
+  open: func(params: open-params) -> result<open-response, string>;
 
 }
 
 interface dnd {
+  /// Schema for successful response from dnd.endDnd method
+  record end-dnd-response {
+    ok: defs-ok-true
+  }
+
+  record defs-ok-true {
+    /// opaque schema; raw JSON
+    value: string
+  }
+
+  /// Schema for successful response from dnd.endSnooze method
+  record end-snooze-response {
+    dnd-enabled: bool,
+    next-dnd-end-ts: s32,
+    next-dnd-start-ts: s32,
+    ok: defs-ok-true,
+    snooze-enabled: bool
+  }
+
+  /// Schema for successful response from dnd.info method
+  record info-response {
+    dnd-enabled: bool,
+    next-dnd-end-ts: s32,
+    next-dnd-start-ts: s32,
+    ok: defs-ok-true,
+    snooze-enabled: option<bool>,
+    snooze-endtime: option<s32>,
+    snooze-remaining: option<s32>
+  }
+
+  /// Schema for successful response from dnd.setSnooze method
+  record set-snooze-response {
+    ok: defs-ok-true,
+    snooze-enabled: bool,
+    snooze-endtime: s32,
+    snooze-remaining: s32
+  }
+
+  /// This method either only returns a brief _OK_ response or a verbose schema is not available for this method.
+  record team-info-response {
+    ok: defs-ok-true
+  }
+
   record end-dnd-params {
     /// Authentication token. Requires scope: `dnd:write`
     token: string
   }
-  end-dnd: func(params: end-dnd-params) -> result<string, string>;
+  end-dnd: func(params: end-dnd-params) -> result<end-dnd-response, string>;
 
   record end-snooze-params {
     /// Authentication token. Requires scope: `dnd:write`
     token: string
   }
-  end-snooze: func(params: end-snooze-params) -> result<string, string>;
+  end-snooze: func(params: end-snooze-params) -> result<end-snooze-response, string>;
 
   record info-params {
     /// Authentication token. Requires scope: `dnd:read`
@@ -909,9 +2908,15 @@ interface dnd {
     /// User to fetch status for (defaults to current user)
     user: option<string>
   }
-  info: func(params: info-params) -> result<string, string>;
+  info: func(params: info-params) -> result<info-response, string>;
 
-  set-snooze: func() -> result<string, string>;
+  record set-snooze-params {
+    /// Number of minutes, from now, to snooze until.
+    num-minutes: string,
+    /// Authentication token. Requires scope: `dnd:write`
+    token: string
+  }
+  set-snooze: func(params: set-snooze-params) -> result<set-snooze-response, string>;
 
   record team-info-params {
     /// Authentication token. Requires scope: `dnd:read`
@@ -919,34 +2924,249 @@ interface dnd {
     /// Comma-separated list of users to fetch Do Not Disturb status for
     users: option<string>
   }
-  team-info: func(params: team-info-params) -> result<string, string>;
+  team-info: func(params: team-info-params) -> result<team-info-response, string>;
 
 }
 
 interface emoji {
+  /// This method either only returns a brief _OK_ response or a verbose schema is not available for this method.
+  record list-op-response {
+    ok: defs-ok-true
+  }
+
+  record defs-ok-true {
+    /// opaque schema; raw JSON
+    value: string
+  }
+
   record list-op-params {
     /// Authentication token. Requires scope: `emoji:read`
     token: string
   }
-  list-op: func(params: list-op-params) -> result<string, string>;
+  list-op: func(params: list-op-params) -> result<list-op-response, string>;
 
 }
 
 interface files-comments {
+  /// Schema for successful response files.comments.delete method
+  record delete-response {
+    ok: defs-ok-true
+  }
+
+  record defs-ok-true {
+    /// opaque schema; raw JSON
+    value: string
+  }
+
   record delete-params {
     /// Authentication token. Requires scope: `files:write:user`
-    token: option<string>
+    token: option<string>,
+    /// File to delete a comment from.
+    file: option<string>,
+    /// The comment to delete.
+    id: option<string>
   }
-  delete: func(params: delete-params) -> result<string, string>;
+  delete: func(params: delete-params) -> result<delete-response, string>;
 
 }
 
 interface files {
+  /// Schema for successful response files.delete method
+  record delete-response {
+    ok: defs-ok-true
+  }
+
+  record defs-ok-true {
+    /// opaque schema; raw JSON
+    value: string
+  }
+
+  /// Schema for successful response from files.info method
+  record info-response {
+    comments: objs-comments,
+    content-html: option<string>,
+    editor: option<defs-user-id>,
+    file: objs-file,
+    ok: defs-ok-true,
+    paging: option<objs-paging>,
+    response-metadata: option<objs-response-metadata>
+  }
+
+  record objs-comments {
+    /// opaque schema; raw JSON
+    value: string
+  }
+
+  record defs-user-id {
+    /// opaque schema; raw JSON
+    value: string
+  }
+
+  record objs-file {
+    channels: option<list<defs-channel-id>>,
+    comments-count: option<s32>,
+    created: option<s32>,
+    date-delete: option<s32>,
+    display-as-bot: option<bool>,
+    editable: option<bool>,
+    editor: option<defs-user-id>,
+    external-id: option<string>,
+    external-type: option<string>,
+    external-url: option<string>,
+    filetype: option<string>,
+    groups: option<list<defs-group-id>>,
+    has-rich-preview: option<bool>,
+    id: option<defs-file-id>,
+    image-exif-rotation: option<s32>,
+    ims: option<list<defs-dm-id>>,
+    is-external: option<bool>,
+    is-public: option<bool>,
+    is-starred: option<bool>,
+    is-tombstoned: option<bool>,
+    last-editor: option<defs-user-id>,
+    mimetype: option<string>,
+    mode: option<string>,
+    name: option<string>,
+    non-owner-editable: option<bool>,
+    num-stars: option<s32>,
+    original-h: option<s32>,
+    original-w: option<s32>,
+    permalink: option<string>,
+    permalink-public: option<string>,
+    pinned-info: option<defs-pinned-info>,
+    pinned-to: option<list<defs-channel>>,
+    pretty-type: option<string>,
+    preview: option<string>,
+    public-url-shared: option<bool>,
+    reactions: option<list<objs-reaction>>,
+    shares: option<objs-file-shares>,
+    size: option<s32>,
+    source-team: option<defs-team>,
+    state: option<string>,
+    thumb-v1024: option<string>,
+    thumb-v1024-h: option<s32>,
+    thumb-v1024-w: option<s32>,
+    thumb-v160: option<string>,
+    thumb-v360: option<string>,
+    thumb-v360-h: option<s32>,
+    thumb-v360-w: option<s32>,
+    thumb-v480: option<string>,
+    thumb-v480-h: option<s32>,
+    thumb-v480-w: option<s32>,
+    thumb-v64: option<string>,
+    thumb-v720: option<string>,
+    thumb-v720-h: option<s32>,
+    thumb-v720-w: option<s32>,
+    thumb-v80: option<string>,
+    thumb-v800: option<string>,
+    thumb-v800-h: option<s32>,
+    thumb-v800-w: option<s32>,
+    thumb-v960: option<string>,
+    thumb-v960-h: option<s32>,
+    thumb-v960-w: option<s32>,
+    thumb-tiny: option<string>,
+    timestamp: option<s32>,
+    title: option<string>,
+    updated: option<s32>,
+    url-private: option<string>,
+    url-private-download: option<string>,
+    user: option<string>,
+    user-team: option<defs-team>,
+    username: option<string>
+  }
+
+  record defs-channel-id {
+    /// opaque schema; raw JSON
+    value: string
+  }
+
+  record defs-group-id {
+    /// opaque schema; raw JSON
+    value: string
+  }
+
+  record defs-file-id {
+    /// opaque schema; raw JSON
+    value: string
+  }
+
+  record defs-dm-id {
+    /// opaque schema; raw JSON
+    value: string
+  }
+
+  record defs-pinned-info {
+    /// JSON-encoded free-form object payload
+    data: option<string>
+  }
+
+  record defs-channel {
+    /// opaque schema; raw JSON
+    value: string
+  }
+
+  record objs-reaction {
+    count: s32,
+    name: string,
+    users: list<defs-user-id>
+  }
+
+  record objs-file-shares {
+    private: option<string>,
+    public: option<string>
+  }
+
+  record defs-team {
+    /// opaque schema; raw JSON
+    value: string
+  }
+
+  record objs-paging {
+    count: option<s32>,
+    page: s32,
+    pages: option<s32>,
+    per-page: option<s32>,
+    spill: option<s32>,
+    total: s32
+  }
+
+  record objs-response-metadata {
+    /// JSON-encoded free-form object payload
+    data: option<string>
+  }
+
+  /// Schema for successful response from files.list method
+  record list-op-response {
+    files: list<objs-file>,
+    ok: defs-ok-true,
+    paging: objs-paging
+  }
+
+  /// Schema for successful response from files.revokePublicURL method
+  record revoke-public-url-response {
+    file: objs-file,
+    ok: defs-ok-true
+  }
+
+  /// Schema for successful response from files.sharedPublicURL method
+  record shared-public-url-response {
+    file: objs-file,
+    ok: defs-ok-true
+  }
+
+  /// Schema for successful response files.upload method
+  record upload-response {
+    file: objs-file,
+    ok: defs-ok-true
+  }
+
   record delete-params {
     /// Authentication token. Requires scope: `files:write:user`
-    token: option<string>
+    token: option<string>,
+    /// ID of file to delete.
+    file: option<string>
   }
-  delete: func(params: delete-params) -> result<string, string>;
+  delete: func(params: delete-params) -> result<delete-response, string>;
 
   record info-params {
     /// Authentication token. Requires scope: `files:read`
@@ -960,7 +3180,7 @@ interface files {
     /// Parameter for pagination. File comments are paginated for a single file. Set `cursor` equal to the `next_cursor` attribute returned by the previous request's `response_metadata`. This parameter is optional, but pagination is mandatory: the default value simply fetches the first "page" of the collection of comments. See [pagination](/docs/pagination) for more details.
     cursor: option<string>
   }
-  info: func(params: info-params) -> result<string, string>;
+  info: func(params: info-params) -> result<info-response, string>;
 
   record list-op-params {
     /// Authentication token. Requires scope: `files:read`
@@ -980,26 +3200,101 @@ interface files {
     /// Show truncated file info for files hidden due to being too old, and the team who owns the file being over the file limit.
     show-files-hidden-by-limit: option<bool>
   }
-  list-op: func(params: list-op-params) -> result<string, string>;
+  list-op: func(params: list-op-params) -> result<list-op-response, string>;
 
   record revoke-public-url-params {
     /// Authentication token. Requires scope: `files:write:user`
-    token: option<string>
+    token: option<string>,
+    /// File to revoke
+    file: option<string>
   }
-  revoke-public-url: func(params: revoke-public-url-params) -> result<string, string>;
+  revoke-public-url: func(params: revoke-public-url-params) -> result<revoke-public-url-response, string>;
 
   record shared-public-url-params {
     /// Authentication token. Requires scope: `files:write:user`
+    token: option<string>,
+    /// File to share
+    file: option<string>
+  }
+  shared-public-url: func(params: shared-public-url-params) -> result<shared-public-url-response, string>;
+
+  record upload-params {
+    /// Comma-separated list of channel names or IDs where the file will be shared.
+    channels: option<string>,
+    /// File contents via a POST variable. If omitting this parameter, you must provide a `file`.
+    content: option<string>,
+    /// File contents via `multipart/form-data`. If omitting this parameter, you must submit `content`.
+    file: option<string>,
+    /// Filename of file.
+    filename: option<string>,
+    /// A [file type](/types/file#file_types) identifier.
+    filetype: option<string>,
+    /// The message text introducing the file in specified `channels`.
+    initial-comment: option<string>,
+    /// Provide another message's `ts` value to upload this file as a reply. Never use a reply's `ts` value; use its parent instead.
+    thread-ts: option<f64>,
+    /// Title of file.
+    title: option<string>,
+    /// Authentication token. Requires scope: `files:write:user`
     token: option<string>
   }
-  shared-public-url: func(params: shared-public-url-params) -> result<string, string>;
-
-  upload: func() -> result<string, string>;
+  upload: func(params: upload-params) -> result<upload-response, string>;
 
 }
 
 interface files-remote {
-  add: func() -> result<string, string>;
+  /// This method either only returns a brief _OK_ response or a verbose schema is not available for this method.
+  record add-response {
+    ok: defs-ok-true
+  }
+
+  record defs-ok-true {
+    /// opaque schema; raw JSON
+    value: string
+  }
+
+  /// This method either only returns a brief _OK_ response or a verbose schema is not available for this method.
+  record info-response {
+    ok: defs-ok-true
+  }
+
+  /// This method either only returns a brief _OK_ response or a verbose schema is not available for this method.
+  record list-op-response {
+    ok: defs-ok-true
+  }
+
+  /// This method either only returns a brief _OK_ response or a verbose schema is not available for this method.
+  record remove-response {
+    ok: defs-ok-true
+  }
+
+  /// This method either only returns a brief _OK_ response or a verbose schema is not available for this method.
+  record share-response {
+    ok: defs-ok-true
+  }
+
+  /// This method either only returns a brief _OK_ response or a verbose schema is not available for this method.
+  record update-response {
+    ok: defs-ok-true
+  }
+
+  record add-params {
+    /// Creator defined GUID for the file.
+    external-id: option<string>,
+    /// URL of the remote file.
+    external-url: option<string>,
+    /// type of file
+    filetype: option<string>,
+    /// A text file (txt, pdf, doc, etc.) containing textual search terms that are used to improve discovery of the remote file.
+    indexable-file-contents: option<string>,
+    /// Preview of the document via `multipart/form-data`.
+    preview-image: option<string>,
+    /// Title of the file being shared.
+    title: option<string>,
+    /// Authentication token. Requires scope: `remote_files:write`
+    token: option<string>
+  }
+  add: func(params: add-params) -> result<add-response, string>;
 
   record info-params {
     /// Authentication token. Requires scope: `remote_files:read`
@@ -1009,7 +3304,7 @@ interface files-remote {
     /// Creator defined GUID for the file.
     external-id: option<string>
   }
-  info: func(params: info-params) -> result<string, string>;
+  info: func(params: info-params) -> result<info-response, string>;
 
   record list-op-params {
     /// Authentication token. Requires scope: `remote_files:read`
@@ -1025,9 +3320,17 @@ interface files-remote {
     /// Paginate through collections of data by setting the `cursor` parameter to a `next_cursor` attribute returned by a previous request's `response_metadata`. Default value fetches the first "page" of the collection. See [pagination](/docs/pagination) for more detail.
     cursor: option<string>
   }
-  list-op: func(params: list-op-params) -> result<string, string>;
+  list-op: func(params: list-op-params) -> result<list-op-response, string>;
 
-  remove: func() -> result<string, string>;
+  record remove-params {
+    /// Creator defined GUID for the file.
+    external-id: option<string>,
+    /// Specify a file by providing its ID.
+    file: option<string>,
+    /// Authentication token. Requires scope: `remote_files:write`
+    token: option<string>
+  }
+  remove: func(params: remove-params) -> result<remove-response, string>;
 
   record share-params {
     /// Authentication token. Requires scope: `remote_files:share`
@@ -1039,13 +3342,55 @@ interface files-remote {
     /// Comma-separated list of channel IDs where the file will be shared.
     channels: option<string>
   }
-  share: func(params: share-params) -> result<string, string>;
+  share: func(params: share-params) -> result<share-response, string>;
 
-  update: func() -> result<string, string>;
+  record update-params {
+    /// Creator defined GUID for the file.
+    external-id: option<string>,
+    /// URL of the remote file.
+    external-url: option<string>,
+    /// Specify a file by providing its ID.
+    file: option<string>,
+    /// type of file
+    filetype: option<string>,
+    /// File containing contents that can be used to improve searchability for the remote file.
+    indexable-file-contents: option<string>,
+    /// Preview of the document via `multipart/form-data`.
+    preview-image: option<string>,
+    /// Title of the file being shared.
+    title: option<string>,
+    /// Authentication token. Requires scope: `remote_files:write`
+    token: option<string>
+  }
+  update: func(params: update-params) -> result<update-response, string>;
 
 }
 
 interface migration {
+  /// Schema for successful response from migration.exchange method
+  record exchange-response {
+    enterprise-id: string,
+    invalid-user-ids: option<list<string>>,
+    ok: defs-ok-true,
+    team-id: defs-team,
+    user-id-map: option<exchange-response-user-id-map>
+  }
+
+  record defs-ok-true {
+    /// opaque schema; raw JSON
+    value: string
+  }
+
+  record defs-team {
+    /// opaque schema; raw JSON
+    value: string
+  }
+
+  record exchange-response-user-id-map {
+    /// JSON-encoded free-form object payload
+    data: option<string>
+  }
+
   record exchange-params {
     /// Authentication token. Requires scope: `tokens.basic`
     token: string,
@@ -1056,11 +3401,26 @@ interface migration {
     /// Specify `true` to convert `W` global user IDs to workspace-specific `U` IDs. Defaults to `false`.
     to-old: option<bool>
   }
-  exchange: func(params: exchange-params) -> result<string, string>;
+  exchange: func(params: exchange-params) -> result<exchange-response, string>;
 
 }
 
 interface oauth {
+  /// This method either only returns a brief _OK_ response or a verbose schema is not available for this method.
+  record access-response {
+    ok: defs-ok-true
+  }
+
+  record defs-ok-true {
+    /// opaque schema; raw JSON
+    value: string
+  }
+
+  /// This method either only returns a brief _OK_ response or a verbose schema is not available for this method.
+  record token-response {
+    ok: defs-ok-true
+  }
+
   record access-params {
     /// Issued when you created your application.
     client-id: option<string>,
@@ -1073,7 +3433,7 @@ interface oauth {
     /// Request the user to add your app only to a single channel. Only valid with a [legacy workspace app](https://api.slack.com/legacy-workspace-apps).
     single-channel: option<bool>
   }
-  access: func(params: access-params) -> result<string, string>;
+  access: func(params: access-params) -> result<access-response, string>;
 
   record token-params {
     /// Issued when you created your application.
@@ -1087,11 +3447,21 @@ interface oauth {
     /// Request the user to add your app only to a single channel.
     single-channel: option<bool>
   }
-  token: func(params: token-params) -> result<string, string>;
+  token: func(params: token-params) -> result<token-response, string>;
 
 }
 
 interface oauth-v2 {
+  /// This method either only returns a brief _OK_ response or a verbose schema is not available for this method.
+  record access-response {
+    ok: defs-ok-true
+  }
+
+  record defs-ok-true {
+    /// opaque schema; raw JSON
+    value: string
+  }
+
   record access-params {
     /// Issued when you created your application.
     client-id: option<string>,
@@ -1102,16 +3472,35 @@ interface oauth-v2 {
     /// This must match the originally submitted URI (if one was sent).
     redirect-uri: option<string>
   }
-  access: func(params: access-params) -> result<string, string>;
+  access: func(params: access-params) -> result<access-response, string>;
 
 }
 
 interface pins {
+  /// Schema for successful response from pins.add method
+  record add-response {
+    ok: defs-ok-true
+  }
+
+  record defs-ok-true {
+    /// opaque schema; raw JSON
+    value: string
+  }
+
+  /// Schema for successful response from pins.remove method
+  record remove-response {
+    ok: defs-ok-true
+  }
+
   record add-params {
     /// Authentication token. Requires scope: `pins:write`
-    token: string
+    token: string,
+    /// Channel to pin the item in.
+    channel: string,
+    /// Timestamp of the message to pin.
+    timestamp: option<string>
   }
-  add: func(params: add-params) -> result<string, string>;
+  add: func(params: add-params) -> result<add-response, string>;
 
   record list-op-params {
     /// Authentication token. Requires scope: `pins:read`
@@ -1123,18 +3512,65 @@ interface pins {
 
   record remove-params {
     /// Authentication token. Requires scope: `pins:write`
-    token: string
+    token: string,
+    /// Channel where the item is pinned to.
+    channel: string,
+    /// Timestamp of the message to un-pin.
+    timestamp: option<string>
   }
-  remove: func(params: remove-params) -> result<string, string>;
+  remove: func(params: remove-params) -> result<remove-response, string>;
 
 }
 
 interface reactions {
+  /// Schema for successful response from reactions.add method
+  record add-response {
+    ok: defs-ok-true
+  }
+
+  record defs-ok-true {
+    /// opaque schema; raw JSON
+    value: string
+  }
+
+  /// Schema for successful response from reactions.list method
+  record list-op-response {
+    items: list<string>,
+    ok: defs-ok-true,
+    paging: option<objs-paging>,
+    response-metadata: option<objs-response-metadata>
+  }
+
+  record objs-paging {
+    count: option<s32>,
+    page: s32,
+    pages: option<s32>,
+    per-page: option<s32>,
+    spill: option<s32>,
+    total: s32
+  }
+
+  record objs-response-metadata {
+    /// JSON-encoded free-form object payload
+    data: option<string>
+  }
+
+  /// Schema for successful response from reactions.remove method
+  record remove-response {
+    ok: defs-ok-true
+  }
+
   record add-params {
     /// Authentication token. Requires scope: `reactions:write`
-    token: string
+    token: string,
+    /// Channel where the message to add reaction to was posted.
+    channel: string,
+    /// Reaction (emoji) name.
+    name: string,
+    /// Timestamp of the message to add reaction to.
+    timestamp: string
   }
-  add: func(params: add-params) -> result<string, string>;
+  add: func(params: add-params) -> result<add-response, string>;
 
   record get-params {
     /// Authentication token. Requires scope: `reactions:read`
@@ -1166,34 +3602,107 @@ interface reactions {
     /// The maximum number of items to return. Fewer than the requested number of items may be returned, even if the end of the list hasn't been reached.
     limit: option<s32>
   }
-  list-op: func(params: list-op-params) -> result<string, string>;
+  list-op: func(params: list-op-params) -> result<list-op-response, string>;
 
   record remove-params {
     /// Authentication token. Requires scope: `reactions:write`
-    token: string
+    token: string,
+    /// Channel where the message to remove reaction from was posted.
+    channel: option<string>,
+    /// File to remove reaction from.
+    file: option<string>,
+    /// File comment to remove reaction from.
+    file-comment: option<string>,
+    /// Reaction (emoji) name.
+    name: string,
+    /// Timestamp of the message to remove reaction from.
+    timestamp: option<string>
   }
-  remove: func(params: remove-params) -> result<string, string>;
+  remove: func(params: remove-params) -> result<remove-response, string>;
 
 }
 
 interface reminders {
+  /// Schema for successful response from reminders.add method
+  record add-response {
+    ok: defs-ok-true,
+    reminder: objs-reminder
+  }
+
+  record defs-ok-true {
+    /// opaque schema; raw JSON
+    value: string
+  }
+
+  record objs-reminder {
+    complete-ts: option<s32>,
+    creator: defs-user-id,
+    id: defs-reminder-id,
+    recurring: bool,
+    text: string,
+    time: option<s32>,
+    user: defs-user-id
+  }
+
+  record defs-user-id {
+    /// opaque schema; raw JSON
+    value: string
+  }
+
+  record defs-reminder-id {
+    /// opaque schema; raw JSON
+    value: string
+  }
+
+  /// Schema for successful response from reminders.complete method
+  record complete-response {
+    ok: defs-ok-true
+  }
+
+  /// Schema for successful response from reminders.delete method
+  record delete-response {
+    ok: defs-ok-true
+  }
+
+  /// Schema for successful response from reminders.info method
+  record info-response {
+    ok: defs-ok-true,
+    reminder: objs-reminder
+  }
+
+  /// Schema for successful response from reminders.list method
+  record list-op-response {
+    ok: defs-ok-true,
+    reminders: list<objs-reminder>
+  }
+
   record add-params {
     /// Authentication token. Requires scope: `reminders:write`
-    token: string
+    token: string,
+    /// The content of the reminder
+    text: string,
+    /// When this reminder should happen: the Unix timestamp (up to five years from now), the number of seconds until the reminder (if within 24 hours), or a natural language description (Ex. "in 15 minutes," or "every Thursday")
+    time: string,
+    /// The user who will receive the reminder. If no user is specified, the reminder will go to user who created it.
+    user: option<string>
   }
-  add: func(params: add-params) -> result<string, string>;
+  add: func(params: add-params) -> result<add-response, string>;
 
   record complete-params {
     /// Authentication token. Requires scope: `reminders:write`
-    token: option<string>
+    token: option<string>,
+    /// The ID of the reminder to be marked as complete
+    reminder: option<string>
   }
-  complete: func(params: complete-params) -> result<string, string>;
+  complete: func(params: complete-params) -> result<complete-response, string>;
 
   record delete-params {
     /// Authentication token. Requires scope: `reminders:write`
-    token: option<string>
+    token: option<string>,
+    /// The ID of the reminder
+    reminder: option<string>
   }
-  delete: func(params: delete-params) -> result<string, string>;
+  delete: func(params: delete-params) -> result<delete-response, string>;
 
   record info-params {
     /// Authentication token. Requires scope: `reminders:read`
@@ -1201,17 +3710,51 @@ interface reminders {
     /// The ID of the reminder
     reminder: option<string>
   }
-  info: func(params: info-params) -> result<string, string>;
+  info: func(params: info-params) -> result<info-response, string>;
 
   record list-op-params {
     /// Authentication token. Requires scope: `reminders:read`
     token: option<string>
   }
-  list-op: func(params: list-op-params) -> result<string, string>;
+  list-op: func(params: list-op-params) -> result<list-op-response, string>;
 
 }
 
 interface rtm {
+  /// Schema for successful response from rtm.connect method
+  record connect-response {
+    ok: defs-ok-true,
+    self: connect-response-self,
+    team: connect-response-team,
+    url: string
+  }
+
+  record defs-ok-true {
+    /// opaque schema; raw JSON
+    value: string
+  }
+
+  record connect-response-self {
+    id: defs-user-id,
+    name: string
+  }
+
+  record defs-user-id {
+    /// opaque schema; raw JSON
+    value: string
+  }
+
+  record connect-response-team {
+    domain: string,
+    id: defs-team,
+    name: string
+  }
+
+  record defs-team {
+    /// opaque schema; raw JSON
+    value: string
+  }
+
   record connect-params {
     /// Authentication token. Requires scope: `rtm:stream`
     token: string,
@@ -1220,11 +3763,21 @@ interface rtm {
     /// Only deliver presence events when requested by subscription. See [presence subscriptions](/docs/presence-and-status#subscriptions).
     presence-sub: option<bool>
   }
-  connect: func(params: connect-params) -> result<string, string>;
+  connect: func(params: connect-params) -> result<connect-response, string>;
 
 }
 
 interface search {
+  /// This method either only returns a brief _OK_ response or a verbose schema is not available for this method.
+  record messages-response {
+    ok: defs-ok-true
+  }
+
+  record defs-ok-true {
+    /// opaque schema; raw JSON
+    value: string
+  }
+
   record messages-params {
     /// Authentication token. Requires scope: `search:read`
     token: string,
@@ -1240,16 +3793,55 @@ interface search {
     /// Change sort direction to ascending (`asc`) or descending (`desc`).
     sort-dir: option<string>
   }
-  messages: func(params: messages-params) -> result<string, string>;
+  messages: func(params: messages-params) -> result<messages-response, string>;
 
 }
 
 interface stars {
+  /// Schema for successful response from stars.add method
+  record add-response {
+    ok: defs-ok-true
+  }
+
+  record defs-ok-true {
+    /// opaque schema; raw JSON
+    value: string
+  }
+
+  /// Schema for successful response from stars.list method
+  record list-op-response {
+    items: list<string>,
+    ok: defs-ok-true,
+    paging: option<objs-paging>
+  }
+
+  record objs-paging {
+    count: option<s32>,
+    page: s32,
+    pages: option<s32>,
+    per-page: option<s32>,
+    spill: option<s32>,
+    total: s32
+  }
+
+  /// Schema for successful response from stars.remove method
+  record remove-response {
+    ok: defs-ok-true
+  }
+
   record add-params {
     /// Authentication token. Requires scope: `stars:write`
-    token: string
+    token: string,
+    /// Channel to add star to, or channel where the message to add star to was posted (used with `timestamp`).
+    channel: option<string>,
+    /// File to add star to.
+    file: option<string>,
+    /// File comment to add star to.
+    file-comment: option<string>,
+    /// Timestamp of the message to add star to.
+    timestamp: option<string>
   }
-  add: func(params: add-params) -> result<string, string>;
+  add: func(params: add-params) -> result<add-response, string>;
 
   record list-op-params {
     /// Authentication token. Requires scope: `stars:read`
@@ -1261,17 +3853,193 @@ interface stars {
     /// The maximum number of items to return. Fewer than the requested number of items may be returned, even if the end of the list hasn't been reached.
     limit: option<s32>
   }
-  list-op: func(params: list-op-params) -> result<string, string>;
+  list-op: func(params: list-op-params) -> result<list-op-response, string>;
 
   record remove-params {
     /// Authentication token. Requires scope: `stars:write`
-    token: string
+    token: string,
+    /// Channel to remove star from, or channel where the message to remove star from was posted (used with `timestamp`).
+    channel: option<string>,
+    /// File to remove star from.
+    file: option<string>,
+    /// File comment to remove star from.
+    file-comment: option<string>,
+    /// Timestamp of the message to remove star from.
+    timestamp: option<string>
   }
-  remove: func(params: remove-params) -> result<string, string>;
+  remove: func(params: remove-params) -> result<remove-response, string>;
 
 }
 
 interface team {
+  enum objs-team-plan-enum {
+    empty,
+    std,
+    plus,
+    compliance,
+    enterprise,
+  }
+
+  /// Schema for successful response from team.accessLogs method
+  record access-logs-response {
+    logins: list<access-logs-response-logins-item>,
+    ok: defs-ok-true,
+    paging: objs-paging
+  }
+
+  record access-logs-response-logins-item {
+    count: s32,
+    country: string,
+    date-first: s32,
+    date-last: s32,
+    ip: string,
+    isp: string,
+    region: string,
+    user-agent: string,
+    user-id: defs-user-id,
+    username: string
+  }
+
+  record defs-user-id {
+    /// opaque schema; raw JSON
+    value: string
+  }
+
+  record defs-ok-true {
+    /// opaque schema; raw JSON
+    value: string
+  }
+
+  record objs-paging {
+    count: option<s32>,
+    page: s32,
+    pages: option<s32>,
+    per-page: option<s32>,
+    spill: option<s32>,
+    total: s32
+  }
+
+  /// This method either only returns a brief _OK_ response or a verbose schema is not available for this method.
+  record billable-info-response {
+    ok: defs-ok-true
+  }
+
+  /// Schema for successful response from team.info method
+  record info-response {
+    ok: defs-ok-true,
+    team: objs-team
+  }
+
+  record objs-team {
+    archived: option<bool>,
+    avatar-base-url: option<string>,
+    created: option<s32>,
+    date-create: option<s32>,
+    deleted: option<bool>,
+    description: option<string>,
+    discoverable: option<string>,
+    domain: string,
+    email-domain: string,
+    enterprise-id: option<defs-enterprise-id>,
+    enterprise-name: option<defs-enterprise-name>,
+    external-org-migrations: option<objs-external-org-migrations>,
+    has-compliance-export: option<bool>,
+    icon: objs-icon,
+    id: defs-workspace-id,
+    is-assigned: option<bool>,
+    is-enterprise: option<s32>,
+    is-over-storage-limit: option<bool>,
+    limit-ts: option<s32>,
+    locale: option<string>,
+    messages-count: option<s32>,
+    msg-edit-window-mins: option<s32>,
+    name: string,
+    over-integrations-limit: option<bool>,
+    over-storage-limit: option<bool>,
+    pay-prod-cur: option<string>,
+    plan: option<objs-team-plan-enum>,
+    primary-owner: option<objs-primary-owner>,
+    sso-provider: option<objs-team-sso-provider>
+  }
+
+  record defs-enterprise-id {
+    /// opaque schema; raw JSON
+    value: string
+  }
+
+  record defs-enterprise-name {
+    /// opaque schema; raw JSON
+    value: string
+  }
+
+  record objs-external-org-migrations {
+    current: list<objs-external-org-migrations-current-item>,
+    date-updated: s32
+  }
+
+  record objs-external-org-migrations-current-item {
+    date-started: s32,
+    team-id: string
+  }
+
+  record objs-icon {
+    image-v102: option<string>,
+    image-v132: option<string>,
+    image-v230: option<string>,
+    image-v34: option<string>,
+    image-v44: option<string>,
+    image-v68: option<string>,
+    image-v88: option<string>,
+    image-default: option<bool>
+  }
+
+  record defs-workspace-id {
+    /// opaque schema; raw JSON
+    value: string
+  }
+
+  record objs-primary-owner {
+    email: string,
+    id: string
+  }
+
+  record objs-team-sso-provider {
+    label: option<string>,
+    name: option<string>,
+    type-op: option<string>
+  }
+
+  /// Schema for successful response from team.integrationLogs method
+  record integration-logs-response {
+    logs: list<integration-logs-response-logs-item>,
+    ok: defs-ok-true,
+    paging: objs-paging
+  }
+
+  record integration-logs-response-logs-item {
+    admin-app-id: option<defs-app-id>,
+    app-id: defs-app-id,
+    app-type: string,
+    change-type: string,
+    channel: option<defs-channel>,
+    date: string,
+    scope: string,
+    service-id: option<string>,
+    service-type: option<string>,
+    user-id: defs-user-id,
+    user-name: string
+  }
+
+  record defs-app-id {
+    /// opaque schema; raw JSON
+    value: string
+  }
+
+  record defs-channel {
+    /// opaque schema; raw JSON
+    value: string
+  }
+
   record access-logs-params {
     /// Authentication token. Requires scope: `admin`
     token: string,
@@ -1280,7 +4048,7 @@ interface team {
     count: option<string>,
     page: option<string>
   }
-  access-logs: func(params: access-logs-params) -> result<string, string>;
+  access-logs: func(params: access-logs-params) -> result<access-logs-response, string>;
 
   record billable-info-params {
     /// Authentication token. Requires scope: `admin`
@@ -1288,7 +4056,7 @@ interface team {
     /// A user to retrieve the billable information for. Defaults to all users.
     user: option<string>
   }
-  billable-info: func(params: billable-info-params) -> result<string, string>;
+  billable-info: func(params: billable-info-params) -> result<billable-info-response, string>;
 
   record info-params {
     /// Authentication token. Requires scope: `team:read`
@@ -1296,7 +4064,7 @@ interface team {
     /// Team to get info on, if omitted, will return information about the current team. Will only return team that the authenticated token is allowed to see through external shared channels
     team: option<string>
   }
-  info: func(params: info-params) -> result<string, string>;
+  info: func(params: info-params) -> result<info-response, string>;
 
   record integration-logs-params {
     /// Authentication token. Requires scope: `admin`
@@ -1312,39 +4080,182 @@ interface team {
     /// Filter logs generated by this user’s actions. Defaults to all logs.
     user: option<string>
   }
-  integration-logs: func(params: integration-logs-params) -> result<string, string>;
+  integration-logs: func(params: integration-logs-params) -> result<integration-logs-response, string>;
 
 }
 
 interface team-profile {
+  enum objs-team-profile-field-type-op-enum {
+    text,
+    date,
+    link,
+    mailto,
+    options-list,
+    user,
+  }
+
+  /// Schema for successful response from team.profile.get method
+  record get-response {
+    ok: defs-ok-true,
+    profile: get-response-profile
+  }
+
+  record defs-ok-true {
+    /// opaque schema; raw JSON
+    value: string
+  }
+
+  record get-response-profile {
+    fields: list<objs-team-profile-field>
+  }
+
+  record objs-team-profile-field {
+    field-name: option<string>,
+    hint: string,
+    id: string,
+    is-hidden: option<bool>,
+    label: string,
+    options: option<string>,
+    ordering: f64,
+    possible-values: option<list<string>>,
+    type-op: objs-team-profile-field-type-op-enum
+  }
+
   record get-params {
     /// Authentication token. Requires scope: `users.profile:read`
     token: string,
     /// Filter by visibility.
     visibility: option<string>
   }
-  get: func(params: get-params) -> result<string, string>;
+  get: func(params: get-params) -> result<get-response, string>;
 
 }
 
 interface usergroups {
+  /// Schema for successful response from usergroups.create method
+  record create-response {
+    ok: defs-ok-true,
+    usergroup: objs-subteam
+  }
+
+  record defs-ok-true {
+    /// opaque schema; raw JSON
+    value: string
+  }
+
+  record objs-subteam {
+    auto-provision: bool,
+    auto-type: string,
+    channel-count: option<s32>,
+    created-by: defs-user-id,
+    date-create: s32,
+    date-delete: s32,
+    date-update: s32,
+    deleted-by: string,
+    description: string,
+    enterprise-subteam-id: string,
+    handle: string,
+    id: defs-subteam-id,
+    is-external: bool,
+    is-subteam: bool,
+    is-usergroup: bool,
+    name: string,
+    prefs: objs-subteam-prefs,
+    team-id: defs-team,
+    updated-by: defs-user-id,
+    user-count: option<s32>,
+    users: option<list<defs-user-id>>
+  }
+
+  record defs-user-id {
+    /// opaque schema; raw JSON
+    value: string
+  }
+
+  record defs-subteam-id {
+    /// opaque schema; raw JSON
+    value: string
+  }
+
+  record objs-subteam-prefs {
+    channels: list<defs-channel-id>,
+    groups: list<defs-group-id>
+  }
+
+  record defs-channel-id {
+    /// opaque schema; raw JSON
+    value: string
+  }
+
+  record defs-group-id {
+    /// opaque schema; raw JSON
+    value: string
+  }
+
+  record defs-team {
+    /// opaque schema; raw JSON
+    value: string
+  }
+
+  /// Schema for successful response from usergroups.disable method
+  record disable-response {
+    ok: defs-ok-true,
+    usergroup: objs-subteam
+  }
+
+  /// Schema for successful response from usergroups.enable method
+  record enable-response {
+    ok: defs-ok-true,
+    usergroup: objs-subteam
+  }
+
+  /// Schema for successful response from usergroups.list method
+  record list-op-response {
+    ok: defs-ok-true,
+    usergroups: list<objs-subteam>
+  }
+
+  /// Schema for successful response from usergroups.update method
+  record update-response {
+    ok: defs-ok-true,
+    usergroup: objs-subteam
+  }
+
   record create-params {
     /// Authentication token. Requires scope: `usergroups:write`
-    token: string
+    token: string,
+    /// A comma separated string of encoded channel IDs for which the User Group uses as a default.
+    channels: option<string>,
+    /// A short description of the User Group.
+    description: option<string>,
+    /// A mention handle. Must be unique among channels, users and User Groups.
+    handle: option<string>,
+    /// Include the number of users in each User Group.
+    include-count: option<bool>,
+    /// A name for the User Group. Must be unique among User Groups.
+    name: string
   }
-  create: func(params: create-params) -> result<string, string>;
+  create: func(params: create-params) -> result<create-response, string>;
 
   record disable-params {
     /// Authentication token. Requires scope: `usergroups:write`
-    token: string
+    token: string,
+    /// Include the number of users in the User Group.
+    include-count: option<bool>,
+    /// The encoded ID of the User Group to disable.
+    usergroup: string
   }
-  disable: func(params: disable-params) -> result<string, string>;
+  disable: func(params: disable-params) -> result<disable-response, string>;
 
   record enable-params {
     /// Authentication token. Requires scope: `usergroups:write`
-    token: string
+    token: string,
+    /// Include the number of users in the User Group.
+    include-count: option<bool>,
+    /// The encoded ID of the User Group to enable.
+    usergroup: string
   }
-  enable: func(params: enable-params) -> result<string, string>;
+  enable: func(params: enable-params) -> result<enable-response, string>;
 
   record list-op-params {
     /// Include the list of users for each User Group.
@@ -1356,17 +4267,100 @@ interface usergroups {
     /// Include disabled User Groups.
     include-disabled: option<bool>
   }
-  list-op: func(params: list-op-params) -> result<string, string>;
+  list-op: func(params: list-op-params) -> result<list-op-response, string>;
 
   record update-params {
     /// Authentication token. Requires scope: `usergroups:write`
-    token: string
+    token: string,
+    /// A comma separated string of encoded channel IDs for which the User Group uses as a default.
+    channels: option<string>,
+    /// A short description of the User Group.
+    description: option<string>,
+    /// A mention handle. Must be unique among channels, users and User Groups.
+    handle: option<string>,
+    /// Include the number of users in the User Group.
+    include-count: option<bool>,
+    /// A name for the User Group. Must be unique among User Groups.
+    name: option<string>,
+    /// The encoded ID of the User Group to update.
+    usergroup: string
   }
-  update: func(params: update-params) -> result<string, string>;
+  update: func(params: update-params) -> result<update-response, string>;
 
 }
 
 interface usergroups-users {
+  /// Schema for successful response from usergroups.users.list method
+  record list-op-response {
+    ok: defs-ok-true,
+    users: list<defs-user-id>
+  }
+
+  record defs-ok-true {
+    /// opaque schema; raw JSON
+    value: string
+  }
+
+  record defs-user-id {
+    /// opaque schema; raw JSON
+    value: string
+  }
+
+  /// Schema for successful response from usergroups.users.update method
+  record update-response {
+    ok: defs-ok-true,
+    usergroup: objs-subteam
+  }
+
+  record objs-subteam {
+    auto-provision: bool,
+    auto-type: string,
+    channel-count: option<s32>,
+    created-by: defs-user-id,
+    date-create: s32,
+    date-delete: s32,
+    date-update: s32,
+    deleted-by: string,
+    description: string,
+    enterprise-subteam-id: string,
+    handle: string,
+    id: defs-subteam-id,
+    is-external: bool,
+    is-subteam: bool,
+    is-usergroup: bool,
+    name: string,
+    prefs: objs-subteam-prefs,
+    team-id: defs-team,
+    updated-by: defs-user-id,
+    user-count: option<s32>,
+    users: option<list<defs-user-id>>
+  }
+
+  record defs-subteam-id {
+    /// opaque schema; raw JSON
+    value: string
+  }
+
+  record objs-subteam-prefs {
+    channels: list<defs-channel-id>,
+    groups: list<defs-group-id>
+  }
+
+  record defs-channel-id {
+    /// opaque schema; raw JSON
+    value: string
+  }
+
+  record defs-group-id {
+    /// opaque schema; raw JSON
+    value: string
+  }
+
+  record defs-team {
+    /// opaque schema; raw JSON
+    value: string
+  }
+
   record list-op-params {
     /// Authentication token. Requires scope: `usergroups:read`
     token: string,
@@ -1375,17 +4369,118 @@ interface usergroups-users {
     /// The encoded ID of the User Group to update.
     usergroup: string
   }
-  list-op: func(params: list-op-params) -> result<string, string>;
+  list-op: func(params: list-op-params) -> result<list-op-response, string>;
 
   record update-params {
     /// Authentication token. Requires scope: `usergroups:write`
-    token: string
+    token: string,
+    /// Include the number of users in the User Group.
+    include-count: option<bool>,
+    /// The encoded ID of the User Group to update.
+    usergroup: string,
+    /// A comma separated string of encoded user IDs that represent the entire list of users for the User Group.
+    users: string
   }
-  update: func(params: update-params) -> result<string, string>;
+  update: func(params: update-params) -> result<update-response, string>;
 
 }
 
 interface users {
+  /// Schema for successful response from users.conversations method. Returned conversation objects do not include `num_members` or `is_member`
+  record conversations-response {
+    channels: list<objs-conversation>,
+    ok: defs-ok-true,
+    response-metadata: option<conversations-response-response-metadata>
+  }
+
+  record objs-conversation {
+    /// JSON-encoded free-form object payload
+    data: option<string>
+  }
+
+  record defs-ok-true {
+    /// opaque schema; raw JSON
+    value: string
+  }
+
+  record conversations-response-response-metadata {
+    next-cursor: string
+  }
+
+  /// Schema for successful response from users.deletePhoto method
+  record delete-photo-response {
+    ok: defs-ok-true
+  }
+
+  /// Generated from users.getPresence with shasum e7251aec575d8863f9e0eb38663ae9dc26655f65
+  record get-presence-response {
+    auto-away: option<bool>,
+    connection-count: option<s32>,
+    last-activity: option<s32>,
+    manual-away: option<bool>,
+    ok: defs-ok-true,
+    online: option<bool>,
+    presence: string
+  }
+
+  /// Schema for successful response from users.info method
+  record info-response {
+    ok: defs-ok-true,
+    user: objs-user
+  }
+
+  record objs-user {
+    /// JSON-encoded free-form object payload
+    data: option<string>
+  }
+
+  /// Schema for successful response from users.list method
+  record list-op-response {
+    cache-ts: s32,
+    members: list<objs-user>,
+    ok: defs-ok-true,
+    response-metadata: option<objs-response-metadata>
+  }
+
+  record objs-response-metadata {
+    /// JSON-encoded free-form object payload
+    data: option<string>
+  }
+
+  /// Schema for successful response from users.lookupByEmail method
+  record lookup-by-email-response {
+    ok: defs-ok-true,
+    user: objs-user
+  }
+
+  /// Schema for successful response from users.setActive method
+  record set-active-response {
+    ok: defs-ok-true
+  }
+
+  /// Schema for successful response from users.setPhoto method
+  record set-photo-response {
+    ok: defs-ok-true,
+    profile: set-photo-response-profile
+  }
+
+  record set-photo-response-profile {
+    avatar-hash: string,
+    image-v1024: string,
+    image-v192: string,
+    image-v24: string,
+    image-v32: string,
+    image-v48: string,
+    image-v512: string,
+    image-v72: string,
+    image-original: string
+  }
+
+  /// Schema for successful response from users.setPresence method
+  record set-presence-response {
+    ok: defs-ok-true
+  }
+
   record conversations-params {
     /// Authentication token. Requires scope: `conversations:read`
     token: option<string>,
@@ -1400,9 +4495,13 @@ interface users {
     /// Paginate through collections of data by setting the `cursor` parameter to a `next_cursor` attribute returned by a previous request's `response_metadata`. Default value fetches the first "page" of the collection. See [pagination](/docs/pagination) for more detail.
     cursor: option<string>
   }
-  conversations: func(params: conversations-params) -> result<string, string>;
+  conversations: func(params: conversations-params) -> result<conversations-response, string>;
 
-  delete-photo: func() -> result<string, string>;
+  record delete-photo-params {
+    /// Authentication token. Requires scope: `users.profile:write`
+    token: string
+  }
+  delete-photo: func(params: delete-photo-params) -> result<delete-photo-response, string>;
 
   record get-presence-params {
     /// Authentication token. Requires scope: `users:read`
@@ -1410,7 +4509,7 @@ interface users {
     /// User to get presence info on. Defaults to the authed user.
     user: option<string>
   }
-  get-presence: func(params: get-presence-params) -> result<string, string>;
+  get-presence: func(params: get-presence-params) -> result<get-presence-response, string>;
 
   record identity-params {
     /// Authentication token. Requires scope: `identity.basic`
@@ -1426,7 +4525,7 @@ interface users {
     /// User to get info on
     user: option<string>
   }
-  info: func(params: info-params) -> result<string, string>;
+  info: func(params: info-params) -> result<info-response, string>;
 
   record list-op-params {
     /// Authentication token. Requires scope: `users:read`
@@ -1438,7 +4537,7 @@ interface users {
     /// Set this to `true` to receive the locale for users. Defaults to `false`
     include-locale: option<bool>
   }
-  list-op: func(params: list-op-params) -> result<string, string>;
+  list-op: func(params: list-op-params) -> result<list-op-response, string>;
 
   record lookup-by-email-params {
     /// Authentication token. Requires scope: `users:read.email`
@@ -1446,25 +4545,120 @@ interface users {
     /// An email address belonging to a user in the workspace
     email: string
   }
-  lookup-by-email: func(params: lookup-by-email-params) -> result<string, string>;
+  lookup-by-email: func(params: lookup-by-email-params) -> result<lookup-by-email-response, string>;
 
   record set-active-params {
     /// Authentication token. Requires scope: `users:write`
     token: string
   }
-  set-active: func(params: set-active-params) -> result<string, string>;
+  set-active: func(params: set-active-params) -> result<set-active-response, string>;
 
-  set-photo: func() -> result<string, string>;
+  record set-photo-params {
+    /// Width/height of crop box (always square)
+    crop-w: option<string>,
+    /// X coordinate of top-left corner of crop box
+    crop-x: option<string>,
+    /// Y coordinate of top-left corner of crop box
+    crop-y: option<string>,
+    /// File contents via `multipart/form-data`.
+    image: option<string>,
+    /// Authentication token. Requires scope: `users.profile:write`
+    token: string
+  }
+  set-photo: func(params: set-photo-params) -> result<set-photo-response, string>;
 
   record set-presence-params {
     /// Authentication token. Requires scope: `users:write`
-    token: string
+    token: string,
+    /// Either `auto` or `away`
+    presence: string
   }
-  set-presence: func(params: set-presence-params) -> result<string, string>;
+  set-presence: func(params: set-presence-params) -> result<set-presence-response, string>;
 
 }
 
 interface users-profile {
+  /// Schema for successful response from users.profile.get method
+  record get-response {
+    ok: defs-ok-true,
+    profile: objs-user-profile
+  }
+
+  record defs-ok-true {
+    /// opaque schema; raw JSON
+    value: string
+  }
+
+  record objs-user-profile {
+    always-active: option<bool>,
+    api-app-id: option<defs-optional-app-id>,
+    avatar-hash: string,
+    bot-id: option<defs-bot-id>,
+    display-name: string,
+    display-name-normalized: string,
+    email: option<string>,
+    fields: string,
+    first-name: option<string>,
+    guest-expiration-ts: option<s32>,
+    guest-invited-by: option<string>,
+    image-v1024: option<string>,
+    image-v192: option<string>,
+    image-v24: option<string>,
+    image-v32: option<string>,
+    image-v48: option<string>,
+    image-v512: option<string>,
+    image-v72: option<string>,
+    image-original: option<string>,
+    is-app-user: option<bool>,
+    is-custom-image: option<bool>,
+    is-restricted: option<bool>,
+    is-ultra-restricted: option<bool>,
+    last-avatar-image-hash: option<string>,
+    last-name: option<string>,
+    memberships-count: option<s32>,
+    name: option<string>,
+    phone: string,
+    pronouns: option<string>,
+    real-name: string,
+    real-name-normalized: string,
+    skype: string,
+    status-default-emoji: option<string>,
+    status-default-text: option<string>,
+    status-default-text-canonical: option<string>,
+    status-emoji: string,
+    status-expiration: option<s32>,
+    status-text: string,
+    status-text-canonical: option<string>,
+    team: option<defs-workspace-id>,
+    title: string,
+    updated: option<s32>,
+    user-id: option<string>,
+    username: option<string>
+  }
+
+  record defs-optional-app-id {
+    /// opaque schema; raw JSON
+    value: string
+  }
+
+  record defs-bot-id {
+    /// opaque schema; raw JSON
+    value: string
+  }
+
+  record defs-workspace-id {
+    /// opaque schema; raw JSON
+    value: string
+  }
+
+  /// Schema for successful response from users.profile.set method
+  record set-response {
+    email-pending: option<string>,
+    ok: defs-ok-true,
+    profile: objs-user-profile,
+    username: string
+  }
+
   record get-params {
     /// Authentication token. Requires scope: `users.profile:read`
     token: string,
@@ -1473,17 +4667,50 @@ interface users-profile {
     /// User to retrieve profile info for
     user: option<string>
   }
-  get: func(params: get-params) -> result<string, string>;
+  get: func(params: get-params) -> result<get-response, string>;
 
   record set-params {
     /// Authentication token. Requires scope: `users.profile:write`
-    token: string
+    token: string,
+    /// Name of a single key to set. Usable only if `profile` is not passed.
+    name: option<string>,
+    /// Collection of key:value pairs presented as a URL-encoded JSON hash. At most 50 fields may be set. Each field name is limited to 255 characters.
+    profile: option<string>,
+    /// ID of user to change. This argument may only be specified by team admins on paid teams.
+    user: option<string>,
+    /// Value to set a single key to. Usable only if `profile` is not passed.
+    value: option<string>
   }
-  set: func(params: set-params) -> result<string, string>;
+  set: func(params: set-params) -> result<set-response, string>;
 
 }
 
 interface views {
+  /// This method either only returns a brief _OK_ response or a verbose schema is not available for this method.
+  record open-response {
+    ok: defs-ok-true
+  }
+
+  record defs-ok-true {
+    /// opaque schema; raw JSON
+    value: string
+  }
+
+  /// This method either only returns a brief _OK_ response or a verbose schema is not available for this method.
+  record publish-response {
+    ok: defs-ok-true
+  }
+
+  /// This method either only returns a brief _OK_ response or a verbose schema is not available for this method.
+  record push-response {
+    ok: defs-ok-true
+  }
+
+  /// This method either only returns a brief _OK_ response or a verbose schema is not available for this method.
+  record update-response {
+    ok: defs-ok-true
+  }
+
   record open-params {
     /// Authentication token. Requires scope: `none`
     token: string,
@@ -1492,7 +4719,7 @@ interface views {
     /// A [view payload](/reference/surfaces/views). This must be a JSON-encoded string.
     view: string
   }
-  open: func(params: open-params) -> result<string, string>;
+  open: func(params: open-params) -> result<open-response, string>;
 
   record publish-params {
     /// Authentication token. Requires scope: `none`
@@ -1504,7 +4731,7 @@ interface views {
     /// A string that represents view state to protect against possible race conditions.
     hash: option<string>
   }
-  publish: func(params: publish-params) -> result<string, string>;
+  publish: func(params: publish-params) -> result<publish-response, string>;
 
   record push-params {
     /// Authentication token. Requires scope: `none`
@@ -1514,7 +4741,7 @@ interface views {
     /// A [view payload](/reference/surfaces/views). This must be a JSON-encoded string.
     view: string
   }
-  push: func(params: push-params) -> result<string, string>;
+  push: func(params: push-params) -> result<push-response, string>;
 
   record update-params {
     /// Authentication token. Requires scope: `none`
@@ -1528,11 +4755,31 @@ interface views {
     /// A string that represents view state to protect against possible race conditions.
     hash: option<string>
   }
-  update: func(params: update-params) -> result<string, string>;
+  update: func(params: update-params) -> result<update-response, string>;
 
 }
 
 interface workflows {
+  /// This method either only returns a brief _OK_ response or a verbose schema is not available for this method.
+  record step-completed-response {
+    ok: defs-ok-true
+  }
+
+  record defs-ok-true {
+    /// opaque schema; raw JSON
+    value: string
+  }
+
+  /// This method either only returns a brief _OK_ response or a verbose schema is not available for this method.
+  record step-failed-response {
+    ok: defs-ok-true
+  }
+
+  /// This method either only returns a brief _OK_ response or a verbose schema is not available for this method.
+  record update-step-response {
+    ok: defs-ok-true
+  }
+
   record step-completed-params {
     /// Authentication token. Requires scope: `workflow.steps:execute`
     token: string,
@@ -1541,7 +4788,7 @@ interface workflows {
     /// Key-value object of outputs from your step. Keys of this object reflect the configured `key` properties of your [`outputs`](/reference/workflows/workflow_step#output) array from your `workflow_step` object.
     outputs: option<string>
   }
-  step-completed: func(params: step-completed-params) -> result<string, string>;
+  step-completed: func(params: step-completed-params) -> result<step-completed-response, string>;
 
   record step-failed-params {
     /// Authentication token. Requires scope: `workflow.steps:execute`
@@ -1551,7 +4798,7 @@ interface workflows {
     /// A JSON-based object with a `message` property that should contain a human readable error message.
     error: string
   }
-  step-failed: func(params: step-failed-params) -> result<string, string>;
+  step-failed: func(params: step-failed-params) -> result<step-failed-response, string>;
 
   record update-step-params {
     /// Authentication token. Requires scope: `workflow.steps:execute`
@@ -1567,7 +4814,7 @@ interface workflows {
     /// An optional field that can be used to override app image that is shown in the Workflow Builder.
     step-image-url: option<string>
   }
-  update-step: func(params: update-step-params) -> result<string, string>;
+  update-step: func(params: update-step-params) -> result<update-step-response, string>;
 
 }
 /// The component world: imports the secrets host capability

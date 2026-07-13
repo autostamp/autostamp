@@ -44,10 +44,15 @@ pub(crate) enum FieldLocation {
     Body,
 }
 
-/// A single operation parameter: the snake-case key it carries in the params JSON and where
-/// it belongs in the request.
+/// A single operation parameter. `snake` keys the field in the internal params JSON (and, for a
+/// path field, matches the `{snake}` placeholder in the path template); `wire` is the verbatim name
+/// the field takes on the HTTP wire (query key, header name, or body property). The two differ
+/// whenever the source name isn't already snake_case (e.g. `dryRun` → snake `dry_run`, wire
+/// `dryRun`), and let distinct inputs that share a snake key (`DateCreated`, `DateCreated<`) still
+/// travel under their true names.
 pub(crate) struct FieldSpec {
     pub(crate) snake: &'static str,
+    pub(crate) wire: &'static str,
     pub(crate) location: FieldLocation,
 }
 
@@ -71,6 +76,16 @@ pub(crate) struct AuthApply {
     pub(crate) kind: AuthKind,
 }
 
+/// The failure modes of [`dispatch`], kept structured so each generated operation can map them
+/// onto its own typed error: an `Http` failure carries the response status and body (routed to
+/// the matching error-variant case), while a `Transport` failure carries a message for the
+/// catch-all case (a secret lookup, connection, or decode failure that never produced an HTTP
+/// status).
+pub(crate) enum DispatchError {
+    Http { status: u16, body: String },
+    Transport(String),
+}
+
 /// A single API operation: HTTP method, path template (with `{snake}` placeholders), the
 /// parameter fields, and the security schemes to apply.
 pub(crate) struct OpSpec {
@@ -81,8 +96,9 @@ pub(crate) struct OpSpec {
 }
 
 /// Execute `op` with the supplied `params` (a JSON object keyed by snake-case field names)
-/// and return the response body as a string, or an error message.
-pub(crate) fn dispatch(op: &OpSpec, params: Value) -> Result<String, String> {
+/// and return the raw 2xx response body, or a structured [`DispatchError`] the caller maps
+/// onto the operation's typed error.
+pub(crate) fn dispatch(op: &OpSpec, params: Value) -> Result<String, DispatchError> {
     let obj = match &params {
         Value::Object(map) => Some(map),
         _ => None,
@@ -105,10 +121,10 @@ pub(crate) fn dispatch(op: &OpSpec, params: Value) -> Result<String, String> {
                 let placeholder = format!("{{{}}}", field.snake);
                 path = path.replace(&placeholder, &percent_encode(&scalar(value)));
             }
-            FieldLocation::Query => query.push((field.snake.to_string(), scalar(value))),
-            FieldLocation::Header => headers.push((field.snake.to_string(), scalar(value))),
+            FieldLocation::Query => query.push((field.wire.to_string(), scalar(value))),
+            FieldLocation::Header => headers.push((field.wire.to_string(), scalar(value))),
             FieldLocation::Body => {
-                body.insert(field.snake.to_string(), value.clone());
+                body.insert(field.wire.to_string(), value.clone());
             }
         }
     }
@@ -116,7 +132,7 @@ pub(crate) fn dispatch(op: &OpSpec, params: Value) -> Result<String, String> {
     // Apply each resolved security scheme, sourcing its value from wasmcloud:secrets.
     let mut cookies: Vec<String> = Vec::new();
     for apply in op.auth {
-        let secret = fetch_secret(apply.secret_key)?;
+        let secret = fetch_secret(apply.secret_key).map_err(DispatchError::Transport)?;
         match &apply.kind {
             AuthKind::Bearer => headers.push(("authorization".into(), format!("Bearer {secret}"))),
             AuthKind::Basic => {
@@ -177,17 +193,18 @@ fn fetch_secret(key: &str) -> Result<String, String> {
 }
 
 /// Build and send the outgoing request with `wstd`, returning the response body on a 2xx
-/// status. The generated guest exports are synchronous, so the async `wstd` client is driven
-/// to completion on a local reactor via `wstd::runtime::block_on`.
+/// status and a structured [`DispatchError`] otherwise. The generated guest exports are
+/// synchronous, so the async `wstd` client is driven to completion on a local reactor via
+/// `wstd::runtime::block_on`.
 fn perform(
     method: &str,
     path_with_query: &str,
     headers: &[(String, String)],
     body: &[u8],
-) -> Result<String, String> {
+) -> Result<String, DispatchError> {
     let url = join_url(crate::BASE_URL, path_with_query);
     let method = Method::from_bytes(method.as_bytes())
-        .map_err(|err| format!("invalid HTTP method `{method}`: {err}"))?;
+        .map_err(|err| DispatchError::Transport(format!("invalid HTTP method `{method}`: {err}")))?;
 
     let mut builder = Request::builder().method(method).uri(url);
     for (name, value) in headers {
@@ -199,27 +216,29 @@ fn perform(
         } else {
             Body::from(body.to_vec())
         })
-        .map_err(|err| format!("failed to build request: {err}"))?;
+        .map_err(|err| DispatchError::Transport(format!("failed to build request: {err}")))?;
 
     wstd::runtime::block_on(async move {
         let client = Client::new();
         let response = client
             .send(request)
             .await
-            .map_err(|err| format!("request failed: {err:#}"))?;
+            .map_err(|err| DispatchError::Transport(format!("request failed: {err:#}")))?;
 
         let status = response.status().as_u16();
         let mut response_body = response.into_body();
-        let bytes = response_body
-            .contents()
-            .await
-            .map_err(|err| format!("failed to read response body: {err:#}"))?;
+        let bytes = response_body.contents().await.map_err(|err| {
+            DispatchError::Transport(format!("failed to read response body: {err:#}"))
+        })?;
         let body_text = String::from_utf8_lossy(bytes).into_owned();
 
         if (200..300).contains(&status) {
             Ok(body_text)
         } else {
-            Err(format!("HTTP {status}: {body_text}"))
+            Err(DispatchError::Http {
+                status,
+                body: body_text,
+            })
         }
     })
 }
@@ -298,12 +317,52 @@ const OP_DISCOVERY_GET_NAMESPACE: OpSpec = OpSpec {
     method: "GET",
     path_template: "/namespaces/{namespace}",
     fields: &[
-        FieldSpec { snake: "namespace", location: FieldLocation::Path },
+        FieldSpec { snake: "namespace", wire: "namespace", location: FieldLocation::Path },
     ],
     auth: &[
         AuthApply { secret_key: "HubAuth", kind: AuthKind::Bearer },
     ],
 };
+
+fn iface_discovery__namespace_data__to_json(p: &iface_discovery::NamespaceData) -> Value {
+    let mut m = Map::new();
+    m.insert("namespaces".into(), match (&p.namespaces) { Some(v) => Value::Array((v).iter().map(|v| Value::String((v).clone())).collect()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_discovery__namespace_metadata__to_json(p: &iface_discovery::NamespaceMetadata) -> Value {
+    let mut m = Map::new();
+    m.insert("datasets".into(), match (&p.datasets) { Some(v) => Value::Array((v).iter().map(|v| iface_discovery__dataset_model__to_json(v)).collect()), None => Value::Null });
+    m.insert("extraRepos".into(), match (&p.extra_repos) { Some(v) => Value::Array((v).iter().map(|v| Value::String((v).clone())).collect()), None => Value::Null });
+    m.insert("namespace".into(), match (&p.namespace) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_discovery__dataset_model__to_json(p: &iface_discovery::DatasetModel) -> Value {
+    let mut m = Map::new();
+    m.insert("name".into(), match (&p.name) { Some(v) => iface_discovery__dataset_type__to_json(v), None => Value::Null });
+    m.insert("timespans".into(), match (&p.timespans) { Some(v) => Value::Array((v).iter().map(|v| iface_discovery__timespan_type__to_json(v)).collect()), None => Value::Null });
+    m.insert("views".into(), match (&p.views) { Some(v) => Value::Array((v).iter().map(|v| iface_discovery__dataview_type__to_json(v)).collect()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_discovery__dataset_type__to_json(p: &iface_discovery::DatasetType) -> Value {
+    let mut m = Map::new();
+    m.insert("value".into(), Value::String((&p.value).clone()));
+    Value::Object(m)
+}
+
+fn iface_discovery__timespan_type__to_json(p: &iface_discovery::TimespanType) -> Value {
+    let mut m = Map::new();
+    m.insert("value".into(), Value::String((&p.value).clone()));
+    Value::Object(m)
+}
+
+fn iface_discovery__dataview_type__to_json(p: &iface_discovery::DataviewType) -> Value {
+    let mut m = Map::new();
+    m.insert("value".into(), Value::String((&p.value).clone()));
+    Value::Object(m)
+}
 
 fn iface_discovery__get_namespace_params__to_json(p: &iface_discovery::GetNamespaceParams) -> Value {
     let mut m = Map::new();
@@ -311,13 +370,101 @@ fn iface_discovery__get_namespace_params__to_json(p: &iface_discovery::GetNamesp
     Value::Object(m)
 }
 
-impl iface_discovery::Guest for crate::Component {
-    fn get_namespaces() -> Result<String, String> {
-        dispatch(&OP_DISCOVERY_GET_NAMESPACES, Value::Object(Map::new()))
+fn iface_discovery__namespace_data__from_json(v: &Value) -> Option<iface_discovery::NamespaceData> {
+    let m = v.as_object()?;
+    Some(iface_discovery::NamespaceData {
+        namespaces: m.get("namespaces").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| (x).as_str().map(|s| s.to_string())).collect())),
+    })
+}
+
+fn iface_discovery__namespace_metadata__from_json(v: &Value) -> Option<iface_discovery::NamespaceMetadata> {
+    let m = v.as_object()?;
+    Some(iface_discovery::NamespaceMetadata {
+        datasets: m.get("datasets").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| iface_discovery__dataset_model__from_json(x)).collect())),
+        extra_repos: m.get("extraRepos").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| (x).as_str().map(|s| s.to_string())).collect())),
+        namespace: m.get("namespace").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    })
+}
+
+fn iface_discovery__dataset_model__from_json(v: &Value) -> Option<iface_discovery::DatasetModel> {
+    let m = v.as_object()?;
+    Some(iface_discovery::DatasetModel {
+        name: m.get("name").filter(|v| !v.is_null()).and_then(|v| iface_discovery__dataset_type__from_json(v)),
+        timespans: m.get("timespans").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| iface_discovery__timespan_type__from_json(x)).collect())),
+        views: m.get("views").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| iface_discovery__dataview_type__from_json(x)).collect())),
+    })
+}
+
+fn iface_discovery__dataset_type__from_json(v: &Value) -> Option<iface_discovery::DatasetType> {
+    let m = v.as_object()?;
+    Some(iface_discovery::DatasetType {
+        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+    })
+}
+
+fn iface_discovery__timespan_type__from_json(v: &Value) -> Option<iface_discovery::TimespanType> {
+    let m = v.as_object()?;
+    Some(iface_discovery::TimespanType {
+        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+    })
+}
+
+fn iface_discovery__dataview_type__from_json(v: &Value) -> Option<iface_discovery::DataviewType> {
+    let m = v.as_object()?;
+    Some(iface_discovery::DataviewType {
+        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+    })
+}
+
+fn iface_discovery__get_namespaces__ok(body: String) -> Result<iface_discovery::NamespaceData, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match iface_discovery__namespace_data__from_json(&v) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
     }
-    fn get_namespace(params: iface_discovery::GetNamespaceParams) -> Result<String, String> {
+}
+
+fn iface_discovery__get_namespaces__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
+fn iface_discovery__get_namespace__ok(body: String) -> Result<iface_discovery::NamespaceMetadata, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match iface_discovery__namespace_metadata__from_json(&v) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_discovery__get_namespace__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
+impl iface_discovery::Guest for crate::Component {
+    fn get_namespaces() -> Result<iface_discovery::NamespaceData, String> {
+        match dispatch(&OP_DISCOVERY_GET_NAMESPACES, Value::Object(Map::new())).and_then(iface_discovery__get_namespaces__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_discovery__get_namespaces__err(e)),
+        }
+    }
+    fn get_namespace(params: iface_discovery::GetNamespaceParams) -> Result<iface_discovery::NamespaceMetadata, String> {
         let json = iface_discovery__get_namespace_params__to_json(&params);
-        dispatch(&OP_DISCOVERY_GET_NAMESPACE, json)
+        match dispatch(&OP_DISCOVERY_GET_NAMESPACE, json).and_then(iface_discovery__get_namespace__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_discovery__get_namespace__err(e)),
+        }
     }
 }
 use crate::exports::autostamp::docker::namespaces as iface_namespaces;
@@ -326,7 +473,7 @@ const OP_NAMESPACES_GET_NAMESPACE_YEARS: OpSpec = OpSpec {
     method: "GET",
     path_template: "/namespaces/{namespace}/pulls/exports/years",
     fields: &[
-        FieldSpec { snake: "namespace", location: FieldLocation::Path },
+        FieldSpec { snake: "namespace", wire: "namespace", location: FieldLocation::Path },
     ],
     auth: &[
         AuthApply { secret_key: "HubAuth", kind: AuthKind::Bearer },
@@ -337,9 +484,9 @@ const OP_NAMESPACES_GET_NAMESPACE_TIMESPANS: OpSpec = OpSpec {
     method: "GET",
     path_template: "/namespaces/{namespace}/pulls/exports/years/{year}/{timespantype}",
     fields: &[
-        FieldSpec { snake: "namespace", location: FieldLocation::Path },
-        FieldSpec { snake: "year", location: FieldLocation::Path },
-        FieldSpec { snake: "timespantype", location: FieldLocation::Path },
+        FieldSpec { snake: "namespace", wire: "namespace", location: FieldLocation::Path },
+        FieldSpec { snake: "year", wire: "year", location: FieldLocation::Path },
+        FieldSpec { snake: "timespantype", wire: "timespantype", location: FieldLocation::Path },
     ],
     auth: &[
         AuthApply { secret_key: "HubAuth", kind: AuthKind::Bearer },
@@ -350,10 +497,10 @@ const OP_NAMESPACES_GET_NAMESPACE_TIMESPAN_METADATA: OpSpec = OpSpec {
     method: "GET",
     path_template: "/namespaces/{namespace}/pulls/exports/years/{year}/{timespantype}/{timespan}",
     fields: &[
-        FieldSpec { snake: "namespace", location: FieldLocation::Path },
-        FieldSpec { snake: "year", location: FieldLocation::Path },
-        FieldSpec { snake: "timespantype", location: FieldLocation::Path },
-        FieldSpec { snake: "timespan", location: FieldLocation::Path },
+        FieldSpec { snake: "namespace", wire: "namespace", location: FieldLocation::Path },
+        FieldSpec { snake: "year", wire: "year", location: FieldLocation::Path },
+        FieldSpec { snake: "timespantype", wire: "timespantype", location: FieldLocation::Path },
+        FieldSpec { snake: "timespan", wire: "timespan", location: FieldLocation::Path },
     ],
     auth: &[
         AuthApply { secret_key: "HubAuth", kind: AuthKind::Bearer },
@@ -364,16 +511,53 @@ const OP_NAMESPACES_GET_NAMESPACE_DATA_BY_TIMESPAN: OpSpec = OpSpec {
     method: "GET",
     path_template: "/namespaces/{namespace}/pulls/exports/years/{year}/{timespantype}/{timespan}/{dataview}",
     fields: &[
-        FieldSpec { snake: "namespace", location: FieldLocation::Path },
-        FieldSpec { snake: "year", location: FieldLocation::Path },
-        FieldSpec { snake: "timespantype", location: FieldLocation::Path },
-        FieldSpec { snake: "timespan", location: FieldLocation::Path },
-        FieldSpec { snake: "dataview", location: FieldLocation::Path },
+        FieldSpec { snake: "namespace", wire: "namespace", location: FieldLocation::Path },
+        FieldSpec { snake: "year", wire: "year", location: FieldLocation::Path },
+        FieldSpec { snake: "timespantype", wire: "timespantype", location: FieldLocation::Path },
+        FieldSpec { snake: "timespan", wire: "timespan", location: FieldLocation::Path },
+        FieldSpec { snake: "dataview", wire: "dataview", location: FieldLocation::Path },
     ],
     auth: &[
         AuthApply { secret_key: "HubAuth", kind: AuthKind::Bearer },
     ],
 };
+
+fn iface_namespaces__year_data__to_json(p: &iface_namespaces::YearData) -> Value {
+    let mut m = Map::new();
+    m.insert("years".into(), match (&p.years) { Some(v) => Value::Array((v).iter().map(|v| iface_namespaces__year_model__to_json(v)).collect()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_namespaces__year_model__to_json(p: &iface_namespaces::YearModel) -> Value {
+    let mut m = Map::new();
+    m.insert("year".into(), match (&p.year) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_namespaces__timespan_data__to_json(p: &iface_namespaces::TimespanData) -> Value {
+    let mut m = Map::new();
+    m.insert("value".into(), Value::String((&p.value).clone()));
+    Value::Object(m)
+}
+
+fn iface_namespaces__timespan_model__to_json(p: &iface_namespaces::TimespanModel) -> Value {
+    let mut m = Map::new();
+    m.insert("value".into(), Value::String((&p.value).clone()));
+    Value::Object(m)
+}
+
+fn iface_namespaces__response_data__to_json(p: &iface_namespaces::ResponseData) -> Value {
+    let mut m = Map::new();
+    m.insert("data".into(), match (&p.data) { Some(v) => Value::Array((v).iter().map(|v| iface_namespaces__response_data_file__to_json(v)).collect()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_namespaces__response_data_file__to_json(p: &iface_namespaces::ResponseDataFile) -> Value {
+    let mut m = Map::new();
+    m.insert("size".into(), match (&p.size) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("url".into(), match (&p.url) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
 
 fn iface_namespaces__get_namespace_years_params__to_json(p: &iface_namespaces::GetNamespaceYearsParams) -> Value {
     let mut m = Map::new();
@@ -408,22 +592,152 @@ fn iface_namespaces__get_namespace_data_by_timespan_params__to_json(p: &iface_na
     Value::Object(m)
 }
 
+fn iface_namespaces__year_data__from_json(v: &Value) -> Option<iface_namespaces::YearData> {
+    let m = v.as_object()?;
+    Some(iface_namespaces::YearData {
+        years: m.get("years").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| iface_namespaces__year_model__from_json(x)).collect())),
+    })
+}
+
+fn iface_namespaces__year_model__from_json(v: &Value) -> Option<iface_namespaces::YearModel> {
+    let m = v.as_object()?;
+    Some(iface_namespaces::YearModel {
+        year: m.get("year").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+    })
+}
+
+fn iface_namespaces__timespan_data__from_json(v: &Value) -> Option<iface_namespaces::TimespanData> {
+    let m = v.as_object()?;
+    Some(iface_namespaces::TimespanData {
+        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+    })
+}
+
+fn iface_namespaces__timespan_model__from_json(v: &Value) -> Option<iface_namespaces::TimespanModel> {
+    let m = v.as_object()?;
+    Some(iface_namespaces::TimespanModel {
+        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+    })
+}
+
+fn iface_namespaces__response_data__from_json(v: &Value) -> Option<iface_namespaces::ResponseData> {
+    let m = v.as_object()?;
+    Some(iface_namespaces::ResponseData {
+        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| iface_namespaces__response_data_file__from_json(x)).collect())),
+    })
+}
+
+fn iface_namespaces__response_data_file__from_json(v: &Value) -> Option<iface_namespaces::ResponseDataFile> {
+    let m = v.as_object()?;
+    Some(iface_namespaces::ResponseDataFile {
+        size: m.get("size").filter(|v| !v.is_null()).and_then(|v| (v).as_i64()),
+        url: m.get("url").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    })
+}
+
+fn iface_namespaces__get_namespace_years__ok(body: String) -> Result<iface_namespaces::YearData, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match iface_namespaces__year_data__from_json(&v) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_namespaces__get_namespace_years__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
+fn iface_namespaces__get_namespace_timespans__ok(body: String) -> Result<iface_namespaces::TimespanData, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match iface_namespaces__timespan_data__from_json(&v) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_namespaces__get_namespace_timespans__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
+fn iface_namespaces__get_namespace_timespan_metadata__ok(body: String) -> Result<iface_namespaces::TimespanModel, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match iface_namespaces__timespan_model__from_json(&v) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_namespaces__get_namespace_timespan_metadata__err(e: crate::runtime::DispatchError) -> iface_namespaces::GetNamespaceTimespanMetadataError {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => match status {
+            404u16 => iface_namespaces::GetNamespaceTimespanMetadataError::NotFound(body),
+            _ => iface_namespaces::GetNamespaceTimespanMetadataError::Other(body),
+        },
+        crate::runtime::DispatchError::Transport(m) => iface_namespaces::GetNamespaceTimespanMetadataError::Other(m),
+    }
+}
+
+fn iface_namespaces__get_namespace_data_by_timespan__ok(body: String) -> Result<iface_namespaces::ResponseData, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match iface_namespaces__response_data__from_json(&v) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_namespaces__get_namespace_data_by_timespan__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
 impl iface_namespaces::Guest for crate::Component {
-    fn get_namespace_years(params: iface_namespaces::GetNamespaceYearsParams) -> Result<String, String> {
+    fn get_namespace_years(params: iface_namespaces::GetNamespaceYearsParams) -> Result<iface_namespaces::YearData, String> {
         let json = iface_namespaces__get_namespace_years_params__to_json(&params);
-        dispatch(&OP_NAMESPACES_GET_NAMESPACE_YEARS, json)
+        match dispatch(&OP_NAMESPACES_GET_NAMESPACE_YEARS, json).and_then(iface_namespaces__get_namespace_years__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_namespaces__get_namespace_years__err(e)),
+        }
     }
-    fn get_namespace_timespans(params: iface_namespaces::GetNamespaceTimespansParams) -> Result<String, String> {
+    fn get_namespace_timespans(params: iface_namespaces::GetNamespaceTimespansParams) -> Result<iface_namespaces::TimespanData, String> {
         let json = iface_namespaces__get_namespace_timespans_params__to_json(&params);
-        dispatch(&OP_NAMESPACES_GET_NAMESPACE_TIMESPANS, json)
+        match dispatch(&OP_NAMESPACES_GET_NAMESPACE_TIMESPANS, json).and_then(iface_namespaces__get_namespace_timespans__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_namespaces__get_namespace_timespans__err(e)),
+        }
     }
-    fn get_namespace_timespan_metadata(params: iface_namespaces::GetNamespaceTimespanMetadataParams) -> Result<String, String> {
+    fn get_namespace_timespan_metadata(params: iface_namespaces::GetNamespaceTimespanMetadataParams) -> Result<iface_namespaces::TimespanModel, iface_namespaces::GetNamespaceTimespanMetadataError> {
         let json = iface_namespaces__get_namespace_timespan_metadata_params__to_json(&params);
-        dispatch(&OP_NAMESPACES_GET_NAMESPACE_TIMESPAN_METADATA, json)
+        match dispatch(&OP_NAMESPACES_GET_NAMESPACE_TIMESPAN_METADATA, json).and_then(iface_namespaces__get_namespace_timespan_metadata__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_namespaces__get_namespace_timespan_metadata__err(e)),
+        }
     }
-    fn get_namespace_data_by_timespan(params: iface_namespaces::GetNamespaceDataByTimespanParams) -> Result<String, String> {
+    fn get_namespace_data_by_timespan(params: iface_namespaces::GetNamespaceDataByTimespanParams) -> Result<iface_namespaces::ResponseData, String> {
         let json = iface_namespaces__get_namespace_data_by_timespan_params__to_json(&params);
-        dispatch(&OP_NAMESPACES_GET_NAMESPACE_DATA_BY_TIMESPAN, json)
+        match dispatch(&OP_NAMESPACES_GET_NAMESPACE_DATA_BY_TIMESPAN, json).and_then(iface_namespaces__get_namespace_data_by_timespan__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_namespaces__get_namespace_data_by_timespan__err(e)),
+        }
     }
 }
 use crate::exports::autostamp::docker::authentication as iface_authentication;
@@ -432,8 +746,8 @@ const OP_AUTHENTICATION_POST_USERS2_FA_LOGIN: OpSpec = OpSpec {
     method: "POST",
     path_template: "/v2/users/2fa-login",
     fields: &[
-        FieldSpec { snake: "code", location: FieldLocation::Body },
-        FieldSpec { snake: "login_2fa_token", location: FieldLocation::Body },
+        FieldSpec { snake: "code", wire: "code", location: FieldLocation::Body },
+        FieldSpec { snake: "login_2fa_token", wire: "login_2fa_token", location: FieldLocation::Body },
     ],
     auth: &[
     ],
@@ -443,12 +757,18 @@ const OP_AUTHENTICATION_POST_USERS_LOGIN: OpSpec = OpSpec {
     method: "POST",
     path_template: "/v2/users/login",
     fields: &[
-        FieldSpec { snake: "password", location: FieldLocation::Body },
-        FieldSpec { snake: "username", location: FieldLocation::Body },
+        FieldSpec { snake: "password", wire: "password", location: FieldLocation::Body },
+        FieldSpec { snake: "username", wire: "username", location: FieldLocation::Body },
     ],
     auth: &[
     ],
 };
+
+fn iface_authentication__post_users_login_success_response__to_json(p: &iface_authentication::PostUsersLoginSuccessResponse) -> Value {
+    let mut m = Map::new();
+    m.insert("token".into(), match (&p.token) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
 
 fn iface_authentication__post_users2_fa_login_params__to_json(p: &iface_authentication::PostUsers2FaLoginParams) -> Value {
     let mut m = Map::new();
@@ -464,14 +784,69 @@ fn iface_authentication__post_users_login_params__to_json(p: &iface_authenticati
     Value::Object(m)
 }
 
-impl iface_authentication::Guest for crate::Component {
-    fn post_users2_fa_login(params: iface_authentication::PostUsers2FaLoginParams) -> Result<String, String> {
-        let json = iface_authentication__post_users2_fa_login_params__to_json(&params);
-        dispatch(&OP_AUTHENTICATION_POST_USERS2_FA_LOGIN, json)
+fn iface_authentication__post_users_login_success_response__from_json(v: &Value) -> Option<iface_authentication::PostUsersLoginSuccessResponse> {
+    let m = v.as_object()?;
+    Some(iface_authentication::PostUsersLoginSuccessResponse {
+        token: m.get("token").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    })
+}
+
+fn iface_authentication__post_users2_fa_login__ok(body: String) -> Result<iface_authentication::PostUsersLoginSuccessResponse, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match iface_authentication__post_users_login_success_response__from_json(&v) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
     }
-    fn post_users_login(params: iface_authentication::PostUsersLoginParams) -> Result<String, String> {
+}
+
+fn iface_authentication__post_users2_fa_login__err(e: crate::runtime::DispatchError) -> iface_authentication::PostUsers2FaLoginError {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => match status {
+            401u16 => iface_authentication::PostUsers2FaLoginError::Unauthorized(body),
+            _ => iface_authentication::PostUsers2FaLoginError::Other(body),
+        },
+        crate::runtime::DispatchError::Transport(m) => iface_authentication::PostUsers2FaLoginError::Other(m),
+    }
+}
+
+fn iface_authentication__post_users_login__ok(body: String) -> Result<iface_authentication::PostUsersLoginSuccessResponse, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match iface_authentication__post_users_login_success_response__from_json(&v) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_authentication__post_users_login__err(e: crate::runtime::DispatchError) -> iface_authentication::PostUsersLoginError {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => match status {
+            401u16 => iface_authentication::PostUsersLoginError::Unauthorized(body),
+            _ => iface_authentication::PostUsersLoginError::Other(body),
+        },
+        crate::runtime::DispatchError::Transport(m) => iface_authentication::PostUsersLoginError::Other(m),
+    }
+}
+
+impl iface_authentication::Guest for crate::Component {
+    fn post_users2_fa_login(params: iface_authentication::PostUsers2FaLoginParams) -> Result<iface_authentication::PostUsersLoginSuccessResponse, iface_authentication::PostUsers2FaLoginError> {
+        let json = iface_authentication__post_users2_fa_login_params__to_json(&params);
+        match dispatch(&OP_AUTHENTICATION_POST_USERS2_FA_LOGIN, json).and_then(iface_authentication__post_users2_fa_login__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_authentication__post_users2_fa_login__err(e)),
+        }
+    }
+    fn post_users_login(params: iface_authentication::PostUsersLoginParams) -> Result<iface_authentication::PostUsersLoginSuccessResponse, iface_authentication::PostUsersLoginError> {
         let json = iface_authentication__post_users_login_params__to_json(&params);
-        dispatch(&OP_AUTHENTICATION_POST_USERS_LOGIN, json)
+        match dispatch(&OP_AUTHENTICATION_POST_USERS_LOGIN, json).and_then(iface_authentication__post_users_login__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_authentication__post_users_login__err(e)),
+        }
     }
 }
 

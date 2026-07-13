@@ -44,10 +44,15 @@ pub(crate) enum FieldLocation {
     Body,
 }
 
-/// A single operation parameter: the snake-case key it carries in the params JSON and where
-/// it belongs in the request.
+/// A single operation parameter. `snake` keys the field in the internal params JSON (and, for a
+/// path field, matches the `{snake}` placeholder in the path template); `wire` is the verbatim name
+/// the field takes on the HTTP wire (query key, header name, or body property). The two differ
+/// whenever the source name isn't already snake_case (e.g. `dryRun` → snake `dry_run`, wire
+/// `dryRun`), and let distinct inputs that share a snake key (`DateCreated`, `DateCreated<`) still
+/// travel under their true names.
 pub(crate) struct FieldSpec {
     pub(crate) snake: &'static str,
+    pub(crate) wire: &'static str,
     pub(crate) location: FieldLocation,
 }
 
@@ -71,6 +76,16 @@ pub(crate) struct AuthApply {
     pub(crate) kind: AuthKind,
 }
 
+/// The failure modes of [`dispatch`], kept structured so each generated operation can map them
+/// onto its own typed error: an `Http` failure carries the response status and body (routed to
+/// the matching error-variant case), while a `Transport` failure carries a message for the
+/// catch-all case (a secret lookup, connection, or decode failure that never produced an HTTP
+/// status).
+pub(crate) enum DispatchError {
+    Http { status: u16, body: String },
+    Transport(String),
+}
+
 /// A single API operation: HTTP method, path template (with `{snake}` placeholders), the
 /// parameter fields, and the security schemes to apply.
 pub(crate) struct OpSpec {
@@ -81,8 +96,9 @@ pub(crate) struct OpSpec {
 }
 
 /// Execute `op` with the supplied `params` (a JSON object keyed by snake-case field names)
-/// and return the response body as a string, or an error message.
-pub(crate) fn dispatch(op: &OpSpec, params: Value) -> Result<String, String> {
+/// and return the raw 2xx response body, or a structured [`DispatchError`] the caller maps
+/// onto the operation's typed error.
+pub(crate) fn dispatch(op: &OpSpec, params: Value) -> Result<String, DispatchError> {
     let obj = match &params {
         Value::Object(map) => Some(map),
         _ => None,
@@ -105,10 +121,10 @@ pub(crate) fn dispatch(op: &OpSpec, params: Value) -> Result<String, String> {
                 let placeholder = format!("{{{}}}", field.snake);
                 path = path.replace(&placeholder, &percent_encode(&scalar(value)));
             }
-            FieldLocation::Query => query.push((field.snake.to_string(), scalar(value))),
-            FieldLocation::Header => headers.push((field.snake.to_string(), scalar(value))),
+            FieldLocation::Query => query.push((field.wire.to_string(), scalar(value))),
+            FieldLocation::Header => headers.push((field.wire.to_string(), scalar(value))),
             FieldLocation::Body => {
-                body.insert(field.snake.to_string(), value.clone());
+                body.insert(field.wire.to_string(), value.clone());
             }
         }
     }
@@ -116,7 +132,7 @@ pub(crate) fn dispatch(op: &OpSpec, params: Value) -> Result<String, String> {
     // Apply each resolved security scheme, sourcing its value from wasmcloud:secrets.
     let mut cookies: Vec<String> = Vec::new();
     for apply in op.auth {
-        let secret = fetch_secret(apply.secret_key)?;
+        let secret = fetch_secret(apply.secret_key).map_err(DispatchError::Transport)?;
         match &apply.kind {
             AuthKind::Bearer => headers.push(("authorization".into(), format!("Bearer {secret}"))),
             AuthKind::Basic => {
@@ -177,17 +193,18 @@ fn fetch_secret(key: &str) -> Result<String, String> {
 }
 
 /// Build and send the outgoing request with `wstd`, returning the response body on a 2xx
-/// status. The generated guest exports are synchronous, so the async `wstd` client is driven
-/// to completion on a local reactor via `wstd::runtime::block_on`.
+/// status and a structured [`DispatchError`] otherwise. The generated guest exports are
+/// synchronous, so the async `wstd` client is driven to completion on a local reactor via
+/// `wstd::runtime::block_on`.
 fn perform(
     method: &str,
     path_with_query: &str,
     headers: &[(String, String)],
     body: &[u8],
-) -> Result<String, String> {
+) -> Result<String, DispatchError> {
     let url = join_url(crate::BASE_URL, path_with_query);
     let method = Method::from_bytes(method.as_bytes())
-        .map_err(|err| format!("invalid HTTP method `{method}`: {err}"))?;
+        .map_err(|err| DispatchError::Transport(format!("invalid HTTP method `{method}`: {err}")))?;
 
     let mut builder = Request::builder().method(method).uri(url);
     for (name, value) in headers {
@@ -199,27 +216,29 @@ fn perform(
         } else {
             Body::from(body.to_vec())
         })
-        .map_err(|err| format!("failed to build request: {err}"))?;
+        .map_err(|err| DispatchError::Transport(format!("failed to build request: {err}")))?;
 
     wstd::runtime::block_on(async move {
         let client = Client::new();
         let response = client
             .send(request)
             .await
-            .map_err(|err| format!("request failed: {err:#}"))?;
+            .map_err(|err| DispatchError::Transport(format!("request failed: {err:#}")))?;
 
         let status = response.status().as_u16();
         let mut response_body = response.into_body();
-        let bytes = response_body
-            .contents()
-            .await
-            .map_err(|err| format!("failed to read response body: {err:#}"))?;
+        let bytes = response_body.contents().await.map_err(|err| {
+            DispatchError::Transport(format!("failed to read response body: {err:#}"))
+        })?;
         let body_text = String::from_utf8_lossy(bytes).into_owned();
 
         if (200..300).contains(&status) {
             Ok(body_text)
         } else {
-            Err(format!("HTTP {status}: {body_text}"))
+            Err(DispatchError::Http {
+                status,
+                body: body_text,
+            })
         }
     })
 }
@@ -288,8 +307,8 @@ const OP_CLUSTER_API_SOLVE_CLUSTERING_PROBLEM: OpSpec = OpSpec {
     method: "POST",
     path_template: "/cluster",
     fields: &[
-        FieldSpec { snake: "configuration", location: FieldLocation::Body },
-        FieldSpec { snake: "customers", location: FieldLocation::Body },
+        FieldSpec { snake: "configuration", wire: "configuration", location: FieldLocation::Body },
+        FieldSpec { snake: "customers", wire: "customers", location: FieldLocation::Body },
     ],
     auth: &[
         AuthApply { secret_key: "api_key", kind: AuthKind::ApiKeyQuery("key") },
@@ -300,8 +319,8 @@ const OP_CLUSTER_API_ASYNC_CLUSTERING_PROBLEM: OpSpec = OpSpec {
     method: "POST",
     path_template: "/cluster/calculate",
     fields: &[
-        FieldSpec { snake: "configuration", location: FieldLocation::Body },
-        FieldSpec { snake: "customers", location: FieldLocation::Body },
+        FieldSpec { snake: "configuration", wire: "configuration", location: FieldLocation::Body },
+        FieldSpec { snake: "customers", wire: "customers", location: FieldLocation::Body },
     ],
     auth: &[
         AuthApply { secret_key: "api_key", kind: AuthKind::ApiKeyQuery("key") },
@@ -312,12 +331,20 @@ const OP_CLUSTER_API_GET_CLUSTER_SOLUTION: OpSpec = OpSpec {
     method: "GET",
     path_template: "/cluster/solution/{job_id}",
     fields: &[
-        FieldSpec { snake: "job_id", location: FieldLocation::Path },
+        FieldSpec { snake: "job_id", wire: "jobId", location: FieldLocation::Path },
     ],
     auth: &[
         AuthApply { secret_key: "api_key", kind: AuthKind::ApiKeyQuery("key") },
     ],
 };
+
+fn iface_cluster_api__cluster_response_status_enum__to_str(e: &iface_cluster_api::ClusterResponseStatusEnum) -> &'static str {
+    match e {
+        iface_cluster_api::ClusterResponseStatusEnum::WaitingInQueue => "waiting_in_queue",
+        iface_cluster_api::ClusterResponseStatusEnum::Processing => "processing",
+        iface_cluster_api::ClusterResponseStatusEnum::Finished => "finished",
+    }
+}
 
 fn iface_cluster_api__cluster_configuration__to_json(p: &iface_cluster_api::ClusterConfiguration) -> Value {
     let mut m = Map::new();
@@ -359,6 +386,29 @@ fn iface_cluster_api__cluster_customer_address__to_json(p: &iface_cluster_api::C
     Value::Object(m)
 }
 
+fn iface_cluster_api__cluster_response__to_json(p: &iface_cluster_api::ClusterResponse) -> Value {
+    let mut m = Map::new();
+    m.insert("clusters".into(), match (&p.clusters) { Some(v) => Value::Array((v).iter().map(|v| iface_cluster_api__cluster__to_json(v)).collect()), None => Value::Null });
+    m.insert("copyrights".into(), match (&p.copyrights) { Some(v) => Value::Array((v).iter().map(|v| Value::String((v).clone())).collect()), None => Value::Null });
+    m.insert("processing_time".into(), match (&p.processing_time) { Some(v) => serde_json::Number::from_f64(*(v)).map(Value::Number).unwrap_or(Value::Null), None => Value::Null });
+    m.insert("status".into(), match (&p.status) { Some(v) => Value::String(iface_cluster_api__cluster_response_status_enum__to_str(v).into()), None => Value::Null });
+    m.insert("waiting_time_in_queue".into(), match (&p.waiting_time_in_queue) { Some(v) => serde_json::Number::from_f64(*(v)).map(Value::Number).unwrap_or(Value::Null), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_cluster_api__cluster__to_json(p: &iface_cluster_api::Cluster) -> Value {
+    let mut m = Map::new();
+    m.insert("ids".into(), match (&p.ids) { Some(v) => Value::Array((v).iter().map(|v| Value::String((v).clone())).collect()), None => Value::Null });
+    m.insert("quantity".into(), match (&p.quantity) { Some(v) => serde_json::Number::from_f64(*(v)).map(Value::Number).unwrap_or(Value::Null), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_cluster_api__job_id__to_json(p: &iface_cluster_api::JobId) -> Value {
+    let mut m = Map::new();
+    m.insert("job_id".into(), match (&p.job_id) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
 fn iface_cluster_api__solve_clustering_problem_params__to_json(p: &iface_cluster_api::SolveClusteringProblemParams) -> Value {
     let mut m = Map::new();
     m.insert("configuration".into(), match (&p.configuration) { Some(v) => iface_cluster_api__cluster_configuration__to_json(v), None => Value::Null });
@@ -379,18 +429,129 @@ fn iface_cluster_api__get_cluster_solution_params__to_json(p: &iface_cluster_api
     Value::Object(m)
 }
 
+fn iface_cluster_api__cluster_response__from_json(v: &Value) -> Option<iface_cluster_api::ClusterResponse> {
+    let m = v.as_object()?;
+    Some(iface_cluster_api::ClusterResponse {
+        clusters: m.get("clusters").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| iface_cluster_api__cluster__from_json(x)).collect())),
+        copyrights: m.get("copyrights").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| (x).as_str().map(|s| s.to_string())).collect())),
+        processing_time: m.get("processing_time").filter(|v| !v.is_null()).and_then(|v| (v).as_f64()),
+        status: m.get("status").filter(|v| !v.is_null()).and_then(|v| (v).as_str().and_then(iface_cluster_api__cluster_response_status_enum__from_str)),
+        waiting_time_in_queue: m.get("waiting_time_in_queue").filter(|v| !v.is_null()).and_then(|v| (v).as_f64()),
+    })
+}
+
+fn iface_cluster_api__cluster__from_json(v: &Value) -> Option<iface_cluster_api::Cluster> {
+    let m = v.as_object()?;
+    Some(iface_cluster_api::Cluster {
+        ids: m.get("ids").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| (x).as_str().map(|s| s.to_string())).collect())),
+        quantity: m.get("quantity").filter(|v| !v.is_null()).and_then(|v| (v).as_f64()),
+    })
+}
+
+fn iface_cluster_api__job_id__from_json(v: &Value) -> Option<iface_cluster_api::JobId> {
+    let m = v.as_object()?;
+    Some(iface_cluster_api::JobId {
+        job_id: m.get("job_id").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    })
+}
+
+fn iface_cluster_api__cluster_response_status_enum__from_str(s: &str) -> Option<iface_cluster_api::ClusterResponseStatusEnum> {
+    match s {
+        "waiting_in_queue" => Some(iface_cluster_api::ClusterResponseStatusEnum::WaitingInQueue),
+        "processing" => Some(iface_cluster_api::ClusterResponseStatusEnum::Processing),
+        "finished" => Some(iface_cluster_api::ClusterResponseStatusEnum::Finished),
+        _ => None,
+    }
+}
+
+fn iface_cluster_api__solve_clustering_problem__ok(body: String) -> Result<iface_cluster_api::ClusterResponse, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match iface_cluster_api__cluster_response__from_json(&v) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_cluster_api__solve_clustering_problem__err(e: crate::runtime::DispatchError) -> iface_cluster_api::SolveClusteringProblemError {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => match status {
+            400u16 => iface_cluster_api::SolveClusteringProblemError::BadRequest(body),
+            500u16 => iface_cluster_api::SolveClusteringProblemError::InternalServerError(body),
+            _ => iface_cluster_api::SolveClusteringProblemError::Other(body),
+        },
+        crate::runtime::DispatchError::Transport(m) => iface_cluster_api::SolveClusteringProblemError::Other(m),
+    }
+}
+
+fn iface_cluster_api__async_clustering_problem__ok(body: String) -> Result<iface_cluster_api::JobId, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match iface_cluster_api__job_id__from_json(&v) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_cluster_api__async_clustering_problem__err(e: crate::runtime::DispatchError) -> iface_cluster_api::AsyncClusteringProblemError {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => match status {
+            400u16 => iface_cluster_api::AsyncClusteringProblemError::BadRequest(body),
+            500u16 => iface_cluster_api::AsyncClusteringProblemError::InternalServerError(body),
+            _ => iface_cluster_api::AsyncClusteringProblemError::Other(body),
+        },
+        crate::runtime::DispatchError::Transport(m) => iface_cluster_api::AsyncClusteringProblemError::Other(m),
+    }
+}
+
+fn iface_cluster_api__get_cluster_solution__ok(body: String) -> Result<iface_cluster_api::ClusterResponse, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match iface_cluster_api__cluster_response__from_json(&v) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_cluster_api__get_cluster_solution__err(e: crate::runtime::DispatchError) -> iface_cluster_api::GetClusterSolutionError {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => match status {
+            400u16 => iface_cluster_api::GetClusterSolutionError::BadRequest(body),
+            404u16 => iface_cluster_api::GetClusterSolutionError::NotFound(body),
+            500u16 => iface_cluster_api::GetClusterSolutionError::InternalServerError(body),
+            _ => iface_cluster_api::GetClusterSolutionError::Other(body),
+        },
+        crate::runtime::DispatchError::Transport(m) => iface_cluster_api::GetClusterSolutionError::Other(m),
+    }
+}
+
 impl iface_cluster_api::Guest for crate::Component {
-    fn solve_clustering_problem(params: iface_cluster_api::SolveClusteringProblemParams) -> Result<String, String> {
+    fn solve_clustering_problem(params: iface_cluster_api::SolveClusteringProblemParams) -> Result<iface_cluster_api::ClusterResponse, iface_cluster_api::SolveClusteringProblemError> {
         let json = iface_cluster_api__solve_clustering_problem_params__to_json(&params);
-        dispatch(&OP_CLUSTER_API_SOLVE_CLUSTERING_PROBLEM, json)
+        match dispatch(&OP_CLUSTER_API_SOLVE_CLUSTERING_PROBLEM, json).and_then(iface_cluster_api__solve_clustering_problem__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_cluster_api__solve_clustering_problem__err(e)),
+        }
     }
-    fn async_clustering_problem(params: iface_cluster_api::AsyncClusteringProblemParams) -> Result<String, String> {
+    fn async_clustering_problem(params: iface_cluster_api::AsyncClusteringProblemParams) -> Result<iface_cluster_api::JobId, iface_cluster_api::AsyncClusteringProblemError> {
         let json = iface_cluster_api__async_clustering_problem_params__to_json(&params);
-        dispatch(&OP_CLUSTER_API_ASYNC_CLUSTERING_PROBLEM, json)
+        match dispatch(&OP_CLUSTER_API_ASYNC_CLUSTERING_PROBLEM, json).and_then(iface_cluster_api__async_clustering_problem__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_cluster_api__async_clustering_problem__err(e)),
+        }
     }
-    fn get_cluster_solution(params: iface_cluster_api::GetClusterSolutionParams) -> Result<String, String> {
+    fn get_cluster_solution(params: iface_cluster_api::GetClusterSolutionParams) -> Result<iface_cluster_api::ClusterResponse, iface_cluster_api::GetClusterSolutionError> {
         let json = iface_cluster_api__get_cluster_solution_params__to_json(&params);
-        dispatch(&OP_CLUSTER_API_GET_CLUSTER_SOLUTION, json)
+        match dispatch(&OP_CLUSTER_API_GET_CLUSTER_SOLUTION, json).and_then(iface_cluster_api__get_cluster_solution__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_cluster_api__get_cluster_solution__err(e)),
+        }
     }
 }
 use crate::exports::autostamp::graphhopper::geocoding_api as iface_geocoding_api;
@@ -399,18 +560,48 @@ const OP_GEOCODING_API_GET_GEOCODE: OpSpec = OpSpec {
     method: "GET",
     path_template: "/geocode",
     fields: &[
-        FieldSpec { snake: "q", location: FieldLocation::Query },
-        FieldSpec { snake: "locale", location: FieldLocation::Query },
-        FieldSpec { snake: "limit", location: FieldLocation::Query },
-        FieldSpec { snake: "reverse", location: FieldLocation::Query },
-        FieldSpec { snake: "debug", location: FieldLocation::Query },
-        FieldSpec { snake: "point", location: FieldLocation::Query },
-        FieldSpec { snake: "provider", location: FieldLocation::Query },
+        FieldSpec { snake: "q", wire: "q", location: FieldLocation::Query },
+        FieldSpec { snake: "locale", wire: "locale", location: FieldLocation::Query },
+        FieldSpec { snake: "limit", wire: "limit", location: FieldLocation::Query },
+        FieldSpec { snake: "reverse", wire: "reverse", location: FieldLocation::Query },
+        FieldSpec { snake: "debug", wire: "debug", location: FieldLocation::Query },
+        FieldSpec { snake: "point", wire: "point", location: FieldLocation::Query },
+        FieldSpec { snake: "provider", wire: "provider", location: FieldLocation::Query },
     ],
     auth: &[
         AuthApply { secret_key: "api_key", kind: AuthKind::ApiKeyQuery("key") },
     ],
 };
+
+fn iface_geocoding_api__geocoding_response__to_json(p: &iface_geocoding_api::GeocodingResponse) -> Value {
+    let mut m = Map::new();
+    m.insert("hits".into(), match (&p.hits) { Some(v) => Value::Array((v).iter().map(|v| iface_geocoding_api__geocoding_location__to_json(v)).collect()), None => Value::Null });
+    m.insert("took".into(), match (&p.took) { Some(v) => serde_json::Number::from_f64(*(v)).map(Value::Number).unwrap_or(Value::Null), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_geocoding_api__geocoding_location__to_json(p: &iface_geocoding_api::GeocodingLocation) -> Value {
+    let mut m = Map::new();
+    m.insert("city".into(), match (&p.city) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("country".into(), match (&p.country) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("housenumber".into(), match (&p.housenumber) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("name".into(), match (&p.name) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("osm_id".into(), match (&p.osm_id) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("osm_key".into(), match (&p.osm_key) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("osm_type".into(), match (&p.osm_type) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("point".into(), match (&p.point) { Some(v) => iface_geocoding_api__geocoding_point__to_json(v), None => Value::Null });
+    m.insert("postcode".into(), match (&p.postcode) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("state".into(), match (&p.state) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("street".into(), match (&p.street) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_geocoding_api__geocoding_point__to_json(p: &iface_geocoding_api::GeocodingPoint) -> Value {
+    let mut m = Map::new();
+    m.insert("lat".into(), match (&p.lat) { Some(v) => serde_json::Number::from_f64(*(v)).map(Value::Number).unwrap_or(Value::Null), None => Value::Null });
+    m.insert("lng".into(), match (&p.lng) { Some(v) => serde_json::Number::from_f64(*(v)).map(Value::Number).unwrap_or(Value::Null), None => Value::Null });
+    Value::Object(m)
+}
 
 fn iface_geocoding_api__get_geocode_params__to_json(p: &iface_geocoding_api::GetGeocodeParams) -> Value {
     let mut m = Map::new();
@@ -424,10 +615,64 @@ fn iface_geocoding_api__get_geocode_params__to_json(p: &iface_geocoding_api::Get
     Value::Object(m)
 }
 
+fn iface_geocoding_api__geocoding_response__from_json(v: &Value) -> Option<iface_geocoding_api::GeocodingResponse> {
+    let m = v.as_object()?;
+    Some(iface_geocoding_api::GeocodingResponse {
+        hits: m.get("hits").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| iface_geocoding_api__geocoding_location__from_json(x)).collect())),
+        took: m.get("took").filter(|v| !v.is_null()).and_then(|v| (v).as_f64()),
+    })
+}
+
+fn iface_geocoding_api__geocoding_location__from_json(v: &Value) -> Option<iface_geocoding_api::GeocodingLocation> {
+    let m = v.as_object()?;
+    Some(iface_geocoding_api::GeocodingLocation {
+        city: m.get("city").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        country: m.get("country").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        housenumber: m.get("housenumber").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        name: m.get("name").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        osm_id: m.get("osm_id").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        osm_key: m.get("osm_key").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        osm_type: m.get("osm_type").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        point: m.get("point").filter(|v| !v.is_null()).and_then(|v| iface_geocoding_api__geocoding_point__from_json(v)),
+        postcode: m.get("postcode").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        state: m.get("state").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        street: m.get("street").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    })
+}
+
+fn iface_geocoding_api__geocoding_point__from_json(v: &Value) -> Option<iface_geocoding_api::GeocodingPoint> {
+    let m = v.as_object()?;
+    Some(iface_geocoding_api::GeocodingPoint {
+        lat: m.get("lat").filter(|v| !v.is_null()).and_then(|v| (v).as_f64()),
+        lng: m.get("lng").filter(|v| !v.is_null()).and_then(|v| (v).as_f64()),
+    })
+}
+
+fn iface_geocoding_api__get_geocode__ok(body: String) -> Result<iface_geocoding_api::GeocodingResponse, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match iface_geocoding_api__geocoding_response__from_json(&v) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_geocoding_api__get_geocode__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
 impl iface_geocoding_api::Guest for crate::Component {
-    fn get_geocode(params: iface_geocoding_api::GetGeocodeParams) -> Result<String, String> {
+    fn get_geocode(params: iface_geocoding_api::GetGeocodeParams) -> Result<iface_geocoding_api::GeocodingResponse, String> {
         let json = iface_geocoding_api__get_geocode_params__to_json(&params);
-        dispatch(&OP_GEOCODING_API_GET_GEOCODE, json)
+        match dispatch(&OP_GEOCODING_API_GET_GEOCODE, json).and_then(iface_geocoding_api__get_geocode__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_geocoding_api__get_geocode__err(e)),
+        }
     }
 }
 use crate::exports::autostamp::graphhopper::isochrone_api as iface_isochrone_api;
@@ -436,13 +681,13 @@ const OP_ISOCHRONE_API_GET_ISOCHRONE: OpSpec = OpSpec {
     method: "GET",
     path_template: "/isochrone",
     fields: &[
-        FieldSpec { snake: "point", location: FieldLocation::Query },
-        FieldSpec { snake: "time_limit", location: FieldLocation::Query },
-        FieldSpec { snake: "distance_limit", location: FieldLocation::Query },
-        FieldSpec { snake: "vehicle", location: FieldLocation::Query },
-        FieldSpec { snake: "buckets", location: FieldLocation::Query },
-        FieldSpec { snake: "reverse_flow", location: FieldLocation::Query },
-        FieldSpec { snake: "weighting", location: FieldLocation::Query },
+        FieldSpec { snake: "point", wire: "point", location: FieldLocation::Query },
+        FieldSpec { snake: "time_limit", wire: "time_limit", location: FieldLocation::Query },
+        FieldSpec { snake: "distance_limit", wire: "distance_limit", location: FieldLocation::Query },
+        FieldSpec { snake: "vehicle", wire: "vehicle", location: FieldLocation::Query },
+        FieldSpec { snake: "buckets", wire: "buckets", location: FieldLocation::Query },
+        FieldSpec { snake: "reverse_flow", wire: "reverse_flow", location: FieldLocation::Query },
+        FieldSpec { snake: "weighting", wire: "weighting", location: FieldLocation::Query },
     ],
     auth: &[
         AuthApply { secret_key: "api_key", kind: AuthKind::ApiKeyQuery("key") },
@@ -462,6 +707,34 @@ fn iface_isochrone_api__vehicle_profile_id__to_json(p: &iface_isochrone_api::Veh
     Value::Object(m)
 }
 
+fn iface_isochrone_api__isochrone_response__to_json(p: &iface_isochrone_api::IsochroneResponse) -> Value {
+    let mut m = Map::new();
+    m.insert("copyrights".into(), match (&p.copyrights) { Some(v) => Value::Array((v).iter().map(|v| Value::String((v).clone())).collect()), None => Value::Null });
+    m.insert("polygons".into(), match (&p.polygons) { Some(v) => Value::Array((v).iter().map(|v| iface_isochrone_api__isochrone_response_polygon__to_json(v)).collect()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_isochrone_api__isochrone_response_polygon__to_json(p: &iface_isochrone_api::IsochroneResponsePolygon) -> Value {
+    let mut m = Map::new();
+    m.insert("geometry".into(), match (&p.geometry) { Some(v) => iface_isochrone_api__polygon__to_json(v), None => Value::Null });
+    m.insert("properties".into(), match (&p.properties) { Some(v) => iface_isochrone_api__isochrone_response_polygon_properties__to_json(v), None => Value::Null });
+    m.insert("type".into(), match (&p.type_op) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_isochrone_api__polygon__to_json(p: &iface_isochrone_api::Polygon) -> Value {
+    let mut m = Map::new();
+    m.insert("coordinates".into(), match (&p.coordinates) { Some(v) => Value::Array((v).iter().map(|v| Value::Array((v).iter().map(|v| Value::Array((v).iter().map(|v| serde_json::Number::from_f64(*(v)).map(Value::Number).unwrap_or(Value::Null)).collect())).collect())).collect()), None => Value::Null });
+    m.insert("type".into(), match (&p.type_op) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_isochrone_api__isochrone_response_polygon_properties__to_json(p: &iface_isochrone_api::IsochroneResponsePolygonProperties) -> Value {
+    let mut m = Map::new();
+    m.insert("bucket".into(), match (&p.bucket) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    Value::Object(m)
+}
+
 fn iface_isochrone_api__get_isochrone_params__to_json(p: &iface_isochrone_api::GetIsochroneParams) -> Value {
     let mut m = Map::new();
     m.insert("point".into(), Value::String((&p.point).clone()));
@@ -474,10 +747,63 @@ fn iface_isochrone_api__get_isochrone_params__to_json(p: &iface_isochrone_api::G
     Value::Object(m)
 }
 
+fn iface_isochrone_api__isochrone_response__from_json(v: &Value) -> Option<iface_isochrone_api::IsochroneResponse> {
+    let m = v.as_object()?;
+    Some(iface_isochrone_api::IsochroneResponse {
+        copyrights: m.get("copyrights").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| (x).as_str().map(|s| s.to_string())).collect())),
+        polygons: m.get("polygons").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| iface_isochrone_api__isochrone_response_polygon__from_json(x)).collect())),
+    })
+}
+
+fn iface_isochrone_api__isochrone_response_polygon__from_json(v: &Value) -> Option<iface_isochrone_api::IsochroneResponsePolygon> {
+    let m = v.as_object()?;
+    Some(iface_isochrone_api::IsochroneResponsePolygon {
+        geometry: m.get("geometry").filter(|v| !v.is_null()).and_then(|v| iface_isochrone_api__polygon__from_json(v)),
+        properties: m.get("properties").filter(|v| !v.is_null()).and_then(|v| iface_isochrone_api__isochrone_response_polygon_properties__from_json(v)),
+        type_op: m.get("type").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    })
+}
+
+fn iface_isochrone_api__polygon__from_json(v: &Value) -> Option<iface_isochrone_api::Polygon> {
+    let m = v.as_object()?;
+    Some(iface_isochrone_api::Polygon {
+        coordinates: m.get("coordinates").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| (x).as_array().map(|a| a.iter().filter_map(|x| (x).as_array().map(|a| a.iter().filter_map(|x| (x).as_f64()).collect())).collect())).collect())),
+        type_op: m.get("type").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    })
+}
+
+fn iface_isochrone_api__isochrone_response_polygon_properties__from_json(v: &Value) -> Option<iface_isochrone_api::IsochroneResponsePolygonProperties> {
+    let m = v.as_object()?;
+    Some(iface_isochrone_api::IsochroneResponsePolygonProperties {
+        bucket: m.get("bucket").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+    })
+}
+
+fn iface_isochrone_api__get_isochrone__ok(body: String) -> Result<iface_isochrone_api::IsochroneResponse, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match iface_isochrone_api__isochrone_response__from_json(&v) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_isochrone_api__get_isochrone__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
 impl iface_isochrone_api::Guest for crate::Component {
-    fn get_isochrone(params: iface_isochrone_api::GetIsochroneParams) -> Result<String, String> {
+    fn get_isochrone(params: iface_isochrone_api::GetIsochroneParams) -> Result<iface_isochrone_api::IsochroneResponse, String> {
         let json = iface_isochrone_api__get_isochrone_params__to_json(&params);
-        dispatch(&OP_ISOCHRONE_API_GET_ISOCHRONE, json)
+        match dispatch(&OP_ISOCHRONE_API_GET_ISOCHRONE, json).and_then(iface_isochrone_api__get_isochrone__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_isochrone_api__get_isochrone__err(e)),
+        }
     }
 }
 use crate::exports::autostamp::graphhopper::map_matching_api as iface_map_matching_api;
@@ -486,13 +812,74 @@ const OP_MAP_MATCHING_API_POST_GPX: OpSpec = OpSpec {
     method: "POST",
     path_template: "/match",
     fields: &[
-        FieldSpec { snake: "gps_accuracy", location: FieldLocation::Query },
-        FieldSpec { snake: "vehicle", location: FieldLocation::Query },
+        FieldSpec { snake: "gps_accuracy", wire: "gps_accuracy", location: FieldLocation::Query },
+        FieldSpec { snake: "vehicle", wire: "vehicle", location: FieldLocation::Query },
     ],
     auth: &[
         AuthApply { secret_key: "api_key", kind: AuthKind::ApiKeyQuery("key") },
     ],
 };
+
+fn iface_map_matching_api__route_response__to_json(p: &iface_map_matching_api::RouteResponse) -> Value {
+    let mut m = Map::new();
+    m.insert("info".into(), match (&p.info) { Some(v) => iface_map_matching_api__response_info__to_json(v), None => Value::Null });
+    m.insert("paths".into(), match (&p.paths) { Some(v) => Value::Array((v).iter().map(|v| iface_map_matching_api__route_response_path__to_json(v)).collect()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_map_matching_api__response_info__to_json(p: &iface_map_matching_api::ResponseInfo) -> Value {
+    let mut m = Map::new();
+    m.insert("copyrights".into(), match (&p.copyrights) { Some(v) => Value::Array((v).iter().map(|v| Value::String((v).clone())).collect()), None => Value::Null });
+    m.insert("took".into(), match (&p.took) { Some(v) => serde_json::Number::from_f64(*(v)).map(Value::Number).unwrap_or(Value::Null), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_map_matching_api__route_response_path__to_json(p: &iface_map_matching_api::RouteResponsePath) -> Value {
+    let mut m = Map::new();
+    m.insert("ascend".into(), match (&p.ascend) { Some(v) => serde_json::Number::from_f64(*(v)).map(Value::Number).unwrap_or(Value::Null), None => Value::Null });
+    m.insert("bbox".into(), match (&p.bbox) { Some(v) => Value::Array((v).iter().map(|v| serde_json::Number::from_f64(*(v)).map(Value::Number).unwrap_or(Value::Null)).collect()), None => Value::Null });
+    m.insert("descend".into(), match (&p.descend) { Some(v) => serde_json::Number::from_f64(*(v)).map(Value::Number).unwrap_or(Value::Null), None => Value::Null });
+    m.insert("details".into(), match (&p.details) { Some(v) => iface_map_matching_api__route_response_path_details__to_json(v), None => Value::Null });
+    m.insert("distance".into(), match (&p.distance) { Some(v) => serde_json::Number::from_f64(*(v)).map(Value::Number).unwrap_or(Value::Null), None => Value::Null });
+    m.insert("instructions".into(), match (&p.instructions) { Some(v) => Value::Array((v).iter().map(|v| iface_map_matching_api__route_response_path_instructions_item__to_json(v)).collect()), None => Value::Null });
+    m.insert("points".into(), match (&p.points) { Some(v) => iface_map_matching_api__route_response_path_points__to_json(v), None => Value::Null });
+    m.insert("points_encoded".into(), match (&p.points_encoded) { Some(v) => Value::Bool(*(v)), None => Value::Null });
+    m.insert("points_order".into(), match (&p.points_order) { Some(v) => Value::Array((v).iter().map(|v| Value::Number(serde_json::Number::from(*(v)))).collect()), None => Value::Null });
+    m.insert("snapped_waypoints".into(), match (&p.snapped_waypoints) { Some(v) => iface_map_matching_api__route_response_path_snapped_waypoints__to_json(v), None => Value::Null });
+    m.insert("time".into(), match (&p.time) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_map_matching_api__route_response_path_details__to_json(p: &iface_map_matching_api::RouteResponsePathDetails) -> Value {
+    let mut m = Map::new();
+    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_map_matching_api__route_response_path_instructions_item__to_json(p: &iface_map_matching_api::RouteResponsePathInstructionsItem) -> Value {
+    let mut m = Map::new();
+    m.insert("distance".into(), match (&p.distance) { Some(v) => serde_json::Number::from_f64(*(v)).map(Value::Number).unwrap_or(Value::Null), None => Value::Null });
+    m.insert("exit_number".into(), match (&p.exit_number) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("interval".into(), match (&p.interval) { Some(v) => Value::Array((v).iter().map(|v| Value::Number(serde_json::Number::from(*(v)))).collect()), None => Value::Null });
+    m.insert("sign".into(), match (&p.sign) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("street_name".into(), match (&p.street_name) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("text".into(), match (&p.text) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("time".into(), match (&p.time) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("turn_angle".into(), match (&p.turn_angle) { Some(v) => serde_json::Number::from_f64(*(v)).map(Value::Number).unwrap_or(Value::Null), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_map_matching_api__route_response_path_points__to_json(p: &iface_map_matching_api::RouteResponsePathPoints) -> Value {
+    let mut m = Map::new();
+    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_map_matching_api__route_response_path_snapped_waypoints__to_json(p: &iface_map_matching_api::RouteResponsePathSnappedWaypoints) -> Value {
+    let mut m = Map::new();
+    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
 
 fn iface_map_matching_api__post_gpx_params__to_json(p: &iface_map_matching_api::PostGpxParams) -> Value {
     let mut m = Map::new();
@@ -501,10 +888,99 @@ fn iface_map_matching_api__post_gpx_params__to_json(p: &iface_map_matching_api::
     Value::Object(m)
 }
 
+fn iface_map_matching_api__route_response__from_json(v: &Value) -> Option<iface_map_matching_api::RouteResponse> {
+    let m = v.as_object()?;
+    Some(iface_map_matching_api::RouteResponse {
+        info: m.get("info").filter(|v| !v.is_null()).and_then(|v| iface_map_matching_api__response_info__from_json(v)),
+        paths: m.get("paths").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| iface_map_matching_api__route_response_path__from_json(x)).collect())),
+    })
+}
+
+fn iface_map_matching_api__response_info__from_json(v: &Value) -> Option<iface_map_matching_api::ResponseInfo> {
+    let m = v.as_object()?;
+    Some(iface_map_matching_api::ResponseInfo {
+        copyrights: m.get("copyrights").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| (x).as_str().map(|s| s.to_string())).collect())),
+        took: m.get("took").filter(|v| !v.is_null()).and_then(|v| (v).as_f64()),
+    })
+}
+
+fn iface_map_matching_api__route_response_path__from_json(v: &Value) -> Option<iface_map_matching_api::RouteResponsePath> {
+    let m = v.as_object()?;
+    Some(iface_map_matching_api::RouteResponsePath {
+        ascend: m.get("ascend").filter(|v| !v.is_null()).and_then(|v| (v).as_f64()),
+        bbox: m.get("bbox").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| (x).as_f64()).collect())),
+        descend: m.get("descend").filter(|v| !v.is_null()).and_then(|v| (v).as_f64()),
+        details: m.get("details").filter(|v| !v.is_null()).and_then(|v| iface_map_matching_api__route_response_path_details__from_json(v)),
+        distance: m.get("distance").filter(|v| !v.is_null()).and_then(|v| (v).as_f64()),
+        instructions: m.get("instructions").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| iface_map_matching_api__route_response_path_instructions_item__from_json(x)).collect())),
+        points: m.get("points").filter(|v| !v.is_null()).and_then(|v| iface_map_matching_api__route_response_path_points__from_json(v)),
+        points_encoded: m.get("points_encoded").filter(|v| !v.is_null()).and_then(|v| (v).as_bool()),
+        points_order: m.get("points_order").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| (x).as_i64().map(|n| n as i32)).collect())),
+        snapped_waypoints: m.get("snapped_waypoints").filter(|v| !v.is_null()).and_then(|v| iface_map_matching_api__route_response_path_snapped_waypoints__from_json(v)),
+        time: m.get("time").filter(|v| !v.is_null()).and_then(|v| (v).as_i64()),
+    })
+}
+
+fn iface_map_matching_api__route_response_path_details__from_json(v: &Value) -> Option<iface_map_matching_api::RouteResponsePathDetails> {
+    let m = v.as_object()?;
+    Some(iface_map_matching_api::RouteResponsePathDetails {
+        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    })
+}
+
+fn iface_map_matching_api__route_response_path_instructions_item__from_json(v: &Value) -> Option<iface_map_matching_api::RouteResponsePathInstructionsItem> {
+    let m = v.as_object()?;
+    Some(iface_map_matching_api::RouteResponsePathInstructionsItem {
+        distance: m.get("distance").filter(|v| !v.is_null()).and_then(|v| (v).as_f64()),
+        exit_number: m.get("exit_number").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        interval: m.get("interval").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| (x).as_i64().map(|n| n as i32)).collect())),
+        sign: m.get("sign").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        street_name: m.get("street_name").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        text: m.get("text").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        time: m.get("time").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        turn_angle: m.get("turn_angle").filter(|v| !v.is_null()).and_then(|v| (v).as_f64()),
+    })
+}
+
+fn iface_map_matching_api__route_response_path_points__from_json(v: &Value) -> Option<iface_map_matching_api::RouteResponsePathPoints> {
+    let m = v.as_object()?;
+    Some(iface_map_matching_api::RouteResponsePathPoints {
+        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    })
+}
+
+fn iface_map_matching_api__route_response_path_snapped_waypoints__from_json(v: &Value) -> Option<iface_map_matching_api::RouteResponsePathSnappedWaypoints> {
+    let m = v.as_object()?;
+    Some(iface_map_matching_api::RouteResponsePathSnappedWaypoints {
+        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    })
+}
+
+fn iface_map_matching_api__post_gpx__ok(body: String) -> Result<iface_map_matching_api::RouteResponse, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match iface_map_matching_api__route_response__from_json(&v) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_map_matching_api__post_gpx__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
 impl iface_map_matching_api::Guest for crate::Component {
-    fn post_gpx(params: iface_map_matching_api::PostGpxParams) -> Result<String, String> {
+    fn post_gpx(params: iface_map_matching_api::PostGpxParams) -> Result<iface_map_matching_api::RouteResponse, String> {
         let json = iface_map_matching_api__post_gpx_params__to_json(&params);
-        dispatch(&OP_MAP_MATCHING_API_POST_GPX, json)
+        match dispatch(&OP_MAP_MATCHING_API_POST_GPX, json).and_then(iface_map_matching_api__post_gpx__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_map_matching_api__post_gpx__err(e)),
+        }
     }
 }
 use crate::exports::autostamp::graphhopper::matrix_api as iface_matrix_api;
@@ -513,20 +989,20 @@ const OP_MATRIX_API_GET_MATRIX: OpSpec = OpSpec {
     method: "GET",
     path_template: "/matrix",
     fields: &[
-        FieldSpec { snake: "point", location: FieldLocation::Query },
-        FieldSpec { snake: "from_point", location: FieldLocation::Query },
-        FieldSpec { snake: "to_point", location: FieldLocation::Query },
-        FieldSpec { snake: "point_hint", location: FieldLocation::Query },
-        FieldSpec { snake: "from_point_hint", location: FieldLocation::Query },
-        FieldSpec { snake: "to_point_hint", location: FieldLocation::Query },
-        FieldSpec { snake: "snap_prevention", location: FieldLocation::Query },
-        FieldSpec { snake: "curbside", location: FieldLocation::Query },
-        FieldSpec { snake: "from_curbside", location: FieldLocation::Query },
-        FieldSpec { snake: "to_curbside", location: FieldLocation::Query },
-        FieldSpec { snake: "out_array", location: FieldLocation::Query },
-        FieldSpec { snake: "vehicle", location: FieldLocation::Query },
-        FieldSpec { snake: "fail_fast", location: FieldLocation::Query },
-        FieldSpec { snake: "turn_costs", location: FieldLocation::Query },
+        FieldSpec { snake: "point", wire: "point", location: FieldLocation::Query },
+        FieldSpec { snake: "from_point", wire: "from_point", location: FieldLocation::Query },
+        FieldSpec { snake: "to_point", wire: "to_point", location: FieldLocation::Query },
+        FieldSpec { snake: "point_hint", wire: "point_hint", location: FieldLocation::Query },
+        FieldSpec { snake: "from_point_hint", wire: "from_point_hint", location: FieldLocation::Query },
+        FieldSpec { snake: "to_point_hint", wire: "to_point_hint", location: FieldLocation::Query },
+        FieldSpec { snake: "snap_prevention", wire: "snap_prevention", location: FieldLocation::Query },
+        FieldSpec { snake: "curbside", wire: "curbside", location: FieldLocation::Query },
+        FieldSpec { snake: "from_curbside", wire: "from_curbside", location: FieldLocation::Query },
+        FieldSpec { snake: "to_curbside", wire: "to_curbside", location: FieldLocation::Query },
+        FieldSpec { snake: "out_array", wire: "out_array", location: FieldLocation::Query },
+        FieldSpec { snake: "vehicle", wire: "vehicle", location: FieldLocation::Query },
+        FieldSpec { snake: "fail_fast", wire: "fail_fast", location: FieldLocation::Query },
+        FieldSpec { snake: "turn_costs", wire: "turn_costs", location: FieldLocation::Query },
     ],
     auth: &[
         AuthApply { secret_key: "api_key", kind: AuthKind::ApiKeyQuery("key") },
@@ -537,7 +1013,7 @@ const OP_MATRIX_API_POST_MATRIX: OpSpec = OpSpec {
     method: "POST",
     path_template: "/matrix",
     fields: &[
-        FieldSpec { snake: "body", location: FieldLocation::Body },
+        FieldSpec { snake: "body", wire: "body", location: FieldLocation::Body },
     ],
     auth: &[
         AuthApply { secret_key: "api_key", kind: AuthKind::ApiKeyQuery("key") },
@@ -548,7 +1024,7 @@ const OP_MATRIX_API_CALCULATE_MATRIX: OpSpec = OpSpec {
     method: "POST",
     path_template: "/matrix/calculate",
     fields: &[
-        FieldSpec { snake: "body", location: FieldLocation::Body },
+        FieldSpec { snake: "body", wire: "body", location: FieldLocation::Body },
     ],
     auth: &[
         AuthApply { secret_key: "api_key", kind: AuthKind::ApiKeyQuery("key") },
@@ -559,7 +1035,7 @@ const OP_MATRIX_API_GET_MATRIX_SOLUTION: OpSpec = OpSpec {
     method: "GET",
     path_template: "/matrix/solution/{job_id}",
     fields: &[
-        FieldSpec { snake: "job_id", location: FieldLocation::Path },
+        FieldSpec { snake: "job_id", wire: "jobId", location: FieldLocation::Path },
     ],
     auth: &[
         AuthApply { secret_key: "api_key", kind: AuthKind::ApiKeyQuery("key") },
@@ -577,6 +1053,39 @@ fn iface_matrix_api__get_matrix_curbside_item_enum__to_str(e: &iface_matrix_api:
 fn iface_matrix_api__vehicle_profile_id__to_json(p: &iface_matrix_api::VehicleProfileId) -> Value {
     let mut m = Map::new();
     m.insert("value".into(), Value::String((&p.value).clone()));
+    Value::Object(m)
+}
+
+fn iface_matrix_api__matrix_response__to_json(p: &iface_matrix_api::MatrixResponse) -> Value {
+    let mut m = Map::new();
+    m.insert("distances".into(), match (&p.distances) { Some(v) => Value::Array((v).iter().map(|v| Value::Array((v).iter().map(|v| serde_json::Number::from_f64(*(v)).map(Value::Number).unwrap_or(Value::Null)).collect())).collect()), None => Value::Null });
+    m.insert("hints".into(), match (&p.hints) { Some(v) => Value::Array((v).iter().map(|v| iface_matrix_api__matrix_response_hints_item__to_json(v)).collect()), None => Value::Null });
+    m.insert("info".into(), match (&p.info) { Some(v) => iface_matrix_api__response_info__to_json(v), None => Value::Null });
+    m.insert("times".into(), match (&p.times) { Some(v) => Value::Array((v).iter().map(|v| Value::Array((v).iter().map(|v| serde_json::Number::from_f64(*(v)).map(Value::Number).unwrap_or(Value::Null)).collect())).collect()), None => Value::Null });
+    m.insert("weights".into(), match (&p.weights) { Some(v) => Value::Array((v).iter().map(|v| Value::Array((v).iter().map(|v| serde_json::Number::from_f64(*(v)).map(Value::Number).unwrap_or(Value::Null)).collect())).collect()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_matrix_api__matrix_response_hints_item__to_json(p: &iface_matrix_api::MatrixResponseHintsItem) -> Value {
+    let mut m = Map::new();
+    m.insert("details".into(), match (&p.details) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("invalid_from_points".into(), match (&p.invalid_from_points) { Some(v) => Value::Array((v).iter().map(|v| serde_json::Number::from_f64(*(v)).map(Value::Number).unwrap_or(Value::Null)).collect()), None => Value::Null });
+    m.insert("invalid_to_points".into(), match (&p.invalid_to_points) { Some(v) => Value::Array((v).iter().map(|v| serde_json::Number::from_f64(*(v)).map(Value::Number).unwrap_or(Value::Null)).collect()), None => Value::Null });
+    m.insert("message".into(), match (&p.message) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("point_pairs".into(), match (&p.point_pairs) { Some(v) => Value::Array((v).iter().map(|v| Value::Array((v).iter().map(|v| serde_json::Number::from_f64(*(v)).map(Value::Number).unwrap_or(Value::Null)).collect())).collect()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_matrix_api__response_info__to_json(p: &iface_matrix_api::ResponseInfo) -> Value {
+    let mut m = Map::new();
+    m.insert("copyrights".into(), match (&p.copyrights) { Some(v) => Value::Array((v).iter().map(|v| Value::String((v).clone())).collect()), None => Value::Null });
+    m.insert("took".into(), match (&p.took) { Some(v) => serde_json::Number::from_f64(*(v)).map(Value::Number).unwrap_or(Value::Null), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_matrix_api__job_id__to_json(p: &iface_matrix_api::JobId) -> Value {
+    let mut m = Map::new();
+    m.insert("job_id".into(), match (&p.job_id) { Some(v) => Value::String((v).clone()), None => Value::Null });
     Value::Object(m)
 }
 
@@ -617,22 +1126,143 @@ fn iface_matrix_api__get_matrix_solution_params__to_json(p: &iface_matrix_api::G
     Value::Object(m)
 }
 
+fn iface_matrix_api__matrix_response__from_json(v: &Value) -> Option<iface_matrix_api::MatrixResponse> {
+    let m = v.as_object()?;
+    Some(iface_matrix_api::MatrixResponse {
+        distances: m.get("distances").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| (x).as_array().map(|a| a.iter().filter_map(|x| (x).as_f64()).collect())).collect())),
+        hints: m.get("hints").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| iface_matrix_api__matrix_response_hints_item__from_json(x)).collect())),
+        info: m.get("info").filter(|v| !v.is_null()).and_then(|v| iface_matrix_api__response_info__from_json(v)),
+        times: m.get("times").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| (x).as_array().map(|a| a.iter().filter_map(|x| (x).as_f64()).collect())).collect())),
+        weights: m.get("weights").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| (x).as_array().map(|a| a.iter().filter_map(|x| (x).as_f64()).collect())).collect())),
+    })
+}
+
+fn iface_matrix_api__matrix_response_hints_item__from_json(v: &Value) -> Option<iface_matrix_api::MatrixResponseHintsItem> {
+    let m = v.as_object()?;
+    Some(iface_matrix_api::MatrixResponseHintsItem {
+        details: m.get("details").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        invalid_from_points: m.get("invalid_from_points").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| (x).as_f64()).collect())),
+        invalid_to_points: m.get("invalid_to_points").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| (x).as_f64()).collect())),
+        message: m.get("message").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        point_pairs: m.get("point_pairs").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| (x).as_array().map(|a| a.iter().filter_map(|x| (x).as_f64()).collect())).collect())),
+    })
+}
+
+fn iface_matrix_api__response_info__from_json(v: &Value) -> Option<iface_matrix_api::ResponseInfo> {
+    let m = v.as_object()?;
+    Some(iface_matrix_api::ResponseInfo {
+        copyrights: m.get("copyrights").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| (x).as_str().map(|s| s.to_string())).collect())),
+        took: m.get("took").filter(|v| !v.is_null()).and_then(|v| (v).as_f64()),
+    })
+}
+
+fn iface_matrix_api__job_id__from_json(v: &Value) -> Option<iface_matrix_api::JobId> {
+    let m = v.as_object()?;
+    Some(iface_matrix_api::JobId {
+        job_id: m.get("job_id").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    })
+}
+
+fn iface_matrix_api__get_matrix__ok(body: String) -> Result<iface_matrix_api::MatrixResponse, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match iface_matrix_api__matrix_response__from_json(&v) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_matrix_api__get_matrix__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
+fn iface_matrix_api__post_matrix__ok(body: String) -> Result<iface_matrix_api::MatrixResponse, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match iface_matrix_api__matrix_response__from_json(&v) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_matrix_api__post_matrix__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
+fn iface_matrix_api__calculate_matrix__ok(body: String) -> Result<iface_matrix_api::JobId, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match iface_matrix_api__job_id__from_json(&v) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_matrix_api__calculate_matrix__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
+fn iface_matrix_api__get_matrix_solution__ok(body: String) -> Result<iface_matrix_api::MatrixResponse, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match iface_matrix_api__matrix_response__from_json(&v) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_matrix_api__get_matrix_solution__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
 impl iface_matrix_api::Guest for crate::Component {
-    fn get_matrix(params: iface_matrix_api::GetMatrixParams) -> Result<String, String> {
+    fn get_matrix(params: iface_matrix_api::GetMatrixParams) -> Result<iface_matrix_api::MatrixResponse, String> {
         let json = iface_matrix_api__get_matrix_params__to_json(&params);
-        dispatch(&OP_MATRIX_API_GET_MATRIX, json)
+        match dispatch(&OP_MATRIX_API_GET_MATRIX, json).and_then(iface_matrix_api__get_matrix__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_matrix_api__get_matrix__err(e)),
+        }
     }
-    fn post_matrix(params: iface_matrix_api::PostMatrixParams) -> Result<String, String> {
+    fn post_matrix(params: iface_matrix_api::PostMatrixParams) -> Result<iface_matrix_api::MatrixResponse, String> {
         let json = iface_matrix_api__post_matrix_params__to_json(&params);
-        dispatch(&OP_MATRIX_API_POST_MATRIX, json)
+        match dispatch(&OP_MATRIX_API_POST_MATRIX, json).and_then(iface_matrix_api__post_matrix__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_matrix_api__post_matrix__err(e)),
+        }
     }
-    fn calculate_matrix(params: iface_matrix_api::CalculateMatrixParams) -> Result<String, String> {
+    fn calculate_matrix(params: iface_matrix_api::CalculateMatrixParams) -> Result<iface_matrix_api::JobId, String> {
         let json = iface_matrix_api__calculate_matrix_params__to_json(&params);
-        dispatch(&OP_MATRIX_API_CALCULATE_MATRIX, json)
+        match dispatch(&OP_MATRIX_API_CALCULATE_MATRIX, json).and_then(iface_matrix_api__calculate_matrix__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_matrix_api__calculate_matrix__err(e)),
+        }
     }
-    fn get_matrix_solution(params: iface_matrix_api::GetMatrixSolutionParams) -> Result<String, String> {
+    fn get_matrix_solution(params: iface_matrix_api::GetMatrixSolutionParams) -> Result<iface_matrix_api::MatrixResponse, String> {
         let json = iface_matrix_api__get_matrix_solution_params__to_json(&params);
-        dispatch(&OP_MATRIX_API_GET_MATRIX_SOLUTION, json)
+        match dispatch(&OP_MATRIX_API_GET_MATRIX_SOLUTION, json).and_then(iface_matrix_api__get_matrix_solution__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_matrix_api__get_matrix_solution__err(e)),
+        }
     }
 }
 use crate::exports::autostamp::graphhopper::routing_api as iface_routing_api;
@@ -641,33 +1271,33 @@ const OP_ROUTING_API_GET_ROUTE: OpSpec = OpSpec {
     method: "GET",
     path_template: "/route",
     fields: &[
-        FieldSpec { snake: "point", location: FieldLocation::Query },
-        FieldSpec { snake: "point_hint", location: FieldLocation::Query },
-        FieldSpec { snake: "snap_prevention", location: FieldLocation::Query },
-        FieldSpec { snake: "vehicle", location: FieldLocation::Query },
-        FieldSpec { snake: "curbside", location: FieldLocation::Query },
-        FieldSpec { snake: "turn_costs", location: FieldLocation::Query },
-        FieldSpec { snake: "locale", location: FieldLocation::Query },
-        FieldSpec { snake: "elevation", location: FieldLocation::Query },
-        FieldSpec { snake: "details", location: FieldLocation::Query },
-        FieldSpec { snake: "optimize", location: FieldLocation::Query },
-        FieldSpec { snake: "instructions", location: FieldLocation::Query },
-        FieldSpec { snake: "calc_points", location: FieldLocation::Query },
-        FieldSpec { snake: "debug", location: FieldLocation::Query },
-        FieldSpec { snake: "points_encoded", location: FieldLocation::Query },
-        FieldSpec { snake: "ch_disable", location: FieldLocation::Query },
-        FieldSpec { snake: "weighting", location: FieldLocation::Query },
-        FieldSpec { snake: "heading", location: FieldLocation::Query },
-        FieldSpec { snake: "heading_penalty", location: FieldLocation::Query },
-        FieldSpec { snake: "pass_through", location: FieldLocation::Query },
-        FieldSpec { snake: "block_area", location: FieldLocation::Query },
-        FieldSpec { snake: "avoid", location: FieldLocation::Query },
-        FieldSpec { snake: "algorithm", location: FieldLocation::Query },
-        FieldSpec { snake: "round_trip_distance", location: FieldLocation::Query },
-        FieldSpec { snake: "round_trip_seed", location: FieldLocation::Query },
-        FieldSpec { snake: "alternative_route_max_paths", location: FieldLocation::Query },
-        FieldSpec { snake: "alternative_route_max_weight_factor", location: FieldLocation::Query },
-        FieldSpec { snake: "alternative_route_max_share_factor", location: FieldLocation::Query },
+        FieldSpec { snake: "point", wire: "point", location: FieldLocation::Query },
+        FieldSpec { snake: "point_hint", wire: "point_hint", location: FieldLocation::Query },
+        FieldSpec { snake: "snap_prevention", wire: "snap_prevention", location: FieldLocation::Query },
+        FieldSpec { snake: "vehicle", wire: "vehicle", location: FieldLocation::Query },
+        FieldSpec { snake: "curbside", wire: "curbside", location: FieldLocation::Query },
+        FieldSpec { snake: "turn_costs", wire: "turn_costs", location: FieldLocation::Query },
+        FieldSpec { snake: "locale", wire: "locale", location: FieldLocation::Query },
+        FieldSpec { snake: "elevation", wire: "elevation", location: FieldLocation::Query },
+        FieldSpec { snake: "details", wire: "details", location: FieldLocation::Query },
+        FieldSpec { snake: "optimize", wire: "optimize", location: FieldLocation::Query },
+        FieldSpec { snake: "instructions", wire: "instructions", location: FieldLocation::Query },
+        FieldSpec { snake: "calc_points", wire: "calc_points", location: FieldLocation::Query },
+        FieldSpec { snake: "debug", wire: "debug", location: FieldLocation::Query },
+        FieldSpec { snake: "points_encoded", wire: "points_encoded", location: FieldLocation::Query },
+        FieldSpec { snake: "ch_disable", wire: "ch.disable", location: FieldLocation::Query },
+        FieldSpec { snake: "weighting", wire: "weighting", location: FieldLocation::Query },
+        FieldSpec { snake: "heading", wire: "heading", location: FieldLocation::Query },
+        FieldSpec { snake: "heading_penalty", wire: "heading_penalty", location: FieldLocation::Query },
+        FieldSpec { snake: "pass_through", wire: "pass_through", location: FieldLocation::Query },
+        FieldSpec { snake: "block_area", wire: "block_area", location: FieldLocation::Query },
+        FieldSpec { snake: "avoid", wire: "avoid", location: FieldLocation::Query },
+        FieldSpec { snake: "algorithm", wire: "algorithm", location: FieldLocation::Query },
+        FieldSpec { snake: "round_trip_distance", wire: "round_trip.distance", location: FieldLocation::Query },
+        FieldSpec { snake: "round_trip_seed", wire: "round_trip.seed", location: FieldLocation::Query },
+        FieldSpec { snake: "alternative_route_max_paths", wire: "alternative_route.max_paths", location: FieldLocation::Query },
+        FieldSpec { snake: "alternative_route_max_weight_factor", wire: "alternative_route.max_weight_factor", location: FieldLocation::Query },
+        FieldSpec { snake: "alternative_route_max_share_factor", wire: "alternative_route.max_share_factor", location: FieldLocation::Query },
     ],
     auth: &[
         AuthApply { secret_key: "api_key", kind: AuthKind::ApiKeyQuery("key") },
@@ -678,32 +1308,32 @@ const OP_ROUTING_API_POST_ROUTE: OpSpec = OpSpec {
     method: "POST",
     path_template: "/route",
     fields: &[
-        FieldSpec { snake: "algorithm", location: FieldLocation::Body },
-        FieldSpec { snake: "alternative_route_max_paths", location: FieldLocation::Body },
-        FieldSpec { snake: "alternative_route_max_share_factor", location: FieldLocation::Body },
-        FieldSpec { snake: "alternative_route_max_weight_factor", location: FieldLocation::Body },
-        FieldSpec { snake: "avoid", location: FieldLocation::Body },
-        FieldSpec { snake: "block_area", location: FieldLocation::Body },
-        FieldSpec { snake: "calc_points", location: FieldLocation::Body },
-        FieldSpec { snake: "ch_disable", location: FieldLocation::Body },
-        FieldSpec { snake: "curbsides", location: FieldLocation::Body },
-        FieldSpec { snake: "debug", location: FieldLocation::Body },
-        FieldSpec { snake: "details", location: FieldLocation::Body },
-        FieldSpec { snake: "elevation", location: FieldLocation::Body },
-        FieldSpec { snake: "heading_penalty", location: FieldLocation::Body },
-        FieldSpec { snake: "headings", location: FieldLocation::Body },
-        FieldSpec { snake: "instructions", location: FieldLocation::Body },
-        FieldSpec { snake: "locale", location: FieldLocation::Body },
-        FieldSpec { snake: "optimize", location: FieldLocation::Body },
-        FieldSpec { snake: "pass_through", location: FieldLocation::Body },
-        FieldSpec { snake: "point_hints", location: FieldLocation::Body },
-        FieldSpec { snake: "points", location: FieldLocation::Body },
-        FieldSpec { snake: "points_encoded", location: FieldLocation::Body },
-        FieldSpec { snake: "round_trip_distance", location: FieldLocation::Body },
-        FieldSpec { snake: "round_trip_seed", location: FieldLocation::Body },
-        FieldSpec { snake: "snap_preventions", location: FieldLocation::Body },
-        FieldSpec { snake: "vehicle", location: FieldLocation::Body },
-        FieldSpec { snake: "weighting", location: FieldLocation::Body },
+        FieldSpec { snake: "algorithm", wire: "algorithm", location: FieldLocation::Body },
+        FieldSpec { snake: "alternative_route_max_paths", wire: "alternative_route.max_paths", location: FieldLocation::Body },
+        FieldSpec { snake: "alternative_route_max_share_factor", wire: "alternative_route.max_share_factor", location: FieldLocation::Body },
+        FieldSpec { snake: "alternative_route_max_weight_factor", wire: "alternative_route.max_weight_factor", location: FieldLocation::Body },
+        FieldSpec { snake: "avoid", wire: "avoid", location: FieldLocation::Body },
+        FieldSpec { snake: "block_area", wire: "block_area", location: FieldLocation::Body },
+        FieldSpec { snake: "calc_points", wire: "calc_points", location: FieldLocation::Body },
+        FieldSpec { snake: "ch_disable", wire: "ch.disable", location: FieldLocation::Body },
+        FieldSpec { snake: "curbsides", wire: "curbsides", location: FieldLocation::Body },
+        FieldSpec { snake: "debug", wire: "debug", location: FieldLocation::Body },
+        FieldSpec { snake: "details", wire: "details", location: FieldLocation::Body },
+        FieldSpec { snake: "elevation", wire: "elevation", location: FieldLocation::Body },
+        FieldSpec { snake: "heading_penalty", wire: "heading_penalty", location: FieldLocation::Body },
+        FieldSpec { snake: "headings", wire: "headings", location: FieldLocation::Body },
+        FieldSpec { snake: "instructions", wire: "instructions", location: FieldLocation::Body },
+        FieldSpec { snake: "locale", wire: "locale", location: FieldLocation::Body },
+        FieldSpec { snake: "optimize", wire: "optimize", location: FieldLocation::Body },
+        FieldSpec { snake: "pass_through", wire: "pass_through", location: FieldLocation::Body },
+        FieldSpec { snake: "point_hints", wire: "point_hints", location: FieldLocation::Body },
+        FieldSpec { snake: "points", wire: "points", location: FieldLocation::Body },
+        FieldSpec { snake: "points_encoded", wire: "points_encoded", location: FieldLocation::Body },
+        FieldSpec { snake: "round_trip_distance", wire: "round_trip.distance", location: FieldLocation::Body },
+        FieldSpec { snake: "round_trip_seed", wire: "round_trip.seed", location: FieldLocation::Body },
+        FieldSpec { snake: "snap_preventions", wire: "snap_preventions", location: FieldLocation::Body },
+        FieldSpec { snake: "vehicle", wire: "vehicle", location: FieldLocation::Body },
+        FieldSpec { snake: "weighting", wire: "weighting", location: FieldLocation::Body },
     ],
     auth: &[
         AuthApply { secret_key: "api_key", kind: AuthKind::ApiKeyQuery("key") },
@@ -738,6 +1368,87 @@ fn iface_routing_api__get_route_algorithm_enum__to_str(e: &iface_routing_api::Ge
 fn iface_routing_api__vehicle_profile_id__to_json(p: &iface_routing_api::VehicleProfileId) -> Value {
     let mut m = Map::new();
     m.insert("value".into(), Value::String((&p.value).clone()));
+    Value::Object(m)
+}
+
+fn iface_routing_api__route_response__to_json(p: &iface_routing_api::RouteResponse) -> Value {
+    let mut m = Map::new();
+    m.insert("info".into(), match (&p.info) { Some(v) => iface_routing_api__response_info__to_json(v), None => Value::Null });
+    m.insert("paths".into(), match (&p.paths) { Some(v) => Value::Array((v).iter().map(|v| iface_routing_api__route_response_path__to_json(v)).collect()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_routing_api__response_info__to_json(p: &iface_routing_api::ResponseInfo) -> Value {
+    let mut m = Map::new();
+    m.insert("copyrights".into(), match (&p.copyrights) { Some(v) => Value::Array((v).iter().map(|v| Value::String((v).clone())).collect()), None => Value::Null });
+    m.insert("took".into(), match (&p.took) { Some(v) => serde_json::Number::from_f64(*(v)).map(Value::Number).unwrap_or(Value::Null), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_routing_api__route_response_path__to_json(p: &iface_routing_api::RouteResponsePath) -> Value {
+    let mut m = Map::new();
+    m.insert("ascend".into(), match (&p.ascend) { Some(v) => serde_json::Number::from_f64(*(v)).map(Value::Number).unwrap_or(Value::Null), None => Value::Null });
+    m.insert("bbox".into(), match (&p.bbox) { Some(v) => Value::Array((v).iter().map(|v| serde_json::Number::from_f64(*(v)).map(Value::Number).unwrap_or(Value::Null)).collect()), None => Value::Null });
+    m.insert("descend".into(), match (&p.descend) { Some(v) => serde_json::Number::from_f64(*(v)).map(Value::Number).unwrap_or(Value::Null), None => Value::Null });
+    m.insert("details".into(), match (&p.details) { Some(v) => iface_routing_api__route_response_path_details__to_json(v), None => Value::Null });
+    m.insert("distance".into(), match (&p.distance) { Some(v) => serde_json::Number::from_f64(*(v)).map(Value::Number).unwrap_or(Value::Null), None => Value::Null });
+    m.insert("instructions".into(), match (&p.instructions) { Some(v) => Value::Array((v).iter().map(|v| iface_routing_api__route_response_path_instructions_item__to_json(v)).collect()), None => Value::Null });
+    m.insert("points".into(), match (&p.points) { Some(v) => iface_routing_api__route_response_path_points__to_json(v), None => Value::Null });
+    m.insert("points_encoded".into(), match (&p.points_encoded) { Some(v) => Value::Bool(*(v)), None => Value::Null });
+    m.insert("points_order".into(), match (&p.points_order) { Some(v) => Value::Array((v).iter().map(|v| Value::Number(serde_json::Number::from(*(v)))).collect()), None => Value::Null });
+    m.insert("snapped_waypoints".into(), match (&p.snapped_waypoints) { Some(v) => iface_routing_api__route_response_path_snapped_waypoints__to_json(v), None => Value::Null });
+    m.insert("time".into(), match (&p.time) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_routing_api__route_response_path_details__to_json(p: &iface_routing_api::RouteResponsePathDetails) -> Value {
+    let mut m = Map::new();
+    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_routing_api__route_response_path_instructions_item__to_json(p: &iface_routing_api::RouteResponsePathInstructionsItem) -> Value {
+    let mut m = Map::new();
+    m.insert("distance".into(), match (&p.distance) { Some(v) => serde_json::Number::from_f64(*(v)).map(Value::Number).unwrap_or(Value::Null), None => Value::Null });
+    m.insert("exit_number".into(), match (&p.exit_number) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("interval".into(), match (&p.interval) { Some(v) => Value::Array((v).iter().map(|v| Value::Number(serde_json::Number::from(*(v)))).collect()), None => Value::Null });
+    m.insert("sign".into(), match (&p.sign) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("street_name".into(), match (&p.street_name) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("text".into(), match (&p.text) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("time".into(), match (&p.time) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("turn_angle".into(), match (&p.turn_angle) { Some(v) => serde_json::Number::from_f64(*(v)).map(Value::Number).unwrap_or(Value::Null), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_routing_api__route_response_path_points__to_json(p: &iface_routing_api::RouteResponsePathPoints) -> Value {
+    let mut m = Map::new();
+    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_routing_api__route_response_path_snapped_waypoints__to_json(p: &iface_routing_api::RouteResponsePathSnappedWaypoints) -> Value {
+    let mut m = Map::new();
+    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_routing_api__route_request_vehicle__to_json(p: &iface_routing_api::RouteRequestVehicle) -> Value {
+    let mut m = Map::new();
+    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_routing_api__info_response__to_json(p: &iface_routing_api::InfoResponse) -> Value {
+    let mut m = Map::new();
+    m.insert("bbox".into(), match (&p.bbox) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("features".into(), match (&p.features) { Some(v) => iface_routing_api__info_response_features__to_json(v), None => Value::Null });
+    m.insert("version".into(), match (&p.version) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_routing_api__info_response_features__to_json(p: &iface_routing_api::InfoResponseFeatures) -> Value {
+    let mut m = Map::new();
+    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
     Value::Object(m)
 }
 
@@ -799,22 +1510,183 @@ fn iface_routing_api__post_route_params__to_json(p: &iface_routing_api::PostRout
     m.insert("round_trip_distance".into(), match (&p.round_trip_distance) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
     m.insert("round_trip_seed".into(), match (&p.round_trip_seed) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
     m.insert("snap_preventions".into(), match (&p.snap_preventions) { Some(v) => Value::Array((v).iter().map(|v| Value::String((v).clone())).collect()), None => Value::Null });
-    m.insert("vehicle".into(), match (&p.vehicle) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("vehicle".into(), match (&p.vehicle) { Some(v) => iface_routing_api__route_request_vehicle__to_json(v), None => Value::Null });
     m.insert("weighting".into(), match (&p.weighting) { Some(v) => Value::String((v).clone()), None => Value::Null });
     Value::Object(m)
 }
 
+fn iface_routing_api__route_response__from_json(v: &Value) -> Option<iface_routing_api::RouteResponse> {
+    let m = v.as_object()?;
+    Some(iface_routing_api::RouteResponse {
+        info: m.get("info").filter(|v| !v.is_null()).and_then(|v| iface_routing_api__response_info__from_json(v)),
+        paths: m.get("paths").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| iface_routing_api__route_response_path__from_json(x)).collect())),
+    })
+}
+
+fn iface_routing_api__response_info__from_json(v: &Value) -> Option<iface_routing_api::ResponseInfo> {
+    let m = v.as_object()?;
+    Some(iface_routing_api::ResponseInfo {
+        copyrights: m.get("copyrights").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| (x).as_str().map(|s| s.to_string())).collect())),
+        took: m.get("took").filter(|v| !v.is_null()).and_then(|v| (v).as_f64()),
+    })
+}
+
+fn iface_routing_api__route_response_path__from_json(v: &Value) -> Option<iface_routing_api::RouteResponsePath> {
+    let m = v.as_object()?;
+    Some(iface_routing_api::RouteResponsePath {
+        ascend: m.get("ascend").filter(|v| !v.is_null()).and_then(|v| (v).as_f64()),
+        bbox: m.get("bbox").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| (x).as_f64()).collect())),
+        descend: m.get("descend").filter(|v| !v.is_null()).and_then(|v| (v).as_f64()),
+        details: m.get("details").filter(|v| !v.is_null()).and_then(|v| iface_routing_api__route_response_path_details__from_json(v)),
+        distance: m.get("distance").filter(|v| !v.is_null()).and_then(|v| (v).as_f64()),
+        instructions: m.get("instructions").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| iface_routing_api__route_response_path_instructions_item__from_json(x)).collect())),
+        points: m.get("points").filter(|v| !v.is_null()).and_then(|v| iface_routing_api__route_response_path_points__from_json(v)),
+        points_encoded: m.get("points_encoded").filter(|v| !v.is_null()).and_then(|v| (v).as_bool()),
+        points_order: m.get("points_order").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| (x).as_i64().map(|n| n as i32)).collect())),
+        snapped_waypoints: m.get("snapped_waypoints").filter(|v| !v.is_null()).and_then(|v| iface_routing_api__route_response_path_snapped_waypoints__from_json(v)),
+        time: m.get("time").filter(|v| !v.is_null()).and_then(|v| (v).as_i64()),
+    })
+}
+
+fn iface_routing_api__route_response_path_details__from_json(v: &Value) -> Option<iface_routing_api::RouteResponsePathDetails> {
+    let m = v.as_object()?;
+    Some(iface_routing_api::RouteResponsePathDetails {
+        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    })
+}
+
+fn iface_routing_api__route_response_path_instructions_item__from_json(v: &Value) -> Option<iface_routing_api::RouteResponsePathInstructionsItem> {
+    let m = v.as_object()?;
+    Some(iface_routing_api::RouteResponsePathInstructionsItem {
+        distance: m.get("distance").filter(|v| !v.is_null()).and_then(|v| (v).as_f64()),
+        exit_number: m.get("exit_number").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        interval: m.get("interval").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| (x).as_i64().map(|n| n as i32)).collect())),
+        sign: m.get("sign").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        street_name: m.get("street_name").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        text: m.get("text").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        time: m.get("time").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        turn_angle: m.get("turn_angle").filter(|v| !v.is_null()).and_then(|v| (v).as_f64()),
+    })
+}
+
+fn iface_routing_api__route_response_path_points__from_json(v: &Value) -> Option<iface_routing_api::RouteResponsePathPoints> {
+    let m = v.as_object()?;
+    Some(iface_routing_api::RouteResponsePathPoints {
+        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    })
+}
+
+fn iface_routing_api__route_response_path_snapped_waypoints__from_json(v: &Value) -> Option<iface_routing_api::RouteResponsePathSnappedWaypoints> {
+    let m = v.as_object()?;
+    Some(iface_routing_api::RouteResponsePathSnappedWaypoints {
+        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    })
+}
+
+fn iface_routing_api__info_response__from_json(v: &Value) -> Option<iface_routing_api::InfoResponse> {
+    let m = v.as_object()?;
+    Some(iface_routing_api::InfoResponse {
+        bbox: m.get("bbox").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        features: m.get("features").filter(|v| !v.is_null()).and_then(|v| iface_routing_api__info_response_features__from_json(v)),
+        version: m.get("version").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    })
+}
+
+fn iface_routing_api__info_response_features__from_json(v: &Value) -> Option<iface_routing_api::InfoResponseFeatures> {
+    let m = v.as_object()?;
+    Some(iface_routing_api::InfoResponseFeatures {
+        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    })
+}
+
+fn iface_routing_api__get_route__ok(body: String) -> Result<iface_routing_api::RouteResponse, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match iface_routing_api__route_response__from_json(&v) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_routing_api__get_route__err(e: crate::runtime::DispatchError) -> iface_routing_api::GetRouteError {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => match status {
+            400u16 => iface_routing_api::GetRouteError::BadRequest(body),
+            401u16 => iface_routing_api::GetRouteError::Unauthorized(body),
+            429u16 => iface_routing_api::GetRouteError::TooManyRequests(body),
+            500u16 => iface_routing_api::GetRouteError::InternalServerError(body),
+            501u16 => iface_routing_api::GetRouteError::NotImplemented(body),
+            _ => iface_routing_api::GetRouteError::Other(body),
+        },
+        crate::runtime::DispatchError::Transport(m) => iface_routing_api::GetRouteError::Other(m),
+    }
+}
+
+fn iface_routing_api__post_route__ok(body: String) -> Result<iface_routing_api::RouteResponse, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match iface_routing_api__route_response__from_json(&v) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_routing_api__post_route__err(e: crate::runtime::DispatchError) -> iface_routing_api::PostRouteError {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => match status {
+            400u16 => iface_routing_api::PostRouteError::BadRequest(body),
+            401u16 => iface_routing_api::PostRouteError::Unauthorized(body),
+            429u16 => iface_routing_api::PostRouteError::TooManyRequests(body),
+            500u16 => iface_routing_api::PostRouteError::InternalServerError(body),
+            501u16 => iface_routing_api::PostRouteError::NotImplemented(body),
+            _ => iface_routing_api::PostRouteError::Other(body),
+        },
+        crate::runtime::DispatchError::Transport(m) => iface_routing_api::PostRouteError::Other(m),
+    }
+}
+
+fn iface_routing_api__get_route_info__ok(body: String) -> Result<iface_routing_api::InfoResponse, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match iface_routing_api__info_response__from_json(&v) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_routing_api__get_route_info__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
 impl iface_routing_api::Guest for crate::Component {
-    fn get_route(params: iface_routing_api::GetRouteParams) -> Result<String, String> {
+    fn get_route(params: iface_routing_api::GetRouteParams) -> Result<iface_routing_api::RouteResponse, iface_routing_api::GetRouteError> {
         let json = iface_routing_api__get_route_params__to_json(&params);
-        dispatch(&OP_ROUTING_API_GET_ROUTE, json)
+        match dispatch(&OP_ROUTING_API_GET_ROUTE, json).and_then(iface_routing_api__get_route__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_routing_api__get_route__err(e)),
+        }
     }
-    fn post_route(params: iface_routing_api::PostRouteParams) -> Result<String, String> {
+    fn post_route(params: iface_routing_api::PostRouteParams) -> Result<iface_routing_api::RouteResponse, iface_routing_api::PostRouteError> {
         let json = iface_routing_api__post_route_params__to_json(&params);
-        dispatch(&OP_ROUTING_API_POST_ROUTE, json)
+        match dispatch(&OP_ROUTING_API_POST_ROUTE, json).and_then(iface_routing_api__post_route__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_routing_api__post_route__err(e)),
+        }
     }
-    fn get_route_info() -> Result<String, String> {
-        dispatch(&OP_ROUTING_API_GET_ROUTE_INFO, Value::Object(Map::new()))
+    fn get_route_info() -> Result<iface_routing_api::InfoResponse, String> {
+        match dispatch(&OP_ROUTING_API_GET_ROUTE_INFO, Value::Object(Map::new())).and_then(iface_routing_api__get_route_info__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_routing_api__get_route_info__err(e)),
+        }
     }
 }
 use crate::exports::autostamp::graphhopper::route_optimization_api as iface_route_optimization_api;
@@ -823,15 +1695,15 @@ const OP_ROUTE_OPTIMIZATION_API_SOLVE_VRP: OpSpec = OpSpec {
     method: "POST",
     path_template: "/vrp",
     fields: &[
-        FieldSpec { snake: "algorithm", location: FieldLocation::Body },
-        FieldSpec { snake: "configuration", location: FieldLocation::Body },
-        FieldSpec { snake: "cost_matrices", location: FieldLocation::Body },
-        FieldSpec { snake: "objectives", location: FieldLocation::Body },
-        FieldSpec { snake: "relations", location: FieldLocation::Body },
-        FieldSpec { snake: "services", location: FieldLocation::Body },
-        FieldSpec { snake: "shipments", location: FieldLocation::Body },
-        FieldSpec { snake: "vehicle_types", location: FieldLocation::Body },
-        FieldSpec { snake: "vehicles", location: FieldLocation::Body },
+        FieldSpec { snake: "algorithm", wire: "algorithm", location: FieldLocation::Body },
+        FieldSpec { snake: "configuration", wire: "configuration", location: FieldLocation::Body },
+        FieldSpec { snake: "cost_matrices", wire: "cost_matrices", location: FieldLocation::Body },
+        FieldSpec { snake: "objectives", wire: "objectives", location: FieldLocation::Body },
+        FieldSpec { snake: "relations", wire: "relations", location: FieldLocation::Body },
+        FieldSpec { snake: "services", wire: "services", location: FieldLocation::Body },
+        FieldSpec { snake: "shipments", wire: "shipments", location: FieldLocation::Body },
+        FieldSpec { snake: "vehicle_types", wire: "vehicle_types", location: FieldLocation::Body },
+        FieldSpec { snake: "vehicles", wire: "vehicles", location: FieldLocation::Body },
     ],
     auth: &[
         AuthApply { secret_key: "api_key", kind: AuthKind::ApiKeyQuery("key") },
@@ -842,15 +1714,15 @@ const OP_ROUTE_OPTIMIZATION_API_ASYNC_VRP: OpSpec = OpSpec {
     method: "POST",
     path_template: "/vrp/optimize",
     fields: &[
-        FieldSpec { snake: "algorithm", location: FieldLocation::Body },
-        FieldSpec { snake: "configuration", location: FieldLocation::Body },
-        FieldSpec { snake: "cost_matrices", location: FieldLocation::Body },
-        FieldSpec { snake: "objectives", location: FieldLocation::Body },
-        FieldSpec { snake: "relations", location: FieldLocation::Body },
-        FieldSpec { snake: "services", location: FieldLocation::Body },
-        FieldSpec { snake: "shipments", location: FieldLocation::Body },
-        FieldSpec { snake: "vehicle_types", location: FieldLocation::Body },
-        FieldSpec { snake: "vehicles", location: FieldLocation::Body },
+        FieldSpec { snake: "algorithm", wire: "algorithm", location: FieldLocation::Body },
+        FieldSpec { snake: "configuration", wire: "configuration", location: FieldLocation::Body },
+        FieldSpec { snake: "cost_matrices", wire: "cost_matrices", location: FieldLocation::Body },
+        FieldSpec { snake: "objectives", wire: "objectives", location: FieldLocation::Body },
+        FieldSpec { snake: "relations", wire: "relations", location: FieldLocation::Body },
+        FieldSpec { snake: "services", wire: "services", location: FieldLocation::Body },
+        FieldSpec { snake: "shipments", wire: "shipments", location: FieldLocation::Body },
+        FieldSpec { snake: "vehicle_types", wire: "vehicle_types", location: FieldLocation::Body },
+        FieldSpec { snake: "vehicles", wire: "vehicles", location: FieldLocation::Body },
     ],
     auth: &[
         AuthApply { secret_key: "api_key", kind: AuthKind::ApiKeyQuery("key") },
@@ -861,7 +1733,7 @@ const OP_ROUTE_OPTIMIZATION_API_GET_SOLUTION: OpSpec = OpSpec {
     method: "GET",
     path_template: "/vrp/solution/{job_id}",
     fields: &[
-        FieldSpec { snake: "job_id", location: FieldLocation::Path },
+        FieldSpec { snake: "job_id", wire: "jobId", location: FieldLocation::Path },
     ],
     auth: &[
         AuthApply { secret_key: "api_key", kind: AuthKind::ApiKeyQuery("key") },
@@ -937,6 +1809,27 @@ fn iface_route_optimization_api__service_type_op_enum__to_str(e: &iface_route_op
         iface_route_optimization_api::ServiceTypeOpEnum::Service => "service",
         iface_route_optimization_api::ServiceTypeOpEnum::Pickup => "pickup",
         iface_route_optimization_api::ServiceTypeOpEnum::Delivery => "delivery",
+    }
+}
+
+fn iface_route_optimization_api__activity_type_op_enum__to_str(e: &iface_route_optimization_api::ActivityTypeOpEnum) -> &'static str {
+    match e {
+        iface_route_optimization_api::ActivityTypeOpEnum::Start => "start",
+        iface_route_optimization_api::ActivityTypeOpEnum::End => "end",
+        iface_route_optimization_api::ActivityTypeOpEnum::Service => "service",
+        iface_route_optimization_api::ActivityTypeOpEnum::PickupShipment => "pickupShipment",
+        iface_route_optimization_api::ActivityTypeOpEnum::DeliverShipment => "deliverShipment",
+        iface_route_optimization_api::ActivityTypeOpEnum::Pickup => "pickup",
+        iface_route_optimization_api::ActivityTypeOpEnum::Delivery => "delivery",
+        iface_route_optimization_api::ActivityTypeOpEnum::Break => "break",
+    }
+}
+
+fn iface_route_optimization_api__response_status_enum__to_str(e: &iface_route_optimization_api::ResponseStatusEnum) -> &'static str {
+    match e {
+        iface_route_optimization_api::ResponseStatusEnum::WaitingInQueue => "waiting_in_queue",
+        iface_route_optimization_api::ResponseStatusEnum::Processing => "processing",
+        iface_route_optimization_api::ResponseStatusEnum::Finished => "finished",
     }
 }
 
@@ -1066,10 +1959,16 @@ fn iface_route_optimization_api__vehicle_type__to_json(p: &iface_route_optimizat
     m.insert("cost_per_meter".into(), match (&p.cost_per_meter) { Some(v) => serde_json::Number::from_f64(*(v)).map(Value::Number).unwrap_or(Value::Null), None => Value::Null });
     m.insert("cost_per_second".into(), match (&p.cost_per_second) { Some(v) => serde_json::Number::from_f64(*(v)).map(Value::Number).unwrap_or(Value::Null), None => Value::Null });
     m.insert("network_data_provider".into(), match (&p.network_data_provider) { Some(v) => Value::String(iface_route_optimization_api__routing_network_data_provider_enum__to_str(v).into()), None => Value::Null });
-    m.insert("profile".into(), match (&p.profile) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("profile".into(), match (&p.profile) { Some(v) => iface_route_optimization_api__vehicle_type_profile__to_json(v), None => Value::Null });
     m.insert("service_time_factor".into(), match (&p.service_time_factor) { Some(v) => serde_json::Number::from_f64(*(v)).map(Value::Number).unwrap_or(Value::Null), None => Value::Null });
     m.insert("speed_factor".into(), match (&p.speed_factor) { Some(v) => serde_json::Number::from_f64(*(v)).map(Value::Number).unwrap_or(Value::Null), None => Value::Null });
     m.insert("type_id".into(), Value::String((&p.type_id).clone()));
+    Value::Object(m)
+}
+
+fn iface_route_optimization_api__vehicle_type_profile__to_json(p: &iface_route_optimization_api::VehicleTypeProfile) -> Value {
+    let mut m = Map::new();
+    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
     Value::Object(m)
 }
 
@@ -1090,6 +1989,121 @@ fn iface_route_optimization_api__vehicle__to_json(p: &iface_route_optimization_a
     m.insert("start_address".into(), iface_route_optimization_api__address__to_json(&p.start_address));
     m.insert("type_id".into(), match (&p.type_id) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("vehicle_id".into(), Value::String((&p.vehicle_id).clone()));
+    Value::Object(m)
+}
+
+fn iface_route_optimization_api__response__to_json(p: &iface_route_optimization_api::Response) -> Value {
+    let mut m = Map::new();
+    m.insert("copyrights".into(), match (&p.copyrights) { Some(v) => Value::Array((v).iter().map(|v| Value::String((v).clone())).collect()), None => Value::Null });
+    m.insert("processing_time".into(), match (&p.processing_time) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("solution".into(), match (&p.solution) { Some(v) => iface_route_optimization_api__solution__to_json(v), None => Value::Null });
+    m.insert("status".into(), match (&p.status) { Some(v) => Value::String(iface_route_optimization_api__response_status_enum__to_str(v).into()), None => Value::Null });
+    m.insert("waiting_time_in_queue".into(), match (&p.waiting_time_in_queue) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_route_optimization_api__solution__to_json(p: &iface_route_optimization_api::Solution) -> Value {
+    let mut m = Map::new();
+    m.insert("completion_time".into(), match (&p.completion_time) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("costs".into(), match (&p.costs) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("distance".into(), match (&p.distance) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("max_operation_time".into(), match (&p.max_operation_time) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("no_unassigned".into(), match (&p.no_unassigned) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("no_vehicles".into(), match (&p.no_vehicles) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("preparation_time".into(), match (&p.preparation_time) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("routes".into(), match (&p.routes) { Some(v) => Value::Array((v).iter().map(|v| iface_route_optimization_api__route__to_json(v)).collect()), None => Value::Null });
+    m.insert("service_duration".into(), match (&p.service_duration) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("time".into(), match (&p.time) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("transport_time".into(), match (&p.transport_time) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("unassigned".into(), match (&p.unassigned) { Some(v) => iface_route_optimization_api__solution_unassigned__to_json(v), None => Value::Null });
+    m.insert("waiting_time".into(), match (&p.waiting_time) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_route_optimization_api__route__to_json(p: &iface_route_optimization_api::Route) -> Value {
+    let mut m = Map::new();
+    m.insert("activities".into(), match (&p.activities) { Some(v) => Value::Array((v).iter().map(|v| iface_route_optimization_api__activity__to_json(v)).collect()), None => Value::Null });
+    m.insert("completion_time".into(), match (&p.completion_time) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("distance".into(), match (&p.distance) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("points".into(), match (&p.points) { Some(v) => Value::Array((v).iter().map(|v| iface_route_optimization_api__route_point__to_json(v)).collect()), None => Value::Null });
+    m.insert("preparation_time".into(), match (&p.preparation_time) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("service_duration".into(), match (&p.service_duration) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("transport_time".into(), match (&p.transport_time) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("vehicle_id".into(), match (&p.vehicle_id) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("waiting_time".into(), match (&p.waiting_time) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_route_optimization_api__activity__to_json(p: &iface_route_optimization_api::Activity) -> Value {
+    let mut m = Map::new();
+    m.insert("address".into(), match (&p.address) { Some(v) => iface_route_optimization_api__response_address__to_json(v), None => Value::Null });
+    m.insert("arr_date_time".into(), match (&p.arr_date_time) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("arr_time".into(), match (&p.arr_time) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("distance".into(), match (&p.distance) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("driving_time".into(), match (&p.driving_time) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("end_date_time".into(), match (&p.end_date_time) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("end_time".into(), match (&p.end_time) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("id".into(), match (&p.id) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("load_after".into(), match (&p.load_after) { Some(v) => Value::Array((v).iter().map(|v| Value::Number(serde_json::Number::from(*(v)))).collect()), None => Value::Null });
+    m.insert("load_before".into(), match (&p.load_before) { Some(v) => Value::Array((v).iter().map(|v| Value::Number(serde_json::Number::from(*(v)))).collect()), None => Value::Null });
+    m.insert("location_id".into(), match (&p.location_id) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("preparation_time".into(), match (&p.preparation_time) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("type".into(), match (&p.type_op) { Some(v) => Value::String(iface_route_optimization_api__activity_type_op_enum__to_str(v).into()), None => Value::Null });
+    m.insert("waiting_time".into(), match (&p.waiting_time) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_route_optimization_api__response_address__to_json(p: &iface_route_optimization_api::ResponseAddress) -> Value {
+    let mut m = Map::new();
+    m.insert("lat".into(), match (&p.lat) { Some(v) => serde_json::Number::from_f64(*(v)).map(Value::Number).unwrap_or(Value::Null), None => Value::Null });
+    m.insert("location_id".into(), match (&p.location_id) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("lon".into(), match (&p.lon) { Some(v) => serde_json::Number::from_f64(*(v)).map(Value::Number).unwrap_or(Value::Null), None => Value::Null });
+    m.insert("name".into(), match (&p.name) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("snapped_waypoint".into(), match (&p.snapped_waypoint) { Some(v) => iface_route_optimization_api__snapped_waypoint__to_json(v), None => Value::Null });
+    m.insert("street_hint".into(), match (&p.street_hint) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_route_optimization_api__snapped_waypoint__to_json(p: &iface_route_optimization_api::SnappedWaypoint) -> Value {
+    let mut m = Map::new();
+    m.insert("lat".into(), match (&p.lat) { Some(v) => serde_json::Number::from_f64(*(v)).map(Value::Number).unwrap_or(Value::Null), None => Value::Null });
+    m.insert("lon".into(), match (&p.lon) { Some(v) => serde_json::Number::from_f64(*(v)).map(Value::Number).unwrap_or(Value::Null), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_route_optimization_api__route_point__to_json(p: &iface_route_optimization_api::RoutePoint) -> Value {
+    let mut m = Map::new();
+    m.insert("coordinates".into(), match (&p.coordinates) { Some(v) => Value::Array((v).iter().map(|v| iface_route_optimization_api__route_point_coordinates_item__to_json(v)).collect()), None => Value::Null });
+    m.insert("type".into(), match (&p.type_op) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_route_optimization_api__route_point_coordinates_item__to_json(p: &iface_route_optimization_api::RoutePointCoordinatesItem) -> Value {
+    let mut m = Map::new();
+    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_route_optimization_api__solution_unassigned__to_json(p: &iface_route_optimization_api::SolutionUnassigned) -> Value {
+    let mut m = Map::new();
+    m.insert("breaks".into(), match (&p.breaks) { Some(v) => Value::Array((v).iter().map(|v| Value::String((v).clone())).collect()), None => Value::Null });
+    m.insert("details".into(), match (&p.details) { Some(v) => Value::Array((v).iter().map(|v| iface_route_optimization_api__detail__to_json(v)).collect()), None => Value::Null });
+    m.insert("services".into(), match (&p.services) { Some(v) => Value::Array((v).iter().map(|v| Value::String((v).clone())).collect()), None => Value::Null });
+    m.insert("shipments".into(), match (&p.shipments) { Some(v) => Value::Array((v).iter().map(|v| Value::String((v).clone())).collect()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_route_optimization_api__detail__to_json(p: &iface_route_optimization_api::Detail) -> Value {
+    let mut m = Map::new();
+    m.insert("code".into(), match (&p.code) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("id".into(), match (&p.id) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("reason".into(), match (&p.reason) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_route_optimization_api__job_id__to_json(p: &iface_route_optimization_api::JobId) -> Value {
+    let mut m = Map::new();
+    m.insert("job_id".into(), match (&p.job_id) { Some(v) => Value::String((v).clone()), None => Value::Null });
     Value::Object(m)
 }
 
@@ -1127,18 +2141,243 @@ fn iface_route_optimization_api__get_solution_params__to_json(p: &iface_route_op
     Value::Object(m)
 }
 
+fn iface_route_optimization_api__response__from_json(v: &Value) -> Option<iface_route_optimization_api::Response> {
+    let m = v.as_object()?;
+    Some(iface_route_optimization_api::Response {
+        copyrights: m.get("copyrights").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| (x).as_str().map(|s| s.to_string())).collect())),
+        processing_time: m.get("processing_time").filter(|v| !v.is_null()).and_then(|v| (v).as_i64()),
+        solution: m.get("solution").filter(|v| !v.is_null()).and_then(|v| iface_route_optimization_api__solution__from_json(v)),
+        status: m.get("status").filter(|v| !v.is_null()).and_then(|v| (v).as_str().and_then(iface_route_optimization_api__response_status_enum__from_str)),
+        waiting_time_in_queue: m.get("waiting_time_in_queue").filter(|v| !v.is_null()).and_then(|v| (v).as_i64()),
+    })
+}
+
+fn iface_route_optimization_api__solution__from_json(v: &Value) -> Option<iface_route_optimization_api::Solution> {
+    let m = v.as_object()?;
+    Some(iface_route_optimization_api::Solution {
+        completion_time: m.get("completion_time").filter(|v| !v.is_null()).and_then(|v| (v).as_i64()),
+        costs: m.get("costs").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        distance: m.get("distance").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        max_operation_time: m.get("max_operation_time").filter(|v| !v.is_null()).and_then(|v| (v).as_i64()),
+        no_unassigned: m.get("no_unassigned").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        no_vehicles: m.get("no_vehicles").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        preparation_time: m.get("preparation_time").filter(|v| !v.is_null()).and_then(|v| (v).as_i64()),
+        routes: m.get("routes").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| iface_route_optimization_api__route__from_json(x)).collect())),
+        service_duration: m.get("service_duration").filter(|v| !v.is_null()).and_then(|v| (v).as_i64()),
+        time: m.get("time").filter(|v| !v.is_null()).and_then(|v| (v).as_i64()),
+        transport_time: m.get("transport_time").filter(|v| !v.is_null()).and_then(|v| (v).as_i64()),
+        unassigned: m.get("unassigned").filter(|v| !v.is_null()).and_then(|v| iface_route_optimization_api__solution_unassigned__from_json(v)),
+        waiting_time: m.get("waiting_time").filter(|v| !v.is_null()).and_then(|v| (v).as_i64()),
+    })
+}
+
+fn iface_route_optimization_api__route__from_json(v: &Value) -> Option<iface_route_optimization_api::Route> {
+    let m = v.as_object()?;
+    Some(iface_route_optimization_api::Route {
+        activities: m.get("activities").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| iface_route_optimization_api__activity__from_json(x)).collect())),
+        completion_time: m.get("completion_time").filter(|v| !v.is_null()).and_then(|v| (v).as_i64()),
+        distance: m.get("distance").filter(|v| !v.is_null()).and_then(|v| (v).as_i64()),
+        points: m.get("points").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| iface_route_optimization_api__route_point__from_json(x)).collect())),
+        preparation_time: m.get("preparation_time").filter(|v| !v.is_null()).and_then(|v| (v).as_i64()),
+        service_duration: m.get("service_duration").filter(|v| !v.is_null()).and_then(|v| (v).as_i64()),
+        transport_time: m.get("transport_time").filter(|v| !v.is_null()).and_then(|v| (v).as_i64()),
+        vehicle_id: m.get("vehicle_id").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        waiting_time: m.get("waiting_time").filter(|v| !v.is_null()).and_then(|v| (v).as_i64()),
+    })
+}
+
+fn iface_route_optimization_api__activity__from_json(v: &Value) -> Option<iface_route_optimization_api::Activity> {
+    let m = v.as_object()?;
+    Some(iface_route_optimization_api::Activity {
+        address: m.get("address").filter(|v| !v.is_null()).and_then(|v| iface_route_optimization_api__response_address__from_json(v)),
+        arr_date_time: m.get("arr_date_time").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        arr_time: m.get("arr_time").filter(|v| !v.is_null()).and_then(|v| (v).as_i64()),
+        distance: m.get("distance").filter(|v| !v.is_null()).and_then(|v| (v).as_i64()),
+        driving_time: m.get("driving_time").filter(|v| !v.is_null()).and_then(|v| (v).as_i64()),
+        end_date_time: m.get("end_date_time").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        end_time: m.get("end_time").filter(|v| !v.is_null()).and_then(|v| (v).as_i64()),
+        id: m.get("id").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        load_after: m.get("load_after").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| (x).as_i64().map(|n| n as i32)).collect())),
+        load_before: m.get("load_before").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| (x).as_i64().map(|n| n as i32)).collect())),
+        location_id: m.get("location_id").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        preparation_time: m.get("preparation_time").filter(|v| !v.is_null()).and_then(|v| (v).as_i64()),
+        type_op: m.get("type").filter(|v| !v.is_null()).and_then(|v| (v).as_str().and_then(iface_route_optimization_api__activity_type_op_enum__from_str)),
+        waiting_time: m.get("waiting_time").filter(|v| !v.is_null()).and_then(|v| (v).as_i64()),
+    })
+}
+
+fn iface_route_optimization_api__response_address__from_json(v: &Value) -> Option<iface_route_optimization_api::ResponseAddress> {
+    let m = v.as_object()?;
+    Some(iface_route_optimization_api::ResponseAddress {
+        lat: m.get("lat").filter(|v| !v.is_null()).and_then(|v| (v).as_f64()),
+        location_id: m.get("location_id").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        lon: m.get("lon").filter(|v| !v.is_null()).and_then(|v| (v).as_f64()),
+        name: m.get("name").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        snapped_waypoint: m.get("snapped_waypoint").filter(|v| !v.is_null()).and_then(|v| iface_route_optimization_api__snapped_waypoint__from_json(v)),
+        street_hint: m.get("street_hint").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    })
+}
+
+fn iface_route_optimization_api__snapped_waypoint__from_json(v: &Value) -> Option<iface_route_optimization_api::SnappedWaypoint> {
+    let m = v.as_object()?;
+    Some(iface_route_optimization_api::SnappedWaypoint {
+        lat: m.get("lat").filter(|v| !v.is_null()).and_then(|v| (v).as_f64()),
+        lon: m.get("lon").filter(|v| !v.is_null()).and_then(|v| (v).as_f64()),
+    })
+}
+
+fn iface_route_optimization_api__route_point__from_json(v: &Value) -> Option<iface_route_optimization_api::RoutePoint> {
+    let m = v.as_object()?;
+    Some(iface_route_optimization_api::RoutePoint {
+        coordinates: m.get("coordinates").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| iface_route_optimization_api__route_point_coordinates_item__from_json(x)).collect())),
+        type_op: m.get("type").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    })
+}
+
+fn iface_route_optimization_api__route_point_coordinates_item__from_json(v: &Value) -> Option<iface_route_optimization_api::RoutePointCoordinatesItem> {
+    let m = v.as_object()?;
+    Some(iface_route_optimization_api::RoutePointCoordinatesItem {
+        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    })
+}
+
+fn iface_route_optimization_api__solution_unassigned__from_json(v: &Value) -> Option<iface_route_optimization_api::SolutionUnassigned> {
+    let m = v.as_object()?;
+    Some(iface_route_optimization_api::SolutionUnassigned {
+        breaks: m.get("breaks").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| (x).as_str().map(|s| s.to_string())).collect())),
+        details: m.get("details").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| iface_route_optimization_api__detail__from_json(x)).collect())),
+        services: m.get("services").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| (x).as_str().map(|s| s.to_string())).collect())),
+        shipments: m.get("shipments").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| (x).as_str().map(|s| s.to_string())).collect())),
+    })
+}
+
+fn iface_route_optimization_api__detail__from_json(v: &Value) -> Option<iface_route_optimization_api::Detail> {
+    let m = v.as_object()?;
+    Some(iface_route_optimization_api::Detail {
+        code: m.get("code").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        id: m.get("id").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        reason: m.get("reason").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    })
+}
+
+fn iface_route_optimization_api__job_id__from_json(v: &Value) -> Option<iface_route_optimization_api::JobId> {
+    let m = v.as_object()?;
+    Some(iface_route_optimization_api::JobId {
+        job_id: m.get("job_id").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    })
+}
+
+fn iface_route_optimization_api__activity_type_op_enum__from_str(s: &str) -> Option<iface_route_optimization_api::ActivityTypeOpEnum> {
+    match s {
+        "start" => Some(iface_route_optimization_api::ActivityTypeOpEnum::Start),
+        "end" => Some(iface_route_optimization_api::ActivityTypeOpEnum::End),
+        "service" => Some(iface_route_optimization_api::ActivityTypeOpEnum::Service),
+        "pickupShipment" => Some(iface_route_optimization_api::ActivityTypeOpEnum::PickupShipment),
+        "deliverShipment" => Some(iface_route_optimization_api::ActivityTypeOpEnum::DeliverShipment),
+        "pickup" => Some(iface_route_optimization_api::ActivityTypeOpEnum::Pickup),
+        "delivery" => Some(iface_route_optimization_api::ActivityTypeOpEnum::Delivery),
+        "break" => Some(iface_route_optimization_api::ActivityTypeOpEnum::Break),
+        _ => None,
+    }
+}
+
+fn iface_route_optimization_api__response_status_enum__from_str(s: &str) -> Option<iface_route_optimization_api::ResponseStatusEnum> {
+    match s {
+        "waiting_in_queue" => Some(iface_route_optimization_api::ResponseStatusEnum::WaitingInQueue),
+        "processing" => Some(iface_route_optimization_api::ResponseStatusEnum::Processing),
+        "finished" => Some(iface_route_optimization_api::ResponseStatusEnum::Finished),
+        _ => None,
+    }
+}
+
+fn iface_route_optimization_api__solve_vrp__ok(body: String) -> Result<iface_route_optimization_api::Response, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match iface_route_optimization_api__response__from_json(&v) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_route_optimization_api__solve_vrp__err(e: crate::runtime::DispatchError) -> iface_route_optimization_api::SolveVrpError {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => match status {
+            400u16 => iface_route_optimization_api::SolveVrpError::BadRequest(body),
+            500u16 => iface_route_optimization_api::SolveVrpError::InternalServerError(body),
+            _ => iface_route_optimization_api::SolveVrpError::Other(body),
+        },
+        crate::runtime::DispatchError::Transport(m) => iface_route_optimization_api::SolveVrpError::Other(m),
+    }
+}
+
+fn iface_route_optimization_api__async_vrp__ok(body: String) -> Result<iface_route_optimization_api::JobId, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match iface_route_optimization_api__job_id__from_json(&v) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_route_optimization_api__async_vrp__err(e: crate::runtime::DispatchError) -> iface_route_optimization_api::AsyncVrpError {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => match status {
+            400u16 => iface_route_optimization_api::AsyncVrpError::BadRequest(body),
+            500u16 => iface_route_optimization_api::AsyncVrpError::InternalServerError(body),
+            _ => iface_route_optimization_api::AsyncVrpError::Other(body),
+        },
+        crate::runtime::DispatchError::Transport(m) => iface_route_optimization_api::AsyncVrpError::Other(m),
+    }
+}
+
+fn iface_route_optimization_api__get_solution__ok(body: String) -> Result<iface_route_optimization_api::Response, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match iface_route_optimization_api__response__from_json(&v) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_route_optimization_api__get_solution__err(e: crate::runtime::DispatchError) -> iface_route_optimization_api::GetSolutionError {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => match status {
+            400u16 => iface_route_optimization_api::GetSolutionError::BadRequest(body),
+            404u16 => iface_route_optimization_api::GetSolutionError::NotFound(body),
+            500u16 => iface_route_optimization_api::GetSolutionError::InternalServerError(body),
+            _ => iface_route_optimization_api::GetSolutionError::Other(body),
+        },
+        crate::runtime::DispatchError::Transport(m) => iface_route_optimization_api::GetSolutionError::Other(m),
+    }
+}
+
 impl iface_route_optimization_api::Guest for crate::Component {
-    fn solve_vrp(params: iface_route_optimization_api::SolveVrpParams) -> Result<String, String> {
+    fn solve_vrp(params: iface_route_optimization_api::SolveVrpParams) -> Result<iface_route_optimization_api::Response, iface_route_optimization_api::SolveVrpError> {
         let json = iface_route_optimization_api__solve_vrp_params__to_json(&params);
-        dispatch(&OP_ROUTE_OPTIMIZATION_API_SOLVE_VRP, json)
+        match dispatch(&OP_ROUTE_OPTIMIZATION_API_SOLVE_VRP, json).and_then(iface_route_optimization_api__solve_vrp__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_route_optimization_api__solve_vrp__err(e)),
+        }
     }
-    fn async_vrp(params: iface_route_optimization_api::AsyncVrpParams) -> Result<String, String> {
+    fn async_vrp(params: iface_route_optimization_api::AsyncVrpParams) -> Result<iface_route_optimization_api::JobId, iface_route_optimization_api::AsyncVrpError> {
         let json = iface_route_optimization_api__async_vrp_params__to_json(&params);
-        dispatch(&OP_ROUTE_OPTIMIZATION_API_ASYNC_VRP, json)
+        match dispatch(&OP_ROUTE_OPTIMIZATION_API_ASYNC_VRP, json).and_then(iface_route_optimization_api__async_vrp__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_route_optimization_api__async_vrp__err(e)),
+        }
     }
-    fn get_solution(params: iface_route_optimization_api::GetSolutionParams) -> Result<String, String> {
+    fn get_solution(params: iface_route_optimization_api::GetSolutionParams) -> Result<iface_route_optimization_api::Response, iface_route_optimization_api::GetSolutionError> {
         let json = iface_route_optimization_api__get_solution_params__to_json(&params);
-        dispatch(&OP_ROUTE_OPTIMIZATION_API_GET_SOLUTION, json)
+        match dispatch(&OP_ROUTE_OPTIMIZATION_API_GET_SOLUTION, json).and_then(iface_route_optimization_api__get_solution__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_route_optimization_api__get_solution__err(e)),
+        }
     }
 }
 

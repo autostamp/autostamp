@@ -44,10 +44,15 @@ pub(crate) enum FieldLocation {
     Body,
 }
 
-/// A single operation parameter: the snake-case key it carries in the params JSON and where
-/// it belongs in the request.
+/// A single operation parameter. `snake` keys the field in the internal params JSON (and, for a
+/// path field, matches the `{snake}` placeholder in the path template); `wire` is the verbatim name
+/// the field takes on the HTTP wire (query key, header name, or body property). The two differ
+/// whenever the source name isn't already snake_case (e.g. `dryRun` → snake `dry_run`, wire
+/// `dryRun`), and let distinct inputs that share a snake key (`DateCreated`, `DateCreated<`) still
+/// travel under their true names.
 pub(crate) struct FieldSpec {
     pub(crate) snake: &'static str,
+    pub(crate) wire: &'static str,
     pub(crate) location: FieldLocation,
 }
 
@@ -71,6 +76,16 @@ pub(crate) struct AuthApply {
     pub(crate) kind: AuthKind,
 }
 
+/// The failure modes of [`dispatch`], kept structured so each generated operation can map them
+/// onto its own typed error: an `Http` failure carries the response status and body (routed to
+/// the matching error-variant case), while a `Transport` failure carries a message for the
+/// catch-all case (a secret lookup, connection, or decode failure that never produced an HTTP
+/// status).
+pub(crate) enum DispatchError {
+    Http { status: u16, body: String },
+    Transport(String),
+}
+
 /// A single API operation: HTTP method, path template (with `{snake}` placeholders), the
 /// parameter fields, and the security schemes to apply.
 pub(crate) struct OpSpec {
@@ -81,8 +96,9 @@ pub(crate) struct OpSpec {
 }
 
 /// Execute `op` with the supplied `params` (a JSON object keyed by snake-case field names)
-/// and return the response body as a string, or an error message.
-pub(crate) fn dispatch(op: &OpSpec, params: Value) -> Result<String, String> {
+/// and return the raw 2xx response body, or a structured [`DispatchError`] the caller maps
+/// onto the operation's typed error.
+pub(crate) fn dispatch(op: &OpSpec, params: Value) -> Result<String, DispatchError> {
     let obj = match &params {
         Value::Object(map) => Some(map),
         _ => None,
@@ -105,10 +121,10 @@ pub(crate) fn dispatch(op: &OpSpec, params: Value) -> Result<String, String> {
                 let placeholder = format!("{{{}}}", field.snake);
                 path = path.replace(&placeholder, &percent_encode(&scalar(value)));
             }
-            FieldLocation::Query => query.push((field.snake.to_string(), scalar(value))),
-            FieldLocation::Header => headers.push((field.snake.to_string(), scalar(value))),
+            FieldLocation::Query => query.push((field.wire.to_string(), scalar(value))),
+            FieldLocation::Header => headers.push((field.wire.to_string(), scalar(value))),
             FieldLocation::Body => {
-                body.insert(field.snake.to_string(), value.clone());
+                body.insert(field.wire.to_string(), value.clone());
             }
         }
     }
@@ -116,7 +132,7 @@ pub(crate) fn dispatch(op: &OpSpec, params: Value) -> Result<String, String> {
     // Apply each resolved security scheme, sourcing its value from wasmcloud:secrets.
     let mut cookies: Vec<String> = Vec::new();
     for apply in op.auth {
-        let secret = fetch_secret(apply.secret_key)?;
+        let secret = fetch_secret(apply.secret_key).map_err(DispatchError::Transport)?;
         match &apply.kind {
             AuthKind::Bearer => headers.push(("authorization".into(), format!("Bearer {secret}"))),
             AuthKind::Basic => {
@@ -177,17 +193,18 @@ fn fetch_secret(key: &str) -> Result<String, String> {
 }
 
 /// Build and send the outgoing request with `wstd`, returning the response body on a 2xx
-/// status. The generated guest exports are synchronous, so the async `wstd` client is driven
-/// to completion on a local reactor via `wstd::runtime::block_on`.
+/// status and a structured [`DispatchError`] otherwise. The generated guest exports are
+/// synchronous, so the async `wstd` client is driven to completion on a local reactor via
+/// `wstd::runtime::block_on`.
 fn perform(
     method: &str,
     path_with_query: &str,
     headers: &[(String, String)],
     body: &[u8],
-) -> Result<String, String> {
+) -> Result<String, DispatchError> {
     let url = join_url(crate::BASE_URL, path_with_query);
     let method = Method::from_bytes(method.as_bytes())
-        .map_err(|err| format!("invalid HTTP method `{method}`: {err}"))?;
+        .map_err(|err| DispatchError::Transport(format!("invalid HTTP method `{method}`: {err}")))?;
 
     let mut builder = Request::builder().method(method).uri(url);
     for (name, value) in headers {
@@ -199,27 +216,29 @@ fn perform(
         } else {
             Body::from(body.to_vec())
         })
-        .map_err(|err| format!("failed to build request: {err}"))?;
+        .map_err(|err| DispatchError::Transport(format!("failed to build request: {err}")))?;
 
     wstd::runtime::block_on(async move {
         let client = Client::new();
         let response = client
             .send(request)
             .await
-            .map_err(|err| format!("request failed: {err:#}"))?;
+            .map_err(|err| DispatchError::Transport(format!("request failed: {err:#}")))?;
 
         let status = response.status().as_u16();
         let mut response_body = response.into_body();
-        let bytes = response_body
-            .contents()
-            .await
-            .map_err(|err| format!("failed to read response body: {err:#}"))?;
+        let bytes = response_body.contents().await.map_err(|err| {
+            DispatchError::Transport(format!("failed to read response body: {err:#}"))
+        })?;
         let body_text = String::from_utf8_lossy(bytes).into_owned();
 
         if (200..300).contains(&status) {
             Ok(body_text)
         } else {
-            Err(format!("HTTP {status}: {body_text}"))
+            Err(DispatchError::Http {
+                status,
+                body: body_text,
+            })
         }
     })
 }
@@ -293,9 +312,23 @@ const OP_DUMPS_CREATE_A_DUMP: OpSpec = OpSpec {
     ],
 };
 
+fn iface_dumps__create_a_dump__ok(body: String) -> Result<String, crate::runtime::DispatchError> {
+    Ok(body)
+}
+
+fn iface_dumps__create_a_dump__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
 impl iface_dumps::Guest for crate::Component {
     fn create_a_dump() -> Result<String, String> {
-        dispatch(&OP_DUMPS_CREATE_A_DUMP, Value::Object(Map::new()))
+        match dispatch(&OP_DUMPS_CREATE_A_DUMP, Value::Object(Map::new())).and_then(iface_dumps__create_a_dump__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_dumps__create_a_dump__err(e)),
+        }
     }
 }
 use crate::exports::autostamp::meilisearch::stats as iface_stats;
@@ -336,18 +369,74 @@ const OP_STATS_VERSION: OpSpec = OpSpec {
     ],
 };
 
+fn iface_stats__health__ok(body: String) -> Result<String, crate::runtime::DispatchError> {
+    Ok(body)
+}
+
+fn iface_stats__health__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
+fn iface_stats__of_an_index__ok(body: String) -> Result<String, crate::runtime::DispatchError> {
+    Ok(body)
+}
+
+fn iface_stats__of_an_index__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
+fn iface_stats__global_stats__ok(body: String) -> Result<String, crate::runtime::DispatchError> {
+    Ok(body)
+}
+
+fn iface_stats__global_stats__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
+fn iface_stats__version__ok(body: String) -> Result<String, crate::runtime::DispatchError> {
+    Ok(body)
+}
+
+fn iface_stats__version__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
 impl iface_stats::Guest for crate::Component {
     fn health() -> Result<String, String> {
-        dispatch(&OP_STATS_HEALTH, Value::Object(Map::new()))
+        match dispatch(&OP_STATS_HEALTH, Value::Object(Map::new())).and_then(iface_stats__health__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_stats__health__err(e)),
+        }
     }
     fn of_an_index() -> Result<String, String> {
-        dispatch(&OP_STATS_OF_AN_INDEX, Value::Object(Map::new()))
+        match dispatch(&OP_STATS_OF_AN_INDEX, Value::Object(Map::new())).and_then(iface_stats__of_an_index__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_stats__of_an_index__err(e)),
+        }
     }
     fn global_stats() -> Result<String, String> {
-        dispatch(&OP_STATS_GLOBAL_STATS, Value::Object(Map::new()))
+        match dispatch(&OP_STATS_GLOBAL_STATS, Value::Object(Map::new())).and_then(iface_stats__global_stats__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_stats__global_stats__err(e)),
+        }
     }
     fn version() -> Result<String, String> {
-        dispatch(&OP_STATS_VERSION, Value::Object(Map::new()))
+        match dispatch(&OP_STATS_VERSION, Value::Object(Map::new())).and_then(iface_stats__version__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_stats__version__err(e)),
+        }
     }
 }
 use crate::exports::autostamp::meilisearch::indexes as iface_indexes;
@@ -356,8 +445,8 @@ const OP_INDEXES_GET_INDEXES: OpSpec = OpSpec {
     method: "GET",
     path_template: "/indexes",
     fields: &[
-        FieldSpec { snake: "offset", location: FieldLocation::Query },
-        FieldSpec { snake: "limit", location: FieldLocation::Query },
+        FieldSpec { snake: "offset", wire: "offset", location: FieldLocation::Query },
+        FieldSpec { snake: "limit", wire: "limit", location: FieldLocation::Query },
     ],
     auth: &[
     ],
@@ -367,8 +456,8 @@ const OP_INDEXES_CREATE_INDEX_WITH_PRIMARY_KEY: OpSpec = OpSpec {
     method: "POST",
     path_template: "/indexes",
     fields: &[
-        FieldSpec { snake: "primary_key", location: FieldLocation::Body },
-        FieldSpec { snake: "uid", location: FieldLocation::Body },
+        FieldSpec { snake: "primary_key", wire: "primaryKey", location: FieldLocation::Body },
+        FieldSpec { snake: "uid", wire: "uid", location: FieldLocation::Body },
     ],
     auth: &[
     ],
@@ -387,7 +476,7 @@ const OP_INDEXES_UPDATE_INDEX: OpSpec = OpSpec {
     method: "PATCH",
     path_template: "/indexes/books",
     fields: &[
-        FieldSpec { snake: "primary_key", location: FieldLocation::Body },
+        FieldSpec { snake: "primary_key", wire: "primaryKey", location: FieldLocation::Body },
     ],
     auth: &[
     ],
@@ -406,7 +495,7 @@ const OP_INDEXES_SWAP_INDEXES: OpSpec = OpSpec {
     method: "POST",
     path_template: "/indexes/swap-indexes",
     fields: &[
-        FieldSpec { snake: "body", location: FieldLocation::Body },
+        FieldSpec { snake: "body", wire: "body", location: FieldLocation::Body },
     ],
     auth: &[
     ],
@@ -444,28 +533,112 @@ fn iface_indexes__swap_indexes_params__to_json(p: &iface_indexes::SwapIndexesPar
     Value::Object(m)
 }
 
+fn iface_indexes__get_indexes__ok(body: String) -> Result<String, crate::runtime::DispatchError> {
+    Ok(body)
+}
+
+fn iface_indexes__get_indexes__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
+fn iface_indexes__create_index_with_primary_key__ok(body: String) -> Result<String, crate::runtime::DispatchError> {
+    Ok(body)
+}
+
+fn iface_indexes__create_index_with_primary_key__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
+fn iface_indexes__show_index__ok(body: String) -> Result<String, crate::runtime::DispatchError> {
+    Ok(body)
+}
+
+fn iface_indexes__show_index__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
+fn iface_indexes__update_index__ok(body: String) -> Result<String, crate::runtime::DispatchError> {
+    Ok(body)
+}
+
+fn iface_indexes__update_index__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
+fn iface_indexes__delete_an_index__ok(body: String) -> Result<String, crate::runtime::DispatchError> {
+    Ok(body)
+}
+
+fn iface_indexes__delete_an_index__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
+fn iface_indexes__swap_indexes__ok(body: String) -> Result<String, crate::runtime::DispatchError> {
+    Ok(body)
+}
+
+fn iface_indexes__swap_indexes__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
 impl iface_indexes::Guest for crate::Component {
     fn get_indexes(params: iface_indexes::GetIndexesParams) -> Result<String, String> {
         let json = iface_indexes__get_indexes_params__to_json(&params);
-        dispatch(&OP_INDEXES_GET_INDEXES, json)
+        match dispatch(&OP_INDEXES_GET_INDEXES, json).and_then(iface_indexes__get_indexes__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_indexes__get_indexes__err(e)),
+        }
     }
     fn create_index_with_primary_key(params: iface_indexes::CreateIndexWithPrimaryKeyParams) -> Result<String, String> {
         let json = iface_indexes__create_index_with_primary_key_params__to_json(&params);
-        dispatch(&OP_INDEXES_CREATE_INDEX_WITH_PRIMARY_KEY, json)
+        match dispatch(&OP_INDEXES_CREATE_INDEX_WITH_PRIMARY_KEY, json).and_then(iface_indexes__create_index_with_primary_key__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_indexes__create_index_with_primary_key__err(e)),
+        }
     }
     fn show_index() -> Result<String, String> {
-        dispatch(&OP_INDEXES_SHOW_INDEX, Value::Object(Map::new()))
+        match dispatch(&OP_INDEXES_SHOW_INDEX, Value::Object(Map::new())).and_then(iface_indexes__show_index__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_indexes__show_index__err(e)),
+        }
     }
     fn update_index(params: iface_indexes::UpdateIndexParams) -> Result<String, String> {
         let json = iface_indexes__update_index_params__to_json(&params);
-        dispatch(&OP_INDEXES_UPDATE_INDEX, json)
+        match dispatch(&OP_INDEXES_UPDATE_INDEX, json).and_then(iface_indexes__update_index__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_indexes__update_index__err(e)),
+        }
     }
     fn delete_an_index() -> Result<String, String> {
-        dispatch(&OP_INDEXES_DELETE_AN_INDEX, Value::Object(Map::new()))
+        match dispatch(&OP_INDEXES_DELETE_AN_INDEX, Value::Object(Map::new())).and_then(iface_indexes__delete_an_index__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_indexes__delete_an_index__err(e)),
+        }
     }
     fn swap_indexes(params: iface_indexes::SwapIndexesParams) -> Result<String, String> {
         let json = iface_indexes__swap_indexes_params__to_json(&params);
-        dispatch(&OP_INDEXES_SWAP_INDEXES, json)
+        match dispatch(&OP_INDEXES_SWAP_INDEXES, json).and_then(iface_indexes__swap_indexes__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_indexes__swap_indexes__err(e)),
+        }
     }
 }
 use crate::exports::autostamp::meilisearch::documents as iface_documents;
@@ -474,9 +647,9 @@ const OP_DOCUMENTS_GET_DOCUMENTS: OpSpec = OpSpec {
     method: "GET",
     path_template: "/indexes/books/documents",
     fields: &[
-        FieldSpec { snake: "limit", location: FieldLocation::Query },
-        FieldSpec { snake: "offset", location: FieldLocation::Query },
-        FieldSpec { snake: "fields", location: FieldLocation::Query },
+        FieldSpec { snake: "limit", wire: "limit", location: FieldLocation::Query },
+        FieldSpec { snake: "offset", wire: "offset", location: FieldLocation::Query },
+        FieldSpec { snake: "fields", wire: "fields", location: FieldLocation::Query },
     ],
     auth: &[
     ],
@@ -486,9 +659,9 @@ const OP_DOCUMENTS_ADD_OR_REPLACE_DOCUMENTS: OpSpec = OpSpec {
     method: "POST",
     path_template: "/indexes/books/documents",
     fields: &[
-        FieldSpec { snake: "primary_key", location: FieldLocation::Query },
-        FieldSpec { snake: "csv_delimiter", location: FieldLocation::Query },
-        FieldSpec { snake: "body", location: FieldLocation::Body },
+        FieldSpec { snake: "primary_key", wire: "primaryKey", location: FieldLocation::Query },
+        FieldSpec { snake: "csv_delimiter", wire: "csvDelimiter", location: FieldLocation::Query },
+        FieldSpec { snake: "body", wire: "body", location: FieldLocation::Body },
     ],
     auth: &[
     ],
@@ -498,9 +671,9 @@ const OP_DOCUMENTS_ADD_OR_UPDATE_DOCUMENTS: OpSpec = OpSpec {
     method: "PUT",
     path_template: "/indexes/books/documents",
     fields: &[
-        FieldSpec { snake: "primary_key", location: FieldLocation::Query },
-        FieldSpec { snake: "csv_delimiter", location: FieldLocation::Query },
-        FieldSpec { snake: "body", location: FieldLocation::Body },
+        FieldSpec { snake: "primary_key", wire: "primaryKey", location: FieldLocation::Query },
+        FieldSpec { snake: "csv_delimiter", wire: "csvDelimiter", location: FieldLocation::Query },
+        FieldSpec { snake: "body", wire: "body", location: FieldLocation::Body },
     ],
     auth: &[
     ],
@@ -528,7 +701,7 @@ const OP_DOCUMENTS_GET_ONE_DOCUMENT: OpSpec = OpSpec {
     method: "GET",
     path_template: "/indexes/books/documents/2",
     fields: &[
-        FieldSpec { snake: "fields", location: FieldLocation::Query },
+        FieldSpec { snake: "fields", wire: "fields", location: FieldLocation::Query },
     ],
     auth: &[
     ],
@@ -538,7 +711,7 @@ const OP_DOCUMENTS_DELETE_DOCUMENTS: OpSpec = OpSpec {
     method: "POST",
     path_template: "/indexes/books/documents/delete-batch",
     fields: &[
-        FieldSpec { snake: "body", location: FieldLocation::Body },
+        FieldSpec { snake: "body", wire: "body", location: FieldLocation::Body },
     ],
     auth: &[
     ],
@@ -598,32 +771,130 @@ fn iface_documents__delete_documents_params__to_json(p: &iface_documents::Delete
     Value::Object(m)
 }
 
+fn iface_documents__get_documents__ok(body: String) -> Result<String, crate::runtime::DispatchError> {
+    Ok(body)
+}
+
+fn iface_documents__get_documents__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
+fn iface_documents__add_or_replace_documents__ok(body: String) -> Result<String, crate::runtime::DispatchError> {
+    Ok(body)
+}
+
+fn iface_documents__add_or_replace_documents__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
+fn iface_documents__add_or_update_documents__ok(body: String) -> Result<String, crate::runtime::DispatchError> {
+    Ok(body)
+}
+
+fn iface_documents__add_or_update_documents__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
+fn iface_documents__delete_all_documents__ok(body: String) -> Result<String, crate::runtime::DispatchError> {
+    Ok(body)
+}
+
+fn iface_documents__delete_all_documents__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
+fn iface_documents__delete_one_document__ok(body: String) -> Result<String, crate::runtime::DispatchError> {
+    Ok(body)
+}
+
+fn iface_documents__delete_one_document__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
+fn iface_documents__get_one_document__ok(body: String) -> Result<String, crate::runtime::DispatchError> {
+    Ok(body)
+}
+
+fn iface_documents__get_one_document__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
+fn iface_documents__delete_documents__ok(body: String) -> Result<String, crate::runtime::DispatchError> {
+    Ok(body)
+}
+
+fn iface_documents__delete_documents__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
 impl iface_documents::Guest for crate::Component {
     fn get_documents(params: iface_documents::GetDocumentsParams) -> Result<String, String> {
         let json = iface_documents__get_documents_params__to_json(&params);
-        dispatch(&OP_DOCUMENTS_GET_DOCUMENTS, json)
+        match dispatch(&OP_DOCUMENTS_GET_DOCUMENTS, json).and_then(iface_documents__get_documents__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_documents__get_documents__err(e)),
+        }
     }
     fn add_or_replace_documents(params: iface_documents::AddOrReplaceDocumentsParams) -> Result<String, String> {
         let json = iface_documents__add_or_replace_documents_params__to_json(&params);
-        dispatch(&OP_DOCUMENTS_ADD_OR_REPLACE_DOCUMENTS, json)
+        match dispatch(&OP_DOCUMENTS_ADD_OR_REPLACE_DOCUMENTS, json).and_then(iface_documents__add_or_replace_documents__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_documents__add_or_replace_documents__err(e)),
+        }
     }
     fn add_or_update_documents(params: iface_documents::AddOrUpdateDocumentsParams) -> Result<String, String> {
         let json = iface_documents__add_or_update_documents_params__to_json(&params);
-        dispatch(&OP_DOCUMENTS_ADD_OR_UPDATE_DOCUMENTS, json)
+        match dispatch(&OP_DOCUMENTS_ADD_OR_UPDATE_DOCUMENTS, json).and_then(iface_documents__add_or_update_documents__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_documents__add_or_update_documents__err(e)),
+        }
     }
     fn delete_all_documents() -> Result<String, String> {
-        dispatch(&OP_DOCUMENTS_DELETE_ALL_DOCUMENTS, Value::Object(Map::new()))
+        match dispatch(&OP_DOCUMENTS_DELETE_ALL_DOCUMENTS, Value::Object(Map::new())).and_then(iface_documents__delete_all_documents__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_documents__delete_all_documents__err(e)),
+        }
     }
     fn delete_one_document() -> Result<String, String> {
-        dispatch(&OP_DOCUMENTS_DELETE_ONE_DOCUMENT, Value::Object(Map::new()))
+        match dispatch(&OP_DOCUMENTS_DELETE_ONE_DOCUMENT, Value::Object(Map::new())).and_then(iface_documents__delete_one_document__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_documents__delete_one_document__err(e)),
+        }
     }
     fn get_one_document(params: iface_documents::GetOneDocumentParams) -> Result<String, String> {
         let json = iface_documents__get_one_document_params__to_json(&params);
-        dispatch(&OP_DOCUMENTS_GET_ONE_DOCUMENT, json)
+        match dispatch(&OP_DOCUMENTS_GET_ONE_DOCUMENT, json).and_then(iface_documents__get_one_document__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_documents__get_one_document__err(e)),
+        }
     }
     fn delete_documents(params: iface_documents::DeleteDocumentsParams) -> Result<String, String> {
         let json = iface_documents__delete_documents_params__to_json(&params);
-        dispatch(&OP_DOCUMENTS_DELETE_DOCUMENTS, json)
+        match dispatch(&OP_DOCUMENTS_DELETE_DOCUMENTS, json).and_then(iface_documents__delete_documents__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_documents__delete_documents__err(e)),
+        }
     }
 }
 use crate::exports::autostamp::meilisearch::search as iface_search;
@@ -632,23 +903,23 @@ const OP_SEARCH_IN_INDEX: OpSpec = OpSpec {
     method: "GET",
     path_template: "/indexes/books/search",
     fields: &[
-        FieldSpec { snake: "q", location: FieldLocation::Query },
-        FieldSpec { snake: "offset", location: FieldLocation::Query },
-        FieldSpec { snake: "limit", location: FieldLocation::Query },
-        FieldSpec { snake: "attributes_to_retrieve", location: FieldLocation::Query },
-        FieldSpec { snake: "attributes_to_crop", location: FieldLocation::Query },
-        FieldSpec { snake: "attributes_to_highlight", location: FieldLocation::Query },
-        FieldSpec { snake: "crop_length", location: FieldLocation::Query },
-        FieldSpec { snake: "crop_marker", location: FieldLocation::Query },
-        FieldSpec { snake: "filter", location: FieldLocation::Query },
-        FieldSpec { snake: "show_matches_position", location: FieldLocation::Query },
-        FieldSpec { snake: "facets", location: FieldLocation::Query },
-        FieldSpec { snake: "sort", location: FieldLocation::Query },
-        FieldSpec { snake: "highlight_pre_tag", location: FieldLocation::Query },
-        FieldSpec { snake: "highlight_post_tag", location: FieldLocation::Query },
-        FieldSpec { snake: "matching_strategy", location: FieldLocation::Query },
-        FieldSpec { snake: "page", location: FieldLocation::Query },
-        FieldSpec { snake: "hits_per_page", location: FieldLocation::Query },
+        FieldSpec { snake: "q", wire: "q", location: FieldLocation::Query },
+        FieldSpec { snake: "offset", wire: "offset", location: FieldLocation::Query },
+        FieldSpec { snake: "limit", wire: "limit", location: FieldLocation::Query },
+        FieldSpec { snake: "attributes_to_retrieve", wire: "attributesToRetrieve", location: FieldLocation::Query },
+        FieldSpec { snake: "attributes_to_crop", wire: "attributesToCrop", location: FieldLocation::Query },
+        FieldSpec { snake: "attributes_to_highlight", wire: "attributesToHighlight", location: FieldLocation::Query },
+        FieldSpec { snake: "crop_length", wire: "cropLength", location: FieldLocation::Query },
+        FieldSpec { snake: "crop_marker", wire: "cropMarker", location: FieldLocation::Query },
+        FieldSpec { snake: "filter", wire: "filter", location: FieldLocation::Query },
+        FieldSpec { snake: "show_matches_position", wire: "showMatchesPosition", location: FieldLocation::Query },
+        FieldSpec { snake: "facets", wire: "facets", location: FieldLocation::Query },
+        FieldSpec { snake: "sort", wire: "sort", location: FieldLocation::Query },
+        FieldSpec { snake: "highlight_pre_tag", wire: "highlightPreTag", location: FieldLocation::Query },
+        FieldSpec { snake: "highlight_post_tag", wire: "highlightPostTag", location: FieldLocation::Query },
+        FieldSpec { snake: "matching_strategy", wire: "matchingStrategy", location: FieldLocation::Query },
+        FieldSpec { snake: "page", wire: "page", location: FieldLocation::Query },
+        FieldSpec { snake: "hits_per_page", wire: "hitsPerPage", location: FieldLocation::Query },
     ],
     auth: &[
     ],
@@ -658,8 +929,8 @@ const OP_SEARCH_IN_INDEX1: OpSpec = OpSpec {
     method: "POST",
     path_template: "/indexes/books/search",
     fields: &[
-        FieldSpec { snake: "attributes_to_highlight", location: FieldLocation::Body },
-        FieldSpec { snake: "q", location: FieldLocation::Body },
+        FieldSpec { snake: "attributes_to_highlight", wire: "attributesToHighlight", location: FieldLocation::Body },
+        FieldSpec { snake: "q", wire: "q", location: FieldLocation::Body },
     ],
     auth: &[
     ],
@@ -694,14 +965,42 @@ fn iface_search__in_index1_params__to_json(p: &iface_search::InIndex1Params) -> 
     Value::Object(m)
 }
 
+fn iface_search__in_index__ok(body: String) -> Result<String, crate::runtime::DispatchError> {
+    Ok(body)
+}
+
+fn iface_search__in_index__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
+fn iface_search__in_index1__ok(body: String) -> Result<String, crate::runtime::DispatchError> {
+    Ok(body)
+}
+
+fn iface_search__in_index1__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
 impl iface_search::Guest for crate::Component {
     fn in_index(params: iface_search::InIndexParams) -> Result<String, String> {
         let json = iface_search__in_index_params__to_json(&params);
-        dispatch(&OP_SEARCH_IN_INDEX, json)
+        match dispatch(&OP_SEARCH_IN_INDEX, json).and_then(iface_search__in_index__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_search__in_index__err(e)),
+        }
     }
     fn in_index1(params: iface_search::InIndex1Params) -> Result<String, String> {
         let json = iface_search__in_index1_params__to_json(&params);
-        dispatch(&OP_SEARCH_IN_INDEX1, json)
+        match dispatch(&OP_SEARCH_IN_INDEX1, json).and_then(iface_search__in_index1__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_search__in_index1__err(e)),
+        }
     }
 }
 use crate::exports::autostamp::meilisearch::settings as iface_settings;
@@ -719,11 +1018,11 @@ const OP_SETTINGS_UPDATE_SETTINGS: OpSpec = OpSpec {
     method: "PATCH",
     path_template: "/indexes/books/settings",
     fields: &[
-        FieldSpec { snake: "displayed_attributes", location: FieldLocation::Body },
-        FieldSpec { snake: "filterable_attributes", location: FieldLocation::Body },
-        FieldSpec { snake: "searchable_attributes", location: FieldLocation::Body },
-        FieldSpec { snake: "sortable_attributes", location: FieldLocation::Body },
-        FieldSpec { snake: "stop_words", location: FieldLocation::Body },
+        FieldSpec { snake: "displayed_attributes", wire: "displayedAttributes", location: FieldLocation::Body },
+        FieldSpec { snake: "filterable_attributes", wire: "filterableAttributes", location: FieldLocation::Body },
+        FieldSpec { snake: "searchable_attributes", wire: "searchableAttributes", location: FieldLocation::Body },
+        FieldSpec { snake: "sortable_attributes", wire: "sortableAttributes", location: FieldLocation::Body },
+        FieldSpec { snake: "stop_words", wire: "stopWords", location: FieldLocation::Body },
     ],
     auth: &[
     ],
@@ -751,7 +1050,7 @@ const OP_SETTINGS_UPDATE_DISPLAYED_ATTRIBUTES: OpSpec = OpSpec {
     method: "PUT",
     path_template: "/indexes/books/settings/displayed-attributes",
     fields: &[
-        FieldSpec { snake: "body", location: FieldLocation::Body },
+        FieldSpec { snake: "body", wire: "body", location: FieldLocation::Body },
     ],
     auth: &[
     ],
@@ -806,7 +1105,7 @@ const OP_SETTINGS_UPDATE_FACETING: OpSpec = OpSpec {
     method: "PATCH",
     path_template: "/indexes/books/settings/faceting",
     fields: &[
-        FieldSpec { snake: "max_values_per_facet", location: FieldLocation::Body },
+        FieldSpec { snake: "max_values_per_facet", wire: "maxValuesPerFacet", location: FieldLocation::Body },
     ],
     auth: &[
     ],
@@ -834,7 +1133,7 @@ const OP_SETTINGS_UPDATE_FILTERABLE_ATTRIBUTES: OpSpec = OpSpec {
     method: "PUT",
     path_template: "/indexes/books/settings/filterable-attributes",
     fields: &[
-        FieldSpec { snake: "body", location: FieldLocation::Body },
+        FieldSpec { snake: "body", wire: "body", location: FieldLocation::Body },
     ],
     auth: &[
     ],
@@ -862,7 +1161,7 @@ const OP_SETTINGS_UPDATE_PAGINATION: OpSpec = OpSpec {
     method: "PATCH",
     path_template: "/indexes/books/settings/pagination",
     fields: &[
-        FieldSpec { snake: "max_total_hits", location: FieldLocation::Body },
+        FieldSpec { snake: "max_total_hits", wire: "maxTotalHits", location: FieldLocation::Body },
     ],
     auth: &[
     ],
@@ -890,7 +1189,7 @@ const OP_SETTINGS_UPDATE_RANKING_RULES: OpSpec = OpSpec {
     method: "PUT",
     path_template: "/indexes/books/settings/ranking-rules",
     fields: &[
-        FieldSpec { snake: "body", location: FieldLocation::Body },
+        FieldSpec { snake: "body", wire: "body", location: FieldLocation::Body },
     ],
     auth: &[
     ],
@@ -918,7 +1217,7 @@ const OP_SETTINGS_UPDATE_SEARCHABLE_ATTRIBUTES: OpSpec = OpSpec {
     method: "PUT",
     path_template: "/indexes/books/settings/searchable-attributes",
     fields: &[
-        FieldSpec { snake: "body", location: FieldLocation::Body },
+        FieldSpec { snake: "body", wire: "body", location: FieldLocation::Body },
     ],
     auth: &[
     ],
@@ -946,7 +1245,7 @@ const OP_SETTINGS_UPDATE_SORTABLE_ATTRIBUTES: OpSpec = OpSpec {
     method: "PUT",
     path_template: "/indexes/books/settings/sortable-attributes",
     fields: &[
-        FieldSpec { snake: "body", location: FieldLocation::Body },
+        FieldSpec { snake: "body", wire: "body", location: FieldLocation::Body },
     ],
     auth: &[
     ],
@@ -965,7 +1264,7 @@ const OP_SETTINGS_GET_STOP_WORDS: OpSpec = OpSpec {
     method: "GET",
     path_template: "/indexes/books/settings/stop-words",
     fields: &[
-        FieldSpec { snake: "body", location: FieldLocation::Body },
+        FieldSpec { snake: "body", wire: "body", location: FieldLocation::Body },
     ],
     auth: &[
     ],
@@ -975,7 +1274,7 @@ const OP_SETTINGS_UPDATE_STOP_WORDS: OpSpec = OpSpec {
     method: "PUT",
     path_template: "/indexes/books/settings/stop-words",
     fields: &[
-        FieldSpec { snake: "body", location: FieldLocation::Body },
+        FieldSpec { snake: "body", wire: "body", location: FieldLocation::Body },
     ],
     auth: &[
     ],
@@ -1003,8 +1302,8 @@ const OP_SETTINGS_UPDATE_SYNONYMS: OpSpec = OpSpec {
     method: "PUT",
     path_template: "/indexes/books/settings/synonyms",
     fields: &[
-        FieldSpec { snake: "harry_potter", location: FieldLocation::Body },
-        FieldSpec { snake: "hp", location: FieldLocation::Body },
+        FieldSpec { snake: "harry_potter", wire: "harry potter", location: FieldLocation::Body },
+        FieldSpec { snake: "hp", wire: "hp", location: FieldLocation::Body },
     ],
     auth: &[
     ],
@@ -1032,9 +1331,9 @@ const OP_SETTINGS_UPDATE_TYPO_TOLERANCE: OpSpec = OpSpec {
     method: "PATCH",
     path_template: "/indexes/books/settings/typo-tolerance",
     fields: &[
-        FieldSpec { snake: "disable_on_attributes", location: FieldLocation::Body },
-        FieldSpec { snake: "disable_on_words", location: FieldLocation::Body },
-        FieldSpec { snake: "min_word_size_for_typos", location: FieldLocation::Body },
+        FieldSpec { snake: "disable_on_attributes", wire: "disableOnAttributes", location: FieldLocation::Body },
+        FieldSpec { snake: "disable_on_words", wire: "disableOnWords", location: FieldLocation::Body },
+        FieldSpec { snake: "min_word_size_for_typos", wire: "minWordSizeForTypos", location: FieldLocation::Body },
     ],
     auth: &[
     ],
@@ -1051,8 +1350,8 @@ const OP_SETTINGS_RESET_TYPO_TOLERANCE: OpSpec = OpSpec {
 
 fn iface_settings__update_typo_tolerance_body_min_word_size_for_typos__to_json(p: &iface_settings::UpdateTypoToleranceBodyMinWordSizeForTypos) -> Value {
     let mut m = Map::new();
-    m.insert("one_typo".into(), match (&p.one_typo) { Some(v) => serde_json::Number::from_f64(*(v)).map(Value::Number).unwrap_or(Value::Null), None => Value::Null });
-    m.insert("two_typos".into(), match (&p.two_typos) { Some(v) => serde_json::Number::from_f64(*(v)).map(Value::Number).unwrap_or(Value::Null), None => Value::Null });
+    m.insert("oneTypo".into(), match (&p.one_typo) { Some(v) => serde_json::Number::from_f64(*(v)).map(Value::Number).unwrap_or(Value::Null), None => Value::Null });
+    m.insert("twoTypos".into(), match (&p.two_typos) { Some(v) => serde_json::Number::from_f64(*(v)).map(Value::Number).unwrap_or(Value::Null), None => Value::Null });
     Value::Object(m)
 }
 
@@ -1135,126 +1434,630 @@ fn iface_settings__update_typo_tolerance_params__to_json(p: &iface_settings::Upd
     Value::Object(m)
 }
 
+fn iface_settings__get_all_settings__ok(body: String) -> Result<String, crate::runtime::DispatchError> {
+    Ok(body)
+}
+
+fn iface_settings__get_all_settings__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
+fn iface_settings__update_settings__ok(body: String) -> Result<String, crate::runtime::DispatchError> {
+    Ok(body)
+}
+
+fn iface_settings__update_settings__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
+fn iface_settings__reset_all_settings__ok(body: String) -> Result<String, crate::runtime::DispatchError> {
+    Ok(body)
+}
+
+fn iface_settings__reset_all_settings__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
+fn iface_settings__get_displayed_attributes__ok(body: String) -> Result<String, crate::runtime::DispatchError> {
+    Ok(body)
+}
+
+fn iface_settings__get_displayed_attributes__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
+fn iface_settings__update_displayed_attributes__ok(body: String) -> Result<String, crate::runtime::DispatchError> {
+    Ok(body)
+}
+
+fn iface_settings__update_displayed_attributes__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
+fn iface_settings__reset_displayed_attributes__ok(body: String) -> Result<String, crate::runtime::DispatchError> {
+    Ok(body)
+}
+
+fn iface_settings__reset_displayed_attributes__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
+fn iface_settings__get_distinct_attribute__ok(body: String) -> Result<String, crate::runtime::DispatchError> {
+    Ok(body)
+}
+
+fn iface_settings__get_distinct_attribute__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
+fn iface_settings__update_distinct_attribute__ok(body: String) -> Result<String, crate::runtime::DispatchError> {
+    Ok(body)
+}
+
+fn iface_settings__update_distinct_attribute__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
+fn iface_settings__reset_distinct_attribute__ok(body: String) -> Result<String, crate::runtime::DispatchError> {
+    Ok(body)
+}
+
+fn iface_settings__reset_distinct_attribute__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
+fn iface_settings__get_faceting__ok(body: String) -> Result<String, crate::runtime::DispatchError> {
+    Ok(body)
+}
+
+fn iface_settings__get_faceting__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
+fn iface_settings__update_faceting__ok(body: String) -> Result<String, crate::runtime::DispatchError> {
+    Ok(body)
+}
+
+fn iface_settings__update_faceting__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
+fn iface_settings__reset_faceting__ok(body: String) -> Result<String, crate::runtime::DispatchError> {
+    Ok(body)
+}
+
+fn iface_settings__reset_faceting__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
+fn iface_settings__get_filterable_attributes__ok(body: String) -> Result<String, crate::runtime::DispatchError> {
+    Ok(body)
+}
+
+fn iface_settings__get_filterable_attributes__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
+fn iface_settings__update_filterable_attributes__ok(body: String) -> Result<String, crate::runtime::DispatchError> {
+    Ok(body)
+}
+
+fn iface_settings__update_filterable_attributes__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
+fn iface_settings__reset_filterable_attributes__ok(body: String) -> Result<String, crate::runtime::DispatchError> {
+    Ok(body)
+}
+
+fn iface_settings__reset_filterable_attributes__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
+fn iface_settings__get_pagination__ok(body: String) -> Result<String, crate::runtime::DispatchError> {
+    Ok(body)
+}
+
+fn iface_settings__get_pagination__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
+fn iface_settings__update_pagination__ok(body: String) -> Result<String, crate::runtime::DispatchError> {
+    Ok(body)
+}
+
+fn iface_settings__update_pagination__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
+fn iface_settings__reset_pagination__ok(body: String) -> Result<String, crate::runtime::DispatchError> {
+    Ok(body)
+}
+
+fn iface_settings__reset_pagination__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
+fn iface_settings__get_ranking_rules__ok(body: String) -> Result<String, crate::runtime::DispatchError> {
+    Ok(body)
+}
+
+fn iface_settings__get_ranking_rules__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
+fn iface_settings__update_ranking_rules__ok(body: String) -> Result<String, crate::runtime::DispatchError> {
+    Ok(body)
+}
+
+fn iface_settings__update_ranking_rules__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
+fn iface_settings__reset_ranking_rules__ok(body: String) -> Result<String, crate::runtime::DispatchError> {
+    Ok(body)
+}
+
+fn iface_settings__reset_ranking_rules__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
+fn iface_settings__get_searchable_attributes__ok(body: String) -> Result<String, crate::runtime::DispatchError> {
+    Ok(body)
+}
+
+fn iface_settings__get_searchable_attributes__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
+fn iface_settings__update_searchable_attributes__ok(body: String) -> Result<String, crate::runtime::DispatchError> {
+    Ok(body)
+}
+
+fn iface_settings__update_searchable_attributes__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
+fn iface_settings__reset_searchable_attributes__ok(body: String) -> Result<String, crate::runtime::DispatchError> {
+    Ok(body)
+}
+
+fn iface_settings__reset_searchable_attributes__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
+fn iface_settings__get_sortable_attributes__ok(body: String) -> Result<String, crate::runtime::DispatchError> {
+    Ok(body)
+}
+
+fn iface_settings__get_sortable_attributes__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
+fn iface_settings__update_sortable_attributes__ok(body: String) -> Result<String, crate::runtime::DispatchError> {
+    Ok(body)
+}
+
+fn iface_settings__update_sortable_attributes__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
+fn iface_settings__reset_sortable_attributes__ok(body: String) -> Result<String, crate::runtime::DispatchError> {
+    Ok(body)
+}
+
+fn iface_settings__reset_sortable_attributes__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
+fn iface_settings__get_stop_words__ok(body: String) -> Result<String, crate::runtime::DispatchError> {
+    Ok(body)
+}
+
+fn iface_settings__get_stop_words__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
+fn iface_settings__update_stop_words__ok(body: String) -> Result<String, crate::runtime::DispatchError> {
+    Ok(body)
+}
+
+fn iface_settings__update_stop_words__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
+fn iface_settings__reset_stop_words__ok(body: String) -> Result<String, crate::runtime::DispatchError> {
+    Ok(body)
+}
+
+fn iface_settings__reset_stop_words__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
+fn iface_settings__get_synonyms__ok(body: String) -> Result<String, crate::runtime::DispatchError> {
+    Ok(body)
+}
+
+fn iface_settings__get_synonyms__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
+fn iface_settings__update_synonyms__ok(body: String) -> Result<String, crate::runtime::DispatchError> {
+    Ok(body)
+}
+
+fn iface_settings__update_synonyms__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
+fn iface_settings__reset_synonyms__ok(body: String) -> Result<String, crate::runtime::DispatchError> {
+    Ok(body)
+}
+
+fn iface_settings__reset_synonyms__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
+fn iface_settings__get_typo_tolerance__ok(body: String) -> Result<String, crate::runtime::DispatchError> {
+    Ok(body)
+}
+
+fn iface_settings__get_typo_tolerance__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
+fn iface_settings__update_typo_tolerance__ok(body: String) -> Result<String, crate::runtime::DispatchError> {
+    Ok(body)
+}
+
+fn iface_settings__update_typo_tolerance__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
+fn iface_settings__reset_typo_tolerance__ok(body: String) -> Result<String, crate::runtime::DispatchError> {
+    Ok(body)
+}
+
+fn iface_settings__reset_typo_tolerance__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
 impl iface_settings::Guest for crate::Component {
     fn get_all_settings() -> Result<String, String> {
-        dispatch(&OP_SETTINGS_GET_ALL_SETTINGS, Value::Object(Map::new()))
+        match dispatch(&OP_SETTINGS_GET_ALL_SETTINGS, Value::Object(Map::new())).and_then(iface_settings__get_all_settings__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_settings__get_all_settings__err(e)),
+        }
     }
     fn update_settings(params: iface_settings::UpdateSettingsParams) -> Result<String, String> {
         let json = iface_settings__update_settings_params__to_json(&params);
-        dispatch(&OP_SETTINGS_UPDATE_SETTINGS, json)
+        match dispatch(&OP_SETTINGS_UPDATE_SETTINGS, json).and_then(iface_settings__update_settings__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_settings__update_settings__err(e)),
+        }
     }
     fn reset_all_settings() -> Result<String, String> {
-        dispatch(&OP_SETTINGS_RESET_ALL_SETTINGS, Value::Object(Map::new()))
+        match dispatch(&OP_SETTINGS_RESET_ALL_SETTINGS, Value::Object(Map::new())).and_then(iface_settings__reset_all_settings__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_settings__reset_all_settings__err(e)),
+        }
     }
     fn get_displayed_attributes() -> Result<String, String> {
-        dispatch(&OP_SETTINGS_GET_DISPLAYED_ATTRIBUTES, Value::Object(Map::new()))
+        match dispatch(&OP_SETTINGS_GET_DISPLAYED_ATTRIBUTES, Value::Object(Map::new())).and_then(iface_settings__get_displayed_attributes__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_settings__get_displayed_attributes__err(e)),
+        }
     }
     fn update_displayed_attributes(params: iface_settings::UpdateDisplayedAttributesParams) -> Result<String, String> {
         let json = iface_settings__update_displayed_attributes_params__to_json(&params);
-        dispatch(&OP_SETTINGS_UPDATE_DISPLAYED_ATTRIBUTES, json)
+        match dispatch(&OP_SETTINGS_UPDATE_DISPLAYED_ATTRIBUTES, json).and_then(iface_settings__update_displayed_attributes__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_settings__update_displayed_attributes__err(e)),
+        }
     }
     fn reset_displayed_attributes() -> Result<String, String> {
-        dispatch(&OP_SETTINGS_RESET_DISPLAYED_ATTRIBUTES, Value::Object(Map::new()))
+        match dispatch(&OP_SETTINGS_RESET_DISPLAYED_ATTRIBUTES, Value::Object(Map::new())).and_then(iface_settings__reset_displayed_attributes__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_settings__reset_displayed_attributes__err(e)),
+        }
     }
     fn get_distinct_attribute() -> Result<String, String> {
-        dispatch(&OP_SETTINGS_GET_DISTINCT_ATTRIBUTE, Value::Object(Map::new()))
+        match dispatch(&OP_SETTINGS_GET_DISTINCT_ATTRIBUTE, Value::Object(Map::new())).and_then(iface_settings__get_distinct_attribute__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_settings__get_distinct_attribute__err(e)),
+        }
     }
     fn update_distinct_attribute() -> Result<String, String> {
-        dispatch(&OP_SETTINGS_UPDATE_DISTINCT_ATTRIBUTE, Value::Object(Map::new()))
+        match dispatch(&OP_SETTINGS_UPDATE_DISTINCT_ATTRIBUTE, Value::Object(Map::new())).and_then(iface_settings__update_distinct_attribute__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_settings__update_distinct_attribute__err(e)),
+        }
     }
     fn reset_distinct_attribute() -> Result<String, String> {
-        dispatch(&OP_SETTINGS_RESET_DISTINCT_ATTRIBUTE, Value::Object(Map::new()))
+        match dispatch(&OP_SETTINGS_RESET_DISTINCT_ATTRIBUTE, Value::Object(Map::new())).and_then(iface_settings__reset_distinct_attribute__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_settings__reset_distinct_attribute__err(e)),
+        }
     }
     fn get_faceting() -> Result<String, String> {
-        dispatch(&OP_SETTINGS_GET_FACETING, Value::Object(Map::new()))
+        match dispatch(&OP_SETTINGS_GET_FACETING, Value::Object(Map::new())).and_then(iface_settings__get_faceting__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_settings__get_faceting__err(e)),
+        }
     }
     fn update_faceting(params: iface_settings::UpdateFacetingParams) -> Result<String, String> {
         let json = iface_settings__update_faceting_params__to_json(&params);
-        dispatch(&OP_SETTINGS_UPDATE_FACETING, json)
+        match dispatch(&OP_SETTINGS_UPDATE_FACETING, json).and_then(iface_settings__update_faceting__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_settings__update_faceting__err(e)),
+        }
     }
     fn reset_faceting() -> Result<String, String> {
-        dispatch(&OP_SETTINGS_RESET_FACETING, Value::Object(Map::new()))
+        match dispatch(&OP_SETTINGS_RESET_FACETING, Value::Object(Map::new())).and_then(iface_settings__reset_faceting__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_settings__reset_faceting__err(e)),
+        }
     }
     fn get_filterable_attributes() -> Result<String, String> {
-        dispatch(&OP_SETTINGS_GET_FILTERABLE_ATTRIBUTES, Value::Object(Map::new()))
+        match dispatch(&OP_SETTINGS_GET_FILTERABLE_ATTRIBUTES, Value::Object(Map::new())).and_then(iface_settings__get_filterable_attributes__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_settings__get_filterable_attributes__err(e)),
+        }
     }
     fn update_filterable_attributes(params: iface_settings::UpdateFilterableAttributesParams) -> Result<String, String> {
         let json = iface_settings__update_filterable_attributes_params__to_json(&params);
-        dispatch(&OP_SETTINGS_UPDATE_FILTERABLE_ATTRIBUTES, json)
+        match dispatch(&OP_SETTINGS_UPDATE_FILTERABLE_ATTRIBUTES, json).and_then(iface_settings__update_filterable_attributes__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_settings__update_filterable_attributes__err(e)),
+        }
     }
     fn reset_filterable_attributes() -> Result<String, String> {
-        dispatch(&OP_SETTINGS_RESET_FILTERABLE_ATTRIBUTES, Value::Object(Map::new()))
+        match dispatch(&OP_SETTINGS_RESET_FILTERABLE_ATTRIBUTES, Value::Object(Map::new())).and_then(iface_settings__reset_filterable_attributes__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_settings__reset_filterable_attributes__err(e)),
+        }
     }
     fn get_pagination() -> Result<String, String> {
-        dispatch(&OP_SETTINGS_GET_PAGINATION, Value::Object(Map::new()))
+        match dispatch(&OP_SETTINGS_GET_PAGINATION, Value::Object(Map::new())).and_then(iface_settings__get_pagination__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_settings__get_pagination__err(e)),
+        }
     }
     fn update_pagination(params: iface_settings::UpdatePaginationParams) -> Result<String, String> {
         let json = iface_settings__update_pagination_params__to_json(&params);
-        dispatch(&OP_SETTINGS_UPDATE_PAGINATION, json)
+        match dispatch(&OP_SETTINGS_UPDATE_PAGINATION, json).and_then(iface_settings__update_pagination__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_settings__update_pagination__err(e)),
+        }
     }
     fn reset_pagination() -> Result<String, String> {
-        dispatch(&OP_SETTINGS_RESET_PAGINATION, Value::Object(Map::new()))
+        match dispatch(&OP_SETTINGS_RESET_PAGINATION, Value::Object(Map::new())).and_then(iface_settings__reset_pagination__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_settings__reset_pagination__err(e)),
+        }
     }
     fn get_ranking_rules() -> Result<String, String> {
-        dispatch(&OP_SETTINGS_GET_RANKING_RULES, Value::Object(Map::new()))
+        match dispatch(&OP_SETTINGS_GET_RANKING_RULES, Value::Object(Map::new())).and_then(iface_settings__get_ranking_rules__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_settings__get_ranking_rules__err(e)),
+        }
     }
     fn update_ranking_rules(params: iface_settings::UpdateRankingRulesParams) -> Result<String, String> {
         let json = iface_settings__update_ranking_rules_params__to_json(&params);
-        dispatch(&OP_SETTINGS_UPDATE_RANKING_RULES, json)
+        match dispatch(&OP_SETTINGS_UPDATE_RANKING_RULES, json).and_then(iface_settings__update_ranking_rules__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_settings__update_ranking_rules__err(e)),
+        }
     }
     fn reset_ranking_rules() -> Result<String, String> {
-        dispatch(&OP_SETTINGS_RESET_RANKING_RULES, Value::Object(Map::new()))
+        match dispatch(&OP_SETTINGS_RESET_RANKING_RULES, Value::Object(Map::new())).and_then(iface_settings__reset_ranking_rules__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_settings__reset_ranking_rules__err(e)),
+        }
     }
     fn get_searchable_attributes() -> Result<String, String> {
-        dispatch(&OP_SETTINGS_GET_SEARCHABLE_ATTRIBUTES, Value::Object(Map::new()))
+        match dispatch(&OP_SETTINGS_GET_SEARCHABLE_ATTRIBUTES, Value::Object(Map::new())).and_then(iface_settings__get_searchable_attributes__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_settings__get_searchable_attributes__err(e)),
+        }
     }
     fn update_searchable_attributes(params: iface_settings::UpdateSearchableAttributesParams) -> Result<String, String> {
         let json = iface_settings__update_searchable_attributes_params__to_json(&params);
-        dispatch(&OP_SETTINGS_UPDATE_SEARCHABLE_ATTRIBUTES, json)
+        match dispatch(&OP_SETTINGS_UPDATE_SEARCHABLE_ATTRIBUTES, json).and_then(iface_settings__update_searchable_attributes__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_settings__update_searchable_attributes__err(e)),
+        }
     }
     fn reset_searchable_attributes() -> Result<String, String> {
-        dispatch(&OP_SETTINGS_RESET_SEARCHABLE_ATTRIBUTES, Value::Object(Map::new()))
+        match dispatch(&OP_SETTINGS_RESET_SEARCHABLE_ATTRIBUTES, Value::Object(Map::new())).and_then(iface_settings__reset_searchable_attributes__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_settings__reset_searchable_attributes__err(e)),
+        }
     }
     fn get_sortable_attributes() -> Result<String, String> {
-        dispatch(&OP_SETTINGS_GET_SORTABLE_ATTRIBUTES, Value::Object(Map::new()))
+        match dispatch(&OP_SETTINGS_GET_SORTABLE_ATTRIBUTES, Value::Object(Map::new())).and_then(iface_settings__get_sortable_attributes__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_settings__get_sortable_attributes__err(e)),
+        }
     }
     fn update_sortable_attributes(params: iface_settings::UpdateSortableAttributesParams) -> Result<String, String> {
         let json = iface_settings__update_sortable_attributes_params__to_json(&params);
-        dispatch(&OP_SETTINGS_UPDATE_SORTABLE_ATTRIBUTES, json)
+        match dispatch(&OP_SETTINGS_UPDATE_SORTABLE_ATTRIBUTES, json).and_then(iface_settings__update_sortable_attributes__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_settings__update_sortable_attributes__err(e)),
+        }
     }
     fn reset_sortable_attributes() -> Result<String, String> {
-        dispatch(&OP_SETTINGS_RESET_SORTABLE_ATTRIBUTES, Value::Object(Map::new()))
+        match dispatch(&OP_SETTINGS_RESET_SORTABLE_ATTRIBUTES, Value::Object(Map::new())).and_then(iface_settings__reset_sortable_attributes__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_settings__reset_sortable_attributes__err(e)),
+        }
     }
     fn get_stop_words(params: iface_settings::GetStopWordsParams) -> Result<String, String> {
         let json = iface_settings__get_stop_words_params__to_json(&params);
-        dispatch(&OP_SETTINGS_GET_STOP_WORDS, json)
+        match dispatch(&OP_SETTINGS_GET_STOP_WORDS, json).and_then(iface_settings__get_stop_words__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_settings__get_stop_words__err(e)),
+        }
     }
     fn update_stop_words(params: iface_settings::UpdateStopWordsParams) -> Result<String, String> {
         let json = iface_settings__update_stop_words_params__to_json(&params);
-        dispatch(&OP_SETTINGS_UPDATE_STOP_WORDS, json)
+        match dispatch(&OP_SETTINGS_UPDATE_STOP_WORDS, json).and_then(iface_settings__update_stop_words__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_settings__update_stop_words__err(e)),
+        }
     }
     fn reset_stop_words() -> Result<String, String> {
-        dispatch(&OP_SETTINGS_RESET_STOP_WORDS, Value::Object(Map::new()))
+        match dispatch(&OP_SETTINGS_RESET_STOP_WORDS, Value::Object(Map::new())).and_then(iface_settings__reset_stop_words__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_settings__reset_stop_words__err(e)),
+        }
     }
     fn get_synonyms() -> Result<String, String> {
-        dispatch(&OP_SETTINGS_GET_SYNONYMS, Value::Object(Map::new()))
+        match dispatch(&OP_SETTINGS_GET_SYNONYMS, Value::Object(Map::new())).and_then(iface_settings__get_synonyms__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_settings__get_synonyms__err(e)),
+        }
     }
     fn update_synonyms(params: iface_settings::UpdateSynonymsParams) -> Result<String, String> {
         let json = iface_settings__update_synonyms_params__to_json(&params);
-        dispatch(&OP_SETTINGS_UPDATE_SYNONYMS, json)
+        match dispatch(&OP_SETTINGS_UPDATE_SYNONYMS, json).and_then(iface_settings__update_synonyms__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_settings__update_synonyms__err(e)),
+        }
     }
     fn reset_synonyms() -> Result<String, String> {
-        dispatch(&OP_SETTINGS_RESET_SYNONYMS, Value::Object(Map::new()))
+        match dispatch(&OP_SETTINGS_RESET_SYNONYMS, Value::Object(Map::new())).and_then(iface_settings__reset_synonyms__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_settings__reset_synonyms__err(e)),
+        }
     }
     fn get_typo_tolerance() -> Result<String, String> {
-        dispatch(&OP_SETTINGS_GET_TYPO_TOLERANCE, Value::Object(Map::new()))
+        match dispatch(&OP_SETTINGS_GET_TYPO_TOLERANCE, Value::Object(Map::new())).and_then(iface_settings__get_typo_tolerance__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_settings__get_typo_tolerance__err(e)),
+        }
     }
     fn update_typo_tolerance(params: iface_settings::UpdateTypoToleranceParams) -> Result<String, String> {
         let json = iface_settings__update_typo_tolerance_params__to_json(&params);
-        dispatch(&OP_SETTINGS_UPDATE_TYPO_TOLERANCE, json)
+        match dispatch(&OP_SETTINGS_UPDATE_TYPO_TOLERANCE, json).and_then(iface_settings__update_typo_tolerance__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_settings__update_typo_tolerance__err(e)),
+        }
     }
     fn reset_typo_tolerance() -> Result<String, String> {
-        dispatch(&OP_SETTINGS_RESET_TYPO_TOLERANCE, Value::Object(Map::new()))
+        match dispatch(&OP_SETTINGS_RESET_TYPO_TOLERANCE, Value::Object(Map::new())).and_then(iface_settings__reset_typo_tolerance__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_settings__reset_typo_tolerance__err(e)),
+        }
     }
 }
 use crate::exports::autostamp::meilisearch::key_management as iface_key_management;
@@ -1263,8 +2066,8 @@ const OP_KEY_MANAGEMENT_GET_KEYS: OpSpec = OpSpec {
     method: "GET",
     path_template: "/keys",
     fields: &[
-        FieldSpec { snake: "offset", location: FieldLocation::Query },
-        FieldSpec { snake: "limit", location: FieldLocation::Query },
+        FieldSpec { snake: "offset", wire: "offset", location: FieldLocation::Query },
+        FieldSpec { snake: "limit", wire: "limit", location: FieldLocation::Query },
     ],
     auth: &[
     ],
@@ -1274,11 +2077,11 @@ const OP_KEY_MANAGEMENT_CREATE_A_KEY: OpSpec = OpSpec {
     method: "POST",
     path_template: "/keys",
     fields: &[
-        FieldSpec { snake: "actions", location: FieldLocation::Body },
-        FieldSpec { snake: "description", location: FieldLocation::Body },
-        FieldSpec { snake: "expires_at", location: FieldLocation::Body },
-        FieldSpec { snake: "indexes", location: FieldLocation::Body },
-        FieldSpec { snake: "name", location: FieldLocation::Body },
+        FieldSpec { snake: "actions", wire: "actions", location: FieldLocation::Body },
+        FieldSpec { snake: "description", wire: "description", location: FieldLocation::Body },
+        FieldSpec { snake: "expires_at", wire: "expiresAt", location: FieldLocation::Body },
+        FieldSpec { snake: "indexes", wire: "indexes", location: FieldLocation::Body },
+        FieldSpec { snake: "name", wire: "name", location: FieldLocation::Body },
     ],
     auth: &[
     ],
@@ -1306,7 +2109,7 @@ const OP_KEY_MANAGEMENT_UPDATE_A_KEY: OpSpec = OpSpec {
     method: "PATCH",
     path_template: "/keys/wYZjGJyBcdb0621b97999c233246a8ec0a35d0fcd9a6417ef8ccee0c8978b64b123af2dd",
     fields: &[
-        FieldSpec { snake: "description", location: FieldLocation::Body },
+        FieldSpec { snake: "description", wire: "description", location: FieldLocation::Body },
     ],
     auth: &[
     ],
@@ -1335,24 +2138,94 @@ fn iface_key_management__update_a_key_params__to_json(p: &iface_key_management::
     Value::Object(m)
 }
 
+fn iface_key_management__get_keys__ok(body: String) -> Result<String, crate::runtime::DispatchError> {
+    Ok(body)
+}
+
+fn iface_key_management__get_keys__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
+fn iface_key_management__create_a_key__ok(body: String) -> Result<String, crate::runtime::DispatchError> {
+    Ok(body)
+}
+
+fn iface_key_management__create_a_key__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
+fn iface_key_management__get_one_key__ok(body: String) -> Result<String, crate::runtime::DispatchError> {
+    Ok(body)
+}
+
+fn iface_key_management__get_one_key__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
+fn iface_key_management__delete_a_key__ok(body: String) -> Result<String, crate::runtime::DispatchError> {
+    Ok(body)
+}
+
+fn iface_key_management__delete_a_key__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
+fn iface_key_management__update_a_key__ok(body: String) -> Result<String, crate::runtime::DispatchError> {
+    Ok(body)
+}
+
+fn iface_key_management__update_a_key__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
 impl iface_key_management::Guest for crate::Component {
     fn get_keys(params: iface_key_management::GetKeysParams) -> Result<String, String> {
         let json = iface_key_management__get_keys_params__to_json(&params);
-        dispatch(&OP_KEY_MANAGEMENT_GET_KEYS, json)
+        match dispatch(&OP_KEY_MANAGEMENT_GET_KEYS, json).and_then(iface_key_management__get_keys__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_key_management__get_keys__err(e)),
+        }
     }
     fn create_a_key(params: iface_key_management::CreateAKeyParams) -> Result<String, String> {
         let json = iface_key_management__create_a_key_params__to_json(&params);
-        dispatch(&OP_KEY_MANAGEMENT_CREATE_A_KEY, json)
+        match dispatch(&OP_KEY_MANAGEMENT_CREATE_A_KEY, json).and_then(iface_key_management__create_a_key__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_key_management__create_a_key__err(e)),
+        }
     }
     fn get_one_key() -> Result<String, String> {
-        dispatch(&OP_KEY_MANAGEMENT_GET_ONE_KEY, Value::Object(Map::new()))
+        match dispatch(&OP_KEY_MANAGEMENT_GET_ONE_KEY, Value::Object(Map::new())).and_then(iface_key_management__get_one_key__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_key_management__get_one_key__err(e)),
+        }
     }
     fn delete_a_key() -> Result<String, String> {
-        dispatch(&OP_KEY_MANAGEMENT_DELETE_A_KEY, Value::Object(Map::new()))
+        match dispatch(&OP_KEY_MANAGEMENT_DELETE_A_KEY, Value::Object(Map::new())).and_then(iface_key_management__delete_a_key__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_key_management__delete_a_key__err(e)),
+        }
     }
     fn update_a_key(params: iface_key_management::UpdateAKeyParams) -> Result<String, String> {
         let json = iface_key_management__update_a_key_params__to_json(&params);
-        dispatch(&OP_KEY_MANAGEMENT_UPDATE_A_KEY, json)
+        match dispatch(&OP_KEY_MANAGEMENT_UPDATE_A_KEY, json).and_then(iface_key_management__update_a_key__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_key_management__update_a_key__err(e)),
+        }
     }
 }
 use crate::exports::autostamp::meilisearch::multi_search as iface_multi_search;
@@ -1361,7 +2234,7 @@ const OP_MULTI_SEARCH_SEARCH_ONE_OR_MORE_INDEXES: OpSpec = OpSpec {
     method: "POST",
     path_template: "/multi-search",
     fields: &[
-        FieldSpec { snake: "queries", location: FieldLocation::Body },
+        FieldSpec { snake: "queries", wire: "queries", location: FieldLocation::Body },
     ],
     auth: &[
     ],
@@ -1369,8 +2242,8 @@ const OP_MULTI_SEARCH_SEARCH_ONE_OR_MORE_INDEXES: OpSpec = OpSpec {
 
 fn iface_multi_search__search_one_or_more_indexes_body_queries_item__to_json(p: &iface_multi_search::SearchOneOrMoreIndexesBodyQueriesItem) -> Value {
     let mut m = Map::new();
-    m.insert("attributes_to_highlight".into(), match (&p.attributes_to_highlight) { Some(v) => Value::Array((v).iter().map(|v| Value::String((v).clone())).collect()), None => Value::Null });
-    m.insert("index_uid".into(), match (&p.index_uid) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("attributesToHighlight".into(), match (&p.attributes_to_highlight) { Some(v) => Value::Array((v).iter().map(|v| Value::String((v).clone())).collect()), None => Value::Null });
+    m.insert("indexUid".into(), match (&p.index_uid) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("q".into(), match (&p.q) { Some(v) => Value::String((v).clone()), None => Value::Null });
     Value::Object(m)
 }
@@ -1381,10 +2254,24 @@ fn iface_multi_search__search_one_or_more_indexes_params__to_json(p: &iface_mult
     Value::Object(m)
 }
 
+fn iface_multi_search__search_one_or_more_indexes__ok(body: String) -> Result<String, crate::runtime::DispatchError> {
+    Ok(body)
+}
+
+fn iface_multi_search__search_one_or_more_indexes__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
 impl iface_multi_search::Guest for crate::Component {
     fn search_one_or_more_indexes(params: iface_multi_search::SearchOneOrMoreIndexesParams) -> Result<String, String> {
         let json = iface_multi_search__search_one_or_more_indexes_params__to_json(&params);
-        dispatch(&OP_MULTI_SEARCH_SEARCH_ONE_OR_MORE_INDEXES, json)
+        match dispatch(&OP_MULTI_SEARCH_SEARCH_ONE_OR_MORE_INDEXES, json).and_then(iface_multi_search__search_one_or_more_indexes__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_multi_search__search_one_or_more_indexes__err(e)),
+        }
     }
 }
 use crate::exports::autostamp::meilisearch::tasks as iface_tasks;
@@ -1393,19 +2280,19 @@ const OP_TASKS_GET_ALL_TASKS: OpSpec = OpSpec {
     method: "GET",
     path_template: "/tasks",
     fields: &[
-        FieldSpec { snake: "uids", location: FieldLocation::Query },
-        FieldSpec { snake: "index_uids", location: FieldLocation::Query },
-        FieldSpec { snake: "types", location: FieldLocation::Query },
-        FieldSpec { snake: "statuses", location: FieldLocation::Query },
-        FieldSpec { snake: "before_enqueued_at", location: FieldLocation::Query },
-        FieldSpec { snake: "after_enqueued_at", location: FieldLocation::Query },
-        FieldSpec { snake: "before_started_at", location: FieldLocation::Query },
-        FieldSpec { snake: "after_started_at", location: FieldLocation::Query },
-        FieldSpec { snake: "before_finished_at", location: FieldLocation::Query },
-        FieldSpec { snake: "after_finished_at", location: FieldLocation::Query },
-        FieldSpec { snake: "canceled_by", location: FieldLocation::Query },
-        FieldSpec { snake: "limit", location: FieldLocation::Query },
-        FieldSpec { snake: "from", location: FieldLocation::Query },
+        FieldSpec { snake: "uids", wire: "uids", location: FieldLocation::Query },
+        FieldSpec { snake: "index_uids", wire: "indexUids", location: FieldLocation::Query },
+        FieldSpec { snake: "types", wire: "types", location: FieldLocation::Query },
+        FieldSpec { snake: "statuses", wire: "statuses", location: FieldLocation::Query },
+        FieldSpec { snake: "before_enqueued_at", wire: "beforeEnqueuedAt", location: FieldLocation::Query },
+        FieldSpec { snake: "after_enqueued_at", wire: "afterEnqueuedAt", location: FieldLocation::Query },
+        FieldSpec { snake: "before_started_at", wire: "beforeStartedAt", location: FieldLocation::Query },
+        FieldSpec { snake: "after_started_at", wire: "afterStartedAt", location: FieldLocation::Query },
+        FieldSpec { snake: "before_finished_at", wire: "beforeFinishedAt", location: FieldLocation::Query },
+        FieldSpec { snake: "after_finished_at", wire: "afterFinishedAt", location: FieldLocation::Query },
+        FieldSpec { snake: "canceled_by", wire: "canceledBy", location: FieldLocation::Query },
+        FieldSpec { snake: "limit", wire: "limit", location: FieldLocation::Query },
+        FieldSpec { snake: "from", wire: "from", location: FieldLocation::Query },
     ],
     auth: &[
     ],
@@ -1415,19 +2302,19 @@ const OP_TASKS_DELETE_TASKS: OpSpec = OpSpec {
     method: "DELETE",
     path_template: "/tasks",
     fields: &[
-        FieldSpec { snake: "uids", location: FieldLocation::Query },
-        FieldSpec { snake: "index_uids", location: FieldLocation::Query },
-        FieldSpec { snake: "types", location: FieldLocation::Query },
-        FieldSpec { snake: "statuses", location: FieldLocation::Query },
-        FieldSpec { snake: "before_enqueued_at", location: FieldLocation::Query },
-        FieldSpec { snake: "after_enqueued_at", location: FieldLocation::Query },
-        FieldSpec { snake: "before_started_at", location: FieldLocation::Query },
-        FieldSpec { snake: "after_started_at", location: FieldLocation::Query },
-        FieldSpec { snake: "before_finished_at", location: FieldLocation::Query },
-        FieldSpec { snake: "after_finished_at", location: FieldLocation::Query },
-        FieldSpec { snake: "canceled_by", location: FieldLocation::Query },
-        FieldSpec { snake: "limit", location: FieldLocation::Query },
-        FieldSpec { snake: "from", location: FieldLocation::Query },
+        FieldSpec { snake: "uids", wire: "uids", location: FieldLocation::Query },
+        FieldSpec { snake: "index_uids", wire: "indexUids", location: FieldLocation::Query },
+        FieldSpec { snake: "types", wire: "types", location: FieldLocation::Query },
+        FieldSpec { snake: "statuses", wire: "statuses", location: FieldLocation::Query },
+        FieldSpec { snake: "before_enqueued_at", wire: "beforeEnqueuedAt", location: FieldLocation::Query },
+        FieldSpec { snake: "after_enqueued_at", wire: "afterEnqueuedAt", location: FieldLocation::Query },
+        FieldSpec { snake: "before_started_at", wire: "beforeStartedAt", location: FieldLocation::Query },
+        FieldSpec { snake: "after_started_at", wire: "afterStartedAt", location: FieldLocation::Query },
+        FieldSpec { snake: "before_finished_at", wire: "beforeFinishedAt", location: FieldLocation::Query },
+        FieldSpec { snake: "after_finished_at", wire: "afterFinishedAt", location: FieldLocation::Query },
+        FieldSpec { snake: "canceled_by", wire: "canceledBy", location: FieldLocation::Query },
+        FieldSpec { snake: "limit", wire: "limit", location: FieldLocation::Query },
+        FieldSpec { snake: "from", wire: "from", location: FieldLocation::Query },
     ],
     auth: &[
     ],
@@ -1446,19 +2333,19 @@ const OP_TASKS_CANCEL_TASKS: OpSpec = OpSpec {
     method: "POST",
     path_template: "/tasks/cancel",
     fields: &[
-        FieldSpec { snake: "uids", location: FieldLocation::Query },
-        FieldSpec { snake: "index_uids", location: FieldLocation::Query },
-        FieldSpec { snake: "types", location: FieldLocation::Query },
-        FieldSpec { snake: "statuses", location: FieldLocation::Query },
-        FieldSpec { snake: "before_enqueued_at", location: FieldLocation::Query },
-        FieldSpec { snake: "after_enqueued_at", location: FieldLocation::Query },
-        FieldSpec { snake: "before_started_at", location: FieldLocation::Query },
-        FieldSpec { snake: "after_started_at", location: FieldLocation::Query },
-        FieldSpec { snake: "before_finished_at", location: FieldLocation::Query },
-        FieldSpec { snake: "after_finished_at", location: FieldLocation::Query },
-        FieldSpec { snake: "canceled_by", location: FieldLocation::Query },
-        FieldSpec { snake: "limit", location: FieldLocation::Query },
-        FieldSpec { snake: "from", location: FieldLocation::Query },
+        FieldSpec { snake: "uids", wire: "uids", location: FieldLocation::Query },
+        FieldSpec { snake: "index_uids", wire: "indexUids", location: FieldLocation::Query },
+        FieldSpec { snake: "types", wire: "types", location: FieldLocation::Query },
+        FieldSpec { snake: "statuses", wire: "statuses", location: FieldLocation::Query },
+        FieldSpec { snake: "before_enqueued_at", wire: "beforeEnqueuedAt", location: FieldLocation::Query },
+        FieldSpec { snake: "after_enqueued_at", wire: "afterEnqueuedAt", location: FieldLocation::Query },
+        FieldSpec { snake: "before_started_at", wire: "beforeStartedAt", location: FieldLocation::Query },
+        FieldSpec { snake: "after_started_at", wire: "afterStartedAt", location: FieldLocation::Query },
+        FieldSpec { snake: "before_finished_at", wire: "beforeFinishedAt", location: FieldLocation::Query },
+        FieldSpec { snake: "after_finished_at", wire: "afterFinishedAt", location: FieldLocation::Query },
+        FieldSpec { snake: "canceled_by", wire: "canceledBy", location: FieldLocation::Query },
+        FieldSpec { snake: "limit", wire: "limit", location: FieldLocation::Query },
+        FieldSpec { snake: "from", wire: "from", location: FieldLocation::Query },
     ],
     auth: &[
     ],
@@ -1518,21 +2405,77 @@ fn iface_tasks__cancel_tasks_params__to_json(p: &iface_tasks::CancelTasksParams)
     Value::Object(m)
 }
 
+fn iface_tasks__get_all_tasks__ok(body: String) -> Result<String, crate::runtime::DispatchError> {
+    Ok(body)
+}
+
+fn iface_tasks__get_all_tasks__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
+fn iface_tasks__delete_tasks__ok(body: String) -> Result<String, crate::runtime::DispatchError> {
+    Ok(body)
+}
+
+fn iface_tasks__delete_tasks__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
+fn iface_tasks__get_one_task__ok(body: String) -> Result<String, crate::runtime::DispatchError> {
+    Ok(body)
+}
+
+fn iface_tasks__get_one_task__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
+fn iface_tasks__cancel_tasks__ok(body: String) -> Result<String, crate::runtime::DispatchError> {
+    Ok(body)
+}
+
+fn iface_tasks__cancel_tasks__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
 impl iface_tasks::Guest for crate::Component {
     fn get_all_tasks(params: iface_tasks::GetAllTasksParams) -> Result<String, String> {
         let json = iface_tasks__get_all_tasks_params__to_json(&params);
-        dispatch(&OP_TASKS_GET_ALL_TASKS, json)
+        match dispatch(&OP_TASKS_GET_ALL_TASKS, json).and_then(iface_tasks__get_all_tasks__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_tasks__get_all_tasks__err(e)),
+        }
     }
     fn delete_tasks(params: iface_tasks::DeleteTasksParams) -> Result<String, String> {
         let json = iface_tasks__delete_tasks_params__to_json(&params);
-        dispatch(&OP_TASKS_DELETE_TASKS, json)
+        match dispatch(&OP_TASKS_DELETE_TASKS, json).and_then(iface_tasks__delete_tasks__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_tasks__delete_tasks__err(e)),
+        }
     }
     fn get_one_task() -> Result<String, String> {
-        dispatch(&OP_TASKS_GET_ONE_TASK, Value::Object(Map::new()))
+        match dispatch(&OP_TASKS_GET_ONE_TASK, Value::Object(Map::new())).and_then(iface_tasks__get_one_task__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_tasks__get_one_task__err(e)),
+        }
     }
     fn cancel_tasks(params: iface_tasks::CancelTasksParams) -> Result<String, String> {
         let json = iface_tasks__cancel_tasks_params__to_json(&params);
-        dispatch(&OP_TASKS_CANCEL_TASKS, json)
+        match dispatch(&OP_TASKS_CANCEL_TASKS, json).and_then(iface_tasks__cancel_tasks__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_tasks__cancel_tasks__err(e)),
+        }
     }
 }
 

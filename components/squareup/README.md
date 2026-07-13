@@ -21,8 +21,8 @@ triggered.
 
 | Setting | Value |
 | --- | --- |
-| Package | `autostamp:squareup@0.3.0` |
-| Published version | `0.3.0+squareup-2.0` |
+| Package | `autostamp:squareup@0.5.0` |
+| Published version | `0.5.0+squareup-2.0` |
 | Tag filter | all tags |
 | Operations generated | 200 |
 | Infer API-key credentials | enabled — not triggered |

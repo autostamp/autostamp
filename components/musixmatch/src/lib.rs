@@ -44,10 +44,15 @@ pub(crate) enum FieldLocation {
     Body,
 }
 
-/// A single operation parameter: the snake-case key it carries in the params JSON and where
-/// it belongs in the request.
+/// A single operation parameter. `snake` keys the field in the internal params JSON (and, for a
+/// path field, matches the `{snake}` placeholder in the path template); `wire` is the verbatim name
+/// the field takes on the HTTP wire (query key, header name, or body property). The two differ
+/// whenever the source name isn't already snake_case (e.g. `dryRun` → snake `dry_run`, wire
+/// `dryRun`), and let distinct inputs that share a snake key (`DateCreated`, `DateCreated<`) still
+/// travel under their true names.
 pub(crate) struct FieldSpec {
     pub(crate) snake: &'static str,
+    pub(crate) wire: &'static str,
     pub(crate) location: FieldLocation,
 }
 
@@ -71,6 +76,16 @@ pub(crate) struct AuthApply {
     pub(crate) kind: AuthKind,
 }
 
+/// The failure modes of [`dispatch`], kept structured so each generated operation can map them
+/// onto its own typed error: an `Http` failure carries the response status and body (routed to
+/// the matching error-variant case), while a `Transport` failure carries a message for the
+/// catch-all case (a secret lookup, connection, or decode failure that never produced an HTTP
+/// status).
+pub(crate) enum DispatchError {
+    Http { status: u16, body: String },
+    Transport(String),
+}
+
 /// A single API operation: HTTP method, path template (with `{snake}` placeholders), the
 /// parameter fields, and the security schemes to apply.
 pub(crate) struct OpSpec {
@@ -81,8 +96,9 @@ pub(crate) struct OpSpec {
 }
 
 /// Execute `op` with the supplied `params` (a JSON object keyed by snake-case field names)
-/// and return the response body as a string, or an error message.
-pub(crate) fn dispatch(op: &OpSpec, params: Value) -> Result<String, String> {
+/// and return the raw 2xx response body, or a structured [`DispatchError`] the caller maps
+/// onto the operation's typed error.
+pub(crate) fn dispatch(op: &OpSpec, params: Value) -> Result<String, DispatchError> {
     let obj = match &params {
         Value::Object(map) => Some(map),
         _ => None,
@@ -105,10 +121,10 @@ pub(crate) fn dispatch(op: &OpSpec, params: Value) -> Result<String, String> {
                 let placeholder = format!("{{{}}}", field.snake);
                 path = path.replace(&placeholder, &percent_encode(&scalar(value)));
             }
-            FieldLocation::Query => query.push((field.snake.to_string(), scalar(value))),
-            FieldLocation::Header => headers.push((field.snake.to_string(), scalar(value))),
+            FieldLocation::Query => query.push((field.wire.to_string(), scalar(value))),
+            FieldLocation::Header => headers.push((field.wire.to_string(), scalar(value))),
             FieldLocation::Body => {
-                body.insert(field.snake.to_string(), value.clone());
+                body.insert(field.wire.to_string(), value.clone());
             }
         }
     }
@@ -116,7 +132,7 @@ pub(crate) fn dispatch(op: &OpSpec, params: Value) -> Result<String, String> {
     // Apply each resolved security scheme, sourcing its value from wasmcloud:secrets.
     let mut cookies: Vec<String> = Vec::new();
     for apply in op.auth {
-        let secret = fetch_secret(apply.secret_key)?;
+        let secret = fetch_secret(apply.secret_key).map_err(DispatchError::Transport)?;
         match &apply.kind {
             AuthKind::Bearer => headers.push(("authorization".into(), format!("Bearer {secret}"))),
             AuthKind::Basic => {
@@ -177,17 +193,18 @@ fn fetch_secret(key: &str) -> Result<String, String> {
 }
 
 /// Build and send the outgoing request with `wstd`, returning the response body on a 2xx
-/// status. The generated guest exports are synchronous, so the async `wstd` client is driven
-/// to completion on a local reactor via `wstd::runtime::block_on`.
+/// status and a structured [`DispatchError`] otherwise. The generated guest exports are
+/// synchronous, so the async `wstd` client is driven to completion on a local reactor via
+/// `wstd::runtime::block_on`.
 fn perform(
     method: &str,
     path_with_query: &str,
     headers: &[(String, String)],
     body: &[u8],
-) -> Result<String, String> {
+) -> Result<String, DispatchError> {
     let url = join_url(crate::BASE_URL, path_with_query);
     let method = Method::from_bytes(method.as_bytes())
-        .map_err(|err| format!("invalid HTTP method `{method}`: {err}"))?;
+        .map_err(|err| DispatchError::Transport(format!("invalid HTTP method `{method}`: {err}")))?;
 
     let mut builder = Request::builder().method(method).uri(url);
     for (name, value) in headers {
@@ -199,27 +216,29 @@ fn perform(
         } else {
             Body::from(body.to_vec())
         })
-        .map_err(|err| format!("failed to build request: {err}"))?;
+        .map_err(|err| DispatchError::Transport(format!("failed to build request: {err}")))?;
 
     wstd::runtime::block_on(async move {
         let client = Client::new();
         let response = client
             .send(request)
             .await
-            .map_err(|err| format!("request failed: {err:#}"))?;
+            .map_err(|err| DispatchError::Transport(format!("request failed: {err:#}")))?;
 
         let status = response.status().as_u16();
         let mut response_body = response.into_body();
-        let bytes = response_body
-            .contents()
-            .await
-            .map_err(|err| format!("failed to read response body: {err:#}"))?;
+        let bytes = response_body.contents().await.map_err(|err| {
+            DispatchError::Transport(format!("failed to read response body: {err:#}"))
+        })?;
         let body_text = String::from_utf8_lossy(bytes).into_owned();
 
         if (200..300).contains(&status) {
             Ok(body_text)
         } else {
-            Err(format!("HTTP {status}: {body_text}"))
+            Err(DispatchError::Http {
+                status,
+                body: body_text,
+            })
         }
     })
 }
@@ -288,9 +307,9 @@ const OP_ALBUM_GET_ALBUM_GET: OpSpec = OpSpec {
     method: "GET",
     path_template: "/album.get",
     fields: &[
-        FieldSpec { snake: "format", location: FieldLocation::Query },
-        FieldSpec { snake: "callback", location: FieldLocation::Query },
-        FieldSpec { snake: "album_id", location: FieldLocation::Query },
+        FieldSpec { snake: "format", wire: "format", location: FieldLocation::Query },
+        FieldSpec { snake: "callback", wire: "callback", location: FieldLocation::Query },
+        FieldSpec { snake: "album_id", wire: "album_id", location: FieldLocation::Query },
     ],
     auth: &[
     ],
@@ -300,17 +319,131 @@ const OP_ALBUM_GET_ARTIST_ALBUMS_GET: OpSpec = OpSpec {
     method: "GET",
     path_template: "/artist.albums.get",
     fields: &[
-        FieldSpec { snake: "format", location: FieldLocation::Query },
-        FieldSpec { snake: "callback", location: FieldLocation::Query },
-        FieldSpec { snake: "artist_id", location: FieldLocation::Query },
-        FieldSpec { snake: "s_release_date", location: FieldLocation::Query },
-        FieldSpec { snake: "g_album_name", location: FieldLocation::Query },
-        FieldSpec { snake: "page_size", location: FieldLocation::Query },
-        FieldSpec { snake: "page", location: FieldLocation::Query },
+        FieldSpec { snake: "format", wire: "format", location: FieldLocation::Query },
+        FieldSpec { snake: "callback", wire: "callback", location: FieldLocation::Query },
+        FieldSpec { snake: "artist_id", wire: "artist_id", location: FieldLocation::Query },
+        FieldSpec { snake: "s_release_date", wire: "s_release_date", location: FieldLocation::Query },
+        FieldSpec { snake: "g_album_name", wire: "g_album_name", location: FieldLocation::Query },
+        FieldSpec { snake: "page_size", wire: "page_size", location: FieldLocation::Query },
+        FieldSpec { snake: "page", wire: "page", location: FieldLocation::Query },
     ],
     auth: &[
     ],
 };
+
+fn iface_album__get_album_get_response__to_json(p: &iface_album::GetAlbumGetResponse) -> Value {
+    let mut m = Map::new();
+    m.insert("message".into(), match (&p.message) { Some(v) => iface_album__get_album_get_response_message__to_json(v), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_album__get_album_get_response_message__to_json(p: &iface_album::GetAlbumGetResponseMessage) -> Value {
+    let mut m = Map::new();
+    m.insert("body".into(), match (&p.body) { Some(v) => iface_album__get_album_get_response_message_body__to_json(v), None => Value::Null });
+    m.insert("header".into(), match (&p.header) { Some(v) => iface_album__get_album_get_response_message_header__to_json(v), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_album__get_album_get_response_message_body__to_json(p: &iface_album::GetAlbumGetResponseMessageBody) -> Value {
+    let mut m = Map::new();
+    m.insert("album".into(), match (&p.album) { Some(v) => iface_album__album__to_json(v), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_album__album__to_json(p: &iface_album::Album) -> Value {
+    let mut m = Map::new();
+    m.insert("album_copyright".into(), match (&p.album_copyright) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("album_coverart_100x100".into(), match (&p.album_coverart_v100x100) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("album_coverart_350x350".into(), match (&p.album_coverart_v350x350) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("album_coverart_500x500".into(), match (&p.album_coverart_v500x500) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("album_coverart_800x800".into(), match (&p.album_coverart_v800x800) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("album_edit_url".into(), match (&p.album_edit_url) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("album_id".into(), match (&p.album_id) { Some(v) => serde_json::Number::from_f64(*(v)).map(Value::Number).unwrap_or(Value::Null), None => Value::Null });
+    m.insert("album_label".into(), match (&p.album_label) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("album_mbid".into(), match (&p.album_mbid) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("album_name".into(), match (&p.album_name) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("album_pline".into(), match (&p.album_pline) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("album_rating".into(), match (&p.album_rating) { Some(v) => serde_json::Number::from_f64(*(v)).map(Value::Number).unwrap_or(Value::Null), None => Value::Null });
+    m.insert("album_release_date".into(), match (&p.album_release_date) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("album_release_type".into(), match (&p.album_release_type) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("album_track_count".into(), match (&p.album_track_count) { Some(v) => serde_json::Number::from_f64(*(v)).map(Value::Number).unwrap_or(Value::Null), None => Value::Null });
+    m.insert("album_vanity_id".into(), match (&p.album_vanity_id) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("artist_id".into(), match (&p.artist_id) { Some(v) => serde_json::Number::from_f64(*(v)).map(Value::Number).unwrap_or(Value::Null), None => Value::Null });
+    m.insert("artist_name".into(), match (&p.artist_name) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("primary_genres".into(), match (&p.primary_genres) { Some(v) => iface_album__album_primary_genres__to_json(v), None => Value::Null });
+    m.insert("restricted".into(), match (&p.restricted) { Some(v) => serde_json::Number::from_f64(*(v)).map(Value::Number).unwrap_or(Value::Null), None => Value::Null });
+    m.insert("secondary_genres".into(), match (&p.secondary_genres) { Some(v) => iface_album__album_secondary_genres__to_json(v), None => Value::Null });
+    m.insert("updated_time".into(), match (&p.updated_time) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_album__album_primary_genres__to_json(p: &iface_album::AlbumPrimaryGenres) -> Value {
+    let mut m = Map::new();
+    m.insert("music_genre_list".into(), match (&p.music_genre_list) { Some(v) => Value::Array((v).iter().map(|v| iface_album__album_primary_genres_music_genre_list_item__to_json(v)).collect()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_album__album_primary_genres_music_genre_list_item__to_json(p: &iface_album::AlbumPrimaryGenresMusicGenreListItem) -> Value {
+    let mut m = Map::new();
+    m.insert("music_genre".into(), match (&p.music_genre) { Some(v) => iface_album__album_primary_genres_music_genre_list_item_music_genre__to_json(v), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_album__album_primary_genres_music_genre_list_item_music_genre__to_json(p: &iface_album::AlbumPrimaryGenresMusicGenreListItemMusicGenre) -> Value {
+    let mut m = Map::new();
+    m.insert("music_genre_id".into(), match (&p.music_genre_id) { Some(v) => serde_json::Number::from_f64(*(v)).map(Value::Number).unwrap_or(Value::Null), None => Value::Null });
+    m.insert("music_genre_name".into(), match (&p.music_genre_name) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("music_genre_name_extended".into(), match (&p.music_genre_name_extended) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("music_genre_parent_id".into(), match (&p.music_genre_parent_id) { Some(v) => serde_json::Number::from_f64(*(v)).map(Value::Number).unwrap_or(Value::Null), None => Value::Null });
+    m.insert("music_genre_vanity".into(), match (&p.music_genre_vanity) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_album__album_secondary_genres__to_json(p: &iface_album::AlbumSecondaryGenres) -> Value {
+    let mut m = Map::new();
+    m.insert("music_genre_list".into(), match (&p.music_genre_list) { Some(v) => Value::Array((v).iter().map(|v| Value::String((v).clone())).collect()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_album__get_album_get_response_message_header__to_json(p: &iface_album::GetAlbumGetResponseMessageHeader) -> Value {
+    let mut m = Map::new();
+    m.insert("execute_time".into(), match (&p.execute_time) { Some(v) => serde_json::Number::from_f64(*(v)).map(Value::Number).unwrap_or(Value::Null), None => Value::Null });
+    m.insert("status_code".into(), match (&p.status_code) { Some(v) => serde_json::Number::from_f64(*(v)).map(Value::Number).unwrap_or(Value::Null), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_album__get_artist_albums_get_response__to_json(p: &iface_album::GetArtistAlbumsGetResponse) -> Value {
+    let mut m = Map::new();
+    m.insert("message".into(), match (&p.message) { Some(v) => iface_album__get_artist_albums_get_response_message__to_json(v), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_album__get_artist_albums_get_response_message__to_json(p: &iface_album::GetArtistAlbumsGetResponseMessage) -> Value {
+    let mut m = Map::new();
+    m.insert("body".into(), match (&p.body) { Some(v) => iface_album__get_artist_albums_get_response_message_body__to_json(v), None => Value::Null });
+    m.insert("header".into(), match (&p.header) { Some(v) => iface_album__get_artist_albums_get_response_message_header__to_json(v), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_album__get_artist_albums_get_response_message_body__to_json(p: &iface_album::GetArtistAlbumsGetResponseMessageBody) -> Value {
+    let mut m = Map::new();
+    m.insert("album_list".into(), match (&p.album_list) { Some(v) => Value::Array((v).iter().map(|v| iface_album__get_artist_albums_get_response_message_body_album_list_item__to_json(v)).collect()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_album__get_artist_albums_get_response_message_body_album_list_item__to_json(p: &iface_album::GetArtistAlbumsGetResponseMessageBodyAlbumListItem) -> Value {
+    let mut m = Map::new();
+    m.insert("album".into(), match (&p.album) { Some(v) => iface_album__album__to_json(v), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_album__get_artist_albums_get_response_message_header__to_json(p: &iface_album::GetArtistAlbumsGetResponseMessageHeader) -> Value {
+    let mut m = Map::new();
+    m.insert("available".into(), match (&p.available) { Some(v) => serde_json::Number::from_f64(*(v)).map(Value::Number).unwrap_or(Value::Null), None => Value::Null });
+    m.insert("execute_time".into(), match (&p.execute_time) { Some(v) => serde_json::Number::from_f64(*(v)).map(Value::Number).unwrap_or(Value::Null), None => Value::Null });
+    m.insert("status_code".into(), match (&p.status_code) { Some(v) => serde_json::Number::from_f64(*(v)).map(Value::Number).unwrap_or(Value::Null), None => Value::Null });
+    Value::Object(m)
+}
 
 fn iface_album__get_album_get_params__to_json(p: &iface_album::GetAlbumGetParams) -> Value {
     let mut m = Map::new();
@@ -332,14 +465,184 @@ fn iface_album__get_artist_albums_get_params__to_json(p: &iface_album::GetArtist
     Value::Object(m)
 }
 
-impl iface_album::Guest for crate::Component {
-    fn get_album_get(params: iface_album::GetAlbumGetParams) -> Result<String, String> {
-        let json = iface_album__get_album_get_params__to_json(&params);
-        dispatch(&OP_ALBUM_GET_ALBUM_GET, json)
+fn iface_album__get_album_get_response__from_json(v: &Value) -> Option<iface_album::GetAlbumGetResponse> {
+    let m = v.as_object()?;
+    Some(iface_album::GetAlbumGetResponse {
+        message: m.get("message").filter(|v| !v.is_null()).and_then(|v| iface_album__get_album_get_response_message__from_json(v)),
+    })
+}
+
+fn iface_album__get_album_get_response_message__from_json(v: &Value) -> Option<iface_album::GetAlbumGetResponseMessage> {
+    let m = v.as_object()?;
+    Some(iface_album::GetAlbumGetResponseMessage {
+        body: m.get("body").filter(|v| !v.is_null()).and_then(|v| iface_album__get_album_get_response_message_body__from_json(v)),
+        header: m.get("header").filter(|v| !v.is_null()).and_then(|v| iface_album__get_album_get_response_message_header__from_json(v)),
+    })
+}
+
+fn iface_album__get_album_get_response_message_body__from_json(v: &Value) -> Option<iface_album::GetAlbumGetResponseMessageBody> {
+    let m = v.as_object()?;
+    Some(iface_album::GetAlbumGetResponseMessageBody {
+        album: m.get("album").filter(|v| !v.is_null()).and_then(|v| iface_album__album__from_json(v)),
+    })
+}
+
+fn iface_album__album__from_json(v: &Value) -> Option<iface_album::Album> {
+    let m = v.as_object()?;
+    Some(iface_album::Album {
+        album_copyright: m.get("album_copyright").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        album_coverart_v100x100: m.get("album_coverart_100x100").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        album_coverart_v350x350: m.get("album_coverart_350x350").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        album_coverart_v500x500: m.get("album_coverart_500x500").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        album_coverart_v800x800: m.get("album_coverart_800x800").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        album_edit_url: m.get("album_edit_url").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        album_id: m.get("album_id").filter(|v| !v.is_null()).and_then(|v| (v).as_f64()),
+        album_label: m.get("album_label").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        album_mbid: m.get("album_mbid").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        album_name: m.get("album_name").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        album_pline: m.get("album_pline").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        album_rating: m.get("album_rating").filter(|v| !v.is_null()).and_then(|v| (v).as_f64()),
+        album_release_date: m.get("album_release_date").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        album_release_type: m.get("album_release_type").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        album_track_count: m.get("album_track_count").filter(|v| !v.is_null()).and_then(|v| (v).as_f64()),
+        album_vanity_id: m.get("album_vanity_id").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        artist_id: m.get("artist_id").filter(|v| !v.is_null()).and_then(|v| (v).as_f64()),
+        artist_name: m.get("artist_name").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        primary_genres: m.get("primary_genres").filter(|v| !v.is_null()).and_then(|v| iface_album__album_primary_genres__from_json(v)),
+        restricted: m.get("restricted").filter(|v| !v.is_null()).and_then(|v| (v).as_f64()),
+        secondary_genres: m.get("secondary_genres").filter(|v| !v.is_null()).and_then(|v| iface_album__album_secondary_genres__from_json(v)),
+        updated_time: m.get("updated_time").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    })
+}
+
+fn iface_album__album_primary_genres__from_json(v: &Value) -> Option<iface_album::AlbumPrimaryGenres> {
+    let m = v.as_object()?;
+    Some(iface_album::AlbumPrimaryGenres {
+        music_genre_list: m.get("music_genre_list").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| iface_album__album_primary_genres_music_genre_list_item__from_json(x)).collect())),
+    })
+}
+
+fn iface_album__album_primary_genres_music_genre_list_item__from_json(v: &Value) -> Option<iface_album::AlbumPrimaryGenresMusicGenreListItem> {
+    let m = v.as_object()?;
+    Some(iface_album::AlbumPrimaryGenresMusicGenreListItem {
+        music_genre: m.get("music_genre").filter(|v| !v.is_null()).and_then(|v| iface_album__album_primary_genres_music_genre_list_item_music_genre__from_json(v)),
+    })
+}
+
+fn iface_album__album_primary_genres_music_genre_list_item_music_genre__from_json(v: &Value) -> Option<iface_album::AlbumPrimaryGenresMusicGenreListItemMusicGenre> {
+    let m = v.as_object()?;
+    Some(iface_album::AlbumPrimaryGenresMusicGenreListItemMusicGenre {
+        music_genre_id: m.get("music_genre_id").filter(|v| !v.is_null()).and_then(|v| (v).as_f64()),
+        music_genre_name: m.get("music_genre_name").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        music_genre_name_extended: m.get("music_genre_name_extended").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        music_genre_parent_id: m.get("music_genre_parent_id").filter(|v| !v.is_null()).and_then(|v| (v).as_f64()),
+        music_genre_vanity: m.get("music_genre_vanity").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    })
+}
+
+fn iface_album__album_secondary_genres__from_json(v: &Value) -> Option<iface_album::AlbumSecondaryGenres> {
+    let m = v.as_object()?;
+    Some(iface_album::AlbumSecondaryGenres {
+        music_genre_list: m.get("music_genre_list").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| (x).as_str().map(|s| s.to_string())).collect())),
+    })
+}
+
+fn iface_album__get_album_get_response_message_header__from_json(v: &Value) -> Option<iface_album::GetAlbumGetResponseMessageHeader> {
+    let m = v.as_object()?;
+    Some(iface_album::GetAlbumGetResponseMessageHeader {
+        execute_time: m.get("execute_time").filter(|v| !v.is_null()).and_then(|v| (v).as_f64()),
+        status_code: m.get("status_code").filter(|v| !v.is_null()).and_then(|v| (v).as_f64()),
+    })
+}
+
+fn iface_album__get_artist_albums_get_response__from_json(v: &Value) -> Option<iface_album::GetArtistAlbumsGetResponse> {
+    let m = v.as_object()?;
+    Some(iface_album::GetArtistAlbumsGetResponse {
+        message: m.get("message").filter(|v| !v.is_null()).and_then(|v| iface_album__get_artist_albums_get_response_message__from_json(v)),
+    })
+}
+
+fn iface_album__get_artist_albums_get_response_message__from_json(v: &Value) -> Option<iface_album::GetArtistAlbumsGetResponseMessage> {
+    let m = v.as_object()?;
+    Some(iface_album::GetArtistAlbumsGetResponseMessage {
+        body: m.get("body").filter(|v| !v.is_null()).and_then(|v| iface_album__get_artist_albums_get_response_message_body__from_json(v)),
+        header: m.get("header").filter(|v| !v.is_null()).and_then(|v| iface_album__get_artist_albums_get_response_message_header__from_json(v)),
+    })
+}
+
+fn iface_album__get_artist_albums_get_response_message_body__from_json(v: &Value) -> Option<iface_album::GetArtistAlbumsGetResponseMessageBody> {
+    let m = v.as_object()?;
+    Some(iface_album::GetArtistAlbumsGetResponseMessageBody {
+        album_list: m.get("album_list").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| iface_album__get_artist_albums_get_response_message_body_album_list_item__from_json(x)).collect())),
+    })
+}
+
+fn iface_album__get_artist_albums_get_response_message_body_album_list_item__from_json(v: &Value) -> Option<iface_album::GetArtistAlbumsGetResponseMessageBodyAlbumListItem> {
+    let m = v.as_object()?;
+    Some(iface_album::GetArtistAlbumsGetResponseMessageBodyAlbumListItem {
+        album: m.get("album").filter(|v| !v.is_null()).and_then(|v| iface_album__album__from_json(v)),
+    })
+}
+
+fn iface_album__get_artist_albums_get_response_message_header__from_json(v: &Value) -> Option<iface_album::GetArtistAlbumsGetResponseMessageHeader> {
+    let m = v.as_object()?;
+    Some(iface_album::GetArtistAlbumsGetResponseMessageHeader {
+        available: m.get("available").filter(|v| !v.is_null()).and_then(|v| (v).as_f64()),
+        execute_time: m.get("execute_time").filter(|v| !v.is_null()).and_then(|v| (v).as_f64()),
+        status_code: m.get("status_code").filter(|v| !v.is_null()).and_then(|v| (v).as_f64()),
+    })
+}
+
+fn iface_album__get_album_get__ok(body: String) -> Result<iface_album::GetAlbumGetResponse, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match iface_album__get_album_get_response__from_json(&v) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
     }
-    fn get_artist_albums_get(params: iface_album::GetArtistAlbumsGetParams) -> Result<String, String> {
+}
+
+fn iface_album__get_album_get__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
+fn iface_album__get_artist_albums_get__ok(body: String) -> Result<iface_album::GetArtistAlbumsGetResponse, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match iface_album__get_artist_albums_get_response__from_json(&v) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_album__get_artist_albums_get__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
+impl iface_album::Guest for crate::Component {
+    fn get_album_get(params: iface_album::GetAlbumGetParams) -> Result<iface_album::GetAlbumGetResponse, String> {
+        let json = iface_album__get_album_get_params__to_json(&params);
+        match dispatch(&OP_ALBUM_GET_ALBUM_GET, json).and_then(iface_album__get_album_get__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_album__get_album_get__err(e)),
+        }
+    }
+    fn get_artist_albums_get(params: iface_album::GetArtistAlbumsGetParams) -> Result<iface_album::GetArtistAlbumsGetResponse, String> {
         let json = iface_album__get_artist_albums_get_params__to_json(&params);
-        dispatch(&OP_ALBUM_GET_ARTIST_ALBUMS_GET, json)
+        match dispatch(&OP_ALBUM_GET_ARTIST_ALBUMS_GET, json).and_then(iface_album__get_artist_albums_get__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_album__get_artist_albums_get__err(e)),
+        }
     }
 }
 use crate::exports::autostamp::musixmatch::track as iface_track;
@@ -348,12 +651,12 @@ const OP_TRACK_GET_ALBUM_TRACKS_GET: OpSpec = OpSpec {
     method: "GET",
     path_template: "/album.tracks.get",
     fields: &[
-        FieldSpec { snake: "format", location: FieldLocation::Query },
-        FieldSpec { snake: "callback", location: FieldLocation::Query },
-        FieldSpec { snake: "album_id", location: FieldLocation::Query },
-        FieldSpec { snake: "f_has_lyrics", location: FieldLocation::Query },
-        FieldSpec { snake: "page", location: FieldLocation::Query },
-        FieldSpec { snake: "page_size", location: FieldLocation::Query },
+        FieldSpec { snake: "format", wire: "format", location: FieldLocation::Query },
+        FieldSpec { snake: "callback", wire: "callback", location: FieldLocation::Query },
+        FieldSpec { snake: "album_id", wire: "album_id", location: FieldLocation::Query },
+        FieldSpec { snake: "f_has_lyrics", wire: "f_has_lyrics", location: FieldLocation::Query },
+        FieldSpec { snake: "page", wire: "page", location: FieldLocation::Query },
+        FieldSpec { snake: "page_size", wire: "page_size", location: FieldLocation::Query },
     ],
     auth: &[
     ],
@@ -363,12 +666,12 @@ const OP_TRACK_GET_CHART_TRACKS_GET: OpSpec = OpSpec {
     method: "GET",
     path_template: "/chart.tracks.get",
     fields: &[
-        FieldSpec { snake: "format", location: FieldLocation::Query },
-        FieldSpec { snake: "callback", location: FieldLocation::Query },
-        FieldSpec { snake: "page", location: FieldLocation::Query },
-        FieldSpec { snake: "page_size", location: FieldLocation::Query },
-        FieldSpec { snake: "country", location: FieldLocation::Query },
-        FieldSpec { snake: "f_has_lyrics", location: FieldLocation::Query },
+        FieldSpec { snake: "format", wire: "format", location: FieldLocation::Query },
+        FieldSpec { snake: "callback", wire: "callback", location: FieldLocation::Query },
+        FieldSpec { snake: "page", wire: "page", location: FieldLocation::Query },
+        FieldSpec { snake: "page_size", wire: "page_size", location: FieldLocation::Query },
+        FieldSpec { snake: "country", wire: "country", location: FieldLocation::Query },
+        FieldSpec { snake: "f_has_lyrics", wire: "f_has_lyrics", location: FieldLocation::Query },
     ],
     auth: &[
     ],
@@ -378,12 +681,12 @@ const OP_TRACK_GET_MATCHER_TRACK_GET: OpSpec = OpSpec {
     method: "GET",
     path_template: "/matcher.track.get",
     fields: &[
-        FieldSpec { snake: "format", location: FieldLocation::Query },
-        FieldSpec { snake: "callback", location: FieldLocation::Query },
-        FieldSpec { snake: "q_artist", location: FieldLocation::Query },
-        FieldSpec { snake: "q_track", location: FieldLocation::Query },
-        FieldSpec { snake: "f_has_lyrics", location: FieldLocation::Query },
-        FieldSpec { snake: "f_has_subtitle", location: FieldLocation::Query },
+        FieldSpec { snake: "format", wire: "format", location: FieldLocation::Query },
+        FieldSpec { snake: "callback", wire: "callback", location: FieldLocation::Query },
+        FieldSpec { snake: "q_artist", wire: "q_artist", location: FieldLocation::Query },
+        FieldSpec { snake: "q_track", wire: "q_track", location: FieldLocation::Query },
+        FieldSpec { snake: "f_has_lyrics", wire: "f_has_lyrics", location: FieldLocation::Query },
+        FieldSpec { snake: "f_has_subtitle", wire: "f_has_subtitle", location: FieldLocation::Query },
     ],
     auth: &[
     ],
@@ -393,9 +696,9 @@ const OP_TRACK_GET_TRACK_GET: OpSpec = OpSpec {
     method: "GET",
     path_template: "/track.get",
     fields: &[
-        FieldSpec { snake: "format", location: FieldLocation::Query },
-        FieldSpec { snake: "callback", location: FieldLocation::Query },
-        FieldSpec { snake: "track_id", location: FieldLocation::Query },
+        FieldSpec { snake: "format", wire: "format", location: FieldLocation::Query },
+        FieldSpec { snake: "callback", wire: "callback", location: FieldLocation::Query },
+        FieldSpec { snake: "track_id", wire: "track_id", location: FieldLocation::Query },
     ],
     auth: &[
     ],
@@ -405,24 +708,253 @@ const OP_TRACK_GET_TRACK_SEARCH: OpSpec = OpSpec {
     method: "GET",
     path_template: "/track.search",
     fields: &[
-        FieldSpec { snake: "format", location: FieldLocation::Query },
-        FieldSpec { snake: "callback", location: FieldLocation::Query },
-        FieldSpec { snake: "q_track", location: FieldLocation::Query },
-        FieldSpec { snake: "q_artist", location: FieldLocation::Query },
-        FieldSpec { snake: "q_lyrics", location: FieldLocation::Query },
-        FieldSpec { snake: "f_artist_id", location: FieldLocation::Query },
-        FieldSpec { snake: "f_music_genre_id", location: FieldLocation::Query },
-        FieldSpec { snake: "f_lyrics_language", location: FieldLocation::Query },
-        FieldSpec { snake: "f_has_lyrics", location: FieldLocation::Query },
-        FieldSpec { snake: "s_artist_rating", location: FieldLocation::Query },
-        FieldSpec { snake: "s_track_rating", location: FieldLocation::Query },
-        FieldSpec { snake: "quorum_factor", location: FieldLocation::Query },
-        FieldSpec { snake: "page_size", location: FieldLocation::Query },
-        FieldSpec { snake: "page", location: FieldLocation::Query },
+        FieldSpec { snake: "format", wire: "format", location: FieldLocation::Query },
+        FieldSpec { snake: "callback", wire: "callback", location: FieldLocation::Query },
+        FieldSpec { snake: "q_track", wire: "q_track", location: FieldLocation::Query },
+        FieldSpec { snake: "q_artist", wire: "q_artist", location: FieldLocation::Query },
+        FieldSpec { snake: "q_lyrics", wire: "q_lyrics", location: FieldLocation::Query },
+        FieldSpec { snake: "f_artist_id", wire: "f_artist_id", location: FieldLocation::Query },
+        FieldSpec { snake: "f_music_genre_id", wire: "f_music_genre_id", location: FieldLocation::Query },
+        FieldSpec { snake: "f_lyrics_language", wire: "f_lyrics_language", location: FieldLocation::Query },
+        FieldSpec { snake: "f_has_lyrics", wire: "f_has_lyrics", location: FieldLocation::Query },
+        FieldSpec { snake: "s_artist_rating", wire: "s_artist_rating", location: FieldLocation::Query },
+        FieldSpec { snake: "s_track_rating", wire: "s_track_rating", location: FieldLocation::Query },
+        FieldSpec { snake: "quorum_factor", wire: "quorum_factor", location: FieldLocation::Query },
+        FieldSpec { snake: "page_size", wire: "page_size", location: FieldLocation::Query },
+        FieldSpec { snake: "page", wire: "page", location: FieldLocation::Query },
     ],
     auth: &[
     ],
 };
+
+fn iface_track__get_album_tracks_get_response__to_json(p: &iface_track::GetAlbumTracksGetResponse) -> Value {
+    let mut m = Map::new();
+    m.insert("message".into(), match (&p.message) { Some(v) => iface_track__get_album_tracks_get_response_message__to_json(v), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_track__get_album_tracks_get_response_message__to_json(p: &iface_track::GetAlbumTracksGetResponseMessage) -> Value {
+    let mut m = Map::new();
+    m.insert("body".into(), match (&p.body) { Some(v) => iface_track__get_album_tracks_get_response_message_body__to_json(v), None => Value::Null });
+    m.insert("header".into(), match (&p.header) { Some(v) => iface_track__get_album_tracks_get_response_message_header__to_json(v), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_track__get_album_tracks_get_response_message_body__to_json(p: &iface_track::GetAlbumTracksGetResponseMessageBody) -> Value {
+    let mut m = Map::new();
+    m.insert("track_list".into(), match (&p.track_list) { Some(v) => Value::Array((v).iter().map(|v| iface_track__track__to_json(v)).collect()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_track__track__to_json(p: &iface_track::Track) -> Value {
+    let mut m = Map::new();
+    m.insert("album_coverart_100x100".into(), match (&p.album_coverart_v100x100) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("album_coverart_350x350".into(), match (&p.album_coverart_v350x350) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("album_coverart_500x500".into(), match (&p.album_coverart_v500x500) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("album_coverart_800x800".into(), match (&p.album_coverart_v800x800) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("album_id".into(), match (&p.album_id) { Some(v) => serde_json::Number::from_f64(*(v)).map(Value::Number).unwrap_or(Value::Null), None => Value::Null });
+    m.insert("album_name".into(), match (&p.album_name) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("artist_id".into(), match (&p.artist_id) { Some(v) => serde_json::Number::from_f64(*(v)).map(Value::Number).unwrap_or(Value::Null), None => Value::Null });
+    m.insert("artist_mbid".into(), match (&p.artist_mbid) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("artist_name".into(), match (&p.artist_name) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("commontrack_id".into(), match (&p.commontrack_id) { Some(v) => serde_json::Number::from_f64(*(v)).map(Value::Number).unwrap_or(Value::Null), None => Value::Null });
+    m.insert("commontrack_vanity_id".into(), match (&p.commontrack_vanity_id) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("explicit".into(), match (&p.explicit) { Some(v) => serde_json::Number::from_f64(*(v)).map(Value::Number).unwrap_or(Value::Null), None => Value::Null });
+    m.insert("first_release_date".into(), match (&p.first_release_date) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("has_lyrics".into(), match (&p.has_lyrics) { Some(v) => serde_json::Number::from_f64(*(v)).map(Value::Number).unwrap_or(Value::Null), None => Value::Null });
+    m.insert("has_subtitles".into(), match (&p.has_subtitles) { Some(v) => serde_json::Number::from_f64(*(v)).map(Value::Number).unwrap_or(Value::Null), None => Value::Null });
+    m.insert("instrumental".into(), match (&p.instrumental) { Some(v) => serde_json::Number::from_f64(*(v)).map(Value::Number).unwrap_or(Value::Null), None => Value::Null });
+    m.insert("lyrics_id".into(), match (&p.lyrics_id) { Some(v) => serde_json::Number::from_f64(*(v)).map(Value::Number).unwrap_or(Value::Null), None => Value::Null });
+    m.insert("num_favourite".into(), match (&p.num_favourite) { Some(v) => serde_json::Number::from_f64(*(v)).map(Value::Number).unwrap_or(Value::Null), None => Value::Null });
+    m.insert("primary_genres".into(), match (&p.primary_genres) { Some(v) => iface_track__track_primary_genres__to_json(v), None => Value::Null });
+    m.insert("restricted".into(), match (&p.restricted) { Some(v) => serde_json::Number::from_f64(*(v)).map(Value::Number).unwrap_or(Value::Null), None => Value::Null });
+    m.insert("secondary_genres".into(), match (&p.secondary_genres) { Some(v) => iface_track__track_secondary_genres__to_json(v), None => Value::Null });
+    m.insert("subtitle_id".into(), match (&p.subtitle_id) { Some(v) => serde_json::Number::from_f64(*(v)).map(Value::Number).unwrap_or(Value::Null), None => Value::Null });
+    m.insert("track_edit_url".into(), match (&p.track_edit_url) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("track_id".into(), match (&p.track_id) { Some(v) => serde_json::Number::from_f64(*(v)).map(Value::Number).unwrap_or(Value::Null), None => Value::Null });
+    m.insert("track_isrc".into(), match (&p.track_isrc) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("track_length".into(), match (&p.track_length) { Some(v) => serde_json::Number::from_f64(*(v)).map(Value::Number).unwrap_or(Value::Null), None => Value::Null });
+    m.insert("track_mbid".into(), match (&p.track_mbid) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("track_name".into(), match (&p.track_name) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("track_name_translation_list".into(), match (&p.track_name_translation_list) { Some(v) => Value::Array((v).iter().map(|v| Value::String((v).clone())).collect()), None => Value::Null });
+    m.insert("track_rating".into(), match (&p.track_rating) { Some(v) => serde_json::Number::from_f64(*(v)).map(Value::Number).unwrap_or(Value::Null), None => Value::Null });
+    m.insert("track_share_url".into(), match (&p.track_share_url) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("track_soundcloud_id".into(), match (&p.track_soundcloud_id) { Some(v) => serde_json::Number::from_f64(*(v)).map(Value::Number).unwrap_or(Value::Null), None => Value::Null });
+    m.insert("track_spotify_id".into(), match (&p.track_spotify_id) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("track_xboxmusic_id".into(), match (&p.track_xboxmusic_id) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("updated_time".into(), match (&p.updated_time) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_track__track_primary_genres__to_json(p: &iface_track::TrackPrimaryGenres) -> Value {
+    let mut m = Map::new();
+    m.insert("music_genre_list".into(), match (&p.music_genre_list) { Some(v) => Value::Array((v).iter().map(|v| iface_track__track_primary_genres_music_genre_list_item__to_json(v)).collect()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_track__track_primary_genres_music_genre_list_item__to_json(p: &iface_track::TrackPrimaryGenresMusicGenreListItem) -> Value {
+    let mut m = Map::new();
+    m.insert("music_genre".into(), match (&p.music_genre) { Some(v) => iface_track__track_primary_genres_music_genre_list_item_music_genre__to_json(v), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_track__track_primary_genres_music_genre_list_item_music_genre__to_json(p: &iface_track::TrackPrimaryGenresMusicGenreListItemMusicGenre) -> Value {
+    let mut m = Map::new();
+    m.insert("music_genre_id".into(), match (&p.music_genre_id) { Some(v) => serde_json::Number::from_f64(*(v)).map(Value::Number).unwrap_or(Value::Null), None => Value::Null });
+    m.insert("music_genre_name".into(), match (&p.music_genre_name) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("music_genre_name_extended".into(), match (&p.music_genre_name_extended) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("music_genre_parent_id".into(), match (&p.music_genre_parent_id) { Some(v) => serde_json::Number::from_f64(*(v)).map(Value::Number).unwrap_or(Value::Null), None => Value::Null });
+    m.insert("music_genre_vanity".into(), match (&p.music_genre_vanity) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_track__track_secondary_genres__to_json(p: &iface_track::TrackSecondaryGenres) -> Value {
+    let mut m = Map::new();
+    m.insert("music_genre_list".into(), match (&p.music_genre_list) { Some(v) => Value::Array((v).iter().map(|v| iface_track__track_secondary_genres_music_genre_list_item__to_json(v)).collect()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_track__track_secondary_genres_music_genre_list_item__to_json(p: &iface_track::TrackSecondaryGenresMusicGenreListItem) -> Value {
+    let mut m = Map::new();
+    m.insert("music_genre".into(), match (&p.music_genre) { Some(v) => iface_track__track_secondary_genres_music_genre_list_item_music_genre__to_json(v), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_track__track_secondary_genres_music_genre_list_item_music_genre__to_json(p: &iface_track::TrackSecondaryGenresMusicGenreListItemMusicGenre) -> Value {
+    let mut m = Map::new();
+    m.insert("music_genre_id".into(), match (&p.music_genre_id) { Some(v) => serde_json::Number::from_f64(*(v)).map(Value::Number).unwrap_or(Value::Null), None => Value::Null });
+    m.insert("music_genre_name".into(), match (&p.music_genre_name) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("music_genre_name_extended".into(), match (&p.music_genre_name_extended) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("music_genre_parent_id".into(), match (&p.music_genre_parent_id) { Some(v) => serde_json::Number::from_f64(*(v)).map(Value::Number).unwrap_or(Value::Null), None => Value::Null });
+    m.insert("music_genre_vanity".into(), match (&p.music_genre_vanity) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_track__get_album_tracks_get_response_message_header__to_json(p: &iface_track::GetAlbumTracksGetResponseMessageHeader) -> Value {
+    let mut m = Map::new();
+    m.insert("available".into(), match (&p.available) { Some(v) => serde_json::Number::from_f64(*(v)).map(Value::Number).unwrap_or(Value::Null), None => Value::Null });
+    m.insert("execute_time".into(), match (&p.execute_time) { Some(v) => serde_json::Number::from_f64(*(v)).map(Value::Number).unwrap_or(Value::Null), None => Value::Null });
+    m.insert("status_code".into(), match (&p.status_code) { Some(v) => serde_json::Number::from_f64(*(v)).map(Value::Number).unwrap_or(Value::Null), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_track__get_chart_tracks_get_response__to_json(p: &iface_track::GetChartTracksGetResponse) -> Value {
+    let mut m = Map::new();
+    m.insert("message".into(), match (&p.message) { Some(v) => iface_track__get_chart_tracks_get_response_message__to_json(v), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_track__get_chart_tracks_get_response_message__to_json(p: &iface_track::GetChartTracksGetResponseMessage) -> Value {
+    let mut m = Map::new();
+    m.insert("body".into(), match (&p.body) { Some(v) => iface_track__get_chart_tracks_get_response_message_body__to_json(v), None => Value::Null });
+    m.insert("header".into(), match (&p.header) { Some(v) => iface_track__get_chart_tracks_get_response_message_header__to_json(v), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_track__get_chart_tracks_get_response_message_body__to_json(p: &iface_track::GetChartTracksGetResponseMessageBody) -> Value {
+    let mut m = Map::new();
+    m.insert("track_list".into(), match (&p.track_list) { Some(v) => Value::Array((v).iter().map(|v| iface_track__get_chart_tracks_get_response_message_body_track_list_item__to_json(v)).collect()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_track__get_chart_tracks_get_response_message_body_track_list_item__to_json(p: &iface_track::GetChartTracksGetResponseMessageBodyTrackListItem) -> Value {
+    let mut m = Map::new();
+    m.insert("track".into(), match (&p.track) { Some(v) => iface_track__track__to_json(v), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_track__get_chart_tracks_get_response_message_header__to_json(p: &iface_track::GetChartTracksGetResponseMessageHeader) -> Value {
+    let mut m = Map::new();
+    m.insert("available".into(), match (&p.available) { Some(v) => serde_json::Number::from_f64(*(v)).map(Value::Number).unwrap_or(Value::Null), None => Value::Null });
+    m.insert("execute_time".into(), match (&p.execute_time) { Some(v) => serde_json::Number::from_f64(*(v)).map(Value::Number).unwrap_or(Value::Null), None => Value::Null });
+    m.insert("status_code".into(), match (&p.status_code) { Some(v) => serde_json::Number::from_f64(*(v)).map(Value::Number).unwrap_or(Value::Null), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_track__get_matcher_track_get_response__to_json(p: &iface_track::GetMatcherTrackGetResponse) -> Value {
+    let mut m = Map::new();
+    m.insert("message".into(), match (&p.message) { Some(v) => iface_track__get_matcher_track_get_response_message__to_json(v), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_track__get_matcher_track_get_response_message__to_json(p: &iface_track::GetMatcherTrackGetResponseMessage) -> Value {
+    let mut m = Map::new();
+    m.insert("body".into(), match (&p.body) { Some(v) => iface_track__get_matcher_track_get_response_message_body__to_json(v), None => Value::Null });
+    m.insert("header".into(), match (&p.header) { Some(v) => iface_track__get_matcher_track_get_response_message_header__to_json(v), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_track__get_matcher_track_get_response_message_body__to_json(p: &iface_track::GetMatcherTrackGetResponseMessageBody) -> Value {
+    let mut m = Map::new();
+    m.insert("track".into(), match (&p.track) { Some(v) => iface_track__track__to_json(v), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_track__get_matcher_track_get_response_message_header__to_json(p: &iface_track::GetMatcherTrackGetResponseMessageHeader) -> Value {
+    let mut m = Map::new();
+    m.insert("execute_time".into(), match (&p.execute_time) { Some(v) => serde_json::Number::from_f64(*(v)).map(Value::Number).unwrap_or(Value::Null), None => Value::Null });
+    m.insert("status_code".into(), match (&p.status_code) { Some(v) => serde_json::Number::from_f64(*(v)).map(Value::Number).unwrap_or(Value::Null), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_track__get_track_get_response__to_json(p: &iface_track::GetTrackGetResponse) -> Value {
+    let mut m = Map::new();
+    m.insert("message".into(), match (&p.message) { Some(v) => iface_track__get_track_get_response_message__to_json(v), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_track__get_track_get_response_message__to_json(p: &iface_track::GetTrackGetResponseMessage) -> Value {
+    let mut m = Map::new();
+    m.insert("body".into(), match (&p.body) { Some(v) => iface_track__get_track_get_response_message_body__to_json(v), None => Value::Null });
+    m.insert("header".into(), match (&p.header) { Some(v) => iface_track__get_track_get_response_message_header__to_json(v), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_track__get_track_get_response_message_body__to_json(p: &iface_track::GetTrackGetResponseMessageBody) -> Value {
+    let mut m = Map::new();
+    m.insert("track".into(), match (&p.track) { Some(v) => iface_track__track__to_json(v), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_track__get_track_get_response_message_header__to_json(p: &iface_track::GetTrackGetResponseMessageHeader) -> Value {
+    let mut m = Map::new();
+    m.insert("execute_time".into(), match (&p.execute_time) { Some(v) => serde_json::Number::from_f64(*(v)).map(Value::Number).unwrap_or(Value::Null), None => Value::Null });
+    m.insert("status_code".into(), match (&p.status_code) { Some(v) => serde_json::Number::from_f64(*(v)).map(Value::Number).unwrap_or(Value::Null), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_track__get_track_search_response__to_json(p: &iface_track::GetTrackSearchResponse) -> Value {
+    let mut m = Map::new();
+    m.insert("message".into(), match (&p.message) { Some(v) => iface_track__get_track_search_response_message__to_json(v), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_track__get_track_search_response_message__to_json(p: &iface_track::GetTrackSearchResponseMessage) -> Value {
+    let mut m = Map::new();
+    m.insert("body".into(), match (&p.body) { Some(v) => iface_track__get_track_search_response_message_body__to_json(v), None => Value::Null });
+    m.insert("header".into(), match (&p.header) { Some(v) => iface_track__get_track_search_response_message_header__to_json(v), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_track__get_track_search_response_message_body__to_json(p: &iface_track::GetTrackSearchResponseMessageBody) -> Value {
+    let mut m = Map::new();
+    m.insert("track_list".into(), match (&p.track_list) { Some(v) => Value::Array((v).iter().map(|v| iface_track__get_track_search_response_message_body_track_list_item__to_json(v)).collect()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_track__get_track_search_response_message_body_track_list_item__to_json(p: &iface_track::GetTrackSearchResponseMessageBodyTrackListItem) -> Value {
+    let mut m = Map::new();
+    m.insert("track".into(), match (&p.track) { Some(v) => iface_track__track__to_json(v), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_track__get_track_search_response_message_header__to_json(p: &iface_track::GetTrackSearchResponseMessageHeader) -> Value {
+    let mut m = Map::new();
+    m.insert("available".into(), match (&p.available) { Some(v) => serde_json::Number::from_f64(*(v)).map(Value::Number).unwrap_or(Value::Null), None => Value::Null });
+    m.insert("execute_time".into(), match (&p.execute_time) { Some(v) => serde_json::Number::from_f64(*(v)).map(Value::Number).unwrap_or(Value::Null), None => Value::Null });
+    m.insert("status_code".into(), match (&p.status_code) { Some(v) => serde_json::Number::from_f64(*(v)).map(Value::Number).unwrap_or(Value::Null), None => Value::Null });
+    Value::Object(m)
+}
 
 fn iface_track__get_album_tracks_get_params__to_json(p: &iface_track::GetAlbumTracksGetParams) -> Value {
     let mut m = Map::new();
@@ -484,26 +1016,389 @@ fn iface_track__get_track_search_params__to_json(p: &iface_track::GetTrackSearch
     Value::Object(m)
 }
 
+fn iface_track__get_album_tracks_get_response__from_json(v: &Value) -> Option<iface_track::GetAlbumTracksGetResponse> {
+    let m = v.as_object()?;
+    Some(iface_track::GetAlbumTracksGetResponse {
+        message: m.get("message").filter(|v| !v.is_null()).and_then(|v| iface_track__get_album_tracks_get_response_message__from_json(v)),
+    })
+}
+
+fn iface_track__get_album_tracks_get_response_message__from_json(v: &Value) -> Option<iface_track::GetAlbumTracksGetResponseMessage> {
+    let m = v.as_object()?;
+    Some(iface_track::GetAlbumTracksGetResponseMessage {
+        body: m.get("body").filter(|v| !v.is_null()).and_then(|v| iface_track__get_album_tracks_get_response_message_body__from_json(v)),
+        header: m.get("header").filter(|v| !v.is_null()).and_then(|v| iface_track__get_album_tracks_get_response_message_header__from_json(v)),
+    })
+}
+
+fn iface_track__get_album_tracks_get_response_message_body__from_json(v: &Value) -> Option<iface_track::GetAlbumTracksGetResponseMessageBody> {
+    let m = v.as_object()?;
+    Some(iface_track::GetAlbumTracksGetResponseMessageBody {
+        track_list: m.get("track_list").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| iface_track__track__from_json(x)).collect())),
+    })
+}
+
+fn iface_track__track__from_json(v: &Value) -> Option<iface_track::Track> {
+    let m = v.as_object()?;
+    Some(iface_track::Track {
+        album_coverart_v100x100: m.get("album_coverart_100x100").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        album_coverart_v350x350: m.get("album_coverart_350x350").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        album_coverart_v500x500: m.get("album_coverart_500x500").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        album_coverart_v800x800: m.get("album_coverart_800x800").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        album_id: m.get("album_id").filter(|v| !v.is_null()).and_then(|v| (v).as_f64()),
+        album_name: m.get("album_name").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        artist_id: m.get("artist_id").filter(|v| !v.is_null()).and_then(|v| (v).as_f64()),
+        artist_mbid: m.get("artist_mbid").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        artist_name: m.get("artist_name").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        commontrack_id: m.get("commontrack_id").filter(|v| !v.is_null()).and_then(|v| (v).as_f64()),
+        commontrack_vanity_id: m.get("commontrack_vanity_id").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        explicit: m.get("explicit").filter(|v| !v.is_null()).and_then(|v| (v).as_f64()),
+        first_release_date: m.get("first_release_date").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        has_lyrics: m.get("has_lyrics").filter(|v| !v.is_null()).and_then(|v| (v).as_f64()),
+        has_subtitles: m.get("has_subtitles").filter(|v| !v.is_null()).and_then(|v| (v).as_f64()),
+        instrumental: m.get("instrumental").filter(|v| !v.is_null()).and_then(|v| (v).as_f64()),
+        lyrics_id: m.get("lyrics_id").filter(|v| !v.is_null()).and_then(|v| (v).as_f64()),
+        num_favourite: m.get("num_favourite").filter(|v| !v.is_null()).and_then(|v| (v).as_f64()),
+        primary_genres: m.get("primary_genres").filter(|v| !v.is_null()).and_then(|v| iface_track__track_primary_genres__from_json(v)),
+        restricted: m.get("restricted").filter(|v| !v.is_null()).and_then(|v| (v).as_f64()),
+        secondary_genres: m.get("secondary_genres").filter(|v| !v.is_null()).and_then(|v| iface_track__track_secondary_genres__from_json(v)),
+        subtitle_id: m.get("subtitle_id").filter(|v| !v.is_null()).and_then(|v| (v).as_f64()),
+        track_edit_url: m.get("track_edit_url").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        track_id: m.get("track_id").filter(|v| !v.is_null()).and_then(|v| (v).as_f64()),
+        track_isrc: m.get("track_isrc").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        track_length: m.get("track_length").filter(|v| !v.is_null()).and_then(|v| (v).as_f64()),
+        track_mbid: m.get("track_mbid").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        track_name: m.get("track_name").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        track_name_translation_list: m.get("track_name_translation_list").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| (x).as_str().map(|s| s.to_string())).collect())),
+        track_rating: m.get("track_rating").filter(|v| !v.is_null()).and_then(|v| (v).as_f64()),
+        track_share_url: m.get("track_share_url").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        track_soundcloud_id: m.get("track_soundcloud_id").filter(|v| !v.is_null()).and_then(|v| (v).as_f64()),
+        track_spotify_id: m.get("track_spotify_id").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        track_xboxmusic_id: m.get("track_xboxmusic_id").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        updated_time: m.get("updated_time").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    })
+}
+
+fn iface_track__track_primary_genres__from_json(v: &Value) -> Option<iface_track::TrackPrimaryGenres> {
+    let m = v.as_object()?;
+    Some(iface_track::TrackPrimaryGenres {
+        music_genre_list: m.get("music_genre_list").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| iface_track__track_primary_genres_music_genre_list_item__from_json(x)).collect())),
+    })
+}
+
+fn iface_track__track_primary_genres_music_genre_list_item__from_json(v: &Value) -> Option<iface_track::TrackPrimaryGenresMusicGenreListItem> {
+    let m = v.as_object()?;
+    Some(iface_track::TrackPrimaryGenresMusicGenreListItem {
+        music_genre: m.get("music_genre").filter(|v| !v.is_null()).and_then(|v| iface_track__track_primary_genres_music_genre_list_item_music_genre__from_json(v)),
+    })
+}
+
+fn iface_track__track_primary_genres_music_genre_list_item_music_genre__from_json(v: &Value) -> Option<iface_track::TrackPrimaryGenresMusicGenreListItemMusicGenre> {
+    let m = v.as_object()?;
+    Some(iface_track::TrackPrimaryGenresMusicGenreListItemMusicGenre {
+        music_genre_id: m.get("music_genre_id").filter(|v| !v.is_null()).and_then(|v| (v).as_f64()),
+        music_genre_name: m.get("music_genre_name").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        music_genre_name_extended: m.get("music_genre_name_extended").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        music_genre_parent_id: m.get("music_genre_parent_id").filter(|v| !v.is_null()).and_then(|v| (v).as_f64()),
+        music_genre_vanity: m.get("music_genre_vanity").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    })
+}
+
+fn iface_track__track_secondary_genres__from_json(v: &Value) -> Option<iface_track::TrackSecondaryGenres> {
+    let m = v.as_object()?;
+    Some(iface_track::TrackSecondaryGenres {
+        music_genre_list: m.get("music_genre_list").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| iface_track__track_secondary_genres_music_genre_list_item__from_json(x)).collect())),
+    })
+}
+
+fn iface_track__track_secondary_genres_music_genre_list_item__from_json(v: &Value) -> Option<iface_track::TrackSecondaryGenresMusicGenreListItem> {
+    let m = v.as_object()?;
+    Some(iface_track::TrackSecondaryGenresMusicGenreListItem {
+        music_genre: m.get("music_genre").filter(|v| !v.is_null()).and_then(|v| iface_track__track_secondary_genres_music_genre_list_item_music_genre__from_json(v)),
+    })
+}
+
+fn iface_track__track_secondary_genres_music_genre_list_item_music_genre__from_json(v: &Value) -> Option<iface_track::TrackSecondaryGenresMusicGenreListItemMusicGenre> {
+    let m = v.as_object()?;
+    Some(iface_track::TrackSecondaryGenresMusicGenreListItemMusicGenre {
+        music_genre_id: m.get("music_genre_id").filter(|v| !v.is_null()).and_then(|v| (v).as_f64()),
+        music_genre_name: m.get("music_genre_name").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        music_genre_name_extended: m.get("music_genre_name_extended").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        music_genre_parent_id: m.get("music_genre_parent_id").filter(|v| !v.is_null()).and_then(|v| (v).as_f64()),
+        music_genre_vanity: m.get("music_genre_vanity").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    })
+}
+
+fn iface_track__get_album_tracks_get_response_message_header__from_json(v: &Value) -> Option<iface_track::GetAlbumTracksGetResponseMessageHeader> {
+    let m = v.as_object()?;
+    Some(iface_track::GetAlbumTracksGetResponseMessageHeader {
+        available: m.get("available").filter(|v| !v.is_null()).and_then(|v| (v).as_f64()),
+        execute_time: m.get("execute_time").filter(|v| !v.is_null()).and_then(|v| (v).as_f64()),
+        status_code: m.get("status_code").filter(|v| !v.is_null()).and_then(|v| (v).as_f64()),
+    })
+}
+
+fn iface_track__get_chart_tracks_get_response__from_json(v: &Value) -> Option<iface_track::GetChartTracksGetResponse> {
+    let m = v.as_object()?;
+    Some(iface_track::GetChartTracksGetResponse {
+        message: m.get("message").filter(|v| !v.is_null()).and_then(|v| iface_track__get_chart_tracks_get_response_message__from_json(v)),
+    })
+}
+
+fn iface_track__get_chart_tracks_get_response_message__from_json(v: &Value) -> Option<iface_track::GetChartTracksGetResponseMessage> {
+    let m = v.as_object()?;
+    Some(iface_track::GetChartTracksGetResponseMessage {
+        body: m.get("body").filter(|v| !v.is_null()).and_then(|v| iface_track__get_chart_tracks_get_response_message_body__from_json(v)),
+        header: m.get("header").filter(|v| !v.is_null()).and_then(|v| iface_track__get_chart_tracks_get_response_message_header__from_json(v)),
+    })
+}
+
+fn iface_track__get_chart_tracks_get_response_message_body__from_json(v: &Value) -> Option<iface_track::GetChartTracksGetResponseMessageBody> {
+    let m = v.as_object()?;
+    Some(iface_track::GetChartTracksGetResponseMessageBody {
+        track_list: m.get("track_list").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| iface_track__get_chart_tracks_get_response_message_body_track_list_item__from_json(x)).collect())),
+    })
+}
+
+fn iface_track__get_chart_tracks_get_response_message_body_track_list_item__from_json(v: &Value) -> Option<iface_track::GetChartTracksGetResponseMessageBodyTrackListItem> {
+    let m = v.as_object()?;
+    Some(iface_track::GetChartTracksGetResponseMessageBodyTrackListItem {
+        track: m.get("track").filter(|v| !v.is_null()).and_then(|v| iface_track__track__from_json(v)),
+    })
+}
+
+fn iface_track__get_chart_tracks_get_response_message_header__from_json(v: &Value) -> Option<iface_track::GetChartTracksGetResponseMessageHeader> {
+    let m = v.as_object()?;
+    Some(iface_track::GetChartTracksGetResponseMessageHeader {
+        available: m.get("available").filter(|v| !v.is_null()).and_then(|v| (v).as_f64()),
+        execute_time: m.get("execute_time").filter(|v| !v.is_null()).and_then(|v| (v).as_f64()),
+        status_code: m.get("status_code").filter(|v| !v.is_null()).and_then(|v| (v).as_f64()),
+    })
+}
+
+fn iface_track__get_matcher_track_get_response__from_json(v: &Value) -> Option<iface_track::GetMatcherTrackGetResponse> {
+    let m = v.as_object()?;
+    Some(iface_track::GetMatcherTrackGetResponse {
+        message: m.get("message").filter(|v| !v.is_null()).and_then(|v| iface_track__get_matcher_track_get_response_message__from_json(v)),
+    })
+}
+
+fn iface_track__get_matcher_track_get_response_message__from_json(v: &Value) -> Option<iface_track::GetMatcherTrackGetResponseMessage> {
+    let m = v.as_object()?;
+    Some(iface_track::GetMatcherTrackGetResponseMessage {
+        body: m.get("body").filter(|v| !v.is_null()).and_then(|v| iface_track__get_matcher_track_get_response_message_body__from_json(v)),
+        header: m.get("header").filter(|v| !v.is_null()).and_then(|v| iface_track__get_matcher_track_get_response_message_header__from_json(v)),
+    })
+}
+
+fn iface_track__get_matcher_track_get_response_message_body__from_json(v: &Value) -> Option<iface_track::GetMatcherTrackGetResponseMessageBody> {
+    let m = v.as_object()?;
+    Some(iface_track::GetMatcherTrackGetResponseMessageBody {
+        track: m.get("track").filter(|v| !v.is_null()).and_then(|v| iface_track__track__from_json(v)),
+    })
+}
+
+fn iface_track__get_matcher_track_get_response_message_header__from_json(v: &Value) -> Option<iface_track::GetMatcherTrackGetResponseMessageHeader> {
+    let m = v.as_object()?;
+    Some(iface_track::GetMatcherTrackGetResponseMessageHeader {
+        execute_time: m.get("execute_time").filter(|v| !v.is_null()).and_then(|v| (v).as_f64()),
+        status_code: m.get("status_code").filter(|v| !v.is_null()).and_then(|v| (v).as_f64()),
+    })
+}
+
+fn iface_track__get_track_get_response__from_json(v: &Value) -> Option<iface_track::GetTrackGetResponse> {
+    let m = v.as_object()?;
+    Some(iface_track::GetTrackGetResponse {
+        message: m.get("message").filter(|v| !v.is_null()).and_then(|v| iface_track__get_track_get_response_message__from_json(v)),
+    })
+}
+
+fn iface_track__get_track_get_response_message__from_json(v: &Value) -> Option<iface_track::GetTrackGetResponseMessage> {
+    let m = v.as_object()?;
+    Some(iface_track::GetTrackGetResponseMessage {
+        body: m.get("body").filter(|v| !v.is_null()).and_then(|v| iface_track__get_track_get_response_message_body__from_json(v)),
+        header: m.get("header").filter(|v| !v.is_null()).and_then(|v| iface_track__get_track_get_response_message_header__from_json(v)),
+    })
+}
+
+fn iface_track__get_track_get_response_message_body__from_json(v: &Value) -> Option<iface_track::GetTrackGetResponseMessageBody> {
+    let m = v.as_object()?;
+    Some(iface_track::GetTrackGetResponseMessageBody {
+        track: m.get("track").filter(|v| !v.is_null()).and_then(|v| iface_track__track__from_json(v)),
+    })
+}
+
+fn iface_track__get_track_get_response_message_header__from_json(v: &Value) -> Option<iface_track::GetTrackGetResponseMessageHeader> {
+    let m = v.as_object()?;
+    Some(iface_track::GetTrackGetResponseMessageHeader {
+        execute_time: m.get("execute_time").filter(|v| !v.is_null()).and_then(|v| (v).as_f64()),
+        status_code: m.get("status_code").filter(|v| !v.is_null()).and_then(|v| (v).as_f64()),
+    })
+}
+
+fn iface_track__get_track_search_response__from_json(v: &Value) -> Option<iface_track::GetTrackSearchResponse> {
+    let m = v.as_object()?;
+    Some(iface_track::GetTrackSearchResponse {
+        message: m.get("message").filter(|v| !v.is_null()).and_then(|v| iface_track__get_track_search_response_message__from_json(v)),
+    })
+}
+
+fn iface_track__get_track_search_response_message__from_json(v: &Value) -> Option<iface_track::GetTrackSearchResponseMessage> {
+    let m = v.as_object()?;
+    Some(iface_track::GetTrackSearchResponseMessage {
+        body: m.get("body").filter(|v| !v.is_null()).and_then(|v| iface_track__get_track_search_response_message_body__from_json(v)),
+        header: m.get("header").filter(|v| !v.is_null()).and_then(|v| iface_track__get_track_search_response_message_header__from_json(v)),
+    })
+}
+
+fn iface_track__get_track_search_response_message_body__from_json(v: &Value) -> Option<iface_track::GetTrackSearchResponseMessageBody> {
+    let m = v.as_object()?;
+    Some(iface_track::GetTrackSearchResponseMessageBody {
+        track_list: m.get("track_list").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| iface_track__get_track_search_response_message_body_track_list_item__from_json(x)).collect())),
+    })
+}
+
+fn iface_track__get_track_search_response_message_body_track_list_item__from_json(v: &Value) -> Option<iface_track::GetTrackSearchResponseMessageBodyTrackListItem> {
+    let m = v.as_object()?;
+    Some(iface_track::GetTrackSearchResponseMessageBodyTrackListItem {
+        track: m.get("track").filter(|v| !v.is_null()).and_then(|v| iface_track__track__from_json(v)),
+    })
+}
+
+fn iface_track__get_track_search_response_message_header__from_json(v: &Value) -> Option<iface_track::GetTrackSearchResponseMessageHeader> {
+    let m = v.as_object()?;
+    Some(iface_track::GetTrackSearchResponseMessageHeader {
+        available: m.get("available").filter(|v| !v.is_null()).and_then(|v| (v).as_f64()),
+        execute_time: m.get("execute_time").filter(|v| !v.is_null()).and_then(|v| (v).as_f64()),
+        status_code: m.get("status_code").filter(|v| !v.is_null()).and_then(|v| (v).as_f64()),
+    })
+}
+
+fn iface_track__get_album_tracks_get__ok(body: String) -> Result<iface_track::GetAlbumTracksGetResponse, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match iface_track__get_album_tracks_get_response__from_json(&v) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_track__get_album_tracks_get__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
+fn iface_track__get_chart_tracks_get__ok(body: String) -> Result<iface_track::GetChartTracksGetResponse, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match iface_track__get_chart_tracks_get_response__from_json(&v) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_track__get_chart_tracks_get__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
+fn iface_track__get_matcher_track_get__ok(body: String) -> Result<iface_track::GetMatcherTrackGetResponse, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match iface_track__get_matcher_track_get_response__from_json(&v) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_track__get_matcher_track_get__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
+fn iface_track__get_track_get__ok(body: String) -> Result<iface_track::GetTrackGetResponse, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match iface_track__get_track_get_response__from_json(&v) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_track__get_track_get__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
+fn iface_track__get_track_search__ok(body: String) -> Result<iface_track::GetTrackSearchResponse, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match iface_track__get_track_search_response__from_json(&v) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_track__get_track_search__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
 impl iface_track::Guest for crate::Component {
-    fn get_album_tracks_get(params: iface_track::GetAlbumTracksGetParams) -> Result<String, String> {
+    fn get_album_tracks_get(params: iface_track::GetAlbumTracksGetParams) -> Result<iface_track::GetAlbumTracksGetResponse, String> {
         let json = iface_track__get_album_tracks_get_params__to_json(&params);
-        dispatch(&OP_TRACK_GET_ALBUM_TRACKS_GET, json)
+        match dispatch(&OP_TRACK_GET_ALBUM_TRACKS_GET, json).and_then(iface_track__get_album_tracks_get__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_track__get_album_tracks_get__err(e)),
+        }
     }
-    fn get_chart_tracks_get(params: iface_track::GetChartTracksGetParams) -> Result<String, String> {
+    fn get_chart_tracks_get(params: iface_track::GetChartTracksGetParams) -> Result<iface_track::GetChartTracksGetResponse, String> {
         let json = iface_track__get_chart_tracks_get_params__to_json(&params);
-        dispatch(&OP_TRACK_GET_CHART_TRACKS_GET, json)
+        match dispatch(&OP_TRACK_GET_CHART_TRACKS_GET, json).and_then(iface_track__get_chart_tracks_get__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_track__get_chart_tracks_get__err(e)),
+        }
     }
-    fn get_matcher_track_get(params: iface_track::GetMatcherTrackGetParams) -> Result<String, String> {
+    fn get_matcher_track_get(params: iface_track::GetMatcherTrackGetParams) -> Result<iface_track::GetMatcherTrackGetResponse, String> {
         let json = iface_track__get_matcher_track_get_params__to_json(&params);
-        dispatch(&OP_TRACK_GET_MATCHER_TRACK_GET, json)
+        match dispatch(&OP_TRACK_GET_MATCHER_TRACK_GET, json).and_then(iface_track__get_matcher_track_get__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_track__get_matcher_track_get__err(e)),
+        }
     }
-    fn get_track_get(params: iface_track::GetTrackGetParams) -> Result<String, String> {
+    fn get_track_get(params: iface_track::GetTrackGetParams) -> Result<iface_track::GetTrackGetResponse, String> {
         let json = iface_track__get_track_get_params__to_json(&params);
-        dispatch(&OP_TRACK_GET_TRACK_GET, json)
+        match dispatch(&OP_TRACK_GET_TRACK_GET, json).and_then(iface_track__get_track_get__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_track__get_track_get__err(e)),
+        }
     }
-    fn get_track_search(params: iface_track::GetTrackSearchParams) -> Result<String, String> {
+    fn get_track_search(params: iface_track::GetTrackSearchParams) -> Result<iface_track::GetTrackSearchResponse, String> {
         let json = iface_track__get_track_search_params__to_json(&params);
-        dispatch(&OP_TRACK_GET_TRACK_SEARCH, json)
+        match dispatch(&OP_TRACK_GET_TRACK_SEARCH, json).and_then(iface_track__get_track_search__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_track__get_track_search__err(e)),
+        }
     }
 }
 use crate::exports::autostamp::musixmatch::artist as iface_artist;
@@ -512,9 +1407,9 @@ const OP_ARTIST_GET_ARTIST_GET: OpSpec = OpSpec {
     method: "GET",
     path_template: "/artist.get",
     fields: &[
-        FieldSpec { snake: "format", location: FieldLocation::Query },
-        FieldSpec { snake: "callback", location: FieldLocation::Query },
-        FieldSpec { snake: "artist_id", location: FieldLocation::Query },
+        FieldSpec { snake: "format", wire: "format", location: FieldLocation::Query },
+        FieldSpec { snake: "callback", wire: "callback", location: FieldLocation::Query },
+        FieldSpec { snake: "artist_id", wire: "artist_id", location: FieldLocation::Query },
     ],
     auth: &[
     ],
@@ -524,11 +1419,11 @@ const OP_ARTIST_GET_ARTIST_RELATED_GET: OpSpec = OpSpec {
     method: "GET",
     path_template: "/artist.related.get",
     fields: &[
-        FieldSpec { snake: "format", location: FieldLocation::Query },
-        FieldSpec { snake: "callback", location: FieldLocation::Query },
-        FieldSpec { snake: "artist_id", location: FieldLocation::Query },
-        FieldSpec { snake: "page_size", location: FieldLocation::Query },
-        FieldSpec { snake: "page", location: FieldLocation::Query },
+        FieldSpec { snake: "format", wire: "format", location: FieldLocation::Query },
+        FieldSpec { snake: "callback", wire: "callback", location: FieldLocation::Query },
+        FieldSpec { snake: "artist_id", wire: "artist_id", location: FieldLocation::Query },
+        FieldSpec { snake: "page_size", wire: "page_size", location: FieldLocation::Query },
+        FieldSpec { snake: "page", wire: "page", location: FieldLocation::Query },
     ],
     auth: &[
     ],
@@ -538,12 +1433,12 @@ const OP_ARTIST_GET_ARTIST_SEARCH: OpSpec = OpSpec {
     method: "GET",
     path_template: "/artist.search",
     fields: &[
-        FieldSpec { snake: "format", location: FieldLocation::Query },
-        FieldSpec { snake: "callback", location: FieldLocation::Query },
-        FieldSpec { snake: "q_artist", location: FieldLocation::Query },
-        FieldSpec { snake: "f_artist_id", location: FieldLocation::Query },
-        FieldSpec { snake: "page", location: FieldLocation::Query },
-        FieldSpec { snake: "page_size", location: FieldLocation::Query },
+        FieldSpec { snake: "format", wire: "format", location: FieldLocation::Query },
+        FieldSpec { snake: "callback", wire: "callback", location: FieldLocation::Query },
+        FieldSpec { snake: "q_artist", wire: "q_artist", location: FieldLocation::Query },
+        FieldSpec { snake: "f_artist_id", wire: "f_artist_id", location: FieldLocation::Query },
+        FieldSpec { snake: "page", wire: "page", location: FieldLocation::Query },
+        FieldSpec { snake: "page_size", wire: "page_size", location: FieldLocation::Query },
     ],
     auth: &[
     ],
@@ -553,15 +1448,216 @@ const OP_ARTIST_GET_CHART_ARTISTS_GET: OpSpec = OpSpec {
     method: "GET",
     path_template: "/chart.artists.get",
     fields: &[
-        FieldSpec { snake: "format", location: FieldLocation::Query },
-        FieldSpec { snake: "callback", location: FieldLocation::Query },
-        FieldSpec { snake: "page", location: FieldLocation::Query },
-        FieldSpec { snake: "page_size", location: FieldLocation::Query },
-        FieldSpec { snake: "country", location: FieldLocation::Query },
+        FieldSpec { snake: "format", wire: "format", location: FieldLocation::Query },
+        FieldSpec { snake: "callback", wire: "callback", location: FieldLocation::Query },
+        FieldSpec { snake: "page", wire: "page", location: FieldLocation::Query },
+        FieldSpec { snake: "page_size", wire: "page_size", location: FieldLocation::Query },
+        FieldSpec { snake: "country", wire: "country", location: FieldLocation::Query },
     ],
     auth: &[
     ],
 };
+
+fn iface_artist__get_artist_get_response__to_json(p: &iface_artist::GetArtistGetResponse) -> Value {
+    let mut m = Map::new();
+    m.insert("message".into(), match (&p.message) { Some(v) => iface_artist__get_artist_get_response_message__to_json(v), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_artist__get_artist_get_response_message__to_json(p: &iface_artist::GetArtistGetResponseMessage) -> Value {
+    let mut m = Map::new();
+    m.insert("body".into(), match (&p.body) { Some(v) => iface_artist__get_artist_get_response_message_body__to_json(v), None => Value::Null });
+    m.insert("header".into(), match (&p.header) { Some(v) => iface_artist__get_artist_get_response_message_header__to_json(v), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_artist__get_artist_get_response_message_body__to_json(p: &iface_artist::GetArtistGetResponseMessageBody) -> Value {
+    let mut m = Map::new();
+    m.insert("artist".into(), match (&p.artist) { Some(v) => iface_artist__artist__to_json(v), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_artist__artist__to_json(p: &iface_artist::Artist) -> Value {
+    let mut m = Map::new();
+    m.insert("artist_alias_list".into(), match (&p.artist_alias_list) { Some(v) => Value::Array((v).iter().map(|v| iface_artist__artist_artist_alias_list_item__to_json(v)).collect()), None => Value::Null });
+    m.insert("artist_comment".into(), match (&p.artist_comment) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("artist_country".into(), match (&p.artist_country) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("artist_credits".into(), match (&p.artist_credits) { Some(v) => iface_artist__artist_artist_credits__to_json(v), None => Value::Null });
+    m.insert("artist_edit_url".into(), match (&p.artist_edit_url) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("artist_id".into(), match (&p.artist_id) { Some(v) => serde_json::Number::from_f64(*(v)).map(Value::Number).unwrap_or(Value::Null), None => Value::Null });
+    m.insert("artist_mbid".into(), match (&p.artist_mbid) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("artist_name".into(), match (&p.artist_name) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("artist_name_translation_list".into(), match (&p.artist_name_translation_list) { Some(v) => Value::Array((v).iter().map(|v| iface_artist__artist_artist_name_translation_list_item__to_json(v)).collect()), None => Value::Null });
+    m.insert("artist_rating".into(), match (&p.artist_rating) { Some(v) => serde_json::Number::from_f64(*(v)).map(Value::Number).unwrap_or(Value::Null), None => Value::Null });
+    m.insert("artist_share_url".into(), match (&p.artist_share_url) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("artist_twitter_url".into(), match (&p.artist_twitter_url) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("artist_vanity_id".into(), match (&p.artist_vanity_id) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("managed".into(), match (&p.managed) { Some(v) => serde_json::Number::from_f64(*(v)).map(Value::Number).unwrap_or(Value::Null), None => Value::Null });
+    m.insert("primary_genres".into(), match (&p.primary_genres) { Some(v) => iface_artist__artist_primary_genres__to_json(v), None => Value::Null });
+    m.insert("restricted".into(), match (&p.restricted) { Some(v) => serde_json::Number::from_f64(*(v)).map(Value::Number).unwrap_or(Value::Null), None => Value::Null });
+    m.insert("secondary_genres".into(), match (&p.secondary_genres) { Some(v) => iface_artist__artist_secondary_genres__to_json(v), None => Value::Null });
+    m.insert("updated_time".into(), match (&p.updated_time) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_artist__artist_artist_alias_list_item__to_json(p: &iface_artist::ArtistArtistAliasListItem) -> Value {
+    let mut m = Map::new();
+    m.insert("artist_alias".into(), match (&p.artist_alias) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_artist__artist_artist_credits__to_json(p: &iface_artist::ArtistArtistCredits) -> Value {
+    let mut m = Map::new();
+    m.insert("artist_list".into(), match (&p.artist_list) { Some(v) => Value::Array((v).iter().map(|v| Value::String((v).clone())).collect()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_artist__artist_artist_name_translation_list_item__to_json(p: &iface_artist::ArtistArtistNameTranslationListItem) -> Value {
+    let mut m = Map::new();
+    m.insert("artist_name_translation".into(), match (&p.artist_name_translation) { Some(v) => iface_artist__artist_artist_name_translation_list_item_artist_name_translation__to_json(v), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_artist__artist_artist_name_translation_list_item_artist_name_translation__to_json(p: &iface_artist::ArtistArtistNameTranslationListItemArtistNameTranslation) -> Value {
+    let mut m = Map::new();
+    m.insert("language".into(), match (&p.language) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("translation".into(), match (&p.translation) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_artist__artist_primary_genres__to_json(p: &iface_artist::ArtistPrimaryGenres) -> Value {
+    let mut m = Map::new();
+    m.insert("music_genre_list".into(), match (&p.music_genre_list) { Some(v) => Value::Array((v).iter().map(|v| iface_artist__artist_primary_genres_music_genre_list_item__to_json(v)).collect()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_artist__artist_primary_genres_music_genre_list_item__to_json(p: &iface_artist::ArtistPrimaryGenresMusicGenreListItem) -> Value {
+    let mut m = Map::new();
+    m.insert("music_genre".into(), match (&p.music_genre) { Some(v) => iface_artist__artist_primary_genres_music_genre_list_item_music_genre__to_json(v), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_artist__artist_primary_genres_music_genre_list_item_music_genre__to_json(p: &iface_artist::ArtistPrimaryGenresMusicGenreListItemMusicGenre) -> Value {
+    let mut m = Map::new();
+    m.insert("music_genre_id".into(), match (&p.music_genre_id) { Some(v) => serde_json::Number::from_f64(*(v)).map(Value::Number).unwrap_or(Value::Null), None => Value::Null });
+    m.insert("music_genre_name".into(), match (&p.music_genre_name) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("music_genre_name_extended".into(), match (&p.music_genre_name_extended) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("music_genre_parent_id".into(), match (&p.music_genre_parent_id) { Some(v) => serde_json::Number::from_f64(*(v)).map(Value::Number).unwrap_or(Value::Null), None => Value::Null });
+    m.insert("music_genre_vanity".into(), match (&p.music_genre_vanity) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_artist__artist_secondary_genres__to_json(p: &iface_artist::ArtistSecondaryGenres) -> Value {
+    let mut m = Map::new();
+    m.insert("music_genre_list".into(), match (&p.music_genre_list) { Some(v) => Value::Array((v).iter().map(|v| Value::String((v).clone())).collect()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_artist__get_artist_get_response_message_header__to_json(p: &iface_artist::GetArtistGetResponseMessageHeader) -> Value {
+    let mut m = Map::new();
+    m.insert("execute_time".into(), match (&p.execute_time) { Some(v) => serde_json::Number::from_f64(*(v)).map(Value::Number).unwrap_or(Value::Null), None => Value::Null });
+    m.insert("status_code".into(), match (&p.status_code) { Some(v) => serde_json::Number::from_f64(*(v)).map(Value::Number).unwrap_or(Value::Null), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_artist__get_artist_related_get_response__to_json(p: &iface_artist::GetArtistRelatedGetResponse) -> Value {
+    let mut m = Map::new();
+    m.insert("message".into(), match (&p.message) { Some(v) => iface_artist__get_artist_related_get_response_message__to_json(v), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_artist__get_artist_related_get_response_message__to_json(p: &iface_artist::GetArtistRelatedGetResponseMessage) -> Value {
+    let mut m = Map::new();
+    m.insert("body".into(), match (&p.body) { Some(v) => iface_artist__get_artist_related_get_response_message_body__to_json(v), None => Value::Null });
+    m.insert("header".into(), match (&p.header) { Some(v) => iface_artist__get_artist_related_get_response_message_header__to_json(v), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_artist__get_artist_related_get_response_message_body__to_json(p: &iface_artist::GetArtistRelatedGetResponseMessageBody) -> Value {
+    let mut m = Map::new();
+    m.insert("artist_list".into(), match (&p.artist_list) { Some(v) => Value::Array((v).iter().map(|v| iface_artist__get_artist_related_get_response_message_body_artist_list_item__to_json(v)).collect()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_artist__get_artist_related_get_response_message_body_artist_list_item__to_json(p: &iface_artist::GetArtistRelatedGetResponseMessageBodyArtistListItem) -> Value {
+    let mut m = Map::new();
+    m.insert("artist".into(), match (&p.artist) { Some(v) => iface_artist__artist__to_json(v), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_artist__get_artist_related_get_response_message_header__to_json(p: &iface_artist::GetArtistRelatedGetResponseMessageHeader) -> Value {
+    let mut m = Map::new();
+    m.insert("available".into(), match (&p.available) { Some(v) => serde_json::Number::from_f64(*(v)).map(Value::Number).unwrap_or(Value::Null), None => Value::Null });
+    m.insert("execute_time".into(), match (&p.execute_time) { Some(v) => serde_json::Number::from_f64(*(v)).map(Value::Number).unwrap_or(Value::Null), None => Value::Null });
+    m.insert("status_code".into(), match (&p.status_code) { Some(v) => serde_json::Number::from_f64(*(v)).map(Value::Number).unwrap_or(Value::Null), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_artist__get_artist_search_response__to_json(p: &iface_artist::GetArtistSearchResponse) -> Value {
+    let mut m = Map::new();
+    m.insert("message".into(), match (&p.message) { Some(v) => iface_artist__get_artist_search_response_message__to_json(v), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_artist__get_artist_search_response_message__to_json(p: &iface_artist::GetArtistSearchResponseMessage) -> Value {
+    let mut m = Map::new();
+    m.insert("body".into(), match (&p.body) { Some(v) => iface_artist__get_artist_search_response_message_body__to_json(v), None => Value::Null });
+    m.insert("header".into(), match (&p.header) { Some(v) => iface_artist__get_artist_search_response_message_header__to_json(v), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_artist__get_artist_search_response_message_body__to_json(p: &iface_artist::GetArtistSearchResponseMessageBody) -> Value {
+    let mut m = Map::new();
+    m.insert("artist_list".into(), match (&p.artist_list) { Some(v) => Value::Array((v).iter().map(|v| iface_artist__get_artist_search_response_message_body_artist_list_item__to_json(v)).collect()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_artist__get_artist_search_response_message_body_artist_list_item__to_json(p: &iface_artist::GetArtistSearchResponseMessageBodyArtistListItem) -> Value {
+    let mut m = Map::new();
+    m.insert("artist".into(), match (&p.artist) { Some(v) => iface_artist__artist__to_json(v), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_artist__get_artist_search_response_message_header__to_json(p: &iface_artist::GetArtistSearchResponseMessageHeader) -> Value {
+    let mut m = Map::new();
+    m.insert("available".into(), match (&p.available) { Some(v) => serde_json::Number::from_f64(*(v)).map(Value::Number).unwrap_or(Value::Null), None => Value::Null });
+    m.insert("execute_time".into(), match (&p.execute_time) { Some(v) => serde_json::Number::from_f64(*(v)).map(Value::Number).unwrap_or(Value::Null), None => Value::Null });
+    m.insert("status_code".into(), match (&p.status_code) { Some(v) => serde_json::Number::from_f64(*(v)).map(Value::Number).unwrap_or(Value::Null), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_artist__get_chart_artists_get_response__to_json(p: &iface_artist::GetChartArtistsGetResponse) -> Value {
+    let mut m = Map::new();
+    m.insert("message".into(), match (&p.message) { Some(v) => iface_artist__get_chart_artists_get_response_message__to_json(v), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_artist__get_chart_artists_get_response_message__to_json(p: &iface_artist::GetChartArtistsGetResponseMessage) -> Value {
+    let mut m = Map::new();
+    m.insert("body".into(), match (&p.body) { Some(v) => iface_artist__get_chart_artists_get_response_message_body__to_json(v), None => Value::Null });
+    m.insert("header".into(), match (&p.header) { Some(v) => iface_artist__get_chart_artists_get_response_message_header__to_json(v), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_artist__get_chart_artists_get_response_message_body__to_json(p: &iface_artist::GetChartArtistsGetResponseMessageBody) -> Value {
+    let mut m = Map::new();
+    m.insert("artist_list".into(), match (&p.artist_list) { Some(v) => Value::Array((v).iter().map(|v| iface_artist__get_chart_artists_get_response_message_body_artist_list_item__to_json(v)).collect()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_artist__get_chart_artists_get_response_message_body_artist_list_item__to_json(p: &iface_artist::GetChartArtistsGetResponseMessageBodyArtistListItem) -> Value {
+    let mut m = Map::new();
+    m.insert("artist".into(), match (&p.artist) { Some(v) => iface_artist__artist__to_json(v), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_artist__get_chart_artists_get_response_message_header__to_json(p: &iface_artist::GetChartArtistsGetResponseMessageHeader) -> Value {
+    let mut m = Map::new();
+    m.insert("available".into(), match (&p.available) { Some(v) => serde_json::Number::from_f64(*(v)).map(Value::Number).unwrap_or(Value::Null), None => Value::Null });
+    m.insert("execute_time".into(), match (&p.execute_time) { Some(v) => serde_json::Number::from_f64(*(v)).map(Value::Number).unwrap_or(Value::Null), None => Value::Null });
+    m.insert("status_code".into(), match (&p.status_code) { Some(v) => serde_json::Number::from_f64(*(v)).map(Value::Number).unwrap_or(Value::Null), None => Value::Null });
+    Value::Object(m)
+}
 
 fn iface_artist__get_artist_get_params__to_json(p: &iface_artist::GetArtistGetParams) -> Value {
     let mut m = Map::new();
@@ -602,22 +1698,335 @@ fn iface_artist__get_chart_artists_get_params__to_json(p: &iface_artist::GetChar
     Value::Object(m)
 }
 
+fn iface_artist__get_artist_get_response__from_json(v: &Value) -> Option<iface_artist::GetArtistGetResponse> {
+    let m = v.as_object()?;
+    Some(iface_artist::GetArtistGetResponse {
+        message: m.get("message").filter(|v| !v.is_null()).and_then(|v| iface_artist__get_artist_get_response_message__from_json(v)),
+    })
+}
+
+fn iface_artist__get_artist_get_response_message__from_json(v: &Value) -> Option<iface_artist::GetArtistGetResponseMessage> {
+    let m = v.as_object()?;
+    Some(iface_artist::GetArtistGetResponseMessage {
+        body: m.get("body").filter(|v| !v.is_null()).and_then(|v| iface_artist__get_artist_get_response_message_body__from_json(v)),
+        header: m.get("header").filter(|v| !v.is_null()).and_then(|v| iface_artist__get_artist_get_response_message_header__from_json(v)),
+    })
+}
+
+fn iface_artist__get_artist_get_response_message_body__from_json(v: &Value) -> Option<iface_artist::GetArtistGetResponseMessageBody> {
+    let m = v.as_object()?;
+    Some(iface_artist::GetArtistGetResponseMessageBody {
+        artist: m.get("artist").filter(|v| !v.is_null()).and_then(|v| iface_artist__artist__from_json(v)),
+    })
+}
+
+fn iface_artist__artist__from_json(v: &Value) -> Option<iface_artist::Artist> {
+    let m = v.as_object()?;
+    Some(iface_artist::Artist {
+        artist_alias_list: m.get("artist_alias_list").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| iface_artist__artist_artist_alias_list_item__from_json(x)).collect())),
+        artist_comment: m.get("artist_comment").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        artist_country: m.get("artist_country").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        artist_credits: m.get("artist_credits").filter(|v| !v.is_null()).and_then(|v| iface_artist__artist_artist_credits__from_json(v)),
+        artist_edit_url: m.get("artist_edit_url").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        artist_id: m.get("artist_id").filter(|v| !v.is_null()).and_then(|v| (v).as_f64()),
+        artist_mbid: m.get("artist_mbid").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        artist_name: m.get("artist_name").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        artist_name_translation_list: m.get("artist_name_translation_list").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| iface_artist__artist_artist_name_translation_list_item__from_json(x)).collect())),
+        artist_rating: m.get("artist_rating").filter(|v| !v.is_null()).and_then(|v| (v).as_f64()),
+        artist_share_url: m.get("artist_share_url").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        artist_twitter_url: m.get("artist_twitter_url").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        artist_vanity_id: m.get("artist_vanity_id").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        managed: m.get("managed").filter(|v| !v.is_null()).and_then(|v| (v).as_f64()),
+        primary_genres: m.get("primary_genres").filter(|v| !v.is_null()).and_then(|v| iface_artist__artist_primary_genres__from_json(v)),
+        restricted: m.get("restricted").filter(|v| !v.is_null()).and_then(|v| (v).as_f64()),
+        secondary_genres: m.get("secondary_genres").filter(|v| !v.is_null()).and_then(|v| iface_artist__artist_secondary_genres__from_json(v)),
+        updated_time: m.get("updated_time").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    })
+}
+
+fn iface_artist__artist_artist_alias_list_item__from_json(v: &Value) -> Option<iface_artist::ArtistArtistAliasListItem> {
+    let m = v.as_object()?;
+    Some(iface_artist::ArtistArtistAliasListItem {
+        artist_alias: m.get("artist_alias").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    })
+}
+
+fn iface_artist__artist_artist_credits__from_json(v: &Value) -> Option<iface_artist::ArtistArtistCredits> {
+    let m = v.as_object()?;
+    Some(iface_artist::ArtistArtistCredits {
+        artist_list: m.get("artist_list").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| (x).as_str().map(|s| s.to_string())).collect())),
+    })
+}
+
+fn iface_artist__artist_artist_name_translation_list_item__from_json(v: &Value) -> Option<iface_artist::ArtistArtistNameTranslationListItem> {
+    let m = v.as_object()?;
+    Some(iface_artist::ArtistArtistNameTranslationListItem {
+        artist_name_translation: m.get("artist_name_translation").filter(|v| !v.is_null()).and_then(|v| iface_artist__artist_artist_name_translation_list_item_artist_name_translation__from_json(v)),
+    })
+}
+
+fn iface_artist__artist_artist_name_translation_list_item_artist_name_translation__from_json(v: &Value) -> Option<iface_artist::ArtistArtistNameTranslationListItemArtistNameTranslation> {
+    let m = v.as_object()?;
+    Some(iface_artist::ArtistArtistNameTranslationListItemArtistNameTranslation {
+        language: m.get("language").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        translation: m.get("translation").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    })
+}
+
+fn iface_artist__artist_primary_genres__from_json(v: &Value) -> Option<iface_artist::ArtistPrimaryGenres> {
+    let m = v.as_object()?;
+    Some(iface_artist::ArtistPrimaryGenres {
+        music_genre_list: m.get("music_genre_list").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| iface_artist__artist_primary_genres_music_genre_list_item__from_json(x)).collect())),
+    })
+}
+
+fn iface_artist__artist_primary_genres_music_genre_list_item__from_json(v: &Value) -> Option<iface_artist::ArtistPrimaryGenresMusicGenreListItem> {
+    let m = v.as_object()?;
+    Some(iface_artist::ArtistPrimaryGenresMusicGenreListItem {
+        music_genre: m.get("music_genre").filter(|v| !v.is_null()).and_then(|v| iface_artist__artist_primary_genres_music_genre_list_item_music_genre__from_json(v)),
+    })
+}
+
+fn iface_artist__artist_primary_genres_music_genre_list_item_music_genre__from_json(v: &Value) -> Option<iface_artist::ArtistPrimaryGenresMusicGenreListItemMusicGenre> {
+    let m = v.as_object()?;
+    Some(iface_artist::ArtistPrimaryGenresMusicGenreListItemMusicGenre {
+        music_genre_id: m.get("music_genre_id").filter(|v| !v.is_null()).and_then(|v| (v).as_f64()),
+        music_genre_name: m.get("music_genre_name").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        music_genre_name_extended: m.get("music_genre_name_extended").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        music_genre_parent_id: m.get("music_genre_parent_id").filter(|v| !v.is_null()).and_then(|v| (v).as_f64()),
+        music_genre_vanity: m.get("music_genre_vanity").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    })
+}
+
+fn iface_artist__artist_secondary_genres__from_json(v: &Value) -> Option<iface_artist::ArtistSecondaryGenres> {
+    let m = v.as_object()?;
+    Some(iface_artist::ArtistSecondaryGenres {
+        music_genre_list: m.get("music_genre_list").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| (x).as_str().map(|s| s.to_string())).collect())),
+    })
+}
+
+fn iface_artist__get_artist_get_response_message_header__from_json(v: &Value) -> Option<iface_artist::GetArtistGetResponseMessageHeader> {
+    let m = v.as_object()?;
+    Some(iface_artist::GetArtistGetResponseMessageHeader {
+        execute_time: m.get("execute_time").filter(|v| !v.is_null()).and_then(|v| (v).as_f64()),
+        status_code: m.get("status_code").filter(|v| !v.is_null()).and_then(|v| (v).as_f64()),
+    })
+}
+
+fn iface_artist__get_artist_related_get_response__from_json(v: &Value) -> Option<iface_artist::GetArtistRelatedGetResponse> {
+    let m = v.as_object()?;
+    Some(iface_artist::GetArtistRelatedGetResponse {
+        message: m.get("message").filter(|v| !v.is_null()).and_then(|v| iface_artist__get_artist_related_get_response_message__from_json(v)),
+    })
+}
+
+fn iface_artist__get_artist_related_get_response_message__from_json(v: &Value) -> Option<iface_artist::GetArtistRelatedGetResponseMessage> {
+    let m = v.as_object()?;
+    Some(iface_artist::GetArtistRelatedGetResponseMessage {
+        body: m.get("body").filter(|v| !v.is_null()).and_then(|v| iface_artist__get_artist_related_get_response_message_body__from_json(v)),
+        header: m.get("header").filter(|v| !v.is_null()).and_then(|v| iface_artist__get_artist_related_get_response_message_header__from_json(v)),
+    })
+}
+
+fn iface_artist__get_artist_related_get_response_message_body__from_json(v: &Value) -> Option<iface_artist::GetArtistRelatedGetResponseMessageBody> {
+    let m = v.as_object()?;
+    Some(iface_artist::GetArtistRelatedGetResponseMessageBody {
+        artist_list: m.get("artist_list").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| iface_artist__get_artist_related_get_response_message_body_artist_list_item__from_json(x)).collect())),
+    })
+}
+
+fn iface_artist__get_artist_related_get_response_message_body_artist_list_item__from_json(v: &Value) -> Option<iface_artist::GetArtistRelatedGetResponseMessageBodyArtistListItem> {
+    let m = v.as_object()?;
+    Some(iface_artist::GetArtistRelatedGetResponseMessageBodyArtistListItem {
+        artist: m.get("artist").filter(|v| !v.is_null()).and_then(|v| iface_artist__artist__from_json(v)),
+    })
+}
+
+fn iface_artist__get_artist_related_get_response_message_header__from_json(v: &Value) -> Option<iface_artist::GetArtistRelatedGetResponseMessageHeader> {
+    let m = v.as_object()?;
+    Some(iface_artist::GetArtistRelatedGetResponseMessageHeader {
+        available: m.get("available").filter(|v| !v.is_null()).and_then(|v| (v).as_f64()),
+        execute_time: m.get("execute_time").filter(|v| !v.is_null()).and_then(|v| (v).as_f64()),
+        status_code: m.get("status_code").filter(|v| !v.is_null()).and_then(|v| (v).as_f64()),
+    })
+}
+
+fn iface_artist__get_artist_search_response__from_json(v: &Value) -> Option<iface_artist::GetArtistSearchResponse> {
+    let m = v.as_object()?;
+    Some(iface_artist::GetArtistSearchResponse {
+        message: m.get("message").filter(|v| !v.is_null()).and_then(|v| iface_artist__get_artist_search_response_message__from_json(v)),
+    })
+}
+
+fn iface_artist__get_artist_search_response_message__from_json(v: &Value) -> Option<iface_artist::GetArtistSearchResponseMessage> {
+    let m = v.as_object()?;
+    Some(iface_artist::GetArtistSearchResponseMessage {
+        body: m.get("body").filter(|v| !v.is_null()).and_then(|v| iface_artist__get_artist_search_response_message_body__from_json(v)),
+        header: m.get("header").filter(|v| !v.is_null()).and_then(|v| iface_artist__get_artist_search_response_message_header__from_json(v)),
+    })
+}
+
+fn iface_artist__get_artist_search_response_message_body__from_json(v: &Value) -> Option<iface_artist::GetArtistSearchResponseMessageBody> {
+    let m = v.as_object()?;
+    Some(iface_artist::GetArtistSearchResponseMessageBody {
+        artist_list: m.get("artist_list").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| iface_artist__get_artist_search_response_message_body_artist_list_item__from_json(x)).collect())),
+    })
+}
+
+fn iface_artist__get_artist_search_response_message_body_artist_list_item__from_json(v: &Value) -> Option<iface_artist::GetArtistSearchResponseMessageBodyArtistListItem> {
+    let m = v.as_object()?;
+    Some(iface_artist::GetArtistSearchResponseMessageBodyArtistListItem {
+        artist: m.get("artist").filter(|v| !v.is_null()).and_then(|v| iface_artist__artist__from_json(v)),
+    })
+}
+
+fn iface_artist__get_artist_search_response_message_header__from_json(v: &Value) -> Option<iface_artist::GetArtistSearchResponseMessageHeader> {
+    let m = v.as_object()?;
+    Some(iface_artist::GetArtistSearchResponseMessageHeader {
+        available: m.get("available").filter(|v| !v.is_null()).and_then(|v| (v).as_f64()),
+        execute_time: m.get("execute_time").filter(|v| !v.is_null()).and_then(|v| (v).as_f64()),
+        status_code: m.get("status_code").filter(|v| !v.is_null()).and_then(|v| (v).as_f64()),
+    })
+}
+
+fn iface_artist__get_chart_artists_get_response__from_json(v: &Value) -> Option<iface_artist::GetChartArtistsGetResponse> {
+    let m = v.as_object()?;
+    Some(iface_artist::GetChartArtistsGetResponse {
+        message: m.get("message").filter(|v| !v.is_null()).and_then(|v| iface_artist__get_chart_artists_get_response_message__from_json(v)),
+    })
+}
+
+fn iface_artist__get_chart_artists_get_response_message__from_json(v: &Value) -> Option<iface_artist::GetChartArtistsGetResponseMessage> {
+    let m = v.as_object()?;
+    Some(iface_artist::GetChartArtistsGetResponseMessage {
+        body: m.get("body").filter(|v| !v.is_null()).and_then(|v| iface_artist__get_chart_artists_get_response_message_body__from_json(v)),
+        header: m.get("header").filter(|v| !v.is_null()).and_then(|v| iface_artist__get_chart_artists_get_response_message_header__from_json(v)),
+    })
+}
+
+fn iface_artist__get_chart_artists_get_response_message_body__from_json(v: &Value) -> Option<iface_artist::GetChartArtistsGetResponseMessageBody> {
+    let m = v.as_object()?;
+    Some(iface_artist::GetChartArtistsGetResponseMessageBody {
+        artist_list: m.get("artist_list").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| iface_artist__get_chart_artists_get_response_message_body_artist_list_item__from_json(x)).collect())),
+    })
+}
+
+fn iface_artist__get_chart_artists_get_response_message_body_artist_list_item__from_json(v: &Value) -> Option<iface_artist::GetChartArtistsGetResponseMessageBodyArtistListItem> {
+    let m = v.as_object()?;
+    Some(iface_artist::GetChartArtistsGetResponseMessageBodyArtistListItem {
+        artist: m.get("artist").filter(|v| !v.is_null()).and_then(|v| iface_artist__artist__from_json(v)),
+    })
+}
+
+fn iface_artist__get_chart_artists_get_response_message_header__from_json(v: &Value) -> Option<iface_artist::GetChartArtistsGetResponseMessageHeader> {
+    let m = v.as_object()?;
+    Some(iface_artist::GetChartArtistsGetResponseMessageHeader {
+        available: m.get("available").filter(|v| !v.is_null()).and_then(|v| (v).as_f64()),
+        execute_time: m.get("execute_time").filter(|v| !v.is_null()).and_then(|v| (v).as_f64()),
+        status_code: m.get("status_code").filter(|v| !v.is_null()).and_then(|v| (v).as_f64()),
+    })
+}
+
+fn iface_artist__get_artist_get__ok(body: String) -> Result<iface_artist::GetArtistGetResponse, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match iface_artist__get_artist_get_response__from_json(&v) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_artist__get_artist_get__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
+fn iface_artist__get_artist_related_get__ok(body: String) -> Result<iface_artist::GetArtistRelatedGetResponse, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match iface_artist__get_artist_related_get_response__from_json(&v) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_artist__get_artist_related_get__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
+fn iface_artist__get_artist_search__ok(body: String) -> Result<iface_artist::GetArtistSearchResponse, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match iface_artist__get_artist_search_response__from_json(&v) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_artist__get_artist_search__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
+fn iface_artist__get_chart_artists_get__ok(body: String) -> Result<iface_artist::GetChartArtistsGetResponse, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match iface_artist__get_chart_artists_get_response__from_json(&v) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_artist__get_chart_artists_get__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
 impl iface_artist::Guest for crate::Component {
-    fn get_artist_get(params: iface_artist::GetArtistGetParams) -> Result<String, String> {
+    fn get_artist_get(params: iface_artist::GetArtistGetParams) -> Result<iface_artist::GetArtistGetResponse, String> {
         let json = iface_artist__get_artist_get_params__to_json(&params);
-        dispatch(&OP_ARTIST_GET_ARTIST_GET, json)
+        match dispatch(&OP_ARTIST_GET_ARTIST_GET, json).and_then(iface_artist__get_artist_get__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_artist__get_artist_get__err(e)),
+        }
     }
-    fn get_artist_related_get(params: iface_artist::GetArtistRelatedGetParams) -> Result<String, String> {
+    fn get_artist_related_get(params: iface_artist::GetArtistRelatedGetParams) -> Result<iface_artist::GetArtistRelatedGetResponse, String> {
         let json = iface_artist__get_artist_related_get_params__to_json(&params);
-        dispatch(&OP_ARTIST_GET_ARTIST_RELATED_GET, json)
+        match dispatch(&OP_ARTIST_GET_ARTIST_RELATED_GET, json).and_then(iface_artist__get_artist_related_get__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_artist__get_artist_related_get__err(e)),
+        }
     }
-    fn get_artist_search(params: iface_artist::GetArtistSearchParams) -> Result<String, String> {
+    fn get_artist_search(params: iface_artist::GetArtistSearchParams) -> Result<iface_artist::GetArtistSearchResponse, String> {
         let json = iface_artist__get_artist_search_params__to_json(&params);
-        dispatch(&OP_ARTIST_GET_ARTIST_SEARCH, json)
+        match dispatch(&OP_ARTIST_GET_ARTIST_SEARCH, json).and_then(iface_artist__get_artist_search__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_artist__get_artist_search__err(e)),
+        }
     }
-    fn get_chart_artists_get(params: iface_artist::GetChartArtistsGetParams) -> Result<String, String> {
+    fn get_chart_artists_get(params: iface_artist::GetChartArtistsGetParams) -> Result<iface_artist::GetChartArtistsGetResponse, String> {
         let json = iface_artist__get_chart_artists_get_params__to_json(&params);
-        dispatch(&OP_ARTIST_GET_CHART_ARTISTS_GET, json)
+        match dispatch(&OP_ARTIST_GET_CHART_ARTISTS_GET, json).and_then(iface_artist__get_chart_artists_get__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_artist__get_chart_artists_get__err(e)),
+        }
     }
 }
 use crate::exports::autostamp::musixmatch::lyrics as iface_lyrics;
@@ -626,10 +2035,10 @@ const OP_LYRICS_GET_MATCHER_LYRICS_GET: OpSpec = OpSpec {
     method: "GET",
     path_template: "/matcher.lyrics.get",
     fields: &[
-        FieldSpec { snake: "format", location: FieldLocation::Query },
-        FieldSpec { snake: "callback", location: FieldLocation::Query },
-        FieldSpec { snake: "q_track", location: FieldLocation::Query },
-        FieldSpec { snake: "q_artist", location: FieldLocation::Query },
+        FieldSpec { snake: "format", wire: "format", location: FieldLocation::Query },
+        FieldSpec { snake: "callback", wire: "callback", location: FieldLocation::Query },
+        FieldSpec { snake: "q_track", wire: "q_track", location: FieldLocation::Query },
+        FieldSpec { snake: "q_artist", wire: "q_artist", location: FieldLocation::Query },
     ],
     auth: &[
     ],
@@ -639,13 +2048,88 @@ const OP_LYRICS_GET_TRACK_LYRICS_GET: OpSpec = OpSpec {
     method: "GET",
     path_template: "/track.lyrics.get",
     fields: &[
-        FieldSpec { snake: "format", location: FieldLocation::Query },
-        FieldSpec { snake: "callback", location: FieldLocation::Query },
-        FieldSpec { snake: "track_id", location: FieldLocation::Query },
+        FieldSpec { snake: "format", wire: "format", location: FieldLocation::Query },
+        FieldSpec { snake: "callback", wire: "callback", location: FieldLocation::Query },
+        FieldSpec { snake: "track_id", wire: "track_id", location: FieldLocation::Query },
     ],
     auth: &[
     ],
 };
+
+fn iface_lyrics__get_matcher_lyrics_get_response__to_json(p: &iface_lyrics::GetMatcherLyricsGetResponse) -> Value {
+    let mut m = Map::new();
+    m.insert("message".into(), match (&p.message) { Some(v) => iface_lyrics__get_matcher_lyrics_get_response_message__to_json(v), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_lyrics__get_matcher_lyrics_get_response_message__to_json(p: &iface_lyrics::GetMatcherLyricsGetResponseMessage) -> Value {
+    let mut m = Map::new();
+    m.insert("body".into(), match (&p.body) { Some(v) => iface_lyrics__get_matcher_lyrics_get_response_message_body__to_json(v), None => Value::Null });
+    m.insert("header".into(), match (&p.header) { Some(v) => iface_lyrics__get_matcher_lyrics_get_response_message_header__to_json(v), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_lyrics__get_matcher_lyrics_get_response_message_body__to_json(p: &iface_lyrics::GetMatcherLyricsGetResponseMessageBody) -> Value {
+    let mut m = Map::new();
+    m.insert("lyrics".into(), match (&p.lyrics) { Some(v) => iface_lyrics__lyrics__to_json(v), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_lyrics__lyrics__to_json(p: &iface_lyrics::Lyrics) -> Value {
+    let mut m = Map::new();
+    m.insert("action_requested".into(), match (&p.action_requested) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("can_edit".into(), match (&p.can_edit) { Some(v) => serde_json::Number::from_f64(*(v)).map(Value::Number).unwrap_or(Value::Null), None => Value::Null });
+    m.insert("explicit".into(), match (&p.explicit) { Some(v) => serde_json::Number::from_f64(*(v)).map(Value::Number).unwrap_or(Value::Null), None => Value::Null });
+    m.insert("html_tracking_url".into(), match (&p.html_tracking_url) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("instrumental".into(), match (&p.instrumental) { Some(v) => serde_json::Number::from_f64(*(v)).map(Value::Number).unwrap_or(Value::Null), None => Value::Null });
+    m.insert("locked".into(), match (&p.locked) { Some(v) => serde_json::Number::from_f64(*(v)).map(Value::Number).unwrap_or(Value::Null), None => Value::Null });
+    m.insert("lyrics_body".into(), match (&p.lyrics_body) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("lyrics_copyright".into(), match (&p.lyrics_copyright) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("lyrics_id".into(), match (&p.lyrics_id) { Some(v) => serde_json::Number::from_f64(*(v)).map(Value::Number).unwrap_or(Value::Null), None => Value::Null });
+    m.insert("lyrics_language".into(), match (&p.lyrics_language) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("lyrics_language_description".into(), match (&p.lyrics_language_description) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("pixel_tracking_url".into(), match (&p.pixel_tracking_url) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("publisher_list".into(), match (&p.publisher_list) { Some(v) => Value::Array((v).iter().map(|v| Value::String((v).clone())).collect()), None => Value::Null });
+    m.insert("restricted".into(), match (&p.restricted) { Some(v) => serde_json::Number::from_f64(*(v)).map(Value::Number).unwrap_or(Value::Null), None => Value::Null });
+    m.insert("script_tracking_url".into(), match (&p.script_tracking_url) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("updated_time".into(), match (&p.updated_time) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("verified".into(), match (&p.verified) { Some(v) => serde_json::Number::from_f64(*(v)).map(Value::Number).unwrap_or(Value::Null), None => Value::Null });
+    m.insert("writer_list".into(), match (&p.writer_list) { Some(v) => Value::Array((v).iter().map(|v| Value::String((v).clone())).collect()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_lyrics__get_matcher_lyrics_get_response_message_header__to_json(p: &iface_lyrics::GetMatcherLyricsGetResponseMessageHeader) -> Value {
+    let mut m = Map::new();
+    m.insert("execute_time".into(), match (&p.execute_time) { Some(v) => serde_json::Number::from_f64(*(v)).map(Value::Number).unwrap_or(Value::Null), None => Value::Null });
+    m.insert("status_code".into(), match (&p.status_code) { Some(v) => serde_json::Number::from_f64(*(v)).map(Value::Number).unwrap_or(Value::Null), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_lyrics__get_track_lyrics_get_response__to_json(p: &iface_lyrics::GetTrackLyricsGetResponse) -> Value {
+    let mut m = Map::new();
+    m.insert("message".into(), match (&p.message) { Some(v) => iface_lyrics__get_track_lyrics_get_response_message__to_json(v), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_lyrics__get_track_lyrics_get_response_message__to_json(p: &iface_lyrics::GetTrackLyricsGetResponseMessage) -> Value {
+    let mut m = Map::new();
+    m.insert("body".into(), match (&p.body) { Some(v) => iface_lyrics__get_track_lyrics_get_response_message_body__to_json(v), None => Value::Null });
+    m.insert("header".into(), match (&p.header) { Some(v) => iface_lyrics__get_track_lyrics_get_response_message_header__to_json(v), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_lyrics__get_track_lyrics_get_response_message_body__to_json(p: &iface_lyrics::GetTrackLyricsGetResponseMessageBody) -> Value {
+    let mut m = Map::new();
+    m.insert("lyrics".into(), match (&p.lyrics) { Some(v) => iface_lyrics__lyrics__to_json(v), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_lyrics__get_track_lyrics_get_response_message_header__to_json(p: &iface_lyrics::GetTrackLyricsGetResponseMessageHeader) -> Value {
+    let mut m = Map::new();
+    m.insert("execute_time".into(), match (&p.execute_time) { Some(v) => serde_json::Number::from_f64(*(v)).map(Value::Number).unwrap_or(Value::Null), None => Value::Null });
+    m.insert("status_code".into(), match (&p.status_code) { Some(v) => serde_json::Number::from_f64(*(v)).map(Value::Number).unwrap_or(Value::Null), None => Value::Null });
+    Value::Object(m)
+}
 
 fn iface_lyrics__get_matcher_lyrics_get_params__to_json(p: &iface_lyrics::GetMatcherLyricsGetParams) -> Value {
     let mut m = Map::new();
@@ -664,14 +2148,140 @@ fn iface_lyrics__get_track_lyrics_get_params__to_json(p: &iface_lyrics::GetTrack
     Value::Object(m)
 }
 
-impl iface_lyrics::Guest for crate::Component {
-    fn get_matcher_lyrics_get(params: iface_lyrics::GetMatcherLyricsGetParams) -> Result<String, String> {
-        let json = iface_lyrics__get_matcher_lyrics_get_params__to_json(&params);
-        dispatch(&OP_LYRICS_GET_MATCHER_LYRICS_GET, json)
+fn iface_lyrics__get_matcher_lyrics_get_response__from_json(v: &Value) -> Option<iface_lyrics::GetMatcherLyricsGetResponse> {
+    let m = v.as_object()?;
+    Some(iface_lyrics::GetMatcherLyricsGetResponse {
+        message: m.get("message").filter(|v| !v.is_null()).and_then(|v| iface_lyrics__get_matcher_lyrics_get_response_message__from_json(v)),
+    })
+}
+
+fn iface_lyrics__get_matcher_lyrics_get_response_message__from_json(v: &Value) -> Option<iface_lyrics::GetMatcherLyricsGetResponseMessage> {
+    let m = v.as_object()?;
+    Some(iface_lyrics::GetMatcherLyricsGetResponseMessage {
+        body: m.get("body").filter(|v| !v.is_null()).and_then(|v| iface_lyrics__get_matcher_lyrics_get_response_message_body__from_json(v)),
+        header: m.get("header").filter(|v| !v.is_null()).and_then(|v| iface_lyrics__get_matcher_lyrics_get_response_message_header__from_json(v)),
+    })
+}
+
+fn iface_lyrics__get_matcher_lyrics_get_response_message_body__from_json(v: &Value) -> Option<iface_lyrics::GetMatcherLyricsGetResponseMessageBody> {
+    let m = v.as_object()?;
+    Some(iface_lyrics::GetMatcherLyricsGetResponseMessageBody {
+        lyrics: m.get("lyrics").filter(|v| !v.is_null()).and_then(|v| iface_lyrics__lyrics__from_json(v)),
+    })
+}
+
+fn iface_lyrics__lyrics__from_json(v: &Value) -> Option<iface_lyrics::Lyrics> {
+    let m = v.as_object()?;
+    Some(iface_lyrics::Lyrics {
+        action_requested: m.get("action_requested").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        can_edit: m.get("can_edit").filter(|v| !v.is_null()).and_then(|v| (v).as_f64()),
+        explicit: m.get("explicit").filter(|v| !v.is_null()).and_then(|v| (v).as_f64()),
+        html_tracking_url: m.get("html_tracking_url").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        instrumental: m.get("instrumental").filter(|v| !v.is_null()).and_then(|v| (v).as_f64()),
+        locked: m.get("locked").filter(|v| !v.is_null()).and_then(|v| (v).as_f64()),
+        lyrics_body: m.get("lyrics_body").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        lyrics_copyright: m.get("lyrics_copyright").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        lyrics_id: m.get("lyrics_id").filter(|v| !v.is_null()).and_then(|v| (v).as_f64()),
+        lyrics_language: m.get("lyrics_language").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        lyrics_language_description: m.get("lyrics_language_description").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        pixel_tracking_url: m.get("pixel_tracking_url").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        publisher_list: m.get("publisher_list").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| (x).as_str().map(|s| s.to_string())).collect())),
+        restricted: m.get("restricted").filter(|v| !v.is_null()).and_then(|v| (v).as_f64()),
+        script_tracking_url: m.get("script_tracking_url").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        updated_time: m.get("updated_time").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        verified: m.get("verified").filter(|v| !v.is_null()).and_then(|v| (v).as_f64()),
+        writer_list: m.get("writer_list").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| (x).as_str().map(|s| s.to_string())).collect())),
+    })
+}
+
+fn iface_lyrics__get_matcher_lyrics_get_response_message_header__from_json(v: &Value) -> Option<iface_lyrics::GetMatcherLyricsGetResponseMessageHeader> {
+    let m = v.as_object()?;
+    Some(iface_lyrics::GetMatcherLyricsGetResponseMessageHeader {
+        execute_time: m.get("execute_time").filter(|v| !v.is_null()).and_then(|v| (v).as_f64()),
+        status_code: m.get("status_code").filter(|v| !v.is_null()).and_then(|v| (v).as_f64()),
+    })
+}
+
+fn iface_lyrics__get_track_lyrics_get_response__from_json(v: &Value) -> Option<iface_lyrics::GetTrackLyricsGetResponse> {
+    let m = v.as_object()?;
+    Some(iface_lyrics::GetTrackLyricsGetResponse {
+        message: m.get("message").filter(|v| !v.is_null()).and_then(|v| iface_lyrics__get_track_lyrics_get_response_message__from_json(v)),
+    })
+}
+
+fn iface_lyrics__get_track_lyrics_get_response_message__from_json(v: &Value) -> Option<iface_lyrics::GetTrackLyricsGetResponseMessage> {
+    let m = v.as_object()?;
+    Some(iface_lyrics::GetTrackLyricsGetResponseMessage {
+        body: m.get("body").filter(|v| !v.is_null()).and_then(|v| iface_lyrics__get_track_lyrics_get_response_message_body__from_json(v)),
+        header: m.get("header").filter(|v| !v.is_null()).and_then(|v| iface_lyrics__get_track_lyrics_get_response_message_header__from_json(v)),
+    })
+}
+
+fn iface_lyrics__get_track_lyrics_get_response_message_body__from_json(v: &Value) -> Option<iface_lyrics::GetTrackLyricsGetResponseMessageBody> {
+    let m = v.as_object()?;
+    Some(iface_lyrics::GetTrackLyricsGetResponseMessageBody {
+        lyrics: m.get("lyrics").filter(|v| !v.is_null()).and_then(|v| iface_lyrics__lyrics__from_json(v)),
+    })
+}
+
+fn iface_lyrics__get_track_lyrics_get_response_message_header__from_json(v: &Value) -> Option<iface_lyrics::GetTrackLyricsGetResponseMessageHeader> {
+    let m = v.as_object()?;
+    Some(iface_lyrics::GetTrackLyricsGetResponseMessageHeader {
+        execute_time: m.get("execute_time").filter(|v| !v.is_null()).and_then(|v| (v).as_f64()),
+        status_code: m.get("status_code").filter(|v| !v.is_null()).and_then(|v| (v).as_f64()),
+    })
+}
+
+fn iface_lyrics__get_matcher_lyrics_get__ok(body: String) -> Result<iface_lyrics::GetMatcherLyricsGetResponse, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match iface_lyrics__get_matcher_lyrics_get_response__from_json(&v) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
     }
-    fn get_track_lyrics_get(params: iface_lyrics::GetTrackLyricsGetParams) -> Result<String, String> {
+}
+
+fn iface_lyrics__get_matcher_lyrics_get__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
+fn iface_lyrics__get_track_lyrics_get__ok(body: String) -> Result<iface_lyrics::GetTrackLyricsGetResponse, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match iface_lyrics__get_track_lyrics_get_response__from_json(&v) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_lyrics__get_track_lyrics_get__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
+impl iface_lyrics::Guest for crate::Component {
+    fn get_matcher_lyrics_get(params: iface_lyrics::GetMatcherLyricsGetParams) -> Result<iface_lyrics::GetMatcherLyricsGetResponse, String> {
+        let json = iface_lyrics__get_matcher_lyrics_get_params__to_json(&params);
+        match dispatch(&OP_LYRICS_GET_MATCHER_LYRICS_GET, json).and_then(iface_lyrics__get_matcher_lyrics_get__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_lyrics__get_matcher_lyrics_get__err(e)),
+        }
+    }
+    fn get_track_lyrics_get(params: iface_lyrics::GetTrackLyricsGetParams) -> Result<iface_lyrics::GetTrackLyricsGetResponse, String> {
         let json = iface_lyrics__get_track_lyrics_get_params__to_json(&params);
-        dispatch(&OP_LYRICS_GET_TRACK_LYRICS_GET, json)
+        match dispatch(&OP_LYRICS_GET_TRACK_LYRICS_GET, json).and_then(iface_lyrics__get_track_lyrics_get__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_lyrics__get_track_lyrics_get__err(e)),
+        }
     }
 }
 use crate::exports::autostamp::musixmatch::subtitle as iface_subtitle;
@@ -680,12 +2290,12 @@ const OP_SUBTITLE_GET_MATCHER_SUBTITLE_GET: OpSpec = OpSpec {
     method: "GET",
     path_template: "/matcher.subtitle.get",
     fields: &[
-        FieldSpec { snake: "format", location: FieldLocation::Query },
-        FieldSpec { snake: "callback", location: FieldLocation::Query },
-        FieldSpec { snake: "q_track", location: FieldLocation::Query },
-        FieldSpec { snake: "q_artist", location: FieldLocation::Query },
-        FieldSpec { snake: "f_subtitle_length", location: FieldLocation::Query },
-        FieldSpec { snake: "f_subtitle_length_max_deviation", location: FieldLocation::Query },
+        FieldSpec { snake: "format", wire: "format", location: FieldLocation::Query },
+        FieldSpec { snake: "callback", wire: "callback", location: FieldLocation::Query },
+        FieldSpec { snake: "q_track", wire: "q_track", location: FieldLocation::Query },
+        FieldSpec { snake: "q_artist", wire: "q_artist", location: FieldLocation::Query },
+        FieldSpec { snake: "f_subtitle_length", wire: "f_subtitle_length", location: FieldLocation::Query },
+        FieldSpec { snake: "f_subtitle_length_max_deviation", wire: "f_subtitle_length_max_deviation", location: FieldLocation::Query },
     ],
     auth: &[
     ],
@@ -695,13 +2305,83 @@ const OP_SUBTITLE_GET_TRACK_SUBTITLE_GET: OpSpec = OpSpec {
     method: "GET",
     path_template: "/track.subtitle.get",
     fields: &[
-        FieldSpec { snake: "format", location: FieldLocation::Query },
-        FieldSpec { snake: "callback", location: FieldLocation::Query },
-        FieldSpec { snake: "track_id", location: FieldLocation::Query },
+        FieldSpec { snake: "format", wire: "format", location: FieldLocation::Query },
+        FieldSpec { snake: "callback", wire: "callback", location: FieldLocation::Query },
+        FieldSpec { snake: "track_id", wire: "track_id", location: FieldLocation::Query },
     ],
     auth: &[
     ],
 };
+
+fn iface_subtitle__get_matcher_subtitle_get_response__to_json(p: &iface_subtitle::GetMatcherSubtitleGetResponse) -> Value {
+    let mut m = Map::new();
+    m.insert("message".into(), match (&p.message) { Some(v) => iface_subtitle__get_matcher_subtitle_get_response_message__to_json(v), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_subtitle__get_matcher_subtitle_get_response_message__to_json(p: &iface_subtitle::GetMatcherSubtitleGetResponseMessage) -> Value {
+    let mut m = Map::new();
+    m.insert("body".into(), match (&p.body) { Some(v) => iface_subtitle__get_matcher_subtitle_get_response_message_body__to_json(v), None => Value::Null });
+    m.insert("header".into(), match (&p.header) { Some(v) => iface_subtitle__get_matcher_subtitle_get_response_message_header__to_json(v), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_subtitle__get_matcher_subtitle_get_response_message_body__to_json(p: &iface_subtitle::GetMatcherSubtitleGetResponseMessageBody) -> Value {
+    let mut m = Map::new();
+    m.insert("subtitle".into(), match (&p.subtitle) { Some(v) => iface_subtitle__subtitle__to_json(v), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_subtitle__subtitle__to_json(p: &iface_subtitle::Subtitle) -> Value {
+    let mut m = Map::new();
+    m.insert("html_tracking_url".into(), match (&p.html_tracking_url) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("lyrics_copyright".into(), match (&p.lyrics_copyright) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("pixel_tracking_url".into(), match (&p.pixel_tracking_url) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("publisher_list".into(), match (&p.publisher_list) { Some(v) => Value::Array((v).iter().map(|v| Value::String((v).clone())).collect()), None => Value::Null });
+    m.insert("restricted".into(), match (&p.restricted) { Some(v) => serde_json::Number::from_f64(*(v)).map(Value::Number).unwrap_or(Value::Null), None => Value::Null });
+    m.insert("script_tracking_url".into(), match (&p.script_tracking_url) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("subtitle_body".into(), match (&p.subtitle_body) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("subtitle_id".into(), match (&p.subtitle_id) { Some(v) => serde_json::Number::from_f64(*(v)).map(Value::Number).unwrap_or(Value::Null), None => Value::Null });
+    m.insert("subtitle_language".into(), match (&p.subtitle_language) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("subtitle_language_description".into(), match (&p.subtitle_language_description) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("subtitle_length".into(), match (&p.subtitle_length) { Some(v) => serde_json::Number::from_f64(*(v)).map(Value::Number).unwrap_or(Value::Null), None => Value::Null });
+    m.insert("updated_time".into(), match (&p.updated_time) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("writer_list".into(), match (&p.writer_list) { Some(v) => Value::Array((v).iter().map(|v| Value::String((v).clone())).collect()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_subtitle__get_matcher_subtitle_get_response_message_header__to_json(p: &iface_subtitle::GetMatcherSubtitleGetResponseMessageHeader) -> Value {
+    let mut m = Map::new();
+    m.insert("execute_time".into(), match (&p.execute_time) { Some(v) => serde_json::Number::from_f64(*(v)).map(Value::Number).unwrap_or(Value::Null), None => Value::Null });
+    m.insert("status_code".into(), match (&p.status_code) { Some(v) => serde_json::Number::from_f64(*(v)).map(Value::Number).unwrap_or(Value::Null), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_subtitle__get_track_subtitle_get_response__to_json(p: &iface_subtitle::GetTrackSubtitleGetResponse) -> Value {
+    let mut m = Map::new();
+    m.insert("message".into(), match (&p.message) { Some(v) => iface_subtitle__get_track_subtitle_get_response_message__to_json(v), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_subtitle__get_track_subtitle_get_response_message__to_json(p: &iface_subtitle::GetTrackSubtitleGetResponseMessage) -> Value {
+    let mut m = Map::new();
+    m.insert("body".into(), match (&p.body) { Some(v) => iface_subtitle__get_track_subtitle_get_response_message_body__to_json(v), None => Value::Null });
+    m.insert("header".into(), match (&p.header) { Some(v) => iface_subtitle__get_track_subtitle_get_response_message_header__to_json(v), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_subtitle__get_track_subtitle_get_response_message_body__to_json(p: &iface_subtitle::GetTrackSubtitleGetResponseMessageBody) -> Value {
+    let mut m = Map::new();
+    m.insert("subtitle".into(), match (&p.subtitle) { Some(v) => iface_subtitle__subtitle__to_json(v), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_subtitle__get_track_subtitle_get_response_message_header__to_json(p: &iface_subtitle::GetTrackSubtitleGetResponseMessageHeader) -> Value {
+    let mut m = Map::new();
+    m.insert("execute_time".into(), match (&p.execute_time) { Some(v) => serde_json::Number::from_f64(*(v)).map(Value::Number).unwrap_or(Value::Null), None => Value::Null });
+    m.insert("status_code".into(), match (&p.status_code) { Some(v) => serde_json::Number::from_f64(*(v)).map(Value::Number).unwrap_or(Value::Null), None => Value::Null });
+    Value::Object(m)
+}
 
 fn iface_subtitle__get_matcher_subtitle_get_params__to_json(p: &iface_subtitle::GetMatcherSubtitleGetParams) -> Value {
     let mut m = Map::new();
@@ -722,14 +2402,135 @@ fn iface_subtitle__get_track_subtitle_get_params__to_json(p: &iface_subtitle::Ge
     Value::Object(m)
 }
 
-impl iface_subtitle::Guest for crate::Component {
-    fn get_matcher_subtitle_get(params: iface_subtitle::GetMatcherSubtitleGetParams) -> Result<String, String> {
-        let json = iface_subtitle__get_matcher_subtitle_get_params__to_json(&params);
-        dispatch(&OP_SUBTITLE_GET_MATCHER_SUBTITLE_GET, json)
+fn iface_subtitle__get_matcher_subtitle_get_response__from_json(v: &Value) -> Option<iface_subtitle::GetMatcherSubtitleGetResponse> {
+    let m = v.as_object()?;
+    Some(iface_subtitle::GetMatcherSubtitleGetResponse {
+        message: m.get("message").filter(|v| !v.is_null()).and_then(|v| iface_subtitle__get_matcher_subtitle_get_response_message__from_json(v)),
+    })
+}
+
+fn iface_subtitle__get_matcher_subtitle_get_response_message__from_json(v: &Value) -> Option<iface_subtitle::GetMatcherSubtitleGetResponseMessage> {
+    let m = v.as_object()?;
+    Some(iface_subtitle::GetMatcherSubtitleGetResponseMessage {
+        body: m.get("body").filter(|v| !v.is_null()).and_then(|v| iface_subtitle__get_matcher_subtitle_get_response_message_body__from_json(v)),
+        header: m.get("header").filter(|v| !v.is_null()).and_then(|v| iface_subtitle__get_matcher_subtitle_get_response_message_header__from_json(v)),
+    })
+}
+
+fn iface_subtitle__get_matcher_subtitle_get_response_message_body__from_json(v: &Value) -> Option<iface_subtitle::GetMatcherSubtitleGetResponseMessageBody> {
+    let m = v.as_object()?;
+    Some(iface_subtitle::GetMatcherSubtitleGetResponseMessageBody {
+        subtitle: m.get("subtitle").filter(|v| !v.is_null()).and_then(|v| iface_subtitle__subtitle__from_json(v)),
+    })
+}
+
+fn iface_subtitle__subtitle__from_json(v: &Value) -> Option<iface_subtitle::Subtitle> {
+    let m = v.as_object()?;
+    Some(iface_subtitle::Subtitle {
+        html_tracking_url: m.get("html_tracking_url").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        lyrics_copyright: m.get("lyrics_copyright").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        pixel_tracking_url: m.get("pixel_tracking_url").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        publisher_list: m.get("publisher_list").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| (x).as_str().map(|s| s.to_string())).collect())),
+        restricted: m.get("restricted").filter(|v| !v.is_null()).and_then(|v| (v).as_f64()),
+        script_tracking_url: m.get("script_tracking_url").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        subtitle_body: m.get("subtitle_body").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        subtitle_id: m.get("subtitle_id").filter(|v| !v.is_null()).and_then(|v| (v).as_f64()),
+        subtitle_language: m.get("subtitle_language").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        subtitle_language_description: m.get("subtitle_language_description").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        subtitle_length: m.get("subtitle_length").filter(|v| !v.is_null()).and_then(|v| (v).as_f64()),
+        updated_time: m.get("updated_time").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        writer_list: m.get("writer_list").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| (x).as_str().map(|s| s.to_string())).collect())),
+    })
+}
+
+fn iface_subtitle__get_matcher_subtitle_get_response_message_header__from_json(v: &Value) -> Option<iface_subtitle::GetMatcherSubtitleGetResponseMessageHeader> {
+    let m = v.as_object()?;
+    Some(iface_subtitle::GetMatcherSubtitleGetResponseMessageHeader {
+        execute_time: m.get("execute_time").filter(|v| !v.is_null()).and_then(|v| (v).as_f64()),
+        status_code: m.get("status_code").filter(|v| !v.is_null()).and_then(|v| (v).as_f64()),
+    })
+}
+
+fn iface_subtitle__get_track_subtitle_get_response__from_json(v: &Value) -> Option<iface_subtitle::GetTrackSubtitleGetResponse> {
+    let m = v.as_object()?;
+    Some(iface_subtitle::GetTrackSubtitleGetResponse {
+        message: m.get("message").filter(|v| !v.is_null()).and_then(|v| iface_subtitle__get_track_subtitle_get_response_message__from_json(v)),
+    })
+}
+
+fn iface_subtitle__get_track_subtitle_get_response_message__from_json(v: &Value) -> Option<iface_subtitle::GetTrackSubtitleGetResponseMessage> {
+    let m = v.as_object()?;
+    Some(iface_subtitle::GetTrackSubtitleGetResponseMessage {
+        body: m.get("body").filter(|v| !v.is_null()).and_then(|v| iface_subtitle__get_track_subtitle_get_response_message_body__from_json(v)),
+        header: m.get("header").filter(|v| !v.is_null()).and_then(|v| iface_subtitle__get_track_subtitle_get_response_message_header__from_json(v)),
+    })
+}
+
+fn iface_subtitle__get_track_subtitle_get_response_message_body__from_json(v: &Value) -> Option<iface_subtitle::GetTrackSubtitleGetResponseMessageBody> {
+    let m = v.as_object()?;
+    Some(iface_subtitle::GetTrackSubtitleGetResponseMessageBody {
+        subtitle: m.get("subtitle").filter(|v| !v.is_null()).and_then(|v| iface_subtitle__subtitle__from_json(v)),
+    })
+}
+
+fn iface_subtitle__get_track_subtitle_get_response_message_header__from_json(v: &Value) -> Option<iface_subtitle::GetTrackSubtitleGetResponseMessageHeader> {
+    let m = v.as_object()?;
+    Some(iface_subtitle::GetTrackSubtitleGetResponseMessageHeader {
+        execute_time: m.get("execute_time").filter(|v| !v.is_null()).and_then(|v| (v).as_f64()),
+        status_code: m.get("status_code").filter(|v| !v.is_null()).and_then(|v| (v).as_f64()),
+    })
+}
+
+fn iface_subtitle__get_matcher_subtitle_get__ok(body: String) -> Result<iface_subtitle::GetMatcherSubtitleGetResponse, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match iface_subtitle__get_matcher_subtitle_get_response__from_json(&v) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
     }
-    fn get_track_subtitle_get(params: iface_subtitle::GetTrackSubtitleGetParams) -> Result<String, String> {
+}
+
+fn iface_subtitle__get_matcher_subtitle_get__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
+fn iface_subtitle__get_track_subtitle_get__ok(body: String) -> Result<iface_subtitle::GetTrackSubtitleGetResponse, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match iface_subtitle__get_track_subtitle_get_response__from_json(&v) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_subtitle__get_track_subtitle_get__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
+impl iface_subtitle::Guest for crate::Component {
+    fn get_matcher_subtitle_get(params: iface_subtitle::GetMatcherSubtitleGetParams) -> Result<iface_subtitle::GetMatcherSubtitleGetResponse, String> {
+        let json = iface_subtitle__get_matcher_subtitle_get_params__to_json(&params);
+        match dispatch(&OP_SUBTITLE_GET_MATCHER_SUBTITLE_GET, json).and_then(iface_subtitle__get_matcher_subtitle_get__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_subtitle__get_matcher_subtitle_get__err(e)),
+        }
+    }
+    fn get_track_subtitle_get(params: iface_subtitle::GetTrackSubtitleGetParams) -> Result<iface_subtitle::GetTrackSubtitleGetResponse, String> {
         let json = iface_subtitle__get_track_subtitle_get_params__to_json(&params);
-        dispatch(&OP_SUBTITLE_GET_TRACK_SUBTITLE_GET, json)
+        match dispatch(&OP_SUBTITLE_GET_TRACK_SUBTITLE_GET, json).and_then(iface_subtitle__get_track_subtitle_get__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_subtitle__get_track_subtitle_get__err(e)),
+        }
     }
 }
 use crate::exports::autostamp::musixmatch::snippet as iface_snippet;
@@ -738,13 +2539,53 @@ const OP_SNIPPET_GET_TRACK_SNIPPET_GET: OpSpec = OpSpec {
     method: "GET",
     path_template: "/track.snippet.get",
     fields: &[
-        FieldSpec { snake: "format", location: FieldLocation::Query },
-        FieldSpec { snake: "callback", location: FieldLocation::Query },
-        FieldSpec { snake: "track_id", location: FieldLocation::Query },
+        FieldSpec { snake: "format", wire: "format", location: FieldLocation::Query },
+        FieldSpec { snake: "callback", wire: "callback", location: FieldLocation::Query },
+        FieldSpec { snake: "track_id", wire: "track_id", location: FieldLocation::Query },
     ],
     auth: &[
     ],
 };
+
+fn iface_snippet__get_track_snippet_get_response__to_json(p: &iface_snippet::GetTrackSnippetGetResponse) -> Value {
+    let mut m = Map::new();
+    m.insert("message".into(), match (&p.message) { Some(v) => iface_snippet__get_track_snippet_get_response_message__to_json(v), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_snippet__get_track_snippet_get_response_message__to_json(p: &iface_snippet::GetTrackSnippetGetResponseMessage) -> Value {
+    let mut m = Map::new();
+    m.insert("body".into(), match (&p.body) { Some(v) => iface_snippet__get_track_snippet_get_response_message_body__to_json(v), None => Value::Null });
+    m.insert("header".into(), match (&p.header) { Some(v) => iface_snippet__get_track_snippet_get_response_message_header__to_json(v), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_snippet__get_track_snippet_get_response_message_body__to_json(p: &iface_snippet::GetTrackSnippetGetResponseMessageBody) -> Value {
+    let mut m = Map::new();
+    m.insert("snippet".into(), match (&p.snippet) { Some(v) => iface_snippet__snippet__to_json(v), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_snippet__snippet__to_json(p: &iface_snippet::Snippet) -> Value {
+    let mut m = Map::new();
+    m.insert("html_tracking_url".into(), match (&p.html_tracking_url) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("instrumental".into(), match (&p.instrumental) { Some(v) => serde_json::Number::from_f64(*(v)).map(Value::Number).unwrap_or(Value::Null), None => Value::Null });
+    m.insert("pixel_tracking_url".into(), match (&p.pixel_tracking_url) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("restricted".into(), match (&p.restricted) { Some(v) => serde_json::Number::from_f64(*(v)).map(Value::Number).unwrap_or(Value::Null), None => Value::Null });
+    m.insert("script_tracking_url".into(), match (&p.script_tracking_url) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("snippet_body".into(), match (&p.snippet_body) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("snippet_id".into(), match (&p.snippet_id) { Some(v) => serde_json::Number::from_f64(*(v)).map(Value::Number).unwrap_or(Value::Null), None => Value::Null });
+    m.insert("snippet_language".into(), match (&p.snippet_language) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("updated_time".into(), match (&p.updated_time) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_snippet__get_track_snippet_get_response_message_header__to_json(p: &iface_snippet::GetTrackSnippetGetResponseMessageHeader) -> Value {
+    let mut m = Map::new();
+    m.insert("execute_time".into(), match (&p.execute_time) { Some(v) => serde_json::Number::from_f64(*(v)).map(Value::Number).unwrap_or(Value::Null), None => Value::Null });
+    m.insert("status_code".into(), match (&p.status_code) { Some(v) => serde_json::Number::from_f64(*(v)).map(Value::Number).unwrap_or(Value::Null), None => Value::Null });
+    Value::Object(m)
+}
 
 fn iface_snippet__get_track_snippet_get_params__to_json(p: &iface_snippet::GetTrackSnippetGetParams) -> Value {
     let mut m = Map::new();
@@ -754,10 +2595,76 @@ fn iface_snippet__get_track_snippet_get_params__to_json(p: &iface_snippet::GetTr
     Value::Object(m)
 }
 
+fn iface_snippet__get_track_snippet_get_response__from_json(v: &Value) -> Option<iface_snippet::GetTrackSnippetGetResponse> {
+    let m = v.as_object()?;
+    Some(iface_snippet::GetTrackSnippetGetResponse {
+        message: m.get("message").filter(|v| !v.is_null()).and_then(|v| iface_snippet__get_track_snippet_get_response_message__from_json(v)),
+    })
+}
+
+fn iface_snippet__get_track_snippet_get_response_message__from_json(v: &Value) -> Option<iface_snippet::GetTrackSnippetGetResponseMessage> {
+    let m = v.as_object()?;
+    Some(iface_snippet::GetTrackSnippetGetResponseMessage {
+        body: m.get("body").filter(|v| !v.is_null()).and_then(|v| iface_snippet__get_track_snippet_get_response_message_body__from_json(v)),
+        header: m.get("header").filter(|v| !v.is_null()).and_then(|v| iface_snippet__get_track_snippet_get_response_message_header__from_json(v)),
+    })
+}
+
+fn iface_snippet__get_track_snippet_get_response_message_body__from_json(v: &Value) -> Option<iface_snippet::GetTrackSnippetGetResponseMessageBody> {
+    let m = v.as_object()?;
+    Some(iface_snippet::GetTrackSnippetGetResponseMessageBody {
+        snippet: m.get("snippet").filter(|v| !v.is_null()).and_then(|v| iface_snippet__snippet__from_json(v)),
+    })
+}
+
+fn iface_snippet__snippet__from_json(v: &Value) -> Option<iface_snippet::Snippet> {
+    let m = v.as_object()?;
+    Some(iface_snippet::Snippet {
+        html_tracking_url: m.get("html_tracking_url").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        instrumental: m.get("instrumental").filter(|v| !v.is_null()).and_then(|v| (v).as_f64()),
+        pixel_tracking_url: m.get("pixel_tracking_url").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        restricted: m.get("restricted").filter(|v| !v.is_null()).and_then(|v| (v).as_f64()),
+        script_tracking_url: m.get("script_tracking_url").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        snippet_body: m.get("snippet_body").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        snippet_id: m.get("snippet_id").filter(|v| !v.is_null()).and_then(|v| (v).as_f64()),
+        snippet_language: m.get("snippet_language").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        updated_time: m.get("updated_time").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    })
+}
+
+fn iface_snippet__get_track_snippet_get_response_message_header__from_json(v: &Value) -> Option<iface_snippet::GetTrackSnippetGetResponseMessageHeader> {
+    let m = v.as_object()?;
+    Some(iface_snippet::GetTrackSnippetGetResponseMessageHeader {
+        execute_time: m.get("execute_time").filter(|v| !v.is_null()).and_then(|v| (v).as_f64()),
+        status_code: m.get("status_code").filter(|v| !v.is_null()).and_then(|v| (v).as_f64()),
+    })
+}
+
+fn iface_snippet__get_track_snippet_get__ok(body: String) -> Result<iface_snippet::GetTrackSnippetGetResponse, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match iface_snippet__get_track_snippet_get_response__from_json(&v) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_snippet__get_track_snippet_get__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
 impl iface_snippet::Guest for crate::Component {
-    fn get_track_snippet_get(params: iface_snippet::GetTrackSnippetGetParams) -> Result<String, String> {
+    fn get_track_snippet_get(params: iface_snippet::GetTrackSnippetGetParams) -> Result<iface_snippet::GetTrackSnippetGetResponse, String> {
         let json = iface_snippet__get_track_snippet_get_params__to_json(&params);
-        dispatch(&OP_SNIPPET_GET_TRACK_SNIPPET_GET, json)
+        match dispatch(&OP_SNIPPET_GET_TRACK_SNIPPET_GET, json).and_then(iface_snippet__get_track_snippet_get__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_snippet__get_track_snippet_get__err(e)),
+        }
     }
 }
 

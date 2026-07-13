@@ -44,10 +44,15 @@ pub(crate) enum FieldLocation {
     Body,
 }
 
-/// A single operation parameter: the snake-case key it carries in the params JSON and where
-/// it belongs in the request.
+/// A single operation parameter. `snake` keys the field in the internal params JSON (and, for a
+/// path field, matches the `{snake}` placeholder in the path template); `wire` is the verbatim name
+/// the field takes on the HTTP wire (query key, header name, or body property). The two differ
+/// whenever the source name isn't already snake_case (e.g. `dryRun` → snake `dry_run`, wire
+/// `dryRun`), and let distinct inputs that share a snake key (`DateCreated`, `DateCreated<`) still
+/// travel under their true names.
 pub(crate) struct FieldSpec {
     pub(crate) snake: &'static str,
+    pub(crate) wire: &'static str,
     pub(crate) location: FieldLocation,
 }
 
@@ -71,6 +76,16 @@ pub(crate) struct AuthApply {
     pub(crate) kind: AuthKind,
 }
 
+/// The failure modes of [`dispatch`], kept structured so each generated operation can map them
+/// onto its own typed error: an `Http` failure carries the response status and body (routed to
+/// the matching error-variant case), while a `Transport` failure carries a message for the
+/// catch-all case (a secret lookup, connection, or decode failure that never produced an HTTP
+/// status).
+pub(crate) enum DispatchError {
+    Http { status: u16, body: String },
+    Transport(String),
+}
+
 /// A single API operation: HTTP method, path template (with `{snake}` placeholders), the
 /// parameter fields, and the security schemes to apply.
 pub(crate) struct OpSpec {
@@ -81,8 +96,9 @@ pub(crate) struct OpSpec {
 }
 
 /// Execute `op` with the supplied `params` (a JSON object keyed by snake-case field names)
-/// and return the response body as a string, or an error message.
-pub(crate) fn dispatch(op: &OpSpec, params: Value) -> Result<String, String> {
+/// and return the raw 2xx response body, or a structured [`DispatchError`] the caller maps
+/// onto the operation's typed error.
+pub(crate) fn dispatch(op: &OpSpec, params: Value) -> Result<String, DispatchError> {
     let obj = match &params {
         Value::Object(map) => Some(map),
         _ => None,
@@ -105,10 +121,10 @@ pub(crate) fn dispatch(op: &OpSpec, params: Value) -> Result<String, String> {
                 let placeholder = format!("{{{}}}", field.snake);
                 path = path.replace(&placeholder, &percent_encode(&scalar(value)));
             }
-            FieldLocation::Query => query.push((field.snake.to_string(), scalar(value))),
-            FieldLocation::Header => headers.push((field.snake.to_string(), scalar(value))),
+            FieldLocation::Query => query.push((field.wire.to_string(), scalar(value))),
+            FieldLocation::Header => headers.push((field.wire.to_string(), scalar(value))),
             FieldLocation::Body => {
-                body.insert(field.snake.to_string(), value.clone());
+                body.insert(field.wire.to_string(), value.clone());
             }
         }
     }
@@ -116,7 +132,7 @@ pub(crate) fn dispatch(op: &OpSpec, params: Value) -> Result<String, String> {
     // Apply each resolved security scheme, sourcing its value from wasmcloud:secrets.
     let mut cookies: Vec<String> = Vec::new();
     for apply in op.auth {
-        let secret = fetch_secret(apply.secret_key)?;
+        let secret = fetch_secret(apply.secret_key).map_err(DispatchError::Transport)?;
         match &apply.kind {
             AuthKind::Bearer => headers.push(("authorization".into(), format!("Bearer {secret}"))),
             AuthKind::Basic => {
@@ -177,17 +193,18 @@ fn fetch_secret(key: &str) -> Result<String, String> {
 }
 
 /// Build and send the outgoing request with `wstd`, returning the response body on a 2xx
-/// status. The generated guest exports are synchronous, so the async `wstd` client is driven
-/// to completion on a local reactor via `wstd::runtime::block_on`.
+/// status and a structured [`DispatchError`] otherwise. The generated guest exports are
+/// synchronous, so the async `wstd` client is driven to completion on a local reactor via
+/// `wstd::runtime::block_on`.
 fn perform(
     method: &str,
     path_with_query: &str,
     headers: &[(String, String)],
     body: &[u8],
-) -> Result<String, String> {
+) -> Result<String, DispatchError> {
     let url = join_url(crate::BASE_URL, path_with_query);
     let method = Method::from_bytes(method.as_bytes())
-        .map_err(|err| format!("invalid HTTP method `{method}`: {err}"))?;
+        .map_err(|err| DispatchError::Transport(format!("invalid HTTP method `{method}`: {err}")))?;
 
     let mut builder = Request::builder().method(method).uri(url);
     for (name, value) in headers {
@@ -199,27 +216,29 @@ fn perform(
         } else {
             Body::from(body.to_vec())
         })
-        .map_err(|err| format!("failed to build request: {err}"))?;
+        .map_err(|err| DispatchError::Transport(format!("failed to build request: {err}")))?;
 
     wstd::runtime::block_on(async move {
         let client = Client::new();
         let response = client
             .send(request)
             .await
-            .map_err(|err| format!("request failed: {err:#}"))?;
+            .map_err(|err| DispatchError::Transport(format!("request failed: {err:#}")))?;
 
         let status = response.status().as_u16();
         let mut response_body = response.into_body();
-        let bytes = response_body
-            .contents()
-            .await
-            .map_err(|err| format!("failed to read response body: {err:#}"))?;
+        let bytes = response_body.contents().await.map_err(|err| {
+            DispatchError::Transport(format!("failed to read response body: {err:#}"))
+        })?;
         let body_text = String::from_utf8_lossy(bytes).into_owned();
 
         if (200..300).contains(&status) {
             Ok(body_text)
         } else {
-            Err(format!("HTTP {status}: {body_text}"))
+            Err(DispatchError::Http {
+                status,
+                body: body_text,
+            })
         }
     })
 }
@@ -288,24 +307,24 @@ const OP_OPEN_AI_CREATE_ANSWER: OpSpec = OpSpec {
     method: "POST",
     path_template: "/answers",
     fields: &[
-        FieldSpec { snake: "documents", location: FieldLocation::Body },
-        FieldSpec { snake: "examples", location: FieldLocation::Body },
-        FieldSpec { snake: "examples_context", location: FieldLocation::Body },
-        FieldSpec { snake: "expand", location: FieldLocation::Body },
-        FieldSpec { snake: "file", location: FieldLocation::Body },
-        FieldSpec { snake: "logit_bias", location: FieldLocation::Body },
-        FieldSpec { snake: "logprobs", location: FieldLocation::Body },
-        FieldSpec { snake: "max_rerank", location: FieldLocation::Body },
-        FieldSpec { snake: "max_tokens", location: FieldLocation::Body },
-        FieldSpec { snake: "model", location: FieldLocation::Body },
-        FieldSpec { snake: "n", location: FieldLocation::Body },
-        FieldSpec { snake: "question", location: FieldLocation::Body },
-        FieldSpec { snake: "return_metadata", location: FieldLocation::Body },
-        FieldSpec { snake: "return_prompt", location: FieldLocation::Body },
-        FieldSpec { snake: "search_model", location: FieldLocation::Body },
-        FieldSpec { snake: "stop", location: FieldLocation::Body },
-        FieldSpec { snake: "temperature", location: FieldLocation::Body },
-        FieldSpec { snake: "user", location: FieldLocation::Body },
+        FieldSpec { snake: "documents", wire: "documents", location: FieldLocation::Body },
+        FieldSpec { snake: "examples", wire: "examples", location: FieldLocation::Body },
+        FieldSpec { snake: "examples_context", wire: "examples_context", location: FieldLocation::Body },
+        FieldSpec { snake: "expand", wire: "expand", location: FieldLocation::Body },
+        FieldSpec { snake: "file", wire: "file", location: FieldLocation::Body },
+        FieldSpec { snake: "logit_bias", wire: "logit_bias", location: FieldLocation::Body },
+        FieldSpec { snake: "logprobs", wire: "logprobs", location: FieldLocation::Body },
+        FieldSpec { snake: "max_rerank", wire: "max_rerank", location: FieldLocation::Body },
+        FieldSpec { snake: "max_tokens", wire: "max_tokens", location: FieldLocation::Body },
+        FieldSpec { snake: "model", wire: "model", location: FieldLocation::Body },
+        FieldSpec { snake: "n", wire: "n", location: FieldLocation::Body },
+        FieldSpec { snake: "question", wire: "question", location: FieldLocation::Body },
+        FieldSpec { snake: "return_metadata", wire: "return_metadata", location: FieldLocation::Body },
+        FieldSpec { snake: "return_prompt", wire: "return_prompt", location: FieldLocation::Body },
+        FieldSpec { snake: "search_model", wire: "search_model", location: FieldLocation::Body },
+        FieldSpec { snake: "stop", wire: "stop", location: FieldLocation::Body },
+        FieldSpec { snake: "temperature", wire: "temperature", location: FieldLocation::Body },
+        FieldSpec { snake: "user", wire: "user", location: FieldLocation::Body },
     ],
     auth: &[
     ],
@@ -315,6 +334,12 @@ const OP_OPEN_AI_CREATE_TRANSCRIPTION: OpSpec = OpSpec {
     method: "POST",
     path_template: "/audio/transcriptions",
     fields: &[
+        FieldSpec { snake: "file", wire: "file", location: FieldLocation::Body },
+        FieldSpec { snake: "language", wire: "language", location: FieldLocation::Body },
+        FieldSpec { snake: "model", wire: "model", location: FieldLocation::Body },
+        FieldSpec { snake: "prompt", wire: "prompt", location: FieldLocation::Body },
+        FieldSpec { snake: "response_format", wire: "response_format", location: FieldLocation::Body },
+        FieldSpec { snake: "temperature", wire: "temperature", location: FieldLocation::Body },
     ],
     auth: &[
     ],
@@ -324,6 +349,11 @@ const OP_OPEN_AI_CREATE_TRANSLATION: OpSpec = OpSpec {
     method: "POST",
     path_template: "/audio/translations",
     fields: &[
+        FieldSpec { snake: "file", wire: "file", location: FieldLocation::Body },
+        FieldSpec { snake: "model", wire: "model", location: FieldLocation::Body },
+        FieldSpec { snake: "prompt", wire: "prompt", location: FieldLocation::Body },
+        FieldSpec { snake: "response_format", wire: "response_format", location: FieldLocation::Body },
+        FieldSpec { snake: "temperature", wire: "temperature", location: FieldLocation::Body },
     ],
     auth: &[
     ],
@@ -333,18 +363,18 @@ const OP_OPEN_AI_CREATE_CHAT_COMPLETION: OpSpec = OpSpec {
     method: "POST",
     path_template: "/chat/completions",
     fields: &[
-        FieldSpec { snake: "frequency_penalty", location: FieldLocation::Body },
-        FieldSpec { snake: "logit_bias", location: FieldLocation::Body },
-        FieldSpec { snake: "max_tokens", location: FieldLocation::Body },
-        FieldSpec { snake: "messages", location: FieldLocation::Body },
-        FieldSpec { snake: "model", location: FieldLocation::Body },
-        FieldSpec { snake: "n", location: FieldLocation::Body },
-        FieldSpec { snake: "presence_penalty", location: FieldLocation::Body },
-        FieldSpec { snake: "stop", location: FieldLocation::Body },
-        FieldSpec { snake: "stream", location: FieldLocation::Body },
-        FieldSpec { snake: "temperature", location: FieldLocation::Body },
-        FieldSpec { snake: "top_p", location: FieldLocation::Body },
-        FieldSpec { snake: "user", location: FieldLocation::Body },
+        FieldSpec { snake: "frequency_penalty", wire: "frequency_penalty", location: FieldLocation::Body },
+        FieldSpec { snake: "logit_bias", wire: "logit_bias", location: FieldLocation::Body },
+        FieldSpec { snake: "max_tokens", wire: "max_tokens", location: FieldLocation::Body },
+        FieldSpec { snake: "messages", wire: "messages", location: FieldLocation::Body },
+        FieldSpec { snake: "model", wire: "model", location: FieldLocation::Body },
+        FieldSpec { snake: "n", wire: "n", location: FieldLocation::Body },
+        FieldSpec { snake: "presence_penalty", wire: "presence_penalty", location: FieldLocation::Body },
+        FieldSpec { snake: "stop", wire: "stop", location: FieldLocation::Body },
+        FieldSpec { snake: "stream", wire: "stream", location: FieldLocation::Body },
+        FieldSpec { snake: "temperature", wire: "temperature", location: FieldLocation::Body },
+        FieldSpec { snake: "top_p", wire: "top_p", location: FieldLocation::Body },
+        FieldSpec { snake: "user", wire: "user", location: FieldLocation::Body },
     ],
     auth: &[
     ],
@@ -354,20 +384,20 @@ const OP_OPEN_AI_CREATE_CLASSIFICATION: OpSpec = OpSpec {
     method: "POST",
     path_template: "/classifications",
     fields: &[
-        FieldSpec { snake: "examples", location: FieldLocation::Body },
-        FieldSpec { snake: "expand", location: FieldLocation::Body },
-        FieldSpec { snake: "file", location: FieldLocation::Body },
-        FieldSpec { snake: "labels", location: FieldLocation::Body },
-        FieldSpec { snake: "logit_bias", location: FieldLocation::Body },
-        FieldSpec { snake: "logprobs", location: FieldLocation::Body },
-        FieldSpec { snake: "max_examples", location: FieldLocation::Body },
-        FieldSpec { snake: "model", location: FieldLocation::Body },
-        FieldSpec { snake: "query", location: FieldLocation::Body },
-        FieldSpec { snake: "return_metadata", location: FieldLocation::Body },
-        FieldSpec { snake: "return_prompt", location: FieldLocation::Body },
-        FieldSpec { snake: "search_model", location: FieldLocation::Body },
-        FieldSpec { snake: "temperature", location: FieldLocation::Body },
-        FieldSpec { snake: "user", location: FieldLocation::Body },
+        FieldSpec { snake: "examples", wire: "examples", location: FieldLocation::Body },
+        FieldSpec { snake: "expand", wire: "expand", location: FieldLocation::Body },
+        FieldSpec { snake: "file", wire: "file", location: FieldLocation::Body },
+        FieldSpec { snake: "labels", wire: "labels", location: FieldLocation::Body },
+        FieldSpec { snake: "logit_bias", wire: "logit_bias", location: FieldLocation::Body },
+        FieldSpec { snake: "logprobs", wire: "logprobs", location: FieldLocation::Body },
+        FieldSpec { snake: "max_examples", wire: "max_examples", location: FieldLocation::Body },
+        FieldSpec { snake: "model", wire: "model", location: FieldLocation::Body },
+        FieldSpec { snake: "query", wire: "query", location: FieldLocation::Body },
+        FieldSpec { snake: "return_metadata", wire: "return_metadata", location: FieldLocation::Body },
+        FieldSpec { snake: "return_prompt", wire: "return_prompt", location: FieldLocation::Body },
+        FieldSpec { snake: "search_model", wire: "search_model", location: FieldLocation::Body },
+        FieldSpec { snake: "temperature", wire: "temperature", location: FieldLocation::Body },
+        FieldSpec { snake: "user", wire: "user", location: FieldLocation::Body },
     ],
     auth: &[
     ],
@@ -377,22 +407,22 @@ const OP_OPEN_AI_CREATE_COMPLETION: OpSpec = OpSpec {
     method: "POST",
     path_template: "/completions",
     fields: &[
-        FieldSpec { snake: "best_of", location: FieldLocation::Body },
-        FieldSpec { snake: "echo", location: FieldLocation::Body },
-        FieldSpec { snake: "frequency_penalty", location: FieldLocation::Body },
-        FieldSpec { snake: "logit_bias", location: FieldLocation::Body },
-        FieldSpec { snake: "logprobs", location: FieldLocation::Body },
-        FieldSpec { snake: "max_tokens", location: FieldLocation::Body },
-        FieldSpec { snake: "model", location: FieldLocation::Body },
-        FieldSpec { snake: "n", location: FieldLocation::Body },
-        FieldSpec { snake: "presence_penalty", location: FieldLocation::Body },
-        FieldSpec { snake: "prompt", location: FieldLocation::Body },
-        FieldSpec { snake: "stop", location: FieldLocation::Body },
-        FieldSpec { snake: "stream", location: FieldLocation::Body },
-        FieldSpec { snake: "suffix", location: FieldLocation::Body },
-        FieldSpec { snake: "temperature", location: FieldLocation::Body },
-        FieldSpec { snake: "top_p", location: FieldLocation::Body },
-        FieldSpec { snake: "user", location: FieldLocation::Body },
+        FieldSpec { snake: "best_of", wire: "best_of", location: FieldLocation::Body },
+        FieldSpec { snake: "echo", wire: "echo", location: FieldLocation::Body },
+        FieldSpec { snake: "frequency_penalty", wire: "frequency_penalty", location: FieldLocation::Body },
+        FieldSpec { snake: "logit_bias", wire: "logit_bias", location: FieldLocation::Body },
+        FieldSpec { snake: "logprobs", wire: "logprobs", location: FieldLocation::Body },
+        FieldSpec { snake: "max_tokens", wire: "max_tokens", location: FieldLocation::Body },
+        FieldSpec { snake: "model", wire: "model", location: FieldLocation::Body },
+        FieldSpec { snake: "n", wire: "n", location: FieldLocation::Body },
+        FieldSpec { snake: "presence_penalty", wire: "presence_penalty", location: FieldLocation::Body },
+        FieldSpec { snake: "prompt", wire: "prompt", location: FieldLocation::Body },
+        FieldSpec { snake: "stop", wire: "stop", location: FieldLocation::Body },
+        FieldSpec { snake: "stream", wire: "stream", location: FieldLocation::Body },
+        FieldSpec { snake: "suffix", wire: "suffix", location: FieldLocation::Body },
+        FieldSpec { snake: "temperature", wire: "temperature", location: FieldLocation::Body },
+        FieldSpec { snake: "top_p", wire: "top_p", location: FieldLocation::Body },
+        FieldSpec { snake: "user", wire: "user", location: FieldLocation::Body },
     ],
     auth: &[
     ],
@@ -402,12 +432,12 @@ const OP_OPEN_AI_CREATE_EDIT: OpSpec = OpSpec {
     method: "POST",
     path_template: "/edits",
     fields: &[
-        FieldSpec { snake: "input", location: FieldLocation::Body },
-        FieldSpec { snake: "instruction", location: FieldLocation::Body },
-        FieldSpec { snake: "model", location: FieldLocation::Body },
-        FieldSpec { snake: "n", location: FieldLocation::Body },
-        FieldSpec { snake: "temperature", location: FieldLocation::Body },
-        FieldSpec { snake: "top_p", location: FieldLocation::Body },
+        FieldSpec { snake: "input", wire: "input", location: FieldLocation::Body },
+        FieldSpec { snake: "instruction", wire: "instruction", location: FieldLocation::Body },
+        FieldSpec { snake: "model", wire: "model", location: FieldLocation::Body },
+        FieldSpec { snake: "n", wire: "n", location: FieldLocation::Body },
+        FieldSpec { snake: "temperature", wire: "temperature", location: FieldLocation::Body },
+        FieldSpec { snake: "top_p", wire: "top_p", location: FieldLocation::Body },
     ],
     auth: &[
     ],
@@ -417,9 +447,9 @@ const OP_OPEN_AI_CREATE_EMBEDDING: OpSpec = OpSpec {
     method: "POST",
     path_template: "/embeddings",
     fields: &[
-        FieldSpec { snake: "input", location: FieldLocation::Body },
-        FieldSpec { snake: "model", location: FieldLocation::Body },
-        FieldSpec { snake: "user", location: FieldLocation::Body },
+        FieldSpec { snake: "input", wire: "input", location: FieldLocation::Body },
+        FieldSpec { snake: "model", wire: "model", location: FieldLocation::Body },
+        FieldSpec { snake: "user", wire: "user", location: FieldLocation::Body },
     ],
     auth: &[
     ],
@@ -438,7 +468,7 @@ const OP_OPEN_AI_RETRIEVE_ENGINE: OpSpec = OpSpec {
     method: "GET",
     path_template: "/engines/{engine_id}",
     fields: &[
-        FieldSpec { snake: "engine_id", location: FieldLocation::Path },
+        FieldSpec { snake: "engine_id", wire: "engine_id", location: FieldLocation::Path },
     ],
     auth: &[
     ],
@@ -448,13 +478,13 @@ const OP_OPEN_AI_CREATE_SEARCH: OpSpec = OpSpec {
     method: "POST",
     path_template: "/engines/{engine_id}/search",
     fields: &[
-        FieldSpec { snake: "engine_id", location: FieldLocation::Path },
-        FieldSpec { snake: "documents", location: FieldLocation::Body },
-        FieldSpec { snake: "file", location: FieldLocation::Body },
-        FieldSpec { snake: "max_rerank", location: FieldLocation::Body },
-        FieldSpec { snake: "query", location: FieldLocation::Body },
-        FieldSpec { snake: "return_metadata", location: FieldLocation::Body },
-        FieldSpec { snake: "user", location: FieldLocation::Body },
+        FieldSpec { snake: "engine_id", wire: "engine_id", location: FieldLocation::Path },
+        FieldSpec { snake: "documents", wire: "documents", location: FieldLocation::Body },
+        FieldSpec { snake: "file", wire: "file", location: FieldLocation::Body },
+        FieldSpec { snake: "max_rerank", wire: "max_rerank", location: FieldLocation::Body },
+        FieldSpec { snake: "query", wire: "query", location: FieldLocation::Body },
+        FieldSpec { snake: "return_metadata", wire: "return_metadata", location: FieldLocation::Body },
+        FieldSpec { snake: "user", wire: "user", location: FieldLocation::Body },
     ],
     auth: &[
     ],
@@ -473,6 +503,8 @@ const OP_OPEN_AI_CREATE_FILE: OpSpec = OpSpec {
     method: "POST",
     path_template: "/files",
     fields: &[
+        FieldSpec { snake: "file", wire: "file", location: FieldLocation::Body },
+        FieldSpec { snake: "purpose", wire: "purpose", location: FieldLocation::Body },
     ],
     auth: &[
     ],
@@ -482,7 +514,7 @@ const OP_OPEN_AI_RETRIEVE_FILE: OpSpec = OpSpec {
     method: "GET",
     path_template: "/files/{file_id}",
     fields: &[
-        FieldSpec { snake: "file_id", location: FieldLocation::Path },
+        FieldSpec { snake: "file_id", wire: "file_id", location: FieldLocation::Path },
     ],
     auth: &[
     ],
@@ -492,7 +524,7 @@ const OP_OPEN_AI_DELETE_FILE: OpSpec = OpSpec {
     method: "DELETE",
     path_template: "/files/{file_id}",
     fields: &[
-        FieldSpec { snake: "file_id", location: FieldLocation::Path },
+        FieldSpec { snake: "file_id", wire: "file_id", location: FieldLocation::Path },
     ],
     auth: &[
     ],
@@ -502,7 +534,7 @@ const OP_OPEN_AI_DOWNLOAD_FILE: OpSpec = OpSpec {
     method: "GET",
     path_template: "/files/{file_id}/content",
     fields: &[
-        FieldSpec { snake: "file_id", location: FieldLocation::Path },
+        FieldSpec { snake: "file_id", wire: "file_id", location: FieldLocation::Path },
     ],
     auth: &[
     ],
@@ -521,18 +553,18 @@ const OP_OPEN_AI_CREATE_FINE_TUNE: OpSpec = OpSpec {
     method: "POST",
     path_template: "/fine-tunes",
     fields: &[
-        FieldSpec { snake: "batch_size", location: FieldLocation::Body },
-        FieldSpec { snake: "classification_betas", location: FieldLocation::Body },
-        FieldSpec { snake: "classification_n_classes", location: FieldLocation::Body },
-        FieldSpec { snake: "classification_positive_class", location: FieldLocation::Body },
-        FieldSpec { snake: "compute_classification_metrics", location: FieldLocation::Body },
-        FieldSpec { snake: "learning_rate_multiplier", location: FieldLocation::Body },
-        FieldSpec { snake: "model", location: FieldLocation::Body },
-        FieldSpec { snake: "n_epochs", location: FieldLocation::Body },
-        FieldSpec { snake: "prompt_loss_weight", location: FieldLocation::Body },
-        FieldSpec { snake: "suffix", location: FieldLocation::Body },
-        FieldSpec { snake: "training_file", location: FieldLocation::Body },
-        FieldSpec { snake: "validation_file", location: FieldLocation::Body },
+        FieldSpec { snake: "batch_size", wire: "batch_size", location: FieldLocation::Body },
+        FieldSpec { snake: "classification_betas", wire: "classification_betas", location: FieldLocation::Body },
+        FieldSpec { snake: "classification_n_classes", wire: "classification_n_classes", location: FieldLocation::Body },
+        FieldSpec { snake: "classification_positive_class", wire: "classification_positive_class", location: FieldLocation::Body },
+        FieldSpec { snake: "compute_classification_metrics", wire: "compute_classification_metrics", location: FieldLocation::Body },
+        FieldSpec { snake: "learning_rate_multiplier", wire: "learning_rate_multiplier", location: FieldLocation::Body },
+        FieldSpec { snake: "model", wire: "model", location: FieldLocation::Body },
+        FieldSpec { snake: "n_epochs", wire: "n_epochs", location: FieldLocation::Body },
+        FieldSpec { snake: "prompt_loss_weight", wire: "prompt_loss_weight", location: FieldLocation::Body },
+        FieldSpec { snake: "suffix", wire: "suffix", location: FieldLocation::Body },
+        FieldSpec { snake: "training_file", wire: "training_file", location: FieldLocation::Body },
+        FieldSpec { snake: "validation_file", wire: "validation_file", location: FieldLocation::Body },
     ],
     auth: &[
     ],
@@ -542,7 +574,7 @@ const OP_OPEN_AI_RETRIEVE_FINE_TUNE: OpSpec = OpSpec {
     method: "GET",
     path_template: "/fine-tunes/{fine_tune_id}",
     fields: &[
-        FieldSpec { snake: "fine_tune_id", location: FieldLocation::Path },
+        FieldSpec { snake: "fine_tune_id", wire: "fine_tune_id", location: FieldLocation::Path },
     ],
     auth: &[
     ],
@@ -552,7 +584,7 @@ const OP_OPEN_AI_CANCEL_FINE_TUNE: OpSpec = OpSpec {
     method: "POST",
     path_template: "/fine-tunes/{fine_tune_id}/cancel",
     fields: &[
-        FieldSpec { snake: "fine_tune_id", location: FieldLocation::Path },
+        FieldSpec { snake: "fine_tune_id", wire: "fine_tune_id", location: FieldLocation::Path },
     ],
     auth: &[
     ],
@@ -562,8 +594,8 @@ const OP_OPEN_AI_LIST_FINE_TUNE_EVENTS: OpSpec = OpSpec {
     method: "GET",
     path_template: "/fine-tunes/{fine_tune_id}/events",
     fields: &[
-        FieldSpec { snake: "fine_tune_id", location: FieldLocation::Path },
-        FieldSpec { snake: "stream", location: FieldLocation::Query },
+        FieldSpec { snake: "fine_tune_id", wire: "fine_tune_id", location: FieldLocation::Path },
+        FieldSpec { snake: "stream", wire: "stream", location: FieldLocation::Query },
     ],
     auth: &[
     ],
@@ -573,6 +605,13 @@ const OP_OPEN_AI_CREATE_IMAGE_EDIT: OpSpec = OpSpec {
     method: "POST",
     path_template: "/images/edits",
     fields: &[
+        FieldSpec { snake: "image", wire: "image", location: FieldLocation::Body },
+        FieldSpec { snake: "mask", wire: "mask", location: FieldLocation::Body },
+        FieldSpec { snake: "n", wire: "n", location: FieldLocation::Body },
+        FieldSpec { snake: "prompt", wire: "prompt", location: FieldLocation::Body },
+        FieldSpec { snake: "response_format", wire: "response_format", location: FieldLocation::Body },
+        FieldSpec { snake: "size", wire: "size", location: FieldLocation::Body },
+        FieldSpec { snake: "user", wire: "user", location: FieldLocation::Body },
     ],
     auth: &[
     ],
@@ -582,11 +621,11 @@ const OP_OPEN_AI_CREATE_IMAGE: OpSpec = OpSpec {
     method: "POST",
     path_template: "/images/generations",
     fields: &[
-        FieldSpec { snake: "n", location: FieldLocation::Body },
-        FieldSpec { snake: "prompt", location: FieldLocation::Body },
-        FieldSpec { snake: "response_format", location: FieldLocation::Body },
-        FieldSpec { snake: "size", location: FieldLocation::Body },
-        FieldSpec { snake: "user", location: FieldLocation::Body },
+        FieldSpec { snake: "n", wire: "n", location: FieldLocation::Body },
+        FieldSpec { snake: "prompt", wire: "prompt", location: FieldLocation::Body },
+        FieldSpec { snake: "response_format", wire: "response_format", location: FieldLocation::Body },
+        FieldSpec { snake: "size", wire: "size", location: FieldLocation::Body },
+        FieldSpec { snake: "user", wire: "user", location: FieldLocation::Body },
     ],
     auth: &[
     ],
@@ -596,6 +635,11 @@ const OP_OPEN_AI_CREATE_IMAGE_VARIATION: OpSpec = OpSpec {
     method: "POST",
     path_template: "/images/variations",
     fields: &[
+        FieldSpec { snake: "image", wire: "image", location: FieldLocation::Body },
+        FieldSpec { snake: "n", wire: "n", location: FieldLocation::Body },
+        FieldSpec { snake: "response_format", wire: "response_format", location: FieldLocation::Body },
+        FieldSpec { snake: "size", wire: "size", location: FieldLocation::Body },
+        FieldSpec { snake: "user", wire: "user", location: FieldLocation::Body },
     ],
     auth: &[
     ],
@@ -614,7 +658,7 @@ const OP_OPEN_AI_RETRIEVE_MODEL: OpSpec = OpSpec {
     method: "GET",
     path_template: "/models/{model}",
     fields: &[
-        FieldSpec { snake: "model", location: FieldLocation::Path },
+        FieldSpec { snake: "model", wire: "model", location: FieldLocation::Path },
     ],
     auth: &[
     ],
@@ -624,7 +668,7 @@ const OP_OPEN_AI_DELETE_MODEL: OpSpec = OpSpec {
     method: "DELETE",
     path_template: "/models/{model}",
     fields: &[
-        FieldSpec { snake: "model", location: FieldLocation::Path },
+        FieldSpec { snake: "model", wire: "model", location: FieldLocation::Path },
     ],
     auth: &[
     ],
@@ -634,8 +678,8 @@ const OP_OPEN_AI_CREATE_MODERATION: OpSpec = OpSpec {
     method: "POST",
     path_template: "/moderations",
     fields: &[
-        FieldSpec { snake: "input", location: FieldLocation::Body },
-        FieldSpec { snake: "model", location: FieldLocation::Body },
+        FieldSpec { snake: "input", wire: "input", location: FieldLocation::Body },
+        FieldSpec { snake: "model", wire: "model", location: FieldLocation::Body },
     ],
     auth: &[
     ],
@@ -682,6 +726,36 @@ fn iface_open_ai__create_completion_request_properties_user__to_json(p: &iface_o
     Value::Object(m)
 }
 
+fn iface_open_ai__create_answer_response__to_json(p: &iface_open_ai::CreateAnswerResponse) -> Value {
+    let mut m = Map::new();
+    m.insert("answers".into(), match (&p.answers) { Some(v) => Value::Array((v).iter().map(|v| Value::String((v).clone())).collect()), None => Value::Null });
+    m.insert("completion".into(), match (&p.completion) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("model".into(), match (&p.model) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("object".into(), match (&p.object) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("search_model".into(), match (&p.search_model) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("selected_documents".into(), match (&p.selected_documents) { Some(v) => Value::Array((v).iter().map(|v| iface_open_ai__create_answer_response_selected_documents_item__to_json(v)).collect()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_open_ai__create_answer_response_selected_documents_item__to_json(p: &iface_open_ai::CreateAnswerResponseSelectedDocumentsItem) -> Value {
+    let mut m = Map::new();
+    m.insert("document".into(), match (&p.document) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("text".into(), match (&p.text) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_open_ai__create_transcription_response__to_json(p: &iface_open_ai::CreateTranscriptionResponse) -> Value {
+    let mut m = Map::new();
+    m.insert("text".into(), Value::String((&p.text).clone()));
+    Value::Object(m)
+}
+
+fn iface_open_ai__create_translation_response__to_json(p: &iface_open_ai::CreateTranslationResponse) -> Value {
+    let mut m = Map::new();
+    m.insert("text".into(), Value::String((&p.text).clone()));
+    Value::Object(m)
+}
+
 fn iface_open_ai__create_chat_completion_request_logit_bias__to_json(p: &iface_open_ai::CreateChatCompletionRequestLogitBias) -> Value {
     let mut m = Map::new();
     m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
@@ -693,6 +767,40 @@ fn iface_open_ai__chat_completion_request_message__to_json(p: &iface_open_ai::Ch
     m.insert("content".into(), Value::String((&p.content).clone()));
     m.insert("name".into(), match (&p.name) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("role".into(), Value::String(iface_open_ai__chat_completion_request_message_role_enum__to_str(&p.role).into()));
+    Value::Object(m)
+}
+
+fn iface_open_ai__create_chat_completion_response__to_json(p: &iface_open_ai::CreateChatCompletionResponse) -> Value {
+    let mut m = Map::new();
+    m.insert("choices".into(), Value::Array((&p.choices).iter().map(|v| iface_open_ai__create_chat_completion_response_choices_item__to_json(v)).collect()));
+    m.insert("created".into(), Value::Number(serde_json::Number::from(*(&p.created))));
+    m.insert("id".into(), Value::String((&p.id).clone()));
+    m.insert("model".into(), Value::String((&p.model).clone()));
+    m.insert("object".into(), Value::String((&p.object).clone()));
+    m.insert("usage".into(), match (&p.usage) { Some(v) => iface_open_ai__create_chat_completion_response_usage__to_json(v), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_open_ai__create_chat_completion_response_choices_item__to_json(p: &iface_open_ai::CreateChatCompletionResponseChoicesItem) -> Value {
+    let mut m = Map::new();
+    m.insert("finish_reason".into(), match (&p.finish_reason) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("index".into(), match (&p.index) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("message".into(), match (&p.message) { Some(v) => iface_open_ai__chat_completion_response_message__to_json(v), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_open_ai__chat_completion_response_message__to_json(p: &iface_open_ai::ChatCompletionResponseMessage) -> Value {
+    let mut m = Map::new();
+    m.insert("content".into(), Value::String((&p.content).clone()));
+    m.insert("role".into(), Value::String(iface_open_ai__chat_completion_request_message_role_enum__to_str(&p.role).into()));
+    Value::Object(m)
+}
+
+fn iface_open_ai__create_chat_completion_response_usage__to_json(p: &iface_open_ai::CreateChatCompletionResponseUsage) -> Value {
+    let mut m = Map::new();
+    m.insert("completion_tokens".into(), Value::Number(serde_json::Number::from(*(&p.completion_tokens))));
+    m.insert("prompt_tokens".into(), Value::Number(serde_json::Number::from(*(&p.prompt_tokens))));
+    m.insert("total_tokens".into(), Value::Number(serde_json::Number::from(*(&p.total_tokens))));
     Value::Object(m)
 }
 
@@ -726,9 +834,345 @@ fn iface_open_ai__create_answer_request_properties_search_model__to_json(p: &ifa
     Value::Object(m)
 }
 
+fn iface_open_ai__create_classification_response__to_json(p: &iface_open_ai::CreateClassificationResponse) -> Value {
+    let mut m = Map::new();
+    m.insert("completion".into(), match (&p.completion) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("label".into(), match (&p.label) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("model".into(), match (&p.model) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("object".into(), match (&p.object) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("search_model".into(), match (&p.search_model) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("selected_examples".into(), match (&p.selected_examples) { Some(v) => Value::Array((v).iter().map(|v| iface_open_ai__create_classification_response_selected_examples_item__to_json(v)).collect()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_open_ai__create_classification_response_selected_examples_item__to_json(p: &iface_open_ai::CreateClassificationResponseSelectedExamplesItem) -> Value {
+    let mut m = Map::new();
+    m.insert("document".into(), match (&p.document) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("label".into(), match (&p.label) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("text".into(), match (&p.text) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
 fn iface_open_ai__create_completion_request_logit_bias__to_json(p: &iface_open_ai::CreateCompletionRequestLogitBias) -> Value {
     let mut m = Map::new();
     m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_open_ai__create_completion_response__to_json(p: &iface_open_ai::CreateCompletionResponse) -> Value {
+    let mut m = Map::new();
+    m.insert("choices".into(), Value::Array((&p.choices).iter().map(|v| iface_open_ai__create_completion_response_choices_item__to_json(v)).collect()));
+    m.insert("created".into(), Value::Number(serde_json::Number::from(*(&p.created))));
+    m.insert("id".into(), Value::String((&p.id).clone()));
+    m.insert("model".into(), Value::String((&p.model).clone()));
+    m.insert("object".into(), Value::String((&p.object).clone()));
+    m.insert("usage".into(), match (&p.usage) { Some(v) => iface_open_ai__create_completion_response_usage__to_json(v), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_open_ai__create_completion_response_choices_item__to_json(p: &iface_open_ai::CreateCompletionResponseChoicesItem) -> Value {
+    let mut m = Map::new();
+    m.insert("finish_reason".into(), match (&p.finish_reason) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("index".into(), match (&p.index) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("logprobs".into(), match (&p.logprobs) { Some(v) => iface_open_ai__create_completion_response_choices_item_logprobs__to_json(v), None => Value::Null });
+    m.insert("text".into(), match (&p.text) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_open_ai__create_completion_response_choices_item_logprobs__to_json(p: &iface_open_ai::CreateCompletionResponseChoicesItemLogprobs) -> Value {
+    let mut m = Map::new();
+    m.insert("text_offset".into(), match (&p.text_offset) { Some(v) => Value::Array((v).iter().map(|v| Value::Number(serde_json::Number::from(*(v)))).collect()), None => Value::Null });
+    m.insert("token_logprobs".into(), match (&p.token_logprobs) { Some(v) => Value::Array((v).iter().map(|v| serde_json::Number::from_f64(*(v)).map(Value::Number).unwrap_or(Value::Null)).collect()), None => Value::Null });
+    m.insert("tokens".into(), match (&p.tokens) { Some(v) => Value::Array((v).iter().map(|v| Value::String((v).clone())).collect()), None => Value::Null });
+    m.insert("top_logprobs".into(), match (&p.top_logprobs) { Some(v) => Value::Array((v).iter().map(|v| iface_open_ai__create_completion_response_choices_item_logprobs_top_logprobs_item__to_json(v)).collect()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_open_ai__create_completion_response_choices_item_logprobs_top_logprobs_item__to_json(p: &iface_open_ai::CreateCompletionResponseChoicesItemLogprobsTopLogprobsItem) -> Value {
+    let mut m = Map::new();
+    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_open_ai__create_completion_response_usage__to_json(p: &iface_open_ai::CreateCompletionResponseUsage) -> Value {
+    let mut m = Map::new();
+    m.insert("completion_tokens".into(), Value::Number(serde_json::Number::from(*(&p.completion_tokens))));
+    m.insert("prompt_tokens".into(), Value::Number(serde_json::Number::from(*(&p.prompt_tokens))));
+    m.insert("total_tokens".into(), Value::Number(serde_json::Number::from(*(&p.total_tokens))));
+    Value::Object(m)
+}
+
+fn iface_open_ai__create_edit_response__to_json(p: &iface_open_ai::CreateEditResponse) -> Value {
+    let mut m = Map::new();
+    m.insert("choices".into(), Value::Array((&p.choices).iter().map(|v| iface_open_ai__create_edit_response_choices_item__to_json(v)).collect()));
+    m.insert("created".into(), Value::Number(serde_json::Number::from(*(&p.created))));
+    m.insert("object".into(), Value::String((&p.object).clone()));
+    m.insert("usage".into(), iface_open_ai__create_edit_response_usage__to_json(&p.usage));
+    Value::Object(m)
+}
+
+fn iface_open_ai__create_edit_response_choices_item__to_json(p: &iface_open_ai::CreateEditResponseChoicesItem) -> Value {
+    let mut m = Map::new();
+    m.insert("finish_reason".into(), match (&p.finish_reason) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("index".into(), match (&p.index) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("logprobs".into(), match (&p.logprobs) { Some(v) => iface_open_ai__create_edit_response_choices_item_logprobs__to_json(v), None => Value::Null });
+    m.insert("text".into(), match (&p.text) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_open_ai__create_edit_response_choices_item_logprobs__to_json(p: &iface_open_ai::CreateEditResponseChoicesItemLogprobs) -> Value {
+    let mut m = Map::new();
+    m.insert("text_offset".into(), match (&p.text_offset) { Some(v) => Value::Array((v).iter().map(|v| Value::Number(serde_json::Number::from(*(v)))).collect()), None => Value::Null });
+    m.insert("token_logprobs".into(), match (&p.token_logprobs) { Some(v) => Value::Array((v).iter().map(|v| serde_json::Number::from_f64(*(v)).map(Value::Number).unwrap_or(Value::Null)).collect()), None => Value::Null });
+    m.insert("tokens".into(), match (&p.tokens) { Some(v) => Value::Array((v).iter().map(|v| Value::String((v).clone())).collect()), None => Value::Null });
+    m.insert("top_logprobs".into(), match (&p.top_logprobs) { Some(v) => Value::Array((v).iter().map(|v| iface_open_ai__create_edit_response_choices_item_logprobs_top_logprobs_item__to_json(v)).collect()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_open_ai__create_edit_response_choices_item_logprobs_top_logprobs_item__to_json(p: &iface_open_ai::CreateEditResponseChoicesItemLogprobsTopLogprobsItem) -> Value {
+    let mut m = Map::new();
+    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_open_ai__create_edit_response_usage__to_json(p: &iface_open_ai::CreateEditResponseUsage) -> Value {
+    let mut m = Map::new();
+    m.insert("completion_tokens".into(), Value::Number(serde_json::Number::from(*(&p.completion_tokens))));
+    m.insert("prompt_tokens".into(), Value::Number(serde_json::Number::from(*(&p.prompt_tokens))));
+    m.insert("total_tokens".into(), Value::Number(serde_json::Number::from(*(&p.total_tokens))));
+    Value::Object(m)
+}
+
+fn iface_open_ai__create_embedding_response__to_json(p: &iface_open_ai::CreateEmbeddingResponse) -> Value {
+    let mut m = Map::new();
+    m.insert("data".into(), Value::Array((&p.data).iter().map(|v| iface_open_ai__create_embedding_response_data_item__to_json(v)).collect()));
+    m.insert("model".into(), Value::String((&p.model).clone()));
+    m.insert("object".into(), Value::String((&p.object).clone()));
+    m.insert("usage".into(), iface_open_ai__create_embedding_response_usage__to_json(&p.usage));
+    Value::Object(m)
+}
+
+fn iface_open_ai__create_embedding_response_data_item__to_json(p: &iface_open_ai::CreateEmbeddingResponseDataItem) -> Value {
+    let mut m = Map::new();
+    m.insert("embedding".into(), Value::Array((&p.embedding).iter().map(|v| serde_json::Number::from_f64(*(v)).map(Value::Number).unwrap_or(Value::Null)).collect()));
+    m.insert("index".into(), Value::Number(serde_json::Number::from(*(&p.index))));
+    m.insert("object".into(), Value::String((&p.object).clone()));
+    Value::Object(m)
+}
+
+fn iface_open_ai__create_embedding_response_usage__to_json(p: &iface_open_ai::CreateEmbeddingResponseUsage) -> Value {
+    let mut m = Map::new();
+    m.insert("prompt_tokens".into(), Value::Number(serde_json::Number::from(*(&p.prompt_tokens))));
+    m.insert("total_tokens".into(), Value::Number(serde_json::Number::from(*(&p.total_tokens))));
+    Value::Object(m)
+}
+
+fn iface_open_ai__list_engines_response__to_json(p: &iface_open_ai::ListEnginesResponse) -> Value {
+    let mut m = Map::new();
+    m.insert("data".into(), Value::Array((&p.data).iter().map(|v| iface_open_ai__engine__to_json(v)).collect()));
+    m.insert("object".into(), Value::String((&p.object).clone()));
+    Value::Object(m)
+}
+
+fn iface_open_ai__engine__to_json(p: &iface_open_ai::Engine) -> Value {
+    let mut m = Map::new();
+    m.insert("created".into(), Value::Number(serde_json::Number::from(*(&p.created))));
+    m.insert("id".into(), Value::String((&p.id).clone()));
+    m.insert("object".into(), Value::String((&p.object).clone()));
+    m.insert("ready".into(), Value::Bool(*(&p.ready)));
+    Value::Object(m)
+}
+
+fn iface_open_ai__create_search_response__to_json(p: &iface_open_ai::CreateSearchResponse) -> Value {
+    let mut m = Map::new();
+    m.insert("data".into(), match (&p.data) { Some(v) => Value::Array((v).iter().map(|v| iface_open_ai__create_search_response_data_item__to_json(v)).collect()), None => Value::Null });
+    m.insert("model".into(), match (&p.model) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("object".into(), match (&p.object) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_open_ai__create_search_response_data_item__to_json(p: &iface_open_ai::CreateSearchResponseDataItem) -> Value {
+    let mut m = Map::new();
+    m.insert("document".into(), match (&p.document) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("object".into(), match (&p.object) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("score".into(), match (&p.score) { Some(v) => serde_json::Number::from_f64(*(v)).map(Value::Number).unwrap_or(Value::Null), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_open_ai__list_files_response__to_json(p: &iface_open_ai::ListFilesResponse) -> Value {
+    let mut m = Map::new();
+    m.insert("data".into(), Value::Array((&p.data).iter().map(|v| iface_open_ai__file__to_json(v)).collect()));
+    m.insert("object".into(), Value::String((&p.object).clone()));
+    Value::Object(m)
+}
+
+fn iface_open_ai__file__to_json(p: &iface_open_ai::File) -> Value {
+    let mut m = Map::new();
+    m.insert("bytes".into(), Value::Number(serde_json::Number::from(*(&p.bytes))));
+    m.insert("created_at".into(), Value::Number(serde_json::Number::from(*(&p.created_at))));
+    m.insert("filename".into(), Value::String((&p.filename).clone()));
+    m.insert("id".into(), Value::String((&p.id).clone()));
+    m.insert("object".into(), Value::String((&p.object).clone()));
+    m.insert("purpose".into(), Value::String((&p.purpose).clone()));
+    m.insert("status".into(), match (&p.status) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("status_details".into(), match (&p.status_details) { Some(v) => iface_open_ai__file_status_details__to_json(v), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_open_ai__file_status_details__to_json(p: &iface_open_ai::FileStatusDetails) -> Value {
+    let mut m = Map::new();
+    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_open_ai__delete_file_response__to_json(p: &iface_open_ai::DeleteFileResponse) -> Value {
+    let mut m = Map::new();
+    m.insert("deleted".into(), Value::Bool(*(&p.deleted)));
+    m.insert("id".into(), Value::String((&p.id).clone()));
+    m.insert("object".into(), Value::String((&p.object).clone()));
+    Value::Object(m)
+}
+
+fn iface_open_ai__list_fine_tunes_response__to_json(p: &iface_open_ai::ListFineTunesResponse) -> Value {
+    let mut m = Map::new();
+    m.insert("data".into(), Value::Array((&p.data).iter().map(|v| iface_open_ai__fine_tune__to_json(v)).collect()));
+    m.insert("object".into(), Value::String((&p.object).clone()));
+    Value::Object(m)
+}
+
+fn iface_open_ai__fine_tune__to_json(p: &iface_open_ai::FineTune) -> Value {
+    let mut m = Map::new();
+    m.insert("created_at".into(), Value::Number(serde_json::Number::from(*(&p.created_at))));
+    m.insert("events".into(), match (&p.events) { Some(v) => Value::Array((v).iter().map(|v| iface_open_ai__fine_tune_event__to_json(v)).collect()), None => Value::Null });
+    m.insert("fine_tuned_model".into(), Value::String((&p.fine_tuned_model).clone()));
+    m.insert("hyperparams".into(), iface_open_ai__fine_tune_hyperparams__to_json(&p.hyperparams));
+    m.insert("id".into(), Value::String((&p.id).clone()));
+    m.insert("model".into(), Value::String((&p.model).clone()));
+    m.insert("object".into(), Value::String((&p.object).clone()));
+    m.insert("organization_id".into(), Value::String((&p.organization_id).clone()));
+    m.insert("result_files".into(), Value::Array((&p.result_files).iter().map(|v| iface_open_ai__file__to_json(v)).collect()));
+    m.insert("status".into(), Value::String((&p.status).clone()));
+    m.insert("training_files".into(), Value::Array((&p.training_files).iter().map(|v| iface_open_ai__file__to_json(v)).collect()));
+    m.insert("updated_at".into(), Value::Number(serde_json::Number::from(*(&p.updated_at))));
+    m.insert("validation_files".into(), Value::Array((&p.validation_files).iter().map(|v| iface_open_ai__file__to_json(v)).collect()));
+    Value::Object(m)
+}
+
+fn iface_open_ai__fine_tune_event__to_json(p: &iface_open_ai::FineTuneEvent) -> Value {
+    let mut m = Map::new();
+    m.insert("created_at".into(), Value::Number(serde_json::Number::from(*(&p.created_at))));
+    m.insert("level".into(), Value::String((&p.level).clone()));
+    m.insert("message".into(), Value::String((&p.message).clone()));
+    m.insert("object".into(), Value::String((&p.object).clone()));
+    Value::Object(m)
+}
+
+fn iface_open_ai__fine_tune_hyperparams__to_json(p: &iface_open_ai::FineTuneHyperparams) -> Value {
+    let mut m = Map::new();
+    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_open_ai__list_fine_tune_events_response__to_json(p: &iface_open_ai::ListFineTuneEventsResponse) -> Value {
+    let mut m = Map::new();
+    m.insert("data".into(), Value::Array((&p.data).iter().map(|v| iface_open_ai__fine_tune_event__to_json(v)).collect()));
+    m.insert("object".into(), Value::String((&p.object).clone()));
+    Value::Object(m)
+}
+
+fn iface_open_ai__create_image_request_properties_n__to_json(p: &iface_open_ai::CreateImageRequestPropertiesN) -> Value {
+    let mut m = Map::new();
+    m.insert("value".into(), Value::String((&p.value).clone()));
+    Value::Object(m)
+}
+
+fn iface_open_ai__create_image_request_properties_response_format__to_json(p: &iface_open_ai::CreateImageRequestPropertiesResponseFormat) -> Value {
+    let mut m = Map::new();
+    m.insert("value".into(), Value::String((&p.value).clone()));
+    Value::Object(m)
+}
+
+fn iface_open_ai__create_image_request_properties_size__to_json(p: &iface_open_ai::CreateImageRequestPropertiesSize) -> Value {
+    let mut m = Map::new();
+    m.insert("value".into(), Value::String((&p.value).clone()));
+    Value::Object(m)
+}
+
+fn iface_open_ai__images_response__to_json(p: &iface_open_ai::ImagesResponse) -> Value {
+    let mut m = Map::new();
+    m.insert("created".into(), Value::Number(serde_json::Number::from(*(&p.created))));
+    m.insert("data".into(), Value::Array((&p.data).iter().map(|v| iface_open_ai__images_response_data_item__to_json(v)).collect()));
+    Value::Object(m)
+}
+
+fn iface_open_ai__images_response_data_item__to_json(p: &iface_open_ai::ImagesResponseDataItem) -> Value {
+    let mut m = Map::new();
+    m.insert("b64_json".into(), match (&p.b64_json) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("url".into(), match (&p.url) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_open_ai__list_models_response__to_json(p: &iface_open_ai::ListModelsResponse) -> Value {
+    let mut m = Map::new();
+    m.insert("data".into(), Value::Array((&p.data).iter().map(|v| iface_open_ai__model__to_json(v)).collect()));
+    m.insert("object".into(), Value::String((&p.object).clone()));
+    Value::Object(m)
+}
+
+fn iface_open_ai__model__to_json(p: &iface_open_ai::Model) -> Value {
+    let mut m = Map::new();
+    m.insert("created".into(), Value::Number(serde_json::Number::from(*(&p.created))));
+    m.insert("id".into(), Value::String((&p.id).clone()));
+    m.insert("object".into(), Value::String((&p.object).clone()));
+    m.insert("owned_by".into(), Value::String((&p.owned_by).clone()));
+    Value::Object(m)
+}
+
+fn iface_open_ai__delete_model_response__to_json(p: &iface_open_ai::DeleteModelResponse) -> Value {
+    let mut m = Map::new();
+    m.insert("deleted".into(), Value::Bool(*(&p.deleted)));
+    m.insert("id".into(), Value::String((&p.id).clone()));
+    m.insert("object".into(), Value::String((&p.object).clone()));
+    Value::Object(m)
+}
+
+fn iface_open_ai__create_moderation_response__to_json(p: &iface_open_ai::CreateModerationResponse) -> Value {
+    let mut m = Map::new();
+    m.insert("id".into(), Value::String((&p.id).clone()));
+    m.insert("model".into(), Value::String((&p.model).clone()));
+    m.insert("results".into(), Value::Array((&p.results).iter().map(|v| iface_open_ai__create_moderation_response_results_item__to_json(v)).collect()));
+    Value::Object(m)
+}
+
+fn iface_open_ai__create_moderation_response_results_item__to_json(p: &iface_open_ai::CreateModerationResponseResultsItem) -> Value {
+    let mut m = Map::new();
+    m.insert("categories".into(), iface_open_ai__create_moderation_response_results_item_categories__to_json(&p.categories));
+    m.insert("category_scores".into(), iface_open_ai__create_moderation_response_results_item_category_scores__to_json(&p.category_scores));
+    m.insert("flagged".into(), Value::Bool(*(&p.flagged)));
+    Value::Object(m)
+}
+
+fn iface_open_ai__create_moderation_response_results_item_categories__to_json(p: &iface_open_ai::CreateModerationResponseResultsItemCategories) -> Value {
+    let mut m = Map::new();
+    m.insert("hate".into(), Value::Bool(*(&p.hate)));
+    m.insert("hate/threatening".into(), Value::Bool(*(&p.hate_threatening)));
+    m.insert("self-harm".into(), Value::Bool(*(&p.self_harm)));
+    m.insert("sexual".into(), Value::Bool(*(&p.sexual)));
+    m.insert("sexual/minors".into(), Value::Bool(*(&p.sexual_minors)));
+    m.insert("violence".into(), Value::Bool(*(&p.violence)));
+    m.insert("violence/graphic".into(), Value::Bool(*(&p.violence_graphic)));
+    Value::Object(m)
+}
+
+fn iface_open_ai__create_moderation_response_results_item_category_scores__to_json(p: &iface_open_ai::CreateModerationResponseResultsItemCategoryScores) -> Value {
+    let mut m = Map::new();
+    m.insert("hate".into(), serde_json::Number::from_f64(*(&p.hate)).map(Value::Number).unwrap_or(Value::Null));
+    m.insert("hate/threatening".into(), serde_json::Number::from_f64(*(&p.hate_threatening)).map(Value::Number).unwrap_or(Value::Null));
+    m.insert("self-harm".into(), serde_json::Number::from_f64(*(&p.self_harm)).map(Value::Number).unwrap_or(Value::Null));
+    m.insert("sexual".into(), serde_json::Number::from_f64(*(&p.sexual)).map(Value::Number).unwrap_or(Value::Null));
+    m.insert("sexual/minors".into(), serde_json::Number::from_f64(*(&p.sexual_minors)).map(Value::Number).unwrap_or(Value::Null));
+    m.insert("violence".into(), serde_json::Number::from_f64(*(&p.violence)).map(Value::Number).unwrap_or(Value::Null));
+    m.insert("violence/graphic".into(), serde_json::Number::from_f64(*(&p.violence_graphic)).map(Value::Number).unwrap_or(Value::Null));
     Value::Object(m)
 }
 
@@ -752,6 +1196,27 @@ fn iface_open_ai__create_answer_params__to_json(p: &iface_open_ai::CreateAnswerP
     m.insert("stop".into(), match (&p.stop) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("temperature".into(), match (&p.temperature) { Some(v) => serde_json::Number::from_f64(*(v)).map(Value::Number).unwrap_or(Value::Null), None => Value::Null });
     m.insert("user".into(), match (&p.user) { Some(v) => iface_open_ai__create_completion_request_properties_user__to_json(v), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_open_ai__create_transcription_params__to_json(p: &iface_open_ai::CreateTranscriptionParams) -> Value {
+    let mut m = Map::new();
+    m.insert("file".into(), Value::String((&p.file).clone()));
+    m.insert("language".into(), match (&p.language) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("model".into(), Value::String((&p.model).clone()));
+    m.insert("prompt".into(), match (&p.prompt) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("response_format".into(), match (&p.response_format) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("temperature".into(), match (&p.temperature) { Some(v) => serde_json::Number::from_f64(*(v)).map(Value::Number).unwrap_or(Value::Null), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_open_ai__create_translation_params__to_json(p: &iface_open_ai::CreateTranslationParams) -> Value {
+    let mut m = Map::new();
+    m.insert("file".into(), Value::String((&p.file).clone()));
+    m.insert("model".into(), Value::String((&p.model).clone()));
+    m.insert("prompt".into(), match (&p.prompt) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("response_format".into(), match (&p.response_format) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("temperature".into(), match (&p.temperature) { Some(v) => serde_json::Number::from_f64(*(v)).map(Value::Number).unwrap_or(Value::Null), None => Value::Null });
     Value::Object(m)
 }
 
@@ -849,6 +1314,13 @@ fn iface_open_ai__create_search_params__to_json(p: &iface_open_ai::CreateSearchP
     Value::Object(m)
 }
 
+fn iface_open_ai__create_file_params__to_json(p: &iface_open_ai::CreateFileParams) -> Value {
+    let mut m = Map::new();
+    m.insert("file".into(), Value::String((&p.file).clone()));
+    m.insert("purpose".into(), Value::String((&p.purpose).clone()));
+    Value::Object(m)
+}
+
 fn iface_open_ai__retrieve_file_params__to_json(p: &iface_open_ai::RetrieveFileParams) -> Value {
     let mut m = Map::new();
     m.insert("file_id".into(), Value::String((&p.file_id).clone()));
@@ -903,12 +1375,34 @@ fn iface_open_ai__list_fine_tune_events_params__to_json(p: &iface_open_ai::ListF
     Value::Object(m)
 }
 
+fn iface_open_ai__create_image_edit_params__to_json(p: &iface_open_ai::CreateImageEditParams) -> Value {
+    let mut m = Map::new();
+    m.insert("image".into(), Value::String((&p.image).clone()));
+    m.insert("mask".into(), match (&p.mask) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("n".into(), match (&p.n) { Some(v) => iface_open_ai__create_image_request_properties_n__to_json(v), None => Value::Null });
+    m.insert("prompt".into(), Value::String((&p.prompt).clone()));
+    m.insert("response_format".into(), match (&p.response_format) { Some(v) => iface_open_ai__create_image_request_properties_response_format__to_json(v), None => Value::Null });
+    m.insert("size".into(), match (&p.size) { Some(v) => iface_open_ai__create_image_request_properties_size__to_json(v), None => Value::Null });
+    m.insert("user".into(), match (&p.user) { Some(v) => iface_open_ai__create_completion_request_properties_user__to_json(v), None => Value::Null });
+    Value::Object(m)
+}
+
 fn iface_open_ai__create_image_params__to_json(p: &iface_open_ai::CreateImageParams) -> Value {
     let mut m = Map::new();
     m.insert("n".into(), match (&p.n) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
     m.insert("prompt".into(), Value::String((&p.prompt).clone()));
     m.insert("response_format".into(), match (&p.response_format) { Some(v) => Value::String(iface_open_ai__create_image_request_response_format_enum__to_str(v).into()), None => Value::Null });
     m.insert("size".into(), match (&p.size) { Some(v) => Value::String(iface_open_ai__create_image_request_size_enum__to_str(v).into()), None => Value::Null });
+    m.insert("user".into(), match (&p.user) { Some(v) => iface_open_ai__create_completion_request_properties_user__to_json(v), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_open_ai__create_image_variation_params__to_json(p: &iface_open_ai::CreateImageVariationParams) -> Value {
+    let mut m = Map::new();
+    m.insert("image".into(), Value::String((&p.image).clone()));
+    m.insert("n".into(), match (&p.n) { Some(v) => iface_open_ai__create_image_request_properties_n__to_json(v), None => Value::Null });
+    m.insert("response_format".into(), match (&p.response_format) { Some(v) => iface_open_ai__create_image_request_properties_response_format__to_json(v), None => Value::Null });
+    m.insert("size".into(), match (&p.size) { Some(v) => iface_open_ai__create_image_request_properties_size__to_json(v), None => Value::Null });
     m.insert("user".into(), match (&p.user) { Some(v) => iface_open_ai__create_completion_request_properties_user__to_json(v), None => Value::Null });
     Value::Object(m)
 }
@@ -932,109 +1426,1131 @@ fn iface_open_ai__create_moderation_params__to_json(p: &iface_open_ai::CreateMod
     Value::Object(m)
 }
 
+fn iface_open_ai__create_answer_response__from_json(v: &Value) -> Option<iface_open_ai::CreateAnswerResponse> {
+    let m = v.as_object()?;
+    Some(iface_open_ai::CreateAnswerResponse {
+        answers: m.get("answers").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| (x).as_str().map(|s| s.to_string())).collect())),
+        completion: m.get("completion").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        model: m.get("model").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        object: m.get("object").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        search_model: m.get("search_model").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        selected_documents: m.get("selected_documents").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| iface_open_ai__create_answer_response_selected_documents_item__from_json(x)).collect())),
+    })
+}
+
+fn iface_open_ai__create_answer_response_selected_documents_item__from_json(v: &Value) -> Option<iface_open_ai::CreateAnswerResponseSelectedDocumentsItem> {
+    let m = v.as_object()?;
+    Some(iface_open_ai::CreateAnswerResponseSelectedDocumentsItem {
+        document: m.get("document").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        text: m.get("text").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    })
+}
+
+fn iface_open_ai__create_transcription_response__from_json(v: &Value) -> Option<iface_open_ai::CreateTranscriptionResponse> {
+    let m = v.as_object()?;
+    Some(iface_open_ai::CreateTranscriptionResponse {
+        text: m.get("text").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+    })
+}
+
+fn iface_open_ai__create_translation_response__from_json(v: &Value) -> Option<iface_open_ai::CreateTranslationResponse> {
+    let m = v.as_object()?;
+    Some(iface_open_ai::CreateTranslationResponse {
+        text: m.get("text").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+    })
+}
+
+fn iface_open_ai__create_chat_completion_response__from_json(v: &Value) -> Option<iface_open_ai::CreateChatCompletionResponse> {
+    let m = v.as_object()?;
+    Some(iface_open_ai::CreateChatCompletionResponse {
+        choices: m.get("choices").and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| iface_open_ai__create_chat_completion_response_choices_item__from_json(x)).collect())).unwrap_or_default(),
+        created: m.get("created").and_then(|v| (v).as_i64().map(|n| n as i32)).unwrap_or_default(),
+        id: m.get("id").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        model: m.get("model").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        object: m.get("object").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        usage: m.get("usage").filter(|v| !v.is_null()).and_then(|v| iface_open_ai__create_chat_completion_response_usage__from_json(v)),
+    })
+}
+
+fn iface_open_ai__create_chat_completion_response_choices_item__from_json(v: &Value) -> Option<iface_open_ai::CreateChatCompletionResponseChoicesItem> {
+    let m = v.as_object()?;
+    Some(iface_open_ai::CreateChatCompletionResponseChoicesItem {
+        finish_reason: m.get("finish_reason").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        index: m.get("index").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        message: m.get("message").filter(|v| !v.is_null()).and_then(|v| iface_open_ai__chat_completion_response_message__from_json(v)),
+    })
+}
+
+fn iface_open_ai__chat_completion_response_message__from_json(v: &Value) -> Option<iface_open_ai::ChatCompletionResponseMessage> {
+    let m = v.as_object()?;
+    Some(iface_open_ai::ChatCompletionResponseMessage {
+        content: m.get("content").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        role: match m.get("role").and_then(|v| (v).as_str().and_then(iface_open_ai__chat_completion_request_message_role_enum__from_str)) { Some(x) => x, None => return None },
+    })
+}
+
+fn iface_open_ai__create_chat_completion_response_usage__from_json(v: &Value) -> Option<iface_open_ai::CreateChatCompletionResponseUsage> {
+    let m = v.as_object()?;
+    Some(iface_open_ai::CreateChatCompletionResponseUsage {
+        completion_tokens: m.get("completion_tokens").and_then(|v| (v).as_i64().map(|n| n as i32)).unwrap_or_default(),
+        prompt_tokens: m.get("prompt_tokens").and_then(|v| (v).as_i64().map(|n| n as i32)).unwrap_or_default(),
+        total_tokens: m.get("total_tokens").and_then(|v| (v).as_i64().map(|n| n as i32)).unwrap_or_default(),
+    })
+}
+
+fn iface_open_ai__create_classification_response__from_json(v: &Value) -> Option<iface_open_ai::CreateClassificationResponse> {
+    let m = v.as_object()?;
+    Some(iface_open_ai::CreateClassificationResponse {
+        completion: m.get("completion").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        label: m.get("label").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        model: m.get("model").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        object: m.get("object").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        search_model: m.get("search_model").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        selected_examples: m.get("selected_examples").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| iface_open_ai__create_classification_response_selected_examples_item__from_json(x)).collect())),
+    })
+}
+
+fn iface_open_ai__create_classification_response_selected_examples_item__from_json(v: &Value) -> Option<iface_open_ai::CreateClassificationResponseSelectedExamplesItem> {
+    let m = v.as_object()?;
+    Some(iface_open_ai::CreateClassificationResponseSelectedExamplesItem {
+        document: m.get("document").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        label: m.get("label").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        text: m.get("text").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    })
+}
+
+fn iface_open_ai__create_completion_response__from_json(v: &Value) -> Option<iface_open_ai::CreateCompletionResponse> {
+    let m = v.as_object()?;
+    Some(iface_open_ai::CreateCompletionResponse {
+        choices: m.get("choices").and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| iface_open_ai__create_completion_response_choices_item__from_json(x)).collect())).unwrap_or_default(),
+        created: m.get("created").and_then(|v| (v).as_i64().map(|n| n as i32)).unwrap_or_default(),
+        id: m.get("id").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        model: m.get("model").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        object: m.get("object").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        usage: m.get("usage").filter(|v| !v.is_null()).and_then(|v| iface_open_ai__create_completion_response_usage__from_json(v)),
+    })
+}
+
+fn iface_open_ai__create_completion_response_choices_item__from_json(v: &Value) -> Option<iface_open_ai::CreateCompletionResponseChoicesItem> {
+    let m = v.as_object()?;
+    Some(iface_open_ai::CreateCompletionResponseChoicesItem {
+        finish_reason: m.get("finish_reason").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        index: m.get("index").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        logprobs: m.get("logprobs").filter(|v| !v.is_null()).and_then(|v| iface_open_ai__create_completion_response_choices_item_logprobs__from_json(v)),
+        text: m.get("text").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    })
+}
+
+fn iface_open_ai__create_completion_response_choices_item_logprobs__from_json(v: &Value) -> Option<iface_open_ai::CreateCompletionResponseChoicesItemLogprobs> {
+    let m = v.as_object()?;
+    Some(iface_open_ai::CreateCompletionResponseChoicesItemLogprobs {
+        text_offset: m.get("text_offset").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| (x).as_i64().map(|n| n as i32)).collect())),
+        token_logprobs: m.get("token_logprobs").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| (x).as_f64()).collect())),
+        tokens: m.get("tokens").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| (x).as_str().map(|s| s.to_string())).collect())),
+        top_logprobs: m.get("top_logprobs").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| iface_open_ai__create_completion_response_choices_item_logprobs_top_logprobs_item__from_json(x)).collect())),
+    })
+}
+
+fn iface_open_ai__create_completion_response_choices_item_logprobs_top_logprobs_item__from_json(v: &Value) -> Option<iface_open_ai::CreateCompletionResponseChoicesItemLogprobsTopLogprobsItem> {
+    let m = v.as_object()?;
+    Some(iface_open_ai::CreateCompletionResponseChoicesItemLogprobsTopLogprobsItem {
+        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    })
+}
+
+fn iface_open_ai__create_completion_response_usage__from_json(v: &Value) -> Option<iface_open_ai::CreateCompletionResponseUsage> {
+    let m = v.as_object()?;
+    Some(iface_open_ai::CreateCompletionResponseUsage {
+        completion_tokens: m.get("completion_tokens").and_then(|v| (v).as_i64().map(|n| n as i32)).unwrap_or_default(),
+        prompt_tokens: m.get("prompt_tokens").and_then(|v| (v).as_i64().map(|n| n as i32)).unwrap_or_default(),
+        total_tokens: m.get("total_tokens").and_then(|v| (v).as_i64().map(|n| n as i32)).unwrap_or_default(),
+    })
+}
+
+fn iface_open_ai__create_edit_response__from_json(v: &Value) -> Option<iface_open_ai::CreateEditResponse> {
+    let m = v.as_object()?;
+    Some(iface_open_ai::CreateEditResponse {
+        choices: m.get("choices").and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| iface_open_ai__create_edit_response_choices_item__from_json(x)).collect())).unwrap_or_default(),
+        created: m.get("created").and_then(|v| (v).as_i64().map(|n| n as i32)).unwrap_or_default(),
+        object: m.get("object").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        usage: match m.get("usage").and_then(|v| iface_open_ai__create_edit_response_usage__from_json(v)) { Some(x) => x, None => return None },
+    })
+}
+
+fn iface_open_ai__create_edit_response_choices_item__from_json(v: &Value) -> Option<iface_open_ai::CreateEditResponseChoicesItem> {
+    let m = v.as_object()?;
+    Some(iface_open_ai::CreateEditResponseChoicesItem {
+        finish_reason: m.get("finish_reason").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        index: m.get("index").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        logprobs: m.get("logprobs").filter(|v| !v.is_null()).and_then(|v| iface_open_ai__create_edit_response_choices_item_logprobs__from_json(v)),
+        text: m.get("text").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    })
+}
+
+fn iface_open_ai__create_edit_response_choices_item_logprobs__from_json(v: &Value) -> Option<iface_open_ai::CreateEditResponseChoicesItemLogprobs> {
+    let m = v.as_object()?;
+    Some(iface_open_ai::CreateEditResponseChoicesItemLogprobs {
+        text_offset: m.get("text_offset").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| (x).as_i64().map(|n| n as i32)).collect())),
+        token_logprobs: m.get("token_logprobs").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| (x).as_f64()).collect())),
+        tokens: m.get("tokens").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| (x).as_str().map(|s| s.to_string())).collect())),
+        top_logprobs: m.get("top_logprobs").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| iface_open_ai__create_edit_response_choices_item_logprobs_top_logprobs_item__from_json(x)).collect())),
+    })
+}
+
+fn iface_open_ai__create_edit_response_choices_item_logprobs_top_logprobs_item__from_json(v: &Value) -> Option<iface_open_ai::CreateEditResponseChoicesItemLogprobsTopLogprobsItem> {
+    let m = v.as_object()?;
+    Some(iface_open_ai::CreateEditResponseChoicesItemLogprobsTopLogprobsItem {
+        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    })
+}
+
+fn iface_open_ai__create_edit_response_usage__from_json(v: &Value) -> Option<iface_open_ai::CreateEditResponseUsage> {
+    let m = v.as_object()?;
+    Some(iface_open_ai::CreateEditResponseUsage {
+        completion_tokens: m.get("completion_tokens").and_then(|v| (v).as_i64().map(|n| n as i32)).unwrap_or_default(),
+        prompt_tokens: m.get("prompt_tokens").and_then(|v| (v).as_i64().map(|n| n as i32)).unwrap_or_default(),
+        total_tokens: m.get("total_tokens").and_then(|v| (v).as_i64().map(|n| n as i32)).unwrap_or_default(),
+    })
+}
+
+fn iface_open_ai__create_embedding_response__from_json(v: &Value) -> Option<iface_open_ai::CreateEmbeddingResponse> {
+    let m = v.as_object()?;
+    Some(iface_open_ai::CreateEmbeddingResponse {
+        data: m.get("data").and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| iface_open_ai__create_embedding_response_data_item__from_json(x)).collect())).unwrap_or_default(),
+        model: m.get("model").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        object: m.get("object").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        usage: match m.get("usage").and_then(|v| iface_open_ai__create_embedding_response_usage__from_json(v)) { Some(x) => x, None => return None },
+    })
+}
+
+fn iface_open_ai__create_embedding_response_data_item__from_json(v: &Value) -> Option<iface_open_ai::CreateEmbeddingResponseDataItem> {
+    let m = v.as_object()?;
+    Some(iface_open_ai::CreateEmbeddingResponseDataItem {
+        embedding: m.get("embedding").and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| (x).as_f64()).collect())).unwrap_or_default(),
+        index: m.get("index").and_then(|v| (v).as_i64().map(|n| n as i32)).unwrap_or_default(),
+        object: m.get("object").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+    })
+}
+
+fn iface_open_ai__create_embedding_response_usage__from_json(v: &Value) -> Option<iface_open_ai::CreateEmbeddingResponseUsage> {
+    let m = v.as_object()?;
+    Some(iface_open_ai::CreateEmbeddingResponseUsage {
+        prompt_tokens: m.get("prompt_tokens").and_then(|v| (v).as_i64().map(|n| n as i32)).unwrap_or_default(),
+        total_tokens: m.get("total_tokens").and_then(|v| (v).as_i64().map(|n| n as i32)).unwrap_or_default(),
+    })
+}
+
+fn iface_open_ai__list_engines_response__from_json(v: &Value) -> Option<iface_open_ai::ListEnginesResponse> {
+    let m = v.as_object()?;
+    Some(iface_open_ai::ListEnginesResponse {
+        data: m.get("data").and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| iface_open_ai__engine__from_json(x)).collect())).unwrap_or_default(),
+        object: m.get("object").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+    })
+}
+
+fn iface_open_ai__engine__from_json(v: &Value) -> Option<iface_open_ai::Engine> {
+    let m = v.as_object()?;
+    Some(iface_open_ai::Engine {
+        created: m.get("created").and_then(|v| (v).as_i64().map(|n| n as i32)).unwrap_or_default(),
+        id: m.get("id").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        object: m.get("object").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        ready: m.get("ready").and_then(|v| (v).as_bool()).unwrap_or_default(),
+    })
+}
+
+fn iface_open_ai__create_search_response__from_json(v: &Value) -> Option<iface_open_ai::CreateSearchResponse> {
+    let m = v.as_object()?;
+    Some(iface_open_ai::CreateSearchResponse {
+        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| iface_open_ai__create_search_response_data_item__from_json(x)).collect())),
+        model: m.get("model").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        object: m.get("object").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    })
+}
+
+fn iface_open_ai__create_search_response_data_item__from_json(v: &Value) -> Option<iface_open_ai::CreateSearchResponseDataItem> {
+    let m = v.as_object()?;
+    Some(iface_open_ai::CreateSearchResponseDataItem {
+        document: m.get("document").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        object: m.get("object").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        score: m.get("score").filter(|v| !v.is_null()).and_then(|v| (v).as_f64()),
+    })
+}
+
+fn iface_open_ai__list_files_response__from_json(v: &Value) -> Option<iface_open_ai::ListFilesResponse> {
+    let m = v.as_object()?;
+    Some(iface_open_ai::ListFilesResponse {
+        data: m.get("data").and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| iface_open_ai__file__from_json(x)).collect())).unwrap_or_default(),
+        object: m.get("object").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+    })
+}
+
+fn iface_open_ai__file__from_json(v: &Value) -> Option<iface_open_ai::File> {
+    let m = v.as_object()?;
+    Some(iface_open_ai::File {
+        bytes: m.get("bytes").and_then(|v| (v).as_i64().map(|n| n as i32)).unwrap_or_default(),
+        created_at: m.get("created_at").and_then(|v| (v).as_i64().map(|n| n as i32)).unwrap_or_default(),
+        filename: m.get("filename").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        id: m.get("id").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        object: m.get("object").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        purpose: m.get("purpose").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        status: m.get("status").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        status_details: m.get("status_details").filter(|v| !v.is_null()).and_then(|v| iface_open_ai__file_status_details__from_json(v)),
+    })
+}
+
+fn iface_open_ai__file_status_details__from_json(v: &Value) -> Option<iface_open_ai::FileStatusDetails> {
+    let m = v.as_object()?;
+    Some(iface_open_ai::FileStatusDetails {
+        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    })
+}
+
+fn iface_open_ai__delete_file_response__from_json(v: &Value) -> Option<iface_open_ai::DeleteFileResponse> {
+    let m = v.as_object()?;
+    Some(iface_open_ai::DeleteFileResponse {
+        deleted: m.get("deleted").and_then(|v| (v).as_bool()).unwrap_or_default(),
+        id: m.get("id").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        object: m.get("object").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+    })
+}
+
+fn iface_open_ai__list_fine_tunes_response__from_json(v: &Value) -> Option<iface_open_ai::ListFineTunesResponse> {
+    let m = v.as_object()?;
+    Some(iface_open_ai::ListFineTunesResponse {
+        data: m.get("data").and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| iface_open_ai__fine_tune__from_json(x)).collect())).unwrap_or_default(),
+        object: m.get("object").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+    })
+}
+
+fn iface_open_ai__fine_tune__from_json(v: &Value) -> Option<iface_open_ai::FineTune> {
+    let m = v.as_object()?;
+    Some(iface_open_ai::FineTune {
+        created_at: m.get("created_at").and_then(|v| (v).as_i64().map(|n| n as i32)).unwrap_or_default(),
+        events: m.get("events").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| iface_open_ai__fine_tune_event__from_json(x)).collect())),
+        fine_tuned_model: m.get("fine_tuned_model").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        hyperparams: match m.get("hyperparams").and_then(|v| iface_open_ai__fine_tune_hyperparams__from_json(v)) { Some(x) => x, None => return None },
+        id: m.get("id").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        model: m.get("model").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        object: m.get("object").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        organization_id: m.get("organization_id").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        result_files: m.get("result_files").and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| iface_open_ai__file__from_json(x)).collect())).unwrap_or_default(),
+        status: m.get("status").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        training_files: m.get("training_files").and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| iface_open_ai__file__from_json(x)).collect())).unwrap_or_default(),
+        updated_at: m.get("updated_at").and_then(|v| (v).as_i64().map(|n| n as i32)).unwrap_or_default(),
+        validation_files: m.get("validation_files").and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| iface_open_ai__file__from_json(x)).collect())).unwrap_or_default(),
+    })
+}
+
+fn iface_open_ai__fine_tune_event__from_json(v: &Value) -> Option<iface_open_ai::FineTuneEvent> {
+    let m = v.as_object()?;
+    Some(iface_open_ai::FineTuneEvent {
+        created_at: m.get("created_at").and_then(|v| (v).as_i64().map(|n| n as i32)).unwrap_or_default(),
+        level: m.get("level").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        message: m.get("message").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        object: m.get("object").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+    })
+}
+
+fn iface_open_ai__fine_tune_hyperparams__from_json(v: &Value) -> Option<iface_open_ai::FineTuneHyperparams> {
+    let m = v.as_object()?;
+    Some(iface_open_ai::FineTuneHyperparams {
+        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    })
+}
+
+fn iface_open_ai__list_fine_tune_events_response__from_json(v: &Value) -> Option<iface_open_ai::ListFineTuneEventsResponse> {
+    let m = v.as_object()?;
+    Some(iface_open_ai::ListFineTuneEventsResponse {
+        data: m.get("data").and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| iface_open_ai__fine_tune_event__from_json(x)).collect())).unwrap_or_default(),
+        object: m.get("object").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+    })
+}
+
+fn iface_open_ai__images_response__from_json(v: &Value) -> Option<iface_open_ai::ImagesResponse> {
+    let m = v.as_object()?;
+    Some(iface_open_ai::ImagesResponse {
+        created: m.get("created").and_then(|v| (v).as_i64().map(|n| n as i32)).unwrap_or_default(),
+        data: m.get("data").and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| iface_open_ai__images_response_data_item__from_json(x)).collect())).unwrap_or_default(),
+    })
+}
+
+fn iface_open_ai__images_response_data_item__from_json(v: &Value) -> Option<iface_open_ai::ImagesResponseDataItem> {
+    let m = v.as_object()?;
+    Some(iface_open_ai::ImagesResponseDataItem {
+        b64_json: m.get("b64_json").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        url: m.get("url").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    })
+}
+
+fn iface_open_ai__list_models_response__from_json(v: &Value) -> Option<iface_open_ai::ListModelsResponse> {
+    let m = v.as_object()?;
+    Some(iface_open_ai::ListModelsResponse {
+        data: m.get("data").and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| iface_open_ai__model__from_json(x)).collect())).unwrap_or_default(),
+        object: m.get("object").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+    })
+}
+
+fn iface_open_ai__model__from_json(v: &Value) -> Option<iface_open_ai::Model> {
+    let m = v.as_object()?;
+    Some(iface_open_ai::Model {
+        created: m.get("created").and_then(|v| (v).as_i64().map(|n| n as i32)).unwrap_or_default(),
+        id: m.get("id").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        object: m.get("object").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        owned_by: m.get("owned_by").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+    })
+}
+
+fn iface_open_ai__delete_model_response__from_json(v: &Value) -> Option<iface_open_ai::DeleteModelResponse> {
+    let m = v.as_object()?;
+    Some(iface_open_ai::DeleteModelResponse {
+        deleted: m.get("deleted").and_then(|v| (v).as_bool()).unwrap_or_default(),
+        id: m.get("id").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        object: m.get("object").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+    })
+}
+
+fn iface_open_ai__create_moderation_response__from_json(v: &Value) -> Option<iface_open_ai::CreateModerationResponse> {
+    let m = v.as_object()?;
+    Some(iface_open_ai::CreateModerationResponse {
+        id: m.get("id").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        model: m.get("model").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        results: m.get("results").and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| iface_open_ai__create_moderation_response_results_item__from_json(x)).collect())).unwrap_or_default(),
+    })
+}
+
+fn iface_open_ai__create_moderation_response_results_item__from_json(v: &Value) -> Option<iface_open_ai::CreateModerationResponseResultsItem> {
+    let m = v.as_object()?;
+    Some(iface_open_ai::CreateModerationResponseResultsItem {
+        categories: match m.get("categories").and_then(|v| iface_open_ai__create_moderation_response_results_item_categories__from_json(v)) { Some(x) => x, None => return None },
+        category_scores: match m.get("category_scores").and_then(|v| iface_open_ai__create_moderation_response_results_item_category_scores__from_json(v)) { Some(x) => x, None => return None },
+        flagged: m.get("flagged").and_then(|v| (v).as_bool()).unwrap_or_default(),
+    })
+}
+
+fn iface_open_ai__create_moderation_response_results_item_categories__from_json(v: &Value) -> Option<iface_open_ai::CreateModerationResponseResultsItemCategories> {
+    let m = v.as_object()?;
+    Some(iface_open_ai::CreateModerationResponseResultsItemCategories {
+        hate: m.get("hate").and_then(|v| (v).as_bool()).unwrap_or_default(),
+        hate_threatening: m.get("hate/threatening").and_then(|v| (v).as_bool()).unwrap_or_default(),
+        self_harm: m.get("self-harm").and_then(|v| (v).as_bool()).unwrap_or_default(),
+        sexual: m.get("sexual").and_then(|v| (v).as_bool()).unwrap_or_default(),
+        sexual_minors: m.get("sexual/minors").and_then(|v| (v).as_bool()).unwrap_or_default(),
+        violence: m.get("violence").and_then(|v| (v).as_bool()).unwrap_or_default(),
+        violence_graphic: m.get("violence/graphic").and_then(|v| (v).as_bool()).unwrap_or_default(),
+    })
+}
+
+fn iface_open_ai__create_moderation_response_results_item_category_scores__from_json(v: &Value) -> Option<iface_open_ai::CreateModerationResponseResultsItemCategoryScores> {
+    let m = v.as_object()?;
+    Some(iface_open_ai::CreateModerationResponseResultsItemCategoryScores {
+        hate: m.get("hate").and_then(|v| (v).as_f64()).unwrap_or_default(),
+        hate_threatening: m.get("hate/threatening").and_then(|v| (v).as_f64()).unwrap_or_default(),
+        self_harm: m.get("self-harm").and_then(|v| (v).as_f64()).unwrap_or_default(),
+        sexual: m.get("sexual").and_then(|v| (v).as_f64()).unwrap_or_default(),
+        sexual_minors: m.get("sexual/minors").and_then(|v| (v).as_f64()).unwrap_or_default(),
+        violence: m.get("violence").and_then(|v| (v).as_f64()).unwrap_or_default(),
+        violence_graphic: m.get("violence/graphic").and_then(|v| (v).as_f64()).unwrap_or_default(),
+    })
+}
+
+fn iface_open_ai__chat_completion_request_message_role_enum__from_str(s: &str) -> Option<iface_open_ai::ChatCompletionRequestMessageRoleEnum> {
+    match s {
+        "system" => Some(iface_open_ai::ChatCompletionRequestMessageRoleEnum::System),
+        "user" => Some(iface_open_ai::ChatCompletionRequestMessageRoleEnum::User),
+        "assistant" => Some(iface_open_ai::ChatCompletionRequestMessageRoleEnum::Assistant),
+        _ => None,
+    }
+}
+
+fn iface_open_ai__create_answer__ok(body: String) -> Result<iface_open_ai::CreateAnswerResponse, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match iface_open_ai__create_answer_response__from_json(&v) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_open_ai__create_answer__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
+fn iface_open_ai__create_transcription__ok(body: String) -> Result<iface_open_ai::CreateTranscriptionResponse, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match iface_open_ai__create_transcription_response__from_json(&v) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_open_ai__create_transcription__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
+fn iface_open_ai__create_translation__ok(body: String) -> Result<iface_open_ai::CreateTranslationResponse, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match iface_open_ai__create_translation_response__from_json(&v) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_open_ai__create_translation__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
+fn iface_open_ai__create_chat_completion__ok(body: String) -> Result<iface_open_ai::CreateChatCompletionResponse, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match iface_open_ai__create_chat_completion_response__from_json(&v) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_open_ai__create_chat_completion__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
+fn iface_open_ai__create_classification__ok(body: String) -> Result<iface_open_ai::CreateClassificationResponse, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match iface_open_ai__create_classification_response__from_json(&v) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_open_ai__create_classification__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
+fn iface_open_ai__create_completion__ok(body: String) -> Result<iface_open_ai::CreateCompletionResponse, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match iface_open_ai__create_completion_response__from_json(&v) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_open_ai__create_completion__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
+fn iface_open_ai__create_edit__ok(body: String) -> Result<iface_open_ai::CreateEditResponse, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match iface_open_ai__create_edit_response__from_json(&v) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_open_ai__create_edit__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
+fn iface_open_ai__create_embedding__ok(body: String) -> Result<iface_open_ai::CreateEmbeddingResponse, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match iface_open_ai__create_embedding_response__from_json(&v) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_open_ai__create_embedding__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
+fn iface_open_ai__list_engines__ok(body: String) -> Result<iface_open_ai::ListEnginesResponse, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match iface_open_ai__list_engines_response__from_json(&v) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_open_ai__list_engines__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
+fn iface_open_ai__retrieve_engine__ok(body: String) -> Result<iface_open_ai::Engine, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match iface_open_ai__engine__from_json(&v) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_open_ai__retrieve_engine__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
+fn iface_open_ai__create_search__ok(body: String) -> Result<iface_open_ai::CreateSearchResponse, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match iface_open_ai__create_search_response__from_json(&v) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_open_ai__create_search__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
+fn iface_open_ai__list_files__ok(body: String) -> Result<iface_open_ai::ListFilesResponse, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match iface_open_ai__list_files_response__from_json(&v) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_open_ai__list_files__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
+fn iface_open_ai__create_file__ok(body: String) -> Result<iface_open_ai::File, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match iface_open_ai__file__from_json(&v) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_open_ai__create_file__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
+fn iface_open_ai__retrieve_file__ok(body: String) -> Result<iface_open_ai::File, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match iface_open_ai__file__from_json(&v) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_open_ai__retrieve_file__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
+fn iface_open_ai__delete_file__ok(body: String) -> Result<iface_open_ai::DeleteFileResponse, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match iface_open_ai__delete_file_response__from_json(&v) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_open_ai__delete_file__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
+fn iface_open_ai__download_file__ok(body: String) -> Result<String, crate::runtime::DispatchError> {
+    Ok(body)
+}
+
+fn iface_open_ai__download_file__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
+fn iface_open_ai__list_fine_tunes__ok(body: String) -> Result<iface_open_ai::ListFineTunesResponse, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match iface_open_ai__list_fine_tunes_response__from_json(&v) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_open_ai__list_fine_tunes__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
+fn iface_open_ai__create_fine_tune__ok(body: String) -> Result<iface_open_ai::FineTune, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match iface_open_ai__fine_tune__from_json(&v) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_open_ai__create_fine_tune__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
+fn iface_open_ai__retrieve_fine_tune__ok(body: String) -> Result<iface_open_ai::FineTune, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match iface_open_ai__fine_tune__from_json(&v) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_open_ai__retrieve_fine_tune__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
+fn iface_open_ai__cancel_fine_tune__ok(body: String) -> Result<iface_open_ai::FineTune, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match iface_open_ai__fine_tune__from_json(&v) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_open_ai__cancel_fine_tune__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
+fn iface_open_ai__list_fine_tune_events__ok(body: String) -> Result<iface_open_ai::ListFineTuneEventsResponse, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match iface_open_ai__list_fine_tune_events_response__from_json(&v) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_open_ai__list_fine_tune_events__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
+fn iface_open_ai__create_image_edit__ok(body: String) -> Result<iface_open_ai::ImagesResponse, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match iface_open_ai__images_response__from_json(&v) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_open_ai__create_image_edit__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
+fn iface_open_ai__create_image__ok(body: String) -> Result<iface_open_ai::ImagesResponse, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match iface_open_ai__images_response__from_json(&v) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_open_ai__create_image__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
+fn iface_open_ai__create_image_variation__ok(body: String) -> Result<iface_open_ai::ImagesResponse, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match iface_open_ai__images_response__from_json(&v) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_open_ai__create_image_variation__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
+fn iface_open_ai__list_models__ok(body: String) -> Result<iface_open_ai::ListModelsResponse, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match iface_open_ai__list_models_response__from_json(&v) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_open_ai__list_models__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
+fn iface_open_ai__retrieve_model__ok(body: String) -> Result<iface_open_ai::Model, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match iface_open_ai__model__from_json(&v) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_open_ai__retrieve_model__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
+fn iface_open_ai__delete_model__ok(body: String) -> Result<iface_open_ai::DeleteModelResponse, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match iface_open_ai__delete_model_response__from_json(&v) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_open_ai__delete_model__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
+fn iface_open_ai__create_moderation__ok(body: String) -> Result<iface_open_ai::CreateModerationResponse, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match iface_open_ai__create_moderation_response__from_json(&v) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_open_ai__create_moderation__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
 impl iface_open_ai::Guest for crate::Component {
-    fn create_answer(params: iface_open_ai::CreateAnswerParams) -> Result<String, String> {
+    fn create_answer(params: iface_open_ai::CreateAnswerParams) -> Result<iface_open_ai::CreateAnswerResponse, String> {
         let json = iface_open_ai__create_answer_params__to_json(&params);
-        dispatch(&OP_OPEN_AI_CREATE_ANSWER, json)
+        match dispatch(&OP_OPEN_AI_CREATE_ANSWER, json).and_then(iface_open_ai__create_answer__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_open_ai__create_answer__err(e)),
+        }
     }
-    fn create_transcription() -> Result<String, String> {
-        dispatch(&OP_OPEN_AI_CREATE_TRANSCRIPTION, Value::Object(Map::new()))
+    fn create_transcription(params: iface_open_ai::CreateTranscriptionParams) -> Result<iface_open_ai::CreateTranscriptionResponse, String> {
+        let json = iface_open_ai__create_transcription_params__to_json(&params);
+        match dispatch(&OP_OPEN_AI_CREATE_TRANSCRIPTION, json).and_then(iface_open_ai__create_transcription__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_open_ai__create_transcription__err(e)),
+        }
     }
-    fn create_translation() -> Result<String, String> {
-        dispatch(&OP_OPEN_AI_CREATE_TRANSLATION, Value::Object(Map::new()))
+    fn create_translation(params: iface_open_ai::CreateTranslationParams) -> Result<iface_open_ai::CreateTranslationResponse, String> {
+        let json = iface_open_ai__create_translation_params__to_json(&params);
+        match dispatch(&OP_OPEN_AI_CREATE_TRANSLATION, json).and_then(iface_open_ai__create_translation__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_open_ai__create_translation__err(e)),
+        }
     }
-    fn create_chat_completion(params: iface_open_ai::CreateChatCompletionParams) -> Result<String, String> {
+    fn create_chat_completion(params: iface_open_ai::CreateChatCompletionParams) -> Result<iface_open_ai::CreateChatCompletionResponse, String> {
         let json = iface_open_ai__create_chat_completion_params__to_json(&params);
-        dispatch(&OP_OPEN_AI_CREATE_CHAT_COMPLETION, json)
+        match dispatch(&OP_OPEN_AI_CREATE_CHAT_COMPLETION, json).and_then(iface_open_ai__create_chat_completion__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_open_ai__create_chat_completion__err(e)),
+        }
     }
-    fn create_classification(params: iface_open_ai::CreateClassificationParams) -> Result<String, String> {
+    fn create_classification(params: iface_open_ai::CreateClassificationParams) -> Result<iface_open_ai::CreateClassificationResponse, String> {
         let json = iface_open_ai__create_classification_params__to_json(&params);
-        dispatch(&OP_OPEN_AI_CREATE_CLASSIFICATION, json)
+        match dispatch(&OP_OPEN_AI_CREATE_CLASSIFICATION, json).and_then(iface_open_ai__create_classification__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_open_ai__create_classification__err(e)),
+        }
     }
-    fn create_completion(params: iface_open_ai::CreateCompletionParams) -> Result<String, String> {
+    fn create_completion(params: iface_open_ai::CreateCompletionParams) -> Result<iface_open_ai::CreateCompletionResponse, String> {
         let json = iface_open_ai__create_completion_params__to_json(&params);
-        dispatch(&OP_OPEN_AI_CREATE_COMPLETION, json)
+        match dispatch(&OP_OPEN_AI_CREATE_COMPLETION, json).and_then(iface_open_ai__create_completion__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_open_ai__create_completion__err(e)),
+        }
     }
-    fn create_edit(params: iface_open_ai::CreateEditParams) -> Result<String, String> {
+    fn create_edit(params: iface_open_ai::CreateEditParams) -> Result<iface_open_ai::CreateEditResponse, String> {
         let json = iface_open_ai__create_edit_params__to_json(&params);
-        dispatch(&OP_OPEN_AI_CREATE_EDIT, json)
+        match dispatch(&OP_OPEN_AI_CREATE_EDIT, json).and_then(iface_open_ai__create_edit__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_open_ai__create_edit__err(e)),
+        }
     }
-    fn create_embedding(params: iface_open_ai::CreateEmbeddingParams) -> Result<String, String> {
+    fn create_embedding(params: iface_open_ai::CreateEmbeddingParams) -> Result<iface_open_ai::CreateEmbeddingResponse, String> {
         let json = iface_open_ai__create_embedding_params__to_json(&params);
-        dispatch(&OP_OPEN_AI_CREATE_EMBEDDING, json)
+        match dispatch(&OP_OPEN_AI_CREATE_EMBEDDING, json).and_then(iface_open_ai__create_embedding__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_open_ai__create_embedding__err(e)),
+        }
     }
-    fn list_engines() -> Result<String, String> {
-        dispatch(&OP_OPEN_AI_LIST_ENGINES, Value::Object(Map::new()))
+    fn list_engines() -> Result<iface_open_ai::ListEnginesResponse, String> {
+        match dispatch(&OP_OPEN_AI_LIST_ENGINES, Value::Object(Map::new())).and_then(iface_open_ai__list_engines__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_open_ai__list_engines__err(e)),
+        }
     }
-    fn retrieve_engine(params: iface_open_ai::RetrieveEngineParams) -> Result<String, String> {
+    fn retrieve_engine(params: iface_open_ai::RetrieveEngineParams) -> Result<iface_open_ai::Engine, String> {
         let json = iface_open_ai__retrieve_engine_params__to_json(&params);
-        dispatch(&OP_OPEN_AI_RETRIEVE_ENGINE, json)
+        match dispatch(&OP_OPEN_AI_RETRIEVE_ENGINE, json).and_then(iface_open_ai__retrieve_engine__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_open_ai__retrieve_engine__err(e)),
+        }
     }
-    fn create_search(params: iface_open_ai::CreateSearchParams) -> Result<String, String> {
+    fn create_search(params: iface_open_ai::CreateSearchParams) -> Result<iface_open_ai::CreateSearchResponse, String> {
         let json = iface_open_ai__create_search_params__to_json(&params);
-        dispatch(&OP_OPEN_AI_CREATE_SEARCH, json)
+        match dispatch(&OP_OPEN_AI_CREATE_SEARCH, json).and_then(iface_open_ai__create_search__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_open_ai__create_search__err(e)),
+        }
     }
-    fn list_files() -> Result<String, String> {
-        dispatch(&OP_OPEN_AI_LIST_FILES, Value::Object(Map::new()))
+    fn list_files() -> Result<iface_open_ai::ListFilesResponse, String> {
+        match dispatch(&OP_OPEN_AI_LIST_FILES, Value::Object(Map::new())).and_then(iface_open_ai__list_files__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_open_ai__list_files__err(e)),
+        }
     }
-    fn create_file() -> Result<String, String> {
-        dispatch(&OP_OPEN_AI_CREATE_FILE, Value::Object(Map::new()))
+    fn create_file(params: iface_open_ai::CreateFileParams) -> Result<iface_open_ai::File, String> {
+        let json = iface_open_ai__create_file_params__to_json(&params);
+        match dispatch(&OP_OPEN_AI_CREATE_FILE, json).and_then(iface_open_ai__create_file__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_open_ai__create_file__err(e)),
+        }
     }
-    fn retrieve_file(params: iface_open_ai::RetrieveFileParams) -> Result<String, String> {
+    fn retrieve_file(params: iface_open_ai::RetrieveFileParams) -> Result<iface_open_ai::File, String> {
         let json = iface_open_ai__retrieve_file_params__to_json(&params);
-        dispatch(&OP_OPEN_AI_RETRIEVE_FILE, json)
+        match dispatch(&OP_OPEN_AI_RETRIEVE_FILE, json).and_then(iface_open_ai__retrieve_file__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_open_ai__retrieve_file__err(e)),
+        }
     }
-    fn delete_file(params: iface_open_ai::DeleteFileParams) -> Result<String, String> {
+    fn delete_file(params: iface_open_ai::DeleteFileParams) -> Result<iface_open_ai::DeleteFileResponse, String> {
         let json = iface_open_ai__delete_file_params__to_json(&params);
-        dispatch(&OP_OPEN_AI_DELETE_FILE, json)
+        match dispatch(&OP_OPEN_AI_DELETE_FILE, json).and_then(iface_open_ai__delete_file__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_open_ai__delete_file__err(e)),
+        }
     }
     fn download_file(params: iface_open_ai::DownloadFileParams) -> Result<String, String> {
         let json = iface_open_ai__download_file_params__to_json(&params);
-        dispatch(&OP_OPEN_AI_DOWNLOAD_FILE, json)
+        match dispatch(&OP_OPEN_AI_DOWNLOAD_FILE, json).and_then(iface_open_ai__download_file__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_open_ai__download_file__err(e)),
+        }
     }
-    fn list_fine_tunes() -> Result<String, String> {
-        dispatch(&OP_OPEN_AI_LIST_FINE_TUNES, Value::Object(Map::new()))
+    fn list_fine_tunes() -> Result<iface_open_ai::ListFineTunesResponse, String> {
+        match dispatch(&OP_OPEN_AI_LIST_FINE_TUNES, Value::Object(Map::new())).and_then(iface_open_ai__list_fine_tunes__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_open_ai__list_fine_tunes__err(e)),
+        }
     }
-    fn create_fine_tune(params: iface_open_ai::CreateFineTuneParams) -> Result<String, String> {
+    fn create_fine_tune(params: iface_open_ai::CreateFineTuneParams) -> Result<iface_open_ai::FineTune, String> {
         let json = iface_open_ai__create_fine_tune_params__to_json(&params);
-        dispatch(&OP_OPEN_AI_CREATE_FINE_TUNE, json)
+        match dispatch(&OP_OPEN_AI_CREATE_FINE_TUNE, json).and_then(iface_open_ai__create_fine_tune__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_open_ai__create_fine_tune__err(e)),
+        }
     }
-    fn retrieve_fine_tune(params: iface_open_ai::RetrieveFineTuneParams) -> Result<String, String> {
+    fn retrieve_fine_tune(params: iface_open_ai::RetrieveFineTuneParams) -> Result<iface_open_ai::FineTune, String> {
         let json = iface_open_ai__retrieve_fine_tune_params__to_json(&params);
-        dispatch(&OP_OPEN_AI_RETRIEVE_FINE_TUNE, json)
+        match dispatch(&OP_OPEN_AI_RETRIEVE_FINE_TUNE, json).and_then(iface_open_ai__retrieve_fine_tune__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_open_ai__retrieve_fine_tune__err(e)),
+        }
     }
-    fn cancel_fine_tune(params: iface_open_ai::CancelFineTuneParams) -> Result<String, String> {
+    fn cancel_fine_tune(params: iface_open_ai::CancelFineTuneParams) -> Result<iface_open_ai::FineTune, String> {
         let json = iface_open_ai__cancel_fine_tune_params__to_json(&params);
-        dispatch(&OP_OPEN_AI_CANCEL_FINE_TUNE, json)
+        match dispatch(&OP_OPEN_AI_CANCEL_FINE_TUNE, json).and_then(iface_open_ai__cancel_fine_tune__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_open_ai__cancel_fine_tune__err(e)),
+        }
     }
-    fn list_fine_tune_events(params: iface_open_ai::ListFineTuneEventsParams) -> Result<String, String> {
+    fn list_fine_tune_events(params: iface_open_ai::ListFineTuneEventsParams) -> Result<iface_open_ai::ListFineTuneEventsResponse, String> {
         let json = iface_open_ai__list_fine_tune_events_params__to_json(&params);
-        dispatch(&OP_OPEN_AI_LIST_FINE_TUNE_EVENTS, json)
+        match dispatch(&OP_OPEN_AI_LIST_FINE_TUNE_EVENTS, json).and_then(iface_open_ai__list_fine_tune_events__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_open_ai__list_fine_tune_events__err(e)),
+        }
     }
-    fn create_image_edit() -> Result<String, String> {
-        dispatch(&OP_OPEN_AI_CREATE_IMAGE_EDIT, Value::Object(Map::new()))
+    fn create_image_edit(params: iface_open_ai::CreateImageEditParams) -> Result<iface_open_ai::ImagesResponse, String> {
+        let json = iface_open_ai__create_image_edit_params__to_json(&params);
+        match dispatch(&OP_OPEN_AI_CREATE_IMAGE_EDIT, json).and_then(iface_open_ai__create_image_edit__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_open_ai__create_image_edit__err(e)),
+        }
     }
-    fn create_image(params: iface_open_ai::CreateImageParams) -> Result<String, String> {
+    fn create_image(params: iface_open_ai::CreateImageParams) -> Result<iface_open_ai::ImagesResponse, String> {
         let json = iface_open_ai__create_image_params__to_json(&params);
-        dispatch(&OP_OPEN_AI_CREATE_IMAGE, json)
+        match dispatch(&OP_OPEN_AI_CREATE_IMAGE, json).and_then(iface_open_ai__create_image__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_open_ai__create_image__err(e)),
+        }
     }
-    fn create_image_variation() -> Result<String, String> {
-        dispatch(&OP_OPEN_AI_CREATE_IMAGE_VARIATION, Value::Object(Map::new()))
+    fn create_image_variation(params: iface_open_ai::CreateImageVariationParams) -> Result<iface_open_ai::ImagesResponse, String> {
+        let json = iface_open_ai__create_image_variation_params__to_json(&params);
+        match dispatch(&OP_OPEN_AI_CREATE_IMAGE_VARIATION, json).and_then(iface_open_ai__create_image_variation__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_open_ai__create_image_variation__err(e)),
+        }
     }
-    fn list_models() -> Result<String, String> {
-        dispatch(&OP_OPEN_AI_LIST_MODELS, Value::Object(Map::new()))
+    fn list_models() -> Result<iface_open_ai::ListModelsResponse, String> {
+        match dispatch(&OP_OPEN_AI_LIST_MODELS, Value::Object(Map::new())).and_then(iface_open_ai__list_models__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_open_ai__list_models__err(e)),
+        }
     }
-    fn retrieve_model(params: iface_open_ai::RetrieveModelParams) -> Result<String, String> {
+    fn retrieve_model(params: iface_open_ai::RetrieveModelParams) -> Result<iface_open_ai::Model, String> {
         let json = iface_open_ai__retrieve_model_params__to_json(&params);
-        dispatch(&OP_OPEN_AI_RETRIEVE_MODEL, json)
+        match dispatch(&OP_OPEN_AI_RETRIEVE_MODEL, json).and_then(iface_open_ai__retrieve_model__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_open_ai__retrieve_model__err(e)),
+        }
     }
-    fn delete_model(params: iface_open_ai::DeleteModelParams) -> Result<String, String> {
+    fn delete_model(params: iface_open_ai::DeleteModelParams) -> Result<iface_open_ai::DeleteModelResponse, String> {
         let json = iface_open_ai__delete_model_params__to_json(&params);
-        dispatch(&OP_OPEN_AI_DELETE_MODEL, json)
+        match dispatch(&OP_OPEN_AI_DELETE_MODEL, json).and_then(iface_open_ai__delete_model__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_open_ai__delete_model__err(e)),
+        }
     }
-    fn create_moderation(params: iface_open_ai::CreateModerationParams) -> Result<String, String> {
+    fn create_moderation(params: iface_open_ai::CreateModerationParams) -> Result<iface_open_ai::CreateModerationResponse, String> {
         let json = iface_open_ai__create_moderation_params__to_json(&params);
-        dispatch(&OP_OPEN_AI_CREATE_MODERATION, json)
+        match dispatch(&OP_OPEN_AI_CREATE_MODERATION, json).and_then(iface_open_ai__create_moderation__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_open_ai__create_moderation__err(e)),
+        }
     }
 }
 

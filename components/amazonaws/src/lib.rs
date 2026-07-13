@@ -8,7 +8,7 @@ wit_bindgen::generate!({
 });
 
 /// The API base URL, resolved from the OpenAPI `servers` list.
-const BASE_URL: &str = "http://access-analyzer.us-east-1.amazonaws.com";
+const BASE_URL: &str = "http://mgh.us-east-1.amazonaws.com";
 
 /// The component entry point implementing the generated interfaces.
 struct Component;
@@ -44,10 +44,15 @@ pub(crate) enum FieldLocation {
     Body,
 }
 
-/// A single operation parameter: the snake-case key it carries in the params JSON and where
-/// it belongs in the request.
+/// A single operation parameter. `snake` keys the field in the internal params JSON (and, for a
+/// path field, matches the `{snake}` placeholder in the path template); `wire` is the verbatim name
+/// the field takes on the HTTP wire (query key, header name, or body property). The two differ
+/// whenever the source name isn't already snake_case (e.g. `dryRun` → snake `dry_run`, wire
+/// `dryRun`), and let distinct inputs that share a snake key (`DateCreated`, `DateCreated<`) still
+/// travel under their true names.
 pub(crate) struct FieldSpec {
     pub(crate) snake: &'static str,
+    pub(crate) wire: &'static str,
     pub(crate) location: FieldLocation,
 }
 
@@ -71,6 +76,16 @@ pub(crate) struct AuthApply {
     pub(crate) kind: AuthKind,
 }
 
+/// The failure modes of [`dispatch`], kept structured so each generated operation can map them
+/// onto its own typed error: an `Http` failure carries the response status and body (routed to
+/// the matching error-variant case), while a `Transport` failure carries a message for the
+/// catch-all case (a secret lookup, connection, or decode failure that never produced an HTTP
+/// status).
+pub(crate) enum DispatchError {
+    Http { status: u16, body: String },
+    Transport(String),
+}
+
 /// A single API operation: HTTP method, path template (with `{snake}` placeholders), the
 /// parameter fields, and the security schemes to apply.
 pub(crate) struct OpSpec {
@@ -81,8 +96,9 @@ pub(crate) struct OpSpec {
 }
 
 /// Execute `op` with the supplied `params` (a JSON object keyed by snake-case field names)
-/// and return the response body as a string, or an error message.
-pub(crate) fn dispatch(op: &OpSpec, params: Value) -> Result<String, String> {
+/// and return the raw 2xx response body, or a structured [`DispatchError`] the caller maps
+/// onto the operation's typed error.
+pub(crate) fn dispatch(op: &OpSpec, params: Value) -> Result<String, DispatchError> {
     let obj = match &params {
         Value::Object(map) => Some(map),
         _ => None,
@@ -105,10 +121,10 @@ pub(crate) fn dispatch(op: &OpSpec, params: Value) -> Result<String, String> {
                 let placeholder = format!("{{{}}}", field.snake);
                 path = path.replace(&placeholder, &percent_encode(&scalar(value)));
             }
-            FieldLocation::Query => query.push((field.snake.to_string(), scalar(value))),
-            FieldLocation::Header => headers.push((field.snake.to_string(), scalar(value))),
+            FieldLocation::Query => query.push((field.wire.to_string(), scalar(value))),
+            FieldLocation::Header => headers.push((field.wire.to_string(), scalar(value))),
             FieldLocation::Body => {
-                body.insert(field.snake.to_string(), value.clone());
+                body.insert(field.wire.to_string(), value.clone());
             }
         }
     }
@@ -116,7 +132,7 @@ pub(crate) fn dispatch(op: &OpSpec, params: Value) -> Result<String, String> {
     // Apply each resolved security scheme, sourcing its value from wasmcloud:secrets.
     let mut cookies: Vec<String> = Vec::new();
     for apply in op.auth {
-        let secret = fetch_secret(apply.secret_key)?;
+        let secret = fetch_secret(apply.secret_key).map_err(DispatchError::Transport)?;
         match &apply.kind {
             AuthKind::Bearer => headers.push(("authorization".into(), format!("Bearer {secret}"))),
             AuthKind::Basic => {
@@ -177,17 +193,18 @@ fn fetch_secret(key: &str) -> Result<String, String> {
 }
 
 /// Build and send the outgoing request with `wstd`, returning the response body on a 2xx
-/// status. The generated guest exports are synchronous, so the async `wstd` client is driven
-/// to completion on a local reactor via `wstd::runtime::block_on`.
+/// status and a structured [`DispatchError`] otherwise. The generated guest exports are
+/// synchronous, so the async `wstd` client is driven to completion on a local reactor via
+/// `wstd::runtime::block_on`.
 fn perform(
     method: &str,
     path_with_query: &str,
     headers: &[(String, String)],
     body: &[u8],
-) -> Result<String, String> {
+) -> Result<String, DispatchError> {
     let url = join_url(crate::BASE_URL, path_with_query);
     let method = Method::from_bytes(method.as_bytes())
-        .map_err(|err| format!("invalid HTTP method `{method}`: {err}"))?;
+        .map_err(|err| DispatchError::Transport(format!("invalid HTTP method `{method}`: {err}")))?;
 
     let mut builder = Request::builder().method(method).uri(url);
     for (name, value) in headers {
@@ -199,27 +216,29 @@ fn perform(
         } else {
             Body::from(body.to_vec())
         })
-        .map_err(|err| format!("failed to build request: {err}"))?;
+        .map_err(|err| DispatchError::Transport(format!("failed to build request: {err}")))?;
 
     wstd::runtime::block_on(async move {
         let client = Client::new();
         let response = client
             .send(request)
             .await
-            .map_err(|err| format!("request failed: {err:#}"))?;
+            .map_err(|err| DispatchError::Transport(format!("request failed: {err:#}")))?;
 
         let status = response.status().as_u16();
         let mut response_body = response.into_body();
-        let bytes = response_body
-            .contents()
-            .await
-            .map_err(|err| format!("failed to read response body: {err:#}"))?;
+        let bytes = response_body.contents().await.map_err(|err| {
+            DispatchError::Transport(format!("failed to read response body: {err:#}"))
+        })?;
         let body_text = String::from_utf8_lossy(bytes).into_owned();
 
         if (200..300).contains(&status) {
             Ok(body_text)
         } else {
-            Err(format!("HTTP {status}: {body_text}"))
+            Err(DispatchError::Http {
+                status,
+                body: body_text,
+            })
         }
     })
 }
@@ -282,894 +301,2268 @@ fn base64(input: &[u8]) -> String {
 use crate::runtime::{dispatch, AuthApply, AuthKind, FieldLocation, FieldSpec, OpSpec};
 use serde_json::{Map, Value};
 
-use crate::exports::autostamp::amazonaws::archive_rule as iface_archive_rule;
+use crate::exports::autostamp::amazonaws::aws_migration_hub as iface_aws_migration_hub;
 
-const OP_ARCHIVE_RULE_APPLY_ARCHIVE_RULE: OpSpec = OpSpec {
-    method: "PUT",
-    path_template: "/archive-rule",
-    fields: &[
-        FieldSpec { snake: "analyzer_arn", location: FieldLocation::Body },
-        FieldSpec { snake: "rule_name", location: FieldLocation::Body },
-        FieldSpec { snake: "client_token", location: FieldLocation::Body },
-    ],
-    auth: &[
-        AuthApply { secret_key: "hmac", kind: AuthKind::ApiKeyHeader("Authorization") },
-    ],
-};
-
-fn iface_archive_rule__apply_archive_rule_params__to_json(p: &iface_archive_rule::ApplyArchiveRuleParams) -> Value {
-    let mut m = Map::new();
-    m.insert("analyzer_arn".into(), Value::String((&p.analyzer_arn).clone()));
-    m.insert("rule_name".into(), Value::String((&p.rule_name).clone()));
-    m.insert("client_token".into(), match (&p.client_token) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    Value::Object(m)
-}
-
-impl iface_archive_rule::Guest for crate::Component {
-    fn apply_archive_rule(params: iface_archive_rule::ApplyArchiveRuleParams) -> Result<String, String> {
-        let json = iface_archive_rule__apply_archive_rule_params__to_json(&params);
-        dispatch(&OP_ARCHIVE_RULE_APPLY_ARCHIVE_RULE, json)
-    }
-}
-use crate::exports::autostamp::amazonaws::policy as iface_policy;
-
-const OP_POLICY_GET_GENERATED_POLICY: OpSpec = OpSpec {
-    method: "GET",
-    path_template: "/policy/generation/{job_id}",
-    fields: &[
-        FieldSpec { snake: "job_id", location: FieldLocation::Path },
-        FieldSpec { snake: "include_resource_placeholders", location: FieldLocation::Query },
-        FieldSpec { snake: "include_service_level_template", location: FieldLocation::Query },
-    ],
-    auth: &[
-        AuthApply { secret_key: "hmac", kind: AuthKind::ApiKeyHeader("Authorization") },
-    ],
-};
-
-const OP_POLICY_CANCEL_POLICY_GENERATION: OpSpec = OpSpec {
-    method: "PUT",
-    path_template: "/policy/generation/{job_id}",
-    fields: &[
-        FieldSpec { snake: "job_id", location: FieldLocation::Path },
-    ],
-    auth: &[
-        AuthApply { secret_key: "hmac", kind: AuthKind::ApiKeyHeader("Authorization") },
-    ],
-};
-
-const OP_POLICY_LIST_POLICY_GENERATIONS: OpSpec = OpSpec {
-    method: "GET",
-    path_template: "/policy/generation",
-    fields: &[
-        FieldSpec { snake: "principal_arn", location: FieldLocation::Query },
-        FieldSpec { snake: "max_results", location: FieldLocation::Query },
-        FieldSpec { snake: "next_token", location: FieldLocation::Query },
-    ],
-    auth: &[
-        AuthApply { secret_key: "hmac", kind: AuthKind::ApiKeyHeader("Authorization") },
-    ],
-};
-
-const OP_POLICY_START_POLICY_GENERATION: OpSpec = OpSpec {
-    method: "PUT",
-    path_template: "/policy/generation",
-    fields: &[
-        FieldSpec { snake: "policy_generation_details", location: FieldLocation::Body },
-        FieldSpec { snake: "cloud_trail_details", location: FieldLocation::Body },
-        FieldSpec { snake: "client_token", location: FieldLocation::Body },
-    ],
-    auth: &[
-        AuthApply { secret_key: "hmac", kind: AuthKind::ApiKeyHeader("Authorization") },
-    ],
-};
-
-const OP_POLICY_VALIDATE_POLICY: OpSpec = OpSpec {
+const OP_AWS_MIGRATION_HUB_ASSOCIATE_CREATED_ARTIFACT: OpSpec = OpSpec {
     method: "POST",
-    path_template: "/policy/validation",
+    path_template: "/#X-Amz-Target=AWSMigrationHub.AssociateCreatedArtifact",
     fields: &[
-        FieldSpec { snake: "max_results", location: FieldLocation::Query },
-        FieldSpec { snake: "next_token", location: FieldLocation::Query },
-        FieldSpec { snake: "locale", location: FieldLocation::Body },
-        FieldSpec { snake: "policy_document", location: FieldLocation::Body },
-        FieldSpec { snake: "policy_type", location: FieldLocation::Body },
-        FieldSpec { snake: "validate_policy_resource_type", location: FieldLocation::Body },
+        FieldSpec { snake: "x_amz_content_sha256", wire: "X-Amz-Content-Sha256", location: FieldLocation::Header },
+        FieldSpec { snake: "x_amz_date", wire: "X-Amz-Date", location: FieldLocation::Header },
+        FieldSpec { snake: "x_amz_algorithm", wire: "X-Amz-Algorithm", location: FieldLocation::Header },
+        FieldSpec { snake: "x_amz_credential", wire: "X-Amz-Credential", location: FieldLocation::Header },
+        FieldSpec { snake: "x_amz_security_token", wire: "X-Amz-Security-Token", location: FieldLocation::Header },
+        FieldSpec { snake: "x_amz_signature", wire: "X-Amz-Signature", location: FieldLocation::Header },
+        FieldSpec { snake: "x_amz_signed_headers", wire: "X-Amz-SignedHeaders", location: FieldLocation::Header },
+        FieldSpec { snake: "x_amz_target", wire: "X-Amz-Target", location: FieldLocation::Header },
+        FieldSpec { snake: "progress_update_stream", wire: "ProgressUpdateStream", location: FieldLocation::Body },
+        FieldSpec { snake: "migration_task_name", wire: "MigrationTaskName", location: FieldLocation::Body },
+        FieldSpec { snake: "created_artifact", wire: "CreatedArtifact", location: FieldLocation::Body },
+        FieldSpec { snake: "dry_run", wire: "DryRun", location: FieldLocation::Body },
     ],
     auth: &[
         AuthApply { secret_key: "hmac", kind: AuthKind::ApiKeyHeader("Authorization") },
     ],
 };
 
-fn iface_policy__validate_policy_body_locale_enum__to_str(e: &iface_policy::ValidatePolicyBodyLocaleEnum) -> &'static str {
-    match e {
-        iface_policy::ValidatePolicyBodyLocaleEnum::De => "DE",
-        iface_policy::ValidatePolicyBodyLocaleEnum::En => "EN",
-        iface_policy::ValidatePolicyBodyLocaleEnum::Es => "ES",
-        iface_policy::ValidatePolicyBodyLocaleEnum::Fr => "FR",
-        iface_policy::ValidatePolicyBodyLocaleEnum::It => "IT",
-        iface_policy::ValidatePolicyBodyLocaleEnum::Ja => "JA",
-        iface_policy::ValidatePolicyBodyLocaleEnum::Ko => "KO",
-        iface_policy::ValidatePolicyBodyLocaleEnum::PtBr => "PT_BR",
-        iface_policy::ValidatePolicyBodyLocaleEnum::ZhCn => "ZH_CN",
-        iface_policy::ValidatePolicyBodyLocaleEnum::ZhTw => "ZH_TW",
-    }
-}
-
-fn iface_policy__validate_policy_body_policy_type_enum__to_str(e: &iface_policy::ValidatePolicyBodyPolicyTypeEnum) -> &'static str {
-    match e {
-        iface_policy::ValidatePolicyBodyPolicyTypeEnum::IdentityPolicy => "IDENTITY_POLICY",
-        iface_policy::ValidatePolicyBodyPolicyTypeEnum::ResourcePolicy => "RESOURCE_POLICY",
-        iface_policy::ValidatePolicyBodyPolicyTypeEnum::ServiceControlPolicy => "SERVICE_CONTROL_POLICY",
-    }
-}
-
-fn iface_policy__validate_policy_body_validate_policy_resource_type_enum__to_str(e: &iface_policy::ValidatePolicyBodyValidatePolicyResourceTypeEnum) -> &'static str {
-    match e {
-        iface_policy::ValidatePolicyBodyValidatePolicyResourceTypeEnum::AwsS3Bucket => "AWS::S3::Bucket",
-        iface_policy::ValidatePolicyBodyValidatePolicyResourceTypeEnum::AwsS3AccessPoint => "AWS::S3::AccessPoint",
-        iface_policy::ValidatePolicyBodyValidatePolicyResourceTypeEnum::AwsS3MultiRegionAccessPoint => "AWS::S3::MultiRegionAccessPoint",
-        iface_policy::ValidatePolicyBodyValidatePolicyResourceTypeEnum::AwsS3ObjectLambdaAccessPoint => "AWS::S3ObjectLambda::AccessPoint",
-        iface_policy::ValidatePolicyBodyValidatePolicyResourceTypeEnum::AwsIamAssumeRolePolicyDocument => "AWS::IAM::AssumeRolePolicyDocument",
-    }
-}
-
-fn iface_policy__start_policy_generation_body_policy_generation_details__to_json(p: &iface_policy::StartPolicyGenerationBodyPolicyGenerationDetails) -> Value {
-    let mut m = Map::new();
-    m.insert("principal_arn".into(), match (&p.principal_arn) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    Value::Object(m)
-}
-
-fn iface_policy__start_policy_generation_body_cloud_trail_details__to_json(p: &iface_policy::StartPolicyGenerationBodyCloudTrailDetails) -> Value {
-    let mut m = Map::new();
-    m.insert("trails".into(), match (&p.trails) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    m.insert("access_role".into(), match (&p.access_role) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    m.insert("start_time".into(), match (&p.start_time) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    m.insert("end_time".into(), match (&p.end_time) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    Value::Object(m)
-}
-
-fn iface_policy__get_generated_policy_params__to_json(p: &iface_policy::GetGeneratedPolicyParams) -> Value {
-    let mut m = Map::new();
-    m.insert("job_id".into(), Value::String((&p.job_id).clone()));
-    m.insert("include_resource_placeholders".into(), match (&p.include_resource_placeholders) { Some(v) => Value::Bool(*(v)), None => Value::Null });
-    m.insert("include_service_level_template".into(), match (&p.include_service_level_template) { Some(v) => Value::Bool(*(v)), None => Value::Null });
-    Value::Object(m)
-}
-
-fn iface_policy__cancel_policy_generation_params__to_json(p: &iface_policy::CancelPolicyGenerationParams) -> Value {
-    let mut m = Map::new();
-    m.insert("job_id".into(), Value::String((&p.job_id).clone()));
-    Value::Object(m)
-}
-
-fn iface_policy__list_policy_generations_params__to_json(p: &iface_policy::ListPolicyGenerationsParams) -> Value {
-    let mut m = Map::new();
-    m.insert("principal_arn".into(), match (&p.principal_arn) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    m.insert("max_results".into(), match (&p.max_results) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
-    m.insert("next_token".into(), match (&p.next_token) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    Value::Object(m)
-}
-
-fn iface_policy__start_policy_generation_params__to_json(p: &iface_policy::StartPolicyGenerationParams) -> Value {
-    let mut m = Map::new();
-    m.insert("policy_generation_details".into(), iface_policy__start_policy_generation_body_policy_generation_details__to_json(&p.policy_generation_details));
-    m.insert("cloud_trail_details".into(), match (&p.cloud_trail_details) { Some(v) => iface_policy__start_policy_generation_body_cloud_trail_details__to_json(v), None => Value::Null });
-    m.insert("client_token".into(), match (&p.client_token) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    Value::Object(m)
-}
-
-fn iface_policy__validate_policy_params__to_json(p: &iface_policy::ValidatePolicyParams) -> Value {
-    let mut m = Map::new();
-    m.insert("max_results".into(), match (&p.max_results) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
-    m.insert("next_token".into(), match (&p.next_token) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    m.insert("locale".into(), match (&p.locale) { Some(v) => Value::String(iface_policy__validate_policy_body_locale_enum__to_str(v).into()), None => Value::Null });
-    m.insert("policy_document".into(), Value::String((&p.policy_document).clone()));
-    m.insert("policy_type".into(), Value::String(iface_policy__validate_policy_body_policy_type_enum__to_str(&p.policy_type).into()));
-    m.insert("validate_policy_resource_type".into(), match (&p.validate_policy_resource_type) { Some(v) => Value::String(iface_policy__validate_policy_body_validate_policy_resource_type_enum__to_str(v).into()), None => Value::Null });
-    Value::Object(m)
-}
-
-impl iface_policy::Guest for crate::Component {
-    fn get_generated_policy(params: iface_policy::GetGeneratedPolicyParams) -> Result<String, String> {
-        let json = iface_policy__get_generated_policy_params__to_json(&params);
-        dispatch(&OP_POLICY_GET_GENERATED_POLICY, json)
-    }
-    fn cancel_policy_generation(params: iface_policy::CancelPolicyGenerationParams) -> Result<String, String> {
-        let json = iface_policy__cancel_policy_generation_params__to_json(&params);
-        dispatch(&OP_POLICY_CANCEL_POLICY_GENERATION, json)
-    }
-    fn list_policy_generations(params: iface_policy::ListPolicyGenerationsParams) -> Result<String, String> {
-        let json = iface_policy__list_policy_generations_params__to_json(&params);
-        dispatch(&OP_POLICY_LIST_POLICY_GENERATIONS, json)
-    }
-    fn start_policy_generation(params: iface_policy::StartPolicyGenerationParams) -> Result<String, String> {
-        let json = iface_policy__start_policy_generation_params__to_json(&params);
-        dispatch(&OP_POLICY_START_POLICY_GENERATION, json)
-    }
-    fn validate_policy(params: iface_policy::ValidatePolicyParams) -> Result<String, String> {
-        let json = iface_policy__validate_policy_params__to_json(&params);
-        dispatch(&OP_POLICY_VALIDATE_POLICY, json)
-    }
-}
-use crate::exports::autostamp::amazonaws::access_preview as iface_access_preview;
-
-const OP_ACCESS_PREVIEW_CREATE_ACCESS_PREVIEW: OpSpec = OpSpec {
-    method: "PUT",
-    path_template: "/access-preview",
-    fields: &[
-        FieldSpec { snake: "analyzer_arn", location: FieldLocation::Body },
-        FieldSpec { snake: "configurations", location: FieldLocation::Body },
-        FieldSpec { snake: "client_token", location: FieldLocation::Body },
-    ],
-    auth: &[
-        AuthApply { secret_key: "hmac", kind: AuthKind::ApiKeyHeader("Authorization") },
-    ],
-};
-
-const OP_ACCESS_PREVIEW_GET_ACCESS_PREVIEW: OpSpec = OpSpec {
-    method: "GET",
-    path_template: "/access-preview/{access_preview_id}#analyzerArn",
-    fields: &[
-        FieldSpec { snake: "access_preview_id", location: FieldLocation::Path },
-        FieldSpec { snake: "analyzer_arn", location: FieldLocation::Query },
-    ],
-    auth: &[
-        AuthApply { secret_key: "hmac", kind: AuthKind::ApiKeyHeader("Authorization") },
-    ],
-};
-
-const OP_ACCESS_PREVIEW_LIST_ACCESS_PREVIEW_FINDINGS: OpSpec = OpSpec {
+const OP_AWS_MIGRATION_HUB_ASSOCIATE_DISCOVERED_RESOURCE: OpSpec = OpSpec {
     method: "POST",
-    path_template: "/access-preview/{access_preview_id}",
+    path_template: "/#X-Amz-Target=AWSMigrationHub.AssociateDiscoveredResource",
     fields: &[
-        FieldSpec { snake: "access_preview_id", location: FieldLocation::Path },
-        FieldSpec { snake: "max_results", location: FieldLocation::Query },
-        FieldSpec { snake: "next_token", location: FieldLocation::Query },
-        FieldSpec { snake: "analyzer_arn", location: FieldLocation::Body },
-        FieldSpec { snake: "filter", location: FieldLocation::Body },
+        FieldSpec { snake: "x_amz_content_sha256", wire: "X-Amz-Content-Sha256", location: FieldLocation::Header },
+        FieldSpec { snake: "x_amz_date", wire: "X-Amz-Date", location: FieldLocation::Header },
+        FieldSpec { snake: "x_amz_algorithm", wire: "X-Amz-Algorithm", location: FieldLocation::Header },
+        FieldSpec { snake: "x_amz_credential", wire: "X-Amz-Credential", location: FieldLocation::Header },
+        FieldSpec { snake: "x_amz_security_token", wire: "X-Amz-Security-Token", location: FieldLocation::Header },
+        FieldSpec { snake: "x_amz_signature", wire: "X-Amz-Signature", location: FieldLocation::Header },
+        FieldSpec { snake: "x_amz_signed_headers", wire: "X-Amz-SignedHeaders", location: FieldLocation::Header },
+        FieldSpec { snake: "x_amz_target", wire: "X-Amz-Target", location: FieldLocation::Header },
+        FieldSpec { snake: "progress_update_stream", wire: "ProgressUpdateStream", location: FieldLocation::Body },
+        FieldSpec { snake: "migration_task_name", wire: "MigrationTaskName", location: FieldLocation::Body },
+        FieldSpec { snake: "discovered_resource", wire: "DiscoveredResource", location: FieldLocation::Body },
+        FieldSpec { snake: "dry_run", wire: "DryRun", location: FieldLocation::Body },
     ],
     auth: &[
         AuthApply { secret_key: "hmac", kind: AuthKind::ApiKeyHeader("Authorization") },
     ],
 };
 
-fn iface_access_preview__create_access_preview_body_configurations__to_json(p: &iface_access_preview::CreateAccessPreviewBodyConfigurations) -> Value {
+const OP_AWS_MIGRATION_HUB_CREATE_PROGRESS_UPDATE_STREAM: OpSpec = OpSpec {
+    method: "POST",
+    path_template: "/#X-Amz-Target=AWSMigrationHub.CreateProgressUpdateStream",
+    fields: &[
+        FieldSpec { snake: "x_amz_content_sha256", wire: "X-Amz-Content-Sha256", location: FieldLocation::Header },
+        FieldSpec { snake: "x_amz_date", wire: "X-Amz-Date", location: FieldLocation::Header },
+        FieldSpec { snake: "x_amz_algorithm", wire: "X-Amz-Algorithm", location: FieldLocation::Header },
+        FieldSpec { snake: "x_amz_credential", wire: "X-Amz-Credential", location: FieldLocation::Header },
+        FieldSpec { snake: "x_amz_security_token", wire: "X-Amz-Security-Token", location: FieldLocation::Header },
+        FieldSpec { snake: "x_amz_signature", wire: "X-Amz-Signature", location: FieldLocation::Header },
+        FieldSpec { snake: "x_amz_signed_headers", wire: "X-Amz-SignedHeaders", location: FieldLocation::Header },
+        FieldSpec { snake: "x_amz_target", wire: "X-Amz-Target", location: FieldLocation::Header },
+        FieldSpec { snake: "progress_update_stream_name", wire: "ProgressUpdateStreamName", location: FieldLocation::Body },
+        FieldSpec { snake: "dry_run", wire: "DryRun", location: FieldLocation::Body },
+    ],
+    auth: &[
+        AuthApply { secret_key: "hmac", kind: AuthKind::ApiKeyHeader("Authorization") },
+    ],
+};
+
+const OP_AWS_MIGRATION_HUB_DELETE_PROGRESS_UPDATE_STREAM: OpSpec = OpSpec {
+    method: "POST",
+    path_template: "/#X-Amz-Target=AWSMigrationHub.DeleteProgressUpdateStream",
+    fields: &[
+        FieldSpec { snake: "x_amz_content_sha256", wire: "X-Amz-Content-Sha256", location: FieldLocation::Header },
+        FieldSpec { snake: "x_amz_date", wire: "X-Amz-Date", location: FieldLocation::Header },
+        FieldSpec { snake: "x_amz_algorithm", wire: "X-Amz-Algorithm", location: FieldLocation::Header },
+        FieldSpec { snake: "x_amz_credential", wire: "X-Amz-Credential", location: FieldLocation::Header },
+        FieldSpec { snake: "x_amz_security_token", wire: "X-Amz-Security-Token", location: FieldLocation::Header },
+        FieldSpec { snake: "x_amz_signature", wire: "X-Amz-Signature", location: FieldLocation::Header },
+        FieldSpec { snake: "x_amz_signed_headers", wire: "X-Amz-SignedHeaders", location: FieldLocation::Header },
+        FieldSpec { snake: "x_amz_target", wire: "X-Amz-Target", location: FieldLocation::Header },
+        FieldSpec { snake: "progress_update_stream_name", wire: "ProgressUpdateStreamName", location: FieldLocation::Body },
+        FieldSpec { snake: "dry_run", wire: "DryRun", location: FieldLocation::Body },
+    ],
+    auth: &[
+        AuthApply { secret_key: "hmac", kind: AuthKind::ApiKeyHeader("Authorization") },
+    ],
+};
+
+const OP_AWS_MIGRATION_HUB_DESCRIBE_APPLICATION_STATE: OpSpec = OpSpec {
+    method: "POST",
+    path_template: "/#X-Amz-Target=AWSMigrationHub.DescribeApplicationState",
+    fields: &[
+        FieldSpec { snake: "x_amz_content_sha256", wire: "X-Amz-Content-Sha256", location: FieldLocation::Header },
+        FieldSpec { snake: "x_amz_date", wire: "X-Amz-Date", location: FieldLocation::Header },
+        FieldSpec { snake: "x_amz_algorithm", wire: "X-Amz-Algorithm", location: FieldLocation::Header },
+        FieldSpec { snake: "x_amz_credential", wire: "X-Amz-Credential", location: FieldLocation::Header },
+        FieldSpec { snake: "x_amz_security_token", wire: "X-Amz-Security-Token", location: FieldLocation::Header },
+        FieldSpec { snake: "x_amz_signature", wire: "X-Amz-Signature", location: FieldLocation::Header },
+        FieldSpec { snake: "x_amz_signed_headers", wire: "X-Amz-SignedHeaders", location: FieldLocation::Header },
+        FieldSpec { snake: "x_amz_target", wire: "X-Amz-Target", location: FieldLocation::Header },
+        FieldSpec { snake: "application_id", wire: "ApplicationId", location: FieldLocation::Body },
+    ],
+    auth: &[
+        AuthApply { secret_key: "hmac", kind: AuthKind::ApiKeyHeader("Authorization") },
+    ],
+};
+
+const OP_AWS_MIGRATION_HUB_DESCRIBE_MIGRATION_TASK: OpSpec = OpSpec {
+    method: "POST",
+    path_template: "/#X-Amz-Target=AWSMigrationHub.DescribeMigrationTask",
+    fields: &[
+        FieldSpec { snake: "x_amz_content_sha256", wire: "X-Amz-Content-Sha256", location: FieldLocation::Header },
+        FieldSpec { snake: "x_amz_date", wire: "X-Amz-Date", location: FieldLocation::Header },
+        FieldSpec { snake: "x_amz_algorithm", wire: "X-Amz-Algorithm", location: FieldLocation::Header },
+        FieldSpec { snake: "x_amz_credential", wire: "X-Amz-Credential", location: FieldLocation::Header },
+        FieldSpec { snake: "x_amz_security_token", wire: "X-Amz-Security-Token", location: FieldLocation::Header },
+        FieldSpec { snake: "x_amz_signature", wire: "X-Amz-Signature", location: FieldLocation::Header },
+        FieldSpec { snake: "x_amz_signed_headers", wire: "X-Amz-SignedHeaders", location: FieldLocation::Header },
+        FieldSpec { snake: "x_amz_target", wire: "X-Amz-Target", location: FieldLocation::Header },
+        FieldSpec { snake: "progress_update_stream", wire: "ProgressUpdateStream", location: FieldLocation::Body },
+        FieldSpec { snake: "migration_task_name", wire: "MigrationTaskName", location: FieldLocation::Body },
+    ],
+    auth: &[
+        AuthApply { secret_key: "hmac", kind: AuthKind::ApiKeyHeader("Authorization") },
+    ],
+};
+
+const OP_AWS_MIGRATION_HUB_DISASSOCIATE_CREATED_ARTIFACT: OpSpec = OpSpec {
+    method: "POST",
+    path_template: "/#X-Amz-Target=AWSMigrationHub.DisassociateCreatedArtifact",
+    fields: &[
+        FieldSpec { snake: "x_amz_content_sha256", wire: "X-Amz-Content-Sha256", location: FieldLocation::Header },
+        FieldSpec { snake: "x_amz_date", wire: "X-Amz-Date", location: FieldLocation::Header },
+        FieldSpec { snake: "x_amz_algorithm", wire: "X-Amz-Algorithm", location: FieldLocation::Header },
+        FieldSpec { snake: "x_amz_credential", wire: "X-Amz-Credential", location: FieldLocation::Header },
+        FieldSpec { snake: "x_amz_security_token", wire: "X-Amz-Security-Token", location: FieldLocation::Header },
+        FieldSpec { snake: "x_amz_signature", wire: "X-Amz-Signature", location: FieldLocation::Header },
+        FieldSpec { snake: "x_amz_signed_headers", wire: "X-Amz-SignedHeaders", location: FieldLocation::Header },
+        FieldSpec { snake: "x_amz_target", wire: "X-Amz-Target", location: FieldLocation::Header },
+        FieldSpec { snake: "progress_update_stream", wire: "ProgressUpdateStream", location: FieldLocation::Body },
+        FieldSpec { snake: "migration_task_name", wire: "MigrationTaskName", location: FieldLocation::Body },
+        FieldSpec { snake: "created_artifact_name", wire: "CreatedArtifactName", location: FieldLocation::Body },
+        FieldSpec { snake: "dry_run", wire: "DryRun", location: FieldLocation::Body },
+    ],
+    auth: &[
+        AuthApply { secret_key: "hmac", kind: AuthKind::ApiKeyHeader("Authorization") },
+    ],
+};
+
+const OP_AWS_MIGRATION_HUB_DISASSOCIATE_DISCOVERED_RESOURCE: OpSpec = OpSpec {
+    method: "POST",
+    path_template: "/#X-Amz-Target=AWSMigrationHub.DisassociateDiscoveredResource",
+    fields: &[
+        FieldSpec { snake: "x_amz_content_sha256", wire: "X-Amz-Content-Sha256", location: FieldLocation::Header },
+        FieldSpec { snake: "x_amz_date", wire: "X-Amz-Date", location: FieldLocation::Header },
+        FieldSpec { snake: "x_amz_algorithm", wire: "X-Amz-Algorithm", location: FieldLocation::Header },
+        FieldSpec { snake: "x_amz_credential", wire: "X-Amz-Credential", location: FieldLocation::Header },
+        FieldSpec { snake: "x_amz_security_token", wire: "X-Amz-Security-Token", location: FieldLocation::Header },
+        FieldSpec { snake: "x_amz_signature", wire: "X-Amz-Signature", location: FieldLocation::Header },
+        FieldSpec { snake: "x_amz_signed_headers", wire: "X-Amz-SignedHeaders", location: FieldLocation::Header },
+        FieldSpec { snake: "x_amz_target", wire: "X-Amz-Target", location: FieldLocation::Header },
+        FieldSpec { snake: "progress_update_stream", wire: "ProgressUpdateStream", location: FieldLocation::Body },
+        FieldSpec { snake: "migration_task_name", wire: "MigrationTaskName", location: FieldLocation::Body },
+        FieldSpec { snake: "configuration_id", wire: "ConfigurationId", location: FieldLocation::Body },
+        FieldSpec { snake: "dry_run", wire: "DryRun", location: FieldLocation::Body },
+    ],
+    auth: &[
+        AuthApply { secret_key: "hmac", kind: AuthKind::ApiKeyHeader("Authorization") },
+    ],
+};
+
+const OP_AWS_MIGRATION_HUB_IMPORT_MIGRATION_TASK: OpSpec = OpSpec {
+    method: "POST",
+    path_template: "/#X-Amz-Target=AWSMigrationHub.ImportMigrationTask",
+    fields: &[
+        FieldSpec { snake: "x_amz_content_sha256", wire: "X-Amz-Content-Sha256", location: FieldLocation::Header },
+        FieldSpec { snake: "x_amz_date", wire: "X-Amz-Date", location: FieldLocation::Header },
+        FieldSpec { snake: "x_amz_algorithm", wire: "X-Amz-Algorithm", location: FieldLocation::Header },
+        FieldSpec { snake: "x_amz_credential", wire: "X-Amz-Credential", location: FieldLocation::Header },
+        FieldSpec { snake: "x_amz_security_token", wire: "X-Amz-Security-Token", location: FieldLocation::Header },
+        FieldSpec { snake: "x_amz_signature", wire: "X-Amz-Signature", location: FieldLocation::Header },
+        FieldSpec { snake: "x_amz_signed_headers", wire: "X-Amz-SignedHeaders", location: FieldLocation::Header },
+        FieldSpec { snake: "x_amz_target", wire: "X-Amz-Target", location: FieldLocation::Header },
+        FieldSpec { snake: "progress_update_stream", wire: "ProgressUpdateStream", location: FieldLocation::Body },
+        FieldSpec { snake: "migration_task_name", wire: "MigrationTaskName", location: FieldLocation::Body },
+        FieldSpec { snake: "dry_run", wire: "DryRun", location: FieldLocation::Body },
+    ],
+    auth: &[
+        AuthApply { secret_key: "hmac", kind: AuthKind::ApiKeyHeader("Authorization") },
+    ],
+};
+
+const OP_AWS_MIGRATION_HUB_LIST_APPLICATION_STATES: OpSpec = OpSpec {
+    method: "POST",
+    path_template: "/#X-Amz-Target=AWSMigrationHub.ListApplicationStates",
+    fields: &[
+        FieldSpec { snake: "x_amz_content_sha256", wire: "X-Amz-Content-Sha256", location: FieldLocation::Header },
+        FieldSpec { snake: "x_amz_date", wire: "X-Amz-Date", location: FieldLocation::Header },
+        FieldSpec { snake: "x_amz_algorithm", wire: "X-Amz-Algorithm", location: FieldLocation::Header },
+        FieldSpec { snake: "x_amz_credential", wire: "X-Amz-Credential", location: FieldLocation::Header },
+        FieldSpec { snake: "x_amz_security_token", wire: "X-Amz-Security-Token", location: FieldLocation::Header },
+        FieldSpec { snake: "x_amz_signature", wire: "X-Amz-Signature", location: FieldLocation::Header },
+        FieldSpec { snake: "x_amz_signed_headers", wire: "X-Amz-SignedHeaders", location: FieldLocation::Header },
+        FieldSpec { snake: "max_results", wire: "MaxResults", location: FieldLocation::Query },
+        FieldSpec { snake: "next_token", wire: "NextToken", location: FieldLocation::Query },
+        FieldSpec { snake: "x_amz_target", wire: "X-Amz-Target", location: FieldLocation::Header },
+        FieldSpec { snake: "application_ids", wire: "ApplicationIds", location: FieldLocation::Body },
+        FieldSpec { snake: "next_token_v2", wire: "NextToken", location: FieldLocation::Body },
+        FieldSpec { snake: "max_results_v2", wire: "MaxResults", location: FieldLocation::Body },
+    ],
+    auth: &[
+        AuthApply { secret_key: "hmac", kind: AuthKind::ApiKeyHeader("Authorization") },
+    ],
+};
+
+const OP_AWS_MIGRATION_HUB_LIST_CREATED_ARTIFACTS: OpSpec = OpSpec {
+    method: "POST",
+    path_template: "/#X-Amz-Target=AWSMigrationHub.ListCreatedArtifacts",
+    fields: &[
+        FieldSpec { snake: "x_amz_content_sha256", wire: "X-Amz-Content-Sha256", location: FieldLocation::Header },
+        FieldSpec { snake: "x_amz_date", wire: "X-Amz-Date", location: FieldLocation::Header },
+        FieldSpec { snake: "x_amz_algorithm", wire: "X-Amz-Algorithm", location: FieldLocation::Header },
+        FieldSpec { snake: "x_amz_credential", wire: "X-Amz-Credential", location: FieldLocation::Header },
+        FieldSpec { snake: "x_amz_security_token", wire: "X-Amz-Security-Token", location: FieldLocation::Header },
+        FieldSpec { snake: "x_amz_signature", wire: "X-Amz-Signature", location: FieldLocation::Header },
+        FieldSpec { snake: "x_amz_signed_headers", wire: "X-Amz-SignedHeaders", location: FieldLocation::Header },
+        FieldSpec { snake: "max_results", wire: "MaxResults", location: FieldLocation::Query },
+        FieldSpec { snake: "next_token", wire: "NextToken", location: FieldLocation::Query },
+        FieldSpec { snake: "x_amz_target", wire: "X-Amz-Target", location: FieldLocation::Header },
+        FieldSpec { snake: "progress_update_stream", wire: "ProgressUpdateStream", location: FieldLocation::Body },
+        FieldSpec { snake: "migration_task_name", wire: "MigrationTaskName", location: FieldLocation::Body },
+        FieldSpec { snake: "next_token_v2", wire: "NextToken", location: FieldLocation::Body },
+        FieldSpec { snake: "max_results_v2", wire: "MaxResults", location: FieldLocation::Body },
+    ],
+    auth: &[
+        AuthApply { secret_key: "hmac", kind: AuthKind::ApiKeyHeader("Authorization") },
+    ],
+};
+
+const OP_AWS_MIGRATION_HUB_LIST_DISCOVERED_RESOURCES: OpSpec = OpSpec {
+    method: "POST",
+    path_template: "/#X-Amz-Target=AWSMigrationHub.ListDiscoveredResources",
+    fields: &[
+        FieldSpec { snake: "x_amz_content_sha256", wire: "X-Amz-Content-Sha256", location: FieldLocation::Header },
+        FieldSpec { snake: "x_amz_date", wire: "X-Amz-Date", location: FieldLocation::Header },
+        FieldSpec { snake: "x_amz_algorithm", wire: "X-Amz-Algorithm", location: FieldLocation::Header },
+        FieldSpec { snake: "x_amz_credential", wire: "X-Amz-Credential", location: FieldLocation::Header },
+        FieldSpec { snake: "x_amz_security_token", wire: "X-Amz-Security-Token", location: FieldLocation::Header },
+        FieldSpec { snake: "x_amz_signature", wire: "X-Amz-Signature", location: FieldLocation::Header },
+        FieldSpec { snake: "x_amz_signed_headers", wire: "X-Amz-SignedHeaders", location: FieldLocation::Header },
+        FieldSpec { snake: "max_results", wire: "MaxResults", location: FieldLocation::Query },
+        FieldSpec { snake: "next_token", wire: "NextToken", location: FieldLocation::Query },
+        FieldSpec { snake: "x_amz_target", wire: "X-Amz-Target", location: FieldLocation::Header },
+        FieldSpec { snake: "progress_update_stream", wire: "ProgressUpdateStream", location: FieldLocation::Body },
+        FieldSpec { snake: "migration_task_name", wire: "MigrationTaskName", location: FieldLocation::Body },
+        FieldSpec { snake: "next_token_v2", wire: "NextToken", location: FieldLocation::Body },
+        FieldSpec { snake: "max_results_v2", wire: "MaxResults", location: FieldLocation::Body },
+    ],
+    auth: &[
+        AuthApply { secret_key: "hmac", kind: AuthKind::ApiKeyHeader("Authorization") },
+    ],
+};
+
+const OP_AWS_MIGRATION_HUB_LIST_MIGRATION_TASKS: OpSpec = OpSpec {
+    method: "POST",
+    path_template: "/#X-Amz-Target=AWSMigrationHub.ListMigrationTasks",
+    fields: &[
+        FieldSpec { snake: "x_amz_content_sha256", wire: "X-Amz-Content-Sha256", location: FieldLocation::Header },
+        FieldSpec { snake: "x_amz_date", wire: "X-Amz-Date", location: FieldLocation::Header },
+        FieldSpec { snake: "x_amz_algorithm", wire: "X-Amz-Algorithm", location: FieldLocation::Header },
+        FieldSpec { snake: "x_amz_credential", wire: "X-Amz-Credential", location: FieldLocation::Header },
+        FieldSpec { snake: "x_amz_security_token", wire: "X-Amz-Security-Token", location: FieldLocation::Header },
+        FieldSpec { snake: "x_amz_signature", wire: "X-Amz-Signature", location: FieldLocation::Header },
+        FieldSpec { snake: "x_amz_signed_headers", wire: "X-Amz-SignedHeaders", location: FieldLocation::Header },
+        FieldSpec { snake: "max_results", wire: "MaxResults", location: FieldLocation::Query },
+        FieldSpec { snake: "next_token", wire: "NextToken", location: FieldLocation::Query },
+        FieldSpec { snake: "x_amz_target", wire: "X-Amz-Target", location: FieldLocation::Header },
+        FieldSpec { snake: "next_token_v2", wire: "NextToken", location: FieldLocation::Body },
+        FieldSpec { snake: "max_results_v2", wire: "MaxResults", location: FieldLocation::Body },
+        FieldSpec { snake: "resource_name", wire: "ResourceName", location: FieldLocation::Body },
+    ],
+    auth: &[
+        AuthApply { secret_key: "hmac", kind: AuthKind::ApiKeyHeader("Authorization") },
+    ],
+};
+
+const OP_AWS_MIGRATION_HUB_LIST_PROGRESS_UPDATE_STREAMS: OpSpec = OpSpec {
+    method: "POST",
+    path_template: "/#X-Amz-Target=AWSMigrationHub.ListProgressUpdateStreams",
+    fields: &[
+        FieldSpec { snake: "x_amz_content_sha256", wire: "X-Amz-Content-Sha256", location: FieldLocation::Header },
+        FieldSpec { snake: "x_amz_date", wire: "X-Amz-Date", location: FieldLocation::Header },
+        FieldSpec { snake: "x_amz_algorithm", wire: "X-Amz-Algorithm", location: FieldLocation::Header },
+        FieldSpec { snake: "x_amz_credential", wire: "X-Amz-Credential", location: FieldLocation::Header },
+        FieldSpec { snake: "x_amz_security_token", wire: "X-Amz-Security-Token", location: FieldLocation::Header },
+        FieldSpec { snake: "x_amz_signature", wire: "X-Amz-Signature", location: FieldLocation::Header },
+        FieldSpec { snake: "x_amz_signed_headers", wire: "X-Amz-SignedHeaders", location: FieldLocation::Header },
+        FieldSpec { snake: "max_results", wire: "MaxResults", location: FieldLocation::Query },
+        FieldSpec { snake: "next_token", wire: "NextToken", location: FieldLocation::Query },
+        FieldSpec { snake: "x_amz_target", wire: "X-Amz-Target", location: FieldLocation::Header },
+        FieldSpec { snake: "next_token_v2", wire: "NextToken", location: FieldLocation::Body },
+        FieldSpec { snake: "max_results_v2", wire: "MaxResults", location: FieldLocation::Body },
+    ],
+    auth: &[
+        AuthApply { secret_key: "hmac", kind: AuthKind::ApiKeyHeader("Authorization") },
+    ],
+};
+
+const OP_AWS_MIGRATION_HUB_NOTIFY_APPLICATION_STATE: OpSpec = OpSpec {
+    method: "POST",
+    path_template: "/#X-Amz-Target=AWSMigrationHub.NotifyApplicationState",
+    fields: &[
+        FieldSpec { snake: "x_amz_content_sha256", wire: "X-Amz-Content-Sha256", location: FieldLocation::Header },
+        FieldSpec { snake: "x_amz_date", wire: "X-Amz-Date", location: FieldLocation::Header },
+        FieldSpec { snake: "x_amz_algorithm", wire: "X-Amz-Algorithm", location: FieldLocation::Header },
+        FieldSpec { snake: "x_amz_credential", wire: "X-Amz-Credential", location: FieldLocation::Header },
+        FieldSpec { snake: "x_amz_security_token", wire: "X-Amz-Security-Token", location: FieldLocation::Header },
+        FieldSpec { snake: "x_amz_signature", wire: "X-Amz-Signature", location: FieldLocation::Header },
+        FieldSpec { snake: "x_amz_signed_headers", wire: "X-Amz-SignedHeaders", location: FieldLocation::Header },
+        FieldSpec { snake: "x_amz_target", wire: "X-Amz-Target", location: FieldLocation::Header },
+        FieldSpec { snake: "application_id", wire: "ApplicationId", location: FieldLocation::Body },
+        FieldSpec { snake: "status", wire: "Status", location: FieldLocation::Body },
+        FieldSpec { snake: "update_date_time", wire: "UpdateDateTime", location: FieldLocation::Body },
+        FieldSpec { snake: "dry_run", wire: "DryRun", location: FieldLocation::Body },
+    ],
+    auth: &[
+        AuthApply { secret_key: "hmac", kind: AuthKind::ApiKeyHeader("Authorization") },
+    ],
+};
+
+const OP_AWS_MIGRATION_HUB_NOTIFY_MIGRATION_TASK_STATE: OpSpec = OpSpec {
+    method: "POST",
+    path_template: "/#X-Amz-Target=AWSMigrationHub.NotifyMigrationTaskState",
+    fields: &[
+        FieldSpec { snake: "x_amz_content_sha256", wire: "X-Amz-Content-Sha256", location: FieldLocation::Header },
+        FieldSpec { snake: "x_amz_date", wire: "X-Amz-Date", location: FieldLocation::Header },
+        FieldSpec { snake: "x_amz_algorithm", wire: "X-Amz-Algorithm", location: FieldLocation::Header },
+        FieldSpec { snake: "x_amz_credential", wire: "X-Amz-Credential", location: FieldLocation::Header },
+        FieldSpec { snake: "x_amz_security_token", wire: "X-Amz-Security-Token", location: FieldLocation::Header },
+        FieldSpec { snake: "x_amz_signature", wire: "X-Amz-Signature", location: FieldLocation::Header },
+        FieldSpec { snake: "x_amz_signed_headers", wire: "X-Amz-SignedHeaders", location: FieldLocation::Header },
+        FieldSpec { snake: "x_amz_target", wire: "X-Amz-Target", location: FieldLocation::Header },
+        FieldSpec { snake: "progress_update_stream", wire: "ProgressUpdateStream", location: FieldLocation::Body },
+        FieldSpec { snake: "migration_task_name", wire: "MigrationTaskName", location: FieldLocation::Body },
+        FieldSpec { snake: "task", wire: "Task", location: FieldLocation::Body },
+        FieldSpec { snake: "update_date_time", wire: "UpdateDateTime", location: FieldLocation::Body },
+        FieldSpec { snake: "next_update_seconds", wire: "NextUpdateSeconds", location: FieldLocation::Body },
+        FieldSpec { snake: "dry_run", wire: "DryRun", location: FieldLocation::Body },
+    ],
+    auth: &[
+        AuthApply { secret_key: "hmac", kind: AuthKind::ApiKeyHeader("Authorization") },
+    ],
+};
+
+const OP_AWS_MIGRATION_HUB_PUT_RESOURCE_ATTRIBUTES: OpSpec = OpSpec {
+    method: "POST",
+    path_template: "/#X-Amz-Target=AWSMigrationHub.PutResourceAttributes",
+    fields: &[
+        FieldSpec { snake: "x_amz_content_sha256", wire: "X-Amz-Content-Sha256", location: FieldLocation::Header },
+        FieldSpec { snake: "x_amz_date", wire: "X-Amz-Date", location: FieldLocation::Header },
+        FieldSpec { snake: "x_amz_algorithm", wire: "X-Amz-Algorithm", location: FieldLocation::Header },
+        FieldSpec { snake: "x_amz_credential", wire: "X-Amz-Credential", location: FieldLocation::Header },
+        FieldSpec { snake: "x_amz_security_token", wire: "X-Amz-Security-Token", location: FieldLocation::Header },
+        FieldSpec { snake: "x_amz_signature", wire: "X-Amz-Signature", location: FieldLocation::Header },
+        FieldSpec { snake: "x_amz_signed_headers", wire: "X-Amz-SignedHeaders", location: FieldLocation::Header },
+        FieldSpec { snake: "x_amz_target", wire: "X-Amz-Target", location: FieldLocation::Header },
+        FieldSpec { snake: "progress_update_stream", wire: "ProgressUpdateStream", location: FieldLocation::Body },
+        FieldSpec { snake: "migration_task_name", wire: "MigrationTaskName", location: FieldLocation::Body },
+        FieldSpec { snake: "resource_attribute_list", wire: "ResourceAttributeList", location: FieldLocation::Body },
+        FieldSpec { snake: "dry_run", wire: "DryRun", location: FieldLocation::Body },
+    ],
+    auth: &[
+        AuthApply { secret_key: "hmac", kind: AuthKind::ApiKeyHeader("Authorization") },
+    ],
+};
+
+fn iface_aws_migration_hub__associate_created_artifact_x_amz_target_enum__to_str(e: &iface_aws_migration_hub::AssociateCreatedArtifactXAmzTargetEnum) -> &'static str {
+    match e {
+        iface_aws_migration_hub::AssociateCreatedArtifactXAmzTargetEnum::AwsMigrationHubAssociateCreatedArtifact => "AWSMigrationHub.AssociateCreatedArtifact",
+    }
+}
+
+fn iface_aws_migration_hub__associate_discovered_resource_x_amz_target_enum__to_str(e: &iface_aws_migration_hub::AssociateDiscoveredResourceXAmzTargetEnum) -> &'static str {
+    match e {
+        iface_aws_migration_hub::AssociateDiscoveredResourceXAmzTargetEnum::AwsMigrationHubAssociateDiscoveredResource => "AWSMigrationHub.AssociateDiscoveredResource",
+    }
+}
+
+fn iface_aws_migration_hub__create_progress_update_stream_x_amz_target_enum__to_str(e: &iface_aws_migration_hub::CreateProgressUpdateStreamXAmzTargetEnum) -> &'static str {
+    match e {
+        iface_aws_migration_hub::CreateProgressUpdateStreamXAmzTargetEnum::AwsMigrationHubCreateProgressUpdateStream => "AWSMigrationHub.CreateProgressUpdateStream",
+    }
+}
+
+fn iface_aws_migration_hub__delete_progress_update_stream_x_amz_target_enum__to_str(e: &iface_aws_migration_hub::DeleteProgressUpdateStreamXAmzTargetEnum) -> &'static str {
+    match e {
+        iface_aws_migration_hub::DeleteProgressUpdateStreamXAmzTargetEnum::AwsMigrationHubDeleteProgressUpdateStream => "AWSMigrationHub.DeleteProgressUpdateStream",
+    }
+}
+
+fn iface_aws_migration_hub__describe_application_state_x_amz_target_enum__to_str(e: &iface_aws_migration_hub::DescribeApplicationStateXAmzTargetEnum) -> &'static str {
+    match e {
+        iface_aws_migration_hub::DescribeApplicationStateXAmzTargetEnum::AwsMigrationHubDescribeApplicationState => "AWSMigrationHub.DescribeApplicationState",
+    }
+}
+
+fn iface_aws_migration_hub__describe_migration_task_x_amz_target_enum__to_str(e: &iface_aws_migration_hub::DescribeMigrationTaskXAmzTargetEnum) -> &'static str {
+    match e {
+        iface_aws_migration_hub::DescribeMigrationTaskXAmzTargetEnum::AwsMigrationHubDescribeMigrationTask => "AWSMigrationHub.DescribeMigrationTask",
+    }
+}
+
+fn iface_aws_migration_hub__disassociate_created_artifact_x_amz_target_enum__to_str(e: &iface_aws_migration_hub::DisassociateCreatedArtifactXAmzTargetEnum) -> &'static str {
+    match e {
+        iface_aws_migration_hub::DisassociateCreatedArtifactXAmzTargetEnum::AwsMigrationHubDisassociateCreatedArtifact => "AWSMigrationHub.DisassociateCreatedArtifact",
+    }
+}
+
+fn iface_aws_migration_hub__disassociate_discovered_resource_x_amz_target_enum__to_str(e: &iface_aws_migration_hub::DisassociateDiscoveredResourceXAmzTargetEnum) -> &'static str {
+    match e {
+        iface_aws_migration_hub::DisassociateDiscoveredResourceXAmzTargetEnum::AwsMigrationHubDisassociateDiscoveredResource => "AWSMigrationHub.DisassociateDiscoveredResource",
+    }
+}
+
+fn iface_aws_migration_hub__import_migration_task_x_amz_target_enum__to_str(e: &iface_aws_migration_hub::ImportMigrationTaskXAmzTargetEnum) -> &'static str {
+    match e {
+        iface_aws_migration_hub::ImportMigrationTaskXAmzTargetEnum::AwsMigrationHubImportMigrationTask => "AWSMigrationHub.ImportMigrationTask",
+    }
+}
+
+fn iface_aws_migration_hub__list_application_states_x_amz_target_enum__to_str(e: &iface_aws_migration_hub::ListApplicationStatesXAmzTargetEnum) -> &'static str {
+    match e {
+        iface_aws_migration_hub::ListApplicationStatesXAmzTargetEnum::AwsMigrationHubListApplicationStates => "AWSMigrationHub.ListApplicationStates",
+    }
+}
+
+fn iface_aws_migration_hub__list_created_artifacts_x_amz_target_enum__to_str(e: &iface_aws_migration_hub::ListCreatedArtifactsXAmzTargetEnum) -> &'static str {
+    match e {
+        iface_aws_migration_hub::ListCreatedArtifactsXAmzTargetEnum::AwsMigrationHubListCreatedArtifacts => "AWSMigrationHub.ListCreatedArtifacts",
+    }
+}
+
+fn iface_aws_migration_hub__list_discovered_resources_x_amz_target_enum__to_str(e: &iface_aws_migration_hub::ListDiscoveredResourcesXAmzTargetEnum) -> &'static str {
+    match e {
+        iface_aws_migration_hub::ListDiscoveredResourcesXAmzTargetEnum::AwsMigrationHubListDiscoveredResources => "AWSMigrationHub.ListDiscoveredResources",
+    }
+}
+
+fn iface_aws_migration_hub__list_migration_tasks_x_amz_target_enum__to_str(e: &iface_aws_migration_hub::ListMigrationTasksXAmzTargetEnum) -> &'static str {
+    match e {
+        iface_aws_migration_hub::ListMigrationTasksXAmzTargetEnum::AwsMigrationHubListMigrationTasks => "AWSMigrationHub.ListMigrationTasks",
+    }
+}
+
+fn iface_aws_migration_hub__list_progress_update_streams_x_amz_target_enum__to_str(e: &iface_aws_migration_hub::ListProgressUpdateStreamsXAmzTargetEnum) -> &'static str {
+    match e {
+        iface_aws_migration_hub::ListProgressUpdateStreamsXAmzTargetEnum::AwsMigrationHubListProgressUpdateStreams => "AWSMigrationHub.ListProgressUpdateStreams",
+    }
+}
+
+fn iface_aws_migration_hub__notify_application_state_x_amz_target_enum__to_str(e: &iface_aws_migration_hub::NotifyApplicationStateXAmzTargetEnum) -> &'static str {
+    match e {
+        iface_aws_migration_hub::NotifyApplicationStateXAmzTargetEnum::AwsMigrationHubNotifyApplicationState => "AWSMigrationHub.NotifyApplicationState",
+    }
+}
+
+fn iface_aws_migration_hub__notify_migration_task_state_x_amz_target_enum__to_str(e: &iface_aws_migration_hub::NotifyMigrationTaskStateXAmzTargetEnum) -> &'static str {
+    match e {
+        iface_aws_migration_hub::NotifyMigrationTaskStateXAmzTargetEnum::AwsMigrationHubNotifyMigrationTaskState => "AWSMigrationHub.NotifyMigrationTaskState",
+    }
+}
+
+fn iface_aws_migration_hub__put_resource_attributes_x_amz_target_enum__to_str(e: &iface_aws_migration_hub::PutResourceAttributesXAmzTargetEnum) -> &'static str {
+    match e {
+        iface_aws_migration_hub::PutResourceAttributesXAmzTargetEnum::AwsMigrationHubPutResourceAttributes => "AWSMigrationHub.PutResourceAttributes",
+    }
+}
+
+fn iface_aws_migration_hub__associate_created_artifact_request_progress_update_stream__to_json(p: &iface_aws_migration_hub::AssociateCreatedArtifactRequestProgressUpdateStream) -> Value {
     let mut m = Map::new();
     m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
     Value::Object(m)
 }
 
-fn iface_access_preview__list_access_preview_findings_body_filter__to_json(p: &iface_access_preview::ListAccessPreviewFindingsBodyFilter) -> Value {
+fn iface_aws_migration_hub__associate_created_artifact_request_migration_task_name__to_json(p: &iface_aws_migration_hub::AssociateCreatedArtifactRequestMigrationTaskName) -> Value {
     let mut m = Map::new();
     m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
     Value::Object(m)
 }
 
-fn iface_access_preview__create_access_preview_params__to_json(p: &iface_access_preview::CreateAccessPreviewParams) -> Value {
+fn iface_aws_migration_hub__associate_created_artifact_request_created_artifact__to_json(p: &iface_aws_migration_hub::AssociateCreatedArtifactRequestCreatedArtifact) -> Value {
     let mut m = Map::new();
-    m.insert("analyzer_arn".into(), Value::String((&p.analyzer_arn).clone()));
-    m.insert("configurations".into(), iface_access_preview__create_access_preview_body_configurations__to_json(&p.configurations));
-    m.insert("client_token".into(), match (&p.client_token) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("Name".into(), iface_aws_migration_hub__associate_created_artifact_request_created_artifact_name__to_json(&p.name));
+    m.insert("Description".into(), match (&p.description) { Some(v) => iface_aws_migration_hub__associate_created_artifact_request_created_artifact_description__to_json(v), None => Value::Null });
     Value::Object(m)
 }
 
-fn iface_access_preview__get_access_preview_params__to_json(p: &iface_access_preview::GetAccessPreviewParams) -> Value {
+fn iface_aws_migration_hub__associate_created_artifact_request_created_artifact_name__to_json(p: &iface_aws_migration_hub::AssociateCreatedArtifactRequestCreatedArtifactName) -> Value {
     let mut m = Map::new();
-    m.insert("access_preview_id".into(), Value::String((&p.access_preview_id).clone()));
-    m.insert("analyzer_arn".into(), Value::String((&p.analyzer_arn).clone()));
+    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
     Value::Object(m)
 }
 
-fn iface_access_preview__list_access_preview_findings_params__to_json(p: &iface_access_preview::ListAccessPreviewFindingsParams) -> Value {
+fn iface_aws_migration_hub__associate_created_artifact_request_created_artifact_description__to_json(p: &iface_aws_migration_hub::AssociateCreatedArtifactRequestCreatedArtifactDescription) -> Value {
     let mut m = Map::new();
-    m.insert("access_preview_id".into(), Value::String((&p.access_preview_id).clone()));
+    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_aws_migration_hub__associate_created_artifact_request_dry_run__to_json(p: &iface_aws_migration_hub::AssociateCreatedArtifactRequestDryRun) -> Value {
+    let mut m = Map::new();
+    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_aws_migration_hub__associate_created_artifact_result__to_json(p: &iface_aws_migration_hub::AssociateCreatedArtifactResult) -> Value {
+    let mut m = Map::new();
+    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_aws_migration_hub__associate_discovered_resource_request_progress_update_stream__to_json(p: &iface_aws_migration_hub::AssociateDiscoveredResourceRequestProgressUpdateStream) -> Value {
+    let mut m = Map::new();
+    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_aws_migration_hub__associate_discovered_resource_request_migration_task_name__to_json(p: &iface_aws_migration_hub::AssociateDiscoveredResourceRequestMigrationTaskName) -> Value {
+    let mut m = Map::new();
+    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_aws_migration_hub__associate_discovered_resource_request_discovered_resource__to_json(p: &iface_aws_migration_hub::AssociateDiscoveredResourceRequestDiscoveredResource) -> Value {
+    let mut m = Map::new();
+    m.insert("ConfigurationId".into(), iface_aws_migration_hub__associate_discovered_resource_request_discovered_resource_configuration_id__to_json(&p.configuration_id));
+    m.insert("Description".into(), match (&p.description) { Some(v) => iface_aws_migration_hub__associate_discovered_resource_request_discovered_resource_description__to_json(v), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_aws_migration_hub__associate_discovered_resource_request_discovered_resource_configuration_id__to_json(p: &iface_aws_migration_hub::AssociateDiscoveredResourceRequestDiscoveredResourceConfigurationId) -> Value {
+    let mut m = Map::new();
+    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_aws_migration_hub__associate_discovered_resource_request_discovered_resource_description__to_json(p: &iface_aws_migration_hub::AssociateDiscoveredResourceRequestDiscoveredResourceDescription) -> Value {
+    let mut m = Map::new();
+    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_aws_migration_hub__associate_discovered_resource_request_dry_run__to_json(p: &iface_aws_migration_hub::AssociateDiscoveredResourceRequestDryRun) -> Value {
+    let mut m = Map::new();
+    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_aws_migration_hub__associate_discovered_resource_result__to_json(p: &iface_aws_migration_hub::AssociateDiscoveredResourceResult) -> Value {
+    let mut m = Map::new();
+    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_aws_migration_hub__create_progress_update_stream_request_progress_update_stream_name__to_json(p: &iface_aws_migration_hub::CreateProgressUpdateStreamRequestProgressUpdateStreamName) -> Value {
+    let mut m = Map::new();
+    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_aws_migration_hub__create_progress_update_stream_request_dry_run__to_json(p: &iface_aws_migration_hub::CreateProgressUpdateStreamRequestDryRun) -> Value {
+    let mut m = Map::new();
+    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_aws_migration_hub__create_progress_update_stream_result__to_json(p: &iface_aws_migration_hub::CreateProgressUpdateStreamResult) -> Value {
+    let mut m = Map::new();
+    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_aws_migration_hub__delete_progress_update_stream_request_progress_update_stream_name__to_json(p: &iface_aws_migration_hub::DeleteProgressUpdateStreamRequestProgressUpdateStreamName) -> Value {
+    let mut m = Map::new();
+    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_aws_migration_hub__delete_progress_update_stream_request_dry_run__to_json(p: &iface_aws_migration_hub::DeleteProgressUpdateStreamRequestDryRun) -> Value {
+    let mut m = Map::new();
+    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_aws_migration_hub__delete_progress_update_stream_result__to_json(p: &iface_aws_migration_hub::DeleteProgressUpdateStreamResult) -> Value {
+    let mut m = Map::new();
+    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_aws_migration_hub__describe_application_state_request_application_id__to_json(p: &iface_aws_migration_hub::DescribeApplicationStateRequestApplicationId) -> Value {
+    let mut m = Map::new();
+    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_aws_migration_hub__describe_application_state_result__to_json(p: &iface_aws_migration_hub::DescribeApplicationStateResult) -> Value {
+    let mut m = Map::new();
+    m.insert("ApplicationStatus".into(), match (&p.application_status) { Some(v) => iface_aws_migration_hub__describe_application_state_result_application_status__to_json(v), None => Value::Null });
+    m.insert("LastUpdatedTime".into(), match (&p.last_updated_time) { Some(v) => iface_aws_migration_hub__describe_application_state_result_last_updated_time__to_json(v), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_aws_migration_hub__describe_application_state_result_application_status__to_json(p: &iface_aws_migration_hub::DescribeApplicationStateResultApplicationStatus) -> Value {
+    let mut m = Map::new();
+    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_aws_migration_hub__describe_application_state_result_last_updated_time__to_json(p: &iface_aws_migration_hub::DescribeApplicationStateResultLastUpdatedTime) -> Value {
+    let mut m = Map::new();
+    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_aws_migration_hub__describe_migration_task_request_progress_update_stream__to_json(p: &iface_aws_migration_hub::DescribeMigrationTaskRequestProgressUpdateStream) -> Value {
+    let mut m = Map::new();
+    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_aws_migration_hub__describe_migration_task_request_migration_task_name__to_json(p: &iface_aws_migration_hub::DescribeMigrationTaskRequestMigrationTaskName) -> Value {
+    let mut m = Map::new();
+    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_aws_migration_hub__describe_migration_task_result__to_json(p: &iface_aws_migration_hub::DescribeMigrationTaskResult) -> Value {
+    let mut m = Map::new();
+    m.insert("MigrationTask".into(), match (&p.migration_task) { Some(v) => iface_aws_migration_hub__describe_migration_task_result_migration_task__to_json(v), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_aws_migration_hub__describe_migration_task_result_migration_task__to_json(p: &iface_aws_migration_hub::DescribeMigrationTaskResultMigrationTask) -> Value {
+    let mut m = Map::new();
+    m.insert("ProgressUpdateStream".into(), match (&p.progress_update_stream) { Some(v) => iface_aws_migration_hub__describe_migration_task_result_migration_task_progress_update_stream__to_json(v), None => Value::Null });
+    m.insert("MigrationTaskName".into(), match (&p.migration_task_name) { Some(v) => iface_aws_migration_hub__describe_migration_task_result_migration_task_migration_task_name__to_json(v), None => Value::Null });
+    m.insert("Task".into(), match (&p.task) { Some(v) => iface_aws_migration_hub__describe_migration_task_result_migration_task_task__to_json(v), None => Value::Null });
+    m.insert("UpdateDateTime".into(), match (&p.update_date_time) { Some(v) => iface_aws_migration_hub__describe_migration_task_result_migration_task_update_date_time__to_json(v), None => Value::Null });
+    m.insert("ResourceAttributeList".into(), match (&p.resource_attribute_list) { Some(v) => iface_aws_migration_hub__describe_migration_task_result_migration_task_resource_attribute_list__to_json(v), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_aws_migration_hub__describe_migration_task_result_migration_task_progress_update_stream__to_json(p: &iface_aws_migration_hub::DescribeMigrationTaskResultMigrationTaskProgressUpdateStream) -> Value {
+    let mut m = Map::new();
+    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_aws_migration_hub__describe_migration_task_result_migration_task_migration_task_name__to_json(p: &iface_aws_migration_hub::DescribeMigrationTaskResultMigrationTaskMigrationTaskName) -> Value {
+    let mut m = Map::new();
+    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_aws_migration_hub__describe_migration_task_result_migration_task_task__to_json(p: &iface_aws_migration_hub::DescribeMigrationTaskResultMigrationTaskTask) -> Value {
+    let mut m = Map::new();
+    m.insert("Status".into(), iface_aws_migration_hub__describe_migration_task_result_migration_task_task_status__to_json(&p.status));
+    m.insert("StatusDetail".into(), match (&p.status_detail) { Some(v) => iface_aws_migration_hub__describe_migration_task_result_migration_task_task_status_detail__to_json(v), None => Value::Null });
+    m.insert("ProgressPercent".into(), match (&p.progress_percent) { Some(v) => iface_aws_migration_hub__describe_migration_task_result_migration_task_task_progress_percent__to_json(v), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_aws_migration_hub__describe_migration_task_result_migration_task_task_status__to_json(p: &iface_aws_migration_hub::DescribeMigrationTaskResultMigrationTaskTaskStatus) -> Value {
+    let mut m = Map::new();
+    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_aws_migration_hub__describe_migration_task_result_migration_task_task_status_detail__to_json(p: &iface_aws_migration_hub::DescribeMigrationTaskResultMigrationTaskTaskStatusDetail) -> Value {
+    let mut m = Map::new();
+    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_aws_migration_hub__describe_migration_task_result_migration_task_task_progress_percent__to_json(p: &iface_aws_migration_hub::DescribeMigrationTaskResultMigrationTaskTaskProgressPercent) -> Value {
+    let mut m = Map::new();
+    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_aws_migration_hub__describe_migration_task_result_migration_task_update_date_time__to_json(p: &iface_aws_migration_hub::DescribeMigrationTaskResultMigrationTaskUpdateDateTime) -> Value {
+    let mut m = Map::new();
+    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_aws_migration_hub__describe_migration_task_result_migration_task_resource_attribute_list__to_json(p: &iface_aws_migration_hub::DescribeMigrationTaskResultMigrationTaskResourceAttributeList) -> Value {
+    let mut m = Map::new();
+    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_aws_migration_hub__disassociate_created_artifact_request_progress_update_stream__to_json(p: &iface_aws_migration_hub::DisassociateCreatedArtifactRequestProgressUpdateStream) -> Value {
+    let mut m = Map::new();
+    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_aws_migration_hub__disassociate_created_artifact_request_migration_task_name__to_json(p: &iface_aws_migration_hub::DisassociateCreatedArtifactRequestMigrationTaskName) -> Value {
+    let mut m = Map::new();
+    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_aws_migration_hub__disassociate_created_artifact_request_created_artifact_name__to_json(p: &iface_aws_migration_hub::DisassociateCreatedArtifactRequestCreatedArtifactName) -> Value {
+    let mut m = Map::new();
+    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_aws_migration_hub__disassociate_created_artifact_request_dry_run__to_json(p: &iface_aws_migration_hub::DisassociateCreatedArtifactRequestDryRun) -> Value {
+    let mut m = Map::new();
+    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_aws_migration_hub__disassociate_created_artifact_result__to_json(p: &iface_aws_migration_hub::DisassociateCreatedArtifactResult) -> Value {
+    let mut m = Map::new();
+    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_aws_migration_hub__disassociate_discovered_resource_request_progress_update_stream__to_json(p: &iface_aws_migration_hub::DisassociateDiscoveredResourceRequestProgressUpdateStream) -> Value {
+    let mut m = Map::new();
+    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_aws_migration_hub__disassociate_discovered_resource_request_migration_task_name__to_json(p: &iface_aws_migration_hub::DisassociateDiscoveredResourceRequestMigrationTaskName) -> Value {
+    let mut m = Map::new();
+    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_aws_migration_hub__disassociate_discovered_resource_request_configuration_id__to_json(p: &iface_aws_migration_hub::DisassociateDiscoveredResourceRequestConfigurationId) -> Value {
+    let mut m = Map::new();
+    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_aws_migration_hub__disassociate_discovered_resource_request_dry_run__to_json(p: &iface_aws_migration_hub::DisassociateDiscoveredResourceRequestDryRun) -> Value {
+    let mut m = Map::new();
+    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_aws_migration_hub__disassociate_discovered_resource_result__to_json(p: &iface_aws_migration_hub::DisassociateDiscoveredResourceResult) -> Value {
+    let mut m = Map::new();
+    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_aws_migration_hub__import_migration_task_request_progress_update_stream__to_json(p: &iface_aws_migration_hub::ImportMigrationTaskRequestProgressUpdateStream) -> Value {
+    let mut m = Map::new();
+    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_aws_migration_hub__import_migration_task_request_migration_task_name__to_json(p: &iface_aws_migration_hub::ImportMigrationTaskRequestMigrationTaskName) -> Value {
+    let mut m = Map::new();
+    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_aws_migration_hub__import_migration_task_request_dry_run__to_json(p: &iface_aws_migration_hub::ImportMigrationTaskRequestDryRun) -> Value {
+    let mut m = Map::new();
+    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_aws_migration_hub__import_migration_task_result__to_json(p: &iface_aws_migration_hub::ImportMigrationTaskResult) -> Value {
+    let mut m = Map::new();
+    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_aws_migration_hub__list_application_states_request_application_ids__to_json(p: &iface_aws_migration_hub::ListApplicationStatesRequestApplicationIds) -> Value {
+    let mut m = Map::new();
+    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_aws_migration_hub__list_application_states_request_next_token__to_json(p: &iface_aws_migration_hub::ListApplicationStatesRequestNextToken) -> Value {
+    let mut m = Map::new();
+    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_aws_migration_hub__list_application_states_request_max_results__to_json(p: &iface_aws_migration_hub::ListApplicationStatesRequestMaxResults) -> Value {
+    let mut m = Map::new();
+    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_aws_migration_hub__list_application_states_result__to_json(p: &iface_aws_migration_hub::ListApplicationStatesResult) -> Value {
+    let mut m = Map::new();
+    m.insert("ApplicationStateList".into(), match (&p.application_state_list) { Some(v) => iface_aws_migration_hub__list_application_states_result_application_state_list__to_json(v), None => Value::Null });
+    m.insert("NextToken".into(), match (&p.next_token) { Some(v) => iface_aws_migration_hub__list_application_states_result_next_token__to_json(v), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_aws_migration_hub__list_application_states_result_application_state_list__to_json(p: &iface_aws_migration_hub::ListApplicationStatesResultApplicationStateList) -> Value {
+    let mut m = Map::new();
+    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_aws_migration_hub__list_application_states_result_next_token__to_json(p: &iface_aws_migration_hub::ListApplicationStatesResultNextToken) -> Value {
+    let mut m = Map::new();
+    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_aws_migration_hub__list_created_artifacts_request_progress_update_stream__to_json(p: &iface_aws_migration_hub::ListCreatedArtifactsRequestProgressUpdateStream) -> Value {
+    let mut m = Map::new();
+    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_aws_migration_hub__list_created_artifacts_request_migration_task_name__to_json(p: &iface_aws_migration_hub::ListCreatedArtifactsRequestMigrationTaskName) -> Value {
+    let mut m = Map::new();
+    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_aws_migration_hub__list_created_artifacts_request_next_token__to_json(p: &iface_aws_migration_hub::ListCreatedArtifactsRequestNextToken) -> Value {
+    let mut m = Map::new();
+    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_aws_migration_hub__list_created_artifacts_request_max_results__to_json(p: &iface_aws_migration_hub::ListCreatedArtifactsRequestMaxResults) -> Value {
+    let mut m = Map::new();
+    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_aws_migration_hub__list_created_artifacts_result__to_json(p: &iface_aws_migration_hub::ListCreatedArtifactsResult) -> Value {
+    let mut m = Map::new();
+    m.insert("NextToken".into(), match (&p.next_token) { Some(v) => iface_aws_migration_hub__list_created_artifacts_result_next_token__to_json(v), None => Value::Null });
+    m.insert("CreatedArtifactList".into(), match (&p.created_artifact_list) { Some(v) => iface_aws_migration_hub__list_created_artifacts_result_created_artifact_list__to_json(v), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_aws_migration_hub__list_created_artifacts_result_next_token__to_json(p: &iface_aws_migration_hub::ListCreatedArtifactsResultNextToken) -> Value {
+    let mut m = Map::new();
+    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_aws_migration_hub__list_created_artifacts_result_created_artifact_list__to_json(p: &iface_aws_migration_hub::ListCreatedArtifactsResultCreatedArtifactList) -> Value {
+    let mut m = Map::new();
+    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_aws_migration_hub__list_discovered_resources_request_progress_update_stream__to_json(p: &iface_aws_migration_hub::ListDiscoveredResourcesRequestProgressUpdateStream) -> Value {
+    let mut m = Map::new();
+    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_aws_migration_hub__list_discovered_resources_request_migration_task_name__to_json(p: &iface_aws_migration_hub::ListDiscoveredResourcesRequestMigrationTaskName) -> Value {
+    let mut m = Map::new();
+    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_aws_migration_hub__list_discovered_resources_request_next_token__to_json(p: &iface_aws_migration_hub::ListDiscoveredResourcesRequestNextToken) -> Value {
+    let mut m = Map::new();
+    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_aws_migration_hub__list_discovered_resources_request_max_results__to_json(p: &iface_aws_migration_hub::ListDiscoveredResourcesRequestMaxResults) -> Value {
+    let mut m = Map::new();
+    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_aws_migration_hub__list_discovered_resources_result__to_json(p: &iface_aws_migration_hub::ListDiscoveredResourcesResult) -> Value {
+    let mut m = Map::new();
+    m.insert("NextToken".into(), match (&p.next_token) { Some(v) => iface_aws_migration_hub__list_discovered_resources_result_next_token__to_json(v), None => Value::Null });
+    m.insert("DiscoveredResourceList".into(), match (&p.discovered_resource_list) { Some(v) => iface_aws_migration_hub__list_discovered_resources_result_discovered_resource_list__to_json(v), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_aws_migration_hub__list_discovered_resources_result_next_token__to_json(p: &iface_aws_migration_hub::ListDiscoveredResourcesResultNextToken) -> Value {
+    let mut m = Map::new();
+    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_aws_migration_hub__list_discovered_resources_result_discovered_resource_list__to_json(p: &iface_aws_migration_hub::ListDiscoveredResourcesResultDiscoveredResourceList) -> Value {
+    let mut m = Map::new();
+    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_aws_migration_hub__list_migration_tasks_request_next_token__to_json(p: &iface_aws_migration_hub::ListMigrationTasksRequestNextToken) -> Value {
+    let mut m = Map::new();
+    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_aws_migration_hub__list_migration_tasks_request_max_results__to_json(p: &iface_aws_migration_hub::ListMigrationTasksRequestMaxResults) -> Value {
+    let mut m = Map::new();
+    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_aws_migration_hub__list_migration_tasks_request_resource_name__to_json(p: &iface_aws_migration_hub::ListMigrationTasksRequestResourceName) -> Value {
+    let mut m = Map::new();
+    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_aws_migration_hub__list_migration_tasks_result__to_json(p: &iface_aws_migration_hub::ListMigrationTasksResult) -> Value {
+    let mut m = Map::new();
+    m.insert("NextToken".into(), match (&p.next_token) { Some(v) => iface_aws_migration_hub__list_migration_tasks_result_next_token__to_json(v), None => Value::Null });
+    m.insert("MigrationTaskSummaryList".into(), match (&p.migration_task_summary_list) { Some(v) => iface_aws_migration_hub__list_migration_tasks_result_migration_task_summary_list__to_json(v), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_aws_migration_hub__list_migration_tasks_result_next_token__to_json(p: &iface_aws_migration_hub::ListMigrationTasksResultNextToken) -> Value {
+    let mut m = Map::new();
+    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_aws_migration_hub__list_migration_tasks_result_migration_task_summary_list__to_json(p: &iface_aws_migration_hub::ListMigrationTasksResultMigrationTaskSummaryList) -> Value {
+    let mut m = Map::new();
+    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_aws_migration_hub__list_progress_update_streams_request_next_token__to_json(p: &iface_aws_migration_hub::ListProgressUpdateStreamsRequestNextToken) -> Value {
+    let mut m = Map::new();
+    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_aws_migration_hub__list_progress_update_streams_request_max_results__to_json(p: &iface_aws_migration_hub::ListProgressUpdateStreamsRequestMaxResults) -> Value {
+    let mut m = Map::new();
+    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_aws_migration_hub__list_progress_update_streams_result__to_json(p: &iface_aws_migration_hub::ListProgressUpdateStreamsResult) -> Value {
+    let mut m = Map::new();
+    m.insert("ProgressUpdateStreamSummaryList".into(), match (&p.progress_update_stream_summary_list) { Some(v) => iface_aws_migration_hub__list_progress_update_streams_result_progress_update_stream_summary_list__to_json(v), None => Value::Null });
+    m.insert("NextToken".into(), match (&p.next_token) { Some(v) => iface_aws_migration_hub__list_progress_update_streams_result_next_token__to_json(v), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_aws_migration_hub__list_progress_update_streams_result_progress_update_stream_summary_list__to_json(p: &iface_aws_migration_hub::ListProgressUpdateStreamsResultProgressUpdateStreamSummaryList) -> Value {
+    let mut m = Map::new();
+    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_aws_migration_hub__list_progress_update_streams_result_next_token__to_json(p: &iface_aws_migration_hub::ListProgressUpdateStreamsResultNextToken) -> Value {
+    let mut m = Map::new();
+    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_aws_migration_hub__notify_application_state_request_application_id__to_json(p: &iface_aws_migration_hub::NotifyApplicationStateRequestApplicationId) -> Value {
+    let mut m = Map::new();
+    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_aws_migration_hub__notify_application_state_request_status__to_json(p: &iface_aws_migration_hub::NotifyApplicationStateRequestStatus) -> Value {
+    let mut m = Map::new();
+    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_aws_migration_hub__notify_application_state_request_update_date_time__to_json(p: &iface_aws_migration_hub::NotifyApplicationStateRequestUpdateDateTime) -> Value {
+    let mut m = Map::new();
+    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_aws_migration_hub__notify_application_state_request_dry_run__to_json(p: &iface_aws_migration_hub::NotifyApplicationStateRequestDryRun) -> Value {
+    let mut m = Map::new();
+    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_aws_migration_hub__notify_application_state_result__to_json(p: &iface_aws_migration_hub::NotifyApplicationStateResult) -> Value {
+    let mut m = Map::new();
+    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_aws_migration_hub__notify_migration_task_state_request_progress_update_stream__to_json(p: &iface_aws_migration_hub::NotifyMigrationTaskStateRequestProgressUpdateStream) -> Value {
+    let mut m = Map::new();
+    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_aws_migration_hub__notify_migration_task_state_request_migration_task_name__to_json(p: &iface_aws_migration_hub::NotifyMigrationTaskStateRequestMigrationTaskName) -> Value {
+    let mut m = Map::new();
+    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_aws_migration_hub__notify_migration_task_state_request_task__to_json(p: &iface_aws_migration_hub::NotifyMigrationTaskStateRequestTask) -> Value {
+    let mut m = Map::new();
+    m.insert("Status".into(), iface_aws_migration_hub__notify_migration_task_state_request_task_status__to_json(&p.status));
+    m.insert("StatusDetail".into(), match (&p.status_detail) { Some(v) => iface_aws_migration_hub__notify_migration_task_state_request_task_status_detail__to_json(v), None => Value::Null });
+    m.insert("ProgressPercent".into(), match (&p.progress_percent) { Some(v) => iface_aws_migration_hub__notify_migration_task_state_request_task_progress_percent__to_json(v), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_aws_migration_hub__notify_migration_task_state_request_task_status__to_json(p: &iface_aws_migration_hub::NotifyMigrationTaskStateRequestTaskStatus) -> Value {
+    let mut m = Map::new();
+    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_aws_migration_hub__notify_migration_task_state_request_task_status_detail__to_json(p: &iface_aws_migration_hub::NotifyMigrationTaskStateRequestTaskStatusDetail) -> Value {
+    let mut m = Map::new();
+    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_aws_migration_hub__notify_migration_task_state_request_task_progress_percent__to_json(p: &iface_aws_migration_hub::NotifyMigrationTaskStateRequestTaskProgressPercent) -> Value {
+    let mut m = Map::new();
+    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_aws_migration_hub__notify_migration_task_state_request_update_date_time__to_json(p: &iface_aws_migration_hub::NotifyMigrationTaskStateRequestUpdateDateTime) -> Value {
+    let mut m = Map::new();
+    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_aws_migration_hub__notify_migration_task_state_request_next_update_seconds__to_json(p: &iface_aws_migration_hub::NotifyMigrationTaskStateRequestNextUpdateSeconds) -> Value {
+    let mut m = Map::new();
+    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_aws_migration_hub__notify_migration_task_state_request_dry_run__to_json(p: &iface_aws_migration_hub::NotifyMigrationTaskStateRequestDryRun) -> Value {
+    let mut m = Map::new();
+    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_aws_migration_hub__notify_migration_task_state_result__to_json(p: &iface_aws_migration_hub::NotifyMigrationTaskStateResult) -> Value {
+    let mut m = Map::new();
+    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_aws_migration_hub__put_resource_attributes_request_progress_update_stream__to_json(p: &iface_aws_migration_hub::PutResourceAttributesRequestProgressUpdateStream) -> Value {
+    let mut m = Map::new();
+    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_aws_migration_hub__put_resource_attributes_request_migration_task_name__to_json(p: &iface_aws_migration_hub::PutResourceAttributesRequestMigrationTaskName) -> Value {
+    let mut m = Map::new();
+    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_aws_migration_hub__put_resource_attributes_request_resource_attribute_list__to_json(p: &iface_aws_migration_hub::PutResourceAttributesRequestResourceAttributeList) -> Value {
+    let mut m = Map::new();
+    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_aws_migration_hub__put_resource_attributes_request_dry_run__to_json(p: &iface_aws_migration_hub::PutResourceAttributesRequestDryRun) -> Value {
+    let mut m = Map::new();
+    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_aws_migration_hub__put_resource_attributes_result__to_json(p: &iface_aws_migration_hub::PutResourceAttributesResult) -> Value {
+    let mut m = Map::new();
+    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_aws_migration_hub__associate_created_artifact_params__to_json(p: &iface_aws_migration_hub::AssociateCreatedArtifactParams) -> Value {
+    let mut m = Map::new();
+    m.insert("x_amz_content_sha256".into(), match (&p.x_amz_content_sha256) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("x_amz_date".into(), match (&p.x_amz_date) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("x_amz_algorithm".into(), match (&p.x_amz_algorithm) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("x_amz_credential".into(), match (&p.x_amz_credential) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("x_amz_security_token".into(), match (&p.x_amz_security_token) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("x_amz_signature".into(), match (&p.x_amz_signature) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("x_amz_signed_headers".into(), match (&p.x_amz_signed_headers) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("x_amz_target".into(), Value::String(iface_aws_migration_hub__associate_created_artifact_x_amz_target_enum__to_str(&p.x_amz_target).into()));
+    m.insert("progress_update_stream".into(), iface_aws_migration_hub__associate_created_artifact_request_progress_update_stream__to_json(&p.progress_update_stream));
+    m.insert("migration_task_name".into(), iface_aws_migration_hub__associate_created_artifact_request_migration_task_name__to_json(&p.migration_task_name));
+    m.insert("created_artifact".into(), iface_aws_migration_hub__associate_created_artifact_request_created_artifact__to_json(&p.created_artifact));
+    m.insert("dry_run".into(), match (&p.dry_run) { Some(v) => iface_aws_migration_hub__associate_created_artifact_request_dry_run__to_json(v), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_aws_migration_hub__associate_discovered_resource_params__to_json(p: &iface_aws_migration_hub::AssociateDiscoveredResourceParams) -> Value {
+    let mut m = Map::new();
+    m.insert("x_amz_content_sha256".into(), match (&p.x_amz_content_sha256) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("x_amz_date".into(), match (&p.x_amz_date) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("x_amz_algorithm".into(), match (&p.x_amz_algorithm) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("x_amz_credential".into(), match (&p.x_amz_credential) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("x_amz_security_token".into(), match (&p.x_amz_security_token) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("x_amz_signature".into(), match (&p.x_amz_signature) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("x_amz_signed_headers".into(), match (&p.x_amz_signed_headers) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("x_amz_target".into(), Value::String(iface_aws_migration_hub__associate_discovered_resource_x_amz_target_enum__to_str(&p.x_amz_target).into()));
+    m.insert("progress_update_stream".into(), iface_aws_migration_hub__associate_discovered_resource_request_progress_update_stream__to_json(&p.progress_update_stream));
+    m.insert("migration_task_name".into(), iface_aws_migration_hub__associate_discovered_resource_request_migration_task_name__to_json(&p.migration_task_name));
+    m.insert("discovered_resource".into(), iface_aws_migration_hub__associate_discovered_resource_request_discovered_resource__to_json(&p.discovered_resource));
+    m.insert("dry_run".into(), match (&p.dry_run) { Some(v) => iface_aws_migration_hub__associate_discovered_resource_request_dry_run__to_json(v), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_aws_migration_hub__create_progress_update_stream_params__to_json(p: &iface_aws_migration_hub::CreateProgressUpdateStreamParams) -> Value {
+    let mut m = Map::new();
+    m.insert("x_amz_content_sha256".into(), match (&p.x_amz_content_sha256) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("x_amz_date".into(), match (&p.x_amz_date) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("x_amz_algorithm".into(), match (&p.x_amz_algorithm) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("x_amz_credential".into(), match (&p.x_amz_credential) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("x_amz_security_token".into(), match (&p.x_amz_security_token) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("x_amz_signature".into(), match (&p.x_amz_signature) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("x_amz_signed_headers".into(), match (&p.x_amz_signed_headers) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("x_amz_target".into(), Value::String(iface_aws_migration_hub__create_progress_update_stream_x_amz_target_enum__to_str(&p.x_amz_target).into()));
+    m.insert("progress_update_stream_name".into(), iface_aws_migration_hub__create_progress_update_stream_request_progress_update_stream_name__to_json(&p.progress_update_stream_name));
+    m.insert("dry_run".into(), match (&p.dry_run) { Some(v) => iface_aws_migration_hub__create_progress_update_stream_request_dry_run__to_json(v), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_aws_migration_hub__delete_progress_update_stream_params__to_json(p: &iface_aws_migration_hub::DeleteProgressUpdateStreamParams) -> Value {
+    let mut m = Map::new();
+    m.insert("x_amz_content_sha256".into(), match (&p.x_amz_content_sha256) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("x_amz_date".into(), match (&p.x_amz_date) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("x_amz_algorithm".into(), match (&p.x_amz_algorithm) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("x_amz_credential".into(), match (&p.x_amz_credential) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("x_amz_security_token".into(), match (&p.x_amz_security_token) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("x_amz_signature".into(), match (&p.x_amz_signature) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("x_amz_signed_headers".into(), match (&p.x_amz_signed_headers) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("x_amz_target".into(), Value::String(iface_aws_migration_hub__delete_progress_update_stream_x_amz_target_enum__to_str(&p.x_amz_target).into()));
+    m.insert("progress_update_stream_name".into(), iface_aws_migration_hub__delete_progress_update_stream_request_progress_update_stream_name__to_json(&p.progress_update_stream_name));
+    m.insert("dry_run".into(), match (&p.dry_run) { Some(v) => iface_aws_migration_hub__delete_progress_update_stream_request_dry_run__to_json(v), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_aws_migration_hub__describe_application_state_params__to_json(p: &iface_aws_migration_hub::DescribeApplicationStateParams) -> Value {
+    let mut m = Map::new();
+    m.insert("x_amz_content_sha256".into(), match (&p.x_amz_content_sha256) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("x_amz_date".into(), match (&p.x_amz_date) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("x_amz_algorithm".into(), match (&p.x_amz_algorithm) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("x_amz_credential".into(), match (&p.x_amz_credential) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("x_amz_security_token".into(), match (&p.x_amz_security_token) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("x_amz_signature".into(), match (&p.x_amz_signature) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("x_amz_signed_headers".into(), match (&p.x_amz_signed_headers) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("x_amz_target".into(), Value::String(iface_aws_migration_hub__describe_application_state_x_amz_target_enum__to_str(&p.x_amz_target).into()));
+    m.insert("application_id".into(), iface_aws_migration_hub__describe_application_state_request_application_id__to_json(&p.application_id));
+    Value::Object(m)
+}
+
+fn iface_aws_migration_hub__describe_migration_task_params__to_json(p: &iface_aws_migration_hub::DescribeMigrationTaskParams) -> Value {
+    let mut m = Map::new();
+    m.insert("x_amz_content_sha256".into(), match (&p.x_amz_content_sha256) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("x_amz_date".into(), match (&p.x_amz_date) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("x_amz_algorithm".into(), match (&p.x_amz_algorithm) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("x_amz_credential".into(), match (&p.x_amz_credential) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("x_amz_security_token".into(), match (&p.x_amz_security_token) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("x_amz_signature".into(), match (&p.x_amz_signature) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("x_amz_signed_headers".into(), match (&p.x_amz_signed_headers) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("x_amz_target".into(), Value::String(iface_aws_migration_hub__describe_migration_task_x_amz_target_enum__to_str(&p.x_amz_target).into()));
+    m.insert("progress_update_stream".into(), iface_aws_migration_hub__describe_migration_task_request_progress_update_stream__to_json(&p.progress_update_stream));
+    m.insert("migration_task_name".into(), iface_aws_migration_hub__describe_migration_task_request_migration_task_name__to_json(&p.migration_task_name));
+    Value::Object(m)
+}
+
+fn iface_aws_migration_hub__disassociate_created_artifact_params__to_json(p: &iface_aws_migration_hub::DisassociateCreatedArtifactParams) -> Value {
+    let mut m = Map::new();
+    m.insert("x_amz_content_sha256".into(), match (&p.x_amz_content_sha256) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("x_amz_date".into(), match (&p.x_amz_date) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("x_amz_algorithm".into(), match (&p.x_amz_algorithm) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("x_amz_credential".into(), match (&p.x_amz_credential) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("x_amz_security_token".into(), match (&p.x_amz_security_token) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("x_amz_signature".into(), match (&p.x_amz_signature) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("x_amz_signed_headers".into(), match (&p.x_amz_signed_headers) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("x_amz_target".into(), Value::String(iface_aws_migration_hub__disassociate_created_artifact_x_amz_target_enum__to_str(&p.x_amz_target).into()));
+    m.insert("progress_update_stream".into(), iface_aws_migration_hub__disassociate_created_artifact_request_progress_update_stream__to_json(&p.progress_update_stream));
+    m.insert("migration_task_name".into(), iface_aws_migration_hub__disassociate_created_artifact_request_migration_task_name__to_json(&p.migration_task_name));
+    m.insert("created_artifact_name".into(), iface_aws_migration_hub__disassociate_created_artifact_request_created_artifact_name__to_json(&p.created_artifact_name));
+    m.insert("dry_run".into(), match (&p.dry_run) { Some(v) => iface_aws_migration_hub__disassociate_created_artifact_request_dry_run__to_json(v), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_aws_migration_hub__disassociate_discovered_resource_params__to_json(p: &iface_aws_migration_hub::DisassociateDiscoveredResourceParams) -> Value {
+    let mut m = Map::new();
+    m.insert("x_amz_content_sha256".into(), match (&p.x_amz_content_sha256) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("x_amz_date".into(), match (&p.x_amz_date) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("x_amz_algorithm".into(), match (&p.x_amz_algorithm) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("x_amz_credential".into(), match (&p.x_amz_credential) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("x_amz_security_token".into(), match (&p.x_amz_security_token) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("x_amz_signature".into(), match (&p.x_amz_signature) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("x_amz_signed_headers".into(), match (&p.x_amz_signed_headers) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("x_amz_target".into(), Value::String(iface_aws_migration_hub__disassociate_discovered_resource_x_amz_target_enum__to_str(&p.x_amz_target).into()));
+    m.insert("progress_update_stream".into(), iface_aws_migration_hub__disassociate_discovered_resource_request_progress_update_stream__to_json(&p.progress_update_stream));
+    m.insert("migration_task_name".into(), iface_aws_migration_hub__disassociate_discovered_resource_request_migration_task_name__to_json(&p.migration_task_name));
+    m.insert("configuration_id".into(), iface_aws_migration_hub__disassociate_discovered_resource_request_configuration_id__to_json(&p.configuration_id));
+    m.insert("dry_run".into(), match (&p.dry_run) { Some(v) => iface_aws_migration_hub__disassociate_discovered_resource_request_dry_run__to_json(v), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_aws_migration_hub__import_migration_task_params__to_json(p: &iface_aws_migration_hub::ImportMigrationTaskParams) -> Value {
+    let mut m = Map::new();
+    m.insert("x_amz_content_sha256".into(), match (&p.x_amz_content_sha256) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("x_amz_date".into(), match (&p.x_amz_date) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("x_amz_algorithm".into(), match (&p.x_amz_algorithm) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("x_amz_credential".into(), match (&p.x_amz_credential) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("x_amz_security_token".into(), match (&p.x_amz_security_token) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("x_amz_signature".into(), match (&p.x_amz_signature) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("x_amz_signed_headers".into(), match (&p.x_amz_signed_headers) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("x_amz_target".into(), Value::String(iface_aws_migration_hub__import_migration_task_x_amz_target_enum__to_str(&p.x_amz_target).into()));
+    m.insert("progress_update_stream".into(), iface_aws_migration_hub__import_migration_task_request_progress_update_stream__to_json(&p.progress_update_stream));
+    m.insert("migration_task_name".into(), iface_aws_migration_hub__import_migration_task_request_migration_task_name__to_json(&p.migration_task_name));
+    m.insert("dry_run".into(), match (&p.dry_run) { Some(v) => iface_aws_migration_hub__import_migration_task_request_dry_run__to_json(v), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_aws_migration_hub__list_application_states_params__to_json(p: &iface_aws_migration_hub::ListApplicationStatesParams) -> Value {
+    let mut m = Map::new();
+    m.insert("x_amz_content_sha256".into(), match (&p.x_amz_content_sha256) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("x_amz_date".into(), match (&p.x_amz_date) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("x_amz_algorithm".into(), match (&p.x_amz_algorithm) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("x_amz_credential".into(), match (&p.x_amz_credential) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("x_amz_security_token".into(), match (&p.x_amz_security_token) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("x_amz_signature".into(), match (&p.x_amz_signature) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("x_amz_signed_headers".into(), match (&p.x_amz_signed_headers) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("max_results".into(), match (&p.max_results) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("next_token".into(), match (&p.next_token) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    m.insert("analyzer_arn".into(), Value::String((&p.analyzer_arn).clone()));
-    m.insert("filter".into(), match (&p.filter) { Some(v) => iface_access_preview__list_access_preview_findings_body_filter__to_json(v), None => Value::Null });
+    m.insert("x_amz_target".into(), Value::String(iface_aws_migration_hub__list_application_states_x_amz_target_enum__to_str(&p.x_amz_target).into()));
+    m.insert("application_ids".into(), match (&p.application_ids) { Some(v) => iface_aws_migration_hub__list_application_states_request_application_ids__to_json(v), None => Value::Null });
+    m.insert("next_token_v2".into(), match (&p.next_token_v2) { Some(v) => iface_aws_migration_hub__list_application_states_request_next_token__to_json(v), None => Value::Null });
+    m.insert("max_results_v2".into(), match (&p.max_results_v2) { Some(v) => iface_aws_migration_hub__list_application_states_request_max_results__to_json(v), None => Value::Null });
     Value::Object(m)
 }
 
-impl iface_access_preview::Guest for crate::Component {
-    fn create_access_preview(params: iface_access_preview::CreateAccessPreviewParams) -> Result<String, String> {
-        let json = iface_access_preview__create_access_preview_params__to_json(&params);
-        dispatch(&OP_ACCESS_PREVIEW_CREATE_ACCESS_PREVIEW, json)
-    }
-    fn get_access_preview(params: iface_access_preview::GetAccessPreviewParams) -> Result<String, String> {
-        let json = iface_access_preview__get_access_preview_params__to_json(&params);
-        dispatch(&OP_ACCESS_PREVIEW_GET_ACCESS_PREVIEW, json)
-    }
-    fn list_access_preview_findings(params: iface_access_preview::ListAccessPreviewFindingsParams) -> Result<String, String> {
-        let json = iface_access_preview__list_access_preview_findings_params__to_json(&params);
-        dispatch(&OP_ACCESS_PREVIEW_LIST_ACCESS_PREVIEW_FINDINGS, json)
-    }
-}
-use crate::exports::autostamp::amazonaws::analyzer as iface_analyzer;
-
-const OP_ANALYZER_LIST_ANALYZERS: OpSpec = OpSpec {
-    method: "GET",
-    path_template: "/analyzer",
-    fields: &[
-        FieldSpec { snake: "next_token", location: FieldLocation::Query },
-        FieldSpec { snake: "max_results", location: FieldLocation::Query },
-        FieldSpec { snake: "type", location: FieldLocation::Query },
-    ],
-    auth: &[
-        AuthApply { secret_key: "hmac", kind: AuthKind::ApiKeyHeader("Authorization") },
-    ],
-};
-
-const OP_ANALYZER_CREATE_ANALYZER: OpSpec = OpSpec {
-    method: "PUT",
-    path_template: "/analyzer",
-    fields: &[
-        FieldSpec { snake: "analyzer_name", location: FieldLocation::Body },
-        FieldSpec { snake: "type", location: FieldLocation::Body },
-        FieldSpec { snake: "archive_rules", location: FieldLocation::Body },
-        FieldSpec { snake: "tags", location: FieldLocation::Body },
-        FieldSpec { snake: "client_token", location: FieldLocation::Body },
-    ],
-    auth: &[
-        AuthApply { secret_key: "hmac", kind: AuthKind::ApiKeyHeader("Authorization") },
-    ],
-};
-
-const OP_ANALYZER_LIST_ARCHIVE_RULES: OpSpec = OpSpec {
-    method: "GET",
-    path_template: "/analyzer/{analyzer_name}/archive-rule",
-    fields: &[
-        FieldSpec { snake: "analyzer_name", location: FieldLocation::Path },
-        FieldSpec { snake: "next_token", location: FieldLocation::Query },
-        FieldSpec { snake: "max_results", location: FieldLocation::Query },
-    ],
-    auth: &[
-        AuthApply { secret_key: "hmac", kind: AuthKind::ApiKeyHeader("Authorization") },
-    ],
-};
-
-const OP_ANALYZER_CREATE_ARCHIVE_RULE: OpSpec = OpSpec {
-    method: "PUT",
-    path_template: "/analyzer/{analyzer_name}/archive-rule",
-    fields: &[
-        FieldSpec { snake: "analyzer_name", location: FieldLocation::Path },
-        FieldSpec { snake: "rule_name", location: FieldLocation::Body },
-        FieldSpec { snake: "filter", location: FieldLocation::Body },
-        FieldSpec { snake: "client_token", location: FieldLocation::Body },
-    ],
-    auth: &[
-        AuthApply { secret_key: "hmac", kind: AuthKind::ApiKeyHeader("Authorization") },
-    ],
-};
-
-const OP_ANALYZER_GET_ANALYZER: OpSpec = OpSpec {
-    method: "GET",
-    path_template: "/analyzer/{analyzer_name}",
-    fields: &[
-        FieldSpec { snake: "analyzer_name", location: FieldLocation::Path },
-    ],
-    auth: &[
-        AuthApply { secret_key: "hmac", kind: AuthKind::ApiKeyHeader("Authorization") },
-    ],
-};
-
-const OP_ANALYZER_DELETE_ANALYZER: OpSpec = OpSpec {
-    method: "DELETE",
-    path_template: "/analyzer/{analyzer_name}",
-    fields: &[
-        FieldSpec { snake: "analyzer_name", location: FieldLocation::Path },
-        FieldSpec { snake: "client_token", location: FieldLocation::Query },
-    ],
-    auth: &[
-        AuthApply { secret_key: "hmac", kind: AuthKind::ApiKeyHeader("Authorization") },
-    ],
-};
-
-const OP_ANALYZER_GET_ARCHIVE_RULE: OpSpec = OpSpec {
-    method: "GET",
-    path_template: "/analyzer/{analyzer_name}/archive-rule/{rule_name}",
-    fields: &[
-        FieldSpec { snake: "analyzer_name", location: FieldLocation::Path },
-        FieldSpec { snake: "rule_name", location: FieldLocation::Path },
-    ],
-    auth: &[
-        AuthApply { secret_key: "hmac", kind: AuthKind::ApiKeyHeader("Authorization") },
-    ],
-};
-
-const OP_ANALYZER_UPDATE_ARCHIVE_RULE: OpSpec = OpSpec {
-    method: "PUT",
-    path_template: "/analyzer/{analyzer_name}/archive-rule/{rule_name}",
-    fields: &[
-        FieldSpec { snake: "analyzer_name", location: FieldLocation::Path },
-        FieldSpec { snake: "rule_name", location: FieldLocation::Path },
-        FieldSpec { snake: "filter", location: FieldLocation::Body },
-        FieldSpec { snake: "client_token", location: FieldLocation::Body },
-    ],
-    auth: &[
-        AuthApply { secret_key: "hmac", kind: AuthKind::ApiKeyHeader("Authorization") },
-    ],
-};
-
-const OP_ANALYZER_DELETE_ARCHIVE_RULE: OpSpec = OpSpec {
-    method: "DELETE",
-    path_template: "/analyzer/{analyzer_name}/archive-rule/{rule_name}",
-    fields: &[
-        FieldSpec { snake: "analyzer_name", location: FieldLocation::Path },
-        FieldSpec { snake: "rule_name", location: FieldLocation::Path },
-        FieldSpec { snake: "client_token", location: FieldLocation::Query },
-    ],
-    auth: &[
-        AuthApply { secret_key: "hmac", kind: AuthKind::ApiKeyHeader("Authorization") },
-    ],
-};
-
-fn iface_analyzer__list_analyzers_type_op_enum__to_str(e: &iface_analyzer::ListAnalyzersTypeOpEnum) -> &'static str {
-    match e {
-        iface_analyzer::ListAnalyzersTypeOpEnum::Account => "ACCOUNT",
-        iface_analyzer::ListAnalyzersTypeOpEnum::Organization => "ORGANIZATION",
-    }
-}
-
-fn iface_analyzer__inline_archive_rule__to_json(p: &iface_analyzer::InlineArchiveRule) -> Value {
+fn iface_aws_migration_hub__list_created_artifacts_params__to_json(p: &iface_aws_migration_hub::ListCreatedArtifactsParams) -> Value {
     let mut m = Map::new();
-    m.insert("rule_name".into(), Value::String((&p.rule_name).clone()));
-    m.insert("filter".into(), Value::String((&p.filter).clone()));
-    Value::Object(m)
-}
-
-fn iface_analyzer__create_analyzer_body_tags__to_json(p: &iface_analyzer::CreateAnalyzerBodyTags) -> Value {
-    let mut m = Map::new();
-    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    Value::Object(m)
-}
-
-fn iface_analyzer__create_archive_rule_body_filter__to_json(p: &iface_analyzer::CreateArchiveRuleBodyFilter) -> Value {
-    let mut m = Map::new();
-    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    Value::Object(m)
-}
-
-fn iface_analyzer__update_archive_rule_body_filter__to_json(p: &iface_analyzer::UpdateArchiveRuleBodyFilter) -> Value {
-    let mut m = Map::new();
-    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    Value::Object(m)
-}
-
-fn iface_analyzer__list_analyzers_params__to_json(p: &iface_analyzer::ListAnalyzersParams) -> Value {
-    let mut m = Map::new();
-    m.insert("next_token".into(), match (&p.next_token) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    m.insert("max_results".into(), match (&p.max_results) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
-    m.insert("type".into(), match (&p.type_op) { Some(v) => Value::String(iface_analyzer__list_analyzers_type_op_enum__to_str(v).into()), None => Value::Null });
-    Value::Object(m)
-}
-
-fn iface_analyzer__create_analyzer_params__to_json(p: &iface_analyzer::CreateAnalyzerParams) -> Value {
-    let mut m = Map::new();
-    m.insert("analyzer_name".into(), Value::String((&p.analyzer_name).clone()));
-    m.insert("type".into(), Value::String(iface_analyzer__list_analyzers_type_op_enum__to_str(&p.type_op).into()));
-    m.insert("archive_rules".into(), match (&p.archive_rules) { Some(v) => Value::Array((v).iter().map(|v| iface_analyzer__inline_archive_rule__to_json(v)).collect()), None => Value::Null });
-    m.insert("tags".into(), match (&p.tags) { Some(v) => iface_analyzer__create_analyzer_body_tags__to_json(v), None => Value::Null });
-    m.insert("client_token".into(), match (&p.client_token) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    Value::Object(m)
-}
-
-fn iface_analyzer__list_archive_rules_params__to_json(p: &iface_analyzer::ListArchiveRulesParams) -> Value {
-    let mut m = Map::new();
-    m.insert("analyzer_name".into(), Value::String((&p.analyzer_name).clone()));
-    m.insert("next_token".into(), match (&p.next_token) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    m.insert("max_results".into(), match (&p.max_results) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
-    Value::Object(m)
-}
-
-fn iface_analyzer__create_archive_rule_params__to_json(p: &iface_analyzer::CreateArchiveRuleParams) -> Value {
-    let mut m = Map::new();
-    m.insert("analyzer_name".into(), Value::String((&p.analyzer_name).clone()));
-    m.insert("rule_name".into(), Value::String((&p.rule_name).clone()));
-    m.insert("filter".into(), iface_analyzer__create_archive_rule_body_filter__to_json(&p.filter));
-    m.insert("client_token".into(), match (&p.client_token) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    Value::Object(m)
-}
-
-fn iface_analyzer__get_analyzer_params__to_json(p: &iface_analyzer::GetAnalyzerParams) -> Value {
-    let mut m = Map::new();
-    m.insert("analyzer_name".into(), Value::String((&p.analyzer_name).clone()));
-    Value::Object(m)
-}
-
-fn iface_analyzer__delete_analyzer_params__to_json(p: &iface_analyzer::DeleteAnalyzerParams) -> Value {
-    let mut m = Map::new();
-    m.insert("analyzer_name".into(), Value::String((&p.analyzer_name).clone()));
-    m.insert("client_token".into(), match (&p.client_token) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    Value::Object(m)
-}
-
-fn iface_analyzer__get_archive_rule_params__to_json(p: &iface_analyzer::GetArchiveRuleParams) -> Value {
-    let mut m = Map::new();
-    m.insert("analyzer_name".into(), Value::String((&p.analyzer_name).clone()));
-    m.insert("rule_name".into(), Value::String((&p.rule_name).clone()));
-    Value::Object(m)
-}
-
-fn iface_analyzer__update_archive_rule_params__to_json(p: &iface_analyzer::UpdateArchiveRuleParams) -> Value {
-    let mut m = Map::new();
-    m.insert("analyzer_name".into(), Value::String((&p.analyzer_name).clone()));
-    m.insert("rule_name".into(), Value::String((&p.rule_name).clone()));
-    m.insert("filter".into(), iface_analyzer__update_archive_rule_body_filter__to_json(&p.filter));
-    m.insert("client_token".into(), match (&p.client_token) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    Value::Object(m)
-}
-
-fn iface_analyzer__delete_archive_rule_params__to_json(p: &iface_analyzer::DeleteArchiveRuleParams) -> Value {
-    let mut m = Map::new();
-    m.insert("analyzer_name".into(), Value::String((&p.analyzer_name).clone()));
-    m.insert("rule_name".into(), Value::String((&p.rule_name).clone()));
-    m.insert("client_token".into(), match (&p.client_token) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    Value::Object(m)
-}
-
-impl iface_analyzer::Guest for crate::Component {
-    fn list_analyzers(params: iface_analyzer::ListAnalyzersParams) -> Result<String, String> {
-        let json = iface_analyzer__list_analyzers_params__to_json(&params);
-        dispatch(&OP_ANALYZER_LIST_ANALYZERS, json)
-    }
-    fn create_analyzer(params: iface_analyzer::CreateAnalyzerParams) -> Result<String, String> {
-        let json = iface_analyzer__create_analyzer_params__to_json(&params);
-        dispatch(&OP_ANALYZER_CREATE_ANALYZER, json)
-    }
-    fn list_archive_rules(params: iface_analyzer::ListArchiveRulesParams) -> Result<String, String> {
-        let json = iface_analyzer__list_archive_rules_params__to_json(&params);
-        dispatch(&OP_ANALYZER_LIST_ARCHIVE_RULES, json)
-    }
-    fn create_archive_rule(params: iface_analyzer::CreateArchiveRuleParams) -> Result<String, String> {
-        let json = iface_analyzer__create_archive_rule_params__to_json(&params);
-        dispatch(&OP_ANALYZER_CREATE_ARCHIVE_RULE, json)
-    }
-    fn get_analyzer(params: iface_analyzer::GetAnalyzerParams) -> Result<String, String> {
-        let json = iface_analyzer__get_analyzer_params__to_json(&params);
-        dispatch(&OP_ANALYZER_GET_ANALYZER, json)
-    }
-    fn delete_analyzer(params: iface_analyzer::DeleteAnalyzerParams) -> Result<String, String> {
-        let json = iface_analyzer__delete_analyzer_params__to_json(&params);
-        dispatch(&OP_ANALYZER_DELETE_ANALYZER, json)
-    }
-    fn get_archive_rule(params: iface_analyzer::GetArchiveRuleParams) -> Result<String, String> {
-        let json = iface_analyzer__get_archive_rule_params__to_json(&params);
-        dispatch(&OP_ANALYZER_GET_ARCHIVE_RULE, json)
-    }
-    fn update_archive_rule(params: iface_analyzer::UpdateArchiveRuleParams) -> Result<String, String> {
-        let json = iface_analyzer__update_archive_rule_params__to_json(&params);
-        dispatch(&OP_ANALYZER_UPDATE_ARCHIVE_RULE, json)
-    }
-    fn delete_archive_rule(params: iface_analyzer::DeleteArchiveRuleParams) -> Result<String, String> {
-        let json = iface_analyzer__delete_archive_rule_params__to_json(&params);
-        dispatch(&OP_ANALYZER_DELETE_ARCHIVE_RULE, json)
-    }
-}
-use crate::exports::autostamp::amazonaws::analyzed_resource_analyzer_arn_resource_arn as iface_analyzed_resource_analyzer_arn_resource_arn;
-
-const OP_ANALYZED_RESOURCE_ANALYZER_ARN_RESOURCE_ARN_GET_ANALYZED_RESOURCE: OpSpec = OpSpec {
-    method: "GET",
-    path_template: "/analyzed-resource#analyzerArn&resourceArn",
-    fields: &[
-        FieldSpec { snake: "analyzer_arn", location: FieldLocation::Query },
-        FieldSpec { snake: "resource_arn", location: FieldLocation::Query },
-    ],
-    auth: &[
-        AuthApply { secret_key: "hmac", kind: AuthKind::ApiKeyHeader("Authorization") },
-    ],
-};
-
-fn iface_analyzed_resource_analyzer_arn_resource_arn__get_analyzed_resource_params__to_json(p: &iface_analyzed_resource_analyzer_arn_resource_arn::GetAnalyzedResourceParams) -> Value {
-    let mut m = Map::new();
-    m.insert("analyzer_arn".into(), Value::String((&p.analyzer_arn).clone()));
-    m.insert("resource_arn".into(), Value::String((&p.resource_arn).clone()));
-    Value::Object(m)
-}
-
-impl iface_analyzed_resource_analyzer_arn_resource_arn::Guest for crate::Component {
-    fn get_analyzed_resource(params: iface_analyzed_resource_analyzer_arn_resource_arn::GetAnalyzedResourceParams) -> Result<String, String> {
-        let json = iface_analyzed_resource_analyzer_arn_resource_arn__get_analyzed_resource_params__to_json(&params);
-        dispatch(&OP_ANALYZED_RESOURCE_ANALYZER_ARN_RESOURCE_ARN_GET_ANALYZED_RESOURCE, json)
-    }
-}
-use crate::exports::autostamp::amazonaws::finding as iface_finding;
-
-const OP_FINDING_GET_FINDING: OpSpec = OpSpec {
-    method: "GET",
-    path_template: "/finding/{id}#analyzerArn",
-    fields: &[
-        FieldSpec { snake: "analyzer_arn", location: FieldLocation::Query },
-        FieldSpec { snake: "id", location: FieldLocation::Path },
-    ],
-    auth: &[
-        AuthApply { secret_key: "hmac", kind: AuthKind::ApiKeyHeader("Authorization") },
-    ],
-};
-
-const OP_FINDING_LIST_FINDINGS: OpSpec = OpSpec {
-    method: "POST",
-    path_template: "/finding",
-    fields: &[
-        FieldSpec { snake: "max_results", location: FieldLocation::Query },
-        FieldSpec { snake: "next_token", location: FieldLocation::Query },
-        FieldSpec { snake: "analyzer_arn", location: FieldLocation::Body },
-        FieldSpec { snake: "filter", location: FieldLocation::Body },
-        FieldSpec { snake: "sort", location: FieldLocation::Body },
-    ],
-    auth: &[
-        AuthApply { secret_key: "hmac", kind: AuthKind::ApiKeyHeader("Authorization") },
-    ],
-};
-
-const OP_FINDING_UPDATE_FINDINGS: OpSpec = OpSpec {
-    method: "PUT",
-    path_template: "/finding",
-    fields: &[
-        FieldSpec { snake: "analyzer_arn", location: FieldLocation::Body },
-        FieldSpec { snake: "status", location: FieldLocation::Body },
-        FieldSpec { snake: "ids", location: FieldLocation::Body },
-        FieldSpec { snake: "resource_arn", location: FieldLocation::Body },
-        FieldSpec { snake: "client_token", location: FieldLocation::Body },
-    ],
-    auth: &[
-        AuthApply { secret_key: "hmac", kind: AuthKind::ApiKeyHeader("Authorization") },
-    ],
-};
-
-fn iface_finding__update_findings_body_status_enum__to_str(e: &iface_finding::UpdateFindingsBodyStatusEnum) -> &'static str {
-    match e {
-        iface_finding::UpdateFindingsBodyStatusEnum::Active => "ACTIVE",
-        iface_finding::UpdateFindingsBodyStatusEnum::Archived => "ARCHIVED",
-    }
-}
-
-fn iface_finding__list_findings_body_filter__to_json(p: &iface_finding::ListFindingsBodyFilter) -> Value {
-    let mut m = Map::new();
-    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    Value::Object(m)
-}
-
-fn iface_finding__list_findings_body_sort__to_json(p: &iface_finding::ListFindingsBodySort) -> Value {
-    let mut m = Map::new();
-    m.insert("attribute_name".into(), match (&p.attribute_name) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    m.insert("order_by".into(), match (&p.order_by) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    Value::Object(m)
-}
-
-fn iface_finding__id__to_json(p: &iface_finding::Id) -> Value {
-    let mut m = Map::new();
-    m.insert("value".into(), Value::String((&p.value).clone()));
-    Value::Object(m)
-}
-
-fn iface_finding__get_finding_params__to_json(p: &iface_finding::GetFindingParams) -> Value {
-    let mut m = Map::new();
-    m.insert("analyzer_arn".into(), Value::String((&p.analyzer_arn).clone()));
-    m.insert("id".into(), Value::String((&p.id).clone()));
-    Value::Object(m)
-}
-
-fn iface_finding__list_findings_params__to_json(p: &iface_finding::ListFindingsParams) -> Value {
-    let mut m = Map::new();
+    m.insert("x_amz_content_sha256".into(), match (&p.x_amz_content_sha256) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("x_amz_date".into(), match (&p.x_amz_date) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("x_amz_algorithm".into(), match (&p.x_amz_algorithm) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("x_amz_credential".into(), match (&p.x_amz_credential) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("x_amz_security_token".into(), match (&p.x_amz_security_token) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("x_amz_signature".into(), match (&p.x_amz_signature) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("x_amz_signed_headers".into(), match (&p.x_amz_signed_headers) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("max_results".into(), match (&p.max_results) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("next_token".into(), match (&p.next_token) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    m.insert("analyzer_arn".into(), Value::String((&p.analyzer_arn).clone()));
-    m.insert("filter".into(), match (&p.filter) { Some(v) => iface_finding__list_findings_body_filter__to_json(v), None => Value::Null });
-    m.insert("sort".into(), match (&p.sort) { Some(v) => iface_finding__list_findings_body_sort__to_json(v), None => Value::Null });
+    m.insert("x_amz_target".into(), Value::String(iface_aws_migration_hub__list_created_artifacts_x_amz_target_enum__to_str(&p.x_amz_target).into()));
+    m.insert("progress_update_stream".into(), iface_aws_migration_hub__list_created_artifacts_request_progress_update_stream__to_json(&p.progress_update_stream));
+    m.insert("migration_task_name".into(), iface_aws_migration_hub__list_created_artifacts_request_migration_task_name__to_json(&p.migration_task_name));
+    m.insert("next_token_v2".into(), match (&p.next_token_v2) { Some(v) => iface_aws_migration_hub__list_created_artifacts_request_next_token__to_json(v), None => Value::Null });
+    m.insert("max_results_v2".into(), match (&p.max_results_v2) { Some(v) => iface_aws_migration_hub__list_created_artifacts_request_max_results__to_json(v), None => Value::Null });
     Value::Object(m)
 }
 
-fn iface_finding__update_findings_params__to_json(p: &iface_finding::UpdateFindingsParams) -> Value {
+fn iface_aws_migration_hub__list_discovered_resources_params__to_json(p: &iface_aws_migration_hub::ListDiscoveredResourcesParams) -> Value {
     let mut m = Map::new();
-    m.insert("analyzer_arn".into(), Value::String((&p.analyzer_arn).clone()));
-    m.insert("status".into(), Value::String(iface_finding__update_findings_body_status_enum__to_str(&p.status).into()));
-    m.insert("ids".into(), match (&p.ids) { Some(v) => Value::Array((v).iter().map(|v| iface_finding__id__to_json(v)).collect()), None => Value::Null });
-    m.insert("resource_arn".into(), match (&p.resource_arn) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    m.insert("client_token".into(), match (&p.client_token) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    Value::Object(m)
-}
-
-impl iface_finding::Guest for crate::Component {
-    fn get_finding(params: iface_finding::GetFindingParams) -> Result<String, String> {
-        let json = iface_finding__get_finding_params__to_json(&params);
-        dispatch(&OP_FINDING_GET_FINDING, json)
-    }
-    fn list_findings(params: iface_finding::ListFindingsParams) -> Result<String, String> {
-        let json = iface_finding__list_findings_params__to_json(&params);
-        dispatch(&OP_FINDING_LIST_FINDINGS, json)
-    }
-    fn update_findings(params: iface_finding::UpdateFindingsParams) -> Result<String, String> {
-        let json = iface_finding__update_findings_params__to_json(&params);
-        dispatch(&OP_FINDING_UPDATE_FINDINGS, json)
-    }
-}
-use crate::exports::autostamp::amazonaws::access_preview_analyzer_arn as iface_access_preview_analyzer_arn;
-
-const OP_ACCESS_PREVIEW_ANALYZER_ARN_LIST_ACCESS_PREVIEWS: OpSpec = OpSpec {
-    method: "GET",
-    path_template: "/access-preview#analyzerArn",
-    fields: &[
-        FieldSpec { snake: "analyzer_arn", location: FieldLocation::Query },
-        FieldSpec { snake: "next_token", location: FieldLocation::Query },
-        FieldSpec { snake: "max_results", location: FieldLocation::Query },
-    ],
-    auth: &[
-        AuthApply { secret_key: "hmac", kind: AuthKind::ApiKeyHeader("Authorization") },
-    ],
-};
-
-fn iface_access_preview_analyzer_arn__list_access_previews_params__to_json(p: &iface_access_preview_analyzer_arn::ListAccessPreviewsParams) -> Value {
-    let mut m = Map::new();
-    m.insert("analyzer_arn".into(), Value::String((&p.analyzer_arn).clone()));
-    m.insert("next_token".into(), match (&p.next_token) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    m.insert("max_results".into(), match (&p.max_results) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
-    Value::Object(m)
-}
-
-impl iface_access_preview_analyzer_arn::Guest for crate::Component {
-    fn list_access_previews(params: iface_access_preview_analyzer_arn::ListAccessPreviewsParams) -> Result<String, String> {
-        let json = iface_access_preview_analyzer_arn__list_access_previews_params__to_json(&params);
-        dispatch(&OP_ACCESS_PREVIEW_ANALYZER_ARN_LIST_ACCESS_PREVIEWS, json)
-    }
-}
-use crate::exports::autostamp::amazonaws::analyzed_resource as iface_analyzed_resource;
-
-const OP_ANALYZED_RESOURCE_LIST_ANALYZED_RESOURCES: OpSpec = OpSpec {
-    method: "POST",
-    path_template: "/analyzed-resource",
-    fields: &[
-        FieldSpec { snake: "max_results", location: FieldLocation::Query },
-        FieldSpec { snake: "next_token", location: FieldLocation::Query },
-        FieldSpec { snake: "analyzer_arn", location: FieldLocation::Body },
-        FieldSpec { snake: "resource_type", location: FieldLocation::Body },
-    ],
-    auth: &[
-        AuthApply { secret_key: "hmac", kind: AuthKind::ApiKeyHeader("Authorization") },
-    ],
-};
-
-fn iface_analyzed_resource__list_analyzed_resources_body_resource_type_enum__to_str(e: &iface_analyzed_resource::ListAnalyzedResourcesBodyResourceTypeEnum) -> &'static str {
-    match e {
-        iface_analyzed_resource::ListAnalyzedResourcesBodyResourceTypeEnum::AwsS3Bucket => "AWS::S3::Bucket",
-        iface_analyzed_resource::ListAnalyzedResourcesBodyResourceTypeEnum::AwsIamRole => "AWS::IAM::Role",
-        iface_analyzed_resource::ListAnalyzedResourcesBodyResourceTypeEnum::AwsSqsQueue => "AWS::SQS::Queue",
-        iface_analyzed_resource::ListAnalyzedResourcesBodyResourceTypeEnum::AwsLambdaFunction => "AWS::Lambda::Function",
-        iface_analyzed_resource::ListAnalyzedResourcesBodyResourceTypeEnum::AwsLambdaLayerVersion => "AWS::Lambda::LayerVersion",
-        iface_analyzed_resource::ListAnalyzedResourcesBodyResourceTypeEnum::AwsKmsKey => "AWS::KMS::Key",
-        iface_analyzed_resource::ListAnalyzedResourcesBodyResourceTypeEnum::AwsSecretsManagerSecret => "AWS::SecretsManager::Secret",
-        iface_analyzed_resource::ListAnalyzedResourcesBodyResourceTypeEnum::AwsEfsFileSystem => "AWS::EFS::FileSystem",
-        iface_analyzed_resource::ListAnalyzedResourcesBodyResourceTypeEnum::AwsEc2Snapshot => "AWS::EC2::Snapshot",
-        iface_analyzed_resource::ListAnalyzedResourcesBodyResourceTypeEnum::AwsEcrRepository => "AWS::ECR::Repository",
-        iface_analyzed_resource::ListAnalyzedResourcesBodyResourceTypeEnum::AwsRdsDbSnapshot => "AWS::RDS::DBSnapshot",
-        iface_analyzed_resource::ListAnalyzedResourcesBodyResourceTypeEnum::AwsRdsDbClusterSnapshot => "AWS::RDS::DBClusterSnapshot",
-        iface_analyzed_resource::ListAnalyzedResourcesBodyResourceTypeEnum::AwsSnsTopic => "AWS::SNS::Topic",
-    }
-}
-
-fn iface_analyzed_resource__list_analyzed_resources_params__to_json(p: &iface_analyzed_resource::ListAnalyzedResourcesParams) -> Value {
-    let mut m = Map::new();
+    m.insert("x_amz_content_sha256".into(), match (&p.x_amz_content_sha256) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("x_amz_date".into(), match (&p.x_amz_date) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("x_amz_algorithm".into(), match (&p.x_amz_algorithm) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("x_amz_credential".into(), match (&p.x_amz_credential) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("x_amz_security_token".into(), match (&p.x_amz_security_token) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("x_amz_signature".into(), match (&p.x_amz_signature) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("x_amz_signed_headers".into(), match (&p.x_amz_signed_headers) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("max_results".into(), match (&p.max_results) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("next_token".into(), match (&p.next_token) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    m.insert("analyzer_arn".into(), Value::String((&p.analyzer_arn).clone()));
-    m.insert("resource_type".into(), match (&p.resource_type) { Some(v) => Value::String(iface_analyzed_resource__list_analyzed_resources_body_resource_type_enum__to_str(v).into()), None => Value::Null });
+    m.insert("x_amz_target".into(), Value::String(iface_aws_migration_hub__list_discovered_resources_x_amz_target_enum__to_str(&p.x_amz_target).into()));
+    m.insert("progress_update_stream".into(), iface_aws_migration_hub__list_discovered_resources_request_progress_update_stream__to_json(&p.progress_update_stream));
+    m.insert("migration_task_name".into(), iface_aws_migration_hub__list_discovered_resources_request_migration_task_name__to_json(&p.migration_task_name));
+    m.insert("next_token_v2".into(), match (&p.next_token_v2) { Some(v) => iface_aws_migration_hub__list_discovered_resources_request_next_token__to_json(v), None => Value::Null });
+    m.insert("max_results_v2".into(), match (&p.max_results_v2) { Some(v) => iface_aws_migration_hub__list_discovered_resources_request_max_results__to_json(v), None => Value::Null });
     Value::Object(m)
 }
 
-impl iface_analyzed_resource::Guest for crate::Component {
-    fn list_analyzed_resources(params: iface_analyzed_resource::ListAnalyzedResourcesParams) -> Result<String, String> {
-        let json = iface_analyzed_resource__list_analyzed_resources_params__to_json(&params);
-        dispatch(&OP_ANALYZED_RESOURCE_LIST_ANALYZED_RESOURCES, json)
+fn iface_aws_migration_hub__list_migration_tasks_params__to_json(p: &iface_aws_migration_hub::ListMigrationTasksParams) -> Value {
+    let mut m = Map::new();
+    m.insert("x_amz_content_sha256".into(), match (&p.x_amz_content_sha256) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("x_amz_date".into(), match (&p.x_amz_date) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("x_amz_algorithm".into(), match (&p.x_amz_algorithm) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("x_amz_credential".into(), match (&p.x_amz_credential) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("x_amz_security_token".into(), match (&p.x_amz_security_token) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("x_amz_signature".into(), match (&p.x_amz_signature) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("x_amz_signed_headers".into(), match (&p.x_amz_signed_headers) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("max_results".into(), match (&p.max_results) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("next_token".into(), match (&p.next_token) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("x_amz_target".into(), Value::String(iface_aws_migration_hub__list_migration_tasks_x_amz_target_enum__to_str(&p.x_amz_target).into()));
+    m.insert("next_token_v2".into(), match (&p.next_token_v2) { Some(v) => iface_aws_migration_hub__list_migration_tasks_request_next_token__to_json(v), None => Value::Null });
+    m.insert("max_results_v2".into(), match (&p.max_results_v2) { Some(v) => iface_aws_migration_hub__list_migration_tasks_request_max_results__to_json(v), None => Value::Null });
+    m.insert("resource_name".into(), match (&p.resource_name) { Some(v) => iface_aws_migration_hub__list_migration_tasks_request_resource_name__to_json(v), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_aws_migration_hub__list_progress_update_streams_params__to_json(p: &iface_aws_migration_hub::ListProgressUpdateStreamsParams) -> Value {
+    let mut m = Map::new();
+    m.insert("x_amz_content_sha256".into(), match (&p.x_amz_content_sha256) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("x_amz_date".into(), match (&p.x_amz_date) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("x_amz_algorithm".into(), match (&p.x_amz_algorithm) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("x_amz_credential".into(), match (&p.x_amz_credential) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("x_amz_security_token".into(), match (&p.x_amz_security_token) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("x_amz_signature".into(), match (&p.x_amz_signature) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("x_amz_signed_headers".into(), match (&p.x_amz_signed_headers) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("max_results".into(), match (&p.max_results) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("next_token".into(), match (&p.next_token) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("x_amz_target".into(), Value::String(iface_aws_migration_hub__list_progress_update_streams_x_amz_target_enum__to_str(&p.x_amz_target).into()));
+    m.insert("next_token_v2".into(), match (&p.next_token_v2) { Some(v) => iface_aws_migration_hub__list_progress_update_streams_request_next_token__to_json(v), None => Value::Null });
+    m.insert("max_results_v2".into(), match (&p.max_results_v2) { Some(v) => iface_aws_migration_hub__list_progress_update_streams_request_max_results__to_json(v), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_aws_migration_hub__notify_application_state_params__to_json(p: &iface_aws_migration_hub::NotifyApplicationStateParams) -> Value {
+    let mut m = Map::new();
+    m.insert("x_amz_content_sha256".into(), match (&p.x_amz_content_sha256) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("x_amz_date".into(), match (&p.x_amz_date) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("x_amz_algorithm".into(), match (&p.x_amz_algorithm) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("x_amz_credential".into(), match (&p.x_amz_credential) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("x_amz_security_token".into(), match (&p.x_amz_security_token) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("x_amz_signature".into(), match (&p.x_amz_signature) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("x_amz_signed_headers".into(), match (&p.x_amz_signed_headers) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("x_amz_target".into(), Value::String(iface_aws_migration_hub__notify_application_state_x_amz_target_enum__to_str(&p.x_amz_target).into()));
+    m.insert("application_id".into(), iface_aws_migration_hub__notify_application_state_request_application_id__to_json(&p.application_id));
+    m.insert("status".into(), iface_aws_migration_hub__notify_application_state_request_status__to_json(&p.status));
+    m.insert("update_date_time".into(), match (&p.update_date_time) { Some(v) => iface_aws_migration_hub__notify_application_state_request_update_date_time__to_json(v), None => Value::Null });
+    m.insert("dry_run".into(), match (&p.dry_run) { Some(v) => iface_aws_migration_hub__notify_application_state_request_dry_run__to_json(v), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_aws_migration_hub__notify_migration_task_state_params__to_json(p: &iface_aws_migration_hub::NotifyMigrationTaskStateParams) -> Value {
+    let mut m = Map::new();
+    m.insert("x_amz_content_sha256".into(), match (&p.x_amz_content_sha256) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("x_amz_date".into(), match (&p.x_amz_date) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("x_amz_algorithm".into(), match (&p.x_amz_algorithm) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("x_amz_credential".into(), match (&p.x_amz_credential) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("x_amz_security_token".into(), match (&p.x_amz_security_token) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("x_amz_signature".into(), match (&p.x_amz_signature) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("x_amz_signed_headers".into(), match (&p.x_amz_signed_headers) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("x_amz_target".into(), Value::String(iface_aws_migration_hub__notify_migration_task_state_x_amz_target_enum__to_str(&p.x_amz_target).into()));
+    m.insert("progress_update_stream".into(), iface_aws_migration_hub__notify_migration_task_state_request_progress_update_stream__to_json(&p.progress_update_stream));
+    m.insert("migration_task_name".into(), iface_aws_migration_hub__notify_migration_task_state_request_migration_task_name__to_json(&p.migration_task_name));
+    m.insert("task".into(), iface_aws_migration_hub__notify_migration_task_state_request_task__to_json(&p.task));
+    m.insert("update_date_time".into(), iface_aws_migration_hub__notify_migration_task_state_request_update_date_time__to_json(&p.update_date_time));
+    m.insert("next_update_seconds".into(), iface_aws_migration_hub__notify_migration_task_state_request_next_update_seconds__to_json(&p.next_update_seconds));
+    m.insert("dry_run".into(), match (&p.dry_run) { Some(v) => iface_aws_migration_hub__notify_migration_task_state_request_dry_run__to_json(v), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_aws_migration_hub__put_resource_attributes_params__to_json(p: &iface_aws_migration_hub::PutResourceAttributesParams) -> Value {
+    let mut m = Map::new();
+    m.insert("x_amz_content_sha256".into(), match (&p.x_amz_content_sha256) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("x_amz_date".into(), match (&p.x_amz_date) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("x_amz_algorithm".into(), match (&p.x_amz_algorithm) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("x_amz_credential".into(), match (&p.x_amz_credential) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("x_amz_security_token".into(), match (&p.x_amz_security_token) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("x_amz_signature".into(), match (&p.x_amz_signature) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("x_amz_signed_headers".into(), match (&p.x_amz_signed_headers) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("x_amz_target".into(), Value::String(iface_aws_migration_hub__put_resource_attributes_x_amz_target_enum__to_str(&p.x_amz_target).into()));
+    m.insert("progress_update_stream".into(), iface_aws_migration_hub__put_resource_attributes_request_progress_update_stream__to_json(&p.progress_update_stream));
+    m.insert("migration_task_name".into(), iface_aws_migration_hub__put_resource_attributes_request_migration_task_name__to_json(&p.migration_task_name));
+    m.insert("resource_attribute_list".into(), iface_aws_migration_hub__put_resource_attributes_request_resource_attribute_list__to_json(&p.resource_attribute_list));
+    m.insert("dry_run".into(), match (&p.dry_run) { Some(v) => iface_aws_migration_hub__put_resource_attributes_request_dry_run__to_json(v), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_aws_migration_hub__associate_created_artifact_result__from_json(v: &Value) -> Option<iface_aws_migration_hub::AssociateCreatedArtifactResult> {
+    let m = v.as_object()?;
+    Some(iface_aws_migration_hub::AssociateCreatedArtifactResult {
+        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    })
+}
+
+fn iface_aws_migration_hub__associate_discovered_resource_result__from_json(v: &Value) -> Option<iface_aws_migration_hub::AssociateDiscoveredResourceResult> {
+    let m = v.as_object()?;
+    Some(iface_aws_migration_hub::AssociateDiscoveredResourceResult {
+        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    })
+}
+
+fn iface_aws_migration_hub__create_progress_update_stream_result__from_json(v: &Value) -> Option<iface_aws_migration_hub::CreateProgressUpdateStreamResult> {
+    let m = v.as_object()?;
+    Some(iface_aws_migration_hub::CreateProgressUpdateStreamResult {
+        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    })
+}
+
+fn iface_aws_migration_hub__delete_progress_update_stream_result__from_json(v: &Value) -> Option<iface_aws_migration_hub::DeleteProgressUpdateStreamResult> {
+    let m = v.as_object()?;
+    Some(iface_aws_migration_hub::DeleteProgressUpdateStreamResult {
+        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    })
+}
+
+fn iface_aws_migration_hub__describe_application_state_result__from_json(v: &Value) -> Option<iface_aws_migration_hub::DescribeApplicationStateResult> {
+    let m = v.as_object()?;
+    Some(iface_aws_migration_hub::DescribeApplicationStateResult {
+        application_status: m.get("ApplicationStatus").filter(|v| !v.is_null()).and_then(|v| iface_aws_migration_hub__describe_application_state_result_application_status__from_json(v)),
+        last_updated_time: m.get("LastUpdatedTime").filter(|v| !v.is_null()).and_then(|v| iface_aws_migration_hub__describe_application_state_result_last_updated_time__from_json(v)),
+    })
+}
+
+fn iface_aws_migration_hub__describe_application_state_result_application_status__from_json(v: &Value) -> Option<iface_aws_migration_hub::DescribeApplicationStateResultApplicationStatus> {
+    let m = v.as_object()?;
+    Some(iface_aws_migration_hub::DescribeApplicationStateResultApplicationStatus {
+        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    })
+}
+
+fn iface_aws_migration_hub__describe_application_state_result_last_updated_time__from_json(v: &Value) -> Option<iface_aws_migration_hub::DescribeApplicationStateResultLastUpdatedTime> {
+    let m = v.as_object()?;
+    Some(iface_aws_migration_hub::DescribeApplicationStateResultLastUpdatedTime {
+        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    })
+}
+
+fn iface_aws_migration_hub__describe_migration_task_result__from_json(v: &Value) -> Option<iface_aws_migration_hub::DescribeMigrationTaskResult> {
+    let m = v.as_object()?;
+    Some(iface_aws_migration_hub::DescribeMigrationTaskResult {
+        migration_task: m.get("MigrationTask").filter(|v| !v.is_null()).and_then(|v| iface_aws_migration_hub__describe_migration_task_result_migration_task__from_json(v)),
+    })
+}
+
+fn iface_aws_migration_hub__describe_migration_task_result_migration_task__from_json(v: &Value) -> Option<iface_aws_migration_hub::DescribeMigrationTaskResultMigrationTask> {
+    let m = v.as_object()?;
+    Some(iface_aws_migration_hub::DescribeMigrationTaskResultMigrationTask {
+        progress_update_stream: m.get("ProgressUpdateStream").filter(|v| !v.is_null()).and_then(|v| iface_aws_migration_hub__describe_migration_task_result_migration_task_progress_update_stream__from_json(v)),
+        migration_task_name: m.get("MigrationTaskName").filter(|v| !v.is_null()).and_then(|v| iface_aws_migration_hub__describe_migration_task_result_migration_task_migration_task_name__from_json(v)),
+        task: m.get("Task").filter(|v| !v.is_null()).and_then(|v| iface_aws_migration_hub__describe_migration_task_result_migration_task_task__from_json(v)),
+        update_date_time: m.get("UpdateDateTime").filter(|v| !v.is_null()).and_then(|v| iface_aws_migration_hub__describe_migration_task_result_migration_task_update_date_time__from_json(v)),
+        resource_attribute_list: m.get("ResourceAttributeList").filter(|v| !v.is_null()).and_then(|v| iface_aws_migration_hub__describe_migration_task_result_migration_task_resource_attribute_list__from_json(v)),
+    })
+}
+
+fn iface_aws_migration_hub__describe_migration_task_result_migration_task_progress_update_stream__from_json(v: &Value) -> Option<iface_aws_migration_hub::DescribeMigrationTaskResultMigrationTaskProgressUpdateStream> {
+    let m = v.as_object()?;
+    Some(iface_aws_migration_hub::DescribeMigrationTaskResultMigrationTaskProgressUpdateStream {
+        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    })
+}
+
+fn iface_aws_migration_hub__describe_migration_task_result_migration_task_migration_task_name__from_json(v: &Value) -> Option<iface_aws_migration_hub::DescribeMigrationTaskResultMigrationTaskMigrationTaskName> {
+    let m = v.as_object()?;
+    Some(iface_aws_migration_hub::DescribeMigrationTaskResultMigrationTaskMigrationTaskName {
+        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    })
+}
+
+fn iface_aws_migration_hub__describe_migration_task_result_migration_task_task__from_json(v: &Value) -> Option<iface_aws_migration_hub::DescribeMigrationTaskResultMigrationTaskTask> {
+    let m = v.as_object()?;
+    Some(iface_aws_migration_hub::DescribeMigrationTaskResultMigrationTaskTask {
+        status: match m.get("Status").and_then(|v| iface_aws_migration_hub__describe_migration_task_result_migration_task_task_status__from_json(v)) { Some(x) => x, None => return None },
+        status_detail: m.get("StatusDetail").filter(|v| !v.is_null()).and_then(|v| iface_aws_migration_hub__describe_migration_task_result_migration_task_task_status_detail__from_json(v)),
+        progress_percent: m.get("ProgressPercent").filter(|v| !v.is_null()).and_then(|v| iface_aws_migration_hub__describe_migration_task_result_migration_task_task_progress_percent__from_json(v)),
+    })
+}
+
+fn iface_aws_migration_hub__describe_migration_task_result_migration_task_task_status__from_json(v: &Value) -> Option<iface_aws_migration_hub::DescribeMigrationTaskResultMigrationTaskTaskStatus> {
+    let m = v.as_object()?;
+    Some(iface_aws_migration_hub::DescribeMigrationTaskResultMigrationTaskTaskStatus {
+        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    })
+}
+
+fn iface_aws_migration_hub__describe_migration_task_result_migration_task_task_status_detail__from_json(v: &Value) -> Option<iface_aws_migration_hub::DescribeMigrationTaskResultMigrationTaskTaskStatusDetail> {
+    let m = v.as_object()?;
+    Some(iface_aws_migration_hub::DescribeMigrationTaskResultMigrationTaskTaskStatusDetail {
+        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    })
+}
+
+fn iface_aws_migration_hub__describe_migration_task_result_migration_task_task_progress_percent__from_json(v: &Value) -> Option<iface_aws_migration_hub::DescribeMigrationTaskResultMigrationTaskTaskProgressPercent> {
+    let m = v.as_object()?;
+    Some(iface_aws_migration_hub::DescribeMigrationTaskResultMigrationTaskTaskProgressPercent {
+        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    })
+}
+
+fn iface_aws_migration_hub__describe_migration_task_result_migration_task_update_date_time__from_json(v: &Value) -> Option<iface_aws_migration_hub::DescribeMigrationTaskResultMigrationTaskUpdateDateTime> {
+    let m = v.as_object()?;
+    Some(iface_aws_migration_hub::DescribeMigrationTaskResultMigrationTaskUpdateDateTime {
+        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    })
+}
+
+fn iface_aws_migration_hub__describe_migration_task_result_migration_task_resource_attribute_list__from_json(v: &Value) -> Option<iface_aws_migration_hub::DescribeMigrationTaskResultMigrationTaskResourceAttributeList> {
+    let m = v.as_object()?;
+    Some(iface_aws_migration_hub::DescribeMigrationTaskResultMigrationTaskResourceAttributeList {
+        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    })
+}
+
+fn iface_aws_migration_hub__disassociate_created_artifact_result__from_json(v: &Value) -> Option<iface_aws_migration_hub::DisassociateCreatedArtifactResult> {
+    let m = v.as_object()?;
+    Some(iface_aws_migration_hub::DisassociateCreatedArtifactResult {
+        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    })
+}
+
+fn iface_aws_migration_hub__disassociate_discovered_resource_result__from_json(v: &Value) -> Option<iface_aws_migration_hub::DisassociateDiscoveredResourceResult> {
+    let m = v.as_object()?;
+    Some(iface_aws_migration_hub::DisassociateDiscoveredResourceResult {
+        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    })
+}
+
+fn iface_aws_migration_hub__import_migration_task_result__from_json(v: &Value) -> Option<iface_aws_migration_hub::ImportMigrationTaskResult> {
+    let m = v.as_object()?;
+    Some(iface_aws_migration_hub::ImportMigrationTaskResult {
+        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    })
+}
+
+fn iface_aws_migration_hub__list_application_states_result__from_json(v: &Value) -> Option<iface_aws_migration_hub::ListApplicationStatesResult> {
+    let m = v.as_object()?;
+    Some(iface_aws_migration_hub::ListApplicationStatesResult {
+        application_state_list: m.get("ApplicationStateList").filter(|v| !v.is_null()).and_then(|v| iface_aws_migration_hub__list_application_states_result_application_state_list__from_json(v)),
+        next_token: m.get("NextToken").filter(|v| !v.is_null()).and_then(|v| iface_aws_migration_hub__list_application_states_result_next_token__from_json(v)),
+    })
+}
+
+fn iface_aws_migration_hub__list_application_states_result_application_state_list__from_json(v: &Value) -> Option<iface_aws_migration_hub::ListApplicationStatesResultApplicationStateList> {
+    let m = v.as_object()?;
+    Some(iface_aws_migration_hub::ListApplicationStatesResultApplicationStateList {
+        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    })
+}
+
+fn iface_aws_migration_hub__list_application_states_result_next_token__from_json(v: &Value) -> Option<iface_aws_migration_hub::ListApplicationStatesResultNextToken> {
+    let m = v.as_object()?;
+    Some(iface_aws_migration_hub::ListApplicationStatesResultNextToken {
+        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    })
+}
+
+fn iface_aws_migration_hub__list_created_artifacts_result__from_json(v: &Value) -> Option<iface_aws_migration_hub::ListCreatedArtifactsResult> {
+    let m = v.as_object()?;
+    Some(iface_aws_migration_hub::ListCreatedArtifactsResult {
+        next_token: m.get("NextToken").filter(|v| !v.is_null()).and_then(|v| iface_aws_migration_hub__list_created_artifacts_result_next_token__from_json(v)),
+        created_artifact_list: m.get("CreatedArtifactList").filter(|v| !v.is_null()).and_then(|v| iface_aws_migration_hub__list_created_artifacts_result_created_artifact_list__from_json(v)),
+    })
+}
+
+fn iface_aws_migration_hub__list_created_artifacts_result_next_token__from_json(v: &Value) -> Option<iface_aws_migration_hub::ListCreatedArtifactsResultNextToken> {
+    let m = v.as_object()?;
+    Some(iface_aws_migration_hub::ListCreatedArtifactsResultNextToken {
+        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    })
+}
+
+fn iface_aws_migration_hub__list_created_artifacts_result_created_artifact_list__from_json(v: &Value) -> Option<iface_aws_migration_hub::ListCreatedArtifactsResultCreatedArtifactList> {
+    let m = v.as_object()?;
+    Some(iface_aws_migration_hub::ListCreatedArtifactsResultCreatedArtifactList {
+        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    })
+}
+
+fn iface_aws_migration_hub__list_discovered_resources_result__from_json(v: &Value) -> Option<iface_aws_migration_hub::ListDiscoveredResourcesResult> {
+    let m = v.as_object()?;
+    Some(iface_aws_migration_hub::ListDiscoveredResourcesResult {
+        next_token: m.get("NextToken").filter(|v| !v.is_null()).and_then(|v| iface_aws_migration_hub__list_discovered_resources_result_next_token__from_json(v)),
+        discovered_resource_list: m.get("DiscoveredResourceList").filter(|v| !v.is_null()).and_then(|v| iface_aws_migration_hub__list_discovered_resources_result_discovered_resource_list__from_json(v)),
+    })
+}
+
+fn iface_aws_migration_hub__list_discovered_resources_result_next_token__from_json(v: &Value) -> Option<iface_aws_migration_hub::ListDiscoveredResourcesResultNextToken> {
+    let m = v.as_object()?;
+    Some(iface_aws_migration_hub::ListDiscoveredResourcesResultNextToken {
+        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    })
+}
+
+fn iface_aws_migration_hub__list_discovered_resources_result_discovered_resource_list__from_json(v: &Value) -> Option<iface_aws_migration_hub::ListDiscoveredResourcesResultDiscoveredResourceList> {
+    let m = v.as_object()?;
+    Some(iface_aws_migration_hub::ListDiscoveredResourcesResultDiscoveredResourceList {
+        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    })
+}
+
+fn iface_aws_migration_hub__list_migration_tasks_result__from_json(v: &Value) -> Option<iface_aws_migration_hub::ListMigrationTasksResult> {
+    let m = v.as_object()?;
+    Some(iface_aws_migration_hub::ListMigrationTasksResult {
+        next_token: m.get("NextToken").filter(|v| !v.is_null()).and_then(|v| iface_aws_migration_hub__list_migration_tasks_result_next_token__from_json(v)),
+        migration_task_summary_list: m.get("MigrationTaskSummaryList").filter(|v| !v.is_null()).and_then(|v| iface_aws_migration_hub__list_migration_tasks_result_migration_task_summary_list__from_json(v)),
+    })
+}
+
+fn iface_aws_migration_hub__list_migration_tasks_result_next_token__from_json(v: &Value) -> Option<iface_aws_migration_hub::ListMigrationTasksResultNextToken> {
+    let m = v.as_object()?;
+    Some(iface_aws_migration_hub::ListMigrationTasksResultNextToken {
+        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    })
+}
+
+fn iface_aws_migration_hub__list_migration_tasks_result_migration_task_summary_list__from_json(v: &Value) -> Option<iface_aws_migration_hub::ListMigrationTasksResultMigrationTaskSummaryList> {
+    let m = v.as_object()?;
+    Some(iface_aws_migration_hub::ListMigrationTasksResultMigrationTaskSummaryList {
+        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    })
+}
+
+fn iface_aws_migration_hub__list_progress_update_streams_result__from_json(v: &Value) -> Option<iface_aws_migration_hub::ListProgressUpdateStreamsResult> {
+    let m = v.as_object()?;
+    Some(iface_aws_migration_hub::ListProgressUpdateStreamsResult {
+        progress_update_stream_summary_list: m.get("ProgressUpdateStreamSummaryList").filter(|v| !v.is_null()).and_then(|v| iface_aws_migration_hub__list_progress_update_streams_result_progress_update_stream_summary_list__from_json(v)),
+        next_token: m.get("NextToken").filter(|v| !v.is_null()).and_then(|v| iface_aws_migration_hub__list_progress_update_streams_result_next_token__from_json(v)),
+    })
+}
+
+fn iface_aws_migration_hub__list_progress_update_streams_result_progress_update_stream_summary_list__from_json(v: &Value) -> Option<iface_aws_migration_hub::ListProgressUpdateStreamsResultProgressUpdateStreamSummaryList> {
+    let m = v.as_object()?;
+    Some(iface_aws_migration_hub::ListProgressUpdateStreamsResultProgressUpdateStreamSummaryList {
+        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    })
+}
+
+fn iface_aws_migration_hub__list_progress_update_streams_result_next_token__from_json(v: &Value) -> Option<iface_aws_migration_hub::ListProgressUpdateStreamsResultNextToken> {
+    let m = v.as_object()?;
+    Some(iface_aws_migration_hub::ListProgressUpdateStreamsResultNextToken {
+        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    })
+}
+
+fn iface_aws_migration_hub__notify_application_state_result__from_json(v: &Value) -> Option<iface_aws_migration_hub::NotifyApplicationStateResult> {
+    let m = v.as_object()?;
+    Some(iface_aws_migration_hub::NotifyApplicationStateResult {
+        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    })
+}
+
+fn iface_aws_migration_hub__notify_migration_task_state_result__from_json(v: &Value) -> Option<iface_aws_migration_hub::NotifyMigrationTaskStateResult> {
+    let m = v.as_object()?;
+    Some(iface_aws_migration_hub::NotifyMigrationTaskStateResult {
+        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    })
+}
+
+fn iface_aws_migration_hub__put_resource_attributes_result__from_json(v: &Value) -> Option<iface_aws_migration_hub::PutResourceAttributesResult> {
+    let m = v.as_object()?;
+    Some(iface_aws_migration_hub::PutResourceAttributesResult {
+        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    })
+}
+
+fn iface_aws_migration_hub__associate_created_artifact__ok(body: String) -> Result<iface_aws_migration_hub::AssociateCreatedArtifactResult, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match iface_aws_migration_hub__associate_created_artifact_result__from_json(&v) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
     }
 }
-use crate::exports::autostamp::amazonaws::tags as iface_tags;
 
-const OP_TAGS_LIST_TAGS_FOR_RESOURCE: OpSpec = OpSpec {
-    method: "GET",
-    path_template: "/tags/{resource_arn}",
-    fields: &[
-        FieldSpec { snake: "resource_arn", location: FieldLocation::Path },
-    ],
-    auth: &[
-        AuthApply { secret_key: "hmac", kind: AuthKind::ApiKeyHeader("Authorization") },
-    ],
-};
-
-const OP_TAGS_TAG_RESOURCE: OpSpec = OpSpec {
-    method: "POST",
-    path_template: "/tags/{resource_arn}",
-    fields: &[
-        FieldSpec { snake: "resource_arn", location: FieldLocation::Path },
-        FieldSpec { snake: "tags", location: FieldLocation::Body },
-    ],
-    auth: &[
-        AuthApply { secret_key: "hmac", kind: AuthKind::ApiKeyHeader("Authorization") },
-    ],
-};
-
-const OP_TAGS_UNTAG_RESOURCE: OpSpec = OpSpec {
-    method: "DELETE",
-    path_template: "/tags/{resource_arn}#tagKeys",
-    fields: &[
-        FieldSpec { snake: "resource_arn", location: FieldLocation::Path },
-        FieldSpec { snake: "tag_keys", location: FieldLocation::Query },
-    ],
-    auth: &[
-        AuthApply { secret_key: "hmac", kind: AuthKind::ApiKeyHeader("Authorization") },
-    ],
-};
-
-fn iface_tags__tag_resource_body_tags__to_json(p: &iface_tags::TagResourceBodyTags) -> Value {
-    let mut m = Map::new();
-    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    Value::Object(m)
-}
-
-fn iface_tags__string_op__to_json(p: &iface_tags::StringOp) -> Value {
-    let mut m = Map::new();
-    m.insert("value".into(), Value::String((&p.value).clone()));
-    Value::Object(m)
-}
-
-fn iface_tags__list_tags_for_resource_params__to_json(p: &iface_tags::ListTagsForResourceParams) -> Value {
-    let mut m = Map::new();
-    m.insert("resource_arn".into(), Value::String((&p.resource_arn).clone()));
-    Value::Object(m)
-}
-
-fn iface_tags__tag_resource_params__to_json(p: &iface_tags::TagResourceParams) -> Value {
-    let mut m = Map::new();
-    m.insert("resource_arn".into(), Value::String((&p.resource_arn).clone()));
-    m.insert("tags".into(), iface_tags__tag_resource_body_tags__to_json(&p.tags));
-    Value::Object(m)
-}
-
-fn iface_tags__untag_resource_params__to_json(p: &iface_tags::UntagResourceParams) -> Value {
-    let mut m = Map::new();
-    m.insert("resource_arn".into(), Value::String((&p.resource_arn).clone()));
-    m.insert("tag_keys".into(), Value::Array((&p.tag_keys).iter().map(|v| iface_tags__string_op__to_json(v)).collect()));
-    Value::Object(m)
-}
-
-impl iface_tags::Guest for crate::Component {
-    fn list_tags_for_resource(params: iface_tags::ListTagsForResourceParams) -> Result<String, String> {
-        let json = iface_tags__list_tags_for_resource_params__to_json(&params);
-        dispatch(&OP_TAGS_LIST_TAGS_FOR_RESOURCE, json)
-    }
-    fn tag_resource(params: iface_tags::TagResourceParams) -> Result<String, String> {
-        let json = iface_tags__tag_resource_params__to_json(&params);
-        dispatch(&OP_TAGS_TAG_RESOURCE, json)
-    }
-    fn untag_resource(params: iface_tags::UntagResourceParams) -> Result<String, String> {
-        let json = iface_tags__untag_resource_params__to_json(&params);
-        dispatch(&OP_TAGS_UNTAG_RESOURCE, json)
+fn iface_aws_migration_hub__associate_created_artifact__err(e: crate::runtime::DispatchError) -> iface_aws_migration_hub::AssociateCreatedArtifactError {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => match status {
+            480u16 => iface_aws_migration_hub::AssociateCreatedArtifactError::StatusV480(body),
+            481u16 => iface_aws_migration_hub::AssociateCreatedArtifactError::StatusV481(body),
+            482u16 => iface_aws_migration_hub::AssociateCreatedArtifactError::StatusV482(body),
+            483u16 => iface_aws_migration_hub::AssociateCreatedArtifactError::StatusV483(body),
+            484u16 => iface_aws_migration_hub::AssociateCreatedArtifactError::StatusV484(body),
+            485u16 => iface_aws_migration_hub::AssociateCreatedArtifactError::StatusV485(body),
+            486u16 => iface_aws_migration_hub::AssociateCreatedArtifactError::StatusV486(body),
+            487u16 => iface_aws_migration_hub::AssociateCreatedArtifactError::StatusV487(body),
+            488u16 => iface_aws_migration_hub::AssociateCreatedArtifactError::StatusV488(body),
+            _ => iface_aws_migration_hub::AssociateCreatedArtifactError::Other(body),
+        },
+        crate::runtime::DispatchError::Transport(m) => iface_aws_migration_hub::AssociateCreatedArtifactError::Other(m),
     }
 }
-use crate::exports::autostamp::amazonaws::resource_op as iface_resource_op;
 
-const OP_RESOURCE_OP_START_RESOURCE_SCAN: OpSpec = OpSpec {
-    method: "POST",
-    path_template: "/resource/scan",
-    fields: &[
-        FieldSpec { snake: "analyzer_arn", location: FieldLocation::Body },
-        FieldSpec { snake: "resource_arn", location: FieldLocation::Body },
-        FieldSpec { snake: "resource_owner_account", location: FieldLocation::Body },
-    ],
-    auth: &[
-        AuthApply { secret_key: "hmac", kind: AuthKind::ApiKeyHeader("Authorization") },
-    ],
-};
-
-fn iface_resource_op__start_resource_scan_params__to_json(p: &iface_resource_op::StartResourceScanParams) -> Value {
-    let mut m = Map::new();
-    m.insert("analyzer_arn".into(), Value::String((&p.analyzer_arn).clone()));
-    m.insert("resource_arn".into(), Value::String((&p.resource_arn).clone()));
-    m.insert("resource_owner_account".into(), match (&p.resource_owner_account) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    Value::Object(m)
+fn iface_aws_migration_hub__associate_discovered_resource__ok(body: String) -> Result<iface_aws_migration_hub::AssociateDiscoveredResourceResult, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match iface_aws_migration_hub__associate_discovered_resource_result__from_json(&v) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
 }
 
-impl iface_resource_op::Guest for crate::Component {
-    fn start_resource_scan(params: iface_resource_op::StartResourceScanParams) -> Result<String, String> {
-        let json = iface_resource_op__start_resource_scan_params__to_json(&params);
-        dispatch(&OP_RESOURCE_OP_START_RESOURCE_SCAN, json)
+fn iface_aws_migration_hub__associate_discovered_resource__err(e: crate::runtime::DispatchError) -> iface_aws_migration_hub::AssociateDiscoveredResourceError {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => match status {
+            480u16 => iface_aws_migration_hub::AssociateDiscoveredResourceError::StatusV480(body),
+            481u16 => iface_aws_migration_hub::AssociateDiscoveredResourceError::StatusV481(body),
+            482u16 => iface_aws_migration_hub::AssociateDiscoveredResourceError::StatusV482(body),
+            483u16 => iface_aws_migration_hub::AssociateDiscoveredResourceError::StatusV483(body),
+            484u16 => iface_aws_migration_hub::AssociateDiscoveredResourceError::StatusV484(body),
+            485u16 => iface_aws_migration_hub::AssociateDiscoveredResourceError::StatusV485(body),
+            486u16 => iface_aws_migration_hub::AssociateDiscoveredResourceError::StatusV486(body),
+            487u16 => iface_aws_migration_hub::AssociateDiscoveredResourceError::StatusV487(body),
+            488u16 => iface_aws_migration_hub::AssociateDiscoveredResourceError::StatusV488(body),
+            489u16 => iface_aws_migration_hub::AssociateDiscoveredResourceError::StatusV489(body),
+            _ => iface_aws_migration_hub::AssociateDiscoveredResourceError::Other(body),
+        },
+        crate::runtime::DispatchError::Transport(m) => iface_aws_migration_hub::AssociateDiscoveredResourceError::Other(m),
+    }
+}
+
+fn iface_aws_migration_hub__create_progress_update_stream__ok(body: String) -> Result<iface_aws_migration_hub::CreateProgressUpdateStreamResult, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match iface_aws_migration_hub__create_progress_update_stream_result__from_json(&v) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_aws_migration_hub__create_progress_update_stream__err(e: crate::runtime::DispatchError) -> iface_aws_migration_hub::CreateProgressUpdateStreamError {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => match status {
+            480u16 => iface_aws_migration_hub::CreateProgressUpdateStreamError::StatusV480(body),
+            481u16 => iface_aws_migration_hub::CreateProgressUpdateStreamError::StatusV481(body),
+            482u16 => iface_aws_migration_hub::CreateProgressUpdateStreamError::StatusV482(body),
+            483u16 => iface_aws_migration_hub::CreateProgressUpdateStreamError::StatusV483(body),
+            484u16 => iface_aws_migration_hub::CreateProgressUpdateStreamError::StatusV484(body),
+            485u16 => iface_aws_migration_hub::CreateProgressUpdateStreamError::StatusV485(body),
+            486u16 => iface_aws_migration_hub::CreateProgressUpdateStreamError::StatusV486(body),
+            487u16 => iface_aws_migration_hub::CreateProgressUpdateStreamError::StatusV487(body),
+            _ => iface_aws_migration_hub::CreateProgressUpdateStreamError::Other(body),
+        },
+        crate::runtime::DispatchError::Transport(m) => iface_aws_migration_hub::CreateProgressUpdateStreamError::Other(m),
+    }
+}
+
+fn iface_aws_migration_hub__delete_progress_update_stream__ok(body: String) -> Result<iface_aws_migration_hub::DeleteProgressUpdateStreamResult, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match iface_aws_migration_hub__delete_progress_update_stream_result__from_json(&v) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_aws_migration_hub__delete_progress_update_stream__err(e: crate::runtime::DispatchError) -> iface_aws_migration_hub::DeleteProgressUpdateStreamError {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => match status {
+            480u16 => iface_aws_migration_hub::DeleteProgressUpdateStreamError::StatusV480(body),
+            481u16 => iface_aws_migration_hub::DeleteProgressUpdateStreamError::StatusV481(body),
+            482u16 => iface_aws_migration_hub::DeleteProgressUpdateStreamError::StatusV482(body),
+            483u16 => iface_aws_migration_hub::DeleteProgressUpdateStreamError::StatusV483(body),
+            484u16 => iface_aws_migration_hub::DeleteProgressUpdateStreamError::StatusV484(body),
+            485u16 => iface_aws_migration_hub::DeleteProgressUpdateStreamError::StatusV485(body),
+            486u16 => iface_aws_migration_hub::DeleteProgressUpdateStreamError::StatusV486(body),
+            487u16 => iface_aws_migration_hub::DeleteProgressUpdateStreamError::StatusV487(body),
+            488u16 => iface_aws_migration_hub::DeleteProgressUpdateStreamError::StatusV488(body),
+            _ => iface_aws_migration_hub::DeleteProgressUpdateStreamError::Other(body),
+        },
+        crate::runtime::DispatchError::Transport(m) => iface_aws_migration_hub::DeleteProgressUpdateStreamError::Other(m),
+    }
+}
+
+fn iface_aws_migration_hub__describe_application_state__ok(body: String) -> Result<iface_aws_migration_hub::DescribeApplicationStateResult, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match iface_aws_migration_hub__describe_application_state_result__from_json(&v) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_aws_migration_hub__describe_application_state__err(e: crate::runtime::DispatchError) -> iface_aws_migration_hub::DescribeApplicationStateError {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => match status {
+            480u16 => iface_aws_migration_hub::DescribeApplicationStateError::StatusV480(body),
+            481u16 => iface_aws_migration_hub::DescribeApplicationStateError::StatusV481(body),
+            482u16 => iface_aws_migration_hub::DescribeApplicationStateError::StatusV482(body),
+            483u16 => iface_aws_migration_hub::DescribeApplicationStateError::StatusV483(body),
+            484u16 => iface_aws_migration_hub::DescribeApplicationStateError::StatusV484(body),
+            485u16 => iface_aws_migration_hub::DescribeApplicationStateError::StatusV485(body),
+            486u16 => iface_aws_migration_hub::DescribeApplicationStateError::StatusV486(body),
+            487u16 => iface_aws_migration_hub::DescribeApplicationStateError::StatusV487(body),
+            _ => iface_aws_migration_hub::DescribeApplicationStateError::Other(body),
+        },
+        crate::runtime::DispatchError::Transport(m) => iface_aws_migration_hub::DescribeApplicationStateError::Other(m),
+    }
+}
+
+fn iface_aws_migration_hub__describe_migration_task__ok(body: String) -> Result<iface_aws_migration_hub::DescribeMigrationTaskResult, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match iface_aws_migration_hub__describe_migration_task_result__from_json(&v) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_aws_migration_hub__describe_migration_task__err(e: crate::runtime::DispatchError) -> iface_aws_migration_hub::DescribeMigrationTaskError {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => match status {
+            480u16 => iface_aws_migration_hub::DescribeMigrationTaskError::StatusV480(body),
+            481u16 => iface_aws_migration_hub::DescribeMigrationTaskError::StatusV481(body),
+            482u16 => iface_aws_migration_hub::DescribeMigrationTaskError::StatusV482(body),
+            483u16 => iface_aws_migration_hub::DescribeMigrationTaskError::StatusV483(body),
+            484u16 => iface_aws_migration_hub::DescribeMigrationTaskError::StatusV484(body),
+            485u16 => iface_aws_migration_hub::DescribeMigrationTaskError::StatusV485(body),
+            486u16 => iface_aws_migration_hub::DescribeMigrationTaskError::StatusV486(body),
+            _ => iface_aws_migration_hub::DescribeMigrationTaskError::Other(body),
+        },
+        crate::runtime::DispatchError::Transport(m) => iface_aws_migration_hub::DescribeMigrationTaskError::Other(m),
+    }
+}
+
+fn iface_aws_migration_hub__disassociate_created_artifact__ok(body: String) -> Result<iface_aws_migration_hub::DisassociateCreatedArtifactResult, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match iface_aws_migration_hub__disassociate_created_artifact_result__from_json(&v) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_aws_migration_hub__disassociate_created_artifact__err(e: crate::runtime::DispatchError) -> iface_aws_migration_hub::DisassociateCreatedArtifactError {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => match status {
+            480u16 => iface_aws_migration_hub::DisassociateCreatedArtifactError::StatusV480(body),
+            481u16 => iface_aws_migration_hub::DisassociateCreatedArtifactError::StatusV481(body),
+            482u16 => iface_aws_migration_hub::DisassociateCreatedArtifactError::StatusV482(body),
+            483u16 => iface_aws_migration_hub::DisassociateCreatedArtifactError::StatusV483(body),
+            484u16 => iface_aws_migration_hub::DisassociateCreatedArtifactError::StatusV484(body),
+            485u16 => iface_aws_migration_hub::DisassociateCreatedArtifactError::StatusV485(body),
+            486u16 => iface_aws_migration_hub::DisassociateCreatedArtifactError::StatusV486(body),
+            487u16 => iface_aws_migration_hub::DisassociateCreatedArtifactError::StatusV487(body),
+            488u16 => iface_aws_migration_hub::DisassociateCreatedArtifactError::StatusV488(body),
+            _ => iface_aws_migration_hub::DisassociateCreatedArtifactError::Other(body),
+        },
+        crate::runtime::DispatchError::Transport(m) => iface_aws_migration_hub::DisassociateCreatedArtifactError::Other(m),
+    }
+}
+
+fn iface_aws_migration_hub__disassociate_discovered_resource__ok(body: String) -> Result<iface_aws_migration_hub::DisassociateDiscoveredResourceResult, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match iface_aws_migration_hub__disassociate_discovered_resource_result__from_json(&v) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_aws_migration_hub__disassociate_discovered_resource__err(e: crate::runtime::DispatchError) -> iface_aws_migration_hub::DisassociateDiscoveredResourceError {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => match status {
+            480u16 => iface_aws_migration_hub::DisassociateDiscoveredResourceError::StatusV480(body),
+            481u16 => iface_aws_migration_hub::DisassociateDiscoveredResourceError::StatusV481(body),
+            482u16 => iface_aws_migration_hub::DisassociateDiscoveredResourceError::StatusV482(body),
+            483u16 => iface_aws_migration_hub::DisassociateDiscoveredResourceError::StatusV483(body),
+            484u16 => iface_aws_migration_hub::DisassociateDiscoveredResourceError::StatusV484(body),
+            485u16 => iface_aws_migration_hub::DisassociateDiscoveredResourceError::StatusV485(body),
+            486u16 => iface_aws_migration_hub::DisassociateDiscoveredResourceError::StatusV486(body),
+            487u16 => iface_aws_migration_hub::DisassociateDiscoveredResourceError::StatusV487(body),
+            488u16 => iface_aws_migration_hub::DisassociateDiscoveredResourceError::StatusV488(body),
+            _ => iface_aws_migration_hub::DisassociateDiscoveredResourceError::Other(body),
+        },
+        crate::runtime::DispatchError::Transport(m) => iface_aws_migration_hub::DisassociateDiscoveredResourceError::Other(m),
+    }
+}
+
+fn iface_aws_migration_hub__import_migration_task__ok(body: String) -> Result<iface_aws_migration_hub::ImportMigrationTaskResult, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match iface_aws_migration_hub__import_migration_task_result__from_json(&v) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_aws_migration_hub__import_migration_task__err(e: crate::runtime::DispatchError) -> iface_aws_migration_hub::ImportMigrationTaskError {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => match status {
+            480u16 => iface_aws_migration_hub::ImportMigrationTaskError::StatusV480(body),
+            481u16 => iface_aws_migration_hub::ImportMigrationTaskError::StatusV481(body),
+            482u16 => iface_aws_migration_hub::ImportMigrationTaskError::StatusV482(body),
+            483u16 => iface_aws_migration_hub::ImportMigrationTaskError::StatusV483(body),
+            484u16 => iface_aws_migration_hub::ImportMigrationTaskError::StatusV484(body),
+            485u16 => iface_aws_migration_hub::ImportMigrationTaskError::StatusV485(body),
+            486u16 => iface_aws_migration_hub::ImportMigrationTaskError::StatusV486(body),
+            487u16 => iface_aws_migration_hub::ImportMigrationTaskError::StatusV487(body),
+            488u16 => iface_aws_migration_hub::ImportMigrationTaskError::StatusV488(body),
+            _ => iface_aws_migration_hub::ImportMigrationTaskError::Other(body),
+        },
+        crate::runtime::DispatchError::Transport(m) => iface_aws_migration_hub::ImportMigrationTaskError::Other(m),
+    }
+}
+
+fn iface_aws_migration_hub__list_application_states__ok(body: String) -> Result<iface_aws_migration_hub::ListApplicationStatesResult, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match iface_aws_migration_hub__list_application_states_result__from_json(&v) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_aws_migration_hub__list_application_states__err(e: crate::runtime::DispatchError) -> iface_aws_migration_hub::ListApplicationStatesError {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => match status {
+            480u16 => iface_aws_migration_hub::ListApplicationStatesError::StatusV480(body),
+            481u16 => iface_aws_migration_hub::ListApplicationStatesError::StatusV481(body),
+            482u16 => iface_aws_migration_hub::ListApplicationStatesError::StatusV482(body),
+            483u16 => iface_aws_migration_hub::ListApplicationStatesError::StatusV483(body),
+            484u16 => iface_aws_migration_hub::ListApplicationStatesError::StatusV484(body),
+            485u16 => iface_aws_migration_hub::ListApplicationStatesError::StatusV485(body),
+            _ => iface_aws_migration_hub::ListApplicationStatesError::Other(body),
+        },
+        crate::runtime::DispatchError::Transport(m) => iface_aws_migration_hub::ListApplicationStatesError::Other(m),
+    }
+}
+
+fn iface_aws_migration_hub__list_created_artifacts__ok(body: String) -> Result<iface_aws_migration_hub::ListCreatedArtifactsResult, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match iface_aws_migration_hub__list_created_artifacts_result__from_json(&v) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_aws_migration_hub__list_created_artifacts__err(e: crate::runtime::DispatchError) -> iface_aws_migration_hub::ListCreatedArtifactsError {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => match status {
+            480u16 => iface_aws_migration_hub::ListCreatedArtifactsError::StatusV480(body),
+            481u16 => iface_aws_migration_hub::ListCreatedArtifactsError::StatusV481(body),
+            482u16 => iface_aws_migration_hub::ListCreatedArtifactsError::StatusV482(body),
+            483u16 => iface_aws_migration_hub::ListCreatedArtifactsError::StatusV483(body),
+            484u16 => iface_aws_migration_hub::ListCreatedArtifactsError::StatusV484(body),
+            485u16 => iface_aws_migration_hub::ListCreatedArtifactsError::StatusV485(body),
+            486u16 => iface_aws_migration_hub::ListCreatedArtifactsError::StatusV486(body),
+            _ => iface_aws_migration_hub::ListCreatedArtifactsError::Other(body),
+        },
+        crate::runtime::DispatchError::Transport(m) => iface_aws_migration_hub::ListCreatedArtifactsError::Other(m),
+    }
+}
+
+fn iface_aws_migration_hub__list_discovered_resources__ok(body: String) -> Result<iface_aws_migration_hub::ListDiscoveredResourcesResult, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match iface_aws_migration_hub__list_discovered_resources_result__from_json(&v) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_aws_migration_hub__list_discovered_resources__err(e: crate::runtime::DispatchError) -> iface_aws_migration_hub::ListDiscoveredResourcesError {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => match status {
+            480u16 => iface_aws_migration_hub::ListDiscoveredResourcesError::StatusV480(body),
+            481u16 => iface_aws_migration_hub::ListDiscoveredResourcesError::StatusV481(body),
+            482u16 => iface_aws_migration_hub::ListDiscoveredResourcesError::StatusV482(body),
+            483u16 => iface_aws_migration_hub::ListDiscoveredResourcesError::StatusV483(body),
+            484u16 => iface_aws_migration_hub::ListDiscoveredResourcesError::StatusV484(body),
+            485u16 => iface_aws_migration_hub::ListDiscoveredResourcesError::StatusV485(body),
+            486u16 => iface_aws_migration_hub::ListDiscoveredResourcesError::StatusV486(body),
+            _ => iface_aws_migration_hub::ListDiscoveredResourcesError::Other(body),
+        },
+        crate::runtime::DispatchError::Transport(m) => iface_aws_migration_hub::ListDiscoveredResourcesError::Other(m),
+    }
+}
+
+fn iface_aws_migration_hub__list_migration_tasks__ok(body: String) -> Result<iface_aws_migration_hub::ListMigrationTasksResult, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match iface_aws_migration_hub__list_migration_tasks_result__from_json(&v) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_aws_migration_hub__list_migration_tasks__err(e: crate::runtime::DispatchError) -> iface_aws_migration_hub::ListMigrationTasksError {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => match status {
+            480u16 => iface_aws_migration_hub::ListMigrationTasksError::StatusV480(body),
+            481u16 => iface_aws_migration_hub::ListMigrationTasksError::StatusV481(body),
+            482u16 => iface_aws_migration_hub::ListMigrationTasksError::StatusV482(body),
+            483u16 => iface_aws_migration_hub::ListMigrationTasksError::StatusV483(body),
+            484u16 => iface_aws_migration_hub::ListMigrationTasksError::StatusV484(body),
+            485u16 => iface_aws_migration_hub::ListMigrationTasksError::StatusV485(body),
+            486u16 => iface_aws_migration_hub::ListMigrationTasksError::StatusV486(body),
+            487u16 => iface_aws_migration_hub::ListMigrationTasksError::StatusV487(body),
+            _ => iface_aws_migration_hub::ListMigrationTasksError::Other(body),
+        },
+        crate::runtime::DispatchError::Transport(m) => iface_aws_migration_hub::ListMigrationTasksError::Other(m),
+    }
+}
+
+fn iface_aws_migration_hub__list_progress_update_streams__ok(body: String) -> Result<iface_aws_migration_hub::ListProgressUpdateStreamsResult, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match iface_aws_migration_hub__list_progress_update_streams_result__from_json(&v) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_aws_migration_hub__list_progress_update_streams__err(e: crate::runtime::DispatchError) -> iface_aws_migration_hub::ListProgressUpdateStreamsError {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => match status {
+            480u16 => iface_aws_migration_hub::ListProgressUpdateStreamsError::StatusV480(body),
+            481u16 => iface_aws_migration_hub::ListProgressUpdateStreamsError::StatusV481(body),
+            482u16 => iface_aws_migration_hub::ListProgressUpdateStreamsError::StatusV482(body),
+            483u16 => iface_aws_migration_hub::ListProgressUpdateStreamsError::StatusV483(body),
+            484u16 => iface_aws_migration_hub::ListProgressUpdateStreamsError::StatusV484(body),
+            485u16 => iface_aws_migration_hub::ListProgressUpdateStreamsError::StatusV485(body),
+            _ => iface_aws_migration_hub::ListProgressUpdateStreamsError::Other(body),
+        },
+        crate::runtime::DispatchError::Transport(m) => iface_aws_migration_hub::ListProgressUpdateStreamsError::Other(m),
+    }
+}
+
+fn iface_aws_migration_hub__notify_application_state__ok(body: String) -> Result<iface_aws_migration_hub::NotifyApplicationStateResult, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match iface_aws_migration_hub__notify_application_state_result__from_json(&v) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_aws_migration_hub__notify_application_state__err(e: crate::runtime::DispatchError) -> iface_aws_migration_hub::NotifyApplicationStateError {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => match status {
+            480u16 => iface_aws_migration_hub::NotifyApplicationStateError::StatusV480(body),
+            481u16 => iface_aws_migration_hub::NotifyApplicationStateError::StatusV481(body),
+            482u16 => iface_aws_migration_hub::NotifyApplicationStateError::StatusV482(body),
+            483u16 => iface_aws_migration_hub::NotifyApplicationStateError::StatusV483(body),
+            484u16 => iface_aws_migration_hub::NotifyApplicationStateError::StatusV484(body),
+            485u16 => iface_aws_migration_hub::NotifyApplicationStateError::StatusV485(body),
+            486u16 => iface_aws_migration_hub::NotifyApplicationStateError::StatusV486(body),
+            487u16 => iface_aws_migration_hub::NotifyApplicationStateError::StatusV487(body),
+            488u16 => iface_aws_migration_hub::NotifyApplicationStateError::StatusV488(body),
+            489u16 => iface_aws_migration_hub::NotifyApplicationStateError::StatusV489(body),
+            _ => iface_aws_migration_hub::NotifyApplicationStateError::Other(body),
+        },
+        crate::runtime::DispatchError::Transport(m) => iface_aws_migration_hub::NotifyApplicationStateError::Other(m),
+    }
+}
+
+fn iface_aws_migration_hub__notify_migration_task_state__ok(body: String) -> Result<iface_aws_migration_hub::NotifyMigrationTaskStateResult, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match iface_aws_migration_hub__notify_migration_task_state_result__from_json(&v) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_aws_migration_hub__notify_migration_task_state__err(e: crate::runtime::DispatchError) -> iface_aws_migration_hub::NotifyMigrationTaskStateError {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => match status {
+            480u16 => iface_aws_migration_hub::NotifyMigrationTaskStateError::StatusV480(body),
+            481u16 => iface_aws_migration_hub::NotifyMigrationTaskStateError::StatusV481(body),
+            482u16 => iface_aws_migration_hub::NotifyMigrationTaskStateError::StatusV482(body),
+            483u16 => iface_aws_migration_hub::NotifyMigrationTaskStateError::StatusV483(body),
+            484u16 => iface_aws_migration_hub::NotifyMigrationTaskStateError::StatusV484(body),
+            485u16 => iface_aws_migration_hub::NotifyMigrationTaskStateError::StatusV485(body),
+            486u16 => iface_aws_migration_hub::NotifyMigrationTaskStateError::StatusV486(body),
+            487u16 => iface_aws_migration_hub::NotifyMigrationTaskStateError::StatusV487(body),
+            488u16 => iface_aws_migration_hub::NotifyMigrationTaskStateError::StatusV488(body),
+            _ => iface_aws_migration_hub::NotifyMigrationTaskStateError::Other(body),
+        },
+        crate::runtime::DispatchError::Transport(m) => iface_aws_migration_hub::NotifyMigrationTaskStateError::Other(m),
+    }
+}
+
+fn iface_aws_migration_hub__put_resource_attributes__ok(body: String) -> Result<iface_aws_migration_hub::PutResourceAttributesResult, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match iface_aws_migration_hub__put_resource_attributes_result__from_json(&v) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_aws_migration_hub__put_resource_attributes__err(e: crate::runtime::DispatchError) -> iface_aws_migration_hub::PutResourceAttributesError {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => match status {
+            480u16 => iface_aws_migration_hub::PutResourceAttributesError::StatusV480(body),
+            481u16 => iface_aws_migration_hub::PutResourceAttributesError::StatusV481(body),
+            482u16 => iface_aws_migration_hub::PutResourceAttributesError::StatusV482(body),
+            483u16 => iface_aws_migration_hub::PutResourceAttributesError::StatusV483(body),
+            484u16 => iface_aws_migration_hub::PutResourceAttributesError::StatusV484(body),
+            485u16 => iface_aws_migration_hub::PutResourceAttributesError::StatusV485(body),
+            486u16 => iface_aws_migration_hub::PutResourceAttributesError::StatusV486(body),
+            487u16 => iface_aws_migration_hub::PutResourceAttributesError::StatusV487(body),
+            488u16 => iface_aws_migration_hub::PutResourceAttributesError::StatusV488(body),
+            _ => iface_aws_migration_hub::PutResourceAttributesError::Other(body),
+        },
+        crate::runtime::DispatchError::Transport(m) => iface_aws_migration_hub::PutResourceAttributesError::Other(m),
+    }
+}
+
+impl iface_aws_migration_hub::Guest for crate::Component {
+    fn associate_created_artifact(params: iface_aws_migration_hub::AssociateCreatedArtifactParams) -> Result<iface_aws_migration_hub::AssociateCreatedArtifactResult, iface_aws_migration_hub::AssociateCreatedArtifactError> {
+        let json = iface_aws_migration_hub__associate_created_artifact_params__to_json(&params);
+        match dispatch(&OP_AWS_MIGRATION_HUB_ASSOCIATE_CREATED_ARTIFACT, json).and_then(iface_aws_migration_hub__associate_created_artifact__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_aws_migration_hub__associate_created_artifact__err(e)),
+        }
+    }
+    fn associate_discovered_resource(params: iface_aws_migration_hub::AssociateDiscoveredResourceParams) -> Result<iface_aws_migration_hub::AssociateDiscoveredResourceResult, iface_aws_migration_hub::AssociateDiscoveredResourceError> {
+        let json = iface_aws_migration_hub__associate_discovered_resource_params__to_json(&params);
+        match dispatch(&OP_AWS_MIGRATION_HUB_ASSOCIATE_DISCOVERED_RESOURCE, json).and_then(iface_aws_migration_hub__associate_discovered_resource__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_aws_migration_hub__associate_discovered_resource__err(e)),
+        }
+    }
+    fn create_progress_update_stream(params: iface_aws_migration_hub::CreateProgressUpdateStreamParams) -> Result<iface_aws_migration_hub::CreateProgressUpdateStreamResult, iface_aws_migration_hub::CreateProgressUpdateStreamError> {
+        let json = iface_aws_migration_hub__create_progress_update_stream_params__to_json(&params);
+        match dispatch(&OP_AWS_MIGRATION_HUB_CREATE_PROGRESS_UPDATE_STREAM, json).and_then(iface_aws_migration_hub__create_progress_update_stream__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_aws_migration_hub__create_progress_update_stream__err(e)),
+        }
+    }
+    fn delete_progress_update_stream(params: iface_aws_migration_hub::DeleteProgressUpdateStreamParams) -> Result<iface_aws_migration_hub::DeleteProgressUpdateStreamResult, iface_aws_migration_hub::DeleteProgressUpdateStreamError> {
+        let json = iface_aws_migration_hub__delete_progress_update_stream_params__to_json(&params);
+        match dispatch(&OP_AWS_MIGRATION_HUB_DELETE_PROGRESS_UPDATE_STREAM, json).and_then(iface_aws_migration_hub__delete_progress_update_stream__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_aws_migration_hub__delete_progress_update_stream__err(e)),
+        }
+    }
+    fn describe_application_state(params: iface_aws_migration_hub::DescribeApplicationStateParams) -> Result<iface_aws_migration_hub::DescribeApplicationStateResult, iface_aws_migration_hub::DescribeApplicationStateError> {
+        let json = iface_aws_migration_hub__describe_application_state_params__to_json(&params);
+        match dispatch(&OP_AWS_MIGRATION_HUB_DESCRIBE_APPLICATION_STATE, json).and_then(iface_aws_migration_hub__describe_application_state__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_aws_migration_hub__describe_application_state__err(e)),
+        }
+    }
+    fn describe_migration_task(params: iface_aws_migration_hub::DescribeMigrationTaskParams) -> Result<iface_aws_migration_hub::DescribeMigrationTaskResult, iface_aws_migration_hub::DescribeMigrationTaskError> {
+        let json = iface_aws_migration_hub__describe_migration_task_params__to_json(&params);
+        match dispatch(&OP_AWS_MIGRATION_HUB_DESCRIBE_MIGRATION_TASK, json).and_then(iface_aws_migration_hub__describe_migration_task__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_aws_migration_hub__describe_migration_task__err(e)),
+        }
+    }
+    fn disassociate_created_artifact(params: iface_aws_migration_hub::DisassociateCreatedArtifactParams) -> Result<iface_aws_migration_hub::DisassociateCreatedArtifactResult, iface_aws_migration_hub::DisassociateCreatedArtifactError> {
+        let json = iface_aws_migration_hub__disassociate_created_artifact_params__to_json(&params);
+        match dispatch(&OP_AWS_MIGRATION_HUB_DISASSOCIATE_CREATED_ARTIFACT, json).and_then(iface_aws_migration_hub__disassociate_created_artifact__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_aws_migration_hub__disassociate_created_artifact__err(e)),
+        }
+    }
+    fn disassociate_discovered_resource(params: iface_aws_migration_hub::DisassociateDiscoveredResourceParams) -> Result<iface_aws_migration_hub::DisassociateDiscoveredResourceResult, iface_aws_migration_hub::DisassociateDiscoveredResourceError> {
+        let json = iface_aws_migration_hub__disassociate_discovered_resource_params__to_json(&params);
+        match dispatch(&OP_AWS_MIGRATION_HUB_DISASSOCIATE_DISCOVERED_RESOURCE, json).and_then(iface_aws_migration_hub__disassociate_discovered_resource__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_aws_migration_hub__disassociate_discovered_resource__err(e)),
+        }
+    }
+    fn import_migration_task(params: iface_aws_migration_hub::ImportMigrationTaskParams) -> Result<iface_aws_migration_hub::ImportMigrationTaskResult, iface_aws_migration_hub::ImportMigrationTaskError> {
+        let json = iface_aws_migration_hub__import_migration_task_params__to_json(&params);
+        match dispatch(&OP_AWS_MIGRATION_HUB_IMPORT_MIGRATION_TASK, json).and_then(iface_aws_migration_hub__import_migration_task__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_aws_migration_hub__import_migration_task__err(e)),
+        }
+    }
+    fn list_application_states(params: iface_aws_migration_hub::ListApplicationStatesParams) -> Result<iface_aws_migration_hub::ListApplicationStatesResult, iface_aws_migration_hub::ListApplicationStatesError> {
+        let json = iface_aws_migration_hub__list_application_states_params__to_json(&params);
+        match dispatch(&OP_AWS_MIGRATION_HUB_LIST_APPLICATION_STATES, json).and_then(iface_aws_migration_hub__list_application_states__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_aws_migration_hub__list_application_states__err(e)),
+        }
+    }
+    fn list_created_artifacts(params: iface_aws_migration_hub::ListCreatedArtifactsParams) -> Result<iface_aws_migration_hub::ListCreatedArtifactsResult, iface_aws_migration_hub::ListCreatedArtifactsError> {
+        let json = iface_aws_migration_hub__list_created_artifacts_params__to_json(&params);
+        match dispatch(&OP_AWS_MIGRATION_HUB_LIST_CREATED_ARTIFACTS, json).and_then(iface_aws_migration_hub__list_created_artifacts__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_aws_migration_hub__list_created_artifacts__err(e)),
+        }
+    }
+    fn list_discovered_resources(params: iface_aws_migration_hub::ListDiscoveredResourcesParams) -> Result<iface_aws_migration_hub::ListDiscoveredResourcesResult, iface_aws_migration_hub::ListDiscoveredResourcesError> {
+        let json = iface_aws_migration_hub__list_discovered_resources_params__to_json(&params);
+        match dispatch(&OP_AWS_MIGRATION_HUB_LIST_DISCOVERED_RESOURCES, json).and_then(iface_aws_migration_hub__list_discovered_resources__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_aws_migration_hub__list_discovered_resources__err(e)),
+        }
+    }
+    fn list_migration_tasks(params: iface_aws_migration_hub::ListMigrationTasksParams) -> Result<iface_aws_migration_hub::ListMigrationTasksResult, iface_aws_migration_hub::ListMigrationTasksError> {
+        let json = iface_aws_migration_hub__list_migration_tasks_params__to_json(&params);
+        match dispatch(&OP_AWS_MIGRATION_HUB_LIST_MIGRATION_TASKS, json).and_then(iface_aws_migration_hub__list_migration_tasks__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_aws_migration_hub__list_migration_tasks__err(e)),
+        }
+    }
+    fn list_progress_update_streams(params: iface_aws_migration_hub::ListProgressUpdateStreamsParams) -> Result<iface_aws_migration_hub::ListProgressUpdateStreamsResult, iface_aws_migration_hub::ListProgressUpdateStreamsError> {
+        let json = iface_aws_migration_hub__list_progress_update_streams_params__to_json(&params);
+        match dispatch(&OP_AWS_MIGRATION_HUB_LIST_PROGRESS_UPDATE_STREAMS, json).and_then(iface_aws_migration_hub__list_progress_update_streams__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_aws_migration_hub__list_progress_update_streams__err(e)),
+        }
+    }
+    fn notify_application_state(params: iface_aws_migration_hub::NotifyApplicationStateParams) -> Result<iface_aws_migration_hub::NotifyApplicationStateResult, iface_aws_migration_hub::NotifyApplicationStateError> {
+        let json = iface_aws_migration_hub__notify_application_state_params__to_json(&params);
+        match dispatch(&OP_AWS_MIGRATION_HUB_NOTIFY_APPLICATION_STATE, json).and_then(iface_aws_migration_hub__notify_application_state__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_aws_migration_hub__notify_application_state__err(e)),
+        }
+    }
+    fn notify_migration_task_state(params: iface_aws_migration_hub::NotifyMigrationTaskStateParams) -> Result<iface_aws_migration_hub::NotifyMigrationTaskStateResult, iface_aws_migration_hub::NotifyMigrationTaskStateError> {
+        let json = iface_aws_migration_hub__notify_migration_task_state_params__to_json(&params);
+        match dispatch(&OP_AWS_MIGRATION_HUB_NOTIFY_MIGRATION_TASK_STATE, json).and_then(iface_aws_migration_hub__notify_migration_task_state__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_aws_migration_hub__notify_migration_task_state__err(e)),
+        }
+    }
+    fn put_resource_attributes(params: iface_aws_migration_hub::PutResourceAttributesParams) -> Result<iface_aws_migration_hub::PutResourceAttributesResult, iface_aws_migration_hub::PutResourceAttributesError> {
+        let json = iface_aws_migration_hub__put_resource_attributes_params__to_json(&params);
+        match dispatch(&OP_AWS_MIGRATION_HUB_PUT_RESOURCE_ATTRIBUTES, json).and_then(iface_aws_migration_hub__put_resource_attributes__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_aws_migration_hub__put_resource_attributes__err(e)),
+        }
     }
 }
 

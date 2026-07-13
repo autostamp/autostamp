@@ -44,10 +44,15 @@ pub(crate) enum FieldLocation {
     Body,
 }
 
-/// A single operation parameter: the snake-case key it carries in the params JSON and where
-/// it belongs in the request.
+/// A single operation parameter. `snake` keys the field in the internal params JSON (and, for a
+/// path field, matches the `{snake}` placeholder in the path template); `wire` is the verbatim name
+/// the field takes on the HTTP wire (query key, header name, or body property). The two differ
+/// whenever the source name isn't already snake_case (e.g. `dryRun` → snake `dry_run`, wire
+/// `dryRun`), and let distinct inputs that share a snake key (`DateCreated`, `DateCreated<`) still
+/// travel under their true names.
 pub(crate) struct FieldSpec {
     pub(crate) snake: &'static str,
+    pub(crate) wire: &'static str,
     pub(crate) location: FieldLocation,
 }
 
@@ -71,6 +76,16 @@ pub(crate) struct AuthApply {
     pub(crate) kind: AuthKind,
 }
 
+/// The failure modes of [`dispatch`], kept structured so each generated operation can map them
+/// onto its own typed error: an `Http` failure carries the response status and body (routed to
+/// the matching error-variant case), while a `Transport` failure carries a message for the
+/// catch-all case (a secret lookup, connection, or decode failure that never produced an HTTP
+/// status).
+pub(crate) enum DispatchError {
+    Http { status: u16, body: String },
+    Transport(String),
+}
+
 /// A single API operation: HTTP method, path template (with `{snake}` placeholders), the
 /// parameter fields, and the security schemes to apply.
 pub(crate) struct OpSpec {
@@ -81,8 +96,9 @@ pub(crate) struct OpSpec {
 }
 
 /// Execute `op` with the supplied `params` (a JSON object keyed by snake-case field names)
-/// and return the response body as a string, or an error message.
-pub(crate) fn dispatch(op: &OpSpec, params: Value) -> Result<String, String> {
+/// and return the raw 2xx response body, or a structured [`DispatchError`] the caller maps
+/// onto the operation's typed error.
+pub(crate) fn dispatch(op: &OpSpec, params: Value) -> Result<String, DispatchError> {
     let obj = match &params {
         Value::Object(map) => Some(map),
         _ => None,
@@ -105,10 +121,10 @@ pub(crate) fn dispatch(op: &OpSpec, params: Value) -> Result<String, String> {
                 let placeholder = format!("{{{}}}", field.snake);
                 path = path.replace(&placeholder, &percent_encode(&scalar(value)));
             }
-            FieldLocation::Query => query.push((field.snake.to_string(), scalar(value))),
-            FieldLocation::Header => headers.push((field.snake.to_string(), scalar(value))),
+            FieldLocation::Query => query.push((field.wire.to_string(), scalar(value))),
+            FieldLocation::Header => headers.push((field.wire.to_string(), scalar(value))),
             FieldLocation::Body => {
-                body.insert(field.snake.to_string(), value.clone());
+                body.insert(field.wire.to_string(), value.clone());
             }
         }
     }
@@ -116,7 +132,7 @@ pub(crate) fn dispatch(op: &OpSpec, params: Value) -> Result<String, String> {
     // Apply each resolved security scheme, sourcing its value from wasmcloud:secrets.
     let mut cookies: Vec<String> = Vec::new();
     for apply in op.auth {
-        let secret = fetch_secret(apply.secret_key)?;
+        let secret = fetch_secret(apply.secret_key).map_err(DispatchError::Transport)?;
         match &apply.kind {
             AuthKind::Bearer => headers.push(("authorization".into(), format!("Bearer {secret}"))),
             AuthKind::Basic => {
@@ -177,17 +193,18 @@ fn fetch_secret(key: &str) -> Result<String, String> {
 }
 
 /// Build and send the outgoing request with `wstd`, returning the response body on a 2xx
-/// status. The generated guest exports are synchronous, so the async `wstd` client is driven
-/// to completion on a local reactor via `wstd::runtime::block_on`.
+/// status and a structured [`DispatchError`] otherwise. The generated guest exports are
+/// synchronous, so the async `wstd` client is driven to completion on a local reactor via
+/// `wstd::runtime::block_on`.
 fn perform(
     method: &str,
     path_with_query: &str,
     headers: &[(String, String)],
     body: &[u8],
-) -> Result<String, String> {
+) -> Result<String, DispatchError> {
     let url = join_url(crate::BASE_URL, path_with_query);
     let method = Method::from_bytes(method.as_bytes())
-        .map_err(|err| format!("invalid HTTP method `{method}`: {err}"))?;
+        .map_err(|err| DispatchError::Transport(format!("invalid HTTP method `{method}`: {err}")))?;
 
     let mut builder = Request::builder().method(method).uri(url);
     for (name, value) in headers {
@@ -199,27 +216,29 @@ fn perform(
         } else {
             Body::from(body.to_vec())
         })
-        .map_err(|err| format!("failed to build request: {err}"))?;
+        .map_err(|err| DispatchError::Transport(format!("failed to build request: {err}")))?;
 
     wstd::runtime::block_on(async move {
         let client = Client::new();
         let response = client
             .send(request)
             .await
-            .map_err(|err| format!("request failed: {err:#}"))?;
+            .map_err(|err| DispatchError::Transport(format!("request failed: {err:#}")))?;
 
         let status = response.status().as_u16();
         let mut response_body = response.into_body();
-        let bytes = response_body
-            .contents()
-            .await
-            .map_err(|err| format!("failed to read response body: {err:#}"))?;
+        let bytes = response_body.contents().await.map_err(|err| {
+            DispatchError::Transport(format!("failed to read response body: {err:#}"))
+        })?;
         let body_text = String::from_utf8_lossy(bytes).into_owned();
 
         if (200..300).contains(&status) {
             Ok(body_text)
         } else {
-            Err(format!("HTTP {status}: {body_text}"))
+            Err(DispatchError::Http {
+                status,
+                body: body_text,
+            })
         }
     })
 }
@@ -288,8 +307,8 @@ const OP_MISC_TALK_TO_CHATBOT: OpSpec = OpSpec {
     method: "GET",
     path_template: "/food/converse",
     fields: &[
-        FieldSpec { snake: "text", location: FieldLocation::Query },
-        FieldSpec { snake: "context_id", location: FieldLocation::Query },
+        FieldSpec { snake: "text", wire: "text", location: FieldLocation::Query },
+        FieldSpec { snake: "context_id", wire: "contextId", location: FieldLocation::Query },
     ],
     auth: &[
         AuthApply { secret_key: "apiKeyScheme", kind: AuthKind::ApiKeyHeader("x-api-key") },
@@ -300,8 +319,8 @@ const OP_MISC_GET_CONVERSATION_SUGGESTS: OpSpec = OpSpec {
     method: "GET",
     path_template: "/food/converse/suggest",
     fields: &[
-        FieldSpec { snake: "query", location: FieldLocation::Query },
-        FieldSpec { snake: "number", location: FieldLocation::Query },
+        FieldSpec { snake: "query", wire: "query", location: FieldLocation::Query },
+        FieldSpec { snake: "number", wire: "number", location: FieldLocation::Query },
     ],
     auth: &[
         AuthApply { secret_key: "apiKeyScheme", kind: AuthKind::ApiKeyHeader("x-api-key") },
@@ -312,11 +331,11 @@ const OP_MISC_SEARCH_CUSTOM_FOODS: OpSpec = OpSpec {
     method: "GET",
     path_template: "/food/customFoods/search",
     fields: &[
-        FieldSpec { snake: "query", location: FieldLocation::Query },
-        FieldSpec { snake: "username", location: FieldLocation::Query },
-        FieldSpec { snake: "hash", location: FieldLocation::Query },
-        FieldSpec { snake: "offset", location: FieldLocation::Query },
-        FieldSpec { snake: "number", location: FieldLocation::Query },
+        FieldSpec { snake: "query", wire: "query", location: FieldLocation::Query },
+        FieldSpec { snake: "username", wire: "username", location: FieldLocation::Query },
+        FieldSpec { snake: "hash", wire: "hash", location: FieldLocation::Query },
+        FieldSpec { snake: "offset", wire: "offset", location: FieldLocation::Query },
+        FieldSpec { snake: "number", wire: "number", location: FieldLocation::Query },
     ],
     auth: &[
         AuthApply { secret_key: "apiKeyScheme", kind: AuthKind::ApiKeyHeader("x-api-key") },
@@ -327,7 +346,8 @@ const OP_MISC_DETECT_FOOD_IN_TEXT: OpSpec = OpSpec {
     method: "POST",
     path_template: "/food/detect",
     fields: &[
-        FieldSpec { snake: "content_type", location: FieldLocation::Header },
+        FieldSpec { snake: "content_type", wire: "Content-Type", location: FieldLocation::Header },
+        FieldSpec { snake: "body", wire: "body", location: FieldLocation::Body },
     ],
     auth: &[
         AuthApply { secret_key: "apiKeyScheme", kind: AuthKind::ApiKeyHeader("x-api-key") },
@@ -338,7 +358,7 @@ const OP_MISC_IMAGE_ANALYSIS_BY_URL: OpSpec = OpSpec {
     method: "GET",
     path_template: "/food/images/analyze",
     fields: &[
-        FieldSpec { snake: "image_url", location: FieldLocation::Query },
+        FieldSpec { snake: "image_url", wire: "imageUrl", location: FieldLocation::Query },
     ],
     auth: &[
         AuthApply { secret_key: "apiKeyScheme", kind: AuthKind::ApiKeyHeader("x-api-key") },
@@ -349,7 +369,7 @@ const OP_MISC_IMAGE_CLASSIFICATION_BY_URL: OpSpec = OpSpec {
     method: "GET",
     path_template: "/food/images/classify",
     fields: &[
-        FieldSpec { snake: "image_url", location: FieldLocation::Query },
+        FieldSpec { snake: "image_url", wire: "imageUrl", location: FieldLocation::Query },
     ],
     auth: &[
         AuthApply { secret_key: "apiKeyScheme", kind: AuthKind::ApiKeyHeader("x-api-key") },
@@ -370,9 +390,9 @@ const OP_MISC_SEARCH_ALL_FOOD: OpSpec = OpSpec {
     method: "GET",
     path_template: "/food/search",
     fields: &[
-        FieldSpec { snake: "query", location: FieldLocation::Query },
-        FieldSpec { snake: "offset", location: FieldLocation::Query },
-        FieldSpec { snake: "number", location: FieldLocation::Query },
+        FieldSpec { snake: "query", wire: "query", location: FieldLocation::Query },
+        FieldSpec { snake: "offset", wire: "offset", location: FieldLocation::Query },
+        FieldSpec { snake: "number", wire: "number", location: FieldLocation::Query },
     ],
     auth: &[
         AuthApply { secret_key: "apiKeyScheme", kind: AuthKind::ApiKeyHeader("x-api-key") },
@@ -383,7 +403,7 @@ const OP_MISC_SEARCH_SITE_CONTENT: OpSpec = OpSpec {
     method: "GET",
     path_template: "/food/site/search",
     fields: &[
-        FieldSpec { snake: "query", location: FieldLocation::Query },
+        FieldSpec { snake: "query", wire: "query", location: FieldLocation::Query },
     ],
     auth: &[
         AuthApply { secret_key: "apiKeyScheme", kind: AuthKind::ApiKeyHeader("x-api-key") },
@@ -404,16 +424,16 @@ const OP_MISC_SEARCH_FOOD_VIDEOS: OpSpec = OpSpec {
     method: "GET",
     path_template: "/food/videos/search",
     fields: &[
-        FieldSpec { snake: "query", location: FieldLocation::Query },
-        FieldSpec { snake: "type", location: FieldLocation::Query },
-        FieldSpec { snake: "cuisine", location: FieldLocation::Query },
-        FieldSpec { snake: "diet", location: FieldLocation::Query },
-        FieldSpec { snake: "include_ingredients", location: FieldLocation::Query },
-        FieldSpec { snake: "exclude_ingredients", location: FieldLocation::Query },
-        FieldSpec { snake: "min_length", location: FieldLocation::Query },
-        FieldSpec { snake: "max_length", location: FieldLocation::Query },
-        FieldSpec { snake: "offset", location: FieldLocation::Query },
-        FieldSpec { snake: "number", location: FieldLocation::Query },
+        FieldSpec { snake: "query", wire: "query", location: FieldLocation::Query },
+        FieldSpec { snake: "type", wire: "type", location: FieldLocation::Query },
+        FieldSpec { snake: "cuisine", wire: "cuisine", location: FieldLocation::Query },
+        FieldSpec { snake: "diet", wire: "diet", location: FieldLocation::Query },
+        FieldSpec { snake: "include_ingredients", wire: "includeIngredients", location: FieldLocation::Query },
+        FieldSpec { snake: "exclude_ingredients", wire: "excludeIngredients", location: FieldLocation::Query },
+        FieldSpec { snake: "min_length", wire: "minLength", location: FieldLocation::Query },
+        FieldSpec { snake: "max_length", wire: "maxLength", location: FieldLocation::Query },
+        FieldSpec { snake: "offset", wire: "offset", location: FieldLocation::Query },
+        FieldSpec { snake: "number", wire: "number", location: FieldLocation::Query },
     ],
     auth: &[
         AuthApply { secret_key: "apiKeyScheme", kind: AuthKind::ApiKeyHeader("x-api-key") },
@@ -426,6 +446,297 @@ fn iface_misc__detect_food_in_text_content_type_enum__to_str(e: &iface_misc::Det
         iface_misc::DetectFoodInTextContentTypeEnum::ApplicationJson => "application/json",
         iface_misc::DetectFoodInTextContentTypeEnum::MultipartFormData => "multipart/form-data",
     }
+}
+
+fn iface_misc__talk_to_chatbot_response__to_json(p: &iface_misc::TalkToChatbotResponse) -> Value {
+    let mut m = Map::new();
+    m.insert("answerText".into(), Value::String((&p.answer_text).clone()));
+    m.insert("media".into(), Value::Array((&p.media).iter().map(|v| Value::String((v).clone())).collect()));
+    Value::Object(m)
+}
+
+fn iface_misc__get_conversation_suggests_response__to_json(p: &iface_misc::GetConversationSuggestsResponse) -> Value {
+    let mut m = Map::new();
+    m.insert("suggests".into(), iface_misc__get_conversation_suggests_response_suggests__to_json(&p.suggests));
+    m.insert("words".into(), Value::Array((&p.words).iter().map(|v| Value::String((v).clone())).collect()));
+    Value::Object(m)
+}
+
+fn iface_misc__get_conversation_suggests_response_suggests__to_json(p: &iface_misc::GetConversationSuggestsResponseSuggests) -> Value {
+    let mut m = Map::new();
+    m.insert("_".into(), Value::Array((&p.x).iter().map(|v| iface_misc__get_conversation_suggests_response_suggests_x_item__to_json(v)).collect()));
+    Value::Object(m)
+}
+
+fn iface_misc__get_conversation_suggests_response_suggests_x_item__to_json(p: &iface_misc::GetConversationSuggestsResponseSuggestsXItem) -> Value {
+    let mut m = Map::new();
+    m.insert("name".into(), Value::String((&p.name).clone()));
+    Value::Object(m)
+}
+
+fn iface_misc__search_custom_foods_response__to_json(p: &iface_misc::SearchCustomFoodsResponse) -> Value {
+    let mut m = Map::new();
+    m.insert("customFoods".into(), Value::Array((&p.custom_foods).iter().map(|v| iface_misc__search_custom_foods_response_custom_foods_item__to_json(v)).collect()));
+    m.insert("number".into(), Value::Number(serde_json::Number::from(*(&p.number))));
+    m.insert("offset".into(), Value::Number(serde_json::Number::from(*(&p.offset))));
+    m.insert("type".into(), Value::String((&p.type_op).clone()));
+    Value::Object(m)
+}
+
+fn iface_misc__search_custom_foods_response_custom_foods_item__to_json(p: &iface_misc::SearchCustomFoodsResponseCustomFoodsItem) -> Value {
+    let mut m = Map::new();
+    m.insert("id".into(), Value::Number(serde_json::Number::from(*(&p.id))));
+    m.insert("imageUrl".into(), Value::String((&p.image_url).clone()));
+    m.insert("price".into(), serde_json::Number::from_f64(*(&p.price)).map(Value::Number).unwrap_or(Value::Null));
+    m.insert("servings".into(), serde_json::Number::from_f64(*(&p.servings)).map(Value::Number).unwrap_or(Value::Null));
+    m.insert("title".into(), Value::String((&p.title).clone()));
+    Value::Object(m)
+}
+
+fn iface_misc__detect_food_in_text_response__to_json(p: &iface_misc::DetectFoodInTextResponse) -> Value {
+    let mut m = Map::new();
+    m.insert("annotations".into(), Value::Array((&p.annotations).iter().map(|v| iface_misc__detect_food_in_text_response_annotations_item__to_json(v)).collect()));
+    Value::Object(m)
+}
+
+fn iface_misc__detect_food_in_text_response_annotations_item__to_json(p: &iface_misc::DetectFoodInTextResponseAnnotationsItem) -> Value {
+    let mut m = Map::new();
+    m.insert("annotation".into(), Value::String((&p.annotation).clone()));
+    m.insert("image".into(), Value::String((&p.image).clone()));
+    m.insert("tag".into(), Value::String((&p.tag).clone()));
+    Value::Object(m)
+}
+
+fn iface_misc__image_analysis_by_url_response__to_json(p: &iface_misc::ImageAnalysisByUrlResponse) -> Value {
+    let mut m = Map::new();
+    m.insert("category".into(), iface_misc__image_analysis_by_url_response_category__to_json(&p.category));
+    m.insert("nutrition".into(), iface_misc__image_analysis_by_url_response_nutrition__to_json(&p.nutrition));
+    m.insert("recipes".into(), Value::Array((&p.recipes).iter().map(|v| iface_misc__image_analysis_by_url_response_recipes_item__to_json(v)).collect()));
+    Value::Object(m)
+}
+
+fn iface_misc__image_analysis_by_url_response_category__to_json(p: &iface_misc::ImageAnalysisByUrlResponseCategory) -> Value {
+    let mut m = Map::new();
+    m.insert("name".into(), Value::String((&p.name).clone()));
+    m.insert("probability".into(), serde_json::Number::from_f64(*(&p.probability)).map(Value::Number).unwrap_or(Value::Null));
+    Value::Object(m)
+}
+
+fn iface_misc__image_analysis_by_url_response_nutrition__to_json(p: &iface_misc::ImageAnalysisByUrlResponseNutrition) -> Value {
+    let mut m = Map::new();
+    m.insert("calories".into(), iface_misc__image_analysis_by_url_response_nutrition_calories__to_json(&p.calories));
+    m.insert("carbs".into(), iface_misc__image_analysis_by_url_response_nutrition_carbs__to_json(&p.carbs));
+    m.insert("fat".into(), iface_misc__image_analysis_by_url_response_nutrition_fat__to_json(&p.fat));
+    m.insert("protein".into(), iface_misc__image_analysis_by_url_response_nutrition_protein__to_json(&p.protein));
+    m.insert("recipesUsed".into(), Value::Number(serde_json::Number::from(*(&p.recipes_used))));
+    Value::Object(m)
+}
+
+fn iface_misc__image_analysis_by_url_response_nutrition_calories__to_json(p: &iface_misc::ImageAnalysisByUrlResponseNutritionCalories) -> Value {
+    let mut m = Map::new();
+    m.insert("confidenceRange95Percent".into(), iface_misc__image_analysis_by_url_response_nutrition_calories_confidence_range95_percent__to_json(&p.confidence_range95_percent));
+    m.insert("standardDeviation".into(), serde_json::Number::from_f64(*(&p.standard_deviation)).map(Value::Number).unwrap_or(Value::Null));
+    m.insert("unit".into(), Value::String((&p.unit).clone()));
+    m.insert("value".into(), serde_json::Number::from_f64(*(&p.value)).map(Value::Number).unwrap_or(Value::Null));
+    Value::Object(m)
+}
+
+fn iface_misc__image_analysis_by_url_response_nutrition_calories_confidence_range95_percent__to_json(p: &iface_misc::ImageAnalysisByUrlResponseNutritionCaloriesConfidenceRange95Percent) -> Value {
+    let mut m = Map::new();
+    m.insert("max".into(), serde_json::Number::from_f64(*(&p.max)).map(Value::Number).unwrap_or(Value::Null));
+    m.insert("min".into(), serde_json::Number::from_f64(*(&p.min)).map(Value::Number).unwrap_or(Value::Null));
+    Value::Object(m)
+}
+
+fn iface_misc__image_analysis_by_url_response_nutrition_carbs__to_json(p: &iface_misc::ImageAnalysisByUrlResponseNutritionCarbs) -> Value {
+    let mut m = Map::new();
+    m.insert("confidenceRange95Percent".into(), iface_misc__image_analysis_by_url_response_nutrition_carbs_confidence_range95_percent__to_json(&p.confidence_range95_percent));
+    m.insert("standardDeviation".into(), serde_json::Number::from_f64(*(&p.standard_deviation)).map(Value::Number).unwrap_or(Value::Null));
+    m.insert("unit".into(), Value::String((&p.unit).clone()));
+    m.insert("value".into(), serde_json::Number::from_f64(*(&p.value)).map(Value::Number).unwrap_or(Value::Null));
+    Value::Object(m)
+}
+
+fn iface_misc__image_analysis_by_url_response_nutrition_carbs_confidence_range95_percent__to_json(p: &iface_misc::ImageAnalysisByUrlResponseNutritionCarbsConfidenceRange95Percent) -> Value {
+    let mut m = Map::new();
+    m.insert("max".into(), serde_json::Number::from_f64(*(&p.max)).map(Value::Number).unwrap_or(Value::Null));
+    m.insert("min".into(), serde_json::Number::from_f64(*(&p.min)).map(Value::Number).unwrap_or(Value::Null));
+    Value::Object(m)
+}
+
+fn iface_misc__image_analysis_by_url_response_nutrition_fat__to_json(p: &iface_misc::ImageAnalysisByUrlResponseNutritionFat) -> Value {
+    let mut m = Map::new();
+    m.insert("confidenceRange95Percent".into(), iface_misc__image_analysis_by_url_response_nutrition_fat_confidence_range95_percent__to_json(&p.confidence_range95_percent));
+    m.insert("standardDeviation".into(), serde_json::Number::from_f64(*(&p.standard_deviation)).map(Value::Number).unwrap_or(Value::Null));
+    m.insert("unit".into(), Value::String((&p.unit).clone()));
+    m.insert("value".into(), serde_json::Number::from_f64(*(&p.value)).map(Value::Number).unwrap_or(Value::Null));
+    Value::Object(m)
+}
+
+fn iface_misc__image_analysis_by_url_response_nutrition_fat_confidence_range95_percent__to_json(p: &iface_misc::ImageAnalysisByUrlResponseNutritionFatConfidenceRange95Percent) -> Value {
+    let mut m = Map::new();
+    m.insert("max".into(), serde_json::Number::from_f64(*(&p.max)).map(Value::Number).unwrap_or(Value::Null));
+    m.insert("min".into(), serde_json::Number::from_f64(*(&p.min)).map(Value::Number).unwrap_or(Value::Null));
+    Value::Object(m)
+}
+
+fn iface_misc__image_analysis_by_url_response_nutrition_protein__to_json(p: &iface_misc::ImageAnalysisByUrlResponseNutritionProtein) -> Value {
+    let mut m = Map::new();
+    m.insert("confidenceRange95Percent".into(), iface_misc__image_analysis_by_url_response_nutrition_protein_confidence_range95_percent__to_json(&p.confidence_range95_percent));
+    m.insert("standardDeviation".into(), serde_json::Number::from_f64(*(&p.standard_deviation)).map(Value::Number).unwrap_or(Value::Null));
+    m.insert("unit".into(), Value::String((&p.unit).clone()));
+    m.insert("value".into(), serde_json::Number::from_f64(*(&p.value)).map(Value::Number).unwrap_or(Value::Null));
+    Value::Object(m)
+}
+
+fn iface_misc__image_analysis_by_url_response_nutrition_protein_confidence_range95_percent__to_json(p: &iface_misc::ImageAnalysisByUrlResponseNutritionProteinConfidenceRange95Percent) -> Value {
+    let mut m = Map::new();
+    m.insert("max".into(), serde_json::Number::from_f64(*(&p.max)).map(Value::Number).unwrap_or(Value::Null));
+    m.insert("min".into(), serde_json::Number::from_f64(*(&p.min)).map(Value::Number).unwrap_or(Value::Null));
+    Value::Object(m)
+}
+
+fn iface_misc__image_analysis_by_url_response_recipes_item__to_json(p: &iface_misc::ImageAnalysisByUrlResponseRecipesItem) -> Value {
+    let mut m = Map::new();
+    m.insert("id".into(), Value::Number(serde_json::Number::from(*(&p.id))));
+    m.insert("imageType".into(), Value::String((&p.image_type).clone()));
+    m.insert("title".into(), Value::String((&p.title).clone()));
+    m.insert("url".into(), Value::String((&p.url).clone()));
+    Value::Object(m)
+}
+
+fn iface_misc__image_classification_by_url_response__to_json(p: &iface_misc::ImageClassificationByUrlResponse) -> Value {
+    let mut m = Map::new();
+    m.insert("category".into(), Value::String((&p.category).clone()));
+    m.insert("probability".into(), serde_json::Number::from_f64(*(&p.probability)).map(Value::Number).unwrap_or(Value::Null));
+    Value::Object(m)
+}
+
+fn iface_misc__get_a_random_food_joke_response__to_json(p: &iface_misc::GetARandomFoodJokeResponse) -> Value {
+    let mut m = Map::new();
+    m.insert("text".into(), Value::String((&p.text).clone()));
+    Value::Object(m)
+}
+
+fn iface_misc__search_all_food_response__to_json(p: &iface_misc::SearchAllFoodResponse) -> Value {
+    let mut m = Map::new();
+    m.insert("limit".into(), Value::Number(serde_json::Number::from(*(&p.limit))));
+    m.insert("offset".into(), Value::Number(serde_json::Number::from(*(&p.offset))));
+    m.insert("query".into(), Value::String((&p.query).clone()));
+    m.insert("searchResults".into(), Value::Array((&p.search_results).iter().map(|v| iface_misc__search_all_food_response_search_results_item__to_json(v)).collect()));
+    m.insert("totalResults".into(), Value::Number(serde_json::Number::from(*(&p.total_results))));
+    Value::Object(m)
+}
+
+fn iface_misc__search_all_food_response_search_results_item__to_json(p: &iface_misc::SearchAllFoodResponseSearchResultsItem) -> Value {
+    let mut m = Map::new();
+    m.insert("name".into(), Value::String((&p.name).clone()));
+    m.insert("results".into(), match (&p.results) { Some(v) => Value::Array((v).iter().map(|v| iface_misc__search_all_food_response_search_results_item_results_item__to_json(v)).collect()), None => Value::Null });
+    m.insert("totalResults".into(), Value::Number(serde_json::Number::from(*(&p.total_results))));
+    Value::Object(m)
+}
+
+fn iface_misc__search_all_food_response_search_results_item_results_item__to_json(p: &iface_misc::SearchAllFoodResponseSearchResultsItemResultsItem) -> Value {
+    let mut m = Map::new();
+    m.insert("content".into(), Value::String((&p.content).clone()));
+    m.insert("id".into(), Value::String((&p.id).clone()));
+    m.insert("image".into(), Value::String((&p.image).clone()));
+    m.insert("link".into(), Value::String((&p.link).clone()));
+    m.insert("name".into(), Value::String((&p.name).clone()));
+    m.insert("relevance".into(), serde_json::Number::from_f64(*(&p.relevance)).map(Value::Number).unwrap_or(Value::Null));
+    m.insert("type".into(), Value::String((&p.type_op).clone()));
+    Value::Object(m)
+}
+
+fn iface_misc__search_site_content_response__to_json(p: &iface_misc::SearchSiteContentResponse) -> Value {
+    let mut m = Map::new();
+    m.insert("Articles".into(), Value::Array((&p.articles).iter().map(|v| iface_misc__search_site_content_response_articles_item__to_json(v)).collect()));
+    m.insert("Grocery Products".into(), Value::Array((&p.grocery_products).iter().map(|v| iface_misc__search_site_content_response_grocery_products_item__to_json(v)).collect()));
+    m.insert("Menu Items".into(), Value::Array((&p.menu_items).iter().map(|v| iface_misc__search_site_content_response_menu_items_item__to_json(v)).collect()));
+    m.insert("Recipes".into(), Value::Array((&p.recipes).iter().map(|v| iface_misc__search_site_content_response_recipes_item__to_json(v)).collect()));
+    Value::Object(m)
+}
+
+fn iface_misc__search_site_content_response_articles_item__to_json(p: &iface_misc::SearchSiteContentResponseArticlesItem) -> Value {
+    let mut m = Map::new();
+    m.insert("dataPoints".into(), match (&p.data_points) { Some(v) => Value::Array((v).iter().map(|v| Value::String((v).clone())).collect()), None => Value::Null });
+    m.insert("image".into(), Value::String((&p.image).clone()));
+    m.insert("link".into(), Value::String((&p.link).clone()));
+    m.insert("name".into(), Value::String((&p.name).clone()));
+    Value::Object(m)
+}
+
+fn iface_misc__search_site_content_response_grocery_products_item__to_json(p: &iface_misc::SearchSiteContentResponseGroceryProductsItem) -> Value {
+    let mut m = Map::new();
+    m.insert("dataPoints".into(), match (&p.data_points) { Some(v) => Value::Array((v).iter().map(|v| iface_misc__search_site_content_response_grocery_products_item_data_points_item__to_json(v)).collect()), None => Value::Null });
+    m.insert("image".into(), Value::String((&p.image).clone()));
+    m.insert("link".into(), Value::String((&p.link).clone()));
+    m.insert("name".into(), Value::String((&p.name).clone()));
+    Value::Object(m)
+}
+
+fn iface_misc__search_site_content_response_grocery_products_item_data_points_item__to_json(p: &iface_misc::SearchSiteContentResponseGroceryProductsItemDataPointsItem) -> Value {
+    let mut m = Map::new();
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), Value::String((&p.value).clone()));
+    Value::Object(m)
+}
+
+fn iface_misc__search_site_content_response_menu_items_item__to_json(p: &iface_misc::SearchSiteContentResponseMenuItemsItem) -> Value {
+    let mut m = Map::new();
+    m.insert("dataPoints".into(), match (&p.data_points) { Some(v) => Value::Array((v).iter().map(|v| iface_misc__search_site_content_response_menu_items_item_data_points_item__to_json(v)).collect()), None => Value::Null });
+    m.insert("image".into(), Value::String((&p.image).clone()));
+    m.insert("link".into(), Value::String((&p.link).clone()));
+    m.insert("name".into(), Value::String((&p.name).clone()));
+    Value::Object(m)
+}
+
+fn iface_misc__search_site_content_response_menu_items_item_data_points_item__to_json(p: &iface_misc::SearchSiteContentResponseMenuItemsItemDataPointsItem) -> Value {
+    let mut m = Map::new();
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), Value::String((&p.value).clone()));
+    Value::Object(m)
+}
+
+fn iface_misc__search_site_content_response_recipes_item__to_json(p: &iface_misc::SearchSiteContentResponseRecipesItem) -> Value {
+    let mut m = Map::new();
+    m.insert("dataPoints".into(), match (&p.data_points) { Some(v) => Value::Array((v).iter().map(|v| iface_misc__search_site_content_response_recipes_item_data_points_item__to_json(v)).collect()), None => Value::Null });
+    m.insert("image".into(), Value::String((&p.image).clone()));
+    m.insert("link".into(), Value::String((&p.link).clone()));
+    m.insert("name".into(), Value::String((&p.name).clone()));
+    Value::Object(m)
+}
+
+fn iface_misc__search_site_content_response_recipes_item_data_points_item__to_json(p: &iface_misc::SearchSiteContentResponseRecipesItemDataPointsItem) -> Value {
+    let mut m = Map::new();
+    m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("value".into(), Value::String((&p.value).clone()));
+    Value::Object(m)
+}
+
+fn iface_misc__get_random_food_trivia_response__to_json(p: &iface_misc::GetRandomFoodTriviaResponse) -> Value {
+    let mut m = Map::new();
+    m.insert("text".into(), Value::String((&p.text).clone()));
+    Value::Object(m)
+}
+
+fn iface_misc__search_food_videos_response__to_json(p: &iface_misc::SearchFoodVideosResponse) -> Value {
+    let mut m = Map::new();
+    m.insert("totalResults".into(), Value::Number(serde_json::Number::from(*(&p.total_results))));
+    m.insert("videos".into(), Value::Array((&p.videos).iter().map(|v| iface_misc__search_food_videos_response_videos_item__to_json(v)).collect()));
+    Value::Object(m)
+}
+
+fn iface_misc__search_food_videos_response_videos_item__to_json(p: &iface_misc::SearchFoodVideosResponseVideosItem) -> Value {
+    let mut m = Map::new();
+    m.insert("length".into(), Value::Number(serde_json::Number::from(*(&p.length))));
+    m.insert("rating".into(), serde_json::Number::from_f64(*(&p.rating)).map(Value::Number).unwrap_or(Value::Null));
+    m.insert("shortTitle".into(), Value::String((&p.short_title).clone()));
+    m.insert("thumbnail".into(), Value::String((&p.thumbnail).clone()));
+    m.insert("title".into(), Value::String((&p.title).clone()));
+    m.insert("views".into(), Value::Number(serde_json::Number::from(*(&p.views))));
+    m.insert("youTubeId".into(), Value::String((&p.you_tube_id).clone()));
+    Value::Object(m)
 }
 
 fn iface_misc__talk_to_chatbot_params__to_json(p: &iface_misc::TalkToChatbotParams) -> Value {
@@ -455,6 +766,7 @@ fn iface_misc__search_custom_foods_params__to_json(p: &iface_misc::SearchCustomF
 fn iface_misc__detect_food_in_text_params__to_json(p: &iface_misc::DetectFoodInTextParams) -> Value {
     let mut m = Map::new();
     m.insert("content_type".into(), match (&p.content_type) { Some(v) => Value::String(iface_misc__detect_food_in_text_content_type_enum__to_str(v).into()), None => Value::Null });
+    m.insert("body".into(), Value::String((&p.body).clone()));
     Value::Object(m)
 }
 
@@ -499,48 +811,661 @@ fn iface_misc__search_food_videos_params__to_json(p: &iface_misc::SearchFoodVide
     Value::Object(m)
 }
 
+fn iface_misc__talk_to_chatbot_response__from_json(v: &Value) -> Option<iface_misc::TalkToChatbotResponse> {
+    let m = v.as_object()?;
+    Some(iface_misc::TalkToChatbotResponse {
+        answer_text: m.get("answerText").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        media: m.get("media").and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| (x).as_str().map(|s| s.to_string())).collect())).unwrap_or_default(),
+    })
+}
+
+fn iface_misc__get_conversation_suggests_response__from_json(v: &Value) -> Option<iface_misc::GetConversationSuggestsResponse> {
+    let m = v.as_object()?;
+    Some(iface_misc::GetConversationSuggestsResponse {
+        suggests: match m.get("suggests").and_then(|v| iface_misc__get_conversation_suggests_response_suggests__from_json(v)) { Some(x) => x, None => return None },
+        words: m.get("words").and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| (x).as_str().map(|s| s.to_string())).collect())).unwrap_or_default(),
+    })
+}
+
+fn iface_misc__get_conversation_suggests_response_suggests__from_json(v: &Value) -> Option<iface_misc::GetConversationSuggestsResponseSuggests> {
+    let m = v.as_object()?;
+    Some(iface_misc::GetConversationSuggestsResponseSuggests {
+        x: m.get("_").and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| iface_misc__get_conversation_suggests_response_suggests_x_item__from_json(x)).collect())).unwrap_or_default(),
+    })
+}
+
+fn iface_misc__get_conversation_suggests_response_suggests_x_item__from_json(v: &Value) -> Option<iface_misc::GetConversationSuggestsResponseSuggestsXItem> {
+    let m = v.as_object()?;
+    Some(iface_misc::GetConversationSuggestsResponseSuggestsXItem {
+        name: m.get("name").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+    })
+}
+
+fn iface_misc__search_custom_foods_response__from_json(v: &Value) -> Option<iface_misc::SearchCustomFoodsResponse> {
+    let m = v.as_object()?;
+    Some(iface_misc::SearchCustomFoodsResponse {
+        custom_foods: m.get("customFoods").and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| iface_misc__search_custom_foods_response_custom_foods_item__from_json(x)).collect())).unwrap_or_default(),
+        number: m.get("number").and_then(|v| (v).as_i64().map(|n| n as i32)).unwrap_or_default(),
+        offset: m.get("offset").and_then(|v| (v).as_i64().map(|n| n as i32)).unwrap_or_default(),
+        type_op: m.get("type").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+    })
+}
+
+fn iface_misc__search_custom_foods_response_custom_foods_item__from_json(v: &Value) -> Option<iface_misc::SearchCustomFoodsResponseCustomFoodsItem> {
+    let m = v.as_object()?;
+    Some(iface_misc::SearchCustomFoodsResponseCustomFoodsItem {
+        id: m.get("id").and_then(|v| (v).as_i64().map(|n| n as i32)).unwrap_or_default(),
+        image_url: m.get("imageUrl").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        price: m.get("price").and_then(|v| (v).as_f64()).unwrap_or_default(),
+        servings: m.get("servings").and_then(|v| (v).as_f64()).unwrap_or_default(),
+        title: m.get("title").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+    })
+}
+
+fn iface_misc__detect_food_in_text_response__from_json(v: &Value) -> Option<iface_misc::DetectFoodInTextResponse> {
+    let m = v.as_object()?;
+    Some(iface_misc::DetectFoodInTextResponse {
+        annotations: m.get("annotations").and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| iface_misc__detect_food_in_text_response_annotations_item__from_json(x)).collect())).unwrap_or_default(),
+    })
+}
+
+fn iface_misc__detect_food_in_text_response_annotations_item__from_json(v: &Value) -> Option<iface_misc::DetectFoodInTextResponseAnnotationsItem> {
+    let m = v.as_object()?;
+    Some(iface_misc::DetectFoodInTextResponseAnnotationsItem {
+        annotation: m.get("annotation").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        image: m.get("image").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        tag: m.get("tag").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+    })
+}
+
+fn iface_misc__image_analysis_by_url_response__from_json(v: &Value) -> Option<iface_misc::ImageAnalysisByUrlResponse> {
+    let m = v.as_object()?;
+    Some(iface_misc::ImageAnalysisByUrlResponse {
+        category: match m.get("category").and_then(|v| iface_misc__image_analysis_by_url_response_category__from_json(v)) { Some(x) => x, None => return None },
+        nutrition: match m.get("nutrition").and_then(|v| iface_misc__image_analysis_by_url_response_nutrition__from_json(v)) { Some(x) => x, None => return None },
+        recipes: m.get("recipes").and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| iface_misc__image_analysis_by_url_response_recipes_item__from_json(x)).collect())).unwrap_or_default(),
+    })
+}
+
+fn iface_misc__image_analysis_by_url_response_category__from_json(v: &Value) -> Option<iface_misc::ImageAnalysisByUrlResponseCategory> {
+    let m = v.as_object()?;
+    Some(iface_misc::ImageAnalysisByUrlResponseCategory {
+        name: m.get("name").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        probability: m.get("probability").and_then(|v| (v).as_f64()).unwrap_or_default(),
+    })
+}
+
+fn iface_misc__image_analysis_by_url_response_nutrition__from_json(v: &Value) -> Option<iface_misc::ImageAnalysisByUrlResponseNutrition> {
+    let m = v.as_object()?;
+    Some(iface_misc::ImageAnalysisByUrlResponseNutrition {
+        calories: match m.get("calories").and_then(|v| iface_misc__image_analysis_by_url_response_nutrition_calories__from_json(v)) { Some(x) => x, None => return None },
+        carbs: match m.get("carbs").and_then(|v| iface_misc__image_analysis_by_url_response_nutrition_carbs__from_json(v)) { Some(x) => x, None => return None },
+        fat: match m.get("fat").and_then(|v| iface_misc__image_analysis_by_url_response_nutrition_fat__from_json(v)) { Some(x) => x, None => return None },
+        protein: match m.get("protein").and_then(|v| iface_misc__image_analysis_by_url_response_nutrition_protein__from_json(v)) { Some(x) => x, None => return None },
+        recipes_used: m.get("recipesUsed").and_then(|v| (v).as_i64().map(|n| n as i32)).unwrap_or_default(),
+    })
+}
+
+fn iface_misc__image_analysis_by_url_response_nutrition_calories__from_json(v: &Value) -> Option<iface_misc::ImageAnalysisByUrlResponseNutritionCalories> {
+    let m = v.as_object()?;
+    Some(iface_misc::ImageAnalysisByUrlResponseNutritionCalories {
+        confidence_range95_percent: match m.get("confidenceRange95Percent").and_then(|v| iface_misc__image_analysis_by_url_response_nutrition_calories_confidence_range95_percent__from_json(v)) { Some(x) => x, None => return None },
+        standard_deviation: m.get("standardDeviation").and_then(|v| (v).as_f64()).unwrap_or_default(),
+        unit: m.get("unit").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        value: m.get("value").and_then(|v| (v).as_f64()).unwrap_or_default(),
+    })
+}
+
+fn iface_misc__image_analysis_by_url_response_nutrition_calories_confidence_range95_percent__from_json(v: &Value) -> Option<iface_misc::ImageAnalysisByUrlResponseNutritionCaloriesConfidenceRange95Percent> {
+    let m = v.as_object()?;
+    Some(iface_misc::ImageAnalysisByUrlResponseNutritionCaloriesConfidenceRange95Percent {
+        max: m.get("max").and_then(|v| (v).as_f64()).unwrap_or_default(),
+        min: m.get("min").and_then(|v| (v).as_f64()).unwrap_or_default(),
+    })
+}
+
+fn iface_misc__image_analysis_by_url_response_nutrition_carbs__from_json(v: &Value) -> Option<iface_misc::ImageAnalysisByUrlResponseNutritionCarbs> {
+    let m = v.as_object()?;
+    Some(iface_misc::ImageAnalysisByUrlResponseNutritionCarbs {
+        confidence_range95_percent: match m.get("confidenceRange95Percent").and_then(|v| iface_misc__image_analysis_by_url_response_nutrition_carbs_confidence_range95_percent__from_json(v)) { Some(x) => x, None => return None },
+        standard_deviation: m.get("standardDeviation").and_then(|v| (v).as_f64()).unwrap_or_default(),
+        unit: m.get("unit").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        value: m.get("value").and_then(|v| (v).as_f64()).unwrap_or_default(),
+    })
+}
+
+fn iface_misc__image_analysis_by_url_response_nutrition_carbs_confidence_range95_percent__from_json(v: &Value) -> Option<iface_misc::ImageAnalysisByUrlResponseNutritionCarbsConfidenceRange95Percent> {
+    let m = v.as_object()?;
+    Some(iface_misc::ImageAnalysisByUrlResponseNutritionCarbsConfidenceRange95Percent {
+        max: m.get("max").and_then(|v| (v).as_f64()).unwrap_or_default(),
+        min: m.get("min").and_then(|v| (v).as_f64()).unwrap_or_default(),
+    })
+}
+
+fn iface_misc__image_analysis_by_url_response_nutrition_fat__from_json(v: &Value) -> Option<iface_misc::ImageAnalysisByUrlResponseNutritionFat> {
+    let m = v.as_object()?;
+    Some(iface_misc::ImageAnalysisByUrlResponseNutritionFat {
+        confidence_range95_percent: match m.get("confidenceRange95Percent").and_then(|v| iface_misc__image_analysis_by_url_response_nutrition_fat_confidence_range95_percent__from_json(v)) { Some(x) => x, None => return None },
+        standard_deviation: m.get("standardDeviation").and_then(|v| (v).as_f64()).unwrap_or_default(),
+        unit: m.get("unit").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        value: m.get("value").and_then(|v| (v).as_f64()).unwrap_or_default(),
+    })
+}
+
+fn iface_misc__image_analysis_by_url_response_nutrition_fat_confidence_range95_percent__from_json(v: &Value) -> Option<iface_misc::ImageAnalysisByUrlResponseNutritionFatConfidenceRange95Percent> {
+    let m = v.as_object()?;
+    Some(iface_misc::ImageAnalysisByUrlResponseNutritionFatConfidenceRange95Percent {
+        max: m.get("max").and_then(|v| (v).as_f64()).unwrap_or_default(),
+        min: m.get("min").and_then(|v| (v).as_f64()).unwrap_or_default(),
+    })
+}
+
+fn iface_misc__image_analysis_by_url_response_nutrition_protein__from_json(v: &Value) -> Option<iface_misc::ImageAnalysisByUrlResponseNutritionProtein> {
+    let m = v.as_object()?;
+    Some(iface_misc::ImageAnalysisByUrlResponseNutritionProtein {
+        confidence_range95_percent: match m.get("confidenceRange95Percent").and_then(|v| iface_misc__image_analysis_by_url_response_nutrition_protein_confidence_range95_percent__from_json(v)) { Some(x) => x, None => return None },
+        standard_deviation: m.get("standardDeviation").and_then(|v| (v).as_f64()).unwrap_or_default(),
+        unit: m.get("unit").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        value: m.get("value").and_then(|v| (v).as_f64()).unwrap_or_default(),
+    })
+}
+
+fn iface_misc__image_analysis_by_url_response_nutrition_protein_confidence_range95_percent__from_json(v: &Value) -> Option<iface_misc::ImageAnalysisByUrlResponseNutritionProteinConfidenceRange95Percent> {
+    let m = v.as_object()?;
+    Some(iface_misc::ImageAnalysisByUrlResponseNutritionProteinConfidenceRange95Percent {
+        max: m.get("max").and_then(|v| (v).as_f64()).unwrap_or_default(),
+        min: m.get("min").and_then(|v| (v).as_f64()).unwrap_or_default(),
+    })
+}
+
+fn iface_misc__image_analysis_by_url_response_recipes_item__from_json(v: &Value) -> Option<iface_misc::ImageAnalysisByUrlResponseRecipesItem> {
+    let m = v.as_object()?;
+    Some(iface_misc::ImageAnalysisByUrlResponseRecipesItem {
+        id: m.get("id").and_then(|v| (v).as_i64().map(|n| n as i32)).unwrap_or_default(),
+        image_type: m.get("imageType").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        title: m.get("title").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        url: m.get("url").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+    })
+}
+
+fn iface_misc__image_classification_by_url_response__from_json(v: &Value) -> Option<iface_misc::ImageClassificationByUrlResponse> {
+    let m = v.as_object()?;
+    Some(iface_misc::ImageClassificationByUrlResponse {
+        category: m.get("category").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        probability: m.get("probability").and_then(|v| (v).as_f64()).unwrap_or_default(),
+    })
+}
+
+fn iface_misc__get_a_random_food_joke_response__from_json(v: &Value) -> Option<iface_misc::GetARandomFoodJokeResponse> {
+    let m = v.as_object()?;
+    Some(iface_misc::GetARandomFoodJokeResponse {
+        text: m.get("text").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+    })
+}
+
+fn iface_misc__search_all_food_response__from_json(v: &Value) -> Option<iface_misc::SearchAllFoodResponse> {
+    let m = v.as_object()?;
+    Some(iface_misc::SearchAllFoodResponse {
+        limit: m.get("limit").and_then(|v| (v).as_i64().map(|n| n as i32)).unwrap_or_default(),
+        offset: m.get("offset").and_then(|v| (v).as_i64().map(|n| n as i32)).unwrap_or_default(),
+        query: m.get("query").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        search_results: m.get("searchResults").and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| iface_misc__search_all_food_response_search_results_item__from_json(x)).collect())).unwrap_or_default(),
+        total_results: m.get("totalResults").and_then(|v| (v).as_i64().map(|n| n as i32)).unwrap_or_default(),
+    })
+}
+
+fn iface_misc__search_all_food_response_search_results_item__from_json(v: &Value) -> Option<iface_misc::SearchAllFoodResponseSearchResultsItem> {
+    let m = v.as_object()?;
+    Some(iface_misc::SearchAllFoodResponseSearchResultsItem {
+        name: m.get("name").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        results: m.get("results").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| iface_misc__search_all_food_response_search_results_item_results_item__from_json(x)).collect())),
+        total_results: m.get("totalResults").and_then(|v| (v).as_i64().map(|n| n as i32)).unwrap_or_default(),
+    })
+}
+
+fn iface_misc__search_all_food_response_search_results_item_results_item__from_json(v: &Value) -> Option<iface_misc::SearchAllFoodResponseSearchResultsItemResultsItem> {
+    let m = v.as_object()?;
+    Some(iface_misc::SearchAllFoodResponseSearchResultsItemResultsItem {
+        content: m.get("content").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        id: m.get("id").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        image: m.get("image").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        link: m.get("link").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        name: m.get("name").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        relevance: m.get("relevance").and_then(|v| (v).as_f64()).unwrap_or_default(),
+        type_op: m.get("type").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+    })
+}
+
+fn iface_misc__search_site_content_response__from_json(v: &Value) -> Option<iface_misc::SearchSiteContentResponse> {
+    let m = v.as_object()?;
+    Some(iface_misc::SearchSiteContentResponse {
+        articles: m.get("Articles").and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| iface_misc__search_site_content_response_articles_item__from_json(x)).collect())).unwrap_or_default(),
+        grocery_products: m.get("Grocery Products").and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| iface_misc__search_site_content_response_grocery_products_item__from_json(x)).collect())).unwrap_or_default(),
+        menu_items: m.get("Menu Items").and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| iface_misc__search_site_content_response_menu_items_item__from_json(x)).collect())).unwrap_or_default(),
+        recipes: m.get("Recipes").and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| iface_misc__search_site_content_response_recipes_item__from_json(x)).collect())).unwrap_or_default(),
+    })
+}
+
+fn iface_misc__search_site_content_response_articles_item__from_json(v: &Value) -> Option<iface_misc::SearchSiteContentResponseArticlesItem> {
+    let m = v.as_object()?;
+    Some(iface_misc::SearchSiteContentResponseArticlesItem {
+        data_points: m.get("dataPoints").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| (x).as_str().map(|s| s.to_string())).collect())),
+        image: m.get("image").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        link: m.get("link").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        name: m.get("name").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+    })
+}
+
+fn iface_misc__search_site_content_response_grocery_products_item__from_json(v: &Value) -> Option<iface_misc::SearchSiteContentResponseGroceryProductsItem> {
+    let m = v.as_object()?;
+    Some(iface_misc::SearchSiteContentResponseGroceryProductsItem {
+        data_points: m.get("dataPoints").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| iface_misc__search_site_content_response_grocery_products_item_data_points_item__from_json(x)).collect())),
+        image: m.get("image").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        link: m.get("link").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        name: m.get("name").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+    })
+}
+
+fn iface_misc__search_site_content_response_grocery_products_item_data_points_item__from_json(v: &Value) -> Option<iface_misc::SearchSiteContentResponseGroceryProductsItemDataPointsItem> {
+    let m = v.as_object()?;
+    Some(iface_misc::SearchSiteContentResponseGroceryProductsItemDataPointsItem {
+        key: m.get("key").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+    })
+}
+
+fn iface_misc__search_site_content_response_menu_items_item__from_json(v: &Value) -> Option<iface_misc::SearchSiteContentResponseMenuItemsItem> {
+    let m = v.as_object()?;
+    Some(iface_misc::SearchSiteContentResponseMenuItemsItem {
+        data_points: m.get("dataPoints").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| iface_misc__search_site_content_response_menu_items_item_data_points_item__from_json(x)).collect())),
+        image: m.get("image").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        link: m.get("link").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        name: m.get("name").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+    })
+}
+
+fn iface_misc__search_site_content_response_menu_items_item_data_points_item__from_json(v: &Value) -> Option<iface_misc::SearchSiteContentResponseMenuItemsItemDataPointsItem> {
+    let m = v.as_object()?;
+    Some(iface_misc::SearchSiteContentResponseMenuItemsItemDataPointsItem {
+        key: m.get("key").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+    })
+}
+
+fn iface_misc__search_site_content_response_recipes_item__from_json(v: &Value) -> Option<iface_misc::SearchSiteContentResponseRecipesItem> {
+    let m = v.as_object()?;
+    Some(iface_misc::SearchSiteContentResponseRecipesItem {
+        data_points: m.get("dataPoints").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| iface_misc__search_site_content_response_recipes_item_data_points_item__from_json(x)).collect())),
+        image: m.get("image").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        link: m.get("link").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        name: m.get("name").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+    })
+}
+
+fn iface_misc__search_site_content_response_recipes_item_data_points_item__from_json(v: &Value) -> Option<iface_misc::SearchSiteContentResponseRecipesItemDataPointsItem> {
+    let m = v.as_object()?;
+    Some(iface_misc::SearchSiteContentResponseRecipesItemDataPointsItem {
+        key: m.get("key").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+    })
+}
+
+fn iface_misc__get_random_food_trivia_response__from_json(v: &Value) -> Option<iface_misc::GetRandomFoodTriviaResponse> {
+    let m = v.as_object()?;
+    Some(iface_misc::GetRandomFoodTriviaResponse {
+        text: m.get("text").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+    })
+}
+
+fn iface_misc__search_food_videos_response__from_json(v: &Value) -> Option<iface_misc::SearchFoodVideosResponse> {
+    let m = v.as_object()?;
+    Some(iface_misc::SearchFoodVideosResponse {
+        total_results: m.get("totalResults").and_then(|v| (v).as_i64().map(|n| n as i32)).unwrap_or_default(),
+        videos: m.get("videos").and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| iface_misc__search_food_videos_response_videos_item__from_json(x)).collect())).unwrap_or_default(),
+    })
+}
+
+fn iface_misc__search_food_videos_response_videos_item__from_json(v: &Value) -> Option<iface_misc::SearchFoodVideosResponseVideosItem> {
+    let m = v.as_object()?;
+    Some(iface_misc::SearchFoodVideosResponseVideosItem {
+        length: m.get("length").and_then(|v| (v).as_i64().map(|n| n as i32)).unwrap_or_default(),
+        rating: m.get("rating").and_then(|v| (v).as_f64()).unwrap_or_default(),
+        short_title: m.get("shortTitle").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        thumbnail: m.get("thumbnail").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        title: m.get("title").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        views: m.get("views").and_then(|v| (v).as_i64().map(|n| n as i32)).unwrap_or_default(),
+        you_tube_id: m.get("youTubeId").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+    })
+}
+
+fn iface_misc__talk_to_chatbot__ok(body: String) -> Result<iface_misc::TalkToChatbotResponse, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match iface_misc__talk_to_chatbot_response__from_json(&v) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_misc__talk_to_chatbot__err(e: crate::runtime::DispatchError) -> iface_misc::TalkToChatbotError {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => match status {
+            401u16 => iface_misc::TalkToChatbotError::Unauthorized(body),
+            403u16 => iface_misc::TalkToChatbotError::Forbidden(body),
+            404u16 => iface_misc::TalkToChatbotError::NotFound(body),
+            _ => iface_misc::TalkToChatbotError::Other(body),
+        },
+        crate::runtime::DispatchError::Transport(m) => iface_misc::TalkToChatbotError::Other(m),
+    }
+}
+
+fn iface_misc__get_conversation_suggests__ok(body: String) -> Result<iface_misc::GetConversationSuggestsResponse, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match iface_misc__get_conversation_suggests_response__from_json(&v) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_misc__get_conversation_suggests__err(e: crate::runtime::DispatchError) -> iface_misc::GetConversationSuggestsError {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => match status {
+            401u16 => iface_misc::GetConversationSuggestsError::Unauthorized(body),
+            403u16 => iface_misc::GetConversationSuggestsError::Forbidden(body),
+            404u16 => iface_misc::GetConversationSuggestsError::NotFound(body),
+            _ => iface_misc::GetConversationSuggestsError::Other(body),
+        },
+        crate::runtime::DispatchError::Transport(m) => iface_misc::GetConversationSuggestsError::Other(m),
+    }
+}
+
+fn iface_misc__search_custom_foods__ok(body: String) -> Result<iface_misc::SearchCustomFoodsResponse, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match iface_misc__search_custom_foods_response__from_json(&v) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_misc__search_custom_foods__err(e: crate::runtime::DispatchError) -> iface_misc::SearchCustomFoodsError {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => match status {
+            401u16 => iface_misc::SearchCustomFoodsError::Unauthorized(body),
+            403u16 => iface_misc::SearchCustomFoodsError::Forbidden(body),
+            404u16 => iface_misc::SearchCustomFoodsError::NotFound(body),
+            _ => iface_misc::SearchCustomFoodsError::Other(body),
+        },
+        crate::runtime::DispatchError::Transport(m) => iface_misc::SearchCustomFoodsError::Other(m),
+    }
+}
+
+fn iface_misc__detect_food_in_text__ok(body: String) -> Result<iface_misc::DetectFoodInTextResponse, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match iface_misc__detect_food_in_text_response__from_json(&v) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_misc__detect_food_in_text__err(e: crate::runtime::DispatchError) -> iface_misc::DetectFoodInTextError {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => match status {
+            401u16 => iface_misc::DetectFoodInTextError::Unauthorized(body),
+            403u16 => iface_misc::DetectFoodInTextError::Forbidden(body),
+            404u16 => iface_misc::DetectFoodInTextError::NotFound(body),
+            _ => iface_misc::DetectFoodInTextError::Other(body),
+        },
+        crate::runtime::DispatchError::Transport(m) => iface_misc::DetectFoodInTextError::Other(m),
+    }
+}
+
+fn iface_misc__image_analysis_by_url__ok(body: String) -> Result<iface_misc::ImageAnalysisByUrlResponse, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match iface_misc__image_analysis_by_url_response__from_json(&v) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_misc__image_analysis_by_url__err(e: crate::runtime::DispatchError) -> iface_misc::ImageAnalysisByUrlError {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => match status {
+            401u16 => iface_misc::ImageAnalysisByUrlError::Unauthorized(body),
+            403u16 => iface_misc::ImageAnalysisByUrlError::Forbidden(body),
+            404u16 => iface_misc::ImageAnalysisByUrlError::NotFound(body),
+            _ => iface_misc::ImageAnalysisByUrlError::Other(body),
+        },
+        crate::runtime::DispatchError::Transport(m) => iface_misc::ImageAnalysisByUrlError::Other(m),
+    }
+}
+
+fn iface_misc__image_classification_by_url__ok(body: String) -> Result<iface_misc::ImageClassificationByUrlResponse, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match iface_misc__image_classification_by_url_response__from_json(&v) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_misc__image_classification_by_url__err(e: crate::runtime::DispatchError) -> iface_misc::ImageClassificationByUrlError {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => match status {
+            401u16 => iface_misc::ImageClassificationByUrlError::Unauthorized(body),
+            403u16 => iface_misc::ImageClassificationByUrlError::Forbidden(body),
+            404u16 => iface_misc::ImageClassificationByUrlError::NotFound(body),
+            _ => iface_misc::ImageClassificationByUrlError::Other(body),
+        },
+        crate::runtime::DispatchError::Transport(m) => iface_misc::ImageClassificationByUrlError::Other(m),
+    }
+}
+
+fn iface_misc__get_a_random_food_joke__ok(body: String) -> Result<iface_misc::GetARandomFoodJokeResponse, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match iface_misc__get_a_random_food_joke_response__from_json(&v) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_misc__get_a_random_food_joke__err(e: crate::runtime::DispatchError) -> iface_misc::GetARandomFoodJokeError {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => match status {
+            401u16 => iface_misc::GetARandomFoodJokeError::Unauthorized(body),
+            403u16 => iface_misc::GetARandomFoodJokeError::Forbidden(body),
+            404u16 => iface_misc::GetARandomFoodJokeError::NotFound(body),
+            _ => iface_misc::GetARandomFoodJokeError::Other(body),
+        },
+        crate::runtime::DispatchError::Transport(m) => iface_misc::GetARandomFoodJokeError::Other(m),
+    }
+}
+
+fn iface_misc__search_all_food__ok(body: String) -> Result<iface_misc::SearchAllFoodResponse, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match iface_misc__search_all_food_response__from_json(&v) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_misc__search_all_food__err(e: crate::runtime::DispatchError) -> iface_misc::SearchAllFoodError {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => match status {
+            401u16 => iface_misc::SearchAllFoodError::Unauthorized(body),
+            403u16 => iface_misc::SearchAllFoodError::Forbidden(body),
+            404u16 => iface_misc::SearchAllFoodError::NotFound(body),
+            _ => iface_misc::SearchAllFoodError::Other(body),
+        },
+        crate::runtime::DispatchError::Transport(m) => iface_misc::SearchAllFoodError::Other(m),
+    }
+}
+
+fn iface_misc__search_site_content__ok(body: String) -> Result<iface_misc::SearchSiteContentResponse, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match iface_misc__search_site_content_response__from_json(&v) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_misc__search_site_content__err(e: crate::runtime::DispatchError) -> iface_misc::SearchSiteContentError {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => match status {
+            401u16 => iface_misc::SearchSiteContentError::Unauthorized(body),
+            403u16 => iface_misc::SearchSiteContentError::Forbidden(body),
+            404u16 => iface_misc::SearchSiteContentError::NotFound(body),
+            _ => iface_misc::SearchSiteContentError::Other(body),
+        },
+        crate::runtime::DispatchError::Transport(m) => iface_misc::SearchSiteContentError::Other(m),
+    }
+}
+
+fn iface_misc__get_random_food_trivia__ok(body: String) -> Result<iface_misc::GetRandomFoodTriviaResponse, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match iface_misc__get_random_food_trivia_response__from_json(&v) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_misc__get_random_food_trivia__err(e: crate::runtime::DispatchError) -> iface_misc::GetRandomFoodTriviaError {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => match status {
+            401u16 => iface_misc::GetRandomFoodTriviaError::Unauthorized(body),
+            403u16 => iface_misc::GetRandomFoodTriviaError::Forbidden(body),
+            404u16 => iface_misc::GetRandomFoodTriviaError::NotFound(body),
+            _ => iface_misc::GetRandomFoodTriviaError::Other(body),
+        },
+        crate::runtime::DispatchError::Transport(m) => iface_misc::GetRandomFoodTriviaError::Other(m),
+    }
+}
+
+fn iface_misc__search_food_videos__ok(body: String) -> Result<iface_misc::SearchFoodVideosResponse, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match iface_misc__search_food_videos_response__from_json(&v) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_misc__search_food_videos__err(e: crate::runtime::DispatchError) -> iface_misc::SearchFoodVideosError {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => match status {
+            401u16 => iface_misc::SearchFoodVideosError::Unauthorized(body),
+            403u16 => iface_misc::SearchFoodVideosError::Forbidden(body),
+            404u16 => iface_misc::SearchFoodVideosError::NotFound(body),
+            _ => iface_misc::SearchFoodVideosError::Other(body),
+        },
+        crate::runtime::DispatchError::Transport(m) => iface_misc::SearchFoodVideosError::Other(m),
+    }
+}
+
 impl iface_misc::Guest for crate::Component {
-    fn talk_to_chatbot(params: iface_misc::TalkToChatbotParams) -> Result<String, String> {
+    fn talk_to_chatbot(params: iface_misc::TalkToChatbotParams) -> Result<iface_misc::TalkToChatbotResponse, iface_misc::TalkToChatbotError> {
         let json = iface_misc__talk_to_chatbot_params__to_json(&params);
-        dispatch(&OP_MISC_TALK_TO_CHATBOT, json)
+        match dispatch(&OP_MISC_TALK_TO_CHATBOT, json).and_then(iface_misc__talk_to_chatbot__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_misc__talk_to_chatbot__err(e)),
+        }
     }
-    fn get_conversation_suggests(params: iface_misc::GetConversationSuggestsParams) -> Result<String, String> {
+    fn get_conversation_suggests(params: iface_misc::GetConversationSuggestsParams) -> Result<iface_misc::GetConversationSuggestsResponse, iface_misc::GetConversationSuggestsError> {
         let json = iface_misc__get_conversation_suggests_params__to_json(&params);
-        dispatch(&OP_MISC_GET_CONVERSATION_SUGGESTS, json)
+        match dispatch(&OP_MISC_GET_CONVERSATION_SUGGESTS, json).and_then(iface_misc__get_conversation_suggests__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_misc__get_conversation_suggests__err(e)),
+        }
     }
-    fn search_custom_foods(params: iface_misc::SearchCustomFoodsParams) -> Result<String, String> {
+    fn search_custom_foods(params: iface_misc::SearchCustomFoodsParams) -> Result<iface_misc::SearchCustomFoodsResponse, iface_misc::SearchCustomFoodsError> {
         let json = iface_misc__search_custom_foods_params__to_json(&params);
-        dispatch(&OP_MISC_SEARCH_CUSTOM_FOODS, json)
+        match dispatch(&OP_MISC_SEARCH_CUSTOM_FOODS, json).and_then(iface_misc__search_custom_foods__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_misc__search_custom_foods__err(e)),
+        }
     }
-    fn detect_food_in_text(params: iface_misc::DetectFoodInTextParams) -> Result<String, String> {
+    fn detect_food_in_text(params: iface_misc::DetectFoodInTextParams) -> Result<iface_misc::DetectFoodInTextResponse, iface_misc::DetectFoodInTextError> {
         let json = iface_misc__detect_food_in_text_params__to_json(&params);
-        dispatch(&OP_MISC_DETECT_FOOD_IN_TEXT, json)
+        match dispatch(&OP_MISC_DETECT_FOOD_IN_TEXT, json).and_then(iface_misc__detect_food_in_text__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_misc__detect_food_in_text__err(e)),
+        }
     }
-    fn image_analysis_by_url(params: iface_misc::ImageAnalysisByUrlParams) -> Result<String, String> {
+    fn image_analysis_by_url(params: iface_misc::ImageAnalysisByUrlParams) -> Result<iface_misc::ImageAnalysisByUrlResponse, iface_misc::ImageAnalysisByUrlError> {
         let json = iface_misc__image_analysis_by_url_params__to_json(&params);
-        dispatch(&OP_MISC_IMAGE_ANALYSIS_BY_URL, json)
+        match dispatch(&OP_MISC_IMAGE_ANALYSIS_BY_URL, json).and_then(iface_misc__image_analysis_by_url__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_misc__image_analysis_by_url__err(e)),
+        }
     }
-    fn image_classification_by_url(params: iface_misc::ImageClassificationByUrlParams) -> Result<String, String> {
+    fn image_classification_by_url(params: iface_misc::ImageClassificationByUrlParams) -> Result<iface_misc::ImageClassificationByUrlResponse, iface_misc::ImageClassificationByUrlError> {
         let json = iface_misc__image_classification_by_url_params__to_json(&params);
-        dispatch(&OP_MISC_IMAGE_CLASSIFICATION_BY_URL, json)
+        match dispatch(&OP_MISC_IMAGE_CLASSIFICATION_BY_URL, json).and_then(iface_misc__image_classification_by_url__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_misc__image_classification_by_url__err(e)),
+        }
     }
-    fn get_a_random_food_joke() -> Result<String, String> {
-        dispatch(&OP_MISC_GET_A_RANDOM_FOOD_JOKE, Value::Object(Map::new()))
+    fn get_a_random_food_joke() -> Result<iface_misc::GetARandomFoodJokeResponse, iface_misc::GetARandomFoodJokeError> {
+        match dispatch(&OP_MISC_GET_A_RANDOM_FOOD_JOKE, Value::Object(Map::new())).and_then(iface_misc__get_a_random_food_joke__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_misc__get_a_random_food_joke__err(e)),
+        }
     }
-    fn search_all_food(params: iface_misc::SearchAllFoodParams) -> Result<String, String> {
+    fn search_all_food(params: iface_misc::SearchAllFoodParams) -> Result<iface_misc::SearchAllFoodResponse, iface_misc::SearchAllFoodError> {
         let json = iface_misc__search_all_food_params__to_json(&params);
-        dispatch(&OP_MISC_SEARCH_ALL_FOOD, json)
+        match dispatch(&OP_MISC_SEARCH_ALL_FOOD, json).and_then(iface_misc__search_all_food__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_misc__search_all_food__err(e)),
+        }
     }
-    fn search_site_content(params: iface_misc::SearchSiteContentParams) -> Result<String, String> {
+    fn search_site_content(params: iface_misc::SearchSiteContentParams) -> Result<iface_misc::SearchSiteContentResponse, iface_misc::SearchSiteContentError> {
         let json = iface_misc__search_site_content_params__to_json(&params);
-        dispatch(&OP_MISC_SEARCH_SITE_CONTENT, json)
+        match dispatch(&OP_MISC_SEARCH_SITE_CONTENT, json).and_then(iface_misc__search_site_content__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_misc__search_site_content__err(e)),
+        }
     }
-    fn get_random_food_trivia() -> Result<String, String> {
-        dispatch(&OP_MISC_GET_RANDOM_FOOD_TRIVIA, Value::Object(Map::new()))
+    fn get_random_food_trivia() -> Result<iface_misc::GetRandomFoodTriviaResponse, iface_misc::GetRandomFoodTriviaError> {
+        match dispatch(&OP_MISC_GET_RANDOM_FOOD_TRIVIA, Value::Object(Map::new())).and_then(iface_misc__get_random_food_trivia__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_misc__get_random_food_trivia__err(e)),
+        }
     }
-    fn search_food_videos(params: iface_misc::SearchFoodVideosParams) -> Result<String, String> {
+    fn search_food_videos(params: iface_misc::SearchFoodVideosParams) -> Result<iface_misc::SearchFoodVideosResponse, iface_misc::SearchFoodVideosError> {
         let json = iface_misc__search_food_videos_params__to_json(&params);
-        dispatch(&OP_MISC_SEARCH_FOOD_VIDEOS, json)
+        match dispatch(&OP_MISC_SEARCH_FOOD_VIDEOS, json).and_then(iface_misc__search_food_videos__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_misc__search_food_videos__err(e)),
+        }
     }
 }
 use crate::exports::autostamp::spoonacular::ingredients as iface_ingredients;
@@ -549,11 +1474,11 @@ const OP_INGREDIENTS_AUTOCOMPLETE_INGREDIENT_SEARCH: OpSpec = OpSpec {
     method: "GET",
     path_template: "/food/ingredients/autocomplete",
     fields: &[
-        FieldSpec { snake: "query", location: FieldLocation::Query },
-        FieldSpec { snake: "number", location: FieldLocation::Query },
-        FieldSpec { snake: "meta_information", location: FieldLocation::Query },
-        FieldSpec { snake: "intolerances", location: FieldLocation::Query },
-        FieldSpec { snake: "language", location: FieldLocation::Query },
+        FieldSpec { snake: "query", wire: "query", location: FieldLocation::Query },
+        FieldSpec { snake: "number", wire: "number", location: FieldLocation::Query },
+        FieldSpec { snake: "meta_information", wire: "metaInformation", location: FieldLocation::Query },
+        FieldSpec { snake: "intolerances", wire: "intolerances", location: FieldLocation::Query },
+        FieldSpec { snake: "language", wire: "language", location: FieldLocation::Query },
     ],
     auth: &[
         AuthApply { secret_key: "apiKeyScheme", kind: AuthKind::ApiKeyHeader("x-api-key") },
@@ -564,8 +1489,8 @@ const OP_INGREDIENTS_MAP_INGREDIENTS_TO_GROCERY_PRODUCTS: OpSpec = OpSpec {
     method: "POST",
     path_template: "/food/ingredients/map",
     fields: &[
-        FieldSpec { snake: "ingredients", location: FieldLocation::Body },
-        FieldSpec { snake: "servings", location: FieldLocation::Body },
+        FieldSpec { snake: "ingredients", wire: "ingredients", location: FieldLocation::Body },
+        FieldSpec { snake: "servings", wire: "servings", location: FieldLocation::Body },
     ],
     auth: &[
         AuthApply { secret_key: "apiKeyScheme", kind: AuthKind::ApiKeyHeader("x-api-key") },
@@ -576,21 +1501,21 @@ const OP_INGREDIENTS_INGREDIENT_SEARCH: OpSpec = OpSpec {
     method: "GET",
     path_template: "/food/ingredients/search",
     fields: &[
-        FieldSpec { snake: "query", location: FieldLocation::Query },
-        FieldSpec { snake: "add_children", location: FieldLocation::Query },
-        FieldSpec { snake: "min_protein_percent", location: FieldLocation::Query },
-        FieldSpec { snake: "max_protein_percent", location: FieldLocation::Query },
-        FieldSpec { snake: "min_fat_percent", location: FieldLocation::Query },
-        FieldSpec { snake: "max_fat_percent", location: FieldLocation::Query },
-        FieldSpec { snake: "min_carbs_percent", location: FieldLocation::Query },
-        FieldSpec { snake: "max_carbs_percent", location: FieldLocation::Query },
-        FieldSpec { snake: "meta_information", location: FieldLocation::Query },
-        FieldSpec { snake: "intolerances", location: FieldLocation::Query },
-        FieldSpec { snake: "sort", location: FieldLocation::Query },
-        FieldSpec { snake: "sort_direction", location: FieldLocation::Query },
-        FieldSpec { snake: "offset", location: FieldLocation::Query },
-        FieldSpec { snake: "number", location: FieldLocation::Query },
-        FieldSpec { snake: "language", location: FieldLocation::Query },
+        FieldSpec { snake: "query", wire: "query", location: FieldLocation::Query },
+        FieldSpec { snake: "add_children", wire: "addChildren", location: FieldLocation::Query },
+        FieldSpec { snake: "min_protein_percent", wire: "minProteinPercent", location: FieldLocation::Query },
+        FieldSpec { snake: "max_protein_percent", wire: "maxProteinPercent", location: FieldLocation::Query },
+        FieldSpec { snake: "min_fat_percent", wire: "minFatPercent", location: FieldLocation::Query },
+        FieldSpec { snake: "max_fat_percent", wire: "maxFatPercent", location: FieldLocation::Query },
+        FieldSpec { snake: "min_carbs_percent", wire: "minCarbsPercent", location: FieldLocation::Query },
+        FieldSpec { snake: "max_carbs_percent", wire: "maxCarbsPercent", location: FieldLocation::Query },
+        FieldSpec { snake: "meta_information", wire: "metaInformation", location: FieldLocation::Query },
+        FieldSpec { snake: "intolerances", wire: "intolerances", location: FieldLocation::Query },
+        FieldSpec { snake: "sort", wire: "sort", location: FieldLocation::Query },
+        FieldSpec { snake: "sort_direction", wire: "sortDirection", location: FieldLocation::Query },
+        FieldSpec { snake: "offset", wire: "offset", location: FieldLocation::Query },
+        FieldSpec { snake: "number", wire: "number", location: FieldLocation::Query },
+        FieldSpec { snake: "language", wire: "language", location: FieldLocation::Query },
     ],
     auth: &[
         AuthApply { secret_key: "apiKeyScheme", kind: AuthKind::ApiKeyHeader("x-api-key") },
@@ -601,7 +1526,7 @@ const OP_INGREDIENTS_GET_INGREDIENT_SUBSTITUTES: OpSpec = OpSpec {
     method: "GET",
     path_template: "/food/ingredients/substitutes",
     fields: &[
-        FieldSpec { snake: "ingredient_name", location: FieldLocation::Query },
+        FieldSpec { snake: "ingredient_name", wire: "ingredientName", location: FieldLocation::Query },
     ],
     auth: &[
         AuthApply { secret_key: "apiKeyScheme", kind: AuthKind::ApiKeyHeader("x-api-key") },
@@ -612,10 +1537,10 @@ const OP_INGREDIENTS_COMPUTE_INGREDIENT_AMOUNT: OpSpec = OpSpec {
     method: "GET",
     path_template: "/food/ingredients/{id}/amount",
     fields: &[
-        FieldSpec { snake: "id", location: FieldLocation::Path },
-        FieldSpec { snake: "nutrient", location: FieldLocation::Query },
-        FieldSpec { snake: "target", location: FieldLocation::Query },
-        FieldSpec { snake: "unit", location: FieldLocation::Query },
+        FieldSpec { snake: "id", wire: "id", location: FieldLocation::Path },
+        FieldSpec { snake: "nutrient", wire: "nutrient", location: FieldLocation::Query },
+        FieldSpec { snake: "target", wire: "target", location: FieldLocation::Query },
+        FieldSpec { snake: "unit", wire: "unit", location: FieldLocation::Query },
     ],
     auth: &[
         AuthApply { secret_key: "apiKeyScheme", kind: AuthKind::ApiKeyHeader("x-api-key") },
@@ -626,9 +1551,9 @@ const OP_INGREDIENTS_GET_INGREDIENT_INFORMATION: OpSpec = OpSpec {
     method: "GET",
     path_template: "/food/ingredients/{id}/information",
     fields: &[
-        FieldSpec { snake: "id", location: FieldLocation::Path },
-        FieldSpec { snake: "amount", location: FieldLocation::Query },
-        FieldSpec { snake: "unit", location: FieldLocation::Query },
+        FieldSpec { snake: "id", wire: "id", location: FieldLocation::Path },
+        FieldSpec { snake: "amount", wire: "amount", location: FieldLocation::Query },
+        FieldSpec { snake: "unit", wire: "unit", location: FieldLocation::Query },
     ],
     auth: &[
         AuthApply { secret_key: "apiKeyScheme", kind: AuthKind::ApiKeyHeader("x-api-key") },
@@ -639,7 +1564,7 @@ const OP_INGREDIENTS_GET_INGREDIENT_SUBSTITUTES_BY_ID: OpSpec = OpSpec {
     method: "GET",
     path_template: "/food/ingredients/{id}/substitutes",
     fields: &[
-        FieldSpec { snake: "id", location: FieldLocation::Path },
+        FieldSpec { snake: "id", wire: "id", location: FieldLocation::Path },
     ],
     auth: &[
         AuthApply { secret_key: "apiKeyScheme", kind: AuthKind::ApiKeyHeader("x-api-key") },
@@ -650,9 +1575,10 @@ const OP_INGREDIENTS_VISUALIZE_INGREDIENTS: OpSpec = OpSpec {
     method: "POST",
     path_template: "/recipes/visualizeIngredients",
     fields: &[
-        FieldSpec { snake: "content_type", location: FieldLocation::Header },
-        FieldSpec { snake: "language", location: FieldLocation::Query },
-        FieldSpec { snake: "accept", location: FieldLocation::Header },
+        FieldSpec { snake: "content_type", wire: "Content-Type", location: FieldLocation::Header },
+        FieldSpec { snake: "language", wire: "language", location: FieldLocation::Query },
+        FieldSpec { snake: "accept", wire: "Accept", location: FieldLocation::Header },
+        FieldSpec { snake: "body", wire: "body", location: FieldLocation::Body },
     ],
     auth: &[
         AuthApply { secret_key: "apiKeyScheme", kind: AuthKind::ApiKeyHeader("x-api-key") },
@@ -663,8 +1589,8 @@ const OP_INGREDIENTS_BY_ID_IMAGE: OpSpec = OpSpec {
     method: "GET",
     path_template: "/recipes/{id}/ingredientWidget.png",
     fields: &[
-        FieldSpec { snake: "id", location: FieldLocation::Path },
-        FieldSpec { snake: "measure", location: FieldLocation::Query },
+        FieldSpec { snake: "id", wire: "id", location: FieldLocation::Path },
+        FieldSpec { snake: "measure", wire: "measure", location: FieldLocation::Query },
     ],
     auth: &[
         AuthApply { secret_key: "apiKeyScheme", kind: AuthKind::ApiKeyHeader("x-api-key") },
@@ -699,6 +1625,157 @@ fn iface_ingredients__by_id_image_measure_enum__to_str(e: &iface_ingredients::By
         iface_ingredients::ByIdImageMeasureEnum::Us => "us",
         iface_ingredients::ByIdImageMeasureEnum::Metric => "metric",
     }
+}
+
+fn iface_ingredients__autocomplete_ingredient_search_response_item__to_json(p: &iface_ingredients::AutocompleteIngredientSearchResponseItem) -> Value {
+    let mut m = Map::new();
+    m.insert("aisle".into(), match (&p.aisle) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("id".into(), match (&p.id) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("image".into(), Value::String((&p.image).clone()));
+    m.insert("name".into(), Value::String((&p.name).clone()));
+    m.insert("possibleUnits".into(), match (&p.possible_units) { Some(v) => Value::Array((v).iter().map(|v| Value::String((v).clone())).collect()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_ingredients__map_ingredients_to_grocery_products_response_item__to_json(p: &iface_ingredients::MapIngredientsToGroceryProductsResponseItem) -> Value {
+    let mut m = Map::new();
+    m.insert("ingredientImage".into(), Value::String((&p.ingredient_image).clone()));
+    m.insert("meta".into(), Value::Array((&p.meta).iter().map(|v| Value::String((v).clone())).collect()));
+    m.insert("original".into(), Value::String((&p.original).clone()));
+    m.insert("originalName".into(), Value::String((&p.original_name).clone()));
+    m.insert("products".into(), Value::Array((&p.products).iter().map(|v| iface_ingredients__map_ingredients_to_grocery_products_response_item_products_item__to_json(v)).collect()));
+    Value::Object(m)
+}
+
+fn iface_ingredients__map_ingredients_to_grocery_products_response_item_products_item__to_json(p: &iface_ingredients::MapIngredientsToGroceryProductsResponseItemProductsItem) -> Value {
+    let mut m = Map::new();
+    m.insert("id".into(), Value::Number(serde_json::Number::from(*(&p.id))));
+    m.insert("title".into(), Value::String((&p.title).clone()));
+    m.insert("upc".into(), Value::String((&p.upc).clone()));
+    Value::Object(m)
+}
+
+fn iface_ingredients__ingredient_search_response__to_json(p: &iface_ingredients::IngredientSearchResponse) -> Value {
+    let mut m = Map::new();
+    m.insert("number".into(), Value::Number(serde_json::Number::from(*(&p.number))));
+    m.insert("offset".into(), Value::Number(serde_json::Number::from(*(&p.offset))));
+    m.insert("results".into(), Value::Array((&p.results).iter().map(|v| iface_ingredients__ingredient_search_response_results_item__to_json(v)).collect()));
+    m.insert("totalResults".into(), Value::Number(serde_json::Number::from(*(&p.total_results))));
+    Value::Object(m)
+}
+
+fn iface_ingredients__ingredient_search_response_results_item__to_json(p: &iface_ingredients::IngredientSearchResponseResultsItem) -> Value {
+    let mut m = Map::new();
+    m.insert("id".into(), Value::Number(serde_json::Number::from(*(&p.id))));
+    m.insert("image".into(), Value::String((&p.image).clone()));
+    m.insert("name".into(), Value::String((&p.name).clone()));
+    Value::Object(m)
+}
+
+fn iface_ingredients__get_ingredient_substitutes_response__to_json(p: &iface_ingredients::GetIngredientSubstitutesResponse) -> Value {
+    let mut m = Map::new();
+    m.insert("ingredient".into(), Value::String((&p.ingredient).clone()));
+    m.insert("message".into(), Value::String((&p.message).clone()));
+    m.insert("substitutes".into(), Value::Array((&p.substitutes).iter().map(|v| Value::String((v).clone())).collect()));
+    Value::Object(m)
+}
+
+fn iface_ingredients__compute_ingredient_amount_response__to_json(p: &iface_ingredients::ComputeIngredientAmountResponse) -> Value {
+    let mut m = Map::new();
+    m.insert("amount".into(), serde_json::Number::from_f64(*(&p.amount)).map(Value::Number).unwrap_or(Value::Null));
+    m.insert("unit".into(), Value::String((&p.unit).clone()));
+    Value::Object(m)
+}
+
+fn iface_ingredients__get_ingredient_information_response__to_json(p: &iface_ingredients::GetIngredientInformationResponse) -> Value {
+    let mut m = Map::new();
+    m.insert("aisle".into(), Value::String((&p.aisle).clone()));
+    m.insert("amount".into(), serde_json::Number::from_f64(*(&p.amount)).map(Value::Number).unwrap_or(Value::Null));
+    m.insert("categoryPath".into(), Value::Array((&p.category_path).iter().map(|v| Value::String((v).clone())).collect()));
+    m.insert("consistency".into(), Value::String((&p.consistency).clone()));
+    m.insert("estimatedCost".into(), iface_ingredients__get_ingredient_information_response_estimated_cost__to_json(&p.estimated_cost));
+    m.insert("id".into(), Value::Number(serde_json::Number::from(*(&p.id))));
+    m.insert("image".into(), Value::String((&p.image).clone()));
+    m.insert("meta".into(), Value::Array((&p.meta).iter().map(|v| iface_ingredients__get_ingredient_information_response_meta_item__to_json(v)).collect()));
+    m.insert("name".into(), Value::String((&p.name).clone()));
+    m.insert("nameClean".into(), Value::String((&p.name_clean).clone()));
+    m.insert("nutrition".into(), iface_ingredients__get_ingredient_information_response_nutrition__to_json(&p.nutrition));
+    m.insert("original".into(), Value::String((&p.original).clone()));
+    m.insert("originalName".into(), Value::String((&p.original_name).clone()));
+    m.insert("possibleUnits".into(), Value::Array((&p.possible_units).iter().map(|v| Value::String((v).clone())).collect()));
+    m.insert("shoppingListUnits".into(), Value::Array((&p.shopping_list_units).iter().map(|v| Value::String((v).clone())).collect()));
+    m.insert("unit".into(), Value::String((&p.unit).clone()));
+    m.insert("unitLong".into(), Value::String((&p.unit_long).clone()));
+    m.insert("unitShort".into(), Value::String((&p.unit_short).clone()));
+    Value::Object(m)
+}
+
+fn iface_ingredients__get_ingredient_information_response_estimated_cost__to_json(p: &iface_ingredients::GetIngredientInformationResponseEstimatedCost) -> Value {
+    let mut m = Map::new();
+    m.insert("unit".into(), Value::String((&p.unit).clone()));
+    m.insert("value".into(), serde_json::Number::from_f64(*(&p.value)).map(Value::Number).unwrap_or(Value::Null));
+    Value::Object(m)
+}
+
+fn iface_ingredients__get_ingredient_information_response_meta_item__to_json(p: &iface_ingredients::GetIngredientInformationResponseMetaItem) -> Value {
+    let mut m = Map::new();
+    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_ingredients__get_ingredient_information_response_nutrition__to_json(p: &iface_ingredients::GetIngredientInformationResponseNutrition) -> Value {
+    let mut m = Map::new();
+    m.insert("caloricBreakdown".into(), iface_ingredients__get_ingredient_information_response_nutrition_caloric_breakdown__to_json(&p.caloric_breakdown));
+    m.insert("nutrients".into(), Value::Array((&p.nutrients).iter().map(|v| iface_ingredients__get_ingredient_information_response_nutrition_nutrients_item__to_json(v)).collect()));
+    m.insert("properties".into(), Value::Array((&p.properties).iter().map(|v| iface_ingredients__get_ingredient_information_response_nutrition_properties_item__to_json(v)).collect()));
+    m.insert("weightPerServing".into(), iface_ingredients__get_ingredient_information_response_nutrition_weight_per_serving__to_json(&p.weight_per_serving));
+    Value::Object(m)
+}
+
+fn iface_ingredients__get_ingredient_information_response_nutrition_caloric_breakdown__to_json(p: &iface_ingredients::GetIngredientInformationResponseNutritionCaloricBreakdown) -> Value {
+    let mut m = Map::new();
+    m.insert("percentCarbs".into(), serde_json::Number::from_f64(*(&p.percent_carbs)).map(Value::Number).unwrap_or(Value::Null));
+    m.insert("percentFat".into(), serde_json::Number::from_f64(*(&p.percent_fat)).map(Value::Number).unwrap_or(Value::Null));
+    m.insert("percentProtein".into(), serde_json::Number::from_f64(*(&p.percent_protein)).map(Value::Number).unwrap_or(Value::Null));
+    Value::Object(m)
+}
+
+fn iface_ingredients__get_ingredient_information_response_nutrition_nutrients_item__to_json(p: &iface_ingredients::GetIngredientInformationResponseNutritionNutrientsItem) -> Value {
+    let mut m = Map::new();
+    m.insert("amount".into(), serde_json::Number::from_f64(*(&p.amount)).map(Value::Number).unwrap_or(Value::Null));
+    m.insert("name".into(), Value::String((&p.name).clone()));
+    m.insert("percentOfDailyNeeds".into(), serde_json::Number::from_f64(*(&p.percent_of_daily_needs)).map(Value::Number).unwrap_or(Value::Null));
+    m.insert("unit".into(), Value::String((&p.unit).clone()));
+    Value::Object(m)
+}
+
+fn iface_ingredients__get_ingredient_information_response_nutrition_properties_item__to_json(p: &iface_ingredients::GetIngredientInformationResponseNutritionPropertiesItem) -> Value {
+    let mut m = Map::new();
+    m.insert("amount".into(), serde_json::Number::from_f64(*(&p.amount)).map(Value::Number).unwrap_or(Value::Null));
+    m.insert("name".into(), Value::String((&p.name).clone()));
+    m.insert("unit".into(), Value::String((&p.unit).clone()));
+    Value::Object(m)
+}
+
+fn iface_ingredients__get_ingredient_information_response_nutrition_weight_per_serving__to_json(p: &iface_ingredients::GetIngredientInformationResponseNutritionWeightPerServing) -> Value {
+    let mut m = Map::new();
+    m.insert("amount".into(), serde_json::Number::from_f64(*(&p.amount)).map(Value::Number).unwrap_or(Value::Null));
+    m.insert("unit".into(), Value::String((&p.unit).clone()));
+    Value::Object(m)
+}
+
+fn iface_ingredients__get_ingredient_substitutes_by_id_response__to_json(p: &iface_ingredients::GetIngredientSubstitutesByIdResponse) -> Value {
+    let mut m = Map::new();
+    m.insert("ingredient".into(), Value::String((&p.ingredient).clone()));
+    m.insert("message".into(), Value::String((&p.message).clone()));
+    m.insert("substitutes".into(), Value::Array((&p.substitutes).iter().map(|v| Value::String((v).clone())).collect()));
+    Value::Object(m)
+}
+
+fn iface_ingredients__by_id_image_response__to_json(p: &iface_ingredients::ByIdImageResponse) -> Value {
+    let mut m = Map::new();
+    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
 }
 
 fn iface_ingredients__autocomplete_ingredient_search_params__to_json(p: &iface_ingredients::AutocompleteIngredientSearchParams) -> Value {
@@ -772,6 +1849,7 @@ fn iface_ingredients__visualize_ingredients_params__to_json(p: &iface_ingredient
     m.insert("content_type".into(), match (&p.content_type) { Some(v) => Value::String(iface_ingredients__visualize_ingredients_content_type_enum__to_str(v).into()), None => Value::Null });
     m.insert("language".into(), match (&p.language) { Some(v) => Value::String(iface_ingredients__autocomplete_ingredient_search_language_enum__to_str(v).into()), None => Value::Null });
     m.insert("accept".into(), match (&p.accept) { Some(v) => Value::String(iface_ingredients__visualize_ingredients_accept_enum__to_str(v).into()), None => Value::Null });
+    m.insert("body".into(), Value::String((&p.body).clone()));
     Value::Object(m)
 }
 
@@ -782,42 +1860,437 @@ fn iface_ingredients__by_id_image_params__to_json(p: &iface_ingredients::ByIdIma
     Value::Object(m)
 }
 
+fn iface_ingredients__autocomplete_ingredient_search_response_item__from_json(v: &Value) -> Option<iface_ingredients::AutocompleteIngredientSearchResponseItem> {
+    let m = v.as_object()?;
+    Some(iface_ingredients::AutocompleteIngredientSearchResponseItem {
+        aisle: m.get("aisle").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        id: m.get("id").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        image: m.get("image").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        name: m.get("name").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        possible_units: m.get("possibleUnits").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| (x).as_str().map(|s| s.to_string())).collect())),
+    })
+}
+
+fn iface_ingredients__map_ingredients_to_grocery_products_response_item__from_json(v: &Value) -> Option<iface_ingredients::MapIngredientsToGroceryProductsResponseItem> {
+    let m = v.as_object()?;
+    Some(iface_ingredients::MapIngredientsToGroceryProductsResponseItem {
+        ingredient_image: m.get("ingredientImage").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        meta: m.get("meta").and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| (x).as_str().map(|s| s.to_string())).collect())).unwrap_or_default(),
+        original: m.get("original").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        original_name: m.get("originalName").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        products: m.get("products").and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| iface_ingredients__map_ingredients_to_grocery_products_response_item_products_item__from_json(x)).collect())).unwrap_or_default(),
+    })
+}
+
+fn iface_ingredients__map_ingredients_to_grocery_products_response_item_products_item__from_json(v: &Value) -> Option<iface_ingredients::MapIngredientsToGroceryProductsResponseItemProductsItem> {
+    let m = v.as_object()?;
+    Some(iface_ingredients::MapIngredientsToGroceryProductsResponseItemProductsItem {
+        id: m.get("id").and_then(|v| (v).as_i64().map(|n| n as i32)).unwrap_or_default(),
+        title: m.get("title").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        upc: m.get("upc").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+    })
+}
+
+fn iface_ingredients__ingredient_search_response__from_json(v: &Value) -> Option<iface_ingredients::IngredientSearchResponse> {
+    let m = v.as_object()?;
+    Some(iface_ingredients::IngredientSearchResponse {
+        number: m.get("number").and_then(|v| (v).as_i64().map(|n| n as i32)).unwrap_or_default(),
+        offset: m.get("offset").and_then(|v| (v).as_i64().map(|n| n as i32)).unwrap_or_default(),
+        results: m.get("results").and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| iface_ingredients__ingredient_search_response_results_item__from_json(x)).collect())).unwrap_or_default(),
+        total_results: m.get("totalResults").and_then(|v| (v).as_i64().map(|n| n as i32)).unwrap_or_default(),
+    })
+}
+
+fn iface_ingredients__ingredient_search_response_results_item__from_json(v: &Value) -> Option<iface_ingredients::IngredientSearchResponseResultsItem> {
+    let m = v.as_object()?;
+    Some(iface_ingredients::IngredientSearchResponseResultsItem {
+        id: m.get("id").and_then(|v| (v).as_i64().map(|n| n as i32)).unwrap_or_default(),
+        image: m.get("image").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        name: m.get("name").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+    })
+}
+
+fn iface_ingredients__get_ingredient_substitutes_response__from_json(v: &Value) -> Option<iface_ingredients::GetIngredientSubstitutesResponse> {
+    let m = v.as_object()?;
+    Some(iface_ingredients::GetIngredientSubstitutesResponse {
+        ingredient: m.get("ingredient").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        message: m.get("message").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        substitutes: m.get("substitutes").and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| (x).as_str().map(|s| s.to_string())).collect())).unwrap_or_default(),
+    })
+}
+
+fn iface_ingredients__compute_ingredient_amount_response__from_json(v: &Value) -> Option<iface_ingredients::ComputeIngredientAmountResponse> {
+    let m = v.as_object()?;
+    Some(iface_ingredients::ComputeIngredientAmountResponse {
+        amount: m.get("amount").and_then(|v| (v).as_f64()).unwrap_or_default(),
+        unit: m.get("unit").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+    })
+}
+
+fn iface_ingredients__get_ingredient_information_response__from_json(v: &Value) -> Option<iface_ingredients::GetIngredientInformationResponse> {
+    let m = v.as_object()?;
+    Some(iface_ingredients::GetIngredientInformationResponse {
+        aisle: m.get("aisle").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        amount: m.get("amount").and_then(|v| (v).as_f64()).unwrap_or_default(),
+        category_path: m.get("categoryPath").and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| (x).as_str().map(|s| s.to_string())).collect())).unwrap_or_default(),
+        consistency: m.get("consistency").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        estimated_cost: match m.get("estimatedCost").and_then(|v| iface_ingredients__get_ingredient_information_response_estimated_cost__from_json(v)) { Some(x) => x, None => return None },
+        id: m.get("id").and_then(|v| (v).as_i64().map(|n| n as i32)).unwrap_or_default(),
+        image: m.get("image").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        meta: m.get("meta").and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| iface_ingredients__get_ingredient_information_response_meta_item__from_json(x)).collect())).unwrap_or_default(),
+        name: m.get("name").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        name_clean: m.get("nameClean").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        nutrition: match m.get("nutrition").and_then(|v| iface_ingredients__get_ingredient_information_response_nutrition__from_json(v)) { Some(x) => x, None => return None },
+        original: m.get("original").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        original_name: m.get("originalName").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        possible_units: m.get("possibleUnits").and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| (x).as_str().map(|s| s.to_string())).collect())).unwrap_or_default(),
+        shopping_list_units: m.get("shoppingListUnits").and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| (x).as_str().map(|s| s.to_string())).collect())).unwrap_or_default(),
+        unit: m.get("unit").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        unit_long: m.get("unitLong").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        unit_short: m.get("unitShort").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+    })
+}
+
+fn iface_ingredients__get_ingredient_information_response_estimated_cost__from_json(v: &Value) -> Option<iface_ingredients::GetIngredientInformationResponseEstimatedCost> {
+    let m = v.as_object()?;
+    Some(iface_ingredients::GetIngredientInformationResponseEstimatedCost {
+        unit: m.get("unit").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        value: m.get("value").and_then(|v| (v).as_f64()).unwrap_or_default(),
+    })
+}
+
+fn iface_ingredients__get_ingredient_information_response_meta_item__from_json(v: &Value) -> Option<iface_ingredients::GetIngredientInformationResponseMetaItem> {
+    let m = v.as_object()?;
+    Some(iface_ingredients::GetIngredientInformationResponseMetaItem {
+        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    })
+}
+
+fn iface_ingredients__get_ingredient_information_response_nutrition__from_json(v: &Value) -> Option<iface_ingredients::GetIngredientInformationResponseNutrition> {
+    let m = v.as_object()?;
+    Some(iface_ingredients::GetIngredientInformationResponseNutrition {
+        caloric_breakdown: match m.get("caloricBreakdown").and_then(|v| iface_ingredients__get_ingredient_information_response_nutrition_caloric_breakdown__from_json(v)) { Some(x) => x, None => return None },
+        nutrients: m.get("nutrients").and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| iface_ingredients__get_ingredient_information_response_nutrition_nutrients_item__from_json(x)).collect())).unwrap_or_default(),
+        properties: m.get("properties").and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| iface_ingredients__get_ingredient_information_response_nutrition_properties_item__from_json(x)).collect())).unwrap_or_default(),
+        weight_per_serving: match m.get("weightPerServing").and_then(|v| iface_ingredients__get_ingredient_information_response_nutrition_weight_per_serving__from_json(v)) { Some(x) => x, None => return None },
+    })
+}
+
+fn iface_ingredients__get_ingredient_information_response_nutrition_caloric_breakdown__from_json(v: &Value) -> Option<iface_ingredients::GetIngredientInformationResponseNutritionCaloricBreakdown> {
+    let m = v.as_object()?;
+    Some(iface_ingredients::GetIngredientInformationResponseNutritionCaloricBreakdown {
+        percent_carbs: m.get("percentCarbs").and_then(|v| (v).as_f64()).unwrap_or_default(),
+        percent_fat: m.get("percentFat").and_then(|v| (v).as_f64()).unwrap_or_default(),
+        percent_protein: m.get("percentProtein").and_then(|v| (v).as_f64()).unwrap_or_default(),
+    })
+}
+
+fn iface_ingredients__get_ingredient_information_response_nutrition_nutrients_item__from_json(v: &Value) -> Option<iface_ingredients::GetIngredientInformationResponseNutritionNutrientsItem> {
+    let m = v.as_object()?;
+    Some(iface_ingredients::GetIngredientInformationResponseNutritionNutrientsItem {
+        amount: m.get("amount").and_then(|v| (v).as_f64()).unwrap_or_default(),
+        name: m.get("name").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        percent_of_daily_needs: m.get("percentOfDailyNeeds").and_then(|v| (v).as_f64()).unwrap_or_default(),
+        unit: m.get("unit").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+    })
+}
+
+fn iface_ingredients__get_ingredient_information_response_nutrition_properties_item__from_json(v: &Value) -> Option<iface_ingredients::GetIngredientInformationResponseNutritionPropertiesItem> {
+    let m = v.as_object()?;
+    Some(iface_ingredients::GetIngredientInformationResponseNutritionPropertiesItem {
+        amount: m.get("amount").and_then(|v| (v).as_f64()).unwrap_or_default(),
+        name: m.get("name").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        unit: m.get("unit").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+    })
+}
+
+fn iface_ingredients__get_ingredient_information_response_nutrition_weight_per_serving__from_json(v: &Value) -> Option<iface_ingredients::GetIngredientInformationResponseNutritionWeightPerServing> {
+    let m = v.as_object()?;
+    Some(iface_ingredients::GetIngredientInformationResponseNutritionWeightPerServing {
+        amount: m.get("amount").and_then(|v| (v).as_f64()).unwrap_or_default(),
+        unit: m.get("unit").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+    })
+}
+
+fn iface_ingredients__get_ingredient_substitutes_by_id_response__from_json(v: &Value) -> Option<iface_ingredients::GetIngredientSubstitutesByIdResponse> {
+    let m = v.as_object()?;
+    Some(iface_ingredients::GetIngredientSubstitutesByIdResponse {
+        ingredient: m.get("ingredient").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        message: m.get("message").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        substitutes: m.get("substitutes").and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| (x).as_str().map(|s| s.to_string())).collect())).unwrap_or_default(),
+    })
+}
+
+fn iface_ingredients__by_id_image_response__from_json(v: &Value) -> Option<iface_ingredients::ByIdImageResponse> {
+    let m = v.as_object()?;
+    Some(iface_ingredients::ByIdImageResponse {
+        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    })
+}
+
+fn iface_ingredients__autocomplete_ingredient_search__ok(body: String) -> Result<Vec<iface_ingredients::AutocompleteIngredientSearchResponseItem>, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match (&v).as_array().map(|a| a.iter().filter_map(|x| iface_ingredients__autocomplete_ingredient_search_response_item__from_json(x)).collect()) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_ingredients__autocomplete_ingredient_search__err(e: crate::runtime::DispatchError) -> iface_ingredients::AutocompleteIngredientSearchError {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => match status {
+            401u16 => iface_ingredients::AutocompleteIngredientSearchError::Unauthorized(body),
+            403u16 => iface_ingredients::AutocompleteIngredientSearchError::Forbidden(body),
+            404u16 => iface_ingredients::AutocompleteIngredientSearchError::NotFound(body),
+            _ => iface_ingredients::AutocompleteIngredientSearchError::Other(body),
+        },
+        crate::runtime::DispatchError::Transport(m) => iface_ingredients::AutocompleteIngredientSearchError::Other(m),
+    }
+}
+
+fn iface_ingredients__map_ingredients_to_grocery_products__ok(body: String) -> Result<Vec<iface_ingredients::MapIngredientsToGroceryProductsResponseItem>, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match (&v).as_array().map(|a| a.iter().filter_map(|x| iface_ingredients__map_ingredients_to_grocery_products_response_item__from_json(x)).collect()) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_ingredients__map_ingredients_to_grocery_products__err(e: crate::runtime::DispatchError) -> iface_ingredients::MapIngredientsToGroceryProductsError {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => match status {
+            401u16 => iface_ingredients::MapIngredientsToGroceryProductsError::Unauthorized(body),
+            403u16 => iface_ingredients::MapIngredientsToGroceryProductsError::Forbidden(body),
+            404u16 => iface_ingredients::MapIngredientsToGroceryProductsError::NotFound(body),
+            _ => iface_ingredients::MapIngredientsToGroceryProductsError::Other(body),
+        },
+        crate::runtime::DispatchError::Transport(m) => iface_ingredients::MapIngredientsToGroceryProductsError::Other(m),
+    }
+}
+
+fn iface_ingredients__ingredient_search__ok(body: String) -> Result<iface_ingredients::IngredientSearchResponse, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match iface_ingredients__ingredient_search_response__from_json(&v) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_ingredients__ingredient_search__err(e: crate::runtime::DispatchError) -> iface_ingredients::IngredientSearchError {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => match status {
+            401u16 => iface_ingredients::IngredientSearchError::Unauthorized(body),
+            403u16 => iface_ingredients::IngredientSearchError::Forbidden(body),
+            404u16 => iface_ingredients::IngredientSearchError::NotFound(body),
+            _ => iface_ingredients::IngredientSearchError::Other(body),
+        },
+        crate::runtime::DispatchError::Transport(m) => iface_ingredients::IngredientSearchError::Other(m),
+    }
+}
+
+fn iface_ingredients__get_ingredient_substitutes__ok(body: String) -> Result<iface_ingredients::GetIngredientSubstitutesResponse, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match iface_ingredients__get_ingredient_substitutes_response__from_json(&v) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_ingredients__get_ingredient_substitutes__err(e: crate::runtime::DispatchError) -> iface_ingredients::GetIngredientSubstitutesError {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => match status {
+            401u16 => iface_ingredients::GetIngredientSubstitutesError::Unauthorized(body),
+            403u16 => iface_ingredients::GetIngredientSubstitutesError::Forbidden(body),
+            404u16 => iface_ingredients::GetIngredientSubstitutesError::NotFound(body),
+            _ => iface_ingredients::GetIngredientSubstitutesError::Other(body),
+        },
+        crate::runtime::DispatchError::Transport(m) => iface_ingredients::GetIngredientSubstitutesError::Other(m),
+    }
+}
+
+fn iface_ingredients__compute_ingredient_amount__ok(body: String) -> Result<iface_ingredients::ComputeIngredientAmountResponse, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match iface_ingredients__compute_ingredient_amount_response__from_json(&v) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_ingredients__compute_ingredient_amount__err(e: crate::runtime::DispatchError) -> iface_ingredients::ComputeIngredientAmountError {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => match status {
+            401u16 => iface_ingredients::ComputeIngredientAmountError::Unauthorized(body),
+            403u16 => iface_ingredients::ComputeIngredientAmountError::Forbidden(body),
+            404u16 => iface_ingredients::ComputeIngredientAmountError::NotFound(body),
+            _ => iface_ingredients::ComputeIngredientAmountError::Other(body),
+        },
+        crate::runtime::DispatchError::Transport(m) => iface_ingredients::ComputeIngredientAmountError::Other(m),
+    }
+}
+
+fn iface_ingredients__get_ingredient_information__ok(body: String) -> Result<iface_ingredients::GetIngredientInformationResponse, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match iface_ingredients__get_ingredient_information_response__from_json(&v) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_ingredients__get_ingredient_information__err(e: crate::runtime::DispatchError) -> iface_ingredients::GetIngredientInformationError {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => match status {
+            401u16 => iface_ingredients::GetIngredientInformationError::Unauthorized(body),
+            403u16 => iface_ingredients::GetIngredientInformationError::Forbidden(body),
+            404u16 => iface_ingredients::GetIngredientInformationError::NotFound(body),
+            _ => iface_ingredients::GetIngredientInformationError::Other(body),
+        },
+        crate::runtime::DispatchError::Transport(m) => iface_ingredients::GetIngredientInformationError::Other(m),
+    }
+}
+
+fn iface_ingredients__get_ingredient_substitutes_by_id__ok(body: String) -> Result<iface_ingredients::GetIngredientSubstitutesByIdResponse, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match iface_ingredients__get_ingredient_substitutes_by_id_response__from_json(&v) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_ingredients__get_ingredient_substitutes_by_id__err(e: crate::runtime::DispatchError) -> iface_ingredients::GetIngredientSubstitutesByIdError {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => match status {
+            401u16 => iface_ingredients::GetIngredientSubstitutesByIdError::Unauthorized(body),
+            403u16 => iface_ingredients::GetIngredientSubstitutesByIdError::Forbidden(body),
+            404u16 => iface_ingredients::GetIngredientSubstitutesByIdError::NotFound(body),
+            _ => iface_ingredients::GetIngredientSubstitutesByIdError::Other(body),
+        },
+        crate::runtime::DispatchError::Transport(m) => iface_ingredients::GetIngredientSubstitutesByIdError::Other(m),
+    }
+}
+
+fn iface_ingredients__visualize_ingredients__ok(body: String) -> Result<String, crate::runtime::DispatchError> {
+    Ok(body)
+}
+
+fn iface_ingredients__visualize_ingredients__err(e: crate::runtime::DispatchError) -> iface_ingredients::VisualizeIngredientsError {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => match status {
+            401u16 => iface_ingredients::VisualizeIngredientsError::Unauthorized(body),
+            403u16 => iface_ingredients::VisualizeIngredientsError::Forbidden(body),
+            404u16 => iface_ingredients::VisualizeIngredientsError::NotFound(body),
+            _ => iface_ingredients::VisualizeIngredientsError::Other(body),
+        },
+        crate::runtime::DispatchError::Transport(m) => iface_ingredients::VisualizeIngredientsError::Other(m),
+    }
+}
+
+fn iface_ingredients__by_id_image__ok(body: String) -> Result<iface_ingredients::ByIdImageResponse, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match iface_ingredients__by_id_image_response__from_json(&v) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_ingredients__by_id_image__err(e: crate::runtime::DispatchError) -> iface_ingredients::ByIdImageError {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => match status {
+            401u16 => iface_ingredients::ByIdImageError::Unauthorized(body),
+            403u16 => iface_ingredients::ByIdImageError::Forbidden(body),
+            404u16 => iface_ingredients::ByIdImageError::NotFound(body),
+            _ => iface_ingredients::ByIdImageError::Other(body),
+        },
+        crate::runtime::DispatchError::Transport(m) => iface_ingredients::ByIdImageError::Other(m),
+    }
+}
+
 impl iface_ingredients::Guest for crate::Component {
-    fn autocomplete_ingredient_search(params: iface_ingredients::AutocompleteIngredientSearchParams) -> Result<String, String> {
+    fn autocomplete_ingredient_search(params: iface_ingredients::AutocompleteIngredientSearchParams) -> Result<Vec<iface_ingredients::AutocompleteIngredientSearchResponseItem>, iface_ingredients::AutocompleteIngredientSearchError> {
         let json = iface_ingredients__autocomplete_ingredient_search_params__to_json(&params);
-        dispatch(&OP_INGREDIENTS_AUTOCOMPLETE_INGREDIENT_SEARCH, json)
+        match dispatch(&OP_INGREDIENTS_AUTOCOMPLETE_INGREDIENT_SEARCH, json).and_then(iface_ingredients__autocomplete_ingredient_search__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_ingredients__autocomplete_ingredient_search__err(e)),
+        }
     }
-    fn map_ingredients_to_grocery_products(params: iface_ingredients::MapIngredientsToGroceryProductsParams) -> Result<String, String> {
+    fn map_ingredients_to_grocery_products(params: iface_ingredients::MapIngredientsToGroceryProductsParams) -> Result<Vec<iface_ingredients::MapIngredientsToGroceryProductsResponseItem>, iface_ingredients::MapIngredientsToGroceryProductsError> {
         let json = iface_ingredients__map_ingredients_to_grocery_products_params__to_json(&params);
-        dispatch(&OP_INGREDIENTS_MAP_INGREDIENTS_TO_GROCERY_PRODUCTS, json)
+        match dispatch(&OP_INGREDIENTS_MAP_INGREDIENTS_TO_GROCERY_PRODUCTS, json).and_then(iface_ingredients__map_ingredients_to_grocery_products__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_ingredients__map_ingredients_to_grocery_products__err(e)),
+        }
     }
-    fn ingredient_search(params: iface_ingredients::IngredientSearchParams) -> Result<String, String> {
+    fn ingredient_search(params: iface_ingredients::IngredientSearchParams) -> Result<iface_ingredients::IngredientSearchResponse, iface_ingredients::IngredientSearchError> {
         let json = iface_ingredients__ingredient_search_params__to_json(&params);
-        dispatch(&OP_INGREDIENTS_INGREDIENT_SEARCH, json)
+        match dispatch(&OP_INGREDIENTS_INGREDIENT_SEARCH, json).and_then(iface_ingredients__ingredient_search__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_ingredients__ingredient_search__err(e)),
+        }
     }
-    fn get_ingredient_substitutes(params: iface_ingredients::GetIngredientSubstitutesParams) -> Result<String, String> {
+    fn get_ingredient_substitutes(params: iface_ingredients::GetIngredientSubstitutesParams) -> Result<iface_ingredients::GetIngredientSubstitutesResponse, iface_ingredients::GetIngredientSubstitutesError> {
         let json = iface_ingredients__get_ingredient_substitutes_params__to_json(&params);
-        dispatch(&OP_INGREDIENTS_GET_INGREDIENT_SUBSTITUTES, json)
+        match dispatch(&OP_INGREDIENTS_GET_INGREDIENT_SUBSTITUTES, json).and_then(iface_ingredients__get_ingredient_substitutes__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_ingredients__get_ingredient_substitutes__err(e)),
+        }
     }
-    fn compute_ingredient_amount(params: iface_ingredients::ComputeIngredientAmountParams) -> Result<String, String> {
+    fn compute_ingredient_amount(params: iface_ingredients::ComputeIngredientAmountParams) -> Result<iface_ingredients::ComputeIngredientAmountResponse, iface_ingredients::ComputeIngredientAmountError> {
         let json = iface_ingredients__compute_ingredient_amount_params__to_json(&params);
-        dispatch(&OP_INGREDIENTS_COMPUTE_INGREDIENT_AMOUNT, json)
+        match dispatch(&OP_INGREDIENTS_COMPUTE_INGREDIENT_AMOUNT, json).and_then(iface_ingredients__compute_ingredient_amount__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_ingredients__compute_ingredient_amount__err(e)),
+        }
     }
-    fn get_ingredient_information(params: iface_ingredients::GetIngredientInformationParams) -> Result<String, String> {
+    fn get_ingredient_information(params: iface_ingredients::GetIngredientInformationParams) -> Result<iface_ingredients::GetIngredientInformationResponse, iface_ingredients::GetIngredientInformationError> {
         let json = iface_ingredients__get_ingredient_information_params__to_json(&params);
-        dispatch(&OP_INGREDIENTS_GET_INGREDIENT_INFORMATION, json)
+        match dispatch(&OP_INGREDIENTS_GET_INGREDIENT_INFORMATION, json).and_then(iface_ingredients__get_ingredient_information__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_ingredients__get_ingredient_information__err(e)),
+        }
     }
-    fn get_ingredient_substitutes_by_id(params: iface_ingredients::GetIngredientSubstitutesByIdParams) -> Result<String, String> {
+    fn get_ingredient_substitutes_by_id(params: iface_ingredients::GetIngredientSubstitutesByIdParams) -> Result<iface_ingredients::GetIngredientSubstitutesByIdResponse, iface_ingredients::GetIngredientSubstitutesByIdError> {
         let json = iface_ingredients__get_ingredient_substitutes_by_id_params__to_json(&params);
-        dispatch(&OP_INGREDIENTS_GET_INGREDIENT_SUBSTITUTES_BY_ID, json)
+        match dispatch(&OP_INGREDIENTS_GET_INGREDIENT_SUBSTITUTES_BY_ID, json).and_then(iface_ingredients__get_ingredient_substitutes_by_id__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_ingredients__get_ingredient_substitutes_by_id__err(e)),
+        }
     }
-    fn visualize_ingredients(params: iface_ingredients::VisualizeIngredientsParams) -> Result<String, String> {
+    fn visualize_ingredients(params: iface_ingredients::VisualizeIngredientsParams) -> Result<String, iface_ingredients::VisualizeIngredientsError> {
         let json = iface_ingredients__visualize_ingredients_params__to_json(&params);
-        dispatch(&OP_INGREDIENTS_VISUALIZE_INGREDIENTS, json)
+        match dispatch(&OP_INGREDIENTS_VISUALIZE_INGREDIENTS, json).and_then(iface_ingredients__visualize_ingredients__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_ingredients__visualize_ingredients__err(e)),
+        }
     }
-    fn by_id_image(params: iface_ingredients::ByIdImageParams) -> Result<String, String> {
+    fn by_id_image(params: iface_ingredients::ByIdImageParams) -> Result<iface_ingredients::ByIdImageResponse, iface_ingredients::ByIdImageError> {
         let json = iface_ingredients__by_id_image_params__to_json(&params);
-        dispatch(&OP_INGREDIENTS_BY_ID_IMAGE, json)
+        match dispatch(&OP_INGREDIENTS_BY_ID_IMAGE, json).and_then(iface_ingredients__by_id_image__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_ingredients__by_id_image__err(e)),
+        }
     }
 }
 use crate::exports::autostamp::spoonacular::recipes as iface_recipes;
@@ -826,8 +2299,8 @@ const OP_RECIPES_COMPUTE_GLYCEMIC_LOAD: OpSpec = OpSpec {
     method: "POST",
     path_template: "/food/ingredients/glycemicLoad",
     fields: &[
-        FieldSpec { snake: "language", location: FieldLocation::Query },
-        FieldSpec { snake: "ingredients", location: FieldLocation::Body },
+        FieldSpec { snake: "language", wire: "language", location: FieldLocation::Query },
+        FieldSpec { snake: "ingredients", wire: "ingredients", location: FieldLocation::Body },
     ],
     auth: &[
         AuthApply { secret_key: "apiKeyScheme", kind: AuthKind::ApiKeyHeader("x-api-key") },
@@ -838,13 +2311,13 @@ const OP_RECIPES_ANALYZE_RECIPE: OpSpec = OpSpec {
     method: "POST",
     path_template: "/recipes/analyze",
     fields: &[
-        FieldSpec { snake: "language", location: FieldLocation::Query },
-        FieldSpec { snake: "include_nutrition", location: FieldLocation::Query },
-        FieldSpec { snake: "include_taste", location: FieldLocation::Query },
-        FieldSpec { snake: "ingredients", location: FieldLocation::Body },
-        FieldSpec { snake: "instructions", location: FieldLocation::Body },
-        FieldSpec { snake: "servings", location: FieldLocation::Body },
-        FieldSpec { snake: "title", location: FieldLocation::Body },
+        FieldSpec { snake: "language", wire: "language", location: FieldLocation::Query },
+        FieldSpec { snake: "include_nutrition", wire: "includeNutrition", location: FieldLocation::Query },
+        FieldSpec { snake: "include_taste", wire: "includeTaste", location: FieldLocation::Query },
+        FieldSpec { snake: "ingredients", wire: "ingredients", location: FieldLocation::Body },
+        FieldSpec { snake: "instructions", wire: "instructions", location: FieldLocation::Body },
+        FieldSpec { snake: "servings", wire: "servings", location: FieldLocation::Body },
+        FieldSpec { snake: "title", wire: "title", location: FieldLocation::Body },
     ],
     auth: &[
         AuthApply { secret_key: "apiKeyScheme", kind: AuthKind::ApiKeyHeader("x-api-key") },
@@ -855,7 +2328,8 @@ const OP_RECIPES_ANALYZE_RECIPE_INSTRUCTIONS: OpSpec = OpSpec {
     method: "POST",
     path_template: "/recipes/analyzeInstructions",
     fields: &[
-        FieldSpec { snake: "content_type", location: FieldLocation::Header },
+        FieldSpec { snake: "content_type", wire: "Content-Type", location: FieldLocation::Header },
+        FieldSpec { snake: "body", wire: "body", location: FieldLocation::Body },
     ],
     auth: &[
         AuthApply { secret_key: "apiKeyScheme", kind: AuthKind::ApiKeyHeader("x-api-key") },
@@ -866,8 +2340,8 @@ const OP_RECIPES_AUTOCOMPLETE_RECIPE_SEARCH: OpSpec = OpSpec {
     method: "GET",
     path_template: "/recipes/autocomplete",
     fields: &[
-        FieldSpec { snake: "query", location: FieldLocation::Query },
-        FieldSpec { snake: "number", location: FieldLocation::Query },
+        FieldSpec { snake: "query", wire: "query", location: FieldLocation::Query },
+        FieldSpec { snake: "number", wire: "number", location: FieldLocation::Query },
     ],
     auth: &[
         AuthApply { secret_key: "apiKeyScheme", kind: AuthKind::ApiKeyHeader("x-api-key") },
@@ -878,102 +2352,102 @@ const OP_RECIPES_SEARCH_RECIPES: OpSpec = OpSpec {
     method: "GET",
     path_template: "/recipes/complexSearch",
     fields: &[
-        FieldSpec { snake: "query", location: FieldLocation::Query },
-        FieldSpec { snake: "cuisine", location: FieldLocation::Query },
-        FieldSpec { snake: "exclude_cuisine", location: FieldLocation::Query },
-        FieldSpec { snake: "diet", location: FieldLocation::Query },
-        FieldSpec { snake: "intolerances", location: FieldLocation::Query },
-        FieldSpec { snake: "equipment", location: FieldLocation::Query },
-        FieldSpec { snake: "include_ingredients", location: FieldLocation::Query },
-        FieldSpec { snake: "exclude_ingredients", location: FieldLocation::Query },
-        FieldSpec { snake: "type", location: FieldLocation::Query },
-        FieldSpec { snake: "instructions_required", location: FieldLocation::Query },
-        FieldSpec { snake: "fill_ingredients", location: FieldLocation::Query },
-        FieldSpec { snake: "add_recipe_information", location: FieldLocation::Query },
-        FieldSpec { snake: "add_recipe_nutrition", location: FieldLocation::Query },
-        FieldSpec { snake: "author", location: FieldLocation::Query },
-        FieldSpec { snake: "tags", location: FieldLocation::Query },
-        FieldSpec { snake: "recipe_box_id", location: FieldLocation::Query },
-        FieldSpec { snake: "title_match", location: FieldLocation::Query },
-        FieldSpec { snake: "max_ready_time", location: FieldLocation::Query },
-        FieldSpec { snake: "ignore_pantry", location: FieldLocation::Query },
-        FieldSpec { snake: "sort", location: FieldLocation::Query },
-        FieldSpec { snake: "sort_direction", location: FieldLocation::Query },
-        FieldSpec { snake: "min_carbs", location: FieldLocation::Query },
-        FieldSpec { snake: "max_carbs", location: FieldLocation::Query },
-        FieldSpec { snake: "min_protein", location: FieldLocation::Query },
-        FieldSpec { snake: "max_protein", location: FieldLocation::Query },
-        FieldSpec { snake: "min_calories", location: FieldLocation::Query },
-        FieldSpec { snake: "max_calories", location: FieldLocation::Query },
-        FieldSpec { snake: "min_fat", location: FieldLocation::Query },
-        FieldSpec { snake: "max_fat", location: FieldLocation::Query },
-        FieldSpec { snake: "min_alcohol", location: FieldLocation::Query },
-        FieldSpec { snake: "max_alcohol", location: FieldLocation::Query },
-        FieldSpec { snake: "min_caffeine", location: FieldLocation::Query },
-        FieldSpec { snake: "max_caffeine", location: FieldLocation::Query },
-        FieldSpec { snake: "min_copper", location: FieldLocation::Query },
-        FieldSpec { snake: "max_copper", location: FieldLocation::Query },
-        FieldSpec { snake: "min_calcium", location: FieldLocation::Query },
-        FieldSpec { snake: "max_calcium", location: FieldLocation::Query },
-        FieldSpec { snake: "min_choline", location: FieldLocation::Query },
-        FieldSpec { snake: "max_choline", location: FieldLocation::Query },
-        FieldSpec { snake: "min_cholesterol", location: FieldLocation::Query },
-        FieldSpec { snake: "max_cholesterol", location: FieldLocation::Query },
-        FieldSpec { snake: "min_fluoride", location: FieldLocation::Query },
-        FieldSpec { snake: "max_fluoride", location: FieldLocation::Query },
-        FieldSpec { snake: "min_saturated_fat", location: FieldLocation::Query },
-        FieldSpec { snake: "max_saturated_fat", location: FieldLocation::Query },
-        FieldSpec { snake: "min_vitamin_a", location: FieldLocation::Query },
-        FieldSpec { snake: "max_vitamin_a", location: FieldLocation::Query },
-        FieldSpec { snake: "min_vitamin_c", location: FieldLocation::Query },
-        FieldSpec { snake: "max_vitamin_c", location: FieldLocation::Query },
-        FieldSpec { snake: "min_vitamin_d", location: FieldLocation::Query },
-        FieldSpec { snake: "max_vitamin_d", location: FieldLocation::Query },
-        FieldSpec { snake: "min_vitamin_e", location: FieldLocation::Query },
-        FieldSpec { snake: "max_vitamin_e", location: FieldLocation::Query },
-        FieldSpec { snake: "min_vitamin_k", location: FieldLocation::Query },
-        FieldSpec { snake: "max_vitamin_k", location: FieldLocation::Query },
-        FieldSpec { snake: "min_vitamin_b1", location: FieldLocation::Query },
-        FieldSpec { snake: "max_vitamin_b1", location: FieldLocation::Query },
-        FieldSpec { snake: "min_vitamin_b2", location: FieldLocation::Query },
-        FieldSpec { snake: "max_vitamin_b2", location: FieldLocation::Query },
-        FieldSpec { snake: "min_vitamin_b5", location: FieldLocation::Query },
-        FieldSpec { snake: "max_vitamin_b5", location: FieldLocation::Query },
-        FieldSpec { snake: "min_vitamin_b3", location: FieldLocation::Query },
-        FieldSpec { snake: "max_vitamin_b3", location: FieldLocation::Query },
-        FieldSpec { snake: "min_vitamin_b6", location: FieldLocation::Query },
-        FieldSpec { snake: "max_vitamin_b6", location: FieldLocation::Query },
-        FieldSpec { snake: "min_vitamin_b12", location: FieldLocation::Query },
-        FieldSpec { snake: "max_vitamin_b12", location: FieldLocation::Query },
-        FieldSpec { snake: "min_fiber", location: FieldLocation::Query },
-        FieldSpec { snake: "max_fiber", location: FieldLocation::Query },
-        FieldSpec { snake: "min_folate", location: FieldLocation::Query },
-        FieldSpec { snake: "max_folate", location: FieldLocation::Query },
-        FieldSpec { snake: "min_folic_acid", location: FieldLocation::Query },
-        FieldSpec { snake: "max_folic_acid", location: FieldLocation::Query },
-        FieldSpec { snake: "min_iodine", location: FieldLocation::Query },
-        FieldSpec { snake: "max_iodine", location: FieldLocation::Query },
-        FieldSpec { snake: "min_iron", location: FieldLocation::Query },
-        FieldSpec { snake: "max_iron", location: FieldLocation::Query },
-        FieldSpec { snake: "min_magnesium", location: FieldLocation::Query },
-        FieldSpec { snake: "max_magnesium", location: FieldLocation::Query },
-        FieldSpec { snake: "min_manganese", location: FieldLocation::Query },
-        FieldSpec { snake: "max_manganese", location: FieldLocation::Query },
-        FieldSpec { snake: "min_phosphorus", location: FieldLocation::Query },
-        FieldSpec { snake: "max_phosphorus", location: FieldLocation::Query },
-        FieldSpec { snake: "min_potassium", location: FieldLocation::Query },
-        FieldSpec { snake: "max_potassium", location: FieldLocation::Query },
-        FieldSpec { snake: "min_selenium", location: FieldLocation::Query },
-        FieldSpec { snake: "max_selenium", location: FieldLocation::Query },
-        FieldSpec { snake: "min_sodium", location: FieldLocation::Query },
-        FieldSpec { snake: "max_sodium", location: FieldLocation::Query },
-        FieldSpec { snake: "min_sugar", location: FieldLocation::Query },
-        FieldSpec { snake: "max_sugar", location: FieldLocation::Query },
-        FieldSpec { snake: "min_zinc", location: FieldLocation::Query },
-        FieldSpec { snake: "max_zinc", location: FieldLocation::Query },
-        FieldSpec { snake: "offset", location: FieldLocation::Query },
-        FieldSpec { snake: "number", location: FieldLocation::Query },
-        FieldSpec { snake: "limit_license", location: FieldLocation::Query },
+        FieldSpec { snake: "query", wire: "query", location: FieldLocation::Query },
+        FieldSpec { snake: "cuisine", wire: "cuisine", location: FieldLocation::Query },
+        FieldSpec { snake: "exclude_cuisine", wire: "excludeCuisine", location: FieldLocation::Query },
+        FieldSpec { snake: "diet", wire: "diet", location: FieldLocation::Query },
+        FieldSpec { snake: "intolerances", wire: "intolerances", location: FieldLocation::Query },
+        FieldSpec { snake: "equipment", wire: "equipment", location: FieldLocation::Query },
+        FieldSpec { snake: "include_ingredients", wire: "includeIngredients", location: FieldLocation::Query },
+        FieldSpec { snake: "exclude_ingredients", wire: "excludeIngredients", location: FieldLocation::Query },
+        FieldSpec { snake: "type", wire: "type", location: FieldLocation::Query },
+        FieldSpec { snake: "instructions_required", wire: "instructionsRequired", location: FieldLocation::Query },
+        FieldSpec { snake: "fill_ingredients", wire: "fillIngredients", location: FieldLocation::Query },
+        FieldSpec { snake: "add_recipe_information", wire: "addRecipeInformation", location: FieldLocation::Query },
+        FieldSpec { snake: "add_recipe_nutrition", wire: "addRecipeNutrition", location: FieldLocation::Query },
+        FieldSpec { snake: "author", wire: "author", location: FieldLocation::Query },
+        FieldSpec { snake: "tags", wire: "tags", location: FieldLocation::Query },
+        FieldSpec { snake: "recipe_box_id", wire: "recipeBoxId", location: FieldLocation::Query },
+        FieldSpec { snake: "title_match", wire: "titleMatch", location: FieldLocation::Query },
+        FieldSpec { snake: "max_ready_time", wire: "maxReadyTime", location: FieldLocation::Query },
+        FieldSpec { snake: "ignore_pantry", wire: "ignorePantry", location: FieldLocation::Query },
+        FieldSpec { snake: "sort", wire: "sort", location: FieldLocation::Query },
+        FieldSpec { snake: "sort_direction", wire: "sortDirection", location: FieldLocation::Query },
+        FieldSpec { snake: "min_carbs", wire: "minCarbs", location: FieldLocation::Query },
+        FieldSpec { snake: "max_carbs", wire: "maxCarbs", location: FieldLocation::Query },
+        FieldSpec { snake: "min_protein", wire: "minProtein", location: FieldLocation::Query },
+        FieldSpec { snake: "max_protein", wire: "maxProtein", location: FieldLocation::Query },
+        FieldSpec { snake: "min_calories", wire: "minCalories", location: FieldLocation::Query },
+        FieldSpec { snake: "max_calories", wire: "maxCalories", location: FieldLocation::Query },
+        FieldSpec { snake: "min_fat", wire: "minFat", location: FieldLocation::Query },
+        FieldSpec { snake: "max_fat", wire: "maxFat", location: FieldLocation::Query },
+        FieldSpec { snake: "min_alcohol", wire: "minAlcohol", location: FieldLocation::Query },
+        FieldSpec { snake: "max_alcohol", wire: "maxAlcohol", location: FieldLocation::Query },
+        FieldSpec { snake: "min_caffeine", wire: "minCaffeine", location: FieldLocation::Query },
+        FieldSpec { snake: "max_caffeine", wire: "maxCaffeine", location: FieldLocation::Query },
+        FieldSpec { snake: "min_copper", wire: "minCopper", location: FieldLocation::Query },
+        FieldSpec { snake: "max_copper", wire: "maxCopper", location: FieldLocation::Query },
+        FieldSpec { snake: "min_calcium", wire: "minCalcium", location: FieldLocation::Query },
+        FieldSpec { snake: "max_calcium", wire: "maxCalcium", location: FieldLocation::Query },
+        FieldSpec { snake: "min_choline", wire: "minCholine", location: FieldLocation::Query },
+        FieldSpec { snake: "max_choline", wire: "maxCholine", location: FieldLocation::Query },
+        FieldSpec { snake: "min_cholesterol", wire: "minCholesterol", location: FieldLocation::Query },
+        FieldSpec { snake: "max_cholesterol", wire: "maxCholesterol", location: FieldLocation::Query },
+        FieldSpec { snake: "min_fluoride", wire: "minFluoride", location: FieldLocation::Query },
+        FieldSpec { snake: "max_fluoride", wire: "maxFluoride", location: FieldLocation::Query },
+        FieldSpec { snake: "min_saturated_fat", wire: "minSaturatedFat", location: FieldLocation::Query },
+        FieldSpec { snake: "max_saturated_fat", wire: "maxSaturatedFat", location: FieldLocation::Query },
+        FieldSpec { snake: "min_vitamin_a", wire: "minVitaminA", location: FieldLocation::Query },
+        FieldSpec { snake: "max_vitamin_a", wire: "maxVitaminA", location: FieldLocation::Query },
+        FieldSpec { snake: "min_vitamin_c", wire: "minVitaminC", location: FieldLocation::Query },
+        FieldSpec { snake: "max_vitamin_c", wire: "maxVitaminC", location: FieldLocation::Query },
+        FieldSpec { snake: "min_vitamin_d", wire: "minVitaminD", location: FieldLocation::Query },
+        FieldSpec { snake: "max_vitamin_d", wire: "maxVitaminD", location: FieldLocation::Query },
+        FieldSpec { snake: "min_vitamin_e", wire: "minVitaminE", location: FieldLocation::Query },
+        FieldSpec { snake: "max_vitamin_e", wire: "maxVitaminE", location: FieldLocation::Query },
+        FieldSpec { snake: "min_vitamin_k", wire: "minVitaminK", location: FieldLocation::Query },
+        FieldSpec { snake: "max_vitamin_k", wire: "maxVitaminK", location: FieldLocation::Query },
+        FieldSpec { snake: "min_vitamin_b1", wire: "minVitaminB1", location: FieldLocation::Query },
+        FieldSpec { snake: "max_vitamin_b1", wire: "maxVitaminB1", location: FieldLocation::Query },
+        FieldSpec { snake: "min_vitamin_b2", wire: "minVitaminB2", location: FieldLocation::Query },
+        FieldSpec { snake: "max_vitamin_b2", wire: "maxVitaminB2", location: FieldLocation::Query },
+        FieldSpec { snake: "min_vitamin_b5", wire: "minVitaminB5", location: FieldLocation::Query },
+        FieldSpec { snake: "max_vitamin_b5", wire: "maxVitaminB5", location: FieldLocation::Query },
+        FieldSpec { snake: "min_vitamin_b3", wire: "minVitaminB3", location: FieldLocation::Query },
+        FieldSpec { snake: "max_vitamin_b3", wire: "maxVitaminB3", location: FieldLocation::Query },
+        FieldSpec { snake: "min_vitamin_b6", wire: "minVitaminB6", location: FieldLocation::Query },
+        FieldSpec { snake: "max_vitamin_b6", wire: "maxVitaminB6", location: FieldLocation::Query },
+        FieldSpec { snake: "min_vitamin_b12", wire: "minVitaminB12", location: FieldLocation::Query },
+        FieldSpec { snake: "max_vitamin_b12", wire: "maxVitaminB12", location: FieldLocation::Query },
+        FieldSpec { snake: "min_fiber", wire: "minFiber", location: FieldLocation::Query },
+        FieldSpec { snake: "max_fiber", wire: "maxFiber", location: FieldLocation::Query },
+        FieldSpec { snake: "min_folate", wire: "minFolate", location: FieldLocation::Query },
+        FieldSpec { snake: "max_folate", wire: "maxFolate", location: FieldLocation::Query },
+        FieldSpec { snake: "min_folic_acid", wire: "minFolicAcid", location: FieldLocation::Query },
+        FieldSpec { snake: "max_folic_acid", wire: "maxFolicAcid", location: FieldLocation::Query },
+        FieldSpec { snake: "min_iodine", wire: "minIodine", location: FieldLocation::Query },
+        FieldSpec { snake: "max_iodine", wire: "maxIodine", location: FieldLocation::Query },
+        FieldSpec { snake: "min_iron", wire: "minIron", location: FieldLocation::Query },
+        FieldSpec { snake: "max_iron", wire: "maxIron", location: FieldLocation::Query },
+        FieldSpec { snake: "min_magnesium", wire: "minMagnesium", location: FieldLocation::Query },
+        FieldSpec { snake: "max_magnesium", wire: "maxMagnesium", location: FieldLocation::Query },
+        FieldSpec { snake: "min_manganese", wire: "minManganese", location: FieldLocation::Query },
+        FieldSpec { snake: "max_manganese", wire: "maxManganese", location: FieldLocation::Query },
+        FieldSpec { snake: "min_phosphorus", wire: "minPhosphorus", location: FieldLocation::Query },
+        FieldSpec { snake: "max_phosphorus", wire: "maxPhosphorus", location: FieldLocation::Query },
+        FieldSpec { snake: "min_potassium", wire: "minPotassium", location: FieldLocation::Query },
+        FieldSpec { snake: "max_potassium", wire: "maxPotassium", location: FieldLocation::Query },
+        FieldSpec { snake: "min_selenium", wire: "minSelenium", location: FieldLocation::Query },
+        FieldSpec { snake: "max_selenium", wire: "maxSelenium", location: FieldLocation::Query },
+        FieldSpec { snake: "min_sodium", wire: "minSodium", location: FieldLocation::Query },
+        FieldSpec { snake: "max_sodium", wire: "maxSodium", location: FieldLocation::Query },
+        FieldSpec { snake: "min_sugar", wire: "minSugar", location: FieldLocation::Query },
+        FieldSpec { snake: "max_sugar", wire: "maxSugar", location: FieldLocation::Query },
+        FieldSpec { snake: "min_zinc", wire: "minZinc", location: FieldLocation::Query },
+        FieldSpec { snake: "max_zinc", wire: "maxZinc", location: FieldLocation::Query },
+        FieldSpec { snake: "offset", wire: "offset", location: FieldLocation::Query },
+        FieldSpec { snake: "number", wire: "number", location: FieldLocation::Query },
+        FieldSpec { snake: "limit_license", wire: "limitLicense", location: FieldLocation::Query },
     ],
     auth: &[
         AuthApply { secret_key: "apiKeyScheme", kind: AuthKind::ApiKeyHeader("x-api-key") },
@@ -984,10 +2458,10 @@ const OP_RECIPES_CONVERT_AMOUNTS: OpSpec = OpSpec {
     method: "GET",
     path_template: "/recipes/convert",
     fields: &[
-        FieldSpec { snake: "ingredient_name", location: FieldLocation::Query },
-        FieldSpec { snake: "source_amount", location: FieldLocation::Query },
-        FieldSpec { snake: "source_unit", location: FieldLocation::Query },
-        FieldSpec { snake: "target_unit", location: FieldLocation::Query },
+        FieldSpec { snake: "ingredient_name", wire: "ingredientName", location: FieldLocation::Query },
+        FieldSpec { snake: "source_amount", wire: "sourceAmount", location: FieldLocation::Query },
+        FieldSpec { snake: "source_unit", wire: "sourceUnit", location: FieldLocation::Query },
+        FieldSpec { snake: "target_unit", wire: "targetUnit", location: FieldLocation::Query },
     ],
     auth: &[
         AuthApply { secret_key: "apiKeyScheme", kind: AuthKind::ApiKeyHeader("x-api-key") },
@@ -998,7 +2472,8 @@ const OP_RECIPES_CLASSIFY_CUISINE: OpSpec = OpSpec {
     method: "POST",
     path_template: "/recipes/cuisine",
     fields: &[
-        FieldSpec { snake: "content_type", location: FieldLocation::Header },
+        FieldSpec { snake: "content_type", wire: "Content-Type", location: FieldLocation::Header },
+        FieldSpec { snake: "body", wire: "body", location: FieldLocation::Body },
     ],
     auth: &[
         AuthApply { secret_key: "apiKeyScheme", kind: AuthKind::ApiKeyHeader("x-api-key") },
@@ -1009,11 +2484,11 @@ const OP_RECIPES_EXTRACT_RECIPE_FROM_WEBSITE: OpSpec = OpSpec {
     method: "GET",
     path_template: "/recipes/extract",
     fields: &[
-        FieldSpec { snake: "url", location: FieldLocation::Query },
-        FieldSpec { snake: "force_extraction", location: FieldLocation::Query },
-        FieldSpec { snake: "analyze", location: FieldLocation::Query },
-        FieldSpec { snake: "include_nutrition", location: FieldLocation::Query },
-        FieldSpec { snake: "include_taste", location: FieldLocation::Query },
+        FieldSpec { snake: "url", wire: "url", location: FieldLocation::Query },
+        FieldSpec { snake: "force_extraction", wire: "forceExtraction", location: FieldLocation::Query },
+        FieldSpec { snake: "analyze", wire: "analyze", location: FieldLocation::Query },
+        FieldSpec { snake: "include_nutrition", wire: "includeNutrition", location: FieldLocation::Query },
+        FieldSpec { snake: "include_taste", wire: "includeTaste", location: FieldLocation::Query },
     ],
     auth: &[
         AuthApply { secret_key: "apiKeyScheme", kind: AuthKind::ApiKeyHeader("x-api-key") },
@@ -1024,11 +2499,11 @@ const OP_RECIPES_SEARCH_RECIPES_BY_INGREDIENTS: OpSpec = OpSpec {
     method: "GET",
     path_template: "/recipes/findByIngredients",
     fields: &[
-        FieldSpec { snake: "ingredients", location: FieldLocation::Query },
-        FieldSpec { snake: "number", location: FieldLocation::Query },
-        FieldSpec { snake: "limit_license", location: FieldLocation::Query },
-        FieldSpec { snake: "ranking", location: FieldLocation::Query },
-        FieldSpec { snake: "ignore_pantry", location: FieldLocation::Query },
+        FieldSpec { snake: "ingredients", wire: "ingredients", location: FieldLocation::Query },
+        FieldSpec { snake: "number", wire: "number", location: FieldLocation::Query },
+        FieldSpec { snake: "limit_license", wire: "limitLicense", location: FieldLocation::Query },
+        FieldSpec { snake: "ranking", wire: "ranking", location: FieldLocation::Query },
+        FieldSpec { snake: "ignore_pantry", wire: "ignorePantry", location: FieldLocation::Query },
     ],
     auth: &[
         AuthApply { secret_key: "apiKeyScheme", kind: AuthKind::ApiKeyHeader("x-api-key") },
@@ -1039,82 +2514,82 @@ const OP_RECIPES_SEARCH_RECIPES_BY_NUTRIENTS: OpSpec = OpSpec {
     method: "GET",
     path_template: "/recipes/findByNutrients",
     fields: &[
-        FieldSpec { snake: "min_carbs", location: FieldLocation::Query },
-        FieldSpec { snake: "max_carbs", location: FieldLocation::Query },
-        FieldSpec { snake: "min_protein", location: FieldLocation::Query },
-        FieldSpec { snake: "max_protein", location: FieldLocation::Query },
-        FieldSpec { snake: "min_calories", location: FieldLocation::Query },
-        FieldSpec { snake: "max_calories", location: FieldLocation::Query },
-        FieldSpec { snake: "min_fat", location: FieldLocation::Query },
-        FieldSpec { snake: "max_fat", location: FieldLocation::Query },
-        FieldSpec { snake: "min_alcohol", location: FieldLocation::Query },
-        FieldSpec { snake: "max_alcohol", location: FieldLocation::Query },
-        FieldSpec { snake: "min_caffeine", location: FieldLocation::Query },
-        FieldSpec { snake: "max_caffeine", location: FieldLocation::Query },
-        FieldSpec { snake: "min_copper", location: FieldLocation::Query },
-        FieldSpec { snake: "max_copper", location: FieldLocation::Query },
-        FieldSpec { snake: "min_calcium", location: FieldLocation::Query },
-        FieldSpec { snake: "max_calcium", location: FieldLocation::Query },
-        FieldSpec { snake: "min_choline", location: FieldLocation::Query },
-        FieldSpec { snake: "max_choline", location: FieldLocation::Query },
-        FieldSpec { snake: "min_cholesterol", location: FieldLocation::Query },
-        FieldSpec { snake: "max_cholesterol", location: FieldLocation::Query },
-        FieldSpec { snake: "min_fluoride", location: FieldLocation::Query },
-        FieldSpec { snake: "max_fluoride", location: FieldLocation::Query },
-        FieldSpec { snake: "min_saturated_fat", location: FieldLocation::Query },
-        FieldSpec { snake: "max_saturated_fat", location: FieldLocation::Query },
-        FieldSpec { snake: "min_vitamin_a", location: FieldLocation::Query },
-        FieldSpec { snake: "max_vitamin_a", location: FieldLocation::Query },
-        FieldSpec { snake: "min_vitamin_c", location: FieldLocation::Query },
-        FieldSpec { snake: "max_vitamin_c", location: FieldLocation::Query },
-        FieldSpec { snake: "min_vitamin_d", location: FieldLocation::Query },
-        FieldSpec { snake: "max_vitamin_d", location: FieldLocation::Query },
-        FieldSpec { snake: "min_vitamin_e", location: FieldLocation::Query },
-        FieldSpec { snake: "max_vitamin_e", location: FieldLocation::Query },
-        FieldSpec { snake: "min_vitamin_k", location: FieldLocation::Query },
-        FieldSpec { snake: "max_vitamin_k", location: FieldLocation::Query },
-        FieldSpec { snake: "min_vitamin_b1", location: FieldLocation::Query },
-        FieldSpec { snake: "max_vitamin_b1", location: FieldLocation::Query },
-        FieldSpec { snake: "min_vitamin_b2", location: FieldLocation::Query },
-        FieldSpec { snake: "max_vitamin_b2", location: FieldLocation::Query },
-        FieldSpec { snake: "min_vitamin_b5", location: FieldLocation::Query },
-        FieldSpec { snake: "max_vitamin_b5", location: FieldLocation::Query },
-        FieldSpec { snake: "min_vitamin_b3", location: FieldLocation::Query },
-        FieldSpec { snake: "max_vitamin_b3", location: FieldLocation::Query },
-        FieldSpec { snake: "min_vitamin_b6", location: FieldLocation::Query },
-        FieldSpec { snake: "max_vitamin_b6", location: FieldLocation::Query },
-        FieldSpec { snake: "min_vitamin_b12", location: FieldLocation::Query },
-        FieldSpec { snake: "max_vitamin_b12", location: FieldLocation::Query },
-        FieldSpec { snake: "min_fiber", location: FieldLocation::Query },
-        FieldSpec { snake: "max_fiber", location: FieldLocation::Query },
-        FieldSpec { snake: "min_folate", location: FieldLocation::Query },
-        FieldSpec { snake: "max_folate", location: FieldLocation::Query },
-        FieldSpec { snake: "min_folic_acid", location: FieldLocation::Query },
-        FieldSpec { snake: "max_folic_acid", location: FieldLocation::Query },
-        FieldSpec { snake: "min_iodine", location: FieldLocation::Query },
-        FieldSpec { snake: "max_iodine", location: FieldLocation::Query },
-        FieldSpec { snake: "min_iron", location: FieldLocation::Query },
-        FieldSpec { snake: "max_iron", location: FieldLocation::Query },
-        FieldSpec { snake: "min_magnesium", location: FieldLocation::Query },
-        FieldSpec { snake: "max_magnesium", location: FieldLocation::Query },
-        FieldSpec { snake: "min_manganese", location: FieldLocation::Query },
-        FieldSpec { snake: "max_manganese", location: FieldLocation::Query },
-        FieldSpec { snake: "min_phosphorus", location: FieldLocation::Query },
-        FieldSpec { snake: "max_phosphorus", location: FieldLocation::Query },
-        FieldSpec { snake: "min_potassium", location: FieldLocation::Query },
-        FieldSpec { snake: "max_potassium", location: FieldLocation::Query },
-        FieldSpec { snake: "min_selenium", location: FieldLocation::Query },
-        FieldSpec { snake: "max_selenium", location: FieldLocation::Query },
-        FieldSpec { snake: "min_sodium", location: FieldLocation::Query },
-        FieldSpec { snake: "max_sodium", location: FieldLocation::Query },
-        FieldSpec { snake: "min_sugar", location: FieldLocation::Query },
-        FieldSpec { snake: "max_sugar", location: FieldLocation::Query },
-        FieldSpec { snake: "min_zinc", location: FieldLocation::Query },
-        FieldSpec { snake: "max_zinc", location: FieldLocation::Query },
-        FieldSpec { snake: "offset", location: FieldLocation::Query },
-        FieldSpec { snake: "number", location: FieldLocation::Query },
-        FieldSpec { snake: "random", location: FieldLocation::Query },
-        FieldSpec { snake: "limit_license", location: FieldLocation::Query },
+        FieldSpec { snake: "min_carbs", wire: "minCarbs", location: FieldLocation::Query },
+        FieldSpec { snake: "max_carbs", wire: "maxCarbs", location: FieldLocation::Query },
+        FieldSpec { snake: "min_protein", wire: "minProtein", location: FieldLocation::Query },
+        FieldSpec { snake: "max_protein", wire: "maxProtein", location: FieldLocation::Query },
+        FieldSpec { snake: "min_calories", wire: "minCalories", location: FieldLocation::Query },
+        FieldSpec { snake: "max_calories", wire: "maxCalories", location: FieldLocation::Query },
+        FieldSpec { snake: "min_fat", wire: "minFat", location: FieldLocation::Query },
+        FieldSpec { snake: "max_fat", wire: "maxFat", location: FieldLocation::Query },
+        FieldSpec { snake: "min_alcohol", wire: "minAlcohol", location: FieldLocation::Query },
+        FieldSpec { snake: "max_alcohol", wire: "maxAlcohol", location: FieldLocation::Query },
+        FieldSpec { snake: "min_caffeine", wire: "minCaffeine", location: FieldLocation::Query },
+        FieldSpec { snake: "max_caffeine", wire: "maxCaffeine", location: FieldLocation::Query },
+        FieldSpec { snake: "min_copper", wire: "minCopper", location: FieldLocation::Query },
+        FieldSpec { snake: "max_copper", wire: "maxCopper", location: FieldLocation::Query },
+        FieldSpec { snake: "min_calcium", wire: "minCalcium", location: FieldLocation::Query },
+        FieldSpec { snake: "max_calcium", wire: "maxCalcium", location: FieldLocation::Query },
+        FieldSpec { snake: "min_choline", wire: "minCholine", location: FieldLocation::Query },
+        FieldSpec { snake: "max_choline", wire: "maxCholine", location: FieldLocation::Query },
+        FieldSpec { snake: "min_cholesterol", wire: "minCholesterol", location: FieldLocation::Query },
+        FieldSpec { snake: "max_cholesterol", wire: "maxCholesterol", location: FieldLocation::Query },
+        FieldSpec { snake: "min_fluoride", wire: "minFluoride", location: FieldLocation::Query },
+        FieldSpec { snake: "max_fluoride", wire: "maxFluoride", location: FieldLocation::Query },
+        FieldSpec { snake: "min_saturated_fat", wire: "minSaturatedFat", location: FieldLocation::Query },
+        FieldSpec { snake: "max_saturated_fat", wire: "maxSaturatedFat", location: FieldLocation::Query },
+        FieldSpec { snake: "min_vitamin_a", wire: "minVitaminA", location: FieldLocation::Query },
+        FieldSpec { snake: "max_vitamin_a", wire: "maxVitaminA", location: FieldLocation::Query },
+        FieldSpec { snake: "min_vitamin_c", wire: "minVitaminC", location: FieldLocation::Query },
+        FieldSpec { snake: "max_vitamin_c", wire: "maxVitaminC", location: FieldLocation::Query },
+        FieldSpec { snake: "min_vitamin_d", wire: "minVitaminD", location: FieldLocation::Query },
+        FieldSpec { snake: "max_vitamin_d", wire: "maxVitaminD", location: FieldLocation::Query },
+        FieldSpec { snake: "min_vitamin_e", wire: "minVitaminE", location: FieldLocation::Query },
+        FieldSpec { snake: "max_vitamin_e", wire: "maxVitaminE", location: FieldLocation::Query },
+        FieldSpec { snake: "min_vitamin_k", wire: "minVitaminK", location: FieldLocation::Query },
+        FieldSpec { snake: "max_vitamin_k", wire: "maxVitaminK", location: FieldLocation::Query },
+        FieldSpec { snake: "min_vitamin_b1", wire: "minVitaminB1", location: FieldLocation::Query },
+        FieldSpec { snake: "max_vitamin_b1", wire: "maxVitaminB1", location: FieldLocation::Query },
+        FieldSpec { snake: "min_vitamin_b2", wire: "minVitaminB2", location: FieldLocation::Query },
+        FieldSpec { snake: "max_vitamin_b2", wire: "maxVitaminB2", location: FieldLocation::Query },
+        FieldSpec { snake: "min_vitamin_b5", wire: "minVitaminB5", location: FieldLocation::Query },
+        FieldSpec { snake: "max_vitamin_b5", wire: "maxVitaminB5", location: FieldLocation::Query },
+        FieldSpec { snake: "min_vitamin_b3", wire: "minVitaminB3", location: FieldLocation::Query },
+        FieldSpec { snake: "max_vitamin_b3", wire: "maxVitaminB3", location: FieldLocation::Query },
+        FieldSpec { snake: "min_vitamin_b6", wire: "minVitaminB6", location: FieldLocation::Query },
+        FieldSpec { snake: "max_vitamin_b6", wire: "maxVitaminB6", location: FieldLocation::Query },
+        FieldSpec { snake: "min_vitamin_b12", wire: "minVitaminB12", location: FieldLocation::Query },
+        FieldSpec { snake: "max_vitamin_b12", wire: "maxVitaminB12", location: FieldLocation::Query },
+        FieldSpec { snake: "min_fiber", wire: "minFiber", location: FieldLocation::Query },
+        FieldSpec { snake: "max_fiber", wire: "maxFiber", location: FieldLocation::Query },
+        FieldSpec { snake: "min_folate", wire: "minFolate", location: FieldLocation::Query },
+        FieldSpec { snake: "max_folate", wire: "maxFolate", location: FieldLocation::Query },
+        FieldSpec { snake: "min_folic_acid", wire: "minFolicAcid", location: FieldLocation::Query },
+        FieldSpec { snake: "max_folic_acid", wire: "maxFolicAcid", location: FieldLocation::Query },
+        FieldSpec { snake: "min_iodine", wire: "minIodine", location: FieldLocation::Query },
+        FieldSpec { snake: "max_iodine", wire: "maxIodine", location: FieldLocation::Query },
+        FieldSpec { snake: "min_iron", wire: "minIron", location: FieldLocation::Query },
+        FieldSpec { snake: "max_iron", wire: "maxIron", location: FieldLocation::Query },
+        FieldSpec { snake: "min_magnesium", wire: "minMagnesium", location: FieldLocation::Query },
+        FieldSpec { snake: "max_magnesium", wire: "maxMagnesium", location: FieldLocation::Query },
+        FieldSpec { snake: "min_manganese", wire: "minManganese", location: FieldLocation::Query },
+        FieldSpec { snake: "max_manganese", wire: "maxManganese", location: FieldLocation::Query },
+        FieldSpec { snake: "min_phosphorus", wire: "minPhosphorus", location: FieldLocation::Query },
+        FieldSpec { snake: "max_phosphorus", wire: "maxPhosphorus", location: FieldLocation::Query },
+        FieldSpec { snake: "min_potassium", wire: "minPotassium", location: FieldLocation::Query },
+        FieldSpec { snake: "max_potassium", wire: "maxPotassium", location: FieldLocation::Query },
+        FieldSpec { snake: "min_selenium", wire: "minSelenium", location: FieldLocation::Query },
+        FieldSpec { snake: "max_selenium", wire: "maxSelenium", location: FieldLocation::Query },
+        FieldSpec { snake: "min_sodium", wire: "minSodium", location: FieldLocation::Query },
+        FieldSpec { snake: "max_sodium", wire: "maxSodium", location: FieldLocation::Query },
+        FieldSpec { snake: "min_sugar", wire: "minSugar", location: FieldLocation::Query },
+        FieldSpec { snake: "max_sugar", wire: "maxSugar", location: FieldLocation::Query },
+        FieldSpec { snake: "min_zinc", wire: "minZinc", location: FieldLocation::Query },
+        FieldSpec { snake: "max_zinc", wire: "maxZinc", location: FieldLocation::Query },
+        FieldSpec { snake: "offset", wire: "offset", location: FieldLocation::Query },
+        FieldSpec { snake: "number", wire: "number", location: FieldLocation::Query },
+        FieldSpec { snake: "random", wire: "random", location: FieldLocation::Query },
+        FieldSpec { snake: "limit_license", wire: "limitLicense", location: FieldLocation::Query },
     ],
     auth: &[
         AuthApply { secret_key: "apiKeyScheme", kind: AuthKind::ApiKeyHeader("x-api-key") },
@@ -1125,7 +2600,7 @@ const OP_RECIPES_GUESS_NUTRITION_BY_DISH_NAME: OpSpec = OpSpec {
     method: "GET",
     path_template: "/recipes/guessNutrition",
     fields: &[
-        FieldSpec { snake: "title", location: FieldLocation::Query },
+        FieldSpec { snake: "title", wire: "title", location: FieldLocation::Query },
     ],
     auth: &[
         AuthApply { secret_key: "apiKeyScheme", kind: AuthKind::ApiKeyHeader("x-api-key") },
@@ -1136,8 +2611,8 @@ const OP_RECIPES_GET_RECIPE_INFORMATION_BULK: OpSpec = OpSpec {
     method: "GET",
     path_template: "/recipes/informationBulk",
     fields: &[
-        FieldSpec { snake: "ids", location: FieldLocation::Query },
-        FieldSpec { snake: "include_nutrition", location: FieldLocation::Query },
+        FieldSpec { snake: "ids", wire: "ids", location: FieldLocation::Query },
+        FieldSpec { snake: "include_nutrition", wire: "includeNutrition", location: FieldLocation::Query },
     ],
     auth: &[
         AuthApply { secret_key: "apiKeyScheme", kind: AuthKind::ApiKeyHeader("x-api-key") },
@@ -1148,8 +2623,9 @@ const OP_RECIPES_PARSE_INGREDIENTS: OpSpec = OpSpec {
     method: "POST",
     path_template: "/recipes/parseIngredients",
     fields: &[
-        FieldSpec { snake: "content_type", location: FieldLocation::Header },
-        FieldSpec { snake: "language", location: FieldLocation::Query },
+        FieldSpec { snake: "content_type", wire: "Content-Type", location: FieldLocation::Header },
+        FieldSpec { snake: "language", wire: "language", location: FieldLocation::Query },
+        FieldSpec { snake: "body", wire: "body", location: FieldLocation::Body },
     ],
     auth: &[
         AuthApply { secret_key: "apiKeyScheme", kind: AuthKind::ApiKeyHeader("x-api-key") },
@@ -1160,7 +2636,7 @@ const OP_RECIPES_ANALYZE_A_RECIPE_SEARCH_QUERY: OpSpec = OpSpec {
     method: "GET",
     path_template: "/recipes/queries/analyze",
     fields: &[
-        FieldSpec { snake: "q", location: FieldLocation::Query },
+        FieldSpec { snake: "q", wire: "q", location: FieldLocation::Query },
     ],
     auth: &[
         AuthApply { secret_key: "apiKeyScheme", kind: AuthKind::ApiKeyHeader("x-api-key") },
@@ -1171,7 +2647,7 @@ const OP_RECIPES_QUICK_ANSWER: OpSpec = OpSpec {
     method: "GET",
     path_template: "/recipes/quickAnswer",
     fields: &[
-        FieldSpec { snake: "q", location: FieldLocation::Query },
+        FieldSpec { snake: "q", wire: "q", location: FieldLocation::Query },
     ],
     auth: &[
         AuthApply { secret_key: "apiKeyScheme", kind: AuthKind::ApiKeyHeader("x-api-key") },
@@ -1182,9 +2658,9 @@ const OP_RECIPES_GET_RANDOM_RECIPES: OpSpec = OpSpec {
     method: "GET",
     path_template: "/recipes/random",
     fields: &[
-        FieldSpec { snake: "limit_license", location: FieldLocation::Query },
-        FieldSpec { snake: "tags", location: FieldLocation::Query },
-        FieldSpec { snake: "number", location: FieldLocation::Query },
+        FieldSpec { snake: "limit_license", wire: "limitLicense", location: FieldLocation::Query },
+        FieldSpec { snake: "tags", wire: "tags", location: FieldLocation::Query },
+        FieldSpec { snake: "number", wire: "number", location: FieldLocation::Query },
     ],
     auth: &[
         AuthApply { secret_key: "apiKeyScheme", kind: AuthKind::ApiKeyHeader("x-api-key") },
@@ -1195,8 +2671,9 @@ const OP_RECIPES_VISUALIZE_EQUIPMENT: OpSpec = OpSpec {
     method: "POST",
     path_template: "/recipes/visualizeEquipment",
     fields: &[
-        FieldSpec { snake: "content_type", location: FieldLocation::Header },
-        FieldSpec { snake: "accept", location: FieldLocation::Header },
+        FieldSpec { snake: "content_type", wire: "Content-Type", location: FieldLocation::Header },
+        FieldSpec { snake: "accept", wire: "Accept", location: FieldLocation::Header },
+        FieldSpec { snake: "body", wire: "body", location: FieldLocation::Body },
     ],
     auth: &[
         AuthApply { secret_key: "apiKeyScheme", kind: AuthKind::ApiKeyHeader("x-api-key") },
@@ -1207,9 +2684,10 @@ const OP_RECIPES_VISUALIZE_RECIPE_NUTRITION: OpSpec = OpSpec {
     method: "POST",
     path_template: "/recipes/visualizeNutrition",
     fields: &[
-        FieldSpec { snake: "content_type", location: FieldLocation::Header },
-        FieldSpec { snake: "accept", location: FieldLocation::Header },
-        FieldSpec { snake: "language", location: FieldLocation::Query },
+        FieldSpec { snake: "content_type", wire: "Content-Type", location: FieldLocation::Header },
+        FieldSpec { snake: "accept", wire: "Accept", location: FieldLocation::Header },
+        FieldSpec { snake: "language", wire: "language", location: FieldLocation::Query },
+        FieldSpec { snake: "body", wire: "body", location: FieldLocation::Body },
     ],
     auth: &[
         AuthApply { secret_key: "apiKeyScheme", kind: AuthKind::ApiKeyHeader("x-api-key") },
@@ -1220,9 +2698,10 @@ const OP_RECIPES_VISUALIZE_PRICE_BREAKDOWN: OpSpec = OpSpec {
     method: "POST",
     path_template: "/recipes/visualizePriceEstimator",
     fields: &[
-        FieldSpec { snake: "content_type", location: FieldLocation::Header },
-        FieldSpec { snake: "accept", location: FieldLocation::Header },
-        FieldSpec { snake: "language", location: FieldLocation::Query },
+        FieldSpec { snake: "content_type", wire: "Content-Type", location: FieldLocation::Header },
+        FieldSpec { snake: "accept", wire: "Accept", location: FieldLocation::Header },
+        FieldSpec { snake: "language", wire: "language", location: FieldLocation::Query },
+        FieldSpec { snake: "body", wire: "body", location: FieldLocation::Body },
     ],
     auth: &[
         AuthApply { secret_key: "apiKeyScheme", kind: AuthKind::ApiKeyHeader("x-api-key") },
@@ -1233,7 +2712,8 @@ const OP_RECIPES_CREATE_RECIPE_CARD: OpSpec = OpSpec {
     method: "POST",
     path_template: "/recipes/visualizeRecipe",
     fields: &[
-        FieldSpec { snake: "content_type", location: FieldLocation::Header },
+        FieldSpec { snake: "content_type", wire: "Content-Type", location: FieldLocation::Header },
+        FieldSpec { snake: "body", wire: "body", location: FieldLocation::Body },
     ],
     auth: &[
         AuthApply { secret_key: "apiKeyScheme", kind: AuthKind::ApiKeyHeader("x-api-key") },
@@ -1244,11 +2724,12 @@ const OP_RECIPES_VISUALIZE_RECIPE_TASTE: OpSpec = OpSpec {
     method: "POST",
     path_template: "/recipes/visualizeTaste",
     fields: &[
-        FieldSpec { snake: "language", location: FieldLocation::Query },
-        FieldSpec { snake: "content_type", location: FieldLocation::Header },
-        FieldSpec { snake: "accept", location: FieldLocation::Header },
-        FieldSpec { snake: "normalize", location: FieldLocation::Query },
-        FieldSpec { snake: "rgb", location: FieldLocation::Query },
+        FieldSpec { snake: "language", wire: "language", location: FieldLocation::Query },
+        FieldSpec { snake: "content_type", wire: "Content-Type", location: FieldLocation::Header },
+        FieldSpec { snake: "accept", wire: "Accept", location: FieldLocation::Header },
+        FieldSpec { snake: "normalize", wire: "normalize", location: FieldLocation::Query },
+        FieldSpec { snake: "rgb", wire: "rgb", location: FieldLocation::Query },
+        FieldSpec { snake: "body", wire: "body", location: FieldLocation::Body },
     ],
     auth: &[
         AuthApply { secret_key: "apiKeyScheme", kind: AuthKind::ApiKeyHeader("x-api-key") },
@@ -1259,8 +2740,8 @@ const OP_RECIPES_GET_ANALYZED_RECIPE_INSTRUCTIONS: OpSpec = OpSpec {
     method: "GET",
     path_template: "/recipes/{id}/analyzedInstructions",
     fields: &[
-        FieldSpec { snake: "id", location: FieldLocation::Path },
-        FieldSpec { snake: "step_breakdown", location: FieldLocation::Query },
+        FieldSpec { snake: "id", wire: "id", location: FieldLocation::Path },
+        FieldSpec { snake: "step_breakdown", wire: "stepBreakdown", location: FieldLocation::Query },
     ],
     auth: &[
         AuthApply { secret_key: "apiKeyScheme", kind: AuthKind::ApiKeyHeader("x-api-key") },
@@ -1271,11 +2752,11 @@ const OP_RECIPES_CREATE_RECIPE_CARD_GET: OpSpec = OpSpec {
     method: "GET",
     path_template: "/recipes/{id}/card",
     fields: &[
-        FieldSpec { snake: "id", location: FieldLocation::Path },
-        FieldSpec { snake: "mask", location: FieldLocation::Query },
-        FieldSpec { snake: "background_image", location: FieldLocation::Query },
-        FieldSpec { snake: "background_color", location: FieldLocation::Query },
-        FieldSpec { snake: "font_color", location: FieldLocation::Query },
+        FieldSpec { snake: "id", wire: "id", location: FieldLocation::Path },
+        FieldSpec { snake: "mask", wire: "mask", location: FieldLocation::Query },
+        FieldSpec { snake: "background_image", wire: "backgroundImage", location: FieldLocation::Query },
+        FieldSpec { snake: "background_color", wire: "backgroundColor", location: FieldLocation::Query },
+        FieldSpec { snake: "font_color", wire: "fontColor", location: FieldLocation::Query },
     ],
     auth: &[
         AuthApply { secret_key: "apiKeyScheme", kind: AuthKind::ApiKeyHeader("x-api-key") },
@@ -1286,8 +2767,8 @@ const OP_RECIPES_VISUALIZE_RECIPE_EQUIPMENT_BY_ID: OpSpec = OpSpec {
     method: "GET",
     path_template: "/recipes/{id}/equipmentWidget",
     fields: &[
-        FieldSpec { snake: "id", location: FieldLocation::Path },
-        FieldSpec { snake: "default_css", location: FieldLocation::Query },
+        FieldSpec { snake: "id", wire: "id", location: FieldLocation::Path },
+        FieldSpec { snake: "default_css", wire: "defaultCss", location: FieldLocation::Query },
     ],
     auth: &[
         AuthApply { secret_key: "apiKeyScheme", kind: AuthKind::ApiKeyHeader("x-api-key") },
@@ -1298,7 +2779,7 @@ const OP_RECIPES_GET_RECIPE_EQUIPMENT_BY_ID: OpSpec = OpSpec {
     method: "GET",
     path_template: "/recipes/{id}/equipmentWidget.json",
     fields: &[
-        FieldSpec { snake: "id", location: FieldLocation::Path },
+        FieldSpec { snake: "id", wire: "id", location: FieldLocation::Path },
     ],
     auth: &[
         AuthApply { secret_key: "apiKeyScheme", kind: AuthKind::ApiKeyHeader("x-api-key") },
@@ -1309,7 +2790,7 @@ const OP_RECIPES_EQUIPMENT_BY_ID_IMAGE: OpSpec = OpSpec {
     method: "GET",
     path_template: "/recipes/{id}/equipmentWidget.png",
     fields: &[
-        FieldSpec { snake: "id", location: FieldLocation::Path },
+        FieldSpec { snake: "id", wire: "id", location: FieldLocation::Path },
     ],
     auth: &[
         AuthApply { secret_key: "apiKeyScheme", kind: AuthKind::ApiKeyHeader("x-api-key") },
@@ -1320,8 +2801,8 @@ const OP_RECIPES_GET_RECIPE_INFORMATION: OpSpec = OpSpec {
     method: "GET",
     path_template: "/recipes/{id}/information",
     fields: &[
-        FieldSpec { snake: "id", location: FieldLocation::Path },
-        FieldSpec { snake: "include_nutrition", location: FieldLocation::Query },
+        FieldSpec { snake: "id", wire: "id", location: FieldLocation::Path },
+        FieldSpec { snake: "include_nutrition", wire: "includeNutrition", location: FieldLocation::Query },
     ],
     auth: &[
         AuthApply { secret_key: "apiKeyScheme", kind: AuthKind::ApiKeyHeader("x-api-key") },
@@ -1332,9 +2813,9 @@ const OP_RECIPES_VISUALIZE_RECIPE_INGREDIENTS_BY_ID: OpSpec = OpSpec {
     method: "GET",
     path_template: "/recipes/{id}/ingredientWidget",
     fields: &[
-        FieldSpec { snake: "id", location: FieldLocation::Path },
-        FieldSpec { snake: "default_css", location: FieldLocation::Query },
-        FieldSpec { snake: "measure", location: FieldLocation::Query },
+        FieldSpec { snake: "id", wire: "id", location: FieldLocation::Path },
+        FieldSpec { snake: "default_css", wire: "defaultCss", location: FieldLocation::Query },
+        FieldSpec { snake: "measure", wire: "measure", location: FieldLocation::Query },
     ],
     auth: &[
         AuthApply { secret_key: "apiKeyScheme", kind: AuthKind::ApiKeyHeader("x-api-key") },
@@ -1345,7 +2826,7 @@ const OP_RECIPES_GET_RECIPE_INGREDIENTS_BY_ID: OpSpec = OpSpec {
     method: "GET",
     path_template: "/recipes/{id}/ingredientWidget.json",
     fields: &[
-        FieldSpec { snake: "id", location: FieldLocation::Path },
+        FieldSpec { snake: "id", wire: "id", location: FieldLocation::Path },
     ],
     auth: &[
         AuthApply { secret_key: "apiKeyScheme", kind: AuthKind::ApiKeyHeader("x-api-key") },
@@ -1356,11 +2837,11 @@ const OP_RECIPES_RECIPE_NUTRITION_LABEL_WIDGET: OpSpec = OpSpec {
     method: "GET",
     path_template: "/recipes/{id}/nutritionLabel",
     fields: &[
-        FieldSpec { snake: "id", location: FieldLocation::Path },
-        FieldSpec { snake: "default_css", location: FieldLocation::Query },
-        FieldSpec { snake: "show_optional_nutrients", location: FieldLocation::Query },
-        FieldSpec { snake: "show_zero_values", location: FieldLocation::Query },
-        FieldSpec { snake: "show_ingredients", location: FieldLocation::Query },
+        FieldSpec { snake: "id", wire: "id", location: FieldLocation::Path },
+        FieldSpec { snake: "default_css", wire: "defaultCss", location: FieldLocation::Query },
+        FieldSpec { snake: "show_optional_nutrients", wire: "showOptionalNutrients", location: FieldLocation::Query },
+        FieldSpec { snake: "show_zero_values", wire: "showZeroValues", location: FieldLocation::Query },
+        FieldSpec { snake: "show_ingredients", wire: "showIngredients", location: FieldLocation::Query },
     ],
     auth: &[
         AuthApply { secret_key: "apiKeyScheme", kind: AuthKind::ApiKeyHeader("x-api-key") },
@@ -1371,10 +2852,10 @@ const OP_RECIPES_RECIPE_NUTRITION_LABEL_IMAGE: OpSpec = OpSpec {
     method: "GET",
     path_template: "/recipes/{id}/nutritionLabel.png",
     fields: &[
-        FieldSpec { snake: "id", location: FieldLocation::Path },
-        FieldSpec { snake: "show_optional_nutrients", location: FieldLocation::Query },
-        FieldSpec { snake: "show_zero_values", location: FieldLocation::Query },
-        FieldSpec { snake: "show_ingredients", location: FieldLocation::Query },
+        FieldSpec { snake: "id", wire: "id", location: FieldLocation::Path },
+        FieldSpec { snake: "show_optional_nutrients", wire: "showOptionalNutrients", location: FieldLocation::Query },
+        FieldSpec { snake: "show_zero_values", wire: "showZeroValues", location: FieldLocation::Query },
+        FieldSpec { snake: "show_ingredients", wire: "showIngredients", location: FieldLocation::Query },
     ],
     auth: &[
         AuthApply { secret_key: "apiKeyScheme", kind: AuthKind::ApiKeyHeader("x-api-key") },
@@ -1385,9 +2866,9 @@ const OP_RECIPES_VISUALIZE_RECIPE_NUTRITION_BY_ID: OpSpec = OpSpec {
     method: "GET",
     path_template: "/recipes/{id}/nutritionWidget",
     fields: &[
-        FieldSpec { snake: "id", location: FieldLocation::Path },
-        FieldSpec { snake: "default_css", location: FieldLocation::Query },
-        FieldSpec { snake: "accept", location: FieldLocation::Header },
+        FieldSpec { snake: "id", wire: "id", location: FieldLocation::Path },
+        FieldSpec { snake: "default_css", wire: "defaultCss", location: FieldLocation::Query },
+        FieldSpec { snake: "accept", wire: "Accept", location: FieldLocation::Header },
     ],
     auth: &[
         AuthApply { secret_key: "apiKeyScheme", kind: AuthKind::ApiKeyHeader("x-api-key") },
@@ -1398,7 +2879,7 @@ const OP_RECIPES_GET_RECIPE_NUTRITION_WIDGET_BY_ID: OpSpec = OpSpec {
     method: "GET",
     path_template: "/recipes/{id}/nutritionWidget.json",
     fields: &[
-        FieldSpec { snake: "id", location: FieldLocation::Path },
+        FieldSpec { snake: "id", wire: "id", location: FieldLocation::Path },
     ],
     auth: &[
         AuthApply { secret_key: "apiKeyScheme", kind: AuthKind::ApiKeyHeader("x-api-key") },
@@ -1409,7 +2890,7 @@ const OP_RECIPES_RECIPE_NUTRITION_BY_ID_IMAGE: OpSpec = OpSpec {
     method: "GET",
     path_template: "/recipes/{id}/nutritionWidget.png",
     fields: &[
-        FieldSpec { snake: "id", location: FieldLocation::Path },
+        FieldSpec { snake: "id", wire: "id", location: FieldLocation::Path },
     ],
     auth: &[
         AuthApply { secret_key: "apiKeyScheme", kind: AuthKind::ApiKeyHeader("x-api-key") },
@@ -1420,8 +2901,8 @@ const OP_RECIPES_VISUALIZE_RECIPE_PRICE_BREAKDOWN_BY_ID: OpSpec = OpSpec {
     method: "GET",
     path_template: "/recipes/{id}/priceBreakdownWidget",
     fields: &[
-        FieldSpec { snake: "id", location: FieldLocation::Path },
-        FieldSpec { snake: "default_css", location: FieldLocation::Query },
+        FieldSpec { snake: "id", wire: "id", location: FieldLocation::Path },
+        FieldSpec { snake: "default_css", wire: "defaultCss", location: FieldLocation::Query },
     ],
     auth: &[
         AuthApply { secret_key: "apiKeyScheme", kind: AuthKind::ApiKeyHeader("x-api-key") },
@@ -1432,7 +2913,7 @@ const OP_RECIPES_GET_RECIPE_PRICE_BREAKDOWN_BY_ID: OpSpec = OpSpec {
     method: "GET",
     path_template: "/recipes/{id}/priceBreakdownWidget.json",
     fields: &[
-        FieldSpec { snake: "id", location: FieldLocation::Path },
+        FieldSpec { snake: "id", wire: "id", location: FieldLocation::Path },
     ],
     auth: &[
         AuthApply { secret_key: "apiKeyScheme", kind: AuthKind::ApiKeyHeader("x-api-key") },
@@ -1443,7 +2924,7 @@ const OP_RECIPES_PRICE_BREAKDOWN_BY_ID_IMAGE: OpSpec = OpSpec {
     method: "GET",
     path_template: "/recipes/{id}/priceBreakdownWidget.png",
     fields: &[
-        FieldSpec { snake: "id", location: FieldLocation::Path },
+        FieldSpec { snake: "id", wire: "id", location: FieldLocation::Path },
     ],
     auth: &[
         AuthApply { secret_key: "apiKeyScheme", kind: AuthKind::ApiKeyHeader("x-api-key") },
@@ -1454,9 +2935,9 @@ const OP_RECIPES_GET_SIMILAR_RECIPES: OpSpec = OpSpec {
     method: "GET",
     path_template: "/recipes/{id}/similar",
     fields: &[
-        FieldSpec { snake: "id", location: FieldLocation::Path },
-        FieldSpec { snake: "number", location: FieldLocation::Query },
-        FieldSpec { snake: "limit_license", location: FieldLocation::Query },
+        FieldSpec { snake: "id", wire: "id", location: FieldLocation::Path },
+        FieldSpec { snake: "number", wire: "number", location: FieldLocation::Query },
+        FieldSpec { snake: "limit_license", wire: "limitLicense", location: FieldLocation::Query },
     ],
     auth: &[
         AuthApply { secret_key: "apiKeyScheme", kind: AuthKind::ApiKeyHeader("x-api-key") },
@@ -1467,7 +2948,7 @@ const OP_RECIPES_SUMMARIZE_RECIPE: OpSpec = OpSpec {
     method: "GET",
     path_template: "/recipes/{id}/summary",
     fields: &[
-        FieldSpec { snake: "id", location: FieldLocation::Path },
+        FieldSpec { snake: "id", wire: "id", location: FieldLocation::Path },
     ],
     auth: &[
         AuthApply { secret_key: "apiKeyScheme", kind: AuthKind::ApiKeyHeader("x-api-key") },
@@ -1478,9 +2959,9 @@ const OP_RECIPES_VISUALIZE_RECIPE_TASTE_BY_ID: OpSpec = OpSpec {
     method: "GET",
     path_template: "/recipes/{id}/tasteWidget",
     fields: &[
-        FieldSpec { snake: "id", location: FieldLocation::Path },
-        FieldSpec { snake: "normalize", location: FieldLocation::Query },
-        FieldSpec { snake: "rgb", location: FieldLocation::Query },
+        FieldSpec { snake: "id", wire: "id", location: FieldLocation::Path },
+        FieldSpec { snake: "normalize", wire: "normalize", location: FieldLocation::Query },
+        FieldSpec { snake: "rgb", wire: "rgb", location: FieldLocation::Query },
     ],
     auth: &[
         AuthApply { secret_key: "apiKeyScheme", kind: AuthKind::ApiKeyHeader("x-api-key") },
@@ -1491,8 +2972,8 @@ const OP_RECIPES_GET_RECIPE_TASTE_BY_ID: OpSpec = OpSpec {
     method: "GET",
     path_template: "/recipes/{id}/tasteWidget.json",
     fields: &[
-        FieldSpec { snake: "id", location: FieldLocation::Path },
-        FieldSpec { snake: "normalize", location: FieldLocation::Query },
+        FieldSpec { snake: "id", wire: "id", location: FieldLocation::Path },
+        FieldSpec { snake: "normalize", wire: "normalize", location: FieldLocation::Query },
     ],
     auth: &[
         AuthApply { secret_key: "apiKeyScheme", kind: AuthKind::ApiKeyHeader("x-api-key") },
@@ -1503,9 +2984,9 @@ const OP_RECIPES_RECIPE_TASTE_BY_ID_IMAGE: OpSpec = OpSpec {
     method: "GET",
     path_template: "/recipes/{id}/tasteWidget.png",
     fields: &[
-        FieldSpec { snake: "id", location: FieldLocation::Path },
-        FieldSpec { snake: "normalize", location: FieldLocation::Query },
-        FieldSpec { snake: "rgb", location: FieldLocation::Query },
+        FieldSpec { snake: "id", wire: "id", location: FieldLocation::Path },
+        FieldSpec { snake: "normalize", wire: "normalize", location: FieldLocation::Query },
+        FieldSpec { snake: "rgb", wire: "rgb", location: FieldLocation::Query },
     ],
     auth: &[
         AuthApply { secret_key: "apiKeyScheme", kind: AuthKind::ApiKeyHeader("x-api-key") },
@@ -1542,6 +3023,1061 @@ fn iface_recipes__visualize_recipe_ingredients_by_id_measure_enum__to_str(e: &if
     }
 }
 
+fn iface_recipes__compute_glycemic_load_response__to_json(p: &iface_recipes::ComputeGlycemicLoadResponse) -> Value {
+    let mut m = Map::new();
+    m.insert("ingredients".into(), Value::Array((&p.ingredients).iter().map(|v| iface_recipes__compute_glycemic_load_response_ingredients_item__to_json(v)).collect()));
+    m.insert("totalGlycemicLoad".into(), serde_json::Number::from_f64(*(&p.total_glycemic_load)).map(Value::Number).unwrap_or(Value::Null));
+    Value::Object(m)
+}
+
+fn iface_recipes__compute_glycemic_load_response_ingredients_item__to_json(p: &iface_recipes::ComputeGlycemicLoadResponseIngredientsItem) -> Value {
+    let mut m = Map::new();
+    m.insert("glycemicIndex".into(), serde_json::Number::from_f64(*(&p.glycemic_index)).map(Value::Number).unwrap_or(Value::Null));
+    m.insert("glycemicLoad".into(), serde_json::Number::from_f64(*(&p.glycemic_load)).map(Value::Number).unwrap_or(Value::Null));
+    m.insert("id".into(), Value::Number(serde_json::Number::from(*(&p.id))));
+    m.insert("original".into(), Value::String((&p.original).clone()));
+    Value::Object(m)
+}
+
+fn iface_recipes__analyze_recipe_response__to_json(p: &iface_recipes::AnalyzeRecipeResponse) -> Value {
+    let mut m = Map::new();
+    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_recipes__analyze_recipe_instructions_response__to_json(p: &iface_recipes::AnalyzeRecipeInstructionsResponse) -> Value {
+    let mut m = Map::new();
+    m.insert("equipment".into(), Value::Array((&p.equipment).iter().map(|v| iface_recipes__analyze_recipe_instructions_response_equipment_item__to_json(v)).collect()));
+    m.insert("ingredients".into(), Value::Array((&p.ingredients).iter().map(|v| iface_recipes__analyze_recipe_instructions_response_ingredients_item__to_json(v)).collect()));
+    m.insert("parsedInstructions".into(), Value::Array((&p.parsed_instructions).iter().map(|v| iface_recipes__analyze_recipe_instructions_response_parsed_instructions_item__to_json(v)).collect()));
+    Value::Object(m)
+}
+
+fn iface_recipes__analyze_recipe_instructions_response_equipment_item__to_json(p: &iface_recipes::AnalyzeRecipeInstructionsResponseEquipmentItem) -> Value {
+    let mut m = Map::new();
+    m.insert("id".into(), serde_json::Number::from_f64(*(&p.id)).map(Value::Number).unwrap_or(Value::Null));
+    m.insert("name".into(), Value::String((&p.name).clone()));
+    Value::Object(m)
+}
+
+fn iface_recipes__analyze_recipe_instructions_response_ingredients_item__to_json(p: &iface_recipes::AnalyzeRecipeInstructionsResponseIngredientsItem) -> Value {
+    let mut m = Map::new();
+    m.insert("id".into(), serde_json::Number::from_f64(*(&p.id)).map(Value::Number).unwrap_or(Value::Null));
+    m.insert("name".into(), Value::String((&p.name).clone()));
+    Value::Object(m)
+}
+
+fn iface_recipes__analyze_recipe_instructions_response_parsed_instructions_item__to_json(p: &iface_recipes::AnalyzeRecipeInstructionsResponseParsedInstructionsItem) -> Value {
+    let mut m = Map::new();
+    m.insert("name".into(), Value::String((&p.name).clone()));
+    m.insert("steps".into(), match (&p.steps) { Some(v) => Value::Array((v).iter().map(|v| iface_recipes__analyze_recipe_instructions_response_parsed_instructions_item_steps_item__to_json(v)).collect()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_recipes__analyze_recipe_instructions_response_parsed_instructions_item_steps_item__to_json(p: &iface_recipes::AnalyzeRecipeInstructionsResponseParsedInstructionsItemStepsItem) -> Value {
+    let mut m = Map::new();
+    m.insert("equipment".into(), match (&p.equipment) { Some(v) => Value::Array((v).iter().map(|v| iface_recipes__analyze_recipe_instructions_response_parsed_instructions_item_steps_item_equipment_item__to_json(v)).collect()), None => Value::Null });
+    m.insert("ingredients".into(), match (&p.ingredients) { Some(v) => Value::Array((v).iter().map(|v| iface_recipes__analyze_recipe_instructions_response_parsed_instructions_item_steps_item_ingredients_item__to_json(v)).collect()), None => Value::Null });
+    m.insert("number".into(), serde_json::Number::from_f64(*(&p.number)).map(Value::Number).unwrap_or(Value::Null));
+    m.insert("step".into(), Value::String((&p.step).clone()));
+    Value::Object(m)
+}
+
+fn iface_recipes__analyze_recipe_instructions_response_parsed_instructions_item_steps_item_equipment_item__to_json(p: &iface_recipes::AnalyzeRecipeInstructionsResponseParsedInstructionsItemStepsItemEquipmentItem) -> Value {
+    let mut m = Map::new();
+    m.insert("id".into(), serde_json::Number::from_f64(*(&p.id)).map(Value::Number).unwrap_or(Value::Null));
+    m.insert("image".into(), Value::String((&p.image).clone()));
+    m.insert("localizedName".into(), Value::String((&p.localized_name).clone()));
+    m.insert("name".into(), Value::String((&p.name).clone()));
+    Value::Object(m)
+}
+
+fn iface_recipes__analyze_recipe_instructions_response_parsed_instructions_item_steps_item_ingredients_item__to_json(p: &iface_recipes::AnalyzeRecipeInstructionsResponseParsedInstructionsItemStepsItemIngredientsItem) -> Value {
+    let mut m = Map::new();
+    m.insert("id".into(), serde_json::Number::from_f64(*(&p.id)).map(Value::Number).unwrap_or(Value::Null));
+    m.insert("image".into(), Value::String((&p.image).clone()));
+    m.insert("localizedName".into(), Value::String((&p.localized_name).clone()));
+    m.insert("name".into(), Value::String((&p.name).clone()));
+    Value::Object(m)
+}
+
+fn iface_recipes__autocomplete_recipe_search_response_item__to_json(p: &iface_recipes::AutocompleteRecipeSearchResponseItem) -> Value {
+    let mut m = Map::new();
+    m.insert("id".into(), Value::Number(serde_json::Number::from(*(&p.id))));
+    m.insert("imageType".into(), Value::String((&p.image_type).clone()));
+    m.insert("title".into(), Value::String((&p.title).clone()));
+    Value::Object(m)
+}
+
+fn iface_recipes__search_recipes_response__to_json(p: &iface_recipes::SearchRecipesResponse) -> Value {
+    let mut m = Map::new();
+    m.insert("number".into(), Value::Number(serde_json::Number::from(*(&p.number))));
+    m.insert("offset".into(), Value::Number(serde_json::Number::from(*(&p.offset))));
+    m.insert("results".into(), Value::Array((&p.results).iter().map(|v| iface_recipes__search_recipes_response_results_item__to_json(v)).collect()));
+    m.insert("totalResults".into(), Value::Number(serde_json::Number::from(*(&p.total_results))));
+    Value::Object(m)
+}
+
+fn iface_recipes__search_recipes_response_results_item__to_json(p: &iface_recipes::SearchRecipesResponseResultsItem) -> Value {
+    let mut m = Map::new();
+    m.insert("calories".into(), serde_json::Number::from_f64(*(&p.calories)).map(Value::Number).unwrap_or(Value::Null));
+    m.insert("carbs".into(), Value::String((&p.carbs).clone()));
+    m.insert("fat".into(), Value::String((&p.fat).clone()));
+    m.insert("id".into(), Value::Number(serde_json::Number::from(*(&p.id))));
+    m.insert("image".into(), Value::String((&p.image).clone()));
+    m.insert("imageType".into(), Value::String((&p.image_type).clone()));
+    m.insert("protein".into(), Value::String((&p.protein).clone()));
+    m.insert("title".into(), Value::String((&p.title).clone()));
+    Value::Object(m)
+}
+
+fn iface_recipes__convert_amounts_response__to_json(p: &iface_recipes::ConvertAmountsResponse) -> Value {
+    let mut m = Map::new();
+    m.insert("answer".into(), Value::String((&p.answer).clone()));
+    m.insert("sourceAmount".into(), serde_json::Number::from_f64(*(&p.source_amount)).map(Value::Number).unwrap_or(Value::Null));
+    m.insert("sourceUnit".into(), Value::String((&p.source_unit).clone()));
+    m.insert("targetAmount".into(), serde_json::Number::from_f64(*(&p.target_amount)).map(Value::Number).unwrap_or(Value::Null));
+    m.insert("targetUnit".into(), Value::String((&p.target_unit).clone()));
+    Value::Object(m)
+}
+
+fn iface_recipes__classify_cuisine_response__to_json(p: &iface_recipes::ClassifyCuisineResponse) -> Value {
+    let mut m = Map::new();
+    m.insert("confidence".into(), serde_json::Number::from_f64(*(&p.confidence)).map(Value::Number).unwrap_or(Value::Null));
+    m.insert("cuisine".into(), Value::String((&p.cuisine).clone()));
+    m.insert("cuisines".into(), Value::Array((&p.cuisines).iter().map(|v| Value::String((v).clone())).collect()));
+    Value::Object(m)
+}
+
+fn iface_recipes__extract_recipe_from_website_response__to_json(p: &iface_recipes::ExtractRecipeFromWebsiteResponse) -> Value {
+    let mut m = Map::new();
+    m.insert("aggregateLikes".into(), Value::Number(serde_json::Number::from(*(&p.aggregate_likes))));
+    m.insert("analyzedInstructions".into(), Value::Array((&p.analyzed_instructions).iter().map(|v| iface_recipes__extract_recipe_from_website_response_analyzed_instructions_item__to_json(v)).collect()));
+    m.insert("cheap".into(), Value::Bool(*(&p.cheap)));
+    m.insert("creditsText".into(), Value::String((&p.credits_text).clone()));
+    m.insert("cuisines".into(), Value::Array((&p.cuisines).iter().map(|v| Value::String((v).clone())).collect()));
+    m.insert("dairyFree".into(), Value::Bool(*(&p.dairy_free)));
+    m.insert("diets".into(), Value::Array((&p.diets).iter().map(|v| Value::String((v).clone())).collect()));
+    m.insert("dishTypes".into(), Value::Array((&p.dish_types).iter().map(|v| Value::String((v).clone())).collect()));
+    m.insert("extendedIngredients".into(), Value::Array((&p.extended_ingredients).iter().map(|v| iface_recipes__extract_recipe_from_website_response_extended_ingredients_item__to_json(v)).collect()));
+    m.insert("gaps".into(), Value::String((&p.gaps).clone()));
+    m.insert("glutenFree".into(), Value::Bool(*(&p.gluten_free)));
+    m.insert("healthScore".into(), serde_json::Number::from_f64(*(&p.health_score)).map(Value::Number).unwrap_or(Value::Null));
+    m.insert("id".into(), Value::Number(serde_json::Number::from(*(&p.id))));
+    m.insert("image".into(), Value::String((&p.image).clone()));
+    m.insert("imageType".into(), Value::String((&p.image_type).clone()));
+    m.insert("instructions".into(), Value::String((&p.instructions).clone()));
+    m.insert("ketogenic".into(), Value::Bool(*(&p.ketogenic)));
+    m.insert("license".into(), Value::String((&p.license).clone()));
+    m.insert("lowFodmap".into(), Value::Bool(*(&p.low_fodmap)));
+    m.insert("occasions".into(), Value::Array((&p.occasions).iter().map(|v| Value::String((v).clone())).collect()));
+    m.insert("pricePerServing".into(), serde_json::Number::from_f64(*(&p.price_per_serving)).map(Value::Number).unwrap_or(Value::Null));
+    m.insert("readyInMinutes".into(), Value::Number(serde_json::Number::from(*(&p.ready_in_minutes))));
+    m.insert("servings".into(), serde_json::Number::from_f64(*(&p.servings)).map(Value::Number).unwrap_or(Value::Null));
+    m.insert("sourceName".into(), Value::String((&p.source_name).clone()));
+    m.insert("sourceUrl".into(), Value::String((&p.source_url).clone()));
+    m.insert("spoonacularScore".into(), serde_json::Number::from_f64(*(&p.spoonacular_score)).map(Value::Number).unwrap_or(Value::Null));
+    m.insert("spoonacularSourceUrl".into(), Value::String((&p.spoonacular_source_url).clone()));
+    m.insert("summary".into(), Value::String((&p.summary).clone()));
+    m.insert("sustainable".into(), Value::Bool(*(&p.sustainable)));
+    m.insert("title".into(), Value::String((&p.title).clone()));
+    m.insert("vegan".into(), Value::Bool(*(&p.vegan)));
+    m.insert("vegetarian".into(), Value::Bool(*(&p.vegetarian)));
+    m.insert("veryHealthy".into(), Value::Bool(*(&p.very_healthy)));
+    m.insert("veryPopular".into(), Value::Bool(*(&p.very_popular)));
+    m.insert("weightWatcherSmartPoints".into(), serde_json::Number::from_f64(*(&p.weight_watcher_smart_points)).map(Value::Number).unwrap_or(Value::Null));
+    m.insert("whole30".into(), Value::Bool(*(&p.whole30)));
+    m.insert("winePairing".into(), iface_recipes__extract_recipe_from_website_response_wine_pairing__to_json(&p.wine_pairing));
+    Value::Object(m)
+}
+
+fn iface_recipes__extract_recipe_from_website_response_analyzed_instructions_item__to_json(p: &iface_recipes::ExtractRecipeFromWebsiteResponseAnalyzedInstructionsItem) -> Value {
+    let mut m = Map::new();
+    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_recipes__extract_recipe_from_website_response_extended_ingredients_item__to_json(p: &iface_recipes::ExtractRecipeFromWebsiteResponseExtendedIngredientsItem) -> Value {
+    let mut m = Map::new();
+    m.insert("aisle".into(), Value::String((&p.aisle).clone()));
+    m.insert("amount".into(), serde_json::Number::from_f64(*(&p.amount)).map(Value::Number).unwrap_or(Value::Null));
+    m.insert("consitency".into(), Value::String((&p.consitency).clone()));
+    m.insert("id".into(), Value::Number(serde_json::Number::from(*(&p.id))));
+    m.insert("image".into(), Value::String((&p.image).clone()));
+    m.insert("measures".into(), match (&p.measures) { Some(v) => iface_recipes__extract_recipe_from_website_response_extended_ingredients_item_measures__to_json(v), None => Value::Null });
+    m.insert("meta".into(), match (&p.meta) { Some(v) => Value::Array((v).iter().map(|v| Value::String((v).clone())).collect()), None => Value::Null });
+    m.insert("name".into(), Value::String((&p.name).clone()));
+    m.insert("original".into(), Value::String((&p.original).clone()));
+    m.insert("originalName".into(), Value::String((&p.original_name).clone()));
+    m.insert("unit".into(), Value::String((&p.unit).clone()));
+    Value::Object(m)
+}
+
+fn iface_recipes__extract_recipe_from_website_response_extended_ingredients_item_measures__to_json(p: &iface_recipes::ExtractRecipeFromWebsiteResponseExtendedIngredientsItemMeasures) -> Value {
+    let mut m = Map::new();
+    m.insert("metric".into(), iface_recipes__extract_recipe_from_website_response_extended_ingredients_item_measures_metric__to_json(&p.metric));
+    m.insert("us".into(), iface_recipes__extract_recipe_from_website_response_extended_ingredients_item_measures_us__to_json(&p.us));
+    Value::Object(m)
+}
+
+fn iface_recipes__extract_recipe_from_website_response_extended_ingredients_item_measures_metric__to_json(p: &iface_recipes::ExtractRecipeFromWebsiteResponseExtendedIngredientsItemMeasuresMetric) -> Value {
+    let mut m = Map::new();
+    m.insert("amount".into(), serde_json::Number::from_f64(*(&p.amount)).map(Value::Number).unwrap_or(Value::Null));
+    m.insert("unitLong".into(), Value::String((&p.unit_long).clone()));
+    m.insert("unitShort".into(), Value::String((&p.unit_short).clone()));
+    Value::Object(m)
+}
+
+fn iface_recipes__extract_recipe_from_website_response_extended_ingredients_item_measures_us__to_json(p: &iface_recipes::ExtractRecipeFromWebsiteResponseExtendedIngredientsItemMeasuresUs) -> Value {
+    let mut m = Map::new();
+    m.insert("amount".into(), serde_json::Number::from_f64(*(&p.amount)).map(Value::Number).unwrap_or(Value::Null));
+    m.insert("unitLong".into(), Value::String((&p.unit_long).clone()));
+    m.insert("unitShort".into(), Value::String((&p.unit_short).clone()));
+    Value::Object(m)
+}
+
+fn iface_recipes__extract_recipe_from_website_response_wine_pairing__to_json(p: &iface_recipes::ExtractRecipeFromWebsiteResponseWinePairing) -> Value {
+    let mut m = Map::new();
+    m.insert("pairedWines".into(), Value::Array((&p.paired_wines).iter().map(|v| Value::String((v).clone())).collect()));
+    m.insert("pairingText".into(), Value::String((&p.pairing_text).clone()));
+    m.insert("productMatches".into(), Value::Array((&p.product_matches).iter().map(|v| iface_recipes__extract_recipe_from_website_response_wine_pairing_product_matches_item__to_json(v)).collect()));
+    Value::Object(m)
+}
+
+fn iface_recipes__extract_recipe_from_website_response_wine_pairing_product_matches_item__to_json(p: &iface_recipes::ExtractRecipeFromWebsiteResponseWinePairingProductMatchesItem) -> Value {
+    let mut m = Map::new();
+    m.insert("averageRating".into(), serde_json::Number::from_f64(*(&p.average_rating)).map(Value::Number).unwrap_or(Value::Null));
+    m.insert("description".into(), Value::String((&p.description).clone()));
+    m.insert("id".into(), Value::Number(serde_json::Number::from(*(&p.id))));
+    m.insert("imageUrl".into(), Value::String((&p.image_url).clone()));
+    m.insert("link".into(), Value::String((&p.link).clone()));
+    m.insert("price".into(), Value::String((&p.price).clone()));
+    m.insert("ratingCount".into(), Value::Number(serde_json::Number::from(*(&p.rating_count))));
+    m.insert("score".into(), serde_json::Number::from_f64(*(&p.score)).map(Value::Number).unwrap_or(Value::Null));
+    m.insert("title".into(), Value::String((&p.title).clone()));
+    Value::Object(m)
+}
+
+fn iface_recipes__search_recipes_by_ingredients_response_item__to_json(p: &iface_recipes::SearchRecipesByIngredientsResponseItem) -> Value {
+    let mut m = Map::new();
+    m.insert("id".into(), Value::Number(serde_json::Number::from(*(&p.id))));
+    m.insert("image".into(), Value::String((&p.image).clone()));
+    m.insert("imageType".into(), Value::String((&p.image_type).clone()));
+    m.insert("likes".into(), Value::Number(serde_json::Number::from(*(&p.likes))));
+    m.insert("missedIngredientCount".into(), Value::Number(serde_json::Number::from(*(&p.missed_ingredient_count))));
+    m.insert("missedIngredients".into(), Value::Array((&p.missed_ingredients).iter().map(|v| iface_recipes__search_recipes_by_ingredients_response_item_missed_ingredients_item__to_json(v)).collect()));
+    m.insert("title".into(), Value::String((&p.title).clone()));
+    m.insert("unusedIngredients".into(), Value::Array((&p.unused_ingredients).iter().map(|v| iface_recipes__search_recipes_by_ingredients_response_item_unused_ingredients_item__to_json(v)).collect()));
+    m.insert("usedIngredientCount".into(), serde_json::Number::from_f64(*(&p.used_ingredient_count)).map(Value::Number).unwrap_or(Value::Null));
+    m.insert("usedIngredients".into(), Value::Array((&p.used_ingredients).iter().map(|v| iface_recipes__search_recipes_by_ingredients_response_item_used_ingredients_item__to_json(v)).collect()));
+    Value::Object(m)
+}
+
+fn iface_recipes__search_recipes_by_ingredients_response_item_missed_ingredients_item__to_json(p: &iface_recipes::SearchRecipesByIngredientsResponseItemMissedIngredientsItem) -> Value {
+    let mut m = Map::new();
+    m.insert("aisle".into(), Value::String((&p.aisle).clone()));
+    m.insert("amount".into(), serde_json::Number::from_f64(*(&p.amount)).map(Value::Number).unwrap_or(Value::Null));
+    m.insert("id".into(), Value::Number(serde_json::Number::from(*(&p.id))));
+    m.insert("image".into(), Value::String((&p.image).clone()));
+    m.insert("meta".into(), match (&p.meta) { Some(v) => Value::Array((v).iter().map(|v| Value::String((v).clone())).collect()), None => Value::Null });
+    m.insert("name".into(), Value::String((&p.name).clone()));
+    m.insert("original".into(), Value::String((&p.original).clone()));
+    m.insert("originalName".into(), Value::String((&p.original_name).clone()));
+    m.insert("unit".into(), Value::String((&p.unit).clone()));
+    m.insert("unitLong".into(), Value::String((&p.unit_long).clone()));
+    m.insert("unitShort".into(), Value::String((&p.unit_short).clone()));
+    Value::Object(m)
+}
+
+fn iface_recipes__search_recipes_by_ingredients_response_item_unused_ingredients_item__to_json(p: &iface_recipes::SearchRecipesByIngredientsResponseItemUnusedIngredientsItem) -> Value {
+    let mut m = Map::new();
+    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_recipes__search_recipes_by_ingredients_response_item_used_ingredients_item__to_json(p: &iface_recipes::SearchRecipesByIngredientsResponseItemUsedIngredientsItem) -> Value {
+    let mut m = Map::new();
+    m.insert("aisle".into(), Value::String((&p.aisle).clone()));
+    m.insert("amount".into(), serde_json::Number::from_f64(*(&p.amount)).map(Value::Number).unwrap_or(Value::Null));
+    m.insert("id".into(), Value::Number(serde_json::Number::from(*(&p.id))));
+    m.insert("image".into(), Value::String((&p.image).clone()));
+    m.insert("meta".into(), match (&p.meta) { Some(v) => Value::Array((v).iter().map(|v| Value::String((v).clone())).collect()), None => Value::Null });
+    m.insert("name".into(), Value::String((&p.name).clone()));
+    m.insert("original".into(), Value::String((&p.original).clone()));
+    m.insert("originalName".into(), Value::String((&p.original_name).clone()));
+    m.insert("unit".into(), Value::String((&p.unit).clone()));
+    m.insert("unitLong".into(), Value::String((&p.unit_long).clone()));
+    m.insert("unitShort".into(), Value::String((&p.unit_short).clone()));
+    Value::Object(m)
+}
+
+fn iface_recipes__search_recipes_by_nutrients_response_item__to_json(p: &iface_recipes::SearchRecipesByNutrientsResponseItem) -> Value {
+    let mut m = Map::new();
+    m.insert("calories".into(), serde_json::Number::from_f64(*(&p.calories)).map(Value::Number).unwrap_or(Value::Null));
+    m.insert("carbs".into(), Value::String((&p.carbs).clone()));
+    m.insert("fat".into(), Value::String((&p.fat).clone()));
+    m.insert("id".into(), Value::Number(serde_json::Number::from(*(&p.id))));
+    m.insert("image".into(), Value::String((&p.image).clone()));
+    m.insert("imageType".into(), Value::String((&p.image_type).clone()));
+    m.insert("protein".into(), Value::String((&p.protein).clone()));
+    m.insert("title".into(), Value::String((&p.title).clone()));
+    Value::Object(m)
+}
+
+fn iface_recipes__guess_nutrition_by_dish_name_response__to_json(p: &iface_recipes::GuessNutritionByDishNameResponse) -> Value {
+    let mut m = Map::new();
+    m.insert("calories".into(), iface_recipes__guess_nutrition_by_dish_name_response_calories__to_json(&p.calories));
+    m.insert("carbs".into(), iface_recipes__guess_nutrition_by_dish_name_response_carbs__to_json(&p.carbs));
+    m.insert("fat".into(), iface_recipes__guess_nutrition_by_dish_name_response_fat__to_json(&p.fat));
+    m.insert("protein".into(), iface_recipes__guess_nutrition_by_dish_name_response_protein__to_json(&p.protein));
+    m.insert("recipesUsed".into(), Value::Number(serde_json::Number::from(*(&p.recipes_used))));
+    Value::Object(m)
+}
+
+fn iface_recipes__guess_nutrition_by_dish_name_response_calories__to_json(p: &iface_recipes::GuessNutritionByDishNameResponseCalories) -> Value {
+    let mut m = Map::new();
+    m.insert("confidenceRange95Percent".into(), iface_recipes__guess_nutrition_by_dish_name_response_calories_confidence_range95_percent__to_json(&p.confidence_range95_percent));
+    m.insert("standardDeviation".into(), serde_json::Number::from_f64(*(&p.standard_deviation)).map(Value::Number).unwrap_or(Value::Null));
+    m.insert("unit".into(), Value::String((&p.unit).clone()));
+    m.insert("value".into(), serde_json::Number::from_f64(*(&p.value)).map(Value::Number).unwrap_or(Value::Null));
+    Value::Object(m)
+}
+
+fn iface_recipes__guess_nutrition_by_dish_name_response_calories_confidence_range95_percent__to_json(p: &iface_recipes::GuessNutritionByDishNameResponseCaloriesConfidenceRange95Percent) -> Value {
+    let mut m = Map::new();
+    m.insert("max".into(), serde_json::Number::from_f64(*(&p.max)).map(Value::Number).unwrap_or(Value::Null));
+    m.insert("min".into(), serde_json::Number::from_f64(*(&p.min)).map(Value::Number).unwrap_or(Value::Null));
+    Value::Object(m)
+}
+
+fn iface_recipes__guess_nutrition_by_dish_name_response_carbs__to_json(p: &iface_recipes::GuessNutritionByDishNameResponseCarbs) -> Value {
+    let mut m = Map::new();
+    m.insert("confidenceRange95Percent".into(), iface_recipes__guess_nutrition_by_dish_name_response_carbs_confidence_range95_percent__to_json(&p.confidence_range95_percent));
+    m.insert("standardDeviation".into(), serde_json::Number::from_f64(*(&p.standard_deviation)).map(Value::Number).unwrap_or(Value::Null));
+    m.insert("unit".into(), Value::String((&p.unit).clone()));
+    m.insert("value".into(), serde_json::Number::from_f64(*(&p.value)).map(Value::Number).unwrap_or(Value::Null));
+    Value::Object(m)
+}
+
+fn iface_recipes__guess_nutrition_by_dish_name_response_carbs_confidence_range95_percent__to_json(p: &iface_recipes::GuessNutritionByDishNameResponseCarbsConfidenceRange95Percent) -> Value {
+    let mut m = Map::new();
+    m.insert("max".into(), serde_json::Number::from_f64(*(&p.max)).map(Value::Number).unwrap_or(Value::Null));
+    m.insert("min".into(), serde_json::Number::from_f64(*(&p.min)).map(Value::Number).unwrap_or(Value::Null));
+    Value::Object(m)
+}
+
+fn iface_recipes__guess_nutrition_by_dish_name_response_fat__to_json(p: &iface_recipes::GuessNutritionByDishNameResponseFat) -> Value {
+    let mut m = Map::new();
+    m.insert("confidenceRange95Percent".into(), iface_recipes__guess_nutrition_by_dish_name_response_fat_confidence_range95_percent__to_json(&p.confidence_range95_percent));
+    m.insert("standardDeviation".into(), serde_json::Number::from_f64(*(&p.standard_deviation)).map(Value::Number).unwrap_or(Value::Null));
+    m.insert("unit".into(), Value::String((&p.unit).clone()));
+    m.insert("value".into(), serde_json::Number::from_f64(*(&p.value)).map(Value::Number).unwrap_or(Value::Null));
+    Value::Object(m)
+}
+
+fn iface_recipes__guess_nutrition_by_dish_name_response_fat_confidence_range95_percent__to_json(p: &iface_recipes::GuessNutritionByDishNameResponseFatConfidenceRange95Percent) -> Value {
+    let mut m = Map::new();
+    m.insert("max".into(), serde_json::Number::from_f64(*(&p.max)).map(Value::Number).unwrap_or(Value::Null));
+    m.insert("min".into(), serde_json::Number::from_f64(*(&p.min)).map(Value::Number).unwrap_or(Value::Null));
+    Value::Object(m)
+}
+
+fn iface_recipes__guess_nutrition_by_dish_name_response_protein__to_json(p: &iface_recipes::GuessNutritionByDishNameResponseProtein) -> Value {
+    let mut m = Map::new();
+    m.insert("confidenceRange95Percent".into(), iface_recipes__guess_nutrition_by_dish_name_response_protein_confidence_range95_percent__to_json(&p.confidence_range95_percent));
+    m.insert("standardDeviation".into(), serde_json::Number::from_f64(*(&p.standard_deviation)).map(Value::Number).unwrap_or(Value::Null));
+    m.insert("unit".into(), Value::String((&p.unit).clone()));
+    m.insert("value".into(), serde_json::Number::from_f64(*(&p.value)).map(Value::Number).unwrap_or(Value::Null));
+    Value::Object(m)
+}
+
+fn iface_recipes__guess_nutrition_by_dish_name_response_protein_confidence_range95_percent__to_json(p: &iface_recipes::GuessNutritionByDishNameResponseProteinConfidenceRange95Percent) -> Value {
+    let mut m = Map::new();
+    m.insert("max".into(), serde_json::Number::from_f64(*(&p.max)).map(Value::Number).unwrap_or(Value::Null));
+    m.insert("min".into(), serde_json::Number::from_f64(*(&p.min)).map(Value::Number).unwrap_or(Value::Null));
+    Value::Object(m)
+}
+
+fn iface_recipes__get_recipe_information_bulk_response_item__to_json(p: &iface_recipes::GetRecipeInformationBulkResponseItem) -> Value {
+    let mut m = Map::new();
+    m.insert("aggregateLikes".into(), Value::Number(serde_json::Number::from(*(&p.aggregate_likes))));
+    m.insert("analyzedInstructions".into(), Value::Array((&p.analyzed_instructions).iter().map(|v| Value::String((v).clone())).collect()));
+    m.insert("cheap".into(), Value::Bool(*(&p.cheap)));
+    m.insert("creditsText".into(), Value::String((&p.credits_text).clone()));
+    m.insert("cuisines".into(), Value::Array((&p.cuisines).iter().map(|v| Value::String((v).clone())).collect()));
+    m.insert("dairyFree".into(), Value::Bool(*(&p.dairy_free)));
+    m.insert("diets".into(), Value::Array((&p.diets).iter().map(|v| Value::String((v).clone())).collect()));
+    m.insert("dishTypes".into(), Value::Array((&p.dish_types).iter().map(|v| Value::String((v).clone())).collect()));
+    m.insert("extendedIngredients".into(), Value::Array((&p.extended_ingredients).iter().map(|v| iface_recipes__get_recipe_information_bulk_response_item_extended_ingredients_item__to_json(v)).collect()));
+    m.insert("gaps".into(), Value::String((&p.gaps).clone()));
+    m.insert("glutenFree".into(), Value::Bool(*(&p.gluten_free)));
+    m.insert("healthScore".into(), serde_json::Number::from_f64(*(&p.health_score)).map(Value::Number).unwrap_or(Value::Null));
+    m.insert("id".into(), Value::Number(serde_json::Number::from(*(&p.id))));
+    m.insert("image".into(), Value::String((&p.image).clone()));
+    m.insert("imageType".into(), Value::String((&p.image_type).clone()));
+    m.insert("instructions".into(), Value::String((&p.instructions).clone()));
+    m.insert("ketogenic".into(), Value::Bool(*(&p.ketogenic)));
+    m.insert("license".into(), Value::String((&p.license).clone()));
+    m.insert("lowFodmap".into(), Value::Bool(*(&p.low_fodmap)));
+    m.insert("occasions".into(), Value::Array((&p.occasions).iter().map(|v| Value::String((v).clone())).collect()));
+    m.insert("pricePerServing".into(), serde_json::Number::from_f64(*(&p.price_per_serving)).map(Value::Number).unwrap_or(Value::Null));
+    m.insert("readyInMinutes".into(), Value::Number(serde_json::Number::from(*(&p.ready_in_minutes))));
+    m.insert("servings".into(), serde_json::Number::from_f64(*(&p.servings)).map(Value::Number).unwrap_or(Value::Null));
+    m.insert("sourceName".into(), Value::String((&p.source_name).clone()));
+    m.insert("sourceUrl".into(), Value::String((&p.source_url).clone()));
+    m.insert("spoonacularScore".into(), serde_json::Number::from_f64(*(&p.spoonacular_score)).map(Value::Number).unwrap_or(Value::Null));
+    m.insert("spoonacularSourceUrl".into(), Value::String((&p.spoonacular_source_url).clone()));
+    m.insert("summary".into(), Value::String((&p.summary).clone()));
+    m.insert("sustainable".into(), Value::Bool(*(&p.sustainable)));
+    m.insert("title".into(), Value::String((&p.title).clone()));
+    m.insert("vegan".into(), Value::Bool(*(&p.vegan)));
+    m.insert("vegetarian".into(), Value::Bool(*(&p.vegetarian)));
+    m.insert("veryHealthy".into(), Value::Bool(*(&p.very_healthy)));
+    m.insert("veryPopular".into(), Value::Bool(*(&p.very_popular)));
+    m.insert("weightWatcherSmartPoints".into(), serde_json::Number::from_f64(*(&p.weight_watcher_smart_points)).map(Value::Number).unwrap_or(Value::Null));
+    m.insert("whole30".into(), Value::Bool(*(&p.whole30)));
+    m.insert("winePairing".into(), iface_recipes__get_recipe_information_bulk_response_item_wine_pairing__to_json(&p.wine_pairing));
+    Value::Object(m)
+}
+
+fn iface_recipes__get_recipe_information_bulk_response_item_extended_ingredients_item__to_json(p: &iface_recipes::GetRecipeInformationBulkResponseItemExtendedIngredientsItem) -> Value {
+    let mut m = Map::new();
+    m.insert("aisle".into(), Value::String((&p.aisle).clone()));
+    m.insert("amount".into(), serde_json::Number::from_f64(*(&p.amount)).map(Value::Number).unwrap_or(Value::Null));
+    m.insert("consitency".into(), Value::String((&p.consitency).clone()));
+    m.insert("id".into(), Value::Number(serde_json::Number::from(*(&p.id))));
+    m.insert("image".into(), Value::String((&p.image).clone()));
+    m.insert("measures".into(), match (&p.measures) { Some(v) => iface_recipes__get_recipe_information_bulk_response_item_extended_ingredients_item_measures__to_json(v), None => Value::Null });
+    m.insert("meta".into(), match (&p.meta) { Some(v) => Value::Array((v).iter().map(|v| Value::String((v).clone())).collect()), None => Value::Null });
+    m.insert("name".into(), Value::String((&p.name).clone()));
+    m.insert("original".into(), Value::String((&p.original).clone()));
+    m.insert("originalName".into(), Value::String((&p.original_name).clone()));
+    m.insert("unit".into(), Value::String((&p.unit).clone()));
+    Value::Object(m)
+}
+
+fn iface_recipes__get_recipe_information_bulk_response_item_extended_ingredients_item_measures__to_json(p: &iface_recipes::GetRecipeInformationBulkResponseItemExtendedIngredientsItemMeasures) -> Value {
+    let mut m = Map::new();
+    m.insert("metric".into(), iface_recipes__get_recipe_information_bulk_response_item_extended_ingredients_item_measures_metric__to_json(&p.metric));
+    m.insert("us".into(), iface_recipes__get_recipe_information_bulk_response_item_extended_ingredients_item_measures_us__to_json(&p.us));
+    Value::Object(m)
+}
+
+fn iface_recipes__get_recipe_information_bulk_response_item_extended_ingredients_item_measures_metric__to_json(p: &iface_recipes::GetRecipeInformationBulkResponseItemExtendedIngredientsItemMeasuresMetric) -> Value {
+    let mut m = Map::new();
+    m.insert("amount".into(), serde_json::Number::from_f64(*(&p.amount)).map(Value::Number).unwrap_or(Value::Null));
+    m.insert("unitLong".into(), Value::String((&p.unit_long).clone()));
+    m.insert("unitShort".into(), Value::String((&p.unit_short).clone()));
+    Value::Object(m)
+}
+
+fn iface_recipes__get_recipe_information_bulk_response_item_extended_ingredients_item_measures_us__to_json(p: &iface_recipes::GetRecipeInformationBulkResponseItemExtendedIngredientsItemMeasuresUs) -> Value {
+    let mut m = Map::new();
+    m.insert("amount".into(), serde_json::Number::from_f64(*(&p.amount)).map(Value::Number).unwrap_or(Value::Null));
+    m.insert("unitLong".into(), Value::String((&p.unit_long).clone()));
+    m.insert("unitShort".into(), Value::String((&p.unit_short).clone()));
+    Value::Object(m)
+}
+
+fn iface_recipes__get_recipe_information_bulk_response_item_wine_pairing__to_json(p: &iface_recipes::GetRecipeInformationBulkResponseItemWinePairing) -> Value {
+    let mut m = Map::new();
+    m.insert("pairedWines".into(), Value::Array((&p.paired_wines).iter().map(|v| Value::String((v).clone())).collect()));
+    m.insert("pairingText".into(), Value::String((&p.pairing_text).clone()));
+    m.insert("productMatches".into(), Value::Array((&p.product_matches).iter().map(|v| iface_recipes__get_recipe_information_bulk_response_item_wine_pairing_product_matches_item__to_json(v)).collect()));
+    Value::Object(m)
+}
+
+fn iface_recipes__get_recipe_information_bulk_response_item_wine_pairing_product_matches_item__to_json(p: &iface_recipes::GetRecipeInformationBulkResponseItemWinePairingProductMatchesItem) -> Value {
+    let mut m = Map::new();
+    m.insert("averageRating".into(), serde_json::Number::from_f64(*(&p.average_rating)).map(Value::Number).unwrap_or(Value::Null));
+    m.insert("description".into(), Value::String((&p.description).clone()));
+    m.insert("id".into(), Value::Number(serde_json::Number::from(*(&p.id))));
+    m.insert("imageUrl".into(), Value::String((&p.image_url).clone()));
+    m.insert("link".into(), Value::String((&p.link).clone()));
+    m.insert("price".into(), Value::String((&p.price).clone()));
+    m.insert("ratingCount".into(), Value::Number(serde_json::Number::from(*(&p.rating_count))));
+    m.insert("score".into(), serde_json::Number::from_f64(*(&p.score)).map(Value::Number).unwrap_or(Value::Null));
+    m.insert("title".into(), Value::String((&p.title).clone()));
+    Value::Object(m)
+}
+
+fn iface_recipes__parse_ingredients_response_item__to_json(p: &iface_recipes::ParseIngredientsResponseItem) -> Value {
+    let mut m = Map::new();
+    m.insert("aisle".into(), Value::String((&p.aisle).clone()));
+    m.insert("amount".into(), serde_json::Number::from_f64(*(&p.amount)).map(Value::Number).unwrap_or(Value::Null));
+    m.insert("consistency".into(), Value::String((&p.consistency).clone()));
+    m.insert("estimatedCost".into(), iface_recipes__parse_ingredients_response_item_estimated_cost__to_json(&p.estimated_cost));
+    m.insert("id".into(), Value::Number(serde_json::Number::from(*(&p.id))));
+    m.insert("image".into(), Value::String((&p.image).clone()));
+    m.insert("meta".into(), Value::Array((&p.meta).iter().map(|v| Value::String((v).clone())).collect()));
+    m.insert("name".into(), Value::String((&p.name).clone()));
+    m.insert("nameClean".into(), Value::String((&p.name_clean).clone()));
+    m.insert("nutrition".into(), iface_recipes__parse_ingredients_response_item_nutrition__to_json(&p.nutrition));
+    m.insert("original".into(), Value::String((&p.original).clone()));
+    m.insert("originalName".into(), Value::String((&p.original_name).clone()));
+    m.insert("possibleUnits".into(), Value::Array((&p.possible_units).iter().map(|v| Value::String((v).clone())).collect()));
+    m.insert("unit".into(), Value::String((&p.unit).clone()));
+    m.insert("unitLong".into(), Value::String((&p.unit_long).clone()));
+    m.insert("unitShort".into(), Value::String((&p.unit_short).clone()));
+    Value::Object(m)
+}
+
+fn iface_recipes__parse_ingredients_response_item_estimated_cost__to_json(p: &iface_recipes::ParseIngredientsResponseItemEstimatedCost) -> Value {
+    let mut m = Map::new();
+    m.insert("unit".into(), Value::String((&p.unit).clone()));
+    m.insert("value".into(), serde_json::Number::from_f64(*(&p.value)).map(Value::Number).unwrap_or(Value::Null));
+    Value::Object(m)
+}
+
+fn iface_recipes__parse_ingredients_response_item_nutrition__to_json(p: &iface_recipes::ParseIngredientsResponseItemNutrition) -> Value {
+    let mut m = Map::new();
+    m.insert("caloricBreakdown".into(), iface_recipes__parse_ingredients_response_item_nutrition_caloric_breakdown__to_json(&p.caloric_breakdown));
+    m.insert("flavonoids".into(), Value::Array((&p.flavonoids).iter().map(|v| iface_recipes__parse_ingredients_response_item_nutrition_flavonoids_item__to_json(v)).collect()));
+    m.insert("nutrients".into(), Value::Array((&p.nutrients).iter().map(|v| iface_recipes__parse_ingredients_response_item_nutrition_nutrients_item__to_json(v)).collect()));
+    m.insert("properties".into(), Value::Array((&p.properties).iter().map(|v| iface_recipes__parse_ingredients_response_item_nutrition_properties_item__to_json(v)).collect()));
+    m.insert("weightPerServing".into(), iface_recipes__parse_ingredients_response_item_nutrition_weight_per_serving__to_json(&p.weight_per_serving));
+    Value::Object(m)
+}
+
+fn iface_recipes__parse_ingredients_response_item_nutrition_caloric_breakdown__to_json(p: &iface_recipes::ParseIngredientsResponseItemNutritionCaloricBreakdown) -> Value {
+    let mut m = Map::new();
+    m.insert("percentCarbs".into(), serde_json::Number::from_f64(*(&p.percent_carbs)).map(Value::Number).unwrap_or(Value::Null));
+    m.insert("percentFat".into(), serde_json::Number::from_f64(*(&p.percent_fat)).map(Value::Number).unwrap_or(Value::Null));
+    m.insert("percentProtein".into(), serde_json::Number::from_f64(*(&p.percent_protein)).map(Value::Number).unwrap_or(Value::Null));
+    Value::Object(m)
+}
+
+fn iface_recipes__parse_ingredients_response_item_nutrition_flavonoids_item__to_json(p: &iface_recipes::ParseIngredientsResponseItemNutritionFlavonoidsItem) -> Value {
+    let mut m = Map::new();
+    m.insert("amount".into(), serde_json::Number::from_f64(*(&p.amount)).map(Value::Number).unwrap_or(Value::Null));
+    m.insert("name".into(), Value::String((&p.name).clone()));
+    m.insert("unit".into(), Value::String((&p.unit).clone()));
+    Value::Object(m)
+}
+
+fn iface_recipes__parse_ingredients_response_item_nutrition_nutrients_item__to_json(p: &iface_recipes::ParseIngredientsResponseItemNutritionNutrientsItem) -> Value {
+    let mut m = Map::new();
+    m.insert("amount".into(), serde_json::Number::from_f64(*(&p.amount)).map(Value::Number).unwrap_or(Value::Null));
+    m.insert("name".into(), Value::String((&p.name).clone()));
+    m.insert("percentOfDailyNeeds".into(), serde_json::Number::from_f64(*(&p.percent_of_daily_needs)).map(Value::Number).unwrap_or(Value::Null));
+    m.insert("unit".into(), Value::String((&p.unit).clone()));
+    Value::Object(m)
+}
+
+fn iface_recipes__parse_ingredients_response_item_nutrition_properties_item__to_json(p: &iface_recipes::ParseIngredientsResponseItemNutritionPropertiesItem) -> Value {
+    let mut m = Map::new();
+    m.insert("amount".into(), serde_json::Number::from_f64(*(&p.amount)).map(Value::Number).unwrap_or(Value::Null));
+    m.insert("name".into(), Value::String((&p.name).clone()));
+    m.insert("unit".into(), Value::String((&p.unit).clone()));
+    Value::Object(m)
+}
+
+fn iface_recipes__parse_ingredients_response_item_nutrition_weight_per_serving__to_json(p: &iface_recipes::ParseIngredientsResponseItemNutritionWeightPerServing) -> Value {
+    let mut m = Map::new();
+    m.insert("amount".into(), serde_json::Number::from_f64(*(&p.amount)).map(Value::Number).unwrap_or(Value::Null));
+    m.insert("unit".into(), Value::String((&p.unit).clone()));
+    Value::Object(m)
+}
+
+fn iface_recipes__analyze_a_recipe_search_query_response__to_json(p: &iface_recipes::AnalyzeARecipeSearchQueryResponse) -> Value {
+    let mut m = Map::new();
+    m.insert("cuisines".into(), Value::Array((&p.cuisines).iter().map(|v| Value::String((v).clone())).collect()));
+    m.insert("dishes".into(), Value::Array((&p.dishes).iter().map(|v| iface_recipes__analyze_a_recipe_search_query_response_dishes_item__to_json(v)).collect()));
+    m.insert("ingredients".into(), Value::Array((&p.ingredients).iter().map(|v| iface_recipes__analyze_a_recipe_search_query_response_ingredients_item__to_json(v)).collect()));
+    m.insert("modifiers".into(), Value::Array((&p.modifiers).iter().map(|v| Value::String((v).clone())).collect()));
+    Value::Object(m)
+}
+
+fn iface_recipes__analyze_a_recipe_search_query_response_dishes_item__to_json(p: &iface_recipes::AnalyzeARecipeSearchQueryResponseDishesItem) -> Value {
+    let mut m = Map::new();
+    m.insert("image".into(), Value::String((&p.image).clone()));
+    m.insert("name".into(), Value::String((&p.name).clone()));
+    Value::Object(m)
+}
+
+fn iface_recipes__analyze_a_recipe_search_query_response_ingredients_item__to_json(p: &iface_recipes::AnalyzeARecipeSearchQueryResponseIngredientsItem) -> Value {
+    let mut m = Map::new();
+    m.insert("image".into(), Value::String((&p.image).clone()));
+    m.insert("include".into(), Value::Bool(*(&p.include_op)));
+    m.insert("name".into(), Value::String((&p.name).clone()));
+    Value::Object(m)
+}
+
+fn iface_recipes__quick_answer_response__to_json(p: &iface_recipes::QuickAnswerResponse) -> Value {
+    let mut m = Map::new();
+    m.insert("answer".into(), Value::String((&p.answer).clone()));
+    m.insert("image".into(), Value::String((&p.image).clone()));
+    Value::Object(m)
+}
+
+fn iface_recipes__get_random_recipes_response__to_json(p: &iface_recipes::GetRandomRecipesResponse) -> Value {
+    let mut m = Map::new();
+    m.insert("recipes".into(), Value::Array((&p.recipes).iter().map(|v| iface_recipes__get_random_recipes_response_recipes_item__to_json(v)).collect()));
+    Value::Object(m)
+}
+
+fn iface_recipes__get_random_recipes_response_recipes_item__to_json(p: &iface_recipes::GetRandomRecipesResponseRecipesItem) -> Value {
+    let mut m = Map::new();
+    m.insert("aggregateLikes".into(), serde_json::Number::from_f64(*(&p.aggregate_likes)).map(Value::Number).unwrap_or(Value::Null));
+    m.insert("analyzedInstructions".into(), match (&p.analyzed_instructions) { Some(v) => Value::Array((v).iter().map(|v| iface_recipes__get_random_recipes_response_recipes_item_analyzed_instructions_item__to_json(v)).collect()), None => Value::Null });
+    m.insert("cheap".into(), Value::Bool(*(&p.cheap)));
+    m.insert("creditsText".into(), Value::String((&p.credits_text).clone()));
+    m.insert("cuisines".into(), match (&p.cuisines) { Some(v) => Value::Array((v).iter().map(|v| Value::String((v).clone())).collect()), None => Value::Null });
+    m.insert("dairyFree".into(), Value::Bool(*(&p.dairy_free)));
+    m.insert("diets".into(), match (&p.diets) { Some(v) => Value::Array((v).iter().map(|v| Value::String((v).clone())).collect()), None => Value::Null });
+    m.insert("dishTypes".into(), match (&p.dish_types) { Some(v) => Value::Array((v).iter().map(|v| Value::String((v).clone())).collect()), None => Value::Null });
+    m.insert("extendedIngredients".into(), match (&p.extended_ingredients) { Some(v) => Value::Array((v).iter().map(|v| iface_recipes__get_random_recipes_response_recipes_item_extended_ingredients_item__to_json(v)).collect()), None => Value::Null });
+    m.insert("gaps".into(), Value::String((&p.gaps).clone()));
+    m.insert("glutenFree".into(), Value::Bool(*(&p.gluten_free)));
+    m.insert("healthScore".into(), serde_json::Number::from_f64(*(&p.health_score)).map(Value::Number).unwrap_or(Value::Null));
+    m.insert("id".into(), Value::Number(serde_json::Number::from(*(&p.id))));
+    m.insert("image".into(), Value::String((&p.image).clone()));
+    m.insert("imageType".into(), Value::String((&p.image_type).clone()));
+    m.insert("instructions".into(), Value::String((&p.instructions).clone()));
+    m.insert("ketogenic".into(), Value::Bool(*(&p.ketogenic)));
+    m.insert("license".into(), Value::String((&p.license).clone()));
+    m.insert("lowFodmap".into(), Value::Bool(*(&p.low_fodmap)));
+    m.insert("occasions".into(), match (&p.occasions) { Some(v) => Value::Array((v).iter().map(|v| Value::String((v).clone())).collect()), None => Value::Null });
+    m.insert("pricePerServing".into(), serde_json::Number::from_f64(*(&p.price_per_serving)).map(Value::Number).unwrap_or(Value::Null));
+    m.insert("readyInMinutes".into(), Value::Number(serde_json::Number::from(*(&p.ready_in_minutes))));
+    m.insert("servings".into(), serde_json::Number::from_f64(*(&p.servings)).map(Value::Number).unwrap_or(Value::Null));
+    m.insert("sourceName".into(), Value::String((&p.source_name).clone()));
+    m.insert("sourceUrl".into(), Value::String((&p.source_url).clone()));
+    m.insert("spoonacularScore".into(), serde_json::Number::from_f64(*(&p.spoonacular_score)).map(Value::Number).unwrap_or(Value::Null));
+    m.insert("spoonacularSourceUrl".into(), Value::String((&p.spoonacular_source_url).clone()));
+    m.insert("summary".into(), Value::String((&p.summary).clone()));
+    m.insert("sustainable".into(), Value::Bool(*(&p.sustainable)));
+    m.insert("title".into(), Value::String((&p.title).clone()));
+    m.insert("vegan".into(), Value::Bool(*(&p.vegan)));
+    m.insert("vegetarian".into(), Value::Bool(*(&p.vegetarian)));
+    m.insert("veryHealthy".into(), Value::Bool(*(&p.very_healthy)));
+    m.insert("veryPopular".into(), Value::Bool(*(&p.very_popular)));
+    m.insert("weightWatcherSmartPoints".into(), serde_json::Number::from_f64(*(&p.weight_watcher_smart_points)).map(Value::Number).unwrap_or(Value::Null));
+    m.insert("whole30".into(), Value::Bool(*(&p.whole30)));
+    m.insert("winePairing".into(), match (&p.wine_pairing) { Some(v) => iface_recipes__get_random_recipes_response_recipes_item_wine_pairing__to_json(v), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_recipes__get_random_recipes_response_recipes_item_analyzed_instructions_item__to_json(p: &iface_recipes::GetRandomRecipesResponseRecipesItemAnalyzedInstructionsItem) -> Value {
+    let mut m = Map::new();
+    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_recipes__get_random_recipes_response_recipes_item_extended_ingredients_item__to_json(p: &iface_recipes::GetRandomRecipesResponseRecipesItemExtendedIngredientsItem) -> Value {
+    let mut m = Map::new();
+    m.insert("aisle".into(), Value::String((&p.aisle).clone()));
+    m.insert("amount".into(), serde_json::Number::from_f64(*(&p.amount)).map(Value::Number).unwrap_or(Value::Null));
+    m.insert("consitency".into(), Value::String((&p.consitency).clone()));
+    m.insert("id".into(), Value::Number(serde_json::Number::from(*(&p.id))));
+    m.insert("image".into(), Value::String((&p.image).clone()));
+    m.insert("measures".into(), match (&p.measures) { Some(v) => iface_recipes__get_random_recipes_response_recipes_item_extended_ingredients_item_measures__to_json(v), None => Value::Null });
+    m.insert("meta".into(), match (&p.meta) { Some(v) => Value::Array((v).iter().map(|v| Value::String((v).clone())).collect()), None => Value::Null });
+    m.insert("name".into(), Value::String((&p.name).clone()));
+    m.insert("original".into(), Value::String((&p.original).clone()));
+    m.insert("originalName".into(), Value::String((&p.original_name).clone()));
+    m.insert("unit".into(), Value::String((&p.unit).clone()));
+    Value::Object(m)
+}
+
+fn iface_recipes__get_random_recipes_response_recipes_item_extended_ingredients_item_measures__to_json(p: &iface_recipes::GetRandomRecipesResponseRecipesItemExtendedIngredientsItemMeasures) -> Value {
+    let mut m = Map::new();
+    m.insert("metric".into(), iface_recipes__get_random_recipes_response_recipes_item_extended_ingredients_item_measures_metric__to_json(&p.metric));
+    m.insert("us".into(), iface_recipes__get_random_recipes_response_recipes_item_extended_ingredients_item_measures_us__to_json(&p.us));
+    Value::Object(m)
+}
+
+fn iface_recipes__get_random_recipes_response_recipes_item_extended_ingredients_item_measures_metric__to_json(p: &iface_recipes::GetRandomRecipesResponseRecipesItemExtendedIngredientsItemMeasuresMetric) -> Value {
+    let mut m = Map::new();
+    m.insert("amount".into(), serde_json::Number::from_f64(*(&p.amount)).map(Value::Number).unwrap_or(Value::Null));
+    m.insert("unitLong".into(), Value::String((&p.unit_long).clone()));
+    m.insert("unitShort".into(), Value::String((&p.unit_short).clone()));
+    Value::Object(m)
+}
+
+fn iface_recipes__get_random_recipes_response_recipes_item_extended_ingredients_item_measures_us__to_json(p: &iface_recipes::GetRandomRecipesResponseRecipesItemExtendedIngredientsItemMeasuresUs) -> Value {
+    let mut m = Map::new();
+    m.insert("amount".into(), serde_json::Number::from_f64(*(&p.amount)).map(Value::Number).unwrap_or(Value::Null));
+    m.insert("unitLong".into(), Value::String((&p.unit_long).clone()));
+    m.insert("unitShort".into(), Value::String((&p.unit_short).clone()));
+    Value::Object(m)
+}
+
+fn iface_recipes__get_random_recipes_response_recipes_item_wine_pairing__to_json(p: &iface_recipes::GetRandomRecipesResponseRecipesItemWinePairing) -> Value {
+    let mut m = Map::new();
+    m.insert("pairedWines".into(), Value::Array((&p.paired_wines).iter().map(|v| Value::String((v).clone())).collect()));
+    m.insert("pairingText".into(), Value::String((&p.pairing_text).clone()));
+    m.insert("productMatches".into(), Value::Array((&p.product_matches).iter().map(|v| iface_recipes__get_random_recipes_response_recipes_item_wine_pairing_product_matches_item__to_json(v)).collect()));
+    Value::Object(m)
+}
+
+fn iface_recipes__get_random_recipes_response_recipes_item_wine_pairing_product_matches_item__to_json(p: &iface_recipes::GetRandomRecipesResponseRecipesItemWinePairingProductMatchesItem) -> Value {
+    let mut m = Map::new();
+    m.insert("averageRating".into(), serde_json::Number::from_f64(*(&p.average_rating)).map(Value::Number).unwrap_or(Value::Null));
+    m.insert("description".into(), Value::String((&p.description).clone()));
+    m.insert("id".into(), Value::Number(serde_json::Number::from(*(&p.id))));
+    m.insert("imageUrl".into(), Value::String((&p.image_url).clone()));
+    m.insert("link".into(), Value::String((&p.link).clone()));
+    m.insert("price".into(), Value::String((&p.price).clone()));
+    m.insert("ratingCount".into(), Value::Number(serde_json::Number::from(*(&p.rating_count))));
+    m.insert("score".into(), serde_json::Number::from_f64(*(&p.score)).map(Value::Number).unwrap_or(Value::Null));
+    m.insert("title".into(), Value::String((&p.title).clone()));
+    Value::Object(m)
+}
+
+fn iface_recipes__create_recipe_card_response__to_json(p: &iface_recipes::CreateRecipeCardResponse) -> Value {
+    let mut m = Map::new();
+    m.insert("url".into(), Value::String((&p.url).clone()));
+    Value::Object(m)
+}
+
+fn iface_recipes__get_analyzed_recipe_instructions_response__to_json(p: &iface_recipes::GetAnalyzedRecipeInstructionsResponse) -> Value {
+    let mut m = Map::new();
+    m.insert("equipment".into(), Value::Array((&p.equipment).iter().map(|v| iface_recipes__get_analyzed_recipe_instructions_response_equipment_item__to_json(v)).collect()));
+    m.insert("ingredients".into(), Value::Array((&p.ingredients).iter().map(|v| iface_recipes__get_analyzed_recipe_instructions_response_ingredients_item__to_json(v)).collect()));
+    m.insert("parsedInstructions".into(), Value::Array((&p.parsed_instructions).iter().map(|v| iface_recipes__get_analyzed_recipe_instructions_response_parsed_instructions_item__to_json(v)).collect()));
+    Value::Object(m)
+}
+
+fn iface_recipes__get_analyzed_recipe_instructions_response_equipment_item__to_json(p: &iface_recipes::GetAnalyzedRecipeInstructionsResponseEquipmentItem) -> Value {
+    let mut m = Map::new();
+    m.insert("id".into(), Value::Number(serde_json::Number::from(*(&p.id))));
+    m.insert("name".into(), Value::String((&p.name).clone()));
+    Value::Object(m)
+}
+
+fn iface_recipes__get_analyzed_recipe_instructions_response_ingredients_item__to_json(p: &iface_recipes::GetAnalyzedRecipeInstructionsResponseIngredientsItem) -> Value {
+    let mut m = Map::new();
+    m.insert("id".into(), Value::Number(serde_json::Number::from(*(&p.id))));
+    m.insert("name".into(), Value::String((&p.name).clone()));
+    Value::Object(m)
+}
+
+fn iface_recipes__get_analyzed_recipe_instructions_response_parsed_instructions_item__to_json(p: &iface_recipes::GetAnalyzedRecipeInstructionsResponseParsedInstructionsItem) -> Value {
+    let mut m = Map::new();
+    m.insert("name".into(), Value::String((&p.name).clone()));
+    m.insert("steps".into(), match (&p.steps) { Some(v) => Value::Array((v).iter().map(|v| iface_recipes__get_analyzed_recipe_instructions_response_parsed_instructions_item_steps_item__to_json(v)).collect()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_recipes__get_analyzed_recipe_instructions_response_parsed_instructions_item_steps_item__to_json(p: &iface_recipes::GetAnalyzedRecipeInstructionsResponseParsedInstructionsItemStepsItem) -> Value {
+    let mut m = Map::new();
+    m.insert("equipment".into(), match (&p.equipment) { Some(v) => Value::Array((v).iter().map(|v| iface_recipes__get_analyzed_recipe_instructions_response_parsed_instructions_item_steps_item_equipment_item__to_json(v)).collect()), None => Value::Null });
+    m.insert("ingredients".into(), match (&p.ingredients) { Some(v) => Value::Array((v).iter().map(|v| iface_recipes__get_analyzed_recipe_instructions_response_parsed_instructions_item_steps_item_ingredients_item__to_json(v)).collect()), None => Value::Null });
+    m.insert("number".into(), serde_json::Number::from_f64(*(&p.number)).map(Value::Number).unwrap_or(Value::Null));
+    m.insert("step".into(), Value::String((&p.step).clone()));
+    Value::Object(m)
+}
+
+fn iface_recipes__get_analyzed_recipe_instructions_response_parsed_instructions_item_steps_item_equipment_item__to_json(p: &iface_recipes::GetAnalyzedRecipeInstructionsResponseParsedInstructionsItemStepsItemEquipmentItem) -> Value {
+    let mut m = Map::new();
+    m.insert("id".into(), Value::Number(serde_json::Number::from(*(&p.id))));
+    m.insert("image".into(), Value::String((&p.image).clone()));
+    m.insert("localizedName".into(), Value::String((&p.localized_name).clone()));
+    m.insert("name".into(), Value::String((&p.name).clone()));
+    Value::Object(m)
+}
+
+fn iface_recipes__get_analyzed_recipe_instructions_response_parsed_instructions_item_steps_item_ingredients_item__to_json(p: &iface_recipes::GetAnalyzedRecipeInstructionsResponseParsedInstructionsItemStepsItemIngredientsItem) -> Value {
+    let mut m = Map::new();
+    m.insert("id".into(), Value::Number(serde_json::Number::from(*(&p.id))));
+    m.insert("image".into(), Value::String((&p.image).clone()));
+    m.insert("localizedName".into(), Value::String((&p.localized_name).clone()));
+    m.insert("name".into(), Value::String((&p.name).clone()));
+    Value::Object(m)
+}
+
+fn iface_recipes__create_recipe_card_get_response__to_json(p: &iface_recipes::CreateRecipeCardGetResponse) -> Value {
+    let mut m = Map::new();
+    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_recipes__get_recipe_equipment_by_id_response__to_json(p: &iface_recipes::GetRecipeEquipmentByIdResponse) -> Value {
+    let mut m = Map::new();
+    m.insert("equipment".into(), Value::Array((&p.equipment).iter().map(|v| iface_recipes__get_recipe_equipment_by_id_response_equipment_item__to_json(v)).collect()));
+    Value::Object(m)
+}
+
+fn iface_recipes__get_recipe_equipment_by_id_response_equipment_item__to_json(p: &iface_recipes::GetRecipeEquipmentByIdResponseEquipmentItem) -> Value {
+    let mut m = Map::new();
+    m.insert("image".into(), Value::String((&p.image).clone()));
+    m.insert("name".into(), Value::String((&p.name).clone()));
+    Value::Object(m)
+}
+
+fn iface_recipes__equipment_by_id_image_response__to_json(p: &iface_recipes::EquipmentByIdImageResponse) -> Value {
+    let mut m = Map::new();
+    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_recipes__get_recipe_information_response__to_json(p: &iface_recipes::GetRecipeInformationResponse) -> Value {
+    let mut m = Map::new();
+    m.insert("aggregateLikes".into(), Value::Number(serde_json::Number::from(*(&p.aggregate_likes))));
+    m.insert("analyzedInstructions".into(), Value::Array((&p.analyzed_instructions).iter().map(|v| iface_recipes__get_recipe_information_response_analyzed_instructions_item__to_json(v)).collect()));
+    m.insert("cheap".into(), Value::Bool(*(&p.cheap)));
+    m.insert("creditsText".into(), Value::String((&p.credits_text).clone()));
+    m.insert("cuisines".into(), Value::Array((&p.cuisines).iter().map(|v| Value::String((v).clone())).collect()));
+    m.insert("dairyFree".into(), Value::Bool(*(&p.dairy_free)));
+    m.insert("diets".into(), Value::Array((&p.diets).iter().map(|v| Value::String((v).clone())).collect()));
+    m.insert("dishTypes".into(), Value::Array((&p.dish_types).iter().map(|v| Value::String((v).clone())).collect()));
+    m.insert("extendedIngredients".into(), Value::Array((&p.extended_ingredients).iter().map(|v| iface_recipes__get_recipe_information_response_extended_ingredients_item__to_json(v)).collect()));
+    m.insert("gaps".into(), Value::String((&p.gaps).clone()));
+    m.insert("glutenFree".into(), Value::Bool(*(&p.gluten_free)));
+    m.insert("healthScore".into(), serde_json::Number::from_f64(*(&p.health_score)).map(Value::Number).unwrap_or(Value::Null));
+    m.insert("id".into(), Value::Number(serde_json::Number::from(*(&p.id))));
+    m.insert("image".into(), Value::String((&p.image).clone()));
+    m.insert("imageType".into(), Value::String((&p.image_type).clone()));
+    m.insert("instructions".into(), Value::String((&p.instructions).clone()));
+    m.insert("ketogenic".into(), Value::Bool(*(&p.ketogenic)));
+    m.insert("license".into(), Value::String((&p.license).clone()));
+    m.insert("lowFodmap".into(), Value::Bool(*(&p.low_fodmap)));
+    m.insert("occasions".into(), Value::Array((&p.occasions).iter().map(|v| Value::String((v).clone())).collect()));
+    m.insert("pricePerServing".into(), serde_json::Number::from_f64(*(&p.price_per_serving)).map(Value::Number).unwrap_or(Value::Null));
+    m.insert("readyInMinutes".into(), Value::Number(serde_json::Number::from(*(&p.ready_in_minutes))));
+    m.insert("servings".into(), serde_json::Number::from_f64(*(&p.servings)).map(Value::Number).unwrap_or(Value::Null));
+    m.insert("sourceName".into(), Value::String((&p.source_name).clone()));
+    m.insert("sourceUrl".into(), Value::String((&p.source_url).clone()));
+    m.insert("spoonacularScore".into(), serde_json::Number::from_f64(*(&p.spoonacular_score)).map(Value::Number).unwrap_or(Value::Null));
+    m.insert("spoonacularSourceUrl".into(), Value::String((&p.spoonacular_source_url).clone()));
+    m.insert("summary".into(), Value::String((&p.summary).clone()));
+    m.insert("sustainable".into(), Value::Bool(*(&p.sustainable)));
+    m.insert("title".into(), Value::String((&p.title).clone()));
+    m.insert("vegan".into(), Value::Bool(*(&p.vegan)));
+    m.insert("vegetarian".into(), Value::Bool(*(&p.vegetarian)));
+    m.insert("veryHealthy".into(), Value::Bool(*(&p.very_healthy)));
+    m.insert("veryPopular".into(), Value::Bool(*(&p.very_popular)));
+    m.insert("weightWatcherSmartPoints".into(), serde_json::Number::from_f64(*(&p.weight_watcher_smart_points)).map(Value::Number).unwrap_or(Value::Null));
+    m.insert("whole30".into(), Value::Bool(*(&p.whole30)));
+    m.insert("winePairing".into(), iface_recipes__get_recipe_information_response_wine_pairing__to_json(&p.wine_pairing));
+    Value::Object(m)
+}
+
+fn iface_recipes__get_recipe_information_response_analyzed_instructions_item__to_json(p: &iface_recipes::GetRecipeInformationResponseAnalyzedInstructionsItem) -> Value {
+    let mut m = Map::new();
+    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_recipes__get_recipe_information_response_extended_ingredients_item__to_json(p: &iface_recipes::GetRecipeInformationResponseExtendedIngredientsItem) -> Value {
+    let mut m = Map::new();
+    m.insert("aisle".into(), Value::String((&p.aisle).clone()));
+    m.insert("amount".into(), serde_json::Number::from_f64(*(&p.amount)).map(Value::Number).unwrap_or(Value::Null));
+    m.insert("consitency".into(), Value::String((&p.consitency).clone()));
+    m.insert("id".into(), Value::Number(serde_json::Number::from(*(&p.id))));
+    m.insert("image".into(), Value::String((&p.image).clone()));
+    m.insert("measures".into(), match (&p.measures) { Some(v) => iface_recipes__get_recipe_information_response_extended_ingredients_item_measures__to_json(v), None => Value::Null });
+    m.insert("meta".into(), match (&p.meta) { Some(v) => Value::Array((v).iter().map(|v| Value::String((v).clone())).collect()), None => Value::Null });
+    m.insert("name".into(), Value::String((&p.name).clone()));
+    m.insert("original".into(), Value::String((&p.original).clone()));
+    m.insert("originalName".into(), Value::String((&p.original_name).clone()));
+    m.insert("unit".into(), Value::String((&p.unit).clone()));
+    Value::Object(m)
+}
+
+fn iface_recipes__get_recipe_information_response_extended_ingredients_item_measures__to_json(p: &iface_recipes::GetRecipeInformationResponseExtendedIngredientsItemMeasures) -> Value {
+    let mut m = Map::new();
+    m.insert("metric".into(), iface_recipes__get_recipe_information_response_extended_ingredients_item_measures_metric__to_json(&p.metric));
+    m.insert("us".into(), iface_recipes__get_recipe_information_response_extended_ingredients_item_measures_us__to_json(&p.us));
+    Value::Object(m)
+}
+
+fn iface_recipes__get_recipe_information_response_extended_ingredients_item_measures_metric__to_json(p: &iface_recipes::GetRecipeInformationResponseExtendedIngredientsItemMeasuresMetric) -> Value {
+    let mut m = Map::new();
+    m.insert("amount".into(), serde_json::Number::from_f64(*(&p.amount)).map(Value::Number).unwrap_or(Value::Null));
+    m.insert("unitLong".into(), Value::String((&p.unit_long).clone()));
+    m.insert("unitShort".into(), Value::String((&p.unit_short).clone()));
+    Value::Object(m)
+}
+
+fn iface_recipes__get_recipe_information_response_extended_ingredients_item_measures_us__to_json(p: &iface_recipes::GetRecipeInformationResponseExtendedIngredientsItemMeasuresUs) -> Value {
+    let mut m = Map::new();
+    m.insert("amount".into(), serde_json::Number::from_f64(*(&p.amount)).map(Value::Number).unwrap_or(Value::Null));
+    m.insert("unitLong".into(), Value::String((&p.unit_long).clone()));
+    m.insert("unitShort".into(), Value::String((&p.unit_short).clone()));
+    Value::Object(m)
+}
+
+fn iface_recipes__get_recipe_information_response_wine_pairing__to_json(p: &iface_recipes::GetRecipeInformationResponseWinePairing) -> Value {
+    let mut m = Map::new();
+    m.insert("pairedWines".into(), Value::Array((&p.paired_wines).iter().map(|v| Value::String((v).clone())).collect()));
+    m.insert("pairingText".into(), Value::String((&p.pairing_text).clone()));
+    m.insert("productMatches".into(), Value::Array((&p.product_matches).iter().map(|v| iface_recipes__get_recipe_information_response_wine_pairing_product_matches_item__to_json(v)).collect()));
+    Value::Object(m)
+}
+
+fn iface_recipes__get_recipe_information_response_wine_pairing_product_matches_item__to_json(p: &iface_recipes::GetRecipeInformationResponseWinePairingProductMatchesItem) -> Value {
+    let mut m = Map::new();
+    m.insert("averageRating".into(), serde_json::Number::from_f64(*(&p.average_rating)).map(Value::Number).unwrap_or(Value::Null));
+    m.insert("description".into(), Value::String((&p.description).clone()));
+    m.insert("id".into(), Value::Number(serde_json::Number::from(*(&p.id))));
+    m.insert("imageUrl".into(), Value::String((&p.image_url).clone()));
+    m.insert("link".into(), Value::String((&p.link).clone()));
+    m.insert("price".into(), Value::String((&p.price).clone()));
+    m.insert("ratingCount".into(), Value::Number(serde_json::Number::from(*(&p.rating_count))));
+    m.insert("score".into(), serde_json::Number::from_f64(*(&p.score)).map(Value::Number).unwrap_or(Value::Null));
+    m.insert("title".into(), Value::String((&p.title).clone()));
+    Value::Object(m)
+}
+
+fn iface_recipes__get_recipe_ingredients_by_id_response__to_json(p: &iface_recipes::GetRecipeIngredientsByIdResponse) -> Value {
+    let mut m = Map::new();
+    m.insert("ingredients".into(), Value::Array((&p.ingredients).iter().map(|v| iface_recipes__get_recipe_ingredients_by_id_response_ingredients_item__to_json(v)).collect()));
+    Value::Object(m)
+}
+
+fn iface_recipes__get_recipe_ingredients_by_id_response_ingredients_item__to_json(p: &iface_recipes::GetRecipeIngredientsByIdResponseIngredientsItem) -> Value {
+    let mut m = Map::new();
+    m.insert("amount".into(), match (&p.amount) { Some(v) => iface_recipes__get_recipe_ingredients_by_id_response_ingredients_item_amount__to_json(v), None => Value::Null });
+    m.insert("image".into(), Value::String((&p.image).clone()));
+    m.insert("name".into(), Value::String((&p.name).clone()));
+    Value::Object(m)
+}
+
+fn iface_recipes__get_recipe_ingredients_by_id_response_ingredients_item_amount__to_json(p: &iface_recipes::GetRecipeIngredientsByIdResponseIngredientsItemAmount) -> Value {
+    let mut m = Map::new();
+    m.insert("metric".into(), iface_recipes__get_recipe_ingredients_by_id_response_ingredients_item_amount_metric__to_json(&p.metric));
+    m.insert("us".into(), iface_recipes__get_recipe_ingredients_by_id_response_ingredients_item_amount_us__to_json(&p.us));
+    Value::Object(m)
+}
+
+fn iface_recipes__get_recipe_ingredients_by_id_response_ingredients_item_amount_metric__to_json(p: &iface_recipes::GetRecipeIngredientsByIdResponseIngredientsItemAmountMetric) -> Value {
+    let mut m = Map::new();
+    m.insert("unit".into(), Value::String((&p.unit).clone()));
+    m.insert("value".into(), serde_json::Number::from_f64(*(&p.value)).map(Value::Number).unwrap_or(Value::Null));
+    Value::Object(m)
+}
+
+fn iface_recipes__get_recipe_ingredients_by_id_response_ingredients_item_amount_us__to_json(p: &iface_recipes::GetRecipeIngredientsByIdResponseIngredientsItemAmountUs) -> Value {
+    let mut m = Map::new();
+    m.insert("unit".into(), Value::String((&p.unit).clone()));
+    m.insert("value".into(), serde_json::Number::from_f64(*(&p.value)).map(Value::Number).unwrap_or(Value::Null));
+    Value::Object(m)
+}
+
+fn iface_recipes__recipe_nutrition_label_image_response__to_json(p: &iface_recipes::RecipeNutritionLabelImageResponse) -> Value {
+    let mut m = Map::new();
+    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_recipes__get_recipe_nutrition_widget_by_id_response__to_json(p: &iface_recipes::GetRecipeNutritionWidgetByIdResponse) -> Value {
+    let mut m = Map::new();
+    m.insert("bad".into(), Value::Array((&p.bad).iter().map(|v| iface_recipes__get_recipe_nutrition_widget_by_id_response_bad_item__to_json(v)).collect()));
+    m.insert("calories".into(), Value::String((&p.calories).clone()));
+    m.insert("carbs".into(), Value::String((&p.carbs).clone()));
+    m.insert("fat".into(), Value::String((&p.fat).clone()));
+    m.insert("good".into(), Value::Array((&p.good).iter().map(|v| iface_recipes__get_recipe_nutrition_widget_by_id_response_good_item__to_json(v)).collect()));
+    m.insert("protein".into(), Value::String((&p.protein).clone()));
+    Value::Object(m)
+}
+
+fn iface_recipes__get_recipe_nutrition_widget_by_id_response_bad_item__to_json(p: &iface_recipes::GetRecipeNutritionWidgetByIdResponseBadItem) -> Value {
+    let mut m = Map::new();
+    m.insert("amount".into(), Value::String((&p.amount).clone()));
+    m.insert("indented".into(), Value::Bool(*(&p.indented)));
+    m.insert("name".into(), Value::String((&p.name).clone()));
+    m.insert("percentOfDailyNeeds".into(), serde_json::Number::from_f64(*(&p.percent_of_daily_needs)).map(Value::Number).unwrap_or(Value::Null));
+    Value::Object(m)
+}
+
+fn iface_recipes__get_recipe_nutrition_widget_by_id_response_good_item__to_json(p: &iface_recipes::GetRecipeNutritionWidgetByIdResponseGoodItem) -> Value {
+    let mut m = Map::new();
+    m.insert("amount".into(), Value::String((&p.amount).clone()));
+    m.insert("indented".into(), Value::Bool(*(&p.indented)));
+    m.insert("name".into(), Value::String((&p.name).clone()));
+    m.insert("percentOfDailyNeeds".into(), serde_json::Number::from_f64(*(&p.percent_of_daily_needs)).map(Value::Number).unwrap_or(Value::Null));
+    Value::Object(m)
+}
+
+fn iface_recipes__recipe_nutrition_by_id_image_response__to_json(p: &iface_recipes::RecipeNutritionByIdImageResponse) -> Value {
+    let mut m = Map::new();
+    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_recipes__get_recipe_price_breakdown_by_id_response__to_json(p: &iface_recipes::GetRecipePriceBreakdownByIdResponse) -> Value {
+    let mut m = Map::new();
+    m.insert("ingredients".into(), Value::Array((&p.ingredients).iter().map(|v| iface_recipes__get_recipe_price_breakdown_by_id_response_ingredients_item__to_json(v)).collect()));
+    m.insert("totalCost".into(), serde_json::Number::from_f64(*(&p.total_cost)).map(Value::Number).unwrap_or(Value::Null));
+    m.insert("totalCostPerServing".into(), serde_json::Number::from_f64(*(&p.total_cost_per_serving)).map(Value::Number).unwrap_or(Value::Null));
+    Value::Object(m)
+}
+
+fn iface_recipes__get_recipe_price_breakdown_by_id_response_ingredients_item__to_json(p: &iface_recipes::GetRecipePriceBreakdownByIdResponseIngredientsItem) -> Value {
+    let mut m = Map::new();
+    m.insert("amount".into(), match (&p.amount) { Some(v) => iface_recipes__get_recipe_price_breakdown_by_id_response_ingredients_item_amount__to_json(v), None => Value::Null });
+    m.insert("image".into(), Value::String((&p.image).clone()));
+    m.insert("name".into(), Value::String((&p.name).clone()));
+    m.insert("price".into(), serde_json::Number::from_f64(*(&p.price)).map(Value::Number).unwrap_or(Value::Null));
+    Value::Object(m)
+}
+
+fn iface_recipes__get_recipe_price_breakdown_by_id_response_ingredients_item_amount__to_json(p: &iface_recipes::GetRecipePriceBreakdownByIdResponseIngredientsItemAmount) -> Value {
+    let mut m = Map::new();
+    m.insert("metric".into(), iface_recipes__get_recipe_price_breakdown_by_id_response_ingredients_item_amount_metric__to_json(&p.metric));
+    m.insert("us".into(), iface_recipes__get_recipe_price_breakdown_by_id_response_ingredients_item_amount_us__to_json(&p.us));
+    Value::Object(m)
+}
+
+fn iface_recipes__get_recipe_price_breakdown_by_id_response_ingredients_item_amount_metric__to_json(p: &iface_recipes::GetRecipePriceBreakdownByIdResponseIngredientsItemAmountMetric) -> Value {
+    let mut m = Map::new();
+    m.insert("unit".into(), Value::String((&p.unit).clone()));
+    m.insert("value".into(), serde_json::Number::from_f64(*(&p.value)).map(Value::Number).unwrap_or(Value::Null));
+    Value::Object(m)
+}
+
+fn iface_recipes__get_recipe_price_breakdown_by_id_response_ingredients_item_amount_us__to_json(p: &iface_recipes::GetRecipePriceBreakdownByIdResponseIngredientsItemAmountUs) -> Value {
+    let mut m = Map::new();
+    m.insert("unit".into(), Value::String((&p.unit).clone()));
+    m.insert("value".into(), serde_json::Number::from_f64(*(&p.value)).map(Value::Number).unwrap_or(Value::Null));
+    Value::Object(m)
+}
+
+fn iface_recipes__price_breakdown_by_id_image_response__to_json(p: &iface_recipes::PriceBreakdownByIdImageResponse) -> Value {
+    let mut m = Map::new();
+    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_recipes__get_similar_recipes_response_item__to_json(p: &iface_recipes::GetSimilarRecipesResponseItem) -> Value {
+    let mut m = Map::new();
+    m.insert("id".into(), Value::Number(serde_json::Number::from(*(&p.id))));
+    m.insert("imageType".into(), Value::String((&p.image_type).clone()));
+    m.insert("readyInMinutes".into(), Value::Number(serde_json::Number::from(*(&p.ready_in_minutes))));
+    m.insert("servings".into(), serde_json::Number::from_f64(*(&p.servings)).map(Value::Number).unwrap_or(Value::Null));
+    m.insert("sourceUrl".into(), Value::String((&p.source_url).clone()));
+    m.insert("title".into(), Value::String((&p.title).clone()));
+    Value::Object(m)
+}
+
+fn iface_recipes__summarize_recipe_response__to_json(p: &iface_recipes::SummarizeRecipeResponse) -> Value {
+    let mut m = Map::new();
+    m.insert("id".into(), Value::Number(serde_json::Number::from(*(&p.id))));
+    m.insert("summary".into(), Value::String((&p.summary).clone()));
+    m.insert("title".into(), Value::String((&p.title).clone()));
+    Value::Object(m)
+}
+
+fn iface_recipes__get_recipe_taste_by_id_response__to_json(p: &iface_recipes::GetRecipeTasteByIdResponse) -> Value {
+    let mut m = Map::new();
+    m.insert("bitterness".into(), serde_json::Number::from_f64(*(&p.bitterness)).map(Value::Number).unwrap_or(Value::Null));
+    m.insert("fattiness".into(), serde_json::Number::from_f64(*(&p.fattiness)).map(Value::Number).unwrap_or(Value::Null));
+    m.insert("saltiness".into(), serde_json::Number::from_f64(*(&p.saltiness)).map(Value::Number).unwrap_or(Value::Null));
+    m.insert("savoriness".into(), serde_json::Number::from_f64(*(&p.savoriness)).map(Value::Number).unwrap_or(Value::Null));
+    m.insert("sourness".into(), serde_json::Number::from_f64(*(&p.sourness)).map(Value::Number).unwrap_or(Value::Null));
+    m.insert("spiciness".into(), serde_json::Number::from_f64(*(&p.spiciness)).map(Value::Number).unwrap_or(Value::Null));
+    m.insert("sweetness".into(), serde_json::Number::from_f64(*(&p.sweetness)).map(Value::Number).unwrap_or(Value::Null));
+    Value::Object(m)
+}
+
+fn iface_recipes__recipe_taste_by_id_image_response__to_json(p: &iface_recipes::RecipeTasteByIdImageResponse) -> Value {
+    let mut m = Map::new();
+    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
 fn iface_recipes__compute_glycemic_load_params__to_json(p: &iface_recipes::ComputeGlycemicLoadParams) -> Value {
     let mut m = Map::new();
     m.insert("language".into(), match (&p.language) { Some(v) => Value::String(iface_recipes__compute_glycemic_load_language_enum__to_str(v).into()), None => Value::Null });
@@ -1564,6 +4100,7 @@ fn iface_recipes__analyze_recipe_params__to_json(p: &iface_recipes::AnalyzeRecip
 fn iface_recipes__analyze_recipe_instructions_params__to_json(p: &iface_recipes::AnalyzeRecipeInstructionsParams) -> Value {
     let mut m = Map::new();
     m.insert("content_type".into(), match (&p.content_type) { Some(v) => Value::String(iface_recipes__analyze_recipe_instructions_content_type_enum__to_str(v).into()), None => Value::Null });
+    m.insert("body".into(), Value::String((&p.body).clone()));
     Value::Object(m)
 }
 
@@ -1687,6 +4224,7 @@ fn iface_recipes__convert_amounts_params__to_json(p: &iface_recipes::ConvertAmou
 fn iface_recipes__classify_cuisine_params__to_json(p: &iface_recipes::ClassifyCuisineParams) -> Value {
     let mut m = Map::new();
     m.insert("content_type".into(), match (&p.content_type) { Some(v) => Value::String(iface_recipes__analyze_recipe_instructions_content_type_enum__to_str(v).into()), None => Value::Null });
+    m.insert("body".into(), Value::String((&p.body).clone()));
     Value::Object(m)
 }
 
@@ -1808,6 +4346,7 @@ fn iface_recipes__parse_ingredients_params__to_json(p: &iface_recipes::ParseIngr
     let mut m = Map::new();
     m.insert("content_type".into(), match (&p.content_type) { Some(v) => Value::String(iface_recipes__analyze_recipe_instructions_content_type_enum__to_str(v).into()), None => Value::Null });
     m.insert("language".into(), match (&p.language) { Some(v) => Value::String(iface_recipes__compute_glycemic_load_language_enum__to_str(v).into()), None => Value::Null });
+    m.insert("body".into(), Value::String((&p.body).clone()));
     Value::Object(m)
 }
 
@@ -1835,6 +4374,7 @@ fn iface_recipes__visualize_equipment_params__to_json(p: &iface_recipes::Visuali
     let mut m = Map::new();
     m.insert("content_type".into(), match (&p.content_type) { Some(v) => Value::String(iface_recipes__analyze_recipe_instructions_content_type_enum__to_str(v).into()), None => Value::Null });
     m.insert("accept".into(), match (&p.accept) { Some(v) => Value::String(iface_recipes__visualize_equipment_accept_enum__to_str(v).into()), None => Value::Null });
+    m.insert("body".into(), Value::String((&p.body).clone()));
     Value::Object(m)
 }
 
@@ -1843,6 +4383,7 @@ fn iface_recipes__visualize_recipe_nutrition_params__to_json(p: &iface_recipes::
     m.insert("content_type".into(), match (&p.content_type) { Some(v) => Value::String(iface_recipes__analyze_recipe_instructions_content_type_enum__to_str(v).into()), None => Value::Null });
     m.insert("accept".into(), match (&p.accept) { Some(v) => Value::String(iface_recipes__visualize_equipment_accept_enum__to_str(v).into()), None => Value::Null });
     m.insert("language".into(), match (&p.language) { Some(v) => Value::String(iface_recipes__compute_glycemic_load_language_enum__to_str(v).into()), None => Value::Null });
+    m.insert("body".into(), Value::String((&p.body).clone()));
     Value::Object(m)
 }
 
@@ -1851,12 +4392,14 @@ fn iface_recipes__visualize_price_breakdown_params__to_json(p: &iface_recipes::V
     m.insert("content_type".into(), match (&p.content_type) { Some(v) => Value::String(iface_recipes__analyze_recipe_instructions_content_type_enum__to_str(v).into()), None => Value::Null });
     m.insert("accept".into(), match (&p.accept) { Some(v) => Value::String(iface_recipes__visualize_equipment_accept_enum__to_str(v).into()), None => Value::Null });
     m.insert("language".into(), match (&p.language) { Some(v) => Value::String(iface_recipes__compute_glycemic_load_language_enum__to_str(v).into()), None => Value::Null });
+    m.insert("body".into(), Value::String((&p.body).clone()));
     Value::Object(m)
 }
 
 fn iface_recipes__create_recipe_card_params__to_json(p: &iface_recipes::CreateRecipeCardParams) -> Value {
     let mut m = Map::new();
     m.insert("content_type".into(), match (&p.content_type) { Some(v) => Value::String(iface_recipes__analyze_recipe_instructions_content_type_enum__to_str(v).into()), None => Value::Null });
+    m.insert("body".into(), Value::String((&p.body).clone()));
     Value::Object(m)
 }
 
@@ -1867,6 +4410,7 @@ fn iface_recipes__visualize_recipe_taste_params__to_json(p: &iface_recipes::Visu
     m.insert("accept".into(), match (&p.accept) { Some(v) => Value::String(iface_recipes__visualize_equipment_accept_enum__to_str(v).into()), None => Value::Null });
     m.insert("normalize".into(), match (&p.normalize) { Some(v) => Value::Bool(*(v)), None => Value::Null });
     m.insert("rgb".into(), match (&p.rgb) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("body".into(), Value::String((&p.body).clone()));
     Value::Object(m)
 }
 
@@ -2022,174 +4566,2356 @@ fn iface_recipes__recipe_taste_by_id_image_params__to_json(p: &iface_recipes::Re
     Value::Object(m)
 }
 
+fn iface_recipes__compute_glycemic_load_response__from_json(v: &Value) -> Option<iface_recipes::ComputeGlycemicLoadResponse> {
+    let m = v.as_object()?;
+    Some(iface_recipes::ComputeGlycemicLoadResponse {
+        ingredients: m.get("ingredients").and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| iface_recipes__compute_glycemic_load_response_ingredients_item__from_json(x)).collect())).unwrap_or_default(),
+        total_glycemic_load: m.get("totalGlycemicLoad").and_then(|v| (v).as_f64()).unwrap_or_default(),
+    })
+}
+
+fn iface_recipes__compute_glycemic_load_response_ingredients_item__from_json(v: &Value) -> Option<iface_recipes::ComputeGlycemicLoadResponseIngredientsItem> {
+    let m = v.as_object()?;
+    Some(iface_recipes::ComputeGlycemicLoadResponseIngredientsItem {
+        glycemic_index: m.get("glycemicIndex").and_then(|v| (v).as_f64()).unwrap_or_default(),
+        glycemic_load: m.get("glycemicLoad").and_then(|v| (v).as_f64()).unwrap_or_default(),
+        id: m.get("id").and_then(|v| (v).as_i64().map(|n| n as i32)).unwrap_or_default(),
+        original: m.get("original").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+    })
+}
+
+fn iface_recipes__analyze_recipe_response__from_json(v: &Value) -> Option<iface_recipes::AnalyzeRecipeResponse> {
+    let m = v.as_object()?;
+    Some(iface_recipes::AnalyzeRecipeResponse {
+        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    })
+}
+
+fn iface_recipes__analyze_recipe_instructions_response__from_json(v: &Value) -> Option<iface_recipes::AnalyzeRecipeInstructionsResponse> {
+    let m = v.as_object()?;
+    Some(iface_recipes::AnalyzeRecipeInstructionsResponse {
+        equipment: m.get("equipment").and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| iface_recipes__analyze_recipe_instructions_response_equipment_item__from_json(x)).collect())).unwrap_or_default(),
+        ingredients: m.get("ingredients").and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| iface_recipes__analyze_recipe_instructions_response_ingredients_item__from_json(x)).collect())).unwrap_or_default(),
+        parsed_instructions: m.get("parsedInstructions").and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| iface_recipes__analyze_recipe_instructions_response_parsed_instructions_item__from_json(x)).collect())).unwrap_or_default(),
+    })
+}
+
+fn iface_recipes__analyze_recipe_instructions_response_equipment_item__from_json(v: &Value) -> Option<iface_recipes::AnalyzeRecipeInstructionsResponseEquipmentItem> {
+    let m = v.as_object()?;
+    Some(iface_recipes::AnalyzeRecipeInstructionsResponseEquipmentItem {
+        id: m.get("id").and_then(|v| (v).as_f64()).unwrap_or_default(),
+        name: m.get("name").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+    })
+}
+
+fn iface_recipes__analyze_recipe_instructions_response_ingredients_item__from_json(v: &Value) -> Option<iface_recipes::AnalyzeRecipeInstructionsResponseIngredientsItem> {
+    let m = v.as_object()?;
+    Some(iface_recipes::AnalyzeRecipeInstructionsResponseIngredientsItem {
+        id: m.get("id").and_then(|v| (v).as_f64()).unwrap_or_default(),
+        name: m.get("name").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+    })
+}
+
+fn iface_recipes__analyze_recipe_instructions_response_parsed_instructions_item__from_json(v: &Value) -> Option<iface_recipes::AnalyzeRecipeInstructionsResponseParsedInstructionsItem> {
+    let m = v.as_object()?;
+    Some(iface_recipes::AnalyzeRecipeInstructionsResponseParsedInstructionsItem {
+        name: m.get("name").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        steps: m.get("steps").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| iface_recipes__analyze_recipe_instructions_response_parsed_instructions_item_steps_item__from_json(x)).collect())),
+    })
+}
+
+fn iface_recipes__analyze_recipe_instructions_response_parsed_instructions_item_steps_item__from_json(v: &Value) -> Option<iface_recipes::AnalyzeRecipeInstructionsResponseParsedInstructionsItemStepsItem> {
+    let m = v.as_object()?;
+    Some(iface_recipes::AnalyzeRecipeInstructionsResponseParsedInstructionsItemStepsItem {
+        equipment: m.get("equipment").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| iface_recipes__analyze_recipe_instructions_response_parsed_instructions_item_steps_item_equipment_item__from_json(x)).collect())),
+        ingredients: m.get("ingredients").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| iface_recipes__analyze_recipe_instructions_response_parsed_instructions_item_steps_item_ingredients_item__from_json(x)).collect())),
+        number: m.get("number").and_then(|v| (v).as_f64()).unwrap_or_default(),
+        step: m.get("step").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+    })
+}
+
+fn iface_recipes__analyze_recipe_instructions_response_parsed_instructions_item_steps_item_equipment_item__from_json(v: &Value) -> Option<iface_recipes::AnalyzeRecipeInstructionsResponseParsedInstructionsItemStepsItemEquipmentItem> {
+    let m = v.as_object()?;
+    Some(iface_recipes::AnalyzeRecipeInstructionsResponseParsedInstructionsItemStepsItemEquipmentItem {
+        id: m.get("id").and_then(|v| (v).as_f64()).unwrap_or_default(),
+        image: m.get("image").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        localized_name: m.get("localizedName").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        name: m.get("name").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+    })
+}
+
+fn iface_recipes__analyze_recipe_instructions_response_parsed_instructions_item_steps_item_ingredients_item__from_json(v: &Value) -> Option<iface_recipes::AnalyzeRecipeInstructionsResponseParsedInstructionsItemStepsItemIngredientsItem> {
+    let m = v.as_object()?;
+    Some(iface_recipes::AnalyzeRecipeInstructionsResponseParsedInstructionsItemStepsItemIngredientsItem {
+        id: m.get("id").and_then(|v| (v).as_f64()).unwrap_or_default(),
+        image: m.get("image").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        localized_name: m.get("localizedName").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        name: m.get("name").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+    })
+}
+
+fn iface_recipes__autocomplete_recipe_search_response_item__from_json(v: &Value) -> Option<iface_recipes::AutocompleteRecipeSearchResponseItem> {
+    let m = v.as_object()?;
+    Some(iface_recipes::AutocompleteRecipeSearchResponseItem {
+        id: m.get("id").and_then(|v| (v).as_i64().map(|n| n as i32)).unwrap_or_default(),
+        image_type: m.get("imageType").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        title: m.get("title").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+    })
+}
+
+fn iface_recipes__search_recipes_response__from_json(v: &Value) -> Option<iface_recipes::SearchRecipesResponse> {
+    let m = v.as_object()?;
+    Some(iface_recipes::SearchRecipesResponse {
+        number: m.get("number").and_then(|v| (v).as_i64().map(|n| n as i32)).unwrap_or_default(),
+        offset: m.get("offset").and_then(|v| (v).as_i64().map(|n| n as i32)).unwrap_or_default(),
+        results: m.get("results").and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| iface_recipes__search_recipes_response_results_item__from_json(x)).collect())).unwrap_or_default(),
+        total_results: m.get("totalResults").and_then(|v| (v).as_i64().map(|n| n as i32)).unwrap_or_default(),
+    })
+}
+
+fn iface_recipes__search_recipes_response_results_item__from_json(v: &Value) -> Option<iface_recipes::SearchRecipesResponseResultsItem> {
+    let m = v.as_object()?;
+    Some(iface_recipes::SearchRecipesResponseResultsItem {
+        calories: m.get("calories").and_then(|v| (v).as_f64()).unwrap_or_default(),
+        carbs: m.get("carbs").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        fat: m.get("fat").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        id: m.get("id").and_then(|v| (v).as_i64().map(|n| n as i32)).unwrap_or_default(),
+        image: m.get("image").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        image_type: m.get("imageType").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        protein: m.get("protein").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        title: m.get("title").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+    })
+}
+
+fn iface_recipes__convert_amounts_response__from_json(v: &Value) -> Option<iface_recipes::ConvertAmountsResponse> {
+    let m = v.as_object()?;
+    Some(iface_recipes::ConvertAmountsResponse {
+        answer: m.get("answer").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        source_amount: m.get("sourceAmount").and_then(|v| (v).as_f64()).unwrap_or_default(),
+        source_unit: m.get("sourceUnit").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        target_amount: m.get("targetAmount").and_then(|v| (v).as_f64()).unwrap_or_default(),
+        target_unit: m.get("targetUnit").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+    })
+}
+
+fn iface_recipes__classify_cuisine_response__from_json(v: &Value) -> Option<iface_recipes::ClassifyCuisineResponse> {
+    let m = v.as_object()?;
+    Some(iface_recipes::ClassifyCuisineResponse {
+        confidence: m.get("confidence").and_then(|v| (v).as_f64()).unwrap_or_default(),
+        cuisine: m.get("cuisine").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        cuisines: m.get("cuisines").and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| (x).as_str().map(|s| s.to_string())).collect())).unwrap_or_default(),
+    })
+}
+
+fn iface_recipes__extract_recipe_from_website_response__from_json(v: &Value) -> Option<iface_recipes::ExtractRecipeFromWebsiteResponse> {
+    let m = v.as_object()?;
+    Some(iface_recipes::ExtractRecipeFromWebsiteResponse {
+        aggregate_likes: m.get("aggregateLikes").and_then(|v| (v).as_i64().map(|n| n as i32)).unwrap_or_default(),
+        analyzed_instructions: m.get("analyzedInstructions").and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| iface_recipes__extract_recipe_from_website_response_analyzed_instructions_item__from_json(x)).collect())).unwrap_or_default(),
+        cheap: m.get("cheap").and_then(|v| (v).as_bool()).unwrap_or_default(),
+        credits_text: m.get("creditsText").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        cuisines: m.get("cuisines").and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| (x).as_str().map(|s| s.to_string())).collect())).unwrap_or_default(),
+        dairy_free: m.get("dairyFree").and_then(|v| (v).as_bool()).unwrap_or_default(),
+        diets: m.get("diets").and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| (x).as_str().map(|s| s.to_string())).collect())).unwrap_or_default(),
+        dish_types: m.get("dishTypes").and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| (x).as_str().map(|s| s.to_string())).collect())).unwrap_or_default(),
+        extended_ingredients: m.get("extendedIngredients").and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| iface_recipes__extract_recipe_from_website_response_extended_ingredients_item__from_json(x)).collect())).unwrap_or_default(),
+        gaps: m.get("gaps").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        gluten_free: m.get("glutenFree").and_then(|v| (v).as_bool()).unwrap_or_default(),
+        health_score: m.get("healthScore").and_then(|v| (v).as_f64()).unwrap_or_default(),
+        id: m.get("id").and_then(|v| (v).as_i64().map(|n| n as i32)).unwrap_or_default(),
+        image: m.get("image").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        image_type: m.get("imageType").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        instructions: m.get("instructions").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        ketogenic: m.get("ketogenic").and_then(|v| (v).as_bool()).unwrap_or_default(),
+        license: m.get("license").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        low_fodmap: m.get("lowFodmap").and_then(|v| (v).as_bool()).unwrap_or_default(),
+        occasions: m.get("occasions").and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| (x).as_str().map(|s| s.to_string())).collect())).unwrap_or_default(),
+        price_per_serving: m.get("pricePerServing").and_then(|v| (v).as_f64()).unwrap_or_default(),
+        ready_in_minutes: m.get("readyInMinutes").and_then(|v| (v).as_i64().map(|n| n as i32)).unwrap_or_default(),
+        servings: m.get("servings").and_then(|v| (v).as_f64()).unwrap_or_default(),
+        source_name: m.get("sourceName").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        source_url: m.get("sourceUrl").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        spoonacular_score: m.get("spoonacularScore").and_then(|v| (v).as_f64()).unwrap_or_default(),
+        spoonacular_source_url: m.get("spoonacularSourceUrl").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        summary: m.get("summary").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        sustainable: m.get("sustainable").and_then(|v| (v).as_bool()).unwrap_or_default(),
+        title: m.get("title").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        vegan: m.get("vegan").and_then(|v| (v).as_bool()).unwrap_or_default(),
+        vegetarian: m.get("vegetarian").and_then(|v| (v).as_bool()).unwrap_or_default(),
+        very_healthy: m.get("veryHealthy").and_then(|v| (v).as_bool()).unwrap_or_default(),
+        very_popular: m.get("veryPopular").and_then(|v| (v).as_bool()).unwrap_or_default(),
+        weight_watcher_smart_points: m.get("weightWatcherSmartPoints").and_then(|v| (v).as_f64()).unwrap_or_default(),
+        whole30: m.get("whole30").and_then(|v| (v).as_bool()).unwrap_or_default(),
+        wine_pairing: match m.get("winePairing").and_then(|v| iface_recipes__extract_recipe_from_website_response_wine_pairing__from_json(v)) { Some(x) => x, None => return None },
+    })
+}
+
+fn iface_recipes__extract_recipe_from_website_response_analyzed_instructions_item__from_json(v: &Value) -> Option<iface_recipes::ExtractRecipeFromWebsiteResponseAnalyzedInstructionsItem> {
+    let m = v.as_object()?;
+    Some(iface_recipes::ExtractRecipeFromWebsiteResponseAnalyzedInstructionsItem {
+        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    })
+}
+
+fn iface_recipes__extract_recipe_from_website_response_extended_ingredients_item__from_json(v: &Value) -> Option<iface_recipes::ExtractRecipeFromWebsiteResponseExtendedIngredientsItem> {
+    let m = v.as_object()?;
+    Some(iface_recipes::ExtractRecipeFromWebsiteResponseExtendedIngredientsItem {
+        aisle: m.get("aisle").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        amount: m.get("amount").and_then(|v| (v).as_f64()).unwrap_or_default(),
+        consitency: m.get("consitency").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        id: m.get("id").and_then(|v| (v).as_i64().map(|n| n as i32)).unwrap_or_default(),
+        image: m.get("image").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        measures: m.get("measures").filter(|v| !v.is_null()).and_then(|v| iface_recipes__extract_recipe_from_website_response_extended_ingredients_item_measures__from_json(v)),
+        meta: m.get("meta").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| (x).as_str().map(|s| s.to_string())).collect())),
+        name: m.get("name").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        original: m.get("original").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        original_name: m.get("originalName").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        unit: m.get("unit").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+    })
+}
+
+fn iface_recipes__extract_recipe_from_website_response_extended_ingredients_item_measures__from_json(v: &Value) -> Option<iface_recipes::ExtractRecipeFromWebsiteResponseExtendedIngredientsItemMeasures> {
+    let m = v.as_object()?;
+    Some(iface_recipes::ExtractRecipeFromWebsiteResponseExtendedIngredientsItemMeasures {
+        metric: match m.get("metric").and_then(|v| iface_recipes__extract_recipe_from_website_response_extended_ingredients_item_measures_metric__from_json(v)) { Some(x) => x, None => return None },
+        us: match m.get("us").and_then(|v| iface_recipes__extract_recipe_from_website_response_extended_ingredients_item_measures_us__from_json(v)) { Some(x) => x, None => return None },
+    })
+}
+
+fn iface_recipes__extract_recipe_from_website_response_extended_ingredients_item_measures_metric__from_json(v: &Value) -> Option<iface_recipes::ExtractRecipeFromWebsiteResponseExtendedIngredientsItemMeasuresMetric> {
+    let m = v.as_object()?;
+    Some(iface_recipes::ExtractRecipeFromWebsiteResponseExtendedIngredientsItemMeasuresMetric {
+        amount: m.get("amount").and_then(|v| (v).as_f64()).unwrap_or_default(),
+        unit_long: m.get("unitLong").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        unit_short: m.get("unitShort").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+    })
+}
+
+fn iface_recipes__extract_recipe_from_website_response_extended_ingredients_item_measures_us__from_json(v: &Value) -> Option<iface_recipes::ExtractRecipeFromWebsiteResponseExtendedIngredientsItemMeasuresUs> {
+    let m = v.as_object()?;
+    Some(iface_recipes::ExtractRecipeFromWebsiteResponseExtendedIngredientsItemMeasuresUs {
+        amount: m.get("amount").and_then(|v| (v).as_f64()).unwrap_or_default(),
+        unit_long: m.get("unitLong").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        unit_short: m.get("unitShort").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+    })
+}
+
+fn iface_recipes__extract_recipe_from_website_response_wine_pairing__from_json(v: &Value) -> Option<iface_recipes::ExtractRecipeFromWebsiteResponseWinePairing> {
+    let m = v.as_object()?;
+    Some(iface_recipes::ExtractRecipeFromWebsiteResponseWinePairing {
+        paired_wines: m.get("pairedWines").and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| (x).as_str().map(|s| s.to_string())).collect())).unwrap_or_default(),
+        pairing_text: m.get("pairingText").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        product_matches: m.get("productMatches").and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| iface_recipes__extract_recipe_from_website_response_wine_pairing_product_matches_item__from_json(x)).collect())).unwrap_or_default(),
+    })
+}
+
+fn iface_recipes__extract_recipe_from_website_response_wine_pairing_product_matches_item__from_json(v: &Value) -> Option<iface_recipes::ExtractRecipeFromWebsiteResponseWinePairingProductMatchesItem> {
+    let m = v.as_object()?;
+    Some(iface_recipes::ExtractRecipeFromWebsiteResponseWinePairingProductMatchesItem {
+        average_rating: m.get("averageRating").and_then(|v| (v).as_f64()).unwrap_or_default(),
+        description: m.get("description").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        id: m.get("id").and_then(|v| (v).as_i64().map(|n| n as i32)).unwrap_or_default(),
+        image_url: m.get("imageUrl").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        link: m.get("link").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        price: m.get("price").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        rating_count: m.get("ratingCount").and_then(|v| (v).as_i64().map(|n| n as i32)).unwrap_or_default(),
+        score: m.get("score").and_then(|v| (v).as_f64()).unwrap_or_default(),
+        title: m.get("title").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+    })
+}
+
+fn iface_recipes__search_recipes_by_ingredients_response_item__from_json(v: &Value) -> Option<iface_recipes::SearchRecipesByIngredientsResponseItem> {
+    let m = v.as_object()?;
+    Some(iface_recipes::SearchRecipesByIngredientsResponseItem {
+        id: m.get("id").and_then(|v| (v).as_i64().map(|n| n as i32)).unwrap_or_default(),
+        image: m.get("image").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        image_type: m.get("imageType").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        likes: m.get("likes").and_then(|v| (v).as_i64().map(|n| n as i32)).unwrap_or_default(),
+        missed_ingredient_count: m.get("missedIngredientCount").and_then(|v| (v).as_i64().map(|n| n as i32)).unwrap_or_default(),
+        missed_ingredients: m.get("missedIngredients").and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| iface_recipes__search_recipes_by_ingredients_response_item_missed_ingredients_item__from_json(x)).collect())).unwrap_or_default(),
+        title: m.get("title").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        unused_ingredients: m.get("unusedIngredients").and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| iface_recipes__search_recipes_by_ingredients_response_item_unused_ingredients_item__from_json(x)).collect())).unwrap_or_default(),
+        used_ingredient_count: m.get("usedIngredientCount").and_then(|v| (v).as_f64()).unwrap_or_default(),
+        used_ingredients: m.get("usedIngredients").and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| iface_recipes__search_recipes_by_ingredients_response_item_used_ingredients_item__from_json(x)).collect())).unwrap_or_default(),
+    })
+}
+
+fn iface_recipes__search_recipes_by_ingredients_response_item_missed_ingredients_item__from_json(v: &Value) -> Option<iface_recipes::SearchRecipesByIngredientsResponseItemMissedIngredientsItem> {
+    let m = v.as_object()?;
+    Some(iface_recipes::SearchRecipesByIngredientsResponseItemMissedIngredientsItem {
+        aisle: m.get("aisle").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        amount: m.get("amount").and_then(|v| (v).as_f64()).unwrap_or_default(),
+        id: m.get("id").and_then(|v| (v).as_i64().map(|n| n as i32)).unwrap_or_default(),
+        image: m.get("image").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        meta: m.get("meta").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| (x).as_str().map(|s| s.to_string())).collect())),
+        name: m.get("name").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        original: m.get("original").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        original_name: m.get("originalName").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        unit: m.get("unit").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        unit_long: m.get("unitLong").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        unit_short: m.get("unitShort").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+    })
+}
+
+fn iface_recipes__search_recipes_by_ingredients_response_item_unused_ingredients_item__from_json(v: &Value) -> Option<iface_recipes::SearchRecipesByIngredientsResponseItemUnusedIngredientsItem> {
+    let m = v.as_object()?;
+    Some(iface_recipes::SearchRecipesByIngredientsResponseItemUnusedIngredientsItem {
+        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    })
+}
+
+fn iface_recipes__search_recipes_by_ingredients_response_item_used_ingredients_item__from_json(v: &Value) -> Option<iface_recipes::SearchRecipesByIngredientsResponseItemUsedIngredientsItem> {
+    let m = v.as_object()?;
+    Some(iface_recipes::SearchRecipesByIngredientsResponseItemUsedIngredientsItem {
+        aisle: m.get("aisle").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        amount: m.get("amount").and_then(|v| (v).as_f64()).unwrap_or_default(),
+        id: m.get("id").and_then(|v| (v).as_i64().map(|n| n as i32)).unwrap_or_default(),
+        image: m.get("image").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        meta: m.get("meta").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| (x).as_str().map(|s| s.to_string())).collect())),
+        name: m.get("name").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        original: m.get("original").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        original_name: m.get("originalName").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        unit: m.get("unit").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        unit_long: m.get("unitLong").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        unit_short: m.get("unitShort").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+    })
+}
+
+fn iface_recipes__search_recipes_by_nutrients_response_item__from_json(v: &Value) -> Option<iface_recipes::SearchRecipesByNutrientsResponseItem> {
+    let m = v.as_object()?;
+    Some(iface_recipes::SearchRecipesByNutrientsResponseItem {
+        calories: m.get("calories").and_then(|v| (v).as_f64()).unwrap_or_default(),
+        carbs: m.get("carbs").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        fat: m.get("fat").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        id: m.get("id").and_then(|v| (v).as_i64().map(|n| n as i32)).unwrap_or_default(),
+        image: m.get("image").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        image_type: m.get("imageType").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        protein: m.get("protein").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        title: m.get("title").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+    })
+}
+
+fn iface_recipes__guess_nutrition_by_dish_name_response__from_json(v: &Value) -> Option<iface_recipes::GuessNutritionByDishNameResponse> {
+    let m = v.as_object()?;
+    Some(iface_recipes::GuessNutritionByDishNameResponse {
+        calories: match m.get("calories").and_then(|v| iface_recipes__guess_nutrition_by_dish_name_response_calories__from_json(v)) { Some(x) => x, None => return None },
+        carbs: match m.get("carbs").and_then(|v| iface_recipes__guess_nutrition_by_dish_name_response_carbs__from_json(v)) { Some(x) => x, None => return None },
+        fat: match m.get("fat").and_then(|v| iface_recipes__guess_nutrition_by_dish_name_response_fat__from_json(v)) { Some(x) => x, None => return None },
+        protein: match m.get("protein").and_then(|v| iface_recipes__guess_nutrition_by_dish_name_response_protein__from_json(v)) { Some(x) => x, None => return None },
+        recipes_used: m.get("recipesUsed").and_then(|v| (v).as_i64().map(|n| n as i32)).unwrap_or_default(),
+    })
+}
+
+fn iface_recipes__guess_nutrition_by_dish_name_response_calories__from_json(v: &Value) -> Option<iface_recipes::GuessNutritionByDishNameResponseCalories> {
+    let m = v.as_object()?;
+    Some(iface_recipes::GuessNutritionByDishNameResponseCalories {
+        confidence_range95_percent: match m.get("confidenceRange95Percent").and_then(|v| iface_recipes__guess_nutrition_by_dish_name_response_calories_confidence_range95_percent__from_json(v)) { Some(x) => x, None => return None },
+        standard_deviation: m.get("standardDeviation").and_then(|v| (v).as_f64()).unwrap_or_default(),
+        unit: m.get("unit").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        value: m.get("value").and_then(|v| (v).as_f64()).unwrap_or_default(),
+    })
+}
+
+fn iface_recipes__guess_nutrition_by_dish_name_response_calories_confidence_range95_percent__from_json(v: &Value) -> Option<iface_recipes::GuessNutritionByDishNameResponseCaloriesConfidenceRange95Percent> {
+    let m = v.as_object()?;
+    Some(iface_recipes::GuessNutritionByDishNameResponseCaloriesConfidenceRange95Percent {
+        max: m.get("max").and_then(|v| (v).as_f64()).unwrap_or_default(),
+        min: m.get("min").and_then(|v| (v).as_f64()).unwrap_or_default(),
+    })
+}
+
+fn iface_recipes__guess_nutrition_by_dish_name_response_carbs__from_json(v: &Value) -> Option<iface_recipes::GuessNutritionByDishNameResponseCarbs> {
+    let m = v.as_object()?;
+    Some(iface_recipes::GuessNutritionByDishNameResponseCarbs {
+        confidence_range95_percent: match m.get("confidenceRange95Percent").and_then(|v| iface_recipes__guess_nutrition_by_dish_name_response_carbs_confidence_range95_percent__from_json(v)) { Some(x) => x, None => return None },
+        standard_deviation: m.get("standardDeviation").and_then(|v| (v).as_f64()).unwrap_or_default(),
+        unit: m.get("unit").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        value: m.get("value").and_then(|v| (v).as_f64()).unwrap_or_default(),
+    })
+}
+
+fn iface_recipes__guess_nutrition_by_dish_name_response_carbs_confidence_range95_percent__from_json(v: &Value) -> Option<iface_recipes::GuessNutritionByDishNameResponseCarbsConfidenceRange95Percent> {
+    let m = v.as_object()?;
+    Some(iface_recipes::GuessNutritionByDishNameResponseCarbsConfidenceRange95Percent {
+        max: m.get("max").and_then(|v| (v).as_f64()).unwrap_or_default(),
+        min: m.get("min").and_then(|v| (v).as_f64()).unwrap_or_default(),
+    })
+}
+
+fn iface_recipes__guess_nutrition_by_dish_name_response_fat__from_json(v: &Value) -> Option<iface_recipes::GuessNutritionByDishNameResponseFat> {
+    let m = v.as_object()?;
+    Some(iface_recipes::GuessNutritionByDishNameResponseFat {
+        confidence_range95_percent: match m.get("confidenceRange95Percent").and_then(|v| iface_recipes__guess_nutrition_by_dish_name_response_fat_confidence_range95_percent__from_json(v)) { Some(x) => x, None => return None },
+        standard_deviation: m.get("standardDeviation").and_then(|v| (v).as_f64()).unwrap_or_default(),
+        unit: m.get("unit").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        value: m.get("value").and_then(|v| (v).as_f64()).unwrap_or_default(),
+    })
+}
+
+fn iface_recipes__guess_nutrition_by_dish_name_response_fat_confidence_range95_percent__from_json(v: &Value) -> Option<iface_recipes::GuessNutritionByDishNameResponseFatConfidenceRange95Percent> {
+    let m = v.as_object()?;
+    Some(iface_recipes::GuessNutritionByDishNameResponseFatConfidenceRange95Percent {
+        max: m.get("max").and_then(|v| (v).as_f64()).unwrap_or_default(),
+        min: m.get("min").and_then(|v| (v).as_f64()).unwrap_or_default(),
+    })
+}
+
+fn iface_recipes__guess_nutrition_by_dish_name_response_protein__from_json(v: &Value) -> Option<iface_recipes::GuessNutritionByDishNameResponseProtein> {
+    let m = v.as_object()?;
+    Some(iface_recipes::GuessNutritionByDishNameResponseProtein {
+        confidence_range95_percent: match m.get("confidenceRange95Percent").and_then(|v| iface_recipes__guess_nutrition_by_dish_name_response_protein_confidence_range95_percent__from_json(v)) { Some(x) => x, None => return None },
+        standard_deviation: m.get("standardDeviation").and_then(|v| (v).as_f64()).unwrap_or_default(),
+        unit: m.get("unit").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        value: m.get("value").and_then(|v| (v).as_f64()).unwrap_or_default(),
+    })
+}
+
+fn iface_recipes__guess_nutrition_by_dish_name_response_protein_confidence_range95_percent__from_json(v: &Value) -> Option<iface_recipes::GuessNutritionByDishNameResponseProteinConfidenceRange95Percent> {
+    let m = v.as_object()?;
+    Some(iface_recipes::GuessNutritionByDishNameResponseProteinConfidenceRange95Percent {
+        max: m.get("max").and_then(|v| (v).as_f64()).unwrap_or_default(),
+        min: m.get("min").and_then(|v| (v).as_f64()).unwrap_or_default(),
+    })
+}
+
+fn iface_recipes__get_recipe_information_bulk_response_item__from_json(v: &Value) -> Option<iface_recipes::GetRecipeInformationBulkResponseItem> {
+    let m = v.as_object()?;
+    Some(iface_recipes::GetRecipeInformationBulkResponseItem {
+        aggregate_likes: m.get("aggregateLikes").and_then(|v| (v).as_i64().map(|n| n as i32)).unwrap_or_default(),
+        analyzed_instructions: m.get("analyzedInstructions").and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| (x).as_str().map(|s| s.to_string())).collect())).unwrap_or_default(),
+        cheap: m.get("cheap").and_then(|v| (v).as_bool()).unwrap_or_default(),
+        credits_text: m.get("creditsText").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        cuisines: m.get("cuisines").and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| (x).as_str().map(|s| s.to_string())).collect())).unwrap_or_default(),
+        dairy_free: m.get("dairyFree").and_then(|v| (v).as_bool()).unwrap_or_default(),
+        diets: m.get("diets").and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| (x).as_str().map(|s| s.to_string())).collect())).unwrap_or_default(),
+        dish_types: m.get("dishTypes").and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| (x).as_str().map(|s| s.to_string())).collect())).unwrap_or_default(),
+        extended_ingredients: m.get("extendedIngredients").and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| iface_recipes__get_recipe_information_bulk_response_item_extended_ingredients_item__from_json(x)).collect())).unwrap_or_default(),
+        gaps: m.get("gaps").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        gluten_free: m.get("glutenFree").and_then(|v| (v).as_bool()).unwrap_or_default(),
+        health_score: m.get("healthScore").and_then(|v| (v).as_f64()).unwrap_or_default(),
+        id: m.get("id").and_then(|v| (v).as_i64().map(|n| n as i32)).unwrap_or_default(),
+        image: m.get("image").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        image_type: m.get("imageType").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        instructions: m.get("instructions").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        ketogenic: m.get("ketogenic").and_then(|v| (v).as_bool()).unwrap_or_default(),
+        license: m.get("license").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        low_fodmap: m.get("lowFodmap").and_then(|v| (v).as_bool()).unwrap_or_default(),
+        occasions: m.get("occasions").and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| (x).as_str().map(|s| s.to_string())).collect())).unwrap_or_default(),
+        price_per_serving: m.get("pricePerServing").and_then(|v| (v).as_f64()).unwrap_or_default(),
+        ready_in_minutes: m.get("readyInMinutes").and_then(|v| (v).as_i64().map(|n| n as i32)).unwrap_or_default(),
+        servings: m.get("servings").and_then(|v| (v).as_f64()).unwrap_or_default(),
+        source_name: m.get("sourceName").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        source_url: m.get("sourceUrl").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        spoonacular_score: m.get("spoonacularScore").and_then(|v| (v).as_f64()).unwrap_or_default(),
+        spoonacular_source_url: m.get("spoonacularSourceUrl").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        summary: m.get("summary").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        sustainable: m.get("sustainable").and_then(|v| (v).as_bool()).unwrap_or_default(),
+        title: m.get("title").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        vegan: m.get("vegan").and_then(|v| (v).as_bool()).unwrap_or_default(),
+        vegetarian: m.get("vegetarian").and_then(|v| (v).as_bool()).unwrap_or_default(),
+        very_healthy: m.get("veryHealthy").and_then(|v| (v).as_bool()).unwrap_or_default(),
+        very_popular: m.get("veryPopular").and_then(|v| (v).as_bool()).unwrap_or_default(),
+        weight_watcher_smart_points: m.get("weightWatcherSmartPoints").and_then(|v| (v).as_f64()).unwrap_or_default(),
+        whole30: m.get("whole30").and_then(|v| (v).as_bool()).unwrap_or_default(),
+        wine_pairing: match m.get("winePairing").and_then(|v| iface_recipes__get_recipe_information_bulk_response_item_wine_pairing__from_json(v)) { Some(x) => x, None => return None },
+    })
+}
+
+fn iface_recipes__get_recipe_information_bulk_response_item_extended_ingredients_item__from_json(v: &Value) -> Option<iface_recipes::GetRecipeInformationBulkResponseItemExtendedIngredientsItem> {
+    let m = v.as_object()?;
+    Some(iface_recipes::GetRecipeInformationBulkResponseItemExtendedIngredientsItem {
+        aisle: m.get("aisle").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        amount: m.get("amount").and_then(|v| (v).as_f64()).unwrap_or_default(),
+        consitency: m.get("consitency").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        id: m.get("id").and_then(|v| (v).as_i64().map(|n| n as i32)).unwrap_or_default(),
+        image: m.get("image").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        measures: m.get("measures").filter(|v| !v.is_null()).and_then(|v| iface_recipes__get_recipe_information_bulk_response_item_extended_ingredients_item_measures__from_json(v)),
+        meta: m.get("meta").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| (x).as_str().map(|s| s.to_string())).collect())),
+        name: m.get("name").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        original: m.get("original").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        original_name: m.get("originalName").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        unit: m.get("unit").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+    })
+}
+
+fn iface_recipes__get_recipe_information_bulk_response_item_extended_ingredients_item_measures__from_json(v: &Value) -> Option<iface_recipes::GetRecipeInformationBulkResponseItemExtendedIngredientsItemMeasures> {
+    let m = v.as_object()?;
+    Some(iface_recipes::GetRecipeInformationBulkResponseItemExtendedIngredientsItemMeasures {
+        metric: match m.get("metric").and_then(|v| iface_recipes__get_recipe_information_bulk_response_item_extended_ingredients_item_measures_metric__from_json(v)) { Some(x) => x, None => return None },
+        us: match m.get("us").and_then(|v| iface_recipes__get_recipe_information_bulk_response_item_extended_ingredients_item_measures_us__from_json(v)) { Some(x) => x, None => return None },
+    })
+}
+
+fn iface_recipes__get_recipe_information_bulk_response_item_extended_ingredients_item_measures_metric__from_json(v: &Value) -> Option<iface_recipes::GetRecipeInformationBulkResponseItemExtendedIngredientsItemMeasuresMetric> {
+    let m = v.as_object()?;
+    Some(iface_recipes::GetRecipeInformationBulkResponseItemExtendedIngredientsItemMeasuresMetric {
+        amount: m.get("amount").and_then(|v| (v).as_f64()).unwrap_or_default(),
+        unit_long: m.get("unitLong").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        unit_short: m.get("unitShort").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+    })
+}
+
+fn iface_recipes__get_recipe_information_bulk_response_item_extended_ingredients_item_measures_us__from_json(v: &Value) -> Option<iface_recipes::GetRecipeInformationBulkResponseItemExtendedIngredientsItemMeasuresUs> {
+    let m = v.as_object()?;
+    Some(iface_recipes::GetRecipeInformationBulkResponseItemExtendedIngredientsItemMeasuresUs {
+        amount: m.get("amount").and_then(|v| (v).as_f64()).unwrap_or_default(),
+        unit_long: m.get("unitLong").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        unit_short: m.get("unitShort").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+    })
+}
+
+fn iface_recipes__get_recipe_information_bulk_response_item_wine_pairing__from_json(v: &Value) -> Option<iface_recipes::GetRecipeInformationBulkResponseItemWinePairing> {
+    let m = v.as_object()?;
+    Some(iface_recipes::GetRecipeInformationBulkResponseItemWinePairing {
+        paired_wines: m.get("pairedWines").and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| (x).as_str().map(|s| s.to_string())).collect())).unwrap_or_default(),
+        pairing_text: m.get("pairingText").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        product_matches: m.get("productMatches").and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| iface_recipes__get_recipe_information_bulk_response_item_wine_pairing_product_matches_item__from_json(x)).collect())).unwrap_or_default(),
+    })
+}
+
+fn iface_recipes__get_recipe_information_bulk_response_item_wine_pairing_product_matches_item__from_json(v: &Value) -> Option<iface_recipes::GetRecipeInformationBulkResponseItemWinePairingProductMatchesItem> {
+    let m = v.as_object()?;
+    Some(iface_recipes::GetRecipeInformationBulkResponseItemWinePairingProductMatchesItem {
+        average_rating: m.get("averageRating").and_then(|v| (v).as_f64()).unwrap_or_default(),
+        description: m.get("description").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        id: m.get("id").and_then(|v| (v).as_i64().map(|n| n as i32)).unwrap_or_default(),
+        image_url: m.get("imageUrl").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        link: m.get("link").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        price: m.get("price").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        rating_count: m.get("ratingCount").and_then(|v| (v).as_i64().map(|n| n as i32)).unwrap_or_default(),
+        score: m.get("score").and_then(|v| (v).as_f64()).unwrap_or_default(),
+        title: m.get("title").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+    })
+}
+
+fn iface_recipes__parse_ingredients_response_item__from_json(v: &Value) -> Option<iface_recipes::ParseIngredientsResponseItem> {
+    let m = v.as_object()?;
+    Some(iface_recipes::ParseIngredientsResponseItem {
+        aisle: m.get("aisle").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        amount: m.get("amount").and_then(|v| (v).as_f64()).unwrap_or_default(),
+        consistency: m.get("consistency").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        estimated_cost: match m.get("estimatedCost").and_then(|v| iface_recipes__parse_ingredients_response_item_estimated_cost__from_json(v)) { Some(x) => x, None => return None },
+        id: m.get("id").and_then(|v| (v).as_i64().map(|n| n as i32)).unwrap_or_default(),
+        image: m.get("image").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        meta: m.get("meta").and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| (x).as_str().map(|s| s.to_string())).collect())).unwrap_or_default(),
+        name: m.get("name").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        name_clean: m.get("nameClean").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        nutrition: match m.get("nutrition").and_then(|v| iface_recipes__parse_ingredients_response_item_nutrition__from_json(v)) { Some(x) => x, None => return None },
+        original: m.get("original").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        original_name: m.get("originalName").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        possible_units: m.get("possibleUnits").and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| (x).as_str().map(|s| s.to_string())).collect())).unwrap_or_default(),
+        unit: m.get("unit").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        unit_long: m.get("unitLong").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        unit_short: m.get("unitShort").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+    })
+}
+
+fn iface_recipes__parse_ingredients_response_item_estimated_cost__from_json(v: &Value) -> Option<iface_recipes::ParseIngredientsResponseItemEstimatedCost> {
+    let m = v.as_object()?;
+    Some(iface_recipes::ParseIngredientsResponseItemEstimatedCost {
+        unit: m.get("unit").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        value: m.get("value").and_then(|v| (v).as_f64()).unwrap_or_default(),
+    })
+}
+
+fn iface_recipes__parse_ingredients_response_item_nutrition__from_json(v: &Value) -> Option<iface_recipes::ParseIngredientsResponseItemNutrition> {
+    let m = v.as_object()?;
+    Some(iface_recipes::ParseIngredientsResponseItemNutrition {
+        caloric_breakdown: match m.get("caloricBreakdown").and_then(|v| iface_recipes__parse_ingredients_response_item_nutrition_caloric_breakdown__from_json(v)) { Some(x) => x, None => return None },
+        flavonoids: m.get("flavonoids").and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| iface_recipes__parse_ingredients_response_item_nutrition_flavonoids_item__from_json(x)).collect())).unwrap_or_default(),
+        nutrients: m.get("nutrients").and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| iface_recipes__parse_ingredients_response_item_nutrition_nutrients_item__from_json(x)).collect())).unwrap_or_default(),
+        properties: m.get("properties").and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| iface_recipes__parse_ingredients_response_item_nutrition_properties_item__from_json(x)).collect())).unwrap_or_default(),
+        weight_per_serving: match m.get("weightPerServing").and_then(|v| iface_recipes__parse_ingredients_response_item_nutrition_weight_per_serving__from_json(v)) { Some(x) => x, None => return None },
+    })
+}
+
+fn iface_recipes__parse_ingredients_response_item_nutrition_caloric_breakdown__from_json(v: &Value) -> Option<iface_recipes::ParseIngredientsResponseItemNutritionCaloricBreakdown> {
+    let m = v.as_object()?;
+    Some(iface_recipes::ParseIngredientsResponseItemNutritionCaloricBreakdown {
+        percent_carbs: m.get("percentCarbs").and_then(|v| (v).as_f64()).unwrap_or_default(),
+        percent_fat: m.get("percentFat").and_then(|v| (v).as_f64()).unwrap_or_default(),
+        percent_protein: m.get("percentProtein").and_then(|v| (v).as_f64()).unwrap_or_default(),
+    })
+}
+
+fn iface_recipes__parse_ingredients_response_item_nutrition_flavonoids_item__from_json(v: &Value) -> Option<iface_recipes::ParseIngredientsResponseItemNutritionFlavonoidsItem> {
+    let m = v.as_object()?;
+    Some(iface_recipes::ParseIngredientsResponseItemNutritionFlavonoidsItem {
+        amount: m.get("amount").and_then(|v| (v).as_f64()).unwrap_or_default(),
+        name: m.get("name").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        unit: m.get("unit").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+    })
+}
+
+fn iface_recipes__parse_ingredients_response_item_nutrition_nutrients_item__from_json(v: &Value) -> Option<iface_recipes::ParseIngredientsResponseItemNutritionNutrientsItem> {
+    let m = v.as_object()?;
+    Some(iface_recipes::ParseIngredientsResponseItemNutritionNutrientsItem {
+        amount: m.get("amount").and_then(|v| (v).as_f64()).unwrap_or_default(),
+        name: m.get("name").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        percent_of_daily_needs: m.get("percentOfDailyNeeds").and_then(|v| (v).as_f64()).unwrap_or_default(),
+        unit: m.get("unit").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+    })
+}
+
+fn iface_recipes__parse_ingredients_response_item_nutrition_properties_item__from_json(v: &Value) -> Option<iface_recipes::ParseIngredientsResponseItemNutritionPropertiesItem> {
+    let m = v.as_object()?;
+    Some(iface_recipes::ParseIngredientsResponseItemNutritionPropertiesItem {
+        amount: m.get("amount").and_then(|v| (v).as_f64()).unwrap_or_default(),
+        name: m.get("name").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        unit: m.get("unit").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+    })
+}
+
+fn iface_recipes__parse_ingredients_response_item_nutrition_weight_per_serving__from_json(v: &Value) -> Option<iface_recipes::ParseIngredientsResponseItemNutritionWeightPerServing> {
+    let m = v.as_object()?;
+    Some(iface_recipes::ParseIngredientsResponseItemNutritionWeightPerServing {
+        amount: m.get("amount").and_then(|v| (v).as_f64()).unwrap_or_default(),
+        unit: m.get("unit").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+    })
+}
+
+fn iface_recipes__analyze_a_recipe_search_query_response__from_json(v: &Value) -> Option<iface_recipes::AnalyzeARecipeSearchQueryResponse> {
+    let m = v.as_object()?;
+    Some(iface_recipes::AnalyzeARecipeSearchQueryResponse {
+        cuisines: m.get("cuisines").and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| (x).as_str().map(|s| s.to_string())).collect())).unwrap_or_default(),
+        dishes: m.get("dishes").and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| iface_recipes__analyze_a_recipe_search_query_response_dishes_item__from_json(x)).collect())).unwrap_or_default(),
+        ingredients: m.get("ingredients").and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| iface_recipes__analyze_a_recipe_search_query_response_ingredients_item__from_json(x)).collect())).unwrap_or_default(),
+        modifiers: m.get("modifiers").and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| (x).as_str().map(|s| s.to_string())).collect())).unwrap_or_default(),
+    })
+}
+
+fn iface_recipes__analyze_a_recipe_search_query_response_dishes_item__from_json(v: &Value) -> Option<iface_recipes::AnalyzeARecipeSearchQueryResponseDishesItem> {
+    let m = v.as_object()?;
+    Some(iface_recipes::AnalyzeARecipeSearchQueryResponseDishesItem {
+        image: m.get("image").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        name: m.get("name").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+    })
+}
+
+fn iface_recipes__analyze_a_recipe_search_query_response_ingredients_item__from_json(v: &Value) -> Option<iface_recipes::AnalyzeARecipeSearchQueryResponseIngredientsItem> {
+    let m = v.as_object()?;
+    Some(iface_recipes::AnalyzeARecipeSearchQueryResponseIngredientsItem {
+        image: m.get("image").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        include_op: m.get("include").and_then(|v| (v).as_bool()).unwrap_or_default(),
+        name: m.get("name").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+    })
+}
+
+fn iface_recipes__quick_answer_response__from_json(v: &Value) -> Option<iface_recipes::QuickAnswerResponse> {
+    let m = v.as_object()?;
+    Some(iface_recipes::QuickAnswerResponse {
+        answer: m.get("answer").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        image: m.get("image").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+    })
+}
+
+fn iface_recipes__get_random_recipes_response__from_json(v: &Value) -> Option<iface_recipes::GetRandomRecipesResponse> {
+    let m = v.as_object()?;
+    Some(iface_recipes::GetRandomRecipesResponse {
+        recipes: m.get("recipes").and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| iface_recipes__get_random_recipes_response_recipes_item__from_json(x)).collect())).unwrap_or_default(),
+    })
+}
+
+fn iface_recipes__get_random_recipes_response_recipes_item__from_json(v: &Value) -> Option<iface_recipes::GetRandomRecipesResponseRecipesItem> {
+    let m = v.as_object()?;
+    Some(iface_recipes::GetRandomRecipesResponseRecipesItem {
+        aggregate_likes: m.get("aggregateLikes").and_then(|v| (v).as_f64()).unwrap_or_default(),
+        analyzed_instructions: m.get("analyzedInstructions").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| iface_recipes__get_random_recipes_response_recipes_item_analyzed_instructions_item__from_json(x)).collect())),
+        cheap: m.get("cheap").and_then(|v| (v).as_bool()).unwrap_or_default(),
+        credits_text: m.get("creditsText").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        cuisines: m.get("cuisines").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| (x).as_str().map(|s| s.to_string())).collect())),
+        dairy_free: m.get("dairyFree").and_then(|v| (v).as_bool()).unwrap_or_default(),
+        diets: m.get("diets").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| (x).as_str().map(|s| s.to_string())).collect())),
+        dish_types: m.get("dishTypes").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| (x).as_str().map(|s| s.to_string())).collect())),
+        extended_ingredients: m.get("extendedIngredients").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| iface_recipes__get_random_recipes_response_recipes_item_extended_ingredients_item__from_json(x)).collect())),
+        gaps: m.get("gaps").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        gluten_free: m.get("glutenFree").and_then(|v| (v).as_bool()).unwrap_or_default(),
+        health_score: m.get("healthScore").and_then(|v| (v).as_f64()).unwrap_or_default(),
+        id: m.get("id").and_then(|v| (v).as_i64().map(|n| n as i32)).unwrap_or_default(),
+        image: m.get("image").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        image_type: m.get("imageType").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        instructions: m.get("instructions").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        ketogenic: m.get("ketogenic").and_then(|v| (v).as_bool()).unwrap_or_default(),
+        license: m.get("license").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        low_fodmap: m.get("lowFodmap").and_then(|v| (v).as_bool()).unwrap_or_default(),
+        occasions: m.get("occasions").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| (x).as_str().map(|s| s.to_string())).collect())),
+        price_per_serving: m.get("pricePerServing").and_then(|v| (v).as_f64()).unwrap_or_default(),
+        ready_in_minutes: m.get("readyInMinutes").and_then(|v| (v).as_i64().map(|n| n as i32)).unwrap_or_default(),
+        servings: m.get("servings").and_then(|v| (v).as_f64()).unwrap_or_default(),
+        source_name: m.get("sourceName").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        source_url: m.get("sourceUrl").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        spoonacular_score: m.get("spoonacularScore").and_then(|v| (v).as_f64()).unwrap_or_default(),
+        spoonacular_source_url: m.get("spoonacularSourceUrl").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        summary: m.get("summary").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        sustainable: m.get("sustainable").and_then(|v| (v).as_bool()).unwrap_or_default(),
+        title: m.get("title").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        vegan: m.get("vegan").and_then(|v| (v).as_bool()).unwrap_or_default(),
+        vegetarian: m.get("vegetarian").and_then(|v| (v).as_bool()).unwrap_or_default(),
+        very_healthy: m.get("veryHealthy").and_then(|v| (v).as_bool()).unwrap_or_default(),
+        very_popular: m.get("veryPopular").and_then(|v| (v).as_bool()).unwrap_or_default(),
+        weight_watcher_smart_points: m.get("weightWatcherSmartPoints").and_then(|v| (v).as_f64()).unwrap_or_default(),
+        whole30: m.get("whole30").and_then(|v| (v).as_bool()).unwrap_or_default(),
+        wine_pairing: m.get("winePairing").filter(|v| !v.is_null()).and_then(|v| iface_recipes__get_random_recipes_response_recipes_item_wine_pairing__from_json(v)),
+    })
+}
+
+fn iface_recipes__get_random_recipes_response_recipes_item_analyzed_instructions_item__from_json(v: &Value) -> Option<iface_recipes::GetRandomRecipesResponseRecipesItemAnalyzedInstructionsItem> {
+    let m = v.as_object()?;
+    Some(iface_recipes::GetRandomRecipesResponseRecipesItemAnalyzedInstructionsItem {
+        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    })
+}
+
+fn iface_recipes__get_random_recipes_response_recipes_item_extended_ingredients_item__from_json(v: &Value) -> Option<iface_recipes::GetRandomRecipesResponseRecipesItemExtendedIngredientsItem> {
+    let m = v.as_object()?;
+    Some(iface_recipes::GetRandomRecipesResponseRecipesItemExtendedIngredientsItem {
+        aisle: m.get("aisle").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        amount: m.get("amount").and_then(|v| (v).as_f64()).unwrap_or_default(),
+        consitency: m.get("consitency").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        id: m.get("id").and_then(|v| (v).as_i64().map(|n| n as i32)).unwrap_or_default(),
+        image: m.get("image").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        measures: m.get("measures").filter(|v| !v.is_null()).and_then(|v| iface_recipes__get_random_recipes_response_recipes_item_extended_ingredients_item_measures__from_json(v)),
+        meta: m.get("meta").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| (x).as_str().map(|s| s.to_string())).collect())),
+        name: m.get("name").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        original: m.get("original").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        original_name: m.get("originalName").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        unit: m.get("unit").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+    })
+}
+
+fn iface_recipes__get_random_recipes_response_recipes_item_extended_ingredients_item_measures__from_json(v: &Value) -> Option<iface_recipes::GetRandomRecipesResponseRecipesItemExtendedIngredientsItemMeasures> {
+    let m = v.as_object()?;
+    Some(iface_recipes::GetRandomRecipesResponseRecipesItemExtendedIngredientsItemMeasures {
+        metric: match m.get("metric").and_then(|v| iface_recipes__get_random_recipes_response_recipes_item_extended_ingredients_item_measures_metric__from_json(v)) { Some(x) => x, None => return None },
+        us: match m.get("us").and_then(|v| iface_recipes__get_random_recipes_response_recipes_item_extended_ingredients_item_measures_us__from_json(v)) { Some(x) => x, None => return None },
+    })
+}
+
+fn iface_recipes__get_random_recipes_response_recipes_item_extended_ingredients_item_measures_metric__from_json(v: &Value) -> Option<iface_recipes::GetRandomRecipesResponseRecipesItemExtendedIngredientsItemMeasuresMetric> {
+    let m = v.as_object()?;
+    Some(iface_recipes::GetRandomRecipesResponseRecipesItemExtendedIngredientsItemMeasuresMetric {
+        amount: m.get("amount").and_then(|v| (v).as_f64()).unwrap_or_default(),
+        unit_long: m.get("unitLong").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        unit_short: m.get("unitShort").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+    })
+}
+
+fn iface_recipes__get_random_recipes_response_recipes_item_extended_ingredients_item_measures_us__from_json(v: &Value) -> Option<iface_recipes::GetRandomRecipesResponseRecipesItemExtendedIngredientsItemMeasuresUs> {
+    let m = v.as_object()?;
+    Some(iface_recipes::GetRandomRecipesResponseRecipesItemExtendedIngredientsItemMeasuresUs {
+        amount: m.get("amount").and_then(|v| (v).as_f64()).unwrap_or_default(),
+        unit_long: m.get("unitLong").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        unit_short: m.get("unitShort").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+    })
+}
+
+fn iface_recipes__get_random_recipes_response_recipes_item_wine_pairing__from_json(v: &Value) -> Option<iface_recipes::GetRandomRecipesResponseRecipesItemWinePairing> {
+    let m = v.as_object()?;
+    Some(iface_recipes::GetRandomRecipesResponseRecipesItemWinePairing {
+        paired_wines: m.get("pairedWines").and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| (x).as_str().map(|s| s.to_string())).collect())).unwrap_or_default(),
+        pairing_text: m.get("pairingText").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        product_matches: m.get("productMatches").and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| iface_recipes__get_random_recipes_response_recipes_item_wine_pairing_product_matches_item__from_json(x)).collect())).unwrap_or_default(),
+    })
+}
+
+fn iface_recipes__get_random_recipes_response_recipes_item_wine_pairing_product_matches_item__from_json(v: &Value) -> Option<iface_recipes::GetRandomRecipesResponseRecipesItemWinePairingProductMatchesItem> {
+    let m = v.as_object()?;
+    Some(iface_recipes::GetRandomRecipesResponseRecipesItemWinePairingProductMatchesItem {
+        average_rating: m.get("averageRating").and_then(|v| (v).as_f64()).unwrap_or_default(),
+        description: m.get("description").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        id: m.get("id").and_then(|v| (v).as_i64().map(|n| n as i32)).unwrap_or_default(),
+        image_url: m.get("imageUrl").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        link: m.get("link").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        price: m.get("price").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        rating_count: m.get("ratingCount").and_then(|v| (v).as_i64().map(|n| n as i32)).unwrap_or_default(),
+        score: m.get("score").and_then(|v| (v).as_f64()).unwrap_or_default(),
+        title: m.get("title").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+    })
+}
+
+fn iface_recipes__create_recipe_card_response__from_json(v: &Value) -> Option<iface_recipes::CreateRecipeCardResponse> {
+    let m = v.as_object()?;
+    Some(iface_recipes::CreateRecipeCardResponse {
+        url: m.get("url").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+    })
+}
+
+fn iface_recipes__get_analyzed_recipe_instructions_response__from_json(v: &Value) -> Option<iface_recipes::GetAnalyzedRecipeInstructionsResponse> {
+    let m = v.as_object()?;
+    Some(iface_recipes::GetAnalyzedRecipeInstructionsResponse {
+        equipment: m.get("equipment").and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| iface_recipes__get_analyzed_recipe_instructions_response_equipment_item__from_json(x)).collect())).unwrap_or_default(),
+        ingredients: m.get("ingredients").and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| iface_recipes__get_analyzed_recipe_instructions_response_ingredients_item__from_json(x)).collect())).unwrap_or_default(),
+        parsed_instructions: m.get("parsedInstructions").and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| iface_recipes__get_analyzed_recipe_instructions_response_parsed_instructions_item__from_json(x)).collect())).unwrap_or_default(),
+    })
+}
+
+fn iface_recipes__get_analyzed_recipe_instructions_response_equipment_item__from_json(v: &Value) -> Option<iface_recipes::GetAnalyzedRecipeInstructionsResponseEquipmentItem> {
+    let m = v.as_object()?;
+    Some(iface_recipes::GetAnalyzedRecipeInstructionsResponseEquipmentItem {
+        id: m.get("id").and_then(|v| (v).as_i64().map(|n| n as i32)).unwrap_or_default(),
+        name: m.get("name").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+    })
+}
+
+fn iface_recipes__get_analyzed_recipe_instructions_response_ingredients_item__from_json(v: &Value) -> Option<iface_recipes::GetAnalyzedRecipeInstructionsResponseIngredientsItem> {
+    let m = v.as_object()?;
+    Some(iface_recipes::GetAnalyzedRecipeInstructionsResponseIngredientsItem {
+        id: m.get("id").and_then(|v| (v).as_i64().map(|n| n as i32)).unwrap_or_default(),
+        name: m.get("name").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+    })
+}
+
+fn iface_recipes__get_analyzed_recipe_instructions_response_parsed_instructions_item__from_json(v: &Value) -> Option<iface_recipes::GetAnalyzedRecipeInstructionsResponseParsedInstructionsItem> {
+    let m = v.as_object()?;
+    Some(iface_recipes::GetAnalyzedRecipeInstructionsResponseParsedInstructionsItem {
+        name: m.get("name").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        steps: m.get("steps").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| iface_recipes__get_analyzed_recipe_instructions_response_parsed_instructions_item_steps_item__from_json(x)).collect())),
+    })
+}
+
+fn iface_recipes__get_analyzed_recipe_instructions_response_parsed_instructions_item_steps_item__from_json(v: &Value) -> Option<iface_recipes::GetAnalyzedRecipeInstructionsResponseParsedInstructionsItemStepsItem> {
+    let m = v.as_object()?;
+    Some(iface_recipes::GetAnalyzedRecipeInstructionsResponseParsedInstructionsItemStepsItem {
+        equipment: m.get("equipment").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| iface_recipes__get_analyzed_recipe_instructions_response_parsed_instructions_item_steps_item_equipment_item__from_json(x)).collect())),
+        ingredients: m.get("ingredients").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| iface_recipes__get_analyzed_recipe_instructions_response_parsed_instructions_item_steps_item_ingredients_item__from_json(x)).collect())),
+        number: m.get("number").and_then(|v| (v).as_f64()).unwrap_or_default(),
+        step: m.get("step").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+    })
+}
+
+fn iface_recipes__get_analyzed_recipe_instructions_response_parsed_instructions_item_steps_item_equipment_item__from_json(v: &Value) -> Option<iface_recipes::GetAnalyzedRecipeInstructionsResponseParsedInstructionsItemStepsItemEquipmentItem> {
+    let m = v.as_object()?;
+    Some(iface_recipes::GetAnalyzedRecipeInstructionsResponseParsedInstructionsItemStepsItemEquipmentItem {
+        id: m.get("id").and_then(|v| (v).as_i64().map(|n| n as i32)).unwrap_or_default(),
+        image: m.get("image").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        localized_name: m.get("localizedName").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        name: m.get("name").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+    })
+}
+
+fn iface_recipes__get_analyzed_recipe_instructions_response_parsed_instructions_item_steps_item_ingredients_item__from_json(v: &Value) -> Option<iface_recipes::GetAnalyzedRecipeInstructionsResponseParsedInstructionsItemStepsItemIngredientsItem> {
+    let m = v.as_object()?;
+    Some(iface_recipes::GetAnalyzedRecipeInstructionsResponseParsedInstructionsItemStepsItemIngredientsItem {
+        id: m.get("id").and_then(|v| (v).as_i64().map(|n| n as i32)).unwrap_or_default(),
+        image: m.get("image").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        localized_name: m.get("localizedName").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        name: m.get("name").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+    })
+}
+
+fn iface_recipes__create_recipe_card_get_response__from_json(v: &Value) -> Option<iface_recipes::CreateRecipeCardGetResponse> {
+    let m = v.as_object()?;
+    Some(iface_recipes::CreateRecipeCardGetResponse {
+        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    })
+}
+
+fn iface_recipes__get_recipe_equipment_by_id_response__from_json(v: &Value) -> Option<iface_recipes::GetRecipeEquipmentByIdResponse> {
+    let m = v.as_object()?;
+    Some(iface_recipes::GetRecipeEquipmentByIdResponse {
+        equipment: m.get("equipment").and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| iface_recipes__get_recipe_equipment_by_id_response_equipment_item__from_json(x)).collect())).unwrap_or_default(),
+    })
+}
+
+fn iface_recipes__get_recipe_equipment_by_id_response_equipment_item__from_json(v: &Value) -> Option<iface_recipes::GetRecipeEquipmentByIdResponseEquipmentItem> {
+    let m = v.as_object()?;
+    Some(iface_recipes::GetRecipeEquipmentByIdResponseEquipmentItem {
+        image: m.get("image").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        name: m.get("name").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+    })
+}
+
+fn iface_recipes__equipment_by_id_image_response__from_json(v: &Value) -> Option<iface_recipes::EquipmentByIdImageResponse> {
+    let m = v.as_object()?;
+    Some(iface_recipes::EquipmentByIdImageResponse {
+        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    })
+}
+
+fn iface_recipes__get_recipe_information_response__from_json(v: &Value) -> Option<iface_recipes::GetRecipeInformationResponse> {
+    let m = v.as_object()?;
+    Some(iface_recipes::GetRecipeInformationResponse {
+        aggregate_likes: m.get("aggregateLikes").and_then(|v| (v).as_i64().map(|n| n as i32)).unwrap_or_default(),
+        analyzed_instructions: m.get("analyzedInstructions").and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| iface_recipes__get_recipe_information_response_analyzed_instructions_item__from_json(x)).collect())).unwrap_or_default(),
+        cheap: m.get("cheap").and_then(|v| (v).as_bool()).unwrap_or_default(),
+        credits_text: m.get("creditsText").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        cuisines: m.get("cuisines").and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| (x).as_str().map(|s| s.to_string())).collect())).unwrap_or_default(),
+        dairy_free: m.get("dairyFree").and_then(|v| (v).as_bool()).unwrap_or_default(),
+        diets: m.get("diets").and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| (x).as_str().map(|s| s.to_string())).collect())).unwrap_or_default(),
+        dish_types: m.get("dishTypes").and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| (x).as_str().map(|s| s.to_string())).collect())).unwrap_or_default(),
+        extended_ingredients: m.get("extendedIngredients").and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| iface_recipes__get_recipe_information_response_extended_ingredients_item__from_json(x)).collect())).unwrap_or_default(),
+        gaps: m.get("gaps").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        gluten_free: m.get("glutenFree").and_then(|v| (v).as_bool()).unwrap_or_default(),
+        health_score: m.get("healthScore").and_then(|v| (v).as_f64()).unwrap_or_default(),
+        id: m.get("id").and_then(|v| (v).as_i64().map(|n| n as i32)).unwrap_or_default(),
+        image: m.get("image").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        image_type: m.get("imageType").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        instructions: m.get("instructions").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        ketogenic: m.get("ketogenic").and_then(|v| (v).as_bool()).unwrap_or_default(),
+        license: m.get("license").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        low_fodmap: m.get("lowFodmap").and_then(|v| (v).as_bool()).unwrap_or_default(),
+        occasions: m.get("occasions").and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| (x).as_str().map(|s| s.to_string())).collect())).unwrap_or_default(),
+        price_per_serving: m.get("pricePerServing").and_then(|v| (v).as_f64()).unwrap_or_default(),
+        ready_in_minutes: m.get("readyInMinutes").and_then(|v| (v).as_i64().map(|n| n as i32)).unwrap_or_default(),
+        servings: m.get("servings").and_then(|v| (v).as_f64()).unwrap_or_default(),
+        source_name: m.get("sourceName").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        source_url: m.get("sourceUrl").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        spoonacular_score: m.get("spoonacularScore").and_then(|v| (v).as_f64()).unwrap_or_default(),
+        spoonacular_source_url: m.get("spoonacularSourceUrl").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        summary: m.get("summary").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        sustainable: m.get("sustainable").and_then(|v| (v).as_bool()).unwrap_or_default(),
+        title: m.get("title").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        vegan: m.get("vegan").and_then(|v| (v).as_bool()).unwrap_or_default(),
+        vegetarian: m.get("vegetarian").and_then(|v| (v).as_bool()).unwrap_or_default(),
+        very_healthy: m.get("veryHealthy").and_then(|v| (v).as_bool()).unwrap_or_default(),
+        very_popular: m.get("veryPopular").and_then(|v| (v).as_bool()).unwrap_or_default(),
+        weight_watcher_smart_points: m.get("weightWatcherSmartPoints").and_then(|v| (v).as_f64()).unwrap_or_default(),
+        whole30: m.get("whole30").and_then(|v| (v).as_bool()).unwrap_or_default(),
+        wine_pairing: match m.get("winePairing").and_then(|v| iface_recipes__get_recipe_information_response_wine_pairing__from_json(v)) { Some(x) => x, None => return None },
+    })
+}
+
+fn iface_recipes__get_recipe_information_response_analyzed_instructions_item__from_json(v: &Value) -> Option<iface_recipes::GetRecipeInformationResponseAnalyzedInstructionsItem> {
+    let m = v.as_object()?;
+    Some(iface_recipes::GetRecipeInformationResponseAnalyzedInstructionsItem {
+        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    })
+}
+
+fn iface_recipes__get_recipe_information_response_extended_ingredients_item__from_json(v: &Value) -> Option<iface_recipes::GetRecipeInformationResponseExtendedIngredientsItem> {
+    let m = v.as_object()?;
+    Some(iface_recipes::GetRecipeInformationResponseExtendedIngredientsItem {
+        aisle: m.get("aisle").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        amount: m.get("amount").and_then(|v| (v).as_f64()).unwrap_or_default(),
+        consitency: m.get("consitency").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        id: m.get("id").and_then(|v| (v).as_i64().map(|n| n as i32)).unwrap_or_default(),
+        image: m.get("image").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        measures: m.get("measures").filter(|v| !v.is_null()).and_then(|v| iface_recipes__get_recipe_information_response_extended_ingredients_item_measures__from_json(v)),
+        meta: m.get("meta").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| (x).as_str().map(|s| s.to_string())).collect())),
+        name: m.get("name").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        original: m.get("original").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        original_name: m.get("originalName").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        unit: m.get("unit").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+    })
+}
+
+fn iface_recipes__get_recipe_information_response_extended_ingredients_item_measures__from_json(v: &Value) -> Option<iface_recipes::GetRecipeInformationResponseExtendedIngredientsItemMeasures> {
+    let m = v.as_object()?;
+    Some(iface_recipes::GetRecipeInformationResponseExtendedIngredientsItemMeasures {
+        metric: match m.get("metric").and_then(|v| iface_recipes__get_recipe_information_response_extended_ingredients_item_measures_metric__from_json(v)) { Some(x) => x, None => return None },
+        us: match m.get("us").and_then(|v| iface_recipes__get_recipe_information_response_extended_ingredients_item_measures_us__from_json(v)) { Some(x) => x, None => return None },
+    })
+}
+
+fn iface_recipes__get_recipe_information_response_extended_ingredients_item_measures_metric__from_json(v: &Value) -> Option<iface_recipes::GetRecipeInformationResponseExtendedIngredientsItemMeasuresMetric> {
+    let m = v.as_object()?;
+    Some(iface_recipes::GetRecipeInformationResponseExtendedIngredientsItemMeasuresMetric {
+        amount: m.get("amount").and_then(|v| (v).as_f64()).unwrap_or_default(),
+        unit_long: m.get("unitLong").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        unit_short: m.get("unitShort").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+    })
+}
+
+fn iface_recipes__get_recipe_information_response_extended_ingredients_item_measures_us__from_json(v: &Value) -> Option<iface_recipes::GetRecipeInformationResponseExtendedIngredientsItemMeasuresUs> {
+    let m = v.as_object()?;
+    Some(iface_recipes::GetRecipeInformationResponseExtendedIngredientsItemMeasuresUs {
+        amount: m.get("amount").and_then(|v| (v).as_f64()).unwrap_or_default(),
+        unit_long: m.get("unitLong").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        unit_short: m.get("unitShort").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+    })
+}
+
+fn iface_recipes__get_recipe_information_response_wine_pairing__from_json(v: &Value) -> Option<iface_recipes::GetRecipeInformationResponseWinePairing> {
+    let m = v.as_object()?;
+    Some(iface_recipes::GetRecipeInformationResponseWinePairing {
+        paired_wines: m.get("pairedWines").and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| (x).as_str().map(|s| s.to_string())).collect())).unwrap_or_default(),
+        pairing_text: m.get("pairingText").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        product_matches: m.get("productMatches").and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| iface_recipes__get_recipe_information_response_wine_pairing_product_matches_item__from_json(x)).collect())).unwrap_or_default(),
+    })
+}
+
+fn iface_recipes__get_recipe_information_response_wine_pairing_product_matches_item__from_json(v: &Value) -> Option<iface_recipes::GetRecipeInformationResponseWinePairingProductMatchesItem> {
+    let m = v.as_object()?;
+    Some(iface_recipes::GetRecipeInformationResponseWinePairingProductMatchesItem {
+        average_rating: m.get("averageRating").and_then(|v| (v).as_f64()).unwrap_or_default(),
+        description: m.get("description").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        id: m.get("id").and_then(|v| (v).as_i64().map(|n| n as i32)).unwrap_or_default(),
+        image_url: m.get("imageUrl").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        link: m.get("link").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        price: m.get("price").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        rating_count: m.get("ratingCount").and_then(|v| (v).as_i64().map(|n| n as i32)).unwrap_or_default(),
+        score: m.get("score").and_then(|v| (v).as_f64()).unwrap_or_default(),
+        title: m.get("title").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+    })
+}
+
+fn iface_recipes__get_recipe_ingredients_by_id_response__from_json(v: &Value) -> Option<iface_recipes::GetRecipeIngredientsByIdResponse> {
+    let m = v.as_object()?;
+    Some(iface_recipes::GetRecipeIngredientsByIdResponse {
+        ingredients: m.get("ingredients").and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| iface_recipes__get_recipe_ingredients_by_id_response_ingredients_item__from_json(x)).collect())).unwrap_or_default(),
+    })
+}
+
+fn iface_recipes__get_recipe_ingredients_by_id_response_ingredients_item__from_json(v: &Value) -> Option<iface_recipes::GetRecipeIngredientsByIdResponseIngredientsItem> {
+    let m = v.as_object()?;
+    Some(iface_recipes::GetRecipeIngredientsByIdResponseIngredientsItem {
+        amount: m.get("amount").filter(|v| !v.is_null()).and_then(|v| iface_recipes__get_recipe_ingredients_by_id_response_ingredients_item_amount__from_json(v)),
+        image: m.get("image").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        name: m.get("name").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+    })
+}
+
+fn iface_recipes__get_recipe_ingredients_by_id_response_ingredients_item_amount__from_json(v: &Value) -> Option<iface_recipes::GetRecipeIngredientsByIdResponseIngredientsItemAmount> {
+    let m = v.as_object()?;
+    Some(iface_recipes::GetRecipeIngredientsByIdResponseIngredientsItemAmount {
+        metric: match m.get("metric").and_then(|v| iface_recipes__get_recipe_ingredients_by_id_response_ingredients_item_amount_metric__from_json(v)) { Some(x) => x, None => return None },
+        us: match m.get("us").and_then(|v| iface_recipes__get_recipe_ingredients_by_id_response_ingredients_item_amount_us__from_json(v)) { Some(x) => x, None => return None },
+    })
+}
+
+fn iface_recipes__get_recipe_ingredients_by_id_response_ingredients_item_amount_metric__from_json(v: &Value) -> Option<iface_recipes::GetRecipeIngredientsByIdResponseIngredientsItemAmountMetric> {
+    let m = v.as_object()?;
+    Some(iface_recipes::GetRecipeIngredientsByIdResponseIngredientsItemAmountMetric {
+        unit: m.get("unit").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        value: m.get("value").and_then(|v| (v).as_f64()).unwrap_or_default(),
+    })
+}
+
+fn iface_recipes__get_recipe_ingredients_by_id_response_ingredients_item_amount_us__from_json(v: &Value) -> Option<iface_recipes::GetRecipeIngredientsByIdResponseIngredientsItemAmountUs> {
+    let m = v.as_object()?;
+    Some(iface_recipes::GetRecipeIngredientsByIdResponseIngredientsItemAmountUs {
+        unit: m.get("unit").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        value: m.get("value").and_then(|v| (v).as_f64()).unwrap_or_default(),
+    })
+}
+
+fn iface_recipes__recipe_nutrition_label_image_response__from_json(v: &Value) -> Option<iface_recipes::RecipeNutritionLabelImageResponse> {
+    let m = v.as_object()?;
+    Some(iface_recipes::RecipeNutritionLabelImageResponse {
+        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    })
+}
+
+fn iface_recipes__get_recipe_nutrition_widget_by_id_response__from_json(v: &Value) -> Option<iface_recipes::GetRecipeNutritionWidgetByIdResponse> {
+    let m = v.as_object()?;
+    Some(iface_recipes::GetRecipeNutritionWidgetByIdResponse {
+        bad: m.get("bad").and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| iface_recipes__get_recipe_nutrition_widget_by_id_response_bad_item__from_json(x)).collect())).unwrap_or_default(),
+        calories: m.get("calories").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        carbs: m.get("carbs").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        fat: m.get("fat").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        good: m.get("good").and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| iface_recipes__get_recipe_nutrition_widget_by_id_response_good_item__from_json(x)).collect())).unwrap_or_default(),
+        protein: m.get("protein").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+    })
+}
+
+fn iface_recipes__get_recipe_nutrition_widget_by_id_response_bad_item__from_json(v: &Value) -> Option<iface_recipes::GetRecipeNutritionWidgetByIdResponseBadItem> {
+    let m = v.as_object()?;
+    Some(iface_recipes::GetRecipeNutritionWidgetByIdResponseBadItem {
+        amount: m.get("amount").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        indented: m.get("indented").and_then(|v| (v).as_bool()).unwrap_or_default(),
+        name: m.get("name").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        percent_of_daily_needs: m.get("percentOfDailyNeeds").and_then(|v| (v).as_f64()).unwrap_or_default(),
+    })
+}
+
+fn iface_recipes__get_recipe_nutrition_widget_by_id_response_good_item__from_json(v: &Value) -> Option<iface_recipes::GetRecipeNutritionWidgetByIdResponseGoodItem> {
+    let m = v.as_object()?;
+    Some(iface_recipes::GetRecipeNutritionWidgetByIdResponseGoodItem {
+        amount: m.get("amount").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        indented: m.get("indented").and_then(|v| (v).as_bool()).unwrap_or_default(),
+        name: m.get("name").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        percent_of_daily_needs: m.get("percentOfDailyNeeds").and_then(|v| (v).as_f64()).unwrap_or_default(),
+    })
+}
+
+fn iface_recipes__recipe_nutrition_by_id_image_response__from_json(v: &Value) -> Option<iface_recipes::RecipeNutritionByIdImageResponse> {
+    let m = v.as_object()?;
+    Some(iface_recipes::RecipeNutritionByIdImageResponse {
+        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    })
+}
+
+fn iface_recipes__get_recipe_price_breakdown_by_id_response__from_json(v: &Value) -> Option<iface_recipes::GetRecipePriceBreakdownByIdResponse> {
+    let m = v.as_object()?;
+    Some(iface_recipes::GetRecipePriceBreakdownByIdResponse {
+        ingredients: m.get("ingredients").and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| iface_recipes__get_recipe_price_breakdown_by_id_response_ingredients_item__from_json(x)).collect())).unwrap_or_default(),
+        total_cost: m.get("totalCost").and_then(|v| (v).as_f64()).unwrap_or_default(),
+        total_cost_per_serving: m.get("totalCostPerServing").and_then(|v| (v).as_f64()).unwrap_or_default(),
+    })
+}
+
+fn iface_recipes__get_recipe_price_breakdown_by_id_response_ingredients_item__from_json(v: &Value) -> Option<iface_recipes::GetRecipePriceBreakdownByIdResponseIngredientsItem> {
+    let m = v.as_object()?;
+    Some(iface_recipes::GetRecipePriceBreakdownByIdResponseIngredientsItem {
+        amount: m.get("amount").filter(|v| !v.is_null()).and_then(|v| iface_recipes__get_recipe_price_breakdown_by_id_response_ingredients_item_amount__from_json(v)),
+        image: m.get("image").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        name: m.get("name").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        price: m.get("price").and_then(|v| (v).as_f64()).unwrap_or_default(),
+    })
+}
+
+fn iface_recipes__get_recipe_price_breakdown_by_id_response_ingredients_item_amount__from_json(v: &Value) -> Option<iface_recipes::GetRecipePriceBreakdownByIdResponseIngredientsItemAmount> {
+    let m = v.as_object()?;
+    Some(iface_recipes::GetRecipePriceBreakdownByIdResponseIngredientsItemAmount {
+        metric: match m.get("metric").and_then(|v| iface_recipes__get_recipe_price_breakdown_by_id_response_ingredients_item_amount_metric__from_json(v)) { Some(x) => x, None => return None },
+        us: match m.get("us").and_then(|v| iface_recipes__get_recipe_price_breakdown_by_id_response_ingredients_item_amount_us__from_json(v)) { Some(x) => x, None => return None },
+    })
+}
+
+fn iface_recipes__get_recipe_price_breakdown_by_id_response_ingredients_item_amount_metric__from_json(v: &Value) -> Option<iface_recipes::GetRecipePriceBreakdownByIdResponseIngredientsItemAmountMetric> {
+    let m = v.as_object()?;
+    Some(iface_recipes::GetRecipePriceBreakdownByIdResponseIngredientsItemAmountMetric {
+        unit: m.get("unit").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        value: m.get("value").and_then(|v| (v).as_f64()).unwrap_or_default(),
+    })
+}
+
+fn iface_recipes__get_recipe_price_breakdown_by_id_response_ingredients_item_amount_us__from_json(v: &Value) -> Option<iface_recipes::GetRecipePriceBreakdownByIdResponseIngredientsItemAmountUs> {
+    let m = v.as_object()?;
+    Some(iface_recipes::GetRecipePriceBreakdownByIdResponseIngredientsItemAmountUs {
+        unit: m.get("unit").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        value: m.get("value").and_then(|v| (v).as_f64()).unwrap_or_default(),
+    })
+}
+
+fn iface_recipes__price_breakdown_by_id_image_response__from_json(v: &Value) -> Option<iface_recipes::PriceBreakdownByIdImageResponse> {
+    let m = v.as_object()?;
+    Some(iface_recipes::PriceBreakdownByIdImageResponse {
+        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    })
+}
+
+fn iface_recipes__get_similar_recipes_response_item__from_json(v: &Value) -> Option<iface_recipes::GetSimilarRecipesResponseItem> {
+    let m = v.as_object()?;
+    Some(iface_recipes::GetSimilarRecipesResponseItem {
+        id: m.get("id").and_then(|v| (v).as_i64().map(|n| n as i32)).unwrap_or_default(),
+        image_type: m.get("imageType").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        ready_in_minutes: m.get("readyInMinutes").and_then(|v| (v).as_i64().map(|n| n as i32)).unwrap_or_default(),
+        servings: m.get("servings").and_then(|v| (v).as_f64()).unwrap_or_default(),
+        source_url: m.get("sourceUrl").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        title: m.get("title").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+    })
+}
+
+fn iface_recipes__summarize_recipe_response__from_json(v: &Value) -> Option<iface_recipes::SummarizeRecipeResponse> {
+    let m = v.as_object()?;
+    Some(iface_recipes::SummarizeRecipeResponse {
+        id: m.get("id").and_then(|v| (v).as_i64().map(|n| n as i32)).unwrap_or_default(),
+        summary: m.get("summary").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        title: m.get("title").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+    })
+}
+
+fn iface_recipes__get_recipe_taste_by_id_response__from_json(v: &Value) -> Option<iface_recipes::GetRecipeTasteByIdResponse> {
+    let m = v.as_object()?;
+    Some(iface_recipes::GetRecipeTasteByIdResponse {
+        bitterness: m.get("bitterness").and_then(|v| (v).as_f64()).unwrap_or_default(),
+        fattiness: m.get("fattiness").and_then(|v| (v).as_f64()).unwrap_or_default(),
+        saltiness: m.get("saltiness").and_then(|v| (v).as_f64()).unwrap_or_default(),
+        savoriness: m.get("savoriness").and_then(|v| (v).as_f64()).unwrap_or_default(),
+        sourness: m.get("sourness").and_then(|v| (v).as_f64()).unwrap_or_default(),
+        spiciness: m.get("spiciness").and_then(|v| (v).as_f64()).unwrap_or_default(),
+        sweetness: m.get("sweetness").and_then(|v| (v).as_f64()).unwrap_or_default(),
+    })
+}
+
+fn iface_recipes__recipe_taste_by_id_image_response__from_json(v: &Value) -> Option<iface_recipes::RecipeTasteByIdImageResponse> {
+    let m = v.as_object()?;
+    Some(iface_recipes::RecipeTasteByIdImageResponse {
+        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    })
+}
+
+fn iface_recipes__compute_glycemic_load__ok(body: String) -> Result<iface_recipes::ComputeGlycemicLoadResponse, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match iface_recipes__compute_glycemic_load_response__from_json(&v) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_recipes__compute_glycemic_load__err(e: crate::runtime::DispatchError) -> iface_recipes::ComputeGlycemicLoadError {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => match status {
+            401u16 => iface_recipes::ComputeGlycemicLoadError::Unauthorized(body),
+            403u16 => iface_recipes::ComputeGlycemicLoadError::Forbidden(body),
+            404u16 => iface_recipes::ComputeGlycemicLoadError::NotFound(body),
+            _ => iface_recipes::ComputeGlycemicLoadError::Other(body),
+        },
+        crate::runtime::DispatchError::Transport(m) => iface_recipes::ComputeGlycemicLoadError::Other(m),
+    }
+}
+
+fn iface_recipes__analyze_recipe__ok(body: String) -> Result<iface_recipes::AnalyzeRecipeResponse, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match iface_recipes__analyze_recipe_response__from_json(&v) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_recipes__analyze_recipe__err(e: crate::runtime::DispatchError) -> iface_recipes::AnalyzeRecipeError {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => match status {
+            401u16 => iface_recipes::AnalyzeRecipeError::Unauthorized(body),
+            403u16 => iface_recipes::AnalyzeRecipeError::Forbidden(body),
+            404u16 => iface_recipes::AnalyzeRecipeError::NotFound(body),
+            _ => iface_recipes::AnalyzeRecipeError::Other(body),
+        },
+        crate::runtime::DispatchError::Transport(m) => iface_recipes::AnalyzeRecipeError::Other(m),
+    }
+}
+
+fn iface_recipes__analyze_recipe_instructions__ok(body: String) -> Result<iface_recipes::AnalyzeRecipeInstructionsResponse, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match iface_recipes__analyze_recipe_instructions_response__from_json(&v) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_recipes__analyze_recipe_instructions__err(e: crate::runtime::DispatchError) -> iface_recipes::AnalyzeRecipeInstructionsError {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => match status {
+            401u16 => iface_recipes::AnalyzeRecipeInstructionsError::Unauthorized(body),
+            403u16 => iface_recipes::AnalyzeRecipeInstructionsError::Forbidden(body),
+            404u16 => iface_recipes::AnalyzeRecipeInstructionsError::NotFound(body),
+            _ => iface_recipes::AnalyzeRecipeInstructionsError::Other(body),
+        },
+        crate::runtime::DispatchError::Transport(m) => iface_recipes::AnalyzeRecipeInstructionsError::Other(m),
+    }
+}
+
+fn iface_recipes__autocomplete_recipe_search__ok(body: String) -> Result<Vec<iface_recipes::AutocompleteRecipeSearchResponseItem>, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match (&v).as_array().map(|a| a.iter().filter_map(|x| iface_recipes__autocomplete_recipe_search_response_item__from_json(x)).collect()) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_recipes__autocomplete_recipe_search__err(e: crate::runtime::DispatchError) -> iface_recipes::AutocompleteRecipeSearchError {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => match status {
+            401u16 => iface_recipes::AutocompleteRecipeSearchError::Unauthorized(body),
+            403u16 => iface_recipes::AutocompleteRecipeSearchError::Forbidden(body),
+            404u16 => iface_recipes::AutocompleteRecipeSearchError::NotFound(body),
+            _ => iface_recipes::AutocompleteRecipeSearchError::Other(body),
+        },
+        crate::runtime::DispatchError::Transport(m) => iface_recipes::AutocompleteRecipeSearchError::Other(m),
+    }
+}
+
+fn iface_recipes__search_recipes__ok(body: String) -> Result<iface_recipes::SearchRecipesResponse, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match iface_recipes__search_recipes_response__from_json(&v) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_recipes__search_recipes__err(e: crate::runtime::DispatchError) -> iface_recipes::SearchRecipesError {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => match status {
+            401u16 => iface_recipes::SearchRecipesError::Unauthorized(body),
+            403u16 => iface_recipes::SearchRecipesError::Forbidden(body),
+            404u16 => iface_recipes::SearchRecipesError::NotFound(body),
+            _ => iface_recipes::SearchRecipesError::Other(body),
+        },
+        crate::runtime::DispatchError::Transport(m) => iface_recipes::SearchRecipesError::Other(m),
+    }
+}
+
+fn iface_recipes__convert_amounts__ok(body: String) -> Result<iface_recipes::ConvertAmountsResponse, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match iface_recipes__convert_amounts_response__from_json(&v) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_recipes__convert_amounts__err(e: crate::runtime::DispatchError) -> iface_recipes::ConvertAmountsError {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => match status {
+            401u16 => iface_recipes::ConvertAmountsError::Unauthorized(body),
+            403u16 => iface_recipes::ConvertAmountsError::Forbidden(body),
+            404u16 => iface_recipes::ConvertAmountsError::NotFound(body),
+            _ => iface_recipes::ConvertAmountsError::Other(body),
+        },
+        crate::runtime::DispatchError::Transport(m) => iface_recipes::ConvertAmountsError::Other(m),
+    }
+}
+
+fn iface_recipes__classify_cuisine__ok(body: String) -> Result<iface_recipes::ClassifyCuisineResponse, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match iface_recipes__classify_cuisine_response__from_json(&v) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_recipes__classify_cuisine__err(e: crate::runtime::DispatchError) -> iface_recipes::ClassifyCuisineError {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => match status {
+            401u16 => iface_recipes::ClassifyCuisineError::Unauthorized(body),
+            403u16 => iface_recipes::ClassifyCuisineError::Forbidden(body),
+            404u16 => iface_recipes::ClassifyCuisineError::NotFound(body),
+            _ => iface_recipes::ClassifyCuisineError::Other(body),
+        },
+        crate::runtime::DispatchError::Transport(m) => iface_recipes::ClassifyCuisineError::Other(m),
+    }
+}
+
+fn iface_recipes__extract_recipe_from_website__ok(body: String) -> Result<iface_recipes::ExtractRecipeFromWebsiteResponse, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match iface_recipes__extract_recipe_from_website_response__from_json(&v) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_recipes__extract_recipe_from_website__err(e: crate::runtime::DispatchError) -> iface_recipes::ExtractRecipeFromWebsiteError {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => match status {
+            401u16 => iface_recipes::ExtractRecipeFromWebsiteError::Unauthorized(body),
+            403u16 => iface_recipes::ExtractRecipeFromWebsiteError::Forbidden(body),
+            404u16 => iface_recipes::ExtractRecipeFromWebsiteError::NotFound(body),
+            _ => iface_recipes::ExtractRecipeFromWebsiteError::Other(body),
+        },
+        crate::runtime::DispatchError::Transport(m) => iface_recipes::ExtractRecipeFromWebsiteError::Other(m),
+    }
+}
+
+fn iface_recipes__search_recipes_by_ingredients__ok(body: String) -> Result<Vec<iface_recipes::SearchRecipesByIngredientsResponseItem>, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match (&v).as_array().map(|a| a.iter().filter_map(|x| iface_recipes__search_recipes_by_ingredients_response_item__from_json(x)).collect()) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_recipes__search_recipes_by_ingredients__err(e: crate::runtime::DispatchError) -> iface_recipes::SearchRecipesByIngredientsError {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => match status {
+            401u16 => iface_recipes::SearchRecipesByIngredientsError::Unauthorized(body),
+            403u16 => iface_recipes::SearchRecipesByIngredientsError::Forbidden(body),
+            404u16 => iface_recipes::SearchRecipesByIngredientsError::NotFound(body),
+            _ => iface_recipes::SearchRecipesByIngredientsError::Other(body),
+        },
+        crate::runtime::DispatchError::Transport(m) => iface_recipes::SearchRecipesByIngredientsError::Other(m),
+    }
+}
+
+fn iface_recipes__search_recipes_by_nutrients__ok(body: String) -> Result<Vec<iface_recipes::SearchRecipesByNutrientsResponseItem>, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match (&v).as_array().map(|a| a.iter().filter_map(|x| iface_recipes__search_recipes_by_nutrients_response_item__from_json(x)).collect()) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_recipes__search_recipes_by_nutrients__err(e: crate::runtime::DispatchError) -> iface_recipes::SearchRecipesByNutrientsError {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => match status {
+            401u16 => iface_recipes::SearchRecipesByNutrientsError::Unauthorized(body),
+            403u16 => iface_recipes::SearchRecipesByNutrientsError::Forbidden(body),
+            404u16 => iface_recipes::SearchRecipesByNutrientsError::NotFound(body),
+            _ => iface_recipes::SearchRecipesByNutrientsError::Other(body),
+        },
+        crate::runtime::DispatchError::Transport(m) => iface_recipes::SearchRecipesByNutrientsError::Other(m),
+    }
+}
+
+fn iface_recipes__guess_nutrition_by_dish_name__ok(body: String) -> Result<iface_recipes::GuessNutritionByDishNameResponse, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match iface_recipes__guess_nutrition_by_dish_name_response__from_json(&v) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_recipes__guess_nutrition_by_dish_name__err(e: crate::runtime::DispatchError) -> iface_recipes::GuessNutritionByDishNameError {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => match status {
+            401u16 => iface_recipes::GuessNutritionByDishNameError::Unauthorized(body),
+            403u16 => iface_recipes::GuessNutritionByDishNameError::Forbidden(body),
+            404u16 => iface_recipes::GuessNutritionByDishNameError::NotFound(body),
+            _ => iface_recipes::GuessNutritionByDishNameError::Other(body),
+        },
+        crate::runtime::DispatchError::Transport(m) => iface_recipes::GuessNutritionByDishNameError::Other(m),
+    }
+}
+
+fn iface_recipes__get_recipe_information_bulk__ok(body: String) -> Result<Vec<iface_recipes::GetRecipeInformationBulkResponseItem>, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match (&v).as_array().map(|a| a.iter().filter_map(|x| iface_recipes__get_recipe_information_bulk_response_item__from_json(x)).collect()) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_recipes__get_recipe_information_bulk__err(e: crate::runtime::DispatchError) -> iface_recipes::GetRecipeInformationBulkError {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => match status {
+            401u16 => iface_recipes::GetRecipeInformationBulkError::Unauthorized(body),
+            403u16 => iface_recipes::GetRecipeInformationBulkError::Forbidden(body),
+            404u16 => iface_recipes::GetRecipeInformationBulkError::NotFound(body),
+            _ => iface_recipes::GetRecipeInformationBulkError::Other(body),
+        },
+        crate::runtime::DispatchError::Transport(m) => iface_recipes::GetRecipeInformationBulkError::Other(m),
+    }
+}
+
+fn iface_recipes__parse_ingredients__ok(body: String) -> Result<Vec<iface_recipes::ParseIngredientsResponseItem>, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match (&v).as_array().map(|a| a.iter().filter_map(|x| iface_recipes__parse_ingredients_response_item__from_json(x)).collect()) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_recipes__parse_ingredients__err(e: crate::runtime::DispatchError) -> iface_recipes::ParseIngredientsError {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => match status {
+            401u16 => iface_recipes::ParseIngredientsError::Unauthorized(body),
+            403u16 => iface_recipes::ParseIngredientsError::Forbidden(body),
+            404u16 => iface_recipes::ParseIngredientsError::NotFound(body),
+            _ => iface_recipes::ParseIngredientsError::Other(body),
+        },
+        crate::runtime::DispatchError::Transport(m) => iface_recipes::ParseIngredientsError::Other(m),
+    }
+}
+
+fn iface_recipes__analyze_a_recipe_search_query__ok(body: String) -> Result<iface_recipes::AnalyzeARecipeSearchQueryResponse, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match iface_recipes__analyze_a_recipe_search_query_response__from_json(&v) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_recipes__analyze_a_recipe_search_query__err(e: crate::runtime::DispatchError) -> iface_recipes::AnalyzeARecipeSearchQueryError {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => match status {
+            401u16 => iface_recipes::AnalyzeARecipeSearchQueryError::Unauthorized(body),
+            403u16 => iface_recipes::AnalyzeARecipeSearchQueryError::Forbidden(body),
+            404u16 => iface_recipes::AnalyzeARecipeSearchQueryError::NotFound(body),
+            _ => iface_recipes::AnalyzeARecipeSearchQueryError::Other(body),
+        },
+        crate::runtime::DispatchError::Transport(m) => iface_recipes::AnalyzeARecipeSearchQueryError::Other(m),
+    }
+}
+
+fn iface_recipes__quick_answer__ok(body: String) -> Result<iface_recipes::QuickAnswerResponse, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match iface_recipes__quick_answer_response__from_json(&v) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_recipes__quick_answer__err(e: crate::runtime::DispatchError) -> iface_recipes::QuickAnswerError {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => match status {
+            401u16 => iface_recipes::QuickAnswerError::Unauthorized(body),
+            403u16 => iface_recipes::QuickAnswerError::Forbidden(body),
+            404u16 => iface_recipes::QuickAnswerError::NotFound(body),
+            _ => iface_recipes::QuickAnswerError::Other(body),
+        },
+        crate::runtime::DispatchError::Transport(m) => iface_recipes::QuickAnswerError::Other(m),
+    }
+}
+
+fn iface_recipes__get_random_recipes__ok(body: String) -> Result<iface_recipes::GetRandomRecipesResponse, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match iface_recipes__get_random_recipes_response__from_json(&v) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_recipes__get_random_recipes__err(e: crate::runtime::DispatchError) -> iface_recipes::GetRandomRecipesError {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => match status {
+            401u16 => iface_recipes::GetRandomRecipesError::Unauthorized(body),
+            403u16 => iface_recipes::GetRandomRecipesError::Forbidden(body),
+            404u16 => iface_recipes::GetRandomRecipesError::NotFound(body),
+            _ => iface_recipes::GetRandomRecipesError::Other(body),
+        },
+        crate::runtime::DispatchError::Transport(m) => iface_recipes::GetRandomRecipesError::Other(m),
+    }
+}
+
+fn iface_recipes__visualize_equipment__ok(body: String) -> Result<String, crate::runtime::DispatchError> {
+    Ok(body)
+}
+
+fn iface_recipes__visualize_equipment__err(e: crate::runtime::DispatchError) -> iface_recipes::VisualizeEquipmentError {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => match status {
+            401u16 => iface_recipes::VisualizeEquipmentError::Unauthorized(body),
+            403u16 => iface_recipes::VisualizeEquipmentError::Forbidden(body),
+            404u16 => iface_recipes::VisualizeEquipmentError::NotFound(body),
+            _ => iface_recipes::VisualizeEquipmentError::Other(body),
+        },
+        crate::runtime::DispatchError::Transport(m) => iface_recipes::VisualizeEquipmentError::Other(m),
+    }
+}
+
+fn iface_recipes__visualize_recipe_nutrition__ok(body: String) -> Result<String, crate::runtime::DispatchError> {
+    Ok(body)
+}
+
+fn iface_recipes__visualize_recipe_nutrition__err(e: crate::runtime::DispatchError) -> iface_recipes::VisualizeRecipeNutritionError {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => match status {
+            401u16 => iface_recipes::VisualizeRecipeNutritionError::Unauthorized(body),
+            403u16 => iface_recipes::VisualizeRecipeNutritionError::Forbidden(body),
+            404u16 => iface_recipes::VisualizeRecipeNutritionError::NotFound(body),
+            _ => iface_recipes::VisualizeRecipeNutritionError::Other(body),
+        },
+        crate::runtime::DispatchError::Transport(m) => iface_recipes::VisualizeRecipeNutritionError::Other(m),
+    }
+}
+
+fn iface_recipes__visualize_price_breakdown__ok(body: String) -> Result<String, crate::runtime::DispatchError> {
+    Ok(body)
+}
+
+fn iface_recipes__visualize_price_breakdown__err(e: crate::runtime::DispatchError) -> iface_recipes::VisualizePriceBreakdownError {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => match status {
+            401u16 => iface_recipes::VisualizePriceBreakdownError::Unauthorized(body),
+            403u16 => iface_recipes::VisualizePriceBreakdownError::Forbidden(body),
+            404u16 => iface_recipes::VisualizePriceBreakdownError::NotFound(body),
+            _ => iface_recipes::VisualizePriceBreakdownError::Other(body),
+        },
+        crate::runtime::DispatchError::Transport(m) => iface_recipes::VisualizePriceBreakdownError::Other(m),
+    }
+}
+
+fn iface_recipes__create_recipe_card__ok(body: String) -> Result<iface_recipes::CreateRecipeCardResponse, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match iface_recipes__create_recipe_card_response__from_json(&v) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_recipes__create_recipe_card__err(e: crate::runtime::DispatchError) -> iface_recipes::CreateRecipeCardError {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => match status {
+            401u16 => iface_recipes::CreateRecipeCardError::Unauthorized(body),
+            403u16 => iface_recipes::CreateRecipeCardError::Forbidden(body),
+            404u16 => iface_recipes::CreateRecipeCardError::NotFound(body),
+            _ => iface_recipes::CreateRecipeCardError::Other(body),
+        },
+        crate::runtime::DispatchError::Transport(m) => iface_recipes::CreateRecipeCardError::Other(m),
+    }
+}
+
+fn iface_recipes__visualize_recipe_taste__ok(body: String) -> Result<String, crate::runtime::DispatchError> {
+    Ok(body)
+}
+
+fn iface_recipes__visualize_recipe_taste__err(e: crate::runtime::DispatchError) -> iface_recipes::VisualizeRecipeTasteError {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => match status {
+            401u16 => iface_recipes::VisualizeRecipeTasteError::Unauthorized(body),
+            403u16 => iface_recipes::VisualizeRecipeTasteError::Forbidden(body),
+            404u16 => iface_recipes::VisualizeRecipeTasteError::NotFound(body),
+            _ => iface_recipes::VisualizeRecipeTasteError::Other(body),
+        },
+        crate::runtime::DispatchError::Transport(m) => iface_recipes::VisualizeRecipeTasteError::Other(m),
+    }
+}
+
+fn iface_recipes__get_analyzed_recipe_instructions__ok(body: String) -> Result<iface_recipes::GetAnalyzedRecipeInstructionsResponse, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match iface_recipes__get_analyzed_recipe_instructions_response__from_json(&v) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_recipes__get_analyzed_recipe_instructions__err(e: crate::runtime::DispatchError) -> iface_recipes::GetAnalyzedRecipeInstructionsError {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => match status {
+            401u16 => iface_recipes::GetAnalyzedRecipeInstructionsError::Unauthorized(body),
+            403u16 => iface_recipes::GetAnalyzedRecipeInstructionsError::Forbidden(body),
+            404u16 => iface_recipes::GetAnalyzedRecipeInstructionsError::NotFound(body),
+            _ => iface_recipes::GetAnalyzedRecipeInstructionsError::Other(body),
+        },
+        crate::runtime::DispatchError::Transport(m) => iface_recipes::GetAnalyzedRecipeInstructionsError::Other(m),
+    }
+}
+
+fn iface_recipes__create_recipe_card_get__ok(body: String) -> Result<iface_recipes::CreateRecipeCardGetResponse, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match iface_recipes__create_recipe_card_get_response__from_json(&v) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_recipes__create_recipe_card_get__err(e: crate::runtime::DispatchError) -> iface_recipes::CreateRecipeCardGetError {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => match status {
+            401u16 => iface_recipes::CreateRecipeCardGetError::Unauthorized(body),
+            403u16 => iface_recipes::CreateRecipeCardGetError::Forbidden(body),
+            404u16 => iface_recipes::CreateRecipeCardGetError::NotFound(body),
+            _ => iface_recipes::CreateRecipeCardGetError::Other(body),
+        },
+        crate::runtime::DispatchError::Transport(m) => iface_recipes::CreateRecipeCardGetError::Other(m),
+    }
+}
+
+fn iface_recipes__visualize_recipe_equipment_by_id__ok(body: String) -> Result<String, crate::runtime::DispatchError> {
+    Ok(body)
+}
+
+fn iface_recipes__visualize_recipe_equipment_by_id__err(e: crate::runtime::DispatchError) -> iface_recipes::VisualizeRecipeEquipmentByIdError {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => match status {
+            401u16 => iface_recipes::VisualizeRecipeEquipmentByIdError::Unauthorized(body),
+            403u16 => iface_recipes::VisualizeRecipeEquipmentByIdError::Forbidden(body),
+            404u16 => iface_recipes::VisualizeRecipeEquipmentByIdError::NotFound(body),
+            _ => iface_recipes::VisualizeRecipeEquipmentByIdError::Other(body),
+        },
+        crate::runtime::DispatchError::Transport(m) => iface_recipes::VisualizeRecipeEquipmentByIdError::Other(m),
+    }
+}
+
+fn iface_recipes__get_recipe_equipment_by_id__ok(body: String) -> Result<iface_recipes::GetRecipeEquipmentByIdResponse, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match iface_recipes__get_recipe_equipment_by_id_response__from_json(&v) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_recipes__get_recipe_equipment_by_id__err(e: crate::runtime::DispatchError) -> iface_recipes::GetRecipeEquipmentByIdError {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => match status {
+            401u16 => iface_recipes::GetRecipeEquipmentByIdError::Unauthorized(body),
+            403u16 => iface_recipes::GetRecipeEquipmentByIdError::Forbidden(body),
+            404u16 => iface_recipes::GetRecipeEquipmentByIdError::NotFound(body),
+            _ => iface_recipes::GetRecipeEquipmentByIdError::Other(body),
+        },
+        crate::runtime::DispatchError::Transport(m) => iface_recipes::GetRecipeEquipmentByIdError::Other(m),
+    }
+}
+
+fn iface_recipes__equipment_by_id_image__ok(body: String) -> Result<iface_recipes::EquipmentByIdImageResponse, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match iface_recipes__equipment_by_id_image_response__from_json(&v) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_recipes__equipment_by_id_image__err(e: crate::runtime::DispatchError) -> iface_recipes::EquipmentByIdImageError {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => match status {
+            401u16 => iface_recipes::EquipmentByIdImageError::Unauthorized(body),
+            403u16 => iface_recipes::EquipmentByIdImageError::Forbidden(body),
+            404u16 => iface_recipes::EquipmentByIdImageError::NotFound(body),
+            _ => iface_recipes::EquipmentByIdImageError::Other(body),
+        },
+        crate::runtime::DispatchError::Transport(m) => iface_recipes::EquipmentByIdImageError::Other(m),
+    }
+}
+
+fn iface_recipes__get_recipe_information__ok(body: String) -> Result<iface_recipes::GetRecipeInformationResponse, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match iface_recipes__get_recipe_information_response__from_json(&v) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_recipes__get_recipe_information__err(e: crate::runtime::DispatchError) -> iface_recipes::GetRecipeInformationError {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => match status {
+            401u16 => iface_recipes::GetRecipeInformationError::Unauthorized(body),
+            403u16 => iface_recipes::GetRecipeInformationError::Forbidden(body),
+            404u16 => iface_recipes::GetRecipeInformationError::NotFound(body),
+            _ => iface_recipes::GetRecipeInformationError::Other(body),
+        },
+        crate::runtime::DispatchError::Transport(m) => iface_recipes::GetRecipeInformationError::Other(m),
+    }
+}
+
+fn iface_recipes__visualize_recipe_ingredients_by_id__ok(body: String) -> Result<String, crate::runtime::DispatchError> {
+    Ok(body)
+}
+
+fn iface_recipes__visualize_recipe_ingredients_by_id__err(e: crate::runtime::DispatchError) -> iface_recipes::VisualizeRecipeIngredientsByIdError {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => match status {
+            401u16 => iface_recipes::VisualizeRecipeIngredientsByIdError::Unauthorized(body),
+            403u16 => iface_recipes::VisualizeRecipeIngredientsByIdError::Forbidden(body),
+            404u16 => iface_recipes::VisualizeRecipeIngredientsByIdError::NotFound(body),
+            _ => iface_recipes::VisualizeRecipeIngredientsByIdError::Other(body),
+        },
+        crate::runtime::DispatchError::Transport(m) => iface_recipes::VisualizeRecipeIngredientsByIdError::Other(m),
+    }
+}
+
+fn iface_recipes__get_recipe_ingredients_by_id__ok(body: String) -> Result<iface_recipes::GetRecipeIngredientsByIdResponse, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match iface_recipes__get_recipe_ingredients_by_id_response__from_json(&v) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_recipes__get_recipe_ingredients_by_id__err(e: crate::runtime::DispatchError) -> iface_recipes::GetRecipeIngredientsByIdError {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => match status {
+            401u16 => iface_recipes::GetRecipeIngredientsByIdError::Unauthorized(body),
+            403u16 => iface_recipes::GetRecipeIngredientsByIdError::Forbidden(body),
+            404u16 => iface_recipes::GetRecipeIngredientsByIdError::NotFound(body),
+            _ => iface_recipes::GetRecipeIngredientsByIdError::Other(body),
+        },
+        crate::runtime::DispatchError::Transport(m) => iface_recipes::GetRecipeIngredientsByIdError::Other(m),
+    }
+}
+
+fn iface_recipes__recipe_nutrition_label_widget__ok(body: String) -> Result<String, crate::runtime::DispatchError> {
+    Ok(body)
+}
+
+fn iface_recipes__recipe_nutrition_label_widget__err(e: crate::runtime::DispatchError) -> iface_recipes::RecipeNutritionLabelWidgetError {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => match status {
+            401u16 => iface_recipes::RecipeNutritionLabelWidgetError::Unauthorized(body),
+            403u16 => iface_recipes::RecipeNutritionLabelWidgetError::Forbidden(body),
+            404u16 => iface_recipes::RecipeNutritionLabelWidgetError::NotFound(body),
+            _ => iface_recipes::RecipeNutritionLabelWidgetError::Other(body),
+        },
+        crate::runtime::DispatchError::Transport(m) => iface_recipes::RecipeNutritionLabelWidgetError::Other(m),
+    }
+}
+
+fn iface_recipes__recipe_nutrition_label_image__ok(body: String) -> Result<iface_recipes::RecipeNutritionLabelImageResponse, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match iface_recipes__recipe_nutrition_label_image_response__from_json(&v) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_recipes__recipe_nutrition_label_image__err(e: crate::runtime::DispatchError) -> iface_recipes::RecipeNutritionLabelImageError {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => match status {
+            401u16 => iface_recipes::RecipeNutritionLabelImageError::Unauthorized(body),
+            403u16 => iface_recipes::RecipeNutritionLabelImageError::Forbidden(body),
+            404u16 => iface_recipes::RecipeNutritionLabelImageError::NotFound(body),
+            _ => iface_recipes::RecipeNutritionLabelImageError::Other(body),
+        },
+        crate::runtime::DispatchError::Transport(m) => iface_recipes::RecipeNutritionLabelImageError::Other(m),
+    }
+}
+
+fn iface_recipes__visualize_recipe_nutrition_by_id__ok(body: String) -> Result<String, crate::runtime::DispatchError> {
+    Ok(body)
+}
+
+fn iface_recipes__visualize_recipe_nutrition_by_id__err(e: crate::runtime::DispatchError) -> iface_recipes::VisualizeRecipeNutritionByIdError {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => match status {
+            401u16 => iface_recipes::VisualizeRecipeNutritionByIdError::Unauthorized(body),
+            403u16 => iface_recipes::VisualizeRecipeNutritionByIdError::Forbidden(body),
+            404u16 => iface_recipes::VisualizeRecipeNutritionByIdError::NotFound(body),
+            _ => iface_recipes::VisualizeRecipeNutritionByIdError::Other(body),
+        },
+        crate::runtime::DispatchError::Transport(m) => iface_recipes::VisualizeRecipeNutritionByIdError::Other(m),
+    }
+}
+
+fn iface_recipes__get_recipe_nutrition_widget_by_id__ok(body: String) -> Result<iface_recipes::GetRecipeNutritionWidgetByIdResponse, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match iface_recipes__get_recipe_nutrition_widget_by_id_response__from_json(&v) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_recipes__get_recipe_nutrition_widget_by_id__err(e: crate::runtime::DispatchError) -> iface_recipes::GetRecipeNutritionWidgetByIdError {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => match status {
+            401u16 => iface_recipes::GetRecipeNutritionWidgetByIdError::Unauthorized(body),
+            403u16 => iface_recipes::GetRecipeNutritionWidgetByIdError::Forbidden(body),
+            404u16 => iface_recipes::GetRecipeNutritionWidgetByIdError::NotFound(body),
+            _ => iface_recipes::GetRecipeNutritionWidgetByIdError::Other(body),
+        },
+        crate::runtime::DispatchError::Transport(m) => iface_recipes::GetRecipeNutritionWidgetByIdError::Other(m),
+    }
+}
+
+fn iface_recipes__recipe_nutrition_by_id_image__ok(body: String) -> Result<iface_recipes::RecipeNutritionByIdImageResponse, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match iface_recipes__recipe_nutrition_by_id_image_response__from_json(&v) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_recipes__recipe_nutrition_by_id_image__err(e: crate::runtime::DispatchError) -> iface_recipes::RecipeNutritionByIdImageError {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => match status {
+            401u16 => iface_recipes::RecipeNutritionByIdImageError::Unauthorized(body),
+            403u16 => iface_recipes::RecipeNutritionByIdImageError::Forbidden(body),
+            404u16 => iface_recipes::RecipeNutritionByIdImageError::NotFound(body),
+            _ => iface_recipes::RecipeNutritionByIdImageError::Other(body),
+        },
+        crate::runtime::DispatchError::Transport(m) => iface_recipes::RecipeNutritionByIdImageError::Other(m),
+    }
+}
+
+fn iface_recipes__visualize_recipe_price_breakdown_by_id__ok(body: String) -> Result<String, crate::runtime::DispatchError> {
+    Ok(body)
+}
+
+fn iface_recipes__visualize_recipe_price_breakdown_by_id__err(e: crate::runtime::DispatchError) -> iface_recipes::VisualizeRecipePriceBreakdownByIdError {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => match status {
+            401u16 => iface_recipes::VisualizeRecipePriceBreakdownByIdError::Unauthorized(body),
+            403u16 => iface_recipes::VisualizeRecipePriceBreakdownByIdError::Forbidden(body),
+            404u16 => iface_recipes::VisualizeRecipePriceBreakdownByIdError::NotFound(body),
+            _ => iface_recipes::VisualizeRecipePriceBreakdownByIdError::Other(body),
+        },
+        crate::runtime::DispatchError::Transport(m) => iface_recipes::VisualizeRecipePriceBreakdownByIdError::Other(m),
+    }
+}
+
+fn iface_recipes__get_recipe_price_breakdown_by_id__ok(body: String) -> Result<iface_recipes::GetRecipePriceBreakdownByIdResponse, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match iface_recipes__get_recipe_price_breakdown_by_id_response__from_json(&v) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_recipes__get_recipe_price_breakdown_by_id__err(e: crate::runtime::DispatchError) -> iface_recipes::GetRecipePriceBreakdownByIdError {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => match status {
+            401u16 => iface_recipes::GetRecipePriceBreakdownByIdError::Unauthorized(body),
+            403u16 => iface_recipes::GetRecipePriceBreakdownByIdError::Forbidden(body),
+            404u16 => iface_recipes::GetRecipePriceBreakdownByIdError::NotFound(body),
+            _ => iface_recipes::GetRecipePriceBreakdownByIdError::Other(body),
+        },
+        crate::runtime::DispatchError::Transport(m) => iface_recipes::GetRecipePriceBreakdownByIdError::Other(m),
+    }
+}
+
+fn iface_recipes__price_breakdown_by_id_image__ok(body: String) -> Result<iface_recipes::PriceBreakdownByIdImageResponse, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match iface_recipes__price_breakdown_by_id_image_response__from_json(&v) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_recipes__price_breakdown_by_id_image__err(e: crate::runtime::DispatchError) -> iface_recipes::PriceBreakdownByIdImageError {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => match status {
+            401u16 => iface_recipes::PriceBreakdownByIdImageError::Unauthorized(body),
+            403u16 => iface_recipes::PriceBreakdownByIdImageError::Forbidden(body),
+            404u16 => iface_recipes::PriceBreakdownByIdImageError::NotFound(body),
+            _ => iface_recipes::PriceBreakdownByIdImageError::Other(body),
+        },
+        crate::runtime::DispatchError::Transport(m) => iface_recipes::PriceBreakdownByIdImageError::Other(m),
+    }
+}
+
+fn iface_recipes__get_similar_recipes__ok(body: String) -> Result<Vec<iface_recipes::GetSimilarRecipesResponseItem>, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match (&v).as_array().map(|a| a.iter().filter_map(|x| iface_recipes__get_similar_recipes_response_item__from_json(x)).collect()) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_recipes__get_similar_recipes__err(e: crate::runtime::DispatchError) -> iface_recipes::GetSimilarRecipesError {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => match status {
+            401u16 => iface_recipes::GetSimilarRecipesError::Unauthorized(body),
+            403u16 => iface_recipes::GetSimilarRecipesError::Forbidden(body),
+            404u16 => iface_recipes::GetSimilarRecipesError::NotFound(body),
+            _ => iface_recipes::GetSimilarRecipesError::Other(body),
+        },
+        crate::runtime::DispatchError::Transport(m) => iface_recipes::GetSimilarRecipesError::Other(m),
+    }
+}
+
+fn iface_recipes__summarize_recipe__ok(body: String) -> Result<iface_recipes::SummarizeRecipeResponse, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match iface_recipes__summarize_recipe_response__from_json(&v) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_recipes__summarize_recipe__err(e: crate::runtime::DispatchError) -> iface_recipes::SummarizeRecipeError {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => match status {
+            401u16 => iface_recipes::SummarizeRecipeError::Unauthorized(body),
+            403u16 => iface_recipes::SummarizeRecipeError::Forbidden(body),
+            404u16 => iface_recipes::SummarizeRecipeError::NotFound(body),
+            _ => iface_recipes::SummarizeRecipeError::Other(body),
+        },
+        crate::runtime::DispatchError::Transport(m) => iface_recipes::SummarizeRecipeError::Other(m),
+    }
+}
+
+fn iface_recipes__visualize_recipe_taste_by_id__ok(body: String) -> Result<String, crate::runtime::DispatchError> {
+    Ok(body)
+}
+
+fn iface_recipes__visualize_recipe_taste_by_id__err(e: crate::runtime::DispatchError) -> iface_recipes::VisualizeRecipeTasteByIdError {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => match status {
+            401u16 => iface_recipes::VisualizeRecipeTasteByIdError::Unauthorized(body),
+            403u16 => iface_recipes::VisualizeRecipeTasteByIdError::Forbidden(body),
+            404u16 => iface_recipes::VisualizeRecipeTasteByIdError::NotFound(body),
+            _ => iface_recipes::VisualizeRecipeTasteByIdError::Other(body),
+        },
+        crate::runtime::DispatchError::Transport(m) => iface_recipes::VisualizeRecipeTasteByIdError::Other(m),
+    }
+}
+
+fn iface_recipes__get_recipe_taste_by_id__ok(body: String) -> Result<iface_recipes::GetRecipeTasteByIdResponse, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match iface_recipes__get_recipe_taste_by_id_response__from_json(&v) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_recipes__get_recipe_taste_by_id__err(e: crate::runtime::DispatchError) -> iface_recipes::GetRecipeTasteByIdError {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => match status {
+            401u16 => iface_recipes::GetRecipeTasteByIdError::Unauthorized(body),
+            403u16 => iface_recipes::GetRecipeTasteByIdError::Forbidden(body),
+            404u16 => iface_recipes::GetRecipeTasteByIdError::NotFound(body),
+            _ => iface_recipes::GetRecipeTasteByIdError::Other(body),
+        },
+        crate::runtime::DispatchError::Transport(m) => iface_recipes::GetRecipeTasteByIdError::Other(m),
+    }
+}
+
+fn iface_recipes__recipe_taste_by_id_image__ok(body: String) -> Result<iface_recipes::RecipeTasteByIdImageResponse, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match iface_recipes__recipe_taste_by_id_image_response__from_json(&v) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_recipes__recipe_taste_by_id_image__err(e: crate::runtime::DispatchError) -> iface_recipes::RecipeTasteByIdImageError {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => match status {
+            401u16 => iface_recipes::RecipeTasteByIdImageError::Unauthorized(body),
+            403u16 => iface_recipes::RecipeTasteByIdImageError::Forbidden(body),
+            404u16 => iface_recipes::RecipeTasteByIdImageError::NotFound(body),
+            _ => iface_recipes::RecipeTasteByIdImageError::Other(body),
+        },
+        crate::runtime::DispatchError::Transport(m) => iface_recipes::RecipeTasteByIdImageError::Other(m),
+    }
+}
+
 impl iface_recipes::Guest for crate::Component {
-    fn compute_glycemic_load(params: iface_recipes::ComputeGlycemicLoadParams) -> Result<String, String> {
+    fn compute_glycemic_load(params: iface_recipes::ComputeGlycemicLoadParams) -> Result<iface_recipes::ComputeGlycemicLoadResponse, iface_recipes::ComputeGlycemicLoadError> {
         let json = iface_recipes__compute_glycemic_load_params__to_json(&params);
-        dispatch(&OP_RECIPES_COMPUTE_GLYCEMIC_LOAD, json)
+        match dispatch(&OP_RECIPES_COMPUTE_GLYCEMIC_LOAD, json).and_then(iface_recipes__compute_glycemic_load__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_recipes__compute_glycemic_load__err(e)),
+        }
     }
-    fn analyze_recipe(params: iface_recipes::AnalyzeRecipeParams) -> Result<String, String> {
+    fn analyze_recipe(params: iface_recipes::AnalyzeRecipeParams) -> Result<iface_recipes::AnalyzeRecipeResponse, iface_recipes::AnalyzeRecipeError> {
         let json = iface_recipes__analyze_recipe_params__to_json(&params);
-        dispatch(&OP_RECIPES_ANALYZE_RECIPE, json)
+        match dispatch(&OP_RECIPES_ANALYZE_RECIPE, json).and_then(iface_recipes__analyze_recipe__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_recipes__analyze_recipe__err(e)),
+        }
     }
-    fn analyze_recipe_instructions(params: iface_recipes::AnalyzeRecipeInstructionsParams) -> Result<String, String> {
+    fn analyze_recipe_instructions(params: iface_recipes::AnalyzeRecipeInstructionsParams) -> Result<iface_recipes::AnalyzeRecipeInstructionsResponse, iface_recipes::AnalyzeRecipeInstructionsError> {
         let json = iface_recipes__analyze_recipe_instructions_params__to_json(&params);
-        dispatch(&OP_RECIPES_ANALYZE_RECIPE_INSTRUCTIONS, json)
+        match dispatch(&OP_RECIPES_ANALYZE_RECIPE_INSTRUCTIONS, json).and_then(iface_recipes__analyze_recipe_instructions__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_recipes__analyze_recipe_instructions__err(e)),
+        }
     }
-    fn autocomplete_recipe_search(params: iface_recipes::AutocompleteRecipeSearchParams) -> Result<String, String> {
+    fn autocomplete_recipe_search(params: iface_recipes::AutocompleteRecipeSearchParams) -> Result<Vec<iface_recipes::AutocompleteRecipeSearchResponseItem>, iface_recipes::AutocompleteRecipeSearchError> {
         let json = iface_recipes__autocomplete_recipe_search_params__to_json(&params);
-        dispatch(&OP_RECIPES_AUTOCOMPLETE_RECIPE_SEARCH, json)
+        match dispatch(&OP_RECIPES_AUTOCOMPLETE_RECIPE_SEARCH, json).and_then(iface_recipes__autocomplete_recipe_search__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_recipes__autocomplete_recipe_search__err(e)),
+        }
     }
-    fn search_recipes(params: iface_recipes::SearchRecipesParams) -> Result<String, String> {
+    fn search_recipes(params: iface_recipes::SearchRecipesParams) -> Result<iface_recipes::SearchRecipesResponse, iface_recipes::SearchRecipesError> {
         let json = iface_recipes__search_recipes_params__to_json(&params);
-        dispatch(&OP_RECIPES_SEARCH_RECIPES, json)
+        match dispatch(&OP_RECIPES_SEARCH_RECIPES, json).and_then(iface_recipes__search_recipes__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_recipes__search_recipes__err(e)),
+        }
     }
-    fn convert_amounts(params: iface_recipes::ConvertAmountsParams) -> Result<String, String> {
+    fn convert_amounts(params: iface_recipes::ConvertAmountsParams) -> Result<iface_recipes::ConvertAmountsResponse, iface_recipes::ConvertAmountsError> {
         let json = iface_recipes__convert_amounts_params__to_json(&params);
-        dispatch(&OP_RECIPES_CONVERT_AMOUNTS, json)
+        match dispatch(&OP_RECIPES_CONVERT_AMOUNTS, json).and_then(iface_recipes__convert_amounts__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_recipes__convert_amounts__err(e)),
+        }
     }
-    fn classify_cuisine(params: iface_recipes::ClassifyCuisineParams) -> Result<String, String> {
+    fn classify_cuisine(params: iface_recipes::ClassifyCuisineParams) -> Result<iface_recipes::ClassifyCuisineResponse, iface_recipes::ClassifyCuisineError> {
         let json = iface_recipes__classify_cuisine_params__to_json(&params);
-        dispatch(&OP_RECIPES_CLASSIFY_CUISINE, json)
+        match dispatch(&OP_RECIPES_CLASSIFY_CUISINE, json).and_then(iface_recipes__classify_cuisine__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_recipes__classify_cuisine__err(e)),
+        }
     }
-    fn extract_recipe_from_website(params: iface_recipes::ExtractRecipeFromWebsiteParams) -> Result<String, String> {
+    fn extract_recipe_from_website(params: iface_recipes::ExtractRecipeFromWebsiteParams) -> Result<iface_recipes::ExtractRecipeFromWebsiteResponse, iface_recipes::ExtractRecipeFromWebsiteError> {
         let json = iface_recipes__extract_recipe_from_website_params__to_json(&params);
-        dispatch(&OP_RECIPES_EXTRACT_RECIPE_FROM_WEBSITE, json)
+        match dispatch(&OP_RECIPES_EXTRACT_RECIPE_FROM_WEBSITE, json).and_then(iface_recipes__extract_recipe_from_website__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_recipes__extract_recipe_from_website__err(e)),
+        }
     }
-    fn search_recipes_by_ingredients(params: iface_recipes::SearchRecipesByIngredientsParams) -> Result<String, String> {
+    fn search_recipes_by_ingredients(params: iface_recipes::SearchRecipesByIngredientsParams) -> Result<Vec<iface_recipes::SearchRecipesByIngredientsResponseItem>, iface_recipes::SearchRecipesByIngredientsError> {
         let json = iface_recipes__search_recipes_by_ingredients_params__to_json(&params);
-        dispatch(&OP_RECIPES_SEARCH_RECIPES_BY_INGREDIENTS, json)
+        match dispatch(&OP_RECIPES_SEARCH_RECIPES_BY_INGREDIENTS, json).and_then(iface_recipes__search_recipes_by_ingredients__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_recipes__search_recipes_by_ingredients__err(e)),
+        }
     }
-    fn search_recipes_by_nutrients(params: iface_recipes::SearchRecipesByNutrientsParams) -> Result<String, String> {
+    fn search_recipes_by_nutrients(params: iface_recipes::SearchRecipesByNutrientsParams) -> Result<Vec<iface_recipes::SearchRecipesByNutrientsResponseItem>, iface_recipes::SearchRecipesByNutrientsError> {
         let json = iface_recipes__search_recipes_by_nutrients_params__to_json(&params);
-        dispatch(&OP_RECIPES_SEARCH_RECIPES_BY_NUTRIENTS, json)
+        match dispatch(&OP_RECIPES_SEARCH_RECIPES_BY_NUTRIENTS, json).and_then(iface_recipes__search_recipes_by_nutrients__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_recipes__search_recipes_by_nutrients__err(e)),
+        }
     }
-    fn guess_nutrition_by_dish_name(params: iface_recipes::GuessNutritionByDishNameParams) -> Result<String, String> {
+    fn guess_nutrition_by_dish_name(params: iface_recipes::GuessNutritionByDishNameParams) -> Result<iface_recipes::GuessNutritionByDishNameResponse, iface_recipes::GuessNutritionByDishNameError> {
         let json = iface_recipes__guess_nutrition_by_dish_name_params__to_json(&params);
-        dispatch(&OP_RECIPES_GUESS_NUTRITION_BY_DISH_NAME, json)
+        match dispatch(&OP_RECIPES_GUESS_NUTRITION_BY_DISH_NAME, json).and_then(iface_recipes__guess_nutrition_by_dish_name__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_recipes__guess_nutrition_by_dish_name__err(e)),
+        }
     }
-    fn get_recipe_information_bulk(params: iface_recipes::GetRecipeInformationBulkParams) -> Result<String, String> {
+    fn get_recipe_information_bulk(params: iface_recipes::GetRecipeInformationBulkParams) -> Result<Vec<iface_recipes::GetRecipeInformationBulkResponseItem>, iface_recipes::GetRecipeInformationBulkError> {
         let json = iface_recipes__get_recipe_information_bulk_params__to_json(&params);
-        dispatch(&OP_RECIPES_GET_RECIPE_INFORMATION_BULK, json)
+        match dispatch(&OP_RECIPES_GET_RECIPE_INFORMATION_BULK, json).and_then(iface_recipes__get_recipe_information_bulk__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_recipes__get_recipe_information_bulk__err(e)),
+        }
     }
-    fn parse_ingredients(params: iface_recipes::ParseIngredientsParams) -> Result<String, String> {
+    fn parse_ingredients(params: iface_recipes::ParseIngredientsParams) -> Result<Vec<iface_recipes::ParseIngredientsResponseItem>, iface_recipes::ParseIngredientsError> {
         let json = iface_recipes__parse_ingredients_params__to_json(&params);
-        dispatch(&OP_RECIPES_PARSE_INGREDIENTS, json)
+        match dispatch(&OP_RECIPES_PARSE_INGREDIENTS, json).and_then(iface_recipes__parse_ingredients__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_recipes__parse_ingredients__err(e)),
+        }
     }
-    fn analyze_a_recipe_search_query(params: iface_recipes::AnalyzeARecipeSearchQueryParams) -> Result<String, String> {
+    fn analyze_a_recipe_search_query(params: iface_recipes::AnalyzeARecipeSearchQueryParams) -> Result<iface_recipes::AnalyzeARecipeSearchQueryResponse, iface_recipes::AnalyzeARecipeSearchQueryError> {
         let json = iface_recipes__analyze_a_recipe_search_query_params__to_json(&params);
-        dispatch(&OP_RECIPES_ANALYZE_A_RECIPE_SEARCH_QUERY, json)
+        match dispatch(&OP_RECIPES_ANALYZE_A_RECIPE_SEARCH_QUERY, json).and_then(iface_recipes__analyze_a_recipe_search_query__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_recipes__analyze_a_recipe_search_query__err(e)),
+        }
     }
-    fn quick_answer(params: iface_recipes::QuickAnswerParams) -> Result<String, String> {
+    fn quick_answer(params: iface_recipes::QuickAnswerParams) -> Result<iface_recipes::QuickAnswerResponse, iface_recipes::QuickAnswerError> {
         let json = iface_recipes__quick_answer_params__to_json(&params);
-        dispatch(&OP_RECIPES_QUICK_ANSWER, json)
+        match dispatch(&OP_RECIPES_QUICK_ANSWER, json).and_then(iface_recipes__quick_answer__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_recipes__quick_answer__err(e)),
+        }
     }
-    fn get_random_recipes(params: iface_recipes::GetRandomRecipesParams) -> Result<String, String> {
+    fn get_random_recipes(params: iface_recipes::GetRandomRecipesParams) -> Result<iface_recipes::GetRandomRecipesResponse, iface_recipes::GetRandomRecipesError> {
         let json = iface_recipes__get_random_recipes_params__to_json(&params);
-        dispatch(&OP_RECIPES_GET_RANDOM_RECIPES, json)
+        match dispatch(&OP_RECIPES_GET_RANDOM_RECIPES, json).and_then(iface_recipes__get_random_recipes__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_recipes__get_random_recipes__err(e)),
+        }
     }
-    fn visualize_equipment(params: iface_recipes::VisualizeEquipmentParams) -> Result<String, String> {
+    fn visualize_equipment(params: iface_recipes::VisualizeEquipmentParams) -> Result<String, iface_recipes::VisualizeEquipmentError> {
         let json = iface_recipes__visualize_equipment_params__to_json(&params);
-        dispatch(&OP_RECIPES_VISUALIZE_EQUIPMENT, json)
+        match dispatch(&OP_RECIPES_VISUALIZE_EQUIPMENT, json).and_then(iface_recipes__visualize_equipment__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_recipes__visualize_equipment__err(e)),
+        }
     }
-    fn visualize_recipe_nutrition(params: iface_recipes::VisualizeRecipeNutritionParams) -> Result<String, String> {
+    fn visualize_recipe_nutrition(params: iface_recipes::VisualizeRecipeNutritionParams) -> Result<String, iface_recipes::VisualizeRecipeNutritionError> {
         let json = iface_recipes__visualize_recipe_nutrition_params__to_json(&params);
-        dispatch(&OP_RECIPES_VISUALIZE_RECIPE_NUTRITION, json)
+        match dispatch(&OP_RECIPES_VISUALIZE_RECIPE_NUTRITION, json).and_then(iface_recipes__visualize_recipe_nutrition__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_recipes__visualize_recipe_nutrition__err(e)),
+        }
     }
-    fn visualize_price_breakdown(params: iface_recipes::VisualizePriceBreakdownParams) -> Result<String, String> {
+    fn visualize_price_breakdown(params: iface_recipes::VisualizePriceBreakdownParams) -> Result<String, iface_recipes::VisualizePriceBreakdownError> {
         let json = iface_recipes__visualize_price_breakdown_params__to_json(&params);
-        dispatch(&OP_RECIPES_VISUALIZE_PRICE_BREAKDOWN, json)
+        match dispatch(&OP_RECIPES_VISUALIZE_PRICE_BREAKDOWN, json).and_then(iface_recipes__visualize_price_breakdown__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_recipes__visualize_price_breakdown__err(e)),
+        }
     }
-    fn create_recipe_card(params: iface_recipes::CreateRecipeCardParams) -> Result<String, String> {
+    fn create_recipe_card(params: iface_recipes::CreateRecipeCardParams) -> Result<iface_recipes::CreateRecipeCardResponse, iface_recipes::CreateRecipeCardError> {
         let json = iface_recipes__create_recipe_card_params__to_json(&params);
-        dispatch(&OP_RECIPES_CREATE_RECIPE_CARD, json)
+        match dispatch(&OP_RECIPES_CREATE_RECIPE_CARD, json).and_then(iface_recipes__create_recipe_card__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_recipes__create_recipe_card__err(e)),
+        }
     }
-    fn visualize_recipe_taste(params: iface_recipes::VisualizeRecipeTasteParams) -> Result<String, String> {
+    fn visualize_recipe_taste(params: iface_recipes::VisualizeRecipeTasteParams) -> Result<String, iface_recipes::VisualizeRecipeTasteError> {
         let json = iface_recipes__visualize_recipe_taste_params__to_json(&params);
-        dispatch(&OP_RECIPES_VISUALIZE_RECIPE_TASTE, json)
+        match dispatch(&OP_RECIPES_VISUALIZE_RECIPE_TASTE, json).and_then(iface_recipes__visualize_recipe_taste__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_recipes__visualize_recipe_taste__err(e)),
+        }
     }
-    fn get_analyzed_recipe_instructions(params: iface_recipes::GetAnalyzedRecipeInstructionsParams) -> Result<String, String> {
+    fn get_analyzed_recipe_instructions(params: iface_recipes::GetAnalyzedRecipeInstructionsParams) -> Result<iface_recipes::GetAnalyzedRecipeInstructionsResponse, iface_recipes::GetAnalyzedRecipeInstructionsError> {
         let json = iface_recipes__get_analyzed_recipe_instructions_params__to_json(&params);
-        dispatch(&OP_RECIPES_GET_ANALYZED_RECIPE_INSTRUCTIONS, json)
+        match dispatch(&OP_RECIPES_GET_ANALYZED_RECIPE_INSTRUCTIONS, json).and_then(iface_recipes__get_analyzed_recipe_instructions__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_recipes__get_analyzed_recipe_instructions__err(e)),
+        }
     }
-    fn create_recipe_card_get(params: iface_recipes::CreateRecipeCardGetParams) -> Result<String, String> {
+    fn create_recipe_card_get(params: iface_recipes::CreateRecipeCardGetParams) -> Result<iface_recipes::CreateRecipeCardGetResponse, iface_recipes::CreateRecipeCardGetError> {
         let json = iface_recipes__create_recipe_card_get_params__to_json(&params);
-        dispatch(&OP_RECIPES_CREATE_RECIPE_CARD_GET, json)
+        match dispatch(&OP_RECIPES_CREATE_RECIPE_CARD_GET, json).and_then(iface_recipes__create_recipe_card_get__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_recipes__create_recipe_card_get__err(e)),
+        }
     }
-    fn visualize_recipe_equipment_by_id(params: iface_recipes::VisualizeRecipeEquipmentByIdParams) -> Result<String, String> {
+    fn visualize_recipe_equipment_by_id(params: iface_recipes::VisualizeRecipeEquipmentByIdParams) -> Result<String, iface_recipes::VisualizeRecipeEquipmentByIdError> {
         let json = iface_recipes__visualize_recipe_equipment_by_id_params__to_json(&params);
-        dispatch(&OP_RECIPES_VISUALIZE_RECIPE_EQUIPMENT_BY_ID, json)
+        match dispatch(&OP_RECIPES_VISUALIZE_RECIPE_EQUIPMENT_BY_ID, json).and_then(iface_recipes__visualize_recipe_equipment_by_id__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_recipes__visualize_recipe_equipment_by_id__err(e)),
+        }
     }
-    fn get_recipe_equipment_by_id(params: iface_recipes::GetRecipeEquipmentByIdParams) -> Result<String, String> {
+    fn get_recipe_equipment_by_id(params: iface_recipes::GetRecipeEquipmentByIdParams) -> Result<iface_recipes::GetRecipeEquipmentByIdResponse, iface_recipes::GetRecipeEquipmentByIdError> {
         let json = iface_recipes__get_recipe_equipment_by_id_params__to_json(&params);
-        dispatch(&OP_RECIPES_GET_RECIPE_EQUIPMENT_BY_ID, json)
+        match dispatch(&OP_RECIPES_GET_RECIPE_EQUIPMENT_BY_ID, json).and_then(iface_recipes__get_recipe_equipment_by_id__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_recipes__get_recipe_equipment_by_id__err(e)),
+        }
     }
-    fn equipment_by_id_image(params: iface_recipes::EquipmentByIdImageParams) -> Result<String, String> {
+    fn equipment_by_id_image(params: iface_recipes::EquipmentByIdImageParams) -> Result<iface_recipes::EquipmentByIdImageResponse, iface_recipes::EquipmentByIdImageError> {
         let json = iface_recipes__equipment_by_id_image_params__to_json(&params);
-        dispatch(&OP_RECIPES_EQUIPMENT_BY_ID_IMAGE, json)
+        match dispatch(&OP_RECIPES_EQUIPMENT_BY_ID_IMAGE, json).and_then(iface_recipes__equipment_by_id_image__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_recipes__equipment_by_id_image__err(e)),
+        }
     }
-    fn get_recipe_information(params: iface_recipes::GetRecipeInformationParams) -> Result<String, String> {
+    fn get_recipe_information(params: iface_recipes::GetRecipeInformationParams) -> Result<iface_recipes::GetRecipeInformationResponse, iface_recipes::GetRecipeInformationError> {
         let json = iface_recipes__get_recipe_information_params__to_json(&params);
-        dispatch(&OP_RECIPES_GET_RECIPE_INFORMATION, json)
+        match dispatch(&OP_RECIPES_GET_RECIPE_INFORMATION, json).and_then(iface_recipes__get_recipe_information__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_recipes__get_recipe_information__err(e)),
+        }
     }
-    fn visualize_recipe_ingredients_by_id(params: iface_recipes::VisualizeRecipeIngredientsByIdParams) -> Result<String, String> {
+    fn visualize_recipe_ingredients_by_id(params: iface_recipes::VisualizeRecipeIngredientsByIdParams) -> Result<String, iface_recipes::VisualizeRecipeIngredientsByIdError> {
         let json = iface_recipes__visualize_recipe_ingredients_by_id_params__to_json(&params);
-        dispatch(&OP_RECIPES_VISUALIZE_RECIPE_INGREDIENTS_BY_ID, json)
+        match dispatch(&OP_RECIPES_VISUALIZE_RECIPE_INGREDIENTS_BY_ID, json).and_then(iface_recipes__visualize_recipe_ingredients_by_id__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_recipes__visualize_recipe_ingredients_by_id__err(e)),
+        }
     }
-    fn get_recipe_ingredients_by_id(params: iface_recipes::GetRecipeIngredientsByIdParams) -> Result<String, String> {
+    fn get_recipe_ingredients_by_id(params: iface_recipes::GetRecipeIngredientsByIdParams) -> Result<iface_recipes::GetRecipeIngredientsByIdResponse, iface_recipes::GetRecipeIngredientsByIdError> {
         let json = iface_recipes__get_recipe_ingredients_by_id_params__to_json(&params);
-        dispatch(&OP_RECIPES_GET_RECIPE_INGREDIENTS_BY_ID, json)
+        match dispatch(&OP_RECIPES_GET_RECIPE_INGREDIENTS_BY_ID, json).and_then(iface_recipes__get_recipe_ingredients_by_id__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_recipes__get_recipe_ingredients_by_id__err(e)),
+        }
     }
-    fn recipe_nutrition_label_widget(params: iface_recipes::RecipeNutritionLabelWidgetParams) -> Result<String, String> {
+    fn recipe_nutrition_label_widget(params: iface_recipes::RecipeNutritionLabelWidgetParams) -> Result<String, iface_recipes::RecipeNutritionLabelWidgetError> {
         let json = iface_recipes__recipe_nutrition_label_widget_params__to_json(&params);
-        dispatch(&OP_RECIPES_RECIPE_NUTRITION_LABEL_WIDGET, json)
+        match dispatch(&OP_RECIPES_RECIPE_NUTRITION_LABEL_WIDGET, json).and_then(iface_recipes__recipe_nutrition_label_widget__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_recipes__recipe_nutrition_label_widget__err(e)),
+        }
     }
-    fn recipe_nutrition_label_image(params: iface_recipes::RecipeNutritionLabelImageParams) -> Result<String, String> {
+    fn recipe_nutrition_label_image(params: iface_recipes::RecipeNutritionLabelImageParams) -> Result<iface_recipes::RecipeNutritionLabelImageResponse, iface_recipes::RecipeNutritionLabelImageError> {
         let json = iface_recipes__recipe_nutrition_label_image_params__to_json(&params);
-        dispatch(&OP_RECIPES_RECIPE_NUTRITION_LABEL_IMAGE, json)
+        match dispatch(&OP_RECIPES_RECIPE_NUTRITION_LABEL_IMAGE, json).and_then(iface_recipes__recipe_nutrition_label_image__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_recipes__recipe_nutrition_label_image__err(e)),
+        }
     }
-    fn visualize_recipe_nutrition_by_id(params: iface_recipes::VisualizeRecipeNutritionByIdParams) -> Result<String, String> {
+    fn visualize_recipe_nutrition_by_id(params: iface_recipes::VisualizeRecipeNutritionByIdParams) -> Result<String, iface_recipes::VisualizeRecipeNutritionByIdError> {
         let json = iface_recipes__visualize_recipe_nutrition_by_id_params__to_json(&params);
-        dispatch(&OP_RECIPES_VISUALIZE_RECIPE_NUTRITION_BY_ID, json)
+        match dispatch(&OP_RECIPES_VISUALIZE_RECIPE_NUTRITION_BY_ID, json).and_then(iface_recipes__visualize_recipe_nutrition_by_id__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_recipes__visualize_recipe_nutrition_by_id__err(e)),
+        }
     }
-    fn get_recipe_nutrition_widget_by_id(params: iface_recipes::GetRecipeNutritionWidgetByIdParams) -> Result<String, String> {
+    fn get_recipe_nutrition_widget_by_id(params: iface_recipes::GetRecipeNutritionWidgetByIdParams) -> Result<iface_recipes::GetRecipeNutritionWidgetByIdResponse, iface_recipes::GetRecipeNutritionWidgetByIdError> {
         let json = iface_recipes__get_recipe_nutrition_widget_by_id_params__to_json(&params);
-        dispatch(&OP_RECIPES_GET_RECIPE_NUTRITION_WIDGET_BY_ID, json)
+        match dispatch(&OP_RECIPES_GET_RECIPE_NUTRITION_WIDGET_BY_ID, json).and_then(iface_recipes__get_recipe_nutrition_widget_by_id__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_recipes__get_recipe_nutrition_widget_by_id__err(e)),
+        }
     }
-    fn recipe_nutrition_by_id_image(params: iface_recipes::RecipeNutritionByIdImageParams) -> Result<String, String> {
+    fn recipe_nutrition_by_id_image(params: iface_recipes::RecipeNutritionByIdImageParams) -> Result<iface_recipes::RecipeNutritionByIdImageResponse, iface_recipes::RecipeNutritionByIdImageError> {
         let json = iface_recipes__recipe_nutrition_by_id_image_params__to_json(&params);
-        dispatch(&OP_RECIPES_RECIPE_NUTRITION_BY_ID_IMAGE, json)
+        match dispatch(&OP_RECIPES_RECIPE_NUTRITION_BY_ID_IMAGE, json).and_then(iface_recipes__recipe_nutrition_by_id_image__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_recipes__recipe_nutrition_by_id_image__err(e)),
+        }
     }
-    fn visualize_recipe_price_breakdown_by_id(params: iface_recipes::VisualizeRecipePriceBreakdownByIdParams) -> Result<String, String> {
+    fn visualize_recipe_price_breakdown_by_id(params: iface_recipes::VisualizeRecipePriceBreakdownByIdParams) -> Result<String, iface_recipes::VisualizeRecipePriceBreakdownByIdError> {
         let json = iface_recipes__visualize_recipe_price_breakdown_by_id_params__to_json(&params);
-        dispatch(&OP_RECIPES_VISUALIZE_RECIPE_PRICE_BREAKDOWN_BY_ID, json)
+        match dispatch(&OP_RECIPES_VISUALIZE_RECIPE_PRICE_BREAKDOWN_BY_ID, json).and_then(iface_recipes__visualize_recipe_price_breakdown_by_id__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_recipes__visualize_recipe_price_breakdown_by_id__err(e)),
+        }
     }
-    fn get_recipe_price_breakdown_by_id(params: iface_recipes::GetRecipePriceBreakdownByIdParams) -> Result<String, String> {
+    fn get_recipe_price_breakdown_by_id(params: iface_recipes::GetRecipePriceBreakdownByIdParams) -> Result<iface_recipes::GetRecipePriceBreakdownByIdResponse, iface_recipes::GetRecipePriceBreakdownByIdError> {
         let json = iface_recipes__get_recipe_price_breakdown_by_id_params__to_json(&params);
-        dispatch(&OP_RECIPES_GET_RECIPE_PRICE_BREAKDOWN_BY_ID, json)
+        match dispatch(&OP_RECIPES_GET_RECIPE_PRICE_BREAKDOWN_BY_ID, json).and_then(iface_recipes__get_recipe_price_breakdown_by_id__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_recipes__get_recipe_price_breakdown_by_id__err(e)),
+        }
     }
-    fn price_breakdown_by_id_image(params: iface_recipes::PriceBreakdownByIdImageParams) -> Result<String, String> {
+    fn price_breakdown_by_id_image(params: iface_recipes::PriceBreakdownByIdImageParams) -> Result<iface_recipes::PriceBreakdownByIdImageResponse, iface_recipes::PriceBreakdownByIdImageError> {
         let json = iface_recipes__price_breakdown_by_id_image_params__to_json(&params);
-        dispatch(&OP_RECIPES_PRICE_BREAKDOWN_BY_ID_IMAGE, json)
+        match dispatch(&OP_RECIPES_PRICE_BREAKDOWN_BY_ID_IMAGE, json).and_then(iface_recipes__price_breakdown_by_id_image__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_recipes__price_breakdown_by_id_image__err(e)),
+        }
     }
-    fn get_similar_recipes(params: iface_recipes::GetSimilarRecipesParams) -> Result<String, String> {
+    fn get_similar_recipes(params: iface_recipes::GetSimilarRecipesParams) -> Result<Vec<iface_recipes::GetSimilarRecipesResponseItem>, iface_recipes::GetSimilarRecipesError> {
         let json = iface_recipes__get_similar_recipes_params__to_json(&params);
-        dispatch(&OP_RECIPES_GET_SIMILAR_RECIPES, json)
+        match dispatch(&OP_RECIPES_GET_SIMILAR_RECIPES, json).and_then(iface_recipes__get_similar_recipes__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_recipes__get_similar_recipes__err(e)),
+        }
     }
-    fn summarize_recipe(params: iface_recipes::SummarizeRecipeParams) -> Result<String, String> {
+    fn summarize_recipe(params: iface_recipes::SummarizeRecipeParams) -> Result<iface_recipes::SummarizeRecipeResponse, iface_recipes::SummarizeRecipeError> {
         let json = iface_recipes__summarize_recipe_params__to_json(&params);
-        dispatch(&OP_RECIPES_SUMMARIZE_RECIPE, json)
+        match dispatch(&OP_RECIPES_SUMMARIZE_RECIPE, json).and_then(iface_recipes__summarize_recipe__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_recipes__summarize_recipe__err(e)),
+        }
     }
-    fn visualize_recipe_taste_by_id(params: iface_recipes::VisualizeRecipeTasteByIdParams) -> Result<String, String> {
+    fn visualize_recipe_taste_by_id(params: iface_recipes::VisualizeRecipeTasteByIdParams) -> Result<String, iface_recipes::VisualizeRecipeTasteByIdError> {
         let json = iface_recipes__visualize_recipe_taste_by_id_params__to_json(&params);
-        dispatch(&OP_RECIPES_VISUALIZE_RECIPE_TASTE_BY_ID, json)
+        match dispatch(&OP_RECIPES_VISUALIZE_RECIPE_TASTE_BY_ID, json).and_then(iface_recipes__visualize_recipe_taste_by_id__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_recipes__visualize_recipe_taste_by_id__err(e)),
+        }
     }
-    fn get_recipe_taste_by_id(params: iface_recipes::GetRecipeTasteByIdParams) -> Result<String, String> {
+    fn get_recipe_taste_by_id(params: iface_recipes::GetRecipeTasteByIdParams) -> Result<iface_recipes::GetRecipeTasteByIdResponse, iface_recipes::GetRecipeTasteByIdError> {
         let json = iface_recipes__get_recipe_taste_by_id_params__to_json(&params);
-        dispatch(&OP_RECIPES_GET_RECIPE_TASTE_BY_ID, json)
+        match dispatch(&OP_RECIPES_GET_RECIPE_TASTE_BY_ID, json).and_then(iface_recipes__get_recipe_taste_by_id__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_recipes__get_recipe_taste_by_id__err(e)),
+        }
     }
-    fn recipe_taste_by_id_image(params: iface_recipes::RecipeTasteByIdImageParams) -> Result<String, String> {
+    fn recipe_taste_by_id_image(params: iface_recipes::RecipeTasteByIdImageParams) -> Result<iface_recipes::RecipeTasteByIdImageResponse, iface_recipes::RecipeTasteByIdImageError> {
         let json = iface_recipes__recipe_taste_by_id_image_params__to_json(&params);
-        dispatch(&OP_RECIPES_RECIPE_TASTE_BY_ID_IMAGE, json)
+        match dispatch(&OP_RECIPES_RECIPE_TASTE_BY_ID_IMAGE, json).and_then(iface_recipes__recipe_taste_by_id_image__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_recipes__recipe_taste_by_id_image__err(e)),
+        }
     }
 }
 use crate::exports::autostamp::spoonacular::menu_items as iface_menu_items;
@@ -2198,18 +6924,18 @@ const OP_MENU_ITEMS_SEARCH_MENU_ITEMS: OpSpec = OpSpec {
     method: "GET",
     path_template: "/food/menuItems/search",
     fields: &[
-        FieldSpec { snake: "query", location: FieldLocation::Query },
-        FieldSpec { snake: "min_calories", location: FieldLocation::Query },
-        FieldSpec { snake: "max_calories", location: FieldLocation::Query },
-        FieldSpec { snake: "min_carbs", location: FieldLocation::Query },
-        FieldSpec { snake: "max_carbs", location: FieldLocation::Query },
-        FieldSpec { snake: "min_protein", location: FieldLocation::Query },
-        FieldSpec { snake: "max_protein", location: FieldLocation::Query },
-        FieldSpec { snake: "min_fat", location: FieldLocation::Query },
-        FieldSpec { snake: "max_fat", location: FieldLocation::Query },
-        FieldSpec { snake: "add_menu_item_information", location: FieldLocation::Query },
-        FieldSpec { snake: "offset", location: FieldLocation::Query },
-        FieldSpec { snake: "number", location: FieldLocation::Query },
+        FieldSpec { snake: "query", wire: "query", location: FieldLocation::Query },
+        FieldSpec { snake: "min_calories", wire: "minCalories", location: FieldLocation::Query },
+        FieldSpec { snake: "max_calories", wire: "maxCalories", location: FieldLocation::Query },
+        FieldSpec { snake: "min_carbs", wire: "minCarbs", location: FieldLocation::Query },
+        FieldSpec { snake: "max_carbs", wire: "maxCarbs", location: FieldLocation::Query },
+        FieldSpec { snake: "min_protein", wire: "minProtein", location: FieldLocation::Query },
+        FieldSpec { snake: "max_protein", wire: "maxProtein", location: FieldLocation::Query },
+        FieldSpec { snake: "min_fat", wire: "minFat", location: FieldLocation::Query },
+        FieldSpec { snake: "max_fat", wire: "maxFat", location: FieldLocation::Query },
+        FieldSpec { snake: "add_menu_item_information", wire: "addMenuItemInformation", location: FieldLocation::Query },
+        FieldSpec { snake: "offset", wire: "offset", location: FieldLocation::Query },
+        FieldSpec { snake: "number", wire: "number", location: FieldLocation::Query },
     ],
     auth: &[
         AuthApply { secret_key: "apiKeyScheme", kind: AuthKind::ApiKeyHeader("x-api-key") },
@@ -2220,8 +6946,8 @@ const OP_MENU_ITEMS_AUTOCOMPLETE_MENU_ITEM_SEARCH: OpSpec = OpSpec {
     method: "GET",
     path_template: "/food/menuItems/suggest",
     fields: &[
-        FieldSpec { snake: "query", location: FieldLocation::Query },
-        FieldSpec { snake: "number", location: FieldLocation::Query },
+        FieldSpec { snake: "query", wire: "query", location: FieldLocation::Query },
+        FieldSpec { snake: "number", wire: "number", location: FieldLocation::Query },
     ],
     auth: &[
         AuthApply { secret_key: "apiKeyScheme", kind: AuthKind::ApiKeyHeader("x-api-key") },
@@ -2232,7 +6958,7 @@ const OP_MENU_ITEMS_GET_MENU_ITEM_INFORMATION: OpSpec = OpSpec {
     method: "GET",
     path_template: "/food/menuItems/{id}",
     fields: &[
-        FieldSpec { snake: "id", location: FieldLocation::Path },
+        FieldSpec { snake: "id", wire: "id", location: FieldLocation::Path },
     ],
     auth: &[
         AuthApply { secret_key: "apiKeyScheme", kind: AuthKind::ApiKeyHeader("x-api-key") },
@@ -2243,11 +6969,11 @@ const OP_MENU_ITEMS_MENU_ITEM_NUTRITION_LABEL_WIDGET: OpSpec = OpSpec {
     method: "GET",
     path_template: "/food/menuItems/{id}/nutritionLabel",
     fields: &[
-        FieldSpec { snake: "id", location: FieldLocation::Path },
-        FieldSpec { snake: "default_css", location: FieldLocation::Query },
-        FieldSpec { snake: "show_optional_nutrients", location: FieldLocation::Query },
-        FieldSpec { snake: "show_zero_values", location: FieldLocation::Query },
-        FieldSpec { snake: "show_ingredients", location: FieldLocation::Query },
+        FieldSpec { snake: "id", wire: "id", location: FieldLocation::Path },
+        FieldSpec { snake: "default_css", wire: "defaultCss", location: FieldLocation::Query },
+        FieldSpec { snake: "show_optional_nutrients", wire: "showOptionalNutrients", location: FieldLocation::Query },
+        FieldSpec { snake: "show_zero_values", wire: "showZeroValues", location: FieldLocation::Query },
+        FieldSpec { snake: "show_ingredients", wire: "showIngredients", location: FieldLocation::Query },
     ],
     auth: &[
         AuthApply { secret_key: "apiKeyScheme", kind: AuthKind::ApiKeyHeader("x-api-key") },
@@ -2258,10 +6984,10 @@ const OP_MENU_ITEMS_MENU_ITEM_NUTRITION_LABEL_IMAGE: OpSpec = OpSpec {
     method: "GET",
     path_template: "/food/menuItems/{id}/nutritionLabel.png",
     fields: &[
-        FieldSpec { snake: "id", location: FieldLocation::Path },
-        FieldSpec { snake: "show_optional_nutrients", location: FieldLocation::Query },
-        FieldSpec { snake: "show_zero_values", location: FieldLocation::Query },
-        FieldSpec { snake: "show_ingredients", location: FieldLocation::Query },
+        FieldSpec { snake: "id", wire: "id", location: FieldLocation::Path },
+        FieldSpec { snake: "show_optional_nutrients", wire: "showOptionalNutrients", location: FieldLocation::Query },
+        FieldSpec { snake: "show_zero_values", wire: "showZeroValues", location: FieldLocation::Query },
+        FieldSpec { snake: "show_ingredients", wire: "showIngredients", location: FieldLocation::Query },
     ],
     auth: &[
         AuthApply { secret_key: "apiKeyScheme", kind: AuthKind::ApiKeyHeader("x-api-key") },
@@ -2272,9 +6998,9 @@ const OP_MENU_ITEMS_VISUALIZE_MENU_ITEM_NUTRITION_BY_ID: OpSpec = OpSpec {
     method: "GET",
     path_template: "/food/menuItems/{id}/nutritionWidget",
     fields: &[
-        FieldSpec { snake: "id", location: FieldLocation::Path },
-        FieldSpec { snake: "default_css", location: FieldLocation::Query },
-        FieldSpec { snake: "accept", location: FieldLocation::Header },
+        FieldSpec { snake: "id", wire: "id", location: FieldLocation::Path },
+        FieldSpec { snake: "default_css", wire: "defaultCss", location: FieldLocation::Query },
+        FieldSpec { snake: "accept", wire: "Accept", location: FieldLocation::Header },
     ],
     auth: &[
         AuthApply { secret_key: "apiKeyScheme", kind: AuthKind::ApiKeyHeader("x-api-key") },
@@ -2285,7 +7011,7 @@ const OP_MENU_ITEMS_MENU_ITEM_NUTRITION_BY_ID_IMAGE: OpSpec = OpSpec {
     method: "GET",
     path_template: "/food/menuItems/{id}/nutritionWidget.png",
     fields: &[
-        FieldSpec { snake: "id", location: FieldLocation::Path },
+        FieldSpec { snake: "id", wire: "id", location: FieldLocation::Path },
     ],
     auth: &[
         AuthApply { secret_key: "apiKeyScheme", kind: AuthKind::ApiKeyHeader("x-api-key") },
@@ -2298,6 +7024,109 @@ fn iface_menu_items__visualize_menu_item_nutrition_by_id_accept_enum__to_str(e: 
         iface_menu_items::VisualizeMenuItemNutritionByIdAcceptEnum::TextHtml => "text/html",
         iface_menu_items::VisualizeMenuItemNutritionByIdAcceptEnum::Media => "media/*",
     }
+}
+
+fn iface_menu_items__search_menu_items_response__to_json(p: &iface_menu_items::SearchMenuItemsResponse) -> Value {
+    let mut m = Map::new();
+    m.insert("menuItems".into(), Value::Array((&p.menu_items).iter().map(|v| iface_menu_items__search_menu_items_response_menu_items_item__to_json(v)).collect()));
+    m.insert("number".into(), Value::Number(serde_json::Number::from(*(&p.number))));
+    m.insert("offset".into(), Value::Number(serde_json::Number::from(*(&p.offset))));
+    m.insert("totalMenuItems".into(), Value::Number(serde_json::Number::from(*(&p.total_menu_items))));
+    m.insert("type".into(), Value::String((&p.type_op).clone()));
+    Value::Object(m)
+}
+
+fn iface_menu_items__search_menu_items_response_menu_items_item__to_json(p: &iface_menu_items::SearchMenuItemsResponseMenuItemsItem) -> Value {
+    let mut m = Map::new();
+    m.insert("id".into(), Value::Number(serde_json::Number::from(*(&p.id))));
+    m.insert("image".into(), Value::String((&p.image).clone()));
+    m.insert("imageType".into(), Value::String((&p.image_type).clone()));
+    m.insert("restaurantChain".into(), Value::String((&p.restaurant_chain).clone()));
+    m.insert("servings".into(), match (&p.servings) { Some(v) => iface_menu_items__search_menu_items_response_menu_items_item_servings__to_json(v), None => Value::Null });
+    m.insert("title".into(), Value::String((&p.title).clone()));
+    Value::Object(m)
+}
+
+fn iface_menu_items__search_menu_items_response_menu_items_item_servings__to_json(p: &iface_menu_items::SearchMenuItemsResponseMenuItemsItemServings) -> Value {
+    let mut m = Map::new();
+    m.insert("number".into(), serde_json::Number::from_f64(*(&p.number)).map(Value::Number).unwrap_or(Value::Null));
+    m.insert("size".into(), serde_json::Number::from_f64(*(&p.size)).map(Value::Number).unwrap_or(Value::Null));
+    m.insert("unit".into(), Value::String((&p.unit).clone()));
+    Value::Object(m)
+}
+
+fn iface_menu_items__autocomplete_menu_item_search_response__to_json(p: &iface_menu_items::AutocompleteMenuItemSearchResponse) -> Value {
+    let mut m = Map::new();
+    m.insert("results".into(), Value::Array((&p.results).iter().map(|v| iface_menu_items__autocomplete_menu_item_search_response_results_item__to_json(v)).collect()));
+    Value::Object(m)
+}
+
+fn iface_menu_items__autocomplete_menu_item_search_response_results_item__to_json(p: &iface_menu_items::AutocompleteMenuItemSearchResponseResultsItem) -> Value {
+    let mut m = Map::new();
+    m.insert("id".into(), Value::Number(serde_json::Number::from(*(&p.id))));
+    m.insert("title".into(), Value::String((&p.title).clone()));
+    Value::Object(m)
+}
+
+fn iface_menu_items__get_menu_item_information_response__to_json(p: &iface_menu_items::GetMenuItemInformationResponse) -> Value {
+    let mut m = Map::new();
+    m.insert("badges".into(), Value::Array((&p.badges).iter().map(|v| Value::String((v).clone())).collect()));
+    m.insert("breadcrumbs".into(), Value::Array((&p.breadcrumbs).iter().map(|v| Value::String((v).clone())).collect()));
+    m.insert("generatedText".into(), match (&p.generated_text) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("id".into(), Value::Number(serde_json::Number::from(*(&p.id))));
+    m.insert("imageType".into(), Value::String((&p.image_type).clone()));
+    m.insert("likes".into(), serde_json::Number::from_f64(*(&p.likes)).map(Value::Number).unwrap_or(Value::Null));
+    m.insert("nutrition".into(), iface_menu_items__get_menu_item_information_response_nutrition__to_json(&p.nutrition));
+    m.insert("price".into(), match (&p.price) { Some(v) => serde_json::Number::from_f64(*(v)).map(Value::Number).unwrap_or(Value::Null), None => Value::Null });
+    m.insert("restaurantChain".into(), Value::String((&p.restaurant_chain).clone()));
+    m.insert("servings".into(), iface_menu_items__get_menu_item_information_response_servings__to_json(&p.servings));
+    m.insert("spoonacularScore".into(), match (&p.spoonacular_score) { Some(v) => serde_json::Number::from_f64(*(v)).map(Value::Number).unwrap_or(Value::Null), None => Value::Null });
+    m.insert("title".into(), Value::String((&p.title).clone()));
+    Value::Object(m)
+}
+
+fn iface_menu_items__get_menu_item_information_response_nutrition__to_json(p: &iface_menu_items::GetMenuItemInformationResponseNutrition) -> Value {
+    let mut m = Map::new();
+    m.insert("caloricBreakdown".into(), iface_menu_items__get_menu_item_information_response_nutrition_caloric_breakdown__to_json(&p.caloric_breakdown));
+    m.insert("nutrients".into(), Value::Array((&p.nutrients).iter().map(|v| iface_menu_items__get_menu_item_information_response_nutrition_nutrients_item__to_json(v)).collect()));
+    Value::Object(m)
+}
+
+fn iface_menu_items__get_menu_item_information_response_nutrition_caloric_breakdown__to_json(p: &iface_menu_items::GetMenuItemInformationResponseNutritionCaloricBreakdown) -> Value {
+    let mut m = Map::new();
+    m.insert("percentCarbs".into(), serde_json::Number::from_f64(*(&p.percent_carbs)).map(Value::Number).unwrap_or(Value::Null));
+    m.insert("percentFat".into(), serde_json::Number::from_f64(*(&p.percent_fat)).map(Value::Number).unwrap_or(Value::Null));
+    m.insert("percentProtein".into(), serde_json::Number::from_f64(*(&p.percent_protein)).map(Value::Number).unwrap_or(Value::Null));
+    Value::Object(m)
+}
+
+fn iface_menu_items__get_menu_item_information_response_nutrition_nutrients_item__to_json(p: &iface_menu_items::GetMenuItemInformationResponseNutritionNutrientsItem) -> Value {
+    let mut m = Map::new();
+    m.insert("amount".into(), serde_json::Number::from_f64(*(&p.amount)).map(Value::Number).unwrap_or(Value::Null));
+    m.insert("name".into(), Value::String((&p.name).clone()));
+    m.insert("percentOfDailyNeeds".into(), serde_json::Number::from_f64(*(&p.percent_of_daily_needs)).map(Value::Number).unwrap_or(Value::Null));
+    m.insert("unit".into(), Value::String((&p.unit).clone()));
+    Value::Object(m)
+}
+
+fn iface_menu_items__get_menu_item_information_response_servings__to_json(p: &iface_menu_items::GetMenuItemInformationResponseServings) -> Value {
+    let mut m = Map::new();
+    m.insert("number".into(), serde_json::Number::from_f64(*(&p.number)).map(Value::Number).unwrap_or(Value::Null));
+    m.insert("size".into(), serde_json::Number::from_f64(*(&p.size)).map(Value::Number).unwrap_or(Value::Null));
+    m.insert("unit".into(), Value::String((&p.unit).clone()));
+    Value::Object(m)
+}
+
+fn iface_menu_items__menu_item_nutrition_label_image_response__to_json(p: &iface_menu_items::MenuItemNutritionLabelImageResponse) -> Value {
+    let mut m = Map::new();
+    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_menu_items__menu_item_nutrition_by_id_image_response__to_json(p: &iface_menu_items::MenuItemNutritionByIdImageResponse) -> Value {
+    let mut m = Map::new();
+    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
 }
 
 fn iface_menu_items__search_menu_items_params__to_json(p: &iface_menu_items::SearchMenuItemsParams) -> Value {
@@ -2363,34 +7192,317 @@ fn iface_menu_items__menu_item_nutrition_by_id_image_params__to_json(p: &iface_m
     Value::Object(m)
 }
 
+fn iface_menu_items__search_menu_items_response__from_json(v: &Value) -> Option<iface_menu_items::SearchMenuItemsResponse> {
+    let m = v.as_object()?;
+    Some(iface_menu_items::SearchMenuItemsResponse {
+        menu_items: m.get("menuItems").and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| iface_menu_items__search_menu_items_response_menu_items_item__from_json(x)).collect())).unwrap_or_default(),
+        number: m.get("number").and_then(|v| (v).as_i64().map(|n| n as i32)).unwrap_or_default(),
+        offset: m.get("offset").and_then(|v| (v).as_i64().map(|n| n as i32)).unwrap_or_default(),
+        total_menu_items: m.get("totalMenuItems").and_then(|v| (v).as_i64().map(|n| n as i32)).unwrap_or_default(),
+        type_op: m.get("type").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+    })
+}
+
+fn iface_menu_items__search_menu_items_response_menu_items_item__from_json(v: &Value) -> Option<iface_menu_items::SearchMenuItemsResponseMenuItemsItem> {
+    let m = v.as_object()?;
+    Some(iface_menu_items::SearchMenuItemsResponseMenuItemsItem {
+        id: m.get("id").and_then(|v| (v).as_i64().map(|n| n as i32)).unwrap_or_default(),
+        image: m.get("image").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        image_type: m.get("imageType").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        restaurant_chain: m.get("restaurantChain").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        servings: m.get("servings").filter(|v| !v.is_null()).and_then(|v| iface_menu_items__search_menu_items_response_menu_items_item_servings__from_json(v)),
+        title: m.get("title").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+    })
+}
+
+fn iface_menu_items__search_menu_items_response_menu_items_item_servings__from_json(v: &Value) -> Option<iface_menu_items::SearchMenuItemsResponseMenuItemsItemServings> {
+    let m = v.as_object()?;
+    Some(iface_menu_items::SearchMenuItemsResponseMenuItemsItemServings {
+        number: m.get("number").and_then(|v| (v).as_f64()).unwrap_or_default(),
+        size: m.get("size").and_then(|v| (v).as_f64()).unwrap_or_default(),
+        unit: m.get("unit").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+    })
+}
+
+fn iface_menu_items__autocomplete_menu_item_search_response__from_json(v: &Value) -> Option<iface_menu_items::AutocompleteMenuItemSearchResponse> {
+    let m = v.as_object()?;
+    Some(iface_menu_items::AutocompleteMenuItemSearchResponse {
+        results: m.get("results").and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| iface_menu_items__autocomplete_menu_item_search_response_results_item__from_json(x)).collect())).unwrap_or_default(),
+    })
+}
+
+fn iface_menu_items__autocomplete_menu_item_search_response_results_item__from_json(v: &Value) -> Option<iface_menu_items::AutocompleteMenuItemSearchResponseResultsItem> {
+    let m = v.as_object()?;
+    Some(iface_menu_items::AutocompleteMenuItemSearchResponseResultsItem {
+        id: m.get("id").and_then(|v| (v).as_i64().map(|n| n as i32)).unwrap_or_default(),
+        title: m.get("title").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+    })
+}
+
+fn iface_menu_items__get_menu_item_information_response__from_json(v: &Value) -> Option<iface_menu_items::GetMenuItemInformationResponse> {
+    let m = v.as_object()?;
+    Some(iface_menu_items::GetMenuItemInformationResponse {
+        badges: m.get("badges").and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| (x).as_str().map(|s| s.to_string())).collect())).unwrap_or_default(),
+        breadcrumbs: m.get("breadcrumbs").and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| (x).as_str().map(|s| s.to_string())).collect())).unwrap_or_default(),
+        generated_text: m.get("generatedText").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        id: m.get("id").and_then(|v| (v).as_i64().map(|n| n as i32)).unwrap_or_default(),
+        image_type: m.get("imageType").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        likes: m.get("likes").and_then(|v| (v).as_f64()).unwrap_or_default(),
+        nutrition: match m.get("nutrition").and_then(|v| iface_menu_items__get_menu_item_information_response_nutrition__from_json(v)) { Some(x) => x, None => return None },
+        price: m.get("price").filter(|v| !v.is_null()).and_then(|v| (v).as_f64()),
+        restaurant_chain: m.get("restaurantChain").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        servings: match m.get("servings").and_then(|v| iface_menu_items__get_menu_item_information_response_servings__from_json(v)) { Some(x) => x, None => return None },
+        spoonacular_score: m.get("spoonacularScore").filter(|v| !v.is_null()).and_then(|v| (v).as_f64()),
+        title: m.get("title").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+    })
+}
+
+fn iface_menu_items__get_menu_item_information_response_nutrition__from_json(v: &Value) -> Option<iface_menu_items::GetMenuItemInformationResponseNutrition> {
+    let m = v.as_object()?;
+    Some(iface_menu_items::GetMenuItemInformationResponseNutrition {
+        caloric_breakdown: match m.get("caloricBreakdown").and_then(|v| iface_menu_items__get_menu_item_information_response_nutrition_caloric_breakdown__from_json(v)) { Some(x) => x, None => return None },
+        nutrients: m.get("nutrients").and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| iface_menu_items__get_menu_item_information_response_nutrition_nutrients_item__from_json(x)).collect())).unwrap_or_default(),
+    })
+}
+
+fn iface_menu_items__get_menu_item_information_response_nutrition_caloric_breakdown__from_json(v: &Value) -> Option<iface_menu_items::GetMenuItemInformationResponseNutritionCaloricBreakdown> {
+    let m = v.as_object()?;
+    Some(iface_menu_items::GetMenuItemInformationResponseNutritionCaloricBreakdown {
+        percent_carbs: m.get("percentCarbs").and_then(|v| (v).as_f64()).unwrap_or_default(),
+        percent_fat: m.get("percentFat").and_then(|v| (v).as_f64()).unwrap_or_default(),
+        percent_protein: m.get("percentProtein").and_then(|v| (v).as_f64()).unwrap_or_default(),
+    })
+}
+
+fn iface_menu_items__get_menu_item_information_response_nutrition_nutrients_item__from_json(v: &Value) -> Option<iface_menu_items::GetMenuItemInformationResponseNutritionNutrientsItem> {
+    let m = v.as_object()?;
+    Some(iface_menu_items::GetMenuItemInformationResponseNutritionNutrientsItem {
+        amount: m.get("amount").and_then(|v| (v).as_f64()).unwrap_or_default(),
+        name: m.get("name").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        percent_of_daily_needs: m.get("percentOfDailyNeeds").and_then(|v| (v).as_f64()).unwrap_or_default(),
+        unit: m.get("unit").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+    })
+}
+
+fn iface_menu_items__get_menu_item_information_response_servings__from_json(v: &Value) -> Option<iface_menu_items::GetMenuItemInformationResponseServings> {
+    let m = v.as_object()?;
+    Some(iface_menu_items::GetMenuItemInformationResponseServings {
+        number: m.get("number").and_then(|v| (v).as_f64()).unwrap_or_default(),
+        size: m.get("size").and_then(|v| (v).as_f64()).unwrap_or_default(),
+        unit: m.get("unit").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+    })
+}
+
+fn iface_menu_items__menu_item_nutrition_label_image_response__from_json(v: &Value) -> Option<iface_menu_items::MenuItemNutritionLabelImageResponse> {
+    let m = v.as_object()?;
+    Some(iface_menu_items::MenuItemNutritionLabelImageResponse {
+        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    })
+}
+
+fn iface_menu_items__menu_item_nutrition_by_id_image_response__from_json(v: &Value) -> Option<iface_menu_items::MenuItemNutritionByIdImageResponse> {
+    let m = v.as_object()?;
+    Some(iface_menu_items::MenuItemNutritionByIdImageResponse {
+        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    })
+}
+
+fn iface_menu_items__search_menu_items__ok(body: String) -> Result<iface_menu_items::SearchMenuItemsResponse, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match iface_menu_items__search_menu_items_response__from_json(&v) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_menu_items__search_menu_items__err(e: crate::runtime::DispatchError) -> iface_menu_items::SearchMenuItemsError {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => match status {
+            401u16 => iface_menu_items::SearchMenuItemsError::Unauthorized(body),
+            403u16 => iface_menu_items::SearchMenuItemsError::Forbidden(body),
+            404u16 => iface_menu_items::SearchMenuItemsError::NotFound(body),
+            _ => iface_menu_items::SearchMenuItemsError::Other(body),
+        },
+        crate::runtime::DispatchError::Transport(m) => iface_menu_items::SearchMenuItemsError::Other(m),
+    }
+}
+
+fn iface_menu_items__autocomplete_menu_item_search__ok(body: String) -> Result<iface_menu_items::AutocompleteMenuItemSearchResponse, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match iface_menu_items__autocomplete_menu_item_search_response__from_json(&v) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_menu_items__autocomplete_menu_item_search__err(e: crate::runtime::DispatchError) -> iface_menu_items::AutocompleteMenuItemSearchError {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => match status {
+            401u16 => iface_menu_items::AutocompleteMenuItemSearchError::Unauthorized(body),
+            403u16 => iface_menu_items::AutocompleteMenuItemSearchError::Forbidden(body),
+            404u16 => iface_menu_items::AutocompleteMenuItemSearchError::NotFound(body),
+            _ => iface_menu_items::AutocompleteMenuItemSearchError::Other(body),
+        },
+        crate::runtime::DispatchError::Transport(m) => iface_menu_items::AutocompleteMenuItemSearchError::Other(m),
+    }
+}
+
+fn iface_menu_items__get_menu_item_information__ok(body: String) -> Result<iface_menu_items::GetMenuItemInformationResponse, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match iface_menu_items__get_menu_item_information_response__from_json(&v) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_menu_items__get_menu_item_information__err(e: crate::runtime::DispatchError) -> iface_menu_items::GetMenuItemInformationError {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => match status {
+            401u16 => iface_menu_items::GetMenuItemInformationError::Unauthorized(body),
+            403u16 => iface_menu_items::GetMenuItemInformationError::Forbidden(body),
+            404u16 => iface_menu_items::GetMenuItemInformationError::NotFound(body),
+            _ => iface_menu_items::GetMenuItemInformationError::Other(body),
+        },
+        crate::runtime::DispatchError::Transport(m) => iface_menu_items::GetMenuItemInformationError::Other(m),
+    }
+}
+
+fn iface_menu_items__menu_item_nutrition_label_widget__ok(body: String) -> Result<String, crate::runtime::DispatchError> {
+    Ok(body)
+}
+
+fn iface_menu_items__menu_item_nutrition_label_widget__err(e: crate::runtime::DispatchError) -> iface_menu_items::MenuItemNutritionLabelWidgetError {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => match status {
+            401u16 => iface_menu_items::MenuItemNutritionLabelWidgetError::Unauthorized(body),
+            403u16 => iface_menu_items::MenuItemNutritionLabelWidgetError::Forbidden(body),
+            404u16 => iface_menu_items::MenuItemNutritionLabelWidgetError::NotFound(body),
+            _ => iface_menu_items::MenuItemNutritionLabelWidgetError::Other(body),
+        },
+        crate::runtime::DispatchError::Transport(m) => iface_menu_items::MenuItemNutritionLabelWidgetError::Other(m),
+    }
+}
+
+fn iface_menu_items__menu_item_nutrition_label_image__ok(body: String) -> Result<iface_menu_items::MenuItemNutritionLabelImageResponse, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match iface_menu_items__menu_item_nutrition_label_image_response__from_json(&v) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_menu_items__menu_item_nutrition_label_image__err(e: crate::runtime::DispatchError) -> iface_menu_items::MenuItemNutritionLabelImageError {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => match status {
+            401u16 => iface_menu_items::MenuItemNutritionLabelImageError::Unauthorized(body),
+            403u16 => iface_menu_items::MenuItemNutritionLabelImageError::Forbidden(body),
+            404u16 => iface_menu_items::MenuItemNutritionLabelImageError::NotFound(body),
+            _ => iface_menu_items::MenuItemNutritionLabelImageError::Other(body),
+        },
+        crate::runtime::DispatchError::Transport(m) => iface_menu_items::MenuItemNutritionLabelImageError::Other(m),
+    }
+}
+
+fn iface_menu_items__visualize_menu_item_nutrition_by_id__ok(body: String) -> Result<String, crate::runtime::DispatchError> {
+    Ok(body)
+}
+
+fn iface_menu_items__visualize_menu_item_nutrition_by_id__err(e: crate::runtime::DispatchError) -> iface_menu_items::VisualizeMenuItemNutritionByIdError {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => match status {
+            401u16 => iface_menu_items::VisualizeMenuItemNutritionByIdError::Unauthorized(body),
+            403u16 => iface_menu_items::VisualizeMenuItemNutritionByIdError::Forbidden(body),
+            404u16 => iface_menu_items::VisualizeMenuItemNutritionByIdError::NotFound(body),
+            _ => iface_menu_items::VisualizeMenuItemNutritionByIdError::Other(body),
+        },
+        crate::runtime::DispatchError::Transport(m) => iface_menu_items::VisualizeMenuItemNutritionByIdError::Other(m),
+    }
+}
+
+fn iface_menu_items__menu_item_nutrition_by_id_image__ok(body: String) -> Result<iface_menu_items::MenuItemNutritionByIdImageResponse, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match iface_menu_items__menu_item_nutrition_by_id_image_response__from_json(&v) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_menu_items__menu_item_nutrition_by_id_image__err(e: crate::runtime::DispatchError) -> iface_menu_items::MenuItemNutritionByIdImageError {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => match status {
+            401u16 => iface_menu_items::MenuItemNutritionByIdImageError::Unauthorized(body),
+            403u16 => iface_menu_items::MenuItemNutritionByIdImageError::Forbidden(body),
+            404u16 => iface_menu_items::MenuItemNutritionByIdImageError::NotFound(body),
+            _ => iface_menu_items::MenuItemNutritionByIdImageError::Other(body),
+        },
+        crate::runtime::DispatchError::Transport(m) => iface_menu_items::MenuItemNutritionByIdImageError::Other(m),
+    }
+}
+
 impl iface_menu_items::Guest for crate::Component {
-    fn search_menu_items(params: iface_menu_items::SearchMenuItemsParams) -> Result<String, String> {
+    fn search_menu_items(params: iface_menu_items::SearchMenuItemsParams) -> Result<iface_menu_items::SearchMenuItemsResponse, iface_menu_items::SearchMenuItemsError> {
         let json = iface_menu_items__search_menu_items_params__to_json(&params);
-        dispatch(&OP_MENU_ITEMS_SEARCH_MENU_ITEMS, json)
+        match dispatch(&OP_MENU_ITEMS_SEARCH_MENU_ITEMS, json).and_then(iface_menu_items__search_menu_items__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_menu_items__search_menu_items__err(e)),
+        }
     }
-    fn autocomplete_menu_item_search(params: iface_menu_items::AutocompleteMenuItemSearchParams) -> Result<String, String> {
+    fn autocomplete_menu_item_search(params: iface_menu_items::AutocompleteMenuItemSearchParams) -> Result<iface_menu_items::AutocompleteMenuItemSearchResponse, iface_menu_items::AutocompleteMenuItemSearchError> {
         let json = iface_menu_items__autocomplete_menu_item_search_params__to_json(&params);
-        dispatch(&OP_MENU_ITEMS_AUTOCOMPLETE_MENU_ITEM_SEARCH, json)
+        match dispatch(&OP_MENU_ITEMS_AUTOCOMPLETE_MENU_ITEM_SEARCH, json).and_then(iface_menu_items__autocomplete_menu_item_search__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_menu_items__autocomplete_menu_item_search__err(e)),
+        }
     }
-    fn get_menu_item_information(params: iface_menu_items::GetMenuItemInformationParams) -> Result<String, String> {
+    fn get_menu_item_information(params: iface_menu_items::GetMenuItemInformationParams) -> Result<iface_menu_items::GetMenuItemInformationResponse, iface_menu_items::GetMenuItemInformationError> {
         let json = iface_menu_items__get_menu_item_information_params__to_json(&params);
-        dispatch(&OP_MENU_ITEMS_GET_MENU_ITEM_INFORMATION, json)
+        match dispatch(&OP_MENU_ITEMS_GET_MENU_ITEM_INFORMATION, json).and_then(iface_menu_items__get_menu_item_information__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_menu_items__get_menu_item_information__err(e)),
+        }
     }
-    fn menu_item_nutrition_label_widget(params: iface_menu_items::MenuItemNutritionLabelWidgetParams) -> Result<String, String> {
+    fn menu_item_nutrition_label_widget(params: iface_menu_items::MenuItemNutritionLabelWidgetParams) -> Result<String, iface_menu_items::MenuItemNutritionLabelWidgetError> {
         let json = iface_menu_items__menu_item_nutrition_label_widget_params__to_json(&params);
-        dispatch(&OP_MENU_ITEMS_MENU_ITEM_NUTRITION_LABEL_WIDGET, json)
+        match dispatch(&OP_MENU_ITEMS_MENU_ITEM_NUTRITION_LABEL_WIDGET, json).and_then(iface_menu_items__menu_item_nutrition_label_widget__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_menu_items__menu_item_nutrition_label_widget__err(e)),
+        }
     }
-    fn menu_item_nutrition_label_image(params: iface_menu_items::MenuItemNutritionLabelImageParams) -> Result<String, String> {
+    fn menu_item_nutrition_label_image(params: iface_menu_items::MenuItemNutritionLabelImageParams) -> Result<iface_menu_items::MenuItemNutritionLabelImageResponse, iface_menu_items::MenuItemNutritionLabelImageError> {
         let json = iface_menu_items__menu_item_nutrition_label_image_params__to_json(&params);
-        dispatch(&OP_MENU_ITEMS_MENU_ITEM_NUTRITION_LABEL_IMAGE, json)
+        match dispatch(&OP_MENU_ITEMS_MENU_ITEM_NUTRITION_LABEL_IMAGE, json).and_then(iface_menu_items__menu_item_nutrition_label_image__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_menu_items__menu_item_nutrition_label_image__err(e)),
+        }
     }
-    fn visualize_menu_item_nutrition_by_id(params: iface_menu_items::VisualizeMenuItemNutritionByIdParams) -> Result<String, String> {
+    fn visualize_menu_item_nutrition_by_id(params: iface_menu_items::VisualizeMenuItemNutritionByIdParams) -> Result<String, iface_menu_items::VisualizeMenuItemNutritionByIdError> {
         let json = iface_menu_items__visualize_menu_item_nutrition_by_id_params__to_json(&params);
-        dispatch(&OP_MENU_ITEMS_VISUALIZE_MENU_ITEM_NUTRITION_BY_ID, json)
+        match dispatch(&OP_MENU_ITEMS_VISUALIZE_MENU_ITEM_NUTRITION_BY_ID, json).and_then(iface_menu_items__visualize_menu_item_nutrition_by_id__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_menu_items__visualize_menu_item_nutrition_by_id__err(e)),
+        }
     }
-    fn menu_item_nutrition_by_id_image(params: iface_menu_items::MenuItemNutritionByIdImageParams) -> Result<String, String> {
+    fn menu_item_nutrition_by_id_image(params: iface_menu_items::MenuItemNutritionByIdImageParams) -> Result<iface_menu_items::MenuItemNutritionByIdImageResponse, iface_menu_items::MenuItemNutritionByIdImageError> {
         let json = iface_menu_items__menu_item_nutrition_by_id_image_params__to_json(&params);
-        dispatch(&OP_MENU_ITEMS_MENU_ITEM_NUTRITION_BY_ID_IMAGE, json)
+        match dispatch(&OP_MENU_ITEMS_MENU_ITEM_NUTRITION_BY_ID_IMAGE, json).and_then(iface_menu_items__menu_item_nutrition_by_id_image__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_menu_items__menu_item_nutrition_by_id_image__err(e)),
+        }
     }
 }
 use crate::exports::autostamp::spoonacular::products as iface_products;
@@ -2399,10 +7511,10 @@ const OP_PRODUCTS_CLASSIFY_GROCERY_PRODUCT: OpSpec = OpSpec {
     method: "POST",
     path_template: "/food/products/classify",
     fields: &[
-        FieldSpec { snake: "locale", location: FieldLocation::Query },
-        FieldSpec { snake: "plu_code", location: FieldLocation::Body },
-        FieldSpec { snake: "title", location: FieldLocation::Body },
-        FieldSpec { snake: "upc", location: FieldLocation::Body },
+        FieldSpec { snake: "locale", wire: "locale", location: FieldLocation::Query },
+        FieldSpec { snake: "plu_code", wire: "plu_code", location: FieldLocation::Body },
+        FieldSpec { snake: "title", wire: "title", location: FieldLocation::Body },
+        FieldSpec { snake: "upc", wire: "upc", location: FieldLocation::Body },
     ],
     auth: &[
         AuthApply { secret_key: "apiKeyScheme", kind: AuthKind::ApiKeyHeader("x-api-key") },
@@ -2413,8 +7525,8 @@ const OP_PRODUCTS_CLASSIFY_GROCERY_PRODUCT_BULK: OpSpec = OpSpec {
     method: "POST",
     path_template: "/food/products/classifyBatch",
     fields: &[
-        FieldSpec { snake: "locale", location: FieldLocation::Query },
-        FieldSpec { snake: "body", location: FieldLocation::Body },
+        FieldSpec { snake: "locale", wire: "locale", location: FieldLocation::Query },
+        FieldSpec { snake: "body", wire: "body", location: FieldLocation::Body },
     ],
     auth: &[
         AuthApply { secret_key: "apiKeyScheme", kind: AuthKind::ApiKeyHeader("x-api-key") },
@@ -2425,18 +7537,18 @@ const OP_PRODUCTS_SEARCH_GROCERY_PRODUCTS: OpSpec = OpSpec {
     method: "GET",
     path_template: "/food/products/search",
     fields: &[
-        FieldSpec { snake: "query", location: FieldLocation::Query },
-        FieldSpec { snake: "min_calories", location: FieldLocation::Query },
-        FieldSpec { snake: "max_calories", location: FieldLocation::Query },
-        FieldSpec { snake: "min_carbs", location: FieldLocation::Query },
-        FieldSpec { snake: "max_carbs", location: FieldLocation::Query },
-        FieldSpec { snake: "min_protein", location: FieldLocation::Query },
-        FieldSpec { snake: "max_protein", location: FieldLocation::Query },
-        FieldSpec { snake: "min_fat", location: FieldLocation::Query },
-        FieldSpec { snake: "max_fat", location: FieldLocation::Query },
-        FieldSpec { snake: "add_product_information", location: FieldLocation::Query },
-        FieldSpec { snake: "offset", location: FieldLocation::Query },
-        FieldSpec { snake: "number", location: FieldLocation::Query },
+        FieldSpec { snake: "query", wire: "query", location: FieldLocation::Query },
+        FieldSpec { snake: "min_calories", wire: "minCalories", location: FieldLocation::Query },
+        FieldSpec { snake: "max_calories", wire: "maxCalories", location: FieldLocation::Query },
+        FieldSpec { snake: "min_carbs", wire: "minCarbs", location: FieldLocation::Query },
+        FieldSpec { snake: "max_carbs", wire: "maxCarbs", location: FieldLocation::Query },
+        FieldSpec { snake: "min_protein", wire: "minProtein", location: FieldLocation::Query },
+        FieldSpec { snake: "max_protein", wire: "maxProtein", location: FieldLocation::Query },
+        FieldSpec { snake: "min_fat", wire: "minFat", location: FieldLocation::Query },
+        FieldSpec { snake: "max_fat", wire: "maxFat", location: FieldLocation::Query },
+        FieldSpec { snake: "add_product_information", wire: "addProductInformation", location: FieldLocation::Query },
+        FieldSpec { snake: "offset", wire: "offset", location: FieldLocation::Query },
+        FieldSpec { snake: "number", wire: "number", location: FieldLocation::Query },
     ],
     auth: &[
         AuthApply { secret_key: "apiKeyScheme", kind: AuthKind::ApiKeyHeader("x-api-key") },
@@ -2447,8 +7559,8 @@ const OP_PRODUCTS_AUTOCOMPLETE_PRODUCT_SEARCH: OpSpec = OpSpec {
     method: "GET",
     path_template: "/food/products/suggest",
     fields: &[
-        FieldSpec { snake: "query", location: FieldLocation::Query },
-        FieldSpec { snake: "number", location: FieldLocation::Query },
+        FieldSpec { snake: "query", wire: "query", location: FieldLocation::Query },
+        FieldSpec { snake: "number", wire: "number", location: FieldLocation::Query },
     ],
     auth: &[
         AuthApply { secret_key: "apiKeyScheme", kind: AuthKind::ApiKeyHeader("x-api-key") },
@@ -2459,7 +7571,7 @@ const OP_PRODUCTS_SEARCH_GROCERY_PRODUCTS_BY_UPC: OpSpec = OpSpec {
     method: "GET",
     path_template: "/food/products/upc/{upc}",
     fields: &[
-        FieldSpec { snake: "upc", location: FieldLocation::Path },
+        FieldSpec { snake: "upc", wire: "upc", location: FieldLocation::Path },
     ],
     auth: &[
         AuthApply { secret_key: "apiKeyScheme", kind: AuthKind::ApiKeyHeader("x-api-key") },
@@ -2470,7 +7582,7 @@ const OP_PRODUCTS_GET_COMPARABLE_PRODUCTS: OpSpec = OpSpec {
     method: "GET",
     path_template: "/food/products/upc/{upc}/comparable",
     fields: &[
-        FieldSpec { snake: "upc", location: FieldLocation::Path },
+        FieldSpec { snake: "upc", wire: "upc", location: FieldLocation::Path },
     ],
     auth: &[
         AuthApply { secret_key: "apiKeyScheme", kind: AuthKind::ApiKeyHeader("x-api-key") },
@@ -2481,7 +7593,7 @@ const OP_PRODUCTS_GET_PRODUCT_INFORMATION: OpSpec = OpSpec {
     method: "GET",
     path_template: "/food/products/{id}",
     fields: &[
-        FieldSpec { snake: "id", location: FieldLocation::Path },
+        FieldSpec { snake: "id", wire: "id", location: FieldLocation::Path },
     ],
     auth: &[
         AuthApply { secret_key: "apiKeyScheme", kind: AuthKind::ApiKeyHeader("x-api-key") },
@@ -2492,11 +7604,11 @@ const OP_PRODUCTS_PRODUCT_NUTRITION_LABEL_WIDGET: OpSpec = OpSpec {
     method: "GET",
     path_template: "/food/products/{id}/nutritionLabel",
     fields: &[
-        FieldSpec { snake: "id", location: FieldLocation::Path },
-        FieldSpec { snake: "default_css", location: FieldLocation::Query },
-        FieldSpec { snake: "show_optional_nutrients", location: FieldLocation::Query },
-        FieldSpec { snake: "show_zero_values", location: FieldLocation::Query },
-        FieldSpec { snake: "show_ingredients", location: FieldLocation::Query },
+        FieldSpec { snake: "id", wire: "id", location: FieldLocation::Path },
+        FieldSpec { snake: "default_css", wire: "defaultCss", location: FieldLocation::Query },
+        FieldSpec { snake: "show_optional_nutrients", wire: "showOptionalNutrients", location: FieldLocation::Query },
+        FieldSpec { snake: "show_zero_values", wire: "showZeroValues", location: FieldLocation::Query },
+        FieldSpec { snake: "show_ingredients", wire: "showIngredients", location: FieldLocation::Query },
     ],
     auth: &[
         AuthApply { secret_key: "apiKeyScheme", kind: AuthKind::ApiKeyHeader("x-api-key") },
@@ -2507,10 +7619,10 @@ const OP_PRODUCTS_PRODUCT_NUTRITION_LABEL_IMAGE: OpSpec = OpSpec {
     method: "GET",
     path_template: "/food/products/{id}/nutritionLabel.png",
     fields: &[
-        FieldSpec { snake: "id", location: FieldLocation::Path },
-        FieldSpec { snake: "show_optional_nutrients", location: FieldLocation::Query },
-        FieldSpec { snake: "show_zero_values", location: FieldLocation::Query },
-        FieldSpec { snake: "show_ingredients", location: FieldLocation::Query },
+        FieldSpec { snake: "id", wire: "id", location: FieldLocation::Path },
+        FieldSpec { snake: "show_optional_nutrients", wire: "showOptionalNutrients", location: FieldLocation::Query },
+        FieldSpec { snake: "show_zero_values", wire: "showZeroValues", location: FieldLocation::Query },
+        FieldSpec { snake: "show_ingredients", wire: "showIngredients", location: FieldLocation::Query },
     ],
     auth: &[
         AuthApply { secret_key: "apiKeyScheme", kind: AuthKind::ApiKeyHeader("x-api-key") },
@@ -2521,9 +7633,9 @@ const OP_PRODUCTS_VISUALIZE_PRODUCT_NUTRITION_BY_ID: OpSpec = OpSpec {
     method: "GET",
     path_template: "/food/products/{id}/nutritionWidget",
     fields: &[
-        FieldSpec { snake: "id", location: FieldLocation::Path },
-        FieldSpec { snake: "default_css", location: FieldLocation::Query },
-        FieldSpec { snake: "accept", location: FieldLocation::Header },
+        FieldSpec { snake: "id", wire: "id", location: FieldLocation::Path },
+        FieldSpec { snake: "default_css", wire: "defaultCss", location: FieldLocation::Query },
+        FieldSpec { snake: "accept", wire: "Accept", location: FieldLocation::Header },
     ],
     auth: &[
         AuthApply { secret_key: "apiKeyScheme", kind: AuthKind::ApiKeyHeader("x-api-key") },
@@ -2534,7 +7646,7 @@ const OP_PRODUCTS_PRODUCT_NUTRITION_BY_ID_IMAGE: OpSpec = OpSpec {
     method: "GET",
     path_template: "/food/products/{id}/nutritionWidget.png",
     fields: &[
-        FieldSpec { snake: "id", location: FieldLocation::Path },
+        FieldSpec { snake: "id", wire: "id", location: FieldLocation::Path },
     ],
     auth: &[
         AuthApply { secret_key: "apiKeyScheme", kind: AuthKind::ApiKeyHeader("x-api-key") },
@@ -2556,11 +7668,254 @@ fn iface_products__visualize_product_nutrition_by_id_accept_enum__to_str(e: &ifa
     }
 }
 
+fn iface_products__classify_grocery_product_response__to_json(p: &iface_products::ClassifyGroceryProductResponse) -> Value {
+    let mut m = Map::new();
+    m.insert("breadcrumbs".into(), Value::Array((&p.breadcrumbs).iter().map(|v| Value::String((v).clone())).collect()));
+    m.insert("category".into(), Value::String((&p.category).clone()));
+    m.insert("cleanTitle".into(), Value::String((&p.clean_title).clone()));
+    m.insert("image".into(), Value::String((&p.image).clone()));
+    m.insert("usdaCode".into(), Value::Number(serde_json::Number::from(*(&p.usda_code))));
+    Value::Object(m)
+}
+
 fn iface_products__classify_grocery_product_bulk_body_item__to_json(p: &iface_products::ClassifyGroceryProductBulkBodyItem) -> Value {
     let mut m = Map::new();
     m.insert("plu_code".into(), Value::String((&p.plu_code).clone()));
     m.insert("title".into(), Value::String((&p.title).clone()));
     m.insert("upc".into(), Value::String((&p.upc).clone()));
+    Value::Object(m)
+}
+
+fn iface_products__classify_grocery_product_bulk_response_item__to_json(p: &iface_products::ClassifyGroceryProductBulkResponseItem) -> Value {
+    let mut m = Map::new();
+    m.insert("breadcrumbs".into(), Value::Array((&p.breadcrumbs).iter().map(|v| Value::String((v).clone())).collect()));
+    m.insert("category".into(), Value::String((&p.category).clone()));
+    m.insert("cleanTitle".into(), Value::String((&p.clean_title).clone()));
+    m.insert("image".into(), Value::String((&p.image).clone()));
+    m.insert("usdaCode".into(), Value::Number(serde_json::Number::from(*(&p.usda_code))));
+    Value::Object(m)
+}
+
+fn iface_products__search_grocery_products_response__to_json(p: &iface_products::SearchGroceryProductsResponse) -> Value {
+    let mut m = Map::new();
+    m.insert("number".into(), Value::Number(serde_json::Number::from(*(&p.number))));
+    m.insert("offset".into(), Value::Number(serde_json::Number::from(*(&p.offset))));
+    m.insert("products".into(), Value::Array((&p.products).iter().map(|v| iface_products__search_grocery_products_response_products_item__to_json(v)).collect()));
+    m.insert("totalProducts".into(), Value::Number(serde_json::Number::from(*(&p.total_products))));
+    m.insert("type".into(), Value::String((&p.type_op).clone()));
+    Value::Object(m)
+}
+
+fn iface_products__search_grocery_products_response_products_item__to_json(p: &iface_products::SearchGroceryProductsResponseProductsItem) -> Value {
+    let mut m = Map::new();
+    m.insert("id".into(), Value::Number(serde_json::Number::from(*(&p.id))));
+    m.insert("imageType".into(), Value::String((&p.image_type).clone()));
+    m.insert("title".into(), Value::String((&p.title).clone()));
+    Value::Object(m)
+}
+
+fn iface_products__autocomplete_product_search_response__to_json(p: &iface_products::AutocompleteProductSearchResponse) -> Value {
+    let mut m = Map::new();
+    m.insert("results".into(), Value::Array((&p.results).iter().map(|v| iface_products__autocomplete_product_search_response_results_item__to_json(v)).collect()));
+    Value::Object(m)
+}
+
+fn iface_products__autocomplete_product_search_response_results_item__to_json(p: &iface_products::AutocompleteProductSearchResponseResultsItem) -> Value {
+    let mut m = Map::new();
+    m.insert("id".into(), Value::Number(serde_json::Number::from(*(&p.id))));
+    m.insert("title".into(), Value::String((&p.title).clone()));
+    Value::Object(m)
+}
+
+fn iface_products__search_grocery_products_by_upc_response__to_json(p: &iface_products::SearchGroceryProductsByUpcResponse) -> Value {
+    let mut m = Map::new();
+    m.insert("badges".into(), Value::Array((&p.badges).iter().map(|v| Value::String((v).clone())).collect()));
+    m.insert("breadcrumbs".into(), Value::Array((&p.breadcrumbs).iter().map(|v| Value::String((v).clone())).collect()));
+    m.insert("generatedText".into(), Value::String((&p.generated_text).clone()));
+    m.insert("id".into(), Value::Number(serde_json::Number::from(*(&p.id))));
+    m.insert("imageType".into(), Value::String((&p.image_type).clone()));
+    m.insert("importantBadges".into(), Value::Array((&p.important_badges).iter().map(|v| Value::String((v).clone())).collect()));
+    m.insert("ingredientCount".into(), match (&p.ingredient_count) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("ingredientList".into(), Value::String((&p.ingredient_list).clone()));
+    m.insert("ingredients".into(), Value::Array((&p.ingredients).iter().map(|v| iface_products__search_grocery_products_by_upc_response_ingredients_item__to_json(v)).collect()));
+    m.insert("likes".into(), serde_json::Number::from_f64(*(&p.likes)).map(Value::Number).unwrap_or(Value::Null));
+    m.insert("nutrition".into(), iface_products__search_grocery_products_by_upc_response_nutrition__to_json(&p.nutrition));
+    m.insert("price".into(), serde_json::Number::from_f64(*(&p.price)).map(Value::Number).unwrap_or(Value::Null));
+    m.insert("servings".into(), iface_products__search_grocery_products_by_upc_response_servings__to_json(&p.servings));
+    m.insert("spoonacularScore".into(), serde_json::Number::from_f64(*(&p.spoonacular_score)).map(Value::Number).unwrap_or(Value::Null));
+    m.insert("title".into(), Value::String((&p.title).clone()));
+    Value::Object(m)
+}
+
+fn iface_products__search_grocery_products_by_upc_response_ingredients_item__to_json(p: &iface_products::SearchGroceryProductsByUpcResponseIngredientsItem) -> Value {
+    let mut m = Map::new();
+    m.insert("description".into(), match (&p.description) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("name".into(), Value::String((&p.name).clone()));
+    m.insert("safety_level".into(), match (&p.safety_level) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_products__search_grocery_products_by_upc_response_nutrition__to_json(p: &iface_products::SearchGroceryProductsByUpcResponseNutrition) -> Value {
+    let mut m = Map::new();
+    m.insert("caloricBreakdown".into(), iface_products__search_grocery_products_by_upc_response_nutrition_caloric_breakdown__to_json(&p.caloric_breakdown));
+    m.insert("nutrients".into(), Value::Array((&p.nutrients).iter().map(|v| iface_products__search_grocery_products_by_upc_response_nutrition_nutrients_item__to_json(v)).collect()));
+    Value::Object(m)
+}
+
+fn iface_products__search_grocery_products_by_upc_response_nutrition_caloric_breakdown__to_json(p: &iface_products::SearchGroceryProductsByUpcResponseNutritionCaloricBreakdown) -> Value {
+    let mut m = Map::new();
+    m.insert("percentCarbs".into(), serde_json::Number::from_f64(*(&p.percent_carbs)).map(Value::Number).unwrap_or(Value::Null));
+    m.insert("percentFat".into(), serde_json::Number::from_f64(*(&p.percent_fat)).map(Value::Number).unwrap_or(Value::Null));
+    m.insert("percentProtein".into(), serde_json::Number::from_f64(*(&p.percent_protein)).map(Value::Number).unwrap_or(Value::Null));
+    Value::Object(m)
+}
+
+fn iface_products__search_grocery_products_by_upc_response_nutrition_nutrients_item__to_json(p: &iface_products::SearchGroceryProductsByUpcResponseNutritionNutrientsItem) -> Value {
+    let mut m = Map::new();
+    m.insert("amount".into(), serde_json::Number::from_f64(*(&p.amount)).map(Value::Number).unwrap_or(Value::Null));
+    m.insert("name".into(), Value::String((&p.name).clone()));
+    m.insert("percentOfDailyNeeds".into(), serde_json::Number::from_f64(*(&p.percent_of_daily_needs)).map(Value::Number).unwrap_or(Value::Null));
+    m.insert("unit".into(), Value::String((&p.unit).clone()));
+    Value::Object(m)
+}
+
+fn iface_products__search_grocery_products_by_upc_response_servings__to_json(p: &iface_products::SearchGroceryProductsByUpcResponseServings) -> Value {
+    let mut m = Map::new();
+    m.insert("number".into(), serde_json::Number::from_f64(*(&p.number)).map(Value::Number).unwrap_or(Value::Null));
+    m.insert("size".into(), serde_json::Number::from_f64(*(&p.size)).map(Value::Number).unwrap_or(Value::Null));
+    m.insert("unit".into(), Value::String((&p.unit).clone()));
+    Value::Object(m)
+}
+
+fn iface_products__get_comparable_products_response__to_json(p: &iface_products::GetComparableProductsResponse) -> Value {
+    let mut m = Map::new();
+    m.insert("comparableProducts".into(), iface_products__get_comparable_products_response_comparable_products__to_json(&p.comparable_products));
+    Value::Object(m)
+}
+
+fn iface_products__get_comparable_products_response_comparable_products__to_json(p: &iface_products::GetComparableProductsResponseComparableProducts) -> Value {
+    let mut m = Map::new();
+    m.insert("calories".into(), Value::Array((&p.calories).iter().map(|v| iface_products__get_comparable_products_response_comparable_products_calories_item__to_json(v)).collect()));
+    m.insert("likes".into(), Value::Array((&p.likes).iter().map(|v| iface_products__get_comparable_products_response_comparable_products_likes_item__to_json(v)).collect()));
+    m.insert("price".into(), Value::Array((&p.price).iter().map(|v| iface_products__get_comparable_products_response_comparable_products_price_item__to_json(v)).collect()));
+    m.insert("protein".into(), Value::Array((&p.protein).iter().map(|v| iface_products__get_comparable_products_response_comparable_products_protein_item__to_json(v)).collect()));
+    m.insert("spoonacularScore".into(), Value::Array((&p.spoonacular_score).iter().map(|v| iface_products__get_comparable_products_response_comparable_products_spoonacular_score_item__to_json(v)).collect()));
+    m.insert("sugar".into(), Value::Array((&p.sugar).iter().map(|v| iface_products__get_comparable_products_response_comparable_products_sugar_item__to_json(v)).collect()));
+    Value::Object(m)
+}
+
+fn iface_products__get_comparable_products_response_comparable_products_calories_item__to_json(p: &iface_products::GetComparableProductsResponseComparableProductsCaloriesItem) -> Value {
+    let mut m = Map::new();
+    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_products__get_comparable_products_response_comparable_products_likes_item__to_json(p: &iface_products::GetComparableProductsResponseComparableProductsLikesItem) -> Value {
+    let mut m = Map::new();
+    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_products__get_comparable_products_response_comparable_products_price_item__to_json(p: &iface_products::GetComparableProductsResponseComparableProductsPriceItem) -> Value {
+    let mut m = Map::new();
+    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_products__get_comparable_products_response_comparable_products_protein_item__to_json(p: &iface_products::GetComparableProductsResponseComparableProductsProteinItem) -> Value {
+    let mut m = Map::new();
+    m.insert("difference".into(), serde_json::Number::from_f64(*(&p.difference)).map(Value::Number).unwrap_or(Value::Null));
+    m.insert("id".into(), Value::Number(serde_json::Number::from(*(&p.id))));
+    m.insert("image".into(), Value::String((&p.image).clone()));
+    m.insert("title".into(), Value::String((&p.title).clone()));
+    Value::Object(m)
+}
+
+fn iface_products__get_comparable_products_response_comparable_products_spoonacular_score_item__to_json(p: &iface_products::GetComparableProductsResponseComparableProductsSpoonacularScoreItem) -> Value {
+    let mut m = Map::new();
+    m.insert("difference".into(), serde_json::Number::from_f64(*(&p.difference)).map(Value::Number).unwrap_or(Value::Null));
+    m.insert("id".into(), Value::Number(serde_json::Number::from(*(&p.id))));
+    m.insert("image".into(), Value::String((&p.image).clone()));
+    m.insert("title".into(), Value::String((&p.title).clone()));
+    Value::Object(m)
+}
+
+fn iface_products__get_comparable_products_response_comparable_products_sugar_item__to_json(p: &iface_products::GetComparableProductsResponseComparableProductsSugarItem) -> Value {
+    let mut m = Map::new();
+    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_products__get_product_information_response__to_json(p: &iface_products::GetProductInformationResponse) -> Value {
+    let mut m = Map::new();
+    m.insert("aisle".into(), Value::String((&p.aisle).clone()));
+    m.insert("badges".into(), Value::Array((&p.badges).iter().map(|v| Value::String((v).clone())).collect()));
+    m.insert("breadcrumbs".into(), Value::Array((&p.breadcrumbs).iter().map(|v| Value::String((v).clone())).collect()));
+    m.insert("generatedText".into(), match (&p.generated_text) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("id".into(), Value::Number(serde_json::Number::from(*(&p.id))));
+    m.insert("imageType".into(), Value::String((&p.image_type).clone()));
+    m.insert("importantBadges".into(), Value::Array((&p.important_badges).iter().map(|v| Value::String((v).clone())).collect()));
+    m.insert("ingredientCount".into(), Value::Number(serde_json::Number::from(*(&p.ingredient_count))));
+    m.insert("ingredientList".into(), Value::String((&p.ingredient_list).clone()));
+    m.insert("ingredients".into(), Value::Array((&p.ingredients).iter().map(|v| iface_products__get_product_information_response_ingredients_item__to_json(v)).collect()));
+    m.insert("likes".into(), serde_json::Number::from_f64(*(&p.likes)).map(Value::Number).unwrap_or(Value::Null));
+    m.insert("nutrition".into(), iface_products__get_product_information_response_nutrition__to_json(&p.nutrition));
+    m.insert("price".into(), serde_json::Number::from_f64(*(&p.price)).map(Value::Number).unwrap_or(Value::Null));
+    m.insert("servings".into(), iface_products__get_product_information_response_servings__to_json(&p.servings));
+    m.insert("spoonacularScore".into(), serde_json::Number::from_f64(*(&p.spoonacular_score)).map(Value::Number).unwrap_or(Value::Null));
+    m.insert("title".into(), Value::String((&p.title).clone()));
+    Value::Object(m)
+}
+
+fn iface_products__get_product_information_response_ingredients_item__to_json(p: &iface_products::GetProductInformationResponseIngredientsItem) -> Value {
+    let mut m = Map::new();
+    m.insert("description".into(), match (&p.description) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("name".into(), Value::String((&p.name).clone()));
+    m.insert("safety_level".into(), match (&p.safety_level) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_products__get_product_information_response_nutrition__to_json(p: &iface_products::GetProductInformationResponseNutrition) -> Value {
+    let mut m = Map::new();
+    m.insert("caloricBreakdown".into(), iface_products__get_product_information_response_nutrition_caloric_breakdown__to_json(&p.caloric_breakdown));
+    m.insert("nutrients".into(), Value::Array((&p.nutrients).iter().map(|v| iface_products__get_product_information_response_nutrition_nutrients_item__to_json(v)).collect()));
+    Value::Object(m)
+}
+
+fn iface_products__get_product_information_response_nutrition_caloric_breakdown__to_json(p: &iface_products::GetProductInformationResponseNutritionCaloricBreakdown) -> Value {
+    let mut m = Map::new();
+    m.insert("percentCarbs".into(), serde_json::Number::from_f64(*(&p.percent_carbs)).map(Value::Number).unwrap_or(Value::Null));
+    m.insert("percentFat".into(), serde_json::Number::from_f64(*(&p.percent_fat)).map(Value::Number).unwrap_or(Value::Null));
+    m.insert("percentProtein".into(), serde_json::Number::from_f64(*(&p.percent_protein)).map(Value::Number).unwrap_or(Value::Null));
+    Value::Object(m)
+}
+
+fn iface_products__get_product_information_response_nutrition_nutrients_item__to_json(p: &iface_products::GetProductInformationResponseNutritionNutrientsItem) -> Value {
+    let mut m = Map::new();
+    m.insert("amount".into(), serde_json::Number::from_f64(*(&p.amount)).map(Value::Number).unwrap_or(Value::Null));
+    m.insert("name".into(), Value::String((&p.name).clone()));
+    m.insert("percentOfDailyNeeds".into(), serde_json::Number::from_f64(*(&p.percent_of_daily_needs)).map(Value::Number).unwrap_or(Value::Null));
+    m.insert("unit".into(), Value::String((&p.unit).clone()));
+    Value::Object(m)
+}
+
+fn iface_products__get_product_information_response_servings__to_json(p: &iface_products::GetProductInformationResponseServings) -> Value {
+    let mut m = Map::new();
+    m.insert("number".into(), serde_json::Number::from_f64(*(&p.number)).map(Value::Number).unwrap_or(Value::Null));
+    m.insert("size".into(), serde_json::Number::from_f64(*(&p.size)).map(Value::Number).unwrap_or(Value::Null));
+    m.insert("unit".into(), Value::String((&p.unit).clone()));
+    Value::Object(m)
+}
+
+fn iface_products__product_nutrition_label_image_response__to_json(p: &iface_products::ProductNutritionLabelImageResponse) -> Value {
+    let mut m = Map::new();
+    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_products__product_nutrition_by_id_image_response__to_json(p: &iface_products::ProductNutritionByIdImageResponse) -> Value {
+    let mut m = Map::new();
+    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
     Value::Object(m)
 }
 
@@ -2655,50 +8010,593 @@ fn iface_products__product_nutrition_by_id_image_params__to_json(p: &iface_produ
     Value::Object(m)
 }
 
+fn iface_products__classify_grocery_product_response__from_json(v: &Value) -> Option<iface_products::ClassifyGroceryProductResponse> {
+    let m = v.as_object()?;
+    Some(iface_products::ClassifyGroceryProductResponse {
+        breadcrumbs: m.get("breadcrumbs").and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| (x).as_str().map(|s| s.to_string())).collect())).unwrap_or_default(),
+        category: m.get("category").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        clean_title: m.get("cleanTitle").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        image: m.get("image").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        usda_code: m.get("usdaCode").and_then(|v| (v).as_i64().map(|n| n as i32)).unwrap_or_default(),
+    })
+}
+
+fn iface_products__classify_grocery_product_bulk_response_item__from_json(v: &Value) -> Option<iface_products::ClassifyGroceryProductBulkResponseItem> {
+    let m = v.as_object()?;
+    Some(iface_products::ClassifyGroceryProductBulkResponseItem {
+        breadcrumbs: m.get("breadcrumbs").and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| (x).as_str().map(|s| s.to_string())).collect())).unwrap_or_default(),
+        category: m.get("category").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        clean_title: m.get("cleanTitle").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        image: m.get("image").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        usda_code: m.get("usdaCode").and_then(|v| (v).as_i64().map(|n| n as i32)).unwrap_or_default(),
+    })
+}
+
+fn iface_products__search_grocery_products_response__from_json(v: &Value) -> Option<iface_products::SearchGroceryProductsResponse> {
+    let m = v.as_object()?;
+    Some(iface_products::SearchGroceryProductsResponse {
+        number: m.get("number").and_then(|v| (v).as_i64().map(|n| n as i32)).unwrap_or_default(),
+        offset: m.get("offset").and_then(|v| (v).as_i64().map(|n| n as i32)).unwrap_or_default(),
+        products: m.get("products").and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| iface_products__search_grocery_products_response_products_item__from_json(x)).collect())).unwrap_or_default(),
+        total_products: m.get("totalProducts").and_then(|v| (v).as_i64().map(|n| n as i32)).unwrap_or_default(),
+        type_op: m.get("type").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+    })
+}
+
+fn iface_products__search_grocery_products_response_products_item__from_json(v: &Value) -> Option<iface_products::SearchGroceryProductsResponseProductsItem> {
+    let m = v.as_object()?;
+    Some(iface_products::SearchGroceryProductsResponseProductsItem {
+        id: m.get("id").and_then(|v| (v).as_i64().map(|n| n as i32)).unwrap_or_default(),
+        image_type: m.get("imageType").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        title: m.get("title").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+    })
+}
+
+fn iface_products__autocomplete_product_search_response__from_json(v: &Value) -> Option<iface_products::AutocompleteProductSearchResponse> {
+    let m = v.as_object()?;
+    Some(iface_products::AutocompleteProductSearchResponse {
+        results: m.get("results").and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| iface_products__autocomplete_product_search_response_results_item__from_json(x)).collect())).unwrap_or_default(),
+    })
+}
+
+fn iface_products__autocomplete_product_search_response_results_item__from_json(v: &Value) -> Option<iface_products::AutocompleteProductSearchResponseResultsItem> {
+    let m = v.as_object()?;
+    Some(iface_products::AutocompleteProductSearchResponseResultsItem {
+        id: m.get("id").and_then(|v| (v).as_i64().map(|n| n as i32)).unwrap_or_default(),
+        title: m.get("title").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+    })
+}
+
+fn iface_products__search_grocery_products_by_upc_response__from_json(v: &Value) -> Option<iface_products::SearchGroceryProductsByUpcResponse> {
+    let m = v.as_object()?;
+    Some(iface_products::SearchGroceryProductsByUpcResponse {
+        badges: m.get("badges").and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| (x).as_str().map(|s| s.to_string())).collect())).unwrap_or_default(),
+        breadcrumbs: m.get("breadcrumbs").and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| (x).as_str().map(|s| s.to_string())).collect())).unwrap_or_default(),
+        generated_text: m.get("generatedText").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        id: m.get("id").and_then(|v| (v).as_i64().map(|n| n as i32)).unwrap_or_default(),
+        image_type: m.get("imageType").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        important_badges: m.get("importantBadges").and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| (x).as_str().map(|s| s.to_string())).collect())).unwrap_or_default(),
+        ingredient_count: m.get("ingredientCount").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        ingredient_list: m.get("ingredientList").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        ingredients: m.get("ingredients").and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| iface_products__search_grocery_products_by_upc_response_ingredients_item__from_json(x)).collect())).unwrap_or_default(),
+        likes: m.get("likes").and_then(|v| (v).as_f64()).unwrap_or_default(),
+        nutrition: match m.get("nutrition").and_then(|v| iface_products__search_grocery_products_by_upc_response_nutrition__from_json(v)) { Some(x) => x, None => return None },
+        price: m.get("price").and_then(|v| (v).as_f64()).unwrap_or_default(),
+        servings: match m.get("servings").and_then(|v| iface_products__search_grocery_products_by_upc_response_servings__from_json(v)) { Some(x) => x, None => return None },
+        spoonacular_score: m.get("spoonacularScore").and_then(|v| (v).as_f64()).unwrap_or_default(),
+        title: m.get("title").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+    })
+}
+
+fn iface_products__search_grocery_products_by_upc_response_ingredients_item__from_json(v: &Value) -> Option<iface_products::SearchGroceryProductsByUpcResponseIngredientsItem> {
+    let m = v.as_object()?;
+    Some(iface_products::SearchGroceryProductsByUpcResponseIngredientsItem {
+        description: m.get("description").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        name: m.get("name").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        safety_level: m.get("safety_level").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    })
+}
+
+fn iface_products__search_grocery_products_by_upc_response_nutrition__from_json(v: &Value) -> Option<iface_products::SearchGroceryProductsByUpcResponseNutrition> {
+    let m = v.as_object()?;
+    Some(iface_products::SearchGroceryProductsByUpcResponseNutrition {
+        caloric_breakdown: match m.get("caloricBreakdown").and_then(|v| iface_products__search_grocery_products_by_upc_response_nutrition_caloric_breakdown__from_json(v)) { Some(x) => x, None => return None },
+        nutrients: m.get("nutrients").and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| iface_products__search_grocery_products_by_upc_response_nutrition_nutrients_item__from_json(x)).collect())).unwrap_or_default(),
+    })
+}
+
+fn iface_products__search_grocery_products_by_upc_response_nutrition_caloric_breakdown__from_json(v: &Value) -> Option<iface_products::SearchGroceryProductsByUpcResponseNutritionCaloricBreakdown> {
+    let m = v.as_object()?;
+    Some(iface_products::SearchGroceryProductsByUpcResponseNutritionCaloricBreakdown {
+        percent_carbs: m.get("percentCarbs").and_then(|v| (v).as_f64()).unwrap_or_default(),
+        percent_fat: m.get("percentFat").and_then(|v| (v).as_f64()).unwrap_or_default(),
+        percent_protein: m.get("percentProtein").and_then(|v| (v).as_f64()).unwrap_or_default(),
+    })
+}
+
+fn iface_products__search_grocery_products_by_upc_response_nutrition_nutrients_item__from_json(v: &Value) -> Option<iface_products::SearchGroceryProductsByUpcResponseNutritionNutrientsItem> {
+    let m = v.as_object()?;
+    Some(iface_products::SearchGroceryProductsByUpcResponseNutritionNutrientsItem {
+        amount: m.get("amount").and_then(|v| (v).as_f64()).unwrap_or_default(),
+        name: m.get("name").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        percent_of_daily_needs: m.get("percentOfDailyNeeds").and_then(|v| (v).as_f64()).unwrap_or_default(),
+        unit: m.get("unit").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+    })
+}
+
+fn iface_products__search_grocery_products_by_upc_response_servings__from_json(v: &Value) -> Option<iface_products::SearchGroceryProductsByUpcResponseServings> {
+    let m = v.as_object()?;
+    Some(iface_products::SearchGroceryProductsByUpcResponseServings {
+        number: m.get("number").and_then(|v| (v).as_f64()).unwrap_or_default(),
+        size: m.get("size").and_then(|v| (v).as_f64()).unwrap_or_default(),
+        unit: m.get("unit").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+    })
+}
+
+fn iface_products__get_comparable_products_response__from_json(v: &Value) -> Option<iface_products::GetComparableProductsResponse> {
+    let m = v.as_object()?;
+    Some(iface_products::GetComparableProductsResponse {
+        comparable_products: match m.get("comparableProducts").and_then(|v| iface_products__get_comparable_products_response_comparable_products__from_json(v)) { Some(x) => x, None => return None },
+    })
+}
+
+fn iface_products__get_comparable_products_response_comparable_products__from_json(v: &Value) -> Option<iface_products::GetComparableProductsResponseComparableProducts> {
+    let m = v.as_object()?;
+    Some(iface_products::GetComparableProductsResponseComparableProducts {
+        calories: m.get("calories").and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| iface_products__get_comparable_products_response_comparable_products_calories_item__from_json(x)).collect())).unwrap_or_default(),
+        likes: m.get("likes").and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| iface_products__get_comparable_products_response_comparable_products_likes_item__from_json(x)).collect())).unwrap_or_default(),
+        price: m.get("price").and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| iface_products__get_comparable_products_response_comparable_products_price_item__from_json(x)).collect())).unwrap_or_default(),
+        protein: m.get("protein").and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| iface_products__get_comparable_products_response_comparable_products_protein_item__from_json(x)).collect())).unwrap_or_default(),
+        spoonacular_score: m.get("spoonacularScore").and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| iface_products__get_comparable_products_response_comparable_products_spoonacular_score_item__from_json(x)).collect())).unwrap_or_default(),
+        sugar: m.get("sugar").and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| iface_products__get_comparable_products_response_comparable_products_sugar_item__from_json(x)).collect())).unwrap_or_default(),
+    })
+}
+
+fn iface_products__get_comparable_products_response_comparable_products_calories_item__from_json(v: &Value) -> Option<iface_products::GetComparableProductsResponseComparableProductsCaloriesItem> {
+    let m = v.as_object()?;
+    Some(iface_products::GetComparableProductsResponseComparableProductsCaloriesItem {
+        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    })
+}
+
+fn iface_products__get_comparable_products_response_comparable_products_likes_item__from_json(v: &Value) -> Option<iface_products::GetComparableProductsResponseComparableProductsLikesItem> {
+    let m = v.as_object()?;
+    Some(iface_products::GetComparableProductsResponseComparableProductsLikesItem {
+        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    })
+}
+
+fn iface_products__get_comparable_products_response_comparable_products_price_item__from_json(v: &Value) -> Option<iface_products::GetComparableProductsResponseComparableProductsPriceItem> {
+    let m = v.as_object()?;
+    Some(iface_products::GetComparableProductsResponseComparableProductsPriceItem {
+        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    })
+}
+
+fn iface_products__get_comparable_products_response_comparable_products_protein_item__from_json(v: &Value) -> Option<iface_products::GetComparableProductsResponseComparableProductsProteinItem> {
+    let m = v.as_object()?;
+    Some(iface_products::GetComparableProductsResponseComparableProductsProteinItem {
+        difference: m.get("difference").and_then(|v| (v).as_f64()).unwrap_or_default(),
+        id: m.get("id").and_then(|v| (v).as_i64().map(|n| n as i32)).unwrap_or_default(),
+        image: m.get("image").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        title: m.get("title").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+    })
+}
+
+fn iface_products__get_comparable_products_response_comparable_products_spoonacular_score_item__from_json(v: &Value) -> Option<iface_products::GetComparableProductsResponseComparableProductsSpoonacularScoreItem> {
+    let m = v.as_object()?;
+    Some(iface_products::GetComparableProductsResponseComparableProductsSpoonacularScoreItem {
+        difference: m.get("difference").and_then(|v| (v).as_f64()).unwrap_or_default(),
+        id: m.get("id").and_then(|v| (v).as_i64().map(|n| n as i32)).unwrap_or_default(),
+        image: m.get("image").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        title: m.get("title").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+    })
+}
+
+fn iface_products__get_comparable_products_response_comparable_products_sugar_item__from_json(v: &Value) -> Option<iface_products::GetComparableProductsResponseComparableProductsSugarItem> {
+    let m = v.as_object()?;
+    Some(iface_products::GetComparableProductsResponseComparableProductsSugarItem {
+        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    })
+}
+
+fn iface_products__get_product_information_response__from_json(v: &Value) -> Option<iface_products::GetProductInformationResponse> {
+    let m = v.as_object()?;
+    Some(iface_products::GetProductInformationResponse {
+        aisle: m.get("aisle").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        badges: m.get("badges").and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| (x).as_str().map(|s| s.to_string())).collect())).unwrap_or_default(),
+        breadcrumbs: m.get("breadcrumbs").and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| (x).as_str().map(|s| s.to_string())).collect())).unwrap_or_default(),
+        generated_text: m.get("generatedText").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        id: m.get("id").and_then(|v| (v).as_i64().map(|n| n as i32)).unwrap_or_default(),
+        image_type: m.get("imageType").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        important_badges: m.get("importantBadges").and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| (x).as_str().map(|s| s.to_string())).collect())).unwrap_or_default(),
+        ingredient_count: m.get("ingredientCount").and_then(|v| (v).as_i64().map(|n| n as i32)).unwrap_or_default(),
+        ingredient_list: m.get("ingredientList").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        ingredients: m.get("ingredients").and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| iface_products__get_product_information_response_ingredients_item__from_json(x)).collect())).unwrap_or_default(),
+        likes: m.get("likes").and_then(|v| (v).as_f64()).unwrap_or_default(),
+        nutrition: match m.get("nutrition").and_then(|v| iface_products__get_product_information_response_nutrition__from_json(v)) { Some(x) => x, None => return None },
+        price: m.get("price").and_then(|v| (v).as_f64()).unwrap_or_default(),
+        servings: match m.get("servings").and_then(|v| iface_products__get_product_information_response_servings__from_json(v)) { Some(x) => x, None => return None },
+        spoonacular_score: m.get("spoonacularScore").and_then(|v| (v).as_f64()).unwrap_or_default(),
+        title: m.get("title").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+    })
+}
+
+fn iface_products__get_product_information_response_ingredients_item__from_json(v: &Value) -> Option<iface_products::GetProductInformationResponseIngredientsItem> {
+    let m = v.as_object()?;
+    Some(iface_products::GetProductInformationResponseIngredientsItem {
+        description: m.get("description").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        name: m.get("name").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        safety_level: m.get("safety_level").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    })
+}
+
+fn iface_products__get_product_information_response_nutrition__from_json(v: &Value) -> Option<iface_products::GetProductInformationResponseNutrition> {
+    let m = v.as_object()?;
+    Some(iface_products::GetProductInformationResponseNutrition {
+        caloric_breakdown: match m.get("caloricBreakdown").and_then(|v| iface_products__get_product_information_response_nutrition_caloric_breakdown__from_json(v)) { Some(x) => x, None => return None },
+        nutrients: m.get("nutrients").and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| iface_products__get_product_information_response_nutrition_nutrients_item__from_json(x)).collect())).unwrap_or_default(),
+    })
+}
+
+fn iface_products__get_product_information_response_nutrition_caloric_breakdown__from_json(v: &Value) -> Option<iface_products::GetProductInformationResponseNutritionCaloricBreakdown> {
+    let m = v.as_object()?;
+    Some(iface_products::GetProductInformationResponseNutritionCaloricBreakdown {
+        percent_carbs: m.get("percentCarbs").and_then(|v| (v).as_f64()).unwrap_or_default(),
+        percent_fat: m.get("percentFat").and_then(|v| (v).as_f64()).unwrap_or_default(),
+        percent_protein: m.get("percentProtein").and_then(|v| (v).as_f64()).unwrap_or_default(),
+    })
+}
+
+fn iface_products__get_product_information_response_nutrition_nutrients_item__from_json(v: &Value) -> Option<iface_products::GetProductInformationResponseNutritionNutrientsItem> {
+    let m = v.as_object()?;
+    Some(iface_products::GetProductInformationResponseNutritionNutrientsItem {
+        amount: m.get("amount").and_then(|v| (v).as_f64()).unwrap_or_default(),
+        name: m.get("name").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        percent_of_daily_needs: m.get("percentOfDailyNeeds").and_then(|v| (v).as_f64()).unwrap_or_default(),
+        unit: m.get("unit").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+    })
+}
+
+fn iface_products__get_product_information_response_servings__from_json(v: &Value) -> Option<iface_products::GetProductInformationResponseServings> {
+    let m = v.as_object()?;
+    Some(iface_products::GetProductInformationResponseServings {
+        number: m.get("number").and_then(|v| (v).as_f64()).unwrap_or_default(),
+        size: m.get("size").and_then(|v| (v).as_f64()).unwrap_or_default(),
+        unit: m.get("unit").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+    })
+}
+
+fn iface_products__product_nutrition_label_image_response__from_json(v: &Value) -> Option<iface_products::ProductNutritionLabelImageResponse> {
+    let m = v.as_object()?;
+    Some(iface_products::ProductNutritionLabelImageResponse {
+        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    })
+}
+
+fn iface_products__product_nutrition_by_id_image_response__from_json(v: &Value) -> Option<iface_products::ProductNutritionByIdImageResponse> {
+    let m = v.as_object()?;
+    Some(iface_products::ProductNutritionByIdImageResponse {
+        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    })
+}
+
+fn iface_products__classify_grocery_product__ok(body: String) -> Result<iface_products::ClassifyGroceryProductResponse, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match iface_products__classify_grocery_product_response__from_json(&v) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_products__classify_grocery_product__err(e: crate::runtime::DispatchError) -> iface_products::ClassifyGroceryProductError {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => match status {
+            401u16 => iface_products::ClassifyGroceryProductError::Unauthorized(body),
+            403u16 => iface_products::ClassifyGroceryProductError::Forbidden(body),
+            404u16 => iface_products::ClassifyGroceryProductError::NotFound(body),
+            _ => iface_products::ClassifyGroceryProductError::Other(body),
+        },
+        crate::runtime::DispatchError::Transport(m) => iface_products::ClassifyGroceryProductError::Other(m),
+    }
+}
+
+fn iface_products__classify_grocery_product_bulk__ok(body: String) -> Result<Vec<iface_products::ClassifyGroceryProductBulkResponseItem>, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match (&v).as_array().map(|a| a.iter().filter_map(|x| iface_products__classify_grocery_product_bulk_response_item__from_json(x)).collect()) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_products__classify_grocery_product_bulk__err(e: crate::runtime::DispatchError) -> iface_products::ClassifyGroceryProductBulkError {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => match status {
+            401u16 => iface_products::ClassifyGroceryProductBulkError::Unauthorized(body),
+            403u16 => iface_products::ClassifyGroceryProductBulkError::Forbidden(body),
+            404u16 => iface_products::ClassifyGroceryProductBulkError::NotFound(body),
+            _ => iface_products::ClassifyGroceryProductBulkError::Other(body),
+        },
+        crate::runtime::DispatchError::Transport(m) => iface_products::ClassifyGroceryProductBulkError::Other(m),
+    }
+}
+
+fn iface_products__search_grocery_products__ok(body: String) -> Result<iface_products::SearchGroceryProductsResponse, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match iface_products__search_grocery_products_response__from_json(&v) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_products__search_grocery_products__err(e: crate::runtime::DispatchError) -> iface_products::SearchGroceryProductsError {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => match status {
+            401u16 => iface_products::SearchGroceryProductsError::Unauthorized(body),
+            403u16 => iface_products::SearchGroceryProductsError::Forbidden(body),
+            404u16 => iface_products::SearchGroceryProductsError::NotFound(body),
+            _ => iface_products::SearchGroceryProductsError::Other(body),
+        },
+        crate::runtime::DispatchError::Transport(m) => iface_products::SearchGroceryProductsError::Other(m),
+    }
+}
+
+fn iface_products__autocomplete_product_search__ok(body: String) -> Result<iface_products::AutocompleteProductSearchResponse, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match iface_products__autocomplete_product_search_response__from_json(&v) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_products__autocomplete_product_search__err(e: crate::runtime::DispatchError) -> iface_products::AutocompleteProductSearchError {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => match status {
+            401u16 => iface_products::AutocompleteProductSearchError::Unauthorized(body),
+            403u16 => iface_products::AutocompleteProductSearchError::Forbidden(body),
+            404u16 => iface_products::AutocompleteProductSearchError::NotFound(body),
+            _ => iface_products::AutocompleteProductSearchError::Other(body),
+        },
+        crate::runtime::DispatchError::Transport(m) => iface_products::AutocompleteProductSearchError::Other(m),
+    }
+}
+
+fn iface_products__search_grocery_products_by_upc__ok(body: String) -> Result<iface_products::SearchGroceryProductsByUpcResponse, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match iface_products__search_grocery_products_by_upc_response__from_json(&v) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_products__search_grocery_products_by_upc__err(e: crate::runtime::DispatchError) -> iface_products::SearchGroceryProductsByUpcError {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => match status {
+            401u16 => iface_products::SearchGroceryProductsByUpcError::Unauthorized(body),
+            403u16 => iface_products::SearchGroceryProductsByUpcError::Forbidden(body),
+            404u16 => iface_products::SearchGroceryProductsByUpcError::NotFound(body),
+            _ => iface_products::SearchGroceryProductsByUpcError::Other(body),
+        },
+        crate::runtime::DispatchError::Transport(m) => iface_products::SearchGroceryProductsByUpcError::Other(m),
+    }
+}
+
+fn iface_products__get_comparable_products__ok(body: String) -> Result<iface_products::GetComparableProductsResponse, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match iface_products__get_comparable_products_response__from_json(&v) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_products__get_comparable_products__err(e: crate::runtime::DispatchError) -> iface_products::GetComparableProductsError {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => match status {
+            401u16 => iface_products::GetComparableProductsError::Unauthorized(body),
+            403u16 => iface_products::GetComparableProductsError::Forbidden(body),
+            404u16 => iface_products::GetComparableProductsError::NotFound(body),
+            _ => iface_products::GetComparableProductsError::Other(body),
+        },
+        crate::runtime::DispatchError::Transport(m) => iface_products::GetComparableProductsError::Other(m),
+    }
+}
+
+fn iface_products__get_product_information__ok(body: String) -> Result<iface_products::GetProductInformationResponse, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match iface_products__get_product_information_response__from_json(&v) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_products__get_product_information__err(e: crate::runtime::DispatchError) -> iface_products::GetProductInformationError {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => match status {
+            401u16 => iface_products::GetProductInformationError::Unauthorized(body),
+            403u16 => iface_products::GetProductInformationError::Forbidden(body),
+            404u16 => iface_products::GetProductInformationError::NotFound(body),
+            _ => iface_products::GetProductInformationError::Other(body),
+        },
+        crate::runtime::DispatchError::Transport(m) => iface_products::GetProductInformationError::Other(m),
+    }
+}
+
+fn iface_products__product_nutrition_label_widget__ok(body: String) -> Result<String, crate::runtime::DispatchError> {
+    Ok(body)
+}
+
+fn iface_products__product_nutrition_label_widget__err(e: crate::runtime::DispatchError) -> iface_products::ProductNutritionLabelWidgetError {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => match status {
+            401u16 => iface_products::ProductNutritionLabelWidgetError::Unauthorized(body),
+            403u16 => iface_products::ProductNutritionLabelWidgetError::Forbidden(body),
+            404u16 => iface_products::ProductNutritionLabelWidgetError::NotFound(body),
+            _ => iface_products::ProductNutritionLabelWidgetError::Other(body),
+        },
+        crate::runtime::DispatchError::Transport(m) => iface_products::ProductNutritionLabelWidgetError::Other(m),
+    }
+}
+
+fn iface_products__product_nutrition_label_image__ok(body: String) -> Result<iface_products::ProductNutritionLabelImageResponse, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match iface_products__product_nutrition_label_image_response__from_json(&v) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_products__product_nutrition_label_image__err(e: crate::runtime::DispatchError) -> iface_products::ProductNutritionLabelImageError {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => match status {
+            401u16 => iface_products::ProductNutritionLabelImageError::Unauthorized(body),
+            403u16 => iface_products::ProductNutritionLabelImageError::Forbidden(body),
+            404u16 => iface_products::ProductNutritionLabelImageError::NotFound(body),
+            _ => iface_products::ProductNutritionLabelImageError::Other(body),
+        },
+        crate::runtime::DispatchError::Transport(m) => iface_products::ProductNutritionLabelImageError::Other(m),
+    }
+}
+
+fn iface_products__visualize_product_nutrition_by_id__ok(body: String) -> Result<String, crate::runtime::DispatchError> {
+    Ok(body)
+}
+
+fn iface_products__visualize_product_nutrition_by_id__err(e: crate::runtime::DispatchError) -> iface_products::VisualizeProductNutritionByIdError {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => match status {
+            401u16 => iface_products::VisualizeProductNutritionByIdError::Unauthorized(body),
+            403u16 => iface_products::VisualizeProductNutritionByIdError::Forbidden(body),
+            404u16 => iface_products::VisualizeProductNutritionByIdError::NotFound(body),
+            _ => iface_products::VisualizeProductNutritionByIdError::Other(body),
+        },
+        crate::runtime::DispatchError::Transport(m) => iface_products::VisualizeProductNutritionByIdError::Other(m),
+    }
+}
+
+fn iface_products__product_nutrition_by_id_image__ok(body: String) -> Result<iface_products::ProductNutritionByIdImageResponse, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match iface_products__product_nutrition_by_id_image_response__from_json(&v) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_products__product_nutrition_by_id_image__err(e: crate::runtime::DispatchError) -> iface_products::ProductNutritionByIdImageError {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => match status {
+            401u16 => iface_products::ProductNutritionByIdImageError::Unauthorized(body),
+            403u16 => iface_products::ProductNutritionByIdImageError::Forbidden(body),
+            404u16 => iface_products::ProductNutritionByIdImageError::NotFound(body),
+            _ => iface_products::ProductNutritionByIdImageError::Other(body),
+        },
+        crate::runtime::DispatchError::Transport(m) => iface_products::ProductNutritionByIdImageError::Other(m),
+    }
+}
+
 impl iface_products::Guest for crate::Component {
-    fn classify_grocery_product(params: iface_products::ClassifyGroceryProductParams) -> Result<String, String> {
+    fn classify_grocery_product(params: iface_products::ClassifyGroceryProductParams) -> Result<iface_products::ClassifyGroceryProductResponse, iface_products::ClassifyGroceryProductError> {
         let json = iface_products__classify_grocery_product_params__to_json(&params);
-        dispatch(&OP_PRODUCTS_CLASSIFY_GROCERY_PRODUCT, json)
+        match dispatch(&OP_PRODUCTS_CLASSIFY_GROCERY_PRODUCT, json).and_then(iface_products__classify_grocery_product__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_products__classify_grocery_product__err(e)),
+        }
     }
-    fn classify_grocery_product_bulk(params: iface_products::ClassifyGroceryProductBulkParams) -> Result<String, String> {
+    fn classify_grocery_product_bulk(params: iface_products::ClassifyGroceryProductBulkParams) -> Result<Vec<iface_products::ClassifyGroceryProductBulkResponseItem>, iface_products::ClassifyGroceryProductBulkError> {
         let json = iface_products__classify_grocery_product_bulk_params__to_json(&params);
-        dispatch(&OP_PRODUCTS_CLASSIFY_GROCERY_PRODUCT_BULK, json)
+        match dispatch(&OP_PRODUCTS_CLASSIFY_GROCERY_PRODUCT_BULK, json).and_then(iface_products__classify_grocery_product_bulk__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_products__classify_grocery_product_bulk__err(e)),
+        }
     }
-    fn search_grocery_products(params: iface_products::SearchGroceryProductsParams) -> Result<String, String> {
+    fn search_grocery_products(params: iface_products::SearchGroceryProductsParams) -> Result<iface_products::SearchGroceryProductsResponse, iface_products::SearchGroceryProductsError> {
         let json = iface_products__search_grocery_products_params__to_json(&params);
-        dispatch(&OP_PRODUCTS_SEARCH_GROCERY_PRODUCTS, json)
+        match dispatch(&OP_PRODUCTS_SEARCH_GROCERY_PRODUCTS, json).and_then(iface_products__search_grocery_products__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_products__search_grocery_products__err(e)),
+        }
     }
-    fn autocomplete_product_search(params: iface_products::AutocompleteProductSearchParams) -> Result<String, String> {
+    fn autocomplete_product_search(params: iface_products::AutocompleteProductSearchParams) -> Result<iface_products::AutocompleteProductSearchResponse, iface_products::AutocompleteProductSearchError> {
         let json = iface_products__autocomplete_product_search_params__to_json(&params);
-        dispatch(&OP_PRODUCTS_AUTOCOMPLETE_PRODUCT_SEARCH, json)
+        match dispatch(&OP_PRODUCTS_AUTOCOMPLETE_PRODUCT_SEARCH, json).and_then(iface_products__autocomplete_product_search__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_products__autocomplete_product_search__err(e)),
+        }
     }
-    fn search_grocery_products_by_upc(params: iface_products::SearchGroceryProductsByUpcParams) -> Result<String, String> {
+    fn search_grocery_products_by_upc(params: iface_products::SearchGroceryProductsByUpcParams) -> Result<iface_products::SearchGroceryProductsByUpcResponse, iface_products::SearchGroceryProductsByUpcError> {
         let json = iface_products__search_grocery_products_by_upc_params__to_json(&params);
-        dispatch(&OP_PRODUCTS_SEARCH_GROCERY_PRODUCTS_BY_UPC, json)
+        match dispatch(&OP_PRODUCTS_SEARCH_GROCERY_PRODUCTS_BY_UPC, json).and_then(iface_products__search_grocery_products_by_upc__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_products__search_grocery_products_by_upc__err(e)),
+        }
     }
-    fn get_comparable_products(params: iface_products::GetComparableProductsParams) -> Result<String, String> {
+    fn get_comparable_products(params: iface_products::GetComparableProductsParams) -> Result<iface_products::GetComparableProductsResponse, iface_products::GetComparableProductsError> {
         let json = iface_products__get_comparable_products_params__to_json(&params);
-        dispatch(&OP_PRODUCTS_GET_COMPARABLE_PRODUCTS, json)
+        match dispatch(&OP_PRODUCTS_GET_COMPARABLE_PRODUCTS, json).and_then(iface_products__get_comparable_products__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_products__get_comparable_products__err(e)),
+        }
     }
-    fn get_product_information(params: iface_products::GetProductInformationParams) -> Result<String, String> {
+    fn get_product_information(params: iface_products::GetProductInformationParams) -> Result<iface_products::GetProductInformationResponse, iface_products::GetProductInformationError> {
         let json = iface_products__get_product_information_params__to_json(&params);
-        dispatch(&OP_PRODUCTS_GET_PRODUCT_INFORMATION, json)
+        match dispatch(&OP_PRODUCTS_GET_PRODUCT_INFORMATION, json).and_then(iface_products__get_product_information__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_products__get_product_information__err(e)),
+        }
     }
-    fn product_nutrition_label_widget(params: iface_products::ProductNutritionLabelWidgetParams) -> Result<String, String> {
+    fn product_nutrition_label_widget(params: iface_products::ProductNutritionLabelWidgetParams) -> Result<String, iface_products::ProductNutritionLabelWidgetError> {
         let json = iface_products__product_nutrition_label_widget_params__to_json(&params);
-        dispatch(&OP_PRODUCTS_PRODUCT_NUTRITION_LABEL_WIDGET, json)
+        match dispatch(&OP_PRODUCTS_PRODUCT_NUTRITION_LABEL_WIDGET, json).and_then(iface_products__product_nutrition_label_widget__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_products__product_nutrition_label_widget__err(e)),
+        }
     }
-    fn product_nutrition_label_image(params: iface_products::ProductNutritionLabelImageParams) -> Result<String, String> {
+    fn product_nutrition_label_image(params: iface_products::ProductNutritionLabelImageParams) -> Result<iface_products::ProductNutritionLabelImageResponse, iface_products::ProductNutritionLabelImageError> {
         let json = iface_products__product_nutrition_label_image_params__to_json(&params);
-        dispatch(&OP_PRODUCTS_PRODUCT_NUTRITION_LABEL_IMAGE, json)
+        match dispatch(&OP_PRODUCTS_PRODUCT_NUTRITION_LABEL_IMAGE, json).and_then(iface_products__product_nutrition_label_image__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_products__product_nutrition_label_image__err(e)),
+        }
     }
-    fn visualize_product_nutrition_by_id(params: iface_products::VisualizeProductNutritionByIdParams) -> Result<String, String> {
+    fn visualize_product_nutrition_by_id(params: iface_products::VisualizeProductNutritionByIdParams) -> Result<String, iface_products::VisualizeProductNutritionByIdError> {
         let json = iface_products__visualize_product_nutrition_by_id_params__to_json(&params);
-        dispatch(&OP_PRODUCTS_VISUALIZE_PRODUCT_NUTRITION_BY_ID, json)
+        match dispatch(&OP_PRODUCTS_VISUALIZE_PRODUCT_NUTRITION_BY_ID, json).and_then(iface_products__visualize_product_nutrition_by_id__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_products__visualize_product_nutrition_by_id__err(e)),
+        }
     }
-    fn product_nutrition_by_id_image(params: iface_products::ProductNutritionByIdImageParams) -> Result<String, String> {
+    fn product_nutrition_by_id_image(params: iface_products::ProductNutritionByIdImageParams) -> Result<iface_products::ProductNutritionByIdImageResponse, iface_products::ProductNutritionByIdImageError> {
         let json = iface_products__product_nutrition_by_id_image_params__to_json(&params);
-        dispatch(&OP_PRODUCTS_PRODUCT_NUTRITION_BY_ID_IMAGE, json)
+        match dispatch(&OP_PRODUCTS_PRODUCT_NUTRITION_BY_ID_IMAGE, json).and_then(iface_products__product_nutrition_by_id_image__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_products__product_nutrition_by_id_image__err(e)),
+        }
     }
 }
 use crate::exports::autostamp::spoonacular::food as iface_food;
@@ -2707,21 +8605,130 @@ const OP_FOOD_SEARCH_RESTAURANTS: OpSpec = OpSpec {
     method: "GET",
     path_template: "/food/restaurants/search",
     fields: &[
-        FieldSpec { snake: "query", location: FieldLocation::Query },
-        FieldSpec { snake: "lat", location: FieldLocation::Query },
-        FieldSpec { snake: "lng", location: FieldLocation::Query },
-        FieldSpec { snake: "distance", location: FieldLocation::Query },
-        FieldSpec { snake: "budget", location: FieldLocation::Query },
-        FieldSpec { snake: "cuisine", location: FieldLocation::Query },
-        FieldSpec { snake: "min_rating", location: FieldLocation::Query },
-        FieldSpec { snake: "is_open", location: FieldLocation::Query },
-        FieldSpec { snake: "sort", location: FieldLocation::Query },
-        FieldSpec { snake: "page", location: FieldLocation::Query },
+        FieldSpec { snake: "query", wire: "query", location: FieldLocation::Query },
+        FieldSpec { snake: "lat", wire: "lat", location: FieldLocation::Query },
+        FieldSpec { snake: "lng", wire: "lng", location: FieldLocation::Query },
+        FieldSpec { snake: "distance", wire: "distance", location: FieldLocation::Query },
+        FieldSpec { snake: "budget", wire: "budget", location: FieldLocation::Query },
+        FieldSpec { snake: "cuisine", wire: "cuisine", location: FieldLocation::Query },
+        FieldSpec { snake: "min_rating", wire: "min-rating", location: FieldLocation::Query },
+        FieldSpec { snake: "is_open", wire: "is-open", location: FieldLocation::Query },
+        FieldSpec { snake: "sort", wire: "sort", location: FieldLocation::Query },
+        FieldSpec { snake: "page", wire: "page", location: FieldLocation::Query },
     ],
     auth: &[
         AuthApply { secret_key: "apiKeyScheme", kind: AuthKind::ApiKeyHeader("x-api-key") },
     ],
 };
+
+fn iface_food__search_restaurants_response__to_json(p: &iface_food::SearchRestaurantsResponse) -> Value {
+    let mut m = Map::new();
+    m.insert("restaurants".into(), match (&p.restaurants) { Some(v) => Value::Array((v).iter().map(|v| iface_food__search_restaurants_response_restaurants_item__to_json(v)).collect()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_food__search_restaurants_response_restaurants_item__to_json(p: &iface_food::SearchRestaurantsResponseRestaurantsItem) -> Value {
+    let mut m = Map::new();
+    m.insert("_id".into(), match (&p.id) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("address".into(), match (&p.address) { Some(v) => iface_food__search_restaurants_response_restaurants_item_address__to_json(v), None => Value::Null });
+    m.insert("aggregated_rating_count".into(), match (&p.aggregated_rating_count) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("cuisines".into(), match (&p.cuisines) { Some(v) => Value::Array((v).iter().map(|v| Value::String((v).clone())).collect()), None => Value::Null });
+    m.insert("delivery_enabled".into(), match (&p.delivery_enabled) { Some(v) => Value::Bool(*(v)), None => Value::Null });
+    m.insert("description".into(), match (&p.description) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("dollar_signs".into(), match (&p.dollar_signs) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("food_photos".into(), match (&p.food_photos) { Some(v) => Value::Array((v).iter().map(|v| Value::String((v).clone())).collect()), None => Value::Null });
+    m.insert("is_open".into(), match (&p.is_open) { Some(v) => Value::Bool(*(v)), None => Value::Null });
+    m.insert("local_hours".into(), match (&p.local_hours) { Some(v) => iface_food__search_restaurants_response_restaurants_item_local_hours__to_json(v), None => Value::Null });
+    m.insert("logo_photos".into(), match (&p.logo_photos) { Some(v) => Value::Array((v).iter().map(|v| Value::String((v).clone())).collect()), None => Value::Null });
+    m.insert("miles".into(), match (&p.miles) { Some(v) => serde_json::Number::from_f64(*(v)).map(Value::Number).unwrap_or(Value::Null), None => Value::Null });
+    m.insert("name".into(), match (&p.name) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("offers_first_party_delivery".into(), match (&p.offers_first_party_delivery) { Some(v) => Value::Bool(*(v)), None => Value::Null });
+    m.insert("offers_third_party_delivery".into(), match (&p.offers_third_party_delivery) { Some(v) => Value::Bool(*(v)), None => Value::Null });
+    m.insert("phone_number".into(), match (&p.phone_number) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("pickup_enabled".into(), match (&p.pickup_enabled) { Some(v) => Value::Bool(*(v)), None => Value::Null });
+    m.insert("store_photos".into(), match (&p.store_photos) { Some(v) => Value::Array((v).iter().map(|v| iface_food__search_restaurants_response_restaurants_item_store_photos_item__to_json(v)).collect()), None => Value::Null });
+    m.insert("type".into(), match (&p.type_op) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("weighted_rating_value".into(), match (&p.weighted_rating_value) { Some(v) => serde_json::Number::from_f64(*(v)).map(Value::Number).unwrap_or(Value::Null), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_food__search_restaurants_response_restaurants_item_address__to_json(p: &iface_food::SearchRestaurantsResponseRestaurantsItemAddress) -> Value {
+    let mut m = Map::new();
+    m.insert("city".into(), match (&p.city) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("country".into(), match (&p.country) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("lat".into(), match (&p.lat) { Some(v) => serde_json::Number::from_f64(*(v)).map(Value::Number).unwrap_or(Value::Null), None => Value::Null });
+    m.insert("latitude".into(), match (&p.latitude) { Some(v) => serde_json::Number::from_f64(*(v)).map(Value::Number).unwrap_or(Value::Null), None => Value::Null });
+    m.insert("lon".into(), match (&p.lon) { Some(v) => serde_json::Number::from_f64(*(v)).map(Value::Number).unwrap_or(Value::Null), None => Value::Null });
+    m.insert("longitude".into(), match (&p.longitude) { Some(v) => serde_json::Number::from_f64(*(v)).map(Value::Number).unwrap_or(Value::Null), None => Value::Null });
+    m.insert("state".into(), match (&p.state) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("street_addr".into(), match (&p.street_addr) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("street_addr_2".into(), match (&p.street_addr_v2) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("zipcode".into(), match (&p.zipcode) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_food__search_restaurants_response_restaurants_item_local_hours__to_json(p: &iface_food::SearchRestaurantsResponseRestaurantsItemLocalHours) -> Value {
+    let mut m = Map::new();
+    m.insert("delivery".into(), match (&p.delivery) { Some(v) => iface_food__search_restaurants_response_restaurants_item_local_hours_delivery__to_json(v), None => Value::Null });
+    m.insert("dine_in".into(), match (&p.dine_in) { Some(v) => iface_food__search_restaurants_response_restaurants_item_local_hours_dine_in__to_json(v), None => Value::Null });
+    m.insert("operational".into(), match (&p.operational) { Some(v) => iface_food__search_restaurants_response_restaurants_item_local_hours_operational__to_json(v), None => Value::Null });
+    m.insert("pickup".into(), match (&p.pickup) { Some(v) => iface_food__search_restaurants_response_restaurants_item_local_hours_pickup__to_json(v), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_food__search_restaurants_response_restaurants_item_local_hours_delivery__to_json(p: &iface_food::SearchRestaurantsResponseRestaurantsItemLocalHoursDelivery) -> Value {
+    let mut m = Map::new();
+    m.insert("Friday".into(), match (&p.friday) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("Monday".into(), match (&p.monday) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("Saturday".into(), match (&p.saturday) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("Sunday".into(), match (&p.sunday) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("Thursday".into(), match (&p.thursday) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("Tuesday".into(), match (&p.tuesday) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("Wednesday".into(), match (&p.wednesday) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_food__search_restaurants_response_restaurants_item_local_hours_dine_in__to_json(p: &iface_food::SearchRestaurantsResponseRestaurantsItemLocalHoursDineIn) -> Value {
+    let mut m = Map::new();
+    m.insert("Friday".into(), match (&p.friday) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("Monday".into(), match (&p.monday) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("Saturday".into(), match (&p.saturday) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("Sunday".into(), match (&p.sunday) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("Thursday".into(), match (&p.thursday) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("Tuesday".into(), match (&p.tuesday) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("Wednesday".into(), match (&p.wednesday) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_food__search_restaurants_response_restaurants_item_local_hours_operational__to_json(p: &iface_food::SearchRestaurantsResponseRestaurantsItemLocalHoursOperational) -> Value {
+    let mut m = Map::new();
+    m.insert("Friday".into(), match (&p.friday) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("Monday".into(), match (&p.monday) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("Saturday".into(), match (&p.saturday) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("Sunday".into(), match (&p.sunday) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("Thursday".into(), match (&p.thursday) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("Tuesday".into(), match (&p.tuesday) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("Wednesday".into(), match (&p.wednesday) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_food__search_restaurants_response_restaurants_item_local_hours_pickup__to_json(p: &iface_food::SearchRestaurantsResponseRestaurantsItemLocalHoursPickup) -> Value {
+    let mut m = Map::new();
+    m.insert("Friday".into(), match (&p.friday) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("Monday".into(), match (&p.monday) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("Saturday".into(), match (&p.saturday) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("Sunday".into(), match (&p.sunday) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("Thursday".into(), match (&p.thursday) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("Tuesday".into(), match (&p.tuesday) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("Wednesday".into(), match (&p.wednesday) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_food__search_restaurants_response_restaurants_item_store_photos_item__to_json(p: &iface_food::SearchRestaurantsResponseRestaurantsItemStorePhotosItem) -> Value {
+    let mut m = Map::new();
+    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
 
 fn iface_food__search_restaurants_params__to_json(p: &iface_food::SearchRestaurantsParams) -> Value {
     let mut m = Map::new();
@@ -2738,10 +8745,154 @@ fn iface_food__search_restaurants_params__to_json(p: &iface_food::SearchRestaura
     Value::Object(m)
 }
 
+fn iface_food__search_restaurants_response__from_json(v: &Value) -> Option<iface_food::SearchRestaurantsResponse> {
+    let m = v.as_object()?;
+    Some(iface_food::SearchRestaurantsResponse {
+        restaurants: m.get("restaurants").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| iface_food__search_restaurants_response_restaurants_item__from_json(x)).collect())),
+    })
+}
+
+fn iface_food__search_restaurants_response_restaurants_item__from_json(v: &Value) -> Option<iface_food::SearchRestaurantsResponseRestaurantsItem> {
+    let m = v.as_object()?;
+    Some(iface_food::SearchRestaurantsResponseRestaurantsItem {
+        id: m.get("_id").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        address: m.get("address").filter(|v| !v.is_null()).and_then(|v| iface_food__search_restaurants_response_restaurants_item_address__from_json(v)),
+        aggregated_rating_count: m.get("aggregated_rating_count").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        cuisines: m.get("cuisines").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| (x).as_str().map(|s| s.to_string())).collect())),
+        delivery_enabled: m.get("delivery_enabled").filter(|v| !v.is_null()).and_then(|v| (v).as_bool()),
+        description: m.get("description").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        dollar_signs: m.get("dollar_signs").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        food_photos: m.get("food_photos").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| (x).as_str().map(|s| s.to_string())).collect())),
+        is_open: m.get("is_open").filter(|v| !v.is_null()).and_then(|v| (v).as_bool()),
+        local_hours: m.get("local_hours").filter(|v| !v.is_null()).and_then(|v| iface_food__search_restaurants_response_restaurants_item_local_hours__from_json(v)),
+        logo_photos: m.get("logo_photos").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| (x).as_str().map(|s| s.to_string())).collect())),
+        miles: m.get("miles").filter(|v| !v.is_null()).and_then(|v| (v).as_f64()),
+        name: m.get("name").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        offers_first_party_delivery: m.get("offers_first_party_delivery").filter(|v| !v.is_null()).and_then(|v| (v).as_bool()),
+        offers_third_party_delivery: m.get("offers_third_party_delivery").filter(|v| !v.is_null()).and_then(|v| (v).as_bool()),
+        phone_number: m.get("phone_number").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        pickup_enabled: m.get("pickup_enabled").filter(|v| !v.is_null()).and_then(|v| (v).as_bool()),
+        store_photos: m.get("store_photos").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| iface_food__search_restaurants_response_restaurants_item_store_photos_item__from_json(x)).collect())),
+        type_op: m.get("type").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        weighted_rating_value: m.get("weighted_rating_value").filter(|v| !v.is_null()).and_then(|v| (v).as_f64()),
+    })
+}
+
+fn iface_food__search_restaurants_response_restaurants_item_address__from_json(v: &Value) -> Option<iface_food::SearchRestaurantsResponseRestaurantsItemAddress> {
+    let m = v.as_object()?;
+    Some(iface_food::SearchRestaurantsResponseRestaurantsItemAddress {
+        city: m.get("city").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        country: m.get("country").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        lat: m.get("lat").filter(|v| !v.is_null()).and_then(|v| (v).as_f64()),
+        latitude: m.get("latitude").filter(|v| !v.is_null()).and_then(|v| (v).as_f64()),
+        lon: m.get("lon").filter(|v| !v.is_null()).and_then(|v| (v).as_f64()),
+        longitude: m.get("longitude").filter(|v| !v.is_null()).and_then(|v| (v).as_f64()),
+        state: m.get("state").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        street_addr: m.get("street_addr").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        street_addr_v2: m.get("street_addr_2").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        zipcode: m.get("zipcode").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    })
+}
+
+fn iface_food__search_restaurants_response_restaurants_item_local_hours__from_json(v: &Value) -> Option<iface_food::SearchRestaurantsResponseRestaurantsItemLocalHours> {
+    let m = v.as_object()?;
+    Some(iface_food::SearchRestaurantsResponseRestaurantsItemLocalHours {
+        delivery: m.get("delivery").filter(|v| !v.is_null()).and_then(|v| iface_food__search_restaurants_response_restaurants_item_local_hours_delivery__from_json(v)),
+        dine_in: m.get("dine_in").filter(|v| !v.is_null()).and_then(|v| iface_food__search_restaurants_response_restaurants_item_local_hours_dine_in__from_json(v)),
+        operational: m.get("operational").filter(|v| !v.is_null()).and_then(|v| iface_food__search_restaurants_response_restaurants_item_local_hours_operational__from_json(v)),
+        pickup: m.get("pickup").filter(|v| !v.is_null()).and_then(|v| iface_food__search_restaurants_response_restaurants_item_local_hours_pickup__from_json(v)),
+    })
+}
+
+fn iface_food__search_restaurants_response_restaurants_item_local_hours_delivery__from_json(v: &Value) -> Option<iface_food::SearchRestaurantsResponseRestaurantsItemLocalHoursDelivery> {
+    let m = v.as_object()?;
+    Some(iface_food::SearchRestaurantsResponseRestaurantsItemLocalHoursDelivery {
+        friday: m.get("Friday").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        monday: m.get("Monday").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        saturday: m.get("Saturday").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        sunday: m.get("Sunday").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        thursday: m.get("Thursday").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        tuesday: m.get("Tuesday").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        wednesday: m.get("Wednesday").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    })
+}
+
+fn iface_food__search_restaurants_response_restaurants_item_local_hours_dine_in__from_json(v: &Value) -> Option<iface_food::SearchRestaurantsResponseRestaurantsItemLocalHoursDineIn> {
+    let m = v.as_object()?;
+    Some(iface_food::SearchRestaurantsResponseRestaurantsItemLocalHoursDineIn {
+        friday: m.get("Friday").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        monday: m.get("Monday").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        saturday: m.get("Saturday").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        sunday: m.get("Sunday").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        thursday: m.get("Thursday").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        tuesday: m.get("Tuesday").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        wednesday: m.get("Wednesday").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    })
+}
+
+fn iface_food__search_restaurants_response_restaurants_item_local_hours_operational__from_json(v: &Value) -> Option<iface_food::SearchRestaurantsResponseRestaurantsItemLocalHoursOperational> {
+    let m = v.as_object()?;
+    Some(iface_food::SearchRestaurantsResponseRestaurantsItemLocalHoursOperational {
+        friday: m.get("Friday").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        monday: m.get("Monday").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        saturday: m.get("Saturday").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        sunday: m.get("Sunday").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        thursday: m.get("Thursday").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        tuesday: m.get("Tuesday").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        wednesday: m.get("Wednesday").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    })
+}
+
+fn iface_food__search_restaurants_response_restaurants_item_local_hours_pickup__from_json(v: &Value) -> Option<iface_food::SearchRestaurantsResponseRestaurantsItemLocalHoursPickup> {
+    let m = v.as_object()?;
+    Some(iface_food::SearchRestaurantsResponseRestaurantsItemLocalHoursPickup {
+        friday: m.get("Friday").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        monday: m.get("Monday").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        saturday: m.get("Saturday").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        sunday: m.get("Sunday").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        thursday: m.get("Thursday").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        tuesday: m.get("Tuesday").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        wednesday: m.get("Wednesday").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    })
+}
+
+fn iface_food__search_restaurants_response_restaurants_item_store_photos_item__from_json(v: &Value) -> Option<iface_food::SearchRestaurantsResponseRestaurantsItemStorePhotosItem> {
+    let m = v.as_object()?;
+    Some(iface_food::SearchRestaurantsResponseRestaurantsItemStorePhotosItem {
+        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    })
+}
+
+fn iface_food__search_restaurants__ok(body: String) -> Result<iface_food::SearchRestaurantsResponse, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match iface_food__search_restaurants_response__from_json(&v) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_food__search_restaurants__err(e: crate::runtime::DispatchError) -> iface_food::SearchRestaurantsError {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => match status {
+            401u16 => iface_food::SearchRestaurantsError::Unauthorized(body),
+            403u16 => iface_food::SearchRestaurantsError::Forbidden(body),
+            404u16 => iface_food::SearchRestaurantsError::NotFound(body),
+            _ => iface_food::SearchRestaurantsError::Other(body),
+        },
+        crate::runtime::DispatchError::Transport(m) => iface_food::SearchRestaurantsError::Other(m),
+    }
+}
+
 impl iface_food::Guest for crate::Component {
-    fn search_restaurants(params: iface_food::SearchRestaurantsParams) -> Result<String, String> {
+    fn search_restaurants(params: iface_food::SearchRestaurantsParams) -> Result<iface_food::SearchRestaurantsResponse, iface_food::SearchRestaurantsError> {
         let json = iface_food__search_restaurants_params__to_json(&params);
-        dispatch(&OP_FOOD_SEARCH_RESTAURANTS, json)
+        match dispatch(&OP_FOOD_SEARCH_RESTAURANTS, json).and_then(iface_food__search_restaurants__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_food__search_restaurants__err(e)),
+        }
     }
 }
 use crate::exports::autostamp::spoonacular::wine as iface_wine;
@@ -2750,7 +8901,7 @@ const OP_WINE_GET_WINE_DESCRIPTION: OpSpec = OpSpec {
     method: "GET",
     path_template: "/food/wine/description",
     fields: &[
-        FieldSpec { snake: "wine", location: FieldLocation::Query },
+        FieldSpec { snake: "wine", wire: "wine", location: FieldLocation::Query },
     ],
     auth: &[
         AuthApply { secret_key: "apiKeyScheme", kind: AuthKind::ApiKeyHeader("x-api-key") },
@@ -2761,7 +8912,7 @@ const OP_WINE_GET_DISH_PAIRING_FOR_WINE: OpSpec = OpSpec {
     method: "GET",
     path_template: "/food/wine/dishes",
     fields: &[
-        FieldSpec { snake: "wine", location: FieldLocation::Query },
+        FieldSpec { snake: "wine", wire: "wine", location: FieldLocation::Query },
     ],
     auth: &[
         AuthApply { secret_key: "apiKeyScheme", kind: AuthKind::ApiKeyHeader("x-api-key") },
@@ -2772,8 +8923,8 @@ const OP_WINE_GET_WINE_PAIRING: OpSpec = OpSpec {
     method: "GET",
     path_template: "/food/wine/pairing",
     fields: &[
-        FieldSpec { snake: "food", location: FieldLocation::Query },
-        FieldSpec { snake: "max_price", location: FieldLocation::Query },
+        FieldSpec { snake: "food", wire: "food", location: FieldLocation::Query },
+        FieldSpec { snake: "max_price", wire: "maxPrice", location: FieldLocation::Query },
     ],
     auth: &[
         AuthApply { secret_key: "apiKeyScheme", kind: AuthKind::ApiKeyHeader("x-api-key") },
@@ -2784,15 +8935,71 @@ const OP_WINE_GET_WINE_RECOMMENDATION: OpSpec = OpSpec {
     method: "GET",
     path_template: "/food/wine/recommendation",
     fields: &[
-        FieldSpec { snake: "wine", location: FieldLocation::Query },
-        FieldSpec { snake: "max_price", location: FieldLocation::Query },
-        FieldSpec { snake: "min_rating", location: FieldLocation::Query },
-        FieldSpec { snake: "number", location: FieldLocation::Query },
+        FieldSpec { snake: "wine", wire: "wine", location: FieldLocation::Query },
+        FieldSpec { snake: "max_price", wire: "maxPrice", location: FieldLocation::Query },
+        FieldSpec { snake: "min_rating", wire: "minRating", location: FieldLocation::Query },
+        FieldSpec { snake: "number", wire: "number", location: FieldLocation::Query },
     ],
     auth: &[
         AuthApply { secret_key: "apiKeyScheme", kind: AuthKind::ApiKeyHeader("x-api-key") },
     ],
 };
+
+fn iface_wine__get_wine_description_response__to_json(p: &iface_wine::GetWineDescriptionResponse) -> Value {
+    let mut m = Map::new();
+    m.insert("wineDescription".into(), Value::String((&p.wine_description).clone()));
+    Value::Object(m)
+}
+
+fn iface_wine__get_dish_pairing_for_wine_response__to_json(p: &iface_wine::GetDishPairingForWineResponse) -> Value {
+    let mut m = Map::new();
+    m.insert("pairings".into(), Value::Array((&p.pairings).iter().map(|v| Value::String((v).clone())).collect()));
+    m.insert("text".into(), Value::String((&p.text).clone()));
+    Value::Object(m)
+}
+
+fn iface_wine__get_wine_pairing_response__to_json(p: &iface_wine::GetWinePairingResponse) -> Value {
+    let mut m = Map::new();
+    m.insert("pairedWines".into(), Value::Array((&p.paired_wines).iter().map(|v| Value::String((v).clone())).collect()));
+    m.insert("pairingText".into(), Value::String((&p.pairing_text).clone()));
+    m.insert("productMatches".into(), Value::Array((&p.product_matches).iter().map(|v| iface_wine__get_wine_pairing_response_product_matches_item__to_json(v)).collect()));
+    Value::Object(m)
+}
+
+fn iface_wine__get_wine_pairing_response_product_matches_item__to_json(p: &iface_wine::GetWinePairingResponseProductMatchesItem) -> Value {
+    let mut m = Map::new();
+    m.insert("averageRating".into(), serde_json::Number::from_f64(*(&p.average_rating)).map(Value::Number).unwrap_or(Value::Null));
+    m.insert("description".into(), match (&p.description) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("id".into(), Value::Number(serde_json::Number::from(*(&p.id))));
+    m.insert("imageUrl".into(), Value::String((&p.image_url).clone()));
+    m.insert("link".into(), Value::String((&p.link).clone()));
+    m.insert("price".into(), Value::String((&p.price).clone()));
+    m.insert("ratingCount".into(), Value::Number(serde_json::Number::from(*(&p.rating_count))));
+    m.insert("score".into(), serde_json::Number::from_f64(*(&p.score)).map(Value::Number).unwrap_or(Value::Null));
+    m.insert("title".into(), Value::String((&p.title).clone()));
+    Value::Object(m)
+}
+
+fn iface_wine__get_wine_recommendation_response__to_json(p: &iface_wine::GetWineRecommendationResponse) -> Value {
+    let mut m = Map::new();
+    m.insert("recommendedWines".into(), Value::Array((&p.recommended_wines).iter().map(|v| iface_wine__get_wine_recommendation_response_recommended_wines_item__to_json(v)).collect()));
+    m.insert("totalFound".into(), Value::Number(serde_json::Number::from(*(&p.total_found))));
+    Value::Object(m)
+}
+
+fn iface_wine__get_wine_recommendation_response_recommended_wines_item__to_json(p: &iface_wine::GetWineRecommendationResponseRecommendedWinesItem) -> Value {
+    let mut m = Map::new();
+    m.insert("averageRating".into(), serde_json::Number::from_f64(*(&p.average_rating)).map(Value::Number).unwrap_or(Value::Null));
+    m.insert("description".into(), Value::String((&p.description).clone()));
+    m.insert("id".into(), Value::Number(serde_json::Number::from(*(&p.id))));
+    m.insert("imageUrl".into(), Value::String((&p.image_url).clone()));
+    m.insert("link".into(), Value::String((&p.link).clone()));
+    m.insert("price".into(), Value::String((&p.price).clone()));
+    m.insert("ratingCount".into(), Value::Number(serde_json::Number::from(*(&p.rating_count))));
+    m.insert("score".into(), serde_json::Number::from_f64(*(&p.score)).map(Value::Number).unwrap_or(Value::Null));
+    m.insert("title".into(), Value::String((&p.title).clone()));
+    Value::Object(m)
+}
 
 fn iface_wine__get_wine_description_params__to_json(p: &iface_wine::GetWineDescriptionParams) -> Value {
     let mut m = Map::new();
@@ -2822,22 +9029,188 @@ fn iface_wine__get_wine_recommendation_params__to_json(p: &iface_wine::GetWineRe
     Value::Object(m)
 }
 
+fn iface_wine__get_wine_description_response__from_json(v: &Value) -> Option<iface_wine::GetWineDescriptionResponse> {
+    let m = v.as_object()?;
+    Some(iface_wine::GetWineDescriptionResponse {
+        wine_description: m.get("wineDescription").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+    })
+}
+
+fn iface_wine__get_dish_pairing_for_wine_response__from_json(v: &Value) -> Option<iface_wine::GetDishPairingForWineResponse> {
+    let m = v.as_object()?;
+    Some(iface_wine::GetDishPairingForWineResponse {
+        pairings: m.get("pairings").and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| (x).as_str().map(|s| s.to_string())).collect())).unwrap_or_default(),
+        text: m.get("text").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+    })
+}
+
+fn iface_wine__get_wine_pairing_response__from_json(v: &Value) -> Option<iface_wine::GetWinePairingResponse> {
+    let m = v.as_object()?;
+    Some(iface_wine::GetWinePairingResponse {
+        paired_wines: m.get("pairedWines").and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| (x).as_str().map(|s| s.to_string())).collect())).unwrap_or_default(),
+        pairing_text: m.get("pairingText").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        product_matches: m.get("productMatches").and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| iface_wine__get_wine_pairing_response_product_matches_item__from_json(x)).collect())).unwrap_or_default(),
+    })
+}
+
+fn iface_wine__get_wine_pairing_response_product_matches_item__from_json(v: &Value) -> Option<iface_wine::GetWinePairingResponseProductMatchesItem> {
+    let m = v.as_object()?;
+    Some(iface_wine::GetWinePairingResponseProductMatchesItem {
+        average_rating: m.get("averageRating").and_then(|v| (v).as_f64()).unwrap_or_default(),
+        description: m.get("description").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        id: m.get("id").and_then(|v| (v).as_i64().map(|n| n as i32)).unwrap_or_default(),
+        image_url: m.get("imageUrl").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        link: m.get("link").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        price: m.get("price").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        rating_count: m.get("ratingCount").and_then(|v| (v).as_i64().map(|n| n as i32)).unwrap_or_default(),
+        score: m.get("score").and_then(|v| (v).as_f64()).unwrap_or_default(),
+        title: m.get("title").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+    })
+}
+
+fn iface_wine__get_wine_recommendation_response__from_json(v: &Value) -> Option<iface_wine::GetWineRecommendationResponse> {
+    let m = v.as_object()?;
+    Some(iface_wine::GetWineRecommendationResponse {
+        recommended_wines: m.get("recommendedWines").and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| iface_wine__get_wine_recommendation_response_recommended_wines_item__from_json(x)).collect())).unwrap_or_default(),
+        total_found: m.get("totalFound").and_then(|v| (v).as_i64().map(|n| n as i32)).unwrap_or_default(),
+    })
+}
+
+fn iface_wine__get_wine_recommendation_response_recommended_wines_item__from_json(v: &Value) -> Option<iface_wine::GetWineRecommendationResponseRecommendedWinesItem> {
+    let m = v.as_object()?;
+    Some(iface_wine::GetWineRecommendationResponseRecommendedWinesItem {
+        average_rating: m.get("averageRating").and_then(|v| (v).as_f64()).unwrap_or_default(),
+        description: m.get("description").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        id: m.get("id").and_then(|v| (v).as_i64().map(|n| n as i32)).unwrap_or_default(),
+        image_url: m.get("imageUrl").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        link: m.get("link").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        price: m.get("price").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        rating_count: m.get("ratingCount").and_then(|v| (v).as_i64().map(|n| n as i32)).unwrap_or_default(),
+        score: m.get("score").and_then(|v| (v).as_f64()).unwrap_or_default(),
+        title: m.get("title").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+    })
+}
+
+fn iface_wine__get_wine_description__ok(body: String) -> Result<iface_wine::GetWineDescriptionResponse, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match iface_wine__get_wine_description_response__from_json(&v) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_wine__get_wine_description__err(e: crate::runtime::DispatchError) -> iface_wine::GetWineDescriptionError {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => match status {
+            401u16 => iface_wine::GetWineDescriptionError::Unauthorized(body),
+            403u16 => iface_wine::GetWineDescriptionError::Forbidden(body),
+            404u16 => iface_wine::GetWineDescriptionError::NotFound(body),
+            _ => iface_wine::GetWineDescriptionError::Other(body),
+        },
+        crate::runtime::DispatchError::Transport(m) => iface_wine::GetWineDescriptionError::Other(m),
+    }
+}
+
+fn iface_wine__get_dish_pairing_for_wine__ok(body: String) -> Result<iface_wine::GetDishPairingForWineResponse, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match iface_wine__get_dish_pairing_for_wine_response__from_json(&v) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_wine__get_dish_pairing_for_wine__err(e: crate::runtime::DispatchError) -> iface_wine::GetDishPairingForWineError {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => match status {
+            401u16 => iface_wine::GetDishPairingForWineError::Unauthorized(body),
+            403u16 => iface_wine::GetDishPairingForWineError::Forbidden(body),
+            404u16 => iface_wine::GetDishPairingForWineError::NotFound(body),
+            _ => iface_wine::GetDishPairingForWineError::Other(body),
+        },
+        crate::runtime::DispatchError::Transport(m) => iface_wine::GetDishPairingForWineError::Other(m),
+    }
+}
+
+fn iface_wine__get_wine_pairing__ok(body: String) -> Result<iface_wine::GetWinePairingResponse, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match iface_wine__get_wine_pairing_response__from_json(&v) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_wine__get_wine_pairing__err(e: crate::runtime::DispatchError) -> iface_wine::GetWinePairingError {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => match status {
+            401u16 => iface_wine::GetWinePairingError::Unauthorized(body),
+            403u16 => iface_wine::GetWinePairingError::Forbidden(body),
+            404u16 => iface_wine::GetWinePairingError::NotFound(body),
+            _ => iface_wine::GetWinePairingError::Other(body),
+        },
+        crate::runtime::DispatchError::Transport(m) => iface_wine::GetWinePairingError::Other(m),
+    }
+}
+
+fn iface_wine__get_wine_recommendation__ok(body: String) -> Result<iface_wine::GetWineRecommendationResponse, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match iface_wine__get_wine_recommendation_response__from_json(&v) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_wine__get_wine_recommendation__err(e: crate::runtime::DispatchError) -> iface_wine::GetWineRecommendationError {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => match status {
+            401u16 => iface_wine::GetWineRecommendationError::Unauthorized(body),
+            403u16 => iface_wine::GetWineRecommendationError::Forbidden(body),
+            404u16 => iface_wine::GetWineRecommendationError::NotFound(body),
+            _ => iface_wine::GetWineRecommendationError::Other(body),
+        },
+        crate::runtime::DispatchError::Transport(m) => iface_wine::GetWineRecommendationError::Other(m),
+    }
+}
+
 impl iface_wine::Guest for crate::Component {
-    fn get_wine_description(params: iface_wine::GetWineDescriptionParams) -> Result<String, String> {
+    fn get_wine_description(params: iface_wine::GetWineDescriptionParams) -> Result<iface_wine::GetWineDescriptionResponse, iface_wine::GetWineDescriptionError> {
         let json = iface_wine__get_wine_description_params__to_json(&params);
-        dispatch(&OP_WINE_GET_WINE_DESCRIPTION, json)
+        match dispatch(&OP_WINE_GET_WINE_DESCRIPTION, json).and_then(iface_wine__get_wine_description__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_wine__get_wine_description__err(e)),
+        }
     }
-    fn get_dish_pairing_for_wine(params: iface_wine::GetDishPairingForWineParams) -> Result<String, String> {
+    fn get_dish_pairing_for_wine(params: iface_wine::GetDishPairingForWineParams) -> Result<iface_wine::GetDishPairingForWineResponse, iface_wine::GetDishPairingForWineError> {
         let json = iface_wine__get_dish_pairing_for_wine_params__to_json(&params);
-        dispatch(&OP_WINE_GET_DISH_PAIRING_FOR_WINE, json)
+        match dispatch(&OP_WINE_GET_DISH_PAIRING_FOR_WINE, json).and_then(iface_wine__get_dish_pairing_for_wine__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_wine__get_dish_pairing_for_wine__err(e)),
+        }
     }
-    fn get_wine_pairing(params: iface_wine::GetWinePairingParams) -> Result<String, String> {
+    fn get_wine_pairing(params: iface_wine::GetWinePairingParams) -> Result<iface_wine::GetWinePairingResponse, iface_wine::GetWinePairingError> {
         let json = iface_wine__get_wine_pairing_params__to_json(&params);
-        dispatch(&OP_WINE_GET_WINE_PAIRING, json)
+        match dispatch(&OP_WINE_GET_WINE_PAIRING, json).and_then(iface_wine__get_wine_pairing__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_wine__get_wine_pairing__err(e)),
+        }
     }
-    fn get_wine_recommendation(params: iface_wine::GetWineRecommendationParams) -> Result<String, String> {
+    fn get_wine_recommendation(params: iface_wine::GetWineRecommendationParams) -> Result<iface_wine::GetWineRecommendationResponse, iface_wine::GetWineRecommendationError> {
         let json = iface_wine__get_wine_recommendation_params__to_json(&params);
-        dispatch(&OP_WINE_GET_WINE_RECOMMENDATION, json)
+        match dispatch(&OP_WINE_GET_WINE_RECOMMENDATION, json).and_then(iface_wine__get_wine_recommendation__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_wine__get_wine_recommendation__err(e)),
+        }
     }
 }
 use crate::exports::autostamp::spoonacular::meal_planning as iface_meal_planning;
@@ -2846,10 +9219,10 @@ const OP_MEAL_PLANNING_GENERATE_MEAL_PLAN: OpSpec = OpSpec {
     method: "GET",
     path_template: "/mealplanner/generate",
     fields: &[
-        FieldSpec { snake: "time_frame", location: FieldLocation::Query },
-        FieldSpec { snake: "target_calories", location: FieldLocation::Query },
-        FieldSpec { snake: "diet", location: FieldLocation::Query },
-        FieldSpec { snake: "exclude", location: FieldLocation::Query },
+        FieldSpec { snake: "time_frame", wire: "timeFrame", location: FieldLocation::Query },
+        FieldSpec { snake: "target_calories", wire: "targetCalories", location: FieldLocation::Query },
+        FieldSpec { snake: "diet", wire: "diet", location: FieldLocation::Query },
+        FieldSpec { snake: "exclude", wire: "exclude", location: FieldLocation::Query },
     ],
     auth: &[
         AuthApply { secret_key: "apiKeyScheme", kind: AuthKind::ApiKeyHeader("x-api-key") },
@@ -2860,9 +9233,12 @@ const OP_MEAL_PLANNING_CLEAR_MEAL_PLAN_DAY: OpSpec = OpSpec {
     method: "DELETE",
     path_template: "/mealplanner/{username}/day/{date}",
     fields: &[
-        FieldSpec { snake: "username", location: FieldLocation::Path },
-        FieldSpec { snake: "date", location: FieldLocation::Path },
-        FieldSpec { snake: "hash", location: FieldLocation::Query },
+        FieldSpec { snake: "username", wire: "username", location: FieldLocation::Path },
+        FieldSpec { snake: "date", wire: "date", location: FieldLocation::Path },
+        FieldSpec { snake: "hash", wire: "hash", location: FieldLocation::Query },
+        FieldSpec { snake: "date_v2", wire: "date", location: FieldLocation::Body },
+        FieldSpec { snake: "hash_v2", wire: "hash", location: FieldLocation::Body },
+        FieldSpec { snake: "username_v2", wire: "username", location: FieldLocation::Body },
     ],
     auth: &[
         AuthApply { secret_key: "apiKeyScheme", kind: AuthKind::ApiKeyHeader("x-api-key") },
@@ -2873,13 +9249,13 @@ const OP_MEAL_PLANNING_ADD_TO_MEAL_PLAN: OpSpec = OpSpec {
     method: "POST",
     path_template: "/mealplanner/{username}/items",
     fields: &[
-        FieldSpec { snake: "username", location: FieldLocation::Path },
-        FieldSpec { snake: "hash", location: FieldLocation::Query },
-        FieldSpec { snake: "date", location: FieldLocation::Body },
-        FieldSpec { snake: "position", location: FieldLocation::Body },
-        FieldSpec { snake: "slot", location: FieldLocation::Body },
-        FieldSpec { snake: "type", location: FieldLocation::Body },
-        FieldSpec { snake: "value", location: FieldLocation::Body },
+        FieldSpec { snake: "username", wire: "username", location: FieldLocation::Path },
+        FieldSpec { snake: "hash", wire: "hash", location: FieldLocation::Query },
+        FieldSpec { snake: "date", wire: "date", location: FieldLocation::Body },
+        FieldSpec { snake: "position", wire: "position", location: FieldLocation::Body },
+        FieldSpec { snake: "slot", wire: "slot", location: FieldLocation::Body },
+        FieldSpec { snake: "type", wire: "type", location: FieldLocation::Body },
+        FieldSpec { snake: "value", wire: "value", location: FieldLocation::Body },
     ],
     auth: &[
         AuthApply { secret_key: "apiKeyScheme", kind: AuthKind::ApiKeyHeader("x-api-key") },
@@ -2890,9 +9266,12 @@ const OP_MEAL_PLANNING_DELETE_FROM_MEAL_PLAN: OpSpec = OpSpec {
     method: "DELETE",
     path_template: "/mealplanner/{username}/items/{id}",
     fields: &[
-        FieldSpec { snake: "username", location: FieldLocation::Path },
-        FieldSpec { snake: "id", location: FieldLocation::Path },
-        FieldSpec { snake: "hash", location: FieldLocation::Query },
+        FieldSpec { snake: "username", wire: "username", location: FieldLocation::Path },
+        FieldSpec { snake: "id", wire: "id", location: FieldLocation::Path },
+        FieldSpec { snake: "hash", wire: "hash", location: FieldLocation::Query },
+        FieldSpec { snake: "hash_v2", wire: "hash", location: FieldLocation::Body },
+        FieldSpec { snake: "id_v2", wire: "id", location: FieldLocation::Body },
+        FieldSpec { snake: "username_v2", wire: "username", location: FieldLocation::Body },
     ],
     auth: &[
         AuthApply { secret_key: "apiKeyScheme", kind: AuthKind::ApiKeyHeader("x-api-key") },
@@ -2903,8 +9282,8 @@ const OP_MEAL_PLANNING_GET_SHOPPING_LIST: OpSpec = OpSpec {
     method: "GET",
     path_template: "/mealplanner/{username}/shopping-list",
     fields: &[
-        FieldSpec { snake: "username", location: FieldLocation::Path },
-        FieldSpec { snake: "hash", location: FieldLocation::Query },
+        FieldSpec { snake: "username", wire: "username", location: FieldLocation::Path },
+        FieldSpec { snake: "hash", wire: "hash", location: FieldLocation::Query },
     ],
     auth: &[
         AuthApply { secret_key: "apiKeyScheme", kind: AuthKind::ApiKeyHeader("x-api-key") },
@@ -2915,11 +9294,11 @@ const OP_MEAL_PLANNING_ADD_TO_SHOPPING_LIST: OpSpec = OpSpec {
     method: "POST",
     path_template: "/mealplanner/{username}/shopping-list/items",
     fields: &[
-        FieldSpec { snake: "username", location: FieldLocation::Path },
-        FieldSpec { snake: "hash", location: FieldLocation::Query },
-        FieldSpec { snake: "aisle", location: FieldLocation::Body },
-        FieldSpec { snake: "item", location: FieldLocation::Body },
-        FieldSpec { snake: "parse", location: FieldLocation::Body },
+        FieldSpec { snake: "username", wire: "username", location: FieldLocation::Path },
+        FieldSpec { snake: "hash", wire: "hash", location: FieldLocation::Query },
+        FieldSpec { snake: "aisle", wire: "aisle", location: FieldLocation::Body },
+        FieldSpec { snake: "item", wire: "item", location: FieldLocation::Body },
+        FieldSpec { snake: "parse", wire: "parse", location: FieldLocation::Body },
     ],
     auth: &[
         AuthApply { secret_key: "apiKeyScheme", kind: AuthKind::ApiKeyHeader("x-api-key") },
@@ -2930,9 +9309,12 @@ const OP_MEAL_PLANNING_DELETE_FROM_SHOPPING_LIST: OpSpec = OpSpec {
     method: "DELETE",
     path_template: "/mealplanner/{username}/shopping-list/items/{id}",
     fields: &[
-        FieldSpec { snake: "username", location: FieldLocation::Path },
-        FieldSpec { snake: "id", location: FieldLocation::Path },
-        FieldSpec { snake: "hash", location: FieldLocation::Query },
+        FieldSpec { snake: "username", wire: "username", location: FieldLocation::Path },
+        FieldSpec { snake: "id", wire: "id", location: FieldLocation::Path },
+        FieldSpec { snake: "hash", wire: "hash", location: FieldLocation::Query },
+        FieldSpec { snake: "hash_v2", wire: "hash", location: FieldLocation::Body },
+        FieldSpec { snake: "id_v2", wire: "id", location: FieldLocation::Body },
+        FieldSpec { snake: "username_v2", wire: "username", location: FieldLocation::Body },
     ],
     auth: &[
         AuthApply { secret_key: "apiKeyScheme", kind: AuthKind::ApiKeyHeader("x-api-key") },
@@ -2943,10 +9325,14 @@ const OP_MEAL_PLANNING_GENERATE_SHOPPING_LIST: OpSpec = OpSpec {
     method: "POST",
     path_template: "/mealplanner/{username}/shopping-list/{start_date}/{end_date}",
     fields: &[
-        FieldSpec { snake: "username", location: FieldLocation::Path },
-        FieldSpec { snake: "start_date", location: FieldLocation::Path },
-        FieldSpec { snake: "end_date", location: FieldLocation::Path },
-        FieldSpec { snake: "hash", location: FieldLocation::Query },
+        FieldSpec { snake: "username", wire: "username", location: FieldLocation::Path },
+        FieldSpec { snake: "start_date", wire: "start-date", location: FieldLocation::Path },
+        FieldSpec { snake: "end_date", wire: "end-date", location: FieldLocation::Path },
+        FieldSpec { snake: "hash", wire: "hash", location: FieldLocation::Query },
+        FieldSpec { snake: "end_date_v2", wire: "end-date", location: FieldLocation::Body },
+        FieldSpec { snake: "hash_v2", wire: "hash", location: FieldLocation::Body },
+        FieldSpec { snake: "start_date_v2", wire: "start-date", location: FieldLocation::Body },
+        FieldSpec { snake: "username_v2", wire: "username", location: FieldLocation::Body },
     ],
     auth: &[
         AuthApply { secret_key: "apiKeyScheme", kind: AuthKind::ApiKeyHeader("x-api-key") },
@@ -2957,8 +9343,8 @@ const OP_MEAL_PLANNING_GET_MEAL_PLAN_TEMPLATES: OpSpec = OpSpec {
     method: "GET",
     path_template: "/mealplanner/{username}/templates",
     fields: &[
-        FieldSpec { snake: "username", location: FieldLocation::Path },
-        FieldSpec { snake: "hash", location: FieldLocation::Query },
+        FieldSpec { snake: "username", wire: "username", location: FieldLocation::Path },
+        FieldSpec { snake: "hash", wire: "hash", location: FieldLocation::Query },
     ],
     auth: &[
         AuthApply { secret_key: "apiKeyScheme", kind: AuthKind::ApiKeyHeader("x-api-key") },
@@ -2969,8 +9355,10 @@ const OP_MEAL_PLANNING_ADD_MEAL_PLAN_TEMPLATE: OpSpec = OpSpec {
     method: "POST",
     path_template: "/mealplanner/{username}/templates",
     fields: &[
-        FieldSpec { snake: "username", location: FieldLocation::Path },
-        FieldSpec { snake: "hash", location: FieldLocation::Query },
+        FieldSpec { snake: "username", wire: "username", location: FieldLocation::Path },
+        FieldSpec { snake: "hash", wire: "hash", location: FieldLocation::Query },
+        FieldSpec { snake: "hash_v2", wire: "hash", location: FieldLocation::Body },
+        FieldSpec { snake: "username_v2", wire: "username", location: FieldLocation::Body },
     ],
     auth: &[
         AuthApply { secret_key: "apiKeyScheme", kind: AuthKind::ApiKeyHeader("x-api-key") },
@@ -2981,9 +9369,9 @@ const OP_MEAL_PLANNING_GET_MEAL_PLAN_TEMPLATE: OpSpec = OpSpec {
     method: "GET",
     path_template: "/mealplanner/{username}/templates/{id}",
     fields: &[
-        FieldSpec { snake: "username", location: FieldLocation::Path },
-        FieldSpec { snake: "id", location: FieldLocation::Path },
-        FieldSpec { snake: "hash", location: FieldLocation::Query },
+        FieldSpec { snake: "username", wire: "username", location: FieldLocation::Path },
+        FieldSpec { snake: "id", wire: "id", location: FieldLocation::Path },
+        FieldSpec { snake: "hash", wire: "hash", location: FieldLocation::Query },
     ],
     auth: &[
         AuthApply { secret_key: "apiKeyScheme", kind: AuthKind::ApiKeyHeader("x-api-key") },
@@ -2994,9 +9382,12 @@ const OP_MEAL_PLANNING_DELETE_MEAL_PLAN_TEMPLATE: OpSpec = OpSpec {
     method: "DELETE",
     path_template: "/mealplanner/{username}/templates/{id}",
     fields: &[
-        FieldSpec { snake: "username", location: FieldLocation::Path },
-        FieldSpec { snake: "id", location: FieldLocation::Path },
-        FieldSpec { snake: "hash", location: FieldLocation::Query },
+        FieldSpec { snake: "username", wire: "username", location: FieldLocation::Path },
+        FieldSpec { snake: "id", wire: "id", location: FieldLocation::Path },
+        FieldSpec { snake: "hash", wire: "hash", location: FieldLocation::Query },
+        FieldSpec { snake: "hash_v2", wire: "hash", location: FieldLocation::Body },
+        FieldSpec { snake: "id_v2", wire: "id", location: FieldLocation::Body },
+        FieldSpec { snake: "username_v2", wire: "username", location: FieldLocation::Body },
     ],
     auth: &[
         AuthApply { secret_key: "apiKeyScheme", kind: AuthKind::ApiKeyHeader("x-api-key") },
@@ -3007,9 +9398,9 @@ const OP_MEAL_PLANNING_GET_MEAL_PLAN_WEEK: OpSpec = OpSpec {
     method: "GET",
     path_template: "/mealplanner/{username}/week/{start_date}",
     fields: &[
-        FieldSpec { snake: "username", location: FieldLocation::Path },
-        FieldSpec { snake: "start_date", location: FieldLocation::Path },
-        FieldSpec { snake: "hash", location: FieldLocation::Query },
+        FieldSpec { snake: "username", wire: "username", location: FieldLocation::Path },
+        FieldSpec { snake: "start_date", wire: "start-date", location: FieldLocation::Path },
+        FieldSpec { snake: "hash", wire: "hash", location: FieldLocation::Query },
     ],
     auth: &[
         AuthApply { secret_key: "apiKeyScheme", kind: AuthKind::ApiKeyHeader("x-api-key") },
@@ -3020,15 +9411,48 @@ const OP_MEAL_PLANNING_CONNECT_USER: OpSpec = OpSpec {
     method: "POST",
     path_template: "/users/connect",
     fields: &[
-        FieldSpec { snake: "email", location: FieldLocation::Body },
-        FieldSpec { snake: "first_name", location: FieldLocation::Body },
-        FieldSpec { snake: "last_name", location: FieldLocation::Body },
-        FieldSpec { snake: "username", location: FieldLocation::Body },
+        FieldSpec { snake: "email", wire: "email", location: FieldLocation::Body },
+        FieldSpec { snake: "first_name", wire: "firstName", location: FieldLocation::Body },
+        FieldSpec { snake: "last_name", wire: "lastName", location: FieldLocation::Body },
+        FieldSpec { snake: "username", wire: "username", location: FieldLocation::Body },
     ],
     auth: &[
         AuthApply { secret_key: "apiKeyScheme", kind: AuthKind::ApiKeyHeader("x-api-key") },
     ],
 };
+
+fn iface_meal_planning__generate_meal_plan_response__to_json(p: &iface_meal_planning::GenerateMealPlanResponse) -> Value {
+    let mut m = Map::new();
+    m.insert("meals".into(), Value::Array((&p.meals).iter().map(|v| iface_meal_planning__generate_meal_plan_response_meals_item__to_json(v)).collect()));
+    m.insert("nutrients".into(), iface_meal_planning__generate_meal_plan_response_nutrients__to_json(&p.nutrients));
+    Value::Object(m)
+}
+
+fn iface_meal_planning__generate_meal_plan_response_meals_item__to_json(p: &iface_meal_planning::GenerateMealPlanResponseMealsItem) -> Value {
+    let mut m = Map::new();
+    m.insert("id".into(), Value::Number(serde_json::Number::from(*(&p.id))));
+    m.insert("imageType".into(), Value::String((&p.image_type).clone()));
+    m.insert("readyInMinutes".into(), Value::Number(serde_json::Number::from(*(&p.ready_in_minutes))));
+    m.insert("servings".into(), serde_json::Number::from_f64(*(&p.servings)).map(Value::Number).unwrap_or(Value::Null));
+    m.insert("sourceUrl".into(), Value::String((&p.source_url).clone()));
+    m.insert("title".into(), Value::String((&p.title).clone()));
+    Value::Object(m)
+}
+
+fn iface_meal_planning__generate_meal_plan_response_nutrients__to_json(p: &iface_meal_planning::GenerateMealPlanResponseNutrients) -> Value {
+    let mut m = Map::new();
+    m.insert("calories".into(), serde_json::Number::from_f64(*(&p.calories)).map(Value::Number).unwrap_or(Value::Null));
+    m.insert("carbohydrates".into(), serde_json::Number::from_f64(*(&p.carbohydrates)).map(Value::Number).unwrap_or(Value::Null));
+    m.insert("fat".into(), serde_json::Number::from_f64(*(&p.fat)).map(Value::Number).unwrap_or(Value::Null));
+    m.insert("protein".into(), serde_json::Number::from_f64(*(&p.protein)).map(Value::Number).unwrap_or(Value::Null));
+    Value::Object(m)
+}
+
+fn iface_meal_planning__clear_meal_plan_day_response__to_json(p: &iface_meal_planning::ClearMealPlanDayResponse) -> Value {
+    let mut m = Map::new();
+    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
 
 fn iface_meal_planning__add_to_meal_plan_body_value__to_json(p: &iface_meal_planning::AddToMealPlanBodyValue) -> Value {
     let mut m = Map::new();
@@ -3039,6 +9463,442 @@ fn iface_meal_planning__add_to_meal_plan_body_value__to_json(p: &iface_meal_plan
 fn iface_meal_planning__add_to_meal_plan_body_value_ingredients_item__to_json(p: &iface_meal_planning::AddToMealPlanBodyValueIngredientsItem) -> Value {
     let mut m = Map::new();
     m.insert("name".into(), Value::String((&p.name).clone()));
+    Value::Object(m)
+}
+
+fn iface_meal_planning__add_to_meal_plan_response__to_json(p: &iface_meal_planning::AddToMealPlanResponse) -> Value {
+    let mut m = Map::new();
+    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_meal_planning__delete_from_meal_plan_response__to_json(p: &iface_meal_planning::DeleteFromMealPlanResponse) -> Value {
+    let mut m = Map::new();
+    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_meal_planning__get_shopping_list_response__to_json(p: &iface_meal_planning::GetShoppingListResponse) -> Value {
+    let mut m = Map::new();
+    m.insert("aisles".into(), Value::Array((&p.aisles).iter().map(|v| iface_meal_planning__get_shopping_list_response_aisles_item__to_json(v)).collect()));
+    m.insert("cost".into(), serde_json::Number::from_f64(*(&p.cost)).map(Value::Number).unwrap_or(Value::Null));
+    m.insert("endDate".into(), serde_json::Number::from_f64(*(&p.end_date)).map(Value::Number).unwrap_or(Value::Null));
+    m.insert("startDate".into(), serde_json::Number::from_f64(*(&p.start_date)).map(Value::Number).unwrap_or(Value::Null));
+    Value::Object(m)
+}
+
+fn iface_meal_planning__get_shopping_list_response_aisles_item__to_json(p: &iface_meal_planning::GetShoppingListResponseAislesItem) -> Value {
+    let mut m = Map::new();
+    m.insert("aisle".into(), Value::String((&p.aisle).clone()));
+    m.insert("items".into(), match (&p.items) { Some(v) => Value::Array((v).iter().map(|v| iface_meal_planning__get_shopping_list_response_aisles_item_items_item__to_json(v)).collect()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_meal_planning__get_shopping_list_response_aisles_item_items_item__to_json(p: &iface_meal_planning::GetShoppingListResponseAislesItemItemsItem) -> Value {
+    let mut m = Map::new();
+    m.insert("aisle".into(), Value::String((&p.aisle).clone()));
+    m.insert("cost".into(), serde_json::Number::from_f64(*(&p.cost)).map(Value::Number).unwrap_or(Value::Null));
+    m.insert("id".into(), Value::Number(serde_json::Number::from(*(&p.id))));
+    m.insert("ingredientId".into(), Value::Number(serde_json::Number::from(*(&p.ingredient_id))));
+    m.insert("measures".into(), match (&p.measures) { Some(v) => iface_meal_planning__get_shopping_list_response_aisles_item_items_item_measures__to_json(v), None => Value::Null });
+    m.insert("name".into(), Value::String((&p.name).clone()));
+    m.insert("pantryItem".into(), Value::Bool(*(&p.pantry_item)));
+    Value::Object(m)
+}
+
+fn iface_meal_planning__get_shopping_list_response_aisles_item_items_item_measures__to_json(p: &iface_meal_planning::GetShoppingListResponseAislesItemItemsItemMeasures) -> Value {
+    let mut m = Map::new();
+    m.insert("metric".into(), iface_meal_planning__get_shopping_list_response_aisles_item_items_item_measures_metric__to_json(&p.metric));
+    m.insert("original".into(), iface_meal_planning__get_shopping_list_response_aisles_item_items_item_measures_original__to_json(&p.original));
+    m.insert("us".into(), iface_meal_planning__get_shopping_list_response_aisles_item_items_item_measures_us__to_json(&p.us));
+    Value::Object(m)
+}
+
+fn iface_meal_planning__get_shopping_list_response_aisles_item_items_item_measures_metric__to_json(p: &iface_meal_planning::GetShoppingListResponseAislesItemItemsItemMeasuresMetric) -> Value {
+    let mut m = Map::new();
+    m.insert("amount".into(), serde_json::Number::from_f64(*(&p.amount)).map(Value::Number).unwrap_or(Value::Null));
+    m.insert("unit".into(), Value::String((&p.unit).clone()));
+    Value::Object(m)
+}
+
+fn iface_meal_planning__get_shopping_list_response_aisles_item_items_item_measures_original__to_json(p: &iface_meal_planning::GetShoppingListResponseAislesItemItemsItemMeasuresOriginal) -> Value {
+    let mut m = Map::new();
+    m.insert("amount".into(), serde_json::Number::from_f64(*(&p.amount)).map(Value::Number).unwrap_or(Value::Null));
+    m.insert("unit".into(), Value::String((&p.unit).clone()));
+    Value::Object(m)
+}
+
+fn iface_meal_planning__get_shopping_list_response_aisles_item_items_item_measures_us__to_json(p: &iface_meal_planning::GetShoppingListResponseAislesItemItemsItemMeasuresUs) -> Value {
+    let mut m = Map::new();
+    m.insert("amount".into(), serde_json::Number::from_f64(*(&p.amount)).map(Value::Number).unwrap_or(Value::Null));
+    m.insert("unit".into(), Value::String((&p.unit).clone()));
+    Value::Object(m)
+}
+
+fn iface_meal_planning__add_to_shopping_list_response__to_json(p: &iface_meal_planning::AddToShoppingListResponse) -> Value {
+    let mut m = Map::new();
+    m.insert("aisles".into(), Value::Array((&p.aisles).iter().map(|v| iface_meal_planning__add_to_shopping_list_response_aisles_item__to_json(v)).collect()));
+    m.insert("cost".into(), serde_json::Number::from_f64(*(&p.cost)).map(Value::Number).unwrap_or(Value::Null));
+    m.insert("endDate".into(), serde_json::Number::from_f64(*(&p.end_date)).map(Value::Number).unwrap_or(Value::Null));
+    m.insert("startDate".into(), serde_json::Number::from_f64(*(&p.start_date)).map(Value::Number).unwrap_or(Value::Null));
+    Value::Object(m)
+}
+
+fn iface_meal_planning__add_to_shopping_list_response_aisles_item__to_json(p: &iface_meal_planning::AddToShoppingListResponseAislesItem) -> Value {
+    let mut m = Map::new();
+    m.insert("aisle".into(), Value::String((&p.aisle).clone()));
+    m.insert("items".into(), match (&p.items) { Some(v) => Value::Array((v).iter().map(|v| iface_meal_planning__add_to_shopping_list_response_aisles_item_items_item__to_json(v)).collect()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_meal_planning__add_to_shopping_list_response_aisles_item_items_item__to_json(p: &iface_meal_planning::AddToShoppingListResponseAislesItemItemsItem) -> Value {
+    let mut m = Map::new();
+    m.insert("aisle".into(), Value::String((&p.aisle).clone()));
+    m.insert("cost".into(), serde_json::Number::from_f64(*(&p.cost)).map(Value::Number).unwrap_or(Value::Null));
+    m.insert("id".into(), Value::Number(serde_json::Number::from(*(&p.id))));
+    m.insert("ingredientId".into(), Value::Number(serde_json::Number::from(*(&p.ingredient_id))));
+    m.insert("measures".into(), match (&p.measures) { Some(v) => iface_meal_planning__add_to_shopping_list_response_aisles_item_items_item_measures__to_json(v), None => Value::Null });
+    m.insert("name".into(), Value::String((&p.name).clone()));
+    m.insert("pantryItem".into(), Value::Bool(*(&p.pantry_item)));
+    Value::Object(m)
+}
+
+fn iface_meal_planning__add_to_shopping_list_response_aisles_item_items_item_measures__to_json(p: &iface_meal_planning::AddToShoppingListResponseAislesItemItemsItemMeasures) -> Value {
+    let mut m = Map::new();
+    m.insert("metric".into(), iface_meal_planning__add_to_shopping_list_response_aisles_item_items_item_measures_metric__to_json(&p.metric));
+    m.insert("original".into(), iface_meal_planning__add_to_shopping_list_response_aisles_item_items_item_measures_original__to_json(&p.original));
+    m.insert("us".into(), iface_meal_planning__add_to_shopping_list_response_aisles_item_items_item_measures_us__to_json(&p.us));
+    Value::Object(m)
+}
+
+fn iface_meal_planning__add_to_shopping_list_response_aisles_item_items_item_measures_metric__to_json(p: &iface_meal_planning::AddToShoppingListResponseAislesItemItemsItemMeasuresMetric) -> Value {
+    let mut m = Map::new();
+    m.insert("amount".into(), serde_json::Number::from_f64(*(&p.amount)).map(Value::Number).unwrap_or(Value::Null));
+    m.insert("unit".into(), Value::String((&p.unit).clone()));
+    Value::Object(m)
+}
+
+fn iface_meal_planning__add_to_shopping_list_response_aisles_item_items_item_measures_original__to_json(p: &iface_meal_planning::AddToShoppingListResponseAislesItemItemsItemMeasuresOriginal) -> Value {
+    let mut m = Map::new();
+    m.insert("amount".into(), serde_json::Number::from_f64(*(&p.amount)).map(Value::Number).unwrap_or(Value::Null));
+    m.insert("unit".into(), Value::String((&p.unit).clone()));
+    Value::Object(m)
+}
+
+fn iface_meal_planning__add_to_shopping_list_response_aisles_item_items_item_measures_us__to_json(p: &iface_meal_planning::AddToShoppingListResponseAislesItemItemsItemMeasuresUs) -> Value {
+    let mut m = Map::new();
+    m.insert("amount".into(), serde_json::Number::from_f64(*(&p.amount)).map(Value::Number).unwrap_or(Value::Null));
+    m.insert("unit".into(), Value::String((&p.unit).clone()));
+    Value::Object(m)
+}
+
+fn iface_meal_planning__delete_from_shopping_list_response__to_json(p: &iface_meal_planning::DeleteFromShoppingListResponse) -> Value {
+    let mut m = Map::new();
+    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_meal_planning__generate_shopping_list_response__to_json(p: &iface_meal_planning::GenerateShoppingListResponse) -> Value {
+    let mut m = Map::new();
+    m.insert("aisles".into(), Value::Array((&p.aisles).iter().map(|v| iface_meal_planning__generate_shopping_list_response_aisles_item__to_json(v)).collect()));
+    m.insert("cost".into(), serde_json::Number::from_f64(*(&p.cost)).map(Value::Number).unwrap_or(Value::Null));
+    m.insert("endDate".into(), serde_json::Number::from_f64(*(&p.end_date)).map(Value::Number).unwrap_or(Value::Null));
+    m.insert("startDate".into(), serde_json::Number::from_f64(*(&p.start_date)).map(Value::Number).unwrap_or(Value::Null));
+    Value::Object(m)
+}
+
+fn iface_meal_planning__generate_shopping_list_response_aisles_item__to_json(p: &iface_meal_planning::GenerateShoppingListResponseAislesItem) -> Value {
+    let mut m = Map::new();
+    m.insert("aisle".into(), Value::String((&p.aisle).clone()));
+    m.insert("items".into(), match (&p.items) { Some(v) => Value::Array((v).iter().map(|v| iface_meal_planning__generate_shopping_list_response_aisles_item_items_item__to_json(v)).collect()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_meal_planning__generate_shopping_list_response_aisles_item_items_item__to_json(p: &iface_meal_planning::GenerateShoppingListResponseAislesItemItemsItem) -> Value {
+    let mut m = Map::new();
+    m.insert("aisle".into(), Value::String((&p.aisle).clone()));
+    m.insert("cost".into(), serde_json::Number::from_f64(*(&p.cost)).map(Value::Number).unwrap_or(Value::Null));
+    m.insert("id".into(), Value::Number(serde_json::Number::from(*(&p.id))));
+    m.insert("ingredientId".into(), Value::Number(serde_json::Number::from(*(&p.ingredient_id))));
+    m.insert("measures".into(), match (&p.measures) { Some(v) => iface_meal_planning__generate_shopping_list_response_aisles_item_items_item_measures__to_json(v), None => Value::Null });
+    m.insert("name".into(), Value::String((&p.name).clone()));
+    m.insert("pantryItem".into(), Value::Bool(*(&p.pantry_item)));
+    Value::Object(m)
+}
+
+fn iface_meal_planning__generate_shopping_list_response_aisles_item_items_item_measures__to_json(p: &iface_meal_planning::GenerateShoppingListResponseAislesItemItemsItemMeasures) -> Value {
+    let mut m = Map::new();
+    m.insert("metric".into(), iface_meal_planning__generate_shopping_list_response_aisles_item_items_item_measures_metric__to_json(&p.metric));
+    m.insert("original".into(), iface_meal_planning__generate_shopping_list_response_aisles_item_items_item_measures_original__to_json(&p.original));
+    m.insert("us".into(), iface_meal_planning__generate_shopping_list_response_aisles_item_items_item_measures_us__to_json(&p.us));
+    Value::Object(m)
+}
+
+fn iface_meal_planning__generate_shopping_list_response_aisles_item_items_item_measures_metric__to_json(p: &iface_meal_planning::GenerateShoppingListResponseAislesItemItemsItemMeasuresMetric) -> Value {
+    let mut m = Map::new();
+    m.insert("amount".into(), serde_json::Number::from_f64(*(&p.amount)).map(Value::Number).unwrap_or(Value::Null));
+    m.insert("unit".into(), Value::String((&p.unit).clone()));
+    Value::Object(m)
+}
+
+fn iface_meal_planning__generate_shopping_list_response_aisles_item_items_item_measures_original__to_json(p: &iface_meal_planning::GenerateShoppingListResponseAislesItemItemsItemMeasuresOriginal) -> Value {
+    let mut m = Map::new();
+    m.insert("amount".into(), serde_json::Number::from_f64(*(&p.amount)).map(Value::Number).unwrap_or(Value::Null));
+    m.insert("unit".into(), Value::String((&p.unit).clone()));
+    Value::Object(m)
+}
+
+fn iface_meal_planning__generate_shopping_list_response_aisles_item_items_item_measures_us__to_json(p: &iface_meal_planning::GenerateShoppingListResponseAislesItemItemsItemMeasuresUs) -> Value {
+    let mut m = Map::new();
+    m.insert("amount".into(), serde_json::Number::from_f64(*(&p.amount)).map(Value::Number).unwrap_or(Value::Null));
+    m.insert("unit".into(), Value::String((&p.unit).clone()));
+    Value::Object(m)
+}
+
+fn iface_meal_planning__get_meal_plan_templates_response__to_json(p: &iface_meal_planning::GetMealPlanTemplatesResponse) -> Value {
+    let mut m = Map::new();
+    m.insert("templates".into(), Value::Array((&p.templates).iter().map(|v| iface_meal_planning__get_meal_plan_templates_response_templates_item__to_json(v)).collect()));
+    Value::Object(m)
+}
+
+fn iface_meal_planning__get_meal_plan_templates_response_templates_item__to_json(p: &iface_meal_planning::GetMealPlanTemplatesResponseTemplatesItem) -> Value {
+    let mut m = Map::new();
+    m.insert("id".into(), Value::Number(serde_json::Number::from(*(&p.id))));
+    m.insert("name".into(), Value::String((&p.name).clone()));
+    Value::Object(m)
+}
+
+fn iface_meal_planning__add_meal_plan_template_response__to_json(p: &iface_meal_planning::AddMealPlanTemplateResponse) -> Value {
+    let mut m = Map::new();
+    m.insert("items".into(), Value::Array((&p.items).iter().map(|v| iface_meal_planning__add_meal_plan_template_response_items_item__to_json(v)).collect()));
+    m.insert("name".into(), Value::String((&p.name).clone()));
+    m.insert("publishAsPublic".into(), Value::Bool(*(&p.publish_as_public)));
+    Value::Object(m)
+}
+
+fn iface_meal_planning__add_meal_plan_template_response_items_item__to_json(p: &iface_meal_planning::AddMealPlanTemplateResponseItemsItem) -> Value {
+    let mut m = Map::new();
+    m.insert("day".into(), Value::Number(serde_json::Number::from(*(&p.day))));
+    m.insert("position".into(), Value::Number(serde_json::Number::from(*(&p.position))));
+    m.insert("slot".into(), Value::Number(serde_json::Number::from(*(&p.slot))));
+    m.insert("type".into(), Value::String((&p.type_op).clone()));
+    m.insert("value".into(), match (&p.value) { Some(v) => iface_meal_planning__add_meal_plan_template_response_items_item_value__to_json(v), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_meal_planning__add_meal_plan_template_response_items_item_value__to_json(p: &iface_meal_planning::AddMealPlanTemplateResponseItemsItemValue) -> Value {
+    let mut m = Map::new();
+    m.insert("id".into(), match (&p.id) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("imageType".into(), match (&p.image_type) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("servings".into(), match (&p.servings) { Some(v) => serde_json::Number::from_f64(*(v)).map(Value::Number).unwrap_or(Value::Null), None => Value::Null });
+    m.insert("title".into(), match (&p.title) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_meal_planning__get_meal_plan_template_response__to_json(p: &iface_meal_planning::GetMealPlanTemplateResponse) -> Value {
+    let mut m = Map::new();
+    m.insert("days".into(), Value::Array((&p.days).iter().map(|v| iface_meal_planning__get_meal_plan_template_response_days_item__to_json(v)).collect()));
+    m.insert("id".into(), Value::Number(serde_json::Number::from(*(&p.id))));
+    m.insert("name".into(), Value::String((&p.name).clone()));
+    Value::Object(m)
+}
+
+fn iface_meal_planning__get_meal_plan_template_response_days_item__to_json(p: &iface_meal_planning::GetMealPlanTemplateResponseDaysItem) -> Value {
+    let mut m = Map::new();
+    m.insert("day".into(), Value::String((&p.day).clone()));
+    m.insert("items".into(), match (&p.items) { Some(v) => Value::Array((v).iter().map(|v| iface_meal_planning__get_meal_plan_template_response_days_item_items_item__to_json(v)).collect()), None => Value::Null });
+    m.insert("nutritionSummary".into(), match (&p.nutrition_summary) { Some(v) => iface_meal_planning__get_meal_plan_template_response_days_item_nutrition_summary__to_json(v), None => Value::Null });
+    m.insert("nutritionSummaryBreakfast".into(), match (&p.nutrition_summary_breakfast) { Some(v) => iface_meal_planning__get_meal_plan_template_response_days_item_nutrition_summary_breakfast__to_json(v), None => Value::Null });
+    m.insert("nutritionSummaryDinner".into(), match (&p.nutrition_summary_dinner) { Some(v) => iface_meal_planning__get_meal_plan_template_response_days_item_nutrition_summary_dinner__to_json(v), None => Value::Null });
+    m.insert("nutritionSummaryLunch".into(), match (&p.nutrition_summary_lunch) { Some(v) => iface_meal_planning__get_meal_plan_template_response_days_item_nutrition_summary_lunch__to_json(v), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_meal_planning__get_meal_plan_template_response_days_item_items_item__to_json(p: &iface_meal_planning::GetMealPlanTemplateResponseDaysItemItemsItem) -> Value {
+    let mut m = Map::new();
+    m.insert("id".into(), Value::Number(serde_json::Number::from(*(&p.id))));
+    m.insert("position".into(), Value::Number(serde_json::Number::from(*(&p.position))));
+    m.insert("slot".into(), Value::Number(serde_json::Number::from(*(&p.slot))));
+    m.insert("type".into(), Value::String((&p.type_op).clone()));
+    m.insert("value".into(), match (&p.value) { Some(v) => iface_meal_planning__get_meal_plan_template_response_days_item_items_item_value__to_json(v), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_meal_planning__get_meal_plan_template_response_days_item_items_item_value__to_json(p: &iface_meal_planning::GetMealPlanTemplateResponseDaysItemItemsItemValue) -> Value {
+    let mut m = Map::new();
+    m.insert("id".into(), serde_json::Number::from_f64(*(&p.id)).map(Value::Number).unwrap_or(Value::Null));
+    m.insert("imageType".into(), Value::String((&p.image_type).clone()));
+    m.insert("title".into(), Value::String((&p.title).clone()));
+    Value::Object(m)
+}
+
+fn iface_meal_planning__get_meal_plan_template_response_days_item_nutrition_summary__to_json(p: &iface_meal_planning::GetMealPlanTemplateResponseDaysItemNutritionSummary) -> Value {
+    let mut m = Map::new();
+    m.insert("nutrients".into(), Value::Array((&p.nutrients).iter().map(|v| iface_meal_planning__get_meal_plan_template_response_days_item_nutrition_summary_nutrients_item__to_json(v)).collect()));
+    Value::Object(m)
+}
+
+fn iface_meal_planning__get_meal_plan_template_response_days_item_nutrition_summary_nutrients_item__to_json(p: &iface_meal_planning::GetMealPlanTemplateResponseDaysItemNutritionSummaryNutrientsItem) -> Value {
+    let mut m = Map::new();
+    m.insert("amount".into(), serde_json::Number::from_f64(*(&p.amount)).map(Value::Number).unwrap_or(Value::Null));
+    m.insert("name".into(), Value::String((&p.name).clone()));
+    m.insert("percentDailyNeeds".into(), serde_json::Number::from_f64(*(&p.percent_daily_needs)).map(Value::Number).unwrap_or(Value::Null));
+    m.insert("unit".into(), Value::String((&p.unit).clone()));
+    Value::Object(m)
+}
+
+fn iface_meal_planning__get_meal_plan_template_response_days_item_nutrition_summary_breakfast__to_json(p: &iface_meal_planning::GetMealPlanTemplateResponseDaysItemNutritionSummaryBreakfast) -> Value {
+    let mut m = Map::new();
+    m.insert("nutrients".into(), Value::Array((&p.nutrients).iter().map(|v| iface_meal_planning__get_meal_plan_template_response_days_item_nutrition_summary_breakfast_nutrients_item__to_json(v)).collect()));
+    Value::Object(m)
+}
+
+fn iface_meal_planning__get_meal_plan_template_response_days_item_nutrition_summary_breakfast_nutrients_item__to_json(p: &iface_meal_planning::GetMealPlanTemplateResponseDaysItemNutritionSummaryBreakfastNutrientsItem) -> Value {
+    let mut m = Map::new();
+    m.insert("amount".into(), serde_json::Number::from_f64(*(&p.amount)).map(Value::Number).unwrap_or(Value::Null));
+    m.insert("name".into(), Value::String((&p.name).clone()));
+    m.insert("percentDailyNeeds".into(), serde_json::Number::from_f64(*(&p.percent_daily_needs)).map(Value::Number).unwrap_or(Value::Null));
+    m.insert("unit".into(), Value::String((&p.unit).clone()));
+    Value::Object(m)
+}
+
+fn iface_meal_planning__get_meal_plan_template_response_days_item_nutrition_summary_dinner__to_json(p: &iface_meal_planning::GetMealPlanTemplateResponseDaysItemNutritionSummaryDinner) -> Value {
+    let mut m = Map::new();
+    m.insert("nutrients".into(), Value::Array((&p.nutrients).iter().map(|v| iface_meal_planning__get_meal_plan_template_response_days_item_nutrition_summary_dinner_nutrients_item__to_json(v)).collect()));
+    Value::Object(m)
+}
+
+fn iface_meal_planning__get_meal_plan_template_response_days_item_nutrition_summary_dinner_nutrients_item__to_json(p: &iface_meal_planning::GetMealPlanTemplateResponseDaysItemNutritionSummaryDinnerNutrientsItem) -> Value {
+    let mut m = Map::new();
+    m.insert("amount".into(), serde_json::Number::from_f64(*(&p.amount)).map(Value::Number).unwrap_or(Value::Null));
+    m.insert("name".into(), Value::String((&p.name).clone()));
+    m.insert("percentDailyNeeds".into(), serde_json::Number::from_f64(*(&p.percent_daily_needs)).map(Value::Number).unwrap_or(Value::Null));
+    m.insert("unit".into(), Value::String((&p.unit).clone()));
+    Value::Object(m)
+}
+
+fn iface_meal_planning__get_meal_plan_template_response_days_item_nutrition_summary_lunch__to_json(p: &iface_meal_planning::GetMealPlanTemplateResponseDaysItemNutritionSummaryLunch) -> Value {
+    let mut m = Map::new();
+    m.insert("nutrients".into(), Value::Array((&p.nutrients).iter().map(|v| iface_meal_planning__get_meal_plan_template_response_days_item_nutrition_summary_lunch_nutrients_item__to_json(v)).collect()));
+    Value::Object(m)
+}
+
+fn iface_meal_planning__get_meal_plan_template_response_days_item_nutrition_summary_lunch_nutrients_item__to_json(p: &iface_meal_planning::GetMealPlanTemplateResponseDaysItemNutritionSummaryLunchNutrientsItem) -> Value {
+    let mut m = Map::new();
+    m.insert("amount".into(), serde_json::Number::from_f64(*(&p.amount)).map(Value::Number).unwrap_or(Value::Null));
+    m.insert("name".into(), Value::String((&p.name).clone()));
+    m.insert("percentDailyNeeds".into(), serde_json::Number::from_f64(*(&p.percent_daily_needs)).map(Value::Number).unwrap_or(Value::Null));
+    m.insert("unit".into(), Value::String((&p.unit).clone()));
+    Value::Object(m)
+}
+
+fn iface_meal_planning__delete_meal_plan_template_response__to_json(p: &iface_meal_planning::DeleteMealPlanTemplateResponse) -> Value {
+    let mut m = Map::new();
+    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_meal_planning__get_meal_plan_week_response__to_json(p: &iface_meal_planning::GetMealPlanWeekResponse) -> Value {
+    let mut m = Map::new();
+    m.insert("days".into(), Value::Array((&p.days).iter().map(|v| iface_meal_planning__get_meal_plan_week_response_days_item__to_json(v)).collect()));
+    Value::Object(m)
+}
+
+fn iface_meal_planning__get_meal_plan_week_response_days_item__to_json(p: &iface_meal_planning::GetMealPlanWeekResponseDaysItem) -> Value {
+    let mut m = Map::new();
+    m.insert("date".into(), serde_json::Number::from_f64(*(&p.date)).map(Value::Number).unwrap_or(Value::Null));
+    m.insert("day".into(), Value::String((&p.day).clone()));
+    m.insert("items".into(), match (&p.items) { Some(v) => Value::Array((v).iter().map(|v| iface_meal_planning__get_meal_plan_week_response_days_item_items_item__to_json(v)).collect()), None => Value::Null });
+    m.insert("nutritionSummary".into(), match (&p.nutrition_summary) { Some(v) => iface_meal_planning__get_meal_plan_week_response_days_item_nutrition_summary__to_json(v), None => Value::Null });
+    m.insert("nutritionSummaryBreakfast".into(), match (&p.nutrition_summary_breakfast) { Some(v) => iface_meal_planning__get_meal_plan_week_response_days_item_nutrition_summary_breakfast__to_json(v), None => Value::Null });
+    m.insert("nutritionSummaryDinner".into(), match (&p.nutrition_summary_dinner) { Some(v) => iface_meal_planning__get_meal_plan_week_response_days_item_nutrition_summary_dinner__to_json(v), None => Value::Null });
+    m.insert("nutritionSummaryLunch".into(), match (&p.nutrition_summary_lunch) { Some(v) => iface_meal_planning__get_meal_plan_week_response_days_item_nutrition_summary_lunch__to_json(v), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_meal_planning__get_meal_plan_week_response_days_item_items_item__to_json(p: &iface_meal_planning::GetMealPlanWeekResponseDaysItemItemsItem) -> Value {
+    let mut m = Map::new();
+    m.insert("id".into(), Value::Number(serde_json::Number::from(*(&p.id))));
+    m.insert("position".into(), Value::Number(serde_json::Number::from(*(&p.position))));
+    m.insert("slot".into(), Value::Number(serde_json::Number::from(*(&p.slot))));
+    m.insert("type".into(), Value::String((&p.type_op).clone()));
+    m.insert("value".into(), match (&p.value) { Some(v) => iface_meal_planning__get_meal_plan_week_response_days_item_items_item_value__to_json(v), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_meal_planning__get_meal_plan_week_response_days_item_items_item_value__to_json(p: &iface_meal_planning::GetMealPlanWeekResponseDaysItemItemsItemValue) -> Value {
+    let mut m = Map::new();
+    m.insert("id".into(), serde_json::Number::from_f64(*(&p.id)).map(Value::Number).unwrap_or(Value::Null));
+    m.insert("imageType".into(), Value::String((&p.image_type).clone()));
+    m.insert("servings".into(), serde_json::Number::from_f64(*(&p.servings)).map(Value::Number).unwrap_or(Value::Null));
+    m.insert("title".into(), Value::String((&p.title).clone()));
+    Value::Object(m)
+}
+
+fn iface_meal_planning__get_meal_plan_week_response_days_item_nutrition_summary__to_json(p: &iface_meal_planning::GetMealPlanWeekResponseDaysItemNutritionSummary) -> Value {
+    let mut m = Map::new();
+    m.insert("nutrients".into(), Value::Array((&p.nutrients).iter().map(|v| iface_meal_planning__get_meal_plan_week_response_days_item_nutrition_summary_nutrients_item__to_json(v)).collect()));
+    Value::Object(m)
+}
+
+fn iface_meal_planning__get_meal_plan_week_response_days_item_nutrition_summary_nutrients_item__to_json(p: &iface_meal_planning::GetMealPlanWeekResponseDaysItemNutritionSummaryNutrientsItem) -> Value {
+    let mut m = Map::new();
+    m.insert("amount".into(), serde_json::Number::from_f64(*(&p.amount)).map(Value::Number).unwrap_or(Value::Null));
+    m.insert("name".into(), Value::String((&p.name).clone()));
+    m.insert("percentDailyNeeds".into(), serde_json::Number::from_f64(*(&p.percent_daily_needs)).map(Value::Number).unwrap_or(Value::Null));
+    m.insert("unit".into(), Value::String((&p.unit).clone()));
+    Value::Object(m)
+}
+
+fn iface_meal_planning__get_meal_plan_week_response_days_item_nutrition_summary_breakfast__to_json(p: &iface_meal_planning::GetMealPlanWeekResponseDaysItemNutritionSummaryBreakfast) -> Value {
+    let mut m = Map::new();
+    m.insert("nutrients".into(), Value::Array((&p.nutrients).iter().map(|v| iface_meal_planning__get_meal_plan_week_response_days_item_nutrition_summary_breakfast_nutrients_item__to_json(v)).collect()));
+    Value::Object(m)
+}
+
+fn iface_meal_planning__get_meal_plan_week_response_days_item_nutrition_summary_breakfast_nutrients_item__to_json(p: &iface_meal_planning::GetMealPlanWeekResponseDaysItemNutritionSummaryBreakfastNutrientsItem) -> Value {
+    let mut m = Map::new();
+    m.insert("amount".into(), serde_json::Number::from_f64(*(&p.amount)).map(Value::Number).unwrap_or(Value::Null));
+    m.insert("name".into(), Value::String((&p.name).clone()));
+    m.insert("percentDailyNeeds".into(), serde_json::Number::from_f64(*(&p.percent_daily_needs)).map(Value::Number).unwrap_or(Value::Null));
+    m.insert("unit".into(), Value::String((&p.unit).clone()));
+    Value::Object(m)
+}
+
+fn iface_meal_planning__get_meal_plan_week_response_days_item_nutrition_summary_dinner__to_json(p: &iface_meal_planning::GetMealPlanWeekResponseDaysItemNutritionSummaryDinner) -> Value {
+    let mut m = Map::new();
+    m.insert("nutrients".into(), Value::Array((&p.nutrients).iter().map(|v| iface_meal_planning__get_meal_plan_week_response_days_item_nutrition_summary_dinner_nutrients_item__to_json(v)).collect()));
+    Value::Object(m)
+}
+
+fn iface_meal_planning__get_meal_plan_week_response_days_item_nutrition_summary_dinner_nutrients_item__to_json(p: &iface_meal_planning::GetMealPlanWeekResponseDaysItemNutritionSummaryDinnerNutrientsItem) -> Value {
+    let mut m = Map::new();
+    m.insert("amount".into(), serde_json::Number::from_f64(*(&p.amount)).map(Value::Number).unwrap_or(Value::Null));
+    m.insert("name".into(), Value::String((&p.name).clone()));
+    m.insert("percentDailyNeeds".into(), serde_json::Number::from_f64(*(&p.percent_daily_needs)).map(Value::Number).unwrap_or(Value::Null));
+    m.insert("unit".into(), Value::String((&p.unit).clone()));
+    Value::Object(m)
+}
+
+fn iface_meal_planning__get_meal_plan_week_response_days_item_nutrition_summary_lunch__to_json(p: &iface_meal_planning::GetMealPlanWeekResponseDaysItemNutritionSummaryLunch) -> Value {
+    let mut m = Map::new();
+    m.insert("nutrients".into(), Value::Array((&p.nutrients).iter().map(|v| iface_meal_planning__get_meal_plan_week_response_days_item_nutrition_summary_lunch_nutrients_item__to_json(v)).collect()));
+    Value::Object(m)
+}
+
+fn iface_meal_planning__get_meal_plan_week_response_days_item_nutrition_summary_lunch_nutrients_item__to_json(p: &iface_meal_planning::GetMealPlanWeekResponseDaysItemNutritionSummaryLunchNutrientsItem) -> Value {
+    let mut m = Map::new();
+    m.insert("amount".into(), serde_json::Number::from_f64(*(&p.amount)).map(Value::Number).unwrap_or(Value::Null));
+    m.insert("name".into(), Value::String((&p.name).clone()));
+    m.insert("percentDailyNeeds".into(), serde_json::Number::from_f64(*(&p.percent_daily_needs)).map(Value::Number).unwrap_or(Value::Null));
+    m.insert("unit".into(), Value::String((&p.unit).clone()));
+    Value::Object(m)
+}
+
+fn iface_meal_planning__connect_user_response__to_json(p: &iface_meal_planning::ConnectUserResponse) -> Value {
+    let mut m = Map::new();
+    m.insert("hash".into(), Value::String((&p.hash).clone()));
+    m.insert("username".into(), Value::String((&p.username).clone()));
     Value::Object(m)
 }
 
@@ -3056,6 +9916,9 @@ fn iface_meal_planning__clear_meal_plan_day_params__to_json(p: &iface_meal_plann
     m.insert("username".into(), Value::String((&p.username).clone()));
     m.insert("date".into(), Value::String((&p.date).clone()));
     m.insert("hash".into(), Value::String((&p.hash).clone()));
+    m.insert("date_v2".into(), Value::String((&p.date_v2).clone()));
+    m.insert("hash_v2".into(), Value::String((&p.hash_v2).clone()));
+    m.insert("username_v2".into(), Value::String((&p.username_v2).clone()));
     Value::Object(m)
 }
 
@@ -3076,6 +9939,9 @@ fn iface_meal_planning__delete_from_meal_plan_params__to_json(p: &iface_meal_pla
     m.insert("username".into(), Value::String((&p.username).clone()));
     m.insert("id".into(), Value::String((&p.id).clone()));
     m.insert("hash".into(), Value::String((&p.hash).clone()));
+    m.insert("hash_v2".into(), Value::String((&p.hash_v2).clone()));
+    m.insert("id_v2".into(), serde_json::Number::from_f64(*(&p.id_v2)).map(Value::Number).unwrap_or(Value::Null));
+    m.insert("username_v2".into(), Value::String((&p.username_v2).clone()));
     Value::Object(m)
 }
 
@@ -3101,6 +9967,9 @@ fn iface_meal_planning__delete_from_shopping_list_params__to_json(p: &iface_meal
     m.insert("username".into(), Value::String((&p.username).clone()));
     m.insert("id".into(), Value::String((&p.id).clone()));
     m.insert("hash".into(), Value::String((&p.hash).clone()));
+    m.insert("hash_v2".into(), Value::String((&p.hash_v2).clone()));
+    m.insert("id_v2".into(), serde_json::Number::from_f64(*(&p.id_v2)).map(Value::Number).unwrap_or(Value::Null));
+    m.insert("username_v2".into(), Value::String((&p.username_v2).clone()));
     Value::Object(m)
 }
 
@@ -3110,6 +9979,10 @@ fn iface_meal_planning__generate_shopping_list_params__to_json(p: &iface_meal_pl
     m.insert("start_date".into(), Value::String((&p.start_date).clone()));
     m.insert("end_date".into(), Value::String((&p.end_date).clone()));
     m.insert("hash".into(), Value::String((&p.hash).clone()));
+    m.insert("end_date_v2".into(), Value::String((&p.end_date_v2).clone()));
+    m.insert("hash_v2".into(), Value::String((&p.hash_v2).clone()));
+    m.insert("start_date_v2".into(), Value::String((&p.start_date_v2).clone()));
+    m.insert("username_v2".into(), Value::String((&p.username_v2).clone()));
     Value::Object(m)
 }
 
@@ -3124,6 +9997,8 @@ fn iface_meal_planning__add_meal_plan_template_params__to_json(p: &iface_meal_pl
     let mut m = Map::new();
     m.insert("username".into(), Value::String((&p.username).clone()));
     m.insert("hash".into(), Value::String((&p.hash).clone()));
+    m.insert("hash_v2".into(), Value::String((&p.hash_v2).clone()));
+    m.insert("username_v2".into(), Value::String((&p.username_v2).clone()));
     Value::Object(m)
 }
 
@@ -3140,6 +10015,9 @@ fn iface_meal_planning__delete_meal_plan_template_params__to_json(p: &iface_meal
     m.insert("username".into(), Value::String((&p.username).clone()));
     m.insert("id".into(), Value::String((&p.id).clone()));
     m.insert("hash".into(), Value::String((&p.hash).clone()));
+    m.insert("hash_v2".into(), Value::String((&p.hash_v2).clone()));
+    m.insert("id_v2".into(), serde_json::Number::from_f64(*(&p.id_v2)).map(Value::Number).unwrap_or(Value::Null));
+    m.insert("username_v2".into(), Value::String((&p.username_v2).clone()));
     Value::Object(m)
 }
 
@@ -3160,62 +10038,954 @@ fn iface_meal_planning__connect_user_params__to_json(p: &iface_meal_planning::Co
     Value::Object(m)
 }
 
+fn iface_meal_planning__generate_meal_plan_response__from_json(v: &Value) -> Option<iface_meal_planning::GenerateMealPlanResponse> {
+    let m = v.as_object()?;
+    Some(iface_meal_planning::GenerateMealPlanResponse {
+        meals: m.get("meals").and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| iface_meal_planning__generate_meal_plan_response_meals_item__from_json(x)).collect())).unwrap_or_default(),
+        nutrients: match m.get("nutrients").and_then(|v| iface_meal_planning__generate_meal_plan_response_nutrients__from_json(v)) { Some(x) => x, None => return None },
+    })
+}
+
+fn iface_meal_planning__generate_meal_plan_response_meals_item__from_json(v: &Value) -> Option<iface_meal_planning::GenerateMealPlanResponseMealsItem> {
+    let m = v.as_object()?;
+    Some(iface_meal_planning::GenerateMealPlanResponseMealsItem {
+        id: m.get("id").and_then(|v| (v).as_i64().map(|n| n as i32)).unwrap_or_default(),
+        image_type: m.get("imageType").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        ready_in_minutes: m.get("readyInMinutes").and_then(|v| (v).as_i64().map(|n| n as i32)).unwrap_or_default(),
+        servings: m.get("servings").and_then(|v| (v).as_f64()).unwrap_or_default(),
+        source_url: m.get("sourceUrl").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        title: m.get("title").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+    })
+}
+
+fn iface_meal_planning__generate_meal_plan_response_nutrients__from_json(v: &Value) -> Option<iface_meal_planning::GenerateMealPlanResponseNutrients> {
+    let m = v.as_object()?;
+    Some(iface_meal_planning::GenerateMealPlanResponseNutrients {
+        calories: m.get("calories").and_then(|v| (v).as_f64()).unwrap_or_default(),
+        carbohydrates: m.get("carbohydrates").and_then(|v| (v).as_f64()).unwrap_or_default(),
+        fat: m.get("fat").and_then(|v| (v).as_f64()).unwrap_or_default(),
+        protein: m.get("protein").and_then(|v| (v).as_f64()).unwrap_or_default(),
+    })
+}
+
+fn iface_meal_planning__clear_meal_plan_day_response__from_json(v: &Value) -> Option<iface_meal_planning::ClearMealPlanDayResponse> {
+    let m = v.as_object()?;
+    Some(iface_meal_planning::ClearMealPlanDayResponse {
+        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    })
+}
+
+fn iface_meal_planning__add_to_meal_plan_response__from_json(v: &Value) -> Option<iface_meal_planning::AddToMealPlanResponse> {
+    let m = v.as_object()?;
+    Some(iface_meal_planning::AddToMealPlanResponse {
+        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    })
+}
+
+fn iface_meal_planning__delete_from_meal_plan_response__from_json(v: &Value) -> Option<iface_meal_planning::DeleteFromMealPlanResponse> {
+    let m = v.as_object()?;
+    Some(iface_meal_planning::DeleteFromMealPlanResponse {
+        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    })
+}
+
+fn iface_meal_planning__get_shopping_list_response__from_json(v: &Value) -> Option<iface_meal_planning::GetShoppingListResponse> {
+    let m = v.as_object()?;
+    Some(iface_meal_planning::GetShoppingListResponse {
+        aisles: m.get("aisles").and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| iface_meal_planning__get_shopping_list_response_aisles_item__from_json(x)).collect())).unwrap_or_default(),
+        cost: m.get("cost").and_then(|v| (v).as_f64()).unwrap_or_default(),
+        end_date: m.get("endDate").and_then(|v| (v).as_f64()).unwrap_or_default(),
+        start_date: m.get("startDate").and_then(|v| (v).as_f64()).unwrap_or_default(),
+    })
+}
+
+fn iface_meal_planning__get_shopping_list_response_aisles_item__from_json(v: &Value) -> Option<iface_meal_planning::GetShoppingListResponseAislesItem> {
+    let m = v.as_object()?;
+    Some(iface_meal_planning::GetShoppingListResponseAislesItem {
+        aisle: m.get("aisle").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        items: m.get("items").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| iface_meal_planning__get_shopping_list_response_aisles_item_items_item__from_json(x)).collect())),
+    })
+}
+
+fn iface_meal_planning__get_shopping_list_response_aisles_item_items_item__from_json(v: &Value) -> Option<iface_meal_planning::GetShoppingListResponseAislesItemItemsItem> {
+    let m = v.as_object()?;
+    Some(iface_meal_planning::GetShoppingListResponseAislesItemItemsItem {
+        aisle: m.get("aisle").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        cost: m.get("cost").and_then(|v| (v).as_f64()).unwrap_or_default(),
+        id: m.get("id").and_then(|v| (v).as_i64().map(|n| n as i32)).unwrap_or_default(),
+        ingredient_id: m.get("ingredientId").and_then(|v| (v).as_i64().map(|n| n as i32)).unwrap_or_default(),
+        measures: m.get("measures").filter(|v| !v.is_null()).and_then(|v| iface_meal_planning__get_shopping_list_response_aisles_item_items_item_measures__from_json(v)),
+        name: m.get("name").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        pantry_item: m.get("pantryItem").and_then(|v| (v).as_bool()).unwrap_or_default(),
+    })
+}
+
+fn iface_meal_planning__get_shopping_list_response_aisles_item_items_item_measures__from_json(v: &Value) -> Option<iface_meal_planning::GetShoppingListResponseAislesItemItemsItemMeasures> {
+    let m = v.as_object()?;
+    Some(iface_meal_planning::GetShoppingListResponseAislesItemItemsItemMeasures {
+        metric: match m.get("metric").and_then(|v| iface_meal_planning__get_shopping_list_response_aisles_item_items_item_measures_metric__from_json(v)) { Some(x) => x, None => return None },
+        original: match m.get("original").and_then(|v| iface_meal_planning__get_shopping_list_response_aisles_item_items_item_measures_original__from_json(v)) { Some(x) => x, None => return None },
+        us: match m.get("us").and_then(|v| iface_meal_planning__get_shopping_list_response_aisles_item_items_item_measures_us__from_json(v)) { Some(x) => x, None => return None },
+    })
+}
+
+fn iface_meal_planning__get_shopping_list_response_aisles_item_items_item_measures_metric__from_json(v: &Value) -> Option<iface_meal_planning::GetShoppingListResponseAislesItemItemsItemMeasuresMetric> {
+    let m = v.as_object()?;
+    Some(iface_meal_planning::GetShoppingListResponseAislesItemItemsItemMeasuresMetric {
+        amount: m.get("amount").and_then(|v| (v).as_f64()).unwrap_or_default(),
+        unit: m.get("unit").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+    })
+}
+
+fn iface_meal_planning__get_shopping_list_response_aisles_item_items_item_measures_original__from_json(v: &Value) -> Option<iface_meal_planning::GetShoppingListResponseAislesItemItemsItemMeasuresOriginal> {
+    let m = v.as_object()?;
+    Some(iface_meal_planning::GetShoppingListResponseAislesItemItemsItemMeasuresOriginal {
+        amount: m.get("amount").and_then(|v| (v).as_f64()).unwrap_or_default(),
+        unit: m.get("unit").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+    })
+}
+
+fn iface_meal_planning__get_shopping_list_response_aisles_item_items_item_measures_us__from_json(v: &Value) -> Option<iface_meal_planning::GetShoppingListResponseAislesItemItemsItemMeasuresUs> {
+    let m = v.as_object()?;
+    Some(iface_meal_planning::GetShoppingListResponseAislesItemItemsItemMeasuresUs {
+        amount: m.get("amount").and_then(|v| (v).as_f64()).unwrap_or_default(),
+        unit: m.get("unit").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+    })
+}
+
+fn iface_meal_planning__add_to_shopping_list_response__from_json(v: &Value) -> Option<iface_meal_planning::AddToShoppingListResponse> {
+    let m = v.as_object()?;
+    Some(iface_meal_planning::AddToShoppingListResponse {
+        aisles: m.get("aisles").and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| iface_meal_planning__add_to_shopping_list_response_aisles_item__from_json(x)).collect())).unwrap_or_default(),
+        cost: m.get("cost").and_then(|v| (v).as_f64()).unwrap_or_default(),
+        end_date: m.get("endDate").and_then(|v| (v).as_f64()).unwrap_or_default(),
+        start_date: m.get("startDate").and_then(|v| (v).as_f64()).unwrap_or_default(),
+    })
+}
+
+fn iface_meal_planning__add_to_shopping_list_response_aisles_item__from_json(v: &Value) -> Option<iface_meal_planning::AddToShoppingListResponseAislesItem> {
+    let m = v.as_object()?;
+    Some(iface_meal_planning::AddToShoppingListResponseAislesItem {
+        aisle: m.get("aisle").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        items: m.get("items").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| iface_meal_planning__add_to_shopping_list_response_aisles_item_items_item__from_json(x)).collect())),
+    })
+}
+
+fn iface_meal_planning__add_to_shopping_list_response_aisles_item_items_item__from_json(v: &Value) -> Option<iface_meal_planning::AddToShoppingListResponseAislesItemItemsItem> {
+    let m = v.as_object()?;
+    Some(iface_meal_planning::AddToShoppingListResponseAislesItemItemsItem {
+        aisle: m.get("aisle").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        cost: m.get("cost").and_then(|v| (v).as_f64()).unwrap_or_default(),
+        id: m.get("id").and_then(|v| (v).as_i64().map(|n| n as i32)).unwrap_or_default(),
+        ingredient_id: m.get("ingredientId").and_then(|v| (v).as_i64().map(|n| n as i32)).unwrap_or_default(),
+        measures: m.get("measures").filter(|v| !v.is_null()).and_then(|v| iface_meal_planning__add_to_shopping_list_response_aisles_item_items_item_measures__from_json(v)),
+        name: m.get("name").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        pantry_item: m.get("pantryItem").and_then(|v| (v).as_bool()).unwrap_or_default(),
+    })
+}
+
+fn iface_meal_planning__add_to_shopping_list_response_aisles_item_items_item_measures__from_json(v: &Value) -> Option<iface_meal_planning::AddToShoppingListResponseAislesItemItemsItemMeasures> {
+    let m = v.as_object()?;
+    Some(iface_meal_planning::AddToShoppingListResponseAislesItemItemsItemMeasures {
+        metric: match m.get("metric").and_then(|v| iface_meal_planning__add_to_shopping_list_response_aisles_item_items_item_measures_metric__from_json(v)) { Some(x) => x, None => return None },
+        original: match m.get("original").and_then(|v| iface_meal_planning__add_to_shopping_list_response_aisles_item_items_item_measures_original__from_json(v)) { Some(x) => x, None => return None },
+        us: match m.get("us").and_then(|v| iface_meal_planning__add_to_shopping_list_response_aisles_item_items_item_measures_us__from_json(v)) { Some(x) => x, None => return None },
+    })
+}
+
+fn iface_meal_planning__add_to_shopping_list_response_aisles_item_items_item_measures_metric__from_json(v: &Value) -> Option<iface_meal_planning::AddToShoppingListResponseAislesItemItemsItemMeasuresMetric> {
+    let m = v.as_object()?;
+    Some(iface_meal_planning::AddToShoppingListResponseAislesItemItemsItemMeasuresMetric {
+        amount: m.get("amount").and_then(|v| (v).as_f64()).unwrap_or_default(),
+        unit: m.get("unit").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+    })
+}
+
+fn iface_meal_planning__add_to_shopping_list_response_aisles_item_items_item_measures_original__from_json(v: &Value) -> Option<iface_meal_planning::AddToShoppingListResponseAislesItemItemsItemMeasuresOriginal> {
+    let m = v.as_object()?;
+    Some(iface_meal_planning::AddToShoppingListResponseAislesItemItemsItemMeasuresOriginal {
+        amount: m.get("amount").and_then(|v| (v).as_f64()).unwrap_or_default(),
+        unit: m.get("unit").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+    })
+}
+
+fn iface_meal_planning__add_to_shopping_list_response_aisles_item_items_item_measures_us__from_json(v: &Value) -> Option<iface_meal_planning::AddToShoppingListResponseAislesItemItemsItemMeasuresUs> {
+    let m = v.as_object()?;
+    Some(iface_meal_planning::AddToShoppingListResponseAislesItemItemsItemMeasuresUs {
+        amount: m.get("amount").and_then(|v| (v).as_f64()).unwrap_or_default(),
+        unit: m.get("unit").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+    })
+}
+
+fn iface_meal_planning__delete_from_shopping_list_response__from_json(v: &Value) -> Option<iface_meal_planning::DeleteFromShoppingListResponse> {
+    let m = v.as_object()?;
+    Some(iface_meal_planning::DeleteFromShoppingListResponse {
+        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    })
+}
+
+fn iface_meal_planning__generate_shopping_list_response__from_json(v: &Value) -> Option<iface_meal_planning::GenerateShoppingListResponse> {
+    let m = v.as_object()?;
+    Some(iface_meal_planning::GenerateShoppingListResponse {
+        aisles: m.get("aisles").and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| iface_meal_planning__generate_shopping_list_response_aisles_item__from_json(x)).collect())).unwrap_or_default(),
+        cost: m.get("cost").and_then(|v| (v).as_f64()).unwrap_or_default(),
+        end_date: m.get("endDate").and_then(|v| (v).as_f64()).unwrap_or_default(),
+        start_date: m.get("startDate").and_then(|v| (v).as_f64()).unwrap_or_default(),
+    })
+}
+
+fn iface_meal_planning__generate_shopping_list_response_aisles_item__from_json(v: &Value) -> Option<iface_meal_planning::GenerateShoppingListResponseAislesItem> {
+    let m = v.as_object()?;
+    Some(iface_meal_planning::GenerateShoppingListResponseAislesItem {
+        aisle: m.get("aisle").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        items: m.get("items").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| iface_meal_planning__generate_shopping_list_response_aisles_item_items_item__from_json(x)).collect())),
+    })
+}
+
+fn iface_meal_planning__generate_shopping_list_response_aisles_item_items_item__from_json(v: &Value) -> Option<iface_meal_planning::GenerateShoppingListResponseAislesItemItemsItem> {
+    let m = v.as_object()?;
+    Some(iface_meal_planning::GenerateShoppingListResponseAislesItemItemsItem {
+        aisle: m.get("aisle").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        cost: m.get("cost").and_then(|v| (v).as_f64()).unwrap_or_default(),
+        id: m.get("id").and_then(|v| (v).as_i64().map(|n| n as i32)).unwrap_or_default(),
+        ingredient_id: m.get("ingredientId").and_then(|v| (v).as_i64().map(|n| n as i32)).unwrap_or_default(),
+        measures: m.get("measures").filter(|v| !v.is_null()).and_then(|v| iface_meal_planning__generate_shopping_list_response_aisles_item_items_item_measures__from_json(v)),
+        name: m.get("name").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        pantry_item: m.get("pantryItem").and_then(|v| (v).as_bool()).unwrap_or_default(),
+    })
+}
+
+fn iface_meal_planning__generate_shopping_list_response_aisles_item_items_item_measures__from_json(v: &Value) -> Option<iface_meal_planning::GenerateShoppingListResponseAislesItemItemsItemMeasures> {
+    let m = v.as_object()?;
+    Some(iface_meal_planning::GenerateShoppingListResponseAislesItemItemsItemMeasures {
+        metric: match m.get("metric").and_then(|v| iface_meal_planning__generate_shopping_list_response_aisles_item_items_item_measures_metric__from_json(v)) { Some(x) => x, None => return None },
+        original: match m.get("original").and_then(|v| iface_meal_planning__generate_shopping_list_response_aisles_item_items_item_measures_original__from_json(v)) { Some(x) => x, None => return None },
+        us: match m.get("us").and_then(|v| iface_meal_planning__generate_shopping_list_response_aisles_item_items_item_measures_us__from_json(v)) { Some(x) => x, None => return None },
+    })
+}
+
+fn iface_meal_planning__generate_shopping_list_response_aisles_item_items_item_measures_metric__from_json(v: &Value) -> Option<iface_meal_planning::GenerateShoppingListResponseAislesItemItemsItemMeasuresMetric> {
+    let m = v.as_object()?;
+    Some(iface_meal_planning::GenerateShoppingListResponseAislesItemItemsItemMeasuresMetric {
+        amount: m.get("amount").and_then(|v| (v).as_f64()).unwrap_or_default(),
+        unit: m.get("unit").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+    })
+}
+
+fn iface_meal_planning__generate_shopping_list_response_aisles_item_items_item_measures_original__from_json(v: &Value) -> Option<iface_meal_planning::GenerateShoppingListResponseAislesItemItemsItemMeasuresOriginal> {
+    let m = v.as_object()?;
+    Some(iface_meal_planning::GenerateShoppingListResponseAislesItemItemsItemMeasuresOriginal {
+        amount: m.get("amount").and_then(|v| (v).as_f64()).unwrap_or_default(),
+        unit: m.get("unit").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+    })
+}
+
+fn iface_meal_planning__generate_shopping_list_response_aisles_item_items_item_measures_us__from_json(v: &Value) -> Option<iface_meal_planning::GenerateShoppingListResponseAislesItemItemsItemMeasuresUs> {
+    let m = v.as_object()?;
+    Some(iface_meal_planning::GenerateShoppingListResponseAislesItemItemsItemMeasuresUs {
+        amount: m.get("amount").and_then(|v| (v).as_f64()).unwrap_or_default(),
+        unit: m.get("unit").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+    })
+}
+
+fn iface_meal_planning__get_meal_plan_templates_response__from_json(v: &Value) -> Option<iface_meal_planning::GetMealPlanTemplatesResponse> {
+    let m = v.as_object()?;
+    Some(iface_meal_planning::GetMealPlanTemplatesResponse {
+        templates: m.get("templates").and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| iface_meal_planning__get_meal_plan_templates_response_templates_item__from_json(x)).collect())).unwrap_or_default(),
+    })
+}
+
+fn iface_meal_planning__get_meal_plan_templates_response_templates_item__from_json(v: &Value) -> Option<iface_meal_planning::GetMealPlanTemplatesResponseTemplatesItem> {
+    let m = v.as_object()?;
+    Some(iface_meal_planning::GetMealPlanTemplatesResponseTemplatesItem {
+        id: m.get("id").and_then(|v| (v).as_i64().map(|n| n as i32)).unwrap_or_default(),
+        name: m.get("name").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+    })
+}
+
+fn iface_meal_planning__add_meal_plan_template_response__from_json(v: &Value) -> Option<iface_meal_planning::AddMealPlanTemplateResponse> {
+    let m = v.as_object()?;
+    Some(iface_meal_planning::AddMealPlanTemplateResponse {
+        items: m.get("items").and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| iface_meal_planning__add_meal_plan_template_response_items_item__from_json(x)).collect())).unwrap_or_default(),
+        name: m.get("name").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        publish_as_public: m.get("publishAsPublic").and_then(|v| (v).as_bool()).unwrap_or_default(),
+    })
+}
+
+fn iface_meal_planning__add_meal_plan_template_response_items_item__from_json(v: &Value) -> Option<iface_meal_planning::AddMealPlanTemplateResponseItemsItem> {
+    let m = v.as_object()?;
+    Some(iface_meal_planning::AddMealPlanTemplateResponseItemsItem {
+        day: m.get("day").and_then(|v| (v).as_i64().map(|n| n as i32)).unwrap_or_default(),
+        position: m.get("position").and_then(|v| (v).as_i64().map(|n| n as i32)).unwrap_or_default(),
+        slot: m.get("slot").and_then(|v| (v).as_i64().map(|n| n as i32)).unwrap_or_default(),
+        type_op: m.get("type").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        value: m.get("value").filter(|v| !v.is_null()).and_then(|v| iface_meal_planning__add_meal_plan_template_response_items_item_value__from_json(v)),
+    })
+}
+
+fn iface_meal_planning__add_meal_plan_template_response_items_item_value__from_json(v: &Value) -> Option<iface_meal_planning::AddMealPlanTemplateResponseItemsItemValue> {
+    let m = v.as_object()?;
+    Some(iface_meal_planning::AddMealPlanTemplateResponseItemsItemValue {
+        id: m.get("id").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        image_type: m.get("imageType").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        servings: m.get("servings").filter(|v| !v.is_null()).and_then(|v| (v).as_f64()),
+        title: m.get("title").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    })
+}
+
+fn iface_meal_planning__get_meal_plan_template_response__from_json(v: &Value) -> Option<iface_meal_planning::GetMealPlanTemplateResponse> {
+    let m = v.as_object()?;
+    Some(iface_meal_planning::GetMealPlanTemplateResponse {
+        days: m.get("days").and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| iface_meal_planning__get_meal_plan_template_response_days_item__from_json(x)).collect())).unwrap_or_default(),
+        id: m.get("id").and_then(|v| (v).as_i64().map(|n| n as i32)).unwrap_or_default(),
+        name: m.get("name").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+    })
+}
+
+fn iface_meal_planning__get_meal_plan_template_response_days_item__from_json(v: &Value) -> Option<iface_meal_planning::GetMealPlanTemplateResponseDaysItem> {
+    let m = v.as_object()?;
+    Some(iface_meal_planning::GetMealPlanTemplateResponseDaysItem {
+        day: m.get("day").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        items: m.get("items").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| iface_meal_planning__get_meal_plan_template_response_days_item_items_item__from_json(x)).collect())),
+        nutrition_summary: m.get("nutritionSummary").filter(|v| !v.is_null()).and_then(|v| iface_meal_planning__get_meal_plan_template_response_days_item_nutrition_summary__from_json(v)),
+        nutrition_summary_breakfast: m.get("nutritionSummaryBreakfast").filter(|v| !v.is_null()).and_then(|v| iface_meal_planning__get_meal_plan_template_response_days_item_nutrition_summary_breakfast__from_json(v)),
+        nutrition_summary_dinner: m.get("nutritionSummaryDinner").filter(|v| !v.is_null()).and_then(|v| iface_meal_planning__get_meal_plan_template_response_days_item_nutrition_summary_dinner__from_json(v)),
+        nutrition_summary_lunch: m.get("nutritionSummaryLunch").filter(|v| !v.is_null()).and_then(|v| iface_meal_planning__get_meal_plan_template_response_days_item_nutrition_summary_lunch__from_json(v)),
+    })
+}
+
+fn iface_meal_planning__get_meal_plan_template_response_days_item_items_item__from_json(v: &Value) -> Option<iface_meal_planning::GetMealPlanTemplateResponseDaysItemItemsItem> {
+    let m = v.as_object()?;
+    Some(iface_meal_planning::GetMealPlanTemplateResponseDaysItemItemsItem {
+        id: m.get("id").and_then(|v| (v).as_i64().map(|n| n as i32)).unwrap_or_default(),
+        position: m.get("position").and_then(|v| (v).as_i64().map(|n| n as i32)).unwrap_or_default(),
+        slot: m.get("slot").and_then(|v| (v).as_i64().map(|n| n as i32)).unwrap_or_default(),
+        type_op: m.get("type").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        value: m.get("value").filter(|v| !v.is_null()).and_then(|v| iface_meal_planning__get_meal_plan_template_response_days_item_items_item_value__from_json(v)),
+    })
+}
+
+fn iface_meal_planning__get_meal_plan_template_response_days_item_items_item_value__from_json(v: &Value) -> Option<iface_meal_planning::GetMealPlanTemplateResponseDaysItemItemsItemValue> {
+    let m = v.as_object()?;
+    Some(iface_meal_planning::GetMealPlanTemplateResponseDaysItemItemsItemValue {
+        id: m.get("id").and_then(|v| (v).as_f64()).unwrap_or_default(),
+        image_type: m.get("imageType").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        title: m.get("title").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+    })
+}
+
+fn iface_meal_planning__get_meal_plan_template_response_days_item_nutrition_summary__from_json(v: &Value) -> Option<iface_meal_planning::GetMealPlanTemplateResponseDaysItemNutritionSummary> {
+    let m = v.as_object()?;
+    Some(iface_meal_planning::GetMealPlanTemplateResponseDaysItemNutritionSummary {
+        nutrients: m.get("nutrients").and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| iface_meal_planning__get_meal_plan_template_response_days_item_nutrition_summary_nutrients_item__from_json(x)).collect())).unwrap_or_default(),
+    })
+}
+
+fn iface_meal_planning__get_meal_plan_template_response_days_item_nutrition_summary_nutrients_item__from_json(v: &Value) -> Option<iface_meal_planning::GetMealPlanTemplateResponseDaysItemNutritionSummaryNutrientsItem> {
+    let m = v.as_object()?;
+    Some(iface_meal_planning::GetMealPlanTemplateResponseDaysItemNutritionSummaryNutrientsItem {
+        amount: m.get("amount").and_then(|v| (v).as_f64()).unwrap_or_default(),
+        name: m.get("name").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        percent_daily_needs: m.get("percentDailyNeeds").and_then(|v| (v).as_f64()).unwrap_or_default(),
+        unit: m.get("unit").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+    })
+}
+
+fn iface_meal_planning__get_meal_plan_template_response_days_item_nutrition_summary_breakfast__from_json(v: &Value) -> Option<iface_meal_planning::GetMealPlanTemplateResponseDaysItemNutritionSummaryBreakfast> {
+    let m = v.as_object()?;
+    Some(iface_meal_planning::GetMealPlanTemplateResponseDaysItemNutritionSummaryBreakfast {
+        nutrients: m.get("nutrients").and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| iface_meal_planning__get_meal_plan_template_response_days_item_nutrition_summary_breakfast_nutrients_item__from_json(x)).collect())).unwrap_or_default(),
+    })
+}
+
+fn iface_meal_planning__get_meal_plan_template_response_days_item_nutrition_summary_breakfast_nutrients_item__from_json(v: &Value) -> Option<iface_meal_planning::GetMealPlanTemplateResponseDaysItemNutritionSummaryBreakfastNutrientsItem> {
+    let m = v.as_object()?;
+    Some(iface_meal_planning::GetMealPlanTemplateResponseDaysItemNutritionSummaryBreakfastNutrientsItem {
+        amount: m.get("amount").and_then(|v| (v).as_f64()).unwrap_or_default(),
+        name: m.get("name").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        percent_daily_needs: m.get("percentDailyNeeds").and_then(|v| (v).as_f64()).unwrap_or_default(),
+        unit: m.get("unit").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+    })
+}
+
+fn iface_meal_planning__get_meal_plan_template_response_days_item_nutrition_summary_dinner__from_json(v: &Value) -> Option<iface_meal_planning::GetMealPlanTemplateResponseDaysItemNutritionSummaryDinner> {
+    let m = v.as_object()?;
+    Some(iface_meal_planning::GetMealPlanTemplateResponseDaysItemNutritionSummaryDinner {
+        nutrients: m.get("nutrients").and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| iface_meal_planning__get_meal_plan_template_response_days_item_nutrition_summary_dinner_nutrients_item__from_json(x)).collect())).unwrap_or_default(),
+    })
+}
+
+fn iface_meal_planning__get_meal_plan_template_response_days_item_nutrition_summary_dinner_nutrients_item__from_json(v: &Value) -> Option<iface_meal_planning::GetMealPlanTemplateResponseDaysItemNutritionSummaryDinnerNutrientsItem> {
+    let m = v.as_object()?;
+    Some(iface_meal_planning::GetMealPlanTemplateResponseDaysItemNutritionSummaryDinnerNutrientsItem {
+        amount: m.get("amount").and_then(|v| (v).as_f64()).unwrap_or_default(),
+        name: m.get("name").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        percent_daily_needs: m.get("percentDailyNeeds").and_then(|v| (v).as_f64()).unwrap_or_default(),
+        unit: m.get("unit").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+    })
+}
+
+fn iface_meal_planning__get_meal_plan_template_response_days_item_nutrition_summary_lunch__from_json(v: &Value) -> Option<iface_meal_planning::GetMealPlanTemplateResponseDaysItemNutritionSummaryLunch> {
+    let m = v.as_object()?;
+    Some(iface_meal_planning::GetMealPlanTemplateResponseDaysItemNutritionSummaryLunch {
+        nutrients: m.get("nutrients").and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| iface_meal_planning__get_meal_plan_template_response_days_item_nutrition_summary_lunch_nutrients_item__from_json(x)).collect())).unwrap_or_default(),
+    })
+}
+
+fn iface_meal_planning__get_meal_plan_template_response_days_item_nutrition_summary_lunch_nutrients_item__from_json(v: &Value) -> Option<iface_meal_planning::GetMealPlanTemplateResponseDaysItemNutritionSummaryLunchNutrientsItem> {
+    let m = v.as_object()?;
+    Some(iface_meal_planning::GetMealPlanTemplateResponseDaysItemNutritionSummaryLunchNutrientsItem {
+        amount: m.get("amount").and_then(|v| (v).as_f64()).unwrap_or_default(),
+        name: m.get("name").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        percent_daily_needs: m.get("percentDailyNeeds").and_then(|v| (v).as_f64()).unwrap_or_default(),
+        unit: m.get("unit").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+    })
+}
+
+fn iface_meal_planning__delete_meal_plan_template_response__from_json(v: &Value) -> Option<iface_meal_planning::DeleteMealPlanTemplateResponse> {
+    let m = v.as_object()?;
+    Some(iface_meal_planning::DeleteMealPlanTemplateResponse {
+        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    })
+}
+
+fn iface_meal_planning__get_meal_plan_week_response__from_json(v: &Value) -> Option<iface_meal_planning::GetMealPlanWeekResponse> {
+    let m = v.as_object()?;
+    Some(iface_meal_planning::GetMealPlanWeekResponse {
+        days: m.get("days").and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| iface_meal_planning__get_meal_plan_week_response_days_item__from_json(x)).collect())).unwrap_or_default(),
+    })
+}
+
+fn iface_meal_planning__get_meal_plan_week_response_days_item__from_json(v: &Value) -> Option<iface_meal_planning::GetMealPlanWeekResponseDaysItem> {
+    let m = v.as_object()?;
+    Some(iface_meal_planning::GetMealPlanWeekResponseDaysItem {
+        date: m.get("date").and_then(|v| (v).as_f64()).unwrap_or_default(),
+        day: m.get("day").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        items: m.get("items").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| iface_meal_planning__get_meal_plan_week_response_days_item_items_item__from_json(x)).collect())),
+        nutrition_summary: m.get("nutritionSummary").filter(|v| !v.is_null()).and_then(|v| iface_meal_planning__get_meal_plan_week_response_days_item_nutrition_summary__from_json(v)),
+        nutrition_summary_breakfast: m.get("nutritionSummaryBreakfast").filter(|v| !v.is_null()).and_then(|v| iface_meal_planning__get_meal_plan_week_response_days_item_nutrition_summary_breakfast__from_json(v)),
+        nutrition_summary_dinner: m.get("nutritionSummaryDinner").filter(|v| !v.is_null()).and_then(|v| iface_meal_planning__get_meal_plan_week_response_days_item_nutrition_summary_dinner__from_json(v)),
+        nutrition_summary_lunch: m.get("nutritionSummaryLunch").filter(|v| !v.is_null()).and_then(|v| iface_meal_planning__get_meal_plan_week_response_days_item_nutrition_summary_lunch__from_json(v)),
+    })
+}
+
+fn iface_meal_planning__get_meal_plan_week_response_days_item_items_item__from_json(v: &Value) -> Option<iface_meal_planning::GetMealPlanWeekResponseDaysItemItemsItem> {
+    let m = v.as_object()?;
+    Some(iface_meal_planning::GetMealPlanWeekResponseDaysItemItemsItem {
+        id: m.get("id").and_then(|v| (v).as_i64().map(|n| n as i32)).unwrap_or_default(),
+        position: m.get("position").and_then(|v| (v).as_i64().map(|n| n as i32)).unwrap_or_default(),
+        slot: m.get("slot").and_then(|v| (v).as_i64().map(|n| n as i32)).unwrap_or_default(),
+        type_op: m.get("type").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        value: m.get("value").filter(|v| !v.is_null()).and_then(|v| iface_meal_planning__get_meal_plan_week_response_days_item_items_item_value__from_json(v)),
+    })
+}
+
+fn iface_meal_planning__get_meal_plan_week_response_days_item_items_item_value__from_json(v: &Value) -> Option<iface_meal_planning::GetMealPlanWeekResponseDaysItemItemsItemValue> {
+    let m = v.as_object()?;
+    Some(iface_meal_planning::GetMealPlanWeekResponseDaysItemItemsItemValue {
+        id: m.get("id").and_then(|v| (v).as_f64()).unwrap_or_default(),
+        image_type: m.get("imageType").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        servings: m.get("servings").and_then(|v| (v).as_f64()).unwrap_or_default(),
+        title: m.get("title").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+    })
+}
+
+fn iface_meal_planning__get_meal_plan_week_response_days_item_nutrition_summary__from_json(v: &Value) -> Option<iface_meal_planning::GetMealPlanWeekResponseDaysItemNutritionSummary> {
+    let m = v.as_object()?;
+    Some(iface_meal_planning::GetMealPlanWeekResponseDaysItemNutritionSummary {
+        nutrients: m.get("nutrients").and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| iface_meal_planning__get_meal_plan_week_response_days_item_nutrition_summary_nutrients_item__from_json(x)).collect())).unwrap_or_default(),
+    })
+}
+
+fn iface_meal_planning__get_meal_plan_week_response_days_item_nutrition_summary_nutrients_item__from_json(v: &Value) -> Option<iface_meal_planning::GetMealPlanWeekResponseDaysItemNutritionSummaryNutrientsItem> {
+    let m = v.as_object()?;
+    Some(iface_meal_planning::GetMealPlanWeekResponseDaysItemNutritionSummaryNutrientsItem {
+        amount: m.get("amount").and_then(|v| (v).as_f64()).unwrap_or_default(),
+        name: m.get("name").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        percent_daily_needs: m.get("percentDailyNeeds").and_then(|v| (v).as_f64()).unwrap_or_default(),
+        unit: m.get("unit").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+    })
+}
+
+fn iface_meal_planning__get_meal_plan_week_response_days_item_nutrition_summary_breakfast__from_json(v: &Value) -> Option<iface_meal_planning::GetMealPlanWeekResponseDaysItemNutritionSummaryBreakfast> {
+    let m = v.as_object()?;
+    Some(iface_meal_planning::GetMealPlanWeekResponseDaysItemNutritionSummaryBreakfast {
+        nutrients: m.get("nutrients").and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| iface_meal_planning__get_meal_plan_week_response_days_item_nutrition_summary_breakfast_nutrients_item__from_json(x)).collect())).unwrap_or_default(),
+    })
+}
+
+fn iface_meal_planning__get_meal_plan_week_response_days_item_nutrition_summary_breakfast_nutrients_item__from_json(v: &Value) -> Option<iface_meal_planning::GetMealPlanWeekResponseDaysItemNutritionSummaryBreakfastNutrientsItem> {
+    let m = v.as_object()?;
+    Some(iface_meal_planning::GetMealPlanWeekResponseDaysItemNutritionSummaryBreakfastNutrientsItem {
+        amount: m.get("amount").and_then(|v| (v).as_f64()).unwrap_or_default(),
+        name: m.get("name").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        percent_daily_needs: m.get("percentDailyNeeds").and_then(|v| (v).as_f64()).unwrap_or_default(),
+        unit: m.get("unit").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+    })
+}
+
+fn iface_meal_planning__get_meal_plan_week_response_days_item_nutrition_summary_dinner__from_json(v: &Value) -> Option<iface_meal_planning::GetMealPlanWeekResponseDaysItemNutritionSummaryDinner> {
+    let m = v.as_object()?;
+    Some(iface_meal_planning::GetMealPlanWeekResponseDaysItemNutritionSummaryDinner {
+        nutrients: m.get("nutrients").and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| iface_meal_planning__get_meal_plan_week_response_days_item_nutrition_summary_dinner_nutrients_item__from_json(x)).collect())).unwrap_or_default(),
+    })
+}
+
+fn iface_meal_planning__get_meal_plan_week_response_days_item_nutrition_summary_dinner_nutrients_item__from_json(v: &Value) -> Option<iface_meal_planning::GetMealPlanWeekResponseDaysItemNutritionSummaryDinnerNutrientsItem> {
+    let m = v.as_object()?;
+    Some(iface_meal_planning::GetMealPlanWeekResponseDaysItemNutritionSummaryDinnerNutrientsItem {
+        amount: m.get("amount").and_then(|v| (v).as_f64()).unwrap_or_default(),
+        name: m.get("name").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        percent_daily_needs: m.get("percentDailyNeeds").and_then(|v| (v).as_f64()).unwrap_or_default(),
+        unit: m.get("unit").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+    })
+}
+
+fn iface_meal_planning__get_meal_plan_week_response_days_item_nutrition_summary_lunch__from_json(v: &Value) -> Option<iface_meal_planning::GetMealPlanWeekResponseDaysItemNutritionSummaryLunch> {
+    let m = v.as_object()?;
+    Some(iface_meal_planning::GetMealPlanWeekResponseDaysItemNutritionSummaryLunch {
+        nutrients: m.get("nutrients").and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| iface_meal_planning__get_meal_plan_week_response_days_item_nutrition_summary_lunch_nutrients_item__from_json(x)).collect())).unwrap_or_default(),
+    })
+}
+
+fn iface_meal_planning__get_meal_plan_week_response_days_item_nutrition_summary_lunch_nutrients_item__from_json(v: &Value) -> Option<iface_meal_planning::GetMealPlanWeekResponseDaysItemNutritionSummaryLunchNutrientsItem> {
+    let m = v.as_object()?;
+    Some(iface_meal_planning::GetMealPlanWeekResponseDaysItemNutritionSummaryLunchNutrientsItem {
+        amount: m.get("amount").and_then(|v| (v).as_f64()).unwrap_or_default(),
+        name: m.get("name").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        percent_daily_needs: m.get("percentDailyNeeds").and_then(|v| (v).as_f64()).unwrap_or_default(),
+        unit: m.get("unit").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+    })
+}
+
+fn iface_meal_planning__connect_user_response__from_json(v: &Value) -> Option<iface_meal_planning::ConnectUserResponse> {
+    let m = v.as_object()?;
+    Some(iface_meal_planning::ConnectUserResponse {
+        hash: m.get("hash").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        username: m.get("username").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+    })
+}
+
+fn iface_meal_planning__generate_meal_plan__ok(body: String) -> Result<iface_meal_planning::GenerateMealPlanResponse, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match iface_meal_planning__generate_meal_plan_response__from_json(&v) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_meal_planning__generate_meal_plan__err(e: crate::runtime::DispatchError) -> iface_meal_planning::GenerateMealPlanError {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => match status {
+            401u16 => iface_meal_planning::GenerateMealPlanError::Unauthorized(body),
+            403u16 => iface_meal_planning::GenerateMealPlanError::Forbidden(body),
+            404u16 => iface_meal_planning::GenerateMealPlanError::NotFound(body),
+            _ => iface_meal_planning::GenerateMealPlanError::Other(body),
+        },
+        crate::runtime::DispatchError::Transport(m) => iface_meal_planning::GenerateMealPlanError::Other(m),
+    }
+}
+
+fn iface_meal_planning__clear_meal_plan_day__ok(body: String) -> Result<iface_meal_planning::ClearMealPlanDayResponse, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match iface_meal_planning__clear_meal_plan_day_response__from_json(&v) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_meal_planning__clear_meal_plan_day__err(e: crate::runtime::DispatchError) -> iface_meal_planning::ClearMealPlanDayError {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => match status {
+            401u16 => iface_meal_planning::ClearMealPlanDayError::Unauthorized(body),
+            403u16 => iface_meal_planning::ClearMealPlanDayError::Forbidden(body),
+            404u16 => iface_meal_planning::ClearMealPlanDayError::NotFound(body),
+            _ => iface_meal_planning::ClearMealPlanDayError::Other(body),
+        },
+        crate::runtime::DispatchError::Transport(m) => iface_meal_planning::ClearMealPlanDayError::Other(m),
+    }
+}
+
+fn iface_meal_planning__add_to_meal_plan__ok(body: String) -> Result<iface_meal_planning::AddToMealPlanResponse, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match iface_meal_planning__add_to_meal_plan_response__from_json(&v) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_meal_planning__add_to_meal_plan__err(e: crate::runtime::DispatchError) -> iface_meal_planning::AddToMealPlanError {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => match status {
+            401u16 => iface_meal_planning::AddToMealPlanError::Unauthorized(body),
+            403u16 => iface_meal_planning::AddToMealPlanError::Forbidden(body),
+            404u16 => iface_meal_planning::AddToMealPlanError::NotFound(body),
+            _ => iface_meal_planning::AddToMealPlanError::Other(body),
+        },
+        crate::runtime::DispatchError::Transport(m) => iface_meal_planning::AddToMealPlanError::Other(m),
+    }
+}
+
+fn iface_meal_planning__delete_from_meal_plan__ok(body: String) -> Result<iface_meal_planning::DeleteFromMealPlanResponse, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match iface_meal_planning__delete_from_meal_plan_response__from_json(&v) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_meal_planning__delete_from_meal_plan__err(e: crate::runtime::DispatchError) -> iface_meal_planning::DeleteFromMealPlanError {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => match status {
+            401u16 => iface_meal_planning::DeleteFromMealPlanError::Unauthorized(body),
+            403u16 => iface_meal_planning::DeleteFromMealPlanError::Forbidden(body),
+            404u16 => iface_meal_planning::DeleteFromMealPlanError::NotFound(body),
+            _ => iface_meal_planning::DeleteFromMealPlanError::Other(body),
+        },
+        crate::runtime::DispatchError::Transport(m) => iface_meal_planning::DeleteFromMealPlanError::Other(m),
+    }
+}
+
+fn iface_meal_planning__get_shopping_list__ok(body: String) -> Result<iface_meal_planning::GetShoppingListResponse, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match iface_meal_planning__get_shopping_list_response__from_json(&v) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_meal_planning__get_shopping_list__err(e: crate::runtime::DispatchError) -> iface_meal_planning::GetShoppingListError {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => match status {
+            401u16 => iface_meal_planning::GetShoppingListError::Unauthorized(body),
+            403u16 => iface_meal_planning::GetShoppingListError::Forbidden(body),
+            404u16 => iface_meal_planning::GetShoppingListError::NotFound(body),
+            _ => iface_meal_planning::GetShoppingListError::Other(body),
+        },
+        crate::runtime::DispatchError::Transport(m) => iface_meal_planning::GetShoppingListError::Other(m),
+    }
+}
+
+fn iface_meal_planning__add_to_shopping_list__ok(body: String) -> Result<iface_meal_planning::AddToShoppingListResponse, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match iface_meal_planning__add_to_shopping_list_response__from_json(&v) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_meal_planning__add_to_shopping_list__err(e: crate::runtime::DispatchError) -> iface_meal_planning::AddToShoppingListError {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => match status {
+            401u16 => iface_meal_planning::AddToShoppingListError::Unauthorized(body),
+            403u16 => iface_meal_planning::AddToShoppingListError::Forbidden(body),
+            404u16 => iface_meal_planning::AddToShoppingListError::NotFound(body),
+            _ => iface_meal_planning::AddToShoppingListError::Other(body),
+        },
+        crate::runtime::DispatchError::Transport(m) => iface_meal_planning::AddToShoppingListError::Other(m),
+    }
+}
+
+fn iface_meal_planning__delete_from_shopping_list__ok(body: String) -> Result<iface_meal_planning::DeleteFromShoppingListResponse, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match iface_meal_planning__delete_from_shopping_list_response__from_json(&v) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_meal_planning__delete_from_shopping_list__err(e: crate::runtime::DispatchError) -> iface_meal_planning::DeleteFromShoppingListError {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => match status {
+            401u16 => iface_meal_planning::DeleteFromShoppingListError::Unauthorized(body),
+            403u16 => iface_meal_planning::DeleteFromShoppingListError::Forbidden(body),
+            404u16 => iface_meal_planning::DeleteFromShoppingListError::NotFound(body),
+            _ => iface_meal_planning::DeleteFromShoppingListError::Other(body),
+        },
+        crate::runtime::DispatchError::Transport(m) => iface_meal_planning::DeleteFromShoppingListError::Other(m),
+    }
+}
+
+fn iface_meal_planning__generate_shopping_list__ok(body: String) -> Result<iface_meal_planning::GenerateShoppingListResponse, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match iface_meal_planning__generate_shopping_list_response__from_json(&v) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_meal_planning__generate_shopping_list__err(e: crate::runtime::DispatchError) -> iface_meal_planning::GenerateShoppingListError {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => match status {
+            401u16 => iface_meal_planning::GenerateShoppingListError::Unauthorized(body),
+            403u16 => iface_meal_planning::GenerateShoppingListError::Forbidden(body),
+            404u16 => iface_meal_planning::GenerateShoppingListError::NotFound(body),
+            _ => iface_meal_planning::GenerateShoppingListError::Other(body),
+        },
+        crate::runtime::DispatchError::Transport(m) => iface_meal_planning::GenerateShoppingListError::Other(m),
+    }
+}
+
+fn iface_meal_planning__get_meal_plan_templates__ok(body: String) -> Result<iface_meal_planning::GetMealPlanTemplatesResponse, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match iface_meal_planning__get_meal_plan_templates_response__from_json(&v) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_meal_planning__get_meal_plan_templates__err(e: crate::runtime::DispatchError) -> iface_meal_planning::GetMealPlanTemplatesError {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => match status {
+            401u16 => iface_meal_planning::GetMealPlanTemplatesError::Unauthorized(body),
+            403u16 => iface_meal_planning::GetMealPlanTemplatesError::Forbidden(body),
+            404u16 => iface_meal_planning::GetMealPlanTemplatesError::NotFound(body),
+            _ => iface_meal_planning::GetMealPlanTemplatesError::Other(body),
+        },
+        crate::runtime::DispatchError::Transport(m) => iface_meal_planning::GetMealPlanTemplatesError::Other(m),
+    }
+}
+
+fn iface_meal_planning__add_meal_plan_template__ok(body: String) -> Result<iface_meal_planning::AddMealPlanTemplateResponse, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match iface_meal_planning__add_meal_plan_template_response__from_json(&v) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_meal_planning__add_meal_plan_template__err(e: crate::runtime::DispatchError) -> iface_meal_planning::AddMealPlanTemplateError {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => match status {
+            401u16 => iface_meal_planning::AddMealPlanTemplateError::Unauthorized(body),
+            403u16 => iface_meal_planning::AddMealPlanTemplateError::Forbidden(body),
+            404u16 => iface_meal_planning::AddMealPlanTemplateError::NotFound(body),
+            _ => iface_meal_planning::AddMealPlanTemplateError::Other(body),
+        },
+        crate::runtime::DispatchError::Transport(m) => iface_meal_planning::AddMealPlanTemplateError::Other(m),
+    }
+}
+
+fn iface_meal_planning__get_meal_plan_template__ok(body: String) -> Result<iface_meal_planning::GetMealPlanTemplateResponse, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match iface_meal_planning__get_meal_plan_template_response__from_json(&v) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_meal_planning__get_meal_plan_template__err(e: crate::runtime::DispatchError) -> iface_meal_planning::GetMealPlanTemplateError {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => match status {
+            401u16 => iface_meal_planning::GetMealPlanTemplateError::Unauthorized(body),
+            403u16 => iface_meal_planning::GetMealPlanTemplateError::Forbidden(body),
+            404u16 => iface_meal_planning::GetMealPlanTemplateError::NotFound(body),
+            _ => iface_meal_planning::GetMealPlanTemplateError::Other(body),
+        },
+        crate::runtime::DispatchError::Transport(m) => iface_meal_planning::GetMealPlanTemplateError::Other(m),
+    }
+}
+
+fn iface_meal_planning__delete_meal_plan_template__ok(body: String) -> Result<iface_meal_planning::DeleteMealPlanTemplateResponse, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match iface_meal_planning__delete_meal_plan_template_response__from_json(&v) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_meal_planning__delete_meal_plan_template__err(e: crate::runtime::DispatchError) -> iface_meal_planning::DeleteMealPlanTemplateError {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => match status {
+            401u16 => iface_meal_planning::DeleteMealPlanTemplateError::Unauthorized(body),
+            403u16 => iface_meal_planning::DeleteMealPlanTemplateError::Forbidden(body),
+            404u16 => iface_meal_planning::DeleteMealPlanTemplateError::NotFound(body),
+            _ => iface_meal_planning::DeleteMealPlanTemplateError::Other(body),
+        },
+        crate::runtime::DispatchError::Transport(m) => iface_meal_planning::DeleteMealPlanTemplateError::Other(m),
+    }
+}
+
+fn iface_meal_planning__get_meal_plan_week__ok(body: String) -> Result<iface_meal_planning::GetMealPlanWeekResponse, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match iface_meal_planning__get_meal_plan_week_response__from_json(&v) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_meal_planning__get_meal_plan_week__err(e: crate::runtime::DispatchError) -> iface_meal_planning::GetMealPlanWeekError {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => match status {
+            401u16 => iface_meal_planning::GetMealPlanWeekError::Unauthorized(body),
+            403u16 => iface_meal_planning::GetMealPlanWeekError::Forbidden(body),
+            404u16 => iface_meal_planning::GetMealPlanWeekError::NotFound(body),
+            _ => iface_meal_planning::GetMealPlanWeekError::Other(body),
+        },
+        crate::runtime::DispatchError::Transport(m) => iface_meal_planning::GetMealPlanWeekError::Other(m),
+    }
+}
+
+fn iface_meal_planning__connect_user__ok(body: String) -> Result<iface_meal_planning::ConnectUserResponse, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match iface_meal_planning__connect_user_response__from_json(&v) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_meal_planning__connect_user__err(e: crate::runtime::DispatchError) -> iface_meal_planning::ConnectUserError {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => match status {
+            401u16 => iface_meal_planning::ConnectUserError::Unauthorized(body),
+            403u16 => iface_meal_planning::ConnectUserError::Forbidden(body),
+            404u16 => iface_meal_planning::ConnectUserError::NotFound(body),
+            _ => iface_meal_planning::ConnectUserError::Other(body),
+        },
+        crate::runtime::DispatchError::Transport(m) => iface_meal_planning::ConnectUserError::Other(m),
+    }
+}
+
 impl iface_meal_planning::Guest for crate::Component {
-    fn generate_meal_plan(params: iface_meal_planning::GenerateMealPlanParams) -> Result<String, String> {
+    fn generate_meal_plan(params: iface_meal_planning::GenerateMealPlanParams) -> Result<iface_meal_planning::GenerateMealPlanResponse, iface_meal_planning::GenerateMealPlanError> {
         let json = iface_meal_planning__generate_meal_plan_params__to_json(&params);
-        dispatch(&OP_MEAL_PLANNING_GENERATE_MEAL_PLAN, json)
+        match dispatch(&OP_MEAL_PLANNING_GENERATE_MEAL_PLAN, json).and_then(iface_meal_planning__generate_meal_plan__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_meal_planning__generate_meal_plan__err(e)),
+        }
     }
-    fn clear_meal_plan_day(params: iface_meal_planning::ClearMealPlanDayParams) -> Result<String, String> {
+    fn clear_meal_plan_day(params: iface_meal_planning::ClearMealPlanDayParams) -> Result<iface_meal_planning::ClearMealPlanDayResponse, iface_meal_planning::ClearMealPlanDayError> {
         let json = iface_meal_planning__clear_meal_plan_day_params__to_json(&params);
-        dispatch(&OP_MEAL_PLANNING_CLEAR_MEAL_PLAN_DAY, json)
+        match dispatch(&OP_MEAL_PLANNING_CLEAR_MEAL_PLAN_DAY, json).and_then(iface_meal_planning__clear_meal_plan_day__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_meal_planning__clear_meal_plan_day__err(e)),
+        }
     }
-    fn add_to_meal_plan(params: iface_meal_planning::AddToMealPlanParams) -> Result<String, String> {
+    fn add_to_meal_plan(params: iface_meal_planning::AddToMealPlanParams) -> Result<iface_meal_planning::AddToMealPlanResponse, iface_meal_planning::AddToMealPlanError> {
         let json = iface_meal_planning__add_to_meal_plan_params__to_json(&params);
-        dispatch(&OP_MEAL_PLANNING_ADD_TO_MEAL_PLAN, json)
+        match dispatch(&OP_MEAL_PLANNING_ADD_TO_MEAL_PLAN, json).and_then(iface_meal_planning__add_to_meal_plan__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_meal_planning__add_to_meal_plan__err(e)),
+        }
     }
-    fn delete_from_meal_plan(params: iface_meal_planning::DeleteFromMealPlanParams) -> Result<String, String> {
+    fn delete_from_meal_plan(params: iface_meal_planning::DeleteFromMealPlanParams) -> Result<iface_meal_planning::DeleteFromMealPlanResponse, iface_meal_planning::DeleteFromMealPlanError> {
         let json = iface_meal_planning__delete_from_meal_plan_params__to_json(&params);
-        dispatch(&OP_MEAL_PLANNING_DELETE_FROM_MEAL_PLAN, json)
+        match dispatch(&OP_MEAL_PLANNING_DELETE_FROM_MEAL_PLAN, json).and_then(iface_meal_planning__delete_from_meal_plan__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_meal_planning__delete_from_meal_plan__err(e)),
+        }
     }
-    fn get_shopping_list(params: iface_meal_planning::GetShoppingListParams) -> Result<String, String> {
+    fn get_shopping_list(params: iface_meal_planning::GetShoppingListParams) -> Result<iface_meal_planning::GetShoppingListResponse, iface_meal_planning::GetShoppingListError> {
         let json = iface_meal_planning__get_shopping_list_params__to_json(&params);
-        dispatch(&OP_MEAL_PLANNING_GET_SHOPPING_LIST, json)
+        match dispatch(&OP_MEAL_PLANNING_GET_SHOPPING_LIST, json).and_then(iface_meal_planning__get_shopping_list__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_meal_planning__get_shopping_list__err(e)),
+        }
     }
-    fn add_to_shopping_list(params: iface_meal_planning::AddToShoppingListParams) -> Result<String, String> {
+    fn add_to_shopping_list(params: iface_meal_planning::AddToShoppingListParams) -> Result<iface_meal_planning::AddToShoppingListResponse, iface_meal_planning::AddToShoppingListError> {
         let json = iface_meal_planning__add_to_shopping_list_params__to_json(&params);
-        dispatch(&OP_MEAL_PLANNING_ADD_TO_SHOPPING_LIST, json)
+        match dispatch(&OP_MEAL_PLANNING_ADD_TO_SHOPPING_LIST, json).and_then(iface_meal_planning__add_to_shopping_list__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_meal_planning__add_to_shopping_list__err(e)),
+        }
     }
-    fn delete_from_shopping_list(params: iface_meal_planning::DeleteFromShoppingListParams) -> Result<String, String> {
+    fn delete_from_shopping_list(params: iface_meal_planning::DeleteFromShoppingListParams) -> Result<iface_meal_planning::DeleteFromShoppingListResponse, iface_meal_planning::DeleteFromShoppingListError> {
         let json = iface_meal_planning__delete_from_shopping_list_params__to_json(&params);
-        dispatch(&OP_MEAL_PLANNING_DELETE_FROM_SHOPPING_LIST, json)
+        match dispatch(&OP_MEAL_PLANNING_DELETE_FROM_SHOPPING_LIST, json).and_then(iface_meal_planning__delete_from_shopping_list__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_meal_planning__delete_from_shopping_list__err(e)),
+        }
     }
-    fn generate_shopping_list(params: iface_meal_planning::GenerateShoppingListParams) -> Result<String, String> {
+    fn generate_shopping_list(params: iface_meal_planning::GenerateShoppingListParams) -> Result<iface_meal_planning::GenerateShoppingListResponse, iface_meal_planning::GenerateShoppingListError> {
         let json = iface_meal_planning__generate_shopping_list_params__to_json(&params);
-        dispatch(&OP_MEAL_PLANNING_GENERATE_SHOPPING_LIST, json)
+        match dispatch(&OP_MEAL_PLANNING_GENERATE_SHOPPING_LIST, json).and_then(iface_meal_planning__generate_shopping_list__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_meal_planning__generate_shopping_list__err(e)),
+        }
     }
-    fn get_meal_plan_templates(params: iface_meal_planning::GetMealPlanTemplatesParams) -> Result<String, String> {
+    fn get_meal_plan_templates(params: iface_meal_planning::GetMealPlanTemplatesParams) -> Result<iface_meal_planning::GetMealPlanTemplatesResponse, iface_meal_planning::GetMealPlanTemplatesError> {
         let json = iface_meal_planning__get_meal_plan_templates_params__to_json(&params);
-        dispatch(&OP_MEAL_PLANNING_GET_MEAL_PLAN_TEMPLATES, json)
+        match dispatch(&OP_MEAL_PLANNING_GET_MEAL_PLAN_TEMPLATES, json).and_then(iface_meal_planning__get_meal_plan_templates__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_meal_planning__get_meal_plan_templates__err(e)),
+        }
     }
-    fn add_meal_plan_template(params: iface_meal_planning::AddMealPlanTemplateParams) -> Result<String, String> {
+    fn add_meal_plan_template(params: iface_meal_planning::AddMealPlanTemplateParams) -> Result<iface_meal_planning::AddMealPlanTemplateResponse, iface_meal_planning::AddMealPlanTemplateError> {
         let json = iface_meal_planning__add_meal_plan_template_params__to_json(&params);
-        dispatch(&OP_MEAL_PLANNING_ADD_MEAL_PLAN_TEMPLATE, json)
+        match dispatch(&OP_MEAL_PLANNING_ADD_MEAL_PLAN_TEMPLATE, json).and_then(iface_meal_planning__add_meal_plan_template__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_meal_planning__add_meal_plan_template__err(e)),
+        }
     }
-    fn get_meal_plan_template(params: iface_meal_planning::GetMealPlanTemplateParams) -> Result<String, String> {
+    fn get_meal_plan_template(params: iface_meal_planning::GetMealPlanTemplateParams) -> Result<iface_meal_planning::GetMealPlanTemplateResponse, iface_meal_planning::GetMealPlanTemplateError> {
         let json = iface_meal_planning__get_meal_plan_template_params__to_json(&params);
-        dispatch(&OP_MEAL_PLANNING_GET_MEAL_PLAN_TEMPLATE, json)
+        match dispatch(&OP_MEAL_PLANNING_GET_MEAL_PLAN_TEMPLATE, json).and_then(iface_meal_planning__get_meal_plan_template__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_meal_planning__get_meal_plan_template__err(e)),
+        }
     }
-    fn delete_meal_plan_template(params: iface_meal_planning::DeleteMealPlanTemplateParams) -> Result<String, String> {
+    fn delete_meal_plan_template(params: iface_meal_planning::DeleteMealPlanTemplateParams) -> Result<iface_meal_planning::DeleteMealPlanTemplateResponse, iface_meal_planning::DeleteMealPlanTemplateError> {
         let json = iface_meal_planning__delete_meal_plan_template_params__to_json(&params);
-        dispatch(&OP_MEAL_PLANNING_DELETE_MEAL_PLAN_TEMPLATE, json)
+        match dispatch(&OP_MEAL_PLANNING_DELETE_MEAL_PLAN_TEMPLATE, json).and_then(iface_meal_planning__delete_meal_plan_template__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_meal_planning__delete_meal_plan_template__err(e)),
+        }
     }
-    fn get_meal_plan_week(params: iface_meal_planning::GetMealPlanWeekParams) -> Result<String, String> {
+    fn get_meal_plan_week(params: iface_meal_planning::GetMealPlanWeekParams) -> Result<iface_meal_planning::GetMealPlanWeekResponse, iface_meal_planning::GetMealPlanWeekError> {
         let json = iface_meal_planning__get_meal_plan_week_params__to_json(&params);
-        dispatch(&OP_MEAL_PLANNING_GET_MEAL_PLAN_WEEK, json)
+        match dispatch(&OP_MEAL_PLANNING_GET_MEAL_PLAN_WEEK, json).and_then(iface_meal_planning__get_meal_plan_week__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_meal_planning__get_meal_plan_week__err(e)),
+        }
     }
-    fn connect_user(params: iface_meal_planning::ConnectUserParams) -> Result<String, String> {
+    fn connect_user(params: iface_meal_planning::ConnectUserParams) -> Result<iface_meal_planning::ConnectUserResponse, iface_meal_planning::ConnectUserError> {
         let json = iface_meal_planning__connect_user_params__to_json(&params);
-        dispatch(&OP_MEAL_PLANNING_CONNECT_USER, json)
+        match dispatch(&OP_MEAL_PLANNING_CONNECT_USER, json).and_then(iface_meal_planning__connect_user__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_meal_planning__connect_user__err(e)),
+        }
     }
 }
 

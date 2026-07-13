@@ -44,10 +44,15 @@ pub(crate) enum FieldLocation {
     Body,
 }
 
-/// A single operation parameter: the snake-case key it carries in the params JSON and where
-/// it belongs in the request.
+/// A single operation parameter. `snake` keys the field in the internal params JSON (and, for a
+/// path field, matches the `{snake}` placeholder in the path template); `wire` is the verbatim name
+/// the field takes on the HTTP wire (query key, header name, or body property). The two differ
+/// whenever the source name isn't already snake_case (e.g. `dryRun` → snake `dry_run`, wire
+/// `dryRun`), and let distinct inputs that share a snake key (`DateCreated`, `DateCreated<`) still
+/// travel under their true names.
 pub(crate) struct FieldSpec {
     pub(crate) snake: &'static str,
+    pub(crate) wire: &'static str,
     pub(crate) location: FieldLocation,
 }
 
@@ -71,6 +76,16 @@ pub(crate) struct AuthApply {
     pub(crate) kind: AuthKind,
 }
 
+/// The failure modes of [`dispatch`], kept structured so each generated operation can map them
+/// onto its own typed error: an `Http` failure carries the response status and body (routed to
+/// the matching error-variant case), while a `Transport` failure carries a message for the
+/// catch-all case (a secret lookup, connection, or decode failure that never produced an HTTP
+/// status).
+pub(crate) enum DispatchError {
+    Http { status: u16, body: String },
+    Transport(String),
+}
+
 /// A single API operation: HTTP method, path template (with `{snake}` placeholders), the
 /// parameter fields, and the security schemes to apply.
 pub(crate) struct OpSpec {
@@ -81,8 +96,9 @@ pub(crate) struct OpSpec {
 }
 
 /// Execute `op` with the supplied `params` (a JSON object keyed by snake-case field names)
-/// and return the response body as a string, or an error message.
-pub(crate) fn dispatch(op: &OpSpec, params: Value) -> Result<String, String> {
+/// and return the raw 2xx response body, or a structured [`DispatchError`] the caller maps
+/// onto the operation's typed error.
+pub(crate) fn dispatch(op: &OpSpec, params: Value) -> Result<String, DispatchError> {
     let obj = match &params {
         Value::Object(map) => Some(map),
         _ => None,
@@ -105,10 +121,10 @@ pub(crate) fn dispatch(op: &OpSpec, params: Value) -> Result<String, String> {
                 let placeholder = format!("{{{}}}", field.snake);
                 path = path.replace(&placeholder, &percent_encode(&scalar(value)));
             }
-            FieldLocation::Query => query.push((field.snake.to_string(), scalar(value))),
-            FieldLocation::Header => headers.push((field.snake.to_string(), scalar(value))),
+            FieldLocation::Query => query.push((field.wire.to_string(), scalar(value))),
+            FieldLocation::Header => headers.push((field.wire.to_string(), scalar(value))),
             FieldLocation::Body => {
-                body.insert(field.snake.to_string(), value.clone());
+                body.insert(field.wire.to_string(), value.clone());
             }
         }
     }
@@ -116,7 +132,7 @@ pub(crate) fn dispatch(op: &OpSpec, params: Value) -> Result<String, String> {
     // Apply each resolved security scheme, sourcing its value from wasmcloud:secrets.
     let mut cookies: Vec<String> = Vec::new();
     for apply in op.auth {
-        let secret = fetch_secret(apply.secret_key)?;
+        let secret = fetch_secret(apply.secret_key).map_err(DispatchError::Transport)?;
         match &apply.kind {
             AuthKind::Bearer => headers.push(("authorization".into(), format!("Bearer {secret}"))),
             AuthKind::Basic => {
@@ -177,17 +193,18 @@ fn fetch_secret(key: &str) -> Result<String, String> {
 }
 
 /// Build and send the outgoing request with `wstd`, returning the response body on a 2xx
-/// status. The generated guest exports are synchronous, so the async `wstd` client is driven
-/// to completion on a local reactor via `wstd::runtime::block_on`.
+/// status and a structured [`DispatchError`] otherwise. The generated guest exports are
+/// synchronous, so the async `wstd` client is driven to completion on a local reactor via
+/// `wstd::runtime::block_on`.
 fn perform(
     method: &str,
     path_with_query: &str,
     headers: &[(String, String)],
     body: &[u8],
-) -> Result<String, String> {
+) -> Result<String, DispatchError> {
     let url = join_url(crate::BASE_URL, path_with_query);
     let method = Method::from_bytes(method.as_bytes())
-        .map_err(|err| format!("invalid HTTP method `{method}`: {err}"))?;
+        .map_err(|err| DispatchError::Transport(format!("invalid HTTP method `{method}`: {err}")))?;
 
     let mut builder = Request::builder().method(method).uri(url);
     for (name, value) in headers {
@@ -199,27 +216,29 @@ fn perform(
         } else {
             Body::from(body.to_vec())
         })
-        .map_err(|err| format!("failed to build request: {err}"))?;
+        .map_err(|err| DispatchError::Transport(format!("failed to build request: {err}")))?;
 
     wstd::runtime::block_on(async move {
         let client = Client::new();
         let response = client
             .send(request)
             .await
-            .map_err(|err| format!("request failed: {err:#}"))?;
+            .map_err(|err| DispatchError::Transport(format!("request failed: {err:#}")))?;
 
         let status = response.status().as_u16();
         let mut response_body = response.into_body();
-        let bytes = response_body
-            .contents()
-            .await
-            .map_err(|err| format!("failed to read response body: {err:#}"))?;
+        let bytes = response_body.contents().await.map_err(|err| {
+            DispatchError::Transport(format!("failed to read response body: {err:#}"))
+        })?;
         let body_text = String::from_utf8_lossy(bytes).into_owned();
 
         if (200..300).contains(&status) {
             Ok(body_text)
         } else {
-            Err(format!("HTTP {status}: {body_text}"))
+            Err(DispatchError::Http {
+                status,
+                body: body_text,
+            })
         }
     })
 }
@@ -288,17 +307,17 @@ const OP_API_GET_ALL_AP_IS: OpSpec = OpSpec {
     method: "GET",
     path_template: "/apis",
     fields: &[
-        FieldSpec { snake: "workspace", location: FieldLocation::Query },
-        FieldSpec { snake: "since", location: FieldLocation::Query },
-        FieldSpec { snake: "until", location: FieldLocation::Query },
-        FieldSpec { snake: "created_by", location: FieldLocation::Query },
-        FieldSpec { snake: "updated_by", location: FieldLocation::Query },
-        FieldSpec { snake: "is_public", location: FieldLocation::Query },
-        FieldSpec { snake: "name", location: FieldLocation::Query },
-        FieldSpec { snake: "summary", location: FieldLocation::Query },
-        FieldSpec { snake: "description", location: FieldLocation::Query },
-        FieldSpec { snake: "sort", location: FieldLocation::Query },
-        FieldSpec { snake: "direction", location: FieldLocation::Query },
+        FieldSpec { snake: "workspace", wire: "workspace", location: FieldLocation::Query },
+        FieldSpec { snake: "since", wire: "since", location: FieldLocation::Query },
+        FieldSpec { snake: "until", wire: "until", location: FieldLocation::Query },
+        FieldSpec { snake: "created_by", wire: "createdBy", location: FieldLocation::Query },
+        FieldSpec { snake: "updated_by", wire: "updatedBy", location: FieldLocation::Query },
+        FieldSpec { snake: "is_public", wire: "isPublic", location: FieldLocation::Query },
+        FieldSpec { snake: "name", wire: "name", location: FieldLocation::Query },
+        FieldSpec { snake: "summary", wire: "summary", location: FieldLocation::Query },
+        FieldSpec { snake: "description", wire: "description", location: FieldLocation::Query },
+        FieldSpec { snake: "sort", wire: "sort", location: FieldLocation::Query },
+        FieldSpec { snake: "direction", wire: "direction", location: FieldLocation::Query },
     ],
     auth: &[
     ],
@@ -308,8 +327,8 @@ const OP_API_CREATE_API: OpSpec = OpSpec {
     method: "POST",
     path_template: "/apis",
     fields: &[
-        FieldSpec { snake: "workspace", location: FieldLocation::Query },
-        FieldSpec { snake: "api", location: FieldLocation::Body },
+        FieldSpec { snake: "workspace", wire: "workspace", location: FieldLocation::Query },
+        FieldSpec { snake: "api", wire: "api", location: FieldLocation::Body },
     ],
     auth: &[
     ],
@@ -319,6 +338,7 @@ const OP_API_SINGLE_API: OpSpec = OpSpec {
     method: "GET",
     path_template: "/apis/{api_id}",
     fields: &[
+        FieldSpec { snake: "api_id", wire: "apiId", location: FieldLocation::Path },
     ],
     auth: &[
     ],
@@ -328,7 +348,8 @@ const OP_API_UPDATE_AN_API: OpSpec = OpSpec {
     method: "PUT",
     path_template: "/apis/{api_id}",
     fields: &[
-        FieldSpec { snake: "api", location: FieldLocation::Body },
+        FieldSpec { snake: "api_id", wire: "apiId", location: FieldLocation::Path },
+        FieldSpec { snake: "api", wire: "api", location: FieldLocation::Body },
     ],
     auth: &[
     ],
@@ -338,6 +359,7 @@ const OP_API_DELETE_AN_API: OpSpec = OpSpec {
     method: "DELETE",
     path_template: "/apis/{api_id}",
     fields: &[
+        FieldSpec { snake: "api_id", wire: "apiId", location: FieldLocation::Path },
     ],
     auth: &[
     ],
@@ -347,6 +369,7 @@ const OP_API_GET_ALL_API_VERSIONS: OpSpec = OpSpec {
     method: "GET",
     path_template: "/apis/{api_id}/versions",
     fields: &[
+        FieldSpec { snake: "api_id", wire: "apiId", location: FieldLocation::Path },
     ],
     auth: &[
     ],
@@ -356,7 +379,8 @@ const OP_API_CREATE_API_VERSION: OpSpec = OpSpec {
     method: "POST",
     path_template: "/apis/{api_id}/versions",
     fields: &[
-        FieldSpec { snake: "version", location: FieldLocation::Body },
+        FieldSpec { snake: "api_id", wire: "apiId", location: FieldLocation::Path },
+        FieldSpec { snake: "version", wire: "version", location: FieldLocation::Body },
     ],
     auth: &[
     ],
@@ -366,6 +390,8 @@ const OP_API_GET_AN_API_VERSION: OpSpec = OpSpec {
     method: "GET",
     path_template: "/apis/{api_id}/versions/{api_version_id}",
     fields: &[
+        FieldSpec { snake: "api_id", wire: "apiId", location: FieldLocation::Path },
+        FieldSpec { snake: "api_version_id", wire: "apiVersionId", location: FieldLocation::Path },
     ],
     auth: &[
     ],
@@ -375,7 +401,9 @@ const OP_API_UPDATE_AN_API_VERSION: OpSpec = OpSpec {
     method: "PUT",
     path_template: "/apis/{api_id}/versions/{api_version_id}",
     fields: &[
-        FieldSpec { snake: "version", location: FieldLocation::Body },
+        FieldSpec { snake: "api_id", wire: "apiId", location: FieldLocation::Path },
+        FieldSpec { snake: "api_version_id", wire: "apiVersionId", location: FieldLocation::Path },
+        FieldSpec { snake: "version", wire: "version", location: FieldLocation::Body },
     ],
     auth: &[
     ],
@@ -385,6 +413,8 @@ const OP_API_DELETE_AN_API_VERSION: OpSpec = OpSpec {
     method: "DELETE",
     path_template: "/apis/{api_id}/versions/{api_version_id}",
     fields: &[
+        FieldSpec { snake: "api_id", wire: "apiId", location: FieldLocation::Path },
+        FieldSpec { snake: "api_version_id", wire: "apiVersionId", location: FieldLocation::Path },
     ],
     auth: &[
     ],
@@ -394,6 +424,8 @@ const OP_API_GET_CONTRACT_TEST_RELATIONS: OpSpec = OpSpec {
     method: "GET",
     path_template: "/apis/{api_id}/versions/{api_version_id}/contracttest",
     fields: &[
+        FieldSpec { snake: "api_id", wire: "apiId", location: FieldLocation::Path },
+        FieldSpec { snake: "api_version_id", wire: "apiVersionId", location: FieldLocation::Path },
     ],
     auth: &[
     ],
@@ -403,6 +435,8 @@ const OP_API_GET_DOCUMENTATION_RELATIONS: OpSpec = OpSpec {
     method: "GET",
     path_template: "/apis/{api_id}/versions/{api_version_id}/documentation",
     fields: &[
+        FieldSpec { snake: "api_id", wire: "apiId", location: FieldLocation::Path },
+        FieldSpec { snake: "api_version_id", wire: "apiVersionId", location: FieldLocation::Path },
     ],
     auth: &[
     ],
@@ -412,6 +446,8 @@ const OP_API_GET_ENVIRONMENT_RELATIONS: OpSpec = OpSpec {
     method: "GET",
     path_template: "/apis/{api_id}/versions/{api_version_id}/environment",
     fields: &[
+        FieldSpec { snake: "api_id", wire: "apiId", location: FieldLocation::Path },
+        FieldSpec { snake: "api_version_id", wire: "apiVersionId", location: FieldLocation::Path },
     ],
     auth: &[
     ],
@@ -421,6 +457,8 @@ const OP_API_GET_INTEGRATION_TEST_RELATIONS: OpSpec = OpSpec {
     method: "GET",
     path_template: "/apis/{api_id}/versions/{api_version_id}/integrationtest",
     fields: &[
+        FieldSpec { snake: "api_id", wire: "apiId", location: FieldLocation::Path },
+        FieldSpec { snake: "api_version_id", wire: "apiVersionId", location: FieldLocation::Path },
     ],
     auth: &[
     ],
@@ -430,6 +468,8 @@ const OP_API_GET_MONITOR_RELATIONS: OpSpec = OpSpec {
     method: "GET",
     path_template: "/apis/{api_id}/versions/{api_version_id}/monitor",
     fields: &[
+        FieldSpec { snake: "api_id", wire: "apiId", location: FieldLocation::Path },
+        FieldSpec { snake: "api_version_id", wire: "apiVersionId", location: FieldLocation::Path },
     ],
     auth: &[
     ],
@@ -439,6 +479,8 @@ const OP_API_GET_LINKED_RELATIONS: OpSpec = OpSpec {
     method: "GET",
     path_template: "/apis/{api_id}/versions/{api_version_id}/relations",
     fields: &[
+        FieldSpec { snake: "api_id", wire: "apiId", location: FieldLocation::Path },
+        FieldSpec { snake: "api_version_id", wire: "apiVersionId", location: FieldLocation::Path },
     ],
     auth: &[
     ],
@@ -448,10 +490,12 @@ const OP_API_CREATE_RELATIONS: OpSpec = OpSpec {
     method: "POST",
     path_template: "/apis/{api_id}/versions/{api_version_id}/relations",
     fields: &[
-        FieldSpec { snake: "contracttest", location: FieldLocation::Body },
-        FieldSpec { snake: "documentation", location: FieldLocation::Body },
-        FieldSpec { snake: "mock", location: FieldLocation::Body },
-        FieldSpec { snake: "testsuite", location: FieldLocation::Body },
+        FieldSpec { snake: "api_id", wire: "apiId", location: FieldLocation::Path },
+        FieldSpec { snake: "api_version_id", wire: "apiVersionId", location: FieldLocation::Path },
+        FieldSpec { snake: "contracttest", wire: "contracttest", location: FieldLocation::Body },
+        FieldSpec { snake: "documentation", wire: "documentation", location: FieldLocation::Body },
+        FieldSpec { snake: "mock", wire: "mock", location: FieldLocation::Body },
+        FieldSpec { snake: "testsuite", wire: "testsuite", location: FieldLocation::Body },
     ],
     auth: &[
     ],
@@ -461,7 +505,9 @@ const OP_API_CREATE_SCHEMA: OpSpec = OpSpec {
     method: "POST",
     path_template: "/apis/{api_id}/versions/{api_version_id}/schemas",
     fields: &[
-        FieldSpec { snake: "schema", location: FieldLocation::Body },
+        FieldSpec { snake: "api_id", wire: "apiId", location: FieldLocation::Path },
+        FieldSpec { snake: "api_version_id", wire: "apiVersionId", location: FieldLocation::Path },
+        FieldSpec { snake: "schema", wire: "schema", location: FieldLocation::Body },
     ],
     auth: &[
     ],
@@ -471,6 +517,9 @@ const OP_API_GET_SCHEMA: OpSpec = OpSpec {
     method: "GET",
     path_template: "/apis/{api_id}/versions/{api_version_id}/schemas/{schema_id}",
     fields: &[
+        FieldSpec { snake: "api_id", wire: "apiId", location: FieldLocation::Path },
+        FieldSpec { snake: "api_version_id", wire: "apiVersionId", location: FieldLocation::Path },
+        FieldSpec { snake: "schema_id", wire: "schemaId", location: FieldLocation::Path },
     ],
     auth: &[
     ],
@@ -480,7 +529,10 @@ const OP_API_UPDATE_SCHEMA: OpSpec = OpSpec {
     method: "PUT",
     path_template: "/apis/{api_id}/versions/{api_version_id}/schemas/{schema_id}",
     fields: &[
-        FieldSpec { snake: "schema", location: FieldLocation::Body },
+        FieldSpec { snake: "api_id", wire: "apiId", location: FieldLocation::Path },
+        FieldSpec { snake: "api_version_id", wire: "apiVersionId", location: FieldLocation::Path },
+        FieldSpec { snake: "schema_id", wire: "schemaId", location: FieldLocation::Path },
+        FieldSpec { snake: "schema", wire: "schema", location: FieldLocation::Body },
     ],
     auth: &[
     ],
@@ -490,9 +542,12 @@ const OP_API_CREATE_COLLECTION_FROM_SCHEMA: OpSpec = OpSpec {
     method: "POST",
     path_template: "/apis/{api_id}/versions/{api_version_id}/schemas/{schema_id}/collections",
     fields: &[
-        FieldSpec { snake: "workspace", location: FieldLocation::Query },
-        FieldSpec { snake: "name", location: FieldLocation::Body },
-        FieldSpec { snake: "relations", location: FieldLocation::Body },
+        FieldSpec { snake: "api_id", wire: "apiId", location: FieldLocation::Path },
+        FieldSpec { snake: "api_version_id", wire: "apiVersionId", location: FieldLocation::Path },
+        FieldSpec { snake: "schema_id", wire: "schemaId", location: FieldLocation::Path },
+        FieldSpec { snake: "workspace", wire: "workspace", location: FieldLocation::Query },
+        FieldSpec { snake: "name", wire: "name", location: FieldLocation::Body },
+        FieldSpec { snake: "relations", wire: "relations", location: FieldLocation::Body },
     ],
     auth: &[
     ],
@@ -502,6 +557,8 @@ const OP_API_GET_TEST_SUITE_RELATIONS: OpSpec = OpSpec {
     method: "GET",
     path_template: "/apis/{api_id}/versions/{api_version_id}/testsuite",
     fields: &[
+        FieldSpec { snake: "api_id", wire: "apiId", location: FieldLocation::Path },
+        FieldSpec { snake: "api_version_id", wire: "apiVersionId", location: FieldLocation::Path },
     ],
     auth: &[
     ],
@@ -511,6 +568,10 @@ const OP_API_SYNC_RELATIONS_WITH_SCHEMA: OpSpec = OpSpec {
     method: "PUT",
     path_template: "/apis/{api_id}/versions/{api_version_id}/{entity_type}/{entity_id}/syncWithSchema",
     fields: &[
+        FieldSpec { snake: "api_id", wire: "apiId", location: FieldLocation::Path },
+        FieldSpec { snake: "api_version_id", wire: "apiVersionId", location: FieldLocation::Path },
+        FieldSpec { snake: "entity_type", wire: "entityType", location: FieldLocation::Path },
+        FieldSpec { snake: "entity_id", wire: "entityId", location: FieldLocation::Path },
     ],
     auth: &[
     ],
@@ -524,10 +585,94 @@ fn iface_api__create_api_body_api__to_json(p: &iface_api::CreateApiBodyApi) -> V
     Value::Object(m)
 }
 
+fn iface_api__create_api_response__to_json(p: &iface_api::CreateApiResponse) -> Value {
+    let mut m = Map::new();
+    m.insert("api".into(), match (&p.api) { Some(v) => iface_api__create_api_response_api__to_json(v), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_api__create_api_response_api__to_json(p: &iface_api::CreateApiResponseApi) -> Value {
+    let mut m = Map::new();
+    m.insert("createdAt".into(), match (&p.created_at) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("createdBy".into(), match (&p.created_by) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("description".into(), match (&p.description) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("id".into(), match (&p.id) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("name".into(), match (&p.name) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("summary".into(), match (&p.summary) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("updatedAt".into(), match (&p.updated_at) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_api__single_api_response__to_json(p: &iface_api::SingleApiResponse) -> Value {
+    let mut m = Map::new();
+    m.insert("api".into(), match (&p.api) { Some(v) => iface_api__single_api_response_api__to_json(v), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_api__single_api_response_api__to_json(p: &iface_api::SingleApiResponseApi) -> Value {
+    let mut m = Map::new();
+    m.insert("createdAt".into(), match (&p.created_at) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("createdBy".into(), match (&p.created_by) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("description".into(), match (&p.description) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("id".into(), match (&p.id) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("name".into(), match (&p.name) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("summary".into(), match (&p.summary) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("updatedAt".into(), match (&p.updated_at) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
 fn iface_api__update_an_api_body_api__to_json(p: &iface_api::UpdateAnApiBodyApi) -> Value {
     let mut m = Map::new();
     m.insert("description".into(), match (&p.description) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("name".into(), match (&p.name) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_api__update_an_api_response__to_json(p: &iface_api::UpdateAnApiResponse) -> Value {
+    let mut m = Map::new();
+    m.insert("api".into(), match (&p.api) { Some(v) => iface_api__update_an_api_response_api__to_json(v), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_api__update_an_api_response_api__to_json(p: &iface_api::UpdateAnApiResponseApi) -> Value {
+    let mut m = Map::new();
+    m.insert("createdAt".into(), match (&p.created_at) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("createdBy".into(), match (&p.created_by) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("description".into(), match (&p.description) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("id".into(), match (&p.id) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("name".into(), match (&p.name) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("summary".into(), match (&p.summary) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("updatedAt".into(), match (&p.updated_at) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_api__delete_an_api_response__to_json(p: &iface_api::DeleteAnApiResponse) -> Value {
+    let mut m = Map::new();
+    m.insert("api".into(), match (&p.api) { Some(v) => iface_api__delete_an_api_response_api__to_json(v), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_api__delete_an_api_response_api__to_json(p: &iface_api::DeleteAnApiResponseApi) -> Value {
+    let mut m = Map::new();
+    m.insert("id".into(), match (&p.id) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_api__get_all_api_versions_response__to_json(p: &iface_api::GetAllApiVersionsResponse) -> Value {
+    let mut m = Map::new();
+    m.insert("versions".into(), match (&p.versions) { Some(v) => Value::Array((v).iter().map(|v| iface_api__get_all_api_versions_response_versions_item__to_json(v)).collect()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_api__get_all_api_versions_response_versions_item__to_json(p: &iface_api::GetAllApiVersionsResponseVersionsItem) -> Value {
+    let mut m = Map::new();
+    m.insert("createdAt".into(), match (&p.created_at) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("createdBy".into(), match (&p.created_by) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("description".into(), match (&p.description) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("id".into(), match (&p.id) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("name".into(), match (&p.name) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("summary".into(), match (&p.summary) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("updatedAt".into(), match (&p.updated_at) { Some(v) => Value::String((v).clone()), None => Value::Null });
     Value::Object(m)
 }
 
@@ -554,9 +699,220 @@ fn iface_api__create_api_version_body_version_source_relations__to_json(p: &ifac
     Value::Object(m)
 }
 
+fn iface_api__create_api_version_response__to_json(p: &iface_api::CreateApiVersionResponse) -> Value {
+    let mut m = Map::new();
+    m.insert("version".into(), match (&p.version) { Some(v) => iface_api__create_api_version_response_version__to_json(v), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_api__create_api_version_response_version__to_json(p: &iface_api::CreateApiVersionResponseVersion) -> Value {
+    let mut m = Map::new();
+    m.insert("api".into(), match (&p.api) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("id".into(), match (&p.id) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("name".into(), match (&p.name) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_api__get_an_api_version_response__to_json(p: &iface_api::GetAnApiVersionResponse) -> Value {
+    let mut m = Map::new();
+    m.insert("version".into(), match (&p.version) { Some(v) => iface_api__get_an_api_version_response_version__to_json(v), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_api__get_an_api_version_response_version__to_json(p: &iface_api::GetAnApiVersionResponseVersion) -> Value {
+    let mut m = Map::new();
+    m.insert("api".into(), match (&p.api) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("createdAt".into(), match (&p.created_at) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("createdBy".into(), match (&p.created_by) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("id".into(), match (&p.id) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("name".into(), match (&p.name) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("schema".into(), match (&p.schema) { Some(v) => Value::Array((v).iter().map(|v| Value::String((v).clone())).collect()), None => Value::Null });
+    m.insert("updatedAt".into(), match (&p.updated_at) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("updatedBy".into(), match (&p.updated_by) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
 fn iface_api__update_an_api_version_body_version__to_json(p: &iface_api::UpdateAnApiVersionBodyVersion) -> Value {
     let mut m = Map::new();
     m.insert("name".into(), match (&p.name) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_api__update_an_api_version_response__to_json(p: &iface_api::UpdateAnApiVersionResponse) -> Value {
+    let mut m = Map::new();
+    m.insert("version".into(), match (&p.version) { Some(v) => iface_api__update_an_api_version_response_version__to_json(v), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_api__update_an_api_version_response_version__to_json(p: &iface_api::UpdateAnApiVersionResponseVersion) -> Value {
+    let mut m = Map::new();
+    m.insert("api".into(), match (&p.api) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("createdAt".into(), match (&p.created_at) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("createdBy".into(), match (&p.created_by) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("id".into(), match (&p.id) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("name".into(), match (&p.name) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("updatedAt".into(), match (&p.updated_at) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("updatedBy".into(), match (&p.updated_by) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_api__delete_an_api_version_response__to_json(p: &iface_api::DeleteAnApiVersionResponse) -> Value {
+    let mut m = Map::new();
+    m.insert("version".into(), match (&p.version) { Some(v) => iface_api__delete_an_api_version_response_version__to_json(v), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_api__delete_an_api_version_response_version__to_json(p: &iface_api::DeleteAnApiVersionResponseVersion) -> Value {
+    let mut m = Map::new();
+    m.insert("id".into(), match (&p.id) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_api__get_contract_test_relations_response__to_json(p: &iface_api::GetContractTestRelationsResponse) -> Value {
+    let mut m = Map::new();
+    m.insert("contracttest".into(), match (&p.contracttest) { Some(v) => Value::Array((v).iter().map(|v| iface_api__get_contract_test_relations_response_contracttest_item__to_json(v)).collect()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_api__get_contract_test_relations_response_contracttest_item__to_json(p: &iface_api::GetContractTestRelationsResponseContracttestItem) -> Value {
+    let mut m = Map::new();
+    m.insert("collectionId".into(), match (&p.collection_id) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("id".into(), match (&p.id) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("name".into(), match (&p.name) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("updatedAt".into(), match (&p.updated_at) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_api__get_documentation_relations_response__to_json(p: &iface_api::GetDocumentationRelationsResponse) -> Value {
+    let mut m = Map::new();
+    m.insert("documentation".into(), match (&p.documentation) { Some(v) => Value::Array((v).iter().map(|v| iface_api__get_documentation_relations_response_documentation_item__to_json(v)).collect()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_api__get_documentation_relations_response_documentation_item__to_json(p: &iface_api::GetDocumentationRelationsResponseDocumentationItem) -> Value {
+    let mut m = Map::new();
+    m.insert("collectionId".into(), match (&p.collection_id) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("id".into(), match (&p.id) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("name".into(), match (&p.name) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("updatedAt".into(), match (&p.updated_at) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_api__get_environment_relations_response__to_json(p: &iface_api::GetEnvironmentRelationsResponse) -> Value {
+    let mut m = Map::new();
+    m.insert("environment".into(), match (&p.environment) { Some(v) => Value::Array((v).iter().map(|v| iface_api__get_environment_relations_response_environment_item__to_json(v)).collect()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_api__get_environment_relations_response_environment_item__to_json(p: &iface_api::GetEnvironmentRelationsResponseEnvironmentItem) -> Value {
+    let mut m = Map::new();
+    m.insert("id".into(), match (&p.id) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("name".into(), match (&p.name) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("updatedAt".into(), match (&p.updated_at) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_api__get_integration_test_relations_response__to_json(p: &iface_api::GetIntegrationTestRelationsResponse) -> Value {
+    let mut m = Map::new();
+    m.insert("integrationtest".into(), match (&p.integrationtest) { Some(v) => Value::Array((v).iter().map(|v| iface_api__get_integration_test_relations_response_integrationtest_item__to_json(v)).collect()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_api__get_integration_test_relations_response_integrationtest_item__to_json(p: &iface_api::GetIntegrationTestRelationsResponseIntegrationtestItem) -> Value {
+    let mut m = Map::new();
+    m.insert("collectionId".into(), match (&p.collection_id) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("id".into(), match (&p.id) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("name".into(), match (&p.name) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("updatedAt".into(), match (&p.updated_at) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_api__get_monitor_relations_response__to_json(p: &iface_api::GetMonitorRelationsResponse) -> Value {
+    let mut m = Map::new();
+    m.insert("monitor".into(), match (&p.monitor) { Some(v) => Value::Array((v).iter().map(|v| iface_api__get_monitor_relations_response_monitor_item__to_json(v)).collect()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_api__get_monitor_relations_response_monitor_item__to_json(p: &iface_api::GetMonitorRelationsResponseMonitorItem) -> Value {
+    let mut m = Map::new();
+    m.insert("id".into(), match (&p.id) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("monitorId".into(), match (&p.monitor_id) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("name".into(), match (&p.name) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("updatedAt".into(), match (&p.updated_at) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_api__get_linked_relations_response__to_json(p: &iface_api::GetLinkedRelationsResponse) -> Value {
+    let mut m = Map::new();
+    m.insert("relations".into(), match (&p.relations) { Some(v) => iface_api__get_linked_relations_response_relations__to_json(v), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_api__get_linked_relations_response_relations__to_json(p: &iface_api::GetLinkedRelationsResponseRelations) -> Value {
+    let mut m = Map::new();
+    m.insert("contracttest".into(), match (&p.contracttest) { Some(v) => iface_api__get_linked_relations_response_relations_contracttest__to_json(v), None => Value::Null });
+    m.insert("integrationtest".into(), match (&p.integrationtest) { Some(v) => iface_api__get_linked_relations_response_relations_integrationtest__to_json(v), None => Value::Null });
+    m.insert("mock".into(), match (&p.mock) { Some(v) => iface_api__get_linked_relations_response_relations_mock__to_json(v), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_api__get_linked_relations_response_relations_contracttest__to_json(p: &iface_api::GetLinkedRelationsResponseRelationsContracttest) -> Value {
+    let mut m = Map::new();
+    m.insert("2a9b8fa8-88b7-4b86-8372-8e3f6f6e07f2".into(), match (&p.v2a9b8fa8_v88b7_v4b86_v8372_v8e3f6f6e07f2) { Some(v) => iface_api__get_linked_relations_response_relations_contracttest_v2a9b8fa8_v88b7_v4b86_v8372_v8e3f6f6e07f2__to_json(v), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_api__get_linked_relations_response_relations_contracttest_v2a9b8fa8_v88b7_v4b86_v8372_v8e3f6f6e07f2__to_json(p: &iface_api::GetLinkedRelationsResponseRelationsContracttestV2a9b8fa8V88b7V4b86V8372V8e3f6f6e07f2) -> Value {
+    let mut m = Map::new();
+    m.insert("id".into(), match (&p.id) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("name".into(), match (&p.name) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("updatedAt".into(), match (&p.updated_at) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_api__get_linked_relations_response_relations_integrationtest__to_json(p: &iface_api::GetLinkedRelationsResponseRelationsIntegrationtest) -> Value {
+    let mut m = Map::new();
+    m.insert("521b0486-ab91-4d3a-9189-43c9380a0533".into(), match (&p.v521b0486_ab91_v4d3a_v9189_v43c9380a0533) { Some(v) => iface_api__get_linked_relations_response_relations_integrationtest_v521b0486_ab91_v4d3a_v9189_v43c9380a0533__to_json(v), None => Value::Null });
+    m.insert("a236b715-e682-460b-97b6-c1db24f7612e".into(), match (&p.a236b715_e682_v460b_v97b6_c1db24f7612e) { Some(v) => iface_api__get_linked_relations_response_relations_integrationtest_a236b715_e682_v460b_v97b6_c1db24f7612e__to_json(v), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_api__get_linked_relations_response_relations_integrationtest_v521b0486_ab91_v4d3a_v9189_v43c9380a0533__to_json(p: &iface_api::GetLinkedRelationsResponseRelationsIntegrationtestV521b0486Ab91V4d3aV9189V43c9380a0533) -> Value {
+    let mut m = Map::new();
+    m.insert("id".into(), match (&p.id) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("name".into(), match (&p.name) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("updatedAt".into(), match (&p.updated_at) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_api__get_linked_relations_response_relations_integrationtest_a236b715_e682_v460b_v97b6_c1db24f7612e__to_json(p: &iface_api::GetLinkedRelationsResponseRelationsIntegrationtestA236b715E682V460bV97b6C1db24f7612e) -> Value {
+    let mut m = Map::new();
+    m.insert("id".into(), match (&p.id) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("name".into(), match (&p.name) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("updatedAt".into(), match (&p.updated_at) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_api__get_linked_relations_response_relations_mock__to_json(p: &iface_api::GetLinkedRelationsResponseRelationsMock) -> Value {
+    let mut m = Map::new();
+    m.insert("4ccd755f-2c80-481b-a262-49b55e12f5e1".into(), match (&p.v4ccd755f_v2c80_v481b_a262_v49b55e12f5e1) { Some(v) => iface_api__get_linked_relations_response_relations_mock_v4ccd755f_v2c80_v481b_a262_v49b55e12f5e1__to_json(v), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_api__get_linked_relations_response_relations_mock_v4ccd755f_v2c80_v481b_a262_v49b55e12f5e1__to_json(p: &iface_api::GetLinkedRelationsResponseRelationsMockV4ccd755fV2c80V481bA262V49b55e12f5e1) -> Value {
+    let mut m = Map::new();
+    m.insert("id".into(), match (&p.id) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("name".into(), match (&p.name) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("updatedAt".into(), match (&p.updated_at) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("url".into(), match (&p.url) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_api__create_relations_response__to_json(p: &iface_api::CreateRelationsResponse) -> Value {
+    let mut m = Map::new();
+    m.insert("contracttest".into(), match (&p.contracttest) { Some(v) => Value::Array((v).iter().map(|v| Value::String((v).clone())).collect()), None => Value::Null });
+    m.insert("documentation".into(), match (&p.documentation) { Some(v) => Value::Array((v).iter().map(|v| Value::String((v).clone())).collect()), None => Value::Null });
+    m.insert("testsuite".into(), match (&p.testsuite) { Some(v) => Value::Array((v).iter().map(|v| Value::String((v).clone())).collect()), None => Value::Null });
     Value::Object(m)
 }
 
@@ -568,6 +924,44 @@ fn iface_api__create_schema_body_schema__to_json(p: &iface_api::CreateSchemaBody
     Value::Object(m)
 }
 
+fn iface_api__create_schema_response__to_json(p: &iface_api::CreateSchemaResponse) -> Value {
+    let mut m = Map::new();
+    m.insert("schema".into(), match (&p.schema) { Some(v) => iface_api__create_schema_response_schema__to_json(v), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_api__create_schema_response_schema__to_json(p: &iface_api::CreateSchemaResponseSchema) -> Value {
+    let mut m = Map::new();
+    m.insert("apiVersion".into(), match (&p.api_version) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("createdAt".into(), match (&p.created_at) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("createdBy".into(), match (&p.created_by) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("id".into(), match (&p.id) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("language".into(), match (&p.language) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("type".into(), match (&p.type_op) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("updateBy".into(), match (&p.update_by) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("updatedAt".into(), match (&p.updated_at) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_api__get_schema_response__to_json(p: &iface_api::GetSchemaResponse) -> Value {
+    let mut m = Map::new();
+    m.insert("schema".into(), match (&p.schema) { Some(v) => iface_api__get_schema_response_schema__to_json(v), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_api__get_schema_response_schema__to_json(p: &iface_api::GetSchemaResponseSchema) -> Value {
+    let mut m = Map::new();
+    m.insert("apiVersion".into(), match (&p.api_version) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("createdAt".into(), match (&p.created_at) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("createdBy".into(), match (&p.created_by) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("id".into(), match (&p.id) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("language".into(), match (&p.language) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("type".into(), match (&p.type_op) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("updateBy".into(), match (&p.update_by) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("updatedAt".into(), match (&p.updated_at) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
 fn iface_api__update_schema_body_schema__to_json(p: &iface_api::UpdateSchemaBodySchema) -> Value {
     let mut m = Map::new();
     m.insert("language".into(), match (&p.language) { Some(v) => Value::String((v).clone()), None => Value::Null });
@@ -576,9 +970,70 @@ fn iface_api__update_schema_body_schema__to_json(p: &iface_api::UpdateSchemaBody
     Value::Object(m)
 }
 
+fn iface_api__update_schema_response__to_json(p: &iface_api::UpdateSchemaResponse) -> Value {
+    let mut m = Map::new();
+    m.insert("schema".into(), match (&p.schema) { Some(v) => iface_api__update_schema_response_schema__to_json(v), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_api__update_schema_response_schema__to_json(p: &iface_api::UpdateSchemaResponseSchema) -> Value {
+    let mut m = Map::new();
+    m.insert("apiVersion".into(), match (&p.api_version) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("createdAt".into(), match (&p.created_at) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("createdBy".into(), match (&p.created_by) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("id".into(), match (&p.id) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("language".into(), match (&p.language) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("type".into(), match (&p.type_op) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("updateBy".into(), match (&p.update_by) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("updatedAt".into(), match (&p.updated_at) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
 fn iface_api__create_collection_from_schema_body_relations_item__to_json(p: &iface_api::CreateCollectionFromSchemaBodyRelationsItem) -> Value {
     let mut m = Map::new();
     m.insert("type".into(), match (&p.type_op) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_api__create_collection_from_schema_response__to_json(p: &iface_api::CreateCollectionFromSchemaResponse) -> Value {
+    let mut m = Map::new();
+    m.insert("collection".into(), match (&p.collection) { Some(v) => iface_api__create_collection_from_schema_response_collection__to_json(v), None => Value::Null });
+    m.insert("relations".into(), match (&p.relations) { Some(v) => Value::Array((v).iter().map(|v| iface_api__create_collection_from_schema_response_relations_item__to_json(v)).collect()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_api__create_collection_from_schema_response_collection__to_json(p: &iface_api::CreateCollectionFromSchemaResponseCollection) -> Value {
+    let mut m = Map::new();
+    m.insert("id".into(), match (&p.id) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("uid".into(), match (&p.uid) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_api__create_collection_from_schema_response_relations_item__to_json(p: &iface_api::CreateCollectionFromSchemaResponseRelationsItem) -> Value {
+    let mut m = Map::new();
+    m.insert("id".into(), match (&p.id) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("type".into(), match (&p.type_op) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_api__get_test_suite_relations_response__to_json(p: &iface_api::GetTestSuiteRelationsResponse) -> Value {
+    let mut m = Map::new();
+    m.insert("testsuite".into(), match (&p.testsuite) { Some(v) => Value::Array((v).iter().map(|v| iface_api__get_test_suite_relations_response_testsuite_item__to_json(v)).collect()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_api__get_test_suite_relations_response_testsuite_item__to_json(p: &iface_api::GetTestSuiteRelationsResponseTestsuiteItem) -> Value {
+    let mut m = Map::new();
+    m.insert("collectionId".into(), match (&p.collection_id) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("id".into(), match (&p.id) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("name".into(), match (&p.name) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("updatedAt".into(), match (&p.updated_at) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_api__sync_relations_with_schema_response__to_json(p: &iface_api::SyncRelationsWithSchemaResponse) -> Value {
+    let mut m = Map::new();
+    m.insert("success".into(), match (&p.success) { Some(v) => Value::Bool(*(v)), None => Value::Null });
     Value::Object(m)
 }
 
@@ -605,26 +1060,106 @@ fn iface_api__create_api_params__to_json(p: &iface_api::CreateApiParams) -> Valu
     Value::Object(m)
 }
 
+fn iface_api__single_api_params__to_json(p: &iface_api::SingleApiParams) -> Value {
+    let mut m = Map::new();
+    m.insert("api_id".into(), Value::String((&p.api_id).clone()));
+    Value::Object(m)
+}
+
 fn iface_api__update_an_api_params__to_json(p: &iface_api::UpdateAnApiParams) -> Value {
     let mut m = Map::new();
+    m.insert("api_id".into(), Value::String((&p.api_id).clone()));
     m.insert("api".into(), match (&p.api) { Some(v) => iface_api__update_an_api_body_api__to_json(v), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_api__delete_an_api_params__to_json(p: &iface_api::DeleteAnApiParams) -> Value {
+    let mut m = Map::new();
+    m.insert("api_id".into(), Value::String((&p.api_id).clone()));
+    Value::Object(m)
+}
+
+fn iface_api__get_all_api_versions_params__to_json(p: &iface_api::GetAllApiVersionsParams) -> Value {
+    let mut m = Map::new();
+    m.insert("api_id".into(), Value::String((&p.api_id).clone()));
     Value::Object(m)
 }
 
 fn iface_api__create_api_version_params__to_json(p: &iface_api::CreateApiVersionParams) -> Value {
     let mut m = Map::new();
+    m.insert("api_id".into(), Value::String((&p.api_id).clone()));
     m.insert("version".into(), match (&p.version) { Some(v) => iface_api__create_api_version_body_version__to_json(v), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_api__get_an_api_version_params__to_json(p: &iface_api::GetAnApiVersionParams) -> Value {
+    let mut m = Map::new();
+    m.insert("api_id".into(), Value::String((&p.api_id).clone()));
+    m.insert("api_version_id".into(), Value::String((&p.api_version_id).clone()));
     Value::Object(m)
 }
 
 fn iface_api__update_an_api_version_params__to_json(p: &iface_api::UpdateAnApiVersionParams) -> Value {
     let mut m = Map::new();
+    m.insert("api_id".into(), Value::String((&p.api_id).clone()));
+    m.insert("api_version_id".into(), Value::String((&p.api_version_id).clone()));
     m.insert("version".into(), match (&p.version) { Some(v) => iface_api__update_an_api_version_body_version__to_json(v), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_api__delete_an_api_version_params__to_json(p: &iface_api::DeleteAnApiVersionParams) -> Value {
+    let mut m = Map::new();
+    m.insert("api_id".into(), Value::String((&p.api_id).clone()));
+    m.insert("api_version_id".into(), Value::String((&p.api_version_id).clone()));
+    Value::Object(m)
+}
+
+fn iface_api__get_contract_test_relations_params__to_json(p: &iface_api::GetContractTestRelationsParams) -> Value {
+    let mut m = Map::new();
+    m.insert("api_id".into(), Value::String((&p.api_id).clone()));
+    m.insert("api_version_id".into(), Value::String((&p.api_version_id).clone()));
+    Value::Object(m)
+}
+
+fn iface_api__get_documentation_relations_params__to_json(p: &iface_api::GetDocumentationRelationsParams) -> Value {
+    let mut m = Map::new();
+    m.insert("api_id".into(), Value::String((&p.api_id).clone()));
+    m.insert("api_version_id".into(), Value::String((&p.api_version_id).clone()));
+    Value::Object(m)
+}
+
+fn iface_api__get_environment_relations_params__to_json(p: &iface_api::GetEnvironmentRelationsParams) -> Value {
+    let mut m = Map::new();
+    m.insert("api_id".into(), Value::String((&p.api_id).clone()));
+    m.insert("api_version_id".into(), Value::String((&p.api_version_id).clone()));
+    Value::Object(m)
+}
+
+fn iface_api__get_integration_test_relations_params__to_json(p: &iface_api::GetIntegrationTestRelationsParams) -> Value {
+    let mut m = Map::new();
+    m.insert("api_id".into(), Value::String((&p.api_id).clone()));
+    m.insert("api_version_id".into(), Value::String((&p.api_version_id).clone()));
+    Value::Object(m)
+}
+
+fn iface_api__get_monitor_relations_params__to_json(p: &iface_api::GetMonitorRelationsParams) -> Value {
+    let mut m = Map::new();
+    m.insert("api_id".into(), Value::String((&p.api_id).clone()));
+    m.insert("api_version_id".into(), Value::String((&p.api_version_id).clone()));
+    Value::Object(m)
+}
+
+fn iface_api__get_linked_relations_params__to_json(p: &iface_api::GetLinkedRelationsParams) -> Value {
+    let mut m = Map::new();
+    m.insert("api_id".into(), Value::String((&p.api_id).clone()));
+    m.insert("api_version_id".into(), Value::String((&p.api_version_id).clone()));
     Value::Object(m)
 }
 
 fn iface_api__create_relations_params__to_json(p: &iface_api::CreateRelationsParams) -> Value {
     let mut m = Map::new();
+    m.insert("api_id".into(), Value::String((&p.api_id).clone()));
+    m.insert("api_version_id".into(), Value::String((&p.api_version_id).clone()));
     m.insert("contracttest".into(), match (&p.contracttest) { Some(v) => Value::Array((v).iter().map(|v| Value::String((v).clone())).collect()), None => Value::Null });
     m.insert("documentation".into(), match (&p.documentation) { Some(v) => Value::Array((v).iter().map(|v| Value::String((v).clone())).collect()), None => Value::Null });
     m.insert("mock".into(), match (&p.mock) { Some(v) => Value::Array((v).iter().map(|v| Value::String((v).clone())).collect()), None => Value::Null });
@@ -634,102 +1169,1071 @@ fn iface_api__create_relations_params__to_json(p: &iface_api::CreateRelationsPar
 
 fn iface_api__create_schema_params__to_json(p: &iface_api::CreateSchemaParams) -> Value {
     let mut m = Map::new();
+    m.insert("api_id".into(), Value::String((&p.api_id).clone()));
+    m.insert("api_version_id".into(), Value::String((&p.api_version_id).clone()));
     m.insert("schema".into(), match (&p.schema) { Some(v) => iface_api__create_schema_body_schema__to_json(v), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_api__get_schema_params__to_json(p: &iface_api::GetSchemaParams) -> Value {
+    let mut m = Map::new();
+    m.insert("api_id".into(), Value::String((&p.api_id).clone()));
+    m.insert("api_version_id".into(), Value::String((&p.api_version_id).clone()));
+    m.insert("schema_id".into(), Value::String((&p.schema_id).clone()));
     Value::Object(m)
 }
 
 fn iface_api__update_schema_params__to_json(p: &iface_api::UpdateSchemaParams) -> Value {
     let mut m = Map::new();
+    m.insert("api_id".into(), Value::String((&p.api_id).clone()));
+    m.insert("api_version_id".into(), Value::String((&p.api_version_id).clone()));
+    m.insert("schema_id".into(), Value::String((&p.schema_id).clone()));
     m.insert("schema".into(), match (&p.schema) { Some(v) => iface_api__update_schema_body_schema__to_json(v), None => Value::Null });
     Value::Object(m)
 }
 
 fn iface_api__create_collection_from_schema_params__to_json(p: &iface_api::CreateCollectionFromSchemaParams) -> Value {
     let mut m = Map::new();
+    m.insert("api_id".into(), Value::String((&p.api_id).clone()));
+    m.insert("api_version_id".into(), Value::String((&p.api_version_id).clone()));
+    m.insert("schema_id".into(), Value::String((&p.schema_id).clone()));
     m.insert("workspace".into(), match (&p.workspace) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("name".into(), match (&p.name) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("relations".into(), match (&p.relations) { Some(v) => Value::Array((v).iter().map(|v| iface_api__create_collection_from_schema_body_relations_item__to_json(v)).collect()), None => Value::Null });
     Value::Object(m)
 }
 
+fn iface_api__get_test_suite_relations_params__to_json(p: &iface_api::GetTestSuiteRelationsParams) -> Value {
+    let mut m = Map::new();
+    m.insert("api_id".into(), Value::String((&p.api_id).clone()));
+    m.insert("api_version_id".into(), Value::String((&p.api_version_id).clone()));
+    Value::Object(m)
+}
+
+fn iface_api__sync_relations_with_schema_params__to_json(p: &iface_api::SyncRelationsWithSchemaParams) -> Value {
+    let mut m = Map::new();
+    m.insert("api_id".into(), Value::String((&p.api_id).clone()));
+    m.insert("api_version_id".into(), Value::String((&p.api_version_id).clone()));
+    m.insert("entity_type".into(), Value::String((&p.entity_type).clone()));
+    m.insert("entity_id".into(), Value::String((&p.entity_id).clone()));
+    Value::Object(m)
+}
+
+fn iface_api__create_api_response__from_json(v: &Value) -> Option<iface_api::CreateApiResponse> {
+    let m = v.as_object()?;
+    Some(iface_api::CreateApiResponse {
+        api: m.get("api").filter(|v| !v.is_null()).and_then(|v| iface_api__create_api_response_api__from_json(v)),
+    })
+}
+
+fn iface_api__create_api_response_api__from_json(v: &Value) -> Option<iface_api::CreateApiResponseApi> {
+    let m = v.as_object()?;
+    Some(iface_api::CreateApiResponseApi {
+        created_at: m.get("createdAt").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        created_by: m.get("createdBy").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        description: m.get("description").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        id: m.get("id").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        name: m.get("name").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        summary: m.get("summary").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        updated_at: m.get("updatedAt").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    })
+}
+
+fn iface_api__single_api_response__from_json(v: &Value) -> Option<iface_api::SingleApiResponse> {
+    let m = v.as_object()?;
+    Some(iface_api::SingleApiResponse {
+        api: m.get("api").filter(|v| !v.is_null()).and_then(|v| iface_api__single_api_response_api__from_json(v)),
+    })
+}
+
+fn iface_api__single_api_response_api__from_json(v: &Value) -> Option<iface_api::SingleApiResponseApi> {
+    let m = v.as_object()?;
+    Some(iface_api::SingleApiResponseApi {
+        created_at: m.get("createdAt").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        created_by: m.get("createdBy").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        description: m.get("description").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        id: m.get("id").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        name: m.get("name").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        summary: m.get("summary").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        updated_at: m.get("updatedAt").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    })
+}
+
+fn iface_api__update_an_api_response__from_json(v: &Value) -> Option<iface_api::UpdateAnApiResponse> {
+    let m = v.as_object()?;
+    Some(iface_api::UpdateAnApiResponse {
+        api: m.get("api").filter(|v| !v.is_null()).and_then(|v| iface_api__update_an_api_response_api__from_json(v)),
+    })
+}
+
+fn iface_api__update_an_api_response_api__from_json(v: &Value) -> Option<iface_api::UpdateAnApiResponseApi> {
+    let m = v.as_object()?;
+    Some(iface_api::UpdateAnApiResponseApi {
+        created_at: m.get("createdAt").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        created_by: m.get("createdBy").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        description: m.get("description").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        id: m.get("id").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        name: m.get("name").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        summary: m.get("summary").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        updated_at: m.get("updatedAt").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    })
+}
+
+fn iface_api__delete_an_api_response__from_json(v: &Value) -> Option<iface_api::DeleteAnApiResponse> {
+    let m = v.as_object()?;
+    Some(iface_api::DeleteAnApiResponse {
+        api: m.get("api").filter(|v| !v.is_null()).and_then(|v| iface_api__delete_an_api_response_api__from_json(v)),
+    })
+}
+
+fn iface_api__delete_an_api_response_api__from_json(v: &Value) -> Option<iface_api::DeleteAnApiResponseApi> {
+    let m = v.as_object()?;
+    Some(iface_api::DeleteAnApiResponseApi {
+        id: m.get("id").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    })
+}
+
+fn iface_api__get_all_api_versions_response__from_json(v: &Value) -> Option<iface_api::GetAllApiVersionsResponse> {
+    let m = v.as_object()?;
+    Some(iface_api::GetAllApiVersionsResponse {
+        versions: m.get("versions").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| iface_api__get_all_api_versions_response_versions_item__from_json(x)).collect())),
+    })
+}
+
+fn iface_api__get_all_api_versions_response_versions_item__from_json(v: &Value) -> Option<iface_api::GetAllApiVersionsResponseVersionsItem> {
+    let m = v.as_object()?;
+    Some(iface_api::GetAllApiVersionsResponseVersionsItem {
+        created_at: m.get("createdAt").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        created_by: m.get("createdBy").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        description: m.get("description").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        id: m.get("id").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        name: m.get("name").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        summary: m.get("summary").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        updated_at: m.get("updatedAt").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    })
+}
+
+fn iface_api__create_api_version_response__from_json(v: &Value) -> Option<iface_api::CreateApiVersionResponse> {
+    let m = v.as_object()?;
+    Some(iface_api::CreateApiVersionResponse {
+        version: m.get("version").filter(|v| !v.is_null()).and_then(|v| iface_api__create_api_version_response_version__from_json(v)),
+    })
+}
+
+fn iface_api__create_api_version_response_version__from_json(v: &Value) -> Option<iface_api::CreateApiVersionResponseVersion> {
+    let m = v.as_object()?;
+    Some(iface_api::CreateApiVersionResponseVersion {
+        api: m.get("api").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        id: m.get("id").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        name: m.get("name").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    })
+}
+
+fn iface_api__get_an_api_version_response__from_json(v: &Value) -> Option<iface_api::GetAnApiVersionResponse> {
+    let m = v.as_object()?;
+    Some(iface_api::GetAnApiVersionResponse {
+        version: m.get("version").filter(|v| !v.is_null()).and_then(|v| iface_api__get_an_api_version_response_version__from_json(v)),
+    })
+}
+
+fn iface_api__get_an_api_version_response_version__from_json(v: &Value) -> Option<iface_api::GetAnApiVersionResponseVersion> {
+    let m = v.as_object()?;
+    Some(iface_api::GetAnApiVersionResponseVersion {
+        api: m.get("api").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        created_at: m.get("createdAt").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        created_by: m.get("createdBy").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        id: m.get("id").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        name: m.get("name").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        schema: m.get("schema").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| (x).as_str().map(|s| s.to_string())).collect())),
+        updated_at: m.get("updatedAt").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        updated_by: m.get("updatedBy").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    })
+}
+
+fn iface_api__update_an_api_version_response__from_json(v: &Value) -> Option<iface_api::UpdateAnApiVersionResponse> {
+    let m = v.as_object()?;
+    Some(iface_api::UpdateAnApiVersionResponse {
+        version: m.get("version").filter(|v| !v.is_null()).and_then(|v| iface_api__update_an_api_version_response_version__from_json(v)),
+    })
+}
+
+fn iface_api__update_an_api_version_response_version__from_json(v: &Value) -> Option<iface_api::UpdateAnApiVersionResponseVersion> {
+    let m = v.as_object()?;
+    Some(iface_api::UpdateAnApiVersionResponseVersion {
+        api: m.get("api").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        created_at: m.get("createdAt").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        created_by: m.get("createdBy").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        id: m.get("id").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        name: m.get("name").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        updated_at: m.get("updatedAt").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        updated_by: m.get("updatedBy").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    })
+}
+
+fn iface_api__delete_an_api_version_response__from_json(v: &Value) -> Option<iface_api::DeleteAnApiVersionResponse> {
+    let m = v.as_object()?;
+    Some(iface_api::DeleteAnApiVersionResponse {
+        version: m.get("version").filter(|v| !v.is_null()).and_then(|v| iface_api__delete_an_api_version_response_version__from_json(v)),
+    })
+}
+
+fn iface_api__delete_an_api_version_response_version__from_json(v: &Value) -> Option<iface_api::DeleteAnApiVersionResponseVersion> {
+    let m = v.as_object()?;
+    Some(iface_api::DeleteAnApiVersionResponseVersion {
+        id: m.get("id").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    })
+}
+
+fn iface_api__get_contract_test_relations_response__from_json(v: &Value) -> Option<iface_api::GetContractTestRelationsResponse> {
+    let m = v.as_object()?;
+    Some(iface_api::GetContractTestRelationsResponse {
+        contracttest: m.get("contracttest").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| iface_api__get_contract_test_relations_response_contracttest_item__from_json(x)).collect())),
+    })
+}
+
+fn iface_api__get_contract_test_relations_response_contracttest_item__from_json(v: &Value) -> Option<iface_api::GetContractTestRelationsResponseContracttestItem> {
+    let m = v.as_object()?;
+    Some(iface_api::GetContractTestRelationsResponseContracttestItem {
+        collection_id: m.get("collectionId").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        id: m.get("id").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        name: m.get("name").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        updated_at: m.get("updatedAt").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    })
+}
+
+fn iface_api__get_documentation_relations_response__from_json(v: &Value) -> Option<iface_api::GetDocumentationRelationsResponse> {
+    let m = v.as_object()?;
+    Some(iface_api::GetDocumentationRelationsResponse {
+        documentation: m.get("documentation").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| iface_api__get_documentation_relations_response_documentation_item__from_json(x)).collect())),
+    })
+}
+
+fn iface_api__get_documentation_relations_response_documentation_item__from_json(v: &Value) -> Option<iface_api::GetDocumentationRelationsResponseDocumentationItem> {
+    let m = v.as_object()?;
+    Some(iface_api::GetDocumentationRelationsResponseDocumentationItem {
+        collection_id: m.get("collectionId").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        id: m.get("id").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        name: m.get("name").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        updated_at: m.get("updatedAt").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    })
+}
+
+fn iface_api__get_environment_relations_response__from_json(v: &Value) -> Option<iface_api::GetEnvironmentRelationsResponse> {
+    let m = v.as_object()?;
+    Some(iface_api::GetEnvironmentRelationsResponse {
+        environment: m.get("environment").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| iface_api__get_environment_relations_response_environment_item__from_json(x)).collect())),
+    })
+}
+
+fn iface_api__get_environment_relations_response_environment_item__from_json(v: &Value) -> Option<iface_api::GetEnvironmentRelationsResponseEnvironmentItem> {
+    let m = v.as_object()?;
+    Some(iface_api::GetEnvironmentRelationsResponseEnvironmentItem {
+        id: m.get("id").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        name: m.get("name").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        updated_at: m.get("updatedAt").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    })
+}
+
+fn iface_api__get_integration_test_relations_response__from_json(v: &Value) -> Option<iface_api::GetIntegrationTestRelationsResponse> {
+    let m = v.as_object()?;
+    Some(iface_api::GetIntegrationTestRelationsResponse {
+        integrationtest: m.get("integrationtest").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| iface_api__get_integration_test_relations_response_integrationtest_item__from_json(x)).collect())),
+    })
+}
+
+fn iface_api__get_integration_test_relations_response_integrationtest_item__from_json(v: &Value) -> Option<iface_api::GetIntegrationTestRelationsResponseIntegrationtestItem> {
+    let m = v.as_object()?;
+    Some(iface_api::GetIntegrationTestRelationsResponseIntegrationtestItem {
+        collection_id: m.get("collectionId").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        id: m.get("id").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        name: m.get("name").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        updated_at: m.get("updatedAt").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    })
+}
+
+fn iface_api__get_monitor_relations_response__from_json(v: &Value) -> Option<iface_api::GetMonitorRelationsResponse> {
+    let m = v.as_object()?;
+    Some(iface_api::GetMonitorRelationsResponse {
+        monitor: m.get("monitor").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| iface_api__get_monitor_relations_response_monitor_item__from_json(x)).collect())),
+    })
+}
+
+fn iface_api__get_monitor_relations_response_monitor_item__from_json(v: &Value) -> Option<iface_api::GetMonitorRelationsResponseMonitorItem> {
+    let m = v.as_object()?;
+    Some(iface_api::GetMonitorRelationsResponseMonitorItem {
+        id: m.get("id").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        monitor_id: m.get("monitorId").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        name: m.get("name").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        updated_at: m.get("updatedAt").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    })
+}
+
+fn iface_api__get_linked_relations_response__from_json(v: &Value) -> Option<iface_api::GetLinkedRelationsResponse> {
+    let m = v.as_object()?;
+    Some(iface_api::GetLinkedRelationsResponse {
+        relations: m.get("relations").filter(|v| !v.is_null()).and_then(|v| iface_api__get_linked_relations_response_relations__from_json(v)),
+    })
+}
+
+fn iface_api__get_linked_relations_response_relations__from_json(v: &Value) -> Option<iface_api::GetLinkedRelationsResponseRelations> {
+    let m = v.as_object()?;
+    Some(iface_api::GetLinkedRelationsResponseRelations {
+        contracttest: m.get("contracttest").filter(|v| !v.is_null()).and_then(|v| iface_api__get_linked_relations_response_relations_contracttest__from_json(v)),
+        integrationtest: m.get("integrationtest").filter(|v| !v.is_null()).and_then(|v| iface_api__get_linked_relations_response_relations_integrationtest__from_json(v)),
+        mock: m.get("mock").filter(|v| !v.is_null()).and_then(|v| iface_api__get_linked_relations_response_relations_mock__from_json(v)),
+    })
+}
+
+fn iface_api__get_linked_relations_response_relations_contracttest__from_json(v: &Value) -> Option<iface_api::GetLinkedRelationsResponseRelationsContracttest> {
+    let m = v.as_object()?;
+    Some(iface_api::GetLinkedRelationsResponseRelationsContracttest {
+        v2a9b8fa8_v88b7_v4b86_v8372_v8e3f6f6e07f2: m.get("2a9b8fa8-88b7-4b86-8372-8e3f6f6e07f2").filter(|v| !v.is_null()).and_then(|v| iface_api__get_linked_relations_response_relations_contracttest_v2a9b8fa8_v88b7_v4b86_v8372_v8e3f6f6e07f2__from_json(v)),
+    })
+}
+
+fn iface_api__get_linked_relations_response_relations_contracttest_v2a9b8fa8_v88b7_v4b86_v8372_v8e3f6f6e07f2__from_json(v: &Value) -> Option<iface_api::GetLinkedRelationsResponseRelationsContracttestV2a9b8fa8V88b7V4b86V8372V8e3f6f6e07f2> {
+    let m = v.as_object()?;
+    Some(iface_api::GetLinkedRelationsResponseRelationsContracttestV2a9b8fa8V88b7V4b86V8372V8e3f6f6e07f2 {
+        id: m.get("id").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        name: m.get("name").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        updated_at: m.get("updatedAt").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    })
+}
+
+fn iface_api__get_linked_relations_response_relations_integrationtest__from_json(v: &Value) -> Option<iface_api::GetLinkedRelationsResponseRelationsIntegrationtest> {
+    let m = v.as_object()?;
+    Some(iface_api::GetLinkedRelationsResponseRelationsIntegrationtest {
+        v521b0486_ab91_v4d3a_v9189_v43c9380a0533: m.get("521b0486-ab91-4d3a-9189-43c9380a0533").filter(|v| !v.is_null()).and_then(|v| iface_api__get_linked_relations_response_relations_integrationtest_v521b0486_ab91_v4d3a_v9189_v43c9380a0533__from_json(v)),
+        a236b715_e682_v460b_v97b6_c1db24f7612e: m.get("a236b715-e682-460b-97b6-c1db24f7612e").filter(|v| !v.is_null()).and_then(|v| iface_api__get_linked_relations_response_relations_integrationtest_a236b715_e682_v460b_v97b6_c1db24f7612e__from_json(v)),
+    })
+}
+
+fn iface_api__get_linked_relations_response_relations_integrationtest_v521b0486_ab91_v4d3a_v9189_v43c9380a0533__from_json(v: &Value) -> Option<iface_api::GetLinkedRelationsResponseRelationsIntegrationtestV521b0486Ab91V4d3aV9189V43c9380a0533> {
+    let m = v.as_object()?;
+    Some(iface_api::GetLinkedRelationsResponseRelationsIntegrationtestV521b0486Ab91V4d3aV9189V43c9380a0533 {
+        id: m.get("id").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        name: m.get("name").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        updated_at: m.get("updatedAt").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    })
+}
+
+fn iface_api__get_linked_relations_response_relations_integrationtest_a236b715_e682_v460b_v97b6_c1db24f7612e__from_json(v: &Value) -> Option<iface_api::GetLinkedRelationsResponseRelationsIntegrationtestA236b715E682V460bV97b6C1db24f7612e> {
+    let m = v.as_object()?;
+    Some(iface_api::GetLinkedRelationsResponseRelationsIntegrationtestA236b715E682V460bV97b6C1db24f7612e {
+        id: m.get("id").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        name: m.get("name").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        updated_at: m.get("updatedAt").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    })
+}
+
+fn iface_api__get_linked_relations_response_relations_mock__from_json(v: &Value) -> Option<iface_api::GetLinkedRelationsResponseRelationsMock> {
+    let m = v.as_object()?;
+    Some(iface_api::GetLinkedRelationsResponseRelationsMock {
+        v4ccd755f_v2c80_v481b_a262_v49b55e12f5e1: m.get("4ccd755f-2c80-481b-a262-49b55e12f5e1").filter(|v| !v.is_null()).and_then(|v| iface_api__get_linked_relations_response_relations_mock_v4ccd755f_v2c80_v481b_a262_v49b55e12f5e1__from_json(v)),
+    })
+}
+
+fn iface_api__get_linked_relations_response_relations_mock_v4ccd755f_v2c80_v481b_a262_v49b55e12f5e1__from_json(v: &Value) -> Option<iface_api::GetLinkedRelationsResponseRelationsMockV4ccd755fV2c80V481bA262V49b55e12f5e1> {
+    let m = v.as_object()?;
+    Some(iface_api::GetLinkedRelationsResponseRelationsMockV4ccd755fV2c80V481bA262V49b55e12f5e1 {
+        id: m.get("id").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        name: m.get("name").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        updated_at: m.get("updatedAt").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        url: m.get("url").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    })
+}
+
+fn iface_api__create_relations_response__from_json(v: &Value) -> Option<iface_api::CreateRelationsResponse> {
+    let m = v.as_object()?;
+    Some(iface_api::CreateRelationsResponse {
+        contracttest: m.get("contracttest").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| (x).as_str().map(|s| s.to_string())).collect())),
+        documentation: m.get("documentation").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| (x).as_str().map(|s| s.to_string())).collect())),
+        testsuite: m.get("testsuite").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| (x).as_str().map(|s| s.to_string())).collect())),
+    })
+}
+
+fn iface_api__create_schema_response__from_json(v: &Value) -> Option<iface_api::CreateSchemaResponse> {
+    let m = v.as_object()?;
+    Some(iface_api::CreateSchemaResponse {
+        schema: m.get("schema").filter(|v| !v.is_null()).and_then(|v| iface_api__create_schema_response_schema__from_json(v)),
+    })
+}
+
+fn iface_api__create_schema_response_schema__from_json(v: &Value) -> Option<iface_api::CreateSchemaResponseSchema> {
+    let m = v.as_object()?;
+    Some(iface_api::CreateSchemaResponseSchema {
+        api_version: m.get("apiVersion").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        created_at: m.get("createdAt").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        created_by: m.get("createdBy").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        id: m.get("id").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        language: m.get("language").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        type_op: m.get("type").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        update_by: m.get("updateBy").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        updated_at: m.get("updatedAt").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    })
+}
+
+fn iface_api__get_schema_response__from_json(v: &Value) -> Option<iface_api::GetSchemaResponse> {
+    let m = v.as_object()?;
+    Some(iface_api::GetSchemaResponse {
+        schema: m.get("schema").filter(|v| !v.is_null()).and_then(|v| iface_api__get_schema_response_schema__from_json(v)),
+    })
+}
+
+fn iface_api__get_schema_response_schema__from_json(v: &Value) -> Option<iface_api::GetSchemaResponseSchema> {
+    let m = v.as_object()?;
+    Some(iface_api::GetSchemaResponseSchema {
+        api_version: m.get("apiVersion").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        created_at: m.get("createdAt").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        created_by: m.get("createdBy").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        id: m.get("id").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        language: m.get("language").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        type_op: m.get("type").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        update_by: m.get("updateBy").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        updated_at: m.get("updatedAt").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    })
+}
+
+fn iface_api__update_schema_response__from_json(v: &Value) -> Option<iface_api::UpdateSchemaResponse> {
+    let m = v.as_object()?;
+    Some(iface_api::UpdateSchemaResponse {
+        schema: m.get("schema").filter(|v| !v.is_null()).and_then(|v| iface_api__update_schema_response_schema__from_json(v)),
+    })
+}
+
+fn iface_api__update_schema_response_schema__from_json(v: &Value) -> Option<iface_api::UpdateSchemaResponseSchema> {
+    let m = v.as_object()?;
+    Some(iface_api::UpdateSchemaResponseSchema {
+        api_version: m.get("apiVersion").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        created_at: m.get("createdAt").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        created_by: m.get("createdBy").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        id: m.get("id").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        language: m.get("language").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        type_op: m.get("type").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        update_by: m.get("updateBy").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        updated_at: m.get("updatedAt").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    })
+}
+
+fn iface_api__create_collection_from_schema_response__from_json(v: &Value) -> Option<iface_api::CreateCollectionFromSchemaResponse> {
+    let m = v.as_object()?;
+    Some(iface_api::CreateCollectionFromSchemaResponse {
+        collection: m.get("collection").filter(|v| !v.is_null()).and_then(|v| iface_api__create_collection_from_schema_response_collection__from_json(v)),
+        relations: m.get("relations").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| iface_api__create_collection_from_schema_response_relations_item__from_json(x)).collect())),
+    })
+}
+
+fn iface_api__create_collection_from_schema_response_collection__from_json(v: &Value) -> Option<iface_api::CreateCollectionFromSchemaResponseCollection> {
+    let m = v.as_object()?;
+    Some(iface_api::CreateCollectionFromSchemaResponseCollection {
+        id: m.get("id").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        uid: m.get("uid").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    })
+}
+
+fn iface_api__create_collection_from_schema_response_relations_item__from_json(v: &Value) -> Option<iface_api::CreateCollectionFromSchemaResponseRelationsItem> {
+    let m = v.as_object()?;
+    Some(iface_api::CreateCollectionFromSchemaResponseRelationsItem {
+        id: m.get("id").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        type_op: m.get("type").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    })
+}
+
+fn iface_api__get_test_suite_relations_response__from_json(v: &Value) -> Option<iface_api::GetTestSuiteRelationsResponse> {
+    let m = v.as_object()?;
+    Some(iface_api::GetTestSuiteRelationsResponse {
+        testsuite: m.get("testsuite").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| iface_api__get_test_suite_relations_response_testsuite_item__from_json(x)).collect())),
+    })
+}
+
+fn iface_api__get_test_suite_relations_response_testsuite_item__from_json(v: &Value) -> Option<iface_api::GetTestSuiteRelationsResponseTestsuiteItem> {
+    let m = v.as_object()?;
+    Some(iface_api::GetTestSuiteRelationsResponseTestsuiteItem {
+        collection_id: m.get("collectionId").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        id: m.get("id").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        name: m.get("name").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        updated_at: m.get("updatedAt").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    })
+}
+
+fn iface_api__sync_relations_with_schema_response__from_json(v: &Value) -> Option<iface_api::SyncRelationsWithSchemaResponse> {
+    let m = v.as_object()?;
+    Some(iface_api::SyncRelationsWithSchemaResponse {
+        success: m.get("success").filter(|v| !v.is_null()).and_then(|v| (v).as_bool()),
+    })
+}
+
+fn iface_api__get_all_ap_is__ok(body: String) -> Result<String, crate::runtime::DispatchError> {
+    Ok(body)
+}
+
+fn iface_api__get_all_ap_is__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
+fn iface_api__create_api__ok(body: String) -> Result<iface_api::CreateApiResponse, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match iface_api__create_api_response__from_json(&v) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_api__create_api__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
+fn iface_api__single_api__ok(body: String) -> Result<iface_api::SingleApiResponse, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match iface_api__single_api_response__from_json(&v) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_api__single_api__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
+fn iface_api__update_an_api__ok(body: String) -> Result<iface_api::UpdateAnApiResponse, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match iface_api__update_an_api_response__from_json(&v) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_api__update_an_api__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
+fn iface_api__delete_an_api__ok(body: String) -> Result<iface_api::DeleteAnApiResponse, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match iface_api__delete_an_api_response__from_json(&v) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_api__delete_an_api__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
+fn iface_api__get_all_api_versions__ok(body: String) -> Result<iface_api::GetAllApiVersionsResponse, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match iface_api__get_all_api_versions_response__from_json(&v) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_api__get_all_api_versions__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
+fn iface_api__create_api_version__ok(body: String) -> Result<iface_api::CreateApiVersionResponse, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match iface_api__create_api_version_response__from_json(&v) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_api__create_api_version__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
+fn iface_api__get_an_api_version__ok(body: String) -> Result<iface_api::GetAnApiVersionResponse, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match iface_api__get_an_api_version_response__from_json(&v) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_api__get_an_api_version__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
+fn iface_api__update_an_api_version__ok(body: String) -> Result<iface_api::UpdateAnApiVersionResponse, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match iface_api__update_an_api_version_response__from_json(&v) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_api__update_an_api_version__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
+fn iface_api__delete_an_api_version__ok(body: String) -> Result<iface_api::DeleteAnApiVersionResponse, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match iface_api__delete_an_api_version_response__from_json(&v) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_api__delete_an_api_version__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
+fn iface_api__get_contract_test_relations__ok(body: String) -> Result<iface_api::GetContractTestRelationsResponse, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match iface_api__get_contract_test_relations_response__from_json(&v) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_api__get_contract_test_relations__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
+fn iface_api__get_documentation_relations__ok(body: String) -> Result<iface_api::GetDocumentationRelationsResponse, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match iface_api__get_documentation_relations_response__from_json(&v) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_api__get_documentation_relations__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
+fn iface_api__get_environment_relations__ok(body: String) -> Result<iface_api::GetEnvironmentRelationsResponse, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match iface_api__get_environment_relations_response__from_json(&v) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_api__get_environment_relations__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
+fn iface_api__get_integration_test_relations__ok(body: String) -> Result<iface_api::GetIntegrationTestRelationsResponse, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match iface_api__get_integration_test_relations_response__from_json(&v) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_api__get_integration_test_relations__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
+fn iface_api__get_monitor_relations__ok(body: String) -> Result<iface_api::GetMonitorRelationsResponse, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match iface_api__get_monitor_relations_response__from_json(&v) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_api__get_monitor_relations__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
+fn iface_api__get_linked_relations__ok(body: String) -> Result<iface_api::GetLinkedRelationsResponse, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match iface_api__get_linked_relations_response__from_json(&v) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_api__get_linked_relations__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
+fn iface_api__create_relations__ok(body: String) -> Result<iface_api::CreateRelationsResponse, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match iface_api__create_relations_response__from_json(&v) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_api__create_relations__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
+fn iface_api__create_schema__ok(body: String) -> Result<iface_api::CreateSchemaResponse, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match iface_api__create_schema_response__from_json(&v) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_api__create_schema__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
+fn iface_api__get_schema__ok(body: String) -> Result<iface_api::GetSchemaResponse, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match iface_api__get_schema_response__from_json(&v) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_api__get_schema__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
+fn iface_api__update_schema__ok(body: String) -> Result<iface_api::UpdateSchemaResponse, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match iface_api__update_schema_response__from_json(&v) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_api__update_schema__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
+fn iface_api__create_collection_from_schema__ok(body: String) -> Result<iface_api::CreateCollectionFromSchemaResponse, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match iface_api__create_collection_from_schema_response__from_json(&v) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_api__create_collection_from_schema__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
+fn iface_api__get_test_suite_relations__ok(body: String) -> Result<iface_api::GetTestSuiteRelationsResponse, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match iface_api__get_test_suite_relations_response__from_json(&v) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_api__get_test_suite_relations__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
+fn iface_api__sync_relations_with_schema__ok(body: String) -> Result<iface_api::SyncRelationsWithSchemaResponse, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match iface_api__sync_relations_with_schema_response__from_json(&v) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_api__sync_relations_with_schema__err(e: crate::runtime::DispatchError) -> iface_api::SyncRelationsWithSchemaError {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => match status {
+            400u16 => iface_api::SyncRelationsWithSchemaError::BadRequest(body),
+            _ => iface_api::SyncRelationsWithSchemaError::Other(body),
+        },
+        crate::runtime::DispatchError::Transport(m) => iface_api::SyncRelationsWithSchemaError::Other(m),
+    }
+}
+
 impl iface_api::Guest for crate::Component {
     fn get_all_ap_is(params: iface_api::GetAllApIsParams) -> Result<String, String> {
         let json = iface_api__get_all_ap_is_params__to_json(&params);
-        dispatch(&OP_API_GET_ALL_AP_IS, json)
+        match dispatch(&OP_API_GET_ALL_AP_IS, json).and_then(iface_api__get_all_ap_is__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_api__get_all_ap_is__err(e)),
+        }
     }
-    fn create_api(params: iface_api::CreateApiParams) -> Result<String, String> {
+    fn create_api(params: iface_api::CreateApiParams) -> Result<iface_api::CreateApiResponse, String> {
         let json = iface_api__create_api_params__to_json(&params);
-        dispatch(&OP_API_CREATE_API, json)
+        match dispatch(&OP_API_CREATE_API, json).and_then(iface_api__create_api__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_api__create_api__err(e)),
+        }
     }
-    fn single_api() -> Result<String, String> {
-        dispatch(&OP_API_SINGLE_API, Value::Object(Map::new()))
+    fn single_api(params: iface_api::SingleApiParams) -> Result<iface_api::SingleApiResponse, String> {
+        let json = iface_api__single_api_params__to_json(&params);
+        match dispatch(&OP_API_SINGLE_API, json).and_then(iface_api__single_api__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_api__single_api__err(e)),
+        }
     }
-    fn update_an_api(params: iface_api::UpdateAnApiParams) -> Result<String, String> {
+    fn update_an_api(params: iface_api::UpdateAnApiParams) -> Result<iface_api::UpdateAnApiResponse, String> {
         let json = iface_api__update_an_api_params__to_json(&params);
-        dispatch(&OP_API_UPDATE_AN_API, json)
+        match dispatch(&OP_API_UPDATE_AN_API, json).and_then(iface_api__update_an_api__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_api__update_an_api__err(e)),
+        }
     }
-    fn delete_an_api() -> Result<String, String> {
-        dispatch(&OP_API_DELETE_AN_API, Value::Object(Map::new()))
+    fn delete_an_api(params: iface_api::DeleteAnApiParams) -> Result<iface_api::DeleteAnApiResponse, String> {
+        let json = iface_api__delete_an_api_params__to_json(&params);
+        match dispatch(&OP_API_DELETE_AN_API, json).and_then(iface_api__delete_an_api__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_api__delete_an_api__err(e)),
+        }
     }
-    fn get_all_api_versions() -> Result<String, String> {
-        dispatch(&OP_API_GET_ALL_API_VERSIONS, Value::Object(Map::new()))
+    fn get_all_api_versions(params: iface_api::GetAllApiVersionsParams) -> Result<iface_api::GetAllApiVersionsResponse, String> {
+        let json = iface_api__get_all_api_versions_params__to_json(&params);
+        match dispatch(&OP_API_GET_ALL_API_VERSIONS, json).and_then(iface_api__get_all_api_versions__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_api__get_all_api_versions__err(e)),
+        }
     }
-    fn create_api_version(params: iface_api::CreateApiVersionParams) -> Result<String, String> {
+    fn create_api_version(params: iface_api::CreateApiVersionParams) -> Result<iface_api::CreateApiVersionResponse, String> {
         let json = iface_api__create_api_version_params__to_json(&params);
-        dispatch(&OP_API_CREATE_API_VERSION, json)
+        match dispatch(&OP_API_CREATE_API_VERSION, json).and_then(iface_api__create_api_version__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_api__create_api_version__err(e)),
+        }
     }
-    fn get_an_api_version() -> Result<String, String> {
-        dispatch(&OP_API_GET_AN_API_VERSION, Value::Object(Map::new()))
+    fn get_an_api_version(params: iface_api::GetAnApiVersionParams) -> Result<iface_api::GetAnApiVersionResponse, String> {
+        let json = iface_api__get_an_api_version_params__to_json(&params);
+        match dispatch(&OP_API_GET_AN_API_VERSION, json).and_then(iface_api__get_an_api_version__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_api__get_an_api_version__err(e)),
+        }
     }
-    fn update_an_api_version(params: iface_api::UpdateAnApiVersionParams) -> Result<String, String> {
+    fn update_an_api_version(params: iface_api::UpdateAnApiVersionParams) -> Result<iface_api::UpdateAnApiVersionResponse, String> {
         let json = iface_api__update_an_api_version_params__to_json(&params);
-        dispatch(&OP_API_UPDATE_AN_API_VERSION, json)
+        match dispatch(&OP_API_UPDATE_AN_API_VERSION, json).and_then(iface_api__update_an_api_version__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_api__update_an_api_version__err(e)),
+        }
     }
-    fn delete_an_api_version() -> Result<String, String> {
-        dispatch(&OP_API_DELETE_AN_API_VERSION, Value::Object(Map::new()))
+    fn delete_an_api_version(params: iface_api::DeleteAnApiVersionParams) -> Result<iface_api::DeleteAnApiVersionResponse, String> {
+        let json = iface_api__delete_an_api_version_params__to_json(&params);
+        match dispatch(&OP_API_DELETE_AN_API_VERSION, json).and_then(iface_api__delete_an_api_version__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_api__delete_an_api_version__err(e)),
+        }
     }
-    fn get_contract_test_relations() -> Result<String, String> {
-        dispatch(&OP_API_GET_CONTRACT_TEST_RELATIONS, Value::Object(Map::new()))
+    fn get_contract_test_relations(params: iface_api::GetContractTestRelationsParams) -> Result<iface_api::GetContractTestRelationsResponse, String> {
+        let json = iface_api__get_contract_test_relations_params__to_json(&params);
+        match dispatch(&OP_API_GET_CONTRACT_TEST_RELATIONS, json).and_then(iface_api__get_contract_test_relations__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_api__get_contract_test_relations__err(e)),
+        }
     }
-    fn get_documentation_relations() -> Result<String, String> {
-        dispatch(&OP_API_GET_DOCUMENTATION_RELATIONS, Value::Object(Map::new()))
+    fn get_documentation_relations(params: iface_api::GetDocumentationRelationsParams) -> Result<iface_api::GetDocumentationRelationsResponse, String> {
+        let json = iface_api__get_documentation_relations_params__to_json(&params);
+        match dispatch(&OP_API_GET_DOCUMENTATION_RELATIONS, json).and_then(iface_api__get_documentation_relations__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_api__get_documentation_relations__err(e)),
+        }
     }
-    fn get_environment_relations() -> Result<String, String> {
-        dispatch(&OP_API_GET_ENVIRONMENT_RELATIONS, Value::Object(Map::new()))
+    fn get_environment_relations(params: iface_api::GetEnvironmentRelationsParams) -> Result<iface_api::GetEnvironmentRelationsResponse, String> {
+        let json = iface_api__get_environment_relations_params__to_json(&params);
+        match dispatch(&OP_API_GET_ENVIRONMENT_RELATIONS, json).and_then(iface_api__get_environment_relations__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_api__get_environment_relations__err(e)),
+        }
     }
-    fn get_integration_test_relations() -> Result<String, String> {
-        dispatch(&OP_API_GET_INTEGRATION_TEST_RELATIONS, Value::Object(Map::new()))
+    fn get_integration_test_relations(params: iface_api::GetIntegrationTestRelationsParams) -> Result<iface_api::GetIntegrationTestRelationsResponse, String> {
+        let json = iface_api__get_integration_test_relations_params__to_json(&params);
+        match dispatch(&OP_API_GET_INTEGRATION_TEST_RELATIONS, json).and_then(iface_api__get_integration_test_relations__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_api__get_integration_test_relations__err(e)),
+        }
     }
-    fn get_monitor_relations() -> Result<String, String> {
-        dispatch(&OP_API_GET_MONITOR_RELATIONS, Value::Object(Map::new()))
+    fn get_monitor_relations(params: iface_api::GetMonitorRelationsParams) -> Result<iface_api::GetMonitorRelationsResponse, String> {
+        let json = iface_api__get_monitor_relations_params__to_json(&params);
+        match dispatch(&OP_API_GET_MONITOR_RELATIONS, json).and_then(iface_api__get_monitor_relations__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_api__get_monitor_relations__err(e)),
+        }
     }
-    fn get_linked_relations() -> Result<String, String> {
-        dispatch(&OP_API_GET_LINKED_RELATIONS, Value::Object(Map::new()))
+    fn get_linked_relations(params: iface_api::GetLinkedRelationsParams) -> Result<iface_api::GetLinkedRelationsResponse, String> {
+        let json = iface_api__get_linked_relations_params__to_json(&params);
+        match dispatch(&OP_API_GET_LINKED_RELATIONS, json).and_then(iface_api__get_linked_relations__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_api__get_linked_relations__err(e)),
+        }
     }
-    fn create_relations(params: iface_api::CreateRelationsParams) -> Result<String, String> {
+    fn create_relations(params: iface_api::CreateRelationsParams) -> Result<iface_api::CreateRelationsResponse, String> {
         let json = iface_api__create_relations_params__to_json(&params);
-        dispatch(&OP_API_CREATE_RELATIONS, json)
+        match dispatch(&OP_API_CREATE_RELATIONS, json).and_then(iface_api__create_relations__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_api__create_relations__err(e)),
+        }
     }
-    fn create_schema(params: iface_api::CreateSchemaParams) -> Result<String, String> {
+    fn create_schema(params: iface_api::CreateSchemaParams) -> Result<iface_api::CreateSchemaResponse, String> {
         let json = iface_api__create_schema_params__to_json(&params);
-        dispatch(&OP_API_CREATE_SCHEMA, json)
+        match dispatch(&OP_API_CREATE_SCHEMA, json).and_then(iface_api__create_schema__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_api__create_schema__err(e)),
+        }
     }
-    fn get_schema() -> Result<String, String> {
-        dispatch(&OP_API_GET_SCHEMA, Value::Object(Map::new()))
+    fn get_schema(params: iface_api::GetSchemaParams) -> Result<iface_api::GetSchemaResponse, String> {
+        let json = iface_api__get_schema_params__to_json(&params);
+        match dispatch(&OP_API_GET_SCHEMA, json).and_then(iface_api__get_schema__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_api__get_schema__err(e)),
+        }
     }
-    fn update_schema(params: iface_api::UpdateSchemaParams) -> Result<String, String> {
+    fn update_schema(params: iface_api::UpdateSchemaParams) -> Result<iface_api::UpdateSchemaResponse, String> {
         let json = iface_api__update_schema_params__to_json(&params);
-        dispatch(&OP_API_UPDATE_SCHEMA, json)
+        match dispatch(&OP_API_UPDATE_SCHEMA, json).and_then(iface_api__update_schema__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_api__update_schema__err(e)),
+        }
     }
-    fn create_collection_from_schema(params: iface_api::CreateCollectionFromSchemaParams) -> Result<String, String> {
+    fn create_collection_from_schema(params: iface_api::CreateCollectionFromSchemaParams) -> Result<iface_api::CreateCollectionFromSchemaResponse, String> {
         let json = iface_api__create_collection_from_schema_params__to_json(&params);
-        dispatch(&OP_API_CREATE_COLLECTION_FROM_SCHEMA, json)
+        match dispatch(&OP_API_CREATE_COLLECTION_FROM_SCHEMA, json).and_then(iface_api__create_collection_from_schema__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_api__create_collection_from_schema__err(e)),
+        }
     }
-    fn get_test_suite_relations() -> Result<String, String> {
-        dispatch(&OP_API_GET_TEST_SUITE_RELATIONS, Value::Object(Map::new()))
+    fn get_test_suite_relations(params: iface_api::GetTestSuiteRelationsParams) -> Result<iface_api::GetTestSuiteRelationsResponse, String> {
+        let json = iface_api__get_test_suite_relations_params__to_json(&params);
+        match dispatch(&OP_API_GET_TEST_SUITE_RELATIONS, json).and_then(iface_api__get_test_suite_relations__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_api__get_test_suite_relations__err(e)),
+        }
     }
-    fn sync_relations_with_schema() -> Result<String, String> {
-        dispatch(&OP_API_SYNC_RELATIONS_WITH_SCHEMA, Value::Object(Map::new()))
+    fn sync_relations_with_schema(params: iface_api::SyncRelationsWithSchemaParams) -> Result<iface_api::SyncRelationsWithSchemaResponse, iface_api::SyncRelationsWithSchemaError> {
+        let json = iface_api__sync_relations_with_schema_params__to_json(&params);
+        match dispatch(&OP_API_SYNC_RELATIONS_WITH_SCHEMA, json).and_then(iface_api__sync_relations_with_schema__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_api__sync_relations_with_schema__err(e)),
+        }
     }
 }
 use crate::exports::autostamp::getpostman::collections as iface_collections;
@@ -747,7 +2251,7 @@ const OP_COLLECTIONS_CREATE_COLLECTION: OpSpec = OpSpec {
     method: "POST",
     path_template: "/collections",
     fields: &[
-        FieldSpec { snake: "collection", location: FieldLocation::Body },
+        FieldSpec { snake: "collection", wire: "collection", location: FieldLocation::Body },
     ],
     auth: &[
     ],
@@ -757,8 +2261,9 @@ const OP_COLLECTIONS_CREATE_A_FORK: OpSpec = OpSpec {
     method: "POST",
     path_template: "/collections/fork/{collection_uid}",
     fields: &[
-        FieldSpec { snake: "workspace", location: FieldLocation::Query },
-        FieldSpec { snake: "name", location: FieldLocation::Body },
+        FieldSpec { snake: "collection_uid", wire: "collection_uid", location: FieldLocation::Path },
+        FieldSpec { snake: "workspace", wire: "workspace", location: FieldLocation::Query },
+        FieldSpec { snake: "name", wire: "name", location: FieldLocation::Body },
     ],
     auth: &[
     ],
@@ -768,9 +2273,9 @@ const OP_COLLECTIONS_MERGE_A_FORK: OpSpec = OpSpec {
     method: "POST",
     path_template: "/collections/merge",
     fields: &[
-        FieldSpec { snake: "destination", location: FieldLocation::Body },
-        FieldSpec { snake: "source", location: FieldLocation::Body },
-        FieldSpec { snake: "strategy", location: FieldLocation::Body },
+        FieldSpec { snake: "destination", wire: "destination", location: FieldLocation::Body },
+        FieldSpec { snake: "source", wire: "source", location: FieldLocation::Body },
+        FieldSpec { snake: "strategy", wire: "strategy", location: FieldLocation::Body },
     ],
     auth: &[
     ],
@@ -780,6 +2285,7 @@ const OP_COLLECTIONS_SINGLE_COLLECTION: OpSpec = OpSpec {
     method: "GET",
     path_template: "/collections/{collection_uid}",
     fields: &[
+        FieldSpec { snake: "collection_uid", wire: "collection_uid", location: FieldLocation::Path },
     ],
     auth: &[
     ],
@@ -789,7 +2295,8 @@ const OP_COLLECTIONS_UPDATE_COLLECTION: OpSpec = OpSpec {
     method: "PUT",
     path_template: "/collections/{collection_uid}",
     fields: &[
-        FieldSpec { snake: "collection", location: FieldLocation::Body },
+        FieldSpec { snake: "collection_uid", wire: "collection_uid", location: FieldLocation::Path },
+        FieldSpec { snake: "collection", wire: "collection", location: FieldLocation::Body },
     ],
     auth: &[
     ],
@@ -799,10 +2306,26 @@ const OP_COLLECTIONS_DELETE_COLLECTION: OpSpec = OpSpec {
     method: "DELETE",
     path_template: "/collections/{collection_uid}",
     fields: &[
+        FieldSpec { snake: "collection_uid", wire: "collection_uid", location: FieldLocation::Path },
     ],
     auth: &[
     ],
 };
+
+fn iface_collections__all_collections_response__to_json(p: &iface_collections::AllCollectionsResponse) -> Value {
+    let mut m = Map::new();
+    m.insert("collections".into(), match (&p.collections) { Some(v) => Value::Array((v).iter().map(|v| iface_collections__all_collections_response_collections_item__to_json(v)).collect()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_collections__all_collections_response_collections_item__to_json(p: &iface_collections::AllCollectionsResponseCollectionsItem) -> Value {
+    let mut m = Map::new();
+    m.insert("id".into(), match (&p.id) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("name".into(), match (&p.name) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("owner".into(), match (&p.owner) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("uid".into(), match (&p.uid) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
 
 fn iface_collections__create_collection_body_collection__to_json(p: &iface_collections::CreateCollectionBodyCollection) -> Value {
     let mut m = Map::new();
@@ -857,6 +2380,92 @@ fn iface_collections__create_collection_body_collection_item_item_item_item_requ
     Value::Object(m)
 }
 
+fn iface_collections__create_collection_response__to_json(p: &iface_collections::CreateCollectionResponse) -> Value {
+    let mut m = Map::new();
+    m.insert("collection".into(), match (&p.collection) { Some(v) => iface_collections__create_collection_response_collection__to_json(v), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_collections__create_collection_response_collection__to_json(p: &iface_collections::CreateCollectionResponseCollection) -> Value {
+    let mut m = Map::new();
+    m.insert("id".into(), match (&p.id) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("name".into(), match (&p.name) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("uid".into(), match (&p.uid) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_collections__single_collection_response__to_json(p: &iface_collections::SingleCollectionResponse) -> Value {
+    let mut m = Map::new();
+    m.insert("collection".into(), match (&p.collection) { Some(v) => iface_collections__single_collection_response_collection__to_json(v), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_collections__single_collection_response_collection__to_json(p: &iface_collections::SingleCollectionResponseCollection) -> Value {
+    let mut m = Map::new();
+    m.insert("info".into(), match (&p.info) { Some(v) => iface_collections__single_collection_response_collection_info__to_json(v), None => Value::Null });
+    m.insert("item".into(), match (&p.item) { Some(v) => Value::Array((v).iter().map(|v| iface_collections__single_collection_response_collection_item_item__to_json(v)).collect()), None => Value::Null });
+    m.insert("variables".into(), match (&p.variables) { Some(v) => Value::Array((v).iter().map(|v| Value::String((v).clone())).collect()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_collections__single_collection_response_collection_info__to_json(p: &iface_collections::SingleCollectionResponseCollectionInfo) -> Value {
+    let mut m = Map::new();
+    m.insert("_postman_id".into(), match (&p.postman_id) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("description".into(), match (&p.description) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("name".into(), match (&p.name) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("schema".into(), match (&p.schema) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_collections__single_collection_response_collection_item_item__to_json(p: &iface_collections::SingleCollectionResponseCollectionItemItem) -> Value {
+    let mut m = Map::new();
+    m.insert("event".into(), match (&p.event) { Some(v) => Value::Array((v).iter().map(|v| iface_collections__single_collection_response_collection_item_item_event_item__to_json(v)).collect()), None => Value::Null });
+    m.insert("id".into(), match (&p.id) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("name".into(), match (&p.name) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("request".into(), match (&p.request) { Some(v) => iface_collections__single_collection_response_collection_item_item_request__to_json(v), None => Value::Null });
+    m.insert("response".into(), match (&p.response) { Some(v) => Value::Array((v).iter().map(|v| Value::String((v).clone())).collect()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_collections__single_collection_response_collection_item_item_event_item__to_json(p: &iface_collections::SingleCollectionResponseCollectionItemItemEventItem) -> Value {
+    let mut m = Map::new();
+    m.insert("listen".into(), match (&p.listen) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("script".into(), match (&p.script) { Some(v) => iface_collections__single_collection_response_collection_item_item_event_item_script__to_json(v), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_collections__single_collection_response_collection_item_item_event_item_script__to_json(p: &iface_collections::SingleCollectionResponseCollectionItemItemEventItemScript) -> Value {
+    let mut m = Map::new();
+    m.insert("exec".into(), match (&p.exec) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("type".into(), match (&p.type_op) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_collections__single_collection_response_collection_item_item_request__to_json(p: &iface_collections::SingleCollectionResponseCollectionItemItemRequest) -> Value {
+    let mut m = Map::new();
+    m.insert("body".into(), match (&p.body) { Some(v) => iface_collections__single_collection_response_collection_item_item_request_body__to_json(v), None => Value::Null });
+    m.insert("description".into(), match (&p.description) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("header".into(), match (&p.header) { Some(v) => Value::Array((v).iter().map(|v| iface_collections__single_collection_response_collection_item_item_request_header_item__to_json(v)).collect()), None => Value::Null });
+    m.insert("method".into(), match (&p.method) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("url".into(), match (&p.url) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_collections__single_collection_response_collection_item_item_request_body__to_json(p: &iface_collections::SingleCollectionResponseCollectionItemItemRequestBody) -> Value {
+    let mut m = Map::new();
+    m.insert("formdata".into(), match (&p.formdata) { Some(v) => Value::Array((v).iter().map(|v| Value::String((v).clone())).collect()), None => Value::Null });
+    m.insert("mode".into(), match (&p.mode) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_collections__single_collection_response_collection_item_item_request_header_item__to_json(p: &iface_collections::SingleCollectionResponseCollectionItemItemRequestHeaderItem) -> Value {
+    let mut m = Map::new();
+    m.insert("description".into(), match (&p.description) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("key".into(), match (&p.key) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("value".into(), match (&p.value) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
 fn iface_collections__update_collection_body_collection__to_json(p: &iface_collections::UpdateCollectionBodyCollection) -> Value {
     let mut m = Map::new();
     m.insert("info".into(), match (&p.info) { Some(v) => iface_collections__update_collection_body_collection_info__to_json(v), None => Value::Null });
@@ -866,7 +2475,7 @@ fn iface_collections__update_collection_body_collection__to_json(p: &iface_colle
 
 fn iface_collections__update_collection_body_collection_info__to_json(p: &iface_collections::UpdateCollectionBodyCollectionInfo) -> Value {
     let mut m = Map::new();
-    m.insert("postman_id".into(), match (&p.postman_id) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("_postman_id".into(), match (&p.postman_id) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("description".into(), match (&p.description) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("name".into(), match (&p.name) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("schema".into(), match (&p.schema) { Some(v) => Value::String((v).clone()), None => Value::Null });
@@ -911,6 +2520,33 @@ fn iface_collections__update_collection_body_collection_item_item_item_item_requ
     Value::Object(m)
 }
 
+fn iface_collections__update_collection_response__to_json(p: &iface_collections::UpdateCollectionResponse) -> Value {
+    let mut m = Map::new();
+    m.insert("collection".into(), match (&p.collection) { Some(v) => iface_collections__update_collection_response_collection__to_json(v), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_collections__update_collection_response_collection__to_json(p: &iface_collections::UpdateCollectionResponseCollection) -> Value {
+    let mut m = Map::new();
+    m.insert("id".into(), match (&p.id) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("name".into(), match (&p.name) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("uid".into(), match (&p.uid) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_collections__delete_collection_response__to_json(p: &iface_collections::DeleteCollectionResponse) -> Value {
+    let mut m = Map::new();
+    m.insert("collection".into(), match (&p.collection) { Some(v) => iface_collections__delete_collection_response_collection__to_json(v), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_collections__delete_collection_response_collection__to_json(p: &iface_collections::DeleteCollectionResponseCollection) -> Value {
+    let mut m = Map::new();
+    m.insert("id".into(), match (&p.id) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("uid".into(), match (&p.uid) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
 fn iface_collections__create_collection_params__to_json(p: &iface_collections::CreateCollectionParams) -> Value {
     let mut m = Map::new();
     m.insert("collection".into(), match (&p.collection) { Some(v) => iface_collections__create_collection_body_collection__to_json(v), None => Value::Null });
@@ -919,6 +2555,7 @@ fn iface_collections__create_collection_params__to_json(p: &iface_collections::C
 
 fn iface_collections__create_a_fork_params__to_json(p: &iface_collections::CreateAForkParams) -> Value {
     let mut m = Map::new();
+    m.insert("collection_uid".into(), Value::String((&p.collection_uid).clone()));
     m.insert("workspace".into(), match (&p.workspace) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("name".into(), match (&p.name) { Some(v) => Value::String((v).clone()), None => Value::Null });
     Value::Object(m)
@@ -932,37 +2569,341 @@ fn iface_collections__merge_a_fork_params__to_json(p: &iface_collections::MergeA
     Value::Object(m)
 }
 
+fn iface_collections__single_collection_params__to_json(p: &iface_collections::SingleCollectionParams) -> Value {
+    let mut m = Map::new();
+    m.insert("collection_uid".into(), Value::String((&p.collection_uid).clone()));
+    Value::Object(m)
+}
+
 fn iface_collections__update_collection_params__to_json(p: &iface_collections::UpdateCollectionParams) -> Value {
     let mut m = Map::new();
+    m.insert("collection_uid".into(), Value::String((&p.collection_uid).clone()));
     m.insert("collection".into(), match (&p.collection) { Some(v) => iface_collections__update_collection_body_collection__to_json(v), None => Value::Null });
     Value::Object(m)
 }
 
-impl iface_collections::Guest for crate::Component {
-    fn all_collections() -> Result<String, String> {
-        dispatch(&OP_COLLECTIONS_ALL_COLLECTIONS, Value::Object(Map::new()))
+fn iface_collections__delete_collection_params__to_json(p: &iface_collections::DeleteCollectionParams) -> Value {
+    let mut m = Map::new();
+    m.insert("collection_uid".into(), Value::String((&p.collection_uid).clone()));
+    Value::Object(m)
+}
+
+fn iface_collections__all_collections_response__from_json(v: &Value) -> Option<iface_collections::AllCollectionsResponse> {
+    let m = v.as_object()?;
+    Some(iface_collections::AllCollectionsResponse {
+        collections: m.get("collections").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| iface_collections__all_collections_response_collections_item__from_json(x)).collect())),
+    })
+}
+
+fn iface_collections__all_collections_response_collections_item__from_json(v: &Value) -> Option<iface_collections::AllCollectionsResponseCollectionsItem> {
+    let m = v.as_object()?;
+    Some(iface_collections::AllCollectionsResponseCollectionsItem {
+        id: m.get("id").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        name: m.get("name").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        owner: m.get("owner").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        uid: m.get("uid").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    })
+}
+
+fn iface_collections__create_collection_response__from_json(v: &Value) -> Option<iface_collections::CreateCollectionResponse> {
+    let m = v.as_object()?;
+    Some(iface_collections::CreateCollectionResponse {
+        collection: m.get("collection").filter(|v| !v.is_null()).and_then(|v| iface_collections__create_collection_response_collection__from_json(v)),
+    })
+}
+
+fn iface_collections__create_collection_response_collection__from_json(v: &Value) -> Option<iface_collections::CreateCollectionResponseCollection> {
+    let m = v.as_object()?;
+    Some(iface_collections::CreateCollectionResponseCollection {
+        id: m.get("id").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        name: m.get("name").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        uid: m.get("uid").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    })
+}
+
+fn iface_collections__single_collection_response__from_json(v: &Value) -> Option<iface_collections::SingleCollectionResponse> {
+    let m = v.as_object()?;
+    Some(iface_collections::SingleCollectionResponse {
+        collection: m.get("collection").filter(|v| !v.is_null()).and_then(|v| iface_collections__single_collection_response_collection__from_json(v)),
+    })
+}
+
+fn iface_collections__single_collection_response_collection__from_json(v: &Value) -> Option<iface_collections::SingleCollectionResponseCollection> {
+    let m = v.as_object()?;
+    Some(iface_collections::SingleCollectionResponseCollection {
+        info: m.get("info").filter(|v| !v.is_null()).and_then(|v| iface_collections__single_collection_response_collection_info__from_json(v)),
+        item: m.get("item").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| iface_collections__single_collection_response_collection_item_item__from_json(x)).collect())),
+        variables: m.get("variables").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| (x).as_str().map(|s| s.to_string())).collect())),
+    })
+}
+
+fn iface_collections__single_collection_response_collection_info__from_json(v: &Value) -> Option<iface_collections::SingleCollectionResponseCollectionInfo> {
+    let m = v.as_object()?;
+    Some(iface_collections::SingleCollectionResponseCollectionInfo {
+        postman_id: m.get("_postman_id").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        description: m.get("description").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        name: m.get("name").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        schema: m.get("schema").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    })
+}
+
+fn iface_collections__single_collection_response_collection_item_item__from_json(v: &Value) -> Option<iface_collections::SingleCollectionResponseCollectionItemItem> {
+    let m = v.as_object()?;
+    Some(iface_collections::SingleCollectionResponseCollectionItemItem {
+        event: m.get("event").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| iface_collections__single_collection_response_collection_item_item_event_item__from_json(x)).collect())),
+        id: m.get("id").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        name: m.get("name").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        request: m.get("request").filter(|v| !v.is_null()).and_then(|v| iface_collections__single_collection_response_collection_item_item_request__from_json(v)),
+        response: m.get("response").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| (x).as_str().map(|s| s.to_string())).collect())),
+    })
+}
+
+fn iface_collections__single_collection_response_collection_item_item_event_item__from_json(v: &Value) -> Option<iface_collections::SingleCollectionResponseCollectionItemItemEventItem> {
+    let m = v.as_object()?;
+    Some(iface_collections::SingleCollectionResponseCollectionItemItemEventItem {
+        listen: m.get("listen").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        script: m.get("script").filter(|v| !v.is_null()).and_then(|v| iface_collections__single_collection_response_collection_item_item_event_item_script__from_json(v)),
+    })
+}
+
+fn iface_collections__single_collection_response_collection_item_item_event_item_script__from_json(v: &Value) -> Option<iface_collections::SingleCollectionResponseCollectionItemItemEventItemScript> {
+    let m = v.as_object()?;
+    Some(iface_collections::SingleCollectionResponseCollectionItemItemEventItemScript {
+        exec: m.get("exec").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        type_op: m.get("type").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    })
+}
+
+fn iface_collections__single_collection_response_collection_item_item_request__from_json(v: &Value) -> Option<iface_collections::SingleCollectionResponseCollectionItemItemRequest> {
+    let m = v.as_object()?;
+    Some(iface_collections::SingleCollectionResponseCollectionItemItemRequest {
+        body: m.get("body").filter(|v| !v.is_null()).and_then(|v| iface_collections__single_collection_response_collection_item_item_request_body__from_json(v)),
+        description: m.get("description").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        header: m.get("header").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| iface_collections__single_collection_response_collection_item_item_request_header_item__from_json(x)).collect())),
+        method: m.get("method").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        url: m.get("url").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    })
+}
+
+fn iface_collections__single_collection_response_collection_item_item_request_body__from_json(v: &Value) -> Option<iface_collections::SingleCollectionResponseCollectionItemItemRequestBody> {
+    let m = v.as_object()?;
+    Some(iface_collections::SingleCollectionResponseCollectionItemItemRequestBody {
+        formdata: m.get("formdata").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| (x).as_str().map(|s| s.to_string())).collect())),
+        mode: m.get("mode").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    })
+}
+
+fn iface_collections__single_collection_response_collection_item_item_request_header_item__from_json(v: &Value) -> Option<iface_collections::SingleCollectionResponseCollectionItemItemRequestHeaderItem> {
+    let m = v.as_object()?;
+    Some(iface_collections::SingleCollectionResponseCollectionItemItemRequestHeaderItem {
+        description: m.get("description").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        key: m.get("key").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        value: m.get("value").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    })
+}
+
+fn iface_collections__update_collection_response__from_json(v: &Value) -> Option<iface_collections::UpdateCollectionResponse> {
+    let m = v.as_object()?;
+    Some(iface_collections::UpdateCollectionResponse {
+        collection: m.get("collection").filter(|v| !v.is_null()).and_then(|v| iface_collections__update_collection_response_collection__from_json(v)),
+    })
+}
+
+fn iface_collections__update_collection_response_collection__from_json(v: &Value) -> Option<iface_collections::UpdateCollectionResponseCollection> {
+    let m = v.as_object()?;
+    Some(iface_collections::UpdateCollectionResponseCollection {
+        id: m.get("id").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        name: m.get("name").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        uid: m.get("uid").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    })
+}
+
+fn iface_collections__delete_collection_response__from_json(v: &Value) -> Option<iface_collections::DeleteCollectionResponse> {
+    let m = v.as_object()?;
+    Some(iface_collections::DeleteCollectionResponse {
+        collection: m.get("collection").filter(|v| !v.is_null()).and_then(|v| iface_collections__delete_collection_response_collection__from_json(v)),
+    })
+}
+
+fn iface_collections__delete_collection_response_collection__from_json(v: &Value) -> Option<iface_collections::DeleteCollectionResponseCollection> {
+    let m = v.as_object()?;
+    Some(iface_collections::DeleteCollectionResponseCollection {
+        id: m.get("id").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        uid: m.get("uid").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    })
+}
+
+fn iface_collections__all_collections__ok(body: String) -> Result<iface_collections::AllCollectionsResponse, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match iface_collections__all_collections_response__from_json(&v) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
     }
-    fn create_collection(params: iface_collections::CreateCollectionParams) -> Result<String, String> {
+}
+
+fn iface_collections__all_collections__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
+fn iface_collections__create_collection__ok(body: String) -> Result<iface_collections::CreateCollectionResponse, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match iface_collections__create_collection_response__from_json(&v) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_collections__create_collection__err(e: crate::runtime::DispatchError) -> iface_collections::CreateCollectionError {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => match status {
+            400u16 => iface_collections::CreateCollectionError::BadRequest(body),
+            _ => iface_collections::CreateCollectionError::Other(body),
+        },
+        crate::runtime::DispatchError::Transport(m) => iface_collections::CreateCollectionError::Other(m),
+    }
+}
+
+fn iface_collections__create_a_fork__ok(body: String) -> Result<String, crate::runtime::DispatchError> {
+    Ok(body)
+}
+
+fn iface_collections__create_a_fork__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
+fn iface_collections__merge_a_fork__ok(body: String) -> Result<String, crate::runtime::DispatchError> {
+    Ok(body)
+}
+
+fn iface_collections__merge_a_fork__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
+fn iface_collections__single_collection__ok(body: String) -> Result<iface_collections::SingleCollectionResponse, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match iface_collections__single_collection_response__from_json(&v) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_collections__single_collection__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
+fn iface_collections__update_collection__ok(body: String) -> Result<iface_collections::UpdateCollectionResponse, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match iface_collections__update_collection_response__from_json(&v) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_collections__update_collection__err(e: crate::runtime::DispatchError) -> iface_collections::UpdateCollectionError {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => match status {
+            400u16 => iface_collections::UpdateCollectionError::BadRequest(body),
+            403u16 => iface_collections::UpdateCollectionError::Forbidden(body),
+            404u16 => iface_collections::UpdateCollectionError::NotFound(body),
+            _ => iface_collections::UpdateCollectionError::Other(body),
+        },
+        crate::runtime::DispatchError::Transport(m) => iface_collections::UpdateCollectionError::Other(m),
+    }
+}
+
+fn iface_collections__delete_collection__ok(body: String) -> Result<iface_collections::DeleteCollectionResponse, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match iface_collections__delete_collection_response__from_json(&v) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_collections__delete_collection__err(e: crate::runtime::DispatchError) -> iface_collections::DeleteCollectionError {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => match status {
+            404u16 => iface_collections::DeleteCollectionError::NotFound(body),
+            _ => iface_collections::DeleteCollectionError::Other(body),
+        },
+        crate::runtime::DispatchError::Transport(m) => iface_collections::DeleteCollectionError::Other(m),
+    }
+}
+
+impl iface_collections::Guest for crate::Component {
+    fn all_collections() -> Result<iface_collections::AllCollectionsResponse, String> {
+        match dispatch(&OP_COLLECTIONS_ALL_COLLECTIONS, Value::Object(Map::new())).and_then(iface_collections__all_collections__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_collections__all_collections__err(e)),
+        }
+    }
+    fn create_collection(params: iface_collections::CreateCollectionParams) -> Result<iface_collections::CreateCollectionResponse, iface_collections::CreateCollectionError> {
         let json = iface_collections__create_collection_params__to_json(&params);
-        dispatch(&OP_COLLECTIONS_CREATE_COLLECTION, json)
+        match dispatch(&OP_COLLECTIONS_CREATE_COLLECTION, json).and_then(iface_collections__create_collection__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_collections__create_collection__err(e)),
+        }
     }
     fn create_a_fork(params: iface_collections::CreateAForkParams) -> Result<String, String> {
         let json = iface_collections__create_a_fork_params__to_json(&params);
-        dispatch(&OP_COLLECTIONS_CREATE_A_FORK, json)
+        match dispatch(&OP_COLLECTIONS_CREATE_A_FORK, json).and_then(iface_collections__create_a_fork__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_collections__create_a_fork__err(e)),
+        }
     }
     fn merge_a_fork(params: iface_collections::MergeAForkParams) -> Result<String, String> {
         let json = iface_collections__merge_a_fork_params__to_json(&params);
-        dispatch(&OP_COLLECTIONS_MERGE_A_FORK, json)
+        match dispatch(&OP_COLLECTIONS_MERGE_A_FORK, json).and_then(iface_collections__merge_a_fork__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_collections__merge_a_fork__err(e)),
+        }
     }
-    fn single_collection() -> Result<String, String> {
-        dispatch(&OP_COLLECTIONS_SINGLE_COLLECTION, Value::Object(Map::new()))
+    fn single_collection(params: iface_collections::SingleCollectionParams) -> Result<iface_collections::SingleCollectionResponse, String> {
+        let json = iface_collections__single_collection_params__to_json(&params);
+        match dispatch(&OP_COLLECTIONS_SINGLE_COLLECTION, json).and_then(iface_collections__single_collection__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_collections__single_collection__err(e)),
+        }
     }
-    fn update_collection(params: iface_collections::UpdateCollectionParams) -> Result<String, String> {
+    fn update_collection(params: iface_collections::UpdateCollectionParams) -> Result<iface_collections::UpdateCollectionResponse, iface_collections::UpdateCollectionError> {
         let json = iface_collections__update_collection_params__to_json(&params);
-        dispatch(&OP_COLLECTIONS_UPDATE_COLLECTION, json)
+        match dispatch(&OP_COLLECTIONS_UPDATE_COLLECTION, json).and_then(iface_collections__update_collection__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_collections__update_collection__err(e)),
+        }
     }
-    fn delete_collection() -> Result<String, String> {
-        dispatch(&OP_COLLECTIONS_DELETE_COLLECTION, Value::Object(Map::new()))
+    fn delete_collection(params: iface_collections::DeleteCollectionParams) -> Result<iface_collections::DeleteCollectionResponse, iface_collections::DeleteCollectionError> {
+        let json = iface_collections__delete_collection_params__to_json(&params);
+        match dispatch(&OP_COLLECTIONS_DELETE_COLLECTION, json).and_then(iface_collections__delete_collection__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_collections__delete_collection__err(e)),
+        }
     }
 }
 use crate::exports::autostamp::getpostman::environments as iface_environments;
@@ -980,7 +2921,7 @@ const OP_ENVIRONMENTS_CREATE_ENVIRONMENT: OpSpec = OpSpec {
     method: "POST",
     path_template: "/environments",
     fields: &[
-        FieldSpec { snake: "environment", location: FieldLocation::Body },
+        FieldSpec { snake: "environment", wire: "environment", location: FieldLocation::Body },
     ],
     auth: &[
     ],
@@ -990,6 +2931,7 @@ const OP_ENVIRONMENTS_SINGLE_ENVIRONMENT: OpSpec = OpSpec {
     method: "GET",
     path_template: "/environments/{environment_uid}",
     fields: &[
+        FieldSpec { snake: "environment_uid", wire: "environment_uid", location: FieldLocation::Path },
     ],
     auth: &[
     ],
@@ -999,7 +2941,8 @@ const OP_ENVIRONMENTS_UPDATE_ENVIRONMENT: OpSpec = OpSpec {
     method: "PUT",
     path_template: "/environments/{environment_uid}",
     fields: &[
-        FieldSpec { snake: "environment", location: FieldLocation::Body },
+        FieldSpec { snake: "environment_uid", wire: "environment_uid", location: FieldLocation::Path },
+        FieldSpec { snake: "environment", wire: "environment", location: FieldLocation::Body },
     ],
     auth: &[
     ],
@@ -1009,10 +2952,26 @@ const OP_ENVIRONMENTS_DELETE_ENVIRONMENT: OpSpec = OpSpec {
     method: "DELETE",
     path_template: "/environments/{environment_uid}",
     fields: &[
+        FieldSpec { snake: "environment_uid", wire: "environment_uid", location: FieldLocation::Path },
     ],
     auth: &[
     ],
 };
+
+fn iface_environments__all_environments_response__to_json(p: &iface_environments::AllEnvironmentsResponse) -> Value {
+    let mut m = Map::new();
+    m.insert("environments".into(), match (&p.environments) { Some(v) => Value::Array((v).iter().map(|v| iface_environments__all_environments_response_environments_item__to_json(v)).collect()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_environments__all_environments_response_environments_item__to_json(p: &iface_environments::AllEnvironmentsResponseEnvironmentsItem) -> Value {
+    let mut m = Map::new();
+    m.insert("id".into(), match (&p.id) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("name".into(), match (&p.name) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("owner".into(), match (&p.owner) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("uid".into(), match (&p.uid) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
 
 fn iface_environments__create_environment_body_environment__to_json(p: &iface_environments::CreateEnvironmentBodyEnvironment) -> Value {
     let mut m = Map::new();
@@ -1024,6 +2983,44 @@ fn iface_environments__create_environment_body_environment__to_json(p: &iface_en
 fn iface_environments__create_environment_body_environment_values_item__to_json(p: &iface_environments::CreateEnvironmentBodyEnvironmentValuesItem) -> Value {
     let mut m = Map::new();
     m.insert("key".into(), match (&p.key) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("value".into(), match (&p.value) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_environments__create_environment_response__to_json(p: &iface_environments::CreateEnvironmentResponse) -> Value {
+    let mut m = Map::new();
+    m.insert("environment".into(), match (&p.environment) { Some(v) => iface_environments__create_environment_response_environment__to_json(v), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_environments__create_environment_response_environment__to_json(p: &iface_environments::CreateEnvironmentResponseEnvironment) -> Value {
+    let mut m = Map::new();
+    m.insert("id".into(), match (&p.id) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("name".into(), match (&p.name) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("uid".into(), match (&p.uid) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_environments__single_environment_response__to_json(p: &iface_environments::SingleEnvironmentResponse) -> Value {
+    let mut m = Map::new();
+    m.insert("environment".into(), match (&p.environment) { Some(v) => iface_environments__single_environment_response_environment__to_json(v), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_environments__single_environment_response_environment__to_json(p: &iface_environments::SingleEnvironmentResponseEnvironment) -> Value {
+    let mut m = Map::new();
+    m.insert("id".into(), match (&p.id) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("name".into(), match (&p.name) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("values".into(), match (&p.values) { Some(v) => Value::Array((v).iter().map(|v| iface_environments__single_environment_response_environment_values_item__to_json(v)).collect()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_environments__single_environment_response_environment_values_item__to_json(p: &iface_environments::SingleEnvironmentResponseEnvironmentValuesItem) -> Value {
+    let mut m = Map::new();
+    m.insert("enabled".into(), match (&p.enabled) { Some(v) => Value::Bool(*(v)), None => Value::Null });
+    m.insert("hovered".into(), match (&p.hovered) { Some(v) => Value::Bool(*(v)), None => Value::Null });
+    m.insert("key".into(), match (&p.key) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("type".into(), match (&p.type_op) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("value".into(), match (&p.value) { Some(v) => Value::String((v).clone()), None => Value::Null });
     Value::Object(m)
 }
@@ -1042,35 +3039,282 @@ fn iface_environments__update_environment_body_environment_values_item__to_json(
     Value::Object(m)
 }
 
+fn iface_environments__update_environment_response__to_json(p: &iface_environments::UpdateEnvironmentResponse) -> Value {
+    let mut m = Map::new();
+    m.insert("environment".into(), match (&p.environment) { Some(v) => iface_environments__update_environment_response_environment__to_json(v), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_environments__update_environment_response_environment__to_json(p: &iface_environments::UpdateEnvironmentResponseEnvironment) -> Value {
+    let mut m = Map::new();
+    m.insert("id".into(), match (&p.id) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("name".into(), match (&p.name) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("uid".into(), match (&p.uid) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_environments__delete_environment_response__to_json(p: &iface_environments::DeleteEnvironmentResponse) -> Value {
+    let mut m = Map::new();
+    m.insert("environment".into(), match (&p.environment) { Some(v) => iface_environments__delete_environment_response_environment__to_json(v), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_environments__delete_environment_response_environment__to_json(p: &iface_environments::DeleteEnvironmentResponseEnvironment) -> Value {
+    let mut m = Map::new();
+    m.insert("id".into(), match (&p.id) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("uid".into(), match (&p.uid) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
 fn iface_environments__create_environment_params__to_json(p: &iface_environments::CreateEnvironmentParams) -> Value {
     let mut m = Map::new();
     m.insert("environment".into(), match (&p.environment) { Some(v) => iface_environments__create_environment_body_environment__to_json(v), None => Value::Null });
     Value::Object(m)
 }
 
+fn iface_environments__single_environment_params__to_json(p: &iface_environments::SingleEnvironmentParams) -> Value {
+    let mut m = Map::new();
+    m.insert("environment_uid".into(), Value::String((&p.environment_uid).clone()));
+    Value::Object(m)
+}
+
 fn iface_environments__update_environment_params__to_json(p: &iface_environments::UpdateEnvironmentParams) -> Value {
     let mut m = Map::new();
+    m.insert("environment_uid".into(), Value::String((&p.environment_uid).clone()));
     m.insert("environment".into(), match (&p.environment) { Some(v) => iface_environments__update_environment_body_environment__to_json(v), None => Value::Null });
     Value::Object(m)
 }
 
+fn iface_environments__delete_environment_params__to_json(p: &iface_environments::DeleteEnvironmentParams) -> Value {
+    let mut m = Map::new();
+    m.insert("environment_uid".into(), Value::String((&p.environment_uid).clone()));
+    Value::Object(m)
+}
+
+fn iface_environments__all_environments_response__from_json(v: &Value) -> Option<iface_environments::AllEnvironmentsResponse> {
+    let m = v.as_object()?;
+    Some(iface_environments::AllEnvironmentsResponse {
+        environments: m.get("environments").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| iface_environments__all_environments_response_environments_item__from_json(x)).collect())),
+    })
+}
+
+fn iface_environments__all_environments_response_environments_item__from_json(v: &Value) -> Option<iface_environments::AllEnvironmentsResponseEnvironmentsItem> {
+    let m = v.as_object()?;
+    Some(iface_environments::AllEnvironmentsResponseEnvironmentsItem {
+        id: m.get("id").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        name: m.get("name").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        owner: m.get("owner").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        uid: m.get("uid").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    })
+}
+
+fn iface_environments__create_environment_response__from_json(v: &Value) -> Option<iface_environments::CreateEnvironmentResponse> {
+    let m = v.as_object()?;
+    Some(iface_environments::CreateEnvironmentResponse {
+        environment: m.get("environment").filter(|v| !v.is_null()).and_then(|v| iface_environments__create_environment_response_environment__from_json(v)),
+    })
+}
+
+fn iface_environments__create_environment_response_environment__from_json(v: &Value) -> Option<iface_environments::CreateEnvironmentResponseEnvironment> {
+    let m = v.as_object()?;
+    Some(iface_environments::CreateEnvironmentResponseEnvironment {
+        id: m.get("id").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        name: m.get("name").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        uid: m.get("uid").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    })
+}
+
+fn iface_environments__single_environment_response__from_json(v: &Value) -> Option<iface_environments::SingleEnvironmentResponse> {
+    let m = v.as_object()?;
+    Some(iface_environments::SingleEnvironmentResponse {
+        environment: m.get("environment").filter(|v| !v.is_null()).and_then(|v| iface_environments__single_environment_response_environment__from_json(v)),
+    })
+}
+
+fn iface_environments__single_environment_response_environment__from_json(v: &Value) -> Option<iface_environments::SingleEnvironmentResponseEnvironment> {
+    let m = v.as_object()?;
+    Some(iface_environments::SingleEnvironmentResponseEnvironment {
+        id: m.get("id").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        name: m.get("name").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        values: m.get("values").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| iface_environments__single_environment_response_environment_values_item__from_json(x)).collect())),
+    })
+}
+
+fn iface_environments__single_environment_response_environment_values_item__from_json(v: &Value) -> Option<iface_environments::SingleEnvironmentResponseEnvironmentValuesItem> {
+    let m = v.as_object()?;
+    Some(iface_environments::SingleEnvironmentResponseEnvironmentValuesItem {
+        enabled: m.get("enabled").filter(|v| !v.is_null()).and_then(|v| (v).as_bool()),
+        hovered: m.get("hovered").filter(|v| !v.is_null()).and_then(|v| (v).as_bool()),
+        key: m.get("key").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        type_op: m.get("type").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        value: m.get("value").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    })
+}
+
+fn iface_environments__update_environment_response__from_json(v: &Value) -> Option<iface_environments::UpdateEnvironmentResponse> {
+    let m = v.as_object()?;
+    Some(iface_environments::UpdateEnvironmentResponse {
+        environment: m.get("environment").filter(|v| !v.is_null()).and_then(|v| iface_environments__update_environment_response_environment__from_json(v)),
+    })
+}
+
+fn iface_environments__update_environment_response_environment__from_json(v: &Value) -> Option<iface_environments::UpdateEnvironmentResponseEnvironment> {
+    let m = v.as_object()?;
+    Some(iface_environments::UpdateEnvironmentResponseEnvironment {
+        id: m.get("id").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        name: m.get("name").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        uid: m.get("uid").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    })
+}
+
+fn iface_environments__delete_environment_response__from_json(v: &Value) -> Option<iface_environments::DeleteEnvironmentResponse> {
+    let m = v.as_object()?;
+    Some(iface_environments::DeleteEnvironmentResponse {
+        environment: m.get("environment").filter(|v| !v.is_null()).and_then(|v| iface_environments__delete_environment_response_environment__from_json(v)),
+    })
+}
+
+fn iface_environments__delete_environment_response_environment__from_json(v: &Value) -> Option<iface_environments::DeleteEnvironmentResponseEnvironment> {
+    let m = v.as_object()?;
+    Some(iface_environments::DeleteEnvironmentResponseEnvironment {
+        id: m.get("id").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        uid: m.get("uid").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    })
+}
+
+fn iface_environments__all_environments__ok(body: String) -> Result<iface_environments::AllEnvironmentsResponse, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match iface_environments__all_environments_response__from_json(&v) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_environments__all_environments__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
+fn iface_environments__create_environment__ok(body: String) -> Result<iface_environments::CreateEnvironmentResponse, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match iface_environments__create_environment_response__from_json(&v) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_environments__create_environment__err(e: crate::runtime::DispatchError) -> iface_environments::CreateEnvironmentError {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => match status {
+            400u16 => iface_environments::CreateEnvironmentError::BadRequest(body),
+            _ => iface_environments::CreateEnvironmentError::Other(body),
+        },
+        crate::runtime::DispatchError::Transport(m) => iface_environments::CreateEnvironmentError::Other(m),
+    }
+}
+
+fn iface_environments__single_environment__ok(body: String) -> Result<iface_environments::SingleEnvironmentResponse, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match iface_environments__single_environment_response__from_json(&v) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_environments__single_environment__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
+fn iface_environments__update_environment__ok(body: String) -> Result<iface_environments::UpdateEnvironmentResponse, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match iface_environments__update_environment_response__from_json(&v) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_environments__update_environment__err(e: crate::runtime::DispatchError) -> iface_environments::UpdateEnvironmentError {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => match status {
+            400u16 => iface_environments::UpdateEnvironmentError::BadRequest(body),
+            _ => iface_environments::UpdateEnvironmentError::Other(body),
+        },
+        crate::runtime::DispatchError::Transport(m) => iface_environments::UpdateEnvironmentError::Other(m),
+    }
+}
+
+fn iface_environments__delete_environment__ok(body: String) -> Result<iface_environments::DeleteEnvironmentResponse, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match iface_environments__delete_environment_response__from_json(&v) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_environments__delete_environment__err(e: crate::runtime::DispatchError) -> iface_environments::DeleteEnvironmentError {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => match status {
+            404u16 => iface_environments::DeleteEnvironmentError::NotFound(body),
+            _ => iface_environments::DeleteEnvironmentError::Other(body),
+        },
+        crate::runtime::DispatchError::Transport(m) => iface_environments::DeleteEnvironmentError::Other(m),
+    }
+}
+
 impl iface_environments::Guest for crate::Component {
-    fn all_environments() -> Result<String, String> {
-        dispatch(&OP_ENVIRONMENTS_ALL_ENVIRONMENTS, Value::Object(Map::new()))
+    fn all_environments() -> Result<iface_environments::AllEnvironmentsResponse, String> {
+        match dispatch(&OP_ENVIRONMENTS_ALL_ENVIRONMENTS, Value::Object(Map::new())).and_then(iface_environments__all_environments__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_environments__all_environments__err(e)),
+        }
     }
-    fn create_environment(params: iface_environments::CreateEnvironmentParams) -> Result<String, String> {
+    fn create_environment(params: iface_environments::CreateEnvironmentParams) -> Result<iface_environments::CreateEnvironmentResponse, iface_environments::CreateEnvironmentError> {
         let json = iface_environments__create_environment_params__to_json(&params);
-        dispatch(&OP_ENVIRONMENTS_CREATE_ENVIRONMENT, json)
+        match dispatch(&OP_ENVIRONMENTS_CREATE_ENVIRONMENT, json).and_then(iface_environments__create_environment__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_environments__create_environment__err(e)),
+        }
     }
-    fn single_environment() -> Result<String, String> {
-        dispatch(&OP_ENVIRONMENTS_SINGLE_ENVIRONMENT, Value::Object(Map::new()))
+    fn single_environment(params: iface_environments::SingleEnvironmentParams) -> Result<iface_environments::SingleEnvironmentResponse, String> {
+        let json = iface_environments__single_environment_params__to_json(&params);
+        match dispatch(&OP_ENVIRONMENTS_SINGLE_ENVIRONMENT, json).and_then(iface_environments__single_environment__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_environments__single_environment__err(e)),
+        }
     }
-    fn update_environment(params: iface_environments::UpdateEnvironmentParams) -> Result<String, String> {
+    fn update_environment(params: iface_environments::UpdateEnvironmentParams) -> Result<iface_environments::UpdateEnvironmentResponse, iface_environments::UpdateEnvironmentError> {
         let json = iface_environments__update_environment_params__to_json(&params);
-        dispatch(&OP_ENVIRONMENTS_UPDATE_ENVIRONMENT, json)
+        match dispatch(&OP_ENVIRONMENTS_UPDATE_ENVIRONMENT, json).and_then(iface_environments__update_environment__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_environments__update_environment__err(e)),
+        }
     }
-    fn delete_environment() -> Result<String, String> {
-        dispatch(&OP_ENVIRONMENTS_DELETE_ENVIRONMENT, Value::Object(Map::new()))
+    fn delete_environment(params: iface_environments::DeleteEnvironmentParams) -> Result<iface_environments::DeleteEnvironmentResponse, iface_environments::DeleteEnvironmentError> {
+        let json = iface_environments__delete_environment_params__to_json(&params);
+        match dispatch(&OP_ENVIRONMENTS_DELETE_ENVIRONMENT, json).and_then(iface_environments__delete_environment__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_environments__delete_environment__err(e)),
+        }
     }
 }
 use crate::exports::autostamp::getpostman::import_op as iface_import_op;
@@ -1088,12 +3332,26 @@ const OP_IMPORT_OP_IMPORT_EXTERNAL_API_SPECIFICATION: OpSpec = OpSpec {
     method: "POST",
     path_template: "/import/openapi",
     fields: &[
-        FieldSpec { snake: "input", location: FieldLocation::Body },
-        FieldSpec { snake: "type", location: FieldLocation::Body },
+        FieldSpec { snake: "input", wire: "input", location: FieldLocation::Body },
+        FieldSpec { snake: "type", wire: "type", location: FieldLocation::Body },
     ],
     auth: &[
     ],
 };
+
+fn iface_import_op__import_exported_data_response__to_json(p: &iface_import_op::ImportExportedDataResponse) -> Value {
+    let mut m = Map::new();
+    m.insert("collections".into(), match (&p.collections) { Some(v) => Value::Array((v).iter().map(|v| iface_import_op__import_exported_data_response_collections_item__to_json(v)).collect()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_import_op__import_exported_data_response_collections_item__to_json(p: &iface_import_op::ImportExportedDataResponseCollectionsItem) -> Value {
+    let mut m = Map::new();
+    m.insert("id".into(), match (&p.id) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("name".into(), match (&p.name) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("uid".into(), match (&p.uid) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
 
 fn iface_import_op__import_external_api_specification_body_input__to_json(p: &iface_import_op::ImportExternalApiSpecificationBodyInput) -> Value {
     let mut m = Map::new();
@@ -1120,7 +3378,7 @@ fn iface_import_op__import_external_api_specification_body_input_info_license__t
 
 fn iface_import_op__import_external_api_specification_body_input_paths__to_json(p: &iface_import_op::ImportExternalApiSpecificationBodyInputPaths) -> Value {
     let mut m = Map::new();
-    m.insert("pets".into(), match (&p.pets) { Some(v) => iface_import_op__import_external_api_specification_body_input_paths_pets__to_json(v), None => Value::Null });
+    m.insert("/pets".into(), match (&p.pets) { Some(v) => iface_import_op__import_external_api_specification_body_input_paths_pets__to_json(v), None => Value::Null });
     Value::Object(m)
 }
 
@@ -1132,7 +3390,7 @@ fn iface_import_op__import_external_api_specification_body_input_paths_pets__to_
 
 fn iface_import_op__import_external_api_specification_body_input_paths_pets_get__to_json(p: &iface_import_op::ImportExternalApiSpecificationBodyInputPathsPetsGet) -> Value {
     let mut m = Map::new();
-    m.insert("operation_id".into(), match (&p.operation_id) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("operationId".into(), match (&p.operation_id) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("parameters".into(), match (&p.parameters) { Some(v) => Value::Array((v).iter().map(|v| iface_import_op__import_external_api_specification_body_input_paths_pets_get_parameters_item__to_json(v)).collect()), None => Value::Null });
     m.insert("responses".into(), match (&p.responses) { Some(v) => iface_import_op__import_external_api_specification_body_input_paths_pets_get_responses__to_json(v), None => Value::Null });
     m.insert("summary".into(), match (&p.summary) { Some(v) => Value::String((v).clone()), None => Value::Null });
@@ -1171,7 +3429,7 @@ fn iface_import_op__import_external_api_specification_body_input_paths_pets_get_
 
 fn iface_import_op__import_external_api_specification_body_input_paths_pets_get_responses_default_content__to_json(p: &iface_import_op::ImportExternalApiSpecificationBodyInputPathsPetsGetResponsesDefaultContent) -> Value {
     let mut m = Map::new();
-    m.insert("application_json".into(), match (&p.application_json) { Some(v) => iface_import_op__import_external_api_specification_body_input_paths_pets_get_responses_default_content_application_json__to_json(v), None => Value::Null });
+    m.insert("application/json".into(), match (&p.application_json) { Some(v) => iface_import_op__import_external_api_specification_body_input_paths_pets_get_responses_default_content_application_json__to_json(v), None => Value::Null });
     Value::Object(m)
 }
 
@@ -1214,6 +3472,20 @@ fn iface_import_op__import_external_api_specification_body_input_servers_item__t
     Value::Object(m)
 }
 
+fn iface_import_op__import_external_api_specification_response__to_json(p: &iface_import_op::ImportExternalApiSpecificationResponse) -> Value {
+    let mut m = Map::new();
+    m.insert("collections".into(), match (&p.collections) { Some(v) => Value::Array((v).iter().map(|v| iface_import_op__import_external_api_specification_response_collections_item__to_json(v)).collect()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_import_op__import_external_api_specification_response_collections_item__to_json(p: &iface_import_op::ImportExternalApiSpecificationResponseCollectionsItem) -> Value {
+    let mut m = Map::new();
+    m.insert("id".into(), match (&p.id) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("name".into(), match (&p.name) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("uid".into(), match (&p.uid) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
 fn iface_import_op__import_external_api_specification_params__to_json(p: &iface_import_op::ImportExternalApiSpecificationParams) -> Value {
     let mut m = Map::new();
     m.insert("input".into(), match (&p.input) { Some(v) => iface_import_op__import_external_api_specification_body_input__to_json(v), None => Value::Null });
@@ -1221,13 +3493,93 @@ fn iface_import_op__import_external_api_specification_params__to_json(p: &iface_
     Value::Object(m)
 }
 
-impl iface_import_op::Guest for crate::Component {
-    fn import_exported_data() -> Result<String, String> {
-        dispatch(&OP_IMPORT_OP_IMPORT_EXPORTED_DATA, Value::Object(Map::new()))
+fn iface_import_op__import_exported_data_response__from_json(v: &Value) -> Option<iface_import_op::ImportExportedDataResponse> {
+    let m = v.as_object()?;
+    Some(iface_import_op::ImportExportedDataResponse {
+        collections: m.get("collections").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| iface_import_op__import_exported_data_response_collections_item__from_json(x)).collect())),
+    })
+}
+
+fn iface_import_op__import_exported_data_response_collections_item__from_json(v: &Value) -> Option<iface_import_op::ImportExportedDataResponseCollectionsItem> {
+    let m = v.as_object()?;
+    Some(iface_import_op::ImportExportedDataResponseCollectionsItem {
+        id: m.get("id").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        name: m.get("name").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        uid: m.get("uid").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    })
+}
+
+fn iface_import_op__import_external_api_specification_response__from_json(v: &Value) -> Option<iface_import_op::ImportExternalApiSpecificationResponse> {
+    let m = v.as_object()?;
+    Some(iface_import_op::ImportExternalApiSpecificationResponse {
+        collections: m.get("collections").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| iface_import_op__import_external_api_specification_response_collections_item__from_json(x)).collect())),
+    })
+}
+
+fn iface_import_op__import_external_api_specification_response_collections_item__from_json(v: &Value) -> Option<iface_import_op::ImportExternalApiSpecificationResponseCollectionsItem> {
+    let m = v.as_object()?;
+    Some(iface_import_op::ImportExternalApiSpecificationResponseCollectionsItem {
+        id: m.get("id").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        name: m.get("name").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        uid: m.get("uid").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    })
+}
+
+fn iface_import_op__import_exported_data__ok(body: String) -> Result<iface_import_op::ImportExportedDataResponse, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match iface_import_op__import_exported_data_response__from_json(&v) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
     }
-    fn import_external_api_specification(params: iface_import_op::ImportExternalApiSpecificationParams) -> Result<String, String> {
+}
+
+fn iface_import_op__import_exported_data__err(e: crate::runtime::DispatchError) -> iface_import_op::ImportExportedDataError {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => match status {
+            400u16 => iface_import_op::ImportExportedDataError::BadRequest(body),
+            _ => iface_import_op::ImportExportedDataError::Other(body),
+        },
+        crate::runtime::DispatchError::Transport(m) => iface_import_op::ImportExportedDataError::Other(m),
+    }
+}
+
+fn iface_import_op__import_external_api_specification__ok(body: String) -> Result<iface_import_op::ImportExternalApiSpecificationResponse, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match iface_import_op__import_external_api_specification_response__from_json(&v) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_import_op__import_external_api_specification__err(e: crate::runtime::DispatchError) -> iface_import_op::ImportExternalApiSpecificationError {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => match status {
+            400u16 => iface_import_op::ImportExternalApiSpecificationError::BadRequest(body),
+            _ => iface_import_op::ImportExternalApiSpecificationError::Other(body),
+        },
+        crate::runtime::DispatchError::Transport(m) => iface_import_op::ImportExternalApiSpecificationError::Other(m),
+    }
+}
+
+impl iface_import_op::Guest for crate::Component {
+    fn import_exported_data() -> Result<iface_import_op::ImportExportedDataResponse, iface_import_op::ImportExportedDataError> {
+        match dispatch(&OP_IMPORT_OP_IMPORT_EXPORTED_DATA, Value::Object(Map::new())).and_then(iface_import_op__import_exported_data__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_import_op__import_exported_data__err(e)),
+        }
+    }
+    fn import_external_api_specification(params: iface_import_op::ImportExternalApiSpecificationParams) -> Result<iface_import_op::ImportExternalApiSpecificationResponse, iface_import_op::ImportExternalApiSpecificationError> {
         let json = iface_import_op__import_external_api_specification_params__to_json(&params);
-        dispatch(&OP_IMPORT_OP_IMPORT_EXTERNAL_API_SPECIFICATION, json)
+        match dispatch(&OP_IMPORT_OP_IMPORT_EXTERNAL_API_SPECIFICATION, json).and_then(iface_import_op__import_external_api_specification__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_import_op__import_external_api_specification__err(e)),
+        }
     }
 }
 use crate::exports::autostamp::getpostman::user as iface_user;
@@ -1241,9 +3593,87 @@ const OP_USER_API_KEY_OWNER: OpSpec = OpSpec {
     ],
 };
 
+fn iface_user__api_key_owner_response__to_json(p: &iface_user::ApiKeyOwnerResponse) -> Value {
+    let mut m = Map::new();
+    m.insert("operations".into(), match (&p.operations) { Some(v) => Value::Array((v).iter().map(|v| iface_user__api_key_owner_response_operations_item__to_json(v)).collect()), None => Value::Null });
+    m.insert("user".into(), match (&p.user) { Some(v) => iface_user__api_key_owner_response_user__to_json(v), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_user__api_key_owner_response_operations_item__to_json(p: &iface_user::ApiKeyOwnerResponseOperationsItem) -> Value {
+    let mut m = Map::new();
+    m.insert("limit".into(), match (&p.limit) { Some(v) => serde_json::Number::from_f64(*(v)).map(Value::Number).unwrap_or(Value::Null), None => Value::Null });
+    m.insert("name".into(), match (&p.name) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("overage".into(), match (&p.overage) { Some(v) => serde_json::Number::from_f64(*(v)).map(Value::Number).unwrap_or(Value::Null), None => Value::Null });
+    m.insert("usage".into(), match (&p.usage) { Some(v) => serde_json::Number::from_f64(*(v)).map(Value::Number).unwrap_or(Value::Null), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_user__api_key_owner_response_user__to_json(p: &iface_user::ApiKeyOwnerResponseUser) -> Value {
+    let mut m = Map::new();
+    m.insert("avatar".into(), match (&p.avatar) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("email".into(), match (&p.email) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("fullName".into(), match (&p.full_name) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("id".into(), match (&p.id) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("isPublic".into(), match (&p.is_public) { Some(v) => Value::Bool(*(v)), None => Value::Null });
+    m.insert("username".into(), match (&p.username) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_user__api_key_owner_response__from_json(v: &Value) -> Option<iface_user::ApiKeyOwnerResponse> {
+    let m = v.as_object()?;
+    Some(iface_user::ApiKeyOwnerResponse {
+        operations: m.get("operations").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| iface_user__api_key_owner_response_operations_item__from_json(x)).collect())),
+        user: m.get("user").filter(|v| !v.is_null()).and_then(|v| iface_user__api_key_owner_response_user__from_json(v)),
+    })
+}
+
+fn iface_user__api_key_owner_response_operations_item__from_json(v: &Value) -> Option<iface_user::ApiKeyOwnerResponseOperationsItem> {
+    let m = v.as_object()?;
+    Some(iface_user::ApiKeyOwnerResponseOperationsItem {
+        limit: m.get("limit").filter(|v| !v.is_null()).and_then(|v| (v).as_f64()),
+        name: m.get("name").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        overage: m.get("overage").filter(|v| !v.is_null()).and_then(|v| (v).as_f64()),
+        usage: m.get("usage").filter(|v| !v.is_null()).and_then(|v| (v).as_f64()),
+    })
+}
+
+fn iface_user__api_key_owner_response_user__from_json(v: &Value) -> Option<iface_user::ApiKeyOwnerResponseUser> {
+    let m = v.as_object()?;
+    Some(iface_user::ApiKeyOwnerResponseUser {
+        avatar: m.get("avatar").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        email: m.get("email").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        full_name: m.get("fullName").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        id: m.get("id").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        is_public: m.get("isPublic").filter(|v| !v.is_null()).and_then(|v| (v).as_bool()),
+        username: m.get("username").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    })
+}
+
+fn iface_user__api_key_owner__ok(body: String) -> Result<iface_user::ApiKeyOwnerResponse, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match iface_user__api_key_owner_response__from_json(&v) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_user__api_key_owner__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
 impl iface_user::Guest for crate::Component {
-    fn api_key_owner() -> Result<String, String> {
-        dispatch(&OP_USER_API_KEY_OWNER, Value::Object(Map::new()))
+    fn api_key_owner() -> Result<iface_user::ApiKeyOwnerResponse, String> {
+        match dispatch(&OP_USER_API_KEY_OWNER, Value::Object(Map::new())).and_then(iface_user__api_key_owner__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_user__api_key_owner__err(e)),
+        }
     }
 }
 use crate::exports::autostamp::getpostman::mocks as iface_mocks;
@@ -1261,7 +3691,7 @@ const OP_MOCKS_CREATE_MOCK: OpSpec = OpSpec {
     method: "POST",
     path_template: "/mocks",
     fields: &[
-        FieldSpec { snake: "mock", location: FieldLocation::Body },
+        FieldSpec { snake: "mock", wire: "mock", location: FieldLocation::Body },
     ],
     auth: &[
     ],
@@ -1271,6 +3701,7 @@ const OP_MOCKS_SINGLE_MOCK: OpSpec = OpSpec {
     method: "GET",
     path_template: "/mocks/{mock_uid}",
     fields: &[
+        FieldSpec { snake: "mock_uid", wire: "mock_uid", location: FieldLocation::Path },
     ],
     auth: &[
     ],
@@ -1280,7 +3711,8 @@ const OP_MOCKS_UPDATE_MOCK: OpSpec = OpSpec {
     method: "PUT",
     path_template: "/mocks/{mock_uid}",
     fields: &[
-        FieldSpec { snake: "mock", location: FieldLocation::Body },
+        FieldSpec { snake: "mock_uid", wire: "mock_uid", location: FieldLocation::Path },
+        FieldSpec { snake: "mock", wire: "mock", location: FieldLocation::Body },
     ],
     auth: &[
     ],
@@ -1290,6 +3722,7 @@ const OP_MOCKS_DELETE_MOCK: OpSpec = OpSpec {
     method: "DELETE",
     path_template: "/mocks/{mock_uid}",
     fields: &[
+        FieldSpec { snake: "mock_uid", wire: "mock_uid", location: FieldLocation::Path },
     ],
     auth: &[
     ],
@@ -1299,6 +3732,7 @@ const OP_MOCKS_PUBLISH_MOCK: OpSpec = OpSpec {
     method: "POST",
     path_template: "/mocks/{mock_uid}/publish",
     fields: &[
+        FieldSpec { snake: "mock_uid", wire: "mock_uid", location: FieldLocation::Path },
     ],
     auth: &[
     ],
@@ -1308,15 +3742,67 @@ const OP_MOCKS_UNPUBLISH_MOCK: OpSpec = OpSpec {
     method: "DELETE",
     path_template: "/mocks/{mock_uid}/unpublish",
     fields: &[
+        FieldSpec { snake: "mock_uid", wire: "mock_uid", location: FieldLocation::Path },
     ],
     auth: &[
     ],
 };
 
+fn iface_mocks__all_mocks_response__to_json(p: &iface_mocks::AllMocksResponse) -> Value {
+    let mut m = Map::new();
+    m.insert("mocks".into(), match (&p.mocks) { Some(v) => Value::Array((v).iter().map(|v| iface_mocks__all_mocks_response_mocks_item__to_json(v)).collect()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_mocks__all_mocks_response_mocks_item__to_json(p: &iface_mocks::AllMocksResponseMocksItem) -> Value {
+    let mut m = Map::new();
+    m.insert("collection".into(), match (&p.collection) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("environment".into(), match (&p.environment) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("id".into(), match (&p.id) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("mockUrl".into(), match (&p.mock_url) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("owner".into(), match (&p.owner) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("uid".into(), match (&p.uid) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
 fn iface_mocks__create_mock_body_mock__to_json(p: &iface_mocks::CreateMockBodyMock) -> Value {
     let mut m = Map::new();
     m.insert("collection".into(), match (&p.collection) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("environment".into(), match (&p.environment) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_mocks__create_mock_response__to_json(p: &iface_mocks::CreateMockResponse) -> Value {
+    let mut m = Map::new();
+    m.insert("mock".into(), match (&p.mock) { Some(v) => iface_mocks__create_mock_response_mock__to_json(v), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_mocks__create_mock_response_mock__to_json(p: &iface_mocks::CreateMockResponseMock) -> Value {
+    let mut m = Map::new();
+    m.insert("collection".into(), match (&p.collection) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("environment".into(), match (&p.environment) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("id".into(), match (&p.id) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("mockUrl".into(), match (&p.mock_url) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("owner".into(), match (&p.owner) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("uid".into(), match (&p.uid) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_mocks__single_mock_response__to_json(p: &iface_mocks::SingleMockResponse) -> Value {
+    let mut m = Map::new();
+    m.insert("mock".into(), match (&p.mock) { Some(v) => iface_mocks__single_mock_response_mock__to_json(v), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_mocks__single_mock_response_mock__to_json(p: &iface_mocks::SingleMockResponseMock) -> Value {
+    let mut m = Map::new();
+    m.insert("collection".into(), match (&p.collection) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("environment".into(), match (&p.environment) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("id".into(), match (&p.id) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("mockUrl".into(), match (&p.mock_url) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("owner".into(), match (&p.owner) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("uid".into(), match (&p.uid) { Some(v) => Value::String((v).clone()), None => Value::Null });
     Value::Object(m)
 }
 
@@ -1326,7 +3812,72 @@ fn iface_mocks__update_mock_body_mock__to_json(p: &iface_mocks::UpdateMockBodyMo
     m.insert("environment".into(), match (&p.environment) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("name".into(), match (&p.name) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("private".into(), match (&p.private) { Some(v) => Value::Bool(*(v)), None => Value::Null });
-    m.insert("version_tag".into(), match (&p.version_tag) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("versionTag".into(), match (&p.version_tag) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_mocks__update_mock_response__to_json(p: &iface_mocks::UpdateMockResponse) -> Value {
+    let mut m = Map::new();
+    m.insert("mock".into(), match (&p.mock) { Some(v) => iface_mocks__update_mock_response_mock__to_json(v), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_mocks__update_mock_response_mock__to_json(p: &iface_mocks::UpdateMockResponseMock) -> Value {
+    let mut m = Map::new();
+    m.insert("collection".into(), match (&p.collection) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("config".into(), match (&p.config) { Some(v) => iface_mocks__update_mock_response_mock_config__to_json(v), None => Value::Null });
+    m.insert("environment".into(), match (&p.environment) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("id".into(), match (&p.id) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("mockUrl".into(), match (&p.mock_url) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("name".into(), match (&p.name) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("owner".into(), match (&p.owner) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("uid".into(), match (&p.uid) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_mocks__update_mock_response_mock_config__to_json(p: &iface_mocks::UpdateMockResponseMockConfig) -> Value {
+    let mut m = Map::new();
+    m.insert("headers".into(), match (&p.headers) { Some(v) => Value::Array((v).iter().map(|v| Value::String((v).clone())).collect()), None => Value::Null });
+    m.insert("matchBody".into(), match (&p.match_body) { Some(v) => Value::Bool(*(v)), None => Value::Null });
+    m.insert("matchQueryParams".into(), match (&p.match_query_params) { Some(v) => Value::Bool(*(v)), None => Value::Null });
+    m.insert("matchWildcards".into(), match (&p.match_wildcards) { Some(v) => Value::Bool(*(v)), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_mocks__delete_mock_response__to_json(p: &iface_mocks::DeleteMockResponse) -> Value {
+    let mut m = Map::new();
+    m.insert("mock".into(), match (&p.mock) { Some(v) => iface_mocks__delete_mock_response_mock__to_json(v), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_mocks__delete_mock_response_mock__to_json(p: &iface_mocks::DeleteMockResponseMock) -> Value {
+    let mut m = Map::new();
+    m.insert("id".into(), match (&p.id) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("uid".into(), match (&p.uid) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_mocks__publish_mock_response__to_json(p: &iface_mocks::PublishMockResponse) -> Value {
+    let mut m = Map::new();
+    m.insert("mock".into(), match (&p.mock) { Some(v) => iface_mocks__publish_mock_response_mock__to_json(v), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_mocks__publish_mock_response_mock__to_json(p: &iface_mocks::PublishMockResponseMock) -> Value {
+    let mut m = Map::new();
+    m.insert("id".into(), match (&p.id) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_mocks__unpublish_mock_response__to_json(p: &iface_mocks::UnpublishMockResponse) -> Value {
+    let mut m = Map::new();
+    m.insert("mock".into(), match (&p.mock) { Some(v) => iface_mocks__unpublish_mock_response_mock__to_json(v), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_mocks__unpublish_mock_response_mock__to_json(p: &iface_mocks::UnpublishMockResponseMock) -> Value {
+    let mut m = Map::new();
+    m.insert("id".into(), match (&p.id) { Some(v) => Value::String((v).clone()), None => Value::Null });
     Value::Object(m)
 }
 
@@ -1336,35 +3887,342 @@ fn iface_mocks__create_mock_params__to_json(p: &iface_mocks::CreateMockParams) -
     Value::Object(m)
 }
 
+fn iface_mocks__single_mock_params__to_json(p: &iface_mocks::SingleMockParams) -> Value {
+    let mut m = Map::new();
+    m.insert("mock_uid".into(), Value::String((&p.mock_uid).clone()));
+    Value::Object(m)
+}
+
 fn iface_mocks__update_mock_params__to_json(p: &iface_mocks::UpdateMockParams) -> Value {
     let mut m = Map::new();
+    m.insert("mock_uid".into(), Value::String((&p.mock_uid).clone()));
     m.insert("mock".into(), match (&p.mock) { Some(v) => iface_mocks__update_mock_body_mock__to_json(v), None => Value::Null });
     Value::Object(m)
 }
 
+fn iface_mocks__delete_mock_params__to_json(p: &iface_mocks::DeleteMockParams) -> Value {
+    let mut m = Map::new();
+    m.insert("mock_uid".into(), Value::String((&p.mock_uid).clone()));
+    Value::Object(m)
+}
+
+fn iface_mocks__publish_mock_params__to_json(p: &iface_mocks::PublishMockParams) -> Value {
+    let mut m = Map::new();
+    m.insert("mock_uid".into(), Value::String((&p.mock_uid).clone()));
+    Value::Object(m)
+}
+
+fn iface_mocks__unpublish_mock_params__to_json(p: &iface_mocks::UnpublishMockParams) -> Value {
+    let mut m = Map::new();
+    m.insert("mock_uid".into(), Value::String((&p.mock_uid).clone()));
+    Value::Object(m)
+}
+
+fn iface_mocks__all_mocks_response__from_json(v: &Value) -> Option<iface_mocks::AllMocksResponse> {
+    let m = v.as_object()?;
+    Some(iface_mocks::AllMocksResponse {
+        mocks: m.get("mocks").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| iface_mocks__all_mocks_response_mocks_item__from_json(x)).collect())),
+    })
+}
+
+fn iface_mocks__all_mocks_response_mocks_item__from_json(v: &Value) -> Option<iface_mocks::AllMocksResponseMocksItem> {
+    let m = v.as_object()?;
+    Some(iface_mocks::AllMocksResponseMocksItem {
+        collection: m.get("collection").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        environment: m.get("environment").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        id: m.get("id").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        mock_url: m.get("mockUrl").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        owner: m.get("owner").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        uid: m.get("uid").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    })
+}
+
+fn iface_mocks__create_mock_response__from_json(v: &Value) -> Option<iface_mocks::CreateMockResponse> {
+    let m = v.as_object()?;
+    Some(iface_mocks::CreateMockResponse {
+        mock: m.get("mock").filter(|v| !v.is_null()).and_then(|v| iface_mocks__create_mock_response_mock__from_json(v)),
+    })
+}
+
+fn iface_mocks__create_mock_response_mock__from_json(v: &Value) -> Option<iface_mocks::CreateMockResponseMock> {
+    let m = v.as_object()?;
+    Some(iface_mocks::CreateMockResponseMock {
+        collection: m.get("collection").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        environment: m.get("environment").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        id: m.get("id").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        mock_url: m.get("mockUrl").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        owner: m.get("owner").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        uid: m.get("uid").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    })
+}
+
+fn iface_mocks__single_mock_response__from_json(v: &Value) -> Option<iface_mocks::SingleMockResponse> {
+    let m = v.as_object()?;
+    Some(iface_mocks::SingleMockResponse {
+        mock: m.get("mock").filter(|v| !v.is_null()).and_then(|v| iface_mocks__single_mock_response_mock__from_json(v)),
+    })
+}
+
+fn iface_mocks__single_mock_response_mock__from_json(v: &Value) -> Option<iface_mocks::SingleMockResponseMock> {
+    let m = v.as_object()?;
+    Some(iface_mocks::SingleMockResponseMock {
+        collection: m.get("collection").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        environment: m.get("environment").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        id: m.get("id").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        mock_url: m.get("mockUrl").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        owner: m.get("owner").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        uid: m.get("uid").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    })
+}
+
+fn iface_mocks__update_mock_response__from_json(v: &Value) -> Option<iface_mocks::UpdateMockResponse> {
+    let m = v.as_object()?;
+    Some(iface_mocks::UpdateMockResponse {
+        mock: m.get("mock").filter(|v| !v.is_null()).and_then(|v| iface_mocks__update_mock_response_mock__from_json(v)),
+    })
+}
+
+fn iface_mocks__update_mock_response_mock__from_json(v: &Value) -> Option<iface_mocks::UpdateMockResponseMock> {
+    let m = v.as_object()?;
+    Some(iface_mocks::UpdateMockResponseMock {
+        collection: m.get("collection").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        config: m.get("config").filter(|v| !v.is_null()).and_then(|v| iface_mocks__update_mock_response_mock_config__from_json(v)),
+        environment: m.get("environment").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        id: m.get("id").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        mock_url: m.get("mockUrl").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        name: m.get("name").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        owner: m.get("owner").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        uid: m.get("uid").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    })
+}
+
+fn iface_mocks__update_mock_response_mock_config__from_json(v: &Value) -> Option<iface_mocks::UpdateMockResponseMockConfig> {
+    let m = v.as_object()?;
+    Some(iface_mocks::UpdateMockResponseMockConfig {
+        headers: m.get("headers").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| (x).as_str().map(|s| s.to_string())).collect())),
+        match_body: m.get("matchBody").filter(|v| !v.is_null()).and_then(|v| (v).as_bool()),
+        match_query_params: m.get("matchQueryParams").filter(|v| !v.is_null()).and_then(|v| (v).as_bool()),
+        match_wildcards: m.get("matchWildcards").filter(|v| !v.is_null()).and_then(|v| (v).as_bool()),
+    })
+}
+
+fn iface_mocks__delete_mock_response__from_json(v: &Value) -> Option<iface_mocks::DeleteMockResponse> {
+    let m = v.as_object()?;
+    Some(iface_mocks::DeleteMockResponse {
+        mock: m.get("mock").filter(|v| !v.is_null()).and_then(|v| iface_mocks__delete_mock_response_mock__from_json(v)),
+    })
+}
+
+fn iface_mocks__delete_mock_response_mock__from_json(v: &Value) -> Option<iface_mocks::DeleteMockResponseMock> {
+    let m = v.as_object()?;
+    Some(iface_mocks::DeleteMockResponseMock {
+        id: m.get("id").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        uid: m.get("uid").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    })
+}
+
+fn iface_mocks__publish_mock_response__from_json(v: &Value) -> Option<iface_mocks::PublishMockResponse> {
+    let m = v.as_object()?;
+    Some(iface_mocks::PublishMockResponse {
+        mock: m.get("mock").filter(|v| !v.is_null()).and_then(|v| iface_mocks__publish_mock_response_mock__from_json(v)),
+    })
+}
+
+fn iface_mocks__publish_mock_response_mock__from_json(v: &Value) -> Option<iface_mocks::PublishMockResponseMock> {
+    let m = v.as_object()?;
+    Some(iface_mocks::PublishMockResponseMock {
+        id: m.get("id").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    })
+}
+
+fn iface_mocks__unpublish_mock_response__from_json(v: &Value) -> Option<iface_mocks::UnpublishMockResponse> {
+    let m = v.as_object()?;
+    Some(iface_mocks::UnpublishMockResponse {
+        mock: m.get("mock").filter(|v| !v.is_null()).and_then(|v| iface_mocks__unpublish_mock_response_mock__from_json(v)),
+    })
+}
+
+fn iface_mocks__unpublish_mock_response_mock__from_json(v: &Value) -> Option<iface_mocks::UnpublishMockResponseMock> {
+    let m = v.as_object()?;
+    Some(iface_mocks::UnpublishMockResponseMock {
+        id: m.get("id").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    })
+}
+
+fn iface_mocks__all_mocks__ok(body: String) -> Result<iface_mocks::AllMocksResponse, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match iface_mocks__all_mocks_response__from_json(&v) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_mocks__all_mocks__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
+fn iface_mocks__create_mock__ok(body: String) -> Result<iface_mocks::CreateMockResponse, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match iface_mocks__create_mock_response__from_json(&v) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_mocks__create_mock__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
+fn iface_mocks__single_mock__ok(body: String) -> Result<iface_mocks::SingleMockResponse, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match iface_mocks__single_mock_response__from_json(&v) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_mocks__single_mock__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
+fn iface_mocks__update_mock__ok(body: String) -> Result<iface_mocks::UpdateMockResponse, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match iface_mocks__update_mock_response__from_json(&v) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_mocks__update_mock__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
+fn iface_mocks__delete_mock__ok(body: String) -> Result<iface_mocks::DeleteMockResponse, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match iface_mocks__delete_mock_response__from_json(&v) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_mocks__delete_mock__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
+fn iface_mocks__publish_mock__ok(body: String) -> Result<iface_mocks::PublishMockResponse, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match iface_mocks__publish_mock_response__from_json(&v) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_mocks__publish_mock__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
+fn iface_mocks__unpublish_mock__ok(body: String) -> Result<iface_mocks::UnpublishMockResponse, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match iface_mocks__unpublish_mock_response__from_json(&v) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_mocks__unpublish_mock__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
 impl iface_mocks::Guest for crate::Component {
-    fn all_mocks() -> Result<String, String> {
-        dispatch(&OP_MOCKS_ALL_MOCKS, Value::Object(Map::new()))
+    fn all_mocks() -> Result<iface_mocks::AllMocksResponse, String> {
+        match dispatch(&OP_MOCKS_ALL_MOCKS, Value::Object(Map::new())).and_then(iface_mocks__all_mocks__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_mocks__all_mocks__err(e)),
+        }
     }
-    fn create_mock(params: iface_mocks::CreateMockParams) -> Result<String, String> {
+    fn create_mock(params: iface_mocks::CreateMockParams) -> Result<iface_mocks::CreateMockResponse, String> {
         let json = iface_mocks__create_mock_params__to_json(&params);
-        dispatch(&OP_MOCKS_CREATE_MOCK, json)
+        match dispatch(&OP_MOCKS_CREATE_MOCK, json).and_then(iface_mocks__create_mock__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_mocks__create_mock__err(e)),
+        }
     }
-    fn single_mock() -> Result<String, String> {
-        dispatch(&OP_MOCKS_SINGLE_MOCK, Value::Object(Map::new()))
+    fn single_mock(params: iface_mocks::SingleMockParams) -> Result<iface_mocks::SingleMockResponse, String> {
+        let json = iface_mocks__single_mock_params__to_json(&params);
+        match dispatch(&OP_MOCKS_SINGLE_MOCK, json).and_then(iface_mocks__single_mock__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_mocks__single_mock__err(e)),
+        }
     }
-    fn update_mock(params: iface_mocks::UpdateMockParams) -> Result<String, String> {
+    fn update_mock(params: iface_mocks::UpdateMockParams) -> Result<iface_mocks::UpdateMockResponse, String> {
         let json = iface_mocks__update_mock_params__to_json(&params);
-        dispatch(&OP_MOCKS_UPDATE_MOCK, json)
+        match dispatch(&OP_MOCKS_UPDATE_MOCK, json).and_then(iface_mocks__update_mock__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_mocks__update_mock__err(e)),
+        }
     }
-    fn delete_mock() -> Result<String, String> {
-        dispatch(&OP_MOCKS_DELETE_MOCK, Value::Object(Map::new()))
+    fn delete_mock(params: iface_mocks::DeleteMockParams) -> Result<iface_mocks::DeleteMockResponse, String> {
+        let json = iface_mocks__delete_mock_params__to_json(&params);
+        match dispatch(&OP_MOCKS_DELETE_MOCK, json).and_then(iface_mocks__delete_mock__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_mocks__delete_mock__err(e)),
+        }
     }
-    fn publish_mock() -> Result<String, String> {
-        dispatch(&OP_MOCKS_PUBLISH_MOCK, Value::Object(Map::new()))
+    fn publish_mock(params: iface_mocks::PublishMockParams) -> Result<iface_mocks::PublishMockResponse, String> {
+        let json = iface_mocks__publish_mock_params__to_json(&params);
+        match dispatch(&OP_MOCKS_PUBLISH_MOCK, json).and_then(iface_mocks__publish_mock__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_mocks__publish_mock__err(e)),
+        }
     }
-    fn unpublish_mock() -> Result<String, String> {
-        dispatch(&OP_MOCKS_UNPUBLISH_MOCK, Value::Object(Map::new()))
+    fn unpublish_mock(params: iface_mocks::UnpublishMockParams) -> Result<iface_mocks::UnpublishMockResponse, String> {
+        let json = iface_mocks__unpublish_mock_params__to_json(&params);
+        match dispatch(&OP_MOCKS_UNPUBLISH_MOCK, json).and_then(iface_mocks__unpublish_mock__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_mocks__unpublish_mock__err(e)),
+        }
     }
 }
 use crate::exports::autostamp::getpostman::monitors as iface_monitors;
@@ -1382,7 +4240,7 @@ const OP_MONITORS_CREATE_MONITOR: OpSpec = OpSpec {
     method: "POST",
     path_template: "/monitors",
     fields: &[
-        FieldSpec { snake: "monitor", location: FieldLocation::Body },
+        FieldSpec { snake: "monitor", wire: "monitor", location: FieldLocation::Body },
     ],
     auth: &[
     ],
@@ -1392,6 +4250,7 @@ const OP_MONITORS_SINGLE_MONITOR: OpSpec = OpSpec {
     method: "GET",
     path_template: "/monitors/{monitor_uid}",
     fields: &[
+        FieldSpec { snake: "monitor_uid", wire: "monitor_uid", location: FieldLocation::Path },
     ],
     auth: &[
     ],
@@ -1401,7 +4260,8 @@ const OP_MONITORS_UPDATE_MONITOR: OpSpec = OpSpec {
     method: "PUT",
     path_template: "/monitors/{monitor_uid}",
     fields: &[
-        FieldSpec { snake: "monitor", location: FieldLocation::Body },
+        FieldSpec { snake: "monitor_uid", wire: "monitor_uid", location: FieldLocation::Path },
+        FieldSpec { snake: "monitor", wire: "monitor", location: FieldLocation::Body },
     ],
     auth: &[
     ],
@@ -1411,6 +4271,7 @@ const OP_MONITORS_DELETE_MONITOR: OpSpec = OpSpec {
     method: "DELETE",
     path_template: "/monitors/{monitor_uid}",
     fields: &[
+        FieldSpec { snake: "monitor_uid", wire: "monitor_uid", location: FieldLocation::Path },
     ],
     auth: &[
     ],
@@ -1420,10 +4281,26 @@ const OP_MONITORS_RUN_A_MONITOR: OpSpec = OpSpec {
     method: "POST",
     path_template: "/monitors/{monitor_uid}/run",
     fields: &[
+        FieldSpec { snake: "monitor_uid", wire: "monitor_uid", location: FieldLocation::Path },
     ],
     auth: &[
     ],
 };
+
+fn iface_monitors__all_monitors_response__to_json(p: &iface_monitors::AllMonitorsResponse) -> Value {
+    let mut m = Map::new();
+    m.insert("monitors".into(), match (&p.monitors) { Some(v) => Value::Array((v).iter().map(|v| iface_monitors__all_monitors_response_monitors_item__to_json(v)).collect()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_monitors__all_monitors_response_monitors_item__to_json(p: &iface_monitors::AllMonitorsResponseMonitorsItem) -> Value {
+    let mut m = Map::new();
+    m.insert("id".into(), match (&p.id) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("name".into(), match (&p.name) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("owner".into(), match (&p.owner) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("uid".into(), match (&p.uid) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
 
 fn iface_monitors__create_monitor_body_monitor__to_json(p: &iface_monitors::CreateMonitorBodyMonitor) -> Value {
     let mut m = Map::new();
@@ -1437,6 +4314,107 @@ fn iface_monitors__create_monitor_body_monitor__to_json(p: &iface_monitors::Crea
 fn iface_monitors__create_monitor_body_monitor_schedule__to_json(p: &iface_monitors::CreateMonitorBodyMonitorSchedule) -> Value {
     let mut m = Map::new();
     m.insert("cron".into(), match (&p.cron) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("timezone".into(), match (&p.timezone) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_monitors__create_monitor_response__to_json(p: &iface_monitors::CreateMonitorResponse) -> Value {
+    let mut m = Map::new();
+    m.insert("monitor".into(), match (&p.monitor) { Some(v) => iface_monitors__create_monitor_response_monitor__to_json(v), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_monitors__create_monitor_response_monitor__to_json(p: &iface_monitors::CreateMonitorResponseMonitor) -> Value {
+    let mut m = Map::new();
+    m.insert("id".into(), match (&p.id) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("name".into(), match (&p.name) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("uid".into(), match (&p.uid) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_monitors__single_monitor_response__to_json(p: &iface_monitors::SingleMonitorResponse) -> Value {
+    let mut m = Map::new();
+    m.insert("monitor".into(), match (&p.monitor) { Some(v) => iface_monitors__single_monitor_response_monitor__to_json(v), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_monitors__single_monitor_response_monitor__to_json(p: &iface_monitors::SingleMonitorResponseMonitor) -> Value {
+    let mut m = Map::new();
+    m.insert("collectionUid".into(), match (&p.collection_uid) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("distribution".into(), match (&p.distribution) { Some(v) => Value::Array((v).iter().map(|v| Value::String((v).clone())).collect()), None => Value::Null });
+    m.insert("environmentUid".into(), match (&p.environment_uid) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("id".into(), match (&p.id) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("lastRun".into(), match (&p.last_run) { Some(v) => iface_monitors__single_monitor_response_monitor_last_run__to_json(v), None => Value::Null });
+    m.insert("name".into(), match (&p.name) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("notifications".into(), match (&p.notifications) { Some(v) => iface_monitors__single_monitor_response_monitor_notifications__to_json(v), None => Value::Null });
+    m.insert("options".into(), match (&p.options) { Some(v) => iface_monitors__single_monitor_response_monitor_options__to_json(v), None => Value::Null });
+    m.insert("owner".into(), match (&p.owner) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("schedule".into(), match (&p.schedule) { Some(v) => iface_monitors__single_monitor_response_monitor_schedule__to_json(v), None => Value::Null });
+    m.insert("uid".into(), match (&p.uid) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_monitors__single_monitor_response_monitor_last_run__to_json(p: &iface_monitors::SingleMonitorResponseMonitorLastRun) -> Value {
+    let mut m = Map::new();
+    m.insert("finishedAt".into(), match (&p.finished_at) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("startedAt".into(), match (&p.started_at) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("stats".into(), match (&p.stats) { Some(v) => iface_monitors__single_monitor_response_monitor_last_run_stats__to_json(v), None => Value::Null });
+    m.insert("status".into(), match (&p.status) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_monitors__single_monitor_response_monitor_last_run_stats__to_json(p: &iface_monitors::SingleMonitorResponseMonitorLastRunStats) -> Value {
+    let mut m = Map::new();
+    m.insert("assertions".into(), match (&p.assertions) { Some(v) => iface_monitors__single_monitor_response_monitor_last_run_stats_assertions__to_json(v), None => Value::Null });
+    m.insert("requests".into(), match (&p.requests) { Some(v) => iface_monitors__single_monitor_response_monitor_last_run_stats_requests__to_json(v), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_monitors__single_monitor_response_monitor_last_run_stats_assertions__to_json(p: &iface_monitors::SingleMonitorResponseMonitorLastRunStatsAssertions) -> Value {
+    let mut m = Map::new();
+    m.insert("failed".into(), match (&p.failed) { Some(v) => serde_json::Number::from_f64(*(v)).map(Value::Number).unwrap_or(Value::Null), None => Value::Null });
+    m.insert("total".into(), match (&p.total) { Some(v) => serde_json::Number::from_f64(*(v)).map(Value::Number).unwrap_or(Value::Null), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_monitors__single_monitor_response_monitor_last_run_stats_requests__to_json(p: &iface_monitors::SingleMonitorResponseMonitorLastRunStatsRequests) -> Value {
+    let mut m = Map::new();
+    m.insert("total".into(), match (&p.total) { Some(v) => serde_json::Number::from_f64(*(v)).map(Value::Number).unwrap_or(Value::Null), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_monitors__single_monitor_response_monitor_notifications__to_json(p: &iface_monitors::SingleMonitorResponseMonitorNotifications) -> Value {
+    let mut m = Map::new();
+    m.insert("onError".into(), match (&p.on_error) { Some(v) => Value::Array((v).iter().map(|v| iface_monitors__single_monitor_response_monitor_notifications_on_error_item__to_json(v)).collect()), None => Value::Null });
+    m.insert("onFailure".into(), match (&p.on_failure) { Some(v) => Value::Array((v).iter().map(|v| iface_monitors__single_monitor_response_monitor_notifications_on_failure_item__to_json(v)).collect()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_monitors__single_monitor_response_monitor_notifications_on_error_item__to_json(p: &iface_monitors::SingleMonitorResponseMonitorNotificationsOnErrorItem) -> Value {
+    let mut m = Map::new();
+    m.insert("email".into(), match (&p.email) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_monitors__single_monitor_response_monitor_notifications_on_failure_item__to_json(p: &iface_monitors::SingleMonitorResponseMonitorNotificationsOnFailureItem) -> Value {
+    let mut m = Map::new();
+    m.insert("email".into(), match (&p.email) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_monitors__single_monitor_response_monitor_options__to_json(p: &iface_monitors::SingleMonitorResponseMonitorOptions) -> Value {
+    let mut m = Map::new();
+    m.insert("followRedirects".into(), match (&p.follow_redirects) { Some(v) => Value::Bool(*(v)), None => Value::Null });
+    m.insert("requestDelay".into(), match (&p.request_delay) { Some(v) => serde_json::Number::from_f64(*(v)).map(Value::Number).unwrap_or(Value::Null), None => Value::Null });
+    m.insert("requestTimeout".into(), match (&p.request_timeout) { Some(v) => serde_json::Number::from_f64(*(v)).map(Value::Number).unwrap_or(Value::Null), None => Value::Null });
+    m.insert("strictSSL".into(), match (&p.strict_ssl) { Some(v) => Value::Bool(*(v)), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_monitors__single_monitor_response_monitor_schedule__to_json(p: &iface_monitors::SingleMonitorResponseMonitorSchedule) -> Value {
+    let mut m = Map::new();
+    m.insert("cron".into(), match (&p.cron) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("nextRun".into(), match (&p.next_run) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("timezone".into(), match (&p.timezone) { Some(v) => Value::String((v).clone()), None => Value::Null });
     Value::Object(m)
 }
@@ -1455,38 +4433,662 @@ fn iface_monitors__update_monitor_body_monitor_schedule__to_json(p: &iface_monit
     Value::Object(m)
 }
 
+fn iface_monitors__update_monitor_response__to_json(p: &iface_monitors::UpdateMonitorResponse) -> Value {
+    let mut m = Map::new();
+    m.insert("monitor".into(), match (&p.monitor) { Some(v) => iface_monitors__update_monitor_response_monitor__to_json(v), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_monitors__update_monitor_response_monitor__to_json(p: &iface_monitors::UpdateMonitorResponseMonitor) -> Value {
+    let mut m = Map::new();
+    m.insert("id".into(), match (&p.id) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("name".into(), match (&p.name) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("uid".into(), match (&p.uid) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_monitors__delete_monitor_response__to_json(p: &iface_monitors::DeleteMonitorResponse) -> Value {
+    let mut m = Map::new();
+    m.insert("monitor".into(), match (&p.monitor) { Some(v) => iface_monitors__delete_monitor_response_monitor__to_json(v), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_monitors__delete_monitor_response_monitor__to_json(p: &iface_monitors::DeleteMonitorResponseMonitor) -> Value {
+    let mut m = Map::new();
+    m.insert("id".into(), match (&p.id) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("uid".into(), match (&p.uid) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_monitors__run_a_monitor_response__to_json(p: &iface_monitors::RunAMonitorResponse) -> Value {
+    let mut m = Map::new();
+    m.insert("run".into(), match (&p.run) { Some(v) => iface_monitors__run_a_monitor_response_run__to_json(v), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_monitors__run_a_monitor_response_run__to_json(p: &iface_monitors::RunAMonitorResponseRun) -> Value {
+    let mut m = Map::new();
+    m.insert("executions".into(), match (&p.executions) { Some(v) => Value::Array((v).iter().map(|v| iface_monitors__run_a_monitor_response_run_executions_item__to_json(v)).collect()), None => Value::Null });
+    m.insert("failures".into(), match (&p.failures) { Some(v) => Value::Array((v).iter().map(|v| iface_monitors__run_a_monitor_response_run_failures_item__to_json(v)).collect()), None => Value::Null });
+    m.insert("info".into(), match (&p.info) { Some(v) => iface_monitors__run_a_monitor_response_run_info__to_json(v), None => Value::Null });
+    m.insert("stats".into(), match (&p.stats) { Some(v) => iface_monitors__run_a_monitor_response_run_stats__to_json(v), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_monitors__run_a_monitor_response_run_executions_item__to_json(p: &iface_monitors::RunAMonitorResponseRunExecutionsItem) -> Value {
+    let mut m = Map::new();
+    m.insert("id".into(), match (&p.id) { Some(v) => serde_json::Number::from_f64(*(v)).map(Value::Number).unwrap_or(Value::Null), None => Value::Null });
+    m.insert("item".into(), match (&p.item) { Some(v) => iface_monitors__run_a_monitor_response_run_executions_item_item__to_json(v), None => Value::Null });
+    m.insert("request".into(), match (&p.request) { Some(v) => iface_monitors__run_a_monitor_response_run_executions_item_request__to_json(v), None => Value::Null });
+    m.insert("response".into(), match (&p.response) { Some(v) => iface_monitors__run_a_monitor_response_run_executions_item_response__to_json(v), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_monitors__run_a_monitor_response_run_executions_item_item__to_json(p: &iface_monitors::RunAMonitorResponseRunExecutionsItemItem) -> Value {
+    let mut m = Map::new();
+    m.insert("id".into(), match (&p.id) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("name".into(), match (&p.name) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_monitors__run_a_monitor_response_run_executions_item_request__to_json(p: &iface_monitors::RunAMonitorResponseRunExecutionsItemRequest) -> Value {
+    let mut m = Map::new();
+    m.insert("body".into(), match (&p.body) { Some(v) => iface_monitors__run_a_monitor_response_run_executions_item_request_body__to_json(v), None => Value::Null });
+    m.insert("headers".into(), match (&p.headers) { Some(v) => iface_monitors__run_a_monitor_response_run_executions_item_request_headers__to_json(v), None => Value::Null });
+    m.insert("method".into(), match (&p.method) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("timestamp".into(), match (&p.timestamp) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("url".into(), match (&p.url) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_monitors__run_a_monitor_response_run_executions_item_request_body__to_json(p: &iface_monitors::RunAMonitorResponseRunExecutionsItemRequestBody) -> Value {
+    let mut m = Map::new();
+    m.insert("contentLength".into(), match (&p.content_length) { Some(v) => serde_json::Number::from_f64(*(v)).map(Value::Number).unwrap_or(Value::Null), None => Value::Null });
+    m.insert("mode".into(), match (&p.mode) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_monitors__run_a_monitor_response_run_executions_item_request_headers__to_json(p: &iface_monitors::RunAMonitorResponseRunExecutionsItemRequestHeaders) -> Value {
+    let mut m = Map::new();
+    m.insert("accept".into(), match (&p.accept) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("accept-encoding".into(), match (&p.accept_encoding) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("content-length".into(), match (&p.content_length) { Some(v) => serde_json::Number::from_f64(*(v)).map(Value::Number).unwrap_or(Value::Null), None => Value::Null });
+    m.insert("content-type".into(), match (&p.content_type) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_monitors__run_a_monitor_response_run_executions_item_response__to_json(p: &iface_monitors::RunAMonitorResponseRunExecutionsItemResponse) -> Value {
+    let mut m = Map::new();
+    m.insert("body".into(), match (&p.body) { Some(v) => iface_monitors__run_a_monitor_response_run_executions_item_response_body__to_json(v), None => Value::Null });
+    m.insert("code".into(), match (&p.code) { Some(v) => serde_json::Number::from_f64(*(v)).map(Value::Number).unwrap_or(Value::Null), None => Value::Null });
+    m.insert("headers".into(), match (&p.headers) { Some(v) => iface_monitors__run_a_monitor_response_run_executions_item_response_headers__to_json(v), None => Value::Null });
+    m.insert("responseSize".into(), match (&p.response_size) { Some(v) => serde_json::Number::from_f64(*(v)).map(Value::Number).unwrap_or(Value::Null), None => Value::Null });
+    m.insert("responseTime".into(), match (&p.response_time) { Some(v) => serde_json::Number::from_f64(*(v)).map(Value::Number).unwrap_or(Value::Null), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_monitors__run_a_monitor_response_run_executions_item_response_body__to_json(p: &iface_monitors::RunAMonitorResponseRunExecutionsItemResponseBody) -> Value {
+    let mut m = Map::new();
+    m.insert("contentLength".into(), match (&p.content_length) { Some(v) => serde_json::Number::from_f64(*(v)).map(Value::Number).unwrap_or(Value::Null), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_monitors__run_a_monitor_response_run_executions_item_response_headers__to_json(p: &iface_monitors::RunAMonitorResponseRunExecutionsItemResponseHeaders) -> Value {
+    let mut m = Map::new();
+    m.insert("connection".into(), match (&p.connection) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("content-encoding".into(), match (&p.content_encoding) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("content-type".into(), match (&p.content_type) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("date".into(), match (&p.date) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("transfer-encoding".into(), match (&p.transfer_encoding) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_monitors__run_a_monitor_response_run_failures_item__to_json(p: &iface_monitors::RunAMonitorResponseRunFailuresItem) -> Value {
+    let mut m = Map::new();
+    m.insert("assertion".into(), match (&p.assertion) { Some(v) => iface_monitors__run_a_monitor_response_run_failures_item_assertion__to_json(v), None => Value::Null });
+    m.insert("executionId".into(), match (&p.execution_id) { Some(v) => serde_json::Number::from_f64(*(v)).map(Value::Number).unwrap_or(Value::Null), None => Value::Null });
+    m.insert("message".into(), match (&p.message) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("name".into(), match (&p.name) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_monitors__run_a_monitor_response_run_failures_item_assertion__to_json(p: &iface_monitors::RunAMonitorResponseRunFailuresItemAssertion) -> Value {
+    let mut m = Map::new();
+    m.insert("Status code is 400".into(), match (&p.status_code_is_v400) { Some(v) => Value::Bool(*(v)), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_monitors__run_a_monitor_response_run_info__to_json(p: &iface_monitors::RunAMonitorResponseRunInfo) -> Value {
+    let mut m = Map::new();
+    m.insert("collectionUid".into(), match (&p.collection_uid) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("finishedAt".into(), match (&p.finished_at) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("jobId".into(), match (&p.job_id) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("monitorId".into(), match (&p.monitor_id) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("name".into(), match (&p.name) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("startedAt".into(), match (&p.started_at) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("status".into(), match (&p.status) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_monitors__run_a_monitor_response_run_stats__to_json(p: &iface_monitors::RunAMonitorResponseRunStats) -> Value {
+    let mut m = Map::new();
+    m.insert("assertions".into(), match (&p.assertions) { Some(v) => iface_monitors__run_a_monitor_response_run_stats_assertions__to_json(v), None => Value::Null });
+    m.insert("requests".into(), match (&p.requests) { Some(v) => iface_monitors__run_a_monitor_response_run_stats_requests__to_json(v), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_monitors__run_a_monitor_response_run_stats_assertions__to_json(p: &iface_monitors::RunAMonitorResponseRunStatsAssertions) -> Value {
+    let mut m = Map::new();
+    m.insert("failed".into(), match (&p.failed) { Some(v) => serde_json::Number::from_f64(*(v)).map(Value::Number).unwrap_or(Value::Null), None => Value::Null });
+    m.insert("total".into(), match (&p.total) { Some(v) => serde_json::Number::from_f64(*(v)).map(Value::Number).unwrap_or(Value::Null), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_monitors__run_a_monitor_response_run_stats_requests__to_json(p: &iface_monitors::RunAMonitorResponseRunStatsRequests) -> Value {
+    let mut m = Map::new();
+    m.insert("failed".into(), match (&p.failed) { Some(v) => serde_json::Number::from_f64(*(v)).map(Value::Number).unwrap_or(Value::Null), None => Value::Null });
+    m.insert("total".into(), match (&p.total) { Some(v) => serde_json::Number::from_f64(*(v)).map(Value::Number).unwrap_or(Value::Null), None => Value::Null });
+    Value::Object(m)
+}
+
 fn iface_monitors__create_monitor_params__to_json(p: &iface_monitors::CreateMonitorParams) -> Value {
     let mut m = Map::new();
     m.insert("monitor".into(), match (&p.monitor) { Some(v) => iface_monitors__create_monitor_body_monitor__to_json(v), None => Value::Null });
     Value::Object(m)
 }
 
+fn iface_monitors__single_monitor_params__to_json(p: &iface_monitors::SingleMonitorParams) -> Value {
+    let mut m = Map::new();
+    m.insert("monitor_uid".into(), Value::String((&p.monitor_uid).clone()));
+    Value::Object(m)
+}
+
 fn iface_monitors__update_monitor_params__to_json(p: &iface_monitors::UpdateMonitorParams) -> Value {
     let mut m = Map::new();
+    m.insert("monitor_uid".into(), Value::String((&p.monitor_uid).clone()));
     m.insert("monitor".into(), match (&p.monitor) { Some(v) => iface_monitors__update_monitor_body_monitor__to_json(v), None => Value::Null });
     Value::Object(m)
 }
 
+fn iface_monitors__delete_monitor_params__to_json(p: &iface_monitors::DeleteMonitorParams) -> Value {
+    let mut m = Map::new();
+    m.insert("monitor_uid".into(), Value::String((&p.monitor_uid).clone()));
+    Value::Object(m)
+}
+
+fn iface_monitors__run_a_monitor_params__to_json(p: &iface_monitors::RunAMonitorParams) -> Value {
+    let mut m = Map::new();
+    m.insert("monitor_uid".into(), Value::String((&p.monitor_uid).clone()));
+    Value::Object(m)
+}
+
+fn iface_monitors__all_monitors_response__from_json(v: &Value) -> Option<iface_monitors::AllMonitorsResponse> {
+    let m = v.as_object()?;
+    Some(iface_monitors::AllMonitorsResponse {
+        monitors: m.get("monitors").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| iface_monitors__all_monitors_response_monitors_item__from_json(x)).collect())),
+    })
+}
+
+fn iface_monitors__all_monitors_response_monitors_item__from_json(v: &Value) -> Option<iface_monitors::AllMonitorsResponseMonitorsItem> {
+    let m = v.as_object()?;
+    Some(iface_monitors::AllMonitorsResponseMonitorsItem {
+        id: m.get("id").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        name: m.get("name").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        owner: m.get("owner").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        uid: m.get("uid").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    })
+}
+
+fn iface_monitors__create_monitor_response__from_json(v: &Value) -> Option<iface_monitors::CreateMonitorResponse> {
+    let m = v.as_object()?;
+    Some(iface_monitors::CreateMonitorResponse {
+        monitor: m.get("monitor").filter(|v| !v.is_null()).and_then(|v| iface_monitors__create_monitor_response_monitor__from_json(v)),
+    })
+}
+
+fn iface_monitors__create_monitor_response_monitor__from_json(v: &Value) -> Option<iface_monitors::CreateMonitorResponseMonitor> {
+    let m = v.as_object()?;
+    Some(iface_monitors::CreateMonitorResponseMonitor {
+        id: m.get("id").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        name: m.get("name").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        uid: m.get("uid").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    })
+}
+
+fn iface_monitors__single_monitor_response__from_json(v: &Value) -> Option<iface_monitors::SingleMonitorResponse> {
+    let m = v.as_object()?;
+    Some(iface_monitors::SingleMonitorResponse {
+        monitor: m.get("monitor").filter(|v| !v.is_null()).and_then(|v| iface_monitors__single_monitor_response_monitor__from_json(v)),
+    })
+}
+
+fn iface_monitors__single_monitor_response_monitor__from_json(v: &Value) -> Option<iface_monitors::SingleMonitorResponseMonitor> {
+    let m = v.as_object()?;
+    Some(iface_monitors::SingleMonitorResponseMonitor {
+        collection_uid: m.get("collectionUid").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        distribution: m.get("distribution").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| (x).as_str().map(|s| s.to_string())).collect())),
+        environment_uid: m.get("environmentUid").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        id: m.get("id").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        last_run: m.get("lastRun").filter(|v| !v.is_null()).and_then(|v| iface_monitors__single_monitor_response_monitor_last_run__from_json(v)),
+        name: m.get("name").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        notifications: m.get("notifications").filter(|v| !v.is_null()).and_then(|v| iface_monitors__single_monitor_response_monitor_notifications__from_json(v)),
+        options: m.get("options").filter(|v| !v.is_null()).and_then(|v| iface_monitors__single_monitor_response_monitor_options__from_json(v)),
+        owner: m.get("owner").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        schedule: m.get("schedule").filter(|v| !v.is_null()).and_then(|v| iface_monitors__single_monitor_response_monitor_schedule__from_json(v)),
+        uid: m.get("uid").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    })
+}
+
+fn iface_monitors__single_monitor_response_monitor_last_run__from_json(v: &Value) -> Option<iface_monitors::SingleMonitorResponseMonitorLastRun> {
+    let m = v.as_object()?;
+    Some(iface_monitors::SingleMonitorResponseMonitorLastRun {
+        finished_at: m.get("finishedAt").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        started_at: m.get("startedAt").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        stats: m.get("stats").filter(|v| !v.is_null()).and_then(|v| iface_monitors__single_monitor_response_monitor_last_run_stats__from_json(v)),
+        status: m.get("status").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    })
+}
+
+fn iface_monitors__single_monitor_response_monitor_last_run_stats__from_json(v: &Value) -> Option<iface_monitors::SingleMonitorResponseMonitorLastRunStats> {
+    let m = v.as_object()?;
+    Some(iface_monitors::SingleMonitorResponseMonitorLastRunStats {
+        assertions: m.get("assertions").filter(|v| !v.is_null()).and_then(|v| iface_monitors__single_monitor_response_monitor_last_run_stats_assertions__from_json(v)),
+        requests: m.get("requests").filter(|v| !v.is_null()).and_then(|v| iface_monitors__single_monitor_response_monitor_last_run_stats_requests__from_json(v)),
+    })
+}
+
+fn iface_monitors__single_monitor_response_monitor_last_run_stats_assertions__from_json(v: &Value) -> Option<iface_monitors::SingleMonitorResponseMonitorLastRunStatsAssertions> {
+    let m = v.as_object()?;
+    Some(iface_monitors::SingleMonitorResponseMonitorLastRunStatsAssertions {
+        failed: m.get("failed").filter(|v| !v.is_null()).and_then(|v| (v).as_f64()),
+        total: m.get("total").filter(|v| !v.is_null()).and_then(|v| (v).as_f64()),
+    })
+}
+
+fn iface_monitors__single_monitor_response_monitor_last_run_stats_requests__from_json(v: &Value) -> Option<iface_monitors::SingleMonitorResponseMonitorLastRunStatsRequests> {
+    let m = v.as_object()?;
+    Some(iface_monitors::SingleMonitorResponseMonitorLastRunStatsRequests {
+        total: m.get("total").filter(|v| !v.is_null()).and_then(|v| (v).as_f64()),
+    })
+}
+
+fn iface_monitors__single_monitor_response_monitor_notifications__from_json(v: &Value) -> Option<iface_monitors::SingleMonitorResponseMonitorNotifications> {
+    let m = v.as_object()?;
+    Some(iface_monitors::SingleMonitorResponseMonitorNotifications {
+        on_error: m.get("onError").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| iface_monitors__single_monitor_response_monitor_notifications_on_error_item__from_json(x)).collect())),
+        on_failure: m.get("onFailure").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| iface_monitors__single_monitor_response_monitor_notifications_on_failure_item__from_json(x)).collect())),
+    })
+}
+
+fn iface_monitors__single_monitor_response_monitor_notifications_on_error_item__from_json(v: &Value) -> Option<iface_monitors::SingleMonitorResponseMonitorNotificationsOnErrorItem> {
+    let m = v.as_object()?;
+    Some(iface_monitors::SingleMonitorResponseMonitorNotificationsOnErrorItem {
+        email: m.get("email").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    })
+}
+
+fn iface_monitors__single_monitor_response_monitor_notifications_on_failure_item__from_json(v: &Value) -> Option<iface_monitors::SingleMonitorResponseMonitorNotificationsOnFailureItem> {
+    let m = v.as_object()?;
+    Some(iface_monitors::SingleMonitorResponseMonitorNotificationsOnFailureItem {
+        email: m.get("email").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    })
+}
+
+fn iface_monitors__single_monitor_response_monitor_options__from_json(v: &Value) -> Option<iface_monitors::SingleMonitorResponseMonitorOptions> {
+    let m = v.as_object()?;
+    Some(iface_monitors::SingleMonitorResponseMonitorOptions {
+        follow_redirects: m.get("followRedirects").filter(|v| !v.is_null()).and_then(|v| (v).as_bool()),
+        request_delay: m.get("requestDelay").filter(|v| !v.is_null()).and_then(|v| (v).as_f64()),
+        request_timeout: m.get("requestTimeout").filter(|v| !v.is_null()).and_then(|v| (v).as_f64()),
+        strict_ssl: m.get("strictSSL").filter(|v| !v.is_null()).and_then(|v| (v).as_bool()),
+    })
+}
+
+fn iface_monitors__single_monitor_response_monitor_schedule__from_json(v: &Value) -> Option<iface_monitors::SingleMonitorResponseMonitorSchedule> {
+    let m = v.as_object()?;
+    Some(iface_monitors::SingleMonitorResponseMonitorSchedule {
+        cron: m.get("cron").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        next_run: m.get("nextRun").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        timezone: m.get("timezone").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    })
+}
+
+fn iface_monitors__update_monitor_response__from_json(v: &Value) -> Option<iface_monitors::UpdateMonitorResponse> {
+    let m = v.as_object()?;
+    Some(iface_monitors::UpdateMonitorResponse {
+        monitor: m.get("monitor").filter(|v| !v.is_null()).and_then(|v| iface_monitors__update_monitor_response_monitor__from_json(v)),
+    })
+}
+
+fn iface_monitors__update_monitor_response_monitor__from_json(v: &Value) -> Option<iface_monitors::UpdateMonitorResponseMonitor> {
+    let m = v.as_object()?;
+    Some(iface_monitors::UpdateMonitorResponseMonitor {
+        id: m.get("id").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        name: m.get("name").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        uid: m.get("uid").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    })
+}
+
+fn iface_monitors__delete_monitor_response__from_json(v: &Value) -> Option<iface_monitors::DeleteMonitorResponse> {
+    let m = v.as_object()?;
+    Some(iface_monitors::DeleteMonitorResponse {
+        monitor: m.get("monitor").filter(|v| !v.is_null()).and_then(|v| iface_monitors__delete_monitor_response_monitor__from_json(v)),
+    })
+}
+
+fn iface_monitors__delete_monitor_response_monitor__from_json(v: &Value) -> Option<iface_monitors::DeleteMonitorResponseMonitor> {
+    let m = v.as_object()?;
+    Some(iface_monitors::DeleteMonitorResponseMonitor {
+        id: m.get("id").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        uid: m.get("uid").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    })
+}
+
+fn iface_monitors__run_a_monitor_response__from_json(v: &Value) -> Option<iface_monitors::RunAMonitorResponse> {
+    let m = v.as_object()?;
+    Some(iface_monitors::RunAMonitorResponse {
+        run: m.get("run").filter(|v| !v.is_null()).and_then(|v| iface_monitors__run_a_monitor_response_run__from_json(v)),
+    })
+}
+
+fn iface_monitors__run_a_monitor_response_run__from_json(v: &Value) -> Option<iface_monitors::RunAMonitorResponseRun> {
+    let m = v.as_object()?;
+    Some(iface_monitors::RunAMonitorResponseRun {
+        executions: m.get("executions").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| iface_monitors__run_a_monitor_response_run_executions_item__from_json(x)).collect())),
+        failures: m.get("failures").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| iface_monitors__run_a_monitor_response_run_failures_item__from_json(x)).collect())),
+        info: m.get("info").filter(|v| !v.is_null()).and_then(|v| iface_monitors__run_a_monitor_response_run_info__from_json(v)),
+        stats: m.get("stats").filter(|v| !v.is_null()).and_then(|v| iface_monitors__run_a_monitor_response_run_stats__from_json(v)),
+    })
+}
+
+fn iface_monitors__run_a_monitor_response_run_executions_item__from_json(v: &Value) -> Option<iface_monitors::RunAMonitorResponseRunExecutionsItem> {
+    let m = v.as_object()?;
+    Some(iface_monitors::RunAMonitorResponseRunExecutionsItem {
+        id: m.get("id").filter(|v| !v.is_null()).and_then(|v| (v).as_f64()),
+        item: m.get("item").filter(|v| !v.is_null()).and_then(|v| iface_monitors__run_a_monitor_response_run_executions_item_item__from_json(v)),
+        request: m.get("request").filter(|v| !v.is_null()).and_then(|v| iface_monitors__run_a_monitor_response_run_executions_item_request__from_json(v)),
+        response: m.get("response").filter(|v| !v.is_null()).and_then(|v| iface_monitors__run_a_monitor_response_run_executions_item_response__from_json(v)),
+    })
+}
+
+fn iface_monitors__run_a_monitor_response_run_executions_item_item__from_json(v: &Value) -> Option<iface_monitors::RunAMonitorResponseRunExecutionsItemItem> {
+    let m = v.as_object()?;
+    Some(iface_monitors::RunAMonitorResponseRunExecutionsItemItem {
+        id: m.get("id").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        name: m.get("name").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    })
+}
+
+fn iface_monitors__run_a_monitor_response_run_executions_item_request__from_json(v: &Value) -> Option<iface_monitors::RunAMonitorResponseRunExecutionsItemRequest> {
+    let m = v.as_object()?;
+    Some(iface_monitors::RunAMonitorResponseRunExecutionsItemRequest {
+        body: m.get("body").filter(|v| !v.is_null()).and_then(|v| iface_monitors__run_a_monitor_response_run_executions_item_request_body__from_json(v)),
+        headers: m.get("headers").filter(|v| !v.is_null()).and_then(|v| iface_monitors__run_a_monitor_response_run_executions_item_request_headers__from_json(v)),
+        method: m.get("method").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        timestamp: m.get("timestamp").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        url: m.get("url").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    })
+}
+
+fn iface_monitors__run_a_monitor_response_run_executions_item_request_body__from_json(v: &Value) -> Option<iface_monitors::RunAMonitorResponseRunExecutionsItemRequestBody> {
+    let m = v.as_object()?;
+    Some(iface_monitors::RunAMonitorResponseRunExecutionsItemRequestBody {
+        content_length: m.get("contentLength").filter(|v| !v.is_null()).and_then(|v| (v).as_f64()),
+        mode: m.get("mode").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    })
+}
+
+fn iface_monitors__run_a_monitor_response_run_executions_item_request_headers__from_json(v: &Value) -> Option<iface_monitors::RunAMonitorResponseRunExecutionsItemRequestHeaders> {
+    let m = v.as_object()?;
+    Some(iface_monitors::RunAMonitorResponseRunExecutionsItemRequestHeaders {
+        accept: m.get("accept").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        accept_encoding: m.get("accept-encoding").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        content_length: m.get("content-length").filter(|v| !v.is_null()).and_then(|v| (v).as_f64()),
+        content_type: m.get("content-type").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    })
+}
+
+fn iface_monitors__run_a_monitor_response_run_executions_item_response__from_json(v: &Value) -> Option<iface_monitors::RunAMonitorResponseRunExecutionsItemResponse> {
+    let m = v.as_object()?;
+    Some(iface_monitors::RunAMonitorResponseRunExecutionsItemResponse {
+        body: m.get("body").filter(|v| !v.is_null()).and_then(|v| iface_monitors__run_a_monitor_response_run_executions_item_response_body__from_json(v)),
+        code: m.get("code").filter(|v| !v.is_null()).and_then(|v| (v).as_f64()),
+        headers: m.get("headers").filter(|v| !v.is_null()).and_then(|v| iface_monitors__run_a_monitor_response_run_executions_item_response_headers__from_json(v)),
+        response_size: m.get("responseSize").filter(|v| !v.is_null()).and_then(|v| (v).as_f64()),
+        response_time: m.get("responseTime").filter(|v| !v.is_null()).and_then(|v| (v).as_f64()),
+    })
+}
+
+fn iface_monitors__run_a_monitor_response_run_executions_item_response_body__from_json(v: &Value) -> Option<iface_monitors::RunAMonitorResponseRunExecutionsItemResponseBody> {
+    let m = v.as_object()?;
+    Some(iface_monitors::RunAMonitorResponseRunExecutionsItemResponseBody {
+        content_length: m.get("contentLength").filter(|v| !v.is_null()).and_then(|v| (v).as_f64()),
+    })
+}
+
+fn iface_monitors__run_a_monitor_response_run_executions_item_response_headers__from_json(v: &Value) -> Option<iface_monitors::RunAMonitorResponseRunExecutionsItemResponseHeaders> {
+    let m = v.as_object()?;
+    Some(iface_monitors::RunAMonitorResponseRunExecutionsItemResponseHeaders {
+        connection: m.get("connection").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        content_encoding: m.get("content-encoding").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        content_type: m.get("content-type").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        date: m.get("date").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        transfer_encoding: m.get("transfer-encoding").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    })
+}
+
+fn iface_monitors__run_a_monitor_response_run_failures_item__from_json(v: &Value) -> Option<iface_monitors::RunAMonitorResponseRunFailuresItem> {
+    let m = v.as_object()?;
+    Some(iface_monitors::RunAMonitorResponseRunFailuresItem {
+        assertion: m.get("assertion").filter(|v| !v.is_null()).and_then(|v| iface_monitors__run_a_monitor_response_run_failures_item_assertion__from_json(v)),
+        execution_id: m.get("executionId").filter(|v| !v.is_null()).and_then(|v| (v).as_f64()),
+        message: m.get("message").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        name: m.get("name").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    })
+}
+
+fn iface_monitors__run_a_monitor_response_run_failures_item_assertion__from_json(v: &Value) -> Option<iface_monitors::RunAMonitorResponseRunFailuresItemAssertion> {
+    let m = v.as_object()?;
+    Some(iface_monitors::RunAMonitorResponseRunFailuresItemAssertion {
+        status_code_is_v400: m.get("Status code is 400").filter(|v| !v.is_null()).and_then(|v| (v).as_bool()),
+    })
+}
+
+fn iface_monitors__run_a_monitor_response_run_info__from_json(v: &Value) -> Option<iface_monitors::RunAMonitorResponseRunInfo> {
+    let m = v.as_object()?;
+    Some(iface_monitors::RunAMonitorResponseRunInfo {
+        collection_uid: m.get("collectionUid").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        finished_at: m.get("finishedAt").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        job_id: m.get("jobId").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        monitor_id: m.get("monitorId").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        name: m.get("name").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        started_at: m.get("startedAt").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        status: m.get("status").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    })
+}
+
+fn iface_monitors__run_a_monitor_response_run_stats__from_json(v: &Value) -> Option<iface_monitors::RunAMonitorResponseRunStats> {
+    let m = v.as_object()?;
+    Some(iface_monitors::RunAMonitorResponseRunStats {
+        assertions: m.get("assertions").filter(|v| !v.is_null()).and_then(|v| iface_monitors__run_a_monitor_response_run_stats_assertions__from_json(v)),
+        requests: m.get("requests").filter(|v| !v.is_null()).and_then(|v| iface_monitors__run_a_monitor_response_run_stats_requests__from_json(v)),
+    })
+}
+
+fn iface_monitors__run_a_monitor_response_run_stats_assertions__from_json(v: &Value) -> Option<iface_monitors::RunAMonitorResponseRunStatsAssertions> {
+    let m = v.as_object()?;
+    Some(iface_monitors::RunAMonitorResponseRunStatsAssertions {
+        failed: m.get("failed").filter(|v| !v.is_null()).and_then(|v| (v).as_f64()),
+        total: m.get("total").filter(|v| !v.is_null()).and_then(|v| (v).as_f64()),
+    })
+}
+
+fn iface_monitors__run_a_monitor_response_run_stats_requests__from_json(v: &Value) -> Option<iface_monitors::RunAMonitorResponseRunStatsRequests> {
+    let m = v.as_object()?;
+    Some(iface_monitors::RunAMonitorResponseRunStatsRequests {
+        failed: m.get("failed").filter(|v| !v.is_null()).and_then(|v| (v).as_f64()),
+        total: m.get("total").filter(|v| !v.is_null()).and_then(|v| (v).as_f64()),
+    })
+}
+
+fn iface_monitors__all_monitors__ok(body: String) -> Result<iface_monitors::AllMonitorsResponse, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match iface_monitors__all_monitors_response__from_json(&v) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_monitors__all_monitors__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
+fn iface_monitors__create_monitor__ok(body: String) -> Result<iface_monitors::CreateMonitorResponse, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match iface_monitors__create_monitor_response__from_json(&v) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_monitors__create_monitor__err(e: crate::runtime::DispatchError) -> iface_monitors::CreateMonitorError {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => match status {
+            400u16 => iface_monitors::CreateMonitorError::BadRequest(body),
+            _ => iface_monitors::CreateMonitorError::Other(body),
+        },
+        crate::runtime::DispatchError::Transport(m) => iface_monitors::CreateMonitorError::Other(m),
+    }
+}
+
+fn iface_monitors__single_monitor__ok(body: String) -> Result<iface_monitors::SingleMonitorResponse, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match iface_monitors__single_monitor_response__from_json(&v) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_monitors__single_monitor__err(e: crate::runtime::DispatchError) -> iface_monitors::SingleMonitorError {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => match status {
+            404u16 => iface_monitors::SingleMonitorError::NotFound(body),
+            _ => iface_monitors::SingleMonitorError::Other(body),
+        },
+        crate::runtime::DispatchError::Transport(m) => iface_monitors::SingleMonitorError::Other(m),
+    }
+}
+
+fn iface_monitors__update_monitor__ok(body: String) -> Result<iface_monitors::UpdateMonitorResponse, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match iface_monitors__update_monitor_response__from_json(&v) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_monitors__update_monitor__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
+fn iface_monitors__delete_monitor__ok(body: String) -> Result<iface_monitors::DeleteMonitorResponse, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match iface_monitors__delete_monitor_response__from_json(&v) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_monitors__delete_monitor__err(e: crate::runtime::DispatchError) -> iface_monitors::DeleteMonitorError {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => match status {
+            404u16 => iface_monitors::DeleteMonitorError::NotFound(body),
+            _ => iface_monitors::DeleteMonitorError::Other(body),
+        },
+        crate::runtime::DispatchError::Transport(m) => iface_monitors::DeleteMonitorError::Other(m),
+    }
+}
+
+fn iface_monitors__run_a_monitor__ok(body: String) -> Result<iface_monitors::RunAMonitorResponse, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match iface_monitors__run_a_monitor_response__from_json(&v) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_monitors__run_a_monitor__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
 impl iface_monitors::Guest for crate::Component {
-    fn all_monitors() -> Result<String, String> {
-        dispatch(&OP_MONITORS_ALL_MONITORS, Value::Object(Map::new()))
+    fn all_monitors() -> Result<iface_monitors::AllMonitorsResponse, String> {
+        match dispatch(&OP_MONITORS_ALL_MONITORS, Value::Object(Map::new())).and_then(iface_monitors__all_monitors__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_monitors__all_monitors__err(e)),
+        }
     }
-    fn create_monitor(params: iface_monitors::CreateMonitorParams) -> Result<String, String> {
+    fn create_monitor(params: iface_monitors::CreateMonitorParams) -> Result<iface_monitors::CreateMonitorResponse, iface_monitors::CreateMonitorError> {
         let json = iface_monitors__create_monitor_params__to_json(&params);
-        dispatch(&OP_MONITORS_CREATE_MONITOR, json)
+        match dispatch(&OP_MONITORS_CREATE_MONITOR, json).and_then(iface_monitors__create_monitor__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_monitors__create_monitor__err(e)),
+        }
     }
-    fn single_monitor() -> Result<String, String> {
-        dispatch(&OP_MONITORS_SINGLE_MONITOR, Value::Object(Map::new()))
+    fn single_monitor(params: iface_monitors::SingleMonitorParams) -> Result<iface_monitors::SingleMonitorResponse, iface_monitors::SingleMonitorError> {
+        let json = iface_monitors__single_monitor_params__to_json(&params);
+        match dispatch(&OP_MONITORS_SINGLE_MONITOR, json).and_then(iface_monitors__single_monitor__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_monitors__single_monitor__err(e)),
+        }
     }
-    fn update_monitor(params: iface_monitors::UpdateMonitorParams) -> Result<String, String> {
+    fn update_monitor(params: iface_monitors::UpdateMonitorParams) -> Result<iface_monitors::UpdateMonitorResponse, String> {
         let json = iface_monitors__update_monitor_params__to_json(&params);
-        dispatch(&OP_MONITORS_UPDATE_MONITOR, json)
+        match dispatch(&OP_MONITORS_UPDATE_MONITOR, json).and_then(iface_monitors__update_monitor__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_monitors__update_monitor__err(e)),
+        }
     }
-    fn delete_monitor() -> Result<String, String> {
-        dispatch(&OP_MONITORS_DELETE_MONITOR, Value::Object(Map::new()))
+    fn delete_monitor(params: iface_monitors::DeleteMonitorParams) -> Result<iface_monitors::DeleteMonitorResponse, iface_monitors::DeleteMonitorError> {
+        let json = iface_monitors__delete_monitor_params__to_json(&params);
+        match dispatch(&OP_MONITORS_DELETE_MONITOR, json).and_then(iface_monitors__delete_monitor__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_monitors__delete_monitor__err(e)),
+        }
     }
-    fn run_a_monitor() -> Result<String, String> {
-        dispatch(&OP_MONITORS_RUN_A_MONITOR, Value::Object(Map::new()))
+    fn run_a_monitor(params: iface_monitors::RunAMonitorParams) -> Result<iface_monitors::RunAMonitorResponse, String> {
+        let json = iface_monitors__run_a_monitor_params__to_json(&params);
+        match dispatch(&OP_MONITORS_RUN_A_MONITOR, json).and_then(iface_monitors__run_a_monitor__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_monitors__run_a_monitor__err(e)),
+        }
     }
 }
 use crate::exports::autostamp::getpostman::webhooks as iface_webhooks;
@@ -1495,8 +5097,8 @@ const OP_WEBHOOKS_CREATE_WEBHOOK: OpSpec = OpSpec {
     method: "POST",
     path_template: "/webhooks",
     fields: &[
-        FieldSpec { snake: "workspace", location: FieldLocation::Query },
-        FieldSpec { snake: "webhook", location: FieldLocation::Body },
+        FieldSpec { snake: "workspace", wire: "workspace", location: FieldLocation::Query },
+        FieldSpec { snake: "webhook", wire: "webhook", location: FieldLocation::Body },
     ],
     auth: &[
     ],
@@ -1516,10 +5118,24 @@ fn iface_webhooks__create_webhook_params__to_json(p: &iface_webhooks::CreateWebh
     Value::Object(m)
 }
 
+fn iface_webhooks__create_webhook__ok(body: String) -> Result<String, crate::runtime::DispatchError> {
+    Ok(body)
+}
+
+fn iface_webhooks__create_webhook__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
 impl iface_webhooks::Guest for crate::Component {
     fn create_webhook(params: iface_webhooks::CreateWebhookParams) -> Result<String, String> {
         let json = iface_webhooks__create_webhook_params__to_json(&params);
-        dispatch(&OP_WEBHOOKS_CREATE_WEBHOOK, json)
+        match dispatch(&OP_WEBHOOKS_CREATE_WEBHOOK, json).and_then(iface_webhooks__create_webhook__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_webhooks__create_webhook__err(e)),
+        }
     }
 }
 use crate::exports::autostamp::getpostman::workspaces as iface_workspaces;
@@ -1537,7 +5153,7 @@ const OP_WORKSPACES_CREATE_WORKSPACE: OpSpec = OpSpec {
     method: "POST",
     path_template: "/workspaces",
     fields: &[
-        FieldSpec { snake: "workspace", location: FieldLocation::Body },
+        FieldSpec { snake: "workspace", wire: "workspace", location: FieldLocation::Body },
     ],
     auth: &[
     ],
@@ -1547,6 +5163,7 @@ const OP_WORKSPACES_SINGLE_WORKSPACE: OpSpec = OpSpec {
     method: "GET",
     path_template: "/workspaces/{workspace_id}",
     fields: &[
+        FieldSpec { snake: "workspace_id", wire: "workspace_id", location: FieldLocation::Path },
     ],
     auth: &[
     ],
@@ -1556,7 +5173,8 @@ const OP_WORKSPACES_UPDATE_WORKSPACE: OpSpec = OpSpec {
     method: "PUT",
     path_template: "/workspaces/{workspace_id}",
     fields: &[
-        FieldSpec { snake: "workspace", location: FieldLocation::Body },
+        FieldSpec { snake: "workspace_id", wire: "workspace_id", location: FieldLocation::Path },
+        FieldSpec { snake: "workspace", wire: "workspace", location: FieldLocation::Body },
     ],
     auth: &[
     ],
@@ -1566,10 +5184,25 @@ const OP_WORKSPACES_DELETE_WORKSPACE: OpSpec = OpSpec {
     method: "DELETE",
     path_template: "/workspaces/{workspace_id}",
     fields: &[
+        FieldSpec { snake: "workspace_id", wire: "workspace_id", location: FieldLocation::Path },
     ],
     auth: &[
     ],
 };
+
+fn iface_workspaces__all_workspaces_response__to_json(p: &iface_workspaces::AllWorkspacesResponse) -> Value {
+    let mut m = Map::new();
+    m.insert("workspaces".into(), match (&p.workspaces) { Some(v) => Value::Array((v).iter().map(|v| iface_workspaces__all_workspaces_response_workspaces_item__to_json(v)).collect()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_workspaces__all_workspaces_response_workspaces_item__to_json(p: &iface_workspaces::AllWorkspacesResponseWorkspacesItem) -> Value {
+    let mut m = Map::new();
+    m.insert("id".into(), match (&p.id) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("name".into(), match (&p.name) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("type".into(), match (&p.type_op) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
 
 fn iface_workspaces__create_workspace_body_workspace__to_json(p: &iface_workspaces::CreateWorkspaceBodyWorkspace) -> Value {
     let mut m = Map::new();
@@ -1608,6 +5241,52 @@ fn iface_workspaces__create_workspace_body_workspace_mocks_item__to_json(p: &ifa
 fn iface_workspaces__create_workspace_body_workspace_monitors_item__to_json(p: &iface_workspaces::CreateWorkspaceBodyWorkspaceMonitorsItem) -> Value {
     let mut m = Map::new();
     m.insert("id".into(), match (&p.id) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_workspaces__create_workspace_response__to_json(p: &iface_workspaces::CreateWorkspaceResponse) -> Value {
+    let mut m = Map::new();
+    m.insert("workspace".into(), match (&p.workspace) { Some(v) => iface_workspaces__create_workspace_response_workspace__to_json(v), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_workspaces__create_workspace_response_workspace__to_json(p: &iface_workspaces::CreateWorkspaceResponseWorkspace) -> Value {
+    let mut m = Map::new();
+    m.insert("id".into(), match (&p.id) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("name".into(), match (&p.name) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_workspaces__single_workspace_response__to_json(p: &iface_workspaces::SingleWorkspaceResponse) -> Value {
+    let mut m = Map::new();
+    m.insert("workspace".into(), match (&p.workspace) { Some(v) => iface_workspaces__single_workspace_response_workspace__to_json(v), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_workspaces__single_workspace_response_workspace__to_json(p: &iface_workspaces::SingleWorkspaceResponseWorkspace) -> Value {
+    let mut m = Map::new();
+    m.insert("collections".into(), match (&p.collections) { Some(v) => Value::Array((v).iter().map(|v| iface_workspaces__single_workspace_response_workspace_collections_item__to_json(v)).collect()), None => Value::Null });
+    m.insert("description".into(), match (&p.description) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("environments".into(), match (&p.environments) { Some(v) => Value::Array((v).iter().map(|v| iface_workspaces__single_workspace_response_workspace_environments_item__to_json(v)).collect()), None => Value::Null });
+    m.insert("id".into(), match (&p.id) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("name".into(), match (&p.name) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("type".into(), match (&p.type_op) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_workspaces__single_workspace_response_workspace_collections_item__to_json(p: &iface_workspaces::SingleWorkspaceResponseWorkspaceCollectionsItem) -> Value {
+    let mut m = Map::new();
+    m.insert("id".into(), match (&p.id) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("name".into(), match (&p.name) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("uid".into(), match (&p.uid) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_workspaces__single_workspace_response_workspace_environments_item__to_json(p: &iface_workspaces::SingleWorkspaceResponseWorkspaceEnvironmentsItem) -> Value {
+    let mut m = Map::new();
+    m.insert("id".into(), match (&p.id) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("name".into(), match (&p.name) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("uid".into(), match (&p.uid) { Some(v) => Value::String((v).clone()), None => Value::Null });
     Value::Object(m)
 }
 
@@ -1650,35 +5329,287 @@ fn iface_workspaces__update_workspace_body_workspace_monitors_item__to_json(p: &
     Value::Object(m)
 }
 
+fn iface_workspaces__update_workspace_response__to_json(p: &iface_workspaces::UpdateWorkspaceResponse) -> Value {
+    let mut m = Map::new();
+    m.insert("workspace".into(), match (&p.workspace) { Some(v) => iface_workspaces__update_workspace_response_workspace__to_json(v), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_workspaces__update_workspace_response_workspace__to_json(p: &iface_workspaces::UpdateWorkspaceResponseWorkspace) -> Value {
+    let mut m = Map::new();
+    m.insert("id".into(), match (&p.id) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("name".into(), match (&p.name) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_workspaces__delete_workspace_response__to_json(p: &iface_workspaces::DeleteWorkspaceResponse) -> Value {
+    let mut m = Map::new();
+    m.insert("workspace".into(), match (&p.workspace) { Some(v) => iface_workspaces__delete_workspace_response_workspace__to_json(v), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_workspaces__delete_workspace_response_workspace__to_json(p: &iface_workspaces::DeleteWorkspaceResponseWorkspace) -> Value {
+    let mut m = Map::new();
+    m.insert("id".into(), match (&p.id) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
 fn iface_workspaces__create_workspace_params__to_json(p: &iface_workspaces::CreateWorkspaceParams) -> Value {
     let mut m = Map::new();
     m.insert("workspace".into(), match (&p.workspace) { Some(v) => iface_workspaces__create_workspace_body_workspace__to_json(v), None => Value::Null });
     Value::Object(m)
 }
 
+fn iface_workspaces__single_workspace_params__to_json(p: &iface_workspaces::SingleWorkspaceParams) -> Value {
+    let mut m = Map::new();
+    m.insert("workspace_id".into(), Value::String((&p.workspace_id).clone()));
+    Value::Object(m)
+}
+
 fn iface_workspaces__update_workspace_params__to_json(p: &iface_workspaces::UpdateWorkspaceParams) -> Value {
     let mut m = Map::new();
+    m.insert("workspace_id".into(), Value::String((&p.workspace_id).clone()));
     m.insert("workspace".into(), match (&p.workspace) { Some(v) => iface_workspaces__update_workspace_body_workspace__to_json(v), None => Value::Null });
     Value::Object(m)
 }
 
+fn iface_workspaces__delete_workspace_params__to_json(p: &iface_workspaces::DeleteWorkspaceParams) -> Value {
+    let mut m = Map::new();
+    m.insert("workspace_id".into(), Value::String((&p.workspace_id).clone()));
+    Value::Object(m)
+}
+
+fn iface_workspaces__all_workspaces_response__from_json(v: &Value) -> Option<iface_workspaces::AllWorkspacesResponse> {
+    let m = v.as_object()?;
+    Some(iface_workspaces::AllWorkspacesResponse {
+        workspaces: m.get("workspaces").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| iface_workspaces__all_workspaces_response_workspaces_item__from_json(x)).collect())),
+    })
+}
+
+fn iface_workspaces__all_workspaces_response_workspaces_item__from_json(v: &Value) -> Option<iface_workspaces::AllWorkspacesResponseWorkspacesItem> {
+    let m = v.as_object()?;
+    Some(iface_workspaces::AllWorkspacesResponseWorkspacesItem {
+        id: m.get("id").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        name: m.get("name").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        type_op: m.get("type").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    })
+}
+
+fn iface_workspaces__create_workspace_response__from_json(v: &Value) -> Option<iface_workspaces::CreateWorkspaceResponse> {
+    let m = v.as_object()?;
+    Some(iface_workspaces::CreateWorkspaceResponse {
+        workspace: m.get("workspace").filter(|v| !v.is_null()).and_then(|v| iface_workspaces__create_workspace_response_workspace__from_json(v)),
+    })
+}
+
+fn iface_workspaces__create_workspace_response_workspace__from_json(v: &Value) -> Option<iface_workspaces::CreateWorkspaceResponseWorkspace> {
+    let m = v.as_object()?;
+    Some(iface_workspaces::CreateWorkspaceResponseWorkspace {
+        id: m.get("id").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        name: m.get("name").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    })
+}
+
+fn iface_workspaces__single_workspace_response__from_json(v: &Value) -> Option<iface_workspaces::SingleWorkspaceResponse> {
+    let m = v.as_object()?;
+    Some(iface_workspaces::SingleWorkspaceResponse {
+        workspace: m.get("workspace").filter(|v| !v.is_null()).and_then(|v| iface_workspaces__single_workspace_response_workspace__from_json(v)),
+    })
+}
+
+fn iface_workspaces__single_workspace_response_workspace__from_json(v: &Value) -> Option<iface_workspaces::SingleWorkspaceResponseWorkspace> {
+    let m = v.as_object()?;
+    Some(iface_workspaces::SingleWorkspaceResponseWorkspace {
+        collections: m.get("collections").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| iface_workspaces__single_workspace_response_workspace_collections_item__from_json(x)).collect())),
+        description: m.get("description").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        environments: m.get("environments").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| iface_workspaces__single_workspace_response_workspace_environments_item__from_json(x)).collect())),
+        id: m.get("id").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        name: m.get("name").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        type_op: m.get("type").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    })
+}
+
+fn iface_workspaces__single_workspace_response_workspace_collections_item__from_json(v: &Value) -> Option<iface_workspaces::SingleWorkspaceResponseWorkspaceCollectionsItem> {
+    let m = v.as_object()?;
+    Some(iface_workspaces::SingleWorkspaceResponseWorkspaceCollectionsItem {
+        id: m.get("id").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        name: m.get("name").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        uid: m.get("uid").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    })
+}
+
+fn iface_workspaces__single_workspace_response_workspace_environments_item__from_json(v: &Value) -> Option<iface_workspaces::SingleWorkspaceResponseWorkspaceEnvironmentsItem> {
+    let m = v.as_object()?;
+    Some(iface_workspaces::SingleWorkspaceResponseWorkspaceEnvironmentsItem {
+        id: m.get("id").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        name: m.get("name").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        uid: m.get("uid").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    })
+}
+
+fn iface_workspaces__update_workspace_response__from_json(v: &Value) -> Option<iface_workspaces::UpdateWorkspaceResponse> {
+    let m = v.as_object()?;
+    Some(iface_workspaces::UpdateWorkspaceResponse {
+        workspace: m.get("workspace").filter(|v| !v.is_null()).and_then(|v| iface_workspaces__update_workspace_response_workspace__from_json(v)),
+    })
+}
+
+fn iface_workspaces__update_workspace_response_workspace__from_json(v: &Value) -> Option<iface_workspaces::UpdateWorkspaceResponseWorkspace> {
+    let m = v.as_object()?;
+    Some(iface_workspaces::UpdateWorkspaceResponseWorkspace {
+        id: m.get("id").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        name: m.get("name").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    })
+}
+
+fn iface_workspaces__delete_workspace_response__from_json(v: &Value) -> Option<iface_workspaces::DeleteWorkspaceResponse> {
+    let m = v.as_object()?;
+    Some(iface_workspaces::DeleteWorkspaceResponse {
+        workspace: m.get("workspace").filter(|v| !v.is_null()).and_then(|v| iface_workspaces__delete_workspace_response_workspace__from_json(v)),
+    })
+}
+
+fn iface_workspaces__delete_workspace_response_workspace__from_json(v: &Value) -> Option<iface_workspaces::DeleteWorkspaceResponseWorkspace> {
+    let m = v.as_object()?;
+    Some(iface_workspaces::DeleteWorkspaceResponseWorkspace {
+        id: m.get("id").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    })
+}
+
+fn iface_workspaces__all_workspaces__ok(body: String) -> Result<iface_workspaces::AllWorkspacesResponse, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match iface_workspaces__all_workspaces_response__from_json(&v) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_workspaces__all_workspaces__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
+fn iface_workspaces__create_workspace__ok(body: String) -> Result<iface_workspaces::CreateWorkspaceResponse, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match iface_workspaces__create_workspace_response__from_json(&v) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_workspaces__create_workspace__err(e: crate::runtime::DispatchError) -> iface_workspaces::CreateWorkspaceError {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => match status {
+            400u16 => iface_workspaces::CreateWorkspaceError::BadRequest(body),
+            _ => iface_workspaces::CreateWorkspaceError::Other(body),
+        },
+        crate::runtime::DispatchError::Transport(m) => iface_workspaces::CreateWorkspaceError::Other(m),
+    }
+}
+
+fn iface_workspaces__single_workspace__ok(body: String) -> Result<iface_workspaces::SingleWorkspaceResponse, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match iface_workspaces__single_workspace_response__from_json(&v) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_workspaces__single_workspace__err(e: crate::runtime::DispatchError) -> iface_workspaces::SingleWorkspaceError {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => match status {
+            404u16 => iface_workspaces::SingleWorkspaceError::NotFound(body),
+            _ => iface_workspaces::SingleWorkspaceError::Other(body),
+        },
+        crate::runtime::DispatchError::Transport(m) => iface_workspaces::SingleWorkspaceError::Other(m),
+    }
+}
+
+fn iface_workspaces__update_workspace__ok(body: String) -> Result<iface_workspaces::UpdateWorkspaceResponse, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match iface_workspaces__update_workspace_response__from_json(&v) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_workspaces__update_workspace__err(e: crate::runtime::DispatchError) -> iface_workspaces::UpdateWorkspaceError {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => match status {
+            403u16 => iface_workspaces::UpdateWorkspaceError::Forbidden(body),
+            404u16 => iface_workspaces::UpdateWorkspaceError::NotFound(body),
+            _ => iface_workspaces::UpdateWorkspaceError::Other(body),
+        },
+        crate::runtime::DispatchError::Transport(m) => iface_workspaces::UpdateWorkspaceError::Other(m),
+    }
+}
+
+fn iface_workspaces__delete_workspace__ok(body: String) -> Result<iface_workspaces::DeleteWorkspaceResponse, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match iface_workspaces__delete_workspace_response__from_json(&v) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_workspaces__delete_workspace__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
 impl iface_workspaces::Guest for crate::Component {
-    fn all_workspaces() -> Result<String, String> {
-        dispatch(&OP_WORKSPACES_ALL_WORKSPACES, Value::Object(Map::new()))
+    fn all_workspaces() -> Result<iface_workspaces::AllWorkspacesResponse, String> {
+        match dispatch(&OP_WORKSPACES_ALL_WORKSPACES, Value::Object(Map::new())).and_then(iface_workspaces__all_workspaces__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_workspaces__all_workspaces__err(e)),
+        }
     }
-    fn create_workspace(params: iface_workspaces::CreateWorkspaceParams) -> Result<String, String> {
+    fn create_workspace(params: iface_workspaces::CreateWorkspaceParams) -> Result<iface_workspaces::CreateWorkspaceResponse, iface_workspaces::CreateWorkspaceError> {
         let json = iface_workspaces__create_workspace_params__to_json(&params);
-        dispatch(&OP_WORKSPACES_CREATE_WORKSPACE, json)
+        match dispatch(&OP_WORKSPACES_CREATE_WORKSPACE, json).and_then(iface_workspaces__create_workspace__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_workspaces__create_workspace__err(e)),
+        }
     }
-    fn single_workspace() -> Result<String, String> {
-        dispatch(&OP_WORKSPACES_SINGLE_WORKSPACE, Value::Object(Map::new()))
+    fn single_workspace(params: iface_workspaces::SingleWorkspaceParams) -> Result<iface_workspaces::SingleWorkspaceResponse, iface_workspaces::SingleWorkspaceError> {
+        let json = iface_workspaces__single_workspace_params__to_json(&params);
+        match dispatch(&OP_WORKSPACES_SINGLE_WORKSPACE, json).and_then(iface_workspaces__single_workspace__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_workspaces__single_workspace__err(e)),
+        }
     }
-    fn update_workspace(params: iface_workspaces::UpdateWorkspaceParams) -> Result<String, String> {
+    fn update_workspace(params: iface_workspaces::UpdateWorkspaceParams) -> Result<iface_workspaces::UpdateWorkspaceResponse, iface_workspaces::UpdateWorkspaceError> {
         let json = iface_workspaces__update_workspace_params__to_json(&params);
-        dispatch(&OP_WORKSPACES_UPDATE_WORKSPACE, json)
+        match dispatch(&OP_WORKSPACES_UPDATE_WORKSPACE, json).and_then(iface_workspaces__update_workspace__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_workspaces__update_workspace__err(e)),
+        }
     }
-    fn delete_workspace() -> Result<String, String> {
-        dispatch(&OP_WORKSPACES_DELETE_WORKSPACE, Value::Object(Map::new()))
+    fn delete_workspace(params: iface_workspaces::DeleteWorkspaceParams) -> Result<iface_workspaces::DeleteWorkspaceResponse, String> {
+        let json = iface_workspaces__delete_workspace_params__to_json(&params);
+        match dispatch(&OP_WORKSPACES_DELETE_WORKSPACE, json).and_then(iface_workspaces__delete_workspace__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_workspaces__delete_workspace__err(e)),
+        }
     }
 }
 

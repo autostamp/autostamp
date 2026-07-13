@@ -44,10 +44,15 @@ pub(crate) enum FieldLocation {
     Body,
 }
 
-/// A single operation parameter: the snake-case key it carries in the params JSON and where
-/// it belongs in the request.
+/// A single operation parameter. `snake` keys the field in the internal params JSON (and, for a
+/// path field, matches the `{snake}` placeholder in the path template); `wire` is the verbatim name
+/// the field takes on the HTTP wire (query key, header name, or body property). The two differ
+/// whenever the source name isn't already snake_case (e.g. `dryRun` → snake `dry_run`, wire
+/// `dryRun`), and let distinct inputs that share a snake key (`DateCreated`, `DateCreated<`) still
+/// travel under their true names.
 pub(crate) struct FieldSpec {
     pub(crate) snake: &'static str,
+    pub(crate) wire: &'static str,
     pub(crate) location: FieldLocation,
 }
 
@@ -71,6 +76,16 @@ pub(crate) struct AuthApply {
     pub(crate) kind: AuthKind,
 }
 
+/// The failure modes of [`dispatch`], kept structured so each generated operation can map them
+/// onto its own typed error: an `Http` failure carries the response status and body (routed to
+/// the matching error-variant case), while a `Transport` failure carries a message for the
+/// catch-all case (a secret lookup, connection, or decode failure that never produced an HTTP
+/// status).
+pub(crate) enum DispatchError {
+    Http { status: u16, body: String },
+    Transport(String),
+}
+
 /// A single API operation: HTTP method, path template (with `{snake}` placeholders), the
 /// parameter fields, and the security schemes to apply.
 pub(crate) struct OpSpec {
@@ -81,8 +96,9 @@ pub(crate) struct OpSpec {
 }
 
 /// Execute `op` with the supplied `params` (a JSON object keyed by snake-case field names)
-/// and return the response body as a string, or an error message.
-pub(crate) fn dispatch(op: &OpSpec, params: Value) -> Result<String, String> {
+/// and return the raw 2xx response body, or a structured [`DispatchError`] the caller maps
+/// onto the operation's typed error.
+pub(crate) fn dispatch(op: &OpSpec, params: Value) -> Result<String, DispatchError> {
     let obj = match &params {
         Value::Object(map) => Some(map),
         _ => None,
@@ -105,10 +121,10 @@ pub(crate) fn dispatch(op: &OpSpec, params: Value) -> Result<String, String> {
                 let placeholder = format!("{{{}}}", field.snake);
                 path = path.replace(&placeholder, &percent_encode(&scalar(value)));
             }
-            FieldLocation::Query => query.push((field.snake.to_string(), scalar(value))),
-            FieldLocation::Header => headers.push((field.snake.to_string(), scalar(value))),
+            FieldLocation::Query => query.push((field.wire.to_string(), scalar(value))),
+            FieldLocation::Header => headers.push((field.wire.to_string(), scalar(value))),
             FieldLocation::Body => {
-                body.insert(field.snake.to_string(), value.clone());
+                body.insert(field.wire.to_string(), value.clone());
             }
         }
     }
@@ -116,7 +132,7 @@ pub(crate) fn dispatch(op: &OpSpec, params: Value) -> Result<String, String> {
     // Apply each resolved security scheme, sourcing its value from wasmcloud:secrets.
     let mut cookies: Vec<String> = Vec::new();
     for apply in op.auth {
-        let secret = fetch_secret(apply.secret_key)?;
+        let secret = fetch_secret(apply.secret_key).map_err(DispatchError::Transport)?;
         match &apply.kind {
             AuthKind::Bearer => headers.push(("authorization".into(), format!("Bearer {secret}"))),
             AuthKind::Basic => {
@@ -177,17 +193,18 @@ fn fetch_secret(key: &str) -> Result<String, String> {
 }
 
 /// Build and send the outgoing request with `wstd`, returning the response body on a 2xx
-/// status. The generated guest exports are synchronous, so the async `wstd` client is driven
-/// to completion on a local reactor via `wstd::runtime::block_on`.
+/// status and a structured [`DispatchError`] otherwise. The generated guest exports are
+/// synchronous, so the async `wstd` client is driven to completion on a local reactor via
+/// `wstd::runtime::block_on`.
 fn perform(
     method: &str,
     path_with_query: &str,
     headers: &[(String, String)],
     body: &[u8],
-) -> Result<String, String> {
+) -> Result<String, DispatchError> {
     let url = join_url(crate::BASE_URL, path_with_query);
     let method = Method::from_bytes(method.as_bytes())
-        .map_err(|err| format!("invalid HTTP method `{method}`: {err}"))?;
+        .map_err(|err| DispatchError::Transport(format!("invalid HTTP method `{method}`: {err}")))?;
 
     let mut builder = Request::builder().method(method).uri(url);
     for (name, value) in headers {
@@ -199,27 +216,29 @@ fn perform(
         } else {
             Body::from(body.to_vec())
         })
-        .map_err(|err| format!("failed to build request: {err}"))?;
+        .map_err(|err| DispatchError::Transport(format!("failed to build request: {err}")))?;
 
     wstd::runtime::block_on(async move {
         let client = Client::new();
         let response = client
             .send(request)
             .await
-            .map_err(|err| format!("request failed: {err:#}"))?;
+            .map_err(|err| DispatchError::Transport(format!("request failed: {err:#}")))?;
 
         let status = response.status().as_u16();
         let mut response_body = response.into_body();
-        let bytes = response_body
-            .contents()
-            .await
-            .map_err(|err| format!("failed to read response body: {err:#}"))?;
+        let bytes = response_body.contents().await.map_err(|err| {
+            DispatchError::Transport(format!("failed to read response body: {err:#}"))
+        })?;
         let body_text = String::from_utf8_lossy(bytes).into_owned();
 
         if (200..300).contains(&status) {
             Ok(body_text)
         } else {
-            Err(format!("HTTP {status}: {body_text}"))
+            Err(DispatchError::Http {
+                status,
+                body: body_text,
+            })
         }
     })
 }
@@ -288,12 +307,29 @@ const OP_CREATOR_ROLES_LIST_OP: OpSpec = OpSpec {
     method: "GET",
     path_template: "/creator-roles",
     fields: &[
-        FieldSpec { snake: "page", location: FieldLocation::Query },
-        FieldSpec { snake: "page_size", location: FieldLocation::Query },
+        FieldSpec { snake: "page", wire: "page", location: FieldLocation::Query },
+        FieldSpec { snake: "page_size", wire: "page_size", location: FieldLocation::Query },
     ],
     auth: &[
     ],
 };
+
+fn iface_creator_roles__list_op_response__to_json(p: &iface_creator_roles::ListOpResponse) -> Value {
+    let mut m = Map::new();
+    m.insert("count".into(), Value::Number(serde_json::Number::from(*(&p.count))));
+    m.insert("next".into(), match (&p.next) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("previous".into(), match (&p.previous) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("results".into(), Value::Array((&p.results).iter().map(|v| iface_creator_roles__position__to_json(v)).collect()));
+    Value::Object(m)
+}
+
+fn iface_creator_roles__position__to_json(p: &iface_creator_roles::Position) -> Value {
+    let mut m = Map::new();
+    m.insert("id".into(), match (&p.id) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("name".into(), match (&p.name) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("slug".into(), match (&p.slug) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
 
 fn iface_creator_roles__list_op_params__to_json(p: &iface_creator_roles::ListOpParams) -> Value {
     let mut m = Map::new();
@@ -302,10 +338,50 @@ fn iface_creator_roles__list_op_params__to_json(p: &iface_creator_roles::ListOpP
     Value::Object(m)
 }
 
+fn iface_creator_roles__list_op_response__from_json(v: &Value) -> Option<iface_creator_roles::ListOpResponse> {
+    let m = v.as_object()?;
+    Some(iface_creator_roles::ListOpResponse {
+        count: m.get("count").and_then(|v| (v).as_i64().map(|n| n as i32)).unwrap_or_default(),
+        next: m.get("next").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        previous: m.get("previous").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        results: m.get("results").and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| iface_creator_roles__position__from_json(x)).collect())).unwrap_or_default(),
+    })
+}
+
+fn iface_creator_roles__position__from_json(v: &Value) -> Option<iface_creator_roles::Position> {
+    let m = v.as_object()?;
+    Some(iface_creator_roles::Position {
+        id: m.get("id").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        name: m.get("name").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        slug: m.get("slug").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    })
+}
+
+fn iface_creator_roles__list_op__ok(body: String) -> Result<iface_creator_roles::ListOpResponse, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match iface_creator_roles__list_op_response__from_json(&v) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_creator_roles__list_op__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
 impl iface_creator_roles::Guest for crate::Component {
-    fn list_op(params: iface_creator_roles::ListOpParams) -> Result<String, String> {
+    fn list_op(params: iface_creator_roles::ListOpParams) -> Result<iface_creator_roles::ListOpResponse, String> {
         let json = iface_creator_roles__list_op_params__to_json(&params);
-        dispatch(&OP_CREATOR_ROLES_LIST_OP, json)
+        match dispatch(&OP_CREATOR_ROLES_LIST_OP, json).and_then(iface_creator_roles__list_op__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_creator_roles__list_op__err(e)),
+        }
     }
 }
 use crate::exports::autostamp::rawg::creators as iface_creators;
@@ -314,8 +390,8 @@ const OP_CREATORS_LIST_OP: OpSpec = OpSpec {
     method: "GET",
     path_template: "/creators",
     fields: &[
-        FieldSpec { snake: "page", location: FieldLocation::Query },
-        FieldSpec { snake: "page_size", location: FieldLocation::Query },
+        FieldSpec { snake: "page", wire: "page", location: FieldLocation::Query },
+        FieldSpec { snake: "page_size", wire: "page_size", location: FieldLocation::Query },
     ],
     auth: &[
     ],
@@ -325,11 +401,47 @@ const OP_CREATORS_READ: OpSpec = OpSpec {
     method: "GET",
     path_template: "/creators/{id}",
     fields: &[
-        FieldSpec { snake: "id", location: FieldLocation::Path },
+        FieldSpec { snake: "id", wire: "id", location: FieldLocation::Path },
     ],
     auth: &[
     ],
 };
+
+fn iface_creators__list_op_response__to_json(p: &iface_creators::ListOpResponse) -> Value {
+    let mut m = Map::new();
+    m.insert("count".into(), Value::Number(serde_json::Number::from(*(&p.count))));
+    m.insert("next".into(), match (&p.next) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("previous".into(), match (&p.previous) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("results".into(), Value::Array((&p.results).iter().map(|v| iface_creators__person__to_json(v)).collect()));
+    Value::Object(m)
+}
+
+fn iface_creators__person__to_json(p: &iface_creators::Person) -> Value {
+    let mut m = Map::new();
+    m.insert("games_count".into(), match (&p.games_count) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("id".into(), match (&p.id) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("image".into(), match (&p.image) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("image_background".into(), match (&p.image_background) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("name".into(), Value::String((&p.name).clone()));
+    m.insert("slug".into(), match (&p.slug) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_creators__person_single__to_json(p: &iface_creators::PersonSingle) -> Value {
+    let mut m = Map::new();
+    m.insert("description".into(), match (&p.description) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("games_count".into(), match (&p.games_count) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("id".into(), match (&p.id) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("image".into(), match (&p.image) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("image_background".into(), match (&p.image_background) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("name".into(), Value::String((&p.name).clone()));
+    m.insert("rating".into(), match (&p.rating) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("rating_top".into(), match (&p.rating_top) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("reviews_count".into(), match (&p.reviews_count) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("slug".into(), match (&p.slug) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("updated".into(), match (&p.updated) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
 
 fn iface_creators__list_op_params__to_json(p: &iface_creators::ListOpParams) -> Value {
     let mut m = Map::new();
@@ -344,14 +456,95 @@ fn iface_creators__read_params__to_json(p: &iface_creators::ReadParams) -> Value
     Value::Object(m)
 }
 
-impl iface_creators::Guest for crate::Component {
-    fn list_op(params: iface_creators::ListOpParams) -> Result<String, String> {
-        let json = iface_creators__list_op_params__to_json(&params);
-        dispatch(&OP_CREATORS_LIST_OP, json)
+fn iface_creators__list_op_response__from_json(v: &Value) -> Option<iface_creators::ListOpResponse> {
+    let m = v.as_object()?;
+    Some(iface_creators::ListOpResponse {
+        count: m.get("count").and_then(|v| (v).as_i64().map(|n| n as i32)).unwrap_or_default(),
+        next: m.get("next").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        previous: m.get("previous").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        results: m.get("results").and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| iface_creators__person__from_json(x)).collect())).unwrap_or_default(),
+    })
+}
+
+fn iface_creators__person__from_json(v: &Value) -> Option<iface_creators::Person> {
+    let m = v.as_object()?;
+    Some(iface_creators::Person {
+        games_count: m.get("games_count").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        id: m.get("id").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        image: m.get("image").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        image_background: m.get("image_background").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        name: m.get("name").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        slug: m.get("slug").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    })
+}
+
+fn iface_creators__person_single__from_json(v: &Value) -> Option<iface_creators::PersonSingle> {
+    let m = v.as_object()?;
+    Some(iface_creators::PersonSingle {
+        description: m.get("description").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        games_count: m.get("games_count").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        id: m.get("id").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        image: m.get("image").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        image_background: m.get("image_background").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        name: m.get("name").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        rating: m.get("rating").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        rating_top: m.get("rating_top").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        reviews_count: m.get("reviews_count").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        slug: m.get("slug").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        updated: m.get("updated").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    })
+}
+
+fn iface_creators__list_op__ok(body: String) -> Result<iface_creators::ListOpResponse, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match iface_creators__list_op_response__from_json(&v) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
     }
-    fn read(params: iface_creators::ReadParams) -> Result<String, String> {
+}
+
+fn iface_creators__list_op__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
+fn iface_creators__read__ok(body: String) -> Result<iface_creators::PersonSingle, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match iface_creators__person_single__from_json(&v) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_creators__read__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
+impl iface_creators::Guest for crate::Component {
+    fn list_op(params: iface_creators::ListOpParams) -> Result<iface_creators::ListOpResponse, String> {
+        let json = iface_creators__list_op_params__to_json(&params);
+        match dispatch(&OP_CREATORS_LIST_OP, json).and_then(iface_creators__list_op__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_creators__list_op__err(e)),
+        }
+    }
+    fn read(params: iface_creators::ReadParams) -> Result<iface_creators::PersonSingle, String> {
         let json = iface_creators__read_params__to_json(&params);
-        dispatch(&OP_CREATORS_READ, json)
+        match dispatch(&OP_CREATORS_READ, json).and_then(iface_creators__read__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_creators__read__err(e)),
+        }
     }
 }
 use crate::exports::autostamp::rawg::developers as iface_developers;
@@ -360,8 +553,8 @@ const OP_DEVELOPERS_LIST_OP: OpSpec = OpSpec {
     method: "GET",
     path_template: "/developers",
     fields: &[
-        FieldSpec { snake: "page", location: FieldLocation::Query },
-        FieldSpec { snake: "page_size", location: FieldLocation::Query },
+        FieldSpec { snake: "page", wire: "page", location: FieldLocation::Query },
+        FieldSpec { snake: "page_size", wire: "page_size", location: FieldLocation::Query },
     ],
     auth: &[
     ],
@@ -371,10 +564,41 @@ const OP_DEVELOPERS_READ: OpSpec = OpSpec {
     method: "GET",
     path_template: "/developers/{id}",
     fields: &[
+        FieldSpec { snake: "id", wire: "id", location: FieldLocation::Path },
     ],
     auth: &[
     ],
 };
+
+fn iface_developers__list_op_response__to_json(p: &iface_developers::ListOpResponse) -> Value {
+    let mut m = Map::new();
+    m.insert("count".into(), Value::Number(serde_json::Number::from(*(&p.count))));
+    m.insert("next".into(), match (&p.next) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("previous".into(), match (&p.previous) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("results".into(), Value::Array((&p.results).iter().map(|v| iface_developers__developer__to_json(v)).collect()));
+    Value::Object(m)
+}
+
+fn iface_developers__developer__to_json(p: &iface_developers::Developer) -> Value {
+    let mut m = Map::new();
+    m.insert("games_count".into(), match (&p.games_count) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("id".into(), match (&p.id) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("image_background".into(), match (&p.image_background) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("name".into(), Value::String((&p.name).clone()));
+    m.insert("slug".into(), match (&p.slug) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_developers__developer_single__to_json(p: &iface_developers::DeveloperSingle) -> Value {
+    let mut m = Map::new();
+    m.insert("description".into(), match (&p.description) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("games_count".into(), match (&p.games_count) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("id".into(), match (&p.id) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("image_background".into(), match (&p.image_background) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("name".into(), Value::String((&p.name).clone()));
+    m.insert("slug".into(), match (&p.slug) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
 
 fn iface_developers__list_op_params__to_json(p: &iface_developers::ListOpParams) -> Value {
     let mut m = Map::new();
@@ -383,13 +607,95 @@ fn iface_developers__list_op_params__to_json(p: &iface_developers::ListOpParams)
     Value::Object(m)
 }
 
-impl iface_developers::Guest for crate::Component {
-    fn list_op(params: iface_developers::ListOpParams) -> Result<String, String> {
-        let json = iface_developers__list_op_params__to_json(&params);
-        dispatch(&OP_DEVELOPERS_LIST_OP, json)
+fn iface_developers__read_params__to_json(p: &iface_developers::ReadParams) -> Value {
+    let mut m = Map::new();
+    m.insert("id".into(), Value::String((&p.id).clone()));
+    Value::Object(m)
+}
+
+fn iface_developers__list_op_response__from_json(v: &Value) -> Option<iface_developers::ListOpResponse> {
+    let m = v.as_object()?;
+    Some(iface_developers::ListOpResponse {
+        count: m.get("count").and_then(|v| (v).as_i64().map(|n| n as i32)).unwrap_or_default(),
+        next: m.get("next").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        previous: m.get("previous").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        results: m.get("results").and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| iface_developers__developer__from_json(x)).collect())).unwrap_or_default(),
+    })
+}
+
+fn iface_developers__developer__from_json(v: &Value) -> Option<iface_developers::Developer> {
+    let m = v.as_object()?;
+    Some(iface_developers::Developer {
+        games_count: m.get("games_count").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        id: m.get("id").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        image_background: m.get("image_background").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        name: m.get("name").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        slug: m.get("slug").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    })
+}
+
+fn iface_developers__developer_single__from_json(v: &Value) -> Option<iface_developers::DeveloperSingle> {
+    let m = v.as_object()?;
+    Some(iface_developers::DeveloperSingle {
+        description: m.get("description").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        games_count: m.get("games_count").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        id: m.get("id").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        image_background: m.get("image_background").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        name: m.get("name").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        slug: m.get("slug").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    })
+}
+
+fn iface_developers__list_op__ok(body: String) -> Result<iface_developers::ListOpResponse, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match iface_developers__list_op_response__from_json(&v) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
     }
-    fn read() -> Result<String, String> {
-        dispatch(&OP_DEVELOPERS_READ, Value::Object(Map::new()))
+}
+
+fn iface_developers__list_op__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
+fn iface_developers__read__ok(body: String) -> Result<iface_developers::DeveloperSingle, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match iface_developers__developer_single__from_json(&v) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_developers__read__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
+impl iface_developers::Guest for crate::Component {
+    fn list_op(params: iface_developers::ListOpParams) -> Result<iface_developers::ListOpResponse, String> {
+        let json = iface_developers__list_op_params__to_json(&params);
+        match dispatch(&OP_DEVELOPERS_LIST_OP, json).and_then(iface_developers__list_op__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_developers__list_op__err(e)),
+        }
+    }
+    fn read(params: iface_developers::ReadParams) -> Result<iface_developers::DeveloperSingle, String> {
+        let json = iface_developers__read_params__to_json(&params);
+        match dispatch(&OP_DEVELOPERS_READ, json).and_then(iface_developers__read__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_developers__read__err(e)),
+        }
     }
 }
 use crate::exports::autostamp::rawg::games as iface_games;
@@ -398,29 +704,29 @@ const OP_GAMES_LIST_OP: OpSpec = OpSpec {
     method: "GET",
     path_template: "/games",
     fields: &[
-        FieldSpec { snake: "page", location: FieldLocation::Query },
-        FieldSpec { snake: "page_size", location: FieldLocation::Query },
-        FieldSpec { snake: "search", location: FieldLocation::Query },
-        FieldSpec { snake: "search_precise", location: FieldLocation::Query },
-        FieldSpec { snake: "search_exact", location: FieldLocation::Query },
-        FieldSpec { snake: "parent_platforms", location: FieldLocation::Query },
-        FieldSpec { snake: "platforms", location: FieldLocation::Query },
-        FieldSpec { snake: "stores", location: FieldLocation::Query },
-        FieldSpec { snake: "developers", location: FieldLocation::Query },
-        FieldSpec { snake: "publishers", location: FieldLocation::Query },
-        FieldSpec { snake: "genres", location: FieldLocation::Query },
-        FieldSpec { snake: "tags", location: FieldLocation::Query },
-        FieldSpec { snake: "creators", location: FieldLocation::Query },
-        FieldSpec { snake: "dates", location: FieldLocation::Query },
-        FieldSpec { snake: "updated", location: FieldLocation::Query },
-        FieldSpec { snake: "platforms_count", location: FieldLocation::Query },
-        FieldSpec { snake: "metacritic", location: FieldLocation::Query },
-        FieldSpec { snake: "exclude_collection", location: FieldLocation::Query },
-        FieldSpec { snake: "exclude_additions", location: FieldLocation::Query },
-        FieldSpec { snake: "exclude_parents", location: FieldLocation::Query },
-        FieldSpec { snake: "exclude_game_series", location: FieldLocation::Query },
-        FieldSpec { snake: "exclude_stores", location: FieldLocation::Query },
-        FieldSpec { snake: "ordering", location: FieldLocation::Query },
+        FieldSpec { snake: "page", wire: "page", location: FieldLocation::Query },
+        FieldSpec { snake: "page_size", wire: "page_size", location: FieldLocation::Query },
+        FieldSpec { snake: "search", wire: "search", location: FieldLocation::Query },
+        FieldSpec { snake: "search_precise", wire: "search_precise", location: FieldLocation::Query },
+        FieldSpec { snake: "search_exact", wire: "search_exact", location: FieldLocation::Query },
+        FieldSpec { snake: "parent_platforms", wire: "parent_platforms", location: FieldLocation::Query },
+        FieldSpec { snake: "platforms", wire: "platforms", location: FieldLocation::Query },
+        FieldSpec { snake: "stores", wire: "stores", location: FieldLocation::Query },
+        FieldSpec { snake: "developers", wire: "developers", location: FieldLocation::Query },
+        FieldSpec { snake: "publishers", wire: "publishers", location: FieldLocation::Query },
+        FieldSpec { snake: "genres", wire: "genres", location: FieldLocation::Query },
+        FieldSpec { snake: "tags", wire: "tags", location: FieldLocation::Query },
+        FieldSpec { snake: "creators", wire: "creators", location: FieldLocation::Query },
+        FieldSpec { snake: "dates", wire: "dates", location: FieldLocation::Query },
+        FieldSpec { snake: "updated", wire: "updated", location: FieldLocation::Query },
+        FieldSpec { snake: "platforms_count", wire: "platforms_count", location: FieldLocation::Query },
+        FieldSpec { snake: "metacritic", wire: "metacritic", location: FieldLocation::Query },
+        FieldSpec { snake: "exclude_collection", wire: "exclude_collection", location: FieldLocation::Query },
+        FieldSpec { snake: "exclude_additions", wire: "exclude_additions", location: FieldLocation::Query },
+        FieldSpec { snake: "exclude_parents", wire: "exclude_parents", location: FieldLocation::Query },
+        FieldSpec { snake: "exclude_game_series", wire: "exclude_game_series", location: FieldLocation::Query },
+        FieldSpec { snake: "exclude_stores", wire: "exclude_stores", location: FieldLocation::Query },
+        FieldSpec { snake: "ordering", wire: "ordering", location: FieldLocation::Query },
     ],
     auth: &[
     ],
@@ -430,8 +736,9 @@ const OP_GAMES_ADDITIONS_LIST: OpSpec = OpSpec {
     method: "GET",
     path_template: "/games/{game_pk}/additions",
     fields: &[
-        FieldSpec { snake: "page", location: FieldLocation::Query },
-        FieldSpec { snake: "page_size", location: FieldLocation::Query },
+        FieldSpec { snake: "game_pk", wire: "game_pk", location: FieldLocation::Path },
+        FieldSpec { snake: "page", wire: "page", location: FieldLocation::Query },
+        FieldSpec { snake: "page_size", wire: "page_size", location: FieldLocation::Query },
     ],
     auth: &[
     ],
@@ -441,9 +748,10 @@ const OP_GAMES_DEVELOPMENT_TEAM_LIST: OpSpec = OpSpec {
     method: "GET",
     path_template: "/games/{game_pk}/development-team",
     fields: &[
-        FieldSpec { snake: "ordering", location: FieldLocation::Query },
-        FieldSpec { snake: "page", location: FieldLocation::Query },
-        FieldSpec { snake: "page_size", location: FieldLocation::Query },
+        FieldSpec { snake: "game_pk", wire: "game_pk", location: FieldLocation::Path },
+        FieldSpec { snake: "ordering", wire: "ordering", location: FieldLocation::Query },
+        FieldSpec { snake: "page", wire: "page", location: FieldLocation::Query },
+        FieldSpec { snake: "page_size", wire: "page_size", location: FieldLocation::Query },
     ],
     auth: &[
     ],
@@ -453,8 +761,9 @@ const OP_GAMES_GAME_SERIES_LIST: OpSpec = OpSpec {
     method: "GET",
     path_template: "/games/{game_pk}/game-series",
     fields: &[
-        FieldSpec { snake: "page", location: FieldLocation::Query },
-        FieldSpec { snake: "page_size", location: FieldLocation::Query },
+        FieldSpec { snake: "game_pk", wire: "game_pk", location: FieldLocation::Path },
+        FieldSpec { snake: "page", wire: "page", location: FieldLocation::Query },
+        FieldSpec { snake: "page_size", wire: "page_size", location: FieldLocation::Query },
     ],
     auth: &[
     ],
@@ -464,8 +773,9 @@ const OP_GAMES_PARENT_GAMES_LIST: OpSpec = OpSpec {
     method: "GET",
     path_template: "/games/{game_pk}/parent-games",
     fields: &[
-        FieldSpec { snake: "page", location: FieldLocation::Query },
-        FieldSpec { snake: "page_size", location: FieldLocation::Query },
+        FieldSpec { snake: "game_pk", wire: "game_pk", location: FieldLocation::Path },
+        FieldSpec { snake: "page", wire: "page", location: FieldLocation::Query },
+        FieldSpec { snake: "page_size", wire: "page_size", location: FieldLocation::Query },
     ],
     auth: &[
     ],
@@ -475,9 +785,10 @@ const OP_GAMES_SCREENSHOTS_LIST: OpSpec = OpSpec {
     method: "GET",
     path_template: "/games/{game_pk}/screenshots",
     fields: &[
-        FieldSpec { snake: "ordering", location: FieldLocation::Query },
-        FieldSpec { snake: "page", location: FieldLocation::Query },
-        FieldSpec { snake: "page_size", location: FieldLocation::Query },
+        FieldSpec { snake: "game_pk", wire: "game_pk", location: FieldLocation::Path },
+        FieldSpec { snake: "ordering", wire: "ordering", location: FieldLocation::Query },
+        FieldSpec { snake: "page", wire: "page", location: FieldLocation::Query },
+        FieldSpec { snake: "page_size", wire: "page_size", location: FieldLocation::Query },
     ],
     auth: &[
     ],
@@ -487,9 +798,10 @@ const OP_GAMES_STORES_LIST: OpSpec = OpSpec {
     method: "GET",
     path_template: "/games/{game_pk}/stores",
     fields: &[
-        FieldSpec { snake: "ordering", location: FieldLocation::Query },
-        FieldSpec { snake: "page", location: FieldLocation::Query },
-        FieldSpec { snake: "page_size", location: FieldLocation::Query },
+        FieldSpec { snake: "game_pk", wire: "game_pk", location: FieldLocation::Path },
+        FieldSpec { snake: "ordering", wire: "ordering", location: FieldLocation::Query },
+        FieldSpec { snake: "page", wire: "page", location: FieldLocation::Query },
+        FieldSpec { snake: "page_size", wire: "page_size", location: FieldLocation::Query },
     ],
     auth: &[
     ],
@@ -499,7 +811,7 @@ const OP_GAMES_READ: OpSpec = OpSpec {
     method: "GET",
     path_template: "/games/{id}",
     fields: &[
-        FieldSpec { snake: "id", location: FieldLocation::Path },
+        FieldSpec { snake: "id", wire: "id", location: FieldLocation::Path },
     ],
     auth: &[
     ],
@@ -509,7 +821,7 @@ const OP_GAMES_ACHIEVEMENTS_READ: OpSpec = OpSpec {
     method: "GET",
     path_template: "/games/{id}/achievements",
     fields: &[
-        FieldSpec { snake: "id", location: FieldLocation::Path },
+        FieldSpec { snake: "id", wire: "id", location: FieldLocation::Path },
     ],
     auth: &[
     ],
@@ -519,7 +831,7 @@ const OP_GAMES_MOVIES_READ: OpSpec = OpSpec {
     method: "GET",
     path_template: "/games/{id}/movies",
     fields: &[
-        FieldSpec { snake: "id", location: FieldLocation::Path },
+        FieldSpec { snake: "id", wire: "id", location: FieldLocation::Path },
     ],
     auth: &[
     ],
@@ -529,7 +841,7 @@ const OP_GAMES_REDDIT_READ: OpSpec = OpSpec {
     method: "GET",
     path_template: "/games/{id}/reddit",
     fields: &[
-        FieldSpec { snake: "id", location: FieldLocation::Path },
+        FieldSpec { snake: "id", wire: "id", location: FieldLocation::Path },
     ],
     auth: &[
     ],
@@ -539,7 +851,7 @@ const OP_GAMES_SUGGESTED_READ: OpSpec = OpSpec {
     method: "GET",
     path_template: "/games/{id}/suggested",
     fields: &[
-        FieldSpec { snake: "id", location: FieldLocation::Path },
+        FieldSpec { snake: "id", wire: "id", location: FieldLocation::Path },
     ],
     auth: &[
     ],
@@ -549,7 +861,7 @@ const OP_GAMES_TWITCH_READ: OpSpec = OpSpec {
     method: "GET",
     path_template: "/games/{id}/twitch",
     fields: &[
-        FieldSpec { snake: "id", location: FieldLocation::Path },
+        FieldSpec { snake: "id", wire: "id", location: FieldLocation::Path },
     ],
     auth: &[
     ],
@@ -559,11 +871,372 @@ const OP_GAMES_YOUTUBE_READ: OpSpec = OpSpec {
     method: "GET",
     path_template: "/games/{id}/youtube",
     fields: &[
-        FieldSpec { snake: "id", location: FieldLocation::Path },
+        FieldSpec { snake: "id", wire: "id", location: FieldLocation::Path },
     ],
     auth: &[
     ],
 };
+
+fn iface_games__game_esrb_rating_name_enum__to_str(e: &iface_games::GameEsrbRatingNameEnum) -> &'static str {
+    match e {
+        iface_games::GameEsrbRatingNameEnum::Everyone => "Everyone",
+        iface_games::GameEsrbRatingNameEnum::EveryoneV10 => "Everyone 10+",
+        iface_games::GameEsrbRatingNameEnum::Teen => "Teen",
+        iface_games::GameEsrbRatingNameEnum::Mature => "Mature",
+        iface_games::GameEsrbRatingNameEnum::AdultsOnly => "Adults Only",
+        iface_games::GameEsrbRatingNameEnum::RatingPending => "Rating Pending",
+    }
+}
+
+fn iface_games__game_esrb_rating_slug_enum__to_str(e: &iface_games::GameEsrbRatingSlugEnum) -> &'static str {
+    match e {
+        iface_games::GameEsrbRatingSlugEnum::Everyone => "everyone",
+        iface_games::GameEsrbRatingSlugEnum::EveryoneV10Plus => "everyone-10-plus",
+        iface_games::GameEsrbRatingSlugEnum::Teen => "teen",
+        iface_games::GameEsrbRatingSlugEnum::Mature => "mature",
+        iface_games::GameEsrbRatingSlugEnum::AdultsOnly => "adults-only",
+        iface_games::GameEsrbRatingSlugEnum::RatingPending => "rating-pending",
+    }
+}
+
+fn iface_games__list_op_response__to_json(p: &iface_games::ListOpResponse) -> Value {
+    let mut m = Map::new();
+    m.insert("count".into(), Value::Number(serde_json::Number::from(*(&p.count))));
+    m.insert("next".into(), match (&p.next) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("previous".into(), match (&p.previous) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("results".into(), Value::Array((&p.results).iter().map(|v| iface_games__game__to_json(v)).collect()));
+    Value::Object(m)
+}
+
+fn iface_games__game__to_json(p: &iface_games::Game) -> Value {
+    let mut m = Map::new();
+    m.insert("added".into(), match (&p.added) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("added_by_status".into(), match (&p.added_by_status) { Some(v) => iface_games__game_added_by_status__to_json(v), None => Value::Null });
+    m.insert("background_image".into(), match (&p.background_image) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("esrb_rating".into(), match (&p.esrb_rating) { Some(v) => iface_games__game_esrb_rating__to_json(v), None => Value::Null });
+    m.insert("id".into(), match (&p.id) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("metacritic".into(), match (&p.metacritic) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("name".into(), match (&p.name) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("platforms".into(), match (&p.platforms) { Some(v) => Value::Array((v).iter().map(|v| iface_games__game_platforms_item__to_json(v)).collect()), None => Value::Null });
+    m.insert("playtime".into(), match (&p.playtime) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("rating".into(), serde_json::Number::from_f64(*(&p.rating)).map(Value::Number).unwrap_or(Value::Null));
+    m.insert("rating_top".into(), match (&p.rating_top) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("ratings".into(), match (&p.ratings) { Some(v) => iface_games__game_ratings__to_json(v), None => Value::Null });
+    m.insert("ratings_count".into(), match (&p.ratings_count) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("released".into(), match (&p.released) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("reviews_text_count".into(), match (&p.reviews_text_count) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("slug".into(), match (&p.slug) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("suggestions_count".into(), match (&p.suggestions_count) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("tba".into(), match (&p.tba) { Some(v) => Value::Bool(*(v)), None => Value::Null });
+    m.insert("updated".into(), match (&p.updated) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_games__game_added_by_status__to_json(p: &iface_games::GameAddedByStatus) -> Value {
+    let mut m = Map::new();
+    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_games__game_esrb_rating__to_json(p: &iface_games::GameEsrbRating) -> Value {
+    let mut m = Map::new();
+    m.insert("id".into(), match (&p.id) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("name".into(), match (&p.name) { Some(v) => Value::String(iface_games__game_esrb_rating_name_enum__to_str(v).into()), None => Value::Null });
+    m.insert("slug".into(), match (&p.slug) { Some(v) => Value::String(iface_games__game_esrb_rating_slug_enum__to_str(v).into()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_games__game_platforms_item__to_json(p: &iface_games::GamePlatformsItem) -> Value {
+    let mut m = Map::new();
+    m.insert("platform".into(), match (&p.platform) { Some(v) => iface_games__game_platforms_item_platform__to_json(v), None => Value::Null });
+    m.insert("released_at".into(), match (&p.released_at) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("requirements".into(), match (&p.requirements) { Some(v) => iface_games__game_platforms_item_requirements__to_json(v), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_games__game_platforms_item_platform__to_json(p: &iface_games::GamePlatformsItemPlatform) -> Value {
+    let mut m = Map::new();
+    m.insert("id".into(), match (&p.id) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("name".into(), match (&p.name) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("slug".into(), match (&p.slug) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_games__game_platforms_item_requirements__to_json(p: &iface_games::GamePlatformsItemRequirements) -> Value {
+    let mut m = Map::new();
+    m.insert("minimum".into(), match (&p.minimum) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("recommended".into(), match (&p.recommended) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_games__game_ratings__to_json(p: &iface_games::GameRatings) -> Value {
+    let mut m = Map::new();
+    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_games__additions_list_response__to_json(p: &iface_games::AdditionsListResponse) -> Value {
+    let mut m = Map::new();
+    m.insert("count".into(), Value::Number(serde_json::Number::from(*(&p.count))));
+    m.insert("next".into(), match (&p.next) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("previous".into(), match (&p.previous) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("results".into(), Value::Array((&p.results).iter().map(|v| iface_games__game__to_json(v)).collect()));
+    Value::Object(m)
+}
+
+fn iface_games__development_team_list_response__to_json(p: &iface_games::DevelopmentTeamListResponse) -> Value {
+    let mut m = Map::new();
+    m.insert("count".into(), Value::Number(serde_json::Number::from(*(&p.count))));
+    m.insert("next".into(), match (&p.next) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("previous".into(), match (&p.previous) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("results".into(), Value::Array((&p.results).iter().map(|v| iface_games__game_person_list__to_json(v)).collect()));
+    Value::Object(m)
+}
+
+fn iface_games__game_person_list__to_json(p: &iface_games::GamePersonList) -> Value {
+    let mut m = Map::new();
+    m.insert("games_count".into(), match (&p.games_count) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("id".into(), match (&p.id) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("image".into(), match (&p.image) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("image_background".into(), match (&p.image_background) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("name".into(), Value::String((&p.name).clone()));
+    m.insert("slug".into(), match (&p.slug) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_games__game_series_list_response__to_json(p: &iface_games::GameSeriesListResponse) -> Value {
+    let mut m = Map::new();
+    m.insert("count".into(), Value::Number(serde_json::Number::from(*(&p.count))));
+    m.insert("next".into(), match (&p.next) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("previous".into(), match (&p.previous) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("results".into(), Value::Array((&p.results).iter().map(|v| iface_games__game__to_json(v)).collect()));
+    Value::Object(m)
+}
+
+fn iface_games__parent_games_list_response__to_json(p: &iface_games::ParentGamesListResponse) -> Value {
+    let mut m = Map::new();
+    m.insert("count".into(), Value::Number(serde_json::Number::from(*(&p.count))));
+    m.insert("next".into(), match (&p.next) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("previous".into(), match (&p.previous) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("results".into(), Value::Array((&p.results).iter().map(|v| iface_games__game__to_json(v)).collect()));
+    Value::Object(m)
+}
+
+fn iface_games__screenshots_list_response__to_json(p: &iface_games::ScreenshotsListResponse) -> Value {
+    let mut m = Map::new();
+    m.insert("count".into(), Value::Number(serde_json::Number::from(*(&p.count))));
+    m.insert("next".into(), match (&p.next) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("previous".into(), match (&p.previous) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("results".into(), Value::Array((&p.results).iter().map(|v| iface_games__screen_shot__to_json(v)).collect()));
+    Value::Object(m)
+}
+
+fn iface_games__screen_shot__to_json(p: &iface_games::ScreenShot) -> Value {
+    let mut m = Map::new();
+    m.insert("height".into(), match (&p.height) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("hidden".into(), match (&p.hidden) { Some(v) => Value::Bool(*(v)), None => Value::Null });
+    m.insert("id".into(), match (&p.id) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("image".into(), match (&p.image) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("width".into(), match (&p.width) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_games__stores_list_response__to_json(p: &iface_games::StoresListResponse) -> Value {
+    let mut m = Map::new();
+    m.insert("count".into(), Value::Number(serde_json::Number::from(*(&p.count))));
+    m.insert("next".into(), match (&p.next) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("previous".into(), match (&p.previous) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("results".into(), Value::Array((&p.results).iter().map(|v| iface_games__game_store_full__to_json(v)).collect()));
+    Value::Object(m)
+}
+
+fn iface_games__game_store_full__to_json(p: &iface_games::GameStoreFull) -> Value {
+    let mut m = Map::new();
+    m.insert("game_id".into(), match (&p.game_id) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("id".into(), match (&p.id) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("store_id".into(), match (&p.store_id) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("url".into(), Value::String((&p.url).clone()));
+    Value::Object(m)
+}
+
+fn iface_games__game_single__to_json(p: &iface_games::GameSingle) -> Value {
+    let mut m = Map::new();
+    m.insert("achievements_count".into(), match (&p.achievements_count) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("added".into(), match (&p.added) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("added_by_status".into(), match (&p.added_by_status) { Some(v) => iface_games__game_single_added_by_status__to_json(v), None => Value::Null });
+    m.insert("additions_count".into(), match (&p.additions_count) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("alternative_names".into(), match (&p.alternative_names) { Some(v) => Value::Array((v).iter().map(|v| Value::String((v).clone())).collect()), None => Value::Null });
+    m.insert("background_image".into(), match (&p.background_image) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("background_image_additional".into(), match (&p.background_image_additional) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("creators_count".into(), match (&p.creators_count) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("description".into(), match (&p.description) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("esrb_rating".into(), match (&p.esrb_rating) { Some(v) => iface_games__game_single_esrb_rating__to_json(v), None => Value::Null });
+    m.insert("game_series_count".into(), match (&p.game_series_count) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("id".into(), match (&p.id) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("metacritic".into(), match (&p.metacritic) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("metacritic_platforms".into(), match (&p.metacritic_platforms) { Some(v) => Value::Array((v).iter().map(|v| iface_games__game_platform_metacritic__to_json(v)).collect()), None => Value::Null });
+    m.insert("metacritic_url".into(), match (&p.metacritic_url) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("movies_count".into(), match (&p.movies_count) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("name".into(), match (&p.name) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("name_original".into(), match (&p.name_original) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("parent_achievements_count".into(), match (&p.parent_achievements_count) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("parents_count".into(), match (&p.parents_count) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("platforms".into(), match (&p.platforms) { Some(v) => Value::Array((v).iter().map(|v| iface_games__game_single_platforms_item__to_json(v)).collect()), None => Value::Null });
+    m.insert("playtime".into(), match (&p.playtime) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("rating".into(), serde_json::Number::from_f64(*(&p.rating)).map(Value::Number).unwrap_or(Value::Null));
+    m.insert("rating_top".into(), match (&p.rating_top) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("ratings".into(), match (&p.ratings) { Some(v) => iface_games__game_single_ratings__to_json(v), None => Value::Null });
+    m.insert("ratings_count".into(), match (&p.ratings_count) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("reactions".into(), match (&p.reactions) { Some(v) => iface_games__game_single_reactions__to_json(v), None => Value::Null });
+    m.insert("reddit_count".into(), match (&p.reddit_count) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("reddit_description".into(), match (&p.reddit_description) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("reddit_logo".into(), match (&p.reddit_logo) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("reddit_name".into(), match (&p.reddit_name) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("reddit_url".into(), match (&p.reddit_url) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("released".into(), match (&p.released) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("reviews_text_count".into(), match (&p.reviews_text_count) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("screenshots_count".into(), match (&p.screenshots_count) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("slug".into(), match (&p.slug) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("suggestions_count".into(), match (&p.suggestions_count) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("tba".into(), match (&p.tba) { Some(v) => Value::Bool(*(v)), None => Value::Null });
+    m.insert("twitch_count".into(), match (&p.twitch_count) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("updated".into(), match (&p.updated) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("website".into(), match (&p.website) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("youtube_count".into(), match (&p.youtube_count) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_games__game_single_added_by_status__to_json(p: &iface_games::GameSingleAddedByStatus) -> Value {
+    let mut m = Map::new();
+    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_games__game_single_esrb_rating__to_json(p: &iface_games::GameSingleEsrbRating) -> Value {
+    let mut m = Map::new();
+    m.insert("id".into(), match (&p.id) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("name".into(), match (&p.name) { Some(v) => Value::String(iface_games__game_esrb_rating_name_enum__to_str(v).into()), None => Value::Null });
+    m.insert("slug".into(), match (&p.slug) { Some(v) => Value::String(iface_games__game_esrb_rating_slug_enum__to_str(v).into()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_games__game_platform_metacritic__to_json(p: &iface_games::GamePlatformMetacritic) -> Value {
+    let mut m = Map::new();
+    m.insert("metascore".into(), match (&p.metascore) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("url".into(), match (&p.url) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_games__game_single_platforms_item__to_json(p: &iface_games::GameSinglePlatformsItem) -> Value {
+    let mut m = Map::new();
+    m.insert("platform".into(), match (&p.platform) { Some(v) => iface_games__game_single_platforms_item_platform__to_json(v), None => Value::Null });
+    m.insert("released_at".into(), match (&p.released_at) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("requirements".into(), match (&p.requirements) { Some(v) => iface_games__game_single_platforms_item_requirements__to_json(v), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_games__game_single_platforms_item_platform__to_json(p: &iface_games::GameSinglePlatformsItemPlatform) -> Value {
+    let mut m = Map::new();
+    m.insert("id".into(), match (&p.id) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("name".into(), match (&p.name) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("slug".into(), match (&p.slug) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_games__game_single_platforms_item_requirements__to_json(p: &iface_games::GameSinglePlatformsItemRequirements) -> Value {
+    let mut m = Map::new();
+    m.insert("minimum".into(), match (&p.minimum) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("recommended".into(), match (&p.recommended) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_games__game_single_ratings__to_json(p: &iface_games::GameSingleRatings) -> Value {
+    let mut m = Map::new();
+    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_games__game_single_reactions__to_json(p: &iface_games::GameSingleReactions) -> Value {
+    let mut m = Map::new();
+    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_games__parent_achievement__to_json(p: &iface_games::ParentAchievement) -> Value {
+    let mut m = Map::new();
+    m.insert("description".into(), match (&p.description) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("id".into(), match (&p.id) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("image".into(), match (&p.image) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("name".into(), match (&p.name) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("percent".into(), match (&p.percent) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_games__movie__to_json(p: &iface_games::Movie) -> Value {
+    let mut m = Map::new();
+    m.insert("data".into(), match (&p.data) { Some(v) => iface_games__movie_data__to_json(v), None => Value::Null });
+    m.insert("id".into(), match (&p.id) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("name".into(), match (&p.name) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("preview".into(), match (&p.preview) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_games__movie_data__to_json(p: &iface_games::MovieData) -> Value {
+    let mut m = Map::new();
+    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_games__reddit__to_json(p: &iface_games::Reddit) -> Value {
+    let mut m = Map::new();
+    m.insert("created".into(), match (&p.created) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("id".into(), match (&p.id) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("image".into(), match (&p.image) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("name".into(), match (&p.name) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("text".into(), match (&p.text) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("url".into(), match (&p.url) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("username".into(), match (&p.username) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("username_url".into(), match (&p.username_url) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_games__twitch__to_json(p: &iface_games::Twitch) -> Value {
+    let mut m = Map::new();
+    m.insert("created".into(), match (&p.created) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("description".into(), match (&p.description) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("external_id".into(), match (&p.external_id) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("id".into(), match (&p.id) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("language".into(), match (&p.language) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("name".into(), match (&p.name) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("published".into(), match (&p.published) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("thumbnail".into(), match (&p.thumbnail) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("view_count".into(), match (&p.view_count) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_games__youtube__to_json(p: &iface_games::Youtube) -> Value {
+    let mut m = Map::new();
+    m.insert("channel_id".into(), match (&p.channel_id) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("channel_title".into(), match (&p.channel_title) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("comments_count".into(), match (&p.comments_count) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("created".into(), match (&p.created) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("description".into(), match (&p.description) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("dislike_count".into(), match (&p.dislike_count) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("external_id".into(), match (&p.external_id) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("favorite_count".into(), match (&p.favorite_count) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("id".into(), match (&p.id) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("like_count".into(), match (&p.like_count) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("name".into(), match (&p.name) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("thumbnails".into(), match (&p.thumbnails) { Some(v) => iface_games__youtube_thumbnails__to_json(v), None => Value::Null });
+    m.insert("view_count".into(), match (&p.view_count) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_games__youtube_thumbnails__to_json(p: &iface_games::YoutubeThumbnails) -> Value {
+    let mut m = Map::new();
+    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
 
 fn iface_games__list_op_params__to_json(p: &iface_games::ListOpParams) -> Value {
     let mut m = Map::new();
@@ -595,6 +1268,7 @@ fn iface_games__list_op_params__to_json(p: &iface_games::ListOpParams) -> Value 
 
 fn iface_games__additions_list_params__to_json(p: &iface_games::AdditionsListParams) -> Value {
     let mut m = Map::new();
+    m.insert("game_pk".into(), Value::String((&p.game_pk).clone()));
     m.insert("page".into(), match (&p.page) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
     m.insert("page_size".into(), match (&p.page_size) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
     Value::Object(m)
@@ -602,6 +1276,7 @@ fn iface_games__additions_list_params__to_json(p: &iface_games::AdditionsListPar
 
 fn iface_games__development_team_list_params__to_json(p: &iface_games::DevelopmentTeamListParams) -> Value {
     let mut m = Map::new();
+    m.insert("game_pk".into(), Value::String((&p.game_pk).clone()));
     m.insert("ordering".into(), match (&p.ordering) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("page".into(), match (&p.page) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
     m.insert("page_size".into(), match (&p.page_size) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
@@ -610,6 +1285,7 @@ fn iface_games__development_team_list_params__to_json(p: &iface_games::Developme
 
 fn iface_games__game_series_list_params__to_json(p: &iface_games::GameSeriesListParams) -> Value {
     let mut m = Map::new();
+    m.insert("game_pk".into(), Value::String((&p.game_pk).clone()));
     m.insert("page".into(), match (&p.page) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
     m.insert("page_size".into(), match (&p.page_size) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
     Value::Object(m)
@@ -617,6 +1293,7 @@ fn iface_games__game_series_list_params__to_json(p: &iface_games::GameSeriesList
 
 fn iface_games__parent_games_list_params__to_json(p: &iface_games::ParentGamesListParams) -> Value {
     let mut m = Map::new();
+    m.insert("game_pk".into(), Value::String((&p.game_pk).clone()));
     m.insert("page".into(), match (&p.page) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
     m.insert("page_size".into(), match (&p.page_size) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
     Value::Object(m)
@@ -624,6 +1301,7 @@ fn iface_games__parent_games_list_params__to_json(p: &iface_games::ParentGamesLi
 
 fn iface_games__screenshots_list_params__to_json(p: &iface_games::ScreenshotsListParams) -> Value {
     let mut m = Map::new();
+    m.insert("game_pk".into(), Value::String((&p.game_pk).clone()));
     m.insert("ordering".into(), match (&p.ordering) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("page".into(), match (&p.page) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
     m.insert("page_size".into(), match (&p.page_size) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
@@ -632,6 +1310,7 @@ fn iface_games__screenshots_list_params__to_json(p: &iface_games::ScreenshotsLis
 
 fn iface_games__stores_list_params__to_json(p: &iface_games::StoresListParams) -> Value {
     let mut m = Map::new();
+    m.insert("game_pk".into(), Value::String((&p.game_pk).clone()));
     m.insert("ordering".into(), match (&p.ordering) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("page".into(), match (&p.page) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
     m.insert("page_size".into(), match (&p.page_size) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
@@ -680,62 +1359,752 @@ fn iface_games__youtube_read_params__to_json(p: &iface_games::YoutubeReadParams)
     Value::Object(m)
 }
 
+fn iface_games__list_op_response__from_json(v: &Value) -> Option<iface_games::ListOpResponse> {
+    let m = v.as_object()?;
+    Some(iface_games::ListOpResponse {
+        count: m.get("count").and_then(|v| (v).as_i64().map(|n| n as i32)).unwrap_or_default(),
+        next: m.get("next").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        previous: m.get("previous").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        results: m.get("results").and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| iface_games__game__from_json(x)).collect())).unwrap_or_default(),
+    })
+}
+
+fn iface_games__game__from_json(v: &Value) -> Option<iface_games::Game> {
+    let m = v.as_object()?;
+    Some(iface_games::Game {
+        added: m.get("added").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        added_by_status: m.get("added_by_status").filter(|v| !v.is_null()).and_then(|v| iface_games__game_added_by_status__from_json(v)),
+        background_image: m.get("background_image").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        esrb_rating: m.get("esrb_rating").filter(|v| !v.is_null()).and_then(|v| iface_games__game_esrb_rating__from_json(v)),
+        id: m.get("id").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        metacritic: m.get("metacritic").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        name: m.get("name").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        platforms: m.get("platforms").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| iface_games__game_platforms_item__from_json(x)).collect())),
+        playtime: m.get("playtime").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        rating: m.get("rating").and_then(|v| (v).as_f64()).unwrap_or_default(),
+        rating_top: m.get("rating_top").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        ratings: m.get("ratings").filter(|v| !v.is_null()).and_then(|v| iface_games__game_ratings__from_json(v)),
+        ratings_count: m.get("ratings_count").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        released: m.get("released").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        reviews_text_count: m.get("reviews_text_count").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        slug: m.get("slug").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        suggestions_count: m.get("suggestions_count").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        tba: m.get("tba").filter(|v| !v.is_null()).and_then(|v| (v).as_bool()),
+        updated: m.get("updated").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    })
+}
+
+fn iface_games__game_added_by_status__from_json(v: &Value) -> Option<iface_games::GameAddedByStatus> {
+    let m = v.as_object()?;
+    Some(iface_games::GameAddedByStatus {
+        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    })
+}
+
+fn iface_games__game_esrb_rating__from_json(v: &Value) -> Option<iface_games::GameEsrbRating> {
+    let m = v.as_object()?;
+    Some(iface_games::GameEsrbRating {
+        id: m.get("id").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        name: m.get("name").filter(|v| !v.is_null()).and_then(|v| (v).as_str().and_then(iface_games__game_esrb_rating_name_enum__from_str)),
+        slug: m.get("slug").filter(|v| !v.is_null()).and_then(|v| (v).as_str().and_then(iface_games__game_esrb_rating_slug_enum__from_str)),
+    })
+}
+
+fn iface_games__game_platforms_item__from_json(v: &Value) -> Option<iface_games::GamePlatformsItem> {
+    let m = v.as_object()?;
+    Some(iface_games::GamePlatformsItem {
+        platform: m.get("platform").filter(|v| !v.is_null()).and_then(|v| iface_games__game_platforms_item_platform__from_json(v)),
+        released_at: m.get("released_at").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        requirements: m.get("requirements").filter(|v| !v.is_null()).and_then(|v| iface_games__game_platforms_item_requirements__from_json(v)),
+    })
+}
+
+fn iface_games__game_platforms_item_platform__from_json(v: &Value) -> Option<iface_games::GamePlatformsItemPlatform> {
+    let m = v.as_object()?;
+    Some(iface_games::GamePlatformsItemPlatform {
+        id: m.get("id").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        name: m.get("name").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        slug: m.get("slug").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    })
+}
+
+fn iface_games__game_platforms_item_requirements__from_json(v: &Value) -> Option<iface_games::GamePlatformsItemRequirements> {
+    let m = v.as_object()?;
+    Some(iface_games::GamePlatformsItemRequirements {
+        minimum: m.get("minimum").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        recommended: m.get("recommended").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    })
+}
+
+fn iface_games__game_ratings__from_json(v: &Value) -> Option<iface_games::GameRatings> {
+    let m = v.as_object()?;
+    Some(iface_games::GameRatings {
+        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    })
+}
+
+fn iface_games__additions_list_response__from_json(v: &Value) -> Option<iface_games::AdditionsListResponse> {
+    let m = v.as_object()?;
+    Some(iface_games::AdditionsListResponse {
+        count: m.get("count").and_then(|v| (v).as_i64().map(|n| n as i32)).unwrap_or_default(),
+        next: m.get("next").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        previous: m.get("previous").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        results: m.get("results").and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| iface_games__game__from_json(x)).collect())).unwrap_or_default(),
+    })
+}
+
+fn iface_games__development_team_list_response__from_json(v: &Value) -> Option<iface_games::DevelopmentTeamListResponse> {
+    let m = v.as_object()?;
+    Some(iface_games::DevelopmentTeamListResponse {
+        count: m.get("count").and_then(|v| (v).as_i64().map(|n| n as i32)).unwrap_or_default(),
+        next: m.get("next").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        previous: m.get("previous").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        results: m.get("results").and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| iface_games__game_person_list__from_json(x)).collect())).unwrap_or_default(),
+    })
+}
+
+fn iface_games__game_person_list__from_json(v: &Value) -> Option<iface_games::GamePersonList> {
+    let m = v.as_object()?;
+    Some(iface_games::GamePersonList {
+        games_count: m.get("games_count").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        id: m.get("id").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        image: m.get("image").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        image_background: m.get("image_background").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        name: m.get("name").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        slug: m.get("slug").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    })
+}
+
+fn iface_games__game_series_list_response__from_json(v: &Value) -> Option<iface_games::GameSeriesListResponse> {
+    let m = v.as_object()?;
+    Some(iface_games::GameSeriesListResponse {
+        count: m.get("count").and_then(|v| (v).as_i64().map(|n| n as i32)).unwrap_or_default(),
+        next: m.get("next").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        previous: m.get("previous").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        results: m.get("results").and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| iface_games__game__from_json(x)).collect())).unwrap_or_default(),
+    })
+}
+
+fn iface_games__parent_games_list_response__from_json(v: &Value) -> Option<iface_games::ParentGamesListResponse> {
+    let m = v.as_object()?;
+    Some(iface_games::ParentGamesListResponse {
+        count: m.get("count").and_then(|v| (v).as_i64().map(|n| n as i32)).unwrap_or_default(),
+        next: m.get("next").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        previous: m.get("previous").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        results: m.get("results").and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| iface_games__game__from_json(x)).collect())).unwrap_or_default(),
+    })
+}
+
+fn iface_games__screenshots_list_response__from_json(v: &Value) -> Option<iface_games::ScreenshotsListResponse> {
+    let m = v.as_object()?;
+    Some(iface_games::ScreenshotsListResponse {
+        count: m.get("count").and_then(|v| (v).as_i64().map(|n| n as i32)).unwrap_or_default(),
+        next: m.get("next").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        previous: m.get("previous").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        results: m.get("results").and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| iface_games__screen_shot__from_json(x)).collect())).unwrap_or_default(),
+    })
+}
+
+fn iface_games__screen_shot__from_json(v: &Value) -> Option<iface_games::ScreenShot> {
+    let m = v.as_object()?;
+    Some(iface_games::ScreenShot {
+        height: m.get("height").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        hidden: m.get("hidden").filter(|v| !v.is_null()).and_then(|v| (v).as_bool()),
+        id: m.get("id").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        image: m.get("image").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        width: m.get("width").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+    })
+}
+
+fn iface_games__stores_list_response__from_json(v: &Value) -> Option<iface_games::StoresListResponse> {
+    let m = v.as_object()?;
+    Some(iface_games::StoresListResponse {
+        count: m.get("count").and_then(|v| (v).as_i64().map(|n| n as i32)).unwrap_or_default(),
+        next: m.get("next").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        previous: m.get("previous").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        results: m.get("results").and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| iface_games__game_store_full__from_json(x)).collect())).unwrap_or_default(),
+    })
+}
+
+fn iface_games__game_store_full__from_json(v: &Value) -> Option<iface_games::GameStoreFull> {
+    let m = v.as_object()?;
+    Some(iface_games::GameStoreFull {
+        game_id: m.get("game_id").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        id: m.get("id").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        store_id: m.get("store_id").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        url: m.get("url").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+    })
+}
+
+fn iface_games__game_single__from_json(v: &Value) -> Option<iface_games::GameSingle> {
+    let m = v.as_object()?;
+    Some(iface_games::GameSingle {
+        achievements_count: m.get("achievements_count").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        added: m.get("added").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        added_by_status: m.get("added_by_status").filter(|v| !v.is_null()).and_then(|v| iface_games__game_single_added_by_status__from_json(v)),
+        additions_count: m.get("additions_count").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        alternative_names: m.get("alternative_names").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| (x).as_str().map(|s| s.to_string())).collect())),
+        background_image: m.get("background_image").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        background_image_additional: m.get("background_image_additional").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        creators_count: m.get("creators_count").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        description: m.get("description").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        esrb_rating: m.get("esrb_rating").filter(|v| !v.is_null()).and_then(|v| iface_games__game_single_esrb_rating__from_json(v)),
+        game_series_count: m.get("game_series_count").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        id: m.get("id").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        metacritic: m.get("metacritic").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        metacritic_platforms: m.get("metacritic_platforms").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| iface_games__game_platform_metacritic__from_json(x)).collect())),
+        metacritic_url: m.get("metacritic_url").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        movies_count: m.get("movies_count").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        name: m.get("name").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        name_original: m.get("name_original").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        parent_achievements_count: m.get("parent_achievements_count").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        parents_count: m.get("parents_count").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        platforms: m.get("platforms").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| iface_games__game_single_platforms_item__from_json(x)).collect())),
+        playtime: m.get("playtime").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        rating: m.get("rating").and_then(|v| (v).as_f64()).unwrap_or_default(),
+        rating_top: m.get("rating_top").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        ratings: m.get("ratings").filter(|v| !v.is_null()).and_then(|v| iface_games__game_single_ratings__from_json(v)),
+        ratings_count: m.get("ratings_count").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        reactions: m.get("reactions").filter(|v| !v.is_null()).and_then(|v| iface_games__game_single_reactions__from_json(v)),
+        reddit_count: m.get("reddit_count").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        reddit_description: m.get("reddit_description").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        reddit_logo: m.get("reddit_logo").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        reddit_name: m.get("reddit_name").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        reddit_url: m.get("reddit_url").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        released: m.get("released").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        reviews_text_count: m.get("reviews_text_count").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        screenshots_count: m.get("screenshots_count").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        slug: m.get("slug").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        suggestions_count: m.get("suggestions_count").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        tba: m.get("tba").filter(|v| !v.is_null()).and_then(|v| (v).as_bool()),
+        twitch_count: m.get("twitch_count").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        updated: m.get("updated").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        website: m.get("website").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        youtube_count: m.get("youtube_count").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    })
+}
+
+fn iface_games__game_single_added_by_status__from_json(v: &Value) -> Option<iface_games::GameSingleAddedByStatus> {
+    let m = v.as_object()?;
+    Some(iface_games::GameSingleAddedByStatus {
+        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    })
+}
+
+fn iface_games__game_single_esrb_rating__from_json(v: &Value) -> Option<iface_games::GameSingleEsrbRating> {
+    let m = v.as_object()?;
+    Some(iface_games::GameSingleEsrbRating {
+        id: m.get("id").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        name: m.get("name").filter(|v| !v.is_null()).and_then(|v| (v).as_str().and_then(iface_games__game_esrb_rating_name_enum__from_str)),
+        slug: m.get("slug").filter(|v| !v.is_null()).and_then(|v| (v).as_str().and_then(iface_games__game_esrb_rating_slug_enum__from_str)),
+    })
+}
+
+fn iface_games__game_platform_metacritic__from_json(v: &Value) -> Option<iface_games::GamePlatformMetacritic> {
+    let m = v.as_object()?;
+    Some(iface_games::GamePlatformMetacritic {
+        metascore: m.get("metascore").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        url: m.get("url").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    })
+}
+
+fn iface_games__game_single_platforms_item__from_json(v: &Value) -> Option<iface_games::GameSinglePlatformsItem> {
+    let m = v.as_object()?;
+    Some(iface_games::GameSinglePlatformsItem {
+        platform: m.get("platform").filter(|v| !v.is_null()).and_then(|v| iface_games__game_single_platforms_item_platform__from_json(v)),
+        released_at: m.get("released_at").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        requirements: m.get("requirements").filter(|v| !v.is_null()).and_then(|v| iface_games__game_single_platforms_item_requirements__from_json(v)),
+    })
+}
+
+fn iface_games__game_single_platforms_item_platform__from_json(v: &Value) -> Option<iface_games::GameSinglePlatformsItemPlatform> {
+    let m = v.as_object()?;
+    Some(iface_games::GameSinglePlatformsItemPlatform {
+        id: m.get("id").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        name: m.get("name").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        slug: m.get("slug").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    })
+}
+
+fn iface_games__game_single_platforms_item_requirements__from_json(v: &Value) -> Option<iface_games::GameSinglePlatformsItemRequirements> {
+    let m = v.as_object()?;
+    Some(iface_games::GameSinglePlatformsItemRequirements {
+        minimum: m.get("minimum").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        recommended: m.get("recommended").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    })
+}
+
+fn iface_games__game_single_ratings__from_json(v: &Value) -> Option<iface_games::GameSingleRatings> {
+    let m = v.as_object()?;
+    Some(iface_games::GameSingleRatings {
+        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    })
+}
+
+fn iface_games__game_single_reactions__from_json(v: &Value) -> Option<iface_games::GameSingleReactions> {
+    let m = v.as_object()?;
+    Some(iface_games::GameSingleReactions {
+        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    })
+}
+
+fn iface_games__parent_achievement__from_json(v: &Value) -> Option<iface_games::ParentAchievement> {
+    let m = v.as_object()?;
+    Some(iface_games::ParentAchievement {
+        description: m.get("description").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        id: m.get("id").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        image: m.get("image").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        name: m.get("name").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        percent: m.get("percent").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    })
+}
+
+fn iface_games__movie__from_json(v: &Value) -> Option<iface_games::Movie> {
+    let m = v.as_object()?;
+    Some(iface_games::Movie {
+        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| iface_games__movie_data__from_json(v)),
+        id: m.get("id").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        name: m.get("name").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        preview: m.get("preview").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    })
+}
+
+fn iface_games__movie_data__from_json(v: &Value) -> Option<iface_games::MovieData> {
+    let m = v.as_object()?;
+    Some(iface_games::MovieData {
+        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    })
+}
+
+fn iface_games__reddit__from_json(v: &Value) -> Option<iface_games::Reddit> {
+    let m = v.as_object()?;
+    Some(iface_games::Reddit {
+        created: m.get("created").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        id: m.get("id").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        image: m.get("image").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        name: m.get("name").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        text: m.get("text").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        url: m.get("url").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        username: m.get("username").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        username_url: m.get("username_url").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    })
+}
+
+fn iface_games__twitch__from_json(v: &Value) -> Option<iface_games::Twitch> {
+    let m = v.as_object()?;
+    Some(iface_games::Twitch {
+        created: m.get("created").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        description: m.get("description").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        external_id: m.get("external_id").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        id: m.get("id").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        language: m.get("language").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        name: m.get("name").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        published: m.get("published").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        thumbnail: m.get("thumbnail").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        view_count: m.get("view_count").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+    })
+}
+
+fn iface_games__youtube__from_json(v: &Value) -> Option<iface_games::Youtube> {
+    let m = v.as_object()?;
+    Some(iface_games::Youtube {
+        channel_id: m.get("channel_id").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        channel_title: m.get("channel_title").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        comments_count: m.get("comments_count").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        created: m.get("created").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        description: m.get("description").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        dislike_count: m.get("dislike_count").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        external_id: m.get("external_id").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        favorite_count: m.get("favorite_count").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        id: m.get("id").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        like_count: m.get("like_count").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        name: m.get("name").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        thumbnails: m.get("thumbnails").filter(|v| !v.is_null()).and_then(|v| iface_games__youtube_thumbnails__from_json(v)),
+        view_count: m.get("view_count").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+    })
+}
+
+fn iface_games__youtube_thumbnails__from_json(v: &Value) -> Option<iface_games::YoutubeThumbnails> {
+    let m = v.as_object()?;
+    Some(iface_games::YoutubeThumbnails {
+        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    })
+}
+
+fn iface_games__game_esrb_rating_name_enum__from_str(s: &str) -> Option<iface_games::GameEsrbRatingNameEnum> {
+    match s {
+        "Everyone" => Some(iface_games::GameEsrbRatingNameEnum::Everyone),
+        "Everyone 10+" => Some(iface_games::GameEsrbRatingNameEnum::EveryoneV10),
+        "Teen" => Some(iface_games::GameEsrbRatingNameEnum::Teen),
+        "Mature" => Some(iface_games::GameEsrbRatingNameEnum::Mature),
+        "Adults Only" => Some(iface_games::GameEsrbRatingNameEnum::AdultsOnly),
+        "Rating Pending" => Some(iface_games::GameEsrbRatingNameEnum::RatingPending),
+        _ => None,
+    }
+}
+
+fn iface_games__game_esrb_rating_slug_enum__from_str(s: &str) -> Option<iface_games::GameEsrbRatingSlugEnum> {
+    match s {
+        "everyone" => Some(iface_games::GameEsrbRatingSlugEnum::Everyone),
+        "everyone-10-plus" => Some(iface_games::GameEsrbRatingSlugEnum::EveryoneV10Plus),
+        "teen" => Some(iface_games::GameEsrbRatingSlugEnum::Teen),
+        "mature" => Some(iface_games::GameEsrbRatingSlugEnum::Mature),
+        "adults-only" => Some(iface_games::GameEsrbRatingSlugEnum::AdultsOnly),
+        "rating-pending" => Some(iface_games::GameEsrbRatingSlugEnum::RatingPending),
+        _ => None,
+    }
+}
+
+fn iface_games__list_op__ok(body: String) -> Result<iface_games::ListOpResponse, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match iface_games__list_op_response__from_json(&v) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_games__list_op__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
+fn iface_games__additions_list__ok(body: String) -> Result<iface_games::AdditionsListResponse, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match iface_games__additions_list_response__from_json(&v) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_games__additions_list__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
+fn iface_games__development_team_list__ok(body: String) -> Result<iface_games::DevelopmentTeamListResponse, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match iface_games__development_team_list_response__from_json(&v) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_games__development_team_list__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
+fn iface_games__game_series_list__ok(body: String) -> Result<iface_games::GameSeriesListResponse, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match iface_games__game_series_list_response__from_json(&v) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_games__game_series_list__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
+fn iface_games__parent_games_list__ok(body: String) -> Result<iface_games::ParentGamesListResponse, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match iface_games__parent_games_list_response__from_json(&v) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_games__parent_games_list__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
+fn iface_games__screenshots_list__ok(body: String) -> Result<iface_games::ScreenshotsListResponse, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match iface_games__screenshots_list_response__from_json(&v) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_games__screenshots_list__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
+fn iface_games__stores_list__ok(body: String) -> Result<iface_games::StoresListResponse, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match iface_games__stores_list_response__from_json(&v) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_games__stores_list__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
+fn iface_games__read__ok(body: String) -> Result<iface_games::GameSingle, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match iface_games__game_single__from_json(&v) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_games__read__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
+fn iface_games__achievements_read__ok(body: String) -> Result<iface_games::ParentAchievement, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match iface_games__parent_achievement__from_json(&v) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_games__achievements_read__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
+fn iface_games__movies_read__ok(body: String) -> Result<iface_games::Movie, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match iface_games__movie__from_json(&v) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_games__movies_read__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
+fn iface_games__reddit_read__ok(body: String) -> Result<iface_games::Reddit, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match iface_games__reddit__from_json(&v) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_games__reddit_read__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
+fn iface_games__suggested_read__ok(body: String) -> Result<iface_games::GameSingle, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match iface_games__game_single__from_json(&v) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_games__suggested_read__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
+fn iface_games__twitch_read__ok(body: String) -> Result<iface_games::Twitch, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match iface_games__twitch__from_json(&v) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_games__twitch_read__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
+fn iface_games__youtube_read__ok(body: String) -> Result<iface_games::Youtube, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match iface_games__youtube__from_json(&v) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_games__youtube_read__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
 impl iface_games::Guest for crate::Component {
-    fn list_op(params: iface_games::ListOpParams) -> Result<String, String> {
+    fn list_op(params: iface_games::ListOpParams) -> Result<iface_games::ListOpResponse, String> {
         let json = iface_games__list_op_params__to_json(&params);
-        dispatch(&OP_GAMES_LIST_OP, json)
+        match dispatch(&OP_GAMES_LIST_OP, json).and_then(iface_games__list_op__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_games__list_op__err(e)),
+        }
     }
-    fn additions_list(params: iface_games::AdditionsListParams) -> Result<String, String> {
+    fn additions_list(params: iface_games::AdditionsListParams) -> Result<iface_games::AdditionsListResponse, String> {
         let json = iface_games__additions_list_params__to_json(&params);
-        dispatch(&OP_GAMES_ADDITIONS_LIST, json)
+        match dispatch(&OP_GAMES_ADDITIONS_LIST, json).and_then(iface_games__additions_list__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_games__additions_list__err(e)),
+        }
     }
-    fn development_team_list(params: iface_games::DevelopmentTeamListParams) -> Result<String, String> {
+    fn development_team_list(params: iface_games::DevelopmentTeamListParams) -> Result<iface_games::DevelopmentTeamListResponse, String> {
         let json = iface_games__development_team_list_params__to_json(&params);
-        dispatch(&OP_GAMES_DEVELOPMENT_TEAM_LIST, json)
+        match dispatch(&OP_GAMES_DEVELOPMENT_TEAM_LIST, json).and_then(iface_games__development_team_list__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_games__development_team_list__err(e)),
+        }
     }
-    fn game_series_list(params: iface_games::GameSeriesListParams) -> Result<String, String> {
+    fn game_series_list(params: iface_games::GameSeriesListParams) -> Result<iface_games::GameSeriesListResponse, String> {
         let json = iface_games__game_series_list_params__to_json(&params);
-        dispatch(&OP_GAMES_GAME_SERIES_LIST, json)
+        match dispatch(&OP_GAMES_GAME_SERIES_LIST, json).and_then(iface_games__game_series_list__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_games__game_series_list__err(e)),
+        }
     }
-    fn parent_games_list(params: iface_games::ParentGamesListParams) -> Result<String, String> {
+    fn parent_games_list(params: iface_games::ParentGamesListParams) -> Result<iface_games::ParentGamesListResponse, String> {
         let json = iface_games__parent_games_list_params__to_json(&params);
-        dispatch(&OP_GAMES_PARENT_GAMES_LIST, json)
+        match dispatch(&OP_GAMES_PARENT_GAMES_LIST, json).and_then(iface_games__parent_games_list__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_games__parent_games_list__err(e)),
+        }
     }
-    fn screenshots_list(params: iface_games::ScreenshotsListParams) -> Result<String, String> {
+    fn screenshots_list(params: iface_games::ScreenshotsListParams) -> Result<iface_games::ScreenshotsListResponse, String> {
         let json = iface_games__screenshots_list_params__to_json(&params);
-        dispatch(&OP_GAMES_SCREENSHOTS_LIST, json)
+        match dispatch(&OP_GAMES_SCREENSHOTS_LIST, json).and_then(iface_games__screenshots_list__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_games__screenshots_list__err(e)),
+        }
     }
-    fn stores_list(params: iface_games::StoresListParams) -> Result<String, String> {
+    fn stores_list(params: iface_games::StoresListParams) -> Result<iface_games::StoresListResponse, String> {
         let json = iface_games__stores_list_params__to_json(&params);
-        dispatch(&OP_GAMES_STORES_LIST, json)
+        match dispatch(&OP_GAMES_STORES_LIST, json).and_then(iface_games__stores_list__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_games__stores_list__err(e)),
+        }
     }
-    fn read(params: iface_games::ReadParams) -> Result<String, String> {
+    fn read(params: iface_games::ReadParams) -> Result<iface_games::GameSingle, String> {
         let json = iface_games__read_params__to_json(&params);
-        dispatch(&OP_GAMES_READ, json)
+        match dispatch(&OP_GAMES_READ, json).and_then(iface_games__read__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_games__read__err(e)),
+        }
     }
-    fn achievements_read(params: iface_games::AchievementsReadParams) -> Result<String, String> {
+    fn achievements_read(params: iface_games::AchievementsReadParams) -> Result<iface_games::ParentAchievement, String> {
         let json = iface_games__achievements_read_params__to_json(&params);
-        dispatch(&OP_GAMES_ACHIEVEMENTS_READ, json)
+        match dispatch(&OP_GAMES_ACHIEVEMENTS_READ, json).and_then(iface_games__achievements_read__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_games__achievements_read__err(e)),
+        }
     }
-    fn movies_read(params: iface_games::MoviesReadParams) -> Result<String, String> {
+    fn movies_read(params: iface_games::MoviesReadParams) -> Result<iface_games::Movie, String> {
         let json = iface_games__movies_read_params__to_json(&params);
-        dispatch(&OP_GAMES_MOVIES_READ, json)
+        match dispatch(&OP_GAMES_MOVIES_READ, json).and_then(iface_games__movies_read__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_games__movies_read__err(e)),
+        }
     }
-    fn reddit_read(params: iface_games::RedditReadParams) -> Result<String, String> {
+    fn reddit_read(params: iface_games::RedditReadParams) -> Result<iface_games::Reddit, String> {
         let json = iface_games__reddit_read_params__to_json(&params);
-        dispatch(&OP_GAMES_REDDIT_READ, json)
+        match dispatch(&OP_GAMES_REDDIT_READ, json).and_then(iface_games__reddit_read__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_games__reddit_read__err(e)),
+        }
     }
-    fn suggested_read(params: iface_games::SuggestedReadParams) -> Result<String, String> {
+    fn suggested_read(params: iface_games::SuggestedReadParams) -> Result<iface_games::GameSingle, String> {
         let json = iface_games__suggested_read_params__to_json(&params);
-        dispatch(&OP_GAMES_SUGGESTED_READ, json)
+        match dispatch(&OP_GAMES_SUGGESTED_READ, json).and_then(iface_games__suggested_read__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_games__suggested_read__err(e)),
+        }
     }
-    fn twitch_read(params: iface_games::TwitchReadParams) -> Result<String, String> {
+    fn twitch_read(params: iface_games::TwitchReadParams) -> Result<iface_games::Twitch, String> {
         let json = iface_games__twitch_read_params__to_json(&params);
-        dispatch(&OP_GAMES_TWITCH_READ, json)
+        match dispatch(&OP_GAMES_TWITCH_READ, json).and_then(iface_games__twitch_read__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_games__twitch_read__err(e)),
+        }
     }
-    fn youtube_read(params: iface_games::YoutubeReadParams) -> Result<String, String> {
+    fn youtube_read(params: iface_games::YoutubeReadParams) -> Result<iface_games::Youtube, String> {
         let json = iface_games__youtube_read_params__to_json(&params);
-        dispatch(&OP_GAMES_YOUTUBE_READ, json)
+        match dispatch(&OP_GAMES_YOUTUBE_READ, json).and_then(iface_games__youtube_read__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_games__youtube_read__err(e)),
+        }
     }
 }
 use crate::exports::autostamp::rawg::genres as iface_genres;
@@ -744,9 +2113,9 @@ const OP_GENRES_LIST_OP: OpSpec = OpSpec {
     method: "GET",
     path_template: "/genres",
     fields: &[
-        FieldSpec { snake: "ordering", location: FieldLocation::Query },
-        FieldSpec { snake: "page", location: FieldLocation::Query },
-        FieldSpec { snake: "page_size", location: FieldLocation::Query },
+        FieldSpec { snake: "ordering", wire: "ordering", location: FieldLocation::Query },
+        FieldSpec { snake: "page", wire: "page", location: FieldLocation::Query },
+        FieldSpec { snake: "page_size", wire: "page_size", location: FieldLocation::Query },
     ],
     auth: &[
     ],
@@ -756,10 +2125,41 @@ const OP_GENRES_READ: OpSpec = OpSpec {
     method: "GET",
     path_template: "/genres/{id}",
     fields: &[
+        FieldSpec { snake: "id", wire: "id", location: FieldLocation::Path },
     ],
     auth: &[
     ],
 };
+
+fn iface_genres__list_op_response__to_json(p: &iface_genres::ListOpResponse) -> Value {
+    let mut m = Map::new();
+    m.insert("count".into(), Value::Number(serde_json::Number::from(*(&p.count))));
+    m.insert("next".into(), match (&p.next) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("previous".into(), match (&p.previous) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("results".into(), Value::Array((&p.results).iter().map(|v| iface_genres__genre__to_json(v)).collect()));
+    Value::Object(m)
+}
+
+fn iface_genres__genre__to_json(p: &iface_genres::Genre) -> Value {
+    let mut m = Map::new();
+    m.insert("games_count".into(), match (&p.games_count) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("id".into(), match (&p.id) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("image_background".into(), match (&p.image_background) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("name".into(), Value::String((&p.name).clone()));
+    m.insert("slug".into(), match (&p.slug) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_genres__genre_single__to_json(p: &iface_genres::GenreSingle) -> Value {
+    let mut m = Map::new();
+    m.insert("description".into(), match (&p.description) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("games_count".into(), match (&p.games_count) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("id".into(), match (&p.id) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("image_background".into(), match (&p.image_background) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("name".into(), Value::String((&p.name).clone()));
+    m.insert("slug".into(), match (&p.slug) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
 
 fn iface_genres__list_op_params__to_json(p: &iface_genres::ListOpParams) -> Value {
     let mut m = Map::new();
@@ -769,13 +2169,95 @@ fn iface_genres__list_op_params__to_json(p: &iface_genres::ListOpParams) -> Valu
     Value::Object(m)
 }
 
-impl iface_genres::Guest for crate::Component {
-    fn list_op(params: iface_genres::ListOpParams) -> Result<String, String> {
-        let json = iface_genres__list_op_params__to_json(&params);
-        dispatch(&OP_GENRES_LIST_OP, json)
+fn iface_genres__read_params__to_json(p: &iface_genres::ReadParams) -> Value {
+    let mut m = Map::new();
+    m.insert("id".into(), Value::String((&p.id).clone()));
+    Value::Object(m)
+}
+
+fn iface_genres__list_op_response__from_json(v: &Value) -> Option<iface_genres::ListOpResponse> {
+    let m = v.as_object()?;
+    Some(iface_genres::ListOpResponse {
+        count: m.get("count").and_then(|v| (v).as_i64().map(|n| n as i32)).unwrap_or_default(),
+        next: m.get("next").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        previous: m.get("previous").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        results: m.get("results").and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| iface_genres__genre__from_json(x)).collect())).unwrap_or_default(),
+    })
+}
+
+fn iface_genres__genre__from_json(v: &Value) -> Option<iface_genres::Genre> {
+    let m = v.as_object()?;
+    Some(iface_genres::Genre {
+        games_count: m.get("games_count").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        id: m.get("id").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        image_background: m.get("image_background").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        name: m.get("name").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        slug: m.get("slug").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    })
+}
+
+fn iface_genres__genre_single__from_json(v: &Value) -> Option<iface_genres::GenreSingle> {
+    let m = v.as_object()?;
+    Some(iface_genres::GenreSingle {
+        description: m.get("description").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        games_count: m.get("games_count").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        id: m.get("id").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        image_background: m.get("image_background").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        name: m.get("name").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        slug: m.get("slug").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    })
+}
+
+fn iface_genres__list_op__ok(body: String) -> Result<iface_genres::ListOpResponse, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match iface_genres__list_op_response__from_json(&v) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
     }
-    fn read() -> Result<String, String> {
-        dispatch(&OP_GENRES_READ, Value::Object(Map::new()))
+}
+
+fn iface_genres__list_op__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
+fn iface_genres__read__ok(body: String) -> Result<iface_genres::GenreSingle, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match iface_genres__genre_single__from_json(&v) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_genres__read__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
+impl iface_genres::Guest for crate::Component {
+    fn list_op(params: iface_genres::ListOpParams) -> Result<iface_genres::ListOpResponse, String> {
+        let json = iface_genres__list_op_params__to_json(&params);
+        match dispatch(&OP_GENRES_LIST_OP, json).and_then(iface_genres__list_op__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_genres__list_op__err(e)),
+        }
+    }
+    fn read(params: iface_genres::ReadParams) -> Result<iface_genres::GenreSingle, String> {
+        let json = iface_genres__read_params__to_json(&params);
+        match dispatch(&OP_GENRES_READ, json).and_then(iface_genres__read__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_genres__read__err(e)),
+        }
     }
 }
 use crate::exports::autostamp::rawg::platforms as iface_platforms;
@@ -784,9 +2266,9 @@ const OP_PLATFORMS_LIST_OP: OpSpec = OpSpec {
     method: "GET",
     path_template: "/platforms",
     fields: &[
-        FieldSpec { snake: "ordering", location: FieldLocation::Query },
-        FieldSpec { snake: "page", location: FieldLocation::Query },
-        FieldSpec { snake: "page_size", location: FieldLocation::Query },
+        FieldSpec { snake: "ordering", wire: "ordering", location: FieldLocation::Query },
+        FieldSpec { snake: "page", wire: "page", location: FieldLocation::Query },
+        FieldSpec { snake: "page_size", wire: "page_size", location: FieldLocation::Query },
     ],
     auth: &[
     ],
@@ -796,9 +2278,9 @@ const OP_PLATFORMS_LISTS_PARENTS_LIST: OpSpec = OpSpec {
     method: "GET",
     path_template: "/platforms/lists/parents",
     fields: &[
-        FieldSpec { snake: "ordering", location: FieldLocation::Query },
-        FieldSpec { snake: "page", location: FieldLocation::Query },
-        FieldSpec { snake: "page_size", location: FieldLocation::Query },
+        FieldSpec { snake: "ordering", wire: "ordering", location: FieldLocation::Query },
+        FieldSpec { snake: "page", wire: "page", location: FieldLocation::Query },
+        FieldSpec { snake: "page_size", wire: "page_size", location: FieldLocation::Query },
     ],
     auth: &[
     ],
@@ -808,10 +2290,65 @@ const OP_PLATFORMS_READ: OpSpec = OpSpec {
     method: "GET",
     path_template: "/platforms/{id}",
     fields: &[
+        FieldSpec { snake: "id", wire: "id", location: FieldLocation::Path },
     ],
     auth: &[
     ],
 };
+
+fn iface_platforms__list_op_response__to_json(p: &iface_platforms::ListOpResponse) -> Value {
+    let mut m = Map::new();
+    m.insert("count".into(), Value::Number(serde_json::Number::from(*(&p.count))));
+    m.insert("next".into(), match (&p.next) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("previous".into(), match (&p.previous) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("results".into(), Value::Array((&p.results).iter().map(|v| iface_platforms__platform__to_json(v)).collect()));
+    Value::Object(m)
+}
+
+fn iface_platforms__platform__to_json(p: &iface_platforms::Platform) -> Value {
+    let mut m = Map::new();
+    m.insert("games_count".into(), match (&p.games_count) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("id".into(), match (&p.id) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("image".into(), match (&p.image) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("image_background".into(), match (&p.image_background) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("name".into(), Value::String((&p.name).clone()));
+    m.insert("slug".into(), match (&p.slug) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("year_end".into(), match (&p.year_end) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("year_start".into(), match (&p.year_start) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_platforms__lists_parents_list_response__to_json(p: &iface_platforms::ListsParentsListResponse) -> Value {
+    let mut m = Map::new();
+    m.insert("count".into(), Value::Number(serde_json::Number::from(*(&p.count))));
+    m.insert("next".into(), match (&p.next) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("previous".into(), match (&p.previous) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("results".into(), Value::Array((&p.results).iter().map(|v| iface_platforms__platform_parent_single__to_json(v)).collect()));
+    Value::Object(m)
+}
+
+fn iface_platforms__platform_parent_single__to_json(p: &iface_platforms::PlatformParentSingle) -> Value {
+    let mut m = Map::new();
+    m.insert("id".into(), match (&p.id) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("name".into(), Value::String((&p.name).clone()));
+    m.insert("platforms".into(), Value::Array((&p.platforms).iter().map(|v| iface_platforms__platform__to_json(v)).collect()));
+    m.insert("slug".into(), match (&p.slug) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_platforms__platform_single__to_json(p: &iface_platforms::PlatformSingle) -> Value {
+    let mut m = Map::new();
+    m.insert("description".into(), match (&p.description) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("games_count".into(), match (&p.games_count) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("id".into(), match (&p.id) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("image".into(), match (&p.image) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("image_background".into(), match (&p.image_background) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("name".into(), Value::String((&p.name).clone()));
+    m.insert("slug".into(), match (&p.slug) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("year_end".into(), match (&p.year_end) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("year_start".into(), match (&p.year_start) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    Value::Object(m)
+}
 
 fn iface_platforms__list_op_params__to_json(p: &iface_platforms::ListOpParams) -> Value {
     let mut m = Map::new();
@@ -829,17 +2366,146 @@ fn iface_platforms__lists_parents_list_params__to_json(p: &iface_platforms::List
     Value::Object(m)
 }
 
+fn iface_platforms__read_params__to_json(p: &iface_platforms::ReadParams) -> Value {
+    let mut m = Map::new();
+    m.insert("id".into(), Value::String((&p.id).clone()));
+    Value::Object(m)
+}
+
+fn iface_platforms__list_op_response__from_json(v: &Value) -> Option<iface_platforms::ListOpResponse> {
+    let m = v.as_object()?;
+    Some(iface_platforms::ListOpResponse {
+        count: m.get("count").and_then(|v| (v).as_i64().map(|n| n as i32)).unwrap_or_default(),
+        next: m.get("next").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        previous: m.get("previous").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        results: m.get("results").and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| iface_platforms__platform__from_json(x)).collect())).unwrap_or_default(),
+    })
+}
+
+fn iface_platforms__platform__from_json(v: &Value) -> Option<iface_platforms::Platform> {
+    let m = v.as_object()?;
+    Some(iface_platforms::Platform {
+        games_count: m.get("games_count").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        id: m.get("id").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        image: m.get("image").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        image_background: m.get("image_background").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        name: m.get("name").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        slug: m.get("slug").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        year_end: m.get("year_end").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        year_start: m.get("year_start").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+    })
+}
+
+fn iface_platforms__lists_parents_list_response__from_json(v: &Value) -> Option<iface_platforms::ListsParentsListResponse> {
+    let m = v.as_object()?;
+    Some(iface_platforms::ListsParentsListResponse {
+        count: m.get("count").and_then(|v| (v).as_i64().map(|n| n as i32)).unwrap_or_default(),
+        next: m.get("next").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        previous: m.get("previous").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        results: m.get("results").and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| iface_platforms__platform_parent_single__from_json(x)).collect())).unwrap_or_default(),
+    })
+}
+
+fn iface_platforms__platform_parent_single__from_json(v: &Value) -> Option<iface_platforms::PlatformParentSingle> {
+    let m = v.as_object()?;
+    Some(iface_platforms::PlatformParentSingle {
+        id: m.get("id").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        name: m.get("name").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        platforms: m.get("platforms").and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| iface_platforms__platform__from_json(x)).collect())).unwrap_or_default(),
+        slug: m.get("slug").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    })
+}
+
+fn iface_platforms__platform_single__from_json(v: &Value) -> Option<iface_platforms::PlatformSingle> {
+    let m = v.as_object()?;
+    Some(iface_platforms::PlatformSingle {
+        description: m.get("description").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        games_count: m.get("games_count").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        id: m.get("id").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        image: m.get("image").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        image_background: m.get("image_background").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        name: m.get("name").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        slug: m.get("slug").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        year_end: m.get("year_end").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        year_start: m.get("year_start").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+    })
+}
+
+fn iface_platforms__list_op__ok(body: String) -> Result<iface_platforms::ListOpResponse, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match iface_platforms__list_op_response__from_json(&v) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_platforms__list_op__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
+fn iface_platforms__lists_parents_list__ok(body: String) -> Result<iface_platforms::ListsParentsListResponse, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match iface_platforms__lists_parents_list_response__from_json(&v) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_platforms__lists_parents_list__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
+fn iface_platforms__read__ok(body: String) -> Result<iface_platforms::PlatformSingle, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match iface_platforms__platform_single__from_json(&v) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_platforms__read__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
 impl iface_platforms::Guest for crate::Component {
-    fn list_op(params: iface_platforms::ListOpParams) -> Result<String, String> {
+    fn list_op(params: iface_platforms::ListOpParams) -> Result<iface_platforms::ListOpResponse, String> {
         let json = iface_platforms__list_op_params__to_json(&params);
-        dispatch(&OP_PLATFORMS_LIST_OP, json)
+        match dispatch(&OP_PLATFORMS_LIST_OP, json).and_then(iface_platforms__list_op__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_platforms__list_op__err(e)),
+        }
     }
-    fn lists_parents_list(params: iface_platforms::ListsParentsListParams) -> Result<String, String> {
+    fn lists_parents_list(params: iface_platforms::ListsParentsListParams) -> Result<iface_platforms::ListsParentsListResponse, String> {
         let json = iface_platforms__lists_parents_list_params__to_json(&params);
-        dispatch(&OP_PLATFORMS_LISTS_PARENTS_LIST, json)
+        match dispatch(&OP_PLATFORMS_LISTS_PARENTS_LIST, json).and_then(iface_platforms__lists_parents_list__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_platforms__lists_parents_list__err(e)),
+        }
     }
-    fn read() -> Result<String, String> {
-        dispatch(&OP_PLATFORMS_READ, Value::Object(Map::new()))
+    fn read(params: iface_platforms::ReadParams) -> Result<iface_platforms::PlatformSingle, String> {
+        let json = iface_platforms__read_params__to_json(&params);
+        match dispatch(&OP_PLATFORMS_READ, json).and_then(iface_platforms__read__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_platforms__read__err(e)),
+        }
     }
 }
 use crate::exports::autostamp::rawg::publishers as iface_publishers;
@@ -848,8 +2514,8 @@ const OP_PUBLISHERS_LIST_OP: OpSpec = OpSpec {
     method: "GET",
     path_template: "/publishers",
     fields: &[
-        FieldSpec { snake: "page", location: FieldLocation::Query },
-        FieldSpec { snake: "page_size", location: FieldLocation::Query },
+        FieldSpec { snake: "page", wire: "page", location: FieldLocation::Query },
+        FieldSpec { snake: "page_size", wire: "page_size", location: FieldLocation::Query },
     ],
     auth: &[
     ],
@@ -859,10 +2525,41 @@ const OP_PUBLISHERS_READ: OpSpec = OpSpec {
     method: "GET",
     path_template: "/publishers/{id}",
     fields: &[
+        FieldSpec { snake: "id", wire: "id", location: FieldLocation::Path },
     ],
     auth: &[
     ],
 };
+
+fn iface_publishers__list_op_response__to_json(p: &iface_publishers::ListOpResponse) -> Value {
+    let mut m = Map::new();
+    m.insert("count".into(), Value::Number(serde_json::Number::from(*(&p.count))));
+    m.insert("next".into(), match (&p.next) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("previous".into(), match (&p.previous) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("results".into(), Value::Array((&p.results).iter().map(|v| iface_publishers__publisher__to_json(v)).collect()));
+    Value::Object(m)
+}
+
+fn iface_publishers__publisher__to_json(p: &iface_publishers::Publisher) -> Value {
+    let mut m = Map::new();
+    m.insert("games_count".into(), match (&p.games_count) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("id".into(), match (&p.id) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("image_background".into(), match (&p.image_background) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("name".into(), Value::String((&p.name).clone()));
+    m.insert("slug".into(), match (&p.slug) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_publishers__publisher_single__to_json(p: &iface_publishers::PublisherSingle) -> Value {
+    let mut m = Map::new();
+    m.insert("description".into(), match (&p.description) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("games_count".into(), match (&p.games_count) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("id".into(), match (&p.id) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("image_background".into(), match (&p.image_background) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("name".into(), Value::String((&p.name).clone()));
+    m.insert("slug".into(), match (&p.slug) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
 
 fn iface_publishers__list_op_params__to_json(p: &iface_publishers::ListOpParams) -> Value {
     let mut m = Map::new();
@@ -871,13 +2568,95 @@ fn iface_publishers__list_op_params__to_json(p: &iface_publishers::ListOpParams)
     Value::Object(m)
 }
 
-impl iface_publishers::Guest for crate::Component {
-    fn list_op(params: iface_publishers::ListOpParams) -> Result<String, String> {
-        let json = iface_publishers__list_op_params__to_json(&params);
-        dispatch(&OP_PUBLISHERS_LIST_OP, json)
+fn iface_publishers__read_params__to_json(p: &iface_publishers::ReadParams) -> Value {
+    let mut m = Map::new();
+    m.insert("id".into(), Value::String((&p.id).clone()));
+    Value::Object(m)
+}
+
+fn iface_publishers__list_op_response__from_json(v: &Value) -> Option<iface_publishers::ListOpResponse> {
+    let m = v.as_object()?;
+    Some(iface_publishers::ListOpResponse {
+        count: m.get("count").and_then(|v| (v).as_i64().map(|n| n as i32)).unwrap_or_default(),
+        next: m.get("next").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        previous: m.get("previous").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        results: m.get("results").and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| iface_publishers__publisher__from_json(x)).collect())).unwrap_or_default(),
+    })
+}
+
+fn iface_publishers__publisher__from_json(v: &Value) -> Option<iface_publishers::Publisher> {
+    let m = v.as_object()?;
+    Some(iface_publishers::Publisher {
+        games_count: m.get("games_count").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        id: m.get("id").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        image_background: m.get("image_background").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        name: m.get("name").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        slug: m.get("slug").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    })
+}
+
+fn iface_publishers__publisher_single__from_json(v: &Value) -> Option<iface_publishers::PublisherSingle> {
+    let m = v.as_object()?;
+    Some(iface_publishers::PublisherSingle {
+        description: m.get("description").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        games_count: m.get("games_count").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        id: m.get("id").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        image_background: m.get("image_background").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        name: m.get("name").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        slug: m.get("slug").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    })
+}
+
+fn iface_publishers__list_op__ok(body: String) -> Result<iface_publishers::ListOpResponse, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match iface_publishers__list_op_response__from_json(&v) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
     }
-    fn read() -> Result<String, String> {
-        dispatch(&OP_PUBLISHERS_READ, Value::Object(Map::new()))
+}
+
+fn iface_publishers__list_op__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
+fn iface_publishers__read__ok(body: String) -> Result<iface_publishers::PublisherSingle, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match iface_publishers__publisher_single__from_json(&v) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_publishers__read__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
+impl iface_publishers::Guest for crate::Component {
+    fn list_op(params: iface_publishers::ListOpParams) -> Result<iface_publishers::ListOpResponse, String> {
+        let json = iface_publishers__list_op_params__to_json(&params);
+        match dispatch(&OP_PUBLISHERS_LIST_OP, json).and_then(iface_publishers__list_op__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_publishers__list_op__err(e)),
+        }
+    }
+    fn read(params: iface_publishers::ReadParams) -> Result<iface_publishers::PublisherSingle, String> {
+        let json = iface_publishers__read_params__to_json(&params);
+        match dispatch(&OP_PUBLISHERS_READ, json).and_then(iface_publishers__read__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_publishers__read__err(e)),
+        }
     }
 }
 use crate::exports::autostamp::rawg::stores as iface_stores;
@@ -886,9 +2665,9 @@ const OP_STORES_LIST_OP: OpSpec = OpSpec {
     method: "GET",
     path_template: "/stores",
     fields: &[
-        FieldSpec { snake: "ordering", location: FieldLocation::Query },
-        FieldSpec { snake: "page", location: FieldLocation::Query },
-        FieldSpec { snake: "page_size", location: FieldLocation::Query },
+        FieldSpec { snake: "ordering", wire: "ordering", location: FieldLocation::Query },
+        FieldSpec { snake: "page", wire: "page", location: FieldLocation::Query },
+        FieldSpec { snake: "page_size", wire: "page_size", location: FieldLocation::Query },
     ],
     auth: &[
     ],
@@ -898,10 +2677,43 @@ const OP_STORES_READ: OpSpec = OpSpec {
     method: "GET",
     path_template: "/stores/{id}",
     fields: &[
+        FieldSpec { snake: "id", wire: "id", location: FieldLocation::Path },
     ],
     auth: &[
     ],
 };
+
+fn iface_stores__list_op_response__to_json(p: &iface_stores::ListOpResponse) -> Value {
+    let mut m = Map::new();
+    m.insert("count".into(), Value::Number(serde_json::Number::from(*(&p.count))));
+    m.insert("next".into(), match (&p.next) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("previous".into(), match (&p.previous) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("results".into(), Value::Array((&p.results).iter().map(|v| iface_stores__store__to_json(v)).collect()));
+    Value::Object(m)
+}
+
+fn iface_stores__store__to_json(p: &iface_stores::Store) -> Value {
+    let mut m = Map::new();
+    m.insert("domain".into(), match (&p.domain) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("games_count".into(), match (&p.games_count) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("id".into(), match (&p.id) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("image_background".into(), match (&p.image_background) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("name".into(), Value::String((&p.name).clone()));
+    m.insert("slug".into(), match (&p.slug) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_stores__store_single__to_json(p: &iface_stores::StoreSingle) -> Value {
+    let mut m = Map::new();
+    m.insert("description".into(), match (&p.description) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("domain".into(), match (&p.domain) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("games_count".into(), match (&p.games_count) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("id".into(), match (&p.id) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("image_background".into(), match (&p.image_background) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("name".into(), Value::String((&p.name).clone()));
+    m.insert("slug".into(), match (&p.slug) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
 
 fn iface_stores__list_op_params__to_json(p: &iface_stores::ListOpParams) -> Value {
     let mut m = Map::new();
@@ -911,13 +2723,97 @@ fn iface_stores__list_op_params__to_json(p: &iface_stores::ListOpParams) -> Valu
     Value::Object(m)
 }
 
-impl iface_stores::Guest for crate::Component {
-    fn list_op(params: iface_stores::ListOpParams) -> Result<String, String> {
-        let json = iface_stores__list_op_params__to_json(&params);
-        dispatch(&OP_STORES_LIST_OP, json)
+fn iface_stores__read_params__to_json(p: &iface_stores::ReadParams) -> Value {
+    let mut m = Map::new();
+    m.insert("id".into(), Value::String((&p.id).clone()));
+    Value::Object(m)
+}
+
+fn iface_stores__list_op_response__from_json(v: &Value) -> Option<iface_stores::ListOpResponse> {
+    let m = v.as_object()?;
+    Some(iface_stores::ListOpResponse {
+        count: m.get("count").and_then(|v| (v).as_i64().map(|n| n as i32)).unwrap_or_default(),
+        next: m.get("next").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        previous: m.get("previous").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        results: m.get("results").and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| iface_stores__store__from_json(x)).collect())).unwrap_or_default(),
+    })
+}
+
+fn iface_stores__store__from_json(v: &Value) -> Option<iface_stores::Store> {
+    let m = v.as_object()?;
+    Some(iface_stores::Store {
+        domain: m.get("domain").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        games_count: m.get("games_count").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        id: m.get("id").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        image_background: m.get("image_background").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        name: m.get("name").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        slug: m.get("slug").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    })
+}
+
+fn iface_stores__store_single__from_json(v: &Value) -> Option<iface_stores::StoreSingle> {
+    let m = v.as_object()?;
+    Some(iface_stores::StoreSingle {
+        description: m.get("description").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        domain: m.get("domain").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        games_count: m.get("games_count").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        id: m.get("id").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        image_background: m.get("image_background").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        name: m.get("name").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        slug: m.get("slug").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    })
+}
+
+fn iface_stores__list_op__ok(body: String) -> Result<iface_stores::ListOpResponse, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match iface_stores__list_op_response__from_json(&v) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
     }
-    fn read() -> Result<String, String> {
-        dispatch(&OP_STORES_READ, Value::Object(Map::new()))
+}
+
+fn iface_stores__list_op__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
+fn iface_stores__read__ok(body: String) -> Result<iface_stores::StoreSingle, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match iface_stores__store_single__from_json(&v) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_stores__read__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
+impl iface_stores::Guest for crate::Component {
+    fn list_op(params: iface_stores::ListOpParams) -> Result<iface_stores::ListOpResponse, String> {
+        let json = iface_stores__list_op_params__to_json(&params);
+        match dispatch(&OP_STORES_LIST_OP, json).and_then(iface_stores__list_op__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_stores__list_op__err(e)),
+        }
+    }
+    fn read(params: iface_stores::ReadParams) -> Result<iface_stores::StoreSingle, String> {
+        let json = iface_stores__read_params__to_json(&params);
+        match dispatch(&OP_STORES_READ, json).and_then(iface_stores__read__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_stores__read__err(e)),
+        }
     }
 }
 use crate::exports::autostamp::rawg::tags as iface_tags;
@@ -926,8 +2822,8 @@ const OP_TAGS_LIST_OP: OpSpec = OpSpec {
     method: "GET",
     path_template: "/tags",
     fields: &[
-        FieldSpec { snake: "page", location: FieldLocation::Query },
-        FieldSpec { snake: "page_size", location: FieldLocation::Query },
+        FieldSpec { snake: "page", wire: "page", location: FieldLocation::Query },
+        FieldSpec { snake: "page_size", wire: "page_size", location: FieldLocation::Query },
     ],
     auth: &[
     ],
@@ -937,10 +2833,42 @@ const OP_TAGS_READ: OpSpec = OpSpec {
     method: "GET",
     path_template: "/tags/{id}",
     fields: &[
+        FieldSpec { snake: "id", wire: "id", location: FieldLocation::Path },
     ],
     auth: &[
     ],
 };
+
+fn iface_tags__list_op_response__to_json(p: &iface_tags::ListOpResponse) -> Value {
+    let mut m = Map::new();
+    m.insert("count".into(), Value::Number(serde_json::Number::from(*(&p.count))));
+    m.insert("next".into(), match (&p.next) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("previous".into(), match (&p.previous) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("results".into(), Value::Array((&p.results).iter().map(|v| iface_tags__tag__to_json(v)).collect()));
+    Value::Object(m)
+}
+
+fn iface_tags__tag__to_json(p: &iface_tags::Tag) -> Value {
+    let mut m = Map::new();
+    m.insert("games_count".into(), match (&p.games_count) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("id".into(), match (&p.id) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("image_background".into(), match (&p.image_background) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("language".into(), match (&p.language) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("name".into(), Value::String((&p.name).clone()));
+    m.insert("slug".into(), match (&p.slug) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_tags__tag_single__to_json(p: &iface_tags::TagSingle) -> Value {
+    let mut m = Map::new();
+    m.insert("description".into(), match (&p.description) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("games_count".into(), match (&p.games_count) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("id".into(), match (&p.id) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("image_background".into(), match (&p.image_background) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("name".into(), Value::String((&p.name).clone()));
+    m.insert("slug".into(), match (&p.slug) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
 
 fn iface_tags__list_op_params__to_json(p: &iface_tags::ListOpParams) -> Value {
     let mut m = Map::new();
@@ -949,13 +2877,96 @@ fn iface_tags__list_op_params__to_json(p: &iface_tags::ListOpParams) -> Value {
     Value::Object(m)
 }
 
-impl iface_tags::Guest for crate::Component {
-    fn list_op(params: iface_tags::ListOpParams) -> Result<String, String> {
-        let json = iface_tags__list_op_params__to_json(&params);
-        dispatch(&OP_TAGS_LIST_OP, json)
+fn iface_tags__read_params__to_json(p: &iface_tags::ReadParams) -> Value {
+    let mut m = Map::new();
+    m.insert("id".into(), Value::String((&p.id).clone()));
+    Value::Object(m)
+}
+
+fn iface_tags__list_op_response__from_json(v: &Value) -> Option<iface_tags::ListOpResponse> {
+    let m = v.as_object()?;
+    Some(iface_tags::ListOpResponse {
+        count: m.get("count").and_then(|v| (v).as_i64().map(|n| n as i32)).unwrap_or_default(),
+        next: m.get("next").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        previous: m.get("previous").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        results: m.get("results").and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| iface_tags__tag__from_json(x)).collect())).unwrap_or_default(),
+    })
+}
+
+fn iface_tags__tag__from_json(v: &Value) -> Option<iface_tags::Tag> {
+    let m = v.as_object()?;
+    Some(iface_tags::Tag {
+        games_count: m.get("games_count").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        id: m.get("id").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        image_background: m.get("image_background").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        language: m.get("language").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        name: m.get("name").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        slug: m.get("slug").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    })
+}
+
+fn iface_tags__tag_single__from_json(v: &Value) -> Option<iface_tags::TagSingle> {
+    let m = v.as_object()?;
+    Some(iface_tags::TagSingle {
+        description: m.get("description").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        games_count: m.get("games_count").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        id: m.get("id").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        image_background: m.get("image_background").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        name: m.get("name").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        slug: m.get("slug").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    })
+}
+
+fn iface_tags__list_op__ok(body: String) -> Result<iface_tags::ListOpResponse, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match iface_tags__list_op_response__from_json(&v) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
     }
-    fn read() -> Result<String, String> {
-        dispatch(&OP_TAGS_READ, Value::Object(Map::new()))
+}
+
+fn iface_tags__list_op__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
+fn iface_tags__read__ok(body: String) -> Result<iface_tags::TagSingle, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match iface_tags__tag_single__from_json(&v) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_tags__read__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
+impl iface_tags::Guest for crate::Component {
+    fn list_op(params: iface_tags::ListOpParams) -> Result<iface_tags::ListOpResponse, String> {
+        let json = iface_tags__list_op_params__to_json(&params);
+        match dispatch(&OP_TAGS_LIST_OP, json).and_then(iface_tags__list_op__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_tags__list_op__err(e)),
+        }
+    }
+    fn read(params: iface_tags::ReadParams) -> Result<iface_tags::TagSingle, String> {
+        let json = iface_tags__read_params__to_json(&params);
+        match dispatch(&OP_TAGS_READ, json).and_then(iface_tags__read__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_tags__read__err(e)),
+        }
     }
 }
 

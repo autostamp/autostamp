@@ -44,10 +44,15 @@ pub(crate) enum FieldLocation {
     Body,
 }
 
-/// A single operation parameter: the snake-case key it carries in the params JSON and where
-/// it belongs in the request.
+/// A single operation parameter. `snake` keys the field in the internal params JSON (and, for a
+/// path field, matches the `{snake}` placeholder in the path template); `wire` is the verbatim name
+/// the field takes on the HTTP wire (query key, header name, or body property). The two differ
+/// whenever the source name isn't already snake_case (e.g. `dryRun` → snake `dry_run`, wire
+/// `dryRun`), and let distinct inputs that share a snake key (`DateCreated`, `DateCreated<`) still
+/// travel under their true names.
 pub(crate) struct FieldSpec {
     pub(crate) snake: &'static str,
+    pub(crate) wire: &'static str,
     pub(crate) location: FieldLocation,
 }
 
@@ -71,6 +76,16 @@ pub(crate) struct AuthApply {
     pub(crate) kind: AuthKind,
 }
 
+/// The failure modes of [`dispatch`], kept structured so each generated operation can map them
+/// onto its own typed error: an `Http` failure carries the response status and body (routed to
+/// the matching error-variant case), while a `Transport` failure carries a message for the
+/// catch-all case (a secret lookup, connection, or decode failure that never produced an HTTP
+/// status).
+pub(crate) enum DispatchError {
+    Http { status: u16, body: String },
+    Transport(String),
+}
+
 /// A single API operation: HTTP method, path template (with `{snake}` placeholders), the
 /// parameter fields, and the security schemes to apply.
 pub(crate) struct OpSpec {
@@ -81,8 +96,9 @@ pub(crate) struct OpSpec {
 }
 
 /// Execute `op` with the supplied `params` (a JSON object keyed by snake-case field names)
-/// and return the response body as a string, or an error message.
-pub(crate) fn dispatch(op: &OpSpec, params: Value) -> Result<String, String> {
+/// and return the raw 2xx response body, or a structured [`DispatchError`] the caller maps
+/// onto the operation's typed error.
+pub(crate) fn dispatch(op: &OpSpec, params: Value) -> Result<String, DispatchError> {
     let obj = match &params {
         Value::Object(map) => Some(map),
         _ => None,
@@ -105,10 +121,10 @@ pub(crate) fn dispatch(op: &OpSpec, params: Value) -> Result<String, String> {
                 let placeholder = format!("{{{}}}", field.snake);
                 path = path.replace(&placeholder, &percent_encode(&scalar(value)));
             }
-            FieldLocation::Query => query.push((field.snake.to_string(), scalar(value))),
-            FieldLocation::Header => headers.push((field.snake.to_string(), scalar(value))),
+            FieldLocation::Query => query.push((field.wire.to_string(), scalar(value))),
+            FieldLocation::Header => headers.push((field.wire.to_string(), scalar(value))),
             FieldLocation::Body => {
-                body.insert(field.snake.to_string(), value.clone());
+                body.insert(field.wire.to_string(), value.clone());
             }
         }
     }
@@ -116,7 +132,7 @@ pub(crate) fn dispatch(op: &OpSpec, params: Value) -> Result<String, String> {
     // Apply each resolved security scheme, sourcing its value from wasmcloud:secrets.
     let mut cookies: Vec<String> = Vec::new();
     for apply in op.auth {
-        let secret = fetch_secret(apply.secret_key)?;
+        let secret = fetch_secret(apply.secret_key).map_err(DispatchError::Transport)?;
         match &apply.kind {
             AuthKind::Bearer => headers.push(("authorization".into(), format!("Bearer {secret}"))),
             AuthKind::Basic => {
@@ -177,17 +193,18 @@ fn fetch_secret(key: &str) -> Result<String, String> {
 }
 
 /// Build and send the outgoing request with `wstd`, returning the response body on a 2xx
-/// status. The generated guest exports are synchronous, so the async `wstd` client is driven
-/// to completion on a local reactor via `wstd::runtime::block_on`.
+/// status and a structured [`DispatchError`] otherwise. The generated guest exports are
+/// synchronous, so the async `wstd` client is driven to completion on a local reactor via
+/// `wstd::runtime::block_on`.
 fn perform(
     method: &str,
     path_with_query: &str,
     headers: &[(String, String)],
     body: &[u8],
-) -> Result<String, String> {
+) -> Result<String, DispatchError> {
     let url = join_url(crate::BASE_URL, path_with_query);
     let method = Method::from_bytes(method.as_bytes())
-        .map_err(|err| format!("invalid HTTP method `{method}`: {err}"))?;
+        .map_err(|err| DispatchError::Transport(format!("invalid HTTP method `{method}`: {err}")))?;
 
     let mut builder = Request::builder().method(method).uri(url);
     for (name, value) in headers {
@@ -199,27 +216,29 @@ fn perform(
         } else {
             Body::from(body.to_vec())
         })
-        .map_err(|err| format!("failed to build request: {err}"))?;
+        .map_err(|err| DispatchError::Transport(format!("failed to build request: {err}")))?;
 
     wstd::runtime::block_on(async move {
         let client = Client::new();
         let response = client
             .send(request)
             .await
-            .map_err(|err| format!("request failed: {err:#}"))?;
+            .map_err(|err| DispatchError::Transport(format!("request failed: {err:#}")))?;
 
         let status = response.status().as_u16();
         let mut response_body = response.into_body();
-        let bytes = response_body
-            .contents()
-            .await
-            .map_err(|err| format!("failed to read response body: {err:#}"))?;
+        let bytes = response_body.contents().await.map_err(|err| {
+            DispatchError::Transport(format!("failed to read response body: {err:#}"))
+        })?;
         let body_text = String::from_utf8_lossy(bytes).into_owned();
 
         if (200..300).contains(&status) {
             Ok(body_text)
         } else {
-            Err(format!("HTTP {status}: {body_text}"))
+            Err(DispatchError::Http {
+                status,
+                body: body_text,
+            })
         }
     })
 }
@@ -293,9 +312,51 @@ const OP_FEED_CONTENT_AVAILABILITY_GET_FEED_AVAILABILITY: OpSpec = OpSpec {
     ],
 };
 
+fn iface_feed_content_availability__availability__to_json(p: &iface_feed_content_availability::Availability) -> Value {
+    let mut m = Map::new();
+    m.insert("in_the_news".into(), Value::Array((&p.in_the_news).iter().map(|v| Value::String((v).clone())).collect()));
+    m.insert("most_read".into(), Value::Array((&p.most_read).iter().map(|v| Value::String((v).clone())).collect()));
+    m.insert("on_this_day".into(), Value::Array((&p.on_this_day).iter().map(|v| Value::String((v).clone())).collect()));
+    m.insert("picture_of_the_day".into(), Value::Array((&p.picture_of_the_day).iter().map(|v| Value::String((v).clone())).collect()));
+    m.insert("todays_featured_article".into(), Value::Array((&p.todays_featured_article).iter().map(|v| Value::String((v).clone())).collect()));
+    Value::Object(m)
+}
+
+fn iface_feed_content_availability__availability__from_json(v: &Value) -> Option<iface_feed_content_availability::Availability> {
+    let m = v.as_object()?;
+    Some(iface_feed_content_availability::Availability {
+        in_the_news: m.get("in_the_news").and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| (x).as_str().map(|s| s.to_string())).collect())).unwrap_or_default(),
+        most_read: m.get("most_read").and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| (x).as_str().map(|s| s.to_string())).collect())).unwrap_or_default(),
+        on_this_day: m.get("on_this_day").and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| (x).as_str().map(|s| s.to_string())).collect())).unwrap_or_default(),
+        picture_of_the_day: m.get("picture_of_the_day").and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| (x).as_str().map(|s| s.to_string())).collect())).unwrap_or_default(),
+        todays_featured_article: m.get("todays_featured_article").and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| (x).as_str().map(|s| s.to_string())).collect())).unwrap_or_default(),
+    })
+}
+
+fn iface_feed_content_availability__get_feed_availability__ok(body: String) -> Result<iface_feed_content_availability::Availability, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match iface_feed_content_availability__availability__from_json(&v) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_feed_content_availability__get_feed_availability__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
 impl iface_feed_content_availability::Guest for crate::Component {
-    fn get_feed_availability() -> Result<String, String> {
-        dispatch(&OP_FEED_CONTENT_AVAILABILITY_GET_FEED_AVAILABILITY, Value::Object(Map::new()))
+    fn get_feed_availability() -> Result<iface_feed_content_availability::Availability, String> {
+        match dispatch(&OP_FEED_CONTENT_AVAILABILITY_GET_FEED_AVAILABILITY, Value::Object(Map::new())).and_then(iface_feed_content_availability__get_feed_availability__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_feed_content_availability__get_feed_availability__err(e)),
+        }
     }
 }
 use crate::exports::autostamp::wikimedia::math as iface_math;
@@ -304,8 +365,8 @@ const OP_MATH_POST_MEDIA_MATH_CHECK_TYPE: OpSpec = OpSpec {
     method: "POST",
     path_template: "/media/math/check/{type}",
     fields: &[
-        FieldSpec { snake: "type", location: FieldLocation::Path },
-        FieldSpec { snake: "q", location: FieldLocation::Body },
+        FieldSpec { snake: "type", wire: "type", location: FieldLocation::Path },
+        FieldSpec { snake: "q", wire: "q", location: FieldLocation::Body },
     ],
     auth: &[
     ],
@@ -315,7 +376,7 @@ const OP_MATH_GET_MEDIA_MATH_FORMULA_HASH: OpSpec = OpSpec {
     method: "GET",
     path_template: "/media/math/formula/{hash}",
     fields: &[
-        FieldSpec { snake: "hash", location: FieldLocation::Path },
+        FieldSpec { snake: "hash", wire: "hash", location: FieldLocation::Path },
     ],
     auth: &[
     ],
@@ -325,8 +386,8 @@ const OP_MATH_GET_MEDIA_MATH_RENDER_FORMAT_HASH: OpSpec = OpSpec {
     method: "GET",
     path_template: "/media/math/render/{format}/{hash}",
     fields: &[
-        FieldSpec { snake: "format", location: FieldLocation::Path },
-        FieldSpec { snake: "hash", location: FieldLocation::Path },
+        FieldSpec { snake: "format", wire: "format", location: FieldLocation::Path },
+        FieldSpec { snake: "hash", wire: "hash", location: FieldLocation::Path },
     ],
     auth: &[
     ],
@@ -352,18 +413,69 @@ fn iface_math__get_media_math_render_format_hash_params__to_json(p: &iface_math:
     Value::Object(m)
 }
 
+fn iface_math__post_media_math_check_type__ok(body: String) -> Result<String, crate::runtime::DispatchError> {
+    Ok(body)
+}
+
+fn iface_math__post_media_math_check_type__err(e: crate::runtime::DispatchError) -> iface_math::PostMediaMathCheckTypeError {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => match status {
+            400u16 => iface_math::PostMediaMathCheckTypeError::BadRequest(body),
+            _ => iface_math::PostMediaMathCheckTypeError::Other(body),
+        },
+        crate::runtime::DispatchError::Transport(m) => iface_math::PostMediaMathCheckTypeError::Other(m),
+    }
+}
+
+fn iface_math__get_media_math_formula_hash__ok(body: String) -> Result<String, crate::runtime::DispatchError> {
+    Ok(body)
+}
+
+fn iface_math__get_media_math_formula_hash__err(e: crate::runtime::DispatchError) -> iface_math::GetMediaMathFormulaHashError {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => match status {
+            404u16 => iface_math::GetMediaMathFormulaHashError::NotFound(body),
+            _ => iface_math::GetMediaMathFormulaHashError::Other(body),
+        },
+        crate::runtime::DispatchError::Transport(m) => iface_math::GetMediaMathFormulaHashError::Other(m),
+    }
+}
+
+fn iface_math__get_media_math_render_format_hash__ok(body: String) -> Result<String, crate::runtime::DispatchError> {
+    Ok(body)
+}
+
+fn iface_math__get_media_math_render_format_hash__err(e: crate::runtime::DispatchError) -> iface_math::GetMediaMathRenderFormatHashError {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => match status {
+            404u16 => iface_math::GetMediaMathRenderFormatHashError::NotFound(body),
+            _ => iface_math::GetMediaMathRenderFormatHashError::Other(body),
+        },
+        crate::runtime::DispatchError::Transport(m) => iface_math::GetMediaMathRenderFormatHashError::Other(m),
+    }
+}
+
 impl iface_math::Guest for crate::Component {
-    fn post_media_math_check_type(params: iface_math::PostMediaMathCheckTypeParams) -> Result<String, String> {
+    fn post_media_math_check_type(params: iface_math::PostMediaMathCheckTypeParams) -> Result<String, iface_math::PostMediaMathCheckTypeError> {
         let json = iface_math__post_media_math_check_type_params__to_json(&params);
-        dispatch(&OP_MATH_POST_MEDIA_MATH_CHECK_TYPE, json)
+        match dispatch(&OP_MATH_POST_MEDIA_MATH_CHECK_TYPE, json).and_then(iface_math__post_media_math_check_type__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_math__post_media_math_check_type__err(e)),
+        }
     }
-    fn get_media_math_formula_hash(params: iface_math::GetMediaMathFormulaHashParams) -> Result<String, String> {
+    fn get_media_math_formula_hash(params: iface_math::GetMediaMathFormulaHashParams) -> Result<String, iface_math::GetMediaMathFormulaHashError> {
         let json = iface_math__get_media_math_formula_hash_params__to_json(&params);
-        dispatch(&OP_MATH_GET_MEDIA_MATH_FORMULA_HASH, json)
+        match dispatch(&OP_MATH_GET_MEDIA_MATH_FORMULA_HASH, json).and_then(iface_math__get_media_math_formula_hash__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_math__get_media_math_formula_hash__err(e)),
+        }
     }
-    fn get_media_math_render_format_hash(params: iface_math::GetMediaMathRenderFormatHashParams) -> Result<String, String> {
+    fn get_media_math_render_format_hash(params: iface_math::GetMediaMathRenderFormatHashParams) -> Result<String, iface_math::GetMediaMathRenderFormatHashError> {
         let json = iface_math__get_media_math_render_format_hash_params__to_json(&params);
-        dispatch(&OP_MATH_GET_MEDIA_MATH_RENDER_FORMAT_HASH, json)
+        match dispatch(&OP_MATH_GET_MEDIA_MATH_RENDER_FORMAT_HASH, json).and_then(iface_math__get_media_math_render_format_hash__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_math__get_media_math_render_format_hash__err(e)),
+        }
     }
 }
 use crate::exports::autostamp::wikimedia::bytes_difference_data as iface_bytes_difference_data;
@@ -372,12 +484,12 @@ const OP_BYTES_DIFFERENCE_DATA_GET_METRICS_BYTES_DIFFERENCE_ABSOLUTE_AGGREGATE_P
     method: "GET",
     path_template: "/metrics/bytes-difference/absolute/aggregate/{project}/{editor_type}/{page_type}/{granularity}/{start}/{end}",
     fields: &[
-        FieldSpec { snake: "project", location: FieldLocation::Path },
-        FieldSpec { snake: "editor_type", location: FieldLocation::Path },
-        FieldSpec { snake: "page_type", location: FieldLocation::Path },
-        FieldSpec { snake: "granularity", location: FieldLocation::Path },
-        FieldSpec { snake: "start", location: FieldLocation::Path },
-        FieldSpec { snake: "end", location: FieldLocation::Path },
+        FieldSpec { snake: "project", wire: "project", location: FieldLocation::Path },
+        FieldSpec { snake: "editor_type", wire: "editor-type", location: FieldLocation::Path },
+        FieldSpec { snake: "page_type", wire: "page-type", location: FieldLocation::Path },
+        FieldSpec { snake: "granularity", wire: "granularity", location: FieldLocation::Path },
+        FieldSpec { snake: "start", wire: "start", location: FieldLocation::Path },
+        FieldSpec { snake: "end", wire: "end", location: FieldLocation::Path },
     ],
     auth: &[
     ],
@@ -387,12 +499,12 @@ const OP_BYTES_DIFFERENCE_DATA_GET_METRICS_BYTES_DIFFERENCE_ABSOLUTE_PER_PAGE_PR
     method: "GET",
     path_template: "/metrics/bytes-difference/absolute/per-page/{project}/{page_title}/{editor_type}/{granularity}/{start}/{end}",
     fields: &[
-        FieldSpec { snake: "project", location: FieldLocation::Path },
-        FieldSpec { snake: "page_title", location: FieldLocation::Path },
-        FieldSpec { snake: "editor_type", location: FieldLocation::Path },
-        FieldSpec { snake: "granularity", location: FieldLocation::Path },
-        FieldSpec { snake: "start", location: FieldLocation::Path },
-        FieldSpec { snake: "end", location: FieldLocation::Path },
+        FieldSpec { snake: "project", wire: "project", location: FieldLocation::Path },
+        FieldSpec { snake: "page_title", wire: "page-title", location: FieldLocation::Path },
+        FieldSpec { snake: "editor_type", wire: "editor-type", location: FieldLocation::Path },
+        FieldSpec { snake: "granularity", wire: "granularity", location: FieldLocation::Path },
+        FieldSpec { snake: "start", wire: "start", location: FieldLocation::Path },
+        FieldSpec { snake: "end", wire: "end", location: FieldLocation::Path },
     ],
     auth: &[
     ],
@@ -402,12 +514,12 @@ const OP_BYTES_DIFFERENCE_DATA_GET_METRICS_BYTES_DIFFERENCE_NET_AGGREGATE_PROJEC
     method: "GET",
     path_template: "/metrics/bytes-difference/net/aggregate/{project}/{editor_type}/{page_type}/{granularity}/{start}/{end}",
     fields: &[
-        FieldSpec { snake: "project", location: FieldLocation::Path },
-        FieldSpec { snake: "editor_type", location: FieldLocation::Path },
-        FieldSpec { snake: "page_type", location: FieldLocation::Path },
-        FieldSpec { snake: "granularity", location: FieldLocation::Path },
-        FieldSpec { snake: "start", location: FieldLocation::Path },
-        FieldSpec { snake: "end", location: FieldLocation::Path },
+        FieldSpec { snake: "project", wire: "project", location: FieldLocation::Path },
+        FieldSpec { snake: "editor_type", wire: "editor-type", location: FieldLocation::Path },
+        FieldSpec { snake: "page_type", wire: "page-type", location: FieldLocation::Path },
+        FieldSpec { snake: "granularity", wire: "granularity", location: FieldLocation::Path },
+        FieldSpec { snake: "start", wire: "start", location: FieldLocation::Path },
+        FieldSpec { snake: "end", wire: "end", location: FieldLocation::Path },
     ],
     auth: &[
     ],
@@ -417,16 +529,108 @@ const OP_BYTES_DIFFERENCE_DATA_GET_METRICS_BYTES_DIFFERENCE_NET_PER_PAGE_PROJECT
     method: "GET",
     path_template: "/metrics/bytes-difference/net/per-page/{project}/{page_title}/{editor_type}/{granularity}/{start}/{end}",
     fields: &[
-        FieldSpec { snake: "project", location: FieldLocation::Path },
-        FieldSpec { snake: "page_title", location: FieldLocation::Path },
-        FieldSpec { snake: "editor_type", location: FieldLocation::Path },
-        FieldSpec { snake: "granularity", location: FieldLocation::Path },
-        FieldSpec { snake: "start", location: FieldLocation::Path },
-        FieldSpec { snake: "end", location: FieldLocation::Path },
+        FieldSpec { snake: "project", wire: "project", location: FieldLocation::Path },
+        FieldSpec { snake: "page_title", wire: "page-title", location: FieldLocation::Path },
+        FieldSpec { snake: "editor_type", wire: "editor-type", location: FieldLocation::Path },
+        FieldSpec { snake: "granularity", wire: "granularity", location: FieldLocation::Path },
+        FieldSpec { snake: "start", wire: "start", location: FieldLocation::Path },
+        FieldSpec { snake: "end", wire: "end", location: FieldLocation::Path },
     ],
     auth: &[
     ],
 };
+
+fn iface_bytes_difference_data__absolute_bytes_difference__to_json(p: &iface_bytes_difference_data::AbsoluteBytesDifference) -> Value {
+    let mut m = Map::new();
+    m.insert("items".into(), match (&p.items) { Some(v) => Value::Array((v).iter().map(|v| iface_bytes_difference_data__absolute_bytes_difference_items_item__to_json(v)).collect()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_bytes_difference_data__absolute_bytes_difference_items_item__to_json(p: &iface_bytes_difference_data::AbsoluteBytesDifferenceItemsItem) -> Value {
+    let mut m = Map::new();
+    m.insert("editor-type".into(), match (&p.editor_type) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("granularity".into(), match (&p.granularity) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("page-type".into(), match (&p.page_type) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("project".into(), match (&p.project) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("results".into(), match (&p.results) { Some(v) => Value::Array((v).iter().map(|v| iface_bytes_difference_data__absolute_bytes_difference_items_item_results_item__to_json(v)).collect()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_bytes_difference_data__absolute_bytes_difference_items_item_results_item__to_json(p: &iface_bytes_difference_data::AbsoluteBytesDifferenceItemsItemResultsItem) -> Value {
+    let mut m = Map::new();
+    m.insert("abs_bytes_diff".into(), match (&p.abs_bytes_diff) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("timestamp".into(), match (&p.timestamp) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_bytes_difference_data__absolute_bytes_difference_per_page__to_json(p: &iface_bytes_difference_data::AbsoluteBytesDifferencePerPage) -> Value {
+    let mut m = Map::new();
+    m.insert("items".into(), match (&p.items) { Some(v) => Value::Array((v).iter().map(|v| iface_bytes_difference_data__absolute_bytes_difference_per_page_items_item__to_json(v)).collect()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_bytes_difference_data__absolute_bytes_difference_per_page_items_item__to_json(p: &iface_bytes_difference_data::AbsoluteBytesDifferencePerPageItemsItem) -> Value {
+    let mut m = Map::new();
+    m.insert("editor-type".into(), match (&p.editor_type) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("granularity".into(), match (&p.granularity) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("page-title".into(), match (&p.page_title) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("project".into(), match (&p.project) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("results".into(), match (&p.results) { Some(v) => Value::Array((v).iter().map(|v| iface_bytes_difference_data__absolute_bytes_difference_per_page_items_item_results_item__to_json(v)).collect()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_bytes_difference_data__absolute_bytes_difference_per_page_items_item_results_item__to_json(p: &iface_bytes_difference_data::AbsoluteBytesDifferencePerPageItemsItemResultsItem) -> Value {
+    let mut m = Map::new();
+    m.insert("abs_bytes_diff".into(), match (&p.abs_bytes_diff) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("timestamp".into(), match (&p.timestamp) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_bytes_difference_data__net_bytes_difference__to_json(p: &iface_bytes_difference_data::NetBytesDifference) -> Value {
+    let mut m = Map::new();
+    m.insert("items".into(), match (&p.items) { Some(v) => Value::Array((v).iter().map(|v| iface_bytes_difference_data__net_bytes_difference_items_item__to_json(v)).collect()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_bytes_difference_data__net_bytes_difference_items_item__to_json(p: &iface_bytes_difference_data::NetBytesDifferenceItemsItem) -> Value {
+    let mut m = Map::new();
+    m.insert("editor-type".into(), match (&p.editor_type) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("granularity".into(), match (&p.granularity) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("page-type".into(), match (&p.page_type) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("project".into(), match (&p.project) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("results".into(), match (&p.results) { Some(v) => Value::Array((v).iter().map(|v| iface_bytes_difference_data__net_bytes_difference_items_item_results_item__to_json(v)).collect()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_bytes_difference_data__net_bytes_difference_items_item_results_item__to_json(p: &iface_bytes_difference_data::NetBytesDifferenceItemsItemResultsItem) -> Value {
+    let mut m = Map::new();
+    m.insert("net_bytes_diff".into(), match (&p.net_bytes_diff) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("timestamp".into(), match (&p.timestamp) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_bytes_difference_data__net_bytes_difference_per_page__to_json(p: &iface_bytes_difference_data::NetBytesDifferencePerPage) -> Value {
+    let mut m = Map::new();
+    m.insert("items".into(), match (&p.items) { Some(v) => Value::Array((v).iter().map(|v| iface_bytes_difference_data__net_bytes_difference_per_page_items_item__to_json(v)).collect()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_bytes_difference_data__net_bytes_difference_per_page_items_item__to_json(p: &iface_bytes_difference_data::NetBytesDifferencePerPageItemsItem) -> Value {
+    let mut m = Map::new();
+    m.insert("editor-type".into(), match (&p.editor_type) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("granularity".into(), match (&p.granularity) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("page-title".into(), match (&p.page_title) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("project".into(), match (&p.project) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("results".into(), match (&p.results) { Some(v) => Value::Array((v).iter().map(|v| iface_bytes_difference_data__net_bytes_difference_per_page_items_item_results_item__to_json(v)).collect()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_bytes_difference_data__net_bytes_difference_per_page_items_item_results_item__to_json(p: &iface_bytes_difference_data::NetBytesDifferencePerPageItemsItemResultsItem) -> Value {
+    let mut m = Map::new();
+    m.insert("net_bytes_diff".into(), match (&p.net_bytes_diff) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("timestamp".into(), match (&p.timestamp) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
 
 fn iface_bytes_difference_data__get_metrics_bytes_difference_absolute_aggregate_project_editor_type_page_type_granularity_start_end_params__to_json(p: &iface_bytes_difference_data::GetMetricsBytesDifferenceAbsoluteAggregateProjectEditorTypePageTypeGranularityStartEndParams) -> Value {
     let mut m = Map::new();
@@ -472,22 +676,210 @@ fn iface_bytes_difference_data__get_metrics_bytes_difference_net_per_page_projec
     Value::Object(m)
 }
 
+fn iface_bytes_difference_data__absolute_bytes_difference__from_json(v: &Value) -> Option<iface_bytes_difference_data::AbsoluteBytesDifference> {
+    let m = v.as_object()?;
+    Some(iface_bytes_difference_data::AbsoluteBytesDifference {
+        items: m.get("items").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| iface_bytes_difference_data__absolute_bytes_difference_items_item__from_json(x)).collect())),
+    })
+}
+
+fn iface_bytes_difference_data__absolute_bytes_difference_items_item__from_json(v: &Value) -> Option<iface_bytes_difference_data::AbsoluteBytesDifferenceItemsItem> {
+    let m = v.as_object()?;
+    Some(iface_bytes_difference_data::AbsoluteBytesDifferenceItemsItem {
+        editor_type: m.get("editor-type").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        granularity: m.get("granularity").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        page_type: m.get("page-type").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        project: m.get("project").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        results: m.get("results").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| iface_bytes_difference_data__absolute_bytes_difference_items_item_results_item__from_json(x)).collect())),
+    })
+}
+
+fn iface_bytes_difference_data__absolute_bytes_difference_items_item_results_item__from_json(v: &Value) -> Option<iface_bytes_difference_data::AbsoluteBytesDifferenceItemsItemResultsItem> {
+    let m = v.as_object()?;
+    Some(iface_bytes_difference_data::AbsoluteBytesDifferenceItemsItemResultsItem {
+        abs_bytes_diff: m.get("abs_bytes_diff").filter(|v| !v.is_null()).and_then(|v| (v).as_i64()),
+        timestamp: m.get("timestamp").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    })
+}
+
+fn iface_bytes_difference_data__absolute_bytes_difference_per_page__from_json(v: &Value) -> Option<iface_bytes_difference_data::AbsoluteBytesDifferencePerPage> {
+    let m = v.as_object()?;
+    Some(iface_bytes_difference_data::AbsoluteBytesDifferencePerPage {
+        items: m.get("items").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| iface_bytes_difference_data__absolute_bytes_difference_per_page_items_item__from_json(x)).collect())),
+    })
+}
+
+fn iface_bytes_difference_data__absolute_bytes_difference_per_page_items_item__from_json(v: &Value) -> Option<iface_bytes_difference_data::AbsoluteBytesDifferencePerPageItemsItem> {
+    let m = v.as_object()?;
+    Some(iface_bytes_difference_data::AbsoluteBytesDifferencePerPageItemsItem {
+        editor_type: m.get("editor-type").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        granularity: m.get("granularity").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        page_title: m.get("page-title").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        project: m.get("project").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        results: m.get("results").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| iface_bytes_difference_data__absolute_bytes_difference_per_page_items_item_results_item__from_json(x)).collect())),
+    })
+}
+
+fn iface_bytes_difference_data__absolute_bytes_difference_per_page_items_item_results_item__from_json(v: &Value) -> Option<iface_bytes_difference_data::AbsoluteBytesDifferencePerPageItemsItemResultsItem> {
+    let m = v.as_object()?;
+    Some(iface_bytes_difference_data::AbsoluteBytesDifferencePerPageItemsItemResultsItem {
+        abs_bytes_diff: m.get("abs_bytes_diff").filter(|v| !v.is_null()).and_then(|v| (v).as_i64()),
+        timestamp: m.get("timestamp").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    })
+}
+
+fn iface_bytes_difference_data__net_bytes_difference__from_json(v: &Value) -> Option<iface_bytes_difference_data::NetBytesDifference> {
+    let m = v.as_object()?;
+    Some(iface_bytes_difference_data::NetBytesDifference {
+        items: m.get("items").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| iface_bytes_difference_data__net_bytes_difference_items_item__from_json(x)).collect())),
+    })
+}
+
+fn iface_bytes_difference_data__net_bytes_difference_items_item__from_json(v: &Value) -> Option<iface_bytes_difference_data::NetBytesDifferenceItemsItem> {
+    let m = v.as_object()?;
+    Some(iface_bytes_difference_data::NetBytesDifferenceItemsItem {
+        editor_type: m.get("editor-type").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        granularity: m.get("granularity").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        page_type: m.get("page-type").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        project: m.get("project").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        results: m.get("results").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| iface_bytes_difference_data__net_bytes_difference_items_item_results_item__from_json(x)).collect())),
+    })
+}
+
+fn iface_bytes_difference_data__net_bytes_difference_items_item_results_item__from_json(v: &Value) -> Option<iface_bytes_difference_data::NetBytesDifferenceItemsItemResultsItem> {
+    let m = v.as_object()?;
+    Some(iface_bytes_difference_data::NetBytesDifferenceItemsItemResultsItem {
+        net_bytes_diff: m.get("net_bytes_diff").filter(|v| !v.is_null()).and_then(|v| (v).as_i64()),
+        timestamp: m.get("timestamp").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    })
+}
+
+fn iface_bytes_difference_data__net_bytes_difference_per_page__from_json(v: &Value) -> Option<iface_bytes_difference_data::NetBytesDifferencePerPage> {
+    let m = v.as_object()?;
+    Some(iface_bytes_difference_data::NetBytesDifferencePerPage {
+        items: m.get("items").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| iface_bytes_difference_data__net_bytes_difference_per_page_items_item__from_json(x)).collect())),
+    })
+}
+
+fn iface_bytes_difference_data__net_bytes_difference_per_page_items_item__from_json(v: &Value) -> Option<iface_bytes_difference_data::NetBytesDifferencePerPageItemsItem> {
+    let m = v.as_object()?;
+    Some(iface_bytes_difference_data::NetBytesDifferencePerPageItemsItem {
+        editor_type: m.get("editor-type").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        granularity: m.get("granularity").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        page_title: m.get("page-title").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        project: m.get("project").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        results: m.get("results").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| iface_bytes_difference_data__net_bytes_difference_per_page_items_item_results_item__from_json(x)).collect())),
+    })
+}
+
+fn iface_bytes_difference_data__net_bytes_difference_per_page_items_item_results_item__from_json(v: &Value) -> Option<iface_bytes_difference_data::NetBytesDifferencePerPageItemsItemResultsItem> {
+    let m = v.as_object()?;
+    Some(iface_bytes_difference_data::NetBytesDifferencePerPageItemsItemResultsItem {
+        net_bytes_diff: m.get("net_bytes_diff").filter(|v| !v.is_null()).and_then(|v| (v).as_i64()),
+        timestamp: m.get("timestamp").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    })
+}
+
+fn iface_bytes_difference_data__get_metrics_bytes_difference_absolute_aggregate_project_editor_type_page_type_granularity_start_end__ok(body: String) -> Result<iface_bytes_difference_data::AbsoluteBytesDifference, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match iface_bytes_difference_data__absolute_bytes_difference__from_json(&v) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_bytes_difference_data__get_metrics_bytes_difference_absolute_aggregate_project_editor_type_page_type_granularity_start_end__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
+fn iface_bytes_difference_data__get_metrics_bytes_difference_absolute_per_page_project_page_title_editor_type_granularity_start_end__ok(body: String) -> Result<iface_bytes_difference_data::AbsoluteBytesDifferencePerPage, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match iface_bytes_difference_data__absolute_bytes_difference_per_page__from_json(&v) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_bytes_difference_data__get_metrics_bytes_difference_absolute_per_page_project_page_title_editor_type_granularity_start_end__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
+fn iface_bytes_difference_data__get_metrics_bytes_difference_net_aggregate_project_editor_type_page_type_granularity_start_end__ok(body: String) -> Result<iface_bytes_difference_data::NetBytesDifference, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match iface_bytes_difference_data__net_bytes_difference__from_json(&v) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_bytes_difference_data__get_metrics_bytes_difference_net_aggregate_project_editor_type_page_type_granularity_start_end__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
+fn iface_bytes_difference_data__get_metrics_bytes_difference_net_per_page_project_page_title_editor_type_granularity_start_end__ok(body: String) -> Result<iface_bytes_difference_data::NetBytesDifferencePerPage, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match iface_bytes_difference_data__net_bytes_difference_per_page__from_json(&v) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_bytes_difference_data__get_metrics_bytes_difference_net_per_page_project_page_title_editor_type_granularity_start_end__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
 impl iface_bytes_difference_data::Guest for crate::Component {
-    fn get_metrics_bytes_difference_absolute_aggregate_project_editor_type_page_type_granularity_start_end(params: iface_bytes_difference_data::GetMetricsBytesDifferenceAbsoluteAggregateProjectEditorTypePageTypeGranularityStartEndParams) -> Result<String, String> {
+    fn get_metrics_bytes_difference_absolute_aggregate_project_editor_type_page_type_granularity_start_end(params: iface_bytes_difference_data::GetMetricsBytesDifferenceAbsoluteAggregateProjectEditorTypePageTypeGranularityStartEndParams) -> Result<iface_bytes_difference_data::AbsoluteBytesDifference, String> {
         let json = iface_bytes_difference_data__get_metrics_bytes_difference_absolute_aggregate_project_editor_type_page_type_granularity_start_end_params__to_json(&params);
-        dispatch(&OP_BYTES_DIFFERENCE_DATA_GET_METRICS_BYTES_DIFFERENCE_ABSOLUTE_AGGREGATE_PROJECT_EDITOR_TYPE_PAGE_TYPE_GRANULARITY_START_END, json)
+        match dispatch(&OP_BYTES_DIFFERENCE_DATA_GET_METRICS_BYTES_DIFFERENCE_ABSOLUTE_AGGREGATE_PROJECT_EDITOR_TYPE_PAGE_TYPE_GRANULARITY_START_END, json).and_then(iface_bytes_difference_data__get_metrics_bytes_difference_absolute_aggregate_project_editor_type_page_type_granularity_start_end__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_bytes_difference_data__get_metrics_bytes_difference_absolute_aggregate_project_editor_type_page_type_granularity_start_end__err(e)),
+        }
     }
-    fn get_metrics_bytes_difference_absolute_per_page_project_page_title_editor_type_granularity_start_end(params: iface_bytes_difference_data::GetMetricsBytesDifferenceAbsolutePerPageProjectPageTitleEditorTypeGranularityStartEndParams) -> Result<String, String> {
+    fn get_metrics_bytes_difference_absolute_per_page_project_page_title_editor_type_granularity_start_end(params: iface_bytes_difference_data::GetMetricsBytesDifferenceAbsolutePerPageProjectPageTitleEditorTypeGranularityStartEndParams) -> Result<iface_bytes_difference_data::AbsoluteBytesDifferencePerPage, String> {
         let json = iface_bytes_difference_data__get_metrics_bytes_difference_absolute_per_page_project_page_title_editor_type_granularity_start_end_params__to_json(&params);
-        dispatch(&OP_BYTES_DIFFERENCE_DATA_GET_METRICS_BYTES_DIFFERENCE_ABSOLUTE_PER_PAGE_PROJECT_PAGE_TITLE_EDITOR_TYPE_GRANULARITY_START_END, json)
+        match dispatch(&OP_BYTES_DIFFERENCE_DATA_GET_METRICS_BYTES_DIFFERENCE_ABSOLUTE_PER_PAGE_PROJECT_PAGE_TITLE_EDITOR_TYPE_GRANULARITY_START_END, json).and_then(iface_bytes_difference_data__get_metrics_bytes_difference_absolute_per_page_project_page_title_editor_type_granularity_start_end__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_bytes_difference_data__get_metrics_bytes_difference_absolute_per_page_project_page_title_editor_type_granularity_start_end__err(e)),
+        }
     }
-    fn get_metrics_bytes_difference_net_aggregate_project_editor_type_page_type_granularity_start_end(params: iface_bytes_difference_data::GetMetricsBytesDifferenceNetAggregateProjectEditorTypePageTypeGranularityStartEndParams) -> Result<String, String> {
+    fn get_metrics_bytes_difference_net_aggregate_project_editor_type_page_type_granularity_start_end(params: iface_bytes_difference_data::GetMetricsBytesDifferenceNetAggregateProjectEditorTypePageTypeGranularityStartEndParams) -> Result<iface_bytes_difference_data::NetBytesDifference, String> {
         let json = iface_bytes_difference_data__get_metrics_bytes_difference_net_aggregate_project_editor_type_page_type_granularity_start_end_params__to_json(&params);
-        dispatch(&OP_BYTES_DIFFERENCE_DATA_GET_METRICS_BYTES_DIFFERENCE_NET_AGGREGATE_PROJECT_EDITOR_TYPE_PAGE_TYPE_GRANULARITY_START_END, json)
+        match dispatch(&OP_BYTES_DIFFERENCE_DATA_GET_METRICS_BYTES_DIFFERENCE_NET_AGGREGATE_PROJECT_EDITOR_TYPE_PAGE_TYPE_GRANULARITY_START_END, json).and_then(iface_bytes_difference_data__get_metrics_bytes_difference_net_aggregate_project_editor_type_page_type_granularity_start_end__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_bytes_difference_data__get_metrics_bytes_difference_net_aggregate_project_editor_type_page_type_granularity_start_end__err(e)),
+        }
     }
-    fn get_metrics_bytes_difference_net_per_page_project_page_title_editor_type_granularity_start_end(params: iface_bytes_difference_data::GetMetricsBytesDifferenceNetPerPageProjectPageTitleEditorTypeGranularityStartEndParams) -> Result<String, String> {
+    fn get_metrics_bytes_difference_net_per_page_project_page_title_editor_type_granularity_start_end(params: iface_bytes_difference_data::GetMetricsBytesDifferenceNetPerPageProjectPageTitleEditorTypeGranularityStartEndParams) -> Result<iface_bytes_difference_data::NetBytesDifferencePerPage, String> {
         let json = iface_bytes_difference_data__get_metrics_bytes_difference_net_per_page_project_page_title_editor_type_granularity_start_end_params__to_json(&params);
-        dispatch(&OP_BYTES_DIFFERENCE_DATA_GET_METRICS_BYTES_DIFFERENCE_NET_PER_PAGE_PROJECT_PAGE_TITLE_EDITOR_TYPE_GRANULARITY_START_END, json)
+        match dispatch(&OP_BYTES_DIFFERENCE_DATA_GET_METRICS_BYTES_DIFFERENCE_NET_PER_PAGE_PROJECT_PAGE_TITLE_EDITOR_TYPE_GRANULARITY_START_END, json).and_then(iface_bytes_difference_data__get_metrics_bytes_difference_net_per_page_project_page_title_editor_type_granularity_start_end__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_bytes_difference_data__get_metrics_bytes_difference_net_per_page_project_page_title_editor_type_granularity_start_end__err(e)),
+        }
     }
 }
 use crate::exports::autostamp::wikimedia::edited_pages_data as iface_edited_pages_data;
@@ -496,13 +888,13 @@ const OP_EDITED_PAGES_DATA_GET_METRICS_EDITED_PAGES_AGGREGATE_PROJECT_EDITOR_TYP
     method: "GET",
     path_template: "/metrics/edited-pages/aggregate/{project}/{editor_type}/{page_type}/{activity_level}/{granularity}/{start}/{end}",
     fields: &[
-        FieldSpec { snake: "project", location: FieldLocation::Path },
-        FieldSpec { snake: "editor_type", location: FieldLocation::Path },
-        FieldSpec { snake: "page_type", location: FieldLocation::Path },
-        FieldSpec { snake: "activity_level", location: FieldLocation::Path },
-        FieldSpec { snake: "granularity", location: FieldLocation::Path },
-        FieldSpec { snake: "start", location: FieldLocation::Path },
-        FieldSpec { snake: "end", location: FieldLocation::Path },
+        FieldSpec { snake: "project", wire: "project", location: FieldLocation::Path },
+        FieldSpec { snake: "editor_type", wire: "editor-type", location: FieldLocation::Path },
+        FieldSpec { snake: "page_type", wire: "page-type", location: FieldLocation::Path },
+        FieldSpec { snake: "activity_level", wire: "activity-level", location: FieldLocation::Path },
+        FieldSpec { snake: "granularity", wire: "granularity", location: FieldLocation::Path },
+        FieldSpec { snake: "start", wire: "start", location: FieldLocation::Path },
+        FieldSpec { snake: "end", wire: "end", location: FieldLocation::Path },
     ],
     auth: &[
     ],
@@ -512,12 +904,12 @@ const OP_EDITED_PAGES_DATA_GET_METRICS_EDITED_PAGES_NEW_PROJECT_EDITOR_TYPE_PAGE
     method: "GET",
     path_template: "/metrics/edited-pages/new/{project}/{editor_type}/{page_type}/{granularity}/{start}/{end}",
     fields: &[
-        FieldSpec { snake: "project", location: FieldLocation::Path },
-        FieldSpec { snake: "editor_type", location: FieldLocation::Path },
-        FieldSpec { snake: "page_type", location: FieldLocation::Path },
-        FieldSpec { snake: "granularity", location: FieldLocation::Path },
-        FieldSpec { snake: "start", location: FieldLocation::Path },
-        FieldSpec { snake: "end", location: FieldLocation::Path },
+        FieldSpec { snake: "project", wire: "project", location: FieldLocation::Path },
+        FieldSpec { snake: "editor_type", wire: "editor-type", location: FieldLocation::Path },
+        FieldSpec { snake: "page_type", wire: "page-type", location: FieldLocation::Path },
+        FieldSpec { snake: "granularity", wire: "granularity", location: FieldLocation::Path },
+        FieldSpec { snake: "start", wire: "start", location: FieldLocation::Path },
+        FieldSpec { snake: "end", wire: "end", location: FieldLocation::Path },
     ],
     auth: &[
     ],
@@ -527,12 +919,12 @@ const OP_EDITED_PAGES_DATA_GET_METRICS_EDITED_PAGES_TOP_BY_ABSOLUTE_BYTES_DIFFER
     method: "GET",
     path_template: "/metrics/edited-pages/top-by-absolute-bytes-difference/{project}/{editor_type}/{page_type}/{year}/{month}/{day}",
     fields: &[
-        FieldSpec { snake: "project", location: FieldLocation::Path },
-        FieldSpec { snake: "editor_type", location: FieldLocation::Path },
-        FieldSpec { snake: "page_type", location: FieldLocation::Path },
-        FieldSpec { snake: "year", location: FieldLocation::Path },
-        FieldSpec { snake: "month", location: FieldLocation::Path },
-        FieldSpec { snake: "day", location: FieldLocation::Path },
+        FieldSpec { snake: "project", wire: "project", location: FieldLocation::Path },
+        FieldSpec { snake: "editor_type", wire: "editor-type", location: FieldLocation::Path },
+        FieldSpec { snake: "page_type", wire: "page-type", location: FieldLocation::Path },
+        FieldSpec { snake: "year", wire: "year", location: FieldLocation::Path },
+        FieldSpec { snake: "month", wire: "month", location: FieldLocation::Path },
+        FieldSpec { snake: "day", wire: "day", location: FieldLocation::Path },
     ],
     auth: &[
     ],
@@ -542,12 +934,12 @@ const OP_EDITED_PAGES_DATA_GET_METRICS_EDITED_PAGES_TOP_BY_EDITS_PROJECT_EDITOR_
     method: "GET",
     path_template: "/metrics/edited-pages/top-by-edits/{project}/{editor_type}/{page_type}/{year}/{month}/{day}",
     fields: &[
-        FieldSpec { snake: "project", location: FieldLocation::Path },
-        FieldSpec { snake: "editor_type", location: FieldLocation::Path },
-        FieldSpec { snake: "page_type", location: FieldLocation::Path },
-        FieldSpec { snake: "year", location: FieldLocation::Path },
-        FieldSpec { snake: "month", location: FieldLocation::Path },
-        FieldSpec { snake: "day", location: FieldLocation::Path },
+        FieldSpec { snake: "project", wire: "project", location: FieldLocation::Path },
+        FieldSpec { snake: "editor_type", wire: "editor-type", location: FieldLocation::Path },
+        FieldSpec { snake: "page_type", wire: "page-type", location: FieldLocation::Path },
+        FieldSpec { snake: "year", wire: "year", location: FieldLocation::Path },
+        FieldSpec { snake: "month", wire: "month", location: FieldLocation::Path },
+        FieldSpec { snake: "day", wire: "day", location: FieldLocation::Path },
     ],
     auth: &[
     ],
@@ -557,16 +949,156 @@ const OP_EDITED_PAGES_DATA_GET_METRICS_EDITED_PAGES_TOP_BY_NET_BYTES_DIFFERENCE_
     method: "GET",
     path_template: "/metrics/edited-pages/top-by-net-bytes-difference/{project}/{editor_type}/{page_type}/{year}/{month}/{day}",
     fields: &[
-        FieldSpec { snake: "project", location: FieldLocation::Path },
-        FieldSpec { snake: "editor_type", location: FieldLocation::Path },
-        FieldSpec { snake: "page_type", location: FieldLocation::Path },
-        FieldSpec { snake: "year", location: FieldLocation::Path },
-        FieldSpec { snake: "month", location: FieldLocation::Path },
-        FieldSpec { snake: "day", location: FieldLocation::Path },
+        FieldSpec { snake: "project", wire: "project", location: FieldLocation::Path },
+        FieldSpec { snake: "editor_type", wire: "editor-type", location: FieldLocation::Path },
+        FieldSpec { snake: "page_type", wire: "page-type", location: FieldLocation::Path },
+        FieldSpec { snake: "year", wire: "year", location: FieldLocation::Path },
+        FieldSpec { snake: "month", wire: "month", location: FieldLocation::Path },
+        FieldSpec { snake: "day", wire: "day", location: FieldLocation::Path },
     ],
     auth: &[
     ],
 };
+
+fn iface_edited_pages_data__edited_pages__to_json(p: &iface_edited_pages_data::EditedPages) -> Value {
+    let mut m = Map::new();
+    m.insert("items".into(), match (&p.items) { Some(v) => Value::Array((v).iter().map(|v| iface_edited_pages_data__edited_pages_items_item__to_json(v)).collect()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_edited_pages_data__edited_pages_items_item__to_json(p: &iface_edited_pages_data::EditedPagesItemsItem) -> Value {
+    let mut m = Map::new();
+    m.insert("activity-level".into(), match (&p.activity_level) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("editor-type".into(), match (&p.editor_type) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("granularity".into(), match (&p.granularity) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("page-type".into(), match (&p.page_type) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("project".into(), match (&p.project) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("results".into(), match (&p.results) { Some(v) => Value::Array((v).iter().map(|v| iface_edited_pages_data__edited_pages_items_item_results_item__to_json(v)).collect()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_edited_pages_data__edited_pages_items_item_results_item__to_json(p: &iface_edited_pages_data::EditedPagesItemsItemResultsItem) -> Value {
+    let mut m = Map::new();
+    m.insert("edited_pages".into(), match (&p.edited_pages) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("timestamp".into(), match (&p.timestamp) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_edited_pages_data__new_pages__to_json(p: &iface_edited_pages_data::NewPages) -> Value {
+    let mut m = Map::new();
+    m.insert("items".into(), match (&p.items) { Some(v) => Value::Array((v).iter().map(|v| iface_edited_pages_data__new_pages_items_item__to_json(v)).collect()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_edited_pages_data__new_pages_items_item__to_json(p: &iface_edited_pages_data::NewPagesItemsItem) -> Value {
+    let mut m = Map::new();
+    m.insert("editor-type".into(), match (&p.editor_type) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("granularity".into(), match (&p.granularity) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("page-type".into(), match (&p.page_type) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("project".into(), match (&p.project) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("results".into(), match (&p.results) { Some(v) => Value::Array((v).iter().map(|v| iface_edited_pages_data__new_pages_items_item_results_item__to_json(v)).collect()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_edited_pages_data__new_pages_items_item_results_item__to_json(p: &iface_edited_pages_data::NewPagesItemsItemResultsItem) -> Value {
+    let mut m = Map::new();
+    m.insert("new_pages".into(), match (&p.new_pages) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("timestamp".into(), match (&p.timestamp) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_edited_pages_data__top_edited_pages_by_abs_bytes_diff__to_json(p: &iface_edited_pages_data::TopEditedPagesByAbsBytesDiff) -> Value {
+    let mut m = Map::new();
+    m.insert("items".into(), match (&p.items) { Some(v) => Value::Array((v).iter().map(|v| iface_edited_pages_data__top_edited_pages_by_abs_bytes_diff_items_item__to_json(v)).collect()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_edited_pages_data__top_edited_pages_by_abs_bytes_diff_items_item__to_json(p: &iface_edited_pages_data::TopEditedPagesByAbsBytesDiffItemsItem) -> Value {
+    let mut m = Map::new();
+    m.insert("editor-type".into(), match (&p.editor_type) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("granularity".into(), match (&p.granularity) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("page-type".into(), match (&p.page_type) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("project".into(), match (&p.project) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("results".into(), match (&p.results) { Some(v) => Value::Array((v).iter().map(|v| iface_edited_pages_data__top_edited_pages_by_abs_bytes_diff_items_item_results_item__to_json(v)).collect()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_edited_pages_data__top_edited_pages_by_abs_bytes_diff_items_item_results_item__to_json(p: &iface_edited_pages_data::TopEditedPagesByAbsBytesDiffItemsItemResultsItem) -> Value {
+    let mut m = Map::new();
+    m.insert("timestamp".into(), match (&p.timestamp) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("top".into(), match (&p.top) { Some(v) => Value::Array((v).iter().map(|v| iface_edited_pages_data__top_edited_pages_by_abs_bytes_diff_items_item_results_item_top_item__to_json(v)).collect()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_edited_pages_data__top_edited_pages_by_abs_bytes_diff_items_item_results_item_top_item__to_json(p: &iface_edited_pages_data::TopEditedPagesByAbsBytesDiffItemsItemResultsItemTopItem) -> Value {
+    let mut m = Map::new();
+    m.insert("abs_bytes_diff".into(), match (&p.abs_bytes_diff) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("page_title".into(), match (&p.page_title) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("rank".into(), match (&p.rank) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_edited_pages_data__top_edited_pages_by_edits__to_json(p: &iface_edited_pages_data::TopEditedPagesByEdits) -> Value {
+    let mut m = Map::new();
+    m.insert("items".into(), match (&p.items) { Some(v) => Value::Array((v).iter().map(|v| iface_edited_pages_data__top_edited_pages_by_edits_items_item__to_json(v)).collect()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_edited_pages_data__top_edited_pages_by_edits_items_item__to_json(p: &iface_edited_pages_data::TopEditedPagesByEditsItemsItem) -> Value {
+    let mut m = Map::new();
+    m.insert("editor-type".into(), match (&p.editor_type) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("granularity".into(), match (&p.granularity) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("page-type".into(), match (&p.page_type) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("project".into(), match (&p.project) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("results".into(), match (&p.results) { Some(v) => Value::Array((v).iter().map(|v| iface_edited_pages_data__top_edited_pages_by_edits_items_item_results_item__to_json(v)).collect()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_edited_pages_data__top_edited_pages_by_edits_items_item_results_item__to_json(p: &iface_edited_pages_data::TopEditedPagesByEditsItemsItemResultsItem) -> Value {
+    let mut m = Map::new();
+    m.insert("timestamp".into(), match (&p.timestamp) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("top".into(), match (&p.top) { Some(v) => Value::Array((v).iter().map(|v| iface_edited_pages_data__top_edited_pages_by_edits_items_item_results_item_top_item__to_json(v)).collect()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_edited_pages_data__top_edited_pages_by_edits_items_item_results_item_top_item__to_json(p: &iface_edited_pages_data::TopEditedPagesByEditsItemsItemResultsItemTopItem) -> Value {
+    let mut m = Map::new();
+    m.insert("edits".into(), match (&p.edits) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("page_title".into(), match (&p.page_title) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("rank".into(), match (&p.rank) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_edited_pages_data__top_edited_pages_by_net_bytes_diff__to_json(p: &iface_edited_pages_data::TopEditedPagesByNetBytesDiff) -> Value {
+    let mut m = Map::new();
+    m.insert("items".into(), match (&p.items) { Some(v) => Value::Array((v).iter().map(|v| iface_edited_pages_data__top_edited_pages_by_net_bytes_diff_items_item__to_json(v)).collect()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_edited_pages_data__top_edited_pages_by_net_bytes_diff_items_item__to_json(p: &iface_edited_pages_data::TopEditedPagesByNetBytesDiffItemsItem) -> Value {
+    let mut m = Map::new();
+    m.insert("editor-type".into(), match (&p.editor_type) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("granularity".into(), match (&p.granularity) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("page-type".into(), match (&p.page_type) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("project".into(), match (&p.project) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("results".into(), match (&p.results) { Some(v) => Value::Array((v).iter().map(|v| iface_edited_pages_data__top_edited_pages_by_net_bytes_diff_items_item_results_item__to_json(v)).collect()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_edited_pages_data__top_edited_pages_by_net_bytes_diff_items_item_results_item__to_json(p: &iface_edited_pages_data::TopEditedPagesByNetBytesDiffItemsItemResultsItem) -> Value {
+    let mut m = Map::new();
+    m.insert("timestamp".into(), match (&p.timestamp) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("top".into(), match (&p.top) { Some(v) => Value::Array((v).iter().map(|v| iface_edited_pages_data__top_edited_pages_by_net_bytes_diff_items_item_results_item_top_item__to_json(v)).collect()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_edited_pages_data__top_edited_pages_by_net_bytes_diff_items_item_results_item_top_item__to_json(p: &iface_edited_pages_data::TopEditedPagesByNetBytesDiffItemsItemResultsItemTopItem) -> Value {
+    let mut m = Map::new();
+    m.insert("net_bytes_diff".into(), match (&p.net_bytes_diff) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("page_title".into(), match (&p.page_title) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("rank".into(), match (&p.rank) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    Value::Object(m)
+}
 
 fn iface_edited_pages_data__get_metrics_edited_pages_aggregate_project_editor_type_page_type_activity_level_granularity_start_end_params__to_json(p: &iface_edited_pages_data::GetMetricsEditedPagesAggregateProjectEditorTypePageTypeActivityLevelGranularityStartEndParams) -> Value {
     let mut m = Map::new();
@@ -624,26 +1156,289 @@ fn iface_edited_pages_data__get_metrics_edited_pages_top_by_net_bytes_difference
     Value::Object(m)
 }
 
+fn iface_edited_pages_data__edited_pages__from_json(v: &Value) -> Option<iface_edited_pages_data::EditedPages> {
+    let m = v.as_object()?;
+    Some(iface_edited_pages_data::EditedPages {
+        items: m.get("items").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| iface_edited_pages_data__edited_pages_items_item__from_json(x)).collect())),
+    })
+}
+
+fn iface_edited_pages_data__edited_pages_items_item__from_json(v: &Value) -> Option<iface_edited_pages_data::EditedPagesItemsItem> {
+    let m = v.as_object()?;
+    Some(iface_edited_pages_data::EditedPagesItemsItem {
+        activity_level: m.get("activity-level").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        editor_type: m.get("editor-type").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        granularity: m.get("granularity").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        page_type: m.get("page-type").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        project: m.get("project").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        results: m.get("results").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| iface_edited_pages_data__edited_pages_items_item_results_item__from_json(x)).collect())),
+    })
+}
+
+fn iface_edited_pages_data__edited_pages_items_item_results_item__from_json(v: &Value) -> Option<iface_edited_pages_data::EditedPagesItemsItemResultsItem> {
+    let m = v.as_object()?;
+    Some(iface_edited_pages_data::EditedPagesItemsItemResultsItem {
+        edited_pages: m.get("edited_pages").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        timestamp: m.get("timestamp").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    })
+}
+
+fn iface_edited_pages_data__new_pages__from_json(v: &Value) -> Option<iface_edited_pages_data::NewPages> {
+    let m = v.as_object()?;
+    Some(iface_edited_pages_data::NewPages {
+        items: m.get("items").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| iface_edited_pages_data__new_pages_items_item__from_json(x)).collect())),
+    })
+}
+
+fn iface_edited_pages_data__new_pages_items_item__from_json(v: &Value) -> Option<iface_edited_pages_data::NewPagesItemsItem> {
+    let m = v.as_object()?;
+    Some(iface_edited_pages_data::NewPagesItemsItem {
+        editor_type: m.get("editor-type").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        granularity: m.get("granularity").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        page_type: m.get("page-type").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        project: m.get("project").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        results: m.get("results").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| iface_edited_pages_data__new_pages_items_item_results_item__from_json(x)).collect())),
+    })
+}
+
+fn iface_edited_pages_data__new_pages_items_item_results_item__from_json(v: &Value) -> Option<iface_edited_pages_data::NewPagesItemsItemResultsItem> {
+    let m = v.as_object()?;
+    Some(iface_edited_pages_data::NewPagesItemsItemResultsItem {
+        new_pages: m.get("new_pages").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        timestamp: m.get("timestamp").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    })
+}
+
+fn iface_edited_pages_data__top_edited_pages_by_abs_bytes_diff__from_json(v: &Value) -> Option<iface_edited_pages_data::TopEditedPagesByAbsBytesDiff> {
+    let m = v.as_object()?;
+    Some(iface_edited_pages_data::TopEditedPagesByAbsBytesDiff {
+        items: m.get("items").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| iface_edited_pages_data__top_edited_pages_by_abs_bytes_diff_items_item__from_json(x)).collect())),
+    })
+}
+
+fn iface_edited_pages_data__top_edited_pages_by_abs_bytes_diff_items_item__from_json(v: &Value) -> Option<iface_edited_pages_data::TopEditedPagesByAbsBytesDiffItemsItem> {
+    let m = v.as_object()?;
+    Some(iface_edited_pages_data::TopEditedPagesByAbsBytesDiffItemsItem {
+        editor_type: m.get("editor-type").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        granularity: m.get("granularity").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        page_type: m.get("page-type").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        project: m.get("project").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        results: m.get("results").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| iface_edited_pages_data__top_edited_pages_by_abs_bytes_diff_items_item_results_item__from_json(x)).collect())),
+    })
+}
+
+fn iface_edited_pages_data__top_edited_pages_by_abs_bytes_diff_items_item_results_item__from_json(v: &Value) -> Option<iface_edited_pages_data::TopEditedPagesByAbsBytesDiffItemsItemResultsItem> {
+    let m = v.as_object()?;
+    Some(iface_edited_pages_data::TopEditedPagesByAbsBytesDiffItemsItemResultsItem {
+        timestamp: m.get("timestamp").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        top: m.get("top").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| iface_edited_pages_data__top_edited_pages_by_abs_bytes_diff_items_item_results_item_top_item__from_json(x)).collect())),
+    })
+}
+
+fn iface_edited_pages_data__top_edited_pages_by_abs_bytes_diff_items_item_results_item_top_item__from_json(v: &Value) -> Option<iface_edited_pages_data::TopEditedPagesByAbsBytesDiffItemsItemResultsItemTopItem> {
+    let m = v.as_object()?;
+    Some(iface_edited_pages_data::TopEditedPagesByAbsBytesDiffItemsItemResultsItemTopItem {
+        abs_bytes_diff: m.get("abs_bytes_diff").filter(|v| !v.is_null()).and_then(|v| (v).as_i64()),
+        page_title: m.get("page_title").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        rank: m.get("rank").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+    })
+}
+
+fn iface_edited_pages_data__top_edited_pages_by_edits__from_json(v: &Value) -> Option<iface_edited_pages_data::TopEditedPagesByEdits> {
+    let m = v.as_object()?;
+    Some(iface_edited_pages_data::TopEditedPagesByEdits {
+        items: m.get("items").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| iface_edited_pages_data__top_edited_pages_by_edits_items_item__from_json(x)).collect())),
+    })
+}
+
+fn iface_edited_pages_data__top_edited_pages_by_edits_items_item__from_json(v: &Value) -> Option<iface_edited_pages_data::TopEditedPagesByEditsItemsItem> {
+    let m = v.as_object()?;
+    Some(iface_edited_pages_data::TopEditedPagesByEditsItemsItem {
+        editor_type: m.get("editor-type").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        granularity: m.get("granularity").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        page_type: m.get("page-type").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        project: m.get("project").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        results: m.get("results").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| iface_edited_pages_data__top_edited_pages_by_edits_items_item_results_item__from_json(x)).collect())),
+    })
+}
+
+fn iface_edited_pages_data__top_edited_pages_by_edits_items_item_results_item__from_json(v: &Value) -> Option<iface_edited_pages_data::TopEditedPagesByEditsItemsItemResultsItem> {
+    let m = v.as_object()?;
+    Some(iface_edited_pages_data::TopEditedPagesByEditsItemsItemResultsItem {
+        timestamp: m.get("timestamp").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        top: m.get("top").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| iface_edited_pages_data__top_edited_pages_by_edits_items_item_results_item_top_item__from_json(x)).collect())),
+    })
+}
+
+fn iface_edited_pages_data__top_edited_pages_by_edits_items_item_results_item_top_item__from_json(v: &Value) -> Option<iface_edited_pages_data::TopEditedPagesByEditsItemsItemResultsItemTopItem> {
+    let m = v.as_object()?;
+    Some(iface_edited_pages_data::TopEditedPagesByEditsItemsItemResultsItemTopItem {
+        edits: m.get("edits").filter(|v| !v.is_null()).and_then(|v| (v).as_i64()),
+        page_title: m.get("page_title").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        rank: m.get("rank").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+    })
+}
+
+fn iface_edited_pages_data__top_edited_pages_by_net_bytes_diff__from_json(v: &Value) -> Option<iface_edited_pages_data::TopEditedPagesByNetBytesDiff> {
+    let m = v.as_object()?;
+    Some(iface_edited_pages_data::TopEditedPagesByNetBytesDiff {
+        items: m.get("items").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| iface_edited_pages_data__top_edited_pages_by_net_bytes_diff_items_item__from_json(x)).collect())),
+    })
+}
+
+fn iface_edited_pages_data__top_edited_pages_by_net_bytes_diff_items_item__from_json(v: &Value) -> Option<iface_edited_pages_data::TopEditedPagesByNetBytesDiffItemsItem> {
+    let m = v.as_object()?;
+    Some(iface_edited_pages_data::TopEditedPagesByNetBytesDiffItemsItem {
+        editor_type: m.get("editor-type").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        granularity: m.get("granularity").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        page_type: m.get("page-type").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        project: m.get("project").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        results: m.get("results").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| iface_edited_pages_data__top_edited_pages_by_net_bytes_diff_items_item_results_item__from_json(x)).collect())),
+    })
+}
+
+fn iface_edited_pages_data__top_edited_pages_by_net_bytes_diff_items_item_results_item__from_json(v: &Value) -> Option<iface_edited_pages_data::TopEditedPagesByNetBytesDiffItemsItemResultsItem> {
+    let m = v.as_object()?;
+    Some(iface_edited_pages_data::TopEditedPagesByNetBytesDiffItemsItemResultsItem {
+        timestamp: m.get("timestamp").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        top: m.get("top").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| iface_edited_pages_data__top_edited_pages_by_net_bytes_diff_items_item_results_item_top_item__from_json(x)).collect())),
+    })
+}
+
+fn iface_edited_pages_data__top_edited_pages_by_net_bytes_diff_items_item_results_item_top_item__from_json(v: &Value) -> Option<iface_edited_pages_data::TopEditedPagesByNetBytesDiffItemsItemResultsItemTopItem> {
+    let m = v.as_object()?;
+    Some(iface_edited_pages_data::TopEditedPagesByNetBytesDiffItemsItemResultsItemTopItem {
+        net_bytes_diff: m.get("net_bytes_diff").filter(|v| !v.is_null()).and_then(|v| (v).as_i64()),
+        page_title: m.get("page_title").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        rank: m.get("rank").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+    })
+}
+
+fn iface_edited_pages_data__get_metrics_edited_pages_aggregate_project_editor_type_page_type_activity_level_granularity_start_end__ok(body: String) -> Result<iface_edited_pages_data::EditedPages, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match iface_edited_pages_data__edited_pages__from_json(&v) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_edited_pages_data__get_metrics_edited_pages_aggregate_project_editor_type_page_type_activity_level_granularity_start_end__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
+fn iface_edited_pages_data__get_metrics_edited_pages_new_project_editor_type_page_type_granularity_start_end__ok(body: String) -> Result<iface_edited_pages_data::NewPages, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match iface_edited_pages_data__new_pages__from_json(&v) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_edited_pages_data__get_metrics_edited_pages_new_project_editor_type_page_type_granularity_start_end__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
+fn iface_edited_pages_data__get_metrics_edited_pages_top_by_absolute_bytes_difference_project_editor_type_page_type_year_month_day__ok(body: String) -> Result<iface_edited_pages_data::TopEditedPagesByAbsBytesDiff, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match iface_edited_pages_data__top_edited_pages_by_abs_bytes_diff__from_json(&v) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_edited_pages_data__get_metrics_edited_pages_top_by_absolute_bytes_difference_project_editor_type_page_type_year_month_day__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
+fn iface_edited_pages_data__get_metrics_edited_pages_top_by_edits_project_editor_type_page_type_year_month_day__ok(body: String) -> Result<iface_edited_pages_data::TopEditedPagesByEdits, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match iface_edited_pages_data__top_edited_pages_by_edits__from_json(&v) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_edited_pages_data__get_metrics_edited_pages_top_by_edits_project_editor_type_page_type_year_month_day__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
+fn iface_edited_pages_data__get_metrics_edited_pages_top_by_net_bytes_difference_project_editor_type_page_type_year_month_day__ok(body: String) -> Result<iface_edited_pages_data::TopEditedPagesByNetBytesDiff, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match iface_edited_pages_data__top_edited_pages_by_net_bytes_diff__from_json(&v) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_edited_pages_data__get_metrics_edited_pages_top_by_net_bytes_difference_project_editor_type_page_type_year_month_day__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
 impl iface_edited_pages_data::Guest for crate::Component {
-    fn get_metrics_edited_pages_aggregate_project_editor_type_page_type_activity_level_granularity_start_end(params: iface_edited_pages_data::GetMetricsEditedPagesAggregateProjectEditorTypePageTypeActivityLevelGranularityStartEndParams) -> Result<String, String> {
+    fn get_metrics_edited_pages_aggregate_project_editor_type_page_type_activity_level_granularity_start_end(params: iface_edited_pages_data::GetMetricsEditedPagesAggregateProjectEditorTypePageTypeActivityLevelGranularityStartEndParams) -> Result<iface_edited_pages_data::EditedPages, String> {
         let json = iface_edited_pages_data__get_metrics_edited_pages_aggregate_project_editor_type_page_type_activity_level_granularity_start_end_params__to_json(&params);
-        dispatch(&OP_EDITED_PAGES_DATA_GET_METRICS_EDITED_PAGES_AGGREGATE_PROJECT_EDITOR_TYPE_PAGE_TYPE_ACTIVITY_LEVEL_GRANULARITY_START_END, json)
+        match dispatch(&OP_EDITED_PAGES_DATA_GET_METRICS_EDITED_PAGES_AGGREGATE_PROJECT_EDITOR_TYPE_PAGE_TYPE_ACTIVITY_LEVEL_GRANULARITY_START_END, json).and_then(iface_edited_pages_data__get_metrics_edited_pages_aggregate_project_editor_type_page_type_activity_level_granularity_start_end__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_edited_pages_data__get_metrics_edited_pages_aggregate_project_editor_type_page_type_activity_level_granularity_start_end__err(e)),
+        }
     }
-    fn get_metrics_edited_pages_new_project_editor_type_page_type_granularity_start_end(params: iface_edited_pages_data::GetMetricsEditedPagesNewProjectEditorTypePageTypeGranularityStartEndParams) -> Result<String, String> {
+    fn get_metrics_edited_pages_new_project_editor_type_page_type_granularity_start_end(params: iface_edited_pages_data::GetMetricsEditedPagesNewProjectEditorTypePageTypeGranularityStartEndParams) -> Result<iface_edited_pages_data::NewPages, String> {
         let json = iface_edited_pages_data__get_metrics_edited_pages_new_project_editor_type_page_type_granularity_start_end_params__to_json(&params);
-        dispatch(&OP_EDITED_PAGES_DATA_GET_METRICS_EDITED_PAGES_NEW_PROJECT_EDITOR_TYPE_PAGE_TYPE_GRANULARITY_START_END, json)
+        match dispatch(&OP_EDITED_PAGES_DATA_GET_METRICS_EDITED_PAGES_NEW_PROJECT_EDITOR_TYPE_PAGE_TYPE_GRANULARITY_START_END, json).and_then(iface_edited_pages_data__get_metrics_edited_pages_new_project_editor_type_page_type_granularity_start_end__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_edited_pages_data__get_metrics_edited_pages_new_project_editor_type_page_type_granularity_start_end__err(e)),
+        }
     }
-    fn get_metrics_edited_pages_top_by_absolute_bytes_difference_project_editor_type_page_type_year_month_day(params: iface_edited_pages_data::GetMetricsEditedPagesTopByAbsoluteBytesDifferenceProjectEditorTypePageTypeYearMonthDayParams) -> Result<String, String> {
+    fn get_metrics_edited_pages_top_by_absolute_bytes_difference_project_editor_type_page_type_year_month_day(params: iface_edited_pages_data::GetMetricsEditedPagesTopByAbsoluteBytesDifferenceProjectEditorTypePageTypeYearMonthDayParams) -> Result<iface_edited_pages_data::TopEditedPagesByAbsBytesDiff, String> {
         let json = iface_edited_pages_data__get_metrics_edited_pages_top_by_absolute_bytes_difference_project_editor_type_page_type_year_month_day_params__to_json(&params);
-        dispatch(&OP_EDITED_PAGES_DATA_GET_METRICS_EDITED_PAGES_TOP_BY_ABSOLUTE_BYTES_DIFFERENCE_PROJECT_EDITOR_TYPE_PAGE_TYPE_YEAR_MONTH_DAY, json)
+        match dispatch(&OP_EDITED_PAGES_DATA_GET_METRICS_EDITED_PAGES_TOP_BY_ABSOLUTE_BYTES_DIFFERENCE_PROJECT_EDITOR_TYPE_PAGE_TYPE_YEAR_MONTH_DAY, json).and_then(iface_edited_pages_data__get_metrics_edited_pages_top_by_absolute_bytes_difference_project_editor_type_page_type_year_month_day__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_edited_pages_data__get_metrics_edited_pages_top_by_absolute_bytes_difference_project_editor_type_page_type_year_month_day__err(e)),
+        }
     }
-    fn get_metrics_edited_pages_top_by_edits_project_editor_type_page_type_year_month_day(params: iface_edited_pages_data::GetMetricsEditedPagesTopByEditsProjectEditorTypePageTypeYearMonthDayParams) -> Result<String, String> {
+    fn get_metrics_edited_pages_top_by_edits_project_editor_type_page_type_year_month_day(params: iface_edited_pages_data::GetMetricsEditedPagesTopByEditsProjectEditorTypePageTypeYearMonthDayParams) -> Result<iface_edited_pages_data::TopEditedPagesByEdits, String> {
         let json = iface_edited_pages_data__get_metrics_edited_pages_top_by_edits_project_editor_type_page_type_year_month_day_params__to_json(&params);
-        dispatch(&OP_EDITED_PAGES_DATA_GET_METRICS_EDITED_PAGES_TOP_BY_EDITS_PROJECT_EDITOR_TYPE_PAGE_TYPE_YEAR_MONTH_DAY, json)
+        match dispatch(&OP_EDITED_PAGES_DATA_GET_METRICS_EDITED_PAGES_TOP_BY_EDITS_PROJECT_EDITOR_TYPE_PAGE_TYPE_YEAR_MONTH_DAY, json).and_then(iface_edited_pages_data__get_metrics_edited_pages_top_by_edits_project_editor_type_page_type_year_month_day__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_edited_pages_data__get_metrics_edited_pages_top_by_edits_project_editor_type_page_type_year_month_day__err(e)),
+        }
     }
-    fn get_metrics_edited_pages_top_by_net_bytes_difference_project_editor_type_page_type_year_month_day(params: iface_edited_pages_data::GetMetricsEditedPagesTopByNetBytesDifferenceProjectEditorTypePageTypeYearMonthDayParams) -> Result<String, String> {
+    fn get_metrics_edited_pages_top_by_net_bytes_difference_project_editor_type_page_type_year_month_day(params: iface_edited_pages_data::GetMetricsEditedPagesTopByNetBytesDifferenceProjectEditorTypePageTypeYearMonthDayParams) -> Result<iface_edited_pages_data::TopEditedPagesByNetBytesDiff, String> {
         let json = iface_edited_pages_data__get_metrics_edited_pages_top_by_net_bytes_difference_project_editor_type_page_type_year_month_day_params__to_json(&params);
-        dispatch(&OP_EDITED_PAGES_DATA_GET_METRICS_EDITED_PAGES_TOP_BY_NET_BYTES_DIFFERENCE_PROJECT_EDITOR_TYPE_PAGE_TYPE_YEAR_MONTH_DAY, json)
+        match dispatch(&OP_EDITED_PAGES_DATA_GET_METRICS_EDITED_PAGES_TOP_BY_NET_BYTES_DIFFERENCE_PROJECT_EDITOR_TYPE_PAGE_TYPE_YEAR_MONTH_DAY, json).and_then(iface_edited_pages_data__get_metrics_edited_pages_top_by_net_bytes_difference_project_editor_type_page_type_year_month_day__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_edited_pages_data__get_metrics_edited_pages_top_by_net_bytes_difference_project_editor_type_page_type_year_month_day__err(e)),
+        }
     }
 }
 use crate::exports::autostamp::wikimedia::editors_data as iface_editors_data;
@@ -652,13 +1447,13 @@ const OP_EDITORS_DATA_GET_METRICS_EDITORS_AGGREGATE_PROJECT_EDITOR_TYPE_PAGE_TYP
     method: "GET",
     path_template: "/metrics/editors/aggregate/{project}/{editor_type}/{page_type}/{activity_level}/{granularity}/{start}/{end}",
     fields: &[
-        FieldSpec { snake: "project", location: FieldLocation::Path },
-        FieldSpec { snake: "editor_type", location: FieldLocation::Path },
-        FieldSpec { snake: "page_type", location: FieldLocation::Path },
-        FieldSpec { snake: "activity_level", location: FieldLocation::Path },
-        FieldSpec { snake: "granularity", location: FieldLocation::Path },
-        FieldSpec { snake: "start", location: FieldLocation::Path },
-        FieldSpec { snake: "end", location: FieldLocation::Path },
+        FieldSpec { snake: "project", wire: "project", location: FieldLocation::Path },
+        FieldSpec { snake: "editor_type", wire: "editor-type", location: FieldLocation::Path },
+        FieldSpec { snake: "page_type", wire: "page-type", location: FieldLocation::Path },
+        FieldSpec { snake: "activity_level", wire: "activity-level", location: FieldLocation::Path },
+        FieldSpec { snake: "granularity", wire: "granularity", location: FieldLocation::Path },
+        FieldSpec { snake: "start", wire: "start", location: FieldLocation::Path },
+        FieldSpec { snake: "end", wire: "end", location: FieldLocation::Path },
     ],
     auth: &[
     ],
@@ -668,12 +1463,12 @@ const OP_EDITORS_DATA_GET_METRICS_EDITORS_TOP_BY_ABSOLUTE_BYTES_DIFFERENCE_PROJE
     method: "GET",
     path_template: "/metrics/editors/top-by-absolute-bytes-difference/{project}/{editor_type}/{page_type}/{year}/{month}/{day}",
     fields: &[
-        FieldSpec { snake: "project", location: FieldLocation::Path },
-        FieldSpec { snake: "editor_type", location: FieldLocation::Path },
-        FieldSpec { snake: "page_type", location: FieldLocation::Path },
-        FieldSpec { snake: "year", location: FieldLocation::Path },
-        FieldSpec { snake: "month", location: FieldLocation::Path },
-        FieldSpec { snake: "day", location: FieldLocation::Path },
+        FieldSpec { snake: "project", wire: "project", location: FieldLocation::Path },
+        FieldSpec { snake: "editor_type", wire: "editor-type", location: FieldLocation::Path },
+        FieldSpec { snake: "page_type", wire: "page-type", location: FieldLocation::Path },
+        FieldSpec { snake: "year", wire: "year", location: FieldLocation::Path },
+        FieldSpec { snake: "month", wire: "month", location: FieldLocation::Path },
+        FieldSpec { snake: "day", wire: "day", location: FieldLocation::Path },
     ],
     auth: &[
     ],
@@ -683,12 +1478,12 @@ const OP_EDITORS_DATA_GET_METRICS_EDITORS_TOP_BY_EDITS_PROJECT_EDITOR_TYPE_PAGE_
     method: "GET",
     path_template: "/metrics/editors/top-by-edits/{project}/{editor_type}/{page_type}/{year}/{month}/{day}",
     fields: &[
-        FieldSpec { snake: "project", location: FieldLocation::Path },
-        FieldSpec { snake: "editor_type", location: FieldLocation::Path },
-        FieldSpec { snake: "page_type", location: FieldLocation::Path },
-        FieldSpec { snake: "year", location: FieldLocation::Path },
-        FieldSpec { snake: "month", location: FieldLocation::Path },
-        FieldSpec { snake: "day", location: FieldLocation::Path },
+        FieldSpec { snake: "project", wire: "project", location: FieldLocation::Path },
+        FieldSpec { snake: "editor_type", wire: "editor-type", location: FieldLocation::Path },
+        FieldSpec { snake: "page_type", wire: "page-type", location: FieldLocation::Path },
+        FieldSpec { snake: "year", wire: "year", location: FieldLocation::Path },
+        FieldSpec { snake: "month", wire: "month", location: FieldLocation::Path },
+        FieldSpec { snake: "day", wire: "day", location: FieldLocation::Path },
     ],
     auth: &[
     ],
@@ -698,16 +1493,133 @@ const OP_EDITORS_DATA_GET_METRICS_EDITORS_TOP_BY_NET_BYTES_DIFFERENCE_PROJECT_ED
     method: "GET",
     path_template: "/metrics/editors/top-by-net-bytes-difference/{project}/{editor_type}/{page_type}/{year}/{month}/{day}",
     fields: &[
-        FieldSpec { snake: "project", location: FieldLocation::Path },
-        FieldSpec { snake: "editor_type", location: FieldLocation::Path },
-        FieldSpec { snake: "page_type", location: FieldLocation::Path },
-        FieldSpec { snake: "year", location: FieldLocation::Path },
-        FieldSpec { snake: "month", location: FieldLocation::Path },
-        FieldSpec { snake: "day", location: FieldLocation::Path },
+        FieldSpec { snake: "project", wire: "project", location: FieldLocation::Path },
+        FieldSpec { snake: "editor_type", wire: "editor-type", location: FieldLocation::Path },
+        FieldSpec { snake: "page_type", wire: "page-type", location: FieldLocation::Path },
+        FieldSpec { snake: "year", wire: "year", location: FieldLocation::Path },
+        FieldSpec { snake: "month", wire: "month", location: FieldLocation::Path },
+        FieldSpec { snake: "day", wire: "day", location: FieldLocation::Path },
     ],
     auth: &[
     ],
 };
+
+fn iface_editors_data__editors__to_json(p: &iface_editors_data::Editors) -> Value {
+    let mut m = Map::new();
+    m.insert("items".into(), match (&p.items) { Some(v) => Value::Array((v).iter().map(|v| iface_editors_data__editors_items_item__to_json(v)).collect()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_editors_data__editors_items_item__to_json(p: &iface_editors_data::EditorsItemsItem) -> Value {
+    let mut m = Map::new();
+    m.insert("activity-level".into(), match (&p.activity_level) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("editor-type".into(), match (&p.editor_type) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("granularity".into(), match (&p.granularity) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("page-type".into(), match (&p.page_type) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("project".into(), match (&p.project) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("results".into(), match (&p.results) { Some(v) => Value::Array((v).iter().map(|v| iface_editors_data__editors_items_item_results_item__to_json(v)).collect()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_editors_data__editors_items_item_results_item__to_json(p: &iface_editors_data::EditorsItemsItemResultsItem) -> Value {
+    let mut m = Map::new();
+    m.insert("editors".into(), match (&p.editors) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("timestamp".into(), match (&p.timestamp) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_editors_data__top_editors_by_abs_bytes_diff__to_json(p: &iface_editors_data::TopEditorsByAbsBytesDiff) -> Value {
+    let mut m = Map::new();
+    m.insert("items".into(), match (&p.items) { Some(v) => Value::Array((v).iter().map(|v| iface_editors_data__top_editors_by_abs_bytes_diff_items_item__to_json(v)).collect()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_editors_data__top_editors_by_abs_bytes_diff_items_item__to_json(p: &iface_editors_data::TopEditorsByAbsBytesDiffItemsItem) -> Value {
+    let mut m = Map::new();
+    m.insert("editor-type".into(), match (&p.editor_type) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("granularity".into(), match (&p.granularity) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("page-type".into(), match (&p.page_type) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("project".into(), match (&p.project) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("results".into(), match (&p.results) { Some(v) => Value::Array((v).iter().map(|v| iface_editors_data__top_editors_by_abs_bytes_diff_items_item_results_item__to_json(v)).collect()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_editors_data__top_editors_by_abs_bytes_diff_items_item_results_item__to_json(p: &iface_editors_data::TopEditorsByAbsBytesDiffItemsItemResultsItem) -> Value {
+    let mut m = Map::new();
+    m.insert("timestamp".into(), match (&p.timestamp) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("top".into(), match (&p.top) { Some(v) => Value::Array((v).iter().map(|v| iface_editors_data__top_editors_by_abs_bytes_diff_items_item_results_item_top_item__to_json(v)).collect()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_editors_data__top_editors_by_abs_bytes_diff_items_item_results_item_top_item__to_json(p: &iface_editors_data::TopEditorsByAbsBytesDiffItemsItemResultsItemTopItem) -> Value {
+    let mut m = Map::new();
+    m.insert("abs_bytes_diff".into(), match (&p.abs_bytes_diff) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("rank".into(), match (&p.rank) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("user_text".into(), match (&p.user_text) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_editors_data__top_editors_by_edits__to_json(p: &iface_editors_data::TopEditorsByEdits) -> Value {
+    let mut m = Map::new();
+    m.insert("items".into(), match (&p.items) { Some(v) => Value::Array((v).iter().map(|v| iface_editors_data__top_editors_by_edits_items_item__to_json(v)).collect()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_editors_data__top_editors_by_edits_items_item__to_json(p: &iface_editors_data::TopEditorsByEditsItemsItem) -> Value {
+    let mut m = Map::new();
+    m.insert("editor-type".into(), match (&p.editor_type) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("granularity".into(), match (&p.granularity) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("page-type".into(), match (&p.page_type) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("project".into(), match (&p.project) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("results".into(), match (&p.results) { Some(v) => Value::Array((v).iter().map(|v| iface_editors_data__top_editors_by_edits_items_item_results_item__to_json(v)).collect()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_editors_data__top_editors_by_edits_items_item_results_item__to_json(p: &iface_editors_data::TopEditorsByEditsItemsItemResultsItem) -> Value {
+    let mut m = Map::new();
+    m.insert("timestamp".into(), match (&p.timestamp) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("top".into(), match (&p.top) { Some(v) => Value::Array((v).iter().map(|v| iface_editors_data__top_editors_by_edits_items_item_results_item_top_item__to_json(v)).collect()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_editors_data__top_editors_by_edits_items_item_results_item_top_item__to_json(p: &iface_editors_data::TopEditorsByEditsItemsItemResultsItemTopItem) -> Value {
+    let mut m = Map::new();
+    m.insert("edits".into(), match (&p.edits) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("rank".into(), match (&p.rank) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("user_text".into(), match (&p.user_text) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_editors_data__top_editors_by_net_bytes_diff__to_json(p: &iface_editors_data::TopEditorsByNetBytesDiff) -> Value {
+    let mut m = Map::new();
+    m.insert("items".into(), match (&p.items) { Some(v) => Value::Array((v).iter().map(|v| iface_editors_data__top_editors_by_net_bytes_diff_items_item__to_json(v)).collect()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_editors_data__top_editors_by_net_bytes_diff_items_item__to_json(p: &iface_editors_data::TopEditorsByNetBytesDiffItemsItem) -> Value {
+    let mut m = Map::new();
+    m.insert("editor-type".into(), match (&p.editor_type) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("granularity".into(), match (&p.granularity) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("page-type".into(), match (&p.page_type) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("project".into(), match (&p.project) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("results".into(), match (&p.results) { Some(v) => Value::Array((v).iter().map(|v| iface_editors_data__top_editors_by_net_bytes_diff_items_item_results_item__to_json(v)).collect()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_editors_data__top_editors_by_net_bytes_diff_items_item_results_item__to_json(p: &iface_editors_data::TopEditorsByNetBytesDiffItemsItemResultsItem) -> Value {
+    let mut m = Map::new();
+    m.insert("timestamp".into(), match (&p.timestamp) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("top".into(), match (&p.top) { Some(v) => Value::Array((v).iter().map(|v| iface_editors_data__top_editors_by_net_bytes_diff_items_item_results_item_top_item__to_json(v)).collect()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_editors_data__top_editors_by_net_bytes_diff_items_item_results_item_top_item__to_json(p: &iface_editors_data::TopEditorsByNetBytesDiffItemsItemResultsItemTopItem) -> Value {
+    let mut m = Map::new();
+    m.insert("net_bytes_diff".into(), match (&p.net_bytes_diff) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("rank".into(), match (&p.rank) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("user_text".into(), match (&p.user_text) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
 
 fn iface_editors_data__get_metrics_editors_aggregate_project_editor_type_page_type_activity_level_granularity_start_end_params__to_json(p: &iface_editors_data::GetMetricsEditorsAggregateProjectEditorTypePageTypeActivityLevelGranularityStartEndParams) -> Value {
     let mut m = Map::new();
@@ -754,22 +1666,238 @@ fn iface_editors_data__get_metrics_editors_top_by_net_bytes_difference_project_e
     Value::Object(m)
 }
 
+fn iface_editors_data__editors__from_json(v: &Value) -> Option<iface_editors_data::Editors> {
+    let m = v.as_object()?;
+    Some(iface_editors_data::Editors {
+        items: m.get("items").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| iface_editors_data__editors_items_item__from_json(x)).collect())),
+    })
+}
+
+fn iface_editors_data__editors_items_item__from_json(v: &Value) -> Option<iface_editors_data::EditorsItemsItem> {
+    let m = v.as_object()?;
+    Some(iface_editors_data::EditorsItemsItem {
+        activity_level: m.get("activity-level").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        editor_type: m.get("editor-type").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        granularity: m.get("granularity").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        page_type: m.get("page-type").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        project: m.get("project").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        results: m.get("results").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| iface_editors_data__editors_items_item_results_item__from_json(x)).collect())),
+    })
+}
+
+fn iface_editors_data__editors_items_item_results_item__from_json(v: &Value) -> Option<iface_editors_data::EditorsItemsItemResultsItem> {
+    let m = v.as_object()?;
+    Some(iface_editors_data::EditorsItemsItemResultsItem {
+        editors: m.get("editors").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        timestamp: m.get("timestamp").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    })
+}
+
+fn iface_editors_data__top_editors_by_abs_bytes_diff__from_json(v: &Value) -> Option<iface_editors_data::TopEditorsByAbsBytesDiff> {
+    let m = v.as_object()?;
+    Some(iface_editors_data::TopEditorsByAbsBytesDiff {
+        items: m.get("items").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| iface_editors_data__top_editors_by_abs_bytes_diff_items_item__from_json(x)).collect())),
+    })
+}
+
+fn iface_editors_data__top_editors_by_abs_bytes_diff_items_item__from_json(v: &Value) -> Option<iface_editors_data::TopEditorsByAbsBytesDiffItemsItem> {
+    let m = v.as_object()?;
+    Some(iface_editors_data::TopEditorsByAbsBytesDiffItemsItem {
+        editor_type: m.get("editor-type").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        granularity: m.get("granularity").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        page_type: m.get("page-type").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        project: m.get("project").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        results: m.get("results").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| iface_editors_data__top_editors_by_abs_bytes_diff_items_item_results_item__from_json(x)).collect())),
+    })
+}
+
+fn iface_editors_data__top_editors_by_abs_bytes_diff_items_item_results_item__from_json(v: &Value) -> Option<iface_editors_data::TopEditorsByAbsBytesDiffItemsItemResultsItem> {
+    let m = v.as_object()?;
+    Some(iface_editors_data::TopEditorsByAbsBytesDiffItemsItemResultsItem {
+        timestamp: m.get("timestamp").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        top: m.get("top").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| iface_editors_data__top_editors_by_abs_bytes_diff_items_item_results_item_top_item__from_json(x)).collect())),
+    })
+}
+
+fn iface_editors_data__top_editors_by_abs_bytes_diff_items_item_results_item_top_item__from_json(v: &Value) -> Option<iface_editors_data::TopEditorsByAbsBytesDiffItemsItemResultsItemTopItem> {
+    let m = v.as_object()?;
+    Some(iface_editors_data::TopEditorsByAbsBytesDiffItemsItemResultsItemTopItem {
+        abs_bytes_diff: m.get("abs_bytes_diff").filter(|v| !v.is_null()).and_then(|v| (v).as_i64()),
+        rank: m.get("rank").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        user_text: m.get("user_text").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    })
+}
+
+fn iface_editors_data__top_editors_by_edits__from_json(v: &Value) -> Option<iface_editors_data::TopEditorsByEdits> {
+    let m = v.as_object()?;
+    Some(iface_editors_data::TopEditorsByEdits {
+        items: m.get("items").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| iface_editors_data__top_editors_by_edits_items_item__from_json(x)).collect())),
+    })
+}
+
+fn iface_editors_data__top_editors_by_edits_items_item__from_json(v: &Value) -> Option<iface_editors_data::TopEditorsByEditsItemsItem> {
+    let m = v.as_object()?;
+    Some(iface_editors_data::TopEditorsByEditsItemsItem {
+        editor_type: m.get("editor-type").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        granularity: m.get("granularity").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        page_type: m.get("page-type").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        project: m.get("project").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        results: m.get("results").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| iface_editors_data__top_editors_by_edits_items_item_results_item__from_json(x)).collect())),
+    })
+}
+
+fn iface_editors_data__top_editors_by_edits_items_item_results_item__from_json(v: &Value) -> Option<iface_editors_data::TopEditorsByEditsItemsItemResultsItem> {
+    let m = v.as_object()?;
+    Some(iface_editors_data::TopEditorsByEditsItemsItemResultsItem {
+        timestamp: m.get("timestamp").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        top: m.get("top").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| iface_editors_data__top_editors_by_edits_items_item_results_item_top_item__from_json(x)).collect())),
+    })
+}
+
+fn iface_editors_data__top_editors_by_edits_items_item_results_item_top_item__from_json(v: &Value) -> Option<iface_editors_data::TopEditorsByEditsItemsItemResultsItemTopItem> {
+    let m = v.as_object()?;
+    Some(iface_editors_data::TopEditorsByEditsItemsItemResultsItemTopItem {
+        edits: m.get("edits").filter(|v| !v.is_null()).and_then(|v| (v).as_i64()),
+        rank: m.get("rank").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        user_text: m.get("user_text").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    })
+}
+
+fn iface_editors_data__top_editors_by_net_bytes_diff__from_json(v: &Value) -> Option<iface_editors_data::TopEditorsByNetBytesDiff> {
+    let m = v.as_object()?;
+    Some(iface_editors_data::TopEditorsByNetBytesDiff {
+        items: m.get("items").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| iface_editors_data__top_editors_by_net_bytes_diff_items_item__from_json(x)).collect())),
+    })
+}
+
+fn iface_editors_data__top_editors_by_net_bytes_diff_items_item__from_json(v: &Value) -> Option<iface_editors_data::TopEditorsByNetBytesDiffItemsItem> {
+    let m = v.as_object()?;
+    Some(iface_editors_data::TopEditorsByNetBytesDiffItemsItem {
+        editor_type: m.get("editor-type").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        granularity: m.get("granularity").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        page_type: m.get("page-type").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        project: m.get("project").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        results: m.get("results").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| iface_editors_data__top_editors_by_net_bytes_diff_items_item_results_item__from_json(x)).collect())),
+    })
+}
+
+fn iface_editors_data__top_editors_by_net_bytes_diff_items_item_results_item__from_json(v: &Value) -> Option<iface_editors_data::TopEditorsByNetBytesDiffItemsItemResultsItem> {
+    let m = v.as_object()?;
+    Some(iface_editors_data::TopEditorsByNetBytesDiffItemsItemResultsItem {
+        timestamp: m.get("timestamp").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        top: m.get("top").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| iface_editors_data__top_editors_by_net_bytes_diff_items_item_results_item_top_item__from_json(x)).collect())),
+    })
+}
+
+fn iface_editors_data__top_editors_by_net_bytes_diff_items_item_results_item_top_item__from_json(v: &Value) -> Option<iface_editors_data::TopEditorsByNetBytesDiffItemsItemResultsItemTopItem> {
+    let m = v.as_object()?;
+    Some(iface_editors_data::TopEditorsByNetBytesDiffItemsItemResultsItemTopItem {
+        net_bytes_diff: m.get("net_bytes_diff").filter(|v| !v.is_null()).and_then(|v| (v).as_i64()),
+        rank: m.get("rank").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        user_text: m.get("user_text").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    })
+}
+
+fn iface_editors_data__get_metrics_editors_aggregate_project_editor_type_page_type_activity_level_granularity_start_end__ok(body: String) -> Result<iface_editors_data::Editors, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match iface_editors_data__editors__from_json(&v) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_editors_data__get_metrics_editors_aggregate_project_editor_type_page_type_activity_level_granularity_start_end__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
+fn iface_editors_data__get_metrics_editors_top_by_absolute_bytes_difference_project_editor_type_page_type_year_month_day__ok(body: String) -> Result<iface_editors_data::TopEditorsByAbsBytesDiff, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match iface_editors_data__top_editors_by_abs_bytes_diff__from_json(&v) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_editors_data__get_metrics_editors_top_by_absolute_bytes_difference_project_editor_type_page_type_year_month_day__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
+fn iface_editors_data__get_metrics_editors_top_by_edits_project_editor_type_page_type_year_month_day__ok(body: String) -> Result<iface_editors_data::TopEditorsByEdits, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match iface_editors_data__top_editors_by_edits__from_json(&v) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_editors_data__get_metrics_editors_top_by_edits_project_editor_type_page_type_year_month_day__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
+fn iface_editors_data__get_metrics_editors_top_by_net_bytes_difference_project_editor_type_page_type_year_month_day__ok(body: String) -> Result<iface_editors_data::TopEditorsByNetBytesDiff, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match iface_editors_data__top_editors_by_net_bytes_diff__from_json(&v) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_editors_data__get_metrics_editors_top_by_net_bytes_difference_project_editor_type_page_type_year_month_day__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
 impl iface_editors_data::Guest for crate::Component {
-    fn get_metrics_editors_aggregate_project_editor_type_page_type_activity_level_granularity_start_end(params: iface_editors_data::GetMetricsEditorsAggregateProjectEditorTypePageTypeActivityLevelGranularityStartEndParams) -> Result<String, String> {
+    fn get_metrics_editors_aggregate_project_editor_type_page_type_activity_level_granularity_start_end(params: iface_editors_data::GetMetricsEditorsAggregateProjectEditorTypePageTypeActivityLevelGranularityStartEndParams) -> Result<iface_editors_data::Editors, String> {
         let json = iface_editors_data__get_metrics_editors_aggregate_project_editor_type_page_type_activity_level_granularity_start_end_params__to_json(&params);
-        dispatch(&OP_EDITORS_DATA_GET_METRICS_EDITORS_AGGREGATE_PROJECT_EDITOR_TYPE_PAGE_TYPE_ACTIVITY_LEVEL_GRANULARITY_START_END, json)
+        match dispatch(&OP_EDITORS_DATA_GET_METRICS_EDITORS_AGGREGATE_PROJECT_EDITOR_TYPE_PAGE_TYPE_ACTIVITY_LEVEL_GRANULARITY_START_END, json).and_then(iface_editors_data__get_metrics_editors_aggregate_project_editor_type_page_type_activity_level_granularity_start_end__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_editors_data__get_metrics_editors_aggregate_project_editor_type_page_type_activity_level_granularity_start_end__err(e)),
+        }
     }
-    fn get_metrics_editors_top_by_absolute_bytes_difference_project_editor_type_page_type_year_month_day(params: iface_editors_data::GetMetricsEditorsTopByAbsoluteBytesDifferenceProjectEditorTypePageTypeYearMonthDayParams) -> Result<String, String> {
+    fn get_metrics_editors_top_by_absolute_bytes_difference_project_editor_type_page_type_year_month_day(params: iface_editors_data::GetMetricsEditorsTopByAbsoluteBytesDifferenceProjectEditorTypePageTypeYearMonthDayParams) -> Result<iface_editors_data::TopEditorsByAbsBytesDiff, String> {
         let json = iface_editors_data__get_metrics_editors_top_by_absolute_bytes_difference_project_editor_type_page_type_year_month_day_params__to_json(&params);
-        dispatch(&OP_EDITORS_DATA_GET_METRICS_EDITORS_TOP_BY_ABSOLUTE_BYTES_DIFFERENCE_PROJECT_EDITOR_TYPE_PAGE_TYPE_YEAR_MONTH_DAY, json)
+        match dispatch(&OP_EDITORS_DATA_GET_METRICS_EDITORS_TOP_BY_ABSOLUTE_BYTES_DIFFERENCE_PROJECT_EDITOR_TYPE_PAGE_TYPE_YEAR_MONTH_DAY, json).and_then(iface_editors_data__get_metrics_editors_top_by_absolute_bytes_difference_project_editor_type_page_type_year_month_day__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_editors_data__get_metrics_editors_top_by_absolute_bytes_difference_project_editor_type_page_type_year_month_day__err(e)),
+        }
     }
-    fn get_metrics_editors_top_by_edits_project_editor_type_page_type_year_month_day(params: iface_editors_data::GetMetricsEditorsTopByEditsProjectEditorTypePageTypeYearMonthDayParams) -> Result<String, String> {
+    fn get_metrics_editors_top_by_edits_project_editor_type_page_type_year_month_day(params: iface_editors_data::GetMetricsEditorsTopByEditsProjectEditorTypePageTypeYearMonthDayParams) -> Result<iface_editors_data::TopEditorsByEdits, String> {
         let json = iface_editors_data__get_metrics_editors_top_by_edits_project_editor_type_page_type_year_month_day_params__to_json(&params);
-        dispatch(&OP_EDITORS_DATA_GET_METRICS_EDITORS_TOP_BY_EDITS_PROJECT_EDITOR_TYPE_PAGE_TYPE_YEAR_MONTH_DAY, json)
+        match dispatch(&OP_EDITORS_DATA_GET_METRICS_EDITORS_TOP_BY_EDITS_PROJECT_EDITOR_TYPE_PAGE_TYPE_YEAR_MONTH_DAY, json).and_then(iface_editors_data__get_metrics_editors_top_by_edits_project_editor_type_page_type_year_month_day__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_editors_data__get_metrics_editors_top_by_edits_project_editor_type_page_type_year_month_day__err(e)),
+        }
     }
-    fn get_metrics_editors_top_by_net_bytes_difference_project_editor_type_page_type_year_month_day(params: iface_editors_data::GetMetricsEditorsTopByNetBytesDifferenceProjectEditorTypePageTypeYearMonthDayParams) -> Result<String, String> {
+    fn get_metrics_editors_top_by_net_bytes_difference_project_editor_type_page_type_year_month_day(params: iface_editors_data::GetMetricsEditorsTopByNetBytesDifferenceProjectEditorTypePageTypeYearMonthDayParams) -> Result<iface_editors_data::TopEditorsByNetBytesDiff, String> {
         let json = iface_editors_data__get_metrics_editors_top_by_net_bytes_difference_project_editor_type_page_type_year_month_day_params__to_json(&params);
-        dispatch(&OP_EDITORS_DATA_GET_METRICS_EDITORS_TOP_BY_NET_BYTES_DIFFERENCE_PROJECT_EDITOR_TYPE_PAGE_TYPE_YEAR_MONTH_DAY, json)
+        match dispatch(&OP_EDITORS_DATA_GET_METRICS_EDITORS_TOP_BY_NET_BYTES_DIFFERENCE_PROJECT_EDITOR_TYPE_PAGE_TYPE_YEAR_MONTH_DAY, json).and_then(iface_editors_data__get_metrics_editors_top_by_net_bytes_difference_project_editor_type_page_type_year_month_day__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_editors_data__get_metrics_editors_top_by_net_bytes_difference_project_editor_type_page_type_year_month_day__err(e)),
+        }
     }
 }
 use crate::exports::autostamp::wikimedia::edits_data as iface_edits_data;
@@ -778,12 +1906,12 @@ const OP_EDITS_DATA_GET_METRICS_EDITS_AGGREGATE_PROJECT_EDITOR_TYPE_PAGE_TYPE_GR
     method: "GET",
     path_template: "/metrics/edits/aggregate/{project}/{editor_type}/{page_type}/{granularity}/{start}/{end}",
     fields: &[
-        FieldSpec { snake: "project", location: FieldLocation::Path },
-        FieldSpec { snake: "editor_type", location: FieldLocation::Path },
-        FieldSpec { snake: "page_type", location: FieldLocation::Path },
-        FieldSpec { snake: "granularity", location: FieldLocation::Path },
-        FieldSpec { snake: "start", location: FieldLocation::Path },
-        FieldSpec { snake: "end", location: FieldLocation::Path },
+        FieldSpec { snake: "project", wire: "project", location: FieldLocation::Path },
+        FieldSpec { snake: "editor_type", wire: "editor-type", location: FieldLocation::Path },
+        FieldSpec { snake: "page_type", wire: "page-type", location: FieldLocation::Path },
+        FieldSpec { snake: "granularity", wire: "granularity", location: FieldLocation::Path },
+        FieldSpec { snake: "start", wire: "start", location: FieldLocation::Path },
+        FieldSpec { snake: "end", wire: "end", location: FieldLocation::Path },
     ],
     auth: &[
     ],
@@ -793,16 +1921,62 @@ const OP_EDITS_DATA_GET_METRICS_EDITS_PER_PAGE_PROJECT_PAGE_TITLE_EDITOR_TYPE_GR
     method: "GET",
     path_template: "/metrics/edits/per-page/{project}/{page_title}/{editor_type}/{granularity}/{start}/{end}",
     fields: &[
-        FieldSpec { snake: "project", location: FieldLocation::Path },
-        FieldSpec { snake: "page_title", location: FieldLocation::Path },
-        FieldSpec { snake: "editor_type", location: FieldLocation::Path },
-        FieldSpec { snake: "granularity", location: FieldLocation::Path },
-        FieldSpec { snake: "start", location: FieldLocation::Path },
-        FieldSpec { snake: "end", location: FieldLocation::Path },
+        FieldSpec { snake: "project", wire: "project", location: FieldLocation::Path },
+        FieldSpec { snake: "page_title", wire: "page-title", location: FieldLocation::Path },
+        FieldSpec { snake: "editor_type", wire: "editor-type", location: FieldLocation::Path },
+        FieldSpec { snake: "granularity", wire: "granularity", location: FieldLocation::Path },
+        FieldSpec { snake: "start", wire: "start", location: FieldLocation::Path },
+        FieldSpec { snake: "end", wire: "end", location: FieldLocation::Path },
     ],
     auth: &[
     ],
 };
+
+fn iface_edits_data__edits__to_json(p: &iface_edits_data::Edits) -> Value {
+    let mut m = Map::new();
+    m.insert("items".into(), match (&p.items) { Some(v) => Value::Array((v).iter().map(|v| iface_edits_data__edits_items_item__to_json(v)).collect()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_edits_data__edits_items_item__to_json(p: &iface_edits_data::EditsItemsItem) -> Value {
+    let mut m = Map::new();
+    m.insert("editor-type".into(), match (&p.editor_type) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("granularity".into(), match (&p.granularity) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("page-type".into(), match (&p.page_type) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("project".into(), match (&p.project) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("results".into(), match (&p.results) { Some(v) => Value::Array((v).iter().map(|v| iface_edits_data__edits_items_item_results_item__to_json(v)).collect()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_edits_data__edits_items_item_results_item__to_json(p: &iface_edits_data::EditsItemsItemResultsItem) -> Value {
+    let mut m = Map::new();
+    m.insert("edits".into(), match (&p.edits) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("timestamp".into(), match (&p.timestamp) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_edits_data__edits_per_page__to_json(p: &iface_edits_data::EditsPerPage) -> Value {
+    let mut m = Map::new();
+    m.insert("items".into(), match (&p.items) { Some(v) => Value::Array((v).iter().map(|v| iface_edits_data__edits_per_page_items_item__to_json(v)).collect()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_edits_data__edits_per_page_items_item__to_json(p: &iface_edits_data::EditsPerPageItemsItem) -> Value {
+    let mut m = Map::new();
+    m.insert("editor-type".into(), match (&p.editor_type) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("granularity".into(), match (&p.granularity) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("page-title".into(), match (&p.page_title) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("project".into(), match (&p.project) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("results".into(), match (&p.results) { Some(v) => Value::Array((v).iter().map(|v| iface_edits_data__edits_per_page_items_item_results_item__to_json(v)).collect()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_edits_data__edits_per_page_items_item_results_item__to_json(p: &iface_edits_data::EditsPerPageItemsItemResultsItem) -> Value {
+    let mut m = Map::new();
+    m.insert("edits".into(), match (&p.edits) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("timestamp".into(), match (&p.timestamp) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
 
 fn iface_edits_data__get_metrics_edits_aggregate_project_editor_type_page_type_granularity_start_end_params__to_json(p: &iface_edits_data::GetMetricsEditsAggregateProjectEditorTypePageTypeGranularityStartEndParams) -> Value {
     let mut m = Map::new();
@@ -826,14 +2000,108 @@ fn iface_edits_data__get_metrics_edits_per_page_project_page_title_editor_type_g
     Value::Object(m)
 }
 
-impl iface_edits_data::Guest for crate::Component {
-    fn get_metrics_edits_aggregate_project_editor_type_page_type_granularity_start_end(params: iface_edits_data::GetMetricsEditsAggregateProjectEditorTypePageTypeGranularityStartEndParams) -> Result<String, String> {
-        let json = iface_edits_data__get_metrics_edits_aggregate_project_editor_type_page_type_granularity_start_end_params__to_json(&params);
-        dispatch(&OP_EDITS_DATA_GET_METRICS_EDITS_AGGREGATE_PROJECT_EDITOR_TYPE_PAGE_TYPE_GRANULARITY_START_END, json)
+fn iface_edits_data__edits__from_json(v: &Value) -> Option<iface_edits_data::Edits> {
+    let m = v.as_object()?;
+    Some(iface_edits_data::Edits {
+        items: m.get("items").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| iface_edits_data__edits_items_item__from_json(x)).collect())),
+    })
+}
+
+fn iface_edits_data__edits_items_item__from_json(v: &Value) -> Option<iface_edits_data::EditsItemsItem> {
+    let m = v.as_object()?;
+    Some(iface_edits_data::EditsItemsItem {
+        editor_type: m.get("editor-type").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        granularity: m.get("granularity").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        page_type: m.get("page-type").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        project: m.get("project").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        results: m.get("results").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| iface_edits_data__edits_items_item_results_item__from_json(x)).collect())),
+    })
+}
+
+fn iface_edits_data__edits_items_item_results_item__from_json(v: &Value) -> Option<iface_edits_data::EditsItemsItemResultsItem> {
+    let m = v.as_object()?;
+    Some(iface_edits_data::EditsItemsItemResultsItem {
+        edits: m.get("edits").filter(|v| !v.is_null()).and_then(|v| (v).as_i64()),
+        timestamp: m.get("timestamp").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    })
+}
+
+fn iface_edits_data__edits_per_page__from_json(v: &Value) -> Option<iface_edits_data::EditsPerPage> {
+    let m = v.as_object()?;
+    Some(iface_edits_data::EditsPerPage {
+        items: m.get("items").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| iface_edits_data__edits_per_page_items_item__from_json(x)).collect())),
+    })
+}
+
+fn iface_edits_data__edits_per_page_items_item__from_json(v: &Value) -> Option<iface_edits_data::EditsPerPageItemsItem> {
+    let m = v.as_object()?;
+    Some(iface_edits_data::EditsPerPageItemsItem {
+        editor_type: m.get("editor-type").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        granularity: m.get("granularity").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        page_title: m.get("page-title").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        project: m.get("project").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        results: m.get("results").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| iface_edits_data__edits_per_page_items_item_results_item__from_json(x)).collect())),
+    })
+}
+
+fn iface_edits_data__edits_per_page_items_item_results_item__from_json(v: &Value) -> Option<iface_edits_data::EditsPerPageItemsItemResultsItem> {
+    let m = v.as_object()?;
+    Some(iface_edits_data::EditsPerPageItemsItemResultsItem {
+        edits: m.get("edits").filter(|v| !v.is_null()).and_then(|v| (v).as_i64()),
+        timestamp: m.get("timestamp").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    })
+}
+
+fn iface_edits_data__get_metrics_edits_aggregate_project_editor_type_page_type_granularity_start_end__ok(body: String) -> Result<iface_edits_data::Edits, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match iface_edits_data__edits__from_json(&v) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
     }
-    fn get_metrics_edits_per_page_project_page_title_editor_type_granularity_start_end(params: iface_edits_data::GetMetricsEditsPerPageProjectPageTitleEditorTypeGranularityStartEndParams) -> Result<String, String> {
+}
+
+fn iface_edits_data__get_metrics_edits_aggregate_project_editor_type_page_type_granularity_start_end__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
+fn iface_edits_data__get_metrics_edits_per_page_project_page_title_editor_type_granularity_start_end__ok(body: String) -> Result<iface_edits_data::EditsPerPage, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match iface_edits_data__edits_per_page__from_json(&v) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_edits_data__get_metrics_edits_per_page_project_page_title_editor_type_granularity_start_end__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
+impl iface_edits_data::Guest for crate::Component {
+    fn get_metrics_edits_aggregate_project_editor_type_page_type_granularity_start_end(params: iface_edits_data::GetMetricsEditsAggregateProjectEditorTypePageTypeGranularityStartEndParams) -> Result<iface_edits_data::Edits, String> {
+        let json = iface_edits_data__get_metrics_edits_aggregate_project_editor_type_page_type_granularity_start_end_params__to_json(&params);
+        match dispatch(&OP_EDITS_DATA_GET_METRICS_EDITS_AGGREGATE_PROJECT_EDITOR_TYPE_PAGE_TYPE_GRANULARITY_START_END, json).and_then(iface_edits_data__get_metrics_edits_aggregate_project_editor_type_page_type_granularity_start_end__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_edits_data__get_metrics_edits_aggregate_project_editor_type_page_type_granularity_start_end__err(e)),
+        }
+    }
+    fn get_metrics_edits_per_page_project_page_title_editor_type_granularity_start_end(params: iface_edits_data::GetMetricsEditsPerPageProjectPageTitleEditorTypeGranularityStartEndParams) -> Result<iface_edits_data::EditsPerPage, String> {
         let json = iface_edits_data__get_metrics_edits_per_page_project_page_title_editor_type_granularity_start_end_params__to_json(&params);
-        dispatch(&OP_EDITS_DATA_GET_METRICS_EDITS_PER_PAGE_PROJECT_PAGE_TITLE_EDITOR_TYPE_GRANULARITY_START_END, json)
+        match dispatch(&OP_EDITS_DATA_GET_METRICS_EDITS_PER_PAGE_PROJECT_PAGE_TITLE_EDITOR_TYPE_GRANULARITY_START_END, json).and_then(iface_edits_data__get_metrics_edits_per_page_project_page_title_editor_type_granularity_start_end__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_edits_data__get_metrics_edits_per_page_project_page_title_editor_type_granularity_start_end__err(e)),
+        }
     }
 }
 use crate::exports::autostamp::wikimedia::legacy_data as iface_legacy_data;
@@ -842,15 +2110,31 @@ const OP_LEGACY_DATA_GET_METRICS_LEGACY_PAGECOUNTS_AGGREGATE_PROJECT_ACCESS_SITE
     method: "GET",
     path_template: "/metrics/legacy/pagecounts/aggregate/{project}/{access_site}/{granularity}/{start}/{end}",
     fields: &[
-        FieldSpec { snake: "project", location: FieldLocation::Path },
-        FieldSpec { snake: "access_site", location: FieldLocation::Path },
-        FieldSpec { snake: "granularity", location: FieldLocation::Path },
-        FieldSpec { snake: "start", location: FieldLocation::Path },
-        FieldSpec { snake: "end", location: FieldLocation::Path },
+        FieldSpec { snake: "project", wire: "project", location: FieldLocation::Path },
+        FieldSpec { snake: "access_site", wire: "access-site", location: FieldLocation::Path },
+        FieldSpec { snake: "granularity", wire: "granularity", location: FieldLocation::Path },
+        FieldSpec { snake: "start", wire: "start", location: FieldLocation::Path },
+        FieldSpec { snake: "end", wire: "end", location: FieldLocation::Path },
     ],
     auth: &[
     ],
 };
+
+fn iface_legacy_data__pagecounts_project__to_json(p: &iface_legacy_data::PagecountsProject) -> Value {
+    let mut m = Map::new();
+    m.insert("items".into(), match (&p.items) { Some(v) => Value::Array((v).iter().map(|v| iface_legacy_data__pagecounts_project_items_item__to_json(v)).collect()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_legacy_data__pagecounts_project_items_item__to_json(p: &iface_legacy_data::PagecountsProjectItemsItem) -> Value {
+    let mut m = Map::new();
+    m.insert("access-site".into(), match (&p.access_site) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("count".into(), match (&p.count) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("granularity".into(), match (&p.granularity) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("project".into(), match (&p.project) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("timestamp".into(), match (&p.timestamp) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
 
 fn iface_legacy_data__get_metrics_legacy_pagecounts_aggregate_project_access_site_granularity_start_end_params__to_json(p: &iface_legacy_data::GetMetricsLegacyPagecountsAggregateProjectAccessSiteGranularityStartEndParams) -> Value {
     let mut m = Map::new();
@@ -862,10 +2146,49 @@ fn iface_legacy_data__get_metrics_legacy_pagecounts_aggregate_project_access_sit
     Value::Object(m)
 }
 
+fn iface_legacy_data__pagecounts_project__from_json(v: &Value) -> Option<iface_legacy_data::PagecountsProject> {
+    let m = v.as_object()?;
+    Some(iface_legacy_data::PagecountsProject {
+        items: m.get("items").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| iface_legacy_data__pagecounts_project_items_item__from_json(x)).collect())),
+    })
+}
+
+fn iface_legacy_data__pagecounts_project_items_item__from_json(v: &Value) -> Option<iface_legacy_data::PagecountsProjectItemsItem> {
+    let m = v.as_object()?;
+    Some(iface_legacy_data::PagecountsProjectItemsItem {
+        access_site: m.get("access-site").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        count: m.get("count").filter(|v| !v.is_null()).and_then(|v| (v).as_i64()),
+        granularity: m.get("granularity").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        project: m.get("project").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        timestamp: m.get("timestamp").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    })
+}
+
+fn iface_legacy_data__get_metrics_legacy_pagecounts_aggregate_project_access_site_granularity_start_end__ok(body: String) -> Result<iface_legacy_data::PagecountsProject, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match iface_legacy_data__pagecounts_project__from_json(&v) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_legacy_data__get_metrics_legacy_pagecounts_aggregate_project_access_site_granularity_start_end__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
 impl iface_legacy_data::Guest for crate::Component {
-    fn get_metrics_legacy_pagecounts_aggregate_project_access_site_granularity_start_end(params: iface_legacy_data::GetMetricsLegacyPagecountsAggregateProjectAccessSiteGranularityStartEndParams) -> Result<String, String> {
+    fn get_metrics_legacy_pagecounts_aggregate_project_access_site_granularity_start_end(params: iface_legacy_data::GetMetricsLegacyPagecountsAggregateProjectAccessSiteGranularityStartEndParams) -> Result<iface_legacy_data::PagecountsProject, String> {
         let json = iface_legacy_data__get_metrics_legacy_pagecounts_aggregate_project_access_site_granularity_start_end_params__to_json(&params);
-        dispatch(&OP_LEGACY_DATA_GET_METRICS_LEGACY_PAGECOUNTS_AGGREGATE_PROJECT_ACCESS_SITE_GRANULARITY_START_END, json)
+        match dispatch(&OP_LEGACY_DATA_GET_METRICS_LEGACY_PAGECOUNTS_AGGREGATE_PROJECT_ACCESS_SITE_GRANULARITY_START_END, json).and_then(iface_legacy_data__get_metrics_legacy_pagecounts_aggregate_project_access_site_granularity_start_end__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_legacy_data__get_metrics_legacy_pagecounts_aggregate_project_access_site_granularity_start_end__err(e)),
+        }
     }
 }
 use crate::exports::autostamp::wikimedia::pageviews_data as iface_pageviews_data;
@@ -874,12 +2197,12 @@ const OP_PAGEVIEWS_DATA_GET_METRICS_PAGEVIEWS_AGGREGATE_PROJECT_ACCESS_AGENT_GRA
     method: "GET",
     path_template: "/metrics/pageviews/aggregate/{project}/{access}/{agent}/{granularity}/{start}/{end}",
     fields: &[
-        FieldSpec { snake: "project", location: FieldLocation::Path },
-        FieldSpec { snake: "access", location: FieldLocation::Path },
-        FieldSpec { snake: "agent", location: FieldLocation::Path },
-        FieldSpec { snake: "granularity", location: FieldLocation::Path },
-        FieldSpec { snake: "start", location: FieldLocation::Path },
-        FieldSpec { snake: "end", location: FieldLocation::Path },
+        FieldSpec { snake: "project", wire: "project", location: FieldLocation::Path },
+        FieldSpec { snake: "access", wire: "access", location: FieldLocation::Path },
+        FieldSpec { snake: "agent", wire: "agent", location: FieldLocation::Path },
+        FieldSpec { snake: "granularity", wire: "granularity", location: FieldLocation::Path },
+        FieldSpec { snake: "start", wire: "start", location: FieldLocation::Path },
+        FieldSpec { snake: "end", wire: "end", location: FieldLocation::Path },
     ],
     auth: &[
     ],
@@ -889,13 +2212,13 @@ const OP_PAGEVIEWS_DATA_GET_METRICS_PAGEVIEWS_PER_ARTICLE_PROJECT_ACCESS_AGENT_A
     method: "GET",
     path_template: "/metrics/pageviews/per-article/{project}/{access}/{agent}/{article}/{granularity}/{start}/{end}",
     fields: &[
-        FieldSpec { snake: "project", location: FieldLocation::Path },
-        FieldSpec { snake: "access", location: FieldLocation::Path },
-        FieldSpec { snake: "agent", location: FieldLocation::Path },
-        FieldSpec { snake: "article", location: FieldLocation::Path },
-        FieldSpec { snake: "granularity", location: FieldLocation::Path },
-        FieldSpec { snake: "start", location: FieldLocation::Path },
-        FieldSpec { snake: "end", location: FieldLocation::Path },
+        FieldSpec { snake: "project", wire: "project", location: FieldLocation::Path },
+        FieldSpec { snake: "access", wire: "access", location: FieldLocation::Path },
+        FieldSpec { snake: "agent", wire: "agent", location: FieldLocation::Path },
+        FieldSpec { snake: "article", wire: "article", location: FieldLocation::Path },
+        FieldSpec { snake: "granularity", wire: "granularity", location: FieldLocation::Path },
+        FieldSpec { snake: "start", wire: "start", location: FieldLocation::Path },
+        FieldSpec { snake: "end", wire: "end", location: FieldLocation::Path },
     ],
     auth: &[
     ],
@@ -905,10 +2228,10 @@ const OP_PAGEVIEWS_DATA_GET_METRICS_PAGEVIEWS_TOP_BY_COUNTRY_PROJECT_ACCESS_YEAR
     method: "GET",
     path_template: "/metrics/pageviews/top-by-country/{project}/{access}/{year}/{month}",
     fields: &[
-        FieldSpec { snake: "project", location: FieldLocation::Path },
-        FieldSpec { snake: "access", location: FieldLocation::Path },
-        FieldSpec { snake: "year", location: FieldLocation::Path },
-        FieldSpec { snake: "month", location: FieldLocation::Path },
+        FieldSpec { snake: "project", wire: "project", location: FieldLocation::Path },
+        FieldSpec { snake: "access", wire: "access", location: FieldLocation::Path },
+        FieldSpec { snake: "year", wire: "year", location: FieldLocation::Path },
+        FieldSpec { snake: "month", wire: "month", location: FieldLocation::Path },
     ],
     auth: &[
     ],
@@ -918,15 +2241,99 @@ const OP_PAGEVIEWS_DATA_GET_METRICS_PAGEVIEWS_TOP_PROJECT_ACCESS_YEAR_MONTH_DAY:
     method: "GET",
     path_template: "/metrics/pageviews/top/{project}/{access}/{year}/{month}/{day}",
     fields: &[
-        FieldSpec { snake: "project", location: FieldLocation::Path },
-        FieldSpec { snake: "access", location: FieldLocation::Path },
-        FieldSpec { snake: "year", location: FieldLocation::Path },
-        FieldSpec { snake: "month", location: FieldLocation::Path },
-        FieldSpec { snake: "day", location: FieldLocation::Path },
+        FieldSpec { snake: "project", wire: "project", location: FieldLocation::Path },
+        FieldSpec { snake: "access", wire: "access", location: FieldLocation::Path },
+        FieldSpec { snake: "year", wire: "year", location: FieldLocation::Path },
+        FieldSpec { snake: "month", wire: "month", location: FieldLocation::Path },
+        FieldSpec { snake: "day", wire: "day", location: FieldLocation::Path },
     ],
     auth: &[
     ],
 };
+
+fn iface_pageviews_data__pageview_project__to_json(p: &iface_pageviews_data::PageviewProject) -> Value {
+    let mut m = Map::new();
+    m.insert("items".into(), match (&p.items) { Some(v) => Value::Array((v).iter().map(|v| iface_pageviews_data__pageview_project_items_item__to_json(v)).collect()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_pageviews_data__pageview_project_items_item__to_json(p: &iface_pageviews_data::PageviewProjectItemsItem) -> Value {
+    let mut m = Map::new();
+    m.insert("access".into(), match (&p.access) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("agent".into(), match (&p.agent) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("granularity".into(), match (&p.granularity) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("project".into(), match (&p.project) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("timestamp".into(), match (&p.timestamp) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("views".into(), match (&p.views) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_pageviews_data__pageview_article__to_json(p: &iface_pageviews_data::PageviewArticle) -> Value {
+    let mut m = Map::new();
+    m.insert("items".into(), match (&p.items) { Some(v) => Value::Array((v).iter().map(|v| iface_pageviews_data__pageview_article_items_item__to_json(v)).collect()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_pageviews_data__pageview_article_items_item__to_json(p: &iface_pageviews_data::PageviewArticleItemsItem) -> Value {
+    let mut m = Map::new();
+    m.insert("access".into(), match (&p.access) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("agent".into(), match (&p.agent) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("article".into(), match (&p.article) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("granularity".into(), match (&p.granularity) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("project".into(), match (&p.project) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("timestamp".into(), match (&p.timestamp) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("views".into(), match (&p.views) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_pageviews_data__by_country__to_json(p: &iface_pageviews_data::ByCountry) -> Value {
+    let mut m = Map::new();
+    m.insert("items".into(), match (&p.items) { Some(v) => Value::Array((v).iter().map(|v| iface_pageviews_data__by_country_items_item__to_json(v)).collect()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_pageviews_data__by_country_items_item__to_json(p: &iface_pageviews_data::ByCountryItemsItem) -> Value {
+    let mut m = Map::new();
+    m.insert("access".into(), match (&p.access) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("countries".into(), match (&p.countries) { Some(v) => Value::Array((v).iter().map(|v| iface_pageviews_data__by_country_items_item_countries_item__to_json(v)).collect()), None => Value::Null });
+    m.insert("month".into(), match (&p.month) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("project".into(), match (&p.project) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("year".into(), match (&p.year) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_pageviews_data__by_country_items_item_countries_item__to_json(p: &iface_pageviews_data::ByCountryItemsItemCountriesItem) -> Value {
+    let mut m = Map::new();
+    m.insert("country".into(), match (&p.country) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("rank".into(), match (&p.rank) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("views".into(), match (&p.views) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_pageviews_data__pageview_tops__to_json(p: &iface_pageviews_data::PageviewTops) -> Value {
+    let mut m = Map::new();
+    m.insert("items".into(), match (&p.items) { Some(v) => Value::Array((v).iter().map(|v| iface_pageviews_data__pageview_tops_items_item__to_json(v)).collect()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_pageviews_data__pageview_tops_items_item__to_json(p: &iface_pageviews_data::PageviewTopsItemsItem) -> Value {
+    let mut m = Map::new();
+    m.insert("access".into(), match (&p.access) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("articles".into(), match (&p.articles) { Some(v) => Value::Array((v).iter().map(|v| iface_pageviews_data__pageview_tops_items_item_articles_item__to_json(v)).collect()), None => Value::Null });
+    m.insert("day".into(), match (&p.day) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("month".into(), match (&p.month) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("project".into(), match (&p.project) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("year".into(), match (&p.year) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_pageviews_data__pageview_tops_items_item_articles_item__to_json(p: &iface_pageviews_data::PageviewTopsItemsItemArticlesItem) -> Value {
+    let mut m = Map::new();
+    m.insert("article".into(), match (&p.article) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("rank".into(), match (&p.rank) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("views".into(), match (&p.views) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    Value::Object(m)
+}
 
 fn iface_pageviews_data__get_metrics_pageviews_aggregate_project_access_agent_granularity_start_end_params__to_json(p: &iface_pageviews_data::GetMetricsPageviewsAggregateProjectAccessAgentGranularityStartEndParams) -> Value {
     let mut m = Map::new();
@@ -970,22 +2377,200 @@ fn iface_pageviews_data__get_metrics_pageviews_top_project_access_year_month_day
     Value::Object(m)
 }
 
+fn iface_pageviews_data__pageview_project__from_json(v: &Value) -> Option<iface_pageviews_data::PageviewProject> {
+    let m = v.as_object()?;
+    Some(iface_pageviews_data::PageviewProject {
+        items: m.get("items").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| iface_pageviews_data__pageview_project_items_item__from_json(x)).collect())),
+    })
+}
+
+fn iface_pageviews_data__pageview_project_items_item__from_json(v: &Value) -> Option<iface_pageviews_data::PageviewProjectItemsItem> {
+    let m = v.as_object()?;
+    Some(iface_pageviews_data::PageviewProjectItemsItem {
+        access: m.get("access").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        agent: m.get("agent").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        granularity: m.get("granularity").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        project: m.get("project").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        timestamp: m.get("timestamp").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        views: m.get("views").filter(|v| !v.is_null()).and_then(|v| (v).as_i64()),
+    })
+}
+
+fn iface_pageviews_data__pageview_article__from_json(v: &Value) -> Option<iface_pageviews_data::PageviewArticle> {
+    let m = v.as_object()?;
+    Some(iface_pageviews_data::PageviewArticle {
+        items: m.get("items").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| iface_pageviews_data__pageview_article_items_item__from_json(x)).collect())),
+    })
+}
+
+fn iface_pageviews_data__pageview_article_items_item__from_json(v: &Value) -> Option<iface_pageviews_data::PageviewArticleItemsItem> {
+    let m = v.as_object()?;
+    Some(iface_pageviews_data::PageviewArticleItemsItem {
+        access: m.get("access").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        agent: m.get("agent").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        article: m.get("article").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        granularity: m.get("granularity").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        project: m.get("project").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        timestamp: m.get("timestamp").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        views: m.get("views").filter(|v| !v.is_null()).and_then(|v| (v).as_i64()),
+    })
+}
+
+fn iface_pageviews_data__by_country__from_json(v: &Value) -> Option<iface_pageviews_data::ByCountry> {
+    let m = v.as_object()?;
+    Some(iface_pageviews_data::ByCountry {
+        items: m.get("items").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| iface_pageviews_data__by_country_items_item__from_json(x)).collect())),
+    })
+}
+
+fn iface_pageviews_data__by_country_items_item__from_json(v: &Value) -> Option<iface_pageviews_data::ByCountryItemsItem> {
+    let m = v.as_object()?;
+    Some(iface_pageviews_data::ByCountryItemsItem {
+        access: m.get("access").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        countries: m.get("countries").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| iface_pageviews_data__by_country_items_item_countries_item__from_json(x)).collect())),
+        month: m.get("month").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        project: m.get("project").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        year: m.get("year").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    })
+}
+
+fn iface_pageviews_data__by_country_items_item_countries_item__from_json(v: &Value) -> Option<iface_pageviews_data::ByCountryItemsItemCountriesItem> {
+    let m = v.as_object()?;
+    Some(iface_pageviews_data::ByCountryItemsItemCountriesItem {
+        country: m.get("country").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        rank: m.get("rank").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        views: m.get("views").filter(|v| !v.is_null()).and_then(|v| (v).as_i64()),
+    })
+}
+
+fn iface_pageviews_data__pageview_tops__from_json(v: &Value) -> Option<iface_pageviews_data::PageviewTops> {
+    let m = v.as_object()?;
+    Some(iface_pageviews_data::PageviewTops {
+        items: m.get("items").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| iface_pageviews_data__pageview_tops_items_item__from_json(x)).collect())),
+    })
+}
+
+fn iface_pageviews_data__pageview_tops_items_item__from_json(v: &Value) -> Option<iface_pageviews_data::PageviewTopsItemsItem> {
+    let m = v.as_object()?;
+    Some(iface_pageviews_data::PageviewTopsItemsItem {
+        access: m.get("access").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        articles: m.get("articles").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| iface_pageviews_data__pageview_tops_items_item_articles_item__from_json(x)).collect())),
+        day: m.get("day").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        month: m.get("month").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        project: m.get("project").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        year: m.get("year").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    })
+}
+
+fn iface_pageviews_data__pageview_tops_items_item_articles_item__from_json(v: &Value) -> Option<iface_pageviews_data::PageviewTopsItemsItemArticlesItem> {
+    let m = v.as_object()?;
+    Some(iface_pageviews_data::PageviewTopsItemsItemArticlesItem {
+        article: m.get("article").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        rank: m.get("rank").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        views: m.get("views").filter(|v| !v.is_null()).and_then(|v| (v).as_i64()),
+    })
+}
+
+fn iface_pageviews_data__get_metrics_pageviews_aggregate_project_access_agent_granularity_start_end__ok(body: String) -> Result<iface_pageviews_data::PageviewProject, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match iface_pageviews_data__pageview_project__from_json(&v) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_pageviews_data__get_metrics_pageviews_aggregate_project_access_agent_granularity_start_end__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
+fn iface_pageviews_data__get_metrics_pageviews_per_article_project_access_agent_article_granularity_start_end__ok(body: String) -> Result<iface_pageviews_data::PageviewArticle, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match iface_pageviews_data__pageview_article__from_json(&v) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_pageviews_data__get_metrics_pageviews_per_article_project_access_agent_article_granularity_start_end__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
+fn iface_pageviews_data__get_metrics_pageviews_top_by_country_project_access_year_month__ok(body: String) -> Result<iface_pageviews_data::ByCountry, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match iface_pageviews_data__by_country__from_json(&v) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_pageviews_data__get_metrics_pageviews_top_by_country_project_access_year_month__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
+fn iface_pageviews_data__get_metrics_pageviews_top_project_access_year_month_day__ok(body: String) -> Result<iface_pageviews_data::PageviewTops, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match iface_pageviews_data__pageview_tops__from_json(&v) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_pageviews_data__get_metrics_pageviews_top_project_access_year_month_day__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
 impl iface_pageviews_data::Guest for crate::Component {
-    fn get_metrics_pageviews_aggregate_project_access_agent_granularity_start_end(params: iface_pageviews_data::GetMetricsPageviewsAggregateProjectAccessAgentGranularityStartEndParams) -> Result<String, String> {
+    fn get_metrics_pageviews_aggregate_project_access_agent_granularity_start_end(params: iface_pageviews_data::GetMetricsPageviewsAggregateProjectAccessAgentGranularityStartEndParams) -> Result<iface_pageviews_data::PageviewProject, String> {
         let json = iface_pageviews_data__get_metrics_pageviews_aggregate_project_access_agent_granularity_start_end_params__to_json(&params);
-        dispatch(&OP_PAGEVIEWS_DATA_GET_METRICS_PAGEVIEWS_AGGREGATE_PROJECT_ACCESS_AGENT_GRANULARITY_START_END, json)
+        match dispatch(&OP_PAGEVIEWS_DATA_GET_METRICS_PAGEVIEWS_AGGREGATE_PROJECT_ACCESS_AGENT_GRANULARITY_START_END, json).and_then(iface_pageviews_data__get_metrics_pageviews_aggregate_project_access_agent_granularity_start_end__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_pageviews_data__get_metrics_pageviews_aggregate_project_access_agent_granularity_start_end__err(e)),
+        }
     }
-    fn get_metrics_pageviews_per_article_project_access_agent_article_granularity_start_end(params: iface_pageviews_data::GetMetricsPageviewsPerArticleProjectAccessAgentArticleGranularityStartEndParams) -> Result<String, String> {
+    fn get_metrics_pageviews_per_article_project_access_agent_article_granularity_start_end(params: iface_pageviews_data::GetMetricsPageviewsPerArticleProjectAccessAgentArticleGranularityStartEndParams) -> Result<iface_pageviews_data::PageviewArticle, String> {
         let json = iface_pageviews_data__get_metrics_pageviews_per_article_project_access_agent_article_granularity_start_end_params__to_json(&params);
-        dispatch(&OP_PAGEVIEWS_DATA_GET_METRICS_PAGEVIEWS_PER_ARTICLE_PROJECT_ACCESS_AGENT_ARTICLE_GRANULARITY_START_END, json)
+        match dispatch(&OP_PAGEVIEWS_DATA_GET_METRICS_PAGEVIEWS_PER_ARTICLE_PROJECT_ACCESS_AGENT_ARTICLE_GRANULARITY_START_END, json).and_then(iface_pageviews_data__get_metrics_pageviews_per_article_project_access_agent_article_granularity_start_end__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_pageviews_data__get_metrics_pageviews_per_article_project_access_agent_article_granularity_start_end__err(e)),
+        }
     }
-    fn get_metrics_pageviews_top_by_country_project_access_year_month(params: iface_pageviews_data::GetMetricsPageviewsTopByCountryProjectAccessYearMonthParams) -> Result<String, String> {
+    fn get_metrics_pageviews_top_by_country_project_access_year_month(params: iface_pageviews_data::GetMetricsPageviewsTopByCountryProjectAccessYearMonthParams) -> Result<iface_pageviews_data::ByCountry, String> {
         let json = iface_pageviews_data__get_metrics_pageviews_top_by_country_project_access_year_month_params__to_json(&params);
-        dispatch(&OP_PAGEVIEWS_DATA_GET_METRICS_PAGEVIEWS_TOP_BY_COUNTRY_PROJECT_ACCESS_YEAR_MONTH, json)
+        match dispatch(&OP_PAGEVIEWS_DATA_GET_METRICS_PAGEVIEWS_TOP_BY_COUNTRY_PROJECT_ACCESS_YEAR_MONTH, json).and_then(iface_pageviews_data__get_metrics_pageviews_top_by_country_project_access_year_month__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_pageviews_data__get_metrics_pageviews_top_by_country_project_access_year_month__err(e)),
+        }
     }
-    fn get_metrics_pageviews_top_project_access_year_month_day(params: iface_pageviews_data::GetMetricsPageviewsTopProjectAccessYearMonthDayParams) -> Result<String, String> {
+    fn get_metrics_pageviews_top_project_access_year_month_day(params: iface_pageviews_data::GetMetricsPageviewsTopProjectAccessYearMonthDayParams) -> Result<iface_pageviews_data::PageviewTops, String> {
         let json = iface_pageviews_data__get_metrics_pageviews_top_project_access_year_month_day_params__to_json(&params);
-        dispatch(&OP_PAGEVIEWS_DATA_GET_METRICS_PAGEVIEWS_TOP_PROJECT_ACCESS_YEAR_MONTH_DAY, json)
+        match dispatch(&OP_PAGEVIEWS_DATA_GET_METRICS_PAGEVIEWS_TOP_PROJECT_ACCESS_YEAR_MONTH_DAY, json).and_then(iface_pageviews_data__get_metrics_pageviews_top_project_access_year_month_day__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_pageviews_data__get_metrics_pageviews_top_project_access_year_month_day__err(e)),
+        }
     }
 }
 use crate::exports::autostamp::wikimedia::registered_users_data as iface_registered_users_data;
@@ -994,14 +2579,35 @@ const OP_REGISTERED_USERS_DATA_GET_METRICS_REGISTERED_USERS_NEW_PROJECT_GRANULAR
     method: "GET",
     path_template: "/metrics/registered-users/new/{project}/{granularity}/{start}/{end}",
     fields: &[
-        FieldSpec { snake: "project", location: FieldLocation::Path },
-        FieldSpec { snake: "granularity", location: FieldLocation::Path },
-        FieldSpec { snake: "start", location: FieldLocation::Path },
-        FieldSpec { snake: "end", location: FieldLocation::Path },
+        FieldSpec { snake: "project", wire: "project", location: FieldLocation::Path },
+        FieldSpec { snake: "granularity", wire: "granularity", location: FieldLocation::Path },
+        FieldSpec { snake: "start", wire: "start", location: FieldLocation::Path },
+        FieldSpec { snake: "end", wire: "end", location: FieldLocation::Path },
     ],
     auth: &[
     ],
 };
+
+fn iface_registered_users_data__new_registered_users__to_json(p: &iface_registered_users_data::NewRegisteredUsers) -> Value {
+    let mut m = Map::new();
+    m.insert("items".into(), match (&p.items) { Some(v) => Value::Array((v).iter().map(|v| iface_registered_users_data__new_registered_users_items_item__to_json(v)).collect()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_registered_users_data__new_registered_users_items_item__to_json(p: &iface_registered_users_data::NewRegisteredUsersItemsItem) -> Value {
+    let mut m = Map::new();
+    m.insert("granularity".into(), match (&p.granularity) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("project".into(), match (&p.project) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("results".into(), match (&p.results) { Some(v) => Value::Array((v).iter().map(|v| iface_registered_users_data__new_registered_users_items_item_results_item__to_json(v)).collect()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_registered_users_data__new_registered_users_items_item_results_item__to_json(p: &iface_registered_users_data::NewRegisteredUsersItemsItemResultsItem) -> Value {
+    let mut m = Map::new();
+    m.insert("new_registered_users".into(), match (&p.new_registered_users) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("timestamp".into(), match (&p.timestamp) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
 
 fn iface_registered_users_data__get_metrics_registered_users_new_project_granularity_start_end_params__to_json(p: &iface_registered_users_data::GetMetricsRegisteredUsersNewProjectGranularityStartEndParams) -> Value {
     let mut m = Map::new();
@@ -1012,10 +2618,55 @@ fn iface_registered_users_data__get_metrics_registered_users_new_project_granula
     Value::Object(m)
 }
 
+fn iface_registered_users_data__new_registered_users__from_json(v: &Value) -> Option<iface_registered_users_data::NewRegisteredUsers> {
+    let m = v.as_object()?;
+    Some(iface_registered_users_data::NewRegisteredUsers {
+        items: m.get("items").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| iface_registered_users_data__new_registered_users_items_item__from_json(x)).collect())),
+    })
+}
+
+fn iface_registered_users_data__new_registered_users_items_item__from_json(v: &Value) -> Option<iface_registered_users_data::NewRegisteredUsersItemsItem> {
+    let m = v.as_object()?;
+    Some(iface_registered_users_data::NewRegisteredUsersItemsItem {
+        granularity: m.get("granularity").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        project: m.get("project").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        results: m.get("results").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| iface_registered_users_data__new_registered_users_items_item_results_item__from_json(x)).collect())),
+    })
+}
+
+fn iface_registered_users_data__new_registered_users_items_item_results_item__from_json(v: &Value) -> Option<iface_registered_users_data::NewRegisteredUsersItemsItemResultsItem> {
+    let m = v.as_object()?;
+    Some(iface_registered_users_data::NewRegisteredUsersItemsItemResultsItem {
+        new_registered_users: m.get("new_registered_users").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        timestamp: m.get("timestamp").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    })
+}
+
+fn iface_registered_users_data__get_metrics_registered_users_new_project_granularity_start_end__ok(body: String) -> Result<iface_registered_users_data::NewRegisteredUsers, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match iface_registered_users_data__new_registered_users__from_json(&v) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_registered_users_data__get_metrics_registered_users_new_project_granularity_start_end__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
 impl iface_registered_users_data::Guest for crate::Component {
-    fn get_metrics_registered_users_new_project_granularity_start_end(params: iface_registered_users_data::GetMetricsRegisteredUsersNewProjectGranularityStartEndParams) -> Result<String, String> {
+    fn get_metrics_registered_users_new_project_granularity_start_end(params: iface_registered_users_data::GetMetricsRegisteredUsersNewProjectGranularityStartEndParams) -> Result<iface_registered_users_data::NewRegisteredUsers, String> {
         let json = iface_registered_users_data__get_metrics_registered_users_new_project_granularity_start_end_params__to_json(&params);
-        dispatch(&OP_REGISTERED_USERS_DATA_GET_METRICS_REGISTERED_USERS_NEW_PROJECT_GRANULARITY_START_END, json)
+        match dispatch(&OP_REGISTERED_USERS_DATA_GET_METRICS_REGISTERED_USERS_NEW_PROJECT_GRANULARITY_START_END, json).and_then(iface_registered_users_data__get_metrics_registered_users_new_project_granularity_start_end__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_registered_users_data__get_metrics_registered_users_new_project_granularity_start_end__err(e)),
+        }
     }
 }
 use crate::exports::autostamp::wikimedia::unique_devices_data as iface_unique_devices_data;
@@ -1024,15 +2675,31 @@ const OP_UNIQUE_DEVICES_DATA_GET_METRICS_UNIQUE_DEVICES_PROJECT_ACCESS_SITE_GRAN
     method: "GET",
     path_template: "/metrics/unique-devices/{project}/{access_site}/{granularity}/{start}/{end}",
     fields: &[
-        FieldSpec { snake: "project", location: FieldLocation::Path },
-        FieldSpec { snake: "access_site", location: FieldLocation::Path },
-        FieldSpec { snake: "granularity", location: FieldLocation::Path },
-        FieldSpec { snake: "start", location: FieldLocation::Path },
-        FieldSpec { snake: "end", location: FieldLocation::Path },
+        FieldSpec { snake: "project", wire: "project", location: FieldLocation::Path },
+        FieldSpec { snake: "access_site", wire: "access-site", location: FieldLocation::Path },
+        FieldSpec { snake: "granularity", wire: "granularity", location: FieldLocation::Path },
+        FieldSpec { snake: "start", wire: "start", location: FieldLocation::Path },
+        FieldSpec { snake: "end", wire: "end", location: FieldLocation::Path },
     ],
     auth: &[
     ],
 };
+
+fn iface_unique_devices_data__unique_devices__to_json(p: &iface_unique_devices_data::UniqueDevices) -> Value {
+    let mut m = Map::new();
+    m.insert("items".into(), match (&p.items) { Some(v) => Value::Array((v).iter().map(|v| iface_unique_devices_data__unique_devices_items_item__to_json(v)).collect()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_unique_devices_data__unique_devices_items_item__to_json(p: &iface_unique_devices_data::UniqueDevicesItemsItem) -> Value {
+    let mut m = Map::new();
+    m.insert("access-site".into(), match (&p.access_site) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("devices".into(), match (&p.devices) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("granularity".into(), match (&p.granularity) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("project".into(), match (&p.project) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("timestamp".into(), match (&p.timestamp) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
 
 fn iface_unique_devices_data__get_metrics_unique_devices_project_access_site_granularity_start_end_params__to_json(p: &iface_unique_devices_data::GetMetricsUniqueDevicesProjectAccessSiteGranularityStartEndParams) -> Value {
     let mut m = Map::new();
@@ -1044,10 +2711,49 @@ fn iface_unique_devices_data__get_metrics_unique_devices_project_access_site_gra
     Value::Object(m)
 }
 
+fn iface_unique_devices_data__unique_devices__from_json(v: &Value) -> Option<iface_unique_devices_data::UniqueDevices> {
+    let m = v.as_object()?;
+    Some(iface_unique_devices_data::UniqueDevices {
+        items: m.get("items").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| iface_unique_devices_data__unique_devices_items_item__from_json(x)).collect())),
+    })
+}
+
+fn iface_unique_devices_data__unique_devices_items_item__from_json(v: &Value) -> Option<iface_unique_devices_data::UniqueDevicesItemsItem> {
+    let m = v.as_object()?;
+    Some(iface_unique_devices_data::UniqueDevicesItemsItem {
+        access_site: m.get("access-site").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        devices: m.get("devices").filter(|v| !v.is_null()).and_then(|v| (v).as_i64()),
+        granularity: m.get("granularity").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        project: m.get("project").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        timestamp: m.get("timestamp").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    })
+}
+
+fn iface_unique_devices_data__get_metrics_unique_devices_project_access_site_granularity_start_end__ok(body: String) -> Result<iface_unique_devices_data::UniqueDevices, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match iface_unique_devices_data__unique_devices__from_json(&v) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_unique_devices_data__get_metrics_unique_devices_project_access_site_granularity_start_end__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
 impl iface_unique_devices_data::Guest for crate::Component {
-    fn get_metrics_unique_devices_project_access_site_granularity_start_end(params: iface_unique_devices_data::GetMetricsUniqueDevicesProjectAccessSiteGranularityStartEndParams) -> Result<String, String> {
+    fn get_metrics_unique_devices_project_access_site_granularity_start_end(params: iface_unique_devices_data::GetMetricsUniqueDevicesProjectAccessSiteGranularityStartEndParams) -> Result<iface_unique_devices_data::UniqueDevices, String> {
         let json = iface_unique_devices_data__get_metrics_unique_devices_project_access_site_granularity_start_end_params__to_json(&params);
-        dispatch(&OP_UNIQUE_DEVICES_DATA_GET_METRICS_UNIQUE_DEVICES_PROJECT_ACCESS_SITE_GRANULARITY_START_END, json)
+        match dispatch(&OP_UNIQUE_DEVICES_DATA_GET_METRICS_UNIQUE_DEVICES_PROJECT_ACCESS_SITE_GRANULARITY_START_END, json).and_then(iface_unique_devices_data__get_metrics_unique_devices_project_access_site_granularity_start_end__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_unique_devices_data__get_metrics_unique_devices_project_access_site_granularity_start_end__err(e)),
+        }
     }
 }
 use crate::exports::autostamp::wikimedia::transform as iface_transform;
@@ -1056,9 +2762,9 @@ const OP_TRANSFORM_POST_TRANSFORM_HTML_FROM_FROM_LANG_TO_TO_LANG: OpSpec = OpSpe
     method: "POST",
     path_template: "/transform/html/from/{from_lang}/to/{to_lang}",
     fields: &[
-        FieldSpec { snake: "from_lang", location: FieldLocation::Path },
-        FieldSpec { snake: "to_lang", location: FieldLocation::Path },
-        FieldSpec { snake: "html", location: FieldLocation::Body },
+        FieldSpec { snake: "from_lang", wire: "from_lang", location: FieldLocation::Path },
+        FieldSpec { snake: "to_lang", wire: "to_lang", location: FieldLocation::Path },
+        FieldSpec { snake: "html", wire: "html", location: FieldLocation::Body },
     ],
     auth: &[
     ],
@@ -1068,10 +2774,10 @@ const OP_TRANSFORM_POST_TRANSFORM_HTML_FROM_FROM_LANG_TO_TO_LANG_PROVIDER: OpSpe
     method: "POST",
     path_template: "/transform/html/from/{from_lang}/to/{to_lang}/{provider}",
     fields: &[
-        FieldSpec { snake: "from_lang", location: FieldLocation::Path },
-        FieldSpec { snake: "to_lang", location: FieldLocation::Path },
-        FieldSpec { snake: "provider", location: FieldLocation::Path },
-        FieldSpec { snake: "html", location: FieldLocation::Body },
+        FieldSpec { snake: "from_lang", wire: "from_lang", location: FieldLocation::Path },
+        FieldSpec { snake: "to_lang", wire: "to_lang", location: FieldLocation::Path },
+        FieldSpec { snake: "provider", wire: "provider", location: FieldLocation::Path },
+        FieldSpec { snake: "html", wire: "html", location: FieldLocation::Body },
     ],
     auth: &[
     ],
@@ -1090,8 +2796,8 @@ const OP_TRANSFORM_GET_TRANSFORM_LIST_PAIR_FROM_TO: OpSpec = OpSpec {
     method: "GET",
     path_template: "/transform/list/pair/{from}/{to}/",
     fields: &[
-        FieldSpec { snake: "from", location: FieldLocation::Path },
-        FieldSpec { snake: "to", location: FieldLocation::Path },
+        FieldSpec { snake: "from", wire: "from", location: FieldLocation::Path },
+        FieldSpec { snake: "to", wire: "to", location: FieldLocation::Path },
     ],
     auth: &[
     ],
@@ -1101,7 +2807,7 @@ const OP_TRANSFORM_GET_TRANSFORM_LIST_TOOL_TOOL: OpSpec = OpSpec {
     method: "GET",
     path_template: "/transform/list/tool/{tool}",
     fields: &[
-        FieldSpec { snake: "tool", location: FieldLocation::Path },
+        FieldSpec { snake: "tool", wire: "tool", location: FieldLocation::Path },
     ],
     auth: &[
     ],
@@ -1111,8 +2817,8 @@ const OP_TRANSFORM_GET_TRANSFORM_LIST_TOOL_TOOL_FROM: OpSpec = OpSpec {
     method: "GET",
     path_template: "/transform/list/tool/{tool}/{from}",
     fields: &[
-        FieldSpec { snake: "tool", location: FieldLocation::Path },
-        FieldSpec { snake: "from", location: FieldLocation::Path },
+        FieldSpec { snake: "tool", wire: "tool", location: FieldLocation::Path },
+        FieldSpec { snake: "from", wire: "from", location: FieldLocation::Path },
     ],
     auth: &[
     ],
@@ -1122,9 +2828,9 @@ const OP_TRANSFORM_GET_TRANSFORM_LIST_TOOL_TOOL_FROM_TO: OpSpec = OpSpec {
     method: "GET",
     path_template: "/transform/list/tool/{tool}/{from}/{to}",
     fields: &[
-        FieldSpec { snake: "tool", location: FieldLocation::Path },
-        FieldSpec { snake: "from", location: FieldLocation::Path },
-        FieldSpec { snake: "to", location: FieldLocation::Path },
+        FieldSpec { snake: "tool", wire: "tool", location: FieldLocation::Path },
+        FieldSpec { snake: "from", wire: "from", location: FieldLocation::Path },
+        FieldSpec { snake: "to", wire: "to", location: FieldLocation::Path },
     ],
     auth: &[
     ],
@@ -1134,9 +2840,9 @@ const OP_TRANSFORM_GET_TRANSFORM_WORD_FROM_FROM_LANG_TO_TO_LANG_WORD: OpSpec = O
     method: "GET",
     path_template: "/transform/word/from/{from_lang}/to/{to_lang}/{word}",
     fields: &[
-        FieldSpec { snake: "from_lang", location: FieldLocation::Path },
-        FieldSpec { snake: "to_lang", location: FieldLocation::Path },
-        FieldSpec { snake: "word", location: FieldLocation::Path },
+        FieldSpec { snake: "from_lang", wire: "from_lang", location: FieldLocation::Path },
+        FieldSpec { snake: "to_lang", wire: "to_lang", location: FieldLocation::Path },
+        FieldSpec { snake: "word", wire: "word", location: FieldLocation::Path },
     ],
     auth: &[
     ],
@@ -1146,14 +2852,54 @@ const OP_TRANSFORM_GET_TRANSFORM_WORD_FROM_FROM_LANG_TO_TO_LANG_WORD_PROVIDER: O
     method: "GET",
     path_template: "/transform/word/from/{from_lang}/to/{to_lang}/{word}/{provider}",
     fields: &[
-        FieldSpec { snake: "from_lang", location: FieldLocation::Path },
-        FieldSpec { snake: "to_lang", location: FieldLocation::Path },
-        FieldSpec { snake: "word", location: FieldLocation::Path },
-        FieldSpec { snake: "provider", location: FieldLocation::Path },
+        FieldSpec { snake: "from_lang", wire: "from_lang", location: FieldLocation::Path },
+        FieldSpec { snake: "to_lang", wire: "to_lang", location: FieldLocation::Path },
+        FieldSpec { snake: "word", wire: "word", location: FieldLocation::Path },
+        FieldSpec { snake: "provider", wire: "provider", location: FieldLocation::Path },
     ],
     auth: &[
     ],
 };
+
+fn iface_transform__cx_mt__to_json(p: &iface_transform::CxMt) -> Value {
+    let mut m = Map::new();
+    m.insert("contents".into(), match (&p.contents) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_transform__cx_languagepairs__to_json(p: &iface_transform::CxLanguagepairs) -> Value {
+    let mut m = Map::new();
+    m.insert("source".into(), match (&p.source) { Some(v) => Value::Array((v).iter().map(|v| Value::String((v).clone())).collect()), None => Value::Null });
+    m.insert("target".into(), match (&p.target) { Some(v) => Value::Array((v).iter().map(|v| Value::String((v).clone())).collect()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_transform__cx_list_tools__to_json(p: &iface_transform::CxListTools) -> Value {
+    let mut m = Map::new();
+    m.insert("tools".into(), match (&p.tools) { Some(v) => Value::Array((v).iter().map(|v| Value::String((v).clone())).collect()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_transform__cx_list_pairs_for_tool__to_json(p: &iface_transform::CxListPairsForTool) -> Value {
+    let mut m = Map::new();
+    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_transform__cx_dict__to_json(p: &iface_transform::CxDict) -> Value {
+    let mut m = Map::new();
+    m.insert("source".into(), match (&p.source) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("translations".into(), match (&p.translations) { Some(v) => Value::Array((v).iter().map(|v| iface_transform__cx_dict_translations_item__to_json(v)).collect()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_transform__cx_dict_translations_item__to_json(p: &iface_transform::CxDictTranslationsItem) -> Value {
+    let mut m = Map::new();
+    m.insert("info".into(), match (&p.info) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("phrase".into(), match (&p.phrase) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("sources".into(), match (&p.sources) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
 
 fn iface_transform__post_transform_html_from_from_lang_to_to_lang_params__to_json(p: &iface_transform::PostTransformHtmlFromFromLangToToLangParams) -> Value {
     let mut m = Map::new();
@@ -1217,41 +2963,276 @@ fn iface_transform__get_transform_word_from_from_lang_to_to_lang_word_provider_p
     Value::Object(m)
 }
 
+fn iface_transform__cx_mt__from_json(v: &Value) -> Option<iface_transform::CxMt> {
+    let m = v.as_object()?;
+    Some(iface_transform::CxMt {
+        contents: m.get("contents").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    })
+}
+
+fn iface_transform__cx_languagepairs__from_json(v: &Value) -> Option<iface_transform::CxLanguagepairs> {
+    let m = v.as_object()?;
+    Some(iface_transform::CxLanguagepairs {
+        source: m.get("source").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| (x).as_str().map(|s| s.to_string())).collect())),
+        target: m.get("target").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| (x).as_str().map(|s| s.to_string())).collect())),
+    })
+}
+
+fn iface_transform__cx_list_tools__from_json(v: &Value) -> Option<iface_transform::CxListTools> {
+    let m = v.as_object()?;
+    Some(iface_transform::CxListTools {
+        tools: m.get("tools").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| (x).as_str().map(|s| s.to_string())).collect())),
+    })
+}
+
+fn iface_transform__cx_list_pairs_for_tool__from_json(v: &Value) -> Option<iface_transform::CxListPairsForTool> {
+    let m = v.as_object()?;
+    Some(iface_transform::CxListPairsForTool {
+        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    })
+}
+
+fn iface_transform__cx_dict__from_json(v: &Value) -> Option<iface_transform::CxDict> {
+    let m = v.as_object()?;
+    Some(iface_transform::CxDict {
+        source: m.get("source").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        translations: m.get("translations").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| iface_transform__cx_dict_translations_item__from_json(x)).collect())),
+    })
+}
+
+fn iface_transform__cx_dict_translations_item__from_json(v: &Value) -> Option<iface_transform::CxDictTranslationsItem> {
+    let m = v.as_object()?;
+    Some(iface_transform::CxDictTranslationsItem {
+        info: m.get("info").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        phrase: m.get("phrase").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        sources: m.get("sources").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    })
+}
+
+fn iface_transform__post_transform_html_from_from_lang_to_to_lang__ok(body: String) -> Result<iface_transform::CxMt, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match iface_transform__cx_mt__from_json(&v) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_transform__post_transform_html_from_from_lang_to_to_lang__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
+fn iface_transform__post_transform_html_from_from_lang_to_to_lang_provider__ok(body: String) -> Result<iface_transform::CxMt, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match iface_transform__cx_mt__from_json(&v) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_transform__post_transform_html_from_from_lang_to_to_lang_provider__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
+fn iface_transform__get_transform_list_languagepairs__ok(body: String) -> Result<iface_transform::CxLanguagepairs, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match iface_transform__cx_languagepairs__from_json(&v) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_transform__get_transform_list_languagepairs__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
+fn iface_transform__get_transform_list_pair_from_to__ok(body: String) -> Result<iface_transform::CxListTools, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match iface_transform__cx_list_tools__from_json(&v) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_transform__get_transform_list_pair_from_to__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
+fn iface_transform__get_transform_list_tool_tool__ok(body: String) -> Result<iface_transform::CxListPairsForTool, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match iface_transform__cx_list_pairs_for_tool__from_json(&v) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_transform__get_transform_list_tool_tool__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
+fn iface_transform__get_transform_list_tool_tool_from__ok(body: String) -> Result<iface_transform::CxListPairsForTool, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match iface_transform__cx_list_pairs_for_tool__from_json(&v) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_transform__get_transform_list_tool_tool_from__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
+fn iface_transform__get_transform_list_tool_tool_from_to__ok(body: String) -> Result<iface_transform::CxListPairsForTool, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match iface_transform__cx_list_pairs_for_tool__from_json(&v) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_transform__get_transform_list_tool_tool_from_to__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
+fn iface_transform__get_transform_word_from_from_lang_to_to_lang_word__ok(body: String) -> Result<iface_transform::CxDict, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match iface_transform__cx_dict__from_json(&v) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_transform__get_transform_word_from_from_lang_to_to_lang_word__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
+fn iface_transform__get_transform_word_from_from_lang_to_to_lang_word_provider__ok(body: String) -> Result<iface_transform::CxDict, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match iface_transform__cx_dict__from_json(&v) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_transform__get_transform_word_from_from_lang_to_to_lang_word_provider__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
 impl iface_transform::Guest for crate::Component {
-    fn post_transform_html_from_from_lang_to_to_lang(params: iface_transform::PostTransformHtmlFromFromLangToToLangParams) -> Result<String, String> {
+    fn post_transform_html_from_from_lang_to_to_lang(params: iface_transform::PostTransformHtmlFromFromLangToToLangParams) -> Result<iface_transform::CxMt, String> {
         let json = iface_transform__post_transform_html_from_from_lang_to_to_lang_params__to_json(&params);
-        dispatch(&OP_TRANSFORM_POST_TRANSFORM_HTML_FROM_FROM_LANG_TO_TO_LANG, json)
+        match dispatch(&OP_TRANSFORM_POST_TRANSFORM_HTML_FROM_FROM_LANG_TO_TO_LANG, json).and_then(iface_transform__post_transform_html_from_from_lang_to_to_lang__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_transform__post_transform_html_from_from_lang_to_to_lang__err(e)),
+        }
     }
-    fn post_transform_html_from_from_lang_to_to_lang_provider(params: iface_transform::PostTransformHtmlFromFromLangToToLangProviderParams) -> Result<String, String> {
+    fn post_transform_html_from_from_lang_to_to_lang_provider(params: iface_transform::PostTransformHtmlFromFromLangToToLangProviderParams) -> Result<iface_transform::CxMt, String> {
         let json = iface_transform__post_transform_html_from_from_lang_to_to_lang_provider_params__to_json(&params);
-        dispatch(&OP_TRANSFORM_POST_TRANSFORM_HTML_FROM_FROM_LANG_TO_TO_LANG_PROVIDER, json)
+        match dispatch(&OP_TRANSFORM_POST_TRANSFORM_HTML_FROM_FROM_LANG_TO_TO_LANG_PROVIDER, json).and_then(iface_transform__post_transform_html_from_from_lang_to_to_lang_provider__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_transform__post_transform_html_from_from_lang_to_to_lang_provider__err(e)),
+        }
     }
-    fn get_transform_list_languagepairs() -> Result<String, String> {
-        dispatch(&OP_TRANSFORM_GET_TRANSFORM_LIST_LANGUAGEPAIRS, Value::Object(Map::new()))
+    fn get_transform_list_languagepairs() -> Result<iface_transform::CxLanguagepairs, String> {
+        match dispatch(&OP_TRANSFORM_GET_TRANSFORM_LIST_LANGUAGEPAIRS, Value::Object(Map::new())).and_then(iface_transform__get_transform_list_languagepairs__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_transform__get_transform_list_languagepairs__err(e)),
+        }
     }
-    fn get_transform_list_pair_from_to(params: iface_transform::GetTransformListPairFromToParams) -> Result<String, String> {
+    fn get_transform_list_pair_from_to(params: iface_transform::GetTransformListPairFromToParams) -> Result<iface_transform::CxListTools, String> {
         let json = iface_transform__get_transform_list_pair_from_to_params__to_json(&params);
-        dispatch(&OP_TRANSFORM_GET_TRANSFORM_LIST_PAIR_FROM_TO, json)
+        match dispatch(&OP_TRANSFORM_GET_TRANSFORM_LIST_PAIR_FROM_TO, json).and_then(iface_transform__get_transform_list_pair_from_to__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_transform__get_transform_list_pair_from_to__err(e)),
+        }
     }
-    fn get_transform_list_tool_tool(params: iface_transform::GetTransformListToolToolParams) -> Result<String, String> {
+    fn get_transform_list_tool_tool(params: iface_transform::GetTransformListToolToolParams) -> Result<iface_transform::CxListPairsForTool, String> {
         let json = iface_transform__get_transform_list_tool_tool_params__to_json(&params);
-        dispatch(&OP_TRANSFORM_GET_TRANSFORM_LIST_TOOL_TOOL, json)
+        match dispatch(&OP_TRANSFORM_GET_TRANSFORM_LIST_TOOL_TOOL, json).and_then(iface_transform__get_transform_list_tool_tool__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_transform__get_transform_list_tool_tool__err(e)),
+        }
     }
-    fn get_transform_list_tool_tool_from(params: iface_transform::GetTransformListToolToolFromParams) -> Result<String, String> {
+    fn get_transform_list_tool_tool_from(params: iface_transform::GetTransformListToolToolFromParams) -> Result<iface_transform::CxListPairsForTool, String> {
         let json = iface_transform__get_transform_list_tool_tool_from_params__to_json(&params);
-        dispatch(&OP_TRANSFORM_GET_TRANSFORM_LIST_TOOL_TOOL_FROM, json)
+        match dispatch(&OP_TRANSFORM_GET_TRANSFORM_LIST_TOOL_TOOL_FROM, json).and_then(iface_transform__get_transform_list_tool_tool_from__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_transform__get_transform_list_tool_tool_from__err(e)),
+        }
     }
-    fn get_transform_list_tool_tool_from_to(params: iface_transform::GetTransformListToolToolFromToParams) -> Result<String, String> {
+    fn get_transform_list_tool_tool_from_to(params: iface_transform::GetTransformListToolToolFromToParams) -> Result<iface_transform::CxListPairsForTool, String> {
         let json = iface_transform__get_transform_list_tool_tool_from_to_params__to_json(&params);
-        dispatch(&OP_TRANSFORM_GET_TRANSFORM_LIST_TOOL_TOOL_FROM_TO, json)
+        match dispatch(&OP_TRANSFORM_GET_TRANSFORM_LIST_TOOL_TOOL_FROM_TO, json).and_then(iface_transform__get_transform_list_tool_tool_from_to__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_transform__get_transform_list_tool_tool_from_to__err(e)),
+        }
     }
-    fn get_transform_word_from_from_lang_to_to_lang_word(params: iface_transform::GetTransformWordFromFromLangToToLangWordParams) -> Result<String, String> {
+    fn get_transform_word_from_from_lang_to_to_lang_word(params: iface_transform::GetTransformWordFromFromLangToToLangWordParams) -> Result<iface_transform::CxDict, String> {
         let json = iface_transform__get_transform_word_from_from_lang_to_to_lang_word_params__to_json(&params);
-        dispatch(&OP_TRANSFORM_GET_TRANSFORM_WORD_FROM_FROM_LANG_TO_TO_LANG_WORD, json)
+        match dispatch(&OP_TRANSFORM_GET_TRANSFORM_WORD_FROM_FROM_LANG_TO_TO_LANG_WORD, json).and_then(iface_transform__get_transform_word_from_from_lang_to_to_lang_word__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_transform__get_transform_word_from_from_lang_to_to_lang_word__err(e)),
+        }
     }
-    fn get_transform_word_from_from_lang_to_to_lang_word_provider(params: iface_transform::GetTransformWordFromFromLangToToLangWordProviderParams) -> Result<String, String> {
+    fn get_transform_word_from_from_lang_to_to_lang_word_provider(params: iface_transform::GetTransformWordFromFromLangToToLangWordProviderParams) -> Result<iface_transform::CxDict, String> {
         let json = iface_transform__get_transform_word_from_from_lang_to_to_lang_word_provider_params__to_json(&params);
-        dispatch(&OP_TRANSFORM_GET_TRANSFORM_WORD_FROM_FROM_LANG_TO_TO_LANG_WORD_PROVIDER, json)
+        match dispatch(&OP_TRANSFORM_GET_TRANSFORM_WORD_FROM_FROM_LANG_TO_TO_LANG_WORD_PROVIDER, json).and_then(iface_transform__get_transform_word_from_from_lang_to_to_lang_word_provider__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_transform__get_transform_word_from_from_lang_to_to_lang_word_provider__err(e)),
+        }
     }
 }
 

@@ -44,10 +44,15 @@ pub(crate) enum FieldLocation {
     Body,
 }
 
-/// A single operation parameter: the snake-case key it carries in the params JSON and where
-/// it belongs in the request.
+/// A single operation parameter. `snake` keys the field in the internal params JSON (and, for a
+/// path field, matches the `{snake}` placeholder in the path template); `wire` is the verbatim name
+/// the field takes on the HTTP wire (query key, header name, or body property). The two differ
+/// whenever the source name isn't already snake_case (e.g. `dryRun` → snake `dry_run`, wire
+/// `dryRun`), and let distinct inputs that share a snake key (`DateCreated`, `DateCreated<`) still
+/// travel under their true names.
 pub(crate) struct FieldSpec {
     pub(crate) snake: &'static str,
+    pub(crate) wire: &'static str,
     pub(crate) location: FieldLocation,
 }
 
@@ -71,6 +76,16 @@ pub(crate) struct AuthApply {
     pub(crate) kind: AuthKind,
 }
 
+/// The failure modes of [`dispatch`], kept structured so each generated operation can map them
+/// onto its own typed error: an `Http` failure carries the response status and body (routed to
+/// the matching error-variant case), while a `Transport` failure carries a message for the
+/// catch-all case (a secret lookup, connection, or decode failure that never produced an HTTP
+/// status).
+pub(crate) enum DispatchError {
+    Http { status: u16, body: String },
+    Transport(String),
+}
+
 /// A single API operation: HTTP method, path template (with `{snake}` placeholders), the
 /// parameter fields, and the security schemes to apply.
 pub(crate) struct OpSpec {
@@ -81,8 +96,9 @@ pub(crate) struct OpSpec {
 }
 
 /// Execute `op` with the supplied `params` (a JSON object keyed by snake-case field names)
-/// and return the response body as a string, or an error message.
-pub(crate) fn dispatch(op: &OpSpec, params: Value) -> Result<String, String> {
+/// and return the raw 2xx response body, or a structured [`DispatchError`] the caller maps
+/// onto the operation's typed error.
+pub(crate) fn dispatch(op: &OpSpec, params: Value) -> Result<String, DispatchError> {
     let obj = match &params {
         Value::Object(map) => Some(map),
         _ => None,
@@ -105,10 +121,10 @@ pub(crate) fn dispatch(op: &OpSpec, params: Value) -> Result<String, String> {
                 let placeholder = format!("{{{}}}", field.snake);
                 path = path.replace(&placeholder, &percent_encode(&scalar(value)));
             }
-            FieldLocation::Query => query.push((field.snake.to_string(), scalar(value))),
-            FieldLocation::Header => headers.push((field.snake.to_string(), scalar(value))),
+            FieldLocation::Query => query.push((field.wire.to_string(), scalar(value))),
+            FieldLocation::Header => headers.push((field.wire.to_string(), scalar(value))),
             FieldLocation::Body => {
-                body.insert(field.snake.to_string(), value.clone());
+                body.insert(field.wire.to_string(), value.clone());
             }
         }
     }
@@ -116,7 +132,7 @@ pub(crate) fn dispatch(op: &OpSpec, params: Value) -> Result<String, String> {
     // Apply each resolved security scheme, sourcing its value from wasmcloud:secrets.
     let mut cookies: Vec<String> = Vec::new();
     for apply in op.auth {
-        let secret = fetch_secret(apply.secret_key)?;
+        let secret = fetch_secret(apply.secret_key).map_err(DispatchError::Transport)?;
         match &apply.kind {
             AuthKind::Bearer => headers.push(("authorization".into(), format!("Bearer {secret}"))),
             AuthKind::Basic => {
@@ -177,17 +193,18 @@ fn fetch_secret(key: &str) -> Result<String, String> {
 }
 
 /// Build and send the outgoing request with `wstd`, returning the response body on a 2xx
-/// status. The generated guest exports are synchronous, so the async `wstd` client is driven
-/// to completion on a local reactor via `wstd::runtime::block_on`.
+/// status and a structured [`DispatchError`] otherwise. The generated guest exports are
+/// synchronous, so the async `wstd` client is driven to completion on a local reactor via
+/// `wstd::runtime::block_on`.
 fn perform(
     method: &str,
     path_with_query: &str,
     headers: &[(String, String)],
     body: &[u8],
-) -> Result<String, String> {
+) -> Result<String, DispatchError> {
     let url = join_url(crate::BASE_URL, path_with_query);
     let method = Method::from_bytes(method.as_bytes())
-        .map_err(|err| format!("invalid HTTP method `{method}`: {err}"))?;
+        .map_err(|err| DispatchError::Transport(format!("invalid HTTP method `{method}`: {err}")))?;
 
     let mut builder = Request::builder().method(method).uri(url);
     for (name, value) in headers {
@@ -199,27 +216,29 @@ fn perform(
         } else {
             Body::from(body.to_vec())
         })
-        .map_err(|err| format!("failed to build request: {err}"))?;
+        .map_err(|err| DispatchError::Transport(format!("failed to build request: {err}")))?;
 
     wstd::runtime::block_on(async move {
         let client = Client::new();
         let response = client
             .send(request)
             .await
-            .map_err(|err| format!("request failed: {err:#}"))?;
+            .map_err(|err| DispatchError::Transport(format!("request failed: {err:#}")))?;
 
         let status = response.status().as_u16();
         let mut response_body = response.into_body();
-        let bytes = response_body
-            .contents()
-            .await
-            .map_err(|err| format!("failed to read response body: {err:#}"))?;
+        let bytes = response_body.contents().await.map_err(|err| {
+            DispatchError::Transport(format!("failed to read response body: {err:#}"))
+        })?;
         let body_text = String::from_utf8_lossy(bytes).into_owned();
 
         if (200..300).contains(&status) {
             Ok(body_text)
         } else {
-            Err(format!("HTTP {status}: {body_text}"))
+            Err(DispatchError::Http {
+                status,
+                body: body_text,
+            })
         }
     })
 }
@@ -288,7 +307,7 @@ const OP_ACCOUNT_PORTFOLIO_GET_ACCOUNTS: OpSpec = OpSpec {
     method: "GET",
     path_template: "/accounts",
     fields: &[
-        FieldSpec { snake: "account", location: FieldLocation::Query },
+        FieldSpec { snake: "account", wire: "account", location: FieldLocation::Query },
     ],
     auth: &[
         AuthApply { secret_key: "cookieAuth", kind: AuthKind::ApiKeyHeader("portal") },
@@ -299,7 +318,7 @@ const OP_ACCOUNT_PORTFOLIO_GET_ACCOUNTS_ACCOUNT_POSITIONS: OpSpec = OpSpec {
     method: "GET",
     path_template: "/accounts/{account}/positions",
     fields: &[
-        FieldSpec { snake: "account", location: FieldLocation::Path },
+        FieldSpec { snake: "account", wire: "account", location: FieldLocation::Path },
     ],
     auth: &[
         AuthApply { secret_key: "cookieAuth", kind: AuthKind::ApiKeyHeader("portal") },
@@ -310,12 +329,159 @@ const OP_ACCOUNT_PORTFOLIO_GET_ACCOUNTS_ACCOUNT_SUMMARY: OpSpec = OpSpec {
     method: "GET",
     path_template: "/accounts/{account}/summary",
     fields: &[
-        FieldSpec { snake: "account", location: FieldLocation::Path },
+        FieldSpec { snake: "account", wire: "account", location: FieldLocation::Path },
     ],
     auth: &[
         AuthApply { secret_key: "cookieAuth", kind: AuthKind::ApiKeyHeader("portal") },
     ],
 };
+
+fn iface_account_portfolio__get_accounts_response__to_json(p: &iface_account_portfolio::GetAccountsResponse) -> Value {
+    let mut m = Map::new();
+    m.insert("accounts".into(), match (&p.accounts) { Some(v) => Value::Array((v).iter().map(|v| Value::String((v).clone())).collect()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_account_portfolio__get_accounts_account_positions_response_item__to_json(p: &iface_account_portfolio::GetAccountsAccountPositionsResponseItem) -> Value {
+    let mut m = Map::new();
+    m.insert("AverageCost".into(), match (&p.average_cost) { Some(v) => serde_json::Number::from_f64(*(v)).map(Value::Number).unwrap_or(Value::Null), None => Value::Null });
+    m.insert("ContractId".into(), match (&p.contract_id) { Some(v) => serde_json::Number::from_f64(*(v)).map(Value::Number).unwrap_or(Value::Null), None => Value::Null });
+    m.insert("Position".into(), match (&p.position) { Some(v) => serde_json::Number::from_f64(*(v)).map(Value::Number).unwrap_or(Value::Null), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_account_portfolio__get_accounts_account_summary_response__to_json(p: &iface_account_portfolio::GetAccountsAccountSummaryResponse) -> Value {
+    let mut m = Map::new();
+    m.insert("Info".into(), match (&p.info) { Some(v) => iface_account_portfolio__get_accounts_account_summary_response_info__to_json(v), None => Value::Null });
+    m.insert("Ledger".into(), match (&p.ledger) { Some(v) => Value::Array((v).iter().map(|v| iface_account_portfolio__get_accounts_account_summary_response_ledger_item__to_json(v)).collect()), None => Value::Null });
+    m.insert("Summary".into(), match (&p.summary) { Some(v) => iface_account_portfolio__get_accounts_account_summary_response_summary__to_json(v), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_account_portfolio__get_accounts_account_summary_response_info__to_json(p: &iface_account_portfolio::GetAccountsAccountSummaryResponseInfo) -> Value {
+    let mut m = Map::new();
+    m.insert("AccountCode".into(), match (&p.account_code) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("AccountReady".into(), match (&p.account_ready) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("AccountType".into(), match (&p.account_type) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("Cushion".into(), match (&p.cushion) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("DayTradesRemaining".into(), match (&p.day_trades_remaining) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("DayTradesRemainingT".into(), match (&p.day_trades_remaining_t) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("DayTradesRemainingT+2".into(), match (&p.day_trades_remaining_t_v2) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("DayTradesRemainingT+3".into(), match (&p.day_trades_remaining_t_v3) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("DayTradesRemainingT+4".into(), match (&p.day_trades_remaining_t_v4) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("HighestSeverity".into(), match (&p.highest_severity) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("Leverage-S".into(), match (&p.leverage_s) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("LookAheadNextChange".into(), match (&p.look_ahead_next_change) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("SegmentTitle-C".into(), match (&p.segment_title_c) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("SegmentTitle-S".into(), match (&p.segment_title_s) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("TradingType-S".into(), match (&p.trading_type_s) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("WhatIfPMEnabled".into(), match (&p.what_if_pm_enabled) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_account_portfolio__get_accounts_account_summary_response_ledger_item__to_json(p: &iface_account_portfolio::GetAccountsAccountSummaryResponseLedgerItem) -> Value {
+    let mut m = Map::new();
+    m.insert("CashBalance".into(), match (&p.cash_balance) { Some(v) => serde_json::Number::from_f64(*(v)).map(Value::Number).unwrap_or(Value::Null), None => Value::Null });
+    m.insert("CashBalanceFXSegment".into(), match (&p.cash_balance_fx_segment) { Some(v) => serde_json::Number::from_f64(*(v)).map(Value::Number).unwrap_or(Value::Null), None => Value::Null });
+    m.insert("CashCumQty".into(), match (&p.cash_cum_qty) { Some(v) => serde_json::Number::from_f64(*(v)).map(Value::Number).unwrap_or(Value::Null), None => Value::Null });
+    m.insert("ExchangeRate".into(), match (&p.exchange_rate) { Some(v) => serde_json::Number::from_f64(*(v)).map(Value::Number).unwrap_or(Value::Null), None => Value::Null });
+    m.insert("FutureOptionMarketValue".into(), match (&p.future_option_market_value) { Some(v) => serde_json::Number::from_f64(*(v)).map(Value::Number).unwrap_or(Value::Null), None => Value::Null });
+    m.insert("FuturePNL".into(), match (&p.future_pnl) { Some(v) => serde_json::Number::from_f64(*(v)).map(Value::Number).unwrap_or(Value::Null), None => Value::Null });
+    m.insert("NetDividend".into(), match (&p.net_dividend) { Some(v) => serde_json::Number::from_f64(*(v)).map(Value::Number).unwrap_or(Value::Null), None => Value::Null });
+    m.insert("NetInterest".into(), match (&p.net_interest) { Some(v) => serde_json::Number::from_f64(*(v)).map(Value::Number).unwrap_or(Value::Null), None => Value::Null });
+    m.insert("NetLiquidation".into(), match (&p.net_liquidation) { Some(v) => serde_json::Number::from_f64(*(v)).map(Value::Number).unwrap_or(Value::Null), None => Value::Null });
+    m.insert("OptionMarketValue".into(), match (&p.option_market_value) { Some(v) => serde_json::Number::from_f64(*(v)).map(Value::Number).unwrap_or(Value::Null), None => Value::Null });
+    m.insert("RealizedPNL".into(), match (&p.realized_pnl) { Some(v) => serde_json::Number::from_f64(*(v)).map(Value::Number).unwrap_or(Value::Null), None => Value::Null });
+    m.insert("StockMarketValue".into(), match (&p.stock_market_value) { Some(v) => serde_json::Number::from_f64(*(v)).map(Value::Number).unwrap_or(Value::Null), None => Value::Null });
+    m.insert("TotalCashBalance".into(), match (&p.total_cash_balance) { Some(v) => serde_json::Number::from_f64(*(v)).map(Value::Number).unwrap_or(Value::Null), None => Value::Null });
+    m.insert("UnrealizedPNL".into(), match (&p.unrealized_pnl) { Some(v) => serde_json::Number::from_f64(*(v)).map(Value::Number).unwrap_or(Value::Null), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_account_portfolio__get_accounts_account_summary_response_summary__to_json(p: &iface_account_portfolio::GetAccountsAccountSummaryResponseSummary) -> Value {
+    let mut m = Map::new();
+    m.insert("AccruedCash".into(), match (&p.accrued_cash) { Some(v) => serde_json::Number::from_f64(*(v)).map(Value::Number).unwrap_or(Value::Null), None => Value::Null });
+    m.insert("AccruedCash-C".into(), match (&p.accrued_cash_c) { Some(v) => serde_json::Number::from_f64(*(v)).map(Value::Number).unwrap_or(Value::Null), None => Value::Null });
+    m.insert("AccruedCash-S".into(), match (&p.accrued_cash_s) { Some(v) => serde_json::Number::from_f64(*(v)).map(Value::Number).unwrap_or(Value::Null), None => Value::Null });
+    m.insert("AccruedDividend".into(), match (&p.accrued_dividend) { Some(v) => serde_json::Number::from_f64(*(v)).map(Value::Number).unwrap_or(Value::Null), None => Value::Null });
+    m.insert("AccruedDividend-C".into(), match (&p.accrued_dividend_c) { Some(v) => serde_json::Number::from_f64(*(v)).map(Value::Number).unwrap_or(Value::Null), None => Value::Null });
+    m.insert("AccruedDividend-S".into(), match (&p.accrued_dividend_s) { Some(v) => serde_json::Number::from_f64(*(v)).map(Value::Number).unwrap_or(Value::Null), None => Value::Null });
+    m.insert("AvailableFunds".into(), match (&p.available_funds) { Some(v) => serde_json::Number::from_f64(*(v)).map(Value::Number).unwrap_or(Value::Null), None => Value::Null });
+    m.insert("AvailableFunds-C".into(), match (&p.available_funds_c) { Some(v) => serde_json::Number::from_f64(*(v)).map(Value::Number).unwrap_or(Value::Null), None => Value::Null });
+    m.insert("AvailableFunds-S".into(), match (&p.available_funds_s) { Some(v) => serde_json::Number::from_f64(*(v)).map(Value::Number).unwrap_or(Value::Null), None => Value::Null });
+    m.insert("Billable".into(), match (&p.billable) { Some(v) => serde_json::Number::from_f64(*(v)).map(Value::Number).unwrap_or(Value::Null), None => Value::Null });
+    m.insert("Billable-C".into(), match (&p.billable_c) { Some(v) => serde_json::Number::from_f64(*(v)).map(Value::Number).unwrap_or(Value::Null), None => Value::Null });
+    m.insert("Billable-S".into(), match (&p.billable_s) { Some(v) => serde_json::Number::from_f64(*(v)).map(Value::Number).unwrap_or(Value::Null), None => Value::Null });
+    m.insert("BuyingPower".into(), match (&p.buying_power) { Some(v) => serde_json::Number::from_f64(*(v)).map(Value::Number).unwrap_or(Value::Null), None => Value::Null });
+    m.insert("EquityWithLoanValue".into(), match (&p.equity_with_loan_value) { Some(v) => serde_json::Number::from_f64(*(v)).map(Value::Number).unwrap_or(Value::Null), None => Value::Null });
+    m.insert("EquityWithLoanValue-C".into(), match (&p.equity_with_loan_value_c) { Some(v) => serde_json::Number::from_f64(*(v)).map(Value::Number).unwrap_or(Value::Null), None => Value::Null });
+    m.insert("EquityWithLoanValue-S".into(), match (&p.equity_with_loan_value_s) { Some(v) => serde_json::Number::from_f64(*(v)).map(Value::Number).unwrap_or(Value::Null), None => Value::Null });
+    m.insert("ExcessLiquidity".into(), match (&p.excess_liquidity) { Some(v) => serde_json::Number::from_f64(*(v)).map(Value::Number).unwrap_or(Value::Null), None => Value::Null });
+    m.insert("ExcessLiquidity-C".into(), match (&p.excess_liquidity_c) { Some(v) => serde_json::Number::from_f64(*(v)).map(Value::Number).unwrap_or(Value::Null), None => Value::Null });
+    m.insert("ExcessLiquidity-S".into(), match (&p.excess_liquidity_s) { Some(v) => serde_json::Number::from_f64(*(v)).map(Value::Number).unwrap_or(Value::Null), None => Value::Null });
+    m.insert("FullAvailableFunds".into(), match (&p.full_available_funds) { Some(v) => serde_json::Number::from_f64(*(v)).map(Value::Number).unwrap_or(Value::Null), None => Value::Null });
+    m.insert("FullAvailableFunds-C".into(), match (&p.full_available_funds_c) { Some(v) => serde_json::Number::from_f64(*(v)).map(Value::Number).unwrap_or(Value::Null), None => Value::Null });
+    m.insert("FullAvailableFunds-S".into(), match (&p.full_available_funds_s) { Some(v) => serde_json::Number::from_f64(*(v)).map(Value::Number).unwrap_or(Value::Null), None => Value::Null });
+    m.insert("FullExcessLiquidity".into(), match (&p.full_excess_liquidity) { Some(v) => serde_json::Number::from_f64(*(v)).map(Value::Number).unwrap_or(Value::Null), None => Value::Null });
+    m.insert("FullExcessLiquidity-C".into(), match (&p.full_excess_liquidity_c) { Some(v) => serde_json::Number::from_f64(*(v)).map(Value::Number).unwrap_or(Value::Null), None => Value::Null });
+    m.insert("FullExcessLiquidity-S".into(), match (&p.full_excess_liquidity_s) { Some(v) => serde_json::Number::from_f64(*(v)).map(Value::Number).unwrap_or(Value::Null), None => Value::Null });
+    m.insert("FullInitMarginReq".into(), match (&p.full_init_margin_req) { Some(v) => serde_json::Number::from_f64(*(v)).map(Value::Number).unwrap_or(Value::Null), None => Value::Null });
+    m.insert("FullInitMarginReq-C".into(), match (&p.full_init_margin_req_c) { Some(v) => serde_json::Number::from_f64(*(v)).map(Value::Number).unwrap_or(Value::Null), None => Value::Null });
+    m.insert("FullInitMarginReq-S".into(), match (&p.full_init_margin_req_s) { Some(v) => serde_json::Number::from_f64(*(v)).map(Value::Number).unwrap_or(Value::Null), None => Value::Null });
+    m.insert("FullMaintMarginReq".into(), match (&p.full_maint_margin_req) { Some(v) => serde_json::Number::from_f64(*(v)).map(Value::Number).unwrap_or(Value::Null), None => Value::Null });
+    m.insert("FullMaintMarginReq-C".into(), match (&p.full_maint_margin_req_c) { Some(v) => serde_json::Number::from_f64(*(v)).map(Value::Number).unwrap_or(Value::Null), None => Value::Null });
+    m.insert("FullMaintMarginReq-S".into(), match (&p.full_maint_margin_req_s) { Some(v) => serde_json::Number::from_f64(*(v)).map(Value::Number).unwrap_or(Value::Null), None => Value::Null });
+    m.insert("GrossPositionValue".into(), match (&p.gross_position_value) { Some(v) => serde_json::Number::from_f64(*(v)).map(Value::Number).unwrap_or(Value::Null), None => Value::Null });
+    m.insert("GrossPositionValue-C".into(), match (&p.gross_position_value_c) { Some(v) => serde_json::Number::from_f64(*(v)).map(Value::Number).unwrap_or(Value::Null), None => Value::Null });
+    m.insert("GrossPositionValue-S".into(), match (&p.gross_position_value_s) { Some(v) => serde_json::Number::from_f64(*(v)).map(Value::Number).unwrap_or(Value::Null), None => Value::Null });
+    m.insert("IndianStockHaircut".into(), match (&p.indian_stock_haircut) { Some(v) => serde_json::Number::from_f64(*(v)).map(Value::Number).unwrap_or(Value::Null), None => Value::Null });
+    m.insert("IndianStockHaircut-C".into(), match (&p.indian_stock_haircut_c) { Some(v) => serde_json::Number::from_f64(*(v)).map(Value::Number).unwrap_or(Value::Null), None => Value::Null });
+    m.insert("IndianStockHaircut-S".into(), match (&p.indian_stock_haircut_s) { Some(v) => serde_json::Number::from_f64(*(v)).map(Value::Number).unwrap_or(Value::Null), None => Value::Null });
+    m.insert("InitMarginReq".into(), match (&p.init_margin_req) { Some(v) => serde_json::Number::from_f64(*(v)).map(Value::Number).unwrap_or(Value::Null), None => Value::Null });
+    m.insert("InitMarginReq-C".into(), match (&p.init_margin_req_c) { Some(v) => serde_json::Number::from_f64(*(v)).map(Value::Number).unwrap_or(Value::Null), None => Value::Null });
+    m.insert("InitMarginReq-S".into(), match (&p.init_margin_req_s) { Some(v) => serde_json::Number::from_f64(*(v)).map(Value::Number).unwrap_or(Value::Null), None => Value::Null });
+    m.insert("InsuredDeposit".into(), match (&p.insured_deposit) { Some(v) => serde_json::Number::from_f64(*(v)).map(Value::Number).unwrap_or(Value::Null), None => Value::Null });
+    m.insert("InsuredDeposit-C".into(), match (&p.insured_deposit_c) { Some(v) => serde_json::Number::from_f64(*(v)).map(Value::Number).unwrap_or(Value::Null), None => Value::Null });
+    m.insert("InsuredDeposit-S".into(), match (&p.insured_deposit_s) { Some(v) => serde_json::Number::from_f64(*(v)).map(Value::Number).unwrap_or(Value::Null), None => Value::Null });
+    m.insert("LookAheadAvailableFunds".into(), match (&p.look_ahead_available_funds) { Some(v) => serde_json::Number::from_f64(*(v)).map(Value::Number).unwrap_or(Value::Null), None => Value::Null });
+    m.insert("LookAheadAvailableFunds-C".into(), match (&p.look_ahead_available_funds_c) { Some(v) => serde_json::Number::from_f64(*(v)).map(Value::Number).unwrap_or(Value::Null), None => Value::Null });
+    m.insert("LookAheadAvailableFunds-S".into(), match (&p.look_ahead_available_funds_s) { Some(v) => serde_json::Number::from_f64(*(v)).map(Value::Number).unwrap_or(Value::Null), None => Value::Null });
+    m.insert("LookAheadExcessLiquidity".into(), match (&p.look_ahead_excess_liquidity) { Some(v) => serde_json::Number::from_f64(*(v)).map(Value::Number).unwrap_or(Value::Null), None => Value::Null });
+    m.insert("LookAheadExcessLiquidity-C".into(), match (&p.look_ahead_excess_liquidity_c) { Some(v) => serde_json::Number::from_f64(*(v)).map(Value::Number).unwrap_or(Value::Null), None => Value::Null });
+    m.insert("LookAheadExcessLiquidity-S".into(), match (&p.look_ahead_excess_liquidity_s) { Some(v) => serde_json::Number::from_f64(*(v)).map(Value::Number).unwrap_or(Value::Null), None => Value::Null });
+    m.insert("LookAheadInitMarginReq".into(), match (&p.look_ahead_init_margin_req) { Some(v) => serde_json::Number::from_f64(*(v)).map(Value::Number).unwrap_or(Value::Null), None => Value::Null });
+    m.insert("LookAheadInitMarginReq-C".into(), match (&p.look_ahead_init_margin_req_c) { Some(v) => serde_json::Number::from_f64(*(v)).map(Value::Number).unwrap_or(Value::Null), None => Value::Null });
+    m.insert("LookAheadInitMarginReq-S".into(), match (&p.look_ahead_init_margin_req_s) { Some(v) => serde_json::Number::from_f64(*(v)).map(Value::Number).unwrap_or(Value::Null), None => Value::Null });
+    m.insert("LookAheadMaintMarginReq".into(), match (&p.look_ahead_maint_margin_req) { Some(v) => serde_json::Number::from_f64(*(v)).map(Value::Number).unwrap_or(Value::Null), None => Value::Null });
+    m.insert("LookAheadMaintMarginReq-C".into(), match (&p.look_ahead_maint_margin_req_c) { Some(v) => serde_json::Number::from_f64(*(v)).map(Value::Number).unwrap_or(Value::Null), None => Value::Null });
+    m.insert("LookAheadMaintMarginReq-S".into(), match (&p.look_ahead_maint_margin_req_s) { Some(v) => serde_json::Number::from_f64(*(v)).map(Value::Number).unwrap_or(Value::Null), None => Value::Null });
+    m.insert("MaintMarginReq".into(), match (&p.maint_margin_req) { Some(v) => serde_json::Number::from_f64(*(v)).map(Value::Number).unwrap_or(Value::Null), None => Value::Null });
+    m.insert("MaintMarginReq-C".into(), match (&p.maint_margin_req_c) { Some(v) => serde_json::Number::from_f64(*(v)).map(Value::Number).unwrap_or(Value::Null), None => Value::Null });
+    m.insert("MaintMarginReq-S".into(), match (&p.maint_margin_req_s) { Some(v) => serde_json::Number::from_f64(*(v)).map(Value::Number).unwrap_or(Value::Null), None => Value::Null });
+    m.insert("NetLiquidation".into(), match (&p.net_liquidation) { Some(v) => serde_json::Number::from_f64(*(v)).map(Value::Number).unwrap_or(Value::Null), None => Value::Null });
+    m.insert("NetLiquidation-C".into(), match (&p.net_liquidation_c) { Some(v) => serde_json::Number::from_f64(*(v)).map(Value::Number).unwrap_or(Value::Null), None => Value::Null });
+    m.insert("NetLiquidation-S".into(), match (&p.net_liquidation_s) { Some(v) => serde_json::Number::from_f64(*(v)).map(Value::Number).unwrap_or(Value::Null), None => Value::Null });
+    m.insert("NetLiquidationUncertainty".into(), match (&p.net_liquidation_uncertainty) { Some(v) => serde_json::Number::from_f64(*(v)).map(Value::Number).unwrap_or(Value::Null), None => Value::Null });
+    m.insert("PASharesValue".into(), match (&p.pa_shares_value) { Some(v) => serde_json::Number::from_f64(*(v)).map(Value::Number).unwrap_or(Value::Null), None => Value::Null });
+    m.insert("PASharesValue-C".into(), match (&p.pa_shares_value_c) { Some(v) => serde_json::Number::from_f64(*(v)).map(Value::Number).unwrap_or(Value::Null), None => Value::Null });
+    m.insert("PASharesValue-S".into(), match (&p.pa_shares_value_s) { Some(v) => serde_json::Number::from_f64(*(v)).map(Value::Number).unwrap_or(Value::Null), None => Value::Null });
+    m.insert("PostExpirationExcess".into(), match (&p.post_expiration_excess) { Some(v) => serde_json::Number::from_f64(*(v)).map(Value::Number).unwrap_or(Value::Null), None => Value::Null });
+    m.insert("PostExpirationExcess-C".into(), match (&p.post_expiration_excess_c) { Some(v) => serde_json::Number::from_f64(*(v)).map(Value::Number).unwrap_or(Value::Null), None => Value::Null });
+    m.insert("PostExpirationExcess-S".into(), match (&p.post_expiration_excess_s) { Some(v) => serde_json::Number::from_f64(*(v)).map(Value::Number).unwrap_or(Value::Null), None => Value::Null });
+    m.insert("PostExpirationMargin".into(), match (&p.post_expiration_margin) { Some(v) => serde_json::Number::from_f64(*(v)).map(Value::Number).unwrap_or(Value::Null), None => Value::Null });
+    m.insert("PostExpirationMargin-C".into(), match (&p.post_expiration_margin_c) { Some(v) => serde_json::Number::from_f64(*(v)).map(Value::Number).unwrap_or(Value::Null), None => Value::Null });
+    m.insert("PostExpirationMargin-S".into(), match (&p.post_expiration_margin_s) { Some(v) => serde_json::Number::from_f64(*(v)).map(Value::Number).unwrap_or(Value::Null), None => Value::Null });
+    m.insert("RegTEquity".into(), match (&p.reg_t_equity) { Some(v) => serde_json::Number::from_f64(*(v)).map(Value::Number).unwrap_or(Value::Null), None => Value::Null });
+    m.insert("RegTEquity-S".into(), match (&p.reg_t_equity_s) { Some(v) => serde_json::Number::from_f64(*(v)).map(Value::Number).unwrap_or(Value::Null), None => Value::Null });
+    m.insert("RegTMargin".into(), match (&p.reg_t_margin) { Some(v) => serde_json::Number::from_f64(*(v)).map(Value::Number).unwrap_or(Value::Null), None => Value::Null });
+    m.insert("RegTMargin-S".into(), match (&p.reg_t_margin_s) { Some(v) => serde_json::Number::from_f64(*(v)).map(Value::Number).unwrap_or(Value::Null), None => Value::Null });
+    m.insert("SMA".into(), match (&p.sma) { Some(v) => serde_json::Number::from_f64(*(v)).map(Value::Number).unwrap_or(Value::Null), None => Value::Null });
+    m.insert("SMA-S".into(), match (&p.sma_s) { Some(v) => serde_json::Number::from_f64(*(v)).map(Value::Number).unwrap_or(Value::Null), None => Value::Null });
+    m.insert("TotalCashValue".into(), match (&p.total_cash_value) { Some(v) => serde_json::Number::from_f64(*(v)).map(Value::Number).unwrap_or(Value::Null), None => Value::Null });
+    m.insert("TotalCashValue-C".into(), match (&p.total_cash_value_c) { Some(v) => serde_json::Number::from_f64(*(v)).map(Value::Number).unwrap_or(Value::Null), None => Value::Null });
+    m.insert("TotalCashValue-S".into(), match (&p.total_cash_value_s) { Some(v) => serde_json::Number::from_f64(*(v)).map(Value::Number).unwrap_or(Value::Null), None => Value::Null });
+    Value::Object(m)
+}
 
 fn iface_account_portfolio__get_accounts_params__to_json(p: &iface_account_portfolio::GetAccountsParams) -> Value {
     let mut m = Map::new();
@@ -335,18 +501,251 @@ fn iface_account_portfolio__get_accounts_account_summary_params__to_json(p: &ifa
     Value::Object(m)
 }
 
+fn iface_account_portfolio__get_accounts_response__from_json(v: &Value) -> Option<iface_account_portfolio::GetAccountsResponse> {
+    let m = v.as_object()?;
+    Some(iface_account_portfolio::GetAccountsResponse {
+        accounts: m.get("accounts").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| (x).as_str().map(|s| s.to_string())).collect())),
+    })
+}
+
+fn iface_account_portfolio__get_accounts_account_positions_response_item__from_json(v: &Value) -> Option<iface_account_portfolio::GetAccountsAccountPositionsResponseItem> {
+    let m = v.as_object()?;
+    Some(iface_account_portfolio::GetAccountsAccountPositionsResponseItem {
+        average_cost: m.get("AverageCost").filter(|v| !v.is_null()).and_then(|v| (v).as_f64()),
+        contract_id: m.get("ContractId").filter(|v| !v.is_null()).and_then(|v| (v).as_f64()),
+        position: m.get("Position").filter(|v| !v.is_null()).and_then(|v| (v).as_f64()),
+    })
+}
+
+fn iface_account_portfolio__get_accounts_account_summary_response__from_json(v: &Value) -> Option<iface_account_portfolio::GetAccountsAccountSummaryResponse> {
+    let m = v.as_object()?;
+    Some(iface_account_portfolio::GetAccountsAccountSummaryResponse {
+        info: m.get("Info").filter(|v| !v.is_null()).and_then(|v| iface_account_portfolio__get_accounts_account_summary_response_info__from_json(v)),
+        ledger: m.get("Ledger").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| iface_account_portfolio__get_accounts_account_summary_response_ledger_item__from_json(x)).collect())),
+        summary: m.get("Summary").filter(|v| !v.is_null()).and_then(|v| iface_account_portfolio__get_accounts_account_summary_response_summary__from_json(v)),
+    })
+}
+
+fn iface_account_portfolio__get_accounts_account_summary_response_info__from_json(v: &Value) -> Option<iface_account_portfolio::GetAccountsAccountSummaryResponseInfo> {
+    let m = v.as_object()?;
+    Some(iface_account_portfolio::GetAccountsAccountSummaryResponseInfo {
+        account_code: m.get("AccountCode").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        account_ready: m.get("AccountReady").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        account_type: m.get("AccountType").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        cushion: m.get("Cushion").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        day_trades_remaining: m.get("DayTradesRemaining").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        day_trades_remaining_t: m.get("DayTradesRemainingT").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        day_trades_remaining_t_v2: m.get("DayTradesRemainingT+2").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        day_trades_remaining_t_v3: m.get("DayTradesRemainingT+3").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        day_trades_remaining_t_v4: m.get("DayTradesRemainingT+4").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        highest_severity: m.get("HighestSeverity").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        leverage_s: m.get("Leverage-S").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        look_ahead_next_change: m.get("LookAheadNextChange").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        segment_title_c: m.get("SegmentTitle-C").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        segment_title_s: m.get("SegmentTitle-S").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        trading_type_s: m.get("TradingType-S").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        what_if_pm_enabled: m.get("WhatIfPMEnabled").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    })
+}
+
+fn iface_account_portfolio__get_accounts_account_summary_response_ledger_item__from_json(v: &Value) -> Option<iface_account_portfolio::GetAccountsAccountSummaryResponseLedgerItem> {
+    let m = v.as_object()?;
+    Some(iface_account_portfolio::GetAccountsAccountSummaryResponseLedgerItem {
+        cash_balance: m.get("CashBalance").filter(|v| !v.is_null()).and_then(|v| (v).as_f64()),
+        cash_balance_fx_segment: m.get("CashBalanceFXSegment").filter(|v| !v.is_null()).and_then(|v| (v).as_f64()),
+        cash_cum_qty: m.get("CashCumQty").filter(|v| !v.is_null()).and_then(|v| (v).as_f64()),
+        exchange_rate: m.get("ExchangeRate").filter(|v| !v.is_null()).and_then(|v| (v).as_f64()),
+        future_option_market_value: m.get("FutureOptionMarketValue").filter(|v| !v.is_null()).and_then(|v| (v).as_f64()),
+        future_pnl: m.get("FuturePNL").filter(|v| !v.is_null()).and_then(|v| (v).as_f64()),
+        net_dividend: m.get("NetDividend").filter(|v| !v.is_null()).and_then(|v| (v).as_f64()),
+        net_interest: m.get("NetInterest").filter(|v| !v.is_null()).and_then(|v| (v).as_f64()),
+        net_liquidation: m.get("NetLiquidation").filter(|v| !v.is_null()).and_then(|v| (v).as_f64()),
+        option_market_value: m.get("OptionMarketValue").filter(|v| !v.is_null()).and_then(|v| (v).as_f64()),
+        realized_pnl: m.get("RealizedPNL").filter(|v| !v.is_null()).and_then(|v| (v).as_f64()),
+        stock_market_value: m.get("StockMarketValue").filter(|v| !v.is_null()).and_then(|v| (v).as_f64()),
+        total_cash_balance: m.get("TotalCashBalance").filter(|v| !v.is_null()).and_then(|v| (v).as_f64()),
+        unrealized_pnl: m.get("UnrealizedPNL").filter(|v| !v.is_null()).and_then(|v| (v).as_f64()),
+    })
+}
+
+fn iface_account_portfolio__get_accounts_account_summary_response_summary__from_json(v: &Value) -> Option<iface_account_portfolio::GetAccountsAccountSummaryResponseSummary> {
+    let m = v.as_object()?;
+    Some(iface_account_portfolio::GetAccountsAccountSummaryResponseSummary {
+        accrued_cash: m.get("AccruedCash").filter(|v| !v.is_null()).and_then(|v| (v).as_f64()),
+        accrued_cash_c: m.get("AccruedCash-C").filter(|v| !v.is_null()).and_then(|v| (v).as_f64()),
+        accrued_cash_s: m.get("AccruedCash-S").filter(|v| !v.is_null()).and_then(|v| (v).as_f64()),
+        accrued_dividend: m.get("AccruedDividend").filter(|v| !v.is_null()).and_then(|v| (v).as_f64()),
+        accrued_dividend_c: m.get("AccruedDividend-C").filter(|v| !v.is_null()).and_then(|v| (v).as_f64()),
+        accrued_dividend_s: m.get("AccruedDividend-S").filter(|v| !v.is_null()).and_then(|v| (v).as_f64()),
+        available_funds: m.get("AvailableFunds").filter(|v| !v.is_null()).and_then(|v| (v).as_f64()),
+        available_funds_c: m.get("AvailableFunds-C").filter(|v| !v.is_null()).and_then(|v| (v).as_f64()),
+        available_funds_s: m.get("AvailableFunds-S").filter(|v| !v.is_null()).and_then(|v| (v).as_f64()),
+        billable: m.get("Billable").filter(|v| !v.is_null()).and_then(|v| (v).as_f64()),
+        billable_c: m.get("Billable-C").filter(|v| !v.is_null()).and_then(|v| (v).as_f64()),
+        billable_s: m.get("Billable-S").filter(|v| !v.is_null()).and_then(|v| (v).as_f64()),
+        buying_power: m.get("BuyingPower").filter(|v| !v.is_null()).and_then(|v| (v).as_f64()),
+        equity_with_loan_value: m.get("EquityWithLoanValue").filter(|v| !v.is_null()).and_then(|v| (v).as_f64()),
+        equity_with_loan_value_c: m.get("EquityWithLoanValue-C").filter(|v| !v.is_null()).and_then(|v| (v).as_f64()),
+        equity_with_loan_value_s: m.get("EquityWithLoanValue-S").filter(|v| !v.is_null()).and_then(|v| (v).as_f64()),
+        excess_liquidity: m.get("ExcessLiquidity").filter(|v| !v.is_null()).and_then(|v| (v).as_f64()),
+        excess_liquidity_c: m.get("ExcessLiquidity-C").filter(|v| !v.is_null()).and_then(|v| (v).as_f64()),
+        excess_liquidity_s: m.get("ExcessLiquidity-S").filter(|v| !v.is_null()).and_then(|v| (v).as_f64()),
+        full_available_funds: m.get("FullAvailableFunds").filter(|v| !v.is_null()).and_then(|v| (v).as_f64()),
+        full_available_funds_c: m.get("FullAvailableFunds-C").filter(|v| !v.is_null()).and_then(|v| (v).as_f64()),
+        full_available_funds_s: m.get("FullAvailableFunds-S").filter(|v| !v.is_null()).and_then(|v| (v).as_f64()),
+        full_excess_liquidity: m.get("FullExcessLiquidity").filter(|v| !v.is_null()).and_then(|v| (v).as_f64()),
+        full_excess_liquidity_c: m.get("FullExcessLiquidity-C").filter(|v| !v.is_null()).and_then(|v| (v).as_f64()),
+        full_excess_liquidity_s: m.get("FullExcessLiquidity-S").filter(|v| !v.is_null()).and_then(|v| (v).as_f64()),
+        full_init_margin_req: m.get("FullInitMarginReq").filter(|v| !v.is_null()).and_then(|v| (v).as_f64()),
+        full_init_margin_req_c: m.get("FullInitMarginReq-C").filter(|v| !v.is_null()).and_then(|v| (v).as_f64()),
+        full_init_margin_req_s: m.get("FullInitMarginReq-S").filter(|v| !v.is_null()).and_then(|v| (v).as_f64()),
+        full_maint_margin_req: m.get("FullMaintMarginReq").filter(|v| !v.is_null()).and_then(|v| (v).as_f64()),
+        full_maint_margin_req_c: m.get("FullMaintMarginReq-C").filter(|v| !v.is_null()).and_then(|v| (v).as_f64()),
+        full_maint_margin_req_s: m.get("FullMaintMarginReq-S").filter(|v| !v.is_null()).and_then(|v| (v).as_f64()),
+        gross_position_value: m.get("GrossPositionValue").filter(|v| !v.is_null()).and_then(|v| (v).as_f64()),
+        gross_position_value_c: m.get("GrossPositionValue-C").filter(|v| !v.is_null()).and_then(|v| (v).as_f64()),
+        gross_position_value_s: m.get("GrossPositionValue-S").filter(|v| !v.is_null()).and_then(|v| (v).as_f64()),
+        indian_stock_haircut: m.get("IndianStockHaircut").filter(|v| !v.is_null()).and_then(|v| (v).as_f64()),
+        indian_stock_haircut_c: m.get("IndianStockHaircut-C").filter(|v| !v.is_null()).and_then(|v| (v).as_f64()),
+        indian_stock_haircut_s: m.get("IndianStockHaircut-S").filter(|v| !v.is_null()).and_then(|v| (v).as_f64()),
+        init_margin_req: m.get("InitMarginReq").filter(|v| !v.is_null()).and_then(|v| (v).as_f64()),
+        init_margin_req_c: m.get("InitMarginReq-C").filter(|v| !v.is_null()).and_then(|v| (v).as_f64()),
+        init_margin_req_s: m.get("InitMarginReq-S").filter(|v| !v.is_null()).and_then(|v| (v).as_f64()),
+        insured_deposit: m.get("InsuredDeposit").filter(|v| !v.is_null()).and_then(|v| (v).as_f64()),
+        insured_deposit_c: m.get("InsuredDeposit-C").filter(|v| !v.is_null()).and_then(|v| (v).as_f64()),
+        insured_deposit_s: m.get("InsuredDeposit-S").filter(|v| !v.is_null()).and_then(|v| (v).as_f64()),
+        look_ahead_available_funds: m.get("LookAheadAvailableFunds").filter(|v| !v.is_null()).and_then(|v| (v).as_f64()),
+        look_ahead_available_funds_c: m.get("LookAheadAvailableFunds-C").filter(|v| !v.is_null()).and_then(|v| (v).as_f64()),
+        look_ahead_available_funds_s: m.get("LookAheadAvailableFunds-S").filter(|v| !v.is_null()).and_then(|v| (v).as_f64()),
+        look_ahead_excess_liquidity: m.get("LookAheadExcessLiquidity").filter(|v| !v.is_null()).and_then(|v| (v).as_f64()),
+        look_ahead_excess_liquidity_c: m.get("LookAheadExcessLiquidity-C").filter(|v| !v.is_null()).and_then(|v| (v).as_f64()),
+        look_ahead_excess_liquidity_s: m.get("LookAheadExcessLiquidity-S").filter(|v| !v.is_null()).and_then(|v| (v).as_f64()),
+        look_ahead_init_margin_req: m.get("LookAheadInitMarginReq").filter(|v| !v.is_null()).and_then(|v| (v).as_f64()),
+        look_ahead_init_margin_req_c: m.get("LookAheadInitMarginReq-C").filter(|v| !v.is_null()).and_then(|v| (v).as_f64()),
+        look_ahead_init_margin_req_s: m.get("LookAheadInitMarginReq-S").filter(|v| !v.is_null()).and_then(|v| (v).as_f64()),
+        look_ahead_maint_margin_req: m.get("LookAheadMaintMarginReq").filter(|v| !v.is_null()).and_then(|v| (v).as_f64()),
+        look_ahead_maint_margin_req_c: m.get("LookAheadMaintMarginReq-C").filter(|v| !v.is_null()).and_then(|v| (v).as_f64()),
+        look_ahead_maint_margin_req_s: m.get("LookAheadMaintMarginReq-S").filter(|v| !v.is_null()).and_then(|v| (v).as_f64()),
+        maint_margin_req: m.get("MaintMarginReq").filter(|v| !v.is_null()).and_then(|v| (v).as_f64()),
+        maint_margin_req_c: m.get("MaintMarginReq-C").filter(|v| !v.is_null()).and_then(|v| (v).as_f64()),
+        maint_margin_req_s: m.get("MaintMarginReq-S").filter(|v| !v.is_null()).and_then(|v| (v).as_f64()),
+        net_liquidation: m.get("NetLiquidation").filter(|v| !v.is_null()).and_then(|v| (v).as_f64()),
+        net_liquidation_c: m.get("NetLiquidation-C").filter(|v| !v.is_null()).and_then(|v| (v).as_f64()),
+        net_liquidation_s: m.get("NetLiquidation-S").filter(|v| !v.is_null()).and_then(|v| (v).as_f64()),
+        net_liquidation_uncertainty: m.get("NetLiquidationUncertainty").filter(|v| !v.is_null()).and_then(|v| (v).as_f64()),
+        pa_shares_value: m.get("PASharesValue").filter(|v| !v.is_null()).and_then(|v| (v).as_f64()),
+        pa_shares_value_c: m.get("PASharesValue-C").filter(|v| !v.is_null()).and_then(|v| (v).as_f64()),
+        pa_shares_value_s: m.get("PASharesValue-S").filter(|v| !v.is_null()).and_then(|v| (v).as_f64()),
+        post_expiration_excess: m.get("PostExpirationExcess").filter(|v| !v.is_null()).and_then(|v| (v).as_f64()),
+        post_expiration_excess_c: m.get("PostExpirationExcess-C").filter(|v| !v.is_null()).and_then(|v| (v).as_f64()),
+        post_expiration_excess_s: m.get("PostExpirationExcess-S").filter(|v| !v.is_null()).and_then(|v| (v).as_f64()),
+        post_expiration_margin: m.get("PostExpirationMargin").filter(|v| !v.is_null()).and_then(|v| (v).as_f64()),
+        post_expiration_margin_c: m.get("PostExpirationMargin-C").filter(|v| !v.is_null()).and_then(|v| (v).as_f64()),
+        post_expiration_margin_s: m.get("PostExpirationMargin-S").filter(|v| !v.is_null()).and_then(|v| (v).as_f64()),
+        reg_t_equity: m.get("RegTEquity").filter(|v| !v.is_null()).and_then(|v| (v).as_f64()),
+        reg_t_equity_s: m.get("RegTEquity-S").filter(|v| !v.is_null()).and_then(|v| (v).as_f64()),
+        reg_t_margin: m.get("RegTMargin").filter(|v| !v.is_null()).and_then(|v| (v).as_f64()),
+        reg_t_margin_s: m.get("RegTMargin-S").filter(|v| !v.is_null()).and_then(|v| (v).as_f64()),
+        sma: m.get("SMA").filter(|v| !v.is_null()).and_then(|v| (v).as_f64()),
+        sma_s: m.get("SMA-S").filter(|v| !v.is_null()).and_then(|v| (v).as_f64()),
+        total_cash_value: m.get("TotalCashValue").filter(|v| !v.is_null()).and_then(|v| (v).as_f64()),
+        total_cash_value_c: m.get("TotalCashValue-C").filter(|v| !v.is_null()).and_then(|v| (v).as_f64()),
+        total_cash_value_s: m.get("TotalCashValue-S").filter(|v| !v.is_null()).and_then(|v| (v).as_f64()),
+    })
+}
+
+fn iface_account_portfolio__get_accounts__ok(body: String) -> Result<iface_account_portfolio::GetAccountsResponse, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match iface_account_portfolio__get_accounts_response__from_json(&v) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_account_portfolio__get_accounts__err(e: crate::runtime::DispatchError) -> iface_account_portfolio::GetAccountsError {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => match status {
+            401u16 => iface_account_portfolio::GetAccountsError::Unauthorized(body),
+            403u16 => iface_account_portfolio::GetAccountsError::Forbidden(body),
+            408u16 => iface_account_portfolio::GetAccountsError::RequestTimeout(body),
+            _ => iface_account_portfolio::GetAccountsError::Other(body),
+        },
+        crate::runtime::DispatchError::Transport(m) => iface_account_portfolio::GetAccountsError::Other(m),
+    }
+}
+
+fn iface_account_portfolio__get_accounts_account_positions__ok(body: String) -> Result<Vec<iface_account_portfolio::GetAccountsAccountPositionsResponseItem>, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match (&v).as_array().map(|a| a.iter().filter_map(|x| iface_account_portfolio__get_accounts_account_positions_response_item__from_json(x)).collect()) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_account_portfolio__get_accounts_account_positions__err(e: crate::runtime::DispatchError) -> iface_account_portfolio::GetAccountsAccountPositionsError {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => match status {
+            400u16 => iface_account_portfolio::GetAccountsAccountPositionsError::BadRequest(body),
+            401u16 => iface_account_portfolio::GetAccountsAccountPositionsError::Unauthorized(body),
+            403u16 => iface_account_portfolio::GetAccountsAccountPositionsError::Forbidden(body),
+            408u16 => iface_account_portfolio::GetAccountsAccountPositionsError::RequestTimeout(body),
+            _ => iface_account_portfolio::GetAccountsAccountPositionsError::Other(body),
+        },
+        crate::runtime::DispatchError::Transport(m) => iface_account_portfolio::GetAccountsAccountPositionsError::Other(m),
+    }
+}
+
+fn iface_account_portfolio__get_accounts_account_summary__ok(body: String) -> Result<iface_account_portfolio::GetAccountsAccountSummaryResponse, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match iface_account_portfolio__get_accounts_account_summary_response__from_json(&v) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_account_portfolio__get_accounts_account_summary__err(e: crate::runtime::DispatchError) -> iface_account_portfolio::GetAccountsAccountSummaryError {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => match status {
+            400u16 => iface_account_portfolio::GetAccountsAccountSummaryError::BadRequest(body),
+            401u16 => iface_account_portfolio::GetAccountsAccountSummaryError::Unauthorized(body),
+            403u16 => iface_account_portfolio::GetAccountsAccountSummaryError::Forbidden(body),
+            408u16 => iface_account_portfolio::GetAccountsAccountSummaryError::RequestTimeout(body),
+            _ => iface_account_portfolio::GetAccountsAccountSummaryError::Other(body),
+        },
+        crate::runtime::DispatchError::Transport(m) => iface_account_portfolio::GetAccountsAccountSummaryError::Other(m),
+    }
+}
+
 impl iface_account_portfolio::Guest for crate::Component {
-    fn get_accounts(params: iface_account_portfolio::GetAccountsParams) -> Result<String, String> {
+    fn get_accounts(params: iface_account_portfolio::GetAccountsParams) -> Result<iface_account_portfolio::GetAccountsResponse, iface_account_portfolio::GetAccountsError> {
         let json = iface_account_portfolio__get_accounts_params__to_json(&params);
-        dispatch(&OP_ACCOUNT_PORTFOLIO_GET_ACCOUNTS, json)
+        match dispatch(&OP_ACCOUNT_PORTFOLIO_GET_ACCOUNTS, json).and_then(iface_account_portfolio__get_accounts__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_account_portfolio__get_accounts__err(e)),
+        }
     }
-    fn get_accounts_account_positions(params: iface_account_portfolio::GetAccountsAccountPositionsParams) -> Result<String, String> {
+    fn get_accounts_account_positions(params: iface_account_portfolio::GetAccountsAccountPositionsParams) -> Result<Vec<iface_account_portfolio::GetAccountsAccountPositionsResponseItem>, iface_account_portfolio::GetAccountsAccountPositionsError> {
         let json = iface_account_portfolio__get_accounts_account_positions_params__to_json(&params);
-        dispatch(&OP_ACCOUNT_PORTFOLIO_GET_ACCOUNTS_ACCOUNT_POSITIONS, json)
+        match dispatch(&OP_ACCOUNT_PORTFOLIO_GET_ACCOUNTS_ACCOUNT_POSITIONS, json).and_then(iface_account_portfolio__get_accounts_account_positions__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_account_portfolio__get_accounts_account_positions__err(e)),
+        }
     }
-    fn get_accounts_account_summary(params: iface_account_portfolio::GetAccountsAccountSummaryParams) -> Result<String, String> {
+    fn get_accounts_account_summary(params: iface_account_portfolio::GetAccountsAccountSummaryParams) -> Result<iface_account_portfolio::GetAccountsAccountSummaryResponse, iface_account_portfolio::GetAccountsAccountSummaryError> {
         let json = iface_account_portfolio__get_accounts_account_summary_params__to_json(&params);
-        dispatch(&OP_ACCOUNT_PORTFOLIO_GET_ACCOUNTS_ACCOUNT_SUMMARY, json)
+        match dispatch(&OP_ACCOUNT_PORTFOLIO_GET_ACCOUNTS_ACCOUNT_SUMMARY, json).and_then(iface_account_portfolio__get_accounts_account_summary__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_account_portfolio__get_accounts_account_summary__err(e)),
+        }
     }
 }
 use crate::exports::autostamp::interactivebrokers::order_margin_requirements as iface_order_margin_requirements;
@@ -355,18 +754,19 @@ const OP_ORDER_MARGIN_REQUIREMENTS_POST_ACCOUNTS_ACCOUNT_ORDER_IMPACT: OpSpec = 
     method: "POST",
     path_template: "/accounts/{account}/order_impact",
     fields: &[
-        FieldSpec { snake: "aux_price", location: FieldLocation::Body },
-        FieldSpec { snake: "contract_id", location: FieldLocation::Body },
-        FieldSpec { snake: "currency", location: FieldLocation::Body },
-        FieldSpec { snake: "customer_order_id", location: FieldLocation::Body },
-        FieldSpec { snake: "instrument_type", location: FieldLocation::Body },
-        FieldSpec { snake: "listing_exchange", location: FieldLocation::Body },
-        FieldSpec { snake: "order_type", location: FieldLocation::Body },
-        FieldSpec { snake: "price", location: FieldLocation::Body },
-        FieldSpec { snake: "quantity", location: FieldLocation::Body },
-        FieldSpec { snake: "side", location: FieldLocation::Body },
-        FieldSpec { snake: "ticker", location: FieldLocation::Body },
-        FieldSpec { snake: "time_in_force", location: FieldLocation::Body },
+        FieldSpec { snake: "account", wire: "account", location: FieldLocation::Path },
+        FieldSpec { snake: "aux_price", wire: "Aux Price", location: FieldLocation::Body },
+        FieldSpec { snake: "contract_id", wire: "ContractId", location: FieldLocation::Body },
+        FieldSpec { snake: "currency", wire: "Currency", location: FieldLocation::Body },
+        FieldSpec { snake: "customer_order_id", wire: "CustomerOrderId", location: FieldLocation::Body },
+        FieldSpec { snake: "instrument_type", wire: "InstrumentType", location: FieldLocation::Body },
+        FieldSpec { snake: "listing_exchange", wire: "ListingExchange", location: FieldLocation::Body },
+        FieldSpec { snake: "order_type", wire: "Order Type", location: FieldLocation::Body },
+        FieldSpec { snake: "price", wire: "Price", location: FieldLocation::Body },
+        FieldSpec { snake: "quantity", wire: "Quantity", location: FieldLocation::Body },
+        FieldSpec { snake: "side", wire: "Side", location: FieldLocation::Body },
+        FieldSpec { snake: "ticker", wire: "Ticker", location: FieldLocation::Body },
+        FieldSpec { snake: "time_in_force", wire: "Time in Force", location: FieldLocation::Body },
     ],
     auth: &[
         AuthApply { secret_key: "cookieAuth", kind: AuthKind::ApiKeyHeader("portal") },
@@ -385,8 +785,24 @@ fn iface_order_margin_requirements__time_in_force__to_json(p: &iface_order_margi
     Value::Object(m)
 }
 
+fn iface_order_margin_requirements__post_accounts_account_order_impact_response__to_json(p: &iface_order_margin_requirements::PostAccountsAccountOrderImpactResponse) -> Value {
+    let mut m = Map::new();
+    m.insert("Commission".into(), match (&p.commission) { Some(v) => serde_json::Number::from_f64(*(v)).map(Value::Number).unwrap_or(Value::Null), None => Value::Null });
+    m.insert("CommissionsCurrency".into(), match (&p.commissions_currency) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("EquityWithLoan".into(), match (&p.equity_with_loan) { Some(v) => serde_json::Number::from_f64(*(v)).map(Value::Number).unwrap_or(Value::Null), None => Value::Null });
+    m.insert("InitMargin".into(), match (&p.init_margin) { Some(v) => serde_json::Number::from_f64(*(v)).map(Value::Number).unwrap_or(Value::Null), None => Value::Null });
+    m.insert("InitMarginBefore".into(), match (&p.init_margin_before) { Some(v) => serde_json::Number::from_f64(*(v)).map(Value::Number).unwrap_or(Value::Null), None => Value::Null });
+    m.insert("MaintMargin".into(), match (&p.maint_margin) { Some(v) => serde_json::Number::from_f64(*(v)).map(Value::Number).unwrap_or(Value::Null), None => Value::Null });
+    m.insert("MaintMarginBefore".into(), match (&p.maint_margin_before) { Some(v) => serde_json::Number::from_f64(*(v)).map(Value::Number).unwrap_or(Value::Null), None => Value::Null });
+    m.insert("MarginCurrency".into(), match (&p.margin_currency) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("MaxCommissions".into(), match (&p.max_commissions) { Some(v) => serde_json::Number::from_f64(*(v)).map(Value::Number).unwrap_or(Value::Null), None => Value::Null });
+    m.insert("MinCommissions".into(), match (&p.min_commissions) { Some(v) => serde_json::Number::from_f64(*(v)).map(Value::Number).unwrap_or(Value::Null), None => Value::Null });
+    Value::Object(m)
+}
+
 fn iface_order_margin_requirements__post_accounts_account_order_impact_params__to_json(p: &iface_order_margin_requirements::PostAccountsAccountOrderImpactParams) -> Value {
     let mut m = Map::new();
+    m.insert("account".into(), Value::String((&p.account).clone()));
     m.insert("aux_price".into(), match (&p.aux_price) { Some(v) => serde_json::Number::from_f64(*(v)).map(Value::Number).unwrap_or(Value::Null), None => Value::Null });
     m.insert("contract_id".into(), match (&p.contract_id) { Some(v) => serde_json::Number::from_f64(*(v)).map(Value::Number).unwrap_or(Value::Null), None => Value::Null });
     m.insert("currency".into(), match (&p.currency) { Some(v) => Value::String((v).clone()), None => Value::Null });
@@ -402,10 +818,53 @@ fn iface_order_margin_requirements__post_accounts_account_order_impact_params__t
     Value::Object(m)
 }
 
+fn iface_order_margin_requirements__post_accounts_account_order_impact_response__from_json(v: &Value) -> Option<iface_order_margin_requirements::PostAccountsAccountOrderImpactResponse> {
+    let m = v.as_object()?;
+    Some(iface_order_margin_requirements::PostAccountsAccountOrderImpactResponse {
+        commission: m.get("Commission").filter(|v| !v.is_null()).and_then(|v| (v).as_f64()),
+        commissions_currency: m.get("CommissionsCurrency").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        equity_with_loan: m.get("EquityWithLoan").filter(|v| !v.is_null()).and_then(|v| (v).as_f64()),
+        init_margin: m.get("InitMargin").filter(|v| !v.is_null()).and_then(|v| (v).as_f64()),
+        init_margin_before: m.get("InitMarginBefore").filter(|v| !v.is_null()).and_then(|v| (v).as_f64()),
+        maint_margin: m.get("MaintMargin").filter(|v| !v.is_null()).and_then(|v| (v).as_f64()),
+        maint_margin_before: m.get("MaintMarginBefore").filter(|v| !v.is_null()).and_then(|v| (v).as_f64()),
+        margin_currency: m.get("MarginCurrency").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        max_commissions: m.get("MaxCommissions").filter(|v| !v.is_null()).and_then(|v| (v).as_f64()),
+        min_commissions: m.get("MinCommissions").filter(|v| !v.is_null()).and_then(|v| (v).as_f64()),
+    })
+}
+
+fn iface_order_margin_requirements__post_accounts_account_order_impact__ok(body: String) -> Result<iface_order_margin_requirements::PostAccountsAccountOrderImpactResponse, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match iface_order_margin_requirements__post_accounts_account_order_impact_response__from_json(&v) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_order_margin_requirements__post_accounts_account_order_impact__err(e: crate::runtime::DispatchError) -> iface_order_margin_requirements::PostAccountsAccountOrderImpactError {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => match status {
+            400u16 => iface_order_margin_requirements::PostAccountsAccountOrderImpactError::BadRequest(body),
+            401u16 => iface_order_margin_requirements::PostAccountsAccountOrderImpactError::Unauthorized(body),
+            403u16 => iface_order_margin_requirements::PostAccountsAccountOrderImpactError::Forbidden(body),
+            408u16 => iface_order_margin_requirements::PostAccountsAccountOrderImpactError::RequestTimeout(body),
+            _ => iface_order_margin_requirements::PostAccountsAccountOrderImpactError::Other(body),
+        },
+        crate::runtime::DispatchError::Transport(m) => iface_order_margin_requirements::PostAccountsAccountOrderImpactError::Other(m),
+    }
+}
+
 impl iface_order_margin_requirements::Guest for crate::Component {
-    fn post_accounts_account_order_impact(params: iface_order_margin_requirements::PostAccountsAccountOrderImpactParams) -> Result<String, String> {
+    fn post_accounts_account_order_impact(params: iface_order_margin_requirements::PostAccountsAccountOrderImpactParams) -> Result<iface_order_margin_requirements::PostAccountsAccountOrderImpactResponse, iface_order_margin_requirements::PostAccountsAccountOrderImpactError> {
         let json = iface_order_margin_requirements__post_accounts_account_order_impact_params__to_json(&params);
-        dispatch(&OP_ORDER_MARGIN_REQUIREMENTS_POST_ACCOUNTS_ACCOUNT_ORDER_IMPACT, json)
+        match dispatch(&OP_ORDER_MARGIN_REQUIREMENTS_POST_ACCOUNTS_ACCOUNT_ORDER_IMPACT, json).and_then(iface_order_margin_requirements__post_accounts_account_order_impact__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_order_margin_requirements__post_accounts_account_order_impact__err(e)),
+        }
     }
 }
 use crate::exports::autostamp::interactivebrokers::orders as iface_orders;
@@ -414,6 +873,7 @@ const OP_ORDERS_GET_ACCOUNTS_ACCOUNT_ORDERS: OpSpec = OpSpec {
     method: "GET",
     path_template: "/accounts/{account}/orders",
     fields: &[
+        FieldSpec { snake: "account", wire: "account", location: FieldLocation::Path },
     ],
     auth: &[
         AuthApply { secret_key: "cookieAuth", kind: AuthKind::ApiKeyHeader("portal") },
@@ -424,25 +884,26 @@ const OP_ORDERS_POST_ACCOUNTS_ACCOUNT_ORDERS: OpSpec = OpSpec {
     method: "POST",
     path_template: "/accounts/{account}/orders",
     fields: &[
-        FieldSpec { snake: "aux_price", location: FieldLocation::Body },
-        FieldSpec { snake: "contract_id", location: FieldLocation::Body },
-        FieldSpec { snake: "currency", location: FieldLocation::Body },
-        FieldSpec { snake: "customer_order_id", location: FieldLocation::Body },
-        FieldSpec { snake: "german_hft_algo", location: FieldLocation::Body },
-        FieldSpec { snake: "instrument_type", location: FieldLocation::Body },
-        FieldSpec { snake: "listing_exchange", location: FieldLocation::Body },
-        FieldSpec { snake: "mifid2_algo", location: FieldLocation::Body },
-        FieldSpec { snake: "mifid2_decision_maker", location: FieldLocation::Body },
-        FieldSpec { snake: "mifid2_execution_algo", location: FieldLocation::Body },
-        FieldSpec { snake: "mifid2_execution_trader", location: FieldLocation::Body },
-        FieldSpec { snake: "order_type", location: FieldLocation::Body },
-        FieldSpec { snake: "order_restrictions", location: FieldLocation::Body },
-        FieldSpec { snake: "outside_rth", location: FieldLocation::Body },
-        FieldSpec { snake: "price", location: FieldLocation::Body },
-        FieldSpec { snake: "quantity", location: FieldLocation::Body },
-        FieldSpec { snake: "side", location: FieldLocation::Body },
-        FieldSpec { snake: "ticker", location: FieldLocation::Body },
-        FieldSpec { snake: "time_in_force", location: FieldLocation::Body },
+        FieldSpec { snake: "account", wire: "account", location: FieldLocation::Path },
+        FieldSpec { snake: "aux_price", wire: "Aux Price", location: FieldLocation::Body },
+        FieldSpec { snake: "contract_id", wire: "ContractId", location: FieldLocation::Body },
+        FieldSpec { snake: "currency", wire: "Currency", location: FieldLocation::Body },
+        FieldSpec { snake: "customer_order_id", wire: "CustomerOrderId", location: FieldLocation::Body },
+        FieldSpec { snake: "german_hft_algo", wire: "GermanHftAlgo", location: FieldLocation::Body },
+        FieldSpec { snake: "instrument_type", wire: "InstrumentType", location: FieldLocation::Body },
+        FieldSpec { snake: "listing_exchange", wire: "ListingExchange", location: FieldLocation::Body },
+        FieldSpec { snake: "mifid2_algo", wire: "Mifid2Algo", location: FieldLocation::Body },
+        FieldSpec { snake: "mifid2_decision_maker", wire: "Mifid2DecisionMaker", location: FieldLocation::Body },
+        FieldSpec { snake: "mifid2_execution_algo", wire: "Mifid2ExecutionAlgo", location: FieldLocation::Body },
+        FieldSpec { snake: "mifid2_execution_trader", wire: "Mifid2ExecutionTrader", location: FieldLocation::Body },
+        FieldSpec { snake: "order_type", wire: "Order Type", location: FieldLocation::Body },
+        FieldSpec { snake: "order_restrictions", wire: "OrderRestrictions", location: FieldLocation::Body },
+        FieldSpec { snake: "outside_rth", wire: "Outside RTH", location: FieldLocation::Body },
+        FieldSpec { snake: "price", wire: "Price", location: FieldLocation::Body },
+        FieldSpec { snake: "quantity", wire: "Quantity", location: FieldLocation::Body },
+        FieldSpec { snake: "side", wire: "Side", location: FieldLocation::Body },
+        FieldSpec { snake: "ticker", wire: "Ticker", location: FieldLocation::Body },
+        FieldSpec { snake: "time_in_force", wire: "Time in Force", location: FieldLocation::Body },
     ],
     auth: &[
         AuthApply { secret_key: "cookieAuth", kind: AuthKind::ApiKeyHeader("portal") },
@@ -453,6 +914,8 @@ const OP_ORDERS_GET_ACCOUNTS_ACCOUNT_ORDERS_CUSTOMER_ORDER_ID: OpSpec = OpSpec {
     method: "GET",
     path_template: "/accounts/{account}/orders/{customer_order_id}",
     fields: &[
+        FieldSpec { snake: "account", wire: "account", location: FieldLocation::Path },
+        FieldSpec { snake: "customer_order_id", wire: "CustomerOrderId", location: FieldLocation::Path },
     ],
     auth: &[
         AuthApply { secret_key: "cookieAuth", kind: AuthKind::ApiKeyHeader("portal") },
@@ -463,20 +926,22 @@ const OP_ORDERS_PUT_ACCOUNTS_ACCOUNT_ORDERS_CUSTOMER_ORDER_ID: OpSpec = OpSpec {
     method: "PUT",
     path_template: "/accounts/{account}/orders/{customer_order_id}",
     fields: &[
-        FieldSpec { snake: "aux_price", location: FieldLocation::Body },
-        FieldSpec { snake: "customer_order_id", location: FieldLocation::Body },
-        FieldSpec { snake: "german_hft_algo", location: FieldLocation::Body },
-        FieldSpec { snake: "mifid2_algo", location: FieldLocation::Body },
-        FieldSpec { snake: "mifid2_decision_maker", location: FieldLocation::Body },
-        FieldSpec { snake: "mifid2_execution_algo", location: FieldLocation::Body },
-        FieldSpec { snake: "mifid2_execution_trader", location: FieldLocation::Body },
-        FieldSpec { snake: "order_type", location: FieldLocation::Body },
-        FieldSpec { snake: "orig_customer_order_id", location: FieldLocation::Body },
-        FieldSpec { snake: "outside_rth", location: FieldLocation::Body },
-        FieldSpec { snake: "price", location: FieldLocation::Body },
-        FieldSpec { snake: "quantity", location: FieldLocation::Body },
-        FieldSpec { snake: "side", location: FieldLocation::Body },
-        FieldSpec { snake: "time_in_force", location: FieldLocation::Body },
+        FieldSpec { snake: "account", wire: "account", location: FieldLocation::Path },
+        FieldSpec { snake: "customer_order_id", wire: "CustomerOrderId", location: FieldLocation::Path },
+        FieldSpec { snake: "aux_price", wire: "Aux Price", location: FieldLocation::Body },
+        FieldSpec { snake: "customer_order_id_v2", wire: "CustomerOrderId", location: FieldLocation::Body },
+        FieldSpec { snake: "german_hft_algo", wire: "GermanHftAlgo", location: FieldLocation::Body },
+        FieldSpec { snake: "mifid2_algo", wire: "Mifid2Algo", location: FieldLocation::Body },
+        FieldSpec { snake: "mifid2_decision_maker", wire: "Mifid2DecisionMaker", location: FieldLocation::Body },
+        FieldSpec { snake: "mifid2_execution_algo", wire: "Mifid2ExecutionAlgo", location: FieldLocation::Body },
+        FieldSpec { snake: "mifid2_execution_trader", wire: "Mifid2ExecutionTrader", location: FieldLocation::Body },
+        FieldSpec { snake: "order_type", wire: "Order Type", location: FieldLocation::Body },
+        FieldSpec { snake: "orig_customer_order_id", wire: "OrigCustomerOrderId", location: FieldLocation::Body },
+        FieldSpec { snake: "outside_rth", wire: "Outside RTH", location: FieldLocation::Body },
+        FieldSpec { snake: "price", wire: "Price", location: FieldLocation::Body },
+        FieldSpec { snake: "quantity", wire: "Quantity", location: FieldLocation::Body },
+        FieldSpec { snake: "side", wire: "Side", location: FieldLocation::Body },
+        FieldSpec { snake: "time_in_force", wire: "Time in Force", location: FieldLocation::Body },
     ],
     auth: &[
         AuthApply { secret_key: "cookieAuth", kind: AuthKind::ApiKeyHeader("portal") },
@@ -487,13 +952,40 @@ const OP_ORDERS_DELETE_ACCOUNTS_ACCOUNT_ORDERS_CUSTOMER_ORDER_ID: OpSpec = OpSpe
     method: "DELETE",
     path_template: "/accounts/{account}/orders/{customer_order_id}",
     fields: &[
+        FieldSpec { snake: "account", wire: "account", location: FieldLocation::Path },
+        FieldSpec { snake: "customer_order_id", wire: "CustomerOrderId", location: FieldLocation::Path },
     ],
     auth: &[
         AuthApply { secret_key: "cookieAuth", kind: AuthKind::ApiKeyHeader("portal") },
     ],
 };
 
+fn iface_orders__order_state__to_json(p: &iface_orders::OrderState) -> Value {
+    let mut m = Map::new();
+    m.insert("ContractId".into(), match (&p.contract_id) { Some(v) => serde_json::Number::from_f64(*(v)).map(Value::Number).unwrap_or(Value::Null), None => Value::Null });
+    m.insert("CustomerOrderId".into(), match (&p.customer_order_id) { Some(v) => serde_json::Number::from_f64(*(v)).map(Value::Number).unwrap_or(Value::Null), None => Value::Null });
+    m.insert("FilledQuantity".into(), match (&p.filled_quantity) { Some(v) => serde_json::Number::from_f64(*(v)).map(Value::Number).unwrap_or(Value::Null), None => Value::Null });
+    m.insert("ListingExchange".into(), match (&p.listing_exchange) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("OrderType".into(), match (&p.order_type) { Some(v) => iface_orders__order_type__to_json(v), None => Value::Null });
+    m.insert("OutsideRTH".into(), match (&p.outside_rth) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("Price".into(), match (&p.price) { Some(v) => serde_json::Number::from_f64(*(v)).map(Value::Number).unwrap_or(Value::Null), None => Value::Null });
+    m.insert("RemainingQuantity".into(), match (&p.remaining_quantity) { Some(v) => serde_json::Number::from_f64(*(v)).map(Value::Number).unwrap_or(Value::Null), None => Value::Null });
+    m.insert("Side".into(), match (&p.side) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("Status".into(), match (&p.status) { Some(v) => iface_orders__order_status__to_json(v), None => Value::Null });
+    m.insert("Ticker".into(), match (&p.ticker) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("TimeInForce".into(), match (&p.time_in_force) { Some(v) => iface_orders__time_in_force__to_json(v), None => Value::Null });
+    m.insert("TransactionTime".into(), match (&p.transaction_time) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("Warning".into(), match (&p.warning) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
 fn iface_orders__order_type__to_json(p: &iface_orders::OrderType) -> Value {
+    let mut m = Map::new();
+    m.insert("value".into(), Value::String((&p.value).clone()));
+    Value::Object(m)
+}
+
+fn iface_orders__order_status__to_json(p: &iface_orders::OrderStatus) -> Value {
     let mut m = Map::new();
     m.insert("value".into(), Value::String((&p.value).clone()));
     Value::Object(m)
@@ -505,8 +997,41 @@ fn iface_orders__time_in_force__to_json(p: &iface_orders::TimeInForce) -> Value 
     Value::Object(m)
 }
 
+fn iface_orders__put_accounts_account_orders_customer_order_id_response_item__to_json(p: &iface_orders::PutAccountsAccountOrdersCustomerOrderIdResponseItem) -> Value {
+    let mut m = Map::new();
+    m.insert("CustomerOrderId".into(), match (&p.customer_order_id) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("OrderQty".into(), match (&p.order_qty) { Some(v) => serde_json::Number::from_f64(*(v)).map(Value::Number).unwrap_or(Value::Null), None => Value::Null });
+    m.insert("OrderType".into(), match (&p.order_type) { Some(v) => iface_orders__order_type__to_json(v), None => Value::Null });
+    m.insert("Price".into(), match (&p.price) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("Side".into(), match (&p.side) { Some(v) => serde_json::Number::from_f64(*(v)).map(Value::Number).unwrap_or(Value::Null), None => Value::Null });
+    m.insert("Status".into(), match (&p.status) { Some(v) => iface_orders__order_status__to_json(v), None => Value::Null });
+    m.insert("Symbol".into(), match (&p.symbol) { Some(v) => serde_json::Number::from_f64(*(v)).map(Value::Number).unwrap_or(Value::Null), None => Value::Null });
+    m.insert("Warning".into(), match (&p.warning) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_orders__delete_accounts_account_orders_customer_order_id_response_item__to_json(p: &iface_orders::DeleteAccountsAccountOrdersCustomerOrderIdResponseItem) -> Value {
+    let mut m = Map::new();
+    m.insert("CustomerOrderId".into(), match (&p.customer_order_id) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("OrderQty".into(), match (&p.order_qty) { Some(v) => serde_json::Number::from_f64(*(v)).map(Value::Number).unwrap_or(Value::Null), None => Value::Null });
+    m.insert("OrderType".into(), match (&p.order_type) { Some(v) => iface_orders__order_type__to_json(v), None => Value::Null });
+    m.insert("Price".into(), match (&p.price) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("Side".into(), match (&p.side) { Some(v) => serde_json::Number::from_f64(*(v)).map(Value::Number).unwrap_or(Value::Null), None => Value::Null });
+    m.insert("Status".into(), match (&p.status) { Some(v) => iface_orders__order_status__to_json(v), None => Value::Null });
+    m.insert("Symbol".into(), match (&p.symbol) { Some(v) => serde_json::Number::from_f64(*(v)).map(Value::Number).unwrap_or(Value::Null), None => Value::Null });
+    m.insert("Warning".into(), match (&p.warning) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_orders__get_accounts_account_orders_params__to_json(p: &iface_orders::GetAccountsAccountOrdersParams) -> Value {
+    let mut m = Map::new();
+    m.insert("account".into(), Value::String((&p.account).clone()));
+    Value::Object(m)
+}
+
 fn iface_orders__post_accounts_account_orders_params__to_json(p: &iface_orders::PostAccountsAccountOrdersParams) -> Value {
     let mut m = Map::new();
+    m.insert("account".into(), Value::String((&p.account).clone()));
     m.insert("aux_price".into(), match (&p.aux_price) { Some(v) => serde_json::Number::from_f64(*(v)).map(Value::Number).unwrap_or(Value::Null), None => Value::Null });
     m.insert("contract_id".into(), match (&p.contract_id) { Some(v) => serde_json::Number::from_f64(*(v)).map(Value::Number).unwrap_or(Value::Null), None => Value::Null });
     m.insert("currency".into(), match (&p.currency) { Some(v) => Value::String((v).clone()), None => Value::Null });
@@ -529,10 +1054,19 @@ fn iface_orders__post_accounts_account_orders_params__to_json(p: &iface_orders::
     Value::Object(m)
 }
 
+fn iface_orders__get_accounts_account_orders_customer_order_id_params__to_json(p: &iface_orders::GetAccountsAccountOrdersCustomerOrderIdParams) -> Value {
+    let mut m = Map::new();
+    m.insert("account".into(), Value::String((&p.account).clone()));
+    m.insert("customer_order_id".into(), Value::String((&p.customer_order_id).clone()));
+    Value::Object(m)
+}
+
 fn iface_orders__put_accounts_account_orders_customer_order_id_params__to_json(p: &iface_orders::PutAccountsAccountOrdersCustomerOrderIdParams) -> Value {
     let mut m = Map::new();
+    m.insert("account".into(), Value::String((&p.account).clone()));
+    m.insert("customer_order_id".into(), Value::String((&p.customer_order_id).clone()));
     m.insert("aux_price".into(), match (&p.aux_price) { Some(v) => serde_json::Number::from_f64(*(v)).map(Value::Number).unwrap_or(Value::Null), None => Value::Null });
-    m.insert("customer_order_id".into(), match (&p.customer_order_id) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("customer_order_id_v2".into(), match (&p.customer_order_id_v2) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("german_hft_algo".into(), match (&p.german_hft_algo) { Some(v) => Value::Bool(*(v)), None => Value::Null });
     m.insert("mifid2_algo".into(), match (&p.mifid2_algo) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("mifid2_decision_maker".into(), match (&p.mifid2_decision_maker) { Some(v) => Value::String((v).clone()), None => Value::Null });
@@ -548,23 +1082,237 @@ fn iface_orders__put_accounts_account_orders_customer_order_id_params__to_json(p
     Value::Object(m)
 }
 
+fn iface_orders__delete_accounts_account_orders_customer_order_id_params__to_json(p: &iface_orders::DeleteAccountsAccountOrdersCustomerOrderIdParams) -> Value {
+    let mut m = Map::new();
+    m.insert("account".into(), Value::String((&p.account).clone()));
+    m.insert("customer_order_id".into(), Value::String((&p.customer_order_id).clone()));
+    Value::Object(m)
+}
+
+fn iface_orders__order_state__from_json(v: &Value) -> Option<iface_orders::OrderState> {
+    let m = v.as_object()?;
+    Some(iface_orders::OrderState {
+        contract_id: m.get("ContractId").filter(|v| !v.is_null()).and_then(|v| (v).as_f64()),
+        customer_order_id: m.get("CustomerOrderId").filter(|v| !v.is_null()).and_then(|v| (v).as_f64()),
+        filled_quantity: m.get("FilledQuantity").filter(|v| !v.is_null()).and_then(|v| (v).as_f64()),
+        listing_exchange: m.get("ListingExchange").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        order_type: m.get("OrderType").filter(|v| !v.is_null()).and_then(|v| iface_orders__order_type__from_json(v)),
+        outside_rth: m.get("OutsideRTH").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        price: m.get("Price").filter(|v| !v.is_null()).and_then(|v| (v).as_f64()),
+        remaining_quantity: m.get("RemainingQuantity").filter(|v| !v.is_null()).and_then(|v| (v).as_f64()),
+        side: m.get("Side").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        status: m.get("Status").filter(|v| !v.is_null()).and_then(|v| iface_orders__order_status__from_json(v)),
+        ticker: m.get("Ticker").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        time_in_force: m.get("TimeInForce").filter(|v| !v.is_null()).and_then(|v| iface_orders__time_in_force__from_json(v)),
+        transaction_time: m.get("TransactionTime").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        warning: m.get("Warning").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    })
+}
+
+fn iface_orders__order_type__from_json(v: &Value) -> Option<iface_orders::OrderType> {
+    let m = v.as_object()?;
+    Some(iface_orders::OrderType {
+        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+    })
+}
+
+fn iface_orders__order_status__from_json(v: &Value) -> Option<iface_orders::OrderStatus> {
+    let m = v.as_object()?;
+    Some(iface_orders::OrderStatus {
+        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+    })
+}
+
+fn iface_orders__time_in_force__from_json(v: &Value) -> Option<iface_orders::TimeInForce> {
+    let m = v.as_object()?;
+    Some(iface_orders::TimeInForce {
+        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+    })
+}
+
+fn iface_orders__put_accounts_account_orders_customer_order_id_response_item__from_json(v: &Value) -> Option<iface_orders::PutAccountsAccountOrdersCustomerOrderIdResponseItem> {
+    let m = v.as_object()?;
+    Some(iface_orders::PutAccountsAccountOrdersCustomerOrderIdResponseItem {
+        customer_order_id: m.get("CustomerOrderId").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        order_qty: m.get("OrderQty").filter(|v| !v.is_null()).and_then(|v| (v).as_f64()),
+        order_type: m.get("OrderType").filter(|v| !v.is_null()).and_then(|v| iface_orders__order_type__from_json(v)),
+        price: m.get("Price").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        side: m.get("Side").filter(|v| !v.is_null()).and_then(|v| (v).as_f64()),
+        status: m.get("Status").filter(|v| !v.is_null()).and_then(|v| iface_orders__order_status__from_json(v)),
+        symbol: m.get("Symbol").filter(|v| !v.is_null()).and_then(|v| (v).as_f64()),
+        warning: m.get("Warning").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    })
+}
+
+fn iface_orders__delete_accounts_account_orders_customer_order_id_response_item__from_json(v: &Value) -> Option<iface_orders::DeleteAccountsAccountOrdersCustomerOrderIdResponseItem> {
+    let m = v.as_object()?;
+    Some(iface_orders::DeleteAccountsAccountOrdersCustomerOrderIdResponseItem {
+        customer_order_id: m.get("CustomerOrderId").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        order_qty: m.get("OrderQty").filter(|v| !v.is_null()).and_then(|v| (v).as_f64()),
+        order_type: m.get("OrderType").filter(|v| !v.is_null()).and_then(|v| iface_orders__order_type__from_json(v)),
+        price: m.get("Price").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        side: m.get("Side").filter(|v| !v.is_null()).and_then(|v| (v).as_f64()),
+        status: m.get("Status").filter(|v| !v.is_null()).and_then(|v| iface_orders__order_status__from_json(v)),
+        symbol: m.get("Symbol").filter(|v| !v.is_null()).and_then(|v| (v).as_f64()),
+        warning: m.get("Warning").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    })
+}
+
+fn iface_orders__get_accounts_account_orders__ok(body: String) -> Result<Vec<iface_orders::OrderState>, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match (&v).as_array().map(|a| a.iter().filter_map(|x| iface_orders__order_state__from_json(x)).collect()) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_orders__get_accounts_account_orders__err(e: crate::runtime::DispatchError) -> iface_orders::GetAccountsAccountOrdersError {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => match status {
+            400u16 => iface_orders::GetAccountsAccountOrdersError::BadRequest(body),
+            401u16 => iface_orders::GetAccountsAccountOrdersError::Unauthorized(body),
+            403u16 => iface_orders::GetAccountsAccountOrdersError::Forbidden(body),
+            408u16 => iface_orders::GetAccountsAccountOrdersError::RequestTimeout(body),
+            _ => iface_orders::GetAccountsAccountOrdersError::Other(body),
+        },
+        crate::runtime::DispatchError::Transport(m) => iface_orders::GetAccountsAccountOrdersError::Other(m),
+    }
+}
+
+fn iface_orders__post_accounts_account_orders__ok(body: String) -> Result<Vec<iface_orders::OrderState>, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match (&v).as_array().map(|a| a.iter().filter_map(|x| iface_orders__order_state__from_json(x)).collect()) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_orders__post_accounts_account_orders__err(e: crate::runtime::DispatchError) -> iface_orders::PostAccountsAccountOrdersError {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => match status {
+            400u16 => iface_orders::PostAccountsAccountOrdersError::BadRequest(body),
+            401u16 => iface_orders::PostAccountsAccountOrdersError::Unauthorized(body),
+            403u16 => iface_orders::PostAccountsAccountOrdersError::Forbidden(body),
+            408u16 => iface_orders::PostAccountsAccountOrdersError::RequestTimeout(body),
+            _ => iface_orders::PostAccountsAccountOrdersError::Other(body),
+        },
+        crate::runtime::DispatchError::Transport(m) => iface_orders::PostAccountsAccountOrdersError::Other(m),
+    }
+}
+
+fn iface_orders__get_accounts_account_orders_customer_order_id__ok(body: String) -> Result<Vec<iface_orders::OrderState>, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match (&v).as_array().map(|a| a.iter().filter_map(|x| iface_orders__order_state__from_json(x)).collect()) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_orders__get_accounts_account_orders_customer_order_id__err(e: crate::runtime::DispatchError) -> iface_orders::GetAccountsAccountOrdersCustomerOrderIdError {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => match status {
+            400u16 => iface_orders::GetAccountsAccountOrdersCustomerOrderIdError::BadRequest(body),
+            401u16 => iface_orders::GetAccountsAccountOrdersCustomerOrderIdError::Unauthorized(body),
+            403u16 => iface_orders::GetAccountsAccountOrdersCustomerOrderIdError::Forbidden(body),
+            408u16 => iface_orders::GetAccountsAccountOrdersCustomerOrderIdError::RequestTimeout(body),
+            _ => iface_orders::GetAccountsAccountOrdersCustomerOrderIdError::Other(body),
+        },
+        crate::runtime::DispatchError::Transport(m) => iface_orders::GetAccountsAccountOrdersCustomerOrderIdError::Other(m),
+    }
+}
+
+fn iface_orders__put_accounts_account_orders_customer_order_id__ok(body: String) -> Result<Vec<iface_orders::PutAccountsAccountOrdersCustomerOrderIdResponseItem>, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match (&v).as_array().map(|a| a.iter().filter_map(|x| iface_orders__put_accounts_account_orders_customer_order_id_response_item__from_json(x)).collect()) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_orders__put_accounts_account_orders_customer_order_id__err(e: crate::runtime::DispatchError) -> iface_orders::PutAccountsAccountOrdersCustomerOrderIdError {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => match status {
+            400u16 => iface_orders::PutAccountsAccountOrdersCustomerOrderIdError::BadRequest(body),
+            401u16 => iface_orders::PutAccountsAccountOrdersCustomerOrderIdError::Unauthorized(body),
+            403u16 => iface_orders::PutAccountsAccountOrdersCustomerOrderIdError::Forbidden(body),
+            408u16 => iface_orders::PutAccountsAccountOrdersCustomerOrderIdError::RequestTimeout(body),
+            _ => iface_orders::PutAccountsAccountOrdersCustomerOrderIdError::Other(body),
+        },
+        crate::runtime::DispatchError::Transport(m) => iface_orders::PutAccountsAccountOrdersCustomerOrderIdError::Other(m),
+    }
+}
+
+fn iface_orders__delete_accounts_account_orders_customer_order_id__ok(body: String) -> Result<Vec<iface_orders::DeleteAccountsAccountOrdersCustomerOrderIdResponseItem>, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match (&v).as_array().map(|a| a.iter().filter_map(|x| iface_orders__delete_accounts_account_orders_customer_order_id_response_item__from_json(x)).collect()) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_orders__delete_accounts_account_orders_customer_order_id__err(e: crate::runtime::DispatchError) -> iface_orders::DeleteAccountsAccountOrdersCustomerOrderIdError {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => match status {
+            400u16 => iface_orders::DeleteAccountsAccountOrdersCustomerOrderIdError::BadRequest(body),
+            401u16 => iface_orders::DeleteAccountsAccountOrdersCustomerOrderIdError::Unauthorized(body),
+            403u16 => iface_orders::DeleteAccountsAccountOrdersCustomerOrderIdError::Forbidden(body),
+            408u16 => iface_orders::DeleteAccountsAccountOrdersCustomerOrderIdError::RequestTimeout(body),
+            _ => iface_orders::DeleteAccountsAccountOrdersCustomerOrderIdError::Other(body),
+        },
+        crate::runtime::DispatchError::Transport(m) => iface_orders::DeleteAccountsAccountOrdersCustomerOrderIdError::Other(m),
+    }
+}
+
 impl iface_orders::Guest for crate::Component {
-    fn get_accounts_account_orders() -> Result<String, String> {
-        dispatch(&OP_ORDERS_GET_ACCOUNTS_ACCOUNT_ORDERS, Value::Object(Map::new()))
+    fn get_accounts_account_orders(params: iface_orders::GetAccountsAccountOrdersParams) -> Result<Vec<iface_orders::OrderState>, iface_orders::GetAccountsAccountOrdersError> {
+        let json = iface_orders__get_accounts_account_orders_params__to_json(&params);
+        match dispatch(&OP_ORDERS_GET_ACCOUNTS_ACCOUNT_ORDERS, json).and_then(iface_orders__get_accounts_account_orders__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_orders__get_accounts_account_orders__err(e)),
+        }
     }
-    fn post_accounts_account_orders(params: iface_orders::PostAccountsAccountOrdersParams) -> Result<String, String> {
+    fn post_accounts_account_orders(params: iface_orders::PostAccountsAccountOrdersParams) -> Result<Vec<iface_orders::OrderState>, iface_orders::PostAccountsAccountOrdersError> {
         let json = iface_orders__post_accounts_account_orders_params__to_json(&params);
-        dispatch(&OP_ORDERS_POST_ACCOUNTS_ACCOUNT_ORDERS, json)
+        match dispatch(&OP_ORDERS_POST_ACCOUNTS_ACCOUNT_ORDERS, json).and_then(iface_orders__post_accounts_account_orders__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_orders__post_accounts_account_orders__err(e)),
+        }
     }
-    fn get_accounts_account_orders_customer_order_id() -> Result<String, String> {
-        dispatch(&OP_ORDERS_GET_ACCOUNTS_ACCOUNT_ORDERS_CUSTOMER_ORDER_ID, Value::Object(Map::new()))
+    fn get_accounts_account_orders_customer_order_id(params: iface_orders::GetAccountsAccountOrdersCustomerOrderIdParams) -> Result<Vec<iface_orders::OrderState>, iface_orders::GetAccountsAccountOrdersCustomerOrderIdError> {
+        let json = iface_orders__get_accounts_account_orders_customer_order_id_params__to_json(&params);
+        match dispatch(&OP_ORDERS_GET_ACCOUNTS_ACCOUNT_ORDERS_CUSTOMER_ORDER_ID, json).and_then(iface_orders__get_accounts_account_orders_customer_order_id__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_orders__get_accounts_account_orders_customer_order_id__err(e)),
+        }
     }
-    fn put_accounts_account_orders_customer_order_id(params: iface_orders::PutAccountsAccountOrdersCustomerOrderIdParams) -> Result<String, String> {
+    fn put_accounts_account_orders_customer_order_id(params: iface_orders::PutAccountsAccountOrdersCustomerOrderIdParams) -> Result<Vec<iface_orders::PutAccountsAccountOrdersCustomerOrderIdResponseItem>, iface_orders::PutAccountsAccountOrdersCustomerOrderIdError> {
         let json = iface_orders__put_accounts_account_orders_customer_order_id_params__to_json(&params);
-        dispatch(&OP_ORDERS_PUT_ACCOUNTS_ACCOUNT_ORDERS_CUSTOMER_ORDER_ID, json)
+        match dispatch(&OP_ORDERS_PUT_ACCOUNTS_ACCOUNT_ORDERS_CUSTOMER_ORDER_ID, json).and_then(iface_orders__put_accounts_account_orders_customer_order_id__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_orders__put_accounts_account_orders_customer_order_id__err(e)),
+        }
     }
-    fn delete_accounts_account_orders_customer_order_id() -> Result<String, String> {
-        dispatch(&OP_ORDERS_DELETE_ACCOUNTS_ACCOUNT_ORDERS_CUSTOMER_ORDER_ID, Value::Object(Map::new()))
+    fn delete_accounts_account_orders_customer_order_id(params: iface_orders::DeleteAccountsAccountOrdersCustomerOrderIdParams) -> Result<Vec<iface_orders::DeleteAccountsAccountOrdersCustomerOrderIdResponseItem>, iface_orders::DeleteAccountsAccountOrdersCustomerOrderIdError> {
+        let json = iface_orders__delete_accounts_account_orders_customer_order_id_params__to_json(&params);
+        match dispatch(&OP_ORDERS_DELETE_ACCOUNTS_ACCOUNT_ORDERS_CUSTOMER_ORDER_ID, json).and_then(iface_orders__delete_accounts_account_orders_customer_order_id__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_orders__delete_accounts_account_orders_customer_order_id__err(e)),
+        }
     }
 }
 use crate::exports::autostamp::interactivebrokers::trades as iface_trades;
@@ -573,23 +1321,114 @@ const OP_TRADES_GET_ACCOUNTS_ACCOUNT_TRADES: OpSpec = OpSpec {
     method: "GET",
     path_template: "/accounts/{account}/trades",
     fields: &[
-        FieldSpec { snake: "body", location: FieldLocation::Body },
+        FieldSpec { snake: "account", wire: "account", location: FieldLocation::Path },
+        FieldSpec { snake: "body", wire: "body", location: FieldLocation::Body },
     ],
     auth: &[
         AuthApply { secret_key: "cookieAuth", kind: AuthKind::ApiKeyHeader("portal") },
     ],
 };
 
+fn iface_trades__get_accounts_account_trades_response_item__to_json(p: &iface_trades::GetAccountsAccountTradesResponseItem) -> Value {
+    let mut m = Map::new();
+    m.insert("AvgPrice".into(), match (&p.avg_price) { Some(v) => serde_json::Number::from_f64(*(v)).map(Value::Number).unwrap_or(Value::Null), None => Value::Null });
+    m.insert("Commission".into(), match (&p.commission) { Some(v) => serde_json::Number::from_f64(*(v)).map(Value::Number).unwrap_or(Value::Null), None => Value::Null });
+    m.insert("CommissionCurrency".into(), match (&p.commission_currency) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("ContractId".into(), match (&p.contract_id) { Some(v) => serde_json::Number::from_f64(*(v)).map(Value::Number).unwrap_or(Value::Null), None => Value::Null });
+    m.insert("Currency".into(), match (&p.currency) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("CustomerOrderId".into(), match (&p.customer_order_id) { Some(v) => serde_json::Number::from_f64(*(v)).map(Value::Number).unwrap_or(Value::Null), None => Value::Null });
+    m.insert("ExecId".into(), match (&p.exec_id) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("ExecutionTime".into(), match (&p.execution_time) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("FilledQuantity".into(), match (&p.filled_quantity) { Some(v) => serde_json::Number::from_f64(*(v)).map(Value::Number).unwrap_or(Value::Null), None => Value::Null });
+    m.insert("LastMarket".into(), match (&p.last_market) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("ListingExchange".into(), match (&p.listing_exchange) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("OrderId".into(), match (&p.order_id) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("OrderType".into(), match (&p.order_type) { Some(v) => iface_trades__order_type__to_json(v), None => Value::Null });
+    m.insert("Quantity".into(), match (&p.quantity) { Some(v) => serde_json::Number::from_f64(*(v)).map(Value::Number).unwrap_or(Value::Null), None => Value::Null });
+    m.insert("RemainingQuantity".into(), match (&p.remaining_quantity) { Some(v) => serde_json::Number::from_f64(*(v)).map(Value::Number).unwrap_or(Value::Null), None => Value::Null });
+    m.insert("Side".into(), match (&p.side) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("Ticker".into(), match (&p.ticker) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("TradePrice".into(), match (&p.trade_price) { Some(v) => serde_json::Number::from_f64(*(v)).map(Value::Number).unwrap_or(Value::Null), None => Value::Null });
+    m.insert("TradeSize".into(), match (&p.trade_size) { Some(v) => serde_json::Number::from_f64(*(v)).map(Value::Number).unwrap_or(Value::Null), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_trades__order_type__to_json(p: &iface_trades::OrderType) -> Value {
+    let mut m = Map::new();
+    m.insert("value".into(), Value::String((&p.value).clone()));
+    Value::Object(m)
+}
+
 fn iface_trades__get_accounts_account_trades_params__to_json(p: &iface_trades::GetAccountsAccountTradesParams) -> Value {
     let mut m = Map::new();
+    m.insert("account".into(), Value::String((&p.account).clone()));
     m.insert("body".into(), match (&p.body) { Some(v) => Value::String((v).clone()), None => Value::Null });
     Value::Object(m)
 }
 
+fn iface_trades__get_accounts_account_trades_response_item__from_json(v: &Value) -> Option<iface_trades::GetAccountsAccountTradesResponseItem> {
+    let m = v.as_object()?;
+    Some(iface_trades::GetAccountsAccountTradesResponseItem {
+        avg_price: m.get("AvgPrice").filter(|v| !v.is_null()).and_then(|v| (v).as_f64()),
+        commission: m.get("Commission").filter(|v| !v.is_null()).and_then(|v| (v).as_f64()),
+        commission_currency: m.get("CommissionCurrency").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        contract_id: m.get("ContractId").filter(|v| !v.is_null()).and_then(|v| (v).as_f64()),
+        currency: m.get("Currency").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        customer_order_id: m.get("CustomerOrderId").filter(|v| !v.is_null()).and_then(|v| (v).as_f64()),
+        exec_id: m.get("ExecId").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        execution_time: m.get("ExecutionTime").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        filled_quantity: m.get("FilledQuantity").filter(|v| !v.is_null()).and_then(|v| (v).as_f64()),
+        last_market: m.get("LastMarket").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        listing_exchange: m.get("ListingExchange").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        order_id: m.get("OrderId").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        order_type: m.get("OrderType").filter(|v| !v.is_null()).and_then(|v| iface_trades__order_type__from_json(v)),
+        quantity: m.get("Quantity").filter(|v| !v.is_null()).and_then(|v| (v).as_f64()),
+        remaining_quantity: m.get("RemainingQuantity").filter(|v| !v.is_null()).and_then(|v| (v).as_f64()),
+        side: m.get("Side").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        ticker: m.get("Ticker").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        trade_price: m.get("TradePrice").filter(|v| !v.is_null()).and_then(|v| (v).as_f64()),
+        trade_size: m.get("TradeSize").filter(|v| !v.is_null()).and_then(|v| (v).as_f64()),
+    })
+}
+
+fn iface_trades__order_type__from_json(v: &Value) -> Option<iface_trades::OrderType> {
+    let m = v.as_object()?;
+    Some(iface_trades::OrderType {
+        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+    })
+}
+
+fn iface_trades__get_accounts_account_trades__ok(body: String) -> Result<Vec<iface_trades::GetAccountsAccountTradesResponseItem>, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match (&v).as_array().map(|a| a.iter().filter_map(|x| iface_trades__get_accounts_account_trades_response_item__from_json(x)).collect()) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_trades__get_accounts_account_trades__err(e: crate::runtime::DispatchError) -> iface_trades::GetAccountsAccountTradesError {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => match status {
+            400u16 => iface_trades::GetAccountsAccountTradesError::BadRequest(body),
+            401u16 => iface_trades::GetAccountsAccountTradesError::Unauthorized(body),
+            403u16 => iface_trades::GetAccountsAccountTradesError::Forbidden(body),
+            408u16 => iface_trades::GetAccountsAccountTradesError::RequestTimeout(body),
+            _ => iface_trades::GetAccountsAccountTradesError::Other(body),
+        },
+        crate::runtime::DispatchError::Transport(m) => iface_trades::GetAccountsAccountTradesError::Other(m),
+    }
+}
+
 impl iface_trades::Guest for crate::Component {
-    fn get_accounts_account_trades(params: iface_trades::GetAccountsAccountTradesParams) -> Result<String, String> {
+    fn get_accounts_account_trades(params: iface_trades::GetAccountsAccountTradesParams) -> Result<Vec<iface_trades::GetAccountsAccountTradesResponseItem>, iface_trades::GetAccountsAccountTradesError> {
         let json = iface_trades__get_accounts_account_trades_params__to_json(&params);
-        dispatch(&OP_TRADES_GET_ACCOUNTS_ACCOUNT_TRADES, json)
+        match dispatch(&OP_TRADES_GET_ACCOUNTS_ACCOUNT_TRADES, json).and_then(iface_trades__get_accounts_account_trades__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_trades__get_accounts_account_trades__err(e)),
+        }
     }
 }
 use crate::exports::autostamp::interactivebrokers::market_data as iface_market_data;
@@ -608,12 +1447,28 @@ const OP_MARKET_DATA_GET_MARKETDATA_SNAPSHOT: OpSpec = OpSpec {
     method: "GET",
     path_template: "/marketdata/snapshot",
     fields: &[
-        FieldSpec { snake: "body", location: FieldLocation::Body },
+        FieldSpec { snake: "body", wire: "body", location: FieldLocation::Body },
     ],
     auth: &[
         AuthApply { secret_key: "cookieAuth", kind: AuthKind::ApiKeyHeader("portal") },
     ],
 };
+
+fn iface_market_data__get_marketdata_exchange_components_response_item__to_json(p: &iface_market_data::GetMarketdataExchangeComponentsResponseItem) -> Value {
+    let mut m = Map::new();
+    m.insert("Complete".into(), match (&p.complete) { Some(v) => Value::Bool(*(v)), None => Value::Null });
+    m.insert("ConId".into(), match (&p.con_id) { Some(v) => serde_json::Number::from_f64(*(v)).map(Value::Number).unwrap_or(Value::Null), None => Value::Null });
+    m.insert("mapping".into(), match (&p.mapping) { Some(v) => Value::Array((v).iter().map(|v| iface_market_data__get_marketdata_exchange_components_response_item_mapping_item__to_json(v)).collect()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_market_data__get_marketdata_exchange_components_response_item_mapping_item__to_json(p: &iface_market_data::GetMarketdataExchangeComponentsResponseItemMappingItem) -> Value {
+    let mut m = Map::new();
+    m.insert("bit".into(), match (&p.bit) { Some(v) => serde_json::Number::from_f64(*(v)).map(Value::Number).unwrap_or(Value::Null), None => Value::Null });
+    m.insert("code".into(), match (&p.code) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("exchange".into(), match (&p.exchange) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
 
 fn iface_market_data__get_marketdata_snapshot_body_item__to_json(p: &iface_market_data::GetMarketdataSnapshotBodyItem) -> Value {
     let mut m = Map::new();
@@ -625,19 +1480,182 @@ fn iface_market_data__get_marketdata_snapshot_body_item__to_json(p: &iface_marke
     Value::Object(m)
 }
 
+fn iface_market_data__get_marketdata_snapshot_response_item__to_json(p: &iface_market_data::GetMarketdataSnapshotResponseItem) -> Value {
+    let mut m = Map::new();
+    m.insert("Bid".into(), match (&p.bid) { Some(v) => iface_market_data__get_marketdata_snapshot_response_item_bid__to_json(v), None => Value::Null });
+    m.insert("Closing".into(), match (&p.closing) { Some(v) => iface_market_data__get_marketdata_snapshot_response_item_closing__to_json(v), None => Value::Null });
+    m.insert("Complete".into(), match (&p.complete) { Some(v) => Value::Bool(*(v)), None => Value::Null });
+    m.insert("Conid".into(), match (&p.conid) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("Offer".into(), match (&p.offer) { Some(v) => iface_market_data__get_marketdata_snapshot_response_item_offer__to_json(v), None => Value::Null });
+    m.insert("Temporality".into(), match (&p.temporality) { Some(v) => serde_json::Number::from_f64(*(v)).map(Value::Number).unwrap_or(Value::Null), None => Value::Null });
+    m.insert("Trade".into(), match (&p.trade) { Some(v) => iface_market_data__get_marketdata_snapshot_response_item_trade__to_json(v), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_market_data__get_marketdata_snapshot_response_item_bid__to_json(p: &iface_market_data::GetMarketdataSnapshotResponseItemBid) -> Value {
+    let mut m = Map::new();
+    m.insert("market".into(), match (&p.market) { Some(v) => serde_json::Number::from_f64(*(v)).map(Value::Number).unwrap_or(Value::Null), None => Value::Null });
+    m.insert("price".into(), match (&p.price) { Some(v) => serde_json::Number::from_f64(*(v)).map(Value::Number).unwrap_or(Value::Null), None => Value::Null });
+    m.insert("size".into(), match (&p.size) { Some(v) => serde_json::Number::from_f64(*(v)).map(Value::Number).unwrap_or(Value::Null), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_market_data__get_marketdata_snapshot_response_item_closing__to_json(p: &iface_market_data::GetMarketdataSnapshotResponseItemClosing) -> Value {
+    let mut m = Map::new();
+    m.insert("price".into(), match (&p.price) { Some(v) => serde_json::Number::from_f64(*(v)).map(Value::Number).unwrap_or(Value::Null), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_market_data__get_marketdata_snapshot_response_item_offer__to_json(p: &iface_market_data::GetMarketdataSnapshotResponseItemOffer) -> Value {
+    let mut m = Map::new();
+    m.insert("market".into(), match (&p.market) { Some(v) => serde_json::Number::from_f64(*(v)).map(Value::Number).unwrap_or(Value::Null), None => Value::Null });
+    m.insert("price".into(), match (&p.price) { Some(v) => serde_json::Number::from_f64(*(v)).map(Value::Number).unwrap_or(Value::Null), None => Value::Null });
+    m.insert("size".into(), match (&p.size) { Some(v) => serde_json::Number::from_f64(*(v)).map(Value::Number).unwrap_or(Value::Null), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_market_data__get_marketdata_snapshot_response_item_trade__to_json(p: &iface_market_data::GetMarketdataSnapshotResponseItemTrade) -> Value {
+    let mut m = Map::new();
+    m.insert("market".into(), match (&p.market) { Some(v) => serde_json::Number::from_f64(*(v)).map(Value::Number).unwrap_or(Value::Null), None => Value::Null });
+    m.insert("price".into(), match (&p.price) { Some(v) => serde_json::Number::from_f64(*(v)).map(Value::Number).unwrap_or(Value::Null), None => Value::Null });
+    m.insert("size".into(), match (&p.size) { Some(v) => serde_json::Number::from_f64(*(v)).map(Value::Number).unwrap_or(Value::Null), None => Value::Null });
+    m.insert("time".into(), match (&p.time) { Some(v) => serde_json::Number::from_f64(*(v)).map(Value::Number).unwrap_or(Value::Null), None => Value::Null });
+    Value::Object(m)
+}
+
 fn iface_market_data__get_marketdata_snapshot_params__to_json(p: &iface_market_data::GetMarketdataSnapshotParams) -> Value {
     let mut m = Map::new();
     m.insert("body".into(), Value::Array((&p.body).iter().map(|v| iface_market_data__get_marketdata_snapshot_body_item__to_json(v)).collect()));
     Value::Object(m)
 }
 
-impl iface_market_data::Guest for crate::Component {
-    fn get_marketdata_exchange_components() -> Result<String, String> {
-        dispatch(&OP_MARKET_DATA_GET_MARKETDATA_EXCHANGE_COMPONENTS, Value::Object(Map::new()))
+fn iface_market_data__get_marketdata_exchange_components_response_item__from_json(v: &Value) -> Option<iface_market_data::GetMarketdataExchangeComponentsResponseItem> {
+    let m = v.as_object()?;
+    Some(iface_market_data::GetMarketdataExchangeComponentsResponseItem {
+        complete: m.get("Complete").filter(|v| !v.is_null()).and_then(|v| (v).as_bool()),
+        con_id: m.get("ConId").filter(|v| !v.is_null()).and_then(|v| (v).as_f64()),
+        mapping: m.get("mapping").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| iface_market_data__get_marketdata_exchange_components_response_item_mapping_item__from_json(x)).collect())),
+    })
+}
+
+fn iface_market_data__get_marketdata_exchange_components_response_item_mapping_item__from_json(v: &Value) -> Option<iface_market_data::GetMarketdataExchangeComponentsResponseItemMappingItem> {
+    let m = v.as_object()?;
+    Some(iface_market_data::GetMarketdataExchangeComponentsResponseItemMappingItem {
+        bit: m.get("bit").filter(|v| !v.is_null()).and_then(|v| (v).as_f64()),
+        code: m.get("code").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        exchange: m.get("exchange").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    })
+}
+
+fn iface_market_data__get_marketdata_snapshot_response_item__from_json(v: &Value) -> Option<iface_market_data::GetMarketdataSnapshotResponseItem> {
+    let m = v.as_object()?;
+    Some(iface_market_data::GetMarketdataSnapshotResponseItem {
+        bid: m.get("Bid").filter(|v| !v.is_null()).and_then(|v| iface_market_data__get_marketdata_snapshot_response_item_bid__from_json(v)),
+        closing: m.get("Closing").filter(|v| !v.is_null()).and_then(|v| iface_market_data__get_marketdata_snapshot_response_item_closing__from_json(v)),
+        complete: m.get("Complete").filter(|v| !v.is_null()).and_then(|v| (v).as_bool()),
+        conid: m.get("Conid").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        offer: m.get("Offer").filter(|v| !v.is_null()).and_then(|v| iface_market_data__get_marketdata_snapshot_response_item_offer__from_json(v)),
+        temporality: m.get("Temporality").filter(|v| !v.is_null()).and_then(|v| (v).as_f64()),
+        trade: m.get("Trade").filter(|v| !v.is_null()).and_then(|v| iface_market_data__get_marketdata_snapshot_response_item_trade__from_json(v)),
+    })
+}
+
+fn iface_market_data__get_marketdata_snapshot_response_item_bid__from_json(v: &Value) -> Option<iface_market_data::GetMarketdataSnapshotResponseItemBid> {
+    let m = v.as_object()?;
+    Some(iface_market_data::GetMarketdataSnapshotResponseItemBid {
+        market: m.get("market").filter(|v| !v.is_null()).and_then(|v| (v).as_f64()),
+        price: m.get("price").filter(|v| !v.is_null()).and_then(|v| (v).as_f64()),
+        size: m.get("size").filter(|v| !v.is_null()).and_then(|v| (v).as_f64()),
+    })
+}
+
+fn iface_market_data__get_marketdata_snapshot_response_item_closing__from_json(v: &Value) -> Option<iface_market_data::GetMarketdataSnapshotResponseItemClosing> {
+    let m = v.as_object()?;
+    Some(iface_market_data::GetMarketdataSnapshotResponseItemClosing {
+        price: m.get("price").filter(|v| !v.is_null()).and_then(|v| (v).as_f64()),
+    })
+}
+
+fn iface_market_data__get_marketdata_snapshot_response_item_offer__from_json(v: &Value) -> Option<iface_market_data::GetMarketdataSnapshotResponseItemOffer> {
+    let m = v.as_object()?;
+    Some(iface_market_data::GetMarketdataSnapshotResponseItemOffer {
+        market: m.get("market").filter(|v| !v.is_null()).and_then(|v| (v).as_f64()),
+        price: m.get("price").filter(|v| !v.is_null()).and_then(|v| (v).as_f64()),
+        size: m.get("size").filter(|v| !v.is_null()).and_then(|v| (v).as_f64()),
+    })
+}
+
+fn iface_market_data__get_marketdata_snapshot_response_item_trade__from_json(v: &Value) -> Option<iface_market_data::GetMarketdataSnapshotResponseItemTrade> {
+    let m = v.as_object()?;
+    Some(iface_market_data::GetMarketdataSnapshotResponseItemTrade {
+        market: m.get("market").filter(|v| !v.is_null()).and_then(|v| (v).as_f64()),
+        price: m.get("price").filter(|v| !v.is_null()).and_then(|v| (v).as_f64()),
+        size: m.get("size").filter(|v| !v.is_null()).and_then(|v| (v).as_f64()),
+        time: m.get("time").filter(|v| !v.is_null()).and_then(|v| (v).as_f64()),
+    })
+}
+
+fn iface_market_data__get_marketdata_exchange_components__ok(body: String) -> Result<Vec<iface_market_data::GetMarketdataExchangeComponentsResponseItem>, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match (&v).as_array().map(|a| a.iter().filter_map(|x| iface_market_data__get_marketdata_exchange_components_response_item__from_json(x)).collect()) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
     }
-    fn get_marketdata_snapshot(params: iface_market_data::GetMarketdataSnapshotParams) -> Result<String, String> {
+}
+
+fn iface_market_data__get_marketdata_exchange_components__err(e: crate::runtime::DispatchError) -> iface_market_data::GetMarketdataExchangeComponentsError {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => match status {
+            400u16 => iface_market_data::GetMarketdataExchangeComponentsError::BadRequest(body),
+            401u16 => iface_market_data::GetMarketdataExchangeComponentsError::Unauthorized(body),
+            403u16 => iface_market_data::GetMarketdataExchangeComponentsError::Forbidden(body),
+            408u16 => iface_market_data::GetMarketdataExchangeComponentsError::RequestTimeout(body),
+            _ => iface_market_data::GetMarketdataExchangeComponentsError::Other(body),
+        },
+        crate::runtime::DispatchError::Transport(m) => iface_market_data::GetMarketdataExchangeComponentsError::Other(m),
+    }
+}
+
+fn iface_market_data__get_marketdata_snapshot__ok(body: String) -> Result<Vec<iface_market_data::GetMarketdataSnapshotResponseItem>, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match (&v).as_array().map(|a| a.iter().filter_map(|x| iface_market_data__get_marketdata_snapshot_response_item__from_json(x)).collect()) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_market_data__get_marketdata_snapshot__err(e: crate::runtime::DispatchError) -> iface_market_data::GetMarketdataSnapshotError {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => match status {
+            400u16 => iface_market_data::GetMarketdataSnapshotError::BadRequest(body),
+            401u16 => iface_market_data::GetMarketdataSnapshotError::Unauthorized(body),
+            403u16 => iface_market_data::GetMarketdataSnapshotError::Forbidden(body),
+            408u16 => iface_market_data::GetMarketdataSnapshotError::RequestTimeout(body),
+            _ => iface_market_data::GetMarketdataSnapshotError::Other(body),
+        },
+        crate::runtime::DispatchError::Transport(m) => iface_market_data::GetMarketdataSnapshotError::Other(m),
+    }
+}
+
+impl iface_market_data::Guest for crate::Component {
+    fn get_marketdata_exchange_components() -> Result<Vec<iface_market_data::GetMarketdataExchangeComponentsResponseItem>, iface_market_data::GetMarketdataExchangeComponentsError> {
+        match dispatch(&OP_MARKET_DATA_GET_MARKETDATA_EXCHANGE_COMPONENTS, Value::Object(Map::new())).and_then(iface_market_data__get_marketdata_exchange_components__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_market_data__get_marketdata_exchange_components__err(e)),
+        }
+    }
+    fn get_marketdata_snapshot(params: iface_market_data::GetMarketdataSnapshotParams) -> Result<Vec<iface_market_data::GetMarketdataSnapshotResponseItem>, iface_market_data::GetMarketdataSnapshotError> {
         let json = iface_market_data__get_marketdata_snapshot_params__to_json(&params);
-        dispatch(&OP_MARKET_DATA_GET_MARKETDATA_SNAPSHOT, json)
+        match dispatch(&OP_MARKET_DATA_GET_MARKETDATA_SNAPSHOT, json).and_then(iface_market_data__get_marketdata_snapshot__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_market_data__get_marketdata_snapshot__err(e)),
+        }
     }
 }
 use crate::exports::autostamp::interactivebrokers::o_auth as iface_o_auth;
@@ -646,13 +1664,13 @@ const OP_O_AUTH_POST_OAUTH_ACCESS_TOKEN: OpSpec = OpSpec {
     method: "POST",
     path_template: "/oauth/access_token",
     fields: &[
-        FieldSpec { snake: "oauth_consumer_key", location: FieldLocation::Body },
-        FieldSpec { snake: "oauth_nonce", location: FieldLocation::Body },
-        FieldSpec { snake: "oauth_signature", location: FieldLocation::Body },
-        FieldSpec { snake: "oauth_signature_method", location: FieldLocation::Body },
-        FieldSpec { snake: "oauth_timestamp", location: FieldLocation::Body },
-        FieldSpec { snake: "oauth_token", location: FieldLocation::Body },
-        FieldSpec { snake: "oauth_verifier", location: FieldLocation::Body },
+        FieldSpec { snake: "oauth_consumer_key", wire: "oauth_consumer_key", location: FieldLocation::Body },
+        FieldSpec { snake: "oauth_nonce", wire: "oauth_nonce", location: FieldLocation::Body },
+        FieldSpec { snake: "oauth_signature", wire: "oauth_signature", location: FieldLocation::Body },
+        FieldSpec { snake: "oauth_signature_method", wire: "oauth_signature_method", location: FieldLocation::Body },
+        FieldSpec { snake: "oauth_timestamp", wire: "oauth_timestamp", location: FieldLocation::Body },
+        FieldSpec { snake: "oauth_token", wire: "oauth_token", location: FieldLocation::Body },
+        FieldSpec { snake: "oauth_verifier", wire: "oauth_verifier", location: FieldLocation::Body },
     ],
     auth: &[
         AuthApply { secret_key: "cookieAuth", kind: AuthKind::ApiKeyHeader("portal") },
@@ -663,13 +1681,13 @@ const OP_O_AUTH_POST_OAUTH_LIVE_SESSION_TOKEN: OpSpec = OpSpec {
     method: "POST",
     path_template: "/oauth/live_session_token",
     fields: &[
-        FieldSpec { snake: "diffie_hellman_challenge", location: FieldLocation::Body },
-        FieldSpec { snake: "oauth_consumer_key", location: FieldLocation::Body },
-        FieldSpec { snake: "oauth_nonce", location: FieldLocation::Body },
-        FieldSpec { snake: "oauth_signature", location: FieldLocation::Body },
-        FieldSpec { snake: "oauth_signature_method", location: FieldLocation::Body },
-        FieldSpec { snake: "oauth_timestamp", location: FieldLocation::Body },
-        FieldSpec { snake: "oauth_token", location: FieldLocation::Body },
+        FieldSpec { snake: "diffie_hellman_challenge", wire: "diffie_hellman_challenge", location: FieldLocation::Body },
+        FieldSpec { snake: "oauth_consumer_key", wire: "oauth_consumer_key", location: FieldLocation::Body },
+        FieldSpec { snake: "oauth_nonce", wire: "oauth_nonce", location: FieldLocation::Body },
+        FieldSpec { snake: "oauth_signature", wire: "oauth_signature", location: FieldLocation::Body },
+        FieldSpec { snake: "oauth_signature_method", wire: "oauth_signature_method", location: FieldLocation::Body },
+        FieldSpec { snake: "oauth_timestamp", wire: "oauth_timestamp", location: FieldLocation::Body },
+        FieldSpec { snake: "oauth_token", wire: "oauth_token", location: FieldLocation::Body },
     ],
     auth: &[
         AuthApply { secret_key: "cookieAuth", kind: AuthKind::ApiKeyHeader("portal") },
@@ -680,17 +1698,37 @@ const OP_O_AUTH_POST_OAUTH_REQUEST_TOKEN: OpSpec = OpSpec {
     method: "POST",
     path_template: "/oauth/request_token",
     fields: &[
-        FieldSpec { snake: "oauth_callback", location: FieldLocation::Body },
-        FieldSpec { snake: "oauth_consumer_key", location: FieldLocation::Body },
-        FieldSpec { snake: "oauth_nonce", location: FieldLocation::Body },
-        FieldSpec { snake: "oauth_signature", location: FieldLocation::Body },
-        FieldSpec { snake: "oauth_signature_method", location: FieldLocation::Body },
-        FieldSpec { snake: "oauth_timestamp", location: FieldLocation::Body },
+        FieldSpec { snake: "oauth_callback", wire: "oauth_callback", location: FieldLocation::Body },
+        FieldSpec { snake: "oauth_consumer_key", wire: "oauth_consumer_key", location: FieldLocation::Body },
+        FieldSpec { snake: "oauth_nonce", wire: "oauth_nonce", location: FieldLocation::Body },
+        FieldSpec { snake: "oauth_signature", wire: "oauth_signature", location: FieldLocation::Body },
+        FieldSpec { snake: "oauth_signature_method", wire: "oauth_signature_method", location: FieldLocation::Body },
+        FieldSpec { snake: "oauth_timestamp", wire: "oauth_timestamp", location: FieldLocation::Body },
     ],
     auth: &[
         AuthApply { secret_key: "cookieAuth", kind: AuthKind::ApiKeyHeader("portal") },
     ],
 };
+
+fn iface_o_auth__post_oauth_access_token_response__to_json(p: &iface_o_auth::PostOauthAccessTokenResponse) -> Value {
+    let mut m = Map::new();
+    m.insert("oauth_token".into(), match (&p.oauth_token) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("oauth_token_secret".into(), match (&p.oauth_token_secret) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_o_auth__post_oauth_live_session_token_response__to_json(p: &iface_o_auth::PostOauthLiveSessionTokenResponse) -> Value {
+    let mut m = Map::new();
+    m.insert("diffie_hellman_response".into(), match (&p.diffie_hellman_response) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("live_session_token_signature".into(), match (&p.live_session_token_signature) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_o_auth__post_oauth_request_token_response__to_json(p: &iface_o_auth::PostOauthRequestTokenResponse) -> Value {
+    let mut m = Map::new();
+    m.insert("oauth_token".into(), match (&p.oauth_token) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
 
 fn iface_o_auth__post_oauth_access_token_params__to_json(p: &iface_o_auth::PostOauthAccessTokenParams) -> Value {
     let mut m = Map::new();
@@ -727,18 +1765,122 @@ fn iface_o_auth__post_oauth_request_token_params__to_json(p: &iface_o_auth::Post
     Value::Object(m)
 }
 
+fn iface_o_auth__post_oauth_access_token_response__from_json(v: &Value) -> Option<iface_o_auth::PostOauthAccessTokenResponse> {
+    let m = v.as_object()?;
+    Some(iface_o_auth::PostOauthAccessTokenResponse {
+        oauth_token: m.get("oauth_token").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        oauth_token_secret: m.get("oauth_token_secret").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    })
+}
+
+fn iface_o_auth__post_oauth_live_session_token_response__from_json(v: &Value) -> Option<iface_o_auth::PostOauthLiveSessionTokenResponse> {
+    let m = v.as_object()?;
+    Some(iface_o_auth::PostOauthLiveSessionTokenResponse {
+        diffie_hellman_response: m.get("diffie_hellman_response").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        live_session_token_signature: m.get("live_session_token_signature").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    })
+}
+
+fn iface_o_auth__post_oauth_request_token_response__from_json(v: &Value) -> Option<iface_o_auth::PostOauthRequestTokenResponse> {
+    let m = v.as_object()?;
+    Some(iface_o_auth::PostOauthRequestTokenResponse {
+        oauth_token: m.get("oauth_token").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    })
+}
+
+fn iface_o_auth__post_oauth_access_token__ok(body: String) -> Result<iface_o_auth::PostOauthAccessTokenResponse, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match iface_o_auth__post_oauth_access_token_response__from_json(&v) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_o_auth__post_oauth_access_token__err(e: crate::runtime::DispatchError) -> iface_o_auth::PostOauthAccessTokenError {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => match status {
+            400u16 => iface_o_auth::PostOauthAccessTokenError::BadRequest(body),
+            401u16 => iface_o_auth::PostOauthAccessTokenError::Unauthorized(body),
+            403u16 => iface_o_auth::PostOauthAccessTokenError::Forbidden(body),
+            408u16 => iface_o_auth::PostOauthAccessTokenError::RequestTimeout(body),
+            _ => iface_o_auth::PostOauthAccessTokenError::Other(body),
+        },
+        crate::runtime::DispatchError::Transport(m) => iface_o_auth::PostOauthAccessTokenError::Other(m),
+    }
+}
+
+fn iface_o_auth__post_oauth_live_session_token__ok(body: String) -> Result<iface_o_auth::PostOauthLiveSessionTokenResponse, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match iface_o_auth__post_oauth_live_session_token_response__from_json(&v) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_o_auth__post_oauth_live_session_token__err(e: crate::runtime::DispatchError) -> iface_o_auth::PostOauthLiveSessionTokenError {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => match status {
+            400u16 => iface_o_auth::PostOauthLiveSessionTokenError::BadRequest(body),
+            401u16 => iface_o_auth::PostOauthLiveSessionTokenError::Unauthorized(body),
+            403u16 => iface_o_auth::PostOauthLiveSessionTokenError::Forbidden(body),
+            408u16 => iface_o_auth::PostOauthLiveSessionTokenError::RequestTimeout(body),
+            _ => iface_o_auth::PostOauthLiveSessionTokenError::Other(body),
+        },
+        crate::runtime::DispatchError::Transport(m) => iface_o_auth::PostOauthLiveSessionTokenError::Other(m),
+    }
+}
+
+fn iface_o_auth__post_oauth_request_token__ok(body: String) -> Result<iface_o_auth::PostOauthRequestTokenResponse, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match iface_o_auth__post_oauth_request_token_response__from_json(&v) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_o_auth__post_oauth_request_token__err(e: crate::runtime::DispatchError) -> iface_o_auth::PostOauthRequestTokenError {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => match status {
+            400u16 => iface_o_auth::PostOauthRequestTokenError::BadRequest(body),
+            401u16 => iface_o_auth::PostOauthRequestTokenError::Unauthorized(body),
+            403u16 => iface_o_auth::PostOauthRequestTokenError::Forbidden(body),
+            408u16 => iface_o_auth::PostOauthRequestTokenError::RequestTimeout(body),
+            _ => iface_o_auth::PostOauthRequestTokenError::Other(body),
+        },
+        crate::runtime::DispatchError::Transport(m) => iface_o_auth::PostOauthRequestTokenError::Other(m),
+    }
+}
+
 impl iface_o_auth::Guest for crate::Component {
-    fn post_oauth_access_token(params: iface_o_auth::PostOauthAccessTokenParams) -> Result<String, String> {
+    fn post_oauth_access_token(params: iface_o_auth::PostOauthAccessTokenParams) -> Result<iface_o_auth::PostOauthAccessTokenResponse, iface_o_auth::PostOauthAccessTokenError> {
         let json = iface_o_auth__post_oauth_access_token_params__to_json(&params);
-        dispatch(&OP_O_AUTH_POST_OAUTH_ACCESS_TOKEN, json)
+        match dispatch(&OP_O_AUTH_POST_OAUTH_ACCESS_TOKEN, json).and_then(iface_o_auth__post_oauth_access_token__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_o_auth__post_oauth_access_token__err(e)),
+        }
     }
-    fn post_oauth_live_session_token(params: iface_o_auth::PostOauthLiveSessionTokenParams) -> Result<String, String> {
+    fn post_oauth_live_session_token(params: iface_o_auth::PostOauthLiveSessionTokenParams) -> Result<iface_o_auth::PostOauthLiveSessionTokenResponse, iface_o_auth::PostOauthLiveSessionTokenError> {
         let json = iface_o_auth__post_oauth_live_session_token_params__to_json(&params);
-        dispatch(&OP_O_AUTH_POST_OAUTH_LIVE_SESSION_TOKEN, json)
+        match dispatch(&OP_O_AUTH_POST_OAUTH_LIVE_SESSION_TOKEN, json).and_then(iface_o_auth__post_oauth_live_session_token__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_o_auth__post_oauth_live_session_token__err(e)),
+        }
     }
-    fn post_oauth_request_token(params: iface_o_auth::PostOauthRequestTokenParams) -> Result<String, String> {
+    fn post_oauth_request_token(params: iface_o_auth::PostOauthRequestTokenParams) -> Result<iface_o_auth::PostOauthRequestTokenResponse, iface_o_auth::PostOauthRequestTokenError> {
         let json = iface_o_auth__post_oauth_request_token_params__to_json(&params);
-        dispatch(&OP_O_AUTH_POST_OAUTH_REQUEST_TOKEN, json)
+        match dispatch(&OP_O_AUTH_POST_OAUTH_REQUEST_TOKEN, json).and_then(iface_o_auth__post_oauth_request_token__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_o_auth__post_oauth_request_token__err(e)),
+        }
     }
 }
 use crate::exports::autostamp::interactivebrokers::financial_instrument_definitions as iface_financial_instrument_definitions;
@@ -747,16 +1889,27 @@ const OP_FINANCIAL_INSTRUMENT_DEFINITIONS_GET_SECDEF: OpSpec = OpSpec {
     method: "GET",
     path_template: "/secdef",
     fields: &[
-        FieldSpec { snake: "conid", location: FieldLocation::Body },
-        FieldSpec { snake: "currency", location: FieldLocation::Body },
-        FieldSpec { snake: "exchange", location: FieldLocation::Body },
-        FieldSpec { snake: "symbol", location: FieldLocation::Body },
-        FieldSpec { snake: "type", location: FieldLocation::Body },
+        FieldSpec { snake: "conid", wire: "conid", location: FieldLocation::Body },
+        FieldSpec { snake: "currency", wire: "currency", location: FieldLocation::Body },
+        FieldSpec { snake: "exchange", wire: "exchange", location: FieldLocation::Body },
+        FieldSpec { snake: "symbol", wire: "symbol", location: FieldLocation::Body },
+        FieldSpec { snake: "type", wire: "type", location: FieldLocation::Body },
     ],
     auth: &[
         AuthApply { secret_key: "cookieAuth", kind: AuthKind::ApiKeyHeader("portal") },
     ],
 };
+
+fn iface_financial_instrument_definitions__get_secdef_response_item__to_json(p: &iface_financial_instrument_definitions::GetSecdefResponseItem) -> Value {
+    let mut m = Map::new();
+    m.insert("CompanyName".into(), match (&p.company_name) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("ContractId".into(), match (&p.contract_id) { Some(v) => serde_json::Number::from_f64(*(v)).map(Value::Number).unwrap_or(Value::Null), None => Value::Null });
+    m.insert("Currency".into(), match (&p.currency) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("Exchange".into(), match (&p.exchange) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("SecurityType".into(), match (&p.security_type) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("Ticker".into(), match (&p.ticker) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
 
 fn iface_financial_instrument_definitions__get_secdef_params__to_json(p: &iface_financial_instrument_definitions::GetSecdefParams) -> Value {
     let mut m = Map::new();
@@ -768,10 +1921,49 @@ fn iface_financial_instrument_definitions__get_secdef_params__to_json(p: &iface_
     Value::Object(m)
 }
 
+fn iface_financial_instrument_definitions__get_secdef_response_item__from_json(v: &Value) -> Option<iface_financial_instrument_definitions::GetSecdefResponseItem> {
+    let m = v.as_object()?;
+    Some(iface_financial_instrument_definitions::GetSecdefResponseItem {
+        company_name: m.get("CompanyName").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        contract_id: m.get("ContractId").filter(|v| !v.is_null()).and_then(|v| (v).as_f64()),
+        currency: m.get("Currency").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        exchange: m.get("Exchange").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        security_type: m.get("SecurityType").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        ticker: m.get("Ticker").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    })
+}
+
+fn iface_financial_instrument_definitions__get_secdef__ok(body: String) -> Result<Vec<iface_financial_instrument_definitions::GetSecdefResponseItem>, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match (&v).as_array().map(|a| a.iter().filter_map(|x| iface_financial_instrument_definitions__get_secdef_response_item__from_json(x)).collect()) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_financial_instrument_definitions__get_secdef__err(e: crate::runtime::DispatchError) -> iface_financial_instrument_definitions::GetSecdefError {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => match status {
+            400u16 => iface_financial_instrument_definitions::GetSecdefError::BadRequest(body),
+            401u16 => iface_financial_instrument_definitions::GetSecdefError::Unauthorized(body),
+            403u16 => iface_financial_instrument_definitions::GetSecdefError::Forbidden(body),
+            408u16 => iface_financial_instrument_definitions::GetSecdefError::RequestTimeout(body),
+            _ => iface_financial_instrument_definitions::GetSecdefError::Other(body),
+        },
+        crate::runtime::DispatchError::Transport(m) => iface_financial_instrument_definitions::GetSecdefError::Other(m),
+    }
+}
+
 impl iface_financial_instrument_definitions::Guest for crate::Component {
-    fn get_secdef(params: iface_financial_instrument_definitions::GetSecdefParams) -> Result<String, String> {
+    fn get_secdef(params: iface_financial_instrument_definitions::GetSecdefParams) -> Result<Vec<iface_financial_instrument_definitions::GetSecdefResponseItem>, iface_financial_instrument_definitions::GetSecdefError> {
         let json = iface_financial_instrument_definitions__get_secdef_params__to_json(&params);
-        dispatch(&OP_FINANCIAL_INSTRUMENT_DEFINITIONS_GET_SECDEF, json)
+        match dispatch(&OP_FINANCIAL_INSTRUMENT_DEFINITIONS_GET_SECDEF, json).and_then(iface_financial_instrument_definitions__get_secdef__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_financial_instrument_definitions__get_secdef__err(e)),
+        }
     }
 }
 

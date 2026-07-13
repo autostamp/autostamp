@@ -44,10 +44,15 @@ pub(crate) enum FieldLocation {
     Body,
 }
 
-/// A single operation parameter: the snake-case key it carries in the params JSON and where
-/// it belongs in the request.
+/// A single operation parameter. `snake` keys the field in the internal params JSON (and, for a
+/// path field, matches the `{snake}` placeholder in the path template); `wire` is the verbatim name
+/// the field takes on the HTTP wire (query key, header name, or body property). The two differ
+/// whenever the source name isn't already snake_case (e.g. `dryRun` → snake `dry_run`, wire
+/// `dryRun`), and let distinct inputs that share a snake key (`DateCreated`, `DateCreated<`) still
+/// travel under their true names.
 pub(crate) struct FieldSpec {
     pub(crate) snake: &'static str,
+    pub(crate) wire: &'static str,
     pub(crate) location: FieldLocation,
 }
 
@@ -71,6 +76,16 @@ pub(crate) struct AuthApply {
     pub(crate) kind: AuthKind,
 }
 
+/// The failure modes of [`dispatch`], kept structured so each generated operation can map them
+/// onto its own typed error: an `Http` failure carries the response status and body (routed to
+/// the matching error-variant case), while a `Transport` failure carries a message for the
+/// catch-all case (a secret lookup, connection, or decode failure that never produced an HTTP
+/// status).
+pub(crate) enum DispatchError {
+    Http { status: u16, body: String },
+    Transport(String),
+}
+
 /// A single API operation: HTTP method, path template (with `{snake}` placeholders), the
 /// parameter fields, and the security schemes to apply.
 pub(crate) struct OpSpec {
@@ -81,8 +96,9 @@ pub(crate) struct OpSpec {
 }
 
 /// Execute `op` with the supplied `params` (a JSON object keyed by snake-case field names)
-/// and return the response body as a string, or an error message.
-pub(crate) fn dispatch(op: &OpSpec, params: Value) -> Result<String, String> {
+/// and return the raw 2xx response body, or a structured [`DispatchError`] the caller maps
+/// onto the operation's typed error.
+pub(crate) fn dispatch(op: &OpSpec, params: Value) -> Result<String, DispatchError> {
     let obj = match &params {
         Value::Object(map) => Some(map),
         _ => None,
@@ -105,10 +121,10 @@ pub(crate) fn dispatch(op: &OpSpec, params: Value) -> Result<String, String> {
                 let placeholder = format!("{{{}}}", field.snake);
                 path = path.replace(&placeholder, &percent_encode(&scalar(value)));
             }
-            FieldLocation::Query => query.push((field.snake.to_string(), scalar(value))),
-            FieldLocation::Header => headers.push((field.snake.to_string(), scalar(value))),
+            FieldLocation::Query => query.push((field.wire.to_string(), scalar(value))),
+            FieldLocation::Header => headers.push((field.wire.to_string(), scalar(value))),
             FieldLocation::Body => {
-                body.insert(field.snake.to_string(), value.clone());
+                body.insert(field.wire.to_string(), value.clone());
             }
         }
     }
@@ -116,7 +132,7 @@ pub(crate) fn dispatch(op: &OpSpec, params: Value) -> Result<String, String> {
     // Apply each resolved security scheme, sourcing its value from wasmcloud:secrets.
     let mut cookies: Vec<String> = Vec::new();
     for apply in op.auth {
-        let secret = fetch_secret(apply.secret_key)?;
+        let secret = fetch_secret(apply.secret_key).map_err(DispatchError::Transport)?;
         match &apply.kind {
             AuthKind::Bearer => headers.push(("authorization".into(), format!("Bearer {secret}"))),
             AuthKind::Basic => {
@@ -177,17 +193,18 @@ fn fetch_secret(key: &str) -> Result<String, String> {
 }
 
 /// Build and send the outgoing request with `wstd`, returning the response body on a 2xx
-/// status. The generated guest exports are synchronous, so the async `wstd` client is driven
-/// to completion on a local reactor via `wstd::runtime::block_on`.
+/// status and a structured [`DispatchError`] otherwise. The generated guest exports are
+/// synchronous, so the async `wstd` client is driven to completion on a local reactor via
+/// `wstd::runtime::block_on`.
 fn perform(
     method: &str,
     path_with_query: &str,
     headers: &[(String, String)],
     body: &[u8],
-) -> Result<String, String> {
+) -> Result<String, DispatchError> {
     let url = join_url(crate::BASE_URL, path_with_query);
     let method = Method::from_bytes(method.as_bytes())
-        .map_err(|err| format!("invalid HTTP method `{method}`: {err}"))?;
+        .map_err(|err| DispatchError::Transport(format!("invalid HTTP method `{method}`: {err}")))?;
 
     let mut builder = Request::builder().method(method).uri(url);
     for (name, value) in headers {
@@ -199,27 +216,29 @@ fn perform(
         } else {
             Body::from(body.to_vec())
         })
-        .map_err(|err| format!("failed to build request: {err}"))?;
+        .map_err(|err| DispatchError::Transport(format!("failed to build request: {err}")))?;
 
     wstd::runtime::block_on(async move {
         let client = Client::new();
         let response = client
             .send(request)
             .await
-            .map_err(|err| format!("request failed: {err:#}"))?;
+            .map_err(|err| DispatchError::Transport(format!("request failed: {err:#}")))?;
 
         let status = response.status().as_u16();
         let mut response_body = response.into_body();
-        let bytes = response_body
-            .contents()
-            .await
-            .map_err(|err| format!("failed to read response body: {err:#}"))?;
+        let bytes = response_body.contents().await.map_err(|err| {
+            DispatchError::Transport(format!("failed to read response body: {err:#}"))
+        })?;
         let body_text = String::from_utf8_lossy(bytes).into_owned();
 
         if (200..300).contains(&status) {
             Ok(body_text)
         } else {
-            Err(format!("HTTP {status}: {body_text}"))
+            Err(DispatchError::Http {
+                status,
+                body: body_text,
+            })
         }
     })
 }
@@ -288,13 +307,149 @@ const OP_GEOGRAPHIES_GET_GEOGRAPHIES_GEO_ID_MEDIA_RECENT: OpSpec = OpSpec {
     method: "GET",
     path_template: "/geographies/{geo_id}/media/recent",
     fields: &[
-        FieldSpec { snake: "geo_id", location: FieldLocation::Path },
-        FieldSpec { snake: "count", location: FieldLocation::Query },
-        FieldSpec { snake: "min_id", location: FieldLocation::Query },
+        FieldSpec { snake: "geo_id", wire: "geo-id", location: FieldLocation::Path },
+        FieldSpec { snake: "count", wire: "count", location: FieldLocation::Query },
+        FieldSpec { snake: "min_id", wire: "min_id", location: FieldLocation::Query },
     ],
     auth: &[
     ],
 };
+
+fn iface_geographies__media_entry_type_op_enum__to_str(e: &iface_geographies::MediaEntryTypeOpEnum) -> &'static str {
+    match e {
+        iface_geographies::MediaEntryTypeOpEnum::Image => "image",
+        iface_geographies::MediaEntryTypeOpEnum::Video => "video",
+    }
+}
+
+fn iface_geographies__media_list_response__to_json(p: &iface_geographies::MediaListResponse) -> Value {
+    let mut m = Map::new();
+    m.insert("data".into(), match (&p.data) { Some(v) => Value::Array((v).iter().map(|v| iface_geographies__media_entry__to_json(v)).collect()), None => Value::Null });
+    m.insert("meta".into(), match (&p.meta) { Some(v) => iface_geographies__meta_data__to_json(v), None => Value::Null });
+    m.insert("pagination".into(), match (&p.pagination) { Some(v) => iface_geographies__id_pagination_info__to_json(v), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_geographies__media_entry__to_json(p: &iface_geographies::MediaEntry) -> Value {
+    let mut m = Map::new();
+    m.insert("attribution".into(), match (&p.attribution) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("caption".into(), match (&p.caption) { Some(v) => iface_geographies__caption_data__to_json(v), None => Value::Null });
+    m.insert("comments".into(), match (&p.comments) { Some(v) => iface_geographies__comments_collection__to_json(v), None => Value::Null });
+    m.insert("created_time".into(), match (&p.created_time) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("filter".into(), match (&p.filter) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("id".into(), match (&p.id) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("images".into(), match (&p.images) { Some(v) => iface_geographies__images_data__to_json(v), None => Value::Null });
+    m.insert("likes".into(), match (&p.likes) { Some(v) => iface_geographies__likes_collection__to_json(v), None => Value::Null });
+    m.insert("link".into(), match (&p.link) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("location".into(), match (&p.location) { Some(v) => iface_geographies__location_info__to_json(v), None => Value::Null });
+    m.insert("tags".into(), match (&p.tags) { Some(v) => Value::Array((v).iter().map(|v| Value::String((v).clone())).collect()), None => Value::Null });
+    m.insert("type".into(), match (&p.type_op) { Some(v) => Value::String(iface_geographies__media_entry_type_op_enum__to_str(v).into()), None => Value::Null });
+    m.insert("user".into(), match (&p.user) { Some(v) => iface_geographies__user_short_info__to_json(v), None => Value::Null });
+    m.insert("user_has_liked".into(), match (&p.user_has_liked) { Some(v) => Value::Bool(*(v)), None => Value::Null });
+    m.insert("users_in_photo".into(), match (&p.users_in_photo) { Some(v) => Value::Array((v).iter().map(|v| iface_geographies__user_in_photo__to_json(v)).collect()), None => Value::Null });
+    m.insert("videos".into(), match (&p.videos) { Some(v) => iface_geographies__videos_data__to_json(v), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_geographies__caption_data__to_json(p: &iface_geographies::CaptionData) -> Value {
+    let mut m = Map::new();
+    m.insert("created_time".into(), match (&p.created_time) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("from".into(), match (&p.from_op) { Some(v) => iface_geographies__user_short_info__to_json(v), None => Value::Null });
+    m.insert("id".into(), match (&p.id) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("text".into(), match (&p.text) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_geographies__user_short_info__to_json(p: &iface_geographies::UserShortInfo) -> Value {
+    let mut m = Map::new();
+    m.insert("full_name".into(), match (&p.full_name) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("id".into(), match (&p.id) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("profile_picture".into(), match (&p.profile_picture) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("username".into(), match (&p.username) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_geographies__comments_collection__to_json(p: &iface_geographies::CommentsCollection) -> Value {
+    let mut m = Map::new();
+    m.insert("count".into(), match (&p.count) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("data".into(), match (&p.data) { Some(v) => Value::Array((v).iter().map(|v| iface_geographies__comment_entry__to_json(v)).collect()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_geographies__comment_entry__to_json(p: &iface_geographies::CommentEntry) -> Value {
+    let mut m = Map::new();
+    m.insert("created_time".into(), match (&p.created_time) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("from".into(), match (&p.from_op) { Some(v) => iface_geographies__user_short_info__to_json(v), None => Value::Null });
+    m.insert("id".into(), match (&p.id) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("text".into(), match (&p.text) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_geographies__images_data__to_json(p: &iface_geographies::ImagesData) -> Value {
+    let mut m = Map::new();
+    m.insert("low_resolution".into(), match (&p.low_resolution) { Some(v) => iface_geographies__image_info__to_json(v), None => Value::Null });
+    m.insert("standard_resolution".into(), match (&p.standard_resolution) { Some(v) => iface_geographies__image_info__to_json(v), None => Value::Null });
+    m.insert("thumbnail".into(), match (&p.thumbnail) { Some(v) => iface_geographies__image_info__to_json(v), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_geographies__image_info__to_json(p: &iface_geographies::ImageInfo) -> Value {
+    let mut m = Map::new();
+    m.insert("height".into(), match (&p.height) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("url".into(), match (&p.url) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("width".into(), match (&p.width) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_geographies__likes_collection__to_json(p: &iface_geographies::LikesCollection) -> Value {
+    let mut m = Map::new();
+    m.insert("count".into(), match (&p.count) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("data".into(), match (&p.data) { Some(v) => Value::Array((v).iter().map(|v| iface_geographies__user_short_info__to_json(v)).collect()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_geographies__location_info__to_json(p: &iface_geographies::LocationInfo) -> Value {
+    let mut m = Map::new();
+    m.insert("id".into(), match (&p.id) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("latitude".into(), match (&p.latitude) { Some(v) => serde_json::Number::from_f64(*(v)).map(Value::Number).unwrap_or(Value::Null), None => Value::Null });
+    m.insert("longitude".into(), match (&p.longitude) { Some(v) => serde_json::Number::from_f64(*(v)).map(Value::Number).unwrap_or(Value::Null), None => Value::Null });
+    m.insert("name".into(), match (&p.name) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_geographies__user_in_photo__to_json(p: &iface_geographies::UserInPhoto) -> Value {
+    let mut m = Map::new();
+    m.insert("position".into(), match (&p.position) { Some(v) => iface_geographies__position__to_json(v), None => Value::Null });
+    m.insert("user".into(), match (&p.user) { Some(v) => iface_geographies__user_short_info__to_json(v), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_geographies__position__to_json(p: &iface_geographies::Position) -> Value {
+    let mut m = Map::new();
+    m.insert("x".into(), match (&p.x) { Some(v) => serde_json::Number::from_f64(*(v)).map(Value::Number).unwrap_or(Value::Null), None => Value::Null });
+    m.insert("y".into(), match (&p.y) { Some(v) => serde_json::Number::from_f64(*(v)).map(Value::Number).unwrap_or(Value::Null), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_geographies__videos_data__to_json(p: &iface_geographies::VideosData) -> Value {
+    let mut m = Map::new();
+    m.insert("low_resolution".into(), match (&p.low_resolution) { Some(v) => iface_geographies__image_info__to_json(v), None => Value::Null });
+    m.insert("standard_resolution".into(), match (&p.standard_resolution) { Some(v) => iface_geographies__image_info__to_json(v), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_geographies__meta_data__to_json(p: &iface_geographies::MetaData) -> Value {
+    let mut m = Map::new();
+    m.insert("code".into(), match (&p.code) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_geographies__id_pagination_info__to_json(p: &iface_geographies::IdPaginationInfo) -> Value {
+    let mut m = Map::new();
+    m.insert("next_max_id".into(), match (&p.next_max_id) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("next_url".into(), match (&p.next_url) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
 
 fn iface_geographies__get_geographies_geo_id_media_recent_params__to_json(p: &iface_geographies::GetGeographiesGeoIdMediaRecentParams) -> Value {
     let mut m = Map::new();
@@ -304,10 +459,183 @@ fn iface_geographies__get_geographies_geo_id_media_recent_params__to_json(p: &if
     Value::Object(m)
 }
 
+fn iface_geographies__media_list_response__from_json(v: &Value) -> Option<iface_geographies::MediaListResponse> {
+    let m = v.as_object()?;
+    Some(iface_geographies::MediaListResponse {
+        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| iface_geographies__media_entry__from_json(x)).collect())),
+        meta: m.get("meta").filter(|v| !v.is_null()).and_then(|v| iface_geographies__meta_data__from_json(v)),
+        pagination: m.get("pagination").filter(|v| !v.is_null()).and_then(|v| iface_geographies__id_pagination_info__from_json(v)),
+    })
+}
+
+fn iface_geographies__media_entry__from_json(v: &Value) -> Option<iface_geographies::MediaEntry> {
+    let m = v.as_object()?;
+    Some(iface_geographies::MediaEntry {
+        attribution: m.get("attribution").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        caption: m.get("caption").filter(|v| !v.is_null()).and_then(|v| iface_geographies__caption_data__from_json(v)),
+        comments: m.get("comments").filter(|v| !v.is_null()).and_then(|v| iface_geographies__comments_collection__from_json(v)),
+        created_time: m.get("created_time").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        filter: m.get("filter").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        id: m.get("id").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        images: m.get("images").filter(|v| !v.is_null()).and_then(|v| iface_geographies__images_data__from_json(v)),
+        likes: m.get("likes").filter(|v| !v.is_null()).and_then(|v| iface_geographies__likes_collection__from_json(v)),
+        link: m.get("link").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        location: m.get("location").filter(|v| !v.is_null()).and_then(|v| iface_geographies__location_info__from_json(v)),
+        tags: m.get("tags").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| (x).as_str().map(|s| s.to_string())).collect())),
+        type_op: m.get("type").filter(|v| !v.is_null()).and_then(|v| (v).as_str().and_then(iface_geographies__media_entry_type_op_enum__from_str)),
+        user: m.get("user").filter(|v| !v.is_null()).and_then(|v| iface_geographies__user_short_info__from_json(v)),
+        user_has_liked: m.get("user_has_liked").filter(|v| !v.is_null()).and_then(|v| (v).as_bool()),
+        users_in_photo: m.get("users_in_photo").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| iface_geographies__user_in_photo__from_json(x)).collect())),
+        videos: m.get("videos").filter(|v| !v.is_null()).and_then(|v| iface_geographies__videos_data__from_json(v)),
+    })
+}
+
+fn iface_geographies__caption_data__from_json(v: &Value) -> Option<iface_geographies::CaptionData> {
+    let m = v.as_object()?;
+    Some(iface_geographies::CaptionData {
+        created_time: m.get("created_time").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        from_op: m.get("from").filter(|v| !v.is_null()).and_then(|v| iface_geographies__user_short_info__from_json(v)),
+        id: m.get("id").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        text: m.get("text").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    })
+}
+
+fn iface_geographies__user_short_info__from_json(v: &Value) -> Option<iface_geographies::UserShortInfo> {
+    let m = v.as_object()?;
+    Some(iface_geographies::UserShortInfo {
+        full_name: m.get("full_name").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        id: m.get("id").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        profile_picture: m.get("profile_picture").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        username: m.get("username").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    })
+}
+
+fn iface_geographies__comments_collection__from_json(v: &Value) -> Option<iface_geographies::CommentsCollection> {
+    let m = v.as_object()?;
+    Some(iface_geographies::CommentsCollection {
+        count: m.get("count").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| iface_geographies__comment_entry__from_json(x)).collect())),
+    })
+}
+
+fn iface_geographies__comment_entry__from_json(v: &Value) -> Option<iface_geographies::CommentEntry> {
+    let m = v.as_object()?;
+    Some(iface_geographies::CommentEntry {
+        created_time: m.get("created_time").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        from_op: m.get("from").filter(|v| !v.is_null()).and_then(|v| iface_geographies__user_short_info__from_json(v)),
+        id: m.get("id").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        text: m.get("text").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    })
+}
+
+fn iface_geographies__images_data__from_json(v: &Value) -> Option<iface_geographies::ImagesData> {
+    let m = v.as_object()?;
+    Some(iface_geographies::ImagesData {
+        low_resolution: m.get("low_resolution").filter(|v| !v.is_null()).and_then(|v| iface_geographies__image_info__from_json(v)),
+        standard_resolution: m.get("standard_resolution").filter(|v| !v.is_null()).and_then(|v| iface_geographies__image_info__from_json(v)),
+        thumbnail: m.get("thumbnail").filter(|v| !v.is_null()).and_then(|v| iface_geographies__image_info__from_json(v)),
+    })
+}
+
+fn iface_geographies__image_info__from_json(v: &Value) -> Option<iface_geographies::ImageInfo> {
+    let m = v.as_object()?;
+    Some(iface_geographies::ImageInfo {
+        height: m.get("height").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        url: m.get("url").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        width: m.get("width").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+    })
+}
+
+fn iface_geographies__likes_collection__from_json(v: &Value) -> Option<iface_geographies::LikesCollection> {
+    let m = v.as_object()?;
+    Some(iface_geographies::LikesCollection {
+        count: m.get("count").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| iface_geographies__user_short_info__from_json(x)).collect())),
+    })
+}
+
+fn iface_geographies__location_info__from_json(v: &Value) -> Option<iface_geographies::LocationInfo> {
+    let m = v.as_object()?;
+    Some(iface_geographies::LocationInfo {
+        id: m.get("id").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        latitude: m.get("latitude").filter(|v| !v.is_null()).and_then(|v| (v).as_f64()),
+        longitude: m.get("longitude").filter(|v| !v.is_null()).and_then(|v| (v).as_f64()),
+        name: m.get("name").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    })
+}
+
+fn iface_geographies__user_in_photo__from_json(v: &Value) -> Option<iface_geographies::UserInPhoto> {
+    let m = v.as_object()?;
+    Some(iface_geographies::UserInPhoto {
+        position: m.get("position").filter(|v| !v.is_null()).and_then(|v| iface_geographies__position__from_json(v)),
+        user: m.get("user").filter(|v| !v.is_null()).and_then(|v| iface_geographies__user_short_info__from_json(v)),
+    })
+}
+
+fn iface_geographies__position__from_json(v: &Value) -> Option<iface_geographies::Position> {
+    let m = v.as_object()?;
+    Some(iface_geographies::Position {
+        x: m.get("x").filter(|v| !v.is_null()).and_then(|v| (v).as_f64()),
+        y: m.get("y").filter(|v| !v.is_null()).and_then(|v| (v).as_f64()),
+    })
+}
+
+fn iface_geographies__videos_data__from_json(v: &Value) -> Option<iface_geographies::VideosData> {
+    let m = v.as_object()?;
+    Some(iface_geographies::VideosData {
+        low_resolution: m.get("low_resolution").filter(|v| !v.is_null()).and_then(|v| iface_geographies__image_info__from_json(v)),
+        standard_resolution: m.get("standard_resolution").filter(|v| !v.is_null()).and_then(|v| iface_geographies__image_info__from_json(v)),
+    })
+}
+
+fn iface_geographies__meta_data__from_json(v: &Value) -> Option<iface_geographies::MetaData> {
+    let m = v.as_object()?;
+    Some(iface_geographies::MetaData {
+        code: m.get("code").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+    })
+}
+
+fn iface_geographies__id_pagination_info__from_json(v: &Value) -> Option<iface_geographies::IdPaginationInfo> {
+    let m = v.as_object()?;
+    Some(iface_geographies::IdPaginationInfo {
+        next_max_id: m.get("next_max_id").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        next_url: m.get("next_url").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    })
+}
+
+fn iface_geographies__media_entry_type_op_enum__from_str(s: &str) -> Option<iface_geographies::MediaEntryTypeOpEnum> {
+    match s {
+        "image" => Some(iface_geographies::MediaEntryTypeOpEnum::Image),
+        "video" => Some(iface_geographies::MediaEntryTypeOpEnum::Video),
+        _ => None,
+    }
+}
+
+fn iface_geographies__get_geographies_geo_id_media_recent__ok(body: String) -> Result<iface_geographies::MediaListResponse, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match iface_geographies__media_list_response__from_json(&v) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_geographies__get_geographies_geo_id_media_recent__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
 impl iface_geographies::Guest for crate::Component {
-    fn get_geographies_geo_id_media_recent(params: iface_geographies::GetGeographiesGeoIdMediaRecentParams) -> Result<String, String> {
+    fn get_geographies_geo_id_media_recent(params: iface_geographies::GetGeographiesGeoIdMediaRecentParams) -> Result<iface_geographies::MediaListResponse, String> {
         let json = iface_geographies__get_geographies_geo_id_media_recent_params__to_json(&params);
-        dispatch(&OP_GEOGRAPHIES_GET_GEOGRAPHIES_GEO_ID_MEDIA_RECENT, json)
+        match dispatch(&OP_GEOGRAPHIES_GET_GEOGRAPHIES_GEO_ID_MEDIA_RECENT, json).and_then(iface_geographies__get_geographies_geo_id_media_recent__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_geographies__get_geographies_geo_id_media_recent__err(e)),
+        }
     }
 }
 use crate::exports::autostamp::instagram::locations as iface_locations;
@@ -316,12 +644,12 @@ const OP_LOCATIONS_GET_LOCATIONS_SEARCH: OpSpec = OpSpec {
     method: "GET",
     path_template: "/locations/search",
     fields: &[
-        FieldSpec { snake: "distance", location: FieldLocation::Query },
-        FieldSpec { snake: "facebook_places_id", location: FieldLocation::Query },
-        FieldSpec { snake: "foursquare_id", location: FieldLocation::Query },
-        FieldSpec { snake: "lat", location: FieldLocation::Query },
-        FieldSpec { snake: "lng", location: FieldLocation::Query },
-        FieldSpec { snake: "foursquare_v2_id", location: FieldLocation::Query },
+        FieldSpec { snake: "distance", wire: "distance", location: FieldLocation::Query },
+        FieldSpec { snake: "facebook_places_id", wire: "facebook_places_id", location: FieldLocation::Query },
+        FieldSpec { snake: "foursquare_id", wire: "foursquare_id", location: FieldLocation::Query },
+        FieldSpec { snake: "lat", wire: "lat", location: FieldLocation::Query },
+        FieldSpec { snake: "lng", wire: "lng", location: FieldLocation::Query },
+        FieldSpec { snake: "foursquare_v2_id", wire: "foursquare_v2_id", location: FieldLocation::Query },
     ],
     auth: &[
     ],
@@ -331,7 +659,7 @@ const OP_LOCATIONS_GET_LOCATIONS_LOCATION_ID: OpSpec = OpSpec {
     method: "GET",
     path_template: "/locations/{location_id}",
     fields: &[
-        FieldSpec { snake: "location_id", location: FieldLocation::Path },
+        FieldSpec { snake: "location_id", wire: "location-id", location: FieldLocation::Path },
     ],
     auth: &[
     ],
@@ -341,15 +669,165 @@ const OP_LOCATIONS_GET_LOCATIONS_LOCATION_ID_MEDIA_RECENT: OpSpec = OpSpec {
     method: "GET",
     path_template: "/locations/{location_id}/media/recent",
     fields: &[
-        FieldSpec { snake: "location_id", location: FieldLocation::Path },
-        FieldSpec { snake: "min_timestamp", location: FieldLocation::Query },
-        FieldSpec { snake: "max_timestamp", location: FieldLocation::Query },
-        FieldSpec { snake: "min_id", location: FieldLocation::Query },
-        FieldSpec { snake: "max_id", location: FieldLocation::Query },
+        FieldSpec { snake: "location_id", wire: "location-id", location: FieldLocation::Path },
+        FieldSpec { snake: "min_timestamp", wire: "min_timestamp", location: FieldLocation::Query },
+        FieldSpec { snake: "max_timestamp", wire: "max_timestamp", location: FieldLocation::Query },
+        FieldSpec { snake: "min_id", wire: "min_id", location: FieldLocation::Query },
+        FieldSpec { snake: "max_id", wire: "max_id", location: FieldLocation::Query },
     ],
     auth: &[
     ],
 };
+
+fn iface_locations__media_entry_type_op_enum__to_str(e: &iface_locations::MediaEntryTypeOpEnum) -> &'static str {
+    match e {
+        iface_locations::MediaEntryTypeOpEnum::Image => "image",
+        iface_locations::MediaEntryTypeOpEnum::Video => "video",
+    }
+}
+
+fn iface_locations__location_search_response__to_json(p: &iface_locations::LocationSearchResponse) -> Value {
+    let mut m = Map::new();
+    m.insert("data".into(), match (&p.data) { Some(v) => Value::Array((v).iter().map(|v| iface_locations__location_info__to_json(v)).collect()), None => Value::Null });
+    m.insert("meta".into(), match (&p.meta) { Some(v) => iface_locations__meta_data__to_json(v), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_locations__location_info__to_json(p: &iface_locations::LocationInfo) -> Value {
+    let mut m = Map::new();
+    m.insert("id".into(), match (&p.id) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("latitude".into(), match (&p.latitude) { Some(v) => serde_json::Number::from_f64(*(v)).map(Value::Number).unwrap_or(Value::Null), None => Value::Null });
+    m.insert("longitude".into(), match (&p.longitude) { Some(v) => serde_json::Number::from_f64(*(v)).map(Value::Number).unwrap_or(Value::Null), None => Value::Null });
+    m.insert("name".into(), match (&p.name) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_locations__meta_data__to_json(p: &iface_locations::MetaData) -> Value {
+    let mut m = Map::new();
+    m.insert("code".into(), match (&p.code) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_locations__location_info_response__to_json(p: &iface_locations::LocationInfoResponse) -> Value {
+    let mut m = Map::new();
+    m.insert("data".into(), match (&p.data) { Some(v) => iface_locations__location_info__to_json(v), None => Value::Null });
+    m.insert("meta".into(), match (&p.meta) { Some(v) => iface_locations__meta_data__to_json(v), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_locations__media_list_response__to_json(p: &iface_locations::MediaListResponse) -> Value {
+    let mut m = Map::new();
+    m.insert("data".into(), match (&p.data) { Some(v) => Value::Array((v).iter().map(|v| iface_locations__media_entry__to_json(v)).collect()), None => Value::Null });
+    m.insert("meta".into(), match (&p.meta) { Some(v) => iface_locations__meta_data__to_json(v), None => Value::Null });
+    m.insert("pagination".into(), match (&p.pagination) { Some(v) => iface_locations__id_pagination_info__to_json(v), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_locations__media_entry__to_json(p: &iface_locations::MediaEntry) -> Value {
+    let mut m = Map::new();
+    m.insert("attribution".into(), match (&p.attribution) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("caption".into(), match (&p.caption) { Some(v) => iface_locations__caption_data__to_json(v), None => Value::Null });
+    m.insert("comments".into(), match (&p.comments) { Some(v) => iface_locations__comments_collection__to_json(v), None => Value::Null });
+    m.insert("created_time".into(), match (&p.created_time) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("filter".into(), match (&p.filter) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("id".into(), match (&p.id) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("images".into(), match (&p.images) { Some(v) => iface_locations__images_data__to_json(v), None => Value::Null });
+    m.insert("likes".into(), match (&p.likes) { Some(v) => iface_locations__likes_collection__to_json(v), None => Value::Null });
+    m.insert("link".into(), match (&p.link) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("location".into(), match (&p.location) { Some(v) => iface_locations__location_info__to_json(v), None => Value::Null });
+    m.insert("tags".into(), match (&p.tags) { Some(v) => Value::Array((v).iter().map(|v| Value::String((v).clone())).collect()), None => Value::Null });
+    m.insert("type".into(), match (&p.type_op) { Some(v) => Value::String(iface_locations__media_entry_type_op_enum__to_str(v).into()), None => Value::Null });
+    m.insert("user".into(), match (&p.user) { Some(v) => iface_locations__user_short_info__to_json(v), None => Value::Null });
+    m.insert("user_has_liked".into(), match (&p.user_has_liked) { Some(v) => Value::Bool(*(v)), None => Value::Null });
+    m.insert("users_in_photo".into(), match (&p.users_in_photo) { Some(v) => Value::Array((v).iter().map(|v| iface_locations__user_in_photo__to_json(v)).collect()), None => Value::Null });
+    m.insert("videos".into(), match (&p.videos) { Some(v) => iface_locations__videos_data__to_json(v), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_locations__caption_data__to_json(p: &iface_locations::CaptionData) -> Value {
+    let mut m = Map::new();
+    m.insert("created_time".into(), match (&p.created_time) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("from".into(), match (&p.from_op) { Some(v) => iface_locations__user_short_info__to_json(v), None => Value::Null });
+    m.insert("id".into(), match (&p.id) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("text".into(), match (&p.text) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_locations__user_short_info__to_json(p: &iface_locations::UserShortInfo) -> Value {
+    let mut m = Map::new();
+    m.insert("full_name".into(), match (&p.full_name) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("id".into(), match (&p.id) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("profile_picture".into(), match (&p.profile_picture) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("username".into(), match (&p.username) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_locations__comments_collection__to_json(p: &iface_locations::CommentsCollection) -> Value {
+    let mut m = Map::new();
+    m.insert("count".into(), match (&p.count) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("data".into(), match (&p.data) { Some(v) => Value::Array((v).iter().map(|v| iface_locations__comment_entry__to_json(v)).collect()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_locations__comment_entry__to_json(p: &iface_locations::CommentEntry) -> Value {
+    let mut m = Map::new();
+    m.insert("created_time".into(), match (&p.created_time) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("from".into(), match (&p.from_op) { Some(v) => iface_locations__user_short_info__to_json(v), None => Value::Null });
+    m.insert("id".into(), match (&p.id) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("text".into(), match (&p.text) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_locations__images_data__to_json(p: &iface_locations::ImagesData) -> Value {
+    let mut m = Map::new();
+    m.insert("low_resolution".into(), match (&p.low_resolution) { Some(v) => iface_locations__image_info__to_json(v), None => Value::Null });
+    m.insert("standard_resolution".into(), match (&p.standard_resolution) { Some(v) => iface_locations__image_info__to_json(v), None => Value::Null });
+    m.insert("thumbnail".into(), match (&p.thumbnail) { Some(v) => iface_locations__image_info__to_json(v), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_locations__image_info__to_json(p: &iface_locations::ImageInfo) -> Value {
+    let mut m = Map::new();
+    m.insert("height".into(), match (&p.height) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("url".into(), match (&p.url) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("width".into(), match (&p.width) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_locations__likes_collection__to_json(p: &iface_locations::LikesCollection) -> Value {
+    let mut m = Map::new();
+    m.insert("count".into(), match (&p.count) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("data".into(), match (&p.data) { Some(v) => Value::Array((v).iter().map(|v| iface_locations__user_short_info__to_json(v)).collect()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_locations__user_in_photo__to_json(p: &iface_locations::UserInPhoto) -> Value {
+    let mut m = Map::new();
+    m.insert("position".into(), match (&p.position) { Some(v) => iface_locations__position__to_json(v), None => Value::Null });
+    m.insert("user".into(), match (&p.user) { Some(v) => iface_locations__user_short_info__to_json(v), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_locations__position__to_json(p: &iface_locations::Position) -> Value {
+    let mut m = Map::new();
+    m.insert("x".into(), match (&p.x) { Some(v) => serde_json::Number::from_f64(*(v)).map(Value::Number).unwrap_or(Value::Null), None => Value::Null });
+    m.insert("y".into(), match (&p.y) { Some(v) => serde_json::Number::from_f64(*(v)).map(Value::Number).unwrap_or(Value::Null), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_locations__videos_data__to_json(p: &iface_locations::VideosData) -> Value {
+    let mut m = Map::new();
+    m.insert("low_resolution".into(), match (&p.low_resolution) { Some(v) => iface_locations__image_info__to_json(v), None => Value::Null });
+    m.insert("standard_resolution".into(), match (&p.standard_resolution) { Some(v) => iface_locations__image_info__to_json(v), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_locations__id_pagination_info__to_json(p: &iface_locations::IdPaginationInfo) -> Value {
+    let mut m = Map::new();
+    m.insert("next_max_id".into(), match (&p.next_max_id) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("next_url".into(), match (&p.next_url) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
 
 fn iface_locations__get_locations_search_params__to_json(p: &iface_locations::GetLocationsSearchParams) -> Value {
     let mut m = Map::new();
@@ -378,18 +856,249 @@ fn iface_locations__get_locations_location_id_media_recent_params__to_json(p: &i
     Value::Object(m)
 }
 
+fn iface_locations__location_search_response__from_json(v: &Value) -> Option<iface_locations::LocationSearchResponse> {
+    let m = v.as_object()?;
+    Some(iface_locations::LocationSearchResponse {
+        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| iface_locations__location_info__from_json(x)).collect())),
+        meta: m.get("meta").filter(|v| !v.is_null()).and_then(|v| iface_locations__meta_data__from_json(v)),
+    })
+}
+
+fn iface_locations__location_info__from_json(v: &Value) -> Option<iface_locations::LocationInfo> {
+    let m = v.as_object()?;
+    Some(iface_locations::LocationInfo {
+        id: m.get("id").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        latitude: m.get("latitude").filter(|v| !v.is_null()).and_then(|v| (v).as_f64()),
+        longitude: m.get("longitude").filter(|v| !v.is_null()).and_then(|v| (v).as_f64()),
+        name: m.get("name").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    })
+}
+
+fn iface_locations__meta_data__from_json(v: &Value) -> Option<iface_locations::MetaData> {
+    let m = v.as_object()?;
+    Some(iface_locations::MetaData {
+        code: m.get("code").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+    })
+}
+
+fn iface_locations__location_info_response__from_json(v: &Value) -> Option<iface_locations::LocationInfoResponse> {
+    let m = v.as_object()?;
+    Some(iface_locations::LocationInfoResponse {
+        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| iface_locations__location_info__from_json(v)),
+        meta: m.get("meta").filter(|v| !v.is_null()).and_then(|v| iface_locations__meta_data__from_json(v)),
+    })
+}
+
+fn iface_locations__media_list_response__from_json(v: &Value) -> Option<iface_locations::MediaListResponse> {
+    let m = v.as_object()?;
+    Some(iface_locations::MediaListResponse {
+        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| iface_locations__media_entry__from_json(x)).collect())),
+        meta: m.get("meta").filter(|v| !v.is_null()).and_then(|v| iface_locations__meta_data__from_json(v)),
+        pagination: m.get("pagination").filter(|v| !v.is_null()).and_then(|v| iface_locations__id_pagination_info__from_json(v)),
+    })
+}
+
+fn iface_locations__media_entry__from_json(v: &Value) -> Option<iface_locations::MediaEntry> {
+    let m = v.as_object()?;
+    Some(iface_locations::MediaEntry {
+        attribution: m.get("attribution").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        caption: m.get("caption").filter(|v| !v.is_null()).and_then(|v| iface_locations__caption_data__from_json(v)),
+        comments: m.get("comments").filter(|v| !v.is_null()).and_then(|v| iface_locations__comments_collection__from_json(v)),
+        created_time: m.get("created_time").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        filter: m.get("filter").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        id: m.get("id").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        images: m.get("images").filter(|v| !v.is_null()).and_then(|v| iface_locations__images_data__from_json(v)),
+        likes: m.get("likes").filter(|v| !v.is_null()).and_then(|v| iface_locations__likes_collection__from_json(v)),
+        link: m.get("link").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        location: m.get("location").filter(|v| !v.is_null()).and_then(|v| iface_locations__location_info__from_json(v)),
+        tags: m.get("tags").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| (x).as_str().map(|s| s.to_string())).collect())),
+        type_op: m.get("type").filter(|v| !v.is_null()).and_then(|v| (v).as_str().and_then(iface_locations__media_entry_type_op_enum__from_str)),
+        user: m.get("user").filter(|v| !v.is_null()).and_then(|v| iface_locations__user_short_info__from_json(v)),
+        user_has_liked: m.get("user_has_liked").filter(|v| !v.is_null()).and_then(|v| (v).as_bool()),
+        users_in_photo: m.get("users_in_photo").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| iface_locations__user_in_photo__from_json(x)).collect())),
+        videos: m.get("videos").filter(|v| !v.is_null()).and_then(|v| iface_locations__videos_data__from_json(v)),
+    })
+}
+
+fn iface_locations__caption_data__from_json(v: &Value) -> Option<iface_locations::CaptionData> {
+    let m = v.as_object()?;
+    Some(iface_locations::CaptionData {
+        created_time: m.get("created_time").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        from_op: m.get("from").filter(|v| !v.is_null()).and_then(|v| iface_locations__user_short_info__from_json(v)),
+        id: m.get("id").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        text: m.get("text").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    })
+}
+
+fn iface_locations__user_short_info__from_json(v: &Value) -> Option<iface_locations::UserShortInfo> {
+    let m = v.as_object()?;
+    Some(iface_locations::UserShortInfo {
+        full_name: m.get("full_name").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        id: m.get("id").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        profile_picture: m.get("profile_picture").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        username: m.get("username").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    })
+}
+
+fn iface_locations__comments_collection__from_json(v: &Value) -> Option<iface_locations::CommentsCollection> {
+    let m = v.as_object()?;
+    Some(iface_locations::CommentsCollection {
+        count: m.get("count").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| iface_locations__comment_entry__from_json(x)).collect())),
+    })
+}
+
+fn iface_locations__comment_entry__from_json(v: &Value) -> Option<iface_locations::CommentEntry> {
+    let m = v.as_object()?;
+    Some(iface_locations::CommentEntry {
+        created_time: m.get("created_time").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        from_op: m.get("from").filter(|v| !v.is_null()).and_then(|v| iface_locations__user_short_info__from_json(v)),
+        id: m.get("id").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        text: m.get("text").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    })
+}
+
+fn iface_locations__images_data__from_json(v: &Value) -> Option<iface_locations::ImagesData> {
+    let m = v.as_object()?;
+    Some(iface_locations::ImagesData {
+        low_resolution: m.get("low_resolution").filter(|v| !v.is_null()).and_then(|v| iface_locations__image_info__from_json(v)),
+        standard_resolution: m.get("standard_resolution").filter(|v| !v.is_null()).and_then(|v| iface_locations__image_info__from_json(v)),
+        thumbnail: m.get("thumbnail").filter(|v| !v.is_null()).and_then(|v| iface_locations__image_info__from_json(v)),
+    })
+}
+
+fn iface_locations__image_info__from_json(v: &Value) -> Option<iface_locations::ImageInfo> {
+    let m = v.as_object()?;
+    Some(iface_locations::ImageInfo {
+        height: m.get("height").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        url: m.get("url").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        width: m.get("width").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+    })
+}
+
+fn iface_locations__likes_collection__from_json(v: &Value) -> Option<iface_locations::LikesCollection> {
+    let m = v.as_object()?;
+    Some(iface_locations::LikesCollection {
+        count: m.get("count").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| iface_locations__user_short_info__from_json(x)).collect())),
+    })
+}
+
+fn iface_locations__user_in_photo__from_json(v: &Value) -> Option<iface_locations::UserInPhoto> {
+    let m = v.as_object()?;
+    Some(iface_locations::UserInPhoto {
+        position: m.get("position").filter(|v| !v.is_null()).and_then(|v| iface_locations__position__from_json(v)),
+        user: m.get("user").filter(|v| !v.is_null()).and_then(|v| iface_locations__user_short_info__from_json(v)),
+    })
+}
+
+fn iface_locations__position__from_json(v: &Value) -> Option<iface_locations::Position> {
+    let m = v.as_object()?;
+    Some(iface_locations::Position {
+        x: m.get("x").filter(|v| !v.is_null()).and_then(|v| (v).as_f64()),
+        y: m.get("y").filter(|v| !v.is_null()).and_then(|v| (v).as_f64()),
+    })
+}
+
+fn iface_locations__videos_data__from_json(v: &Value) -> Option<iface_locations::VideosData> {
+    let m = v.as_object()?;
+    Some(iface_locations::VideosData {
+        low_resolution: m.get("low_resolution").filter(|v| !v.is_null()).and_then(|v| iface_locations__image_info__from_json(v)),
+        standard_resolution: m.get("standard_resolution").filter(|v| !v.is_null()).and_then(|v| iface_locations__image_info__from_json(v)),
+    })
+}
+
+fn iface_locations__id_pagination_info__from_json(v: &Value) -> Option<iface_locations::IdPaginationInfo> {
+    let m = v.as_object()?;
+    Some(iface_locations::IdPaginationInfo {
+        next_max_id: m.get("next_max_id").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        next_url: m.get("next_url").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    })
+}
+
+fn iface_locations__media_entry_type_op_enum__from_str(s: &str) -> Option<iface_locations::MediaEntryTypeOpEnum> {
+    match s {
+        "image" => Some(iface_locations::MediaEntryTypeOpEnum::Image),
+        "video" => Some(iface_locations::MediaEntryTypeOpEnum::Video),
+        _ => None,
+    }
+}
+
+fn iface_locations__get_locations_search__ok(body: String) -> Result<iface_locations::LocationSearchResponse, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match iface_locations__location_search_response__from_json(&v) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_locations__get_locations_search__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
+fn iface_locations__get_locations_location_id__ok(body: String) -> Result<iface_locations::LocationInfoResponse, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match iface_locations__location_info_response__from_json(&v) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_locations__get_locations_location_id__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
+fn iface_locations__get_locations_location_id_media_recent__ok(body: String) -> Result<iface_locations::MediaListResponse, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match iface_locations__media_list_response__from_json(&v) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_locations__get_locations_location_id_media_recent__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
 impl iface_locations::Guest for crate::Component {
-    fn get_locations_search(params: iface_locations::GetLocationsSearchParams) -> Result<String, String> {
+    fn get_locations_search(params: iface_locations::GetLocationsSearchParams) -> Result<iface_locations::LocationSearchResponse, String> {
         let json = iface_locations__get_locations_search_params__to_json(&params);
-        dispatch(&OP_LOCATIONS_GET_LOCATIONS_SEARCH, json)
+        match dispatch(&OP_LOCATIONS_GET_LOCATIONS_SEARCH, json).and_then(iface_locations__get_locations_search__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_locations__get_locations_search__err(e)),
+        }
     }
-    fn get_locations_location_id(params: iface_locations::GetLocationsLocationIdParams) -> Result<String, String> {
+    fn get_locations_location_id(params: iface_locations::GetLocationsLocationIdParams) -> Result<iface_locations::LocationInfoResponse, String> {
         let json = iface_locations__get_locations_location_id_params__to_json(&params);
-        dispatch(&OP_LOCATIONS_GET_LOCATIONS_LOCATION_ID, json)
+        match dispatch(&OP_LOCATIONS_GET_LOCATIONS_LOCATION_ID, json).and_then(iface_locations__get_locations_location_id__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_locations__get_locations_location_id__err(e)),
+        }
     }
-    fn get_locations_location_id_media_recent(params: iface_locations::GetLocationsLocationIdMediaRecentParams) -> Result<String, String> {
+    fn get_locations_location_id_media_recent(params: iface_locations::GetLocationsLocationIdMediaRecentParams) -> Result<iface_locations::MediaListResponse, String> {
         let json = iface_locations__get_locations_location_id_media_recent_params__to_json(&params);
-        dispatch(&OP_LOCATIONS_GET_LOCATIONS_LOCATION_ID_MEDIA_RECENT, json)
+        match dispatch(&OP_LOCATIONS_GET_LOCATIONS_LOCATION_ID_MEDIA_RECENT, json).and_then(iface_locations__get_locations_location_id_media_recent__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_locations__get_locations_location_id_media_recent__err(e)),
+        }
     }
 }
 use crate::exports::autostamp::instagram::media as iface_media;
@@ -407,11 +1116,11 @@ const OP_MEDIA_GET_MEDIA_SEARCH: OpSpec = OpSpec {
     method: "GET",
     path_template: "/media/search",
     fields: &[
-        FieldSpec { snake: "lat", location: FieldLocation::Query },
-        FieldSpec { snake: "lng", location: FieldLocation::Query },
-        FieldSpec { snake: "min_timestamp", location: FieldLocation::Query },
-        FieldSpec { snake: "max_timestamp", location: FieldLocation::Query },
-        FieldSpec { snake: "distance", location: FieldLocation::Query },
+        FieldSpec { snake: "lat", wire: "lat", location: FieldLocation::Query },
+        FieldSpec { snake: "lng", wire: "lng", location: FieldLocation::Query },
+        FieldSpec { snake: "min_timestamp", wire: "min_timestamp", location: FieldLocation::Query },
+        FieldSpec { snake: "max_timestamp", wire: "max_timestamp", location: FieldLocation::Query },
+        FieldSpec { snake: "distance", wire: "distance", location: FieldLocation::Query },
     ],
     auth: &[
     ],
@@ -421,7 +1130,7 @@ const OP_MEDIA_GET_MEDIA_SHORTCODE_SHORTCODE: OpSpec = OpSpec {
     method: "GET",
     path_template: "/media/shortcode/{shortcode}",
     fields: &[
-        FieldSpec { snake: "shortcode", location: FieldLocation::Path },
+        FieldSpec { snake: "shortcode", wire: "shortcode", location: FieldLocation::Path },
     ],
     auth: &[
     ],
@@ -431,11 +1140,146 @@ const OP_MEDIA_GET_MEDIA_MEDIA_ID: OpSpec = OpSpec {
     method: "GET",
     path_template: "/media/{media_id}",
     fields: &[
-        FieldSpec { snake: "media_id", location: FieldLocation::Path },
+        FieldSpec { snake: "media_id", wire: "media-id", location: FieldLocation::Path },
     ],
     auth: &[
     ],
 };
+
+fn iface_media__entry_type_op_enum__to_str(e: &iface_media::EntryTypeOpEnum) -> &'static str {
+    match e {
+        iface_media::EntryTypeOpEnum::Image => "image",
+        iface_media::EntryTypeOpEnum::Video => "video",
+    }
+}
+
+fn iface_media__search_response__to_json(p: &iface_media::SearchResponse) -> Value {
+    let mut m = Map::new();
+    m.insert("data".into(), match (&p.data) { Some(v) => Value::Array((v).iter().map(|v| iface_media__entry__to_json(v)).collect()), None => Value::Null });
+    m.insert("meta".into(), match (&p.meta) { Some(v) => iface_media__meta_data__to_json(v), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_media__entry__to_json(p: &iface_media::Entry) -> Value {
+    let mut m = Map::new();
+    m.insert("attribution".into(), match (&p.attribution) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("caption".into(), match (&p.caption) { Some(v) => iface_media__caption_data__to_json(v), None => Value::Null });
+    m.insert("comments".into(), match (&p.comments) { Some(v) => iface_media__comments_collection__to_json(v), None => Value::Null });
+    m.insert("created_time".into(), match (&p.created_time) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("filter".into(), match (&p.filter) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("id".into(), match (&p.id) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("images".into(), match (&p.images) { Some(v) => iface_media__images_data__to_json(v), None => Value::Null });
+    m.insert("likes".into(), match (&p.likes) { Some(v) => iface_media__likes_collection__to_json(v), None => Value::Null });
+    m.insert("link".into(), match (&p.link) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("location".into(), match (&p.location) { Some(v) => iface_media__location_info__to_json(v), None => Value::Null });
+    m.insert("tags".into(), match (&p.tags) { Some(v) => Value::Array((v).iter().map(|v| Value::String((v).clone())).collect()), None => Value::Null });
+    m.insert("type".into(), match (&p.type_op) { Some(v) => Value::String(iface_media__entry_type_op_enum__to_str(v).into()), None => Value::Null });
+    m.insert("user".into(), match (&p.user) { Some(v) => iface_media__user_short_info__to_json(v), None => Value::Null });
+    m.insert("user_has_liked".into(), match (&p.user_has_liked) { Some(v) => Value::Bool(*(v)), None => Value::Null });
+    m.insert("users_in_photo".into(), match (&p.users_in_photo) { Some(v) => Value::Array((v).iter().map(|v| iface_media__user_in_photo__to_json(v)).collect()), None => Value::Null });
+    m.insert("videos".into(), match (&p.videos) { Some(v) => iface_media__videos_data__to_json(v), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_media__caption_data__to_json(p: &iface_media::CaptionData) -> Value {
+    let mut m = Map::new();
+    m.insert("created_time".into(), match (&p.created_time) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("from".into(), match (&p.from_op) { Some(v) => iface_media__user_short_info__to_json(v), None => Value::Null });
+    m.insert("id".into(), match (&p.id) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("text".into(), match (&p.text) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_media__user_short_info__to_json(p: &iface_media::UserShortInfo) -> Value {
+    let mut m = Map::new();
+    m.insert("full_name".into(), match (&p.full_name) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("id".into(), match (&p.id) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("profile_picture".into(), match (&p.profile_picture) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("username".into(), match (&p.username) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_media__comments_collection__to_json(p: &iface_media::CommentsCollection) -> Value {
+    let mut m = Map::new();
+    m.insert("count".into(), match (&p.count) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("data".into(), match (&p.data) { Some(v) => Value::Array((v).iter().map(|v| iface_media__comment_entry__to_json(v)).collect()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_media__comment_entry__to_json(p: &iface_media::CommentEntry) -> Value {
+    let mut m = Map::new();
+    m.insert("created_time".into(), match (&p.created_time) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("from".into(), match (&p.from_op) { Some(v) => iface_media__user_short_info__to_json(v), None => Value::Null });
+    m.insert("id".into(), match (&p.id) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("text".into(), match (&p.text) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_media__images_data__to_json(p: &iface_media::ImagesData) -> Value {
+    let mut m = Map::new();
+    m.insert("low_resolution".into(), match (&p.low_resolution) { Some(v) => iface_media__image_info__to_json(v), None => Value::Null });
+    m.insert("standard_resolution".into(), match (&p.standard_resolution) { Some(v) => iface_media__image_info__to_json(v), None => Value::Null });
+    m.insert("thumbnail".into(), match (&p.thumbnail) { Some(v) => iface_media__image_info__to_json(v), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_media__image_info__to_json(p: &iface_media::ImageInfo) -> Value {
+    let mut m = Map::new();
+    m.insert("height".into(), match (&p.height) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("url".into(), match (&p.url) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("width".into(), match (&p.width) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_media__likes_collection__to_json(p: &iface_media::LikesCollection) -> Value {
+    let mut m = Map::new();
+    m.insert("count".into(), match (&p.count) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("data".into(), match (&p.data) { Some(v) => Value::Array((v).iter().map(|v| iface_media__user_short_info__to_json(v)).collect()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_media__location_info__to_json(p: &iface_media::LocationInfo) -> Value {
+    let mut m = Map::new();
+    m.insert("id".into(), match (&p.id) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("latitude".into(), match (&p.latitude) { Some(v) => serde_json::Number::from_f64(*(v)).map(Value::Number).unwrap_or(Value::Null), None => Value::Null });
+    m.insert("longitude".into(), match (&p.longitude) { Some(v) => serde_json::Number::from_f64(*(v)).map(Value::Number).unwrap_or(Value::Null), None => Value::Null });
+    m.insert("name".into(), match (&p.name) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_media__user_in_photo__to_json(p: &iface_media::UserInPhoto) -> Value {
+    let mut m = Map::new();
+    m.insert("position".into(), match (&p.position) { Some(v) => iface_media__position__to_json(v), None => Value::Null });
+    m.insert("user".into(), match (&p.user) { Some(v) => iface_media__user_short_info__to_json(v), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_media__position__to_json(p: &iface_media::Position) -> Value {
+    let mut m = Map::new();
+    m.insert("x".into(), match (&p.x) { Some(v) => serde_json::Number::from_f64(*(v)).map(Value::Number).unwrap_or(Value::Null), None => Value::Null });
+    m.insert("y".into(), match (&p.y) { Some(v) => serde_json::Number::from_f64(*(v)).map(Value::Number).unwrap_or(Value::Null), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_media__videos_data__to_json(p: &iface_media::VideosData) -> Value {
+    let mut m = Map::new();
+    m.insert("low_resolution".into(), match (&p.low_resolution) { Some(v) => iface_media__image_info__to_json(v), None => Value::Null });
+    m.insert("standard_resolution".into(), match (&p.standard_resolution) { Some(v) => iface_media__image_info__to_json(v), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_media__meta_data__to_json(p: &iface_media::MetaData) -> Value {
+    let mut m = Map::new();
+    m.insert("code".into(), match (&p.code) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_media__entry_response__to_json(p: &iface_media::EntryResponse) -> Value {
+    let mut m = Map::new();
+    m.insert("data".into(), match (&p.data) { Some(v) => iface_media__entry__to_json(v), None => Value::Null });
+    m.insert("meta".into(), match (&p.meta) { Some(v) => iface_media__meta_data__to_json(v), None => Value::Null });
+    Value::Object(m)
+}
 
 fn iface_media__get_media_search_params__to_json(p: &iface_media::GetMediaSearchParams) -> Value {
     let mut m = Map::new();
@@ -459,21 +1303,256 @@ fn iface_media__get_media_media_id_params__to_json(p: &iface_media::GetMediaMedi
     Value::Object(m)
 }
 
+fn iface_media__search_response__from_json(v: &Value) -> Option<iface_media::SearchResponse> {
+    let m = v.as_object()?;
+    Some(iface_media::SearchResponse {
+        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| iface_media__entry__from_json(x)).collect())),
+        meta: m.get("meta").filter(|v| !v.is_null()).and_then(|v| iface_media__meta_data__from_json(v)),
+    })
+}
+
+fn iface_media__entry__from_json(v: &Value) -> Option<iface_media::Entry> {
+    let m = v.as_object()?;
+    Some(iface_media::Entry {
+        attribution: m.get("attribution").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        caption: m.get("caption").filter(|v| !v.is_null()).and_then(|v| iface_media__caption_data__from_json(v)),
+        comments: m.get("comments").filter(|v| !v.is_null()).and_then(|v| iface_media__comments_collection__from_json(v)),
+        created_time: m.get("created_time").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        filter: m.get("filter").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        id: m.get("id").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        images: m.get("images").filter(|v| !v.is_null()).and_then(|v| iface_media__images_data__from_json(v)),
+        likes: m.get("likes").filter(|v| !v.is_null()).and_then(|v| iface_media__likes_collection__from_json(v)),
+        link: m.get("link").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        location: m.get("location").filter(|v| !v.is_null()).and_then(|v| iface_media__location_info__from_json(v)),
+        tags: m.get("tags").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| (x).as_str().map(|s| s.to_string())).collect())),
+        type_op: m.get("type").filter(|v| !v.is_null()).and_then(|v| (v).as_str().and_then(iface_media__entry_type_op_enum__from_str)),
+        user: m.get("user").filter(|v| !v.is_null()).and_then(|v| iface_media__user_short_info__from_json(v)),
+        user_has_liked: m.get("user_has_liked").filter(|v| !v.is_null()).and_then(|v| (v).as_bool()),
+        users_in_photo: m.get("users_in_photo").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| iface_media__user_in_photo__from_json(x)).collect())),
+        videos: m.get("videos").filter(|v| !v.is_null()).and_then(|v| iface_media__videos_data__from_json(v)),
+    })
+}
+
+fn iface_media__caption_data__from_json(v: &Value) -> Option<iface_media::CaptionData> {
+    let m = v.as_object()?;
+    Some(iface_media::CaptionData {
+        created_time: m.get("created_time").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        from_op: m.get("from").filter(|v| !v.is_null()).and_then(|v| iface_media__user_short_info__from_json(v)),
+        id: m.get("id").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        text: m.get("text").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    })
+}
+
+fn iface_media__user_short_info__from_json(v: &Value) -> Option<iface_media::UserShortInfo> {
+    let m = v.as_object()?;
+    Some(iface_media::UserShortInfo {
+        full_name: m.get("full_name").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        id: m.get("id").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        profile_picture: m.get("profile_picture").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        username: m.get("username").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    })
+}
+
+fn iface_media__comments_collection__from_json(v: &Value) -> Option<iface_media::CommentsCollection> {
+    let m = v.as_object()?;
+    Some(iface_media::CommentsCollection {
+        count: m.get("count").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| iface_media__comment_entry__from_json(x)).collect())),
+    })
+}
+
+fn iface_media__comment_entry__from_json(v: &Value) -> Option<iface_media::CommentEntry> {
+    let m = v.as_object()?;
+    Some(iface_media::CommentEntry {
+        created_time: m.get("created_time").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        from_op: m.get("from").filter(|v| !v.is_null()).and_then(|v| iface_media__user_short_info__from_json(v)),
+        id: m.get("id").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        text: m.get("text").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    })
+}
+
+fn iface_media__images_data__from_json(v: &Value) -> Option<iface_media::ImagesData> {
+    let m = v.as_object()?;
+    Some(iface_media::ImagesData {
+        low_resolution: m.get("low_resolution").filter(|v| !v.is_null()).and_then(|v| iface_media__image_info__from_json(v)),
+        standard_resolution: m.get("standard_resolution").filter(|v| !v.is_null()).and_then(|v| iface_media__image_info__from_json(v)),
+        thumbnail: m.get("thumbnail").filter(|v| !v.is_null()).and_then(|v| iface_media__image_info__from_json(v)),
+    })
+}
+
+fn iface_media__image_info__from_json(v: &Value) -> Option<iface_media::ImageInfo> {
+    let m = v.as_object()?;
+    Some(iface_media::ImageInfo {
+        height: m.get("height").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        url: m.get("url").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        width: m.get("width").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+    })
+}
+
+fn iface_media__likes_collection__from_json(v: &Value) -> Option<iface_media::LikesCollection> {
+    let m = v.as_object()?;
+    Some(iface_media::LikesCollection {
+        count: m.get("count").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| iface_media__user_short_info__from_json(x)).collect())),
+    })
+}
+
+fn iface_media__location_info__from_json(v: &Value) -> Option<iface_media::LocationInfo> {
+    let m = v.as_object()?;
+    Some(iface_media::LocationInfo {
+        id: m.get("id").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        latitude: m.get("latitude").filter(|v| !v.is_null()).and_then(|v| (v).as_f64()),
+        longitude: m.get("longitude").filter(|v| !v.is_null()).and_then(|v| (v).as_f64()),
+        name: m.get("name").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    })
+}
+
+fn iface_media__user_in_photo__from_json(v: &Value) -> Option<iface_media::UserInPhoto> {
+    let m = v.as_object()?;
+    Some(iface_media::UserInPhoto {
+        position: m.get("position").filter(|v| !v.is_null()).and_then(|v| iface_media__position__from_json(v)),
+        user: m.get("user").filter(|v| !v.is_null()).and_then(|v| iface_media__user_short_info__from_json(v)),
+    })
+}
+
+fn iface_media__position__from_json(v: &Value) -> Option<iface_media::Position> {
+    let m = v.as_object()?;
+    Some(iface_media::Position {
+        x: m.get("x").filter(|v| !v.is_null()).and_then(|v| (v).as_f64()),
+        y: m.get("y").filter(|v| !v.is_null()).and_then(|v| (v).as_f64()),
+    })
+}
+
+fn iface_media__videos_data__from_json(v: &Value) -> Option<iface_media::VideosData> {
+    let m = v.as_object()?;
+    Some(iface_media::VideosData {
+        low_resolution: m.get("low_resolution").filter(|v| !v.is_null()).and_then(|v| iface_media__image_info__from_json(v)),
+        standard_resolution: m.get("standard_resolution").filter(|v| !v.is_null()).and_then(|v| iface_media__image_info__from_json(v)),
+    })
+}
+
+fn iface_media__meta_data__from_json(v: &Value) -> Option<iface_media::MetaData> {
+    let m = v.as_object()?;
+    Some(iface_media::MetaData {
+        code: m.get("code").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+    })
+}
+
+fn iface_media__entry_response__from_json(v: &Value) -> Option<iface_media::EntryResponse> {
+    let m = v.as_object()?;
+    Some(iface_media::EntryResponse {
+        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| iface_media__entry__from_json(v)),
+        meta: m.get("meta").filter(|v| !v.is_null()).and_then(|v| iface_media__meta_data__from_json(v)),
+    })
+}
+
+fn iface_media__entry_type_op_enum__from_str(s: &str) -> Option<iface_media::EntryTypeOpEnum> {
+    match s {
+        "image" => Some(iface_media::EntryTypeOpEnum::Image),
+        "video" => Some(iface_media::EntryTypeOpEnum::Video),
+        _ => None,
+    }
+}
+
+fn iface_media__get_media_popular__ok(body: String) -> Result<iface_media::SearchResponse, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match iface_media__search_response__from_json(&v) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_media__get_media_popular__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
+fn iface_media__get_media_search__ok(body: String) -> Result<iface_media::SearchResponse, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match iface_media__search_response__from_json(&v) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_media__get_media_search__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
+fn iface_media__get_media_shortcode_shortcode__ok(body: String) -> Result<iface_media::EntryResponse, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match iface_media__entry_response__from_json(&v) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_media__get_media_shortcode_shortcode__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
+fn iface_media__get_media_media_id__ok(body: String) -> Result<iface_media::EntryResponse, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match iface_media__entry_response__from_json(&v) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_media__get_media_media_id__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
 impl iface_media::Guest for crate::Component {
-    fn get_media_popular() -> Result<String, String> {
-        dispatch(&OP_MEDIA_GET_MEDIA_POPULAR, Value::Object(Map::new()))
+    fn get_media_popular() -> Result<iface_media::SearchResponse, String> {
+        match dispatch(&OP_MEDIA_GET_MEDIA_POPULAR, Value::Object(Map::new())).and_then(iface_media__get_media_popular__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_media__get_media_popular__err(e)),
+        }
     }
-    fn get_media_search(params: iface_media::GetMediaSearchParams) -> Result<String, String> {
+    fn get_media_search(params: iface_media::GetMediaSearchParams) -> Result<iface_media::SearchResponse, String> {
         let json = iface_media__get_media_search_params__to_json(&params);
-        dispatch(&OP_MEDIA_GET_MEDIA_SEARCH, json)
+        match dispatch(&OP_MEDIA_GET_MEDIA_SEARCH, json).and_then(iface_media__get_media_search__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_media__get_media_search__err(e)),
+        }
     }
-    fn get_media_shortcode_shortcode(params: iface_media::GetMediaShortcodeShortcodeParams) -> Result<String, String> {
+    fn get_media_shortcode_shortcode(params: iface_media::GetMediaShortcodeShortcodeParams) -> Result<iface_media::EntryResponse, String> {
         let json = iface_media__get_media_shortcode_shortcode_params__to_json(&params);
-        dispatch(&OP_MEDIA_GET_MEDIA_SHORTCODE_SHORTCODE, json)
+        match dispatch(&OP_MEDIA_GET_MEDIA_SHORTCODE_SHORTCODE, json).and_then(iface_media__get_media_shortcode_shortcode__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_media__get_media_shortcode_shortcode__err(e)),
+        }
     }
-    fn get_media_media_id(params: iface_media::GetMediaMediaIdParams) -> Result<String, String> {
+    fn get_media_media_id(params: iface_media::GetMediaMediaIdParams) -> Result<iface_media::EntryResponse, String> {
         let json = iface_media__get_media_media_id_params__to_json(&params);
-        dispatch(&OP_MEDIA_GET_MEDIA_MEDIA_ID, json)
+        match dispatch(&OP_MEDIA_GET_MEDIA_MEDIA_ID, json).and_then(iface_media__get_media_media_id__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_media__get_media_media_id__err(e)),
+        }
     }
 }
 use crate::exports::autostamp::instagram::comments as iface_comments;
@@ -482,7 +1561,7 @@ const OP_COMMENTS_GET_MEDIA_MEDIA_ID_COMMENTS: OpSpec = OpSpec {
     method: "GET",
     path_template: "/media/{media_id}/comments",
     fields: &[
-        FieldSpec { snake: "media_id", location: FieldLocation::Path },
+        FieldSpec { snake: "media_id", wire: "media-id", location: FieldLocation::Path },
     ],
     auth: &[
     ],
@@ -492,8 +1571,8 @@ const OP_COMMENTS_POST_MEDIA_MEDIA_ID_COMMENTS: OpSpec = OpSpec {
     method: "POST",
     path_template: "/media/{media_id}/comments",
     fields: &[
-        FieldSpec { snake: "media_id", location: FieldLocation::Path },
-        FieldSpec { snake: "text", location: FieldLocation::Query },
+        FieldSpec { snake: "media_id", wire: "media-id", location: FieldLocation::Path },
+        FieldSpec { snake: "text", wire: "text", location: FieldLocation::Query },
     ],
     auth: &[
     ],
@@ -503,12 +1582,50 @@ const OP_COMMENTS_DELETE_MEDIA_MEDIA_ID_COMMENTS_COMMENT_ID: OpSpec = OpSpec {
     method: "DELETE",
     path_template: "/media/{media_id}/comments/{comment_id}",
     fields: &[
-        FieldSpec { snake: "media_id", location: FieldLocation::Path },
-        FieldSpec { snake: "comment_id", location: FieldLocation::Path },
+        FieldSpec { snake: "media_id", wire: "media-id", location: FieldLocation::Path },
+        FieldSpec { snake: "comment_id", wire: "comment-id", location: FieldLocation::Path },
     ],
     auth: &[
     ],
 };
+
+fn iface_comments__response__to_json(p: &iface_comments::Response) -> Value {
+    let mut m = Map::new();
+    m.insert("data".into(), match (&p.data) { Some(v) => Value::Array((v).iter().map(|v| iface_comments__comment_entry__to_json(v)).collect()), None => Value::Null });
+    m.insert("meta".into(), match (&p.meta) { Some(v) => iface_comments__meta_data__to_json(v), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_comments__comment_entry__to_json(p: &iface_comments::CommentEntry) -> Value {
+    let mut m = Map::new();
+    m.insert("created_time".into(), match (&p.created_time) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("from".into(), match (&p.from_op) { Some(v) => iface_comments__user_short_info__to_json(v), None => Value::Null });
+    m.insert("id".into(), match (&p.id) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("text".into(), match (&p.text) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_comments__user_short_info__to_json(p: &iface_comments::UserShortInfo) -> Value {
+    let mut m = Map::new();
+    m.insert("full_name".into(), match (&p.full_name) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("id".into(), match (&p.id) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("profile_picture".into(), match (&p.profile_picture) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("username".into(), match (&p.username) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_comments__meta_data__to_json(p: &iface_comments::MetaData) -> Value {
+    let mut m = Map::new();
+    m.insert("code".into(), match (&p.code) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_comments__status_response__to_json(p: &iface_comments::StatusResponse) -> Value {
+    let mut m = Map::new();
+    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("meta".into(), match (&p.meta) { Some(v) => iface_comments__meta_data__to_json(v), None => Value::Null });
+    Value::Object(m)
+}
 
 fn iface_comments__get_media_media_id_comments_params__to_json(p: &iface_comments::GetMediaMediaIdCommentsParams) -> Value {
     let mut m = Map::new();
@@ -530,18 +1647,124 @@ fn iface_comments__delete_media_media_id_comments_comment_id_params__to_json(p: 
     Value::Object(m)
 }
 
+fn iface_comments__response__from_json(v: &Value) -> Option<iface_comments::Response> {
+    let m = v.as_object()?;
+    Some(iface_comments::Response {
+        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| iface_comments__comment_entry__from_json(x)).collect())),
+        meta: m.get("meta").filter(|v| !v.is_null()).and_then(|v| iface_comments__meta_data__from_json(v)),
+    })
+}
+
+fn iface_comments__comment_entry__from_json(v: &Value) -> Option<iface_comments::CommentEntry> {
+    let m = v.as_object()?;
+    Some(iface_comments::CommentEntry {
+        created_time: m.get("created_time").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        from_op: m.get("from").filter(|v| !v.is_null()).and_then(|v| iface_comments__user_short_info__from_json(v)),
+        id: m.get("id").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        text: m.get("text").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    })
+}
+
+fn iface_comments__user_short_info__from_json(v: &Value) -> Option<iface_comments::UserShortInfo> {
+    let m = v.as_object()?;
+    Some(iface_comments::UserShortInfo {
+        full_name: m.get("full_name").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        id: m.get("id").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        profile_picture: m.get("profile_picture").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        username: m.get("username").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    })
+}
+
+fn iface_comments__meta_data__from_json(v: &Value) -> Option<iface_comments::MetaData> {
+    let m = v.as_object()?;
+    Some(iface_comments::MetaData {
+        code: m.get("code").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+    })
+}
+
+fn iface_comments__status_response__from_json(v: &Value) -> Option<iface_comments::StatusResponse> {
+    let m = v.as_object()?;
+    Some(iface_comments::StatusResponse {
+        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        meta: m.get("meta").filter(|v| !v.is_null()).and_then(|v| iface_comments__meta_data__from_json(v)),
+    })
+}
+
+fn iface_comments__get_media_media_id_comments__ok(body: String) -> Result<iface_comments::Response, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match iface_comments__response__from_json(&v) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_comments__get_media_media_id_comments__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
+fn iface_comments__post_media_media_id_comments__ok(body: String) -> Result<iface_comments::StatusResponse, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match iface_comments__status_response__from_json(&v) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_comments__post_media_media_id_comments__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
+fn iface_comments__delete_media_media_id_comments_comment_id__ok(body: String) -> Result<iface_comments::StatusResponse, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match iface_comments__status_response__from_json(&v) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_comments__delete_media_media_id_comments_comment_id__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
 impl iface_comments::Guest for crate::Component {
-    fn get_media_media_id_comments(params: iface_comments::GetMediaMediaIdCommentsParams) -> Result<String, String> {
+    fn get_media_media_id_comments(params: iface_comments::GetMediaMediaIdCommentsParams) -> Result<iface_comments::Response, String> {
         let json = iface_comments__get_media_media_id_comments_params__to_json(&params);
-        dispatch(&OP_COMMENTS_GET_MEDIA_MEDIA_ID_COMMENTS, json)
+        match dispatch(&OP_COMMENTS_GET_MEDIA_MEDIA_ID_COMMENTS, json).and_then(iface_comments__get_media_media_id_comments__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_comments__get_media_media_id_comments__err(e)),
+        }
     }
-    fn post_media_media_id_comments(params: iface_comments::PostMediaMediaIdCommentsParams) -> Result<String, String> {
+    fn post_media_media_id_comments(params: iface_comments::PostMediaMediaIdCommentsParams) -> Result<iface_comments::StatusResponse, String> {
         let json = iface_comments__post_media_media_id_comments_params__to_json(&params);
-        dispatch(&OP_COMMENTS_POST_MEDIA_MEDIA_ID_COMMENTS, json)
+        match dispatch(&OP_COMMENTS_POST_MEDIA_MEDIA_ID_COMMENTS, json).and_then(iface_comments__post_media_media_id_comments__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_comments__post_media_media_id_comments__err(e)),
+        }
     }
-    fn delete_media_media_id_comments_comment_id(params: iface_comments::DeleteMediaMediaIdCommentsCommentIdParams) -> Result<String, String> {
+    fn delete_media_media_id_comments_comment_id(params: iface_comments::DeleteMediaMediaIdCommentsCommentIdParams) -> Result<iface_comments::StatusResponse, String> {
         let json = iface_comments__delete_media_media_id_comments_comment_id_params__to_json(&params);
-        dispatch(&OP_COMMENTS_DELETE_MEDIA_MEDIA_ID_COMMENTS_COMMENT_ID, json)
+        match dispatch(&OP_COMMENTS_DELETE_MEDIA_MEDIA_ID_COMMENTS_COMMENT_ID, json).and_then(iface_comments__delete_media_media_id_comments_comment_id__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_comments__delete_media_media_id_comments_comment_id__err(e)),
+        }
     }
 }
 use crate::exports::autostamp::instagram::likes as iface_likes;
@@ -550,7 +1773,7 @@ const OP_LIKES_GET_MEDIA_MEDIA_ID_LIKES: OpSpec = OpSpec {
     method: "GET",
     path_template: "/media/{media_id}/likes",
     fields: &[
-        FieldSpec { snake: "media_id", location: FieldLocation::Path },
+        FieldSpec { snake: "media_id", wire: "media-id", location: FieldLocation::Path },
     ],
     auth: &[
     ],
@@ -560,7 +1783,7 @@ const OP_LIKES_POST_MEDIA_MEDIA_ID_LIKES: OpSpec = OpSpec {
     method: "POST",
     path_template: "/media/{media_id}/likes",
     fields: &[
-        FieldSpec { snake: "media_id", location: FieldLocation::Path },
+        FieldSpec { snake: "media_id", wire: "media-id", location: FieldLocation::Path },
     ],
     auth: &[
     ],
@@ -570,11 +1793,40 @@ const OP_LIKES_DELETE_MEDIA_MEDIA_ID_LIKES: OpSpec = OpSpec {
     method: "DELETE",
     path_template: "/media/{media_id}/likes",
     fields: &[
-        FieldSpec { snake: "media_id", location: FieldLocation::Path },
+        FieldSpec { snake: "media_id", wire: "media-id", location: FieldLocation::Path },
     ],
     auth: &[
     ],
 };
+
+fn iface_likes__users_info_response__to_json(p: &iface_likes::UsersInfoResponse) -> Value {
+    let mut m = Map::new();
+    m.insert("data".into(), match (&p.data) { Some(v) => Value::Array((v).iter().map(|v| iface_likes__user_short_info__to_json(v)).collect()), None => Value::Null });
+    m.insert("meta".into(), match (&p.meta) { Some(v) => iface_likes__meta_data__to_json(v), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_likes__user_short_info__to_json(p: &iface_likes::UserShortInfo) -> Value {
+    let mut m = Map::new();
+    m.insert("full_name".into(), match (&p.full_name) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("id".into(), match (&p.id) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("profile_picture".into(), match (&p.profile_picture) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("username".into(), match (&p.username) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_likes__meta_data__to_json(p: &iface_likes::MetaData) -> Value {
+    let mut m = Map::new();
+    m.insert("code".into(), match (&p.code) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_likes__status_response__to_json(p: &iface_likes::StatusResponse) -> Value {
+    let mut m = Map::new();
+    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("meta".into(), match (&p.meta) { Some(v) => iface_likes__meta_data__to_json(v), None => Value::Null });
+    Value::Object(m)
+}
 
 fn iface_likes__get_media_media_id_likes_params__to_json(p: &iface_likes::GetMediaMediaIdLikesParams) -> Value {
     let mut m = Map::new();
@@ -594,18 +1846,114 @@ fn iface_likes__delete_media_media_id_likes_params__to_json(p: &iface_likes::Del
     Value::Object(m)
 }
 
+fn iface_likes__users_info_response__from_json(v: &Value) -> Option<iface_likes::UsersInfoResponse> {
+    let m = v.as_object()?;
+    Some(iface_likes::UsersInfoResponse {
+        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| iface_likes__user_short_info__from_json(x)).collect())),
+        meta: m.get("meta").filter(|v| !v.is_null()).and_then(|v| iface_likes__meta_data__from_json(v)),
+    })
+}
+
+fn iface_likes__user_short_info__from_json(v: &Value) -> Option<iface_likes::UserShortInfo> {
+    let m = v.as_object()?;
+    Some(iface_likes::UserShortInfo {
+        full_name: m.get("full_name").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        id: m.get("id").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        profile_picture: m.get("profile_picture").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        username: m.get("username").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    })
+}
+
+fn iface_likes__meta_data__from_json(v: &Value) -> Option<iface_likes::MetaData> {
+    let m = v.as_object()?;
+    Some(iface_likes::MetaData {
+        code: m.get("code").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+    })
+}
+
+fn iface_likes__status_response__from_json(v: &Value) -> Option<iface_likes::StatusResponse> {
+    let m = v.as_object()?;
+    Some(iface_likes::StatusResponse {
+        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        meta: m.get("meta").filter(|v| !v.is_null()).and_then(|v| iface_likes__meta_data__from_json(v)),
+    })
+}
+
+fn iface_likes__get_media_media_id_likes__ok(body: String) -> Result<iface_likes::UsersInfoResponse, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match iface_likes__users_info_response__from_json(&v) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_likes__get_media_media_id_likes__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
+fn iface_likes__post_media_media_id_likes__ok(body: String) -> Result<iface_likes::StatusResponse, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match iface_likes__status_response__from_json(&v) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_likes__post_media_media_id_likes__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
+fn iface_likes__delete_media_media_id_likes__ok(body: String) -> Result<iface_likes::StatusResponse, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match iface_likes__status_response__from_json(&v) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_likes__delete_media_media_id_likes__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
 impl iface_likes::Guest for crate::Component {
-    fn get_media_media_id_likes(params: iface_likes::GetMediaMediaIdLikesParams) -> Result<String, String> {
+    fn get_media_media_id_likes(params: iface_likes::GetMediaMediaIdLikesParams) -> Result<iface_likes::UsersInfoResponse, String> {
         let json = iface_likes__get_media_media_id_likes_params__to_json(&params);
-        dispatch(&OP_LIKES_GET_MEDIA_MEDIA_ID_LIKES, json)
+        match dispatch(&OP_LIKES_GET_MEDIA_MEDIA_ID_LIKES, json).and_then(iface_likes__get_media_media_id_likes__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_likes__get_media_media_id_likes__err(e)),
+        }
     }
-    fn post_media_media_id_likes(params: iface_likes::PostMediaMediaIdLikesParams) -> Result<String, String> {
+    fn post_media_media_id_likes(params: iface_likes::PostMediaMediaIdLikesParams) -> Result<iface_likes::StatusResponse, String> {
         let json = iface_likes__post_media_media_id_likes_params__to_json(&params);
-        dispatch(&OP_LIKES_POST_MEDIA_MEDIA_ID_LIKES, json)
+        match dispatch(&OP_LIKES_POST_MEDIA_MEDIA_ID_LIKES, json).and_then(iface_likes__post_media_media_id_likes__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_likes__post_media_media_id_likes__err(e)),
+        }
     }
-    fn delete_media_media_id_likes(params: iface_likes::DeleteMediaMediaIdLikesParams) -> Result<String, String> {
+    fn delete_media_media_id_likes(params: iface_likes::DeleteMediaMediaIdLikesParams) -> Result<iface_likes::StatusResponse, String> {
         let json = iface_likes__delete_media_media_id_likes_params__to_json(&params);
-        dispatch(&OP_LIKES_DELETE_MEDIA_MEDIA_ID_LIKES, json)
+        match dispatch(&OP_LIKES_DELETE_MEDIA_MEDIA_ID_LIKES, json).and_then(iface_likes__delete_media_media_id_likes__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_likes__delete_media_media_id_likes__err(e)),
+        }
     }
 }
 use crate::exports::autostamp::instagram::tags as iface_tags;
@@ -614,7 +1962,7 @@ const OP_TAGS_GET_TAGS_SEARCH: OpSpec = OpSpec {
     method: "GET",
     path_template: "/tags/search",
     fields: &[
-        FieldSpec { snake: "q", location: FieldLocation::Query },
+        FieldSpec { snake: "q", wire: "q", location: FieldLocation::Query },
     ],
     auth: &[
     ],
@@ -624,7 +1972,7 @@ const OP_TAGS_GET_TAGS_TAG_NAME: OpSpec = OpSpec {
     method: "GET",
     path_template: "/tags/{tag_name}",
     fields: &[
-        FieldSpec { snake: "tag_name", location: FieldLocation::Path },
+        FieldSpec { snake: "tag_name", wire: "tag-name", location: FieldLocation::Path },
     ],
     auth: &[
     ],
@@ -634,14 +1982,175 @@ const OP_TAGS_GET_TAGS_TAG_NAME_MEDIA_RECENT: OpSpec = OpSpec {
     method: "GET",
     path_template: "/tags/{tag_name}/media/recent",
     fields: &[
-        FieldSpec { snake: "tag_name", location: FieldLocation::Path },
-        FieldSpec { snake: "count", location: FieldLocation::Query },
-        FieldSpec { snake: "min_tag_id", location: FieldLocation::Query },
-        FieldSpec { snake: "max_tag_id", location: FieldLocation::Query },
+        FieldSpec { snake: "tag_name", wire: "tag-name", location: FieldLocation::Path },
+        FieldSpec { snake: "count", wire: "count", location: FieldLocation::Query },
+        FieldSpec { snake: "min_tag_id", wire: "min_tag_id", location: FieldLocation::Query },
+        FieldSpec { snake: "max_tag_id", wire: "max_tag_id", location: FieldLocation::Query },
     ],
     auth: &[
     ],
 };
+
+fn iface_tags__media_entry_type_op_enum__to_str(e: &iface_tags::MediaEntryTypeOpEnum) -> &'static str {
+    match e {
+        iface_tags::MediaEntryTypeOpEnum::Image => "image",
+        iface_tags::MediaEntryTypeOpEnum::Video => "video",
+    }
+}
+
+fn iface_tags__tag_search_response__to_json(p: &iface_tags::TagSearchResponse) -> Value {
+    let mut m = Map::new();
+    m.insert("data".into(), match (&p.data) { Some(v) => Value::Array((v).iter().map(|v| iface_tags__tag_info__to_json(v)).collect()), None => Value::Null });
+    m.insert("meta".into(), match (&p.meta) { Some(v) => iface_tags__meta_data__to_json(v), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_tags__tag_info__to_json(p: &iface_tags::TagInfo) -> Value {
+    let mut m = Map::new();
+    m.insert("media_count".into(), match (&p.media_count) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("name".into(), match (&p.name) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_tags__meta_data__to_json(p: &iface_tags::MetaData) -> Value {
+    let mut m = Map::new();
+    m.insert("code".into(), match (&p.code) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_tags__tag_info_response__to_json(p: &iface_tags::TagInfoResponse) -> Value {
+    let mut m = Map::new();
+    m.insert("data".into(), match (&p.data) { Some(v) => iface_tags__tag_info__to_json(v), None => Value::Null });
+    m.insert("meta".into(), match (&p.meta) { Some(v) => iface_tags__meta_data__to_json(v), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_tags__tag_media_list_response__to_json(p: &iface_tags::TagMediaListResponse) -> Value {
+    let mut m = Map::new();
+    m.insert("data".into(), match (&p.data) { Some(v) => Value::Array((v).iter().map(|v| iface_tags__media_entry__to_json(v)).collect()), None => Value::Null });
+    m.insert("meta".into(), match (&p.meta) { Some(v) => iface_tags__meta_data__to_json(v), None => Value::Null });
+    m.insert("pagination".into(), match (&p.pagination) { Some(v) => iface_tags__tag_pagination_info__to_json(v), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_tags__media_entry__to_json(p: &iface_tags::MediaEntry) -> Value {
+    let mut m = Map::new();
+    m.insert("attribution".into(), match (&p.attribution) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("caption".into(), match (&p.caption) { Some(v) => iface_tags__caption_data__to_json(v), None => Value::Null });
+    m.insert("comments".into(), match (&p.comments) { Some(v) => iface_tags__comments_collection__to_json(v), None => Value::Null });
+    m.insert("created_time".into(), match (&p.created_time) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("filter".into(), match (&p.filter) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("id".into(), match (&p.id) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("images".into(), match (&p.images) { Some(v) => iface_tags__images_data__to_json(v), None => Value::Null });
+    m.insert("likes".into(), match (&p.likes) { Some(v) => iface_tags__likes_collection__to_json(v), None => Value::Null });
+    m.insert("link".into(), match (&p.link) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("location".into(), match (&p.location) { Some(v) => iface_tags__location_info__to_json(v), None => Value::Null });
+    m.insert("tags".into(), match (&p.tags) { Some(v) => Value::Array((v).iter().map(|v| Value::String((v).clone())).collect()), None => Value::Null });
+    m.insert("type".into(), match (&p.type_op) { Some(v) => Value::String(iface_tags__media_entry_type_op_enum__to_str(v).into()), None => Value::Null });
+    m.insert("user".into(), match (&p.user) { Some(v) => iface_tags__user_short_info__to_json(v), None => Value::Null });
+    m.insert("user_has_liked".into(), match (&p.user_has_liked) { Some(v) => Value::Bool(*(v)), None => Value::Null });
+    m.insert("users_in_photo".into(), match (&p.users_in_photo) { Some(v) => Value::Array((v).iter().map(|v| iface_tags__user_in_photo__to_json(v)).collect()), None => Value::Null });
+    m.insert("videos".into(), match (&p.videos) { Some(v) => iface_tags__videos_data__to_json(v), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_tags__caption_data__to_json(p: &iface_tags::CaptionData) -> Value {
+    let mut m = Map::new();
+    m.insert("created_time".into(), match (&p.created_time) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("from".into(), match (&p.from_op) { Some(v) => iface_tags__user_short_info__to_json(v), None => Value::Null });
+    m.insert("id".into(), match (&p.id) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("text".into(), match (&p.text) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_tags__user_short_info__to_json(p: &iface_tags::UserShortInfo) -> Value {
+    let mut m = Map::new();
+    m.insert("full_name".into(), match (&p.full_name) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("id".into(), match (&p.id) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("profile_picture".into(), match (&p.profile_picture) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("username".into(), match (&p.username) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_tags__comments_collection__to_json(p: &iface_tags::CommentsCollection) -> Value {
+    let mut m = Map::new();
+    m.insert("count".into(), match (&p.count) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("data".into(), match (&p.data) { Some(v) => Value::Array((v).iter().map(|v| iface_tags__comment_entry__to_json(v)).collect()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_tags__comment_entry__to_json(p: &iface_tags::CommentEntry) -> Value {
+    let mut m = Map::new();
+    m.insert("created_time".into(), match (&p.created_time) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("from".into(), match (&p.from_op) { Some(v) => iface_tags__user_short_info__to_json(v), None => Value::Null });
+    m.insert("id".into(), match (&p.id) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("text".into(), match (&p.text) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_tags__images_data__to_json(p: &iface_tags::ImagesData) -> Value {
+    let mut m = Map::new();
+    m.insert("low_resolution".into(), match (&p.low_resolution) { Some(v) => iface_tags__image_info__to_json(v), None => Value::Null });
+    m.insert("standard_resolution".into(), match (&p.standard_resolution) { Some(v) => iface_tags__image_info__to_json(v), None => Value::Null });
+    m.insert("thumbnail".into(), match (&p.thumbnail) { Some(v) => iface_tags__image_info__to_json(v), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_tags__image_info__to_json(p: &iface_tags::ImageInfo) -> Value {
+    let mut m = Map::new();
+    m.insert("height".into(), match (&p.height) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("url".into(), match (&p.url) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("width".into(), match (&p.width) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_tags__likes_collection__to_json(p: &iface_tags::LikesCollection) -> Value {
+    let mut m = Map::new();
+    m.insert("count".into(), match (&p.count) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("data".into(), match (&p.data) { Some(v) => Value::Array((v).iter().map(|v| iface_tags__user_short_info__to_json(v)).collect()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_tags__location_info__to_json(p: &iface_tags::LocationInfo) -> Value {
+    let mut m = Map::new();
+    m.insert("id".into(), match (&p.id) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("latitude".into(), match (&p.latitude) { Some(v) => serde_json::Number::from_f64(*(v)).map(Value::Number).unwrap_or(Value::Null), None => Value::Null });
+    m.insert("longitude".into(), match (&p.longitude) { Some(v) => serde_json::Number::from_f64(*(v)).map(Value::Number).unwrap_or(Value::Null), None => Value::Null });
+    m.insert("name".into(), match (&p.name) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_tags__user_in_photo__to_json(p: &iface_tags::UserInPhoto) -> Value {
+    let mut m = Map::new();
+    m.insert("position".into(), match (&p.position) { Some(v) => iface_tags__position__to_json(v), None => Value::Null });
+    m.insert("user".into(), match (&p.user) { Some(v) => iface_tags__user_short_info__to_json(v), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_tags__position__to_json(p: &iface_tags::Position) -> Value {
+    let mut m = Map::new();
+    m.insert("x".into(), match (&p.x) { Some(v) => serde_json::Number::from_f64(*(v)).map(Value::Number).unwrap_or(Value::Null), None => Value::Null });
+    m.insert("y".into(), match (&p.y) { Some(v) => serde_json::Number::from_f64(*(v)).map(Value::Number).unwrap_or(Value::Null), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_tags__videos_data__to_json(p: &iface_tags::VideosData) -> Value {
+    let mut m = Map::new();
+    m.insert("low_resolution".into(), match (&p.low_resolution) { Some(v) => iface_tags__image_info__to_json(v), None => Value::Null });
+    m.insert("standard_resolution".into(), match (&p.standard_resolution) { Some(v) => iface_tags__image_info__to_json(v), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_tags__tag_pagination_info__to_json(p: &iface_tags::TagPaginationInfo) -> Value {
+    let mut m = Map::new();
+    m.insert("deprecation_warning".into(), match (&p.deprecation_warning) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("min_tag_id".into(), match (&p.min_tag_id) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("next_max_id".into(), match (&p.next_max_id) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("next_max_tag_id".into(), match (&p.next_max_tag_id) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("next_min_id".into(), match (&p.next_min_id) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("next_url".into(), match (&p.next_url) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
 
 fn iface_tags__get_tags_search_params__to_json(p: &iface_tags::GetTagsSearchParams) -> Value {
     let mut m = Map::new();
@@ -664,18 +2173,261 @@ fn iface_tags__get_tags_tag_name_media_recent_params__to_json(p: &iface_tags::Ge
     Value::Object(m)
 }
 
+fn iface_tags__tag_search_response__from_json(v: &Value) -> Option<iface_tags::TagSearchResponse> {
+    let m = v.as_object()?;
+    Some(iface_tags::TagSearchResponse {
+        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| iface_tags__tag_info__from_json(x)).collect())),
+        meta: m.get("meta").filter(|v| !v.is_null()).and_then(|v| iface_tags__meta_data__from_json(v)),
+    })
+}
+
+fn iface_tags__tag_info__from_json(v: &Value) -> Option<iface_tags::TagInfo> {
+    let m = v.as_object()?;
+    Some(iface_tags::TagInfo {
+        media_count: m.get("media_count").filter(|v| !v.is_null()).and_then(|v| (v).as_i64()),
+        name: m.get("name").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    })
+}
+
+fn iface_tags__meta_data__from_json(v: &Value) -> Option<iface_tags::MetaData> {
+    let m = v.as_object()?;
+    Some(iface_tags::MetaData {
+        code: m.get("code").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+    })
+}
+
+fn iface_tags__tag_info_response__from_json(v: &Value) -> Option<iface_tags::TagInfoResponse> {
+    let m = v.as_object()?;
+    Some(iface_tags::TagInfoResponse {
+        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| iface_tags__tag_info__from_json(v)),
+        meta: m.get("meta").filter(|v| !v.is_null()).and_then(|v| iface_tags__meta_data__from_json(v)),
+    })
+}
+
+fn iface_tags__tag_media_list_response__from_json(v: &Value) -> Option<iface_tags::TagMediaListResponse> {
+    let m = v.as_object()?;
+    Some(iface_tags::TagMediaListResponse {
+        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| iface_tags__media_entry__from_json(x)).collect())),
+        meta: m.get("meta").filter(|v| !v.is_null()).and_then(|v| iface_tags__meta_data__from_json(v)),
+        pagination: m.get("pagination").filter(|v| !v.is_null()).and_then(|v| iface_tags__tag_pagination_info__from_json(v)),
+    })
+}
+
+fn iface_tags__media_entry__from_json(v: &Value) -> Option<iface_tags::MediaEntry> {
+    let m = v.as_object()?;
+    Some(iface_tags::MediaEntry {
+        attribution: m.get("attribution").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        caption: m.get("caption").filter(|v| !v.is_null()).and_then(|v| iface_tags__caption_data__from_json(v)),
+        comments: m.get("comments").filter(|v| !v.is_null()).and_then(|v| iface_tags__comments_collection__from_json(v)),
+        created_time: m.get("created_time").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        filter: m.get("filter").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        id: m.get("id").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        images: m.get("images").filter(|v| !v.is_null()).and_then(|v| iface_tags__images_data__from_json(v)),
+        likes: m.get("likes").filter(|v| !v.is_null()).and_then(|v| iface_tags__likes_collection__from_json(v)),
+        link: m.get("link").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        location: m.get("location").filter(|v| !v.is_null()).and_then(|v| iface_tags__location_info__from_json(v)),
+        tags: m.get("tags").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| (x).as_str().map(|s| s.to_string())).collect())),
+        type_op: m.get("type").filter(|v| !v.is_null()).and_then(|v| (v).as_str().and_then(iface_tags__media_entry_type_op_enum__from_str)),
+        user: m.get("user").filter(|v| !v.is_null()).and_then(|v| iface_tags__user_short_info__from_json(v)),
+        user_has_liked: m.get("user_has_liked").filter(|v| !v.is_null()).and_then(|v| (v).as_bool()),
+        users_in_photo: m.get("users_in_photo").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| iface_tags__user_in_photo__from_json(x)).collect())),
+        videos: m.get("videos").filter(|v| !v.is_null()).and_then(|v| iface_tags__videos_data__from_json(v)),
+    })
+}
+
+fn iface_tags__caption_data__from_json(v: &Value) -> Option<iface_tags::CaptionData> {
+    let m = v.as_object()?;
+    Some(iface_tags::CaptionData {
+        created_time: m.get("created_time").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        from_op: m.get("from").filter(|v| !v.is_null()).and_then(|v| iface_tags__user_short_info__from_json(v)),
+        id: m.get("id").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        text: m.get("text").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    })
+}
+
+fn iface_tags__user_short_info__from_json(v: &Value) -> Option<iface_tags::UserShortInfo> {
+    let m = v.as_object()?;
+    Some(iface_tags::UserShortInfo {
+        full_name: m.get("full_name").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        id: m.get("id").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        profile_picture: m.get("profile_picture").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        username: m.get("username").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    })
+}
+
+fn iface_tags__comments_collection__from_json(v: &Value) -> Option<iface_tags::CommentsCollection> {
+    let m = v.as_object()?;
+    Some(iface_tags::CommentsCollection {
+        count: m.get("count").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| iface_tags__comment_entry__from_json(x)).collect())),
+    })
+}
+
+fn iface_tags__comment_entry__from_json(v: &Value) -> Option<iface_tags::CommentEntry> {
+    let m = v.as_object()?;
+    Some(iface_tags::CommentEntry {
+        created_time: m.get("created_time").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        from_op: m.get("from").filter(|v| !v.is_null()).and_then(|v| iface_tags__user_short_info__from_json(v)),
+        id: m.get("id").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        text: m.get("text").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    })
+}
+
+fn iface_tags__images_data__from_json(v: &Value) -> Option<iface_tags::ImagesData> {
+    let m = v.as_object()?;
+    Some(iface_tags::ImagesData {
+        low_resolution: m.get("low_resolution").filter(|v| !v.is_null()).and_then(|v| iface_tags__image_info__from_json(v)),
+        standard_resolution: m.get("standard_resolution").filter(|v| !v.is_null()).and_then(|v| iface_tags__image_info__from_json(v)),
+        thumbnail: m.get("thumbnail").filter(|v| !v.is_null()).and_then(|v| iface_tags__image_info__from_json(v)),
+    })
+}
+
+fn iface_tags__image_info__from_json(v: &Value) -> Option<iface_tags::ImageInfo> {
+    let m = v.as_object()?;
+    Some(iface_tags::ImageInfo {
+        height: m.get("height").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        url: m.get("url").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        width: m.get("width").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+    })
+}
+
+fn iface_tags__likes_collection__from_json(v: &Value) -> Option<iface_tags::LikesCollection> {
+    let m = v.as_object()?;
+    Some(iface_tags::LikesCollection {
+        count: m.get("count").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| iface_tags__user_short_info__from_json(x)).collect())),
+    })
+}
+
+fn iface_tags__location_info__from_json(v: &Value) -> Option<iface_tags::LocationInfo> {
+    let m = v.as_object()?;
+    Some(iface_tags::LocationInfo {
+        id: m.get("id").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        latitude: m.get("latitude").filter(|v| !v.is_null()).and_then(|v| (v).as_f64()),
+        longitude: m.get("longitude").filter(|v| !v.is_null()).and_then(|v| (v).as_f64()),
+        name: m.get("name").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    })
+}
+
+fn iface_tags__user_in_photo__from_json(v: &Value) -> Option<iface_tags::UserInPhoto> {
+    let m = v.as_object()?;
+    Some(iface_tags::UserInPhoto {
+        position: m.get("position").filter(|v| !v.is_null()).and_then(|v| iface_tags__position__from_json(v)),
+        user: m.get("user").filter(|v| !v.is_null()).and_then(|v| iface_tags__user_short_info__from_json(v)),
+    })
+}
+
+fn iface_tags__position__from_json(v: &Value) -> Option<iface_tags::Position> {
+    let m = v.as_object()?;
+    Some(iface_tags::Position {
+        x: m.get("x").filter(|v| !v.is_null()).and_then(|v| (v).as_f64()),
+        y: m.get("y").filter(|v| !v.is_null()).and_then(|v| (v).as_f64()),
+    })
+}
+
+fn iface_tags__videos_data__from_json(v: &Value) -> Option<iface_tags::VideosData> {
+    let m = v.as_object()?;
+    Some(iface_tags::VideosData {
+        low_resolution: m.get("low_resolution").filter(|v| !v.is_null()).and_then(|v| iface_tags__image_info__from_json(v)),
+        standard_resolution: m.get("standard_resolution").filter(|v| !v.is_null()).and_then(|v| iface_tags__image_info__from_json(v)),
+    })
+}
+
+fn iface_tags__tag_pagination_info__from_json(v: &Value) -> Option<iface_tags::TagPaginationInfo> {
+    let m = v.as_object()?;
+    Some(iface_tags::TagPaginationInfo {
+        deprecation_warning: m.get("deprecation_warning").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        min_tag_id: m.get("min_tag_id").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        next_max_id: m.get("next_max_id").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        next_max_tag_id: m.get("next_max_tag_id").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        next_min_id: m.get("next_min_id").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        next_url: m.get("next_url").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    })
+}
+
+fn iface_tags__media_entry_type_op_enum__from_str(s: &str) -> Option<iface_tags::MediaEntryTypeOpEnum> {
+    match s {
+        "image" => Some(iface_tags::MediaEntryTypeOpEnum::Image),
+        "video" => Some(iface_tags::MediaEntryTypeOpEnum::Video),
+        _ => None,
+    }
+}
+
+fn iface_tags__get_tags_search__ok(body: String) -> Result<iface_tags::TagSearchResponse, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match iface_tags__tag_search_response__from_json(&v) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_tags__get_tags_search__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
+fn iface_tags__get_tags_tag_name__ok(body: String) -> Result<iface_tags::TagInfoResponse, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match iface_tags__tag_info_response__from_json(&v) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_tags__get_tags_tag_name__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
+fn iface_tags__get_tags_tag_name_media_recent__ok(body: String) -> Result<iface_tags::TagMediaListResponse, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match iface_tags__tag_media_list_response__from_json(&v) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_tags__get_tags_tag_name_media_recent__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
 impl iface_tags::Guest for crate::Component {
-    fn get_tags_search(params: iface_tags::GetTagsSearchParams) -> Result<String, String> {
+    fn get_tags_search(params: iface_tags::GetTagsSearchParams) -> Result<iface_tags::TagSearchResponse, String> {
         let json = iface_tags__get_tags_search_params__to_json(&params);
-        dispatch(&OP_TAGS_GET_TAGS_SEARCH, json)
+        match dispatch(&OP_TAGS_GET_TAGS_SEARCH, json).and_then(iface_tags__get_tags_search__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_tags__get_tags_search__err(e)),
+        }
     }
-    fn get_tags_tag_name(params: iface_tags::GetTagsTagNameParams) -> Result<String, String> {
+    fn get_tags_tag_name(params: iface_tags::GetTagsTagNameParams) -> Result<iface_tags::TagInfoResponse, String> {
         let json = iface_tags__get_tags_tag_name_params__to_json(&params);
-        dispatch(&OP_TAGS_GET_TAGS_TAG_NAME, json)
+        match dispatch(&OP_TAGS_GET_TAGS_TAG_NAME, json).and_then(iface_tags__get_tags_tag_name__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_tags__get_tags_tag_name__err(e)),
+        }
     }
-    fn get_tags_tag_name_media_recent(params: iface_tags::GetTagsTagNameMediaRecentParams) -> Result<String, String> {
+    fn get_tags_tag_name_media_recent(params: iface_tags::GetTagsTagNameMediaRecentParams) -> Result<iface_tags::TagMediaListResponse, String> {
         let json = iface_tags__get_tags_tag_name_media_recent_params__to_json(&params);
-        dispatch(&OP_TAGS_GET_TAGS_TAG_NAME_MEDIA_RECENT, json)
+        match dispatch(&OP_TAGS_GET_TAGS_TAG_NAME_MEDIA_RECENT, json).and_then(iface_tags__get_tags_tag_name_media_recent__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_tags__get_tags_tag_name_media_recent__err(e)),
+        }
     }
 }
 use crate::exports::autostamp::instagram::users as iface_users;
@@ -684,8 +2436,8 @@ const OP_USERS_GET_USERS_SEARCH: OpSpec = OpSpec {
     method: "GET",
     path_template: "/users/search",
     fields: &[
-        FieldSpec { snake: "q", location: FieldLocation::Query },
-        FieldSpec { snake: "count", location: FieldLocation::Query },
+        FieldSpec { snake: "q", wire: "q", location: FieldLocation::Query },
+        FieldSpec { snake: "count", wire: "count", location: FieldLocation::Query },
     ],
     auth: &[
     ],
@@ -695,9 +2447,9 @@ const OP_USERS_GET_USERS_SELF_FEED: OpSpec = OpSpec {
     method: "GET",
     path_template: "/users/self/feed",
     fields: &[
-        FieldSpec { snake: "count", location: FieldLocation::Query },
-        FieldSpec { snake: "min_id", location: FieldLocation::Query },
-        FieldSpec { snake: "max_id", location: FieldLocation::Query },
+        FieldSpec { snake: "count", wire: "count", location: FieldLocation::Query },
+        FieldSpec { snake: "min_id", wire: "min_id", location: FieldLocation::Query },
+        FieldSpec { snake: "max_id", wire: "max_id", location: FieldLocation::Query },
     ],
     auth: &[
     ],
@@ -707,8 +2459,8 @@ const OP_USERS_GET_USERS_SELF_MEDIA_LIKED: OpSpec = OpSpec {
     method: "GET",
     path_template: "/users/self/media/liked",
     fields: &[
-        FieldSpec { snake: "count", location: FieldLocation::Query },
-        FieldSpec { snake: "max_like_id", location: FieldLocation::Query },
+        FieldSpec { snake: "count", wire: "count", location: FieldLocation::Query },
+        FieldSpec { snake: "max_like_id", wire: "max_like_id", location: FieldLocation::Query },
     ],
     auth: &[
     ],
@@ -718,7 +2470,7 @@ const OP_USERS_GET_USERS_USER_ID: OpSpec = OpSpec {
     method: "GET",
     path_template: "/users/{user_id}",
     fields: &[
-        FieldSpec { snake: "user_id", location: FieldLocation::Path },
+        FieldSpec { snake: "user_id", wire: "user-id", location: FieldLocation::Path },
     ],
     auth: &[
     ],
@@ -728,16 +2480,186 @@ const OP_USERS_GET_USERS_USER_ID_MEDIA_RECENT: OpSpec = OpSpec {
     method: "GET",
     path_template: "/users/{user_id}/media/recent",
     fields: &[
-        FieldSpec { snake: "user_id", location: FieldLocation::Path },
-        FieldSpec { snake: "count", location: FieldLocation::Query },
-        FieldSpec { snake: "max_timestamp", location: FieldLocation::Query },
-        FieldSpec { snake: "min_timestamp", location: FieldLocation::Query },
-        FieldSpec { snake: "min_id", location: FieldLocation::Query },
-        FieldSpec { snake: "max_id", location: FieldLocation::Query },
+        FieldSpec { snake: "user_id", wire: "user-id", location: FieldLocation::Path },
+        FieldSpec { snake: "count", wire: "count", location: FieldLocation::Query },
+        FieldSpec { snake: "max_timestamp", wire: "max_timestamp", location: FieldLocation::Query },
+        FieldSpec { snake: "min_timestamp", wire: "min_timestamp", location: FieldLocation::Query },
+        FieldSpec { snake: "min_id", wire: "min_id", location: FieldLocation::Query },
+        FieldSpec { snake: "max_id", wire: "max_id", location: FieldLocation::Query },
     ],
     auth: &[
     ],
 };
+
+fn iface_users__media_entry_type_op_enum__to_str(e: &iface_users::MediaEntryTypeOpEnum) -> &'static str {
+    match e {
+        iface_users::MediaEntryTypeOpEnum::Image => "image",
+        iface_users::MediaEntryTypeOpEnum::Video => "video",
+    }
+}
+
+fn iface_users__info_response__to_json(p: &iface_users::InfoResponse) -> Value {
+    let mut m = Map::new();
+    m.insert("data".into(), match (&p.data) { Some(v) => Value::Array((v).iter().map(|v| iface_users__user_short_info__to_json(v)).collect()), None => Value::Null });
+    m.insert("meta".into(), match (&p.meta) { Some(v) => iface_users__meta_data__to_json(v), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_users__user_short_info__to_json(p: &iface_users::UserShortInfo) -> Value {
+    let mut m = Map::new();
+    m.insert("full_name".into(), match (&p.full_name) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("id".into(), match (&p.id) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("profile_picture".into(), match (&p.profile_picture) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("username".into(), match (&p.username) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_users__meta_data__to_json(p: &iface_users::MetaData) -> Value {
+    let mut m = Map::new();
+    m.insert("code".into(), match (&p.code) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_users__media_list_response__to_json(p: &iface_users::MediaListResponse) -> Value {
+    let mut m = Map::new();
+    m.insert("data".into(), match (&p.data) { Some(v) => Value::Array((v).iter().map(|v| iface_users__media_entry__to_json(v)).collect()), None => Value::Null });
+    m.insert("meta".into(), match (&p.meta) { Some(v) => iface_users__meta_data__to_json(v), None => Value::Null });
+    m.insert("pagination".into(), match (&p.pagination) { Some(v) => iface_users__id_pagination_info__to_json(v), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_users__media_entry__to_json(p: &iface_users::MediaEntry) -> Value {
+    let mut m = Map::new();
+    m.insert("attribution".into(), match (&p.attribution) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("caption".into(), match (&p.caption) { Some(v) => iface_users__caption_data__to_json(v), None => Value::Null });
+    m.insert("comments".into(), match (&p.comments) { Some(v) => iface_users__comments_collection__to_json(v), None => Value::Null });
+    m.insert("created_time".into(), match (&p.created_time) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("filter".into(), match (&p.filter) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("id".into(), match (&p.id) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("images".into(), match (&p.images) { Some(v) => iface_users__images_data__to_json(v), None => Value::Null });
+    m.insert("likes".into(), match (&p.likes) { Some(v) => iface_users__likes_collection__to_json(v), None => Value::Null });
+    m.insert("link".into(), match (&p.link) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("location".into(), match (&p.location) { Some(v) => iface_users__location_info__to_json(v), None => Value::Null });
+    m.insert("tags".into(), match (&p.tags) { Some(v) => Value::Array((v).iter().map(|v| Value::String((v).clone())).collect()), None => Value::Null });
+    m.insert("type".into(), match (&p.type_op) { Some(v) => Value::String(iface_users__media_entry_type_op_enum__to_str(v).into()), None => Value::Null });
+    m.insert("user".into(), match (&p.user) { Some(v) => iface_users__user_short_info__to_json(v), None => Value::Null });
+    m.insert("user_has_liked".into(), match (&p.user_has_liked) { Some(v) => Value::Bool(*(v)), None => Value::Null });
+    m.insert("users_in_photo".into(), match (&p.users_in_photo) { Some(v) => Value::Array((v).iter().map(|v| iface_users__user_in_photo__to_json(v)).collect()), None => Value::Null });
+    m.insert("videos".into(), match (&p.videos) { Some(v) => iface_users__videos_data__to_json(v), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_users__caption_data__to_json(p: &iface_users::CaptionData) -> Value {
+    let mut m = Map::new();
+    m.insert("created_time".into(), match (&p.created_time) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("from".into(), match (&p.from_op) { Some(v) => iface_users__user_short_info__to_json(v), None => Value::Null });
+    m.insert("id".into(), match (&p.id) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("text".into(), match (&p.text) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_users__comments_collection__to_json(p: &iface_users::CommentsCollection) -> Value {
+    let mut m = Map::new();
+    m.insert("count".into(), match (&p.count) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("data".into(), match (&p.data) { Some(v) => Value::Array((v).iter().map(|v| iface_users__comment_entry__to_json(v)).collect()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_users__comment_entry__to_json(p: &iface_users::CommentEntry) -> Value {
+    let mut m = Map::new();
+    m.insert("created_time".into(), match (&p.created_time) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("from".into(), match (&p.from_op) { Some(v) => iface_users__user_short_info__to_json(v), None => Value::Null });
+    m.insert("id".into(), match (&p.id) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("text".into(), match (&p.text) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_users__images_data__to_json(p: &iface_users::ImagesData) -> Value {
+    let mut m = Map::new();
+    m.insert("low_resolution".into(), match (&p.low_resolution) { Some(v) => iface_users__image_info__to_json(v), None => Value::Null });
+    m.insert("standard_resolution".into(), match (&p.standard_resolution) { Some(v) => iface_users__image_info__to_json(v), None => Value::Null });
+    m.insert("thumbnail".into(), match (&p.thumbnail) { Some(v) => iface_users__image_info__to_json(v), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_users__image_info__to_json(p: &iface_users::ImageInfo) -> Value {
+    let mut m = Map::new();
+    m.insert("height".into(), match (&p.height) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("url".into(), match (&p.url) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("width".into(), match (&p.width) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_users__likes_collection__to_json(p: &iface_users::LikesCollection) -> Value {
+    let mut m = Map::new();
+    m.insert("count".into(), match (&p.count) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("data".into(), match (&p.data) { Some(v) => Value::Array((v).iter().map(|v| iface_users__user_short_info__to_json(v)).collect()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_users__location_info__to_json(p: &iface_users::LocationInfo) -> Value {
+    let mut m = Map::new();
+    m.insert("id".into(), match (&p.id) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("latitude".into(), match (&p.latitude) { Some(v) => serde_json::Number::from_f64(*(v)).map(Value::Number).unwrap_or(Value::Null), None => Value::Null });
+    m.insert("longitude".into(), match (&p.longitude) { Some(v) => serde_json::Number::from_f64(*(v)).map(Value::Number).unwrap_or(Value::Null), None => Value::Null });
+    m.insert("name".into(), match (&p.name) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_users__user_in_photo__to_json(p: &iface_users::UserInPhoto) -> Value {
+    let mut m = Map::new();
+    m.insert("position".into(), match (&p.position) { Some(v) => iface_users__position__to_json(v), None => Value::Null });
+    m.insert("user".into(), match (&p.user) { Some(v) => iface_users__user_short_info__to_json(v), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_users__position__to_json(p: &iface_users::Position) -> Value {
+    let mut m = Map::new();
+    m.insert("x".into(), match (&p.x) { Some(v) => serde_json::Number::from_f64(*(v)).map(Value::Number).unwrap_or(Value::Null), None => Value::Null });
+    m.insert("y".into(), match (&p.y) { Some(v) => serde_json::Number::from_f64(*(v)).map(Value::Number).unwrap_or(Value::Null), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_users__videos_data__to_json(p: &iface_users::VideosData) -> Value {
+    let mut m = Map::new();
+    m.insert("low_resolution".into(), match (&p.low_resolution) { Some(v) => iface_users__image_info__to_json(v), None => Value::Null });
+    m.insert("standard_resolution".into(), match (&p.standard_resolution) { Some(v) => iface_users__image_info__to_json(v), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_users__id_pagination_info__to_json(p: &iface_users::IdPaginationInfo) -> Value {
+    let mut m = Map::new();
+    m.insert("next_max_id".into(), match (&p.next_max_id) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("next_url".into(), match (&p.next_url) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_users__user_response__to_json(p: &iface_users::UserResponse) -> Value {
+    let mut m = Map::new();
+    m.insert("data".into(), match (&p.data) { Some(v) => iface_users__user_info__to_json(v), None => Value::Null });
+    m.insert("meta".into(), match (&p.meta) { Some(v) => iface_users__meta_data__to_json(v), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_users__user_info__to_json(p: &iface_users::UserInfo) -> Value {
+    let mut m = Map::new();
+    m.insert("bio".into(), match (&p.bio) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("counts".into(), match (&p.counts) { Some(v) => iface_users__user_counts__to_json(v), None => Value::Null });
+    m.insert("full_name".into(), match (&p.full_name) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("id".into(), match (&p.id) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("profile_picture".into(), match (&p.profile_picture) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("username".into(), match (&p.username) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("website".into(), match (&p.website) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_users__user_counts__to_json(p: &iface_users::UserCounts) -> Value {
+    let mut m = Map::new();
+    m.insert("followed_by".into(), match (&p.followed_by) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("follows".into(), match (&p.follows) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("media".into(), match (&p.media) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    Value::Object(m)
+}
 
 fn iface_users__get_users_search_params__to_json(p: &iface_users::GetUsersSearchParams) -> Value {
     let mut m = Map::new();
@@ -778,26 +2700,324 @@ fn iface_users__get_users_user_id_media_recent_params__to_json(p: &iface_users::
     Value::Object(m)
 }
 
+fn iface_users__info_response__from_json(v: &Value) -> Option<iface_users::InfoResponse> {
+    let m = v.as_object()?;
+    Some(iface_users::InfoResponse {
+        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| iface_users__user_short_info__from_json(x)).collect())),
+        meta: m.get("meta").filter(|v| !v.is_null()).and_then(|v| iface_users__meta_data__from_json(v)),
+    })
+}
+
+fn iface_users__user_short_info__from_json(v: &Value) -> Option<iface_users::UserShortInfo> {
+    let m = v.as_object()?;
+    Some(iface_users::UserShortInfo {
+        full_name: m.get("full_name").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        id: m.get("id").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        profile_picture: m.get("profile_picture").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        username: m.get("username").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    })
+}
+
+fn iface_users__meta_data__from_json(v: &Value) -> Option<iface_users::MetaData> {
+    let m = v.as_object()?;
+    Some(iface_users::MetaData {
+        code: m.get("code").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+    })
+}
+
+fn iface_users__media_list_response__from_json(v: &Value) -> Option<iface_users::MediaListResponse> {
+    let m = v.as_object()?;
+    Some(iface_users::MediaListResponse {
+        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| iface_users__media_entry__from_json(x)).collect())),
+        meta: m.get("meta").filter(|v| !v.is_null()).and_then(|v| iface_users__meta_data__from_json(v)),
+        pagination: m.get("pagination").filter(|v| !v.is_null()).and_then(|v| iface_users__id_pagination_info__from_json(v)),
+    })
+}
+
+fn iface_users__media_entry__from_json(v: &Value) -> Option<iface_users::MediaEntry> {
+    let m = v.as_object()?;
+    Some(iface_users::MediaEntry {
+        attribution: m.get("attribution").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        caption: m.get("caption").filter(|v| !v.is_null()).and_then(|v| iface_users__caption_data__from_json(v)),
+        comments: m.get("comments").filter(|v| !v.is_null()).and_then(|v| iface_users__comments_collection__from_json(v)),
+        created_time: m.get("created_time").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        filter: m.get("filter").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        id: m.get("id").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        images: m.get("images").filter(|v| !v.is_null()).and_then(|v| iface_users__images_data__from_json(v)),
+        likes: m.get("likes").filter(|v| !v.is_null()).and_then(|v| iface_users__likes_collection__from_json(v)),
+        link: m.get("link").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        location: m.get("location").filter(|v| !v.is_null()).and_then(|v| iface_users__location_info__from_json(v)),
+        tags: m.get("tags").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| (x).as_str().map(|s| s.to_string())).collect())),
+        type_op: m.get("type").filter(|v| !v.is_null()).and_then(|v| (v).as_str().and_then(iface_users__media_entry_type_op_enum__from_str)),
+        user: m.get("user").filter(|v| !v.is_null()).and_then(|v| iface_users__user_short_info__from_json(v)),
+        user_has_liked: m.get("user_has_liked").filter(|v| !v.is_null()).and_then(|v| (v).as_bool()),
+        users_in_photo: m.get("users_in_photo").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| iface_users__user_in_photo__from_json(x)).collect())),
+        videos: m.get("videos").filter(|v| !v.is_null()).and_then(|v| iface_users__videos_data__from_json(v)),
+    })
+}
+
+fn iface_users__caption_data__from_json(v: &Value) -> Option<iface_users::CaptionData> {
+    let m = v.as_object()?;
+    Some(iface_users::CaptionData {
+        created_time: m.get("created_time").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        from_op: m.get("from").filter(|v| !v.is_null()).and_then(|v| iface_users__user_short_info__from_json(v)),
+        id: m.get("id").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        text: m.get("text").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    })
+}
+
+fn iface_users__comments_collection__from_json(v: &Value) -> Option<iface_users::CommentsCollection> {
+    let m = v.as_object()?;
+    Some(iface_users::CommentsCollection {
+        count: m.get("count").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| iface_users__comment_entry__from_json(x)).collect())),
+    })
+}
+
+fn iface_users__comment_entry__from_json(v: &Value) -> Option<iface_users::CommentEntry> {
+    let m = v.as_object()?;
+    Some(iface_users::CommentEntry {
+        created_time: m.get("created_time").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        from_op: m.get("from").filter(|v| !v.is_null()).and_then(|v| iface_users__user_short_info__from_json(v)),
+        id: m.get("id").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        text: m.get("text").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    })
+}
+
+fn iface_users__images_data__from_json(v: &Value) -> Option<iface_users::ImagesData> {
+    let m = v.as_object()?;
+    Some(iface_users::ImagesData {
+        low_resolution: m.get("low_resolution").filter(|v| !v.is_null()).and_then(|v| iface_users__image_info__from_json(v)),
+        standard_resolution: m.get("standard_resolution").filter(|v| !v.is_null()).and_then(|v| iface_users__image_info__from_json(v)),
+        thumbnail: m.get("thumbnail").filter(|v| !v.is_null()).and_then(|v| iface_users__image_info__from_json(v)),
+    })
+}
+
+fn iface_users__image_info__from_json(v: &Value) -> Option<iface_users::ImageInfo> {
+    let m = v.as_object()?;
+    Some(iface_users::ImageInfo {
+        height: m.get("height").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        url: m.get("url").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        width: m.get("width").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+    })
+}
+
+fn iface_users__likes_collection__from_json(v: &Value) -> Option<iface_users::LikesCollection> {
+    let m = v.as_object()?;
+    Some(iface_users::LikesCollection {
+        count: m.get("count").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| iface_users__user_short_info__from_json(x)).collect())),
+    })
+}
+
+fn iface_users__location_info__from_json(v: &Value) -> Option<iface_users::LocationInfo> {
+    let m = v.as_object()?;
+    Some(iface_users::LocationInfo {
+        id: m.get("id").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        latitude: m.get("latitude").filter(|v| !v.is_null()).and_then(|v| (v).as_f64()),
+        longitude: m.get("longitude").filter(|v| !v.is_null()).and_then(|v| (v).as_f64()),
+        name: m.get("name").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    })
+}
+
+fn iface_users__user_in_photo__from_json(v: &Value) -> Option<iface_users::UserInPhoto> {
+    let m = v.as_object()?;
+    Some(iface_users::UserInPhoto {
+        position: m.get("position").filter(|v| !v.is_null()).and_then(|v| iface_users__position__from_json(v)),
+        user: m.get("user").filter(|v| !v.is_null()).and_then(|v| iface_users__user_short_info__from_json(v)),
+    })
+}
+
+fn iface_users__position__from_json(v: &Value) -> Option<iface_users::Position> {
+    let m = v.as_object()?;
+    Some(iface_users::Position {
+        x: m.get("x").filter(|v| !v.is_null()).and_then(|v| (v).as_f64()),
+        y: m.get("y").filter(|v| !v.is_null()).and_then(|v| (v).as_f64()),
+    })
+}
+
+fn iface_users__videos_data__from_json(v: &Value) -> Option<iface_users::VideosData> {
+    let m = v.as_object()?;
+    Some(iface_users::VideosData {
+        low_resolution: m.get("low_resolution").filter(|v| !v.is_null()).and_then(|v| iface_users__image_info__from_json(v)),
+        standard_resolution: m.get("standard_resolution").filter(|v| !v.is_null()).and_then(|v| iface_users__image_info__from_json(v)),
+    })
+}
+
+fn iface_users__id_pagination_info__from_json(v: &Value) -> Option<iface_users::IdPaginationInfo> {
+    let m = v.as_object()?;
+    Some(iface_users::IdPaginationInfo {
+        next_max_id: m.get("next_max_id").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        next_url: m.get("next_url").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    })
+}
+
+fn iface_users__user_response__from_json(v: &Value) -> Option<iface_users::UserResponse> {
+    let m = v.as_object()?;
+    Some(iface_users::UserResponse {
+        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| iface_users__user_info__from_json(v)),
+        meta: m.get("meta").filter(|v| !v.is_null()).and_then(|v| iface_users__meta_data__from_json(v)),
+    })
+}
+
+fn iface_users__user_info__from_json(v: &Value) -> Option<iface_users::UserInfo> {
+    let m = v.as_object()?;
+    Some(iface_users::UserInfo {
+        bio: m.get("bio").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        counts: m.get("counts").filter(|v| !v.is_null()).and_then(|v| iface_users__user_counts__from_json(v)),
+        full_name: m.get("full_name").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        id: m.get("id").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        profile_picture: m.get("profile_picture").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        username: m.get("username").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        website: m.get("website").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    })
+}
+
+fn iface_users__user_counts__from_json(v: &Value) -> Option<iface_users::UserCounts> {
+    let m = v.as_object()?;
+    Some(iface_users::UserCounts {
+        followed_by: m.get("followed_by").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        follows: m.get("follows").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        media: m.get("media").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+    })
+}
+
+fn iface_users__media_entry_type_op_enum__from_str(s: &str) -> Option<iface_users::MediaEntryTypeOpEnum> {
+    match s {
+        "image" => Some(iface_users::MediaEntryTypeOpEnum::Image),
+        "video" => Some(iface_users::MediaEntryTypeOpEnum::Video),
+        _ => None,
+    }
+}
+
+fn iface_users__get_users_search__ok(body: String) -> Result<iface_users::InfoResponse, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match iface_users__info_response__from_json(&v) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_users__get_users_search__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
+fn iface_users__get_users_self_feed__ok(body: String) -> Result<iface_users::MediaListResponse, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match iface_users__media_list_response__from_json(&v) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_users__get_users_self_feed__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
+fn iface_users__get_users_self_media_liked__ok(body: String) -> Result<iface_users::MediaListResponse, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match iface_users__media_list_response__from_json(&v) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_users__get_users_self_media_liked__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
+fn iface_users__get_users_user_id__ok(body: String) -> Result<iface_users::UserResponse, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match iface_users__user_response__from_json(&v) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_users__get_users_user_id__err(e: crate::runtime::DispatchError) -> iface_users::GetUsersUserIdError {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => match status {
+            404u16 => iface_users::GetUsersUserIdError::NotFound(body),
+            _ => iface_users::GetUsersUserIdError::Other(body),
+        },
+        crate::runtime::DispatchError::Transport(m) => iface_users::GetUsersUserIdError::Other(m),
+    }
+}
+
+fn iface_users__get_users_user_id_media_recent__ok(body: String) -> Result<iface_users::MediaListResponse, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match iface_users__media_list_response__from_json(&v) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_users__get_users_user_id_media_recent__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
 impl iface_users::Guest for crate::Component {
-    fn get_users_search(params: iface_users::GetUsersSearchParams) -> Result<String, String> {
+    fn get_users_search(params: iface_users::GetUsersSearchParams) -> Result<iface_users::InfoResponse, String> {
         let json = iface_users__get_users_search_params__to_json(&params);
-        dispatch(&OP_USERS_GET_USERS_SEARCH, json)
+        match dispatch(&OP_USERS_GET_USERS_SEARCH, json).and_then(iface_users__get_users_search__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_users__get_users_search__err(e)),
+        }
     }
-    fn get_users_self_feed(params: iface_users::GetUsersSelfFeedParams) -> Result<String, String> {
+    fn get_users_self_feed(params: iface_users::GetUsersSelfFeedParams) -> Result<iface_users::MediaListResponse, String> {
         let json = iface_users__get_users_self_feed_params__to_json(&params);
-        dispatch(&OP_USERS_GET_USERS_SELF_FEED, json)
+        match dispatch(&OP_USERS_GET_USERS_SELF_FEED, json).and_then(iface_users__get_users_self_feed__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_users__get_users_self_feed__err(e)),
+        }
     }
-    fn get_users_self_media_liked(params: iface_users::GetUsersSelfMediaLikedParams) -> Result<String, String> {
+    fn get_users_self_media_liked(params: iface_users::GetUsersSelfMediaLikedParams) -> Result<iface_users::MediaListResponse, String> {
         let json = iface_users__get_users_self_media_liked_params__to_json(&params);
-        dispatch(&OP_USERS_GET_USERS_SELF_MEDIA_LIKED, json)
+        match dispatch(&OP_USERS_GET_USERS_SELF_MEDIA_LIKED, json).and_then(iface_users__get_users_self_media_liked__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_users__get_users_self_media_liked__err(e)),
+        }
     }
-    fn get_users_user_id(params: iface_users::GetUsersUserIdParams) -> Result<String, String> {
+    fn get_users_user_id(params: iface_users::GetUsersUserIdParams) -> Result<iface_users::UserResponse, iface_users::GetUsersUserIdError> {
         let json = iface_users__get_users_user_id_params__to_json(&params);
-        dispatch(&OP_USERS_GET_USERS_USER_ID, json)
+        match dispatch(&OP_USERS_GET_USERS_USER_ID, json).and_then(iface_users__get_users_user_id__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_users__get_users_user_id__err(e)),
+        }
     }
-    fn get_users_user_id_media_recent(params: iface_users::GetUsersUserIdMediaRecentParams) -> Result<String, String> {
+    fn get_users_user_id_media_recent(params: iface_users::GetUsersUserIdMediaRecentParams) -> Result<iface_users::MediaListResponse, String> {
         let json = iface_users__get_users_user_id_media_recent_params__to_json(&params);
-        dispatch(&OP_USERS_GET_USERS_USER_ID_MEDIA_RECENT, json)
+        match dispatch(&OP_USERS_GET_USERS_USER_ID_MEDIA_RECENT, json).and_then(iface_users__get_users_user_id_media_recent__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_users__get_users_user_id_media_recent__err(e)),
+        }
     }
 }
 use crate::exports::autostamp::instagram::relationships as iface_relationships;
@@ -815,7 +3035,7 @@ const OP_RELATIONSHIPS_GET_USERS_USER_ID_FOLLOWED_BY: OpSpec = OpSpec {
     method: "GET",
     path_template: "/users/{user_id}/followed-by",
     fields: &[
-        FieldSpec { snake: "user_id", location: FieldLocation::Path },
+        FieldSpec { snake: "user_id", wire: "user-id", location: FieldLocation::Path },
     ],
     auth: &[
     ],
@@ -825,7 +3045,7 @@ const OP_RELATIONSHIPS_GET_USERS_USER_ID_FOLLOWS: OpSpec = OpSpec {
     method: "GET",
     path_template: "/users/{user_id}/follows",
     fields: &[
-        FieldSpec { snake: "user_id", location: FieldLocation::Path },
+        FieldSpec { snake: "user_id", wire: "user-id", location: FieldLocation::Path },
     ],
     auth: &[
     ],
@@ -835,7 +3055,7 @@ const OP_RELATIONSHIPS_GET_USERS_USER_ID_RELATIONSHIP: OpSpec = OpSpec {
     method: "GET",
     path_template: "/users/{user_id}/relationship",
     fields: &[
-        FieldSpec { snake: "user_id", location: FieldLocation::Path },
+        FieldSpec { snake: "user_id", wire: "user-id", location: FieldLocation::Path },
     ],
     auth: &[
     ],
@@ -845,12 +3065,28 @@ const OP_RELATIONSHIPS_POST_USERS_USER_ID_RELATIONSHIP: OpSpec = OpSpec {
     method: "POST",
     path_template: "/users/{user_id}/relationship",
     fields: &[
-        FieldSpec { snake: "user_id", location: FieldLocation::Path },
-        FieldSpec { snake: "action", location: FieldLocation::Query },
+        FieldSpec { snake: "user_id", wire: "user-id", location: FieldLocation::Path },
+        FieldSpec { snake: "action", wire: "action", location: FieldLocation::Query },
     ],
     auth: &[
     ],
 };
+
+fn iface_relationships__relationship_info_incoming_status_enum__to_str(e: &iface_relationships::RelationshipInfoIncomingStatusEnum) -> &'static str {
+    match e {
+        iface_relationships::RelationshipInfoIncomingStatusEnum::None => "none",
+        iface_relationships::RelationshipInfoIncomingStatusEnum::FollowedBy => "followed_by",
+        iface_relationships::RelationshipInfoIncomingStatusEnum::RequestedBy => "requested_by",
+    }
+}
+
+fn iface_relationships__relationship_info_outgoing_status_enum__to_str(e: &iface_relationships::RelationshipInfoOutgoingStatusEnum) -> &'static str {
+    match e {
+        iface_relationships::RelationshipInfoOutgoingStatusEnum::None => "none",
+        iface_relationships::RelationshipInfoOutgoingStatusEnum::Follows => "follows",
+        iface_relationships::RelationshipInfoOutgoingStatusEnum::Requested => "requested",
+    }
+}
 
 fn iface_relationships__post_users_user_id_relationship_action_enum__to_str(e: &iface_relationships::PostUsersUserIdRelationshipActionEnum) -> &'static str {
     match e {
@@ -861,6 +3097,71 @@ fn iface_relationships__post_users_user_id_relationship_action_enum__to_str(e: &
         iface_relationships::PostUsersUserIdRelationshipActionEnum::Approve => "approve",
         iface_relationships::PostUsersUserIdRelationshipActionEnum::Ignore => "ignore",
     }
+}
+
+fn iface_relationships__users_info_response__to_json(p: &iface_relationships::UsersInfoResponse) -> Value {
+    let mut m = Map::new();
+    m.insert("data".into(), match (&p.data) { Some(v) => Value::Array((v).iter().map(|v| iface_relationships__user_short_info__to_json(v)).collect()), None => Value::Null });
+    m.insert("meta".into(), match (&p.meta) { Some(v) => iface_relationships__meta_data__to_json(v), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_relationships__user_short_info__to_json(p: &iface_relationships::UserShortInfo) -> Value {
+    let mut m = Map::new();
+    m.insert("full_name".into(), match (&p.full_name) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("id".into(), match (&p.id) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("profile_picture".into(), match (&p.profile_picture) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("username".into(), match (&p.username) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_relationships__meta_data__to_json(p: &iface_relationships::MetaData) -> Value {
+    let mut m = Map::new();
+    m.insert("code".into(), match (&p.code) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_relationships__users_paging_response__to_json(p: &iface_relationships::UsersPagingResponse) -> Value {
+    let mut m = Map::new();
+    m.insert("data".into(), match (&p.data) { Some(v) => Value::Array((v).iter().map(|v| iface_relationships__user_short_info__to_json(v)).collect()), None => Value::Null });
+    m.insert("meta".into(), match (&p.meta) { Some(v) => iface_relationships__meta_data__to_json(v), None => Value::Null });
+    m.insert("pagination".into(), match (&p.pagination) { Some(v) => iface_relationships__cursor_pagination_info__to_json(v), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_relationships__cursor_pagination_info__to_json(p: &iface_relationships::CursorPaginationInfo) -> Value {
+    let mut m = Map::new();
+    m.insert("next_cursor".into(), match (&p.next_cursor) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("next_url".into(), match (&p.next_url) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_relationships__relationship_response__to_json(p: &iface_relationships::RelationshipResponse) -> Value {
+    let mut m = Map::new();
+    m.insert("data".into(), match (&p.data) { Some(v) => iface_relationships__relationship_info__to_json(v), None => Value::Null });
+    m.insert("meta".into(), match (&p.meta) { Some(v) => iface_relationships__meta_data__to_json(v), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_relationships__relationship_info__to_json(p: &iface_relationships::RelationshipInfo) -> Value {
+    let mut m = Map::new();
+    m.insert("incoming_status".into(), match (&p.incoming_status) { Some(v) => Value::String(iface_relationships__relationship_info_incoming_status_enum__to_str(v).into()), None => Value::Null });
+    m.insert("outgoing_status".into(), match (&p.outgoing_status) { Some(v) => Value::String(iface_relationships__relationship_info_outgoing_status_enum__to_str(v).into()), None => Value::Null });
+    m.insert("target_user_is_private".into(), match (&p.target_user_is_private) { Some(v) => Value::Bool(*(v)), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_relationships__relationship_post_response__to_json(p: &iface_relationships::RelationshipPostResponse) -> Value {
+    let mut m = Map::new();
+    m.insert("data".into(), match (&p.data) { Some(v) => iface_relationships__relationship_status__to_json(v), None => Value::Null });
+    m.insert("meta".into(), match (&p.meta) { Some(v) => iface_relationships__meta_data__to_json(v), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_relationships__relationship_status__to_json(p: &iface_relationships::RelationshipStatus) -> Value {
+    let mut m = Map::new();
+    m.insert("outgoing_status".into(), match (&p.outgoing_status) { Some(v) => Value::String(iface_relationships__relationship_info_outgoing_status_enum__to_str(v).into()), None => Value::Null });
+    Value::Object(m)
 }
 
 fn iface_relationships__get_users_user_id_followed_by_params__to_json(p: &iface_relationships::GetUsersUserIdFollowedByParams) -> Value {
@@ -888,25 +3189,222 @@ fn iface_relationships__post_users_user_id_relationship_params__to_json(p: &ifac
     Value::Object(m)
 }
 
+fn iface_relationships__users_info_response__from_json(v: &Value) -> Option<iface_relationships::UsersInfoResponse> {
+    let m = v.as_object()?;
+    Some(iface_relationships::UsersInfoResponse {
+        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| iface_relationships__user_short_info__from_json(x)).collect())),
+        meta: m.get("meta").filter(|v| !v.is_null()).and_then(|v| iface_relationships__meta_data__from_json(v)),
+    })
+}
+
+fn iface_relationships__user_short_info__from_json(v: &Value) -> Option<iface_relationships::UserShortInfo> {
+    let m = v.as_object()?;
+    Some(iface_relationships::UserShortInfo {
+        full_name: m.get("full_name").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        id: m.get("id").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        profile_picture: m.get("profile_picture").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        username: m.get("username").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    })
+}
+
+fn iface_relationships__meta_data__from_json(v: &Value) -> Option<iface_relationships::MetaData> {
+    let m = v.as_object()?;
+    Some(iface_relationships::MetaData {
+        code: m.get("code").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+    })
+}
+
+fn iface_relationships__users_paging_response__from_json(v: &Value) -> Option<iface_relationships::UsersPagingResponse> {
+    let m = v.as_object()?;
+    Some(iface_relationships::UsersPagingResponse {
+        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| iface_relationships__user_short_info__from_json(x)).collect())),
+        meta: m.get("meta").filter(|v| !v.is_null()).and_then(|v| iface_relationships__meta_data__from_json(v)),
+        pagination: m.get("pagination").filter(|v| !v.is_null()).and_then(|v| iface_relationships__cursor_pagination_info__from_json(v)),
+    })
+}
+
+fn iface_relationships__cursor_pagination_info__from_json(v: &Value) -> Option<iface_relationships::CursorPaginationInfo> {
+    let m = v.as_object()?;
+    Some(iface_relationships::CursorPaginationInfo {
+        next_cursor: m.get("next_cursor").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        next_url: m.get("next_url").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    })
+}
+
+fn iface_relationships__relationship_response__from_json(v: &Value) -> Option<iface_relationships::RelationshipResponse> {
+    let m = v.as_object()?;
+    Some(iface_relationships::RelationshipResponse {
+        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| iface_relationships__relationship_info__from_json(v)),
+        meta: m.get("meta").filter(|v| !v.is_null()).and_then(|v| iface_relationships__meta_data__from_json(v)),
+    })
+}
+
+fn iface_relationships__relationship_info__from_json(v: &Value) -> Option<iface_relationships::RelationshipInfo> {
+    let m = v.as_object()?;
+    Some(iface_relationships::RelationshipInfo {
+        incoming_status: m.get("incoming_status").filter(|v| !v.is_null()).and_then(|v| (v).as_str().and_then(iface_relationships__relationship_info_incoming_status_enum__from_str)),
+        outgoing_status: m.get("outgoing_status").filter(|v| !v.is_null()).and_then(|v| (v).as_str().and_then(iface_relationships__relationship_info_outgoing_status_enum__from_str)),
+        target_user_is_private: m.get("target_user_is_private").filter(|v| !v.is_null()).and_then(|v| (v).as_bool()),
+    })
+}
+
+fn iface_relationships__relationship_post_response__from_json(v: &Value) -> Option<iface_relationships::RelationshipPostResponse> {
+    let m = v.as_object()?;
+    Some(iface_relationships::RelationshipPostResponse {
+        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| iface_relationships__relationship_status__from_json(v)),
+        meta: m.get("meta").filter(|v| !v.is_null()).and_then(|v| iface_relationships__meta_data__from_json(v)),
+    })
+}
+
+fn iface_relationships__relationship_status__from_json(v: &Value) -> Option<iface_relationships::RelationshipStatus> {
+    let m = v.as_object()?;
+    Some(iface_relationships::RelationshipStatus {
+        outgoing_status: m.get("outgoing_status").filter(|v| !v.is_null()).and_then(|v| (v).as_str().and_then(iface_relationships__relationship_info_outgoing_status_enum__from_str)),
+    })
+}
+
+fn iface_relationships__relationship_info_incoming_status_enum__from_str(s: &str) -> Option<iface_relationships::RelationshipInfoIncomingStatusEnum> {
+    match s {
+        "none" => Some(iface_relationships::RelationshipInfoIncomingStatusEnum::None),
+        "followed_by" => Some(iface_relationships::RelationshipInfoIncomingStatusEnum::FollowedBy),
+        "requested_by" => Some(iface_relationships::RelationshipInfoIncomingStatusEnum::RequestedBy),
+        _ => None,
+    }
+}
+
+fn iface_relationships__relationship_info_outgoing_status_enum__from_str(s: &str) -> Option<iface_relationships::RelationshipInfoOutgoingStatusEnum> {
+    match s {
+        "none" => Some(iface_relationships::RelationshipInfoOutgoingStatusEnum::None),
+        "follows" => Some(iface_relationships::RelationshipInfoOutgoingStatusEnum::Follows),
+        "requested" => Some(iface_relationships::RelationshipInfoOutgoingStatusEnum::Requested),
+        _ => None,
+    }
+}
+
+fn iface_relationships__get_users_self_requested_by__ok(body: String) -> Result<iface_relationships::UsersInfoResponse, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match iface_relationships__users_info_response__from_json(&v) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_relationships__get_users_self_requested_by__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
+fn iface_relationships__get_users_user_id_followed_by__ok(body: String) -> Result<iface_relationships::UsersPagingResponse, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match iface_relationships__users_paging_response__from_json(&v) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_relationships__get_users_user_id_followed_by__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
+fn iface_relationships__get_users_user_id_follows__ok(body: String) -> Result<iface_relationships::UsersPagingResponse, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match iface_relationships__users_paging_response__from_json(&v) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_relationships__get_users_user_id_follows__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
+fn iface_relationships__get_users_user_id_relationship__ok(body: String) -> Result<iface_relationships::RelationshipResponse, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match iface_relationships__relationship_response__from_json(&v) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_relationships__get_users_user_id_relationship__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
+fn iface_relationships__post_users_user_id_relationship__ok(body: String) -> Result<iface_relationships::RelationshipPostResponse, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match iface_relationships__relationship_post_response__from_json(&v) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_relationships__post_users_user_id_relationship__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
 impl iface_relationships::Guest for crate::Component {
-    fn get_users_self_requested_by() -> Result<String, String> {
-        dispatch(&OP_RELATIONSHIPS_GET_USERS_SELF_REQUESTED_BY, Value::Object(Map::new()))
+    fn get_users_self_requested_by() -> Result<iface_relationships::UsersInfoResponse, String> {
+        match dispatch(&OP_RELATIONSHIPS_GET_USERS_SELF_REQUESTED_BY, Value::Object(Map::new())).and_then(iface_relationships__get_users_self_requested_by__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_relationships__get_users_self_requested_by__err(e)),
+        }
     }
-    fn get_users_user_id_followed_by(params: iface_relationships::GetUsersUserIdFollowedByParams) -> Result<String, String> {
+    fn get_users_user_id_followed_by(params: iface_relationships::GetUsersUserIdFollowedByParams) -> Result<iface_relationships::UsersPagingResponse, String> {
         let json = iface_relationships__get_users_user_id_followed_by_params__to_json(&params);
-        dispatch(&OP_RELATIONSHIPS_GET_USERS_USER_ID_FOLLOWED_BY, json)
+        match dispatch(&OP_RELATIONSHIPS_GET_USERS_USER_ID_FOLLOWED_BY, json).and_then(iface_relationships__get_users_user_id_followed_by__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_relationships__get_users_user_id_followed_by__err(e)),
+        }
     }
-    fn get_users_user_id_follows(params: iface_relationships::GetUsersUserIdFollowsParams) -> Result<String, String> {
+    fn get_users_user_id_follows(params: iface_relationships::GetUsersUserIdFollowsParams) -> Result<iface_relationships::UsersPagingResponse, String> {
         let json = iface_relationships__get_users_user_id_follows_params__to_json(&params);
-        dispatch(&OP_RELATIONSHIPS_GET_USERS_USER_ID_FOLLOWS, json)
+        match dispatch(&OP_RELATIONSHIPS_GET_USERS_USER_ID_FOLLOWS, json).and_then(iface_relationships__get_users_user_id_follows__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_relationships__get_users_user_id_follows__err(e)),
+        }
     }
-    fn get_users_user_id_relationship(params: iface_relationships::GetUsersUserIdRelationshipParams) -> Result<String, String> {
+    fn get_users_user_id_relationship(params: iface_relationships::GetUsersUserIdRelationshipParams) -> Result<iface_relationships::RelationshipResponse, String> {
         let json = iface_relationships__get_users_user_id_relationship_params__to_json(&params);
-        dispatch(&OP_RELATIONSHIPS_GET_USERS_USER_ID_RELATIONSHIP, json)
+        match dispatch(&OP_RELATIONSHIPS_GET_USERS_USER_ID_RELATIONSHIP, json).and_then(iface_relationships__get_users_user_id_relationship__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_relationships__get_users_user_id_relationship__err(e)),
+        }
     }
-    fn post_users_user_id_relationship(params: iface_relationships::PostUsersUserIdRelationshipParams) -> Result<String, String> {
+    fn post_users_user_id_relationship(params: iface_relationships::PostUsersUserIdRelationshipParams) -> Result<iface_relationships::RelationshipPostResponse, String> {
         let json = iface_relationships__post_users_user_id_relationship_params__to_json(&params);
-        dispatch(&OP_RELATIONSHIPS_POST_USERS_USER_ID_RELATIONSHIP, json)
+        match dispatch(&OP_RELATIONSHIPS_POST_USERS_USER_ID_RELATIONSHIP, json).and_then(iface_relationships__post_users_user_id_relationship__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_relationships__post_users_user_id_relationship__err(e)),
+        }
     }
 }
 

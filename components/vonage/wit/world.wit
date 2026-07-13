@@ -6,22 +6,165 @@
 /// | Secret name | Applied to each request as |
 /// | --- | --- |
 /// | `bearerAuth` | `Authorization: Bearer <secret>` |
-package autostamp:vonage@0.3.0;
+package autostamp:vonage@0.5.0;
 
 interface api {
+  record account-hal-response {
+    embedded: option<account-embedded-object>,
+    links: option<links>,
+    /// Current page number
+    page: option<f64>,
+    /// Number of records per page
+    page-size: option<f64>,
+    /// Total number of records
+    total-items: option<f64>,
+    /// Total number of pages
+    total-pages: option<f64>
+  }
+
+  /// Account object
+  record account-embedded-object {
+    data: option<account>
+  }
+
+  record account {
+    address: option<address>,
+    /// Unique identifier of the account
+    id: option<f64>,
+    /// Name of the account
+    name: option<string>,
+    /// Status of the account
+    status: option<string>
+  }
+
+  record address {
+    /// Street portion of the address
+    address-v1: option<string>,
+    /// Additional address information
+    address-v2: option<string>,
+    /// City name
+    city: option<string>,
+    /// Country code
+    country: option<string>,
+    /// Postal code
+    postal-code: option<string>,
+    /// State/Province code
+    state: option<string>
+  }
+
+  record links {
+    first: option<first-href>,
+    last: option<last-href>,
+    next: option<next-href>,
+    prev: option<prev-href>,
+    self: option<self-href>
+  }
+
+  /// URL to the first page of records
+  record first-href {
+    href: option<string>
+  }
+
+  /// URL to the last page of records
+  record last-href {
+    href: option<string>
+  }
+
+  /// URL to the next page of records
+  record next-href {
+    href: option<string>
+  }
+
+  /// URL to the previous page of records
+  record prev-href {
+    href: option<string>
+  }
+
+  /// URL to the current page of records
+  record self-href {
+    href: option<string>
+  }
+
+  record locations-hal-response {
+    embedded: option<locations-embedded-object>,
+    links: option<links>,
+    page: option<f64>,
+    page-size: option<f64>,
+    total-items: option<f64>,
+    total-pages: option<f64>
+  }
+
+  /// Collection of location objects
+  record locations-embedded-object {
+    data: option<list<location>>
+  }
+
+  record location {
+    address: option<address-with-time-zone>,
+    /// Unique identifier of the location
+    id: option<f64>,
+    /// Name of the location
+    name: option<string>
+  }
+
+  record address-with-time-zone {
+    /// Street portion of the address
+    address-v1: option<string>,
+    /// Additional address information
+    address-v2: option<string>,
+    /// City name
+    city: option<string>,
+    /// Country code
+    country: option<string>,
+    /// Postal code
+    postal-code: option<string>,
+    /// State/Province code
+    state: option<string>,
+    /// Time zone
+    time-zone: option<string>
+  }
+
+  record location-hal-response {
+    embedded: option<location-embedded-object>,
+    links: option<links>,
+    /// Current page number
+    page: option<f64>,
+    /// Number of records per page
+    page-size: option<f64>,
+    /// Total number of records
+    total-items: option<f64>,
+    /// Total number of pages
+    total-pages: option<f64>
+  }
+
+  /// Location object
+  record location-embedded-object {
+    data: option<location>
+  }
+
+  variant account-ctrl-get-account-services-by-account-id-error {
+    not-found(string),
+    other(string)
+  }
+
+  variant account-ctrl-get-location-by-id-error {
+    not-found(string),
+    other(string)
+  }
+
   /// Get account data by ID
   record account-ctrl-get-account-services-by-account-id-params {
     /// The Vonage Business Cloud account ID
     account-id: string
   }
-  account-ctrl-get-account-services-by-account-id: func(params: account-ctrl-get-account-services-by-account-id-params) -> result<string, string>;
+  account-ctrl-get-account-services-by-account-id: func(params: account-ctrl-get-account-services-by-account-id-params) -> result<account-hal-response, account-ctrl-get-account-services-by-account-id-error>;
 
   /// Get account locations data by account ID
   record account-ctrl-get-locations-by-account-id-params {
     /// The Vonage Business Cloud account ID
     account-id: string
   }
-  account-ctrl-get-locations-by-account-id: func(params: account-ctrl-get-locations-by-account-id-params) -> result<string, string>;
+  account-ctrl-get-locations-by-account-id: func(params: account-ctrl-get-locations-by-account-id-params) -> result<locations-hal-response, string>;
 
   /// Get location data by account ID and location ID
   record account-ctrl-get-location-by-id-params {
@@ -30,7 +173,7 @@ interface api {
     /// The Vonage Business Cloud location ID
     location-id: string
   }
-  account-ctrl-get-location-by-id: func(params: account-ctrl-get-location-by-id-params) -> result<string, string>;
+  account-ctrl-get-location-by-id: func(params: account-ctrl-get-location-by-id-params) -> result<location-hal-response, account-ctrl-get-location-by-id-error>;
 
 }
 

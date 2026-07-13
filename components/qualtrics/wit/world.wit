@@ -1,4 +1,4 @@
-package autostamp:qualtrics@0.3.0;
+package autostamp:qualtrics@0.5.0;
 
 interface directories {
   /// Create contact in mailing list
@@ -18,12 +18,117 @@ interface directories {
 
 
 interface distributions {
+  record response {
+    meta: option<response-meta>,
+    result-op: option<response-result-op>
+  }
+
+  record response-meta {
+    http-status: option<string>,
+    request-id: option<string>
+  }
+
+  record response-result-op {
+    elements: option<list<response-result-op-elements-item>>,
+    next-page: option<string>
+  }
+
+  record response-result-op-elements-item {
+    created-date: string,
+    custom-headers: response-result-op-elements-item-custom-headers,
+    embedded-data: string,
+    headers: response-result-op-elements-item-headers,
+    id: string,
+    message: response-result-op-elements-item-message,
+    modified-date: string,
+    organization-id: string,
+    owner-id: string,
+    parent-distribution-id: string,
+    recipients: response-result-op-elements-item-recipients,
+    request-status: string,
+    request-type: string,
+    send-date: string,
+    stats: response-result-op-elements-item-stats,
+    survey-link: response-result-op-elements-item-survey-link
+  }
+
+  record response-result-op-elements-item-custom-headers {
+    /// JSON-encoded free-form object payload
+    data: option<string>
+  }
+
+  record response-result-op-elements-item-headers {
+    from-email: option<string>,
+    from-name: option<string>,
+    reply-to-email: option<string>
+  }
+
+  record response-result-op-elements-item-message {
+    library-id: option<string>,
+    message-id: option<string>,
+    message-text: option<string>
+  }
+
+  record response-result-op-elements-item-recipients {
+    contact-id: option<string>,
+    library-id: option<string>,
+    mailing-list-id: option<string>,
+    sample-id: option<string>
+  }
+
+  record response-result-op-elements-item-stats {
+    blocked: option<s32>,
+    bounced: option<s32>,
+    complaints: option<s32>,
+    failed: option<s32>,
+    finished: option<s32>,
+    opened: option<s32>,
+    sent: option<s32>,
+    skipped: option<s32>,
+    started: option<s32>
+  }
+
+  record response-result-op-elements-item-survey-link {
+    expiration-date: option<string>,
+    link-type: option<string>,
+    survey-id: option<string>
+  }
+
+  record retrieve-distribution-links-response {
+    meta: option<retrieve-distribution-links-response-meta>,
+    result-op: option<retrieve-distribution-links-response-result-op>
+  }
+
+  record retrieve-distribution-links-response-meta {
+    http-status: option<string>,
+    request-id: option<string>
+  }
+
+  record retrieve-distribution-links-response-result-op {
+    elements: option<list<retrieve-distribution-links-response-result-op-elements-item>>,
+    next-page: option<string>
+  }
+
+  record retrieve-distribution-links-response-result-op-elements-item {
+    contact-id: string,
+    email: string,
+    exceeded-contact-frequency: bool,
+    external-data-reference: string,
+    first-name: string,
+    last-name: string,
+    link: string,
+    link-expiration: string,
+    status: string,
+    transaction-id: string,
+    unsubscribed: bool
+  }
+
   /// Get distributions for survey
   record get-distributions-params {
     /// The survey for which to load the distributions
     survey-id: string
   }
-  get-distributions: func(params: get-distributions-params) -> result<string, string>;
+  get-distributions: func(params: get-distributions-params) -> result<response, string>;
 
   /// Generate distribution links
   record generate-distribution-links-params {
@@ -43,11 +148,34 @@ interface distributions {
     /// ID of the distribution list
     distribution-id: string
   }
-  retrievedistributionlinks: func(params: retrievedistributionlinks-params) -> result<string, string>;
+  retrievedistributionlinks: func(params: retrievedistributionlinks-params) -> result<retrieve-distribution-links-response, string>;
 
 }
 
 interface eventsubscriptions {
+  record event-subscriptions-response {
+    meta: option<event-subscriptions-response-meta>,
+    result-op: option<event-subscriptions-response-result-op>
+  }
+
+  record event-subscriptions-response-meta {
+    http-status: option<string>,
+    request-id: option<string>
+  }
+
+  record event-subscriptions-response-result-op {
+    meta: option<event-subscriptions-response-result-op-meta>,
+    result-op: option<event-subscriptions-response-result-op-result-op>
+  }
+
+  record event-subscriptions-response-result-op-meta {
+    http-status: option<string>
+  }
+
+  record event-subscriptions-response-result-op-result-op {
+    id: option<string>
+  }
+
   /// Triggers when a response is submitted to a qualtrics survey
   record when-a-response-is-received-params {
     encrypt: option<bool>,
@@ -56,7 +184,7 @@ interface eventsubscriptions {
     /// The topics to subscribe to. Must follow the format surveyengine.completedResponse.[SurveyID]
     topics: string
   }
-  when-a-response-is-received: func(params: when-a-response-is-received-params) -> result<string, string>;
+  when-a-response-is-received: func(params: when-a-response-is-received-params) -> result<event-subscriptions-response, string>;
 
   /// Remove subscription to response event
   record webhook-delete-params {
@@ -66,24 +194,29 @@ interface eventsubscriptions {
     /// The topics to subscribe to. Must follow the format surveyengine.completedResponse.[SurveyID]
     topics: string
   }
-  webhook-delete: func(params: webhook-delete-params) -> result<string, string>;
+  webhook-delete: func(params: webhook-delete-params) -> result<event-subscriptions-response, string>;
 
   /// Get event subscriptions
   record get-event-subscriptions-params {
     /// ID of event subscription - can be obtained from web hook response
     subscription-id: string
   }
-  get-event-subscriptions: func(params: get-event-subscriptions-params) -> result<string, string>;
+  get-event-subscriptions: func(params: get-event-subscriptions-params) -> result<event-subscriptions-response, string>;
 
 }
 
 interface survey-definitions {
+  record survey-response {
+    /// JSON-encoded free-form object payload
+    data: option<string>
+  }
+
   /// Get survey
   record get-survey-params {
     /// ID of survey (eg. SV_123)
     survey-id: string
   }
-  get-survey: func(params: get-survey-params) -> result<string, string>;
+  get-survey: func(params: get-survey-params) -> result<survey-response, string>;
 
 }
 /// The component world: imports the secrets host capability

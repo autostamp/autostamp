@@ -44,10 +44,15 @@ pub(crate) enum FieldLocation {
     Body,
 }
 
-/// A single operation parameter: the snake-case key it carries in the params JSON and where
-/// it belongs in the request.
+/// A single operation parameter. `snake` keys the field in the internal params JSON (and, for a
+/// path field, matches the `{snake}` placeholder in the path template); `wire` is the verbatim name
+/// the field takes on the HTTP wire (query key, header name, or body property). The two differ
+/// whenever the source name isn't already snake_case (e.g. `dryRun` → snake `dry_run`, wire
+/// `dryRun`), and let distinct inputs that share a snake key (`DateCreated`, `DateCreated<`) still
+/// travel under their true names.
 pub(crate) struct FieldSpec {
     pub(crate) snake: &'static str,
+    pub(crate) wire: &'static str,
     pub(crate) location: FieldLocation,
 }
 
@@ -71,6 +76,16 @@ pub(crate) struct AuthApply {
     pub(crate) kind: AuthKind,
 }
 
+/// The failure modes of [`dispatch`], kept structured so each generated operation can map them
+/// onto its own typed error: an `Http` failure carries the response status and body (routed to
+/// the matching error-variant case), while a `Transport` failure carries a message for the
+/// catch-all case (a secret lookup, connection, or decode failure that never produced an HTTP
+/// status).
+pub(crate) enum DispatchError {
+    Http { status: u16, body: String },
+    Transport(String),
+}
+
 /// A single API operation: HTTP method, path template (with `{snake}` placeholders), the
 /// parameter fields, and the security schemes to apply.
 pub(crate) struct OpSpec {
@@ -81,8 +96,9 @@ pub(crate) struct OpSpec {
 }
 
 /// Execute `op` with the supplied `params` (a JSON object keyed by snake-case field names)
-/// and return the response body as a string, or an error message.
-pub(crate) fn dispatch(op: &OpSpec, params: Value) -> Result<String, String> {
+/// and return the raw 2xx response body, or a structured [`DispatchError`] the caller maps
+/// onto the operation's typed error.
+pub(crate) fn dispatch(op: &OpSpec, params: Value) -> Result<String, DispatchError> {
     let obj = match &params {
         Value::Object(map) => Some(map),
         _ => None,
@@ -105,10 +121,10 @@ pub(crate) fn dispatch(op: &OpSpec, params: Value) -> Result<String, String> {
                 let placeholder = format!("{{{}}}", field.snake);
                 path = path.replace(&placeholder, &percent_encode(&scalar(value)));
             }
-            FieldLocation::Query => query.push((field.snake.to_string(), scalar(value))),
-            FieldLocation::Header => headers.push((field.snake.to_string(), scalar(value))),
+            FieldLocation::Query => query.push((field.wire.to_string(), scalar(value))),
+            FieldLocation::Header => headers.push((field.wire.to_string(), scalar(value))),
             FieldLocation::Body => {
-                body.insert(field.snake.to_string(), value.clone());
+                body.insert(field.wire.to_string(), value.clone());
             }
         }
     }
@@ -116,7 +132,7 @@ pub(crate) fn dispatch(op: &OpSpec, params: Value) -> Result<String, String> {
     // Apply each resolved security scheme, sourcing its value from wasmcloud:secrets.
     let mut cookies: Vec<String> = Vec::new();
     for apply in op.auth {
-        let secret = fetch_secret(apply.secret_key)?;
+        let secret = fetch_secret(apply.secret_key).map_err(DispatchError::Transport)?;
         match &apply.kind {
             AuthKind::Bearer => headers.push(("authorization".into(), format!("Bearer {secret}"))),
             AuthKind::Basic => {
@@ -177,17 +193,18 @@ fn fetch_secret(key: &str) -> Result<String, String> {
 }
 
 /// Build and send the outgoing request with `wstd`, returning the response body on a 2xx
-/// status. The generated guest exports are synchronous, so the async `wstd` client is driven
-/// to completion on a local reactor via `wstd::runtime::block_on`.
+/// status and a structured [`DispatchError`] otherwise. The generated guest exports are
+/// synchronous, so the async `wstd` client is driven to completion on a local reactor via
+/// `wstd::runtime::block_on`.
 fn perform(
     method: &str,
     path_with_query: &str,
     headers: &[(String, String)],
     body: &[u8],
-) -> Result<String, String> {
+) -> Result<String, DispatchError> {
     let url = join_url(crate::BASE_URL, path_with_query);
     let method = Method::from_bytes(method.as_bytes())
-        .map_err(|err| format!("invalid HTTP method `{method}`: {err}"))?;
+        .map_err(|err| DispatchError::Transport(format!("invalid HTTP method `{method}`: {err}")))?;
 
     let mut builder = Request::builder().method(method).uri(url);
     for (name, value) in headers {
@@ -199,27 +216,29 @@ fn perform(
         } else {
             Body::from(body.to_vec())
         })
-        .map_err(|err| format!("failed to build request: {err}"))?;
+        .map_err(|err| DispatchError::Transport(format!("failed to build request: {err}")))?;
 
     wstd::runtime::block_on(async move {
         let client = Client::new();
         let response = client
             .send(request)
             .await
-            .map_err(|err| format!("request failed: {err:#}"))?;
+            .map_err(|err| DispatchError::Transport(format!("request failed: {err:#}")))?;
 
         let status = response.status().as_u16();
         let mut response_body = response.into_body();
-        let bytes = response_body
-            .contents()
-            .await
-            .map_err(|err| format!("failed to read response body: {err:#}"))?;
+        let bytes = response_body.contents().await.map_err(|err| {
+            DispatchError::Transport(format!("failed to read response body: {err:#}"))
+        })?;
         let body_text = String::from_utf8_lossy(bytes).into_owned();
 
         if (200..300).contains(&status) {
             Ok(body_text)
         } else {
-            Err(format!("HTTP {status}: {body_text}"))
+            Err(DispatchError::Http {
+                status,
+                body: body_text,
+            })
         }
     })
 }
@@ -288,9 +307,9 @@ const OP_STOCKS_GET_V1_COMPANIES: OpSpec = OpSpec {
     method: "GET",
     path_template: "/v1/companies",
     fields: &[
-        FieldSpec { snake: "sort", location: FieldLocation::Query },
-        FieldSpec { snake: "perpage", location: FieldLocation::Query },
-        FieldSpec { snake: "page", location: FieldLocation::Query },
+        FieldSpec { snake: "sort", wire: "sort", location: FieldLocation::Query },
+        FieldSpec { snake: "perpage", wire: "perpage", location: FieldLocation::Query },
+        FieldSpec { snake: "page", wire: "page", location: FieldLocation::Query },
     ],
     auth: &[
     ],
@@ -300,11 +319,11 @@ const OP_STOCKS_GET_V1_HISTORIC_AGG_SIZE_SYMBOL_DATE: OpSpec = OpSpec {
     method: "GET",
     path_template: "/v1/historic/agg/{size}/{symbol}/{date}",
     fields: &[
-        FieldSpec { snake: "size", location: FieldLocation::Path },
-        FieldSpec { snake: "symbol", location: FieldLocation::Path },
-        FieldSpec { snake: "date", location: FieldLocation::Path },
-        FieldSpec { snake: "offset", location: FieldLocation::Query },
-        FieldSpec { snake: "limit", location: FieldLocation::Query },
+        FieldSpec { snake: "size", wire: "size", location: FieldLocation::Path },
+        FieldSpec { snake: "symbol", wire: "symbol", location: FieldLocation::Path },
+        FieldSpec { snake: "date", wire: "date", location: FieldLocation::Path },
+        FieldSpec { snake: "offset", wire: "offset", location: FieldLocation::Query },
+        FieldSpec { snake: "limit", wire: "limit", location: FieldLocation::Query },
     ],
     auth: &[
     ],
@@ -314,10 +333,10 @@ const OP_STOCKS_GET_V1_HISTORIC_QUOTES_SYMBOL_DATE: OpSpec = OpSpec {
     method: "GET",
     path_template: "/v1/historic/quotes/{symbol}/{date}",
     fields: &[
-        FieldSpec { snake: "symbol", location: FieldLocation::Path },
-        FieldSpec { snake: "date", location: FieldLocation::Path },
-        FieldSpec { snake: "offset", location: FieldLocation::Query },
-        FieldSpec { snake: "limit", location: FieldLocation::Query },
+        FieldSpec { snake: "symbol", wire: "symbol", location: FieldLocation::Path },
+        FieldSpec { snake: "date", wire: "date", location: FieldLocation::Path },
+        FieldSpec { snake: "offset", wire: "offset", location: FieldLocation::Query },
+        FieldSpec { snake: "limit", wire: "limit", location: FieldLocation::Query },
     ],
     auth: &[
     ],
@@ -327,10 +346,10 @@ const OP_STOCKS_GET_V1_HISTORIC_TRADES_SYMBOL_DATE: OpSpec = OpSpec {
     method: "GET",
     path_template: "/v1/historic/trades/{symbol}/{date}",
     fields: &[
-        FieldSpec { snake: "symbol", location: FieldLocation::Path },
-        FieldSpec { snake: "date", location: FieldLocation::Path },
-        FieldSpec { snake: "offset", location: FieldLocation::Query },
-        FieldSpec { snake: "limit", location: FieldLocation::Query },
+        FieldSpec { snake: "symbol", wire: "symbol", location: FieldLocation::Path },
+        FieldSpec { snake: "date", wire: "date", location: FieldLocation::Path },
+        FieldSpec { snake: "offset", wire: "offset", location: FieldLocation::Query },
+        FieldSpec { snake: "limit", wire: "limit", location: FieldLocation::Query },
     ],
     auth: &[
     ],
@@ -340,7 +359,7 @@ const OP_STOCKS_GET_V1_LAST_STOCKS_SYMBOL: OpSpec = OpSpec {
     method: "GET",
     path_template: "/v1/last/stocks/{symbol}",
     fields: &[
-        FieldSpec { snake: "symbol", location: FieldLocation::Path },
+        FieldSpec { snake: "symbol", wire: "symbol", location: FieldLocation::Path },
     ],
     auth: &[
     ],
@@ -350,11 +369,134 @@ const OP_STOCKS_GET_V1_LAST_QUOTE_STOCKS_SYMBOL: OpSpec = OpSpec {
     method: "GET",
     path_template: "/v1/last_quote/stocks/{symbol}",
     fields: &[
-        FieldSpec { snake: "symbol", location: FieldLocation::Path },
+        FieldSpec { snake: "symbol", wire: "symbol", location: FieldLocation::Path },
     ],
     auth: &[
     ],
 };
+
+fn iface_stocks__company__to_json(p: &iface_stocks::Company) -> Value {
+    let mut m = Map::new();
+    m.insert("country".into(), match (&p.country) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("exchange".into(), match (&p.exchange) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("industry".into(), match (&p.industry) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("marketcap".into(), match (&p.marketcap) { Some(v) => serde_json::Number::from_f64(*(v)).map(Value::Number).unwrap_or(Value::Null), None => Value::Null });
+    m.insert("name".into(), match (&p.name) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("sector".into(), match (&p.sector) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("symbol".into(), match (&p.symbol) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("updated".into(), match (&p.updated) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_stocks__get_v1_historic_agg_size_symbol_date_response__to_json(p: &iface_stocks::GetV1HistoricAggSizeSymbolDateResponse) -> Value {
+    let mut m = Map::new();
+    m.insert("day".into(), match (&p.day) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("msLatency".into(), match (&p.ms_latency) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("status".into(), match (&p.status) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("symbol".into(), match (&p.symbol) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("ticks".into(), match (&p.ticks) { Some(v) => Value::Array((v).iter().map(|v| iface_stocks__aggregate__to_json(v)).collect()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_stocks__aggregate__to_json(p: &iface_stocks::Aggregate) -> Value {
+    let mut m = Map::new();
+    m.insert("c".into(), match (&p.c) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("h".into(), match (&p.h) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("k".into(), match (&p.k) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("l".into(), match (&p.l) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("o".into(), match (&p.o) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("t".into(), match (&p.t) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("v".into(), match (&p.v) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_stocks__get_v1_historic_quotes_symbol_date_response__to_json(p: &iface_stocks::GetV1HistoricQuotesSymbolDateResponse) -> Value {
+    let mut m = Map::new();
+    m.insert("day".into(), match (&p.day) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("msLatency".into(), match (&p.ms_latency) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("status".into(), match (&p.status) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("symbol".into(), match (&p.symbol) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("ticks".into(), match (&p.ticks) { Some(v) => Value::Array((v).iter().map(|v| iface_stocks__quote__to_json(v)).collect()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_stocks__quote__to_json(p: &iface_stocks::Quote) -> Value {
+    let mut m = Map::new();
+    m.insert("aE".into(), match (&p.a_e) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("aP".into(), match (&p.a_p) { Some(v) => serde_json::Number::from_f64(*(v)).map(Value::Number).unwrap_or(Value::Null), None => Value::Null });
+    m.insert("aS".into(), match (&p.a_s) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("bE".into(), match (&p.b_e) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("bP".into(), match (&p.b_p) { Some(v) => serde_json::Number::from_f64(*(v)).map(Value::Number).unwrap_or(Value::Null), None => Value::Null });
+    m.insert("bS".into(), match (&p.b_s) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("c".into(), match (&p.c) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("t".into(), match (&p.t) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_stocks__get_v1_historic_trades_symbol_date_response__to_json(p: &iface_stocks::GetV1HistoricTradesSymbolDateResponse) -> Value {
+    let mut m = Map::new();
+    m.insert("day".into(), match (&p.day) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("msLatency".into(), match (&p.ms_latency) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("status".into(), match (&p.status) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("symbol".into(), match (&p.symbol) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("ticks".into(), match (&p.ticks) { Some(v) => Value::Array((v).iter().map(|v| iface_stocks__trade__to_json(v)).collect()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_stocks__trade__to_json(p: &iface_stocks::Trade) -> Value {
+    let mut m = Map::new();
+    m.insert("c1".into(), match (&p.c1) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("c2".into(), match (&p.c2) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("c3".into(), match (&p.c3) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("c4".into(), match (&p.c4) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("e".into(), match (&p.e) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("p".into(), match (&p.p) { Some(v) => serde_json::Number::from_f64(*(v)).map(Value::Number).unwrap_or(Value::Null), None => Value::Null });
+    m.insert("s".into(), match (&p.s) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("t".into(), match (&p.t) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_stocks__get_v1_last_stocks_symbol_response__to_json(p: &iface_stocks::GetV1LastStocksSymbolResponse) -> Value {
+    let mut m = Map::new();
+    m.insert("last".into(), match (&p.last) { Some(v) => iface_stocks__last_trade__to_json(v), None => Value::Null });
+    m.insert("status".into(), match (&p.status) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("symbol".into(), match (&p.symbol) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_stocks__last_trade__to_json(p: &iface_stocks::LastTrade) -> Value {
+    let mut m = Map::new();
+    m.insert("cond1".into(), match (&p.cond1) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("cond2".into(), match (&p.cond2) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("cond3".into(), match (&p.cond3) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("cond4".into(), match (&p.cond4) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("exchange".into(), match (&p.exchange) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("price".into(), match (&p.price) { Some(v) => serde_json::Number::from_f64(*(v)).map(Value::Number).unwrap_or(Value::Null), None => Value::Null });
+    m.insert("size".into(), match (&p.size) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("timestamp".into(), match (&p.timestamp) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_stocks__get_v1_last_quote_stocks_symbol_response__to_json(p: &iface_stocks::GetV1LastQuoteStocksSymbolResponse) -> Value {
+    let mut m = Map::new();
+    m.insert("last".into(), match (&p.last) { Some(v) => iface_stocks__last_quote__to_json(v), None => Value::Null });
+    m.insert("status".into(), match (&p.status) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("symbol".into(), match (&p.symbol) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_stocks__last_quote__to_json(p: &iface_stocks::LastQuote) -> Value {
+    let mut m = Map::new();
+    m.insert("askexchange".into(), match (&p.askexchange) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("askprice".into(), match (&p.askprice) { Some(v) => serde_json::Number::from_f64(*(v)).map(Value::Number).unwrap_or(Value::Null), None => Value::Null });
+    m.insert("asksize".into(), match (&p.asksize) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("bidexchange".into(), match (&p.bidexchange) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("bidprice".into(), match (&p.bidprice) { Some(v) => serde_json::Number::from_f64(*(v)).map(Value::Number).unwrap_or(Value::Null), None => Value::Null });
+    m.insert("bidsize".into(), match (&p.bidsize) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("cond".into(), match (&p.cond) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("timestamp".into(), match (&p.timestamp) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    Value::Object(m)
+}
 
 fn iface_stocks__get_v1_companies_params__to_json(p: &iface_stocks::GetV1CompaniesParams) -> Value {
     let mut m = Map::new();
@@ -404,30 +546,290 @@ fn iface_stocks__get_v1_last_quote_stocks_symbol_params__to_json(p: &iface_stock
     Value::Object(m)
 }
 
+fn iface_stocks__company__from_json(v: &Value) -> Option<iface_stocks::Company> {
+    let m = v.as_object()?;
+    Some(iface_stocks::Company {
+        country: m.get("country").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        exchange: m.get("exchange").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        industry: m.get("industry").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        marketcap: m.get("marketcap").filter(|v| !v.is_null()).and_then(|v| (v).as_f64()),
+        name: m.get("name").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        sector: m.get("sector").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        symbol: m.get("symbol").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        updated: m.get("updated").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    })
+}
+
+fn iface_stocks__get_v1_historic_agg_size_symbol_date_response__from_json(v: &Value) -> Option<iface_stocks::GetV1HistoricAggSizeSymbolDateResponse> {
+    let m = v.as_object()?;
+    Some(iface_stocks::GetV1HistoricAggSizeSymbolDateResponse {
+        day: m.get("day").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        ms_latency: m.get("msLatency").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        status: m.get("status").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        symbol: m.get("symbol").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        ticks: m.get("ticks").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| iface_stocks__aggregate__from_json(x)).collect())),
+    })
+}
+
+fn iface_stocks__aggregate__from_json(v: &Value) -> Option<iface_stocks::Aggregate> {
+    let m = v.as_object()?;
+    Some(iface_stocks::Aggregate {
+        c: m.get("c").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        h: m.get("h").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        k: m.get("k").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        l: m.get("l").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        o: m.get("o").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        t: m.get("t").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        v: m.get("v").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+    })
+}
+
+fn iface_stocks__get_v1_historic_quotes_symbol_date_response__from_json(v: &Value) -> Option<iface_stocks::GetV1HistoricQuotesSymbolDateResponse> {
+    let m = v.as_object()?;
+    Some(iface_stocks::GetV1HistoricQuotesSymbolDateResponse {
+        day: m.get("day").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        ms_latency: m.get("msLatency").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        status: m.get("status").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        symbol: m.get("symbol").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        ticks: m.get("ticks").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| iface_stocks__quote__from_json(x)).collect())),
+    })
+}
+
+fn iface_stocks__quote__from_json(v: &Value) -> Option<iface_stocks::Quote> {
+    let m = v.as_object()?;
+    Some(iface_stocks::Quote {
+        a_e: m.get("aE").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        a_p: m.get("aP").filter(|v| !v.is_null()).and_then(|v| (v).as_f64()),
+        a_s: m.get("aS").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        b_e: m.get("bE").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        b_p: m.get("bP").filter(|v| !v.is_null()).and_then(|v| (v).as_f64()),
+        b_s: m.get("bS").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        c: m.get("c").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        t: m.get("t").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+    })
+}
+
+fn iface_stocks__get_v1_historic_trades_symbol_date_response__from_json(v: &Value) -> Option<iface_stocks::GetV1HistoricTradesSymbolDateResponse> {
+    let m = v.as_object()?;
+    Some(iface_stocks::GetV1HistoricTradesSymbolDateResponse {
+        day: m.get("day").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        ms_latency: m.get("msLatency").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        status: m.get("status").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        symbol: m.get("symbol").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        ticks: m.get("ticks").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| iface_stocks__trade__from_json(x)).collect())),
+    })
+}
+
+fn iface_stocks__trade__from_json(v: &Value) -> Option<iface_stocks::Trade> {
+    let m = v.as_object()?;
+    Some(iface_stocks::Trade {
+        c1: m.get("c1").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        c2: m.get("c2").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        c3: m.get("c3").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        c4: m.get("c4").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        e: m.get("e").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        p: m.get("p").filter(|v| !v.is_null()).and_then(|v| (v).as_f64()),
+        s: m.get("s").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        t: m.get("t").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+    })
+}
+
+fn iface_stocks__get_v1_last_stocks_symbol_response__from_json(v: &Value) -> Option<iface_stocks::GetV1LastStocksSymbolResponse> {
+    let m = v.as_object()?;
+    Some(iface_stocks::GetV1LastStocksSymbolResponse {
+        last: m.get("last").filter(|v| !v.is_null()).and_then(|v| iface_stocks__last_trade__from_json(v)),
+        status: m.get("status").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        symbol: m.get("symbol").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    })
+}
+
+fn iface_stocks__last_trade__from_json(v: &Value) -> Option<iface_stocks::LastTrade> {
+    let m = v.as_object()?;
+    Some(iface_stocks::LastTrade {
+        cond1: m.get("cond1").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        cond2: m.get("cond2").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        cond3: m.get("cond3").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        cond4: m.get("cond4").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        exchange: m.get("exchange").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        price: m.get("price").filter(|v| !v.is_null()).and_then(|v| (v).as_f64()),
+        size: m.get("size").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        timestamp: m.get("timestamp").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+    })
+}
+
+fn iface_stocks__get_v1_last_quote_stocks_symbol_response__from_json(v: &Value) -> Option<iface_stocks::GetV1LastQuoteStocksSymbolResponse> {
+    let m = v.as_object()?;
+    Some(iface_stocks::GetV1LastQuoteStocksSymbolResponse {
+        last: m.get("last").filter(|v| !v.is_null()).and_then(|v| iface_stocks__last_quote__from_json(v)),
+        status: m.get("status").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        symbol: m.get("symbol").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    })
+}
+
+fn iface_stocks__last_quote__from_json(v: &Value) -> Option<iface_stocks::LastQuote> {
+    let m = v.as_object()?;
+    Some(iface_stocks::LastQuote {
+        askexchange: m.get("askexchange").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        askprice: m.get("askprice").filter(|v| !v.is_null()).and_then(|v| (v).as_f64()),
+        asksize: m.get("asksize").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        bidexchange: m.get("bidexchange").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        bidprice: m.get("bidprice").filter(|v| !v.is_null()).and_then(|v| (v).as_f64()),
+        bidsize: m.get("bidsize").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        cond: m.get("cond").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        timestamp: m.get("timestamp").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+    })
+}
+
+fn iface_stocks__get_v1_companies__ok(body: String) -> Result<Vec<iface_stocks::Company>, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match (&v).as_array().map(|a| a.iter().filter_map(|x| iface_stocks__company__from_json(x)).collect()) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_stocks__get_v1_companies__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
+fn iface_stocks__get_v1_historic_agg_size_symbol_date__ok(body: String) -> Result<iface_stocks::GetV1HistoricAggSizeSymbolDateResponse, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match iface_stocks__get_v1_historic_agg_size_symbol_date_response__from_json(&v) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_stocks__get_v1_historic_agg_size_symbol_date__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
+fn iface_stocks__get_v1_historic_quotes_symbol_date__ok(body: String) -> Result<iface_stocks::GetV1HistoricQuotesSymbolDateResponse, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match iface_stocks__get_v1_historic_quotes_symbol_date_response__from_json(&v) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_stocks__get_v1_historic_quotes_symbol_date__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
+fn iface_stocks__get_v1_historic_trades_symbol_date__ok(body: String) -> Result<iface_stocks::GetV1HistoricTradesSymbolDateResponse, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match iface_stocks__get_v1_historic_trades_symbol_date_response__from_json(&v) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_stocks__get_v1_historic_trades_symbol_date__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
+fn iface_stocks__get_v1_last_stocks_symbol__ok(body: String) -> Result<iface_stocks::GetV1LastStocksSymbolResponse, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match iface_stocks__get_v1_last_stocks_symbol_response__from_json(&v) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_stocks__get_v1_last_stocks_symbol__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
+fn iface_stocks__get_v1_last_quote_stocks_symbol__ok(body: String) -> Result<iface_stocks::GetV1LastQuoteStocksSymbolResponse, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match iface_stocks__get_v1_last_quote_stocks_symbol_response__from_json(&v) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_stocks__get_v1_last_quote_stocks_symbol__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
 impl iface_stocks::Guest for crate::Component {
-    fn get_v1_companies(params: iface_stocks::GetV1CompaniesParams) -> Result<String, String> {
+    fn get_v1_companies(params: iface_stocks::GetV1CompaniesParams) -> Result<Vec<iface_stocks::Company>, String> {
         let json = iface_stocks__get_v1_companies_params__to_json(&params);
-        dispatch(&OP_STOCKS_GET_V1_COMPANIES, json)
+        match dispatch(&OP_STOCKS_GET_V1_COMPANIES, json).and_then(iface_stocks__get_v1_companies__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_stocks__get_v1_companies__err(e)),
+        }
     }
-    fn get_v1_historic_agg_size_symbol_date(params: iface_stocks::GetV1HistoricAggSizeSymbolDateParams) -> Result<String, String> {
+    fn get_v1_historic_agg_size_symbol_date(params: iface_stocks::GetV1HistoricAggSizeSymbolDateParams) -> Result<iface_stocks::GetV1HistoricAggSizeSymbolDateResponse, String> {
         let json = iface_stocks__get_v1_historic_agg_size_symbol_date_params__to_json(&params);
-        dispatch(&OP_STOCKS_GET_V1_HISTORIC_AGG_SIZE_SYMBOL_DATE, json)
+        match dispatch(&OP_STOCKS_GET_V1_HISTORIC_AGG_SIZE_SYMBOL_DATE, json).and_then(iface_stocks__get_v1_historic_agg_size_symbol_date__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_stocks__get_v1_historic_agg_size_symbol_date__err(e)),
+        }
     }
-    fn get_v1_historic_quotes_symbol_date(params: iface_stocks::GetV1HistoricQuotesSymbolDateParams) -> Result<String, String> {
+    fn get_v1_historic_quotes_symbol_date(params: iface_stocks::GetV1HistoricQuotesSymbolDateParams) -> Result<iface_stocks::GetV1HistoricQuotesSymbolDateResponse, String> {
         let json = iface_stocks__get_v1_historic_quotes_symbol_date_params__to_json(&params);
-        dispatch(&OP_STOCKS_GET_V1_HISTORIC_QUOTES_SYMBOL_DATE, json)
+        match dispatch(&OP_STOCKS_GET_V1_HISTORIC_QUOTES_SYMBOL_DATE, json).and_then(iface_stocks__get_v1_historic_quotes_symbol_date__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_stocks__get_v1_historic_quotes_symbol_date__err(e)),
+        }
     }
-    fn get_v1_historic_trades_symbol_date(params: iface_stocks::GetV1HistoricTradesSymbolDateParams) -> Result<String, String> {
+    fn get_v1_historic_trades_symbol_date(params: iface_stocks::GetV1HistoricTradesSymbolDateParams) -> Result<iface_stocks::GetV1HistoricTradesSymbolDateResponse, String> {
         let json = iface_stocks__get_v1_historic_trades_symbol_date_params__to_json(&params);
-        dispatch(&OP_STOCKS_GET_V1_HISTORIC_TRADES_SYMBOL_DATE, json)
+        match dispatch(&OP_STOCKS_GET_V1_HISTORIC_TRADES_SYMBOL_DATE, json).and_then(iface_stocks__get_v1_historic_trades_symbol_date__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_stocks__get_v1_historic_trades_symbol_date__err(e)),
+        }
     }
-    fn get_v1_last_stocks_symbol(params: iface_stocks::GetV1LastStocksSymbolParams) -> Result<String, String> {
+    fn get_v1_last_stocks_symbol(params: iface_stocks::GetV1LastStocksSymbolParams) -> Result<iface_stocks::GetV1LastStocksSymbolResponse, String> {
         let json = iface_stocks__get_v1_last_stocks_symbol_params__to_json(&params);
-        dispatch(&OP_STOCKS_GET_V1_LAST_STOCKS_SYMBOL, json)
+        match dispatch(&OP_STOCKS_GET_V1_LAST_STOCKS_SYMBOL, json).and_then(iface_stocks__get_v1_last_stocks_symbol__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_stocks__get_v1_last_stocks_symbol__err(e)),
+        }
     }
-    fn get_v1_last_quote_stocks_symbol(params: iface_stocks::GetV1LastQuoteStocksSymbolParams) -> Result<String, String> {
+    fn get_v1_last_quote_stocks_symbol(params: iface_stocks::GetV1LastQuoteStocksSymbolParams) -> Result<iface_stocks::GetV1LastQuoteStocksSymbolResponse, String> {
         let json = iface_stocks__get_v1_last_quote_stocks_symbol_params__to_json(&params);
-        dispatch(&OP_STOCKS_GET_V1_LAST_QUOTE_STOCKS_SYMBOL, json)
+        match dispatch(&OP_STOCKS_GET_V1_LAST_QUOTE_STOCKS_SYMBOL, json).and_then(iface_stocks__get_v1_last_quote_stocks_symbol__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_stocks__get_v1_last_quote_stocks_symbol__err(e)),
+        }
     }
 }
 use crate::exports::autostamp::polygon::currencies as iface_currencies;
@@ -445,11 +847,11 @@ const OP_CURRENCIES_GET_V1_HISTORIC_FOREX_FROM_TO_DATE: OpSpec = OpSpec {
     method: "GET",
     path_template: "/v1/historic/forex/{from}/{to}/{date}",
     fields: &[
-        FieldSpec { snake: "from", location: FieldLocation::Path },
-        FieldSpec { snake: "to", location: FieldLocation::Path },
-        FieldSpec { snake: "date", location: FieldLocation::Path },
-        FieldSpec { snake: "offset", location: FieldLocation::Query },
-        FieldSpec { snake: "limit", location: FieldLocation::Query },
+        FieldSpec { snake: "from", wire: "from", location: FieldLocation::Path },
+        FieldSpec { snake: "to", wire: "to", location: FieldLocation::Path },
+        FieldSpec { snake: "date", wire: "date", location: FieldLocation::Path },
+        FieldSpec { snake: "offset", wire: "offset", location: FieldLocation::Query },
+        FieldSpec { snake: "limit", wire: "limit", location: FieldLocation::Query },
     ],
     auth: &[
     ],
@@ -459,8 +861,8 @@ const OP_CURRENCIES_GET_V1_LAST_CURRENCIES_FROM_TO: OpSpec = OpSpec {
     method: "GET",
     path_template: "/v1/last/currencies/{from}/{to}",
     fields: &[
-        FieldSpec { snake: "from", location: FieldLocation::Path },
-        FieldSpec { snake: "to", location: FieldLocation::Path },
+        FieldSpec { snake: "from", wire: "from", location: FieldLocation::Path },
+        FieldSpec { snake: "to", wire: "to", location: FieldLocation::Path },
     ],
     auth: &[
     ],
@@ -470,12 +872,62 @@ const OP_CURRENCIES_GET_V1_LAST_QUOTE_CURRENCIES_FROM_TO: OpSpec = OpSpec {
     method: "GET",
     path_template: "/v1/last_quote/currencies/{from}/{to}",
     fields: &[
-        FieldSpec { snake: "from", location: FieldLocation::Path },
-        FieldSpec { snake: "to", location: FieldLocation::Path },
+        FieldSpec { snake: "from", wire: "from", location: FieldLocation::Path },
+        FieldSpec { snake: "to", wire: "to", location: FieldLocation::Path },
     ],
     auth: &[
     ],
 };
+
+fn iface_currencies__get_v1_historic_forex_from_to_date_response__to_json(p: &iface_currencies::GetV1HistoricForexFromToDateResponse) -> Value {
+    let mut m = Map::new();
+    m.insert("day".into(), match (&p.day) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("msLatency".into(), match (&p.ms_latency) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("status".into(), match (&p.status) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("symbol".into(), match (&p.symbol) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("ticks".into(), match (&p.ticks) { Some(v) => Value::Array((v).iter().map(|v| iface_currencies__forex__to_json(v)).collect()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_currencies__forex__to_json(p: &iface_currencies::Forex) -> Value {
+    let mut m = Map::new();
+    m.insert("a".into(), match (&p.a) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("b".into(), match (&p.b) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("t".into(), match (&p.t) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_currencies__get_v1_last_currencies_from_to_response__to_json(p: &iface_currencies::GetV1LastCurrenciesFromToResponse) -> Value {
+    let mut m = Map::new();
+    m.insert("last".into(), match (&p.last) { Some(v) => iface_currencies__last_forex_trade__to_json(v), None => Value::Null });
+    m.insert("status".into(), match (&p.status) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("symbol".into(), match (&p.symbol) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_currencies__last_forex_trade__to_json(p: &iface_currencies::LastForexTrade) -> Value {
+    let mut m = Map::new();
+    m.insert("exchange".into(), match (&p.exchange) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("price".into(), match (&p.price) { Some(v) => serde_json::Number::from_f64(*(v)).map(Value::Number).unwrap_or(Value::Null), None => Value::Null });
+    m.insert("timestamp".into(), match (&p.timestamp) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_currencies__get_v1_last_quote_currencies_from_to_response__to_json(p: &iface_currencies::GetV1LastQuoteCurrenciesFromToResponse) -> Value {
+    let mut m = Map::new();
+    m.insert("last".into(), match (&p.last) { Some(v) => iface_currencies__last_forex_quote__to_json(v), None => Value::Null });
+    m.insert("status".into(), match (&p.status) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("symbol".into(), match (&p.symbol) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_currencies__last_forex_quote__to_json(p: &iface_currencies::LastForexQuote) -> Value {
+    let mut m = Map::new();
+    m.insert("askprice".into(), match (&p.askprice) { Some(v) => serde_json::Number::from_f64(*(v)).map(Value::Number).unwrap_or(Value::Null), None => Value::Null });
+    m.insert("bidprice".into(), match (&p.bidprice) { Some(v) => serde_json::Number::from_f64(*(v)).map(Value::Number).unwrap_or(Value::Null), None => Value::Null });
+    m.insert("timestamp".into(), match (&p.timestamp) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    Value::Object(m)
+}
 
 fn iface_currencies__get_v1_historic_forex_from_to_date_params__to_json(p: &iface_currencies::GetV1HistoricForexFromToDateParams) -> Value {
     let mut m = Map::new();
@@ -501,21 +953,161 @@ fn iface_currencies__get_v1_last_quote_currencies_from_to_params__to_json(p: &if
     Value::Object(m)
 }
 
+fn iface_currencies__get_v1_historic_forex_from_to_date_response__from_json(v: &Value) -> Option<iface_currencies::GetV1HistoricForexFromToDateResponse> {
+    let m = v.as_object()?;
+    Some(iface_currencies::GetV1HistoricForexFromToDateResponse {
+        day: m.get("day").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        ms_latency: m.get("msLatency").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        status: m.get("status").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        symbol: m.get("symbol").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        ticks: m.get("ticks").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| iface_currencies__forex__from_json(x)).collect())),
+    })
+}
+
+fn iface_currencies__forex__from_json(v: &Value) -> Option<iface_currencies::Forex> {
+    let m = v.as_object()?;
+    Some(iface_currencies::Forex {
+        a: m.get("a").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        b: m.get("b").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        t: m.get("t").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+    })
+}
+
+fn iface_currencies__get_v1_last_currencies_from_to_response__from_json(v: &Value) -> Option<iface_currencies::GetV1LastCurrenciesFromToResponse> {
+    let m = v.as_object()?;
+    Some(iface_currencies::GetV1LastCurrenciesFromToResponse {
+        last: m.get("last").filter(|v| !v.is_null()).and_then(|v| iface_currencies__last_forex_trade__from_json(v)),
+        status: m.get("status").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        symbol: m.get("symbol").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    })
+}
+
+fn iface_currencies__last_forex_trade__from_json(v: &Value) -> Option<iface_currencies::LastForexTrade> {
+    let m = v.as_object()?;
+    Some(iface_currencies::LastForexTrade {
+        exchange: m.get("exchange").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        price: m.get("price").filter(|v| !v.is_null()).and_then(|v| (v).as_f64()),
+        timestamp: m.get("timestamp").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+    })
+}
+
+fn iface_currencies__get_v1_last_quote_currencies_from_to_response__from_json(v: &Value) -> Option<iface_currencies::GetV1LastQuoteCurrenciesFromToResponse> {
+    let m = v.as_object()?;
+    Some(iface_currencies::GetV1LastQuoteCurrenciesFromToResponse {
+        last: m.get("last").filter(|v| !v.is_null()).and_then(|v| iface_currencies__last_forex_quote__from_json(v)),
+        status: m.get("status").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        symbol: m.get("symbol").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    })
+}
+
+fn iface_currencies__last_forex_quote__from_json(v: &Value) -> Option<iface_currencies::LastForexQuote> {
+    let m = v.as_object()?;
+    Some(iface_currencies::LastForexQuote {
+        askprice: m.get("askprice").filter(|v| !v.is_null()).and_then(|v| (v).as_f64()),
+        bidprice: m.get("bidprice").filter(|v| !v.is_null()).and_then(|v| (v).as_f64()),
+        timestamp: m.get("timestamp").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+    })
+}
+
+fn iface_currencies__get_v1_currencies__ok(body: String) -> Result<Vec<String>, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match (&v).as_array().map(|a| a.iter().filter_map(|x| (x).as_str().map(|s| s.to_string())).collect()) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_currencies__get_v1_currencies__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
+fn iface_currencies__get_v1_historic_forex_from_to_date__ok(body: String) -> Result<iface_currencies::GetV1HistoricForexFromToDateResponse, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match iface_currencies__get_v1_historic_forex_from_to_date_response__from_json(&v) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_currencies__get_v1_historic_forex_from_to_date__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
+fn iface_currencies__get_v1_last_currencies_from_to__ok(body: String) -> Result<iface_currencies::GetV1LastCurrenciesFromToResponse, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match iface_currencies__get_v1_last_currencies_from_to_response__from_json(&v) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_currencies__get_v1_last_currencies_from_to__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
+fn iface_currencies__get_v1_last_quote_currencies_from_to__ok(body: String) -> Result<iface_currencies::GetV1LastQuoteCurrenciesFromToResponse, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match iface_currencies__get_v1_last_quote_currencies_from_to_response__from_json(&v) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_currencies__get_v1_last_quote_currencies_from_to__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
 impl iface_currencies::Guest for crate::Component {
-    fn get_v1_currencies() -> Result<String, String> {
-        dispatch(&OP_CURRENCIES_GET_V1_CURRENCIES, Value::Object(Map::new()))
+    fn get_v1_currencies() -> Result<Vec<String>, String> {
+        match dispatch(&OP_CURRENCIES_GET_V1_CURRENCIES, Value::Object(Map::new())).and_then(iface_currencies__get_v1_currencies__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_currencies__get_v1_currencies__err(e)),
+        }
     }
-    fn get_v1_historic_forex_from_to_date(params: iface_currencies::GetV1HistoricForexFromToDateParams) -> Result<String, String> {
+    fn get_v1_historic_forex_from_to_date(params: iface_currencies::GetV1HistoricForexFromToDateParams) -> Result<iface_currencies::GetV1HistoricForexFromToDateResponse, String> {
         let json = iface_currencies__get_v1_historic_forex_from_to_date_params__to_json(&params);
-        dispatch(&OP_CURRENCIES_GET_V1_HISTORIC_FOREX_FROM_TO_DATE, json)
+        match dispatch(&OP_CURRENCIES_GET_V1_HISTORIC_FOREX_FROM_TO_DATE, json).and_then(iface_currencies__get_v1_historic_forex_from_to_date__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_currencies__get_v1_historic_forex_from_to_date__err(e)),
+        }
     }
-    fn get_v1_last_currencies_from_to(params: iface_currencies::GetV1LastCurrenciesFromToParams) -> Result<String, String> {
+    fn get_v1_last_currencies_from_to(params: iface_currencies::GetV1LastCurrenciesFromToParams) -> Result<iface_currencies::GetV1LastCurrenciesFromToResponse, String> {
         let json = iface_currencies__get_v1_last_currencies_from_to_params__to_json(&params);
-        dispatch(&OP_CURRENCIES_GET_V1_LAST_CURRENCIES_FROM_TO, json)
+        match dispatch(&OP_CURRENCIES_GET_V1_LAST_CURRENCIES_FROM_TO, json).and_then(iface_currencies__get_v1_last_currencies_from_to__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_currencies__get_v1_last_currencies_from_to__err(e)),
+        }
     }
-    fn get_v1_last_quote_currencies_from_to(params: iface_currencies::GetV1LastQuoteCurrenciesFromToParams) -> Result<String, String> {
+    fn get_v1_last_quote_currencies_from_to(params: iface_currencies::GetV1LastQuoteCurrenciesFromToParams) -> Result<iface_currencies::GetV1LastQuoteCurrenciesFromToResponse, String> {
         let json = iface_currencies__get_v1_last_quote_currencies_from_to_params__to_json(&params);
-        dispatch(&OP_CURRENCIES_GET_V1_LAST_QUOTE_CURRENCIES_FROM_TO, json)
+        match dispatch(&OP_CURRENCIES_GET_V1_LAST_QUOTE_CURRENCIES_FROM_TO, json).and_then(iface_currencies__get_v1_last_quote_currencies_from_to__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_currencies__get_v1_last_quote_currencies_from_to__err(e)),
+        }
     }
 }
 

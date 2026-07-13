@@ -44,10 +44,15 @@ pub(crate) enum FieldLocation {
     Body,
 }
 
-/// A single operation parameter: the snake-case key it carries in the params JSON and where
-/// it belongs in the request.
+/// A single operation parameter. `snake` keys the field in the internal params JSON (and, for a
+/// path field, matches the `{snake}` placeholder in the path template); `wire` is the verbatim name
+/// the field takes on the HTTP wire (query key, header name, or body property). The two differ
+/// whenever the source name isn't already snake_case (e.g. `dryRun` → snake `dry_run`, wire
+/// `dryRun`), and let distinct inputs that share a snake key (`DateCreated`, `DateCreated<`) still
+/// travel under their true names.
 pub(crate) struct FieldSpec {
     pub(crate) snake: &'static str,
+    pub(crate) wire: &'static str,
     pub(crate) location: FieldLocation,
 }
 
@@ -71,6 +76,16 @@ pub(crate) struct AuthApply {
     pub(crate) kind: AuthKind,
 }
 
+/// The failure modes of [`dispatch`], kept structured so each generated operation can map them
+/// onto its own typed error: an `Http` failure carries the response status and body (routed to
+/// the matching error-variant case), while a `Transport` failure carries a message for the
+/// catch-all case (a secret lookup, connection, or decode failure that never produced an HTTP
+/// status).
+pub(crate) enum DispatchError {
+    Http { status: u16, body: String },
+    Transport(String),
+}
+
 /// A single API operation: HTTP method, path template (with `{snake}` placeholders), the
 /// parameter fields, and the security schemes to apply.
 pub(crate) struct OpSpec {
@@ -81,8 +96,9 @@ pub(crate) struct OpSpec {
 }
 
 /// Execute `op` with the supplied `params` (a JSON object keyed by snake-case field names)
-/// and return the response body as a string, or an error message.
-pub(crate) fn dispatch(op: &OpSpec, params: Value) -> Result<String, String> {
+/// and return the raw 2xx response body, or a structured [`DispatchError`] the caller maps
+/// onto the operation's typed error.
+pub(crate) fn dispatch(op: &OpSpec, params: Value) -> Result<String, DispatchError> {
     let obj = match &params {
         Value::Object(map) => Some(map),
         _ => None,
@@ -105,10 +121,10 @@ pub(crate) fn dispatch(op: &OpSpec, params: Value) -> Result<String, String> {
                 let placeholder = format!("{{{}}}", field.snake);
                 path = path.replace(&placeholder, &percent_encode(&scalar(value)));
             }
-            FieldLocation::Query => query.push((field.snake.to_string(), scalar(value))),
-            FieldLocation::Header => headers.push((field.snake.to_string(), scalar(value))),
+            FieldLocation::Query => query.push((field.wire.to_string(), scalar(value))),
+            FieldLocation::Header => headers.push((field.wire.to_string(), scalar(value))),
             FieldLocation::Body => {
-                body.insert(field.snake.to_string(), value.clone());
+                body.insert(field.wire.to_string(), value.clone());
             }
         }
     }
@@ -116,7 +132,7 @@ pub(crate) fn dispatch(op: &OpSpec, params: Value) -> Result<String, String> {
     // Apply each resolved security scheme, sourcing its value from wasmcloud:secrets.
     let mut cookies: Vec<String> = Vec::new();
     for apply in op.auth {
-        let secret = fetch_secret(apply.secret_key)?;
+        let secret = fetch_secret(apply.secret_key).map_err(DispatchError::Transport)?;
         match &apply.kind {
             AuthKind::Bearer => headers.push(("authorization".into(), format!("Bearer {secret}"))),
             AuthKind::Basic => {
@@ -177,17 +193,18 @@ fn fetch_secret(key: &str) -> Result<String, String> {
 }
 
 /// Build and send the outgoing request with `wstd`, returning the response body on a 2xx
-/// status. The generated guest exports are synchronous, so the async `wstd` client is driven
-/// to completion on a local reactor via `wstd::runtime::block_on`.
+/// status and a structured [`DispatchError`] otherwise. The generated guest exports are
+/// synchronous, so the async `wstd` client is driven to completion on a local reactor via
+/// `wstd::runtime::block_on`.
 fn perform(
     method: &str,
     path_with_query: &str,
     headers: &[(String, String)],
     body: &[u8],
-) -> Result<String, String> {
+) -> Result<String, DispatchError> {
     let url = join_url(crate::BASE_URL, path_with_query);
     let method = Method::from_bytes(method.as_bytes())
-        .map_err(|err| format!("invalid HTTP method `{method}`: {err}"))?;
+        .map_err(|err| DispatchError::Transport(format!("invalid HTTP method `{method}`: {err}")))?;
 
     let mut builder = Request::builder().method(method).uri(url);
     for (name, value) in headers {
@@ -199,27 +216,29 @@ fn perform(
         } else {
             Body::from(body.to_vec())
         })
-        .map_err(|err| format!("failed to build request: {err}"))?;
+        .map_err(|err| DispatchError::Transport(format!("failed to build request: {err}")))?;
 
     wstd::runtime::block_on(async move {
         let client = Client::new();
         let response = client
             .send(request)
             .await
-            .map_err(|err| format!("request failed: {err:#}"))?;
+            .map_err(|err| DispatchError::Transport(format!("request failed: {err:#}")))?;
 
         let status = response.status().as_u16();
         let mut response_body = response.into_body();
-        let bytes = response_body
-            .contents()
-            .await
-            .map_err(|err| format!("failed to read response body: {err:#}"))?;
+        let bytes = response_body.contents().await.map_err(|err| {
+            DispatchError::Transport(format!("failed to read response body: {err:#}"))
+        })?;
         let body_text = String::from_utf8_lossy(bytes).into_owned();
 
         if (200..300).contains(&status) {
             Ok(body_text)
         } else {
-            Err(format!("HTTP {status}: {body_text}"))
+            Err(DispatchError::Http {
+                status,
+                body: body_text,
+            })
         }
     })
 }
@@ -288,7 +307,10 @@ const OP_ADMIN_APPS_APPROVE: OpSpec = OpSpec {
     method: "POST",
     path_template: "/admin.apps.approve",
     fields: &[
-        FieldSpec { snake: "token", location: FieldLocation::Header },
+        FieldSpec { snake: "token", wire: "token", location: FieldLocation::Header },
+        FieldSpec { snake: "app_id", wire: "app_id", location: FieldLocation::Body },
+        FieldSpec { snake: "request_id", wire: "request_id", location: FieldLocation::Body },
+        FieldSpec { snake: "team_id", wire: "team_id", location: FieldLocation::Body },
     ],
     auth: &[
         AuthApply { secret_key: "slackAuth", kind: AuthKind::Bearer },
@@ -299,33 +321,123 @@ const OP_ADMIN_APPS_RESTRICT: OpSpec = OpSpec {
     method: "POST",
     path_template: "/admin.apps.restrict",
     fields: &[
-        FieldSpec { snake: "token", location: FieldLocation::Header },
+        FieldSpec { snake: "token", wire: "token", location: FieldLocation::Header },
+        FieldSpec { snake: "app_id", wire: "app_id", location: FieldLocation::Body },
+        FieldSpec { snake: "request_id", wire: "request_id", location: FieldLocation::Body },
+        FieldSpec { snake: "team_id", wire: "team_id", location: FieldLocation::Body },
     ],
     auth: &[
         AuthApply { secret_key: "slackAuth", kind: AuthKind::Bearer },
     ],
 };
 
+fn iface_admin_apps__approve_response__to_json(p: &iface_admin_apps::ApproveResponse) -> Value {
+    let mut m = Map::new();
+    m.insert("ok".into(), iface_admin_apps__defs_ok_true__to_json(&p.ok));
+    Value::Object(m)
+}
+
+fn iface_admin_apps__defs_ok_true__to_json(p: &iface_admin_apps::DefsOkTrue) -> Value {
+    let mut m = Map::new();
+    m.insert("value".into(), Value::String((&p.value).clone()));
+    Value::Object(m)
+}
+
+fn iface_admin_apps__restrict_response__to_json(p: &iface_admin_apps::RestrictResponse) -> Value {
+    let mut m = Map::new();
+    m.insert("ok".into(), iface_admin_apps__defs_ok_true__to_json(&p.ok));
+    Value::Object(m)
+}
+
 fn iface_admin_apps__approve_params__to_json(p: &iface_admin_apps::ApproveParams) -> Value {
     let mut m = Map::new();
     m.insert("token".into(), Value::String((&p.token).clone()));
+    m.insert("app_id".into(), match (&p.app_id) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("request_id".into(), match (&p.request_id) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("team_id".into(), match (&p.team_id) { Some(v) => Value::String((v).clone()), None => Value::Null });
     Value::Object(m)
 }
 
 fn iface_admin_apps__restrict_params__to_json(p: &iface_admin_apps::RestrictParams) -> Value {
     let mut m = Map::new();
     m.insert("token".into(), Value::String((&p.token).clone()));
+    m.insert("app_id".into(), match (&p.app_id) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("request_id".into(), match (&p.request_id) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("team_id".into(), match (&p.team_id) { Some(v) => Value::String((v).clone()), None => Value::Null });
     Value::Object(m)
 }
 
-impl iface_admin_apps::Guest for crate::Component {
-    fn approve(params: iface_admin_apps::ApproveParams) -> Result<String, String> {
-        let json = iface_admin_apps__approve_params__to_json(&params);
-        dispatch(&OP_ADMIN_APPS_APPROVE, json)
+fn iface_admin_apps__approve_response__from_json(v: &Value) -> Option<iface_admin_apps::ApproveResponse> {
+    let m = v.as_object()?;
+    Some(iface_admin_apps::ApproveResponse {
+        ok: match m.get("ok").and_then(|v| iface_admin_apps__defs_ok_true__from_json(v)) { Some(x) => x, None => return None },
+    })
+}
+
+fn iface_admin_apps__defs_ok_true__from_json(v: &Value) -> Option<iface_admin_apps::DefsOkTrue> {
+    let m = v.as_object()?;
+    Some(iface_admin_apps::DefsOkTrue {
+        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+    })
+}
+
+fn iface_admin_apps__restrict_response__from_json(v: &Value) -> Option<iface_admin_apps::RestrictResponse> {
+    let m = v.as_object()?;
+    Some(iface_admin_apps::RestrictResponse {
+        ok: match m.get("ok").and_then(|v| iface_admin_apps__defs_ok_true__from_json(v)) { Some(x) => x, None => return None },
+    })
+}
+
+fn iface_admin_apps__approve__ok(body: String) -> Result<iface_admin_apps::ApproveResponse, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match iface_admin_apps__approve_response__from_json(&v) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
     }
-    fn restrict(params: iface_admin_apps::RestrictParams) -> Result<String, String> {
+}
+
+fn iface_admin_apps__approve__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
+fn iface_admin_apps__restrict__ok(body: String) -> Result<iface_admin_apps::RestrictResponse, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match iface_admin_apps__restrict_response__from_json(&v) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_admin_apps__restrict__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
+impl iface_admin_apps::Guest for crate::Component {
+    fn approve(params: iface_admin_apps::ApproveParams) -> Result<iface_admin_apps::ApproveResponse, String> {
+        let json = iface_admin_apps__approve_params__to_json(&params);
+        match dispatch(&OP_ADMIN_APPS_APPROVE, json).and_then(iface_admin_apps__approve__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_admin_apps__approve__err(e)),
+        }
+    }
+    fn restrict(params: iface_admin_apps::RestrictParams) -> Result<iface_admin_apps::RestrictResponse, String> {
         let json = iface_admin_apps__restrict_params__to_json(&params);
-        dispatch(&OP_ADMIN_APPS_RESTRICT, json)
+        match dispatch(&OP_ADMIN_APPS_RESTRICT, json).and_then(iface_admin_apps__restrict__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_admin_apps__restrict__err(e)),
+        }
     }
 }
 use crate::exports::autostamp::slack::admin_apps_approved as iface_admin_apps_approved;
@@ -334,16 +446,28 @@ const OP_ADMIN_APPS_APPROVED_LIST_OP: OpSpec = OpSpec {
     method: "GET",
     path_template: "/admin.apps.approved.list",
     fields: &[
-        FieldSpec { snake: "token", location: FieldLocation::Query },
-        FieldSpec { snake: "limit", location: FieldLocation::Query },
-        FieldSpec { snake: "cursor", location: FieldLocation::Query },
-        FieldSpec { snake: "team_id", location: FieldLocation::Query },
-        FieldSpec { snake: "enterprise_id", location: FieldLocation::Query },
+        FieldSpec { snake: "token", wire: "token", location: FieldLocation::Query },
+        FieldSpec { snake: "limit", wire: "limit", location: FieldLocation::Query },
+        FieldSpec { snake: "cursor", wire: "cursor", location: FieldLocation::Query },
+        FieldSpec { snake: "team_id", wire: "team_id", location: FieldLocation::Query },
+        FieldSpec { snake: "enterprise_id", wire: "enterprise_id", location: FieldLocation::Query },
     ],
     auth: &[
         AuthApply { secret_key: "slackAuth", kind: AuthKind::Bearer },
     ],
 };
+
+fn iface_admin_apps_approved__list_op_response__to_json(p: &iface_admin_apps_approved::ListOpResponse) -> Value {
+    let mut m = Map::new();
+    m.insert("ok".into(), iface_admin_apps_approved__defs_ok_true__to_json(&p.ok));
+    Value::Object(m)
+}
+
+fn iface_admin_apps_approved__defs_ok_true__to_json(p: &iface_admin_apps_approved::DefsOkTrue) -> Value {
+    let mut m = Map::new();
+    m.insert("value".into(), Value::String((&p.value).clone()));
+    Value::Object(m)
+}
 
 fn iface_admin_apps_approved__list_op_params__to_json(p: &iface_admin_apps_approved::ListOpParams) -> Value {
     let mut m = Map::new();
@@ -355,10 +479,45 @@ fn iface_admin_apps_approved__list_op_params__to_json(p: &iface_admin_apps_appro
     Value::Object(m)
 }
 
+fn iface_admin_apps_approved__list_op_response__from_json(v: &Value) -> Option<iface_admin_apps_approved::ListOpResponse> {
+    let m = v.as_object()?;
+    Some(iface_admin_apps_approved::ListOpResponse {
+        ok: match m.get("ok").and_then(|v| iface_admin_apps_approved__defs_ok_true__from_json(v)) { Some(x) => x, None => return None },
+    })
+}
+
+fn iface_admin_apps_approved__defs_ok_true__from_json(v: &Value) -> Option<iface_admin_apps_approved::DefsOkTrue> {
+    let m = v.as_object()?;
+    Some(iface_admin_apps_approved::DefsOkTrue {
+        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+    })
+}
+
+fn iface_admin_apps_approved__list_op__ok(body: String) -> Result<iface_admin_apps_approved::ListOpResponse, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match iface_admin_apps_approved__list_op_response__from_json(&v) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_admin_apps_approved__list_op__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
 impl iface_admin_apps_approved::Guest for crate::Component {
-    fn list_op(params: iface_admin_apps_approved::ListOpParams) -> Result<String, String> {
+    fn list_op(params: iface_admin_apps_approved::ListOpParams) -> Result<iface_admin_apps_approved::ListOpResponse, String> {
         let json = iface_admin_apps_approved__list_op_params__to_json(&params);
-        dispatch(&OP_ADMIN_APPS_APPROVED_LIST_OP, json)
+        match dispatch(&OP_ADMIN_APPS_APPROVED_LIST_OP, json).and_then(iface_admin_apps_approved__list_op__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_admin_apps_approved__list_op__err(e)),
+        }
     }
 }
 use crate::exports::autostamp::slack::admin_apps_requests as iface_admin_apps_requests;
@@ -367,15 +526,27 @@ const OP_ADMIN_APPS_REQUESTS_LIST_OP: OpSpec = OpSpec {
     method: "GET",
     path_template: "/admin.apps.requests.list",
     fields: &[
-        FieldSpec { snake: "token", location: FieldLocation::Query },
-        FieldSpec { snake: "limit", location: FieldLocation::Query },
-        FieldSpec { snake: "cursor", location: FieldLocation::Query },
-        FieldSpec { snake: "team_id", location: FieldLocation::Query },
+        FieldSpec { snake: "token", wire: "token", location: FieldLocation::Query },
+        FieldSpec { snake: "limit", wire: "limit", location: FieldLocation::Query },
+        FieldSpec { snake: "cursor", wire: "cursor", location: FieldLocation::Query },
+        FieldSpec { snake: "team_id", wire: "team_id", location: FieldLocation::Query },
     ],
     auth: &[
         AuthApply { secret_key: "slackAuth", kind: AuthKind::Bearer },
     ],
 };
+
+fn iface_admin_apps_requests__list_op_response__to_json(p: &iface_admin_apps_requests::ListOpResponse) -> Value {
+    let mut m = Map::new();
+    m.insert("ok".into(), iface_admin_apps_requests__defs_ok_true__to_json(&p.ok));
+    Value::Object(m)
+}
+
+fn iface_admin_apps_requests__defs_ok_true__to_json(p: &iface_admin_apps_requests::DefsOkTrue) -> Value {
+    let mut m = Map::new();
+    m.insert("value".into(), Value::String((&p.value).clone()));
+    Value::Object(m)
+}
 
 fn iface_admin_apps_requests__list_op_params__to_json(p: &iface_admin_apps_requests::ListOpParams) -> Value {
     let mut m = Map::new();
@@ -386,10 +557,45 @@ fn iface_admin_apps_requests__list_op_params__to_json(p: &iface_admin_apps_reque
     Value::Object(m)
 }
 
+fn iface_admin_apps_requests__list_op_response__from_json(v: &Value) -> Option<iface_admin_apps_requests::ListOpResponse> {
+    let m = v.as_object()?;
+    Some(iface_admin_apps_requests::ListOpResponse {
+        ok: match m.get("ok").and_then(|v| iface_admin_apps_requests__defs_ok_true__from_json(v)) { Some(x) => x, None => return None },
+    })
+}
+
+fn iface_admin_apps_requests__defs_ok_true__from_json(v: &Value) -> Option<iface_admin_apps_requests::DefsOkTrue> {
+    let m = v.as_object()?;
+    Some(iface_admin_apps_requests::DefsOkTrue {
+        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+    })
+}
+
+fn iface_admin_apps_requests__list_op__ok(body: String) -> Result<iface_admin_apps_requests::ListOpResponse, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match iface_admin_apps_requests__list_op_response__from_json(&v) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_admin_apps_requests__list_op__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
 impl iface_admin_apps_requests::Guest for crate::Component {
-    fn list_op(params: iface_admin_apps_requests::ListOpParams) -> Result<String, String> {
+    fn list_op(params: iface_admin_apps_requests::ListOpParams) -> Result<iface_admin_apps_requests::ListOpResponse, String> {
         let json = iface_admin_apps_requests__list_op_params__to_json(&params);
-        dispatch(&OP_ADMIN_APPS_REQUESTS_LIST_OP, json)
+        match dispatch(&OP_ADMIN_APPS_REQUESTS_LIST_OP, json).and_then(iface_admin_apps_requests__list_op__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_admin_apps_requests__list_op__err(e)),
+        }
     }
 }
 use crate::exports::autostamp::slack::admin_apps_restricted as iface_admin_apps_restricted;
@@ -398,16 +604,28 @@ const OP_ADMIN_APPS_RESTRICTED_LIST_OP: OpSpec = OpSpec {
     method: "GET",
     path_template: "/admin.apps.restricted.list",
     fields: &[
-        FieldSpec { snake: "token", location: FieldLocation::Query },
-        FieldSpec { snake: "limit", location: FieldLocation::Query },
-        FieldSpec { snake: "cursor", location: FieldLocation::Query },
-        FieldSpec { snake: "team_id", location: FieldLocation::Query },
-        FieldSpec { snake: "enterprise_id", location: FieldLocation::Query },
+        FieldSpec { snake: "token", wire: "token", location: FieldLocation::Query },
+        FieldSpec { snake: "limit", wire: "limit", location: FieldLocation::Query },
+        FieldSpec { snake: "cursor", wire: "cursor", location: FieldLocation::Query },
+        FieldSpec { snake: "team_id", wire: "team_id", location: FieldLocation::Query },
+        FieldSpec { snake: "enterprise_id", wire: "enterprise_id", location: FieldLocation::Query },
     ],
     auth: &[
         AuthApply { secret_key: "slackAuth", kind: AuthKind::Bearer },
     ],
 };
+
+fn iface_admin_apps_restricted__list_op_response__to_json(p: &iface_admin_apps_restricted::ListOpResponse) -> Value {
+    let mut m = Map::new();
+    m.insert("ok".into(), iface_admin_apps_restricted__defs_ok_true__to_json(&p.ok));
+    Value::Object(m)
+}
+
+fn iface_admin_apps_restricted__defs_ok_true__to_json(p: &iface_admin_apps_restricted::DefsOkTrue) -> Value {
+    let mut m = Map::new();
+    m.insert("value".into(), Value::String((&p.value).clone()));
+    Value::Object(m)
+}
 
 fn iface_admin_apps_restricted__list_op_params__to_json(p: &iface_admin_apps_restricted::ListOpParams) -> Value {
     let mut m = Map::new();
@@ -419,10 +637,45 @@ fn iface_admin_apps_restricted__list_op_params__to_json(p: &iface_admin_apps_res
     Value::Object(m)
 }
 
+fn iface_admin_apps_restricted__list_op_response__from_json(v: &Value) -> Option<iface_admin_apps_restricted::ListOpResponse> {
+    let m = v.as_object()?;
+    Some(iface_admin_apps_restricted::ListOpResponse {
+        ok: match m.get("ok").and_then(|v| iface_admin_apps_restricted__defs_ok_true__from_json(v)) { Some(x) => x, None => return None },
+    })
+}
+
+fn iface_admin_apps_restricted__defs_ok_true__from_json(v: &Value) -> Option<iface_admin_apps_restricted::DefsOkTrue> {
+    let m = v.as_object()?;
+    Some(iface_admin_apps_restricted::DefsOkTrue {
+        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+    })
+}
+
+fn iface_admin_apps_restricted__list_op__ok(body: String) -> Result<iface_admin_apps_restricted::ListOpResponse, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match iface_admin_apps_restricted__list_op_response__from_json(&v) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_admin_apps_restricted__list_op__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
 impl iface_admin_apps_restricted::Guest for crate::Component {
-    fn list_op(params: iface_admin_apps_restricted::ListOpParams) -> Result<String, String> {
+    fn list_op(params: iface_admin_apps_restricted::ListOpParams) -> Result<iface_admin_apps_restricted::ListOpResponse, String> {
         let json = iface_admin_apps_restricted__list_op_params__to_json(&params);
-        dispatch(&OP_ADMIN_APPS_RESTRICTED_LIST_OP, json)
+        match dispatch(&OP_ADMIN_APPS_RESTRICTED_LIST_OP, json).and_then(iface_admin_apps_restricted__list_op__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_admin_apps_restricted__list_op__err(e)),
+        }
     }
 }
 use crate::exports::autostamp::slack::admin_conversations as iface_admin_conversations;
@@ -431,7 +684,8 @@ const OP_ADMIN_CONVERSATIONS_ARCHIVE: OpSpec = OpSpec {
     method: "POST",
     path_template: "/admin.conversations.archive",
     fields: &[
-        FieldSpec { snake: "token", location: FieldLocation::Header },
+        FieldSpec { snake: "token", wire: "token", location: FieldLocation::Header },
+        FieldSpec { snake: "channel_id", wire: "channel_id", location: FieldLocation::Body },
     ],
     auth: &[
         AuthApply { secret_key: "slackAuth", kind: AuthKind::Bearer },
@@ -442,7 +696,8 @@ const OP_ADMIN_CONVERSATIONS_CONVERT_TO_PRIVATE: OpSpec = OpSpec {
     method: "POST",
     path_template: "/admin.conversations.convertToPrivate",
     fields: &[
-        FieldSpec { snake: "token", location: FieldLocation::Header },
+        FieldSpec { snake: "token", wire: "token", location: FieldLocation::Header },
+        FieldSpec { snake: "channel_id", wire: "channel_id", location: FieldLocation::Body },
     ],
     auth: &[
         AuthApply { secret_key: "slackAuth", kind: AuthKind::Bearer },
@@ -453,7 +708,12 @@ const OP_ADMIN_CONVERSATIONS_CREATE: OpSpec = OpSpec {
     method: "POST",
     path_template: "/admin.conversations.create",
     fields: &[
-        FieldSpec { snake: "token", location: FieldLocation::Header },
+        FieldSpec { snake: "token", wire: "token", location: FieldLocation::Header },
+        FieldSpec { snake: "description", wire: "description", location: FieldLocation::Body },
+        FieldSpec { snake: "is_private", wire: "is_private", location: FieldLocation::Body },
+        FieldSpec { snake: "name", wire: "name", location: FieldLocation::Body },
+        FieldSpec { snake: "org_wide", wire: "org_wide", location: FieldLocation::Body },
+        FieldSpec { snake: "team_id", wire: "team_id", location: FieldLocation::Body },
     ],
     auth: &[
         AuthApply { secret_key: "slackAuth", kind: AuthKind::Bearer },
@@ -464,7 +724,8 @@ const OP_ADMIN_CONVERSATIONS_DELETE: OpSpec = OpSpec {
     method: "POST",
     path_template: "/admin.conversations.delete",
     fields: &[
-        FieldSpec { snake: "token", location: FieldLocation::Header },
+        FieldSpec { snake: "token", wire: "token", location: FieldLocation::Header },
+        FieldSpec { snake: "channel_id", wire: "channel_id", location: FieldLocation::Body },
     ],
     auth: &[
         AuthApply { secret_key: "slackAuth", kind: AuthKind::Bearer },
@@ -475,7 +736,9 @@ const OP_ADMIN_CONVERSATIONS_DISCONNECT_SHARED: OpSpec = OpSpec {
     method: "POST",
     path_template: "/admin.conversations.disconnectShared",
     fields: &[
-        FieldSpec { snake: "token", location: FieldLocation::Header },
+        FieldSpec { snake: "token", wire: "token", location: FieldLocation::Header },
+        FieldSpec { snake: "channel_id", wire: "channel_id", location: FieldLocation::Body },
+        FieldSpec { snake: "leaving_team_ids", wire: "leaving_team_ids", location: FieldLocation::Body },
     ],
     auth: &[
         AuthApply { secret_key: "slackAuth", kind: AuthKind::Bearer },
@@ -486,8 +749,8 @@ const OP_ADMIN_CONVERSATIONS_GET_CONVERSATION_PREFS: OpSpec = OpSpec {
     method: "GET",
     path_template: "/admin.conversations.getConversationPrefs",
     fields: &[
-        FieldSpec { snake: "token", location: FieldLocation::Header },
-        FieldSpec { snake: "channel_id", location: FieldLocation::Query },
+        FieldSpec { snake: "token", wire: "token", location: FieldLocation::Header },
+        FieldSpec { snake: "channel_id", wire: "channel_id", location: FieldLocation::Query },
     ],
     auth: &[
         AuthApply { secret_key: "slackAuth", kind: AuthKind::Bearer },
@@ -498,10 +761,10 @@ const OP_ADMIN_CONVERSATIONS_GET_TEAMS: OpSpec = OpSpec {
     method: "GET",
     path_template: "/admin.conversations.getTeams",
     fields: &[
-        FieldSpec { snake: "token", location: FieldLocation::Header },
-        FieldSpec { snake: "channel_id", location: FieldLocation::Query },
-        FieldSpec { snake: "cursor", location: FieldLocation::Query },
-        FieldSpec { snake: "limit", location: FieldLocation::Query },
+        FieldSpec { snake: "token", wire: "token", location: FieldLocation::Header },
+        FieldSpec { snake: "channel_id", wire: "channel_id", location: FieldLocation::Query },
+        FieldSpec { snake: "cursor", wire: "cursor", location: FieldLocation::Query },
+        FieldSpec { snake: "limit", wire: "limit", location: FieldLocation::Query },
     ],
     auth: &[
         AuthApply { secret_key: "slackAuth", kind: AuthKind::Bearer },
@@ -512,7 +775,9 @@ const OP_ADMIN_CONVERSATIONS_INVITE: OpSpec = OpSpec {
     method: "POST",
     path_template: "/admin.conversations.invite",
     fields: &[
-        FieldSpec { snake: "token", location: FieldLocation::Header },
+        FieldSpec { snake: "token", wire: "token", location: FieldLocation::Header },
+        FieldSpec { snake: "channel_id", wire: "channel_id", location: FieldLocation::Body },
+        FieldSpec { snake: "user_ids", wire: "user_ids", location: FieldLocation::Body },
     ],
     auth: &[
         AuthApply { secret_key: "slackAuth", kind: AuthKind::Bearer },
@@ -523,7 +788,9 @@ const OP_ADMIN_CONVERSATIONS_RENAME: OpSpec = OpSpec {
     method: "POST",
     path_template: "/admin.conversations.rename",
     fields: &[
-        FieldSpec { snake: "token", location: FieldLocation::Header },
+        FieldSpec { snake: "token", wire: "token", location: FieldLocation::Header },
+        FieldSpec { snake: "channel_id", wire: "channel_id", location: FieldLocation::Body },
+        FieldSpec { snake: "name", wire: "name", location: FieldLocation::Body },
     ],
     auth: &[
         AuthApply { secret_key: "slackAuth", kind: AuthKind::Bearer },
@@ -534,14 +801,14 @@ const OP_ADMIN_CONVERSATIONS_SEARCH: OpSpec = OpSpec {
     method: "GET",
     path_template: "/admin.conversations.search",
     fields: &[
-        FieldSpec { snake: "token", location: FieldLocation::Header },
-        FieldSpec { snake: "team_ids", location: FieldLocation::Query },
-        FieldSpec { snake: "query", location: FieldLocation::Query },
-        FieldSpec { snake: "limit", location: FieldLocation::Query },
-        FieldSpec { snake: "cursor", location: FieldLocation::Query },
-        FieldSpec { snake: "search_channel_types", location: FieldLocation::Query },
-        FieldSpec { snake: "sort", location: FieldLocation::Query },
-        FieldSpec { snake: "sort_dir", location: FieldLocation::Query },
+        FieldSpec { snake: "token", wire: "token", location: FieldLocation::Header },
+        FieldSpec { snake: "team_ids", wire: "team_ids", location: FieldLocation::Query },
+        FieldSpec { snake: "query", wire: "query", location: FieldLocation::Query },
+        FieldSpec { snake: "limit", wire: "limit", location: FieldLocation::Query },
+        FieldSpec { snake: "cursor", wire: "cursor", location: FieldLocation::Query },
+        FieldSpec { snake: "search_channel_types", wire: "search_channel_types", location: FieldLocation::Query },
+        FieldSpec { snake: "sort", wire: "sort", location: FieldLocation::Query },
+        FieldSpec { snake: "sort_dir", wire: "sort_dir", location: FieldLocation::Query },
     ],
     auth: &[
         AuthApply { secret_key: "slackAuth", kind: AuthKind::Bearer },
@@ -552,7 +819,9 @@ const OP_ADMIN_CONVERSATIONS_SET_CONVERSATION_PREFS: OpSpec = OpSpec {
     method: "POST",
     path_template: "/admin.conversations.setConversationPrefs",
     fields: &[
-        FieldSpec { snake: "token", location: FieldLocation::Header },
+        FieldSpec { snake: "token", wire: "token", location: FieldLocation::Header },
+        FieldSpec { snake: "channel_id", wire: "channel_id", location: FieldLocation::Body },
+        FieldSpec { snake: "prefs", wire: "prefs", location: FieldLocation::Body },
     ],
     auth: &[
         AuthApply { secret_key: "slackAuth", kind: AuthKind::Bearer },
@@ -563,7 +832,11 @@ const OP_ADMIN_CONVERSATIONS_SET_TEAMS: OpSpec = OpSpec {
     method: "POST",
     path_template: "/admin.conversations.setTeams",
     fields: &[
-        FieldSpec { snake: "token", location: FieldLocation::Header },
+        FieldSpec { snake: "token", wire: "token", location: FieldLocation::Header },
+        FieldSpec { snake: "channel_id", wire: "channel_id", location: FieldLocation::Body },
+        FieldSpec { snake: "org_channel", wire: "org_channel", location: FieldLocation::Body },
+        FieldSpec { snake: "target_team_ids", wire: "target_team_ids", location: FieldLocation::Body },
+        FieldSpec { snake: "team_id", wire: "team_id", location: FieldLocation::Body },
     ],
     auth: &[
         AuthApply { secret_key: "slackAuth", kind: AuthKind::Bearer },
@@ -574,40 +847,256 @@ const OP_ADMIN_CONVERSATIONS_UNARCHIVE: OpSpec = OpSpec {
     method: "POST",
     path_template: "/admin.conversations.unarchive",
     fields: &[
-        FieldSpec { snake: "token", location: FieldLocation::Header },
+        FieldSpec { snake: "token", wire: "token", location: FieldLocation::Header },
+        FieldSpec { snake: "channel_id", wire: "channel_id", location: FieldLocation::Body },
     ],
     auth: &[
         AuthApply { secret_key: "slackAuth", kind: AuthKind::Bearer },
     ],
 };
 
+fn iface_admin_conversations__archive_response__to_json(p: &iface_admin_conversations::ArchiveResponse) -> Value {
+    let mut m = Map::new();
+    m.insert("ok".into(), iface_admin_conversations__defs_ok_true__to_json(&p.ok));
+    Value::Object(m)
+}
+
+fn iface_admin_conversations__defs_ok_true__to_json(p: &iface_admin_conversations::DefsOkTrue) -> Value {
+    let mut m = Map::new();
+    m.insert("value".into(), Value::String((&p.value).clone()));
+    Value::Object(m)
+}
+
+fn iface_admin_conversations__convert_to_private_response__to_json(p: &iface_admin_conversations::ConvertToPrivateResponse) -> Value {
+    let mut m = Map::new();
+    m.insert("ok".into(), iface_admin_conversations__defs_ok_true__to_json(&p.ok));
+    Value::Object(m)
+}
+
+fn iface_admin_conversations__create_response__to_json(p: &iface_admin_conversations::CreateResponse) -> Value {
+    let mut m = Map::new();
+    m.insert("channel_id".into(), match (&p.channel_id) { Some(v) => iface_admin_conversations__defs_channel_id__to_json(v), None => Value::Null });
+    m.insert("ok".into(), iface_admin_conversations__defs_ok_true__to_json(&p.ok));
+    Value::Object(m)
+}
+
+fn iface_admin_conversations__defs_channel_id__to_json(p: &iface_admin_conversations::DefsChannelId) -> Value {
+    let mut m = Map::new();
+    m.insert("value".into(), Value::String((&p.value).clone()));
+    Value::Object(m)
+}
+
+fn iface_admin_conversations__delete_response__to_json(p: &iface_admin_conversations::DeleteResponse) -> Value {
+    let mut m = Map::new();
+    m.insert("ok".into(), iface_admin_conversations__defs_ok_true__to_json(&p.ok));
+    Value::Object(m)
+}
+
+fn iface_admin_conversations__disconnect_shared_response__to_json(p: &iface_admin_conversations::DisconnectSharedResponse) -> Value {
+    let mut m = Map::new();
+    m.insert("ok".into(), iface_admin_conversations__defs_ok_true__to_json(&p.ok));
+    Value::Object(m)
+}
+
+fn iface_admin_conversations__get_conversation_prefs_response__to_json(p: &iface_admin_conversations::GetConversationPrefsResponse) -> Value {
+    let mut m = Map::new();
+    m.insert("ok".into(), iface_admin_conversations__defs_ok_true__to_json(&p.ok));
+    m.insert("prefs".into(), match (&p.prefs) { Some(v) => iface_admin_conversations__get_conversation_prefs_response_prefs__to_json(v), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_admin_conversations__get_conversation_prefs_response_prefs__to_json(p: &iface_admin_conversations::GetConversationPrefsResponsePrefs) -> Value {
+    let mut m = Map::new();
+    m.insert("can_thread".into(), match (&p.can_thread) { Some(v) => iface_admin_conversations__get_conversation_prefs_response_prefs_can_thread__to_json(v), None => Value::Null });
+    m.insert("who_can_post".into(), match (&p.who_can_post) { Some(v) => iface_admin_conversations__get_conversation_prefs_response_prefs_who_can_post__to_json(v), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_admin_conversations__get_conversation_prefs_response_prefs_can_thread__to_json(p: &iface_admin_conversations::GetConversationPrefsResponsePrefsCanThread) -> Value {
+    let mut m = Map::new();
+    m.insert("type".into(), match (&p.type_op) { Some(v) => Value::Array((v).iter().map(|v| Value::String((v).clone())).collect()), None => Value::Null });
+    m.insert("user".into(), match (&p.user) { Some(v) => Value::Array((v).iter().map(|v| Value::String((v).clone())).collect()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_admin_conversations__get_conversation_prefs_response_prefs_who_can_post__to_json(p: &iface_admin_conversations::GetConversationPrefsResponsePrefsWhoCanPost) -> Value {
+    let mut m = Map::new();
+    m.insert("type".into(), match (&p.type_op) { Some(v) => Value::Array((v).iter().map(|v| Value::String((v).clone())).collect()), None => Value::Null });
+    m.insert("user".into(), match (&p.user) { Some(v) => Value::Array((v).iter().map(|v| Value::String((v).clone())).collect()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_admin_conversations__get_teams_response__to_json(p: &iface_admin_conversations::GetTeamsResponse) -> Value {
+    let mut m = Map::new();
+    m.insert("ok".into(), iface_admin_conversations__defs_ok_true__to_json(&p.ok));
+    m.insert("response_metadata".into(), match (&p.response_metadata) { Some(v) => iface_admin_conversations__get_teams_response_response_metadata__to_json(v), None => Value::Null });
+    m.insert("team_ids".into(), Value::Array((&p.team_ids).iter().map(|v| iface_admin_conversations__defs_team__to_json(v)).collect()));
+    Value::Object(m)
+}
+
+fn iface_admin_conversations__get_teams_response_response_metadata__to_json(p: &iface_admin_conversations::GetTeamsResponseResponseMetadata) -> Value {
+    let mut m = Map::new();
+    m.insert("next_cursor".into(), Value::String((&p.next_cursor).clone()));
+    Value::Object(m)
+}
+
+fn iface_admin_conversations__defs_team__to_json(p: &iface_admin_conversations::DefsTeam) -> Value {
+    let mut m = Map::new();
+    m.insert("value".into(), Value::String((&p.value).clone()));
+    Value::Object(m)
+}
+
+fn iface_admin_conversations__invite_response__to_json(p: &iface_admin_conversations::InviteResponse) -> Value {
+    let mut m = Map::new();
+    m.insert("ok".into(), iface_admin_conversations__defs_ok_true__to_json(&p.ok));
+    Value::Object(m)
+}
+
+fn iface_admin_conversations__rename_response__to_json(p: &iface_admin_conversations::RenameResponse) -> Value {
+    let mut m = Map::new();
+    m.insert("ok".into(), iface_admin_conversations__defs_ok_true__to_json(&p.ok));
+    Value::Object(m)
+}
+
+fn iface_admin_conversations__search_response__to_json(p: &iface_admin_conversations::SearchResponse) -> Value {
+    let mut m = Map::new();
+    m.insert("channels".into(), Value::Array((&p.channels).iter().map(|v| iface_admin_conversations__objs_channel__to_json(v)).collect()));
+    m.insert("next_cursor".into(), Value::String((&p.next_cursor).clone()));
+    Value::Object(m)
+}
+
+fn iface_admin_conversations__objs_channel__to_json(p: &iface_admin_conversations::ObjsChannel) -> Value {
+    let mut m = Map::new();
+    m.insert("accepted_user".into(), match (&p.accepted_user) { Some(v) => iface_admin_conversations__defs_user_id__to_json(v), None => Value::Null });
+    m.insert("created".into(), Value::Number(serde_json::Number::from(*(&p.created))));
+    m.insert("creator".into(), iface_admin_conversations__defs_user_id__to_json(&p.creator));
+    m.insert("id".into(), iface_admin_conversations__defs_channel_id__to_json(&p.id));
+    m.insert("is_archived".into(), match (&p.is_archived) { Some(v) => Value::Bool(*(v)), None => Value::Null });
+    m.insert("is_channel".into(), Value::Bool(*(&p.is_channel)));
+    m.insert("is_frozen".into(), match (&p.is_frozen) { Some(v) => Value::Bool(*(v)), None => Value::Null });
+    m.insert("is_general".into(), match (&p.is_general) { Some(v) => Value::Bool(*(v)), None => Value::Null });
+    m.insert("is_member".into(), match (&p.is_member) { Some(v) => Value::Bool(*(v)), None => Value::Null });
+    m.insert("is_moved".into(), match (&p.is_moved) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("is_mpim".into(), Value::Bool(*(&p.is_mpim)));
+    m.insert("is_non_threadable".into(), match (&p.is_non_threadable) { Some(v) => Value::Bool(*(v)), None => Value::Null });
+    m.insert("is_org_shared".into(), Value::Bool(*(&p.is_org_shared)));
+    m.insert("is_pending_ext_shared".into(), match (&p.is_pending_ext_shared) { Some(v) => Value::Bool(*(v)), None => Value::Null });
+    m.insert("is_private".into(), Value::Bool(*(&p.is_private)));
+    m.insert("is_read_only".into(), match (&p.is_read_only) { Some(v) => Value::Bool(*(v)), None => Value::Null });
+    m.insert("is_shared".into(), Value::Bool(*(&p.is_shared)));
+    m.insert("is_thread_only".into(), match (&p.is_thread_only) { Some(v) => Value::Bool(*(v)), None => Value::Null });
+    m.insert("last_read".into(), match (&p.last_read) { Some(v) => iface_admin_conversations__defs_ts__to_json(v), None => Value::Null });
+    m.insert("latest".into(), match (&p.latest) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("members".into(), Value::Array((&p.members).iter().map(|v| iface_admin_conversations__defs_user_id__to_json(v)).collect()));
+    m.insert("name".into(), Value::String((&p.name).clone()));
+    m.insert("name_normalized".into(), Value::String((&p.name_normalized).clone()));
+    m.insert("num_members".into(), match (&p.num_members) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("pending_shared".into(), match (&p.pending_shared) { Some(v) => Value::Array((v).iter().map(|v| iface_admin_conversations__defs_team__to_json(v)).collect()), None => Value::Null });
+    m.insert("previous_names".into(), match (&p.previous_names) { Some(v) => Value::Array((v).iter().map(|v| iface_admin_conversations__defs_channel_name__to_json(v)).collect()), None => Value::Null });
+    m.insert("priority".into(), match (&p.priority) { Some(v) => serde_json::Number::from_f64(*(v)).map(Value::Number).unwrap_or(Value::Null), None => Value::Null });
+    m.insert("purpose".into(), iface_admin_conversations__objs_channel_purpose__to_json(&p.purpose));
+    m.insert("topic".into(), iface_admin_conversations__objs_channel_topic__to_json(&p.topic));
+    m.insert("unlinked".into(), match (&p.unlinked) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("unread_count".into(), match (&p.unread_count) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("unread_count_display".into(), match (&p.unread_count_display) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_admin_conversations__defs_user_id__to_json(p: &iface_admin_conversations::DefsUserId) -> Value {
+    let mut m = Map::new();
+    m.insert("value".into(), Value::String((&p.value).clone()));
+    Value::Object(m)
+}
+
+fn iface_admin_conversations__defs_ts__to_json(p: &iface_admin_conversations::DefsTs) -> Value {
+    let mut m = Map::new();
+    m.insert("value".into(), Value::String((&p.value).clone()));
+    Value::Object(m)
+}
+
+fn iface_admin_conversations__defs_channel_name__to_json(p: &iface_admin_conversations::DefsChannelName) -> Value {
+    let mut m = Map::new();
+    m.insert("value".into(), Value::String((&p.value).clone()));
+    Value::Object(m)
+}
+
+fn iface_admin_conversations__objs_channel_purpose__to_json(p: &iface_admin_conversations::ObjsChannelPurpose) -> Value {
+    let mut m = Map::new();
+    m.insert("creator".into(), iface_admin_conversations__defs_topic_purpose_creator__to_json(&p.creator));
+    m.insert("last_set".into(), Value::Number(serde_json::Number::from(*(&p.last_set))));
+    m.insert("value".into(), Value::String((&p.value).clone()));
+    Value::Object(m)
+}
+
+fn iface_admin_conversations__defs_topic_purpose_creator__to_json(p: &iface_admin_conversations::DefsTopicPurposeCreator) -> Value {
+    let mut m = Map::new();
+    m.insert("value".into(), Value::String((&p.value).clone()));
+    Value::Object(m)
+}
+
+fn iface_admin_conversations__objs_channel_topic__to_json(p: &iface_admin_conversations::ObjsChannelTopic) -> Value {
+    let mut m = Map::new();
+    m.insert("creator".into(), iface_admin_conversations__defs_topic_purpose_creator__to_json(&p.creator));
+    m.insert("last_set".into(), Value::Number(serde_json::Number::from(*(&p.last_set))));
+    m.insert("value".into(), Value::String((&p.value).clone()));
+    Value::Object(m)
+}
+
+fn iface_admin_conversations__set_conversation_prefs_response__to_json(p: &iface_admin_conversations::SetConversationPrefsResponse) -> Value {
+    let mut m = Map::new();
+    m.insert("ok".into(), iface_admin_conversations__defs_ok_true__to_json(&p.ok));
+    Value::Object(m)
+}
+
+fn iface_admin_conversations__set_teams_response__to_json(p: &iface_admin_conversations::SetTeamsResponse) -> Value {
+    let mut m = Map::new();
+    m.insert("ok".into(), iface_admin_conversations__defs_ok_true__to_json(&p.ok));
+    Value::Object(m)
+}
+
+fn iface_admin_conversations__unarchive_response__to_json(p: &iface_admin_conversations::UnarchiveResponse) -> Value {
+    let mut m = Map::new();
+    m.insert("ok".into(), iface_admin_conversations__defs_ok_true__to_json(&p.ok));
+    Value::Object(m)
+}
+
 fn iface_admin_conversations__archive_params__to_json(p: &iface_admin_conversations::ArchiveParams) -> Value {
     let mut m = Map::new();
     m.insert("token".into(), Value::String((&p.token).clone()));
+    m.insert("channel_id".into(), Value::String((&p.channel_id).clone()));
     Value::Object(m)
 }
 
 fn iface_admin_conversations__convert_to_private_params__to_json(p: &iface_admin_conversations::ConvertToPrivateParams) -> Value {
     let mut m = Map::new();
     m.insert("token".into(), Value::String((&p.token).clone()));
+    m.insert("channel_id".into(), Value::String((&p.channel_id).clone()));
     Value::Object(m)
 }
 
 fn iface_admin_conversations__create_params__to_json(p: &iface_admin_conversations::CreateParams) -> Value {
     let mut m = Map::new();
     m.insert("token".into(), Value::String((&p.token).clone()));
+    m.insert("description".into(), match (&p.description) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("is_private".into(), Value::Bool(*(&p.is_private)));
+    m.insert("name".into(), Value::String((&p.name).clone()));
+    m.insert("org_wide".into(), match (&p.org_wide) { Some(v) => Value::Bool(*(v)), None => Value::Null });
+    m.insert("team_id".into(), match (&p.team_id) { Some(v) => Value::String((v).clone()), None => Value::Null });
     Value::Object(m)
 }
 
 fn iface_admin_conversations__delete_params__to_json(p: &iface_admin_conversations::DeleteParams) -> Value {
     let mut m = Map::new();
     m.insert("token".into(), Value::String((&p.token).clone()));
+    m.insert("channel_id".into(), Value::String((&p.channel_id).clone()));
     Value::Object(m)
 }
 
 fn iface_admin_conversations__disconnect_shared_params__to_json(p: &iface_admin_conversations::DisconnectSharedParams) -> Value {
     let mut m = Map::new();
     m.insert("token".into(), Value::String((&p.token).clone()));
+    m.insert("channel_id".into(), Value::String((&p.channel_id).clone()));
+    m.insert("leaving_team_ids".into(), match (&p.leaving_team_ids) { Some(v) => Value::String((v).clone()), None => Value::Null });
     Value::Object(m)
 }
 
@@ -630,12 +1119,16 @@ fn iface_admin_conversations__get_teams_params__to_json(p: &iface_admin_conversa
 fn iface_admin_conversations__invite_params__to_json(p: &iface_admin_conversations::InviteParams) -> Value {
     let mut m = Map::new();
     m.insert("token".into(), Value::String((&p.token).clone()));
+    m.insert("channel_id".into(), Value::String((&p.channel_id).clone()));
+    m.insert("user_ids".into(), Value::String((&p.user_ids).clone()));
     Value::Object(m)
 }
 
 fn iface_admin_conversations__rename_params__to_json(p: &iface_admin_conversations::RenameParams) -> Value {
     let mut m = Map::new();
     m.insert("token".into(), Value::String((&p.token).clone()));
+    m.insert("channel_id".into(), Value::String((&p.channel_id).clone()));
+    m.insert("name".into(), Value::String((&p.name).clone()));
     Value::Object(m)
 }
 
@@ -655,73 +1148,585 @@ fn iface_admin_conversations__search_params__to_json(p: &iface_admin_conversatio
 fn iface_admin_conversations__set_conversation_prefs_params__to_json(p: &iface_admin_conversations::SetConversationPrefsParams) -> Value {
     let mut m = Map::new();
     m.insert("token".into(), Value::String((&p.token).clone()));
+    m.insert("channel_id".into(), Value::String((&p.channel_id).clone()));
+    m.insert("prefs".into(), Value::String((&p.prefs).clone()));
     Value::Object(m)
 }
 
 fn iface_admin_conversations__set_teams_params__to_json(p: &iface_admin_conversations::SetTeamsParams) -> Value {
     let mut m = Map::new();
     m.insert("token".into(), Value::String((&p.token).clone()));
+    m.insert("channel_id".into(), Value::String((&p.channel_id).clone()));
+    m.insert("org_channel".into(), match (&p.org_channel) { Some(v) => Value::Bool(*(v)), None => Value::Null });
+    m.insert("target_team_ids".into(), match (&p.target_team_ids) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("team_id".into(), match (&p.team_id) { Some(v) => Value::String((v).clone()), None => Value::Null });
     Value::Object(m)
 }
 
 fn iface_admin_conversations__unarchive_params__to_json(p: &iface_admin_conversations::UnarchiveParams) -> Value {
     let mut m = Map::new();
     m.insert("token".into(), Value::String((&p.token).clone()));
+    m.insert("channel_id".into(), Value::String((&p.channel_id).clone()));
     Value::Object(m)
 }
 
+fn iface_admin_conversations__archive_response__from_json(v: &Value) -> Option<iface_admin_conversations::ArchiveResponse> {
+    let m = v.as_object()?;
+    Some(iface_admin_conversations::ArchiveResponse {
+        ok: match m.get("ok").and_then(|v| iface_admin_conversations__defs_ok_true__from_json(v)) { Some(x) => x, None => return None },
+    })
+}
+
+fn iface_admin_conversations__defs_ok_true__from_json(v: &Value) -> Option<iface_admin_conversations::DefsOkTrue> {
+    let m = v.as_object()?;
+    Some(iface_admin_conversations::DefsOkTrue {
+        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+    })
+}
+
+fn iface_admin_conversations__convert_to_private_response__from_json(v: &Value) -> Option<iface_admin_conversations::ConvertToPrivateResponse> {
+    let m = v.as_object()?;
+    Some(iface_admin_conversations::ConvertToPrivateResponse {
+        ok: match m.get("ok").and_then(|v| iface_admin_conversations__defs_ok_true__from_json(v)) { Some(x) => x, None => return None },
+    })
+}
+
+fn iface_admin_conversations__create_response__from_json(v: &Value) -> Option<iface_admin_conversations::CreateResponse> {
+    let m = v.as_object()?;
+    Some(iface_admin_conversations::CreateResponse {
+        channel_id: m.get("channel_id").filter(|v| !v.is_null()).and_then(|v| iface_admin_conversations__defs_channel_id__from_json(v)),
+        ok: match m.get("ok").and_then(|v| iface_admin_conversations__defs_ok_true__from_json(v)) { Some(x) => x, None => return None },
+    })
+}
+
+fn iface_admin_conversations__defs_channel_id__from_json(v: &Value) -> Option<iface_admin_conversations::DefsChannelId> {
+    let m = v.as_object()?;
+    Some(iface_admin_conversations::DefsChannelId {
+        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+    })
+}
+
+fn iface_admin_conversations__delete_response__from_json(v: &Value) -> Option<iface_admin_conversations::DeleteResponse> {
+    let m = v.as_object()?;
+    Some(iface_admin_conversations::DeleteResponse {
+        ok: match m.get("ok").and_then(|v| iface_admin_conversations__defs_ok_true__from_json(v)) { Some(x) => x, None => return None },
+    })
+}
+
+fn iface_admin_conversations__disconnect_shared_response__from_json(v: &Value) -> Option<iface_admin_conversations::DisconnectSharedResponse> {
+    let m = v.as_object()?;
+    Some(iface_admin_conversations::DisconnectSharedResponse {
+        ok: match m.get("ok").and_then(|v| iface_admin_conversations__defs_ok_true__from_json(v)) { Some(x) => x, None => return None },
+    })
+}
+
+fn iface_admin_conversations__get_conversation_prefs_response__from_json(v: &Value) -> Option<iface_admin_conversations::GetConversationPrefsResponse> {
+    let m = v.as_object()?;
+    Some(iface_admin_conversations::GetConversationPrefsResponse {
+        ok: match m.get("ok").and_then(|v| iface_admin_conversations__defs_ok_true__from_json(v)) { Some(x) => x, None => return None },
+        prefs: m.get("prefs").filter(|v| !v.is_null()).and_then(|v| iface_admin_conversations__get_conversation_prefs_response_prefs__from_json(v)),
+    })
+}
+
+fn iface_admin_conversations__get_conversation_prefs_response_prefs__from_json(v: &Value) -> Option<iface_admin_conversations::GetConversationPrefsResponsePrefs> {
+    let m = v.as_object()?;
+    Some(iface_admin_conversations::GetConversationPrefsResponsePrefs {
+        can_thread: m.get("can_thread").filter(|v| !v.is_null()).and_then(|v| iface_admin_conversations__get_conversation_prefs_response_prefs_can_thread__from_json(v)),
+        who_can_post: m.get("who_can_post").filter(|v| !v.is_null()).and_then(|v| iface_admin_conversations__get_conversation_prefs_response_prefs_who_can_post__from_json(v)),
+    })
+}
+
+fn iface_admin_conversations__get_conversation_prefs_response_prefs_can_thread__from_json(v: &Value) -> Option<iface_admin_conversations::GetConversationPrefsResponsePrefsCanThread> {
+    let m = v.as_object()?;
+    Some(iface_admin_conversations::GetConversationPrefsResponsePrefsCanThread {
+        type_op: m.get("type").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| (x).as_str().map(|s| s.to_string())).collect())),
+        user: m.get("user").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| (x).as_str().map(|s| s.to_string())).collect())),
+    })
+}
+
+fn iface_admin_conversations__get_conversation_prefs_response_prefs_who_can_post__from_json(v: &Value) -> Option<iface_admin_conversations::GetConversationPrefsResponsePrefsWhoCanPost> {
+    let m = v.as_object()?;
+    Some(iface_admin_conversations::GetConversationPrefsResponsePrefsWhoCanPost {
+        type_op: m.get("type").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| (x).as_str().map(|s| s.to_string())).collect())),
+        user: m.get("user").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| (x).as_str().map(|s| s.to_string())).collect())),
+    })
+}
+
+fn iface_admin_conversations__get_teams_response__from_json(v: &Value) -> Option<iface_admin_conversations::GetTeamsResponse> {
+    let m = v.as_object()?;
+    Some(iface_admin_conversations::GetTeamsResponse {
+        ok: match m.get("ok").and_then(|v| iface_admin_conversations__defs_ok_true__from_json(v)) { Some(x) => x, None => return None },
+        response_metadata: m.get("response_metadata").filter(|v| !v.is_null()).and_then(|v| iface_admin_conversations__get_teams_response_response_metadata__from_json(v)),
+        team_ids: m.get("team_ids").and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| iface_admin_conversations__defs_team__from_json(x)).collect())).unwrap_or_default(),
+    })
+}
+
+fn iface_admin_conversations__get_teams_response_response_metadata__from_json(v: &Value) -> Option<iface_admin_conversations::GetTeamsResponseResponseMetadata> {
+    let m = v.as_object()?;
+    Some(iface_admin_conversations::GetTeamsResponseResponseMetadata {
+        next_cursor: m.get("next_cursor").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+    })
+}
+
+fn iface_admin_conversations__defs_team__from_json(v: &Value) -> Option<iface_admin_conversations::DefsTeam> {
+    let m = v.as_object()?;
+    Some(iface_admin_conversations::DefsTeam {
+        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+    })
+}
+
+fn iface_admin_conversations__invite_response__from_json(v: &Value) -> Option<iface_admin_conversations::InviteResponse> {
+    let m = v.as_object()?;
+    Some(iface_admin_conversations::InviteResponse {
+        ok: match m.get("ok").and_then(|v| iface_admin_conversations__defs_ok_true__from_json(v)) { Some(x) => x, None => return None },
+    })
+}
+
+fn iface_admin_conversations__rename_response__from_json(v: &Value) -> Option<iface_admin_conversations::RenameResponse> {
+    let m = v.as_object()?;
+    Some(iface_admin_conversations::RenameResponse {
+        ok: match m.get("ok").and_then(|v| iface_admin_conversations__defs_ok_true__from_json(v)) { Some(x) => x, None => return None },
+    })
+}
+
+fn iface_admin_conversations__search_response__from_json(v: &Value) -> Option<iface_admin_conversations::SearchResponse> {
+    let m = v.as_object()?;
+    Some(iface_admin_conversations::SearchResponse {
+        channels: m.get("channels").and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| iface_admin_conversations__objs_channel__from_json(x)).collect())).unwrap_or_default(),
+        next_cursor: m.get("next_cursor").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+    })
+}
+
+fn iface_admin_conversations__objs_channel__from_json(v: &Value) -> Option<iface_admin_conversations::ObjsChannel> {
+    let m = v.as_object()?;
+    Some(iface_admin_conversations::ObjsChannel {
+        accepted_user: m.get("accepted_user").filter(|v| !v.is_null()).and_then(|v| iface_admin_conversations__defs_user_id__from_json(v)),
+        created: m.get("created").and_then(|v| (v).as_i64().map(|n| n as i32)).unwrap_or_default(),
+        creator: match m.get("creator").and_then(|v| iface_admin_conversations__defs_user_id__from_json(v)) { Some(x) => x, None => return None },
+        id: match m.get("id").and_then(|v| iface_admin_conversations__defs_channel_id__from_json(v)) { Some(x) => x, None => return None },
+        is_archived: m.get("is_archived").filter(|v| !v.is_null()).and_then(|v| (v).as_bool()),
+        is_channel: m.get("is_channel").and_then(|v| (v).as_bool()).unwrap_or_default(),
+        is_frozen: m.get("is_frozen").filter(|v| !v.is_null()).and_then(|v| (v).as_bool()),
+        is_general: m.get("is_general").filter(|v| !v.is_null()).and_then(|v| (v).as_bool()),
+        is_member: m.get("is_member").filter(|v| !v.is_null()).and_then(|v| (v).as_bool()),
+        is_moved: m.get("is_moved").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        is_mpim: m.get("is_mpim").and_then(|v| (v).as_bool()).unwrap_or_default(),
+        is_non_threadable: m.get("is_non_threadable").filter(|v| !v.is_null()).and_then(|v| (v).as_bool()),
+        is_org_shared: m.get("is_org_shared").and_then(|v| (v).as_bool()).unwrap_or_default(),
+        is_pending_ext_shared: m.get("is_pending_ext_shared").filter(|v| !v.is_null()).and_then(|v| (v).as_bool()),
+        is_private: m.get("is_private").and_then(|v| (v).as_bool()).unwrap_or_default(),
+        is_read_only: m.get("is_read_only").filter(|v| !v.is_null()).and_then(|v| (v).as_bool()),
+        is_shared: m.get("is_shared").and_then(|v| (v).as_bool()).unwrap_or_default(),
+        is_thread_only: m.get("is_thread_only").filter(|v| !v.is_null()).and_then(|v| (v).as_bool()),
+        last_read: m.get("last_read").filter(|v| !v.is_null()).and_then(|v| iface_admin_conversations__defs_ts__from_json(v)),
+        latest: m.get("latest").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        members: m.get("members").and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| iface_admin_conversations__defs_user_id__from_json(x)).collect())).unwrap_or_default(),
+        name: m.get("name").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        name_normalized: m.get("name_normalized").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        num_members: m.get("num_members").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        pending_shared: m.get("pending_shared").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| iface_admin_conversations__defs_team__from_json(x)).collect())),
+        previous_names: m.get("previous_names").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| iface_admin_conversations__defs_channel_name__from_json(x)).collect())),
+        priority: m.get("priority").filter(|v| !v.is_null()).and_then(|v| (v).as_f64()),
+        purpose: match m.get("purpose").and_then(|v| iface_admin_conversations__objs_channel_purpose__from_json(v)) { Some(x) => x, None => return None },
+        topic: match m.get("topic").and_then(|v| iface_admin_conversations__objs_channel_topic__from_json(v)) { Some(x) => x, None => return None },
+        unlinked: m.get("unlinked").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        unread_count: m.get("unread_count").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        unread_count_display: m.get("unread_count_display").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+    })
+}
+
+fn iface_admin_conversations__defs_user_id__from_json(v: &Value) -> Option<iface_admin_conversations::DefsUserId> {
+    let m = v.as_object()?;
+    Some(iface_admin_conversations::DefsUserId {
+        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+    })
+}
+
+fn iface_admin_conversations__defs_ts__from_json(v: &Value) -> Option<iface_admin_conversations::DefsTs> {
+    let m = v.as_object()?;
+    Some(iface_admin_conversations::DefsTs {
+        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+    })
+}
+
+fn iface_admin_conversations__defs_channel_name__from_json(v: &Value) -> Option<iface_admin_conversations::DefsChannelName> {
+    let m = v.as_object()?;
+    Some(iface_admin_conversations::DefsChannelName {
+        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+    })
+}
+
+fn iface_admin_conversations__objs_channel_purpose__from_json(v: &Value) -> Option<iface_admin_conversations::ObjsChannelPurpose> {
+    let m = v.as_object()?;
+    Some(iface_admin_conversations::ObjsChannelPurpose {
+        creator: match m.get("creator").and_then(|v| iface_admin_conversations__defs_topic_purpose_creator__from_json(v)) { Some(x) => x, None => return None },
+        last_set: m.get("last_set").and_then(|v| (v).as_i64().map(|n| n as i32)).unwrap_or_default(),
+        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+    })
+}
+
+fn iface_admin_conversations__defs_topic_purpose_creator__from_json(v: &Value) -> Option<iface_admin_conversations::DefsTopicPurposeCreator> {
+    let m = v.as_object()?;
+    Some(iface_admin_conversations::DefsTopicPurposeCreator {
+        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+    })
+}
+
+fn iface_admin_conversations__objs_channel_topic__from_json(v: &Value) -> Option<iface_admin_conversations::ObjsChannelTopic> {
+    let m = v.as_object()?;
+    Some(iface_admin_conversations::ObjsChannelTopic {
+        creator: match m.get("creator").and_then(|v| iface_admin_conversations__defs_topic_purpose_creator__from_json(v)) { Some(x) => x, None => return None },
+        last_set: m.get("last_set").and_then(|v| (v).as_i64().map(|n| n as i32)).unwrap_or_default(),
+        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+    })
+}
+
+fn iface_admin_conversations__set_conversation_prefs_response__from_json(v: &Value) -> Option<iface_admin_conversations::SetConversationPrefsResponse> {
+    let m = v.as_object()?;
+    Some(iface_admin_conversations::SetConversationPrefsResponse {
+        ok: match m.get("ok").and_then(|v| iface_admin_conversations__defs_ok_true__from_json(v)) { Some(x) => x, None => return None },
+    })
+}
+
+fn iface_admin_conversations__set_teams_response__from_json(v: &Value) -> Option<iface_admin_conversations::SetTeamsResponse> {
+    let m = v.as_object()?;
+    Some(iface_admin_conversations::SetTeamsResponse {
+        ok: match m.get("ok").and_then(|v| iface_admin_conversations__defs_ok_true__from_json(v)) { Some(x) => x, None => return None },
+    })
+}
+
+fn iface_admin_conversations__unarchive_response__from_json(v: &Value) -> Option<iface_admin_conversations::UnarchiveResponse> {
+    let m = v.as_object()?;
+    Some(iface_admin_conversations::UnarchiveResponse {
+        ok: match m.get("ok").and_then(|v| iface_admin_conversations__defs_ok_true__from_json(v)) { Some(x) => x, None => return None },
+    })
+}
+
+fn iface_admin_conversations__archive__ok(body: String) -> Result<iface_admin_conversations::ArchiveResponse, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match iface_admin_conversations__archive_response__from_json(&v) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_admin_conversations__archive__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
+fn iface_admin_conversations__convert_to_private__ok(body: String) -> Result<iface_admin_conversations::ConvertToPrivateResponse, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match iface_admin_conversations__convert_to_private_response__from_json(&v) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_admin_conversations__convert_to_private__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
+fn iface_admin_conversations__create__ok(body: String) -> Result<iface_admin_conversations::CreateResponse, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match iface_admin_conversations__create_response__from_json(&v) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_admin_conversations__create__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
+fn iface_admin_conversations__delete__ok(body: String) -> Result<iface_admin_conversations::DeleteResponse, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match iface_admin_conversations__delete_response__from_json(&v) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_admin_conversations__delete__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
+fn iface_admin_conversations__disconnect_shared__ok(body: String) -> Result<iface_admin_conversations::DisconnectSharedResponse, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match iface_admin_conversations__disconnect_shared_response__from_json(&v) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_admin_conversations__disconnect_shared__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
+fn iface_admin_conversations__get_conversation_prefs__ok(body: String) -> Result<iface_admin_conversations::GetConversationPrefsResponse, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match iface_admin_conversations__get_conversation_prefs_response__from_json(&v) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_admin_conversations__get_conversation_prefs__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
+fn iface_admin_conversations__get_teams__ok(body: String) -> Result<iface_admin_conversations::GetTeamsResponse, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match iface_admin_conversations__get_teams_response__from_json(&v) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_admin_conversations__get_teams__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
+fn iface_admin_conversations__invite__ok(body: String) -> Result<iface_admin_conversations::InviteResponse, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match iface_admin_conversations__invite_response__from_json(&v) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_admin_conversations__invite__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
+fn iface_admin_conversations__rename__ok(body: String) -> Result<iface_admin_conversations::RenameResponse, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match iface_admin_conversations__rename_response__from_json(&v) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_admin_conversations__rename__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
+fn iface_admin_conversations__search__ok(body: String) -> Result<iface_admin_conversations::SearchResponse, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match iface_admin_conversations__search_response__from_json(&v) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_admin_conversations__search__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
+fn iface_admin_conversations__set_conversation_prefs__ok(body: String) -> Result<iface_admin_conversations::SetConversationPrefsResponse, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match iface_admin_conversations__set_conversation_prefs_response__from_json(&v) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_admin_conversations__set_conversation_prefs__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
+fn iface_admin_conversations__set_teams__ok(body: String) -> Result<iface_admin_conversations::SetTeamsResponse, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match iface_admin_conversations__set_teams_response__from_json(&v) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_admin_conversations__set_teams__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
+fn iface_admin_conversations__unarchive__ok(body: String) -> Result<iface_admin_conversations::UnarchiveResponse, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match iface_admin_conversations__unarchive_response__from_json(&v) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_admin_conversations__unarchive__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
 impl iface_admin_conversations::Guest for crate::Component {
-    fn archive(params: iface_admin_conversations::ArchiveParams) -> Result<String, String> {
+    fn archive(params: iface_admin_conversations::ArchiveParams) -> Result<iface_admin_conversations::ArchiveResponse, String> {
         let json = iface_admin_conversations__archive_params__to_json(&params);
-        dispatch(&OP_ADMIN_CONVERSATIONS_ARCHIVE, json)
+        match dispatch(&OP_ADMIN_CONVERSATIONS_ARCHIVE, json).and_then(iface_admin_conversations__archive__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_admin_conversations__archive__err(e)),
+        }
     }
-    fn convert_to_private(params: iface_admin_conversations::ConvertToPrivateParams) -> Result<String, String> {
+    fn convert_to_private(params: iface_admin_conversations::ConvertToPrivateParams) -> Result<iface_admin_conversations::ConvertToPrivateResponse, String> {
         let json = iface_admin_conversations__convert_to_private_params__to_json(&params);
-        dispatch(&OP_ADMIN_CONVERSATIONS_CONVERT_TO_PRIVATE, json)
+        match dispatch(&OP_ADMIN_CONVERSATIONS_CONVERT_TO_PRIVATE, json).and_then(iface_admin_conversations__convert_to_private__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_admin_conversations__convert_to_private__err(e)),
+        }
     }
-    fn create(params: iface_admin_conversations::CreateParams) -> Result<String, String> {
+    fn create(params: iface_admin_conversations::CreateParams) -> Result<iface_admin_conversations::CreateResponse, String> {
         let json = iface_admin_conversations__create_params__to_json(&params);
-        dispatch(&OP_ADMIN_CONVERSATIONS_CREATE, json)
+        match dispatch(&OP_ADMIN_CONVERSATIONS_CREATE, json).and_then(iface_admin_conversations__create__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_admin_conversations__create__err(e)),
+        }
     }
-    fn delete(params: iface_admin_conversations::DeleteParams) -> Result<String, String> {
+    fn delete(params: iface_admin_conversations::DeleteParams) -> Result<iface_admin_conversations::DeleteResponse, String> {
         let json = iface_admin_conversations__delete_params__to_json(&params);
-        dispatch(&OP_ADMIN_CONVERSATIONS_DELETE, json)
+        match dispatch(&OP_ADMIN_CONVERSATIONS_DELETE, json).and_then(iface_admin_conversations__delete__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_admin_conversations__delete__err(e)),
+        }
     }
-    fn disconnect_shared(params: iface_admin_conversations::DisconnectSharedParams) -> Result<String, String> {
+    fn disconnect_shared(params: iface_admin_conversations::DisconnectSharedParams) -> Result<iface_admin_conversations::DisconnectSharedResponse, String> {
         let json = iface_admin_conversations__disconnect_shared_params__to_json(&params);
-        dispatch(&OP_ADMIN_CONVERSATIONS_DISCONNECT_SHARED, json)
+        match dispatch(&OP_ADMIN_CONVERSATIONS_DISCONNECT_SHARED, json).and_then(iface_admin_conversations__disconnect_shared__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_admin_conversations__disconnect_shared__err(e)),
+        }
     }
-    fn get_conversation_prefs(params: iface_admin_conversations::GetConversationPrefsParams) -> Result<String, String> {
+    fn get_conversation_prefs(params: iface_admin_conversations::GetConversationPrefsParams) -> Result<iface_admin_conversations::GetConversationPrefsResponse, String> {
         let json = iface_admin_conversations__get_conversation_prefs_params__to_json(&params);
-        dispatch(&OP_ADMIN_CONVERSATIONS_GET_CONVERSATION_PREFS, json)
+        match dispatch(&OP_ADMIN_CONVERSATIONS_GET_CONVERSATION_PREFS, json).and_then(iface_admin_conversations__get_conversation_prefs__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_admin_conversations__get_conversation_prefs__err(e)),
+        }
     }
-    fn get_teams(params: iface_admin_conversations::GetTeamsParams) -> Result<String, String> {
+    fn get_teams(params: iface_admin_conversations::GetTeamsParams) -> Result<iface_admin_conversations::GetTeamsResponse, String> {
         let json = iface_admin_conversations__get_teams_params__to_json(&params);
-        dispatch(&OP_ADMIN_CONVERSATIONS_GET_TEAMS, json)
+        match dispatch(&OP_ADMIN_CONVERSATIONS_GET_TEAMS, json).and_then(iface_admin_conversations__get_teams__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_admin_conversations__get_teams__err(e)),
+        }
     }
-    fn invite(params: iface_admin_conversations::InviteParams) -> Result<String, String> {
+    fn invite(params: iface_admin_conversations::InviteParams) -> Result<iface_admin_conversations::InviteResponse, String> {
         let json = iface_admin_conversations__invite_params__to_json(&params);
-        dispatch(&OP_ADMIN_CONVERSATIONS_INVITE, json)
+        match dispatch(&OP_ADMIN_CONVERSATIONS_INVITE, json).and_then(iface_admin_conversations__invite__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_admin_conversations__invite__err(e)),
+        }
     }
-    fn rename(params: iface_admin_conversations::RenameParams) -> Result<String, String> {
+    fn rename(params: iface_admin_conversations::RenameParams) -> Result<iface_admin_conversations::RenameResponse, String> {
         let json = iface_admin_conversations__rename_params__to_json(&params);
-        dispatch(&OP_ADMIN_CONVERSATIONS_RENAME, json)
+        match dispatch(&OP_ADMIN_CONVERSATIONS_RENAME, json).and_then(iface_admin_conversations__rename__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_admin_conversations__rename__err(e)),
+        }
     }
-    fn search(params: iface_admin_conversations::SearchParams) -> Result<String, String> {
+    fn search(params: iface_admin_conversations::SearchParams) -> Result<iface_admin_conversations::SearchResponse, String> {
         let json = iface_admin_conversations__search_params__to_json(&params);
-        dispatch(&OP_ADMIN_CONVERSATIONS_SEARCH, json)
+        match dispatch(&OP_ADMIN_CONVERSATIONS_SEARCH, json).and_then(iface_admin_conversations__search__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_admin_conversations__search__err(e)),
+        }
     }
-    fn set_conversation_prefs(params: iface_admin_conversations::SetConversationPrefsParams) -> Result<String, String> {
+    fn set_conversation_prefs(params: iface_admin_conversations::SetConversationPrefsParams) -> Result<iface_admin_conversations::SetConversationPrefsResponse, String> {
         let json = iface_admin_conversations__set_conversation_prefs_params__to_json(&params);
-        dispatch(&OP_ADMIN_CONVERSATIONS_SET_CONVERSATION_PREFS, json)
+        match dispatch(&OP_ADMIN_CONVERSATIONS_SET_CONVERSATION_PREFS, json).and_then(iface_admin_conversations__set_conversation_prefs__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_admin_conversations__set_conversation_prefs__err(e)),
+        }
     }
-    fn set_teams(params: iface_admin_conversations::SetTeamsParams) -> Result<String, String> {
+    fn set_teams(params: iface_admin_conversations::SetTeamsParams) -> Result<iface_admin_conversations::SetTeamsResponse, String> {
         let json = iface_admin_conversations__set_teams_params__to_json(&params);
-        dispatch(&OP_ADMIN_CONVERSATIONS_SET_TEAMS, json)
+        match dispatch(&OP_ADMIN_CONVERSATIONS_SET_TEAMS, json).and_then(iface_admin_conversations__set_teams__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_admin_conversations__set_teams__err(e)),
+        }
     }
-    fn unarchive(params: iface_admin_conversations::UnarchiveParams) -> Result<String, String> {
+    fn unarchive(params: iface_admin_conversations::UnarchiveParams) -> Result<iface_admin_conversations::UnarchiveResponse, String> {
         let json = iface_admin_conversations__unarchive_params__to_json(&params);
-        dispatch(&OP_ADMIN_CONVERSATIONS_UNARCHIVE, json)
+        match dispatch(&OP_ADMIN_CONVERSATIONS_UNARCHIVE, json).and_then(iface_admin_conversations__unarchive__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_admin_conversations__unarchive__err(e)),
+        }
     }
 }
 use crate::exports::autostamp::slack::admin_conversations_ekm as iface_admin_conversations_ekm;
@@ -730,16 +1735,28 @@ const OP_ADMIN_CONVERSATIONS_EKM_LIST_ORIGINAL_CONNECTED_CHANNEL_INFO: OpSpec = 
     method: "GET",
     path_template: "/admin.conversations.ekm.listOriginalConnectedChannelInfo",
     fields: &[
-        FieldSpec { snake: "token", location: FieldLocation::Query },
-        FieldSpec { snake: "channel_ids", location: FieldLocation::Query },
-        FieldSpec { snake: "team_ids", location: FieldLocation::Query },
-        FieldSpec { snake: "limit", location: FieldLocation::Query },
-        FieldSpec { snake: "cursor", location: FieldLocation::Query },
+        FieldSpec { snake: "token", wire: "token", location: FieldLocation::Query },
+        FieldSpec { snake: "channel_ids", wire: "channel_ids", location: FieldLocation::Query },
+        FieldSpec { snake: "team_ids", wire: "team_ids", location: FieldLocation::Query },
+        FieldSpec { snake: "limit", wire: "limit", location: FieldLocation::Query },
+        FieldSpec { snake: "cursor", wire: "cursor", location: FieldLocation::Query },
     ],
     auth: &[
         AuthApply { secret_key: "slackAuth", kind: AuthKind::Bearer },
     ],
 };
+
+fn iface_admin_conversations_ekm__list_original_connected_channel_info_response__to_json(p: &iface_admin_conversations_ekm::ListOriginalConnectedChannelInfoResponse) -> Value {
+    let mut m = Map::new();
+    m.insert("ok".into(), iface_admin_conversations_ekm__defs_ok_true__to_json(&p.ok));
+    Value::Object(m)
+}
+
+fn iface_admin_conversations_ekm__defs_ok_true__to_json(p: &iface_admin_conversations_ekm::DefsOkTrue) -> Value {
+    let mut m = Map::new();
+    m.insert("value".into(), Value::String((&p.value).clone()));
+    Value::Object(m)
+}
 
 fn iface_admin_conversations_ekm__list_original_connected_channel_info_params__to_json(p: &iface_admin_conversations_ekm::ListOriginalConnectedChannelInfoParams) -> Value {
     let mut m = Map::new();
@@ -751,10 +1768,45 @@ fn iface_admin_conversations_ekm__list_original_connected_channel_info_params__t
     Value::Object(m)
 }
 
+fn iface_admin_conversations_ekm__list_original_connected_channel_info_response__from_json(v: &Value) -> Option<iface_admin_conversations_ekm::ListOriginalConnectedChannelInfoResponse> {
+    let m = v.as_object()?;
+    Some(iface_admin_conversations_ekm::ListOriginalConnectedChannelInfoResponse {
+        ok: match m.get("ok").and_then(|v| iface_admin_conversations_ekm__defs_ok_true__from_json(v)) { Some(x) => x, None => return None },
+    })
+}
+
+fn iface_admin_conversations_ekm__defs_ok_true__from_json(v: &Value) -> Option<iface_admin_conversations_ekm::DefsOkTrue> {
+    let m = v.as_object()?;
+    Some(iface_admin_conversations_ekm::DefsOkTrue {
+        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+    })
+}
+
+fn iface_admin_conversations_ekm__list_original_connected_channel_info__ok(body: String) -> Result<iface_admin_conversations_ekm::ListOriginalConnectedChannelInfoResponse, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match iface_admin_conversations_ekm__list_original_connected_channel_info_response__from_json(&v) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_admin_conversations_ekm__list_original_connected_channel_info__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
 impl iface_admin_conversations_ekm::Guest for crate::Component {
-    fn list_original_connected_channel_info(params: iface_admin_conversations_ekm::ListOriginalConnectedChannelInfoParams) -> Result<String, String> {
+    fn list_original_connected_channel_info(params: iface_admin_conversations_ekm::ListOriginalConnectedChannelInfoParams) -> Result<iface_admin_conversations_ekm::ListOriginalConnectedChannelInfoResponse, String> {
         let json = iface_admin_conversations_ekm__list_original_connected_channel_info_params__to_json(&params);
-        dispatch(&OP_ADMIN_CONVERSATIONS_EKM_LIST_ORIGINAL_CONNECTED_CHANNEL_INFO, json)
+        match dispatch(&OP_ADMIN_CONVERSATIONS_EKM_LIST_ORIGINAL_CONNECTED_CHANNEL_INFO, json).and_then(iface_admin_conversations_ekm__list_original_connected_channel_info__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_admin_conversations_ekm__list_original_connected_channel_info__err(e)),
+        }
     }
 }
 use crate::exports::autostamp::slack::admin_conversations_restrict_access as iface_admin_conversations_restrict_access;
@@ -763,6 +1815,10 @@ const OP_ADMIN_CONVERSATIONS_RESTRICT_ACCESS_ADD_GROUP: OpSpec = OpSpec {
     method: "POST",
     path_template: "/admin.conversations.restrictAccess.addGroup",
     fields: &[
+        FieldSpec { snake: "channel_id", wire: "channel_id", location: FieldLocation::Body },
+        FieldSpec { snake: "group_id", wire: "group_id", location: FieldLocation::Body },
+        FieldSpec { snake: "team_id", wire: "team_id", location: FieldLocation::Body },
+        FieldSpec { snake: "token", wire: "token", location: FieldLocation::Body },
     ],
     auth: &[
         AuthApply { secret_key: "slackAuth", kind: AuthKind::Bearer },
@@ -773,9 +1829,9 @@ const OP_ADMIN_CONVERSATIONS_RESTRICT_ACCESS_LIST_GROUPS: OpSpec = OpSpec {
     method: "GET",
     path_template: "/admin.conversations.restrictAccess.listGroups",
     fields: &[
-        FieldSpec { snake: "token", location: FieldLocation::Query },
-        FieldSpec { snake: "channel_id", location: FieldLocation::Query },
-        FieldSpec { snake: "team_id", location: FieldLocation::Query },
+        FieldSpec { snake: "token", wire: "token", location: FieldLocation::Query },
+        FieldSpec { snake: "channel_id", wire: "channel_id", location: FieldLocation::Query },
+        FieldSpec { snake: "team_id", wire: "team_id", location: FieldLocation::Query },
     ],
     auth: &[
         AuthApply { secret_key: "slackAuth", kind: AuthKind::Bearer },
@@ -786,11 +1842,48 @@ const OP_ADMIN_CONVERSATIONS_RESTRICT_ACCESS_REMOVE_GROUP: OpSpec = OpSpec {
     method: "POST",
     path_template: "/admin.conversations.restrictAccess.removeGroup",
     fields: &[
+        FieldSpec { snake: "channel_id", wire: "channel_id", location: FieldLocation::Body },
+        FieldSpec { snake: "group_id", wire: "group_id", location: FieldLocation::Body },
+        FieldSpec { snake: "team_id", wire: "team_id", location: FieldLocation::Body },
+        FieldSpec { snake: "token", wire: "token", location: FieldLocation::Body },
     ],
     auth: &[
         AuthApply { secret_key: "slackAuth", kind: AuthKind::Bearer },
     ],
 };
+
+fn iface_admin_conversations_restrict_access__add_group_response__to_json(p: &iface_admin_conversations_restrict_access::AddGroupResponse) -> Value {
+    let mut m = Map::new();
+    m.insert("ok".into(), iface_admin_conversations_restrict_access__defs_ok_true__to_json(&p.ok));
+    Value::Object(m)
+}
+
+fn iface_admin_conversations_restrict_access__defs_ok_true__to_json(p: &iface_admin_conversations_restrict_access::DefsOkTrue) -> Value {
+    let mut m = Map::new();
+    m.insert("value".into(), Value::String((&p.value).clone()));
+    Value::Object(m)
+}
+
+fn iface_admin_conversations_restrict_access__list_groups_response__to_json(p: &iface_admin_conversations_restrict_access::ListGroupsResponse) -> Value {
+    let mut m = Map::new();
+    m.insert("ok".into(), iface_admin_conversations_restrict_access__defs_ok_true__to_json(&p.ok));
+    Value::Object(m)
+}
+
+fn iface_admin_conversations_restrict_access__remove_group_response__to_json(p: &iface_admin_conversations_restrict_access::RemoveGroupResponse) -> Value {
+    let mut m = Map::new();
+    m.insert("ok".into(), iface_admin_conversations_restrict_access__defs_ok_true__to_json(&p.ok));
+    Value::Object(m)
+}
+
+fn iface_admin_conversations_restrict_access__add_group_params__to_json(p: &iface_admin_conversations_restrict_access::AddGroupParams) -> Value {
+    let mut m = Map::new();
+    m.insert("channel_id".into(), Value::String((&p.channel_id).clone()));
+    m.insert("group_id".into(), Value::String((&p.group_id).clone()));
+    m.insert("team_id".into(), match (&p.team_id) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("token".into(), Value::String((&p.token).clone()));
+    Value::Object(m)
+}
 
 fn iface_admin_conversations_restrict_access__list_groups_params__to_json(p: &iface_admin_conversations_restrict_access::ListGroupsParams) -> Value {
     let mut m = Map::new();
@@ -800,16 +1893,118 @@ fn iface_admin_conversations_restrict_access__list_groups_params__to_json(p: &if
     Value::Object(m)
 }
 
+fn iface_admin_conversations_restrict_access__remove_group_params__to_json(p: &iface_admin_conversations_restrict_access::RemoveGroupParams) -> Value {
+    let mut m = Map::new();
+    m.insert("channel_id".into(), Value::String((&p.channel_id).clone()));
+    m.insert("group_id".into(), Value::String((&p.group_id).clone()));
+    m.insert("team_id".into(), Value::String((&p.team_id).clone()));
+    m.insert("token".into(), Value::String((&p.token).clone()));
+    Value::Object(m)
+}
+
+fn iface_admin_conversations_restrict_access__add_group_response__from_json(v: &Value) -> Option<iface_admin_conversations_restrict_access::AddGroupResponse> {
+    let m = v.as_object()?;
+    Some(iface_admin_conversations_restrict_access::AddGroupResponse {
+        ok: match m.get("ok").and_then(|v| iface_admin_conversations_restrict_access__defs_ok_true__from_json(v)) { Some(x) => x, None => return None },
+    })
+}
+
+fn iface_admin_conversations_restrict_access__defs_ok_true__from_json(v: &Value) -> Option<iface_admin_conversations_restrict_access::DefsOkTrue> {
+    let m = v.as_object()?;
+    Some(iface_admin_conversations_restrict_access::DefsOkTrue {
+        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+    })
+}
+
+fn iface_admin_conversations_restrict_access__list_groups_response__from_json(v: &Value) -> Option<iface_admin_conversations_restrict_access::ListGroupsResponse> {
+    let m = v.as_object()?;
+    Some(iface_admin_conversations_restrict_access::ListGroupsResponse {
+        ok: match m.get("ok").and_then(|v| iface_admin_conversations_restrict_access__defs_ok_true__from_json(v)) { Some(x) => x, None => return None },
+    })
+}
+
+fn iface_admin_conversations_restrict_access__remove_group_response__from_json(v: &Value) -> Option<iface_admin_conversations_restrict_access::RemoveGroupResponse> {
+    let m = v.as_object()?;
+    Some(iface_admin_conversations_restrict_access::RemoveGroupResponse {
+        ok: match m.get("ok").and_then(|v| iface_admin_conversations_restrict_access__defs_ok_true__from_json(v)) { Some(x) => x, None => return None },
+    })
+}
+
+fn iface_admin_conversations_restrict_access__add_group__ok(body: String) -> Result<iface_admin_conversations_restrict_access::AddGroupResponse, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match iface_admin_conversations_restrict_access__add_group_response__from_json(&v) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_admin_conversations_restrict_access__add_group__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
+fn iface_admin_conversations_restrict_access__list_groups__ok(body: String) -> Result<iface_admin_conversations_restrict_access::ListGroupsResponse, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match iface_admin_conversations_restrict_access__list_groups_response__from_json(&v) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_admin_conversations_restrict_access__list_groups__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
+fn iface_admin_conversations_restrict_access__remove_group__ok(body: String) -> Result<iface_admin_conversations_restrict_access::RemoveGroupResponse, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match iface_admin_conversations_restrict_access__remove_group_response__from_json(&v) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_admin_conversations_restrict_access__remove_group__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
 impl iface_admin_conversations_restrict_access::Guest for crate::Component {
-    fn add_group() -> Result<String, String> {
-        dispatch(&OP_ADMIN_CONVERSATIONS_RESTRICT_ACCESS_ADD_GROUP, Value::Object(Map::new()))
+    fn add_group(params: iface_admin_conversations_restrict_access::AddGroupParams) -> Result<iface_admin_conversations_restrict_access::AddGroupResponse, String> {
+        let json = iface_admin_conversations_restrict_access__add_group_params__to_json(&params);
+        match dispatch(&OP_ADMIN_CONVERSATIONS_RESTRICT_ACCESS_ADD_GROUP, json).and_then(iface_admin_conversations_restrict_access__add_group__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_admin_conversations_restrict_access__add_group__err(e)),
+        }
     }
-    fn list_groups(params: iface_admin_conversations_restrict_access::ListGroupsParams) -> Result<String, String> {
+    fn list_groups(params: iface_admin_conversations_restrict_access::ListGroupsParams) -> Result<iface_admin_conversations_restrict_access::ListGroupsResponse, String> {
         let json = iface_admin_conversations_restrict_access__list_groups_params__to_json(&params);
-        dispatch(&OP_ADMIN_CONVERSATIONS_RESTRICT_ACCESS_LIST_GROUPS, json)
+        match dispatch(&OP_ADMIN_CONVERSATIONS_RESTRICT_ACCESS_LIST_GROUPS, json).and_then(iface_admin_conversations_restrict_access__list_groups__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_admin_conversations_restrict_access__list_groups__err(e)),
+        }
     }
-    fn remove_group() -> Result<String, String> {
-        dispatch(&OP_ADMIN_CONVERSATIONS_RESTRICT_ACCESS_REMOVE_GROUP, Value::Object(Map::new()))
+    fn remove_group(params: iface_admin_conversations_restrict_access::RemoveGroupParams) -> Result<iface_admin_conversations_restrict_access::RemoveGroupResponse, String> {
+        let json = iface_admin_conversations_restrict_access__remove_group_params__to_json(&params);
+        match dispatch(&OP_ADMIN_CONVERSATIONS_RESTRICT_ACCESS_REMOVE_GROUP, json).and_then(iface_admin_conversations_restrict_access__remove_group__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_admin_conversations_restrict_access__remove_group__err(e)),
+        }
     }
 }
 use crate::exports::autostamp::slack::admin_emoji as iface_admin_emoji;
@@ -818,6 +2013,9 @@ const OP_ADMIN_EMOJI_ADD: OpSpec = OpSpec {
     method: "POST",
     path_template: "/admin.emoji.add",
     fields: &[
+        FieldSpec { snake: "name", wire: "name", location: FieldLocation::Body },
+        FieldSpec { snake: "token", wire: "token", location: FieldLocation::Body },
+        FieldSpec { snake: "url", wire: "url", location: FieldLocation::Body },
     ],
     auth: &[
         AuthApply { secret_key: "slackAuth", kind: AuthKind::Bearer },
@@ -828,6 +2026,9 @@ const OP_ADMIN_EMOJI_ADD_ALIAS: OpSpec = OpSpec {
     method: "POST",
     path_template: "/admin.emoji.addAlias",
     fields: &[
+        FieldSpec { snake: "alias_for", wire: "alias_for", location: FieldLocation::Body },
+        FieldSpec { snake: "name", wire: "name", location: FieldLocation::Body },
+        FieldSpec { snake: "token", wire: "token", location: FieldLocation::Body },
     ],
     auth: &[
         AuthApply { secret_key: "slackAuth", kind: AuthKind::Bearer },
@@ -838,9 +2039,9 @@ const OP_ADMIN_EMOJI_LIST_OP: OpSpec = OpSpec {
     method: "GET",
     path_template: "/admin.emoji.list",
     fields: &[
-        FieldSpec { snake: "token", location: FieldLocation::Query },
-        FieldSpec { snake: "cursor", location: FieldLocation::Query },
-        FieldSpec { snake: "limit", location: FieldLocation::Query },
+        FieldSpec { snake: "token", wire: "token", location: FieldLocation::Query },
+        FieldSpec { snake: "cursor", wire: "cursor", location: FieldLocation::Query },
+        FieldSpec { snake: "limit", wire: "limit", location: FieldLocation::Query },
     ],
     auth: &[
         AuthApply { secret_key: "slackAuth", kind: AuthKind::Bearer },
@@ -851,6 +2052,8 @@ const OP_ADMIN_EMOJI_REMOVE: OpSpec = OpSpec {
     method: "POST",
     path_template: "/admin.emoji.remove",
     fields: &[
+        FieldSpec { snake: "name", wire: "name", location: FieldLocation::Body },
+        FieldSpec { snake: "token", wire: "token", location: FieldLocation::Body },
     ],
     auth: &[
         AuthApply { secret_key: "slackAuth", kind: AuthKind::Bearer },
@@ -861,11 +2064,66 @@ const OP_ADMIN_EMOJI_RENAME: OpSpec = OpSpec {
     method: "POST",
     path_template: "/admin.emoji.rename",
     fields: &[
+        FieldSpec { snake: "name", wire: "name", location: FieldLocation::Body },
+        FieldSpec { snake: "new_name", wire: "new_name", location: FieldLocation::Body },
+        FieldSpec { snake: "token", wire: "token", location: FieldLocation::Body },
     ],
     auth: &[
         AuthApply { secret_key: "slackAuth", kind: AuthKind::Bearer },
     ],
 };
+
+fn iface_admin_emoji__add_response__to_json(p: &iface_admin_emoji::AddResponse) -> Value {
+    let mut m = Map::new();
+    m.insert("ok".into(), iface_admin_emoji__defs_ok_true__to_json(&p.ok));
+    Value::Object(m)
+}
+
+fn iface_admin_emoji__defs_ok_true__to_json(p: &iface_admin_emoji::DefsOkTrue) -> Value {
+    let mut m = Map::new();
+    m.insert("value".into(), Value::String((&p.value).clone()));
+    Value::Object(m)
+}
+
+fn iface_admin_emoji__add_alias_response__to_json(p: &iface_admin_emoji::AddAliasResponse) -> Value {
+    let mut m = Map::new();
+    m.insert("ok".into(), iface_admin_emoji__defs_ok_true__to_json(&p.ok));
+    Value::Object(m)
+}
+
+fn iface_admin_emoji__list_op_response__to_json(p: &iface_admin_emoji::ListOpResponse) -> Value {
+    let mut m = Map::new();
+    m.insert("ok".into(), iface_admin_emoji__defs_ok_true__to_json(&p.ok));
+    Value::Object(m)
+}
+
+fn iface_admin_emoji__remove_response__to_json(p: &iface_admin_emoji::RemoveResponse) -> Value {
+    let mut m = Map::new();
+    m.insert("ok".into(), iface_admin_emoji__defs_ok_true__to_json(&p.ok));
+    Value::Object(m)
+}
+
+fn iface_admin_emoji__rename_response__to_json(p: &iface_admin_emoji::RenameResponse) -> Value {
+    let mut m = Map::new();
+    m.insert("ok".into(), iface_admin_emoji__defs_ok_true__to_json(&p.ok));
+    Value::Object(m)
+}
+
+fn iface_admin_emoji__add_params__to_json(p: &iface_admin_emoji::AddParams) -> Value {
+    let mut m = Map::new();
+    m.insert("name".into(), Value::String((&p.name).clone()));
+    m.insert("token".into(), Value::String((&p.token).clone()));
+    m.insert("url".into(), Value::String((&p.url).clone()));
+    Value::Object(m)
+}
+
+fn iface_admin_emoji__add_alias_params__to_json(p: &iface_admin_emoji::AddAliasParams) -> Value {
+    let mut m = Map::new();
+    m.insert("alias_for".into(), Value::String((&p.alias_for).clone()));
+    m.insert("name".into(), Value::String((&p.name).clone()));
+    m.insert("token".into(), Value::String((&p.token).clone()));
+    Value::Object(m)
+}
 
 fn iface_admin_emoji__list_op_params__to_json(p: &iface_admin_emoji::ListOpParams) -> Value {
     let mut m = Map::new();
@@ -875,22 +2133,188 @@ fn iface_admin_emoji__list_op_params__to_json(p: &iface_admin_emoji::ListOpParam
     Value::Object(m)
 }
 
+fn iface_admin_emoji__remove_params__to_json(p: &iface_admin_emoji::RemoveParams) -> Value {
+    let mut m = Map::new();
+    m.insert("name".into(), Value::String((&p.name).clone()));
+    m.insert("token".into(), Value::String((&p.token).clone()));
+    Value::Object(m)
+}
+
+fn iface_admin_emoji__rename_params__to_json(p: &iface_admin_emoji::RenameParams) -> Value {
+    let mut m = Map::new();
+    m.insert("name".into(), Value::String((&p.name).clone()));
+    m.insert("new_name".into(), Value::String((&p.new_name).clone()));
+    m.insert("token".into(), Value::String((&p.token).clone()));
+    Value::Object(m)
+}
+
+fn iface_admin_emoji__add_response__from_json(v: &Value) -> Option<iface_admin_emoji::AddResponse> {
+    let m = v.as_object()?;
+    Some(iface_admin_emoji::AddResponse {
+        ok: match m.get("ok").and_then(|v| iface_admin_emoji__defs_ok_true__from_json(v)) { Some(x) => x, None => return None },
+    })
+}
+
+fn iface_admin_emoji__defs_ok_true__from_json(v: &Value) -> Option<iface_admin_emoji::DefsOkTrue> {
+    let m = v.as_object()?;
+    Some(iface_admin_emoji::DefsOkTrue {
+        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+    })
+}
+
+fn iface_admin_emoji__add_alias_response__from_json(v: &Value) -> Option<iface_admin_emoji::AddAliasResponse> {
+    let m = v.as_object()?;
+    Some(iface_admin_emoji::AddAliasResponse {
+        ok: match m.get("ok").and_then(|v| iface_admin_emoji__defs_ok_true__from_json(v)) { Some(x) => x, None => return None },
+    })
+}
+
+fn iface_admin_emoji__list_op_response__from_json(v: &Value) -> Option<iface_admin_emoji::ListOpResponse> {
+    let m = v.as_object()?;
+    Some(iface_admin_emoji::ListOpResponse {
+        ok: match m.get("ok").and_then(|v| iface_admin_emoji__defs_ok_true__from_json(v)) { Some(x) => x, None => return None },
+    })
+}
+
+fn iface_admin_emoji__remove_response__from_json(v: &Value) -> Option<iface_admin_emoji::RemoveResponse> {
+    let m = v.as_object()?;
+    Some(iface_admin_emoji::RemoveResponse {
+        ok: match m.get("ok").and_then(|v| iface_admin_emoji__defs_ok_true__from_json(v)) { Some(x) => x, None => return None },
+    })
+}
+
+fn iface_admin_emoji__rename_response__from_json(v: &Value) -> Option<iface_admin_emoji::RenameResponse> {
+    let m = v.as_object()?;
+    Some(iface_admin_emoji::RenameResponse {
+        ok: match m.get("ok").and_then(|v| iface_admin_emoji__defs_ok_true__from_json(v)) { Some(x) => x, None => return None },
+    })
+}
+
+fn iface_admin_emoji__add__ok(body: String) -> Result<iface_admin_emoji::AddResponse, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match iface_admin_emoji__add_response__from_json(&v) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_admin_emoji__add__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
+fn iface_admin_emoji__add_alias__ok(body: String) -> Result<iface_admin_emoji::AddAliasResponse, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match iface_admin_emoji__add_alias_response__from_json(&v) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_admin_emoji__add_alias__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
+fn iface_admin_emoji__list_op__ok(body: String) -> Result<iface_admin_emoji::ListOpResponse, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match iface_admin_emoji__list_op_response__from_json(&v) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_admin_emoji__list_op__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
+fn iface_admin_emoji__remove__ok(body: String) -> Result<iface_admin_emoji::RemoveResponse, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match iface_admin_emoji__remove_response__from_json(&v) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_admin_emoji__remove__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
+fn iface_admin_emoji__rename__ok(body: String) -> Result<iface_admin_emoji::RenameResponse, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match iface_admin_emoji__rename_response__from_json(&v) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_admin_emoji__rename__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
 impl iface_admin_emoji::Guest for crate::Component {
-    fn add() -> Result<String, String> {
-        dispatch(&OP_ADMIN_EMOJI_ADD, Value::Object(Map::new()))
+    fn add(params: iface_admin_emoji::AddParams) -> Result<iface_admin_emoji::AddResponse, String> {
+        let json = iface_admin_emoji__add_params__to_json(&params);
+        match dispatch(&OP_ADMIN_EMOJI_ADD, json).and_then(iface_admin_emoji__add__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_admin_emoji__add__err(e)),
+        }
     }
-    fn add_alias() -> Result<String, String> {
-        dispatch(&OP_ADMIN_EMOJI_ADD_ALIAS, Value::Object(Map::new()))
+    fn add_alias(params: iface_admin_emoji::AddAliasParams) -> Result<iface_admin_emoji::AddAliasResponse, String> {
+        let json = iface_admin_emoji__add_alias_params__to_json(&params);
+        match dispatch(&OP_ADMIN_EMOJI_ADD_ALIAS, json).and_then(iface_admin_emoji__add_alias__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_admin_emoji__add_alias__err(e)),
+        }
     }
-    fn list_op(params: iface_admin_emoji::ListOpParams) -> Result<String, String> {
+    fn list_op(params: iface_admin_emoji::ListOpParams) -> Result<iface_admin_emoji::ListOpResponse, String> {
         let json = iface_admin_emoji__list_op_params__to_json(&params);
-        dispatch(&OP_ADMIN_EMOJI_LIST_OP, json)
+        match dispatch(&OP_ADMIN_EMOJI_LIST_OP, json).and_then(iface_admin_emoji__list_op__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_admin_emoji__list_op__err(e)),
+        }
     }
-    fn remove() -> Result<String, String> {
-        dispatch(&OP_ADMIN_EMOJI_REMOVE, Value::Object(Map::new()))
+    fn remove(params: iface_admin_emoji::RemoveParams) -> Result<iface_admin_emoji::RemoveResponse, String> {
+        let json = iface_admin_emoji__remove_params__to_json(&params);
+        match dispatch(&OP_ADMIN_EMOJI_REMOVE, json).and_then(iface_admin_emoji__remove__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_admin_emoji__remove__err(e)),
+        }
     }
-    fn rename() -> Result<String, String> {
-        dispatch(&OP_ADMIN_EMOJI_RENAME, Value::Object(Map::new()))
+    fn rename(params: iface_admin_emoji::RenameParams) -> Result<iface_admin_emoji::RenameResponse, String> {
+        let json = iface_admin_emoji__rename_params__to_json(&params);
+        match dispatch(&OP_ADMIN_EMOJI_RENAME, json).and_then(iface_admin_emoji__rename__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_admin_emoji__rename__err(e)),
+        }
     }
 }
 use crate::exports::autostamp::slack::admin_invite_requests as iface_admin_invite_requests;
@@ -899,7 +2323,9 @@ const OP_ADMIN_INVITE_REQUESTS_APPROVE: OpSpec = OpSpec {
     method: "POST",
     path_template: "/admin.inviteRequests.approve",
     fields: &[
-        FieldSpec { snake: "token", location: FieldLocation::Header },
+        FieldSpec { snake: "token", wire: "token", location: FieldLocation::Header },
+        FieldSpec { snake: "invite_request_id", wire: "invite_request_id", location: FieldLocation::Body },
+        FieldSpec { snake: "team_id", wire: "team_id", location: FieldLocation::Body },
     ],
     auth: &[
         AuthApply { secret_key: "slackAuth", kind: AuthKind::Bearer },
@@ -910,7 +2336,9 @@ const OP_ADMIN_INVITE_REQUESTS_DENY: OpSpec = OpSpec {
     method: "POST",
     path_template: "/admin.inviteRequests.deny",
     fields: &[
-        FieldSpec { snake: "token", location: FieldLocation::Header },
+        FieldSpec { snake: "token", wire: "token", location: FieldLocation::Header },
+        FieldSpec { snake: "invite_request_id", wire: "invite_request_id", location: FieldLocation::Body },
+        FieldSpec { snake: "team_id", wire: "team_id", location: FieldLocation::Body },
     ],
     auth: &[
         AuthApply { secret_key: "slackAuth", kind: AuthKind::Bearer },
@@ -921,25 +2349,53 @@ const OP_ADMIN_INVITE_REQUESTS_LIST_OP: OpSpec = OpSpec {
     method: "GET",
     path_template: "/admin.inviteRequests.list",
     fields: &[
-        FieldSpec { snake: "token", location: FieldLocation::Header },
-        FieldSpec { snake: "team_id", location: FieldLocation::Query },
-        FieldSpec { snake: "cursor", location: FieldLocation::Query },
-        FieldSpec { snake: "limit", location: FieldLocation::Query },
+        FieldSpec { snake: "token", wire: "token", location: FieldLocation::Header },
+        FieldSpec { snake: "team_id", wire: "team_id", location: FieldLocation::Query },
+        FieldSpec { snake: "cursor", wire: "cursor", location: FieldLocation::Query },
+        FieldSpec { snake: "limit", wire: "limit", location: FieldLocation::Query },
     ],
     auth: &[
         AuthApply { secret_key: "slackAuth", kind: AuthKind::Bearer },
     ],
 };
 
+fn iface_admin_invite_requests__approve_response__to_json(p: &iface_admin_invite_requests::ApproveResponse) -> Value {
+    let mut m = Map::new();
+    m.insert("ok".into(), iface_admin_invite_requests__defs_ok_true__to_json(&p.ok));
+    Value::Object(m)
+}
+
+fn iface_admin_invite_requests__defs_ok_true__to_json(p: &iface_admin_invite_requests::DefsOkTrue) -> Value {
+    let mut m = Map::new();
+    m.insert("value".into(), Value::String((&p.value).clone()));
+    Value::Object(m)
+}
+
+fn iface_admin_invite_requests__deny_response__to_json(p: &iface_admin_invite_requests::DenyResponse) -> Value {
+    let mut m = Map::new();
+    m.insert("ok".into(), iface_admin_invite_requests__defs_ok_true__to_json(&p.ok));
+    Value::Object(m)
+}
+
+fn iface_admin_invite_requests__list_op_response__to_json(p: &iface_admin_invite_requests::ListOpResponse) -> Value {
+    let mut m = Map::new();
+    m.insert("ok".into(), iface_admin_invite_requests__defs_ok_true__to_json(&p.ok));
+    Value::Object(m)
+}
+
 fn iface_admin_invite_requests__approve_params__to_json(p: &iface_admin_invite_requests::ApproveParams) -> Value {
     let mut m = Map::new();
     m.insert("token".into(), Value::String((&p.token).clone()));
+    m.insert("invite_request_id".into(), Value::String((&p.invite_request_id).clone()));
+    m.insert("team_id".into(), match (&p.team_id) { Some(v) => Value::String((v).clone()), None => Value::Null });
     Value::Object(m)
 }
 
 fn iface_admin_invite_requests__deny_params__to_json(p: &iface_admin_invite_requests::DenyParams) -> Value {
     let mut m = Map::new();
     m.insert("token".into(), Value::String((&p.token).clone()));
+    m.insert("invite_request_id".into(), Value::String((&p.invite_request_id).clone()));
+    m.insert("team_id".into(), match (&p.team_id) { Some(v) => Value::String((v).clone()), None => Value::Null });
     Value::Object(m)
 }
 
@@ -952,18 +2408,109 @@ fn iface_admin_invite_requests__list_op_params__to_json(p: &iface_admin_invite_r
     Value::Object(m)
 }
 
+fn iface_admin_invite_requests__approve_response__from_json(v: &Value) -> Option<iface_admin_invite_requests::ApproveResponse> {
+    let m = v.as_object()?;
+    Some(iface_admin_invite_requests::ApproveResponse {
+        ok: match m.get("ok").and_then(|v| iface_admin_invite_requests__defs_ok_true__from_json(v)) { Some(x) => x, None => return None },
+    })
+}
+
+fn iface_admin_invite_requests__defs_ok_true__from_json(v: &Value) -> Option<iface_admin_invite_requests::DefsOkTrue> {
+    let m = v.as_object()?;
+    Some(iface_admin_invite_requests::DefsOkTrue {
+        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+    })
+}
+
+fn iface_admin_invite_requests__deny_response__from_json(v: &Value) -> Option<iface_admin_invite_requests::DenyResponse> {
+    let m = v.as_object()?;
+    Some(iface_admin_invite_requests::DenyResponse {
+        ok: match m.get("ok").and_then(|v| iface_admin_invite_requests__defs_ok_true__from_json(v)) { Some(x) => x, None => return None },
+    })
+}
+
+fn iface_admin_invite_requests__list_op_response__from_json(v: &Value) -> Option<iface_admin_invite_requests::ListOpResponse> {
+    let m = v.as_object()?;
+    Some(iface_admin_invite_requests::ListOpResponse {
+        ok: match m.get("ok").and_then(|v| iface_admin_invite_requests__defs_ok_true__from_json(v)) { Some(x) => x, None => return None },
+    })
+}
+
+fn iface_admin_invite_requests__approve__ok(body: String) -> Result<iface_admin_invite_requests::ApproveResponse, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match iface_admin_invite_requests__approve_response__from_json(&v) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_admin_invite_requests__approve__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
+fn iface_admin_invite_requests__deny__ok(body: String) -> Result<iface_admin_invite_requests::DenyResponse, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match iface_admin_invite_requests__deny_response__from_json(&v) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_admin_invite_requests__deny__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
+fn iface_admin_invite_requests__list_op__ok(body: String) -> Result<iface_admin_invite_requests::ListOpResponse, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match iface_admin_invite_requests__list_op_response__from_json(&v) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_admin_invite_requests__list_op__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
 impl iface_admin_invite_requests::Guest for crate::Component {
-    fn approve(params: iface_admin_invite_requests::ApproveParams) -> Result<String, String> {
+    fn approve(params: iface_admin_invite_requests::ApproveParams) -> Result<iface_admin_invite_requests::ApproveResponse, String> {
         let json = iface_admin_invite_requests__approve_params__to_json(&params);
-        dispatch(&OP_ADMIN_INVITE_REQUESTS_APPROVE, json)
+        match dispatch(&OP_ADMIN_INVITE_REQUESTS_APPROVE, json).and_then(iface_admin_invite_requests__approve__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_admin_invite_requests__approve__err(e)),
+        }
     }
-    fn deny(params: iface_admin_invite_requests::DenyParams) -> Result<String, String> {
+    fn deny(params: iface_admin_invite_requests::DenyParams) -> Result<iface_admin_invite_requests::DenyResponse, String> {
         let json = iface_admin_invite_requests__deny_params__to_json(&params);
-        dispatch(&OP_ADMIN_INVITE_REQUESTS_DENY, json)
+        match dispatch(&OP_ADMIN_INVITE_REQUESTS_DENY, json).and_then(iface_admin_invite_requests__deny__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_admin_invite_requests__deny__err(e)),
+        }
     }
-    fn list_op(params: iface_admin_invite_requests::ListOpParams) -> Result<String, String> {
+    fn list_op(params: iface_admin_invite_requests::ListOpParams) -> Result<iface_admin_invite_requests::ListOpResponse, String> {
         let json = iface_admin_invite_requests__list_op_params__to_json(&params);
-        dispatch(&OP_ADMIN_INVITE_REQUESTS_LIST_OP, json)
+        match dispatch(&OP_ADMIN_INVITE_REQUESTS_LIST_OP, json).and_then(iface_admin_invite_requests__list_op__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_admin_invite_requests__list_op__err(e)),
+        }
     }
 }
 use crate::exports::autostamp::slack::admin_invite_requests_approved as iface_admin_invite_requests_approved;
@@ -972,15 +2519,27 @@ const OP_ADMIN_INVITE_REQUESTS_APPROVED_LIST_OP: OpSpec = OpSpec {
     method: "GET",
     path_template: "/admin.inviteRequests.approved.list",
     fields: &[
-        FieldSpec { snake: "token", location: FieldLocation::Header },
-        FieldSpec { snake: "team_id", location: FieldLocation::Query },
-        FieldSpec { snake: "cursor", location: FieldLocation::Query },
-        FieldSpec { snake: "limit", location: FieldLocation::Query },
+        FieldSpec { snake: "token", wire: "token", location: FieldLocation::Header },
+        FieldSpec { snake: "team_id", wire: "team_id", location: FieldLocation::Query },
+        FieldSpec { snake: "cursor", wire: "cursor", location: FieldLocation::Query },
+        FieldSpec { snake: "limit", wire: "limit", location: FieldLocation::Query },
     ],
     auth: &[
         AuthApply { secret_key: "slackAuth", kind: AuthKind::Bearer },
     ],
 };
+
+fn iface_admin_invite_requests_approved__list_op_response__to_json(p: &iface_admin_invite_requests_approved::ListOpResponse) -> Value {
+    let mut m = Map::new();
+    m.insert("ok".into(), iface_admin_invite_requests_approved__defs_ok_true__to_json(&p.ok));
+    Value::Object(m)
+}
+
+fn iface_admin_invite_requests_approved__defs_ok_true__to_json(p: &iface_admin_invite_requests_approved::DefsOkTrue) -> Value {
+    let mut m = Map::new();
+    m.insert("value".into(), Value::String((&p.value).clone()));
+    Value::Object(m)
+}
 
 fn iface_admin_invite_requests_approved__list_op_params__to_json(p: &iface_admin_invite_requests_approved::ListOpParams) -> Value {
     let mut m = Map::new();
@@ -991,10 +2550,45 @@ fn iface_admin_invite_requests_approved__list_op_params__to_json(p: &iface_admin
     Value::Object(m)
 }
 
+fn iface_admin_invite_requests_approved__list_op_response__from_json(v: &Value) -> Option<iface_admin_invite_requests_approved::ListOpResponse> {
+    let m = v.as_object()?;
+    Some(iface_admin_invite_requests_approved::ListOpResponse {
+        ok: match m.get("ok").and_then(|v| iface_admin_invite_requests_approved__defs_ok_true__from_json(v)) { Some(x) => x, None => return None },
+    })
+}
+
+fn iface_admin_invite_requests_approved__defs_ok_true__from_json(v: &Value) -> Option<iface_admin_invite_requests_approved::DefsOkTrue> {
+    let m = v.as_object()?;
+    Some(iface_admin_invite_requests_approved::DefsOkTrue {
+        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+    })
+}
+
+fn iface_admin_invite_requests_approved__list_op__ok(body: String) -> Result<iface_admin_invite_requests_approved::ListOpResponse, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match iface_admin_invite_requests_approved__list_op_response__from_json(&v) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_admin_invite_requests_approved__list_op__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
 impl iface_admin_invite_requests_approved::Guest for crate::Component {
-    fn list_op(params: iface_admin_invite_requests_approved::ListOpParams) -> Result<String, String> {
+    fn list_op(params: iface_admin_invite_requests_approved::ListOpParams) -> Result<iface_admin_invite_requests_approved::ListOpResponse, String> {
         let json = iface_admin_invite_requests_approved__list_op_params__to_json(&params);
-        dispatch(&OP_ADMIN_INVITE_REQUESTS_APPROVED_LIST_OP, json)
+        match dispatch(&OP_ADMIN_INVITE_REQUESTS_APPROVED_LIST_OP, json).and_then(iface_admin_invite_requests_approved__list_op__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_admin_invite_requests_approved__list_op__err(e)),
+        }
     }
 }
 use crate::exports::autostamp::slack::admin_invite_requests_denied as iface_admin_invite_requests_denied;
@@ -1003,15 +2597,27 @@ const OP_ADMIN_INVITE_REQUESTS_DENIED_LIST_OP: OpSpec = OpSpec {
     method: "GET",
     path_template: "/admin.inviteRequests.denied.list",
     fields: &[
-        FieldSpec { snake: "token", location: FieldLocation::Header },
-        FieldSpec { snake: "team_id", location: FieldLocation::Query },
-        FieldSpec { snake: "cursor", location: FieldLocation::Query },
-        FieldSpec { snake: "limit", location: FieldLocation::Query },
+        FieldSpec { snake: "token", wire: "token", location: FieldLocation::Header },
+        FieldSpec { snake: "team_id", wire: "team_id", location: FieldLocation::Query },
+        FieldSpec { snake: "cursor", wire: "cursor", location: FieldLocation::Query },
+        FieldSpec { snake: "limit", wire: "limit", location: FieldLocation::Query },
     ],
     auth: &[
         AuthApply { secret_key: "slackAuth", kind: AuthKind::Bearer },
     ],
 };
+
+fn iface_admin_invite_requests_denied__list_op_response__to_json(p: &iface_admin_invite_requests_denied::ListOpResponse) -> Value {
+    let mut m = Map::new();
+    m.insert("ok".into(), iface_admin_invite_requests_denied__defs_ok_true__to_json(&p.ok));
+    Value::Object(m)
+}
+
+fn iface_admin_invite_requests_denied__defs_ok_true__to_json(p: &iface_admin_invite_requests_denied::DefsOkTrue) -> Value {
+    let mut m = Map::new();
+    m.insert("value".into(), Value::String((&p.value).clone()));
+    Value::Object(m)
+}
 
 fn iface_admin_invite_requests_denied__list_op_params__to_json(p: &iface_admin_invite_requests_denied::ListOpParams) -> Value {
     let mut m = Map::new();
@@ -1022,10 +2628,45 @@ fn iface_admin_invite_requests_denied__list_op_params__to_json(p: &iface_admin_i
     Value::Object(m)
 }
 
+fn iface_admin_invite_requests_denied__list_op_response__from_json(v: &Value) -> Option<iface_admin_invite_requests_denied::ListOpResponse> {
+    let m = v.as_object()?;
+    Some(iface_admin_invite_requests_denied::ListOpResponse {
+        ok: match m.get("ok").and_then(|v| iface_admin_invite_requests_denied__defs_ok_true__from_json(v)) { Some(x) => x, None => return None },
+    })
+}
+
+fn iface_admin_invite_requests_denied__defs_ok_true__from_json(v: &Value) -> Option<iface_admin_invite_requests_denied::DefsOkTrue> {
+    let m = v.as_object()?;
+    Some(iface_admin_invite_requests_denied::DefsOkTrue {
+        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+    })
+}
+
+fn iface_admin_invite_requests_denied__list_op__ok(body: String) -> Result<iface_admin_invite_requests_denied::ListOpResponse, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match iface_admin_invite_requests_denied__list_op_response__from_json(&v) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_admin_invite_requests_denied__list_op__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
 impl iface_admin_invite_requests_denied::Guest for crate::Component {
-    fn list_op(params: iface_admin_invite_requests_denied::ListOpParams) -> Result<String, String> {
+    fn list_op(params: iface_admin_invite_requests_denied::ListOpParams) -> Result<iface_admin_invite_requests_denied::ListOpResponse, String> {
         let json = iface_admin_invite_requests_denied__list_op_params__to_json(&params);
-        dispatch(&OP_ADMIN_INVITE_REQUESTS_DENIED_LIST_OP, json)
+        match dispatch(&OP_ADMIN_INVITE_REQUESTS_DENIED_LIST_OP, json).and_then(iface_admin_invite_requests_denied__list_op__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_admin_invite_requests_denied__list_op__err(e)),
+        }
     }
 }
 use crate::exports::autostamp::slack::admin_teams_admins as iface_admin_teams_admins;
@@ -1034,15 +2675,27 @@ const OP_ADMIN_TEAMS_ADMINS_LIST_OP: OpSpec = OpSpec {
     method: "GET",
     path_template: "/admin.teams.admins.list",
     fields: &[
-        FieldSpec { snake: "token", location: FieldLocation::Query },
-        FieldSpec { snake: "limit", location: FieldLocation::Query },
-        FieldSpec { snake: "cursor", location: FieldLocation::Query },
-        FieldSpec { snake: "team_id", location: FieldLocation::Query },
+        FieldSpec { snake: "token", wire: "token", location: FieldLocation::Query },
+        FieldSpec { snake: "limit", wire: "limit", location: FieldLocation::Query },
+        FieldSpec { snake: "cursor", wire: "cursor", location: FieldLocation::Query },
+        FieldSpec { snake: "team_id", wire: "team_id", location: FieldLocation::Query },
     ],
     auth: &[
         AuthApply { secret_key: "slackAuth", kind: AuthKind::Bearer },
     ],
 };
+
+fn iface_admin_teams_admins__list_op_response__to_json(p: &iface_admin_teams_admins::ListOpResponse) -> Value {
+    let mut m = Map::new();
+    m.insert("ok".into(), iface_admin_teams_admins__defs_ok_true__to_json(&p.ok));
+    Value::Object(m)
+}
+
+fn iface_admin_teams_admins__defs_ok_true__to_json(p: &iface_admin_teams_admins::DefsOkTrue) -> Value {
+    let mut m = Map::new();
+    m.insert("value".into(), Value::String((&p.value).clone()));
+    Value::Object(m)
+}
 
 fn iface_admin_teams_admins__list_op_params__to_json(p: &iface_admin_teams_admins::ListOpParams) -> Value {
     let mut m = Map::new();
@@ -1053,10 +2706,45 @@ fn iface_admin_teams_admins__list_op_params__to_json(p: &iface_admin_teams_admin
     Value::Object(m)
 }
 
+fn iface_admin_teams_admins__list_op_response__from_json(v: &Value) -> Option<iface_admin_teams_admins::ListOpResponse> {
+    let m = v.as_object()?;
+    Some(iface_admin_teams_admins::ListOpResponse {
+        ok: match m.get("ok").and_then(|v| iface_admin_teams_admins__defs_ok_true__from_json(v)) { Some(x) => x, None => return None },
+    })
+}
+
+fn iface_admin_teams_admins__defs_ok_true__from_json(v: &Value) -> Option<iface_admin_teams_admins::DefsOkTrue> {
+    let m = v.as_object()?;
+    Some(iface_admin_teams_admins::DefsOkTrue {
+        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+    })
+}
+
+fn iface_admin_teams_admins__list_op__ok(body: String) -> Result<iface_admin_teams_admins::ListOpResponse, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match iface_admin_teams_admins__list_op_response__from_json(&v) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_admin_teams_admins__list_op__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
 impl iface_admin_teams_admins::Guest for crate::Component {
-    fn list_op(params: iface_admin_teams_admins::ListOpParams) -> Result<String, String> {
+    fn list_op(params: iface_admin_teams_admins::ListOpParams) -> Result<iface_admin_teams_admins::ListOpResponse, String> {
         let json = iface_admin_teams_admins__list_op_params__to_json(&params);
-        dispatch(&OP_ADMIN_TEAMS_ADMINS_LIST_OP, json)
+        match dispatch(&OP_ADMIN_TEAMS_ADMINS_LIST_OP, json).and_then(iface_admin_teams_admins__list_op__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_admin_teams_admins__list_op__err(e)),
+        }
     }
 }
 use crate::exports::autostamp::slack::admin_teams as iface_admin_teams;
@@ -1065,7 +2753,11 @@ const OP_ADMIN_TEAMS_CREATE: OpSpec = OpSpec {
     method: "POST",
     path_template: "/admin.teams.create",
     fields: &[
-        FieldSpec { snake: "token", location: FieldLocation::Header },
+        FieldSpec { snake: "token", wire: "token", location: FieldLocation::Header },
+        FieldSpec { snake: "team_description", wire: "team_description", location: FieldLocation::Body },
+        FieldSpec { snake: "team_discoverability", wire: "team_discoverability", location: FieldLocation::Body },
+        FieldSpec { snake: "team_domain", wire: "team_domain", location: FieldLocation::Body },
+        FieldSpec { snake: "team_name", wire: "team_name", location: FieldLocation::Body },
     ],
     auth: &[
         AuthApply { secret_key: "slackAuth", kind: AuthKind::Bearer },
@@ -1076,18 +2768,40 @@ const OP_ADMIN_TEAMS_LIST_OP: OpSpec = OpSpec {
     method: "GET",
     path_template: "/admin.teams.list",
     fields: &[
-        FieldSpec { snake: "token", location: FieldLocation::Header },
-        FieldSpec { snake: "limit", location: FieldLocation::Query },
-        FieldSpec { snake: "cursor", location: FieldLocation::Query },
+        FieldSpec { snake: "token", wire: "token", location: FieldLocation::Header },
+        FieldSpec { snake: "limit", wire: "limit", location: FieldLocation::Query },
+        FieldSpec { snake: "cursor", wire: "cursor", location: FieldLocation::Query },
     ],
     auth: &[
         AuthApply { secret_key: "slackAuth", kind: AuthKind::Bearer },
     ],
 };
 
+fn iface_admin_teams__create_response__to_json(p: &iface_admin_teams::CreateResponse) -> Value {
+    let mut m = Map::new();
+    m.insert("ok".into(), iface_admin_teams__defs_ok_true__to_json(&p.ok));
+    Value::Object(m)
+}
+
+fn iface_admin_teams__defs_ok_true__to_json(p: &iface_admin_teams::DefsOkTrue) -> Value {
+    let mut m = Map::new();
+    m.insert("value".into(), Value::String((&p.value).clone()));
+    Value::Object(m)
+}
+
+fn iface_admin_teams__list_op_response__to_json(p: &iface_admin_teams::ListOpResponse) -> Value {
+    let mut m = Map::new();
+    m.insert("ok".into(), iface_admin_teams__defs_ok_true__to_json(&p.ok));
+    Value::Object(m)
+}
+
 fn iface_admin_teams__create_params__to_json(p: &iface_admin_teams::CreateParams) -> Value {
     let mut m = Map::new();
     m.insert("token".into(), Value::String((&p.token).clone()));
+    m.insert("team_description".into(), match (&p.team_description) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("team_discoverability".into(), match (&p.team_discoverability) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("team_domain".into(), Value::String((&p.team_domain).clone()));
+    m.insert("team_name".into(), Value::String((&p.team_name).clone()));
     Value::Object(m)
 }
 
@@ -1099,14 +2813,77 @@ fn iface_admin_teams__list_op_params__to_json(p: &iface_admin_teams::ListOpParam
     Value::Object(m)
 }
 
-impl iface_admin_teams::Guest for crate::Component {
-    fn create(params: iface_admin_teams::CreateParams) -> Result<String, String> {
-        let json = iface_admin_teams__create_params__to_json(&params);
-        dispatch(&OP_ADMIN_TEAMS_CREATE, json)
+fn iface_admin_teams__create_response__from_json(v: &Value) -> Option<iface_admin_teams::CreateResponse> {
+    let m = v.as_object()?;
+    Some(iface_admin_teams::CreateResponse {
+        ok: match m.get("ok").and_then(|v| iface_admin_teams__defs_ok_true__from_json(v)) { Some(x) => x, None => return None },
+    })
+}
+
+fn iface_admin_teams__defs_ok_true__from_json(v: &Value) -> Option<iface_admin_teams::DefsOkTrue> {
+    let m = v.as_object()?;
+    Some(iface_admin_teams::DefsOkTrue {
+        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+    })
+}
+
+fn iface_admin_teams__list_op_response__from_json(v: &Value) -> Option<iface_admin_teams::ListOpResponse> {
+    let m = v.as_object()?;
+    Some(iface_admin_teams::ListOpResponse {
+        ok: match m.get("ok").and_then(|v| iface_admin_teams__defs_ok_true__from_json(v)) { Some(x) => x, None => return None },
+    })
+}
+
+fn iface_admin_teams__create__ok(body: String) -> Result<iface_admin_teams::CreateResponse, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match iface_admin_teams__create_response__from_json(&v) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
     }
-    fn list_op(params: iface_admin_teams::ListOpParams) -> Result<String, String> {
+}
+
+fn iface_admin_teams__create__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
+fn iface_admin_teams__list_op__ok(body: String) -> Result<iface_admin_teams::ListOpResponse, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match iface_admin_teams__list_op_response__from_json(&v) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_admin_teams__list_op__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
+impl iface_admin_teams::Guest for crate::Component {
+    fn create(params: iface_admin_teams::CreateParams) -> Result<iface_admin_teams::CreateResponse, String> {
+        let json = iface_admin_teams__create_params__to_json(&params);
+        match dispatch(&OP_ADMIN_TEAMS_CREATE, json).and_then(iface_admin_teams__create__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_admin_teams__create__err(e)),
+        }
+    }
+    fn list_op(params: iface_admin_teams::ListOpParams) -> Result<iface_admin_teams::ListOpResponse, String> {
         let json = iface_admin_teams__list_op_params__to_json(&params);
-        dispatch(&OP_ADMIN_TEAMS_LIST_OP, json)
+        match dispatch(&OP_ADMIN_TEAMS_LIST_OP, json).and_then(iface_admin_teams__list_op__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_admin_teams__list_op__err(e)),
+        }
     }
 }
 use crate::exports::autostamp::slack::admin_teams_owners as iface_admin_teams_owners;
@@ -1115,15 +2892,27 @@ const OP_ADMIN_TEAMS_OWNERS_LIST_OP: OpSpec = OpSpec {
     method: "GET",
     path_template: "/admin.teams.owners.list",
     fields: &[
-        FieldSpec { snake: "token", location: FieldLocation::Query },
-        FieldSpec { snake: "team_id", location: FieldLocation::Query },
-        FieldSpec { snake: "limit", location: FieldLocation::Query },
-        FieldSpec { snake: "cursor", location: FieldLocation::Query },
+        FieldSpec { snake: "token", wire: "token", location: FieldLocation::Query },
+        FieldSpec { snake: "team_id", wire: "team_id", location: FieldLocation::Query },
+        FieldSpec { snake: "limit", wire: "limit", location: FieldLocation::Query },
+        FieldSpec { snake: "cursor", wire: "cursor", location: FieldLocation::Query },
     ],
     auth: &[
         AuthApply { secret_key: "slackAuth", kind: AuthKind::Bearer },
     ],
 };
+
+fn iface_admin_teams_owners__list_op_response__to_json(p: &iface_admin_teams_owners::ListOpResponse) -> Value {
+    let mut m = Map::new();
+    m.insert("ok".into(), iface_admin_teams_owners__defs_ok_true__to_json(&p.ok));
+    Value::Object(m)
+}
+
+fn iface_admin_teams_owners__defs_ok_true__to_json(p: &iface_admin_teams_owners::DefsOkTrue) -> Value {
+    let mut m = Map::new();
+    m.insert("value".into(), Value::String((&p.value).clone()));
+    Value::Object(m)
+}
 
 fn iface_admin_teams_owners__list_op_params__to_json(p: &iface_admin_teams_owners::ListOpParams) -> Value {
     let mut m = Map::new();
@@ -1134,10 +2923,45 @@ fn iface_admin_teams_owners__list_op_params__to_json(p: &iface_admin_teams_owner
     Value::Object(m)
 }
 
+fn iface_admin_teams_owners__list_op_response__from_json(v: &Value) -> Option<iface_admin_teams_owners::ListOpResponse> {
+    let m = v.as_object()?;
+    Some(iface_admin_teams_owners::ListOpResponse {
+        ok: match m.get("ok").and_then(|v| iface_admin_teams_owners__defs_ok_true__from_json(v)) { Some(x) => x, None => return None },
+    })
+}
+
+fn iface_admin_teams_owners__defs_ok_true__from_json(v: &Value) -> Option<iface_admin_teams_owners::DefsOkTrue> {
+    let m = v.as_object()?;
+    Some(iface_admin_teams_owners::DefsOkTrue {
+        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+    })
+}
+
+fn iface_admin_teams_owners__list_op__ok(body: String) -> Result<iface_admin_teams_owners::ListOpResponse, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match iface_admin_teams_owners__list_op_response__from_json(&v) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_admin_teams_owners__list_op__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
 impl iface_admin_teams_owners::Guest for crate::Component {
-    fn list_op(params: iface_admin_teams_owners::ListOpParams) -> Result<String, String> {
+    fn list_op(params: iface_admin_teams_owners::ListOpParams) -> Result<iface_admin_teams_owners::ListOpResponse, String> {
         let json = iface_admin_teams_owners__list_op_params__to_json(&params);
-        dispatch(&OP_ADMIN_TEAMS_OWNERS_LIST_OP, json)
+        match dispatch(&OP_ADMIN_TEAMS_OWNERS_LIST_OP, json).and_then(iface_admin_teams_owners__list_op__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_admin_teams_owners__list_op__err(e)),
+        }
     }
 }
 use crate::exports::autostamp::slack::admin_teams_settings as iface_admin_teams_settings;
@@ -1146,8 +2970,8 @@ const OP_ADMIN_TEAMS_SETTINGS_INFO: OpSpec = OpSpec {
     method: "GET",
     path_template: "/admin.teams.settings.info",
     fields: &[
-        FieldSpec { snake: "token", location: FieldLocation::Header },
-        FieldSpec { snake: "team_id", location: FieldLocation::Query },
+        FieldSpec { snake: "token", wire: "token", location: FieldLocation::Header },
+        FieldSpec { snake: "team_id", wire: "team_id", location: FieldLocation::Query },
     ],
     auth: &[
         AuthApply { secret_key: "slackAuth", kind: AuthKind::Bearer },
@@ -1158,6 +2982,9 @@ const OP_ADMIN_TEAMS_SETTINGS_SET_DEFAULT_CHANNELS: OpSpec = OpSpec {
     method: "POST",
     path_template: "/admin.teams.settings.setDefaultChannels",
     fields: &[
+        FieldSpec { snake: "channel_ids", wire: "channel_ids", location: FieldLocation::Body },
+        FieldSpec { snake: "team_id", wire: "team_id", location: FieldLocation::Body },
+        FieldSpec { snake: "token", wire: "token", location: FieldLocation::Body },
     ],
     auth: &[
         AuthApply { secret_key: "slackAuth", kind: AuthKind::Bearer },
@@ -1168,7 +2995,9 @@ const OP_ADMIN_TEAMS_SETTINGS_SET_DESCRIPTION: OpSpec = OpSpec {
     method: "POST",
     path_template: "/admin.teams.settings.setDescription",
     fields: &[
-        FieldSpec { snake: "token", location: FieldLocation::Header },
+        FieldSpec { snake: "token", wire: "token", location: FieldLocation::Header },
+        FieldSpec { snake: "description", wire: "description", location: FieldLocation::Body },
+        FieldSpec { snake: "team_id", wire: "team_id", location: FieldLocation::Body },
     ],
     auth: &[
         AuthApply { secret_key: "slackAuth", kind: AuthKind::Bearer },
@@ -1179,7 +3008,9 @@ const OP_ADMIN_TEAMS_SETTINGS_SET_DISCOVERABILITY: OpSpec = OpSpec {
     method: "POST",
     path_template: "/admin.teams.settings.setDiscoverability",
     fields: &[
-        FieldSpec { snake: "token", location: FieldLocation::Header },
+        FieldSpec { snake: "token", wire: "token", location: FieldLocation::Header },
+        FieldSpec { snake: "discoverability", wire: "discoverability", location: FieldLocation::Body },
+        FieldSpec { snake: "team_id", wire: "team_id", location: FieldLocation::Body },
     ],
     auth: &[
         AuthApply { secret_key: "slackAuth", kind: AuthKind::Bearer },
@@ -1190,6 +3021,9 @@ const OP_ADMIN_TEAMS_SETTINGS_SET_ICON: OpSpec = OpSpec {
     method: "POST",
     path_template: "/admin.teams.settings.setIcon",
     fields: &[
+        FieldSpec { snake: "image_url", wire: "image_url", location: FieldLocation::Body },
+        FieldSpec { snake: "team_id", wire: "team_id", location: FieldLocation::Body },
+        FieldSpec { snake: "token", wire: "token", location: FieldLocation::Body },
     ],
     auth: &[
         AuthApply { secret_key: "slackAuth", kind: AuthKind::Bearer },
@@ -1200,12 +3034,56 @@ const OP_ADMIN_TEAMS_SETTINGS_SET_NAME: OpSpec = OpSpec {
     method: "POST",
     path_template: "/admin.teams.settings.setName",
     fields: &[
-        FieldSpec { snake: "token", location: FieldLocation::Header },
+        FieldSpec { snake: "token", wire: "token", location: FieldLocation::Header },
+        FieldSpec { snake: "name", wire: "name", location: FieldLocation::Body },
+        FieldSpec { snake: "team_id", wire: "team_id", location: FieldLocation::Body },
     ],
     auth: &[
         AuthApply { secret_key: "slackAuth", kind: AuthKind::Bearer },
     ],
 };
+
+fn iface_admin_teams_settings__info_response__to_json(p: &iface_admin_teams_settings::InfoResponse) -> Value {
+    let mut m = Map::new();
+    m.insert("ok".into(), iface_admin_teams_settings__defs_ok_true__to_json(&p.ok));
+    Value::Object(m)
+}
+
+fn iface_admin_teams_settings__defs_ok_true__to_json(p: &iface_admin_teams_settings::DefsOkTrue) -> Value {
+    let mut m = Map::new();
+    m.insert("value".into(), Value::String((&p.value).clone()));
+    Value::Object(m)
+}
+
+fn iface_admin_teams_settings__set_default_channels_response__to_json(p: &iface_admin_teams_settings::SetDefaultChannelsResponse) -> Value {
+    let mut m = Map::new();
+    m.insert("ok".into(), iface_admin_teams_settings__defs_ok_true__to_json(&p.ok));
+    Value::Object(m)
+}
+
+fn iface_admin_teams_settings__set_description_response__to_json(p: &iface_admin_teams_settings::SetDescriptionResponse) -> Value {
+    let mut m = Map::new();
+    m.insert("ok".into(), iface_admin_teams_settings__defs_ok_true__to_json(&p.ok));
+    Value::Object(m)
+}
+
+fn iface_admin_teams_settings__set_discoverability_response__to_json(p: &iface_admin_teams_settings::SetDiscoverabilityResponse) -> Value {
+    let mut m = Map::new();
+    m.insert("ok".into(), iface_admin_teams_settings__defs_ok_true__to_json(&p.ok));
+    Value::Object(m)
+}
+
+fn iface_admin_teams_settings__set_icon_response__to_json(p: &iface_admin_teams_settings::SetIconResponse) -> Value {
+    let mut m = Map::new();
+    m.insert("ok".into(), iface_admin_teams_settings__defs_ok_true__to_json(&p.ok));
+    Value::Object(m)
+}
+
+fn iface_admin_teams_settings__set_name_response__to_json(p: &iface_admin_teams_settings::SetNameResponse) -> Value {
+    let mut m = Map::new();
+    m.insert("ok".into(), iface_admin_teams_settings__defs_ok_true__to_json(&p.ok));
+    Value::Object(m)
+}
 
 fn iface_admin_teams_settings__info_params__to_json(p: &iface_admin_teams_settings::InfoParams) -> Value {
     let mut m = Map::new();
@@ -1214,14 +3092,34 @@ fn iface_admin_teams_settings__info_params__to_json(p: &iface_admin_teams_settin
     Value::Object(m)
 }
 
+fn iface_admin_teams_settings__set_default_channels_params__to_json(p: &iface_admin_teams_settings::SetDefaultChannelsParams) -> Value {
+    let mut m = Map::new();
+    m.insert("channel_ids".into(), Value::String((&p.channel_ids).clone()));
+    m.insert("team_id".into(), Value::String((&p.team_id).clone()));
+    m.insert("token".into(), Value::String((&p.token).clone()));
+    Value::Object(m)
+}
+
 fn iface_admin_teams_settings__set_description_params__to_json(p: &iface_admin_teams_settings::SetDescriptionParams) -> Value {
     let mut m = Map::new();
     m.insert("token".into(), Value::String((&p.token).clone()));
+    m.insert("description".into(), Value::String((&p.description).clone()));
+    m.insert("team_id".into(), Value::String((&p.team_id).clone()));
     Value::Object(m)
 }
 
 fn iface_admin_teams_settings__set_discoverability_params__to_json(p: &iface_admin_teams_settings::SetDiscoverabilityParams) -> Value {
     let mut m = Map::new();
+    m.insert("token".into(), Value::String((&p.token).clone()));
+    m.insert("discoverability".into(), Value::String((&p.discoverability).clone()));
+    m.insert("team_id".into(), Value::String((&p.team_id).clone()));
+    Value::Object(m)
+}
+
+fn iface_admin_teams_settings__set_icon_params__to_json(p: &iface_admin_teams_settings::SetIconParams) -> Value {
+    let mut m = Map::new();
+    m.insert("image_url".into(), Value::String((&p.image_url).clone()));
+    m.insert("team_id".into(), Value::String((&p.team_id).clone()));
     m.insert("token".into(), Value::String((&p.token).clone()));
     Value::Object(m)
 }
@@ -1229,31 +3127,210 @@ fn iface_admin_teams_settings__set_discoverability_params__to_json(p: &iface_adm
 fn iface_admin_teams_settings__set_name_params__to_json(p: &iface_admin_teams_settings::SetNameParams) -> Value {
     let mut m = Map::new();
     m.insert("token".into(), Value::String((&p.token).clone()));
+    m.insert("name".into(), Value::String((&p.name).clone()));
+    m.insert("team_id".into(), Value::String((&p.team_id).clone()));
     Value::Object(m)
 }
 
+fn iface_admin_teams_settings__info_response__from_json(v: &Value) -> Option<iface_admin_teams_settings::InfoResponse> {
+    let m = v.as_object()?;
+    Some(iface_admin_teams_settings::InfoResponse {
+        ok: match m.get("ok").and_then(|v| iface_admin_teams_settings__defs_ok_true__from_json(v)) { Some(x) => x, None => return None },
+    })
+}
+
+fn iface_admin_teams_settings__defs_ok_true__from_json(v: &Value) -> Option<iface_admin_teams_settings::DefsOkTrue> {
+    let m = v.as_object()?;
+    Some(iface_admin_teams_settings::DefsOkTrue {
+        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+    })
+}
+
+fn iface_admin_teams_settings__set_default_channels_response__from_json(v: &Value) -> Option<iface_admin_teams_settings::SetDefaultChannelsResponse> {
+    let m = v.as_object()?;
+    Some(iface_admin_teams_settings::SetDefaultChannelsResponse {
+        ok: match m.get("ok").and_then(|v| iface_admin_teams_settings__defs_ok_true__from_json(v)) { Some(x) => x, None => return None },
+    })
+}
+
+fn iface_admin_teams_settings__set_description_response__from_json(v: &Value) -> Option<iface_admin_teams_settings::SetDescriptionResponse> {
+    let m = v.as_object()?;
+    Some(iface_admin_teams_settings::SetDescriptionResponse {
+        ok: match m.get("ok").and_then(|v| iface_admin_teams_settings__defs_ok_true__from_json(v)) { Some(x) => x, None => return None },
+    })
+}
+
+fn iface_admin_teams_settings__set_discoverability_response__from_json(v: &Value) -> Option<iface_admin_teams_settings::SetDiscoverabilityResponse> {
+    let m = v.as_object()?;
+    Some(iface_admin_teams_settings::SetDiscoverabilityResponse {
+        ok: match m.get("ok").and_then(|v| iface_admin_teams_settings__defs_ok_true__from_json(v)) { Some(x) => x, None => return None },
+    })
+}
+
+fn iface_admin_teams_settings__set_icon_response__from_json(v: &Value) -> Option<iface_admin_teams_settings::SetIconResponse> {
+    let m = v.as_object()?;
+    Some(iface_admin_teams_settings::SetIconResponse {
+        ok: match m.get("ok").and_then(|v| iface_admin_teams_settings__defs_ok_true__from_json(v)) { Some(x) => x, None => return None },
+    })
+}
+
+fn iface_admin_teams_settings__set_name_response__from_json(v: &Value) -> Option<iface_admin_teams_settings::SetNameResponse> {
+    let m = v.as_object()?;
+    Some(iface_admin_teams_settings::SetNameResponse {
+        ok: match m.get("ok").and_then(|v| iface_admin_teams_settings__defs_ok_true__from_json(v)) { Some(x) => x, None => return None },
+    })
+}
+
+fn iface_admin_teams_settings__info__ok(body: String) -> Result<iface_admin_teams_settings::InfoResponse, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match iface_admin_teams_settings__info_response__from_json(&v) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_admin_teams_settings__info__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
+fn iface_admin_teams_settings__set_default_channels__ok(body: String) -> Result<iface_admin_teams_settings::SetDefaultChannelsResponse, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match iface_admin_teams_settings__set_default_channels_response__from_json(&v) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_admin_teams_settings__set_default_channels__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
+fn iface_admin_teams_settings__set_description__ok(body: String) -> Result<iface_admin_teams_settings::SetDescriptionResponse, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match iface_admin_teams_settings__set_description_response__from_json(&v) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_admin_teams_settings__set_description__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
+fn iface_admin_teams_settings__set_discoverability__ok(body: String) -> Result<iface_admin_teams_settings::SetDiscoverabilityResponse, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match iface_admin_teams_settings__set_discoverability_response__from_json(&v) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_admin_teams_settings__set_discoverability__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
+fn iface_admin_teams_settings__set_icon__ok(body: String) -> Result<iface_admin_teams_settings::SetIconResponse, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match iface_admin_teams_settings__set_icon_response__from_json(&v) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_admin_teams_settings__set_icon__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
+fn iface_admin_teams_settings__set_name__ok(body: String) -> Result<iface_admin_teams_settings::SetNameResponse, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match iface_admin_teams_settings__set_name_response__from_json(&v) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_admin_teams_settings__set_name__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
 impl iface_admin_teams_settings::Guest for crate::Component {
-    fn info(params: iface_admin_teams_settings::InfoParams) -> Result<String, String> {
+    fn info(params: iface_admin_teams_settings::InfoParams) -> Result<iface_admin_teams_settings::InfoResponse, String> {
         let json = iface_admin_teams_settings__info_params__to_json(&params);
-        dispatch(&OP_ADMIN_TEAMS_SETTINGS_INFO, json)
+        match dispatch(&OP_ADMIN_TEAMS_SETTINGS_INFO, json).and_then(iface_admin_teams_settings__info__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_admin_teams_settings__info__err(e)),
+        }
     }
-    fn set_default_channels() -> Result<String, String> {
-        dispatch(&OP_ADMIN_TEAMS_SETTINGS_SET_DEFAULT_CHANNELS, Value::Object(Map::new()))
+    fn set_default_channels(params: iface_admin_teams_settings::SetDefaultChannelsParams) -> Result<iface_admin_teams_settings::SetDefaultChannelsResponse, String> {
+        let json = iface_admin_teams_settings__set_default_channels_params__to_json(&params);
+        match dispatch(&OP_ADMIN_TEAMS_SETTINGS_SET_DEFAULT_CHANNELS, json).and_then(iface_admin_teams_settings__set_default_channels__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_admin_teams_settings__set_default_channels__err(e)),
+        }
     }
-    fn set_description(params: iface_admin_teams_settings::SetDescriptionParams) -> Result<String, String> {
+    fn set_description(params: iface_admin_teams_settings::SetDescriptionParams) -> Result<iface_admin_teams_settings::SetDescriptionResponse, String> {
         let json = iface_admin_teams_settings__set_description_params__to_json(&params);
-        dispatch(&OP_ADMIN_TEAMS_SETTINGS_SET_DESCRIPTION, json)
+        match dispatch(&OP_ADMIN_TEAMS_SETTINGS_SET_DESCRIPTION, json).and_then(iface_admin_teams_settings__set_description__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_admin_teams_settings__set_description__err(e)),
+        }
     }
-    fn set_discoverability(params: iface_admin_teams_settings::SetDiscoverabilityParams) -> Result<String, String> {
+    fn set_discoverability(params: iface_admin_teams_settings::SetDiscoverabilityParams) -> Result<iface_admin_teams_settings::SetDiscoverabilityResponse, String> {
         let json = iface_admin_teams_settings__set_discoverability_params__to_json(&params);
-        dispatch(&OP_ADMIN_TEAMS_SETTINGS_SET_DISCOVERABILITY, json)
+        match dispatch(&OP_ADMIN_TEAMS_SETTINGS_SET_DISCOVERABILITY, json).and_then(iface_admin_teams_settings__set_discoverability__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_admin_teams_settings__set_discoverability__err(e)),
+        }
     }
-    fn set_icon() -> Result<String, String> {
-        dispatch(&OP_ADMIN_TEAMS_SETTINGS_SET_ICON, Value::Object(Map::new()))
+    fn set_icon(params: iface_admin_teams_settings::SetIconParams) -> Result<iface_admin_teams_settings::SetIconResponse, String> {
+        let json = iface_admin_teams_settings__set_icon_params__to_json(&params);
+        match dispatch(&OP_ADMIN_TEAMS_SETTINGS_SET_ICON, json).and_then(iface_admin_teams_settings__set_icon__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_admin_teams_settings__set_icon__err(e)),
+        }
     }
-    fn set_name(params: iface_admin_teams_settings::SetNameParams) -> Result<String, String> {
+    fn set_name(params: iface_admin_teams_settings::SetNameParams) -> Result<iface_admin_teams_settings::SetNameResponse, String> {
         let json = iface_admin_teams_settings__set_name_params__to_json(&params);
-        dispatch(&OP_ADMIN_TEAMS_SETTINGS_SET_NAME, json)
+        match dispatch(&OP_ADMIN_TEAMS_SETTINGS_SET_NAME, json).and_then(iface_admin_teams_settings__set_name__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_admin_teams_settings__set_name__err(e)),
+        }
     }
 }
 use crate::exports::autostamp::slack::admin_usergroups as iface_admin_usergroups;
@@ -1262,7 +3339,10 @@ const OP_ADMIN_USERGROUPS_ADD_CHANNELS: OpSpec = OpSpec {
     method: "POST",
     path_template: "/admin.usergroups.addChannels",
     fields: &[
-        FieldSpec { snake: "token", location: FieldLocation::Header },
+        FieldSpec { snake: "token", wire: "token", location: FieldLocation::Header },
+        FieldSpec { snake: "channel_ids", wire: "channel_ids", location: FieldLocation::Body },
+        FieldSpec { snake: "team_id", wire: "team_id", location: FieldLocation::Body },
+        FieldSpec { snake: "usergroup_id", wire: "usergroup_id", location: FieldLocation::Body },
     ],
     auth: &[
         AuthApply { secret_key: "slackAuth", kind: AuthKind::Bearer },
@@ -1273,7 +3353,10 @@ const OP_ADMIN_USERGROUPS_ADD_TEAMS: OpSpec = OpSpec {
     method: "POST",
     path_template: "/admin.usergroups.addTeams",
     fields: &[
-        FieldSpec { snake: "token", location: FieldLocation::Header },
+        FieldSpec { snake: "token", wire: "token", location: FieldLocation::Header },
+        FieldSpec { snake: "auto_provision", wire: "auto_provision", location: FieldLocation::Body },
+        FieldSpec { snake: "team_ids", wire: "team_ids", location: FieldLocation::Body },
+        FieldSpec { snake: "usergroup_id", wire: "usergroup_id", location: FieldLocation::Body },
     ],
     auth: &[
         AuthApply { secret_key: "slackAuth", kind: AuthKind::Bearer },
@@ -1284,10 +3367,10 @@ const OP_ADMIN_USERGROUPS_LIST_CHANNELS: OpSpec = OpSpec {
     method: "GET",
     path_template: "/admin.usergroups.listChannels",
     fields: &[
-        FieldSpec { snake: "token", location: FieldLocation::Header },
-        FieldSpec { snake: "usergroup_id", location: FieldLocation::Query },
-        FieldSpec { snake: "team_id", location: FieldLocation::Query },
-        FieldSpec { snake: "include_num_members", location: FieldLocation::Query },
+        FieldSpec { snake: "token", wire: "token", location: FieldLocation::Header },
+        FieldSpec { snake: "usergroup_id", wire: "usergroup_id", location: FieldLocation::Query },
+        FieldSpec { snake: "team_id", wire: "team_id", location: FieldLocation::Query },
+        FieldSpec { snake: "include_num_members", wire: "include_num_members", location: FieldLocation::Query },
     ],
     auth: &[
         AuthApply { secret_key: "slackAuth", kind: AuthKind::Bearer },
@@ -1298,22 +3381,60 @@ const OP_ADMIN_USERGROUPS_REMOVE_CHANNELS: OpSpec = OpSpec {
     method: "POST",
     path_template: "/admin.usergroups.removeChannels",
     fields: &[
-        FieldSpec { snake: "token", location: FieldLocation::Header },
+        FieldSpec { snake: "token", wire: "token", location: FieldLocation::Header },
+        FieldSpec { snake: "channel_ids", wire: "channel_ids", location: FieldLocation::Body },
+        FieldSpec { snake: "usergroup_id", wire: "usergroup_id", location: FieldLocation::Body },
     ],
     auth: &[
         AuthApply { secret_key: "slackAuth", kind: AuthKind::Bearer },
     ],
 };
 
+fn iface_admin_usergroups__add_channels_response__to_json(p: &iface_admin_usergroups::AddChannelsResponse) -> Value {
+    let mut m = Map::new();
+    m.insert("ok".into(), iface_admin_usergroups__defs_ok_true__to_json(&p.ok));
+    Value::Object(m)
+}
+
+fn iface_admin_usergroups__defs_ok_true__to_json(p: &iface_admin_usergroups::DefsOkTrue) -> Value {
+    let mut m = Map::new();
+    m.insert("value".into(), Value::String((&p.value).clone()));
+    Value::Object(m)
+}
+
+fn iface_admin_usergroups__add_teams_response__to_json(p: &iface_admin_usergroups::AddTeamsResponse) -> Value {
+    let mut m = Map::new();
+    m.insert("ok".into(), iface_admin_usergroups__defs_ok_true__to_json(&p.ok));
+    Value::Object(m)
+}
+
+fn iface_admin_usergroups__list_channels_response__to_json(p: &iface_admin_usergroups::ListChannelsResponse) -> Value {
+    let mut m = Map::new();
+    m.insert("ok".into(), iface_admin_usergroups__defs_ok_true__to_json(&p.ok));
+    Value::Object(m)
+}
+
+fn iface_admin_usergroups__remove_channels_response__to_json(p: &iface_admin_usergroups::RemoveChannelsResponse) -> Value {
+    let mut m = Map::new();
+    m.insert("ok".into(), iface_admin_usergroups__defs_ok_true__to_json(&p.ok));
+    Value::Object(m)
+}
+
 fn iface_admin_usergroups__add_channels_params__to_json(p: &iface_admin_usergroups::AddChannelsParams) -> Value {
     let mut m = Map::new();
     m.insert("token".into(), Value::String((&p.token).clone()));
+    m.insert("channel_ids".into(), Value::String((&p.channel_ids).clone()));
+    m.insert("team_id".into(), match (&p.team_id) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("usergroup_id".into(), Value::String((&p.usergroup_id).clone()));
     Value::Object(m)
 }
 
 fn iface_admin_usergroups__add_teams_params__to_json(p: &iface_admin_usergroups::AddTeamsParams) -> Value {
     let mut m = Map::new();
     m.insert("token".into(), Value::String((&p.token).clone()));
+    m.insert("auto_provision".into(), match (&p.auto_provision) { Some(v) => Value::Bool(*(v)), None => Value::Null });
+    m.insert("team_ids".into(), Value::String((&p.team_ids).clone()));
+    m.insert("usergroup_id".into(), Value::String((&p.usergroup_id).clone()));
     Value::Object(m)
 }
 
@@ -1329,25 +3450,146 @@ fn iface_admin_usergroups__list_channels_params__to_json(p: &iface_admin_usergro
 fn iface_admin_usergroups__remove_channels_params__to_json(p: &iface_admin_usergroups::RemoveChannelsParams) -> Value {
     let mut m = Map::new();
     m.insert("token".into(), Value::String((&p.token).clone()));
+    m.insert("channel_ids".into(), Value::String((&p.channel_ids).clone()));
+    m.insert("usergroup_id".into(), Value::String((&p.usergroup_id).clone()));
     Value::Object(m)
 }
 
+fn iface_admin_usergroups__add_channels_response__from_json(v: &Value) -> Option<iface_admin_usergroups::AddChannelsResponse> {
+    let m = v.as_object()?;
+    Some(iface_admin_usergroups::AddChannelsResponse {
+        ok: match m.get("ok").and_then(|v| iface_admin_usergroups__defs_ok_true__from_json(v)) { Some(x) => x, None => return None },
+    })
+}
+
+fn iface_admin_usergroups__defs_ok_true__from_json(v: &Value) -> Option<iface_admin_usergroups::DefsOkTrue> {
+    let m = v.as_object()?;
+    Some(iface_admin_usergroups::DefsOkTrue {
+        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+    })
+}
+
+fn iface_admin_usergroups__add_teams_response__from_json(v: &Value) -> Option<iface_admin_usergroups::AddTeamsResponse> {
+    let m = v.as_object()?;
+    Some(iface_admin_usergroups::AddTeamsResponse {
+        ok: match m.get("ok").and_then(|v| iface_admin_usergroups__defs_ok_true__from_json(v)) { Some(x) => x, None => return None },
+    })
+}
+
+fn iface_admin_usergroups__list_channels_response__from_json(v: &Value) -> Option<iface_admin_usergroups::ListChannelsResponse> {
+    let m = v.as_object()?;
+    Some(iface_admin_usergroups::ListChannelsResponse {
+        ok: match m.get("ok").and_then(|v| iface_admin_usergroups__defs_ok_true__from_json(v)) { Some(x) => x, None => return None },
+    })
+}
+
+fn iface_admin_usergroups__remove_channels_response__from_json(v: &Value) -> Option<iface_admin_usergroups::RemoveChannelsResponse> {
+    let m = v.as_object()?;
+    Some(iface_admin_usergroups::RemoveChannelsResponse {
+        ok: match m.get("ok").and_then(|v| iface_admin_usergroups__defs_ok_true__from_json(v)) { Some(x) => x, None => return None },
+    })
+}
+
+fn iface_admin_usergroups__add_channels__ok(body: String) -> Result<iface_admin_usergroups::AddChannelsResponse, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match iface_admin_usergroups__add_channels_response__from_json(&v) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_admin_usergroups__add_channels__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
+fn iface_admin_usergroups__add_teams__ok(body: String) -> Result<iface_admin_usergroups::AddTeamsResponse, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match iface_admin_usergroups__add_teams_response__from_json(&v) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_admin_usergroups__add_teams__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
+fn iface_admin_usergroups__list_channels__ok(body: String) -> Result<iface_admin_usergroups::ListChannelsResponse, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match iface_admin_usergroups__list_channels_response__from_json(&v) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_admin_usergroups__list_channels__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
+fn iface_admin_usergroups__remove_channels__ok(body: String) -> Result<iface_admin_usergroups::RemoveChannelsResponse, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match iface_admin_usergroups__remove_channels_response__from_json(&v) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_admin_usergroups__remove_channels__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
 impl iface_admin_usergroups::Guest for crate::Component {
-    fn add_channels(params: iface_admin_usergroups::AddChannelsParams) -> Result<String, String> {
+    fn add_channels(params: iface_admin_usergroups::AddChannelsParams) -> Result<iface_admin_usergroups::AddChannelsResponse, String> {
         let json = iface_admin_usergroups__add_channels_params__to_json(&params);
-        dispatch(&OP_ADMIN_USERGROUPS_ADD_CHANNELS, json)
+        match dispatch(&OP_ADMIN_USERGROUPS_ADD_CHANNELS, json).and_then(iface_admin_usergroups__add_channels__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_admin_usergroups__add_channels__err(e)),
+        }
     }
-    fn add_teams(params: iface_admin_usergroups::AddTeamsParams) -> Result<String, String> {
+    fn add_teams(params: iface_admin_usergroups::AddTeamsParams) -> Result<iface_admin_usergroups::AddTeamsResponse, String> {
         let json = iface_admin_usergroups__add_teams_params__to_json(&params);
-        dispatch(&OP_ADMIN_USERGROUPS_ADD_TEAMS, json)
+        match dispatch(&OP_ADMIN_USERGROUPS_ADD_TEAMS, json).and_then(iface_admin_usergroups__add_teams__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_admin_usergroups__add_teams__err(e)),
+        }
     }
-    fn list_channels(params: iface_admin_usergroups::ListChannelsParams) -> Result<String, String> {
+    fn list_channels(params: iface_admin_usergroups::ListChannelsParams) -> Result<iface_admin_usergroups::ListChannelsResponse, String> {
         let json = iface_admin_usergroups__list_channels_params__to_json(&params);
-        dispatch(&OP_ADMIN_USERGROUPS_LIST_CHANNELS, json)
+        match dispatch(&OP_ADMIN_USERGROUPS_LIST_CHANNELS, json).and_then(iface_admin_usergroups__list_channels__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_admin_usergroups__list_channels__err(e)),
+        }
     }
-    fn remove_channels(params: iface_admin_usergroups::RemoveChannelsParams) -> Result<String, String> {
+    fn remove_channels(params: iface_admin_usergroups::RemoveChannelsParams) -> Result<iface_admin_usergroups::RemoveChannelsResponse, String> {
         let json = iface_admin_usergroups__remove_channels_params__to_json(&params);
-        dispatch(&OP_ADMIN_USERGROUPS_REMOVE_CHANNELS, json)
+        match dispatch(&OP_ADMIN_USERGROUPS_REMOVE_CHANNELS, json).and_then(iface_admin_usergroups__remove_channels__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_admin_usergroups__remove_channels__err(e)),
+        }
     }
 }
 use crate::exports::autostamp::slack::admin_users as iface_admin_users;
@@ -1356,7 +3598,12 @@ const OP_ADMIN_USERS_ASSIGN: OpSpec = OpSpec {
     method: "POST",
     path_template: "/admin.users.assign",
     fields: &[
-        FieldSpec { snake: "token", location: FieldLocation::Header },
+        FieldSpec { snake: "token", wire: "token", location: FieldLocation::Header },
+        FieldSpec { snake: "channel_ids", wire: "channel_ids", location: FieldLocation::Body },
+        FieldSpec { snake: "is_restricted", wire: "is_restricted", location: FieldLocation::Body },
+        FieldSpec { snake: "is_ultra_restricted", wire: "is_ultra_restricted", location: FieldLocation::Body },
+        FieldSpec { snake: "team_id", wire: "team_id", location: FieldLocation::Body },
+        FieldSpec { snake: "user_id", wire: "user_id", location: FieldLocation::Body },
     ],
     auth: &[
         AuthApply { secret_key: "slackAuth", kind: AuthKind::Bearer },
@@ -1367,7 +3614,16 @@ const OP_ADMIN_USERS_INVITE: OpSpec = OpSpec {
     method: "POST",
     path_template: "/admin.users.invite",
     fields: &[
-        FieldSpec { snake: "token", location: FieldLocation::Header },
+        FieldSpec { snake: "token", wire: "token", location: FieldLocation::Header },
+        FieldSpec { snake: "channel_ids", wire: "channel_ids", location: FieldLocation::Body },
+        FieldSpec { snake: "custom_message", wire: "custom_message", location: FieldLocation::Body },
+        FieldSpec { snake: "email", wire: "email", location: FieldLocation::Body },
+        FieldSpec { snake: "guest_expiration_ts", wire: "guest_expiration_ts", location: FieldLocation::Body },
+        FieldSpec { snake: "is_restricted", wire: "is_restricted", location: FieldLocation::Body },
+        FieldSpec { snake: "is_ultra_restricted", wire: "is_ultra_restricted", location: FieldLocation::Body },
+        FieldSpec { snake: "real_name", wire: "real_name", location: FieldLocation::Body },
+        FieldSpec { snake: "resend", wire: "resend", location: FieldLocation::Body },
+        FieldSpec { snake: "team_id", wire: "team_id", location: FieldLocation::Body },
     ],
     auth: &[
         AuthApply { secret_key: "slackAuth", kind: AuthKind::Bearer },
@@ -1378,10 +3634,10 @@ const OP_ADMIN_USERS_LIST_OP: OpSpec = OpSpec {
     method: "GET",
     path_template: "/admin.users.list",
     fields: &[
-        FieldSpec { snake: "token", location: FieldLocation::Header },
-        FieldSpec { snake: "team_id", location: FieldLocation::Query },
-        FieldSpec { snake: "cursor", location: FieldLocation::Query },
-        FieldSpec { snake: "limit", location: FieldLocation::Query },
+        FieldSpec { snake: "token", wire: "token", location: FieldLocation::Header },
+        FieldSpec { snake: "team_id", wire: "team_id", location: FieldLocation::Query },
+        FieldSpec { snake: "cursor", wire: "cursor", location: FieldLocation::Query },
+        FieldSpec { snake: "limit", wire: "limit", location: FieldLocation::Query },
     ],
     auth: &[
         AuthApply { secret_key: "slackAuth", kind: AuthKind::Bearer },
@@ -1392,7 +3648,9 @@ const OP_ADMIN_USERS_REMOVE: OpSpec = OpSpec {
     method: "POST",
     path_template: "/admin.users.remove",
     fields: &[
-        FieldSpec { snake: "token", location: FieldLocation::Header },
+        FieldSpec { snake: "token", wire: "token", location: FieldLocation::Header },
+        FieldSpec { snake: "team_id", wire: "team_id", location: FieldLocation::Body },
+        FieldSpec { snake: "user_id", wire: "user_id", location: FieldLocation::Body },
     ],
     auth: &[
         AuthApply { secret_key: "slackAuth", kind: AuthKind::Bearer },
@@ -1403,7 +3661,9 @@ const OP_ADMIN_USERS_SET_ADMIN: OpSpec = OpSpec {
     method: "POST",
     path_template: "/admin.users.setAdmin",
     fields: &[
-        FieldSpec { snake: "token", location: FieldLocation::Header },
+        FieldSpec { snake: "token", wire: "token", location: FieldLocation::Header },
+        FieldSpec { snake: "team_id", wire: "team_id", location: FieldLocation::Body },
+        FieldSpec { snake: "user_id", wire: "user_id", location: FieldLocation::Body },
     ],
     auth: &[
         AuthApply { secret_key: "slackAuth", kind: AuthKind::Bearer },
@@ -1414,7 +3674,10 @@ const OP_ADMIN_USERS_SET_EXPIRATION: OpSpec = OpSpec {
     method: "POST",
     path_template: "/admin.users.setExpiration",
     fields: &[
-        FieldSpec { snake: "token", location: FieldLocation::Header },
+        FieldSpec { snake: "token", wire: "token", location: FieldLocation::Header },
+        FieldSpec { snake: "expiration_ts", wire: "expiration_ts", location: FieldLocation::Body },
+        FieldSpec { snake: "team_id", wire: "team_id", location: FieldLocation::Body },
+        FieldSpec { snake: "user_id", wire: "user_id", location: FieldLocation::Body },
     ],
     auth: &[
         AuthApply { secret_key: "slackAuth", kind: AuthKind::Bearer },
@@ -1425,7 +3688,9 @@ const OP_ADMIN_USERS_SET_OWNER: OpSpec = OpSpec {
     method: "POST",
     path_template: "/admin.users.setOwner",
     fields: &[
-        FieldSpec { snake: "token", location: FieldLocation::Header },
+        FieldSpec { snake: "token", wire: "token", location: FieldLocation::Header },
+        FieldSpec { snake: "team_id", wire: "team_id", location: FieldLocation::Body },
+        FieldSpec { snake: "user_id", wire: "user_id", location: FieldLocation::Body },
     ],
     auth: &[
         AuthApply { secret_key: "slackAuth", kind: AuthKind::Bearer },
@@ -1436,22 +3701,92 @@ const OP_ADMIN_USERS_SET_REGULAR: OpSpec = OpSpec {
     method: "POST",
     path_template: "/admin.users.setRegular",
     fields: &[
-        FieldSpec { snake: "token", location: FieldLocation::Header },
+        FieldSpec { snake: "token", wire: "token", location: FieldLocation::Header },
+        FieldSpec { snake: "team_id", wire: "team_id", location: FieldLocation::Body },
+        FieldSpec { snake: "user_id", wire: "user_id", location: FieldLocation::Body },
     ],
     auth: &[
         AuthApply { secret_key: "slackAuth", kind: AuthKind::Bearer },
     ],
 };
 
+fn iface_admin_users__assign_response__to_json(p: &iface_admin_users::AssignResponse) -> Value {
+    let mut m = Map::new();
+    m.insert("ok".into(), iface_admin_users__defs_ok_true__to_json(&p.ok));
+    Value::Object(m)
+}
+
+fn iface_admin_users__defs_ok_true__to_json(p: &iface_admin_users::DefsOkTrue) -> Value {
+    let mut m = Map::new();
+    m.insert("value".into(), Value::String((&p.value).clone()));
+    Value::Object(m)
+}
+
+fn iface_admin_users__invite_response__to_json(p: &iface_admin_users::InviteResponse) -> Value {
+    let mut m = Map::new();
+    m.insert("ok".into(), iface_admin_users__defs_ok_true__to_json(&p.ok));
+    Value::Object(m)
+}
+
+fn iface_admin_users__list_op_response__to_json(p: &iface_admin_users::ListOpResponse) -> Value {
+    let mut m = Map::new();
+    m.insert("ok".into(), iface_admin_users__defs_ok_true__to_json(&p.ok));
+    Value::Object(m)
+}
+
+fn iface_admin_users__remove_response__to_json(p: &iface_admin_users::RemoveResponse) -> Value {
+    let mut m = Map::new();
+    m.insert("ok".into(), iface_admin_users__defs_ok_true__to_json(&p.ok));
+    Value::Object(m)
+}
+
+fn iface_admin_users__set_admin_response__to_json(p: &iface_admin_users::SetAdminResponse) -> Value {
+    let mut m = Map::new();
+    m.insert("ok".into(), iface_admin_users__defs_ok_true__to_json(&p.ok));
+    Value::Object(m)
+}
+
+fn iface_admin_users__set_expiration_response__to_json(p: &iface_admin_users::SetExpirationResponse) -> Value {
+    let mut m = Map::new();
+    m.insert("ok".into(), iface_admin_users__defs_ok_true__to_json(&p.ok));
+    Value::Object(m)
+}
+
+fn iface_admin_users__set_owner_response__to_json(p: &iface_admin_users::SetOwnerResponse) -> Value {
+    let mut m = Map::new();
+    m.insert("ok".into(), iface_admin_users__defs_ok_true__to_json(&p.ok));
+    Value::Object(m)
+}
+
+fn iface_admin_users__set_regular_response__to_json(p: &iface_admin_users::SetRegularResponse) -> Value {
+    let mut m = Map::new();
+    m.insert("ok".into(), iface_admin_users__defs_ok_true__to_json(&p.ok));
+    Value::Object(m)
+}
+
 fn iface_admin_users__assign_params__to_json(p: &iface_admin_users::AssignParams) -> Value {
     let mut m = Map::new();
     m.insert("token".into(), Value::String((&p.token).clone()));
+    m.insert("channel_ids".into(), match (&p.channel_ids) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("is_restricted".into(), match (&p.is_restricted) { Some(v) => Value::Bool(*(v)), None => Value::Null });
+    m.insert("is_ultra_restricted".into(), match (&p.is_ultra_restricted) { Some(v) => Value::Bool(*(v)), None => Value::Null });
+    m.insert("team_id".into(), Value::String((&p.team_id).clone()));
+    m.insert("user_id".into(), Value::String((&p.user_id).clone()));
     Value::Object(m)
 }
 
 fn iface_admin_users__invite_params__to_json(p: &iface_admin_users::InviteParams) -> Value {
     let mut m = Map::new();
     m.insert("token".into(), Value::String((&p.token).clone()));
+    m.insert("channel_ids".into(), Value::String((&p.channel_ids).clone()));
+    m.insert("custom_message".into(), match (&p.custom_message) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("email".into(), Value::String((&p.email).clone()));
+    m.insert("guest_expiration_ts".into(), match (&p.guest_expiration_ts) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("is_restricted".into(), match (&p.is_restricted) { Some(v) => Value::Bool(*(v)), None => Value::Null });
+    m.insert("is_ultra_restricted".into(), match (&p.is_ultra_restricted) { Some(v) => Value::Bool(*(v)), None => Value::Null });
+    m.insert("real_name".into(), match (&p.real_name) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("resend".into(), match (&p.resend) { Some(v) => Value::Bool(*(v)), None => Value::Null });
+    m.insert("team_id".into(), Value::String((&p.team_id).clone()));
     Value::Object(m)
 }
 
@@ -1467,65 +3802,307 @@ fn iface_admin_users__list_op_params__to_json(p: &iface_admin_users::ListOpParam
 fn iface_admin_users__remove_params__to_json(p: &iface_admin_users::RemoveParams) -> Value {
     let mut m = Map::new();
     m.insert("token".into(), Value::String((&p.token).clone()));
+    m.insert("team_id".into(), Value::String((&p.team_id).clone()));
+    m.insert("user_id".into(), Value::String((&p.user_id).clone()));
     Value::Object(m)
 }
 
 fn iface_admin_users__set_admin_params__to_json(p: &iface_admin_users::SetAdminParams) -> Value {
     let mut m = Map::new();
     m.insert("token".into(), Value::String((&p.token).clone()));
+    m.insert("team_id".into(), Value::String((&p.team_id).clone()));
+    m.insert("user_id".into(), Value::String((&p.user_id).clone()));
     Value::Object(m)
 }
 
 fn iface_admin_users__set_expiration_params__to_json(p: &iface_admin_users::SetExpirationParams) -> Value {
     let mut m = Map::new();
     m.insert("token".into(), Value::String((&p.token).clone()));
+    m.insert("expiration_ts".into(), Value::Number(serde_json::Number::from(*(&p.expiration_ts))));
+    m.insert("team_id".into(), Value::String((&p.team_id).clone()));
+    m.insert("user_id".into(), Value::String((&p.user_id).clone()));
     Value::Object(m)
 }
 
 fn iface_admin_users__set_owner_params__to_json(p: &iface_admin_users::SetOwnerParams) -> Value {
     let mut m = Map::new();
     m.insert("token".into(), Value::String((&p.token).clone()));
+    m.insert("team_id".into(), Value::String((&p.team_id).clone()));
+    m.insert("user_id".into(), Value::String((&p.user_id).clone()));
     Value::Object(m)
 }
 
 fn iface_admin_users__set_regular_params__to_json(p: &iface_admin_users::SetRegularParams) -> Value {
     let mut m = Map::new();
     m.insert("token".into(), Value::String((&p.token).clone()));
+    m.insert("team_id".into(), Value::String((&p.team_id).clone()));
+    m.insert("user_id".into(), Value::String((&p.user_id).clone()));
     Value::Object(m)
 }
 
+fn iface_admin_users__assign_response__from_json(v: &Value) -> Option<iface_admin_users::AssignResponse> {
+    let m = v.as_object()?;
+    Some(iface_admin_users::AssignResponse {
+        ok: match m.get("ok").and_then(|v| iface_admin_users__defs_ok_true__from_json(v)) { Some(x) => x, None => return None },
+    })
+}
+
+fn iface_admin_users__defs_ok_true__from_json(v: &Value) -> Option<iface_admin_users::DefsOkTrue> {
+    let m = v.as_object()?;
+    Some(iface_admin_users::DefsOkTrue {
+        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+    })
+}
+
+fn iface_admin_users__invite_response__from_json(v: &Value) -> Option<iface_admin_users::InviteResponse> {
+    let m = v.as_object()?;
+    Some(iface_admin_users::InviteResponse {
+        ok: match m.get("ok").and_then(|v| iface_admin_users__defs_ok_true__from_json(v)) { Some(x) => x, None => return None },
+    })
+}
+
+fn iface_admin_users__list_op_response__from_json(v: &Value) -> Option<iface_admin_users::ListOpResponse> {
+    let m = v.as_object()?;
+    Some(iface_admin_users::ListOpResponse {
+        ok: match m.get("ok").and_then(|v| iface_admin_users__defs_ok_true__from_json(v)) { Some(x) => x, None => return None },
+    })
+}
+
+fn iface_admin_users__remove_response__from_json(v: &Value) -> Option<iface_admin_users::RemoveResponse> {
+    let m = v.as_object()?;
+    Some(iface_admin_users::RemoveResponse {
+        ok: match m.get("ok").and_then(|v| iface_admin_users__defs_ok_true__from_json(v)) { Some(x) => x, None => return None },
+    })
+}
+
+fn iface_admin_users__set_admin_response__from_json(v: &Value) -> Option<iface_admin_users::SetAdminResponse> {
+    let m = v.as_object()?;
+    Some(iface_admin_users::SetAdminResponse {
+        ok: match m.get("ok").and_then(|v| iface_admin_users__defs_ok_true__from_json(v)) { Some(x) => x, None => return None },
+    })
+}
+
+fn iface_admin_users__set_expiration_response__from_json(v: &Value) -> Option<iface_admin_users::SetExpirationResponse> {
+    let m = v.as_object()?;
+    Some(iface_admin_users::SetExpirationResponse {
+        ok: match m.get("ok").and_then(|v| iface_admin_users__defs_ok_true__from_json(v)) { Some(x) => x, None => return None },
+    })
+}
+
+fn iface_admin_users__set_owner_response__from_json(v: &Value) -> Option<iface_admin_users::SetOwnerResponse> {
+    let m = v.as_object()?;
+    Some(iface_admin_users::SetOwnerResponse {
+        ok: match m.get("ok").and_then(|v| iface_admin_users__defs_ok_true__from_json(v)) { Some(x) => x, None => return None },
+    })
+}
+
+fn iface_admin_users__set_regular_response__from_json(v: &Value) -> Option<iface_admin_users::SetRegularResponse> {
+    let m = v.as_object()?;
+    Some(iface_admin_users::SetRegularResponse {
+        ok: match m.get("ok").and_then(|v| iface_admin_users__defs_ok_true__from_json(v)) { Some(x) => x, None => return None },
+    })
+}
+
+fn iface_admin_users__assign__ok(body: String) -> Result<iface_admin_users::AssignResponse, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match iface_admin_users__assign_response__from_json(&v) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_admin_users__assign__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
+fn iface_admin_users__invite__ok(body: String) -> Result<iface_admin_users::InviteResponse, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match iface_admin_users__invite_response__from_json(&v) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_admin_users__invite__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
+fn iface_admin_users__list_op__ok(body: String) -> Result<iface_admin_users::ListOpResponse, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match iface_admin_users__list_op_response__from_json(&v) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_admin_users__list_op__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
+fn iface_admin_users__remove__ok(body: String) -> Result<iface_admin_users::RemoveResponse, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match iface_admin_users__remove_response__from_json(&v) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_admin_users__remove__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
+fn iface_admin_users__set_admin__ok(body: String) -> Result<iface_admin_users::SetAdminResponse, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match iface_admin_users__set_admin_response__from_json(&v) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_admin_users__set_admin__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
+fn iface_admin_users__set_expiration__ok(body: String) -> Result<iface_admin_users::SetExpirationResponse, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match iface_admin_users__set_expiration_response__from_json(&v) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_admin_users__set_expiration__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
+fn iface_admin_users__set_owner__ok(body: String) -> Result<iface_admin_users::SetOwnerResponse, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match iface_admin_users__set_owner_response__from_json(&v) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_admin_users__set_owner__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
+fn iface_admin_users__set_regular__ok(body: String) -> Result<iface_admin_users::SetRegularResponse, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match iface_admin_users__set_regular_response__from_json(&v) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_admin_users__set_regular__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
 impl iface_admin_users::Guest for crate::Component {
-    fn assign(params: iface_admin_users::AssignParams) -> Result<String, String> {
+    fn assign(params: iface_admin_users::AssignParams) -> Result<iface_admin_users::AssignResponse, String> {
         let json = iface_admin_users__assign_params__to_json(&params);
-        dispatch(&OP_ADMIN_USERS_ASSIGN, json)
+        match dispatch(&OP_ADMIN_USERS_ASSIGN, json).and_then(iface_admin_users__assign__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_admin_users__assign__err(e)),
+        }
     }
-    fn invite(params: iface_admin_users::InviteParams) -> Result<String, String> {
+    fn invite(params: iface_admin_users::InviteParams) -> Result<iface_admin_users::InviteResponse, String> {
         let json = iface_admin_users__invite_params__to_json(&params);
-        dispatch(&OP_ADMIN_USERS_INVITE, json)
+        match dispatch(&OP_ADMIN_USERS_INVITE, json).and_then(iface_admin_users__invite__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_admin_users__invite__err(e)),
+        }
     }
-    fn list_op(params: iface_admin_users::ListOpParams) -> Result<String, String> {
+    fn list_op(params: iface_admin_users::ListOpParams) -> Result<iface_admin_users::ListOpResponse, String> {
         let json = iface_admin_users__list_op_params__to_json(&params);
-        dispatch(&OP_ADMIN_USERS_LIST_OP, json)
+        match dispatch(&OP_ADMIN_USERS_LIST_OP, json).and_then(iface_admin_users__list_op__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_admin_users__list_op__err(e)),
+        }
     }
-    fn remove(params: iface_admin_users::RemoveParams) -> Result<String, String> {
+    fn remove(params: iface_admin_users::RemoveParams) -> Result<iface_admin_users::RemoveResponse, String> {
         let json = iface_admin_users__remove_params__to_json(&params);
-        dispatch(&OP_ADMIN_USERS_REMOVE, json)
+        match dispatch(&OP_ADMIN_USERS_REMOVE, json).and_then(iface_admin_users__remove__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_admin_users__remove__err(e)),
+        }
     }
-    fn set_admin(params: iface_admin_users::SetAdminParams) -> Result<String, String> {
+    fn set_admin(params: iface_admin_users::SetAdminParams) -> Result<iface_admin_users::SetAdminResponse, String> {
         let json = iface_admin_users__set_admin_params__to_json(&params);
-        dispatch(&OP_ADMIN_USERS_SET_ADMIN, json)
+        match dispatch(&OP_ADMIN_USERS_SET_ADMIN, json).and_then(iface_admin_users__set_admin__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_admin_users__set_admin__err(e)),
+        }
     }
-    fn set_expiration(params: iface_admin_users::SetExpirationParams) -> Result<String, String> {
+    fn set_expiration(params: iface_admin_users::SetExpirationParams) -> Result<iface_admin_users::SetExpirationResponse, String> {
         let json = iface_admin_users__set_expiration_params__to_json(&params);
-        dispatch(&OP_ADMIN_USERS_SET_EXPIRATION, json)
+        match dispatch(&OP_ADMIN_USERS_SET_EXPIRATION, json).and_then(iface_admin_users__set_expiration__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_admin_users__set_expiration__err(e)),
+        }
     }
-    fn set_owner(params: iface_admin_users::SetOwnerParams) -> Result<String, String> {
+    fn set_owner(params: iface_admin_users::SetOwnerParams) -> Result<iface_admin_users::SetOwnerResponse, String> {
         let json = iface_admin_users__set_owner_params__to_json(&params);
-        dispatch(&OP_ADMIN_USERS_SET_OWNER, json)
+        match dispatch(&OP_ADMIN_USERS_SET_OWNER, json).and_then(iface_admin_users__set_owner__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_admin_users__set_owner__err(e)),
+        }
     }
-    fn set_regular(params: iface_admin_users::SetRegularParams) -> Result<String, String> {
+    fn set_regular(params: iface_admin_users::SetRegularParams) -> Result<iface_admin_users::SetRegularResponse, String> {
         let json = iface_admin_users__set_regular_params__to_json(&params);
-        dispatch(&OP_ADMIN_USERS_SET_REGULAR, json)
+        match dispatch(&OP_ADMIN_USERS_SET_REGULAR, json).and_then(iface_admin_users__set_regular__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_admin_users__set_regular__err(e)),
+        }
     }
 }
 use crate::exports::autostamp::slack::admin_users_session as iface_admin_users_session;
@@ -1534,7 +4111,9 @@ const OP_ADMIN_USERS_SESSION_INVALIDATE: OpSpec = OpSpec {
     method: "POST",
     path_template: "/admin.users.session.invalidate",
     fields: &[
-        FieldSpec { snake: "token", location: FieldLocation::Header },
+        FieldSpec { snake: "token", wire: "token", location: FieldLocation::Header },
+        FieldSpec { snake: "session_id", wire: "session_id", location: FieldLocation::Body },
+        FieldSpec { snake: "team_id", wire: "team_id", location: FieldLocation::Body },
     ],
     auth: &[
         AuthApply { secret_key: "slackAuth", kind: AuthKind::Bearer },
@@ -1545,33 +4124,122 @@ const OP_ADMIN_USERS_SESSION_RESET: OpSpec = OpSpec {
     method: "POST",
     path_template: "/admin.users.session.reset",
     fields: &[
-        FieldSpec { snake: "token", location: FieldLocation::Header },
+        FieldSpec { snake: "token", wire: "token", location: FieldLocation::Header },
+        FieldSpec { snake: "mobile_only", wire: "mobile_only", location: FieldLocation::Body },
+        FieldSpec { snake: "user_id", wire: "user_id", location: FieldLocation::Body },
+        FieldSpec { snake: "web_only", wire: "web_only", location: FieldLocation::Body },
     ],
     auth: &[
         AuthApply { secret_key: "slackAuth", kind: AuthKind::Bearer },
     ],
 };
 
+fn iface_admin_users_session__invalidate_response__to_json(p: &iface_admin_users_session::InvalidateResponse) -> Value {
+    let mut m = Map::new();
+    m.insert("ok".into(), iface_admin_users_session__defs_ok_true__to_json(&p.ok));
+    Value::Object(m)
+}
+
+fn iface_admin_users_session__defs_ok_true__to_json(p: &iface_admin_users_session::DefsOkTrue) -> Value {
+    let mut m = Map::new();
+    m.insert("value".into(), Value::String((&p.value).clone()));
+    Value::Object(m)
+}
+
+fn iface_admin_users_session__reset_response__to_json(p: &iface_admin_users_session::ResetResponse) -> Value {
+    let mut m = Map::new();
+    m.insert("ok".into(), iface_admin_users_session__defs_ok_true__to_json(&p.ok));
+    Value::Object(m)
+}
+
 fn iface_admin_users_session__invalidate_params__to_json(p: &iface_admin_users_session::InvalidateParams) -> Value {
     let mut m = Map::new();
     m.insert("token".into(), Value::String((&p.token).clone()));
+    m.insert("session_id".into(), Value::Number(serde_json::Number::from(*(&p.session_id))));
+    m.insert("team_id".into(), Value::String((&p.team_id).clone()));
     Value::Object(m)
 }
 
 fn iface_admin_users_session__reset_params__to_json(p: &iface_admin_users_session::ResetParams) -> Value {
     let mut m = Map::new();
     m.insert("token".into(), Value::String((&p.token).clone()));
+    m.insert("mobile_only".into(), match (&p.mobile_only) { Some(v) => Value::Bool(*(v)), None => Value::Null });
+    m.insert("user_id".into(), Value::String((&p.user_id).clone()));
+    m.insert("web_only".into(), match (&p.web_only) { Some(v) => Value::Bool(*(v)), None => Value::Null });
     Value::Object(m)
 }
 
-impl iface_admin_users_session::Guest for crate::Component {
-    fn invalidate(params: iface_admin_users_session::InvalidateParams) -> Result<String, String> {
-        let json = iface_admin_users_session__invalidate_params__to_json(&params);
-        dispatch(&OP_ADMIN_USERS_SESSION_INVALIDATE, json)
+fn iface_admin_users_session__invalidate_response__from_json(v: &Value) -> Option<iface_admin_users_session::InvalidateResponse> {
+    let m = v.as_object()?;
+    Some(iface_admin_users_session::InvalidateResponse {
+        ok: match m.get("ok").and_then(|v| iface_admin_users_session__defs_ok_true__from_json(v)) { Some(x) => x, None => return None },
+    })
+}
+
+fn iface_admin_users_session__defs_ok_true__from_json(v: &Value) -> Option<iface_admin_users_session::DefsOkTrue> {
+    let m = v.as_object()?;
+    Some(iface_admin_users_session::DefsOkTrue {
+        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+    })
+}
+
+fn iface_admin_users_session__reset_response__from_json(v: &Value) -> Option<iface_admin_users_session::ResetResponse> {
+    let m = v.as_object()?;
+    Some(iface_admin_users_session::ResetResponse {
+        ok: match m.get("ok").and_then(|v| iface_admin_users_session__defs_ok_true__from_json(v)) { Some(x) => x, None => return None },
+    })
+}
+
+fn iface_admin_users_session__invalidate__ok(body: String) -> Result<iface_admin_users_session::InvalidateResponse, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match iface_admin_users_session__invalidate_response__from_json(&v) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
     }
-    fn reset(params: iface_admin_users_session::ResetParams) -> Result<String, String> {
+}
+
+fn iface_admin_users_session__invalidate__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
+fn iface_admin_users_session__reset__ok(body: String) -> Result<iface_admin_users_session::ResetResponse, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match iface_admin_users_session__reset_response__from_json(&v) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_admin_users_session__reset__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
+impl iface_admin_users_session::Guest for crate::Component {
+    fn invalidate(params: iface_admin_users_session::InvalidateParams) -> Result<iface_admin_users_session::InvalidateResponse, String> {
+        let json = iface_admin_users_session__invalidate_params__to_json(&params);
+        match dispatch(&OP_ADMIN_USERS_SESSION_INVALIDATE, json).and_then(iface_admin_users_session__invalidate__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_admin_users_session__invalidate__err(e)),
+        }
+    }
+    fn reset(params: iface_admin_users_session::ResetParams) -> Result<iface_admin_users_session::ResetResponse, String> {
         let json = iface_admin_users_session__reset_params__to_json(&params);
-        dispatch(&OP_ADMIN_USERS_SESSION_RESET, json)
+        match dispatch(&OP_ADMIN_USERS_SESSION_RESET, json).and_then(iface_admin_users_session__reset__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_admin_users_session__reset__err(e)),
+        }
     }
 }
 use crate::exports::autostamp::slack::api as iface_api;
@@ -1580,13 +4248,25 @@ const OP_API_TEST: OpSpec = OpSpec {
     method: "GET",
     path_template: "/api.test",
     fields: &[
-        FieldSpec { snake: "error", location: FieldLocation::Query },
-        FieldSpec { snake: "foo", location: FieldLocation::Query },
+        FieldSpec { snake: "error", wire: "error", location: FieldLocation::Query },
+        FieldSpec { snake: "foo", wire: "foo", location: FieldLocation::Query },
     ],
     auth: &[
         AuthApply { secret_key: "slackAuth", kind: AuthKind::Bearer },
     ],
 };
+
+fn iface_api__test_response__to_json(p: &iface_api::TestResponse) -> Value {
+    let mut m = Map::new();
+    m.insert("ok".into(), iface_api__defs_ok_true__to_json(&p.ok));
+    Value::Object(m)
+}
+
+fn iface_api__defs_ok_true__to_json(p: &iface_api::DefsOkTrue) -> Value {
+    let mut m = Map::new();
+    m.insert("value".into(), Value::String((&p.value).clone()));
+    Value::Object(m)
+}
 
 fn iface_api__test_params__to_json(p: &iface_api::TestParams) -> Value {
     let mut m = Map::new();
@@ -1595,10 +4275,45 @@ fn iface_api__test_params__to_json(p: &iface_api::TestParams) -> Value {
     Value::Object(m)
 }
 
+fn iface_api__test_response__from_json(v: &Value) -> Option<iface_api::TestResponse> {
+    let m = v.as_object()?;
+    Some(iface_api::TestResponse {
+        ok: match m.get("ok").and_then(|v| iface_api__defs_ok_true__from_json(v)) { Some(x) => x, None => return None },
+    })
+}
+
+fn iface_api__defs_ok_true__from_json(v: &Value) -> Option<iface_api::DefsOkTrue> {
+    let m = v.as_object()?;
+    Some(iface_api::DefsOkTrue {
+        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+    })
+}
+
+fn iface_api__test__ok(body: String) -> Result<iface_api::TestResponse, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match iface_api__test_response__from_json(&v) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_api__test__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
 impl iface_api::Guest for crate::Component {
-    fn test(params: iface_api::TestParams) -> Result<String, String> {
+    fn test(params: iface_api::TestParams) -> Result<iface_api::TestResponse, String> {
         let json = iface_api__test_params__to_json(&params);
-        dispatch(&OP_API_TEST, json)
+        match dispatch(&OP_API_TEST, json).and_then(iface_api__test__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_api__test__err(e)),
+        }
     }
 }
 use crate::exports::autostamp::slack::apps_event_authorizations as iface_apps_event_authorizations;
@@ -1607,15 +4322,27 @@ const OP_APPS_EVENT_AUTHORIZATIONS_LIST_OP: OpSpec = OpSpec {
     method: "GET",
     path_template: "/apps.event.authorizations.list",
     fields: &[
-        FieldSpec { snake: "token", location: FieldLocation::Header },
-        FieldSpec { snake: "event_context", location: FieldLocation::Query },
-        FieldSpec { snake: "cursor", location: FieldLocation::Query },
-        FieldSpec { snake: "limit", location: FieldLocation::Query },
+        FieldSpec { snake: "token", wire: "token", location: FieldLocation::Header },
+        FieldSpec { snake: "event_context", wire: "event_context", location: FieldLocation::Query },
+        FieldSpec { snake: "cursor", wire: "cursor", location: FieldLocation::Query },
+        FieldSpec { snake: "limit", wire: "limit", location: FieldLocation::Query },
     ],
     auth: &[
         AuthApply { secret_key: "slackAuth", kind: AuthKind::Bearer },
     ],
 };
+
+fn iface_apps_event_authorizations__list_op_response__to_json(p: &iface_apps_event_authorizations::ListOpResponse) -> Value {
+    let mut m = Map::new();
+    m.insert("ok".into(), iface_apps_event_authorizations__defs_ok_true__to_json(&p.ok));
+    Value::Object(m)
+}
+
+fn iface_apps_event_authorizations__defs_ok_true__to_json(p: &iface_apps_event_authorizations::DefsOkTrue) -> Value {
+    let mut m = Map::new();
+    m.insert("value".into(), Value::String((&p.value).clone()));
+    Value::Object(m)
+}
 
 fn iface_apps_event_authorizations__list_op_params__to_json(p: &iface_apps_event_authorizations::ListOpParams) -> Value {
     let mut m = Map::new();
@@ -1626,10 +4353,45 @@ fn iface_apps_event_authorizations__list_op_params__to_json(p: &iface_apps_event
     Value::Object(m)
 }
 
+fn iface_apps_event_authorizations__list_op_response__from_json(v: &Value) -> Option<iface_apps_event_authorizations::ListOpResponse> {
+    let m = v.as_object()?;
+    Some(iface_apps_event_authorizations::ListOpResponse {
+        ok: match m.get("ok").and_then(|v| iface_apps_event_authorizations__defs_ok_true__from_json(v)) { Some(x) => x, None => return None },
+    })
+}
+
+fn iface_apps_event_authorizations__defs_ok_true__from_json(v: &Value) -> Option<iface_apps_event_authorizations::DefsOkTrue> {
+    let m = v.as_object()?;
+    Some(iface_apps_event_authorizations::DefsOkTrue {
+        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+    })
+}
+
+fn iface_apps_event_authorizations__list_op__ok(body: String) -> Result<iface_apps_event_authorizations::ListOpResponse, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match iface_apps_event_authorizations__list_op_response__from_json(&v) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_apps_event_authorizations__list_op__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
 impl iface_apps_event_authorizations::Guest for crate::Component {
-    fn list_op(params: iface_apps_event_authorizations::ListOpParams) -> Result<String, String> {
+    fn list_op(params: iface_apps_event_authorizations::ListOpParams) -> Result<iface_apps_event_authorizations::ListOpResponse, String> {
         let json = iface_apps_event_authorizations__list_op_params__to_json(&params);
-        dispatch(&OP_APPS_EVENT_AUTHORIZATIONS_LIST_OP, json)
+        match dispatch(&OP_APPS_EVENT_AUTHORIZATIONS_LIST_OP, json).and_then(iface_apps_event_authorizations__list_op__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_apps_event_authorizations__list_op__err(e)),
+        }
     }
 }
 use crate::exports::autostamp::slack::apps_permissions as iface_apps_permissions;
@@ -1638,7 +4400,7 @@ const OP_APPS_PERMISSIONS_INFO: OpSpec = OpSpec {
     method: "GET",
     path_template: "/apps.permissions.info",
     fields: &[
-        FieldSpec { snake: "token", location: FieldLocation::Query },
+        FieldSpec { snake: "token", wire: "token", location: FieldLocation::Query },
     ],
     auth: &[
         AuthApply { secret_key: "slackAuth", kind: AuthKind::Bearer },
@@ -1649,14 +4411,100 @@ const OP_APPS_PERMISSIONS_REQUEST: OpSpec = OpSpec {
     method: "GET",
     path_template: "/apps.permissions.request",
     fields: &[
-        FieldSpec { snake: "token", location: FieldLocation::Query },
-        FieldSpec { snake: "scopes", location: FieldLocation::Query },
-        FieldSpec { snake: "trigger_id", location: FieldLocation::Query },
+        FieldSpec { snake: "token", wire: "token", location: FieldLocation::Query },
+        FieldSpec { snake: "scopes", wire: "scopes", location: FieldLocation::Query },
+        FieldSpec { snake: "trigger_id", wire: "trigger_id", location: FieldLocation::Query },
     ],
     auth: &[
         AuthApply { secret_key: "slackAuth", kind: AuthKind::Bearer },
     ],
 };
+
+fn iface_apps_permissions__info_response__to_json(p: &iface_apps_permissions::InfoResponse) -> Value {
+    let mut m = Map::new();
+    m.insert("info".into(), iface_apps_permissions__info_response_info__to_json(&p.info));
+    m.insert("ok".into(), iface_apps_permissions__defs_ok_true__to_json(&p.ok));
+    Value::Object(m)
+}
+
+fn iface_apps_permissions__info_response_info__to_json(p: &iface_apps_permissions::InfoResponseInfo) -> Value {
+    let mut m = Map::new();
+    m.insert("app_home".into(), iface_apps_permissions__info_response_info_app_home__to_json(&p.app_home));
+    m.insert("channel".into(), iface_apps_permissions__info_response_info_channel__to_json(&p.channel));
+    m.insert("group".into(), iface_apps_permissions__info_response_info_group__to_json(&p.group));
+    m.insert("im".into(), iface_apps_permissions__info_response_info_im__to_json(&p.im));
+    m.insert("mpim".into(), iface_apps_permissions__info_response_info_mpim__to_json(&p.mpim));
+    m.insert("team".into(), iface_apps_permissions__info_response_info_team__to_json(&p.team));
+    Value::Object(m)
+}
+
+fn iface_apps_permissions__info_response_info_app_home__to_json(p: &iface_apps_permissions::InfoResponseInfoAppHome) -> Value {
+    let mut m = Map::new();
+    m.insert("resources".into(), match (&p.resources) { Some(v) => iface_apps_permissions__objs_resources__to_json(v), None => Value::Null });
+    m.insert("scopes".into(), match (&p.scopes) { Some(v) => iface_apps_permissions__objs_scopes__to_json(v), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_apps_permissions__objs_resources__to_json(p: &iface_apps_permissions::ObjsResources) -> Value {
+    let mut m = Map::new();
+    m.insert("excluded_ids".into(), match (&p.excluded_ids) { Some(v) => Value::Array((v).iter().map(|v| Value::String((v).clone())).collect()), None => Value::Null });
+    m.insert("ids".into(), Value::Array((&p.ids).iter().map(|v| Value::String((v).clone())).collect()));
+    m.insert("wildcard".into(), match (&p.wildcard) { Some(v) => Value::Bool(*(v)), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_apps_permissions__objs_scopes__to_json(p: &iface_apps_permissions::ObjsScopes) -> Value {
+    let mut m = Map::new();
+    m.insert("value".into(), Value::String((&p.value).clone()));
+    Value::Object(m)
+}
+
+fn iface_apps_permissions__info_response_info_channel__to_json(p: &iface_apps_permissions::InfoResponseInfoChannel) -> Value {
+    let mut m = Map::new();
+    m.insert("resources".into(), match (&p.resources) { Some(v) => iface_apps_permissions__objs_resources__to_json(v), None => Value::Null });
+    m.insert("scopes".into(), match (&p.scopes) { Some(v) => iface_apps_permissions__objs_scopes__to_json(v), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_apps_permissions__info_response_info_group__to_json(p: &iface_apps_permissions::InfoResponseInfoGroup) -> Value {
+    let mut m = Map::new();
+    m.insert("resources".into(), match (&p.resources) { Some(v) => iface_apps_permissions__objs_resources__to_json(v), None => Value::Null });
+    m.insert("scopes".into(), match (&p.scopes) { Some(v) => iface_apps_permissions__objs_scopes__to_json(v), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_apps_permissions__info_response_info_im__to_json(p: &iface_apps_permissions::InfoResponseInfoIm) -> Value {
+    let mut m = Map::new();
+    m.insert("resources".into(), match (&p.resources) { Some(v) => iface_apps_permissions__objs_resources__to_json(v), None => Value::Null });
+    m.insert("scopes".into(), match (&p.scopes) { Some(v) => iface_apps_permissions__objs_scopes__to_json(v), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_apps_permissions__info_response_info_mpim__to_json(p: &iface_apps_permissions::InfoResponseInfoMpim) -> Value {
+    let mut m = Map::new();
+    m.insert("resources".into(), match (&p.resources) { Some(v) => iface_apps_permissions__objs_resources__to_json(v), None => Value::Null });
+    m.insert("scopes".into(), match (&p.scopes) { Some(v) => iface_apps_permissions__objs_scopes__to_json(v), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_apps_permissions__info_response_info_team__to_json(p: &iface_apps_permissions::InfoResponseInfoTeam) -> Value {
+    let mut m = Map::new();
+    m.insert("resources".into(), iface_apps_permissions__objs_resources__to_json(&p.resources));
+    m.insert("scopes".into(), iface_apps_permissions__objs_scopes__to_json(&p.scopes));
+    Value::Object(m)
+}
+
+fn iface_apps_permissions__defs_ok_true__to_json(p: &iface_apps_permissions::DefsOkTrue) -> Value {
+    let mut m = Map::new();
+    m.insert("value".into(), Value::String((&p.value).clone()));
+    Value::Object(m)
+}
+
+fn iface_apps_permissions__request_response__to_json(p: &iface_apps_permissions::RequestResponse) -> Value {
+    let mut m = Map::new();
+    m.insert("ok".into(), iface_apps_permissions__defs_ok_true__to_json(&p.ok));
+    Value::Object(m)
+}
 
 fn iface_apps_permissions__info_params__to_json(p: &iface_apps_permissions::InfoParams) -> Value {
     let mut m = Map::new();
@@ -1672,14 +4520,154 @@ fn iface_apps_permissions__request_params__to_json(p: &iface_apps_permissions::R
     Value::Object(m)
 }
 
-impl iface_apps_permissions::Guest for crate::Component {
-    fn info(params: iface_apps_permissions::InfoParams) -> Result<String, String> {
-        let json = iface_apps_permissions__info_params__to_json(&params);
-        dispatch(&OP_APPS_PERMISSIONS_INFO, json)
+fn iface_apps_permissions__info_response__from_json(v: &Value) -> Option<iface_apps_permissions::InfoResponse> {
+    let m = v.as_object()?;
+    Some(iface_apps_permissions::InfoResponse {
+        info: match m.get("info").and_then(|v| iface_apps_permissions__info_response_info__from_json(v)) { Some(x) => x, None => return None },
+        ok: match m.get("ok").and_then(|v| iface_apps_permissions__defs_ok_true__from_json(v)) { Some(x) => x, None => return None },
+    })
+}
+
+fn iface_apps_permissions__info_response_info__from_json(v: &Value) -> Option<iface_apps_permissions::InfoResponseInfo> {
+    let m = v.as_object()?;
+    Some(iface_apps_permissions::InfoResponseInfo {
+        app_home: match m.get("app_home").and_then(|v| iface_apps_permissions__info_response_info_app_home__from_json(v)) { Some(x) => x, None => return None },
+        channel: match m.get("channel").and_then(|v| iface_apps_permissions__info_response_info_channel__from_json(v)) { Some(x) => x, None => return None },
+        group: match m.get("group").and_then(|v| iface_apps_permissions__info_response_info_group__from_json(v)) { Some(x) => x, None => return None },
+        im: match m.get("im").and_then(|v| iface_apps_permissions__info_response_info_im__from_json(v)) { Some(x) => x, None => return None },
+        mpim: match m.get("mpim").and_then(|v| iface_apps_permissions__info_response_info_mpim__from_json(v)) { Some(x) => x, None => return None },
+        team: match m.get("team").and_then(|v| iface_apps_permissions__info_response_info_team__from_json(v)) { Some(x) => x, None => return None },
+    })
+}
+
+fn iface_apps_permissions__info_response_info_app_home__from_json(v: &Value) -> Option<iface_apps_permissions::InfoResponseInfoAppHome> {
+    let m = v.as_object()?;
+    Some(iface_apps_permissions::InfoResponseInfoAppHome {
+        resources: m.get("resources").filter(|v| !v.is_null()).and_then(|v| iface_apps_permissions__objs_resources__from_json(v)),
+        scopes: m.get("scopes").filter(|v| !v.is_null()).and_then(|v| iface_apps_permissions__objs_scopes__from_json(v)),
+    })
+}
+
+fn iface_apps_permissions__objs_resources__from_json(v: &Value) -> Option<iface_apps_permissions::ObjsResources> {
+    let m = v.as_object()?;
+    Some(iface_apps_permissions::ObjsResources {
+        excluded_ids: m.get("excluded_ids").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| (x).as_str().map(|s| s.to_string())).collect())),
+        ids: m.get("ids").and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| (x).as_str().map(|s| s.to_string())).collect())).unwrap_or_default(),
+        wildcard: m.get("wildcard").filter(|v| !v.is_null()).and_then(|v| (v).as_bool()),
+    })
+}
+
+fn iface_apps_permissions__objs_scopes__from_json(v: &Value) -> Option<iface_apps_permissions::ObjsScopes> {
+    let m = v.as_object()?;
+    Some(iface_apps_permissions::ObjsScopes {
+        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+    })
+}
+
+fn iface_apps_permissions__info_response_info_channel__from_json(v: &Value) -> Option<iface_apps_permissions::InfoResponseInfoChannel> {
+    let m = v.as_object()?;
+    Some(iface_apps_permissions::InfoResponseInfoChannel {
+        resources: m.get("resources").filter(|v| !v.is_null()).and_then(|v| iface_apps_permissions__objs_resources__from_json(v)),
+        scopes: m.get("scopes").filter(|v| !v.is_null()).and_then(|v| iface_apps_permissions__objs_scopes__from_json(v)),
+    })
+}
+
+fn iface_apps_permissions__info_response_info_group__from_json(v: &Value) -> Option<iface_apps_permissions::InfoResponseInfoGroup> {
+    let m = v.as_object()?;
+    Some(iface_apps_permissions::InfoResponseInfoGroup {
+        resources: m.get("resources").filter(|v| !v.is_null()).and_then(|v| iface_apps_permissions__objs_resources__from_json(v)),
+        scopes: m.get("scopes").filter(|v| !v.is_null()).and_then(|v| iface_apps_permissions__objs_scopes__from_json(v)),
+    })
+}
+
+fn iface_apps_permissions__info_response_info_im__from_json(v: &Value) -> Option<iface_apps_permissions::InfoResponseInfoIm> {
+    let m = v.as_object()?;
+    Some(iface_apps_permissions::InfoResponseInfoIm {
+        resources: m.get("resources").filter(|v| !v.is_null()).and_then(|v| iface_apps_permissions__objs_resources__from_json(v)),
+        scopes: m.get("scopes").filter(|v| !v.is_null()).and_then(|v| iface_apps_permissions__objs_scopes__from_json(v)),
+    })
+}
+
+fn iface_apps_permissions__info_response_info_mpim__from_json(v: &Value) -> Option<iface_apps_permissions::InfoResponseInfoMpim> {
+    let m = v.as_object()?;
+    Some(iface_apps_permissions::InfoResponseInfoMpim {
+        resources: m.get("resources").filter(|v| !v.is_null()).and_then(|v| iface_apps_permissions__objs_resources__from_json(v)),
+        scopes: m.get("scopes").filter(|v| !v.is_null()).and_then(|v| iface_apps_permissions__objs_scopes__from_json(v)),
+    })
+}
+
+fn iface_apps_permissions__info_response_info_team__from_json(v: &Value) -> Option<iface_apps_permissions::InfoResponseInfoTeam> {
+    let m = v.as_object()?;
+    Some(iface_apps_permissions::InfoResponseInfoTeam {
+        resources: match m.get("resources").and_then(|v| iface_apps_permissions__objs_resources__from_json(v)) { Some(x) => x, None => return None },
+        scopes: match m.get("scopes").and_then(|v| iface_apps_permissions__objs_scopes__from_json(v)) { Some(x) => x, None => return None },
+    })
+}
+
+fn iface_apps_permissions__defs_ok_true__from_json(v: &Value) -> Option<iface_apps_permissions::DefsOkTrue> {
+    let m = v.as_object()?;
+    Some(iface_apps_permissions::DefsOkTrue {
+        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+    })
+}
+
+fn iface_apps_permissions__request_response__from_json(v: &Value) -> Option<iface_apps_permissions::RequestResponse> {
+    let m = v.as_object()?;
+    Some(iface_apps_permissions::RequestResponse {
+        ok: match m.get("ok").and_then(|v| iface_apps_permissions__defs_ok_true__from_json(v)) { Some(x) => x, None => return None },
+    })
+}
+
+fn iface_apps_permissions__info__ok(body: String) -> Result<iface_apps_permissions::InfoResponse, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match iface_apps_permissions__info_response__from_json(&v) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
     }
-    fn request(params: iface_apps_permissions::RequestParams) -> Result<String, String> {
+}
+
+fn iface_apps_permissions__info__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
+fn iface_apps_permissions__request__ok(body: String) -> Result<iface_apps_permissions::RequestResponse, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match iface_apps_permissions__request_response__from_json(&v) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_apps_permissions__request__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
+impl iface_apps_permissions::Guest for crate::Component {
+    fn info(params: iface_apps_permissions::InfoParams) -> Result<iface_apps_permissions::InfoResponse, String> {
+        let json = iface_apps_permissions__info_params__to_json(&params);
+        match dispatch(&OP_APPS_PERMISSIONS_INFO, json).and_then(iface_apps_permissions__info__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_apps_permissions__info__err(e)),
+        }
+    }
+    fn request(params: iface_apps_permissions::RequestParams) -> Result<iface_apps_permissions::RequestResponse, String> {
         let json = iface_apps_permissions__request_params__to_json(&params);
-        dispatch(&OP_APPS_PERMISSIONS_REQUEST, json)
+        match dispatch(&OP_APPS_PERMISSIONS_REQUEST, json).and_then(iface_apps_permissions__request__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_apps_permissions__request__err(e)),
+        }
     }
 }
 use crate::exports::autostamp::slack::apps_permissions_resources as iface_apps_permissions_resources;
@@ -1688,14 +4676,41 @@ const OP_APPS_PERMISSIONS_RESOURCES_LIST_OP: OpSpec = OpSpec {
     method: "GET",
     path_template: "/apps.permissions.resources.list",
     fields: &[
-        FieldSpec { snake: "token", location: FieldLocation::Query },
-        FieldSpec { snake: "cursor", location: FieldLocation::Query },
-        FieldSpec { snake: "limit", location: FieldLocation::Query },
+        FieldSpec { snake: "token", wire: "token", location: FieldLocation::Query },
+        FieldSpec { snake: "cursor", wire: "cursor", location: FieldLocation::Query },
+        FieldSpec { snake: "limit", wire: "limit", location: FieldLocation::Query },
     ],
     auth: &[
         AuthApply { secret_key: "slackAuth", kind: AuthKind::Bearer },
     ],
 };
+
+fn iface_apps_permissions_resources__list_op_response__to_json(p: &iface_apps_permissions_resources::ListOpResponse) -> Value {
+    let mut m = Map::new();
+    m.insert("ok".into(), iface_apps_permissions_resources__defs_ok_true__to_json(&p.ok));
+    m.insert("resources".into(), Value::Array((&p.resources).iter().map(|v| iface_apps_permissions_resources__list_op_response_resources_item__to_json(v)).collect()));
+    m.insert("response_metadata".into(), match (&p.response_metadata) { Some(v) => iface_apps_permissions_resources__list_op_response_response_metadata__to_json(v), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_apps_permissions_resources__defs_ok_true__to_json(p: &iface_apps_permissions_resources::DefsOkTrue) -> Value {
+    let mut m = Map::new();
+    m.insert("value".into(), Value::String((&p.value).clone()));
+    Value::Object(m)
+}
+
+fn iface_apps_permissions_resources__list_op_response_resources_item__to_json(p: &iface_apps_permissions_resources::ListOpResponseResourcesItem) -> Value {
+    let mut m = Map::new();
+    m.insert("id".into(), match (&p.id) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("type".into(), match (&p.type_op) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_apps_permissions_resources__list_op_response_response_metadata__to_json(p: &iface_apps_permissions_resources::ListOpResponseResponseMetadata) -> Value {
+    let mut m = Map::new();
+    m.insert("next_cursor".into(), Value::String((&p.next_cursor).clone()));
+    Value::Object(m)
+}
 
 fn iface_apps_permissions_resources__list_op_params__to_json(p: &iface_apps_permissions_resources::ListOpParams) -> Value {
     let mut m = Map::new();
@@ -1705,10 +4720,62 @@ fn iface_apps_permissions_resources__list_op_params__to_json(p: &iface_apps_perm
     Value::Object(m)
 }
 
+fn iface_apps_permissions_resources__list_op_response__from_json(v: &Value) -> Option<iface_apps_permissions_resources::ListOpResponse> {
+    let m = v.as_object()?;
+    Some(iface_apps_permissions_resources::ListOpResponse {
+        ok: match m.get("ok").and_then(|v| iface_apps_permissions_resources__defs_ok_true__from_json(v)) { Some(x) => x, None => return None },
+        resources: m.get("resources").and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| iface_apps_permissions_resources__list_op_response_resources_item__from_json(x)).collect())).unwrap_or_default(),
+        response_metadata: m.get("response_metadata").filter(|v| !v.is_null()).and_then(|v| iface_apps_permissions_resources__list_op_response_response_metadata__from_json(v)),
+    })
+}
+
+fn iface_apps_permissions_resources__defs_ok_true__from_json(v: &Value) -> Option<iface_apps_permissions_resources::DefsOkTrue> {
+    let m = v.as_object()?;
+    Some(iface_apps_permissions_resources::DefsOkTrue {
+        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+    })
+}
+
+fn iface_apps_permissions_resources__list_op_response_resources_item__from_json(v: &Value) -> Option<iface_apps_permissions_resources::ListOpResponseResourcesItem> {
+    let m = v.as_object()?;
+    Some(iface_apps_permissions_resources::ListOpResponseResourcesItem {
+        id: m.get("id").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        type_op: m.get("type").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    })
+}
+
+fn iface_apps_permissions_resources__list_op_response_response_metadata__from_json(v: &Value) -> Option<iface_apps_permissions_resources::ListOpResponseResponseMetadata> {
+    let m = v.as_object()?;
+    Some(iface_apps_permissions_resources::ListOpResponseResponseMetadata {
+        next_cursor: m.get("next_cursor").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+    })
+}
+
+fn iface_apps_permissions_resources__list_op__ok(body: String) -> Result<iface_apps_permissions_resources::ListOpResponse, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match iface_apps_permissions_resources__list_op_response__from_json(&v) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_apps_permissions_resources__list_op__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
 impl iface_apps_permissions_resources::Guest for crate::Component {
-    fn list_op(params: iface_apps_permissions_resources::ListOpParams) -> Result<String, String> {
+    fn list_op(params: iface_apps_permissions_resources::ListOpParams) -> Result<iface_apps_permissions_resources::ListOpResponse, String> {
         let json = iface_apps_permissions_resources__list_op_params__to_json(&params);
-        dispatch(&OP_APPS_PERMISSIONS_RESOURCES_LIST_OP, json)
+        match dispatch(&OP_APPS_PERMISSIONS_RESOURCES_LIST_OP, json).and_then(iface_apps_permissions_resources__list_op__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_apps_permissions_resources__list_op__err(e)),
+        }
     }
 }
 use crate::exports::autostamp::slack::apps_permissions_scopes as iface_apps_permissions_scopes;
@@ -1717,12 +4784,43 @@ const OP_APPS_PERMISSIONS_SCOPES_LIST_OP: OpSpec = OpSpec {
     method: "GET",
     path_template: "/apps.permissions.scopes.list",
     fields: &[
-        FieldSpec { snake: "token", location: FieldLocation::Query },
+        FieldSpec { snake: "token", wire: "token", location: FieldLocation::Query },
     ],
     auth: &[
         AuthApply { secret_key: "slackAuth", kind: AuthKind::Bearer },
     ],
 };
+
+fn iface_apps_permissions_scopes__list_op_response__to_json(p: &iface_apps_permissions_scopes::ListOpResponse) -> Value {
+    let mut m = Map::new();
+    m.insert("ok".into(), iface_apps_permissions_scopes__defs_ok_true__to_json(&p.ok));
+    m.insert("scopes".into(), iface_apps_permissions_scopes__list_op_response_scopes__to_json(&p.scopes));
+    Value::Object(m)
+}
+
+fn iface_apps_permissions_scopes__defs_ok_true__to_json(p: &iface_apps_permissions_scopes::DefsOkTrue) -> Value {
+    let mut m = Map::new();
+    m.insert("value".into(), Value::String((&p.value).clone()));
+    Value::Object(m)
+}
+
+fn iface_apps_permissions_scopes__list_op_response_scopes__to_json(p: &iface_apps_permissions_scopes::ListOpResponseScopes) -> Value {
+    let mut m = Map::new();
+    m.insert("app_home".into(), match (&p.app_home) { Some(v) => iface_apps_permissions_scopes__objs_scopes__to_json(v), None => Value::Null });
+    m.insert("channel".into(), match (&p.channel) { Some(v) => iface_apps_permissions_scopes__objs_scopes__to_json(v), None => Value::Null });
+    m.insert("group".into(), match (&p.group) { Some(v) => iface_apps_permissions_scopes__objs_scopes__to_json(v), None => Value::Null });
+    m.insert("im".into(), match (&p.im) { Some(v) => iface_apps_permissions_scopes__objs_scopes__to_json(v), None => Value::Null });
+    m.insert("mpim".into(), match (&p.mpim) { Some(v) => iface_apps_permissions_scopes__objs_scopes__to_json(v), None => Value::Null });
+    m.insert("team".into(), match (&p.team) { Some(v) => iface_apps_permissions_scopes__objs_scopes__to_json(v), None => Value::Null });
+    m.insert("user".into(), match (&p.user) { Some(v) => iface_apps_permissions_scopes__objs_scopes__to_json(v), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_apps_permissions_scopes__objs_scopes__to_json(p: &iface_apps_permissions_scopes::ObjsScopes) -> Value {
+    let mut m = Map::new();
+    m.insert("value".into(), Value::String((&p.value).clone()));
+    Value::Object(m)
+}
 
 fn iface_apps_permissions_scopes__list_op_params__to_json(p: &iface_apps_permissions_scopes::ListOpParams) -> Value {
     let mut m = Map::new();
@@ -1730,10 +4828,66 @@ fn iface_apps_permissions_scopes__list_op_params__to_json(p: &iface_apps_permiss
     Value::Object(m)
 }
 
+fn iface_apps_permissions_scopes__list_op_response__from_json(v: &Value) -> Option<iface_apps_permissions_scopes::ListOpResponse> {
+    let m = v.as_object()?;
+    Some(iface_apps_permissions_scopes::ListOpResponse {
+        ok: match m.get("ok").and_then(|v| iface_apps_permissions_scopes__defs_ok_true__from_json(v)) { Some(x) => x, None => return None },
+        scopes: match m.get("scopes").and_then(|v| iface_apps_permissions_scopes__list_op_response_scopes__from_json(v)) { Some(x) => x, None => return None },
+    })
+}
+
+fn iface_apps_permissions_scopes__defs_ok_true__from_json(v: &Value) -> Option<iface_apps_permissions_scopes::DefsOkTrue> {
+    let m = v.as_object()?;
+    Some(iface_apps_permissions_scopes::DefsOkTrue {
+        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+    })
+}
+
+fn iface_apps_permissions_scopes__list_op_response_scopes__from_json(v: &Value) -> Option<iface_apps_permissions_scopes::ListOpResponseScopes> {
+    let m = v.as_object()?;
+    Some(iface_apps_permissions_scopes::ListOpResponseScopes {
+        app_home: m.get("app_home").filter(|v| !v.is_null()).and_then(|v| iface_apps_permissions_scopes__objs_scopes__from_json(v)),
+        channel: m.get("channel").filter(|v| !v.is_null()).and_then(|v| iface_apps_permissions_scopes__objs_scopes__from_json(v)),
+        group: m.get("group").filter(|v| !v.is_null()).and_then(|v| iface_apps_permissions_scopes__objs_scopes__from_json(v)),
+        im: m.get("im").filter(|v| !v.is_null()).and_then(|v| iface_apps_permissions_scopes__objs_scopes__from_json(v)),
+        mpim: m.get("mpim").filter(|v| !v.is_null()).and_then(|v| iface_apps_permissions_scopes__objs_scopes__from_json(v)),
+        team: m.get("team").filter(|v| !v.is_null()).and_then(|v| iface_apps_permissions_scopes__objs_scopes__from_json(v)),
+        user: m.get("user").filter(|v| !v.is_null()).and_then(|v| iface_apps_permissions_scopes__objs_scopes__from_json(v)),
+    })
+}
+
+fn iface_apps_permissions_scopes__objs_scopes__from_json(v: &Value) -> Option<iface_apps_permissions_scopes::ObjsScopes> {
+    let m = v.as_object()?;
+    Some(iface_apps_permissions_scopes::ObjsScopes {
+        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+    })
+}
+
+fn iface_apps_permissions_scopes__list_op__ok(body: String) -> Result<iface_apps_permissions_scopes::ListOpResponse, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match iface_apps_permissions_scopes__list_op_response__from_json(&v) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_apps_permissions_scopes__list_op__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
 impl iface_apps_permissions_scopes::Guest for crate::Component {
-    fn list_op(params: iface_apps_permissions_scopes::ListOpParams) -> Result<String, String> {
+    fn list_op(params: iface_apps_permissions_scopes::ListOpParams) -> Result<iface_apps_permissions_scopes::ListOpResponse, String> {
         let json = iface_apps_permissions_scopes__list_op_params__to_json(&params);
-        dispatch(&OP_APPS_PERMISSIONS_SCOPES_LIST_OP, json)
+        match dispatch(&OP_APPS_PERMISSIONS_SCOPES_LIST_OP, json).and_then(iface_apps_permissions_scopes__list_op__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_apps_permissions_scopes__list_op__err(e)),
+        }
     }
 }
 use crate::exports::autostamp::slack::apps_permissions_users as iface_apps_permissions_users;
@@ -1742,9 +4896,9 @@ const OP_APPS_PERMISSIONS_USERS_LIST_OP: OpSpec = OpSpec {
     method: "GET",
     path_template: "/apps.permissions.users.list",
     fields: &[
-        FieldSpec { snake: "token", location: FieldLocation::Query },
-        FieldSpec { snake: "cursor", location: FieldLocation::Query },
-        FieldSpec { snake: "limit", location: FieldLocation::Query },
+        FieldSpec { snake: "token", wire: "token", location: FieldLocation::Query },
+        FieldSpec { snake: "cursor", wire: "cursor", location: FieldLocation::Query },
+        FieldSpec { snake: "limit", wire: "limit", location: FieldLocation::Query },
     ],
     auth: &[
         AuthApply { secret_key: "slackAuth", kind: AuthKind::Bearer },
@@ -1755,15 +4909,33 @@ const OP_APPS_PERMISSIONS_USERS_REQUEST: OpSpec = OpSpec {
     method: "GET",
     path_template: "/apps.permissions.users.request",
     fields: &[
-        FieldSpec { snake: "token", location: FieldLocation::Query },
-        FieldSpec { snake: "scopes", location: FieldLocation::Query },
-        FieldSpec { snake: "trigger_id", location: FieldLocation::Query },
-        FieldSpec { snake: "user", location: FieldLocation::Query },
+        FieldSpec { snake: "token", wire: "token", location: FieldLocation::Query },
+        FieldSpec { snake: "scopes", wire: "scopes", location: FieldLocation::Query },
+        FieldSpec { snake: "trigger_id", wire: "trigger_id", location: FieldLocation::Query },
+        FieldSpec { snake: "user", wire: "user", location: FieldLocation::Query },
     ],
     auth: &[
         AuthApply { secret_key: "slackAuth", kind: AuthKind::Bearer },
     ],
 };
+
+fn iface_apps_permissions_users__list_op_response__to_json(p: &iface_apps_permissions_users::ListOpResponse) -> Value {
+    let mut m = Map::new();
+    m.insert("ok".into(), iface_apps_permissions_users__defs_ok_true__to_json(&p.ok));
+    Value::Object(m)
+}
+
+fn iface_apps_permissions_users__defs_ok_true__to_json(p: &iface_apps_permissions_users::DefsOkTrue) -> Value {
+    let mut m = Map::new();
+    m.insert("value".into(), Value::String((&p.value).clone()));
+    Value::Object(m)
+}
+
+fn iface_apps_permissions_users__request_response__to_json(p: &iface_apps_permissions_users::RequestResponse) -> Value {
+    let mut m = Map::new();
+    m.insert("ok".into(), iface_apps_permissions_users__defs_ok_true__to_json(&p.ok));
+    Value::Object(m)
+}
 
 fn iface_apps_permissions_users__list_op_params__to_json(p: &iface_apps_permissions_users::ListOpParams) -> Value {
     let mut m = Map::new();
@@ -1782,14 +4954,77 @@ fn iface_apps_permissions_users__request_params__to_json(p: &iface_apps_permissi
     Value::Object(m)
 }
 
-impl iface_apps_permissions_users::Guest for crate::Component {
-    fn list_op(params: iface_apps_permissions_users::ListOpParams) -> Result<String, String> {
-        let json = iface_apps_permissions_users__list_op_params__to_json(&params);
-        dispatch(&OP_APPS_PERMISSIONS_USERS_LIST_OP, json)
+fn iface_apps_permissions_users__list_op_response__from_json(v: &Value) -> Option<iface_apps_permissions_users::ListOpResponse> {
+    let m = v.as_object()?;
+    Some(iface_apps_permissions_users::ListOpResponse {
+        ok: match m.get("ok").and_then(|v| iface_apps_permissions_users__defs_ok_true__from_json(v)) { Some(x) => x, None => return None },
+    })
+}
+
+fn iface_apps_permissions_users__defs_ok_true__from_json(v: &Value) -> Option<iface_apps_permissions_users::DefsOkTrue> {
+    let m = v.as_object()?;
+    Some(iface_apps_permissions_users::DefsOkTrue {
+        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+    })
+}
+
+fn iface_apps_permissions_users__request_response__from_json(v: &Value) -> Option<iface_apps_permissions_users::RequestResponse> {
+    let m = v.as_object()?;
+    Some(iface_apps_permissions_users::RequestResponse {
+        ok: match m.get("ok").and_then(|v| iface_apps_permissions_users__defs_ok_true__from_json(v)) { Some(x) => x, None => return None },
+    })
+}
+
+fn iface_apps_permissions_users__list_op__ok(body: String) -> Result<iface_apps_permissions_users::ListOpResponse, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match iface_apps_permissions_users__list_op_response__from_json(&v) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
     }
-    fn request(params: iface_apps_permissions_users::RequestParams) -> Result<String, String> {
+}
+
+fn iface_apps_permissions_users__list_op__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
+fn iface_apps_permissions_users__request__ok(body: String) -> Result<iface_apps_permissions_users::RequestResponse, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match iface_apps_permissions_users__request_response__from_json(&v) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_apps_permissions_users__request__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
+impl iface_apps_permissions_users::Guest for crate::Component {
+    fn list_op(params: iface_apps_permissions_users::ListOpParams) -> Result<iface_apps_permissions_users::ListOpResponse, String> {
+        let json = iface_apps_permissions_users__list_op_params__to_json(&params);
+        match dispatch(&OP_APPS_PERMISSIONS_USERS_LIST_OP, json).and_then(iface_apps_permissions_users__list_op__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_apps_permissions_users__list_op__err(e)),
+        }
+    }
+    fn request(params: iface_apps_permissions_users::RequestParams) -> Result<iface_apps_permissions_users::RequestResponse, String> {
         let json = iface_apps_permissions_users__request_params__to_json(&params);
-        dispatch(&OP_APPS_PERMISSIONS_USERS_REQUEST, json)
+        match dispatch(&OP_APPS_PERMISSIONS_USERS_REQUEST, json).and_then(iface_apps_permissions_users__request__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_apps_permissions_users__request__err(e)),
+        }
     }
 }
 use crate::exports::autostamp::slack::apps as iface_apps;
@@ -1798,14 +5033,26 @@ const OP_APPS_UNINSTALL: OpSpec = OpSpec {
     method: "GET",
     path_template: "/apps.uninstall",
     fields: &[
-        FieldSpec { snake: "token", location: FieldLocation::Query },
-        FieldSpec { snake: "client_id", location: FieldLocation::Query },
-        FieldSpec { snake: "client_secret", location: FieldLocation::Query },
+        FieldSpec { snake: "token", wire: "token", location: FieldLocation::Query },
+        FieldSpec { snake: "client_id", wire: "client_id", location: FieldLocation::Query },
+        FieldSpec { snake: "client_secret", wire: "client_secret", location: FieldLocation::Query },
     ],
     auth: &[
         AuthApply { secret_key: "slackAuth", kind: AuthKind::Bearer },
     ],
 };
+
+fn iface_apps__uninstall_response__to_json(p: &iface_apps::UninstallResponse) -> Value {
+    let mut m = Map::new();
+    m.insert("ok".into(), iface_apps__defs_ok_true__to_json(&p.ok));
+    Value::Object(m)
+}
+
+fn iface_apps__defs_ok_true__to_json(p: &iface_apps::DefsOkTrue) -> Value {
+    let mut m = Map::new();
+    m.insert("value".into(), Value::String((&p.value).clone()));
+    Value::Object(m)
+}
 
 fn iface_apps__uninstall_params__to_json(p: &iface_apps::UninstallParams) -> Value {
     let mut m = Map::new();
@@ -1815,10 +5062,45 @@ fn iface_apps__uninstall_params__to_json(p: &iface_apps::UninstallParams) -> Val
     Value::Object(m)
 }
 
+fn iface_apps__uninstall_response__from_json(v: &Value) -> Option<iface_apps::UninstallResponse> {
+    let m = v.as_object()?;
+    Some(iface_apps::UninstallResponse {
+        ok: match m.get("ok").and_then(|v| iface_apps__defs_ok_true__from_json(v)) { Some(x) => x, None => return None },
+    })
+}
+
+fn iface_apps__defs_ok_true__from_json(v: &Value) -> Option<iface_apps::DefsOkTrue> {
+    let m = v.as_object()?;
+    Some(iface_apps::DefsOkTrue {
+        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+    })
+}
+
+fn iface_apps__uninstall__ok(body: String) -> Result<iface_apps::UninstallResponse, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match iface_apps__uninstall_response__from_json(&v) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_apps__uninstall__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
 impl iface_apps::Guest for crate::Component {
-    fn uninstall(params: iface_apps::UninstallParams) -> Result<String, String> {
+    fn uninstall(params: iface_apps::UninstallParams) -> Result<iface_apps::UninstallResponse, String> {
         let json = iface_apps__uninstall_params__to_json(&params);
-        dispatch(&OP_APPS_UNINSTALL, json)
+        match dispatch(&OP_APPS_UNINSTALL, json).and_then(iface_apps__uninstall__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_apps__uninstall__err(e)),
+        }
     }
 }
 use crate::exports::autostamp::slack::auth as iface_auth;
@@ -1827,8 +5109,8 @@ const OP_AUTH_REVOKE: OpSpec = OpSpec {
     method: "GET",
     path_template: "/auth.revoke",
     fields: &[
-        FieldSpec { snake: "token", location: FieldLocation::Query },
-        FieldSpec { snake: "test", location: FieldLocation::Query },
+        FieldSpec { snake: "token", wire: "token", location: FieldLocation::Query },
+        FieldSpec { snake: "test", wire: "test", location: FieldLocation::Query },
     ],
     auth: &[
         AuthApply { secret_key: "slackAuth", kind: AuthKind::Bearer },
@@ -1839,12 +5121,56 @@ const OP_AUTH_TEST: OpSpec = OpSpec {
     method: "GET",
     path_template: "/auth.test",
     fields: &[
-        FieldSpec { snake: "token", location: FieldLocation::Header },
+        FieldSpec { snake: "token", wire: "token", location: FieldLocation::Header },
     ],
     auth: &[
         AuthApply { secret_key: "slackAuth", kind: AuthKind::Bearer },
     ],
 };
+
+fn iface_auth__revoke_response__to_json(p: &iface_auth::RevokeResponse) -> Value {
+    let mut m = Map::new();
+    m.insert("ok".into(), iface_auth__defs_ok_true__to_json(&p.ok));
+    m.insert("revoked".into(), Value::Bool(*(&p.revoked)));
+    Value::Object(m)
+}
+
+fn iface_auth__defs_ok_true__to_json(p: &iface_auth::DefsOkTrue) -> Value {
+    let mut m = Map::new();
+    m.insert("value".into(), Value::String((&p.value).clone()));
+    Value::Object(m)
+}
+
+fn iface_auth__test_response__to_json(p: &iface_auth::TestResponse) -> Value {
+    let mut m = Map::new();
+    m.insert("bot_id".into(), match (&p.bot_id) { Some(v) => iface_auth__defs_bot_id__to_json(v), None => Value::Null });
+    m.insert("is_enterprise_install".into(), match (&p.is_enterprise_install) { Some(v) => Value::Bool(*(v)), None => Value::Null });
+    m.insert("ok".into(), iface_auth__defs_ok_true__to_json(&p.ok));
+    m.insert("team".into(), Value::String((&p.team).clone()));
+    m.insert("team_id".into(), iface_auth__defs_team__to_json(&p.team_id));
+    m.insert("url".into(), Value::String((&p.url).clone()));
+    m.insert("user".into(), Value::String((&p.user).clone()));
+    m.insert("user_id".into(), iface_auth__defs_user_id__to_json(&p.user_id));
+    Value::Object(m)
+}
+
+fn iface_auth__defs_bot_id__to_json(p: &iface_auth::DefsBotId) -> Value {
+    let mut m = Map::new();
+    m.insert("value".into(), Value::String((&p.value).clone()));
+    Value::Object(m)
+}
+
+fn iface_auth__defs_team__to_json(p: &iface_auth::DefsTeam) -> Value {
+    let mut m = Map::new();
+    m.insert("value".into(), Value::String((&p.value).clone()));
+    Value::Object(m)
+}
+
+fn iface_auth__defs_user_id__to_json(p: &iface_auth::DefsUserId) -> Value {
+    let mut m = Map::new();
+    m.insert("value".into(), Value::String((&p.value).clone()));
+    Value::Object(m)
+}
 
 fn iface_auth__revoke_params__to_json(p: &iface_auth::RevokeParams) -> Value {
     let mut m = Map::new();
@@ -1859,14 +5185,106 @@ fn iface_auth__test_params__to_json(p: &iface_auth::TestParams) -> Value {
     Value::Object(m)
 }
 
-impl iface_auth::Guest for crate::Component {
-    fn revoke(params: iface_auth::RevokeParams) -> Result<String, String> {
-        let json = iface_auth__revoke_params__to_json(&params);
-        dispatch(&OP_AUTH_REVOKE, json)
+fn iface_auth__revoke_response__from_json(v: &Value) -> Option<iface_auth::RevokeResponse> {
+    let m = v.as_object()?;
+    Some(iface_auth::RevokeResponse {
+        ok: match m.get("ok").and_then(|v| iface_auth__defs_ok_true__from_json(v)) { Some(x) => x, None => return None },
+        revoked: m.get("revoked").and_then(|v| (v).as_bool()).unwrap_or_default(),
+    })
+}
+
+fn iface_auth__defs_ok_true__from_json(v: &Value) -> Option<iface_auth::DefsOkTrue> {
+    let m = v.as_object()?;
+    Some(iface_auth::DefsOkTrue {
+        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+    })
+}
+
+fn iface_auth__test_response__from_json(v: &Value) -> Option<iface_auth::TestResponse> {
+    let m = v.as_object()?;
+    Some(iface_auth::TestResponse {
+        bot_id: m.get("bot_id").filter(|v| !v.is_null()).and_then(|v| iface_auth__defs_bot_id__from_json(v)),
+        is_enterprise_install: m.get("is_enterprise_install").filter(|v| !v.is_null()).and_then(|v| (v).as_bool()),
+        ok: match m.get("ok").and_then(|v| iface_auth__defs_ok_true__from_json(v)) { Some(x) => x, None => return None },
+        team: m.get("team").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        team_id: match m.get("team_id").and_then(|v| iface_auth__defs_team__from_json(v)) { Some(x) => x, None => return None },
+        url: m.get("url").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        user: m.get("user").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        user_id: match m.get("user_id").and_then(|v| iface_auth__defs_user_id__from_json(v)) { Some(x) => x, None => return None },
+    })
+}
+
+fn iface_auth__defs_bot_id__from_json(v: &Value) -> Option<iface_auth::DefsBotId> {
+    let m = v.as_object()?;
+    Some(iface_auth::DefsBotId {
+        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+    })
+}
+
+fn iface_auth__defs_team__from_json(v: &Value) -> Option<iface_auth::DefsTeam> {
+    let m = v.as_object()?;
+    Some(iface_auth::DefsTeam {
+        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+    })
+}
+
+fn iface_auth__defs_user_id__from_json(v: &Value) -> Option<iface_auth::DefsUserId> {
+    let m = v.as_object()?;
+    Some(iface_auth::DefsUserId {
+        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+    })
+}
+
+fn iface_auth__revoke__ok(body: String) -> Result<iface_auth::RevokeResponse, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match iface_auth__revoke_response__from_json(&v) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
     }
-    fn test(params: iface_auth::TestParams) -> Result<String, String> {
+}
+
+fn iface_auth__revoke__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
+fn iface_auth__test__ok(body: String) -> Result<iface_auth::TestResponse, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match iface_auth__test_response__from_json(&v) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_auth__test__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
+impl iface_auth::Guest for crate::Component {
+    fn revoke(params: iface_auth::RevokeParams) -> Result<iface_auth::RevokeResponse, String> {
+        let json = iface_auth__revoke_params__to_json(&params);
+        match dispatch(&OP_AUTH_REVOKE, json).and_then(iface_auth__revoke__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_auth__revoke__err(e)),
+        }
+    }
+    fn test(params: iface_auth::TestParams) -> Result<iface_auth::TestResponse, String> {
         let json = iface_auth__test_params__to_json(&params);
-        dispatch(&OP_AUTH_TEST, json)
+        match dispatch(&OP_AUTH_TEST, json).and_then(iface_auth__test__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_auth__test__err(e)),
+        }
     }
 }
 use crate::exports::autostamp::slack::bots as iface_bots;
@@ -1875,13 +5293,64 @@ const OP_BOTS_INFO: OpSpec = OpSpec {
     method: "GET",
     path_template: "/bots.info",
     fields: &[
-        FieldSpec { snake: "token", location: FieldLocation::Query },
-        FieldSpec { snake: "bot", location: FieldLocation::Query },
+        FieldSpec { snake: "token", wire: "token", location: FieldLocation::Query },
+        FieldSpec { snake: "bot", wire: "bot", location: FieldLocation::Query },
     ],
     auth: &[
         AuthApply { secret_key: "slackAuth", kind: AuthKind::Bearer },
     ],
 };
+
+fn iface_bots__info_response__to_json(p: &iface_bots::InfoResponse) -> Value {
+    let mut m = Map::new();
+    m.insert("bot".into(), iface_bots__info_response_bot__to_json(&p.bot));
+    m.insert("ok".into(), iface_bots__defs_ok_true__to_json(&p.ok));
+    Value::Object(m)
+}
+
+fn iface_bots__info_response_bot__to_json(p: &iface_bots::InfoResponseBot) -> Value {
+    let mut m = Map::new();
+    m.insert("app_id".into(), iface_bots__defs_app_id__to_json(&p.app_id));
+    m.insert("deleted".into(), Value::Bool(*(&p.deleted)));
+    m.insert("icons".into(), iface_bots__info_response_bot_icons__to_json(&p.icons));
+    m.insert("id".into(), iface_bots__defs_bot_id__to_json(&p.id));
+    m.insert("name".into(), Value::String((&p.name).clone()));
+    m.insert("updated".into(), Value::Number(serde_json::Number::from(*(&p.updated))));
+    m.insert("user_id".into(), match (&p.user_id) { Some(v) => iface_bots__defs_user_id__to_json(v), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_bots__defs_app_id__to_json(p: &iface_bots::DefsAppId) -> Value {
+    let mut m = Map::new();
+    m.insert("value".into(), Value::String((&p.value).clone()));
+    Value::Object(m)
+}
+
+fn iface_bots__info_response_bot_icons__to_json(p: &iface_bots::InfoResponseBotIcons) -> Value {
+    let mut m = Map::new();
+    m.insert("image_36".into(), Value::String((&p.image_v36).clone()));
+    m.insert("image_48".into(), Value::String((&p.image_v48).clone()));
+    m.insert("image_72".into(), Value::String((&p.image_v72).clone()));
+    Value::Object(m)
+}
+
+fn iface_bots__defs_bot_id__to_json(p: &iface_bots::DefsBotId) -> Value {
+    let mut m = Map::new();
+    m.insert("value".into(), Value::String((&p.value).clone()));
+    Value::Object(m)
+}
+
+fn iface_bots__defs_user_id__to_json(p: &iface_bots::DefsUserId) -> Value {
+    let mut m = Map::new();
+    m.insert("value".into(), Value::String((&p.value).clone()));
+    Value::Object(m)
+}
+
+fn iface_bots__defs_ok_true__to_json(p: &iface_bots::DefsOkTrue) -> Value {
+    let mut m = Map::new();
+    m.insert("value".into(), Value::String((&p.value).clone()));
+    Value::Object(m)
+}
 
 fn iface_bots__info_params__to_json(p: &iface_bots::InfoParams) -> Value {
     let mut m = Map::new();
@@ -1890,10 +5359,89 @@ fn iface_bots__info_params__to_json(p: &iface_bots::InfoParams) -> Value {
     Value::Object(m)
 }
 
+fn iface_bots__info_response__from_json(v: &Value) -> Option<iface_bots::InfoResponse> {
+    let m = v.as_object()?;
+    Some(iface_bots::InfoResponse {
+        bot: match m.get("bot").and_then(|v| iface_bots__info_response_bot__from_json(v)) { Some(x) => x, None => return None },
+        ok: match m.get("ok").and_then(|v| iface_bots__defs_ok_true__from_json(v)) { Some(x) => x, None => return None },
+    })
+}
+
+fn iface_bots__info_response_bot__from_json(v: &Value) -> Option<iface_bots::InfoResponseBot> {
+    let m = v.as_object()?;
+    Some(iface_bots::InfoResponseBot {
+        app_id: match m.get("app_id").and_then(|v| iface_bots__defs_app_id__from_json(v)) { Some(x) => x, None => return None },
+        deleted: m.get("deleted").and_then(|v| (v).as_bool()).unwrap_or_default(),
+        icons: match m.get("icons").and_then(|v| iface_bots__info_response_bot_icons__from_json(v)) { Some(x) => x, None => return None },
+        id: match m.get("id").and_then(|v| iface_bots__defs_bot_id__from_json(v)) { Some(x) => x, None => return None },
+        name: m.get("name").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        updated: m.get("updated").and_then(|v| (v).as_i64().map(|n| n as i32)).unwrap_or_default(),
+        user_id: m.get("user_id").filter(|v| !v.is_null()).and_then(|v| iface_bots__defs_user_id__from_json(v)),
+    })
+}
+
+fn iface_bots__defs_app_id__from_json(v: &Value) -> Option<iface_bots::DefsAppId> {
+    let m = v.as_object()?;
+    Some(iface_bots::DefsAppId {
+        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+    })
+}
+
+fn iface_bots__info_response_bot_icons__from_json(v: &Value) -> Option<iface_bots::InfoResponseBotIcons> {
+    let m = v.as_object()?;
+    Some(iface_bots::InfoResponseBotIcons {
+        image_v36: m.get("image_36").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        image_v48: m.get("image_48").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        image_v72: m.get("image_72").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+    })
+}
+
+fn iface_bots__defs_bot_id__from_json(v: &Value) -> Option<iface_bots::DefsBotId> {
+    let m = v.as_object()?;
+    Some(iface_bots::DefsBotId {
+        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+    })
+}
+
+fn iface_bots__defs_user_id__from_json(v: &Value) -> Option<iface_bots::DefsUserId> {
+    let m = v.as_object()?;
+    Some(iface_bots::DefsUserId {
+        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+    })
+}
+
+fn iface_bots__defs_ok_true__from_json(v: &Value) -> Option<iface_bots::DefsOkTrue> {
+    let m = v.as_object()?;
+    Some(iface_bots::DefsOkTrue {
+        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+    })
+}
+
+fn iface_bots__info__ok(body: String) -> Result<iface_bots::InfoResponse, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match iface_bots__info_response__from_json(&v) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_bots__info__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
 impl iface_bots::Guest for crate::Component {
-    fn info(params: iface_bots::InfoParams) -> Result<String, String> {
+    fn info(params: iface_bots::InfoParams) -> Result<iface_bots::InfoResponse, String> {
         let json = iface_bots__info_params__to_json(&params);
-        dispatch(&OP_BOTS_INFO, json)
+        match dispatch(&OP_BOTS_INFO, json).and_then(iface_bots__info__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_bots__info__err(e)),
+        }
     }
 }
 use crate::exports::autostamp::slack::calls as iface_calls;
@@ -1902,7 +5450,15 @@ const OP_CALLS_ADD: OpSpec = OpSpec {
     method: "POST",
     path_template: "/calls.add",
     fields: &[
-        FieldSpec { snake: "token", location: FieldLocation::Header },
+        FieldSpec { snake: "token", wire: "token", location: FieldLocation::Header },
+        FieldSpec { snake: "created_by", wire: "created_by", location: FieldLocation::Body },
+        FieldSpec { snake: "date_start", wire: "date_start", location: FieldLocation::Body },
+        FieldSpec { snake: "desktop_app_join_url", wire: "desktop_app_join_url", location: FieldLocation::Body },
+        FieldSpec { snake: "external_display_id", wire: "external_display_id", location: FieldLocation::Body },
+        FieldSpec { snake: "external_unique_id", wire: "external_unique_id", location: FieldLocation::Body },
+        FieldSpec { snake: "join_url", wire: "join_url", location: FieldLocation::Body },
+        FieldSpec { snake: "title", wire: "title", location: FieldLocation::Body },
+        FieldSpec { snake: "users", wire: "users", location: FieldLocation::Body },
     ],
     auth: &[
         AuthApply { secret_key: "slackAuth", kind: AuthKind::Bearer },
@@ -1913,7 +5469,9 @@ const OP_CALLS_END: OpSpec = OpSpec {
     method: "POST",
     path_template: "/calls.end",
     fields: &[
-        FieldSpec { snake: "token", location: FieldLocation::Header },
+        FieldSpec { snake: "token", wire: "token", location: FieldLocation::Header },
+        FieldSpec { snake: "duration", wire: "duration", location: FieldLocation::Body },
+        FieldSpec { snake: "id", wire: "id", location: FieldLocation::Body },
     ],
     auth: &[
         AuthApply { secret_key: "slackAuth", kind: AuthKind::Bearer },
@@ -1924,8 +5482,8 @@ const OP_CALLS_INFO: OpSpec = OpSpec {
     method: "GET",
     path_template: "/calls.info",
     fields: &[
-        FieldSpec { snake: "token", location: FieldLocation::Header },
-        FieldSpec { snake: "id", location: FieldLocation::Query },
+        FieldSpec { snake: "token", wire: "token", location: FieldLocation::Header },
+        FieldSpec { snake: "id", wire: "id", location: FieldLocation::Query },
     ],
     auth: &[
         AuthApply { secret_key: "slackAuth", kind: AuthKind::Bearer },
@@ -1936,22 +5494,66 @@ const OP_CALLS_UPDATE: OpSpec = OpSpec {
     method: "POST",
     path_template: "/calls.update",
     fields: &[
-        FieldSpec { snake: "token", location: FieldLocation::Header },
+        FieldSpec { snake: "token", wire: "token", location: FieldLocation::Header },
+        FieldSpec { snake: "desktop_app_join_url", wire: "desktop_app_join_url", location: FieldLocation::Body },
+        FieldSpec { snake: "id", wire: "id", location: FieldLocation::Body },
+        FieldSpec { snake: "join_url", wire: "join_url", location: FieldLocation::Body },
+        FieldSpec { snake: "title", wire: "title", location: FieldLocation::Body },
     ],
     auth: &[
         AuthApply { secret_key: "slackAuth", kind: AuthKind::Bearer },
     ],
 };
 
+fn iface_calls__add_response__to_json(p: &iface_calls::AddResponse) -> Value {
+    let mut m = Map::new();
+    m.insert("ok".into(), iface_calls__defs_ok_true__to_json(&p.ok));
+    Value::Object(m)
+}
+
+fn iface_calls__defs_ok_true__to_json(p: &iface_calls::DefsOkTrue) -> Value {
+    let mut m = Map::new();
+    m.insert("value".into(), Value::String((&p.value).clone()));
+    Value::Object(m)
+}
+
+fn iface_calls__end_response__to_json(p: &iface_calls::EndResponse) -> Value {
+    let mut m = Map::new();
+    m.insert("ok".into(), iface_calls__defs_ok_true__to_json(&p.ok));
+    Value::Object(m)
+}
+
+fn iface_calls__info_response__to_json(p: &iface_calls::InfoResponse) -> Value {
+    let mut m = Map::new();
+    m.insert("ok".into(), iface_calls__defs_ok_true__to_json(&p.ok));
+    Value::Object(m)
+}
+
+fn iface_calls__update_response__to_json(p: &iface_calls::UpdateResponse) -> Value {
+    let mut m = Map::new();
+    m.insert("ok".into(), iface_calls__defs_ok_true__to_json(&p.ok));
+    Value::Object(m)
+}
+
 fn iface_calls__add_params__to_json(p: &iface_calls::AddParams) -> Value {
     let mut m = Map::new();
     m.insert("token".into(), Value::String((&p.token).clone()));
+    m.insert("created_by".into(), match (&p.created_by) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("date_start".into(), match (&p.date_start) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("desktop_app_join_url".into(), match (&p.desktop_app_join_url) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("external_display_id".into(), match (&p.external_display_id) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("external_unique_id".into(), Value::String((&p.external_unique_id).clone()));
+    m.insert("join_url".into(), Value::String((&p.join_url).clone()));
+    m.insert("title".into(), match (&p.title) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("users".into(), match (&p.users) { Some(v) => Value::String((v).clone()), None => Value::Null });
     Value::Object(m)
 }
 
 fn iface_calls__end_params__to_json(p: &iface_calls::EndParams) -> Value {
     let mut m = Map::new();
     m.insert("token".into(), Value::String((&p.token).clone()));
+    m.insert("duration".into(), match (&p.duration) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("id".into(), Value::String((&p.id).clone()));
     Value::Object(m)
 }
 
@@ -1965,25 +5567,148 @@ fn iface_calls__info_params__to_json(p: &iface_calls::InfoParams) -> Value {
 fn iface_calls__update_params__to_json(p: &iface_calls::UpdateParams) -> Value {
     let mut m = Map::new();
     m.insert("token".into(), Value::String((&p.token).clone()));
+    m.insert("desktop_app_join_url".into(), match (&p.desktop_app_join_url) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("id".into(), Value::String((&p.id).clone()));
+    m.insert("join_url".into(), match (&p.join_url) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("title".into(), match (&p.title) { Some(v) => Value::String((v).clone()), None => Value::Null });
     Value::Object(m)
 }
 
+fn iface_calls__add_response__from_json(v: &Value) -> Option<iface_calls::AddResponse> {
+    let m = v.as_object()?;
+    Some(iface_calls::AddResponse {
+        ok: match m.get("ok").and_then(|v| iface_calls__defs_ok_true__from_json(v)) { Some(x) => x, None => return None },
+    })
+}
+
+fn iface_calls__defs_ok_true__from_json(v: &Value) -> Option<iface_calls::DefsOkTrue> {
+    let m = v.as_object()?;
+    Some(iface_calls::DefsOkTrue {
+        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+    })
+}
+
+fn iface_calls__end_response__from_json(v: &Value) -> Option<iface_calls::EndResponse> {
+    let m = v.as_object()?;
+    Some(iface_calls::EndResponse {
+        ok: match m.get("ok").and_then(|v| iface_calls__defs_ok_true__from_json(v)) { Some(x) => x, None => return None },
+    })
+}
+
+fn iface_calls__info_response__from_json(v: &Value) -> Option<iface_calls::InfoResponse> {
+    let m = v.as_object()?;
+    Some(iface_calls::InfoResponse {
+        ok: match m.get("ok").and_then(|v| iface_calls__defs_ok_true__from_json(v)) { Some(x) => x, None => return None },
+    })
+}
+
+fn iface_calls__update_response__from_json(v: &Value) -> Option<iface_calls::UpdateResponse> {
+    let m = v.as_object()?;
+    Some(iface_calls::UpdateResponse {
+        ok: match m.get("ok").and_then(|v| iface_calls__defs_ok_true__from_json(v)) { Some(x) => x, None => return None },
+    })
+}
+
+fn iface_calls__add__ok(body: String) -> Result<iface_calls::AddResponse, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match iface_calls__add_response__from_json(&v) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_calls__add__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
+fn iface_calls__end__ok(body: String) -> Result<iface_calls::EndResponse, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match iface_calls__end_response__from_json(&v) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_calls__end__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
+fn iface_calls__info__ok(body: String) -> Result<iface_calls::InfoResponse, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match iface_calls__info_response__from_json(&v) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_calls__info__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
+fn iface_calls__update__ok(body: String) -> Result<iface_calls::UpdateResponse, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match iface_calls__update_response__from_json(&v) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_calls__update__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
 impl iface_calls::Guest for crate::Component {
-    fn add(params: iface_calls::AddParams) -> Result<String, String> {
+    fn add(params: iface_calls::AddParams) -> Result<iface_calls::AddResponse, String> {
         let json = iface_calls__add_params__to_json(&params);
-        dispatch(&OP_CALLS_ADD, json)
+        match dispatch(&OP_CALLS_ADD, json).and_then(iface_calls__add__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_calls__add__err(e)),
+        }
     }
-    fn end(params: iface_calls::EndParams) -> Result<String, String> {
+    fn end(params: iface_calls::EndParams) -> Result<iface_calls::EndResponse, String> {
         let json = iface_calls__end_params__to_json(&params);
-        dispatch(&OP_CALLS_END, json)
+        match dispatch(&OP_CALLS_END, json).and_then(iface_calls__end__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_calls__end__err(e)),
+        }
     }
-    fn info(params: iface_calls::InfoParams) -> Result<String, String> {
+    fn info(params: iface_calls::InfoParams) -> Result<iface_calls::InfoResponse, String> {
         let json = iface_calls__info_params__to_json(&params);
-        dispatch(&OP_CALLS_INFO, json)
+        match dispatch(&OP_CALLS_INFO, json).and_then(iface_calls__info__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_calls__info__err(e)),
+        }
     }
-    fn update(params: iface_calls::UpdateParams) -> Result<String, String> {
+    fn update(params: iface_calls::UpdateParams) -> Result<iface_calls::UpdateResponse, String> {
         let json = iface_calls__update_params__to_json(&params);
-        dispatch(&OP_CALLS_UPDATE, json)
+        match dispatch(&OP_CALLS_UPDATE, json).and_then(iface_calls__update__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_calls__update__err(e)),
+        }
     }
 }
 use crate::exports::autostamp::slack::calls_participants as iface_calls_participants;
@@ -1992,7 +5717,9 @@ const OP_CALLS_PARTICIPANTS_ADD: OpSpec = OpSpec {
     method: "POST",
     path_template: "/calls.participants.add",
     fields: &[
-        FieldSpec { snake: "token", location: FieldLocation::Header },
+        FieldSpec { snake: "token", wire: "token", location: FieldLocation::Header },
+        FieldSpec { snake: "id", wire: "id", location: FieldLocation::Body },
+        FieldSpec { snake: "users", wire: "users", location: FieldLocation::Body },
     ],
     auth: &[
         AuthApply { secret_key: "slackAuth", kind: AuthKind::Bearer },
@@ -2003,33 +5730,120 @@ const OP_CALLS_PARTICIPANTS_REMOVE: OpSpec = OpSpec {
     method: "POST",
     path_template: "/calls.participants.remove",
     fields: &[
-        FieldSpec { snake: "token", location: FieldLocation::Header },
+        FieldSpec { snake: "token", wire: "token", location: FieldLocation::Header },
+        FieldSpec { snake: "id", wire: "id", location: FieldLocation::Body },
+        FieldSpec { snake: "users", wire: "users", location: FieldLocation::Body },
     ],
     auth: &[
         AuthApply { secret_key: "slackAuth", kind: AuthKind::Bearer },
     ],
 };
 
+fn iface_calls_participants__add_response__to_json(p: &iface_calls_participants::AddResponse) -> Value {
+    let mut m = Map::new();
+    m.insert("ok".into(), iface_calls_participants__defs_ok_true__to_json(&p.ok));
+    Value::Object(m)
+}
+
+fn iface_calls_participants__defs_ok_true__to_json(p: &iface_calls_participants::DefsOkTrue) -> Value {
+    let mut m = Map::new();
+    m.insert("value".into(), Value::String((&p.value).clone()));
+    Value::Object(m)
+}
+
+fn iface_calls_participants__remove_response__to_json(p: &iface_calls_participants::RemoveResponse) -> Value {
+    let mut m = Map::new();
+    m.insert("ok".into(), iface_calls_participants__defs_ok_true__to_json(&p.ok));
+    Value::Object(m)
+}
+
 fn iface_calls_participants__add_params__to_json(p: &iface_calls_participants::AddParams) -> Value {
     let mut m = Map::new();
     m.insert("token".into(), Value::String((&p.token).clone()));
+    m.insert("id".into(), Value::String((&p.id).clone()));
+    m.insert("users".into(), Value::String((&p.users).clone()));
     Value::Object(m)
 }
 
 fn iface_calls_participants__remove_params__to_json(p: &iface_calls_participants::RemoveParams) -> Value {
     let mut m = Map::new();
     m.insert("token".into(), Value::String((&p.token).clone()));
+    m.insert("id".into(), Value::String((&p.id).clone()));
+    m.insert("users".into(), Value::String((&p.users).clone()));
     Value::Object(m)
 }
 
-impl iface_calls_participants::Guest for crate::Component {
-    fn add(params: iface_calls_participants::AddParams) -> Result<String, String> {
-        let json = iface_calls_participants__add_params__to_json(&params);
-        dispatch(&OP_CALLS_PARTICIPANTS_ADD, json)
+fn iface_calls_participants__add_response__from_json(v: &Value) -> Option<iface_calls_participants::AddResponse> {
+    let m = v.as_object()?;
+    Some(iface_calls_participants::AddResponse {
+        ok: match m.get("ok").and_then(|v| iface_calls_participants__defs_ok_true__from_json(v)) { Some(x) => x, None => return None },
+    })
+}
+
+fn iface_calls_participants__defs_ok_true__from_json(v: &Value) -> Option<iface_calls_participants::DefsOkTrue> {
+    let m = v.as_object()?;
+    Some(iface_calls_participants::DefsOkTrue {
+        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+    })
+}
+
+fn iface_calls_participants__remove_response__from_json(v: &Value) -> Option<iface_calls_participants::RemoveResponse> {
+    let m = v.as_object()?;
+    Some(iface_calls_participants::RemoveResponse {
+        ok: match m.get("ok").and_then(|v| iface_calls_participants__defs_ok_true__from_json(v)) { Some(x) => x, None => return None },
+    })
+}
+
+fn iface_calls_participants__add__ok(body: String) -> Result<iface_calls_participants::AddResponse, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match iface_calls_participants__add_response__from_json(&v) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
     }
-    fn remove(params: iface_calls_participants::RemoveParams) -> Result<String, String> {
+}
+
+fn iface_calls_participants__add__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
+fn iface_calls_participants__remove__ok(body: String) -> Result<iface_calls_participants::RemoveResponse, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match iface_calls_participants__remove_response__from_json(&v) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_calls_participants__remove__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
+impl iface_calls_participants::Guest for crate::Component {
+    fn add(params: iface_calls_participants::AddParams) -> Result<iface_calls_participants::AddResponse, String> {
+        let json = iface_calls_participants__add_params__to_json(&params);
+        match dispatch(&OP_CALLS_PARTICIPANTS_ADD, json).and_then(iface_calls_participants__add__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_calls_participants__add__err(e)),
+        }
+    }
+    fn remove(params: iface_calls_participants::RemoveParams) -> Result<iface_calls_participants::RemoveResponse, String> {
         let json = iface_calls_participants__remove_params__to_json(&params);
-        dispatch(&OP_CALLS_PARTICIPANTS_REMOVE, json)
+        match dispatch(&OP_CALLS_PARTICIPANTS_REMOVE, json).and_then(iface_calls_participants__remove__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_calls_participants__remove__err(e)),
+        }
     }
 }
 use crate::exports::autostamp::slack::chat as iface_chat;
@@ -2038,7 +5852,10 @@ const OP_CHAT_DELETE: OpSpec = OpSpec {
     method: "POST",
     path_template: "/chat.delete",
     fields: &[
-        FieldSpec { snake: "token", location: FieldLocation::Header },
+        FieldSpec { snake: "token", wire: "token", location: FieldLocation::Header },
+        FieldSpec { snake: "as_user", wire: "as_user", location: FieldLocation::Body },
+        FieldSpec { snake: "channel", wire: "channel", location: FieldLocation::Body },
+        FieldSpec { snake: "ts", wire: "ts", location: FieldLocation::Body },
     ],
     auth: &[
         AuthApply { secret_key: "slackAuth", kind: AuthKind::Bearer },
@@ -2049,7 +5866,10 @@ const OP_CHAT_DELETE_SCHEDULED_MESSAGE: OpSpec = OpSpec {
     method: "POST",
     path_template: "/chat.deleteScheduledMessage",
     fields: &[
-        FieldSpec { snake: "token", location: FieldLocation::Header },
+        FieldSpec { snake: "token", wire: "token", location: FieldLocation::Header },
+        FieldSpec { snake: "as_user", wire: "as_user", location: FieldLocation::Body },
+        FieldSpec { snake: "channel", wire: "channel", location: FieldLocation::Body },
+        FieldSpec { snake: "scheduled_message_id", wire: "scheduled_message_id", location: FieldLocation::Body },
     ],
     auth: &[
         AuthApply { secret_key: "slackAuth", kind: AuthKind::Bearer },
@@ -2060,9 +5880,9 @@ const OP_CHAT_GET_PERMALINK: OpSpec = OpSpec {
     method: "GET",
     path_template: "/chat.getPermalink",
     fields: &[
-        FieldSpec { snake: "token", location: FieldLocation::Query },
-        FieldSpec { snake: "channel", location: FieldLocation::Query },
-        FieldSpec { snake: "message_ts", location: FieldLocation::Query },
+        FieldSpec { snake: "token", wire: "token", location: FieldLocation::Query },
+        FieldSpec { snake: "channel", wire: "channel", location: FieldLocation::Query },
+        FieldSpec { snake: "message_ts", wire: "message_ts", location: FieldLocation::Query },
     ],
     auth: &[
         AuthApply { secret_key: "slackAuth", kind: AuthKind::Bearer },
@@ -2073,7 +5893,9 @@ const OP_CHAT_ME_MESSAGE: OpSpec = OpSpec {
     method: "POST",
     path_template: "/chat.meMessage",
     fields: &[
-        FieldSpec { snake: "token", location: FieldLocation::Header },
+        FieldSpec { snake: "token", wire: "token", location: FieldLocation::Header },
+        FieldSpec { snake: "channel", wire: "channel", location: FieldLocation::Body },
+        FieldSpec { snake: "text", wire: "text", location: FieldLocation::Body },
     ],
     auth: &[
         AuthApply { secret_key: "slackAuth", kind: AuthKind::Bearer },
@@ -2084,7 +5906,19 @@ const OP_CHAT_POST_EPHEMERAL: OpSpec = OpSpec {
     method: "POST",
     path_template: "/chat.postEphemeral",
     fields: &[
-        FieldSpec { snake: "token", location: FieldLocation::Header },
+        FieldSpec { snake: "token", wire: "token", location: FieldLocation::Header },
+        FieldSpec { snake: "as_user", wire: "as_user", location: FieldLocation::Body },
+        FieldSpec { snake: "attachments", wire: "attachments", location: FieldLocation::Body },
+        FieldSpec { snake: "blocks", wire: "blocks", location: FieldLocation::Body },
+        FieldSpec { snake: "channel", wire: "channel", location: FieldLocation::Body },
+        FieldSpec { snake: "icon_emoji", wire: "icon_emoji", location: FieldLocation::Body },
+        FieldSpec { snake: "icon_url", wire: "icon_url", location: FieldLocation::Body },
+        FieldSpec { snake: "link_names", wire: "link_names", location: FieldLocation::Body },
+        FieldSpec { snake: "parse", wire: "parse", location: FieldLocation::Body },
+        FieldSpec { snake: "text", wire: "text", location: FieldLocation::Body },
+        FieldSpec { snake: "thread_ts", wire: "thread_ts", location: FieldLocation::Body },
+        FieldSpec { snake: "user", wire: "user", location: FieldLocation::Body },
+        FieldSpec { snake: "username", wire: "username", location: FieldLocation::Body },
     ],
     auth: &[
         AuthApply { secret_key: "slackAuth", kind: AuthKind::Bearer },
@@ -2095,7 +5929,22 @@ const OP_CHAT_POST_MESSAGE: OpSpec = OpSpec {
     method: "POST",
     path_template: "/chat.postMessage",
     fields: &[
-        FieldSpec { snake: "token", location: FieldLocation::Header },
+        FieldSpec { snake: "token", wire: "token", location: FieldLocation::Header },
+        FieldSpec { snake: "as_user", wire: "as_user", location: FieldLocation::Body },
+        FieldSpec { snake: "attachments", wire: "attachments", location: FieldLocation::Body },
+        FieldSpec { snake: "blocks", wire: "blocks", location: FieldLocation::Body },
+        FieldSpec { snake: "channel", wire: "channel", location: FieldLocation::Body },
+        FieldSpec { snake: "icon_emoji", wire: "icon_emoji", location: FieldLocation::Body },
+        FieldSpec { snake: "icon_url", wire: "icon_url", location: FieldLocation::Body },
+        FieldSpec { snake: "link_names", wire: "link_names", location: FieldLocation::Body },
+        FieldSpec { snake: "mrkdwn", wire: "mrkdwn", location: FieldLocation::Body },
+        FieldSpec { snake: "parse", wire: "parse", location: FieldLocation::Body },
+        FieldSpec { snake: "reply_broadcast", wire: "reply_broadcast", location: FieldLocation::Body },
+        FieldSpec { snake: "text", wire: "text", location: FieldLocation::Body },
+        FieldSpec { snake: "thread_ts", wire: "thread_ts", location: FieldLocation::Body },
+        FieldSpec { snake: "unfurl_links", wire: "unfurl_links", location: FieldLocation::Body },
+        FieldSpec { snake: "unfurl_media", wire: "unfurl_media", location: FieldLocation::Body },
+        FieldSpec { snake: "username", wire: "username", location: FieldLocation::Body },
     ],
     auth: &[
         AuthApply { secret_key: "slackAuth", kind: AuthKind::Bearer },
@@ -2106,7 +5955,19 @@ const OP_CHAT_SCHEDULE_MESSAGE: OpSpec = OpSpec {
     method: "POST",
     path_template: "/chat.scheduleMessage",
     fields: &[
-        FieldSpec { snake: "token", location: FieldLocation::Header },
+        FieldSpec { snake: "token", wire: "token", location: FieldLocation::Header },
+        FieldSpec { snake: "as_user", wire: "as_user", location: FieldLocation::Body },
+        FieldSpec { snake: "attachments", wire: "attachments", location: FieldLocation::Body },
+        FieldSpec { snake: "blocks", wire: "blocks", location: FieldLocation::Body },
+        FieldSpec { snake: "channel", wire: "channel", location: FieldLocation::Body },
+        FieldSpec { snake: "link_names", wire: "link_names", location: FieldLocation::Body },
+        FieldSpec { snake: "parse", wire: "parse", location: FieldLocation::Body },
+        FieldSpec { snake: "post_at", wire: "post_at", location: FieldLocation::Body },
+        FieldSpec { snake: "reply_broadcast", wire: "reply_broadcast", location: FieldLocation::Body },
+        FieldSpec { snake: "text", wire: "text", location: FieldLocation::Body },
+        FieldSpec { snake: "thread_ts", wire: "thread_ts", location: FieldLocation::Body },
+        FieldSpec { snake: "unfurl_links", wire: "unfurl_links", location: FieldLocation::Body },
+        FieldSpec { snake: "unfurl_media", wire: "unfurl_media", location: FieldLocation::Body },
     ],
     auth: &[
         AuthApply { secret_key: "slackAuth", kind: AuthKind::Bearer },
@@ -2117,7 +5978,13 @@ const OP_CHAT_UNFURL: OpSpec = OpSpec {
     method: "POST",
     path_template: "/chat.unfurl",
     fields: &[
-        FieldSpec { snake: "token", location: FieldLocation::Header },
+        FieldSpec { snake: "token", wire: "token", location: FieldLocation::Header },
+        FieldSpec { snake: "channel", wire: "channel", location: FieldLocation::Body },
+        FieldSpec { snake: "ts", wire: "ts", location: FieldLocation::Body },
+        FieldSpec { snake: "unfurls", wire: "unfurls", location: FieldLocation::Body },
+        FieldSpec { snake: "user_auth_message", wire: "user_auth_message", location: FieldLocation::Body },
+        FieldSpec { snake: "user_auth_required", wire: "user_auth_required", location: FieldLocation::Body },
+        FieldSpec { snake: "user_auth_url", wire: "user_auth_url", location: FieldLocation::Body },
     ],
     auth: &[
         AuthApply { secret_key: "slackAuth", kind: AuthKind::Bearer },
@@ -2128,22 +5995,436 @@ const OP_CHAT_UPDATE: OpSpec = OpSpec {
     method: "POST",
     path_template: "/chat.update",
     fields: &[
-        FieldSpec { snake: "token", location: FieldLocation::Header },
+        FieldSpec { snake: "token", wire: "token", location: FieldLocation::Header },
+        FieldSpec { snake: "as_user", wire: "as_user", location: FieldLocation::Body },
+        FieldSpec { snake: "attachments", wire: "attachments", location: FieldLocation::Body },
+        FieldSpec { snake: "blocks", wire: "blocks", location: FieldLocation::Body },
+        FieldSpec { snake: "channel", wire: "channel", location: FieldLocation::Body },
+        FieldSpec { snake: "link_names", wire: "link_names", location: FieldLocation::Body },
+        FieldSpec { snake: "parse", wire: "parse", location: FieldLocation::Body },
+        FieldSpec { snake: "text", wire: "text", location: FieldLocation::Body },
+        FieldSpec { snake: "ts", wire: "ts", location: FieldLocation::Body },
     ],
     auth: &[
         AuthApply { secret_key: "slackAuth", kind: AuthKind::Bearer },
     ],
 };
 
+fn iface_chat__delete_response__to_json(p: &iface_chat::DeleteResponse) -> Value {
+    let mut m = Map::new();
+    m.insert("channel".into(), iface_chat__defs_channel__to_json(&p.channel));
+    m.insert("ok".into(), iface_chat__defs_ok_true__to_json(&p.ok));
+    m.insert("ts".into(), iface_chat__defs_ts__to_json(&p.ts));
+    Value::Object(m)
+}
+
+fn iface_chat__defs_channel__to_json(p: &iface_chat::DefsChannel) -> Value {
+    let mut m = Map::new();
+    m.insert("value".into(), Value::String((&p.value).clone()));
+    Value::Object(m)
+}
+
+fn iface_chat__defs_ok_true__to_json(p: &iface_chat::DefsOkTrue) -> Value {
+    let mut m = Map::new();
+    m.insert("value".into(), Value::String((&p.value).clone()));
+    Value::Object(m)
+}
+
+fn iface_chat__defs_ts__to_json(p: &iface_chat::DefsTs) -> Value {
+    let mut m = Map::new();
+    m.insert("value".into(), Value::String((&p.value).clone()));
+    Value::Object(m)
+}
+
+fn iface_chat__delete_scheduled_message_response__to_json(p: &iface_chat::DeleteScheduledMessageResponse) -> Value {
+    let mut m = Map::new();
+    m.insert("ok".into(), iface_chat__defs_ok_true__to_json(&p.ok));
+    Value::Object(m)
+}
+
+fn iface_chat__get_permalink_response__to_json(p: &iface_chat::GetPermalinkResponse) -> Value {
+    let mut m = Map::new();
+    m.insert("channel".into(), iface_chat__defs_channel__to_json(&p.channel));
+    m.insert("ok".into(), iface_chat__defs_ok_true__to_json(&p.ok));
+    m.insert("permalink".into(), Value::String((&p.permalink).clone()));
+    Value::Object(m)
+}
+
+fn iface_chat__me_message_response__to_json(p: &iface_chat::MeMessageResponse) -> Value {
+    let mut m = Map::new();
+    m.insert("channel".into(), match (&p.channel) { Some(v) => iface_chat__defs_channel__to_json(v), None => Value::Null });
+    m.insert("ok".into(), iface_chat__defs_ok_true__to_json(&p.ok));
+    m.insert("ts".into(), match (&p.ts) { Some(v) => iface_chat__defs_ts__to_json(v), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_chat__post_ephemeral_response__to_json(p: &iface_chat::PostEphemeralResponse) -> Value {
+    let mut m = Map::new();
+    m.insert("message_ts".into(), iface_chat__defs_ts__to_json(&p.message_ts));
+    m.insert("ok".into(), iface_chat__defs_ok_true__to_json(&p.ok));
+    Value::Object(m)
+}
+
+fn iface_chat__post_message_response__to_json(p: &iface_chat::PostMessageResponse) -> Value {
+    let mut m = Map::new();
+    m.insert("channel".into(), iface_chat__defs_channel__to_json(&p.channel));
+    m.insert("message".into(), iface_chat__objs_message__to_json(&p.message));
+    m.insert("ok".into(), iface_chat__defs_ok_true__to_json(&p.ok));
+    m.insert("ts".into(), iface_chat__defs_ts__to_json(&p.ts));
+    Value::Object(m)
+}
+
+fn iface_chat__objs_message__to_json(p: &iface_chat::ObjsMessage) -> Value {
+    let mut m = Map::new();
+    m.insert("attachments".into(), match (&p.attachments) { Some(v) => Value::Array((v).iter().map(|v| iface_chat__objs_message_attachments_item__to_json(v)).collect()), None => Value::Null });
+    m.insert("blocks".into(), match (&p.blocks) { Some(v) => iface_chat__blocks__to_json(v), None => Value::Null });
+    m.insert("bot_id".into(), match (&p.bot_id) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("bot_profile".into(), match (&p.bot_profile) { Some(v) => iface_chat__objs_bot_profile__to_json(v), None => Value::Null });
+    m.insert("client_msg_id".into(), match (&p.client_msg_id) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("comment".into(), match (&p.comment) { Some(v) => iface_chat__objs_comment__to_json(v), None => Value::Null });
+    m.insert("display_as_bot".into(), match (&p.display_as_bot) { Some(v) => Value::Bool(*(v)), None => Value::Null });
+    m.insert("file".into(), match (&p.file) { Some(v) => iface_chat__objs_file__to_json(v), None => Value::Null });
+    m.insert("files".into(), match (&p.files) { Some(v) => Value::Array((v).iter().map(|v| iface_chat__objs_file__to_json(v)).collect()), None => Value::Null });
+    m.insert("icons".into(), match (&p.icons) { Some(v) => iface_chat__objs_message_icons__to_json(v), None => Value::Null });
+    m.insert("inviter".into(), match (&p.inviter) { Some(v) => iface_chat__defs_user_id__to_json(v), None => Value::Null });
+    m.insert("is_delayed_message".into(), match (&p.is_delayed_message) { Some(v) => Value::Bool(*(v)), None => Value::Null });
+    m.insert("is_intro".into(), match (&p.is_intro) { Some(v) => Value::Bool(*(v)), None => Value::Null });
+    m.insert("is_starred".into(), match (&p.is_starred) { Some(v) => Value::Bool(*(v)), None => Value::Null });
+    m.insert("last_read".into(), match (&p.last_read) { Some(v) => iface_chat__defs_ts__to_json(v), None => Value::Null });
+    m.insert("latest_reply".into(), match (&p.latest_reply) { Some(v) => iface_chat__defs_ts__to_json(v), None => Value::Null });
+    m.insert("name".into(), match (&p.name) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("old_name".into(), match (&p.old_name) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("parent_user_id".into(), match (&p.parent_user_id) { Some(v) => iface_chat__defs_user_id__to_json(v), None => Value::Null });
+    m.insert("permalink".into(), match (&p.permalink) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("pinned_to".into(), match (&p.pinned_to) { Some(v) => Value::Array((v).iter().map(|v| iface_chat__defs_channel__to_json(v)).collect()), None => Value::Null });
+    m.insert("purpose".into(), match (&p.purpose) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("reactions".into(), match (&p.reactions) { Some(v) => Value::Array((v).iter().map(|v| iface_chat__objs_reaction__to_json(v)).collect()), None => Value::Null });
+    m.insert("reply_count".into(), match (&p.reply_count) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("reply_users".into(), match (&p.reply_users) { Some(v) => Value::Array((v).iter().map(|v| iface_chat__defs_user_id__to_json(v)).collect()), None => Value::Null });
+    m.insert("reply_users_count".into(), match (&p.reply_users_count) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("source_team".into(), match (&p.source_team) { Some(v) => iface_chat__defs_workspace_id__to_json(v), None => Value::Null });
+    m.insert("subscribed".into(), match (&p.subscribed) { Some(v) => Value::Bool(*(v)), None => Value::Null });
+    m.insert("subtype".into(), match (&p.subtype) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("team".into(), match (&p.team) { Some(v) => iface_chat__defs_workspace_id__to_json(v), None => Value::Null });
+    m.insert("text".into(), Value::String((&p.text).clone()));
+    m.insert("thread_ts".into(), match (&p.thread_ts) { Some(v) => iface_chat__defs_ts__to_json(v), None => Value::Null });
+    m.insert("topic".into(), match (&p.topic) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("ts".into(), iface_chat__defs_ts__to_json(&p.ts));
+    m.insert("type".into(), Value::String((&p.type_op).clone()));
+    m.insert("unread_count".into(), match (&p.unread_count) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("upload".into(), match (&p.upload) { Some(v) => Value::Bool(*(v)), None => Value::Null });
+    m.insert("user".into(), match (&p.user) { Some(v) => iface_chat__defs_user_id__to_json(v), None => Value::Null });
+    m.insert("user_profile".into(), match (&p.user_profile) { Some(v) => iface_chat__objs_user_profile_short__to_json(v), None => Value::Null });
+    m.insert("user_team".into(), match (&p.user_team) { Some(v) => iface_chat__defs_workspace_id__to_json(v), None => Value::Null });
+    m.insert("username".into(), match (&p.username) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_chat__objs_message_attachments_item__to_json(p: &iface_chat::ObjsMessageAttachmentsItem) -> Value {
+    let mut m = Map::new();
+    m.insert("fallback".into(), match (&p.fallback) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("id".into(), Value::Number(serde_json::Number::from(*(&p.id))));
+    m.insert("image_bytes".into(), match (&p.image_bytes) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("image_height".into(), match (&p.image_height) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("image_url".into(), match (&p.image_url) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("image_width".into(), match (&p.image_width) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_chat__blocks__to_json(p: &iface_chat::Blocks) -> Value {
+    let mut m = Map::new();
+    m.insert("value".into(), Value::String((&p.value).clone()));
+    Value::Object(m)
+}
+
+fn iface_chat__objs_bot_profile__to_json(p: &iface_chat::ObjsBotProfile) -> Value {
+    let mut m = Map::new();
+    m.insert("app_id".into(), iface_chat__defs_app_id__to_json(&p.app_id));
+    m.insert("deleted".into(), Value::Bool(*(&p.deleted)));
+    m.insert("icons".into(), iface_chat__objs_bot_profile_icons__to_json(&p.icons));
+    m.insert("id".into(), iface_chat__defs_bot_id__to_json(&p.id));
+    m.insert("name".into(), Value::String((&p.name).clone()));
+    m.insert("team_id".into(), iface_chat__defs_team__to_json(&p.team_id));
+    m.insert("updated".into(), Value::Number(serde_json::Number::from(*(&p.updated))));
+    Value::Object(m)
+}
+
+fn iface_chat__defs_app_id__to_json(p: &iface_chat::DefsAppId) -> Value {
+    let mut m = Map::new();
+    m.insert("value".into(), Value::String((&p.value).clone()));
+    Value::Object(m)
+}
+
+fn iface_chat__objs_bot_profile_icons__to_json(p: &iface_chat::ObjsBotProfileIcons) -> Value {
+    let mut m = Map::new();
+    m.insert("image_36".into(), Value::String((&p.image_v36).clone()));
+    m.insert("image_48".into(), Value::String((&p.image_v48).clone()));
+    m.insert("image_72".into(), Value::String((&p.image_v72).clone()));
+    Value::Object(m)
+}
+
+fn iface_chat__defs_bot_id__to_json(p: &iface_chat::DefsBotId) -> Value {
+    let mut m = Map::new();
+    m.insert("value".into(), Value::String((&p.value).clone()));
+    Value::Object(m)
+}
+
+fn iface_chat__defs_team__to_json(p: &iface_chat::DefsTeam) -> Value {
+    let mut m = Map::new();
+    m.insert("value".into(), Value::String((&p.value).clone()));
+    Value::Object(m)
+}
+
+fn iface_chat__objs_comment__to_json(p: &iface_chat::ObjsComment) -> Value {
+    let mut m = Map::new();
+    m.insert("comment".into(), Value::String((&p.comment).clone()));
+    m.insert("created".into(), Value::Number(serde_json::Number::from(*(&p.created))));
+    m.insert("id".into(), iface_chat__defs_comment_id__to_json(&p.id));
+    m.insert("is_intro".into(), Value::Bool(*(&p.is_intro)));
+    m.insert("is_starred".into(), match (&p.is_starred) { Some(v) => Value::Bool(*(v)), None => Value::Null });
+    m.insert("num_stars".into(), match (&p.num_stars) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("pinned_info".into(), match (&p.pinned_info) { Some(v) => iface_chat__defs_pinned_info__to_json(v), None => Value::Null });
+    m.insert("pinned_to".into(), match (&p.pinned_to) { Some(v) => Value::Array((v).iter().map(|v| iface_chat__defs_channel__to_json(v)).collect()), None => Value::Null });
+    m.insert("reactions".into(), match (&p.reactions) { Some(v) => Value::Array((v).iter().map(|v| iface_chat__objs_reaction__to_json(v)).collect()), None => Value::Null });
+    m.insert("timestamp".into(), Value::Number(serde_json::Number::from(*(&p.timestamp))));
+    m.insert("user".into(), iface_chat__defs_user_id__to_json(&p.user));
+    Value::Object(m)
+}
+
+fn iface_chat__defs_comment_id__to_json(p: &iface_chat::DefsCommentId) -> Value {
+    let mut m = Map::new();
+    m.insert("value".into(), Value::String((&p.value).clone()));
+    Value::Object(m)
+}
+
+fn iface_chat__defs_pinned_info__to_json(p: &iface_chat::DefsPinnedInfo) -> Value {
+    let mut m = Map::new();
+    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_chat__objs_reaction__to_json(p: &iface_chat::ObjsReaction) -> Value {
+    let mut m = Map::new();
+    m.insert("count".into(), Value::Number(serde_json::Number::from(*(&p.count))));
+    m.insert("name".into(), Value::String((&p.name).clone()));
+    m.insert("users".into(), Value::Array((&p.users).iter().map(|v| iface_chat__defs_user_id__to_json(v)).collect()));
+    Value::Object(m)
+}
+
+fn iface_chat__defs_user_id__to_json(p: &iface_chat::DefsUserId) -> Value {
+    let mut m = Map::new();
+    m.insert("value".into(), Value::String((&p.value).clone()));
+    Value::Object(m)
+}
+
+fn iface_chat__objs_file__to_json(p: &iface_chat::ObjsFile) -> Value {
+    let mut m = Map::new();
+    m.insert("channels".into(), match (&p.channels) { Some(v) => Value::Array((v).iter().map(|v| iface_chat__defs_channel_id__to_json(v)).collect()), None => Value::Null });
+    m.insert("comments_count".into(), match (&p.comments_count) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("created".into(), match (&p.created) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("date_delete".into(), match (&p.date_delete) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("display_as_bot".into(), match (&p.display_as_bot) { Some(v) => Value::Bool(*(v)), None => Value::Null });
+    m.insert("editable".into(), match (&p.editable) { Some(v) => Value::Bool(*(v)), None => Value::Null });
+    m.insert("editor".into(), match (&p.editor) { Some(v) => iface_chat__defs_user_id__to_json(v), None => Value::Null });
+    m.insert("external_id".into(), match (&p.external_id) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("external_type".into(), match (&p.external_type) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("external_url".into(), match (&p.external_url) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("filetype".into(), match (&p.filetype) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("groups".into(), match (&p.groups) { Some(v) => Value::Array((v).iter().map(|v| iface_chat__defs_group_id__to_json(v)).collect()), None => Value::Null });
+    m.insert("has_rich_preview".into(), match (&p.has_rich_preview) { Some(v) => Value::Bool(*(v)), None => Value::Null });
+    m.insert("id".into(), match (&p.id) { Some(v) => iface_chat__defs_file_id__to_json(v), None => Value::Null });
+    m.insert("image_exif_rotation".into(), match (&p.image_exif_rotation) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("ims".into(), match (&p.ims) { Some(v) => Value::Array((v).iter().map(|v| iface_chat__defs_dm_id__to_json(v)).collect()), None => Value::Null });
+    m.insert("is_external".into(), match (&p.is_external) { Some(v) => Value::Bool(*(v)), None => Value::Null });
+    m.insert("is_public".into(), match (&p.is_public) { Some(v) => Value::Bool(*(v)), None => Value::Null });
+    m.insert("is_starred".into(), match (&p.is_starred) { Some(v) => Value::Bool(*(v)), None => Value::Null });
+    m.insert("is_tombstoned".into(), match (&p.is_tombstoned) { Some(v) => Value::Bool(*(v)), None => Value::Null });
+    m.insert("last_editor".into(), match (&p.last_editor) { Some(v) => iface_chat__defs_user_id__to_json(v), None => Value::Null });
+    m.insert("mimetype".into(), match (&p.mimetype) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("mode".into(), match (&p.mode) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("name".into(), match (&p.name) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("non_owner_editable".into(), match (&p.non_owner_editable) { Some(v) => Value::Bool(*(v)), None => Value::Null });
+    m.insert("num_stars".into(), match (&p.num_stars) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("original_h".into(), match (&p.original_h) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("original_w".into(), match (&p.original_w) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("permalink".into(), match (&p.permalink) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("permalink_public".into(), match (&p.permalink_public) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("pinned_info".into(), match (&p.pinned_info) { Some(v) => iface_chat__defs_pinned_info__to_json(v), None => Value::Null });
+    m.insert("pinned_to".into(), match (&p.pinned_to) { Some(v) => Value::Array((v).iter().map(|v| iface_chat__defs_channel__to_json(v)).collect()), None => Value::Null });
+    m.insert("pretty_type".into(), match (&p.pretty_type) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("preview".into(), match (&p.preview) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("public_url_shared".into(), match (&p.public_url_shared) { Some(v) => Value::Bool(*(v)), None => Value::Null });
+    m.insert("reactions".into(), match (&p.reactions) { Some(v) => Value::Array((v).iter().map(|v| iface_chat__objs_reaction__to_json(v)).collect()), None => Value::Null });
+    m.insert("shares".into(), match (&p.shares) { Some(v) => iface_chat__objs_file_shares__to_json(v), None => Value::Null });
+    m.insert("size".into(), match (&p.size) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("source_team".into(), match (&p.source_team) { Some(v) => iface_chat__defs_team__to_json(v), None => Value::Null });
+    m.insert("state".into(), match (&p.state) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("thumb_1024".into(), match (&p.thumb_v1024) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("thumb_1024_h".into(), match (&p.thumb_v1024_h) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("thumb_1024_w".into(), match (&p.thumb_v1024_w) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("thumb_160".into(), match (&p.thumb_v160) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("thumb_360".into(), match (&p.thumb_v360) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("thumb_360_h".into(), match (&p.thumb_v360_h) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("thumb_360_w".into(), match (&p.thumb_v360_w) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("thumb_480".into(), match (&p.thumb_v480) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("thumb_480_h".into(), match (&p.thumb_v480_h) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("thumb_480_w".into(), match (&p.thumb_v480_w) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("thumb_64".into(), match (&p.thumb_v64) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("thumb_720".into(), match (&p.thumb_v720) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("thumb_720_h".into(), match (&p.thumb_v720_h) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("thumb_720_w".into(), match (&p.thumb_v720_w) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("thumb_80".into(), match (&p.thumb_v80) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("thumb_800".into(), match (&p.thumb_v800) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("thumb_800_h".into(), match (&p.thumb_v800_h) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("thumb_800_w".into(), match (&p.thumb_v800_w) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("thumb_960".into(), match (&p.thumb_v960) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("thumb_960_h".into(), match (&p.thumb_v960_h) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("thumb_960_w".into(), match (&p.thumb_v960_w) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("thumb_tiny".into(), match (&p.thumb_tiny) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("timestamp".into(), match (&p.timestamp) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("title".into(), match (&p.title) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("updated".into(), match (&p.updated) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("url_private".into(), match (&p.url_private) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("url_private_download".into(), match (&p.url_private_download) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("user".into(), match (&p.user) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("user_team".into(), match (&p.user_team) { Some(v) => iface_chat__defs_team__to_json(v), None => Value::Null });
+    m.insert("username".into(), match (&p.username) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_chat__defs_channel_id__to_json(p: &iface_chat::DefsChannelId) -> Value {
+    let mut m = Map::new();
+    m.insert("value".into(), Value::String((&p.value).clone()));
+    Value::Object(m)
+}
+
+fn iface_chat__defs_group_id__to_json(p: &iface_chat::DefsGroupId) -> Value {
+    let mut m = Map::new();
+    m.insert("value".into(), Value::String((&p.value).clone()));
+    Value::Object(m)
+}
+
+fn iface_chat__defs_file_id__to_json(p: &iface_chat::DefsFileId) -> Value {
+    let mut m = Map::new();
+    m.insert("value".into(), Value::String((&p.value).clone()));
+    Value::Object(m)
+}
+
+fn iface_chat__defs_dm_id__to_json(p: &iface_chat::DefsDmId) -> Value {
+    let mut m = Map::new();
+    m.insert("value".into(), Value::String((&p.value).clone()));
+    Value::Object(m)
+}
+
+fn iface_chat__objs_file_shares__to_json(p: &iface_chat::ObjsFileShares) -> Value {
+    let mut m = Map::new();
+    m.insert("private".into(), match (&p.private) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("public".into(), match (&p.public) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_chat__objs_message_icons__to_json(p: &iface_chat::ObjsMessageIcons) -> Value {
+    let mut m = Map::new();
+    m.insert("emoji".into(), match (&p.emoji) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("image_64".into(), match (&p.image_v64) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_chat__defs_workspace_id__to_json(p: &iface_chat::DefsWorkspaceId) -> Value {
+    let mut m = Map::new();
+    m.insert("value".into(), Value::String((&p.value).clone()));
+    Value::Object(m)
+}
+
+fn iface_chat__objs_user_profile_short__to_json(p: &iface_chat::ObjsUserProfileShort) -> Value {
+    let mut m = Map::new();
+    m.insert("avatar_hash".into(), Value::String((&p.avatar_hash).clone()));
+    m.insert("display_name".into(), Value::String((&p.display_name).clone()));
+    m.insert("display_name_normalized".into(), match (&p.display_name_normalized) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("first_name".into(), Value::String((&p.first_name).clone()));
+    m.insert("image_72".into(), Value::String((&p.image_v72).clone()));
+    m.insert("is_restricted".into(), Value::Bool(*(&p.is_restricted)));
+    m.insert("is_ultra_restricted".into(), Value::Bool(*(&p.is_ultra_restricted)));
+    m.insert("name".into(), Value::String((&p.name).clone()));
+    m.insert("real_name".into(), Value::String((&p.real_name).clone()));
+    m.insert("real_name_normalized".into(), match (&p.real_name_normalized) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("team".into(), iface_chat__defs_workspace_id__to_json(&p.team));
+    Value::Object(m)
+}
+
+fn iface_chat__schedule_message_response__to_json(p: &iface_chat::ScheduleMessageResponse) -> Value {
+    let mut m = Map::new();
+    m.insert("channel".into(), iface_chat__defs_channel__to_json(&p.channel));
+    m.insert("message".into(), iface_chat__schedule_message_response_message__to_json(&p.message));
+    m.insert("ok".into(), iface_chat__defs_ok_true__to_json(&p.ok));
+    m.insert("post_at".into(), Value::String((&p.post_at).clone()));
+    m.insert("scheduled_message_id".into(), Value::String((&p.scheduled_message_id).clone()));
+    Value::Object(m)
+}
+
+fn iface_chat__schedule_message_response_message__to_json(p: &iface_chat::ScheduleMessageResponseMessage) -> Value {
+    let mut m = Map::new();
+    m.insert("bot_id".into(), iface_chat__defs_bot_id__to_json(&p.bot_id));
+    m.insert("bot_profile".into(), match (&p.bot_profile) { Some(v) => iface_chat__objs_bot_profile__to_json(v), None => Value::Null });
+    m.insert("team".into(), iface_chat__defs_team__to_json(&p.team));
+    m.insert("text".into(), Value::String((&p.text).clone()));
+    m.insert("type".into(), Value::String((&p.type_op).clone()));
+    m.insert("user".into(), iface_chat__defs_user_id__to_json(&p.user));
+    m.insert("username".into(), match (&p.username) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_chat__unfurl_response__to_json(p: &iface_chat::UnfurlResponse) -> Value {
+    let mut m = Map::new();
+    m.insert("ok".into(), iface_chat__defs_ok_true__to_json(&p.ok));
+    Value::Object(m)
+}
+
+fn iface_chat__update_response__to_json(p: &iface_chat::UpdateResponse) -> Value {
+    let mut m = Map::new();
+    m.insert("channel".into(), Value::String((&p.channel).clone()));
+    m.insert("message".into(), iface_chat__update_response_message__to_json(&p.message));
+    m.insert("ok".into(), iface_chat__defs_ok_true__to_json(&p.ok));
+    m.insert("text".into(), Value::String((&p.text).clone()));
+    m.insert("ts".into(), Value::String((&p.ts).clone()));
+    Value::Object(m)
+}
+
+fn iface_chat__update_response_message__to_json(p: &iface_chat::UpdateResponseMessage) -> Value {
+    let mut m = Map::new();
+    m.insert("attachments".into(), match (&p.attachments) { Some(v) => Value::Array((v).iter().map(|v| iface_chat__update_response_message_attachments_item__to_json(v)).collect()), None => Value::Null });
+    m.insert("blocks".into(), match (&p.blocks) { Some(v) => iface_chat__update_response_message_blocks__to_json(v), None => Value::Null });
+    m.insert("text".into(), Value::String((&p.text).clone()));
+    Value::Object(m)
+}
+
+fn iface_chat__update_response_message_attachments_item__to_json(p: &iface_chat::UpdateResponseMessageAttachmentsItem) -> Value {
+    let mut m = Map::new();
+    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_chat__update_response_message_blocks__to_json(p: &iface_chat::UpdateResponseMessageBlocks) -> Value {
+    let mut m = Map::new();
+    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
 fn iface_chat__delete_params__to_json(p: &iface_chat::DeleteParams) -> Value {
     let mut m = Map::new();
     m.insert("token".into(), match (&p.token) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("as_user".into(), match (&p.as_user) { Some(v) => Value::Bool(*(v)), None => Value::Null });
+    m.insert("channel".into(), match (&p.channel) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("ts".into(), match (&p.ts) { Some(v) => serde_json::Number::from_f64(*(v)).map(Value::Number).unwrap_or(Value::Null), None => Value::Null });
     Value::Object(m)
 }
 
 fn iface_chat__delete_scheduled_message_params__to_json(p: &iface_chat::DeleteScheduledMessageParams) -> Value {
     let mut m = Map::new();
     m.insert("token".into(), Value::String((&p.token).clone()));
+    m.insert("as_user".into(), match (&p.as_user) { Some(v) => Value::Bool(*(v)), None => Value::Null });
+    m.insert("channel".into(), Value::String((&p.channel).clone()));
+    m.insert("scheduled_message_id".into(), Value::String((&p.scheduled_message_id).clone()));
     Value::Object(m)
 }
 
@@ -2158,75 +6439,757 @@ fn iface_chat__get_permalink_params__to_json(p: &iface_chat::GetPermalinkParams)
 fn iface_chat__me_message_params__to_json(p: &iface_chat::MeMessageParams) -> Value {
     let mut m = Map::new();
     m.insert("token".into(), match (&p.token) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("channel".into(), match (&p.channel) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("text".into(), match (&p.text) { Some(v) => Value::String((v).clone()), None => Value::Null });
     Value::Object(m)
 }
 
 fn iface_chat__post_ephemeral_params__to_json(p: &iface_chat::PostEphemeralParams) -> Value {
     let mut m = Map::new();
     m.insert("token".into(), Value::String((&p.token).clone()));
+    m.insert("as_user".into(), match (&p.as_user) { Some(v) => Value::Bool(*(v)), None => Value::Null });
+    m.insert("attachments".into(), match (&p.attachments) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("blocks".into(), match (&p.blocks) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("channel".into(), Value::String((&p.channel).clone()));
+    m.insert("icon_emoji".into(), match (&p.icon_emoji) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("icon_url".into(), match (&p.icon_url) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("link_names".into(), match (&p.link_names) { Some(v) => Value::Bool(*(v)), None => Value::Null });
+    m.insert("parse".into(), match (&p.parse) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("text".into(), match (&p.text) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("thread_ts".into(), match (&p.thread_ts) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("user".into(), Value::String((&p.user).clone()));
+    m.insert("username".into(), match (&p.username) { Some(v) => Value::String((v).clone()), None => Value::Null });
     Value::Object(m)
 }
 
 fn iface_chat__post_message_params__to_json(p: &iface_chat::PostMessageParams) -> Value {
     let mut m = Map::new();
     m.insert("token".into(), Value::String((&p.token).clone()));
+    m.insert("as_user".into(), match (&p.as_user) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("attachments".into(), match (&p.attachments) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("blocks".into(), match (&p.blocks) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("channel".into(), Value::String((&p.channel).clone()));
+    m.insert("icon_emoji".into(), match (&p.icon_emoji) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("icon_url".into(), match (&p.icon_url) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("link_names".into(), match (&p.link_names) { Some(v) => Value::Bool(*(v)), None => Value::Null });
+    m.insert("mrkdwn".into(), match (&p.mrkdwn) { Some(v) => Value::Bool(*(v)), None => Value::Null });
+    m.insert("parse".into(), match (&p.parse) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("reply_broadcast".into(), match (&p.reply_broadcast) { Some(v) => Value::Bool(*(v)), None => Value::Null });
+    m.insert("text".into(), match (&p.text) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("thread_ts".into(), match (&p.thread_ts) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("unfurl_links".into(), match (&p.unfurl_links) { Some(v) => Value::Bool(*(v)), None => Value::Null });
+    m.insert("unfurl_media".into(), match (&p.unfurl_media) { Some(v) => Value::Bool(*(v)), None => Value::Null });
+    m.insert("username".into(), match (&p.username) { Some(v) => Value::String((v).clone()), None => Value::Null });
     Value::Object(m)
 }
 
 fn iface_chat__schedule_message_params__to_json(p: &iface_chat::ScheduleMessageParams) -> Value {
     let mut m = Map::new();
     m.insert("token".into(), match (&p.token) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("as_user".into(), match (&p.as_user) { Some(v) => Value::Bool(*(v)), None => Value::Null });
+    m.insert("attachments".into(), match (&p.attachments) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("blocks".into(), match (&p.blocks) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("channel".into(), match (&p.channel) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("link_names".into(), match (&p.link_names) { Some(v) => Value::Bool(*(v)), None => Value::Null });
+    m.insert("parse".into(), match (&p.parse) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("post_at".into(), match (&p.post_at) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("reply_broadcast".into(), match (&p.reply_broadcast) { Some(v) => Value::Bool(*(v)), None => Value::Null });
+    m.insert("text".into(), match (&p.text) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("thread_ts".into(), match (&p.thread_ts) { Some(v) => serde_json::Number::from_f64(*(v)).map(Value::Number).unwrap_or(Value::Null), None => Value::Null });
+    m.insert("unfurl_links".into(), match (&p.unfurl_links) { Some(v) => Value::Bool(*(v)), None => Value::Null });
+    m.insert("unfurl_media".into(), match (&p.unfurl_media) { Some(v) => Value::Bool(*(v)), None => Value::Null });
     Value::Object(m)
 }
 
 fn iface_chat__unfurl_params__to_json(p: &iface_chat::UnfurlParams) -> Value {
     let mut m = Map::new();
     m.insert("token".into(), Value::String((&p.token).clone()));
+    m.insert("channel".into(), Value::String((&p.channel).clone()));
+    m.insert("ts".into(), Value::String((&p.ts).clone()));
+    m.insert("unfurls".into(), match (&p.unfurls) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("user_auth_message".into(), match (&p.user_auth_message) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("user_auth_required".into(), match (&p.user_auth_required) { Some(v) => Value::Bool(*(v)), None => Value::Null });
+    m.insert("user_auth_url".into(), match (&p.user_auth_url) { Some(v) => Value::String((v).clone()), None => Value::Null });
     Value::Object(m)
 }
 
 fn iface_chat__update_params__to_json(p: &iface_chat::UpdateParams) -> Value {
     let mut m = Map::new();
     m.insert("token".into(), Value::String((&p.token).clone()));
+    m.insert("as_user".into(), match (&p.as_user) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("attachments".into(), match (&p.attachments) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("blocks".into(), match (&p.blocks) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("channel".into(), Value::String((&p.channel).clone()));
+    m.insert("link_names".into(), match (&p.link_names) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("parse".into(), match (&p.parse) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("text".into(), match (&p.text) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("ts".into(), Value::String((&p.ts).clone()));
     Value::Object(m)
 }
 
+fn iface_chat__delete_response__from_json(v: &Value) -> Option<iface_chat::DeleteResponse> {
+    let m = v.as_object()?;
+    Some(iface_chat::DeleteResponse {
+        channel: match m.get("channel").and_then(|v| iface_chat__defs_channel__from_json(v)) { Some(x) => x, None => return None },
+        ok: match m.get("ok").and_then(|v| iface_chat__defs_ok_true__from_json(v)) { Some(x) => x, None => return None },
+        ts: match m.get("ts").and_then(|v| iface_chat__defs_ts__from_json(v)) { Some(x) => x, None => return None },
+    })
+}
+
+fn iface_chat__defs_channel__from_json(v: &Value) -> Option<iface_chat::DefsChannel> {
+    let m = v.as_object()?;
+    Some(iface_chat::DefsChannel {
+        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+    })
+}
+
+fn iface_chat__defs_ok_true__from_json(v: &Value) -> Option<iface_chat::DefsOkTrue> {
+    let m = v.as_object()?;
+    Some(iface_chat::DefsOkTrue {
+        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+    })
+}
+
+fn iface_chat__defs_ts__from_json(v: &Value) -> Option<iface_chat::DefsTs> {
+    let m = v.as_object()?;
+    Some(iface_chat::DefsTs {
+        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+    })
+}
+
+fn iface_chat__delete_scheduled_message_response__from_json(v: &Value) -> Option<iface_chat::DeleteScheduledMessageResponse> {
+    let m = v.as_object()?;
+    Some(iface_chat::DeleteScheduledMessageResponse {
+        ok: match m.get("ok").and_then(|v| iface_chat__defs_ok_true__from_json(v)) { Some(x) => x, None => return None },
+    })
+}
+
+fn iface_chat__get_permalink_response__from_json(v: &Value) -> Option<iface_chat::GetPermalinkResponse> {
+    let m = v.as_object()?;
+    Some(iface_chat::GetPermalinkResponse {
+        channel: match m.get("channel").and_then(|v| iface_chat__defs_channel__from_json(v)) { Some(x) => x, None => return None },
+        ok: match m.get("ok").and_then(|v| iface_chat__defs_ok_true__from_json(v)) { Some(x) => x, None => return None },
+        permalink: m.get("permalink").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+    })
+}
+
+fn iface_chat__me_message_response__from_json(v: &Value) -> Option<iface_chat::MeMessageResponse> {
+    let m = v.as_object()?;
+    Some(iface_chat::MeMessageResponse {
+        channel: m.get("channel").filter(|v| !v.is_null()).and_then(|v| iface_chat__defs_channel__from_json(v)),
+        ok: match m.get("ok").and_then(|v| iface_chat__defs_ok_true__from_json(v)) { Some(x) => x, None => return None },
+        ts: m.get("ts").filter(|v| !v.is_null()).and_then(|v| iface_chat__defs_ts__from_json(v)),
+    })
+}
+
+fn iface_chat__post_ephemeral_response__from_json(v: &Value) -> Option<iface_chat::PostEphemeralResponse> {
+    let m = v.as_object()?;
+    Some(iface_chat::PostEphemeralResponse {
+        message_ts: match m.get("message_ts").and_then(|v| iface_chat__defs_ts__from_json(v)) { Some(x) => x, None => return None },
+        ok: match m.get("ok").and_then(|v| iface_chat__defs_ok_true__from_json(v)) { Some(x) => x, None => return None },
+    })
+}
+
+fn iface_chat__post_message_response__from_json(v: &Value) -> Option<iface_chat::PostMessageResponse> {
+    let m = v.as_object()?;
+    Some(iface_chat::PostMessageResponse {
+        channel: match m.get("channel").and_then(|v| iface_chat__defs_channel__from_json(v)) { Some(x) => x, None => return None },
+        message: match m.get("message").and_then(|v| iface_chat__objs_message__from_json(v)) { Some(x) => x, None => return None },
+        ok: match m.get("ok").and_then(|v| iface_chat__defs_ok_true__from_json(v)) { Some(x) => x, None => return None },
+        ts: match m.get("ts").and_then(|v| iface_chat__defs_ts__from_json(v)) { Some(x) => x, None => return None },
+    })
+}
+
+fn iface_chat__objs_message__from_json(v: &Value) -> Option<iface_chat::ObjsMessage> {
+    let m = v.as_object()?;
+    Some(iface_chat::ObjsMessage {
+        attachments: m.get("attachments").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| iface_chat__objs_message_attachments_item__from_json(x)).collect())),
+        blocks: m.get("blocks").filter(|v| !v.is_null()).and_then(|v| iface_chat__blocks__from_json(v)),
+        bot_id: m.get("bot_id").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        bot_profile: m.get("bot_profile").filter(|v| !v.is_null()).and_then(|v| iface_chat__objs_bot_profile__from_json(v)),
+        client_msg_id: m.get("client_msg_id").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        comment: m.get("comment").filter(|v| !v.is_null()).and_then(|v| iface_chat__objs_comment__from_json(v)),
+        display_as_bot: m.get("display_as_bot").filter(|v| !v.is_null()).and_then(|v| (v).as_bool()),
+        file: m.get("file").filter(|v| !v.is_null()).and_then(|v| iface_chat__objs_file__from_json(v)),
+        files: m.get("files").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| iface_chat__objs_file__from_json(x)).collect())),
+        icons: m.get("icons").filter(|v| !v.is_null()).and_then(|v| iface_chat__objs_message_icons__from_json(v)),
+        inviter: m.get("inviter").filter(|v| !v.is_null()).and_then(|v| iface_chat__defs_user_id__from_json(v)),
+        is_delayed_message: m.get("is_delayed_message").filter(|v| !v.is_null()).and_then(|v| (v).as_bool()),
+        is_intro: m.get("is_intro").filter(|v| !v.is_null()).and_then(|v| (v).as_bool()),
+        is_starred: m.get("is_starred").filter(|v| !v.is_null()).and_then(|v| (v).as_bool()),
+        last_read: m.get("last_read").filter(|v| !v.is_null()).and_then(|v| iface_chat__defs_ts__from_json(v)),
+        latest_reply: m.get("latest_reply").filter(|v| !v.is_null()).and_then(|v| iface_chat__defs_ts__from_json(v)),
+        name: m.get("name").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        old_name: m.get("old_name").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        parent_user_id: m.get("parent_user_id").filter(|v| !v.is_null()).and_then(|v| iface_chat__defs_user_id__from_json(v)),
+        permalink: m.get("permalink").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        pinned_to: m.get("pinned_to").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| iface_chat__defs_channel__from_json(x)).collect())),
+        purpose: m.get("purpose").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        reactions: m.get("reactions").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| iface_chat__objs_reaction__from_json(x)).collect())),
+        reply_count: m.get("reply_count").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        reply_users: m.get("reply_users").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| iface_chat__defs_user_id__from_json(x)).collect())),
+        reply_users_count: m.get("reply_users_count").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        source_team: m.get("source_team").filter(|v| !v.is_null()).and_then(|v| iface_chat__defs_workspace_id__from_json(v)),
+        subscribed: m.get("subscribed").filter(|v| !v.is_null()).and_then(|v| (v).as_bool()),
+        subtype: m.get("subtype").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        team: m.get("team").filter(|v| !v.is_null()).and_then(|v| iface_chat__defs_workspace_id__from_json(v)),
+        text: m.get("text").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        thread_ts: m.get("thread_ts").filter(|v| !v.is_null()).and_then(|v| iface_chat__defs_ts__from_json(v)),
+        topic: m.get("topic").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        ts: match m.get("ts").and_then(|v| iface_chat__defs_ts__from_json(v)) { Some(x) => x, None => return None },
+        type_op: m.get("type").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        unread_count: m.get("unread_count").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        upload: m.get("upload").filter(|v| !v.is_null()).and_then(|v| (v).as_bool()),
+        user: m.get("user").filter(|v| !v.is_null()).and_then(|v| iface_chat__defs_user_id__from_json(v)),
+        user_profile: m.get("user_profile").filter(|v| !v.is_null()).and_then(|v| iface_chat__objs_user_profile_short__from_json(v)),
+        user_team: m.get("user_team").filter(|v| !v.is_null()).and_then(|v| iface_chat__defs_workspace_id__from_json(v)),
+        username: m.get("username").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    })
+}
+
+fn iface_chat__objs_message_attachments_item__from_json(v: &Value) -> Option<iface_chat::ObjsMessageAttachmentsItem> {
+    let m = v.as_object()?;
+    Some(iface_chat::ObjsMessageAttachmentsItem {
+        fallback: m.get("fallback").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        id: m.get("id").and_then(|v| (v).as_i64().map(|n| n as i32)).unwrap_or_default(),
+        image_bytes: m.get("image_bytes").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        image_height: m.get("image_height").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        image_url: m.get("image_url").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        image_width: m.get("image_width").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+    })
+}
+
+fn iface_chat__blocks__from_json(v: &Value) -> Option<iface_chat::Blocks> {
+    let m = v.as_object()?;
+    Some(iface_chat::Blocks {
+        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+    })
+}
+
+fn iface_chat__objs_bot_profile__from_json(v: &Value) -> Option<iface_chat::ObjsBotProfile> {
+    let m = v.as_object()?;
+    Some(iface_chat::ObjsBotProfile {
+        app_id: match m.get("app_id").and_then(|v| iface_chat__defs_app_id__from_json(v)) { Some(x) => x, None => return None },
+        deleted: m.get("deleted").and_then(|v| (v).as_bool()).unwrap_or_default(),
+        icons: match m.get("icons").and_then(|v| iface_chat__objs_bot_profile_icons__from_json(v)) { Some(x) => x, None => return None },
+        id: match m.get("id").and_then(|v| iface_chat__defs_bot_id__from_json(v)) { Some(x) => x, None => return None },
+        name: m.get("name").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        team_id: match m.get("team_id").and_then(|v| iface_chat__defs_team__from_json(v)) { Some(x) => x, None => return None },
+        updated: m.get("updated").and_then(|v| (v).as_i64().map(|n| n as i32)).unwrap_or_default(),
+    })
+}
+
+fn iface_chat__defs_app_id__from_json(v: &Value) -> Option<iface_chat::DefsAppId> {
+    let m = v.as_object()?;
+    Some(iface_chat::DefsAppId {
+        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+    })
+}
+
+fn iface_chat__objs_bot_profile_icons__from_json(v: &Value) -> Option<iface_chat::ObjsBotProfileIcons> {
+    let m = v.as_object()?;
+    Some(iface_chat::ObjsBotProfileIcons {
+        image_v36: m.get("image_36").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        image_v48: m.get("image_48").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        image_v72: m.get("image_72").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+    })
+}
+
+fn iface_chat__defs_bot_id__from_json(v: &Value) -> Option<iface_chat::DefsBotId> {
+    let m = v.as_object()?;
+    Some(iface_chat::DefsBotId {
+        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+    })
+}
+
+fn iface_chat__defs_team__from_json(v: &Value) -> Option<iface_chat::DefsTeam> {
+    let m = v.as_object()?;
+    Some(iface_chat::DefsTeam {
+        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+    })
+}
+
+fn iface_chat__objs_comment__from_json(v: &Value) -> Option<iface_chat::ObjsComment> {
+    let m = v.as_object()?;
+    Some(iface_chat::ObjsComment {
+        comment: m.get("comment").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        created: m.get("created").and_then(|v| (v).as_i64().map(|n| n as i32)).unwrap_or_default(),
+        id: match m.get("id").and_then(|v| iface_chat__defs_comment_id__from_json(v)) { Some(x) => x, None => return None },
+        is_intro: m.get("is_intro").and_then(|v| (v).as_bool()).unwrap_or_default(),
+        is_starred: m.get("is_starred").filter(|v| !v.is_null()).and_then(|v| (v).as_bool()),
+        num_stars: m.get("num_stars").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        pinned_info: m.get("pinned_info").filter(|v| !v.is_null()).and_then(|v| iface_chat__defs_pinned_info__from_json(v)),
+        pinned_to: m.get("pinned_to").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| iface_chat__defs_channel__from_json(x)).collect())),
+        reactions: m.get("reactions").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| iface_chat__objs_reaction__from_json(x)).collect())),
+        timestamp: m.get("timestamp").and_then(|v| (v).as_i64().map(|n| n as i32)).unwrap_or_default(),
+        user: match m.get("user").and_then(|v| iface_chat__defs_user_id__from_json(v)) { Some(x) => x, None => return None },
+    })
+}
+
+fn iface_chat__defs_comment_id__from_json(v: &Value) -> Option<iface_chat::DefsCommentId> {
+    let m = v.as_object()?;
+    Some(iface_chat::DefsCommentId {
+        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+    })
+}
+
+fn iface_chat__defs_pinned_info__from_json(v: &Value) -> Option<iface_chat::DefsPinnedInfo> {
+    let m = v.as_object()?;
+    Some(iface_chat::DefsPinnedInfo {
+        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    })
+}
+
+fn iface_chat__objs_reaction__from_json(v: &Value) -> Option<iface_chat::ObjsReaction> {
+    let m = v.as_object()?;
+    Some(iface_chat::ObjsReaction {
+        count: m.get("count").and_then(|v| (v).as_i64().map(|n| n as i32)).unwrap_or_default(),
+        name: m.get("name").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        users: m.get("users").and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| iface_chat__defs_user_id__from_json(x)).collect())).unwrap_or_default(),
+    })
+}
+
+fn iface_chat__defs_user_id__from_json(v: &Value) -> Option<iface_chat::DefsUserId> {
+    let m = v.as_object()?;
+    Some(iface_chat::DefsUserId {
+        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+    })
+}
+
+fn iface_chat__objs_file__from_json(v: &Value) -> Option<iface_chat::ObjsFile> {
+    let m = v.as_object()?;
+    Some(iface_chat::ObjsFile {
+        channels: m.get("channels").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| iface_chat__defs_channel_id__from_json(x)).collect())),
+        comments_count: m.get("comments_count").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        created: m.get("created").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        date_delete: m.get("date_delete").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        display_as_bot: m.get("display_as_bot").filter(|v| !v.is_null()).and_then(|v| (v).as_bool()),
+        editable: m.get("editable").filter(|v| !v.is_null()).and_then(|v| (v).as_bool()),
+        editor: m.get("editor").filter(|v| !v.is_null()).and_then(|v| iface_chat__defs_user_id__from_json(v)),
+        external_id: m.get("external_id").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        external_type: m.get("external_type").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        external_url: m.get("external_url").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        filetype: m.get("filetype").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        groups: m.get("groups").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| iface_chat__defs_group_id__from_json(x)).collect())),
+        has_rich_preview: m.get("has_rich_preview").filter(|v| !v.is_null()).and_then(|v| (v).as_bool()),
+        id: m.get("id").filter(|v| !v.is_null()).and_then(|v| iface_chat__defs_file_id__from_json(v)),
+        image_exif_rotation: m.get("image_exif_rotation").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        ims: m.get("ims").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| iface_chat__defs_dm_id__from_json(x)).collect())),
+        is_external: m.get("is_external").filter(|v| !v.is_null()).and_then(|v| (v).as_bool()),
+        is_public: m.get("is_public").filter(|v| !v.is_null()).and_then(|v| (v).as_bool()),
+        is_starred: m.get("is_starred").filter(|v| !v.is_null()).and_then(|v| (v).as_bool()),
+        is_tombstoned: m.get("is_tombstoned").filter(|v| !v.is_null()).and_then(|v| (v).as_bool()),
+        last_editor: m.get("last_editor").filter(|v| !v.is_null()).and_then(|v| iface_chat__defs_user_id__from_json(v)),
+        mimetype: m.get("mimetype").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        mode: m.get("mode").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        name: m.get("name").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        non_owner_editable: m.get("non_owner_editable").filter(|v| !v.is_null()).and_then(|v| (v).as_bool()),
+        num_stars: m.get("num_stars").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        original_h: m.get("original_h").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        original_w: m.get("original_w").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        permalink: m.get("permalink").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        permalink_public: m.get("permalink_public").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        pinned_info: m.get("pinned_info").filter(|v| !v.is_null()).and_then(|v| iface_chat__defs_pinned_info__from_json(v)),
+        pinned_to: m.get("pinned_to").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| iface_chat__defs_channel__from_json(x)).collect())),
+        pretty_type: m.get("pretty_type").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        preview: m.get("preview").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        public_url_shared: m.get("public_url_shared").filter(|v| !v.is_null()).and_then(|v| (v).as_bool()),
+        reactions: m.get("reactions").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| iface_chat__objs_reaction__from_json(x)).collect())),
+        shares: m.get("shares").filter(|v| !v.is_null()).and_then(|v| iface_chat__objs_file_shares__from_json(v)),
+        size: m.get("size").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        source_team: m.get("source_team").filter(|v| !v.is_null()).and_then(|v| iface_chat__defs_team__from_json(v)),
+        state: m.get("state").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        thumb_v1024: m.get("thumb_1024").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        thumb_v1024_h: m.get("thumb_1024_h").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        thumb_v1024_w: m.get("thumb_1024_w").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        thumb_v160: m.get("thumb_160").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        thumb_v360: m.get("thumb_360").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        thumb_v360_h: m.get("thumb_360_h").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        thumb_v360_w: m.get("thumb_360_w").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        thumb_v480: m.get("thumb_480").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        thumb_v480_h: m.get("thumb_480_h").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        thumb_v480_w: m.get("thumb_480_w").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        thumb_v64: m.get("thumb_64").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        thumb_v720: m.get("thumb_720").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        thumb_v720_h: m.get("thumb_720_h").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        thumb_v720_w: m.get("thumb_720_w").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        thumb_v80: m.get("thumb_80").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        thumb_v800: m.get("thumb_800").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        thumb_v800_h: m.get("thumb_800_h").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        thumb_v800_w: m.get("thumb_800_w").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        thumb_v960: m.get("thumb_960").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        thumb_v960_h: m.get("thumb_960_h").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        thumb_v960_w: m.get("thumb_960_w").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        thumb_tiny: m.get("thumb_tiny").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        timestamp: m.get("timestamp").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        title: m.get("title").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        updated: m.get("updated").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        url_private: m.get("url_private").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        url_private_download: m.get("url_private_download").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        user: m.get("user").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        user_team: m.get("user_team").filter(|v| !v.is_null()).and_then(|v| iface_chat__defs_team__from_json(v)),
+        username: m.get("username").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    })
+}
+
+fn iface_chat__defs_channel_id__from_json(v: &Value) -> Option<iface_chat::DefsChannelId> {
+    let m = v.as_object()?;
+    Some(iface_chat::DefsChannelId {
+        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+    })
+}
+
+fn iface_chat__defs_group_id__from_json(v: &Value) -> Option<iface_chat::DefsGroupId> {
+    let m = v.as_object()?;
+    Some(iface_chat::DefsGroupId {
+        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+    })
+}
+
+fn iface_chat__defs_file_id__from_json(v: &Value) -> Option<iface_chat::DefsFileId> {
+    let m = v.as_object()?;
+    Some(iface_chat::DefsFileId {
+        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+    })
+}
+
+fn iface_chat__defs_dm_id__from_json(v: &Value) -> Option<iface_chat::DefsDmId> {
+    let m = v.as_object()?;
+    Some(iface_chat::DefsDmId {
+        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+    })
+}
+
+fn iface_chat__objs_file_shares__from_json(v: &Value) -> Option<iface_chat::ObjsFileShares> {
+    let m = v.as_object()?;
+    Some(iface_chat::ObjsFileShares {
+        private: m.get("private").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        public: m.get("public").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    })
+}
+
+fn iface_chat__objs_message_icons__from_json(v: &Value) -> Option<iface_chat::ObjsMessageIcons> {
+    let m = v.as_object()?;
+    Some(iface_chat::ObjsMessageIcons {
+        emoji: m.get("emoji").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        image_v64: m.get("image_64").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    })
+}
+
+fn iface_chat__defs_workspace_id__from_json(v: &Value) -> Option<iface_chat::DefsWorkspaceId> {
+    let m = v.as_object()?;
+    Some(iface_chat::DefsWorkspaceId {
+        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+    })
+}
+
+fn iface_chat__objs_user_profile_short__from_json(v: &Value) -> Option<iface_chat::ObjsUserProfileShort> {
+    let m = v.as_object()?;
+    Some(iface_chat::ObjsUserProfileShort {
+        avatar_hash: m.get("avatar_hash").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        display_name: m.get("display_name").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        display_name_normalized: m.get("display_name_normalized").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        first_name: m.get("first_name").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        image_v72: m.get("image_72").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        is_restricted: m.get("is_restricted").and_then(|v| (v).as_bool()).unwrap_or_default(),
+        is_ultra_restricted: m.get("is_ultra_restricted").and_then(|v| (v).as_bool()).unwrap_or_default(),
+        name: m.get("name").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        real_name: m.get("real_name").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        real_name_normalized: m.get("real_name_normalized").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        team: match m.get("team").and_then(|v| iface_chat__defs_workspace_id__from_json(v)) { Some(x) => x, None => return None },
+    })
+}
+
+fn iface_chat__schedule_message_response__from_json(v: &Value) -> Option<iface_chat::ScheduleMessageResponse> {
+    let m = v.as_object()?;
+    Some(iface_chat::ScheduleMessageResponse {
+        channel: match m.get("channel").and_then(|v| iface_chat__defs_channel__from_json(v)) { Some(x) => x, None => return None },
+        message: match m.get("message").and_then(|v| iface_chat__schedule_message_response_message__from_json(v)) { Some(x) => x, None => return None },
+        ok: match m.get("ok").and_then(|v| iface_chat__defs_ok_true__from_json(v)) { Some(x) => x, None => return None },
+        post_at: m.get("post_at").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        scheduled_message_id: m.get("scheduled_message_id").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+    })
+}
+
+fn iface_chat__schedule_message_response_message__from_json(v: &Value) -> Option<iface_chat::ScheduleMessageResponseMessage> {
+    let m = v.as_object()?;
+    Some(iface_chat::ScheduleMessageResponseMessage {
+        bot_id: match m.get("bot_id").and_then(|v| iface_chat__defs_bot_id__from_json(v)) { Some(x) => x, None => return None },
+        bot_profile: m.get("bot_profile").filter(|v| !v.is_null()).and_then(|v| iface_chat__objs_bot_profile__from_json(v)),
+        team: match m.get("team").and_then(|v| iface_chat__defs_team__from_json(v)) { Some(x) => x, None => return None },
+        text: m.get("text").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        type_op: m.get("type").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        user: match m.get("user").and_then(|v| iface_chat__defs_user_id__from_json(v)) { Some(x) => x, None => return None },
+        username: m.get("username").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    })
+}
+
+fn iface_chat__unfurl_response__from_json(v: &Value) -> Option<iface_chat::UnfurlResponse> {
+    let m = v.as_object()?;
+    Some(iface_chat::UnfurlResponse {
+        ok: match m.get("ok").and_then(|v| iface_chat__defs_ok_true__from_json(v)) { Some(x) => x, None => return None },
+    })
+}
+
+fn iface_chat__update_response__from_json(v: &Value) -> Option<iface_chat::UpdateResponse> {
+    let m = v.as_object()?;
+    Some(iface_chat::UpdateResponse {
+        channel: m.get("channel").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        message: match m.get("message").and_then(|v| iface_chat__update_response_message__from_json(v)) { Some(x) => x, None => return None },
+        ok: match m.get("ok").and_then(|v| iface_chat__defs_ok_true__from_json(v)) { Some(x) => x, None => return None },
+        text: m.get("text").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        ts: m.get("ts").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+    })
+}
+
+fn iface_chat__update_response_message__from_json(v: &Value) -> Option<iface_chat::UpdateResponseMessage> {
+    let m = v.as_object()?;
+    Some(iface_chat::UpdateResponseMessage {
+        attachments: m.get("attachments").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| iface_chat__update_response_message_attachments_item__from_json(x)).collect())),
+        blocks: m.get("blocks").filter(|v| !v.is_null()).and_then(|v| iface_chat__update_response_message_blocks__from_json(v)),
+        text: m.get("text").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+    })
+}
+
+fn iface_chat__update_response_message_attachments_item__from_json(v: &Value) -> Option<iface_chat::UpdateResponseMessageAttachmentsItem> {
+    let m = v.as_object()?;
+    Some(iface_chat::UpdateResponseMessageAttachmentsItem {
+        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    })
+}
+
+fn iface_chat__update_response_message_blocks__from_json(v: &Value) -> Option<iface_chat::UpdateResponseMessageBlocks> {
+    let m = v.as_object()?;
+    Some(iface_chat::UpdateResponseMessageBlocks {
+        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    })
+}
+
+fn iface_chat__delete__ok(body: String) -> Result<iface_chat::DeleteResponse, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match iface_chat__delete_response__from_json(&v) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_chat__delete__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
+fn iface_chat__delete_scheduled_message__ok(body: String) -> Result<iface_chat::DeleteScheduledMessageResponse, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match iface_chat__delete_scheduled_message_response__from_json(&v) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_chat__delete_scheduled_message__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
+fn iface_chat__get_permalink__ok(body: String) -> Result<iface_chat::GetPermalinkResponse, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match iface_chat__get_permalink_response__from_json(&v) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_chat__get_permalink__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
+fn iface_chat__me_message__ok(body: String) -> Result<iface_chat::MeMessageResponse, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match iface_chat__me_message_response__from_json(&v) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_chat__me_message__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
+fn iface_chat__post_ephemeral__ok(body: String) -> Result<iface_chat::PostEphemeralResponse, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match iface_chat__post_ephemeral_response__from_json(&v) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_chat__post_ephemeral__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
+fn iface_chat__post_message__ok(body: String) -> Result<iface_chat::PostMessageResponse, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match iface_chat__post_message_response__from_json(&v) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_chat__post_message__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
+fn iface_chat__schedule_message__ok(body: String) -> Result<iface_chat::ScheduleMessageResponse, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match iface_chat__schedule_message_response__from_json(&v) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_chat__schedule_message__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
+fn iface_chat__unfurl__ok(body: String) -> Result<iface_chat::UnfurlResponse, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match iface_chat__unfurl_response__from_json(&v) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_chat__unfurl__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
+fn iface_chat__update__ok(body: String) -> Result<iface_chat::UpdateResponse, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match iface_chat__update_response__from_json(&v) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_chat__update__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
 impl iface_chat::Guest for crate::Component {
-    fn delete(params: iface_chat::DeleteParams) -> Result<String, String> {
+    fn delete(params: iface_chat::DeleteParams) -> Result<iface_chat::DeleteResponse, String> {
         let json = iface_chat__delete_params__to_json(&params);
-        dispatch(&OP_CHAT_DELETE, json)
+        match dispatch(&OP_CHAT_DELETE, json).and_then(iface_chat__delete__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_chat__delete__err(e)),
+        }
     }
-    fn delete_scheduled_message(params: iface_chat::DeleteScheduledMessageParams) -> Result<String, String> {
+    fn delete_scheduled_message(params: iface_chat::DeleteScheduledMessageParams) -> Result<iface_chat::DeleteScheduledMessageResponse, String> {
         let json = iface_chat__delete_scheduled_message_params__to_json(&params);
-        dispatch(&OP_CHAT_DELETE_SCHEDULED_MESSAGE, json)
+        match dispatch(&OP_CHAT_DELETE_SCHEDULED_MESSAGE, json).and_then(iface_chat__delete_scheduled_message__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_chat__delete_scheduled_message__err(e)),
+        }
     }
-    fn get_permalink(params: iface_chat::GetPermalinkParams) -> Result<String, String> {
+    fn get_permalink(params: iface_chat::GetPermalinkParams) -> Result<iface_chat::GetPermalinkResponse, String> {
         let json = iface_chat__get_permalink_params__to_json(&params);
-        dispatch(&OP_CHAT_GET_PERMALINK, json)
+        match dispatch(&OP_CHAT_GET_PERMALINK, json).and_then(iface_chat__get_permalink__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_chat__get_permalink__err(e)),
+        }
     }
-    fn me_message(params: iface_chat::MeMessageParams) -> Result<String, String> {
+    fn me_message(params: iface_chat::MeMessageParams) -> Result<iface_chat::MeMessageResponse, String> {
         let json = iface_chat__me_message_params__to_json(&params);
-        dispatch(&OP_CHAT_ME_MESSAGE, json)
+        match dispatch(&OP_CHAT_ME_MESSAGE, json).and_then(iface_chat__me_message__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_chat__me_message__err(e)),
+        }
     }
-    fn post_ephemeral(params: iface_chat::PostEphemeralParams) -> Result<String, String> {
+    fn post_ephemeral(params: iface_chat::PostEphemeralParams) -> Result<iface_chat::PostEphemeralResponse, String> {
         let json = iface_chat__post_ephemeral_params__to_json(&params);
-        dispatch(&OP_CHAT_POST_EPHEMERAL, json)
+        match dispatch(&OP_CHAT_POST_EPHEMERAL, json).and_then(iface_chat__post_ephemeral__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_chat__post_ephemeral__err(e)),
+        }
     }
-    fn post_message(params: iface_chat::PostMessageParams) -> Result<String, String> {
+    fn post_message(params: iface_chat::PostMessageParams) -> Result<iface_chat::PostMessageResponse, String> {
         let json = iface_chat__post_message_params__to_json(&params);
-        dispatch(&OP_CHAT_POST_MESSAGE, json)
+        match dispatch(&OP_CHAT_POST_MESSAGE, json).and_then(iface_chat__post_message__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_chat__post_message__err(e)),
+        }
     }
-    fn schedule_message(params: iface_chat::ScheduleMessageParams) -> Result<String, String> {
+    fn schedule_message(params: iface_chat::ScheduleMessageParams) -> Result<iface_chat::ScheduleMessageResponse, String> {
         let json = iface_chat__schedule_message_params__to_json(&params);
-        dispatch(&OP_CHAT_SCHEDULE_MESSAGE, json)
+        match dispatch(&OP_CHAT_SCHEDULE_MESSAGE, json).and_then(iface_chat__schedule_message__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_chat__schedule_message__err(e)),
+        }
     }
-    fn unfurl(params: iface_chat::UnfurlParams) -> Result<String, String> {
+    fn unfurl(params: iface_chat::UnfurlParams) -> Result<iface_chat::UnfurlResponse, String> {
         let json = iface_chat__unfurl_params__to_json(&params);
-        dispatch(&OP_CHAT_UNFURL, json)
+        match dispatch(&OP_CHAT_UNFURL, json).and_then(iface_chat__unfurl__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_chat__unfurl__err(e)),
+        }
     }
-    fn update(params: iface_chat::UpdateParams) -> Result<String, String> {
+    fn update(params: iface_chat::UpdateParams) -> Result<iface_chat::UpdateResponse, String> {
         let json = iface_chat__update_params__to_json(&params);
-        dispatch(&OP_CHAT_UPDATE, json)
+        match dispatch(&OP_CHAT_UPDATE, json).and_then(iface_chat__update__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_chat__update__err(e)),
+        }
     }
 }
 use crate::exports::autostamp::slack::chat_scheduled_messages as iface_chat_scheduled_messages;
@@ -2235,17 +7198,53 @@ const OP_CHAT_SCHEDULED_MESSAGES_LIST_OP: OpSpec = OpSpec {
     method: "GET",
     path_template: "/chat.scheduledMessages.list",
     fields: &[
-        FieldSpec { snake: "token", location: FieldLocation::Header },
-        FieldSpec { snake: "channel", location: FieldLocation::Query },
-        FieldSpec { snake: "latest", location: FieldLocation::Query },
-        FieldSpec { snake: "oldest", location: FieldLocation::Query },
-        FieldSpec { snake: "limit", location: FieldLocation::Query },
-        FieldSpec { snake: "cursor", location: FieldLocation::Query },
+        FieldSpec { snake: "token", wire: "token", location: FieldLocation::Header },
+        FieldSpec { snake: "channel", wire: "channel", location: FieldLocation::Query },
+        FieldSpec { snake: "latest", wire: "latest", location: FieldLocation::Query },
+        FieldSpec { snake: "oldest", wire: "oldest", location: FieldLocation::Query },
+        FieldSpec { snake: "limit", wire: "limit", location: FieldLocation::Query },
+        FieldSpec { snake: "cursor", wire: "cursor", location: FieldLocation::Query },
     ],
     auth: &[
         AuthApply { secret_key: "slackAuth", kind: AuthKind::Bearer },
     ],
 };
+
+fn iface_chat_scheduled_messages__list_op_response__to_json(p: &iface_chat_scheduled_messages::ListOpResponse) -> Value {
+    let mut m = Map::new();
+    m.insert("ok".into(), iface_chat_scheduled_messages__defs_ok_true__to_json(&p.ok));
+    m.insert("response_metadata".into(), iface_chat_scheduled_messages__list_op_response_response_metadata__to_json(&p.response_metadata));
+    m.insert("scheduled_messages".into(), Value::Array((&p.scheduled_messages).iter().map(|v| iface_chat_scheduled_messages__list_op_response_scheduled_messages_item__to_json(v)).collect()));
+    Value::Object(m)
+}
+
+fn iface_chat_scheduled_messages__defs_ok_true__to_json(p: &iface_chat_scheduled_messages::DefsOkTrue) -> Value {
+    let mut m = Map::new();
+    m.insert("value".into(), Value::String((&p.value).clone()));
+    Value::Object(m)
+}
+
+fn iface_chat_scheduled_messages__list_op_response_response_metadata__to_json(p: &iface_chat_scheduled_messages::ListOpResponseResponseMetadata) -> Value {
+    let mut m = Map::new();
+    m.insert("next_cursor".into(), Value::String((&p.next_cursor).clone()));
+    Value::Object(m)
+}
+
+fn iface_chat_scheduled_messages__list_op_response_scheduled_messages_item__to_json(p: &iface_chat_scheduled_messages::ListOpResponseScheduledMessagesItem) -> Value {
+    let mut m = Map::new();
+    m.insert("channel_id".into(), iface_chat_scheduled_messages__defs_channel_id__to_json(&p.channel_id));
+    m.insert("date_created".into(), Value::String((&p.date_created).clone()));
+    m.insert("id".into(), Value::String((&p.id).clone()));
+    m.insert("post_at".into(), Value::String((&p.post_at).clone()));
+    m.insert("text".into(), match (&p.text) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_chat_scheduled_messages__defs_channel_id__to_json(p: &iface_chat_scheduled_messages::DefsChannelId) -> Value {
+    let mut m = Map::new();
+    m.insert("value".into(), Value::String((&p.value).clone()));
+    Value::Object(m)
+}
 
 fn iface_chat_scheduled_messages__list_op_params__to_json(p: &iface_chat_scheduled_messages::ListOpParams) -> Value {
     let mut m = Map::new();
@@ -2258,10 +7257,72 @@ fn iface_chat_scheduled_messages__list_op_params__to_json(p: &iface_chat_schedul
     Value::Object(m)
 }
 
+fn iface_chat_scheduled_messages__list_op_response__from_json(v: &Value) -> Option<iface_chat_scheduled_messages::ListOpResponse> {
+    let m = v.as_object()?;
+    Some(iface_chat_scheduled_messages::ListOpResponse {
+        ok: match m.get("ok").and_then(|v| iface_chat_scheduled_messages__defs_ok_true__from_json(v)) { Some(x) => x, None => return None },
+        response_metadata: match m.get("response_metadata").and_then(|v| iface_chat_scheduled_messages__list_op_response_response_metadata__from_json(v)) { Some(x) => x, None => return None },
+        scheduled_messages: m.get("scheduled_messages").and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| iface_chat_scheduled_messages__list_op_response_scheduled_messages_item__from_json(x)).collect())).unwrap_or_default(),
+    })
+}
+
+fn iface_chat_scheduled_messages__defs_ok_true__from_json(v: &Value) -> Option<iface_chat_scheduled_messages::DefsOkTrue> {
+    let m = v.as_object()?;
+    Some(iface_chat_scheduled_messages::DefsOkTrue {
+        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+    })
+}
+
+fn iface_chat_scheduled_messages__list_op_response_response_metadata__from_json(v: &Value) -> Option<iface_chat_scheduled_messages::ListOpResponseResponseMetadata> {
+    let m = v.as_object()?;
+    Some(iface_chat_scheduled_messages::ListOpResponseResponseMetadata {
+        next_cursor: m.get("next_cursor").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+    })
+}
+
+fn iface_chat_scheduled_messages__list_op_response_scheduled_messages_item__from_json(v: &Value) -> Option<iface_chat_scheduled_messages::ListOpResponseScheduledMessagesItem> {
+    let m = v.as_object()?;
+    Some(iface_chat_scheduled_messages::ListOpResponseScheduledMessagesItem {
+        channel_id: match m.get("channel_id").and_then(|v| iface_chat_scheduled_messages__defs_channel_id__from_json(v)) { Some(x) => x, None => return None },
+        date_created: m.get("date_created").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        id: m.get("id").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        post_at: m.get("post_at").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        text: m.get("text").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    })
+}
+
+fn iface_chat_scheduled_messages__defs_channel_id__from_json(v: &Value) -> Option<iface_chat_scheduled_messages::DefsChannelId> {
+    let m = v.as_object()?;
+    Some(iface_chat_scheduled_messages::DefsChannelId {
+        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+    })
+}
+
+fn iface_chat_scheduled_messages__list_op__ok(body: String) -> Result<iface_chat_scheduled_messages::ListOpResponse, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match iface_chat_scheduled_messages__list_op_response__from_json(&v) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_chat_scheduled_messages__list_op__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
 impl iface_chat_scheduled_messages::Guest for crate::Component {
-    fn list_op(params: iface_chat_scheduled_messages::ListOpParams) -> Result<String, String> {
+    fn list_op(params: iface_chat_scheduled_messages::ListOpParams) -> Result<iface_chat_scheduled_messages::ListOpResponse, String> {
         let json = iface_chat_scheduled_messages__list_op_params__to_json(&params);
-        dispatch(&OP_CHAT_SCHEDULED_MESSAGES_LIST_OP, json)
+        match dispatch(&OP_CHAT_SCHEDULED_MESSAGES_LIST_OP, json).and_then(iface_chat_scheduled_messages__list_op__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_chat_scheduled_messages__list_op__err(e)),
+        }
     }
 }
 use crate::exports::autostamp::slack::conversations as iface_conversations;
@@ -2270,7 +7331,8 @@ const OP_CONVERSATIONS_ARCHIVE: OpSpec = OpSpec {
     method: "POST",
     path_template: "/conversations.archive",
     fields: &[
-        FieldSpec { snake: "token", location: FieldLocation::Header },
+        FieldSpec { snake: "token", wire: "token", location: FieldLocation::Header },
+        FieldSpec { snake: "channel", wire: "channel", location: FieldLocation::Body },
     ],
     auth: &[
         AuthApply { secret_key: "slackAuth", kind: AuthKind::Bearer },
@@ -2281,7 +7343,8 @@ const OP_CONVERSATIONS_CLOSE: OpSpec = OpSpec {
     method: "POST",
     path_template: "/conversations.close",
     fields: &[
-        FieldSpec { snake: "token", location: FieldLocation::Header },
+        FieldSpec { snake: "token", wire: "token", location: FieldLocation::Header },
+        FieldSpec { snake: "channel", wire: "channel", location: FieldLocation::Body },
     ],
     auth: &[
         AuthApply { secret_key: "slackAuth", kind: AuthKind::Bearer },
@@ -2292,7 +7355,9 @@ const OP_CONVERSATIONS_CREATE: OpSpec = OpSpec {
     method: "POST",
     path_template: "/conversations.create",
     fields: &[
-        FieldSpec { snake: "token", location: FieldLocation::Header },
+        FieldSpec { snake: "token", wire: "token", location: FieldLocation::Header },
+        FieldSpec { snake: "is_private", wire: "is_private", location: FieldLocation::Body },
+        FieldSpec { snake: "name", wire: "name", location: FieldLocation::Body },
     ],
     auth: &[
         AuthApply { secret_key: "slackAuth", kind: AuthKind::Bearer },
@@ -2303,13 +7368,13 @@ const OP_CONVERSATIONS_HISTORY: OpSpec = OpSpec {
     method: "GET",
     path_template: "/conversations.history",
     fields: &[
-        FieldSpec { snake: "token", location: FieldLocation::Query },
-        FieldSpec { snake: "channel", location: FieldLocation::Query },
-        FieldSpec { snake: "latest", location: FieldLocation::Query },
-        FieldSpec { snake: "oldest", location: FieldLocation::Query },
-        FieldSpec { snake: "inclusive", location: FieldLocation::Query },
-        FieldSpec { snake: "limit", location: FieldLocation::Query },
-        FieldSpec { snake: "cursor", location: FieldLocation::Query },
+        FieldSpec { snake: "token", wire: "token", location: FieldLocation::Query },
+        FieldSpec { snake: "channel", wire: "channel", location: FieldLocation::Query },
+        FieldSpec { snake: "latest", wire: "latest", location: FieldLocation::Query },
+        FieldSpec { snake: "oldest", wire: "oldest", location: FieldLocation::Query },
+        FieldSpec { snake: "inclusive", wire: "inclusive", location: FieldLocation::Query },
+        FieldSpec { snake: "limit", wire: "limit", location: FieldLocation::Query },
+        FieldSpec { snake: "cursor", wire: "cursor", location: FieldLocation::Query },
     ],
     auth: &[
         AuthApply { secret_key: "slackAuth", kind: AuthKind::Bearer },
@@ -2320,10 +7385,10 @@ const OP_CONVERSATIONS_INFO: OpSpec = OpSpec {
     method: "GET",
     path_template: "/conversations.info",
     fields: &[
-        FieldSpec { snake: "token", location: FieldLocation::Query },
-        FieldSpec { snake: "channel", location: FieldLocation::Query },
-        FieldSpec { snake: "include_locale", location: FieldLocation::Query },
-        FieldSpec { snake: "include_num_members", location: FieldLocation::Query },
+        FieldSpec { snake: "token", wire: "token", location: FieldLocation::Query },
+        FieldSpec { snake: "channel", wire: "channel", location: FieldLocation::Query },
+        FieldSpec { snake: "include_locale", wire: "include_locale", location: FieldLocation::Query },
+        FieldSpec { snake: "include_num_members", wire: "include_num_members", location: FieldLocation::Query },
     ],
     auth: &[
         AuthApply { secret_key: "slackAuth", kind: AuthKind::Bearer },
@@ -2334,7 +7399,9 @@ const OP_CONVERSATIONS_INVITE: OpSpec = OpSpec {
     method: "POST",
     path_template: "/conversations.invite",
     fields: &[
-        FieldSpec { snake: "token", location: FieldLocation::Header },
+        FieldSpec { snake: "token", wire: "token", location: FieldLocation::Header },
+        FieldSpec { snake: "channel", wire: "channel", location: FieldLocation::Body },
+        FieldSpec { snake: "users", wire: "users", location: FieldLocation::Body },
     ],
     auth: &[
         AuthApply { secret_key: "slackAuth", kind: AuthKind::Bearer },
@@ -2345,7 +7412,8 @@ const OP_CONVERSATIONS_JOIN: OpSpec = OpSpec {
     method: "POST",
     path_template: "/conversations.join",
     fields: &[
-        FieldSpec { snake: "token", location: FieldLocation::Header },
+        FieldSpec { snake: "token", wire: "token", location: FieldLocation::Header },
+        FieldSpec { snake: "channel", wire: "channel", location: FieldLocation::Body },
     ],
     auth: &[
         AuthApply { secret_key: "slackAuth", kind: AuthKind::Bearer },
@@ -2356,7 +7424,9 @@ const OP_CONVERSATIONS_KICK: OpSpec = OpSpec {
     method: "POST",
     path_template: "/conversations.kick",
     fields: &[
-        FieldSpec { snake: "token", location: FieldLocation::Header },
+        FieldSpec { snake: "token", wire: "token", location: FieldLocation::Header },
+        FieldSpec { snake: "channel", wire: "channel", location: FieldLocation::Body },
+        FieldSpec { snake: "user", wire: "user", location: FieldLocation::Body },
     ],
     auth: &[
         AuthApply { secret_key: "slackAuth", kind: AuthKind::Bearer },
@@ -2367,7 +7437,8 @@ const OP_CONVERSATIONS_LEAVE: OpSpec = OpSpec {
     method: "POST",
     path_template: "/conversations.leave",
     fields: &[
-        FieldSpec { snake: "token", location: FieldLocation::Header },
+        FieldSpec { snake: "token", wire: "token", location: FieldLocation::Header },
+        FieldSpec { snake: "channel", wire: "channel", location: FieldLocation::Body },
     ],
     auth: &[
         AuthApply { secret_key: "slackAuth", kind: AuthKind::Bearer },
@@ -2378,11 +7449,11 @@ const OP_CONVERSATIONS_LIST_OP: OpSpec = OpSpec {
     method: "GET",
     path_template: "/conversations.list",
     fields: &[
-        FieldSpec { snake: "token", location: FieldLocation::Query },
-        FieldSpec { snake: "exclude_archived", location: FieldLocation::Query },
-        FieldSpec { snake: "types", location: FieldLocation::Query },
-        FieldSpec { snake: "limit", location: FieldLocation::Query },
-        FieldSpec { snake: "cursor", location: FieldLocation::Query },
+        FieldSpec { snake: "token", wire: "token", location: FieldLocation::Query },
+        FieldSpec { snake: "exclude_archived", wire: "exclude_archived", location: FieldLocation::Query },
+        FieldSpec { snake: "types", wire: "types", location: FieldLocation::Query },
+        FieldSpec { snake: "limit", wire: "limit", location: FieldLocation::Query },
+        FieldSpec { snake: "cursor", wire: "cursor", location: FieldLocation::Query },
     ],
     auth: &[
         AuthApply { secret_key: "slackAuth", kind: AuthKind::Bearer },
@@ -2393,7 +7464,9 @@ const OP_CONVERSATIONS_MARK: OpSpec = OpSpec {
     method: "POST",
     path_template: "/conversations.mark",
     fields: &[
-        FieldSpec { snake: "token", location: FieldLocation::Header },
+        FieldSpec { snake: "token", wire: "token", location: FieldLocation::Header },
+        FieldSpec { snake: "channel", wire: "channel", location: FieldLocation::Body },
+        FieldSpec { snake: "ts", wire: "ts", location: FieldLocation::Body },
     ],
     auth: &[
         AuthApply { secret_key: "slackAuth", kind: AuthKind::Bearer },
@@ -2404,10 +7477,10 @@ const OP_CONVERSATIONS_MEMBERS: OpSpec = OpSpec {
     method: "GET",
     path_template: "/conversations.members",
     fields: &[
-        FieldSpec { snake: "token", location: FieldLocation::Query },
-        FieldSpec { snake: "channel", location: FieldLocation::Query },
-        FieldSpec { snake: "limit", location: FieldLocation::Query },
-        FieldSpec { snake: "cursor", location: FieldLocation::Query },
+        FieldSpec { snake: "token", wire: "token", location: FieldLocation::Query },
+        FieldSpec { snake: "channel", wire: "channel", location: FieldLocation::Query },
+        FieldSpec { snake: "limit", wire: "limit", location: FieldLocation::Query },
+        FieldSpec { snake: "cursor", wire: "cursor", location: FieldLocation::Query },
     ],
     auth: &[
         AuthApply { secret_key: "slackAuth", kind: AuthKind::Bearer },
@@ -2418,7 +7491,10 @@ const OP_CONVERSATIONS_OPEN: OpSpec = OpSpec {
     method: "POST",
     path_template: "/conversations.open",
     fields: &[
-        FieldSpec { snake: "token", location: FieldLocation::Header },
+        FieldSpec { snake: "token", wire: "token", location: FieldLocation::Header },
+        FieldSpec { snake: "channel", wire: "channel", location: FieldLocation::Body },
+        FieldSpec { snake: "return_im", wire: "return_im", location: FieldLocation::Body },
+        FieldSpec { snake: "users", wire: "users", location: FieldLocation::Body },
     ],
     auth: &[
         AuthApply { secret_key: "slackAuth", kind: AuthKind::Bearer },
@@ -2429,7 +7505,9 @@ const OP_CONVERSATIONS_RENAME: OpSpec = OpSpec {
     method: "POST",
     path_template: "/conversations.rename",
     fields: &[
-        FieldSpec { snake: "token", location: FieldLocation::Header },
+        FieldSpec { snake: "token", wire: "token", location: FieldLocation::Header },
+        FieldSpec { snake: "channel", wire: "channel", location: FieldLocation::Body },
+        FieldSpec { snake: "name", wire: "name", location: FieldLocation::Body },
     ],
     auth: &[
         AuthApply { secret_key: "slackAuth", kind: AuthKind::Bearer },
@@ -2440,14 +7518,14 @@ const OP_CONVERSATIONS_REPLIES: OpSpec = OpSpec {
     method: "GET",
     path_template: "/conversations.replies",
     fields: &[
-        FieldSpec { snake: "token", location: FieldLocation::Query },
-        FieldSpec { snake: "channel", location: FieldLocation::Query },
-        FieldSpec { snake: "ts", location: FieldLocation::Query },
-        FieldSpec { snake: "latest", location: FieldLocation::Query },
-        FieldSpec { snake: "oldest", location: FieldLocation::Query },
-        FieldSpec { snake: "inclusive", location: FieldLocation::Query },
-        FieldSpec { snake: "limit", location: FieldLocation::Query },
-        FieldSpec { snake: "cursor", location: FieldLocation::Query },
+        FieldSpec { snake: "token", wire: "token", location: FieldLocation::Query },
+        FieldSpec { snake: "channel", wire: "channel", location: FieldLocation::Query },
+        FieldSpec { snake: "ts", wire: "ts", location: FieldLocation::Query },
+        FieldSpec { snake: "latest", wire: "latest", location: FieldLocation::Query },
+        FieldSpec { snake: "oldest", wire: "oldest", location: FieldLocation::Query },
+        FieldSpec { snake: "inclusive", wire: "inclusive", location: FieldLocation::Query },
+        FieldSpec { snake: "limit", wire: "limit", location: FieldLocation::Query },
+        FieldSpec { snake: "cursor", wire: "cursor", location: FieldLocation::Query },
     ],
     auth: &[
         AuthApply { secret_key: "slackAuth", kind: AuthKind::Bearer },
@@ -2458,7 +7536,9 @@ const OP_CONVERSATIONS_SET_PURPOSE: OpSpec = OpSpec {
     method: "POST",
     path_template: "/conversations.setPurpose",
     fields: &[
-        FieldSpec { snake: "token", location: FieldLocation::Header },
+        FieldSpec { snake: "token", wire: "token", location: FieldLocation::Header },
+        FieldSpec { snake: "channel", wire: "channel", location: FieldLocation::Body },
+        FieldSpec { snake: "purpose", wire: "purpose", location: FieldLocation::Body },
     ],
     auth: &[
         AuthApply { secret_key: "slackAuth", kind: AuthKind::Bearer },
@@ -2469,7 +7549,9 @@ const OP_CONVERSATIONS_SET_TOPIC: OpSpec = OpSpec {
     method: "POST",
     path_template: "/conversations.setTopic",
     fields: &[
-        FieldSpec { snake: "token", location: FieldLocation::Header },
+        FieldSpec { snake: "token", wire: "token", location: FieldLocation::Header },
+        FieldSpec { snake: "channel", wire: "channel", location: FieldLocation::Body },
+        FieldSpec { snake: "topic", wire: "topic", location: FieldLocation::Body },
     ],
     auth: &[
         AuthApply { secret_key: "slackAuth", kind: AuthKind::Bearer },
@@ -2480,28 +7562,487 @@ const OP_CONVERSATIONS_UNARCHIVE: OpSpec = OpSpec {
     method: "POST",
     path_template: "/conversations.unarchive",
     fields: &[
-        FieldSpec { snake: "token", location: FieldLocation::Header },
+        FieldSpec { snake: "token", wire: "token", location: FieldLocation::Header },
+        FieldSpec { snake: "channel", wire: "channel", location: FieldLocation::Body },
     ],
     auth: &[
         AuthApply { secret_key: "slackAuth", kind: AuthKind::Bearer },
     ],
 };
 
+fn iface_conversations__archive_response__to_json(p: &iface_conversations::ArchiveResponse) -> Value {
+    let mut m = Map::new();
+    m.insert("ok".into(), iface_conversations__defs_ok_true__to_json(&p.ok));
+    Value::Object(m)
+}
+
+fn iface_conversations__defs_ok_true__to_json(p: &iface_conversations::DefsOkTrue) -> Value {
+    let mut m = Map::new();
+    m.insert("value".into(), Value::String((&p.value).clone()));
+    Value::Object(m)
+}
+
+fn iface_conversations__close_response__to_json(p: &iface_conversations::CloseResponse) -> Value {
+    let mut m = Map::new();
+    m.insert("already_closed".into(), match (&p.already_closed) { Some(v) => Value::Bool(*(v)), None => Value::Null });
+    m.insert("no_op".into(), match (&p.no_op) { Some(v) => Value::Bool(*(v)), None => Value::Null });
+    m.insert("ok".into(), iface_conversations__defs_ok_true__to_json(&p.ok));
+    Value::Object(m)
+}
+
+fn iface_conversations__create_response__to_json(p: &iface_conversations::CreateResponse) -> Value {
+    let mut m = Map::new();
+    m.insert("channel".into(), iface_conversations__objs_conversation__to_json(&p.channel));
+    m.insert("ok".into(), iface_conversations__defs_ok_true__to_json(&p.ok));
+    Value::Object(m)
+}
+
+fn iface_conversations__objs_conversation__to_json(p: &iface_conversations::ObjsConversation) -> Value {
+    let mut m = Map::new();
+    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_conversations__history_response__to_json(p: &iface_conversations::HistoryResponse) -> Value {
+    let mut m = Map::new();
+    m.insert("channel_actions_count".into(), Value::Number(serde_json::Number::from(*(&p.channel_actions_count))));
+    m.insert("channel_actions_ts".into(), Value::String((&p.channel_actions_ts).clone()));
+    m.insert("has_more".into(), Value::Bool(*(&p.has_more)));
+    m.insert("messages".into(), Value::Array((&p.messages).iter().map(|v| iface_conversations__objs_message__to_json(v)).collect()));
+    m.insert("ok".into(), iface_conversations__defs_ok_true__to_json(&p.ok));
+    m.insert("pin_count".into(), Value::Number(serde_json::Number::from(*(&p.pin_count))));
+    Value::Object(m)
+}
+
+fn iface_conversations__objs_message__to_json(p: &iface_conversations::ObjsMessage) -> Value {
+    let mut m = Map::new();
+    m.insert("attachments".into(), match (&p.attachments) { Some(v) => Value::Array((v).iter().map(|v| iface_conversations__objs_message_attachments_item__to_json(v)).collect()), None => Value::Null });
+    m.insert("blocks".into(), match (&p.blocks) { Some(v) => iface_conversations__blocks__to_json(v), None => Value::Null });
+    m.insert("bot_id".into(), match (&p.bot_id) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("bot_profile".into(), match (&p.bot_profile) { Some(v) => iface_conversations__objs_bot_profile__to_json(v), None => Value::Null });
+    m.insert("client_msg_id".into(), match (&p.client_msg_id) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("comment".into(), match (&p.comment) { Some(v) => iface_conversations__objs_comment__to_json(v), None => Value::Null });
+    m.insert("display_as_bot".into(), match (&p.display_as_bot) { Some(v) => Value::Bool(*(v)), None => Value::Null });
+    m.insert("file".into(), match (&p.file) { Some(v) => iface_conversations__objs_file__to_json(v), None => Value::Null });
+    m.insert("files".into(), match (&p.files) { Some(v) => Value::Array((v).iter().map(|v| iface_conversations__objs_file__to_json(v)).collect()), None => Value::Null });
+    m.insert("icons".into(), match (&p.icons) { Some(v) => iface_conversations__objs_message_icons__to_json(v), None => Value::Null });
+    m.insert("inviter".into(), match (&p.inviter) { Some(v) => iface_conversations__defs_user_id__to_json(v), None => Value::Null });
+    m.insert("is_delayed_message".into(), match (&p.is_delayed_message) { Some(v) => Value::Bool(*(v)), None => Value::Null });
+    m.insert("is_intro".into(), match (&p.is_intro) { Some(v) => Value::Bool(*(v)), None => Value::Null });
+    m.insert("is_starred".into(), match (&p.is_starred) { Some(v) => Value::Bool(*(v)), None => Value::Null });
+    m.insert("last_read".into(), match (&p.last_read) { Some(v) => iface_conversations__defs_ts__to_json(v), None => Value::Null });
+    m.insert("latest_reply".into(), match (&p.latest_reply) { Some(v) => iface_conversations__defs_ts__to_json(v), None => Value::Null });
+    m.insert("name".into(), match (&p.name) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("old_name".into(), match (&p.old_name) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("parent_user_id".into(), match (&p.parent_user_id) { Some(v) => iface_conversations__defs_user_id__to_json(v), None => Value::Null });
+    m.insert("permalink".into(), match (&p.permalink) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("pinned_to".into(), match (&p.pinned_to) { Some(v) => Value::Array((v).iter().map(|v| iface_conversations__defs_channel__to_json(v)).collect()), None => Value::Null });
+    m.insert("purpose".into(), match (&p.purpose) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("reactions".into(), match (&p.reactions) { Some(v) => Value::Array((v).iter().map(|v| iface_conversations__objs_reaction__to_json(v)).collect()), None => Value::Null });
+    m.insert("reply_count".into(), match (&p.reply_count) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("reply_users".into(), match (&p.reply_users) { Some(v) => Value::Array((v).iter().map(|v| iface_conversations__defs_user_id__to_json(v)).collect()), None => Value::Null });
+    m.insert("reply_users_count".into(), match (&p.reply_users_count) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("source_team".into(), match (&p.source_team) { Some(v) => iface_conversations__defs_workspace_id__to_json(v), None => Value::Null });
+    m.insert("subscribed".into(), match (&p.subscribed) { Some(v) => Value::Bool(*(v)), None => Value::Null });
+    m.insert("subtype".into(), match (&p.subtype) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("team".into(), match (&p.team) { Some(v) => iface_conversations__defs_workspace_id__to_json(v), None => Value::Null });
+    m.insert("text".into(), Value::String((&p.text).clone()));
+    m.insert("thread_ts".into(), match (&p.thread_ts) { Some(v) => iface_conversations__defs_ts__to_json(v), None => Value::Null });
+    m.insert("topic".into(), match (&p.topic) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("ts".into(), iface_conversations__defs_ts__to_json(&p.ts));
+    m.insert("type".into(), Value::String((&p.type_op).clone()));
+    m.insert("unread_count".into(), match (&p.unread_count) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("upload".into(), match (&p.upload) { Some(v) => Value::Bool(*(v)), None => Value::Null });
+    m.insert("user".into(), match (&p.user) { Some(v) => iface_conversations__defs_user_id__to_json(v), None => Value::Null });
+    m.insert("user_profile".into(), match (&p.user_profile) { Some(v) => iface_conversations__objs_user_profile_short__to_json(v), None => Value::Null });
+    m.insert("user_team".into(), match (&p.user_team) { Some(v) => iface_conversations__defs_workspace_id__to_json(v), None => Value::Null });
+    m.insert("username".into(), match (&p.username) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_conversations__objs_message_attachments_item__to_json(p: &iface_conversations::ObjsMessageAttachmentsItem) -> Value {
+    let mut m = Map::new();
+    m.insert("fallback".into(), match (&p.fallback) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("id".into(), Value::Number(serde_json::Number::from(*(&p.id))));
+    m.insert("image_bytes".into(), match (&p.image_bytes) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("image_height".into(), match (&p.image_height) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("image_url".into(), match (&p.image_url) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("image_width".into(), match (&p.image_width) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_conversations__blocks__to_json(p: &iface_conversations::Blocks) -> Value {
+    let mut m = Map::new();
+    m.insert("value".into(), Value::String((&p.value).clone()));
+    Value::Object(m)
+}
+
+fn iface_conversations__objs_bot_profile__to_json(p: &iface_conversations::ObjsBotProfile) -> Value {
+    let mut m = Map::new();
+    m.insert("app_id".into(), iface_conversations__defs_app_id__to_json(&p.app_id));
+    m.insert("deleted".into(), Value::Bool(*(&p.deleted)));
+    m.insert("icons".into(), iface_conversations__objs_bot_profile_icons__to_json(&p.icons));
+    m.insert("id".into(), iface_conversations__defs_bot_id__to_json(&p.id));
+    m.insert("name".into(), Value::String((&p.name).clone()));
+    m.insert("team_id".into(), iface_conversations__defs_team__to_json(&p.team_id));
+    m.insert("updated".into(), Value::Number(serde_json::Number::from(*(&p.updated))));
+    Value::Object(m)
+}
+
+fn iface_conversations__defs_app_id__to_json(p: &iface_conversations::DefsAppId) -> Value {
+    let mut m = Map::new();
+    m.insert("value".into(), Value::String((&p.value).clone()));
+    Value::Object(m)
+}
+
+fn iface_conversations__objs_bot_profile_icons__to_json(p: &iface_conversations::ObjsBotProfileIcons) -> Value {
+    let mut m = Map::new();
+    m.insert("image_36".into(), Value::String((&p.image_v36).clone()));
+    m.insert("image_48".into(), Value::String((&p.image_v48).clone()));
+    m.insert("image_72".into(), Value::String((&p.image_v72).clone()));
+    Value::Object(m)
+}
+
+fn iface_conversations__defs_bot_id__to_json(p: &iface_conversations::DefsBotId) -> Value {
+    let mut m = Map::new();
+    m.insert("value".into(), Value::String((&p.value).clone()));
+    Value::Object(m)
+}
+
+fn iface_conversations__defs_team__to_json(p: &iface_conversations::DefsTeam) -> Value {
+    let mut m = Map::new();
+    m.insert("value".into(), Value::String((&p.value).clone()));
+    Value::Object(m)
+}
+
+fn iface_conversations__objs_comment__to_json(p: &iface_conversations::ObjsComment) -> Value {
+    let mut m = Map::new();
+    m.insert("comment".into(), Value::String((&p.comment).clone()));
+    m.insert("created".into(), Value::Number(serde_json::Number::from(*(&p.created))));
+    m.insert("id".into(), iface_conversations__defs_comment_id__to_json(&p.id));
+    m.insert("is_intro".into(), Value::Bool(*(&p.is_intro)));
+    m.insert("is_starred".into(), match (&p.is_starred) { Some(v) => Value::Bool(*(v)), None => Value::Null });
+    m.insert("num_stars".into(), match (&p.num_stars) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("pinned_info".into(), match (&p.pinned_info) { Some(v) => iface_conversations__defs_pinned_info__to_json(v), None => Value::Null });
+    m.insert("pinned_to".into(), match (&p.pinned_to) { Some(v) => Value::Array((v).iter().map(|v| iface_conversations__defs_channel__to_json(v)).collect()), None => Value::Null });
+    m.insert("reactions".into(), match (&p.reactions) { Some(v) => Value::Array((v).iter().map(|v| iface_conversations__objs_reaction__to_json(v)).collect()), None => Value::Null });
+    m.insert("timestamp".into(), Value::Number(serde_json::Number::from(*(&p.timestamp))));
+    m.insert("user".into(), iface_conversations__defs_user_id__to_json(&p.user));
+    Value::Object(m)
+}
+
+fn iface_conversations__defs_comment_id__to_json(p: &iface_conversations::DefsCommentId) -> Value {
+    let mut m = Map::new();
+    m.insert("value".into(), Value::String((&p.value).clone()));
+    Value::Object(m)
+}
+
+fn iface_conversations__defs_pinned_info__to_json(p: &iface_conversations::DefsPinnedInfo) -> Value {
+    let mut m = Map::new();
+    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_conversations__defs_channel__to_json(p: &iface_conversations::DefsChannel) -> Value {
+    let mut m = Map::new();
+    m.insert("value".into(), Value::String((&p.value).clone()));
+    Value::Object(m)
+}
+
+fn iface_conversations__objs_reaction__to_json(p: &iface_conversations::ObjsReaction) -> Value {
+    let mut m = Map::new();
+    m.insert("count".into(), Value::Number(serde_json::Number::from(*(&p.count))));
+    m.insert("name".into(), Value::String((&p.name).clone()));
+    m.insert("users".into(), Value::Array((&p.users).iter().map(|v| iface_conversations__defs_user_id__to_json(v)).collect()));
+    Value::Object(m)
+}
+
+fn iface_conversations__defs_user_id__to_json(p: &iface_conversations::DefsUserId) -> Value {
+    let mut m = Map::new();
+    m.insert("value".into(), Value::String((&p.value).clone()));
+    Value::Object(m)
+}
+
+fn iface_conversations__objs_file__to_json(p: &iface_conversations::ObjsFile) -> Value {
+    let mut m = Map::new();
+    m.insert("channels".into(), match (&p.channels) { Some(v) => Value::Array((v).iter().map(|v| iface_conversations__defs_channel_id__to_json(v)).collect()), None => Value::Null });
+    m.insert("comments_count".into(), match (&p.comments_count) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("created".into(), match (&p.created) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("date_delete".into(), match (&p.date_delete) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("display_as_bot".into(), match (&p.display_as_bot) { Some(v) => Value::Bool(*(v)), None => Value::Null });
+    m.insert("editable".into(), match (&p.editable) { Some(v) => Value::Bool(*(v)), None => Value::Null });
+    m.insert("editor".into(), match (&p.editor) { Some(v) => iface_conversations__defs_user_id__to_json(v), None => Value::Null });
+    m.insert("external_id".into(), match (&p.external_id) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("external_type".into(), match (&p.external_type) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("external_url".into(), match (&p.external_url) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("filetype".into(), match (&p.filetype) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("groups".into(), match (&p.groups) { Some(v) => Value::Array((v).iter().map(|v| iface_conversations__defs_group_id__to_json(v)).collect()), None => Value::Null });
+    m.insert("has_rich_preview".into(), match (&p.has_rich_preview) { Some(v) => Value::Bool(*(v)), None => Value::Null });
+    m.insert("id".into(), match (&p.id) { Some(v) => iface_conversations__defs_file_id__to_json(v), None => Value::Null });
+    m.insert("image_exif_rotation".into(), match (&p.image_exif_rotation) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("ims".into(), match (&p.ims) { Some(v) => Value::Array((v).iter().map(|v| iface_conversations__defs_dm_id__to_json(v)).collect()), None => Value::Null });
+    m.insert("is_external".into(), match (&p.is_external) { Some(v) => Value::Bool(*(v)), None => Value::Null });
+    m.insert("is_public".into(), match (&p.is_public) { Some(v) => Value::Bool(*(v)), None => Value::Null });
+    m.insert("is_starred".into(), match (&p.is_starred) { Some(v) => Value::Bool(*(v)), None => Value::Null });
+    m.insert("is_tombstoned".into(), match (&p.is_tombstoned) { Some(v) => Value::Bool(*(v)), None => Value::Null });
+    m.insert("last_editor".into(), match (&p.last_editor) { Some(v) => iface_conversations__defs_user_id__to_json(v), None => Value::Null });
+    m.insert("mimetype".into(), match (&p.mimetype) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("mode".into(), match (&p.mode) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("name".into(), match (&p.name) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("non_owner_editable".into(), match (&p.non_owner_editable) { Some(v) => Value::Bool(*(v)), None => Value::Null });
+    m.insert("num_stars".into(), match (&p.num_stars) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("original_h".into(), match (&p.original_h) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("original_w".into(), match (&p.original_w) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("permalink".into(), match (&p.permalink) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("permalink_public".into(), match (&p.permalink_public) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("pinned_info".into(), match (&p.pinned_info) { Some(v) => iface_conversations__defs_pinned_info__to_json(v), None => Value::Null });
+    m.insert("pinned_to".into(), match (&p.pinned_to) { Some(v) => Value::Array((v).iter().map(|v| iface_conversations__defs_channel__to_json(v)).collect()), None => Value::Null });
+    m.insert("pretty_type".into(), match (&p.pretty_type) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("preview".into(), match (&p.preview) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("public_url_shared".into(), match (&p.public_url_shared) { Some(v) => Value::Bool(*(v)), None => Value::Null });
+    m.insert("reactions".into(), match (&p.reactions) { Some(v) => Value::Array((v).iter().map(|v| iface_conversations__objs_reaction__to_json(v)).collect()), None => Value::Null });
+    m.insert("shares".into(), match (&p.shares) { Some(v) => iface_conversations__objs_file_shares__to_json(v), None => Value::Null });
+    m.insert("size".into(), match (&p.size) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("source_team".into(), match (&p.source_team) { Some(v) => iface_conversations__defs_team__to_json(v), None => Value::Null });
+    m.insert("state".into(), match (&p.state) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("thumb_1024".into(), match (&p.thumb_v1024) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("thumb_1024_h".into(), match (&p.thumb_v1024_h) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("thumb_1024_w".into(), match (&p.thumb_v1024_w) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("thumb_160".into(), match (&p.thumb_v160) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("thumb_360".into(), match (&p.thumb_v360) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("thumb_360_h".into(), match (&p.thumb_v360_h) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("thumb_360_w".into(), match (&p.thumb_v360_w) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("thumb_480".into(), match (&p.thumb_v480) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("thumb_480_h".into(), match (&p.thumb_v480_h) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("thumb_480_w".into(), match (&p.thumb_v480_w) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("thumb_64".into(), match (&p.thumb_v64) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("thumb_720".into(), match (&p.thumb_v720) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("thumb_720_h".into(), match (&p.thumb_v720_h) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("thumb_720_w".into(), match (&p.thumb_v720_w) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("thumb_80".into(), match (&p.thumb_v80) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("thumb_800".into(), match (&p.thumb_v800) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("thumb_800_h".into(), match (&p.thumb_v800_h) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("thumb_800_w".into(), match (&p.thumb_v800_w) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("thumb_960".into(), match (&p.thumb_v960) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("thumb_960_h".into(), match (&p.thumb_v960_h) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("thumb_960_w".into(), match (&p.thumb_v960_w) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("thumb_tiny".into(), match (&p.thumb_tiny) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("timestamp".into(), match (&p.timestamp) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("title".into(), match (&p.title) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("updated".into(), match (&p.updated) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("url_private".into(), match (&p.url_private) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("url_private_download".into(), match (&p.url_private_download) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("user".into(), match (&p.user) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("user_team".into(), match (&p.user_team) { Some(v) => iface_conversations__defs_team__to_json(v), None => Value::Null });
+    m.insert("username".into(), match (&p.username) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_conversations__defs_channel_id__to_json(p: &iface_conversations::DefsChannelId) -> Value {
+    let mut m = Map::new();
+    m.insert("value".into(), Value::String((&p.value).clone()));
+    Value::Object(m)
+}
+
+fn iface_conversations__defs_group_id__to_json(p: &iface_conversations::DefsGroupId) -> Value {
+    let mut m = Map::new();
+    m.insert("value".into(), Value::String((&p.value).clone()));
+    Value::Object(m)
+}
+
+fn iface_conversations__defs_file_id__to_json(p: &iface_conversations::DefsFileId) -> Value {
+    let mut m = Map::new();
+    m.insert("value".into(), Value::String((&p.value).clone()));
+    Value::Object(m)
+}
+
+fn iface_conversations__defs_dm_id__to_json(p: &iface_conversations::DefsDmId) -> Value {
+    let mut m = Map::new();
+    m.insert("value".into(), Value::String((&p.value).clone()));
+    Value::Object(m)
+}
+
+fn iface_conversations__objs_file_shares__to_json(p: &iface_conversations::ObjsFileShares) -> Value {
+    let mut m = Map::new();
+    m.insert("private".into(), match (&p.private) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("public".into(), match (&p.public) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_conversations__objs_message_icons__to_json(p: &iface_conversations::ObjsMessageIcons) -> Value {
+    let mut m = Map::new();
+    m.insert("emoji".into(), match (&p.emoji) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("image_64".into(), match (&p.image_v64) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_conversations__defs_ts__to_json(p: &iface_conversations::DefsTs) -> Value {
+    let mut m = Map::new();
+    m.insert("value".into(), Value::String((&p.value).clone()));
+    Value::Object(m)
+}
+
+fn iface_conversations__defs_workspace_id__to_json(p: &iface_conversations::DefsWorkspaceId) -> Value {
+    let mut m = Map::new();
+    m.insert("value".into(), Value::String((&p.value).clone()));
+    Value::Object(m)
+}
+
+fn iface_conversations__objs_user_profile_short__to_json(p: &iface_conversations::ObjsUserProfileShort) -> Value {
+    let mut m = Map::new();
+    m.insert("avatar_hash".into(), Value::String((&p.avatar_hash).clone()));
+    m.insert("display_name".into(), Value::String((&p.display_name).clone()));
+    m.insert("display_name_normalized".into(), match (&p.display_name_normalized) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("first_name".into(), Value::String((&p.first_name).clone()));
+    m.insert("image_72".into(), Value::String((&p.image_v72).clone()));
+    m.insert("is_restricted".into(), Value::Bool(*(&p.is_restricted)));
+    m.insert("is_ultra_restricted".into(), Value::Bool(*(&p.is_ultra_restricted)));
+    m.insert("name".into(), Value::String((&p.name).clone()));
+    m.insert("real_name".into(), Value::String((&p.real_name).clone()));
+    m.insert("real_name_normalized".into(), match (&p.real_name_normalized) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("team".into(), iface_conversations__defs_workspace_id__to_json(&p.team));
+    Value::Object(m)
+}
+
+fn iface_conversations__info_response__to_json(p: &iface_conversations::InfoResponse) -> Value {
+    let mut m = Map::new();
+    m.insert("channel".into(), iface_conversations__objs_conversation__to_json(&p.channel));
+    m.insert("ok".into(), iface_conversations__defs_ok_true__to_json(&p.ok));
+    Value::Object(m)
+}
+
+fn iface_conversations__invite_response__to_json(p: &iface_conversations::InviteResponse) -> Value {
+    let mut m = Map::new();
+    m.insert("channel".into(), iface_conversations__objs_conversation__to_json(&p.channel));
+    m.insert("ok".into(), iface_conversations__defs_ok_true__to_json(&p.ok));
+    Value::Object(m)
+}
+
+fn iface_conversations__join_response__to_json(p: &iface_conversations::JoinResponse) -> Value {
+    let mut m = Map::new();
+    m.insert("channel".into(), iface_conversations__objs_conversation__to_json(&p.channel));
+    m.insert("ok".into(), iface_conversations__defs_ok_true__to_json(&p.ok));
+    m.insert("response_metadata".into(), match (&p.response_metadata) { Some(v) => iface_conversations__join_response_response_metadata__to_json(v), None => Value::Null });
+    m.insert("warning".into(), match (&p.warning) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_conversations__join_response_response_metadata__to_json(p: &iface_conversations::JoinResponseResponseMetadata) -> Value {
+    let mut m = Map::new();
+    m.insert("warnings".into(), match (&p.warnings) { Some(v) => Value::Array((v).iter().map(|v| Value::String((v).clone())).collect()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_conversations__kick_response__to_json(p: &iface_conversations::KickResponse) -> Value {
+    let mut m = Map::new();
+    m.insert("ok".into(), iface_conversations__defs_ok_true__to_json(&p.ok));
+    Value::Object(m)
+}
+
+fn iface_conversations__leave_response__to_json(p: &iface_conversations::LeaveResponse) -> Value {
+    let mut m = Map::new();
+    m.insert("not_in_channel".into(), match (&p.not_in_channel) { Some(v) => Value::Bool(*(v)), None => Value::Null });
+    m.insert("ok".into(), iface_conversations__defs_ok_true__to_json(&p.ok));
+    Value::Object(m)
+}
+
+fn iface_conversations__list_op_response__to_json(p: &iface_conversations::ListOpResponse) -> Value {
+    let mut m = Map::new();
+    m.insert("channels".into(), Value::Array((&p.channels).iter().map(|v| iface_conversations__objs_conversation__to_json(v)).collect()));
+    m.insert("ok".into(), iface_conversations__defs_ok_true__to_json(&p.ok));
+    m.insert("response_metadata".into(), match (&p.response_metadata) { Some(v) => iface_conversations__list_op_response_response_metadata__to_json(v), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_conversations__list_op_response_response_metadata__to_json(p: &iface_conversations::ListOpResponseResponseMetadata) -> Value {
+    let mut m = Map::new();
+    m.insert("next_cursor".into(), Value::String((&p.next_cursor).clone()));
+    Value::Object(m)
+}
+
+fn iface_conversations__mark_response__to_json(p: &iface_conversations::MarkResponse) -> Value {
+    let mut m = Map::new();
+    m.insert("ok".into(), iface_conversations__defs_ok_true__to_json(&p.ok));
+    Value::Object(m)
+}
+
+fn iface_conversations__members_response__to_json(p: &iface_conversations::MembersResponse) -> Value {
+    let mut m = Map::new();
+    m.insert("members".into(), Value::Array((&p.members).iter().map(|v| iface_conversations__defs_user_id__to_json(v)).collect()));
+    m.insert("ok".into(), iface_conversations__defs_ok_true__to_json(&p.ok));
+    m.insert("response_metadata".into(), iface_conversations__members_response_response_metadata__to_json(&p.response_metadata));
+    Value::Object(m)
+}
+
+fn iface_conversations__members_response_response_metadata__to_json(p: &iface_conversations::MembersResponseResponseMetadata) -> Value {
+    let mut m = Map::new();
+    m.insert("next_cursor".into(), Value::String((&p.next_cursor).clone()));
+    Value::Object(m)
+}
+
+fn iface_conversations__open_response__to_json(p: &iface_conversations::OpenResponse) -> Value {
+    let mut m = Map::new();
+    m.insert("already_open".into(), match (&p.already_open) { Some(v) => Value::Bool(*(v)), None => Value::Null });
+    m.insert("channel".into(), Value::String((&p.channel).clone()));
+    m.insert("no_op".into(), match (&p.no_op) { Some(v) => Value::Bool(*(v)), None => Value::Null });
+    m.insert("ok".into(), iface_conversations__defs_ok_true__to_json(&p.ok));
+    Value::Object(m)
+}
+
+fn iface_conversations__rename_response__to_json(p: &iface_conversations::RenameResponse) -> Value {
+    let mut m = Map::new();
+    m.insert("channel".into(), iface_conversations__objs_conversation__to_json(&p.channel));
+    m.insert("ok".into(), iface_conversations__defs_ok_true__to_json(&p.ok));
+    Value::Object(m)
+}
+
+fn iface_conversations__replies_response__to_json(p: &iface_conversations::RepliesResponse) -> Value {
+    let mut m = Map::new();
+    m.insert("has_more".into(), match (&p.has_more) { Some(v) => Value::Bool(*(v)), None => Value::Null });
+    m.insert("messages".into(), Value::Array((&p.messages).iter().map(|v| Value::String((v).clone())).collect()));
+    m.insert("ok".into(), iface_conversations__defs_ok_true__to_json(&p.ok));
+    Value::Object(m)
+}
+
+fn iface_conversations__set_purpose_response__to_json(p: &iface_conversations::SetPurposeResponse) -> Value {
+    let mut m = Map::new();
+    m.insert("channel".into(), iface_conversations__objs_conversation__to_json(&p.channel));
+    m.insert("ok".into(), iface_conversations__defs_ok_true__to_json(&p.ok));
+    Value::Object(m)
+}
+
+fn iface_conversations__set_topic_response__to_json(p: &iface_conversations::SetTopicResponse) -> Value {
+    let mut m = Map::new();
+    m.insert("channel".into(), iface_conversations__objs_conversation__to_json(&p.channel));
+    m.insert("ok".into(), iface_conversations__defs_ok_true__to_json(&p.ok));
+    Value::Object(m)
+}
+
+fn iface_conversations__unarchive_response__to_json(p: &iface_conversations::UnarchiveResponse) -> Value {
+    let mut m = Map::new();
+    m.insert("ok".into(), iface_conversations__defs_ok_true__to_json(&p.ok));
+    Value::Object(m)
+}
+
 fn iface_conversations__archive_params__to_json(p: &iface_conversations::ArchiveParams) -> Value {
     let mut m = Map::new();
     m.insert("token".into(), match (&p.token) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("channel".into(), match (&p.channel) { Some(v) => Value::String((v).clone()), None => Value::Null });
     Value::Object(m)
 }
 
 fn iface_conversations__close_params__to_json(p: &iface_conversations::CloseParams) -> Value {
     let mut m = Map::new();
     m.insert("token".into(), match (&p.token) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("channel".into(), match (&p.channel) { Some(v) => Value::String((v).clone()), None => Value::Null });
     Value::Object(m)
 }
 
 fn iface_conversations__create_params__to_json(p: &iface_conversations::CreateParams) -> Value {
     let mut m = Map::new();
     m.insert("token".into(), match (&p.token) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("is_private".into(), match (&p.is_private) { Some(v) => Value::Bool(*(v)), None => Value::Null });
+    m.insert("name".into(), match (&p.name) { Some(v) => Value::String((v).clone()), None => Value::Null });
     Value::Object(m)
 }
 
@@ -2529,24 +8070,30 @@ fn iface_conversations__info_params__to_json(p: &iface_conversations::InfoParams
 fn iface_conversations__invite_params__to_json(p: &iface_conversations::InviteParams) -> Value {
     let mut m = Map::new();
     m.insert("token".into(), match (&p.token) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("channel".into(), match (&p.channel) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("users".into(), match (&p.users) { Some(v) => Value::String((v).clone()), None => Value::Null });
     Value::Object(m)
 }
 
 fn iface_conversations__join_params__to_json(p: &iface_conversations::JoinParams) -> Value {
     let mut m = Map::new();
     m.insert("token".into(), match (&p.token) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("channel".into(), match (&p.channel) { Some(v) => Value::String((v).clone()), None => Value::Null });
     Value::Object(m)
 }
 
 fn iface_conversations__kick_params__to_json(p: &iface_conversations::KickParams) -> Value {
     let mut m = Map::new();
     m.insert("token".into(), match (&p.token) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("channel".into(), match (&p.channel) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("user".into(), match (&p.user) { Some(v) => Value::String((v).clone()), None => Value::Null });
     Value::Object(m)
 }
 
 fn iface_conversations__leave_params__to_json(p: &iface_conversations::LeaveParams) -> Value {
     let mut m = Map::new();
     m.insert("token".into(), match (&p.token) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("channel".into(), match (&p.channel) { Some(v) => Value::String((v).clone()), None => Value::Null });
     Value::Object(m)
 }
 
@@ -2563,6 +8110,8 @@ fn iface_conversations__list_op_params__to_json(p: &iface_conversations::ListOpP
 fn iface_conversations__mark_params__to_json(p: &iface_conversations::MarkParams) -> Value {
     let mut m = Map::new();
     m.insert("token".into(), match (&p.token) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("channel".into(), match (&p.channel) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("ts".into(), match (&p.ts) { Some(v) => serde_json::Number::from_f64(*(v)).map(Value::Number).unwrap_or(Value::Null), None => Value::Null });
     Value::Object(m)
 }
 
@@ -2578,12 +8127,17 @@ fn iface_conversations__members_params__to_json(p: &iface_conversations::Members
 fn iface_conversations__open_params__to_json(p: &iface_conversations::OpenParams) -> Value {
     let mut m = Map::new();
     m.insert("token".into(), match (&p.token) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("channel".into(), match (&p.channel) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("return_im".into(), match (&p.return_im) { Some(v) => Value::Bool(*(v)), None => Value::Null });
+    m.insert("users".into(), match (&p.users) { Some(v) => Value::String((v).clone()), None => Value::Null });
     Value::Object(m)
 }
 
 fn iface_conversations__rename_params__to_json(p: &iface_conversations::RenameParams) -> Value {
     let mut m = Map::new();
     m.insert("token".into(), match (&p.token) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("channel".into(), match (&p.channel) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("name".into(), match (&p.name) { Some(v) => Value::String((v).clone()), None => Value::Null });
     Value::Object(m)
 }
 
@@ -2603,93 +8157,977 @@ fn iface_conversations__replies_params__to_json(p: &iface_conversations::Replies
 fn iface_conversations__set_purpose_params__to_json(p: &iface_conversations::SetPurposeParams) -> Value {
     let mut m = Map::new();
     m.insert("token".into(), match (&p.token) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("channel".into(), match (&p.channel) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("purpose".into(), match (&p.purpose) { Some(v) => Value::String((v).clone()), None => Value::Null });
     Value::Object(m)
 }
 
 fn iface_conversations__set_topic_params__to_json(p: &iface_conversations::SetTopicParams) -> Value {
     let mut m = Map::new();
     m.insert("token".into(), match (&p.token) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("channel".into(), match (&p.channel) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("topic".into(), match (&p.topic) { Some(v) => Value::String((v).clone()), None => Value::Null });
     Value::Object(m)
 }
 
 fn iface_conversations__unarchive_params__to_json(p: &iface_conversations::UnarchiveParams) -> Value {
     let mut m = Map::new();
     m.insert("token".into(), match (&p.token) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("channel".into(), match (&p.channel) { Some(v) => Value::String((v).clone()), None => Value::Null });
     Value::Object(m)
 }
 
+fn iface_conversations__archive_response__from_json(v: &Value) -> Option<iface_conversations::ArchiveResponse> {
+    let m = v.as_object()?;
+    Some(iface_conversations::ArchiveResponse {
+        ok: match m.get("ok").and_then(|v| iface_conversations__defs_ok_true__from_json(v)) { Some(x) => x, None => return None },
+    })
+}
+
+fn iface_conversations__defs_ok_true__from_json(v: &Value) -> Option<iface_conversations::DefsOkTrue> {
+    let m = v.as_object()?;
+    Some(iface_conversations::DefsOkTrue {
+        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+    })
+}
+
+fn iface_conversations__close_response__from_json(v: &Value) -> Option<iface_conversations::CloseResponse> {
+    let m = v.as_object()?;
+    Some(iface_conversations::CloseResponse {
+        already_closed: m.get("already_closed").filter(|v| !v.is_null()).and_then(|v| (v).as_bool()),
+        no_op: m.get("no_op").filter(|v| !v.is_null()).and_then(|v| (v).as_bool()),
+        ok: match m.get("ok").and_then(|v| iface_conversations__defs_ok_true__from_json(v)) { Some(x) => x, None => return None },
+    })
+}
+
+fn iface_conversations__create_response__from_json(v: &Value) -> Option<iface_conversations::CreateResponse> {
+    let m = v.as_object()?;
+    Some(iface_conversations::CreateResponse {
+        channel: match m.get("channel").and_then(|v| iface_conversations__objs_conversation__from_json(v)) { Some(x) => x, None => return None },
+        ok: match m.get("ok").and_then(|v| iface_conversations__defs_ok_true__from_json(v)) { Some(x) => x, None => return None },
+    })
+}
+
+fn iface_conversations__objs_conversation__from_json(v: &Value) -> Option<iface_conversations::ObjsConversation> {
+    let m = v.as_object()?;
+    Some(iface_conversations::ObjsConversation {
+        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    })
+}
+
+fn iface_conversations__history_response__from_json(v: &Value) -> Option<iface_conversations::HistoryResponse> {
+    let m = v.as_object()?;
+    Some(iface_conversations::HistoryResponse {
+        channel_actions_count: m.get("channel_actions_count").and_then(|v| (v).as_i64().map(|n| n as i32)).unwrap_or_default(),
+        channel_actions_ts: m.get("channel_actions_ts").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        has_more: m.get("has_more").and_then(|v| (v).as_bool()).unwrap_or_default(),
+        messages: m.get("messages").and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| iface_conversations__objs_message__from_json(x)).collect())).unwrap_or_default(),
+        ok: match m.get("ok").and_then(|v| iface_conversations__defs_ok_true__from_json(v)) { Some(x) => x, None => return None },
+        pin_count: m.get("pin_count").and_then(|v| (v).as_i64().map(|n| n as i32)).unwrap_or_default(),
+    })
+}
+
+fn iface_conversations__objs_message__from_json(v: &Value) -> Option<iface_conversations::ObjsMessage> {
+    let m = v.as_object()?;
+    Some(iface_conversations::ObjsMessage {
+        attachments: m.get("attachments").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| iface_conversations__objs_message_attachments_item__from_json(x)).collect())),
+        blocks: m.get("blocks").filter(|v| !v.is_null()).and_then(|v| iface_conversations__blocks__from_json(v)),
+        bot_id: m.get("bot_id").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        bot_profile: m.get("bot_profile").filter(|v| !v.is_null()).and_then(|v| iface_conversations__objs_bot_profile__from_json(v)),
+        client_msg_id: m.get("client_msg_id").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        comment: m.get("comment").filter(|v| !v.is_null()).and_then(|v| iface_conversations__objs_comment__from_json(v)),
+        display_as_bot: m.get("display_as_bot").filter(|v| !v.is_null()).and_then(|v| (v).as_bool()),
+        file: m.get("file").filter(|v| !v.is_null()).and_then(|v| iface_conversations__objs_file__from_json(v)),
+        files: m.get("files").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| iface_conversations__objs_file__from_json(x)).collect())),
+        icons: m.get("icons").filter(|v| !v.is_null()).and_then(|v| iface_conversations__objs_message_icons__from_json(v)),
+        inviter: m.get("inviter").filter(|v| !v.is_null()).and_then(|v| iface_conversations__defs_user_id__from_json(v)),
+        is_delayed_message: m.get("is_delayed_message").filter(|v| !v.is_null()).and_then(|v| (v).as_bool()),
+        is_intro: m.get("is_intro").filter(|v| !v.is_null()).and_then(|v| (v).as_bool()),
+        is_starred: m.get("is_starred").filter(|v| !v.is_null()).and_then(|v| (v).as_bool()),
+        last_read: m.get("last_read").filter(|v| !v.is_null()).and_then(|v| iface_conversations__defs_ts__from_json(v)),
+        latest_reply: m.get("latest_reply").filter(|v| !v.is_null()).and_then(|v| iface_conversations__defs_ts__from_json(v)),
+        name: m.get("name").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        old_name: m.get("old_name").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        parent_user_id: m.get("parent_user_id").filter(|v| !v.is_null()).and_then(|v| iface_conversations__defs_user_id__from_json(v)),
+        permalink: m.get("permalink").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        pinned_to: m.get("pinned_to").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| iface_conversations__defs_channel__from_json(x)).collect())),
+        purpose: m.get("purpose").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        reactions: m.get("reactions").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| iface_conversations__objs_reaction__from_json(x)).collect())),
+        reply_count: m.get("reply_count").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        reply_users: m.get("reply_users").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| iface_conversations__defs_user_id__from_json(x)).collect())),
+        reply_users_count: m.get("reply_users_count").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        source_team: m.get("source_team").filter(|v| !v.is_null()).and_then(|v| iface_conversations__defs_workspace_id__from_json(v)),
+        subscribed: m.get("subscribed").filter(|v| !v.is_null()).and_then(|v| (v).as_bool()),
+        subtype: m.get("subtype").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        team: m.get("team").filter(|v| !v.is_null()).and_then(|v| iface_conversations__defs_workspace_id__from_json(v)),
+        text: m.get("text").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        thread_ts: m.get("thread_ts").filter(|v| !v.is_null()).and_then(|v| iface_conversations__defs_ts__from_json(v)),
+        topic: m.get("topic").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        ts: match m.get("ts").and_then(|v| iface_conversations__defs_ts__from_json(v)) { Some(x) => x, None => return None },
+        type_op: m.get("type").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        unread_count: m.get("unread_count").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        upload: m.get("upload").filter(|v| !v.is_null()).and_then(|v| (v).as_bool()),
+        user: m.get("user").filter(|v| !v.is_null()).and_then(|v| iface_conversations__defs_user_id__from_json(v)),
+        user_profile: m.get("user_profile").filter(|v| !v.is_null()).and_then(|v| iface_conversations__objs_user_profile_short__from_json(v)),
+        user_team: m.get("user_team").filter(|v| !v.is_null()).and_then(|v| iface_conversations__defs_workspace_id__from_json(v)),
+        username: m.get("username").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    })
+}
+
+fn iface_conversations__objs_message_attachments_item__from_json(v: &Value) -> Option<iface_conversations::ObjsMessageAttachmentsItem> {
+    let m = v.as_object()?;
+    Some(iface_conversations::ObjsMessageAttachmentsItem {
+        fallback: m.get("fallback").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        id: m.get("id").and_then(|v| (v).as_i64().map(|n| n as i32)).unwrap_or_default(),
+        image_bytes: m.get("image_bytes").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        image_height: m.get("image_height").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        image_url: m.get("image_url").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        image_width: m.get("image_width").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+    })
+}
+
+fn iface_conversations__blocks__from_json(v: &Value) -> Option<iface_conversations::Blocks> {
+    let m = v.as_object()?;
+    Some(iface_conversations::Blocks {
+        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+    })
+}
+
+fn iface_conversations__objs_bot_profile__from_json(v: &Value) -> Option<iface_conversations::ObjsBotProfile> {
+    let m = v.as_object()?;
+    Some(iface_conversations::ObjsBotProfile {
+        app_id: match m.get("app_id").and_then(|v| iface_conversations__defs_app_id__from_json(v)) { Some(x) => x, None => return None },
+        deleted: m.get("deleted").and_then(|v| (v).as_bool()).unwrap_or_default(),
+        icons: match m.get("icons").and_then(|v| iface_conversations__objs_bot_profile_icons__from_json(v)) { Some(x) => x, None => return None },
+        id: match m.get("id").and_then(|v| iface_conversations__defs_bot_id__from_json(v)) { Some(x) => x, None => return None },
+        name: m.get("name").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        team_id: match m.get("team_id").and_then(|v| iface_conversations__defs_team__from_json(v)) { Some(x) => x, None => return None },
+        updated: m.get("updated").and_then(|v| (v).as_i64().map(|n| n as i32)).unwrap_or_default(),
+    })
+}
+
+fn iface_conversations__defs_app_id__from_json(v: &Value) -> Option<iface_conversations::DefsAppId> {
+    let m = v.as_object()?;
+    Some(iface_conversations::DefsAppId {
+        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+    })
+}
+
+fn iface_conversations__objs_bot_profile_icons__from_json(v: &Value) -> Option<iface_conversations::ObjsBotProfileIcons> {
+    let m = v.as_object()?;
+    Some(iface_conversations::ObjsBotProfileIcons {
+        image_v36: m.get("image_36").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        image_v48: m.get("image_48").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        image_v72: m.get("image_72").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+    })
+}
+
+fn iface_conversations__defs_bot_id__from_json(v: &Value) -> Option<iface_conversations::DefsBotId> {
+    let m = v.as_object()?;
+    Some(iface_conversations::DefsBotId {
+        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+    })
+}
+
+fn iface_conversations__defs_team__from_json(v: &Value) -> Option<iface_conversations::DefsTeam> {
+    let m = v.as_object()?;
+    Some(iface_conversations::DefsTeam {
+        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+    })
+}
+
+fn iface_conversations__objs_comment__from_json(v: &Value) -> Option<iface_conversations::ObjsComment> {
+    let m = v.as_object()?;
+    Some(iface_conversations::ObjsComment {
+        comment: m.get("comment").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        created: m.get("created").and_then(|v| (v).as_i64().map(|n| n as i32)).unwrap_or_default(),
+        id: match m.get("id").and_then(|v| iface_conversations__defs_comment_id__from_json(v)) { Some(x) => x, None => return None },
+        is_intro: m.get("is_intro").and_then(|v| (v).as_bool()).unwrap_or_default(),
+        is_starred: m.get("is_starred").filter(|v| !v.is_null()).and_then(|v| (v).as_bool()),
+        num_stars: m.get("num_stars").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        pinned_info: m.get("pinned_info").filter(|v| !v.is_null()).and_then(|v| iface_conversations__defs_pinned_info__from_json(v)),
+        pinned_to: m.get("pinned_to").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| iface_conversations__defs_channel__from_json(x)).collect())),
+        reactions: m.get("reactions").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| iface_conversations__objs_reaction__from_json(x)).collect())),
+        timestamp: m.get("timestamp").and_then(|v| (v).as_i64().map(|n| n as i32)).unwrap_or_default(),
+        user: match m.get("user").and_then(|v| iface_conversations__defs_user_id__from_json(v)) { Some(x) => x, None => return None },
+    })
+}
+
+fn iface_conversations__defs_comment_id__from_json(v: &Value) -> Option<iface_conversations::DefsCommentId> {
+    let m = v.as_object()?;
+    Some(iface_conversations::DefsCommentId {
+        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+    })
+}
+
+fn iface_conversations__defs_pinned_info__from_json(v: &Value) -> Option<iface_conversations::DefsPinnedInfo> {
+    let m = v.as_object()?;
+    Some(iface_conversations::DefsPinnedInfo {
+        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    })
+}
+
+fn iface_conversations__defs_channel__from_json(v: &Value) -> Option<iface_conversations::DefsChannel> {
+    let m = v.as_object()?;
+    Some(iface_conversations::DefsChannel {
+        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+    })
+}
+
+fn iface_conversations__objs_reaction__from_json(v: &Value) -> Option<iface_conversations::ObjsReaction> {
+    let m = v.as_object()?;
+    Some(iface_conversations::ObjsReaction {
+        count: m.get("count").and_then(|v| (v).as_i64().map(|n| n as i32)).unwrap_or_default(),
+        name: m.get("name").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        users: m.get("users").and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| iface_conversations__defs_user_id__from_json(x)).collect())).unwrap_or_default(),
+    })
+}
+
+fn iface_conversations__defs_user_id__from_json(v: &Value) -> Option<iface_conversations::DefsUserId> {
+    let m = v.as_object()?;
+    Some(iface_conversations::DefsUserId {
+        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+    })
+}
+
+fn iface_conversations__objs_file__from_json(v: &Value) -> Option<iface_conversations::ObjsFile> {
+    let m = v.as_object()?;
+    Some(iface_conversations::ObjsFile {
+        channels: m.get("channels").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| iface_conversations__defs_channel_id__from_json(x)).collect())),
+        comments_count: m.get("comments_count").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        created: m.get("created").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        date_delete: m.get("date_delete").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        display_as_bot: m.get("display_as_bot").filter(|v| !v.is_null()).and_then(|v| (v).as_bool()),
+        editable: m.get("editable").filter(|v| !v.is_null()).and_then(|v| (v).as_bool()),
+        editor: m.get("editor").filter(|v| !v.is_null()).and_then(|v| iface_conversations__defs_user_id__from_json(v)),
+        external_id: m.get("external_id").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        external_type: m.get("external_type").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        external_url: m.get("external_url").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        filetype: m.get("filetype").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        groups: m.get("groups").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| iface_conversations__defs_group_id__from_json(x)).collect())),
+        has_rich_preview: m.get("has_rich_preview").filter(|v| !v.is_null()).and_then(|v| (v).as_bool()),
+        id: m.get("id").filter(|v| !v.is_null()).and_then(|v| iface_conversations__defs_file_id__from_json(v)),
+        image_exif_rotation: m.get("image_exif_rotation").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        ims: m.get("ims").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| iface_conversations__defs_dm_id__from_json(x)).collect())),
+        is_external: m.get("is_external").filter(|v| !v.is_null()).and_then(|v| (v).as_bool()),
+        is_public: m.get("is_public").filter(|v| !v.is_null()).and_then(|v| (v).as_bool()),
+        is_starred: m.get("is_starred").filter(|v| !v.is_null()).and_then(|v| (v).as_bool()),
+        is_tombstoned: m.get("is_tombstoned").filter(|v| !v.is_null()).and_then(|v| (v).as_bool()),
+        last_editor: m.get("last_editor").filter(|v| !v.is_null()).and_then(|v| iface_conversations__defs_user_id__from_json(v)),
+        mimetype: m.get("mimetype").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        mode: m.get("mode").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        name: m.get("name").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        non_owner_editable: m.get("non_owner_editable").filter(|v| !v.is_null()).and_then(|v| (v).as_bool()),
+        num_stars: m.get("num_stars").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        original_h: m.get("original_h").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        original_w: m.get("original_w").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        permalink: m.get("permalink").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        permalink_public: m.get("permalink_public").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        pinned_info: m.get("pinned_info").filter(|v| !v.is_null()).and_then(|v| iface_conversations__defs_pinned_info__from_json(v)),
+        pinned_to: m.get("pinned_to").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| iface_conversations__defs_channel__from_json(x)).collect())),
+        pretty_type: m.get("pretty_type").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        preview: m.get("preview").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        public_url_shared: m.get("public_url_shared").filter(|v| !v.is_null()).and_then(|v| (v).as_bool()),
+        reactions: m.get("reactions").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| iface_conversations__objs_reaction__from_json(x)).collect())),
+        shares: m.get("shares").filter(|v| !v.is_null()).and_then(|v| iface_conversations__objs_file_shares__from_json(v)),
+        size: m.get("size").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        source_team: m.get("source_team").filter(|v| !v.is_null()).and_then(|v| iface_conversations__defs_team__from_json(v)),
+        state: m.get("state").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        thumb_v1024: m.get("thumb_1024").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        thumb_v1024_h: m.get("thumb_1024_h").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        thumb_v1024_w: m.get("thumb_1024_w").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        thumb_v160: m.get("thumb_160").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        thumb_v360: m.get("thumb_360").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        thumb_v360_h: m.get("thumb_360_h").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        thumb_v360_w: m.get("thumb_360_w").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        thumb_v480: m.get("thumb_480").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        thumb_v480_h: m.get("thumb_480_h").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        thumb_v480_w: m.get("thumb_480_w").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        thumb_v64: m.get("thumb_64").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        thumb_v720: m.get("thumb_720").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        thumb_v720_h: m.get("thumb_720_h").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        thumb_v720_w: m.get("thumb_720_w").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        thumb_v80: m.get("thumb_80").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        thumb_v800: m.get("thumb_800").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        thumb_v800_h: m.get("thumb_800_h").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        thumb_v800_w: m.get("thumb_800_w").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        thumb_v960: m.get("thumb_960").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        thumb_v960_h: m.get("thumb_960_h").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        thumb_v960_w: m.get("thumb_960_w").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        thumb_tiny: m.get("thumb_tiny").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        timestamp: m.get("timestamp").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        title: m.get("title").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        updated: m.get("updated").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        url_private: m.get("url_private").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        url_private_download: m.get("url_private_download").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        user: m.get("user").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        user_team: m.get("user_team").filter(|v| !v.is_null()).and_then(|v| iface_conversations__defs_team__from_json(v)),
+        username: m.get("username").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    })
+}
+
+fn iface_conversations__defs_channel_id__from_json(v: &Value) -> Option<iface_conversations::DefsChannelId> {
+    let m = v.as_object()?;
+    Some(iface_conversations::DefsChannelId {
+        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+    })
+}
+
+fn iface_conversations__defs_group_id__from_json(v: &Value) -> Option<iface_conversations::DefsGroupId> {
+    let m = v.as_object()?;
+    Some(iface_conversations::DefsGroupId {
+        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+    })
+}
+
+fn iface_conversations__defs_file_id__from_json(v: &Value) -> Option<iface_conversations::DefsFileId> {
+    let m = v.as_object()?;
+    Some(iface_conversations::DefsFileId {
+        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+    })
+}
+
+fn iface_conversations__defs_dm_id__from_json(v: &Value) -> Option<iface_conversations::DefsDmId> {
+    let m = v.as_object()?;
+    Some(iface_conversations::DefsDmId {
+        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+    })
+}
+
+fn iface_conversations__objs_file_shares__from_json(v: &Value) -> Option<iface_conversations::ObjsFileShares> {
+    let m = v.as_object()?;
+    Some(iface_conversations::ObjsFileShares {
+        private: m.get("private").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        public: m.get("public").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    })
+}
+
+fn iface_conversations__objs_message_icons__from_json(v: &Value) -> Option<iface_conversations::ObjsMessageIcons> {
+    let m = v.as_object()?;
+    Some(iface_conversations::ObjsMessageIcons {
+        emoji: m.get("emoji").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        image_v64: m.get("image_64").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    })
+}
+
+fn iface_conversations__defs_ts__from_json(v: &Value) -> Option<iface_conversations::DefsTs> {
+    let m = v.as_object()?;
+    Some(iface_conversations::DefsTs {
+        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+    })
+}
+
+fn iface_conversations__defs_workspace_id__from_json(v: &Value) -> Option<iface_conversations::DefsWorkspaceId> {
+    let m = v.as_object()?;
+    Some(iface_conversations::DefsWorkspaceId {
+        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+    })
+}
+
+fn iface_conversations__objs_user_profile_short__from_json(v: &Value) -> Option<iface_conversations::ObjsUserProfileShort> {
+    let m = v.as_object()?;
+    Some(iface_conversations::ObjsUserProfileShort {
+        avatar_hash: m.get("avatar_hash").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        display_name: m.get("display_name").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        display_name_normalized: m.get("display_name_normalized").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        first_name: m.get("first_name").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        image_v72: m.get("image_72").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        is_restricted: m.get("is_restricted").and_then(|v| (v).as_bool()).unwrap_or_default(),
+        is_ultra_restricted: m.get("is_ultra_restricted").and_then(|v| (v).as_bool()).unwrap_or_default(),
+        name: m.get("name").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        real_name: m.get("real_name").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        real_name_normalized: m.get("real_name_normalized").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        team: match m.get("team").and_then(|v| iface_conversations__defs_workspace_id__from_json(v)) { Some(x) => x, None => return None },
+    })
+}
+
+fn iface_conversations__info_response__from_json(v: &Value) -> Option<iface_conversations::InfoResponse> {
+    let m = v.as_object()?;
+    Some(iface_conversations::InfoResponse {
+        channel: match m.get("channel").and_then(|v| iface_conversations__objs_conversation__from_json(v)) { Some(x) => x, None => return None },
+        ok: match m.get("ok").and_then(|v| iface_conversations__defs_ok_true__from_json(v)) { Some(x) => x, None => return None },
+    })
+}
+
+fn iface_conversations__invite_response__from_json(v: &Value) -> Option<iface_conversations::InviteResponse> {
+    let m = v.as_object()?;
+    Some(iface_conversations::InviteResponse {
+        channel: match m.get("channel").and_then(|v| iface_conversations__objs_conversation__from_json(v)) { Some(x) => x, None => return None },
+        ok: match m.get("ok").and_then(|v| iface_conversations__defs_ok_true__from_json(v)) { Some(x) => x, None => return None },
+    })
+}
+
+fn iface_conversations__join_response__from_json(v: &Value) -> Option<iface_conversations::JoinResponse> {
+    let m = v.as_object()?;
+    Some(iface_conversations::JoinResponse {
+        channel: match m.get("channel").and_then(|v| iface_conversations__objs_conversation__from_json(v)) { Some(x) => x, None => return None },
+        ok: match m.get("ok").and_then(|v| iface_conversations__defs_ok_true__from_json(v)) { Some(x) => x, None => return None },
+        response_metadata: m.get("response_metadata").filter(|v| !v.is_null()).and_then(|v| iface_conversations__join_response_response_metadata__from_json(v)),
+        warning: m.get("warning").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    })
+}
+
+fn iface_conversations__join_response_response_metadata__from_json(v: &Value) -> Option<iface_conversations::JoinResponseResponseMetadata> {
+    let m = v.as_object()?;
+    Some(iface_conversations::JoinResponseResponseMetadata {
+        warnings: m.get("warnings").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| (x).as_str().map(|s| s.to_string())).collect())),
+    })
+}
+
+fn iface_conversations__kick_response__from_json(v: &Value) -> Option<iface_conversations::KickResponse> {
+    let m = v.as_object()?;
+    Some(iface_conversations::KickResponse {
+        ok: match m.get("ok").and_then(|v| iface_conversations__defs_ok_true__from_json(v)) { Some(x) => x, None => return None },
+    })
+}
+
+fn iface_conversations__leave_response__from_json(v: &Value) -> Option<iface_conversations::LeaveResponse> {
+    let m = v.as_object()?;
+    Some(iface_conversations::LeaveResponse {
+        not_in_channel: m.get("not_in_channel").filter(|v| !v.is_null()).and_then(|v| (v).as_bool()),
+        ok: match m.get("ok").and_then(|v| iface_conversations__defs_ok_true__from_json(v)) { Some(x) => x, None => return None },
+    })
+}
+
+fn iface_conversations__list_op_response__from_json(v: &Value) -> Option<iface_conversations::ListOpResponse> {
+    let m = v.as_object()?;
+    Some(iface_conversations::ListOpResponse {
+        channels: m.get("channels").and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| iface_conversations__objs_conversation__from_json(x)).collect())).unwrap_or_default(),
+        ok: match m.get("ok").and_then(|v| iface_conversations__defs_ok_true__from_json(v)) { Some(x) => x, None => return None },
+        response_metadata: m.get("response_metadata").filter(|v| !v.is_null()).and_then(|v| iface_conversations__list_op_response_response_metadata__from_json(v)),
+    })
+}
+
+fn iface_conversations__list_op_response_response_metadata__from_json(v: &Value) -> Option<iface_conversations::ListOpResponseResponseMetadata> {
+    let m = v.as_object()?;
+    Some(iface_conversations::ListOpResponseResponseMetadata {
+        next_cursor: m.get("next_cursor").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+    })
+}
+
+fn iface_conversations__mark_response__from_json(v: &Value) -> Option<iface_conversations::MarkResponse> {
+    let m = v.as_object()?;
+    Some(iface_conversations::MarkResponse {
+        ok: match m.get("ok").and_then(|v| iface_conversations__defs_ok_true__from_json(v)) { Some(x) => x, None => return None },
+    })
+}
+
+fn iface_conversations__members_response__from_json(v: &Value) -> Option<iface_conversations::MembersResponse> {
+    let m = v.as_object()?;
+    Some(iface_conversations::MembersResponse {
+        members: m.get("members").and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| iface_conversations__defs_user_id__from_json(x)).collect())).unwrap_or_default(),
+        ok: match m.get("ok").and_then(|v| iface_conversations__defs_ok_true__from_json(v)) { Some(x) => x, None => return None },
+        response_metadata: match m.get("response_metadata").and_then(|v| iface_conversations__members_response_response_metadata__from_json(v)) { Some(x) => x, None => return None },
+    })
+}
+
+fn iface_conversations__members_response_response_metadata__from_json(v: &Value) -> Option<iface_conversations::MembersResponseResponseMetadata> {
+    let m = v.as_object()?;
+    Some(iface_conversations::MembersResponseResponseMetadata {
+        next_cursor: m.get("next_cursor").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+    })
+}
+
+fn iface_conversations__open_response__from_json(v: &Value) -> Option<iface_conversations::OpenResponse> {
+    let m = v.as_object()?;
+    Some(iface_conversations::OpenResponse {
+        already_open: m.get("already_open").filter(|v| !v.is_null()).and_then(|v| (v).as_bool()),
+        channel: m.get("channel").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        no_op: m.get("no_op").filter(|v| !v.is_null()).and_then(|v| (v).as_bool()),
+        ok: match m.get("ok").and_then(|v| iface_conversations__defs_ok_true__from_json(v)) { Some(x) => x, None => return None },
+    })
+}
+
+fn iface_conversations__rename_response__from_json(v: &Value) -> Option<iface_conversations::RenameResponse> {
+    let m = v.as_object()?;
+    Some(iface_conversations::RenameResponse {
+        channel: match m.get("channel").and_then(|v| iface_conversations__objs_conversation__from_json(v)) { Some(x) => x, None => return None },
+        ok: match m.get("ok").and_then(|v| iface_conversations__defs_ok_true__from_json(v)) { Some(x) => x, None => return None },
+    })
+}
+
+fn iface_conversations__replies_response__from_json(v: &Value) -> Option<iface_conversations::RepliesResponse> {
+    let m = v.as_object()?;
+    Some(iface_conversations::RepliesResponse {
+        has_more: m.get("has_more").filter(|v| !v.is_null()).and_then(|v| (v).as_bool()),
+        messages: m.get("messages").and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| (x).as_str().map(|s| s.to_string())).collect())).unwrap_or_default(),
+        ok: match m.get("ok").and_then(|v| iface_conversations__defs_ok_true__from_json(v)) { Some(x) => x, None => return None },
+    })
+}
+
+fn iface_conversations__set_purpose_response__from_json(v: &Value) -> Option<iface_conversations::SetPurposeResponse> {
+    let m = v.as_object()?;
+    Some(iface_conversations::SetPurposeResponse {
+        channel: match m.get("channel").and_then(|v| iface_conversations__objs_conversation__from_json(v)) { Some(x) => x, None => return None },
+        ok: match m.get("ok").and_then(|v| iface_conversations__defs_ok_true__from_json(v)) { Some(x) => x, None => return None },
+    })
+}
+
+fn iface_conversations__set_topic_response__from_json(v: &Value) -> Option<iface_conversations::SetTopicResponse> {
+    let m = v.as_object()?;
+    Some(iface_conversations::SetTopicResponse {
+        channel: match m.get("channel").and_then(|v| iface_conversations__objs_conversation__from_json(v)) { Some(x) => x, None => return None },
+        ok: match m.get("ok").and_then(|v| iface_conversations__defs_ok_true__from_json(v)) { Some(x) => x, None => return None },
+    })
+}
+
+fn iface_conversations__unarchive_response__from_json(v: &Value) -> Option<iface_conversations::UnarchiveResponse> {
+    let m = v.as_object()?;
+    Some(iface_conversations::UnarchiveResponse {
+        ok: match m.get("ok").and_then(|v| iface_conversations__defs_ok_true__from_json(v)) { Some(x) => x, None => return None },
+    })
+}
+
+fn iface_conversations__archive__ok(body: String) -> Result<iface_conversations::ArchiveResponse, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match iface_conversations__archive_response__from_json(&v) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_conversations__archive__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
+fn iface_conversations__close__ok(body: String) -> Result<iface_conversations::CloseResponse, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match iface_conversations__close_response__from_json(&v) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_conversations__close__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
+fn iface_conversations__create__ok(body: String) -> Result<iface_conversations::CreateResponse, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match iface_conversations__create_response__from_json(&v) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_conversations__create__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
+fn iface_conversations__history__ok(body: String) -> Result<iface_conversations::HistoryResponse, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match iface_conversations__history_response__from_json(&v) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_conversations__history__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
+fn iface_conversations__info__ok(body: String) -> Result<iface_conversations::InfoResponse, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match iface_conversations__info_response__from_json(&v) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_conversations__info__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
+fn iface_conversations__invite__ok(body: String) -> Result<iface_conversations::InviteResponse, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match iface_conversations__invite_response__from_json(&v) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_conversations__invite__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
+fn iface_conversations__join__ok(body: String) -> Result<iface_conversations::JoinResponse, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match iface_conversations__join_response__from_json(&v) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_conversations__join__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
+fn iface_conversations__kick__ok(body: String) -> Result<iface_conversations::KickResponse, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match iface_conversations__kick_response__from_json(&v) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_conversations__kick__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
+fn iface_conversations__leave__ok(body: String) -> Result<iface_conversations::LeaveResponse, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match iface_conversations__leave_response__from_json(&v) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_conversations__leave__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
+fn iface_conversations__list_op__ok(body: String) -> Result<iface_conversations::ListOpResponse, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match iface_conversations__list_op_response__from_json(&v) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_conversations__list_op__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
+fn iface_conversations__mark__ok(body: String) -> Result<iface_conversations::MarkResponse, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match iface_conversations__mark_response__from_json(&v) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_conversations__mark__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
+fn iface_conversations__members__ok(body: String) -> Result<iface_conversations::MembersResponse, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match iface_conversations__members_response__from_json(&v) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_conversations__members__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
+fn iface_conversations__open__ok(body: String) -> Result<iface_conversations::OpenResponse, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match iface_conversations__open_response__from_json(&v) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_conversations__open__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
+fn iface_conversations__rename__ok(body: String) -> Result<iface_conversations::RenameResponse, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match iface_conversations__rename_response__from_json(&v) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_conversations__rename__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
+fn iface_conversations__replies__ok(body: String) -> Result<iface_conversations::RepliesResponse, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match iface_conversations__replies_response__from_json(&v) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_conversations__replies__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
+fn iface_conversations__set_purpose__ok(body: String) -> Result<iface_conversations::SetPurposeResponse, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match iface_conversations__set_purpose_response__from_json(&v) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_conversations__set_purpose__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
+fn iface_conversations__set_topic__ok(body: String) -> Result<iface_conversations::SetTopicResponse, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match iface_conversations__set_topic_response__from_json(&v) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_conversations__set_topic__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
+fn iface_conversations__unarchive__ok(body: String) -> Result<iface_conversations::UnarchiveResponse, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match iface_conversations__unarchive_response__from_json(&v) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_conversations__unarchive__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
 impl iface_conversations::Guest for crate::Component {
-    fn archive(params: iface_conversations::ArchiveParams) -> Result<String, String> {
+    fn archive(params: iface_conversations::ArchiveParams) -> Result<iface_conversations::ArchiveResponse, String> {
         let json = iface_conversations__archive_params__to_json(&params);
-        dispatch(&OP_CONVERSATIONS_ARCHIVE, json)
+        match dispatch(&OP_CONVERSATIONS_ARCHIVE, json).and_then(iface_conversations__archive__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_conversations__archive__err(e)),
+        }
     }
-    fn close(params: iface_conversations::CloseParams) -> Result<String, String> {
+    fn close(params: iface_conversations::CloseParams) -> Result<iface_conversations::CloseResponse, String> {
         let json = iface_conversations__close_params__to_json(&params);
-        dispatch(&OP_CONVERSATIONS_CLOSE, json)
+        match dispatch(&OP_CONVERSATIONS_CLOSE, json).and_then(iface_conversations__close__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_conversations__close__err(e)),
+        }
     }
-    fn create(params: iface_conversations::CreateParams) -> Result<String, String> {
+    fn create(params: iface_conversations::CreateParams) -> Result<iface_conversations::CreateResponse, String> {
         let json = iface_conversations__create_params__to_json(&params);
-        dispatch(&OP_CONVERSATIONS_CREATE, json)
+        match dispatch(&OP_CONVERSATIONS_CREATE, json).and_then(iface_conversations__create__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_conversations__create__err(e)),
+        }
     }
-    fn history(params: iface_conversations::HistoryParams) -> Result<String, String> {
+    fn history(params: iface_conversations::HistoryParams) -> Result<iface_conversations::HistoryResponse, String> {
         let json = iface_conversations__history_params__to_json(&params);
-        dispatch(&OP_CONVERSATIONS_HISTORY, json)
+        match dispatch(&OP_CONVERSATIONS_HISTORY, json).and_then(iface_conversations__history__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_conversations__history__err(e)),
+        }
     }
-    fn info(params: iface_conversations::InfoParams) -> Result<String, String> {
+    fn info(params: iface_conversations::InfoParams) -> Result<iface_conversations::InfoResponse, String> {
         let json = iface_conversations__info_params__to_json(&params);
-        dispatch(&OP_CONVERSATIONS_INFO, json)
+        match dispatch(&OP_CONVERSATIONS_INFO, json).and_then(iface_conversations__info__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_conversations__info__err(e)),
+        }
     }
-    fn invite(params: iface_conversations::InviteParams) -> Result<String, String> {
+    fn invite(params: iface_conversations::InviteParams) -> Result<iface_conversations::InviteResponse, String> {
         let json = iface_conversations__invite_params__to_json(&params);
-        dispatch(&OP_CONVERSATIONS_INVITE, json)
+        match dispatch(&OP_CONVERSATIONS_INVITE, json).and_then(iface_conversations__invite__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_conversations__invite__err(e)),
+        }
     }
-    fn join(params: iface_conversations::JoinParams) -> Result<String, String> {
+    fn join(params: iface_conversations::JoinParams) -> Result<iface_conversations::JoinResponse, String> {
         let json = iface_conversations__join_params__to_json(&params);
-        dispatch(&OP_CONVERSATIONS_JOIN, json)
+        match dispatch(&OP_CONVERSATIONS_JOIN, json).and_then(iface_conversations__join__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_conversations__join__err(e)),
+        }
     }
-    fn kick(params: iface_conversations::KickParams) -> Result<String, String> {
+    fn kick(params: iface_conversations::KickParams) -> Result<iface_conversations::KickResponse, String> {
         let json = iface_conversations__kick_params__to_json(&params);
-        dispatch(&OP_CONVERSATIONS_KICK, json)
+        match dispatch(&OP_CONVERSATIONS_KICK, json).and_then(iface_conversations__kick__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_conversations__kick__err(e)),
+        }
     }
-    fn leave(params: iface_conversations::LeaveParams) -> Result<String, String> {
+    fn leave(params: iface_conversations::LeaveParams) -> Result<iface_conversations::LeaveResponse, String> {
         let json = iface_conversations__leave_params__to_json(&params);
-        dispatch(&OP_CONVERSATIONS_LEAVE, json)
+        match dispatch(&OP_CONVERSATIONS_LEAVE, json).and_then(iface_conversations__leave__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_conversations__leave__err(e)),
+        }
     }
-    fn list_op(params: iface_conversations::ListOpParams) -> Result<String, String> {
+    fn list_op(params: iface_conversations::ListOpParams) -> Result<iface_conversations::ListOpResponse, String> {
         let json = iface_conversations__list_op_params__to_json(&params);
-        dispatch(&OP_CONVERSATIONS_LIST_OP, json)
+        match dispatch(&OP_CONVERSATIONS_LIST_OP, json).and_then(iface_conversations__list_op__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_conversations__list_op__err(e)),
+        }
     }
-    fn mark(params: iface_conversations::MarkParams) -> Result<String, String> {
+    fn mark(params: iface_conversations::MarkParams) -> Result<iface_conversations::MarkResponse, String> {
         let json = iface_conversations__mark_params__to_json(&params);
-        dispatch(&OP_CONVERSATIONS_MARK, json)
+        match dispatch(&OP_CONVERSATIONS_MARK, json).and_then(iface_conversations__mark__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_conversations__mark__err(e)),
+        }
     }
-    fn members(params: iface_conversations::MembersParams) -> Result<String, String> {
+    fn members(params: iface_conversations::MembersParams) -> Result<iface_conversations::MembersResponse, String> {
         let json = iface_conversations__members_params__to_json(&params);
-        dispatch(&OP_CONVERSATIONS_MEMBERS, json)
+        match dispatch(&OP_CONVERSATIONS_MEMBERS, json).and_then(iface_conversations__members__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_conversations__members__err(e)),
+        }
     }
-    fn open(params: iface_conversations::OpenParams) -> Result<String, String> {
+    fn open(params: iface_conversations::OpenParams) -> Result<iface_conversations::OpenResponse, String> {
         let json = iface_conversations__open_params__to_json(&params);
-        dispatch(&OP_CONVERSATIONS_OPEN, json)
+        match dispatch(&OP_CONVERSATIONS_OPEN, json).and_then(iface_conversations__open__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_conversations__open__err(e)),
+        }
     }
-    fn rename(params: iface_conversations::RenameParams) -> Result<String, String> {
+    fn rename(params: iface_conversations::RenameParams) -> Result<iface_conversations::RenameResponse, String> {
         let json = iface_conversations__rename_params__to_json(&params);
-        dispatch(&OP_CONVERSATIONS_RENAME, json)
+        match dispatch(&OP_CONVERSATIONS_RENAME, json).and_then(iface_conversations__rename__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_conversations__rename__err(e)),
+        }
     }
-    fn replies(params: iface_conversations::RepliesParams) -> Result<String, String> {
+    fn replies(params: iface_conversations::RepliesParams) -> Result<iface_conversations::RepliesResponse, String> {
         let json = iface_conversations__replies_params__to_json(&params);
-        dispatch(&OP_CONVERSATIONS_REPLIES, json)
+        match dispatch(&OP_CONVERSATIONS_REPLIES, json).and_then(iface_conversations__replies__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_conversations__replies__err(e)),
+        }
     }
-    fn set_purpose(params: iface_conversations::SetPurposeParams) -> Result<String, String> {
+    fn set_purpose(params: iface_conversations::SetPurposeParams) -> Result<iface_conversations::SetPurposeResponse, String> {
         let json = iface_conversations__set_purpose_params__to_json(&params);
-        dispatch(&OP_CONVERSATIONS_SET_PURPOSE, json)
+        match dispatch(&OP_CONVERSATIONS_SET_PURPOSE, json).and_then(iface_conversations__set_purpose__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_conversations__set_purpose__err(e)),
+        }
     }
-    fn set_topic(params: iface_conversations::SetTopicParams) -> Result<String, String> {
+    fn set_topic(params: iface_conversations::SetTopicParams) -> Result<iface_conversations::SetTopicResponse, String> {
         let json = iface_conversations__set_topic_params__to_json(&params);
-        dispatch(&OP_CONVERSATIONS_SET_TOPIC, json)
+        match dispatch(&OP_CONVERSATIONS_SET_TOPIC, json).and_then(iface_conversations__set_topic__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_conversations__set_topic__err(e)),
+        }
     }
-    fn unarchive(params: iface_conversations::UnarchiveParams) -> Result<String, String> {
+    fn unarchive(params: iface_conversations::UnarchiveParams) -> Result<iface_conversations::UnarchiveResponse, String> {
         let json = iface_conversations__unarchive_params__to_json(&params);
-        dispatch(&OP_CONVERSATIONS_UNARCHIVE, json)
+        match dispatch(&OP_CONVERSATIONS_UNARCHIVE, json).and_then(iface_conversations__unarchive__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_conversations__unarchive__err(e)),
+        }
     }
 }
 use crate::exports::autostamp::slack::dialog as iface_dialog;
@@ -2698,14 +9136,26 @@ const OP_DIALOG_OPEN: OpSpec = OpSpec {
     method: "GET",
     path_template: "/dialog.open",
     fields: &[
-        FieldSpec { snake: "token", location: FieldLocation::Header },
-        FieldSpec { snake: "dialog", location: FieldLocation::Query },
-        FieldSpec { snake: "trigger_id", location: FieldLocation::Query },
+        FieldSpec { snake: "token", wire: "token", location: FieldLocation::Header },
+        FieldSpec { snake: "dialog", wire: "dialog", location: FieldLocation::Query },
+        FieldSpec { snake: "trigger_id", wire: "trigger_id", location: FieldLocation::Query },
     ],
     auth: &[
         AuthApply { secret_key: "slackAuth", kind: AuthKind::Bearer },
     ],
 };
+
+fn iface_dialog__open_response__to_json(p: &iface_dialog::OpenResponse) -> Value {
+    let mut m = Map::new();
+    m.insert("ok".into(), iface_dialog__defs_ok_true__to_json(&p.ok));
+    Value::Object(m)
+}
+
+fn iface_dialog__defs_ok_true__to_json(p: &iface_dialog::DefsOkTrue) -> Value {
+    let mut m = Map::new();
+    m.insert("value".into(), Value::String((&p.value).clone()));
+    Value::Object(m)
+}
 
 fn iface_dialog__open_params__to_json(p: &iface_dialog::OpenParams) -> Value {
     let mut m = Map::new();
@@ -2715,10 +9165,45 @@ fn iface_dialog__open_params__to_json(p: &iface_dialog::OpenParams) -> Value {
     Value::Object(m)
 }
 
+fn iface_dialog__open_response__from_json(v: &Value) -> Option<iface_dialog::OpenResponse> {
+    let m = v.as_object()?;
+    Some(iface_dialog::OpenResponse {
+        ok: match m.get("ok").and_then(|v| iface_dialog__defs_ok_true__from_json(v)) { Some(x) => x, None => return None },
+    })
+}
+
+fn iface_dialog__defs_ok_true__from_json(v: &Value) -> Option<iface_dialog::DefsOkTrue> {
+    let m = v.as_object()?;
+    Some(iface_dialog::DefsOkTrue {
+        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+    })
+}
+
+fn iface_dialog__open__ok(body: String) -> Result<iface_dialog::OpenResponse, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match iface_dialog__open_response__from_json(&v) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_dialog__open__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
 impl iface_dialog::Guest for crate::Component {
-    fn open(params: iface_dialog::OpenParams) -> Result<String, String> {
+    fn open(params: iface_dialog::OpenParams) -> Result<iface_dialog::OpenResponse, String> {
         let json = iface_dialog__open_params__to_json(&params);
-        dispatch(&OP_DIALOG_OPEN, json)
+        match dispatch(&OP_DIALOG_OPEN, json).and_then(iface_dialog__open__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_dialog__open__err(e)),
+        }
     }
 }
 use crate::exports::autostamp::slack::dnd as iface_dnd;
@@ -2727,7 +9212,7 @@ const OP_DND_END_DND: OpSpec = OpSpec {
     method: "POST",
     path_template: "/dnd.endDnd",
     fields: &[
-        FieldSpec { snake: "token", location: FieldLocation::Header },
+        FieldSpec { snake: "token", wire: "token", location: FieldLocation::Header },
     ],
     auth: &[
         AuthApply { secret_key: "slackAuth", kind: AuthKind::Bearer },
@@ -2738,7 +9223,7 @@ const OP_DND_END_SNOOZE: OpSpec = OpSpec {
     method: "POST",
     path_template: "/dnd.endSnooze",
     fields: &[
-        FieldSpec { snake: "token", location: FieldLocation::Header },
+        FieldSpec { snake: "token", wire: "token", location: FieldLocation::Header },
     ],
     auth: &[
         AuthApply { secret_key: "slackAuth", kind: AuthKind::Bearer },
@@ -2749,8 +9234,8 @@ const OP_DND_INFO: OpSpec = OpSpec {
     method: "GET",
     path_template: "/dnd.info",
     fields: &[
-        FieldSpec { snake: "token", location: FieldLocation::Query },
-        FieldSpec { snake: "user", location: FieldLocation::Query },
+        FieldSpec { snake: "token", wire: "token", location: FieldLocation::Query },
+        FieldSpec { snake: "user", wire: "user", location: FieldLocation::Query },
     ],
     auth: &[
         AuthApply { secret_key: "slackAuth", kind: AuthKind::Bearer },
@@ -2761,6 +9246,8 @@ const OP_DND_SET_SNOOZE: OpSpec = OpSpec {
     method: "POST",
     path_template: "/dnd.setSnooze",
     fields: &[
+        FieldSpec { snake: "num_minutes", wire: "num_minutes", location: FieldLocation::Body },
+        FieldSpec { snake: "token", wire: "token", location: FieldLocation::Body },
     ],
     auth: &[
         AuthApply { secret_key: "slackAuth", kind: AuthKind::Bearer },
@@ -2771,13 +9258,62 @@ const OP_DND_TEAM_INFO: OpSpec = OpSpec {
     method: "GET",
     path_template: "/dnd.teamInfo",
     fields: &[
-        FieldSpec { snake: "token", location: FieldLocation::Query },
-        FieldSpec { snake: "users", location: FieldLocation::Query },
+        FieldSpec { snake: "token", wire: "token", location: FieldLocation::Query },
+        FieldSpec { snake: "users", wire: "users", location: FieldLocation::Query },
     ],
     auth: &[
         AuthApply { secret_key: "slackAuth", kind: AuthKind::Bearer },
     ],
 };
+
+fn iface_dnd__end_dnd_response__to_json(p: &iface_dnd::EndDndResponse) -> Value {
+    let mut m = Map::new();
+    m.insert("ok".into(), iface_dnd__defs_ok_true__to_json(&p.ok));
+    Value::Object(m)
+}
+
+fn iface_dnd__defs_ok_true__to_json(p: &iface_dnd::DefsOkTrue) -> Value {
+    let mut m = Map::new();
+    m.insert("value".into(), Value::String((&p.value).clone()));
+    Value::Object(m)
+}
+
+fn iface_dnd__end_snooze_response__to_json(p: &iface_dnd::EndSnoozeResponse) -> Value {
+    let mut m = Map::new();
+    m.insert("dnd_enabled".into(), Value::Bool(*(&p.dnd_enabled)));
+    m.insert("next_dnd_end_ts".into(), Value::Number(serde_json::Number::from(*(&p.next_dnd_end_ts))));
+    m.insert("next_dnd_start_ts".into(), Value::Number(serde_json::Number::from(*(&p.next_dnd_start_ts))));
+    m.insert("ok".into(), iface_dnd__defs_ok_true__to_json(&p.ok));
+    m.insert("snooze_enabled".into(), Value::Bool(*(&p.snooze_enabled)));
+    Value::Object(m)
+}
+
+fn iface_dnd__info_response__to_json(p: &iface_dnd::InfoResponse) -> Value {
+    let mut m = Map::new();
+    m.insert("dnd_enabled".into(), Value::Bool(*(&p.dnd_enabled)));
+    m.insert("next_dnd_end_ts".into(), Value::Number(serde_json::Number::from(*(&p.next_dnd_end_ts))));
+    m.insert("next_dnd_start_ts".into(), Value::Number(serde_json::Number::from(*(&p.next_dnd_start_ts))));
+    m.insert("ok".into(), iface_dnd__defs_ok_true__to_json(&p.ok));
+    m.insert("snooze_enabled".into(), match (&p.snooze_enabled) { Some(v) => Value::Bool(*(v)), None => Value::Null });
+    m.insert("snooze_endtime".into(), match (&p.snooze_endtime) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("snooze_remaining".into(), match (&p.snooze_remaining) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_dnd__set_snooze_response__to_json(p: &iface_dnd::SetSnoozeResponse) -> Value {
+    let mut m = Map::new();
+    m.insert("ok".into(), iface_dnd__defs_ok_true__to_json(&p.ok));
+    m.insert("snooze_enabled".into(), Value::Bool(*(&p.snooze_enabled)));
+    m.insert("snooze_endtime".into(), Value::Number(serde_json::Number::from(*(&p.snooze_endtime))));
+    m.insert("snooze_remaining".into(), Value::Number(serde_json::Number::from(*(&p.snooze_remaining))));
+    Value::Object(m)
+}
+
+fn iface_dnd__team_info_response__to_json(p: &iface_dnd::TeamInfoResponse) -> Value {
+    let mut m = Map::new();
+    m.insert("ok".into(), iface_dnd__defs_ok_true__to_json(&p.ok));
+    Value::Object(m)
+}
 
 fn iface_dnd__end_dnd_params__to_json(p: &iface_dnd::EndDndParams) -> Value {
     let mut m = Map::new();
@@ -2798,6 +9334,13 @@ fn iface_dnd__info_params__to_json(p: &iface_dnd::InfoParams) -> Value {
     Value::Object(m)
 }
 
+fn iface_dnd__set_snooze_params__to_json(p: &iface_dnd::SetSnoozeParams) -> Value {
+    let mut m = Map::new();
+    m.insert("num_minutes".into(), Value::String((&p.num_minutes).clone()));
+    m.insert("token".into(), Value::String((&p.token).clone()));
+    Value::Object(m)
+}
+
 fn iface_dnd__team_info_params__to_json(p: &iface_dnd::TeamInfoParams) -> Value {
     let mut m = Map::new();
     m.insert("token".into(), match (&p.token) { Some(v) => Value::String((v).clone()), None => Value::Null });
@@ -2805,25 +9348,186 @@ fn iface_dnd__team_info_params__to_json(p: &iface_dnd::TeamInfoParams) -> Value 
     Value::Object(m)
 }
 
+fn iface_dnd__end_dnd_response__from_json(v: &Value) -> Option<iface_dnd::EndDndResponse> {
+    let m = v.as_object()?;
+    Some(iface_dnd::EndDndResponse {
+        ok: match m.get("ok").and_then(|v| iface_dnd__defs_ok_true__from_json(v)) { Some(x) => x, None => return None },
+    })
+}
+
+fn iface_dnd__defs_ok_true__from_json(v: &Value) -> Option<iface_dnd::DefsOkTrue> {
+    let m = v.as_object()?;
+    Some(iface_dnd::DefsOkTrue {
+        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+    })
+}
+
+fn iface_dnd__end_snooze_response__from_json(v: &Value) -> Option<iface_dnd::EndSnoozeResponse> {
+    let m = v.as_object()?;
+    Some(iface_dnd::EndSnoozeResponse {
+        dnd_enabled: m.get("dnd_enabled").and_then(|v| (v).as_bool()).unwrap_or_default(),
+        next_dnd_end_ts: m.get("next_dnd_end_ts").and_then(|v| (v).as_i64().map(|n| n as i32)).unwrap_or_default(),
+        next_dnd_start_ts: m.get("next_dnd_start_ts").and_then(|v| (v).as_i64().map(|n| n as i32)).unwrap_or_default(),
+        ok: match m.get("ok").and_then(|v| iface_dnd__defs_ok_true__from_json(v)) { Some(x) => x, None => return None },
+        snooze_enabled: m.get("snooze_enabled").and_then(|v| (v).as_bool()).unwrap_or_default(),
+    })
+}
+
+fn iface_dnd__info_response__from_json(v: &Value) -> Option<iface_dnd::InfoResponse> {
+    let m = v.as_object()?;
+    Some(iface_dnd::InfoResponse {
+        dnd_enabled: m.get("dnd_enabled").and_then(|v| (v).as_bool()).unwrap_or_default(),
+        next_dnd_end_ts: m.get("next_dnd_end_ts").and_then(|v| (v).as_i64().map(|n| n as i32)).unwrap_or_default(),
+        next_dnd_start_ts: m.get("next_dnd_start_ts").and_then(|v| (v).as_i64().map(|n| n as i32)).unwrap_or_default(),
+        ok: match m.get("ok").and_then(|v| iface_dnd__defs_ok_true__from_json(v)) { Some(x) => x, None => return None },
+        snooze_enabled: m.get("snooze_enabled").filter(|v| !v.is_null()).and_then(|v| (v).as_bool()),
+        snooze_endtime: m.get("snooze_endtime").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        snooze_remaining: m.get("snooze_remaining").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+    })
+}
+
+fn iface_dnd__set_snooze_response__from_json(v: &Value) -> Option<iface_dnd::SetSnoozeResponse> {
+    let m = v.as_object()?;
+    Some(iface_dnd::SetSnoozeResponse {
+        ok: match m.get("ok").and_then(|v| iface_dnd__defs_ok_true__from_json(v)) { Some(x) => x, None => return None },
+        snooze_enabled: m.get("snooze_enabled").and_then(|v| (v).as_bool()).unwrap_or_default(),
+        snooze_endtime: m.get("snooze_endtime").and_then(|v| (v).as_i64().map(|n| n as i32)).unwrap_or_default(),
+        snooze_remaining: m.get("snooze_remaining").and_then(|v| (v).as_i64().map(|n| n as i32)).unwrap_or_default(),
+    })
+}
+
+fn iface_dnd__team_info_response__from_json(v: &Value) -> Option<iface_dnd::TeamInfoResponse> {
+    let m = v.as_object()?;
+    Some(iface_dnd::TeamInfoResponse {
+        ok: match m.get("ok").and_then(|v| iface_dnd__defs_ok_true__from_json(v)) { Some(x) => x, None => return None },
+    })
+}
+
+fn iface_dnd__end_dnd__ok(body: String) -> Result<iface_dnd::EndDndResponse, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match iface_dnd__end_dnd_response__from_json(&v) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_dnd__end_dnd__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
+fn iface_dnd__end_snooze__ok(body: String) -> Result<iface_dnd::EndSnoozeResponse, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match iface_dnd__end_snooze_response__from_json(&v) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_dnd__end_snooze__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
+fn iface_dnd__info__ok(body: String) -> Result<iface_dnd::InfoResponse, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match iface_dnd__info_response__from_json(&v) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_dnd__info__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
+fn iface_dnd__set_snooze__ok(body: String) -> Result<iface_dnd::SetSnoozeResponse, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match iface_dnd__set_snooze_response__from_json(&v) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_dnd__set_snooze__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
+fn iface_dnd__team_info__ok(body: String) -> Result<iface_dnd::TeamInfoResponse, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match iface_dnd__team_info_response__from_json(&v) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_dnd__team_info__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
 impl iface_dnd::Guest for crate::Component {
-    fn end_dnd(params: iface_dnd::EndDndParams) -> Result<String, String> {
+    fn end_dnd(params: iface_dnd::EndDndParams) -> Result<iface_dnd::EndDndResponse, String> {
         let json = iface_dnd__end_dnd_params__to_json(&params);
-        dispatch(&OP_DND_END_DND, json)
+        match dispatch(&OP_DND_END_DND, json).and_then(iface_dnd__end_dnd__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_dnd__end_dnd__err(e)),
+        }
     }
-    fn end_snooze(params: iface_dnd::EndSnoozeParams) -> Result<String, String> {
+    fn end_snooze(params: iface_dnd::EndSnoozeParams) -> Result<iface_dnd::EndSnoozeResponse, String> {
         let json = iface_dnd__end_snooze_params__to_json(&params);
-        dispatch(&OP_DND_END_SNOOZE, json)
+        match dispatch(&OP_DND_END_SNOOZE, json).and_then(iface_dnd__end_snooze__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_dnd__end_snooze__err(e)),
+        }
     }
-    fn info(params: iface_dnd::InfoParams) -> Result<String, String> {
+    fn info(params: iface_dnd::InfoParams) -> Result<iface_dnd::InfoResponse, String> {
         let json = iface_dnd__info_params__to_json(&params);
-        dispatch(&OP_DND_INFO, json)
+        match dispatch(&OP_DND_INFO, json).and_then(iface_dnd__info__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_dnd__info__err(e)),
+        }
     }
-    fn set_snooze() -> Result<String, String> {
-        dispatch(&OP_DND_SET_SNOOZE, Value::Object(Map::new()))
+    fn set_snooze(params: iface_dnd::SetSnoozeParams) -> Result<iface_dnd::SetSnoozeResponse, String> {
+        let json = iface_dnd__set_snooze_params__to_json(&params);
+        match dispatch(&OP_DND_SET_SNOOZE, json).and_then(iface_dnd__set_snooze__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_dnd__set_snooze__err(e)),
+        }
     }
-    fn team_info(params: iface_dnd::TeamInfoParams) -> Result<String, String> {
+    fn team_info(params: iface_dnd::TeamInfoParams) -> Result<iface_dnd::TeamInfoResponse, String> {
         let json = iface_dnd__team_info_params__to_json(&params);
-        dispatch(&OP_DND_TEAM_INFO, json)
+        match dispatch(&OP_DND_TEAM_INFO, json).and_then(iface_dnd__team_info__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_dnd__team_info__err(e)),
+        }
     }
 }
 use crate::exports::autostamp::slack::emoji as iface_emoji;
@@ -2832,12 +9536,24 @@ const OP_EMOJI_LIST_OP: OpSpec = OpSpec {
     method: "GET",
     path_template: "/emoji.list",
     fields: &[
-        FieldSpec { snake: "token", location: FieldLocation::Query },
+        FieldSpec { snake: "token", wire: "token", location: FieldLocation::Query },
     ],
     auth: &[
         AuthApply { secret_key: "slackAuth", kind: AuthKind::Bearer },
     ],
 };
+
+fn iface_emoji__list_op_response__to_json(p: &iface_emoji::ListOpResponse) -> Value {
+    let mut m = Map::new();
+    m.insert("ok".into(), iface_emoji__defs_ok_true__to_json(&p.ok));
+    Value::Object(m)
+}
+
+fn iface_emoji__defs_ok_true__to_json(p: &iface_emoji::DefsOkTrue) -> Value {
+    let mut m = Map::new();
+    m.insert("value".into(), Value::String((&p.value).clone()));
+    Value::Object(m)
+}
 
 fn iface_emoji__list_op_params__to_json(p: &iface_emoji::ListOpParams) -> Value {
     let mut m = Map::new();
@@ -2845,10 +9561,45 @@ fn iface_emoji__list_op_params__to_json(p: &iface_emoji::ListOpParams) -> Value 
     Value::Object(m)
 }
 
+fn iface_emoji__list_op_response__from_json(v: &Value) -> Option<iface_emoji::ListOpResponse> {
+    let m = v.as_object()?;
+    Some(iface_emoji::ListOpResponse {
+        ok: match m.get("ok").and_then(|v| iface_emoji__defs_ok_true__from_json(v)) { Some(x) => x, None => return None },
+    })
+}
+
+fn iface_emoji__defs_ok_true__from_json(v: &Value) -> Option<iface_emoji::DefsOkTrue> {
+    let m = v.as_object()?;
+    Some(iface_emoji::DefsOkTrue {
+        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+    })
+}
+
+fn iface_emoji__list_op__ok(body: String) -> Result<iface_emoji::ListOpResponse, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match iface_emoji__list_op_response__from_json(&v) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_emoji__list_op__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
 impl iface_emoji::Guest for crate::Component {
-    fn list_op(params: iface_emoji::ListOpParams) -> Result<String, String> {
+    fn list_op(params: iface_emoji::ListOpParams) -> Result<iface_emoji::ListOpResponse, String> {
         let json = iface_emoji__list_op_params__to_json(&params);
-        dispatch(&OP_EMOJI_LIST_OP, json)
+        match dispatch(&OP_EMOJI_LIST_OP, json).and_then(iface_emoji__list_op__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_emoji__list_op__err(e)),
+        }
     }
 }
 use crate::exports::autostamp::slack::files_comments as iface_files_comments;
@@ -2857,23 +9608,74 @@ const OP_FILES_COMMENTS_DELETE: OpSpec = OpSpec {
     method: "POST",
     path_template: "/files.comments.delete",
     fields: &[
-        FieldSpec { snake: "token", location: FieldLocation::Header },
+        FieldSpec { snake: "token", wire: "token", location: FieldLocation::Header },
+        FieldSpec { snake: "file", wire: "file", location: FieldLocation::Body },
+        FieldSpec { snake: "id", wire: "id", location: FieldLocation::Body },
     ],
     auth: &[
         AuthApply { secret_key: "slackAuth", kind: AuthKind::Bearer },
     ],
 };
 
-fn iface_files_comments__delete_params__to_json(p: &iface_files_comments::DeleteParams) -> Value {
+fn iface_files_comments__delete_response__to_json(p: &iface_files_comments::DeleteResponse) -> Value {
     let mut m = Map::new();
-    m.insert("token".into(), match (&p.token) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("ok".into(), iface_files_comments__defs_ok_true__to_json(&p.ok));
     Value::Object(m)
 }
 
+fn iface_files_comments__defs_ok_true__to_json(p: &iface_files_comments::DefsOkTrue) -> Value {
+    let mut m = Map::new();
+    m.insert("value".into(), Value::String((&p.value).clone()));
+    Value::Object(m)
+}
+
+fn iface_files_comments__delete_params__to_json(p: &iface_files_comments::DeleteParams) -> Value {
+    let mut m = Map::new();
+    m.insert("token".into(), match (&p.token) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("file".into(), match (&p.file) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("id".into(), match (&p.id) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_files_comments__delete_response__from_json(v: &Value) -> Option<iface_files_comments::DeleteResponse> {
+    let m = v.as_object()?;
+    Some(iface_files_comments::DeleteResponse {
+        ok: match m.get("ok").and_then(|v| iface_files_comments__defs_ok_true__from_json(v)) { Some(x) => x, None => return None },
+    })
+}
+
+fn iface_files_comments__defs_ok_true__from_json(v: &Value) -> Option<iface_files_comments::DefsOkTrue> {
+    let m = v.as_object()?;
+    Some(iface_files_comments::DefsOkTrue {
+        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+    })
+}
+
+fn iface_files_comments__delete__ok(body: String) -> Result<iface_files_comments::DeleteResponse, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match iface_files_comments__delete_response__from_json(&v) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_files_comments__delete__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
 impl iface_files_comments::Guest for crate::Component {
-    fn delete(params: iface_files_comments::DeleteParams) -> Result<String, String> {
+    fn delete(params: iface_files_comments::DeleteParams) -> Result<iface_files_comments::DeleteResponse, String> {
         let json = iface_files_comments__delete_params__to_json(&params);
-        dispatch(&OP_FILES_COMMENTS_DELETE, json)
+        match dispatch(&OP_FILES_COMMENTS_DELETE, json).and_then(iface_files_comments__delete__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_files_comments__delete__err(e)),
+        }
     }
 }
 use crate::exports::autostamp::slack::files as iface_files;
@@ -2882,7 +9684,8 @@ const OP_FILES_DELETE: OpSpec = OpSpec {
     method: "POST",
     path_template: "/files.delete",
     fields: &[
-        FieldSpec { snake: "token", location: FieldLocation::Header },
+        FieldSpec { snake: "token", wire: "token", location: FieldLocation::Header },
+        FieldSpec { snake: "file", wire: "file", location: FieldLocation::Body },
     ],
     auth: &[
         AuthApply { secret_key: "slackAuth", kind: AuthKind::Bearer },
@@ -2893,12 +9696,12 @@ const OP_FILES_INFO: OpSpec = OpSpec {
     method: "GET",
     path_template: "/files.info",
     fields: &[
-        FieldSpec { snake: "token", location: FieldLocation::Query },
-        FieldSpec { snake: "file", location: FieldLocation::Query },
-        FieldSpec { snake: "count", location: FieldLocation::Query },
-        FieldSpec { snake: "page", location: FieldLocation::Query },
-        FieldSpec { snake: "limit", location: FieldLocation::Query },
-        FieldSpec { snake: "cursor", location: FieldLocation::Query },
+        FieldSpec { snake: "token", wire: "token", location: FieldLocation::Query },
+        FieldSpec { snake: "file", wire: "file", location: FieldLocation::Query },
+        FieldSpec { snake: "count", wire: "count", location: FieldLocation::Query },
+        FieldSpec { snake: "page", wire: "page", location: FieldLocation::Query },
+        FieldSpec { snake: "limit", wire: "limit", location: FieldLocation::Query },
+        FieldSpec { snake: "cursor", wire: "cursor", location: FieldLocation::Query },
     ],
     auth: &[
         AuthApply { secret_key: "slackAuth", kind: AuthKind::Bearer },
@@ -2909,15 +9712,15 @@ const OP_FILES_LIST_OP: OpSpec = OpSpec {
     method: "GET",
     path_template: "/files.list",
     fields: &[
-        FieldSpec { snake: "token", location: FieldLocation::Query },
-        FieldSpec { snake: "user", location: FieldLocation::Query },
-        FieldSpec { snake: "channel", location: FieldLocation::Query },
-        FieldSpec { snake: "ts_from", location: FieldLocation::Query },
-        FieldSpec { snake: "ts_to", location: FieldLocation::Query },
-        FieldSpec { snake: "types", location: FieldLocation::Query },
-        FieldSpec { snake: "count", location: FieldLocation::Query },
-        FieldSpec { snake: "page", location: FieldLocation::Query },
-        FieldSpec { snake: "show_files_hidden_by_limit", location: FieldLocation::Query },
+        FieldSpec { snake: "token", wire: "token", location: FieldLocation::Query },
+        FieldSpec { snake: "user", wire: "user", location: FieldLocation::Query },
+        FieldSpec { snake: "channel", wire: "channel", location: FieldLocation::Query },
+        FieldSpec { snake: "ts_from", wire: "ts_from", location: FieldLocation::Query },
+        FieldSpec { snake: "ts_to", wire: "ts_to", location: FieldLocation::Query },
+        FieldSpec { snake: "types", wire: "types", location: FieldLocation::Query },
+        FieldSpec { snake: "count", wire: "count", location: FieldLocation::Query },
+        FieldSpec { snake: "page", wire: "page", location: FieldLocation::Query },
+        FieldSpec { snake: "show_files_hidden_by_limit", wire: "show_files_hidden_by_limit", location: FieldLocation::Query },
     ],
     auth: &[
         AuthApply { secret_key: "slackAuth", kind: AuthKind::Bearer },
@@ -2928,7 +9731,8 @@ const OP_FILES_REVOKE_PUBLIC_URL: OpSpec = OpSpec {
     method: "POST",
     path_template: "/files.revokePublicURL",
     fields: &[
-        FieldSpec { snake: "token", location: FieldLocation::Header },
+        FieldSpec { snake: "token", wire: "token", location: FieldLocation::Header },
+        FieldSpec { snake: "file", wire: "file", location: FieldLocation::Body },
     ],
     auth: &[
         AuthApply { secret_key: "slackAuth", kind: AuthKind::Bearer },
@@ -2939,7 +9743,8 @@ const OP_FILES_SHARED_PUBLIC_URL: OpSpec = OpSpec {
     method: "POST",
     path_template: "/files.sharedPublicURL",
     fields: &[
-        FieldSpec { snake: "token", location: FieldLocation::Header },
+        FieldSpec { snake: "token", wire: "token", location: FieldLocation::Header },
+        FieldSpec { snake: "file", wire: "file", location: FieldLocation::Body },
     ],
     auth: &[
         AuthApply { secret_key: "slackAuth", kind: AuthKind::Bearer },
@@ -2950,15 +9755,239 @@ const OP_FILES_UPLOAD: OpSpec = OpSpec {
     method: "POST",
     path_template: "/files.upload",
     fields: &[
+        FieldSpec { snake: "channels", wire: "channels", location: FieldLocation::Body },
+        FieldSpec { snake: "content", wire: "content", location: FieldLocation::Body },
+        FieldSpec { snake: "file", wire: "file", location: FieldLocation::Body },
+        FieldSpec { snake: "filename", wire: "filename", location: FieldLocation::Body },
+        FieldSpec { snake: "filetype", wire: "filetype", location: FieldLocation::Body },
+        FieldSpec { snake: "initial_comment", wire: "initial_comment", location: FieldLocation::Body },
+        FieldSpec { snake: "thread_ts", wire: "thread_ts", location: FieldLocation::Body },
+        FieldSpec { snake: "title", wire: "title", location: FieldLocation::Body },
+        FieldSpec { snake: "token", wire: "token", location: FieldLocation::Body },
     ],
     auth: &[
         AuthApply { secret_key: "slackAuth", kind: AuthKind::Bearer },
     ],
 };
 
+fn iface_files__delete_response__to_json(p: &iface_files::DeleteResponse) -> Value {
+    let mut m = Map::new();
+    m.insert("ok".into(), iface_files__defs_ok_true__to_json(&p.ok));
+    Value::Object(m)
+}
+
+fn iface_files__defs_ok_true__to_json(p: &iface_files::DefsOkTrue) -> Value {
+    let mut m = Map::new();
+    m.insert("value".into(), Value::String((&p.value).clone()));
+    Value::Object(m)
+}
+
+fn iface_files__info_response__to_json(p: &iface_files::InfoResponse) -> Value {
+    let mut m = Map::new();
+    m.insert("comments".into(), iface_files__objs_comments__to_json(&p.comments));
+    m.insert("content_html".into(), match (&p.content_html) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("editor".into(), match (&p.editor) { Some(v) => iface_files__defs_user_id__to_json(v), None => Value::Null });
+    m.insert("file".into(), iface_files__objs_file__to_json(&p.file));
+    m.insert("ok".into(), iface_files__defs_ok_true__to_json(&p.ok));
+    m.insert("paging".into(), match (&p.paging) { Some(v) => iface_files__objs_paging__to_json(v), None => Value::Null });
+    m.insert("response_metadata".into(), match (&p.response_metadata) { Some(v) => iface_files__objs_response_metadata__to_json(v), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_files__objs_comments__to_json(p: &iface_files::ObjsComments) -> Value {
+    let mut m = Map::new();
+    m.insert("value".into(), Value::String((&p.value).clone()));
+    Value::Object(m)
+}
+
+fn iface_files__defs_user_id__to_json(p: &iface_files::DefsUserId) -> Value {
+    let mut m = Map::new();
+    m.insert("value".into(), Value::String((&p.value).clone()));
+    Value::Object(m)
+}
+
+fn iface_files__objs_file__to_json(p: &iface_files::ObjsFile) -> Value {
+    let mut m = Map::new();
+    m.insert("channels".into(), match (&p.channels) { Some(v) => Value::Array((v).iter().map(|v| iface_files__defs_channel_id__to_json(v)).collect()), None => Value::Null });
+    m.insert("comments_count".into(), match (&p.comments_count) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("created".into(), match (&p.created) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("date_delete".into(), match (&p.date_delete) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("display_as_bot".into(), match (&p.display_as_bot) { Some(v) => Value::Bool(*(v)), None => Value::Null });
+    m.insert("editable".into(), match (&p.editable) { Some(v) => Value::Bool(*(v)), None => Value::Null });
+    m.insert("editor".into(), match (&p.editor) { Some(v) => iface_files__defs_user_id__to_json(v), None => Value::Null });
+    m.insert("external_id".into(), match (&p.external_id) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("external_type".into(), match (&p.external_type) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("external_url".into(), match (&p.external_url) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("filetype".into(), match (&p.filetype) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("groups".into(), match (&p.groups) { Some(v) => Value::Array((v).iter().map(|v| iface_files__defs_group_id__to_json(v)).collect()), None => Value::Null });
+    m.insert("has_rich_preview".into(), match (&p.has_rich_preview) { Some(v) => Value::Bool(*(v)), None => Value::Null });
+    m.insert("id".into(), match (&p.id) { Some(v) => iface_files__defs_file_id__to_json(v), None => Value::Null });
+    m.insert("image_exif_rotation".into(), match (&p.image_exif_rotation) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("ims".into(), match (&p.ims) { Some(v) => Value::Array((v).iter().map(|v| iface_files__defs_dm_id__to_json(v)).collect()), None => Value::Null });
+    m.insert("is_external".into(), match (&p.is_external) { Some(v) => Value::Bool(*(v)), None => Value::Null });
+    m.insert("is_public".into(), match (&p.is_public) { Some(v) => Value::Bool(*(v)), None => Value::Null });
+    m.insert("is_starred".into(), match (&p.is_starred) { Some(v) => Value::Bool(*(v)), None => Value::Null });
+    m.insert("is_tombstoned".into(), match (&p.is_tombstoned) { Some(v) => Value::Bool(*(v)), None => Value::Null });
+    m.insert("last_editor".into(), match (&p.last_editor) { Some(v) => iface_files__defs_user_id__to_json(v), None => Value::Null });
+    m.insert("mimetype".into(), match (&p.mimetype) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("mode".into(), match (&p.mode) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("name".into(), match (&p.name) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("non_owner_editable".into(), match (&p.non_owner_editable) { Some(v) => Value::Bool(*(v)), None => Value::Null });
+    m.insert("num_stars".into(), match (&p.num_stars) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("original_h".into(), match (&p.original_h) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("original_w".into(), match (&p.original_w) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("permalink".into(), match (&p.permalink) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("permalink_public".into(), match (&p.permalink_public) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("pinned_info".into(), match (&p.pinned_info) { Some(v) => iface_files__defs_pinned_info__to_json(v), None => Value::Null });
+    m.insert("pinned_to".into(), match (&p.pinned_to) { Some(v) => Value::Array((v).iter().map(|v| iface_files__defs_channel__to_json(v)).collect()), None => Value::Null });
+    m.insert("pretty_type".into(), match (&p.pretty_type) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("preview".into(), match (&p.preview) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("public_url_shared".into(), match (&p.public_url_shared) { Some(v) => Value::Bool(*(v)), None => Value::Null });
+    m.insert("reactions".into(), match (&p.reactions) { Some(v) => Value::Array((v).iter().map(|v| iface_files__objs_reaction__to_json(v)).collect()), None => Value::Null });
+    m.insert("shares".into(), match (&p.shares) { Some(v) => iface_files__objs_file_shares__to_json(v), None => Value::Null });
+    m.insert("size".into(), match (&p.size) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("source_team".into(), match (&p.source_team) { Some(v) => iface_files__defs_team__to_json(v), None => Value::Null });
+    m.insert("state".into(), match (&p.state) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("thumb_1024".into(), match (&p.thumb_v1024) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("thumb_1024_h".into(), match (&p.thumb_v1024_h) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("thumb_1024_w".into(), match (&p.thumb_v1024_w) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("thumb_160".into(), match (&p.thumb_v160) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("thumb_360".into(), match (&p.thumb_v360) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("thumb_360_h".into(), match (&p.thumb_v360_h) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("thumb_360_w".into(), match (&p.thumb_v360_w) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("thumb_480".into(), match (&p.thumb_v480) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("thumb_480_h".into(), match (&p.thumb_v480_h) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("thumb_480_w".into(), match (&p.thumb_v480_w) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("thumb_64".into(), match (&p.thumb_v64) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("thumb_720".into(), match (&p.thumb_v720) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("thumb_720_h".into(), match (&p.thumb_v720_h) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("thumb_720_w".into(), match (&p.thumb_v720_w) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("thumb_80".into(), match (&p.thumb_v80) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("thumb_800".into(), match (&p.thumb_v800) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("thumb_800_h".into(), match (&p.thumb_v800_h) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("thumb_800_w".into(), match (&p.thumb_v800_w) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("thumb_960".into(), match (&p.thumb_v960) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("thumb_960_h".into(), match (&p.thumb_v960_h) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("thumb_960_w".into(), match (&p.thumb_v960_w) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("thumb_tiny".into(), match (&p.thumb_tiny) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("timestamp".into(), match (&p.timestamp) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("title".into(), match (&p.title) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("updated".into(), match (&p.updated) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("url_private".into(), match (&p.url_private) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("url_private_download".into(), match (&p.url_private_download) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("user".into(), match (&p.user) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("user_team".into(), match (&p.user_team) { Some(v) => iface_files__defs_team__to_json(v), None => Value::Null });
+    m.insert("username".into(), match (&p.username) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_files__defs_channel_id__to_json(p: &iface_files::DefsChannelId) -> Value {
+    let mut m = Map::new();
+    m.insert("value".into(), Value::String((&p.value).clone()));
+    Value::Object(m)
+}
+
+fn iface_files__defs_group_id__to_json(p: &iface_files::DefsGroupId) -> Value {
+    let mut m = Map::new();
+    m.insert("value".into(), Value::String((&p.value).clone()));
+    Value::Object(m)
+}
+
+fn iface_files__defs_file_id__to_json(p: &iface_files::DefsFileId) -> Value {
+    let mut m = Map::new();
+    m.insert("value".into(), Value::String((&p.value).clone()));
+    Value::Object(m)
+}
+
+fn iface_files__defs_dm_id__to_json(p: &iface_files::DefsDmId) -> Value {
+    let mut m = Map::new();
+    m.insert("value".into(), Value::String((&p.value).clone()));
+    Value::Object(m)
+}
+
+fn iface_files__defs_pinned_info__to_json(p: &iface_files::DefsPinnedInfo) -> Value {
+    let mut m = Map::new();
+    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_files__defs_channel__to_json(p: &iface_files::DefsChannel) -> Value {
+    let mut m = Map::new();
+    m.insert("value".into(), Value::String((&p.value).clone()));
+    Value::Object(m)
+}
+
+fn iface_files__objs_reaction__to_json(p: &iface_files::ObjsReaction) -> Value {
+    let mut m = Map::new();
+    m.insert("count".into(), Value::Number(serde_json::Number::from(*(&p.count))));
+    m.insert("name".into(), Value::String((&p.name).clone()));
+    m.insert("users".into(), Value::Array((&p.users).iter().map(|v| iface_files__defs_user_id__to_json(v)).collect()));
+    Value::Object(m)
+}
+
+fn iface_files__objs_file_shares__to_json(p: &iface_files::ObjsFileShares) -> Value {
+    let mut m = Map::new();
+    m.insert("private".into(), match (&p.private) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("public".into(), match (&p.public) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_files__defs_team__to_json(p: &iface_files::DefsTeam) -> Value {
+    let mut m = Map::new();
+    m.insert("value".into(), Value::String((&p.value).clone()));
+    Value::Object(m)
+}
+
+fn iface_files__objs_paging__to_json(p: &iface_files::ObjsPaging) -> Value {
+    let mut m = Map::new();
+    m.insert("count".into(), match (&p.count) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("page".into(), Value::Number(serde_json::Number::from(*(&p.page))));
+    m.insert("pages".into(), match (&p.pages) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("per_page".into(), match (&p.per_page) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("spill".into(), match (&p.spill) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("total".into(), Value::Number(serde_json::Number::from(*(&p.total))));
+    Value::Object(m)
+}
+
+fn iface_files__objs_response_metadata__to_json(p: &iface_files::ObjsResponseMetadata) -> Value {
+    let mut m = Map::new();
+    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_files__list_op_response__to_json(p: &iface_files::ListOpResponse) -> Value {
+    let mut m = Map::new();
+    m.insert("files".into(), Value::Array((&p.files).iter().map(|v| iface_files__objs_file__to_json(v)).collect()));
+    m.insert("ok".into(), iface_files__defs_ok_true__to_json(&p.ok));
+    m.insert("paging".into(), iface_files__objs_paging__to_json(&p.paging));
+    Value::Object(m)
+}
+
+fn iface_files__revoke_public_url_response__to_json(p: &iface_files::RevokePublicUrlResponse) -> Value {
+    let mut m = Map::new();
+    m.insert("file".into(), iface_files__objs_file__to_json(&p.file));
+    m.insert("ok".into(), iface_files__defs_ok_true__to_json(&p.ok));
+    Value::Object(m)
+}
+
+fn iface_files__shared_public_url_response__to_json(p: &iface_files::SharedPublicUrlResponse) -> Value {
+    let mut m = Map::new();
+    m.insert("file".into(), iface_files__objs_file__to_json(&p.file));
+    m.insert("ok".into(), iface_files__defs_ok_true__to_json(&p.ok));
+    Value::Object(m)
+}
+
+fn iface_files__upload_response__to_json(p: &iface_files::UploadResponse) -> Value {
+    let mut m = Map::new();
+    m.insert("file".into(), iface_files__objs_file__to_json(&p.file));
+    m.insert("ok".into(), iface_files__defs_ok_true__to_json(&p.ok));
+    Value::Object(m)
+}
+
 fn iface_files__delete_params__to_json(p: &iface_files::DeleteParams) -> Value {
     let mut m = Map::new();
     m.insert("token".into(), match (&p.token) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("file".into(), match (&p.file) { Some(v) => Value::String((v).clone()), None => Value::Null });
     Value::Object(m)
 }
 
@@ -2990,38 +10019,416 @@ fn iface_files__list_op_params__to_json(p: &iface_files::ListOpParams) -> Value 
 fn iface_files__revoke_public_url_params__to_json(p: &iface_files::RevokePublicUrlParams) -> Value {
     let mut m = Map::new();
     m.insert("token".into(), match (&p.token) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("file".into(), match (&p.file) { Some(v) => Value::String((v).clone()), None => Value::Null });
     Value::Object(m)
 }
 
 fn iface_files__shared_public_url_params__to_json(p: &iface_files::SharedPublicUrlParams) -> Value {
     let mut m = Map::new();
     m.insert("token".into(), match (&p.token) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("file".into(), match (&p.file) { Some(v) => Value::String((v).clone()), None => Value::Null });
     Value::Object(m)
 }
 
+fn iface_files__upload_params__to_json(p: &iface_files::UploadParams) -> Value {
+    let mut m = Map::new();
+    m.insert("channels".into(), match (&p.channels) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("content".into(), match (&p.content) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("file".into(), match (&p.file) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("filename".into(), match (&p.filename) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("filetype".into(), match (&p.filetype) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("initial_comment".into(), match (&p.initial_comment) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("thread_ts".into(), match (&p.thread_ts) { Some(v) => serde_json::Number::from_f64(*(v)).map(Value::Number).unwrap_or(Value::Null), None => Value::Null });
+    m.insert("title".into(), match (&p.title) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("token".into(), match (&p.token) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_files__delete_response__from_json(v: &Value) -> Option<iface_files::DeleteResponse> {
+    let m = v.as_object()?;
+    Some(iface_files::DeleteResponse {
+        ok: match m.get("ok").and_then(|v| iface_files__defs_ok_true__from_json(v)) { Some(x) => x, None => return None },
+    })
+}
+
+fn iface_files__defs_ok_true__from_json(v: &Value) -> Option<iface_files::DefsOkTrue> {
+    let m = v.as_object()?;
+    Some(iface_files::DefsOkTrue {
+        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+    })
+}
+
+fn iface_files__info_response__from_json(v: &Value) -> Option<iface_files::InfoResponse> {
+    let m = v.as_object()?;
+    Some(iface_files::InfoResponse {
+        comments: match m.get("comments").and_then(|v| iface_files__objs_comments__from_json(v)) { Some(x) => x, None => return None },
+        content_html: m.get("content_html").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        editor: m.get("editor").filter(|v| !v.is_null()).and_then(|v| iface_files__defs_user_id__from_json(v)),
+        file: match m.get("file").and_then(|v| iface_files__objs_file__from_json(v)) { Some(x) => x, None => return None },
+        ok: match m.get("ok").and_then(|v| iface_files__defs_ok_true__from_json(v)) { Some(x) => x, None => return None },
+        paging: m.get("paging").filter(|v| !v.is_null()).and_then(|v| iface_files__objs_paging__from_json(v)),
+        response_metadata: m.get("response_metadata").filter(|v| !v.is_null()).and_then(|v| iface_files__objs_response_metadata__from_json(v)),
+    })
+}
+
+fn iface_files__objs_comments__from_json(v: &Value) -> Option<iface_files::ObjsComments> {
+    let m = v.as_object()?;
+    Some(iface_files::ObjsComments {
+        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+    })
+}
+
+fn iface_files__defs_user_id__from_json(v: &Value) -> Option<iface_files::DefsUserId> {
+    let m = v.as_object()?;
+    Some(iface_files::DefsUserId {
+        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+    })
+}
+
+fn iface_files__objs_file__from_json(v: &Value) -> Option<iface_files::ObjsFile> {
+    let m = v.as_object()?;
+    Some(iface_files::ObjsFile {
+        channels: m.get("channels").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| iface_files__defs_channel_id__from_json(x)).collect())),
+        comments_count: m.get("comments_count").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        created: m.get("created").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        date_delete: m.get("date_delete").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        display_as_bot: m.get("display_as_bot").filter(|v| !v.is_null()).and_then(|v| (v).as_bool()),
+        editable: m.get("editable").filter(|v| !v.is_null()).and_then(|v| (v).as_bool()),
+        editor: m.get("editor").filter(|v| !v.is_null()).and_then(|v| iface_files__defs_user_id__from_json(v)),
+        external_id: m.get("external_id").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        external_type: m.get("external_type").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        external_url: m.get("external_url").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        filetype: m.get("filetype").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        groups: m.get("groups").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| iface_files__defs_group_id__from_json(x)).collect())),
+        has_rich_preview: m.get("has_rich_preview").filter(|v| !v.is_null()).and_then(|v| (v).as_bool()),
+        id: m.get("id").filter(|v| !v.is_null()).and_then(|v| iface_files__defs_file_id__from_json(v)),
+        image_exif_rotation: m.get("image_exif_rotation").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        ims: m.get("ims").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| iface_files__defs_dm_id__from_json(x)).collect())),
+        is_external: m.get("is_external").filter(|v| !v.is_null()).and_then(|v| (v).as_bool()),
+        is_public: m.get("is_public").filter(|v| !v.is_null()).and_then(|v| (v).as_bool()),
+        is_starred: m.get("is_starred").filter(|v| !v.is_null()).and_then(|v| (v).as_bool()),
+        is_tombstoned: m.get("is_tombstoned").filter(|v| !v.is_null()).and_then(|v| (v).as_bool()),
+        last_editor: m.get("last_editor").filter(|v| !v.is_null()).and_then(|v| iface_files__defs_user_id__from_json(v)),
+        mimetype: m.get("mimetype").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        mode: m.get("mode").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        name: m.get("name").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        non_owner_editable: m.get("non_owner_editable").filter(|v| !v.is_null()).and_then(|v| (v).as_bool()),
+        num_stars: m.get("num_stars").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        original_h: m.get("original_h").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        original_w: m.get("original_w").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        permalink: m.get("permalink").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        permalink_public: m.get("permalink_public").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        pinned_info: m.get("pinned_info").filter(|v| !v.is_null()).and_then(|v| iface_files__defs_pinned_info__from_json(v)),
+        pinned_to: m.get("pinned_to").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| iface_files__defs_channel__from_json(x)).collect())),
+        pretty_type: m.get("pretty_type").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        preview: m.get("preview").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        public_url_shared: m.get("public_url_shared").filter(|v| !v.is_null()).and_then(|v| (v).as_bool()),
+        reactions: m.get("reactions").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| iface_files__objs_reaction__from_json(x)).collect())),
+        shares: m.get("shares").filter(|v| !v.is_null()).and_then(|v| iface_files__objs_file_shares__from_json(v)),
+        size: m.get("size").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        source_team: m.get("source_team").filter(|v| !v.is_null()).and_then(|v| iface_files__defs_team__from_json(v)),
+        state: m.get("state").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        thumb_v1024: m.get("thumb_1024").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        thumb_v1024_h: m.get("thumb_1024_h").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        thumb_v1024_w: m.get("thumb_1024_w").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        thumb_v160: m.get("thumb_160").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        thumb_v360: m.get("thumb_360").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        thumb_v360_h: m.get("thumb_360_h").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        thumb_v360_w: m.get("thumb_360_w").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        thumb_v480: m.get("thumb_480").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        thumb_v480_h: m.get("thumb_480_h").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        thumb_v480_w: m.get("thumb_480_w").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        thumb_v64: m.get("thumb_64").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        thumb_v720: m.get("thumb_720").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        thumb_v720_h: m.get("thumb_720_h").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        thumb_v720_w: m.get("thumb_720_w").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        thumb_v80: m.get("thumb_80").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        thumb_v800: m.get("thumb_800").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        thumb_v800_h: m.get("thumb_800_h").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        thumb_v800_w: m.get("thumb_800_w").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        thumb_v960: m.get("thumb_960").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        thumb_v960_h: m.get("thumb_960_h").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        thumb_v960_w: m.get("thumb_960_w").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        thumb_tiny: m.get("thumb_tiny").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        timestamp: m.get("timestamp").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        title: m.get("title").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        updated: m.get("updated").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        url_private: m.get("url_private").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        url_private_download: m.get("url_private_download").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        user: m.get("user").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        user_team: m.get("user_team").filter(|v| !v.is_null()).and_then(|v| iface_files__defs_team__from_json(v)),
+        username: m.get("username").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    })
+}
+
+fn iface_files__defs_channel_id__from_json(v: &Value) -> Option<iface_files::DefsChannelId> {
+    let m = v.as_object()?;
+    Some(iface_files::DefsChannelId {
+        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+    })
+}
+
+fn iface_files__defs_group_id__from_json(v: &Value) -> Option<iface_files::DefsGroupId> {
+    let m = v.as_object()?;
+    Some(iface_files::DefsGroupId {
+        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+    })
+}
+
+fn iface_files__defs_file_id__from_json(v: &Value) -> Option<iface_files::DefsFileId> {
+    let m = v.as_object()?;
+    Some(iface_files::DefsFileId {
+        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+    })
+}
+
+fn iface_files__defs_dm_id__from_json(v: &Value) -> Option<iface_files::DefsDmId> {
+    let m = v.as_object()?;
+    Some(iface_files::DefsDmId {
+        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+    })
+}
+
+fn iface_files__defs_pinned_info__from_json(v: &Value) -> Option<iface_files::DefsPinnedInfo> {
+    let m = v.as_object()?;
+    Some(iface_files::DefsPinnedInfo {
+        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    })
+}
+
+fn iface_files__defs_channel__from_json(v: &Value) -> Option<iface_files::DefsChannel> {
+    let m = v.as_object()?;
+    Some(iface_files::DefsChannel {
+        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+    })
+}
+
+fn iface_files__objs_reaction__from_json(v: &Value) -> Option<iface_files::ObjsReaction> {
+    let m = v.as_object()?;
+    Some(iface_files::ObjsReaction {
+        count: m.get("count").and_then(|v| (v).as_i64().map(|n| n as i32)).unwrap_or_default(),
+        name: m.get("name").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        users: m.get("users").and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| iface_files__defs_user_id__from_json(x)).collect())).unwrap_or_default(),
+    })
+}
+
+fn iface_files__objs_file_shares__from_json(v: &Value) -> Option<iface_files::ObjsFileShares> {
+    let m = v.as_object()?;
+    Some(iface_files::ObjsFileShares {
+        private: m.get("private").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        public: m.get("public").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    })
+}
+
+fn iface_files__defs_team__from_json(v: &Value) -> Option<iface_files::DefsTeam> {
+    let m = v.as_object()?;
+    Some(iface_files::DefsTeam {
+        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+    })
+}
+
+fn iface_files__objs_paging__from_json(v: &Value) -> Option<iface_files::ObjsPaging> {
+    let m = v.as_object()?;
+    Some(iface_files::ObjsPaging {
+        count: m.get("count").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        page: m.get("page").and_then(|v| (v).as_i64().map(|n| n as i32)).unwrap_or_default(),
+        pages: m.get("pages").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        per_page: m.get("per_page").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        spill: m.get("spill").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        total: m.get("total").and_then(|v| (v).as_i64().map(|n| n as i32)).unwrap_or_default(),
+    })
+}
+
+fn iface_files__objs_response_metadata__from_json(v: &Value) -> Option<iface_files::ObjsResponseMetadata> {
+    let m = v.as_object()?;
+    Some(iface_files::ObjsResponseMetadata {
+        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    })
+}
+
+fn iface_files__list_op_response__from_json(v: &Value) -> Option<iface_files::ListOpResponse> {
+    let m = v.as_object()?;
+    Some(iface_files::ListOpResponse {
+        files: m.get("files").and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| iface_files__objs_file__from_json(x)).collect())).unwrap_or_default(),
+        ok: match m.get("ok").and_then(|v| iface_files__defs_ok_true__from_json(v)) { Some(x) => x, None => return None },
+        paging: match m.get("paging").and_then(|v| iface_files__objs_paging__from_json(v)) { Some(x) => x, None => return None },
+    })
+}
+
+fn iface_files__revoke_public_url_response__from_json(v: &Value) -> Option<iface_files::RevokePublicUrlResponse> {
+    let m = v.as_object()?;
+    Some(iface_files::RevokePublicUrlResponse {
+        file: match m.get("file").and_then(|v| iface_files__objs_file__from_json(v)) { Some(x) => x, None => return None },
+        ok: match m.get("ok").and_then(|v| iface_files__defs_ok_true__from_json(v)) { Some(x) => x, None => return None },
+    })
+}
+
+fn iface_files__shared_public_url_response__from_json(v: &Value) -> Option<iface_files::SharedPublicUrlResponse> {
+    let m = v.as_object()?;
+    Some(iface_files::SharedPublicUrlResponse {
+        file: match m.get("file").and_then(|v| iface_files__objs_file__from_json(v)) { Some(x) => x, None => return None },
+        ok: match m.get("ok").and_then(|v| iface_files__defs_ok_true__from_json(v)) { Some(x) => x, None => return None },
+    })
+}
+
+fn iface_files__upload_response__from_json(v: &Value) -> Option<iface_files::UploadResponse> {
+    let m = v.as_object()?;
+    Some(iface_files::UploadResponse {
+        file: match m.get("file").and_then(|v| iface_files__objs_file__from_json(v)) { Some(x) => x, None => return None },
+        ok: match m.get("ok").and_then(|v| iface_files__defs_ok_true__from_json(v)) { Some(x) => x, None => return None },
+    })
+}
+
+fn iface_files__delete__ok(body: String) -> Result<iface_files::DeleteResponse, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match iface_files__delete_response__from_json(&v) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_files__delete__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
+fn iface_files__info__ok(body: String) -> Result<iface_files::InfoResponse, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match iface_files__info_response__from_json(&v) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_files__info__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
+fn iface_files__list_op__ok(body: String) -> Result<iface_files::ListOpResponse, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match iface_files__list_op_response__from_json(&v) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_files__list_op__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
+fn iface_files__revoke_public_url__ok(body: String) -> Result<iface_files::RevokePublicUrlResponse, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match iface_files__revoke_public_url_response__from_json(&v) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_files__revoke_public_url__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
+fn iface_files__shared_public_url__ok(body: String) -> Result<iface_files::SharedPublicUrlResponse, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match iface_files__shared_public_url_response__from_json(&v) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_files__shared_public_url__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
+fn iface_files__upload__ok(body: String) -> Result<iface_files::UploadResponse, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match iface_files__upload_response__from_json(&v) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_files__upload__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
 impl iface_files::Guest for crate::Component {
-    fn delete(params: iface_files::DeleteParams) -> Result<String, String> {
+    fn delete(params: iface_files::DeleteParams) -> Result<iface_files::DeleteResponse, String> {
         let json = iface_files__delete_params__to_json(&params);
-        dispatch(&OP_FILES_DELETE, json)
+        match dispatch(&OP_FILES_DELETE, json).and_then(iface_files__delete__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_files__delete__err(e)),
+        }
     }
-    fn info(params: iface_files::InfoParams) -> Result<String, String> {
+    fn info(params: iface_files::InfoParams) -> Result<iface_files::InfoResponse, String> {
         let json = iface_files__info_params__to_json(&params);
-        dispatch(&OP_FILES_INFO, json)
+        match dispatch(&OP_FILES_INFO, json).and_then(iface_files__info__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_files__info__err(e)),
+        }
     }
-    fn list_op(params: iface_files::ListOpParams) -> Result<String, String> {
+    fn list_op(params: iface_files::ListOpParams) -> Result<iface_files::ListOpResponse, String> {
         let json = iface_files__list_op_params__to_json(&params);
-        dispatch(&OP_FILES_LIST_OP, json)
+        match dispatch(&OP_FILES_LIST_OP, json).and_then(iface_files__list_op__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_files__list_op__err(e)),
+        }
     }
-    fn revoke_public_url(params: iface_files::RevokePublicUrlParams) -> Result<String, String> {
+    fn revoke_public_url(params: iface_files::RevokePublicUrlParams) -> Result<iface_files::RevokePublicUrlResponse, String> {
         let json = iface_files__revoke_public_url_params__to_json(&params);
-        dispatch(&OP_FILES_REVOKE_PUBLIC_URL, json)
+        match dispatch(&OP_FILES_REVOKE_PUBLIC_URL, json).and_then(iface_files__revoke_public_url__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_files__revoke_public_url__err(e)),
+        }
     }
-    fn shared_public_url(params: iface_files::SharedPublicUrlParams) -> Result<String, String> {
+    fn shared_public_url(params: iface_files::SharedPublicUrlParams) -> Result<iface_files::SharedPublicUrlResponse, String> {
         let json = iface_files__shared_public_url_params__to_json(&params);
-        dispatch(&OP_FILES_SHARED_PUBLIC_URL, json)
+        match dispatch(&OP_FILES_SHARED_PUBLIC_URL, json).and_then(iface_files__shared_public_url__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_files__shared_public_url__err(e)),
+        }
     }
-    fn upload() -> Result<String, String> {
-        dispatch(&OP_FILES_UPLOAD, Value::Object(Map::new()))
+    fn upload(params: iface_files::UploadParams) -> Result<iface_files::UploadResponse, String> {
+        let json = iface_files__upload_params__to_json(&params);
+        match dispatch(&OP_FILES_UPLOAD, json).and_then(iface_files__upload__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_files__upload__err(e)),
+        }
     }
 }
 use crate::exports::autostamp::slack::files_remote as iface_files_remote;
@@ -3030,6 +10437,13 @@ const OP_FILES_REMOTE_ADD: OpSpec = OpSpec {
     method: "POST",
     path_template: "/files.remote.add",
     fields: &[
+        FieldSpec { snake: "external_id", wire: "external_id", location: FieldLocation::Body },
+        FieldSpec { snake: "external_url", wire: "external_url", location: FieldLocation::Body },
+        FieldSpec { snake: "filetype", wire: "filetype", location: FieldLocation::Body },
+        FieldSpec { snake: "indexable_file_contents", wire: "indexable_file_contents", location: FieldLocation::Body },
+        FieldSpec { snake: "preview_image", wire: "preview_image", location: FieldLocation::Body },
+        FieldSpec { snake: "title", wire: "title", location: FieldLocation::Body },
+        FieldSpec { snake: "token", wire: "token", location: FieldLocation::Body },
     ],
     auth: &[
         AuthApply { secret_key: "slackAuth", kind: AuthKind::Bearer },
@@ -3040,9 +10454,9 @@ const OP_FILES_REMOTE_INFO: OpSpec = OpSpec {
     method: "GET",
     path_template: "/files.remote.info",
     fields: &[
-        FieldSpec { snake: "token", location: FieldLocation::Query },
-        FieldSpec { snake: "file", location: FieldLocation::Query },
-        FieldSpec { snake: "external_id", location: FieldLocation::Query },
+        FieldSpec { snake: "token", wire: "token", location: FieldLocation::Query },
+        FieldSpec { snake: "file", wire: "file", location: FieldLocation::Query },
+        FieldSpec { snake: "external_id", wire: "external_id", location: FieldLocation::Query },
     ],
     auth: &[
         AuthApply { secret_key: "slackAuth", kind: AuthKind::Bearer },
@@ -3053,12 +10467,12 @@ const OP_FILES_REMOTE_LIST_OP: OpSpec = OpSpec {
     method: "GET",
     path_template: "/files.remote.list",
     fields: &[
-        FieldSpec { snake: "token", location: FieldLocation::Query },
-        FieldSpec { snake: "channel", location: FieldLocation::Query },
-        FieldSpec { snake: "ts_from", location: FieldLocation::Query },
-        FieldSpec { snake: "ts_to", location: FieldLocation::Query },
-        FieldSpec { snake: "limit", location: FieldLocation::Query },
-        FieldSpec { snake: "cursor", location: FieldLocation::Query },
+        FieldSpec { snake: "token", wire: "token", location: FieldLocation::Query },
+        FieldSpec { snake: "channel", wire: "channel", location: FieldLocation::Query },
+        FieldSpec { snake: "ts_from", wire: "ts_from", location: FieldLocation::Query },
+        FieldSpec { snake: "ts_to", wire: "ts_to", location: FieldLocation::Query },
+        FieldSpec { snake: "limit", wire: "limit", location: FieldLocation::Query },
+        FieldSpec { snake: "cursor", wire: "cursor", location: FieldLocation::Query },
     ],
     auth: &[
         AuthApply { secret_key: "slackAuth", kind: AuthKind::Bearer },
@@ -3069,6 +10483,9 @@ const OP_FILES_REMOTE_REMOVE: OpSpec = OpSpec {
     method: "POST",
     path_template: "/files.remote.remove",
     fields: &[
+        FieldSpec { snake: "external_id", wire: "external_id", location: FieldLocation::Body },
+        FieldSpec { snake: "file", wire: "file", location: FieldLocation::Body },
+        FieldSpec { snake: "token", wire: "token", location: FieldLocation::Body },
     ],
     auth: &[
         AuthApply { secret_key: "slackAuth", kind: AuthKind::Bearer },
@@ -3079,10 +10496,10 @@ const OP_FILES_REMOTE_SHARE: OpSpec = OpSpec {
     method: "GET",
     path_template: "/files.remote.share",
     fields: &[
-        FieldSpec { snake: "token", location: FieldLocation::Query },
-        FieldSpec { snake: "file", location: FieldLocation::Query },
-        FieldSpec { snake: "external_id", location: FieldLocation::Query },
-        FieldSpec { snake: "channels", location: FieldLocation::Query },
+        FieldSpec { snake: "token", wire: "token", location: FieldLocation::Query },
+        FieldSpec { snake: "file", wire: "file", location: FieldLocation::Query },
+        FieldSpec { snake: "external_id", wire: "external_id", location: FieldLocation::Query },
+        FieldSpec { snake: "channels", wire: "channels", location: FieldLocation::Query },
     ],
     auth: &[
         AuthApply { secret_key: "slackAuth", kind: AuthKind::Bearer },
@@ -3093,11 +10510,73 @@ const OP_FILES_REMOTE_UPDATE: OpSpec = OpSpec {
     method: "POST",
     path_template: "/files.remote.update",
     fields: &[
+        FieldSpec { snake: "external_id", wire: "external_id", location: FieldLocation::Body },
+        FieldSpec { snake: "external_url", wire: "external_url", location: FieldLocation::Body },
+        FieldSpec { snake: "file", wire: "file", location: FieldLocation::Body },
+        FieldSpec { snake: "filetype", wire: "filetype", location: FieldLocation::Body },
+        FieldSpec { snake: "indexable_file_contents", wire: "indexable_file_contents", location: FieldLocation::Body },
+        FieldSpec { snake: "preview_image", wire: "preview_image", location: FieldLocation::Body },
+        FieldSpec { snake: "title", wire: "title", location: FieldLocation::Body },
+        FieldSpec { snake: "token", wire: "token", location: FieldLocation::Body },
     ],
     auth: &[
         AuthApply { secret_key: "slackAuth", kind: AuthKind::Bearer },
     ],
 };
+
+fn iface_files_remote__add_response__to_json(p: &iface_files_remote::AddResponse) -> Value {
+    let mut m = Map::new();
+    m.insert("ok".into(), iface_files_remote__defs_ok_true__to_json(&p.ok));
+    Value::Object(m)
+}
+
+fn iface_files_remote__defs_ok_true__to_json(p: &iface_files_remote::DefsOkTrue) -> Value {
+    let mut m = Map::new();
+    m.insert("value".into(), Value::String((&p.value).clone()));
+    Value::Object(m)
+}
+
+fn iface_files_remote__info_response__to_json(p: &iface_files_remote::InfoResponse) -> Value {
+    let mut m = Map::new();
+    m.insert("ok".into(), iface_files_remote__defs_ok_true__to_json(&p.ok));
+    Value::Object(m)
+}
+
+fn iface_files_remote__list_op_response__to_json(p: &iface_files_remote::ListOpResponse) -> Value {
+    let mut m = Map::new();
+    m.insert("ok".into(), iface_files_remote__defs_ok_true__to_json(&p.ok));
+    Value::Object(m)
+}
+
+fn iface_files_remote__remove_response__to_json(p: &iface_files_remote::RemoveResponse) -> Value {
+    let mut m = Map::new();
+    m.insert("ok".into(), iface_files_remote__defs_ok_true__to_json(&p.ok));
+    Value::Object(m)
+}
+
+fn iface_files_remote__share_response__to_json(p: &iface_files_remote::ShareResponse) -> Value {
+    let mut m = Map::new();
+    m.insert("ok".into(), iface_files_remote__defs_ok_true__to_json(&p.ok));
+    Value::Object(m)
+}
+
+fn iface_files_remote__update_response__to_json(p: &iface_files_remote::UpdateResponse) -> Value {
+    let mut m = Map::new();
+    m.insert("ok".into(), iface_files_remote__defs_ok_true__to_json(&p.ok));
+    Value::Object(m)
+}
+
+fn iface_files_remote__add_params__to_json(p: &iface_files_remote::AddParams) -> Value {
+    let mut m = Map::new();
+    m.insert("external_id".into(), match (&p.external_id) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("external_url".into(), match (&p.external_url) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("filetype".into(), match (&p.filetype) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("indexable_file_contents".into(), match (&p.indexable_file_contents) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("preview_image".into(), match (&p.preview_image) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("title".into(), match (&p.title) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("token".into(), match (&p.token) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
 
 fn iface_files_remote__info_params__to_json(p: &iface_files_remote::InfoParams) -> Value {
     let mut m = Map::new();
@@ -3118,6 +10597,14 @@ fn iface_files_remote__list_op_params__to_json(p: &iface_files_remote::ListOpPar
     Value::Object(m)
 }
 
+fn iface_files_remote__remove_params__to_json(p: &iface_files_remote::RemoveParams) -> Value {
+    let mut m = Map::new();
+    m.insert("external_id".into(), match (&p.external_id) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("file".into(), match (&p.file) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("token".into(), match (&p.token) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
 fn iface_files_remote__share_params__to_json(p: &iface_files_remote::ShareParams) -> Value {
     let mut m = Map::new();
     m.insert("token".into(), match (&p.token) { Some(v) => Value::String((v).clone()), None => Value::Null });
@@ -3127,27 +10614,218 @@ fn iface_files_remote__share_params__to_json(p: &iface_files_remote::ShareParams
     Value::Object(m)
 }
 
+fn iface_files_remote__update_params__to_json(p: &iface_files_remote::UpdateParams) -> Value {
+    let mut m = Map::new();
+    m.insert("external_id".into(), match (&p.external_id) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("external_url".into(), match (&p.external_url) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("file".into(), match (&p.file) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("filetype".into(), match (&p.filetype) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("indexable_file_contents".into(), match (&p.indexable_file_contents) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("preview_image".into(), match (&p.preview_image) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("title".into(), match (&p.title) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("token".into(), match (&p.token) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_files_remote__add_response__from_json(v: &Value) -> Option<iface_files_remote::AddResponse> {
+    let m = v.as_object()?;
+    Some(iface_files_remote::AddResponse {
+        ok: match m.get("ok").and_then(|v| iface_files_remote__defs_ok_true__from_json(v)) { Some(x) => x, None => return None },
+    })
+}
+
+fn iface_files_remote__defs_ok_true__from_json(v: &Value) -> Option<iface_files_remote::DefsOkTrue> {
+    let m = v.as_object()?;
+    Some(iface_files_remote::DefsOkTrue {
+        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+    })
+}
+
+fn iface_files_remote__info_response__from_json(v: &Value) -> Option<iface_files_remote::InfoResponse> {
+    let m = v.as_object()?;
+    Some(iface_files_remote::InfoResponse {
+        ok: match m.get("ok").and_then(|v| iface_files_remote__defs_ok_true__from_json(v)) { Some(x) => x, None => return None },
+    })
+}
+
+fn iface_files_remote__list_op_response__from_json(v: &Value) -> Option<iface_files_remote::ListOpResponse> {
+    let m = v.as_object()?;
+    Some(iface_files_remote::ListOpResponse {
+        ok: match m.get("ok").and_then(|v| iface_files_remote__defs_ok_true__from_json(v)) { Some(x) => x, None => return None },
+    })
+}
+
+fn iface_files_remote__remove_response__from_json(v: &Value) -> Option<iface_files_remote::RemoveResponse> {
+    let m = v.as_object()?;
+    Some(iface_files_remote::RemoveResponse {
+        ok: match m.get("ok").and_then(|v| iface_files_remote__defs_ok_true__from_json(v)) { Some(x) => x, None => return None },
+    })
+}
+
+fn iface_files_remote__share_response__from_json(v: &Value) -> Option<iface_files_remote::ShareResponse> {
+    let m = v.as_object()?;
+    Some(iface_files_remote::ShareResponse {
+        ok: match m.get("ok").and_then(|v| iface_files_remote__defs_ok_true__from_json(v)) { Some(x) => x, None => return None },
+    })
+}
+
+fn iface_files_remote__update_response__from_json(v: &Value) -> Option<iface_files_remote::UpdateResponse> {
+    let m = v.as_object()?;
+    Some(iface_files_remote::UpdateResponse {
+        ok: match m.get("ok").and_then(|v| iface_files_remote__defs_ok_true__from_json(v)) { Some(x) => x, None => return None },
+    })
+}
+
+fn iface_files_remote__add__ok(body: String) -> Result<iface_files_remote::AddResponse, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match iface_files_remote__add_response__from_json(&v) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_files_remote__add__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
+fn iface_files_remote__info__ok(body: String) -> Result<iface_files_remote::InfoResponse, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match iface_files_remote__info_response__from_json(&v) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_files_remote__info__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
+fn iface_files_remote__list_op__ok(body: String) -> Result<iface_files_remote::ListOpResponse, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match iface_files_remote__list_op_response__from_json(&v) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_files_remote__list_op__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
+fn iface_files_remote__remove__ok(body: String) -> Result<iface_files_remote::RemoveResponse, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match iface_files_remote__remove_response__from_json(&v) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_files_remote__remove__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
+fn iface_files_remote__share__ok(body: String) -> Result<iface_files_remote::ShareResponse, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match iface_files_remote__share_response__from_json(&v) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_files_remote__share__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
+fn iface_files_remote__update__ok(body: String) -> Result<iface_files_remote::UpdateResponse, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match iface_files_remote__update_response__from_json(&v) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_files_remote__update__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
 impl iface_files_remote::Guest for crate::Component {
-    fn add() -> Result<String, String> {
-        dispatch(&OP_FILES_REMOTE_ADD, Value::Object(Map::new()))
+    fn add(params: iface_files_remote::AddParams) -> Result<iface_files_remote::AddResponse, String> {
+        let json = iface_files_remote__add_params__to_json(&params);
+        match dispatch(&OP_FILES_REMOTE_ADD, json).and_then(iface_files_remote__add__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_files_remote__add__err(e)),
+        }
     }
-    fn info(params: iface_files_remote::InfoParams) -> Result<String, String> {
+    fn info(params: iface_files_remote::InfoParams) -> Result<iface_files_remote::InfoResponse, String> {
         let json = iface_files_remote__info_params__to_json(&params);
-        dispatch(&OP_FILES_REMOTE_INFO, json)
+        match dispatch(&OP_FILES_REMOTE_INFO, json).and_then(iface_files_remote__info__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_files_remote__info__err(e)),
+        }
     }
-    fn list_op(params: iface_files_remote::ListOpParams) -> Result<String, String> {
+    fn list_op(params: iface_files_remote::ListOpParams) -> Result<iface_files_remote::ListOpResponse, String> {
         let json = iface_files_remote__list_op_params__to_json(&params);
-        dispatch(&OP_FILES_REMOTE_LIST_OP, json)
+        match dispatch(&OP_FILES_REMOTE_LIST_OP, json).and_then(iface_files_remote__list_op__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_files_remote__list_op__err(e)),
+        }
     }
-    fn remove() -> Result<String, String> {
-        dispatch(&OP_FILES_REMOTE_REMOVE, Value::Object(Map::new()))
+    fn remove(params: iface_files_remote::RemoveParams) -> Result<iface_files_remote::RemoveResponse, String> {
+        let json = iface_files_remote__remove_params__to_json(&params);
+        match dispatch(&OP_FILES_REMOTE_REMOVE, json).and_then(iface_files_remote__remove__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_files_remote__remove__err(e)),
+        }
     }
-    fn share(params: iface_files_remote::ShareParams) -> Result<String, String> {
+    fn share(params: iface_files_remote::ShareParams) -> Result<iface_files_remote::ShareResponse, String> {
         let json = iface_files_remote__share_params__to_json(&params);
-        dispatch(&OP_FILES_REMOTE_SHARE, json)
+        match dispatch(&OP_FILES_REMOTE_SHARE, json).and_then(iface_files_remote__share__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_files_remote__share__err(e)),
+        }
     }
-    fn update() -> Result<String, String> {
-        dispatch(&OP_FILES_REMOTE_UPDATE, Value::Object(Map::new()))
+    fn update(params: iface_files_remote::UpdateParams) -> Result<iface_files_remote::UpdateResponse, String> {
+        let json = iface_files_remote__update_params__to_json(&params);
+        match dispatch(&OP_FILES_REMOTE_UPDATE, json).and_then(iface_files_remote__update__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_files_remote__update__err(e)),
+        }
     }
 }
 use crate::exports::autostamp::slack::migration as iface_migration;
@@ -3156,15 +10834,43 @@ const OP_MIGRATION_EXCHANGE: OpSpec = OpSpec {
     method: "GET",
     path_template: "/migration.exchange",
     fields: &[
-        FieldSpec { snake: "token", location: FieldLocation::Query },
-        FieldSpec { snake: "users", location: FieldLocation::Query },
-        FieldSpec { snake: "team_id", location: FieldLocation::Query },
-        FieldSpec { snake: "to_old", location: FieldLocation::Query },
+        FieldSpec { snake: "token", wire: "token", location: FieldLocation::Query },
+        FieldSpec { snake: "users", wire: "users", location: FieldLocation::Query },
+        FieldSpec { snake: "team_id", wire: "team_id", location: FieldLocation::Query },
+        FieldSpec { snake: "to_old", wire: "to_old", location: FieldLocation::Query },
     ],
     auth: &[
         AuthApply { secret_key: "slackAuth", kind: AuthKind::Bearer },
     ],
 };
+
+fn iface_migration__exchange_response__to_json(p: &iface_migration::ExchangeResponse) -> Value {
+    let mut m = Map::new();
+    m.insert("enterprise_id".into(), Value::String((&p.enterprise_id).clone()));
+    m.insert("invalid_user_ids".into(), match (&p.invalid_user_ids) { Some(v) => Value::Array((v).iter().map(|v| Value::String((v).clone())).collect()), None => Value::Null });
+    m.insert("ok".into(), iface_migration__defs_ok_true__to_json(&p.ok));
+    m.insert("team_id".into(), iface_migration__defs_team__to_json(&p.team_id));
+    m.insert("user_id_map".into(), match (&p.user_id_map) { Some(v) => iface_migration__exchange_response_user_id_map__to_json(v), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_migration__defs_ok_true__to_json(p: &iface_migration::DefsOkTrue) -> Value {
+    let mut m = Map::new();
+    m.insert("value".into(), Value::String((&p.value).clone()));
+    Value::Object(m)
+}
+
+fn iface_migration__defs_team__to_json(p: &iface_migration::DefsTeam) -> Value {
+    let mut m = Map::new();
+    m.insert("value".into(), Value::String((&p.value).clone()));
+    Value::Object(m)
+}
+
+fn iface_migration__exchange_response_user_id_map__to_json(p: &iface_migration::ExchangeResponseUserIdMap) -> Value {
+    let mut m = Map::new();
+    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
 
 fn iface_migration__exchange_params__to_json(p: &iface_migration::ExchangeParams) -> Value {
     let mut m = Map::new();
@@ -3175,10 +10881,63 @@ fn iface_migration__exchange_params__to_json(p: &iface_migration::ExchangeParams
     Value::Object(m)
 }
 
+fn iface_migration__exchange_response__from_json(v: &Value) -> Option<iface_migration::ExchangeResponse> {
+    let m = v.as_object()?;
+    Some(iface_migration::ExchangeResponse {
+        enterprise_id: m.get("enterprise_id").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        invalid_user_ids: m.get("invalid_user_ids").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| (x).as_str().map(|s| s.to_string())).collect())),
+        ok: match m.get("ok").and_then(|v| iface_migration__defs_ok_true__from_json(v)) { Some(x) => x, None => return None },
+        team_id: match m.get("team_id").and_then(|v| iface_migration__defs_team__from_json(v)) { Some(x) => x, None => return None },
+        user_id_map: m.get("user_id_map").filter(|v| !v.is_null()).and_then(|v| iface_migration__exchange_response_user_id_map__from_json(v)),
+    })
+}
+
+fn iface_migration__defs_ok_true__from_json(v: &Value) -> Option<iface_migration::DefsOkTrue> {
+    let m = v.as_object()?;
+    Some(iface_migration::DefsOkTrue {
+        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+    })
+}
+
+fn iface_migration__defs_team__from_json(v: &Value) -> Option<iface_migration::DefsTeam> {
+    let m = v.as_object()?;
+    Some(iface_migration::DefsTeam {
+        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+    })
+}
+
+fn iface_migration__exchange_response_user_id_map__from_json(v: &Value) -> Option<iface_migration::ExchangeResponseUserIdMap> {
+    let m = v.as_object()?;
+    Some(iface_migration::ExchangeResponseUserIdMap {
+        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    })
+}
+
+fn iface_migration__exchange__ok(body: String) -> Result<iface_migration::ExchangeResponse, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match iface_migration__exchange_response__from_json(&v) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_migration__exchange__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
 impl iface_migration::Guest for crate::Component {
-    fn exchange(params: iface_migration::ExchangeParams) -> Result<String, String> {
+    fn exchange(params: iface_migration::ExchangeParams) -> Result<iface_migration::ExchangeResponse, String> {
         let json = iface_migration__exchange_params__to_json(&params);
-        dispatch(&OP_MIGRATION_EXCHANGE, json)
+        match dispatch(&OP_MIGRATION_EXCHANGE, json).and_then(iface_migration__exchange__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_migration__exchange__err(e)),
+        }
     }
 }
 use crate::exports::autostamp::slack::oauth as iface_oauth;
@@ -3187,11 +10946,11 @@ const OP_OAUTH_ACCESS: OpSpec = OpSpec {
     method: "GET",
     path_template: "/oauth.access",
     fields: &[
-        FieldSpec { snake: "client_id", location: FieldLocation::Query },
-        FieldSpec { snake: "client_secret", location: FieldLocation::Query },
-        FieldSpec { snake: "code", location: FieldLocation::Query },
-        FieldSpec { snake: "redirect_uri", location: FieldLocation::Query },
-        FieldSpec { snake: "single_channel", location: FieldLocation::Query },
+        FieldSpec { snake: "client_id", wire: "client_id", location: FieldLocation::Query },
+        FieldSpec { snake: "client_secret", wire: "client_secret", location: FieldLocation::Query },
+        FieldSpec { snake: "code", wire: "code", location: FieldLocation::Query },
+        FieldSpec { snake: "redirect_uri", wire: "redirect_uri", location: FieldLocation::Query },
+        FieldSpec { snake: "single_channel", wire: "single_channel", location: FieldLocation::Query },
     ],
     auth: &[
         AuthApply { secret_key: "slackAuth", kind: AuthKind::Bearer },
@@ -3202,16 +10961,34 @@ const OP_OAUTH_TOKEN: OpSpec = OpSpec {
     method: "GET",
     path_template: "/oauth.token",
     fields: &[
-        FieldSpec { snake: "client_id", location: FieldLocation::Query },
-        FieldSpec { snake: "client_secret", location: FieldLocation::Query },
-        FieldSpec { snake: "code", location: FieldLocation::Query },
-        FieldSpec { snake: "redirect_uri", location: FieldLocation::Query },
-        FieldSpec { snake: "single_channel", location: FieldLocation::Query },
+        FieldSpec { snake: "client_id", wire: "client_id", location: FieldLocation::Query },
+        FieldSpec { snake: "client_secret", wire: "client_secret", location: FieldLocation::Query },
+        FieldSpec { snake: "code", wire: "code", location: FieldLocation::Query },
+        FieldSpec { snake: "redirect_uri", wire: "redirect_uri", location: FieldLocation::Query },
+        FieldSpec { snake: "single_channel", wire: "single_channel", location: FieldLocation::Query },
     ],
     auth: &[
         AuthApply { secret_key: "slackAuth", kind: AuthKind::Bearer },
     ],
 };
+
+fn iface_oauth__access_response__to_json(p: &iface_oauth::AccessResponse) -> Value {
+    let mut m = Map::new();
+    m.insert("ok".into(), iface_oauth__defs_ok_true__to_json(&p.ok));
+    Value::Object(m)
+}
+
+fn iface_oauth__defs_ok_true__to_json(p: &iface_oauth::DefsOkTrue) -> Value {
+    let mut m = Map::new();
+    m.insert("value".into(), Value::String((&p.value).clone()));
+    Value::Object(m)
+}
+
+fn iface_oauth__token_response__to_json(p: &iface_oauth::TokenResponse) -> Value {
+    let mut m = Map::new();
+    m.insert("ok".into(), iface_oauth__defs_ok_true__to_json(&p.ok));
+    Value::Object(m)
+}
 
 fn iface_oauth__access_params__to_json(p: &iface_oauth::AccessParams) -> Value {
     let mut m = Map::new();
@@ -3233,14 +11010,77 @@ fn iface_oauth__token_params__to_json(p: &iface_oauth::TokenParams) -> Value {
     Value::Object(m)
 }
 
-impl iface_oauth::Guest for crate::Component {
-    fn access(params: iface_oauth::AccessParams) -> Result<String, String> {
-        let json = iface_oauth__access_params__to_json(&params);
-        dispatch(&OP_OAUTH_ACCESS, json)
+fn iface_oauth__access_response__from_json(v: &Value) -> Option<iface_oauth::AccessResponse> {
+    let m = v.as_object()?;
+    Some(iface_oauth::AccessResponse {
+        ok: match m.get("ok").and_then(|v| iface_oauth__defs_ok_true__from_json(v)) { Some(x) => x, None => return None },
+    })
+}
+
+fn iface_oauth__defs_ok_true__from_json(v: &Value) -> Option<iface_oauth::DefsOkTrue> {
+    let m = v.as_object()?;
+    Some(iface_oauth::DefsOkTrue {
+        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+    })
+}
+
+fn iface_oauth__token_response__from_json(v: &Value) -> Option<iface_oauth::TokenResponse> {
+    let m = v.as_object()?;
+    Some(iface_oauth::TokenResponse {
+        ok: match m.get("ok").and_then(|v| iface_oauth__defs_ok_true__from_json(v)) { Some(x) => x, None => return None },
+    })
+}
+
+fn iface_oauth__access__ok(body: String) -> Result<iface_oauth::AccessResponse, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match iface_oauth__access_response__from_json(&v) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
     }
-    fn token(params: iface_oauth::TokenParams) -> Result<String, String> {
+}
+
+fn iface_oauth__access__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
+fn iface_oauth__token__ok(body: String) -> Result<iface_oauth::TokenResponse, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match iface_oauth__token_response__from_json(&v) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_oauth__token__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
+impl iface_oauth::Guest for crate::Component {
+    fn access(params: iface_oauth::AccessParams) -> Result<iface_oauth::AccessResponse, String> {
+        let json = iface_oauth__access_params__to_json(&params);
+        match dispatch(&OP_OAUTH_ACCESS, json).and_then(iface_oauth__access__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_oauth__access__err(e)),
+        }
+    }
+    fn token(params: iface_oauth::TokenParams) -> Result<iface_oauth::TokenResponse, String> {
         let json = iface_oauth__token_params__to_json(&params);
-        dispatch(&OP_OAUTH_TOKEN, json)
+        match dispatch(&OP_OAUTH_TOKEN, json).and_then(iface_oauth__token__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_oauth__token__err(e)),
+        }
     }
 }
 use crate::exports::autostamp::slack::oauth_v2 as iface_oauth_v2;
@@ -3249,15 +11089,27 @@ const OP_OAUTH_V2_ACCESS: OpSpec = OpSpec {
     method: "GET",
     path_template: "/oauth.v2.access",
     fields: &[
-        FieldSpec { snake: "client_id", location: FieldLocation::Query },
-        FieldSpec { snake: "client_secret", location: FieldLocation::Query },
-        FieldSpec { snake: "code", location: FieldLocation::Query },
-        FieldSpec { snake: "redirect_uri", location: FieldLocation::Query },
+        FieldSpec { snake: "client_id", wire: "client_id", location: FieldLocation::Query },
+        FieldSpec { snake: "client_secret", wire: "client_secret", location: FieldLocation::Query },
+        FieldSpec { snake: "code", wire: "code", location: FieldLocation::Query },
+        FieldSpec { snake: "redirect_uri", wire: "redirect_uri", location: FieldLocation::Query },
     ],
     auth: &[
         AuthApply { secret_key: "slackAuth", kind: AuthKind::Bearer },
     ],
 };
+
+fn iface_oauth_v2__access_response__to_json(p: &iface_oauth_v2::AccessResponse) -> Value {
+    let mut m = Map::new();
+    m.insert("ok".into(), iface_oauth_v2__defs_ok_true__to_json(&p.ok));
+    Value::Object(m)
+}
+
+fn iface_oauth_v2__defs_ok_true__to_json(p: &iface_oauth_v2::DefsOkTrue) -> Value {
+    let mut m = Map::new();
+    m.insert("value".into(), Value::String((&p.value).clone()));
+    Value::Object(m)
+}
 
 fn iface_oauth_v2__access_params__to_json(p: &iface_oauth_v2::AccessParams) -> Value {
     let mut m = Map::new();
@@ -3268,10 +11120,45 @@ fn iface_oauth_v2__access_params__to_json(p: &iface_oauth_v2::AccessParams) -> V
     Value::Object(m)
 }
 
+fn iface_oauth_v2__access_response__from_json(v: &Value) -> Option<iface_oauth_v2::AccessResponse> {
+    let m = v.as_object()?;
+    Some(iface_oauth_v2::AccessResponse {
+        ok: match m.get("ok").and_then(|v| iface_oauth_v2__defs_ok_true__from_json(v)) { Some(x) => x, None => return None },
+    })
+}
+
+fn iface_oauth_v2__defs_ok_true__from_json(v: &Value) -> Option<iface_oauth_v2::DefsOkTrue> {
+    let m = v.as_object()?;
+    Some(iface_oauth_v2::DefsOkTrue {
+        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+    })
+}
+
+fn iface_oauth_v2__access__ok(body: String) -> Result<iface_oauth_v2::AccessResponse, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match iface_oauth_v2__access_response__from_json(&v) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_oauth_v2__access__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
 impl iface_oauth_v2::Guest for crate::Component {
-    fn access(params: iface_oauth_v2::AccessParams) -> Result<String, String> {
+    fn access(params: iface_oauth_v2::AccessParams) -> Result<iface_oauth_v2::AccessResponse, String> {
         let json = iface_oauth_v2__access_params__to_json(&params);
-        dispatch(&OP_OAUTH_V2_ACCESS, json)
+        match dispatch(&OP_OAUTH_V2_ACCESS, json).and_then(iface_oauth_v2__access__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_oauth_v2__access__err(e)),
+        }
     }
 }
 use crate::exports::autostamp::slack::pins as iface_pins;
@@ -3280,7 +11167,9 @@ const OP_PINS_ADD: OpSpec = OpSpec {
     method: "POST",
     path_template: "/pins.add",
     fields: &[
-        FieldSpec { snake: "token", location: FieldLocation::Header },
+        FieldSpec { snake: "token", wire: "token", location: FieldLocation::Header },
+        FieldSpec { snake: "channel", wire: "channel", location: FieldLocation::Body },
+        FieldSpec { snake: "timestamp", wire: "timestamp", location: FieldLocation::Body },
     ],
     auth: &[
         AuthApply { secret_key: "slackAuth", kind: AuthKind::Bearer },
@@ -3291,8 +11180,8 @@ const OP_PINS_LIST_OP: OpSpec = OpSpec {
     method: "GET",
     path_template: "/pins.list",
     fields: &[
-        FieldSpec { snake: "token", location: FieldLocation::Query },
-        FieldSpec { snake: "channel", location: FieldLocation::Query },
+        FieldSpec { snake: "token", wire: "token", location: FieldLocation::Query },
+        FieldSpec { snake: "channel", wire: "channel", location: FieldLocation::Query },
     ],
     auth: &[
         AuthApply { secret_key: "slackAuth", kind: AuthKind::Bearer },
@@ -3303,16 +11192,38 @@ const OP_PINS_REMOVE: OpSpec = OpSpec {
     method: "POST",
     path_template: "/pins.remove",
     fields: &[
-        FieldSpec { snake: "token", location: FieldLocation::Header },
+        FieldSpec { snake: "token", wire: "token", location: FieldLocation::Header },
+        FieldSpec { snake: "channel", wire: "channel", location: FieldLocation::Body },
+        FieldSpec { snake: "timestamp", wire: "timestamp", location: FieldLocation::Body },
     ],
     auth: &[
         AuthApply { secret_key: "slackAuth", kind: AuthKind::Bearer },
     ],
 };
 
+fn iface_pins__add_response__to_json(p: &iface_pins::AddResponse) -> Value {
+    let mut m = Map::new();
+    m.insert("ok".into(), iface_pins__defs_ok_true__to_json(&p.ok));
+    Value::Object(m)
+}
+
+fn iface_pins__defs_ok_true__to_json(p: &iface_pins::DefsOkTrue) -> Value {
+    let mut m = Map::new();
+    m.insert("value".into(), Value::String((&p.value).clone()));
+    Value::Object(m)
+}
+
+fn iface_pins__remove_response__to_json(p: &iface_pins::RemoveResponse) -> Value {
+    let mut m = Map::new();
+    m.insert("ok".into(), iface_pins__defs_ok_true__to_json(&p.ok));
+    Value::Object(m)
+}
+
 fn iface_pins__add_params__to_json(p: &iface_pins::AddParams) -> Value {
     let mut m = Map::new();
     m.insert("token".into(), Value::String((&p.token).clone()));
+    m.insert("channel".into(), Value::String((&p.channel).clone()));
+    m.insert("timestamp".into(), match (&p.timestamp) { Some(v) => Value::String((v).clone()), None => Value::Null });
     Value::Object(m)
 }
 
@@ -3326,21 +11237,100 @@ fn iface_pins__list_op_params__to_json(p: &iface_pins::ListOpParams) -> Value {
 fn iface_pins__remove_params__to_json(p: &iface_pins::RemoveParams) -> Value {
     let mut m = Map::new();
     m.insert("token".into(), Value::String((&p.token).clone()));
+    m.insert("channel".into(), Value::String((&p.channel).clone()));
+    m.insert("timestamp".into(), match (&p.timestamp) { Some(v) => Value::String((v).clone()), None => Value::Null });
     Value::Object(m)
 }
 
+fn iface_pins__add_response__from_json(v: &Value) -> Option<iface_pins::AddResponse> {
+    let m = v.as_object()?;
+    Some(iface_pins::AddResponse {
+        ok: match m.get("ok").and_then(|v| iface_pins__defs_ok_true__from_json(v)) { Some(x) => x, None => return None },
+    })
+}
+
+fn iface_pins__defs_ok_true__from_json(v: &Value) -> Option<iface_pins::DefsOkTrue> {
+    let m = v.as_object()?;
+    Some(iface_pins::DefsOkTrue {
+        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+    })
+}
+
+fn iface_pins__remove_response__from_json(v: &Value) -> Option<iface_pins::RemoveResponse> {
+    let m = v.as_object()?;
+    Some(iface_pins::RemoveResponse {
+        ok: match m.get("ok").and_then(|v| iface_pins__defs_ok_true__from_json(v)) { Some(x) => x, None => return None },
+    })
+}
+
+fn iface_pins__add__ok(body: String) -> Result<iface_pins::AddResponse, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match iface_pins__add_response__from_json(&v) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_pins__add__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
+fn iface_pins__list_op__ok(body: String) -> Result<String, crate::runtime::DispatchError> {
+    Ok(body)
+}
+
+fn iface_pins__list_op__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
+fn iface_pins__remove__ok(body: String) -> Result<iface_pins::RemoveResponse, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match iface_pins__remove_response__from_json(&v) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_pins__remove__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
 impl iface_pins::Guest for crate::Component {
-    fn add(params: iface_pins::AddParams) -> Result<String, String> {
+    fn add(params: iface_pins::AddParams) -> Result<iface_pins::AddResponse, String> {
         let json = iface_pins__add_params__to_json(&params);
-        dispatch(&OP_PINS_ADD, json)
+        match dispatch(&OP_PINS_ADD, json).and_then(iface_pins__add__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_pins__add__err(e)),
+        }
     }
     fn list_op(params: iface_pins::ListOpParams) -> Result<String, String> {
         let json = iface_pins__list_op_params__to_json(&params);
-        dispatch(&OP_PINS_LIST_OP, json)
+        match dispatch(&OP_PINS_LIST_OP, json).and_then(iface_pins__list_op__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_pins__list_op__err(e)),
+        }
     }
-    fn remove(params: iface_pins::RemoveParams) -> Result<String, String> {
+    fn remove(params: iface_pins::RemoveParams) -> Result<iface_pins::RemoveResponse, String> {
         let json = iface_pins__remove_params__to_json(&params);
-        dispatch(&OP_PINS_REMOVE, json)
+        match dispatch(&OP_PINS_REMOVE, json).and_then(iface_pins__remove__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_pins__remove__err(e)),
+        }
     }
 }
 use crate::exports::autostamp::slack::reactions as iface_reactions;
@@ -3349,7 +11339,10 @@ const OP_REACTIONS_ADD: OpSpec = OpSpec {
     method: "POST",
     path_template: "/reactions.add",
     fields: &[
-        FieldSpec { snake: "token", location: FieldLocation::Header },
+        FieldSpec { snake: "token", wire: "token", location: FieldLocation::Header },
+        FieldSpec { snake: "channel", wire: "channel", location: FieldLocation::Body },
+        FieldSpec { snake: "name", wire: "name", location: FieldLocation::Body },
+        FieldSpec { snake: "timestamp", wire: "timestamp", location: FieldLocation::Body },
     ],
     auth: &[
         AuthApply { secret_key: "slackAuth", kind: AuthKind::Bearer },
@@ -3360,12 +11353,12 @@ const OP_REACTIONS_GET: OpSpec = OpSpec {
     method: "GET",
     path_template: "/reactions.get",
     fields: &[
-        FieldSpec { snake: "token", location: FieldLocation::Query },
-        FieldSpec { snake: "channel", location: FieldLocation::Query },
-        FieldSpec { snake: "file", location: FieldLocation::Query },
-        FieldSpec { snake: "file_comment", location: FieldLocation::Query },
-        FieldSpec { snake: "full", location: FieldLocation::Query },
-        FieldSpec { snake: "timestamp", location: FieldLocation::Query },
+        FieldSpec { snake: "token", wire: "token", location: FieldLocation::Query },
+        FieldSpec { snake: "channel", wire: "channel", location: FieldLocation::Query },
+        FieldSpec { snake: "file", wire: "file", location: FieldLocation::Query },
+        FieldSpec { snake: "file_comment", wire: "file_comment", location: FieldLocation::Query },
+        FieldSpec { snake: "full", wire: "full", location: FieldLocation::Query },
+        FieldSpec { snake: "timestamp", wire: "timestamp", location: FieldLocation::Query },
     ],
     auth: &[
         AuthApply { secret_key: "slackAuth", kind: AuthKind::Bearer },
@@ -3376,13 +11369,13 @@ const OP_REACTIONS_LIST_OP: OpSpec = OpSpec {
     method: "GET",
     path_template: "/reactions.list",
     fields: &[
-        FieldSpec { snake: "token", location: FieldLocation::Query },
-        FieldSpec { snake: "user", location: FieldLocation::Query },
-        FieldSpec { snake: "full", location: FieldLocation::Query },
-        FieldSpec { snake: "count", location: FieldLocation::Query },
-        FieldSpec { snake: "page", location: FieldLocation::Query },
-        FieldSpec { snake: "cursor", location: FieldLocation::Query },
-        FieldSpec { snake: "limit", location: FieldLocation::Query },
+        FieldSpec { snake: "token", wire: "token", location: FieldLocation::Query },
+        FieldSpec { snake: "user", wire: "user", location: FieldLocation::Query },
+        FieldSpec { snake: "full", wire: "full", location: FieldLocation::Query },
+        FieldSpec { snake: "count", wire: "count", location: FieldLocation::Query },
+        FieldSpec { snake: "page", wire: "page", location: FieldLocation::Query },
+        FieldSpec { snake: "cursor", wire: "cursor", location: FieldLocation::Query },
+        FieldSpec { snake: "limit", wire: "limit", location: FieldLocation::Query },
     ],
     auth: &[
         AuthApply { secret_key: "slackAuth", kind: AuthKind::Bearer },
@@ -3393,16 +11386,68 @@ const OP_REACTIONS_REMOVE: OpSpec = OpSpec {
     method: "POST",
     path_template: "/reactions.remove",
     fields: &[
-        FieldSpec { snake: "token", location: FieldLocation::Header },
+        FieldSpec { snake: "token", wire: "token", location: FieldLocation::Header },
+        FieldSpec { snake: "channel", wire: "channel", location: FieldLocation::Body },
+        FieldSpec { snake: "file", wire: "file", location: FieldLocation::Body },
+        FieldSpec { snake: "file_comment", wire: "file_comment", location: FieldLocation::Body },
+        FieldSpec { snake: "name", wire: "name", location: FieldLocation::Body },
+        FieldSpec { snake: "timestamp", wire: "timestamp", location: FieldLocation::Body },
     ],
     auth: &[
         AuthApply { secret_key: "slackAuth", kind: AuthKind::Bearer },
     ],
 };
 
+fn iface_reactions__add_response__to_json(p: &iface_reactions::AddResponse) -> Value {
+    let mut m = Map::new();
+    m.insert("ok".into(), iface_reactions__defs_ok_true__to_json(&p.ok));
+    Value::Object(m)
+}
+
+fn iface_reactions__defs_ok_true__to_json(p: &iface_reactions::DefsOkTrue) -> Value {
+    let mut m = Map::new();
+    m.insert("value".into(), Value::String((&p.value).clone()));
+    Value::Object(m)
+}
+
+fn iface_reactions__list_op_response__to_json(p: &iface_reactions::ListOpResponse) -> Value {
+    let mut m = Map::new();
+    m.insert("items".into(), Value::Array((&p.items).iter().map(|v| Value::String((v).clone())).collect()));
+    m.insert("ok".into(), iface_reactions__defs_ok_true__to_json(&p.ok));
+    m.insert("paging".into(), match (&p.paging) { Some(v) => iface_reactions__objs_paging__to_json(v), None => Value::Null });
+    m.insert("response_metadata".into(), match (&p.response_metadata) { Some(v) => iface_reactions__objs_response_metadata__to_json(v), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_reactions__objs_paging__to_json(p: &iface_reactions::ObjsPaging) -> Value {
+    let mut m = Map::new();
+    m.insert("count".into(), match (&p.count) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("page".into(), Value::Number(serde_json::Number::from(*(&p.page))));
+    m.insert("pages".into(), match (&p.pages) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("per_page".into(), match (&p.per_page) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("spill".into(), match (&p.spill) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("total".into(), Value::Number(serde_json::Number::from(*(&p.total))));
+    Value::Object(m)
+}
+
+fn iface_reactions__objs_response_metadata__to_json(p: &iface_reactions::ObjsResponseMetadata) -> Value {
+    let mut m = Map::new();
+    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_reactions__remove_response__to_json(p: &iface_reactions::RemoveResponse) -> Value {
+    let mut m = Map::new();
+    m.insert("ok".into(), iface_reactions__defs_ok_true__to_json(&p.ok));
+    Value::Object(m)
+}
+
 fn iface_reactions__add_params__to_json(p: &iface_reactions::AddParams) -> Value {
     let mut m = Map::new();
     m.insert("token".into(), Value::String((&p.token).clone()));
+    m.insert("channel".into(), Value::String((&p.channel).clone()));
+    m.insert("name".into(), Value::String((&p.name).clone()));
+    m.insert("timestamp".into(), Value::String((&p.timestamp).clone()));
     Value::Object(m)
 }
 
@@ -3432,25 +11477,157 @@ fn iface_reactions__list_op_params__to_json(p: &iface_reactions::ListOpParams) -
 fn iface_reactions__remove_params__to_json(p: &iface_reactions::RemoveParams) -> Value {
     let mut m = Map::new();
     m.insert("token".into(), Value::String((&p.token).clone()));
+    m.insert("channel".into(), match (&p.channel) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("file".into(), match (&p.file) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("file_comment".into(), match (&p.file_comment) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("name".into(), Value::String((&p.name).clone()));
+    m.insert("timestamp".into(), match (&p.timestamp) { Some(v) => Value::String((v).clone()), None => Value::Null });
     Value::Object(m)
 }
 
+fn iface_reactions__add_response__from_json(v: &Value) -> Option<iface_reactions::AddResponse> {
+    let m = v.as_object()?;
+    Some(iface_reactions::AddResponse {
+        ok: match m.get("ok").and_then(|v| iface_reactions__defs_ok_true__from_json(v)) { Some(x) => x, None => return None },
+    })
+}
+
+fn iface_reactions__defs_ok_true__from_json(v: &Value) -> Option<iface_reactions::DefsOkTrue> {
+    let m = v.as_object()?;
+    Some(iface_reactions::DefsOkTrue {
+        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+    })
+}
+
+fn iface_reactions__list_op_response__from_json(v: &Value) -> Option<iface_reactions::ListOpResponse> {
+    let m = v.as_object()?;
+    Some(iface_reactions::ListOpResponse {
+        items: m.get("items").and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| (x).as_str().map(|s| s.to_string())).collect())).unwrap_or_default(),
+        ok: match m.get("ok").and_then(|v| iface_reactions__defs_ok_true__from_json(v)) { Some(x) => x, None => return None },
+        paging: m.get("paging").filter(|v| !v.is_null()).and_then(|v| iface_reactions__objs_paging__from_json(v)),
+        response_metadata: m.get("response_metadata").filter(|v| !v.is_null()).and_then(|v| iface_reactions__objs_response_metadata__from_json(v)),
+    })
+}
+
+fn iface_reactions__objs_paging__from_json(v: &Value) -> Option<iface_reactions::ObjsPaging> {
+    let m = v.as_object()?;
+    Some(iface_reactions::ObjsPaging {
+        count: m.get("count").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        page: m.get("page").and_then(|v| (v).as_i64().map(|n| n as i32)).unwrap_or_default(),
+        pages: m.get("pages").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        per_page: m.get("per_page").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        spill: m.get("spill").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        total: m.get("total").and_then(|v| (v).as_i64().map(|n| n as i32)).unwrap_or_default(),
+    })
+}
+
+fn iface_reactions__objs_response_metadata__from_json(v: &Value) -> Option<iface_reactions::ObjsResponseMetadata> {
+    let m = v.as_object()?;
+    Some(iface_reactions::ObjsResponseMetadata {
+        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    })
+}
+
+fn iface_reactions__remove_response__from_json(v: &Value) -> Option<iface_reactions::RemoveResponse> {
+    let m = v.as_object()?;
+    Some(iface_reactions::RemoveResponse {
+        ok: match m.get("ok").and_then(|v| iface_reactions__defs_ok_true__from_json(v)) { Some(x) => x, None => return None },
+    })
+}
+
+fn iface_reactions__add__ok(body: String) -> Result<iface_reactions::AddResponse, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match iface_reactions__add_response__from_json(&v) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_reactions__add__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
+fn iface_reactions__get__ok(body: String) -> Result<String, crate::runtime::DispatchError> {
+    Ok(body)
+}
+
+fn iface_reactions__get__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
+fn iface_reactions__list_op__ok(body: String) -> Result<iface_reactions::ListOpResponse, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match iface_reactions__list_op_response__from_json(&v) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_reactions__list_op__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
+fn iface_reactions__remove__ok(body: String) -> Result<iface_reactions::RemoveResponse, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match iface_reactions__remove_response__from_json(&v) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_reactions__remove__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
 impl iface_reactions::Guest for crate::Component {
-    fn add(params: iface_reactions::AddParams) -> Result<String, String> {
+    fn add(params: iface_reactions::AddParams) -> Result<iface_reactions::AddResponse, String> {
         let json = iface_reactions__add_params__to_json(&params);
-        dispatch(&OP_REACTIONS_ADD, json)
+        match dispatch(&OP_REACTIONS_ADD, json).and_then(iface_reactions__add__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_reactions__add__err(e)),
+        }
     }
     fn get(params: iface_reactions::GetParams) -> Result<String, String> {
         let json = iface_reactions__get_params__to_json(&params);
-        dispatch(&OP_REACTIONS_GET, json)
+        match dispatch(&OP_REACTIONS_GET, json).and_then(iface_reactions__get__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_reactions__get__err(e)),
+        }
     }
-    fn list_op(params: iface_reactions::ListOpParams) -> Result<String, String> {
+    fn list_op(params: iface_reactions::ListOpParams) -> Result<iface_reactions::ListOpResponse, String> {
         let json = iface_reactions__list_op_params__to_json(&params);
-        dispatch(&OP_REACTIONS_LIST_OP, json)
+        match dispatch(&OP_REACTIONS_LIST_OP, json).and_then(iface_reactions__list_op__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_reactions__list_op__err(e)),
+        }
     }
-    fn remove(params: iface_reactions::RemoveParams) -> Result<String, String> {
+    fn remove(params: iface_reactions::RemoveParams) -> Result<iface_reactions::RemoveResponse, String> {
         let json = iface_reactions__remove_params__to_json(&params);
-        dispatch(&OP_REACTIONS_REMOVE, json)
+        match dispatch(&OP_REACTIONS_REMOVE, json).and_then(iface_reactions__remove__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_reactions__remove__err(e)),
+        }
     }
 }
 use crate::exports::autostamp::slack::reminders as iface_reminders;
@@ -3459,7 +11636,10 @@ const OP_REMINDERS_ADD: OpSpec = OpSpec {
     method: "POST",
     path_template: "/reminders.add",
     fields: &[
-        FieldSpec { snake: "token", location: FieldLocation::Header },
+        FieldSpec { snake: "token", wire: "token", location: FieldLocation::Header },
+        FieldSpec { snake: "text", wire: "text", location: FieldLocation::Body },
+        FieldSpec { snake: "time", wire: "time", location: FieldLocation::Body },
+        FieldSpec { snake: "user", wire: "user", location: FieldLocation::Body },
     ],
     auth: &[
         AuthApply { secret_key: "slackAuth", kind: AuthKind::Bearer },
@@ -3470,7 +11650,8 @@ const OP_REMINDERS_COMPLETE: OpSpec = OpSpec {
     method: "POST",
     path_template: "/reminders.complete",
     fields: &[
-        FieldSpec { snake: "token", location: FieldLocation::Header },
+        FieldSpec { snake: "token", wire: "token", location: FieldLocation::Header },
+        FieldSpec { snake: "reminder", wire: "reminder", location: FieldLocation::Body },
     ],
     auth: &[
         AuthApply { secret_key: "slackAuth", kind: AuthKind::Bearer },
@@ -3481,7 +11662,8 @@ const OP_REMINDERS_DELETE: OpSpec = OpSpec {
     method: "POST",
     path_template: "/reminders.delete",
     fields: &[
-        FieldSpec { snake: "token", location: FieldLocation::Header },
+        FieldSpec { snake: "token", wire: "token", location: FieldLocation::Header },
+        FieldSpec { snake: "reminder", wire: "reminder", location: FieldLocation::Body },
     ],
     auth: &[
         AuthApply { secret_key: "slackAuth", kind: AuthKind::Bearer },
@@ -3492,8 +11674,8 @@ const OP_REMINDERS_INFO: OpSpec = OpSpec {
     method: "GET",
     path_template: "/reminders.info",
     fields: &[
-        FieldSpec { snake: "token", location: FieldLocation::Query },
-        FieldSpec { snake: "reminder", location: FieldLocation::Query },
+        FieldSpec { snake: "token", wire: "token", location: FieldLocation::Query },
+        FieldSpec { snake: "reminder", wire: "reminder", location: FieldLocation::Query },
     ],
     auth: &[
         AuthApply { secret_key: "slackAuth", kind: AuthKind::Bearer },
@@ -3504,28 +11686,96 @@ const OP_REMINDERS_LIST_OP: OpSpec = OpSpec {
     method: "GET",
     path_template: "/reminders.list",
     fields: &[
-        FieldSpec { snake: "token", location: FieldLocation::Query },
+        FieldSpec { snake: "token", wire: "token", location: FieldLocation::Query },
     ],
     auth: &[
         AuthApply { secret_key: "slackAuth", kind: AuthKind::Bearer },
     ],
 };
 
+fn iface_reminders__add_response__to_json(p: &iface_reminders::AddResponse) -> Value {
+    let mut m = Map::new();
+    m.insert("ok".into(), iface_reminders__defs_ok_true__to_json(&p.ok));
+    m.insert("reminder".into(), iface_reminders__objs_reminder__to_json(&p.reminder));
+    Value::Object(m)
+}
+
+fn iface_reminders__defs_ok_true__to_json(p: &iface_reminders::DefsOkTrue) -> Value {
+    let mut m = Map::new();
+    m.insert("value".into(), Value::String((&p.value).clone()));
+    Value::Object(m)
+}
+
+fn iface_reminders__objs_reminder__to_json(p: &iface_reminders::ObjsReminder) -> Value {
+    let mut m = Map::new();
+    m.insert("complete_ts".into(), match (&p.complete_ts) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("creator".into(), iface_reminders__defs_user_id__to_json(&p.creator));
+    m.insert("id".into(), iface_reminders__defs_reminder_id__to_json(&p.id));
+    m.insert("recurring".into(), Value::Bool(*(&p.recurring)));
+    m.insert("text".into(), Value::String((&p.text).clone()));
+    m.insert("time".into(), match (&p.time) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("user".into(), iface_reminders__defs_user_id__to_json(&p.user));
+    Value::Object(m)
+}
+
+fn iface_reminders__defs_user_id__to_json(p: &iface_reminders::DefsUserId) -> Value {
+    let mut m = Map::new();
+    m.insert("value".into(), Value::String((&p.value).clone()));
+    Value::Object(m)
+}
+
+fn iface_reminders__defs_reminder_id__to_json(p: &iface_reminders::DefsReminderId) -> Value {
+    let mut m = Map::new();
+    m.insert("value".into(), Value::String((&p.value).clone()));
+    Value::Object(m)
+}
+
+fn iface_reminders__complete_response__to_json(p: &iface_reminders::CompleteResponse) -> Value {
+    let mut m = Map::new();
+    m.insert("ok".into(), iface_reminders__defs_ok_true__to_json(&p.ok));
+    Value::Object(m)
+}
+
+fn iface_reminders__delete_response__to_json(p: &iface_reminders::DeleteResponse) -> Value {
+    let mut m = Map::new();
+    m.insert("ok".into(), iface_reminders__defs_ok_true__to_json(&p.ok));
+    Value::Object(m)
+}
+
+fn iface_reminders__info_response__to_json(p: &iface_reminders::InfoResponse) -> Value {
+    let mut m = Map::new();
+    m.insert("ok".into(), iface_reminders__defs_ok_true__to_json(&p.ok));
+    m.insert("reminder".into(), iface_reminders__objs_reminder__to_json(&p.reminder));
+    Value::Object(m)
+}
+
+fn iface_reminders__list_op_response__to_json(p: &iface_reminders::ListOpResponse) -> Value {
+    let mut m = Map::new();
+    m.insert("ok".into(), iface_reminders__defs_ok_true__to_json(&p.ok));
+    m.insert("reminders".into(), Value::Array((&p.reminders).iter().map(|v| iface_reminders__objs_reminder__to_json(v)).collect()));
+    Value::Object(m)
+}
+
 fn iface_reminders__add_params__to_json(p: &iface_reminders::AddParams) -> Value {
     let mut m = Map::new();
     m.insert("token".into(), Value::String((&p.token).clone()));
+    m.insert("text".into(), Value::String((&p.text).clone()));
+    m.insert("time".into(), Value::String((&p.time).clone()));
+    m.insert("user".into(), match (&p.user) { Some(v) => Value::String((v).clone()), None => Value::Null });
     Value::Object(m)
 }
 
 fn iface_reminders__complete_params__to_json(p: &iface_reminders::CompleteParams) -> Value {
     let mut m = Map::new();
     m.insert("token".into(), match (&p.token) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("reminder".into(), match (&p.reminder) { Some(v) => Value::String((v).clone()), None => Value::Null });
     Value::Object(m)
 }
 
 fn iface_reminders__delete_params__to_json(p: &iface_reminders::DeleteParams) -> Value {
     let mut m = Map::new();
     m.insert("token".into(), match (&p.token) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("reminder".into(), match (&p.reminder) { Some(v) => Value::String((v).clone()), None => Value::Null });
     Value::Object(m)
 }
 
@@ -3542,26 +11792,203 @@ fn iface_reminders__list_op_params__to_json(p: &iface_reminders::ListOpParams) -
     Value::Object(m)
 }
 
+fn iface_reminders__add_response__from_json(v: &Value) -> Option<iface_reminders::AddResponse> {
+    let m = v.as_object()?;
+    Some(iface_reminders::AddResponse {
+        ok: match m.get("ok").and_then(|v| iface_reminders__defs_ok_true__from_json(v)) { Some(x) => x, None => return None },
+        reminder: match m.get("reminder").and_then(|v| iface_reminders__objs_reminder__from_json(v)) { Some(x) => x, None => return None },
+    })
+}
+
+fn iface_reminders__defs_ok_true__from_json(v: &Value) -> Option<iface_reminders::DefsOkTrue> {
+    let m = v.as_object()?;
+    Some(iface_reminders::DefsOkTrue {
+        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+    })
+}
+
+fn iface_reminders__objs_reminder__from_json(v: &Value) -> Option<iface_reminders::ObjsReminder> {
+    let m = v.as_object()?;
+    Some(iface_reminders::ObjsReminder {
+        complete_ts: m.get("complete_ts").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        creator: match m.get("creator").and_then(|v| iface_reminders__defs_user_id__from_json(v)) { Some(x) => x, None => return None },
+        id: match m.get("id").and_then(|v| iface_reminders__defs_reminder_id__from_json(v)) { Some(x) => x, None => return None },
+        recurring: m.get("recurring").and_then(|v| (v).as_bool()).unwrap_or_default(),
+        text: m.get("text").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        time: m.get("time").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        user: match m.get("user").and_then(|v| iface_reminders__defs_user_id__from_json(v)) { Some(x) => x, None => return None },
+    })
+}
+
+fn iface_reminders__defs_user_id__from_json(v: &Value) -> Option<iface_reminders::DefsUserId> {
+    let m = v.as_object()?;
+    Some(iface_reminders::DefsUserId {
+        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+    })
+}
+
+fn iface_reminders__defs_reminder_id__from_json(v: &Value) -> Option<iface_reminders::DefsReminderId> {
+    let m = v.as_object()?;
+    Some(iface_reminders::DefsReminderId {
+        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+    })
+}
+
+fn iface_reminders__complete_response__from_json(v: &Value) -> Option<iface_reminders::CompleteResponse> {
+    let m = v.as_object()?;
+    Some(iface_reminders::CompleteResponse {
+        ok: match m.get("ok").and_then(|v| iface_reminders__defs_ok_true__from_json(v)) { Some(x) => x, None => return None },
+    })
+}
+
+fn iface_reminders__delete_response__from_json(v: &Value) -> Option<iface_reminders::DeleteResponse> {
+    let m = v.as_object()?;
+    Some(iface_reminders::DeleteResponse {
+        ok: match m.get("ok").and_then(|v| iface_reminders__defs_ok_true__from_json(v)) { Some(x) => x, None => return None },
+    })
+}
+
+fn iface_reminders__info_response__from_json(v: &Value) -> Option<iface_reminders::InfoResponse> {
+    let m = v.as_object()?;
+    Some(iface_reminders::InfoResponse {
+        ok: match m.get("ok").and_then(|v| iface_reminders__defs_ok_true__from_json(v)) { Some(x) => x, None => return None },
+        reminder: match m.get("reminder").and_then(|v| iface_reminders__objs_reminder__from_json(v)) { Some(x) => x, None => return None },
+    })
+}
+
+fn iface_reminders__list_op_response__from_json(v: &Value) -> Option<iface_reminders::ListOpResponse> {
+    let m = v.as_object()?;
+    Some(iface_reminders::ListOpResponse {
+        ok: match m.get("ok").and_then(|v| iface_reminders__defs_ok_true__from_json(v)) { Some(x) => x, None => return None },
+        reminders: m.get("reminders").and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| iface_reminders__objs_reminder__from_json(x)).collect())).unwrap_or_default(),
+    })
+}
+
+fn iface_reminders__add__ok(body: String) -> Result<iface_reminders::AddResponse, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match iface_reminders__add_response__from_json(&v) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_reminders__add__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
+fn iface_reminders__complete__ok(body: String) -> Result<iface_reminders::CompleteResponse, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match iface_reminders__complete_response__from_json(&v) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_reminders__complete__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
+fn iface_reminders__delete__ok(body: String) -> Result<iface_reminders::DeleteResponse, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match iface_reminders__delete_response__from_json(&v) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_reminders__delete__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
+fn iface_reminders__info__ok(body: String) -> Result<iface_reminders::InfoResponse, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match iface_reminders__info_response__from_json(&v) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_reminders__info__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
+fn iface_reminders__list_op__ok(body: String) -> Result<iface_reminders::ListOpResponse, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match iface_reminders__list_op_response__from_json(&v) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_reminders__list_op__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
 impl iface_reminders::Guest for crate::Component {
-    fn add(params: iface_reminders::AddParams) -> Result<String, String> {
+    fn add(params: iface_reminders::AddParams) -> Result<iface_reminders::AddResponse, String> {
         let json = iface_reminders__add_params__to_json(&params);
-        dispatch(&OP_REMINDERS_ADD, json)
+        match dispatch(&OP_REMINDERS_ADD, json).and_then(iface_reminders__add__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_reminders__add__err(e)),
+        }
     }
-    fn complete(params: iface_reminders::CompleteParams) -> Result<String, String> {
+    fn complete(params: iface_reminders::CompleteParams) -> Result<iface_reminders::CompleteResponse, String> {
         let json = iface_reminders__complete_params__to_json(&params);
-        dispatch(&OP_REMINDERS_COMPLETE, json)
+        match dispatch(&OP_REMINDERS_COMPLETE, json).and_then(iface_reminders__complete__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_reminders__complete__err(e)),
+        }
     }
-    fn delete(params: iface_reminders::DeleteParams) -> Result<String, String> {
+    fn delete(params: iface_reminders::DeleteParams) -> Result<iface_reminders::DeleteResponse, String> {
         let json = iface_reminders__delete_params__to_json(&params);
-        dispatch(&OP_REMINDERS_DELETE, json)
+        match dispatch(&OP_REMINDERS_DELETE, json).and_then(iface_reminders__delete__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_reminders__delete__err(e)),
+        }
     }
-    fn info(params: iface_reminders::InfoParams) -> Result<String, String> {
+    fn info(params: iface_reminders::InfoParams) -> Result<iface_reminders::InfoResponse, String> {
         let json = iface_reminders__info_params__to_json(&params);
-        dispatch(&OP_REMINDERS_INFO, json)
+        match dispatch(&OP_REMINDERS_INFO, json).and_then(iface_reminders__info__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_reminders__info__err(e)),
+        }
     }
-    fn list_op(params: iface_reminders::ListOpParams) -> Result<String, String> {
+    fn list_op(params: iface_reminders::ListOpParams) -> Result<iface_reminders::ListOpResponse, String> {
         let json = iface_reminders__list_op_params__to_json(&params);
-        dispatch(&OP_REMINDERS_LIST_OP, json)
+        match dispatch(&OP_REMINDERS_LIST_OP, json).and_then(iface_reminders__list_op__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_reminders__list_op__err(e)),
+        }
     }
 }
 use crate::exports::autostamp::slack::rtm as iface_rtm;
@@ -3570,14 +11997,56 @@ const OP_RTM_CONNECT: OpSpec = OpSpec {
     method: "GET",
     path_template: "/rtm.connect",
     fields: &[
-        FieldSpec { snake: "token", location: FieldLocation::Query },
-        FieldSpec { snake: "batch_presence_aware", location: FieldLocation::Query },
-        FieldSpec { snake: "presence_sub", location: FieldLocation::Query },
+        FieldSpec { snake: "token", wire: "token", location: FieldLocation::Query },
+        FieldSpec { snake: "batch_presence_aware", wire: "batch_presence_aware", location: FieldLocation::Query },
+        FieldSpec { snake: "presence_sub", wire: "presence_sub", location: FieldLocation::Query },
     ],
     auth: &[
         AuthApply { secret_key: "slackAuth", kind: AuthKind::Bearer },
     ],
 };
+
+fn iface_rtm__connect_response__to_json(p: &iface_rtm::ConnectResponse) -> Value {
+    let mut m = Map::new();
+    m.insert("ok".into(), iface_rtm__defs_ok_true__to_json(&p.ok));
+    m.insert("self".into(), iface_rtm__connect_response_self__to_json(&p.self_));
+    m.insert("team".into(), iface_rtm__connect_response_team__to_json(&p.team));
+    m.insert("url".into(), Value::String((&p.url).clone()));
+    Value::Object(m)
+}
+
+fn iface_rtm__defs_ok_true__to_json(p: &iface_rtm::DefsOkTrue) -> Value {
+    let mut m = Map::new();
+    m.insert("value".into(), Value::String((&p.value).clone()));
+    Value::Object(m)
+}
+
+fn iface_rtm__connect_response_self__to_json(p: &iface_rtm::ConnectResponseSelf) -> Value {
+    let mut m = Map::new();
+    m.insert("id".into(), iface_rtm__defs_user_id__to_json(&p.id));
+    m.insert("name".into(), Value::String((&p.name).clone()));
+    Value::Object(m)
+}
+
+fn iface_rtm__defs_user_id__to_json(p: &iface_rtm::DefsUserId) -> Value {
+    let mut m = Map::new();
+    m.insert("value".into(), Value::String((&p.value).clone()));
+    Value::Object(m)
+}
+
+fn iface_rtm__connect_response_team__to_json(p: &iface_rtm::ConnectResponseTeam) -> Value {
+    let mut m = Map::new();
+    m.insert("domain".into(), Value::String((&p.domain).clone()));
+    m.insert("id".into(), iface_rtm__defs_team__to_json(&p.id));
+    m.insert("name".into(), Value::String((&p.name).clone()));
+    Value::Object(m)
+}
+
+fn iface_rtm__defs_team__to_json(p: &iface_rtm::DefsTeam) -> Value {
+    let mut m = Map::new();
+    m.insert("value".into(), Value::String((&p.value).clone()));
+    Value::Object(m)
+}
 
 fn iface_rtm__connect_params__to_json(p: &iface_rtm::ConnectParams) -> Value {
     let mut m = Map::new();
@@ -3587,10 +12056,79 @@ fn iface_rtm__connect_params__to_json(p: &iface_rtm::ConnectParams) -> Value {
     Value::Object(m)
 }
 
+fn iface_rtm__connect_response__from_json(v: &Value) -> Option<iface_rtm::ConnectResponse> {
+    let m = v.as_object()?;
+    Some(iface_rtm::ConnectResponse {
+        ok: match m.get("ok").and_then(|v| iface_rtm__defs_ok_true__from_json(v)) { Some(x) => x, None => return None },
+        self_: match m.get("self").and_then(|v| iface_rtm__connect_response_self__from_json(v)) { Some(x) => x, None => return None },
+        team: match m.get("team").and_then(|v| iface_rtm__connect_response_team__from_json(v)) { Some(x) => x, None => return None },
+        url: m.get("url").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+    })
+}
+
+fn iface_rtm__defs_ok_true__from_json(v: &Value) -> Option<iface_rtm::DefsOkTrue> {
+    let m = v.as_object()?;
+    Some(iface_rtm::DefsOkTrue {
+        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+    })
+}
+
+fn iface_rtm__connect_response_self__from_json(v: &Value) -> Option<iface_rtm::ConnectResponseSelf> {
+    let m = v.as_object()?;
+    Some(iface_rtm::ConnectResponseSelf {
+        id: match m.get("id").and_then(|v| iface_rtm__defs_user_id__from_json(v)) { Some(x) => x, None => return None },
+        name: m.get("name").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+    })
+}
+
+fn iface_rtm__defs_user_id__from_json(v: &Value) -> Option<iface_rtm::DefsUserId> {
+    let m = v.as_object()?;
+    Some(iface_rtm::DefsUserId {
+        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+    })
+}
+
+fn iface_rtm__connect_response_team__from_json(v: &Value) -> Option<iface_rtm::ConnectResponseTeam> {
+    let m = v.as_object()?;
+    Some(iface_rtm::ConnectResponseTeam {
+        domain: m.get("domain").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        id: match m.get("id").and_then(|v| iface_rtm__defs_team__from_json(v)) { Some(x) => x, None => return None },
+        name: m.get("name").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+    })
+}
+
+fn iface_rtm__defs_team__from_json(v: &Value) -> Option<iface_rtm::DefsTeam> {
+    let m = v.as_object()?;
+    Some(iface_rtm::DefsTeam {
+        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+    })
+}
+
+fn iface_rtm__connect__ok(body: String) -> Result<iface_rtm::ConnectResponse, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match iface_rtm__connect_response__from_json(&v) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_rtm__connect__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
 impl iface_rtm::Guest for crate::Component {
-    fn connect(params: iface_rtm::ConnectParams) -> Result<String, String> {
+    fn connect(params: iface_rtm::ConnectParams) -> Result<iface_rtm::ConnectResponse, String> {
         let json = iface_rtm__connect_params__to_json(&params);
-        dispatch(&OP_RTM_CONNECT, json)
+        match dispatch(&OP_RTM_CONNECT, json).and_then(iface_rtm__connect__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_rtm__connect__err(e)),
+        }
     }
 }
 use crate::exports::autostamp::slack::search as iface_search;
@@ -3599,18 +12137,30 @@ const OP_SEARCH_MESSAGES: OpSpec = OpSpec {
     method: "GET",
     path_template: "/search.messages",
     fields: &[
-        FieldSpec { snake: "token", location: FieldLocation::Query },
-        FieldSpec { snake: "count", location: FieldLocation::Query },
-        FieldSpec { snake: "highlight", location: FieldLocation::Query },
-        FieldSpec { snake: "page", location: FieldLocation::Query },
-        FieldSpec { snake: "query", location: FieldLocation::Query },
-        FieldSpec { snake: "sort", location: FieldLocation::Query },
-        FieldSpec { snake: "sort_dir", location: FieldLocation::Query },
+        FieldSpec { snake: "token", wire: "token", location: FieldLocation::Query },
+        FieldSpec { snake: "count", wire: "count", location: FieldLocation::Query },
+        FieldSpec { snake: "highlight", wire: "highlight", location: FieldLocation::Query },
+        FieldSpec { snake: "page", wire: "page", location: FieldLocation::Query },
+        FieldSpec { snake: "query", wire: "query", location: FieldLocation::Query },
+        FieldSpec { snake: "sort", wire: "sort", location: FieldLocation::Query },
+        FieldSpec { snake: "sort_dir", wire: "sort_dir", location: FieldLocation::Query },
     ],
     auth: &[
         AuthApply { secret_key: "slackAuth", kind: AuthKind::Bearer },
     ],
 };
+
+fn iface_search__messages_response__to_json(p: &iface_search::MessagesResponse) -> Value {
+    let mut m = Map::new();
+    m.insert("ok".into(), iface_search__defs_ok_true__to_json(&p.ok));
+    Value::Object(m)
+}
+
+fn iface_search__defs_ok_true__to_json(p: &iface_search::DefsOkTrue) -> Value {
+    let mut m = Map::new();
+    m.insert("value".into(), Value::String((&p.value).clone()));
+    Value::Object(m)
+}
 
 fn iface_search__messages_params__to_json(p: &iface_search::MessagesParams) -> Value {
     let mut m = Map::new();
@@ -3624,10 +12174,45 @@ fn iface_search__messages_params__to_json(p: &iface_search::MessagesParams) -> V
     Value::Object(m)
 }
 
+fn iface_search__messages_response__from_json(v: &Value) -> Option<iface_search::MessagesResponse> {
+    let m = v.as_object()?;
+    Some(iface_search::MessagesResponse {
+        ok: match m.get("ok").and_then(|v| iface_search__defs_ok_true__from_json(v)) { Some(x) => x, None => return None },
+    })
+}
+
+fn iface_search__defs_ok_true__from_json(v: &Value) -> Option<iface_search::DefsOkTrue> {
+    let m = v.as_object()?;
+    Some(iface_search::DefsOkTrue {
+        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+    })
+}
+
+fn iface_search__messages__ok(body: String) -> Result<iface_search::MessagesResponse, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match iface_search__messages_response__from_json(&v) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_search__messages__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
 impl iface_search::Guest for crate::Component {
-    fn messages(params: iface_search::MessagesParams) -> Result<String, String> {
+    fn messages(params: iface_search::MessagesParams) -> Result<iface_search::MessagesResponse, String> {
         let json = iface_search__messages_params__to_json(&params);
-        dispatch(&OP_SEARCH_MESSAGES, json)
+        match dispatch(&OP_SEARCH_MESSAGES, json).and_then(iface_search__messages__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_search__messages__err(e)),
+        }
     }
 }
 use crate::exports::autostamp::slack::stars as iface_stars;
@@ -3636,7 +12221,11 @@ const OP_STARS_ADD: OpSpec = OpSpec {
     method: "POST",
     path_template: "/stars.add",
     fields: &[
-        FieldSpec { snake: "token", location: FieldLocation::Header },
+        FieldSpec { snake: "token", wire: "token", location: FieldLocation::Header },
+        FieldSpec { snake: "channel", wire: "channel", location: FieldLocation::Body },
+        FieldSpec { snake: "file", wire: "file", location: FieldLocation::Body },
+        FieldSpec { snake: "file_comment", wire: "file_comment", location: FieldLocation::Body },
+        FieldSpec { snake: "timestamp", wire: "timestamp", location: FieldLocation::Body },
     ],
     auth: &[
         AuthApply { secret_key: "slackAuth", kind: AuthKind::Bearer },
@@ -3647,11 +12236,11 @@ const OP_STARS_LIST_OP: OpSpec = OpSpec {
     method: "GET",
     path_template: "/stars.list",
     fields: &[
-        FieldSpec { snake: "token", location: FieldLocation::Query },
-        FieldSpec { snake: "count", location: FieldLocation::Query },
-        FieldSpec { snake: "page", location: FieldLocation::Query },
-        FieldSpec { snake: "cursor", location: FieldLocation::Query },
-        FieldSpec { snake: "limit", location: FieldLocation::Query },
+        FieldSpec { snake: "token", wire: "token", location: FieldLocation::Query },
+        FieldSpec { snake: "count", wire: "count", location: FieldLocation::Query },
+        FieldSpec { snake: "page", wire: "page", location: FieldLocation::Query },
+        FieldSpec { snake: "cursor", wire: "cursor", location: FieldLocation::Query },
+        FieldSpec { snake: "limit", wire: "limit", location: FieldLocation::Query },
     ],
     auth: &[
         AuthApply { secret_key: "slackAuth", kind: AuthKind::Bearer },
@@ -3662,16 +12251,61 @@ const OP_STARS_REMOVE: OpSpec = OpSpec {
     method: "POST",
     path_template: "/stars.remove",
     fields: &[
-        FieldSpec { snake: "token", location: FieldLocation::Header },
+        FieldSpec { snake: "token", wire: "token", location: FieldLocation::Header },
+        FieldSpec { snake: "channel", wire: "channel", location: FieldLocation::Body },
+        FieldSpec { snake: "file", wire: "file", location: FieldLocation::Body },
+        FieldSpec { snake: "file_comment", wire: "file_comment", location: FieldLocation::Body },
+        FieldSpec { snake: "timestamp", wire: "timestamp", location: FieldLocation::Body },
     ],
     auth: &[
         AuthApply { secret_key: "slackAuth", kind: AuthKind::Bearer },
     ],
 };
 
+fn iface_stars__add_response__to_json(p: &iface_stars::AddResponse) -> Value {
+    let mut m = Map::new();
+    m.insert("ok".into(), iface_stars__defs_ok_true__to_json(&p.ok));
+    Value::Object(m)
+}
+
+fn iface_stars__defs_ok_true__to_json(p: &iface_stars::DefsOkTrue) -> Value {
+    let mut m = Map::new();
+    m.insert("value".into(), Value::String((&p.value).clone()));
+    Value::Object(m)
+}
+
+fn iface_stars__list_op_response__to_json(p: &iface_stars::ListOpResponse) -> Value {
+    let mut m = Map::new();
+    m.insert("items".into(), Value::Array((&p.items).iter().map(|v| Value::String((v).clone())).collect()));
+    m.insert("ok".into(), iface_stars__defs_ok_true__to_json(&p.ok));
+    m.insert("paging".into(), match (&p.paging) { Some(v) => iface_stars__objs_paging__to_json(v), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_stars__objs_paging__to_json(p: &iface_stars::ObjsPaging) -> Value {
+    let mut m = Map::new();
+    m.insert("count".into(), match (&p.count) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("page".into(), Value::Number(serde_json::Number::from(*(&p.page))));
+    m.insert("pages".into(), match (&p.pages) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("per_page".into(), match (&p.per_page) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("spill".into(), match (&p.spill) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("total".into(), Value::Number(serde_json::Number::from(*(&p.total))));
+    Value::Object(m)
+}
+
+fn iface_stars__remove_response__to_json(p: &iface_stars::RemoveResponse) -> Value {
+    let mut m = Map::new();
+    m.insert("ok".into(), iface_stars__defs_ok_true__to_json(&p.ok));
+    Value::Object(m)
+}
+
 fn iface_stars__add_params__to_json(p: &iface_stars::AddParams) -> Value {
     let mut m = Map::new();
     m.insert("token".into(), Value::String((&p.token).clone()));
+    m.insert("channel".into(), match (&p.channel) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("file".into(), match (&p.file) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("file_comment".into(), match (&p.file_comment) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("timestamp".into(), match (&p.timestamp) { Some(v) => Value::String((v).clone()), None => Value::Null });
     Value::Object(m)
 }
 
@@ -3688,21 +12322,130 @@ fn iface_stars__list_op_params__to_json(p: &iface_stars::ListOpParams) -> Value 
 fn iface_stars__remove_params__to_json(p: &iface_stars::RemoveParams) -> Value {
     let mut m = Map::new();
     m.insert("token".into(), Value::String((&p.token).clone()));
+    m.insert("channel".into(), match (&p.channel) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("file".into(), match (&p.file) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("file_comment".into(), match (&p.file_comment) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("timestamp".into(), match (&p.timestamp) { Some(v) => Value::String((v).clone()), None => Value::Null });
     Value::Object(m)
 }
 
+fn iface_stars__add_response__from_json(v: &Value) -> Option<iface_stars::AddResponse> {
+    let m = v.as_object()?;
+    Some(iface_stars::AddResponse {
+        ok: match m.get("ok").and_then(|v| iface_stars__defs_ok_true__from_json(v)) { Some(x) => x, None => return None },
+    })
+}
+
+fn iface_stars__defs_ok_true__from_json(v: &Value) -> Option<iface_stars::DefsOkTrue> {
+    let m = v.as_object()?;
+    Some(iface_stars::DefsOkTrue {
+        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+    })
+}
+
+fn iface_stars__list_op_response__from_json(v: &Value) -> Option<iface_stars::ListOpResponse> {
+    let m = v.as_object()?;
+    Some(iface_stars::ListOpResponse {
+        items: m.get("items").and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| (x).as_str().map(|s| s.to_string())).collect())).unwrap_or_default(),
+        ok: match m.get("ok").and_then(|v| iface_stars__defs_ok_true__from_json(v)) { Some(x) => x, None => return None },
+        paging: m.get("paging").filter(|v| !v.is_null()).and_then(|v| iface_stars__objs_paging__from_json(v)),
+    })
+}
+
+fn iface_stars__objs_paging__from_json(v: &Value) -> Option<iface_stars::ObjsPaging> {
+    let m = v.as_object()?;
+    Some(iface_stars::ObjsPaging {
+        count: m.get("count").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        page: m.get("page").and_then(|v| (v).as_i64().map(|n| n as i32)).unwrap_or_default(),
+        pages: m.get("pages").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        per_page: m.get("per_page").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        spill: m.get("spill").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        total: m.get("total").and_then(|v| (v).as_i64().map(|n| n as i32)).unwrap_or_default(),
+    })
+}
+
+fn iface_stars__remove_response__from_json(v: &Value) -> Option<iface_stars::RemoveResponse> {
+    let m = v.as_object()?;
+    Some(iface_stars::RemoveResponse {
+        ok: match m.get("ok").and_then(|v| iface_stars__defs_ok_true__from_json(v)) { Some(x) => x, None => return None },
+    })
+}
+
+fn iface_stars__add__ok(body: String) -> Result<iface_stars::AddResponse, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match iface_stars__add_response__from_json(&v) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_stars__add__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
+fn iface_stars__list_op__ok(body: String) -> Result<iface_stars::ListOpResponse, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match iface_stars__list_op_response__from_json(&v) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_stars__list_op__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
+fn iface_stars__remove__ok(body: String) -> Result<iface_stars::RemoveResponse, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match iface_stars__remove_response__from_json(&v) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_stars__remove__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
 impl iface_stars::Guest for crate::Component {
-    fn add(params: iface_stars::AddParams) -> Result<String, String> {
+    fn add(params: iface_stars::AddParams) -> Result<iface_stars::AddResponse, String> {
         let json = iface_stars__add_params__to_json(&params);
-        dispatch(&OP_STARS_ADD, json)
+        match dispatch(&OP_STARS_ADD, json).and_then(iface_stars__add__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_stars__add__err(e)),
+        }
     }
-    fn list_op(params: iface_stars::ListOpParams) -> Result<String, String> {
+    fn list_op(params: iface_stars::ListOpParams) -> Result<iface_stars::ListOpResponse, String> {
         let json = iface_stars__list_op_params__to_json(&params);
-        dispatch(&OP_STARS_LIST_OP, json)
+        match dispatch(&OP_STARS_LIST_OP, json).and_then(iface_stars__list_op__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_stars__list_op__err(e)),
+        }
     }
-    fn remove(params: iface_stars::RemoveParams) -> Result<String, String> {
+    fn remove(params: iface_stars::RemoveParams) -> Result<iface_stars::RemoveResponse, String> {
         let json = iface_stars__remove_params__to_json(&params);
-        dispatch(&OP_STARS_REMOVE, json)
+        match dispatch(&OP_STARS_REMOVE, json).and_then(iface_stars__remove__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_stars__remove__err(e)),
+        }
     }
 }
 use crate::exports::autostamp::slack::team as iface_team;
@@ -3711,10 +12454,10 @@ const OP_TEAM_ACCESS_LOGS: OpSpec = OpSpec {
     method: "GET",
     path_template: "/team.accessLogs",
     fields: &[
-        FieldSpec { snake: "token", location: FieldLocation::Query },
-        FieldSpec { snake: "before", location: FieldLocation::Query },
-        FieldSpec { snake: "count", location: FieldLocation::Query },
-        FieldSpec { snake: "page", location: FieldLocation::Query },
+        FieldSpec { snake: "token", wire: "token", location: FieldLocation::Query },
+        FieldSpec { snake: "before", wire: "before", location: FieldLocation::Query },
+        FieldSpec { snake: "count", wire: "count", location: FieldLocation::Query },
+        FieldSpec { snake: "page", wire: "page", location: FieldLocation::Query },
     ],
     auth: &[
         AuthApply { secret_key: "slackAuth", kind: AuthKind::Bearer },
@@ -3725,8 +12468,8 @@ const OP_TEAM_BILLABLE_INFO: OpSpec = OpSpec {
     method: "GET",
     path_template: "/team.billableInfo",
     fields: &[
-        FieldSpec { snake: "token", location: FieldLocation::Query },
-        FieldSpec { snake: "user", location: FieldLocation::Query },
+        FieldSpec { snake: "token", wire: "token", location: FieldLocation::Query },
+        FieldSpec { snake: "user", wire: "user", location: FieldLocation::Query },
     ],
     auth: &[
         AuthApply { secret_key: "slackAuth", kind: AuthKind::Bearer },
@@ -3737,8 +12480,8 @@ const OP_TEAM_INFO: OpSpec = OpSpec {
     method: "GET",
     path_template: "/team.info",
     fields: &[
-        FieldSpec { snake: "token", location: FieldLocation::Query },
-        FieldSpec { snake: "team", location: FieldLocation::Query },
+        FieldSpec { snake: "token", wire: "token", location: FieldLocation::Query },
+        FieldSpec { snake: "team", wire: "team", location: FieldLocation::Query },
     ],
     auth: &[
         AuthApply { secret_key: "slackAuth", kind: AuthKind::Bearer },
@@ -3749,18 +12492,217 @@ const OP_TEAM_INTEGRATION_LOGS: OpSpec = OpSpec {
     method: "GET",
     path_template: "/team.integrationLogs",
     fields: &[
-        FieldSpec { snake: "token", location: FieldLocation::Query },
-        FieldSpec { snake: "app_id", location: FieldLocation::Query },
-        FieldSpec { snake: "change_type", location: FieldLocation::Query },
-        FieldSpec { snake: "count", location: FieldLocation::Query },
-        FieldSpec { snake: "page", location: FieldLocation::Query },
-        FieldSpec { snake: "service_id", location: FieldLocation::Query },
-        FieldSpec { snake: "user", location: FieldLocation::Query },
+        FieldSpec { snake: "token", wire: "token", location: FieldLocation::Query },
+        FieldSpec { snake: "app_id", wire: "app_id", location: FieldLocation::Query },
+        FieldSpec { snake: "change_type", wire: "change_type", location: FieldLocation::Query },
+        FieldSpec { snake: "count", wire: "count", location: FieldLocation::Query },
+        FieldSpec { snake: "page", wire: "page", location: FieldLocation::Query },
+        FieldSpec { snake: "service_id", wire: "service_id", location: FieldLocation::Query },
+        FieldSpec { snake: "user", wire: "user", location: FieldLocation::Query },
     ],
     auth: &[
         AuthApply { secret_key: "slackAuth", kind: AuthKind::Bearer },
     ],
 };
+
+fn iface_team__objs_team_plan_enum__to_str(e: &iface_team::ObjsTeamPlanEnum) -> &'static str {
+    match e {
+        iface_team::ObjsTeamPlanEnum::Empty => "",
+        iface_team::ObjsTeamPlanEnum::Std => "std",
+        iface_team::ObjsTeamPlanEnum::Plus => "plus",
+        iface_team::ObjsTeamPlanEnum::Compliance => "compliance",
+        iface_team::ObjsTeamPlanEnum::Enterprise => "enterprise",
+    }
+}
+
+fn iface_team__access_logs_response__to_json(p: &iface_team::AccessLogsResponse) -> Value {
+    let mut m = Map::new();
+    m.insert("logins".into(), Value::Array((&p.logins).iter().map(|v| iface_team__access_logs_response_logins_item__to_json(v)).collect()));
+    m.insert("ok".into(), iface_team__defs_ok_true__to_json(&p.ok));
+    m.insert("paging".into(), iface_team__objs_paging__to_json(&p.paging));
+    Value::Object(m)
+}
+
+fn iface_team__access_logs_response_logins_item__to_json(p: &iface_team::AccessLogsResponseLoginsItem) -> Value {
+    let mut m = Map::new();
+    m.insert("count".into(), Value::Number(serde_json::Number::from(*(&p.count))));
+    m.insert("country".into(), Value::String((&p.country).clone()));
+    m.insert("date_first".into(), Value::Number(serde_json::Number::from(*(&p.date_first))));
+    m.insert("date_last".into(), Value::Number(serde_json::Number::from(*(&p.date_last))));
+    m.insert("ip".into(), Value::String((&p.ip).clone()));
+    m.insert("isp".into(), Value::String((&p.isp).clone()));
+    m.insert("region".into(), Value::String((&p.region).clone()));
+    m.insert("user_agent".into(), Value::String((&p.user_agent).clone()));
+    m.insert("user_id".into(), iface_team__defs_user_id__to_json(&p.user_id));
+    m.insert("username".into(), Value::String((&p.username).clone()));
+    Value::Object(m)
+}
+
+fn iface_team__defs_user_id__to_json(p: &iface_team::DefsUserId) -> Value {
+    let mut m = Map::new();
+    m.insert("value".into(), Value::String((&p.value).clone()));
+    Value::Object(m)
+}
+
+fn iface_team__defs_ok_true__to_json(p: &iface_team::DefsOkTrue) -> Value {
+    let mut m = Map::new();
+    m.insert("value".into(), Value::String((&p.value).clone()));
+    Value::Object(m)
+}
+
+fn iface_team__objs_paging__to_json(p: &iface_team::ObjsPaging) -> Value {
+    let mut m = Map::new();
+    m.insert("count".into(), match (&p.count) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("page".into(), Value::Number(serde_json::Number::from(*(&p.page))));
+    m.insert("pages".into(), match (&p.pages) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("per_page".into(), match (&p.per_page) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("spill".into(), match (&p.spill) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("total".into(), Value::Number(serde_json::Number::from(*(&p.total))));
+    Value::Object(m)
+}
+
+fn iface_team__billable_info_response__to_json(p: &iface_team::BillableInfoResponse) -> Value {
+    let mut m = Map::new();
+    m.insert("ok".into(), iface_team__defs_ok_true__to_json(&p.ok));
+    Value::Object(m)
+}
+
+fn iface_team__info_response__to_json(p: &iface_team::InfoResponse) -> Value {
+    let mut m = Map::new();
+    m.insert("ok".into(), iface_team__defs_ok_true__to_json(&p.ok));
+    m.insert("team".into(), iface_team__objs_team__to_json(&p.team));
+    Value::Object(m)
+}
+
+fn iface_team__objs_team__to_json(p: &iface_team::ObjsTeam) -> Value {
+    let mut m = Map::new();
+    m.insert("archived".into(), match (&p.archived) { Some(v) => Value::Bool(*(v)), None => Value::Null });
+    m.insert("avatar_base_url".into(), match (&p.avatar_base_url) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("created".into(), match (&p.created) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("date_create".into(), match (&p.date_create) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("deleted".into(), match (&p.deleted) { Some(v) => Value::Bool(*(v)), None => Value::Null });
+    m.insert("description".into(), match (&p.description) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("discoverable".into(), match (&p.discoverable) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("domain".into(), Value::String((&p.domain).clone()));
+    m.insert("email_domain".into(), Value::String((&p.email_domain).clone()));
+    m.insert("enterprise_id".into(), match (&p.enterprise_id) { Some(v) => iface_team__defs_enterprise_id__to_json(v), None => Value::Null });
+    m.insert("enterprise_name".into(), match (&p.enterprise_name) { Some(v) => iface_team__defs_enterprise_name__to_json(v), None => Value::Null });
+    m.insert("external_org_migrations".into(), match (&p.external_org_migrations) { Some(v) => iface_team__objs_external_org_migrations__to_json(v), None => Value::Null });
+    m.insert("has_compliance_export".into(), match (&p.has_compliance_export) { Some(v) => Value::Bool(*(v)), None => Value::Null });
+    m.insert("icon".into(), iface_team__objs_icon__to_json(&p.icon));
+    m.insert("id".into(), iface_team__defs_workspace_id__to_json(&p.id));
+    m.insert("is_assigned".into(), match (&p.is_assigned) { Some(v) => Value::Bool(*(v)), None => Value::Null });
+    m.insert("is_enterprise".into(), match (&p.is_enterprise) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("is_over_storage_limit".into(), match (&p.is_over_storage_limit) { Some(v) => Value::Bool(*(v)), None => Value::Null });
+    m.insert("limit_ts".into(), match (&p.limit_ts) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("locale".into(), match (&p.locale) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("messages_count".into(), match (&p.messages_count) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("msg_edit_window_mins".into(), match (&p.msg_edit_window_mins) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("name".into(), Value::String((&p.name).clone()));
+    m.insert("over_integrations_limit".into(), match (&p.over_integrations_limit) { Some(v) => Value::Bool(*(v)), None => Value::Null });
+    m.insert("over_storage_limit".into(), match (&p.over_storage_limit) { Some(v) => Value::Bool(*(v)), None => Value::Null });
+    m.insert("pay_prod_cur".into(), match (&p.pay_prod_cur) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("plan".into(), match (&p.plan) { Some(v) => Value::String(iface_team__objs_team_plan_enum__to_str(v).into()), None => Value::Null });
+    m.insert("primary_owner".into(), match (&p.primary_owner) { Some(v) => iface_team__objs_primary_owner__to_json(v), None => Value::Null });
+    m.insert("sso_provider".into(), match (&p.sso_provider) { Some(v) => iface_team__objs_team_sso_provider__to_json(v), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_team__defs_enterprise_id__to_json(p: &iface_team::DefsEnterpriseId) -> Value {
+    let mut m = Map::new();
+    m.insert("value".into(), Value::String((&p.value).clone()));
+    Value::Object(m)
+}
+
+fn iface_team__defs_enterprise_name__to_json(p: &iface_team::DefsEnterpriseName) -> Value {
+    let mut m = Map::new();
+    m.insert("value".into(), Value::String((&p.value).clone()));
+    Value::Object(m)
+}
+
+fn iface_team__objs_external_org_migrations__to_json(p: &iface_team::ObjsExternalOrgMigrations) -> Value {
+    let mut m = Map::new();
+    m.insert("current".into(), Value::Array((&p.current).iter().map(|v| iface_team__objs_external_org_migrations_current_item__to_json(v)).collect()));
+    m.insert("date_updated".into(), Value::Number(serde_json::Number::from(*(&p.date_updated))));
+    Value::Object(m)
+}
+
+fn iface_team__objs_external_org_migrations_current_item__to_json(p: &iface_team::ObjsExternalOrgMigrationsCurrentItem) -> Value {
+    let mut m = Map::new();
+    m.insert("date_started".into(), Value::Number(serde_json::Number::from(*(&p.date_started))));
+    m.insert("team_id".into(), Value::String((&p.team_id).clone()));
+    Value::Object(m)
+}
+
+fn iface_team__objs_icon__to_json(p: &iface_team::ObjsIcon) -> Value {
+    let mut m = Map::new();
+    m.insert("image_102".into(), match (&p.image_v102) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("image_132".into(), match (&p.image_v132) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("image_230".into(), match (&p.image_v230) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("image_34".into(), match (&p.image_v34) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("image_44".into(), match (&p.image_v44) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("image_68".into(), match (&p.image_v68) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("image_88".into(), match (&p.image_v88) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("image_default".into(), match (&p.image_default) { Some(v) => Value::Bool(*(v)), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_team__defs_workspace_id__to_json(p: &iface_team::DefsWorkspaceId) -> Value {
+    let mut m = Map::new();
+    m.insert("value".into(), Value::String((&p.value).clone()));
+    Value::Object(m)
+}
+
+fn iface_team__objs_primary_owner__to_json(p: &iface_team::ObjsPrimaryOwner) -> Value {
+    let mut m = Map::new();
+    m.insert("email".into(), Value::String((&p.email).clone()));
+    m.insert("id".into(), Value::String((&p.id).clone()));
+    Value::Object(m)
+}
+
+fn iface_team__objs_team_sso_provider__to_json(p: &iface_team::ObjsTeamSsoProvider) -> Value {
+    let mut m = Map::new();
+    m.insert("label".into(), match (&p.label) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("name".into(), match (&p.name) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("type".into(), match (&p.type_op) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_team__integration_logs_response__to_json(p: &iface_team::IntegrationLogsResponse) -> Value {
+    let mut m = Map::new();
+    m.insert("logs".into(), Value::Array((&p.logs).iter().map(|v| iface_team__integration_logs_response_logs_item__to_json(v)).collect()));
+    m.insert("ok".into(), iface_team__defs_ok_true__to_json(&p.ok));
+    m.insert("paging".into(), iface_team__objs_paging__to_json(&p.paging));
+    Value::Object(m)
+}
+
+fn iface_team__integration_logs_response_logs_item__to_json(p: &iface_team::IntegrationLogsResponseLogsItem) -> Value {
+    let mut m = Map::new();
+    m.insert("admin_app_id".into(), match (&p.admin_app_id) { Some(v) => iface_team__defs_app_id__to_json(v), None => Value::Null });
+    m.insert("app_id".into(), iface_team__defs_app_id__to_json(&p.app_id));
+    m.insert("app_type".into(), Value::String((&p.app_type).clone()));
+    m.insert("change_type".into(), Value::String((&p.change_type).clone()));
+    m.insert("channel".into(), match (&p.channel) { Some(v) => iface_team__defs_channel__to_json(v), None => Value::Null });
+    m.insert("date".into(), Value::String((&p.date).clone()));
+    m.insert("scope".into(), Value::String((&p.scope).clone()));
+    m.insert("service_id".into(), match (&p.service_id) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("service_type".into(), match (&p.service_type) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("user_id".into(), iface_team__defs_user_id__to_json(&p.user_id));
+    m.insert("user_name".into(), Value::String((&p.user_name).clone()));
+    Value::Object(m)
+}
+
+fn iface_team__defs_app_id__to_json(p: &iface_team::DefsAppId) -> Value {
+    let mut m = Map::new();
+    m.insert("value".into(), Value::String((&p.value).clone()));
+    Value::Object(m)
+}
+
+fn iface_team__defs_channel__to_json(p: &iface_team::DefsChannel) -> Value {
+    let mut m = Map::new();
+    m.insert("value".into(), Value::String((&p.value).clone()));
+    Value::Object(m)
+}
 
 fn iface_team__access_logs_params__to_json(p: &iface_team::AccessLogsParams) -> Value {
     let mut m = Map::new();
@@ -3797,22 +12739,326 @@ fn iface_team__integration_logs_params__to_json(p: &iface_team::IntegrationLogsP
     Value::Object(m)
 }
 
+fn iface_team__access_logs_response__from_json(v: &Value) -> Option<iface_team::AccessLogsResponse> {
+    let m = v.as_object()?;
+    Some(iface_team::AccessLogsResponse {
+        logins: m.get("logins").and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| iface_team__access_logs_response_logins_item__from_json(x)).collect())).unwrap_or_default(),
+        ok: match m.get("ok").and_then(|v| iface_team__defs_ok_true__from_json(v)) { Some(x) => x, None => return None },
+        paging: match m.get("paging").and_then(|v| iface_team__objs_paging__from_json(v)) { Some(x) => x, None => return None },
+    })
+}
+
+fn iface_team__access_logs_response_logins_item__from_json(v: &Value) -> Option<iface_team::AccessLogsResponseLoginsItem> {
+    let m = v.as_object()?;
+    Some(iface_team::AccessLogsResponseLoginsItem {
+        count: m.get("count").and_then(|v| (v).as_i64().map(|n| n as i32)).unwrap_or_default(),
+        country: m.get("country").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        date_first: m.get("date_first").and_then(|v| (v).as_i64().map(|n| n as i32)).unwrap_or_default(),
+        date_last: m.get("date_last").and_then(|v| (v).as_i64().map(|n| n as i32)).unwrap_or_default(),
+        ip: m.get("ip").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        isp: m.get("isp").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        region: m.get("region").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        user_agent: m.get("user_agent").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        user_id: match m.get("user_id").and_then(|v| iface_team__defs_user_id__from_json(v)) { Some(x) => x, None => return None },
+        username: m.get("username").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+    })
+}
+
+fn iface_team__defs_user_id__from_json(v: &Value) -> Option<iface_team::DefsUserId> {
+    let m = v.as_object()?;
+    Some(iface_team::DefsUserId {
+        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+    })
+}
+
+fn iface_team__defs_ok_true__from_json(v: &Value) -> Option<iface_team::DefsOkTrue> {
+    let m = v.as_object()?;
+    Some(iface_team::DefsOkTrue {
+        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+    })
+}
+
+fn iface_team__objs_paging__from_json(v: &Value) -> Option<iface_team::ObjsPaging> {
+    let m = v.as_object()?;
+    Some(iface_team::ObjsPaging {
+        count: m.get("count").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        page: m.get("page").and_then(|v| (v).as_i64().map(|n| n as i32)).unwrap_or_default(),
+        pages: m.get("pages").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        per_page: m.get("per_page").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        spill: m.get("spill").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        total: m.get("total").and_then(|v| (v).as_i64().map(|n| n as i32)).unwrap_or_default(),
+    })
+}
+
+fn iface_team__billable_info_response__from_json(v: &Value) -> Option<iface_team::BillableInfoResponse> {
+    let m = v.as_object()?;
+    Some(iface_team::BillableInfoResponse {
+        ok: match m.get("ok").and_then(|v| iface_team__defs_ok_true__from_json(v)) { Some(x) => x, None => return None },
+    })
+}
+
+fn iface_team__info_response__from_json(v: &Value) -> Option<iface_team::InfoResponse> {
+    let m = v.as_object()?;
+    Some(iface_team::InfoResponse {
+        ok: match m.get("ok").and_then(|v| iface_team__defs_ok_true__from_json(v)) { Some(x) => x, None => return None },
+        team: match m.get("team").and_then(|v| iface_team__objs_team__from_json(v)) { Some(x) => x, None => return None },
+    })
+}
+
+fn iface_team__objs_team__from_json(v: &Value) -> Option<iface_team::ObjsTeam> {
+    let m = v.as_object()?;
+    Some(iface_team::ObjsTeam {
+        archived: m.get("archived").filter(|v| !v.is_null()).and_then(|v| (v).as_bool()),
+        avatar_base_url: m.get("avatar_base_url").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        created: m.get("created").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        date_create: m.get("date_create").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        deleted: m.get("deleted").filter(|v| !v.is_null()).and_then(|v| (v).as_bool()),
+        description: m.get("description").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        discoverable: m.get("discoverable").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        domain: m.get("domain").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        email_domain: m.get("email_domain").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        enterprise_id: m.get("enterprise_id").filter(|v| !v.is_null()).and_then(|v| iface_team__defs_enterprise_id__from_json(v)),
+        enterprise_name: m.get("enterprise_name").filter(|v| !v.is_null()).and_then(|v| iface_team__defs_enterprise_name__from_json(v)),
+        external_org_migrations: m.get("external_org_migrations").filter(|v| !v.is_null()).and_then(|v| iface_team__objs_external_org_migrations__from_json(v)),
+        has_compliance_export: m.get("has_compliance_export").filter(|v| !v.is_null()).and_then(|v| (v).as_bool()),
+        icon: match m.get("icon").and_then(|v| iface_team__objs_icon__from_json(v)) { Some(x) => x, None => return None },
+        id: match m.get("id").and_then(|v| iface_team__defs_workspace_id__from_json(v)) { Some(x) => x, None => return None },
+        is_assigned: m.get("is_assigned").filter(|v| !v.is_null()).and_then(|v| (v).as_bool()),
+        is_enterprise: m.get("is_enterprise").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        is_over_storage_limit: m.get("is_over_storage_limit").filter(|v| !v.is_null()).and_then(|v| (v).as_bool()),
+        limit_ts: m.get("limit_ts").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        locale: m.get("locale").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        messages_count: m.get("messages_count").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        msg_edit_window_mins: m.get("msg_edit_window_mins").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        name: m.get("name").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        over_integrations_limit: m.get("over_integrations_limit").filter(|v| !v.is_null()).and_then(|v| (v).as_bool()),
+        over_storage_limit: m.get("over_storage_limit").filter(|v| !v.is_null()).and_then(|v| (v).as_bool()),
+        pay_prod_cur: m.get("pay_prod_cur").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        plan: m.get("plan").filter(|v| !v.is_null()).and_then(|v| (v).as_str().and_then(iface_team__objs_team_plan_enum__from_str)),
+        primary_owner: m.get("primary_owner").filter(|v| !v.is_null()).and_then(|v| iface_team__objs_primary_owner__from_json(v)),
+        sso_provider: m.get("sso_provider").filter(|v| !v.is_null()).and_then(|v| iface_team__objs_team_sso_provider__from_json(v)),
+    })
+}
+
+fn iface_team__defs_enterprise_id__from_json(v: &Value) -> Option<iface_team::DefsEnterpriseId> {
+    let m = v.as_object()?;
+    Some(iface_team::DefsEnterpriseId {
+        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+    })
+}
+
+fn iface_team__defs_enterprise_name__from_json(v: &Value) -> Option<iface_team::DefsEnterpriseName> {
+    let m = v.as_object()?;
+    Some(iface_team::DefsEnterpriseName {
+        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+    })
+}
+
+fn iface_team__objs_external_org_migrations__from_json(v: &Value) -> Option<iface_team::ObjsExternalOrgMigrations> {
+    let m = v.as_object()?;
+    Some(iface_team::ObjsExternalOrgMigrations {
+        current: m.get("current").and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| iface_team__objs_external_org_migrations_current_item__from_json(x)).collect())).unwrap_or_default(),
+        date_updated: m.get("date_updated").and_then(|v| (v).as_i64().map(|n| n as i32)).unwrap_or_default(),
+    })
+}
+
+fn iface_team__objs_external_org_migrations_current_item__from_json(v: &Value) -> Option<iface_team::ObjsExternalOrgMigrationsCurrentItem> {
+    let m = v.as_object()?;
+    Some(iface_team::ObjsExternalOrgMigrationsCurrentItem {
+        date_started: m.get("date_started").and_then(|v| (v).as_i64().map(|n| n as i32)).unwrap_or_default(),
+        team_id: m.get("team_id").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+    })
+}
+
+fn iface_team__objs_icon__from_json(v: &Value) -> Option<iface_team::ObjsIcon> {
+    let m = v.as_object()?;
+    Some(iface_team::ObjsIcon {
+        image_v102: m.get("image_102").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        image_v132: m.get("image_132").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        image_v230: m.get("image_230").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        image_v34: m.get("image_34").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        image_v44: m.get("image_44").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        image_v68: m.get("image_68").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        image_v88: m.get("image_88").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        image_default: m.get("image_default").filter(|v| !v.is_null()).and_then(|v| (v).as_bool()),
+    })
+}
+
+fn iface_team__defs_workspace_id__from_json(v: &Value) -> Option<iface_team::DefsWorkspaceId> {
+    let m = v.as_object()?;
+    Some(iface_team::DefsWorkspaceId {
+        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+    })
+}
+
+fn iface_team__objs_primary_owner__from_json(v: &Value) -> Option<iface_team::ObjsPrimaryOwner> {
+    let m = v.as_object()?;
+    Some(iface_team::ObjsPrimaryOwner {
+        email: m.get("email").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        id: m.get("id").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+    })
+}
+
+fn iface_team__objs_team_sso_provider__from_json(v: &Value) -> Option<iface_team::ObjsTeamSsoProvider> {
+    let m = v.as_object()?;
+    Some(iface_team::ObjsTeamSsoProvider {
+        label: m.get("label").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        name: m.get("name").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        type_op: m.get("type").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    })
+}
+
+fn iface_team__integration_logs_response__from_json(v: &Value) -> Option<iface_team::IntegrationLogsResponse> {
+    let m = v.as_object()?;
+    Some(iface_team::IntegrationLogsResponse {
+        logs: m.get("logs").and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| iface_team__integration_logs_response_logs_item__from_json(x)).collect())).unwrap_or_default(),
+        ok: match m.get("ok").and_then(|v| iface_team__defs_ok_true__from_json(v)) { Some(x) => x, None => return None },
+        paging: match m.get("paging").and_then(|v| iface_team__objs_paging__from_json(v)) { Some(x) => x, None => return None },
+    })
+}
+
+fn iface_team__integration_logs_response_logs_item__from_json(v: &Value) -> Option<iface_team::IntegrationLogsResponseLogsItem> {
+    let m = v.as_object()?;
+    Some(iface_team::IntegrationLogsResponseLogsItem {
+        admin_app_id: m.get("admin_app_id").filter(|v| !v.is_null()).and_then(|v| iface_team__defs_app_id__from_json(v)),
+        app_id: match m.get("app_id").and_then(|v| iface_team__defs_app_id__from_json(v)) { Some(x) => x, None => return None },
+        app_type: m.get("app_type").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        change_type: m.get("change_type").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        channel: m.get("channel").filter(|v| !v.is_null()).and_then(|v| iface_team__defs_channel__from_json(v)),
+        date: m.get("date").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        scope: m.get("scope").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        service_id: m.get("service_id").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        service_type: m.get("service_type").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        user_id: match m.get("user_id").and_then(|v| iface_team__defs_user_id__from_json(v)) { Some(x) => x, None => return None },
+        user_name: m.get("user_name").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+    })
+}
+
+fn iface_team__defs_app_id__from_json(v: &Value) -> Option<iface_team::DefsAppId> {
+    let m = v.as_object()?;
+    Some(iface_team::DefsAppId {
+        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+    })
+}
+
+fn iface_team__defs_channel__from_json(v: &Value) -> Option<iface_team::DefsChannel> {
+    let m = v.as_object()?;
+    Some(iface_team::DefsChannel {
+        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+    })
+}
+
+fn iface_team__objs_team_plan_enum__from_str(s: &str) -> Option<iface_team::ObjsTeamPlanEnum> {
+    match s {
+        "" => Some(iface_team::ObjsTeamPlanEnum::Empty),
+        "std" => Some(iface_team::ObjsTeamPlanEnum::Std),
+        "plus" => Some(iface_team::ObjsTeamPlanEnum::Plus),
+        "compliance" => Some(iface_team::ObjsTeamPlanEnum::Compliance),
+        "enterprise" => Some(iface_team::ObjsTeamPlanEnum::Enterprise),
+        _ => None,
+    }
+}
+
+fn iface_team__access_logs__ok(body: String) -> Result<iface_team::AccessLogsResponse, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match iface_team__access_logs_response__from_json(&v) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_team__access_logs__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
+fn iface_team__billable_info__ok(body: String) -> Result<iface_team::BillableInfoResponse, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match iface_team__billable_info_response__from_json(&v) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_team__billable_info__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
+fn iface_team__info__ok(body: String) -> Result<iface_team::InfoResponse, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match iface_team__info_response__from_json(&v) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_team__info__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
+fn iface_team__integration_logs__ok(body: String) -> Result<iface_team::IntegrationLogsResponse, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match iface_team__integration_logs_response__from_json(&v) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_team__integration_logs__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
 impl iface_team::Guest for crate::Component {
-    fn access_logs(params: iface_team::AccessLogsParams) -> Result<String, String> {
+    fn access_logs(params: iface_team::AccessLogsParams) -> Result<iface_team::AccessLogsResponse, String> {
         let json = iface_team__access_logs_params__to_json(&params);
-        dispatch(&OP_TEAM_ACCESS_LOGS, json)
+        match dispatch(&OP_TEAM_ACCESS_LOGS, json).and_then(iface_team__access_logs__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_team__access_logs__err(e)),
+        }
     }
-    fn billable_info(params: iface_team::BillableInfoParams) -> Result<String, String> {
+    fn billable_info(params: iface_team::BillableInfoParams) -> Result<iface_team::BillableInfoResponse, String> {
         let json = iface_team__billable_info_params__to_json(&params);
-        dispatch(&OP_TEAM_BILLABLE_INFO, json)
+        match dispatch(&OP_TEAM_BILLABLE_INFO, json).and_then(iface_team__billable_info__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_team__billable_info__err(e)),
+        }
     }
-    fn info(params: iface_team::InfoParams) -> Result<String, String> {
+    fn info(params: iface_team::InfoParams) -> Result<iface_team::InfoResponse, String> {
         let json = iface_team__info_params__to_json(&params);
-        dispatch(&OP_TEAM_INFO, json)
+        match dispatch(&OP_TEAM_INFO, json).and_then(iface_team__info__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_team__info__err(e)),
+        }
     }
-    fn integration_logs(params: iface_team::IntegrationLogsParams) -> Result<String, String> {
+    fn integration_logs(params: iface_team::IntegrationLogsParams) -> Result<iface_team::IntegrationLogsResponse, String> {
         let json = iface_team__integration_logs_params__to_json(&params);
-        dispatch(&OP_TEAM_INTEGRATION_LOGS, json)
+        match dispatch(&OP_TEAM_INTEGRATION_LOGS, json).and_then(iface_team__integration_logs__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_team__integration_logs__err(e)),
+        }
     }
 }
 use crate::exports::autostamp::slack::team_profile as iface_team_profile;
@@ -3821,13 +13067,57 @@ const OP_TEAM_PROFILE_GET: OpSpec = OpSpec {
     method: "GET",
     path_template: "/team.profile.get",
     fields: &[
-        FieldSpec { snake: "token", location: FieldLocation::Query },
-        FieldSpec { snake: "visibility", location: FieldLocation::Query },
+        FieldSpec { snake: "token", wire: "token", location: FieldLocation::Query },
+        FieldSpec { snake: "visibility", wire: "visibility", location: FieldLocation::Query },
     ],
     auth: &[
         AuthApply { secret_key: "slackAuth", kind: AuthKind::Bearer },
     ],
 };
+
+fn iface_team_profile__objs_team_profile_field_type_op_enum__to_str(e: &iface_team_profile::ObjsTeamProfileFieldTypeOpEnum) -> &'static str {
+    match e {
+        iface_team_profile::ObjsTeamProfileFieldTypeOpEnum::Text => "text",
+        iface_team_profile::ObjsTeamProfileFieldTypeOpEnum::Date => "date",
+        iface_team_profile::ObjsTeamProfileFieldTypeOpEnum::Link => "link",
+        iface_team_profile::ObjsTeamProfileFieldTypeOpEnum::Mailto => "mailto",
+        iface_team_profile::ObjsTeamProfileFieldTypeOpEnum::OptionsList => "options_list",
+        iface_team_profile::ObjsTeamProfileFieldTypeOpEnum::User => "user",
+    }
+}
+
+fn iface_team_profile__get_response__to_json(p: &iface_team_profile::GetResponse) -> Value {
+    let mut m = Map::new();
+    m.insert("ok".into(), iface_team_profile__defs_ok_true__to_json(&p.ok));
+    m.insert("profile".into(), iface_team_profile__get_response_profile__to_json(&p.profile));
+    Value::Object(m)
+}
+
+fn iface_team_profile__defs_ok_true__to_json(p: &iface_team_profile::DefsOkTrue) -> Value {
+    let mut m = Map::new();
+    m.insert("value".into(), Value::String((&p.value).clone()));
+    Value::Object(m)
+}
+
+fn iface_team_profile__get_response_profile__to_json(p: &iface_team_profile::GetResponseProfile) -> Value {
+    let mut m = Map::new();
+    m.insert("fields".into(), Value::Array((&p.fields).iter().map(|v| iface_team_profile__objs_team_profile_field__to_json(v)).collect()));
+    Value::Object(m)
+}
+
+fn iface_team_profile__objs_team_profile_field__to_json(p: &iface_team_profile::ObjsTeamProfileField) -> Value {
+    let mut m = Map::new();
+    m.insert("field_name".into(), match (&p.field_name) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("hint".into(), Value::String((&p.hint).clone()));
+    m.insert("id".into(), Value::String((&p.id).clone()));
+    m.insert("is_hidden".into(), match (&p.is_hidden) { Some(v) => Value::Bool(*(v)), None => Value::Null });
+    m.insert("label".into(), Value::String((&p.label).clone()));
+    m.insert("options".into(), match (&p.options) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("ordering".into(), serde_json::Number::from_f64(*(&p.ordering)).map(Value::Number).unwrap_or(Value::Null));
+    m.insert("possible_values".into(), match (&p.possible_values) { Some(v) => Value::Array((v).iter().map(|v| Value::String((v).clone())).collect()), None => Value::Null });
+    m.insert("type".into(), Value::String(iface_team_profile__objs_team_profile_field_type_op_enum__to_str(&p.type_op).into()));
+    Value::Object(m)
+}
 
 fn iface_team_profile__get_params__to_json(p: &iface_team_profile::GetParams) -> Value {
     let mut m = Map::new();
@@ -3836,10 +13126,80 @@ fn iface_team_profile__get_params__to_json(p: &iface_team_profile::GetParams) ->
     Value::Object(m)
 }
 
+fn iface_team_profile__get_response__from_json(v: &Value) -> Option<iface_team_profile::GetResponse> {
+    let m = v.as_object()?;
+    Some(iface_team_profile::GetResponse {
+        ok: match m.get("ok").and_then(|v| iface_team_profile__defs_ok_true__from_json(v)) { Some(x) => x, None => return None },
+        profile: match m.get("profile").and_then(|v| iface_team_profile__get_response_profile__from_json(v)) { Some(x) => x, None => return None },
+    })
+}
+
+fn iface_team_profile__defs_ok_true__from_json(v: &Value) -> Option<iface_team_profile::DefsOkTrue> {
+    let m = v.as_object()?;
+    Some(iface_team_profile::DefsOkTrue {
+        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+    })
+}
+
+fn iface_team_profile__get_response_profile__from_json(v: &Value) -> Option<iface_team_profile::GetResponseProfile> {
+    let m = v.as_object()?;
+    Some(iface_team_profile::GetResponseProfile {
+        fields: m.get("fields").and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| iface_team_profile__objs_team_profile_field__from_json(x)).collect())).unwrap_or_default(),
+    })
+}
+
+fn iface_team_profile__objs_team_profile_field__from_json(v: &Value) -> Option<iface_team_profile::ObjsTeamProfileField> {
+    let m = v.as_object()?;
+    Some(iface_team_profile::ObjsTeamProfileField {
+        field_name: m.get("field_name").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        hint: m.get("hint").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        id: m.get("id").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        is_hidden: m.get("is_hidden").filter(|v| !v.is_null()).and_then(|v| (v).as_bool()),
+        label: m.get("label").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        options: m.get("options").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        ordering: m.get("ordering").and_then(|v| (v).as_f64()).unwrap_or_default(),
+        possible_values: m.get("possible_values").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| (x).as_str().map(|s| s.to_string())).collect())),
+        type_op: match m.get("type").and_then(|v| (v).as_str().and_then(iface_team_profile__objs_team_profile_field_type_op_enum__from_str)) { Some(x) => x, None => return None },
+    })
+}
+
+fn iface_team_profile__objs_team_profile_field_type_op_enum__from_str(s: &str) -> Option<iface_team_profile::ObjsTeamProfileFieldTypeOpEnum> {
+    match s {
+        "text" => Some(iface_team_profile::ObjsTeamProfileFieldTypeOpEnum::Text),
+        "date" => Some(iface_team_profile::ObjsTeamProfileFieldTypeOpEnum::Date),
+        "link" => Some(iface_team_profile::ObjsTeamProfileFieldTypeOpEnum::Link),
+        "mailto" => Some(iface_team_profile::ObjsTeamProfileFieldTypeOpEnum::Mailto),
+        "options_list" => Some(iface_team_profile::ObjsTeamProfileFieldTypeOpEnum::OptionsList),
+        "user" => Some(iface_team_profile::ObjsTeamProfileFieldTypeOpEnum::User),
+        _ => None,
+    }
+}
+
+fn iface_team_profile__get__ok(body: String) -> Result<iface_team_profile::GetResponse, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match iface_team_profile__get_response__from_json(&v) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_team_profile__get__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
 impl iface_team_profile::Guest for crate::Component {
-    fn get(params: iface_team_profile::GetParams) -> Result<String, String> {
+    fn get(params: iface_team_profile::GetParams) -> Result<iface_team_profile::GetResponse, String> {
         let json = iface_team_profile__get_params__to_json(&params);
-        dispatch(&OP_TEAM_PROFILE_GET, json)
+        match dispatch(&OP_TEAM_PROFILE_GET, json).and_then(iface_team_profile__get__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_team_profile__get__err(e)),
+        }
     }
 }
 use crate::exports::autostamp::slack::usergroups as iface_usergroups;
@@ -3848,7 +13208,12 @@ const OP_USERGROUPS_CREATE: OpSpec = OpSpec {
     method: "POST",
     path_template: "/usergroups.create",
     fields: &[
-        FieldSpec { snake: "token", location: FieldLocation::Header },
+        FieldSpec { snake: "token", wire: "token", location: FieldLocation::Header },
+        FieldSpec { snake: "channels", wire: "channels", location: FieldLocation::Body },
+        FieldSpec { snake: "description", wire: "description", location: FieldLocation::Body },
+        FieldSpec { snake: "handle", wire: "handle", location: FieldLocation::Body },
+        FieldSpec { snake: "include_count", wire: "include_count", location: FieldLocation::Body },
+        FieldSpec { snake: "name", wire: "name", location: FieldLocation::Body },
     ],
     auth: &[
         AuthApply { secret_key: "slackAuth", kind: AuthKind::Bearer },
@@ -3859,7 +13224,9 @@ const OP_USERGROUPS_DISABLE: OpSpec = OpSpec {
     method: "POST",
     path_template: "/usergroups.disable",
     fields: &[
-        FieldSpec { snake: "token", location: FieldLocation::Header },
+        FieldSpec { snake: "token", wire: "token", location: FieldLocation::Header },
+        FieldSpec { snake: "include_count", wire: "include_count", location: FieldLocation::Body },
+        FieldSpec { snake: "usergroup", wire: "usergroup", location: FieldLocation::Body },
     ],
     auth: &[
         AuthApply { secret_key: "slackAuth", kind: AuthKind::Bearer },
@@ -3870,7 +13237,9 @@ const OP_USERGROUPS_ENABLE: OpSpec = OpSpec {
     method: "POST",
     path_template: "/usergroups.enable",
     fields: &[
-        FieldSpec { snake: "token", location: FieldLocation::Header },
+        FieldSpec { snake: "token", wire: "token", location: FieldLocation::Header },
+        FieldSpec { snake: "include_count", wire: "include_count", location: FieldLocation::Body },
+        FieldSpec { snake: "usergroup", wire: "usergroup", location: FieldLocation::Body },
     ],
     auth: &[
         AuthApply { secret_key: "slackAuth", kind: AuthKind::Bearer },
@@ -3881,10 +13250,10 @@ const OP_USERGROUPS_LIST_OP: OpSpec = OpSpec {
     method: "GET",
     path_template: "/usergroups.list",
     fields: &[
-        FieldSpec { snake: "include_users", location: FieldLocation::Query },
-        FieldSpec { snake: "token", location: FieldLocation::Query },
-        FieldSpec { snake: "include_count", location: FieldLocation::Query },
-        FieldSpec { snake: "include_disabled", location: FieldLocation::Query },
+        FieldSpec { snake: "include_users", wire: "include_users", location: FieldLocation::Query },
+        FieldSpec { snake: "token", wire: "token", location: FieldLocation::Query },
+        FieldSpec { snake: "include_count", wire: "include_count", location: FieldLocation::Query },
+        FieldSpec { snake: "include_disabled", wire: "include_disabled", location: FieldLocation::Query },
     ],
     auth: &[
         AuthApply { secret_key: "slackAuth", kind: AuthKind::Bearer },
@@ -3895,28 +13264,147 @@ const OP_USERGROUPS_UPDATE: OpSpec = OpSpec {
     method: "POST",
     path_template: "/usergroups.update",
     fields: &[
-        FieldSpec { snake: "token", location: FieldLocation::Header },
+        FieldSpec { snake: "token", wire: "token", location: FieldLocation::Header },
+        FieldSpec { snake: "channels", wire: "channels", location: FieldLocation::Body },
+        FieldSpec { snake: "description", wire: "description", location: FieldLocation::Body },
+        FieldSpec { snake: "handle", wire: "handle", location: FieldLocation::Body },
+        FieldSpec { snake: "include_count", wire: "include_count", location: FieldLocation::Body },
+        FieldSpec { snake: "name", wire: "name", location: FieldLocation::Body },
+        FieldSpec { snake: "usergroup", wire: "usergroup", location: FieldLocation::Body },
     ],
     auth: &[
         AuthApply { secret_key: "slackAuth", kind: AuthKind::Bearer },
     ],
 };
 
+fn iface_usergroups__create_response__to_json(p: &iface_usergroups::CreateResponse) -> Value {
+    let mut m = Map::new();
+    m.insert("ok".into(), iface_usergroups__defs_ok_true__to_json(&p.ok));
+    m.insert("usergroup".into(), iface_usergroups__objs_subteam__to_json(&p.usergroup));
+    Value::Object(m)
+}
+
+fn iface_usergroups__defs_ok_true__to_json(p: &iface_usergroups::DefsOkTrue) -> Value {
+    let mut m = Map::new();
+    m.insert("value".into(), Value::String((&p.value).clone()));
+    Value::Object(m)
+}
+
+fn iface_usergroups__objs_subteam__to_json(p: &iface_usergroups::ObjsSubteam) -> Value {
+    let mut m = Map::new();
+    m.insert("auto_provision".into(), Value::Bool(*(&p.auto_provision)));
+    m.insert("auto_type".into(), Value::String((&p.auto_type).clone()));
+    m.insert("channel_count".into(), match (&p.channel_count) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("created_by".into(), iface_usergroups__defs_user_id__to_json(&p.created_by));
+    m.insert("date_create".into(), Value::Number(serde_json::Number::from(*(&p.date_create))));
+    m.insert("date_delete".into(), Value::Number(serde_json::Number::from(*(&p.date_delete))));
+    m.insert("date_update".into(), Value::Number(serde_json::Number::from(*(&p.date_update))));
+    m.insert("deleted_by".into(), Value::String((&p.deleted_by).clone()));
+    m.insert("description".into(), Value::String((&p.description).clone()));
+    m.insert("enterprise_subteam_id".into(), Value::String((&p.enterprise_subteam_id).clone()));
+    m.insert("handle".into(), Value::String((&p.handle).clone()));
+    m.insert("id".into(), iface_usergroups__defs_subteam_id__to_json(&p.id));
+    m.insert("is_external".into(), Value::Bool(*(&p.is_external)));
+    m.insert("is_subteam".into(), Value::Bool(*(&p.is_subteam)));
+    m.insert("is_usergroup".into(), Value::Bool(*(&p.is_usergroup)));
+    m.insert("name".into(), Value::String((&p.name).clone()));
+    m.insert("prefs".into(), iface_usergroups__objs_subteam_prefs__to_json(&p.prefs));
+    m.insert("team_id".into(), iface_usergroups__defs_team__to_json(&p.team_id));
+    m.insert("updated_by".into(), iface_usergroups__defs_user_id__to_json(&p.updated_by));
+    m.insert("user_count".into(), match (&p.user_count) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("users".into(), match (&p.users) { Some(v) => Value::Array((v).iter().map(|v| iface_usergroups__defs_user_id__to_json(v)).collect()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_usergroups__defs_user_id__to_json(p: &iface_usergroups::DefsUserId) -> Value {
+    let mut m = Map::new();
+    m.insert("value".into(), Value::String((&p.value).clone()));
+    Value::Object(m)
+}
+
+fn iface_usergroups__defs_subteam_id__to_json(p: &iface_usergroups::DefsSubteamId) -> Value {
+    let mut m = Map::new();
+    m.insert("value".into(), Value::String((&p.value).clone()));
+    Value::Object(m)
+}
+
+fn iface_usergroups__objs_subteam_prefs__to_json(p: &iface_usergroups::ObjsSubteamPrefs) -> Value {
+    let mut m = Map::new();
+    m.insert("channels".into(), Value::Array((&p.channels).iter().map(|v| iface_usergroups__defs_channel_id__to_json(v)).collect()));
+    m.insert("groups".into(), Value::Array((&p.groups).iter().map(|v| iface_usergroups__defs_group_id__to_json(v)).collect()));
+    Value::Object(m)
+}
+
+fn iface_usergroups__defs_channel_id__to_json(p: &iface_usergroups::DefsChannelId) -> Value {
+    let mut m = Map::new();
+    m.insert("value".into(), Value::String((&p.value).clone()));
+    Value::Object(m)
+}
+
+fn iface_usergroups__defs_group_id__to_json(p: &iface_usergroups::DefsGroupId) -> Value {
+    let mut m = Map::new();
+    m.insert("value".into(), Value::String((&p.value).clone()));
+    Value::Object(m)
+}
+
+fn iface_usergroups__defs_team__to_json(p: &iface_usergroups::DefsTeam) -> Value {
+    let mut m = Map::new();
+    m.insert("value".into(), Value::String((&p.value).clone()));
+    Value::Object(m)
+}
+
+fn iface_usergroups__disable_response__to_json(p: &iface_usergroups::DisableResponse) -> Value {
+    let mut m = Map::new();
+    m.insert("ok".into(), iface_usergroups__defs_ok_true__to_json(&p.ok));
+    m.insert("usergroup".into(), iface_usergroups__objs_subteam__to_json(&p.usergroup));
+    Value::Object(m)
+}
+
+fn iface_usergroups__enable_response__to_json(p: &iface_usergroups::EnableResponse) -> Value {
+    let mut m = Map::new();
+    m.insert("ok".into(), iface_usergroups__defs_ok_true__to_json(&p.ok));
+    m.insert("usergroup".into(), iface_usergroups__objs_subteam__to_json(&p.usergroup));
+    Value::Object(m)
+}
+
+fn iface_usergroups__list_op_response__to_json(p: &iface_usergroups::ListOpResponse) -> Value {
+    let mut m = Map::new();
+    m.insert("ok".into(), iface_usergroups__defs_ok_true__to_json(&p.ok));
+    m.insert("usergroups".into(), Value::Array((&p.usergroups).iter().map(|v| iface_usergroups__objs_subteam__to_json(v)).collect()));
+    Value::Object(m)
+}
+
+fn iface_usergroups__update_response__to_json(p: &iface_usergroups::UpdateResponse) -> Value {
+    let mut m = Map::new();
+    m.insert("ok".into(), iface_usergroups__defs_ok_true__to_json(&p.ok));
+    m.insert("usergroup".into(), iface_usergroups__objs_subteam__to_json(&p.usergroup));
+    Value::Object(m)
+}
+
 fn iface_usergroups__create_params__to_json(p: &iface_usergroups::CreateParams) -> Value {
     let mut m = Map::new();
     m.insert("token".into(), Value::String((&p.token).clone()));
+    m.insert("channels".into(), match (&p.channels) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("description".into(), match (&p.description) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("handle".into(), match (&p.handle) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("include_count".into(), match (&p.include_count) { Some(v) => Value::Bool(*(v)), None => Value::Null });
+    m.insert("name".into(), Value::String((&p.name).clone()));
     Value::Object(m)
 }
 
 fn iface_usergroups__disable_params__to_json(p: &iface_usergroups::DisableParams) -> Value {
     let mut m = Map::new();
     m.insert("token".into(), Value::String((&p.token).clone()));
+    m.insert("include_count".into(), match (&p.include_count) { Some(v) => Value::Bool(*(v)), None => Value::Null });
+    m.insert("usergroup".into(), Value::String((&p.usergroup).clone()));
     Value::Object(m)
 }
 
 fn iface_usergroups__enable_params__to_json(p: &iface_usergroups::EnableParams) -> Value {
     let mut m = Map::new();
     m.insert("token".into(), Value::String((&p.token).clone()));
+    m.insert("include_count".into(), match (&p.include_count) { Some(v) => Value::Bool(*(v)), None => Value::Null });
+    m.insert("usergroup".into(), Value::String((&p.usergroup).clone()));
     Value::Object(m)
 }
 
@@ -3932,29 +13420,257 @@ fn iface_usergroups__list_op_params__to_json(p: &iface_usergroups::ListOpParams)
 fn iface_usergroups__update_params__to_json(p: &iface_usergroups::UpdateParams) -> Value {
     let mut m = Map::new();
     m.insert("token".into(), Value::String((&p.token).clone()));
+    m.insert("channels".into(), match (&p.channels) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("description".into(), match (&p.description) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("handle".into(), match (&p.handle) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("include_count".into(), match (&p.include_count) { Some(v) => Value::Bool(*(v)), None => Value::Null });
+    m.insert("name".into(), match (&p.name) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("usergroup".into(), Value::String((&p.usergroup).clone()));
     Value::Object(m)
 }
 
+fn iface_usergroups__create_response__from_json(v: &Value) -> Option<iface_usergroups::CreateResponse> {
+    let m = v.as_object()?;
+    Some(iface_usergroups::CreateResponse {
+        ok: match m.get("ok").and_then(|v| iface_usergroups__defs_ok_true__from_json(v)) { Some(x) => x, None => return None },
+        usergroup: match m.get("usergroup").and_then(|v| iface_usergroups__objs_subteam__from_json(v)) { Some(x) => x, None => return None },
+    })
+}
+
+fn iface_usergroups__defs_ok_true__from_json(v: &Value) -> Option<iface_usergroups::DefsOkTrue> {
+    let m = v.as_object()?;
+    Some(iface_usergroups::DefsOkTrue {
+        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+    })
+}
+
+fn iface_usergroups__objs_subteam__from_json(v: &Value) -> Option<iface_usergroups::ObjsSubteam> {
+    let m = v.as_object()?;
+    Some(iface_usergroups::ObjsSubteam {
+        auto_provision: m.get("auto_provision").and_then(|v| (v).as_bool()).unwrap_or_default(),
+        auto_type: m.get("auto_type").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        channel_count: m.get("channel_count").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        created_by: match m.get("created_by").and_then(|v| iface_usergroups__defs_user_id__from_json(v)) { Some(x) => x, None => return None },
+        date_create: m.get("date_create").and_then(|v| (v).as_i64().map(|n| n as i32)).unwrap_or_default(),
+        date_delete: m.get("date_delete").and_then(|v| (v).as_i64().map(|n| n as i32)).unwrap_or_default(),
+        date_update: m.get("date_update").and_then(|v| (v).as_i64().map(|n| n as i32)).unwrap_or_default(),
+        deleted_by: m.get("deleted_by").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        description: m.get("description").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        enterprise_subteam_id: m.get("enterprise_subteam_id").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        handle: m.get("handle").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        id: match m.get("id").and_then(|v| iface_usergroups__defs_subteam_id__from_json(v)) { Some(x) => x, None => return None },
+        is_external: m.get("is_external").and_then(|v| (v).as_bool()).unwrap_or_default(),
+        is_subteam: m.get("is_subteam").and_then(|v| (v).as_bool()).unwrap_or_default(),
+        is_usergroup: m.get("is_usergroup").and_then(|v| (v).as_bool()).unwrap_or_default(),
+        name: m.get("name").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        prefs: match m.get("prefs").and_then(|v| iface_usergroups__objs_subteam_prefs__from_json(v)) { Some(x) => x, None => return None },
+        team_id: match m.get("team_id").and_then(|v| iface_usergroups__defs_team__from_json(v)) { Some(x) => x, None => return None },
+        updated_by: match m.get("updated_by").and_then(|v| iface_usergroups__defs_user_id__from_json(v)) { Some(x) => x, None => return None },
+        user_count: m.get("user_count").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        users: m.get("users").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| iface_usergroups__defs_user_id__from_json(x)).collect())),
+    })
+}
+
+fn iface_usergroups__defs_user_id__from_json(v: &Value) -> Option<iface_usergroups::DefsUserId> {
+    let m = v.as_object()?;
+    Some(iface_usergroups::DefsUserId {
+        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+    })
+}
+
+fn iface_usergroups__defs_subteam_id__from_json(v: &Value) -> Option<iface_usergroups::DefsSubteamId> {
+    let m = v.as_object()?;
+    Some(iface_usergroups::DefsSubteamId {
+        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+    })
+}
+
+fn iface_usergroups__objs_subteam_prefs__from_json(v: &Value) -> Option<iface_usergroups::ObjsSubteamPrefs> {
+    let m = v.as_object()?;
+    Some(iface_usergroups::ObjsSubteamPrefs {
+        channels: m.get("channels").and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| iface_usergroups__defs_channel_id__from_json(x)).collect())).unwrap_or_default(),
+        groups: m.get("groups").and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| iface_usergroups__defs_group_id__from_json(x)).collect())).unwrap_or_default(),
+    })
+}
+
+fn iface_usergroups__defs_channel_id__from_json(v: &Value) -> Option<iface_usergroups::DefsChannelId> {
+    let m = v.as_object()?;
+    Some(iface_usergroups::DefsChannelId {
+        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+    })
+}
+
+fn iface_usergroups__defs_group_id__from_json(v: &Value) -> Option<iface_usergroups::DefsGroupId> {
+    let m = v.as_object()?;
+    Some(iface_usergroups::DefsGroupId {
+        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+    })
+}
+
+fn iface_usergroups__defs_team__from_json(v: &Value) -> Option<iface_usergroups::DefsTeam> {
+    let m = v.as_object()?;
+    Some(iface_usergroups::DefsTeam {
+        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+    })
+}
+
+fn iface_usergroups__disable_response__from_json(v: &Value) -> Option<iface_usergroups::DisableResponse> {
+    let m = v.as_object()?;
+    Some(iface_usergroups::DisableResponse {
+        ok: match m.get("ok").and_then(|v| iface_usergroups__defs_ok_true__from_json(v)) { Some(x) => x, None => return None },
+        usergroup: match m.get("usergroup").and_then(|v| iface_usergroups__objs_subteam__from_json(v)) { Some(x) => x, None => return None },
+    })
+}
+
+fn iface_usergroups__enable_response__from_json(v: &Value) -> Option<iface_usergroups::EnableResponse> {
+    let m = v.as_object()?;
+    Some(iface_usergroups::EnableResponse {
+        ok: match m.get("ok").and_then(|v| iface_usergroups__defs_ok_true__from_json(v)) { Some(x) => x, None => return None },
+        usergroup: match m.get("usergroup").and_then(|v| iface_usergroups__objs_subteam__from_json(v)) { Some(x) => x, None => return None },
+    })
+}
+
+fn iface_usergroups__list_op_response__from_json(v: &Value) -> Option<iface_usergroups::ListOpResponse> {
+    let m = v.as_object()?;
+    Some(iface_usergroups::ListOpResponse {
+        ok: match m.get("ok").and_then(|v| iface_usergroups__defs_ok_true__from_json(v)) { Some(x) => x, None => return None },
+        usergroups: m.get("usergroups").and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| iface_usergroups__objs_subteam__from_json(x)).collect())).unwrap_or_default(),
+    })
+}
+
+fn iface_usergroups__update_response__from_json(v: &Value) -> Option<iface_usergroups::UpdateResponse> {
+    let m = v.as_object()?;
+    Some(iface_usergroups::UpdateResponse {
+        ok: match m.get("ok").and_then(|v| iface_usergroups__defs_ok_true__from_json(v)) { Some(x) => x, None => return None },
+        usergroup: match m.get("usergroup").and_then(|v| iface_usergroups__objs_subteam__from_json(v)) { Some(x) => x, None => return None },
+    })
+}
+
+fn iface_usergroups__create__ok(body: String) -> Result<iface_usergroups::CreateResponse, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match iface_usergroups__create_response__from_json(&v) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_usergroups__create__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
+fn iface_usergroups__disable__ok(body: String) -> Result<iface_usergroups::DisableResponse, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match iface_usergroups__disable_response__from_json(&v) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_usergroups__disable__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
+fn iface_usergroups__enable__ok(body: String) -> Result<iface_usergroups::EnableResponse, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match iface_usergroups__enable_response__from_json(&v) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_usergroups__enable__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
+fn iface_usergroups__list_op__ok(body: String) -> Result<iface_usergroups::ListOpResponse, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match iface_usergroups__list_op_response__from_json(&v) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_usergroups__list_op__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
+fn iface_usergroups__update__ok(body: String) -> Result<iface_usergroups::UpdateResponse, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match iface_usergroups__update_response__from_json(&v) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_usergroups__update__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
 impl iface_usergroups::Guest for crate::Component {
-    fn create(params: iface_usergroups::CreateParams) -> Result<String, String> {
+    fn create(params: iface_usergroups::CreateParams) -> Result<iface_usergroups::CreateResponse, String> {
         let json = iface_usergroups__create_params__to_json(&params);
-        dispatch(&OP_USERGROUPS_CREATE, json)
+        match dispatch(&OP_USERGROUPS_CREATE, json).and_then(iface_usergroups__create__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_usergroups__create__err(e)),
+        }
     }
-    fn disable(params: iface_usergroups::DisableParams) -> Result<String, String> {
+    fn disable(params: iface_usergroups::DisableParams) -> Result<iface_usergroups::DisableResponse, String> {
         let json = iface_usergroups__disable_params__to_json(&params);
-        dispatch(&OP_USERGROUPS_DISABLE, json)
+        match dispatch(&OP_USERGROUPS_DISABLE, json).and_then(iface_usergroups__disable__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_usergroups__disable__err(e)),
+        }
     }
-    fn enable(params: iface_usergroups::EnableParams) -> Result<String, String> {
+    fn enable(params: iface_usergroups::EnableParams) -> Result<iface_usergroups::EnableResponse, String> {
         let json = iface_usergroups__enable_params__to_json(&params);
-        dispatch(&OP_USERGROUPS_ENABLE, json)
+        match dispatch(&OP_USERGROUPS_ENABLE, json).and_then(iface_usergroups__enable__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_usergroups__enable__err(e)),
+        }
     }
-    fn list_op(params: iface_usergroups::ListOpParams) -> Result<String, String> {
+    fn list_op(params: iface_usergroups::ListOpParams) -> Result<iface_usergroups::ListOpResponse, String> {
         let json = iface_usergroups__list_op_params__to_json(&params);
-        dispatch(&OP_USERGROUPS_LIST_OP, json)
+        match dispatch(&OP_USERGROUPS_LIST_OP, json).and_then(iface_usergroups__list_op__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_usergroups__list_op__err(e)),
+        }
     }
-    fn update(params: iface_usergroups::UpdateParams) -> Result<String, String> {
+    fn update(params: iface_usergroups::UpdateParams) -> Result<iface_usergroups::UpdateResponse, String> {
         let json = iface_usergroups__update_params__to_json(&params);
-        dispatch(&OP_USERGROUPS_UPDATE, json)
+        match dispatch(&OP_USERGROUPS_UPDATE, json).and_then(iface_usergroups__update__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_usergroups__update__err(e)),
+        }
     }
 }
 use crate::exports::autostamp::slack::usergroups_users as iface_usergroups_users;
@@ -3963,9 +13679,9 @@ const OP_USERGROUPS_USERS_LIST_OP: OpSpec = OpSpec {
     method: "GET",
     path_template: "/usergroups.users.list",
     fields: &[
-        FieldSpec { snake: "token", location: FieldLocation::Query },
-        FieldSpec { snake: "include_disabled", location: FieldLocation::Query },
-        FieldSpec { snake: "usergroup", location: FieldLocation::Query },
+        FieldSpec { snake: "token", wire: "token", location: FieldLocation::Query },
+        FieldSpec { snake: "include_disabled", wire: "include_disabled", location: FieldLocation::Query },
+        FieldSpec { snake: "usergroup", wire: "usergroup", location: FieldLocation::Query },
     ],
     auth: &[
         AuthApply { secret_key: "slackAuth", kind: AuthKind::Bearer },
@@ -3976,12 +13692,98 @@ const OP_USERGROUPS_USERS_UPDATE: OpSpec = OpSpec {
     method: "POST",
     path_template: "/usergroups.users.update",
     fields: &[
-        FieldSpec { snake: "token", location: FieldLocation::Header },
+        FieldSpec { snake: "token", wire: "token", location: FieldLocation::Header },
+        FieldSpec { snake: "include_count", wire: "include_count", location: FieldLocation::Body },
+        FieldSpec { snake: "usergroup", wire: "usergroup", location: FieldLocation::Body },
+        FieldSpec { snake: "users", wire: "users", location: FieldLocation::Body },
     ],
     auth: &[
         AuthApply { secret_key: "slackAuth", kind: AuthKind::Bearer },
     ],
 };
+
+fn iface_usergroups_users__list_op_response__to_json(p: &iface_usergroups_users::ListOpResponse) -> Value {
+    let mut m = Map::new();
+    m.insert("ok".into(), iface_usergroups_users__defs_ok_true__to_json(&p.ok));
+    m.insert("users".into(), Value::Array((&p.users).iter().map(|v| iface_usergroups_users__defs_user_id__to_json(v)).collect()));
+    Value::Object(m)
+}
+
+fn iface_usergroups_users__defs_ok_true__to_json(p: &iface_usergroups_users::DefsOkTrue) -> Value {
+    let mut m = Map::new();
+    m.insert("value".into(), Value::String((&p.value).clone()));
+    Value::Object(m)
+}
+
+fn iface_usergroups_users__defs_user_id__to_json(p: &iface_usergroups_users::DefsUserId) -> Value {
+    let mut m = Map::new();
+    m.insert("value".into(), Value::String((&p.value).clone()));
+    Value::Object(m)
+}
+
+fn iface_usergroups_users__update_response__to_json(p: &iface_usergroups_users::UpdateResponse) -> Value {
+    let mut m = Map::new();
+    m.insert("ok".into(), iface_usergroups_users__defs_ok_true__to_json(&p.ok));
+    m.insert("usergroup".into(), iface_usergroups_users__objs_subteam__to_json(&p.usergroup));
+    Value::Object(m)
+}
+
+fn iface_usergroups_users__objs_subteam__to_json(p: &iface_usergroups_users::ObjsSubteam) -> Value {
+    let mut m = Map::new();
+    m.insert("auto_provision".into(), Value::Bool(*(&p.auto_provision)));
+    m.insert("auto_type".into(), Value::String((&p.auto_type).clone()));
+    m.insert("channel_count".into(), match (&p.channel_count) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("created_by".into(), iface_usergroups_users__defs_user_id__to_json(&p.created_by));
+    m.insert("date_create".into(), Value::Number(serde_json::Number::from(*(&p.date_create))));
+    m.insert("date_delete".into(), Value::Number(serde_json::Number::from(*(&p.date_delete))));
+    m.insert("date_update".into(), Value::Number(serde_json::Number::from(*(&p.date_update))));
+    m.insert("deleted_by".into(), Value::String((&p.deleted_by).clone()));
+    m.insert("description".into(), Value::String((&p.description).clone()));
+    m.insert("enterprise_subteam_id".into(), Value::String((&p.enterprise_subteam_id).clone()));
+    m.insert("handle".into(), Value::String((&p.handle).clone()));
+    m.insert("id".into(), iface_usergroups_users__defs_subteam_id__to_json(&p.id));
+    m.insert("is_external".into(), Value::Bool(*(&p.is_external)));
+    m.insert("is_subteam".into(), Value::Bool(*(&p.is_subteam)));
+    m.insert("is_usergroup".into(), Value::Bool(*(&p.is_usergroup)));
+    m.insert("name".into(), Value::String((&p.name).clone()));
+    m.insert("prefs".into(), iface_usergroups_users__objs_subteam_prefs__to_json(&p.prefs));
+    m.insert("team_id".into(), iface_usergroups_users__defs_team__to_json(&p.team_id));
+    m.insert("updated_by".into(), iface_usergroups_users__defs_user_id__to_json(&p.updated_by));
+    m.insert("user_count".into(), match (&p.user_count) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("users".into(), match (&p.users) { Some(v) => Value::Array((v).iter().map(|v| iface_usergroups_users__defs_user_id__to_json(v)).collect()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_usergroups_users__defs_subteam_id__to_json(p: &iface_usergroups_users::DefsSubteamId) -> Value {
+    let mut m = Map::new();
+    m.insert("value".into(), Value::String((&p.value).clone()));
+    Value::Object(m)
+}
+
+fn iface_usergroups_users__objs_subteam_prefs__to_json(p: &iface_usergroups_users::ObjsSubteamPrefs) -> Value {
+    let mut m = Map::new();
+    m.insert("channels".into(), Value::Array((&p.channels).iter().map(|v| iface_usergroups_users__defs_channel_id__to_json(v)).collect()));
+    m.insert("groups".into(), Value::Array((&p.groups).iter().map(|v| iface_usergroups_users__defs_group_id__to_json(v)).collect()));
+    Value::Object(m)
+}
+
+fn iface_usergroups_users__defs_channel_id__to_json(p: &iface_usergroups_users::DefsChannelId) -> Value {
+    let mut m = Map::new();
+    m.insert("value".into(), Value::String((&p.value).clone()));
+    Value::Object(m)
+}
+
+fn iface_usergroups_users__defs_group_id__to_json(p: &iface_usergroups_users::DefsGroupId) -> Value {
+    let mut m = Map::new();
+    m.insert("value".into(), Value::String((&p.value).clone()));
+    Value::Object(m)
+}
+
+fn iface_usergroups_users__defs_team__to_json(p: &iface_usergroups_users::DefsTeam) -> Value {
+    let mut m = Map::new();
+    m.insert("value".into(), Value::String((&p.value).clone()));
+    Value::Object(m)
+}
 
 fn iface_usergroups_users__list_op_params__to_json(p: &iface_usergroups_users::ListOpParams) -> Value {
     let mut m = Map::new();
@@ -3994,17 +13796,155 @@ fn iface_usergroups_users__list_op_params__to_json(p: &iface_usergroups_users::L
 fn iface_usergroups_users__update_params__to_json(p: &iface_usergroups_users::UpdateParams) -> Value {
     let mut m = Map::new();
     m.insert("token".into(), Value::String((&p.token).clone()));
+    m.insert("include_count".into(), match (&p.include_count) { Some(v) => Value::Bool(*(v)), None => Value::Null });
+    m.insert("usergroup".into(), Value::String((&p.usergroup).clone()));
+    m.insert("users".into(), Value::String((&p.users).clone()));
     Value::Object(m)
 }
 
-impl iface_usergroups_users::Guest for crate::Component {
-    fn list_op(params: iface_usergroups_users::ListOpParams) -> Result<String, String> {
-        let json = iface_usergroups_users__list_op_params__to_json(&params);
-        dispatch(&OP_USERGROUPS_USERS_LIST_OP, json)
+fn iface_usergroups_users__list_op_response__from_json(v: &Value) -> Option<iface_usergroups_users::ListOpResponse> {
+    let m = v.as_object()?;
+    Some(iface_usergroups_users::ListOpResponse {
+        ok: match m.get("ok").and_then(|v| iface_usergroups_users__defs_ok_true__from_json(v)) { Some(x) => x, None => return None },
+        users: m.get("users").and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| iface_usergroups_users__defs_user_id__from_json(x)).collect())).unwrap_or_default(),
+    })
+}
+
+fn iface_usergroups_users__defs_ok_true__from_json(v: &Value) -> Option<iface_usergroups_users::DefsOkTrue> {
+    let m = v.as_object()?;
+    Some(iface_usergroups_users::DefsOkTrue {
+        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+    })
+}
+
+fn iface_usergroups_users__defs_user_id__from_json(v: &Value) -> Option<iface_usergroups_users::DefsUserId> {
+    let m = v.as_object()?;
+    Some(iface_usergroups_users::DefsUserId {
+        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+    })
+}
+
+fn iface_usergroups_users__update_response__from_json(v: &Value) -> Option<iface_usergroups_users::UpdateResponse> {
+    let m = v.as_object()?;
+    Some(iface_usergroups_users::UpdateResponse {
+        ok: match m.get("ok").and_then(|v| iface_usergroups_users__defs_ok_true__from_json(v)) { Some(x) => x, None => return None },
+        usergroup: match m.get("usergroup").and_then(|v| iface_usergroups_users__objs_subteam__from_json(v)) { Some(x) => x, None => return None },
+    })
+}
+
+fn iface_usergroups_users__objs_subteam__from_json(v: &Value) -> Option<iface_usergroups_users::ObjsSubteam> {
+    let m = v.as_object()?;
+    Some(iface_usergroups_users::ObjsSubteam {
+        auto_provision: m.get("auto_provision").and_then(|v| (v).as_bool()).unwrap_or_default(),
+        auto_type: m.get("auto_type").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        channel_count: m.get("channel_count").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        created_by: match m.get("created_by").and_then(|v| iface_usergroups_users__defs_user_id__from_json(v)) { Some(x) => x, None => return None },
+        date_create: m.get("date_create").and_then(|v| (v).as_i64().map(|n| n as i32)).unwrap_or_default(),
+        date_delete: m.get("date_delete").and_then(|v| (v).as_i64().map(|n| n as i32)).unwrap_or_default(),
+        date_update: m.get("date_update").and_then(|v| (v).as_i64().map(|n| n as i32)).unwrap_or_default(),
+        deleted_by: m.get("deleted_by").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        description: m.get("description").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        enterprise_subteam_id: m.get("enterprise_subteam_id").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        handle: m.get("handle").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        id: match m.get("id").and_then(|v| iface_usergroups_users__defs_subteam_id__from_json(v)) { Some(x) => x, None => return None },
+        is_external: m.get("is_external").and_then(|v| (v).as_bool()).unwrap_or_default(),
+        is_subteam: m.get("is_subteam").and_then(|v| (v).as_bool()).unwrap_or_default(),
+        is_usergroup: m.get("is_usergroup").and_then(|v| (v).as_bool()).unwrap_or_default(),
+        name: m.get("name").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        prefs: match m.get("prefs").and_then(|v| iface_usergroups_users__objs_subteam_prefs__from_json(v)) { Some(x) => x, None => return None },
+        team_id: match m.get("team_id").and_then(|v| iface_usergroups_users__defs_team__from_json(v)) { Some(x) => x, None => return None },
+        updated_by: match m.get("updated_by").and_then(|v| iface_usergroups_users__defs_user_id__from_json(v)) { Some(x) => x, None => return None },
+        user_count: m.get("user_count").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        users: m.get("users").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| iface_usergroups_users__defs_user_id__from_json(x)).collect())),
+    })
+}
+
+fn iface_usergroups_users__defs_subteam_id__from_json(v: &Value) -> Option<iface_usergroups_users::DefsSubteamId> {
+    let m = v.as_object()?;
+    Some(iface_usergroups_users::DefsSubteamId {
+        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+    })
+}
+
+fn iface_usergroups_users__objs_subteam_prefs__from_json(v: &Value) -> Option<iface_usergroups_users::ObjsSubteamPrefs> {
+    let m = v.as_object()?;
+    Some(iface_usergroups_users::ObjsSubteamPrefs {
+        channels: m.get("channels").and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| iface_usergroups_users__defs_channel_id__from_json(x)).collect())).unwrap_or_default(),
+        groups: m.get("groups").and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| iface_usergroups_users__defs_group_id__from_json(x)).collect())).unwrap_or_default(),
+    })
+}
+
+fn iface_usergroups_users__defs_channel_id__from_json(v: &Value) -> Option<iface_usergroups_users::DefsChannelId> {
+    let m = v.as_object()?;
+    Some(iface_usergroups_users::DefsChannelId {
+        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+    })
+}
+
+fn iface_usergroups_users__defs_group_id__from_json(v: &Value) -> Option<iface_usergroups_users::DefsGroupId> {
+    let m = v.as_object()?;
+    Some(iface_usergroups_users::DefsGroupId {
+        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+    })
+}
+
+fn iface_usergroups_users__defs_team__from_json(v: &Value) -> Option<iface_usergroups_users::DefsTeam> {
+    let m = v.as_object()?;
+    Some(iface_usergroups_users::DefsTeam {
+        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+    })
+}
+
+fn iface_usergroups_users__list_op__ok(body: String) -> Result<iface_usergroups_users::ListOpResponse, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match iface_usergroups_users__list_op_response__from_json(&v) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
     }
-    fn update(params: iface_usergroups_users::UpdateParams) -> Result<String, String> {
+}
+
+fn iface_usergroups_users__list_op__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
+fn iface_usergroups_users__update__ok(body: String) -> Result<iface_usergroups_users::UpdateResponse, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match iface_usergroups_users__update_response__from_json(&v) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_usergroups_users__update__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
+impl iface_usergroups_users::Guest for crate::Component {
+    fn list_op(params: iface_usergroups_users::ListOpParams) -> Result<iface_usergroups_users::ListOpResponse, String> {
+        let json = iface_usergroups_users__list_op_params__to_json(&params);
+        match dispatch(&OP_USERGROUPS_USERS_LIST_OP, json).and_then(iface_usergroups_users__list_op__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_usergroups_users__list_op__err(e)),
+        }
+    }
+    fn update(params: iface_usergroups_users::UpdateParams) -> Result<iface_usergroups_users::UpdateResponse, String> {
         let json = iface_usergroups_users__update_params__to_json(&params);
-        dispatch(&OP_USERGROUPS_USERS_UPDATE, json)
+        match dispatch(&OP_USERGROUPS_USERS_UPDATE, json).and_then(iface_usergroups_users__update__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_usergroups_users__update__err(e)),
+        }
     }
 }
 use crate::exports::autostamp::slack::users as iface_users;
@@ -4013,12 +13953,12 @@ const OP_USERS_CONVERSATIONS: OpSpec = OpSpec {
     method: "GET",
     path_template: "/users.conversations",
     fields: &[
-        FieldSpec { snake: "token", location: FieldLocation::Query },
-        FieldSpec { snake: "user", location: FieldLocation::Query },
-        FieldSpec { snake: "types", location: FieldLocation::Query },
-        FieldSpec { snake: "exclude_archived", location: FieldLocation::Query },
-        FieldSpec { snake: "limit", location: FieldLocation::Query },
-        FieldSpec { snake: "cursor", location: FieldLocation::Query },
+        FieldSpec { snake: "token", wire: "token", location: FieldLocation::Query },
+        FieldSpec { snake: "user", wire: "user", location: FieldLocation::Query },
+        FieldSpec { snake: "types", wire: "types", location: FieldLocation::Query },
+        FieldSpec { snake: "exclude_archived", wire: "exclude_archived", location: FieldLocation::Query },
+        FieldSpec { snake: "limit", wire: "limit", location: FieldLocation::Query },
+        FieldSpec { snake: "cursor", wire: "cursor", location: FieldLocation::Query },
     ],
     auth: &[
         AuthApply { secret_key: "slackAuth", kind: AuthKind::Bearer },
@@ -4029,6 +13969,7 @@ const OP_USERS_DELETE_PHOTO: OpSpec = OpSpec {
     method: "POST",
     path_template: "/users.deletePhoto",
     fields: &[
+        FieldSpec { snake: "token", wire: "token", location: FieldLocation::Body },
     ],
     auth: &[
         AuthApply { secret_key: "slackAuth", kind: AuthKind::Bearer },
@@ -4039,8 +13980,8 @@ const OP_USERS_GET_PRESENCE: OpSpec = OpSpec {
     method: "GET",
     path_template: "/users.getPresence",
     fields: &[
-        FieldSpec { snake: "token", location: FieldLocation::Query },
-        FieldSpec { snake: "user", location: FieldLocation::Query },
+        FieldSpec { snake: "token", wire: "token", location: FieldLocation::Query },
+        FieldSpec { snake: "user", wire: "user", location: FieldLocation::Query },
     ],
     auth: &[
         AuthApply { secret_key: "slackAuth", kind: AuthKind::Bearer },
@@ -4051,7 +13992,7 @@ const OP_USERS_IDENTITY: OpSpec = OpSpec {
     method: "GET",
     path_template: "/users.identity",
     fields: &[
-        FieldSpec { snake: "token", location: FieldLocation::Query },
+        FieldSpec { snake: "token", wire: "token", location: FieldLocation::Query },
     ],
     auth: &[
         AuthApply { secret_key: "slackAuth", kind: AuthKind::Bearer },
@@ -4062,9 +14003,9 @@ const OP_USERS_INFO: OpSpec = OpSpec {
     method: "GET",
     path_template: "/users.info",
     fields: &[
-        FieldSpec { snake: "token", location: FieldLocation::Query },
-        FieldSpec { snake: "include_locale", location: FieldLocation::Query },
-        FieldSpec { snake: "user", location: FieldLocation::Query },
+        FieldSpec { snake: "token", wire: "token", location: FieldLocation::Query },
+        FieldSpec { snake: "include_locale", wire: "include_locale", location: FieldLocation::Query },
+        FieldSpec { snake: "user", wire: "user", location: FieldLocation::Query },
     ],
     auth: &[
         AuthApply { secret_key: "slackAuth", kind: AuthKind::Bearer },
@@ -4075,10 +14016,10 @@ const OP_USERS_LIST_OP: OpSpec = OpSpec {
     method: "GET",
     path_template: "/users.list",
     fields: &[
-        FieldSpec { snake: "token", location: FieldLocation::Query },
-        FieldSpec { snake: "limit", location: FieldLocation::Query },
-        FieldSpec { snake: "cursor", location: FieldLocation::Query },
-        FieldSpec { snake: "include_locale", location: FieldLocation::Query },
+        FieldSpec { snake: "token", wire: "token", location: FieldLocation::Query },
+        FieldSpec { snake: "limit", wire: "limit", location: FieldLocation::Query },
+        FieldSpec { snake: "cursor", wire: "cursor", location: FieldLocation::Query },
+        FieldSpec { snake: "include_locale", wire: "include_locale", location: FieldLocation::Query },
     ],
     auth: &[
         AuthApply { secret_key: "slackAuth", kind: AuthKind::Bearer },
@@ -4089,8 +14030,8 @@ const OP_USERS_LOOKUP_BY_EMAIL: OpSpec = OpSpec {
     method: "GET",
     path_template: "/users.lookupByEmail",
     fields: &[
-        FieldSpec { snake: "token", location: FieldLocation::Query },
-        FieldSpec { snake: "email", location: FieldLocation::Query },
+        FieldSpec { snake: "token", wire: "token", location: FieldLocation::Query },
+        FieldSpec { snake: "email", wire: "email", location: FieldLocation::Query },
     ],
     auth: &[
         AuthApply { secret_key: "slackAuth", kind: AuthKind::Bearer },
@@ -4101,7 +14042,7 @@ const OP_USERS_SET_ACTIVE: OpSpec = OpSpec {
     method: "POST",
     path_template: "/users.setActive",
     fields: &[
-        FieldSpec { snake: "token", location: FieldLocation::Header },
+        FieldSpec { snake: "token", wire: "token", location: FieldLocation::Header },
     ],
     auth: &[
         AuthApply { secret_key: "slackAuth", kind: AuthKind::Bearer },
@@ -4112,6 +14053,11 @@ const OP_USERS_SET_PHOTO: OpSpec = OpSpec {
     method: "POST",
     path_template: "/users.setPhoto",
     fields: &[
+        FieldSpec { snake: "crop_w", wire: "crop_w", location: FieldLocation::Body },
+        FieldSpec { snake: "crop_x", wire: "crop_x", location: FieldLocation::Body },
+        FieldSpec { snake: "crop_y", wire: "crop_y", location: FieldLocation::Body },
+        FieldSpec { snake: "image", wire: "image", location: FieldLocation::Body },
+        FieldSpec { snake: "token", wire: "token", location: FieldLocation::Body },
     ],
     auth: &[
         AuthApply { secret_key: "slackAuth", kind: AuthKind::Bearer },
@@ -4122,12 +14068,125 @@ const OP_USERS_SET_PRESENCE: OpSpec = OpSpec {
     method: "POST",
     path_template: "/users.setPresence",
     fields: &[
-        FieldSpec { snake: "token", location: FieldLocation::Header },
+        FieldSpec { snake: "token", wire: "token", location: FieldLocation::Header },
+        FieldSpec { snake: "presence", wire: "presence", location: FieldLocation::Body },
     ],
     auth: &[
         AuthApply { secret_key: "slackAuth", kind: AuthKind::Bearer },
     ],
 };
+
+fn iface_users__conversations_response__to_json(p: &iface_users::ConversationsResponse) -> Value {
+    let mut m = Map::new();
+    m.insert("channels".into(), Value::Array((&p.channels).iter().map(|v| iface_users__objs_conversation__to_json(v)).collect()));
+    m.insert("ok".into(), iface_users__defs_ok_true__to_json(&p.ok));
+    m.insert("response_metadata".into(), match (&p.response_metadata) { Some(v) => iface_users__conversations_response_response_metadata__to_json(v), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_users__objs_conversation__to_json(p: &iface_users::ObjsConversation) -> Value {
+    let mut m = Map::new();
+    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_users__defs_ok_true__to_json(p: &iface_users::DefsOkTrue) -> Value {
+    let mut m = Map::new();
+    m.insert("value".into(), Value::String((&p.value).clone()));
+    Value::Object(m)
+}
+
+fn iface_users__conversations_response_response_metadata__to_json(p: &iface_users::ConversationsResponseResponseMetadata) -> Value {
+    let mut m = Map::new();
+    m.insert("next_cursor".into(), Value::String((&p.next_cursor).clone()));
+    Value::Object(m)
+}
+
+fn iface_users__delete_photo_response__to_json(p: &iface_users::DeletePhotoResponse) -> Value {
+    let mut m = Map::new();
+    m.insert("ok".into(), iface_users__defs_ok_true__to_json(&p.ok));
+    Value::Object(m)
+}
+
+fn iface_users__get_presence_response__to_json(p: &iface_users::GetPresenceResponse) -> Value {
+    let mut m = Map::new();
+    m.insert("auto_away".into(), match (&p.auto_away) { Some(v) => Value::Bool(*(v)), None => Value::Null });
+    m.insert("connection_count".into(), match (&p.connection_count) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("last_activity".into(), match (&p.last_activity) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("manual_away".into(), match (&p.manual_away) { Some(v) => Value::Bool(*(v)), None => Value::Null });
+    m.insert("ok".into(), iface_users__defs_ok_true__to_json(&p.ok));
+    m.insert("online".into(), match (&p.online) { Some(v) => Value::Bool(*(v)), None => Value::Null });
+    m.insert("presence".into(), Value::String((&p.presence).clone()));
+    Value::Object(m)
+}
+
+fn iface_users__info_response__to_json(p: &iface_users::InfoResponse) -> Value {
+    let mut m = Map::new();
+    m.insert("ok".into(), iface_users__defs_ok_true__to_json(&p.ok));
+    m.insert("user".into(), iface_users__objs_user__to_json(&p.user));
+    Value::Object(m)
+}
+
+fn iface_users__objs_user__to_json(p: &iface_users::ObjsUser) -> Value {
+    let mut m = Map::new();
+    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_users__list_op_response__to_json(p: &iface_users::ListOpResponse) -> Value {
+    let mut m = Map::new();
+    m.insert("cache_ts".into(), Value::Number(serde_json::Number::from(*(&p.cache_ts))));
+    m.insert("members".into(), Value::Array((&p.members).iter().map(|v| iface_users__objs_user__to_json(v)).collect()));
+    m.insert("ok".into(), iface_users__defs_ok_true__to_json(&p.ok));
+    m.insert("response_metadata".into(), match (&p.response_metadata) { Some(v) => iface_users__objs_response_metadata__to_json(v), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_users__objs_response_metadata__to_json(p: &iface_users::ObjsResponseMetadata) -> Value {
+    let mut m = Map::new();
+    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_users__lookup_by_email_response__to_json(p: &iface_users::LookupByEmailResponse) -> Value {
+    let mut m = Map::new();
+    m.insert("ok".into(), iface_users__defs_ok_true__to_json(&p.ok));
+    m.insert("user".into(), iface_users__objs_user__to_json(&p.user));
+    Value::Object(m)
+}
+
+fn iface_users__set_active_response__to_json(p: &iface_users::SetActiveResponse) -> Value {
+    let mut m = Map::new();
+    m.insert("ok".into(), iface_users__defs_ok_true__to_json(&p.ok));
+    Value::Object(m)
+}
+
+fn iface_users__set_photo_response__to_json(p: &iface_users::SetPhotoResponse) -> Value {
+    let mut m = Map::new();
+    m.insert("ok".into(), iface_users__defs_ok_true__to_json(&p.ok));
+    m.insert("profile".into(), iface_users__set_photo_response_profile__to_json(&p.profile));
+    Value::Object(m)
+}
+
+fn iface_users__set_photo_response_profile__to_json(p: &iface_users::SetPhotoResponseProfile) -> Value {
+    let mut m = Map::new();
+    m.insert("avatar_hash".into(), Value::String((&p.avatar_hash).clone()));
+    m.insert("image_1024".into(), Value::String((&p.image_v1024).clone()));
+    m.insert("image_192".into(), Value::String((&p.image_v192).clone()));
+    m.insert("image_24".into(), Value::String((&p.image_v24).clone()));
+    m.insert("image_32".into(), Value::String((&p.image_v32).clone()));
+    m.insert("image_48".into(), Value::String((&p.image_v48).clone()));
+    m.insert("image_512".into(), Value::String((&p.image_v512).clone()));
+    m.insert("image_72".into(), Value::String((&p.image_v72).clone()));
+    m.insert("image_original".into(), Value::String((&p.image_original).clone()));
+    Value::Object(m)
+}
+
+fn iface_users__set_presence_response__to_json(p: &iface_users::SetPresenceResponse) -> Value {
+    let mut m = Map::new();
+    m.insert("ok".into(), iface_users__defs_ok_true__to_json(&p.ok));
+    Value::Object(m)
+}
 
 fn iface_users__conversations_params__to_json(p: &iface_users::ConversationsParams) -> Value {
     let mut m = Map::new();
@@ -4137,6 +14196,12 @@ fn iface_users__conversations_params__to_json(p: &iface_users::ConversationsPara
     m.insert("exclude_archived".into(), match (&p.exclude_archived) { Some(v) => Value::Bool(*(v)), None => Value::Null });
     m.insert("limit".into(), match (&p.limit) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
     m.insert("cursor".into(), match (&p.cursor) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_users__delete_photo_params__to_json(p: &iface_users::DeletePhotoParams) -> Value {
+    let mut m = Map::new();
+    m.insert("token".into(), Value::String((&p.token).clone()));
     Value::Object(m)
 }
 
@@ -4183,50 +14248,393 @@ fn iface_users__set_active_params__to_json(p: &iface_users::SetActiveParams) -> 
     Value::Object(m)
 }
 
-fn iface_users__set_presence_params__to_json(p: &iface_users::SetPresenceParams) -> Value {
+fn iface_users__set_photo_params__to_json(p: &iface_users::SetPhotoParams) -> Value {
     let mut m = Map::new();
+    m.insert("crop_w".into(), match (&p.crop_w) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("crop_x".into(), match (&p.crop_x) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("crop_y".into(), match (&p.crop_y) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("image".into(), match (&p.image) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("token".into(), Value::String((&p.token).clone()));
     Value::Object(m)
 }
 
+fn iface_users__set_presence_params__to_json(p: &iface_users::SetPresenceParams) -> Value {
+    let mut m = Map::new();
+    m.insert("token".into(), Value::String((&p.token).clone()));
+    m.insert("presence".into(), Value::String((&p.presence).clone()));
+    Value::Object(m)
+}
+
+fn iface_users__conversations_response__from_json(v: &Value) -> Option<iface_users::ConversationsResponse> {
+    let m = v.as_object()?;
+    Some(iface_users::ConversationsResponse {
+        channels: m.get("channels").and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| iface_users__objs_conversation__from_json(x)).collect())).unwrap_or_default(),
+        ok: match m.get("ok").and_then(|v| iface_users__defs_ok_true__from_json(v)) { Some(x) => x, None => return None },
+        response_metadata: m.get("response_metadata").filter(|v| !v.is_null()).and_then(|v| iface_users__conversations_response_response_metadata__from_json(v)),
+    })
+}
+
+fn iface_users__objs_conversation__from_json(v: &Value) -> Option<iface_users::ObjsConversation> {
+    let m = v.as_object()?;
+    Some(iface_users::ObjsConversation {
+        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    })
+}
+
+fn iface_users__defs_ok_true__from_json(v: &Value) -> Option<iface_users::DefsOkTrue> {
+    let m = v.as_object()?;
+    Some(iface_users::DefsOkTrue {
+        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+    })
+}
+
+fn iface_users__conversations_response_response_metadata__from_json(v: &Value) -> Option<iface_users::ConversationsResponseResponseMetadata> {
+    let m = v.as_object()?;
+    Some(iface_users::ConversationsResponseResponseMetadata {
+        next_cursor: m.get("next_cursor").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+    })
+}
+
+fn iface_users__delete_photo_response__from_json(v: &Value) -> Option<iface_users::DeletePhotoResponse> {
+    let m = v.as_object()?;
+    Some(iface_users::DeletePhotoResponse {
+        ok: match m.get("ok").and_then(|v| iface_users__defs_ok_true__from_json(v)) { Some(x) => x, None => return None },
+    })
+}
+
+fn iface_users__get_presence_response__from_json(v: &Value) -> Option<iface_users::GetPresenceResponse> {
+    let m = v.as_object()?;
+    Some(iface_users::GetPresenceResponse {
+        auto_away: m.get("auto_away").filter(|v| !v.is_null()).and_then(|v| (v).as_bool()),
+        connection_count: m.get("connection_count").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        last_activity: m.get("last_activity").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        manual_away: m.get("manual_away").filter(|v| !v.is_null()).and_then(|v| (v).as_bool()),
+        ok: match m.get("ok").and_then(|v| iface_users__defs_ok_true__from_json(v)) { Some(x) => x, None => return None },
+        online: m.get("online").filter(|v| !v.is_null()).and_then(|v| (v).as_bool()),
+        presence: m.get("presence").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+    })
+}
+
+fn iface_users__info_response__from_json(v: &Value) -> Option<iface_users::InfoResponse> {
+    let m = v.as_object()?;
+    Some(iface_users::InfoResponse {
+        ok: match m.get("ok").and_then(|v| iface_users__defs_ok_true__from_json(v)) { Some(x) => x, None => return None },
+        user: match m.get("user").and_then(|v| iface_users__objs_user__from_json(v)) { Some(x) => x, None => return None },
+    })
+}
+
+fn iface_users__objs_user__from_json(v: &Value) -> Option<iface_users::ObjsUser> {
+    let m = v.as_object()?;
+    Some(iface_users::ObjsUser {
+        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    })
+}
+
+fn iface_users__list_op_response__from_json(v: &Value) -> Option<iface_users::ListOpResponse> {
+    let m = v.as_object()?;
+    Some(iface_users::ListOpResponse {
+        cache_ts: m.get("cache_ts").and_then(|v| (v).as_i64().map(|n| n as i32)).unwrap_or_default(),
+        members: m.get("members").and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| iface_users__objs_user__from_json(x)).collect())).unwrap_or_default(),
+        ok: match m.get("ok").and_then(|v| iface_users__defs_ok_true__from_json(v)) { Some(x) => x, None => return None },
+        response_metadata: m.get("response_metadata").filter(|v| !v.is_null()).and_then(|v| iface_users__objs_response_metadata__from_json(v)),
+    })
+}
+
+fn iface_users__objs_response_metadata__from_json(v: &Value) -> Option<iface_users::ObjsResponseMetadata> {
+    let m = v.as_object()?;
+    Some(iface_users::ObjsResponseMetadata {
+        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    })
+}
+
+fn iface_users__lookup_by_email_response__from_json(v: &Value) -> Option<iface_users::LookupByEmailResponse> {
+    let m = v.as_object()?;
+    Some(iface_users::LookupByEmailResponse {
+        ok: match m.get("ok").and_then(|v| iface_users__defs_ok_true__from_json(v)) { Some(x) => x, None => return None },
+        user: match m.get("user").and_then(|v| iface_users__objs_user__from_json(v)) { Some(x) => x, None => return None },
+    })
+}
+
+fn iface_users__set_active_response__from_json(v: &Value) -> Option<iface_users::SetActiveResponse> {
+    let m = v.as_object()?;
+    Some(iface_users::SetActiveResponse {
+        ok: match m.get("ok").and_then(|v| iface_users__defs_ok_true__from_json(v)) { Some(x) => x, None => return None },
+    })
+}
+
+fn iface_users__set_photo_response__from_json(v: &Value) -> Option<iface_users::SetPhotoResponse> {
+    let m = v.as_object()?;
+    Some(iface_users::SetPhotoResponse {
+        ok: match m.get("ok").and_then(|v| iface_users__defs_ok_true__from_json(v)) { Some(x) => x, None => return None },
+        profile: match m.get("profile").and_then(|v| iface_users__set_photo_response_profile__from_json(v)) { Some(x) => x, None => return None },
+    })
+}
+
+fn iface_users__set_photo_response_profile__from_json(v: &Value) -> Option<iface_users::SetPhotoResponseProfile> {
+    let m = v.as_object()?;
+    Some(iface_users::SetPhotoResponseProfile {
+        avatar_hash: m.get("avatar_hash").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        image_v1024: m.get("image_1024").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        image_v192: m.get("image_192").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        image_v24: m.get("image_24").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        image_v32: m.get("image_32").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        image_v48: m.get("image_48").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        image_v512: m.get("image_512").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        image_v72: m.get("image_72").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        image_original: m.get("image_original").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+    })
+}
+
+fn iface_users__set_presence_response__from_json(v: &Value) -> Option<iface_users::SetPresenceResponse> {
+    let m = v.as_object()?;
+    Some(iface_users::SetPresenceResponse {
+        ok: match m.get("ok").and_then(|v| iface_users__defs_ok_true__from_json(v)) { Some(x) => x, None => return None },
+    })
+}
+
+fn iface_users__conversations__ok(body: String) -> Result<iface_users::ConversationsResponse, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match iface_users__conversations_response__from_json(&v) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_users__conversations__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
+fn iface_users__delete_photo__ok(body: String) -> Result<iface_users::DeletePhotoResponse, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match iface_users__delete_photo_response__from_json(&v) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_users__delete_photo__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
+fn iface_users__get_presence__ok(body: String) -> Result<iface_users::GetPresenceResponse, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match iface_users__get_presence_response__from_json(&v) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_users__get_presence__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
+fn iface_users__identity__ok(body: String) -> Result<String, crate::runtime::DispatchError> {
+    Ok(body)
+}
+
+fn iface_users__identity__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
+fn iface_users__info__ok(body: String) -> Result<iface_users::InfoResponse, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match iface_users__info_response__from_json(&v) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_users__info__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
+fn iface_users__list_op__ok(body: String) -> Result<iface_users::ListOpResponse, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match iface_users__list_op_response__from_json(&v) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_users__list_op__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
+fn iface_users__lookup_by_email__ok(body: String) -> Result<iface_users::LookupByEmailResponse, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match iface_users__lookup_by_email_response__from_json(&v) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_users__lookup_by_email__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
+fn iface_users__set_active__ok(body: String) -> Result<iface_users::SetActiveResponse, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match iface_users__set_active_response__from_json(&v) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_users__set_active__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
+fn iface_users__set_photo__ok(body: String) -> Result<iface_users::SetPhotoResponse, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match iface_users__set_photo_response__from_json(&v) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_users__set_photo__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
+fn iface_users__set_presence__ok(body: String) -> Result<iface_users::SetPresenceResponse, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match iface_users__set_presence_response__from_json(&v) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_users__set_presence__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
 impl iface_users::Guest for crate::Component {
-    fn conversations(params: iface_users::ConversationsParams) -> Result<String, String> {
+    fn conversations(params: iface_users::ConversationsParams) -> Result<iface_users::ConversationsResponse, String> {
         let json = iface_users__conversations_params__to_json(&params);
-        dispatch(&OP_USERS_CONVERSATIONS, json)
+        match dispatch(&OP_USERS_CONVERSATIONS, json).and_then(iface_users__conversations__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_users__conversations__err(e)),
+        }
     }
-    fn delete_photo() -> Result<String, String> {
-        dispatch(&OP_USERS_DELETE_PHOTO, Value::Object(Map::new()))
+    fn delete_photo(params: iface_users::DeletePhotoParams) -> Result<iface_users::DeletePhotoResponse, String> {
+        let json = iface_users__delete_photo_params__to_json(&params);
+        match dispatch(&OP_USERS_DELETE_PHOTO, json).and_then(iface_users__delete_photo__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_users__delete_photo__err(e)),
+        }
     }
-    fn get_presence(params: iface_users::GetPresenceParams) -> Result<String, String> {
+    fn get_presence(params: iface_users::GetPresenceParams) -> Result<iface_users::GetPresenceResponse, String> {
         let json = iface_users__get_presence_params__to_json(&params);
-        dispatch(&OP_USERS_GET_PRESENCE, json)
+        match dispatch(&OP_USERS_GET_PRESENCE, json).and_then(iface_users__get_presence__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_users__get_presence__err(e)),
+        }
     }
     fn identity(params: iface_users::IdentityParams) -> Result<String, String> {
         let json = iface_users__identity_params__to_json(&params);
-        dispatch(&OP_USERS_IDENTITY, json)
+        match dispatch(&OP_USERS_IDENTITY, json).and_then(iface_users__identity__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_users__identity__err(e)),
+        }
     }
-    fn info(params: iface_users::InfoParams) -> Result<String, String> {
+    fn info(params: iface_users::InfoParams) -> Result<iface_users::InfoResponse, String> {
         let json = iface_users__info_params__to_json(&params);
-        dispatch(&OP_USERS_INFO, json)
+        match dispatch(&OP_USERS_INFO, json).and_then(iface_users__info__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_users__info__err(e)),
+        }
     }
-    fn list_op(params: iface_users::ListOpParams) -> Result<String, String> {
+    fn list_op(params: iface_users::ListOpParams) -> Result<iface_users::ListOpResponse, String> {
         let json = iface_users__list_op_params__to_json(&params);
-        dispatch(&OP_USERS_LIST_OP, json)
+        match dispatch(&OP_USERS_LIST_OP, json).and_then(iface_users__list_op__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_users__list_op__err(e)),
+        }
     }
-    fn lookup_by_email(params: iface_users::LookupByEmailParams) -> Result<String, String> {
+    fn lookup_by_email(params: iface_users::LookupByEmailParams) -> Result<iface_users::LookupByEmailResponse, String> {
         let json = iface_users__lookup_by_email_params__to_json(&params);
-        dispatch(&OP_USERS_LOOKUP_BY_EMAIL, json)
+        match dispatch(&OP_USERS_LOOKUP_BY_EMAIL, json).and_then(iface_users__lookup_by_email__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_users__lookup_by_email__err(e)),
+        }
     }
-    fn set_active(params: iface_users::SetActiveParams) -> Result<String, String> {
+    fn set_active(params: iface_users::SetActiveParams) -> Result<iface_users::SetActiveResponse, String> {
         let json = iface_users__set_active_params__to_json(&params);
-        dispatch(&OP_USERS_SET_ACTIVE, json)
+        match dispatch(&OP_USERS_SET_ACTIVE, json).and_then(iface_users__set_active__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_users__set_active__err(e)),
+        }
     }
-    fn set_photo() -> Result<String, String> {
-        dispatch(&OP_USERS_SET_PHOTO, Value::Object(Map::new()))
+    fn set_photo(params: iface_users::SetPhotoParams) -> Result<iface_users::SetPhotoResponse, String> {
+        let json = iface_users__set_photo_params__to_json(&params);
+        match dispatch(&OP_USERS_SET_PHOTO, json).and_then(iface_users__set_photo__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_users__set_photo__err(e)),
+        }
     }
-    fn set_presence(params: iface_users::SetPresenceParams) -> Result<String, String> {
+    fn set_presence(params: iface_users::SetPresenceParams) -> Result<iface_users::SetPresenceResponse, String> {
         let json = iface_users__set_presence_params__to_json(&params);
-        dispatch(&OP_USERS_SET_PRESENCE, json)
+        match dispatch(&OP_USERS_SET_PRESENCE, json).and_then(iface_users__set_presence__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_users__set_presence__err(e)),
+        }
     }
 }
 use crate::exports::autostamp::slack::users_profile as iface_users_profile;
@@ -4235,9 +14643,9 @@ const OP_USERS_PROFILE_GET: OpSpec = OpSpec {
     method: "GET",
     path_template: "/users.profile.get",
     fields: &[
-        FieldSpec { snake: "token", location: FieldLocation::Query },
-        FieldSpec { snake: "include_labels", location: FieldLocation::Query },
-        FieldSpec { snake: "user", location: FieldLocation::Query },
+        FieldSpec { snake: "token", wire: "token", location: FieldLocation::Query },
+        FieldSpec { snake: "include_labels", wire: "include_labels", location: FieldLocation::Query },
+        FieldSpec { snake: "user", wire: "user", location: FieldLocation::Query },
     ],
     auth: &[
         AuthApply { secret_key: "slackAuth", kind: AuthKind::Bearer },
@@ -4248,12 +14656,105 @@ const OP_USERS_PROFILE_SET: OpSpec = OpSpec {
     method: "POST",
     path_template: "/users.profile.set",
     fields: &[
-        FieldSpec { snake: "token", location: FieldLocation::Header },
+        FieldSpec { snake: "token", wire: "token", location: FieldLocation::Header },
+        FieldSpec { snake: "name", wire: "name", location: FieldLocation::Body },
+        FieldSpec { snake: "profile", wire: "profile", location: FieldLocation::Body },
+        FieldSpec { snake: "user", wire: "user", location: FieldLocation::Body },
+        FieldSpec { snake: "value", wire: "value", location: FieldLocation::Body },
     ],
     auth: &[
         AuthApply { secret_key: "slackAuth", kind: AuthKind::Bearer },
     ],
 };
+
+fn iface_users_profile__get_response__to_json(p: &iface_users_profile::GetResponse) -> Value {
+    let mut m = Map::new();
+    m.insert("ok".into(), iface_users_profile__defs_ok_true__to_json(&p.ok));
+    m.insert("profile".into(), iface_users_profile__objs_user_profile__to_json(&p.profile));
+    Value::Object(m)
+}
+
+fn iface_users_profile__defs_ok_true__to_json(p: &iface_users_profile::DefsOkTrue) -> Value {
+    let mut m = Map::new();
+    m.insert("value".into(), Value::String((&p.value).clone()));
+    Value::Object(m)
+}
+
+fn iface_users_profile__objs_user_profile__to_json(p: &iface_users_profile::ObjsUserProfile) -> Value {
+    let mut m = Map::new();
+    m.insert("always_active".into(), match (&p.always_active) { Some(v) => Value::Bool(*(v)), None => Value::Null });
+    m.insert("api_app_id".into(), match (&p.api_app_id) { Some(v) => iface_users_profile__defs_optional_app_id__to_json(v), None => Value::Null });
+    m.insert("avatar_hash".into(), Value::String((&p.avatar_hash).clone()));
+    m.insert("bot_id".into(), match (&p.bot_id) { Some(v) => iface_users_profile__defs_bot_id__to_json(v), None => Value::Null });
+    m.insert("display_name".into(), Value::String((&p.display_name).clone()));
+    m.insert("display_name_normalized".into(), Value::String((&p.display_name_normalized).clone()));
+    m.insert("email".into(), match (&p.email) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("fields".into(), Value::String((&p.fields).clone()));
+    m.insert("first_name".into(), match (&p.first_name) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("guest_expiration_ts".into(), match (&p.guest_expiration_ts) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("guest_invited_by".into(), match (&p.guest_invited_by) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("image_1024".into(), match (&p.image_v1024) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("image_192".into(), match (&p.image_v192) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("image_24".into(), match (&p.image_v24) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("image_32".into(), match (&p.image_v32) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("image_48".into(), match (&p.image_v48) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("image_512".into(), match (&p.image_v512) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("image_72".into(), match (&p.image_v72) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("image_original".into(), match (&p.image_original) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("is_app_user".into(), match (&p.is_app_user) { Some(v) => Value::Bool(*(v)), None => Value::Null });
+    m.insert("is_custom_image".into(), match (&p.is_custom_image) { Some(v) => Value::Bool(*(v)), None => Value::Null });
+    m.insert("is_restricted".into(), match (&p.is_restricted) { Some(v) => Value::Bool(*(v)), None => Value::Null });
+    m.insert("is_ultra_restricted".into(), match (&p.is_ultra_restricted) { Some(v) => Value::Bool(*(v)), None => Value::Null });
+    m.insert("last_avatar_image_hash".into(), match (&p.last_avatar_image_hash) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("last_name".into(), match (&p.last_name) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("memberships_count".into(), match (&p.memberships_count) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("name".into(), match (&p.name) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("phone".into(), Value::String((&p.phone).clone()));
+    m.insert("pronouns".into(), match (&p.pronouns) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("real_name".into(), Value::String((&p.real_name).clone()));
+    m.insert("real_name_normalized".into(), Value::String((&p.real_name_normalized).clone()));
+    m.insert("skype".into(), Value::String((&p.skype).clone()));
+    m.insert("status_default_emoji".into(), match (&p.status_default_emoji) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("status_default_text".into(), match (&p.status_default_text) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("status_default_text_canonical".into(), match (&p.status_default_text_canonical) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("status_emoji".into(), Value::String((&p.status_emoji).clone()));
+    m.insert("status_expiration".into(), match (&p.status_expiration) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("status_text".into(), Value::String((&p.status_text).clone()));
+    m.insert("status_text_canonical".into(), match (&p.status_text_canonical) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("team".into(), match (&p.team) { Some(v) => iface_users_profile__defs_workspace_id__to_json(v), None => Value::Null });
+    m.insert("title".into(), Value::String((&p.title).clone()));
+    m.insert("updated".into(), match (&p.updated) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("user_id".into(), match (&p.user_id) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("username".into(), match (&p.username) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_users_profile__defs_optional_app_id__to_json(p: &iface_users_profile::DefsOptionalAppId) -> Value {
+    let mut m = Map::new();
+    m.insert("value".into(), Value::String((&p.value).clone()));
+    Value::Object(m)
+}
+
+fn iface_users_profile__defs_bot_id__to_json(p: &iface_users_profile::DefsBotId) -> Value {
+    let mut m = Map::new();
+    m.insert("value".into(), Value::String((&p.value).clone()));
+    Value::Object(m)
+}
+
+fn iface_users_profile__defs_workspace_id__to_json(p: &iface_users_profile::DefsWorkspaceId) -> Value {
+    let mut m = Map::new();
+    m.insert("value".into(), Value::String((&p.value).clone()));
+    Value::Object(m)
+}
+
+fn iface_users_profile__set_response__to_json(p: &iface_users_profile::SetResponse) -> Value {
+    let mut m = Map::new();
+    m.insert("email_pending".into(), match (&p.email_pending) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("ok".into(), iface_users_profile__defs_ok_true__to_json(&p.ok));
+    m.insert("profile".into(), iface_users_profile__objs_user_profile__to_json(&p.profile));
+    m.insert("username".into(), Value::String((&p.username).clone()));
+    Value::Object(m)
+}
 
 fn iface_users_profile__get_params__to_json(p: &iface_users_profile::GetParams) -> Value {
     let mut m = Map::new();
@@ -4266,17 +14767,159 @@ fn iface_users_profile__get_params__to_json(p: &iface_users_profile::GetParams) 
 fn iface_users_profile__set_params__to_json(p: &iface_users_profile::SetParams) -> Value {
     let mut m = Map::new();
     m.insert("token".into(), Value::String((&p.token).clone()));
+    m.insert("name".into(), match (&p.name) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("profile".into(), match (&p.profile) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("user".into(), match (&p.user) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("value".into(), match (&p.value) { Some(v) => Value::String((v).clone()), None => Value::Null });
     Value::Object(m)
 }
 
-impl iface_users_profile::Guest for crate::Component {
-    fn get(params: iface_users_profile::GetParams) -> Result<String, String> {
-        let json = iface_users_profile__get_params__to_json(&params);
-        dispatch(&OP_USERS_PROFILE_GET, json)
+fn iface_users_profile__get_response__from_json(v: &Value) -> Option<iface_users_profile::GetResponse> {
+    let m = v.as_object()?;
+    Some(iface_users_profile::GetResponse {
+        ok: match m.get("ok").and_then(|v| iface_users_profile__defs_ok_true__from_json(v)) { Some(x) => x, None => return None },
+        profile: match m.get("profile").and_then(|v| iface_users_profile__objs_user_profile__from_json(v)) { Some(x) => x, None => return None },
+    })
+}
+
+fn iface_users_profile__defs_ok_true__from_json(v: &Value) -> Option<iface_users_profile::DefsOkTrue> {
+    let m = v.as_object()?;
+    Some(iface_users_profile::DefsOkTrue {
+        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+    })
+}
+
+fn iface_users_profile__objs_user_profile__from_json(v: &Value) -> Option<iface_users_profile::ObjsUserProfile> {
+    let m = v.as_object()?;
+    Some(iface_users_profile::ObjsUserProfile {
+        always_active: m.get("always_active").filter(|v| !v.is_null()).and_then(|v| (v).as_bool()),
+        api_app_id: m.get("api_app_id").filter(|v| !v.is_null()).and_then(|v| iface_users_profile__defs_optional_app_id__from_json(v)),
+        avatar_hash: m.get("avatar_hash").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        bot_id: m.get("bot_id").filter(|v| !v.is_null()).and_then(|v| iface_users_profile__defs_bot_id__from_json(v)),
+        display_name: m.get("display_name").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        display_name_normalized: m.get("display_name_normalized").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        email: m.get("email").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        fields: m.get("fields").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        first_name: m.get("first_name").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        guest_expiration_ts: m.get("guest_expiration_ts").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        guest_invited_by: m.get("guest_invited_by").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        image_v1024: m.get("image_1024").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        image_v192: m.get("image_192").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        image_v24: m.get("image_24").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        image_v32: m.get("image_32").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        image_v48: m.get("image_48").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        image_v512: m.get("image_512").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        image_v72: m.get("image_72").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        image_original: m.get("image_original").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        is_app_user: m.get("is_app_user").filter(|v| !v.is_null()).and_then(|v| (v).as_bool()),
+        is_custom_image: m.get("is_custom_image").filter(|v| !v.is_null()).and_then(|v| (v).as_bool()),
+        is_restricted: m.get("is_restricted").filter(|v| !v.is_null()).and_then(|v| (v).as_bool()),
+        is_ultra_restricted: m.get("is_ultra_restricted").filter(|v| !v.is_null()).and_then(|v| (v).as_bool()),
+        last_avatar_image_hash: m.get("last_avatar_image_hash").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        last_name: m.get("last_name").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        memberships_count: m.get("memberships_count").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        name: m.get("name").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        phone: m.get("phone").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        pronouns: m.get("pronouns").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        real_name: m.get("real_name").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        real_name_normalized: m.get("real_name_normalized").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        skype: m.get("skype").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        status_default_emoji: m.get("status_default_emoji").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        status_default_text: m.get("status_default_text").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        status_default_text_canonical: m.get("status_default_text_canonical").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        status_emoji: m.get("status_emoji").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        status_expiration: m.get("status_expiration").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        status_text: m.get("status_text").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        status_text_canonical: m.get("status_text_canonical").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        team: m.get("team").filter(|v| !v.is_null()).and_then(|v| iface_users_profile__defs_workspace_id__from_json(v)),
+        title: m.get("title").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        updated: m.get("updated").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        user_id: m.get("user_id").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        username: m.get("username").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    })
+}
+
+fn iface_users_profile__defs_optional_app_id__from_json(v: &Value) -> Option<iface_users_profile::DefsOptionalAppId> {
+    let m = v.as_object()?;
+    Some(iface_users_profile::DefsOptionalAppId {
+        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+    })
+}
+
+fn iface_users_profile__defs_bot_id__from_json(v: &Value) -> Option<iface_users_profile::DefsBotId> {
+    let m = v.as_object()?;
+    Some(iface_users_profile::DefsBotId {
+        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+    })
+}
+
+fn iface_users_profile__defs_workspace_id__from_json(v: &Value) -> Option<iface_users_profile::DefsWorkspaceId> {
+    let m = v.as_object()?;
+    Some(iface_users_profile::DefsWorkspaceId {
+        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+    })
+}
+
+fn iface_users_profile__set_response__from_json(v: &Value) -> Option<iface_users_profile::SetResponse> {
+    let m = v.as_object()?;
+    Some(iface_users_profile::SetResponse {
+        email_pending: m.get("email_pending").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        ok: match m.get("ok").and_then(|v| iface_users_profile__defs_ok_true__from_json(v)) { Some(x) => x, None => return None },
+        profile: match m.get("profile").and_then(|v| iface_users_profile__objs_user_profile__from_json(v)) { Some(x) => x, None => return None },
+        username: m.get("username").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+    })
+}
+
+fn iface_users_profile__get__ok(body: String) -> Result<iface_users_profile::GetResponse, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match iface_users_profile__get_response__from_json(&v) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
     }
-    fn set(params: iface_users_profile::SetParams) -> Result<String, String> {
+}
+
+fn iface_users_profile__get__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
+fn iface_users_profile__set__ok(body: String) -> Result<iface_users_profile::SetResponse, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match iface_users_profile__set_response__from_json(&v) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_users_profile__set__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
+impl iface_users_profile::Guest for crate::Component {
+    fn get(params: iface_users_profile::GetParams) -> Result<iface_users_profile::GetResponse, String> {
+        let json = iface_users_profile__get_params__to_json(&params);
+        match dispatch(&OP_USERS_PROFILE_GET, json).and_then(iface_users_profile__get__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_users_profile__get__err(e)),
+        }
+    }
+    fn set(params: iface_users_profile::SetParams) -> Result<iface_users_profile::SetResponse, String> {
         let json = iface_users_profile__set_params__to_json(&params);
-        dispatch(&OP_USERS_PROFILE_SET, json)
+        match dispatch(&OP_USERS_PROFILE_SET, json).and_then(iface_users_profile__set__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_users_profile__set__err(e)),
+        }
     }
 }
 use crate::exports::autostamp::slack::views as iface_views;
@@ -4285,9 +14928,9 @@ const OP_VIEWS_OPEN: OpSpec = OpSpec {
     method: "GET",
     path_template: "/views.open",
     fields: &[
-        FieldSpec { snake: "token", location: FieldLocation::Header },
-        FieldSpec { snake: "trigger_id", location: FieldLocation::Query },
-        FieldSpec { snake: "view", location: FieldLocation::Query },
+        FieldSpec { snake: "token", wire: "token", location: FieldLocation::Header },
+        FieldSpec { snake: "trigger_id", wire: "trigger_id", location: FieldLocation::Query },
+        FieldSpec { snake: "view", wire: "view", location: FieldLocation::Query },
     ],
     auth: &[
         AuthApply { secret_key: "slackAuth", kind: AuthKind::Bearer },
@@ -4298,10 +14941,10 @@ const OP_VIEWS_PUBLISH: OpSpec = OpSpec {
     method: "GET",
     path_template: "/views.publish",
     fields: &[
-        FieldSpec { snake: "token", location: FieldLocation::Header },
-        FieldSpec { snake: "user_id", location: FieldLocation::Query },
-        FieldSpec { snake: "view", location: FieldLocation::Query },
-        FieldSpec { snake: "hash", location: FieldLocation::Query },
+        FieldSpec { snake: "token", wire: "token", location: FieldLocation::Header },
+        FieldSpec { snake: "user_id", wire: "user_id", location: FieldLocation::Query },
+        FieldSpec { snake: "view", wire: "view", location: FieldLocation::Query },
+        FieldSpec { snake: "hash", wire: "hash", location: FieldLocation::Query },
     ],
     auth: &[
         AuthApply { secret_key: "slackAuth", kind: AuthKind::Bearer },
@@ -4312,9 +14955,9 @@ const OP_VIEWS_PUSH: OpSpec = OpSpec {
     method: "GET",
     path_template: "/views.push",
     fields: &[
-        FieldSpec { snake: "token", location: FieldLocation::Header },
-        FieldSpec { snake: "trigger_id", location: FieldLocation::Query },
-        FieldSpec { snake: "view", location: FieldLocation::Query },
+        FieldSpec { snake: "token", wire: "token", location: FieldLocation::Header },
+        FieldSpec { snake: "trigger_id", wire: "trigger_id", location: FieldLocation::Query },
+        FieldSpec { snake: "view", wire: "view", location: FieldLocation::Query },
     ],
     auth: &[
         AuthApply { secret_key: "slackAuth", kind: AuthKind::Bearer },
@@ -4325,16 +14968,46 @@ const OP_VIEWS_UPDATE: OpSpec = OpSpec {
     method: "GET",
     path_template: "/views.update",
     fields: &[
-        FieldSpec { snake: "token", location: FieldLocation::Header },
-        FieldSpec { snake: "view_id", location: FieldLocation::Query },
-        FieldSpec { snake: "external_id", location: FieldLocation::Query },
-        FieldSpec { snake: "view", location: FieldLocation::Query },
-        FieldSpec { snake: "hash", location: FieldLocation::Query },
+        FieldSpec { snake: "token", wire: "token", location: FieldLocation::Header },
+        FieldSpec { snake: "view_id", wire: "view_id", location: FieldLocation::Query },
+        FieldSpec { snake: "external_id", wire: "external_id", location: FieldLocation::Query },
+        FieldSpec { snake: "view", wire: "view", location: FieldLocation::Query },
+        FieldSpec { snake: "hash", wire: "hash", location: FieldLocation::Query },
     ],
     auth: &[
         AuthApply { secret_key: "slackAuth", kind: AuthKind::Bearer },
     ],
 };
+
+fn iface_views__open_response__to_json(p: &iface_views::OpenResponse) -> Value {
+    let mut m = Map::new();
+    m.insert("ok".into(), iface_views__defs_ok_true__to_json(&p.ok));
+    Value::Object(m)
+}
+
+fn iface_views__defs_ok_true__to_json(p: &iface_views::DefsOkTrue) -> Value {
+    let mut m = Map::new();
+    m.insert("value".into(), Value::String((&p.value).clone()));
+    Value::Object(m)
+}
+
+fn iface_views__publish_response__to_json(p: &iface_views::PublishResponse) -> Value {
+    let mut m = Map::new();
+    m.insert("ok".into(), iface_views__defs_ok_true__to_json(&p.ok));
+    Value::Object(m)
+}
+
+fn iface_views__push_response__to_json(p: &iface_views::PushResponse) -> Value {
+    let mut m = Map::new();
+    m.insert("ok".into(), iface_views__defs_ok_true__to_json(&p.ok));
+    Value::Object(m)
+}
+
+fn iface_views__update_response__to_json(p: &iface_views::UpdateResponse) -> Value {
+    let mut m = Map::new();
+    m.insert("ok".into(), iface_views__defs_ok_true__to_json(&p.ok));
+    Value::Object(m)
+}
 
 fn iface_views__open_params__to_json(p: &iface_views::OpenParams) -> Value {
     let mut m = Map::new();
@@ -4371,22 +15044,141 @@ fn iface_views__update_params__to_json(p: &iface_views::UpdateParams) -> Value {
     Value::Object(m)
 }
 
+fn iface_views__open_response__from_json(v: &Value) -> Option<iface_views::OpenResponse> {
+    let m = v.as_object()?;
+    Some(iface_views::OpenResponse {
+        ok: match m.get("ok").and_then(|v| iface_views__defs_ok_true__from_json(v)) { Some(x) => x, None => return None },
+    })
+}
+
+fn iface_views__defs_ok_true__from_json(v: &Value) -> Option<iface_views::DefsOkTrue> {
+    let m = v.as_object()?;
+    Some(iface_views::DefsOkTrue {
+        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+    })
+}
+
+fn iface_views__publish_response__from_json(v: &Value) -> Option<iface_views::PublishResponse> {
+    let m = v.as_object()?;
+    Some(iface_views::PublishResponse {
+        ok: match m.get("ok").and_then(|v| iface_views__defs_ok_true__from_json(v)) { Some(x) => x, None => return None },
+    })
+}
+
+fn iface_views__push_response__from_json(v: &Value) -> Option<iface_views::PushResponse> {
+    let m = v.as_object()?;
+    Some(iface_views::PushResponse {
+        ok: match m.get("ok").and_then(|v| iface_views__defs_ok_true__from_json(v)) { Some(x) => x, None => return None },
+    })
+}
+
+fn iface_views__update_response__from_json(v: &Value) -> Option<iface_views::UpdateResponse> {
+    let m = v.as_object()?;
+    Some(iface_views::UpdateResponse {
+        ok: match m.get("ok").and_then(|v| iface_views__defs_ok_true__from_json(v)) { Some(x) => x, None => return None },
+    })
+}
+
+fn iface_views__open__ok(body: String) -> Result<iface_views::OpenResponse, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match iface_views__open_response__from_json(&v) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_views__open__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
+fn iface_views__publish__ok(body: String) -> Result<iface_views::PublishResponse, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match iface_views__publish_response__from_json(&v) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_views__publish__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
+fn iface_views__push__ok(body: String) -> Result<iface_views::PushResponse, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match iface_views__push_response__from_json(&v) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_views__push__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
+fn iface_views__update__ok(body: String) -> Result<iface_views::UpdateResponse, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match iface_views__update_response__from_json(&v) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_views__update__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
 impl iface_views::Guest for crate::Component {
-    fn open(params: iface_views::OpenParams) -> Result<String, String> {
+    fn open(params: iface_views::OpenParams) -> Result<iface_views::OpenResponse, String> {
         let json = iface_views__open_params__to_json(&params);
-        dispatch(&OP_VIEWS_OPEN, json)
+        match dispatch(&OP_VIEWS_OPEN, json).and_then(iface_views__open__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_views__open__err(e)),
+        }
     }
-    fn publish(params: iface_views::PublishParams) -> Result<String, String> {
+    fn publish(params: iface_views::PublishParams) -> Result<iface_views::PublishResponse, String> {
         let json = iface_views__publish_params__to_json(&params);
-        dispatch(&OP_VIEWS_PUBLISH, json)
+        match dispatch(&OP_VIEWS_PUBLISH, json).and_then(iface_views__publish__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_views__publish__err(e)),
+        }
     }
-    fn push(params: iface_views::PushParams) -> Result<String, String> {
+    fn push(params: iface_views::PushParams) -> Result<iface_views::PushResponse, String> {
         let json = iface_views__push_params__to_json(&params);
-        dispatch(&OP_VIEWS_PUSH, json)
+        match dispatch(&OP_VIEWS_PUSH, json).and_then(iface_views__push__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_views__push__err(e)),
+        }
     }
-    fn update(params: iface_views::UpdateParams) -> Result<String, String> {
+    fn update(params: iface_views::UpdateParams) -> Result<iface_views::UpdateResponse, String> {
         let json = iface_views__update_params__to_json(&params);
-        dispatch(&OP_VIEWS_UPDATE, json)
+        match dispatch(&OP_VIEWS_UPDATE, json).and_then(iface_views__update__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_views__update__err(e)),
+        }
     }
 }
 use crate::exports::autostamp::slack::workflows as iface_workflows;
@@ -4395,9 +15187,9 @@ const OP_WORKFLOWS_STEP_COMPLETED: OpSpec = OpSpec {
     method: "GET",
     path_template: "/workflows.stepCompleted",
     fields: &[
-        FieldSpec { snake: "token", location: FieldLocation::Header },
-        FieldSpec { snake: "workflow_step_execute_id", location: FieldLocation::Query },
-        FieldSpec { snake: "outputs", location: FieldLocation::Query },
+        FieldSpec { snake: "token", wire: "token", location: FieldLocation::Header },
+        FieldSpec { snake: "workflow_step_execute_id", wire: "workflow_step_execute_id", location: FieldLocation::Query },
+        FieldSpec { snake: "outputs", wire: "outputs", location: FieldLocation::Query },
     ],
     auth: &[
         AuthApply { secret_key: "slackAuth", kind: AuthKind::Bearer },
@@ -4408,9 +15200,9 @@ const OP_WORKFLOWS_STEP_FAILED: OpSpec = OpSpec {
     method: "GET",
     path_template: "/workflows.stepFailed",
     fields: &[
-        FieldSpec { snake: "token", location: FieldLocation::Header },
-        FieldSpec { snake: "workflow_step_execute_id", location: FieldLocation::Query },
-        FieldSpec { snake: "error", location: FieldLocation::Query },
+        FieldSpec { snake: "token", wire: "token", location: FieldLocation::Header },
+        FieldSpec { snake: "workflow_step_execute_id", wire: "workflow_step_execute_id", location: FieldLocation::Query },
+        FieldSpec { snake: "error", wire: "error", location: FieldLocation::Query },
     ],
     auth: &[
         AuthApply { secret_key: "slackAuth", kind: AuthKind::Bearer },
@@ -4421,17 +15213,41 @@ const OP_WORKFLOWS_UPDATE_STEP: OpSpec = OpSpec {
     method: "GET",
     path_template: "/workflows.updateStep",
     fields: &[
-        FieldSpec { snake: "token", location: FieldLocation::Header },
-        FieldSpec { snake: "workflow_step_edit_id", location: FieldLocation::Query },
-        FieldSpec { snake: "inputs", location: FieldLocation::Query },
-        FieldSpec { snake: "outputs", location: FieldLocation::Query },
-        FieldSpec { snake: "step_name", location: FieldLocation::Query },
-        FieldSpec { snake: "step_image_url", location: FieldLocation::Query },
+        FieldSpec { snake: "token", wire: "token", location: FieldLocation::Header },
+        FieldSpec { snake: "workflow_step_edit_id", wire: "workflow_step_edit_id", location: FieldLocation::Query },
+        FieldSpec { snake: "inputs", wire: "inputs", location: FieldLocation::Query },
+        FieldSpec { snake: "outputs", wire: "outputs", location: FieldLocation::Query },
+        FieldSpec { snake: "step_name", wire: "step_name", location: FieldLocation::Query },
+        FieldSpec { snake: "step_image_url", wire: "step_image_url", location: FieldLocation::Query },
     ],
     auth: &[
         AuthApply { secret_key: "slackAuth", kind: AuthKind::Bearer },
     ],
 };
+
+fn iface_workflows__step_completed_response__to_json(p: &iface_workflows::StepCompletedResponse) -> Value {
+    let mut m = Map::new();
+    m.insert("ok".into(), iface_workflows__defs_ok_true__to_json(&p.ok));
+    Value::Object(m)
+}
+
+fn iface_workflows__defs_ok_true__to_json(p: &iface_workflows::DefsOkTrue) -> Value {
+    let mut m = Map::new();
+    m.insert("value".into(), Value::String((&p.value).clone()));
+    Value::Object(m)
+}
+
+fn iface_workflows__step_failed_response__to_json(p: &iface_workflows::StepFailedResponse) -> Value {
+    let mut m = Map::new();
+    m.insert("ok".into(), iface_workflows__defs_ok_true__to_json(&p.ok));
+    Value::Object(m)
+}
+
+fn iface_workflows__update_step_response__to_json(p: &iface_workflows::UpdateStepResponse) -> Value {
+    let mut m = Map::new();
+    m.insert("ok".into(), iface_workflows__defs_ok_true__to_json(&p.ok));
+    Value::Object(m)
+}
 
 fn iface_workflows__step_completed_params__to_json(p: &iface_workflows::StepCompletedParams) -> Value {
     let mut m = Map::new();
@@ -4460,18 +15276,109 @@ fn iface_workflows__update_step_params__to_json(p: &iface_workflows::UpdateStepP
     Value::Object(m)
 }
 
+fn iface_workflows__step_completed_response__from_json(v: &Value) -> Option<iface_workflows::StepCompletedResponse> {
+    let m = v.as_object()?;
+    Some(iface_workflows::StepCompletedResponse {
+        ok: match m.get("ok").and_then(|v| iface_workflows__defs_ok_true__from_json(v)) { Some(x) => x, None => return None },
+    })
+}
+
+fn iface_workflows__defs_ok_true__from_json(v: &Value) -> Option<iface_workflows::DefsOkTrue> {
+    let m = v.as_object()?;
+    Some(iface_workflows::DefsOkTrue {
+        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+    })
+}
+
+fn iface_workflows__step_failed_response__from_json(v: &Value) -> Option<iface_workflows::StepFailedResponse> {
+    let m = v.as_object()?;
+    Some(iface_workflows::StepFailedResponse {
+        ok: match m.get("ok").and_then(|v| iface_workflows__defs_ok_true__from_json(v)) { Some(x) => x, None => return None },
+    })
+}
+
+fn iface_workflows__update_step_response__from_json(v: &Value) -> Option<iface_workflows::UpdateStepResponse> {
+    let m = v.as_object()?;
+    Some(iface_workflows::UpdateStepResponse {
+        ok: match m.get("ok").and_then(|v| iface_workflows__defs_ok_true__from_json(v)) { Some(x) => x, None => return None },
+    })
+}
+
+fn iface_workflows__step_completed__ok(body: String) -> Result<iface_workflows::StepCompletedResponse, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match iface_workflows__step_completed_response__from_json(&v) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_workflows__step_completed__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
+fn iface_workflows__step_failed__ok(body: String) -> Result<iface_workflows::StepFailedResponse, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match iface_workflows__step_failed_response__from_json(&v) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_workflows__step_failed__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
+fn iface_workflows__update_step__ok(body: String) -> Result<iface_workflows::UpdateStepResponse, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match iface_workflows__update_step_response__from_json(&v) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_workflows__update_step__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
 impl iface_workflows::Guest for crate::Component {
-    fn step_completed(params: iface_workflows::StepCompletedParams) -> Result<String, String> {
+    fn step_completed(params: iface_workflows::StepCompletedParams) -> Result<iface_workflows::StepCompletedResponse, String> {
         let json = iface_workflows__step_completed_params__to_json(&params);
-        dispatch(&OP_WORKFLOWS_STEP_COMPLETED, json)
+        match dispatch(&OP_WORKFLOWS_STEP_COMPLETED, json).and_then(iface_workflows__step_completed__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_workflows__step_completed__err(e)),
+        }
     }
-    fn step_failed(params: iface_workflows::StepFailedParams) -> Result<String, String> {
+    fn step_failed(params: iface_workflows::StepFailedParams) -> Result<iface_workflows::StepFailedResponse, String> {
         let json = iface_workflows__step_failed_params__to_json(&params);
-        dispatch(&OP_WORKFLOWS_STEP_FAILED, json)
+        match dispatch(&OP_WORKFLOWS_STEP_FAILED, json).and_then(iface_workflows__step_failed__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_workflows__step_failed__err(e)),
+        }
     }
-    fn update_step(params: iface_workflows::UpdateStepParams) -> Result<String, String> {
+    fn update_step(params: iface_workflows::UpdateStepParams) -> Result<iface_workflows::UpdateStepResponse, String> {
         let json = iface_workflows__update_step_params__to_json(&params);
-        dispatch(&OP_WORKFLOWS_UPDATE_STEP, json)
+        match dispatch(&OP_WORKFLOWS_UPDATE_STEP, json).and_then(iface_workflows__update_step__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_workflows__update_step__err(e)),
+        }
     }
 }
 

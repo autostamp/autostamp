@@ -1,19 +1,36 @@
-package autostamp:wolframalpha@0.3.0;
+package autostamp:wolframalpha@0.5.0;
 
 interface api {
+  variant get-wolfram-cloud-results-error {
+    bad-request(string),
+    forbidden(string),
+    internal-server-error(string),
+    service-unavailable(string),
+    other(string)
+  }
+
+  variant get-wolfram-alpha-results-error {
+    bad-request(string),
+    forbidden(string),
+    internal-server-error(string),
+    not-implemented(string),
+    service-unavailable(string),
+    other(string)
+  }
+
   /// Evaluate Wolfram Language code
   record get-wolfram-cloud-results-params {
     /// the input expression
     input: string
   }
-  get-wolfram-cloud-results: func(params: get-wolfram-cloud-results-params) -> result<string, string>;
+  get-wolfram-cloud-results: func(params: get-wolfram-cloud-results-params) -> result<string, get-wolfram-cloud-results-error>;
 
   /// Get Wolfram|Alpha results
   record get-wolfram-alpha-results-params {
     /// the input
     input: string
   }
-  get-wolfram-alpha-results: func(params: get-wolfram-alpha-results-params) -> result<string, string>;
+  get-wolfram-alpha-results: func(params: get-wolfram-alpha-results-params) -> result<string, get-wolfram-alpha-results-error>;
 
 }
 

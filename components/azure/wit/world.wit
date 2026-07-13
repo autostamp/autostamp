@@ -1,65 +1,156 @@
-package autostamp:azure@0.3.0;
+package autostamp:azure@0.5.0;
 
 interface operations {
+  /// The list of EnterpriseKnowledgeGraph service operation response.
+  record operation-entity-list-result {
+    /// The link used to get the next page of operations.
+    next-link: option<string>,
+    /// The list of operations.
+    value: option<list<operation-entity>>
+  }
+
+  /// The operations supported by EnterpriseKnowledgeGraph Service Management.
+  record operation-entity {
+    display: option<operation-display-info>,
+    /// Operation name: {provider}/{resource}/{operation}.
+    name: option<string>,
+    /// The origin of the operation.
+    origin: option<string>,
+    /// Additional properties.
+    properties: option<operation-entity-properties>
+  }
+
+  /// The operation supported by EnterpriseKnowledgeGraph Service Management.
+  record operation-display-info {
+    /// The description of the operation.
+    description: option<string>,
+    /// The action that users can perform, based on their permission level.
+    operation: option<string>,
+    /// Service provider: Microsoft EnterpriseKnowledgeGraph Service.
+    provider: option<string>,
+    /// Resource on which the operation is performed.
+    resource-op: option<string>
+  }
+
+  /// Additional properties.
+  record operation-entity-properties {
+    /// JSON-encoded free-form object payload
+    data: option<string>
+  }
+
   record list-op-params {
-    /// Client API version.
+    /// Version of the API to be used with the client request.
     api-version: string
   }
-  list-op: func(params: list-op-params) -> result<string, string>;
+  list-op: func(params: list-op-params) -> result<operation-entity-list-result, string>;
 
 }
 
 
-interface addon-status {
-  record support-plan-types-list-info-params {
-    /// Client API version.
+interface enterprise-knowledge-graph {
+  enum properties-provisioning-state-enum {
+    creating,
+    deleting,
+    failed,
+    succeeded,
+  }
+
+  /// The list of  EnterpriseKnowledgeGraph service operation response.
+  record response-list {
+    /// The link used to get the next page of EnterpriseKnowledgeGraph service resources.
+    next-link: option<string>,
+    /// Gets the list of EnterpriseKnowledgeGraph service results and their properties.
+    value: option<list<enterprise-knowledge-graph>>
+  }
+
+  /// EnterpriseKnowledgeGraph resource definition
+  record enterprise-knowledge-graph {
+    properties: option<properties>
+  }
+
+  /// The parameters to provide for the EnterpriseKnowledgeGraph.
+  record properties {
+    /// The description of the EnterpriseKnowledgeGraph
+    description: option<string>,
+    /// Specifies the metadata  of the resource.
+    metadata: option<properties-metadata>,
+    /// The state of EnterpriseKnowledgeGraph provisioning
+    provisioning-state: option<properties-provisioning-state-enum>
+  }
+
+  /// Specifies the metadata  of the resource.
+  record properties-metadata {
+    /// JSON-encoded free-form object payload
+    data: option<string>
+  }
+
+  record list-op-params {
+    /// Version of the API to be used with the client request.
     api-version: string,
-    /// Subscription credentials that uniquely identify the Microsoft Azure subscription. The subscription ID forms part of the URI for every service call.
+    /// Azure Subscription ID.
     subscription-id: string
   }
-  support-plan-types-list-info: func(params: support-plan-types-list-info-params) -> result<string, string>;
+  list-op: func(params: list-op-params) -> result<response-list, string>;
 
-}
-
-interface addon-details {
-  record support-plan-types-get-params {
-    /// Client API version.
-    api-version: string,
-    /// Subscription credentials that uniquely identify the Microsoft Azure subscription. The subscription ID forms part of the URI for every service call.
+  record list-by-resource-group-params {
+    /// The name of the EnterpriseKnowledgeGraph resource group in the user subscription.
+    resource-group-name: string,
+    /// Azure Subscription ID.
     subscription-id: string,
-    /// The support plan type. For now the only valid type is "canonical".
-    provider-name: string,
-    /// The Canonical support plan type.
-    plan-type-name: string
+    /// Version of the API to be used with the client request.
+    api-version: string
   }
-  support-plan-types-get: func(params: support-plan-types-get-params) -> result<string, string>;
+  list-by-resource-group: func(params: list-by-resource-group-params) -> result<response-list, string>;
 
-  record support-plan-types-create-or-update-params {
-    /// Client API version.
+  record get-params {
+    /// The name of the EnterpriseKnowledgeGraph resource group in the user subscription.
+    resource-group-name: string,
+    /// The name of the EnterpriseKnowledgeGraph resource.
+    resource-name: string,
+    /// Version of the API to be used with the client request.
     api-version: string,
-    /// Subscription credentials that uniquely identify the Microsoft Azure subscription. The subscription ID forms part of the URI for every service call.
-    subscription-id: string,
-    /// The support plan type. For now the only valid type is "canonical".
-    provider-name: string,
-    /// The Canonical support plan type.
-    plan-type-name: string
+    /// Azure Subscription ID.
+    subscription-id: string
   }
-  support-plan-types-create-or-update: func(params: support-plan-types-create-or-update-params) -> result<string, string>;
+  get: func(params: get-params) -> result<enterprise-knowledge-graph, string>;
 
-}
-
-interface subscriptions {
-  record support-plan-types-delete-params {
-    /// Client API version.
+  record create-params {
+    /// The name of the EnterpriseKnowledgeGraph resource group in the user subscription.
+    resource-group-name: string,
+    /// The name of the EnterpriseKnowledgeGraph resource.
+    resource-name: string,
+    /// Version of the API to be used with the client request.
     api-version: string,
-    /// Subscription credentials that uniquely identify the Microsoft Azure subscription. The subscription ID forms part of the URI for every service call.
+    /// Azure Subscription ID.
     subscription-id: string,
-    /// The support plan type. For now the only valid type is "canonical".
-    provider-name: string,
-    /// The Canonical support plan type.
-    plan-type-name: string
+    properties: option<properties>
   }
-  support-plan-types-delete: func(params: support-plan-types-delete-params) -> result<string, string>;
+  create: func(params: create-params) -> result<enterprise-knowledge-graph, string>;
+
+  record update-params {
+    /// The name of the EnterpriseKnowledgeGraph resource group in the user subscription.
+    resource-group-name: string,
+    /// The name of the EnterpriseKnowledgeGraph resource.
+    resource-name: string,
+    /// Version of the API to be used with the client request.
+    api-version: string,
+    /// Azure Subscription ID.
+    subscription-id: string,
+    properties: option<properties>
+  }
+  update: func(params: update-params) -> result<enterprise-knowledge-graph, string>;
+
+  record delete-params {
+    /// The name of the EnterpriseKnowledgeGraph resource group in the user subscription.
+    resource-group-name: string,
+    /// The name of the EnterpriseKnowledgeGraph resource.
+    resource-name: string,
+    /// Version of the API to be used with the client request.
+    api-version: string,
+    /// Azure Subscription ID.
+    subscription-id: string
+  }
+  delete: func(params: delete-params) -> result<string, string>;
 
 }
 /// The component world: imports the secrets host capability
@@ -69,7 +160,5 @@ world client {
   import wasmcloud:secrets/store@1.0.0;
   import wasmcloud:secrets/reveal@1.0.0;
   export operations;
-  export addon-status;
-  export addon-details;
-  export subscriptions;
+  export enterprise-knowledge-graph;
 }

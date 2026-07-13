@@ -44,10 +44,15 @@ pub(crate) enum FieldLocation {
     Body,
 }
 
-/// A single operation parameter: the snake-case key it carries in the params JSON and where
-/// it belongs in the request.
+/// A single operation parameter. `snake` keys the field in the internal params JSON (and, for a
+/// path field, matches the `{snake}` placeholder in the path template); `wire` is the verbatim name
+/// the field takes on the HTTP wire (query key, header name, or body property). The two differ
+/// whenever the source name isn't already snake_case (e.g. `dryRun` → snake `dry_run`, wire
+/// `dryRun`), and let distinct inputs that share a snake key (`DateCreated`, `DateCreated<`) still
+/// travel under their true names.
 pub(crate) struct FieldSpec {
     pub(crate) snake: &'static str,
+    pub(crate) wire: &'static str,
     pub(crate) location: FieldLocation,
 }
 
@@ -71,6 +76,16 @@ pub(crate) struct AuthApply {
     pub(crate) kind: AuthKind,
 }
 
+/// The failure modes of [`dispatch`], kept structured so each generated operation can map them
+/// onto its own typed error: an `Http` failure carries the response status and body (routed to
+/// the matching error-variant case), while a `Transport` failure carries a message for the
+/// catch-all case (a secret lookup, connection, or decode failure that never produced an HTTP
+/// status).
+pub(crate) enum DispatchError {
+    Http { status: u16, body: String },
+    Transport(String),
+}
+
 /// A single API operation: HTTP method, path template (with `{snake}` placeholders), the
 /// parameter fields, and the security schemes to apply.
 pub(crate) struct OpSpec {
@@ -81,8 +96,9 @@ pub(crate) struct OpSpec {
 }
 
 /// Execute `op` with the supplied `params` (a JSON object keyed by snake-case field names)
-/// and return the response body as a string, or an error message.
-pub(crate) fn dispatch(op: &OpSpec, params: Value) -> Result<String, String> {
+/// and return the raw 2xx response body, or a structured [`DispatchError`] the caller maps
+/// onto the operation's typed error.
+pub(crate) fn dispatch(op: &OpSpec, params: Value) -> Result<String, DispatchError> {
     let obj = match &params {
         Value::Object(map) => Some(map),
         _ => None,
@@ -105,10 +121,10 @@ pub(crate) fn dispatch(op: &OpSpec, params: Value) -> Result<String, String> {
                 let placeholder = format!("{{{}}}", field.snake);
                 path = path.replace(&placeholder, &percent_encode(&scalar(value)));
             }
-            FieldLocation::Query => query.push((field.snake.to_string(), scalar(value))),
-            FieldLocation::Header => headers.push((field.snake.to_string(), scalar(value))),
+            FieldLocation::Query => query.push((field.wire.to_string(), scalar(value))),
+            FieldLocation::Header => headers.push((field.wire.to_string(), scalar(value))),
             FieldLocation::Body => {
-                body.insert(field.snake.to_string(), value.clone());
+                body.insert(field.wire.to_string(), value.clone());
             }
         }
     }
@@ -116,7 +132,7 @@ pub(crate) fn dispatch(op: &OpSpec, params: Value) -> Result<String, String> {
     // Apply each resolved security scheme, sourcing its value from wasmcloud:secrets.
     let mut cookies: Vec<String> = Vec::new();
     for apply in op.auth {
-        let secret = fetch_secret(apply.secret_key)?;
+        let secret = fetch_secret(apply.secret_key).map_err(DispatchError::Transport)?;
         match &apply.kind {
             AuthKind::Bearer => headers.push(("authorization".into(), format!("Bearer {secret}"))),
             AuthKind::Basic => {
@@ -177,17 +193,18 @@ fn fetch_secret(key: &str) -> Result<String, String> {
 }
 
 /// Build and send the outgoing request with `wstd`, returning the response body on a 2xx
-/// status. The generated guest exports are synchronous, so the async `wstd` client is driven
-/// to completion on a local reactor via `wstd::runtime::block_on`.
+/// status and a structured [`DispatchError`] otherwise. The generated guest exports are
+/// synchronous, so the async `wstd` client is driven to completion on a local reactor via
+/// `wstd::runtime::block_on`.
 fn perform(
     method: &str,
     path_with_query: &str,
     headers: &[(String, String)],
     body: &[u8],
-) -> Result<String, String> {
+) -> Result<String, DispatchError> {
     let url = join_url(crate::BASE_URL, path_with_query);
     let method = Method::from_bytes(method.as_bytes())
-        .map_err(|err| format!("invalid HTTP method `{method}`: {err}"))?;
+        .map_err(|err| DispatchError::Transport(format!("invalid HTTP method `{method}`: {err}")))?;
 
     let mut builder = Request::builder().method(method).uri(url);
     for (name, value) in headers {
@@ -199,27 +216,29 @@ fn perform(
         } else {
             Body::from(body.to_vec())
         })
-        .map_err(|err| format!("failed to build request: {err}"))?;
+        .map_err(|err| DispatchError::Transport(format!("failed to build request: {err}")))?;
 
     wstd::runtime::block_on(async move {
         let client = Client::new();
         let response = client
             .send(request)
             .await
-            .map_err(|err| format!("request failed: {err:#}"))?;
+            .map_err(|err| DispatchError::Transport(format!("request failed: {err:#}")))?;
 
         let status = response.status().as_u16();
         let mut response_body = response.into_body();
-        let bytes = response_body
-            .contents()
-            .await
-            .map_err(|err| format!("failed to read response body: {err:#}"))?;
+        let bytes = response_body.contents().await.map_err(|err| {
+            DispatchError::Transport(format!("failed to read response body: {err:#}"))
+        })?;
         let body_text = String::from_utf8_lossy(bytes).into_owned();
 
         if (200..300).contains(&status) {
             Ok(body_text)
         } else {
-            Err(format!("HTTP {status}: {body_text}"))
+            Err(DispatchError::Http {
+                status,
+                body: body_text,
+            })
         }
     })
 }
@@ -298,8 +317,8 @@ const OP_INDEX_OPERATIONS_CREATE_COLLECTION: OpSpec = OpSpec {
     method: "POST",
     path_template: "/collections",
     fields: &[
-        FieldSpec { snake: "name", location: FieldLocation::Body },
-        FieldSpec { snake: "source", location: FieldLocation::Body },
+        FieldSpec { snake: "name", wire: "name", location: FieldLocation::Body },
+        FieldSpec { snake: "source", wire: "source", location: FieldLocation::Body },
     ],
     auth: &[
         AuthApply { secret_key: "ApiKey", kind: AuthKind::ApiKeyHeader("Api-Key") },
@@ -310,6 +329,7 @@ const OP_INDEX_OPERATIONS_DESCRIBE_COLLECTION: OpSpec = OpSpec {
     method: "GET",
     path_template: "/collections/{collection_name}",
     fields: &[
+        FieldSpec { snake: "collection_name", wire: "collectionName", location: FieldLocation::Path },
     ],
     auth: &[
         AuthApply { secret_key: "ApiKey", kind: AuthKind::ApiKeyHeader("Api-Key") },
@@ -320,6 +340,7 @@ const OP_INDEX_OPERATIONS_DELETE_COLLECTION: OpSpec = OpSpec {
     method: "DELETE",
     path_template: "/collections/{collection_name}",
     fields: &[
+        FieldSpec { snake: "collection_name", wire: "collectionName", location: FieldLocation::Path },
     ],
     auth: &[
         AuthApply { secret_key: "ApiKey", kind: AuthKind::ApiKeyHeader("Api-Key") },
@@ -340,14 +361,14 @@ const OP_INDEX_OPERATIONS_CREATE_INDEX: OpSpec = OpSpec {
     method: "POST",
     path_template: "/databases",
     fields: &[
-        FieldSpec { snake: "dimension", location: FieldLocation::Body },
-        FieldSpec { snake: "metadata_config", location: FieldLocation::Body },
-        FieldSpec { snake: "metric", location: FieldLocation::Body },
-        FieldSpec { snake: "name", location: FieldLocation::Body },
-        FieldSpec { snake: "pod_type", location: FieldLocation::Body },
-        FieldSpec { snake: "pods", location: FieldLocation::Body },
-        FieldSpec { snake: "replicas", location: FieldLocation::Body },
-        FieldSpec { snake: "source_collection", location: FieldLocation::Body },
+        FieldSpec { snake: "dimension", wire: "dimension", location: FieldLocation::Body },
+        FieldSpec { snake: "metadata_config", wire: "metadata_config", location: FieldLocation::Body },
+        FieldSpec { snake: "metric", wire: "metric", location: FieldLocation::Body },
+        FieldSpec { snake: "name", wire: "name", location: FieldLocation::Body },
+        FieldSpec { snake: "pod_type", wire: "pod_type", location: FieldLocation::Body },
+        FieldSpec { snake: "pods", wire: "pods", location: FieldLocation::Body },
+        FieldSpec { snake: "replicas", wire: "replicas", location: FieldLocation::Body },
+        FieldSpec { snake: "source_collection", wire: "source_collection", location: FieldLocation::Body },
     ],
     auth: &[
         AuthApply { secret_key: "ApiKey", kind: AuthKind::ApiKeyHeader("Api-Key") },
@@ -358,6 +379,7 @@ const OP_INDEX_OPERATIONS_DESCRIBE_INDEX: OpSpec = OpSpec {
     method: "GET",
     path_template: "/databases/{index_name}",
     fields: &[
+        FieldSpec { snake: "index_name", wire: "indexName", location: FieldLocation::Path },
     ],
     auth: &[
         AuthApply { secret_key: "ApiKey", kind: AuthKind::ApiKeyHeader("Api-Key") },
@@ -368,8 +390,9 @@ const OP_INDEX_OPERATIONS_CONFIGURE_INDEX: OpSpec = OpSpec {
     method: "PATCH",
     path_template: "/databases/{index_name}",
     fields: &[
-        FieldSpec { snake: "pod_type", location: FieldLocation::Body },
-        FieldSpec { snake: "replicas", location: FieldLocation::Body },
+        FieldSpec { snake: "index_name", wire: "indexName", location: FieldLocation::Path },
+        FieldSpec { snake: "pod_type", wire: "pod_type", location: FieldLocation::Body },
+        FieldSpec { snake: "replicas", wire: "replicas", location: FieldLocation::Body },
     ],
     auth: &[
         AuthApply { secret_key: "ApiKey", kind: AuthKind::ApiKeyHeader("Api-Key") },
@@ -380,11 +403,18 @@ const OP_INDEX_OPERATIONS_DELETE_INDEX: OpSpec = OpSpec {
     method: "DELETE",
     path_template: "/databases/{index_name}",
     fields: &[
+        FieldSpec { snake: "index_name", wire: "indexName", location: FieldLocation::Path },
     ],
     auth: &[
         AuthApply { secret_key: "ApiKey", kind: AuthKind::ApiKeyHeader("Api-Key") },
     ],
 };
+
+fn iface_index_operations__collections_list__to_json(p: &iface_index_operations::CollectionsList) -> Value {
+    let mut m = Map::new();
+    m.insert("value".into(), Value::String((&p.value).clone()));
+    Value::Object(m)
+}
 
 fn iface_index_operations__collection_name__to_json(p: &iface_index_operations::CollectionName) -> Value {
     let mut m = Map::new();
@@ -393,6 +423,26 @@ fn iface_index_operations__collection_name__to_json(p: &iface_index_operations::
 }
 
 fn iface_index_operations__index_name__to_json(p: &iface_index_operations::IndexName) -> Value {
+    let mut m = Map::new();
+    m.insert("value".into(), Value::String((&p.value).clone()));
+    Value::Object(m)
+}
+
+fn iface_index_operations__collection__to_json(p: &iface_index_operations::Collection) -> Value {
+    let mut m = Map::new();
+    m.insert("name".into(), iface_index_operations__collection_name__to_json(&p.name));
+    m.insert("size".into(), Value::Number(serde_json::Number::from(*(&p.size))));
+    m.insert("status".into(), iface_index_operations__collection_state__to_json(&p.status));
+    Value::Object(m)
+}
+
+fn iface_index_operations__collection_state__to_json(p: &iface_index_operations::CollectionState) -> Value {
+    let mut m = Map::new();
+    m.insert("value".into(), Value::String((&p.value).clone()));
+    Value::Object(m)
+}
+
+fn iface_index_operations__indexes_list__to_json(p: &iface_index_operations::IndexesList) -> Value {
     let mut m = Map::new();
     m.insert("value".into(), Value::String((&p.value).clone()));
     Value::Object(m)
@@ -422,10 +472,56 @@ fn iface_index_operations__pod_type__to_json(p: &iface_index_operations::PodType
     Value::Object(m)
 }
 
+fn iface_index_operations__index__to_json(p: &iface_index_operations::Index) -> Value {
+    let mut m = Map::new();
+    m.insert("database".into(), match (&p.database) { Some(v) => iface_index_operations__index_database__to_json(v), None => Value::Null });
+    m.insert("status".into(), match (&p.status) { Some(v) => iface_index_operations__index_status__to_json(v), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_index_operations__index_database__to_json(p: &iface_index_operations::IndexDatabase) -> Value {
+    let mut m = Map::new();
+    m.insert("dimension".into(), match (&p.dimension) { Some(v) => iface_index_operations__vector_dimensionality__to_json(v), None => Value::Null });
+    m.insert("metric".into(), match (&p.metric) { Some(v) => iface_index_operations__index_metric__to_json(v), None => Value::Null });
+    m.insert("name".into(), match (&p.name) { Some(v) => iface_index_operations__index_name__to_json(v), None => Value::Null });
+    m.insert("pod_type".into(), match (&p.pod_type) { Some(v) => iface_index_operations__pod_type__to_json(v), None => Value::Null });
+    m.insert("pods".into(), match (&p.pods) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("replicas".into(), match (&p.replicas) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("shards".into(), match (&p.shards) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_index_operations__index_status__to_json(p: &iface_index_operations::IndexStatus) -> Value {
+    let mut m = Map::new();
+    m.insert("host".into(), match (&p.host) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("port".into(), match (&p.port) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("ready".into(), match (&p.ready) { Some(v) => Value::Bool(*(v)), None => Value::Null });
+    m.insert("state".into(), match (&p.state) { Some(v) => iface_index_operations__index_state__to_json(v), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_index_operations__index_state__to_json(p: &iface_index_operations::IndexState) -> Value {
+    let mut m = Map::new();
+    m.insert("value".into(), Value::String((&p.value).clone()));
+    Value::Object(m)
+}
+
 fn iface_index_operations__create_collection_params__to_json(p: &iface_index_operations::CreateCollectionParams) -> Value {
     let mut m = Map::new();
     m.insert("name".into(), iface_index_operations__collection_name__to_json(&p.name));
     m.insert("source".into(), iface_index_operations__index_name__to_json(&p.source));
+    Value::Object(m)
+}
+
+fn iface_index_operations__describe_collection_params__to_json(p: &iface_index_operations::DescribeCollectionParams) -> Value {
+    let mut m = Map::new();
+    m.insert("collection_name".into(), Value::String((&p.collection_name).clone()));
+    Value::Object(m)
+}
+
+fn iface_index_operations__delete_collection_params__to_json(p: &iface_index_operations::DeleteCollectionParams) -> Value {
+    let mut m = Map::new();
+    m.insert("collection_name".into(), Value::String((&p.collection_name).clone()));
     Value::Object(m)
 }
 
@@ -442,43 +538,348 @@ fn iface_index_operations__create_index_params__to_json(p: &iface_index_operatio
     Value::Object(m)
 }
 
+fn iface_index_operations__describe_index_params__to_json(p: &iface_index_operations::DescribeIndexParams) -> Value {
+    let mut m = Map::new();
+    m.insert("index_name".into(), Value::String((&p.index_name).clone()));
+    Value::Object(m)
+}
+
 fn iface_index_operations__configure_index_params__to_json(p: &iface_index_operations::ConfigureIndexParams) -> Value {
     let mut m = Map::new();
+    m.insert("index_name".into(), Value::String((&p.index_name).clone()));
     m.insert("pod_type".into(), match (&p.pod_type) { Some(v) => iface_index_operations__pod_type__to_json(v), None => Value::Null });
     m.insert("replicas".into(), match (&p.replicas) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
     Value::Object(m)
 }
 
+fn iface_index_operations__delete_index_params__to_json(p: &iface_index_operations::DeleteIndexParams) -> Value {
+    let mut m = Map::new();
+    m.insert("index_name".into(), Value::String((&p.index_name).clone()));
+    Value::Object(m)
+}
+
+fn iface_index_operations__collections_list__from_json(v: &Value) -> Option<iface_index_operations::CollectionsList> {
+    let m = v.as_object()?;
+    Some(iface_index_operations::CollectionsList {
+        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+    })
+}
+
+fn iface_index_operations__collection_name__from_json(v: &Value) -> Option<iface_index_operations::CollectionName> {
+    let m = v.as_object()?;
+    Some(iface_index_operations::CollectionName {
+        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+    })
+}
+
+fn iface_index_operations__index_name__from_json(v: &Value) -> Option<iface_index_operations::IndexName> {
+    let m = v.as_object()?;
+    Some(iface_index_operations::IndexName {
+        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+    })
+}
+
+fn iface_index_operations__collection__from_json(v: &Value) -> Option<iface_index_operations::Collection> {
+    let m = v.as_object()?;
+    Some(iface_index_operations::Collection {
+        name: match m.get("name").and_then(|v| iface_index_operations__collection_name__from_json(v)) { Some(x) => x, None => return None },
+        size: m.get("size").and_then(|v| (v).as_i64()).unwrap_or_default(),
+        status: match m.get("status").and_then(|v| iface_index_operations__collection_state__from_json(v)) { Some(x) => x, None => return None },
+    })
+}
+
+fn iface_index_operations__collection_state__from_json(v: &Value) -> Option<iface_index_operations::CollectionState> {
+    let m = v.as_object()?;
+    Some(iface_index_operations::CollectionState {
+        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+    })
+}
+
+fn iface_index_operations__indexes_list__from_json(v: &Value) -> Option<iface_index_operations::IndexesList> {
+    let m = v.as_object()?;
+    Some(iface_index_operations::IndexesList {
+        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+    })
+}
+
+fn iface_index_operations__vector_dimensionality__from_json(v: &Value) -> Option<iface_index_operations::VectorDimensionality> {
+    let m = v.as_object()?;
+    Some(iface_index_operations::VectorDimensionality {
+        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+    })
+}
+
+fn iface_index_operations__index_metric__from_json(v: &Value) -> Option<iface_index_operations::IndexMetric> {
+    let m = v.as_object()?;
+    Some(iface_index_operations::IndexMetric {
+        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+    })
+}
+
+fn iface_index_operations__pod_type__from_json(v: &Value) -> Option<iface_index_operations::PodType> {
+    let m = v.as_object()?;
+    Some(iface_index_operations::PodType {
+        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+    })
+}
+
+fn iface_index_operations__index__from_json(v: &Value) -> Option<iface_index_operations::Index> {
+    let m = v.as_object()?;
+    Some(iface_index_operations::Index {
+        database: m.get("database").filter(|v| !v.is_null()).and_then(|v| iface_index_operations__index_database__from_json(v)),
+        status: m.get("status").filter(|v| !v.is_null()).and_then(|v| iface_index_operations__index_status__from_json(v)),
+    })
+}
+
+fn iface_index_operations__index_database__from_json(v: &Value) -> Option<iface_index_operations::IndexDatabase> {
+    let m = v.as_object()?;
+    Some(iface_index_operations::IndexDatabase {
+        dimension: m.get("dimension").filter(|v| !v.is_null()).and_then(|v| iface_index_operations__vector_dimensionality__from_json(v)),
+        metric: m.get("metric").filter(|v| !v.is_null()).and_then(|v| iface_index_operations__index_metric__from_json(v)),
+        name: m.get("name").filter(|v| !v.is_null()).and_then(|v| iface_index_operations__index_name__from_json(v)),
+        pod_type: m.get("pod_type").filter(|v| !v.is_null()).and_then(|v| iface_index_operations__pod_type__from_json(v)),
+        pods: m.get("pods").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        replicas: m.get("replicas").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        shards: m.get("shards").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+    })
+}
+
+fn iface_index_operations__index_status__from_json(v: &Value) -> Option<iface_index_operations::IndexStatus> {
+    let m = v.as_object()?;
+    Some(iface_index_operations::IndexStatus {
+        host: m.get("host").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        port: m.get("port").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        ready: m.get("ready").filter(|v| !v.is_null()).and_then(|v| (v).as_bool()),
+        state: m.get("state").filter(|v| !v.is_null()).and_then(|v| iface_index_operations__index_state__from_json(v)),
+    })
+}
+
+fn iface_index_operations__index_state__from_json(v: &Value) -> Option<iface_index_operations::IndexState> {
+    let m = v.as_object()?;
+    Some(iface_index_operations::IndexState {
+        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+    })
+}
+
+fn iface_index_operations__list_collections__ok(body: String) -> Result<iface_index_operations::CollectionsList, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match iface_index_operations__collections_list__from_json(&v) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_index_operations__list_collections__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
+fn iface_index_operations__create_collection__ok(body: String) -> Result<String, crate::runtime::DispatchError> {
+    Ok(body)
+}
+
+fn iface_index_operations__create_collection__err(e: crate::runtime::DispatchError) -> iface_index_operations::CreateCollectionError {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => match status {
+            400u16 => iface_index_operations::CreateCollectionError::BadRequest(body),
+            409u16 => iface_index_operations::CreateCollectionError::Conflict(body),
+            500u16 => iface_index_operations::CreateCollectionError::InternalServerError(body),
+            _ => iface_index_operations::CreateCollectionError::Other(body),
+        },
+        crate::runtime::DispatchError::Transport(m) => iface_index_operations::CreateCollectionError::Other(m),
+    }
+}
+
+fn iface_index_operations__describe_collection__ok(body: String) -> Result<iface_index_operations::Collection, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match iface_index_operations__collection__from_json(&v) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_index_operations__describe_collection__err(e: crate::runtime::DispatchError) -> iface_index_operations::DescribeCollectionError {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => match status {
+            404u16 => iface_index_operations::DescribeCollectionError::NotFound(body),
+            500u16 => iface_index_operations::DescribeCollectionError::InternalServerError(body),
+            _ => iface_index_operations::DescribeCollectionError::Other(body),
+        },
+        crate::runtime::DispatchError::Transport(m) => iface_index_operations::DescribeCollectionError::Other(m),
+    }
+}
+
+fn iface_index_operations__delete_collection__ok(body: String) -> Result<String, crate::runtime::DispatchError> {
+    Ok(body)
+}
+
+fn iface_index_operations__delete_collection__err(e: crate::runtime::DispatchError) -> iface_index_operations::DeleteCollectionError {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => match status {
+            404u16 => iface_index_operations::DeleteCollectionError::NotFound(body),
+            500u16 => iface_index_operations::DeleteCollectionError::InternalServerError(body),
+            _ => iface_index_operations::DeleteCollectionError::Other(body),
+        },
+        crate::runtime::DispatchError::Transport(m) => iface_index_operations::DeleteCollectionError::Other(m),
+    }
+}
+
+fn iface_index_operations__list_indexes__ok(body: String) -> Result<iface_index_operations::IndexesList, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match iface_index_operations__indexes_list__from_json(&v) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_index_operations__list_indexes__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
+fn iface_index_operations__create_index__ok(body: String) -> Result<String, crate::runtime::DispatchError> {
+    Ok(body)
+}
+
+fn iface_index_operations__create_index__err(e: crate::runtime::DispatchError) -> iface_index_operations::CreateIndexError {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => match status {
+            400u16 => iface_index_operations::CreateIndexError::BadRequest(body),
+            409u16 => iface_index_operations::CreateIndexError::Conflict(body),
+            500u16 => iface_index_operations::CreateIndexError::InternalServerError(body),
+            _ => iface_index_operations::CreateIndexError::Other(body),
+        },
+        crate::runtime::DispatchError::Transport(m) => iface_index_operations::CreateIndexError::Other(m),
+    }
+}
+
+fn iface_index_operations__describe_index__ok(body: String) -> Result<iface_index_operations::Index, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match iface_index_operations__index__from_json(&v) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_index_operations__describe_index__err(e: crate::runtime::DispatchError) -> iface_index_operations::DescribeIndexError {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => match status {
+            404u16 => iface_index_operations::DescribeIndexError::NotFound(body),
+            500u16 => iface_index_operations::DescribeIndexError::InternalServerError(body),
+            _ => iface_index_operations::DescribeIndexError::Other(body),
+        },
+        crate::runtime::DispatchError::Transport(m) => iface_index_operations::DescribeIndexError::Other(m),
+    }
+}
+
+fn iface_index_operations__configure_index__ok(body: String) -> Result<String, crate::runtime::DispatchError> {
+    Ok(body)
+}
+
+fn iface_index_operations__configure_index__err(e: crate::runtime::DispatchError) -> iface_index_operations::ConfigureIndexError {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => match status {
+            400u16 => iface_index_operations::ConfigureIndexError::BadRequest(body),
+            404u16 => iface_index_operations::ConfigureIndexError::NotFound(body),
+            500u16 => iface_index_operations::ConfigureIndexError::InternalServerError(body),
+            _ => iface_index_operations::ConfigureIndexError::Other(body),
+        },
+        crate::runtime::DispatchError::Transport(m) => iface_index_operations::ConfigureIndexError::Other(m),
+    }
+}
+
+fn iface_index_operations__delete_index__ok(body: String) -> Result<String, crate::runtime::DispatchError> {
+    Ok(body)
+}
+
+fn iface_index_operations__delete_index__err(e: crate::runtime::DispatchError) -> iface_index_operations::DeleteIndexError {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => match status {
+            404u16 => iface_index_operations::DeleteIndexError::NotFound(body),
+            500u16 => iface_index_operations::DeleteIndexError::InternalServerError(body),
+            _ => iface_index_operations::DeleteIndexError::Other(body),
+        },
+        crate::runtime::DispatchError::Transport(m) => iface_index_operations::DeleteIndexError::Other(m),
+    }
+}
+
 impl iface_index_operations::Guest for crate::Component {
-    fn list_collections() -> Result<String, String> {
-        dispatch(&OP_INDEX_OPERATIONS_LIST_COLLECTIONS, Value::Object(Map::new()))
+    fn list_collections() -> Result<iface_index_operations::CollectionsList, String> {
+        match dispatch(&OP_INDEX_OPERATIONS_LIST_COLLECTIONS, Value::Object(Map::new())).and_then(iface_index_operations__list_collections__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_index_operations__list_collections__err(e)),
+        }
     }
-    fn create_collection(params: iface_index_operations::CreateCollectionParams) -> Result<String, String> {
+    fn create_collection(params: iface_index_operations::CreateCollectionParams) -> Result<String, iface_index_operations::CreateCollectionError> {
         let json = iface_index_operations__create_collection_params__to_json(&params);
-        dispatch(&OP_INDEX_OPERATIONS_CREATE_COLLECTION, json)
+        match dispatch(&OP_INDEX_OPERATIONS_CREATE_COLLECTION, json).and_then(iface_index_operations__create_collection__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_index_operations__create_collection__err(e)),
+        }
     }
-    fn describe_collection() -> Result<String, String> {
-        dispatch(&OP_INDEX_OPERATIONS_DESCRIBE_COLLECTION, Value::Object(Map::new()))
+    fn describe_collection(params: iface_index_operations::DescribeCollectionParams) -> Result<iface_index_operations::Collection, iface_index_operations::DescribeCollectionError> {
+        let json = iface_index_operations__describe_collection_params__to_json(&params);
+        match dispatch(&OP_INDEX_OPERATIONS_DESCRIBE_COLLECTION, json).and_then(iface_index_operations__describe_collection__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_index_operations__describe_collection__err(e)),
+        }
     }
-    fn delete_collection() -> Result<String, String> {
-        dispatch(&OP_INDEX_OPERATIONS_DELETE_COLLECTION, Value::Object(Map::new()))
+    fn delete_collection(params: iface_index_operations::DeleteCollectionParams) -> Result<String, iface_index_operations::DeleteCollectionError> {
+        let json = iface_index_operations__delete_collection_params__to_json(&params);
+        match dispatch(&OP_INDEX_OPERATIONS_DELETE_COLLECTION, json).and_then(iface_index_operations__delete_collection__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_index_operations__delete_collection__err(e)),
+        }
     }
-    fn list_indexes() -> Result<String, String> {
-        dispatch(&OP_INDEX_OPERATIONS_LIST_INDEXES, Value::Object(Map::new()))
+    fn list_indexes() -> Result<iface_index_operations::IndexesList, String> {
+        match dispatch(&OP_INDEX_OPERATIONS_LIST_INDEXES, Value::Object(Map::new())).and_then(iface_index_operations__list_indexes__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_index_operations__list_indexes__err(e)),
+        }
     }
-    fn create_index(params: iface_index_operations::CreateIndexParams) -> Result<String, String> {
+    fn create_index(params: iface_index_operations::CreateIndexParams) -> Result<String, iface_index_operations::CreateIndexError> {
         let json = iface_index_operations__create_index_params__to_json(&params);
-        dispatch(&OP_INDEX_OPERATIONS_CREATE_INDEX, json)
+        match dispatch(&OP_INDEX_OPERATIONS_CREATE_INDEX, json).and_then(iface_index_operations__create_index__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_index_operations__create_index__err(e)),
+        }
     }
-    fn describe_index() -> Result<String, String> {
-        dispatch(&OP_INDEX_OPERATIONS_DESCRIBE_INDEX, Value::Object(Map::new()))
+    fn describe_index(params: iface_index_operations::DescribeIndexParams) -> Result<iface_index_operations::Index, iface_index_operations::DescribeIndexError> {
+        let json = iface_index_operations__describe_index_params__to_json(&params);
+        match dispatch(&OP_INDEX_OPERATIONS_DESCRIBE_INDEX, json).and_then(iface_index_operations__describe_index__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_index_operations__describe_index__err(e)),
+        }
     }
-    fn configure_index(params: iface_index_operations::ConfigureIndexParams) -> Result<String, String> {
+    fn configure_index(params: iface_index_operations::ConfigureIndexParams) -> Result<String, iface_index_operations::ConfigureIndexError> {
         let json = iface_index_operations__configure_index_params__to_json(&params);
-        dispatch(&OP_INDEX_OPERATIONS_CONFIGURE_INDEX, json)
+        match dispatch(&OP_INDEX_OPERATIONS_CONFIGURE_INDEX, json).and_then(iface_index_operations__configure_index__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_index_operations__configure_index__err(e)),
+        }
     }
-    fn delete_index() -> Result<String, String> {
-        dispatch(&OP_INDEX_OPERATIONS_DELETE_INDEX, Value::Object(Map::new()))
+    fn delete_index(params: iface_index_operations::DeleteIndexParams) -> Result<String, iface_index_operations::DeleteIndexError> {
+        let json = iface_index_operations__delete_index_params__to_json(&params);
+        match dispatch(&OP_INDEX_OPERATIONS_DELETE_INDEX, json).and_then(iface_index_operations__delete_index__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_index_operations__delete_index__err(e)),
+        }
     }
 }
 use crate::exports::autostamp::pinecone::vector_operations as iface_vector_operations;
@@ -487,7 +888,7 @@ const OP_VECTOR_OPERATIONS_DESCRIBE_INDEX_STATS: OpSpec = OpSpec {
     method: "POST",
     path_template: "/describe_index_stats",
     fields: &[
-        FieldSpec { snake: "filter", location: FieldLocation::Body },
+        FieldSpec { snake: "filter", wire: "filter", location: FieldLocation::Body },
     ],
     auth: &[
         AuthApply { secret_key: "ApiKey", kind: AuthKind::ApiKeyHeader("Api-Key") },
@@ -498,14 +899,14 @@ const OP_VECTOR_OPERATIONS_QUERY: OpSpec = OpSpec {
     method: "POST",
     path_template: "/query",
     fields: &[
-        FieldSpec { snake: "filter", location: FieldLocation::Body },
-        FieldSpec { snake: "id", location: FieldLocation::Body },
-        FieldSpec { snake: "include_metadata", location: FieldLocation::Body },
-        FieldSpec { snake: "include_values", location: FieldLocation::Body },
-        FieldSpec { snake: "namespace", location: FieldLocation::Body },
-        FieldSpec { snake: "sparse_vector", location: FieldLocation::Body },
-        FieldSpec { snake: "top_k", location: FieldLocation::Body },
-        FieldSpec { snake: "vector", location: FieldLocation::Body },
+        FieldSpec { snake: "filter", wire: "filter", location: FieldLocation::Body },
+        FieldSpec { snake: "id", wire: "id", location: FieldLocation::Body },
+        FieldSpec { snake: "include_metadata", wire: "includeMetadata", location: FieldLocation::Body },
+        FieldSpec { snake: "include_values", wire: "includeValues", location: FieldLocation::Body },
+        FieldSpec { snake: "namespace", wire: "namespace", location: FieldLocation::Body },
+        FieldSpec { snake: "sparse_vector", wire: "sparseVector", location: FieldLocation::Body },
+        FieldSpec { snake: "top_k", wire: "topK", location: FieldLocation::Body },
+        FieldSpec { snake: "vector", wire: "vector", location: FieldLocation::Body },
     ],
     auth: &[
         AuthApply { secret_key: "ApiKey", kind: AuthKind::ApiKeyHeader("Api-Key") },
@@ -516,10 +917,10 @@ const OP_VECTOR_OPERATIONS_DELETE: OpSpec = OpSpec {
     method: "POST",
     path_template: "/vectors/delete",
     fields: &[
-        FieldSpec { snake: "delete_all", location: FieldLocation::Body },
-        FieldSpec { snake: "filter", location: FieldLocation::Body },
-        FieldSpec { snake: "ids", location: FieldLocation::Body },
-        FieldSpec { snake: "namespace", location: FieldLocation::Body },
+        FieldSpec { snake: "delete_all", wire: "deleteAll", location: FieldLocation::Body },
+        FieldSpec { snake: "filter", wire: "filter", location: FieldLocation::Body },
+        FieldSpec { snake: "ids", wire: "ids", location: FieldLocation::Body },
+        FieldSpec { snake: "namespace", wire: "namespace", location: FieldLocation::Body },
     ],
     auth: &[
         AuthApply { secret_key: "ApiKey", kind: AuthKind::ApiKeyHeader("Api-Key") },
@@ -530,8 +931,8 @@ const OP_VECTOR_OPERATIONS_FETCH: OpSpec = OpSpec {
     method: "POST",
     path_template: "/vectors/fetch",
     fields: &[
-        FieldSpec { snake: "ids", location: FieldLocation::Body },
-        FieldSpec { snake: "namespace", location: FieldLocation::Body },
+        FieldSpec { snake: "ids", wire: "ids", location: FieldLocation::Body },
+        FieldSpec { snake: "namespace", wire: "namespace", location: FieldLocation::Body },
     ],
     auth: &[
         AuthApply { secret_key: "ApiKey", kind: AuthKind::ApiKeyHeader("Api-Key") },
@@ -542,11 +943,11 @@ const OP_VECTOR_OPERATIONS_UPDATE: OpSpec = OpSpec {
     method: "POST",
     path_template: "/vectors/update",
     fields: &[
-        FieldSpec { snake: "id", location: FieldLocation::Body },
-        FieldSpec { snake: "namespace", location: FieldLocation::Body },
-        FieldSpec { snake: "set_metadata", location: FieldLocation::Body },
-        FieldSpec { snake: "sparse_values", location: FieldLocation::Body },
-        FieldSpec { snake: "values", location: FieldLocation::Body },
+        FieldSpec { snake: "id", wire: "id", location: FieldLocation::Body },
+        FieldSpec { snake: "namespace", wire: "namespace", location: FieldLocation::Body },
+        FieldSpec { snake: "set_metadata", wire: "setMetadata", location: FieldLocation::Body },
+        FieldSpec { snake: "sparse_values", wire: "sparseValues", location: FieldLocation::Body },
+        FieldSpec { snake: "values", wire: "values", location: FieldLocation::Body },
     ],
     auth: &[
         AuthApply { secret_key: "ApiKey", kind: AuthKind::ApiKeyHeader("Api-Key") },
@@ -557,8 +958,8 @@ const OP_VECTOR_OPERATIONS_UPSERT: OpSpec = OpSpec {
     method: "POST",
     path_template: "/vectors/upsert",
     fields: &[
-        FieldSpec { snake: "namespace", location: FieldLocation::Body },
-        FieldSpec { snake: "vectors", location: FieldLocation::Body },
+        FieldSpec { snake: "namespace", wire: "namespace", location: FieldLocation::Body },
+        FieldSpec { snake: "vectors", wire: "vectors", location: FieldLocation::Body },
     ],
     auth: &[
         AuthApply { secret_key: "ApiKey", kind: AuthKind::ApiKeyHeader("Api-Key") },
@@ -566,6 +967,27 @@ const OP_VECTOR_OPERATIONS_UPSERT: OpSpec = OpSpec {
 };
 
 fn iface_vector_operations__vector_filter__to_json(p: &iface_vector_operations::VectorFilter) -> Value {
+    let mut m = Map::new();
+    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_vector_operations__describe_index_stats_response__to_json(p: &iface_vector_operations::DescribeIndexStatsResponse) -> Value {
+    let mut m = Map::new();
+    m.insert("dimension".into(), match (&p.dimension) { Some(v) => iface_vector_operations__vector_dimensionality__to_json(v), None => Value::Null });
+    m.insert("indexFullness".into(), match (&p.index_fullness) { Some(v) => serde_json::Number::from_f64(*(v)).map(Value::Number).unwrap_or(Value::Null), None => Value::Null });
+    m.insert("namespaces".into(), match (&p.namespaces) { Some(v) => iface_vector_operations__describe_index_stats_response_namespaces__to_json(v), None => Value::Null });
+    m.insert("totalVectorCount".into(), match (&p.total_vector_count) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_vector_operations__vector_dimensionality__to_json(p: &iface_vector_operations::VectorDimensionality) -> Value {
+    let mut m = Map::new();
+    m.insert("value".into(), Value::String((&p.value).clone()));
+    Value::Object(m)
+}
+
+fn iface_vector_operations__describe_index_stats_response_namespaces__to_json(p: &iface_vector_operations::DescribeIndexStatsResponseNamespaces) -> Value {
     let mut m = Map::new();
     m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
     Value::Object(m)
@@ -596,9 +1018,57 @@ fn iface_vector_operations__vector_data__to_json(p: &iface_vector_operations::Ve
     Value::Object(m)
 }
 
+fn iface_vector_operations__query_response__to_json(p: &iface_vector_operations::QueryResponse) -> Value {
+    let mut m = Map::new();
+    m.insert("matches".into(), match (&p.matches) { Some(v) => Value::Array((v).iter().map(|v| iface_vector_operations__query_match__to_json(v)).collect()), None => Value::Null });
+    m.insert("namespace".into(), match (&p.namespace) { Some(v) => iface_vector_operations__namespace_name__to_json(v), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_vector_operations__query_match__to_json(p: &iface_vector_operations::QueryMatch) -> Value {
+    let mut m = Map::new();
+    m.insert("id".into(), iface_vector_operations__vector_id__to_json(&p.id));
+    m.insert("metadata".into(), match (&p.metadata) { Some(v) => iface_vector_operations__vector_metadata__to_json(v), None => Value::Null });
+    m.insert("score".into(), match (&p.score) { Some(v) => serde_json::Number::from_f64(*(v)).map(Value::Number).unwrap_or(Value::Null), None => Value::Null });
+    m.insert("sparseValues".into(), match (&p.sparse_values) { Some(v) => iface_vector_operations__sparse_vector_data__to_json(v), None => Value::Null });
+    m.insert("values".into(), match (&p.values) { Some(v) => iface_vector_operations__vector_data__to_json(v), None => Value::Null });
+    Value::Object(m)
+}
+
 fn iface_vector_operations__vector_metadata__to_json(p: &iface_vector_operations::VectorMetadata) -> Value {
     let mut m = Map::new();
     m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_vector_operations__delete_response__to_json(p: &iface_vector_operations::DeleteResponse) -> Value {
+    let mut m = Map::new();
+    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_vector_operations__fetch_response__to_json(p: &iface_vector_operations::FetchResponse) -> Value {
+    let mut m = Map::new();
+    m.insert("namespace".into(), match (&p.namespace) { Some(v) => iface_vector_operations__namespace_name__to_json(v), None => Value::Null });
+    m.insert("vectors".into(), match (&p.vectors) { Some(v) => iface_vector_operations__fetch_response_vectors__to_json(v), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_vector_operations__fetch_response_vectors__to_json(p: &iface_vector_operations::FetchResponseVectors) -> Value {
+    let mut m = Map::new();
+    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_vector_operations__update_response__to_json(p: &iface_vector_operations::UpdateResponse) -> Value {
+    let mut m = Map::new();
+    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_vector_operations__upsert_response__to_json(p: &iface_vector_operations::UpsertResponse) -> Value {
+    let mut m = Map::new();
+    m.insert("upsertedCount".into(), match (&p.upserted_count) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
     Value::Object(m)
 }
 
@@ -654,30 +1124,271 @@ fn iface_vector_operations__upsert_params__to_json(p: &iface_vector_operations::
     Value::Object(m)
 }
 
+fn iface_vector_operations__describe_index_stats_response__from_json(v: &Value) -> Option<iface_vector_operations::DescribeIndexStatsResponse> {
+    let m = v.as_object()?;
+    Some(iface_vector_operations::DescribeIndexStatsResponse {
+        dimension: m.get("dimension").filter(|v| !v.is_null()).and_then(|v| iface_vector_operations__vector_dimensionality__from_json(v)),
+        index_fullness: m.get("indexFullness").filter(|v| !v.is_null()).and_then(|v| (v).as_f64()),
+        namespaces: m.get("namespaces").filter(|v| !v.is_null()).and_then(|v| iface_vector_operations__describe_index_stats_response_namespaces__from_json(v)),
+        total_vector_count: m.get("totalVectorCount").filter(|v| !v.is_null()).and_then(|v| (v).as_i64()),
+    })
+}
+
+fn iface_vector_operations__vector_dimensionality__from_json(v: &Value) -> Option<iface_vector_operations::VectorDimensionality> {
+    let m = v.as_object()?;
+    Some(iface_vector_operations::VectorDimensionality {
+        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+    })
+}
+
+fn iface_vector_operations__describe_index_stats_response_namespaces__from_json(v: &Value) -> Option<iface_vector_operations::DescribeIndexStatsResponseNamespaces> {
+    let m = v.as_object()?;
+    Some(iface_vector_operations::DescribeIndexStatsResponseNamespaces {
+        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    })
+}
+
+fn iface_vector_operations__vector_id__from_json(v: &Value) -> Option<iface_vector_operations::VectorId> {
+    let m = v.as_object()?;
+    Some(iface_vector_operations::VectorId {
+        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+    })
+}
+
+fn iface_vector_operations__namespace_name__from_json(v: &Value) -> Option<iface_vector_operations::NamespaceName> {
+    let m = v.as_object()?;
+    Some(iface_vector_operations::NamespaceName {
+        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+    })
+}
+
+fn iface_vector_operations__sparse_vector_data__from_json(v: &Value) -> Option<iface_vector_operations::SparseVectorData> {
+    let m = v.as_object()?;
+    Some(iface_vector_operations::SparseVectorData {
+        indices: m.get("indices").and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| (x).as_i64()).collect())).unwrap_or_default(),
+        values: m.get("values").and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| (x).as_f64()).collect())).unwrap_or_default(),
+    })
+}
+
+fn iface_vector_operations__vector_data__from_json(v: &Value) -> Option<iface_vector_operations::VectorData> {
+    let m = v.as_object()?;
+    Some(iface_vector_operations::VectorData {
+        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+    })
+}
+
+fn iface_vector_operations__query_response__from_json(v: &Value) -> Option<iface_vector_operations::QueryResponse> {
+    let m = v.as_object()?;
+    Some(iface_vector_operations::QueryResponse {
+        matches: m.get("matches").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| iface_vector_operations__query_match__from_json(x)).collect())),
+        namespace: m.get("namespace").filter(|v| !v.is_null()).and_then(|v| iface_vector_operations__namespace_name__from_json(v)),
+    })
+}
+
+fn iface_vector_operations__query_match__from_json(v: &Value) -> Option<iface_vector_operations::QueryMatch> {
+    let m = v.as_object()?;
+    Some(iface_vector_operations::QueryMatch {
+        id: match m.get("id").and_then(|v| iface_vector_operations__vector_id__from_json(v)) { Some(x) => x, None => return None },
+        metadata: m.get("metadata").filter(|v| !v.is_null()).and_then(|v| iface_vector_operations__vector_metadata__from_json(v)),
+        score: m.get("score").filter(|v| !v.is_null()).and_then(|v| (v).as_f64()),
+        sparse_values: m.get("sparseValues").filter(|v| !v.is_null()).and_then(|v| iface_vector_operations__sparse_vector_data__from_json(v)),
+        values: m.get("values").filter(|v| !v.is_null()).and_then(|v| iface_vector_operations__vector_data__from_json(v)),
+    })
+}
+
+fn iface_vector_operations__vector_metadata__from_json(v: &Value) -> Option<iface_vector_operations::VectorMetadata> {
+    let m = v.as_object()?;
+    Some(iface_vector_operations::VectorMetadata {
+        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    })
+}
+
+fn iface_vector_operations__delete_response__from_json(v: &Value) -> Option<iface_vector_operations::DeleteResponse> {
+    let m = v.as_object()?;
+    Some(iface_vector_operations::DeleteResponse {
+        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    })
+}
+
+fn iface_vector_operations__fetch_response__from_json(v: &Value) -> Option<iface_vector_operations::FetchResponse> {
+    let m = v.as_object()?;
+    Some(iface_vector_operations::FetchResponse {
+        namespace: m.get("namespace").filter(|v| !v.is_null()).and_then(|v| iface_vector_operations__namespace_name__from_json(v)),
+        vectors: m.get("vectors").filter(|v| !v.is_null()).and_then(|v| iface_vector_operations__fetch_response_vectors__from_json(v)),
+    })
+}
+
+fn iface_vector_operations__fetch_response_vectors__from_json(v: &Value) -> Option<iface_vector_operations::FetchResponseVectors> {
+    let m = v.as_object()?;
+    Some(iface_vector_operations::FetchResponseVectors {
+        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    })
+}
+
+fn iface_vector_operations__update_response__from_json(v: &Value) -> Option<iface_vector_operations::UpdateResponse> {
+    let m = v.as_object()?;
+    Some(iface_vector_operations::UpdateResponse {
+        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    })
+}
+
+fn iface_vector_operations__upsert_response__from_json(v: &Value) -> Option<iface_vector_operations::UpsertResponse> {
+    let m = v.as_object()?;
+    Some(iface_vector_operations::UpsertResponse {
+        upserted_count: m.get("upsertedCount").filter(|v| !v.is_null()).and_then(|v| (v).as_i64()),
+    })
+}
+
+fn iface_vector_operations__describe_index_stats__ok(body: String) -> Result<iface_vector_operations::DescribeIndexStatsResponse, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match iface_vector_operations__describe_index_stats_response__from_json(&v) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_vector_operations__describe_index_stats__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
+fn iface_vector_operations__query__ok(body: String) -> Result<iface_vector_operations::QueryResponse, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match iface_vector_operations__query_response__from_json(&v) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_vector_operations__query__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
+fn iface_vector_operations__delete__ok(body: String) -> Result<iface_vector_operations::DeleteResponse, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match iface_vector_operations__delete_response__from_json(&v) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_vector_operations__delete__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
+fn iface_vector_operations__fetch__ok(body: String) -> Result<iface_vector_operations::FetchResponse, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match iface_vector_operations__fetch_response__from_json(&v) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_vector_operations__fetch__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
+fn iface_vector_operations__update__ok(body: String) -> Result<iface_vector_operations::UpdateResponse, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match iface_vector_operations__update_response__from_json(&v) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_vector_operations__update__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
+fn iface_vector_operations__upsert__ok(body: String) -> Result<iface_vector_operations::UpsertResponse, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match iface_vector_operations__upsert_response__from_json(&v) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_vector_operations__upsert__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
 impl iface_vector_operations::Guest for crate::Component {
-    fn describe_index_stats(params: iface_vector_operations::DescribeIndexStatsParams) -> Result<String, String> {
+    fn describe_index_stats(params: iface_vector_operations::DescribeIndexStatsParams) -> Result<iface_vector_operations::DescribeIndexStatsResponse, String> {
         let json = iface_vector_operations__describe_index_stats_params__to_json(&params);
-        dispatch(&OP_VECTOR_OPERATIONS_DESCRIBE_INDEX_STATS, json)
+        match dispatch(&OP_VECTOR_OPERATIONS_DESCRIBE_INDEX_STATS, json).and_then(iface_vector_operations__describe_index_stats__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_vector_operations__describe_index_stats__err(e)),
+        }
     }
-    fn query(params: iface_vector_operations::QueryParams) -> Result<String, String> {
+    fn query(params: iface_vector_operations::QueryParams) -> Result<iface_vector_operations::QueryResponse, String> {
         let json = iface_vector_operations__query_params__to_json(&params);
-        dispatch(&OP_VECTOR_OPERATIONS_QUERY, json)
+        match dispatch(&OP_VECTOR_OPERATIONS_QUERY, json).and_then(iface_vector_operations__query__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_vector_operations__query__err(e)),
+        }
     }
-    fn delete(params: iface_vector_operations::DeleteParams) -> Result<String, String> {
+    fn delete(params: iface_vector_operations::DeleteParams) -> Result<iface_vector_operations::DeleteResponse, String> {
         let json = iface_vector_operations__delete_params__to_json(&params);
-        dispatch(&OP_VECTOR_OPERATIONS_DELETE, json)
+        match dispatch(&OP_VECTOR_OPERATIONS_DELETE, json).and_then(iface_vector_operations__delete__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_vector_operations__delete__err(e)),
+        }
     }
-    fn fetch(params: iface_vector_operations::FetchParams) -> Result<String, String> {
+    fn fetch(params: iface_vector_operations::FetchParams) -> Result<iface_vector_operations::FetchResponse, String> {
         let json = iface_vector_operations__fetch_params__to_json(&params);
-        dispatch(&OP_VECTOR_OPERATIONS_FETCH, json)
+        match dispatch(&OP_VECTOR_OPERATIONS_FETCH, json).and_then(iface_vector_operations__fetch__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_vector_operations__fetch__err(e)),
+        }
     }
-    fn update(params: iface_vector_operations::UpdateParams) -> Result<String, String> {
+    fn update(params: iface_vector_operations::UpdateParams) -> Result<iface_vector_operations::UpdateResponse, String> {
         let json = iface_vector_operations__update_params__to_json(&params);
-        dispatch(&OP_VECTOR_OPERATIONS_UPDATE, json)
+        match dispatch(&OP_VECTOR_OPERATIONS_UPDATE, json).and_then(iface_vector_operations__update__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_vector_operations__update__err(e)),
+        }
     }
-    fn upsert(params: iface_vector_operations::UpsertParams) -> Result<String, String> {
+    fn upsert(params: iface_vector_operations::UpsertParams) -> Result<iface_vector_operations::UpsertResponse, String> {
         let json = iface_vector_operations__upsert_params__to_json(&params);
-        dispatch(&OP_VECTOR_OPERATIONS_UPSERT, json)
+        match dispatch(&OP_VECTOR_OPERATIONS_UPSERT, json).and_then(iface_vector_operations__upsert__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_vector_operations__upsert__err(e)),
+        }
     }
 }
 

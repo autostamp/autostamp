@@ -1,6 +1,19 @@
-package autostamp:rawg@0.3.0;
+package autostamp:rawg@0.5.0;
 
 interface creator-roles {
+  record list-op-response {
+    count: s32,
+    next: option<string>,
+    previous: option<string>,
+    results: list<position>
+  }
+
+  record position {
+    id: option<s32>,
+    name: option<string>,
+    slug: option<string>
+  }
+
   /// Get a list of creator positions (jobs).
   record list-op-params {
     /// A page number within the paginated result set.
@@ -8,12 +21,42 @@ interface creator-roles {
     /// Number of results to return per page.
     page-size: option<s32>
   }
-  list-op: func(params: list-op-params) -> result<string, string>;
+  list-op: func(params: list-op-params) -> result<list-op-response, string>;
 
 }
 
 
 interface creators {
+  record list-op-response {
+    count: s32,
+    next: option<string>,
+    previous: option<string>,
+    results: list<person>
+  }
+
+  record person {
+    games-count: option<s32>,
+    id: option<s32>,
+    image: option<string>,
+    image-background: option<string>,
+    name: string,
+    slug: option<string>
+  }
+
+  record person-single {
+    description: option<string>,
+    games-count: option<s32>,
+    id: option<s32>,
+    image: option<string>,
+    image-background: option<string>,
+    name: string,
+    rating: option<string>,
+    rating-top: option<s32>,
+    reviews-count: option<s32>,
+    slug: option<string>,
+    updated: option<string>
+  }
+
   /// Get a list of game creators.
   record list-op-params {
     /// A page number within the paginated result set.
@@ -21,17 +64,41 @@ interface creators {
     /// Number of results to return per page.
     page-size: option<s32>
   }
-  list-op: func(params: list-op-params) -> result<string, string>;
+  list-op: func(params: list-op-params) -> result<list-op-response, string>;
 
   /// Get details of the creator.
   record read-params {
     id: string
   }
-  read: func(params: read-params) -> result<string, string>;
+  read: func(params: read-params) -> result<person-single, string>;
 
 }
 
 interface developers {
+  record list-op-response {
+    count: s32,
+    next: option<string>,
+    previous: option<string>,
+    results: list<developer>
+  }
+
+  record developer {
+    games-count: option<s32>,
+    id: option<s32>,
+    image-background: option<string>,
+    name: string,
+    slug: option<string>
+  }
+
+  record developer-single {
+    description: option<string>,
+    games-count: option<s32>,
+    id: option<s32>,
+    image-background: option<string>,
+    name: string,
+    slug: option<string>
+  }
+
   /// Get a list of game developers.
   record list-op-params {
     /// A page number within the paginated result set.
@@ -39,14 +106,322 @@ interface developers {
     /// Number of results to return per page.
     page-size: option<s32>
   }
-  list-op: func(params: list-op-params) -> result<string, string>;
+  list-op: func(params: list-op-params) -> result<list-op-response, string>;
 
   /// Get details of the developer.
-  read: func() -> result<string, string>;
+  record read-params {
+    /// A unique integer value identifying this Developer.
+    id: string
+  }
+  read: func(params: read-params) -> result<developer-single, string>;
 
 }
 
 interface games {
+  enum game-esrb-rating-name-enum {
+    everyone,
+    everyone-v10,
+    teen,
+    mature,
+    adults-only,
+    rating-pending,
+  }
+
+  enum game-esrb-rating-slug-enum {
+    everyone,
+    everyone-v10-plus,
+    teen,
+    mature,
+    adults-only,
+    rating-pending,
+  }
+
+  record list-op-response {
+    count: s32,
+    next: option<string>,
+    previous: option<string>,
+    results: list<game>
+  }
+
+  record game {
+    added: option<s32>,
+    added-by-status: option<game-added-by-status>,
+    background-image: option<string>,
+    esrb-rating: option<game-esrb-rating>,
+    id: option<s32>,
+    metacritic: option<s32>,
+    name: option<string>,
+    platforms: option<list<game-platforms-item>>,
+    /// in hours
+    playtime: option<s32>,
+    rating: f64,
+    rating-top: option<s32>,
+    ratings: option<game-ratings>,
+    ratings-count: option<s32>,
+    released: option<string>,
+    reviews-text-count: option<string>,
+    slug: option<string>,
+    suggestions-count: option<s32>,
+    tba: option<bool>,
+    updated: option<string>
+  }
+
+  record game-added-by-status {
+    /// JSON-encoded free-form object payload
+    data: option<string>
+  }
+
+  record game-esrb-rating {
+    id: option<s32>,
+    name: option<game-esrb-rating-name-enum>,
+    slug: option<game-esrb-rating-slug-enum>
+  }
+
+  record game-platforms-item {
+    platform: option<game-platforms-item-platform>,
+    released-at: option<string>,
+    requirements: option<game-platforms-item-requirements>
+  }
+
+  record game-platforms-item-platform {
+    id: option<s32>,
+    name: option<string>,
+    slug: option<string>
+  }
+
+  record game-platforms-item-requirements {
+    minimum: option<string>,
+    recommended: option<string>
+  }
+
+  record game-ratings {
+    /// JSON-encoded free-form object payload
+    data: option<string>
+  }
+
+  record additions-list-response {
+    count: s32,
+    next: option<string>,
+    previous: option<string>,
+    results: list<game>
+  }
+
+  record development-team-list-response {
+    count: s32,
+    next: option<string>,
+    previous: option<string>,
+    results: list<game-person-list>
+  }
+
+  record game-person-list {
+    games-count: option<s32>,
+    id: option<s32>,
+    image: option<string>,
+    image-background: option<string>,
+    name: string,
+    slug: option<string>
+  }
+
+  record game-series-list-response {
+    count: s32,
+    next: option<string>,
+    previous: option<string>,
+    results: list<game>
+  }
+
+  record parent-games-list-response {
+    count: s32,
+    next: option<string>,
+    previous: option<string>,
+    results: list<game>
+  }
+
+  record screenshots-list-response {
+    count: s32,
+    next: option<string>,
+    previous: option<string>,
+    results: list<screen-shot>
+  }
+
+  record screen-shot {
+    height: option<s32>,
+    /// Set image as hidden or visible.
+    hidden: option<bool>,
+    id: option<s32>,
+    /// An image file with size up to 20 MB.
+    image: option<string>,
+    width: option<s32>
+  }
+
+  record stores-list-response {
+    count: s32,
+    next: option<string>,
+    previous: option<string>,
+    results: list<game-store-full>
+  }
+
+  record game-store-full {
+    game-id: option<string>,
+    id: option<s32>,
+    store-id: option<string>,
+    url: string
+  }
+
+  record game-single {
+    achievements-count: option<s32>,
+    added: option<s32>,
+    added-by-status: option<game-single-added-by-status>,
+    additions-count: option<s32>,
+    alternative-names: option<list<string>>,
+    background-image: option<string>,
+    background-image-additional: option<string>,
+    creators-count: option<s32>,
+    description: option<string>,
+    esrb-rating: option<game-single-esrb-rating>,
+    game-series-count: option<s32>,
+    id: option<s32>,
+    metacritic: option<s32>,
+    metacritic-platforms: option<list<game-platform-metacritic>>,
+    /// For example "http://www.metacritic.com/game/playstation-4/the-witcher-3-wild-hunt"
+    metacritic-url: option<string>,
+    movies-count: option<s32>,
+    name: option<string>,
+    name-original: option<string>,
+    parent-achievements-count: option<string>,
+    parents-count: option<s32>,
+    platforms: option<list<game-single-platforms-item>>,
+    /// in hours
+    playtime: option<s32>,
+    rating: f64,
+    rating-top: option<s32>,
+    ratings: option<game-single-ratings>,
+    ratings-count: option<s32>,
+    reactions: option<game-single-reactions>,
+    reddit-count: option<s32>,
+    reddit-description: option<string>,
+    reddit-logo: option<string>,
+    reddit-name: option<string>,
+    /// For example "https://www.reddit.com/r/uncharted/" or "uncharted"
+    reddit-url: option<string>,
+    released: option<string>,
+    reviews-text-count: option<string>,
+    screenshots-count: option<s32>,
+    slug: option<string>,
+    suggestions-count: option<s32>,
+    tba: option<bool>,
+    twitch-count: option<string>,
+    updated: option<string>,
+    website: option<string>,
+    youtube-count: option<string>
+  }
+
+  record game-single-added-by-status {
+    /// JSON-encoded free-form object payload
+    data: option<string>
+  }
+
+  record game-single-esrb-rating {
+    id: option<s32>,
+    name: option<game-esrb-rating-name-enum>,
+    slug: option<game-esrb-rating-slug-enum>
+  }
+
+  record game-platform-metacritic {
+    metascore: option<s32>,
+    url: option<string>
+  }
+
+  record game-single-platforms-item {
+    platform: option<game-single-platforms-item-platform>,
+    released-at: option<string>,
+    requirements: option<game-single-platforms-item-requirements>
+  }
+
+  record game-single-platforms-item-platform {
+    id: option<s32>,
+    name: option<string>,
+    slug: option<string>
+  }
+
+  record game-single-platforms-item-requirements {
+    minimum: option<string>,
+    recommended: option<string>
+  }
+
+  record game-single-ratings {
+    /// JSON-encoded free-form object payload
+    data: option<string>
+  }
+
+  record game-single-reactions {
+    /// JSON-encoded free-form object payload
+    data: option<string>
+  }
+
+  record parent-achievement {
+    description: option<string>,
+    id: option<s32>,
+    image: option<string>,
+    name: option<string>,
+    percent: option<string>
+  }
+
+  record movie {
+    data: option<movie-data>,
+    id: option<s32>,
+    name: option<string>,
+    preview: option<string>
+  }
+
+  record movie-data {
+    /// JSON-encoded free-form object payload
+    data: option<string>
+  }
+
+  record reddit {
+    created: option<string>,
+    id: option<s32>,
+    image: option<string>,
+    name: option<string>,
+    text: option<string>,
+    url: option<string>,
+    username: option<string>,
+    username-url: option<string>
+  }
+
+  record twitch {
+    created: option<string>,
+    description: option<string>,
+    external-id: option<s32>,
+    id: option<s32>,
+    language: option<string>,
+    name: option<string>,
+    published: option<string>,
+    thumbnail: option<string>,
+    view-count: option<s32>
+  }
+
+  record youtube {
+    channel-id: option<string>,
+    channel-title: option<string>,
+    comments-count: option<s32>,
+    created: option<string>,
+    description: option<string>,
+    dislike-count: option<s32>,
+    external-id: option<string>,
+    favorite-count: option<s32>,
+    id: option<s32>,
+    like-count: option<s32>,
+    name: option<string>,
+    thumbnails: option<youtube-thumbnails>,
+    view-count: option<s32>
+  }
+
+  record youtube-thumbnails {
+    /// JSON-encoded free-form object payload
+    data: option<string>
+  }
+
   /// Get a list of games.
   record list-op-params {
     /// A page number within the paginated result set.
@@ -96,19 +471,21 @@ interface games {
     /// Available fields: `name`, `released`, `added`, `created`, `updated`, `rating`, `metacritic`. You can reverse the sort order adding a hyphen, for example: `-released`.
     ordering: option<string>
   }
-  list-op: func(params: list-op-params) -> result<string, string>;
+  list-op: func(params: list-op-params) -> result<list-op-response, string>;
 
   /// Get a list of DLC's for the game, GOTY and other editions, companion apps, etc.
   record additions-list-params {
+    game-pk: string,
     /// A page number within the paginated result set.
     page: option<s32>,
     /// Number of results to return per page.
     page-size: option<s32>
   }
-  additions-list: func(params: additions-list-params) -> result<string, string>;
+  additions-list: func(params: additions-list-params) -> result<additions-list-response, string>;
 
   /// Get a list of individual creators that were part of the development team.
   record development-team-list-params {
+    game-pk: string,
     /// Which field to use when ordering the results.
     ordering: option<string>,
     /// A page number within the paginated result set.
@@ -116,28 +493,31 @@ interface games {
     /// Number of results to return per page.
     page-size: option<s32>
   }
-  development-team-list: func(params: development-team-list-params) -> result<string, string>;
+  development-team-list: func(params: development-team-list-params) -> result<development-team-list-response, string>;
 
   /// Get a list of games that are part of the same series.
   record game-series-list-params {
+    game-pk: string,
     /// A page number within the paginated result set.
     page: option<s32>,
     /// Number of results to return per page.
     page-size: option<s32>
   }
-  game-series-list: func(params: game-series-list-params) -> result<string, string>;
+  game-series-list: func(params: game-series-list-params) -> result<game-series-list-response, string>;
 
   /// Get a list of parent games for DLC's and editions.
   record parent-games-list-params {
+    game-pk: string,
     /// A page number within the paginated result set.
     page: option<s32>,
     /// Number of results to return per page.
     page-size: option<s32>
   }
-  parent-games-list: func(params: parent-games-list-params) -> result<string, string>;
+  parent-games-list: func(params: parent-games-list-params) -> result<parent-games-list-response, string>;
 
   /// Get screenshots for the game.
   record screenshots-list-params {
+    game-pk: string,
     /// Which field to use when ordering the results.
     ordering: option<string>,
     /// A page number within the paginated result set.
@@ -145,10 +525,11 @@ interface games {
     /// Number of results to return per page.
     page-size: option<s32>
   }
-  screenshots-list: func(params: screenshots-list-params) -> result<string, string>;
+  screenshots-list: func(params: screenshots-list-params) -> result<screenshots-list-response, string>;
 
   /// Get links to the stores that sell the game.
   record stores-list-params {
+    game-pk: string,
     /// Which field to use when ordering the results.
     ordering: option<string>,
     /// A page number within the paginated result set.
@@ -156,60 +537,84 @@ interface games {
     /// Number of results to return per page.
     page-size: option<s32>
   }
-  stores-list: func(params: stores-list-params) -> result<string, string>;
+  stores-list: func(params: stores-list-params) -> result<stores-list-response, string>;
 
   /// Get details of the game.
   record read-params {
     /// An ID or a slug identifying this Game.
     id: string
   }
-  read: func(params: read-params) -> result<string, string>;
+  read: func(params: read-params) -> result<game-single, string>;
 
   /// Get a list of game achievements.
   record achievements-read-params {
     /// An ID or a slug identifying this Game.
     id: string
   }
-  achievements-read: func(params: achievements-read-params) -> result<string, string>;
+  achievements-read: func(params: achievements-read-params) -> result<parent-achievement, string>;
 
   /// Get a list of game trailers.
   record movies-read-params {
     /// An ID or a slug identifying this Game.
     id: string
   }
-  movies-read: func(params: movies-read-params) -> result<string, string>;
+  movies-read: func(params: movies-read-params) -> result<movie, string>;
 
   /// Get a list of most recent posts from the game's subreddit.
   record reddit-read-params {
     /// An ID or a slug identifying this Game.
     id: string
   }
-  reddit-read: func(params: reddit-read-params) -> result<string, string>;
+  reddit-read: func(params: reddit-read-params) -> result<reddit, string>;
 
   /// Get a list of visually similar games, available only for business and enterprise API users.
   record suggested-read-params {
     /// An ID or a slug identifying this Game.
     id: string
   }
-  suggested-read: func(params: suggested-read-params) -> result<string, string>;
+  suggested-read: func(params: suggested-read-params) -> result<game-single, string>;
 
   /// Get streams on Twitch associated with the game, available only for business and enterprise API users.
   record twitch-read-params {
     /// An ID or a slug identifying this Game.
     id: string
   }
-  twitch-read: func(params: twitch-read-params) -> result<string, string>;
+  twitch-read: func(params: twitch-read-params) -> result<twitch, string>;
 
   /// Get videos from YouTube associated with the game, available only for business and enterprise API users.
   record youtube-read-params {
     /// An ID or a slug identifying this Game.
     id: string
   }
-  youtube-read: func(params: youtube-read-params) -> result<string, string>;
+  youtube-read: func(params: youtube-read-params) -> result<youtube, string>;
 
 }
 
 interface genres {
+  record list-op-response {
+    count: s32,
+    next: option<string>,
+    previous: option<string>,
+    results: list<genre>
+  }
+
+  record genre {
+    games-count: option<s32>,
+    id: option<s32>,
+    image-background: option<string>,
+    name: string,
+    slug: option<string>
+  }
+
+  record genre-single {
+    description: option<string>,
+    games-count: option<s32>,
+    id: option<s32>,
+    image-background: option<string>,
+    name: string,
+    slug: option<string>
+  }
+
   /// Get a list of video game genres.
   record list-op-params {
     /// Which field to use when ordering the results.
@@ -219,14 +624,62 @@ interface genres {
     /// Number of results to return per page.
     page-size: option<s32>
   }
-  list-op: func(params: list-op-params) -> result<string, string>;
+  list-op: func(params: list-op-params) -> result<list-op-response, string>;
 
   /// Get details of the genre.
-  read: func() -> result<string, string>;
+  record read-params {
+    /// A unique integer value identifying this Genre.
+    id: string
+  }
+  read: func(params: read-params) -> result<genre-single, string>;
 
 }
 
 interface platforms {
+  record list-op-response {
+    count: s32,
+    next: option<string>,
+    previous: option<string>,
+    results: list<platform>
+  }
+
+  record platform {
+    games-count: option<s32>,
+    id: option<s32>,
+    image: option<string>,
+    image-background: option<string>,
+    name: string,
+    slug: option<string>,
+    year-end: option<s32>,
+    year-start: option<s32>
+  }
+
+  record lists-parents-list-response {
+    count: s32,
+    next: option<string>,
+    previous: option<string>,
+    results: list<platform-parent-single>
+  }
+
+  record platform-parent-single {
+    id: option<s32>,
+    name: string,
+    platforms: list<platform>,
+    slug: option<string>
+  }
+
+  record platform-single {
+    description: option<string>,
+    games-count: option<s32>,
+    id: option<s32>,
+    image: option<string>,
+    image-background: option<string>,
+    name: string,
+    slug: option<string>,
+    year-end: option<s32>,
+    year-start: option<s32>
+  }
+
   /// Get a list of video game platforms.
   record list-op-params {
     /// Which field to use when ordering the results.
@@ -236,7 +689,7 @@ interface platforms {
     /// Number of results to return per page.
     page-size: option<s32>
   }
-  list-op: func(params: list-op-params) -> result<string, string>;
+  list-op: func(params: list-op-params) -> result<list-op-response, string>;
 
   /// Get a list of parent platforms.
   record lists-parents-list-params {
@@ -247,14 +700,42 @@ interface platforms {
     /// Number of results to return per page.
     page-size: option<s32>
   }
-  lists-parents-list: func(params: lists-parents-list-params) -> result<string, string>;
+  lists-parents-list: func(params: lists-parents-list-params) -> result<lists-parents-list-response, string>;
 
   /// Get details of the platform.
-  read: func() -> result<string, string>;
+  record read-params {
+    /// A unique integer value identifying this Platform.
+    id: string
+  }
+  read: func(params: read-params) -> result<platform-single, string>;
 
 }
 
 interface publishers {
+  record list-op-response {
+    count: s32,
+    next: option<string>,
+    previous: option<string>,
+    results: list<publisher>
+  }
+
+  record publisher {
+    games-count: option<s32>,
+    id: option<s32>,
+    image-background: option<string>,
+    name: string,
+    slug: option<string>
+  }
+
+  record publisher-single {
+    description: option<string>,
+    games-count: option<s32>,
+    id: option<s32>,
+    image-background: option<string>,
+    name: string,
+    slug: option<string>
+  }
+
   /// Get a list of video game publishers.
   record list-op-params {
     /// A page number within the paginated result set.
@@ -262,14 +743,44 @@ interface publishers {
     /// Number of results to return per page.
     page-size: option<s32>
   }
-  list-op: func(params: list-op-params) -> result<string, string>;
+  list-op: func(params: list-op-params) -> result<list-op-response, string>;
 
   /// Get details of the publisher.
-  read: func() -> result<string, string>;
+  record read-params {
+    /// A unique integer value identifying this Publisher.
+    id: string
+  }
+  read: func(params: read-params) -> result<publisher-single, string>;
 
 }
 
 interface stores {
+  record list-op-response {
+    count: s32,
+    next: option<string>,
+    previous: option<string>,
+    results: list<store>
+  }
+
+  record store {
+    domain: option<string>,
+    games-count: option<s32>,
+    id: option<s32>,
+    image-background: option<string>,
+    name: string,
+    slug: option<string>
+  }
+
+  record store-single {
+    description: option<string>,
+    domain: option<string>,
+    games-count: option<s32>,
+    id: option<s32>,
+    image-background: option<string>,
+    name: string,
+    slug: option<string>
+  }
+
   /// Get a list of video game storefronts.
   record list-op-params {
     /// Which field to use when ordering the results.
@@ -279,14 +790,43 @@ interface stores {
     /// Number of results to return per page.
     page-size: option<s32>
   }
-  list-op: func(params: list-op-params) -> result<string, string>;
+  list-op: func(params: list-op-params) -> result<list-op-response, string>;
 
   /// Get details of the store.
-  read: func() -> result<string, string>;
+  record read-params {
+    /// A unique integer value identifying this Store.
+    id: string
+  }
+  read: func(params: read-params) -> result<store-single, string>;
 
 }
 
 interface tags {
+  record list-op-response {
+    count: s32,
+    next: option<string>,
+    previous: option<string>,
+    results: list<tag>
+  }
+
+  record tag {
+    games-count: option<s32>,
+    id: option<s32>,
+    image-background: option<string>,
+    language: option<string>,
+    name: string,
+    slug: option<string>
+  }
+
+  record tag-single {
+    description: option<string>,
+    games-count: option<s32>,
+    id: option<s32>,
+    image-background: option<string>,
+    name: string,
+    slug: option<string>
+  }
+
   /// Get a list of tags.
   record list-op-params {
     /// A page number within the paginated result set.
@@ -294,10 +834,14 @@ interface tags {
     /// Number of results to return per page.
     page-size: option<s32>
   }
-  list-op: func(params: list-op-params) -> result<string, string>;
+  list-op: func(params: list-op-params) -> result<list-op-response, string>;
 
   /// Get details of the tag.
-  read: func() -> result<string, string>;
+  record read-params {
+    /// A unique integer value identifying this Tag.
+    id: string
+  }
+  read: func(params: read-params) -> result<tag-single, string>;
 
 }
 /// The component world: imports the secrets host capability

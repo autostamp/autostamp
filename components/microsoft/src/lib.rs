@@ -44,10 +44,15 @@ pub(crate) enum FieldLocation {
     Body,
 }
 
-/// A single operation parameter: the snake-case key it carries in the params JSON and where
-/// it belongs in the request.
+/// A single operation parameter. `snake` keys the field in the internal params JSON (and, for a
+/// path field, matches the `{snake}` placeholder in the path template); `wire` is the verbatim name
+/// the field takes on the HTTP wire (query key, header name, or body property). The two differ
+/// whenever the source name isn't already snake_case (e.g. `dryRun` → snake `dry_run`, wire
+/// `dryRun`), and let distinct inputs that share a snake key (`DateCreated`, `DateCreated<`) still
+/// travel under their true names.
 pub(crate) struct FieldSpec {
     pub(crate) snake: &'static str,
+    pub(crate) wire: &'static str,
     pub(crate) location: FieldLocation,
 }
 
@@ -71,6 +76,16 @@ pub(crate) struct AuthApply {
     pub(crate) kind: AuthKind,
 }
 
+/// The failure modes of [`dispatch`], kept structured so each generated operation can map them
+/// onto its own typed error: an `Http` failure carries the response status and body (routed to
+/// the matching error-variant case), while a `Transport` failure carries a message for the
+/// catch-all case (a secret lookup, connection, or decode failure that never produced an HTTP
+/// status).
+pub(crate) enum DispatchError {
+    Http { status: u16, body: String },
+    Transport(String),
+}
+
 /// A single API operation: HTTP method, path template (with `{snake}` placeholders), the
 /// parameter fields, and the security schemes to apply.
 pub(crate) struct OpSpec {
@@ -81,8 +96,9 @@ pub(crate) struct OpSpec {
 }
 
 /// Execute `op` with the supplied `params` (a JSON object keyed by snake-case field names)
-/// and return the response body as a string, or an error message.
-pub(crate) fn dispatch(op: &OpSpec, params: Value) -> Result<String, String> {
+/// and return the raw 2xx response body, or a structured [`DispatchError`] the caller maps
+/// onto the operation's typed error.
+pub(crate) fn dispatch(op: &OpSpec, params: Value) -> Result<String, DispatchError> {
     let obj = match &params {
         Value::Object(map) => Some(map),
         _ => None,
@@ -105,10 +121,10 @@ pub(crate) fn dispatch(op: &OpSpec, params: Value) -> Result<String, String> {
                 let placeholder = format!("{{{}}}", field.snake);
                 path = path.replace(&placeholder, &percent_encode(&scalar(value)));
             }
-            FieldLocation::Query => query.push((field.snake.to_string(), scalar(value))),
-            FieldLocation::Header => headers.push((field.snake.to_string(), scalar(value))),
+            FieldLocation::Query => query.push((field.wire.to_string(), scalar(value))),
+            FieldLocation::Header => headers.push((field.wire.to_string(), scalar(value))),
             FieldLocation::Body => {
-                body.insert(field.snake.to_string(), value.clone());
+                body.insert(field.wire.to_string(), value.clone());
             }
         }
     }
@@ -116,7 +132,7 @@ pub(crate) fn dispatch(op: &OpSpec, params: Value) -> Result<String, String> {
     // Apply each resolved security scheme, sourcing its value from wasmcloud:secrets.
     let mut cookies: Vec<String> = Vec::new();
     for apply in op.auth {
-        let secret = fetch_secret(apply.secret_key)?;
+        let secret = fetch_secret(apply.secret_key).map_err(DispatchError::Transport)?;
         match &apply.kind {
             AuthKind::Bearer => headers.push(("authorization".into(), format!("Bearer {secret}"))),
             AuthKind::Basic => {
@@ -177,17 +193,18 @@ fn fetch_secret(key: &str) -> Result<String, String> {
 }
 
 /// Build and send the outgoing request with `wstd`, returning the response body on a 2xx
-/// status. The generated guest exports are synchronous, so the async `wstd` client is driven
-/// to completion on a local reactor via `wstd::runtime::block_on`.
+/// status and a structured [`DispatchError`] otherwise. The generated guest exports are
+/// synchronous, so the async `wstd` client is driven to completion on a local reactor via
+/// `wstd::runtime::block_on`.
 fn perform(
     method: &str,
     path_with_query: &str,
     headers: &[(String, String)],
     body: &[u8],
-) -> Result<String, String> {
+) -> Result<String, DispatchError> {
     let url = join_url(crate::BASE_URL, path_with_query);
     let method = Method::from_bytes(method.as_bytes())
-        .map_err(|err| format!("invalid HTTP method `{method}`: {err}"))?;
+        .map_err(|err| DispatchError::Transport(format!("invalid HTTP method `{method}`: {err}")))?;
 
     let mut builder = Request::builder().method(method).uri(url);
     for (name, value) in headers {
@@ -199,27 +216,29 @@ fn perform(
         } else {
             Body::from(body.to_vec())
         })
-        .map_err(|err| format!("failed to build request: {err}"))?;
+        .map_err(|err| DispatchError::Transport(format!("failed to build request: {err}")))?;
 
     wstd::runtime::block_on(async move {
         let client = Client::new();
         let response = client
             .send(request)
             .await
-            .map_err(|err| format!("request failed: {err:#}"))?;
+            .map_err(|err| DispatchError::Transport(format!("request failed: {err:#}")))?;
 
         let status = response.status().as_u16();
         let mut response_body = response.into_body();
-        let bytes = response_body
-            .contents()
-            .await
-            .map_err(|err| format!("failed to read response body: {err:#}"))?;
+        let bytes = response_body.contents().await.map_err(|err| {
+            DispatchError::Transport(format!("failed to read response body: {err:#}"))
+        })?;
         let body_text = String::from_utf8_lossy(bytes).into_owned();
 
         if (200..300).contains(&status) {
             Ok(body_text)
         } else {
-            Err(format!("HTTP {status}: {body_text}"))
+            Err(DispatchError::Http {
+                status,
+                body: body_text,
+            })
         }
     })
 }
@@ -288,10 +307,10 @@ const OP_ANALYZE_IMAGE: OpSpec = OpSpec {
     method: "POST",
     path_template: "/analyze",
     fields: &[
-        FieldSpec { snake: "visual_features", location: FieldLocation::Query },
-        FieldSpec { snake: "details", location: FieldLocation::Query },
-        FieldSpec { snake: "language", location: FieldLocation::Query },
-        FieldSpec { snake: "url", location: FieldLocation::Body },
+        FieldSpec { snake: "visual_features", wire: "visualFeatures", location: FieldLocation::Query },
+        FieldSpec { snake: "details", wire: "details", location: FieldLocation::Query },
+        FieldSpec { snake: "language", wire: "language", location: FieldLocation::Query },
+        FieldSpec { snake: "url", wire: "url", location: FieldLocation::Body },
     ],
     auth: &[
         AuthApply { secret_key: "apim_key", kind: AuthKind::ApiKeyHeader("Ocp-Apim-Subscription-Key") },
@@ -329,6 +348,166 @@ fn iface_analyze__image_language_enum__to_str(e: &iface_analyze::ImageLanguageEn
     }
 }
 
+fn iface_analyze__face_description_gender_enum__to_str(e: &iface_analyze::FaceDescriptionGenderEnum) -> &'static str {
+    match e {
+        iface_analyze::FaceDescriptionGenderEnum::Male => "Male",
+        iface_analyze::FaceDescriptionGenderEnum::Female => "Female",
+    }
+}
+
+fn iface_analyze__image_analysis__to_json(p: &iface_analyze::ImageAnalysis) -> Value {
+    let mut m = Map::new();
+    m.insert("adult".into(), match (&p.adult) { Some(v) => iface_analyze__adult_info__to_json(v), None => Value::Null });
+    m.insert("brands".into(), match (&p.brands) { Some(v) => Value::Array((v).iter().map(|v| iface_analyze__detected_brand__to_json(v)).collect()), None => Value::Null });
+    m.insert("categories".into(), match (&p.categories) { Some(v) => Value::Array((v).iter().map(|v| iface_analyze__category__to_json(v)).collect()), None => Value::Null });
+    m.insert("color".into(), match (&p.color) { Some(v) => iface_analyze__color_info__to_json(v), None => Value::Null });
+    m.insert("description".into(), match (&p.description) { Some(v) => iface_analyze__image_description_details__to_json(v), None => Value::Null });
+    m.insert("faces".into(), match (&p.faces) { Some(v) => Value::Array((v).iter().map(|v| iface_analyze__face_description__to_json(v)).collect()), None => Value::Null });
+    m.insert("imageType".into(), match (&p.image_type) { Some(v) => iface_analyze__image_type__to_json(v), None => Value::Null });
+    m.insert("metadata".into(), match (&p.metadata) { Some(v) => iface_analyze__image_metadata__to_json(v), None => Value::Null });
+    m.insert("objects".into(), match (&p.objects) { Some(v) => Value::Array((v).iter().map(|v| iface_analyze__detected_object__to_json(v)).collect()), None => Value::Null });
+    m.insert("requestId".into(), match (&p.request_id) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("tags".into(), match (&p.tags) { Some(v) => Value::Array((v).iter().map(|v| iface_analyze__image_tag__to_json(v)).collect()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_analyze__adult_info__to_json(p: &iface_analyze::AdultInfo) -> Value {
+    let mut m = Map::new();
+    m.insert("adultScore".into(), match (&p.adult_score) { Some(v) => serde_json::Number::from_f64(*(v)).map(Value::Number).unwrap_or(Value::Null), None => Value::Null });
+    m.insert("isAdultContent".into(), match (&p.is_adult_content) { Some(v) => Value::Bool(*(v)), None => Value::Null });
+    m.insert("isRacyContent".into(), match (&p.is_racy_content) { Some(v) => Value::Bool(*(v)), None => Value::Null });
+    m.insert("racyScore".into(), match (&p.racy_score) { Some(v) => serde_json::Number::from_f64(*(v)).map(Value::Number).unwrap_or(Value::Null), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_analyze__detected_brand__to_json(p: &iface_analyze::DetectedBrand) -> Value {
+    let mut m = Map::new();
+    m.insert("confidence".into(), match (&p.confidence) { Some(v) => serde_json::Number::from_f64(*(v)).map(Value::Number).unwrap_or(Value::Null), None => Value::Null });
+    m.insert("name".into(), match (&p.name) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("rectangle".into(), match (&p.rectangle) { Some(v) => iface_analyze__bounding_rect__to_json(v), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_analyze__bounding_rect__to_json(p: &iface_analyze::BoundingRect) -> Value {
+    let mut m = Map::new();
+    m.insert("h".into(), match (&p.h) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("w".into(), match (&p.w) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("x".into(), match (&p.x) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("y".into(), match (&p.y) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_analyze__category__to_json(p: &iface_analyze::Category) -> Value {
+    let mut m = Map::new();
+    m.insert("detail".into(), match (&p.detail) { Some(v) => iface_analyze__category_detail__to_json(v), None => Value::Null });
+    m.insert("name".into(), match (&p.name) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("score".into(), match (&p.score) { Some(v) => serde_json::Number::from_f64(*(v)).map(Value::Number).unwrap_or(Value::Null), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_analyze__category_detail__to_json(p: &iface_analyze::CategoryDetail) -> Value {
+    let mut m = Map::new();
+    m.insert("celebrities".into(), match (&p.celebrities) { Some(v) => Value::Array((v).iter().map(|v| iface_analyze__celebrities_model__to_json(v)).collect()), None => Value::Null });
+    m.insert("landmarks".into(), match (&p.landmarks) { Some(v) => Value::Array((v).iter().map(|v| iface_analyze__landmarks_model__to_json(v)).collect()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_analyze__celebrities_model__to_json(p: &iface_analyze::CelebritiesModel) -> Value {
+    let mut m = Map::new();
+    m.insert("confidence".into(), match (&p.confidence) { Some(v) => serde_json::Number::from_f64(*(v)).map(Value::Number).unwrap_or(Value::Null), None => Value::Null });
+    m.insert("faceRectangle".into(), match (&p.face_rectangle) { Some(v) => iface_analyze__face_rectangle__to_json(v), None => Value::Null });
+    m.insert("name".into(), match (&p.name) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_analyze__face_rectangle__to_json(p: &iface_analyze::FaceRectangle) -> Value {
+    let mut m = Map::new();
+    m.insert("height".into(), match (&p.height) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("left".into(), match (&p.left) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("top".into(), match (&p.top) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("width".into(), match (&p.width) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_analyze__landmarks_model__to_json(p: &iface_analyze::LandmarksModel) -> Value {
+    let mut m = Map::new();
+    m.insert("confidence".into(), match (&p.confidence) { Some(v) => serde_json::Number::from_f64(*(v)).map(Value::Number).unwrap_or(Value::Null), None => Value::Null });
+    m.insert("name".into(), match (&p.name) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_analyze__color_info__to_json(p: &iface_analyze::ColorInfo) -> Value {
+    let mut m = Map::new();
+    m.insert("accentColor".into(), match (&p.accent_color) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("dominantColorBackground".into(), match (&p.dominant_color_background) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("dominantColorForeground".into(), match (&p.dominant_color_foreground) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("dominantColors".into(), match (&p.dominant_colors) { Some(v) => Value::Array((v).iter().map(|v| Value::String((v).clone())).collect()), None => Value::Null });
+    m.insert("isBWImg".into(), match (&p.is_bw_img) { Some(v) => Value::Bool(*(v)), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_analyze__image_description_details__to_json(p: &iface_analyze::ImageDescriptionDetails) -> Value {
+    let mut m = Map::new();
+    m.insert("captions".into(), match (&p.captions) { Some(v) => Value::Array((v).iter().map(|v| iface_analyze__image_caption__to_json(v)).collect()), None => Value::Null });
+    m.insert("tags".into(), match (&p.tags) { Some(v) => Value::Array((v).iter().map(|v| Value::String((v).clone())).collect()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_analyze__image_caption__to_json(p: &iface_analyze::ImageCaption) -> Value {
+    let mut m = Map::new();
+    m.insert("confidence".into(), match (&p.confidence) { Some(v) => serde_json::Number::from_f64(*(v)).map(Value::Number).unwrap_or(Value::Null), None => Value::Null });
+    m.insert("text".into(), match (&p.text) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_analyze__face_description__to_json(p: &iface_analyze::FaceDescription) -> Value {
+    let mut m = Map::new();
+    m.insert("age".into(), match (&p.age) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("faceRectangle".into(), match (&p.face_rectangle) { Some(v) => iface_analyze__face_rectangle__to_json(v), None => Value::Null });
+    m.insert("gender".into(), match (&p.gender) { Some(v) => Value::String(iface_analyze__face_description_gender_enum__to_str(v).into()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_analyze__image_type__to_json(p: &iface_analyze::ImageType) -> Value {
+    let mut m = Map::new();
+    m.insert("clipArtType".into(), match (&p.clip_art_type) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("lineDrawingType".into(), match (&p.line_drawing_type) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_analyze__image_metadata__to_json(p: &iface_analyze::ImageMetadata) -> Value {
+    let mut m = Map::new();
+    m.insert("format".into(), match (&p.format) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("height".into(), match (&p.height) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("width".into(), match (&p.width) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_analyze__detected_object__to_json(p: &iface_analyze::DetectedObject) -> Value {
+    let mut m = Map::new();
+    m.insert("confidence".into(), match (&p.confidence) { Some(v) => serde_json::Number::from_f64(*(v)).map(Value::Number).unwrap_or(Value::Null), None => Value::Null });
+    m.insert("object".into(), match (&p.object) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("parent".into(), match (&p.parent) { Some(v) => iface_analyze__object_hierarchy__to_json(v), None => Value::Null });
+    m.insert("rectangle".into(), match (&p.rectangle) { Some(v) => iface_analyze__bounding_rect__to_json(v), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_analyze__object_hierarchy__to_json(p: &iface_analyze::ObjectHierarchy) -> Value {
+    let mut m = Map::new();
+    m.insert("confidence".into(), match (&p.confidence) { Some(v) => serde_json::Number::from_f64(*(v)).map(Value::Number).unwrap_or(Value::Null), None => Value::Null });
+    m.insert("object".into(), match (&p.object) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("parent".into(), match (&p.parent) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_analyze__image_tag__to_json(p: &iface_analyze::ImageTag) -> Value {
+    let mut m = Map::new();
+    m.insert("confidence".into(), match (&p.confidence) { Some(v) => serde_json::Number::from_f64(*(v)).map(Value::Number).unwrap_or(Value::Null), None => Value::Null });
+    m.insert("hint".into(), match (&p.hint) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("name".into(), match (&p.name) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
 fn iface_analyze__image_params__to_json(p: &iface_analyze::ImageParams) -> Value {
     let mut m = Map::new();
     m.insert("visual_features".into(), match (&p.visual_features) { Some(v) => Value::Array((v).iter().map(|v| Value::String(iface_analyze__image_visual_features_item_enum__to_str(v).into())).collect()), None => Value::Null });
@@ -338,10 +517,210 @@ fn iface_analyze__image_params__to_json(p: &iface_analyze::ImageParams) -> Value
     Value::Object(m)
 }
 
+fn iface_analyze__image_analysis__from_json(v: &Value) -> Option<iface_analyze::ImageAnalysis> {
+    let m = v.as_object()?;
+    Some(iface_analyze::ImageAnalysis {
+        adult: m.get("adult").filter(|v| !v.is_null()).and_then(|v| iface_analyze__adult_info__from_json(v)),
+        brands: m.get("brands").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| iface_analyze__detected_brand__from_json(x)).collect())),
+        categories: m.get("categories").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| iface_analyze__category__from_json(x)).collect())),
+        color: m.get("color").filter(|v| !v.is_null()).and_then(|v| iface_analyze__color_info__from_json(v)),
+        description: m.get("description").filter(|v| !v.is_null()).and_then(|v| iface_analyze__image_description_details__from_json(v)),
+        faces: m.get("faces").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| iface_analyze__face_description__from_json(x)).collect())),
+        image_type: m.get("imageType").filter(|v| !v.is_null()).and_then(|v| iface_analyze__image_type__from_json(v)),
+        metadata: m.get("metadata").filter(|v| !v.is_null()).and_then(|v| iface_analyze__image_metadata__from_json(v)),
+        objects: m.get("objects").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| iface_analyze__detected_object__from_json(x)).collect())),
+        request_id: m.get("requestId").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        tags: m.get("tags").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| iface_analyze__image_tag__from_json(x)).collect())),
+    })
+}
+
+fn iface_analyze__adult_info__from_json(v: &Value) -> Option<iface_analyze::AdultInfo> {
+    let m = v.as_object()?;
+    Some(iface_analyze::AdultInfo {
+        adult_score: m.get("adultScore").filter(|v| !v.is_null()).and_then(|v| (v).as_f64()),
+        is_adult_content: m.get("isAdultContent").filter(|v| !v.is_null()).and_then(|v| (v).as_bool()),
+        is_racy_content: m.get("isRacyContent").filter(|v| !v.is_null()).and_then(|v| (v).as_bool()),
+        racy_score: m.get("racyScore").filter(|v| !v.is_null()).and_then(|v| (v).as_f64()),
+    })
+}
+
+fn iface_analyze__detected_brand__from_json(v: &Value) -> Option<iface_analyze::DetectedBrand> {
+    let m = v.as_object()?;
+    Some(iface_analyze::DetectedBrand {
+        confidence: m.get("confidence").filter(|v| !v.is_null()).and_then(|v| (v).as_f64()),
+        name: m.get("name").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        rectangle: m.get("rectangle").filter(|v| !v.is_null()).and_then(|v| iface_analyze__bounding_rect__from_json(v)),
+    })
+}
+
+fn iface_analyze__bounding_rect__from_json(v: &Value) -> Option<iface_analyze::BoundingRect> {
+    let m = v.as_object()?;
+    Some(iface_analyze::BoundingRect {
+        h: m.get("h").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        w: m.get("w").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        x: m.get("x").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        y: m.get("y").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+    })
+}
+
+fn iface_analyze__category__from_json(v: &Value) -> Option<iface_analyze::Category> {
+    let m = v.as_object()?;
+    Some(iface_analyze::Category {
+        detail: m.get("detail").filter(|v| !v.is_null()).and_then(|v| iface_analyze__category_detail__from_json(v)),
+        name: m.get("name").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        score: m.get("score").filter(|v| !v.is_null()).and_then(|v| (v).as_f64()),
+    })
+}
+
+fn iface_analyze__category_detail__from_json(v: &Value) -> Option<iface_analyze::CategoryDetail> {
+    let m = v.as_object()?;
+    Some(iface_analyze::CategoryDetail {
+        celebrities: m.get("celebrities").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| iface_analyze__celebrities_model__from_json(x)).collect())),
+        landmarks: m.get("landmarks").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| iface_analyze__landmarks_model__from_json(x)).collect())),
+    })
+}
+
+fn iface_analyze__celebrities_model__from_json(v: &Value) -> Option<iface_analyze::CelebritiesModel> {
+    let m = v.as_object()?;
+    Some(iface_analyze::CelebritiesModel {
+        confidence: m.get("confidence").filter(|v| !v.is_null()).and_then(|v| (v).as_f64()),
+        face_rectangle: m.get("faceRectangle").filter(|v| !v.is_null()).and_then(|v| iface_analyze__face_rectangle__from_json(v)),
+        name: m.get("name").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    })
+}
+
+fn iface_analyze__face_rectangle__from_json(v: &Value) -> Option<iface_analyze::FaceRectangle> {
+    let m = v.as_object()?;
+    Some(iface_analyze::FaceRectangle {
+        height: m.get("height").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        left: m.get("left").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        top: m.get("top").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        width: m.get("width").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+    })
+}
+
+fn iface_analyze__landmarks_model__from_json(v: &Value) -> Option<iface_analyze::LandmarksModel> {
+    let m = v.as_object()?;
+    Some(iface_analyze::LandmarksModel {
+        confidence: m.get("confidence").filter(|v| !v.is_null()).and_then(|v| (v).as_f64()),
+        name: m.get("name").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    })
+}
+
+fn iface_analyze__color_info__from_json(v: &Value) -> Option<iface_analyze::ColorInfo> {
+    let m = v.as_object()?;
+    Some(iface_analyze::ColorInfo {
+        accent_color: m.get("accentColor").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        dominant_color_background: m.get("dominantColorBackground").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        dominant_color_foreground: m.get("dominantColorForeground").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        dominant_colors: m.get("dominantColors").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| (x).as_str().map(|s| s.to_string())).collect())),
+        is_bw_img: m.get("isBWImg").filter(|v| !v.is_null()).and_then(|v| (v).as_bool()),
+    })
+}
+
+fn iface_analyze__image_description_details__from_json(v: &Value) -> Option<iface_analyze::ImageDescriptionDetails> {
+    let m = v.as_object()?;
+    Some(iface_analyze::ImageDescriptionDetails {
+        captions: m.get("captions").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| iface_analyze__image_caption__from_json(x)).collect())),
+        tags: m.get("tags").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| (x).as_str().map(|s| s.to_string())).collect())),
+    })
+}
+
+fn iface_analyze__image_caption__from_json(v: &Value) -> Option<iface_analyze::ImageCaption> {
+    let m = v.as_object()?;
+    Some(iface_analyze::ImageCaption {
+        confidence: m.get("confidence").filter(|v| !v.is_null()).and_then(|v| (v).as_f64()),
+        text: m.get("text").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    })
+}
+
+fn iface_analyze__face_description__from_json(v: &Value) -> Option<iface_analyze::FaceDescription> {
+    let m = v.as_object()?;
+    Some(iface_analyze::FaceDescription {
+        age: m.get("age").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        face_rectangle: m.get("faceRectangle").filter(|v| !v.is_null()).and_then(|v| iface_analyze__face_rectangle__from_json(v)),
+        gender: m.get("gender").filter(|v| !v.is_null()).and_then(|v| (v).as_str().and_then(iface_analyze__face_description_gender_enum__from_str)),
+    })
+}
+
+fn iface_analyze__image_type__from_json(v: &Value) -> Option<iface_analyze::ImageType> {
+    let m = v.as_object()?;
+    Some(iface_analyze::ImageType {
+        clip_art_type: m.get("clipArtType").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        line_drawing_type: m.get("lineDrawingType").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+    })
+}
+
+fn iface_analyze__image_metadata__from_json(v: &Value) -> Option<iface_analyze::ImageMetadata> {
+    let m = v.as_object()?;
+    Some(iface_analyze::ImageMetadata {
+        format: m.get("format").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        height: m.get("height").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        width: m.get("width").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+    })
+}
+
+fn iface_analyze__detected_object__from_json(v: &Value) -> Option<iface_analyze::DetectedObject> {
+    let m = v.as_object()?;
+    Some(iface_analyze::DetectedObject {
+        confidence: m.get("confidence").filter(|v| !v.is_null()).and_then(|v| (v).as_f64()),
+        object: m.get("object").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        parent: m.get("parent").filter(|v| !v.is_null()).and_then(|v| iface_analyze__object_hierarchy__from_json(v)),
+        rectangle: m.get("rectangle").filter(|v| !v.is_null()).and_then(|v| iface_analyze__bounding_rect__from_json(v)),
+    })
+}
+
+fn iface_analyze__object_hierarchy__from_json(v: &Value) -> Option<iface_analyze::ObjectHierarchy> {
+    let m = v.as_object()?;
+    Some(iface_analyze::ObjectHierarchy {
+        confidence: m.get("confidence").filter(|v| !v.is_null()).and_then(|v| (v).as_f64()),
+        object: m.get("object").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        parent: m.get("parent").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    })
+}
+
+fn iface_analyze__image_tag__from_json(v: &Value) -> Option<iface_analyze::ImageTag> {
+    let m = v.as_object()?;
+    Some(iface_analyze::ImageTag {
+        confidence: m.get("confidence").filter(|v| !v.is_null()).and_then(|v| (v).as_f64()),
+        hint: m.get("hint").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        name: m.get("name").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    })
+}
+
+fn iface_analyze__face_description_gender_enum__from_str(s: &str) -> Option<iface_analyze::FaceDescriptionGenderEnum> {
+    match s {
+        "Male" => Some(iface_analyze::FaceDescriptionGenderEnum::Male),
+        "Female" => Some(iface_analyze::FaceDescriptionGenderEnum::Female),
+        _ => None,
+    }
+}
+
+fn iface_analyze__image__ok(body: String) -> Result<iface_analyze::ImageAnalysis, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match iface_analyze__image_analysis__from_json(&v) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_analyze__image__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
 impl iface_analyze::Guest for crate::Component {
-    fn image(params: iface_analyze::ImageParams) -> Result<String, String> {
+    fn image(params: iface_analyze::ImageParams) -> Result<iface_analyze::ImageAnalysis, String> {
         let json = iface_analyze__image_params__to_json(&params);
-        dispatch(&OP_ANALYZE_IMAGE, json)
+        match dispatch(&OP_ANALYZE_IMAGE, json).and_then(iface_analyze__image__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_analyze__image__err(e)),
+        }
     }
 }
 use crate::exports::autostamp::microsoft::area_of_interest as iface_area_of_interest;
@@ -350,12 +729,37 @@ const OP_AREA_OF_INTEREST_GET_AREA_OF_INTEREST: OpSpec = OpSpec {
     method: "POST",
     path_template: "/areaOfInterest",
     fields: &[
-        FieldSpec { snake: "url", location: FieldLocation::Body },
+        FieldSpec { snake: "url", wire: "url", location: FieldLocation::Body },
     ],
     auth: &[
         AuthApply { secret_key: "apim_key", kind: AuthKind::ApiKeyHeader("Ocp-Apim-Subscription-Key") },
     ],
 };
+
+fn iface_area_of_interest__result_op__to_json(p: &iface_area_of_interest::ResultOp) -> Value {
+    let mut m = Map::new();
+    m.insert("areaOfInterest".into(), match (&p.area_of_interest) { Some(v) => iface_area_of_interest__bounding_rect__to_json(v), None => Value::Null });
+    m.insert("metadata".into(), match (&p.metadata) { Some(v) => iface_area_of_interest__image_metadata__to_json(v), None => Value::Null });
+    m.insert("requestId".into(), match (&p.request_id) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_area_of_interest__bounding_rect__to_json(p: &iface_area_of_interest::BoundingRect) -> Value {
+    let mut m = Map::new();
+    m.insert("h".into(), match (&p.h) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("w".into(), match (&p.w) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("x".into(), match (&p.x) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("y".into(), match (&p.y) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_area_of_interest__image_metadata__to_json(p: &iface_area_of_interest::ImageMetadata) -> Value {
+    let mut m = Map::new();
+    m.insert("format".into(), match (&p.format) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("height".into(), match (&p.height) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("width".into(), match (&p.width) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    Value::Object(m)
+}
 
 fn iface_area_of_interest__get_area_of_interest_params__to_json(p: &iface_area_of_interest::GetAreaOfInterestParams) -> Value {
     let mut m = Map::new();
@@ -363,10 +767,59 @@ fn iface_area_of_interest__get_area_of_interest_params__to_json(p: &iface_area_o
     Value::Object(m)
 }
 
+fn iface_area_of_interest__result_op__from_json(v: &Value) -> Option<iface_area_of_interest::ResultOp> {
+    let m = v.as_object()?;
+    Some(iface_area_of_interest::ResultOp {
+        area_of_interest: m.get("areaOfInterest").filter(|v| !v.is_null()).and_then(|v| iface_area_of_interest__bounding_rect__from_json(v)),
+        metadata: m.get("metadata").filter(|v| !v.is_null()).and_then(|v| iface_area_of_interest__image_metadata__from_json(v)),
+        request_id: m.get("requestId").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    })
+}
+
+fn iface_area_of_interest__bounding_rect__from_json(v: &Value) -> Option<iface_area_of_interest::BoundingRect> {
+    let m = v.as_object()?;
+    Some(iface_area_of_interest::BoundingRect {
+        h: m.get("h").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        w: m.get("w").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        x: m.get("x").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        y: m.get("y").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+    })
+}
+
+fn iface_area_of_interest__image_metadata__from_json(v: &Value) -> Option<iface_area_of_interest::ImageMetadata> {
+    let m = v.as_object()?;
+    Some(iface_area_of_interest::ImageMetadata {
+        format: m.get("format").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        height: m.get("height").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        width: m.get("width").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+    })
+}
+
+fn iface_area_of_interest__get_area_of_interest__ok(body: String) -> Result<iface_area_of_interest::ResultOp, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match iface_area_of_interest__result_op__from_json(&v) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_area_of_interest__get_area_of_interest__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
 impl iface_area_of_interest::Guest for crate::Component {
-    fn get_area_of_interest(params: iface_area_of_interest::GetAreaOfInterestParams) -> Result<String, String> {
+    fn get_area_of_interest(params: iface_area_of_interest::GetAreaOfInterestParams) -> Result<iface_area_of_interest::ResultOp, String> {
         let json = iface_area_of_interest__get_area_of_interest_params__to_json(&params);
-        dispatch(&OP_AREA_OF_INTEREST_GET_AREA_OF_INTEREST, json)
+        match dispatch(&OP_AREA_OF_INTEREST_GET_AREA_OF_INTEREST, json).and_then(iface_area_of_interest__get_area_of_interest__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_area_of_interest__get_area_of_interest__err(e)),
+        }
     }
 }
 use crate::exports::autostamp::microsoft::describe as iface_describe;
@@ -375,9 +828,9 @@ const OP_DESCRIBE_IMAGE: OpSpec = OpSpec {
     method: "POST",
     path_template: "/describe",
     fields: &[
-        FieldSpec { snake: "max_candidates", location: FieldLocation::Query },
-        FieldSpec { snake: "language", location: FieldLocation::Query },
-        FieldSpec { snake: "url", location: FieldLocation::Body },
+        FieldSpec { snake: "max_candidates", wire: "maxCandidates", location: FieldLocation::Query },
+        FieldSpec { snake: "language", wire: "language", location: FieldLocation::Query },
+        FieldSpec { snake: "url", wire: "url", location: FieldLocation::Body },
     ],
     auth: &[
         AuthApply { secret_key: "apim_key", kind: AuthKind::ApiKeyHeader("Ocp-Apim-Subscription-Key") },
@@ -394,6 +847,36 @@ fn iface_describe__image_language_enum__to_str(e: &iface_describe::ImageLanguage
     }
 }
 
+fn iface_describe__image_description__to_json(p: &iface_describe::ImageDescription) -> Value {
+    let mut m = Map::new();
+    m.insert("description".into(), match (&p.description) { Some(v) => iface_describe__image_description_details__to_json(v), None => Value::Null });
+    m.insert("metadata".into(), match (&p.metadata) { Some(v) => iface_describe__image_metadata__to_json(v), None => Value::Null });
+    m.insert("requestId".into(), match (&p.request_id) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_describe__image_description_details__to_json(p: &iface_describe::ImageDescriptionDetails) -> Value {
+    let mut m = Map::new();
+    m.insert("captions".into(), match (&p.captions) { Some(v) => Value::Array((v).iter().map(|v| iface_describe__image_caption__to_json(v)).collect()), None => Value::Null });
+    m.insert("tags".into(), match (&p.tags) { Some(v) => Value::Array((v).iter().map(|v| Value::String((v).clone())).collect()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_describe__image_caption__to_json(p: &iface_describe::ImageCaption) -> Value {
+    let mut m = Map::new();
+    m.insert("confidence".into(), match (&p.confidence) { Some(v) => serde_json::Number::from_f64(*(v)).map(Value::Number).unwrap_or(Value::Null), None => Value::Null });
+    m.insert("text".into(), match (&p.text) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_describe__image_metadata__to_json(p: &iface_describe::ImageMetadata) -> Value {
+    let mut m = Map::new();
+    m.insert("format".into(), match (&p.format) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("height".into(), match (&p.height) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("width".into(), match (&p.width) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    Value::Object(m)
+}
+
 fn iface_describe__image_params__to_json(p: &iface_describe::ImageParams) -> Value {
     let mut m = Map::new();
     m.insert("max_candidates".into(), match (&p.max_candidates) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
@@ -402,10 +885,65 @@ fn iface_describe__image_params__to_json(p: &iface_describe::ImageParams) -> Val
     Value::Object(m)
 }
 
+fn iface_describe__image_description__from_json(v: &Value) -> Option<iface_describe::ImageDescription> {
+    let m = v.as_object()?;
+    Some(iface_describe::ImageDescription {
+        description: m.get("description").filter(|v| !v.is_null()).and_then(|v| iface_describe__image_description_details__from_json(v)),
+        metadata: m.get("metadata").filter(|v| !v.is_null()).and_then(|v| iface_describe__image_metadata__from_json(v)),
+        request_id: m.get("requestId").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    })
+}
+
+fn iface_describe__image_description_details__from_json(v: &Value) -> Option<iface_describe::ImageDescriptionDetails> {
+    let m = v.as_object()?;
+    Some(iface_describe::ImageDescriptionDetails {
+        captions: m.get("captions").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| iface_describe__image_caption__from_json(x)).collect())),
+        tags: m.get("tags").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| (x).as_str().map(|s| s.to_string())).collect())),
+    })
+}
+
+fn iface_describe__image_caption__from_json(v: &Value) -> Option<iface_describe::ImageCaption> {
+    let m = v.as_object()?;
+    Some(iface_describe::ImageCaption {
+        confidence: m.get("confidence").filter(|v| !v.is_null()).and_then(|v| (v).as_f64()),
+        text: m.get("text").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    })
+}
+
+fn iface_describe__image_metadata__from_json(v: &Value) -> Option<iface_describe::ImageMetadata> {
+    let m = v.as_object()?;
+    Some(iface_describe::ImageMetadata {
+        format: m.get("format").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        height: m.get("height").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        width: m.get("width").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+    })
+}
+
+fn iface_describe__image__ok(body: String) -> Result<iface_describe::ImageDescription, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match iface_describe__image_description__from_json(&v) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_describe__image__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
 impl iface_describe::Guest for crate::Component {
-    fn image(params: iface_describe::ImageParams) -> Result<String, String> {
+    fn image(params: iface_describe::ImageParams) -> Result<iface_describe::ImageDescription, String> {
         let json = iface_describe__image_params__to_json(&params);
-        dispatch(&OP_DESCRIBE_IMAGE, json)
+        match dispatch(&OP_DESCRIBE_IMAGE, json).and_then(iface_describe__image__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_describe__image__err(e)),
+        }
     }
 }
 use crate::exports::autostamp::microsoft::detect as iface_detect;
@@ -414,12 +952,54 @@ const OP_DETECT_OBJECTS: OpSpec = OpSpec {
     method: "POST",
     path_template: "/detect",
     fields: &[
-        FieldSpec { snake: "url", location: FieldLocation::Body },
+        FieldSpec { snake: "url", wire: "url", location: FieldLocation::Body },
     ],
     auth: &[
         AuthApply { secret_key: "apim_key", kind: AuthKind::ApiKeyHeader("Ocp-Apim-Subscription-Key") },
     ],
 };
+
+fn iface_detect__result_op__to_json(p: &iface_detect::ResultOp) -> Value {
+    let mut m = Map::new();
+    m.insert("metadata".into(), match (&p.metadata) { Some(v) => iface_detect__image_metadata__to_json(v), None => Value::Null });
+    m.insert("objects".into(), match (&p.objects) { Some(v) => Value::Array((v).iter().map(|v| iface_detect__detected_object__to_json(v)).collect()), None => Value::Null });
+    m.insert("requestId".into(), match (&p.request_id) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_detect__image_metadata__to_json(p: &iface_detect::ImageMetadata) -> Value {
+    let mut m = Map::new();
+    m.insert("format".into(), match (&p.format) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("height".into(), match (&p.height) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("width".into(), match (&p.width) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_detect__detected_object__to_json(p: &iface_detect::DetectedObject) -> Value {
+    let mut m = Map::new();
+    m.insert("confidence".into(), match (&p.confidence) { Some(v) => serde_json::Number::from_f64(*(v)).map(Value::Number).unwrap_or(Value::Null), None => Value::Null });
+    m.insert("object".into(), match (&p.object) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("parent".into(), match (&p.parent) { Some(v) => iface_detect__object_hierarchy__to_json(v), None => Value::Null });
+    m.insert("rectangle".into(), match (&p.rectangle) { Some(v) => iface_detect__bounding_rect__to_json(v), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_detect__object_hierarchy__to_json(p: &iface_detect::ObjectHierarchy) -> Value {
+    let mut m = Map::new();
+    m.insert("confidence".into(), match (&p.confidence) { Some(v) => serde_json::Number::from_f64(*(v)).map(Value::Number).unwrap_or(Value::Null), None => Value::Null });
+    m.insert("object".into(), match (&p.object) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("parent".into(), match (&p.parent) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_detect__bounding_rect__to_json(p: &iface_detect::BoundingRect) -> Value {
+    let mut m = Map::new();
+    m.insert("h".into(), match (&p.h) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("w".into(), match (&p.w) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("x".into(), match (&p.x) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("y".into(), match (&p.y) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    Value::Object(m)
+}
 
 fn iface_detect__objects_params__to_json(p: &iface_detect::ObjectsParams) -> Value {
     let mut m = Map::new();
@@ -427,10 +1007,78 @@ fn iface_detect__objects_params__to_json(p: &iface_detect::ObjectsParams) -> Val
     Value::Object(m)
 }
 
+fn iface_detect__result_op__from_json(v: &Value) -> Option<iface_detect::ResultOp> {
+    let m = v.as_object()?;
+    Some(iface_detect::ResultOp {
+        metadata: m.get("metadata").filter(|v| !v.is_null()).and_then(|v| iface_detect__image_metadata__from_json(v)),
+        objects: m.get("objects").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| iface_detect__detected_object__from_json(x)).collect())),
+        request_id: m.get("requestId").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    })
+}
+
+fn iface_detect__image_metadata__from_json(v: &Value) -> Option<iface_detect::ImageMetadata> {
+    let m = v.as_object()?;
+    Some(iface_detect::ImageMetadata {
+        format: m.get("format").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        height: m.get("height").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        width: m.get("width").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+    })
+}
+
+fn iface_detect__detected_object__from_json(v: &Value) -> Option<iface_detect::DetectedObject> {
+    let m = v.as_object()?;
+    Some(iface_detect::DetectedObject {
+        confidence: m.get("confidence").filter(|v| !v.is_null()).and_then(|v| (v).as_f64()),
+        object: m.get("object").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        parent: m.get("parent").filter(|v| !v.is_null()).and_then(|v| iface_detect__object_hierarchy__from_json(v)),
+        rectangle: m.get("rectangle").filter(|v| !v.is_null()).and_then(|v| iface_detect__bounding_rect__from_json(v)),
+    })
+}
+
+fn iface_detect__object_hierarchy__from_json(v: &Value) -> Option<iface_detect::ObjectHierarchy> {
+    let m = v.as_object()?;
+    Some(iface_detect::ObjectHierarchy {
+        confidence: m.get("confidence").filter(|v| !v.is_null()).and_then(|v| (v).as_f64()),
+        object: m.get("object").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        parent: m.get("parent").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    })
+}
+
+fn iface_detect__bounding_rect__from_json(v: &Value) -> Option<iface_detect::BoundingRect> {
+    let m = v.as_object()?;
+    Some(iface_detect::BoundingRect {
+        h: m.get("h").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        w: m.get("w").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        x: m.get("x").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        y: m.get("y").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+    })
+}
+
+fn iface_detect__objects__ok(body: String) -> Result<iface_detect::ResultOp, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match iface_detect__result_op__from_json(&v) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_detect__objects__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
 impl iface_detect::Guest for crate::Component {
-    fn objects(params: iface_detect::ObjectsParams) -> Result<String, String> {
+    fn objects(params: iface_detect::ObjectsParams) -> Result<iface_detect::ResultOp, String> {
         let json = iface_detect__objects_params__to_json(&params);
-        dispatch(&OP_DETECT_OBJECTS, json)
+        match dispatch(&OP_DETECT_OBJECTS, json).and_then(iface_detect__objects__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_detect__objects__err(e)),
+        }
     }
 }
 use crate::exports::autostamp::microsoft::generate_thumbnail as iface_generate_thumbnail;
@@ -439,10 +1087,10 @@ const OP_GENERATE_THUMBNAIL_GENERATE_THUMBNAIL: OpSpec = OpSpec {
     method: "POST",
     path_template: "/generateThumbnail",
     fields: &[
-        FieldSpec { snake: "width", location: FieldLocation::Query },
-        FieldSpec { snake: "height", location: FieldLocation::Query },
-        FieldSpec { snake: "smart_cropping", location: FieldLocation::Query },
-        FieldSpec { snake: "url", location: FieldLocation::Body },
+        FieldSpec { snake: "width", wire: "width", location: FieldLocation::Query },
+        FieldSpec { snake: "height", wire: "height", location: FieldLocation::Query },
+        FieldSpec { snake: "smart_cropping", wire: "smartCropping", location: FieldLocation::Query },
+        FieldSpec { snake: "url", wire: "url", location: FieldLocation::Body },
     ],
     auth: &[
         AuthApply { secret_key: "apim_key", kind: AuthKind::ApiKeyHeader("Ocp-Apim-Subscription-Key") },
@@ -458,10 +1106,24 @@ fn iface_generate_thumbnail__generate_thumbnail_params__to_json(p: &iface_genera
     Value::Object(m)
 }
 
+fn iface_generate_thumbnail__generate_thumbnail__ok(body: String) -> Result<String, crate::runtime::DispatchError> {
+    Ok(body)
+}
+
+fn iface_generate_thumbnail__generate_thumbnail__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
 impl iface_generate_thumbnail::Guest for crate::Component {
     fn generate_thumbnail(params: iface_generate_thumbnail::GenerateThumbnailParams) -> Result<String, String> {
         let json = iface_generate_thumbnail__generate_thumbnail_params__to_json(&params);
-        dispatch(&OP_GENERATE_THUMBNAIL_GENERATE_THUMBNAIL, json)
+        match dispatch(&OP_GENERATE_THUMBNAIL_GENERATE_THUMBNAIL, json).and_then(iface_generate_thumbnail__generate_thumbnail__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_generate_thumbnail__generate_thumbnail__err(e)),
+        }
     }
 }
 use crate::exports::autostamp::microsoft::models as iface_models;
@@ -480,9 +1142,9 @@ const OP_MODELS_ANALYZE_IMAGE_BY_DOMAIN: OpSpec = OpSpec {
     method: "POST",
     path_template: "/models/{model}/analyze",
     fields: &[
-        FieldSpec { snake: "model", location: FieldLocation::Path },
-        FieldSpec { snake: "language", location: FieldLocation::Query },
-        FieldSpec { snake: "url", location: FieldLocation::Body },
+        FieldSpec { snake: "model", wire: "model", location: FieldLocation::Path },
+        FieldSpec { snake: "language", wire: "language", location: FieldLocation::Query },
+        FieldSpec { snake: "url", wire: "url", location: FieldLocation::Body },
     ],
     auth: &[
         AuthApply { secret_key: "apim_key", kind: AuthKind::ApiKeyHeader("Ocp-Apim-Subscription-Key") },
@@ -499,6 +1161,41 @@ fn iface_models__analyze_image_by_domain_language_enum__to_str(e: &iface_models:
     }
 }
 
+fn iface_models__list_models_result__to_json(p: &iface_models::ListModelsResult) -> Value {
+    let mut m = Map::new();
+    m.insert("models".into(), match (&p.models) { Some(v) => Value::Array((v).iter().map(|v| iface_models__model_description__to_json(v)).collect()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_models__model_description__to_json(p: &iface_models::ModelDescription) -> Value {
+    let mut m = Map::new();
+    m.insert("categories".into(), match (&p.categories) { Some(v) => Value::Array((v).iter().map(|v| Value::String((v).clone())).collect()), None => Value::Null });
+    m.insert("name".into(), match (&p.name) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_models__domain_model_results__to_json(p: &iface_models::DomainModelResults) -> Value {
+    let mut m = Map::new();
+    m.insert("metadata".into(), match (&p.metadata) { Some(v) => iface_models__image_metadata__to_json(v), None => Value::Null });
+    m.insert("requestId".into(), match (&p.request_id) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("result".into(), match (&p.result_op) { Some(v) => iface_models__domain_model_results_result_op__to_json(v), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_models__image_metadata__to_json(p: &iface_models::ImageMetadata) -> Value {
+    let mut m = Map::new();
+    m.insert("format".into(), match (&p.format) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("height".into(), match (&p.height) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("width".into(), match (&p.width) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_models__domain_model_results_result_op__to_json(p: &iface_models::DomainModelResultsResultOp) -> Value {
+    let mut m = Map::new();
+    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
 fn iface_models__analyze_image_by_domain_params__to_json(p: &iface_models::AnalyzeImageByDomainParams) -> Value {
     let mut m = Map::new();
     m.insert("model".into(), Value::String((&p.model).clone()));
@@ -507,13 +1204,95 @@ fn iface_models__analyze_image_by_domain_params__to_json(p: &iface_models::Analy
     Value::Object(m)
 }
 
-impl iface_models::Guest for crate::Component {
-    fn list_models() -> Result<String, String> {
-        dispatch(&OP_MODELS_LIST_MODELS, Value::Object(Map::new()))
+fn iface_models__list_models_result__from_json(v: &Value) -> Option<iface_models::ListModelsResult> {
+    let m = v.as_object()?;
+    Some(iface_models::ListModelsResult {
+        models: m.get("models").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| iface_models__model_description__from_json(x)).collect())),
+    })
+}
+
+fn iface_models__model_description__from_json(v: &Value) -> Option<iface_models::ModelDescription> {
+    let m = v.as_object()?;
+    Some(iface_models::ModelDescription {
+        categories: m.get("categories").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| (x).as_str().map(|s| s.to_string())).collect())),
+        name: m.get("name").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    })
+}
+
+fn iface_models__domain_model_results__from_json(v: &Value) -> Option<iface_models::DomainModelResults> {
+    let m = v.as_object()?;
+    Some(iface_models::DomainModelResults {
+        metadata: m.get("metadata").filter(|v| !v.is_null()).and_then(|v| iface_models__image_metadata__from_json(v)),
+        request_id: m.get("requestId").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        result_op: m.get("result").filter(|v| !v.is_null()).and_then(|v| iface_models__domain_model_results_result_op__from_json(v)),
+    })
+}
+
+fn iface_models__image_metadata__from_json(v: &Value) -> Option<iface_models::ImageMetadata> {
+    let m = v.as_object()?;
+    Some(iface_models::ImageMetadata {
+        format: m.get("format").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        height: m.get("height").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        width: m.get("width").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+    })
+}
+
+fn iface_models__domain_model_results_result_op__from_json(v: &Value) -> Option<iface_models::DomainModelResultsResultOp> {
+    let m = v.as_object()?;
+    Some(iface_models::DomainModelResultsResultOp {
+        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    })
+}
+
+fn iface_models__list_models__ok(body: String) -> Result<iface_models::ListModelsResult, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match iface_models__list_models_result__from_json(&v) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
     }
-    fn analyze_image_by_domain(params: iface_models::AnalyzeImageByDomainParams) -> Result<String, String> {
+}
+
+fn iface_models__list_models__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
+fn iface_models__analyze_image_by_domain__ok(body: String) -> Result<iface_models::DomainModelResults, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match iface_models__domain_model_results__from_json(&v) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_models__analyze_image_by_domain__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
+impl iface_models::Guest for crate::Component {
+    fn list_models() -> Result<iface_models::ListModelsResult, String> {
+        match dispatch(&OP_MODELS_LIST_MODELS, Value::Object(Map::new())).and_then(iface_models__list_models__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_models__list_models__err(e)),
+        }
+    }
+    fn analyze_image_by_domain(params: iface_models::AnalyzeImageByDomainParams) -> Result<iface_models::DomainModelResults, String> {
         let json = iface_models__analyze_image_by_domain_params__to_json(&params);
-        dispatch(&OP_MODELS_ANALYZE_IMAGE_BY_DOMAIN, json)
+        match dispatch(&OP_MODELS_ANALYZE_IMAGE_BY_DOMAIN, json).and_then(iface_models__analyze_image_by_domain__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_models__analyze_image_by_domain__err(e)),
+        }
     }
 }
 use crate::exports::autostamp::microsoft::ocr as iface_ocr;
@@ -522,9 +1301,9 @@ const OP_OCR_RECOGNIZE_PRINTED_TEXT: OpSpec = OpSpec {
     method: "POST",
     path_template: "/ocr",
     fields: &[
-        FieldSpec { snake: "detect_orientation", location: FieldLocation::Query },
-        FieldSpec { snake: "language", location: FieldLocation::Query },
-        FieldSpec { snake: "url", location: FieldLocation::Body },
+        FieldSpec { snake: "detect_orientation", wire: "detectOrientation", location: FieldLocation::Query },
+        FieldSpec { snake: "language", wire: "language", location: FieldLocation::Query },
+        FieldSpec { snake: "url", wire: "url", location: FieldLocation::Body },
     ],
     auth: &[
         AuthApply { secret_key: "apim_key", kind: AuthKind::ApiKeyHeader("Ocp-Apim-Subscription-Key") },
@@ -563,6 +1342,36 @@ fn iface_ocr__recognize_printed_text_language_enum__to_str(e: &iface_ocr::Recogn
     }
 }
 
+fn iface_ocr__result_op__to_json(p: &iface_ocr::ResultOp) -> Value {
+    let mut m = Map::new();
+    m.insert("language".into(), match (&p.language) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("orientation".into(), match (&p.orientation) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("regions".into(), match (&p.regions) { Some(v) => Value::Array((v).iter().map(|v| iface_ocr__region__to_json(v)).collect()), None => Value::Null });
+    m.insert("textAngle".into(), match (&p.text_angle) { Some(v) => serde_json::Number::from_f64(*(v)).map(Value::Number).unwrap_or(Value::Null), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_ocr__region__to_json(p: &iface_ocr::Region) -> Value {
+    let mut m = Map::new();
+    m.insert("boundingBox".into(), match (&p.bounding_box) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("lines".into(), match (&p.lines) { Some(v) => Value::Array((v).iter().map(|v| iface_ocr__line__to_json(v)).collect()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_ocr__line__to_json(p: &iface_ocr::Line) -> Value {
+    let mut m = Map::new();
+    m.insert("boundingBox".into(), match (&p.bounding_box) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("words".into(), match (&p.words) { Some(v) => Value::Array((v).iter().map(|v| iface_ocr__word__to_json(v)).collect()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_ocr__word__to_json(p: &iface_ocr::Word) -> Value {
+    let mut m = Map::new();
+    m.insert("boundingBox".into(), match (&p.bounding_box) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("text".into(), match (&p.text) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
 fn iface_ocr__recognize_printed_text_params__to_json(p: &iface_ocr::RecognizePrintedTextParams) -> Value {
     let mut m = Map::new();
     m.insert("detect_orientation".into(), Value::Bool(*(&p.detect_orientation)));
@@ -571,10 +1380,65 @@ fn iface_ocr__recognize_printed_text_params__to_json(p: &iface_ocr::RecognizePri
     Value::Object(m)
 }
 
+fn iface_ocr__result_op__from_json(v: &Value) -> Option<iface_ocr::ResultOp> {
+    let m = v.as_object()?;
+    Some(iface_ocr::ResultOp {
+        language: m.get("language").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        orientation: m.get("orientation").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        regions: m.get("regions").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| iface_ocr__region__from_json(x)).collect())),
+        text_angle: m.get("textAngle").filter(|v| !v.is_null()).and_then(|v| (v).as_f64()),
+    })
+}
+
+fn iface_ocr__region__from_json(v: &Value) -> Option<iface_ocr::Region> {
+    let m = v.as_object()?;
+    Some(iface_ocr::Region {
+        bounding_box: m.get("boundingBox").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        lines: m.get("lines").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| iface_ocr__line__from_json(x)).collect())),
+    })
+}
+
+fn iface_ocr__line__from_json(v: &Value) -> Option<iface_ocr::Line> {
+    let m = v.as_object()?;
+    Some(iface_ocr::Line {
+        bounding_box: m.get("boundingBox").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        words: m.get("words").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| iface_ocr__word__from_json(x)).collect())),
+    })
+}
+
+fn iface_ocr__word__from_json(v: &Value) -> Option<iface_ocr::Word> {
+    let m = v.as_object()?;
+    Some(iface_ocr::Word {
+        bounding_box: m.get("boundingBox").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        text: m.get("text").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    })
+}
+
+fn iface_ocr__recognize_printed_text__ok(body: String) -> Result<iface_ocr::ResultOp, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match iface_ocr__result_op__from_json(&v) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_ocr__recognize_printed_text__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
 impl iface_ocr::Guest for crate::Component {
-    fn recognize_printed_text(params: iface_ocr::RecognizePrintedTextParams) -> Result<String, String> {
+    fn recognize_printed_text(params: iface_ocr::RecognizePrintedTextParams) -> Result<iface_ocr::ResultOp, String> {
         let json = iface_ocr__recognize_printed_text_params__to_json(&params);
-        dispatch(&OP_OCR_RECOGNIZE_PRINTED_TEXT, json)
+        match dispatch(&OP_OCR_RECOGNIZE_PRINTED_TEXT, json).and_then(iface_ocr__recognize_printed_text__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_ocr__recognize_printed_text__err(e)),
+        }
     }
 }
 use crate::exports::autostamp::microsoft::tag as iface_tag;
@@ -583,8 +1447,8 @@ const OP_TAG_IMAGE: OpSpec = OpSpec {
     method: "POST",
     path_template: "/tag",
     fields: &[
-        FieldSpec { snake: "language", location: FieldLocation::Query },
-        FieldSpec { snake: "url", location: FieldLocation::Body },
+        FieldSpec { snake: "language", wire: "language", location: FieldLocation::Query },
+        FieldSpec { snake: "url", wire: "url", location: FieldLocation::Body },
     ],
     auth: &[
         AuthApply { secret_key: "apim_key", kind: AuthKind::ApiKeyHeader("Ocp-Apim-Subscription-Key") },
@@ -601,6 +1465,30 @@ fn iface_tag__image_language_enum__to_str(e: &iface_tag::ImageLanguageEnum) -> &
     }
 }
 
+fn iface_tag__result_op__to_json(p: &iface_tag::ResultOp) -> Value {
+    let mut m = Map::new();
+    m.insert("metadata".into(), match (&p.metadata) { Some(v) => iface_tag__image_metadata__to_json(v), None => Value::Null });
+    m.insert("requestId".into(), match (&p.request_id) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("tags".into(), match (&p.tags) { Some(v) => Value::Array((v).iter().map(|v| iface_tag__image_tag__to_json(v)).collect()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_tag__image_metadata__to_json(p: &iface_tag::ImageMetadata) -> Value {
+    let mut m = Map::new();
+    m.insert("format".into(), match (&p.format) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("height".into(), match (&p.height) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("width".into(), match (&p.width) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_tag__image_tag__to_json(p: &iface_tag::ImageTag) -> Value {
+    let mut m = Map::new();
+    m.insert("confidence".into(), match (&p.confidence) { Some(v) => serde_json::Number::from_f64(*(v)).map(Value::Number).unwrap_or(Value::Null), None => Value::Null });
+    m.insert("hint".into(), match (&p.hint) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("name".into(), match (&p.name) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
 fn iface_tag__image_params__to_json(p: &iface_tag::ImageParams) -> Value {
     let mut m = Map::new();
     m.insert("language".into(), match (&p.language) { Some(v) => Value::String(iface_tag__image_language_enum__to_str(v).into()), None => Value::Null });
@@ -608,10 +1496,58 @@ fn iface_tag__image_params__to_json(p: &iface_tag::ImageParams) -> Value {
     Value::Object(m)
 }
 
+fn iface_tag__result_op__from_json(v: &Value) -> Option<iface_tag::ResultOp> {
+    let m = v.as_object()?;
+    Some(iface_tag::ResultOp {
+        metadata: m.get("metadata").filter(|v| !v.is_null()).and_then(|v| iface_tag__image_metadata__from_json(v)),
+        request_id: m.get("requestId").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        tags: m.get("tags").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| iface_tag__image_tag__from_json(x)).collect())),
+    })
+}
+
+fn iface_tag__image_metadata__from_json(v: &Value) -> Option<iface_tag::ImageMetadata> {
+    let m = v.as_object()?;
+    Some(iface_tag::ImageMetadata {
+        format: m.get("format").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        height: m.get("height").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        width: m.get("width").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+    })
+}
+
+fn iface_tag__image_tag__from_json(v: &Value) -> Option<iface_tag::ImageTag> {
+    let m = v.as_object()?;
+    Some(iface_tag::ImageTag {
+        confidence: m.get("confidence").filter(|v| !v.is_null()).and_then(|v| (v).as_f64()),
+        hint: m.get("hint").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        name: m.get("name").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    })
+}
+
+fn iface_tag__image__ok(body: String) -> Result<iface_tag::ResultOp, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match iface_tag__result_op__from_json(&v) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_tag__image__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
 impl iface_tag::Guest for crate::Component {
-    fn image(params: iface_tag::ImageParams) -> Result<String, String> {
+    fn image(params: iface_tag::ImageParams) -> Result<iface_tag::ResultOp, String> {
         let json = iface_tag__image_params__to_json(&params);
-        dispatch(&OP_TAG_IMAGE, json)
+        match dispatch(&OP_TAG_IMAGE, json).and_then(iface_tag__image__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_tag__image__err(e)),
+        }
     }
 }
 

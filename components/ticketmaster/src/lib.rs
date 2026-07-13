@@ -44,10 +44,15 @@ pub(crate) enum FieldLocation {
     Body,
 }
 
-/// A single operation parameter: the snake-case key it carries in the params JSON and where
-/// it belongs in the request.
+/// A single operation parameter. `snake` keys the field in the internal params JSON (and, for a
+/// path field, matches the `{snake}` placeholder in the path template); `wire` is the verbatim name
+/// the field takes on the HTTP wire (query key, header name, or body property). The two differ
+/// whenever the source name isn't already snake_case (e.g. `dryRun` → snake `dry_run`, wire
+/// `dryRun`), and let distinct inputs that share a snake key (`DateCreated`, `DateCreated<`) still
+/// travel under their true names.
 pub(crate) struct FieldSpec {
     pub(crate) snake: &'static str,
+    pub(crate) wire: &'static str,
     pub(crate) location: FieldLocation,
 }
 
@@ -71,6 +76,16 @@ pub(crate) struct AuthApply {
     pub(crate) kind: AuthKind,
 }
 
+/// The failure modes of [`dispatch`], kept structured so each generated operation can map them
+/// onto its own typed error: an `Http` failure carries the response status and body (routed to
+/// the matching error-variant case), while a `Transport` failure carries a message for the
+/// catch-all case (a secret lookup, connection, or decode failure that never produced an HTTP
+/// status).
+pub(crate) enum DispatchError {
+    Http { status: u16, body: String },
+    Transport(String),
+}
+
 /// A single API operation: HTTP method, path template (with `{snake}` placeholders), the
 /// parameter fields, and the security schemes to apply.
 pub(crate) struct OpSpec {
@@ -81,8 +96,9 @@ pub(crate) struct OpSpec {
 }
 
 /// Execute `op` with the supplied `params` (a JSON object keyed by snake-case field names)
-/// and return the response body as a string, or an error message.
-pub(crate) fn dispatch(op: &OpSpec, params: Value) -> Result<String, String> {
+/// and return the raw 2xx response body, or a structured [`DispatchError`] the caller maps
+/// onto the operation's typed error.
+pub(crate) fn dispatch(op: &OpSpec, params: Value) -> Result<String, DispatchError> {
     let obj = match &params {
         Value::Object(map) => Some(map),
         _ => None,
@@ -105,10 +121,10 @@ pub(crate) fn dispatch(op: &OpSpec, params: Value) -> Result<String, String> {
                 let placeholder = format!("{{{}}}", field.snake);
                 path = path.replace(&placeholder, &percent_encode(&scalar(value)));
             }
-            FieldLocation::Query => query.push((field.snake.to_string(), scalar(value))),
-            FieldLocation::Header => headers.push((field.snake.to_string(), scalar(value))),
+            FieldLocation::Query => query.push((field.wire.to_string(), scalar(value))),
+            FieldLocation::Header => headers.push((field.wire.to_string(), scalar(value))),
             FieldLocation::Body => {
-                body.insert(field.snake.to_string(), value.clone());
+                body.insert(field.wire.to_string(), value.clone());
             }
         }
     }
@@ -116,7 +132,7 @@ pub(crate) fn dispatch(op: &OpSpec, params: Value) -> Result<String, String> {
     // Apply each resolved security scheme, sourcing its value from wasmcloud:secrets.
     let mut cookies: Vec<String> = Vec::new();
     for apply in op.auth {
-        let secret = fetch_secret(apply.secret_key)?;
+        let secret = fetch_secret(apply.secret_key).map_err(DispatchError::Transport)?;
         match &apply.kind {
             AuthKind::Bearer => headers.push(("authorization".into(), format!("Bearer {secret}"))),
             AuthKind::Basic => {
@@ -177,17 +193,18 @@ fn fetch_secret(key: &str) -> Result<String, String> {
 }
 
 /// Build and send the outgoing request with `wstd`, returning the response body on a 2xx
-/// status. The generated guest exports are synchronous, so the async `wstd` client is driven
-/// to completion on a local reactor via `wstd::runtime::block_on`.
+/// status and a structured [`DispatchError`] otherwise. The generated guest exports are
+/// synchronous, so the async `wstd` client is driven to completion on a local reactor via
+/// `wstd::runtime::block_on`.
 fn perform(
     method: &str,
     path_with_query: &str,
     headers: &[(String, String)],
     body: &[u8],
-) -> Result<String, String> {
+) -> Result<String, DispatchError> {
     let url = join_url(crate::BASE_URL, path_with_query);
     let method = Method::from_bytes(method.as_bytes())
-        .map_err(|err| format!("invalid HTTP method `{method}`: {err}"))?;
+        .map_err(|err| DispatchError::Transport(format!("invalid HTTP method `{method}`: {err}")))?;
 
     let mut builder = Request::builder().method(method).uri(url);
     for (name, value) in headers {
@@ -199,27 +216,29 @@ fn perform(
         } else {
             Body::from(body.to_vec())
         })
-        .map_err(|err| format!("failed to build request: {err}"))?;
+        .map_err(|err| DispatchError::Transport(format!("failed to build request: {err}")))?;
 
     wstd::runtime::block_on(async move {
         let client = Client::new();
         let response = client
             .send(request)
             .await
-            .map_err(|err| format!("request failed: {err:#}"))?;
+            .map_err(|err| DispatchError::Transport(format!("request failed: {err:#}")))?;
 
         let status = response.status().as_u16();
         let mut response_body = response.into_body();
-        let bytes = response_body
-            .contents()
-            .await
-            .map_err(|err| format!("failed to read response body: {err:#}"))?;
+        let bytes = response_body.contents().await.map_err(|err| {
+            DispatchError::Transport(format!("failed to read response body: {err:#}"))
+        })?;
         let body_text = String::from_utf8_lossy(bytes).into_owned();
 
         if (200..300).contains(&status) {
             Ok(body_text)
         } else {
-            Err(format!("HTTP {status}: {body_text}"))
+            Err(DispatchError::Http {
+                status,
+                body: body_text,
+            })
         }
     })
 }
@@ -288,18 +307,18 @@ const OP_DISCOVERY_FIND: OpSpec = OpSpec {
     method: "GET",
     path_template: "/discovery/v2/attractions",
     fields: &[
-        FieldSpec { snake: "sort", location: FieldLocation::Query },
-        FieldSpec { snake: "classification_name", location: FieldLocation::Query },
-        FieldSpec { snake: "classification_id", location: FieldLocation::Query },
-        FieldSpec { snake: "keyword", location: FieldLocation::Query },
-        FieldSpec { snake: "id", location: FieldLocation::Query },
-        FieldSpec { snake: "source", location: FieldLocation::Query },
-        FieldSpec { snake: "include_test", location: FieldLocation::Query },
-        FieldSpec { snake: "page", location: FieldLocation::Query },
-        FieldSpec { snake: "size", location: FieldLocation::Query },
-        FieldSpec { snake: "locale", location: FieldLocation::Query },
-        FieldSpec { snake: "include_licensed_content", location: FieldLocation::Query },
-        FieldSpec { snake: "include_spellcheck", location: FieldLocation::Query },
+        FieldSpec { snake: "sort", wire: "sort", location: FieldLocation::Query },
+        FieldSpec { snake: "classification_name", wire: "classificationName", location: FieldLocation::Query },
+        FieldSpec { snake: "classification_id", wire: "classificationId", location: FieldLocation::Query },
+        FieldSpec { snake: "keyword", wire: "keyword", location: FieldLocation::Query },
+        FieldSpec { snake: "id", wire: "id", location: FieldLocation::Query },
+        FieldSpec { snake: "source", wire: "source", location: FieldLocation::Query },
+        FieldSpec { snake: "include_test", wire: "includeTest", location: FieldLocation::Query },
+        FieldSpec { snake: "page", wire: "page", location: FieldLocation::Query },
+        FieldSpec { snake: "size", wire: "size", location: FieldLocation::Query },
+        FieldSpec { snake: "locale", wire: "locale", location: FieldLocation::Query },
+        FieldSpec { snake: "include_licensed_content", wire: "includeLicensedContent", location: FieldLocation::Query },
+        FieldSpec { snake: "include_spellcheck", wire: "includeSpellcheck", location: FieldLocation::Query },
     ],
     auth: &[
     ],
@@ -309,9 +328,9 @@ const OP_DISCOVERY_GET: OpSpec = OpSpec {
     method: "GET",
     path_template: "/discovery/v2/attractions/{id}",
     fields: &[
-        FieldSpec { snake: "id", location: FieldLocation::Path },
-        FieldSpec { snake: "locale", location: FieldLocation::Query },
-        FieldSpec { snake: "include_licensed_content", location: FieldLocation::Query },
+        FieldSpec { snake: "id", wire: "id", location: FieldLocation::Path },
+        FieldSpec { snake: "locale", wire: "locale", location: FieldLocation::Query },
+        FieldSpec { snake: "include_licensed_content", wire: "includeLicensedContent", location: FieldLocation::Query },
     ],
     auth: &[
     ],
@@ -321,16 +340,16 @@ const OP_DISCOVERY_GET_DISCOVERY_V2_CLASSIFICATIONS: OpSpec = OpSpec {
     method: "GET",
     path_template: "/discovery/v2/classifications",
     fields: &[
-        FieldSpec { snake: "sort", location: FieldLocation::Query },
-        FieldSpec { snake: "keyword", location: FieldLocation::Query },
-        FieldSpec { snake: "id", location: FieldLocation::Query },
-        FieldSpec { snake: "source", location: FieldLocation::Query },
-        FieldSpec { snake: "include_test", location: FieldLocation::Query },
-        FieldSpec { snake: "page", location: FieldLocation::Query },
-        FieldSpec { snake: "size", location: FieldLocation::Query },
-        FieldSpec { snake: "locale", location: FieldLocation::Query },
-        FieldSpec { snake: "include_licensed_content", location: FieldLocation::Query },
-        FieldSpec { snake: "include_spellcheck", location: FieldLocation::Query },
+        FieldSpec { snake: "sort", wire: "sort", location: FieldLocation::Query },
+        FieldSpec { snake: "keyword", wire: "keyword", location: FieldLocation::Query },
+        FieldSpec { snake: "id", wire: "id", location: FieldLocation::Query },
+        FieldSpec { snake: "source", wire: "source", location: FieldLocation::Query },
+        FieldSpec { snake: "include_test", wire: "includeTest", location: FieldLocation::Query },
+        FieldSpec { snake: "page", wire: "page", location: FieldLocation::Query },
+        FieldSpec { snake: "size", wire: "size", location: FieldLocation::Query },
+        FieldSpec { snake: "locale", wire: "locale", location: FieldLocation::Query },
+        FieldSpec { snake: "include_licensed_content", wire: "includeLicensedContent", location: FieldLocation::Query },
+        FieldSpec { snake: "include_spellcheck", wire: "includeSpellcheck", location: FieldLocation::Query },
     ],
     auth: &[
     ],
@@ -340,9 +359,9 @@ const OP_DISCOVERY_GET_GENRE: OpSpec = OpSpec {
     method: "GET",
     path_template: "/discovery/v2/classifications/genres/{id}",
     fields: &[
-        FieldSpec { snake: "id", location: FieldLocation::Path },
-        FieldSpec { snake: "locale", location: FieldLocation::Query },
-        FieldSpec { snake: "include_licensed_content", location: FieldLocation::Query },
+        FieldSpec { snake: "id", wire: "id", location: FieldLocation::Path },
+        FieldSpec { snake: "locale", wire: "locale", location: FieldLocation::Query },
+        FieldSpec { snake: "include_licensed_content", wire: "includeLicensedContent", location: FieldLocation::Query },
     ],
     auth: &[
     ],
@@ -352,9 +371,9 @@ const OP_DISCOVERY_GET_SEGMENT: OpSpec = OpSpec {
     method: "GET",
     path_template: "/discovery/v2/classifications/segments/{id}",
     fields: &[
-        FieldSpec { snake: "id", location: FieldLocation::Path },
-        FieldSpec { snake: "locale", location: FieldLocation::Query },
-        FieldSpec { snake: "include_licensed_content", location: FieldLocation::Query },
+        FieldSpec { snake: "id", wire: "id", location: FieldLocation::Path },
+        FieldSpec { snake: "locale", wire: "locale", location: FieldLocation::Query },
+        FieldSpec { snake: "include_licensed_content", wire: "includeLicensedContent", location: FieldLocation::Query },
     ],
     auth: &[
     ],
@@ -364,9 +383,9 @@ const OP_DISCOVERY_GET_SUBGENRE: OpSpec = OpSpec {
     method: "GET",
     path_template: "/discovery/v2/classifications/subgenres/{id}",
     fields: &[
-        FieldSpec { snake: "id", location: FieldLocation::Path },
-        FieldSpec { snake: "locale", location: FieldLocation::Query },
-        FieldSpec { snake: "include_licensed_content", location: FieldLocation::Query },
+        FieldSpec { snake: "id", wire: "id", location: FieldLocation::Path },
+        FieldSpec { snake: "locale", wire: "locale", location: FieldLocation::Query },
+        FieldSpec { snake: "include_licensed_content", wire: "includeLicensedContent", location: FieldLocation::Query },
     ],
     auth: &[
     ],
@@ -376,9 +395,9 @@ const OP_DISCOVERY_GET_DISCOVERY_V2_CLASSIFICATIONS_ID: OpSpec = OpSpec {
     method: "GET",
     path_template: "/discovery/v2/classifications/{id}",
     fields: &[
-        FieldSpec { snake: "id", location: FieldLocation::Path },
-        FieldSpec { snake: "locale", location: FieldLocation::Query },
-        FieldSpec { snake: "include_licensed_content", location: FieldLocation::Query },
+        FieldSpec { snake: "id", wire: "id", location: FieldLocation::Path },
+        FieldSpec { snake: "locale", wire: "locale", location: FieldLocation::Query },
+        FieldSpec { snake: "include_licensed_content", wire: "includeLicensedContent", location: FieldLocation::Query },
     ],
     auth: &[
     ],
@@ -388,42 +407,42 @@ const OP_DISCOVERY_GET_DISCOVERY_V2_EVENTS: OpSpec = OpSpec {
     method: "GET",
     path_template: "/discovery/v2/events",
     fields: &[
-        FieldSpec { snake: "sort", location: FieldLocation::Query },
-        FieldSpec { snake: "start_date_time", location: FieldLocation::Query },
-        FieldSpec { snake: "end_date_time", location: FieldLocation::Query },
-        FieldSpec { snake: "onsale_start_date_time", location: FieldLocation::Query },
-        FieldSpec { snake: "onsale_on_start_date", location: FieldLocation::Query },
-        FieldSpec { snake: "onsale_on_after_start_date", location: FieldLocation::Query },
-        FieldSpec { snake: "onsale_end_date_time", location: FieldLocation::Query },
-        FieldSpec { snake: "city", location: FieldLocation::Query },
-        FieldSpec { snake: "country_code", location: FieldLocation::Query },
-        FieldSpec { snake: "state_code", location: FieldLocation::Query },
-        FieldSpec { snake: "postal_code", location: FieldLocation::Query },
-        FieldSpec { snake: "venue_id", location: FieldLocation::Query },
-        FieldSpec { snake: "attraction_id", location: FieldLocation::Query },
-        FieldSpec { snake: "segment_id", location: FieldLocation::Query },
-        FieldSpec { snake: "segment_name", location: FieldLocation::Query },
-        FieldSpec { snake: "classification_name", location: FieldLocation::Query },
-        FieldSpec { snake: "classification_id", location: FieldLocation::Query },
-        FieldSpec { snake: "market_id", location: FieldLocation::Query },
-        FieldSpec { snake: "promoter_id", location: FieldLocation::Query },
-        FieldSpec { snake: "dma_id", location: FieldLocation::Query },
-        FieldSpec { snake: "include_tba", location: FieldLocation::Query },
-        FieldSpec { snake: "include_tbd", location: FieldLocation::Query },
-        FieldSpec { snake: "client_visibility", location: FieldLocation::Query },
-        FieldSpec { snake: "latlong", location: FieldLocation::Query },
-        FieldSpec { snake: "radius", location: FieldLocation::Query },
-        FieldSpec { snake: "unit", location: FieldLocation::Query },
-        FieldSpec { snake: "geo_point", location: FieldLocation::Query },
-        FieldSpec { snake: "keyword", location: FieldLocation::Query },
-        FieldSpec { snake: "id", location: FieldLocation::Query },
-        FieldSpec { snake: "source", location: FieldLocation::Query },
-        FieldSpec { snake: "include_test", location: FieldLocation::Query },
-        FieldSpec { snake: "page", location: FieldLocation::Query },
-        FieldSpec { snake: "size", location: FieldLocation::Query },
-        FieldSpec { snake: "locale", location: FieldLocation::Query },
-        FieldSpec { snake: "include_licensed_content", location: FieldLocation::Query },
-        FieldSpec { snake: "include_spellcheck", location: FieldLocation::Query },
+        FieldSpec { snake: "sort", wire: "sort", location: FieldLocation::Query },
+        FieldSpec { snake: "start_date_time", wire: "startDateTime", location: FieldLocation::Query },
+        FieldSpec { snake: "end_date_time", wire: "endDateTime", location: FieldLocation::Query },
+        FieldSpec { snake: "onsale_start_date_time", wire: "onsaleStartDateTime", location: FieldLocation::Query },
+        FieldSpec { snake: "onsale_on_start_date", wire: "onsaleOnStartDate", location: FieldLocation::Query },
+        FieldSpec { snake: "onsale_on_after_start_date", wire: "onsaleOnAfterStartDate", location: FieldLocation::Query },
+        FieldSpec { snake: "onsale_end_date_time", wire: "onsaleEndDateTime", location: FieldLocation::Query },
+        FieldSpec { snake: "city", wire: "city", location: FieldLocation::Query },
+        FieldSpec { snake: "country_code", wire: "countryCode", location: FieldLocation::Query },
+        FieldSpec { snake: "state_code", wire: "stateCode", location: FieldLocation::Query },
+        FieldSpec { snake: "postal_code", wire: "postalCode", location: FieldLocation::Query },
+        FieldSpec { snake: "venue_id", wire: "venueId", location: FieldLocation::Query },
+        FieldSpec { snake: "attraction_id", wire: "attractionId", location: FieldLocation::Query },
+        FieldSpec { snake: "segment_id", wire: "segmentId", location: FieldLocation::Query },
+        FieldSpec { snake: "segment_name", wire: "segmentName", location: FieldLocation::Query },
+        FieldSpec { snake: "classification_name", wire: "classificationName", location: FieldLocation::Query },
+        FieldSpec { snake: "classification_id", wire: "classificationId", location: FieldLocation::Query },
+        FieldSpec { snake: "market_id", wire: "marketId", location: FieldLocation::Query },
+        FieldSpec { snake: "promoter_id", wire: "promoterId", location: FieldLocation::Query },
+        FieldSpec { snake: "dma_id", wire: "dmaId", location: FieldLocation::Query },
+        FieldSpec { snake: "include_tba", wire: "includeTBA", location: FieldLocation::Query },
+        FieldSpec { snake: "include_tbd", wire: "includeTBD", location: FieldLocation::Query },
+        FieldSpec { snake: "client_visibility", wire: "clientVisibility", location: FieldLocation::Query },
+        FieldSpec { snake: "latlong", wire: "latlong", location: FieldLocation::Query },
+        FieldSpec { snake: "radius", wire: "radius", location: FieldLocation::Query },
+        FieldSpec { snake: "unit", wire: "unit", location: FieldLocation::Query },
+        FieldSpec { snake: "geo_point", wire: "geoPoint", location: FieldLocation::Query },
+        FieldSpec { snake: "keyword", wire: "keyword", location: FieldLocation::Query },
+        FieldSpec { snake: "id", wire: "id", location: FieldLocation::Query },
+        FieldSpec { snake: "source", wire: "source", location: FieldLocation::Query },
+        FieldSpec { snake: "include_test", wire: "includeTest", location: FieldLocation::Query },
+        FieldSpec { snake: "page", wire: "page", location: FieldLocation::Query },
+        FieldSpec { snake: "size", wire: "size", location: FieldLocation::Query },
+        FieldSpec { snake: "locale", wire: "locale", location: FieldLocation::Query },
+        FieldSpec { snake: "include_licensed_content", wire: "includeLicensedContent", location: FieldLocation::Query },
+        FieldSpec { snake: "include_spellcheck", wire: "includeSpellcheck", location: FieldLocation::Query },
     ],
     auth: &[
     ],
@@ -433,9 +452,9 @@ const OP_DISCOVERY_GET_DISCOVERY_V2_EVENTS_ID: OpSpec = OpSpec {
     method: "GET",
     path_template: "/discovery/v2/events/{id}",
     fields: &[
-        FieldSpec { snake: "id", location: FieldLocation::Path },
-        FieldSpec { snake: "locale", location: FieldLocation::Query },
-        FieldSpec { snake: "include_licensed_content", location: FieldLocation::Query },
+        FieldSpec { snake: "id", wire: "id", location: FieldLocation::Path },
+        FieldSpec { snake: "locale", wire: "locale", location: FieldLocation::Query },
+        FieldSpec { snake: "include_licensed_content", wire: "includeLicensedContent", location: FieldLocation::Query },
     ],
     auth: &[
     ],
@@ -445,9 +464,9 @@ const OP_DISCOVERY_GET_IMAGES: OpSpec = OpSpec {
     method: "GET",
     path_template: "/discovery/v2/events/{id}/images",
     fields: &[
-        FieldSpec { snake: "id", location: FieldLocation::Path },
-        FieldSpec { snake: "locale", location: FieldLocation::Query },
-        FieldSpec { snake: "include_licensed_content", location: FieldLocation::Query },
+        FieldSpec { snake: "id", wire: "id", location: FieldLocation::Path },
+        FieldSpec { snake: "locale", wire: "locale", location: FieldLocation::Query },
+        FieldSpec { snake: "include_licensed_content", wire: "includeLicensedContent", location: FieldLocation::Query },
     ],
     auth: &[
     ],
@@ -457,22 +476,22 @@ const OP_DISCOVERY_GET_DISCOVERY_V2_VENUES: OpSpec = OpSpec {
     method: "GET",
     path_template: "/discovery/v2/venues",
     fields: &[
-        FieldSpec { snake: "sort", location: FieldLocation::Query },
-        FieldSpec { snake: "state_code", location: FieldLocation::Query },
-        FieldSpec { snake: "country_code", location: FieldLocation::Query },
-        FieldSpec { snake: "latlong", location: FieldLocation::Query },
-        FieldSpec { snake: "radius", location: FieldLocation::Query },
-        FieldSpec { snake: "unit", location: FieldLocation::Query },
-        FieldSpec { snake: "geo_point", location: FieldLocation::Query },
-        FieldSpec { snake: "keyword", location: FieldLocation::Query },
-        FieldSpec { snake: "id", location: FieldLocation::Query },
-        FieldSpec { snake: "source", location: FieldLocation::Query },
-        FieldSpec { snake: "include_test", location: FieldLocation::Query },
-        FieldSpec { snake: "page", location: FieldLocation::Query },
-        FieldSpec { snake: "size", location: FieldLocation::Query },
-        FieldSpec { snake: "locale", location: FieldLocation::Query },
-        FieldSpec { snake: "include_licensed_content", location: FieldLocation::Query },
-        FieldSpec { snake: "include_spellcheck", location: FieldLocation::Query },
+        FieldSpec { snake: "sort", wire: "sort", location: FieldLocation::Query },
+        FieldSpec { snake: "state_code", wire: "stateCode", location: FieldLocation::Query },
+        FieldSpec { snake: "country_code", wire: "countryCode", location: FieldLocation::Query },
+        FieldSpec { snake: "latlong", wire: "latlong", location: FieldLocation::Query },
+        FieldSpec { snake: "radius", wire: "radius", location: FieldLocation::Query },
+        FieldSpec { snake: "unit", wire: "unit", location: FieldLocation::Query },
+        FieldSpec { snake: "geo_point", wire: "geoPoint", location: FieldLocation::Query },
+        FieldSpec { snake: "keyword", wire: "keyword", location: FieldLocation::Query },
+        FieldSpec { snake: "id", wire: "id", location: FieldLocation::Query },
+        FieldSpec { snake: "source", wire: "source", location: FieldLocation::Query },
+        FieldSpec { snake: "include_test", wire: "includeTest", location: FieldLocation::Query },
+        FieldSpec { snake: "page", wire: "page", location: FieldLocation::Query },
+        FieldSpec { snake: "size", wire: "size", location: FieldLocation::Query },
+        FieldSpec { snake: "locale", wire: "locale", location: FieldLocation::Query },
+        FieldSpec { snake: "include_licensed_content", wire: "includeLicensedContent", location: FieldLocation::Query },
+        FieldSpec { snake: "include_spellcheck", wire: "includeSpellcheck", location: FieldLocation::Query },
     ],
     auth: &[
     ],
@@ -482,9 +501,9 @@ const OP_DISCOVERY_GET_DISCOVERY_V2_VENUES_ID: OpSpec = OpSpec {
     method: "GET",
     path_template: "/discovery/v2/venues/{id}",
     fields: &[
-        FieldSpec { snake: "id", location: FieldLocation::Path },
-        FieldSpec { snake: "locale", location: FieldLocation::Query },
-        FieldSpec { snake: "include_licensed_content", location: FieldLocation::Query },
+        FieldSpec { snake: "id", wire: "id", location: FieldLocation::Path },
+        FieldSpec { snake: "locale", wire: "locale", location: FieldLocation::Query },
+        FieldSpec { snake: "include_licensed_content", wire: "includeLicensedContent", location: FieldLocation::Query },
     ],
     auth: &[
     ],
@@ -514,11 +533,495 @@ fn iface_discovery__find_include_licensed_content_enum__to_str(e: &iface_discove
     }
 }
 
+fn iface_discovery__image_ratio_enum__to_str(e: &iface_discovery::ImageRatioEnum) -> &'static str {
+    match e {
+        iface_discovery::ImageRatioEnum::V16V9 => "16_9",
+        iface_discovery::ImageRatioEnum::V3V2 => "3_2",
+        iface_discovery::ImageRatioEnum::V4V3 => "4_3",
+    }
+}
+
+fn iface_discovery__attraction_type_op_enum__to_str(e: &iface_discovery::AttractionTypeOpEnum) -> &'static str {
+    match e {
+        iface_discovery::AttractionTypeOpEnum::Event => "event",
+        iface_discovery::AttractionTypeOpEnum::Venue => "venue",
+        iface_discovery::AttractionTypeOpEnum::Attraction => "attraction",
+    }
+}
+
 fn iface_discovery__get_discovery_v2_events_unit_enum__to_str(e: &iface_discovery::GetDiscoveryV2EventsUnitEnum) -> &'static str {
     match e {
         iface_discovery::GetDiscoveryV2EventsUnitEnum::Miles => "miles",
         iface_discovery::GetDiscoveryV2EventsUnitEnum::Km => "km",
     }
+}
+
+fn iface_discovery__event_status_code_enum__to_str(e: &iface_discovery::EventStatusCodeEnum) -> &'static str {
+    match e {
+        iface_discovery::EventStatusCodeEnum::Onsale => "onsale",
+        iface_discovery::EventStatusCodeEnum::Offsale => "offsale",
+        iface_discovery::EventStatusCodeEnum::Canceled => "canceled",
+        iface_discovery::EventStatusCodeEnum::Postponed => "postponed",
+        iface_discovery::EventStatusCodeEnum::Rescheduled => "rescheduled",
+    }
+}
+
+fn iface_discovery__price_range_type_op_enum__to_str(e: &iface_discovery::PriceRangeTypeOpEnum) -> &'static str {
+    match e {
+        iface_discovery::PriceRangeTypeOpEnum::Standard => "standard",
+    }
+}
+
+fn iface_discovery__event_images_type_op_enum__to_str(e: &iface_discovery::EventImagesTypeOpEnum) -> &'static str {
+    match e {
+        iface_discovery::EventImagesTypeOpEnum::Event => "event",
+    }
+}
+
+fn iface_discovery__twitter_handle_enum__to_str(e: &iface_discovery::TwitterHandleEnum) -> &'static str {
+    match e {
+        iface_discovery::TwitterHandleEnum::ATwitterHandle => "@a Twitter handle",
+    }
+}
+
+fn iface_discovery__attraction__to_json(p: &iface_discovery::Attraction) -> Value {
+    let mut m = Map::new();
+    m.insert("additionalInfo".into(), match (&p.additional_info) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("classifications".into(), match (&p.classifications) { Some(v) => Value::Array((v).iter().map(|v| iface_discovery__classification__to_json(v)).collect()), None => Value::Null });
+    m.insert("description".into(), match (&p.description) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("externalLinks".into(), match (&p.external_links) { Some(v) => iface_discovery__attraction_external_links__to_json(v), None => Value::Null });
+    m.insert("id".into(), Value::String((&p.id).clone()));
+    m.insert("images".into(), match (&p.images) { Some(v) => Value::Array((v).iter().map(|v| iface_discovery__image__to_json(v)).collect()), None => Value::Null });
+    m.insert("locale".into(), match (&p.locale) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("name".into(), match (&p.name) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("test".into(), match (&p.test) { Some(v) => Value::Bool(*(v)), None => Value::Null });
+    m.insert("type".into(), Value::String(iface_discovery__attraction_type_op_enum__to_str(&p.type_op).into()));
+    m.insert("upcomingEvents".into(), match (&p.upcoming_events) { Some(v) => iface_discovery__attraction_upcoming_events__to_json(v), None => Value::Null });
+    m.insert("url".into(), match (&p.url) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_discovery__classification__to_json(p: &iface_discovery::Classification) -> Value {
+    let mut m = Map::new();
+    m.insert("genre".into(), match (&p.genre) { Some(v) => iface_discovery__level__to_json(v), None => Value::Null });
+    m.insert("primary".into(), match (&p.primary) { Some(v) => Value::Bool(*(v)), None => Value::Null });
+    m.insert("segment".into(), match (&p.segment) { Some(v) => iface_discovery__segment__to_json(v), None => Value::Null });
+    m.insert("subGenre".into(), match (&p.sub_genre) { Some(v) => iface_discovery__level__to_json(v), None => Value::Null });
+    m.insert("subType".into(), match (&p.sub_type) { Some(v) => iface_discovery__level__to_json(v), None => Value::Null });
+    m.insert("type".into(), match (&p.type_op) { Some(v) => iface_discovery__level__to_json(v), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_discovery__level__to_json(p: &iface_discovery::Level) -> Value {
+    let mut m = Map::new();
+    m.insert("id".into(), match (&p.id) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("name".into(), match (&p.name) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_discovery__segment__to_json(p: &iface_discovery::Segment) -> Value {
+    let mut m = Map::new();
+    m.insert("id".into(), match (&p.id) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("name".into(), match (&p.name) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_discovery__attraction_external_links__to_json(p: &iface_discovery::AttractionExternalLinks) -> Value {
+    let mut m = Map::new();
+    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_discovery__image__to_json(p: &iface_discovery::Image) -> Value {
+    let mut m = Map::new();
+    m.insert("attribution".into(), match (&p.attribution) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("fallback".into(), match (&p.fallback) { Some(v) => Value::Bool(*(v)), None => Value::Null });
+    m.insert("height".into(), match (&p.height) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("ratio".into(), match (&p.ratio) { Some(v) => Value::String(iface_discovery__image_ratio_enum__to_str(v).into()), None => Value::Null });
+    m.insert("url".into(), match (&p.url) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("width".into(), match (&p.width) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_discovery__attraction_upcoming_events__to_json(p: &iface_discovery::AttractionUpcomingEvents) -> Value {
+    let mut m = Map::new();
+    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_discovery__genre__to_json(p: &iface_discovery::Genre) -> Value {
+    let mut m = Map::new();
+    m.insert("id".into(), match (&p.id) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("name".into(), match (&p.name) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_discovery__event__to_json(p: &iface_discovery::Event) -> Value {
+    let mut m = Map::new();
+    m.insert("accessibility".into(), match (&p.accessibility) { Some(v) => iface_discovery__accessibility__to_json(v), None => Value::Null });
+    m.insert("additionalInfo".into(), match (&p.additional_info) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("classifications".into(), match (&p.classifications) { Some(v) => Value::Array((v).iter().map(|v| iface_discovery__classification__to_json(v)).collect()), None => Value::Null });
+    m.insert("dates".into(), match (&p.dates) { Some(v) => iface_discovery__event_dates__to_json(v), None => Value::Null });
+    m.insert("description".into(), match (&p.description) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("distance".into(), match (&p.distance) { Some(v) => serde_json::Number::from_f64(*(v)).map(Value::Number).unwrap_or(Value::Null), None => Value::Null });
+    m.insert("externalLinks".into(), match (&p.external_links) { Some(v) => iface_discovery__event_external_links__to_json(v), None => Value::Null });
+    m.insert("id".into(), Value::String((&p.id).clone()));
+    m.insert("images".into(), match (&p.images) { Some(v) => Value::Array((v).iter().map(|v| iface_discovery__image__to_json(v)).collect()), None => Value::Null });
+    m.insert("info".into(), match (&p.info) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("locale".into(), match (&p.locale) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("location".into(), match (&p.location) { Some(v) => iface_discovery__location__to_json(v), None => Value::Null });
+    m.insert("name".into(), match (&p.name) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("outlets".into(), match (&p.outlets) { Some(v) => Value::Array((v).iter().map(|v| iface_discovery__outlet__to_json(v)).collect()), None => Value::Null });
+    m.insert("place".into(), match (&p.place) { Some(v) => iface_discovery__place__to_json(v), None => Value::Null });
+    m.insert("pleaseNote".into(), match (&p.please_note) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("priceRanges".into(), match (&p.price_ranges) { Some(v) => Value::Array((v).iter().map(|v| iface_discovery__price_range__to_json(v)).collect()), None => Value::Null });
+    m.insert("products".into(), match (&p.products) { Some(v) => Value::Array((v).iter().map(|v| iface_discovery__product__to_json(v)).collect()), None => Value::Null });
+    m.insert("promoter".into(), match (&p.promoter) { Some(v) => iface_discovery__promoter__to_json(v), None => Value::Null });
+    m.insert("promoters".into(), match (&p.promoters) { Some(v) => Value::Array((v).iter().map(|v| iface_discovery__promoter__to_json(v)).collect()), None => Value::Null });
+    m.insert("sales".into(), match (&p.sales) { Some(v) => iface_discovery__event_sales_dates__to_json(v), None => Value::Null });
+    m.insert("seatmap".into(), match (&p.seatmap) { Some(v) => iface_discovery__seat_map__to_json(v), None => Value::Null });
+    m.insert("test".into(), match (&p.test) { Some(v) => Value::Bool(*(v)), None => Value::Null });
+    m.insert("type".into(), Value::String(iface_discovery__attraction_type_op_enum__to_str(&p.type_op).into()));
+    m.insert("units".into(), match (&p.units) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("url".into(), match (&p.url) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_discovery__accessibility__to_json(p: &iface_discovery::Accessibility) -> Value {
+    let mut m = Map::new();
+    m.insert("info".into(), match (&p.info) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_discovery__event_dates__to_json(p: &iface_discovery::EventDates) -> Value {
+    let mut m = Map::new();
+    m.insert("access".into(), match (&p.access) { Some(v) => iface_discovery__access_dates__to_json(v), None => Value::Null });
+    m.insert("end".into(), match (&p.end) { Some(v) => iface_discovery__end_dates__to_json(v), None => Value::Null });
+    m.insert("spanMultipleDays".into(), match (&p.span_multiple_days) { Some(v) => Value::Bool(*(v)), None => Value::Null });
+    m.insert("start".into(), match (&p.start) { Some(v) => iface_discovery__start_dates__to_json(v), None => Value::Null });
+    m.insert("status".into(), match (&p.status) { Some(v) => iface_discovery__event_status__to_json(v), None => Value::Null });
+    m.insert("timezone".into(), match (&p.timezone) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_discovery__access_dates__to_json(p: &iface_discovery::AccessDates) -> Value {
+    let mut m = Map::new();
+    m.insert("endApproximate".into(), match (&p.end_approximate) { Some(v) => Value::Bool(*(v)), None => Value::Null });
+    m.insert("endDateTime".into(), match (&p.end_date_time) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("startApproximate".into(), match (&p.start_approximate) { Some(v) => Value::Bool(*(v)), None => Value::Null });
+    m.insert("startDateTime".into(), match (&p.start_date_time) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_discovery__end_dates__to_json(p: &iface_discovery::EndDates) -> Value {
+    let mut m = Map::new();
+    m.insert("approximate".into(), match (&p.approximate) { Some(v) => Value::Bool(*(v)), None => Value::Null });
+    m.insert("dateTime".into(), match (&p.date_time) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("localDate".into(), match (&p.local_date) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("localTime".into(), match (&p.local_time) { Some(v) => iface_discovery__local_time__to_json(v), None => Value::Null });
+    m.insert("noSpecificTime".into(), match (&p.no_specific_time) { Some(v) => Value::Bool(*(v)), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_discovery__local_time__to_json(p: &iface_discovery::LocalTime) -> Value {
+    let mut m = Map::new();
+    m.insert("chronology".into(), match (&p.chronology) { Some(v) => iface_discovery__chronology__to_json(v), None => Value::Null });
+    m.insert("fieldTypes".into(), match (&p.field_types) { Some(v) => Value::Array((v).iter().map(|v| iface_discovery__date_time_field_type__to_json(v)).collect()), None => Value::Null });
+    m.insert("fields".into(), match (&p.fields) { Some(v) => Value::Array((v).iter().map(|v| iface_discovery__date_time_field__to_json(v)).collect()), None => Value::Null });
+    m.insert("hourOfDay".into(), match (&p.hour_of_day) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("millisOfDay".into(), match (&p.millis_of_day) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("millisOfSecond".into(), match (&p.millis_of_second) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("minuteOfHour".into(), match (&p.minute_of_hour) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("secondOfMinute".into(), match (&p.second_of_minute) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("values".into(), match (&p.values) { Some(v) => Value::Array((v).iter().map(|v| Value::Number(serde_json::Number::from(*(v)))).collect()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_discovery__chronology__to_json(p: &iface_discovery::Chronology) -> Value {
+    let mut m = Map::new();
+    m.insert("zone".into(), match (&p.zone) { Some(v) => iface_discovery__date_time_zone__to_json(v), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_discovery__date_time_zone__to_json(p: &iface_discovery::DateTimeZone) -> Value {
+    let mut m = Map::new();
+    m.insert("fixed".into(), match (&p.fixed) { Some(v) => Value::Bool(*(v)), None => Value::Null });
+    m.insert("id".into(), match (&p.id) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_discovery__date_time_field_type__to_json(p: &iface_discovery::DateTimeFieldType) -> Value {
+    let mut m = Map::new();
+    m.insert("durationType".into(), match (&p.duration_type) { Some(v) => iface_discovery__duration_field_type__to_json(v), None => Value::Null });
+    m.insert("name".into(), match (&p.name) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("rangeDurationType".into(), match (&p.range_duration_type) { Some(v) => iface_discovery__duration_field_type__to_json(v), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_discovery__duration_field_type__to_json(p: &iface_discovery::DurationFieldType) -> Value {
+    let mut m = Map::new();
+    m.insert("name".into(), match (&p.name) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_discovery__date_time_field__to_json(p: &iface_discovery::DateTimeField) -> Value {
+    let mut m = Map::new();
+    m.insert("durationField".into(), match (&p.duration_field) { Some(v) => iface_discovery__duration_field__to_json(v), None => Value::Null });
+    m.insert("leapDurationField".into(), match (&p.leap_duration_field) { Some(v) => iface_discovery__duration_field__to_json(v), None => Value::Null });
+    m.insert("lenient".into(), match (&p.lenient) { Some(v) => Value::Bool(*(v)), None => Value::Null });
+    m.insert("maximumValue".into(), match (&p.maximum_value) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("minimumValue".into(), match (&p.minimum_value) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("name".into(), match (&p.name) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("rangeDurationField".into(), match (&p.range_duration_field) { Some(v) => iface_discovery__duration_field__to_json(v), None => Value::Null });
+    m.insert("supported".into(), match (&p.supported) { Some(v) => Value::Bool(*(v)), None => Value::Null });
+    m.insert("type".into(), match (&p.type_op) { Some(v) => iface_discovery__date_time_field_type__to_json(v), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_discovery__duration_field__to_json(p: &iface_discovery::DurationField) -> Value {
+    let mut m = Map::new();
+    m.insert("name".into(), match (&p.name) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("precise".into(), match (&p.precise) { Some(v) => Value::Bool(*(v)), None => Value::Null });
+    m.insert("supported".into(), match (&p.supported) { Some(v) => Value::Bool(*(v)), None => Value::Null });
+    m.insert("type".into(), match (&p.type_op) { Some(v) => iface_discovery__duration_field_type__to_json(v), None => Value::Null });
+    m.insert("unitMillis".into(), match (&p.unit_millis) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_discovery__start_dates__to_json(p: &iface_discovery::StartDates) -> Value {
+    let mut m = Map::new();
+    m.insert("dateTBA".into(), match (&p.date_tba) { Some(v) => Value::Bool(*(v)), None => Value::Null });
+    m.insert("dateTBD".into(), match (&p.date_tbd) { Some(v) => Value::Bool(*(v)), None => Value::Null });
+    m.insert("dateTime".into(), match (&p.date_time) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("localDate".into(), match (&p.local_date) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("localTime".into(), match (&p.local_time) { Some(v) => iface_discovery__local_time__to_json(v), None => Value::Null });
+    m.insert("noSpecificTime".into(), match (&p.no_specific_time) { Some(v) => Value::Bool(*(v)), None => Value::Null });
+    m.insert("timeTBA".into(), match (&p.time_tba) { Some(v) => Value::Bool(*(v)), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_discovery__event_status__to_json(p: &iface_discovery::EventStatus) -> Value {
+    let mut m = Map::new();
+    m.insert("code".into(), match (&p.code) { Some(v) => Value::String(iface_discovery__event_status_code_enum__to_str(v).into()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_discovery__event_external_links__to_json(p: &iface_discovery::EventExternalLinks) -> Value {
+    let mut m = Map::new();
+    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_discovery__location__to_json(p: &iface_discovery::Location) -> Value {
+    let mut m = Map::new();
+    m.insert("latitude".into(), match (&p.latitude) { Some(v) => serde_json::Number::from_f64(*(v)).map(Value::Number).unwrap_or(Value::Null), None => Value::Null });
+    m.insert("longitude".into(), match (&p.longitude) { Some(v) => serde_json::Number::from_f64(*(v)).map(Value::Number).unwrap_or(Value::Null), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_discovery__outlet__to_json(p: &iface_discovery::Outlet) -> Value {
+    let mut m = Map::new();
+    m.insert("type".into(), match (&p.type_op) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("url".into(), match (&p.url) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_discovery__place__to_json(p: &iface_discovery::Place) -> Value {
+    let mut m = Map::new();
+    m.insert("address".into(), match (&p.address) { Some(v) => iface_discovery__address__to_json(v), None => Value::Null });
+    m.insert("area".into(), match (&p.area) { Some(v) => iface_discovery__area__to_json(v), None => Value::Null });
+    m.insert("city".into(), match (&p.city) { Some(v) => iface_discovery__city__to_json(v), None => Value::Null });
+    m.insert("country".into(), match (&p.country) { Some(v) => iface_discovery__country__to_json(v), None => Value::Null });
+    m.insert("location".into(), match (&p.location) { Some(v) => iface_discovery__location__to_json(v), None => Value::Null });
+    m.insert("name".into(), match (&p.name) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("postalCode".into(), match (&p.postal_code) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("state".into(), match (&p.state) { Some(v) => iface_discovery__state__to_json(v), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_discovery__address__to_json(p: &iface_discovery::Address) -> Value {
+    let mut m = Map::new();
+    m.insert("line1".into(), match (&p.line1) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("line2".into(), match (&p.line2) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("line3".into(), match (&p.line3) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_discovery__area__to_json(p: &iface_discovery::Area) -> Value {
+    let mut m = Map::new();
+    m.insert("name".into(), match (&p.name) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_discovery__city__to_json(p: &iface_discovery::City) -> Value {
+    let mut m = Map::new();
+    m.insert("name".into(), match (&p.name) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_discovery__country__to_json(p: &iface_discovery::Country) -> Value {
+    let mut m = Map::new();
+    m.insert("countryCode".into(), match (&p.country_code) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("name".into(), match (&p.name) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_discovery__state__to_json(p: &iface_discovery::State) -> Value {
+    let mut m = Map::new();
+    m.insert("name".into(), match (&p.name) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("stateCode".into(), match (&p.state_code) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_discovery__price_range__to_json(p: &iface_discovery::PriceRange) -> Value {
+    let mut m = Map::new();
+    m.insert("currency".into(), match (&p.currency) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("max".into(), match (&p.max) { Some(v) => serde_json::Number::from_f64(*(v)).map(Value::Number).unwrap_or(Value::Null), None => Value::Null });
+    m.insert("min".into(), match (&p.min) { Some(v) => serde_json::Number::from_f64(*(v)).map(Value::Number).unwrap_or(Value::Null), None => Value::Null });
+    m.insert("type".into(), match (&p.type_op) { Some(v) => Value::String(iface_discovery__price_range_type_op_enum__to_str(v).into()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_discovery__product__to_json(p: &iface_discovery::Product) -> Value {
+    let mut m = Map::new();
+    m.insert("id".into(), match (&p.id) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("name".into(), match (&p.name) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("type".into(), match (&p.type_op) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("url".into(), match (&p.url) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_discovery__promoter__to_json(p: &iface_discovery::Promoter) -> Value {
+    let mut m = Map::new();
+    m.insert("description".into(), match (&p.description) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("id".into(), match (&p.id) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("name".into(), match (&p.name) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_discovery__event_sales_dates__to_json(p: &iface_discovery::EventSalesDates) -> Value {
+    let mut m = Map::new();
+    m.insert("presales".into(), match (&p.presales) { Some(v) => Value::Array((v).iter().map(|v| iface_discovery__presale__to_json(v)).collect()), None => Value::Null });
+    m.insert("public".into(), match (&p.public) { Some(v) => iface_discovery__public_sale_dates__to_json(v), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_discovery__presale__to_json(p: &iface_discovery::Presale) -> Value {
+    let mut m = Map::new();
+    m.insert("description".into(), match (&p.description) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("endDateTime".into(), match (&p.end_date_time) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("name".into(), match (&p.name) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("startDateTime".into(), match (&p.start_date_time) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("url".into(), match (&p.url) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_discovery__public_sale_dates__to_json(p: &iface_discovery::PublicSaleDates) -> Value {
+    let mut m = Map::new();
+    m.insert("endDateTime".into(), match (&p.end_date_time) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("startDateTime".into(), match (&p.start_date_time) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("startTBD".into(), match (&p.start_tbd) { Some(v) => Value::Bool(*(v)), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_discovery__seat_map__to_json(p: &iface_discovery::SeatMap) -> Value {
+    let mut m = Map::new();
+    m.insert("staticUrl".into(), match (&p.static_url) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_discovery__event_images__to_json(p: &iface_discovery::EventImages) -> Value {
+    let mut m = Map::new();
+    m.insert("id".into(), Value::String((&p.id).clone()));
+    m.insert("images".into(), match (&p.images) { Some(v) => Value::Array((v).iter().map(|v| iface_discovery__image__to_json(v)).collect()), None => Value::Null });
+    m.insert("type".into(), Value::String(iface_discovery__event_images_type_op_enum__to_str(&p.type_op).into()));
+    Value::Object(m)
+}
+
+fn iface_discovery__venue__to_json(p: &iface_discovery::Venue) -> Value {
+    let mut m = Map::new();
+    m.insert("accessibleSeatingDetail".into(), match (&p.accessible_seating_detail) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("additionalInfo".into(), match (&p.additional_info) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("address".into(), match (&p.address) { Some(v) => iface_discovery__address__to_json(v), None => Value::Null });
+    m.insert("boxOfficeInfo".into(), match (&p.box_office_info) { Some(v) => iface_discovery__venue_box_office_info__to_json(v), None => Value::Null });
+    m.insert("city".into(), match (&p.city) { Some(v) => iface_discovery__city__to_json(v), None => Value::Null });
+    m.insert("country".into(), match (&p.country) { Some(v) => iface_discovery__country__to_json(v), None => Value::Null });
+    m.insert("currency".into(), match (&p.currency) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("description".into(), match (&p.description) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("distance".into(), match (&p.distance) { Some(v) => serde_json::Number::from_f64(*(v)).map(Value::Number).unwrap_or(Value::Null), None => Value::Null });
+    m.insert("dma".into(), match (&p.dma) { Some(v) => Value::Array((v).iter().map(|v| iface_discovery__dma__to_json(v)).collect()), None => Value::Null });
+    m.insert("externalLinks".into(), match (&p.external_links) { Some(v) => iface_discovery__venue_external_links__to_json(v), None => Value::Null });
+    m.insert("generalInfo".into(), match (&p.general_info) { Some(v) => iface_discovery__venue_general_info__to_json(v), None => Value::Null });
+    m.insert("id".into(), Value::String((&p.id).clone()));
+    m.insert("images".into(), match (&p.images) { Some(v) => Value::Array((v).iter().map(|v| iface_discovery__image__to_json(v)).collect()), None => Value::Null });
+    m.insert("locale".into(), match (&p.locale) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("location".into(), match (&p.location) { Some(v) => iface_discovery__location__to_json(v), None => Value::Null });
+    m.insert("markets".into(), match (&p.markets) { Some(v) => Value::Array((v).iter().map(|v| iface_discovery__market__to_json(v)).collect()), None => Value::Null });
+    m.insert("name".into(), match (&p.name) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("parkingDetail".into(), match (&p.parking_detail) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("postalCode".into(), match (&p.postal_code) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("social".into(), match (&p.social) { Some(v) => iface_discovery__social__to_json(v), None => Value::Null });
+    m.insert("state".into(), match (&p.state) { Some(v) => iface_discovery__state__to_json(v), None => Value::Null });
+    m.insert("test".into(), match (&p.test) { Some(v) => Value::Bool(*(v)), None => Value::Null });
+    m.insert("timezone".into(), match (&p.timezone) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("type".into(), Value::String(iface_discovery__attraction_type_op_enum__to_str(&p.type_op).into()));
+    m.insert("units".into(), match (&p.units) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("upcomingEvents".into(), match (&p.upcoming_events) { Some(v) => iface_discovery__venue_upcoming_events__to_json(v), None => Value::Null });
+    m.insert("url".into(), match (&p.url) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_discovery__venue_box_office_info__to_json(p: &iface_discovery::VenueBoxOfficeInfo) -> Value {
+    let mut m = Map::new();
+    m.insert("acceptedPaymentDetail".into(), match (&p.accepted_payment_detail) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("openHoursDetail".into(), match (&p.open_hours_detail) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("phoneNumberDetail".into(), match (&p.phone_number_detail) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("willCallDetail".into(), match (&p.will_call_detail) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_discovery__dma__to_json(p: &iface_discovery::Dma) -> Value {
+    let mut m = Map::new();
+    m.insert("id".into(), match (&p.id) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_discovery__venue_external_links__to_json(p: &iface_discovery::VenueExternalLinks) -> Value {
+    let mut m = Map::new();
+    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_discovery__venue_general_info__to_json(p: &iface_discovery::VenueGeneralInfo) -> Value {
+    let mut m = Map::new();
+    m.insert("childRule".into(), match (&p.child_rule) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("generalRule".into(), match (&p.general_rule) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_discovery__market__to_json(p: &iface_discovery::Market) -> Value {
+    let mut m = Map::new();
+    m.insert("id".into(), match (&p.id) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_discovery__social__to_json(p: &iface_discovery::Social) -> Value {
+    let mut m = Map::new();
+    m.insert("twitter".into(), match (&p.twitter) { Some(v) => iface_discovery__twitter__to_json(v), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_discovery__twitter__to_json(p: &iface_discovery::Twitter) -> Value {
+    let mut m = Map::new();
+    m.insert("handle".into(), match (&p.handle) { Some(v) => Value::String(iface_discovery__twitter_handle_enum__to_str(v).into()), None => Value::Null });
+    m.insert("hashtags".into(), match (&p.hashtags) { Some(v) => Value::Array((v).iter().map(|v| Value::String((v).clone())).collect()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_discovery__venue_upcoming_events__to_json(p: &iface_discovery::VenueUpcomingEvents) -> Value {
+    let mut m = Map::new();
+    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
 }
 
 fn iface_discovery__find_params__to_json(p: &iface_discovery::FindParams) -> Value {
@@ -679,54 +1182,844 @@ fn iface_discovery__get_discovery_v2_venues_id_params__to_json(p: &iface_discove
     Value::Object(m)
 }
 
+fn iface_discovery__attraction__from_json(v: &Value) -> Option<iface_discovery::Attraction> {
+    let m = v.as_object()?;
+    Some(iface_discovery::Attraction {
+        additional_info: m.get("additionalInfo").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        classifications: m.get("classifications").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| iface_discovery__classification__from_json(x)).collect())),
+        description: m.get("description").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        external_links: m.get("externalLinks").filter(|v| !v.is_null()).and_then(|v| iface_discovery__attraction_external_links__from_json(v)),
+        id: m.get("id").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        images: m.get("images").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| iface_discovery__image__from_json(x)).collect())),
+        locale: m.get("locale").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        name: m.get("name").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        test: m.get("test").filter(|v| !v.is_null()).and_then(|v| (v).as_bool()),
+        type_op: match m.get("type").and_then(|v| (v).as_str().and_then(iface_discovery__attraction_type_op_enum__from_str)) { Some(x) => x, None => return None },
+        upcoming_events: m.get("upcomingEvents").filter(|v| !v.is_null()).and_then(|v| iface_discovery__attraction_upcoming_events__from_json(v)),
+        url: m.get("url").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    })
+}
+
+fn iface_discovery__classification__from_json(v: &Value) -> Option<iface_discovery::Classification> {
+    let m = v.as_object()?;
+    Some(iface_discovery::Classification {
+        genre: m.get("genre").filter(|v| !v.is_null()).and_then(|v| iface_discovery__level__from_json(v)),
+        primary: m.get("primary").filter(|v| !v.is_null()).and_then(|v| (v).as_bool()),
+        segment: m.get("segment").filter(|v| !v.is_null()).and_then(|v| iface_discovery__segment__from_json(v)),
+        sub_genre: m.get("subGenre").filter(|v| !v.is_null()).and_then(|v| iface_discovery__level__from_json(v)),
+        sub_type: m.get("subType").filter(|v| !v.is_null()).and_then(|v| iface_discovery__level__from_json(v)),
+        type_op: m.get("type").filter(|v| !v.is_null()).and_then(|v| iface_discovery__level__from_json(v)),
+    })
+}
+
+fn iface_discovery__level__from_json(v: &Value) -> Option<iface_discovery::Level> {
+    let m = v.as_object()?;
+    Some(iface_discovery::Level {
+        id: m.get("id").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        name: m.get("name").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    })
+}
+
+fn iface_discovery__segment__from_json(v: &Value) -> Option<iface_discovery::Segment> {
+    let m = v.as_object()?;
+    Some(iface_discovery::Segment {
+        id: m.get("id").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        name: m.get("name").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    })
+}
+
+fn iface_discovery__attraction_external_links__from_json(v: &Value) -> Option<iface_discovery::AttractionExternalLinks> {
+    let m = v.as_object()?;
+    Some(iface_discovery::AttractionExternalLinks {
+        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    })
+}
+
+fn iface_discovery__image__from_json(v: &Value) -> Option<iface_discovery::Image> {
+    let m = v.as_object()?;
+    Some(iface_discovery::Image {
+        attribution: m.get("attribution").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        fallback: m.get("fallback").filter(|v| !v.is_null()).and_then(|v| (v).as_bool()),
+        height: m.get("height").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        ratio: m.get("ratio").filter(|v| !v.is_null()).and_then(|v| (v).as_str().and_then(iface_discovery__image_ratio_enum__from_str)),
+        url: m.get("url").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        width: m.get("width").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+    })
+}
+
+fn iface_discovery__attraction_upcoming_events__from_json(v: &Value) -> Option<iface_discovery::AttractionUpcomingEvents> {
+    let m = v.as_object()?;
+    Some(iface_discovery::AttractionUpcomingEvents {
+        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    })
+}
+
+fn iface_discovery__genre__from_json(v: &Value) -> Option<iface_discovery::Genre> {
+    let m = v.as_object()?;
+    Some(iface_discovery::Genre {
+        id: m.get("id").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        name: m.get("name").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    })
+}
+
+fn iface_discovery__event__from_json(v: &Value) -> Option<iface_discovery::Event> {
+    let m = v.as_object()?;
+    Some(iface_discovery::Event {
+        accessibility: m.get("accessibility").filter(|v| !v.is_null()).and_then(|v| iface_discovery__accessibility__from_json(v)),
+        additional_info: m.get("additionalInfo").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        classifications: m.get("classifications").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| iface_discovery__classification__from_json(x)).collect())),
+        dates: m.get("dates").filter(|v| !v.is_null()).and_then(|v| iface_discovery__event_dates__from_json(v)),
+        description: m.get("description").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        distance: m.get("distance").filter(|v| !v.is_null()).and_then(|v| (v).as_f64()),
+        external_links: m.get("externalLinks").filter(|v| !v.is_null()).and_then(|v| iface_discovery__event_external_links__from_json(v)),
+        id: m.get("id").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        images: m.get("images").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| iface_discovery__image__from_json(x)).collect())),
+        info: m.get("info").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        locale: m.get("locale").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        location: m.get("location").filter(|v| !v.is_null()).and_then(|v| iface_discovery__location__from_json(v)),
+        name: m.get("name").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        outlets: m.get("outlets").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| iface_discovery__outlet__from_json(x)).collect())),
+        place: m.get("place").filter(|v| !v.is_null()).and_then(|v| iface_discovery__place__from_json(v)),
+        please_note: m.get("pleaseNote").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        price_ranges: m.get("priceRanges").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| iface_discovery__price_range__from_json(x)).collect())),
+        products: m.get("products").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| iface_discovery__product__from_json(x)).collect())),
+        promoter: m.get("promoter").filter(|v| !v.is_null()).and_then(|v| iface_discovery__promoter__from_json(v)),
+        promoters: m.get("promoters").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| iface_discovery__promoter__from_json(x)).collect())),
+        sales: m.get("sales").filter(|v| !v.is_null()).and_then(|v| iface_discovery__event_sales_dates__from_json(v)),
+        seatmap: m.get("seatmap").filter(|v| !v.is_null()).and_then(|v| iface_discovery__seat_map__from_json(v)),
+        test: m.get("test").filter(|v| !v.is_null()).and_then(|v| (v).as_bool()),
+        type_op: match m.get("type").and_then(|v| (v).as_str().and_then(iface_discovery__attraction_type_op_enum__from_str)) { Some(x) => x, None => return None },
+        units: m.get("units").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        url: m.get("url").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    })
+}
+
+fn iface_discovery__accessibility__from_json(v: &Value) -> Option<iface_discovery::Accessibility> {
+    let m = v.as_object()?;
+    Some(iface_discovery::Accessibility {
+        info: m.get("info").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    })
+}
+
+fn iface_discovery__event_dates__from_json(v: &Value) -> Option<iface_discovery::EventDates> {
+    let m = v.as_object()?;
+    Some(iface_discovery::EventDates {
+        access: m.get("access").filter(|v| !v.is_null()).and_then(|v| iface_discovery__access_dates__from_json(v)),
+        end: m.get("end").filter(|v| !v.is_null()).and_then(|v| iface_discovery__end_dates__from_json(v)),
+        span_multiple_days: m.get("spanMultipleDays").filter(|v| !v.is_null()).and_then(|v| (v).as_bool()),
+        start: m.get("start").filter(|v| !v.is_null()).and_then(|v| iface_discovery__start_dates__from_json(v)),
+        status: m.get("status").filter(|v| !v.is_null()).and_then(|v| iface_discovery__event_status__from_json(v)),
+        timezone: m.get("timezone").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    })
+}
+
+fn iface_discovery__access_dates__from_json(v: &Value) -> Option<iface_discovery::AccessDates> {
+    let m = v.as_object()?;
+    Some(iface_discovery::AccessDates {
+        end_approximate: m.get("endApproximate").filter(|v| !v.is_null()).and_then(|v| (v).as_bool()),
+        end_date_time: m.get("endDateTime").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        start_approximate: m.get("startApproximate").filter(|v| !v.is_null()).and_then(|v| (v).as_bool()),
+        start_date_time: m.get("startDateTime").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    })
+}
+
+fn iface_discovery__end_dates__from_json(v: &Value) -> Option<iface_discovery::EndDates> {
+    let m = v.as_object()?;
+    Some(iface_discovery::EndDates {
+        approximate: m.get("approximate").filter(|v| !v.is_null()).and_then(|v| (v).as_bool()),
+        date_time: m.get("dateTime").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        local_date: m.get("localDate").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        local_time: m.get("localTime").filter(|v| !v.is_null()).and_then(|v| iface_discovery__local_time__from_json(v)),
+        no_specific_time: m.get("noSpecificTime").filter(|v| !v.is_null()).and_then(|v| (v).as_bool()),
+    })
+}
+
+fn iface_discovery__local_time__from_json(v: &Value) -> Option<iface_discovery::LocalTime> {
+    let m = v.as_object()?;
+    Some(iface_discovery::LocalTime {
+        chronology: m.get("chronology").filter(|v| !v.is_null()).and_then(|v| iface_discovery__chronology__from_json(v)),
+        field_types: m.get("fieldTypes").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| iface_discovery__date_time_field_type__from_json(x)).collect())),
+        fields: m.get("fields").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| iface_discovery__date_time_field__from_json(x)).collect())),
+        hour_of_day: m.get("hourOfDay").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        millis_of_day: m.get("millisOfDay").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        millis_of_second: m.get("millisOfSecond").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        minute_of_hour: m.get("minuteOfHour").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        second_of_minute: m.get("secondOfMinute").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        values: m.get("values").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| (x).as_i64().map(|n| n as i32)).collect())),
+    })
+}
+
+fn iface_discovery__chronology__from_json(v: &Value) -> Option<iface_discovery::Chronology> {
+    let m = v.as_object()?;
+    Some(iface_discovery::Chronology {
+        zone: m.get("zone").filter(|v| !v.is_null()).and_then(|v| iface_discovery__date_time_zone__from_json(v)),
+    })
+}
+
+fn iface_discovery__date_time_zone__from_json(v: &Value) -> Option<iface_discovery::DateTimeZone> {
+    let m = v.as_object()?;
+    Some(iface_discovery::DateTimeZone {
+        fixed: m.get("fixed").filter(|v| !v.is_null()).and_then(|v| (v).as_bool()),
+        id: m.get("id").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    })
+}
+
+fn iface_discovery__date_time_field_type__from_json(v: &Value) -> Option<iface_discovery::DateTimeFieldType> {
+    let m = v.as_object()?;
+    Some(iface_discovery::DateTimeFieldType {
+        duration_type: m.get("durationType").filter(|v| !v.is_null()).and_then(|v| iface_discovery__duration_field_type__from_json(v)),
+        name: m.get("name").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        range_duration_type: m.get("rangeDurationType").filter(|v| !v.is_null()).and_then(|v| iface_discovery__duration_field_type__from_json(v)),
+    })
+}
+
+fn iface_discovery__duration_field_type__from_json(v: &Value) -> Option<iface_discovery::DurationFieldType> {
+    let m = v.as_object()?;
+    Some(iface_discovery::DurationFieldType {
+        name: m.get("name").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    })
+}
+
+fn iface_discovery__date_time_field__from_json(v: &Value) -> Option<iface_discovery::DateTimeField> {
+    let m = v.as_object()?;
+    Some(iface_discovery::DateTimeField {
+        duration_field: m.get("durationField").filter(|v| !v.is_null()).and_then(|v| iface_discovery__duration_field__from_json(v)),
+        leap_duration_field: m.get("leapDurationField").filter(|v| !v.is_null()).and_then(|v| iface_discovery__duration_field__from_json(v)),
+        lenient: m.get("lenient").filter(|v| !v.is_null()).and_then(|v| (v).as_bool()),
+        maximum_value: m.get("maximumValue").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        minimum_value: m.get("minimumValue").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        name: m.get("name").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        range_duration_field: m.get("rangeDurationField").filter(|v| !v.is_null()).and_then(|v| iface_discovery__duration_field__from_json(v)),
+        supported: m.get("supported").filter(|v| !v.is_null()).and_then(|v| (v).as_bool()),
+        type_op: m.get("type").filter(|v| !v.is_null()).and_then(|v| iface_discovery__date_time_field_type__from_json(v)),
+    })
+}
+
+fn iface_discovery__duration_field__from_json(v: &Value) -> Option<iface_discovery::DurationField> {
+    let m = v.as_object()?;
+    Some(iface_discovery::DurationField {
+        name: m.get("name").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        precise: m.get("precise").filter(|v| !v.is_null()).and_then(|v| (v).as_bool()),
+        supported: m.get("supported").filter(|v| !v.is_null()).and_then(|v| (v).as_bool()),
+        type_op: m.get("type").filter(|v| !v.is_null()).and_then(|v| iface_discovery__duration_field_type__from_json(v)),
+        unit_millis: m.get("unitMillis").filter(|v| !v.is_null()).and_then(|v| (v).as_i64()),
+    })
+}
+
+fn iface_discovery__start_dates__from_json(v: &Value) -> Option<iface_discovery::StartDates> {
+    let m = v.as_object()?;
+    Some(iface_discovery::StartDates {
+        date_tba: m.get("dateTBA").filter(|v| !v.is_null()).and_then(|v| (v).as_bool()),
+        date_tbd: m.get("dateTBD").filter(|v| !v.is_null()).and_then(|v| (v).as_bool()),
+        date_time: m.get("dateTime").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        local_date: m.get("localDate").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        local_time: m.get("localTime").filter(|v| !v.is_null()).and_then(|v| iface_discovery__local_time__from_json(v)),
+        no_specific_time: m.get("noSpecificTime").filter(|v| !v.is_null()).and_then(|v| (v).as_bool()),
+        time_tba: m.get("timeTBA").filter(|v| !v.is_null()).and_then(|v| (v).as_bool()),
+    })
+}
+
+fn iface_discovery__event_status__from_json(v: &Value) -> Option<iface_discovery::EventStatus> {
+    let m = v.as_object()?;
+    Some(iface_discovery::EventStatus {
+        code: m.get("code").filter(|v| !v.is_null()).and_then(|v| (v).as_str().and_then(iface_discovery__event_status_code_enum__from_str)),
+    })
+}
+
+fn iface_discovery__event_external_links__from_json(v: &Value) -> Option<iface_discovery::EventExternalLinks> {
+    let m = v.as_object()?;
+    Some(iface_discovery::EventExternalLinks {
+        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    })
+}
+
+fn iface_discovery__location__from_json(v: &Value) -> Option<iface_discovery::Location> {
+    let m = v.as_object()?;
+    Some(iface_discovery::Location {
+        latitude: m.get("latitude").filter(|v| !v.is_null()).and_then(|v| (v).as_f64()),
+        longitude: m.get("longitude").filter(|v| !v.is_null()).and_then(|v| (v).as_f64()),
+    })
+}
+
+fn iface_discovery__outlet__from_json(v: &Value) -> Option<iface_discovery::Outlet> {
+    let m = v.as_object()?;
+    Some(iface_discovery::Outlet {
+        type_op: m.get("type").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        url: m.get("url").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    })
+}
+
+fn iface_discovery__place__from_json(v: &Value) -> Option<iface_discovery::Place> {
+    let m = v.as_object()?;
+    Some(iface_discovery::Place {
+        address: m.get("address").filter(|v| !v.is_null()).and_then(|v| iface_discovery__address__from_json(v)),
+        area: m.get("area").filter(|v| !v.is_null()).and_then(|v| iface_discovery__area__from_json(v)),
+        city: m.get("city").filter(|v| !v.is_null()).and_then(|v| iface_discovery__city__from_json(v)),
+        country: m.get("country").filter(|v| !v.is_null()).and_then(|v| iface_discovery__country__from_json(v)),
+        location: m.get("location").filter(|v| !v.is_null()).and_then(|v| iface_discovery__location__from_json(v)),
+        name: m.get("name").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        postal_code: m.get("postalCode").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        state: m.get("state").filter(|v| !v.is_null()).and_then(|v| iface_discovery__state__from_json(v)),
+    })
+}
+
+fn iface_discovery__address__from_json(v: &Value) -> Option<iface_discovery::Address> {
+    let m = v.as_object()?;
+    Some(iface_discovery::Address {
+        line1: m.get("line1").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        line2: m.get("line2").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        line3: m.get("line3").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    })
+}
+
+fn iface_discovery__area__from_json(v: &Value) -> Option<iface_discovery::Area> {
+    let m = v.as_object()?;
+    Some(iface_discovery::Area {
+        name: m.get("name").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    })
+}
+
+fn iface_discovery__city__from_json(v: &Value) -> Option<iface_discovery::City> {
+    let m = v.as_object()?;
+    Some(iface_discovery::City {
+        name: m.get("name").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    })
+}
+
+fn iface_discovery__country__from_json(v: &Value) -> Option<iface_discovery::Country> {
+    let m = v.as_object()?;
+    Some(iface_discovery::Country {
+        country_code: m.get("countryCode").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        name: m.get("name").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    })
+}
+
+fn iface_discovery__state__from_json(v: &Value) -> Option<iface_discovery::State> {
+    let m = v.as_object()?;
+    Some(iface_discovery::State {
+        name: m.get("name").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        state_code: m.get("stateCode").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    })
+}
+
+fn iface_discovery__price_range__from_json(v: &Value) -> Option<iface_discovery::PriceRange> {
+    let m = v.as_object()?;
+    Some(iface_discovery::PriceRange {
+        currency: m.get("currency").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        max: m.get("max").filter(|v| !v.is_null()).and_then(|v| (v).as_f64()),
+        min: m.get("min").filter(|v| !v.is_null()).and_then(|v| (v).as_f64()),
+        type_op: m.get("type").filter(|v| !v.is_null()).and_then(|v| (v).as_str().and_then(iface_discovery__price_range_type_op_enum__from_str)),
+    })
+}
+
+fn iface_discovery__product__from_json(v: &Value) -> Option<iface_discovery::Product> {
+    let m = v.as_object()?;
+    Some(iface_discovery::Product {
+        id: m.get("id").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        name: m.get("name").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        type_op: m.get("type").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        url: m.get("url").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    })
+}
+
+fn iface_discovery__promoter__from_json(v: &Value) -> Option<iface_discovery::Promoter> {
+    let m = v.as_object()?;
+    Some(iface_discovery::Promoter {
+        description: m.get("description").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        id: m.get("id").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        name: m.get("name").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    })
+}
+
+fn iface_discovery__event_sales_dates__from_json(v: &Value) -> Option<iface_discovery::EventSalesDates> {
+    let m = v.as_object()?;
+    Some(iface_discovery::EventSalesDates {
+        presales: m.get("presales").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| iface_discovery__presale__from_json(x)).collect())),
+        public: m.get("public").filter(|v| !v.is_null()).and_then(|v| iface_discovery__public_sale_dates__from_json(v)),
+    })
+}
+
+fn iface_discovery__presale__from_json(v: &Value) -> Option<iface_discovery::Presale> {
+    let m = v.as_object()?;
+    Some(iface_discovery::Presale {
+        description: m.get("description").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        end_date_time: m.get("endDateTime").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        name: m.get("name").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        start_date_time: m.get("startDateTime").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        url: m.get("url").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    })
+}
+
+fn iface_discovery__public_sale_dates__from_json(v: &Value) -> Option<iface_discovery::PublicSaleDates> {
+    let m = v.as_object()?;
+    Some(iface_discovery::PublicSaleDates {
+        end_date_time: m.get("endDateTime").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        start_date_time: m.get("startDateTime").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        start_tbd: m.get("startTBD").filter(|v| !v.is_null()).and_then(|v| (v).as_bool()),
+    })
+}
+
+fn iface_discovery__seat_map__from_json(v: &Value) -> Option<iface_discovery::SeatMap> {
+    let m = v.as_object()?;
+    Some(iface_discovery::SeatMap {
+        static_url: m.get("staticUrl").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    })
+}
+
+fn iface_discovery__event_images__from_json(v: &Value) -> Option<iface_discovery::EventImages> {
+    let m = v.as_object()?;
+    Some(iface_discovery::EventImages {
+        id: m.get("id").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        images: m.get("images").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| iface_discovery__image__from_json(x)).collect())),
+        type_op: match m.get("type").and_then(|v| (v).as_str().and_then(iface_discovery__event_images_type_op_enum__from_str)) { Some(x) => x, None => return None },
+    })
+}
+
+fn iface_discovery__venue__from_json(v: &Value) -> Option<iface_discovery::Venue> {
+    let m = v.as_object()?;
+    Some(iface_discovery::Venue {
+        accessible_seating_detail: m.get("accessibleSeatingDetail").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        additional_info: m.get("additionalInfo").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        address: m.get("address").filter(|v| !v.is_null()).and_then(|v| iface_discovery__address__from_json(v)),
+        box_office_info: m.get("boxOfficeInfo").filter(|v| !v.is_null()).and_then(|v| iface_discovery__venue_box_office_info__from_json(v)),
+        city: m.get("city").filter(|v| !v.is_null()).and_then(|v| iface_discovery__city__from_json(v)),
+        country: m.get("country").filter(|v| !v.is_null()).and_then(|v| iface_discovery__country__from_json(v)),
+        currency: m.get("currency").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        description: m.get("description").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        distance: m.get("distance").filter(|v| !v.is_null()).and_then(|v| (v).as_f64()),
+        dma: m.get("dma").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| iface_discovery__dma__from_json(x)).collect())),
+        external_links: m.get("externalLinks").filter(|v| !v.is_null()).and_then(|v| iface_discovery__venue_external_links__from_json(v)),
+        general_info: m.get("generalInfo").filter(|v| !v.is_null()).and_then(|v| iface_discovery__venue_general_info__from_json(v)),
+        id: m.get("id").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        images: m.get("images").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| iface_discovery__image__from_json(x)).collect())),
+        locale: m.get("locale").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        location: m.get("location").filter(|v| !v.is_null()).and_then(|v| iface_discovery__location__from_json(v)),
+        markets: m.get("markets").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| iface_discovery__market__from_json(x)).collect())),
+        name: m.get("name").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        parking_detail: m.get("parkingDetail").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        postal_code: m.get("postalCode").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        social: m.get("social").filter(|v| !v.is_null()).and_then(|v| iface_discovery__social__from_json(v)),
+        state: m.get("state").filter(|v| !v.is_null()).and_then(|v| iface_discovery__state__from_json(v)),
+        test: m.get("test").filter(|v| !v.is_null()).and_then(|v| (v).as_bool()),
+        timezone: m.get("timezone").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        type_op: match m.get("type").and_then(|v| (v).as_str().and_then(iface_discovery__attraction_type_op_enum__from_str)) { Some(x) => x, None => return None },
+        units: m.get("units").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        upcoming_events: m.get("upcomingEvents").filter(|v| !v.is_null()).and_then(|v| iface_discovery__venue_upcoming_events__from_json(v)),
+        url: m.get("url").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    })
+}
+
+fn iface_discovery__venue_box_office_info__from_json(v: &Value) -> Option<iface_discovery::VenueBoxOfficeInfo> {
+    let m = v.as_object()?;
+    Some(iface_discovery::VenueBoxOfficeInfo {
+        accepted_payment_detail: m.get("acceptedPaymentDetail").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        open_hours_detail: m.get("openHoursDetail").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        phone_number_detail: m.get("phoneNumberDetail").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        will_call_detail: m.get("willCallDetail").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    })
+}
+
+fn iface_discovery__dma__from_json(v: &Value) -> Option<iface_discovery::Dma> {
+    let m = v.as_object()?;
+    Some(iface_discovery::Dma {
+        id: m.get("id").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+    })
+}
+
+fn iface_discovery__venue_external_links__from_json(v: &Value) -> Option<iface_discovery::VenueExternalLinks> {
+    let m = v.as_object()?;
+    Some(iface_discovery::VenueExternalLinks {
+        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    })
+}
+
+fn iface_discovery__venue_general_info__from_json(v: &Value) -> Option<iface_discovery::VenueGeneralInfo> {
+    let m = v.as_object()?;
+    Some(iface_discovery::VenueGeneralInfo {
+        child_rule: m.get("childRule").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        general_rule: m.get("generalRule").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    })
+}
+
+fn iface_discovery__market__from_json(v: &Value) -> Option<iface_discovery::Market> {
+    let m = v.as_object()?;
+    Some(iface_discovery::Market {
+        id: m.get("id").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    })
+}
+
+fn iface_discovery__social__from_json(v: &Value) -> Option<iface_discovery::Social> {
+    let m = v.as_object()?;
+    Some(iface_discovery::Social {
+        twitter: m.get("twitter").filter(|v| !v.is_null()).and_then(|v| iface_discovery__twitter__from_json(v)),
+    })
+}
+
+fn iface_discovery__twitter__from_json(v: &Value) -> Option<iface_discovery::Twitter> {
+    let m = v.as_object()?;
+    Some(iface_discovery::Twitter {
+        handle: m.get("handle").filter(|v| !v.is_null()).and_then(|v| (v).as_str().and_then(iface_discovery__twitter_handle_enum__from_str)),
+        hashtags: m.get("hashtags").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| (x).as_str().map(|s| s.to_string())).collect())),
+    })
+}
+
+fn iface_discovery__venue_upcoming_events__from_json(v: &Value) -> Option<iface_discovery::VenueUpcomingEvents> {
+    let m = v.as_object()?;
+    Some(iface_discovery::VenueUpcomingEvents {
+        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    })
+}
+
+fn iface_discovery__image_ratio_enum__from_str(s: &str) -> Option<iface_discovery::ImageRatioEnum> {
+    match s {
+        "16_9" => Some(iface_discovery::ImageRatioEnum::V16V9),
+        "3_2" => Some(iface_discovery::ImageRatioEnum::V3V2),
+        "4_3" => Some(iface_discovery::ImageRatioEnum::V4V3),
+        _ => None,
+    }
+}
+
+fn iface_discovery__attraction_type_op_enum__from_str(s: &str) -> Option<iface_discovery::AttractionTypeOpEnum> {
+    match s {
+        "event" => Some(iface_discovery::AttractionTypeOpEnum::Event),
+        "venue" => Some(iface_discovery::AttractionTypeOpEnum::Venue),
+        "attraction" => Some(iface_discovery::AttractionTypeOpEnum::Attraction),
+        _ => None,
+    }
+}
+
+fn iface_discovery__event_status_code_enum__from_str(s: &str) -> Option<iface_discovery::EventStatusCodeEnum> {
+    match s {
+        "onsale" => Some(iface_discovery::EventStatusCodeEnum::Onsale),
+        "offsale" => Some(iface_discovery::EventStatusCodeEnum::Offsale),
+        "canceled" => Some(iface_discovery::EventStatusCodeEnum::Canceled),
+        "postponed" => Some(iface_discovery::EventStatusCodeEnum::Postponed),
+        "rescheduled" => Some(iface_discovery::EventStatusCodeEnum::Rescheduled),
+        _ => None,
+    }
+}
+
+fn iface_discovery__price_range_type_op_enum__from_str(s: &str) -> Option<iface_discovery::PriceRangeTypeOpEnum> {
+    match s {
+        "standard" => Some(iface_discovery::PriceRangeTypeOpEnum::Standard),
+        _ => None,
+    }
+}
+
+fn iface_discovery__event_images_type_op_enum__from_str(s: &str) -> Option<iface_discovery::EventImagesTypeOpEnum> {
+    match s {
+        "event" => Some(iface_discovery::EventImagesTypeOpEnum::Event),
+        _ => None,
+    }
+}
+
+fn iface_discovery__twitter_handle_enum__from_str(s: &str) -> Option<iface_discovery::TwitterHandleEnum> {
+    match s {
+        "@a Twitter handle" => Some(iface_discovery::TwitterHandleEnum::ATwitterHandle),
+        _ => None,
+    }
+}
+
+fn iface_discovery__find__ok(body: String) -> Result<Vec<iface_discovery::Attraction>, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match (&v).as_array().map(|a| a.iter().filter_map(|x| iface_discovery__attraction__from_json(x)).collect()) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_discovery__find__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
+fn iface_discovery__get__ok(body: String) -> Result<iface_discovery::Attraction, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match iface_discovery__attraction__from_json(&v) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_discovery__get__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
+fn iface_discovery__get_discovery_v2_classifications__ok(body: String) -> Result<Vec<iface_discovery::Classification>, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match (&v).as_array().map(|a| a.iter().filter_map(|x| iface_discovery__classification__from_json(x)).collect()) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_discovery__get_discovery_v2_classifications__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
+fn iface_discovery__get_genre__ok(body: String) -> Result<iface_discovery::Genre, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match iface_discovery__genre__from_json(&v) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_discovery__get_genre__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
+fn iface_discovery__get_segment__ok(body: String) -> Result<iface_discovery::Segment, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match iface_discovery__segment__from_json(&v) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_discovery__get_segment__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
+fn iface_discovery__get_subgenre__ok(body: String) -> Result<iface_discovery::Level, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match iface_discovery__level__from_json(&v) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_discovery__get_subgenre__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
+fn iface_discovery__get_discovery_v2_classifications_id__ok(body: String) -> Result<iface_discovery::Classification, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match iface_discovery__classification__from_json(&v) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_discovery__get_discovery_v2_classifications_id__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
+fn iface_discovery__get_discovery_v2_events__ok(body: String) -> Result<Vec<iface_discovery::Event>, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match (&v).as_array().map(|a| a.iter().filter_map(|x| iface_discovery__event__from_json(x)).collect()) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_discovery__get_discovery_v2_events__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
+fn iface_discovery__get_discovery_v2_events_id__ok(body: String) -> Result<iface_discovery::Event, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match iface_discovery__event__from_json(&v) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_discovery__get_discovery_v2_events_id__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
+fn iface_discovery__get_images__ok(body: String) -> Result<iface_discovery::EventImages, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match iface_discovery__event_images__from_json(&v) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_discovery__get_images__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
+fn iface_discovery__get_discovery_v2_venues__ok(body: String) -> Result<Vec<iface_discovery::Venue>, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match (&v).as_array().map(|a| a.iter().filter_map(|x| iface_discovery__venue__from_json(x)).collect()) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_discovery__get_discovery_v2_venues__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
+fn iface_discovery__get_discovery_v2_venues_id__ok(body: String) -> Result<iface_discovery::Venue, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match iface_discovery__venue__from_json(&v) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_discovery__get_discovery_v2_venues_id__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
 impl iface_discovery::Guest for crate::Component {
-    fn find(params: iface_discovery::FindParams) -> Result<String, String> {
+    fn find(params: iface_discovery::FindParams) -> Result<Vec<iface_discovery::Attraction>, String> {
         let json = iface_discovery__find_params__to_json(&params);
-        dispatch(&OP_DISCOVERY_FIND, json)
+        match dispatch(&OP_DISCOVERY_FIND, json).and_then(iface_discovery__find__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_discovery__find__err(e)),
+        }
     }
-    fn get(params: iface_discovery::GetParams) -> Result<String, String> {
+    fn get(params: iface_discovery::GetParams) -> Result<iface_discovery::Attraction, String> {
         let json = iface_discovery__get_params__to_json(&params);
-        dispatch(&OP_DISCOVERY_GET, json)
+        match dispatch(&OP_DISCOVERY_GET, json).and_then(iface_discovery__get__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_discovery__get__err(e)),
+        }
     }
-    fn get_discovery_v2_classifications(params: iface_discovery::GetDiscoveryV2ClassificationsParams) -> Result<String, String> {
+    fn get_discovery_v2_classifications(params: iface_discovery::GetDiscoveryV2ClassificationsParams) -> Result<Vec<iface_discovery::Classification>, String> {
         let json = iface_discovery__get_discovery_v2_classifications_params__to_json(&params);
-        dispatch(&OP_DISCOVERY_GET_DISCOVERY_V2_CLASSIFICATIONS, json)
+        match dispatch(&OP_DISCOVERY_GET_DISCOVERY_V2_CLASSIFICATIONS, json).and_then(iface_discovery__get_discovery_v2_classifications__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_discovery__get_discovery_v2_classifications__err(e)),
+        }
     }
-    fn get_genre(params: iface_discovery::GetGenreParams) -> Result<String, String> {
+    fn get_genre(params: iface_discovery::GetGenreParams) -> Result<iface_discovery::Genre, String> {
         let json = iface_discovery__get_genre_params__to_json(&params);
-        dispatch(&OP_DISCOVERY_GET_GENRE, json)
+        match dispatch(&OP_DISCOVERY_GET_GENRE, json).and_then(iface_discovery__get_genre__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_discovery__get_genre__err(e)),
+        }
     }
-    fn get_segment(params: iface_discovery::GetSegmentParams) -> Result<String, String> {
+    fn get_segment(params: iface_discovery::GetSegmentParams) -> Result<iface_discovery::Segment, String> {
         let json = iface_discovery__get_segment_params__to_json(&params);
-        dispatch(&OP_DISCOVERY_GET_SEGMENT, json)
+        match dispatch(&OP_DISCOVERY_GET_SEGMENT, json).and_then(iface_discovery__get_segment__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_discovery__get_segment__err(e)),
+        }
     }
-    fn get_subgenre(params: iface_discovery::GetSubgenreParams) -> Result<String, String> {
+    fn get_subgenre(params: iface_discovery::GetSubgenreParams) -> Result<iface_discovery::Level, String> {
         let json = iface_discovery__get_subgenre_params__to_json(&params);
-        dispatch(&OP_DISCOVERY_GET_SUBGENRE, json)
+        match dispatch(&OP_DISCOVERY_GET_SUBGENRE, json).and_then(iface_discovery__get_subgenre__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_discovery__get_subgenre__err(e)),
+        }
     }
-    fn get_discovery_v2_classifications_id(params: iface_discovery::GetDiscoveryV2ClassificationsIdParams) -> Result<String, String> {
+    fn get_discovery_v2_classifications_id(params: iface_discovery::GetDiscoveryV2ClassificationsIdParams) -> Result<iface_discovery::Classification, String> {
         let json = iface_discovery__get_discovery_v2_classifications_id_params__to_json(&params);
-        dispatch(&OP_DISCOVERY_GET_DISCOVERY_V2_CLASSIFICATIONS_ID, json)
+        match dispatch(&OP_DISCOVERY_GET_DISCOVERY_V2_CLASSIFICATIONS_ID, json).and_then(iface_discovery__get_discovery_v2_classifications_id__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_discovery__get_discovery_v2_classifications_id__err(e)),
+        }
     }
-    fn get_discovery_v2_events(params: iface_discovery::GetDiscoveryV2EventsParams) -> Result<String, String> {
+    fn get_discovery_v2_events(params: iface_discovery::GetDiscoveryV2EventsParams) -> Result<Vec<iface_discovery::Event>, String> {
         let json = iface_discovery__get_discovery_v2_events_params__to_json(&params);
-        dispatch(&OP_DISCOVERY_GET_DISCOVERY_V2_EVENTS, json)
+        match dispatch(&OP_DISCOVERY_GET_DISCOVERY_V2_EVENTS, json).and_then(iface_discovery__get_discovery_v2_events__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_discovery__get_discovery_v2_events__err(e)),
+        }
     }
-    fn get_discovery_v2_events_id(params: iface_discovery::GetDiscoveryV2EventsIdParams) -> Result<String, String> {
+    fn get_discovery_v2_events_id(params: iface_discovery::GetDiscoveryV2EventsIdParams) -> Result<iface_discovery::Event, String> {
         let json = iface_discovery__get_discovery_v2_events_id_params__to_json(&params);
-        dispatch(&OP_DISCOVERY_GET_DISCOVERY_V2_EVENTS_ID, json)
+        match dispatch(&OP_DISCOVERY_GET_DISCOVERY_V2_EVENTS_ID, json).and_then(iface_discovery__get_discovery_v2_events_id__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_discovery__get_discovery_v2_events_id__err(e)),
+        }
     }
-    fn get_images(params: iface_discovery::GetImagesParams) -> Result<String, String> {
+    fn get_images(params: iface_discovery::GetImagesParams) -> Result<iface_discovery::EventImages, String> {
         let json = iface_discovery__get_images_params__to_json(&params);
-        dispatch(&OP_DISCOVERY_GET_IMAGES, json)
+        match dispatch(&OP_DISCOVERY_GET_IMAGES, json).and_then(iface_discovery__get_images__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_discovery__get_images__err(e)),
+        }
     }
-    fn get_discovery_v2_venues(params: iface_discovery::GetDiscoveryV2VenuesParams) -> Result<String, String> {
+    fn get_discovery_v2_venues(params: iface_discovery::GetDiscoveryV2VenuesParams) -> Result<Vec<iface_discovery::Venue>, String> {
         let json = iface_discovery__get_discovery_v2_venues_params__to_json(&params);
-        dispatch(&OP_DISCOVERY_GET_DISCOVERY_V2_VENUES, json)
+        match dispatch(&OP_DISCOVERY_GET_DISCOVERY_V2_VENUES, json).and_then(iface_discovery__get_discovery_v2_venues__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_discovery__get_discovery_v2_venues__err(e)),
+        }
     }
-    fn get_discovery_v2_venues_id(params: iface_discovery::GetDiscoveryV2VenuesIdParams) -> Result<String, String> {
+    fn get_discovery_v2_venues_id(params: iface_discovery::GetDiscoveryV2VenuesIdParams) -> Result<iface_discovery::Venue, String> {
         let json = iface_discovery__get_discovery_v2_venues_id_params__to_json(&params);
-        dispatch(&OP_DISCOVERY_GET_DISCOVERY_V2_VENUES_ID, json)
+        match dispatch(&OP_DISCOVERY_GET_DISCOVERY_V2_VENUES_ID, json).and_then(iface_discovery__get_discovery_v2_venues_id__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_discovery__get_discovery_v2_venues_id__err(e)),
+        }
     }
 }
 use crate::exports::autostamp::ticketmaster::v2 as iface_v2;
@@ -735,22 +2028,22 @@ const OP_V2_GET_DISCOVERY_V2_SUGGEST: OpSpec = OpSpec {
     method: "GET",
     path_template: "/discovery/v2/suggest",
     fields: &[
-        FieldSpec { snake: "keyword", location: FieldLocation::Query },
-        FieldSpec { snake: "source", location: FieldLocation::Query },
-        FieldSpec { snake: "latlong", location: FieldLocation::Query },
-        FieldSpec { snake: "radius", location: FieldLocation::Query },
-        FieldSpec { snake: "unit", location: FieldLocation::Query },
-        FieldSpec { snake: "size", location: FieldLocation::Query },
-        FieldSpec { snake: "include_fuzzy", location: FieldLocation::Query },
-        FieldSpec { snake: "client_visibility", location: FieldLocation::Query },
-        FieldSpec { snake: "country_code", location: FieldLocation::Query },
-        FieldSpec { snake: "include_tba", location: FieldLocation::Query },
-        FieldSpec { snake: "include_tbd", location: FieldLocation::Query },
-        FieldSpec { snake: "segment_id", location: FieldLocation::Query },
-        FieldSpec { snake: "geo_point", location: FieldLocation::Query },
-        FieldSpec { snake: "locale", location: FieldLocation::Query },
-        FieldSpec { snake: "include_licensed_content", location: FieldLocation::Query },
-        FieldSpec { snake: "include_spellcheck", location: FieldLocation::Query },
+        FieldSpec { snake: "keyword", wire: "keyword", location: FieldLocation::Query },
+        FieldSpec { snake: "source", wire: "source", location: FieldLocation::Query },
+        FieldSpec { snake: "latlong", wire: "latlong", location: FieldLocation::Query },
+        FieldSpec { snake: "radius", wire: "radius", location: FieldLocation::Query },
+        FieldSpec { snake: "unit", wire: "unit", location: FieldLocation::Query },
+        FieldSpec { snake: "size", wire: "size", location: FieldLocation::Query },
+        FieldSpec { snake: "include_fuzzy", wire: "includeFuzzy", location: FieldLocation::Query },
+        FieldSpec { snake: "client_visibility", wire: "clientVisibility", location: FieldLocation::Query },
+        FieldSpec { snake: "country_code", wire: "countryCode", location: FieldLocation::Query },
+        FieldSpec { snake: "include_tba", wire: "includeTBA", location: FieldLocation::Query },
+        FieldSpec { snake: "include_tbd", wire: "includeTBD", location: FieldLocation::Query },
+        FieldSpec { snake: "segment_id", wire: "segmentId", location: FieldLocation::Query },
+        FieldSpec { snake: "geo_point", wire: "geoPoint", location: FieldLocation::Query },
+        FieldSpec { snake: "locale", wire: "locale", location: FieldLocation::Query },
+        FieldSpec { snake: "include_licensed_content", wire: "includeLicensedContent", location: FieldLocation::Query },
+        FieldSpec { snake: "include_spellcheck", wire: "includeSpellcheck", location: FieldLocation::Query },
     ],
     auth: &[
     ],
@@ -808,10 +2101,24 @@ fn iface_v2__get_discovery_v2_suggest_params__to_json(p: &iface_v2::GetDiscovery
     Value::Object(m)
 }
 
+fn iface_v2__get_discovery_v2_suggest__ok(body: String) -> Result<String, crate::runtime::DispatchError> {
+    Ok(body)
+}
+
+fn iface_v2__get_discovery_v2_suggest__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
 impl iface_v2::Guest for crate::Component {
     fn get_discovery_v2_suggest(params: iface_v2::GetDiscoveryV2SuggestParams) -> Result<String, String> {
         let json = iface_v2__get_discovery_v2_suggest_params__to_json(&params);
-        dispatch(&OP_V2_GET_DISCOVERY_V2_SUGGEST, json)
+        match dispatch(&OP_V2_GET_DISCOVERY_V2_SUGGEST, json).and_then(iface_v2__get_discovery_v2_suggest__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_v2__get_discovery_v2_suggest__err(e)),
+        }
     }
 }
 

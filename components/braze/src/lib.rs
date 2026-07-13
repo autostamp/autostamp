@@ -44,10 +44,15 @@ pub(crate) enum FieldLocation {
     Body,
 }
 
-/// A single operation parameter: the snake-case key it carries in the params JSON and where
-/// it belongs in the request.
+/// A single operation parameter. `snake` keys the field in the internal params JSON (and, for a
+/// path field, matches the `{snake}` placeholder in the path template); `wire` is the verbatim name
+/// the field takes on the HTTP wire (query key, header name, or body property). The two differ
+/// whenever the source name isn't already snake_case (e.g. `dryRun` → snake `dry_run`, wire
+/// `dryRun`), and let distinct inputs that share a snake key (`DateCreated`, `DateCreated<`) still
+/// travel under their true names.
 pub(crate) struct FieldSpec {
     pub(crate) snake: &'static str,
+    pub(crate) wire: &'static str,
     pub(crate) location: FieldLocation,
 }
 
@@ -71,6 +76,16 @@ pub(crate) struct AuthApply {
     pub(crate) kind: AuthKind,
 }
 
+/// The failure modes of [`dispatch`], kept structured so each generated operation can map them
+/// onto its own typed error: an `Http` failure carries the response status and body (routed to
+/// the matching error-variant case), while a `Transport` failure carries a message for the
+/// catch-all case (a secret lookup, connection, or decode failure that never produced an HTTP
+/// status).
+pub(crate) enum DispatchError {
+    Http { status: u16, body: String },
+    Transport(String),
+}
+
 /// A single API operation: HTTP method, path template (with `{snake}` placeholders), the
 /// parameter fields, and the security schemes to apply.
 pub(crate) struct OpSpec {
@@ -81,8 +96,9 @@ pub(crate) struct OpSpec {
 }
 
 /// Execute `op` with the supplied `params` (a JSON object keyed by snake-case field names)
-/// and return the response body as a string, or an error message.
-pub(crate) fn dispatch(op: &OpSpec, params: Value) -> Result<String, String> {
+/// and return the raw 2xx response body, or a structured [`DispatchError`] the caller maps
+/// onto the operation's typed error.
+pub(crate) fn dispatch(op: &OpSpec, params: Value) -> Result<String, DispatchError> {
     let obj = match &params {
         Value::Object(map) => Some(map),
         _ => None,
@@ -105,10 +121,10 @@ pub(crate) fn dispatch(op: &OpSpec, params: Value) -> Result<String, String> {
                 let placeholder = format!("{{{}}}", field.snake);
                 path = path.replace(&placeholder, &percent_encode(&scalar(value)));
             }
-            FieldLocation::Query => query.push((field.snake.to_string(), scalar(value))),
-            FieldLocation::Header => headers.push((field.snake.to_string(), scalar(value))),
+            FieldLocation::Query => query.push((field.wire.to_string(), scalar(value))),
+            FieldLocation::Header => headers.push((field.wire.to_string(), scalar(value))),
             FieldLocation::Body => {
-                body.insert(field.snake.to_string(), value.clone());
+                body.insert(field.wire.to_string(), value.clone());
             }
         }
     }
@@ -116,7 +132,7 @@ pub(crate) fn dispatch(op: &OpSpec, params: Value) -> Result<String, String> {
     // Apply each resolved security scheme, sourcing its value from wasmcloud:secrets.
     let mut cookies: Vec<String> = Vec::new();
     for apply in op.auth {
-        let secret = fetch_secret(apply.secret_key)?;
+        let secret = fetch_secret(apply.secret_key).map_err(DispatchError::Transport)?;
         match &apply.kind {
             AuthKind::Bearer => headers.push(("authorization".into(), format!("Bearer {secret}"))),
             AuthKind::Basic => {
@@ -177,17 +193,18 @@ fn fetch_secret(key: &str) -> Result<String, String> {
 }
 
 /// Build and send the outgoing request with `wstd`, returning the response body on a 2xx
-/// status. The generated guest exports are synchronous, so the async `wstd` client is driven
-/// to completion on a local reactor via `wstd::runtime::block_on`.
+/// status and a structured [`DispatchError`] otherwise. The generated guest exports are
+/// synchronous, so the async `wstd` client is driven to completion on a local reactor via
+/// `wstd::runtime::block_on`.
 fn perform(
     method: &str,
     path_with_query: &str,
     headers: &[(String, String)],
     body: &[u8],
-) -> Result<String, String> {
+) -> Result<String, DispatchError> {
     let url = join_url(crate::BASE_URL, path_with_query);
     let method = Method::from_bytes(method.as_bytes())
-        .map_err(|err| format!("invalid HTTP method `{method}`: {err}"))?;
+        .map_err(|err| DispatchError::Transport(format!("invalid HTTP method `{method}`: {err}")))?;
 
     let mut builder = Request::builder().method(method).uri(url);
     for (name, value) in headers {
@@ -199,27 +216,29 @@ fn perform(
         } else {
             Body::from(body.to_vec())
         })
-        .map_err(|err| format!("failed to build request: {err}"))?;
+        .map_err(|err| DispatchError::Transport(format!("failed to build request: {err}")))?;
 
     wstd::runtime::block_on(async move {
         let client = Client::new();
         let response = client
             .send(request)
             .await
-            .map_err(|err| format!("request failed: {err:#}"))?;
+            .map_err(|err| DispatchError::Transport(format!("request failed: {err:#}")))?;
 
         let status = response.status().as_u16();
         let mut response_body = response.into_body();
-        let bytes = response_body
-            .contents()
-            .await
-            .map_err(|err| format!("failed to read response body: {err:#}"))?;
+        let bytes = response_body.contents().await.map_err(|err| {
+            DispatchError::Transport(format!("failed to read response body: {err:#}"))
+        })?;
         let body_text = String::from_utf8_lossy(bytes).into_owned();
 
         if (200..300).contains(&status) {
             Ok(body_text)
         } else {
-            Err(format!("HTTP {status}: {body_text}"))
+            Err(DispatchError::Http {
+                status,
+                body: body_text,
+            })
         }
     })
 }
@@ -288,9 +307,9 @@ const OP_EXPORT_OP_CAMPAIGN_ANALYTICS: OpSpec = OpSpec {
     method: "GET",
     path_template: "/campaigns/data_series",
     fields: &[
-        FieldSpec { snake: "campaign_id", location: FieldLocation::Query },
-        FieldSpec { snake: "length", location: FieldLocation::Query },
-        FieldSpec { snake: "ending_at", location: FieldLocation::Query },
+        FieldSpec { snake: "campaign_id", wire: "campaign_id", location: FieldLocation::Query },
+        FieldSpec { snake: "length", wire: "length", location: FieldLocation::Query },
+        FieldSpec { snake: "ending_at", wire: "ending_at", location: FieldLocation::Query },
     ],
     auth: &[
     ],
@@ -300,7 +319,7 @@ const OP_EXPORT_OP_CAMPAIGN_DETAILS: OpSpec = OpSpec {
     method: "GET",
     path_template: "/campaigns/details",
     fields: &[
-        FieldSpec { snake: "campaign_id", location: FieldLocation::Query },
+        FieldSpec { snake: "campaign_id", wire: "campaign_id", location: FieldLocation::Query },
     ],
     auth: &[
     ],
@@ -310,10 +329,10 @@ const OP_EXPORT_OP_CAMPAIGN_LIST: OpSpec = OpSpec {
     method: "GET",
     path_template: "/campaigns/list",
     fields: &[
-        FieldSpec { snake: "page", location: FieldLocation::Query },
-        FieldSpec { snake: "include_archived", location: FieldLocation::Query },
-        FieldSpec { snake: "sort_direction", location: FieldLocation::Query },
-        FieldSpec { snake: "last_edit_time_gt", location: FieldLocation::Query },
+        FieldSpec { snake: "page", wire: "page", location: FieldLocation::Query },
+        FieldSpec { snake: "include_archived", wire: "include_archived", location: FieldLocation::Query },
+        FieldSpec { snake: "sort_direction", wire: "sort_direction", location: FieldLocation::Query },
+        FieldSpec { snake: "last_edit_time_gt", wire: "last_edit.time[gt]", location: FieldLocation::Query },
     ],
     auth: &[
     ],
@@ -323,13 +342,13 @@ const OP_EXPORT_OP_CANVAS_DATA_SERIES_ANALYTICS: OpSpec = OpSpec {
     method: "GET",
     path_template: "/canvas/data_series",
     fields: &[
-        FieldSpec { snake: "canvas_id", location: FieldLocation::Query },
-        FieldSpec { snake: "ending_at", location: FieldLocation::Query },
-        FieldSpec { snake: "starting_at", location: FieldLocation::Query },
-        FieldSpec { snake: "length", location: FieldLocation::Query },
-        FieldSpec { snake: "include_variant_breakdown", location: FieldLocation::Query },
-        FieldSpec { snake: "include_step_breakdown", location: FieldLocation::Query },
-        FieldSpec { snake: "include_deleted_step_data", location: FieldLocation::Query },
+        FieldSpec { snake: "canvas_id", wire: "canvas_id", location: FieldLocation::Query },
+        FieldSpec { snake: "ending_at", wire: "ending_at", location: FieldLocation::Query },
+        FieldSpec { snake: "starting_at", wire: "starting_at", location: FieldLocation::Query },
+        FieldSpec { snake: "length", wire: "length", location: FieldLocation::Query },
+        FieldSpec { snake: "include_variant_breakdown", wire: "include_variant_breakdown", location: FieldLocation::Query },
+        FieldSpec { snake: "include_step_breakdown", wire: "include_step_breakdown", location: FieldLocation::Query },
+        FieldSpec { snake: "include_deleted_step_data", wire: "include_deleted_step_data", location: FieldLocation::Query },
     ],
     auth: &[
     ],
@@ -339,13 +358,13 @@ const OP_EXPORT_OP_CANVAS_DATA_ANALYTICS_SUMMARY: OpSpec = OpSpec {
     method: "GET",
     path_template: "/canvas/data_summary",
     fields: &[
-        FieldSpec { snake: "canvas_id", location: FieldLocation::Query },
-        FieldSpec { snake: "ending_at", location: FieldLocation::Query },
-        FieldSpec { snake: "starting_at", location: FieldLocation::Query },
-        FieldSpec { snake: "length", location: FieldLocation::Query },
-        FieldSpec { snake: "include_variant_breakdown", location: FieldLocation::Query },
-        FieldSpec { snake: "include_step_breakdown", location: FieldLocation::Query },
-        FieldSpec { snake: "include_deleted_step_data", location: FieldLocation::Query },
+        FieldSpec { snake: "canvas_id", wire: "canvas_id", location: FieldLocation::Query },
+        FieldSpec { snake: "ending_at", wire: "ending_at", location: FieldLocation::Query },
+        FieldSpec { snake: "starting_at", wire: "starting_at", location: FieldLocation::Query },
+        FieldSpec { snake: "length", wire: "length", location: FieldLocation::Query },
+        FieldSpec { snake: "include_variant_breakdown", wire: "include_variant_breakdown", location: FieldLocation::Query },
+        FieldSpec { snake: "include_step_breakdown", wire: "include_step_breakdown", location: FieldLocation::Query },
+        FieldSpec { snake: "include_deleted_step_data", wire: "include_deleted_step_data", location: FieldLocation::Query },
     ],
     auth: &[
     ],
@@ -355,7 +374,7 @@ const OP_EXPORT_OP_CANVAS_DETAILS: OpSpec = OpSpec {
     method: "GET",
     path_template: "/canvas/details",
     fields: &[
-        FieldSpec { snake: "canvas_id", location: FieldLocation::Query },
+        FieldSpec { snake: "canvas_id", wire: "canvas_id", location: FieldLocation::Query },
     ],
     auth: &[
     ],
@@ -365,10 +384,10 @@ const OP_EXPORT_OP_CANVAS_LIST: OpSpec = OpSpec {
     method: "GET",
     path_template: "/canvas/list",
     fields: &[
-        FieldSpec { snake: "page", location: FieldLocation::Query },
-        FieldSpec { snake: "include_archived", location: FieldLocation::Query },
-        FieldSpec { snake: "sort_direction", location: FieldLocation::Query },
-        FieldSpec { snake: "last_edit_time_gt", location: FieldLocation::Query },
+        FieldSpec { snake: "page", wire: "page", location: FieldLocation::Query },
+        FieldSpec { snake: "include_archived", wire: "include_archived", location: FieldLocation::Query },
+        FieldSpec { snake: "sort_direction", wire: "sort_direction", location: FieldLocation::Query },
+        FieldSpec { snake: "last_edit_time_gt", wire: "last_edit.time[gt]", location: FieldLocation::Query },
     ],
     auth: &[
     ],
@@ -378,12 +397,12 @@ const OP_EXPORT_OP_CUSTOM_EVENTS_ANALYTICS: OpSpec = OpSpec {
     method: "GET",
     path_template: "/events/data_series",
     fields: &[
-        FieldSpec { snake: "event", location: FieldLocation::Query },
-        FieldSpec { snake: "length", location: FieldLocation::Query },
-        FieldSpec { snake: "unit", location: FieldLocation::Query },
-        FieldSpec { snake: "ending_at", location: FieldLocation::Query },
-        FieldSpec { snake: "app_id", location: FieldLocation::Query },
-        FieldSpec { snake: "segment_id", location: FieldLocation::Query },
+        FieldSpec { snake: "event", wire: "event", location: FieldLocation::Query },
+        FieldSpec { snake: "length", wire: "length", location: FieldLocation::Query },
+        FieldSpec { snake: "unit", wire: "unit", location: FieldLocation::Query },
+        FieldSpec { snake: "ending_at", wire: "ending_at", location: FieldLocation::Query },
+        FieldSpec { snake: "app_id", wire: "app_id", location: FieldLocation::Query },
+        FieldSpec { snake: "segment_id", wire: "segment_id", location: FieldLocation::Query },
     ],
     auth: &[
     ],
@@ -393,7 +412,7 @@ const OP_EXPORT_OP_CUSTOM_EVENTS_LIST: OpSpec = OpSpec {
     method: "GET",
     path_template: "/events/list",
     fields: &[
-        FieldSpec { snake: "page", location: FieldLocation::Query },
+        FieldSpec { snake: "page", wire: "page", location: FieldLocation::Query },
     ],
     auth: &[
     ],
@@ -403,10 +422,10 @@ const OP_EXPORT_OP_NEWS_FEED_CARD_ANALYTICS: OpSpec = OpSpec {
     method: "GET",
     path_template: "/feed/data_series",
     fields: &[
-        FieldSpec { snake: "card_id", location: FieldLocation::Query },
-        FieldSpec { snake: "length", location: FieldLocation::Query },
-        FieldSpec { snake: "unit", location: FieldLocation::Query },
-        FieldSpec { snake: "ending_at", location: FieldLocation::Query },
+        FieldSpec { snake: "card_id", wire: "card_id", location: FieldLocation::Query },
+        FieldSpec { snake: "length", wire: "length", location: FieldLocation::Query },
+        FieldSpec { snake: "unit", wire: "unit", location: FieldLocation::Query },
+        FieldSpec { snake: "ending_at", wire: "ending_at", location: FieldLocation::Query },
     ],
     auth: &[
     ],
@@ -416,7 +435,7 @@ const OP_EXPORT_OP_NEWS_FEED_CARDS_DETAILS: OpSpec = OpSpec {
     method: "GET",
     path_template: "/feed/details",
     fields: &[
-        FieldSpec { snake: "card_id", location: FieldLocation::Query },
+        FieldSpec { snake: "card_id", wire: "card_id", location: FieldLocation::Query },
     ],
     auth: &[
     ],
@@ -426,9 +445,9 @@ const OP_EXPORT_OP_NEWS_FEED_CARDS_LIST: OpSpec = OpSpec {
     method: "GET",
     path_template: "/feed/list",
     fields: &[
-        FieldSpec { snake: "page", location: FieldLocation::Query },
-        FieldSpec { snake: "include_archived", location: FieldLocation::Query },
-        FieldSpec { snake: "sort_direction", location: FieldLocation::Query },
+        FieldSpec { snake: "page", wire: "page", location: FieldLocation::Query },
+        FieldSpec { snake: "include_archived", wire: "include_archived", location: FieldLocation::Query },
+        FieldSpec { snake: "sort_direction", wire: "sort_direction", location: FieldLocation::Query },
     ],
     auth: &[
     ],
@@ -438,9 +457,9 @@ const OP_EXPORT_OP_DAILY_ACTIVE_USERS_BY_DATE: OpSpec = OpSpec {
     method: "GET",
     path_template: "/kpi/dau/data_series",
     fields: &[
-        FieldSpec { snake: "length", location: FieldLocation::Query },
-        FieldSpec { snake: "ending_at", location: FieldLocation::Query },
-        FieldSpec { snake: "app_id", location: FieldLocation::Query },
+        FieldSpec { snake: "length", wire: "length", location: FieldLocation::Query },
+        FieldSpec { snake: "ending_at", wire: "ending_at", location: FieldLocation::Query },
+        FieldSpec { snake: "app_id", wire: "app_id", location: FieldLocation::Query },
     ],
     auth: &[
     ],
@@ -450,9 +469,9 @@ const OP_EXPORT_OP_MONTHLY_ACTIVE_USERS_FOR_LAST30_DAYS: OpSpec = OpSpec {
     method: "GET",
     path_template: "/kpi/mau/data_series",
     fields: &[
-        FieldSpec { snake: "length", location: FieldLocation::Query },
-        FieldSpec { snake: "ending_at", location: FieldLocation::Query },
-        FieldSpec { snake: "app_id", location: FieldLocation::Query },
+        FieldSpec { snake: "length", wire: "length", location: FieldLocation::Query },
+        FieldSpec { snake: "ending_at", wire: "ending_at", location: FieldLocation::Query },
+        FieldSpec { snake: "app_id", wire: "app_id", location: FieldLocation::Query },
     ],
     auth: &[
     ],
@@ -462,9 +481,9 @@ const OP_EXPORT_OP_DAILY_NEW_USERS_BY_DATE: OpSpec = OpSpec {
     method: "GET",
     path_template: "/kpi/new_users/data_series",
     fields: &[
-        FieldSpec { snake: "length", location: FieldLocation::Query },
-        FieldSpec { snake: "ending_at", location: FieldLocation::Query },
-        FieldSpec { snake: "app_id", location: FieldLocation::Query },
+        FieldSpec { snake: "length", wire: "length", location: FieldLocation::Query },
+        FieldSpec { snake: "ending_at", wire: "ending_at", location: FieldLocation::Query },
+        FieldSpec { snake: "app_id", wire: "app_id", location: FieldLocation::Query },
     ],
     auth: &[
     ],
@@ -474,9 +493,9 @@ const OP_EXPORT_OP_KP_IS_FOR_DAILY_APP_UNINSTALLS_BY_DATE: OpSpec = OpSpec {
     method: "GET",
     path_template: "/kpi/uninstalls/data_series",
     fields: &[
-        FieldSpec { snake: "length", location: FieldLocation::Query },
-        FieldSpec { snake: "ending_at", location: FieldLocation::Query },
-        FieldSpec { snake: "app_id", location: FieldLocation::Query },
+        FieldSpec { snake: "length", wire: "length", location: FieldLocation::Query },
+        FieldSpec { snake: "ending_at", wire: "ending_at", location: FieldLocation::Query },
+        FieldSpec { snake: "app_id", wire: "app_id", location: FieldLocation::Query },
     ],
     auth: &[
     ],
@@ -486,9 +505,9 @@ const OP_EXPORT_OP_SEGMENT_ANALYTICS: OpSpec = OpSpec {
     method: "GET",
     path_template: "/segments/data_series",
     fields: &[
-        FieldSpec { snake: "segment_id", location: FieldLocation::Query },
-        FieldSpec { snake: "length", location: FieldLocation::Query },
-        FieldSpec { snake: "ending_at", location: FieldLocation::Query },
+        FieldSpec { snake: "segment_id", wire: "segment_id", location: FieldLocation::Query },
+        FieldSpec { snake: "length", wire: "length", location: FieldLocation::Query },
+        FieldSpec { snake: "ending_at", wire: "ending_at", location: FieldLocation::Query },
     ],
     auth: &[
     ],
@@ -498,7 +517,7 @@ const OP_EXPORT_OP_SEGMENT_DETAILS: OpSpec = OpSpec {
     method: "GET",
     path_template: "/segments/details",
     fields: &[
-        FieldSpec { snake: "segment_id", location: FieldLocation::Query },
+        FieldSpec { snake: "segment_id", wire: "segment_id", location: FieldLocation::Query },
     ],
     auth: &[
     ],
@@ -508,8 +527,8 @@ const OP_EXPORT_OP_SEGMENT_LIST: OpSpec = OpSpec {
     method: "GET",
     path_template: "/segments/list",
     fields: &[
-        FieldSpec { snake: "page", location: FieldLocation::Query },
-        FieldSpec { snake: "sort_direction", location: FieldLocation::Query },
+        FieldSpec { snake: "page", wire: "page", location: FieldLocation::Query },
+        FieldSpec { snake: "sort_direction", wire: "sort_direction", location: FieldLocation::Query },
     ],
     auth: &[
     ],
@@ -519,10 +538,10 @@ const OP_EXPORT_OP_SEND_ANALYTICS: OpSpec = OpSpec {
     method: "GET",
     path_template: "/sends/data_series",
     fields: &[
-        FieldSpec { snake: "campaign_id", location: FieldLocation::Query },
-        FieldSpec { snake: "send_id", location: FieldLocation::Query },
-        FieldSpec { snake: "length", location: FieldLocation::Query },
-        FieldSpec { snake: "ending_at", location: FieldLocation::Query },
+        FieldSpec { snake: "campaign_id", wire: "campaign_id", location: FieldLocation::Query },
+        FieldSpec { snake: "send_id", wire: "send_id", location: FieldLocation::Query },
+        FieldSpec { snake: "length", wire: "length", location: FieldLocation::Query },
+        FieldSpec { snake: "ending_at", wire: "ending_at", location: FieldLocation::Query },
     ],
     auth: &[
     ],
@@ -532,11 +551,11 @@ const OP_EXPORT_OP_APP_SESSIONS_BY_TIME: OpSpec = OpSpec {
     method: "GET",
     path_template: "/sessions/data_series",
     fields: &[
-        FieldSpec { snake: "length", location: FieldLocation::Query },
-        FieldSpec { snake: "unit", location: FieldLocation::Query },
-        FieldSpec { snake: "ending_at", location: FieldLocation::Query },
-        FieldSpec { snake: "app_id", location: FieldLocation::Query },
-        FieldSpec { snake: "segment_id", location: FieldLocation::Query },
+        FieldSpec { snake: "length", wire: "length", location: FieldLocation::Query },
+        FieldSpec { snake: "unit", wire: "unit", location: FieldLocation::Query },
+        FieldSpec { snake: "ending_at", wire: "ending_at", location: FieldLocation::Query },
+        FieldSpec { snake: "app_id", wire: "app_id", location: FieldLocation::Query },
+        FieldSpec { snake: "segment_id", wire: "segment_id", location: FieldLocation::Query },
     ],
     auth: &[
     ],
@@ -716,90 +735,384 @@ fn iface_export_op__app_sessions_by_time_params__to_json(p: &iface_export_op::Ap
     Value::Object(m)
 }
 
+fn iface_export_op__campaign_analytics__ok(body: String) -> Result<String, crate::runtime::DispatchError> {
+    Ok(body)
+}
+
+fn iface_export_op__campaign_analytics__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
+fn iface_export_op__campaign_details__ok(body: String) -> Result<String, crate::runtime::DispatchError> {
+    Ok(body)
+}
+
+fn iface_export_op__campaign_details__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
+fn iface_export_op__campaign_list__ok(body: String) -> Result<String, crate::runtime::DispatchError> {
+    Ok(body)
+}
+
+fn iface_export_op__campaign_list__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
+fn iface_export_op__canvas_data_series_analytics__ok(body: String) -> Result<String, crate::runtime::DispatchError> {
+    Ok(body)
+}
+
+fn iface_export_op__canvas_data_series_analytics__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
+fn iface_export_op__canvas_data_analytics_summary__ok(body: String) -> Result<String, crate::runtime::DispatchError> {
+    Ok(body)
+}
+
+fn iface_export_op__canvas_data_analytics_summary__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
+fn iface_export_op__canvas_details__ok(body: String) -> Result<String, crate::runtime::DispatchError> {
+    Ok(body)
+}
+
+fn iface_export_op__canvas_details__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
+fn iface_export_op__canvas_list__ok(body: String) -> Result<String, crate::runtime::DispatchError> {
+    Ok(body)
+}
+
+fn iface_export_op__canvas_list__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
+fn iface_export_op__custom_events_analytics__ok(body: String) -> Result<String, crate::runtime::DispatchError> {
+    Ok(body)
+}
+
+fn iface_export_op__custom_events_analytics__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
+fn iface_export_op__custom_events_list__ok(body: String) -> Result<String, crate::runtime::DispatchError> {
+    Ok(body)
+}
+
+fn iface_export_op__custom_events_list__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
+fn iface_export_op__news_feed_card_analytics__ok(body: String) -> Result<String, crate::runtime::DispatchError> {
+    Ok(body)
+}
+
+fn iface_export_op__news_feed_card_analytics__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
+fn iface_export_op__news_feed_cards_details__ok(body: String) -> Result<String, crate::runtime::DispatchError> {
+    Ok(body)
+}
+
+fn iface_export_op__news_feed_cards_details__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
+fn iface_export_op__news_feed_cards_list__ok(body: String) -> Result<String, crate::runtime::DispatchError> {
+    Ok(body)
+}
+
+fn iface_export_op__news_feed_cards_list__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
+fn iface_export_op__daily_active_users_by_date__ok(body: String) -> Result<String, crate::runtime::DispatchError> {
+    Ok(body)
+}
+
+fn iface_export_op__daily_active_users_by_date__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
+fn iface_export_op__monthly_active_users_for_last30_days__ok(body: String) -> Result<String, crate::runtime::DispatchError> {
+    Ok(body)
+}
+
+fn iface_export_op__monthly_active_users_for_last30_days__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
+fn iface_export_op__daily_new_users_by_date__ok(body: String) -> Result<String, crate::runtime::DispatchError> {
+    Ok(body)
+}
+
+fn iface_export_op__daily_new_users_by_date__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
+fn iface_export_op__kp_is_for_daily_app_uninstalls_by_date__ok(body: String) -> Result<String, crate::runtime::DispatchError> {
+    Ok(body)
+}
+
+fn iface_export_op__kp_is_for_daily_app_uninstalls_by_date__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
+fn iface_export_op__segment_analytics__ok(body: String) -> Result<String, crate::runtime::DispatchError> {
+    Ok(body)
+}
+
+fn iface_export_op__segment_analytics__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
+fn iface_export_op__segment_details__ok(body: String) -> Result<String, crate::runtime::DispatchError> {
+    Ok(body)
+}
+
+fn iface_export_op__segment_details__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
+fn iface_export_op__segment_list__ok(body: String) -> Result<String, crate::runtime::DispatchError> {
+    Ok(body)
+}
+
+fn iface_export_op__segment_list__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
+fn iface_export_op__send_analytics__ok(body: String) -> Result<String, crate::runtime::DispatchError> {
+    Ok(body)
+}
+
+fn iface_export_op__send_analytics__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
+fn iface_export_op__app_sessions_by_time__ok(body: String) -> Result<String, crate::runtime::DispatchError> {
+    Ok(body)
+}
+
+fn iface_export_op__app_sessions_by_time__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
 impl iface_export_op::Guest for crate::Component {
     fn campaign_analytics(params: iface_export_op::CampaignAnalyticsParams) -> Result<String, String> {
         let json = iface_export_op__campaign_analytics_params__to_json(&params);
-        dispatch(&OP_EXPORT_OP_CAMPAIGN_ANALYTICS, json)
+        match dispatch(&OP_EXPORT_OP_CAMPAIGN_ANALYTICS, json).and_then(iface_export_op__campaign_analytics__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_export_op__campaign_analytics__err(e)),
+        }
     }
     fn campaign_details(params: iface_export_op::CampaignDetailsParams) -> Result<String, String> {
         let json = iface_export_op__campaign_details_params__to_json(&params);
-        dispatch(&OP_EXPORT_OP_CAMPAIGN_DETAILS, json)
+        match dispatch(&OP_EXPORT_OP_CAMPAIGN_DETAILS, json).and_then(iface_export_op__campaign_details__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_export_op__campaign_details__err(e)),
+        }
     }
     fn campaign_list(params: iface_export_op::CampaignListParams) -> Result<String, String> {
         let json = iface_export_op__campaign_list_params__to_json(&params);
-        dispatch(&OP_EXPORT_OP_CAMPAIGN_LIST, json)
+        match dispatch(&OP_EXPORT_OP_CAMPAIGN_LIST, json).and_then(iface_export_op__campaign_list__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_export_op__campaign_list__err(e)),
+        }
     }
     fn canvas_data_series_analytics(params: iface_export_op::CanvasDataSeriesAnalyticsParams) -> Result<String, String> {
         let json = iface_export_op__canvas_data_series_analytics_params__to_json(&params);
-        dispatch(&OP_EXPORT_OP_CANVAS_DATA_SERIES_ANALYTICS, json)
+        match dispatch(&OP_EXPORT_OP_CANVAS_DATA_SERIES_ANALYTICS, json).and_then(iface_export_op__canvas_data_series_analytics__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_export_op__canvas_data_series_analytics__err(e)),
+        }
     }
     fn canvas_data_analytics_summary(params: iface_export_op::CanvasDataAnalyticsSummaryParams) -> Result<String, String> {
         let json = iface_export_op__canvas_data_analytics_summary_params__to_json(&params);
-        dispatch(&OP_EXPORT_OP_CANVAS_DATA_ANALYTICS_SUMMARY, json)
+        match dispatch(&OP_EXPORT_OP_CANVAS_DATA_ANALYTICS_SUMMARY, json).and_then(iface_export_op__canvas_data_analytics_summary__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_export_op__canvas_data_analytics_summary__err(e)),
+        }
     }
     fn canvas_details(params: iface_export_op::CanvasDetailsParams) -> Result<String, String> {
         let json = iface_export_op__canvas_details_params__to_json(&params);
-        dispatch(&OP_EXPORT_OP_CANVAS_DETAILS, json)
+        match dispatch(&OP_EXPORT_OP_CANVAS_DETAILS, json).and_then(iface_export_op__canvas_details__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_export_op__canvas_details__err(e)),
+        }
     }
     fn canvas_list(params: iface_export_op::CanvasListParams) -> Result<String, String> {
         let json = iface_export_op__canvas_list_params__to_json(&params);
-        dispatch(&OP_EXPORT_OP_CANVAS_LIST, json)
+        match dispatch(&OP_EXPORT_OP_CANVAS_LIST, json).and_then(iface_export_op__canvas_list__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_export_op__canvas_list__err(e)),
+        }
     }
     fn custom_events_analytics(params: iface_export_op::CustomEventsAnalyticsParams) -> Result<String, String> {
         let json = iface_export_op__custom_events_analytics_params__to_json(&params);
-        dispatch(&OP_EXPORT_OP_CUSTOM_EVENTS_ANALYTICS, json)
+        match dispatch(&OP_EXPORT_OP_CUSTOM_EVENTS_ANALYTICS, json).and_then(iface_export_op__custom_events_analytics__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_export_op__custom_events_analytics__err(e)),
+        }
     }
     fn custom_events_list(params: iface_export_op::CustomEventsListParams) -> Result<String, String> {
         let json = iface_export_op__custom_events_list_params__to_json(&params);
-        dispatch(&OP_EXPORT_OP_CUSTOM_EVENTS_LIST, json)
+        match dispatch(&OP_EXPORT_OP_CUSTOM_EVENTS_LIST, json).and_then(iface_export_op__custom_events_list__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_export_op__custom_events_list__err(e)),
+        }
     }
     fn news_feed_card_analytics(params: iface_export_op::NewsFeedCardAnalyticsParams) -> Result<String, String> {
         let json = iface_export_op__news_feed_card_analytics_params__to_json(&params);
-        dispatch(&OP_EXPORT_OP_NEWS_FEED_CARD_ANALYTICS, json)
+        match dispatch(&OP_EXPORT_OP_NEWS_FEED_CARD_ANALYTICS, json).and_then(iface_export_op__news_feed_card_analytics__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_export_op__news_feed_card_analytics__err(e)),
+        }
     }
     fn news_feed_cards_details(params: iface_export_op::NewsFeedCardsDetailsParams) -> Result<String, String> {
         let json = iface_export_op__news_feed_cards_details_params__to_json(&params);
-        dispatch(&OP_EXPORT_OP_NEWS_FEED_CARDS_DETAILS, json)
+        match dispatch(&OP_EXPORT_OP_NEWS_FEED_CARDS_DETAILS, json).and_then(iface_export_op__news_feed_cards_details__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_export_op__news_feed_cards_details__err(e)),
+        }
     }
     fn news_feed_cards_list(params: iface_export_op::NewsFeedCardsListParams) -> Result<String, String> {
         let json = iface_export_op__news_feed_cards_list_params__to_json(&params);
-        dispatch(&OP_EXPORT_OP_NEWS_FEED_CARDS_LIST, json)
+        match dispatch(&OP_EXPORT_OP_NEWS_FEED_CARDS_LIST, json).and_then(iface_export_op__news_feed_cards_list__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_export_op__news_feed_cards_list__err(e)),
+        }
     }
     fn daily_active_users_by_date(params: iface_export_op::DailyActiveUsersByDateParams) -> Result<String, String> {
         let json = iface_export_op__daily_active_users_by_date_params__to_json(&params);
-        dispatch(&OP_EXPORT_OP_DAILY_ACTIVE_USERS_BY_DATE, json)
+        match dispatch(&OP_EXPORT_OP_DAILY_ACTIVE_USERS_BY_DATE, json).and_then(iface_export_op__daily_active_users_by_date__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_export_op__daily_active_users_by_date__err(e)),
+        }
     }
     fn monthly_active_users_for_last30_days(params: iface_export_op::MonthlyActiveUsersForLast30DaysParams) -> Result<String, String> {
         let json = iface_export_op__monthly_active_users_for_last30_days_params__to_json(&params);
-        dispatch(&OP_EXPORT_OP_MONTHLY_ACTIVE_USERS_FOR_LAST30_DAYS, json)
+        match dispatch(&OP_EXPORT_OP_MONTHLY_ACTIVE_USERS_FOR_LAST30_DAYS, json).and_then(iface_export_op__monthly_active_users_for_last30_days__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_export_op__monthly_active_users_for_last30_days__err(e)),
+        }
     }
     fn daily_new_users_by_date(params: iface_export_op::DailyNewUsersByDateParams) -> Result<String, String> {
         let json = iface_export_op__daily_new_users_by_date_params__to_json(&params);
-        dispatch(&OP_EXPORT_OP_DAILY_NEW_USERS_BY_DATE, json)
+        match dispatch(&OP_EXPORT_OP_DAILY_NEW_USERS_BY_DATE, json).and_then(iface_export_op__daily_new_users_by_date__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_export_op__daily_new_users_by_date__err(e)),
+        }
     }
     fn kp_is_for_daily_app_uninstalls_by_date(params: iface_export_op::KpIsForDailyAppUninstallsByDateParams) -> Result<String, String> {
         let json = iface_export_op__kp_is_for_daily_app_uninstalls_by_date_params__to_json(&params);
-        dispatch(&OP_EXPORT_OP_KP_IS_FOR_DAILY_APP_UNINSTALLS_BY_DATE, json)
+        match dispatch(&OP_EXPORT_OP_KP_IS_FOR_DAILY_APP_UNINSTALLS_BY_DATE, json).and_then(iface_export_op__kp_is_for_daily_app_uninstalls_by_date__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_export_op__kp_is_for_daily_app_uninstalls_by_date__err(e)),
+        }
     }
     fn segment_analytics(params: iface_export_op::SegmentAnalyticsParams) -> Result<String, String> {
         let json = iface_export_op__segment_analytics_params__to_json(&params);
-        dispatch(&OP_EXPORT_OP_SEGMENT_ANALYTICS, json)
+        match dispatch(&OP_EXPORT_OP_SEGMENT_ANALYTICS, json).and_then(iface_export_op__segment_analytics__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_export_op__segment_analytics__err(e)),
+        }
     }
     fn segment_details(params: iface_export_op::SegmentDetailsParams) -> Result<String, String> {
         let json = iface_export_op__segment_details_params__to_json(&params);
-        dispatch(&OP_EXPORT_OP_SEGMENT_DETAILS, json)
+        match dispatch(&OP_EXPORT_OP_SEGMENT_DETAILS, json).and_then(iface_export_op__segment_details__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_export_op__segment_details__err(e)),
+        }
     }
     fn segment_list(params: iface_export_op::SegmentListParams) -> Result<String, String> {
         let json = iface_export_op__segment_list_params__to_json(&params);
-        dispatch(&OP_EXPORT_OP_SEGMENT_LIST, json)
+        match dispatch(&OP_EXPORT_OP_SEGMENT_LIST, json).and_then(iface_export_op__segment_list__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_export_op__segment_list__err(e)),
+        }
     }
     fn send_analytics(params: iface_export_op::SendAnalyticsParams) -> Result<String, String> {
         let json = iface_export_op__send_analytics_params__to_json(&params);
-        dispatch(&OP_EXPORT_OP_SEND_ANALYTICS, json)
+        match dispatch(&OP_EXPORT_OP_SEND_ANALYTICS, json).and_then(iface_export_op__send_analytics__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_export_op__send_analytics__err(e)),
+        }
     }
     fn app_sessions_by_time(params: iface_export_op::AppSessionsByTimeParams) -> Result<String, String> {
         let json = iface_export_op__app_sessions_by_time_params__to_json(&params);
-        dispatch(&OP_EXPORT_OP_APP_SESSIONS_BY_TIME, json)
+        match dispatch(&OP_EXPORT_OP_APP_SESSIONS_BY_TIME, json).and_then(iface_export_op__app_sessions_by_time__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_export_op__app_sessions_by_time__err(e)),
+        }
     }
 }
 use crate::exports::autostamp::braze::messaging as iface_messaging;
@@ -808,12 +1121,12 @@ const OP_MESSAGING_SCHEDULE_API_TRIGGERED_CANVASES: OpSpec = OpSpec {
     method: "POST",
     path_template: "/canvas/trigger/schedule/create",
     fields: &[
-        FieldSpec { snake: "audience", location: FieldLocation::Body },
-        FieldSpec { snake: "broadcast", location: FieldLocation::Body },
-        FieldSpec { snake: "canvas_entry_properties", location: FieldLocation::Body },
-        FieldSpec { snake: "canvas_id", location: FieldLocation::Body },
-        FieldSpec { snake: "recipients", location: FieldLocation::Body },
-        FieldSpec { snake: "schedule", location: FieldLocation::Body },
+        FieldSpec { snake: "audience", wire: "audience", location: FieldLocation::Body },
+        FieldSpec { snake: "broadcast", wire: "broadcast", location: FieldLocation::Body },
+        FieldSpec { snake: "canvas_entry_properties", wire: "canvas_entry_properties", location: FieldLocation::Body },
+        FieldSpec { snake: "canvas_id", wire: "canvas_id", location: FieldLocation::Body },
+        FieldSpec { snake: "recipients", wire: "recipients", location: FieldLocation::Body },
+        FieldSpec { snake: "schedule", wire: "schedule", location: FieldLocation::Body },
     ],
     auth: &[
     ],
@@ -823,7 +1136,7 @@ const OP_MESSAGING_GET_UPCOMING_SCHEDULED_CAMPAIGNS_AND_CANVASES: OpSpec = OpSpe
     method: "GET",
     path_template: "/messages/scheduled_broadcasts",
     fields: &[
-        FieldSpec { snake: "end_time", location: FieldLocation::Query },
+        FieldSpec { snake: "end_time", wire: "end_time", location: FieldLocation::Query },
     ],
     auth: &[
     ],
@@ -831,7 +1144,7 @@ const OP_MESSAGING_GET_UPCOMING_SCHEDULED_CAMPAIGNS_AND_CANVASES: OpSpec = OpSpe
 
 fn iface_messaging__schedule_api_triggered_canvases_body_audience__to_json(p: &iface_messaging::ScheduleApiTriggeredCanvasesBodyAudience) -> Value {
     let mut m = Map::new();
-    m.insert("and".into(), match (&p.and) { Some(v) => Value::Array((v).iter().map(|v| iface_messaging__schedule_api_triggered_canvases_body_audience_and_item__to_json(v)).collect()), None => Value::Null });
+    m.insert("AND".into(), match (&p.and) { Some(v) => Value::Array((v).iter().map(|v| iface_messaging__schedule_api_triggered_canvases_body_audience_and_item__to_json(v)).collect()), None => Value::Null });
     Value::Object(m)
 }
 
@@ -895,14 +1208,42 @@ fn iface_messaging__get_upcoming_scheduled_campaigns_and_canvases_params__to_jso
     Value::Object(m)
 }
 
+fn iface_messaging__schedule_api_triggered_canvases__ok(body: String) -> Result<String, crate::runtime::DispatchError> {
+    Ok(body)
+}
+
+fn iface_messaging__schedule_api_triggered_canvases__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
+fn iface_messaging__get_upcoming_scheduled_campaigns_and_canvases__ok(body: String) -> Result<String, crate::runtime::DispatchError> {
+    Ok(body)
+}
+
+fn iface_messaging__get_upcoming_scheduled_campaigns_and_canvases__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
 impl iface_messaging::Guest for crate::Component {
     fn schedule_api_triggered_canvases(params: iface_messaging::ScheduleApiTriggeredCanvasesParams) -> Result<String, String> {
         let json = iface_messaging__schedule_api_triggered_canvases_params__to_json(&params);
-        dispatch(&OP_MESSAGING_SCHEDULE_API_TRIGGERED_CANVASES, json)
+        match dispatch(&OP_MESSAGING_SCHEDULE_API_TRIGGERED_CANVASES, json).and_then(iface_messaging__schedule_api_triggered_canvases__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_messaging__schedule_api_triggered_canvases__err(e)),
+        }
     }
     fn get_upcoming_scheduled_campaigns_and_canvases(params: iface_messaging::GetUpcomingScheduledCampaignsAndCanvasesParams) -> Result<String, String> {
         let json = iface_messaging__get_upcoming_scheduled_campaigns_and_canvases_params__to_json(&params);
-        dispatch(&OP_MESSAGING_GET_UPCOMING_SCHEDULED_CAMPAIGNS_AND_CANVASES, json)
+        match dispatch(&OP_MESSAGING_GET_UPCOMING_SCHEDULED_CAMPAIGNS_AND_CANVASES, json).and_then(iface_messaging__get_upcoming_scheduled_campaigns_and_canvases__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_messaging__get_upcoming_scheduled_campaigns_and_canvases__err(e)),
+        }
     }
 }
 use crate::exports::autostamp::braze::templates as iface_templates;
@@ -911,8 +1252,8 @@ const OP_TEMPLATES_SEE_CONTENT_BLOCK_INFORMATION: OpSpec = OpSpec {
     method: "GET",
     path_template: "/content_blocks/info",
     fields: &[
-        FieldSpec { snake: "content_block_id", location: FieldLocation::Query },
-        FieldSpec { snake: "include_inclusion_data", location: FieldLocation::Query },
+        FieldSpec { snake: "content_block_id", wire: "content_block_id", location: FieldLocation::Query },
+        FieldSpec { snake: "include_inclusion_data", wire: "include_inclusion_data", location: FieldLocation::Query },
     ],
     auth: &[
     ],
@@ -922,10 +1263,10 @@ const OP_TEMPLATES_LIST_AVAILABLE_CONTENT_BLOCKS: OpSpec = OpSpec {
     method: "GET",
     path_template: "/content_blocks/list",
     fields: &[
-        FieldSpec { snake: "modified_after", location: FieldLocation::Query },
-        FieldSpec { snake: "modified_before", location: FieldLocation::Query },
-        FieldSpec { snake: "limit", location: FieldLocation::Query },
-        FieldSpec { snake: "offset", location: FieldLocation::Query },
+        FieldSpec { snake: "modified_after", wire: "modified_after", location: FieldLocation::Query },
+        FieldSpec { snake: "modified_before", wire: "modified_before", location: FieldLocation::Query },
+        FieldSpec { snake: "limit", wire: "limit", location: FieldLocation::Query },
+        FieldSpec { snake: "offset", wire: "offset", location: FieldLocation::Query },
     ],
     auth: &[
     ],
@@ -935,7 +1276,7 @@ const OP_TEMPLATES_SEE_EMAIL_TEMPLATE_INFORMATION: OpSpec = OpSpec {
     method: "GET",
     path_template: "/templates/email/info",
     fields: &[
-        FieldSpec { snake: "email_template_id", location: FieldLocation::Query },
+        FieldSpec { snake: "email_template_id", wire: "email_template_id", location: FieldLocation::Query },
     ],
     auth: &[
     ],
@@ -945,10 +1286,10 @@ const OP_TEMPLATES_LIST_AVAILABLE_EMAIL_TEMPLATES: OpSpec = OpSpec {
     method: "GET",
     path_template: "/templates/email/list",
     fields: &[
-        FieldSpec { snake: "modified_after", location: FieldLocation::Query },
-        FieldSpec { snake: "modified_before", location: FieldLocation::Query },
-        FieldSpec { snake: "limit", location: FieldLocation::Query },
-        FieldSpec { snake: "offset", location: FieldLocation::Query },
+        FieldSpec { snake: "modified_after", wire: "modified_after", location: FieldLocation::Query },
+        FieldSpec { snake: "modified_before", wire: "modified_before", location: FieldLocation::Query },
+        FieldSpec { snake: "limit", wire: "limit", location: FieldLocation::Query },
+        FieldSpec { snake: "offset", wire: "offset", location: FieldLocation::Query },
     ],
     auth: &[
     ],
@@ -985,22 +1326,78 @@ fn iface_templates__list_available_email_templates_params__to_json(p: &iface_tem
     Value::Object(m)
 }
 
+fn iface_templates__see_content_block_information__ok(body: String) -> Result<String, crate::runtime::DispatchError> {
+    Ok(body)
+}
+
+fn iface_templates__see_content_block_information__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
+fn iface_templates__list_available_content_blocks__ok(body: String) -> Result<String, crate::runtime::DispatchError> {
+    Ok(body)
+}
+
+fn iface_templates__list_available_content_blocks__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
+fn iface_templates__see_email_template_information__ok(body: String) -> Result<String, crate::runtime::DispatchError> {
+    Ok(body)
+}
+
+fn iface_templates__see_email_template_information__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
+fn iface_templates__list_available_email_templates__ok(body: String) -> Result<String, crate::runtime::DispatchError> {
+    Ok(body)
+}
+
+fn iface_templates__list_available_email_templates__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
 impl iface_templates::Guest for crate::Component {
     fn see_content_block_information(params: iface_templates::SeeContentBlockInformationParams) -> Result<String, String> {
         let json = iface_templates__see_content_block_information_params__to_json(&params);
-        dispatch(&OP_TEMPLATES_SEE_CONTENT_BLOCK_INFORMATION, json)
+        match dispatch(&OP_TEMPLATES_SEE_CONTENT_BLOCK_INFORMATION, json).and_then(iface_templates__see_content_block_information__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_templates__see_content_block_information__err(e)),
+        }
     }
     fn list_available_content_blocks(params: iface_templates::ListAvailableContentBlocksParams) -> Result<String, String> {
         let json = iface_templates__list_available_content_blocks_params__to_json(&params);
-        dispatch(&OP_TEMPLATES_LIST_AVAILABLE_CONTENT_BLOCKS, json)
+        match dispatch(&OP_TEMPLATES_LIST_AVAILABLE_CONTENT_BLOCKS, json).and_then(iface_templates__list_available_content_blocks__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_templates__list_available_content_blocks__err(e)),
+        }
     }
     fn see_email_template_information(params: iface_templates::SeeEmailTemplateInformationParams) -> Result<String, String> {
         let json = iface_templates__see_email_template_information_params__to_json(&params);
-        dispatch(&OP_TEMPLATES_SEE_EMAIL_TEMPLATE_INFORMATION, json)
+        match dispatch(&OP_TEMPLATES_SEE_EMAIL_TEMPLATE_INFORMATION, json).and_then(iface_templates__see_email_template_information__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_templates__see_email_template_information__err(e)),
+        }
     }
     fn list_available_email_templates(params: iface_templates::ListAvailableEmailTemplatesParams) -> Result<String, String> {
         let json = iface_templates__list_available_email_templates_params__to_json(&params);
-        dispatch(&OP_TEMPLATES_LIST_AVAILABLE_EMAIL_TEMPLATES, json)
+        match dispatch(&OP_TEMPLATES_LIST_AVAILABLE_EMAIL_TEMPLATES, json).and_then(iface_templates__list_available_email_templates__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_templates__list_available_email_templates__err(e)),
+        }
     }
 }
 use crate::exports::autostamp::braze::email_lists_addresses as iface_email_lists_addresses;
@@ -1009,11 +1406,11 @@ const OP_EMAIL_LISTS_ADDRESSES_QUERY_HARD_BOUNCED_EMAILS: OpSpec = OpSpec {
     method: "GET",
     path_template: "/email/hard_bounces",
     fields: &[
-        FieldSpec { snake: "start_date", location: FieldLocation::Query },
-        FieldSpec { snake: "end_date", location: FieldLocation::Query },
-        FieldSpec { snake: "limit", location: FieldLocation::Query },
-        FieldSpec { snake: "offset", location: FieldLocation::Query },
-        FieldSpec { snake: "email", location: FieldLocation::Query },
+        FieldSpec { snake: "start_date", wire: "start_date", location: FieldLocation::Query },
+        FieldSpec { snake: "end_date", wire: "end_date", location: FieldLocation::Query },
+        FieldSpec { snake: "limit", wire: "limit", location: FieldLocation::Query },
+        FieldSpec { snake: "offset", wire: "offset", location: FieldLocation::Query },
+        FieldSpec { snake: "email", wire: "email", location: FieldLocation::Query },
     ],
     auth: &[
     ],
@@ -1023,12 +1420,12 @@ const OP_EMAIL_LISTS_ADDRESSES_QUERY_LIST_OF_UNSUBSCRIBED_EMAIL_ADDRESSES: OpSpe
     method: "GET",
     path_template: "/email/unsubscribes",
     fields: &[
-        FieldSpec { snake: "start_date", location: FieldLocation::Query },
-        FieldSpec { snake: "end_date", location: FieldLocation::Query },
-        FieldSpec { snake: "limit", location: FieldLocation::Query },
-        FieldSpec { snake: "offset", location: FieldLocation::Query },
-        FieldSpec { snake: "sort_direction", location: FieldLocation::Query },
-        FieldSpec { snake: "email", location: FieldLocation::Query },
+        FieldSpec { snake: "start_date", wire: "start_date", location: FieldLocation::Query },
+        FieldSpec { snake: "end_date", wire: "end_date", location: FieldLocation::Query },
+        FieldSpec { snake: "limit", wire: "limit", location: FieldLocation::Query },
+        FieldSpec { snake: "offset", wire: "offset", location: FieldLocation::Query },
+        FieldSpec { snake: "sort_direction", wire: "sort_direction", location: FieldLocation::Query },
+        FieldSpec { snake: "email", wire: "email", location: FieldLocation::Query },
     ],
     auth: &[
     ],
@@ -1055,14 +1452,42 @@ fn iface_email_lists_addresses__query_list_of_unsubscribed_email_addresses_param
     Value::Object(m)
 }
 
+fn iface_email_lists_addresses__query_hard_bounced_emails__ok(body: String) -> Result<String, crate::runtime::DispatchError> {
+    Ok(body)
+}
+
+fn iface_email_lists_addresses__query_hard_bounced_emails__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
+fn iface_email_lists_addresses__query_list_of_unsubscribed_email_addresses__ok(body: String) -> Result<String, crate::runtime::DispatchError> {
+    Ok(body)
+}
+
+fn iface_email_lists_addresses__query_list_of_unsubscribed_email_addresses__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
 impl iface_email_lists_addresses::Guest for crate::Component {
     fn query_hard_bounced_emails(params: iface_email_lists_addresses::QueryHardBouncedEmailsParams) -> Result<String, String> {
         let json = iface_email_lists_addresses__query_hard_bounced_emails_params__to_json(&params);
-        dispatch(&OP_EMAIL_LISTS_ADDRESSES_QUERY_HARD_BOUNCED_EMAILS, json)
+        match dispatch(&OP_EMAIL_LISTS_ADDRESSES_QUERY_HARD_BOUNCED_EMAILS, json).and_then(iface_email_lists_addresses__query_hard_bounced_emails__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_email_lists_addresses__query_hard_bounced_emails__err(e)),
+        }
     }
     fn query_list_of_unsubscribed_email_addresses(params: iface_email_lists_addresses::QueryListOfUnsubscribedEmailAddressesParams) -> Result<String, String> {
         let json = iface_email_lists_addresses__query_list_of_unsubscribed_email_addresses_params__to_json(&params);
-        dispatch(&OP_EMAIL_LISTS_ADDRESSES_QUERY_LIST_OF_UNSUBSCRIBED_EMAIL_ADDRESSES, json)
+        match dispatch(&OP_EMAIL_LISTS_ADDRESSES_QUERY_LIST_OF_UNSUBSCRIBED_EMAIL_ADDRESSES, json).and_then(iface_email_lists_addresses__query_list_of_unsubscribed_email_addresses__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_email_lists_addresses__query_list_of_unsubscribed_email_addresses__err(e)),
+        }
     }
 }
 use crate::exports::autostamp::braze::subscription_groups as iface_subscription_groups;
@@ -1071,9 +1496,9 @@ const OP_SUBSCRIPTION_GROUPS_LIST_USER_S_SUBSCRIPTION_GROUP_STATUS_SMS: OpSpec =
     method: "GET",
     path_template: "/subscription/status/get",
     fields: &[
-        FieldSpec { snake: "subscription_group_id", location: FieldLocation::Query },
-        FieldSpec { snake: "external_id", location: FieldLocation::Query },
-        FieldSpec { snake: "phone", location: FieldLocation::Query },
+        FieldSpec { snake: "subscription_group_id", wire: "subscription_group_id", location: FieldLocation::Query },
+        FieldSpec { snake: "external_id", wire: "external_id", location: FieldLocation::Query },
+        FieldSpec { snake: "phone", wire: "phone", location: FieldLocation::Query },
     ],
     auth: &[
     ],
@@ -1083,10 +1508,10 @@ const OP_SUBSCRIPTION_GROUPS_LIST_USER_S_SUBSCRIPTION_GROUP_SMS: OpSpec = OpSpec
     method: "GET",
     path_template: "/subscription/user/status",
     fields: &[
-        FieldSpec { snake: "external_id", location: FieldLocation::Query },
-        FieldSpec { snake: "limit", location: FieldLocation::Query },
-        FieldSpec { snake: "offset", location: FieldLocation::Query },
-        FieldSpec { snake: "phone", location: FieldLocation::Query },
+        FieldSpec { snake: "external_id", wire: "external_id", location: FieldLocation::Query },
+        FieldSpec { snake: "limit", wire: "limit", location: FieldLocation::Query },
+        FieldSpec { snake: "offset", wire: "offset", location: FieldLocation::Query },
+        FieldSpec { snake: "phone", wire: "phone", location: FieldLocation::Query },
     ],
     auth: &[
     ],
@@ -1109,14 +1534,42 @@ fn iface_subscription_groups__list_user_s_subscription_group_sms_params__to_json
     Value::Object(m)
 }
 
+fn iface_subscription_groups__list_user_s_subscription_group_status_sms__ok(body: String) -> Result<String, crate::runtime::DispatchError> {
+    Ok(body)
+}
+
+fn iface_subscription_groups__list_user_s_subscription_group_status_sms__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
+fn iface_subscription_groups__list_user_s_subscription_group_sms__ok(body: String) -> Result<String, crate::runtime::DispatchError> {
+    Ok(body)
+}
+
+fn iface_subscription_groups__list_user_s_subscription_group_sms__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
 impl iface_subscription_groups::Guest for crate::Component {
     fn list_user_s_subscription_group_status_sms(params: iface_subscription_groups::ListUserSSubscriptionGroupStatusSmsParams) -> Result<String, String> {
         let json = iface_subscription_groups__list_user_s_subscription_group_status_sms_params__to_json(&params);
-        dispatch(&OP_SUBSCRIPTION_GROUPS_LIST_USER_S_SUBSCRIPTION_GROUP_STATUS_SMS, json)
+        match dispatch(&OP_SUBSCRIPTION_GROUPS_LIST_USER_S_SUBSCRIPTION_GROUP_STATUS_SMS, json).and_then(iface_subscription_groups__list_user_s_subscription_group_status_sms__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_subscription_groups__list_user_s_subscription_group_status_sms__err(e)),
+        }
     }
     fn list_user_s_subscription_group_sms(params: iface_subscription_groups::ListUserSSubscriptionGroupSmsParams) -> Result<String, String> {
         let json = iface_subscription_groups__list_user_s_subscription_group_sms_params__to_json(&params);
-        dispatch(&OP_SUBSCRIPTION_GROUPS_LIST_USER_S_SUBSCRIPTION_GROUP_SMS, json)
+        match dispatch(&OP_SUBSCRIPTION_GROUPS_LIST_USER_S_SUBSCRIPTION_GROUP_SMS, json).and_then(iface_subscription_groups__list_user_s_subscription_group_sms__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_subscription_groups__list_user_s_subscription_group_sms__err(e)),
+        }
     }
 }
 

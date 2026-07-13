@@ -44,10 +44,15 @@ pub(crate) enum FieldLocation {
     Body,
 }
 
-/// A single operation parameter: the snake-case key it carries in the params JSON and where
-/// it belongs in the request.
+/// A single operation parameter. `snake` keys the field in the internal params JSON (and, for a
+/// path field, matches the `{snake}` placeholder in the path template); `wire` is the verbatim name
+/// the field takes on the HTTP wire (query key, header name, or body property). The two differ
+/// whenever the source name isn't already snake_case (e.g. `dryRun` → snake `dry_run`, wire
+/// `dryRun`), and let distinct inputs that share a snake key (`DateCreated`, `DateCreated<`) still
+/// travel under their true names.
 pub(crate) struct FieldSpec {
     pub(crate) snake: &'static str,
+    pub(crate) wire: &'static str,
     pub(crate) location: FieldLocation,
 }
 
@@ -71,6 +76,16 @@ pub(crate) struct AuthApply {
     pub(crate) kind: AuthKind,
 }
 
+/// The failure modes of [`dispatch`], kept structured so each generated operation can map them
+/// onto its own typed error: an `Http` failure carries the response status and body (routed to
+/// the matching error-variant case), while a `Transport` failure carries a message for the
+/// catch-all case (a secret lookup, connection, or decode failure that never produced an HTTP
+/// status).
+pub(crate) enum DispatchError {
+    Http { status: u16, body: String },
+    Transport(String),
+}
+
 /// A single API operation: HTTP method, path template (with `{snake}` placeholders), the
 /// parameter fields, and the security schemes to apply.
 pub(crate) struct OpSpec {
@@ -81,8 +96,9 @@ pub(crate) struct OpSpec {
 }
 
 /// Execute `op` with the supplied `params` (a JSON object keyed by snake-case field names)
-/// and return the response body as a string, or an error message.
-pub(crate) fn dispatch(op: &OpSpec, params: Value) -> Result<String, String> {
+/// and return the raw 2xx response body, or a structured [`DispatchError`] the caller maps
+/// onto the operation's typed error.
+pub(crate) fn dispatch(op: &OpSpec, params: Value) -> Result<String, DispatchError> {
     let obj = match &params {
         Value::Object(map) => Some(map),
         _ => None,
@@ -105,10 +121,10 @@ pub(crate) fn dispatch(op: &OpSpec, params: Value) -> Result<String, String> {
                 let placeholder = format!("{{{}}}", field.snake);
                 path = path.replace(&placeholder, &percent_encode(&scalar(value)));
             }
-            FieldLocation::Query => query.push((field.snake.to_string(), scalar(value))),
-            FieldLocation::Header => headers.push((field.snake.to_string(), scalar(value))),
+            FieldLocation::Query => query.push((field.wire.to_string(), scalar(value))),
+            FieldLocation::Header => headers.push((field.wire.to_string(), scalar(value))),
             FieldLocation::Body => {
-                body.insert(field.snake.to_string(), value.clone());
+                body.insert(field.wire.to_string(), value.clone());
             }
         }
     }
@@ -116,7 +132,7 @@ pub(crate) fn dispatch(op: &OpSpec, params: Value) -> Result<String, String> {
     // Apply each resolved security scheme, sourcing its value from wasmcloud:secrets.
     let mut cookies: Vec<String> = Vec::new();
     for apply in op.auth {
-        let secret = fetch_secret(apply.secret_key)?;
+        let secret = fetch_secret(apply.secret_key).map_err(DispatchError::Transport)?;
         match &apply.kind {
             AuthKind::Bearer => headers.push(("authorization".into(), format!("Bearer {secret}"))),
             AuthKind::Basic => {
@@ -177,17 +193,18 @@ fn fetch_secret(key: &str) -> Result<String, String> {
 }
 
 /// Build and send the outgoing request with `wstd`, returning the response body on a 2xx
-/// status. The generated guest exports are synchronous, so the async `wstd` client is driven
-/// to completion on a local reactor via `wstd::runtime::block_on`.
+/// status and a structured [`DispatchError`] otherwise. The generated guest exports are
+/// synchronous, so the async `wstd` client is driven to completion on a local reactor via
+/// `wstd::runtime::block_on`.
 fn perform(
     method: &str,
     path_with_query: &str,
     headers: &[(String, String)],
     body: &[u8],
-) -> Result<String, String> {
+) -> Result<String, DispatchError> {
     let url = join_url(crate::BASE_URL, path_with_query);
     let method = Method::from_bytes(method.as_bytes())
-        .map_err(|err| format!("invalid HTTP method `{method}`: {err}"))?;
+        .map_err(|err| DispatchError::Transport(format!("invalid HTTP method `{method}`: {err}")))?;
 
     let mut builder = Request::builder().method(method).uri(url);
     for (name, value) in headers {
@@ -199,27 +216,29 @@ fn perform(
         } else {
             Body::from(body.to_vec())
         })
-        .map_err(|err| format!("failed to build request: {err}"))?;
+        .map_err(|err| DispatchError::Transport(format!("failed to build request: {err}")))?;
 
     wstd::runtime::block_on(async move {
         let client = Client::new();
         let response = client
             .send(request)
             .await
-            .map_err(|err| format!("request failed: {err:#}"))?;
+            .map_err(|err| DispatchError::Transport(format!("request failed: {err:#}")))?;
 
         let status = response.status().as_u16();
         let mut response_body = response.into_body();
-        let bytes = response_body
-            .contents()
-            .await
-            .map_err(|err| format!("failed to read response body: {err:#}"))?;
+        let bytes = response_body.contents().await.map_err(|err| {
+            DispatchError::Transport(format!("failed to read response body: {err:#}"))
+        })?;
         let body_text = String::from_utf8_lossy(bytes).into_owned();
 
         if (200..300).contains(&status) {
             Ok(body_text)
         } else {
-            Err(format!("HTTP {status}: {body_text}"))
+            Err(DispatchError::Http {
+                status,
+                body: body_text,
+            })
         }
     })
 }
@@ -288,7 +307,7 @@ const OP_REISEZENTREN_GET_REISEZENTREN: OpSpec = OpSpec {
     method: "GET",
     path_template: "/reisezentren",
     fields: &[
-        FieldSpec { snake: "name", location: FieldLocation::Query },
+        FieldSpec { snake: "name", wire: "name", location: FieldLocation::Query },
     ],
     auth: &[
     ],
@@ -298,8 +317,8 @@ const OP_REISEZENTREN_GET_REISEZENTREN_LOC_LAT_LON: OpSpec = OpSpec {
     method: "GET",
     path_template: "/reisezentren/loc/{lat}/{lon}",
     fields: &[
-        FieldSpec { snake: "lat", location: FieldLocation::Path },
-        FieldSpec { snake: "lon", location: FieldLocation::Path },
+        FieldSpec { snake: "lat", wire: "lat", location: FieldLocation::Path },
+        FieldSpec { snake: "lon", wire: "lon", location: FieldLocation::Path },
     ],
     auth: &[
     ],
@@ -309,9 +328,9 @@ const OP_REISEZENTREN_GET_REISEZENTREN_LOC_LAT_LON_DIST: OpSpec = OpSpec {
     method: "GET",
     path_template: "/reisezentren/loc/{lat}/{lon}/{dist}",
     fields: &[
-        FieldSpec { snake: "lat", location: FieldLocation::Path },
-        FieldSpec { snake: "lon", location: FieldLocation::Path },
-        FieldSpec { snake: "dist", location: FieldLocation::Path },
+        FieldSpec { snake: "lat", wire: "lat", location: FieldLocation::Path },
+        FieldSpec { snake: "lon", wire: "lon", location: FieldLocation::Path },
+        FieldSpec { snake: "dist", wire: "dist", location: FieldLocation::Path },
     ],
     auth: &[
     ],
@@ -321,11 +340,56 @@ const OP_REISEZENTREN_GET_REISEZENTREN_ID: OpSpec = OpSpec {
     method: "GET",
     path_template: "/reisezentren/{id}",
     fields: &[
-        FieldSpec { snake: "id", location: FieldLocation::Path },
+        FieldSpec { snake: "id", wire: "id", location: FieldLocation::Path },
     ],
     auth: &[
     ],
 };
+
+fn iface_reisezentren__travel_center_type_op_enum__to_str(e: &iface_reisezentren::TravelCenterTypeOpEnum) -> &'static str {
+    match e {
+        iface_reisezentren::TravelCenterTypeOpEnum::Reisezentrum => "Reisezentrum",
+        iface_reisezentren::TravelCenterTypeOpEnum::MobilityCenter => "Mobility Center",
+    }
+}
+
+fn iface_reisezentren__travel_center_list__to_json(p: &iface_reisezentren::TravelCenterList) -> Value {
+    let mut m = Map::new();
+    m.insert("value".into(), Value::String((&p.value).clone()));
+    Value::Object(m)
+}
+
+fn iface_reisezentren__travel_center__to_json(p: &iface_reisezentren::TravelCenter) -> Value {
+    let mut m = Map::new();
+    m.insert("address".into(), match (&p.address) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("city".into(), match (&p.city) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("id".into(), match (&p.id) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("lat".into(), match (&p.lat) { Some(v) => serde_json::Number::from_f64(*(v)).map(Value::Number).unwrap_or(Value::Null), None => Value::Null });
+    m.insert("lon".into(), match (&p.lon) { Some(v) => serde_json::Number::from_f64(*(v)).map(Value::Number).unwrap_or(Value::Null), None => Value::Null });
+    m.insert("name".into(), match (&p.name) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("openingTimes".into(), match (&p.opening_times) { Some(v) => iface_reisezentren__travel_center_opening_times__to_json(v), None => Value::Null });
+    m.insert("postCode".into(), match (&p.post_code) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("type".into(), match (&p.type_op) { Some(v) => Value::String(iface_reisezentren__travel_center_type_op_enum__to_str(v).into()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_reisezentren__travel_center_opening_times__to_json(p: &iface_reisezentren::TravelCenterOpeningTimes) -> Value {
+    let mut m = Map::new();
+    m.insert("fri".into(), match (&p.fri) { Some(v) => iface_reisezentren__opening_time__to_json(v), None => Value::Null });
+    m.insert("mon".into(), match (&p.mon) { Some(v) => iface_reisezentren__opening_time__to_json(v), None => Value::Null });
+    m.insert("sat".into(), match (&p.sat) { Some(v) => iface_reisezentren__opening_time__to_json(v), None => Value::Null });
+    m.insert("sun".into(), match (&p.sun) { Some(v) => iface_reisezentren__opening_time__to_json(v), None => Value::Null });
+    m.insert("thu".into(), match (&p.thu) { Some(v) => iface_reisezentren__opening_time__to_json(v), None => Value::Null });
+    m.insert("tue".into(), match (&p.tue) { Some(v) => iface_reisezentren__opening_time__to_json(v), None => Value::Null });
+    m.insert("wed".into(), match (&p.wed) { Some(v) => iface_reisezentren__opening_time__to_json(v), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_reisezentren__opening_time__to_json(p: &iface_reisezentren::OpeningTime) -> Value {
+    let mut m = Map::new();
+    m.insert("value".into(), Value::String((&p.value).clone()));
+    Value::Object(m)
+}
 
 fn iface_reisezentren__get_reisezentren_params__to_json(p: &iface_reisezentren::GetReisezentrenParams) -> Value {
     let mut m = Map::new();
@@ -354,22 +418,163 @@ fn iface_reisezentren__get_reisezentren_id_params__to_json(p: &iface_reisezentre
     Value::Object(m)
 }
 
+fn iface_reisezentren__travel_center_list__from_json(v: &Value) -> Option<iface_reisezentren::TravelCenterList> {
+    let m = v.as_object()?;
+    Some(iface_reisezentren::TravelCenterList {
+        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+    })
+}
+
+fn iface_reisezentren__travel_center__from_json(v: &Value) -> Option<iface_reisezentren::TravelCenter> {
+    let m = v.as_object()?;
+    Some(iface_reisezentren::TravelCenter {
+        address: m.get("address").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        city: m.get("city").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        id: m.get("id").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        lat: m.get("lat").filter(|v| !v.is_null()).and_then(|v| (v).as_f64()),
+        lon: m.get("lon").filter(|v| !v.is_null()).and_then(|v| (v).as_f64()),
+        name: m.get("name").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        opening_times: m.get("openingTimes").filter(|v| !v.is_null()).and_then(|v| iface_reisezentren__travel_center_opening_times__from_json(v)),
+        post_code: m.get("postCode").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        type_op: m.get("type").filter(|v| !v.is_null()).and_then(|v| (v).as_str().and_then(iface_reisezentren__travel_center_type_op_enum__from_str)),
+    })
+}
+
+fn iface_reisezentren__travel_center_opening_times__from_json(v: &Value) -> Option<iface_reisezentren::TravelCenterOpeningTimes> {
+    let m = v.as_object()?;
+    Some(iface_reisezentren::TravelCenterOpeningTimes {
+        fri: m.get("fri").filter(|v| !v.is_null()).and_then(|v| iface_reisezentren__opening_time__from_json(v)),
+        mon: m.get("mon").filter(|v| !v.is_null()).and_then(|v| iface_reisezentren__opening_time__from_json(v)),
+        sat: m.get("sat").filter(|v| !v.is_null()).and_then(|v| iface_reisezentren__opening_time__from_json(v)),
+        sun: m.get("sun").filter(|v| !v.is_null()).and_then(|v| iface_reisezentren__opening_time__from_json(v)),
+        thu: m.get("thu").filter(|v| !v.is_null()).and_then(|v| iface_reisezentren__opening_time__from_json(v)),
+        tue: m.get("tue").filter(|v| !v.is_null()).and_then(|v| iface_reisezentren__opening_time__from_json(v)),
+        wed: m.get("wed").filter(|v| !v.is_null()).and_then(|v| iface_reisezentren__opening_time__from_json(v)),
+    })
+}
+
+fn iface_reisezentren__opening_time__from_json(v: &Value) -> Option<iface_reisezentren::OpeningTime> {
+    let m = v.as_object()?;
+    Some(iface_reisezentren::OpeningTime {
+        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+    })
+}
+
+fn iface_reisezentren__travel_center_type_op_enum__from_str(s: &str) -> Option<iface_reisezentren::TravelCenterTypeOpEnum> {
+    match s {
+        "Reisezentrum" => Some(iface_reisezentren::TravelCenterTypeOpEnum::Reisezentrum),
+        "Mobility Center" => Some(iface_reisezentren::TravelCenterTypeOpEnum::MobilityCenter),
+        _ => None,
+    }
+}
+
+fn iface_reisezentren__get_reisezentren__ok(body: String) -> Result<iface_reisezentren::TravelCenterList, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match iface_reisezentren__travel_center_list__from_json(&v) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_reisezentren__get_reisezentren__err(e: crate::runtime::DispatchError) -> iface_reisezentren::GetReisezentrenError {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => match status {
+            404u16 => iface_reisezentren::GetReisezentrenError::NotFound(body),
+            416u16 => iface_reisezentren::GetReisezentrenError::RangeNotSatisfiable(body),
+            _ => iface_reisezentren::GetReisezentrenError::Other(body),
+        },
+        crate::runtime::DispatchError::Transport(m) => iface_reisezentren::GetReisezentrenError::Other(m),
+    }
+}
+
+fn iface_reisezentren__get_reisezentren_loc_lat_lon__ok(body: String) -> Result<iface_reisezentren::TravelCenter, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match iface_reisezentren__travel_center__from_json(&v) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_reisezentren__get_reisezentren_loc_lat_lon__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
+fn iface_reisezentren__get_reisezentren_loc_lat_lon_dist__ok(body: String) -> Result<iface_reisezentren::TravelCenter, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match iface_reisezentren__travel_center__from_json(&v) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_reisezentren__get_reisezentren_loc_lat_lon_dist__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
+fn iface_reisezentren__get_reisezentren_id__ok(body: String) -> Result<iface_reisezentren::TravelCenter, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match iface_reisezentren__travel_center__from_json(&v) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_reisezentren__get_reisezentren_id__err(e: crate::runtime::DispatchError) -> iface_reisezentren::GetReisezentrenIdError {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => match status {
+            404u16 => iface_reisezentren::GetReisezentrenIdError::NotFound(body),
+            _ => iface_reisezentren::GetReisezentrenIdError::Other(body),
+        },
+        crate::runtime::DispatchError::Transport(m) => iface_reisezentren::GetReisezentrenIdError::Other(m),
+    }
+}
+
 impl iface_reisezentren::Guest for crate::Component {
-    fn get_reisezentren(params: iface_reisezentren::GetReisezentrenParams) -> Result<String, String> {
+    fn get_reisezentren(params: iface_reisezentren::GetReisezentrenParams) -> Result<iface_reisezentren::TravelCenterList, iface_reisezentren::GetReisezentrenError> {
         let json = iface_reisezentren__get_reisezentren_params__to_json(&params);
-        dispatch(&OP_REISEZENTREN_GET_REISEZENTREN, json)
+        match dispatch(&OP_REISEZENTREN_GET_REISEZENTREN, json).and_then(iface_reisezentren__get_reisezentren__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_reisezentren__get_reisezentren__err(e)),
+        }
     }
-    fn get_reisezentren_loc_lat_lon(params: iface_reisezentren::GetReisezentrenLocLatLonParams) -> Result<String, String> {
+    fn get_reisezentren_loc_lat_lon(params: iface_reisezentren::GetReisezentrenLocLatLonParams) -> Result<iface_reisezentren::TravelCenter, String> {
         let json = iface_reisezentren__get_reisezentren_loc_lat_lon_params__to_json(&params);
-        dispatch(&OP_REISEZENTREN_GET_REISEZENTREN_LOC_LAT_LON, json)
+        match dispatch(&OP_REISEZENTREN_GET_REISEZENTREN_LOC_LAT_LON, json).and_then(iface_reisezentren__get_reisezentren_loc_lat_lon__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_reisezentren__get_reisezentren_loc_lat_lon__err(e)),
+        }
     }
-    fn get_reisezentren_loc_lat_lon_dist(params: iface_reisezentren::GetReisezentrenLocLatLonDistParams) -> Result<String, String> {
+    fn get_reisezentren_loc_lat_lon_dist(params: iface_reisezentren::GetReisezentrenLocLatLonDistParams) -> Result<iface_reisezentren::TravelCenter, String> {
         let json = iface_reisezentren__get_reisezentren_loc_lat_lon_dist_params__to_json(&params);
-        dispatch(&OP_REISEZENTREN_GET_REISEZENTREN_LOC_LAT_LON_DIST, json)
+        match dispatch(&OP_REISEZENTREN_GET_REISEZENTREN_LOC_LAT_LON_DIST, json).and_then(iface_reisezentren__get_reisezentren_loc_lat_lon_dist__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_reisezentren__get_reisezentren_loc_lat_lon_dist__err(e)),
+        }
     }
-    fn get_reisezentren_id(params: iface_reisezentren::GetReisezentrenIdParams) -> Result<String, String> {
+    fn get_reisezentren_id(params: iface_reisezentren::GetReisezentrenIdParams) -> Result<iface_reisezentren::TravelCenter, iface_reisezentren::GetReisezentrenIdError> {
         let json = iface_reisezentren__get_reisezentren_id_params__to_json(&params);
-        dispatch(&OP_REISEZENTREN_GET_REISEZENTREN_ID, json)
+        match dispatch(&OP_REISEZENTREN_GET_REISEZENTREN_ID, json).and_then(iface_reisezentren__get_reisezentren_id__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_reisezentren__get_reisezentren_id__err(e)),
+        }
     }
 }
 

@@ -44,10 +44,15 @@ pub(crate) enum FieldLocation {
     Body,
 }
 
-/// A single operation parameter: the snake-case key it carries in the params JSON and where
-/// it belongs in the request.
+/// A single operation parameter. `snake` keys the field in the internal params JSON (and, for a
+/// path field, matches the `{snake}` placeholder in the path template); `wire` is the verbatim name
+/// the field takes on the HTTP wire (query key, header name, or body property). The two differ
+/// whenever the source name isn't already snake_case (e.g. `dryRun` → snake `dry_run`, wire
+/// `dryRun`), and let distinct inputs that share a snake key (`DateCreated`, `DateCreated<`) still
+/// travel under their true names.
 pub(crate) struct FieldSpec {
     pub(crate) snake: &'static str,
+    pub(crate) wire: &'static str,
     pub(crate) location: FieldLocation,
 }
 
@@ -71,6 +76,16 @@ pub(crate) struct AuthApply {
     pub(crate) kind: AuthKind,
 }
 
+/// The failure modes of [`dispatch`], kept structured so each generated operation can map them
+/// onto its own typed error: an `Http` failure carries the response status and body (routed to
+/// the matching error-variant case), while a `Transport` failure carries a message for the
+/// catch-all case (a secret lookup, connection, or decode failure that never produced an HTTP
+/// status).
+pub(crate) enum DispatchError {
+    Http { status: u16, body: String },
+    Transport(String),
+}
+
 /// A single API operation: HTTP method, path template (with `{snake}` placeholders), the
 /// parameter fields, and the security schemes to apply.
 pub(crate) struct OpSpec {
@@ -81,8 +96,9 @@ pub(crate) struct OpSpec {
 }
 
 /// Execute `op` with the supplied `params` (a JSON object keyed by snake-case field names)
-/// and return the response body as a string, or an error message.
-pub(crate) fn dispatch(op: &OpSpec, params: Value) -> Result<String, String> {
+/// and return the raw 2xx response body, or a structured [`DispatchError`] the caller maps
+/// onto the operation's typed error.
+pub(crate) fn dispatch(op: &OpSpec, params: Value) -> Result<String, DispatchError> {
     let obj = match &params {
         Value::Object(map) => Some(map),
         _ => None,
@@ -105,10 +121,10 @@ pub(crate) fn dispatch(op: &OpSpec, params: Value) -> Result<String, String> {
                 let placeholder = format!("{{{}}}", field.snake);
                 path = path.replace(&placeholder, &percent_encode(&scalar(value)));
             }
-            FieldLocation::Query => query.push((field.snake.to_string(), scalar(value))),
-            FieldLocation::Header => headers.push((field.snake.to_string(), scalar(value))),
+            FieldLocation::Query => query.push((field.wire.to_string(), scalar(value))),
+            FieldLocation::Header => headers.push((field.wire.to_string(), scalar(value))),
             FieldLocation::Body => {
-                body.insert(field.snake.to_string(), value.clone());
+                body.insert(field.wire.to_string(), value.clone());
             }
         }
     }
@@ -116,7 +132,7 @@ pub(crate) fn dispatch(op: &OpSpec, params: Value) -> Result<String, String> {
     // Apply each resolved security scheme, sourcing its value from wasmcloud:secrets.
     let mut cookies: Vec<String> = Vec::new();
     for apply in op.auth {
-        let secret = fetch_secret(apply.secret_key)?;
+        let secret = fetch_secret(apply.secret_key).map_err(DispatchError::Transport)?;
         match &apply.kind {
             AuthKind::Bearer => headers.push(("authorization".into(), format!("Bearer {secret}"))),
             AuthKind::Basic => {
@@ -177,17 +193,18 @@ fn fetch_secret(key: &str) -> Result<String, String> {
 }
 
 /// Build and send the outgoing request with `wstd`, returning the response body on a 2xx
-/// status. The generated guest exports are synchronous, so the async `wstd` client is driven
-/// to completion on a local reactor via `wstd::runtime::block_on`.
+/// status and a structured [`DispatchError`] otherwise. The generated guest exports are
+/// synchronous, so the async `wstd` client is driven to completion on a local reactor via
+/// `wstd::runtime::block_on`.
 fn perform(
     method: &str,
     path_with_query: &str,
     headers: &[(String, String)],
     body: &[u8],
-) -> Result<String, String> {
+) -> Result<String, DispatchError> {
     let url = join_url(crate::BASE_URL, path_with_query);
     let method = Method::from_bytes(method.as_bytes())
-        .map_err(|err| format!("invalid HTTP method `{method}`: {err}"))?;
+        .map_err(|err| DispatchError::Transport(format!("invalid HTTP method `{method}`: {err}")))?;
 
     let mut builder = Request::builder().method(method).uri(url);
     for (name, value) in headers {
@@ -199,27 +216,29 @@ fn perform(
         } else {
             Body::from(body.to_vec())
         })
-        .map_err(|err| format!("failed to build request: {err}"))?;
+        .map_err(|err| DispatchError::Transport(format!("failed to build request: {err}")))?;
 
     wstd::runtime::block_on(async move {
         let client = Client::new();
         let response = client
             .send(request)
             .await
-            .map_err(|err| format!("request failed: {err:#}"))?;
+            .map_err(|err| DispatchError::Transport(format!("request failed: {err:#}")))?;
 
         let status = response.status().as_u16();
         let mut response_body = response.into_body();
-        let bytes = response_body
-            .contents()
-            .await
-            .map_err(|err| format!("failed to read response body: {err:#}"))?;
+        let bytes = response_body.contents().await.map_err(|err| {
+            DispatchError::Transport(format!("failed to read response body: {err:#}"))
+        })?;
         let body_text = String::from_utf8_lossy(bytes).into_owned();
 
         if (200..300).contains(&status) {
             Ok(body_text)
         } else {
-            Err(format!("HTTP {status}: {body_text}"))
+            Err(DispatchError::Http {
+                status,
+                body: body_text,
+            })
         }
     })
 }
@@ -288,9 +307,20 @@ const OP_ACCOUNTS_TRAVELPARTNER_ACCOUNTS_HOTELS_SET_LIVE_ON_GOOGLE: OpSpec = OpS
     method: "POST",
     path_template: "/v3/{account}/hotels:setLiveOnGoogle",
     fields: &[
-        FieldSpec { snake: "account", location: FieldLocation::Path },
-        FieldSpec { snake: "live_on_google", location: FieldLocation::Body },
-        FieldSpec { snake: "partner_hotel_ids", location: FieldLocation::Body },
+        FieldSpec { snake: "xgafv", wire: "$.xgafv", location: FieldLocation::Query },
+        FieldSpec { snake: "access_token", wire: "access_token", location: FieldLocation::Query },
+        FieldSpec { snake: "alt", wire: "alt", location: FieldLocation::Query },
+        FieldSpec { snake: "callback", wire: "callback", location: FieldLocation::Query },
+        FieldSpec { snake: "fields", wire: "fields", location: FieldLocation::Query },
+        FieldSpec { snake: "key", wire: "key", location: FieldLocation::Query },
+        FieldSpec { snake: "oauth_token", wire: "oauth_token", location: FieldLocation::Query },
+        FieldSpec { snake: "pretty_print", wire: "prettyPrint", location: FieldLocation::Query },
+        FieldSpec { snake: "quota_user", wire: "quotaUser", location: FieldLocation::Query },
+        FieldSpec { snake: "upload_protocol", wire: "upload_protocol", location: FieldLocation::Query },
+        FieldSpec { snake: "upload_type", wire: "uploadType", location: FieldLocation::Query },
+        FieldSpec { snake: "account", wire: "account", location: FieldLocation::Path },
+        FieldSpec { snake: "live_on_google", wire: "liveOnGoogle", location: FieldLocation::Body },
+        FieldSpec { snake: "partner_hotel_ids", wire: "partnerHotelIds", location: FieldLocation::Body },
     ],
     auth: &[
     ],
@@ -300,10 +330,21 @@ const OP_ACCOUNTS_TRAVELPARTNER_ACCOUNTS_RECONCILIATION_REPORTS_GET: OpSpec = Op
     method: "GET",
     path_template: "/v3/{name}",
     fields: &[
-        FieldSpec { snake: "name", location: FieldLocation::Path },
-        FieldSpec { snake: "include_matched_prices", location: FieldLocation::Query },
-        FieldSpec { snake: "include_non_scoring", location: FieldLocation::Query },
-        FieldSpec { snake: "include_pixels", location: FieldLocation::Query },
+        FieldSpec { snake: "xgafv", wire: "$.xgafv", location: FieldLocation::Query },
+        FieldSpec { snake: "access_token", wire: "access_token", location: FieldLocation::Query },
+        FieldSpec { snake: "alt", wire: "alt", location: FieldLocation::Query },
+        FieldSpec { snake: "callback", wire: "callback", location: FieldLocation::Query },
+        FieldSpec { snake: "fields", wire: "fields", location: FieldLocation::Query },
+        FieldSpec { snake: "key", wire: "key", location: FieldLocation::Query },
+        FieldSpec { snake: "oauth_token", wire: "oauth_token", location: FieldLocation::Query },
+        FieldSpec { snake: "pretty_print", wire: "prettyPrint", location: FieldLocation::Query },
+        FieldSpec { snake: "quota_user", wire: "quotaUser", location: FieldLocation::Query },
+        FieldSpec { snake: "upload_protocol", wire: "upload_protocol", location: FieldLocation::Query },
+        FieldSpec { snake: "upload_type", wire: "uploadType", location: FieldLocation::Query },
+        FieldSpec { snake: "name", wire: "name", location: FieldLocation::Path },
+        FieldSpec { snake: "include_matched_prices", wire: "includeMatchedPrices", location: FieldLocation::Query },
+        FieldSpec { snake: "include_non_scoring", wire: "includeNonScoring", location: FieldLocation::Query },
+        FieldSpec { snake: "include_pixels", wire: "includePixels", location: FieldLocation::Query },
     ],
     auth: &[
     ],
@@ -313,21 +354,33 @@ const OP_ACCOUNTS_TRAVELPARTNER_ACCOUNTS_BRANDS_PATCH: OpSpec = OpSpec {
     method: "PATCH",
     path_template: "/v3/{name}",
     fields: &[
-        FieldSpec { snake: "name", location: FieldLocation::Path },
-        FieldSpec { snake: "allow_missing", location: FieldLocation::Query },
-        FieldSpec { snake: "update_mask", location: FieldLocation::Query },
-        FieldSpec { snake: "active_display_names", location: FieldLocation::Body },
-        FieldSpec { snake: "active_icon", location: FieldLocation::Body },
-        FieldSpec { snake: "active_icon_uri", location: FieldLocation::Body },
-        FieldSpec { snake: "display_name_disapproval_reason", location: FieldLocation::Body },
-        FieldSpec { snake: "display_name_state", location: FieldLocation::Body },
-        FieldSpec { snake: "display_names", location: FieldLocation::Body },
-        FieldSpec { snake: "icon", location: FieldLocation::Body },
-        FieldSpec { snake: "icon_disapproval_reasons", location: FieldLocation::Body },
-        FieldSpec { snake: "icon_state", location: FieldLocation::Body },
-        FieldSpec { snake: "property_count", location: FieldLocation::Body },
-        FieldSpec { snake: "submitted_display_names", location: FieldLocation::Body },
-        FieldSpec { snake: "submitted_icon", location: FieldLocation::Body },
+        FieldSpec { snake: "xgafv", wire: "$.xgafv", location: FieldLocation::Query },
+        FieldSpec { snake: "access_token", wire: "access_token", location: FieldLocation::Query },
+        FieldSpec { snake: "alt", wire: "alt", location: FieldLocation::Query },
+        FieldSpec { snake: "callback", wire: "callback", location: FieldLocation::Query },
+        FieldSpec { snake: "fields", wire: "fields", location: FieldLocation::Query },
+        FieldSpec { snake: "key", wire: "key", location: FieldLocation::Query },
+        FieldSpec { snake: "oauth_token", wire: "oauth_token", location: FieldLocation::Query },
+        FieldSpec { snake: "pretty_print", wire: "prettyPrint", location: FieldLocation::Query },
+        FieldSpec { snake: "quota_user", wire: "quotaUser", location: FieldLocation::Query },
+        FieldSpec { snake: "upload_protocol", wire: "upload_protocol", location: FieldLocation::Query },
+        FieldSpec { snake: "upload_type", wire: "uploadType", location: FieldLocation::Query },
+        FieldSpec { snake: "name", wire: "name", location: FieldLocation::Path },
+        FieldSpec { snake: "allow_missing", wire: "allowMissing", location: FieldLocation::Query },
+        FieldSpec { snake: "update_mask", wire: "updateMask", location: FieldLocation::Query },
+        FieldSpec { snake: "active_display_names", wire: "activeDisplayNames", location: FieldLocation::Body },
+        FieldSpec { snake: "active_icon", wire: "activeIcon", location: FieldLocation::Body },
+        FieldSpec { snake: "active_icon_uri", wire: "activeIconUri", location: FieldLocation::Body },
+        FieldSpec { snake: "display_name_disapproval_reason", wire: "displayNameDisapprovalReason", location: FieldLocation::Body },
+        FieldSpec { snake: "display_name_state", wire: "displayNameState", location: FieldLocation::Body },
+        FieldSpec { snake: "display_names", wire: "displayNames", location: FieldLocation::Body },
+        FieldSpec { snake: "icon", wire: "icon", location: FieldLocation::Body },
+        FieldSpec { snake: "icon_disapproval_reasons", wire: "iconDisapprovalReasons", location: FieldLocation::Body },
+        FieldSpec { snake: "icon_state", wire: "iconState", location: FieldLocation::Body },
+        FieldSpec { snake: "name_v2", wire: "name", location: FieldLocation::Body },
+        FieldSpec { snake: "property_count", wire: "propertyCount", location: FieldLocation::Body },
+        FieldSpec { snake: "submitted_display_names", wire: "submittedDisplayNames", location: FieldLocation::Body },
+        FieldSpec { snake: "submitted_icon", wire: "submittedIcon", location: FieldLocation::Body },
     ],
     auth: &[
     ],
@@ -337,7 +390,18 @@ const OP_ACCOUNTS_TRAVELPARTNER_ACCOUNTS_ACCOUNT_LINKS_DELETE: OpSpec = OpSpec {
     method: "DELETE",
     path_template: "/v3/{name}",
     fields: &[
-        FieldSpec { snake: "name", location: FieldLocation::Path },
+        FieldSpec { snake: "xgafv", wire: "$.xgafv", location: FieldLocation::Query },
+        FieldSpec { snake: "access_token", wire: "access_token", location: FieldLocation::Query },
+        FieldSpec { snake: "alt", wire: "alt", location: FieldLocation::Query },
+        FieldSpec { snake: "callback", wire: "callback", location: FieldLocation::Query },
+        FieldSpec { snake: "fields", wire: "fields", location: FieldLocation::Query },
+        FieldSpec { snake: "key", wire: "key", location: FieldLocation::Query },
+        FieldSpec { snake: "oauth_token", wire: "oauth_token", location: FieldLocation::Query },
+        FieldSpec { snake: "pretty_print", wire: "prettyPrint", location: FieldLocation::Query },
+        FieldSpec { snake: "quota_user", wire: "quotaUser", location: FieldLocation::Query },
+        FieldSpec { snake: "upload_protocol", wire: "upload_protocol", location: FieldLocation::Query },
+        FieldSpec { snake: "upload_type", wire: "uploadType", location: FieldLocation::Query },
+        FieldSpec { snake: "name", wire: "name", location: FieldLocation::Path },
     ],
     auth: &[
     ],
@@ -347,11 +411,22 @@ const OP_ACCOUNTS_TRAVELPARTNER_ACCOUNTS_FREE_BOOKING_LINKS_REPORT_VIEWS_QUERY: 
     method: "GET",
     path_template: "/v3/{name}/freeBookingLinksReportViews:query",
     fields: &[
-        FieldSpec { snake: "name", location: FieldLocation::Path },
-        FieldSpec { snake: "aggregate_by", location: FieldLocation::Query },
-        FieldSpec { snake: "filter", location: FieldLocation::Query },
-        FieldSpec { snake: "page_size", location: FieldLocation::Query },
-        FieldSpec { snake: "page_token", location: FieldLocation::Query },
+        FieldSpec { snake: "xgafv", wire: "$.xgafv", location: FieldLocation::Query },
+        FieldSpec { snake: "access_token", wire: "access_token", location: FieldLocation::Query },
+        FieldSpec { snake: "alt", wire: "alt", location: FieldLocation::Query },
+        FieldSpec { snake: "callback", wire: "callback", location: FieldLocation::Query },
+        FieldSpec { snake: "fields", wire: "fields", location: FieldLocation::Query },
+        FieldSpec { snake: "key", wire: "key", location: FieldLocation::Query },
+        FieldSpec { snake: "oauth_token", wire: "oauth_token", location: FieldLocation::Query },
+        FieldSpec { snake: "pretty_print", wire: "prettyPrint", location: FieldLocation::Query },
+        FieldSpec { snake: "quota_user", wire: "quotaUser", location: FieldLocation::Query },
+        FieldSpec { snake: "upload_protocol", wire: "upload_protocol", location: FieldLocation::Query },
+        FieldSpec { snake: "upload_type", wire: "uploadType", location: FieldLocation::Query },
+        FieldSpec { snake: "name", wire: "name", location: FieldLocation::Path },
+        FieldSpec { snake: "aggregate_by", wire: "aggregateBy", location: FieldLocation::Query },
+        FieldSpec { snake: "filter", wire: "filter", location: FieldLocation::Query },
+        FieldSpec { snake: "page_size", wire: "pageSize", location: FieldLocation::Query },
+        FieldSpec { snake: "page_token", wire: "pageToken", location: FieldLocation::Query },
     ],
     auth: &[
     ],
@@ -361,11 +436,22 @@ const OP_ACCOUNTS_TRAVELPARTNER_ACCOUNTS_PARTICIPATION_REPORT_VIEWS_QUERY: OpSpe
     method: "GET",
     path_template: "/v3/{name}/participationReportViews:query",
     fields: &[
-        FieldSpec { snake: "name", location: FieldLocation::Path },
-        FieldSpec { snake: "aggregate_by", location: FieldLocation::Query },
-        FieldSpec { snake: "filter", location: FieldLocation::Query },
-        FieldSpec { snake: "page_size", location: FieldLocation::Query },
-        FieldSpec { snake: "page_token", location: FieldLocation::Query },
+        FieldSpec { snake: "xgafv", wire: "$.xgafv", location: FieldLocation::Query },
+        FieldSpec { snake: "access_token", wire: "access_token", location: FieldLocation::Query },
+        FieldSpec { snake: "alt", wire: "alt", location: FieldLocation::Query },
+        FieldSpec { snake: "callback", wire: "callback", location: FieldLocation::Query },
+        FieldSpec { snake: "fields", wire: "fields", location: FieldLocation::Query },
+        FieldSpec { snake: "key", wire: "key", location: FieldLocation::Query },
+        FieldSpec { snake: "oauth_token", wire: "oauth_token", location: FieldLocation::Query },
+        FieldSpec { snake: "pretty_print", wire: "prettyPrint", location: FieldLocation::Query },
+        FieldSpec { snake: "quota_user", wire: "quotaUser", location: FieldLocation::Query },
+        FieldSpec { snake: "upload_protocol", wire: "upload_protocol", location: FieldLocation::Query },
+        FieldSpec { snake: "upload_type", wire: "uploadType", location: FieldLocation::Query },
+        FieldSpec { snake: "name", wire: "name", location: FieldLocation::Path },
+        FieldSpec { snake: "aggregate_by", wire: "aggregateBy", location: FieldLocation::Query },
+        FieldSpec { snake: "filter", wire: "filter", location: FieldLocation::Query },
+        FieldSpec { snake: "page_size", wire: "pageSize", location: FieldLocation::Query },
+        FieldSpec { snake: "page_token", wire: "pageToken", location: FieldLocation::Query },
     ],
     auth: &[
     ],
@@ -375,11 +461,22 @@ const OP_ACCOUNTS_TRAVELPARTNER_ACCOUNTS_PROPERTY_PERFORMANCE_REPORT_VIEWS_QUERY
     method: "GET",
     path_template: "/v3/{name}/propertyPerformanceReportViews:query",
     fields: &[
-        FieldSpec { snake: "name", location: FieldLocation::Path },
-        FieldSpec { snake: "aggregate_by", location: FieldLocation::Query },
-        FieldSpec { snake: "filter", location: FieldLocation::Query },
-        FieldSpec { snake: "page_size", location: FieldLocation::Query },
-        FieldSpec { snake: "page_token", location: FieldLocation::Query },
+        FieldSpec { snake: "xgafv", wire: "$.xgafv", location: FieldLocation::Query },
+        FieldSpec { snake: "access_token", wire: "access_token", location: FieldLocation::Query },
+        FieldSpec { snake: "alt", wire: "alt", location: FieldLocation::Query },
+        FieldSpec { snake: "callback", wire: "callback", location: FieldLocation::Query },
+        FieldSpec { snake: "fields", wire: "fields", location: FieldLocation::Query },
+        FieldSpec { snake: "key", wire: "key", location: FieldLocation::Query },
+        FieldSpec { snake: "oauth_token", wire: "oauth_token", location: FieldLocation::Query },
+        FieldSpec { snake: "pretty_print", wire: "prettyPrint", location: FieldLocation::Query },
+        FieldSpec { snake: "quota_user", wire: "quotaUser", location: FieldLocation::Query },
+        FieldSpec { snake: "upload_protocol", wire: "upload_protocol", location: FieldLocation::Query },
+        FieldSpec { snake: "upload_type", wire: "uploadType", location: FieldLocation::Query },
+        FieldSpec { snake: "name", wire: "name", location: FieldLocation::Path },
+        FieldSpec { snake: "aggregate_by", wire: "aggregateBy", location: FieldLocation::Query },
+        FieldSpec { snake: "filter", wire: "filter", location: FieldLocation::Query },
+        FieldSpec { snake: "page_size", wire: "pageSize", location: FieldLocation::Query },
+        FieldSpec { snake: "page_token", wire: "pageToken", location: FieldLocation::Query },
     ],
     auth: &[
     ],
@@ -389,7 +486,18 @@ const OP_ACCOUNTS_TRAVELPARTNER_ACCOUNTS_ACCOUNT_LINKS_LIST: OpSpec = OpSpec {
     method: "GET",
     path_template: "/v3/{parent}/accountLinks",
     fields: &[
-        FieldSpec { snake: "parent", location: FieldLocation::Path },
+        FieldSpec { snake: "xgafv", wire: "$.xgafv", location: FieldLocation::Query },
+        FieldSpec { snake: "access_token", wire: "access_token", location: FieldLocation::Query },
+        FieldSpec { snake: "alt", wire: "alt", location: FieldLocation::Query },
+        FieldSpec { snake: "callback", wire: "callback", location: FieldLocation::Query },
+        FieldSpec { snake: "fields", wire: "fields", location: FieldLocation::Query },
+        FieldSpec { snake: "key", wire: "key", location: FieldLocation::Query },
+        FieldSpec { snake: "oauth_token", wire: "oauth_token", location: FieldLocation::Query },
+        FieldSpec { snake: "pretty_print", wire: "prettyPrint", location: FieldLocation::Query },
+        FieldSpec { snake: "quota_user", wire: "quotaUser", location: FieldLocation::Query },
+        FieldSpec { snake: "upload_protocol", wire: "upload_protocol", location: FieldLocation::Query },
+        FieldSpec { snake: "upload_type", wire: "uploadType", location: FieldLocation::Query },
+        FieldSpec { snake: "parent", wire: "parent", location: FieldLocation::Path },
     ],
     auth: &[
     ],
@@ -399,11 +507,22 @@ const OP_ACCOUNTS_TRAVELPARTNER_ACCOUNTS_ACCOUNT_LINKS_CREATE: OpSpec = OpSpec {
     method: "POST",
     path_template: "/v3/{parent}/accountLinks",
     fields: &[
-        FieldSpec { snake: "parent", location: FieldLocation::Path },
-        FieldSpec { snake: "account_link_target", location: FieldLocation::Body },
-        FieldSpec { snake: "google_ads_customer_name", location: FieldLocation::Body },
-        FieldSpec { snake: "name", location: FieldLocation::Body },
-        FieldSpec { snake: "status", location: FieldLocation::Body },
+        FieldSpec { snake: "xgafv", wire: "$.xgafv", location: FieldLocation::Query },
+        FieldSpec { snake: "access_token", wire: "access_token", location: FieldLocation::Query },
+        FieldSpec { snake: "alt", wire: "alt", location: FieldLocation::Query },
+        FieldSpec { snake: "callback", wire: "callback", location: FieldLocation::Query },
+        FieldSpec { snake: "fields", wire: "fields", location: FieldLocation::Query },
+        FieldSpec { snake: "key", wire: "key", location: FieldLocation::Query },
+        FieldSpec { snake: "oauth_token", wire: "oauth_token", location: FieldLocation::Query },
+        FieldSpec { snake: "pretty_print", wire: "prettyPrint", location: FieldLocation::Query },
+        FieldSpec { snake: "quota_user", wire: "quotaUser", location: FieldLocation::Query },
+        FieldSpec { snake: "upload_protocol", wire: "upload_protocol", location: FieldLocation::Query },
+        FieldSpec { snake: "upload_type", wire: "uploadType", location: FieldLocation::Query },
+        FieldSpec { snake: "parent", wire: "parent", location: FieldLocation::Path },
+        FieldSpec { snake: "account_link_target", wire: "accountLinkTarget", location: FieldLocation::Body },
+        FieldSpec { snake: "google_ads_customer_name", wire: "googleAdsCustomerName", location: FieldLocation::Body },
+        FieldSpec { snake: "name", wire: "name", location: FieldLocation::Body },
+        FieldSpec { snake: "status", wire: "status", location: FieldLocation::Body },
     ],
     auth: &[
     ],
@@ -413,7 +532,18 @@ const OP_ACCOUNTS_TRAVELPARTNER_ACCOUNTS_BRANDS_LIST: OpSpec = OpSpec {
     method: "GET",
     path_template: "/v3/{parent}/brands",
     fields: &[
-        FieldSpec { snake: "parent", location: FieldLocation::Path },
+        FieldSpec { snake: "xgafv", wire: "$.xgafv", location: FieldLocation::Query },
+        FieldSpec { snake: "access_token", wire: "access_token", location: FieldLocation::Query },
+        FieldSpec { snake: "alt", wire: "alt", location: FieldLocation::Query },
+        FieldSpec { snake: "callback", wire: "callback", location: FieldLocation::Query },
+        FieldSpec { snake: "fields", wire: "fields", location: FieldLocation::Query },
+        FieldSpec { snake: "key", wire: "key", location: FieldLocation::Query },
+        FieldSpec { snake: "oauth_token", wire: "oauth_token", location: FieldLocation::Query },
+        FieldSpec { snake: "pretty_print", wire: "prettyPrint", location: FieldLocation::Query },
+        FieldSpec { snake: "quota_user", wire: "quotaUser", location: FieldLocation::Query },
+        FieldSpec { snake: "upload_protocol", wire: "upload_protocol", location: FieldLocation::Query },
+        FieldSpec { snake: "upload_type", wire: "uploadType", location: FieldLocation::Query },
+        FieldSpec { snake: "parent", wire: "parent", location: FieldLocation::Path },
     ],
     auth: &[
     ],
@@ -423,21 +553,32 @@ const OP_ACCOUNTS_TRAVELPARTNER_ACCOUNTS_BRANDS_CREATE: OpSpec = OpSpec {
     method: "POST",
     path_template: "/v3/{parent}/brands",
     fields: &[
-        FieldSpec { snake: "parent", location: FieldLocation::Path },
-        FieldSpec { snake: "brand_id", location: FieldLocation::Query },
-        FieldSpec { snake: "active_display_names", location: FieldLocation::Body },
-        FieldSpec { snake: "active_icon", location: FieldLocation::Body },
-        FieldSpec { snake: "active_icon_uri", location: FieldLocation::Body },
-        FieldSpec { snake: "display_name_disapproval_reason", location: FieldLocation::Body },
-        FieldSpec { snake: "display_name_state", location: FieldLocation::Body },
-        FieldSpec { snake: "display_names", location: FieldLocation::Body },
-        FieldSpec { snake: "icon", location: FieldLocation::Body },
-        FieldSpec { snake: "icon_disapproval_reasons", location: FieldLocation::Body },
-        FieldSpec { snake: "icon_state", location: FieldLocation::Body },
-        FieldSpec { snake: "name", location: FieldLocation::Body },
-        FieldSpec { snake: "property_count", location: FieldLocation::Body },
-        FieldSpec { snake: "submitted_display_names", location: FieldLocation::Body },
-        FieldSpec { snake: "submitted_icon", location: FieldLocation::Body },
+        FieldSpec { snake: "xgafv", wire: "$.xgafv", location: FieldLocation::Query },
+        FieldSpec { snake: "access_token", wire: "access_token", location: FieldLocation::Query },
+        FieldSpec { snake: "alt", wire: "alt", location: FieldLocation::Query },
+        FieldSpec { snake: "callback", wire: "callback", location: FieldLocation::Query },
+        FieldSpec { snake: "fields", wire: "fields", location: FieldLocation::Query },
+        FieldSpec { snake: "key", wire: "key", location: FieldLocation::Query },
+        FieldSpec { snake: "oauth_token", wire: "oauth_token", location: FieldLocation::Query },
+        FieldSpec { snake: "pretty_print", wire: "prettyPrint", location: FieldLocation::Query },
+        FieldSpec { snake: "quota_user", wire: "quotaUser", location: FieldLocation::Query },
+        FieldSpec { snake: "upload_protocol", wire: "upload_protocol", location: FieldLocation::Query },
+        FieldSpec { snake: "upload_type", wire: "uploadType", location: FieldLocation::Query },
+        FieldSpec { snake: "parent", wire: "parent", location: FieldLocation::Path },
+        FieldSpec { snake: "brand_id", wire: "brandId", location: FieldLocation::Query },
+        FieldSpec { snake: "active_display_names", wire: "activeDisplayNames", location: FieldLocation::Body },
+        FieldSpec { snake: "active_icon", wire: "activeIcon", location: FieldLocation::Body },
+        FieldSpec { snake: "active_icon_uri", wire: "activeIconUri", location: FieldLocation::Body },
+        FieldSpec { snake: "display_name_disapproval_reason", wire: "displayNameDisapprovalReason", location: FieldLocation::Body },
+        FieldSpec { snake: "display_name_state", wire: "displayNameState", location: FieldLocation::Body },
+        FieldSpec { snake: "display_names", wire: "displayNames", location: FieldLocation::Body },
+        FieldSpec { snake: "icon", wire: "icon", location: FieldLocation::Body },
+        FieldSpec { snake: "icon_disapproval_reasons", wire: "iconDisapprovalReasons", location: FieldLocation::Body },
+        FieldSpec { snake: "icon_state", wire: "iconState", location: FieldLocation::Body },
+        FieldSpec { snake: "name", wire: "name", location: FieldLocation::Body },
+        FieldSpec { snake: "property_count", wire: "propertyCount", location: FieldLocation::Body },
+        FieldSpec { snake: "submitted_display_names", wire: "submittedDisplayNames", location: FieldLocation::Body },
+        FieldSpec { snake: "submitted_icon", wire: "submittedIcon", location: FieldLocation::Body },
     ],
     auth: &[
     ],
@@ -447,10 +588,21 @@ const OP_ACCOUNTS_TRAVELPARTNER_ACCOUNTS_HOTEL_VIEWS_LIST: OpSpec = OpSpec {
     method: "GET",
     path_template: "/v3/{parent}/hotelViews",
     fields: &[
-        FieldSpec { snake: "parent", location: FieldLocation::Path },
-        FieldSpec { snake: "filter", location: FieldLocation::Query },
-        FieldSpec { snake: "page_size", location: FieldLocation::Query },
-        FieldSpec { snake: "page_token", location: FieldLocation::Query },
+        FieldSpec { snake: "xgafv", wire: "$.xgafv", location: FieldLocation::Query },
+        FieldSpec { snake: "access_token", wire: "access_token", location: FieldLocation::Query },
+        FieldSpec { snake: "alt", wire: "alt", location: FieldLocation::Query },
+        FieldSpec { snake: "callback", wire: "callback", location: FieldLocation::Query },
+        FieldSpec { snake: "fields", wire: "fields", location: FieldLocation::Query },
+        FieldSpec { snake: "key", wire: "key", location: FieldLocation::Query },
+        FieldSpec { snake: "oauth_token", wire: "oauth_token", location: FieldLocation::Query },
+        FieldSpec { snake: "pretty_print", wire: "prettyPrint", location: FieldLocation::Query },
+        FieldSpec { snake: "quota_user", wire: "quotaUser", location: FieldLocation::Query },
+        FieldSpec { snake: "upload_protocol", wire: "upload_protocol", location: FieldLocation::Query },
+        FieldSpec { snake: "upload_type", wire: "uploadType", location: FieldLocation::Query },
+        FieldSpec { snake: "parent", wire: "parent", location: FieldLocation::Path },
+        FieldSpec { snake: "filter", wire: "filter", location: FieldLocation::Query },
+        FieldSpec { snake: "page_size", wire: "pageSize", location: FieldLocation::Query },
+        FieldSpec { snake: "page_token", wire: "pageToken", location: FieldLocation::Query },
     ],
     auth: &[
     ],
@@ -460,7 +612,18 @@ const OP_ACCOUNTS_TRAVELPARTNER_ACCOUNTS_HOTEL_VIEWS_SUMMARIZE: OpSpec = OpSpec 
     method: "GET",
     path_template: "/v3/{parent}/hotelViews:summarize",
     fields: &[
-        FieldSpec { snake: "parent", location: FieldLocation::Path },
+        FieldSpec { snake: "xgafv", wire: "$.xgafv", location: FieldLocation::Query },
+        FieldSpec { snake: "access_token", wire: "access_token", location: FieldLocation::Query },
+        FieldSpec { snake: "alt", wire: "alt", location: FieldLocation::Query },
+        FieldSpec { snake: "callback", wire: "callback", location: FieldLocation::Query },
+        FieldSpec { snake: "fields", wire: "fields", location: FieldLocation::Query },
+        FieldSpec { snake: "key", wire: "key", location: FieldLocation::Query },
+        FieldSpec { snake: "oauth_token", wire: "oauth_token", location: FieldLocation::Query },
+        FieldSpec { snake: "pretty_print", wire: "prettyPrint", location: FieldLocation::Query },
+        FieldSpec { snake: "quota_user", wire: "quotaUser", location: FieldLocation::Query },
+        FieldSpec { snake: "upload_protocol", wire: "upload_protocol", location: FieldLocation::Query },
+        FieldSpec { snake: "upload_type", wire: "uploadType", location: FieldLocation::Query },
+        FieldSpec { snake: "parent", wire: "parent", location: FieldLocation::Path },
     ],
     auth: &[
     ],
@@ -470,7 +633,18 @@ const OP_ACCOUNTS_TRAVELPARTNER_ACCOUNTS_ICONS_LIST: OpSpec = OpSpec {
     method: "GET",
     path_template: "/v3/{parent}/icons",
     fields: &[
-        FieldSpec { snake: "parent", location: FieldLocation::Path },
+        FieldSpec { snake: "xgafv", wire: "$.xgafv", location: FieldLocation::Query },
+        FieldSpec { snake: "access_token", wire: "access_token", location: FieldLocation::Query },
+        FieldSpec { snake: "alt", wire: "alt", location: FieldLocation::Query },
+        FieldSpec { snake: "callback", wire: "callback", location: FieldLocation::Query },
+        FieldSpec { snake: "fields", wire: "fields", location: FieldLocation::Query },
+        FieldSpec { snake: "key", wire: "key", location: FieldLocation::Query },
+        FieldSpec { snake: "oauth_token", wire: "oauth_token", location: FieldLocation::Query },
+        FieldSpec { snake: "pretty_print", wire: "prettyPrint", location: FieldLocation::Query },
+        FieldSpec { snake: "quota_user", wire: "quotaUser", location: FieldLocation::Query },
+        FieldSpec { snake: "upload_protocol", wire: "upload_protocol", location: FieldLocation::Query },
+        FieldSpec { snake: "upload_type", wire: "uploadType", location: FieldLocation::Query },
+        FieldSpec { snake: "parent", wire: "parent", location: FieldLocation::Path },
     ],
     auth: &[
     ],
@@ -480,13 +654,24 @@ const OP_ACCOUNTS_TRAVELPARTNER_ACCOUNTS_ICONS_CREATE: OpSpec = OpSpec {
     method: "POST",
     path_template: "/v3/{parent}/icons",
     fields: &[
-        FieldSpec { snake: "parent", location: FieldLocation::Path },
-        FieldSpec { snake: "disapproval_reasons", location: FieldLocation::Body },
-        FieldSpec { snake: "icon_uri", location: FieldLocation::Body },
-        FieldSpec { snake: "image_data", location: FieldLocation::Body },
-        FieldSpec { snake: "name", location: FieldLocation::Body },
-        FieldSpec { snake: "reference", location: FieldLocation::Body },
-        FieldSpec { snake: "state", location: FieldLocation::Body },
+        FieldSpec { snake: "xgafv", wire: "$.xgafv", location: FieldLocation::Query },
+        FieldSpec { snake: "access_token", wire: "access_token", location: FieldLocation::Query },
+        FieldSpec { snake: "alt", wire: "alt", location: FieldLocation::Query },
+        FieldSpec { snake: "callback", wire: "callback", location: FieldLocation::Query },
+        FieldSpec { snake: "fields", wire: "fields", location: FieldLocation::Query },
+        FieldSpec { snake: "key", wire: "key", location: FieldLocation::Query },
+        FieldSpec { snake: "oauth_token", wire: "oauth_token", location: FieldLocation::Query },
+        FieldSpec { snake: "pretty_print", wire: "prettyPrint", location: FieldLocation::Query },
+        FieldSpec { snake: "quota_user", wire: "quotaUser", location: FieldLocation::Query },
+        FieldSpec { snake: "upload_protocol", wire: "upload_protocol", location: FieldLocation::Query },
+        FieldSpec { snake: "upload_type", wire: "uploadType", location: FieldLocation::Query },
+        FieldSpec { snake: "parent", wire: "parent", location: FieldLocation::Path },
+        FieldSpec { snake: "disapproval_reasons", wire: "disapprovalReasons", location: FieldLocation::Body },
+        FieldSpec { snake: "icon_uri", wire: "iconUri", location: FieldLocation::Body },
+        FieldSpec { snake: "image_data", wire: "imageData", location: FieldLocation::Body },
+        FieldSpec { snake: "name", wire: "name", location: FieldLocation::Body },
+        FieldSpec { snake: "reference", wire: "reference", location: FieldLocation::Body },
+        FieldSpec { snake: "state", wire: "state", location: FieldLocation::Body },
     ],
     auth: &[
     ],
@@ -496,8 +681,19 @@ const OP_ACCOUNTS_TRAVELPARTNER_ACCOUNTS_LISTINGS_VERIFY: OpSpec = OpSpec {
     method: "POST",
     path_template: "/v3/{parent}/listings:verify",
     fields: &[
-        FieldSpec { snake: "parent", location: FieldLocation::Path },
-        FieldSpec { snake: "xml_listing", location: FieldLocation::Body },
+        FieldSpec { snake: "xgafv", wire: "$.xgafv", location: FieldLocation::Query },
+        FieldSpec { snake: "access_token", wire: "access_token", location: FieldLocation::Query },
+        FieldSpec { snake: "alt", wire: "alt", location: FieldLocation::Query },
+        FieldSpec { snake: "callback", wire: "callback", location: FieldLocation::Query },
+        FieldSpec { snake: "fields", wire: "fields", location: FieldLocation::Query },
+        FieldSpec { snake: "key", wire: "key", location: FieldLocation::Query },
+        FieldSpec { snake: "oauth_token", wire: "oauth_token", location: FieldLocation::Query },
+        FieldSpec { snake: "pretty_print", wire: "prettyPrint", location: FieldLocation::Query },
+        FieldSpec { snake: "quota_user", wire: "quotaUser", location: FieldLocation::Query },
+        FieldSpec { snake: "upload_protocol", wire: "upload_protocol", location: FieldLocation::Query },
+        FieldSpec { snake: "upload_type", wire: "uploadType", location: FieldLocation::Query },
+        FieldSpec { snake: "parent", wire: "parent", location: FieldLocation::Path },
+        FieldSpec { snake: "xml_listing", wire: "xmlListing", location: FieldLocation::Body },
     ],
     auth: &[
     ],
@@ -507,7 +703,18 @@ const OP_ACCOUNTS_TRAVELPARTNER_ACCOUNTS_PRICE_ACCURACY_VIEWS_LIST: OpSpec = OpS
     method: "GET",
     path_template: "/v3/{parent}/priceAccuracyViews",
     fields: &[
-        FieldSpec { snake: "parent", location: FieldLocation::Path },
+        FieldSpec { snake: "xgafv", wire: "$.xgafv", location: FieldLocation::Query },
+        FieldSpec { snake: "access_token", wire: "access_token", location: FieldLocation::Query },
+        FieldSpec { snake: "alt", wire: "alt", location: FieldLocation::Query },
+        FieldSpec { snake: "callback", wire: "callback", location: FieldLocation::Query },
+        FieldSpec { snake: "fields", wire: "fields", location: FieldLocation::Query },
+        FieldSpec { snake: "key", wire: "key", location: FieldLocation::Query },
+        FieldSpec { snake: "oauth_token", wire: "oauth_token", location: FieldLocation::Query },
+        FieldSpec { snake: "pretty_print", wire: "prettyPrint", location: FieldLocation::Query },
+        FieldSpec { snake: "quota_user", wire: "quotaUser", location: FieldLocation::Query },
+        FieldSpec { snake: "upload_protocol", wire: "upload_protocol", location: FieldLocation::Query },
+        FieldSpec { snake: "upload_type", wire: "uploadType", location: FieldLocation::Query },
+        FieldSpec { snake: "parent", wire: "parent", location: FieldLocation::Path },
     ],
     auth: &[
     ],
@@ -517,7 +724,18 @@ const OP_ACCOUNTS_TRAVELPARTNER_ACCOUNTS_PRICE_ACCURACY_VIEWS_SUMMARIZE: OpSpec 
     method: "GET",
     path_template: "/v3/{parent}/priceAccuracyViews:summarize",
     fields: &[
-        FieldSpec { snake: "parent", location: FieldLocation::Path },
+        FieldSpec { snake: "xgafv", wire: "$.xgafv", location: FieldLocation::Query },
+        FieldSpec { snake: "access_token", wire: "access_token", location: FieldLocation::Query },
+        FieldSpec { snake: "alt", wire: "alt", location: FieldLocation::Query },
+        FieldSpec { snake: "callback", wire: "callback", location: FieldLocation::Query },
+        FieldSpec { snake: "fields", wire: "fields", location: FieldLocation::Query },
+        FieldSpec { snake: "key", wire: "key", location: FieldLocation::Query },
+        FieldSpec { snake: "oauth_token", wire: "oauth_token", location: FieldLocation::Query },
+        FieldSpec { snake: "pretty_print", wire: "prettyPrint", location: FieldLocation::Query },
+        FieldSpec { snake: "quota_user", wire: "quotaUser", location: FieldLocation::Query },
+        FieldSpec { snake: "upload_protocol", wire: "upload_protocol", location: FieldLocation::Query },
+        FieldSpec { snake: "upload_type", wire: "uploadType", location: FieldLocation::Query },
+        FieldSpec { snake: "parent", wire: "parent", location: FieldLocation::Path },
     ],
     auth: &[
     ],
@@ -527,7 +745,18 @@ const OP_ACCOUNTS_TRAVELPARTNER_ACCOUNTS_PRICE_COVERAGE_VIEWS_LIST: OpSpec = OpS
     method: "GET",
     path_template: "/v3/{parent}/priceCoverageViews",
     fields: &[
-        FieldSpec { snake: "parent", location: FieldLocation::Path },
+        FieldSpec { snake: "xgafv", wire: "$.xgafv", location: FieldLocation::Query },
+        FieldSpec { snake: "access_token", wire: "access_token", location: FieldLocation::Query },
+        FieldSpec { snake: "alt", wire: "alt", location: FieldLocation::Query },
+        FieldSpec { snake: "callback", wire: "callback", location: FieldLocation::Query },
+        FieldSpec { snake: "fields", wire: "fields", location: FieldLocation::Query },
+        FieldSpec { snake: "key", wire: "key", location: FieldLocation::Query },
+        FieldSpec { snake: "oauth_token", wire: "oauth_token", location: FieldLocation::Query },
+        FieldSpec { snake: "pretty_print", wire: "prettyPrint", location: FieldLocation::Query },
+        FieldSpec { snake: "quota_user", wire: "quotaUser", location: FieldLocation::Query },
+        FieldSpec { snake: "upload_protocol", wire: "upload_protocol", location: FieldLocation::Query },
+        FieldSpec { snake: "upload_type", wire: "uploadType", location: FieldLocation::Query },
+        FieldSpec { snake: "parent", wire: "parent", location: FieldLocation::Path },
     ],
     auth: &[
     ],
@@ -537,7 +766,18 @@ const OP_ACCOUNTS_TRAVELPARTNER_ACCOUNTS_PRICE_COVERAGE_VIEWS_GET_LATEST: OpSpec
     method: "GET",
     path_template: "/v3/{parent}/priceCoverageViews:latest",
     fields: &[
-        FieldSpec { snake: "parent", location: FieldLocation::Path },
+        FieldSpec { snake: "xgafv", wire: "$.xgafv", location: FieldLocation::Query },
+        FieldSpec { snake: "access_token", wire: "access_token", location: FieldLocation::Query },
+        FieldSpec { snake: "alt", wire: "alt", location: FieldLocation::Query },
+        FieldSpec { snake: "callback", wire: "callback", location: FieldLocation::Query },
+        FieldSpec { snake: "fields", wire: "fields", location: FieldLocation::Query },
+        FieldSpec { snake: "key", wire: "key", location: FieldLocation::Query },
+        FieldSpec { snake: "oauth_token", wire: "oauth_token", location: FieldLocation::Query },
+        FieldSpec { snake: "pretty_print", wire: "prettyPrint", location: FieldLocation::Query },
+        FieldSpec { snake: "quota_user", wire: "quotaUser", location: FieldLocation::Query },
+        FieldSpec { snake: "upload_protocol", wire: "upload_protocol", location: FieldLocation::Query },
+        FieldSpec { snake: "upload_type", wire: "uploadType", location: FieldLocation::Query },
+        FieldSpec { snake: "parent", wire: "parent", location: FieldLocation::Path },
     ],
     auth: &[
     ],
@@ -547,9 +787,20 @@ const OP_ACCOUNTS_TRAVELPARTNER_ACCOUNTS_RECONCILIATION_REPORTS_LIST: OpSpec = O
     method: "GET",
     path_template: "/v3/{parent}/reconciliationReports",
     fields: &[
-        FieldSpec { snake: "parent", location: FieldLocation::Path },
-        FieldSpec { snake: "end_date", location: FieldLocation::Query },
-        FieldSpec { snake: "start_date", location: FieldLocation::Query },
+        FieldSpec { snake: "xgafv", wire: "$.xgafv", location: FieldLocation::Query },
+        FieldSpec { snake: "access_token", wire: "access_token", location: FieldLocation::Query },
+        FieldSpec { snake: "alt", wire: "alt", location: FieldLocation::Query },
+        FieldSpec { snake: "callback", wire: "callback", location: FieldLocation::Query },
+        FieldSpec { snake: "fields", wire: "fields", location: FieldLocation::Query },
+        FieldSpec { snake: "key", wire: "key", location: FieldLocation::Query },
+        FieldSpec { snake: "oauth_token", wire: "oauth_token", location: FieldLocation::Query },
+        FieldSpec { snake: "pretty_print", wire: "prettyPrint", location: FieldLocation::Query },
+        FieldSpec { snake: "quota_user", wire: "quotaUser", location: FieldLocation::Query },
+        FieldSpec { snake: "upload_protocol", wire: "upload_protocol", location: FieldLocation::Query },
+        FieldSpec { snake: "upload_type", wire: "uploadType", location: FieldLocation::Query },
+        FieldSpec { snake: "parent", wire: "parent", location: FieldLocation::Path },
+        FieldSpec { snake: "end_date", wire: "endDate", location: FieldLocation::Query },
+        FieldSpec { snake: "start_date", wire: "startDate", location: FieldLocation::Query },
     ],
     auth: &[
     ],
@@ -559,10 +810,21 @@ const OP_ACCOUNTS_TRAVELPARTNER_ACCOUNTS_RECONCILIATION_REPORTS_CREATE: OpSpec =
     method: "POST",
     path_template: "/v3/{parent}/reconciliationReports",
     fields: &[
-        FieldSpec { snake: "parent", location: FieldLocation::Path },
-        FieldSpec { snake: "contents", location: FieldLocation::Body },
-        FieldSpec { snake: "file_name", location: FieldLocation::Body },
-        FieldSpec { snake: "name", location: FieldLocation::Body },
+        FieldSpec { snake: "xgafv", wire: "$.xgafv", location: FieldLocation::Query },
+        FieldSpec { snake: "access_token", wire: "access_token", location: FieldLocation::Query },
+        FieldSpec { snake: "alt", wire: "alt", location: FieldLocation::Query },
+        FieldSpec { snake: "callback", wire: "callback", location: FieldLocation::Query },
+        FieldSpec { snake: "fields", wire: "fields", location: FieldLocation::Query },
+        FieldSpec { snake: "key", wire: "key", location: FieldLocation::Query },
+        FieldSpec { snake: "oauth_token", wire: "oauth_token", location: FieldLocation::Query },
+        FieldSpec { snake: "pretty_print", wire: "prettyPrint", location: FieldLocation::Query },
+        FieldSpec { snake: "quota_user", wire: "quotaUser", location: FieldLocation::Query },
+        FieldSpec { snake: "upload_protocol", wire: "upload_protocol", location: FieldLocation::Query },
+        FieldSpec { snake: "upload_type", wire: "uploadType", location: FieldLocation::Query },
+        FieldSpec { snake: "parent", wire: "parent", location: FieldLocation::Path },
+        FieldSpec { snake: "contents", wire: "contents", location: FieldLocation::Body },
+        FieldSpec { snake: "file_name", wire: "fileName", location: FieldLocation::Body },
+        FieldSpec { snake: "name", wire: "name", location: FieldLocation::Body },
     ],
     auth: &[
     ],
@@ -572,14 +834,40 @@ const OP_ACCOUNTS_TRAVELPARTNER_ACCOUNTS_RECONCILIATION_REPORTS_VALIDATE: OpSpec
     method: "POST",
     path_template: "/v3/{parent}/reconciliationReports:validate",
     fields: &[
-        FieldSpec { snake: "parent", location: FieldLocation::Path },
-        FieldSpec { snake: "contents", location: FieldLocation::Body },
-        FieldSpec { snake: "file_name", location: FieldLocation::Body },
-        FieldSpec { snake: "name", location: FieldLocation::Body },
+        FieldSpec { snake: "xgafv", wire: "$.xgafv", location: FieldLocation::Query },
+        FieldSpec { snake: "access_token", wire: "access_token", location: FieldLocation::Query },
+        FieldSpec { snake: "alt", wire: "alt", location: FieldLocation::Query },
+        FieldSpec { snake: "callback", wire: "callback", location: FieldLocation::Query },
+        FieldSpec { snake: "fields", wire: "fields", location: FieldLocation::Query },
+        FieldSpec { snake: "key", wire: "key", location: FieldLocation::Query },
+        FieldSpec { snake: "oauth_token", wire: "oauth_token", location: FieldLocation::Query },
+        FieldSpec { snake: "pretty_print", wire: "prettyPrint", location: FieldLocation::Query },
+        FieldSpec { snake: "quota_user", wire: "quotaUser", location: FieldLocation::Query },
+        FieldSpec { snake: "upload_protocol", wire: "upload_protocol", location: FieldLocation::Query },
+        FieldSpec { snake: "upload_type", wire: "uploadType", location: FieldLocation::Query },
+        FieldSpec { snake: "parent", wire: "parent", location: FieldLocation::Path },
+        FieldSpec { snake: "contents", wire: "contents", location: FieldLocation::Body },
+        FieldSpec { snake: "file_name", wire: "fileName", location: FieldLocation::Body },
+        FieldSpec { snake: "name", wire: "name", location: FieldLocation::Body },
     ],
     auth: &[
     ],
 };
+
+fn iface_accounts__travelpartner_accounts_hotels_set_live_on_google_xgafv_enum__to_str(e: &iface_accounts::TravelpartnerAccountsHotelsSetLiveOnGoogleXgafvEnum) -> &'static str {
+    match e {
+        iface_accounts::TravelpartnerAccountsHotelsSetLiveOnGoogleXgafvEnum::V1 => "1",
+        iface_accounts::TravelpartnerAccountsHotelsSetLiveOnGoogleXgafvEnum::V2 => "2",
+    }
+}
+
+fn iface_accounts__travelpartner_accounts_hotels_set_live_on_google_alt_enum__to_str(e: &iface_accounts::TravelpartnerAccountsHotelsSetLiveOnGoogleAltEnum) -> &'static str {
+    match e {
+        iface_accounts::TravelpartnerAccountsHotelsSetLiveOnGoogleAltEnum::Json => "json",
+        iface_accounts::TravelpartnerAccountsHotelsSetLiveOnGoogleAltEnum::Media => "media",
+        iface_accounts::TravelpartnerAccountsHotelsSetLiveOnGoogleAltEnum::Proto => "proto",
+    }
+}
 
 fn iface_accounts__display_name_disapproval_reason_disapproval_reason_enum__to_str(e: &iface_accounts::DisplayNameDisapprovalReasonDisapprovalReasonEnum) -> &'static str {
     match e {
@@ -611,6 +899,58 @@ fn iface_accounts__brand_icon_disapproval_reasons_item_enum__to_str(e: &iface_ac
     }
 }
 
+fn iface_accounts__free_booking_links_result_device_type_enum__to_str(e: &iface_accounts::FreeBookingLinksResultDeviceTypeEnum) -> &'static str {
+    match e {
+        iface_accounts::FreeBookingLinksResultDeviceTypeEnum::DeviceUnspecified => "DEVICE_UNSPECIFIED",
+        iface_accounts::FreeBookingLinksResultDeviceTypeEnum::DeviceUnknown => "DEVICE_UNKNOWN",
+        iface_accounts::FreeBookingLinksResultDeviceTypeEnum::Desktop => "DESKTOP",
+        iface_accounts::FreeBookingLinksResultDeviceTypeEnum::Mobile => "MOBILE",
+        iface_accounts::FreeBookingLinksResultDeviceTypeEnum::Tablet => "TABLET",
+    }
+}
+
+fn iface_accounts__property_performance_result_advance_booking_window_enum__to_str(e: &iface_accounts::PropertyPerformanceResultAdvanceBookingWindowEnum) -> &'static str {
+    match e {
+        iface_accounts::PropertyPerformanceResultAdvanceBookingWindowEnum::AdvanceBookingWindowUnspecified => "ADVANCE_BOOKING_WINDOW_UNSPECIFIED",
+        iface_accounts::PropertyPerformanceResultAdvanceBookingWindowEnum::AdvanceBookingWindowSameDay => "ADVANCE_BOOKING_WINDOW_SAME_DAY",
+        iface_accounts::PropertyPerformanceResultAdvanceBookingWindowEnum::AdvanceBookingWindowNextDay => "ADVANCE_BOOKING_WINDOW_NEXT_DAY",
+        iface_accounts::PropertyPerformanceResultAdvanceBookingWindowEnum::AdvanceBookingWindowDaysV2ToV7 => "ADVANCE_BOOKING_WINDOW_DAYS_2_TO_7",
+        iface_accounts::PropertyPerformanceResultAdvanceBookingWindowEnum::AdvanceBookingWindowDaysV8ToV14 => "ADVANCE_BOOKING_WINDOW_DAYS_8_TO_14",
+        iface_accounts::PropertyPerformanceResultAdvanceBookingWindowEnum::AdvanceBookingWindowDaysV15ToV30 => "ADVANCE_BOOKING_WINDOW_DAYS_15_TO_30",
+        iface_accounts::PropertyPerformanceResultAdvanceBookingWindowEnum::AdvanceBookingWindowDaysV31ToV60 => "ADVANCE_BOOKING_WINDOW_DAYS_31_TO_60",
+        iface_accounts::PropertyPerformanceResultAdvanceBookingWindowEnum::AdvanceBookingWindowDaysV61ToV90 => "ADVANCE_BOOKING_WINDOW_DAYS_61_TO_90",
+        iface_accounts::PropertyPerformanceResultAdvanceBookingWindowEnum::AdvanceBookingWindowDaysV91ToV120 => "ADVANCE_BOOKING_WINDOW_DAYS_91_TO_120",
+        iface_accounts::PropertyPerformanceResultAdvanceBookingWindowEnum::AdvanceBookingWindowDaysV121ToV150 => "ADVANCE_BOOKING_WINDOW_DAYS_121_TO_150",
+        iface_accounts::PropertyPerformanceResultAdvanceBookingWindowEnum::AdvanceBookingWindowDaysV151ToV180 => "ADVANCE_BOOKING_WINDOW_DAYS_151_TO_180",
+        iface_accounts::PropertyPerformanceResultAdvanceBookingWindowEnum::AdvanceBookingWindowDaysOverV180 => "ADVANCE_BOOKING_WINDOW_DAYS_OVER_180",
+    }
+}
+
+fn iface_accounts__property_performance_result_length_of_stay_enum__to_str(e: &iface_accounts::PropertyPerformanceResultLengthOfStayEnum) -> &'static str {
+    match e {
+        iface_accounts::PropertyPerformanceResultLengthOfStayEnum::LengthOfStayUnspecified => "LENGTH_OF_STAY_UNSPECIFIED",
+        iface_accounts::PropertyPerformanceResultLengthOfStayEnum::LengthOfStayNightsV1 => "LENGTH_OF_STAY_NIGHTS_1",
+        iface_accounts::PropertyPerformanceResultLengthOfStayEnum::LengthOfStayNightsV2 => "LENGTH_OF_STAY_NIGHTS_2",
+        iface_accounts::PropertyPerformanceResultLengthOfStayEnum::LengthOfStayNightsV3 => "LENGTH_OF_STAY_NIGHTS_3",
+        iface_accounts::PropertyPerformanceResultLengthOfStayEnum::LengthOfStayNightsV4ToV7 => "LENGTH_OF_STAY_NIGHTS_4_TO_7",
+        iface_accounts::PropertyPerformanceResultLengthOfStayEnum::LengthOfStayNightsV8ToV14 => "LENGTH_OF_STAY_NIGHTS_8_TO_14",
+        iface_accounts::PropertyPerformanceResultLengthOfStayEnum::LengthOfStayNightsV15ToV21 => "LENGTH_OF_STAY_NIGHTS_15_TO_21",
+        iface_accounts::PropertyPerformanceResultLengthOfStayEnum::LengthOfStayNightsV22ToV30 => "LENGTH_OF_STAY_NIGHTS_22_TO_30",
+        iface_accounts::PropertyPerformanceResultLengthOfStayEnum::LengthOfStayNightsOverV30 => "LENGTH_OF_STAY_NIGHTS_OVER_30",
+    }
+}
+
+fn iface_accounts__property_performance_result_occupancy_enum__to_str(e: &iface_accounts::PropertyPerformanceResultOccupancyEnum) -> &'static str {
+    match e {
+        iface_accounts::PropertyPerformanceResultOccupancyEnum::OccupancyUnspecified => "OCCUPANCY_UNSPECIFIED",
+        iface_accounts::PropertyPerformanceResultOccupancyEnum::OccupancyV1 => "OCCUPANCY_1",
+        iface_accounts::PropertyPerformanceResultOccupancyEnum::OccupancyV2 => "OCCUPANCY_2",
+        iface_accounts::PropertyPerformanceResultOccupancyEnum::OccupancyV3 => "OCCUPANCY_3",
+        iface_accounts::PropertyPerformanceResultOccupancyEnum::OccupancyV4 => "OCCUPANCY_4",
+        iface_accounts::PropertyPerformanceResultOccupancyEnum::OccupancyOverV4 => "OCCUPANCY_OVER_4",
+    }
+}
+
 fn iface_accounts__account_link_status_enum__to_str(e: &iface_accounts::AccountLinkStatusEnum) -> &'static str {
     match e {
         iface_accounts::AccountLinkStatusEnum::AccountLinkStatusUnspecified => "ACCOUNT_LINK_STATUS_UNSPECIFIED",
@@ -618,6 +958,84 @@ fn iface_accounts__account_link_status_enum__to_str(e: &iface_accounts::AccountL
         iface_accounts::AccountLinkStatusEnum::RequestedFromHotelCenter => "REQUESTED_FROM_HOTEL_CENTER",
         iface_accounts::AccountLinkStatusEnum::RequestedFromGoogleAds => "REQUESTED_FROM_GOOGLE_ADS",
         iface_accounts::AccountLinkStatusEnum::Approved => "APPROVED",
+    }
+}
+
+fn iface_accounts__data_issue_detail_data_issue_severity_enum__to_str(e: &iface_accounts::DataIssueDetailDataIssueSeverityEnum) -> &'static str {
+    match e {
+        iface_accounts::DataIssueDetailDataIssueSeverityEnum::DataIssueSeverityUnspecified => "DATA_ISSUE_SEVERITY_UNSPECIFIED",
+        iface_accounts::DataIssueDetailDataIssueSeverityEnum::Error => "ERROR",
+        iface_accounts::DataIssueDetailDataIssueSeverityEnum::Warning => "WARNING",
+        iface_accounts::DataIssueDetailDataIssueSeverityEnum::Info => "INFO",
+    }
+}
+
+fn iface_accounts__data_issue_detail_data_issue_type_enum__to_str(e: &iface_accounts::DataIssueDetailDataIssueTypeEnum) -> &'static str {
+    match e {
+        iface_accounts::DataIssueDetailDataIssueTypeEnum::FeedDataIssueUnspecified => "FEED_DATA_ISSUE_UNSPECIFIED",
+        iface_accounts::DataIssueDetailDataIssueTypeEnum::FeedDataIssueUnknown => "FEED_DATA_ISSUE_UNKNOWN",
+        iface_accounts::DataIssueDetailDataIssueTypeEnum::NoDataIssue => "NO_DATA_ISSUE",
+        iface_accounts::DataIssueDetailDataIssueTypeEnum::DuplicateAddress => "DUPLICATE_ADDRESS",
+        iface_accounts::DataIssueDetailDataIssueTypeEnum::MissingPhysicalStreetAddress => "MISSING_PHYSICAL_STREET_ADDRESS",
+        iface_accounts::DataIssueDetailDataIssueTypeEnum::MissingStreetName => "MISSING_STREET_NAME",
+        iface_accounts::DataIssueDetailDataIssueTypeEnum::MissingStreetNumber => "MISSING_STREET_NUMBER",
+        iface_accounts::DataIssueDetailDataIssueTypeEnum::MissingAddress => "MISSING_ADDRESS",
+        iface_accounts::DataIssueDetailDataIssueTypeEnum::MissingCountry => "MISSING_COUNTRY",
+        iface_accounts::DataIssueDetailDataIssueTypeEnum::InvalidPostalCode => "INVALID_POSTAL_CODE",
+        iface_accounts::DataIssueDetailDataIssueTypeEnum::InvalidPostalCodeSuffix => "INVALID_POSTAL_CODE_SUFFIX",
+        iface_accounts::DataIssueDetailDataIssueTypeEnum::UnexpectedPostalCodeSuffix => "UNEXPECTED_POSTAL_CODE_SUFFIX",
+        iface_accounts::DataIssueDetailDataIssueTypeEnum::UnexpectedPostalCode => "UNEXPECTED_POSTAL_CODE",
+        iface_accounts::DataIssueDetailDataIssueTypeEnum::InvalidAmenities => "INVALID_AMENITIES",
+        iface_accounts::DataIssueDetailDataIssueTypeEnum::InvalidEmailAddress => "INVALID_EMAIL_ADDRESS",
+        iface_accounts::DataIssueDetailDataIssueTypeEnum::DuplicateLatlong => "DUPLICATE_LATLONG",
+        iface_accounts::DataIssueDetailDataIssueTypeEnum::LatlongInconsistentWithAddress => "LATLONG_INCONSISTENT_WITH_ADDRESS",
+        iface_accounts::DataIssueDetailDataIssueTypeEnum::MissingLatlong => "MISSING_LATLONG",
+        iface_accounts::DataIssueDetailDataIssueTypeEnum::CouldNotGeocode => "COULD_NOT_GEOCODE",
+        iface_accounts::DataIssueDetailDataIssueTypeEnum::MissingHotelName => "MISSING_HOTEL_NAME",
+        iface_accounts::DataIssueDetailDataIssueTypeEnum::HotelNameEmpty => "HOTEL_NAME_EMPTY",
+        iface_accounts::DataIssueDetailDataIssueTypeEnum::InvalidHotelName => "INVALID_HOTEL_NAME",
+        iface_accounts::DataIssueDetailDataIssueTypeEnum::HotelNameTooLong => "HOTEL_NAME_TOO_LONG",
+        iface_accounts::DataIssueDetailDataIssueTypeEnum::ParseErrorInXml => "PARSE_ERROR_IN_XML",
+        iface_accounts::DataIssueDetailDataIssueTypeEnum::UnexpectedAttributeInXml => "UNEXPECTED_ATTRIBUTE_IN_XML",
+        iface_accounts::DataIssueDetailDataIssueTypeEnum::DuplicatePhoneNumber => "DUPLICATE_PHONE_NUMBER",
+        iface_accounts::DataIssueDetailDataIssueTypeEnum::MissingPhoneNumber => "MISSING_PHONE_NUMBER",
+        iface_accounts::DataIssueDetailDataIssueTypeEnum::MissingVoicePhoneNumber => "MISSING_VOICE_PHONE_NUMBER",
+        iface_accounts::DataIssueDetailDataIssueTypeEnum::InvalidPhoneNumberFormat => "INVALID_PHONE_NUMBER_FORMAT",
+        iface_accounts::DataIssueDetailDataIssueTypeEnum::InvalidPhoneNumber => "INVALID_PHONE_NUMBER",
+        iface_accounts::DataIssueDetailDataIssueTypeEnum::InvalidPhoneNumberCountryCode => "INVALID_PHONE_NUMBER_COUNTRY_CODE",
+        iface_accounts::DataIssueDetailDataIssueTypeEnum::PhoneNumberTooLong => "PHONE_NUMBER_TOO_LONG",
+        iface_accounts::DataIssueDetailDataIssueTypeEnum::PhoneNumberTooShort => "PHONE_NUMBER_TOO_SHORT",
+        iface_accounts::DataIssueDetailDataIssueTypeEnum::InvalidWebsiteUrl => "INVALID_WEBSITE_URL",
+        iface_accounts::DataIssueDetailDataIssueTypeEnum::AdwordsAttributeTooLong => "ADWORDS_ATTRIBUTE_TOO_LONG",
+        iface_accounts::DataIssueDetailDataIssueTypeEnum::BrandNotAllowed => "BRAND_NOT_ALLOWED",
+        iface_accounts::DataIssueDetailDataIssueTypeEnum::FlaggedDueToSuspiciousMetadata => "FLAGGED_DUE_TO_SUSPICIOUS_METADATA",
+        iface_accounts::DataIssueDetailDataIssueTypeEnum::NotEnoughImagesProvided => "NOT_ENOUGH_IMAGES_PROVIDED",
+        iface_accounts::DataIssueDetailDataIssueTypeEnum::ImageProcessingInProgress => "IMAGE_PROCESSING_IN_PROGRESS",
+        iface_accounts::DataIssueDetailDataIssueTypeEnum::CannotFetchImages => "CANNOT_FETCH_IMAGES",
+        iface_accounts::DataIssueDetailDataIssueTypeEnum::IncompatibleImageSizeOrLowQuality => "INCOMPATIBLE_IMAGE_SIZE_OR_LOW_QUALITY",
+        iface_accounts::DataIssueDetailDataIssueTypeEnum::MissingLangInRawListing => "MISSING_LANG_IN_RAW_LISTING",
+        iface_accounts::DataIssueDetailDataIssueTypeEnum::IsHotel => "IS_HOTEL",
+        iface_accounts::DataIssueDetailDataIssueTypeEnum::MissingReqAttr => "MISSING_REQ_ATTR",
+        iface_accounts::DataIssueDetailDataIssueTypeEnum::MissingName => "MISSING_NAME",
+        iface_accounts::DataIssueDetailDataIssueTypeEnum::MissingLangInName => "MISSING_LANG_IN_NAME",
+        iface_accounts::DataIssueDetailDataIssueTypeEnum::VrNameTooLong => "VR_NAME_TOO_LONG",
+        iface_accounts::DataIssueDetailDataIssueTypeEnum::TestProperty => "TEST_PROPERTY",
+        iface_accounts::DataIssueDetailDataIssueTypeEnum::NonVrAccommodationTypeBasedOnListingName => "NON_VR_ACCOMMODATION_TYPE_BASED_ON_LISTING_NAME",
+        iface_accounts::DataIssueDetailDataIssueTypeEnum::BrandNameTooLong => "BRAND_NAME_TOO_LONG",
+        iface_accounts::DataIssueDetailDataIssueTypeEnum::MissingBrandName => "MISSING_BRAND_NAME",
+        iface_accounts::DataIssueDetailDataIssueTypeEnum::InvalidReviewRating => "INVALID_REVIEW_RATING",
+        iface_accounts::DataIssueDetailDataIssueTypeEnum::InvalidCheckinFormat => "INVALID_CHECKIN_FORMAT",
+        iface_accounts::DataIssueDetailDataIssueTypeEnum::InvalidCheckoutFormat => "INVALID_CHECKOUT_FORMAT",
+    }
+}
+
+fn iface_accounts__hotel_view_match_status_enum__to_str(e: &iface_accounts::HotelViewMatchStatusEnum) -> &'static str {
+    match e {
+        iface_accounts::HotelViewMatchStatusEnum::MatchStatusUnspecified => "MATCH_STATUS_UNSPECIFIED",
+        iface_accounts::HotelViewMatchStatusEnum::MatchStatusUnknown => "MATCH_STATUS_UNKNOWN",
+        iface_accounts::HotelViewMatchStatusEnum::NotMatched => "NOT_MATCHED",
+        iface_accounts::HotelViewMatchStatusEnum::Matched => "MATCHED",
+        iface_accounts::HotelViewMatchStatusEnum::MapOverlap => "MAP_OVERLAP",
     }
 }
 
@@ -630,35 +1048,569 @@ fn iface_accounts__icon_state_enum__to_str(e: &iface_accounts::IconStateEnum) ->
     }
 }
 
+fn iface_accounts__rating_type_op_enum__to_str(e: &iface_accounts::RatingTypeOpEnum) -> &'static str {
+    match e {
+        iface_accounts::RatingTypeOpEnum::TypeUnspecified => "TYPE_UNSPECIFIED",
+        iface_accounts::RatingTypeOpEnum::Overall => "OVERALL",
+    }
+}
+
+fn iface_accounts__review_type_op_enum__to_str(e: &iface_accounts::ReviewTypeOpEnum) -> &'static str {
+    match e {
+        iface_accounts::ReviewTypeOpEnum::Unknown => "UNKNOWN",
+        iface_accounts::ReviewTypeOpEnum::Editorial => "EDITORIAL",
+        iface_accounts::ReviewTypeOpEnum::User => "USER",
+    }
+}
+
+fn iface_accounts__price_accuracy_row_mismatch_reason_enum__to_str(e: &iface_accounts::PriceAccuracyRowMismatchReasonEnum) -> &'static str {
+    match e {
+        iface_accounts::PriceAccuracyRowMismatchReasonEnum::MismatchReasonUnspecified => "MISMATCH_REASON_UNSPECIFIED",
+        iface_accounts::PriceAccuracyRowMismatchReasonEnum::MismatchReasonUnknown => "MISMATCH_REASON_UNKNOWN",
+        iface_accounts::PriceAccuracyRowMismatchReasonEnum::TaxMismatch => "TAX_MISMATCH",
+        iface_accounts::PriceAccuracyRowMismatchReasonEnum::RoomUnavailable => "ROOM_UNAVAILABLE",
+        iface_accounts::PriceAccuracyRowMismatchReasonEnum::SiteError => "SITE_ERROR",
+        iface_accounts::PriceAccuracyRowMismatchReasonEnum::PriceFeedDelayed => "PRICE_FEED_DELAYED",
+        iface_accounts::PriceAccuracyRowMismatchReasonEnum::DiscountMissing => "DISCOUNT_MISSING",
+        iface_accounts::PriceAccuracyRowMismatchReasonEnum::IncorrectDiscountValue => "INCORRECT_DISCOUNT_VALUE",
+        iface_accounts::PriceAccuracyRowMismatchReasonEnum::WrongItinerary => "WRONG_ITINERARY",
+    }
+}
+
+fn iface_accounts__price_accuracy_row_signal_source_enum__to_str(e: &iface_accounts::PriceAccuracyRowSignalSourceEnum) -> &'static str {
+    match e {
+        iface_accounts::PriceAccuracyRowSignalSourceEnum::SignalSourceUnspecified => "SIGNAL_SOURCE_UNSPECIFIED",
+        iface_accounts::PriceAccuracyRowSignalSourceEnum::SignalSourceUnknown => "SIGNAL_SOURCE_UNKNOWN",
+        iface_accounts::PriceAccuracyRowSignalSourceEnum::Fetched => "FETCHED",
+        iface_accounts::PriceAccuracyRowSignalSourceEnum::Pixel => "PIXEL",
+    }
+}
+
+fn iface_accounts__summarize_price_accuracy_response_current_book_on_google_score_enum__to_str(e: &iface_accounts::SummarizePriceAccuracyResponseCurrentBookOnGoogleScoreEnum) -> &'static str {
+    match e {
+        iface_accounts::SummarizePriceAccuracyResponseCurrentBookOnGoogleScoreEnum::PriceAccuracyStateUnspecified => "PRICE_ACCURACY_STATE_UNSPECIFIED",
+        iface_accounts::SummarizePriceAccuracyResponseCurrentBookOnGoogleScoreEnum::PriceAccuracyStateUnknown => "PRICE_ACCURACY_STATE_UNKNOWN",
+        iface_accounts::SummarizePriceAccuracyResponseCurrentBookOnGoogleScoreEnum::Excellent => "EXCELLENT",
+        iface_accounts::SummarizePriceAccuracyResponseCurrentBookOnGoogleScoreEnum::Good => "GOOD",
+        iface_accounts::SummarizePriceAccuracyResponseCurrentBookOnGoogleScoreEnum::Poor => "POOR",
+        iface_accounts::SummarizePriceAccuracyResponseCurrentBookOnGoogleScoreEnum::AtRisk => "AT_RISK",
+        iface_accounts::SummarizePriceAccuracyResponseCurrentBookOnGoogleScoreEnum::Failed => "FAILED",
+    }
+}
+
+fn iface_accounts__price_coverage_bucket_advance_booking_window_range_enum__to_str(e: &iface_accounts::PriceCoverageBucketAdvanceBookingWindowRangeEnum) -> &'static str {
+    match e {
+        iface_accounts::PriceCoverageBucketAdvanceBookingWindowRangeEnum::AdvanceBookingWindowRangeUnspecified => "ADVANCE_BOOKING_WINDOW_RANGE_UNSPECIFIED",
+        iface_accounts::PriceCoverageBucketAdvanceBookingWindowRangeEnum::AdvanceBookingWindowRangeUnknown => "ADVANCE_BOOKING_WINDOW_RANGE_UNKNOWN",
+        iface_accounts::PriceCoverageBucketAdvanceBookingWindowRangeEnum::DaysV0ToV30 => "DAYS_0_TO_30",
+        iface_accounts::PriceCoverageBucketAdvanceBookingWindowRangeEnum::DaysV31ToV60 => "DAYS_31_TO_60",
+        iface_accounts::PriceCoverageBucketAdvanceBookingWindowRangeEnum::DaysV61ToV90 => "DAYS_61_TO_90",
+        iface_accounts::PriceCoverageBucketAdvanceBookingWindowRangeEnum::DaysV91ToV120 => "DAYS_91_TO_120",
+        iface_accounts::PriceCoverageBucketAdvanceBookingWindowRangeEnum::DaysV121ToV150 => "DAYS_121_TO_150",
+        iface_accounts::PriceCoverageBucketAdvanceBookingWindowRangeEnum::DaysV151ToV180 => "DAYS_151_TO_180",
+        iface_accounts::PriceCoverageBucketAdvanceBookingWindowRangeEnum::DaysV181ToV210 => "DAYS_181_TO_210",
+        iface_accounts::PriceCoverageBucketAdvanceBookingWindowRangeEnum::DaysV211ToV240 => "DAYS_211_TO_240",
+        iface_accounts::PriceCoverageBucketAdvanceBookingWindowRangeEnum::DaysV241ToV270 => "DAYS_241_TO_270",
+        iface_accounts::PriceCoverageBucketAdvanceBookingWindowRangeEnum::DaysV271ToV300 => "DAYS_271_TO_300",
+        iface_accounts::PriceCoverageBucketAdvanceBookingWindowRangeEnum::DaysV301ToV330 => "DAYS_301_TO_330",
+    }
+}
+
+fn iface_accounts__price_coverage_bucket_length_of_stay_range_enum__to_str(e: &iface_accounts::PriceCoverageBucketLengthOfStayRangeEnum) -> &'static str {
+    match e {
+        iface_accounts::PriceCoverageBucketLengthOfStayRangeEnum::LengthOfStayRangeUnspecified => "LENGTH_OF_STAY_RANGE_UNSPECIFIED",
+        iface_accounts::PriceCoverageBucketLengthOfStayRangeEnum::LengthOfStayRangeUnknown => "LENGTH_OF_STAY_RANGE_UNKNOWN",
+        iface_accounts::PriceCoverageBucketLengthOfStayRangeEnum::LengthOfStayV1ToV7 => "LENGTH_OF_STAY_1_TO_7",
+        iface_accounts::PriceCoverageBucketLengthOfStayRangeEnum::LengthOfStayV8ToV14 => "LENGTH_OF_STAY_8_TO_14",
+        iface_accounts::PriceCoverageBucketLengthOfStayRangeEnum::LengthOfStayV15ToV30 => "LENGTH_OF_STAY_15_TO_30",
+    }
+}
+
+fn iface_accounts__set_live_on_google_response__to_json(p: &iface_accounts::SetLiveOnGoogleResponse) -> Value {
+    let mut m = Map::new();
+    m.insert("failedHotelIds".into(), match (&p.failed_hotel_ids) { Some(v) => Value::Array((v).iter().map(|v| Value::String((v).clone())).collect()), None => Value::Null });
+    m.insert("updatedHotelIds".into(), match (&p.updated_hotel_ids) { Some(v) => Value::Array((v).iter().map(|v| Value::String((v).clone())).collect()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_accounts__reconciliation_report__to_json(p: &iface_accounts::ReconciliationReport) -> Value {
+    let mut m = Map::new();
+    m.insert("contents".into(), match (&p.contents) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("fileName".into(), match (&p.file_name) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("name".into(), match (&p.name) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_accounts__brand__to_json(p: &iface_accounts::Brand) -> Value {
+    let mut m = Map::new();
+    m.insert("activeDisplayNames".into(), match (&p.active_display_names) { Some(v) => Value::Array((v).iter().map(|v| iface_accounts__localized_text__to_json(v)).collect()), None => Value::Null });
+    m.insert("activeIcon".into(), match (&p.active_icon) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("activeIconUri".into(), match (&p.active_icon_uri) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("displayNameDisapprovalReason".into(), match (&p.display_name_disapproval_reason) { Some(v) => Value::Array((v).iter().map(|v| iface_accounts__display_name_disapproval_reason__to_json(v)).collect()), None => Value::Null });
+    m.insert("displayNameState".into(), match (&p.display_name_state) { Some(v) => Value::String(iface_accounts__brand_display_name_state_enum__to_str(v).into()), None => Value::Null });
+    m.insert("displayNames".into(), match (&p.display_names) { Some(v) => Value::Array((v).iter().map(|v| iface_accounts__localized_text__to_json(v)).collect()), None => Value::Null });
+    m.insert("icon".into(), match (&p.icon) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("iconDisapprovalReasons".into(), match (&p.icon_disapproval_reasons) { Some(v) => Value::Array((v).iter().map(|v| Value::String(iface_accounts__brand_icon_disapproval_reasons_item_enum__to_str(v).into())).collect()), None => Value::Null });
+    m.insert("iconState".into(), match (&p.icon_state) { Some(v) => Value::String(iface_accounts__brand_display_name_state_enum__to_str(v).into()), None => Value::Null });
+    m.insert("name".into(), match (&p.name) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("propertyCount".into(), match (&p.property_count) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("submittedDisplayNames".into(), match (&p.submitted_display_names) { Some(v) => Value::Array((v).iter().map(|v| iface_accounts__localized_text__to_json(v)).collect()), None => Value::Null });
+    m.insert("submittedIcon".into(), match (&p.submitted_icon) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
 fn iface_accounts__localized_text__to_json(p: &iface_accounts::LocalizedText) -> Value {
     let mut m = Map::new();
-    m.insert("language_code".into(), match (&p.language_code) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("languageCode".into(), match (&p.language_code) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("text".into(), match (&p.text) { Some(v) => Value::String((v).clone()), None => Value::Null });
     Value::Object(m)
 }
 
 fn iface_accounts__display_name_disapproval_reason__to_json(p: &iface_accounts::DisplayNameDisapprovalReason) -> Value {
     let mut m = Map::new();
-    m.insert("disapproval_reason".into(), match (&p.disapproval_reason) { Some(v) => Value::String(iface_accounts__display_name_disapproval_reason_disapproval_reason_enum__to_str(v).into()), None => Value::Null });
-    m.insert("language_code".into(), match (&p.language_code) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("disapprovalReason".into(), match (&p.disapproval_reason) { Some(v) => Value::String(iface_accounts__display_name_disapproval_reason_disapproval_reason_enum__to_str(v).into()), None => Value::Null });
+    m.insert("languageCode".into(), match (&p.language_code) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_accounts__empty__to_json(p: &iface_accounts::Empty) -> Value {
+    let mut m = Map::new();
+    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_accounts__query_free_booking_links_report_response__to_json(p: &iface_accounts::QueryFreeBookingLinksReportResponse) -> Value {
+    let mut m = Map::new();
+    m.insert("nextPageToken".into(), match (&p.next_page_token) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("results".into(), match (&p.results) { Some(v) => Value::Array((v).iter().map(|v| iface_accounts__free_booking_links_result__to_json(v)).collect()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_accounts__free_booking_links_result__to_json(p: &iface_accounts::FreeBookingLinksResult) -> Value {
+    let mut m = Map::new();
+    m.insert("clickCount".into(), match (&p.click_count) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("date".into(), match (&p.date) { Some(v) => iface_accounts__date__to_json(v), None => Value::Null });
+    m.insert("deviceType".into(), match (&p.device_type) { Some(v) => Value::String(iface_accounts__free_booking_links_result_device_type_enum__to_str(v).into()), None => Value::Null });
+    m.insert("partnerHotelDisplayName".into(), match (&p.partner_hotel_display_name) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("partnerHotelId".into(), match (&p.partner_hotel_id) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("userRegionCode".into(), match (&p.user_region_code) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_accounts__date__to_json(p: &iface_accounts::Date) -> Value {
+    let mut m = Map::new();
+    m.insert("day".into(), match (&p.day) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("month".into(), match (&p.month) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("year".into(), match (&p.year) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_accounts__query_participation_report_response__to_json(p: &iface_accounts::QueryParticipationReportResponse) -> Value {
+    let mut m = Map::new();
+    m.insert("nextPageToken".into(), match (&p.next_page_token) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("results".into(), match (&p.results) { Some(v) => Value::Array((v).iter().map(|v| iface_accounts__participation_result__to_json(v)).collect()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_accounts__participation_result__to_json(p: &iface_accounts::ParticipationResult) -> Value {
+    let mut m = Map::new();
+    m.insert("key".into(), match (&p.key) { Some(v) => iface_accounts__key__to_json(v), None => Value::Null });
+    m.insert("missedParticipationCount".into(), match (&p.missed_participation_count) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("missedParticipationCountDetails".into(), match (&p.missed_participation_count_details) { Some(v) => iface_accounts__missed_participation_count_details__to_json(v), None => Value::Null });
+    m.insert("opportunityCount".into(), match (&p.opportunity_count) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("participationCount".into(), match (&p.participation_count) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("participationPercent".into(), match (&p.participation_percent) { Some(v) => serde_json::Number::from_f64(*(v)).map(Value::Number).unwrap_or(Value::Null), None => Value::Null });
+    m.insert("partnerHotelDisplayName".into(), match (&p.partner_hotel_display_name) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_accounts__key__to_json(p: &iface_accounts::Key) -> Value {
+    let mut m = Map::new();
+    m.insert("advanceBookingWindow".into(), match (&p.advance_booking_window) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("checkinDate".into(), match (&p.checkin_date) { Some(v) => iface_accounts__date__to_json(v), None => Value::Null });
+    m.insert("date".into(), match (&p.date) { Some(v) => iface_accounts__date__to_json(v), None => Value::Null });
+    m.insert("deviceType".into(), match (&p.device_type) { Some(v) => Value::String(iface_accounts__free_booking_links_result_device_type_enum__to_str(v).into()), None => Value::Null });
+    m.insert("hotelRegionCode".into(), match (&p.hotel_region_code) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("lengthOfStayDays".into(), match (&p.length_of_stay_days) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("occupancy".into(), match (&p.occupancy) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("partnerHotelId".into(), match (&p.partner_hotel_id) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("userRegionCode".into(), match (&p.user_region_code) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_accounts__missed_participation_count_details__to_json(p: &iface_accounts::MissedParticipationCountDetails) -> Value {
+    let mut m = Map::new();
+    m.insert("hotelSuspendedCount".into(), match (&p.hotel_suspended_count) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("noAvailabilityCount".into(), match (&p.no_availability_count) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("noLandingPageCount".into(), match (&p.no_landing_page_count) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("noPriceCount".into(), match (&p.no_price_count) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("noPriceCountDetails".into(), match (&p.no_price_count_details) { Some(v) => iface_accounts__no_price_count_details__to_json(v), None => Value::Null });
+    m.insert("noTaxBreakdownCount".into(), match (&p.no_tax_breakdown_count) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("otherReasonCount".into(), match (&p.other_reason_count) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("priceMissingCount".into(), match (&p.price_missing_count) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("priceMissingCountDetails".into(), match (&p.price_missing_count_details) { Some(v) => iface_accounts__price_missing_count_details__to_json(v), None => Value::Null });
+    m.insert("priceProblemCount".into(), match (&p.price_problem_count) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("priceProblemCountDetails".into(), match (&p.price_problem_count_details) { Some(v) => iface_accounts__price_problem_count_details__to_json(v), None => Value::Null });
+    m.insert("priceUnavailableCount".into(), match (&p.price_unavailable_count) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("priceUnavailableCountDetails".into(), match (&p.price_unavailable_count_details) { Some(v) => iface_accounts__price_unavailable_count_details__to_json(v), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_accounts__no_price_count_details__to_json(p: &iface_accounts::NoPriceCountDetails) -> Value {
+    let mut m = Map::new();
+    m.insert("livePricingConfigIssueCount".into(), match (&p.live_pricing_config_issue_count) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("livePricingNotAvailableCount".into(), match (&p.live_pricing_not_available_count) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("livePricingNotTriggeredCount".into(), match (&p.live_pricing_not_triggered_count) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("livePricingOtherReasonCount".into(), match (&p.live_pricing_other_reason_count) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("livePricingTechnicalIssueCount".into(), match (&p.live_pricing_technical_issue_count) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_accounts__price_missing_count_details__to_json(p: &iface_accounts::PriceMissingCountDetails) -> Value {
+    let mut m = Map::new();
+    m.insert("bandwidthDepletedCount".into(), match (&p.bandwidth_depleted_count) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("cacheRateMissingCount".into(), match (&p.cache_rate_missing_count) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("itineraryBlockedCount".into(), match (&p.itinerary_blocked_count) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("livePricingErrorCount".into(), match (&p.live_pricing_error_count) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("livePricingNotSetupCount".into(), match (&p.live_pricing_not_setup_count) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("livePricingTimeoutCount".into(), match (&p.live_pricing_timeout_count) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_accounts__price_problem_count_details__to_json(p: &iface_accounts::PriceProblemCountDetails) -> Value {
+    let mut m = Map::new();
+    m.insert("hotelSuspendedCount".into(), match (&p.hotel_suspended_count) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("priceUnusuallyHighCount".into(), match (&p.price_unusually_high_count) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("priceUnusuallyLowCount".into(), match (&p.price_unusually_low_count) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("taxesAndFeesMissingCount".into(), match (&p.taxes_and_fees_missing_count) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_accounts__price_unavailable_count_details__to_json(p: &iface_accounts::PriceUnavailableCountDetails) -> Value {
+    let mut m = Map::new();
+    m.insert("participationNotLikelyCount".into(), match (&p.participation_not_likely_count) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("priceUnavailableCount".into(), match (&p.price_unavailable_count) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_accounts__query_property_performance_report_response__to_json(p: &iface_accounts::QueryPropertyPerformanceReportResponse) -> Value {
+    let mut m = Map::new();
+    m.insert("nextPageToken".into(), match (&p.next_page_token) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("results".into(), match (&p.results) { Some(v) => Value::Array((v).iter().map(|v| iface_accounts__property_performance_result__to_json(v)).collect()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_accounts__property_performance_result__to_json(p: &iface_accounts::PropertyPerformanceResult) -> Value {
+    let mut m = Map::new();
+    m.insert("adsClickCount".into(), match (&p.ads_click_count) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("adsClickthroughRate".into(), match (&p.ads_clickthrough_rate) { Some(v) => serde_json::Number::from_f64(*(v)).map(Value::Number).unwrap_or(Value::Null), None => Value::Null });
+    m.insert("adsImpressionCount".into(), match (&p.ads_impression_count) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("advanceBookingWindow".into(), match (&p.advance_booking_window) { Some(v) => Value::String(iface_accounts__property_performance_result_advance_booking_window_enum__to_str(v).into()), None => Value::Null });
+    m.insert("brand".into(), match (&p.brand) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("clickCount".into(), match (&p.click_count) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("clickthroughRate".into(), match (&p.clickthrough_rate) { Some(v) => serde_json::Number::from_f64(*(v)).map(Value::Number).unwrap_or(Value::Null), None => Value::Null });
+    m.insert("date".into(), match (&p.date) { Some(v) => iface_accounts__date__to_json(v), None => Value::Null });
+    m.insert("deviceType".into(), match (&p.device_type) { Some(v) => Value::String(iface_accounts__free_booking_links_result_device_type_enum__to_str(v).into()), None => Value::Null });
+    m.insert("highIntentUsers".into(), match (&p.high_intent_users) { Some(v) => Value::Bool(*(v)), None => Value::Null });
+    m.insert("impressionCount".into(), match (&p.impression_count) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("lengthOfStay".into(), match (&p.length_of_stay) { Some(v) => Value::String(iface_accounts__property_performance_result_length_of_stay_enum__to_str(v).into()), None => Value::Null });
+    m.insert("occupancy".into(), match (&p.occupancy) { Some(v) => Value::String(iface_accounts__property_performance_result_occupancy_enum__to_str(v).into()), None => Value::Null });
+    m.insert("partnerPropertyDisplayName".into(), match (&p.partner_property_display_name) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("partnerPropertyId".into(), match (&p.partner_property_id) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("propertyRegionCode".into(), match (&p.property_region_code) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("userRegionCode".into(), match (&p.user_region_code) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("vrWebsiteButtonClicks".into(), match (&p.vr_website_button_clicks) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_accounts__list_account_links_response__to_json(p: &iface_accounts::ListAccountLinksResponse) -> Value {
+    let mut m = Map::new();
+    m.insert("accountLinks".into(), match (&p.account_links) { Some(v) => Value::Array((v).iter().map(|v| iface_accounts__account_link__to_json(v)).collect()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_accounts__account_link__to_json(p: &iface_accounts::AccountLink) -> Value {
+    let mut m = Map::new();
+    m.insert("accountLinkTarget".into(), match (&p.account_link_target) { Some(v) => iface_accounts__account_link_target__to_json(v), None => Value::Null });
+    m.insert("googleAdsCustomerName".into(), match (&p.google_ads_customer_name) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("name".into(), match (&p.name) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("status".into(), match (&p.status) { Some(v) => Value::String(iface_accounts__account_link_status_enum__to_str(v).into()), None => Value::Null });
     Value::Object(m)
 }
 
 fn iface_accounts__account_link_target__to_json(p: &iface_accounts::AccountLinkTarget) -> Value {
     let mut m = Map::new();
-    m.insert("all_hotels".into(), match (&p.all_hotels) { Some(v) => Value::Bool(*(v)), None => Value::Null });
-    m.insert("hotel_list".into(), match (&p.hotel_list) { Some(v) => iface_accounts__hotel_list__to_json(v), None => Value::Null });
+    m.insert("allHotels".into(), match (&p.all_hotels) { Some(v) => Value::Bool(*(v)), None => Value::Null });
+    m.insert("hotelList".into(), match (&p.hotel_list) { Some(v) => iface_accounts__hotel_list__to_json(v), None => Value::Null });
     Value::Object(m)
 }
 
 fn iface_accounts__hotel_list__to_json(p: &iface_accounts::HotelList) -> Value {
     let mut m = Map::new();
-    m.insert("partner_hotel_ids".into(), match (&p.partner_hotel_ids) { Some(v) => Value::Array((v).iter().map(|v| Value::String((v).clone())).collect()), None => Value::Null });
+    m.insert("partnerHotelIds".into(), match (&p.partner_hotel_ids) { Some(v) => Value::Array((v).iter().map(|v| Value::String((v).clone())).collect()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_accounts__list_brands_response__to_json(p: &iface_accounts::ListBrandsResponse) -> Value {
+    let mut m = Map::new();
+    m.insert("brands".into(), match (&p.brands) { Some(v) => Value::Array((v).iter().map(|v| iface_accounts__brand__to_json(v)).collect()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_accounts__list_hotel_views_response__to_json(p: &iface_accounts::ListHotelViewsResponse) -> Value {
+    let mut m = Map::new();
+    m.insert("hotelViews".into(), match (&p.hotel_views) { Some(v) => Value::Array((v).iter().map(|v| iface_accounts__hotel_view__to_json(v)).collect()), None => Value::Null });
+    m.insert("nextPageToken".into(), match (&p.next_page_token) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_accounts__hotel_view__to_json(p: &iface_accounts::HotelView) -> Value {
+    let mut m = Map::new();
+    m.insert("dataIssueDetail".into(), match (&p.data_issue_detail) { Some(v) => Value::Array((v).iter().map(|v| iface_accounts__data_issue_detail__to_json(v)).collect()), None => Value::Null });
+    m.insert("dataIssues".into(), match (&p.data_issues) { Some(v) => Value::Array((v).iter().map(|v| Value::String(iface_accounts__data_issue_detail_data_issue_type_enum__to_str(v).into())).collect()), None => Value::Null });
+    m.insert("googleClusterId".into(), match (&p.google_cluster_id) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("googleHotelDisplayName".into(), match (&p.google_hotel_display_name) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("googleHotelId".into(), match (&p.google_hotel_id) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("liveOnGoogle".into(), match (&p.live_on_google) { Some(v) => Value::Bool(*(v)), None => Value::Null });
+    m.insert("matchStatus".into(), match (&p.match_status) { Some(v) => Value::String(iface_accounts__hotel_view_match_status_enum__to_str(v).into()), None => Value::Null });
+    m.insert("overclusteredPartnerHotelIds".into(), match (&p.overclustered_partner_hotel_ids) { Some(v) => Value::Array((v).iter().map(|v| Value::String((v).clone())).collect()), None => Value::Null });
+    m.insert("partnerHotelDisplayName".into(), match (&p.partner_hotel_display_name) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("partnerHotelId".into(), match (&p.partner_hotel_id) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("primaryOverclusteredPartnerHotelId".into(), match (&p.primary_overclustered_partner_hotel_id) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("propertyDetails".into(), match (&p.property_details) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_accounts__data_issue_detail__to_json(p: &iface_accounts::DataIssueDetail) -> Value {
+    let mut m = Map::new();
+    m.insert("dataIssueSeverity".into(), match (&p.data_issue_severity) { Some(v) => Value::String(iface_accounts__data_issue_detail_data_issue_severity_enum__to_str(v).into()), None => Value::Null });
+    m.insert("dataIssueType".into(), match (&p.data_issue_type) { Some(v) => Value::String(iface_accounts__data_issue_detail_data_issue_type_enum__to_str(v).into()), None => Value::Null });
+    m.insert("isSelfResolving".into(), match (&p.is_self_resolving) { Some(v) => Value::Bool(*(v)), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_accounts__summarize_hotel_views_response__to_json(p: &iface_accounts::SummarizeHotelViewsResponse) -> Value {
+    let mut m = Map::new();
+    m.insert("lastFeedSubmissionTime".into(), match (&p.last_feed_submission_time) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("lastManifestUpdateTime".into(), match (&p.last_manifest_update_time) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("liveOnGooglePropertyCount".into(), match (&p.live_on_google_property_count) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("matchedPropertyCount".into(), match (&p.matched_property_count) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("overclusteredPropertyCount".into(), match (&p.overclustered_property_count) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("overclusteredPropertyWithErrorsCount".into(), match (&p.overclustered_property_with_errors_count) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("unmatchedPropertyCount".into(), match (&p.unmatched_property_count) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("unmatchedPropertyWithErrorsCount".into(), match (&p.unmatched_property_with_errors_count) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_accounts__list_icons_response__to_json(p: &iface_accounts::ListIconsResponse) -> Value {
+    let mut m = Map::new();
+    m.insert("icons".into(), match (&p.icons) { Some(v) => Value::Array((v).iter().map(|v| iface_accounts__icon__to_json(v)).collect()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_accounts__icon__to_json(p: &iface_accounts::Icon) -> Value {
+    let mut m = Map::new();
+    m.insert("disapprovalReasons".into(), match (&p.disapproval_reasons) { Some(v) => Value::Array((v).iter().map(|v| Value::String(iface_accounts__brand_icon_disapproval_reasons_item_enum__to_str(v).into())).collect()), None => Value::Null });
+    m.insert("iconUri".into(), match (&p.icon_uri) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("imageData".into(), match (&p.image_data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("name".into(), match (&p.name) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("reference".into(), match (&p.reference) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("state".into(), match (&p.state) { Some(v) => Value::String(iface_accounts__icon_state_enum__to_str(v).into()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_accounts__verify_listings_response__to_json(p: &iface_accounts::VerifyListingsResponse) -> Value {
+    let mut m = Map::new();
+    m.insert("parsedListing".into(), match (&p.parsed_listing) { Some(v) => iface_accounts__parsed_listing__to_json(v), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_accounts__parsed_listing__to_json(p: &iface_accounts::ParsedListing) -> Value {
+    let mut m = Map::new();
+    m.insert("brand".into(), match (&p.brand) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("category".into(), match (&p.category) { Some(v) => Value::Array((v).iter().map(|v| iface_accounts__localized_text__to_json(v)).collect()), None => Value::Null });
+    m.insert("dataIssueDetail".into(), match (&p.data_issue_detail) { Some(v) => Value::Array((v).iter().map(|v| iface_accounts__data_issue_detail__to_json(v)).collect()), None => Value::Null });
+    m.insert("description".into(), match (&p.description) { Some(v) => Value::Array((v).iter().map(|v| iface_accounts__localized_text__to_json(v)).collect()), None => Value::Null });
+    m.insert("image".into(), match (&p.image) { Some(v) => Value::Array((v).iter().map(|v| iface_accounts__image__to_json(v)).collect()), None => Value::Null });
+    m.insert("imprecisionRadiusMeters".into(), match (&p.imprecision_radius_meters) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("isServed".into(), match (&p.is_served) { Some(v) => Value::Bool(*(v)), None => Value::Null });
+    m.insert("listingName".into(), match (&p.listing_name) { Some(v) => Value::Array((v).iter().map(|v| iface_accounts__localized_text__to_json(v)).collect()), None => Value::Null });
+    m.insert("location".into(), match (&p.location) { Some(v) => iface_accounts__lat_lng__to_json(v), None => Value::Null });
+    m.insert("partnerListId".into(), match (&p.partner_list_id) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("regionCode".into(), match (&p.region_code) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("review".into(), match (&p.review) { Some(v) => Value::Array((v).iter().map(|v| iface_accounts__review__to_json(v)).collect()), None => Value::Null });
+    m.insert("unitAttributes".into(), match (&p.unit_attributes) { Some(v) => iface_accounts__parsed_listing_unit_attributes__to_json(v), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_accounts__image__to_json(p: &iface_accounts::Image) -> Value {
+    let mut m = Map::new();
+    m.insert("galleryUri".into(), match (&p.gallery_uri) { Some(v) => Value::Array((v).iter().map(|v| iface_accounts__localized_text__to_json(v)).collect()), None => Value::Null });
+    m.insert("title".into(), match (&p.title) { Some(v) => Value::Array((v).iter().map(|v| iface_accounts__localized_text__to_json(v)).collect()), None => Value::Null });
+    m.insert("uri".into(), match (&p.uri) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_accounts__lat_lng__to_json(p: &iface_accounts::LatLng) -> Value {
+    let mut m = Map::new();
+    m.insert("latitude".into(), match (&p.latitude) { Some(v) => serde_json::Number::from_f64(*(v)).map(Value::Number).unwrap_or(Value::Null), None => Value::Null });
+    m.insert("longitude".into(), match (&p.longitude) { Some(v) => serde_json::Number::from_f64(*(v)).map(Value::Number).unwrap_or(Value::Null), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_accounts__review__to_json(p: &iface_accounts::Review) -> Value {
+    let mut m = Map::new();
+    m.insert("author".into(), match (&p.author) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("body".into(), match (&p.body) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("languageCode".into(), match (&p.language_code) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("link".into(), match (&p.link) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("rating".into(), match (&p.rating) { Some(v) => Value::Array((v).iter().map(|v| iface_accounts__rating__to_json(v)).collect()), None => Value::Null });
+    m.insert("reviewTime".into(), match (&p.review_time) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("title".into(), match (&p.title) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("type".into(), match (&p.type_op) { Some(v) => Value::String(iface_accounts__review_type_op_enum__to_str(v).into()), None => Value::Null });
+    m.insert("visitTime".into(), match (&p.visit_time) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_accounts__rating__to_json(p: &iface_accounts::Rating) -> Value {
+    let mut m = Map::new();
+    m.insert("ratingScale".into(), match (&p.rating_scale) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("score".into(), match (&p.score) { Some(v) => serde_json::Number::from_f64(*(v)).map(Value::Number).unwrap_or(Value::Null), None => Value::Null });
+    m.insert("type".into(), match (&p.type_op) { Some(v) => Value::String(iface_accounts__rating_type_op_enum__to_str(v).into()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_accounts__parsed_listing_unit_attributes__to_json(p: &iface_accounts::ParsedListingUnitAttributes) -> Value {
+    let mut m = Map::new();
+    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_accounts__list_price_accuracy_views_response__to_json(p: &iface_accounts::ListPriceAccuracyViewsResponse) -> Value {
+    let mut m = Map::new();
+    m.insert("priceAccuracyViews".into(), match (&p.price_accuracy_views) { Some(v) => Value::Array((v).iter().map(|v| iface_accounts__price_accuracy_view__to_json(v)).collect()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_accounts__price_accuracy_view__to_json(p: &iface_accounts::PriceAccuracyView) -> Value {
+    let mut m = Map::new();
+    m.insert("name".into(), match (&p.name) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("results".into(), match (&p.results) { Some(v) => Value::Array((v).iter().map(|v| iface_accounts__price_accuracy_row__to_json(v)).collect()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_accounts__price_accuracy_row__to_json(p: &iface_accounts::PriceAccuracyRow) -> Value {
+    let mut m = Map::new();
+    m.insert("adultOccupancy".into(), match (&p.adult_occupancy) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("affectsScore".into(), match (&p.affects_score) { Some(v) => Value::Bool(*(v)), None => Value::Null });
+    m.insert("cachedPriceRecord".into(), match (&p.cached_price_record) { Some(v) => iface_accounts__price_record__to_json(v), None => Value::Null });
+    m.insert("checkinDate".into(), match (&p.checkin_date) { Some(v) => iface_accounts__date__to_json(v), None => Value::Null });
+    m.insert("childOccupancy".into(), match (&p.child_occupancy) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("correctionTime".into(), match (&p.correction_time) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("deviceType".into(), match (&p.device_type) { Some(v) => Value::String(iface_accounts__free_booking_links_result_device_type_enum__to_str(v).into()), None => Value::Null });
+    m.insert("fetchedPriceRecord".into(), match (&p.fetched_price_record) { Some(v) => iface_accounts__price_record__to_json(v), None => Value::Null });
+    m.insert("finalDomain".into(), match (&p.final_domain) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("hotel".into(), match (&p.hotel) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("hotelCountryCode".into(), match (&p.hotel_country_code) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("lengthOfStayDays".into(), match (&p.length_of_stay_days) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("mismatchReason".into(), match (&p.mismatch_reason) { Some(v) => Value::String(iface_accounts__price_accuracy_row_mismatch_reason_enum__to_str(v).into()), None => Value::Null });
+    m.insert("rateRuleId".into(), match (&p.rate_rule_id) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("signalSource".into(), match (&p.signal_source) { Some(v) => Value::String(iface_accounts__price_accuracy_row_signal_source_enum__to_str(v).into()), None => Value::Null });
+    m.insert("url".into(), match (&p.url) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("userRegionCode".into(), match (&p.user_region_code) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_accounts__price_record__to_json(p: &iface_accounts::PriceRecord) -> Value {
+    let mut m = Map::new();
+    m.insert("basePrice".into(), match (&p.base_price) { Some(v) => serde_json::Number::from_f64(*(v)).map(Value::Number).unwrap_or(Value::Null), None => Value::Null });
+    m.insert("currencyCode".into(), match (&p.currency_code) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("taxesAndFees".into(), match (&p.taxes_and_fees) { Some(v) => serde_json::Number::from_f64(*(v)).map(Value::Number).unwrap_or(Value::Null), None => Value::Null });
+    m.insert("time".into(), match (&p.time) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_accounts__summarize_price_accuracy_response__to_json(p: &iface_accounts::SummarizePriceAccuracyResponse) -> Value {
+    let mut m = Map::new();
+    m.insert("currentBookOnGoogleScore".into(), match (&p.current_book_on_google_score) { Some(v) => Value::String(iface_accounts__summarize_price_accuracy_response_current_book_on_google_score_enum__to_str(v).into()), None => Value::Null });
+    m.insert("currentOverallScore".into(), match (&p.current_overall_score) { Some(v) => Value::String(iface_accounts__summarize_price_accuracy_response_current_book_on_google_score_enum__to_str(v).into()), None => Value::Null });
+    m.insert("currentScore".into(), match (&p.current_score) { Some(v) => Value::String(iface_accounts__summarize_price_accuracy_response_current_book_on_google_score_enum__to_str(v).into()), None => Value::Null });
+    m.insert("currentWebsiteScore".into(), match (&p.current_website_score) { Some(v) => Value::String(iface_accounts__summarize_price_accuracy_response_current_book_on_google_score_enum__to_str(v).into()), None => Value::Null });
+    m.insert("predictedBookOnGoogleScore".into(), match (&p.predicted_book_on_google_score) { Some(v) => Value::String(iface_accounts__summarize_price_accuracy_response_current_book_on_google_score_enum__to_str(v).into()), None => Value::Null });
+    m.insert("predictedOverallScore".into(), match (&p.predicted_overall_score) { Some(v) => Value::String(iface_accounts__summarize_price_accuracy_response_current_book_on_google_score_enum__to_str(v).into()), None => Value::Null });
+    m.insert("predictedScore".into(), match (&p.predicted_score) { Some(v) => Value::String(iface_accounts__summarize_price_accuracy_response_current_book_on_google_score_enum__to_str(v).into()), None => Value::Null });
+    m.insert("predictedWebsiteScore".into(), match (&p.predicted_website_score) { Some(v) => Value::String(iface_accounts__summarize_price_accuracy_response_current_book_on_google_score_enum__to_str(v).into()), None => Value::Null });
+    m.insert("updateTime".into(), match (&p.update_time) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_accounts__list_price_coverage_views_response__to_json(p: &iface_accounts::ListPriceCoverageViewsResponse) -> Value {
+    let mut m = Map::new();
+    m.insert("priceCoverageViews".into(), match (&p.price_coverage_views) { Some(v) => Value::Array((v).iter().map(|v| iface_accounts__price_coverage_view__to_json(v)).collect()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_accounts__price_coverage_view__to_json(p: &iface_accounts::PriceCoverageView) -> Value {
+    let mut m = Map::new();
+    m.insert("calculationDate".into(), match (&p.calculation_date) { Some(v) => iface_accounts__date__to_json(v), None => Value::Null });
+    m.insert("matchedPropertyCount".into(), match (&p.matched_property_count) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("priceCoverageBinaryPercent".into(), match (&p.price_coverage_binary_percent) { Some(v) => serde_json::Number::from_f64(*(v)).map(Value::Number).unwrap_or(Value::Null), None => Value::Null });
+    m.insert("priceCoverageBuckets".into(), match (&p.price_coverage_buckets) { Some(v) => Value::Array((v).iter().map(|v| iface_accounts__price_coverage_bucket__to_json(v)).collect()), None => Value::Null });
+    m.insert("priceCoveragePercent".into(), match (&p.price_coverage_percent) { Some(v) => serde_json::Number::from_f64(*(v)).map(Value::Number).unwrap_or(Value::Null), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_accounts__price_coverage_bucket__to_json(p: &iface_accounts::PriceCoverageBucket) -> Value {
+    let mut m = Map::new();
+    m.insert("advanceBookingWindowRange".into(), match (&p.advance_booking_window_range) { Some(v) => Value::String(iface_accounts__price_coverage_bucket_advance_booking_window_range_enum__to_str(v).into()), None => Value::Null });
+    m.insert("availablePriceCount".into(), match (&p.available_price_count) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("lengthOfStayRange".into(), match (&p.length_of_stay_range) { Some(v) => Value::String(iface_accounts__price_coverage_bucket_length_of_stay_range_enum__to_str(v).into()), None => Value::Null });
+    m.insert("priceCoveragePercent".into(), match (&p.price_coverage_percent) { Some(v) => serde_json::Number::from_f64(*(v)).map(Value::Number).unwrap_or(Value::Null), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_accounts__list_reconciliation_reports_response__to_json(p: &iface_accounts::ListReconciliationReportsResponse) -> Value {
+    let mut m = Map::new();
+    m.insert("reconciliationReports".into(), match (&p.reconciliation_reports) { Some(v) => Value::Array((v).iter().map(|v| iface_accounts__reconciliation_report__to_json(v)).collect()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_accounts__create_reconciliation_report_response__to_json(p: &iface_accounts::CreateReconciliationReportResponse) -> Value {
+    let mut m = Map::new();
+    m.insert("issues".into(), match (&p.issues) { Some(v) => Value::Array((v).iter().map(|v| iface_accounts__reconciliation_report_validation_issue__to_json(v)).collect()), None => Value::Null });
+    m.insert("reconciliationReport".into(), match (&p.reconciliation_report) { Some(v) => iface_accounts__reconciliation_report__to_json(v), None => Value::Null });
+    m.insert("successfulRecordCount".into(), match (&p.successful_record_count) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_accounts__reconciliation_report_validation_issue__to_json(p: &iface_accounts::ReconciliationReportValidationIssue) -> Value {
+    let mut m = Map::new();
+    m.insert("description".into(), match (&p.description) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("fieldName".into(), match (&p.field_name) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("lineNum".into(), match (&p.line_num) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_accounts__validate_reconciliation_report_response__to_json(p: &iface_accounts::ValidateReconciliationReportResponse) -> Value {
+    let mut m = Map::new();
+    m.insert("issues".into(), match (&p.issues) { Some(v) => Value::Array((v).iter().map(|v| iface_accounts__reconciliation_report_validation_issue__to_json(v)).collect()), None => Value::Null });
+    m.insert("successfulRecordCount".into(), match (&p.successful_record_count) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
     Value::Object(m)
 }
 
 fn iface_accounts__travelpartner_accounts_hotels_set_live_on_google_params__to_json(p: &iface_accounts::TravelpartnerAccountsHotelsSetLiveOnGoogleParams) -> Value {
     let mut m = Map::new();
+    m.insert("xgafv".into(), match (&p.xgafv) { Some(v) => Value::String(iface_accounts__travelpartner_accounts_hotels_set_live_on_google_xgafv_enum__to_str(v).into()), None => Value::Null });
+    m.insert("access_token".into(), match (&p.access_token) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("alt".into(), match (&p.alt) { Some(v) => Value::String(iface_accounts__travelpartner_accounts_hotels_set_live_on_google_alt_enum__to_str(v).into()), None => Value::Null });
+    m.insert("callback".into(), match (&p.callback) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("fields".into(), match (&p.fields) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("key".into(), match (&p.key) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("oauth_token".into(), match (&p.oauth_token) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("pretty_print".into(), match (&p.pretty_print) { Some(v) => Value::Bool(*(v)), None => Value::Null });
+    m.insert("quota_user".into(), match (&p.quota_user) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("upload_protocol".into(), match (&p.upload_protocol) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("upload_type".into(), match (&p.upload_type) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("account".into(), Value::String((&p.account).clone()));
     m.insert("live_on_google".into(), match (&p.live_on_google) { Some(v) => Value::Bool(*(v)), None => Value::Null });
     m.insert("partner_hotel_ids".into(), match (&p.partner_hotel_ids) { Some(v) => Value::Array((v).iter().map(|v| Value::String((v).clone())).collect()), None => Value::Null });
@@ -667,6 +1619,17 @@ fn iface_accounts__travelpartner_accounts_hotels_set_live_on_google_params__to_j
 
 fn iface_accounts__travelpartner_accounts_reconciliation_reports_get_params__to_json(p: &iface_accounts::TravelpartnerAccountsReconciliationReportsGetParams) -> Value {
     let mut m = Map::new();
+    m.insert("xgafv".into(), match (&p.xgafv) { Some(v) => Value::String(iface_accounts__travelpartner_accounts_hotels_set_live_on_google_xgafv_enum__to_str(v).into()), None => Value::Null });
+    m.insert("access_token".into(), match (&p.access_token) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("alt".into(), match (&p.alt) { Some(v) => Value::String(iface_accounts__travelpartner_accounts_hotels_set_live_on_google_alt_enum__to_str(v).into()), None => Value::Null });
+    m.insert("callback".into(), match (&p.callback) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("fields".into(), match (&p.fields) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("key".into(), match (&p.key) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("oauth_token".into(), match (&p.oauth_token) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("pretty_print".into(), match (&p.pretty_print) { Some(v) => Value::Bool(*(v)), None => Value::Null });
+    m.insert("quota_user".into(), match (&p.quota_user) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("upload_protocol".into(), match (&p.upload_protocol) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("upload_type".into(), match (&p.upload_type) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("name".into(), Value::String((&p.name).clone()));
     m.insert("include_matched_prices".into(), match (&p.include_matched_prices) { Some(v) => Value::Bool(*(v)), None => Value::Null });
     m.insert("include_non_scoring".into(), match (&p.include_non_scoring) { Some(v) => Value::Bool(*(v)), None => Value::Null });
@@ -676,6 +1639,17 @@ fn iface_accounts__travelpartner_accounts_reconciliation_reports_get_params__to_
 
 fn iface_accounts__travelpartner_accounts_brands_patch_params__to_json(p: &iface_accounts::TravelpartnerAccountsBrandsPatchParams) -> Value {
     let mut m = Map::new();
+    m.insert("xgafv".into(), match (&p.xgafv) { Some(v) => Value::String(iface_accounts__travelpartner_accounts_hotels_set_live_on_google_xgafv_enum__to_str(v).into()), None => Value::Null });
+    m.insert("access_token".into(), match (&p.access_token) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("alt".into(), match (&p.alt) { Some(v) => Value::String(iface_accounts__travelpartner_accounts_hotels_set_live_on_google_alt_enum__to_str(v).into()), None => Value::Null });
+    m.insert("callback".into(), match (&p.callback) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("fields".into(), match (&p.fields) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("key".into(), match (&p.key) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("oauth_token".into(), match (&p.oauth_token) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("pretty_print".into(), match (&p.pretty_print) { Some(v) => Value::Bool(*(v)), None => Value::Null });
+    m.insert("quota_user".into(), match (&p.quota_user) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("upload_protocol".into(), match (&p.upload_protocol) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("upload_type".into(), match (&p.upload_type) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("name".into(), Value::String((&p.name).clone()));
     m.insert("allow_missing".into(), match (&p.allow_missing) { Some(v) => Value::Bool(*(v)), None => Value::Null });
     m.insert("update_mask".into(), match (&p.update_mask) { Some(v) => Value::String((v).clone()), None => Value::Null });
@@ -688,6 +1662,7 @@ fn iface_accounts__travelpartner_accounts_brands_patch_params__to_json(p: &iface
     m.insert("icon".into(), match (&p.icon) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("icon_disapproval_reasons".into(), match (&p.icon_disapproval_reasons) { Some(v) => Value::Array((v).iter().map(|v| Value::String(iface_accounts__brand_icon_disapproval_reasons_item_enum__to_str(v).into())).collect()), None => Value::Null });
     m.insert("icon_state".into(), match (&p.icon_state) { Some(v) => Value::String(iface_accounts__brand_display_name_state_enum__to_str(v).into()), None => Value::Null });
+    m.insert("name_v2".into(), match (&p.name_v2) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("property_count".into(), match (&p.property_count) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("submitted_display_names".into(), match (&p.submitted_display_names) { Some(v) => Value::Array((v).iter().map(|v| iface_accounts__localized_text__to_json(v)).collect()), None => Value::Null });
     m.insert("submitted_icon".into(), match (&p.submitted_icon) { Some(v) => Value::String((v).clone()), None => Value::Null });
@@ -696,12 +1671,34 @@ fn iface_accounts__travelpartner_accounts_brands_patch_params__to_json(p: &iface
 
 fn iface_accounts__travelpartner_accounts_account_links_delete_params__to_json(p: &iface_accounts::TravelpartnerAccountsAccountLinksDeleteParams) -> Value {
     let mut m = Map::new();
+    m.insert("xgafv".into(), match (&p.xgafv) { Some(v) => Value::String(iface_accounts__travelpartner_accounts_hotels_set_live_on_google_xgafv_enum__to_str(v).into()), None => Value::Null });
+    m.insert("access_token".into(), match (&p.access_token) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("alt".into(), match (&p.alt) { Some(v) => Value::String(iface_accounts__travelpartner_accounts_hotels_set_live_on_google_alt_enum__to_str(v).into()), None => Value::Null });
+    m.insert("callback".into(), match (&p.callback) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("fields".into(), match (&p.fields) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("key".into(), match (&p.key) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("oauth_token".into(), match (&p.oauth_token) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("pretty_print".into(), match (&p.pretty_print) { Some(v) => Value::Bool(*(v)), None => Value::Null });
+    m.insert("quota_user".into(), match (&p.quota_user) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("upload_protocol".into(), match (&p.upload_protocol) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("upload_type".into(), match (&p.upload_type) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("name".into(), Value::String((&p.name).clone()));
     Value::Object(m)
 }
 
 fn iface_accounts__travelpartner_accounts_free_booking_links_report_views_query_params__to_json(p: &iface_accounts::TravelpartnerAccountsFreeBookingLinksReportViewsQueryParams) -> Value {
     let mut m = Map::new();
+    m.insert("xgafv".into(), match (&p.xgafv) { Some(v) => Value::String(iface_accounts__travelpartner_accounts_hotels_set_live_on_google_xgafv_enum__to_str(v).into()), None => Value::Null });
+    m.insert("access_token".into(), match (&p.access_token) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("alt".into(), match (&p.alt) { Some(v) => Value::String(iface_accounts__travelpartner_accounts_hotels_set_live_on_google_alt_enum__to_str(v).into()), None => Value::Null });
+    m.insert("callback".into(), match (&p.callback) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("fields".into(), match (&p.fields) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("key".into(), match (&p.key) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("oauth_token".into(), match (&p.oauth_token) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("pretty_print".into(), match (&p.pretty_print) { Some(v) => Value::Bool(*(v)), None => Value::Null });
+    m.insert("quota_user".into(), match (&p.quota_user) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("upload_protocol".into(), match (&p.upload_protocol) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("upload_type".into(), match (&p.upload_type) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("name".into(), Value::String((&p.name).clone()));
     m.insert("aggregate_by".into(), match (&p.aggregate_by) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("filter".into(), match (&p.filter) { Some(v) => Value::String((v).clone()), None => Value::Null });
@@ -712,6 +1709,17 @@ fn iface_accounts__travelpartner_accounts_free_booking_links_report_views_query_
 
 fn iface_accounts__travelpartner_accounts_participation_report_views_query_params__to_json(p: &iface_accounts::TravelpartnerAccountsParticipationReportViewsQueryParams) -> Value {
     let mut m = Map::new();
+    m.insert("xgafv".into(), match (&p.xgafv) { Some(v) => Value::String(iface_accounts__travelpartner_accounts_hotels_set_live_on_google_xgafv_enum__to_str(v).into()), None => Value::Null });
+    m.insert("access_token".into(), match (&p.access_token) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("alt".into(), match (&p.alt) { Some(v) => Value::String(iface_accounts__travelpartner_accounts_hotels_set_live_on_google_alt_enum__to_str(v).into()), None => Value::Null });
+    m.insert("callback".into(), match (&p.callback) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("fields".into(), match (&p.fields) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("key".into(), match (&p.key) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("oauth_token".into(), match (&p.oauth_token) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("pretty_print".into(), match (&p.pretty_print) { Some(v) => Value::Bool(*(v)), None => Value::Null });
+    m.insert("quota_user".into(), match (&p.quota_user) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("upload_protocol".into(), match (&p.upload_protocol) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("upload_type".into(), match (&p.upload_type) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("name".into(), Value::String((&p.name).clone()));
     m.insert("aggregate_by".into(), match (&p.aggregate_by) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("filter".into(), match (&p.filter) { Some(v) => Value::String((v).clone()), None => Value::Null });
@@ -722,6 +1730,17 @@ fn iface_accounts__travelpartner_accounts_participation_report_views_query_param
 
 fn iface_accounts__travelpartner_accounts_property_performance_report_views_query_params__to_json(p: &iface_accounts::TravelpartnerAccountsPropertyPerformanceReportViewsQueryParams) -> Value {
     let mut m = Map::new();
+    m.insert("xgafv".into(), match (&p.xgafv) { Some(v) => Value::String(iface_accounts__travelpartner_accounts_hotels_set_live_on_google_xgafv_enum__to_str(v).into()), None => Value::Null });
+    m.insert("access_token".into(), match (&p.access_token) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("alt".into(), match (&p.alt) { Some(v) => Value::String(iface_accounts__travelpartner_accounts_hotels_set_live_on_google_alt_enum__to_str(v).into()), None => Value::Null });
+    m.insert("callback".into(), match (&p.callback) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("fields".into(), match (&p.fields) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("key".into(), match (&p.key) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("oauth_token".into(), match (&p.oauth_token) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("pretty_print".into(), match (&p.pretty_print) { Some(v) => Value::Bool(*(v)), None => Value::Null });
+    m.insert("quota_user".into(), match (&p.quota_user) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("upload_protocol".into(), match (&p.upload_protocol) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("upload_type".into(), match (&p.upload_type) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("name".into(), Value::String((&p.name).clone()));
     m.insert("aggregate_by".into(), match (&p.aggregate_by) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("filter".into(), match (&p.filter) { Some(v) => Value::String((v).clone()), None => Value::Null });
@@ -732,12 +1751,34 @@ fn iface_accounts__travelpartner_accounts_property_performance_report_views_quer
 
 fn iface_accounts__travelpartner_accounts_account_links_list_params__to_json(p: &iface_accounts::TravelpartnerAccountsAccountLinksListParams) -> Value {
     let mut m = Map::new();
+    m.insert("xgafv".into(), match (&p.xgafv) { Some(v) => Value::String(iface_accounts__travelpartner_accounts_hotels_set_live_on_google_xgafv_enum__to_str(v).into()), None => Value::Null });
+    m.insert("access_token".into(), match (&p.access_token) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("alt".into(), match (&p.alt) { Some(v) => Value::String(iface_accounts__travelpartner_accounts_hotels_set_live_on_google_alt_enum__to_str(v).into()), None => Value::Null });
+    m.insert("callback".into(), match (&p.callback) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("fields".into(), match (&p.fields) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("key".into(), match (&p.key) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("oauth_token".into(), match (&p.oauth_token) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("pretty_print".into(), match (&p.pretty_print) { Some(v) => Value::Bool(*(v)), None => Value::Null });
+    m.insert("quota_user".into(), match (&p.quota_user) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("upload_protocol".into(), match (&p.upload_protocol) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("upload_type".into(), match (&p.upload_type) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("parent".into(), Value::String((&p.parent).clone()));
     Value::Object(m)
 }
 
 fn iface_accounts__travelpartner_accounts_account_links_create_params__to_json(p: &iface_accounts::TravelpartnerAccountsAccountLinksCreateParams) -> Value {
     let mut m = Map::new();
+    m.insert("xgafv".into(), match (&p.xgafv) { Some(v) => Value::String(iface_accounts__travelpartner_accounts_hotels_set_live_on_google_xgafv_enum__to_str(v).into()), None => Value::Null });
+    m.insert("access_token".into(), match (&p.access_token) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("alt".into(), match (&p.alt) { Some(v) => Value::String(iface_accounts__travelpartner_accounts_hotels_set_live_on_google_alt_enum__to_str(v).into()), None => Value::Null });
+    m.insert("callback".into(), match (&p.callback) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("fields".into(), match (&p.fields) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("key".into(), match (&p.key) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("oauth_token".into(), match (&p.oauth_token) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("pretty_print".into(), match (&p.pretty_print) { Some(v) => Value::Bool(*(v)), None => Value::Null });
+    m.insert("quota_user".into(), match (&p.quota_user) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("upload_protocol".into(), match (&p.upload_protocol) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("upload_type".into(), match (&p.upload_type) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("parent".into(), Value::String((&p.parent).clone()));
     m.insert("account_link_target".into(), match (&p.account_link_target) { Some(v) => iface_accounts__account_link_target__to_json(v), None => Value::Null });
     m.insert("google_ads_customer_name".into(), match (&p.google_ads_customer_name) { Some(v) => Value::String((v).clone()), None => Value::Null });
@@ -748,12 +1789,34 @@ fn iface_accounts__travelpartner_accounts_account_links_create_params__to_json(p
 
 fn iface_accounts__travelpartner_accounts_brands_list_params__to_json(p: &iface_accounts::TravelpartnerAccountsBrandsListParams) -> Value {
     let mut m = Map::new();
+    m.insert("xgafv".into(), match (&p.xgafv) { Some(v) => Value::String(iface_accounts__travelpartner_accounts_hotels_set_live_on_google_xgafv_enum__to_str(v).into()), None => Value::Null });
+    m.insert("access_token".into(), match (&p.access_token) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("alt".into(), match (&p.alt) { Some(v) => Value::String(iface_accounts__travelpartner_accounts_hotels_set_live_on_google_alt_enum__to_str(v).into()), None => Value::Null });
+    m.insert("callback".into(), match (&p.callback) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("fields".into(), match (&p.fields) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("key".into(), match (&p.key) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("oauth_token".into(), match (&p.oauth_token) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("pretty_print".into(), match (&p.pretty_print) { Some(v) => Value::Bool(*(v)), None => Value::Null });
+    m.insert("quota_user".into(), match (&p.quota_user) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("upload_protocol".into(), match (&p.upload_protocol) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("upload_type".into(), match (&p.upload_type) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("parent".into(), Value::String((&p.parent).clone()));
     Value::Object(m)
 }
 
 fn iface_accounts__travelpartner_accounts_brands_create_params__to_json(p: &iface_accounts::TravelpartnerAccountsBrandsCreateParams) -> Value {
     let mut m = Map::new();
+    m.insert("xgafv".into(), match (&p.xgafv) { Some(v) => Value::String(iface_accounts__travelpartner_accounts_hotels_set_live_on_google_xgafv_enum__to_str(v).into()), None => Value::Null });
+    m.insert("access_token".into(), match (&p.access_token) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("alt".into(), match (&p.alt) { Some(v) => Value::String(iface_accounts__travelpartner_accounts_hotels_set_live_on_google_alt_enum__to_str(v).into()), None => Value::Null });
+    m.insert("callback".into(), match (&p.callback) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("fields".into(), match (&p.fields) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("key".into(), match (&p.key) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("oauth_token".into(), match (&p.oauth_token) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("pretty_print".into(), match (&p.pretty_print) { Some(v) => Value::Bool(*(v)), None => Value::Null });
+    m.insert("quota_user".into(), match (&p.quota_user) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("upload_protocol".into(), match (&p.upload_protocol) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("upload_type".into(), match (&p.upload_type) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("parent".into(), Value::String((&p.parent).clone()));
     m.insert("brand_id".into(), match (&p.brand_id) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("active_display_names".into(), match (&p.active_display_names) { Some(v) => Value::Array((v).iter().map(|v| iface_accounts__localized_text__to_json(v)).collect()), None => Value::Null });
@@ -774,6 +1837,17 @@ fn iface_accounts__travelpartner_accounts_brands_create_params__to_json(p: &ifac
 
 fn iface_accounts__travelpartner_accounts_hotel_views_list_params__to_json(p: &iface_accounts::TravelpartnerAccountsHotelViewsListParams) -> Value {
     let mut m = Map::new();
+    m.insert("xgafv".into(), match (&p.xgafv) { Some(v) => Value::String(iface_accounts__travelpartner_accounts_hotels_set_live_on_google_xgafv_enum__to_str(v).into()), None => Value::Null });
+    m.insert("access_token".into(), match (&p.access_token) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("alt".into(), match (&p.alt) { Some(v) => Value::String(iface_accounts__travelpartner_accounts_hotels_set_live_on_google_alt_enum__to_str(v).into()), None => Value::Null });
+    m.insert("callback".into(), match (&p.callback) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("fields".into(), match (&p.fields) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("key".into(), match (&p.key) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("oauth_token".into(), match (&p.oauth_token) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("pretty_print".into(), match (&p.pretty_print) { Some(v) => Value::Bool(*(v)), None => Value::Null });
+    m.insert("quota_user".into(), match (&p.quota_user) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("upload_protocol".into(), match (&p.upload_protocol) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("upload_type".into(), match (&p.upload_type) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("parent".into(), Value::String((&p.parent).clone()));
     m.insert("filter".into(), match (&p.filter) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("page_size".into(), match (&p.page_size) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
@@ -783,18 +1857,51 @@ fn iface_accounts__travelpartner_accounts_hotel_views_list_params__to_json(p: &i
 
 fn iface_accounts__travelpartner_accounts_hotel_views_summarize_params__to_json(p: &iface_accounts::TravelpartnerAccountsHotelViewsSummarizeParams) -> Value {
     let mut m = Map::new();
+    m.insert("xgafv".into(), match (&p.xgafv) { Some(v) => Value::String(iface_accounts__travelpartner_accounts_hotels_set_live_on_google_xgafv_enum__to_str(v).into()), None => Value::Null });
+    m.insert("access_token".into(), match (&p.access_token) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("alt".into(), match (&p.alt) { Some(v) => Value::String(iface_accounts__travelpartner_accounts_hotels_set_live_on_google_alt_enum__to_str(v).into()), None => Value::Null });
+    m.insert("callback".into(), match (&p.callback) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("fields".into(), match (&p.fields) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("key".into(), match (&p.key) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("oauth_token".into(), match (&p.oauth_token) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("pretty_print".into(), match (&p.pretty_print) { Some(v) => Value::Bool(*(v)), None => Value::Null });
+    m.insert("quota_user".into(), match (&p.quota_user) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("upload_protocol".into(), match (&p.upload_protocol) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("upload_type".into(), match (&p.upload_type) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("parent".into(), Value::String((&p.parent).clone()));
     Value::Object(m)
 }
 
 fn iface_accounts__travelpartner_accounts_icons_list_params__to_json(p: &iface_accounts::TravelpartnerAccountsIconsListParams) -> Value {
     let mut m = Map::new();
+    m.insert("xgafv".into(), match (&p.xgafv) { Some(v) => Value::String(iface_accounts__travelpartner_accounts_hotels_set_live_on_google_xgafv_enum__to_str(v).into()), None => Value::Null });
+    m.insert("access_token".into(), match (&p.access_token) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("alt".into(), match (&p.alt) { Some(v) => Value::String(iface_accounts__travelpartner_accounts_hotels_set_live_on_google_alt_enum__to_str(v).into()), None => Value::Null });
+    m.insert("callback".into(), match (&p.callback) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("fields".into(), match (&p.fields) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("key".into(), match (&p.key) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("oauth_token".into(), match (&p.oauth_token) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("pretty_print".into(), match (&p.pretty_print) { Some(v) => Value::Bool(*(v)), None => Value::Null });
+    m.insert("quota_user".into(), match (&p.quota_user) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("upload_protocol".into(), match (&p.upload_protocol) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("upload_type".into(), match (&p.upload_type) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("parent".into(), Value::String((&p.parent).clone()));
     Value::Object(m)
 }
 
 fn iface_accounts__travelpartner_accounts_icons_create_params__to_json(p: &iface_accounts::TravelpartnerAccountsIconsCreateParams) -> Value {
     let mut m = Map::new();
+    m.insert("xgafv".into(), match (&p.xgafv) { Some(v) => Value::String(iface_accounts__travelpartner_accounts_hotels_set_live_on_google_xgafv_enum__to_str(v).into()), None => Value::Null });
+    m.insert("access_token".into(), match (&p.access_token) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("alt".into(), match (&p.alt) { Some(v) => Value::String(iface_accounts__travelpartner_accounts_hotels_set_live_on_google_alt_enum__to_str(v).into()), None => Value::Null });
+    m.insert("callback".into(), match (&p.callback) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("fields".into(), match (&p.fields) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("key".into(), match (&p.key) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("oauth_token".into(), match (&p.oauth_token) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("pretty_print".into(), match (&p.pretty_print) { Some(v) => Value::Bool(*(v)), None => Value::Null });
+    m.insert("quota_user".into(), match (&p.quota_user) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("upload_protocol".into(), match (&p.upload_protocol) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("upload_type".into(), match (&p.upload_type) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("parent".into(), Value::String((&p.parent).clone()));
     m.insert("disapproval_reasons".into(), match (&p.disapproval_reasons) { Some(v) => Value::Array((v).iter().map(|v| Value::String(iface_accounts__brand_icon_disapproval_reasons_item_enum__to_str(v).into())).collect()), None => Value::Null });
     m.insert("icon_uri".into(), match (&p.icon_uri) { Some(v) => Value::String((v).clone()), None => Value::Null });
@@ -807,6 +1914,17 @@ fn iface_accounts__travelpartner_accounts_icons_create_params__to_json(p: &iface
 
 fn iface_accounts__travelpartner_accounts_listings_verify_params__to_json(p: &iface_accounts::TravelpartnerAccountsListingsVerifyParams) -> Value {
     let mut m = Map::new();
+    m.insert("xgafv".into(), match (&p.xgafv) { Some(v) => Value::String(iface_accounts__travelpartner_accounts_hotels_set_live_on_google_xgafv_enum__to_str(v).into()), None => Value::Null });
+    m.insert("access_token".into(), match (&p.access_token) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("alt".into(), match (&p.alt) { Some(v) => Value::String(iface_accounts__travelpartner_accounts_hotels_set_live_on_google_alt_enum__to_str(v).into()), None => Value::Null });
+    m.insert("callback".into(), match (&p.callback) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("fields".into(), match (&p.fields) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("key".into(), match (&p.key) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("oauth_token".into(), match (&p.oauth_token) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("pretty_print".into(), match (&p.pretty_print) { Some(v) => Value::Bool(*(v)), None => Value::Null });
+    m.insert("quota_user".into(), match (&p.quota_user) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("upload_protocol".into(), match (&p.upload_protocol) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("upload_type".into(), match (&p.upload_type) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("parent".into(), Value::String((&p.parent).clone()));
     m.insert("xml_listing".into(), match (&p.xml_listing) { Some(v) => Value::String((v).clone()), None => Value::Null });
     Value::Object(m)
@@ -814,30 +1932,85 @@ fn iface_accounts__travelpartner_accounts_listings_verify_params__to_json(p: &if
 
 fn iface_accounts__travelpartner_accounts_price_accuracy_views_list_params__to_json(p: &iface_accounts::TravelpartnerAccountsPriceAccuracyViewsListParams) -> Value {
     let mut m = Map::new();
+    m.insert("xgafv".into(), match (&p.xgafv) { Some(v) => Value::String(iface_accounts__travelpartner_accounts_hotels_set_live_on_google_xgafv_enum__to_str(v).into()), None => Value::Null });
+    m.insert("access_token".into(), match (&p.access_token) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("alt".into(), match (&p.alt) { Some(v) => Value::String(iface_accounts__travelpartner_accounts_hotels_set_live_on_google_alt_enum__to_str(v).into()), None => Value::Null });
+    m.insert("callback".into(), match (&p.callback) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("fields".into(), match (&p.fields) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("key".into(), match (&p.key) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("oauth_token".into(), match (&p.oauth_token) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("pretty_print".into(), match (&p.pretty_print) { Some(v) => Value::Bool(*(v)), None => Value::Null });
+    m.insert("quota_user".into(), match (&p.quota_user) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("upload_protocol".into(), match (&p.upload_protocol) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("upload_type".into(), match (&p.upload_type) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("parent".into(), Value::String((&p.parent).clone()));
     Value::Object(m)
 }
 
 fn iface_accounts__travelpartner_accounts_price_accuracy_views_summarize_params__to_json(p: &iface_accounts::TravelpartnerAccountsPriceAccuracyViewsSummarizeParams) -> Value {
     let mut m = Map::new();
+    m.insert("xgafv".into(), match (&p.xgafv) { Some(v) => Value::String(iface_accounts__travelpartner_accounts_hotels_set_live_on_google_xgafv_enum__to_str(v).into()), None => Value::Null });
+    m.insert("access_token".into(), match (&p.access_token) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("alt".into(), match (&p.alt) { Some(v) => Value::String(iface_accounts__travelpartner_accounts_hotels_set_live_on_google_alt_enum__to_str(v).into()), None => Value::Null });
+    m.insert("callback".into(), match (&p.callback) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("fields".into(), match (&p.fields) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("key".into(), match (&p.key) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("oauth_token".into(), match (&p.oauth_token) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("pretty_print".into(), match (&p.pretty_print) { Some(v) => Value::Bool(*(v)), None => Value::Null });
+    m.insert("quota_user".into(), match (&p.quota_user) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("upload_protocol".into(), match (&p.upload_protocol) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("upload_type".into(), match (&p.upload_type) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("parent".into(), Value::String((&p.parent).clone()));
     Value::Object(m)
 }
 
 fn iface_accounts__travelpartner_accounts_price_coverage_views_list_params__to_json(p: &iface_accounts::TravelpartnerAccountsPriceCoverageViewsListParams) -> Value {
     let mut m = Map::new();
+    m.insert("xgafv".into(), match (&p.xgafv) { Some(v) => Value::String(iface_accounts__travelpartner_accounts_hotels_set_live_on_google_xgafv_enum__to_str(v).into()), None => Value::Null });
+    m.insert("access_token".into(), match (&p.access_token) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("alt".into(), match (&p.alt) { Some(v) => Value::String(iface_accounts__travelpartner_accounts_hotels_set_live_on_google_alt_enum__to_str(v).into()), None => Value::Null });
+    m.insert("callback".into(), match (&p.callback) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("fields".into(), match (&p.fields) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("key".into(), match (&p.key) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("oauth_token".into(), match (&p.oauth_token) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("pretty_print".into(), match (&p.pretty_print) { Some(v) => Value::Bool(*(v)), None => Value::Null });
+    m.insert("quota_user".into(), match (&p.quota_user) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("upload_protocol".into(), match (&p.upload_protocol) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("upload_type".into(), match (&p.upload_type) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("parent".into(), Value::String((&p.parent).clone()));
     Value::Object(m)
 }
 
 fn iface_accounts__travelpartner_accounts_price_coverage_views_get_latest_params__to_json(p: &iface_accounts::TravelpartnerAccountsPriceCoverageViewsGetLatestParams) -> Value {
     let mut m = Map::new();
+    m.insert("xgafv".into(), match (&p.xgafv) { Some(v) => Value::String(iface_accounts__travelpartner_accounts_hotels_set_live_on_google_xgafv_enum__to_str(v).into()), None => Value::Null });
+    m.insert("access_token".into(), match (&p.access_token) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("alt".into(), match (&p.alt) { Some(v) => Value::String(iface_accounts__travelpartner_accounts_hotels_set_live_on_google_alt_enum__to_str(v).into()), None => Value::Null });
+    m.insert("callback".into(), match (&p.callback) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("fields".into(), match (&p.fields) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("key".into(), match (&p.key) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("oauth_token".into(), match (&p.oauth_token) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("pretty_print".into(), match (&p.pretty_print) { Some(v) => Value::Bool(*(v)), None => Value::Null });
+    m.insert("quota_user".into(), match (&p.quota_user) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("upload_protocol".into(), match (&p.upload_protocol) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("upload_type".into(), match (&p.upload_type) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("parent".into(), Value::String((&p.parent).clone()));
     Value::Object(m)
 }
 
 fn iface_accounts__travelpartner_accounts_reconciliation_reports_list_params__to_json(p: &iface_accounts::TravelpartnerAccountsReconciliationReportsListParams) -> Value {
     let mut m = Map::new();
+    m.insert("xgafv".into(), match (&p.xgafv) { Some(v) => Value::String(iface_accounts__travelpartner_accounts_hotels_set_live_on_google_xgafv_enum__to_str(v).into()), None => Value::Null });
+    m.insert("access_token".into(), match (&p.access_token) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("alt".into(), match (&p.alt) { Some(v) => Value::String(iface_accounts__travelpartner_accounts_hotels_set_live_on_google_alt_enum__to_str(v).into()), None => Value::Null });
+    m.insert("callback".into(), match (&p.callback) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("fields".into(), match (&p.fields) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("key".into(), match (&p.key) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("oauth_token".into(), match (&p.oauth_token) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("pretty_print".into(), match (&p.pretty_print) { Some(v) => Value::Bool(*(v)), None => Value::Null });
+    m.insert("quota_user".into(), match (&p.quota_user) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("upload_protocol".into(), match (&p.upload_protocol) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("upload_type".into(), match (&p.upload_type) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("parent".into(), Value::String((&p.parent).clone()));
     m.insert("end_date".into(), match (&p.end_date) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("start_date".into(), match (&p.start_date) { Some(v) => Value::String((v).clone()), None => Value::Null });
@@ -846,6 +2019,17 @@ fn iface_accounts__travelpartner_accounts_reconciliation_reports_list_params__to
 
 fn iface_accounts__travelpartner_accounts_reconciliation_reports_create_params__to_json(p: &iface_accounts::TravelpartnerAccountsReconciliationReportsCreateParams) -> Value {
     let mut m = Map::new();
+    m.insert("xgafv".into(), match (&p.xgafv) { Some(v) => Value::String(iface_accounts__travelpartner_accounts_hotels_set_live_on_google_xgafv_enum__to_str(v).into()), None => Value::Null });
+    m.insert("access_token".into(), match (&p.access_token) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("alt".into(), match (&p.alt) { Some(v) => Value::String(iface_accounts__travelpartner_accounts_hotels_set_live_on_google_alt_enum__to_str(v).into()), None => Value::Null });
+    m.insert("callback".into(), match (&p.callback) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("fields".into(), match (&p.fields) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("key".into(), match (&p.key) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("oauth_token".into(), match (&p.oauth_token) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("pretty_print".into(), match (&p.pretty_print) { Some(v) => Value::Bool(*(v)), None => Value::Null });
+    m.insert("quota_user".into(), match (&p.quota_user) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("upload_protocol".into(), match (&p.upload_protocol) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("upload_type".into(), match (&p.upload_type) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("parent".into(), Value::String((&p.parent).clone()));
     m.insert("contents".into(), match (&p.contents) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("file_name".into(), match (&p.file_name) { Some(v) => Value::String((v).clone()), None => Value::Null });
@@ -855,6 +2039,17 @@ fn iface_accounts__travelpartner_accounts_reconciliation_reports_create_params__
 
 fn iface_accounts__travelpartner_accounts_reconciliation_reports_validate_params__to_json(p: &iface_accounts::TravelpartnerAccountsReconciliationReportsValidateParams) -> Value {
     let mut m = Map::new();
+    m.insert("xgafv".into(), match (&p.xgafv) { Some(v) => Value::String(iface_accounts__travelpartner_accounts_hotels_set_live_on_google_xgafv_enum__to_str(v).into()), None => Value::Null });
+    m.insert("access_token".into(), match (&p.access_token) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("alt".into(), match (&p.alt) { Some(v) => Value::String(iface_accounts__travelpartner_accounts_hotels_set_live_on_google_alt_enum__to_str(v).into()), None => Value::Null });
+    m.insert("callback".into(), match (&p.callback) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("fields".into(), match (&p.fields) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("key".into(), match (&p.key) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("oauth_token".into(), match (&p.oauth_token) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("pretty_print".into(), match (&p.pretty_print) { Some(v) => Value::Bool(*(v)), None => Value::Null });
+    m.insert("quota_user".into(), match (&p.quota_user) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("upload_protocol".into(), match (&p.upload_protocol) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("upload_type".into(), match (&p.upload_type) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("parent".into(), Value::String((&p.parent).clone()));
     m.insert("contents".into(), match (&p.contents) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("file_name".into(), match (&p.file_name) { Some(v) => Value::String((v).clone()), None => Value::Null });
@@ -862,98 +2057,1378 @@ fn iface_accounts__travelpartner_accounts_reconciliation_reports_validate_params
     Value::Object(m)
 }
 
+fn iface_accounts__set_live_on_google_response__from_json(v: &Value) -> Option<iface_accounts::SetLiveOnGoogleResponse> {
+    let m = v.as_object()?;
+    Some(iface_accounts::SetLiveOnGoogleResponse {
+        failed_hotel_ids: m.get("failedHotelIds").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| (x).as_str().map(|s| s.to_string())).collect())),
+        updated_hotel_ids: m.get("updatedHotelIds").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| (x).as_str().map(|s| s.to_string())).collect())),
+    })
+}
+
+fn iface_accounts__reconciliation_report__from_json(v: &Value) -> Option<iface_accounts::ReconciliationReport> {
+    let m = v.as_object()?;
+    Some(iface_accounts::ReconciliationReport {
+        contents: m.get("contents").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        file_name: m.get("fileName").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        name: m.get("name").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    })
+}
+
+fn iface_accounts__brand__from_json(v: &Value) -> Option<iface_accounts::Brand> {
+    let m = v.as_object()?;
+    Some(iface_accounts::Brand {
+        active_display_names: m.get("activeDisplayNames").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| iface_accounts__localized_text__from_json(x)).collect())),
+        active_icon: m.get("activeIcon").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        active_icon_uri: m.get("activeIconUri").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        display_name_disapproval_reason: m.get("displayNameDisapprovalReason").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| iface_accounts__display_name_disapproval_reason__from_json(x)).collect())),
+        display_name_state: m.get("displayNameState").filter(|v| !v.is_null()).and_then(|v| (v).as_str().and_then(iface_accounts__brand_display_name_state_enum__from_str)),
+        display_names: m.get("displayNames").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| iface_accounts__localized_text__from_json(x)).collect())),
+        icon: m.get("icon").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        icon_disapproval_reasons: m.get("iconDisapprovalReasons").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| (x).as_str().and_then(iface_accounts__brand_icon_disapproval_reasons_item_enum__from_str)).collect())),
+        icon_state: m.get("iconState").filter(|v| !v.is_null()).and_then(|v| (v).as_str().and_then(iface_accounts__brand_display_name_state_enum__from_str)),
+        name: m.get("name").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        property_count: m.get("propertyCount").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        submitted_display_names: m.get("submittedDisplayNames").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| iface_accounts__localized_text__from_json(x)).collect())),
+        submitted_icon: m.get("submittedIcon").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    })
+}
+
+fn iface_accounts__localized_text__from_json(v: &Value) -> Option<iface_accounts::LocalizedText> {
+    let m = v.as_object()?;
+    Some(iface_accounts::LocalizedText {
+        language_code: m.get("languageCode").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        text: m.get("text").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    })
+}
+
+fn iface_accounts__display_name_disapproval_reason__from_json(v: &Value) -> Option<iface_accounts::DisplayNameDisapprovalReason> {
+    let m = v.as_object()?;
+    Some(iface_accounts::DisplayNameDisapprovalReason {
+        disapproval_reason: m.get("disapprovalReason").filter(|v| !v.is_null()).and_then(|v| (v).as_str().and_then(iface_accounts__display_name_disapproval_reason_disapproval_reason_enum__from_str)),
+        language_code: m.get("languageCode").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    })
+}
+
+fn iface_accounts__empty__from_json(v: &Value) -> Option<iface_accounts::Empty> {
+    let m = v.as_object()?;
+    Some(iface_accounts::Empty {
+        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    })
+}
+
+fn iface_accounts__query_free_booking_links_report_response__from_json(v: &Value) -> Option<iface_accounts::QueryFreeBookingLinksReportResponse> {
+    let m = v.as_object()?;
+    Some(iface_accounts::QueryFreeBookingLinksReportResponse {
+        next_page_token: m.get("nextPageToken").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        results: m.get("results").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| iface_accounts__free_booking_links_result__from_json(x)).collect())),
+    })
+}
+
+fn iface_accounts__free_booking_links_result__from_json(v: &Value) -> Option<iface_accounts::FreeBookingLinksResult> {
+    let m = v.as_object()?;
+    Some(iface_accounts::FreeBookingLinksResult {
+        click_count: m.get("clickCount").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        date: m.get("date").filter(|v| !v.is_null()).and_then(|v| iface_accounts__date__from_json(v)),
+        device_type: m.get("deviceType").filter(|v| !v.is_null()).and_then(|v| (v).as_str().and_then(iface_accounts__free_booking_links_result_device_type_enum__from_str)),
+        partner_hotel_display_name: m.get("partnerHotelDisplayName").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        partner_hotel_id: m.get("partnerHotelId").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        user_region_code: m.get("userRegionCode").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    })
+}
+
+fn iface_accounts__date__from_json(v: &Value) -> Option<iface_accounts::Date> {
+    let m = v.as_object()?;
+    Some(iface_accounts::Date {
+        day: m.get("day").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        month: m.get("month").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        year: m.get("year").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+    })
+}
+
+fn iface_accounts__query_participation_report_response__from_json(v: &Value) -> Option<iface_accounts::QueryParticipationReportResponse> {
+    let m = v.as_object()?;
+    Some(iface_accounts::QueryParticipationReportResponse {
+        next_page_token: m.get("nextPageToken").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        results: m.get("results").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| iface_accounts__participation_result__from_json(x)).collect())),
+    })
+}
+
+fn iface_accounts__participation_result__from_json(v: &Value) -> Option<iface_accounts::ParticipationResult> {
+    let m = v.as_object()?;
+    Some(iface_accounts::ParticipationResult {
+        key: m.get("key").filter(|v| !v.is_null()).and_then(|v| iface_accounts__key__from_json(v)),
+        missed_participation_count: m.get("missedParticipationCount").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        missed_participation_count_details: m.get("missedParticipationCountDetails").filter(|v| !v.is_null()).and_then(|v| iface_accounts__missed_participation_count_details__from_json(v)),
+        opportunity_count: m.get("opportunityCount").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        participation_count: m.get("participationCount").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        participation_percent: m.get("participationPercent").filter(|v| !v.is_null()).and_then(|v| (v).as_f64()),
+        partner_hotel_display_name: m.get("partnerHotelDisplayName").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    })
+}
+
+fn iface_accounts__key__from_json(v: &Value) -> Option<iface_accounts::Key> {
+    let m = v.as_object()?;
+    Some(iface_accounts::Key {
+        advance_booking_window: m.get("advanceBookingWindow").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        checkin_date: m.get("checkinDate").filter(|v| !v.is_null()).and_then(|v| iface_accounts__date__from_json(v)),
+        date: m.get("date").filter(|v| !v.is_null()).and_then(|v| iface_accounts__date__from_json(v)),
+        device_type: m.get("deviceType").filter(|v| !v.is_null()).and_then(|v| (v).as_str().and_then(iface_accounts__free_booking_links_result_device_type_enum__from_str)),
+        hotel_region_code: m.get("hotelRegionCode").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        length_of_stay_days: m.get("lengthOfStayDays").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        occupancy: m.get("occupancy").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        partner_hotel_id: m.get("partnerHotelId").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        user_region_code: m.get("userRegionCode").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    })
+}
+
+fn iface_accounts__missed_participation_count_details__from_json(v: &Value) -> Option<iface_accounts::MissedParticipationCountDetails> {
+    let m = v.as_object()?;
+    Some(iface_accounts::MissedParticipationCountDetails {
+        hotel_suspended_count: m.get("hotelSuspendedCount").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        no_availability_count: m.get("noAvailabilityCount").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        no_landing_page_count: m.get("noLandingPageCount").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        no_price_count: m.get("noPriceCount").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        no_price_count_details: m.get("noPriceCountDetails").filter(|v| !v.is_null()).and_then(|v| iface_accounts__no_price_count_details__from_json(v)),
+        no_tax_breakdown_count: m.get("noTaxBreakdownCount").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        other_reason_count: m.get("otherReasonCount").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        price_missing_count: m.get("priceMissingCount").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        price_missing_count_details: m.get("priceMissingCountDetails").filter(|v| !v.is_null()).and_then(|v| iface_accounts__price_missing_count_details__from_json(v)),
+        price_problem_count: m.get("priceProblemCount").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        price_problem_count_details: m.get("priceProblemCountDetails").filter(|v| !v.is_null()).and_then(|v| iface_accounts__price_problem_count_details__from_json(v)),
+        price_unavailable_count: m.get("priceUnavailableCount").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        price_unavailable_count_details: m.get("priceUnavailableCountDetails").filter(|v| !v.is_null()).and_then(|v| iface_accounts__price_unavailable_count_details__from_json(v)),
+    })
+}
+
+fn iface_accounts__no_price_count_details__from_json(v: &Value) -> Option<iface_accounts::NoPriceCountDetails> {
+    let m = v.as_object()?;
+    Some(iface_accounts::NoPriceCountDetails {
+        live_pricing_config_issue_count: m.get("livePricingConfigIssueCount").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        live_pricing_not_available_count: m.get("livePricingNotAvailableCount").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        live_pricing_not_triggered_count: m.get("livePricingNotTriggeredCount").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        live_pricing_other_reason_count: m.get("livePricingOtherReasonCount").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        live_pricing_technical_issue_count: m.get("livePricingTechnicalIssueCount").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    })
+}
+
+fn iface_accounts__price_missing_count_details__from_json(v: &Value) -> Option<iface_accounts::PriceMissingCountDetails> {
+    let m = v.as_object()?;
+    Some(iface_accounts::PriceMissingCountDetails {
+        bandwidth_depleted_count: m.get("bandwidthDepletedCount").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        cache_rate_missing_count: m.get("cacheRateMissingCount").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        itinerary_blocked_count: m.get("itineraryBlockedCount").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        live_pricing_error_count: m.get("livePricingErrorCount").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        live_pricing_not_setup_count: m.get("livePricingNotSetupCount").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        live_pricing_timeout_count: m.get("livePricingTimeoutCount").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    })
+}
+
+fn iface_accounts__price_problem_count_details__from_json(v: &Value) -> Option<iface_accounts::PriceProblemCountDetails> {
+    let m = v.as_object()?;
+    Some(iface_accounts::PriceProblemCountDetails {
+        hotel_suspended_count: m.get("hotelSuspendedCount").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        price_unusually_high_count: m.get("priceUnusuallyHighCount").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        price_unusually_low_count: m.get("priceUnusuallyLowCount").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        taxes_and_fees_missing_count: m.get("taxesAndFeesMissingCount").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    })
+}
+
+fn iface_accounts__price_unavailable_count_details__from_json(v: &Value) -> Option<iface_accounts::PriceUnavailableCountDetails> {
+    let m = v.as_object()?;
+    Some(iface_accounts::PriceUnavailableCountDetails {
+        participation_not_likely_count: m.get("participationNotLikelyCount").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        price_unavailable_count: m.get("priceUnavailableCount").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    })
+}
+
+fn iface_accounts__query_property_performance_report_response__from_json(v: &Value) -> Option<iface_accounts::QueryPropertyPerformanceReportResponse> {
+    let m = v.as_object()?;
+    Some(iface_accounts::QueryPropertyPerformanceReportResponse {
+        next_page_token: m.get("nextPageToken").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        results: m.get("results").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| iface_accounts__property_performance_result__from_json(x)).collect())),
+    })
+}
+
+fn iface_accounts__property_performance_result__from_json(v: &Value) -> Option<iface_accounts::PropertyPerformanceResult> {
+    let m = v.as_object()?;
+    Some(iface_accounts::PropertyPerformanceResult {
+        ads_click_count: m.get("adsClickCount").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        ads_clickthrough_rate: m.get("adsClickthroughRate").filter(|v| !v.is_null()).and_then(|v| (v).as_f64()),
+        ads_impression_count: m.get("adsImpressionCount").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        advance_booking_window: m.get("advanceBookingWindow").filter(|v| !v.is_null()).and_then(|v| (v).as_str().and_then(iface_accounts__property_performance_result_advance_booking_window_enum__from_str)),
+        brand: m.get("brand").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        click_count: m.get("clickCount").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        clickthrough_rate: m.get("clickthroughRate").filter(|v| !v.is_null()).and_then(|v| (v).as_f64()),
+        date: m.get("date").filter(|v| !v.is_null()).and_then(|v| iface_accounts__date__from_json(v)),
+        device_type: m.get("deviceType").filter(|v| !v.is_null()).and_then(|v| (v).as_str().and_then(iface_accounts__free_booking_links_result_device_type_enum__from_str)),
+        high_intent_users: m.get("highIntentUsers").filter(|v| !v.is_null()).and_then(|v| (v).as_bool()),
+        impression_count: m.get("impressionCount").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        length_of_stay: m.get("lengthOfStay").filter(|v| !v.is_null()).and_then(|v| (v).as_str().and_then(iface_accounts__property_performance_result_length_of_stay_enum__from_str)),
+        occupancy: m.get("occupancy").filter(|v| !v.is_null()).and_then(|v| (v).as_str().and_then(iface_accounts__property_performance_result_occupancy_enum__from_str)),
+        partner_property_display_name: m.get("partnerPropertyDisplayName").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        partner_property_id: m.get("partnerPropertyId").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        property_region_code: m.get("propertyRegionCode").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        user_region_code: m.get("userRegionCode").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        vr_website_button_clicks: m.get("vrWebsiteButtonClicks").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    })
+}
+
+fn iface_accounts__list_account_links_response__from_json(v: &Value) -> Option<iface_accounts::ListAccountLinksResponse> {
+    let m = v.as_object()?;
+    Some(iface_accounts::ListAccountLinksResponse {
+        account_links: m.get("accountLinks").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| iface_accounts__account_link__from_json(x)).collect())),
+    })
+}
+
+fn iface_accounts__account_link__from_json(v: &Value) -> Option<iface_accounts::AccountLink> {
+    let m = v.as_object()?;
+    Some(iface_accounts::AccountLink {
+        account_link_target: m.get("accountLinkTarget").filter(|v| !v.is_null()).and_then(|v| iface_accounts__account_link_target__from_json(v)),
+        google_ads_customer_name: m.get("googleAdsCustomerName").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        name: m.get("name").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        status: m.get("status").filter(|v| !v.is_null()).and_then(|v| (v).as_str().and_then(iface_accounts__account_link_status_enum__from_str)),
+    })
+}
+
+fn iface_accounts__account_link_target__from_json(v: &Value) -> Option<iface_accounts::AccountLinkTarget> {
+    let m = v.as_object()?;
+    Some(iface_accounts::AccountLinkTarget {
+        all_hotels: m.get("allHotels").filter(|v| !v.is_null()).and_then(|v| (v).as_bool()),
+        hotel_list: m.get("hotelList").filter(|v| !v.is_null()).and_then(|v| iface_accounts__hotel_list__from_json(v)),
+    })
+}
+
+fn iface_accounts__hotel_list__from_json(v: &Value) -> Option<iface_accounts::HotelList> {
+    let m = v.as_object()?;
+    Some(iface_accounts::HotelList {
+        partner_hotel_ids: m.get("partnerHotelIds").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| (x).as_str().map(|s| s.to_string())).collect())),
+    })
+}
+
+fn iface_accounts__list_brands_response__from_json(v: &Value) -> Option<iface_accounts::ListBrandsResponse> {
+    let m = v.as_object()?;
+    Some(iface_accounts::ListBrandsResponse {
+        brands: m.get("brands").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| iface_accounts__brand__from_json(x)).collect())),
+    })
+}
+
+fn iface_accounts__list_hotel_views_response__from_json(v: &Value) -> Option<iface_accounts::ListHotelViewsResponse> {
+    let m = v.as_object()?;
+    Some(iface_accounts::ListHotelViewsResponse {
+        hotel_views: m.get("hotelViews").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| iface_accounts__hotel_view__from_json(x)).collect())),
+        next_page_token: m.get("nextPageToken").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    })
+}
+
+fn iface_accounts__hotel_view__from_json(v: &Value) -> Option<iface_accounts::HotelView> {
+    let m = v.as_object()?;
+    Some(iface_accounts::HotelView {
+        data_issue_detail: m.get("dataIssueDetail").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| iface_accounts__data_issue_detail__from_json(x)).collect())),
+        data_issues: m.get("dataIssues").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| (x).as_str().and_then(iface_accounts__data_issue_detail_data_issue_type_enum__from_str)).collect())),
+        google_cluster_id: m.get("googleClusterId").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        google_hotel_display_name: m.get("googleHotelDisplayName").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        google_hotel_id: m.get("googleHotelId").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        live_on_google: m.get("liveOnGoogle").filter(|v| !v.is_null()).and_then(|v| (v).as_bool()),
+        match_status: m.get("matchStatus").filter(|v| !v.is_null()).and_then(|v| (v).as_str().and_then(iface_accounts__hotel_view_match_status_enum__from_str)),
+        overclustered_partner_hotel_ids: m.get("overclusteredPartnerHotelIds").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| (x).as_str().map(|s| s.to_string())).collect())),
+        partner_hotel_display_name: m.get("partnerHotelDisplayName").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        partner_hotel_id: m.get("partnerHotelId").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        primary_overclustered_partner_hotel_id: m.get("primaryOverclusteredPartnerHotelId").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        property_details: m.get("propertyDetails").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    })
+}
+
+fn iface_accounts__data_issue_detail__from_json(v: &Value) -> Option<iface_accounts::DataIssueDetail> {
+    let m = v.as_object()?;
+    Some(iface_accounts::DataIssueDetail {
+        data_issue_severity: m.get("dataIssueSeverity").filter(|v| !v.is_null()).and_then(|v| (v).as_str().and_then(iface_accounts__data_issue_detail_data_issue_severity_enum__from_str)),
+        data_issue_type: m.get("dataIssueType").filter(|v| !v.is_null()).and_then(|v| (v).as_str().and_then(iface_accounts__data_issue_detail_data_issue_type_enum__from_str)),
+        is_self_resolving: m.get("isSelfResolving").filter(|v| !v.is_null()).and_then(|v| (v).as_bool()),
+    })
+}
+
+fn iface_accounts__summarize_hotel_views_response__from_json(v: &Value) -> Option<iface_accounts::SummarizeHotelViewsResponse> {
+    let m = v.as_object()?;
+    Some(iface_accounts::SummarizeHotelViewsResponse {
+        last_feed_submission_time: m.get("lastFeedSubmissionTime").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        last_manifest_update_time: m.get("lastManifestUpdateTime").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        live_on_google_property_count: m.get("liveOnGooglePropertyCount").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        matched_property_count: m.get("matchedPropertyCount").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        overclustered_property_count: m.get("overclusteredPropertyCount").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        overclustered_property_with_errors_count: m.get("overclusteredPropertyWithErrorsCount").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        unmatched_property_count: m.get("unmatchedPropertyCount").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        unmatched_property_with_errors_count: m.get("unmatchedPropertyWithErrorsCount").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    })
+}
+
+fn iface_accounts__list_icons_response__from_json(v: &Value) -> Option<iface_accounts::ListIconsResponse> {
+    let m = v.as_object()?;
+    Some(iface_accounts::ListIconsResponse {
+        icons: m.get("icons").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| iface_accounts__icon__from_json(x)).collect())),
+    })
+}
+
+fn iface_accounts__icon__from_json(v: &Value) -> Option<iface_accounts::Icon> {
+    let m = v.as_object()?;
+    Some(iface_accounts::Icon {
+        disapproval_reasons: m.get("disapprovalReasons").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| (x).as_str().and_then(iface_accounts__brand_icon_disapproval_reasons_item_enum__from_str)).collect())),
+        icon_uri: m.get("iconUri").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        image_data: m.get("imageData").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        name: m.get("name").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        reference: m.get("reference").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        state: m.get("state").filter(|v| !v.is_null()).and_then(|v| (v).as_str().and_then(iface_accounts__icon_state_enum__from_str)),
+    })
+}
+
+fn iface_accounts__verify_listings_response__from_json(v: &Value) -> Option<iface_accounts::VerifyListingsResponse> {
+    let m = v.as_object()?;
+    Some(iface_accounts::VerifyListingsResponse {
+        parsed_listing: m.get("parsedListing").filter(|v| !v.is_null()).and_then(|v| iface_accounts__parsed_listing__from_json(v)),
+    })
+}
+
+fn iface_accounts__parsed_listing__from_json(v: &Value) -> Option<iface_accounts::ParsedListing> {
+    let m = v.as_object()?;
+    Some(iface_accounts::ParsedListing {
+        brand: m.get("brand").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        category: m.get("category").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| iface_accounts__localized_text__from_json(x)).collect())),
+        data_issue_detail: m.get("dataIssueDetail").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| iface_accounts__data_issue_detail__from_json(x)).collect())),
+        description: m.get("description").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| iface_accounts__localized_text__from_json(x)).collect())),
+        image: m.get("image").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| iface_accounts__image__from_json(x)).collect())),
+        imprecision_radius_meters: m.get("imprecisionRadiusMeters").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        is_served: m.get("isServed").filter(|v| !v.is_null()).and_then(|v| (v).as_bool()),
+        listing_name: m.get("listingName").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| iface_accounts__localized_text__from_json(x)).collect())),
+        location: m.get("location").filter(|v| !v.is_null()).and_then(|v| iface_accounts__lat_lng__from_json(v)),
+        partner_list_id: m.get("partnerListId").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        region_code: m.get("regionCode").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        review: m.get("review").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| iface_accounts__review__from_json(x)).collect())),
+        unit_attributes: m.get("unitAttributes").filter(|v| !v.is_null()).and_then(|v| iface_accounts__parsed_listing_unit_attributes__from_json(v)),
+    })
+}
+
+fn iface_accounts__image__from_json(v: &Value) -> Option<iface_accounts::Image> {
+    let m = v.as_object()?;
+    Some(iface_accounts::Image {
+        gallery_uri: m.get("galleryUri").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| iface_accounts__localized_text__from_json(x)).collect())),
+        title: m.get("title").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| iface_accounts__localized_text__from_json(x)).collect())),
+        uri: m.get("uri").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    })
+}
+
+fn iface_accounts__lat_lng__from_json(v: &Value) -> Option<iface_accounts::LatLng> {
+    let m = v.as_object()?;
+    Some(iface_accounts::LatLng {
+        latitude: m.get("latitude").filter(|v| !v.is_null()).and_then(|v| (v).as_f64()),
+        longitude: m.get("longitude").filter(|v| !v.is_null()).and_then(|v| (v).as_f64()),
+    })
+}
+
+fn iface_accounts__review__from_json(v: &Value) -> Option<iface_accounts::Review> {
+    let m = v.as_object()?;
+    Some(iface_accounts::Review {
+        author: m.get("author").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        body: m.get("body").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        language_code: m.get("languageCode").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        link: m.get("link").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        rating: m.get("rating").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| iface_accounts__rating__from_json(x)).collect())),
+        review_time: m.get("reviewTime").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        title: m.get("title").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        type_op: m.get("type").filter(|v| !v.is_null()).and_then(|v| (v).as_str().and_then(iface_accounts__review_type_op_enum__from_str)),
+        visit_time: m.get("visitTime").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    })
+}
+
+fn iface_accounts__rating__from_json(v: &Value) -> Option<iface_accounts::Rating> {
+    let m = v.as_object()?;
+    Some(iface_accounts::Rating {
+        rating_scale: m.get("ratingScale").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        score: m.get("score").filter(|v| !v.is_null()).and_then(|v| (v).as_f64()),
+        type_op: m.get("type").filter(|v| !v.is_null()).and_then(|v| (v).as_str().and_then(iface_accounts__rating_type_op_enum__from_str)),
+    })
+}
+
+fn iface_accounts__parsed_listing_unit_attributes__from_json(v: &Value) -> Option<iface_accounts::ParsedListingUnitAttributes> {
+    let m = v.as_object()?;
+    Some(iface_accounts::ParsedListingUnitAttributes {
+        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    })
+}
+
+fn iface_accounts__list_price_accuracy_views_response__from_json(v: &Value) -> Option<iface_accounts::ListPriceAccuracyViewsResponse> {
+    let m = v.as_object()?;
+    Some(iface_accounts::ListPriceAccuracyViewsResponse {
+        price_accuracy_views: m.get("priceAccuracyViews").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| iface_accounts__price_accuracy_view__from_json(x)).collect())),
+    })
+}
+
+fn iface_accounts__price_accuracy_view__from_json(v: &Value) -> Option<iface_accounts::PriceAccuracyView> {
+    let m = v.as_object()?;
+    Some(iface_accounts::PriceAccuracyView {
+        name: m.get("name").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        results: m.get("results").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| iface_accounts__price_accuracy_row__from_json(x)).collect())),
+    })
+}
+
+fn iface_accounts__price_accuracy_row__from_json(v: &Value) -> Option<iface_accounts::PriceAccuracyRow> {
+    let m = v.as_object()?;
+    Some(iface_accounts::PriceAccuracyRow {
+        adult_occupancy: m.get("adultOccupancy").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        affects_score: m.get("affectsScore").filter(|v| !v.is_null()).and_then(|v| (v).as_bool()),
+        cached_price_record: m.get("cachedPriceRecord").filter(|v| !v.is_null()).and_then(|v| iface_accounts__price_record__from_json(v)),
+        checkin_date: m.get("checkinDate").filter(|v| !v.is_null()).and_then(|v| iface_accounts__date__from_json(v)),
+        child_occupancy: m.get("childOccupancy").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        correction_time: m.get("correctionTime").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        device_type: m.get("deviceType").filter(|v| !v.is_null()).and_then(|v| (v).as_str().and_then(iface_accounts__free_booking_links_result_device_type_enum__from_str)),
+        fetched_price_record: m.get("fetchedPriceRecord").filter(|v| !v.is_null()).and_then(|v| iface_accounts__price_record__from_json(v)),
+        final_domain: m.get("finalDomain").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        hotel: m.get("hotel").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        hotel_country_code: m.get("hotelCountryCode").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        length_of_stay_days: m.get("lengthOfStayDays").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        mismatch_reason: m.get("mismatchReason").filter(|v| !v.is_null()).and_then(|v| (v).as_str().and_then(iface_accounts__price_accuracy_row_mismatch_reason_enum__from_str)),
+        rate_rule_id: m.get("rateRuleId").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        signal_source: m.get("signalSource").filter(|v| !v.is_null()).and_then(|v| (v).as_str().and_then(iface_accounts__price_accuracy_row_signal_source_enum__from_str)),
+        url: m.get("url").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        user_region_code: m.get("userRegionCode").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    })
+}
+
+fn iface_accounts__price_record__from_json(v: &Value) -> Option<iface_accounts::PriceRecord> {
+    let m = v.as_object()?;
+    Some(iface_accounts::PriceRecord {
+        base_price: m.get("basePrice").filter(|v| !v.is_null()).and_then(|v| (v).as_f64()),
+        currency_code: m.get("currencyCode").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        taxes_and_fees: m.get("taxesAndFees").filter(|v| !v.is_null()).and_then(|v| (v).as_f64()),
+        time: m.get("time").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    })
+}
+
+fn iface_accounts__summarize_price_accuracy_response__from_json(v: &Value) -> Option<iface_accounts::SummarizePriceAccuracyResponse> {
+    let m = v.as_object()?;
+    Some(iface_accounts::SummarizePriceAccuracyResponse {
+        current_book_on_google_score: m.get("currentBookOnGoogleScore").filter(|v| !v.is_null()).and_then(|v| (v).as_str().and_then(iface_accounts__summarize_price_accuracy_response_current_book_on_google_score_enum__from_str)),
+        current_overall_score: m.get("currentOverallScore").filter(|v| !v.is_null()).and_then(|v| (v).as_str().and_then(iface_accounts__summarize_price_accuracy_response_current_book_on_google_score_enum__from_str)),
+        current_score: m.get("currentScore").filter(|v| !v.is_null()).and_then(|v| (v).as_str().and_then(iface_accounts__summarize_price_accuracy_response_current_book_on_google_score_enum__from_str)),
+        current_website_score: m.get("currentWebsiteScore").filter(|v| !v.is_null()).and_then(|v| (v).as_str().and_then(iface_accounts__summarize_price_accuracy_response_current_book_on_google_score_enum__from_str)),
+        predicted_book_on_google_score: m.get("predictedBookOnGoogleScore").filter(|v| !v.is_null()).and_then(|v| (v).as_str().and_then(iface_accounts__summarize_price_accuracy_response_current_book_on_google_score_enum__from_str)),
+        predicted_overall_score: m.get("predictedOverallScore").filter(|v| !v.is_null()).and_then(|v| (v).as_str().and_then(iface_accounts__summarize_price_accuracy_response_current_book_on_google_score_enum__from_str)),
+        predicted_score: m.get("predictedScore").filter(|v| !v.is_null()).and_then(|v| (v).as_str().and_then(iface_accounts__summarize_price_accuracy_response_current_book_on_google_score_enum__from_str)),
+        predicted_website_score: m.get("predictedWebsiteScore").filter(|v| !v.is_null()).and_then(|v| (v).as_str().and_then(iface_accounts__summarize_price_accuracy_response_current_book_on_google_score_enum__from_str)),
+        update_time: m.get("updateTime").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    })
+}
+
+fn iface_accounts__list_price_coverage_views_response__from_json(v: &Value) -> Option<iface_accounts::ListPriceCoverageViewsResponse> {
+    let m = v.as_object()?;
+    Some(iface_accounts::ListPriceCoverageViewsResponse {
+        price_coverage_views: m.get("priceCoverageViews").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| iface_accounts__price_coverage_view__from_json(x)).collect())),
+    })
+}
+
+fn iface_accounts__price_coverage_view__from_json(v: &Value) -> Option<iface_accounts::PriceCoverageView> {
+    let m = v.as_object()?;
+    Some(iface_accounts::PriceCoverageView {
+        calculation_date: m.get("calculationDate").filter(|v| !v.is_null()).and_then(|v| iface_accounts__date__from_json(v)),
+        matched_property_count: m.get("matchedPropertyCount").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        price_coverage_binary_percent: m.get("priceCoverageBinaryPercent").filter(|v| !v.is_null()).and_then(|v| (v).as_f64()),
+        price_coverage_buckets: m.get("priceCoverageBuckets").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| iface_accounts__price_coverage_bucket__from_json(x)).collect())),
+        price_coverage_percent: m.get("priceCoveragePercent").filter(|v| !v.is_null()).and_then(|v| (v).as_f64()),
+    })
+}
+
+fn iface_accounts__price_coverage_bucket__from_json(v: &Value) -> Option<iface_accounts::PriceCoverageBucket> {
+    let m = v.as_object()?;
+    Some(iface_accounts::PriceCoverageBucket {
+        advance_booking_window_range: m.get("advanceBookingWindowRange").filter(|v| !v.is_null()).and_then(|v| (v).as_str().and_then(iface_accounts__price_coverage_bucket_advance_booking_window_range_enum__from_str)),
+        available_price_count: m.get("availablePriceCount").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        length_of_stay_range: m.get("lengthOfStayRange").filter(|v| !v.is_null()).and_then(|v| (v).as_str().and_then(iface_accounts__price_coverage_bucket_length_of_stay_range_enum__from_str)),
+        price_coverage_percent: m.get("priceCoveragePercent").filter(|v| !v.is_null()).and_then(|v| (v).as_f64()),
+    })
+}
+
+fn iface_accounts__list_reconciliation_reports_response__from_json(v: &Value) -> Option<iface_accounts::ListReconciliationReportsResponse> {
+    let m = v.as_object()?;
+    Some(iface_accounts::ListReconciliationReportsResponse {
+        reconciliation_reports: m.get("reconciliationReports").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| iface_accounts__reconciliation_report__from_json(x)).collect())),
+    })
+}
+
+fn iface_accounts__create_reconciliation_report_response__from_json(v: &Value) -> Option<iface_accounts::CreateReconciliationReportResponse> {
+    let m = v.as_object()?;
+    Some(iface_accounts::CreateReconciliationReportResponse {
+        issues: m.get("issues").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| iface_accounts__reconciliation_report_validation_issue__from_json(x)).collect())),
+        reconciliation_report: m.get("reconciliationReport").filter(|v| !v.is_null()).and_then(|v| iface_accounts__reconciliation_report__from_json(v)),
+        successful_record_count: m.get("successfulRecordCount").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+    })
+}
+
+fn iface_accounts__reconciliation_report_validation_issue__from_json(v: &Value) -> Option<iface_accounts::ReconciliationReportValidationIssue> {
+    let m = v.as_object()?;
+    Some(iface_accounts::ReconciliationReportValidationIssue {
+        description: m.get("description").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        field_name: m.get("fieldName").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        line_num: m.get("lineNum").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+    })
+}
+
+fn iface_accounts__validate_reconciliation_report_response__from_json(v: &Value) -> Option<iface_accounts::ValidateReconciliationReportResponse> {
+    let m = v.as_object()?;
+    Some(iface_accounts::ValidateReconciliationReportResponse {
+        issues: m.get("issues").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| iface_accounts__reconciliation_report_validation_issue__from_json(x)).collect())),
+        successful_record_count: m.get("successfulRecordCount").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+    })
+}
+
+fn iface_accounts__display_name_disapproval_reason_disapproval_reason_enum__from_str(s: &str) -> Option<iface_accounts::DisplayNameDisapprovalReasonDisapprovalReasonEnum> {
+    match s {
+        "DISAPPROVAL_REASON_UNSPECIFIED" => Some(iface_accounts::DisplayNameDisapprovalReasonDisapprovalReasonEnum::DisapprovalReasonUnspecified),
+        "PUNCTUATION" => Some(iface_accounts::DisplayNameDisapprovalReasonDisapprovalReasonEnum::Punctuation),
+        "MARKETING_LANGUAGE" => Some(iface_accounts::DisplayNameDisapprovalReasonDisapprovalReasonEnum::MarketingLanguage),
+        "LANDING_PAGE_NOT_MATCHED" => Some(iface_accounts::DisplayNameDisapprovalReasonDisapprovalReasonEnum::LandingPageNotMatched),
+        _ => None,
+    }
+}
+
+fn iface_accounts__brand_display_name_state_enum__from_str(s: &str) -> Option<iface_accounts::BrandDisplayNameStateEnum> {
+    match s {
+        "REVIEW_STATE_UNSPECIFIED" => Some(iface_accounts::BrandDisplayNameStateEnum::ReviewStateUnspecified),
+        "REVIEW_STATE_NEW" => Some(iface_accounts::BrandDisplayNameStateEnum::ReviewStateNew),
+        "APPROVED" => Some(iface_accounts::BrandDisplayNameStateEnum::Approved),
+        "REJECTED" => Some(iface_accounts::BrandDisplayNameStateEnum::Rejected),
+        _ => None,
+    }
+}
+
+fn iface_accounts__brand_icon_disapproval_reasons_item_enum__from_str(s: &str) -> Option<iface_accounts::BrandIconDisapprovalReasonsItemEnum> {
+    match s {
+        "IMAGE_DISAPPROVAL_REASON_UNSPECIFIED" => Some(iface_accounts::BrandIconDisapprovalReasonsItemEnum::ImageDisapprovalReasonUnspecified),
+        "NOT_LIKE_SITE" => Some(iface_accounts::BrandIconDisapprovalReasonsItemEnum::NotLikeSite),
+        "OFFENSIVE" => Some(iface_accounts::BrandIconDisapprovalReasonsItemEnum::Offensive),
+        "LOW_QUALITY" => Some(iface_accounts::BrandIconDisapprovalReasonsItemEnum::LowQuality),
+        "ANIMATED" => Some(iface_accounts::BrandIconDisapprovalReasonsItemEnum::Animated),
+        "BAD_BACKGROUND" => Some(iface_accounts::BrandIconDisapprovalReasonsItemEnum::BadBackground),
+        "TEXT_TOO_SMALL" => Some(iface_accounts::BrandIconDisapprovalReasonsItemEnum::TextTooSmall),
+        _ => None,
+    }
+}
+
+fn iface_accounts__free_booking_links_result_device_type_enum__from_str(s: &str) -> Option<iface_accounts::FreeBookingLinksResultDeviceTypeEnum> {
+    match s {
+        "DEVICE_UNSPECIFIED" => Some(iface_accounts::FreeBookingLinksResultDeviceTypeEnum::DeviceUnspecified),
+        "DEVICE_UNKNOWN" => Some(iface_accounts::FreeBookingLinksResultDeviceTypeEnum::DeviceUnknown),
+        "DESKTOP" => Some(iface_accounts::FreeBookingLinksResultDeviceTypeEnum::Desktop),
+        "MOBILE" => Some(iface_accounts::FreeBookingLinksResultDeviceTypeEnum::Mobile),
+        "TABLET" => Some(iface_accounts::FreeBookingLinksResultDeviceTypeEnum::Tablet),
+        _ => None,
+    }
+}
+
+fn iface_accounts__property_performance_result_advance_booking_window_enum__from_str(s: &str) -> Option<iface_accounts::PropertyPerformanceResultAdvanceBookingWindowEnum> {
+    match s {
+        "ADVANCE_BOOKING_WINDOW_UNSPECIFIED" => Some(iface_accounts::PropertyPerformanceResultAdvanceBookingWindowEnum::AdvanceBookingWindowUnspecified),
+        "ADVANCE_BOOKING_WINDOW_SAME_DAY" => Some(iface_accounts::PropertyPerformanceResultAdvanceBookingWindowEnum::AdvanceBookingWindowSameDay),
+        "ADVANCE_BOOKING_WINDOW_NEXT_DAY" => Some(iface_accounts::PropertyPerformanceResultAdvanceBookingWindowEnum::AdvanceBookingWindowNextDay),
+        "ADVANCE_BOOKING_WINDOW_DAYS_2_TO_7" => Some(iface_accounts::PropertyPerformanceResultAdvanceBookingWindowEnum::AdvanceBookingWindowDaysV2ToV7),
+        "ADVANCE_BOOKING_WINDOW_DAYS_8_TO_14" => Some(iface_accounts::PropertyPerformanceResultAdvanceBookingWindowEnum::AdvanceBookingWindowDaysV8ToV14),
+        "ADVANCE_BOOKING_WINDOW_DAYS_15_TO_30" => Some(iface_accounts::PropertyPerformanceResultAdvanceBookingWindowEnum::AdvanceBookingWindowDaysV15ToV30),
+        "ADVANCE_BOOKING_WINDOW_DAYS_31_TO_60" => Some(iface_accounts::PropertyPerformanceResultAdvanceBookingWindowEnum::AdvanceBookingWindowDaysV31ToV60),
+        "ADVANCE_BOOKING_WINDOW_DAYS_61_TO_90" => Some(iface_accounts::PropertyPerformanceResultAdvanceBookingWindowEnum::AdvanceBookingWindowDaysV61ToV90),
+        "ADVANCE_BOOKING_WINDOW_DAYS_91_TO_120" => Some(iface_accounts::PropertyPerformanceResultAdvanceBookingWindowEnum::AdvanceBookingWindowDaysV91ToV120),
+        "ADVANCE_BOOKING_WINDOW_DAYS_121_TO_150" => Some(iface_accounts::PropertyPerformanceResultAdvanceBookingWindowEnum::AdvanceBookingWindowDaysV121ToV150),
+        "ADVANCE_BOOKING_WINDOW_DAYS_151_TO_180" => Some(iface_accounts::PropertyPerformanceResultAdvanceBookingWindowEnum::AdvanceBookingWindowDaysV151ToV180),
+        "ADVANCE_BOOKING_WINDOW_DAYS_OVER_180" => Some(iface_accounts::PropertyPerformanceResultAdvanceBookingWindowEnum::AdvanceBookingWindowDaysOverV180),
+        _ => None,
+    }
+}
+
+fn iface_accounts__property_performance_result_length_of_stay_enum__from_str(s: &str) -> Option<iface_accounts::PropertyPerformanceResultLengthOfStayEnum> {
+    match s {
+        "LENGTH_OF_STAY_UNSPECIFIED" => Some(iface_accounts::PropertyPerformanceResultLengthOfStayEnum::LengthOfStayUnspecified),
+        "LENGTH_OF_STAY_NIGHTS_1" => Some(iface_accounts::PropertyPerformanceResultLengthOfStayEnum::LengthOfStayNightsV1),
+        "LENGTH_OF_STAY_NIGHTS_2" => Some(iface_accounts::PropertyPerformanceResultLengthOfStayEnum::LengthOfStayNightsV2),
+        "LENGTH_OF_STAY_NIGHTS_3" => Some(iface_accounts::PropertyPerformanceResultLengthOfStayEnum::LengthOfStayNightsV3),
+        "LENGTH_OF_STAY_NIGHTS_4_TO_7" => Some(iface_accounts::PropertyPerformanceResultLengthOfStayEnum::LengthOfStayNightsV4ToV7),
+        "LENGTH_OF_STAY_NIGHTS_8_TO_14" => Some(iface_accounts::PropertyPerformanceResultLengthOfStayEnum::LengthOfStayNightsV8ToV14),
+        "LENGTH_OF_STAY_NIGHTS_15_TO_21" => Some(iface_accounts::PropertyPerformanceResultLengthOfStayEnum::LengthOfStayNightsV15ToV21),
+        "LENGTH_OF_STAY_NIGHTS_22_TO_30" => Some(iface_accounts::PropertyPerformanceResultLengthOfStayEnum::LengthOfStayNightsV22ToV30),
+        "LENGTH_OF_STAY_NIGHTS_OVER_30" => Some(iface_accounts::PropertyPerformanceResultLengthOfStayEnum::LengthOfStayNightsOverV30),
+        _ => None,
+    }
+}
+
+fn iface_accounts__property_performance_result_occupancy_enum__from_str(s: &str) -> Option<iface_accounts::PropertyPerformanceResultOccupancyEnum> {
+    match s {
+        "OCCUPANCY_UNSPECIFIED" => Some(iface_accounts::PropertyPerformanceResultOccupancyEnum::OccupancyUnspecified),
+        "OCCUPANCY_1" => Some(iface_accounts::PropertyPerformanceResultOccupancyEnum::OccupancyV1),
+        "OCCUPANCY_2" => Some(iface_accounts::PropertyPerformanceResultOccupancyEnum::OccupancyV2),
+        "OCCUPANCY_3" => Some(iface_accounts::PropertyPerformanceResultOccupancyEnum::OccupancyV3),
+        "OCCUPANCY_4" => Some(iface_accounts::PropertyPerformanceResultOccupancyEnum::OccupancyV4),
+        "OCCUPANCY_OVER_4" => Some(iface_accounts::PropertyPerformanceResultOccupancyEnum::OccupancyOverV4),
+        _ => None,
+    }
+}
+
+fn iface_accounts__account_link_status_enum__from_str(s: &str) -> Option<iface_accounts::AccountLinkStatusEnum> {
+    match s {
+        "ACCOUNT_LINK_STATUS_UNSPECIFIED" => Some(iface_accounts::AccountLinkStatusEnum::AccountLinkStatusUnspecified),
+        "ACCOUNT_LINK_STATUS_UNKNOWN" => Some(iface_accounts::AccountLinkStatusEnum::AccountLinkStatusUnknown),
+        "REQUESTED_FROM_HOTEL_CENTER" => Some(iface_accounts::AccountLinkStatusEnum::RequestedFromHotelCenter),
+        "REQUESTED_FROM_GOOGLE_ADS" => Some(iface_accounts::AccountLinkStatusEnum::RequestedFromGoogleAds),
+        "APPROVED" => Some(iface_accounts::AccountLinkStatusEnum::Approved),
+        _ => None,
+    }
+}
+
+fn iface_accounts__data_issue_detail_data_issue_severity_enum__from_str(s: &str) -> Option<iface_accounts::DataIssueDetailDataIssueSeverityEnum> {
+    match s {
+        "DATA_ISSUE_SEVERITY_UNSPECIFIED" => Some(iface_accounts::DataIssueDetailDataIssueSeverityEnum::DataIssueSeverityUnspecified),
+        "ERROR" => Some(iface_accounts::DataIssueDetailDataIssueSeverityEnum::Error),
+        "WARNING" => Some(iface_accounts::DataIssueDetailDataIssueSeverityEnum::Warning),
+        "INFO" => Some(iface_accounts::DataIssueDetailDataIssueSeverityEnum::Info),
+        _ => None,
+    }
+}
+
+fn iface_accounts__data_issue_detail_data_issue_type_enum__from_str(s: &str) -> Option<iface_accounts::DataIssueDetailDataIssueTypeEnum> {
+    match s {
+        "FEED_DATA_ISSUE_UNSPECIFIED" => Some(iface_accounts::DataIssueDetailDataIssueTypeEnum::FeedDataIssueUnspecified),
+        "FEED_DATA_ISSUE_UNKNOWN" => Some(iface_accounts::DataIssueDetailDataIssueTypeEnum::FeedDataIssueUnknown),
+        "NO_DATA_ISSUE" => Some(iface_accounts::DataIssueDetailDataIssueTypeEnum::NoDataIssue),
+        "DUPLICATE_ADDRESS" => Some(iface_accounts::DataIssueDetailDataIssueTypeEnum::DuplicateAddress),
+        "MISSING_PHYSICAL_STREET_ADDRESS" => Some(iface_accounts::DataIssueDetailDataIssueTypeEnum::MissingPhysicalStreetAddress),
+        "MISSING_STREET_NAME" => Some(iface_accounts::DataIssueDetailDataIssueTypeEnum::MissingStreetName),
+        "MISSING_STREET_NUMBER" => Some(iface_accounts::DataIssueDetailDataIssueTypeEnum::MissingStreetNumber),
+        "MISSING_ADDRESS" => Some(iface_accounts::DataIssueDetailDataIssueTypeEnum::MissingAddress),
+        "MISSING_COUNTRY" => Some(iface_accounts::DataIssueDetailDataIssueTypeEnum::MissingCountry),
+        "INVALID_POSTAL_CODE" => Some(iface_accounts::DataIssueDetailDataIssueTypeEnum::InvalidPostalCode),
+        "INVALID_POSTAL_CODE_SUFFIX" => Some(iface_accounts::DataIssueDetailDataIssueTypeEnum::InvalidPostalCodeSuffix),
+        "UNEXPECTED_POSTAL_CODE_SUFFIX" => Some(iface_accounts::DataIssueDetailDataIssueTypeEnum::UnexpectedPostalCodeSuffix),
+        "UNEXPECTED_POSTAL_CODE" => Some(iface_accounts::DataIssueDetailDataIssueTypeEnum::UnexpectedPostalCode),
+        "INVALID_AMENITIES" => Some(iface_accounts::DataIssueDetailDataIssueTypeEnum::InvalidAmenities),
+        "INVALID_EMAIL_ADDRESS" => Some(iface_accounts::DataIssueDetailDataIssueTypeEnum::InvalidEmailAddress),
+        "DUPLICATE_LATLONG" => Some(iface_accounts::DataIssueDetailDataIssueTypeEnum::DuplicateLatlong),
+        "LATLONG_INCONSISTENT_WITH_ADDRESS" => Some(iface_accounts::DataIssueDetailDataIssueTypeEnum::LatlongInconsistentWithAddress),
+        "MISSING_LATLONG" => Some(iface_accounts::DataIssueDetailDataIssueTypeEnum::MissingLatlong),
+        "COULD_NOT_GEOCODE" => Some(iface_accounts::DataIssueDetailDataIssueTypeEnum::CouldNotGeocode),
+        "MISSING_HOTEL_NAME" => Some(iface_accounts::DataIssueDetailDataIssueTypeEnum::MissingHotelName),
+        "HOTEL_NAME_EMPTY" => Some(iface_accounts::DataIssueDetailDataIssueTypeEnum::HotelNameEmpty),
+        "INVALID_HOTEL_NAME" => Some(iface_accounts::DataIssueDetailDataIssueTypeEnum::InvalidHotelName),
+        "HOTEL_NAME_TOO_LONG" => Some(iface_accounts::DataIssueDetailDataIssueTypeEnum::HotelNameTooLong),
+        "PARSE_ERROR_IN_XML" => Some(iface_accounts::DataIssueDetailDataIssueTypeEnum::ParseErrorInXml),
+        "UNEXPECTED_ATTRIBUTE_IN_XML" => Some(iface_accounts::DataIssueDetailDataIssueTypeEnum::UnexpectedAttributeInXml),
+        "DUPLICATE_PHONE_NUMBER" => Some(iface_accounts::DataIssueDetailDataIssueTypeEnum::DuplicatePhoneNumber),
+        "MISSING_PHONE_NUMBER" => Some(iface_accounts::DataIssueDetailDataIssueTypeEnum::MissingPhoneNumber),
+        "MISSING_VOICE_PHONE_NUMBER" => Some(iface_accounts::DataIssueDetailDataIssueTypeEnum::MissingVoicePhoneNumber),
+        "INVALID_PHONE_NUMBER_FORMAT" => Some(iface_accounts::DataIssueDetailDataIssueTypeEnum::InvalidPhoneNumberFormat),
+        "INVALID_PHONE_NUMBER" => Some(iface_accounts::DataIssueDetailDataIssueTypeEnum::InvalidPhoneNumber),
+        "INVALID_PHONE_NUMBER_COUNTRY_CODE" => Some(iface_accounts::DataIssueDetailDataIssueTypeEnum::InvalidPhoneNumberCountryCode),
+        "PHONE_NUMBER_TOO_LONG" => Some(iface_accounts::DataIssueDetailDataIssueTypeEnum::PhoneNumberTooLong),
+        "PHONE_NUMBER_TOO_SHORT" => Some(iface_accounts::DataIssueDetailDataIssueTypeEnum::PhoneNumberTooShort),
+        "INVALID_WEBSITE_URL" => Some(iface_accounts::DataIssueDetailDataIssueTypeEnum::InvalidWebsiteUrl),
+        "ADWORDS_ATTRIBUTE_TOO_LONG" => Some(iface_accounts::DataIssueDetailDataIssueTypeEnum::AdwordsAttributeTooLong),
+        "BRAND_NOT_ALLOWED" => Some(iface_accounts::DataIssueDetailDataIssueTypeEnum::BrandNotAllowed),
+        "FLAGGED_DUE_TO_SUSPICIOUS_METADATA" => Some(iface_accounts::DataIssueDetailDataIssueTypeEnum::FlaggedDueToSuspiciousMetadata),
+        "NOT_ENOUGH_IMAGES_PROVIDED" => Some(iface_accounts::DataIssueDetailDataIssueTypeEnum::NotEnoughImagesProvided),
+        "IMAGE_PROCESSING_IN_PROGRESS" => Some(iface_accounts::DataIssueDetailDataIssueTypeEnum::ImageProcessingInProgress),
+        "CANNOT_FETCH_IMAGES" => Some(iface_accounts::DataIssueDetailDataIssueTypeEnum::CannotFetchImages),
+        "INCOMPATIBLE_IMAGE_SIZE_OR_LOW_QUALITY" => Some(iface_accounts::DataIssueDetailDataIssueTypeEnum::IncompatibleImageSizeOrLowQuality),
+        "MISSING_LANG_IN_RAW_LISTING" => Some(iface_accounts::DataIssueDetailDataIssueTypeEnum::MissingLangInRawListing),
+        "IS_HOTEL" => Some(iface_accounts::DataIssueDetailDataIssueTypeEnum::IsHotel),
+        "MISSING_REQ_ATTR" => Some(iface_accounts::DataIssueDetailDataIssueTypeEnum::MissingReqAttr),
+        "MISSING_NAME" => Some(iface_accounts::DataIssueDetailDataIssueTypeEnum::MissingName),
+        "MISSING_LANG_IN_NAME" => Some(iface_accounts::DataIssueDetailDataIssueTypeEnum::MissingLangInName),
+        "VR_NAME_TOO_LONG" => Some(iface_accounts::DataIssueDetailDataIssueTypeEnum::VrNameTooLong),
+        "TEST_PROPERTY" => Some(iface_accounts::DataIssueDetailDataIssueTypeEnum::TestProperty),
+        "NON_VR_ACCOMMODATION_TYPE_BASED_ON_LISTING_NAME" => Some(iface_accounts::DataIssueDetailDataIssueTypeEnum::NonVrAccommodationTypeBasedOnListingName),
+        "BRAND_NAME_TOO_LONG" => Some(iface_accounts::DataIssueDetailDataIssueTypeEnum::BrandNameTooLong),
+        "MISSING_BRAND_NAME" => Some(iface_accounts::DataIssueDetailDataIssueTypeEnum::MissingBrandName),
+        "INVALID_REVIEW_RATING" => Some(iface_accounts::DataIssueDetailDataIssueTypeEnum::InvalidReviewRating),
+        "INVALID_CHECKIN_FORMAT" => Some(iface_accounts::DataIssueDetailDataIssueTypeEnum::InvalidCheckinFormat),
+        "INVALID_CHECKOUT_FORMAT" => Some(iface_accounts::DataIssueDetailDataIssueTypeEnum::InvalidCheckoutFormat),
+        _ => None,
+    }
+}
+
+fn iface_accounts__hotel_view_match_status_enum__from_str(s: &str) -> Option<iface_accounts::HotelViewMatchStatusEnum> {
+    match s {
+        "MATCH_STATUS_UNSPECIFIED" => Some(iface_accounts::HotelViewMatchStatusEnum::MatchStatusUnspecified),
+        "MATCH_STATUS_UNKNOWN" => Some(iface_accounts::HotelViewMatchStatusEnum::MatchStatusUnknown),
+        "NOT_MATCHED" => Some(iface_accounts::HotelViewMatchStatusEnum::NotMatched),
+        "MATCHED" => Some(iface_accounts::HotelViewMatchStatusEnum::Matched),
+        "MAP_OVERLAP" => Some(iface_accounts::HotelViewMatchStatusEnum::MapOverlap),
+        _ => None,
+    }
+}
+
+fn iface_accounts__icon_state_enum__from_str(s: &str) -> Option<iface_accounts::IconStateEnum> {
+    match s {
+        "STATE_UNSPECIFIED" => Some(iface_accounts::IconStateEnum::StateUnspecified),
+        "NEW" => Some(iface_accounts::IconStateEnum::New),
+        "APPROVED" => Some(iface_accounts::IconStateEnum::Approved),
+        "REJECTED" => Some(iface_accounts::IconStateEnum::Rejected),
+        _ => None,
+    }
+}
+
+fn iface_accounts__rating_type_op_enum__from_str(s: &str) -> Option<iface_accounts::RatingTypeOpEnum> {
+    match s {
+        "TYPE_UNSPECIFIED" => Some(iface_accounts::RatingTypeOpEnum::TypeUnspecified),
+        "OVERALL" => Some(iface_accounts::RatingTypeOpEnum::Overall),
+        _ => None,
+    }
+}
+
+fn iface_accounts__review_type_op_enum__from_str(s: &str) -> Option<iface_accounts::ReviewTypeOpEnum> {
+    match s {
+        "UNKNOWN" => Some(iface_accounts::ReviewTypeOpEnum::Unknown),
+        "EDITORIAL" => Some(iface_accounts::ReviewTypeOpEnum::Editorial),
+        "USER" => Some(iface_accounts::ReviewTypeOpEnum::User),
+        _ => None,
+    }
+}
+
+fn iface_accounts__price_accuracy_row_mismatch_reason_enum__from_str(s: &str) -> Option<iface_accounts::PriceAccuracyRowMismatchReasonEnum> {
+    match s {
+        "MISMATCH_REASON_UNSPECIFIED" => Some(iface_accounts::PriceAccuracyRowMismatchReasonEnum::MismatchReasonUnspecified),
+        "MISMATCH_REASON_UNKNOWN" => Some(iface_accounts::PriceAccuracyRowMismatchReasonEnum::MismatchReasonUnknown),
+        "TAX_MISMATCH" => Some(iface_accounts::PriceAccuracyRowMismatchReasonEnum::TaxMismatch),
+        "ROOM_UNAVAILABLE" => Some(iface_accounts::PriceAccuracyRowMismatchReasonEnum::RoomUnavailable),
+        "SITE_ERROR" => Some(iface_accounts::PriceAccuracyRowMismatchReasonEnum::SiteError),
+        "PRICE_FEED_DELAYED" => Some(iface_accounts::PriceAccuracyRowMismatchReasonEnum::PriceFeedDelayed),
+        "DISCOUNT_MISSING" => Some(iface_accounts::PriceAccuracyRowMismatchReasonEnum::DiscountMissing),
+        "INCORRECT_DISCOUNT_VALUE" => Some(iface_accounts::PriceAccuracyRowMismatchReasonEnum::IncorrectDiscountValue),
+        "WRONG_ITINERARY" => Some(iface_accounts::PriceAccuracyRowMismatchReasonEnum::WrongItinerary),
+        _ => None,
+    }
+}
+
+fn iface_accounts__price_accuracy_row_signal_source_enum__from_str(s: &str) -> Option<iface_accounts::PriceAccuracyRowSignalSourceEnum> {
+    match s {
+        "SIGNAL_SOURCE_UNSPECIFIED" => Some(iface_accounts::PriceAccuracyRowSignalSourceEnum::SignalSourceUnspecified),
+        "SIGNAL_SOURCE_UNKNOWN" => Some(iface_accounts::PriceAccuracyRowSignalSourceEnum::SignalSourceUnknown),
+        "FETCHED" => Some(iface_accounts::PriceAccuracyRowSignalSourceEnum::Fetched),
+        "PIXEL" => Some(iface_accounts::PriceAccuracyRowSignalSourceEnum::Pixel),
+        _ => None,
+    }
+}
+
+fn iface_accounts__summarize_price_accuracy_response_current_book_on_google_score_enum__from_str(s: &str) -> Option<iface_accounts::SummarizePriceAccuracyResponseCurrentBookOnGoogleScoreEnum> {
+    match s {
+        "PRICE_ACCURACY_STATE_UNSPECIFIED" => Some(iface_accounts::SummarizePriceAccuracyResponseCurrentBookOnGoogleScoreEnum::PriceAccuracyStateUnspecified),
+        "PRICE_ACCURACY_STATE_UNKNOWN" => Some(iface_accounts::SummarizePriceAccuracyResponseCurrentBookOnGoogleScoreEnum::PriceAccuracyStateUnknown),
+        "EXCELLENT" => Some(iface_accounts::SummarizePriceAccuracyResponseCurrentBookOnGoogleScoreEnum::Excellent),
+        "GOOD" => Some(iface_accounts::SummarizePriceAccuracyResponseCurrentBookOnGoogleScoreEnum::Good),
+        "POOR" => Some(iface_accounts::SummarizePriceAccuracyResponseCurrentBookOnGoogleScoreEnum::Poor),
+        "AT_RISK" => Some(iface_accounts::SummarizePriceAccuracyResponseCurrentBookOnGoogleScoreEnum::AtRisk),
+        "FAILED" => Some(iface_accounts::SummarizePriceAccuracyResponseCurrentBookOnGoogleScoreEnum::Failed),
+        _ => None,
+    }
+}
+
+fn iface_accounts__price_coverage_bucket_advance_booking_window_range_enum__from_str(s: &str) -> Option<iface_accounts::PriceCoverageBucketAdvanceBookingWindowRangeEnum> {
+    match s {
+        "ADVANCE_BOOKING_WINDOW_RANGE_UNSPECIFIED" => Some(iface_accounts::PriceCoverageBucketAdvanceBookingWindowRangeEnum::AdvanceBookingWindowRangeUnspecified),
+        "ADVANCE_BOOKING_WINDOW_RANGE_UNKNOWN" => Some(iface_accounts::PriceCoverageBucketAdvanceBookingWindowRangeEnum::AdvanceBookingWindowRangeUnknown),
+        "DAYS_0_TO_30" => Some(iface_accounts::PriceCoverageBucketAdvanceBookingWindowRangeEnum::DaysV0ToV30),
+        "DAYS_31_TO_60" => Some(iface_accounts::PriceCoverageBucketAdvanceBookingWindowRangeEnum::DaysV31ToV60),
+        "DAYS_61_TO_90" => Some(iface_accounts::PriceCoverageBucketAdvanceBookingWindowRangeEnum::DaysV61ToV90),
+        "DAYS_91_TO_120" => Some(iface_accounts::PriceCoverageBucketAdvanceBookingWindowRangeEnum::DaysV91ToV120),
+        "DAYS_121_TO_150" => Some(iface_accounts::PriceCoverageBucketAdvanceBookingWindowRangeEnum::DaysV121ToV150),
+        "DAYS_151_TO_180" => Some(iface_accounts::PriceCoverageBucketAdvanceBookingWindowRangeEnum::DaysV151ToV180),
+        "DAYS_181_TO_210" => Some(iface_accounts::PriceCoverageBucketAdvanceBookingWindowRangeEnum::DaysV181ToV210),
+        "DAYS_211_TO_240" => Some(iface_accounts::PriceCoverageBucketAdvanceBookingWindowRangeEnum::DaysV211ToV240),
+        "DAYS_241_TO_270" => Some(iface_accounts::PriceCoverageBucketAdvanceBookingWindowRangeEnum::DaysV241ToV270),
+        "DAYS_271_TO_300" => Some(iface_accounts::PriceCoverageBucketAdvanceBookingWindowRangeEnum::DaysV271ToV300),
+        "DAYS_301_TO_330" => Some(iface_accounts::PriceCoverageBucketAdvanceBookingWindowRangeEnum::DaysV301ToV330),
+        _ => None,
+    }
+}
+
+fn iface_accounts__price_coverage_bucket_length_of_stay_range_enum__from_str(s: &str) -> Option<iface_accounts::PriceCoverageBucketLengthOfStayRangeEnum> {
+    match s {
+        "LENGTH_OF_STAY_RANGE_UNSPECIFIED" => Some(iface_accounts::PriceCoverageBucketLengthOfStayRangeEnum::LengthOfStayRangeUnspecified),
+        "LENGTH_OF_STAY_RANGE_UNKNOWN" => Some(iface_accounts::PriceCoverageBucketLengthOfStayRangeEnum::LengthOfStayRangeUnknown),
+        "LENGTH_OF_STAY_1_TO_7" => Some(iface_accounts::PriceCoverageBucketLengthOfStayRangeEnum::LengthOfStayV1ToV7),
+        "LENGTH_OF_STAY_8_TO_14" => Some(iface_accounts::PriceCoverageBucketLengthOfStayRangeEnum::LengthOfStayV8ToV14),
+        "LENGTH_OF_STAY_15_TO_30" => Some(iface_accounts::PriceCoverageBucketLengthOfStayRangeEnum::LengthOfStayV15ToV30),
+        _ => None,
+    }
+}
+
+fn iface_accounts__travelpartner_accounts_hotels_set_live_on_google__ok(body: String) -> Result<iface_accounts::SetLiveOnGoogleResponse, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match iface_accounts__set_live_on_google_response__from_json(&v) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_accounts__travelpartner_accounts_hotels_set_live_on_google__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
+fn iface_accounts__travelpartner_accounts_reconciliation_reports_get__ok(body: String) -> Result<iface_accounts::ReconciliationReport, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match iface_accounts__reconciliation_report__from_json(&v) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_accounts__travelpartner_accounts_reconciliation_reports_get__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
+fn iface_accounts__travelpartner_accounts_brands_patch__ok(body: String) -> Result<iface_accounts::Brand, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match iface_accounts__brand__from_json(&v) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_accounts__travelpartner_accounts_brands_patch__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
+fn iface_accounts__travelpartner_accounts_account_links_delete__ok(body: String) -> Result<iface_accounts::Empty, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match iface_accounts__empty__from_json(&v) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_accounts__travelpartner_accounts_account_links_delete__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
+fn iface_accounts__travelpartner_accounts_free_booking_links_report_views_query__ok(body: String) -> Result<iface_accounts::QueryFreeBookingLinksReportResponse, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match iface_accounts__query_free_booking_links_report_response__from_json(&v) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_accounts__travelpartner_accounts_free_booking_links_report_views_query__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
+fn iface_accounts__travelpartner_accounts_participation_report_views_query__ok(body: String) -> Result<iface_accounts::QueryParticipationReportResponse, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match iface_accounts__query_participation_report_response__from_json(&v) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_accounts__travelpartner_accounts_participation_report_views_query__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
+fn iface_accounts__travelpartner_accounts_property_performance_report_views_query__ok(body: String) -> Result<iface_accounts::QueryPropertyPerformanceReportResponse, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match iface_accounts__query_property_performance_report_response__from_json(&v) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_accounts__travelpartner_accounts_property_performance_report_views_query__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
+fn iface_accounts__travelpartner_accounts_account_links_list__ok(body: String) -> Result<iface_accounts::ListAccountLinksResponse, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match iface_accounts__list_account_links_response__from_json(&v) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_accounts__travelpartner_accounts_account_links_list__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
+fn iface_accounts__travelpartner_accounts_account_links_create__ok(body: String) -> Result<iface_accounts::AccountLink, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match iface_accounts__account_link__from_json(&v) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_accounts__travelpartner_accounts_account_links_create__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
+fn iface_accounts__travelpartner_accounts_brands_list__ok(body: String) -> Result<iface_accounts::ListBrandsResponse, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match iface_accounts__list_brands_response__from_json(&v) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_accounts__travelpartner_accounts_brands_list__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
+fn iface_accounts__travelpartner_accounts_brands_create__ok(body: String) -> Result<iface_accounts::Brand, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match iface_accounts__brand__from_json(&v) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_accounts__travelpartner_accounts_brands_create__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
+fn iface_accounts__travelpartner_accounts_hotel_views_list__ok(body: String) -> Result<iface_accounts::ListHotelViewsResponse, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match iface_accounts__list_hotel_views_response__from_json(&v) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_accounts__travelpartner_accounts_hotel_views_list__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
+fn iface_accounts__travelpartner_accounts_hotel_views_summarize__ok(body: String) -> Result<iface_accounts::SummarizeHotelViewsResponse, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match iface_accounts__summarize_hotel_views_response__from_json(&v) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_accounts__travelpartner_accounts_hotel_views_summarize__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
+fn iface_accounts__travelpartner_accounts_icons_list__ok(body: String) -> Result<iface_accounts::ListIconsResponse, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match iface_accounts__list_icons_response__from_json(&v) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_accounts__travelpartner_accounts_icons_list__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
+fn iface_accounts__travelpartner_accounts_icons_create__ok(body: String) -> Result<iface_accounts::Icon, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match iface_accounts__icon__from_json(&v) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_accounts__travelpartner_accounts_icons_create__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
+fn iface_accounts__travelpartner_accounts_listings_verify__ok(body: String) -> Result<iface_accounts::VerifyListingsResponse, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match iface_accounts__verify_listings_response__from_json(&v) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_accounts__travelpartner_accounts_listings_verify__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
+fn iface_accounts__travelpartner_accounts_price_accuracy_views_list__ok(body: String) -> Result<iface_accounts::ListPriceAccuracyViewsResponse, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match iface_accounts__list_price_accuracy_views_response__from_json(&v) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_accounts__travelpartner_accounts_price_accuracy_views_list__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
+fn iface_accounts__travelpartner_accounts_price_accuracy_views_summarize__ok(body: String) -> Result<iface_accounts::SummarizePriceAccuracyResponse, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match iface_accounts__summarize_price_accuracy_response__from_json(&v) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_accounts__travelpartner_accounts_price_accuracy_views_summarize__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
+fn iface_accounts__travelpartner_accounts_price_coverage_views_list__ok(body: String) -> Result<iface_accounts::ListPriceCoverageViewsResponse, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match iface_accounts__list_price_coverage_views_response__from_json(&v) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_accounts__travelpartner_accounts_price_coverage_views_list__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
+fn iface_accounts__travelpartner_accounts_price_coverage_views_get_latest__ok(body: String) -> Result<iface_accounts::PriceCoverageView, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match iface_accounts__price_coverage_view__from_json(&v) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_accounts__travelpartner_accounts_price_coverage_views_get_latest__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
+fn iface_accounts__travelpartner_accounts_reconciliation_reports_list__ok(body: String) -> Result<iface_accounts::ListReconciliationReportsResponse, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match iface_accounts__list_reconciliation_reports_response__from_json(&v) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_accounts__travelpartner_accounts_reconciliation_reports_list__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
+fn iface_accounts__travelpartner_accounts_reconciliation_reports_create__ok(body: String) -> Result<iface_accounts::CreateReconciliationReportResponse, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match iface_accounts__create_reconciliation_report_response__from_json(&v) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_accounts__travelpartner_accounts_reconciliation_reports_create__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
+fn iface_accounts__travelpartner_accounts_reconciliation_reports_validate__ok(body: String) -> Result<iface_accounts::ValidateReconciliationReportResponse, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match iface_accounts__validate_reconciliation_report_response__from_json(&v) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_accounts__travelpartner_accounts_reconciliation_reports_validate__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
 impl iface_accounts::Guest for crate::Component {
-    fn travelpartner_accounts_hotels_set_live_on_google(params: iface_accounts::TravelpartnerAccountsHotelsSetLiveOnGoogleParams) -> Result<String, String> {
+    fn travelpartner_accounts_hotels_set_live_on_google(params: iface_accounts::TravelpartnerAccountsHotelsSetLiveOnGoogleParams) -> Result<iface_accounts::SetLiveOnGoogleResponse, String> {
         let json = iface_accounts__travelpartner_accounts_hotels_set_live_on_google_params__to_json(&params);
-        dispatch(&OP_ACCOUNTS_TRAVELPARTNER_ACCOUNTS_HOTELS_SET_LIVE_ON_GOOGLE, json)
+        match dispatch(&OP_ACCOUNTS_TRAVELPARTNER_ACCOUNTS_HOTELS_SET_LIVE_ON_GOOGLE, json).and_then(iface_accounts__travelpartner_accounts_hotels_set_live_on_google__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_accounts__travelpartner_accounts_hotels_set_live_on_google__err(e)),
+        }
     }
-    fn travelpartner_accounts_reconciliation_reports_get(params: iface_accounts::TravelpartnerAccountsReconciliationReportsGetParams) -> Result<String, String> {
+    fn travelpartner_accounts_reconciliation_reports_get(params: iface_accounts::TravelpartnerAccountsReconciliationReportsGetParams) -> Result<iface_accounts::ReconciliationReport, String> {
         let json = iface_accounts__travelpartner_accounts_reconciliation_reports_get_params__to_json(&params);
-        dispatch(&OP_ACCOUNTS_TRAVELPARTNER_ACCOUNTS_RECONCILIATION_REPORTS_GET, json)
+        match dispatch(&OP_ACCOUNTS_TRAVELPARTNER_ACCOUNTS_RECONCILIATION_REPORTS_GET, json).and_then(iface_accounts__travelpartner_accounts_reconciliation_reports_get__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_accounts__travelpartner_accounts_reconciliation_reports_get__err(e)),
+        }
     }
-    fn travelpartner_accounts_brands_patch(params: iface_accounts::TravelpartnerAccountsBrandsPatchParams) -> Result<String, String> {
+    fn travelpartner_accounts_brands_patch(params: iface_accounts::TravelpartnerAccountsBrandsPatchParams) -> Result<iface_accounts::Brand, String> {
         let json = iface_accounts__travelpartner_accounts_brands_patch_params__to_json(&params);
-        dispatch(&OP_ACCOUNTS_TRAVELPARTNER_ACCOUNTS_BRANDS_PATCH, json)
+        match dispatch(&OP_ACCOUNTS_TRAVELPARTNER_ACCOUNTS_BRANDS_PATCH, json).and_then(iface_accounts__travelpartner_accounts_brands_patch__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_accounts__travelpartner_accounts_brands_patch__err(e)),
+        }
     }
-    fn travelpartner_accounts_account_links_delete(params: iface_accounts::TravelpartnerAccountsAccountLinksDeleteParams) -> Result<String, String> {
+    fn travelpartner_accounts_account_links_delete(params: iface_accounts::TravelpartnerAccountsAccountLinksDeleteParams) -> Result<iface_accounts::Empty, String> {
         let json = iface_accounts__travelpartner_accounts_account_links_delete_params__to_json(&params);
-        dispatch(&OP_ACCOUNTS_TRAVELPARTNER_ACCOUNTS_ACCOUNT_LINKS_DELETE, json)
+        match dispatch(&OP_ACCOUNTS_TRAVELPARTNER_ACCOUNTS_ACCOUNT_LINKS_DELETE, json).and_then(iface_accounts__travelpartner_accounts_account_links_delete__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_accounts__travelpartner_accounts_account_links_delete__err(e)),
+        }
     }
-    fn travelpartner_accounts_free_booking_links_report_views_query(params: iface_accounts::TravelpartnerAccountsFreeBookingLinksReportViewsQueryParams) -> Result<String, String> {
+    fn travelpartner_accounts_free_booking_links_report_views_query(params: iface_accounts::TravelpartnerAccountsFreeBookingLinksReportViewsQueryParams) -> Result<iface_accounts::QueryFreeBookingLinksReportResponse, String> {
         let json = iface_accounts__travelpartner_accounts_free_booking_links_report_views_query_params__to_json(&params);
-        dispatch(&OP_ACCOUNTS_TRAVELPARTNER_ACCOUNTS_FREE_BOOKING_LINKS_REPORT_VIEWS_QUERY, json)
+        match dispatch(&OP_ACCOUNTS_TRAVELPARTNER_ACCOUNTS_FREE_BOOKING_LINKS_REPORT_VIEWS_QUERY, json).and_then(iface_accounts__travelpartner_accounts_free_booking_links_report_views_query__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_accounts__travelpartner_accounts_free_booking_links_report_views_query__err(e)),
+        }
     }
-    fn travelpartner_accounts_participation_report_views_query(params: iface_accounts::TravelpartnerAccountsParticipationReportViewsQueryParams) -> Result<String, String> {
+    fn travelpartner_accounts_participation_report_views_query(params: iface_accounts::TravelpartnerAccountsParticipationReportViewsQueryParams) -> Result<iface_accounts::QueryParticipationReportResponse, String> {
         let json = iface_accounts__travelpartner_accounts_participation_report_views_query_params__to_json(&params);
-        dispatch(&OP_ACCOUNTS_TRAVELPARTNER_ACCOUNTS_PARTICIPATION_REPORT_VIEWS_QUERY, json)
+        match dispatch(&OP_ACCOUNTS_TRAVELPARTNER_ACCOUNTS_PARTICIPATION_REPORT_VIEWS_QUERY, json).and_then(iface_accounts__travelpartner_accounts_participation_report_views_query__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_accounts__travelpartner_accounts_participation_report_views_query__err(e)),
+        }
     }
-    fn travelpartner_accounts_property_performance_report_views_query(params: iface_accounts::TravelpartnerAccountsPropertyPerformanceReportViewsQueryParams) -> Result<String, String> {
+    fn travelpartner_accounts_property_performance_report_views_query(params: iface_accounts::TravelpartnerAccountsPropertyPerformanceReportViewsQueryParams) -> Result<iface_accounts::QueryPropertyPerformanceReportResponse, String> {
         let json = iface_accounts__travelpartner_accounts_property_performance_report_views_query_params__to_json(&params);
-        dispatch(&OP_ACCOUNTS_TRAVELPARTNER_ACCOUNTS_PROPERTY_PERFORMANCE_REPORT_VIEWS_QUERY, json)
+        match dispatch(&OP_ACCOUNTS_TRAVELPARTNER_ACCOUNTS_PROPERTY_PERFORMANCE_REPORT_VIEWS_QUERY, json).and_then(iface_accounts__travelpartner_accounts_property_performance_report_views_query__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_accounts__travelpartner_accounts_property_performance_report_views_query__err(e)),
+        }
     }
-    fn travelpartner_accounts_account_links_list(params: iface_accounts::TravelpartnerAccountsAccountLinksListParams) -> Result<String, String> {
+    fn travelpartner_accounts_account_links_list(params: iface_accounts::TravelpartnerAccountsAccountLinksListParams) -> Result<iface_accounts::ListAccountLinksResponse, String> {
         let json = iface_accounts__travelpartner_accounts_account_links_list_params__to_json(&params);
-        dispatch(&OP_ACCOUNTS_TRAVELPARTNER_ACCOUNTS_ACCOUNT_LINKS_LIST, json)
+        match dispatch(&OP_ACCOUNTS_TRAVELPARTNER_ACCOUNTS_ACCOUNT_LINKS_LIST, json).and_then(iface_accounts__travelpartner_accounts_account_links_list__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_accounts__travelpartner_accounts_account_links_list__err(e)),
+        }
     }
-    fn travelpartner_accounts_account_links_create(params: iface_accounts::TravelpartnerAccountsAccountLinksCreateParams) -> Result<String, String> {
+    fn travelpartner_accounts_account_links_create(params: iface_accounts::TravelpartnerAccountsAccountLinksCreateParams) -> Result<iface_accounts::AccountLink, String> {
         let json = iface_accounts__travelpartner_accounts_account_links_create_params__to_json(&params);
-        dispatch(&OP_ACCOUNTS_TRAVELPARTNER_ACCOUNTS_ACCOUNT_LINKS_CREATE, json)
+        match dispatch(&OP_ACCOUNTS_TRAVELPARTNER_ACCOUNTS_ACCOUNT_LINKS_CREATE, json).and_then(iface_accounts__travelpartner_accounts_account_links_create__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_accounts__travelpartner_accounts_account_links_create__err(e)),
+        }
     }
-    fn travelpartner_accounts_brands_list(params: iface_accounts::TravelpartnerAccountsBrandsListParams) -> Result<String, String> {
+    fn travelpartner_accounts_brands_list(params: iface_accounts::TravelpartnerAccountsBrandsListParams) -> Result<iface_accounts::ListBrandsResponse, String> {
         let json = iface_accounts__travelpartner_accounts_brands_list_params__to_json(&params);
-        dispatch(&OP_ACCOUNTS_TRAVELPARTNER_ACCOUNTS_BRANDS_LIST, json)
+        match dispatch(&OP_ACCOUNTS_TRAVELPARTNER_ACCOUNTS_BRANDS_LIST, json).and_then(iface_accounts__travelpartner_accounts_brands_list__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_accounts__travelpartner_accounts_brands_list__err(e)),
+        }
     }
-    fn travelpartner_accounts_brands_create(params: iface_accounts::TravelpartnerAccountsBrandsCreateParams) -> Result<String, String> {
+    fn travelpartner_accounts_brands_create(params: iface_accounts::TravelpartnerAccountsBrandsCreateParams) -> Result<iface_accounts::Brand, String> {
         let json = iface_accounts__travelpartner_accounts_brands_create_params__to_json(&params);
-        dispatch(&OP_ACCOUNTS_TRAVELPARTNER_ACCOUNTS_BRANDS_CREATE, json)
+        match dispatch(&OP_ACCOUNTS_TRAVELPARTNER_ACCOUNTS_BRANDS_CREATE, json).and_then(iface_accounts__travelpartner_accounts_brands_create__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_accounts__travelpartner_accounts_brands_create__err(e)),
+        }
     }
-    fn travelpartner_accounts_hotel_views_list(params: iface_accounts::TravelpartnerAccountsHotelViewsListParams) -> Result<String, String> {
+    fn travelpartner_accounts_hotel_views_list(params: iface_accounts::TravelpartnerAccountsHotelViewsListParams) -> Result<iface_accounts::ListHotelViewsResponse, String> {
         let json = iface_accounts__travelpartner_accounts_hotel_views_list_params__to_json(&params);
-        dispatch(&OP_ACCOUNTS_TRAVELPARTNER_ACCOUNTS_HOTEL_VIEWS_LIST, json)
+        match dispatch(&OP_ACCOUNTS_TRAVELPARTNER_ACCOUNTS_HOTEL_VIEWS_LIST, json).and_then(iface_accounts__travelpartner_accounts_hotel_views_list__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_accounts__travelpartner_accounts_hotel_views_list__err(e)),
+        }
     }
-    fn travelpartner_accounts_hotel_views_summarize(params: iface_accounts::TravelpartnerAccountsHotelViewsSummarizeParams) -> Result<String, String> {
+    fn travelpartner_accounts_hotel_views_summarize(params: iface_accounts::TravelpartnerAccountsHotelViewsSummarizeParams) -> Result<iface_accounts::SummarizeHotelViewsResponse, String> {
         let json = iface_accounts__travelpartner_accounts_hotel_views_summarize_params__to_json(&params);
-        dispatch(&OP_ACCOUNTS_TRAVELPARTNER_ACCOUNTS_HOTEL_VIEWS_SUMMARIZE, json)
+        match dispatch(&OP_ACCOUNTS_TRAVELPARTNER_ACCOUNTS_HOTEL_VIEWS_SUMMARIZE, json).and_then(iface_accounts__travelpartner_accounts_hotel_views_summarize__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_accounts__travelpartner_accounts_hotel_views_summarize__err(e)),
+        }
     }
-    fn travelpartner_accounts_icons_list(params: iface_accounts::TravelpartnerAccountsIconsListParams) -> Result<String, String> {
+    fn travelpartner_accounts_icons_list(params: iface_accounts::TravelpartnerAccountsIconsListParams) -> Result<iface_accounts::ListIconsResponse, String> {
         let json = iface_accounts__travelpartner_accounts_icons_list_params__to_json(&params);
-        dispatch(&OP_ACCOUNTS_TRAVELPARTNER_ACCOUNTS_ICONS_LIST, json)
+        match dispatch(&OP_ACCOUNTS_TRAVELPARTNER_ACCOUNTS_ICONS_LIST, json).and_then(iface_accounts__travelpartner_accounts_icons_list__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_accounts__travelpartner_accounts_icons_list__err(e)),
+        }
     }
-    fn travelpartner_accounts_icons_create(params: iface_accounts::TravelpartnerAccountsIconsCreateParams) -> Result<String, String> {
+    fn travelpartner_accounts_icons_create(params: iface_accounts::TravelpartnerAccountsIconsCreateParams) -> Result<iface_accounts::Icon, String> {
         let json = iface_accounts__travelpartner_accounts_icons_create_params__to_json(&params);
-        dispatch(&OP_ACCOUNTS_TRAVELPARTNER_ACCOUNTS_ICONS_CREATE, json)
+        match dispatch(&OP_ACCOUNTS_TRAVELPARTNER_ACCOUNTS_ICONS_CREATE, json).and_then(iface_accounts__travelpartner_accounts_icons_create__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_accounts__travelpartner_accounts_icons_create__err(e)),
+        }
     }
-    fn travelpartner_accounts_listings_verify(params: iface_accounts::TravelpartnerAccountsListingsVerifyParams) -> Result<String, String> {
+    fn travelpartner_accounts_listings_verify(params: iface_accounts::TravelpartnerAccountsListingsVerifyParams) -> Result<iface_accounts::VerifyListingsResponse, String> {
         let json = iface_accounts__travelpartner_accounts_listings_verify_params__to_json(&params);
-        dispatch(&OP_ACCOUNTS_TRAVELPARTNER_ACCOUNTS_LISTINGS_VERIFY, json)
+        match dispatch(&OP_ACCOUNTS_TRAVELPARTNER_ACCOUNTS_LISTINGS_VERIFY, json).and_then(iface_accounts__travelpartner_accounts_listings_verify__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_accounts__travelpartner_accounts_listings_verify__err(e)),
+        }
     }
-    fn travelpartner_accounts_price_accuracy_views_list(params: iface_accounts::TravelpartnerAccountsPriceAccuracyViewsListParams) -> Result<String, String> {
+    fn travelpartner_accounts_price_accuracy_views_list(params: iface_accounts::TravelpartnerAccountsPriceAccuracyViewsListParams) -> Result<iface_accounts::ListPriceAccuracyViewsResponse, String> {
         let json = iface_accounts__travelpartner_accounts_price_accuracy_views_list_params__to_json(&params);
-        dispatch(&OP_ACCOUNTS_TRAVELPARTNER_ACCOUNTS_PRICE_ACCURACY_VIEWS_LIST, json)
+        match dispatch(&OP_ACCOUNTS_TRAVELPARTNER_ACCOUNTS_PRICE_ACCURACY_VIEWS_LIST, json).and_then(iface_accounts__travelpartner_accounts_price_accuracy_views_list__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_accounts__travelpartner_accounts_price_accuracy_views_list__err(e)),
+        }
     }
-    fn travelpartner_accounts_price_accuracy_views_summarize(params: iface_accounts::TravelpartnerAccountsPriceAccuracyViewsSummarizeParams) -> Result<String, String> {
+    fn travelpartner_accounts_price_accuracy_views_summarize(params: iface_accounts::TravelpartnerAccountsPriceAccuracyViewsSummarizeParams) -> Result<iface_accounts::SummarizePriceAccuracyResponse, String> {
         let json = iface_accounts__travelpartner_accounts_price_accuracy_views_summarize_params__to_json(&params);
-        dispatch(&OP_ACCOUNTS_TRAVELPARTNER_ACCOUNTS_PRICE_ACCURACY_VIEWS_SUMMARIZE, json)
+        match dispatch(&OP_ACCOUNTS_TRAVELPARTNER_ACCOUNTS_PRICE_ACCURACY_VIEWS_SUMMARIZE, json).and_then(iface_accounts__travelpartner_accounts_price_accuracy_views_summarize__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_accounts__travelpartner_accounts_price_accuracy_views_summarize__err(e)),
+        }
     }
-    fn travelpartner_accounts_price_coverage_views_list(params: iface_accounts::TravelpartnerAccountsPriceCoverageViewsListParams) -> Result<String, String> {
+    fn travelpartner_accounts_price_coverage_views_list(params: iface_accounts::TravelpartnerAccountsPriceCoverageViewsListParams) -> Result<iface_accounts::ListPriceCoverageViewsResponse, String> {
         let json = iface_accounts__travelpartner_accounts_price_coverage_views_list_params__to_json(&params);
-        dispatch(&OP_ACCOUNTS_TRAVELPARTNER_ACCOUNTS_PRICE_COVERAGE_VIEWS_LIST, json)
+        match dispatch(&OP_ACCOUNTS_TRAVELPARTNER_ACCOUNTS_PRICE_COVERAGE_VIEWS_LIST, json).and_then(iface_accounts__travelpartner_accounts_price_coverage_views_list__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_accounts__travelpartner_accounts_price_coverage_views_list__err(e)),
+        }
     }
-    fn travelpartner_accounts_price_coverage_views_get_latest(params: iface_accounts::TravelpartnerAccountsPriceCoverageViewsGetLatestParams) -> Result<String, String> {
+    fn travelpartner_accounts_price_coverage_views_get_latest(params: iface_accounts::TravelpartnerAccountsPriceCoverageViewsGetLatestParams) -> Result<iface_accounts::PriceCoverageView, String> {
         let json = iface_accounts__travelpartner_accounts_price_coverage_views_get_latest_params__to_json(&params);
-        dispatch(&OP_ACCOUNTS_TRAVELPARTNER_ACCOUNTS_PRICE_COVERAGE_VIEWS_GET_LATEST, json)
+        match dispatch(&OP_ACCOUNTS_TRAVELPARTNER_ACCOUNTS_PRICE_COVERAGE_VIEWS_GET_LATEST, json).and_then(iface_accounts__travelpartner_accounts_price_coverage_views_get_latest__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_accounts__travelpartner_accounts_price_coverage_views_get_latest__err(e)),
+        }
     }
-    fn travelpartner_accounts_reconciliation_reports_list(params: iface_accounts::TravelpartnerAccountsReconciliationReportsListParams) -> Result<String, String> {
+    fn travelpartner_accounts_reconciliation_reports_list(params: iface_accounts::TravelpartnerAccountsReconciliationReportsListParams) -> Result<iface_accounts::ListReconciliationReportsResponse, String> {
         let json = iface_accounts__travelpartner_accounts_reconciliation_reports_list_params__to_json(&params);
-        dispatch(&OP_ACCOUNTS_TRAVELPARTNER_ACCOUNTS_RECONCILIATION_REPORTS_LIST, json)
+        match dispatch(&OP_ACCOUNTS_TRAVELPARTNER_ACCOUNTS_RECONCILIATION_REPORTS_LIST, json).and_then(iface_accounts__travelpartner_accounts_reconciliation_reports_list__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_accounts__travelpartner_accounts_reconciliation_reports_list__err(e)),
+        }
     }
-    fn travelpartner_accounts_reconciliation_reports_create(params: iface_accounts::TravelpartnerAccountsReconciliationReportsCreateParams) -> Result<String, String> {
+    fn travelpartner_accounts_reconciliation_reports_create(params: iface_accounts::TravelpartnerAccountsReconciliationReportsCreateParams) -> Result<iface_accounts::CreateReconciliationReportResponse, String> {
         let json = iface_accounts__travelpartner_accounts_reconciliation_reports_create_params__to_json(&params);
-        dispatch(&OP_ACCOUNTS_TRAVELPARTNER_ACCOUNTS_RECONCILIATION_REPORTS_CREATE, json)
+        match dispatch(&OP_ACCOUNTS_TRAVELPARTNER_ACCOUNTS_RECONCILIATION_REPORTS_CREATE, json).and_then(iface_accounts__travelpartner_accounts_reconciliation_reports_create__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_accounts__travelpartner_accounts_reconciliation_reports_create__err(e)),
+        }
     }
-    fn travelpartner_accounts_reconciliation_reports_validate(params: iface_accounts::TravelpartnerAccountsReconciliationReportsValidateParams) -> Result<String, String> {
+    fn travelpartner_accounts_reconciliation_reports_validate(params: iface_accounts::TravelpartnerAccountsReconciliationReportsValidateParams) -> Result<iface_accounts::ValidateReconciliationReportResponse, String> {
         let json = iface_accounts__travelpartner_accounts_reconciliation_reports_validate_params__to_json(&params);
-        dispatch(&OP_ACCOUNTS_TRAVELPARTNER_ACCOUNTS_RECONCILIATION_REPORTS_VALIDATE, json)
+        match dispatch(&OP_ACCOUNTS_TRAVELPARTNER_ACCOUNTS_RECONCILIATION_REPORTS_VALIDATE, json).and_then(iface_accounts__travelpartner_accounts_reconciliation_reports_validate__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_accounts__travelpartner_accounts_reconciliation_reports_validate__err(e)),
+        }
     }
 }
 

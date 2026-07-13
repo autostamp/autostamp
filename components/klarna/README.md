@@ -11,8 +11,8 @@ triggered.
 
 | Setting | Value |
 | --- | --- |
-| Package | `autostamp:klarna@0.3.0` |
-| Published version | `0.3.0+klarna-v0` |
+| Package | `autostamp:klarna@0.5.0` |
+| Published version | `0.5.0+klarna-v0` |
 | Tag filter | all tags |
 | Operations generated | 1 |
 | Infer API-key credentials | enabled — not triggered |

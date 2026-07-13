@@ -1,6 +1,122 @@
-package autostamp:postmarkapp@0.3.0;
+package autostamp:postmarkapp@0.5.0;
 
 interface domains-api {
+  record domain-listing-results {
+    domains: option<list<domain-information>>,
+    total-count: option<s32>
+  }
+
+  record domain-information {
+    dkim-verified: option<bool>,
+    id: option<s64>,
+    name: option<string>,
+    return-path-domain-verified: option<bool>,
+    spf-verified: option<bool>,
+    weak-dkim: option<bool>
+  }
+
+  record domain-extended-information {
+    dkim-host: option<string>,
+    dkim-pending-host: option<string>,
+    dkim-pending-text-value: option<string>,
+    dkim-revoked-host: option<string>,
+    dkim-revoked-text-value: option<string>,
+    dkim-test-value: option<string>,
+    dkim-update-status: option<string>,
+    dkim-verified: option<bool>,
+    id: option<s64>,
+    name: option<string>,
+    return-path-domain: option<string>,
+    return-path-domain-cname-value: option<string>,
+    return-path-domain-verified: option<bool>,
+    spf-host: option<string>,
+    spf-text-value: option<string>,
+    spf-verified: option<bool>,
+    safe-to-remove-revoked-key-from-dns: option<bool>,
+    weak-dkim: option<bool>
+  }
+
+  /// A Postmark API error.
+  record standard-postmark-response {
+    error-code: option<s32>,
+    message: option<string>
+  }
+
+  record dkim-rotation-response {
+    dkim-host: option<string>,
+    dkim-pending-host: option<string>,
+    dkim-pending-text-value: option<string>,
+    dkim-revoked-host: option<string>,
+    dkim-revoked-text-value: option<string>,
+    dkim-test-value: option<string>,
+    dkim-update-status: option<string>,
+    dkim-verified: option<bool>,
+    id: option<s64>,
+    name: option<string>,
+    safe-to-remove-revoked-key-from-dns: option<bool>,
+    weak-dkim: option<bool>
+  }
+
+  record domain-spf-result {
+    spf-host: option<string>,
+    spf-text-value: option<string>,
+    spf-verified: option<bool>
+  }
+
+  variant list-domains-error {
+    unprocessable-entity(string),
+    internal-server-error(string),
+    other(string)
+  }
+
+  variant create-domain-error {
+    unprocessable-entity(string),
+    internal-server-error(string),
+    other(string)
+  }
+
+  variant get-domain-error {
+    unprocessable-entity(string),
+    internal-server-error(string),
+    other(string)
+  }
+
+  variant edit-domain-error {
+    unprocessable-entity(string),
+    internal-server-error(string),
+    other(string)
+  }
+
+  variant delete-domain-error {
+    unprocessable-entity(string),
+    internal-server-error(string),
+    other(string)
+  }
+
+  variant rotate-dkim-key-for-domain-error {
+    unprocessable-entity(string),
+    internal-server-error(string),
+    other(string)
+  }
+
+  variant request-dkim-verification-for-domain-error {
+    unprocessable-entity(string),
+    internal-server-error(string),
+    other(string)
+  }
+
+  variant request-return-path-verification-for-domain-error {
+    unprocessable-entity(string),
+    internal-server-error(string),
+    other(string)
+  }
+
+  variant request-spf-verification-for-domain-error {
+    unprocessable-entity(string),
+    internal-server-error(string),
+    other(string)
+  }
+
   /// List Domains
   record list-domains-params {
     /// The token associated with the Account on which this request will operate.
@@ -10,7 +126,7 @@ interface domains-api {
     /// Number of records to skip
     offset: s32
   }
-  list-domains: func(params: list-domains-params) -> result<string, string>;
+  list-domains: func(params: list-domains-params) -> result<domain-listing-results, list-domains-error>;
 
   /// Create a Domain
   record create-domain-params {
@@ -19,7 +135,7 @@ interface domains-api {
     name: option<string>,
     return-path-domain: option<string>
   }
-  create-domain: func(params: create-domain-params) -> result<string, string>;
+  create-domain: func(params: create-domain-params) -> result<domain-extended-information, create-domain-error>;
 
   /// Get a Domain
   record get-domain-params {
@@ -28,7 +144,7 @@ interface domains-api {
     /// The ID for the Domain that should be retrieved.
     domainid: string
   }
-  get-domain: func(params: get-domain-params) -> result<string, string>;
+  get-domain: func(params: get-domain-params) -> result<domain-extended-information, get-domain-error>;
 
   /// Update a Domain
   record edit-domain-params {
@@ -38,7 +154,7 @@ interface domains-api {
     domainid: string,
     return-path-domain: option<string>
   }
-  edit-domain: func(params: edit-domain-params) -> result<string, string>;
+  edit-domain: func(params: edit-domain-params) -> result<domain-extended-information, edit-domain-error>;
 
   /// Delete a Domain
   record delete-domain-params {
@@ -47,7 +163,7 @@ interface domains-api {
     /// The ID for the Domain that should be deleted by the request.
     domainid: string
   }
-  delete-domain: func(params: delete-domain-params) -> result<string, string>;
+  delete-domain: func(params: delete-domain-params) -> result<standard-postmark-response, delete-domain-error>;
 
   /// Rotate DKIM Key
   record rotate-dkim-key-for-domain-params {
@@ -56,7 +172,7 @@ interface domains-api {
     /// The ID for the Sender Signature for which a new DKIM Key should be generated.
     domainid: string
   }
-  rotate-dkim-key-for-domain: func(params: rotate-dkim-key-for-domain-params) -> result<string, string>;
+  rotate-dkim-key-for-domain: func(params: rotate-dkim-key-for-domain-params) -> result<dkim-rotation-response, rotate-dkim-key-for-domain-error>;
 
   /// Request DNS Verification for DKIM
   record request-dkim-verification-for-domain-params {
@@ -65,7 +181,7 @@ interface domains-api {
     /// The ID for the Domain for which DKIM DNS records should be verified.
     domainid: string
   }
-  request-dkim-verification-for-domain: func(params: request-dkim-verification-for-domain-params) -> result<string, string>;
+  request-dkim-verification-for-domain: func(params: request-dkim-verification-for-domain-params) -> result<domain-extended-information, request-dkim-verification-for-domain-error>;
 
   /// Request DNS Verification for Return-Path
   record request-return-path-verification-for-domain-params {
@@ -74,7 +190,7 @@ interface domains-api {
     /// The ID for the Domain for which Return-Path DNS records should be verified.
     domainid: string
   }
-  request-return-path-verification-for-domain: func(params: request-return-path-verification-for-domain-params) -> result<string, string>;
+  request-return-path-verification-for-domain: func(params: request-return-path-verification-for-domain-params) -> result<domain-extended-information, request-return-path-verification-for-domain-error>;
 
   /// Request DNS Verification for SPF
   record request-spf-verification-for-domain-params {
@@ -83,12 +199,105 @@ interface domains-api {
     /// The ID for the Domain for which SPF DNS records should be verified.
     domainid: string
   }
-  request-spf-verification-for-domain: func(params: request-spf-verification-for-domain-params) -> result<string, string>;
+  request-spf-verification-for-domain: func(params: request-spf-verification-for-domain-params) -> result<domain-spf-result, request-spf-verification-for-domain-error>;
 
 }
 
 
 interface sender-signatures-api {
+  record sender-listing-results {
+    sender-signatures: option<list<sender-signature-information>>,
+    total-count: option<s32>
+  }
+
+  record sender-signature-information {
+    confirmed: option<bool>,
+    domain: option<string>,
+    email-address: option<string>,
+    id: option<s64>,
+    name: option<string>,
+    reply-to-email-address: option<string>
+  }
+
+  record sender-signature-extended-information {
+    confirmed: option<bool>,
+    dkim-host: option<string>,
+    dkim-pending-host: option<string>,
+    dkim-pending-text-value: option<string>,
+    dkim-revoked-host: option<string>,
+    dkim-revoked-text-value: option<string>,
+    dkim-test-value: option<string>,
+    dkim-update-status: option<string>,
+    dkim-verified: option<bool>,
+    domain: option<string>,
+    email-address: option<string>,
+    id: option<s64>,
+    name: option<string>,
+    reply-to-email-address: option<string>,
+    return-path-domain: option<string>,
+    return-path-domain-cname-value: option<string>,
+    return-path-domain-verified: option<bool>,
+    spf-host: option<string>,
+    spf-text-value: option<string>,
+    spf-verified: option<bool>,
+    safe-to-remove-revoked-key-from-dns: option<bool>,
+    weak-dkim: option<bool>
+  }
+
+  /// A Postmark API error.
+  record standard-postmark-response {
+    error-code: option<s32>,
+    message: option<string>
+  }
+
+  variant list-sender-signatures-error {
+    unprocessable-entity(string),
+    internal-server-error(string),
+    other(string)
+  }
+
+  variant create-sender-signature-error {
+    unprocessable-entity(string),
+    internal-server-error(string),
+    other(string)
+  }
+
+  variant get-sender-signature-error {
+    unprocessable-entity(string),
+    internal-server-error(string),
+    other(string)
+  }
+
+  variant edit-sender-signature-error {
+    unprocessable-entity(string),
+    internal-server-error(string),
+    other(string)
+  }
+
+  variant delete-sender-signature-error {
+    unprocessable-entity(string),
+    internal-server-error(string),
+    other(string)
+  }
+
+  variant request-new-dkim-key-for-sender-signature-error {
+    unprocessable-entity(string),
+    internal-server-error(string),
+    other(string)
+  }
+
+  variant resend-sender-signature-confirmation-email-error {
+    unprocessable-entity(string),
+    internal-server-error(string),
+    other(string)
+  }
+
+  variant request-spf-verification-for-sender-signature-error {
+    unprocessable-entity(string),
+    internal-server-error(string),
+    other(string)
+  }
+
   /// List Sender Signatures
   record list-sender-signatures-params {
     /// The token associated with the Account on which this request will operate.
@@ -98,7 +307,7 @@ interface sender-signatures-api {
     /// Number of records to skip
     offset: s32
   }
-  list-sender-signatures: func(params: list-sender-signatures-params) -> result<string, string>;
+  list-sender-signatures: func(params: list-sender-signatures-params) -> result<sender-listing-results, list-sender-signatures-error>;
 
   /// Create a Sender Signature
   record create-sender-signature-params {
@@ -109,7 +318,7 @@ interface sender-signatures-api {
     reply-to-email: option<string>,
     return-path-domain: option<string>
   }
-  create-sender-signature: func(params: create-sender-signature-params) -> result<string, string>;
+  create-sender-signature: func(params: create-sender-signature-params) -> result<sender-signature-extended-information, create-sender-signature-error>;
 
   /// Get a Sender Signature
   record get-sender-signature-params {
@@ -118,7 +327,7 @@ interface sender-signatures-api {
     /// The ID for the Sender Signature that should be retrieved.
     signatureid: string
   }
-  get-sender-signature: func(params: get-sender-signature-params) -> result<string, string>;
+  get-sender-signature: func(params: get-sender-signature-params) -> result<sender-signature-extended-information, get-sender-signature-error>;
 
   /// Update a Sender Signature
   record edit-sender-signature-params {
@@ -130,7 +339,7 @@ interface sender-signatures-api {
     reply-to-email: option<string>,
     return-path-domain: option<string>
   }
-  edit-sender-signature: func(params: edit-sender-signature-params) -> result<string, string>;
+  edit-sender-signature: func(params: edit-sender-signature-params) -> result<sender-signature-extended-information, edit-sender-signature-error>;
 
   /// Delete a Sender Signature
   record delete-sender-signature-params {
@@ -139,7 +348,7 @@ interface sender-signatures-api {
     /// The ID for the Sender Signature that should be deleted by the request.
     signatureid: string
   }
-  delete-sender-signature: func(params: delete-sender-signature-params) -> result<string, string>;
+  delete-sender-signature: func(params: delete-sender-signature-params) -> result<standard-postmark-response, delete-sender-signature-error>;
 
   /// Request a new DKIM Key
   record request-new-dkim-key-for-sender-signature-params {
@@ -148,7 +357,7 @@ interface sender-signatures-api {
     /// The ID for the Sender Signature for which a new DKIM Key should be generated.
     signatureid: string
   }
-  request-new-dkim-key-for-sender-signature: func(params: request-new-dkim-key-for-sender-signature-params) -> result<string, string>;
+  request-new-dkim-key-for-sender-signature: func(params: request-new-dkim-key-for-sender-signature-params) -> result<standard-postmark-response, request-new-dkim-key-for-sender-signature-error>;
 
   /// Resend Signature Confirmation Email
   record resend-sender-signature-confirmation-email-params {
@@ -157,7 +366,7 @@ interface sender-signatures-api {
     /// The ID for the Sender Signature that should have its confirmation email resent.
     signatureid: string
   }
-  resend-sender-signature-confirmation-email: func(params: resend-sender-signature-confirmation-email-params) -> result<string, string>;
+  resend-sender-signature-confirmation-email: func(params: resend-sender-signature-confirmation-email-params) -> result<standard-postmark-response, resend-sender-signature-confirmation-email-error>;
 
   /// Request DNS Verification for SPF
   record request-spf-verification-for-sender-signature-params {
@@ -166,16 +375,74 @@ interface sender-signatures-api {
     /// The ID for the Sender Signature for which SPF DNS records should be verified.
     signatureid: string
   }
-  request-spf-verification-for-sender-signature: func(params: request-spf-verification-for-sender-signature-params) -> result<string, string>;
+  request-spf-verification-for-sender-signature: func(params: request-spf-verification-for-sender-signature-params) -> result<sender-signature-extended-information, request-spf-verification-for-sender-signature-error>;
 
 }
 
 interface server-management-api {
-  enum create-server-payload-track-links-enum {
+  enum extended-server-info-track-links-enum {
     none,
     html-and-text-tracking,
     html-only-tracking,
     text-only-tracking,
+  }
+
+  /// The results of listing servers.
+  record server-listing-response {
+    servers: option<list<extended-server-info>>,
+    total-count: option<s32>
+  }
+
+  record extended-server-info {
+    api-tokens: option<list<string>>,
+    bounce-hook-url: option<string>,
+    click-hook-url: option<string>,
+    color: option<string>,
+    delivery-hook-url: option<string>,
+    id: option<s32>,
+    inbound-address: option<string>,
+    inbound-domain: option<string>,
+    inbound-hash: option<string>,
+    inbound-hook-url: option<string>,
+    inbound-spam-threshold: option<s32>,
+    name: option<string>,
+    open-hook-url: option<string>,
+    post-first-open-only: option<bool>,
+    raw-email-enabled: option<bool>,
+    server-link: option<string>,
+    smtp-api-activated: option<bool>,
+    track-links: option<extended-server-info-track-links-enum>,
+    track-opens: option<bool>
+  }
+
+  variant list-servers-error {
+    unprocessable-entity(string),
+    internal-server-error(string),
+    other(string)
+  }
+
+  variant create-server-error {
+    unprocessable-entity(string),
+    internal-server-error(string),
+    other(string)
+  }
+
+  variant get-server-information-error {
+    unprocessable-entity(string),
+    internal-server-error(string),
+    other(string)
+  }
+
+  variant edit-server-information-error {
+    unprocessable-entity(string),
+    internal-server-error(string),
+    other(string)
+  }
+
+  variant delete-server-error {
+    unprocessable-entity(string),
+    internal-server-error(string),
+    other(string)
   }
 
   /// List servers
@@ -189,7 +456,7 @@ interface server-management-api {
     /// Filter by a specific server name
     name: option<string>
   }
-  list-servers: func(params: list-servers-params) -> result<string, string>;
+  list-servers: func(params: list-servers-params) -> result<server-listing-response, list-servers-error>;
 
   /// Create a Server
   record create-server-params {
@@ -207,10 +474,10 @@ interface server-management-api {
     post-first-open-only: option<bool>,
     raw-email-enabled: option<bool>,
     smtp-api-activated: option<bool>,
-    track-links: option<create-server-payload-track-links-enum>,
+    track-links: option<extended-server-info-track-links-enum>,
     track-opens: option<bool>
   }
-  create-server: func(params: create-server-params) -> result<string, string>;
+  create-server: func(params: create-server-params) -> result<extended-server-info, create-server-error>;
 
   /// Get a Server
   record get-server-information-params {
@@ -219,7 +486,7 @@ interface server-management-api {
     /// The ID of the Server to get.
     serverid: string
   }
-  get-server-information: func(params: get-server-information-params) -> result<string, string>;
+  get-server-information: func(params: get-server-information-params) -> result<extended-server-info, get-server-information-error>;
 
   /// Edit a Server
   record edit-server-information-params {
@@ -239,10 +506,10 @@ interface server-management-api {
     post-first-open-only: option<bool>,
     raw-email-enabled: option<bool>,
     smtp-api-activated: option<bool>,
-    track-links: option<create-server-payload-track-links-enum>,
+    track-links: option<extended-server-info-track-links-enum>,
     track-opens: option<bool>
   }
-  edit-server-information: func(params: edit-server-information-params) -> result<string, string>;
+  edit-server-information: func(params: edit-server-information-params) -> result<extended-server-info, edit-server-information-error>;
 
   /// Delete a Server
   record delete-server-params {
@@ -251,11 +518,29 @@ interface server-management-api {
     /// The ID of the Server that should be deleted.
     serverid: string
   }
-  delete-server: func(params: delete-server-params) -> result<string, string>;
+  delete-server: func(params: delete-server-params) -> result<string, delete-server-error>;
 
 }
 
 interface templates-api {
+  record templates-push-response {
+    templates: option<list<templates-push-response-templates-item>>,
+    total-count: option<s32>
+  }
+
+  record templates-push-response-templates-item {
+    action: option<string>,
+    alias: option<string>,
+    name: option<string>,
+    template-id: option<s32>
+  }
+
+  variant push-templates-error {
+    unprocessable-entity(string),
+    internal-server-error(string),
+    other(string)
+  }
+
   /// Push templates from one server to another
   record push-templates-params {
     /// The token associated with the Account on which this request will operate.
@@ -264,7 +549,7 @@ interface templates-api {
     perform-changes: option<bool>,
     source-server-id: option<s32>
   }
-  push-templates: func(params: push-templates-params) -> result<string, string>;
+  push-templates: func(params: push-templates-params) -> result<templates-push-response, push-templates-error>;
 
 }
 /// The component world: imports the secrets host capability

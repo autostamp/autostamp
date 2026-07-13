@@ -44,10 +44,15 @@ pub(crate) enum FieldLocation {
     Body,
 }
 
-/// A single operation parameter: the snake-case key it carries in the params JSON and where
-/// it belongs in the request.
+/// A single operation parameter. `snake` keys the field in the internal params JSON (and, for a
+/// path field, matches the `{snake}` placeholder in the path template); `wire` is the verbatim name
+/// the field takes on the HTTP wire (query key, header name, or body property). The two differ
+/// whenever the source name isn't already snake_case (e.g. `dryRun` → snake `dry_run`, wire
+/// `dryRun`), and let distinct inputs that share a snake key (`DateCreated`, `DateCreated<`) still
+/// travel under their true names.
 pub(crate) struct FieldSpec {
     pub(crate) snake: &'static str,
+    pub(crate) wire: &'static str,
     pub(crate) location: FieldLocation,
 }
 
@@ -71,6 +76,16 @@ pub(crate) struct AuthApply {
     pub(crate) kind: AuthKind,
 }
 
+/// The failure modes of [`dispatch`], kept structured so each generated operation can map them
+/// onto its own typed error: an `Http` failure carries the response status and body (routed to
+/// the matching error-variant case), while a `Transport` failure carries a message for the
+/// catch-all case (a secret lookup, connection, or decode failure that never produced an HTTP
+/// status).
+pub(crate) enum DispatchError {
+    Http { status: u16, body: String },
+    Transport(String),
+}
+
 /// A single API operation: HTTP method, path template (with `{snake}` placeholders), the
 /// parameter fields, and the security schemes to apply.
 pub(crate) struct OpSpec {
@@ -81,8 +96,9 @@ pub(crate) struct OpSpec {
 }
 
 /// Execute `op` with the supplied `params` (a JSON object keyed by snake-case field names)
-/// and return the response body as a string, or an error message.
-pub(crate) fn dispatch(op: &OpSpec, params: Value) -> Result<String, String> {
+/// and return the raw 2xx response body, or a structured [`DispatchError`] the caller maps
+/// onto the operation's typed error.
+pub(crate) fn dispatch(op: &OpSpec, params: Value) -> Result<String, DispatchError> {
     let obj = match &params {
         Value::Object(map) => Some(map),
         _ => None,
@@ -105,10 +121,10 @@ pub(crate) fn dispatch(op: &OpSpec, params: Value) -> Result<String, String> {
                 let placeholder = format!("{{{}}}", field.snake);
                 path = path.replace(&placeholder, &percent_encode(&scalar(value)));
             }
-            FieldLocation::Query => query.push((field.snake.to_string(), scalar(value))),
-            FieldLocation::Header => headers.push((field.snake.to_string(), scalar(value))),
+            FieldLocation::Query => query.push((field.wire.to_string(), scalar(value))),
+            FieldLocation::Header => headers.push((field.wire.to_string(), scalar(value))),
             FieldLocation::Body => {
-                body.insert(field.snake.to_string(), value.clone());
+                body.insert(field.wire.to_string(), value.clone());
             }
         }
     }
@@ -116,7 +132,7 @@ pub(crate) fn dispatch(op: &OpSpec, params: Value) -> Result<String, String> {
     // Apply each resolved security scheme, sourcing its value from wasmcloud:secrets.
     let mut cookies: Vec<String> = Vec::new();
     for apply in op.auth {
-        let secret = fetch_secret(apply.secret_key)?;
+        let secret = fetch_secret(apply.secret_key).map_err(DispatchError::Transport)?;
         match &apply.kind {
             AuthKind::Bearer => headers.push(("authorization".into(), format!("Bearer {secret}"))),
             AuthKind::Basic => {
@@ -177,17 +193,18 @@ fn fetch_secret(key: &str) -> Result<String, String> {
 }
 
 /// Build and send the outgoing request with `wstd`, returning the response body on a 2xx
-/// status. The generated guest exports are synchronous, so the async `wstd` client is driven
-/// to completion on a local reactor via `wstd::runtime::block_on`.
+/// status and a structured [`DispatchError`] otherwise. The generated guest exports are
+/// synchronous, so the async `wstd` client is driven to completion on a local reactor via
+/// `wstd::runtime::block_on`.
 fn perform(
     method: &str,
     path_with_query: &str,
     headers: &[(String, String)],
     body: &[u8],
-) -> Result<String, String> {
+) -> Result<String, DispatchError> {
     let url = join_url(crate::BASE_URL, path_with_query);
     let method = Method::from_bytes(method.as_bytes())
-        .map_err(|err| format!("invalid HTTP method `{method}`: {err}"))?;
+        .map_err(|err| DispatchError::Transport(format!("invalid HTTP method `{method}`: {err}")))?;
 
     let mut builder = Request::builder().method(method).uri(url);
     for (name, value) in headers {
@@ -199,27 +216,29 @@ fn perform(
         } else {
             Body::from(body.to_vec())
         })
-        .map_err(|err| format!("failed to build request: {err}"))?;
+        .map_err(|err| DispatchError::Transport(format!("failed to build request: {err}")))?;
 
     wstd::runtime::block_on(async move {
         let client = Client::new();
         let response = client
             .send(request)
             .await
-            .map_err(|err| format!("request failed: {err:#}"))?;
+            .map_err(|err| DispatchError::Transport(format!("request failed: {err:#}")))?;
 
         let status = response.status().as_u16();
         let mut response_body = response.into_body();
-        let bytes = response_body
-            .contents()
-            .await
-            .map_err(|err| format!("failed to read response body: {err:#}"))?;
+        let bytes = response_body.contents().await.map_err(|err| {
+            DispatchError::Transport(format!("failed to read response body: {err:#}"))
+        })?;
         let body_text = String::from_utf8_lossy(bytes).into_owned();
 
         if (200..300).contains(&status) {
             Ok(body_text)
         } else {
-            Err(format!("HTTP {status}: {body_text}"))
+            Err(DispatchError::Http {
+                status,
+                body: body_text,
+            })
         }
     })
 }
@@ -288,7 +307,7 @@ const OP_MAPPING_POST_MAPPING: OpSpec = OpSpec {
     method: "POST",
     path_template: "/mapping",
     fields: &[
-        FieldSpec { snake: "value", location: FieldLocation::Body },
+        FieldSpec { snake: "value", wire: "value", location: FieldLocation::Body },
     ],
     auth: &[
     ],
@@ -298,11 +317,23 @@ const OP_MAPPING_GET_MAPPING_VALUES_KEY: OpSpec = OpSpec {
     method: "GET",
     path_template: "/mapping/values/{key}",
     fields: &[
-        FieldSpec { snake: "key", location: FieldLocation::Path },
+        FieldSpec { snake: "key", wire: "key", location: FieldLocation::Path },
     ],
     auth: &[
     ],
 };
+
+fn iface_mapping__bulk_mapping_job_result__to_json(p: &iface_mapping::BulkMappingJobResult) -> Value {
+    let mut m = Map::new();
+    m.insert("value".into(), Value::String((&p.value).clone()));
+    Value::Object(m)
+}
+
+fn iface_mapping__get_mapping_values_key_response__to_json(p: &iface_mapping::GetMappingValuesKeyResponse) -> Value {
+    let mut m = Map::new();
+    m.insert("values".into(), match (&p.values) { Some(v) => Value::Array((v).iter().map(|v| Value::String((v).clone())).collect()), None => Value::Null });
+    Value::Object(m)
+}
 
 fn iface_mapping__post_mapping_params__to_json(p: &iface_mapping::PostMappingParams) -> Value {
     let mut m = Map::new();
@@ -316,14 +347,81 @@ fn iface_mapping__get_mapping_values_key_params__to_json(p: &iface_mapping::GetM
     Value::Object(m)
 }
 
-impl iface_mapping::Guest for crate::Component {
-    fn post_mapping(params: iface_mapping::PostMappingParams) -> Result<String, String> {
-        let json = iface_mapping__post_mapping_params__to_json(&params);
-        dispatch(&OP_MAPPING_POST_MAPPING, json)
+fn iface_mapping__bulk_mapping_job_result__from_json(v: &Value) -> Option<iface_mapping::BulkMappingJobResult> {
+    let m = v.as_object()?;
+    Some(iface_mapping::BulkMappingJobResult {
+        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+    })
+}
+
+fn iface_mapping__get_mapping_values_key_response__from_json(v: &Value) -> Option<iface_mapping::GetMappingValuesKeyResponse> {
+    let m = v.as_object()?;
+    Some(iface_mapping::GetMappingValuesKeyResponse {
+        values: m.get("values").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| (x).as_str().map(|s| s.to_string())).collect())),
+    })
+}
+
+fn iface_mapping__post_mapping__ok(body: String) -> Result<iface_mapping::BulkMappingJobResult, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match iface_mapping__bulk_mapping_job_result__from_json(&v) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
     }
-    fn get_mapping_values_key(params: iface_mapping::GetMappingValuesKeyParams) -> Result<String, String> {
+}
+
+fn iface_mapping__post_mapping__err(e: crate::runtime::DispatchError) -> iface_mapping::PostMappingError {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => match status {
+            400u16 => iface_mapping::PostMappingError::BadRequest(body),
+            401u16 => iface_mapping::PostMappingError::Unauthorized(body),
+            406u16 => iface_mapping::PostMappingError::NotAcceptable(body),
+            413u16 => iface_mapping::PostMappingError::PayloadTooLarge(body),
+            500u16 => iface_mapping::PostMappingError::InternalServerError(body),
+            _ => iface_mapping::PostMappingError::Other(body),
+        },
+        crate::runtime::DispatchError::Transport(m) => iface_mapping::PostMappingError::Other(m),
+    }
+}
+
+fn iface_mapping__get_mapping_values_key__ok(body: String) -> Result<iface_mapping::GetMappingValuesKeyResponse, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match iface_mapping__get_mapping_values_key_response__from_json(&v) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_mapping__get_mapping_values_key__err(e: crate::runtime::DispatchError) -> iface_mapping::GetMappingValuesKeyError {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => match status {
+            400u16 => iface_mapping::GetMappingValuesKeyError::BadRequest(body),
+            500u16 => iface_mapping::GetMappingValuesKeyError::InternalServerError(body),
+            _ => iface_mapping::GetMappingValuesKeyError::Other(body),
+        },
+        crate::runtime::DispatchError::Transport(m) => iface_mapping::GetMappingValuesKeyError::Other(m),
+    }
+}
+
+impl iface_mapping::Guest for crate::Component {
+    fn post_mapping(params: iface_mapping::PostMappingParams) -> Result<iface_mapping::BulkMappingJobResult, iface_mapping::PostMappingError> {
+        let json = iface_mapping__post_mapping_params__to_json(&params);
+        match dispatch(&OP_MAPPING_POST_MAPPING, json).and_then(iface_mapping__post_mapping__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_mapping__post_mapping__err(e)),
+        }
+    }
+    fn get_mapping_values_key(params: iface_mapping::GetMappingValuesKeyParams) -> Result<iface_mapping::GetMappingValuesKeyResponse, iface_mapping::GetMappingValuesKeyError> {
         let json = iface_mapping__get_mapping_values_key_params__to_json(&params);
-        dispatch(&OP_MAPPING_GET_MAPPING_VALUES_KEY, json)
+        match dispatch(&OP_MAPPING_GET_MAPPING_VALUES_KEY, json).and_then(iface_mapping__get_mapping_values_key__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_mapping__get_mapping_values_key__err(e)),
+        }
     }
 }
 

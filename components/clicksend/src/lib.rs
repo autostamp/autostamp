@@ -44,10 +44,15 @@ pub(crate) enum FieldLocation {
     Body,
 }
 
-/// A single operation parameter: the snake-case key it carries in the params JSON and where
-/// it belongs in the request.
+/// A single operation parameter. `snake` keys the field in the internal params JSON (and, for a
+/// path field, matches the `{snake}` placeholder in the path template); `wire` is the verbatim name
+/// the field takes on the HTTP wire (query key, header name, or body property). The two differ
+/// whenever the source name isn't already snake_case (e.g. `dryRun` → snake `dry_run`, wire
+/// `dryRun`), and let distinct inputs that share a snake key (`DateCreated`, `DateCreated<`) still
+/// travel under their true names.
 pub(crate) struct FieldSpec {
     pub(crate) snake: &'static str,
+    pub(crate) wire: &'static str,
     pub(crate) location: FieldLocation,
 }
 
@@ -71,6 +76,16 @@ pub(crate) struct AuthApply {
     pub(crate) kind: AuthKind,
 }
 
+/// The failure modes of [`dispatch`], kept structured so each generated operation can map them
+/// onto its own typed error: an `Http` failure carries the response status and body (routed to
+/// the matching error-variant case), while a `Transport` failure carries a message for the
+/// catch-all case (a secret lookup, connection, or decode failure that never produced an HTTP
+/// status).
+pub(crate) enum DispatchError {
+    Http { status: u16, body: String },
+    Transport(String),
+}
+
 /// A single API operation: HTTP method, path template (with `{snake}` placeholders), the
 /// parameter fields, and the security schemes to apply.
 pub(crate) struct OpSpec {
@@ -81,8 +96,9 @@ pub(crate) struct OpSpec {
 }
 
 /// Execute `op` with the supplied `params` (a JSON object keyed by snake-case field names)
-/// and return the response body as a string, or an error message.
-pub(crate) fn dispatch(op: &OpSpec, params: Value) -> Result<String, String> {
+/// and return the raw 2xx response body, or a structured [`DispatchError`] the caller maps
+/// onto the operation's typed error.
+pub(crate) fn dispatch(op: &OpSpec, params: Value) -> Result<String, DispatchError> {
     let obj = match &params {
         Value::Object(map) => Some(map),
         _ => None,
@@ -105,10 +121,10 @@ pub(crate) fn dispatch(op: &OpSpec, params: Value) -> Result<String, String> {
                 let placeholder = format!("{{{}}}", field.snake);
                 path = path.replace(&placeholder, &percent_encode(&scalar(value)));
             }
-            FieldLocation::Query => query.push((field.snake.to_string(), scalar(value))),
-            FieldLocation::Header => headers.push((field.snake.to_string(), scalar(value))),
+            FieldLocation::Query => query.push((field.wire.to_string(), scalar(value))),
+            FieldLocation::Header => headers.push((field.wire.to_string(), scalar(value))),
             FieldLocation::Body => {
-                body.insert(field.snake.to_string(), value.clone());
+                body.insert(field.wire.to_string(), value.clone());
             }
         }
     }
@@ -116,7 +132,7 @@ pub(crate) fn dispatch(op: &OpSpec, params: Value) -> Result<String, String> {
     // Apply each resolved security scheme, sourcing its value from wasmcloud:secrets.
     let mut cookies: Vec<String> = Vec::new();
     for apply in op.auth {
-        let secret = fetch_secret(apply.secret_key)?;
+        let secret = fetch_secret(apply.secret_key).map_err(DispatchError::Transport)?;
         match &apply.kind {
             AuthKind::Bearer => headers.push(("authorization".into(), format!("Bearer {secret}"))),
             AuthKind::Basic => {
@@ -177,17 +193,18 @@ fn fetch_secret(key: &str) -> Result<String, String> {
 }
 
 /// Build and send the outgoing request with `wstd`, returning the response body on a 2xx
-/// status. The generated guest exports are synchronous, so the async `wstd` client is driven
-/// to completion on a local reactor via `wstd::runtime::block_on`.
+/// status and a structured [`DispatchError`] otherwise. The generated guest exports are
+/// synchronous, so the async `wstd` client is driven to completion on a local reactor via
+/// `wstd::runtime::block_on`.
 fn perform(
     method: &str,
     path_with_query: &str,
     headers: &[(String, String)],
     body: &[u8],
-) -> Result<String, String> {
+) -> Result<String, DispatchError> {
     let url = join_url(crate::BASE_URL, path_with_query);
     let method = Method::from_bytes(method.as_bytes())
-        .map_err(|err| format!("invalid HTTP method `{method}`: {err}"))?;
+        .map_err(|err| DispatchError::Transport(format!("invalid HTTP method `{method}`: {err}")))?;
 
     let mut builder = Request::builder().method(method).uri(url);
     for (name, value) in headers {
@@ -199,27 +216,29 @@ fn perform(
         } else {
             Body::from(body.to_vec())
         })
-        .map_err(|err| format!("failed to build request: {err}"))?;
+        .map_err(|err| DispatchError::Transport(format!("failed to build request: {err}")))?;
 
     wstd::runtime::block_on(async move {
         let client = Client::new();
         let response = client
             .send(request)
             .await
-            .map_err(|err| format!("request failed: {err:#}"))?;
+            .map_err(|err| DispatchError::Transport(format!("request failed: {err:#}")))?;
 
         let status = response.status().as_u16();
         let mut response_body = response.into_body();
-        let bytes = response_body
-            .contents()
-            .await
-            .map_err(|err| format!("failed to read response body: {err:#}"))?;
+        let bytes = response_body.contents().await.map_err(|err| {
+            DispatchError::Transport(format!("failed to read response body: {err:#}"))
+        })?;
         let body_text = String::from_utf8_lossy(bytes).into_owned();
 
         if (200..300).contains(&status) {
             Ok(body_text)
         } else {
-            Err(format!("HTTP {status}: {body_text}"))
+            Err(DispatchError::Http {
+                status,
+                body: body_text,
+            })
         }
     })
 }
@@ -297,14 +316,14 @@ const OP_ACCOUNT_CREATE_A_NEW_ACCOUNT: OpSpec = OpSpec {
     method: "POST",
     path_template: "/account",
     fields: &[
-        FieldSpec { snake: "account_name", location: FieldLocation::Body },
-        FieldSpec { snake: "country", location: FieldLocation::Body },
-        FieldSpec { snake: "password", location: FieldLocation::Body },
-        FieldSpec { snake: "user_email", location: FieldLocation::Body },
-        FieldSpec { snake: "user_first_name", location: FieldLocation::Body },
-        FieldSpec { snake: "user_last_name", location: FieldLocation::Body },
-        FieldSpec { snake: "user_phone", location: FieldLocation::Body },
-        FieldSpec { snake: "username", location: FieldLocation::Body },
+        FieldSpec { snake: "account_name", wire: "account_name", location: FieldLocation::Body },
+        FieldSpec { snake: "country", wire: "country", location: FieldLocation::Body },
+        FieldSpec { snake: "password", wire: "password", location: FieldLocation::Body },
+        FieldSpec { snake: "user_email", wire: "user_email", location: FieldLocation::Body },
+        FieldSpec { snake: "user_first_name", wire: "user_first_name", location: FieldLocation::Body },
+        FieldSpec { snake: "user_last_name", wire: "user_last_name", location: FieldLocation::Body },
+        FieldSpec { snake: "user_phone", wire: "user_phone", location: FieldLocation::Body },
+        FieldSpec { snake: "username", wire: "username", location: FieldLocation::Body },
     ],
     auth: &[
     ],
@@ -314,18 +333,18 @@ const OP_ACCOUNT_UPDATE_ACCOUNT: OpSpec = OpSpec {
     method: "PUT",
     path_template: "/account",
     fields: &[
-        FieldSpec { snake: "account_name", location: FieldLocation::Body },
-        FieldSpec { snake: "country", location: FieldLocation::Body },
-        FieldSpec { snake: "password", location: FieldLocation::Body },
-        FieldSpec { snake: "private_uploads", location: FieldLocation::Body },
-        FieldSpec { snake: "setting_sms_hide_business_name", location: FieldLocation::Body },
-        FieldSpec { snake: "setting_sms_hide_your_number", location: FieldLocation::Body },
-        FieldSpec { snake: "timezone", location: FieldLocation::Body },
-        FieldSpec { snake: "user_email", location: FieldLocation::Body },
-        FieldSpec { snake: "user_first_name", location: FieldLocation::Body },
-        FieldSpec { snake: "user_last_name", location: FieldLocation::Body },
-        FieldSpec { snake: "user_phone", location: FieldLocation::Body },
-        FieldSpec { snake: "username", location: FieldLocation::Body },
+        FieldSpec { snake: "account_name", wire: "account_name", location: FieldLocation::Body },
+        FieldSpec { snake: "country", wire: "country", location: FieldLocation::Body },
+        FieldSpec { snake: "password", wire: "password", location: FieldLocation::Body },
+        FieldSpec { snake: "private_uploads", wire: "private_uploads", location: FieldLocation::Body },
+        FieldSpec { snake: "setting_sms_hide_business_name", wire: "setting_sms_hide_business_name", location: FieldLocation::Body },
+        FieldSpec { snake: "setting_sms_hide_your_number", wire: "setting_sms_hide_your_number", location: FieldLocation::Body },
+        FieldSpec { snake: "timezone", wire: "timezone", location: FieldLocation::Body },
+        FieldSpec { snake: "user_email", wire: "user_email", location: FieldLocation::Body },
+        FieldSpec { snake: "user_first_name", wire: "user_first_name", location: FieldLocation::Body },
+        FieldSpec { snake: "user_last_name", wire: "user_last_name", location: FieldLocation::Body },
+        FieldSpec { snake: "user_phone", wire: "user_phone", location: FieldLocation::Body },
+        FieldSpec { snake: "username", wire: "username", location: FieldLocation::Body },
     ],
     auth: &[
     ],
@@ -335,9 +354,9 @@ const OP_ACCOUNT_SEND_ACCOUNT_ACTIVATION_TOKEN: OpSpec = OpSpec {
     method: "PUT",
     path_template: "/account-verify/send",
     fields: &[
-        FieldSpec { snake: "country", location: FieldLocation::Body },
-        FieldSpec { snake: "type", location: FieldLocation::Body },
-        FieldSpec { snake: "user_phone", location: FieldLocation::Body },
+        FieldSpec { snake: "country", wire: "country", location: FieldLocation::Body },
+        FieldSpec { snake: "type", wire: "type", location: FieldLocation::Body },
+        FieldSpec { snake: "user_phone", wire: "user_phone", location: FieldLocation::Body },
     ],
     auth: &[
         AuthApply { secret_key: "basic", kind: AuthKind::Basic },
@@ -348,7 +367,7 @@ const OP_ACCOUNT_VERIFY_NEW_ACCOUNT: OpSpec = OpSpec {
     method: "PUT",
     path_template: "/account-verify/verify/{activation_token}",
     fields: &[
-        FieldSpec { snake: "activation_token", location: FieldLocation::Path },
+        FieldSpec { snake: "activation_token", wire: "activation_token", location: FieldLocation::Path },
     ],
     auth: &[
     ],
@@ -358,9 +377,9 @@ const OP_ACCOUNT_USAGE: OpSpec = OpSpec {
     method: "GET",
     path_template: "/account/usage/{year}/{month}/{type}",
     fields: &[
-        FieldSpec { snake: "year", location: FieldLocation::Path },
-        FieldSpec { snake: "month", location: FieldLocation::Path },
-        FieldSpec { snake: "type", location: FieldLocation::Path },
+        FieldSpec { snake: "year", wire: "year", location: FieldLocation::Path },
+        FieldSpec { snake: "month", wire: "month", location: FieldLocation::Path },
+        FieldSpec { snake: "type", wire: "type", location: FieldLocation::Path },
     ],
     auth: &[
     ],
@@ -418,29 +437,113 @@ fn iface_account__usage_params__to_json(p: &iface_account::UsageParams) -> Value
     Value::Object(m)
 }
 
+fn iface_account__get_account__ok(body: String) -> Result<String, crate::runtime::DispatchError> {
+    Ok(body)
+}
+
+fn iface_account__get_account__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
+fn iface_account__create_a_new_account__ok(body: String) -> Result<String, crate::runtime::DispatchError> {
+    Ok(body)
+}
+
+fn iface_account__create_a_new_account__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
+fn iface_account__update_account__ok(body: String) -> Result<String, crate::runtime::DispatchError> {
+    Ok(body)
+}
+
+fn iface_account__update_account__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
+fn iface_account__send_account_activation_token__ok(body: String) -> Result<String, crate::runtime::DispatchError> {
+    Ok(body)
+}
+
+fn iface_account__send_account_activation_token__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
+fn iface_account__verify_new_account__ok(body: String) -> Result<String, crate::runtime::DispatchError> {
+    Ok(body)
+}
+
+fn iface_account__verify_new_account__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
+fn iface_account__usage__ok(body: String) -> Result<String, crate::runtime::DispatchError> {
+    Ok(body)
+}
+
+fn iface_account__usage__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
 impl iface_account::Guest for crate::Component {
     fn get_account() -> Result<String, String> {
-        dispatch(&OP_ACCOUNT_GET_ACCOUNT, Value::Object(Map::new()))
+        match dispatch(&OP_ACCOUNT_GET_ACCOUNT, Value::Object(Map::new())).and_then(iface_account__get_account__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_account__get_account__err(e)),
+        }
     }
     fn create_a_new_account(params: iface_account::CreateANewAccountParams) -> Result<String, String> {
         let json = iface_account__create_a_new_account_params__to_json(&params);
-        dispatch(&OP_ACCOUNT_CREATE_A_NEW_ACCOUNT, json)
+        match dispatch(&OP_ACCOUNT_CREATE_A_NEW_ACCOUNT, json).and_then(iface_account__create_a_new_account__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_account__create_a_new_account__err(e)),
+        }
     }
     fn update_account(params: iface_account::UpdateAccountParams) -> Result<String, String> {
         let json = iface_account__update_account_params__to_json(&params);
-        dispatch(&OP_ACCOUNT_UPDATE_ACCOUNT, json)
+        match dispatch(&OP_ACCOUNT_UPDATE_ACCOUNT, json).and_then(iface_account__update_account__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_account__update_account__err(e)),
+        }
     }
     fn send_account_activation_token(params: iface_account::SendAccountActivationTokenParams) -> Result<String, String> {
         let json = iface_account__send_account_activation_token_params__to_json(&params);
-        dispatch(&OP_ACCOUNT_SEND_ACCOUNT_ACTIVATION_TOKEN, json)
+        match dispatch(&OP_ACCOUNT_SEND_ACCOUNT_ACTIVATION_TOKEN, json).and_then(iface_account__send_account_activation_token__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_account__send_account_activation_token__err(e)),
+        }
     }
     fn verify_new_account(params: iface_account::VerifyNewAccountParams) -> Result<String, String> {
         let json = iface_account__verify_new_account_params__to_json(&params);
-        dispatch(&OP_ACCOUNT_VERIFY_NEW_ACCOUNT, json)
+        match dispatch(&OP_ACCOUNT_VERIFY_NEW_ACCOUNT, json).and_then(iface_account__verify_new_account__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_account__verify_new_account__err(e)),
+        }
     }
     fn usage(params: iface_account::UsageParams) -> Result<String, String> {
         let json = iface_account__usage_params__to_json(&params);
-        dispatch(&OP_ACCOUNT_USAGE, json)
+        match dispatch(&OP_ACCOUNT_USAGE, json).and_then(iface_account__usage__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_account__usage__err(e)),
+        }
     }
 }
 use crate::exports::autostamp::clicksend::automation_rules as iface_automation_rules;
@@ -458,11 +561,11 @@ const OP_AUTOMATION_RULES_POST_AUTOMATIONS_EMAIL_RECEIPT: OpSpec = OpSpec {
     method: "POST",
     path_template: "/automations/email/receipt",
     fields: &[
-        FieldSpec { snake: "action", location: FieldLocation::Body },
-        FieldSpec { snake: "action_address", location: FieldLocation::Body },
-        FieldSpec { snake: "enabled", location: FieldLocation::Body },
-        FieldSpec { snake: "match_type", location: FieldLocation::Body },
-        FieldSpec { snake: "rule_name", location: FieldLocation::Body },
+        FieldSpec { snake: "action", wire: "action", location: FieldLocation::Body },
+        FieldSpec { snake: "action_address", wire: "action_address", location: FieldLocation::Body },
+        FieldSpec { snake: "enabled", wire: "enabled", location: FieldLocation::Body },
+        FieldSpec { snake: "match_type", wire: "match_type", location: FieldLocation::Body },
+        FieldSpec { snake: "rule_name", wire: "rule_name", location: FieldLocation::Body },
     ],
     auth: &[
     ],
@@ -472,7 +575,7 @@ const OP_AUTOMATION_RULES_GET_AUTOMATIONS_EMAIL_RECEIPT_RULE_ID: OpSpec = OpSpec
     method: "GET",
     path_template: "/automations/email/receipt/{rule_id}",
     fields: &[
-        FieldSpec { snake: "rule_id", location: FieldLocation::Path },
+        FieldSpec { snake: "rule_id", wire: "rule_id", location: FieldLocation::Path },
     ],
     auth: &[
     ],
@@ -482,12 +585,12 @@ const OP_AUTOMATION_RULES_PUT_AUTOMATIONS_EMAIL_RECEIPT_RULE_ID: OpSpec = OpSpec
     method: "PUT",
     path_template: "/automations/email/receipt/{rule_id}",
     fields: &[
-        FieldSpec { snake: "rule_id", location: FieldLocation::Path },
-        FieldSpec { snake: "action", location: FieldLocation::Body },
-        FieldSpec { snake: "action_address", location: FieldLocation::Body },
-        FieldSpec { snake: "enabled", location: FieldLocation::Body },
-        FieldSpec { snake: "match_type", location: FieldLocation::Body },
-        FieldSpec { snake: "rule_name", location: FieldLocation::Body },
+        FieldSpec { snake: "rule_id", wire: "rule_id", location: FieldLocation::Path },
+        FieldSpec { snake: "action", wire: "action", location: FieldLocation::Body },
+        FieldSpec { snake: "action_address", wire: "action_address", location: FieldLocation::Body },
+        FieldSpec { snake: "enabled", wire: "enabled", location: FieldLocation::Body },
+        FieldSpec { snake: "match_type", wire: "match_type", location: FieldLocation::Body },
+        FieldSpec { snake: "rule_name", wire: "rule_name", location: FieldLocation::Body },
     ],
     auth: &[
     ],
@@ -497,7 +600,7 @@ const OP_AUTOMATION_RULES_DELETE_AUTOMATIONS_EMAIL_RECEIPT_RULE_ID: OpSpec = OpS
     method: "DELETE",
     path_template: "/automations/email/receipt/{rule_id}",
     fields: &[
-        FieldSpec { snake: "rule_id", location: FieldLocation::Path },
+        FieldSpec { snake: "rule_id", wire: "rule_id", location: FieldLocation::Path },
     ],
     auth: &[
     ],
@@ -516,11 +619,11 @@ const OP_AUTOMATION_RULES_POST_AUTOMATIONS_FAX_INBOUND: OpSpec = OpSpec {
     method: "POST",
     path_template: "/automations/fax/inbound",
     fields: &[
-        FieldSpec { snake: "action", location: FieldLocation::Body },
-        FieldSpec { snake: "action_address", location: FieldLocation::Body },
-        FieldSpec { snake: "dedicated_number", location: FieldLocation::Body },
-        FieldSpec { snake: "enabled", location: FieldLocation::Body },
-        FieldSpec { snake: "rule_name", location: FieldLocation::Body },
+        FieldSpec { snake: "action", wire: "action", location: FieldLocation::Body },
+        FieldSpec { snake: "action_address", wire: "action_address", location: FieldLocation::Body },
+        FieldSpec { snake: "dedicated_number", wire: "dedicated_number", location: FieldLocation::Body },
+        FieldSpec { snake: "enabled", wire: "enabled", location: FieldLocation::Body },
+        FieldSpec { snake: "rule_name", wire: "rule_name", location: FieldLocation::Body },
     ],
     auth: &[
     ],
@@ -530,7 +633,7 @@ const OP_AUTOMATION_RULES_GET_AUTOMATIONS_FAX_INBOUND_INBOUND_RULE_ID: OpSpec = 
     method: "GET",
     path_template: "/automations/fax/inbound/{inbound_rule_id}",
     fields: &[
-        FieldSpec { snake: "inbound_rule_id", location: FieldLocation::Path },
+        FieldSpec { snake: "inbound_rule_id", wire: "inbound_rule_id", location: FieldLocation::Path },
     ],
     auth: &[
     ],
@@ -540,12 +643,12 @@ const OP_AUTOMATION_RULES_PUT_AUTOMATIONS_FAX_INBOUND_INBOUND_RULE_ID: OpSpec = 
     method: "PUT",
     path_template: "/automations/fax/inbound/{inbound_rule_id}",
     fields: &[
-        FieldSpec { snake: "inbound_rule_id", location: FieldLocation::Path },
-        FieldSpec { snake: "action", location: FieldLocation::Body },
-        FieldSpec { snake: "action_address", location: FieldLocation::Body },
-        FieldSpec { snake: "dedicated_number", location: FieldLocation::Body },
-        FieldSpec { snake: "enabled", location: FieldLocation::Body },
-        FieldSpec { snake: "rule_name", location: FieldLocation::Body },
+        FieldSpec { snake: "inbound_rule_id", wire: "inbound_rule_id", location: FieldLocation::Path },
+        FieldSpec { snake: "action", wire: "action", location: FieldLocation::Body },
+        FieldSpec { snake: "action_address", wire: "action_address", location: FieldLocation::Body },
+        FieldSpec { snake: "dedicated_number", wire: "dedicated_number", location: FieldLocation::Body },
+        FieldSpec { snake: "enabled", wire: "enabled", location: FieldLocation::Body },
+        FieldSpec { snake: "rule_name", wire: "rule_name", location: FieldLocation::Body },
     ],
     auth: &[
     ],
@@ -555,7 +658,7 @@ const OP_AUTOMATION_RULES_DELETE_AUTOMATIONS_FAX_INBOUND_INBOUND_RULE_ID: OpSpec
     method: "DELETE",
     path_template: "/automations/fax/inbound/{inbound_rule_id}",
     fields: &[
-        FieldSpec { snake: "inbound_rule_id", location: FieldLocation::Path },
+        FieldSpec { snake: "inbound_rule_id", wire: "inbound_rule_id", location: FieldLocation::Path },
     ],
     auth: &[
     ],
@@ -574,11 +677,11 @@ const OP_AUTOMATION_RULES_CREATE_A_NEW_RULE: OpSpec = OpSpec {
     method: "POST",
     path_template: "/automations/fax/receipts",
     fields: &[
-        FieldSpec { snake: "action", location: FieldLocation::Body },
-        FieldSpec { snake: "action_address", location: FieldLocation::Body },
-        FieldSpec { snake: "enabled", location: FieldLocation::Body },
-        FieldSpec { snake: "match_type", location: FieldLocation::Body },
-        FieldSpec { snake: "rule_name", location: FieldLocation::Body },
+        FieldSpec { snake: "action", wire: "action", location: FieldLocation::Body },
+        FieldSpec { snake: "action_address", wire: "action_address", location: FieldLocation::Body },
+        FieldSpec { snake: "enabled", wire: "enabled", location: FieldLocation::Body },
+        FieldSpec { snake: "match_type", wire: "match_type", location: FieldLocation::Body },
+        FieldSpec { snake: "rule_name", wire: "rule_name", location: FieldLocation::Body },
     ],
     auth: &[
     ],
@@ -588,7 +691,7 @@ const OP_AUTOMATION_RULES_GET_A_SPECIFIC_RULE: OpSpec = OpSpec {
     method: "GET",
     path_template: "/automations/fax/receipts/{rule_id}",
     fields: &[
-        FieldSpec { snake: "rule_id", location: FieldLocation::Path },
+        FieldSpec { snake: "rule_id", wire: "rule_id", location: FieldLocation::Path },
     ],
     auth: &[
     ],
@@ -598,12 +701,12 @@ const OP_AUTOMATION_RULES_UPDATE_A_RULE: OpSpec = OpSpec {
     method: "PUT",
     path_template: "/automations/fax/receipts/{rule_id}",
     fields: &[
-        FieldSpec { snake: "rule_id", location: FieldLocation::Path },
-        FieldSpec { snake: "action", location: FieldLocation::Body },
-        FieldSpec { snake: "action_address", location: FieldLocation::Body },
-        FieldSpec { snake: "enabled", location: FieldLocation::Body },
-        FieldSpec { snake: "match_type", location: FieldLocation::Body },
-        FieldSpec { snake: "rule_name", location: FieldLocation::Body },
+        FieldSpec { snake: "rule_id", wire: "rule_id", location: FieldLocation::Path },
+        FieldSpec { snake: "action", wire: "action", location: FieldLocation::Body },
+        FieldSpec { snake: "action_address", wire: "action_address", location: FieldLocation::Body },
+        FieldSpec { snake: "enabled", wire: "enabled", location: FieldLocation::Body },
+        FieldSpec { snake: "match_type", wire: "match_type", location: FieldLocation::Body },
+        FieldSpec { snake: "rule_name", wire: "rule_name", location: FieldLocation::Body },
     ],
     auth: &[
     ],
@@ -613,7 +716,7 @@ const OP_AUTOMATION_RULES_DELETE_A_RULE: OpSpec = OpSpec {
     method: "DELETE",
     path_template: "/automations/fax/receipts/{rule_id}",
     fields: &[
-        FieldSpec { snake: "rule_id", location: FieldLocation::Path },
+        FieldSpec { snake: "rule_id", wire: "rule_id", location: FieldLocation::Path },
     ],
     auth: &[
     ],
@@ -632,13 +735,13 @@ const OP_AUTOMATION_RULES_CREATE_A_NEW_RULE_V2: OpSpec = OpSpec {
     method: "POST",
     path_template: "/automations/sms/inbound/",
     fields: &[
-        FieldSpec { snake: "action", location: FieldLocation::Body },
-        FieldSpec { snake: "action_address", location: FieldLocation::Body },
-        FieldSpec { snake: "dedicated_number", location: FieldLocation::Body },
-        FieldSpec { snake: "enabled", location: FieldLocation::Body },
-        FieldSpec { snake: "message_search_term", location: FieldLocation::Body },
-        FieldSpec { snake: "message_search_type", location: FieldLocation::Body },
-        FieldSpec { snake: "rule_name", location: FieldLocation::Body },
+        FieldSpec { snake: "action", wire: "action", location: FieldLocation::Body },
+        FieldSpec { snake: "action_address", wire: "action_address", location: FieldLocation::Body },
+        FieldSpec { snake: "dedicated_number", wire: "dedicated_number", location: FieldLocation::Body },
+        FieldSpec { snake: "enabled", wire: "enabled", location: FieldLocation::Body },
+        FieldSpec { snake: "message_search_term", wire: "message_search_term", location: FieldLocation::Body },
+        FieldSpec { snake: "message_search_type", wire: "message_search_type", location: FieldLocation::Body },
+        FieldSpec { snake: "rule_name", wire: "rule_name", location: FieldLocation::Body },
     ],
     auth: &[
     ],
@@ -648,7 +751,7 @@ const OP_AUTOMATION_RULES_GET_A_SPECIFIC_RULE_V2: OpSpec = OpSpec {
     method: "GET",
     path_template: "/automations/sms/inbound/{inbound_rule_id}",
     fields: &[
-        FieldSpec { snake: "inbound_rule_id", location: FieldLocation::Path },
+        FieldSpec { snake: "inbound_rule_id", wire: "inbound_rule_id", location: FieldLocation::Path },
     ],
     auth: &[
     ],
@@ -658,13 +761,13 @@ const OP_AUTOMATION_RULES_UPDATE_A_RULE_V2: OpSpec = OpSpec {
     method: "PUT",
     path_template: "/automations/sms/inbound/{inbound_rule_id}",
     fields: &[
-        FieldSpec { snake: "inbound_rule_id", location: FieldLocation::Path },
-        FieldSpec { snake: "action", location: FieldLocation::Body },
-        FieldSpec { snake: "action_address", location: FieldLocation::Body },
-        FieldSpec { snake: "dedicated_number", location: FieldLocation::Body },
-        FieldSpec { snake: "enabled", location: FieldLocation::Body },
-        FieldSpec { snake: "message_search_term", location: FieldLocation::Body },
-        FieldSpec { snake: "message_search_type", location: FieldLocation::Body },
+        FieldSpec { snake: "inbound_rule_id", wire: "inbound_rule_id", location: FieldLocation::Path },
+        FieldSpec { snake: "action", wire: "action", location: FieldLocation::Body },
+        FieldSpec { snake: "action_address", wire: "action_address", location: FieldLocation::Body },
+        FieldSpec { snake: "dedicated_number", wire: "dedicated_number", location: FieldLocation::Body },
+        FieldSpec { snake: "enabled", wire: "enabled", location: FieldLocation::Body },
+        FieldSpec { snake: "message_search_term", wire: "message_search_term", location: FieldLocation::Body },
+        FieldSpec { snake: "message_search_type", wire: "message_search_type", location: FieldLocation::Body },
     ],
     auth: &[
     ],
@@ -674,7 +777,7 @@ const OP_AUTOMATION_RULES_DELETE_A_RULE_V2: OpSpec = OpSpec {
     method: "DELETE",
     path_template: "/automations/sms/inbound/{inbound_rule_id}",
     fields: &[
-        FieldSpec { snake: "inbound_rule_id", location: FieldLocation::Path },
+        FieldSpec { snake: "inbound_rule_id", wire: "inbound_rule_id", location: FieldLocation::Path },
     ],
     auth: &[
     ],
@@ -693,11 +796,11 @@ const OP_AUTOMATION_RULES_POST_AUTOMATIONS_SMS_RECEIPTS: OpSpec = OpSpec {
     method: "POST",
     path_template: "/automations/sms/receipts",
     fields: &[
-        FieldSpec { snake: "action", location: FieldLocation::Body },
-        FieldSpec { snake: "action_address", location: FieldLocation::Body },
-        FieldSpec { snake: "enabled", location: FieldLocation::Body },
-        FieldSpec { snake: "match_type", location: FieldLocation::Body },
-        FieldSpec { snake: "rule_name", location: FieldLocation::Body },
+        FieldSpec { snake: "action", wire: "action", location: FieldLocation::Body },
+        FieldSpec { snake: "action_address", wire: "action_address", location: FieldLocation::Body },
+        FieldSpec { snake: "enabled", wire: "enabled", location: FieldLocation::Body },
+        FieldSpec { snake: "match_type", wire: "match_type", location: FieldLocation::Body },
+        FieldSpec { snake: "rule_name", wire: "rule_name", location: FieldLocation::Body },
     ],
     auth: &[
     ],
@@ -707,7 +810,7 @@ const OP_AUTOMATION_RULES_GET_AUTOMATIONS_SMS_RECEIPTS_RECEIPT_RULE_ID: OpSpec =
     method: "GET",
     path_template: "/automations/sms/receipts/{receipt_rule_id}",
     fields: &[
-        FieldSpec { snake: "receipt_rule_id", location: FieldLocation::Path },
+        FieldSpec { snake: "receipt_rule_id", wire: "receipt_rule_id", location: FieldLocation::Path },
     ],
     auth: &[
     ],
@@ -717,12 +820,12 @@ const OP_AUTOMATION_RULES_PUT_AUTOMATIONS_SMS_RECEIPTS_RECEIPT_RULE_ID: OpSpec =
     method: "PUT",
     path_template: "/automations/sms/receipts/{receipt_rule_id}",
     fields: &[
-        FieldSpec { snake: "receipt_rule_id", location: FieldLocation::Path },
-        FieldSpec { snake: "action", location: FieldLocation::Body },
-        FieldSpec { snake: "action_address", location: FieldLocation::Body },
-        FieldSpec { snake: "enabled", location: FieldLocation::Body },
-        FieldSpec { snake: "match_type", location: FieldLocation::Body },
-        FieldSpec { snake: "rule_name", location: FieldLocation::Body },
+        FieldSpec { snake: "receipt_rule_id", wire: "receipt_rule_id", location: FieldLocation::Path },
+        FieldSpec { snake: "action", wire: "action", location: FieldLocation::Body },
+        FieldSpec { snake: "action_address", wire: "action_address", location: FieldLocation::Body },
+        FieldSpec { snake: "enabled", wire: "enabled", location: FieldLocation::Body },
+        FieldSpec { snake: "match_type", wire: "match_type", location: FieldLocation::Body },
+        FieldSpec { snake: "rule_name", wire: "rule_name", location: FieldLocation::Body },
     ],
     auth: &[
     ],
@@ -732,7 +835,7 @@ const OP_AUTOMATION_RULES_DELETE_AUTOMATIONS_SMS_RECEIPTS_RECEIPT_RULE_ID: OpSpe
     method: "DELETE",
     path_template: "/automations/sms/receipts/{receipt_rule_id}",
     fields: &[
-        FieldSpec { snake: "receipt_rule_id", location: FieldLocation::Path },
+        FieldSpec { snake: "receipt_rule_id", wire: "receipt_rule_id", location: FieldLocation::Path },
     ],
     auth: &[
     ],
@@ -751,11 +854,11 @@ const OP_AUTOMATION_RULES_POST_AUTOMATIONS_VOICE_RECEIPTS: OpSpec = OpSpec {
     method: "POST",
     path_template: "/automations/voice/receipts",
     fields: &[
-        FieldSpec { snake: "action", location: FieldLocation::Body },
-        FieldSpec { snake: "action_address", location: FieldLocation::Body },
-        FieldSpec { snake: "enabled", location: FieldLocation::Body },
-        FieldSpec { snake: "match_type", location: FieldLocation::Body },
-        FieldSpec { snake: "rule_name", location: FieldLocation::Body },
+        FieldSpec { snake: "action", wire: "action", location: FieldLocation::Body },
+        FieldSpec { snake: "action_address", wire: "action_address", location: FieldLocation::Body },
+        FieldSpec { snake: "enabled", wire: "enabled", location: FieldLocation::Body },
+        FieldSpec { snake: "match_type", wire: "match_type", location: FieldLocation::Body },
+        FieldSpec { snake: "rule_name", wire: "rule_name", location: FieldLocation::Body },
     ],
     auth: &[
     ],
@@ -765,7 +868,7 @@ const OP_AUTOMATION_RULES_GET_AUTOMATIONS_VOICE_RECEIPTS_RECEIPT_RULE_ID: OpSpec
     method: "GET",
     path_template: "/automations/voice/receipts/{receipt_rule_id}",
     fields: &[
-        FieldSpec { snake: "receipt_rule_id", location: FieldLocation::Path },
+        FieldSpec { snake: "receipt_rule_id", wire: "receipt_rule_id", location: FieldLocation::Path },
     ],
     auth: &[
     ],
@@ -775,12 +878,12 @@ const OP_AUTOMATION_RULES_PUT_AUTOMATIONS_VOICE_RECEIPTS_RECEIPT_RULE_ID: OpSpec
     method: "PUT",
     path_template: "/automations/voice/receipts/{receipt_rule_id}",
     fields: &[
-        FieldSpec { snake: "receipt_rule_id", location: FieldLocation::Path },
-        FieldSpec { snake: "action", location: FieldLocation::Body },
-        FieldSpec { snake: "action_address", location: FieldLocation::Body },
-        FieldSpec { snake: "enabled", location: FieldLocation::Body },
-        FieldSpec { snake: "match_type", location: FieldLocation::Body },
-        FieldSpec { snake: "rule_name", location: FieldLocation::Body },
+        FieldSpec { snake: "receipt_rule_id", wire: "receipt_rule_id", location: FieldLocation::Path },
+        FieldSpec { snake: "action", wire: "action", location: FieldLocation::Body },
+        FieldSpec { snake: "action_address", wire: "action_address", location: FieldLocation::Body },
+        FieldSpec { snake: "enabled", wire: "enabled", location: FieldLocation::Body },
+        FieldSpec { snake: "match_type", wire: "match_type", location: FieldLocation::Body },
+        FieldSpec { snake: "rule_name", wire: "rule_name", location: FieldLocation::Body },
     ],
     auth: &[
     ],
@@ -790,7 +893,7 @@ const OP_AUTOMATION_RULES_DELETE_AUTOMATIONS_VOICE_RECEIPTS_RECEIPT_RULE_ID: OpS
     method: "DELETE",
     path_template: "/automations/voice/receipts/{receipt_rule_id}",
     fields: &[
-        FieldSpec { snake: "receipt_rule_id", location: FieldLocation::Path },
+        FieldSpec { snake: "receipt_rule_id", wire: "receipt_rule_id", location: FieldLocation::Path },
     ],
     auth: &[
     ],
@@ -997,120 +1100,540 @@ fn iface_automation_rules__delete_automations_voice_receipts_receipt_rule_id_par
     Value::Object(m)
 }
 
+fn iface_automation_rules__get_automations_email_receipt__ok(body: String) -> Result<String, crate::runtime::DispatchError> {
+    Ok(body)
+}
+
+fn iface_automation_rules__get_automations_email_receipt__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
+fn iface_automation_rules__post_automations_email_receipt__ok(body: String) -> Result<String, crate::runtime::DispatchError> {
+    Ok(body)
+}
+
+fn iface_automation_rules__post_automations_email_receipt__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
+fn iface_automation_rules__get_automations_email_receipt_rule_id__ok(body: String) -> Result<String, crate::runtime::DispatchError> {
+    Ok(body)
+}
+
+fn iface_automation_rules__get_automations_email_receipt_rule_id__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
+fn iface_automation_rules__put_automations_email_receipt_rule_id__ok(body: String) -> Result<String, crate::runtime::DispatchError> {
+    Ok(body)
+}
+
+fn iface_automation_rules__put_automations_email_receipt_rule_id__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
+fn iface_automation_rules__delete_automations_email_receipt_rule_id__ok(body: String) -> Result<String, crate::runtime::DispatchError> {
+    Ok(body)
+}
+
+fn iface_automation_rules__delete_automations_email_receipt_rule_id__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
+fn iface_automation_rules__get_automations_fax_inbound__ok(body: String) -> Result<String, crate::runtime::DispatchError> {
+    Ok(body)
+}
+
+fn iface_automation_rules__get_automations_fax_inbound__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
+fn iface_automation_rules__post_automations_fax_inbound__ok(body: String) -> Result<String, crate::runtime::DispatchError> {
+    Ok(body)
+}
+
+fn iface_automation_rules__post_automations_fax_inbound__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
+fn iface_automation_rules__get_automations_fax_inbound_inbound_rule_id__ok(body: String) -> Result<String, crate::runtime::DispatchError> {
+    Ok(body)
+}
+
+fn iface_automation_rules__get_automations_fax_inbound_inbound_rule_id__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
+fn iface_automation_rules__put_automations_fax_inbound_inbound_rule_id__ok(body: String) -> Result<String, crate::runtime::DispatchError> {
+    Ok(body)
+}
+
+fn iface_automation_rules__put_automations_fax_inbound_inbound_rule_id__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
+fn iface_automation_rules__delete_automations_fax_inbound_inbound_rule_id__ok(body: String) -> Result<String, crate::runtime::DispatchError> {
+    Ok(body)
+}
+
+fn iface_automation_rules__delete_automations_fax_inbound_inbound_rule_id__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
+fn iface_automation_rules__list_rules__ok(body: String) -> Result<String, crate::runtime::DispatchError> {
+    Ok(body)
+}
+
+fn iface_automation_rules__list_rules__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
+fn iface_automation_rules__create_a_new_rule__ok(body: String) -> Result<String, crate::runtime::DispatchError> {
+    Ok(body)
+}
+
+fn iface_automation_rules__create_a_new_rule__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
+fn iface_automation_rules__get_a_specific_rule__ok(body: String) -> Result<String, crate::runtime::DispatchError> {
+    Ok(body)
+}
+
+fn iface_automation_rules__get_a_specific_rule__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
+fn iface_automation_rules__update_a_rule__ok(body: String) -> Result<String, crate::runtime::DispatchError> {
+    Ok(body)
+}
+
+fn iface_automation_rules__update_a_rule__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
+fn iface_automation_rules__delete_a_rule__ok(body: String) -> Result<String, crate::runtime::DispatchError> {
+    Ok(body)
+}
+
+fn iface_automation_rules__delete_a_rule__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
+fn iface_automation_rules__list_rules_v2__ok(body: String) -> Result<String, crate::runtime::DispatchError> {
+    Ok(body)
+}
+
+fn iface_automation_rules__list_rules_v2__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
+fn iface_automation_rules__create_a_new_rule_v2__ok(body: String) -> Result<String, crate::runtime::DispatchError> {
+    Ok(body)
+}
+
+fn iface_automation_rules__create_a_new_rule_v2__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
+fn iface_automation_rules__get_a_specific_rule_v2__ok(body: String) -> Result<String, crate::runtime::DispatchError> {
+    Ok(body)
+}
+
+fn iface_automation_rules__get_a_specific_rule_v2__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
+fn iface_automation_rules__update_a_rule_v2__ok(body: String) -> Result<String, crate::runtime::DispatchError> {
+    Ok(body)
+}
+
+fn iface_automation_rules__update_a_rule_v2__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
+fn iface_automation_rules__delete_a_rule_v2__ok(body: String) -> Result<String, crate::runtime::DispatchError> {
+    Ok(body)
+}
+
+fn iface_automation_rules__delete_a_rule_v2__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
+fn iface_automation_rules__get_automations_sms_receipts__ok(body: String) -> Result<String, crate::runtime::DispatchError> {
+    Ok(body)
+}
+
+fn iface_automation_rules__get_automations_sms_receipts__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
+fn iface_automation_rules__post_automations_sms_receipts__ok(body: String) -> Result<String, crate::runtime::DispatchError> {
+    Ok(body)
+}
+
+fn iface_automation_rules__post_automations_sms_receipts__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
+fn iface_automation_rules__get_automations_sms_receipts_receipt_rule_id__ok(body: String) -> Result<String, crate::runtime::DispatchError> {
+    Ok(body)
+}
+
+fn iface_automation_rules__get_automations_sms_receipts_receipt_rule_id__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
+fn iface_automation_rules__put_automations_sms_receipts_receipt_rule_id__ok(body: String) -> Result<String, crate::runtime::DispatchError> {
+    Ok(body)
+}
+
+fn iface_automation_rules__put_automations_sms_receipts_receipt_rule_id__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
+fn iface_automation_rules__delete_automations_sms_receipts_receipt_rule_id__ok(body: String) -> Result<String, crate::runtime::DispatchError> {
+    Ok(body)
+}
+
+fn iface_automation_rules__delete_automations_sms_receipts_receipt_rule_id__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
+fn iface_automation_rules__get_automations_voice_receipts__ok(body: String) -> Result<String, crate::runtime::DispatchError> {
+    Ok(body)
+}
+
+fn iface_automation_rules__get_automations_voice_receipts__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
+fn iface_automation_rules__post_automations_voice_receipts__ok(body: String) -> Result<String, crate::runtime::DispatchError> {
+    Ok(body)
+}
+
+fn iface_automation_rules__post_automations_voice_receipts__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
+fn iface_automation_rules__get_automations_voice_receipts_receipt_rule_id__ok(body: String) -> Result<String, crate::runtime::DispatchError> {
+    Ok(body)
+}
+
+fn iface_automation_rules__get_automations_voice_receipts_receipt_rule_id__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
+fn iface_automation_rules__put_automations_voice_receipts_receipt_rule_id__ok(body: String) -> Result<String, crate::runtime::DispatchError> {
+    Ok(body)
+}
+
+fn iface_automation_rules__put_automations_voice_receipts_receipt_rule_id__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
+fn iface_automation_rules__delete_automations_voice_receipts_receipt_rule_id__ok(body: String) -> Result<String, crate::runtime::DispatchError> {
+    Ok(body)
+}
+
+fn iface_automation_rules__delete_automations_voice_receipts_receipt_rule_id__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
 impl iface_automation_rules::Guest for crate::Component {
     fn get_automations_email_receipt() -> Result<String, String> {
-        dispatch(&OP_AUTOMATION_RULES_GET_AUTOMATIONS_EMAIL_RECEIPT, Value::Object(Map::new()))
+        match dispatch(&OP_AUTOMATION_RULES_GET_AUTOMATIONS_EMAIL_RECEIPT, Value::Object(Map::new())).and_then(iface_automation_rules__get_automations_email_receipt__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_automation_rules__get_automations_email_receipt__err(e)),
+        }
     }
     fn post_automations_email_receipt(params: iface_automation_rules::PostAutomationsEmailReceiptParams) -> Result<String, String> {
         let json = iface_automation_rules__post_automations_email_receipt_params__to_json(&params);
-        dispatch(&OP_AUTOMATION_RULES_POST_AUTOMATIONS_EMAIL_RECEIPT, json)
+        match dispatch(&OP_AUTOMATION_RULES_POST_AUTOMATIONS_EMAIL_RECEIPT, json).and_then(iface_automation_rules__post_automations_email_receipt__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_automation_rules__post_automations_email_receipt__err(e)),
+        }
     }
     fn get_automations_email_receipt_rule_id(params: iface_automation_rules::GetAutomationsEmailReceiptRuleIdParams) -> Result<String, String> {
         let json = iface_automation_rules__get_automations_email_receipt_rule_id_params__to_json(&params);
-        dispatch(&OP_AUTOMATION_RULES_GET_AUTOMATIONS_EMAIL_RECEIPT_RULE_ID, json)
+        match dispatch(&OP_AUTOMATION_RULES_GET_AUTOMATIONS_EMAIL_RECEIPT_RULE_ID, json).and_then(iface_automation_rules__get_automations_email_receipt_rule_id__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_automation_rules__get_automations_email_receipt_rule_id__err(e)),
+        }
     }
     fn put_automations_email_receipt_rule_id(params: iface_automation_rules::PutAutomationsEmailReceiptRuleIdParams) -> Result<String, String> {
         let json = iface_automation_rules__put_automations_email_receipt_rule_id_params__to_json(&params);
-        dispatch(&OP_AUTOMATION_RULES_PUT_AUTOMATIONS_EMAIL_RECEIPT_RULE_ID, json)
+        match dispatch(&OP_AUTOMATION_RULES_PUT_AUTOMATIONS_EMAIL_RECEIPT_RULE_ID, json).and_then(iface_automation_rules__put_automations_email_receipt_rule_id__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_automation_rules__put_automations_email_receipt_rule_id__err(e)),
+        }
     }
     fn delete_automations_email_receipt_rule_id(params: iface_automation_rules::DeleteAutomationsEmailReceiptRuleIdParams) -> Result<String, String> {
         let json = iface_automation_rules__delete_automations_email_receipt_rule_id_params__to_json(&params);
-        dispatch(&OP_AUTOMATION_RULES_DELETE_AUTOMATIONS_EMAIL_RECEIPT_RULE_ID, json)
+        match dispatch(&OP_AUTOMATION_RULES_DELETE_AUTOMATIONS_EMAIL_RECEIPT_RULE_ID, json).and_then(iface_automation_rules__delete_automations_email_receipt_rule_id__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_automation_rules__delete_automations_email_receipt_rule_id__err(e)),
+        }
     }
     fn get_automations_fax_inbound() -> Result<String, String> {
-        dispatch(&OP_AUTOMATION_RULES_GET_AUTOMATIONS_FAX_INBOUND, Value::Object(Map::new()))
+        match dispatch(&OP_AUTOMATION_RULES_GET_AUTOMATIONS_FAX_INBOUND, Value::Object(Map::new())).and_then(iface_automation_rules__get_automations_fax_inbound__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_automation_rules__get_automations_fax_inbound__err(e)),
+        }
     }
     fn post_automations_fax_inbound(params: iface_automation_rules::PostAutomationsFaxInboundParams) -> Result<String, String> {
         let json = iface_automation_rules__post_automations_fax_inbound_params__to_json(&params);
-        dispatch(&OP_AUTOMATION_RULES_POST_AUTOMATIONS_FAX_INBOUND, json)
+        match dispatch(&OP_AUTOMATION_RULES_POST_AUTOMATIONS_FAX_INBOUND, json).and_then(iface_automation_rules__post_automations_fax_inbound__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_automation_rules__post_automations_fax_inbound__err(e)),
+        }
     }
     fn get_automations_fax_inbound_inbound_rule_id(params: iface_automation_rules::GetAutomationsFaxInboundInboundRuleIdParams) -> Result<String, String> {
         let json = iface_automation_rules__get_automations_fax_inbound_inbound_rule_id_params__to_json(&params);
-        dispatch(&OP_AUTOMATION_RULES_GET_AUTOMATIONS_FAX_INBOUND_INBOUND_RULE_ID, json)
+        match dispatch(&OP_AUTOMATION_RULES_GET_AUTOMATIONS_FAX_INBOUND_INBOUND_RULE_ID, json).and_then(iface_automation_rules__get_automations_fax_inbound_inbound_rule_id__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_automation_rules__get_automations_fax_inbound_inbound_rule_id__err(e)),
+        }
     }
     fn put_automations_fax_inbound_inbound_rule_id(params: iface_automation_rules::PutAutomationsFaxInboundInboundRuleIdParams) -> Result<String, String> {
         let json = iface_automation_rules__put_automations_fax_inbound_inbound_rule_id_params__to_json(&params);
-        dispatch(&OP_AUTOMATION_RULES_PUT_AUTOMATIONS_FAX_INBOUND_INBOUND_RULE_ID, json)
+        match dispatch(&OP_AUTOMATION_RULES_PUT_AUTOMATIONS_FAX_INBOUND_INBOUND_RULE_ID, json).and_then(iface_automation_rules__put_automations_fax_inbound_inbound_rule_id__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_automation_rules__put_automations_fax_inbound_inbound_rule_id__err(e)),
+        }
     }
     fn delete_automations_fax_inbound_inbound_rule_id(params: iface_automation_rules::DeleteAutomationsFaxInboundInboundRuleIdParams) -> Result<String, String> {
         let json = iface_automation_rules__delete_automations_fax_inbound_inbound_rule_id_params__to_json(&params);
-        dispatch(&OP_AUTOMATION_RULES_DELETE_AUTOMATIONS_FAX_INBOUND_INBOUND_RULE_ID, json)
+        match dispatch(&OP_AUTOMATION_RULES_DELETE_AUTOMATIONS_FAX_INBOUND_INBOUND_RULE_ID, json).and_then(iface_automation_rules__delete_automations_fax_inbound_inbound_rule_id__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_automation_rules__delete_automations_fax_inbound_inbound_rule_id__err(e)),
+        }
     }
     fn list_rules() -> Result<String, String> {
-        dispatch(&OP_AUTOMATION_RULES_LIST_RULES, Value::Object(Map::new()))
+        match dispatch(&OP_AUTOMATION_RULES_LIST_RULES, Value::Object(Map::new())).and_then(iface_automation_rules__list_rules__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_automation_rules__list_rules__err(e)),
+        }
     }
     fn create_a_new_rule(params: iface_automation_rules::CreateANewRuleParams) -> Result<String, String> {
         let json = iface_automation_rules__create_a_new_rule_params__to_json(&params);
-        dispatch(&OP_AUTOMATION_RULES_CREATE_A_NEW_RULE, json)
+        match dispatch(&OP_AUTOMATION_RULES_CREATE_A_NEW_RULE, json).and_then(iface_automation_rules__create_a_new_rule__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_automation_rules__create_a_new_rule__err(e)),
+        }
     }
     fn get_a_specific_rule(params: iface_automation_rules::GetASpecificRuleParams) -> Result<String, String> {
         let json = iface_automation_rules__get_a_specific_rule_params__to_json(&params);
-        dispatch(&OP_AUTOMATION_RULES_GET_A_SPECIFIC_RULE, json)
+        match dispatch(&OP_AUTOMATION_RULES_GET_A_SPECIFIC_RULE, json).and_then(iface_automation_rules__get_a_specific_rule__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_automation_rules__get_a_specific_rule__err(e)),
+        }
     }
     fn update_a_rule(params: iface_automation_rules::UpdateARuleParams) -> Result<String, String> {
         let json = iface_automation_rules__update_a_rule_params__to_json(&params);
-        dispatch(&OP_AUTOMATION_RULES_UPDATE_A_RULE, json)
+        match dispatch(&OP_AUTOMATION_RULES_UPDATE_A_RULE, json).and_then(iface_automation_rules__update_a_rule__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_automation_rules__update_a_rule__err(e)),
+        }
     }
     fn delete_a_rule(params: iface_automation_rules::DeleteARuleParams) -> Result<String, String> {
         let json = iface_automation_rules__delete_a_rule_params__to_json(&params);
-        dispatch(&OP_AUTOMATION_RULES_DELETE_A_RULE, json)
+        match dispatch(&OP_AUTOMATION_RULES_DELETE_A_RULE, json).and_then(iface_automation_rules__delete_a_rule__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_automation_rules__delete_a_rule__err(e)),
+        }
     }
     fn list_rules_v2() -> Result<String, String> {
-        dispatch(&OP_AUTOMATION_RULES_LIST_RULES_V2, Value::Object(Map::new()))
+        match dispatch(&OP_AUTOMATION_RULES_LIST_RULES_V2, Value::Object(Map::new())).and_then(iface_automation_rules__list_rules_v2__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_automation_rules__list_rules_v2__err(e)),
+        }
     }
     fn create_a_new_rule_v2(params: iface_automation_rules::CreateANewRuleV2Params) -> Result<String, String> {
         let json = iface_automation_rules__create_a_new_rule_v2_params__to_json(&params);
-        dispatch(&OP_AUTOMATION_RULES_CREATE_A_NEW_RULE_V2, json)
+        match dispatch(&OP_AUTOMATION_RULES_CREATE_A_NEW_RULE_V2, json).and_then(iface_automation_rules__create_a_new_rule_v2__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_automation_rules__create_a_new_rule_v2__err(e)),
+        }
     }
     fn get_a_specific_rule_v2(params: iface_automation_rules::GetASpecificRuleV2Params) -> Result<String, String> {
         let json = iface_automation_rules__get_a_specific_rule_v2_params__to_json(&params);
-        dispatch(&OP_AUTOMATION_RULES_GET_A_SPECIFIC_RULE_V2, json)
+        match dispatch(&OP_AUTOMATION_RULES_GET_A_SPECIFIC_RULE_V2, json).and_then(iface_automation_rules__get_a_specific_rule_v2__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_automation_rules__get_a_specific_rule_v2__err(e)),
+        }
     }
     fn update_a_rule_v2(params: iface_automation_rules::UpdateARuleV2Params) -> Result<String, String> {
         let json = iface_automation_rules__update_a_rule_v2_params__to_json(&params);
-        dispatch(&OP_AUTOMATION_RULES_UPDATE_A_RULE_V2, json)
+        match dispatch(&OP_AUTOMATION_RULES_UPDATE_A_RULE_V2, json).and_then(iface_automation_rules__update_a_rule_v2__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_automation_rules__update_a_rule_v2__err(e)),
+        }
     }
     fn delete_a_rule_v2(params: iface_automation_rules::DeleteARuleV2Params) -> Result<String, String> {
         let json = iface_automation_rules__delete_a_rule_v2_params__to_json(&params);
-        dispatch(&OP_AUTOMATION_RULES_DELETE_A_RULE_V2, json)
+        match dispatch(&OP_AUTOMATION_RULES_DELETE_A_RULE_V2, json).and_then(iface_automation_rules__delete_a_rule_v2__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_automation_rules__delete_a_rule_v2__err(e)),
+        }
     }
     fn get_automations_sms_receipts() -> Result<String, String> {
-        dispatch(&OP_AUTOMATION_RULES_GET_AUTOMATIONS_SMS_RECEIPTS, Value::Object(Map::new()))
+        match dispatch(&OP_AUTOMATION_RULES_GET_AUTOMATIONS_SMS_RECEIPTS, Value::Object(Map::new())).and_then(iface_automation_rules__get_automations_sms_receipts__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_automation_rules__get_automations_sms_receipts__err(e)),
+        }
     }
     fn post_automations_sms_receipts(params: iface_automation_rules::PostAutomationsSmsReceiptsParams) -> Result<String, String> {
         let json = iface_automation_rules__post_automations_sms_receipts_params__to_json(&params);
-        dispatch(&OP_AUTOMATION_RULES_POST_AUTOMATIONS_SMS_RECEIPTS, json)
+        match dispatch(&OP_AUTOMATION_RULES_POST_AUTOMATIONS_SMS_RECEIPTS, json).and_then(iface_automation_rules__post_automations_sms_receipts__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_automation_rules__post_automations_sms_receipts__err(e)),
+        }
     }
     fn get_automations_sms_receipts_receipt_rule_id(params: iface_automation_rules::GetAutomationsSmsReceiptsReceiptRuleIdParams) -> Result<String, String> {
         let json = iface_automation_rules__get_automations_sms_receipts_receipt_rule_id_params__to_json(&params);
-        dispatch(&OP_AUTOMATION_RULES_GET_AUTOMATIONS_SMS_RECEIPTS_RECEIPT_RULE_ID, json)
+        match dispatch(&OP_AUTOMATION_RULES_GET_AUTOMATIONS_SMS_RECEIPTS_RECEIPT_RULE_ID, json).and_then(iface_automation_rules__get_automations_sms_receipts_receipt_rule_id__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_automation_rules__get_automations_sms_receipts_receipt_rule_id__err(e)),
+        }
     }
     fn put_automations_sms_receipts_receipt_rule_id(params: iface_automation_rules::PutAutomationsSmsReceiptsReceiptRuleIdParams) -> Result<String, String> {
         let json = iface_automation_rules__put_automations_sms_receipts_receipt_rule_id_params__to_json(&params);
-        dispatch(&OP_AUTOMATION_RULES_PUT_AUTOMATIONS_SMS_RECEIPTS_RECEIPT_RULE_ID, json)
+        match dispatch(&OP_AUTOMATION_RULES_PUT_AUTOMATIONS_SMS_RECEIPTS_RECEIPT_RULE_ID, json).and_then(iface_automation_rules__put_automations_sms_receipts_receipt_rule_id__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_automation_rules__put_automations_sms_receipts_receipt_rule_id__err(e)),
+        }
     }
     fn delete_automations_sms_receipts_receipt_rule_id(params: iface_automation_rules::DeleteAutomationsSmsReceiptsReceiptRuleIdParams) -> Result<String, String> {
         let json = iface_automation_rules__delete_automations_sms_receipts_receipt_rule_id_params__to_json(&params);
-        dispatch(&OP_AUTOMATION_RULES_DELETE_AUTOMATIONS_SMS_RECEIPTS_RECEIPT_RULE_ID, json)
+        match dispatch(&OP_AUTOMATION_RULES_DELETE_AUTOMATIONS_SMS_RECEIPTS_RECEIPT_RULE_ID, json).and_then(iface_automation_rules__delete_automations_sms_receipts_receipt_rule_id__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_automation_rules__delete_automations_sms_receipts_receipt_rule_id__err(e)),
+        }
     }
     fn get_automations_voice_receipts() -> Result<String, String> {
-        dispatch(&OP_AUTOMATION_RULES_GET_AUTOMATIONS_VOICE_RECEIPTS, Value::Object(Map::new()))
+        match dispatch(&OP_AUTOMATION_RULES_GET_AUTOMATIONS_VOICE_RECEIPTS, Value::Object(Map::new())).and_then(iface_automation_rules__get_automations_voice_receipts__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_automation_rules__get_automations_voice_receipts__err(e)),
+        }
     }
     fn post_automations_voice_receipts(params: iface_automation_rules::PostAutomationsVoiceReceiptsParams) -> Result<String, String> {
         let json = iface_automation_rules__post_automations_voice_receipts_params__to_json(&params);
-        dispatch(&OP_AUTOMATION_RULES_POST_AUTOMATIONS_VOICE_RECEIPTS, json)
+        match dispatch(&OP_AUTOMATION_RULES_POST_AUTOMATIONS_VOICE_RECEIPTS, json).and_then(iface_automation_rules__post_automations_voice_receipts__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_automation_rules__post_automations_voice_receipts__err(e)),
+        }
     }
     fn get_automations_voice_receipts_receipt_rule_id(params: iface_automation_rules::GetAutomationsVoiceReceiptsReceiptRuleIdParams) -> Result<String, String> {
         let json = iface_automation_rules__get_automations_voice_receipts_receipt_rule_id_params__to_json(&params);
-        dispatch(&OP_AUTOMATION_RULES_GET_AUTOMATIONS_VOICE_RECEIPTS_RECEIPT_RULE_ID, json)
+        match dispatch(&OP_AUTOMATION_RULES_GET_AUTOMATIONS_VOICE_RECEIPTS_RECEIPT_RULE_ID, json).and_then(iface_automation_rules__get_automations_voice_receipts_receipt_rule_id__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_automation_rules__get_automations_voice_receipts_receipt_rule_id__err(e)),
+        }
     }
     fn put_automations_voice_receipts_receipt_rule_id(params: iface_automation_rules::PutAutomationsVoiceReceiptsReceiptRuleIdParams) -> Result<String, String> {
         let json = iface_automation_rules__put_automations_voice_receipts_receipt_rule_id_params__to_json(&params);
-        dispatch(&OP_AUTOMATION_RULES_PUT_AUTOMATIONS_VOICE_RECEIPTS_RECEIPT_RULE_ID, json)
+        match dispatch(&OP_AUTOMATION_RULES_PUT_AUTOMATIONS_VOICE_RECEIPTS_RECEIPT_RULE_ID, json).and_then(iface_automation_rules__put_automations_voice_receipts_receipt_rule_id__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_automation_rules__put_automations_voice_receipts_receipt_rule_id__err(e)),
+        }
     }
     fn delete_automations_voice_receipts_receipt_rule_id(params: iface_automation_rules::DeleteAutomationsVoiceReceiptsReceiptRuleIdParams) -> Result<String, String> {
         let json = iface_automation_rules__delete_automations_voice_receipts_receipt_rule_id_params__to_json(&params);
-        dispatch(&OP_AUTOMATION_RULES_DELETE_AUTOMATIONS_VOICE_RECEIPTS_RECEIPT_RULE_ID, json)
+        match dispatch(&OP_AUTOMATION_RULES_DELETE_AUTOMATIONS_VOICE_RECEIPTS_RECEIPT_RULE_ID, json).and_then(iface_automation_rules__delete_automations_voice_receipts_receipt_rule_id__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_automation_rules__delete_automations_voice_receipts_receipt_rule_id__err(e)),
+        }
     }
 }
 use crate::exports::autostamp::clicksend::contact_suggestions as iface_contact_suggestions;
@@ -1124,9 +1647,23 @@ const OP_CONTACT_SUGGESTIONS_LIST_CONTACT_SUGGESTIONS: OpSpec = OpSpec {
     ],
 };
 
+fn iface_contact_suggestions__list_contact_suggestions__ok(body: String) -> Result<String, crate::runtime::DispatchError> {
+    Ok(body)
+}
+
+fn iface_contact_suggestions__list_contact_suggestions__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
 impl iface_contact_suggestions::Guest for crate::Component {
     fn list_contact_suggestions() -> Result<String, String> {
-        dispatch(&OP_CONTACT_SUGGESTIONS_LIST_CONTACT_SUGGESTIONS, Value::Object(Map::new()))
+        match dispatch(&OP_CONTACT_SUGGESTIONS_LIST_CONTACT_SUGGESTIONS, Value::Object(Map::new())).and_then(iface_contact_suggestions__list_contact_suggestions__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_contact_suggestions__list_contact_suggestions__err(e)),
+        }
     }
 }
 use crate::exports::autostamp::clicksend::countries as iface_countries;
@@ -1140,9 +1677,23 @@ const OP_COUNTRIES_GET_ALL_COUNTRIES: OpSpec = OpSpec {
     ],
 };
 
+fn iface_countries__get_all_countries__ok(body: String) -> Result<String, crate::runtime::DispatchError> {
+    Ok(body)
+}
+
+fn iface_countries__get_all_countries__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
 impl iface_countries::Guest for crate::Component {
     fn get_all_countries() -> Result<String, String> {
-        dispatch(&OP_COUNTRIES_GET_ALL_COUNTRIES, Value::Object(Map::new()))
+        match dispatch(&OP_COUNTRIES_GET_ALL_COUNTRIES, Value::Object(Map::new())).and_then(iface_countries__get_all_countries__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_countries__get_all_countries__err(e)),
+        }
     }
 }
 use crate::exports::autostamp::clicksend::delivery_issues as iface_delivery_issues;
@@ -1160,11 +1711,11 @@ const OP_DELIVERY_ISSUES_CREATE_DELIVERY_ISSUE: OpSpec = OpSpec {
     method: "POST",
     path_template: "/delivery-issues",
     fields: &[
-        FieldSpec { snake: "client_comments", location: FieldLocation::Body },
-        FieldSpec { snake: "description", location: FieldLocation::Body },
-        FieldSpec { snake: "email_address", location: FieldLocation::Body },
-        FieldSpec { snake: "message_id", location: FieldLocation::Body },
-        FieldSpec { snake: "type", location: FieldLocation::Body },
+        FieldSpec { snake: "client_comments", wire: "client_comments", location: FieldLocation::Body },
+        FieldSpec { snake: "description", wire: "description", location: FieldLocation::Body },
+        FieldSpec { snake: "email_address", wire: "email_address", location: FieldLocation::Body },
+        FieldSpec { snake: "message_id", wire: "message_id", location: FieldLocation::Body },
+        FieldSpec { snake: "type", wire: "type", location: FieldLocation::Body },
     ],
     auth: &[
     ],
@@ -1180,13 +1731,41 @@ fn iface_delivery_issues__create_delivery_issue_params__to_json(p: &iface_delive
     Value::Object(m)
 }
 
+fn iface_delivery_issues__get_delivery_issues__ok(body: String) -> Result<String, crate::runtime::DispatchError> {
+    Ok(body)
+}
+
+fn iface_delivery_issues__get_delivery_issues__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
+fn iface_delivery_issues__create_delivery_issue__ok(body: String) -> Result<String, crate::runtime::DispatchError> {
+    Ok(body)
+}
+
+fn iface_delivery_issues__create_delivery_issue__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
 impl iface_delivery_issues::Guest for crate::Component {
     fn get_delivery_issues() -> Result<String, String> {
-        dispatch(&OP_DELIVERY_ISSUES_GET_DELIVERY_ISSUES, Value::Object(Map::new()))
+        match dispatch(&OP_DELIVERY_ISSUES_GET_DELIVERY_ISSUES, Value::Object(Map::new())).and_then(iface_delivery_issues__get_delivery_issues__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_delivery_issues__get_delivery_issues__err(e)),
+        }
     }
     fn create_delivery_issue(params: iface_delivery_issues::CreateDeliveryIssueParams) -> Result<String, String> {
         let json = iface_delivery_issues__create_delivery_issue_params__to_json(&params);
-        dispatch(&OP_DELIVERY_ISSUES_CREATE_DELIVERY_ISSUE, json)
+        match dispatch(&OP_DELIVERY_ISSUES_CREATE_DELIVERY_ISSUE, json).and_then(iface_delivery_issues__create_delivery_issue__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_delivery_issues__create_delivery_issue__err(e)),
+        }
     }
 }
 use crate::exports::autostamp::clicksend::email_marketing as iface_email_marketing;
@@ -1204,13 +1783,13 @@ const OP_EMAIL_MARKETING_CALCULATE_PRICE: OpSpec = OpSpec {
     method: "POST",
     path_template: "/email-campaigns/price",
     fields: &[
-        FieldSpec { snake: "from_email_address_id", location: FieldLocation::Body },
-        FieldSpec { snake: "from_name", location: FieldLocation::Body },
-        FieldSpec { snake: "list_id", location: FieldLocation::Body },
-        FieldSpec { snake: "name", location: FieldLocation::Body },
-        FieldSpec { snake: "schedule", location: FieldLocation::Body },
-        FieldSpec { snake: "subject", location: FieldLocation::Body },
-        FieldSpec { snake: "template_id", location: FieldLocation::Body },
+        FieldSpec { snake: "from_email_address_id", wire: "from_email_address_id", location: FieldLocation::Body },
+        FieldSpec { snake: "from_name", wire: "from_name", location: FieldLocation::Body },
+        FieldSpec { snake: "list_id", wire: "list_id", location: FieldLocation::Body },
+        FieldSpec { snake: "name", wire: "name", location: FieldLocation::Body },
+        FieldSpec { snake: "schedule", wire: "schedule", location: FieldLocation::Body },
+        FieldSpec { snake: "subject", wire: "subject", location: FieldLocation::Body },
+        FieldSpec { snake: "template_id", wire: "template_id", location: FieldLocation::Body },
     ],
     auth: &[
     ],
@@ -1220,13 +1799,13 @@ const OP_EMAIL_MARKETING_CREATE_EMAIL_CAMPAIGN: OpSpec = OpSpec {
     method: "POST",
     path_template: "/email-campaigns/send",
     fields: &[
-        FieldSpec { snake: "from_email_address_id", location: FieldLocation::Body },
-        FieldSpec { snake: "from_name", location: FieldLocation::Body },
-        FieldSpec { snake: "list_id", location: FieldLocation::Body },
-        FieldSpec { snake: "name", location: FieldLocation::Body },
-        FieldSpec { snake: "schedule", location: FieldLocation::Body },
-        FieldSpec { snake: "subject", location: FieldLocation::Body },
-        FieldSpec { snake: "template_id", location: FieldLocation::Body },
+        FieldSpec { snake: "from_email_address_id", wire: "from_email_address_id", location: FieldLocation::Body },
+        FieldSpec { snake: "from_name", wire: "from_name", location: FieldLocation::Body },
+        FieldSpec { snake: "list_id", wire: "list_id", location: FieldLocation::Body },
+        FieldSpec { snake: "name", wire: "name", location: FieldLocation::Body },
+        FieldSpec { snake: "schedule", wire: "schedule", location: FieldLocation::Body },
+        FieldSpec { snake: "subject", wire: "subject", location: FieldLocation::Body },
+        FieldSpec { snake: "template_id", wire: "template_id", location: FieldLocation::Body },
     ],
     auth: &[
     ],
@@ -1236,7 +1815,7 @@ const OP_EMAIL_MARKETING_GET_SPECIFIC_EMAIL_CAMPAIGN_HISTORY: OpSpec = OpSpec {
     method: "GET",
     path_template: "/email-campaigns/{campaign_id}/history",
     fields: &[
-        FieldSpec { snake: "campaign_id", location: FieldLocation::Path },
+        FieldSpec { snake: "campaign_id", wire: "campaign_id", location: FieldLocation::Path },
     ],
     auth: &[
     ],
@@ -1246,7 +1825,7 @@ const OP_EMAIL_MARKETING_GET_SPECIFIC_EMAIL_CAMPAIGN: OpSpec = OpSpec {
     method: "GET",
     path_template: "/email-campaigns/{email_campaign_id}",
     fields: &[
-        FieldSpec { snake: "email_campaign_id", location: FieldLocation::Path },
+        FieldSpec { snake: "email_campaign_id", wire: "email_campaign_id", location: FieldLocation::Path },
     ],
     auth: &[
     ],
@@ -1256,14 +1835,14 @@ const OP_EMAIL_MARKETING_UPDATE_EMAIL_CAMPAIGN: OpSpec = OpSpec {
     method: "PUT",
     path_template: "/email-campaigns/{email_campaign_id}",
     fields: &[
-        FieldSpec { snake: "email_campaign_id", location: FieldLocation::Path },
-        FieldSpec { snake: "from_email_address_id", location: FieldLocation::Body },
-        FieldSpec { snake: "from_name", location: FieldLocation::Body },
-        FieldSpec { snake: "list_id", location: FieldLocation::Body },
-        FieldSpec { snake: "name", location: FieldLocation::Body },
-        FieldSpec { snake: "schedule", location: FieldLocation::Body },
-        FieldSpec { snake: "subject", location: FieldLocation::Body },
-        FieldSpec { snake: "template_id", location: FieldLocation::Body },
+        FieldSpec { snake: "email_campaign_id", wire: "email_campaign_id", location: FieldLocation::Path },
+        FieldSpec { snake: "from_email_address_id", wire: "from_email_address_id", location: FieldLocation::Body },
+        FieldSpec { snake: "from_name", wire: "from_name", location: FieldLocation::Body },
+        FieldSpec { snake: "list_id", wire: "list_id", location: FieldLocation::Body },
+        FieldSpec { snake: "name", wire: "name", location: FieldLocation::Body },
+        FieldSpec { snake: "schedule", wire: "schedule", location: FieldLocation::Body },
+        FieldSpec { snake: "subject", wire: "subject", location: FieldLocation::Body },
+        FieldSpec { snake: "template_id", wire: "template_id", location: FieldLocation::Body },
     ],
     auth: &[
     ],
@@ -1273,7 +1852,7 @@ const OP_EMAIL_MARKETING_CANCEL_EMAIL_CAMPAIGN: OpSpec = OpSpec {
     method: "PUT",
     path_template: "/email-campaigns/{email_campaign_id}/cancel",
     fields: &[
-        FieldSpec { snake: "email_campaign_id", location: FieldLocation::Path },
+        FieldSpec { snake: "email_campaign_id", wire: "email_campaign_id", location: FieldLocation::Path },
     ],
     auth: &[
     ],
@@ -1283,7 +1862,7 @@ const OP_EMAIL_MARKETING_SEND_VERIFICATION_TOKEN: OpSpec = OpSpec {
     method: "PUT",
     path_template: "/email/address-verify/{email_address_id}/send",
     fields: &[
-        FieldSpec { snake: "email_address_id", location: FieldLocation::Path },
+        FieldSpec { snake: "email_address_id", wire: "email_address_id", location: FieldLocation::Path },
     ],
     auth: &[
     ],
@@ -1293,8 +1872,8 @@ const OP_EMAIL_MARKETING_VERIFY_ALLOWED_EMAIL_ADDRESS: OpSpec = OpSpec {
     method: "PUT",
     path_template: "/email/address-verify/{email_address_id}/verify/{activation_token}",
     fields: &[
-        FieldSpec { snake: "email_address_id", location: FieldLocation::Path },
-        FieldSpec { snake: "activation_token", location: FieldLocation::Path },
+        FieldSpec { snake: "email_address_id", wire: "email_address_id", location: FieldLocation::Path },
+        FieldSpec { snake: "activation_token", wire: "activation_token", location: FieldLocation::Path },
     ],
     auth: &[
     ],
@@ -1313,8 +1892,8 @@ const OP_EMAIL_MARKETING_CREATE_ALLOWED_EMAIL_ADDRESS: OpSpec = OpSpec {
     method: "POST",
     path_template: "/email/addresses",
     fields: &[
-        FieldSpec { snake: "body", location: FieldLocation::Body },
-        FieldSpec { snake: "email_address", location: FieldLocation::Body },
+        FieldSpec { snake: "body", wire: "Body", location: FieldLocation::Body },
+        FieldSpec { snake: "email_address", wire: "email_address", location: FieldLocation::Body },
     ],
     auth: &[
     ],
@@ -1324,7 +1903,7 @@ const OP_EMAIL_MARKETING_GET_SPECIFIC_ALLOWED_EMAIL_ADDRESS: OpSpec = OpSpec {
     method: "GET",
     path_template: "/email/addresses/{email_address_id}",
     fields: &[
-        FieldSpec { snake: "email_address_id", location: FieldLocation::Path },
+        FieldSpec { snake: "email_address_id", wire: "email_address_id", location: FieldLocation::Path },
     ],
     auth: &[
     ],
@@ -1334,7 +1913,7 @@ const OP_EMAIL_MARKETING_DELETE_ALLOWED_EMAIL_ADDRESS: OpSpec = OpSpec {
     method: "DELETE",
     path_template: "/email/addresses/{email_address_id}",
     fields: &[
-        FieldSpec { snake: "email_address_id", location: FieldLocation::Path },
+        FieldSpec { snake: "email_address_id", wire: "email_address_id", location: FieldLocation::Path },
     ],
     auth: &[
     ],
@@ -1362,7 +1941,7 @@ const OP_EMAIL_MARKETING_GET_SPECIFIC_EMAIL_TEMPLATE_CATEGORY: OpSpec = OpSpec {
     method: "GET",
     path_template: "/email/master-templates-categories/{category_id}",
     fields: &[
-        FieldSpec { snake: "category_id", location: FieldLocation::Path },
+        FieldSpec { snake: "category_id", wire: "category_id", location: FieldLocation::Path },
     ],
     auth: &[
     ],
@@ -1372,7 +1951,7 @@ const OP_EMAIL_MARKETING_GET_ALL_TEMPLATES_FOR_CATEGORY: OpSpec = OpSpec {
     method: "GET",
     path_template: "/email/master-templates-categories/{category_id}/master-templates",
     fields: &[
-        FieldSpec { snake: "category_id", location: FieldLocation::Path },
+        FieldSpec { snake: "category_id", wire: "category_id", location: FieldLocation::Path },
     ],
     auth: &[
     ],
@@ -1382,7 +1961,7 @@ const OP_EMAIL_MARKETING_GET_SPECIFIC_MASTER_TEMPLATE: OpSpec = OpSpec {
     method: "GET",
     path_template: "/email/master-templates/{template_id}",
     fields: &[
-        FieldSpec { snake: "template_id", location: FieldLocation::Path },
+        FieldSpec { snake: "template_id", wire: "template_id", location: FieldLocation::Path },
     ],
     auth: &[
     ],
@@ -1401,8 +1980,8 @@ const OP_EMAIL_MARKETING_CREATE_NEW_EMAIL_TEMPLATE_FROM_MASTER_TEMPLATE: OpSpec 
     method: "POST",
     path_template: "/email/templates",
     fields: &[
-        FieldSpec { snake: "template_id_master", location: FieldLocation::Body },
-        FieldSpec { snake: "template_name", location: FieldLocation::Body },
+        FieldSpec { snake: "template_id_master", wire: "template_id_master", location: FieldLocation::Body },
+        FieldSpec { snake: "template_name", wire: "template_name", location: FieldLocation::Body },
     ],
     auth: &[
     ],
@@ -1412,9 +1991,9 @@ const OP_EMAIL_MARKETING_UPLOAD_IMAGE_TO_SPECIFIC_TEMPLATE: OpSpec = OpSpec {
     method: "POST",
     path_template: "/email/templates-images/{template_id}",
     fields: &[
-        FieldSpec { snake: "template_id", location: FieldLocation::Path },
-        FieldSpec { snake: "image", location: FieldLocation::Body },
-        FieldSpec { snake: "url", location: FieldLocation::Body },
+        FieldSpec { snake: "template_id", wire: "template_id", location: FieldLocation::Path },
+        FieldSpec { snake: "image", wire: "image", location: FieldLocation::Body },
+        FieldSpec { snake: "url", wire: "url", location: FieldLocation::Body },
     ],
     auth: &[
     ],
@@ -1424,7 +2003,7 @@ const OP_EMAIL_MARKETING_GET_SPECIFIC_EMAIL_TEMPLATE: OpSpec = OpSpec {
     method: "GET",
     path_template: "/email/templates/{template_id}",
     fields: &[
-        FieldSpec { snake: "template_id", location: FieldLocation::Path },
+        FieldSpec { snake: "template_id", wire: "template_id", location: FieldLocation::Path },
     ],
     auth: &[
     ],
@@ -1434,9 +2013,9 @@ const OP_EMAIL_MARKETING_UPDATE_AN_EMAIL_TEMPLATE: OpSpec = OpSpec {
     method: "PUT",
     path_template: "/email/templates/{template_id}",
     fields: &[
-        FieldSpec { snake: "template_id", location: FieldLocation::Path },
-        FieldSpec { snake: "body", location: FieldLocation::Body },
-        FieldSpec { snake: "template_name", location: FieldLocation::Body },
+        FieldSpec { snake: "template_id", wire: "template_id", location: FieldLocation::Path },
+        FieldSpec { snake: "body", wire: "body", location: FieldLocation::Body },
+        FieldSpec { snake: "template_name", wire: "template_name", location: FieldLocation::Body },
     ],
     auth: &[
         AuthApply { secret_key: "basic", kind: AuthKind::Basic },
@@ -1447,7 +2026,7 @@ const OP_EMAIL_MARKETING_DELETE_EMAIL_TEMPLATE: OpSpec = OpSpec {
     method: "DELETE",
     path_template: "/email/templates/{template_id}",
     fields: &[
-        FieldSpec { snake: "template_id", location: FieldLocation::Path },
+        FieldSpec { snake: "template_id", wire: "template_id", location: FieldLocation::Path },
     ],
     auth: &[
     ],
@@ -1593,97 +2172,433 @@ fn iface_email_marketing__delete_email_template_params__to_json(p: &iface_email_
     Value::Object(m)
 }
 
+fn iface_email_marketing__get_all_email_campaigns__ok(body: String) -> Result<String, crate::runtime::DispatchError> {
+    Ok(body)
+}
+
+fn iface_email_marketing__get_all_email_campaigns__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
+fn iface_email_marketing__calculate_price__ok(body: String) -> Result<String, crate::runtime::DispatchError> {
+    Ok(body)
+}
+
+fn iface_email_marketing__calculate_price__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
+fn iface_email_marketing__create_email_campaign__ok(body: String) -> Result<String, crate::runtime::DispatchError> {
+    Ok(body)
+}
+
+fn iface_email_marketing__create_email_campaign__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
+fn iface_email_marketing__get_specific_email_campaign_history__ok(body: String) -> Result<String, crate::runtime::DispatchError> {
+    Ok(body)
+}
+
+fn iface_email_marketing__get_specific_email_campaign_history__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
+fn iface_email_marketing__get_specific_email_campaign__ok(body: String) -> Result<String, crate::runtime::DispatchError> {
+    Ok(body)
+}
+
+fn iface_email_marketing__get_specific_email_campaign__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
+fn iface_email_marketing__update_email_campaign__ok(body: String) -> Result<String, crate::runtime::DispatchError> {
+    Ok(body)
+}
+
+fn iface_email_marketing__update_email_campaign__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
+fn iface_email_marketing__cancel_email_campaign__ok(body: String) -> Result<String, crate::runtime::DispatchError> {
+    Ok(body)
+}
+
+fn iface_email_marketing__cancel_email_campaign__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
+fn iface_email_marketing__send_verification_token__ok(body: String) -> Result<String, crate::runtime::DispatchError> {
+    Ok(body)
+}
+
+fn iface_email_marketing__send_verification_token__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
+fn iface_email_marketing__verify_allowed_email_address__ok(body: String) -> Result<String, crate::runtime::DispatchError> {
+    Ok(body)
+}
+
+fn iface_email_marketing__verify_allowed_email_address__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
+fn iface_email_marketing__get_all_allowed_email_addresses__ok(body: String) -> Result<String, crate::runtime::DispatchError> {
+    Ok(body)
+}
+
+fn iface_email_marketing__get_all_allowed_email_addresses__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
+fn iface_email_marketing__create_allowed_email_address__ok(body: String) -> Result<String, crate::runtime::DispatchError> {
+    Ok(body)
+}
+
+fn iface_email_marketing__create_allowed_email_address__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
+fn iface_email_marketing__get_specific_allowed_email_address__ok(body: String) -> Result<String, crate::runtime::DispatchError> {
+    Ok(body)
+}
+
+fn iface_email_marketing__get_specific_allowed_email_address__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
+fn iface_email_marketing__delete_allowed_email_address__ok(body: String) -> Result<String, crate::runtime::DispatchError> {
+    Ok(body)
+}
+
+fn iface_email_marketing__delete_allowed_email_address__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
+fn iface_email_marketing__get_all_master_email_templates__ok(body: String) -> Result<String, crate::runtime::DispatchError> {
+    Ok(body)
+}
+
+fn iface_email_marketing__get_all_master_email_templates__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
+fn iface_email_marketing__get_all_master_template_categories__ok(body: String) -> Result<String, crate::runtime::DispatchError> {
+    Ok(body)
+}
+
+fn iface_email_marketing__get_all_master_template_categories__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
+fn iface_email_marketing__get_specific_email_template_category__ok(body: String) -> Result<String, crate::runtime::DispatchError> {
+    Ok(body)
+}
+
+fn iface_email_marketing__get_specific_email_template_category__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
+fn iface_email_marketing__get_all_templates_for_category__ok(body: String) -> Result<String, crate::runtime::DispatchError> {
+    Ok(body)
+}
+
+fn iface_email_marketing__get_all_templates_for_category__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
+fn iface_email_marketing__get_specific_master_template__ok(body: String) -> Result<String, crate::runtime::DispatchError> {
+    Ok(body)
+}
+
+fn iface_email_marketing__get_specific_master_template__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
+fn iface_email_marketing__get_all_email_templates__ok(body: String) -> Result<String, crate::runtime::DispatchError> {
+    Ok(body)
+}
+
+fn iface_email_marketing__get_all_email_templates__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
+fn iface_email_marketing__create_new_email_template_from_master_template__ok(body: String) -> Result<String, crate::runtime::DispatchError> {
+    Ok(body)
+}
+
+fn iface_email_marketing__create_new_email_template_from_master_template__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
+fn iface_email_marketing__upload_image_to_specific_template__ok(body: String) -> Result<String, crate::runtime::DispatchError> {
+    Ok(body)
+}
+
+fn iface_email_marketing__upload_image_to_specific_template__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
+fn iface_email_marketing__get_specific_email_template__ok(body: String) -> Result<String, crate::runtime::DispatchError> {
+    Ok(body)
+}
+
+fn iface_email_marketing__get_specific_email_template__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
+fn iface_email_marketing__update_an_email_template__ok(body: String) -> Result<String, crate::runtime::DispatchError> {
+    Ok(body)
+}
+
+fn iface_email_marketing__update_an_email_template__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
+fn iface_email_marketing__delete_email_template__ok(body: String) -> Result<String, crate::runtime::DispatchError> {
+    Ok(body)
+}
+
+fn iface_email_marketing__delete_email_template__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
 impl iface_email_marketing::Guest for crate::Component {
     fn get_all_email_campaigns() -> Result<String, String> {
-        dispatch(&OP_EMAIL_MARKETING_GET_ALL_EMAIL_CAMPAIGNS, Value::Object(Map::new()))
+        match dispatch(&OP_EMAIL_MARKETING_GET_ALL_EMAIL_CAMPAIGNS, Value::Object(Map::new())).and_then(iface_email_marketing__get_all_email_campaigns__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_email_marketing__get_all_email_campaigns__err(e)),
+        }
     }
     fn calculate_price(params: iface_email_marketing::CalculatePriceParams) -> Result<String, String> {
         let json = iface_email_marketing__calculate_price_params__to_json(&params);
-        dispatch(&OP_EMAIL_MARKETING_CALCULATE_PRICE, json)
+        match dispatch(&OP_EMAIL_MARKETING_CALCULATE_PRICE, json).and_then(iface_email_marketing__calculate_price__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_email_marketing__calculate_price__err(e)),
+        }
     }
     fn create_email_campaign(params: iface_email_marketing::CreateEmailCampaignParams) -> Result<String, String> {
         let json = iface_email_marketing__create_email_campaign_params__to_json(&params);
-        dispatch(&OP_EMAIL_MARKETING_CREATE_EMAIL_CAMPAIGN, json)
+        match dispatch(&OP_EMAIL_MARKETING_CREATE_EMAIL_CAMPAIGN, json).and_then(iface_email_marketing__create_email_campaign__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_email_marketing__create_email_campaign__err(e)),
+        }
     }
     fn get_specific_email_campaign_history(params: iface_email_marketing::GetSpecificEmailCampaignHistoryParams) -> Result<String, String> {
         let json = iface_email_marketing__get_specific_email_campaign_history_params__to_json(&params);
-        dispatch(&OP_EMAIL_MARKETING_GET_SPECIFIC_EMAIL_CAMPAIGN_HISTORY, json)
+        match dispatch(&OP_EMAIL_MARKETING_GET_SPECIFIC_EMAIL_CAMPAIGN_HISTORY, json).and_then(iface_email_marketing__get_specific_email_campaign_history__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_email_marketing__get_specific_email_campaign_history__err(e)),
+        }
     }
     fn get_specific_email_campaign(params: iface_email_marketing::GetSpecificEmailCampaignParams) -> Result<String, String> {
         let json = iface_email_marketing__get_specific_email_campaign_params__to_json(&params);
-        dispatch(&OP_EMAIL_MARKETING_GET_SPECIFIC_EMAIL_CAMPAIGN, json)
+        match dispatch(&OP_EMAIL_MARKETING_GET_SPECIFIC_EMAIL_CAMPAIGN, json).and_then(iface_email_marketing__get_specific_email_campaign__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_email_marketing__get_specific_email_campaign__err(e)),
+        }
     }
     fn update_email_campaign(params: iface_email_marketing::UpdateEmailCampaignParams) -> Result<String, String> {
         let json = iface_email_marketing__update_email_campaign_params__to_json(&params);
-        dispatch(&OP_EMAIL_MARKETING_UPDATE_EMAIL_CAMPAIGN, json)
+        match dispatch(&OP_EMAIL_MARKETING_UPDATE_EMAIL_CAMPAIGN, json).and_then(iface_email_marketing__update_email_campaign__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_email_marketing__update_email_campaign__err(e)),
+        }
     }
     fn cancel_email_campaign(params: iface_email_marketing::CancelEmailCampaignParams) -> Result<String, String> {
         let json = iface_email_marketing__cancel_email_campaign_params__to_json(&params);
-        dispatch(&OP_EMAIL_MARKETING_CANCEL_EMAIL_CAMPAIGN, json)
+        match dispatch(&OP_EMAIL_MARKETING_CANCEL_EMAIL_CAMPAIGN, json).and_then(iface_email_marketing__cancel_email_campaign__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_email_marketing__cancel_email_campaign__err(e)),
+        }
     }
     fn send_verification_token(params: iface_email_marketing::SendVerificationTokenParams) -> Result<String, String> {
         let json = iface_email_marketing__send_verification_token_params__to_json(&params);
-        dispatch(&OP_EMAIL_MARKETING_SEND_VERIFICATION_TOKEN, json)
+        match dispatch(&OP_EMAIL_MARKETING_SEND_VERIFICATION_TOKEN, json).and_then(iface_email_marketing__send_verification_token__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_email_marketing__send_verification_token__err(e)),
+        }
     }
     fn verify_allowed_email_address(params: iface_email_marketing::VerifyAllowedEmailAddressParams) -> Result<String, String> {
         let json = iface_email_marketing__verify_allowed_email_address_params__to_json(&params);
-        dispatch(&OP_EMAIL_MARKETING_VERIFY_ALLOWED_EMAIL_ADDRESS, json)
+        match dispatch(&OP_EMAIL_MARKETING_VERIFY_ALLOWED_EMAIL_ADDRESS, json).and_then(iface_email_marketing__verify_allowed_email_address__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_email_marketing__verify_allowed_email_address__err(e)),
+        }
     }
     fn get_all_allowed_email_addresses() -> Result<String, String> {
-        dispatch(&OP_EMAIL_MARKETING_GET_ALL_ALLOWED_EMAIL_ADDRESSES, Value::Object(Map::new()))
+        match dispatch(&OP_EMAIL_MARKETING_GET_ALL_ALLOWED_EMAIL_ADDRESSES, Value::Object(Map::new())).and_then(iface_email_marketing__get_all_allowed_email_addresses__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_email_marketing__get_all_allowed_email_addresses__err(e)),
+        }
     }
     fn create_allowed_email_address(params: iface_email_marketing::CreateAllowedEmailAddressParams) -> Result<String, String> {
         let json = iface_email_marketing__create_allowed_email_address_params__to_json(&params);
-        dispatch(&OP_EMAIL_MARKETING_CREATE_ALLOWED_EMAIL_ADDRESS, json)
+        match dispatch(&OP_EMAIL_MARKETING_CREATE_ALLOWED_EMAIL_ADDRESS, json).and_then(iface_email_marketing__create_allowed_email_address__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_email_marketing__create_allowed_email_address__err(e)),
+        }
     }
     fn get_specific_allowed_email_address(params: iface_email_marketing::GetSpecificAllowedEmailAddressParams) -> Result<String, String> {
         let json = iface_email_marketing__get_specific_allowed_email_address_params__to_json(&params);
-        dispatch(&OP_EMAIL_MARKETING_GET_SPECIFIC_ALLOWED_EMAIL_ADDRESS, json)
+        match dispatch(&OP_EMAIL_MARKETING_GET_SPECIFIC_ALLOWED_EMAIL_ADDRESS, json).and_then(iface_email_marketing__get_specific_allowed_email_address__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_email_marketing__get_specific_allowed_email_address__err(e)),
+        }
     }
     fn delete_allowed_email_address(params: iface_email_marketing::DeleteAllowedEmailAddressParams) -> Result<String, String> {
         let json = iface_email_marketing__delete_allowed_email_address_params__to_json(&params);
-        dispatch(&OP_EMAIL_MARKETING_DELETE_ALLOWED_EMAIL_ADDRESS, json)
+        match dispatch(&OP_EMAIL_MARKETING_DELETE_ALLOWED_EMAIL_ADDRESS, json).and_then(iface_email_marketing__delete_allowed_email_address__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_email_marketing__delete_allowed_email_address__err(e)),
+        }
     }
     fn get_all_master_email_templates() -> Result<String, String> {
-        dispatch(&OP_EMAIL_MARKETING_GET_ALL_MASTER_EMAIL_TEMPLATES, Value::Object(Map::new()))
+        match dispatch(&OP_EMAIL_MARKETING_GET_ALL_MASTER_EMAIL_TEMPLATES, Value::Object(Map::new())).and_then(iface_email_marketing__get_all_master_email_templates__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_email_marketing__get_all_master_email_templates__err(e)),
+        }
     }
     fn get_all_master_template_categories() -> Result<String, String> {
-        dispatch(&OP_EMAIL_MARKETING_GET_ALL_MASTER_TEMPLATE_CATEGORIES, Value::Object(Map::new()))
+        match dispatch(&OP_EMAIL_MARKETING_GET_ALL_MASTER_TEMPLATE_CATEGORIES, Value::Object(Map::new())).and_then(iface_email_marketing__get_all_master_template_categories__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_email_marketing__get_all_master_template_categories__err(e)),
+        }
     }
     fn get_specific_email_template_category(params: iface_email_marketing::GetSpecificEmailTemplateCategoryParams) -> Result<String, String> {
         let json = iface_email_marketing__get_specific_email_template_category_params__to_json(&params);
-        dispatch(&OP_EMAIL_MARKETING_GET_SPECIFIC_EMAIL_TEMPLATE_CATEGORY, json)
+        match dispatch(&OP_EMAIL_MARKETING_GET_SPECIFIC_EMAIL_TEMPLATE_CATEGORY, json).and_then(iface_email_marketing__get_specific_email_template_category__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_email_marketing__get_specific_email_template_category__err(e)),
+        }
     }
     fn get_all_templates_for_category(params: iface_email_marketing::GetAllTemplatesForCategoryParams) -> Result<String, String> {
         let json = iface_email_marketing__get_all_templates_for_category_params__to_json(&params);
-        dispatch(&OP_EMAIL_MARKETING_GET_ALL_TEMPLATES_FOR_CATEGORY, json)
+        match dispatch(&OP_EMAIL_MARKETING_GET_ALL_TEMPLATES_FOR_CATEGORY, json).and_then(iface_email_marketing__get_all_templates_for_category__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_email_marketing__get_all_templates_for_category__err(e)),
+        }
     }
     fn get_specific_master_template(params: iface_email_marketing::GetSpecificMasterTemplateParams) -> Result<String, String> {
         let json = iface_email_marketing__get_specific_master_template_params__to_json(&params);
-        dispatch(&OP_EMAIL_MARKETING_GET_SPECIFIC_MASTER_TEMPLATE, json)
+        match dispatch(&OP_EMAIL_MARKETING_GET_SPECIFIC_MASTER_TEMPLATE, json).and_then(iface_email_marketing__get_specific_master_template__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_email_marketing__get_specific_master_template__err(e)),
+        }
     }
     fn get_all_email_templates() -> Result<String, String> {
-        dispatch(&OP_EMAIL_MARKETING_GET_ALL_EMAIL_TEMPLATES, Value::Object(Map::new()))
+        match dispatch(&OP_EMAIL_MARKETING_GET_ALL_EMAIL_TEMPLATES, Value::Object(Map::new())).and_then(iface_email_marketing__get_all_email_templates__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_email_marketing__get_all_email_templates__err(e)),
+        }
     }
     fn create_new_email_template_from_master_template(params: iface_email_marketing::CreateNewEmailTemplateFromMasterTemplateParams) -> Result<String, String> {
         let json = iface_email_marketing__create_new_email_template_from_master_template_params__to_json(&params);
-        dispatch(&OP_EMAIL_MARKETING_CREATE_NEW_EMAIL_TEMPLATE_FROM_MASTER_TEMPLATE, json)
+        match dispatch(&OP_EMAIL_MARKETING_CREATE_NEW_EMAIL_TEMPLATE_FROM_MASTER_TEMPLATE, json).and_then(iface_email_marketing__create_new_email_template_from_master_template__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_email_marketing__create_new_email_template_from_master_template__err(e)),
+        }
     }
     fn upload_image_to_specific_template(params: iface_email_marketing::UploadImageToSpecificTemplateParams) -> Result<String, String> {
         let json = iface_email_marketing__upload_image_to_specific_template_params__to_json(&params);
-        dispatch(&OP_EMAIL_MARKETING_UPLOAD_IMAGE_TO_SPECIFIC_TEMPLATE, json)
+        match dispatch(&OP_EMAIL_MARKETING_UPLOAD_IMAGE_TO_SPECIFIC_TEMPLATE, json).and_then(iface_email_marketing__upload_image_to_specific_template__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_email_marketing__upload_image_to_specific_template__err(e)),
+        }
     }
     fn get_specific_email_template(params: iface_email_marketing::GetSpecificEmailTemplateParams) -> Result<String, String> {
         let json = iface_email_marketing__get_specific_email_template_params__to_json(&params);
-        dispatch(&OP_EMAIL_MARKETING_GET_SPECIFIC_EMAIL_TEMPLATE, json)
+        match dispatch(&OP_EMAIL_MARKETING_GET_SPECIFIC_EMAIL_TEMPLATE, json).and_then(iface_email_marketing__get_specific_email_template__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_email_marketing__get_specific_email_template__err(e)),
+        }
     }
     fn update_an_email_template(params: iface_email_marketing::UpdateAnEmailTemplateParams) -> Result<String, String> {
         let json = iface_email_marketing__update_an_email_template_params__to_json(&params);
-        dispatch(&OP_EMAIL_MARKETING_UPDATE_AN_EMAIL_TEMPLATE, json)
+        match dispatch(&OP_EMAIL_MARKETING_UPDATE_AN_EMAIL_TEMPLATE, json).and_then(iface_email_marketing__update_an_email_template__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_email_marketing__update_an_email_template__err(e)),
+        }
     }
     fn delete_email_template(params: iface_email_marketing::DeleteEmailTemplateParams) -> Result<String, String> {
         let json = iface_email_marketing__delete_email_template_params__to_json(&params);
-        dispatch(&OP_EMAIL_MARKETING_DELETE_EMAIL_TEMPLATE, json)
+        match dispatch(&OP_EMAIL_MARKETING_DELETE_EMAIL_TEMPLATE, json).and_then(iface_email_marketing__delete_email_template__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_email_marketing__delete_email_template__err(e)),
+        }
     }
 }
 use crate::exports::autostamp::clicksend::transactional_email as iface_transactional_email;
@@ -1701,7 +2616,7 @@ const OP_TRANSACTIONAL_EMAIL_EXPORT_HISTORY: OpSpec = OpSpec {
     method: "GET",
     path_template: "/email/history/export?filename={filename}",
     fields: &[
-        FieldSpec { snake: "filename", location: FieldLocation::Path },
+        FieldSpec { snake: "filename", wire: "filename", location: FieldLocation::Path },
     ],
     auth: &[
     ],
@@ -1711,14 +2626,14 @@ const OP_TRANSACTIONAL_EMAIL_EMAIL_PRICE: OpSpec = OpSpec {
     method: "POST",
     path_template: "/email/price",
     fields: &[
-        FieldSpec { snake: "attachments", location: FieldLocation::Body },
-        FieldSpec { snake: "bcc", location: FieldLocation::Body },
-        FieldSpec { snake: "body", location: FieldLocation::Body },
-        FieldSpec { snake: "cc", location: FieldLocation::Body },
-        FieldSpec { snake: "from_email_address_id", location: FieldLocation::Body },
-        FieldSpec { snake: "from_name", location: FieldLocation::Body },
-        FieldSpec { snake: "subject", location: FieldLocation::Body },
-        FieldSpec { snake: "to", location: FieldLocation::Body },
+        FieldSpec { snake: "attachments", wire: "attachments", location: FieldLocation::Body },
+        FieldSpec { snake: "bcc", wire: "bcc", location: FieldLocation::Body },
+        FieldSpec { snake: "body", wire: "body", location: FieldLocation::Body },
+        FieldSpec { snake: "cc", wire: "cc", location: FieldLocation::Body },
+        FieldSpec { snake: "from_email_address_id", wire: "from.email_address_id", location: FieldLocation::Body },
+        FieldSpec { snake: "from_name", wire: "from.name", location: FieldLocation::Body },
+        FieldSpec { snake: "subject", wire: "subject", location: FieldLocation::Body },
+        FieldSpec { snake: "to", wire: "to", location: FieldLocation::Body },
     ],
     auth: &[
     ],
@@ -1728,7 +2643,7 @@ const OP_TRANSACTIONAL_EMAIL_POST_EMAIL_RECEIPTS: OpSpec = OpSpec {
     method: "POST",
     path_template: "/email/receipts",
     fields: &[
-        FieldSpec { snake: "url", location: FieldLocation::Body },
+        FieldSpec { snake: "url", wire: "url", location: FieldLocation::Body },
     ],
     auth: &[
     ],
@@ -1738,14 +2653,14 @@ const OP_TRANSACTIONAL_EMAIL_EMAIL_SEND: OpSpec = OpSpec {
     method: "POST",
     path_template: "/email/send",
     fields: &[
-        FieldSpec { snake: "attachments", location: FieldLocation::Body },
-        FieldSpec { snake: "bcc", location: FieldLocation::Body },
-        FieldSpec { snake: "body", location: FieldLocation::Body },
-        FieldSpec { snake: "cc", location: FieldLocation::Body },
-        FieldSpec { snake: "from_email_address_id", location: FieldLocation::Body },
-        FieldSpec { snake: "from_name", location: FieldLocation::Body },
-        FieldSpec { snake: "schedule", location: FieldLocation::Body },
-        FieldSpec { snake: "to", location: FieldLocation::Body },
+        FieldSpec { snake: "attachments", wire: "attachments", location: FieldLocation::Body },
+        FieldSpec { snake: "bcc", wire: "bcc", location: FieldLocation::Body },
+        FieldSpec { snake: "body", wire: "body", location: FieldLocation::Body },
+        FieldSpec { snake: "cc", wire: "cc", location: FieldLocation::Body },
+        FieldSpec { snake: "from_email_address_id", wire: "from.email_address_id", location: FieldLocation::Body },
+        FieldSpec { snake: "from_name", wire: "from.name", location: FieldLocation::Body },
+        FieldSpec { snake: "schedule", wire: "schedule", location: FieldLocation::Body },
+        FieldSpec { snake: "to", wire: "to", location: FieldLocation::Body },
     ],
     auth: &[
     ],
@@ -1789,25 +2704,95 @@ fn iface_transactional_email__email_send_params__to_json(p: &iface_transactional
     Value::Object(m)
 }
 
+fn iface_transactional_email__email_history__ok(body: String) -> Result<String, crate::runtime::DispatchError> {
+    Ok(body)
+}
+
+fn iface_transactional_email__email_history__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
+fn iface_transactional_email__export_history__ok(body: String) -> Result<String, crate::runtime::DispatchError> {
+    Ok(body)
+}
+
+fn iface_transactional_email__export_history__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
+fn iface_transactional_email__email_price__ok(body: String) -> Result<String, crate::runtime::DispatchError> {
+    Ok(body)
+}
+
+fn iface_transactional_email__email_price__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
+fn iface_transactional_email__post_email_receipts__ok(body: String) -> Result<String, crate::runtime::DispatchError> {
+    Ok(body)
+}
+
+fn iface_transactional_email__post_email_receipts__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
+fn iface_transactional_email__email_send__ok(body: String) -> Result<String, crate::runtime::DispatchError> {
+    Ok(body)
+}
+
+fn iface_transactional_email__email_send__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
 impl iface_transactional_email::Guest for crate::Component {
     fn email_history() -> Result<String, String> {
-        dispatch(&OP_TRANSACTIONAL_EMAIL_EMAIL_HISTORY, Value::Object(Map::new()))
+        match dispatch(&OP_TRANSACTIONAL_EMAIL_EMAIL_HISTORY, Value::Object(Map::new())).and_then(iface_transactional_email__email_history__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_transactional_email__email_history__err(e)),
+        }
     }
     fn export_history(params: iface_transactional_email::ExportHistoryParams) -> Result<String, String> {
         let json = iface_transactional_email__export_history_params__to_json(&params);
-        dispatch(&OP_TRANSACTIONAL_EMAIL_EXPORT_HISTORY, json)
+        match dispatch(&OP_TRANSACTIONAL_EMAIL_EXPORT_HISTORY, json).and_then(iface_transactional_email__export_history__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_transactional_email__export_history__err(e)),
+        }
     }
     fn email_price(params: iface_transactional_email::EmailPriceParams) -> Result<String, String> {
         let json = iface_transactional_email__email_price_params__to_json(&params);
-        dispatch(&OP_TRANSACTIONAL_EMAIL_EMAIL_PRICE, json)
+        match dispatch(&OP_TRANSACTIONAL_EMAIL_EMAIL_PRICE, json).and_then(iface_transactional_email__email_price__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_transactional_email__email_price__err(e)),
+        }
     }
     fn post_email_receipts(params: iface_transactional_email::PostEmailReceiptsParams) -> Result<String, String> {
         let json = iface_transactional_email__post_email_receipts_params__to_json(&params);
-        dispatch(&OP_TRANSACTIONAL_EMAIL_POST_EMAIL_RECEIPTS, json)
+        match dispatch(&OP_TRANSACTIONAL_EMAIL_POST_EMAIL_RECEIPTS, json).and_then(iface_transactional_email__post_email_receipts__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_transactional_email__post_email_receipts__err(e)),
+        }
     }
     fn email_send(params: iface_transactional_email::EmailSendParams) -> Result<String, String> {
         let json = iface_transactional_email__email_send_params__to_json(&params);
-        dispatch(&OP_TRANSACTIONAL_EMAIL_EMAIL_SEND, json)
+        match dispatch(&OP_TRANSACTIONAL_EMAIL_EMAIL_SEND, json).and_then(iface_transactional_email__email_send__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_transactional_email__email_send__err(e)),
+        }
     }
 }
 use crate::exports::autostamp::clicksend::fax as iface_fax;
@@ -1816,7 +2801,7 @@ const OP_FAX_EXPORT_FAX_HISTORY: OpSpec = OpSpec {
     method: "GET",
     path_template: "/fax/history/export?filename={filename}",
     fields: &[
-        FieldSpec { snake: "filename", location: FieldLocation::Path },
+        FieldSpec { snake: "filename", wire: "filename", location: FieldLocation::Path },
     ],
     auth: &[
     ],
@@ -1826,10 +2811,10 @@ const OP_FAX_GET_FAX_HISTORY: OpSpec = OpSpec {
     method: "GET",
     path_template: "/fax/history?date_from={date_from}&date_to={date_to}&q={q}&order_by={order_by}",
     fields: &[
-        FieldSpec { snake: "date_from", location: FieldLocation::Path },
-        FieldSpec { snake: "date_to", location: FieldLocation::Path },
-        FieldSpec { snake: "q", location: FieldLocation::Path },
-        FieldSpec { snake: "order_by", location: FieldLocation::Path },
+        FieldSpec { snake: "date_from", wire: "date_from", location: FieldLocation::Path },
+        FieldSpec { snake: "date_to", wire: "date_to", location: FieldLocation::Path },
+        FieldSpec { snake: "q", wire: "q", location: FieldLocation::Path },
+        FieldSpec { snake: "order_by", wire: "order_by", location: FieldLocation::Path },
     ],
     auth: &[
     ],
@@ -1839,16 +2824,16 @@ const OP_FAX_POST_FAX_PRICE: OpSpec = OpSpec {
     method: "POST",
     path_template: "/fax/price",
     fields: &[
-        FieldSpec { snake: "country", location: FieldLocation::Body },
-        FieldSpec { snake: "custom_string", location: FieldLocation::Body },
-        FieldSpec { snake: "file_url", location: FieldLocation::Body },
-        FieldSpec { snake: "from", location: FieldLocation::Body },
-        FieldSpec { snake: "from_email", location: FieldLocation::Body },
-        FieldSpec { snake: "list_id", location: FieldLocation::Body },
-        FieldSpec { snake: "messages", location: FieldLocation::Body },
-        FieldSpec { snake: "schedule", location: FieldLocation::Body },
-        FieldSpec { snake: "source", location: FieldLocation::Body },
-        FieldSpec { snake: "to", location: FieldLocation::Body },
+        FieldSpec { snake: "country", wire: "country", location: FieldLocation::Body },
+        FieldSpec { snake: "custom_string", wire: "custom_string", location: FieldLocation::Body },
+        FieldSpec { snake: "file_url", wire: "file_url", location: FieldLocation::Body },
+        FieldSpec { snake: "from", wire: "from", location: FieldLocation::Body },
+        FieldSpec { snake: "from_email", wire: "from_email", location: FieldLocation::Body },
+        FieldSpec { snake: "list_id", wire: "list_id", location: FieldLocation::Body },
+        FieldSpec { snake: "messages", wire: "messages", location: FieldLocation::Body },
+        FieldSpec { snake: "schedule", wire: "schedule", location: FieldLocation::Body },
+        FieldSpec { snake: "source", wire: "source", location: FieldLocation::Body },
+        FieldSpec { snake: "to", wire: "to", location: FieldLocation::Body },
     ],
     auth: &[
     ],
@@ -1867,7 +2852,7 @@ const OP_FAX_ADD_A_TEST_DELIVERY_RECEIPT: OpSpec = OpSpec {
     method: "POST",
     path_template: "/fax/receipts",
     fields: &[
-        FieldSpec { snake: "url", location: FieldLocation::Body },
+        FieldSpec { snake: "url", wire: "url", location: FieldLocation::Body },
     ],
     auth: &[
     ],
@@ -1877,7 +2862,7 @@ const OP_FAX_MARK_FAX_DELIVERY_RECEIPTS_AS_READ: OpSpec = OpSpec {
     method: "PUT",
     path_template: "/fax/receipts-read",
     fields: &[
-        FieldSpec { snake: "date_before", location: FieldLocation::Body },
+        FieldSpec { snake: "date_before", wire: "date_before", location: FieldLocation::Body },
     ],
     auth: &[
     ],
@@ -1887,7 +2872,7 @@ const OP_FAX_GET_A_SPECIFIC_FAX_DELIVERY_RECEIPT: OpSpec = OpSpec {
     method: "GET",
     path_template: "/fax/receipts/{message_id}",
     fields: &[
-        FieldSpec { snake: "message_id", location: FieldLocation::Path },
+        FieldSpec { snake: "message_id", wire: "message_id", location: FieldLocation::Path },
     ],
     auth: &[
     ],
@@ -1897,16 +2882,16 @@ const OP_FAX_SEND_FAX: OpSpec = OpSpec {
     method: "POST",
     path_template: "/fax/send",
     fields: &[
-        FieldSpec { snake: "country", location: FieldLocation::Body },
-        FieldSpec { snake: "custom_string", location: FieldLocation::Body },
-        FieldSpec { snake: "file_url", location: FieldLocation::Body },
-        FieldSpec { snake: "from", location: FieldLocation::Body },
-        FieldSpec { snake: "from_email", location: FieldLocation::Body },
-        FieldSpec { snake: "list_id", location: FieldLocation::Body },
-        FieldSpec { snake: "messages", location: FieldLocation::Body },
-        FieldSpec { snake: "schedule", location: FieldLocation::Body },
-        FieldSpec { snake: "source", location: FieldLocation::Body },
-        FieldSpec { snake: "to", location: FieldLocation::Body },
+        FieldSpec { snake: "country", wire: "country", location: FieldLocation::Body },
+        FieldSpec { snake: "custom_string", wire: "custom_string", location: FieldLocation::Body },
+        FieldSpec { snake: "file_url", wire: "file_url", location: FieldLocation::Body },
+        FieldSpec { snake: "from", wire: "from", location: FieldLocation::Body },
+        FieldSpec { snake: "from_email", wire: "from_email", location: FieldLocation::Body },
+        FieldSpec { snake: "list_id", wire: "list_id", location: FieldLocation::Body },
+        FieldSpec { snake: "messages", wire: "messages", location: FieldLocation::Body },
+        FieldSpec { snake: "schedule", wire: "schedule", location: FieldLocation::Body },
+        FieldSpec { snake: "source", wire: "source", location: FieldLocation::Body },
+        FieldSpec { snake: "to", wire: "to", location: FieldLocation::Body },
     ],
     auth: &[
     ],
@@ -1975,37 +2960,149 @@ fn iface_fax__send_fax_params__to_json(p: &iface_fax::SendFaxParams) -> Value {
     Value::Object(m)
 }
 
+fn iface_fax__export_fax_history__ok(body: String) -> Result<String, crate::runtime::DispatchError> {
+    Ok(body)
+}
+
+fn iface_fax__export_fax_history__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
+fn iface_fax__get_fax_history__ok(body: String) -> Result<String, crate::runtime::DispatchError> {
+    Ok(body)
+}
+
+fn iface_fax__get_fax_history__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
+fn iface_fax__post_fax_price__ok(body: String) -> Result<String, crate::runtime::DispatchError> {
+    Ok(body)
+}
+
+fn iface_fax__post_fax_price__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
+fn iface_fax__list_of_fax_delivery_receipts__ok(body: String) -> Result<String, crate::runtime::DispatchError> {
+    Ok(body)
+}
+
+fn iface_fax__list_of_fax_delivery_receipts__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
+fn iface_fax__add_a_test_delivery_receipt__ok(body: String) -> Result<String, crate::runtime::DispatchError> {
+    Ok(body)
+}
+
+fn iface_fax__add_a_test_delivery_receipt__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
+fn iface_fax__mark_fax_delivery_receipts_as_read__ok(body: String) -> Result<String, crate::runtime::DispatchError> {
+    Ok(body)
+}
+
+fn iface_fax__mark_fax_delivery_receipts_as_read__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
+fn iface_fax__get_a_specific_fax_delivery_receipt__ok(body: String) -> Result<String, crate::runtime::DispatchError> {
+    Ok(body)
+}
+
+fn iface_fax__get_a_specific_fax_delivery_receipt__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
+fn iface_fax__send_fax__ok(body: String) -> Result<String, crate::runtime::DispatchError> {
+    Ok(body)
+}
+
+fn iface_fax__send_fax__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
 impl iface_fax::Guest for crate::Component {
     fn export_fax_history(params: iface_fax::ExportFaxHistoryParams) -> Result<String, String> {
         let json = iface_fax__export_fax_history_params__to_json(&params);
-        dispatch(&OP_FAX_EXPORT_FAX_HISTORY, json)
+        match dispatch(&OP_FAX_EXPORT_FAX_HISTORY, json).and_then(iface_fax__export_fax_history__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_fax__export_fax_history__err(e)),
+        }
     }
     fn get_fax_history(params: iface_fax::GetFaxHistoryParams) -> Result<String, String> {
         let json = iface_fax__get_fax_history_params__to_json(&params);
-        dispatch(&OP_FAX_GET_FAX_HISTORY, json)
+        match dispatch(&OP_FAX_GET_FAX_HISTORY, json).and_then(iface_fax__get_fax_history__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_fax__get_fax_history__err(e)),
+        }
     }
     fn post_fax_price(params: iface_fax::PostFaxPriceParams) -> Result<String, String> {
         let json = iface_fax__post_fax_price_params__to_json(&params);
-        dispatch(&OP_FAX_POST_FAX_PRICE, json)
+        match dispatch(&OP_FAX_POST_FAX_PRICE, json).and_then(iface_fax__post_fax_price__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_fax__post_fax_price__err(e)),
+        }
     }
     fn list_of_fax_delivery_receipts() -> Result<String, String> {
-        dispatch(&OP_FAX_LIST_OF_FAX_DELIVERY_RECEIPTS, Value::Object(Map::new()))
+        match dispatch(&OP_FAX_LIST_OF_FAX_DELIVERY_RECEIPTS, Value::Object(Map::new())).and_then(iface_fax__list_of_fax_delivery_receipts__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_fax__list_of_fax_delivery_receipts__err(e)),
+        }
     }
     fn add_a_test_delivery_receipt(params: iface_fax::AddATestDeliveryReceiptParams) -> Result<String, String> {
         let json = iface_fax__add_a_test_delivery_receipt_params__to_json(&params);
-        dispatch(&OP_FAX_ADD_A_TEST_DELIVERY_RECEIPT, json)
+        match dispatch(&OP_FAX_ADD_A_TEST_DELIVERY_RECEIPT, json).and_then(iface_fax__add_a_test_delivery_receipt__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_fax__add_a_test_delivery_receipt__err(e)),
+        }
     }
     fn mark_fax_delivery_receipts_as_read(params: iface_fax::MarkFaxDeliveryReceiptsAsReadParams) -> Result<String, String> {
         let json = iface_fax__mark_fax_delivery_receipts_as_read_params__to_json(&params);
-        dispatch(&OP_FAX_MARK_FAX_DELIVERY_RECEIPTS_AS_READ, json)
+        match dispatch(&OP_FAX_MARK_FAX_DELIVERY_RECEIPTS_AS_READ, json).and_then(iface_fax__mark_fax_delivery_receipts_as_read__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_fax__mark_fax_delivery_receipts_as_read__err(e)),
+        }
     }
     fn get_a_specific_fax_delivery_receipt(params: iface_fax::GetASpecificFaxDeliveryReceiptParams) -> Result<String, String> {
         let json = iface_fax__get_a_specific_fax_delivery_receipt_params__to_json(&params);
-        dispatch(&OP_FAX_GET_A_SPECIFIC_FAX_DELIVERY_RECEIPT, json)
+        match dispatch(&OP_FAX_GET_A_SPECIFIC_FAX_DELIVERY_RECEIPT, json).and_then(iface_fax__get_a_specific_fax_delivery_receipt__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_fax__get_a_specific_fax_delivery_receipt__err(e)),
+        }
     }
     fn send_fax(params: iface_fax::SendFaxParams) -> Result<String, String> {
         let json = iface_fax__send_fax_params__to_json(&params);
-        dispatch(&OP_FAX_SEND_FAX, json)
+        match dispatch(&OP_FAX_SEND_FAX, json).and_then(iface_fax__send_fax__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_fax__send_fax__err(e)),
+        }
     }
 }
 use crate::exports::autostamp::clicksend::forgot_account as iface_forgot_account;
@@ -2014,7 +3111,7 @@ const OP_FORGOT_ACCOUNT_FORGOT_PASSWORD: OpSpec = OpSpec {
     method: "PUT",
     path_template: "/forgot-password",
     fields: &[
-        FieldSpec { snake: "username", location: FieldLocation::Body },
+        FieldSpec { snake: "username", wire: "username", location: FieldLocation::Body },
     ],
     auth: &[
     ],
@@ -2024,9 +3121,9 @@ const OP_FORGOT_ACCOUNT_VERIFY_FORGOT_PASSWORD: OpSpec = OpSpec {
     method: "PUT",
     path_template: "/forgot-password/verify",
     fields: &[
-        FieldSpec { snake: "activation_token", location: FieldLocation::Body },
-        FieldSpec { snake: "password", location: FieldLocation::Body },
-        FieldSpec { snake: "subaccount_id", location: FieldLocation::Body },
+        FieldSpec { snake: "activation_token", wire: "activation_token", location: FieldLocation::Body },
+        FieldSpec { snake: "password", wire: "password", location: FieldLocation::Body },
+        FieldSpec { snake: "subaccount_id", wire: "subaccount_id", location: FieldLocation::Body },
     ],
     auth: &[
     ],
@@ -2036,9 +3133,9 @@ const OP_FORGOT_ACCOUNT_FORGOT_USERNAME: OpSpec = OpSpec {
     method: "PUT",
     path_template: "/forgot-username",
     fields: &[
-        FieldSpec { snake: "country", location: FieldLocation::Body },
-        FieldSpec { snake: "email", location: FieldLocation::Body },
-        FieldSpec { snake: "phone_number", location: FieldLocation::Body },
+        FieldSpec { snake: "country", wire: "country", location: FieldLocation::Body },
+        FieldSpec { snake: "email", wire: "email", location: FieldLocation::Body },
+        FieldSpec { snake: "phone_number", wire: "phone_number", location: FieldLocation::Body },
     ],
     auth: &[
     ],
@@ -2066,18 +3163,60 @@ fn iface_forgot_account__forgot_username_params__to_json(p: &iface_forgot_accoun
     Value::Object(m)
 }
 
+fn iface_forgot_account__forgot_password__ok(body: String) -> Result<String, crate::runtime::DispatchError> {
+    Ok(body)
+}
+
+fn iface_forgot_account__forgot_password__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
+fn iface_forgot_account__verify_forgot_password__ok(body: String) -> Result<String, crate::runtime::DispatchError> {
+    Ok(body)
+}
+
+fn iface_forgot_account__verify_forgot_password__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
+fn iface_forgot_account__forgot_username__ok(body: String) -> Result<String, crate::runtime::DispatchError> {
+    Ok(body)
+}
+
+fn iface_forgot_account__forgot_username__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
 impl iface_forgot_account::Guest for crate::Component {
     fn forgot_password(params: iface_forgot_account::ForgotPasswordParams) -> Result<String, String> {
         let json = iface_forgot_account__forgot_password_params__to_json(&params);
-        dispatch(&OP_FORGOT_ACCOUNT_FORGOT_PASSWORD, json)
+        match dispatch(&OP_FORGOT_ACCOUNT_FORGOT_PASSWORD, json).and_then(iface_forgot_account__forgot_password__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_forgot_account__forgot_password__err(e)),
+        }
     }
     fn verify_forgot_password(params: iface_forgot_account::VerifyForgotPasswordParams) -> Result<String, String> {
         let json = iface_forgot_account__verify_forgot_password_params__to_json(&params);
-        dispatch(&OP_FORGOT_ACCOUNT_VERIFY_FORGOT_PASSWORD, json)
+        match dispatch(&OP_FORGOT_ACCOUNT_VERIFY_FORGOT_PASSWORD, json).and_then(iface_forgot_account__verify_forgot_password__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_forgot_account__verify_forgot_password__err(e)),
+        }
     }
     fn forgot_username(params: iface_forgot_account::ForgotUsernameParams) -> Result<String, String> {
         let json = iface_forgot_account__forgot_username_params__to_json(&params);
-        dispatch(&OP_FORGOT_ACCOUNT_FORGOT_USERNAME, json)
+        match dispatch(&OP_FORGOT_ACCOUNT_FORGOT_USERNAME, json).and_then(iface_forgot_account__forgot_username__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_forgot_account__forgot_username__err(e)),
+        }
     }
 }
 use crate::exports::autostamp::clicksend::contact_lists as iface_contact_lists;
@@ -2095,7 +3234,7 @@ const OP_CONTACT_LISTS_CREATE_A_NEW_CONTACT_LIST: OpSpec = OpSpec {
     method: "POST",
     path_template: "/lists",
     fields: &[
-        FieldSpec { snake: "list_name", location: FieldLocation::Body },
+        FieldSpec { snake: "list_name", wire: "list_name", location: FieldLocation::Body },
     ],
     auth: &[
         AuthApply { secret_key: "basic", kind: AuthKind::Basic },
@@ -2106,7 +3245,7 @@ const OP_CONTACT_LISTS_GET_A_SPECIFIC_CONTACT_LIST: OpSpec = OpSpec {
     method: "GET",
     path_template: "/lists/{list_id}",
     fields: &[
-        FieldSpec { snake: "list_id", location: FieldLocation::Path },
+        FieldSpec { snake: "list_id", wire: "list_id", location: FieldLocation::Path },
     ],
     auth: &[
     ],
@@ -2116,8 +3255,8 @@ const OP_CONTACT_LISTS_UPDATE_A_SPECIFIC_CONTACT_LIST: OpSpec = OpSpec {
     method: "PUT",
     path_template: "/lists/{list_id}",
     fields: &[
-        FieldSpec { snake: "list_id", location: FieldLocation::Path },
-        FieldSpec { snake: "list_name", location: FieldLocation::Body },
+        FieldSpec { snake: "list_id", wire: "list_id", location: FieldLocation::Path },
+        FieldSpec { snake: "list_name", wire: "list_name", location: FieldLocation::Body },
     ],
     auth: &[
         AuthApply { secret_key: "basic", kind: AuthKind::Basic },
@@ -2128,7 +3267,7 @@ const OP_CONTACT_LISTS_DELETE_A_SPECIFIC_CONTACT_LIST: OpSpec = OpSpec {
     method: "DELETE",
     path_template: "/lists/{list_id}",
     fields: &[
-        FieldSpec { snake: "list_id", location: FieldLocation::Path },
+        FieldSpec { snake: "list_id", wire: "list_id", location: FieldLocation::Path },
     ],
     auth: &[
     ],
@@ -2138,8 +3277,8 @@ const OP_CONTACT_LISTS_EXPORT_CONTACTS_LIST: OpSpec = OpSpec {
     method: "GET",
     path_template: "/lists/{list_id}/export?filename={filename}",
     fields: &[
-        FieldSpec { snake: "filename", location: FieldLocation::Path },
-        FieldSpec { snake: "list_id", location: FieldLocation::Path },
+        FieldSpec { snake: "filename", wire: "filename", location: FieldLocation::Path },
+        FieldSpec { snake: "list_id", wire: "list_id", location: FieldLocation::Path },
     ],
     auth: &[
     ],
@@ -2149,9 +3288,9 @@ const OP_CONTACT_LISTS_IMPORT_CONTACTS_TO_LIST: OpSpec = OpSpec {
     method: "POST",
     path_template: "/lists/{list_id}/import",
     fields: &[
-        FieldSpec { snake: "list_id", location: FieldLocation::Path },
-        FieldSpec { snake: "field_order", location: FieldLocation::Body },
-        FieldSpec { snake: "file_url", location: FieldLocation::Body },
+        FieldSpec { snake: "list_id", wire: "list_id", location: FieldLocation::Path },
+        FieldSpec { snake: "field_order", wire: "field_order", location: FieldLocation::Body },
+        FieldSpec { snake: "file_url", wire: "file_url", location: FieldLocation::Body },
     ],
     auth: &[
     ],
@@ -2161,8 +3300,8 @@ const OP_CONTACT_LISTS_SHOW_CSV_IMPORT_FILE_PREVIEW: OpSpec = OpSpec {
     method: "POST",
     path_template: "/lists/{list_id}/import-csv-preview",
     fields: &[
-        FieldSpec { snake: "list_id", location: FieldLocation::Path },
-        FieldSpec { snake: "file_url", location: FieldLocation::Body },
+        FieldSpec { snake: "list_id", wire: "list_id", location: FieldLocation::Path },
+        FieldSpec { snake: "file_url", wire: "file_url", location: FieldLocation::Body },
     ],
     auth: &[
     ],
@@ -2172,7 +3311,7 @@ const OP_CONTACT_LISTS_GET_LIST_OF_ACCEPTABLE_IMPORT_FIELDS: OpSpec = OpSpec {
     method: "GET",
     path_template: "/lists/{list_id}/import-fields",
     fields: &[
-        FieldSpec { snake: "list_id", location: FieldLocation::Path },
+        FieldSpec { snake: "list_id", wire: "list_id", location: FieldLocation::Path },
     ],
     auth: &[
     ],
@@ -2182,8 +3321,8 @@ const OP_CONTACT_LISTS_REMOVE_DUPLICATE_CONTACTS: OpSpec = OpSpec {
     method: "PUT",
     path_template: "/lists/{list_id}/remove-duplicates",
     fields: &[
-        FieldSpec { snake: "list_id", location: FieldLocation::Path },
-        FieldSpec { snake: "fields", location: FieldLocation::Body },
+        FieldSpec { snake: "list_id", wire: "list_id", location: FieldLocation::Path },
+        FieldSpec { snake: "fields", wire: "fields", location: FieldLocation::Body },
     ],
     auth: &[
     ],
@@ -2249,45 +3388,185 @@ fn iface_contact_lists__remove_duplicate_contacts_params__to_json(p: &iface_cont
     Value::Object(m)
 }
 
+fn iface_contact_lists__get_all_contact_lists__ok(body: String) -> Result<String, crate::runtime::DispatchError> {
+    Ok(body)
+}
+
+fn iface_contact_lists__get_all_contact_lists__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
+fn iface_contact_lists__create_a_new_contact_list__ok(body: String) -> Result<String, crate::runtime::DispatchError> {
+    Ok(body)
+}
+
+fn iface_contact_lists__create_a_new_contact_list__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
+fn iface_contact_lists__get_a_specific_contact_list__ok(body: String) -> Result<String, crate::runtime::DispatchError> {
+    Ok(body)
+}
+
+fn iface_contact_lists__get_a_specific_contact_list__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
+fn iface_contact_lists__update_a_specific_contact_list__ok(body: String) -> Result<String, crate::runtime::DispatchError> {
+    Ok(body)
+}
+
+fn iface_contact_lists__update_a_specific_contact_list__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
+fn iface_contact_lists__delete_a_specific_contact_list__ok(body: String) -> Result<String, crate::runtime::DispatchError> {
+    Ok(body)
+}
+
+fn iface_contact_lists__delete_a_specific_contact_list__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
+fn iface_contact_lists__export_contacts_list__ok(body: String) -> Result<String, crate::runtime::DispatchError> {
+    Ok(body)
+}
+
+fn iface_contact_lists__export_contacts_list__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
+fn iface_contact_lists__import_contacts_to_list__ok(body: String) -> Result<String, crate::runtime::DispatchError> {
+    Ok(body)
+}
+
+fn iface_contact_lists__import_contacts_to_list__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
+fn iface_contact_lists__show_csv_import_file_preview__ok(body: String) -> Result<String, crate::runtime::DispatchError> {
+    Ok(body)
+}
+
+fn iface_contact_lists__show_csv_import_file_preview__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
+fn iface_contact_lists__get_list_of_acceptable_import_fields__ok(body: String) -> Result<String, crate::runtime::DispatchError> {
+    Ok(body)
+}
+
+fn iface_contact_lists__get_list_of_acceptable_import_fields__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
+fn iface_contact_lists__remove_duplicate_contacts__ok(body: String) -> Result<String, crate::runtime::DispatchError> {
+    Ok(body)
+}
+
+fn iface_contact_lists__remove_duplicate_contacts__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
 impl iface_contact_lists::Guest for crate::Component {
     fn get_all_contact_lists() -> Result<String, String> {
-        dispatch(&OP_CONTACT_LISTS_GET_ALL_CONTACT_LISTS, Value::Object(Map::new()))
+        match dispatch(&OP_CONTACT_LISTS_GET_ALL_CONTACT_LISTS, Value::Object(Map::new())).and_then(iface_contact_lists__get_all_contact_lists__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_contact_lists__get_all_contact_lists__err(e)),
+        }
     }
     fn create_a_new_contact_list(params: iface_contact_lists::CreateANewContactListParams) -> Result<String, String> {
         let json = iface_contact_lists__create_a_new_contact_list_params__to_json(&params);
-        dispatch(&OP_CONTACT_LISTS_CREATE_A_NEW_CONTACT_LIST, json)
+        match dispatch(&OP_CONTACT_LISTS_CREATE_A_NEW_CONTACT_LIST, json).and_then(iface_contact_lists__create_a_new_contact_list__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_contact_lists__create_a_new_contact_list__err(e)),
+        }
     }
     fn get_a_specific_contact_list(params: iface_contact_lists::GetASpecificContactListParams) -> Result<String, String> {
         let json = iface_contact_lists__get_a_specific_contact_list_params__to_json(&params);
-        dispatch(&OP_CONTACT_LISTS_GET_A_SPECIFIC_CONTACT_LIST, json)
+        match dispatch(&OP_CONTACT_LISTS_GET_A_SPECIFIC_CONTACT_LIST, json).and_then(iface_contact_lists__get_a_specific_contact_list__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_contact_lists__get_a_specific_contact_list__err(e)),
+        }
     }
     fn update_a_specific_contact_list(params: iface_contact_lists::UpdateASpecificContactListParams) -> Result<String, String> {
         let json = iface_contact_lists__update_a_specific_contact_list_params__to_json(&params);
-        dispatch(&OP_CONTACT_LISTS_UPDATE_A_SPECIFIC_CONTACT_LIST, json)
+        match dispatch(&OP_CONTACT_LISTS_UPDATE_A_SPECIFIC_CONTACT_LIST, json).and_then(iface_contact_lists__update_a_specific_contact_list__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_contact_lists__update_a_specific_contact_list__err(e)),
+        }
     }
     fn delete_a_specific_contact_list(params: iface_contact_lists::DeleteASpecificContactListParams) -> Result<String, String> {
         let json = iface_contact_lists__delete_a_specific_contact_list_params__to_json(&params);
-        dispatch(&OP_CONTACT_LISTS_DELETE_A_SPECIFIC_CONTACT_LIST, json)
+        match dispatch(&OP_CONTACT_LISTS_DELETE_A_SPECIFIC_CONTACT_LIST, json).and_then(iface_contact_lists__delete_a_specific_contact_list__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_contact_lists__delete_a_specific_contact_list__err(e)),
+        }
     }
     fn export_contacts_list(params: iface_contact_lists::ExportContactsListParams) -> Result<String, String> {
         let json = iface_contact_lists__export_contacts_list_params__to_json(&params);
-        dispatch(&OP_CONTACT_LISTS_EXPORT_CONTACTS_LIST, json)
+        match dispatch(&OP_CONTACT_LISTS_EXPORT_CONTACTS_LIST, json).and_then(iface_contact_lists__export_contacts_list__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_contact_lists__export_contacts_list__err(e)),
+        }
     }
     fn import_contacts_to_list(params: iface_contact_lists::ImportContactsToListParams) -> Result<String, String> {
         let json = iface_contact_lists__import_contacts_to_list_params__to_json(&params);
-        dispatch(&OP_CONTACT_LISTS_IMPORT_CONTACTS_TO_LIST, json)
+        match dispatch(&OP_CONTACT_LISTS_IMPORT_CONTACTS_TO_LIST, json).and_then(iface_contact_lists__import_contacts_to_list__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_contact_lists__import_contacts_to_list__err(e)),
+        }
     }
     fn show_csv_import_file_preview(params: iface_contact_lists::ShowCsvImportFilePreviewParams) -> Result<String, String> {
         let json = iface_contact_lists__show_csv_import_file_preview_params__to_json(&params);
-        dispatch(&OP_CONTACT_LISTS_SHOW_CSV_IMPORT_FILE_PREVIEW, json)
+        match dispatch(&OP_CONTACT_LISTS_SHOW_CSV_IMPORT_FILE_PREVIEW, json).and_then(iface_contact_lists__show_csv_import_file_preview__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_contact_lists__show_csv_import_file_preview__err(e)),
+        }
     }
     fn get_list_of_acceptable_import_fields(params: iface_contact_lists::GetListOfAcceptableImportFieldsParams) -> Result<String, String> {
         let json = iface_contact_lists__get_list_of_acceptable_import_fields_params__to_json(&params);
-        dispatch(&OP_CONTACT_LISTS_GET_LIST_OF_ACCEPTABLE_IMPORT_FIELDS, json)
+        match dispatch(&OP_CONTACT_LISTS_GET_LIST_OF_ACCEPTABLE_IMPORT_FIELDS, json).and_then(iface_contact_lists__get_list_of_acceptable_import_fields__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_contact_lists__get_list_of_acceptable_import_fields__err(e)),
+        }
     }
     fn remove_duplicate_contacts(params: iface_contact_lists::RemoveDuplicateContactsParams) -> Result<String, String> {
         let json = iface_contact_lists__remove_duplicate_contacts_params__to_json(&params);
-        dispatch(&OP_CONTACT_LISTS_REMOVE_DUPLICATE_CONTACTS, json)
+        match dispatch(&OP_CONTACT_LISTS_REMOVE_DUPLICATE_CONTACTS, json).and_then(iface_contact_lists__remove_duplicate_contacts__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_contact_lists__remove_duplicate_contacts__err(e)),
+        }
     }
 }
 use crate::exports::autostamp::clicksend::contacts as iface_contacts;
@@ -2296,9 +3575,9 @@ const OP_CONTACTS_TRANSFER_A_CONTACT: OpSpec = OpSpec {
     method: "PUT",
     path_template: "/lists/{from_list_id}/contacts/{contact_id}/{to_list_id}",
     fields: &[
-        FieldSpec { snake: "from_list_id", location: FieldLocation::Path },
-        FieldSpec { snake: "contact_id", location: FieldLocation::Path },
-        FieldSpec { snake: "to_list_id", location: FieldLocation::Path },
+        FieldSpec { snake: "from_list_id", wire: "from_list_id", location: FieldLocation::Path },
+        FieldSpec { snake: "contact_id", wire: "contact_id", location: FieldLocation::Path },
+        FieldSpec { snake: "to_list_id", wire: "to_list_id", location: FieldLocation::Path },
     ],
     auth: &[
     ],
@@ -2308,7 +3587,7 @@ const OP_CONTACTS_GET_ALL_CONTACTS_IN_A_LIST: OpSpec = OpSpec {
     method: "GET",
     path_template: "/lists/{list_id}/contacts",
     fields: &[
-        FieldSpec { snake: "list_id", location: FieldLocation::Path },
+        FieldSpec { snake: "list_id", wire: "list_id", location: FieldLocation::Path },
     ],
     auth: &[
     ],
@@ -2318,23 +3597,23 @@ const OP_CONTACTS_CREATE_A_NEW_CONTACT: OpSpec = OpSpec {
     method: "POST",
     path_template: "/lists/{list_id}/contacts",
     fields: &[
-        FieldSpec { snake: "list_id", location: FieldLocation::Path },
-        FieldSpec { snake: "address_city", location: FieldLocation::Body },
-        FieldSpec { snake: "address_country", location: FieldLocation::Body },
-        FieldSpec { snake: "address_line_1", location: FieldLocation::Body },
-        FieldSpec { snake: "address_line_2", location: FieldLocation::Body },
-        FieldSpec { snake: "address_postal_code", location: FieldLocation::Body },
-        FieldSpec { snake: "address_state", location: FieldLocation::Body },
-        FieldSpec { snake: "custom_1", location: FieldLocation::Body },
-        FieldSpec { snake: "custom_2", location: FieldLocation::Body },
-        FieldSpec { snake: "custom_3", location: FieldLocation::Body },
-        FieldSpec { snake: "custom_4", location: FieldLocation::Body },
-        FieldSpec { snake: "email", location: FieldLocation::Body },
-        FieldSpec { snake: "fax_number", location: FieldLocation::Body },
-        FieldSpec { snake: "first_name", location: FieldLocation::Body },
-        FieldSpec { snake: "last_name", location: FieldLocation::Body },
-        FieldSpec { snake: "organization_name", location: FieldLocation::Body },
-        FieldSpec { snake: "phone_number", location: FieldLocation::Body },
+        FieldSpec { snake: "list_id", wire: "list_id", location: FieldLocation::Path },
+        FieldSpec { snake: "address_city", wire: "address_city", location: FieldLocation::Body },
+        FieldSpec { snake: "address_country", wire: "address_country", location: FieldLocation::Body },
+        FieldSpec { snake: "address_line_1", wire: "address_line_1", location: FieldLocation::Body },
+        FieldSpec { snake: "address_line_2", wire: "address_line_2", location: FieldLocation::Body },
+        FieldSpec { snake: "address_postal_code", wire: "address_postal_code", location: FieldLocation::Body },
+        FieldSpec { snake: "address_state", wire: "address_state", location: FieldLocation::Body },
+        FieldSpec { snake: "custom_1", wire: "custom_1", location: FieldLocation::Body },
+        FieldSpec { snake: "custom_2", wire: "custom_2", location: FieldLocation::Body },
+        FieldSpec { snake: "custom_3", wire: "custom_3", location: FieldLocation::Body },
+        FieldSpec { snake: "custom_4", wire: "custom_4", location: FieldLocation::Body },
+        FieldSpec { snake: "email", wire: "email", location: FieldLocation::Body },
+        FieldSpec { snake: "fax_number", wire: "fax_number", location: FieldLocation::Body },
+        FieldSpec { snake: "first_name", wire: "first_name", location: FieldLocation::Body },
+        FieldSpec { snake: "last_name", wire: "last_name", location: FieldLocation::Body },
+        FieldSpec { snake: "organization_name", wire: "organization_name", location: FieldLocation::Body },
+        FieldSpec { snake: "phone_number", wire: "phone_number", location: FieldLocation::Body },
     ],
     auth: &[
         AuthApply { secret_key: "basic", kind: AuthKind::Basic },
@@ -2345,8 +3624,8 @@ const OP_CONTACTS_GET_A_SPECIFIC_CONTACT: OpSpec = OpSpec {
     method: "GET",
     path_template: "/lists/{list_id}/contacts/{contact_id}",
     fields: &[
-        FieldSpec { snake: "list_id", location: FieldLocation::Path },
-        FieldSpec { snake: "contact_id", location: FieldLocation::Path },
+        FieldSpec { snake: "list_id", wire: "list_id", location: FieldLocation::Path },
+        FieldSpec { snake: "contact_id", wire: "contact_id", location: FieldLocation::Path },
     ],
     auth: &[
     ],
@@ -2356,24 +3635,24 @@ const OP_CONTACTS_UPDATE_A_SPECIFIC_CONTACT: OpSpec = OpSpec {
     method: "PUT",
     path_template: "/lists/{list_id}/contacts/{contact_id}",
     fields: &[
-        FieldSpec { snake: "list_id", location: FieldLocation::Path },
-        FieldSpec { snake: "contact_id", location: FieldLocation::Path },
-        FieldSpec { snake: "address_city", location: FieldLocation::Body },
-        FieldSpec { snake: "address_country", location: FieldLocation::Body },
-        FieldSpec { snake: "address_line_1", location: FieldLocation::Body },
-        FieldSpec { snake: "address_line_2", location: FieldLocation::Body },
-        FieldSpec { snake: "address_postal_code", location: FieldLocation::Body },
-        FieldSpec { snake: "address_state", location: FieldLocation::Body },
-        FieldSpec { snake: "custom_1", location: FieldLocation::Body },
-        FieldSpec { snake: "custom_2", location: FieldLocation::Body },
-        FieldSpec { snake: "custom_3", location: FieldLocation::Body },
-        FieldSpec { snake: "custom_4", location: FieldLocation::Body },
-        FieldSpec { snake: "email", location: FieldLocation::Body },
-        FieldSpec { snake: "fax_number", location: FieldLocation::Body },
-        FieldSpec { snake: "first_name", location: FieldLocation::Body },
-        FieldSpec { snake: "last_name", location: FieldLocation::Body },
-        FieldSpec { snake: "organization_name", location: FieldLocation::Body },
-        FieldSpec { snake: "phone_number", location: FieldLocation::Body },
+        FieldSpec { snake: "list_id", wire: "list_id", location: FieldLocation::Path },
+        FieldSpec { snake: "contact_id", wire: "contact_id", location: FieldLocation::Path },
+        FieldSpec { snake: "address_city", wire: "address_city", location: FieldLocation::Body },
+        FieldSpec { snake: "address_country", wire: "address_country", location: FieldLocation::Body },
+        FieldSpec { snake: "address_line_1", wire: "address_line_1", location: FieldLocation::Body },
+        FieldSpec { snake: "address_line_2", wire: "address_line_2", location: FieldLocation::Body },
+        FieldSpec { snake: "address_postal_code", wire: "address_postal_code", location: FieldLocation::Body },
+        FieldSpec { snake: "address_state", wire: "address_state", location: FieldLocation::Body },
+        FieldSpec { snake: "custom_1", wire: "custom_1", location: FieldLocation::Body },
+        FieldSpec { snake: "custom_2", wire: "custom_2", location: FieldLocation::Body },
+        FieldSpec { snake: "custom_3", wire: "custom_3", location: FieldLocation::Body },
+        FieldSpec { snake: "custom_4", wire: "custom_4", location: FieldLocation::Body },
+        FieldSpec { snake: "email", wire: "email", location: FieldLocation::Body },
+        FieldSpec { snake: "fax_number", wire: "fax_number", location: FieldLocation::Body },
+        FieldSpec { snake: "first_name", wire: "first_name", location: FieldLocation::Body },
+        FieldSpec { snake: "last_name", wire: "last_name", location: FieldLocation::Body },
+        FieldSpec { snake: "organization_name", wire: "organization_name", location: FieldLocation::Body },
+        FieldSpec { snake: "phone_number", wire: "phone_number", location: FieldLocation::Body },
     ],
     auth: &[
         AuthApply { secret_key: "basic", kind: AuthKind::Basic },
@@ -2384,8 +3663,8 @@ const OP_CONTACTS_DELETE_A_SPECIFIC_CONTACT: OpSpec = OpSpec {
     method: "DELETE",
     path_template: "/lists/{list_id}/contacts/{contact_id}",
     fields: &[
-        FieldSpec { snake: "list_id", location: FieldLocation::Path },
-        FieldSpec { snake: "contact_id", location: FieldLocation::Path },
+        FieldSpec { snake: "list_id", wire: "list_id", location: FieldLocation::Path },
+        FieldSpec { snake: "contact_id", wire: "contact_id", location: FieldLocation::Path },
     ],
     auth: &[
     ],
@@ -2395,8 +3674,8 @@ const OP_CONTACTS_REMOVE_OPTED_OUT_CONTACTS: OpSpec = OpSpec {
     method: "PUT",
     path_template: "/lists/{list_id}/remove-opted-out-contacts/{opt_out_list_id}",
     fields: &[
-        FieldSpec { snake: "list_id", location: FieldLocation::Path },
-        FieldSpec { snake: "opt_out_list_id", location: FieldLocation::Path },
+        FieldSpec { snake: "list_id", wire: "list_id", location: FieldLocation::Path },
+        FieldSpec { snake: "opt_out_list_id", wire: "opt_out_list_id", location: FieldLocation::Path },
     ],
     auth: &[
     ],
@@ -2482,34 +3761,132 @@ fn iface_contacts__remove_opted_out_contacts_params__to_json(p: &iface_contacts:
     Value::Object(m)
 }
 
+fn iface_contacts__transfer_a_contact__ok(body: String) -> Result<String, crate::runtime::DispatchError> {
+    Ok(body)
+}
+
+fn iface_contacts__transfer_a_contact__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
+fn iface_contacts__get_all_contacts_in_a_list__ok(body: String) -> Result<String, crate::runtime::DispatchError> {
+    Ok(body)
+}
+
+fn iface_contacts__get_all_contacts_in_a_list__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
+fn iface_contacts__create_a_new_contact__ok(body: String) -> Result<String, crate::runtime::DispatchError> {
+    Ok(body)
+}
+
+fn iface_contacts__create_a_new_contact__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
+fn iface_contacts__get_a_specific_contact__ok(body: String) -> Result<String, crate::runtime::DispatchError> {
+    Ok(body)
+}
+
+fn iface_contacts__get_a_specific_contact__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
+fn iface_contacts__update_a_specific_contact__ok(body: String) -> Result<String, crate::runtime::DispatchError> {
+    Ok(body)
+}
+
+fn iface_contacts__update_a_specific_contact__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
+fn iface_contacts__delete_a_specific_contact__ok(body: String) -> Result<String, crate::runtime::DispatchError> {
+    Ok(body)
+}
+
+fn iface_contacts__delete_a_specific_contact__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
+fn iface_contacts__remove_opted_out_contacts__ok(body: String) -> Result<String, crate::runtime::DispatchError> {
+    Ok(body)
+}
+
+fn iface_contacts__remove_opted_out_contacts__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
 impl iface_contacts::Guest for crate::Component {
     fn transfer_a_contact(params: iface_contacts::TransferAContactParams) -> Result<String, String> {
         let json = iface_contacts__transfer_a_contact_params__to_json(&params);
-        dispatch(&OP_CONTACTS_TRANSFER_A_CONTACT, json)
+        match dispatch(&OP_CONTACTS_TRANSFER_A_CONTACT, json).and_then(iface_contacts__transfer_a_contact__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_contacts__transfer_a_contact__err(e)),
+        }
     }
     fn get_all_contacts_in_a_list(params: iface_contacts::GetAllContactsInAListParams) -> Result<String, String> {
         let json = iface_contacts__get_all_contacts_in_a_list_params__to_json(&params);
-        dispatch(&OP_CONTACTS_GET_ALL_CONTACTS_IN_A_LIST, json)
+        match dispatch(&OP_CONTACTS_GET_ALL_CONTACTS_IN_A_LIST, json).and_then(iface_contacts__get_all_contacts_in_a_list__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_contacts__get_all_contacts_in_a_list__err(e)),
+        }
     }
     fn create_a_new_contact(params: iface_contacts::CreateANewContactParams) -> Result<String, String> {
         let json = iface_contacts__create_a_new_contact_params__to_json(&params);
-        dispatch(&OP_CONTACTS_CREATE_A_NEW_CONTACT, json)
+        match dispatch(&OP_CONTACTS_CREATE_A_NEW_CONTACT, json).and_then(iface_contacts__create_a_new_contact__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_contacts__create_a_new_contact__err(e)),
+        }
     }
     fn get_a_specific_contact(params: iface_contacts::GetASpecificContactParams) -> Result<String, String> {
         let json = iface_contacts__get_a_specific_contact_params__to_json(&params);
-        dispatch(&OP_CONTACTS_GET_A_SPECIFIC_CONTACT, json)
+        match dispatch(&OP_CONTACTS_GET_A_SPECIFIC_CONTACT, json).and_then(iface_contacts__get_a_specific_contact__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_contacts__get_a_specific_contact__err(e)),
+        }
     }
     fn update_a_specific_contact(params: iface_contacts::UpdateASpecificContactParams) -> Result<String, String> {
         let json = iface_contacts__update_a_specific_contact_params__to_json(&params);
-        dispatch(&OP_CONTACTS_UPDATE_A_SPECIFIC_CONTACT, json)
+        match dispatch(&OP_CONTACTS_UPDATE_A_SPECIFIC_CONTACT, json).and_then(iface_contacts__update_a_specific_contact__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_contacts__update_a_specific_contact__err(e)),
+        }
     }
     fn delete_a_specific_contact(params: iface_contacts::DeleteASpecificContactParams) -> Result<String, String> {
         let json = iface_contacts__delete_a_specific_contact_params__to_json(&params);
-        dispatch(&OP_CONTACTS_DELETE_A_SPECIFIC_CONTACT, json)
+        match dispatch(&OP_CONTACTS_DELETE_A_SPECIFIC_CONTACT, json).and_then(iface_contacts__delete_a_specific_contact__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_contacts__delete_a_specific_contact__err(e)),
+        }
     }
     fn remove_opted_out_contacts(params: iface_contacts::RemoveOptedOutContactsParams) -> Result<String, String> {
         let json = iface_contacts__remove_opted_out_contacts_params__to_json(&params);
-        dispatch(&OP_CONTACTS_REMOVE_OPTED_OUT_CONTACTS, json)
+        match dispatch(&OP_CONTACTS_REMOVE_OPTED_OUT_CONTACTS, json).and_then(iface_contacts__remove_opted_out_contacts__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_contacts__remove_opted_out_contacts__err(e)),
+        }
     }
 }
 use crate::exports::autostamp::clicksend::mms as iface_mms;
@@ -2527,7 +3904,7 @@ const OP_MMS_EXPORT_MMS_HISTORY: OpSpec = OpSpec {
     method: "GET",
     path_template: "/mms/history/export?filename={filename}",
     fields: &[
-        FieldSpec { snake: "filename", location: FieldLocation::Path },
+        FieldSpec { snake: "filename", wire: "filename", location: FieldLocation::Path },
     ],
     auth: &[
     ],
@@ -2537,10 +3914,10 @@ const OP_MMS_GET_MMS_HISTORY: OpSpec = OpSpec {
     method: "GET",
     path_template: "/mms/history?q={q}&order_by={order_by}&date_from={date_from}&date_to={date_to}",
     fields: &[
-        FieldSpec { snake: "q", location: FieldLocation::Path },
-        FieldSpec { snake: "order_by", location: FieldLocation::Path },
-        FieldSpec { snake: "date_from", location: FieldLocation::Path },
-        FieldSpec { snake: "date_to", location: FieldLocation::Path },
+        FieldSpec { snake: "q", wire: "q", location: FieldLocation::Path },
+        FieldSpec { snake: "order_by", wire: "order_by", location: FieldLocation::Path },
+        FieldSpec { snake: "date_from", wire: "date_from", location: FieldLocation::Path },
+        FieldSpec { snake: "date_to", wire: "date_to", location: FieldLocation::Path },
     ],
     auth: &[
     ],
@@ -2550,17 +3927,17 @@ const OP_MMS_GET_PRICE: OpSpec = OpSpec {
     method: "POST",
     path_template: "/mms/price",
     fields: &[
-        FieldSpec { snake: "body", location: FieldLocation::Body },
-        FieldSpec { snake: "country", location: FieldLocation::Body },
-        FieldSpec { snake: "custom_string", location: FieldLocation::Body },
-        FieldSpec { snake: "from", location: FieldLocation::Body },
-        FieldSpec { snake: "from_email", location: FieldLocation::Body },
-        FieldSpec { snake: "list_id", location: FieldLocation::Body },
-        FieldSpec { snake: "media_file", location: FieldLocation::Body },
-        FieldSpec { snake: "schedule", location: FieldLocation::Body },
-        FieldSpec { snake: "source", location: FieldLocation::Body },
-        FieldSpec { snake: "subject", location: FieldLocation::Body },
-        FieldSpec { snake: "to", location: FieldLocation::Body },
+        FieldSpec { snake: "body", wire: "body", location: FieldLocation::Body },
+        FieldSpec { snake: "country", wire: "country", location: FieldLocation::Body },
+        FieldSpec { snake: "custom_string", wire: "custom_string", location: FieldLocation::Body },
+        FieldSpec { snake: "from", wire: "from", location: FieldLocation::Body },
+        FieldSpec { snake: "from_email", wire: "from_email", location: FieldLocation::Body },
+        FieldSpec { snake: "list_id", wire: "list_id", location: FieldLocation::Body },
+        FieldSpec { snake: "media_file", wire: "media_file", location: FieldLocation::Body },
+        FieldSpec { snake: "schedule", wire: "schedule", location: FieldLocation::Body },
+        FieldSpec { snake: "source", wire: "source", location: FieldLocation::Body },
+        FieldSpec { snake: "subject", wire: "subject", location: FieldLocation::Body },
+        FieldSpec { snake: "to", wire: "to", location: FieldLocation::Body },
     ],
     auth: &[
         AuthApply { secret_key: "basic", kind: AuthKind::Basic },
@@ -2589,7 +3966,7 @@ const OP_MMS_GET_DELIVERY_RECEIPT: OpSpec = OpSpec {
     method: "GET",
     path_template: "/mms/receipts/{message_id}",
     fields: &[
-        FieldSpec { snake: "message_id", location: FieldLocation::Path },
+        FieldSpec { snake: "message_id", wire: "message_id", location: FieldLocation::Path },
     ],
     auth: &[
     ],
@@ -2599,17 +3976,17 @@ const OP_MMS_SEND_MMS: OpSpec = OpSpec {
     method: "POST",
     path_template: "/mms/send",
     fields: &[
-        FieldSpec { snake: "body", location: FieldLocation::Body },
-        FieldSpec { snake: "country", location: FieldLocation::Body },
-        FieldSpec { snake: "custom_string", location: FieldLocation::Body },
-        FieldSpec { snake: "from", location: FieldLocation::Body },
-        FieldSpec { snake: "from_email", location: FieldLocation::Body },
-        FieldSpec { snake: "list_id", location: FieldLocation::Body },
-        FieldSpec { snake: "media_file", location: FieldLocation::Body },
-        FieldSpec { snake: "schedule", location: FieldLocation::Body },
-        FieldSpec { snake: "source", location: FieldLocation::Body },
-        FieldSpec { snake: "subject", location: FieldLocation::Body },
-        FieldSpec { snake: "to", location: FieldLocation::Body },
+        FieldSpec { snake: "body", wire: "body", location: FieldLocation::Body },
+        FieldSpec { snake: "country", wire: "country", location: FieldLocation::Body },
+        FieldSpec { snake: "custom_string", wire: "custom_string", location: FieldLocation::Body },
+        FieldSpec { snake: "from", wire: "from", location: FieldLocation::Body },
+        FieldSpec { snake: "from_email", wire: "from_email", location: FieldLocation::Body },
+        FieldSpec { snake: "list_id", wire: "list_id", location: FieldLocation::Body },
+        FieldSpec { snake: "media_file", wire: "media_file", location: FieldLocation::Body },
+        FieldSpec { snake: "schedule", wire: "schedule", location: FieldLocation::Body },
+        FieldSpec { snake: "source", wire: "source", location: FieldLocation::Body },
+        FieldSpec { snake: "subject", wire: "subject", location: FieldLocation::Body },
+        FieldSpec { snake: "to", wire: "to", location: FieldLocation::Body },
     ],
     auth: &[
         AuthApply { secret_key: "basic", kind: AuthKind::Basic },
@@ -2620,7 +3997,7 @@ const OP_MMS_CANCEL_MMS: OpSpec = OpSpec {
     method: "PUT",
     path_template: "/mms/{message_id}/cancel",
     fields: &[
-        FieldSpec { snake: "message_id", location: FieldLocation::Path },
+        FieldSpec { snake: "message_id", wire: "message_id", location: FieldLocation::Path },
     ],
     auth: &[
     ],
@@ -2685,39 +4062,165 @@ fn iface_mms__cancel_mms_params__to_json(p: &iface_mms::CancelMmsParams) -> Valu
     Value::Object(m)
 }
 
+fn iface_mms__cancel_all_mms__ok(body: String) -> Result<String, crate::runtime::DispatchError> {
+    Ok(body)
+}
+
+fn iface_mms__cancel_all_mms__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
+fn iface_mms__export_mms_history__ok(body: String) -> Result<String, crate::runtime::DispatchError> {
+    Ok(body)
+}
+
+fn iface_mms__export_mms_history__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
+fn iface_mms__get_mms_history__ok(body: String) -> Result<String, crate::runtime::DispatchError> {
+    Ok(body)
+}
+
+fn iface_mms__get_mms_history__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
+fn iface_mms__get_price__ok(body: String) -> Result<String, crate::runtime::DispatchError> {
+    Ok(body)
+}
+
+fn iface_mms__get_price__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
+fn iface_mms__get_all_delivery_receipts__ok(body: String) -> Result<String, crate::runtime::DispatchError> {
+    Ok(body)
+}
+
+fn iface_mms__get_all_delivery_receipts__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
+fn iface_mms__mark_receipts_as_read__ok(body: String) -> Result<String, crate::runtime::DispatchError> {
+    Ok(body)
+}
+
+fn iface_mms__mark_receipts_as_read__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
+fn iface_mms__get_delivery_receipt__ok(body: String) -> Result<String, crate::runtime::DispatchError> {
+    Ok(body)
+}
+
+fn iface_mms__get_delivery_receipt__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
+fn iface_mms__send_mms__ok(body: String) -> Result<String, crate::runtime::DispatchError> {
+    Ok(body)
+}
+
+fn iface_mms__send_mms__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
+fn iface_mms__cancel_mms__ok(body: String) -> Result<String, crate::runtime::DispatchError> {
+    Ok(body)
+}
+
+fn iface_mms__cancel_mms__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
 impl iface_mms::Guest for crate::Component {
     fn cancel_all_mms() -> Result<String, String> {
-        dispatch(&OP_MMS_CANCEL_ALL_MMS, Value::Object(Map::new()))
+        match dispatch(&OP_MMS_CANCEL_ALL_MMS, Value::Object(Map::new())).and_then(iface_mms__cancel_all_mms__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_mms__cancel_all_mms__err(e)),
+        }
     }
     fn export_mms_history(params: iface_mms::ExportMmsHistoryParams) -> Result<String, String> {
         let json = iface_mms__export_mms_history_params__to_json(&params);
-        dispatch(&OP_MMS_EXPORT_MMS_HISTORY, json)
+        match dispatch(&OP_MMS_EXPORT_MMS_HISTORY, json).and_then(iface_mms__export_mms_history__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_mms__export_mms_history__err(e)),
+        }
     }
     fn get_mms_history(params: iface_mms::GetMmsHistoryParams) -> Result<String, String> {
         let json = iface_mms__get_mms_history_params__to_json(&params);
-        dispatch(&OP_MMS_GET_MMS_HISTORY, json)
+        match dispatch(&OP_MMS_GET_MMS_HISTORY, json).and_then(iface_mms__get_mms_history__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_mms__get_mms_history__err(e)),
+        }
     }
     fn get_price(params: iface_mms::GetPriceParams) -> Result<String, String> {
         let json = iface_mms__get_price_params__to_json(&params);
-        dispatch(&OP_MMS_GET_PRICE, json)
+        match dispatch(&OP_MMS_GET_PRICE, json).and_then(iface_mms__get_price__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_mms__get_price__err(e)),
+        }
     }
     fn get_all_delivery_receipts() -> Result<String, String> {
-        dispatch(&OP_MMS_GET_ALL_DELIVERY_RECEIPTS, Value::Object(Map::new()))
+        match dispatch(&OP_MMS_GET_ALL_DELIVERY_RECEIPTS, Value::Object(Map::new())).and_then(iface_mms__get_all_delivery_receipts__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_mms__get_all_delivery_receipts__err(e)),
+        }
     }
     fn mark_receipts_as_read() -> Result<String, String> {
-        dispatch(&OP_MMS_MARK_RECEIPTS_AS_READ, Value::Object(Map::new()))
+        match dispatch(&OP_MMS_MARK_RECEIPTS_AS_READ, Value::Object(Map::new())).and_then(iface_mms__mark_receipts_as_read__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_mms__mark_receipts_as_read__err(e)),
+        }
     }
     fn get_delivery_receipt(params: iface_mms::GetDeliveryReceiptParams) -> Result<String, String> {
         let json = iface_mms__get_delivery_receipt_params__to_json(&params);
-        dispatch(&OP_MMS_GET_DELIVERY_RECEIPT, json)
+        match dispatch(&OP_MMS_GET_DELIVERY_RECEIPT, json).and_then(iface_mms__get_delivery_receipt__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_mms__get_delivery_receipt__err(e)),
+        }
     }
     fn send_mms(params: iface_mms::SendMmsParams) -> Result<String, String> {
         let json = iface_mms__send_mms_params__to_json(&params);
-        dispatch(&OP_MMS_SEND_MMS, json)
+        match dispatch(&OP_MMS_SEND_MMS, json).and_then(iface_mms__send_mms__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_mms__send_mms__err(e)),
+        }
     }
     fn cancel_mms(params: iface_mms::CancelMmsParams) -> Result<String, String> {
         let json = iface_mms__cancel_mms_params__to_json(&params);
-        dispatch(&OP_MMS_CANCEL_MMS, json)
+        match dispatch(&OP_MMS_CANCEL_MMS, json).and_then(iface_mms__cancel_mms__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_mms__cancel_mms__err(e)),
+        }
     }
 }
 use crate::exports::autostamp::clicksend::numbers as iface_numbers;
@@ -2735,7 +4238,7 @@ const OP_NUMBERS_BUY_DEDICATED_NUMBER: OpSpec = OpSpec {
     method: "POST",
     path_template: "/numbers/buy/{dedicated_number}",
     fields: &[
-        FieldSpec { snake: "dedicated_number", location: FieldLocation::Path },
+        FieldSpec { snake: "dedicated_number", wire: "dedicated_number", location: FieldLocation::Path },
     ],
     auth: &[
     ],
@@ -2745,9 +4248,9 @@ const OP_NUMBERS_SEARCH_DEDICATED_NUMBERS_BY_COUNTRY: OpSpec = OpSpec {
     method: "GET",
     path_template: "/numbers/search/{country}?{search}=1&{search_type}=2",
     fields: &[
-        FieldSpec { snake: "country", location: FieldLocation::Path },
-        FieldSpec { snake: "search", location: FieldLocation::Path },
-        FieldSpec { snake: "search_type", location: FieldLocation::Path },
+        FieldSpec { snake: "country", wire: "country", location: FieldLocation::Path },
+        FieldSpec { snake: "search", wire: "search", location: FieldLocation::Path },
+        FieldSpec { snake: "search_type", wire: "search_type", location: FieldLocation::Path },
     ],
     auth: &[
     ],
@@ -2767,17 +4270,59 @@ fn iface_numbers__search_dedicated_numbers_by_country_params__to_json(p: &iface_
     Value::Object(m)
 }
 
+fn iface_numbers__get_all_dedicated_numbers__ok(body: String) -> Result<String, crate::runtime::DispatchError> {
+    Ok(body)
+}
+
+fn iface_numbers__get_all_dedicated_numbers__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
+fn iface_numbers__buy_dedicated_number__ok(body: String) -> Result<String, crate::runtime::DispatchError> {
+    Ok(body)
+}
+
+fn iface_numbers__buy_dedicated_number__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
+fn iface_numbers__search_dedicated_numbers_by_country__ok(body: String) -> Result<String, crate::runtime::DispatchError> {
+    Ok(body)
+}
+
+fn iface_numbers__search_dedicated_numbers_by_country__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
 impl iface_numbers::Guest for crate::Component {
     fn get_all_dedicated_numbers() -> Result<String, String> {
-        dispatch(&OP_NUMBERS_GET_ALL_DEDICATED_NUMBERS, Value::Object(Map::new()))
+        match dispatch(&OP_NUMBERS_GET_ALL_DEDICATED_NUMBERS, Value::Object(Map::new())).and_then(iface_numbers__get_all_dedicated_numbers__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_numbers__get_all_dedicated_numbers__err(e)),
+        }
     }
     fn buy_dedicated_number(params: iface_numbers::BuyDedicatedNumberParams) -> Result<String, String> {
         let json = iface_numbers__buy_dedicated_number_params__to_json(&params);
-        dispatch(&OP_NUMBERS_BUY_DEDICATED_NUMBER, json)
+        match dispatch(&OP_NUMBERS_BUY_DEDICATED_NUMBER, json).and_then(iface_numbers__buy_dedicated_number__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_numbers__buy_dedicated_number__err(e)),
+        }
     }
     fn search_dedicated_numbers_by_country(params: iface_numbers::SearchDedicatedNumbersByCountryParams) -> Result<String, String> {
         let json = iface_numbers__search_dedicated_numbers_by_country_params__to_json(&params);
-        dispatch(&OP_NUMBERS_SEARCH_DEDICATED_NUMBERS_BY_COUNTRY, json)
+        match dispatch(&OP_NUMBERS_SEARCH_DEDICATED_NUMBERS_BY_COUNTRY, json).and_then(iface_numbers__search_dedicated_numbers_by_country__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_numbers__search_dedicated_numbers_by_country__err(e)),
+        }
     }
 }
 use crate::exports::autostamp::clicksend::post_direct_mail as iface_post_direct_mail;
@@ -2795,12 +4340,12 @@ const OP_POST_DIRECT_MAIL_CALCULATE_DIRECT_MAIL_CAMPAIGN_PRICE: OpSpec = OpSpec 
     method: "POST",
     path_template: "/post/direct-mail/campaigns/price",
     fields: &[
-        FieldSpec { snake: "areas", location: FieldLocation::Body },
-        FieldSpec { snake: "file_urls", location: FieldLocation::Body },
-        FieldSpec { snake: "name", location: FieldLocation::Body },
-        FieldSpec { snake: "schedule", location: FieldLocation::Body },
-        FieldSpec { snake: "size", location: FieldLocation::Body },
-        FieldSpec { snake: "source", location: FieldLocation::Body },
+        FieldSpec { snake: "areas", wire: "areas", location: FieldLocation::Body },
+        FieldSpec { snake: "file_urls", wire: "file_urls", location: FieldLocation::Body },
+        FieldSpec { snake: "name", wire: "name", location: FieldLocation::Body },
+        FieldSpec { snake: "schedule", wire: "schedule", location: FieldLocation::Body },
+        FieldSpec { snake: "size", wire: "size", location: FieldLocation::Body },
+        FieldSpec { snake: "source", wire: "source", location: FieldLocation::Body },
     ],
     auth: &[
     ],
@@ -2810,12 +4355,12 @@ const OP_POST_DIRECT_MAIL_CREATE_NEW_CAMPAIGN: OpSpec = OpSpec {
     method: "POST",
     path_template: "/post/direct-mail/campaigns/send",
     fields: &[
-        FieldSpec { snake: "areas", location: FieldLocation::Body },
-        FieldSpec { snake: "file_urls", location: FieldLocation::Body },
-        FieldSpec { snake: "name", location: FieldLocation::Body },
-        FieldSpec { snake: "schedule", location: FieldLocation::Body },
-        FieldSpec { snake: "size", location: FieldLocation::Body },
-        FieldSpec { snake: "source", location: FieldLocation::Body },
+        FieldSpec { snake: "areas", wire: "areas", location: FieldLocation::Body },
+        FieldSpec { snake: "file_urls", wire: "file_urls", location: FieldLocation::Body },
+        FieldSpec { snake: "name", wire: "name", location: FieldLocation::Body },
+        FieldSpec { snake: "schedule", wire: "schedule", location: FieldLocation::Body },
+        FieldSpec { snake: "size", wire: "size", location: FieldLocation::Body },
+        FieldSpec { snake: "source", wire: "source", location: FieldLocation::Body },
     ],
     auth: &[
     ],
@@ -2825,8 +4370,8 @@ const OP_POST_DIRECT_MAIL_SEARCH_LOCATIONS: OpSpec = OpSpec {
     method: "GET",
     path_template: "/post/direct-mail/locations/search/{country}/?q={query}",
     fields: &[
-        FieldSpec { snake: "country", location: FieldLocation::Path },
-        FieldSpec { snake: "query", location: FieldLocation::Path },
+        FieldSpec { snake: "country", wire: "country", location: FieldLocation::Path },
+        FieldSpec { snake: "query", wire: "query", location: FieldLocation::Path },
     ],
     auth: &[
     ],
@@ -2861,21 +4406,77 @@ fn iface_post_direct_mail__search_locations_params__to_json(p: &iface_post_direc
     Value::Object(m)
 }
 
+fn iface_post_direct_mail__list_direct_mail_campaigns__ok(body: String) -> Result<String, crate::runtime::DispatchError> {
+    Ok(body)
+}
+
+fn iface_post_direct_mail__list_direct_mail_campaigns__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
+fn iface_post_direct_mail__calculate_direct_mail_campaign_price__ok(body: String) -> Result<String, crate::runtime::DispatchError> {
+    Ok(body)
+}
+
+fn iface_post_direct_mail__calculate_direct_mail_campaign_price__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
+fn iface_post_direct_mail__create_new_campaign__ok(body: String) -> Result<String, crate::runtime::DispatchError> {
+    Ok(body)
+}
+
+fn iface_post_direct_mail__create_new_campaign__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
+fn iface_post_direct_mail__search_locations__ok(body: String) -> Result<String, crate::runtime::DispatchError> {
+    Ok(body)
+}
+
+fn iface_post_direct_mail__search_locations__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
 impl iface_post_direct_mail::Guest for crate::Component {
     fn list_direct_mail_campaigns() -> Result<String, String> {
-        dispatch(&OP_POST_DIRECT_MAIL_LIST_DIRECT_MAIL_CAMPAIGNS, Value::Object(Map::new()))
+        match dispatch(&OP_POST_DIRECT_MAIL_LIST_DIRECT_MAIL_CAMPAIGNS, Value::Object(Map::new())).and_then(iface_post_direct_mail__list_direct_mail_campaigns__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_post_direct_mail__list_direct_mail_campaigns__err(e)),
+        }
     }
     fn calculate_direct_mail_campaign_price(params: iface_post_direct_mail::CalculateDirectMailCampaignPriceParams) -> Result<String, String> {
         let json = iface_post_direct_mail__calculate_direct_mail_campaign_price_params__to_json(&params);
-        dispatch(&OP_POST_DIRECT_MAIL_CALCULATE_DIRECT_MAIL_CAMPAIGN_PRICE, json)
+        match dispatch(&OP_POST_DIRECT_MAIL_CALCULATE_DIRECT_MAIL_CAMPAIGN_PRICE, json).and_then(iface_post_direct_mail__calculate_direct_mail_campaign_price__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_post_direct_mail__calculate_direct_mail_campaign_price__err(e)),
+        }
     }
     fn create_new_campaign(params: iface_post_direct_mail::CreateNewCampaignParams) -> Result<String, String> {
         let json = iface_post_direct_mail__create_new_campaign_params__to_json(&params);
-        dispatch(&OP_POST_DIRECT_MAIL_CREATE_NEW_CAMPAIGN, json)
+        match dispatch(&OP_POST_DIRECT_MAIL_CREATE_NEW_CAMPAIGN, json).and_then(iface_post_direct_mail__create_new_campaign__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_post_direct_mail__create_new_campaign__err(e)),
+        }
     }
     fn search_locations(params: iface_post_direct_mail::SearchLocationsParams) -> Result<String, String> {
         let json = iface_post_direct_mail__search_locations_params__to_json(&params);
-        dispatch(&OP_POST_DIRECT_MAIL_SEARCH_LOCATIONS, json)
+        match dispatch(&OP_POST_DIRECT_MAIL_SEARCH_LOCATIONS, json).and_then(iface_post_direct_mail__search_locations__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_post_direct_mail__search_locations__err(e)),
+        }
     }
 }
 use crate::exports::autostamp::clicksend::post_address_detection as iface_post_address_detection;
@@ -2884,7 +4485,7 @@ const OP_POST_ADDRESS_DETECTION_DETECT_ADDRESS: OpSpec = OpSpec {
     method: "POST",
     path_template: "/post/letters/detect-address",
     fields: &[
-        FieldSpec { snake: "body", location: FieldLocation::Body },
+        FieldSpec { snake: "body", wire: "body", location: FieldLocation::Body },
     ],
     auth: &[
     ],
@@ -2896,10 +4497,24 @@ fn iface_post_address_detection__detect_address_params__to_json(p: &iface_post_a
     Value::Object(m)
 }
 
+fn iface_post_address_detection__detect_address__ok(body: String) -> Result<String, crate::runtime::DispatchError> {
+    Ok(body)
+}
+
+fn iface_post_address_detection__detect_address__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
 impl iface_post_address_detection::Guest for crate::Component {
     fn detect_address(params: iface_post_address_detection::DetectAddressParams) -> Result<String, String> {
         let json = iface_post_address_detection__detect_address_params__to_json(&params);
-        dispatch(&OP_POST_ADDRESS_DETECTION_DETECT_ADDRESS, json)
+        match dispatch(&OP_POST_ADDRESS_DETECTION_DETECT_ADDRESS, json).and_then(iface_post_address_detection__detect_address__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_post_address_detection__detect_address__err(e)),
+        }
     }
 }
 use crate::exports::autostamp::clicksend::post_letter as iface_post_letter;
@@ -2917,7 +4532,7 @@ const OP_POST_LETTER_EXPORT_POST_LETTER_HISTORY: OpSpec = OpSpec {
     method: "GET",
     path_template: "/post/letters/history/export?filename={filename}",
     fields: &[
-        FieldSpec { snake: "filename", location: FieldLocation::Path },
+        FieldSpec { snake: "filename", wire: "filename", location: FieldLocation::Path },
     ],
     auth: &[
     ],
@@ -2927,12 +4542,12 @@ const OP_POST_LETTER_POST_POST_LETTERS_PRICE: OpSpec = OpSpec {
     method: "POST",
     path_template: "/post/letters/price",
     fields: &[
-        FieldSpec { snake: "colour", location: FieldLocation::Body },
-        FieldSpec { snake: "duplex", location: FieldLocation::Body },
-        FieldSpec { snake: "file_url", location: FieldLocation::Body },
-        FieldSpec { snake: "priority_post", location: FieldLocation::Body },
-        FieldSpec { snake: "recipients", location: FieldLocation::Body },
-        FieldSpec { snake: "template_used", location: FieldLocation::Body },
+        FieldSpec { snake: "colour", wire: "colour", location: FieldLocation::Body },
+        FieldSpec { snake: "duplex", wire: "duplex", location: FieldLocation::Body },
+        FieldSpec { snake: "file_url", wire: "file_url", location: FieldLocation::Body },
+        FieldSpec { snake: "priority_post", wire: "priority_post", location: FieldLocation::Body },
+        FieldSpec { snake: "recipients", wire: "recipients", location: FieldLocation::Body },
+        FieldSpec { snake: "template_used", wire: "template_used", location: FieldLocation::Body },
     ],
     auth: &[
     ],
@@ -2942,12 +4557,12 @@ const OP_POST_LETTER_SEND_POST_LETTER: OpSpec = OpSpec {
     method: "POST",
     path_template: "/post/letters/send",
     fields: &[
-        FieldSpec { snake: "colour", location: FieldLocation::Body },
-        FieldSpec { snake: "duplex", location: FieldLocation::Body },
-        FieldSpec { snake: "file_url", location: FieldLocation::Body },
-        FieldSpec { snake: "priority_post", location: FieldLocation::Body },
-        FieldSpec { snake: "recipients", location: FieldLocation::Body },
-        FieldSpec { snake: "template_used", location: FieldLocation::Body },
+        FieldSpec { snake: "colour", wire: "colour", location: FieldLocation::Body },
+        FieldSpec { snake: "duplex", wire: "duplex", location: FieldLocation::Body },
+        FieldSpec { snake: "file_url", wire: "file_url", location: FieldLocation::Body },
+        FieldSpec { snake: "priority_post", wire: "priority_post", location: FieldLocation::Body },
+        FieldSpec { snake: "recipients", wire: "recipients", location: FieldLocation::Body },
+        FieldSpec { snake: "template_used", wire: "template_used", location: FieldLocation::Body },
     ],
     auth: &[
     ],
@@ -2966,13 +4581,13 @@ const OP_POST_LETTER_CREATE_A_POST_RETURN_ADDRESS: OpSpec = OpSpec {
     method: "POST",
     path_template: "/post/return-addresses",
     fields: &[
-        FieldSpec { snake: "address_city", location: FieldLocation::Body },
-        FieldSpec { snake: "address_country", location: FieldLocation::Body },
-        FieldSpec { snake: "address_line_1", location: FieldLocation::Body },
-        FieldSpec { snake: "address_line_2", location: FieldLocation::Body },
-        FieldSpec { snake: "address_name", location: FieldLocation::Body },
-        FieldSpec { snake: "address_postal_code", location: FieldLocation::Body },
-        FieldSpec { snake: "address_state", location: FieldLocation::Body },
+        FieldSpec { snake: "address_city", wire: "address_city", location: FieldLocation::Body },
+        FieldSpec { snake: "address_country", wire: "address_country", location: FieldLocation::Body },
+        FieldSpec { snake: "address_line_1", wire: "address_line_1", location: FieldLocation::Body },
+        FieldSpec { snake: "address_line_2", wire: "address_line_2", location: FieldLocation::Body },
+        FieldSpec { snake: "address_name", wire: "address_name", location: FieldLocation::Body },
+        FieldSpec { snake: "address_postal_code", wire: "address_postal_code", location: FieldLocation::Body },
+        FieldSpec { snake: "address_state", wire: "address_state", location: FieldLocation::Body },
     ],
     auth: &[
     ],
@@ -2982,7 +4597,7 @@ const OP_POST_LETTER_GET_POST_RETURN_ADDRESS: OpSpec = OpSpec {
     method: "GET",
     path_template: "/post/return-addresses/{return_address_id}",
     fields: &[
-        FieldSpec { snake: "return_address_id", location: FieldLocation::Path },
+        FieldSpec { snake: "return_address_id", wire: "return_address_id", location: FieldLocation::Path },
     ],
     auth: &[
     ],
@@ -2992,14 +4607,14 @@ const OP_POST_LETTER_UPDATE_POST_RETURN_ADDRESS: OpSpec = OpSpec {
     method: "PUT",
     path_template: "/post/return-addresses/{return_address_id}",
     fields: &[
-        FieldSpec { snake: "return_address_id", location: FieldLocation::Path },
-        FieldSpec { snake: "address_city", location: FieldLocation::Body },
-        FieldSpec { snake: "address_country", location: FieldLocation::Body },
-        FieldSpec { snake: "address_line_1", location: FieldLocation::Body },
-        FieldSpec { snake: "address_line_2", location: FieldLocation::Body },
-        FieldSpec { snake: "address_name", location: FieldLocation::Body },
-        FieldSpec { snake: "address_postal_code", location: FieldLocation::Body },
-        FieldSpec { snake: "address_state", location: FieldLocation::Body },
+        FieldSpec { snake: "return_address_id", wire: "return_address_id", location: FieldLocation::Path },
+        FieldSpec { snake: "address_city", wire: "address_city", location: FieldLocation::Body },
+        FieldSpec { snake: "address_country", wire: "address_country", location: FieldLocation::Body },
+        FieldSpec { snake: "address_line_1", wire: "address_line_1", location: FieldLocation::Body },
+        FieldSpec { snake: "address_line_2", wire: "address_line_2", location: FieldLocation::Body },
+        FieldSpec { snake: "address_name", wire: "address_name", location: FieldLocation::Body },
+        FieldSpec { snake: "address_postal_code", wire: "address_postal_code", location: FieldLocation::Body },
+        FieldSpec { snake: "address_state", wire: "address_state", location: FieldLocation::Body },
     ],
     auth: &[
     ],
@@ -3009,7 +4624,7 @@ const OP_POST_LETTER_DELETE_POST_RETURN_ADDRESS: OpSpec = OpSpec {
     method: "DELETE",
     path_template: "/post/return-addresses/{return_address_id}",
     fields: &[
-        FieldSpec { snake: "return_address_id", location: FieldLocation::Path },
+        FieldSpec { snake: "return_address_id", wire: "return_address_id", location: FieldLocation::Path },
     ],
     auth: &[
     ],
@@ -3080,40 +4695,166 @@ fn iface_post_letter__delete_post_return_address_params__to_json(p: &iface_post_
     Value::Object(m)
 }
 
+fn iface_post_letter__get_post_letter_history__ok(body: String) -> Result<String, crate::runtime::DispatchError> {
+    Ok(body)
+}
+
+fn iface_post_letter__get_post_letter_history__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
+fn iface_post_letter__export_post_letter_history__ok(body: String) -> Result<String, crate::runtime::DispatchError> {
+    Ok(body)
+}
+
+fn iface_post_letter__export_post_letter_history__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
+fn iface_post_letter__post_post_letters_price__ok(body: String) -> Result<String, crate::runtime::DispatchError> {
+    Ok(body)
+}
+
+fn iface_post_letter__post_post_letters_price__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
+fn iface_post_letter__send_post_letter__ok(body: String) -> Result<String, crate::runtime::DispatchError> {
+    Ok(body)
+}
+
+fn iface_post_letter__send_post_letter__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
+fn iface_post_letter__get_list_of_post_return_addresses__ok(body: String) -> Result<String, crate::runtime::DispatchError> {
+    Ok(body)
+}
+
+fn iface_post_letter__get_list_of_post_return_addresses__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
+fn iface_post_letter__create_a_post_return_address__ok(body: String) -> Result<String, crate::runtime::DispatchError> {
+    Ok(body)
+}
+
+fn iface_post_letter__create_a_post_return_address__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
+fn iface_post_letter__get_post_return_address__ok(body: String) -> Result<String, crate::runtime::DispatchError> {
+    Ok(body)
+}
+
+fn iface_post_letter__get_post_return_address__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
+fn iface_post_letter__update_post_return_address__ok(body: String) -> Result<String, crate::runtime::DispatchError> {
+    Ok(body)
+}
+
+fn iface_post_letter__update_post_return_address__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
+fn iface_post_letter__delete_post_return_address__ok(body: String) -> Result<String, crate::runtime::DispatchError> {
+    Ok(body)
+}
+
+fn iface_post_letter__delete_post_return_address__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
 impl iface_post_letter::Guest for crate::Component {
     fn get_post_letter_history() -> Result<String, String> {
-        dispatch(&OP_POST_LETTER_GET_POST_LETTER_HISTORY, Value::Object(Map::new()))
+        match dispatch(&OP_POST_LETTER_GET_POST_LETTER_HISTORY, Value::Object(Map::new())).and_then(iface_post_letter__get_post_letter_history__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_post_letter__get_post_letter_history__err(e)),
+        }
     }
     fn export_post_letter_history(params: iface_post_letter::ExportPostLetterHistoryParams) -> Result<String, String> {
         let json = iface_post_letter__export_post_letter_history_params__to_json(&params);
-        dispatch(&OP_POST_LETTER_EXPORT_POST_LETTER_HISTORY, json)
+        match dispatch(&OP_POST_LETTER_EXPORT_POST_LETTER_HISTORY, json).and_then(iface_post_letter__export_post_letter_history__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_post_letter__export_post_letter_history__err(e)),
+        }
     }
     fn post_post_letters_price(params: iface_post_letter::PostPostLettersPriceParams) -> Result<String, String> {
         let json = iface_post_letter__post_post_letters_price_params__to_json(&params);
-        dispatch(&OP_POST_LETTER_POST_POST_LETTERS_PRICE, json)
+        match dispatch(&OP_POST_LETTER_POST_POST_LETTERS_PRICE, json).and_then(iface_post_letter__post_post_letters_price__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_post_letter__post_post_letters_price__err(e)),
+        }
     }
     fn send_post_letter(params: iface_post_letter::SendPostLetterParams) -> Result<String, String> {
         let json = iface_post_letter__send_post_letter_params__to_json(&params);
-        dispatch(&OP_POST_LETTER_SEND_POST_LETTER, json)
+        match dispatch(&OP_POST_LETTER_SEND_POST_LETTER, json).and_then(iface_post_letter__send_post_letter__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_post_letter__send_post_letter__err(e)),
+        }
     }
     fn get_list_of_post_return_addresses() -> Result<String, String> {
-        dispatch(&OP_POST_LETTER_GET_LIST_OF_POST_RETURN_ADDRESSES, Value::Object(Map::new()))
+        match dispatch(&OP_POST_LETTER_GET_LIST_OF_POST_RETURN_ADDRESSES, Value::Object(Map::new())).and_then(iface_post_letter__get_list_of_post_return_addresses__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_post_letter__get_list_of_post_return_addresses__err(e)),
+        }
     }
     fn create_a_post_return_address(params: iface_post_letter::CreateAPostReturnAddressParams) -> Result<String, String> {
         let json = iface_post_letter__create_a_post_return_address_params__to_json(&params);
-        dispatch(&OP_POST_LETTER_CREATE_A_POST_RETURN_ADDRESS, json)
+        match dispatch(&OP_POST_LETTER_CREATE_A_POST_RETURN_ADDRESS, json).and_then(iface_post_letter__create_a_post_return_address__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_post_letter__create_a_post_return_address__err(e)),
+        }
     }
     fn get_post_return_address(params: iface_post_letter::GetPostReturnAddressParams) -> Result<String, String> {
         let json = iface_post_letter__get_post_return_address_params__to_json(&params);
-        dispatch(&OP_POST_LETTER_GET_POST_RETURN_ADDRESS, json)
+        match dispatch(&OP_POST_LETTER_GET_POST_RETURN_ADDRESS, json).and_then(iface_post_letter__get_post_return_address__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_post_letter__get_post_return_address__err(e)),
+        }
     }
     fn update_post_return_address(params: iface_post_letter::UpdatePostReturnAddressParams) -> Result<String, String> {
         let json = iface_post_letter__update_post_return_address_params__to_json(&params);
-        dispatch(&OP_POST_LETTER_UPDATE_POST_RETURN_ADDRESS, json)
+        match dispatch(&OP_POST_LETTER_UPDATE_POST_RETURN_ADDRESS, json).and_then(iface_post_letter__update_post_return_address__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_post_letter__update_post_return_address__err(e)),
+        }
     }
     fn delete_post_return_address(params: iface_post_letter::DeletePostReturnAddressParams) -> Result<String, String> {
         let json = iface_post_letter__delete_post_return_address_params__to_json(&params);
-        dispatch(&OP_POST_LETTER_DELETE_POST_RETURN_ADDRESS, json)
+        match dispatch(&OP_POST_LETTER_DELETE_POST_RETURN_ADDRESS, json).and_then(iface_post_letter__delete_post_return_address__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_post_letter__delete_post_return_address__err(e)),
+        }
     }
 }
 use crate::exports::autostamp::clicksend::postcards as iface_postcards;
@@ -3122,7 +4863,7 @@ const OP_POSTCARDS_EXPORT_POSTCARD_HISTORY: OpSpec = OpSpec {
     method: "GET",
     path_template: "/post/postcards/export?filename={filename}",
     fields: &[
-        FieldSpec { snake: "filename", location: FieldLocation::Path },
+        FieldSpec { snake: "filename", wire: "filename", location: FieldLocation::Path },
     ],
     auth: &[
     ],
@@ -3141,8 +4882,8 @@ const OP_POSTCARDS_CALCULATE_PRICING: OpSpec = OpSpec {
     method: "POST",
     path_template: "/post/postcards/price",
     fields: &[
-        FieldSpec { snake: "file_urls", location: FieldLocation::Body },
-        FieldSpec { snake: "recipients", location: FieldLocation::Body },
+        FieldSpec { snake: "file_urls", wire: "file_urls", location: FieldLocation::Body },
+        FieldSpec { snake: "recipients", wire: "recipients", location: FieldLocation::Body },
     ],
     auth: &[
     ],
@@ -3152,8 +4893,8 @@ const OP_POSTCARDS_SEND_POSTCARD: OpSpec = OpSpec {
     method: "POST",
     path_template: "/post/postcards/send",
     fields: &[
-        FieldSpec { snake: "file_urls", location: FieldLocation::Body },
-        FieldSpec { snake: "recipients", location: FieldLocation::Body },
+        FieldSpec { snake: "file_urls", wire: "file_urls", location: FieldLocation::Body },
+        FieldSpec { snake: "recipients", wire: "recipients", location: FieldLocation::Body },
     ],
     auth: &[
     ],
@@ -3179,21 +4920,77 @@ fn iface_postcards__send_postcard_params__to_json(p: &iface_postcards::SendPostc
     Value::Object(m)
 }
 
+fn iface_postcards__export_postcard_history__ok(body: String) -> Result<String, crate::runtime::DispatchError> {
+    Ok(body)
+}
+
+fn iface_postcards__export_postcard_history__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
+fn iface_postcards__get_postcard_history__ok(body: String) -> Result<String, crate::runtime::DispatchError> {
+    Ok(body)
+}
+
+fn iface_postcards__get_postcard_history__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
+fn iface_postcards__calculate_pricing__ok(body: String) -> Result<String, crate::runtime::DispatchError> {
+    Ok(body)
+}
+
+fn iface_postcards__calculate_pricing__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
+fn iface_postcards__send_postcard__ok(body: String) -> Result<String, crate::runtime::DispatchError> {
+    Ok(body)
+}
+
+fn iface_postcards__send_postcard__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
 impl iface_postcards::Guest for crate::Component {
     fn export_postcard_history(params: iface_postcards::ExportPostcardHistoryParams) -> Result<String, String> {
         let json = iface_postcards__export_postcard_history_params__to_json(&params);
-        dispatch(&OP_POSTCARDS_EXPORT_POSTCARD_HISTORY, json)
+        match dispatch(&OP_POSTCARDS_EXPORT_POSTCARD_HISTORY, json).and_then(iface_postcards__export_postcard_history__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_postcards__export_postcard_history__err(e)),
+        }
     }
     fn get_postcard_history() -> Result<String, String> {
-        dispatch(&OP_POSTCARDS_GET_POSTCARD_HISTORY, Value::Object(Map::new()))
+        match dispatch(&OP_POSTCARDS_GET_POSTCARD_HISTORY, Value::Object(Map::new())).and_then(iface_postcards__get_postcard_history__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_postcards__get_postcard_history__err(e)),
+        }
     }
     fn calculate_pricing(params: iface_postcards::CalculatePricingParams) -> Result<String, String> {
         let json = iface_postcards__calculate_pricing_params__to_json(&params);
-        dispatch(&OP_POSTCARDS_CALCULATE_PRICING, json)
+        match dispatch(&OP_POSTCARDS_CALCULATE_PRICING, json).and_then(iface_postcards__calculate_pricing__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_postcards__calculate_pricing__err(e)),
+        }
     }
     fn send_postcard(params: iface_postcards::SendPostcardParams) -> Result<String, String> {
         let json = iface_postcards__send_postcard_params__to_json(&params);
-        dispatch(&OP_POSTCARDS_SEND_POSTCARD, json)
+        match dispatch(&OP_POSTCARDS_SEND_POSTCARD, json).and_then(iface_postcards__send_postcard__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_postcards__send_postcard__err(e)),
+        }
     }
 }
 use crate::exports::autostamp::clicksend::pricing as iface_pricing;
@@ -3202,8 +4999,8 @@ const OP_PRICING_GET_COUNTRY_PRICING: OpSpec = OpSpec {
     method: "GET",
     path_template: "/pricing/{country}?currency={currency}",
     fields: &[
-        FieldSpec { snake: "country", location: FieldLocation::Path },
-        FieldSpec { snake: "currency", location: FieldLocation::Path },
+        FieldSpec { snake: "country", wire: "country", location: FieldLocation::Path },
+        FieldSpec { snake: "currency", wire: "currency", location: FieldLocation::Path },
     ],
     auth: &[
     ],
@@ -3216,10 +5013,24 @@ fn iface_pricing__get_country_pricing_params__to_json(p: &iface_pricing::GetCoun
     Value::Object(m)
 }
 
+fn iface_pricing__get_country_pricing__ok(body: String) -> Result<String, crate::runtime::DispatchError> {
+    Ok(body)
+}
+
+fn iface_pricing__get_country_pricing__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
 impl iface_pricing::Guest for crate::Component {
     fn get_country_pricing(params: iface_pricing::GetCountryPricingParams) -> Result<String, String> {
         let json = iface_pricing__get_country_pricing_params__to_json(&params);
-        dispatch(&OP_PRICING_GET_COUNTRY_PRICING, json)
+        match dispatch(&OP_PRICING_GET_COUNTRY_PRICING, json).and_then(iface_pricing__get_country_pricing__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_pricing__get_country_pricing__err(e)),
+        }
     }
 }
 use crate::exports::autostamp::clicksend::account_recharge as iface_account_recharge;
@@ -3237,12 +5048,12 @@ const OP_ACCOUNT_RECHARGE_UPDATE_CREDIT_CARD_INFO: OpSpec = OpSpec {
     method: "PUT",
     path_template: "/recharge/credit-card",
     fields: &[
-        FieldSpec { snake: "bank_name", location: FieldLocation::Body },
-        FieldSpec { snake: "cvc", location: FieldLocation::Body },
-        FieldSpec { snake: "expiry_month", location: FieldLocation::Body },
-        FieldSpec { snake: "expiry_year", location: FieldLocation::Body },
-        FieldSpec { snake: "name", location: FieldLocation::Body },
-        FieldSpec { snake: "number", location: FieldLocation::Body },
+        FieldSpec { snake: "bank_name", wire: "bank_name", location: FieldLocation::Body },
+        FieldSpec { snake: "cvc", wire: "cvc", location: FieldLocation::Body },
+        FieldSpec { snake: "expiry_month", wire: "expiry_month", location: FieldLocation::Body },
+        FieldSpec { snake: "expiry_year", wire: "expiry_year", location: FieldLocation::Body },
+        FieldSpec { snake: "name", wire: "name", location: FieldLocation::Body },
+        FieldSpec { snake: "number", wire: "number", location: FieldLocation::Body },
     ],
     auth: &[
     ],
@@ -3252,7 +5063,7 @@ const OP_ACCOUNT_RECHARGE_LIST_OF_PACKAGES: OpSpec = OpSpec {
     method: "GET",
     path_template: "/recharge/packages?country={country}",
     fields: &[
-        FieldSpec { snake: "country", location: FieldLocation::Path },
+        FieldSpec { snake: "country", wire: "country", location: FieldLocation::Path },
     ],
     auth: &[
     ],
@@ -3262,7 +5073,7 @@ const OP_ACCOUNT_RECHARGE_PURCHASE_A_PACKAGE: OpSpec = OpSpec {
     method: "PUT",
     path_template: "/recharge/purchase/{package_id}",
     fields: &[
-        FieldSpec { snake: "package_id", location: FieldLocation::Path },
+        FieldSpec { snake: "package_id", wire: "package_id", location: FieldLocation::Path },
     ],
     auth: &[
     ],
@@ -3281,7 +5092,7 @@ const OP_ACCOUNT_RECHARGE_GET_A_SPECIFIC_TRANSACTION: OpSpec = OpSpec {
     method: "GET",
     path_template: "/recharge/transactions/{transaction_id}",
     fields: &[
-        FieldSpec { snake: "transaction_id", location: FieldLocation::Path },
+        FieldSpec { snake: "transaction_id", wire: "transaction_id", location: FieldLocation::Path },
     ],
     auth: &[
     ],
@@ -3316,28 +5127,112 @@ fn iface_account_recharge__get_a_specific_transaction_params__to_json(p: &iface_
     Value::Object(m)
 }
 
+fn iface_account_recharge__get_credit_card_info__ok(body: String) -> Result<String, crate::runtime::DispatchError> {
+    Ok(body)
+}
+
+fn iface_account_recharge__get_credit_card_info__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
+fn iface_account_recharge__update_credit_card_info__ok(body: String) -> Result<String, crate::runtime::DispatchError> {
+    Ok(body)
+}
+
+fn iface_account_recharge__update_credit_card_info__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
+fn iface_account_recharge__list_of_packages__ok(body: String) -> Result<String, crate::runtime::DispatchError> {
+    Ok(body)
+}
+
+fn iface_account_recharge__list_of_packages__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
+fn iface_account_recharge__purchase_a_package__ok(body: String) -> Result<String, crate::runtime::DispatchError> {
+    Ok(body)
+}
+
+fn iface_account_recharge__purchase_a_package__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
+fn iface_account_recharge__get_transactions__ok(body: String) -> Result<String, crate::runtime::DispatchError> {
+    Ok(body)
+}
+
+fn iface_account_recharge__get_transactions__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
+fn iface_account_recharge__get_a_specific_transaction__ok(body: String) -> Result<String, crate::runtime::DispatchError> {
+    Ok(body)
+}
+
+fn iface_account_recharge__get_a_specific_transaction__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
 impl iface_account_recharge::Guest for crate::Component {
     fn get_credit_card_info() -> Result<String, String> {
-        dispatch(&OP_ACCOUNT_RECHARGE_GET_CREDIT_CARD_INFO, Value::Object(Map::new()))
+        match dispatch(&OP_ACCOUNT_RECHARGE_GET_CREDIT_CARD_INFO, Value::Object(Map::new())).and_then(iface_account_recharge__get_credit_card_info__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_account_recharge__get_credit_card_info__err(e)),
+        }
     }
     fn update_credit_card_info(params: iface_account_recharge::UpdateCreditCardInfoParams) -> Result<String, String> {
         let json = iface_account_recharge__update_credit_card_info_params__to_json(&params);
-        dispatch(&OP_ACCOUNT_RECHARGE_UPDATE_CREDIT_CARD_INFO, json)
+        match dispatch(&OP_ACCOUNT_RECHARGE_UPDATE_CREDIT_CARD_INFO, json).and_then(iface_account_recharge__update_credit_card_info__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_account_recharge__update_credit_card_info__err(e)),
+        }
     }
     fn list_of_packages(params: iface_account_recharge::ListOfPackagesParams) -> Result<String, String> {
         let json = iface_account_recharge__list_of_packages_params__to_json(&params);
-        dispatch(&OP_ACCOUNT_RECHARGE_LIST_OF_PACKAGES, json)
+        match dispatch(&OP_ACCOUNT_RECHARGE_LIST_OF_PACKAGES, json).and_then(iface_account_recharge__list_of_packages__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_account_recharge__list_of_packages__err(e)),
+        }
     }
     fn purchase_a_package(params: iface_account_recharge::PurchaseAPackageParams) -> Result<String, String> {
         let json = iface_account_recharge__purchase_a_package_params__to_json(&params);
-        dispatch(&OP_ACCOUNT_RECHARGE_PURCHASE_A_PACKAGE, json)
+        match dispatch(&OP_ACCOUNT_RECHARGE_PURCHASE_A_PACKAGE, json).and_then(iface_account_recharge__purchase_a_package__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_account_recharge__purchase_a_package__err(e)),
+        }
     }
     fn get_transactions() -> Result<String, String> {
-        dispatch(&OP_ACCOUNT_RECHARGE_GET_TRANSACTIONS, Value::Object(Map::new()))
+        match dispatch(&OP_ACCOUNT_RECHARGE_GET_TRANSACTIONS, Value::Object(Map::new())).and_then(iface_account_recharge__get_transactions__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_account_recharge__get_transactions__err(e)),
+        }
     }
     fn get_a_specific_transaction(params: iface_account_recharge::GetASpecificTransactionParams) -> Result<String, String> {
         let json = iface_account_recharge__get_a_specific_transaction_params__to_json(&params);
-        dispatch(&OP_ACCOUNT_RECHARGE_GET_A_SPECIFIC_TRANSACTION, json)
+        match dispatch(&OP_ACCOUNT_RECHARGE_GET_A_SPECIFIC_TRANSACTION, json).and_then(iface_account_recharge__get_a_specific_transaction__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_account_recharge__get_a_specific_transaction__err(e)),
+        }
     }
 }
 use crate::exports::autostamp::clicksend::referral_accounts as iface_referral_accounts;
@@ -3351,9 +5246,23 @@ const OP_REFERRAL_ACCOUNTS_GET_LIST_OF_REFERRAL_ACCOUNTS: OpSpec = OpSpec {
     ],
 };
 
+fn iface_referral_accounts__get_list_of_referral_accounts__ok(body: String) -> Result<String, crate::runtime::DispatchError> {
+    Ok(body)
+}
+
+fn iface_referral_accounts__get_list_of_referral_accounts__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
 impl iface_referral_accounts::Guest for crate::Component {
     fn get_list_of_referral_accounts() -> Result<String, String> {
-        dispatch(&OP_REFERRAL_ACCOUNTS_GET_LIST_OF_REFERRAL_ACCOUNTS, Value::Object(Map::new()))
+        match dispatch(&OP_REFERRAL_ACCOUNTS_GET_LIST_OF_REFERRAL_ACCOUNTS, Value::Object(Map::new())).and_then(iface_referral_accounts__get_list_of_referral_accounts__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_referral_accounts__get_list_of_referral_accounts__err(e)),
+        }
     }
 }
 use crate::exports::autostamp::clicksend::reseller as iface_reseller;
@@ -3371,15 +5280,15 @@ const OP_RESELLER_UPDATE_RESELLER_SETTING: OpSpec = OpSpec {
     method: "PUT",
     path_template: "/reseller",
     fields: &[
-        FieldSpec { snake: "allow_public_signups", location: FieldLocation::Body },
-        FieldSpec { snake: "colour_navigation", location: FieldLocation::Body },
-        FieldSpec { snake: "company_name", location: FieldLocation::Body },
-        FieldSpec { snake: "default_margin", location: FieldLocation::Body },
-        FieldSpec { snake: "default_margin_numbers", location: FieldLocation::Body },
-        FieldSpec { snake: "logo_url_dark", location: FieldLocation::Body },
-        FieldSpec { snake: "logo_url_light", location: FieldLocation::Body },
-        FieldSpec { snake: "subdomain", location: FieldLocation::Body },
-        FieldSpec { snake: "trial_balance", location: FieldLocation::Body },
+        FieldSpec { snake: "allow_public_signups", wire: "allow_public_signups", location: FieldLocation::Body },
+        FieldSpec { snake: "colour_navigation", wire: "colour_navigation", location: FieldLocation::Body },
+        FieldSpec { snake: "company_name", wire: "company_name", location: FieldLocation::Body },
+        FieldSpec { snake: "default_margin", wire: "default_margin", location: FieldLocation::Body },
+        FieldSpec { snake: "default_margin_numbers", wire: "default_margin_numbers", location: FieldLocation::Body },
+        FieldSpec { snake: "logo_url_dark", wire: "logo_url_dark", location: FieldLocation::Body },
+        FieldSpec { snake: "logo_url_light", wire: "logo_url_light", location: FieldLocation::Body },
+        FieldSpec { snake: "subdomain", wire: "subdomain", location: FieldLocation::Body },
+        FieldSpec { snake: "trial_balance", wire: "trial_balance", location: FieldLocation::Body },
     ],
     auth: &[
     ],
@@ -3389,7 +5298,7 @@ const OP_RESELLER_BY_SUBDOMAIN: OpSpec = OpSpec {
     method: "GET",
     path_template: "/reseller/{subdomain}",
     fields: &[
-        FieldSpec { snake: "subdomain", location: FieldLocation::Path },
+        FieldSpec { snake: "subdomain", wire: "subdomain", location: FieldLocation::Path },
     ],
     auth: &[
     ],
@@ -3415,17 +5324,59 @@ fn iface_reseller__by_subdomain_params__to_json(p: &iface_reseller::BySubdomainP
     Value::Object(m)
 }
 
+fn iface_reseller__get_reseller_setting__ok(body: String) -> Result<String, crate::runtime::DispatchError> {
+    Ok(body)
+}
+
+fn iface_reseller__get_reseller_setting__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
+fn iface_reseller__update_reseller_setting__ok(body: String) -> Result<String, crate::runtime::DispatchError> {
+    Ok(body)
+}
+
+fn iface_reseller__update_reseller_setting__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
+fn iface_reseller__by_subdomain__ok(body: String) -> Result<String, crate::runtime::DispatchError> {
+    Ok(body)
+}
+
+fn iface_reseller__by_subdomain__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
 impl iface_reseller::Guest for crate::Component {
     fn get_reseller_setting() -> Result<String, String> {
-        dispatch(&OP_RESELLER_GET_RESELLER_SETTING, Value::Object(Map::new()))
+        match dispatch(&OP_RESELLER_GET_RESELLER_SETTING, Value::Object(Map::new())).and_then(iface_reseller__get_reseller_setting__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_reseller__get_reseller_setting__err(e)),
+        }
     }
     fn update_reseller_setting(params: iface_reseller::UpdateResellerSettingParams) -> Result<String, String> {
         let json = iface_reseller__update_reseller_setting_params__to_json(&params);
-        dispatch(&OP_RESELLER_UPDATE_RESELLER_SETTING, json)
+        match dispatch(&OP_RESELLER_UPDATE_RESELLER_SETTING, json).and_then(iface_reseller__update_reseller_setting__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_reseller__update_reseller_setting__err(e)),
+        }
     }
     fn by_subdomain(params: iface_reseller::BySubdomainParams) -> Result<String, String> {
         let json = iface_reseller__by_subdomain_params__to_json(&params);
-        dispatch(&OP_RESELLER_BY_SUBDOMAIN, json)
+        match dispatch(&OP_RESELLER_BY_SUBDOMAIN, json).and_then(iface_reseller__by_subdomain__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_reseller__by_subdomain__err(e)),
+        }
     }
 }
 use crate::exports::autostamp::clicksend::reseller_accounts as iface_reseller_accounts;
@@ -3443,14 +5394,14 @@ const OP_RESELLER_ACCOUNTS_CREATE_RESELLER_ACCOUNT: OpSpec = OpSpec {
     method: "POST",
     path_template: "/reseller/accounts",
     fields: &[
-        FieldSpec { snake: "account_name", location: FieldLocation::Body },
-        FieldSpec { snake: "country", location: FieldLocation::Body },
-        FieldSpec { snake: "password", location: FieldLocation::Body },
-        FieldSpec { snake: "user_email", location: FieldLocation::Body },
-        FieldSpec { snake: "user_first_name", location: FieldLocation::Body },
-        FieldSpec { snake: "user_last_name", location: FieldLocation::Body },
-        FieldSpec { snake: "user_phone", location: FieldLocation::Body },
-        FieldSpec { snake: "username", location: FieldLocation::Body },
+        FieldSpec { snake: "account_name", wire: "account_name", location: FieldLocation::Body },
+        FieldSpec { snake: "country", wire: "country", location: FieldLocation::Body },
+        FieldSpec { snake: "password", wire: "password", location: FieldLocation::Body },
+        FieldSpec { snake: "user_email", wire: "user_email", location: FieldLocation::Body },
+        FieldSpec { snake: "user_first_name", wire: "user_first_name", location: FieldLocation::Body },
+        FieldSpec { snake: "user_last_name", wire: "user_last_name", location: FieldLocation::Body },
+        FieldSpec { snake: "user_phone", wire: "user_phone", location: FieldLocation::Body },
+        FieldSpec { snake: "username", wire: "username", location: FieldLocation::Body },
     ],
     auth: &[
     ],
@@ -3460,15 +5411,15 @@ const OP_RESELLER_ACCOUNTS_CREATE_RESELLER_ACCOUNT_PUBLIC: OpSpec = OpSpec {
     method: "POST",
     path_template: "/reseller/accounts-public",
     fields: &[
-        FieldSpec { snake: "account_name", location: FieldLocation::Body },
-        FieldSpec { snake: "country", location: FieldLocation::Body },
-        FieldSpec { snake: "password", location: FieldLocation::Body },
-        FieldSpec { snake: "reseller_user_id", location: FieldLocation::Body },
-        FieldSpec { snake: "user_email", location: FieldLocation::Body },
-        FieldSpec { snake: "user_first_name", location: FieldLocation::Body },
-        FieldSpec { snake: "user_last_name", location: FieldLocation::Body },
-        FieldSpec { snake: "user_phone", location: FieldLocation::Body },
-        FieldSpec { snake: "username", location: FieldLocation::Body },
+        FieldSpec { snake: "account_name", wire: "account_name", location: FieldLocation::Body },
+        FieldSpec { snake: "country", wire: "country", location: FieldLocation::Body },
+        FieldSpec { snake: "password", wire: "password", location: FieldLocation::Body },
+        FieldSpec { snake: "reseller_user_id", wire: "reseller_user_id", location: FieldLocation::Body },
+        FieldSpec { snake: "user_email", wire: "user_email", location: FieldLocation::Body },
+        FieldSpec { snake: "user_first_name", wire: "user_first_name", location: FieldLocation::Body },
+        FieldSpec { snake: "user_last_name", wire: "user_last_name", location: FieldLocation::Body },
+        FieldSpec { snake: "user_phone", wire: "user_phone", location: FieldLocation::Body },
+        FieldSpec { snake: "username", wire: "username", location: FieldLocation::Body },
     ],
     auth: &[
     ],
@@ -3478,7 +5429,7 @@ const OP_RESELLER_ACCOUNTS_GET_RESELLER_ACCOUNT: OpSpec = OpSpec {
     method: "GET",
     path_template: "/reseller/accounts/{client_user_id}",
     fields: &[
-        FieldSpec { snake: "client_user_id", location: FieldLocation::Path },
+        FieldSpec { snake: "client_user_id", wire: "client_user_id", location: FieldLocation::Path },
     ],
     auth: &[
     ],
@@ -3488,15 +5439,15 @@ const OP_RESELLER_ACCOUNTS_UPDATE_RESELLER_ACCOUNT: OpSpec = OpSpec {
     method: "PUT",
     path_template: "/reseller/accounts/{client_user_id}",
     fields: &[
-        FieldSpec { snake: "client_user_id", location: FieldLocation::Path },
-        FieldSpec { snake: "account_name", location: FieldLocation::Body },
-        FieldSpec { snake: "country", location: FieldLocation::Body },
-        FieldSpec { snake: "password", location: FieldLocation::Body },
-        FieldSpec { snake: "user_email", location: FieldLocation::Body },
-        FieldSpec { snake: "user_first_name", location: FieldLocation::Body },
-        FieldSpec { snake: "user_last_name", location: FieldLocation::Body },
-        FieldSpec { snake: "user_phone", location: FieldLocation::Body },
-        FieldSpec { snake: "username", location: FieldLocation::Body },
+        FieldSpec { snake: "client_user_id", wire: "client_user_id", location: FieldLocation::Path },
+        FieldSpec { snake: "account_name", wire: "account_name", location: FieldLocation::Body },
+        FieldSpec { snake: "country", wire: "country", location: FieldLocation::Body },
+        FieldSpec { snake: "password", wire: "password", location: FieldLocation::Body },
+        FieldSpec { snake: "user_email", wire: "user_email", location: FieldLocation::Body },
+        FieldSpec { snake: "user_first_name", wire: "user_first_name", location: FieldLocation::Body },
+        FieldSpec { snake: "user_last_name", wire: "user_last_name", location: FieldLocation::Body },
+        FieldSpec { snake: "user_phone", wire: "user_phone", location: FieldLocation::Body },
+        FieldSpec { snake: "username", wire: "username", location: FieldLocation::Body },
     ],
     auth: &[
     ],
@@ -3506,9 +5457,9 @@ const OP_RESELLER_ACCOUNTS_TRANSFER_CREDIT: OpSpec = OpSpec {
     method: "PUT",
     path_template: "/reseller/transfer-credit",
     fields: &[
-        FieldSpec { snake: "balance", location: FieldLocation::Body },
-        FieldSpec { snake: "client_user_id", location: FieldLocation::Body },
-        FieldSpec { snake: "currency", location: FieldLocation::Body },
+        FieldSpec { snake: "balance", wire: "balance", location: FieldLocation::Body },
+        FieldSpec { snake: "client_user_id", wire: "client_user_id", location: FieldLocation::Body },
+        FieldSpec { snake: "currency", wire: "currency", location: FieldLocation::Body },
     ],
     auth: &[
         AuthApply { secret_key: "basic", kind: AuthKind::Basic },
@@ -3570,29 +5521,113 @@ fn iface_reseller_accounts__transfer_credit_params__to_json(p: &iface_reseller_a
     Value::Object(m)
 }
 
+fn iface_reseller_accounts__list_of_reseller_accounts__ok(body: String) -> Result<String, crate::runtime::DispatchError> {
+    Ok(body)
+}
+
+fn iface_reseller_accounts__list_of_reseller_accounts__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
+fn iface_reseller_accounts__create_reseller_account__ok(body: String) -> Result<String, crate::runtime::DispatchError> {
+    Ok(body)
+}
+
+fn iface_reseller_accounts__create_reseller_account__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
+fn iface_reseller_accounts__create_reseller_account_public__ok(body: String) -> Result<String, crate::runtime::DispatchError> {
+    Ok(body)
+}
+
+fn iface_reseller_accounts__create_reseller_account_public__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
+fn iface_reseller_accounts__get_reseller_account__ok(body: String) -> Result<String, crate::runtime::DispatchError> {
+    Ok(body)
+}
+
+fn iface_reseller_accounts__get_reseller_account__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
+fn iface_reseller_accounts__update_reseller_account__ok(body: String) -> Result<String, crate::runtime::DispatchError> {
+    Ok(body)
+}
+
+fn iface_reseller_accounts__update_reseller_account__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
+fn iface_reseller_accounts__transfer_credit__ok(body: String) -> Result<String, crate::runtime::DispatchError> {
+    Ok(body)
+}
+
+fn iface_reseller_accounts__transfer_credit__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
 impl iface_reseller_accounts::Guest for crate::Component {
     fn list_of_reseller_accounts() -> Result<String, String> {
-        dispatch(&OP_RESELLER_ACCOUNTS_LIST_OF_RESELLER_ACCOUNTS, Value::Object(Map::new()))
+        match dispatch(&OP_RESELLER_ACCOUNTS_LIST_OF_RESELLER_ACCOUNTS, Value::Object(Map::new())).and_then(iface_reseller_accounts__list_of_reseller_accounts__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_reseller_accounts__list_of_reseller_accounts__err(e)),
+        }
     }
     fn create_reseller_account(params: iface_reseller_accounts::CreateResellerAccountParams) -> Result<String, String> {
         let json = iface_reseller_accounts__create_reseller_account_params__to_json(&params);
-        dispatch(&OP_RESELLER_ACCOUNTS_CREATE_RESELLER_ACCOUNT, json)
+        match dispatch(&OP_RESELLER_ACCOUNTS_CREATE_RESELLER_ACCOUNT, json).and_then(iface_reseller_accounts__create_reseller_account__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_reseller_accounts__create_reseller_account__err(e)),
+        }
     }
     fn create_reseller_account_public(params: iface_reseller_accounts::CreateResellerAccountPublicParams) -> Result<String, String> {
         let json = iface_reseller_accounts__create_reseller_account_public_params__to_json(&params);
-        dispatch(&OP_RESELLER_ACCOUNTS_CREATE_RESELLER_ACCOUNT_PUBLIC, json)
+        match dispatch(&OP_RESELLER_ACCOUNTS_CREATE_RESELLER_ACCOUNT_PUBLIC, json).and_then(iface_reseller_accounts__create_reseller_account_public__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_reseller_accounts__create_reseller_account_public__err(e)),
+        }
     }
     fn get_reseller_account(params: iface_reseller_accounts::GetResellerAccountParams) -> Result<String, String> {
         let json = iface_reseller_accounts__get_reseller_account_params__to_json(&params);
-        dispatch(&OP_RESELLER_ACCOUNTS_GET_RESELLER_ACCOUNT, json)
+        match dispatch(&OP_RESELLER_ACCOUNTS_GET_RESELLER_ACCOUNT, json).and_then(iface_reseller_accounts__get_reseller_account__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_reseller_accounts__get_reseller_account__err(e)),
+        }
     }
     fn update_reseller_account(params: iface_reseller_accounts::UpdateResellerAccountParams) -> Result<String, String> {
         let json = iface_reseller_accounts__update_reseller_account_params__to_json(&params);
-        dispatch(&OP_RESELLER_ACCOUNTS_UPDATE_RESELLER_ACCOUNT, json)
+        match dispatch(&OP_RESELLER_ACCOUNTS_UPDATE_RESELLER_ACCOUNT, json).and_then(iface_reseller_accounts__update_reseller_account__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_reseller_accounts__update_reseller_account__err(e)),
+        }
     }
     fn transfer_credit(params: iface_reseller_accounts::TransferCreditParams) -> Result<String, String> {
         let json = iface_reseller_accounts__transfer_credit_params__to_json(&params);
-        dispatch(&OP_RESELLER_ACCOUNTS_TRANSFER_CREDIT, json)
+        match dispatch(&OP_RESELLER_ACCOUNTS_TRANSFER_CREDIT, json).and_then(iface_reseller_accounts__transfer_credit__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_reseller_accounts__transfer_credit__err(e)),
+        }
     }
 }
 use crate::exports::autostamp::clicksend::sdk as iface_sdk;
@@ -3601,7 +5636,7 @@ const OP_SDK_DOWNLOAD: OpSpec = OpSpec {
     method: "GET",
     path_template: "/sdk-download/{type}",
     fields: &[
-        FieldSpec { snake: "type", location: FieldLocation::Path },
+        FieldSpec { snake: "type", wire: "type", location: FieldLocation::Path },
     ],
     auth: &[
     ],
@@ -3613,10 +5648,24 @@ fn iface_sdk__download_params__to_json(p: &iface_sdk::DownloadParams) -> Value {
     Value::Object(m)
 }
 
+fn iface_sdk__download__ok(body: String) -> Result<String, crate::runtime::DispatchError> {
+    Ok(body)
+}
+
+fn iface_sdk__download__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
 impl iface_sdk::Guest for crate::Component {
     fn download(params: iface_sdk::DownloadParams) -> Result<String, String> {
         let json = iface_sdk__download_params__to_json(&params);
-        dispatch(&OP_SDK_DOWNLOAD, json)
+        match dispatch(&OP_SDK_DOWNLOAD, json).and_then(iface_sdk__download__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_sdk__download__err(e)),
+        }
     }
 }
 use crate::exports::autostamp::clicksend::search as iface_search;
@@ -3625,7 +5674,7 @@ const OP_SEARCH_CONTACTS_LISTS: OpSpec = OpSpec {
     method: "GET",
     path_template: "/search/contacts-lists?q={q}",
     fields: &[
-        FieldSpec { snake: "q", location: FieldLocation::Path },
+        FieldSpec { snake: "q", wire: "q", location: FieldLocation::Path },
     ],
     auth: &[
     ],
@@ -3637,10 +5686,24 @@ fn iface_search__contacts_lists_params__to_json(p: &iface_search::ContactsListsP
     Value::Object(m)
 }
 
+fn iface_search__contacts_lists__ok(body: String) -> Result<String, crate::runtime::DispatchError> {
+    Ok(body)
+}
+
+fn iface_search__contacts_lists__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
 impl iface_search::Guest for crate::Component {
     fn contacts_lists(params: iface_search::ContactsListsParams) -> Result<String, String> {
         let json = iface_search__contacts_lists_params__to_json(&params);
-        dispatch(&OP_SEARCH_CONTACTS_LISTS, json)
+        match dispatch(&OP_SEARCH_CONTACTS_LISTS, json).and_then(iface_search__contacts_lists__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_search__contacts_lists__err(e)),
+        }
     }
 }
 use crate::exports::autostamp::clicksend::sms_campaigns as iface_sms_campaigns;
@@ -3658,10 +5721,10 @@ const OP_SMS_CAMPAIGNS_CALCULATE_PRICE_FOR_SMS_CAMPAIGN: OpSpec = OpSpec {
     method: "POST",
     path_template: "/sms-campaigns/price",
     fields: &[
-        FieldSpec { snake: "body", location: FieldLocation::Body },
-        FieldSpec { snake: "from", location: FieldLocation::Body },
-        FieldSpec { snake: "list_id", location: FieldLocation::Body },
-        FieldSpec { snake: "name", location: FieldLocation::Body },
+        FieldSpec { snake: "body", wire: "body", location: FieldLocation::Body },
+        FieldSpec { snake: "from", wire: "from", location: FieldLocation::Body },
+        FieldSpec { snake: "list_id", wire: "list_id", location: FieldLocation::Body },
+        FieldSpec { snake: "name", wire: "name", location: FieldLocation::Body },
     ],
     auth: &[
     ],
@@ -3671,12 +5734,12 @@ const OP_SMS_CAMPAIGNS_USE_SHORT_URL: OpSpec = OpSpec {
     method: "POST",
     path_template: "/sms-campaigns/send",
     fields: &[
-        FieldSpec { snake: "body", location: FieldLocation::Body },
-        FieldSpec { snake: "from", location: FieldLocation::Body },
-        FieldSpec { snake: "list_id", location: FieldLocation::Body },
-        FieldSpec { snake: "name", location: FieldLocation::Body },
-        FieldSpec { snake: "schedule", location: FieldLocation::Body },
-        FieldSpec { snake: "url_to_shorten", location: FieldLocation::Body },
+        FieldSpec { snake: "body", wire: "body", location: FieldLocation::Body },
+        FieldSpec { snake: "from", wire: "from", location: FieldLocation::Body },
+        FieldSpec { snake: "list_id", wire: "list_id", location: FieldLocation::Body },
+        FieldSpec { snake: "name", wire: "name", location: FieldLocation::Body },
+        FieldSpec { snake: "schedule", wire: "schedule", location: FieldLocation::Body },
+        FieldSpec { snake: "url_to_shorten", wire: "url_to_shorten", location: FieldLocation::Body },
     ],
     auth: &[
     ],
@@ -3686,8 +5749,8 @@ const OP_SMS_CAMPAIGNS_LINK_TRACKING_EXPORT: OpSpec = OpSpec {
     method: "GET",
     path_template: "/sms-campaigns/{campaign_id}/link-export?filename={filename}",
     fields: &[
-        FieldSpec { snake: "campaign_id", location: FieldLocation::Path },
-        FieldSpec { snake: "filename", location: FieldLocation::Path },
+        FieldSpec { snake: "campaign_id", wire: "campaign_id", location: FieldLocation::Path },
+        FieldSpec { snake: "filename", wire: "filename", location: FieldLocation::Path },
     ],
     auth: &[
     ],
@@ -3697,7 +5760,7 @@ const OP_SMS_CAMPAIGNS_LINK_STATISTICS: OpSpec = OpSpec {
     method: "GET",
     path_template: "/sms-campaigns/{campaign_id}/link-statistics",
     fields: &[
-        FieldSpec { snake: "campaign_id", location: FieldLocation::Path },
+        FieldSpec { snake: "campaign_id", wire: "campaign_id", location: FieldLocation::Path },
     ],
     auth: &[
     ],
@@ -3707,7 +5770,7 @@ const OP_SMS_CAMPAIGNS_LINK_TRACKING: OpSpec = OpSpec {
     method: "GET",
     path_template: "/sms-campaigns/{campaign_id}/link-tracking",
     fields: &[
-        FieldSpec { snake: "campaign_id", location: FieldLocation::Path },
+        FieldSpec { snake: "campaign_id", wire: "campaign_id", location: FieldLocation::Path },
     ],
     auth: &[
     ],
@@ -3717,7 +5780,7 @@ const OP_SMS_CAMPAIGNS_GET_SMS_CAMPAIGN: OpSpec = OpSpec {
     method: "GET",
     path_template: "/sms-campaigns/{sms_campaign_id}",
     fields: &[
-        FieldSpec { snake: "sms_campaign_id", location: FieldLocation::Path },
+        FieldSpec { snake: "sms_campaign_id", wire: "sms_campaign_id", location: FieldLocation::Path },
     ],
     auth: &[
     ],
@@ -3727,12 +5790,12 @@ const OP_SMS_CAMPAIGNS_UPDATE_AN_SMS_CAMPAIGN: OpSpec = OpSpec {
     method: "PUT",
     path_template: "/sms-campaigns/{sms_campaign_id}",
     fields: &[
-        FieldSpec { snake: "sms_campaign_id", location: FieldLocation::Path },
-        FieldSpec { snake: "body", location: FieldLocation::Body },
-        FieldSpec { snake: "from", location: FieldLocation::Body },
-        FieldSpec { snake: "list_id", location: FieldLocation::Body },
-        FieldSpec { snake: "name", location: FieldLocation::Body },
-        FieldSpec { snake: "schedule", location: FieldLocation::Body },
+        FieldSpec { snake: "sms_campaign_id", wire: "sms_campaign_id", location: FieldLocation::Path },
+        FieldSpec { snake: "body", wire: "body", location: FieldLocation::Body },
+        FieldSpec { snake: "from", wire: "from", location: FieldLocation::Body },
+        FieldSpec { snake: "list_id", wire: "list_id", location: FieldLocation::Body },
+        FieldSpec { snake: "name", wire: "name", location: FieldLocation::Body },
+        FieldSpec { snake: "schedule", wire: "schedule", location: FieldLocation::Body },
     ],
     auth: &[
     ],
@@ -3742,7 +5805,7 @@ const OP_SMS_CAMPAIGNS_CANCEL_AN_SMS_CAMPAIGN: OpSpec = OpSpec {
     method: "PUT",
     path_template: "/sms-campaigns/{sms_campaign_id}/cancel",
     fields: &[
-        FieldSpec { snake: "sms_campaign_id", location: FieldLocation::Path },
+        FieldSpec { snake: "sms_campaign_id", wire: "sms_campaign_id", location: FieldLocation::Path },
     ],
     auth: &[
     ],
@@ -3810,41 +5873,167 @@ fn iface_sms_campaigns__cancel_an_sms_campaign_params__to_json(p: &iface_sms_cam
     Value::Object(m)
 }
 
+fn iface_sms_campaigns__get_list_of_sms_campaigns__ok(body: String) -> Result<String, crate::runtime::DispatchError> {
+    Ok(body)
+}
+
+fn iface_sms_campaigns__get_list_of_sms_campaigns__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
+fn iface_sms_campaigns__calculate_price_for_sms_campaign__ok(body: String) -> Result<String, crate::runtime::DispatchError> {
+    Ok(body)
+}
+
+fn iface_sms_campaigns__calculate_price_for_sms_campaign__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
+fn iface_sms_campaigns__use_short_url__ok(body: String) -> Result<String, crate::runtime::DispatchError> {
+    Ok(body)
+}
+
+fn iface_sms_campaigns__use_short_url__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
+fn iface_sms_campaigns__link_tracking_export__ok(body: String) -> Result<String, crate::runtime::DispatchError> {
+    Ok(body)
+}
+
+fn iface_sms_campaigns__link_tracking_export__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
+fn iface_sms_campaigns__link_statistics__ok(body: String) -> Result<String, crate::runtime::DispatchError> {
+    Ok(body)
+}
+
+fn iface_sms_campaigns__link_statistics__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
+fn iface_sms_campaigns__link_tracking__ok(body: String) -> Result<String, crate::runtime::DispatchError> {
+    Ok(body)
+}
+
+fn iface_sms_campaigns__link_tracking__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
+fn iface_sms_campaigns__get_sms_campaign__ok(body: String) -> Result<String, crate::runtime::DispatchError> {
+    Ok(body)
+}
+
+fn iface_sms_campaigns__get_sms_campaign__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
+fn iface_sms_campaigns__update_an_sms_campaign__ok(body: String) -> Result<String, crate::runtime::DispatchError> {
+    Ok(body)
+}
+
+fn iface_sms_campaigns__update_an_sms_campaign__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
+fn iface_sms_campaigns__cancel_an_sms_campaign__ok(body: String) -> Result<String, crate::runtime::DispatchError> {
+    Ok(body)
+}
+
+fn iface_sms_campaigns__cancel_an_sms_campaign__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
 impl iface_sms_campaigns::Guest for crate::Component {
     fn get_list_of_sms_campaigns() -> Result<String, String> {
-        dispatch(&OP_SMS_CAMPAIGNS_GET_LIST_OF_SMS_CAMPAIGNS, Value::Object(Map::new()))
+        match dispatch(&OP_SMS_CAMPAIGNS_GET_LIST_OF_SMS_CAMPAIGNS, Value::Object(Map::new())).and_then(iface_sms_campaigns__get_list_of_sms_campaigns__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_sms_campaigns__get_list_of_sms_campaigns__err(e)),
+        }
     }
     fn calculate_price_for_sms_campaign(params: iface_sms_campaigns::CalculatePriceForSmsCampaignParams) -> Result<String, String> {
         let json = iface_sms_campaigns__calculate_price_for_sms_campaign_params__to_json(&params);
-        dispatch(&OP_SMS_CAMPAIGNS_CALCULATE_PRICE_FOR_SMS_CAMPAIGN, json)
+        match dispatch(&OP_SMS_CAMPAIGNS_CALCULATE_PRICE_FOR_SMS_CAMPAIGN, json).and_then(iface_sms_campaigns__calculate_price_for_sms_campaign__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_sms_campaigns__calculate_price_for_sms_campaign__err(e)),
+        }
     }
     fn use_short_url(params: iface_sms_campaigns::UseShortUrlParams) -> Result<String, String> {
         let json = iface_sms_campaigns__use_short_url_params__to_json(&params);
-        dispatch(&OP_SMS_CAMPAIGNS_USE_SHORT_URL, json)
+        match dispatch(&OP_SMS_CAMPAIGNS_USE_SHORT_URL, json).and_then(iface_sms_campaigns__use_short_url__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_sms_campaigns__use_short_url__err(e)),
+        }
     }
     fn link_tracking_export(params: iface_sms_campaigns::LinkTrackingExportParams) -> Result<String, String> {
         let json = iface_sms_campaigns__link_tracking_export_params__to_json(&params);
-        dispatch(&OP_SMS_CAMPAIGNS_LINK_TRACKING_EXPORT, json)
+        match dispatch(&OP_SMS_CAMPAIGNS_LINK_TRACKING_EXPORT, json).and_then(iface_sms_campaigns__link_tracking_export__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_sms_campaigns__link_tracking_export__err(e)),
+        }
     }
     fn link_statistics(params: iface_sms_campaigns::LinkStatisticsParams) -> Result<String, String> {
         let json = iface_sms_campaigns__link_statistics_params__to_json(&params);
-        dispatch(&OP_SMS_CAMPAIGNS_LINK_STATISTICS, json)
+        match dispatch(&OP_SMS_CAMPAIGNS_LINK_STATISTICS, json).and_then(iface_sms_campaigns__link_statistics__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_sms_campaigns__link_statistics__err(e)),
+        }
     }
     fn link_tracking(params: iface_sms_campaigns::LinkTrackingParams) -> Result<String, String> {
         let json = iface_sms_campaigns__link_tracking_params__to_json(&params);
-        dispatch(&OP_SMS_CAMPAIGNS_LINK_TRACKING, json)
+        match dispatch(&OP_SMS_CAMPAIGNS_LINK_TRACKING, json).and_then(iface_sms_campaigns__link_tracking__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_sms_campaigns__link_tracking__err(e)),
+        }
     }
     fn get_sms_campaign(params: iface_sms_campaigns::GetSmsCampaignParams) -> Result<String, String> {
         let json = iface_sms_campaigns__get_sms_campaign_params__to_json(&params);
-        dispatch(&OP_SMS_CAMPAIGNS_GET_SMS_CAMPAIGN, json)
+        match dispatch(&OP_SMS_CAMPAIGNS_GET_SMS_CAMPAIGN, json).and_then(iface_sms_campaigns__get_sms_campaign__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_sms_campaigns__get_sms_campaign__err(e)),
+        }
     }
     fn update_an_sms_campaign(params: iface_sms_campaigns::UpdateAnSmsCampaignParams) -> Result<String, String> {
         let json = iface_sms_campaigns__update_an_sms_campaign_params__to_json(&params);
-        dispatch(&OP_SMS_CAMPAIGNS_UPDATE_AN_SMS_CAMPAIGN, json)
+        match dispatch(&OP_SMS_CAMPAIGNS_UPDATE_AN_SMS_CAMPAIGN, json).and_then(iface_sms_campaigns__update_an_sms_campaign__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_sms_campaigns__update_an_sms_campaign__err(e)),
+        }
     }
     fn cancel_an_sms_campaign(params: iface_sms_campaigns::CancelAnSmsCampaignParams) -> Result<String, String> {
         let json = iface_sms_campaigns__cancel_an_sms_campaign_params__to_json(&params);
-        dispatch(&OP_SMS_CAMPAIGNS_CANCEL_AN_SMS_CAMPAIGN, json)
+        match dispatch(&OP_SMS_CAMPAIGNS_CANCEL_AN_SMS_CAMPAIGN, json).and_then(iface_sms_campaigns__cancel_an_sms_campaign__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_sms_campaigns__cancel_an_sms_campaign__err(e)),
+        }
     }
 }
 use crate::exports::autostamp::clicksend::sms as iface_sms;
@@ -3862,7 +6051,7 @@ const OP_SMS_EXPORT_SMS_HISTORY: OpSpec = OpSpec {
     method: "GET",
     path_template: "/sms/history/export?filename={filename}",
     fields: &[
-        FieldSpec { snake: "filename", location: FieldLocation::Path },
+        FieldSpec { snake: "filename", wire: "filename", location: FieldLocation::Path },
     ],
     auth: &[
     ],
@@ -3872,8 +6061,8 @@ const OP_SMS_GET_ALL_HISTORY: OpSpec = OpSpec {
     method: "GET",
     path_template: "/sms/history?date_from={date_from}&date_to={date_to}",
     fields: &[
-        FieldSpec { snake: "date_from", location: FieldLocation::Path },
-        FieldSpec { snake: "date_to", location: FieldLocation::Path },
+        FieldSpec { snake: "date_from", wire: "date_from", location: FieldLocation::Path },
+        FieldSpec { snake: "date_to", wire: "date_to", location: FieldLocation::Path },
     ],
     auth: &[
     ],
@@ -3892,7 +6081,7 @@ const OP_SMS_ADD_A_TEST_INBOUND_SMS: OpSpec = OpSpec {
     method: "POST",
     path_template: "/sms/inbound",
     fields: &[
-        FieldSpec { snake: "url", location: FieldLocation::Body },
+        FieldSpec { snake: "url", wire: "url", location: FieldLocation::Body },
     ],
     auth: &[
     ],
@@ -3902,7 +6091,7 @@ const OP_SMS_MARK_ALL_INBOUND_SMS_AS_READ: OpSpec = OpSpec {
     method: "PUT",
     path_template: "/sms/inbound-read",
     fields: &[
-        FieldSpec { snake: "date_before", location: FieldLocation::Body },
+        FieldSpec { snake: "date_before", wire: "date_before", location: FieldLocation::Body },
     ],
     auth: &[
     ],
@@ -3912,7 +6101,7 @@ const OP_SMS_MARK_A_SPECIFIC_INBOUND_SMS_AS_READ: OpSpec = OpSpec {
     method: "PUT",
     path_template: "/sms/inbound-read/{message_id}",
     fields: &[
-        FieldSpec { snake: "message_id", location: FieldLocation::Path },
+        FieldSpec { snake: "message_id", wire: "message_id", location: FieldLocation::Path },
     ],
     auth: &[
     ],
@@ -3922,7 +6111,7 @@ const OP_SMS_GET_SPECIFIC_INBOUND_PULL: OpSpec = OpSpec {
     method: "GET",
     path_template: "/sms/inbound/{outbound_message_id}",
     fields: &[
-        FieldSpec { snake: "outbound_message_id", location: FieldLocation::Path },
+        FieldSpec { snake: "outbound_message_id", wire: "outbound_message_id", location: FieldLocation::Path },
     ],
     auth: &[
     ],
@@ -3932,14 +6121,14 @@ const OP_SMS_POST_SMS_PRICE: OpSpec = OpSpec {
     method: "POST",
     path_template: "/sms/price",
     fields: &[
-        FieldSpec { snake: "body", location: FieldLocation::Body },
-        FieldSpec { snake: "country", location: FieldLocation::Body },
-        FieldSpec { snake: "custom_string", location: FieldLocation::Body },
-        FieldSpec { snake: "from", location: FieldLocation::Body },
-        FieldSpec { snake: "list_id", location: FieldLocation::Body },
-        FieldSpec { snake: "schedule", location: FieldLocation::Body },
-        FieldSpec { snake: "source", location: FieldLocation::Body },
-        FieldSpec { snake: "to", location: FieldLocation::Body },
+        FieldSpec { snake: "body", wire: "body", location: FieldLocation::Body },
+        FieldSpec { snake: "country", wire: "country", location: FieldLocation::Body },
+        FieldSpec { snake: "custom_string", wire: "custom_string", location: FieldLocation::Body },
+        FieldSpec { snake: "from", wire: "from", location: FieldLocation::Body },
+        FieldSpec { snake: "list_id", wire: "list_id", location: FieldLocation::Body },
+        FieldSpec { snake: "schedule", wire: "schedule", location: FieldLocation::Body },
+        FieldSpec { snake: "source", wire: "source", location: FieldLocation::Body },
+        FieldSpec { snake: "to", wire: "to", location: FieldLocation::Body },
     ],
     auth: &[
         AuthApply { secret_key: "basic", kind: AuthKind::Basic },
@@ -3959,7 +6148,7 @@ const OP_SMS_POST_SMS_RECEIPTS: OpSpec = OpSpec {
     method: "POST",
     path_template: "/sms/receipts",
     fields: &[
-        FieldSpec { snake: "url", location: FieldLocation::Body },
+        FieldSpec { snake: "url", wire: "url", location: FieldLocation::Body },
     ],
     auth: &[
     ],
@@ -3969,7 +6158,7 @@ const OP_SMS_MARK_DELIVERY_RECEIPTS_AS_READ: OpSpec = OpSpec {
     method: "PUT",
     path_template: "/sms/receipts-read",
     fields: &[
-        FieldSpec { snake: "date_before", location: FieldLocation::Body },
+        FieldSpec { snake: "date_before", wire: "date_before", location: FieldLocation::Body },
     ],
     auth: &[
     ],
@@ -3979,7 +6168,7 @@ const OP_SMS_GET_A_SPECIFIC_DELIVERY_RECEIPT: OpSpec = OpSpec {
     method: "GET",
     path_template: "/sms/receipts/{message_id}",
     fields: &[
-        FieldSpec { snake: "message_id", location: FieldLocation::Path },
+        FieldSpec { snake: "message_id", wire: "message_id", location: FieldLocation::Path },
     ],
     auth: &[
     ],
@@ -3989,15 +6178,15 @@ const OP_SMS_SEND_AN_SMS: OpSpec = OpSpec {
     method: "POST",
     path_template: "/sms/send",
     fields: &[
-        FieldSpec { snake: "body", location: FieldLocation::Body },
-        FieldSpec { snake: "country", location: FieldLocation::Body },
-        FieldSpec { snake: "custom_string", location: FieldLocation::Body },
-        FieldSpec { snake: "from", location: FieldLocation::Body },
-        FieldSpec { snake: "from_email", location: FieldLocation::Body },
-        FieldSpec { snake: "list_id", location: FieldLocation::Body },
-        FieldSpec { snake: "schedule", location: FieldLocation::Body },
-        FieldSpec { snake: "source", location: FieldLocation::Body },
-        FieldSpec { snake: "to", location: FieldLocation::Body },
+        FieldSpec { snake: "body", wire: "body", location: FieldLocation::Body },
+        FieldSpec { snake: "country", wire: "country", location: FieldLocation::Body },
+        FieldSpec { snake: "custom_string", wire: "custom_string", location: FieldLocation::Body },
+        FieldSpec { snake: "from", wire: "from", location: FieldLocation::Body },
+        FieldSpec { snake: "from_email", wire: "from_email", location: FieldLocation::Body },
+        FieldSpec { snake: "list_id", wire: "list_id", location: FieldLocation::Body },
+        FieldSpec { snake: "schedule", wire: "schedule", location: FieldLocation::Body },
+        FieldSpec { snake: "source", wire: "source", location: FieldLocation::Body },
+        FieldSpec { snake: "to", wire: "to", location: FieldLocation::Body },
     ],
     auth: &[
         AuthApply { secret_key: "basic", kind: AuthKind::Basic },
@@ -4008,7 +6197,7 @@ const OP_SMS_CANCEL_A_SCHEDULED_MESSAGE: OpSpec = OpSpec {
     method: "PUT",
     path_template: "/sms/{message_id}/cancel",
     fields: &[
-        FieldSpec { snake: "message_id", location: FieldLocation::Path },
+        FieldSpec { snake: "message_id", wire: "message_id", location: FieldLocation::Path },
     ],
     auth: &[
     ],
@@ -4102,63 +6291,273 @@ fn iface_sms__cancel_a_scheduled_message_params__to_json(p: &iface_sms::CancelAS
     Value::Object(m)
 }
 
+fn iface_sms__cancel_all_scheduled_messages__ok(body: String) -> Result<String, crate::runtime::DispatchError> {
+    Ok(body)
+}
+
+fn iface_sms__cancel_all_scheduled_messages__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
+fn iface_sms__export_sms_history__ok(body: String) -> Result<String, crate::runtime::DispatchError> {
+    Ok(body)
+}
+
+fn iface_sms__export_sms_history__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
+fn iface_sms__get_all_history__ok(body: String) -> Result<String, crate::runtime::DispatchError> {
+    Ok(body)
+}
+
+fn iface_sms__get_all_history__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
+fn iface_sms__get_all_inbound_sms_pull__ok(body: String) -> Result<String, crate::runtime::DispatchError> {
+    Ok(body)
+}
+
+fn iface_sms__get_all_inbound_sms_pull__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
+fn iface_sms__add_a_test_inbound_sms__ok(body: String) -> Result<String, crate::runtime::DispatchError> {
+    Ok(body)
+}
+
+fn iface_sms__add_a_test_inbound_sms__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
+fn iface_sms__mark_all_inbound_sms_as_read__ok(body: String) -> Result<String, crate::runtime::DispatchError> {
+    Ok(body)
+}
+
+fn iface_sms__mark_all_inbound_sms_as_read__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
+fn iface_sms__mark_a_specific_inbound_sms_as_read__ok(body: String) -> Result<String, crate::runtime::DispatchError> {
+    Ok(body)
+}
+
+fn iface_sms__mark_a_specific_inbound_sms_as_read__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
+fn iface_sms__get_specific_inbound_pull__ok(body: String) -> Result<String, crate::runtime::DispatchError> {
+    Ok(body)
+}
+
+fn iface_sms__get_specific_inbound_pull__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
+fn iface_sms__post_sms_price__ok(body: String) -> Result<String, crate::runtime::DispatchError> {
+    Ok(body)
+}
+
+fn iface_sms__post_sms_price__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
+fn iface_sms__get_sms_receipts__ok(body: String) -> Result<String, crate::runtime::DispatchError> {
+    Ok(body)
+}
+
+fn iface_sms__get_sms_receipts__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
+fn iface_sms__post_sms_receipts__ok(body: String) -> Result<String, crate::runtime::DispatchError> {
+    Ok(body)
+}
+
+fn iface_sms__post_sms_receipts__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
+fn iface_sms__mark_delivery_receipts_as_read__ok(body: String) -> Result<String, crate::runtime::DispatchError> {
+    Ok(body)
+}
+
+fn iface_sms__mark_delivery_receipts_as_read__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
+fn iface_sms__get_a_specific_delivery_receipt__ok(body: String) -> Result<String, crate::runtime::DispatchError> {
+    Ok(body)
+}
+
+fn iface_sms__get_a_specific_delivery_receipt__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
+fn iface_sms__send_an_sms__ok(body: String) -> Result<String, crate::runtime::DispatchError> {
+    Ok(body)
+}
+
+fn iface_sms__send_an_sms__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
+fn iface_sms__cancel_a_scheduled_message__ok(body: String) -> Result<String, crate::runtime::DispatchError> {
+    Ok(body)
+}
+
+fn iface_sms__cancel_a_scheduled_message__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
 impl iface_sms::Guest for crate::Component {
     fn cancel_all_scheduled_messages() -> Result<String, String> {
-        dispatch(&OP_SMS_CANCEL_ALL_SCHEDULED_MESSAGES, Value::Object(Map::new()))
+        match dispatch(&OP_SMS_CANCEL_ALL_SCHEDULED_MESSAGES, Value::Object(Map::new())).and_then(iface_sms__cancel_all_scheduled_messages__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_sms__cancel_all_scheduled_messages__err(e)),
+        }
     }
     fn export_sms_history(params: iface_sms::ExportSmsHistoryParams) -> Result<String, String> {
         let json = iface_sms__export_sms_history_params__to_json(&params);
-        dispatch(&OP_SMS_EXPORT_SMS_HISTORY, json)
+        match dispatch(&OP_SMS_EXPORT_SMS_HISTORY, json).and_then(iface_sms__export_sms_history__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_sms__export_sms_history__err(e)),
+        }
     }
     fn get_all_history(params: iface_sms::GetAllHistoryParams) -> Result<String, String> {
         let json = iface_sms__get_all_history_params__to_json(&params);
-        dispatch(&OP_SMS_GET_ALL_HISTORY, json)
+        match dispatch(&OP_SMS_GET_ALL_HISTORY, json).and_then(iface_sms__get_all_history__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_sms__get_all_history__err(e)),
+        }
     }
     fn get_all_inbound_sms_pull() -> Result<String, String> {
-        dispatch(&OP_SMS_GET_ALL_INBOUND_SMS_PULL, Value::Object(Map::new()))
+        match dispatch(&OP_SMS_GET_ALL_INBOUND_SMS_PULL, Value::Object(Map::new())).and_then(iface_sms__get_all_inbound_sms_pull__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_sms__get_all_inbound_sms_pull__err(e)),
+        }
     }
     fn add_a_test_inbound_sms(params: iface_sms::AddATestInboundSmsParams) -> Result<String, String> {
         let json = iface_sms__add_a_test_inbound_sms_params__to_json(&params);
-        dispatch(&OP_SMS_ADD_A_TEST_INBOUND_SMS, json)
+        match dispatch(&OP_SMS_ADD_A_TEST_INBOUND_SMS, json).and_then(iface_sms__add_a_test_inbound_sms__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_sms__add_a_test_inbound_sms__err(e)),
+        }
     }
     fn mark_all_inbound_sms_as_read(params: iface_sms::MarkAllInboundSmsAsReadParams) -> Result<String, String> {
         let json = iface_sms__mark_all_inbound_sms_as_read_params__to_json(&params);
-        dispatch(&OP_SMS_MARK_ALL_INBOUND_SMS_AS_READ, json)
+        match dispatch(&OP_SMS_MARK_ALL_INBOUND_SMS_AS_READ, json).and_then(iface_sms__mark_all_inbound_sms_as_read__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_sms__mark_all_inbound_sms_as_read__err(e)),
+        }
     }
     fn mark_a_specific_inbound_sms_as_read(params: iface_sms::MarkASpecificInboundSmsAsReadParams) -> Result<String, String> {
         let json = iface_sms__mark_a_specific_inbound_sms_as_read_params__to_json(&params);
-        dispatch(&OP_SMS_MARK_A_SPECIFIC_INBOUND_SMS_AS_READ, json)
+        match dispatch(&OP_SMS_MARK_A_SPECIFIC_INBOUND_SMS_AS_READ, json).and_then(iface_sms__mark_a_specific_inbound_sms_as_read__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_sms__mark_a_specific_inbound_sms_as_read__err(e)),
+        }
     }
     fn get_specific_inbound_pull(params: iface_sms::GetSpecificInboundPullParams) -> Result<String, String> {
         let json = iface_sms__get_specific_inbound_pull_params__to_json(&params);
-        dispatch(&OP_SMS_GET_SPECIFIC_INBOUND_PULL, json)
+        match dispatch(&OP_SMS_GET_SPECIFIC_INBOUND_PULL, json).and_then(iface_sms__get_specific_inbound_pull__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_sms__get_specific_inbound_pull__err(e)),
+        }
     }
     fn post_sms_price(params: iface_sms::PostSmsPriceParams) -> Result<String, String> {
         let json = iface_sms__post_sms_price_params__to_json(&params);
-        dispatch(&OP_SMS_POST_SMS_PRICE, json)
+        match dispatch(&OP_SMS_POST_SMS_PRICE, json).and_then(iface_sms__post_sms_price__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_sms__post_sms_price__err(e)),
+        }
     }
     fn get_sms_receipts() -> Result<String, String> {
-        dispatch(&OP_SMS_GET_SMS_RECEIPTS, Value::Object(Map::new()))
+        match dispatch(&OP_SMS_GET_SMS_RECEIPTS, Value::Object(Map::new())).and_then(iface_sms__get_sms_receipts__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_sms__get_sms_receipts__err(e)),
+        }
     }
     fn post_sms_receipts(params: iface_sms::PostSmsReceiptsParams) -> Result<String, String> {
         let json = iface_sms__post_sms_receipts_params__to_json(&params);
-        dispatch(&OP_SMS_POST_SMS_RECEIPTS, json)
+        match dispatch(&OP_SMS_POST_SMS_RECEIPTS, json).and_then(iface_sms__post_sms_receipts__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_sms__post_sms_receipts__err(e)),
+        }
     }
     fn mark_delivery_receipts_as_read(params: iface_sms::MarkDeliveryReceiptsAsReadParams) -> Result<String, String> {
         let json = iface_sms__mark_delivery_receipts_as_read_params__to_json(&params);
-        dispatch(&OP_SMS_MARK_DELIVERY_RECEIPTS_AS_READ, json)
+        match dispatch(&OP_SMS_MARK_DELIVERY_RECEIPTS_AS_READ, json).and_then(iface_sms__mark_delivery_receipts_as_read__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_sms__mark_delivery_receipts_as_read__err(e)),
+        }
     }
     fn get_a_specific_delivery_receipt(params: iface_sms::GetASpecificDeliveryReceiptParams) -> Result<String, String> {
         let json = iface_sms__get_a_specific_delivery_receipt_params__to_json(&params);
-        dispatch(&OP_SMS_GET_A_SPECIFIC_DELIVERY_RECEIPT, json)
+        match dispatch(&OP_SMS_GET_A_SPECIFIC_DELIVERY_RECEIPT, json).and_then(iface_sms__get_a_specific_delivery_receipt__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_sms__get_a_specific_delivery_receipt__err(e)),
+        }
     }
     fn send_an_sms(params: iface_sms::SendAnSmsParams) -> Result<String, String> {
         let json = iface_sms__send_an_sms_params__to_json(&params);
-        dispatch(&OP_SMS_SEND_AN_SMS, json)
+        match dispatch(&OP_SMS_SEND_AN_SMS, json).and_then(iface_sms__send_an_sms__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_sms__send_an_sms__err(e)),
+        }
     }
     fn cancel_a_scheduled_message(params: iface_sms::CancelAScheduledMessageParams) -> Result<String, String> {
         let json = iface_sms__cancel_a_scheduled_message_params__to_json(&params);
-        dispatch(&OP_SMS_CANCEL_A_SCHEDULED_MESSAGE, json)
+        match dispatch(&OP_SMS_CANCEL_A_SCHEDULED_MESSAGE, json).and_then(iface_sms__cancel_a_scheduled_message__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_sms__cancel_a_scheduled_message__err(e)),
+        }
     }
 }
 use crate::exports::autostamp::clicksend::email_to_sms_allowed_address as iface_email_to_sms_allowed_address;
@@ -4176,8 +6575,8 @@ const OP_EMAIL_TO_SMS_ALLOWED_ADDRESS_CREATE_EMAIL_TO_SMS_ALLOWED_ADDRESS: OpSpe
     method: "POST",
     path_template: "/sms/email-sms",
     fields: &[
-        FieldSpec { snake: "email_address", location: FieldLocation::Body },
-        FieldSpec { snake: "from", location: FieldLocation::Body },
+        FieldSpec { snake: "email_address", wire: "email_address", location: FieldLocation::Body },
+        FieldSpec { snake: "from", wire: "from", location: FieldLocation::Body },
     ],
     auth: &[
         AuthApply { secret_key: "basic", kind: AuthKind::Basic },
@@ -4188,7 +6587,7 @@ const OP_EMAIL_TO_SMS_ALLOWED_ADDRESS_GET_SPECIFIC_EMAIL_TO_SMS_ALLOWED_ADDRESS:
     method: "GET",
     path_template: "/sms/email-sms/{email_address_id}",
     fields: &[
-        FieldSpec { snake: "email_address_id", location: FieldLocation::Path },
+        FieldSpec { snake: "email_address_id", wire: "email_address_id", location: FieldLocation::Path },
     ],
     auth: &[
     ],
@@ -4198,9 +6597,9 @@ const OP_EMAIL_TO_SMS_ALLOWED_ADDRESS_UPDATE_EMAIL_TO_SMS_ALLOWED_ADDRESS: OpSpe
     method: "PUT",
     path_template: "/sms/email-sms/{email_address_id}",
     fields: &[
-        FieldSpec { snake: "email_address_id", location: FieldLocation::Path },
-        FieldSpec { snake: "email_address", location: FieldLocation::Body },
-        FieldSpec { snake: "from", location: FieldLocation::Body },
+        FieldSpec { snake: "email_address_id", wire: "email_address_id", location: FieldLocation::Path },
+        FieldSpec { snake: "email_address", wire: "email_address", location: FieldLocation::Body },
+        FieldSpec { snake: "from", wire: "from", location: FieldLocation::Body },
     ],
     auth: &[
         AuthApply { secret_key: "basic", kind: AuthKind::Basic },
@@ -4211,7 +6610,7 @@ const OP_EMAIL_TO_SMS_ALLOWED_ADDRESS_DELETE_EMAIL_TO_SMS_ALLOWED_ADDRESS: OpSpe
     method: "DELETE",
     path_template: "/sms/email-sms/{email_address_id}",
     fields: &[
-        FieldSpec { snake: "email_address_id", location: FieldLocation::Path },
+        FieldSpec { snake: "email_address_id", wire: "email_address_id", location: FieldLocation::Path },
     ],
     auth: &[
     ],
@@ -4244,25 +6643,95 @@ fn iface_email_to_sms_allowed_address__delete_email_to_sms_allowed_address_param
     Value::Object(m)
 }
 
+fn iface_email_to_sms_allowed_address__list_of_email_to_sms_allowed_address__ok(body: String) -> Result<String, crate::runtime::DispatchError> {
+    Ok(body)
+}
+
+fn iface_email_to_sms_allowed_address__list_of_email_to_sms_allowed_address__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
+fn iface_email_to_sms_allowed_address__create_email_to_sms_allowed_address__ok(body: String) -> Result<String, crate::runtime::DispatchError> {
+    Ok(body)
+}
+
+fn iface_email_to_sms_allowed_address__create_email_to_sms_allowed_address__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
+fn iface_email_to_sms_allowed_address__get_specific_email_to_sms_allowed_address__ok(body: String) -> Result<String, crate::runtime::DispatchError> {
+    Ok(body)
+}
+
+fn iface_email_to_sms_allowed_address__get_specific_email_to_sms_allowed_address__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
+fn iface_email_to_sms_allowed_address__update_email_to_sms_allowed_address__ok(body: String) -> Result<String, crate::runtime::DispatchError> {
+    Ok(body)
+}
+
+fn iface_email_to_sms_allowed_address__update_email_to_sms_allowed_address__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
+fn iface_email_to_sms_allowed_address__delete_email_to_sms_allowed_address__ok(body: String) -> Result<String, crate::runtime::DispatchError> {
+    Ok(body)
+}
+
+fn iface_email_to_sms_allowed_address__delete_email_to_sms_allowed_address__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
 impl iface_email_to_sms_allowed_address::Guest for crate::Component {
     fn list_of_email_to_sms_allowed_address() -> Result<String, String> {
-        dispatch(&OP_EMAIL_TO_SMS_ALLOWED_ADDRESS_LIST_OF_EMAIL_TO_SMS_ALLOWED_ADDRESS, Value::Object(Map::new()))
+        match dispatch(&OP_EMAIL_TO_SMS_ALLOWED_ADDRESS_LIST_OF_EMAIL_TO_SMS_ALLOWED_ADDRESS, Value::Object(Map::new())).and_then(iface_email_to_sms_allowed_address__list_of_email_to_sms_allowed_address__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_email_to_sms_allowed_address__list_of_email_to_sms_allowed_address__err(e)),
+        }
     }
     fn create_email_to_sms_allowed_address(params: iface_email_to_sms_allowed_address::CreateEmailToSmsAllowedAddressParams) -> Result<String, String> {
         let json = iface_email_to_sms_allowed_address__create_email_to_sms_allowed_address_params__to_json(&params);
-        dispatch(&OP_EMAIL_TO_SMS_ALLOWED_ADDRESS_CREATE_EMAIL_TO_SMS_ALLOWED_ADDRESS, json)
+        match dispatch(&OP_EMAIL_TO_SMS_ALLOWED_ADDRESS_CREATE_EMAIL_TO_SMS_ALLOWED_ADDRESS, json).and_then(iface_email_to_sms_allowed_address__create_email_to_sms_allowed_address__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_email_to_sms_allowed_address__create_email_to_sms_allowed_address__err(e)),
+        }
     }
     fn get_specific_email_to_sms_allowed_address(params: iface_email_to_sms_allowed_address::GetSpecificEmailToSmsAllowedAddressParams) -> Result<String, String> {
         let json = iface_email_to_sms_allowed_address__get_specific_email_to_sms_allowed_address_params__to_json(&params);
-        dispatch(&OP_EMAIL_TO_SMS_ALLOWED_ADDRESS_GET_SPECIFIC_EMAIL_TO_SMS_ALLOWED_ADDRESS, json)
+        match dispatch(&OP_EMAIL_TO_SMS_ALLOWED_ADDRESS_GET_SPECIFIC_EMAIL_TO_SMS_ALLOWED_ADDRESS, json).and_then(iface_email_to_sms_allowed_address__get_specific_email_to_sms_allowed_address__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_email_to_sms_allowed_address__get_specific_email_to_sms_allowed_address__err(e)),
+        }
     }
     fn update_email_to_sms_allowed_address(params: iface_email_to_sms_allowed_address::UpdateEmailToSmsAllowedAddressParams) -> Result<String, String> {
         let json = iface_email_to_sms_allowed_address__update_email_to_sms_allowed_address_params__to_json(&params);
-        dispatch(&OP_EMAIL_TO_SMS_ALLOWED_ADDRESS_UPDATE_EMAIL_TO_SMS_ALLOWED_ADDRESS, json)
+        match dispatch(&OP_EMAIL_TO_SMS_ALLOWED_ADDRESS_UPDATE_EMAIL_TO_SMS_ALLOWED_ADDRESS, json).and_then(iface_email_to_sms_allowed_address__update_email_to_sms_allowed_address__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_email_to_sms_allowed_address__update_email_to_sms_allowed_address__err(e)),
+        }
     }
     fn delete_email_to_sms_allowed_address(params: iface_email_to_sms_allowed_address::DeleteEmailToSmsAllowedAddressParams) -> Result<String, String> {
         let json = iface_email_to_sms_allowed_address__delete_email_to_sms_allowed_address_params__to_json(&params);
-        dispatch(&OP_EMAIL_TO_SMS_ALLOWED_ADDRESS_DELETE_EMAIL_TO_SMS_ALLOWED_ADDRESS, json)
+        match dispatch(&OP_EMAIL_TO_SMS_ALLOWED_ADDRESS_DELETE_EMAIL_TO_SMS_ALLOWED_ADDRESS, json).and_then(iface_email_to_sms_allowed_address__delete_email_to_sms_allowed_address__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_email_to_sms_allowed_address__delete_email_to_sms_allowed_address__err(e)),
+        }
     }
 }
 use crate::exports::autostamp::clicksend::email_to_sms_stripped_strings as iface_email_to_sms_stripped_strings;
@@ -4280,7 +6749,7 @@ const OP_EMAIL_TO_SMS_STRIPPED_STRINGS_CREATE_STRIPPED_STRING: OpSpec = OpSpec {
     method: "POST",
     path_template: "/sms/email-sms-stripped-strings",
     fields: &[
-        FieldSpec { snake: "strip_string", location: FieldLocation::Body },
+        FieldSpec { snake: "strip_string", wire: "strip_string", location: FieldLocation::Body },
     ],
     auth: &[
     ],
@@ -4290,7 +6759,7 @@ const OP_EMAIL_TO_SMS_STRIPPED_STRINGS_FIND_SPECIFIC_STRIPPED_STRING: OpSpec = O
     method: "GET",
     path_template: "/sms/email-sms-stripped-strings/{rule_id}",
     fields: &[
-        FieldSpec { snake: "rule_id", location: FieldLocation::Path },
+        FieldSpec { snake: "rule_id", wire: "rule_id", location: FieldLocation::Path },
     ],
     auth: &[
     ],
@@ -4300,8 +6769,8 @@ const OP_EMAIL_TO_SMS_STRIPPED_STRINGS_UPDATE_STRIPPED_STRING: OpSpec = OpSpec {
     method: "PUT",
     path_template: "/sms/email-sms-stripped-strings/{rule_id}",
     fields: &[
-        FieldSpec { snake: "rule_id", location: FieldLocation::Path },
-        FieldSpec { snake: "strip_string", location: FieldLocation::Body },
+        FieldSpec { snake: "rule_id", wire: "rule_id", location: FieldLocation::Path },
+        FieldSpec { snake: "strip_string", wire: "strip_string", location: FieldLocation::Body },
     ],
     auth: &[
     ],
@@ -4311,7 +6780,7 @@ const OP_EMAIL_TO_SMS_STRIPPED_STRINGS_DELETE_STRIPPED_STRING: OpSpec = OpSpec {
     method: "DELETE",
     path_template: "/sms/email-sms-stripped-strings/{rule_id}",
     fields: &[
-        FieldSpec { snake: "rule_id", location: FieldLocation::Path },
+        FieldSpec { snake: "rule_id", wire: "rule_id", location: FieldLocation::Path },
     ],
     auth: &[
     ],
@@ -4342,25 +6811,95 @@ fn iface_email_to_sms_stripped_strings__delete_stripped_string_params__to_json(p
     Value::Object(m)
 }
 
+fn iface_email_to_sms_stripped_strings__list_stripped_strings__ok(body: String) -> Result<String, crate::runtime::DispatchError> {
+    Ok(body)
+}
+
+fn iface_email_to_sms_stripped_strings__list_stripped_strings__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
+fn iface_email_to_sms_stripped_strings__create_stripped_string__ok(body: String) -> Result<String, crate::runtime::DispatchError> {
+    Ok(body)
+}
+
+fn iface_email_to_sms_stripped_strings__create_stripped_string__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
+fn iface_email_to_sms_stripped_strings__find_specific_stripped_string__ok(body: String) -> Result<String, crate::runtime::DispatchError> {
+    Ok(body)
+}
+
+fn iface_email_to_sms_stripped_strings__find_specific_stripped_string__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
+fn iface_email_to_sms_stripped_strings__update_stripped_string__ok(body: String) -> Result<String, crate::runtime::DispatchError> {
+    Ok(body)
+}
+
+fn iface_email_to_sms_stripped_strings__update_stripped_string__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
+fn iface_email_to_sms_stripped_strings__delete_stripped_string__ok(body: String) -> Result<String, crate::runtime::DispatchError> {
+    Ok(body)
+}
+
+fn iface_email_to_sms_stripped_strings__delete_stripped_string__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
 impl iface_email_to_sms_stripped_strings::Guest for crate::Component {
     fn list_stripped_strings() -> Result<String, String> {
-        dispatch(&OP_EMAIL_TO_SMS_STRIPPED_STRINGS_LIST_STRIPPED_STRINGS, Value::Object(Map::new()))
+        match dispatch(&OP_EMAIL_TO_SMS_STRIPPED_STRINGS_LIST_STRIPPED_STRINGS, Value::Object(Map::new())).and_then(iface_email_to_sms_stripped_strings__list_stripped_strings__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_email_to_sms_stripped_strings__list_stripped_strings__err(e)),
+        }
     }
     fn create_stripped_string(params: iface_email_to_sms_stripped_strings::CreateStrippedStringParams) -> Result<String, String> {
         let json = iface_email_to_sms_stripped_strings__create_stripped_string_params__to_json(&params);
-        dispatch(&OP_EMAIL_TO_SMS_STRIPPED_STRINGS_CREATE_STRIPPED_STRING, json)
+        match dispatch(&OP_EMAIL_TO_SMS_STRIPPED_STRINGS_CREATE_STRIPPED_STRING, json).and_then(iface_email_to_sms_stripped_strings__create_stripped_string__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_email_to_sms_stripped_strings__create_stripped_string__err(e)),
+        }
     }
     fn find_specific_stripped_string(params: iface_email_to_sms_stripped_strings::FindSpecificStrippedStringParams) -> Result<String, String> {
         let json = iface_email_to_sms_stripped_strings__find_specific_stripped_string_params__to_json(&params);
-        dispatch(&OP_EMAIL_TO_SMS_STRIPPED_STRINGS_FIND_SPECIFIC_STRIPPED_STRING, json)
+        match dispatch(&OP_EMAIL_TO_SMS_STRIPPED_STRINGS_FIND_SPECIFIC_STRIPPED_STRING, json).and_then(iface_email_to_sms_stripped_strings__find_specific_stripped_string__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_email_to_sms_stripped_strings__find_specific_stripped_string__err(e)),
+        }
     }
     fn update_stripped_string(params: iface_email_to_sms_stripped_strings::UpdateStrippedStringParams) -> Result<String, String> {
         let json = iface_email_to_sms_stripped_strings__update_stripped_string_params__to_json(&params);
-        dispatch(&OP_EMAIL_TO_SMS_STRIPPED_STRINGS_UPDATE_STRIPPED_STRING, json)
+        match dispatch(&OP_EMAIL_TO_SMS_STRIPPED_STRINGS_UPDATE_STRIPPED_STRING, json).and_then(iface_email_to_sms_stripped_strings__update_stripped_string__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_email_to_sms_stripped_strings__update_stripped_string__err(e)),
+        }
     }
     fn delete_stripped_string(params: iface_email_to_sms_stripped_strings::DeleteStrippedStringParams) -> Result<String, String> {
         let json = iface_email_to_sms_stripped_strings__delete_stripped_string_params__to_json(&params);
-        dispatch(&OP_EMAIL_TO_SMS_STRIPPED_STRINGS_DELETE_STRIPPED_STRING, json)
+        match dispatch(&OP_EMAIL_TO_SMS_STRIPPED_STRINGS_DELETE_STRIPPED_STRING, json).and_then(iface_email_to_sms_stripped_strings__delete_stripped_string__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_email_to_sms_stripped_strings__delete_stripped_string__err(e)),
+        }
     }
 }
 use crate::exports::autostamp::clicksend::sms_templates as iface_sms_templates;
@@ -4378,8 +6917,8 @@ const OP_SMS_TEMPLATES_CREATE_A_TEMPLATE: OpSpec = OpSpec {
     method: "POST",
     path_template: "/sms/templates",
     fields: &[
-        FieldSpec { snake: "body", location: FieldLocation::Body },
-        FieldSpec { snake: "template_name", location: FieldLocation::Body },
+        FieldSpec { snake: "body", wire: "body", location: FieldLocation::Body },
+        FieldSpec { snake: "template_name", wire: "template_name", location: FieldLocation::Body },
     ],
     auth: &[
         AuthApply { secret_key: "basic", kind: AuthKind::Basic },
@@ -4390,9 +6929,9 @@ const OP_SMS_TEMPLATES_UPDATE_A_TEMPLATE: OpSpec = OpSpec {
     method: "PUT",
     path_template: "/sms/templates/{template_id}",
     fields: &[
-        FieldSpec { snake: "template_id", location: FieldLocation::Path },
-        FieldSpec { snake: "body", location: FieldLocation::Body },
-        FieldSpec { snake: "template_name", location: FieldLocation::Body },
+        FieldSpec { snake: "template_id", wire: "template_id", location: FieldLocation::Path },
+        FieldSpec { snake: "body", wire: "body", location: FieldLocation::Body },
+        FieldSpec { snake: "template_name", wire: "template_name", location: FieldLocation::Body },
     ],
     auth: &[
         AuthApply { secret_key: "basic", kind: AuthKind::Basic },
@@ -4403,7 +6942,7 @@ const OP_SMS_TEMPLATES_DELETE_A_TEMPLATE: OpSpec = OpSpec {
     method: "DELETE",
     path_template: "/sms/templates/{template_id}",
     fields: &[
-        FieldSpec { snake: "template_id", location: FieldLocation::Path },
+        FieldSpec { snake: "template_id", wire: "template_id", location: FieldLocation::Path },
     ],
     auth: &[
     ],
@@ -4430,21 +6969,77 @@ fn iface_sms_templates__delete_a_template_params__to_json(p: &iface_sms_template
     Value::Object(m)
 }
 
+fn iface_sms_templates__list_of_templates__ok(body: String) -> Result<String, crate::runtime::DispatchError> {
+    Ok(body)
+}
+
+fn iface_sms_templates__list_of_templates__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
+fn iface_sms_templates__create_a_template__ok(body: String) -> Result<String, crate::runtime::DispatchError> {
+    Ok(body)
+}
+
+fn iface_sms_templates__create_a_template__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
+fn iface_sms_templates__update_a_template__ok(body: String) -> Result<String, crate::runtime::DispatchError> {
+    Ok(body)
+}
+
+fn iface_sms_templates__update_a_template__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
+fn iface_sms_templates__delete_a_template__ok(body: String) -> Result<String, crate::runtime::DispatchError> {
+    Ok(body)
+}
+
+fn iface_sms_templates__delete_a_template__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
 impl iface_sms_templates::Guest for crate::Component {
     fn list_of_templates() -> Result<String, String> {
-        dispatch(&OP_SMS_TEMPLATES_LIST_OF_TEMPLATES, Value::Object(Map::new()))
+        match dispatch(&OP_SMS_TEMPLATES_LIST_OF_TEMPLATES, Value::Object(Map::new())).and_then(iface_sms_templates__list_of_templates__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_sms_templates__list_of_templates__err(e)),
+        }
     }
     fn create_a_template(params: iface_sms_templates::CreateATemplateParams) -> Result<String, String> {
         let json = iface_sms_templates__create_a_template_params__to_json(&params);
-        dispatch(&OP_SMS_TEMPLATES_CREATE_A_TEMPLATE, json)
+        match dispatch(&OP_SMS_TEMPLATES_CREATE_A_TEMPLATE, json).and_then(iface_sms_templates__create_a_template__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_sms_templates__create_a_template__err(e)),
+        }
     }
     fn update_a_template(params: iface_sms_templates::UpdateATemplateParams) -> Result<String, String> {
         let json = iface_sms_templates__update_a_template_params__to_json(&params);
-        dispatch(&OP_SMS_TEMPLATES_UPDATE_A_TEMPLATE, json)
+        match dispatch(&OP_SMS_TEMPLATES_UPDATE_A_TEMPLATE, json).and_then(iface_sms_templates__update_a_template__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_sms_templates__update_a_template__err(e)),
+        }
     }
     fn delete_a_template(params: iface_sms_templates::DeleteATemplateParams) -> Result<String, String> {
         let json = iface_sms_templates__delete_a_template_params__to_json(&params);
-        dispatch(&OP_SMS_TEMPLATES_DELETE_A_TEMPLATE, json)
+        match dispatch(&OP_SMS_TEMPLATES_DELETE_A_TEMPLATE, json).and_then(iface_sms_templates__delete_a_template__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_sms_templates__delete_a_template__err(e)),
+        }
     }
 }
 use crate::exports::autostamp::clicksend::statistics as iface_statistics;
@@ -4467,12 +7062,40 @@ const OP_STATISTICS_GET_VOICE_STATISTICS: OpSpec = OpSpec {
     ],
 };
 
+fn iface_statistics__get_sms_statistics__ok(body: String) -> Result<String, crate::runtime::DispatchError> {
+    Ok(body)
+}
+
+fn iface_statistics__get_sms_statistics__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
+fn iface_statistics__get_voice_statistics__ok(body: String) -> Result<String, crate::runtime::DispatchError> {
+    Ok(body)
+}
+
+fn iface_statistics__get_voice_statistics__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
 impl iface_statistics::Guest for crate::Component {
     fn get_sms_statistics() -> Result<String, String> {
-        dispatch(&OP_STATISTICS_GET_SMS_STATISTICS, Value::Object(Map::new()))
+        match dispatch(&OP_STATISTICS_GET_SMS_STATISTICS, Value::Object(Map::new())).and_then(iface_statistics__get_sms_statistics__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_statistics__get_sms_statistics__err(e)),
+        }
     }
     fn get_voice_statistics() -> Result<String, String> {
-        dispatch(&OP_STATISTICS_GET_VOICE_STATISTICS, Value::Object(Map::new()))
+        match dispatch(&OP_STATISTICS_GET_VOICE_STATISTICS, Value::Object(Map::new())).and_then(iface_statistics__get_voice_statistics__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_statistics__get_voice_statistics__err(e)),
+        }
     }
 }
 use crate::exports::autostamp::clicksend::subaccounts as iface_subaccounts;
@@ -4490,18 +7113,18 @@ const OP_SUBACCOUNTS_CREATE_A_NEW_SUBACCOUNT: OpSpec = OpSpec {
     method: "POST",
     path_template: "/subaccounts",
     fields: &[
-        FieldSpec { snake: "access_billing", location: FieldLocation::Body },
-        FieldSpec { snake: "access_contacts", location: FieldLocation::Body },
-        FieldSpec { snake: "access_reporting", location: FieldLocation::Body },
-        FieldSpec { snake: "access_settings", location: FieldLocation::Body },
-        FieldSpec { snake: "access_users", location: FieldLocation::Body },
-        FieldSpec { snake: "api_username", location: FieldLocation::Body },
-        FieldSpec { snake: "email", location: FieldLocation::Body },
-        FieldSpec { snake: "first_name", location: FieldLocation::Body },
-        FieldSpec { snake: "last_name", location: FieldLocation::Body },
-        FieldSpec { snake: "password", location: FieldLocation::Body },
-        FieldSpec { snake: "phone_number", location: FieldLocation::Body },
-        FieldSpec { snake: "share_campaigns", location: FieldLocation::Body },
+        FieldSpec { snake: "access_billing", wire: "access_billing", location: FieldLocation::Body },
+        FieldSpec { snake: "access_contacts", wire: "access_contacts", location: FieldLocation::Body },
+        FieldSpec { snake: "access_reporting", wire: "access_reporting", location: FieldLocation::Body },
+        FieldSpec { snake: "access_settings", wire: "access_settings", location: FieldLocation::Body },
+        FieldSpec { snake: "access_users", wire: "access_users", location: FieldLocation::Body },
+        FieldSpec { snake: "api_username", wire: "api_username", location: FieldLocation::Body },
+        FieldSpec { snake: "email", wire: "email", location: FieldLocation::Body },
+        FieldSpec { snake: "first_name", wire: "first_name", location: FieldLocation::Body },
+        FieldSpec { snake: "last_name", wire: "last_name", location: FieldLocation::Body },
+        FieldSpec { snake: "password", wire: "password", location: FieldLocation::Body },
+        FieldSpec { snake: "phone_number", wire: "phone_number", location: FieldLocation::Body },
+        FieldSpec { snake: "share_campaigns", wire: "share_campaigns", location: FieldLocation::Body },
     ],
     auth: &[
         AuthApply { secret_key: "basic", kind: AuthKind::Basic },
@@ -4512,7 +7135,7 @@ const OP_SUBACCOUNTS_GET_A_SPECIFIC_SUBACCOUNT: OpSpec = OpSpec {
     method: "GET",
     path_template: "/subaccounts/{subaccount_id}",
     fields: &[
-        FieldSpec { snake: "subaccount_id", location: FieldLocation::Path },
+        FieldSpec { snake: "subaccount_id", wire: "subaccount_id", location: FieldLocation::Path },
     ],
     auth: &[
     ],
@@ -4522,18 +7145,18 @@ const OP_SUBACCOUNTS_UPDATE_A_SPECIFIC_SUBACCOUNT: OpSpec = OpSpec {
     method: "PUT",
     path_template: "/subaccounts/{subaccount_id}",
     fields: &[
-        FieldSpec { snake: "subaccount_id", location: FieldLocation::Path },
-        FieldSpec { snake: "access_billing", location: FieldLocation::Body },
-        FieldSpec { snake: "access_contacts", location: FieldLocation::Body },
-        FieldSpec { snake: "access_reporting", location: FieldLocation::Body },
-        FieldSpec { snake: "access_settings", location: FieldLocation::Body },
-        FieldSpec { snake: "access_users", location: FieldLocation::Body },
-        FieldSpec { snake: "email", location: FieldLocation::Body },
-        FieldSpec { snake: "first_name", location: FieldLocation::Body },
-        FieldSpec { snake: "last_name", location: FieldLocation::Body },
-        FieldSpec { snake: "password", location: FieldLocation::Body },
-        FieldSpec { snake: "phone_number", location: FieldLocation::Body },
-        FieldSpec { snake: "share_campaigns", location: FieldLocation::Body },
+        FieldSpec { snake: "subaccount_id", wire: "subaccount_id", location: FieldLocation::Path },
+        FieldSpec { snake: "access_billing", wire: "access_billing", location: FieldLocation::Body },
+        FieldSpec { snake: "access_contacts", wire: "access_contacts", location: FieldLocation::Body },
+        FieldSpec { snake: "access_reporting", wire: "access_reporting", location: FieldLocation::Body },
+        FieldSpec { snake: "access_settings", wire: "access_settings", location: FieldLocation::Body },
+        FieldSpec { snake: "access_users", wire: "access_users", location: FieldLocation::Body },
+        FieldSpec { snake: "email", wire: "email", location: FieldLocation::Body },
+        FieldSpec { snake: "first_name", wire: "first_name", location: FieldLocation::Body },
+        FieldSpec { snake: "last_name", wire: "last_name", location: FieldLocation::Body },
+        FieldSpec { snake: "password", wire: "password", location: FieldLocation::Body },
+        FieldSpec { snake: "phone_number", wire: "phone_number", location: FieldLocation::Body },
+        FieldSpec { snake: "share_campaigns", wire: "share_campaigns", location: FieldLocation::Body },
     ],
     auth: &[
         AuthApply { secret_key: "basic", kind: AuthKind::Basic },
@@ -4544,7 +7167,7 @@ const OP_SUBACCOUNTS_DELETE_A_SPECIFIC_SUBACCOUNT: OpSpec = OpSpec {
     method: "DELETE",
     path_template: "/subaccounts/{subaccount_id}",
     fields: &[
-        FieldSpec { snake: "subaccount_id", location: FieldLocation::Path },
+        FieldSpec { snake: "subaccount_id", wire: "subaccount_id", location: FieldLocation::Path },
     ],
     auth: &[
     ],
@@ -4554,7 +7177,7 @@ const OP_SUBACCOUNTS_REGENERATE_API_KEY: OpSpec = OpSpec {
     method: "PUT",
     path_template: "/subaccounts/{subaccount_id}/regen-api-key",
     fields: &[
-        FieldSpec { snake: "subaccount_id", location: FieldLocation::Path },
+        FieldSpec { snake: "subaccount_id", wire: "subaccount_id", location: FieldLocation::Path },
     ],
     auth: &[
     ],
@@ -4612,29 +7235,113 @@ fn iface_subaccounts__regenerate_api_key_params__to_json(p: &iface_subaccounts::
     Value::Object(m)
 }
 
+fn iface_subaccounts__get_all_subaccounts__ok(body: String) -> Result<String, crate::runtime::DispatchError> {
+    Ok(body)
+}
+
+fn iface_subaccounts__get_all_subaccounts__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
+fn iface_subaccounts__create_a_new_subaccount__ok(body: String) -> Result<String, crate::runtime::DispatchError> {
+    Ok(body)
+}
+
+fn iface_subaccounts__create_a_new_subaccount__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
+fn iface_subaccounts__get_a_specific_subaccount__ok(body: String) -> Result<String, crate::runtime::DispatchError> {
+    Ok(body)
+}
+
+fn iface_subaccounts__get_a_specific_subaccount__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
+fn iface_subaccounts__update_a_specific_subaccount__ok(body: String) -> Result<String, crate::runtime::DispatchError> {
+    Ok(body)
+}
+
+fn iface_subaccounts__update_a_specific_subaccount__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
+fn iface_subaccounts__delete_a_specific_subaccount__ok(body: String) -> Result<String, crate::runtime::DispatchError> {
+    Ok(body)
+}
+
+fn iface_subaccounts__delete_a_specific_subaccount__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
+fn iface_subaccounts__regenerate_api_key__ok(body: String) -> Result<String, crate::runtime::DispatchError> {
+    Ok(body)
+}
+
+fn iface_subaccounts__regenerate_api_key__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
 impl iface_subaccounts::Guest for crate::Component {
     fn get_all_subaccounts() -> Result<String, String> {
-        dispatch(&OP_SUBACCOUNTS_GET_ALL_SUBACCOUNTS, Value::Object(Map::new()))
+        match dispatch(&OP_SUBACCOUNTS_GET_ALL_SUBACCOUNTS, Value::Object(Map::new())).and_then(iface_subaccounts__get_all_subaccounts__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_subaccounts__get_all_subaccounts__err(e)),
+        }
     }
     fn create_a_new_subaccount(params: iface_subaccounts::CreateANewSubaccountParams) -> Result<String, String> {
         let json = iface_subaccounts__create_a_new_subaccount_params__to_json(&params);
-        dispatch(&OP_SUBACCOUNTS_CREATE_A_NEW_SUBACCOUNT, json)
+        match dispatch(&OP_SUBACCOUNTS_CREATE_A_NEW_SUBACCOUNT, json).and_then(iface_subaccounts__create_a_new_subaccount__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_subaccounts__create_a_new_subaccount__err(e)),
+        }
     }
     fn get_a_specific_subaccount(params: iface_subaccounts::GetASpecificSubaccountParams) -> Result<String, String> {
         let json = iface_subaccounts__get_a_specific_subaccount_params__to_json(&params);
-        dispatch(&OP_SUBACCOUNTS_GET_A_SPECIFIC_SUBACCOUNT, json)
+        match dispatch(&OP_SUBACCOUNTS_GET_A_SPECIFIC_SUBACCOUNT, json).and_then(iface_subaccounts__get_a_specific_subaccount__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_subaccounts__get_a_specific_subaccount__err(e)),
+        }
     }
     fn update_a_specific_subaccount(params: iface_subaccounts::UpdateASpecificSubaccountParams) -> Result<String, String> {
         let json = iface_subaccounts__update_a_specific_subaccount_params__to_json(&params);
-        dispatch(&OP_SUBACCOUNTS_UPDATE_A_SPECIFIC_SUBACCOUNT, json)
+        match dispatch(&OP_SUBACCOUNTS_UPDATE_A_SPECIFIC_SUBACCOUNT, json).and_then(iface_subaccounts__update_a_specific_subaccount__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_subaccounts__update_a_specific_subaccount__err(e)),
+        }
     }
     fn delete_a_specific_subaccount(params: iface_subaccounts::DeleteASpecificSubaccountParams) -> Result<String, String> {
         let json = iface_subaccounts__delete_a_specific_subaccount_params__to_json(&params);
-        dispatch(&OP_SUBACCOUNTS_DELETE_A_SPECIFIC_SUBACCOUNT, json)
+        match dispatch(&OP_SUBACCOUNTS_DELETE_A_SPECIFIC_SUBACCOUNT, json).and_then(iface_subaccounts__delete_a_specific_subaccount__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_subaccounts__delete_a_specific_subaccount__err(e)),
+        }
     }
     fn regenerate_api_key(params: iface_subaccounts::RegenerateApiKeyParams) -> Result<String, String> {
         let json = iface_subaccounts__regenerate_api_key_params__to_json(&params);
-        dispatch(&OP_SUBACCOUNTS_REGENERATE_API_KEY, json)
+        match dispatch(&OP_SUBACCOUNTS_REGENERATE_API_KEY, json).and_then(iface_subaccounts__regenerate_api_key__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_subaccounts__regenerate_api_key__err(e)),
+        }
     }
 }
 use crate::exports::autostamp::clicksend::timezones as iface_timezones;
@@ -4648,9 +7355,23 @@ const OP_TIMEZONES_GET_TIMEZONES: OpSpec = OpSpec {
     ],
 };
 
+fn iface_timezones__get_timezones__ok(body: String) -> Result<String, crate::runtime::DispatchError> {
+    Ok(body)
+}
+
+fn iface_timezones__get_timezones__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
 impl iface_timezones::Guest for crate::Component {
     fn get_timezones() -> Result<String, String> {
-        dispatch(&OP_TIMEZONES_GET_TIMEZONES, Value::Object(Map::new()))
+        match dispatch(&OP_TIMEZONES_GET_TIMEZONES, Value::Object(Map::new())).and_then(iface_timezones__get_timezones__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_timezones__get_timezones__err(e)),
+        }
     }
 }
 use crate::exports::autostamp::clicksend::uploads as iface_uploads;
@@ -4659,7 +7380,7 @@ const OP_UPLOADS_UPLOAD_A_FILE: OpSpec = OpSpec {
     method: "POST",
     path_template: "/uploads?convert={convert}",
     fields: &[
-        FieldSpec { snake: "body", location: FieldLocation::Body },
+        FieldSpec { snake: "body", wire: "body", location: FieldLocation::Body },
     ],
     auth: &[
     ],
@@ -4671,10 +7392,24 @@ fn iface_uploads__upload_a_file_params__to_json(p: &iface_uploads::UploadAFilePa
     Value::Object(m)
 }
 
+fn iface_uploads__upload_a_file__ok(body: String) -> Result<String, crate::runtime::DispatchError> {
+    Ok(body)
+}
+
+fn iface_uploads__upload_a_file__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
 impl iface_uploads::Guest for crate::Component {
     fn upload_a_file(params: iface_uploads::UploadAFileParams) -> Result<String, String> {
         let json = iface_uploads__upload_a_file_params__to_json(&params);
-        dispatch(&OP_UPLOADS_UPLOAD_A_FILE, json)
+        match dispatch(&OP_UPLOADS_UPLOAD_A_FILE, json).and_then(iface_uploads__upload_a_file__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_uploads__upload_a_file__err(e)),
+        }
     }
 }
 use crate::exports::autostamp::clicksend::voice as iface_voice;
@@ -4692,7 +7427,7 @@ const OP_VOICE_EXPORT_VOICE_HISTORY: OpSpec = OpSpec {
     method: "GET",
     path_template: "/voice/history/export?filename={filename}",
     fields: &[
-        FieldSpec { snake: "filename", location: FieldLocation::Path },
+        FieldSpec { snake: "filename", wire: "filename", location: FieldLocation::Path },
     ],
     auth: &[
     ],
@@ -4702,8 +7437,8 @@ const OP_VOICE_GET_VOICE_HISTORY: OpSpec = OpSpec {
     method: "GET",
     path_template: "/voice/history?date_from={date_from}&date_to={date_to}",
     fields: &[
-        FieldSpec { snake: "date_from", location: FieldLocation::Path },
-        FieldSpec { snake: "date_to", location: FieldLocation::Path },
+        FieldSpec { snake: "date_from", wire: "date_from", location: FieldLocation::Path },
+        FieldSpec { snake: "date_to", wire: "date_to", location: FieldLocation::Path },
     ],
     auth: &[
     ],
@@ -4722,16 +7457,16 @@ const OP_VOICE_POST_VOICE_PRICE: OpSpec = OpSpec {
     method: "POST",
     path_template: "/voice/price",
     fields: &[
-        FieldSpec { snake: "body", location: FieldLocation::Body },
-        FieldSpec { snake: "country", location: FieldLocation::Body },
-        FieldSpec { snake: "custom_string", location: FieldLocation::Body },
-        FieldSpec { snake: "lang", location: FieldLocation::Body },
-        FieldSpec { snake: "list_id", location: FieldLocation::Body },
-        FieldSpec { snake: "require_input", location: FieldLocation::Body },
-        FieldSpec { snake: "schedule", location: FieldLocation::Body },
-        FieldSpec { snake: "source", location: FieldLocation::Body },
-        FieldSpec { snake: "to", location: FieldLocation::Body },
-        FieldSpec { snake: "voice", location: FieldLocation::Body },
+        FieldSpec { snake: "body", wire: "body", location: FieldLocation::Body },
+        FieldSpec { snake: "country", wire: "country", location: FieldLocation::Body },
+        FieldSpec { snake: "custom_string", wire: "custom_string", location: FieldLocation::Body },
+        FieldSpec { snake: "lang", wire: "lang", location: FieldLocation::Body },
+        FieldSpec { snake: "list_id", wire: "list_id", location: FieldLocation::Body },
+        FieldSpec { snake: "require_input", wire: "require_input", location: FieldLocation::Body },
+        FieldSpec { snake: "schedule", wire: "schedule", location: FieldLocation::Body },
+        FieldSpec { snake: "source", wire: "source", location: FieldLocation::Body },
+        FieldSpec { snake: "to", wire: "to", location: FieldLocation::Body },
+        FieldSpec { snake: "voice", wire: "voice", location: FieldLocation::Body },
     ],
     auth: &[
         AuthApply { secret_key: "basic", kind: AuthKind::Basic },
@@ -4751,7 +7486,7 @@ const OP_VOICE_POST_VOICE_RECEIPTS: OpSpec = OpSpec {
     method: "POST",
     path_template: "/voice/receipts",
     fields: &[
-        FieldSpec { snake: "url", location: FieldLocation::Body },
+        FieldSpec { snake: "url", wire: "url", location: FieldLocation::Body },
     ],
     auth: &[
     ],
@@ -4761,7 +7496,7 @@ const OP_VOICE_MARKED_VOICE_RECEIPTS_AS_READ: OpSpec = OpSpec {
     method: "PUT",
     path_template: "/voice/receipts-read?date_before={date_before}",
     fields: &[
-        FieldSpec { snake: "date_before", location: FieldLocation::Path },
+        FieldSpec { snake: "date_before", wire: "date_before", location: FieldLocation::Path },
     ],
     auth: &[
     ],
@@ -4771,7 +7506,7 @@ const OP_VOICE_GET_SPECIFIC_VOICE_RECEIPT: OpSpec = OpSpec {
     method: "GET",
     path_template: "/voice/receipts/{message_id}",
     fields: &[
-        FieldSpec { snake: "message_id", location: FieldLocation::Path },
+        FieldSpec { snake: "message_id", wire: "message_id", location: FieldLocation::Path },
     ],
     auth: &[
     ],
@@ -4781,17 +7516,17 @@ const OP_VOICE_SEND_A_VOICE_CALL: OpSpec = OpSpec {
     method: "POST",
     path_template: "/voice/send",
     fields: &[
-        FieldSpec { snake: "body", location: FieldLocation::Body },
-        FieldSpec { snake: "country", location: FieldLocation::Body },
-        FieldSpec { snake: "custom_string", location: FieldLocation::Body },
-        FieldSpec { snake: "lang", location: FieldLocation::Body },
-        FieldSpec { snake: "list_id", location: FieldLocation::Body },
-        FieldSpec { snake: "machine_detection", location: FieldLocation::Body },
-        FieldSpec { snake: "require_input", location: FieldLocation::Body },
-        FieldSpec { snake: "schedule", location: FieldLocation::Body },
-        FieldSpec { snake: "source", location: FieldLocation::Body },
-        FieldSpec { snake: "to", location: FieldLocation::Body },
-        FieldSpec { snake: "voice", location: FieldLocation::Body },
+        FieldSpec { snake: "body", wire: "body", location: FieldLocation::Body },
+        FieldSpec { snake: "country", wire: "country", location: FieldLocation::Body },
+        FieldSpec { snake: "custom_string", wire: "custom_string", location: FieldLocation::Body },
+        FieldSpec { snake: "lang", wire: "lang", location: FieldLocation::Body },
+        FieldSpec { snake: "list_id", wire: "list_id", location: FieldLocation::Body },
+        FieldSpec { snake: "machine_detection", wire: "machine_detection", location: FieldLocation::Body },
+        FieldSpec { snake: "require_input", wire: "require_input", location: FieldLocation::Body },
+        FieldSpec { snake: "schedule", wire: "schedule", location: FieldLocation::Body },
+        FieldSpec { snake: "source", wire: "source", location: FieldLocation::Body },
+        FieldSpec { snake: "to", wire: "to", location: FieldLocation::Body },
+        FieldSpec { snake: "voice", wire: "voice", location: FieldLocation::Body },
     ],
     auth: &[
         AuthApply { secret_key: "basic", kind: AuthKind::Basic },
@@ -4802,7 +7537,7 @@ const OP_VOICE_CANCEL_A_SPECIFIC_VOICE_CALL: OpSpec = OpSpec {
     method: "PUT",
     path_template: "/voice/{message_id}/cancel",
     fields: &[
-        FieldSpec { snake: "message_id", location: FieldLocation::Path },
+        FieldSpec { snake: "message_id", wire: "message_id", location: FieldLocation::Path },
     ],
     auth: &[
     ],
@@ -4876,47 +7611,201 @@ fn iface_voice__cancel_a_specific_voice_call_params__to_json(p: &iface_voice::Ca
     Value::Object(m)
 }
 
+fn iface_voice__cancel_all_voice_calls__ok(body: String) -> Result<String, crate::runtime::DispatchError> {
+    Ok(body)
+}
+
+fn iface_voice__cancel_all_voice_calls__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
+fn iface_voice__export_voice_history__ok(body: String) -> Result<String, crate::runtime::DispatchError> {
+    Ok(body)
+}
+
+fn iface_voice__export_voice_history__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
+fn iface_voice__get_voice_history__ok(body: String) -> Result<String, crate::runtime::DispatchError> {
+    Ok(body)
+}
+
+fn iface_voice__get_voice_history__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
+fn iface_voice__languages__ok(body: String) -> Result<String, crate::runtime::DispatchError> {
+    Ok(body)
+}
+
+fn iface_voice__languages__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
+fn iface_voice__post_voice_price__ok(body: String) -> Result<String, crate::runtime::DispatchError> {
+    Ok(body)
+}
+
+fn iface_voice__post_voice_price__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
+fn iface_voice__get_voice_receipts__ok(body: String) -> Result<String, crate::runtime::DispatchError> {
+    Ok(body)
+}
+
+fn iface_voice__get_voice_receipts__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
+fn iface_voice__post_voice_receipts__ok(body: String) -> Result<String, crate::runtime::DispatchError> {
+    Ok(body)
+}
+
+fn iface_voice__post_voice_receipts__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
+fn iface_voice__marked_voice_receipts_as_read__ok(body: String) -> Result<String, crate::runtime::DispatchError> {
+    Ok(body)
+}
+
+fn iface_voice__marked_voice_receipts_as_read__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
+fn iface_voice__get_specific_voice_receipt__ok(body: String) -> Result<String, crate::runtime::DispatchError> {
+    Ok(body)
+}
+
+fn iface_voice__get_specific_voice_receipt__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
+fn iface_voice__send_a_voice_call__ok(body: String) -> Result<String, crate::runtime::DispatchError> {
+    Ok(body)
+}
+
+fn iface_voice__send_a_voice_call__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
+fn iface_voice__cancel_a_specific_voice_call__ok(body: String) -> Result<String, crate::runtime::DispatchError> {
+    Ok(body)
+}
+
+fn iface_voice__cancel_a_specific_voice_call__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
 impl iface_voice::Guest for crate::Component {
     fn cancel_all_voice_calls() -> Result<String, String> {
-        dispatch(&OP_VOICE_CANCEL_ALL_VOICE_CALLS, Value::Object(Map::new()))
+        match dispatch(&OP_VOICE_CANCEL_ALL_VOICE_CALLS, Value::Object(Map::new())).and_then(iface_voice__cancel_all_voice_calls__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_voice__cancel_all_voice_calls__err(e)),
+        }
     }
     fn export_voice_history(params: iface_voice::ExportVoiceHistoryParams) -> Result<String, String> {
         let json = iface_voice__export_voice_history_params__to_json(&params);
-        dispatch(&OP_VOICE_EXPORT_VOICE_HISTORY, json)
+        match dispatch(&OP_VOICE_EXPORT_VOICE_HISTORY, json).and_then(iface_voice__export_voice_history__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_voice__export_voice_history__err(e)),
+        }
     }
     fn get_voice_history(params: iface_voice::GetVoiceHistoryParams) -> Result<String, String> {
         let json = iface_voice__get_voice_history_params__to_json(&params);
-        dispatch(&OP_VOICE_GET_VOICE_HISTORY, json)
+        match dispatch(&OP_VOICE_GET_VOICE_HISTORY, json).and_then(iface_voice__get_voice_history__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_voice__get_voice_history__err(e)),
+        }
     }
     fn languages() -> Result<String, String> {
-        dispatch(&OP_VOICE_LANGUAGES, Value::Object(Map::new()))
+        match dispatch(&OP_VOICE_LANGUAGES, Value::Object(Map::new())).and_then(iface_voice__languages__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_voice__languages__err(e)),
+        }
     }
     fn post_voice_price(params: iface_voice::PostVoicePriceParams) -> Result<String, String> {
         let json = iface_voice__post_voice_price_params__to_json(&params);
-        dispatch(&OP_VOICE_POST_VOICE_PRICE, json)
+        match dispatch(&OP_VOICE_POST_VOICE_PRICE, json).and_then(iface_voice__post_voice_price__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_voice__post_voice_price__err(e)),
+        }
     }
     fn get_voice_receipts() -> Result<String, String> {
-        dispatch(&OP_VOICE_GET_VOICE_RECEIPTS, Value::Object(Map::new()))
+        match dispatch(&OP_VOICE_GET_VOICE_RECEIPTS, Value::Object(Map::new())).and_then(iface_voice__get_voice_receipts__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_voice__get_voice_receipts__err(e)),
+        }
     }
     fn post_voice_receipts(params: iface_voice::PostVoiceReceiptsParams) -> Result<String, String> {
         let json = iface_voice__post_voice_receipts_params__to_json(&params);
-        dispatch(&OP_VOICE_POST_VOICE_RECEIPTS, json)
+        match dispatch(&OP_VOICE_POST_VOICE_RECEIPTS, json).and_then(iface_voice__post_voice_receipts__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_voice__post_voice_receipts__err(e)),
+        }
     }
     fn marked_voice_receipts_as_read(params: iface_voice::MarkedVoiceReceiptsAsReadParams) -> Result<String, String> {
         let json = iface_voice__marked_voice_receipts_as_read_params__to_json(&params);
-        dispatch(&OP_VOICE_MARKED_VOICE_RECEIPTS_AS_READ, json)
+        match dispatch(&OP_VOICE_MARKED_VOICE_RECEIPTS_AS_READ, json).and_then(iface_voice__marked_voice_receipts_as_read__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_voice__marked_voice_receipts_as_read__err(e)),
+        }
     }
     fn get_specific_voice_receipt(params: iface_voice::GetSpecificVoiceReceiptParams) -> Result<String, String> {
         let json = iface_voice__get_specific_voice_receipt_params__to_json(&params);
-        dispatch(&OP_VOICE_GET_SPECIFIC_VOICE_RECEIPT, json)
+        match dispatch(&OP_VOICE_GET_SPECIFIC_VOICE_RECEIPT, json).and_then(iface_voice__get_specific_voice_receipt__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_voice__get_specific_voice_receipt__err(e)),
+        }
     }
     fn send_a_voice_call(params: iface_voice::SendAVoiceCallParams) -> Result<String, String> {
         let json = iface_voice__send_a_voice_call_params__to_json(&params);
-        dispatch(&OP_VOICE_SEND_A_VOICE_CALL, json)
+        match dispatch(&OP_VOICE_SEND_A_VOICE_CALL, json).and_then(iface_voice__send_a_voice_call__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_voice__send_a_voice_call__err(e)),
+        }
     }
     fn cancel_a_specific_voice_call(params: iface_voice::CancelASpecificVoiceCallParams) -> Result<String, String> {
         let json = iface_voice__cancel_a_specific_voice_call_params__to_json(&params);
-        dispatch(&OP_VOICE_CANCEL_A_SPECIFIC_VOICE_CALL, json)
+        match dispatch(&OP_VOICE_CANCEL_A_SPECIFIC_VOICE_CALL, json).and_then(iface_voice__cancel_a_specific_voice_call__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_voice__cancel_a_specific_voice_call__err(e)),
+        }
     }
 }
 

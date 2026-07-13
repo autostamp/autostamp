@@ -44,10 +44,15 @@ pub(crate) enum FieldLocation {
     Body,
 }
 
-/// A single operation parameter: the snake-case key it carries in the params JSON and where
-/// it belongs in the request.
+/// A single operation parameter. `snake` keys the field in the internal params JSON (and, for a
+/// path field, matches the `{snake}` placeholder in the path template); `wire` is the verbatim name
+/// the field takes on the HTTP wire (query key, header name, or body property). The two differ
+/// whenever the source name isn't already snake_case (e.g. `dryRun` → snake `dry_run`, wire
+/// `dryRun`), and let distinct inputs that share a snake key (`DateCreated`, `DateCreated<`) still
+/// travel under their true names.
 pub(crate) struct FieldSpec {
     pub(crate) snake: &'static str,
+    pub(crate) wire: &'static str,
     pub(crate) location: FieldLocation,
 }
 
@@ -71,6 +76,16 @@ pub(crate) struct AuthApply {
     pub(crate) kind: AuthKind,
 }
 
+/// The failure modes of [`dispatch`], kept structured so each generated operation can map them
+/// onto its own typed error: an `Http` failure carries the response status and body (routed to
+/// the matching error-variant case), while a `Transport` failure carries a message for the
+/// catch-all case (a secret lookup, connection, or decode failure that never produced an HTTP
+/// status).
+pub(crate) enum DispatchError {
+    Http { status: u16, body: String },
+    Transport(String),
+}
+
 /// A single API operation: HTTP method, path template (with `{snake}` placeholders), the
 /// parameter fields, and the security schemes to apply.
 pub(crate) struct OpSpec {
@@ -81,8 +96,9 @@ pub(crate) struct OpSpec {
 }
 
 /// Execute `op` with the supplied `params` (a JSON object keyed by snake-case field names)
-/// and return the response body as a string, or an error message.
-pub(crate) fn dispatch(op: &OpSpec, params: Value) -> Result<String, String> {
+/// and return the raw 2xx response body, or a structured [`DispatchError`] the caller maps
+/// onto the operation's typed error.
+pub(crate) fn dispatch(op: &OpSpec, params: Value) -> Result<String, DispatchError> {
     let obj = match &params {
         Value::Object(map) => Some(map),
         _ => None,
@@ -105,10 +121,10 @@ pub(crate) fn dispatch(op: &OpSpec, params: Value) -> Result<String, String> {
                 let placeholder = format!("{{{}}}", field.snake);
                 path = path.replace(&placeholder, &percent_encode(&scalar(value)));
             }
-            FieldLocation::Query => query.push((field.snake.to_string(), scalar(value))),
-            FieldLocation::Header => headers.push((field.snake.to_string(), scalar(value))),
+            FieldLocation::Query => query.push((field.wire.to_string(), scalar(value))),
+            FieldLocation::Header => headers.push((field.wire.to_string(), scalar(value))),
             FieldLocation::Body => {
-                body.insert(field.snake.to_string(), value.clone());
+                body.insert(field.wire.to_string(), value.clone());
             }
         }
     }
@@ -116,7 +132,7 @@ pub(crate) fn dispatch(op: &OpSpec, params: Value) -> Result<String, String> {
     // Apply each resolved security scheme, sourcing its value from wasmcloud:secrets.
     let mut cookies: Vec<String> = Vec::new();
     for apply in op.auth {
-        let secret = fetch_secret(apply.secret_key)?;
+        let secret = fetch_secret(apply.secret_key).map_err(DispatchError::Transport)?;
         match &apply.kind {
             AuthKind::Bearer => headers.push(("authorization".into(), format!("Bearer {secret}"))),
             AuthKind::Basic => {
@@ -177,17 +193,18 @@ fn fetch_secret(key: &str) -> Result<String, String> {
 }
 
 /// Build and send the outgoing request with `wstd`, returning the response body on a 2xx
-/// status. The generated guest exports are synchronous, so the async `wstd` client is driven
-/// to completion on a local reactor via `wstd::runtime::block_on`.
+/// status and a structured [`DispatchError`] otherwise. The generated guest exports are
+/// synchronous, so the async `wstd` client is driven to completion on a local reactor via
+/// `wstd::runtime::block_on`.
 fn perform(
     method: &str,
     path_with_query: &str,
     headers: &[(String, String)],
     body: &[u8],
-) -> Result<String, String> {
+) -> Result<String, DispatchError> {
     let url = join_url(crate::BASE_URL, path_with_query);
     let method = Method::from_bytes(method.as_bytes())
-        .map_err(|err| format!("invalid HTTP method `{method}`: {err}"))?;
+        .map_err(|err| DispatchError::Transport(format!("invalid HTTP method `{method}`: {err}")))?;
 
     let mut builder = Request::builder().method(method).uri(url);
     for (name, value) in headers {
@@ -199,27 +216,29 @@ fn perform(
         } else {
             Body::from(body.to_vec())
         })
-        .map_err(|err| format!("failed to build request: {err}"))?;
+        .map_err(|err| DispatchError::Transport(format!("failed to build request: {err}")))?;
 
     wstd::runtime::block_on(async move {
         let client = Client::new();
         let response = client
             .send(request)
             .await
-            .map_err(|err| format!("request failed: {err:#}"))?;
+            .map_err(|err| DispatchError::Transport(format!("request failed: {err:#}")))?;
 
         let status = response.status().as_u16();
         let mut response_body = response.into_body();
-        let bytes = response_body
-            .contents()
-            .await
-            .map_err(|err| format!("failed to read response body: {err:#}"))?;
+        let bytes = response_body.contents().await.map_err(|err| {
+            DispatchError::Transport(format!("failed to read response body: {err:#}"))
+        })?;
         let body_text = String::from_utf8_lossy(bytes).into_owned();
 
         if (200..300).contains(&status) {
             Ok(body_text)
         } else {
-            Err(format!("HTTP {status}: {body_text}"))
+            Err(DispatchError::Http {
+                status,
+                body: body_text,
+            })
         }
     })
 }
@@ -288,20 +307,20 @@ const OP_CHECK_POST_CHECK: OpSpec = OpSpec {
     method: "POST",
     path_template: "/check",
     fields: &[
-        FieldSpec { snake: "text", location: FieldLocation::Body },
-        FieldSpec { snake: "data", location: FieldLocation::Body },
-        FieldSpec { snake: "language", location: FieldLocation::Body },
-        FieldSpec { snake: "username", location: FieldLocation::Body },
-        FieldSpec { snake: "api_key", location: FieldLocation::Body },
-        FieldSpec { snake: "dicts", location: FieldLocation::Body },
-        FieldSpec { snake: "mother_tongue", location: FieldLocation::Body },
-        FieldSpec { snake: "preferred_variants", location: FieldLocation::Body },
-        FieldSpec { snake: "enabled_rules", location: FieldLocation::Body },
-        FieldSpec { snake: "disabled_rules", location: FieldLocation::Body },
-        FieldSpec { snake: "enabled_categories", location: FieldLocation::Body },
-        FieldSpec { snake: "disabled_categories", location: FieldLocation::Body },
-        FieldSpec { snake: "enabled_only", location: FieldLocation::Body },
-        FieldSpec { snake: "level", location: FieldLocation::Body },
+        FieldSpec { snake: "text", wire: "text", location: FieldLocation::Body },
+        FieldSpec { snake: "data", wire: "data", location: FieldLocation::Body },
+        FieldSpec { snake: "language", wire: "language", location: FieldLocation::Body },
+        FieldSpec { snake: "username", wire: "username", location: FieldLocation::Body },
+        FieldSpec { snake: "api_key", wire: "apiKey", location: FieldLocation::Body },
+        FieldSpec { snake: "dicts", wire: "dicts", location: FieldLocation::Body },
+        FieldSpec { snake: "mother_tongue", wire: "motherTongue", location: FieldLocation::Body },
+        FieldSpec { snake: "preferred_variants", wire: "preferredVariants", location: FieldLocation::Body },
+        FieldSpec { snake: "enabled_rules", wire: "enabledRules", location: FieldLocation::Body },
+        FieldSpec { snake: "disabled_rules", wire: "disabledRules", location: FieldLocation::Body },
+        FieldSpec { snake: "enabled_categories", wire: "enabledCategories", location: FieldLocation::Body },
+        FieldSpec { snake: "disabled_categories", wire: "disabledCategories", location: FieldLocation::Body },
+        FieldSpec { snake: "enabled_only", wire: "enabledOnly", location: FieldLocation::Body },
+        FieldSpec { snake: "level", wire: "level", location: FieldLocation::Body },
     ],
     auth: &[
     ],
@@ -312,6 +331,91 @@ fn iface_check__post_check_body_level_enum__to_str(e: &iface_check::PostCheckBod
         iface_check::PostCheckBodyLevelEnum::Default => "default",
         iface_check::PostCheckBodyLevelEnum::Picky => "picky",
     }
+}
+
+fn iface_check__post_check_response__to_json(p: &iface_check::PostCheckResponse) -> Value {
+    let mut m = Map::new();
+    m.insert("language".into(), match (&p.language) { Some(v) => iface_check__post_check_response_language__to_json(v), None => Value::Null });
+    m.insert("matches".into(), match (&p.matches) { Some(v) => Value::Array((v).iter().map(|v| iface_check__post_check_response_matches_item__to_json(v)).collect()), None => Value::Null });
+    m.insert("software".into(), match (&p.software) { Some(v) => iface_check__post_check_response_software__to_json(v), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_check__post_check_response_language__to_json(p: &iface_check::PostCheckResponseLanguage) -> Value {
+    let mut m = Map::new();
+    m.insert("code".into(), Value::String((&p.code).clone()));
+    m.insert("detectedLanguage".into(), iface_check__post_check_response_language_detected_language__to_json(&p.detected_language));
+    m.insert("name".into(), Value::String((&p.name).clone()));
+    Value::Object(m)
+}
+
+fn iface_check__post_check_response_language_detected_language__to_json(p: &iface_check::PostCheckResponseLanguageDetectedLanguage) -> Value {
+    let mut m = Map::new();
+    m.insert("code".into(), Value::String((&p.code).clone()));
+    m.insert("name".into(), Value::String((&p.name).clone()));
+    Value::Object(m)
+}
+
+fn iface_check__post_check_response_matches_item__to_json(p: &iface_check::PostCheckResponseMatchesItem) -> Value {
+    let mut m = Map::new();
+    m.insert("context".into(), iface_check__post_check_response_matches_item_context__to_json(&p.context));
+    m.insert("length".into(), Value::Number(serde_json::Number::from(*(&p.length))));
+    m.insert("message".into(), Value::String((&p.message).clone()));
+    m.insert("offset".into(), Value::Number(serde_json::Number::from(*(&p.offset))));
+    m.insert("replacements".into(), Value::Array((&p.replacements).iter().map(|v| iface_check__post_check_response_matches_item_replacements_item__to_json(v)).collect()));
+    m.insert("rule".into(), match (&p.rule) { Some(v) => iface_check__post_check_response_matches_item_rule__to_json(v), None => Value::Null });
+    m.insert("sentence".into(), Value::String((&p.sentence).clone()));
+    m.insert("shortMessage".into(), match (&p.short_message) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_check__post_check_response_matches_item_context__to_json(p: &iface_check::PostCheckResponseMatchesItemContext) -> Value {
+    let mut m = Map::new();
+    m.insert("length".into(), Value::Number(serde_json::Number::from(*(&p.length))));
+    m.insert("offset".into(), Value::Number(serde_json::Number::from(*(&p.offset))));
+    m.insert("text".into(), Value::String((&p.text).clone()));
+    Value::Object(m)
+}
+
+fn iface_check__post_check_response_matches_item_replacements_item__to_json(p: &iface_check::PostCheckResponseMatchesItemReplacementsItem) -> Value {
+    let mut m = Map::new();
+    m.insert("value".into(), match (&p.value) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_check__post_check_response_matches_item_rule__to_json(p: &iface_check::PostCheckResponseMatchesItemRule) -> Value {
+    let mut m = Map::new();
+    m.insert("category".into(), iface_check__post_check_response_matches_item_rule_category__to_json(&p.category));
+    m.insert("description".into(), Value::String((&p.description).clone()));
+    m.insert("id".into(), Value::String((&p.id).clone()));
+    m.insert("issueType".into(), match (&p.issue_type) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("subId".into(), match (&p.sub_id) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("urls".into(), match (&p.urls) { Some(v) => Value::Array((v).iter().map(|v| iface_check__post_check_response_matches_item_rule_urls_item__to_json(v)).collect()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_check__post_check_response_matches_item_rule_category__to_json(p: &iface_check::PostCheckResponseMatchesItemRuleCategory) -> Value {
+    let mut m = Map::new();
+    m.insert("id".into(), match (&p.id) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("name".into(), match (&p.name) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_check__post_check_response_matches_item_rule_urls_item__to_json(p: &iface_check::PostCheckResponseMatchesItemRuleUrlsItem) -> Value {
+    let mut m = Map::new();
+    m.insert("value".into(), match (&p.value) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_check__post_check_response_software__to_json(p: &iface_check::PostCheckResponseSoftware) -> Value {
+    let mut m = Map::new();
+    m.insert("apiVersion".into(), Value::Number(serde_json::Number::from(*(&p.api_version))));
+    m.insert("buildDate".into(), Value::String((&p.build_date).clone()));
+    m.insert("name".into(), Value::String((&p.name).clone()));
+    m.insert("premium".into(), match (&p.premium) { Some(v) => Value::Bool(*(v)), None => Value::Null });
+    m.insert("status".into(), match (&p.status) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("version".into(), Value::String((&p.version).clone()));
+    Value::Object(m)
 }
 
 fn iface_check__post_check_params__to_json(p: &iface_check::PostCheckParams) -> Value {
@@ -333,10 +437,126 @@ fn iface_check__post_check_params__to_json(p: &iface_check::PostCheckParams) -> 
     Value::Object(m)
 }
 
+fn iface_check__post_check_response__from_json(v: &Value) -> Option<iface_check::PostCheckResponse> {
+    let m = v.as_object()?;
+    Some(iface_check::PostCheckResponse {
+        language: m.get("language").filter(|v| !v.is_null()).and_then(|v| iface_check__post_check_response_language__from_json(v)),
+        matches: m.get("matches").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| iface_check__post_check_response_matches_item__from_json(x)).collect())),
+        software: m.get("software").filter(|v| !v.is_null()).and_then(|v| iface_check__post_check_response_software__from_json(v)),
+    })
+}
+
+fn iface_check__post_check_response_language__from_json(v: &Value) -> Option<iface_check::PostCheckResponseLanguage> {
+    let m = v.as_object()?;
+    Some(iface_check::PostCheckResponseLanguage {
+        code: m.get("code").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        detected_language: match m.get("detectedLanguage").and_then(|v| iface_check__post_check_response_language_detected_language__from_json(v)) { Some(x) => x, None => return None },
+        name: m.get("name").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+    })
+}
+
+fn iface_check__post_check_response_language_detected_language__from_json(v: &Value) -> Option<iface_check::PostCheckResponseLanguageDetectedLanguage> {
+    let m = v.as_object()?;
+    Some(iface_check::PostCheckResponseLanguageDetectedLanguage {
+        code: m.get("code").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        name: m.get("name").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+    })
+}
+
+fn iface_check__post_check_response_matches_item__from_json(v: &Value) -> Option<iface_check::PostCheckResponseMatchesItem> {
+    let m = v.as_object()?;
+    Some(iface_check::PostCheckResponseMatchesItem {
+        context: match m.get("context").and_then(|v| iface_check__post_check_response_matches_item_context__from_json(v)) { Some(x) => x, None => return None },
+        length: m.get("length").and_then(|v| (v).as_i64().map(|n| n as i32)).unwrap_or_default(),
+        message: m.get("message").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        offset: m.get("offset").and_then(|v| (v).as_i64().map(|n| n as i32)).unwrap_or_default(),
+        replacements: m.get("replacements").and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| iface_check__post_check_response_matches_item_replacements_item__from_json(x)).collect())).unwrap_or_default(),
+        rule: m.get("rule").filter(|v| !v.is_null()).and_then(|v| iface_check__post_check_response_matches_item_rule__from_json(v)),
+        sentence: m.get("sentence").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        short_message: m.get("shortMessage").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    })
+}
+
+fn iface_check__post_check_response_matches_item_context__from_json(v: &Value) -> Option<iface_check::PostCheckResponseMatchesItemContext> {
+    let m = v.as_object()?;
+    Some(iface_check::PostCheckResponseMatchesItemContext {
+        length: m.get("length").and_then(|v| (v).as_i64().map(|n| n as i32)).unwrap_or_default(),
+        offset: m.get("offset").and_then(|v| (v).as_i64().map(|n| n as i32)).unwrap_or_default(),
+        text: m.get("text").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+    })
+}
+
+fn iface_check__post_check_response_matches_item_replacements_item__from_json(v: &Value) -> Option<iface_check::PostCheckResponseMatchesItemReplacementsItem> {
+    let m = v.as_object()?;
+    Some(iface_check::PostCheckResponseMatchesItemReplacementsItem {
+        value: m.get("value").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    })
+}
+
+fn iface_check__post_check_response_matches_item_rule__from_json(v: &Value) -> Option<iface_check::PostCheckResponseMatchesItemRule> {
+    let m = v.as_object()?;
+    Some(iface_check::PostCheckResponseMatchesItemRule {
+        category: match m.get("category").and_then(|v| iface_check__post_check_response_matches_item_rule_category__from_json(v)) { Some(x) => x, None => return None },
+        description: m.get("description").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        id: m.get("id").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        issue_type: m.get("issueType").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        sub_id: m.get("subId").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        urls: m.get("urls").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| iface_check__post_check_response_matches_item_rule_urls_item__from_json(x)).collect())),
+    })
+}
+
+fn iface_check__post_check_response_matches_item_rule_category__from_json(v: &Value) -> Option<iface_check::PostCheckResponseMatchesItemRuleCategory> {
+    let m = v.as_object()?;
+    Some(iface_check::PostCheckResponseMatchesItemRuleCategory {
+        id: m.get("id").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        name: m.get("name").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    })
+}
+
+fn iface_check__post_check_response_matches_item_rule_urls_item__from_json(v: &Value) -> Option<iface_check::PostCheckResponseMatchesItemRuleUrlsItem> {
+    let m = v.as_object()?;
+    Some(iface_check::PostCheckResponseMatchesItemRuleUrlsItem {
+        value: m.get("value").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    })
+}
+
+fn iface_check__post_check_response_software__from_json(v: &Value) -> Option<iface_check::PostCheckResponseSoftware> {
+    let m = v.as_object()?;
+    Some(iface_check::PostCheckResponseSoftware {
+        api_version: m.get("apiVersion").and_then(|v| (v).as_i64().map(|n| n as i32)).unwrap_or_default(),
+        build_date: m.get("buildDate").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        name: m.get("name").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        premium: m.get("premium").filter(|v| !v.is_null()).and_then(|v| (v).as_bool()),
+        status: m.get("status").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        version: m.get("version").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+    })
+}
+
+fn iface_check__post_check__ok(body: String) -> Result<iface_check::PostCheckResponse, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match iface_check__post_check_response__from_json(&v) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_check__post_check__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
 impl iface_check::Guest for crate::Component {
-    fn post_check(params: iface_check::PostCheckParams) -> Result<String, String> {
+    fn post_check(params: iface_check::PostCheckParams) -> Result<iface_check::PostCheckResponse, String> {
         let json = iface_check__post_check_params__to_json(&params);
-        dispatch(&OP_CHECK_POST_CHECK, json)
+        match dispatch(&OP_CHECK_POST_CHECK, json).and_then(iface_check__post_check__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_check__post_check__err(e)),
+        }
     }
 }
 use crate::exports::autostamp::languagetool::languages as iface_languages;
@@ -350,9 +570,47 @@ const OP_LANGUAGES_GET_LANGUAGES: OpSpec = OpSpec {
     ],
 };
 
+fn iface_languages__get_languages_response_item__to_json(p: &iface_languages::GetLanguagesResponseItem) -> Value {
+    let mut m = Map::new();
+    m.insert("code".into(), Value::String((&p.code).clone()));
+    m.insert("longCode".into(), Value::String((&p.long_code).clone()));
+    m.insert("name".into(), Value::String((&p.name).clone()));
+    Value::Object(m)
+}
+
+fn iface_languages__get_languages_response_item__from_json(v: &Value) -> Option<iface_languages::GetLanguagesResponseItem> {
+    let m = v.as_object()?;
+    Some(iface_languages::GetLanguagesResponseItem {
+        code: m.get("code").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        long_code: m.get("longCode").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        name: m.get("name").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+    })
+}
+
+fn iface_languages__get_languages__ok(body: String) -> Result<Vec<iface_languages::GetLanguagesResponseItem>, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match (&v).as_array().map(|a| a.iter().filter_map(|x| iface_languages__get_languages_response_item__from_json(x)).collect()) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_languages__get_languages__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
 impl iface_languages::Guest for crate::Component {
-    fn get_languages() -> Result<String, String> {
-        dispatch(&OP_LANGUAGES_GET_LANGUAGES, Value::Object(Map::new()))
+    fn get_languages() -> Result<Vec<iface_languages::GetLanguagesResponseItem>, String> {
+        match dispatch(&OP_LANGUAGES_GET_LANGUAGES, Value::Object(Map::new())).and_then(iface_languages__get_languages__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_languages__get_languages__err(e)),
+        }
     }
 }
 use crate::exports::autostamp::languagetool::words as iface_words;
@@ -361,10 +619,10 @@ const OP_WORDS_GET_WORDS: OpSpec = OpSpec {
     method: "GET",
     path_template: "/words",
     fields: &[
-        FieldSpec { snake: "offset", location: FieldLocation::Query },
-        FieldSpec { snake: "limit", location: FieldLocation::Query },
-        FieldSpec { snake: "username", location: FieldLocation::Query },
-        FieldSpec { snake: "dicts", location: FieldLocation::Query },
+        FieldSpec { snake: "offset", wire: "offset", location: FieldLocation::Query },
+        FieldSpec { snake: "limit", wire: "limit", location: FieldLocation::Query },
+        FieldSpec { snake: "username", wire: "username", location: FieldLocation::Query },
+        FieldSpec { snake: "dicts", wire: "dicts", location: FieldLocation::Query },
     ],
     auth: &[
         AuthApply { secret_key: "api-key", kind: AuthKind::ApiKeyQuery("apiKey") },
@@ -375,10 +633,10 @@ const OP_WORDS_POST_WORDS_ADD: OpSpec = OpSpec {
     method: "POST",
     path_template: "/words/add",
     fields: &[
-        FieldSpec { snake: "word", location: FieldLocation::Body },
-        FieldSpec { snake: "username", location: FieldLocation::Body },
-        FieldSpec { snake: "api_key", location: FieldLocation::Body },
-        FieldSpec { snake: "dict", location: FieldLocation::Body },
+        FieldSpec { snake: "word", wire: "word", location: FieldLocation::Body },
+        FieldSpec { snake: "username", wire: "username", location: FieldLocation::Body },
+        FieldSpec { snake: "api_key", wire: "apiKey", location: FieldLocation::Body },
+        FieldSpec { snake: "dict", wire: "dict", location: FieldLocation::Body },
     ],
     auth: &[
     ],
@@ -388,14 +646,32 @@ const OP_WORDS_POST_WORDS_DELETE: OpSpec = OpSpec {
     method: "POST",
     path_template: "/words/delete",
     fields: &[
-        FieldSpec { snake: "word", location: FieldLocation::Body },
-        FieldSpec { snake: "username", location: FieldLocation::Body },
-        FieldSpec { snake: "api_key", location: FieldLocation::Body },
-        FieldSpec { snake: "dict", location: FieldLocation::Body },
+        FieldSpec { snake: "word", wire: "word", location: FieldLocation::Body },
+        FieldSpec { snake: "username", wire: "username", location: FieldLocation::Body },
+        FieldSpec { snake: "api_key", wire: "apiKey", location: FieldLocation::Body },
+        FieldSpec { snake: "dict", wire: "dict", location: FieldLocation::Body },
     ],
     auth: &[
     ],
 };
+
+fn iface_words__get_words_response__to_json(p: &iface_words::GetWordsResponse) -> Value {
+    let mut m = Map::new();
+    m.insert("words".into(), match (&p.words) { Some(v) => Value::Array((v).iter().map(|v| Value::String((v).clone())).collect()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_words__post_words_add_response__to_json(p: &iface_words::PostWordsAddResponse) -> Value {
+    let mut m = Map::new();
+    m.insert("added".into(), match (&p.added) { Some(v) => Value::Bool(*(v)), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_words__post_words_delete_response__to_json(p: &iface_words::PostWordsDeleteResponse) -> Value {
+    let mut m = Map::new();
+    m.insert("deleted".into(), match (&p.deleted) { Some(v) => Value::Bool(*(v)), None => Value::Null });
+    Value::Object(m)
+}
 
 fn iface_words__get_words_params__to_json(p: &iface_words::GetWordsParams) -> Value {
     let mut m = Map::new();
@@ -424,18 +700,102 @@ fn iface_words__post_words_delete_params__to_json(p: &iface_words::PostWordsDele
     Value::Object(m)
 }
 
+fn iface_words__get_words_response__from_json(v: &Value) -> Option<iface_words::GetWordsResponse> {
+    let m = v.as_object()?;
+    Some(iface_words::GetWordsResponse {
+        words: m.get("words").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| (x).as_str().map(|s| s.to_string())).collect())),
+    })
+}
+
+fn iface_words__post_words_add_response__from_json(v: &Value) -> Option<iface_words::PostWordsAddResponse> {
+    let m = v.as_object()?;
+    Some(iface_words::PostWordsAddResponse {
+        added: m.get("added").filter(|v| !v.is_null()).and_then(|v| (v).as_bool()),
+    })
+}
+
+fn iface_words__post_words_delete_response__from_json(v: &Value) -> Option<iface_words::PostWordsDeleteResponse> {
+    let m = v.as_object()?;
+    Some(iface_words::PostWordsDeleteResponse {
+        deleted: m.get("deleted").filter(|v| !v.is_null()).and_then(|v| (v).as_bool()),
+    })
+}
+
+fn iface_words__get_words__ok(body: String) -> Result<iface_words::GetWordsResponse, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match iface_words__get_words_response__from_json(&v) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_words__get_words__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
+fn iface_words__post_words_add__ok(body: String) -> Result<iface_words::PostWordsAddResponse, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match iface_words__post_words_add_response__from_json(&v) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_words__post_words_add__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
+fn iface_words__post_words_delete__ok(body: String) -> Result<iface_words::PostWordsDeleteResponse, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match iface_words__post_words_delete_response__from_json(&v) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_words__post_words_delete__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
 impl iface_words::Guest for crate::Component {
-    fn get_words(params: iface_words::GetWordsParams) -> Result<String, String> {
+    fn get_words(params: iface_words::GetWordsParams) -> Result<iface_words::GetWordsResponse, String> {
         let json = iface_words__get_words_params__to_json(&params);
-        dispatch(&OP_WORDS_GET_WORDS, json)
+        match dispatch(&OP_WORDS_GET_WORDS, json).and_then(iface_words__get_words__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_words__get_words__err(e)),
+        }
     }
-    fn post_words_add(params: iface_words::PostWordsAddParams) -> Result<String, String> {
+    fn post_words_add(params: iface_words::PostWordsAddParams) -> Result<iface_words::PostWordsAddResponse, String> {
         let json = iface_words__post_words_add_params__to_json(&params);
-        dispatch(&OP_WORDS_POST_WORDS_ADD, json)
+        match dispatch(&OP_WORDS_POST_WORDS_ADD, json).and_then(iface_words__post_words_add__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_words__post_words_add__err(e)),
+        }
     }
-    fn post_words_delete(params: iface_words::PostWordsDeleteParams) -> Result<String, String> {
+    fn post_words_delete(params: iface_words::PostWordsDeleteParams) -> Result<iface_words::PostWordsDeleteResponse, String> {
         let json = iface_words__post_words_delete_params__to_json(&params);
-        dispatch(&OP_WORDS_POST_WORDS_DELETE, json)
+        match dispatch(&OP_WORDS_POST_WORDS_DELETE, json).and_then(iface_words__post_words_delete__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_words__post_words_delete__err(e)),
+        }
     }
 }
 

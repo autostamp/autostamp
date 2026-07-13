@@ -44,10 +44,15 @@ pub(crate) enum FieldLocation {
     Body,
 }
 
-/// A single operation parameter: the snake-case key it carries in the params JSON and where
-/// it belongs in the request.
+/// A single operation parameter. `snake` keys the field in the internal params JSON (and, for a
+/// path field, matches the `{snake}` placeholder in the path template); `wire` is the verbatim name
+/// the field takes on the HTTP wire (query key, header name, or body property). The two differ
+/// whenever the source name isn't already snake_case (e.g. `dryRun` → snake `dry_run`, wire
+/// `dryRun`), and let distinct inputs that share a snake key (`DateCreated`, `DateCreated<`) still
+/// travel under their true names.
 pub(crate) struct FieldSpec {
     pub(crate) snake: &'static str,
+    pub(crate) wire: &'static str,
     pub(crate) location: FieldLocation,
 }
 
@@ -71,6 +76,16 @@ pub(crate) struct AuthApply {
     pub(crate) kind: AuthKind,
 }
 
+/// The failure modes of [`dispatch`], kept structured so each generated operation can map them
+/// onto its own typed error: an `Http` failure carries the response status and body (routed to
+/// the matching error-variant case), while a `Transport` failure carries a message for the
+/// catch-all case (a secret lookup, connection, or decode failure that never produced an HTTP
+/// status).
+pub(crate) enum DispatchError {
+    Http { status: u16, body: String },
+    Transport(String),
+}
+
 /// A single API operation: HTTP method, path template (with `{snake}` placeholders), the
 /// parameter fields, and the security schemes to apply.
 pub(crate) struct OpSpec {
@@ -81,8 +96,9 @@ pub(crate) struct OpSpec {
 }
 
 /// Execute `op` with the supplied `params` (a JSON object keyed by snake-case field names)
-/// and return the response body as a string, or an error message.
-pub(crate) fn dispatch(op: &OpSpec, params: Value) -> Result<String, String> {
+/// and return the raw 2xx response body, or a structured [`DispatchError`] the caller maps
+/// onto the operation's typed error.
+pub(crate) fn dispatch(op: &OpSpec, params: Value) -> Result<String, DispatchError> {
     let obj = match &params {
         Value::Object(map) => Some(map),
         _ => None,
@@ -105,10 +121,10 @@ pub(crate) fn dispatch(op: &OpSpec, params: Value) -> Result<String, String> {
                 let placeholder = format!("{{{}}}", field.snake);
                 path = path.replace(&placeholder, &percent_encode(&scalar(value)));
             }
-            FieldLocation::Query => query.push((field.snake.to_string(), scalar(value))),
-            FieldLocation::Header => headers.push((field.snake.to_string(), scalar(value))),
+            FieldLocation::Query => query.push((field.wire.to_string(), scalar(value))),
+            FieldLocation::Header => headers.push((field.wire.to_string(), scalar(value))),
             FieldLocation::Body => {
-                body.insert(field.snake.to_string(), value.clone());
+                body.insert(field.wire.to_string(), value.clone());
             }
         }
     }
@@ -116,7 +132,7 @@ pub(crate) fn dispatch(op: &OpSpec, params: Value) -> Result<String, String> {
     // Apply each resolved security scheme, sourcing its value from wasmcloud:secrets.
     let mut cookies: Vec<String> = Vec::new();
     for apply in op.auth {
-        let secret = fetch_secret(apply.secret_key)?;
+        let secret = fetch_secret(apply.secret_key).map_err(DispatchError::Transport)?;
         match &apply.kind {
             AuthKind::Bearer => headers.push(("authorization".into(), format!("Bearer {secret}"))),
             AuthKind::Basic => {
@@ -177,17 +193,18 @@ fn fetch_secret(key: &str) -> Result<String, String> {
 }
 
 /// Build and send the outgoing request with `wstd`, returning the response body on a 2xx
-/// status. The generated guest exports are synchronous, so the async `wstd` client is driven
-/// to completion on a local reactor via `wstd::runtime::block_on`.
+/// status and a structured [`DispatchError`] otherwise. The generated guest exports are
+/// synchronous, so the async `wstd` client is driven to completion on a local reactor via
+/// `wstd::runtime::block_on`.
 fn perform(
     method: &str,
     path_with_query: &str,
     headers: &[(String, String)],
     body: &[u8],
-) -> Result<String, String> {
+) -> Result<String, DispatchError> {
     let url = join_url(crate::BASE_URL, path_with_query);
     let method = Method::from_bytes(method.as_bytes())
-        .map_err(|err| format!("invalid HTTP method `{method}`: {err}"))?;
+        .map_err(|err| DispatchError::Transport(format!("invalid HTTP method `{method}`: {err}")))?;
 
     let mut builder = Request::builder().method(method).uri(url);
     for (name, value) in headers {
@@ -199,27 +216,29 @@ fn perform(
         } else {
             Body::from(body.to_vec())
         })
-        .map_err(|err| format!("failed to build request: {err}"))?;
+        .map_err(|err| DispatchError::Transport(format!("failed to build request: {err}")))?;
 
     wstd::runtime::block_on(async move {
         let client = Client::new();
         let response = client
             .send(request)
             .await
-            .map_err(|err| format!("request failed: {err:#}"))?;
+            .map_err(|err| DispatchError::Transport(format!("request failed: {err:#}")))?;
 
         let status = response.status().as_u16();
         let mut response_body = response.into_body();
-        let bytes = response_body
-            .contents()
-            .await
-            .map_err(|err| format!("failed to read response body: {err:#}"))?;
+        let bytes = response_body.contents().await.map_err(|err| {
+            DispatchError::Transport(format!("failed to read response body: {err:#}"))
+        })?;
         let body_text = String::from_utf8_lossy(bytes).into_owned();
 
         if (200..300).contains(&status) {
             Ok(body_text)
         } else {
-            Err(format!("HTTP {status}: {body_text}"))
+            Err(DispatchError::Http {
+                status,
+                body: body_text,
+            })
         }
     })
 }
@@ -288,7 +307,7 @@ const OP_API_GET_WOLFRAM_CLOUD_RESULTS: OpSpec = OpSpec {
     method: "GET",
     path_template: "/api/v1/cloud-plugin",
     fields: &[
-        FieldSpec { snake: "input", location: FieldLocation::Query },
+        FieldSpec { snake: "input", wire: "input", location: FieldLocation::Query },
     ],
     auth: &[
     ],
@@ -298,7 +317,7 @@ const OP_API_GET_WOLFRAM_ALPHA_RESULTS: OpSpec = OpSpec {
     method: "GET",
     path_template: "/api/v1/llm-api",
     fields: &[
-        FieldSpec { snake: "input", location: FieldLocation::Query },
+        FieldSpec { snake: "input", wire: "input", location: FieldLocation::Query },
     ],
     auth: &[
     ],
@@ -316,14 +335,55 @@ fn iface_api__get_wolfram_alpha_results_params__to_json(p: &iface_api::GetWolfra
     Value::Object(m)
 }
 
-impl iface_api::Guest for crate::Component {
-    fn get_wolfram_cloud_results(params: iface_api::GetWolframCloudResultsParams) -> Result<String, String> {
-        let json = iface_api__get_wolfram_cloud_results_params__to_json(&params);
-        dispatch(&OP_API_GET_WOLFRAM_CLOUD_RESULTS, json)
+fn iface_api__get_wolfram_cloud_results__ok(body: String) -> Result<String, crate::runtime::DispatchError> {
+    Ok(body)
+}
+
+fn iface_api__get_wolfram_cloud_results__err(e: crate::runtime::DispatchError) -> iface_api::GetWolframCloudResultsError {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => match status {
+            400u16 => iface_api::GetWolframCloudResultsError::BadRequest(body),
+            403u16 => iface_api::GetWolframCloudResultsError::Forbidden(body),
+            500u16 => iface_api::GetWolframCloudResultsError::InternalServerError(body),
+            503u16 => iface_api::GetWolframCloudResultsError::ServiceUnavailable(body),
+            _ => iface_api::GetWolframCloudResultsError::Other(body),
+        },
+        crate::runtime::DispatchError::Transport(m) => iface_api::GetWolframCloudResultsError::Other(m),
     }
-    fn get_wolfram_alpha_results(params: iface_api::GetWolframAlphaResultsParams) -> Result<String, String> {
+}
+
+fn iface_api__get_wolfram_alpha_results__ok(body: String) -> Result<String, crate::runtime::DispatchError> {
+    Ok(body)
+}
+
+fn iface_api__get_wolfram_alpha_results__err(e: crate::runtime::DispatchError) -> iface_api::GetWolframAlphaResultsError {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => match status {
+            400u16 => iface_api::GetWolframAlphaResultsError::BadRequest(body),
+            403u16 => iface_api::GetWolframAlphaResultsError::Forbidden(body),
+            500u16 => iface_api::GetWolframAlphaResultsError::InternalServerError(body),
+            501u16 => iface_api::GetWolframAlphaResultsError::NotImplemented(body),
+            503u16 => iface_api::GetWolframAlphaResultsError::ServiceUnavailable(body),
+            _ => iface_api::GetWolframAlphaResultsError::Other(body),
+        },
+        crate::runtime::DispatchError::Transport(m) => iface_api::GetWolframAlphaResultsError::Other(m),
+    }
+}
+
+impl iface_api::Guest for crate::Component {
+    fn get_wolfram_cloud_results(params: iface_api::GetWolframCloudResultsParams) -> Result<String, iface_api::GetWolframCloudResultsError> {
+        let json = iface_api__get_wolfram_cloud_results_params__to_json(&params);
+        match dispatch(&OP_API_GET_WOLFRAM_CLOUD_RESULTS, json).and_then(iface_api__get_wolfram_cloud_results__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_api__get_wolfram_cloud_results__err(e)),
+        }
+    }
+    fn get_wolfram_alpha_results(params: iface_api::GetWolframAlphaResultsParams) -> Result<String, iface_api::GetWolframAlphaResultsError> {
         let json = iface_api__get_wolfram_alpha_results_params__to_json(&params);
-        dispatch(&OP_API_GET_WOLFRAM_ALPHA_RESULTS, json)
+        match dispatch(&OP_API_GET_WOLFRAM_ALPHA_RESULTS, json).and_then(iface_api__get_wolfram_alpha_results__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_api__get_wolfram_alpha_results__err(e)),
+        }
     }
 }
 

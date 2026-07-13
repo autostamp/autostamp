@@ -44,10 +44,15 @@ pub(crate) enum FieldLocation {
     Body,
 }
 
-/// A single operation parameter: the snake-case key it carries in the params JSON and where
-/// it belongs in the request.
+/// A single operation parameter. `snake` keys the field in the internal params JSON (and, for a
+/// path field, matches the `{snake}` placeholder in the path template); `wire` is the verbatim name
+/// the field takes on the HTTP wire (query key, header name, or body property). The two differ
+/// whenever the source name isn't already snake_case (e.g. `dryRun` → snake `dry_run`, wire
+/// `dryRun`), and let distinct inputs that share a snake key (`DateCreated`, `DateCreated<`) still
+/// travel under their true names.
 pub(crate) struct FieldSpec {
     pub(crate) snake: &'static str,
+    pub(crate) wire: &'static str,
     pub(crate) location: FieldLocation,
 }
 
@@ -71,6 +76,16 @@ pub(crate) struct AuthApply {
     pub(crate) kind: AuthKind,
 }
 
+/// The failure modes of [`dispatch`], kept structured so each generated operation can map them
+/// onto its own typed error: an `Http` failure carries the response status and body (routed to
+/// the matching error-variant case), while a `Transport` failure carries a message for the
+/// catch-all case (a secret lookup, connection, or decode failure that never produced an HTTP
+/// status).
+pub(crate) enum DispatchError {
+    Http { status: u16, body: String },
+    Transport(String),
+}
+
 /// A single API operation: HTTP method, path template (with `{snake}` placeholders), the
 /// parameter fields, and the security schemes to apply.
 pub(crate) struct OpSpec {
@@ -81,8 +96,9 @@ pub(crate) struct OpSpec {
 }
 
 /// Execute `op` with the supplied `params` (a JSON object keyed by snake-case field names)
-/// and return the response body as a string, or an error message.
-pub(crate) fn dispatch(op: &OpSpec, params: Value) -> Result<String, String> {
+/// and return the raw 2xx response body, or a structured [`DispatchError`] the caller maps
+/// onto the operation's typed error.
+pub(crate) fn dispatch(op: &OpSpec, params: Value) -> Result<String, DispatchError> {
     let obj = match &params {
         Value::Object(map) => Some(map),
         _ => None,
@@ -105,10 +121,10 @@ pub(crate) fn dispatch(op: &OpSpec, params: Value) -> Result<String, String> {
                 let placeholder = format!("{{{}}}", field.snake);
                 path = path.replace(&placeholder, &percent_encode(&scalar(value)));
             }
-            FieldLocation::Query => query.push((field.snake.to_string(), scalar(value))),
-            FieldLocation::Header => headers.push((field.snake.to_string(), scalar(value))),
+            FieldLocation::Query => query.push((field.wire.to_string(), scalar(value))),
+            FieldLocation::Header => headers.push((field.wire.to_string(), scalar(value))),
             FieldLocation::Body => {
-                body.insert(field.snake.to_string(), value.clone());
+                body.insert(field.wire.to_string(), value.clone());
             }
         }
     }
@@ -116,7 +132,7 @@ pub(crate) fn dispatch(op: &OpSpec, params: Value) -> Result<String, String> {
     // Apply each resolved security scheme, sourcing its value from wasmcloud:secrets.
     let mut cookies: Vec<String> = Vec::new();
     for apply in op.auth {
-        let secret = fetch_secret(apply.secret_key)?;
+        let secret = fetch_secret(apply.secret_key).map_err(DispatchError::Transport)?;
         match &apply.kind {
             AuthKind::Bearer => headers.push(("authorization".into(), format!("Bearer {secret}"))),
             AuthKind::Basic => {
@@ -177,17 +193,18 @@ fn fetch_secret(key: &str) -> Result<String, String> {
 }
 
 /// Build and send the outgoing request with `wstd`, returning the response body on a 2xx
-/// status. The generated guest exports are synchronous, so the async `wstd` client is driven
-/// to completion on a local reactor via `wstd::runtime::block_on`.
+/// status and a structured [`DispatchError`] otherwise. The generated guest exports are
+/// synchronous, so the async `wstd` client is driven to completion on a local reactor via
+/// `wstd::runtime::block_on`.
 fn perform(
     method: &str,
     path_with_query: &str,
     headers: &[(String, String)],
     body: &[u8],
-) -> Result<String, String> {
+) -> Result<String, DispatchError> {
     let url = join_url(crate::BASE_URL, path_with_query);
     let method = Method::from_bytes(method.as_bytes())
-        .map_err(|err| format!("invalid HTTP method `{method}`: {err}"))?;
+        .map_err(|err| DispatchError::Transport(format!("invalid HTTP method `{method}`: {err}")))?;
 
     let mut builder = Request::builder().method(method).uri(url);
     for (name, value) in headers {
@@ -199,27 +216,29 @@ fn perform(
         } else {
             Body::from(body.to_vec())
         })
-        .map_err(|err| format!("failed to build request: {err}"))?;
+        .map_err(|err| DispatchError::Transport(format!("failed to build request: {err}")))?;
 
     wstd::runtime::block_on(async move {
         let client = Client::new();
         let response = client
             .send(request)
             .await
-            .map_err(|err| format!("request failed: {err:#}"))?;
+            .map_err(|err| DispatchError::Transport(format!("request failed: {err:#}")))?;
 
         let status = response.status().as_u16();
         let mut response_body = response.into_body();
-        let bytes = response_body
-            .contents()
-            .await
-            .map_err(|err| format!("failed to read response body: {err:#}"))?;
+        let bytes = response_body.contents().await.map_err(|err| {
+            DispatchError::Transport(format!("failed to read response body: {err:#}"))
+        })?;
         let body_text = String::from_utf8_lossy(bytes).into_owned();
 
         if (200..300).contains(&status) {
             Ok(body_text)
         } else {
-            Err(format!("HTTP {status}: {body_text}"))
+            Err(DispatchError::Http {
+                status,
+                body: body_text,
+            })
         }
     })
 }
@@ -288,13 +307,95 @@ const OP_ARCHIVE_GET_YEAR_MONTH_JSON: OpSpec = OpSpec {
     method: "GET",
     path_template: "/{year}/{month}.json",
     fields: &[
-        FieldSpec { snake: "year", location: FieldLocation::Path },
-        FieldSpec { snake: "month", location: FieldLocation::Path },
+        FieldSpec { snake: "year", wire: "year", location: FieldLocation::Path },
+        FieldSpec { snake: "month", wire: "month", location: FieldLocation::Path },
     ],
     auth: &[
         AuthApply { secret_key: "apikey", kind: AuthKind::ApiKeyQuery("api-key") },
     ],
 };
+
+fn iface_archive__get_year_month_json_response__to_json(p: &iface_archive::GetYearMonthJsonResponse) -> Value {
+    let mut m = Map::new();
+    m.insert("response".into(), match (&p.response) { Some(v) => iface_archive__get_year_month_json_response_response__to_json(v), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_archive__get_year_month_json_response_response__to_json(p: &iface_archive::GetYearMonthJsonResponseResponse) -> Value {
+    let mut m = Map::new();
+    m.insert("docs".into(), match (&p.docs) { Some(v) => Value::Array((v).iter().map(|v| iface_archive__doc__to_json(v)).collect()), None => Value::Null });
+    m.insert("meta".into(), match (&p.meta) { Some(v) => iface_archive__get_year_month_json_response_response_meta__to_json(v), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_archive__doc__to_json(p: &iface_archive::Doc) -> Value {
+    let mut m = Map::new();
+    m.insert("_id".into(), match (&p.id) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("abstract".into(), match (&p.abstract_) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("blog".into(), match (&p.blog) { Some(v) => Value::Array((v).iter().map(|v| Value::String((v).clone())).collect()), None => Value::Null });
+    m.insert("byline".into(), match (&p.byline) { Some(v) => iface_archive__doc_byline__to_json(v), None => Value::Null });
+    m.insert("document_type".into(), match (&p.document_type) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("headline".into(), match (&p.headline) { Some(v) => iface_archive__doc_headline__to_json(v), None => Value::Null });
+    m.insert("keywords".into(), match (&p.keywords) { Some(v) => iface_archive__doc_keywords__to_json(v), None => Value::Null });
+    m.insert("lead_paragraph".into(), match (&p.lead_paragraph) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("multimedia".into(), match (&p.multimedia) { Some(v) => Value::Array((v).iter().map(|v| iface_archive__doc_multimedia_item__to_json(v)).collect()), None => Value::Null });
+    m.insert("news_desk".into(), match (&p.news_desk) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("print_page".into(), match (&p.print_page) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("pub_date".into(), match (&p.pub_date) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("section_name".into(), match (&p.section_name) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("slideshow_credits".into(), match (&p.slideshow_credits) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("snippet".into(), match (&p.snippet) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("source".into(), match (&p.source) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("subsection_name".into(), match (&p.subsection_name) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("type_of_material".into(), match (&p.type_of_material) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("web_url".into(), match (&p.web_url) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("word_count".into(), match (&p.word_count) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_archive__doc_byline__to_json(p: &iface_archive::DocByline) -> Value {
+    let mut m = Map::new();
+    m.insert("organization".into(), match (&p.organization) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("original".into(), match (&p.original) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("person".into(), match (&p.person) { Some(v) => Value::Array((v).iter().map(|v| Value::String((v).clone())).collect()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_archive__doc_headline__to_json(p: &iface_archive::DocHeadline) -> Value {
+    let mut m = Map::new();
+    m.insert("kicker".into(), match (&p.kicker) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("main".into(), match (&p.main) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_archive__doc_keywords__to_json(p: &iface_archive::DocKeywords) -> Value {
+    let mut m = Map::new();
+    m.insert("name".into(), match (&p.name) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("rank".into(), match (&p.rank) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("value".into(), match (&p.value) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_archive__doc_multimedia_item__to_json(p: &iface_archive::DocMultimediaItem) -> Value {
+    let mut m = Map::new();
+    m.insert("caption".into(), match (&p.caption) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("copyright".into(), match (&p.copyright) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("format".into(), match (&p.format) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("height".into(), match (&p.height) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("subtype".into(), match (&p.subtype) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("type".into(), match (&p.type_op) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("url".into(), match (&p.url) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("width".into(), match (&p.width) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_archive__get_year_month_json_response_response_meta__to_json(p: &iface_archive::GetYearMonthJsonResponseResponseMeta) -> Value {
+    let mut m = Map::new();
+    m.insert("hits".into(), match (&p.hits) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("offset".into(), match (&p.offset) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("time".into(), match (&p.time) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    Value::Object(m)
+}
 
 fn iface_archive__get_year_month_json_params__to_json(p: &iface_archive::GetYearMonthJsonParams) -> Value {
     let mut m = Map::new();
@@ -303,10 +404,121 @@ fn iface_archive__get_year_month_json_params__to_json(p: &iface_archive::GetYear
     Value::Object(m)
 }
 
+fn iface_archive__get_year_month_json_response__from_json(v: &Value) -> Option<iface_archive::GetYearMonthJsonResponse> {
+    let m = v.as_object()?;
+    Some(iface_archive::GetYearMonthJsonResponse {
+        response: m.get("response").filter(|v| !v.is_null()).and_then(|v| iface_archive__get_year_month_json_response_response__from_json(v)),
+    })
+}
+
+fn iface_archive__get_year_month_json_response_response__from_json(v: &Value) -> Option<iface_archive::GetYearMonthJsonResponseResponse> {
+    let m = v.as_object()?;
+    Some(iface_archive::GetYearMonthJsonResponseResponse {
+        docs: m.get("docs").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| iface_archive__doc__from_json(x)).collect())),
+        meta: m.get("meta").filter(|v| !v.is_null()).and_then(|v| iface_archive__get_year_month_json_response_response_meta__from_json(v)),
+    })
+}
+
+fn iface_archive__doc__from_json(v: &Value) -> Option<iface_archive::Doc> {
+    let m = v.as_object()?;
+    Some(iface_archive::Doc {
+        id: m.get("_id").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        abstract_: m.get("abstract").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        blog: m.get("blog").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| (x).as_str().map(|s| s.to_string())).collect())),
+        byline: m.get("byline").filter(|v| !v.is_null()).and_then(|v| iface_archive__doc_byline__from_json(v)),
+        document_type: m.get("document_type").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        headline: m.get("headline").filter(|v| !v.is_null()).and_then(|v| iface_archive__doc_headline__from_json(v)),
+        keywords: m.get("keywords").filter(|v| !v.is_null()).and_then(|v| iface_archive__doc_keywords__from_json(v)),
+        lead_paragraph: m.get("lead_paragraph").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        multimedia: m.get("multimedia").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| iface_archive__doc_multimedia_item__from_json(x)).collect())),
+        news_desk: m.get("news_desk").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        print_page: m.get("print_page").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        pub_date: m.get("pub_date").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        section_name: m.get("section_name").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        slideshow_credits: m.get("slideshow_credits").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        snippet: m.get("snippet").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        source: m.get("source").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        subsection_name: m.get("subsection_name").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        type_of_material: m.get("type_of_material").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        web_url: m.get("web_url").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        word_count: m.get("word_count").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    })
+}
+
+fn iface_archive__doc_byline__from_json(v: &Value) -> Option<iface_archive::DocByline> {
+    let m = v.as_object()?;
+    Some(iface_archive::DocByline {
+        organization: m.get("organization").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        original: m.get("original").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        person: m.get("person").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| (x).as_str().map(|s| s.to_string())).collect())),
+    })
+}
+
+fn iface_archive__doc_headline__from_json(v: &Value) -> Option<iface_archive::DocHeadline> {
+    let m = v.as_object()?;
+    Some(iface_archive::DocHeadline {
+        kicker: m.get("kicker").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        main: m.get("main").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    })
+}
+
+fn iface_archive__doc_keywords__from_json(v: &Value) -> Option<iface_archive::DocKeywords> {
+    let m = v.as_object()?;
+    Some(iface_archive::DocKeywords {
+        name: m.get("name").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        rank: m.get("rank").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        value: m.get("value").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    })
+}
+
+fn iface_archive__doc_multimedia_item__from_json(v: &Value) -> Option<iface_archive::DocMultimediaItem> {
+    let m = v.as_object()?;
+    Some(iface_archive::DocMultimediaItem {
+        caption: m.get("caption").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        copyright: m.get("copyright").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        format: m.get("format").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        height: m.get("height").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        subtype: m.get("subtype").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        type_op: m.get("type").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        url: m.get("url").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        width: m.get("width").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+    })
+}
+
+fn iface_archive__get_year_month_json_response_response_meta__from_json(v: &Value) -> Option<iface_archive::GetYearMonthJsonResponseResponseMeta> {
+    let m = v.as_object()?;
+    Some(iface_archive::GetYearMonthJsonResponseResponseMeta {
+        hits: m.get("hits").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        offset: m.get("offset").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        time: m.get("time").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+    })
+}
+
+fn iface_archive__get_year_month_json__ok(body: String) -> Result<iface_archive::GetYearMonthJsonResponse, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match iface_archive__get_year_month_json_response__from_json(&v) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_archive__get_year_month_json__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
 impl iface_archive::Guest for crate::Component {
-    fn get_year_month_json(params: iface_archive::GetYearMonthJsonParams) -> Result<String, String> {
+    fn get_year_month_json(params: iface_archive::GetYearMonthJsonParams) -> Result<iface_archive::GetYearMonthJsonResponse, String> {
         let json = iface_archive__get_year_month_json_params__to_json(&params);
-        dispatch(&OP_ARCHIVE_GET_YEAR_MONTH_JSON, json)
+        match dispatch(&OP_ARCHIVE_GET_YEAR_MONTH_JSON, json).and_then(iface_archive__get_year_month_json__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_archive__get_year_month_json__err(e)),
+        }
     }
 }
 

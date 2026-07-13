@@ -44,10 +44,15 @@ pub(crate) enum FieldLocation {
     Body,
 }
 
-/// A single operation parameter: the snake-case key it carries in the params JSON and where
-/// it belongs in the request.
+/// A single operation parameter. `snake` keys the field in the internal params JSON (and, for a
+/// path field, matches the `{snake}` placeholder in the path template); `wire` is the verbatim name
+/// the field takes on the HTTP wire (query key, header name, or body property). The two differ
+/// whenever the source name isn't already snake_case (e.g. `dryRun` → snake `dry_run`, wire
+/// `dryRun`), and let distinct inputs that share a snake key (`DateCreated`, `DateCreated<`) still
+/// travel under their true names.
 pub(crate) struct FieldSpec {
     pub(crate) snake: &'static str,
+    pub(crate) wire: &'static str,
     pub(crate) location: FieldLocation,
 }
 
@@ -71,6 +76,16 @@ pub(crate) struct AuthApply {
     pub(crate) kind: AuthKind,
 }
 
+/// The failure modes of [`dispatch`], kept structured so each generated operation can map them
+/// onto its own typed error: an `Http` failure carries the response status and body (routed to
+/// the matching error-variant case), while a `Transport` failure carries a message for the
+/// catch-all case (a secret lookup, connection, or decode failure that never produced an HTTP
+/// status).
+pub(crate) enum DispatchError {
+    Http { status: u16, body: String },
+    Transport(String),
+}
+
 /// A single API operation: HTTP method, path template (with `{snake}` placeholders), the
 /// parameter fields, and the security schemes to apply.
 pub(crate) struct OpSpec {
@@ -81,8 +96,9 @@ pub(crate) struct OpSpec {
 }
 
 /// Execute `op` with the supplied `params` (a JSON object keyed by snake-case field names)
-/// and return the response body as a string, or an error message.
-pub(crate) fn dispatch(op: &OpSpec, params: Value) -> Result<String, String> {
+/// and return the raw 2xx response body, or a structured [`DispatchError`] the caller maps
+/// onto the operation's typed error.
+pub(crate) fn dispatch(op: &OpSpec, params: Value) -> Result<String, DispatchError> {
     let obj = match &params {
         Value::Object(map) => Some(map),
         _ => None,
@@ -105,10 +121,10 @@ pub(crate) fn dispatch(op: &OpSpec, params: Value) -> Result<String, String> {
                 let placeholder = format!("{{{}}}", field.snake);
                 path = path.replace(&placeholder, &percent_encode(&scalar(value)));
             }
-            FieldLocation::Query => query.push((field.snake.to_string(), scalar(value))),
-            FieldLocation::Header => headers.push((field.snake.to_string(), scalar(value))),
+            FieldLocation::Query => query.push((field.wire.to_string(), scalar(value))),
+            FieldLocation::Header => headers.push((field.wire.to_string(), scalar(value))),
             FieldLocation::Body => {
-                body.insert(field.snake.to_string(), value.clone());
+                body.insert(field.wire.to_string(), value.clone());
             }
         }
     }
@@ -116,7 +132,7 @@ pub(crate) fn dispatch(op: &OpSpec, params: Value) -> Result<String, String> {
     // Apply each resolved security scheme, sourcing its value from wasmcloud:secrets.
     let mut cookies: Vec<String> = Vec::new();
     for apply in op.auth {
-        let secret = fetch_secret(apply.secret_key)?;
+        let secret = fetch_secret(apply.secret_key).map_err(DispatchError::Transport)?;
         match &apply.kind {
             AuthKind::Bearer => headers.push(("authorization".into(), format!("Bearer {secret}"))),
             AuthKind::Basic => {
@@ -177,17 +193,18 @@ fn fetch_secret(key: &str) -> Result<String, String> {
 }
 
 /// Build and send the outgoing request with `wstd`, returning the response body on a 2xx
-/// status. The generated guest exports are synchronous, so the async `wstd` client is driven
-/// to completion on a local reactor via `wstd::runtime::block_on`.
+/// status and a structured [`DispatchError`] otherwise. The generated guest exports are
+/// synchronous, so the async `wstd` client is driven to completion on a local reactor via
+/// `wstd::runtime::block_on`.
 fn perform(
     method: &str,
     path_with_query: &str,
     headers: &[(String, String)],
     body: &[u8],
-) -> Result<String, String> {
+) -> Result<String, DispatchError> {
     let url = join_url(crate::BASE_URL, path_with_query);
     let method = Method::from_bytes(method.as_bytes())
-        .map_err(|err| format!("invalid HTTP method `{method}`: {err}"))?;
+        .map_err(|err| DispatchError::Transport(format!("invalid HTTP method `{method}`: {err}")))?;
 
     let mut builder = Request::builder().method(method).uri(url);
     for (name, value) in headers {
@@ -199,27 +216,29 @@ fn perform(
         } else {
             Body::from(body.to_vec())
         })
-        .map_err(|err| format!("failed to build request: {err}"))?;
+        .map_err(|err| DispatchError::Transport(format!("failed to build request: {err}")))?;
 
     wstd::runtime::block_on(async move {
         let client = Client::new();
         let response = client
             .send(request)
             .await
-            .map_err(|err| format!("request failed: {err:#}"))?;
+            .map_err(|err| DispatchError::Transport(format!("request failed: {err:#}")))?;
 
         let status = response.status().as_u16();
         let mut response_body = response.into_body();
-        let bytes = response_body
-            .contents()
-            .await
-            .map_err(|err| format!("failed to read response body: {err:#}"))?;
+        let bytes = response_body.contents().await.map_err(|err| {
+            DispatchError::Transport(format!("failed to read response body: {err:#}"))
+        })?;
         let body_text = String::from_utf8_lossy(bytes).into_owned();
 
         if (200..300).contains(&status) {
             Ok(body_text)
         } else {
-            Err(format!("HTTP {status}: {body_text}"))
+            Err(DispatchError::Http {
+                status,
+                body: body_text,
+            })
         }
     })
 }
@@ -288,12 +307,114 @@ const OP_FORECAST_GET_FORECAST: OpSpec = OpSpec {
     method: "GET",
     path_template: "/forecast",
     fields: &[
-        FieldSpec { snake: "lat", location: FieldLocation::Query },
-        FieldSpec { snake: "lng", location: FieldLocation::Query },
+        FieldSpec { snake: "lat", wire: "lat", location: FieldLocation::Query },
+        FieldSpec { snake: "lng", wire: "lng", location: FieldLocation::Query },
     ],
     auth: &[
     ],
 };
+
+fn iface_forecast__forecast__to_json(p: &iface_forecast::Forecast) -> Value {
+    let mut m = Map::new();
+    m.insert("hours".into(), match (&p.hours) { Some(v) => Value::Array((v).iter().map(|v| iface_forecast__forecast_hours_item__to_json(v)).collect()), None => Value::Null });
+    m.insert("meta".into(), match (&p.meta) { Some(v) => iface_forecast__forecast_meta__to_json(v), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_forecast__forecast_hours_item__to_json(p: &iface_forecast::ForecastHoursItem) -> Value {
+    let mut m = Map::new();
+    m.insert("airTemperature".into(), match (&p.air_temperature) { Some(v) => Value::Array((v).iter().map(|v| iface_forecast__forecast_hours_item_air_temperature_item__to_json(v)).collect()), None => Value::Null });
+    m.insert("swellDirection".into(), match (&p.swell_direction) { Some(v) => Value::Array((v).iter().map(|v| iface_forecast__forecast_hours_item_swell_direction_item__to_json(v)).collect()), None => Value::Null });
+    m.insert("swellHeight".into(), match (&p.swell_height) { Some(v) => Value::Array((v).iter().map(|v| iface_forecast__forecast_hours_item_swell_height_item__to_json(v)).collect()), None => Value::Null });
+    m.insert("swellPeriod".into(), match (&p.swell_period) { Some(v) => Value::Array((v).iter().map(|v| iface_forecast__forecast_hours_item_swell_period_item__to_json(v)).collect()), None => Value::Null });
+    m.insert("time".into(), match (&p.time) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("waterTemperature".into(), match (&p.water_temperature) { Some(v) => Value::Array((v).iter().map(|v| iface_forecast__forecast_hours_item_water_temperature_item__to_json(v)).collect()), None => Value::Null });
+    m.insert("waveDirection".into(), match (&p.wave_direction) { Some(v) => Value::Array((v).iter().map(|v| iface_forecast__forecast_hours_item_wave_direction_item__to_json(v)).collect()), None => Value::Null });
+    m.insert("waveHeight".into(), match (&p.wave_height) { Some(v) => Value::Array((v).iter().map(|v| iface_forecast__forecast_hours_item_wave_height_item__to_json(v)).collect()), None => Value::Null });
+    m.insert("wavePeriod".into(), match (&p.wave_period) { Some(v) => Value::Array((v).iter().map(|v| iface_forecast__forecast_hours_item_wave_period_item__to_json(v)).collect()), None => Value::Null });
+    m.insert("windDirection".into(), match (&p.wind_direction) { Some(v) => Value::Array((v).iter().map(|v| iface_forecast__forecast_hours_item_wind_direction_item__to_json(v)).collect()), None => Value::Null });
+    m.insert("windSpeed".into(), match (&p.wind_speed) { Some(v) => Value::Array((v).iter().map(|v| iface_forecast__forecast_hours_item_wind_speed_item__to_json(v)).collect()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_forecast__forecast_hours_item_air_temperature_item__to_json(p: &iface_forecast::ForecastHoursItemAirTemperatureItem) -> Value {
+    let mut m = Map::new();
+    m.insert("source".into(), match (&p.source) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("value".into(), match (&p.value) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_forecast__forecast_hours_item_swell_direction_item__to_json(p: &iface_forecast::ForecastHoursItemSwellDirectionItem) -> Value {
+    let mut m = Map::new();
+    m.insert("source".into(), match (&p.source) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("value".into(), match (&p.value) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_forecast__forecast_hours_item_swell_height_item__to_json(p: &iface_forecast::ForecastHoursItemSwellHeightItem) -> Value {
+    let mut m = Map::new();
+    m.insert("source".into(), match (&p.source) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("value".into(), match (&p.value) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_forecast__forecast_hours_item_swell_period_item__to_json(p: &iface_forecast::ForecastHoursItemSwellPeriodItem) -> Value {
+    let mut m = Map::new();
+    m.insert("source".into(), match (&p.source) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("value".into(), match (&p.value) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_forecast__forecast_hours_item_water_temperature_item__to_json(p: &iface_forecast::ForecastHoursItemWaterTemperatureItem) -> Value {
+    let mut m = Map::new();
+    m.insert("source".into(), match (&p.source) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("value".into(), match (&p.value) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_forecast__forecast_hours_item_wave_direction_item__to_json(p: &iface_forecast::ForecastHoursItemWaveDirectionItem) -> Value {
+    let mut m = Map::new();
+    m.insert("source".into(), match (&p.source) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("value".into(), match (&p.value) { Some(v) => serde_json::Number::from_f64(*(v)).map(Value::Number).unwrap_or(Value::Null), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_forecast__forecast_hours_item_wave_height_item__to_json(p: &iface_forecast::ForecastHoursItemWaveHeightItem) -> Value {
+    let mut m = Map::new();
+    m.insert("source".into(), match (&p.source) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("value".into(), match (&p.value) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_forecast__forecast_hours_item_wave_period_item__to_json(p: &iface_forecast::ForecastHoursItemWavePeriodItem) -> Value {
+    let mut m = Map::new();
+    m.insert("source".into(), match (&p.source) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("value".into(), match (&p.value) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_forecast__forecast_hours_item_wind_direction_item__to_json(p: &iface_forecast::ForecastHoursItemWindDirectionItem) -> Value {
+    let mut m = Map::new();
+    m.insert("source".into(), match (&p.source) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("value".into(), match (&p.value) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_forecast__forecast_hours_item_wind_speed_item__to_json(p: &iface_forecast::ForecastHoursItemWindSpeedItem) -> Value {
+    let mut m = Map::new();
+    m.insert("source".into(), match (&p.source) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("value".into(), match (&p.value) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_forecast__forecast_meta__to_json(p: &iface_forecast::ForecastMeta) -> Value {
+    let mut m = Map::new();
+    m.insert("dailyQuota".into(), match (&p.daily_quota) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("lat".into(), match (&p.lat) { Some(v) => serde_json::Number::from_f64(*(v)).map(Value::Number).unwrap_or(Value::Null), None => Value::Null });
+    m.insert("lng".into(), match (&p.lng) { Some(v) => serde_json::Number::from_f64(*(v)).map(Value::Number).unwrap_or(Value::Null), None => Value::Null });
+    m.insert("requestCount".into(), match (&p.request_count) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    Value::Object(m)
+}
 
 fn iface_forecast__get_forecast_params__to_json(p: &iface_forecast::GetForecastParams) -> Value {
     let mut m = Map::new();
@@ -302,10 +423,150 @@ fn iface_forecast__get_forecast_params__to_json(p: &iface_forecast::GetForecastP
     Value::Object(m)
 }
 
+fn iface_forecast__forecast__from_json(v: &Value) -> Option<iface_forecast::Forecast> {
+    let m = v.as_object()?;
+    Some(iface_forecast::Forecast {
+        hours: m.get("hours").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| iface_forecast__forecast_hours_item__from_json(x)).collect())),
+        meta: m.get("meta").filter(|v| !v.is_null()).and_then(|v| iface_forecast__forecast_meta__from_json(v)),
+    })
+}
+
+fn iface_forecast__forecast_hours_item__from_json(v: &Value) -> Option<iface_forecast::ForecastHoursItem> {
+    let m = v.as_object()?;
+    Some(iface_forecast::ForecastHoursItem {
+        air_temperature: m.get("airTemperature").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| iface_forecast__forecast_hours_item_air_temperature_item__from_json(x)).collect())),
+        swell_direction: m.get("swellDirection").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| iface_forecast__forecast_hours_item_swell_direction_item__from_json(x)).collect())),
+        swell_height: m.get("swellHeight").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| iface_forecast__forecast_hours_item_swell_height_item__from_json(x)).collect())),
+        swell_period: m.get("swellPeriod").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| iface_forecast__forecast_hours_item_swell_period_item__from_json(x)).collect())),
+        time: m.get("time").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        water_temperature: m.get("waterTemperature").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| iface_forecast__forecast_hours_item_water_temperature_item__from_json(x)).collect())),
+        wave_direction: m.get("waveDirection").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| iface_forecast__forecast_hours_item_wave_direction_item__from_json(x)).collect())),
+        wave_height: m.get("waveHeight").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| iface_forecast__forecast_hours_item_wave_height_item__from_json(x)).collect())),
+        wave_period: m.get("wavePeriod").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| iface_forecast__forecast_hours_item_wave_period_item__from_json(x)).collect())),
+        wind_direction: m.get("windDirection").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| iface_forecast__forecast_hours_item_wind_direction_item__from_json(x)).collect())),
+        wind_speed: m.get("windSpeed").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| iface_forecast__forecast_hours_item_wind_speed_item__from_json(x)).collect())),
+    })
+}
+
+fn iface_forecast__forecast_hours_item_air_temperature_item__from_json(v: &Value) -> Option<iface_forecast::ForecastHoursItemAirTemperatureItem> {
+    let m = v.as_object()?;
+    Some(iface_forecast::ForecastHoursItemAirTemperatureItem {
+        source: m.get("source").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        value: m.get("value").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    })
+}
+
+fn iface_forecast__forecast_hours_item_swell_direction_item__from_json(v: &Value) -> Option<iface_forecast::ForecastHoursItemSwellDirectionItem> {
+    let m = v.as_object()?;
+    Some(iface_forecast::ForecastHoursItemSwellDirectionItem {
+        source: m.get("source").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        value: m.get("value").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    })
+}
+
+fn iface_forecast__forecast_hours_item_swell_height_item__from_json(v: &Value) -> Option<iface_forecast::ForecastHoursItemSwellHeightItem> {
+    let m = v.as_object()?;
+    Some(iface_forecast::ForecastHoursItemSwellHeightItem {
+        source: m.get("source").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        value: m.get("value").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    })
+}
+
+fn iface_forecast__forecast_hours_item_swell_period_item__from_json(v: &Value) -> Option<iface_forecast::ForecastHoursItemSwellPeriodItem> {
+    let m = v.as_object()?;
+    Some(iface_forecast::ForecastHoursItemSwellPeriodItem {
+        source: m.get("source").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        value: m.get("value").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    })
+}
+
+fn iface_forecast__forecast_hours_item_water_temperature_item__from_json(v: &Value) -> Option<iface_forecast::ForecastHoursItemWaterTemperatureItem> {
+    let m = v.as_object()?;
+    Some(iface_forecast::ForecastHoursItemWaterTemperatureItem {
+        source: m.get("source").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        value: m.get("value").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    })
+}
+
+fn iface_forecast__forecast_hours_item_wave_direction_item__from_json(v: &Value) -> Option<iface_forecast::ForecastHoursItemWaveDirectionItem> {
+    let m = v.as_object()?;
+    Some(iface_forecast::ForecastHoursItemWaveDirectionItem {
+        source: m.get("source").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        value: m.get("value").filter(|v| !v.is_null()).and_then(|v| (v).as_f64()),
+    })
+}
+
+fn iface_forecast__forecast_hours_item_wave_height_item__from_json(v: &Value) -> Option<iface_forecast::ForecastHoursItemWaveHeightItem> {
+    let m = v.as_object()?;
+    Some(iface_forecast::ForecastHoursItemWaveHeightItem {
+        source: m.get("source").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        value: m.get("value").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    })
+}
+
+fn iface_forecast__forecast_hours_item_wave_period_item__from_json(v: &Value) -> Option<iface_forecast::ForecastHoursItemWavePeriodItem> {
+    let m = v.as_object()?;
+    Some(iface_forecast::ForecastHoursItemWavePeriodItem {
+        source: m.get("source").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        value: m.get("value").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    })
+}
+
+fn iface_forecast__forecast_hours_item_wind_direction_item__from_json(v: &Value) -> Option<iface_forecast::ForecastHoursItemWindDirectionItem> {
+    let m = v.as_object()?;
+    Some(iface_forecast::ForecastHoursItemWindDirectionItem {
+        source: m.get("source").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        value: m.get("value").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    })
+}
+
+fn iface_forecast__forecast_hours_item_wind_speed_item__from_json(v: &Value) -> Option<iface_forecast::ForecastHoursItemWindSpeedItem> {
+    let m = v.as_object()?;
+    Some(iface_forecast::ForecastHoursItemWindSpeedItem {
+        source: m.get("source").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        value: m.get("value").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    })
+}
+
+fn iface_forecast__forecast_meta__from_json(v: &Value) -> Option<iface_forecast::ForecastMeta> {
+    let m = v.as_object()?;
+    Some(iface_forecast::ForecastMeta {
+        daily_quota: m.get("dailyQuota").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        lat: m.get("lat").filter(|v| !v.is_null()).and_then(|v| (v).as_f64()),
+        lng: m.get("lng").filter(|v| !v.is_null()).and_then(|v| (v).as_f64()),
+        request_count: m.get("requestCount").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+    })
+}
+
+fn iface_forecast__get_forecast__ok(body: String) -> Result<iface_forecast::Forecast, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match iface_forecast__forecast__from_json(&v) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_forecast__get_forecast__err(e: crate::runtime::DispatchError) -> iface_forecast::GetForecastError {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => match status {
+            403u16 => iface_forecast::GetForecastError::Forbidden(body),
+            422u16 => iface_forecast::GetForecastError::UnprocessableEntity(body),
+            _ => iface_forecast::GetForecastError::Other(body),
+        },
+        crate::runtime::DispatchError::Transport(m) => iface_forecast::GetForecastError::Other(m),
+    }
+}
+
 impl iface_forecast::Guest for crate::Component {
-    fn get_forecast(params: iface_forecast::GetForecastParams) -> Result<String, String> {
+    fn get_forecast(params: iface_forecast::GetForecastParams) -> Result<iface_forecast::Forecast, iface_forecast::GetForecastError> {
         let json = iface_forecast__get_forecast_params__to_json(&params);
-        dispatch(&OP_FORECAST_GET_FORECAST, json)
+        match dispatch(&OP_FORECAST_GET_FORECAST, json).and_then(iface_forecast__get_forecast__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_forecast__get_forecast__err(e)),
+        }
     }
 }
 

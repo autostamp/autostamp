@@ -44,10 +44,15 @@ pub(crate) enum FieldLocation {
     Body,
 }
 
-/// A single operation parameter: the snake-case key it carries in the params JSON and where
-/// it belongs in the request.
+/// A single operation parameter. `snake` keys the field in the internal params JSON (and, for a
+/// path field, matches the `{snake}` placeholder in the path template); `wire` is the verbatim name
+/// the field takes on the HTTP wire (query key, header name, or body property). The two differ
+/// whenever the source name isn't already snake_case (e.g. `dryRun` → snake `dry_run`, wire
+/// `dryRun`), and let distinct inputs that share a snake key (`DateCreated`, `DateCreated<`) still
+/// travel under their true names.
 pub(crate) struct FieldSpec {
     pub(crate) snake: &'static str,
+    pub(crate) wire: &'static str,
     pub(crate) location: FieldLocation,
 }
 
@@ -71,6 +76,16 @@ pub(crate) struct AuthApply {
     pub(crate) kind: AuthKind,
 }
 
+/// The failure modes of [`dispatch`], kept structured so each generated operation can map them
+/// onto its own typed error: an `Http` failure carries the response status and body (routed to
+/// the matching error-variant case), while a `Transport` failure carries a message for the
+/// catch-all case (a secret lookup, connection, or decode failure that never produced an HTTP
+/// status).
+pub(crate) enum DispatchError {
+    Http { status: u16, body: String },
+    Transport(String),
+}
+
 /// A single API operation: HTTP method, path template (with `{snake}` placeholders), the
 /// parameter fields, and the security schemes to apply.
 pub(crate) struct OpSpec {
@@ -81,8 +96,9 @@ pub(crate) struct OpSpec {
 }
 
 /// Execute `op` with the supplied `params` (a JSON object keyed by snake-case field names)
-/// and return the response body as a string, or an error message.
-pub(crate) fn dispatch(op: &OpSpec, params: Value) -> Result<String, String> {
+/// and return the raw 2xx response body, or a structured [`DispatchError`] the caller maps
+/// onto the operation's typed error.
+pub(crate) fn dispatch(op: &OpSpec, params: Value) -> Result<String, DispatchError> {
     let obj = match &params {
         Value::Object(map) => Some(map),
         _ => None,
@@ -105,10 +121,10 @@ pub(crate) fn dispatch(op: &OpSpec, params: Value) -> Result<String, String> {
                 let placeholder = format!("{{{}}}", field.snake);
                 path = path.replace(&placeholder, &percent_encode(&scalar(value)));
             }
-            FieldLocation::Query => query.push((field.snake.to_string(), scalar(value))),
-            FieldLocation::Header => headers.push((field.snake.to_string(), scalar(value))),
+            FieldLocation::Query => query.push((field.wire.to_string(), scalar(value))),
+            FieldLocation::Header => headers.push((field.wire.to_string(), scalar(value))),
             FieldLocation::Body => {
-                body.insert(field.snake.to_string(), value.clone());
+                body.insert(field.wire.to_string(), value.clone());
             }
         }
     }
@@ -116,7 +132,7 @@ pub(crate) fn dispatch(op: &OpSpec, params: Value) -> Result<String, String> {
     // Apply each resolved security scheme, sourcing its value from wasmcloud:secrets.
     let mut cookies: Vec<String> = Vec::new();
     for apply in op.auth {
-        let secret = fetch_secret(apply.secret_key)?;
+        let secret = fetch_secret(apply.secret_key).map_err(DispatchError::Transport)?;
         match &apply.kind {
             AuthKind::Bearer => headers.push(("authorization".into(), format!("Bearer {secret}"))),
             AuthKind::Basic => {
@@ -177,17 +193,18 @@ fn fetch_secret(key: &str) -> Result<String, String> {
 }
 
 /// Build and send the outgoing request with `wstd`, returning the response body on a 2xx
-/// status. The generated guest exports are synchronous, so the async `wstd` client is driven
-/// to completion on a local reactor via `wstd::runtime::block_on`.
+/// status and a structured [`DispatchError`] otherwise. The generated guest exports are
+/// synchronous, so the async `wstd` client is driven to completion on a local reactor via
+/// `wstd::runtime::block_on`.
 fn perform(
     method: &str,
     path_with_query: &str,
     headers: &[(String, String)],
     body: &[u8],
-) -> Result<String, String> {
+) -> Result<String, DispatchError> {
     let url = join_url(crate::BASE_URL, path_with_query);
     let method = Method::from_bytes(method.as_bytes())
-        .map_err(|err| format!("invalid HTTP method `{method}`: {err}"))?;
+        .map_err(|err| DispatchError::Transport(format!("invalid HTTP method `{method}`: {err}")))?;
 
     let mut builder = Request::builder().method(method).uri(url);
     for (name, value) in headers {
@@ -199,27 +216,29 @@ fn perform(
         } else {
             Body::from(body.to_vec())
         })
-        .map_err(|err| format!("failed to build request: {err}"))?;
+        .map_err(|err| DispatchError::Transport(format!("failed to build request: {err}")))?;
 
     wstd::runtime::block_on(async move {
         let client = Client::new();
         let response = client
             .send(request)
             .await
-            .map_err(|err| format!("request failed: {err:#}"))?;
+            .map_err(|err| DispatchError::Transport(format!("request failed: {err:#}")))?;
 
         let status = response.status().as_u16();
         let mut response_body = response.into_body();
-        let bytes = response_body
-            .contents()
-            .await
-            .map_err(|err| format!("failed to read response body: {err:#}"))?;
+        let bytes = response_body.contents().await.map_err(|err| {
+            DispatchError::Transport(format!("failed to read response body: {err:#}"))
+        })?;
         let body_text = String::from_utf8_lossy(bytes).into_owned();
 
         if (200..300).contains(&status) {
             Ok(body_text)
         } else {
-            Err(format!("HTTP {status}: {body_text}"))
+            Err(DispatchError::Http {
+                status,
+                body: body_text,
+            })
         }
     })
 }
@@ -288,7 +307,7 @@ const OP_HISTORY_GET_GENERATED_ITEMS_V1_HISTORY_GET: OpSpec = OpSpec {
     method: "GET",
     path_template: "/v1/history",
     fields: &[
-        FieldSpec { snake: "xi_api_key", location: FieldLocation::Header },
+        FieldSpec { snake: "xi_api_key", wire: "xi-api-key", location: FieldLocation::Header },
     ],
     auth: &[
     ],
@@ -298,8 +317,8 @@ const OP_HISTORY_DELETE_HISTORY_ITEMS_V1_HISTORY_DELETE_POST: OpSpec = OpSpec {
     method: "POST",
     path_template: "/v1/history/delete",
     fields: &[
-        FieldSpec { snake: "xi_api_key", location: FieldLocation::Header },
-        FieldSpec { snake: "history_item_ids", location: FieldLocation::Body },
+        FieldSpec { snake: "xi_api_key", wire: "xi-api-key", location: FieldLocation::Header },
+        FieldSpec { snake: "history_item_ids", wire: "history_item_ids", location: FieldLocation::Body },
     ],
     auth: &[
     ],
@@ -309,8 +328,8 @@ const OP_HISTORY_DOWNLOAD_HISTORY_ITEMS_V1_HISTORY_DOWNLOAD_POST: OpSpec = OpSpe
     method: "POST",
     path_template: "/v1/history/download",
     fields: &[
-        FieldSpec { snake: "xi_api_key", location: FieldLocation::Header },
-        FieldSpec { snake: "history_item_ids", location: FieldLocation::Body },
+        FieldSpec { snake: "xi_api_key", wire: "xi-api-key", location: FieldLocation::Header },
+        FieldSpec { snake: "history_item_ids", wire: "history_item_ids", location: FieldLocation::Body },
     ],
     auth: &[
     ],
@@ -320,8 +339,8 @@ const OP_HISTORY_DELETE_HISTORY_ITEM_V1_HISTORY_HISTORY_ITEM_ID_DELETE: OpSpec =
     method: "DELETE",
     path_template: "/v1/history/{history_item_id}",
     fields: &[
-        FieldSpec { snake: "history_item_id", location: FieldLocation::Path },
-        FieldSpec { snake: "xi_api_key", location: FieldLocation::Header },
+        FieldSpec { snake: "history_item_id", wire: "history_item_id", location: FieldLocation::Path },
+        FieldSpec { snake: "xi_api_key", wire: "xi-api-key", location: FieldLocation::Header },
     ],
     auth: &[
     ],
@@ -331,12 +350,62 @@ const OP_HISTORY_GET_AUDIO_FROM_HISTORY_ITEM_V1_HISTORY_HISTORY_ITEM_ID_AUDIO_GE
     method: "GET",
     path_template: "/v1/history/{history_item_id}/audio",
     fields: &[
-        FieldSpec { snake: "history_item_id", location: FieldLocation::Path },
-        FieldSpec { snake: "xi_api_key", location: FieldLocation::Header },
+        FieldSpec { snake: "history_item_id", wire: "history_item_id", location: FieldLocation::Path },
+        FieldSpec { snake: "xi_api_key", wire: "xi-api-key", location: FieldLocation::Header },
     ],
     auth: &[
     ],
 };
+
+fn iface_history__item_response_model_state_enum__to_str(e: &iface_history::ItemResponseModelStateEnum) -> &'static str {
+    match e {
+        iface_history::ItemResponseModelStateEnum::Created => "created",
+        iface_history::ItemResponseModelStateEnum::Deleted => "deleted",
+        iface_history::ItemResponseModelStateEnum::Processing => "processing",
+    }
+}
+
+fn iface_history__get_history_response_model__to_json(p: &iface_history::GetHistoryResponseModel) -> Value {
+    let mut m = Map::new();
+    m.insert("history".into(), Value::Array((&p.history).iter().map(|v| iface_history__item_response_model__to_json(v)).collect()));
+    Value::Object(m)
+}
+
+fn iface_history__item_response_model__to_json(p: &iface_history::ItemResponseModel) -> Value {
+    let mut m = Map::new();
+    m.insert("character_count_change_from".into(), Value::Number(serde_json::Number::from(*(&p.character_count_change_from))));
+    m.insert("character_count_change_to".into(), Value::Number(serde_json::Number::from(*(&p.character_count_change_to))));
+    m.insert("content_type".into(), Value::String((&p.content_type).clone()));
+    m.insert("date_unix".into(), Value::Number(serde_json::Number::from(*(&p.date_unix))));
+    m.insert("feedback".into(), iface_history__feedback_response_model__to_json(&p.feedback));
+    m.insert("history_item_id".into(), Value::String((&p.history_item_id).clone()));
+    m.insert("request_id".into(), Value::String((&p.request_id).clone()));
+    m.insert("settings".into(), iface_history__item_response_model_settings__to_json(&p.settings));
+    m.insert("state".into(), Value::String(iface_history__item_response_model_state_enum__to_str(&p.state).into()));
+    m.insert("text".into(), Value::String((&p.text).clone()));
+    m.insert("voice_id".into(), Value::String((&p.voice_id).clone()));
+    m.insert("voice_name".into(), Value::String((&p.voice_name).clone()));
+    Value::Object(m)
+}
+
+fn iface_history__feedback_response_model__to_json(p: &iface_history::FeedbackResponseModel) -> Value {
+    let mut m = Map::new();
+    m.insert("audio_quality".into(), Value::Bool(*(&p.audio_quality)));
+    m.insert("emotions".into(), Value::Bool(*(&p.emotions)));
+    m.insert("feedback".into(), Value::String((&p.feedback).clone()));
+    m.insert("glitches".into(), Value::Bool(*(&p.glitches)));
+    m.insert("inaccurate_clone".into(), Value::Bool(*(&p.inaccurate_clone)));
+    m.insert("other".into(), Value::Bool(*(&p.other)));
+    m.insert("review_status".into(), match (&p.review_status) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("thumbs_up".into(), Value::Bool(*(&p.thumbs_up)));
+    Value::Object(m)
+}
+
+fn iface_history__item_response_model_settings__to_json(p: &iface_history::ItemResponseModelSettings) -> Value {
+    let mut m = Map::new();
+    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
 
 fn iface_history__get_generated_items_v1_history_get_params__to_json(p: &iface_history::GetGeneratedItemsV1HistoryGetParams) -> Value {
     let mut m = Map::new();
@@ -372,26 +441,173 @@ fn iface_history__get_audio_from_history_item_v1_history_history_item_id_audio_g
     Value::Object(m)
 }
 
+fn iface_history__get_history_response_model__from_json(v: &Value) -> Option<iface_history::GetHistoryResponseModel> {
+    let m = v.as_object()?;
+    Some(iface_history::GetHistoryResponseModel {
+        history: m.get("history").and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| iface_history__item_response_model__from_json(x)).collect())).unwrap_or_default(),
+    })
+}
+
+fn iface_history__item_response_model__from_json(v: &Value) -> Option<iface_history::ItemResponseModel> {
+    let m = v.as_object()?;
+    Some(iface_history::ItemResponseModel {
+        character_count_change_from: m.get("character_count_change_from").and_then(|v| (v).as_i64().map(|n| n as i32)).unwrap_or_default(),
+        character_count_change_to: m.get("character_count_change_to").and_then(|v| (v).as_i64().map(|n| n as i32)).unwrap_or_default(),
+        content_type: m.get("content_type").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        date_unix: m.get("date_unix").and_then(|v| (v).as_i64().map(|n| n as i32)).unwrap_or_default(),
+        feedback: match m.get("feedback").and_then(|v| iface_history__feedback_response_model__from_json(v)) { Some(x) => x, None => return None },
+        history_item_id: m.get("history_item_id").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        request_id: m.get("request_id").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        settings: match m.get("settings").and_then(|v| iface_history__item_response_model_settings__from_json(v)) { Some(x) => x, None => return None },
+        state: match m.get("state").and_then(|v| (v).as_str().and_then(iface_history__item_response_model_state_enum__from_str)) { Some(x) => x, None => return None },
+        text: m.get("text").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        voice_id: m.get("voice_id").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        voice_name: m.get("voice_name").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+    })
+}
+
+fn iface_history__feedback_response_model__from_json(v: &Value) -> Option<iface_history::FeedbackResponseModel> {
+    let m = v.as_object()?;
+    Some(iface_history::FeedbackResponseModel {
+        audio_quality: m.get("audio_quality").and_then(|v| (v).as_bool()).unwrap_or_default(),
+        emotions: m.get("emotions").and_then(|v| (v).as_bool()).unwrap_or_default(),
+        feedback: m.get("feedback").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        glitches: m.get("glitches").and_then(|v| (v).as_bool()).unwrap_or_default(),
+        inaccurate_clone: m.get("inaccurate_clone").and_then(|v| (v).as_bool()).unwrap_or_default(),
+        other: m.get("other").and_then(|v| (v).as_bool()).unwrap_or_default(),
+        review_status: m.get("review_status").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        thumbs_up: m.get("thumbs_up").and_then(|v| (v).as_bool()).unwrap_or_default(),
+    })
+}
+
+fn iface_history__item_response_model_settings__from_json(v: &Value) -> Option<iface_history::ItemResponseModelSettings> {
+    let m = v.as_object()?;
+    Some(iface_history::ItemResponseModelSettings {
+        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    })
+}
+
+fn iface_history__item_response_model_state_enum__from_str(s: &str) -> Option<iface_history::ItemResponseModelStateEnum> {
+    match s {
+        "created" => Some(iface_history::ItemResponseModelStateEnum::Created),
+        "deleted" => Some(iface_history::ItemResponseModelStateEnum::Deleted),
+        "processing" => Some(iface_history::ItemResponseModelStateEnum::Processing),
+        _ => None,
+    }
+}
+
+fn iface_history__get_generated_items_v1_history_get__ok(body: String) -> Result<iface_history::GetHistoryResponseModel, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match iface_history__get_history_response_model__from_json(&v) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_history__get_generated_items_v1_history_get__err(e: crate::runtime::DispatchError) -> iface_history::GetGeneratedItemsV1HistoryGetError {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => match status {
+            422u16 => iface_history::GetGeneratedItemsV1HistoryGetError::UnprocessableEntity(body),
+            _ => iface_history::GetGeneratedItemsV1HistoryGetError::Other(body),
+        },
+        crate::runtime::DispatchError::Transport(m) => iface_history::GetGeneratedItemsV1HistoryGetError::Other(m),
+    }
+}
+
+fn iface_history__delete_history_items_v1_history_delete_post__ok(body: String) -> Result<String, crate::runtime::DispatchError> {
+    Ok(body)
+}
+
+fn iface_history__delete_history_items_v1_history_delete_post__err(e: crate::runtime::DispatchError) -> iface_history::DeleteHistoryItemsV1HistoryDeletePostError {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => match status {
+            422u16 => iface_history::DeleteHistoryItemsV1HistoryDeletePostError::UnprocessableEntity(body),
+            _ => iface_history::DeleteHistoryItemsV1HistoryDeletePostError::Other(body),
+        },
+        crate::runtime::DispatchError::Transport(m) => iface_history::DeleteHistoryItemsV1HistoryDeletePostError::Other(m),
+    }
+}
+
+fn iface_history__download_history_items_v1_history_download_post__ok(body: String) -> Result<String, crate::runtime::DispatchError> {
+    Ok(body)
+}
+
+fn iface_history__download_history_items_v1_history_download_post__err(e: crate::runtime::DispatchError) -> iface_history::DownloadHistoryItemsV1HistoryDownloadPostError {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => match status {
+            422u16 => iface_history::DownloadHistoryItemsV1HistoryDownloadPostError::UnprocessableEntity(body),
+            _ => iface_history::DownloadHistoryItemsV1HistoryDownloadPostError::Other(body),
+        },
+        crate::runtime::DispatchError::Transport(m) => iface_history::DownloadHistoryItemsV1HistoryDownloadPostError::Other(m),
+    }
+}
+
+fn iface_history__delete_history_item_v1_history_history_item_id_delete__ok(body: String) -> Result<String, crate::runtime::DispatchError> {
+    Ok(body)
+}
+
+fn iface_history__delete_history_item_v1_history_history_item_id_delete__err(e: crate::runtime::DispatchError) -> iface_history::DeleteHistoryItemV1HistoryHistoryItemIdDeleteError {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => match status {
+            422u16 => iface_history::DeleteHistoryItemV1HistoryHistoryItemIdDeleteError::UnprocessableEntity(body),
+            _ => iface_history::DeleteHistoryItemV1HistoryHistoryItemIdDeleteError::Other(body),
+        },
+        crate::runtime::DispatchError::Transport(m) => iface_history::DeleteHistoryItemV1HistoryHistoryItemIdDeleteError::Other(m),
+    }
+}
+
+fn iface_history__get_audio_from_history_item_v1_history_history_item_id_audio_get__ok(body: String) -> Result<String, crate::runtime::DispatchError> {
+    Ok(body)
+}
+
+fn iface_history__get_audio_from_history_item_v1_history_history_item_id_audio_get__err(e: crate::runtime::DispatchError) -> iface_history::GetAudioFromHistoryItemV1HistoryHistoryItemIdAudioGetError {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => match status {
+            422u16 => iface_history::GetAudioFromHistoryItemV1HistoryHistoryItemIdAudioGetError::UnprocessableEntity(body),
+            _ => iface_history::GetAudioFromHistoryItemV1HistoryHistoryItemIdAudioGetError::Other(body),
+        },
+        crate::runtime::DispatchError::Transport(m) => iface_history::GetAudioFromHistoryItemV1HistoryHistoryItemIdAudioGetError::Other(m),
+    }
+}
+
 impl iface_history::Guest for crate::Component {
-    fn get_generated_items_v1_history_get(params: iface_history::GetGeneratedItemsV1HistoryGetParams) -> Result<String, String> {
+    fn get_generated_items_v1_history_get(params: iface_history::GetGeneratedItemsV1HistoryGetParams) -> Result<iface_history::GetHistoryResponseModel, iface_history::GetGeneratedItemsV1HistoryGetError> {
         let json = iface_history__get_generated_items_v1_history_get_params__to_json(&params);
-        dispatch(&OP_HISTORY_GET_GENERATED_ITEMS_V1_HISTORY_GET, json)
+        match dispatch(&OP_HISTORY_GET_GENERATED_ITEMS_V1_HISTORY_GET, json).and_then(iface_history__get_generated_items_v1_history_get__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_history__get_generated_items_v1_history_get__err(e)),
+        }
     }
-    fn delete_history_items_v1_history_delete_post(params: iface_history::DeleteHistoryItemsV1HistoryDeletePostParams) -> Result<String, String> {
+    fn delete_history_items_v1_history_delete_post(params: iface_history::DeleteHistoryItemsV1HistoryDeletePostParams) -> Result<String, iface_history::DeleteHistoryItemsV1HistoryDeletePostError> {
         let json = iface_history__delete_history_items_v1_history_delete_post_params__to_json(&params);
-        dispatch(&OP_HISTORY_DELETE_HISTORY_ITEMS_V1_HISTORY_DELETE_POST, json)
+        match dispatch(&OP_HISTORY_DELETE_HISTORY_ITEMS_V1_HISTORY_DELETE_POST, json).and_then(iface_history__delete_history_items_v1_history_delete_post__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_history__delete_history_items_v1_history_delete_post__err(e)),
+        }
     }
-    fn download_history_items_v1_history_download_post(params: iface_history::DownloadHistoryItemsV1HistoryDownloadPostParams) -> Result<String, String> {
+    fn download_history_items_v1_history_download_post(params: iface_history::DownloadHistoryItemsV1HistoryDownloadPostParams) -> Result<String, iface_history::DownloadHistoryItemsV1HistoryDownloadPostError> {
         let json = iface_history__download_history_items_v1_history_download_post_params__to_json(&params);
-        dispatch(&OP_HISTORY_DOWNLOAD_HISTORY_ITEMS_V1_HISTORY_DOWNLOAD_POST, json)
+        match dispatch(&OP_HISTORY_DOWNLOAD_HISTORY_ITEMS_V1_HISTORY_DOWNLOAD_POST, json).and_then(iface_history__download_history_items_v1_history_download_post__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_history__download_history_items_v1_history_download_post__err(e)),
+        }
     }
-    fn delete_history_item_v1_history_history_item_id_delete(params: iface_history::DeleteHistoryItemV1HistoryHistoryItemIdDeleteParams) -> Result<String, String> {
+    fn delete_history_item_v1_history_history_item_id_delete(params: iface_history::DeleteHistoryItemV1HistoryHistoryItemIdDeleteParams) -> Result<String, iface_history::DeleteHistoryItemV1HistoryHistoryItemIdDeleteError> {
         let json = iface_history__delete_history_item_v1_history_history_item_id_delete_params__to_json(&params);
-        dispatch(&OP_HISTORY_DELETE_HISTORY_ITEM_V1_HISTORY_HISTORY_ITEM_ID_DELETE, json)
+        match dispatch(&OP_HISTORY_DELETE_HISTORY_ITEM_V1_HISTORY_HISTORY_ITEM_ID_DELETE, json).and_then(iface_history__delete_history_item_v1_history_history_item_id_delete__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_history__delete_history_item_v1_history_history_item_id_delete__err(e)),
+        }
     }
-    fn get_audio_from_history_item_v1_history_history_item_id_audio_get(params: iface_history::GetAudioFromHistoryItemV1HistoryHistoryItemIdAudioGetParams) -> Result<String, String> {
+    fn get_audio_from_history_item_v1_history_history_item_id_audio_get(params: iface_history::GetAudioFromHistoryItemV1HistoryHistoryItemIdAudioGetParams) -> Result<String, iface_history::GetAudioFromHistoryItemV1HistoryHistoryItemIdAudioGetError> {
         let json = iface_history__get_audio_from_history_item_v1_history_history_item_id_audio_get_params__to_json(&params);
-        dispatch(&OP_HISTORY_GET_AUDIO_FROM_HISTORY_ITEM_V1_HISTORY_HISTORY_ITEM_ID_AUDIO_GET, json)
+        match dispatch(&OP_HISTORY_GET_AUDIO_FROM_HISTORY_ITEM_V1_HISTORY_HISTORY_ITEM_ID_AUDIO_GET, json).and_then(iface_history__get_audio_from_history_item_v1_history_history_item_id_audio_get__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_history__get_audio_from_history_item_v1_history_history_item_id_audio_get__err(e)),
+        }
     }
 }
 use crate::exports::autostamp::elevenlabs::text_to_speech as iface_text_to_speech;
@@ -400,10 +616,10 @@ const OP_TEXT_TO_SPEECH_V1_TEXT_TO_SPEECH_VOICE_ID_POST: OpSpec = OpSpec {
     method: "POST",
     path_template: "/v1/text-to-speech/{voice_id}",
     fields: &[
-        FieldSpec { snake: "voice_id", location: FieldLocation::Path },
-        FieldSpec { snake: "xi_api_key", location: FieldLocation::Header },
-        FieldSpec { snake: "text", location: FieldLocation::Body },
-        FieldSpec { snake: "voice_settings", location: FieldLocation::Body },
+        FieldSpec { snake: "voice_id", wire: "voice_id", location: FieldLocation::Path },
+        FieldSpec { snake: "xi_api_key", wire: "xi-api-key", location: FieldLocation::Header },
+        FieldSpec { snake: "text", wire: "text", location: FieldLocation::Body },
+        FieldSpec { snake: "voice_settings", wire: "voice_settings", location: FieldLocation::Body },
     ],
     auth: &[
     ],
@@ -413,21 +629,28 @@ const OP_TEXT_TO_SPEECH_V1_TEXT_TO_SPEECH_VOICE_ID_STREAM_POST: OpSpec = OpSpec 
     method: "POST",
     path_template: "/v1/text-to-speech/{voice_id}/stream",
     fields: &[
-        FieldSpec { snake: "voice_id", location: FieldLocation::Path },
-        FieldSpec { snake: "xi_api_key", location: FieldLocation::Header },
-        FieldSpec { snake: "text", location: FieldLocation::Body },
-        FieldSpec { snake: "voice_settings", location: FieldLocation::Body },
+        FieldSpec { snake: "voice_id", wire: "voice_id", location: FieldLocation::Path },
+        FieldSpec { snake: "xi_api_key", wire: "xi-api-key", location: FieldLocation::Header },
+        FieldSpec { snake: "text", wire: "text", location: FieldLocation::Body },
+        FieldSpec { snake: "voice_settings", wire: "voice_settings", location: FieldLocation::Body },
     ],
     auth: &[
     ],
 };
+
+fn iface_text_to_speech__voice_settings_response_model__to_json(p: &iface_text_to_speech::VoiceSettingsResponseModel) -> Value {
+    let mut m = Map::new();
+    m.insert("similarity_boost".into(), serde_json::Number::from_f64(*(&p.similarity_boost)).map(Value::Number).unwrap_or(Value::Null));
+    m.insert("stability".into(), serde_json::Number::from_f64(*(&p.stability)).map(Value::Number).unwrap_or(Value::Null));
+    Value::Object(m)
+}
 
 fn iface_text_to_speech__v1_text_to_speech_voice_id_post_params__to_json(p: &iface_text_to_speech::V1TextToSpeechVoiceIdPostParams) -> Value {
     let mut m = Map::new();
     m.insert("voice_id".into(), Value::String((&p.voice_id).clone()));
     m.insert("xi_api_key".into(), match (&p.xi_api_key) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("text".into(), Value::String((&p.text).clone()));
-    m.insert("voice_settings".into(), match (&p.voice_settings) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("voice_settings".into(), match (&p.voice_settings) { Some(v) => iface_text_to_speech__voice_settings_response_model__to_json(v), None => Value::Null });
     Value::Object(m)
 }
 
@@ -436,18 +659,52 @@ fn iface_text_to_speech__v1_text_to_speech_voice_id_stream_post_params__to_json(
     m.insert("voice_id".into(), Value::String((&p.voice_id).clone()));
     m.insert("xi_api_key".into(), match (&p.xi_api_key) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("text".into(), Value::String((&p.text).clone()));
-    m.insert("voice_settings".into(), match (&p.voice_settings) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("voice_settings".into(), match (&p.voice_settings) { Some(v) => iface_text_to_speech__voice_settings_response_model__to_json(v), None => Value::Null });
     Value::Object(m)
 }
 
-impl iface_text_to_speech::Guest for crate::Component {
-    fn v1_text_to_speech_voice_id_post(params: iface_text_to_speech::V1TextToSpeechVoiceIdPostParams) -> Result<String, String> {
-        let json = iface_text_to_speech__v1_text_to_speech_voice_id_post_params__to_json(&params);
-        dispatch(&OP_TEXT_TO_SPEECH_V1_TEXT_TO_SPEECH_VOICE_ID_POST, json)
+fn iface_text_to_speech__v1_text_to_speech_voice_id_post__ok(body: String) -> Result<String, crate::runtime::DispatchError> {
+    Ok(body)
+}
+
+fn iface_text_to_speech__v1_text_to_speech_voice_id_post__err(e: crate::runtime::DispatchError) -> iface_text_to_speech::V1TextToSpeechVoiceIdPostError {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => match status {
+            422u16 => iface_text_to_speech::V1TextToSpeechVoiceIdPostError::UnprocessableEntity(body),
+            _ => iface_text_to_speech::V1TextToSpeechVoiceIdPostError::Other(body),
+        },
+        crate::runtime::DispatchError::Transport(m) => iface_text_to_speech::V1TextToSpeechVoiceIdPostError::Other(m),
     }
-    fn v1_text_to_speech_voice_id_stream_post(params: iface_text_to_speech::V1TextToSpeechVoiceIdStreamPostParams) -> Result<String, String> {
+}
+
+fn iface_text_to_speech__v1_text_to_speech_voice_id_stream_post__ok(body: String) -> Result<String, crate::runtime::DispatchError> {
+    Ok(body)
+}
+
+fn iface_text_to_speech__v1_text_to_speech_voice_id_stream_post__err(e: crate::runtime::DispatchError) -> iface_text_to_speech::V1TextToSpeechVoiceIdStreamPostError {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => match status {
+            422u16 => iface_text_to_speech::V1TextToSpeechVoiceIdStreamPostError::UnprocessableEntity(body),
+            _ => iface_text_to_speech::V1TextToSpeechVoiceIdStreamPostError::Other(body),
+        },
+        crate::runtime::DispatchError::Transport(m) => iface_text_to_speech::V1TextToSpeechVoiceIdStreamPostError::Other(m),
+    }
+}
+
+impl iface_text_to_speech::Guest for crate::Component {
+    fn v1_text_to_speech_voice_id_post(params: iface_text_to_speech::V1TextToSpeechVoiceIdPostParams) -> Result<String, iface_text_to_speech::V1TextToSpeechVoiceIdPostError> {
+        let json = iface_text_to_speech__v1_text_to_speech_voice_id_post_params__to_json(&params);
+        match dispatch(&OP_TEXT_TO_SPEECH_V1_TEXT_TO_SPEECH_VOICE_ID_POST, json).and_then(iface_text_to_speech__v1_text_to_speech_voice_id_post__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_text_to_speech__v1_text_to_speech_voice_id_post__err(e)),
+        }
+    }
+    fn v1_text_to_speech_voice_id_stream_post(params: iface_text_to_speech::V1TextToSpeechVoiceIdStreamPostParams) -> Result<String, iface_text_to_speech::V1TextToSpeechVoiceIdStreamPostError> {
         let json = iface_text_to_speech__v1_text_to_speech_voice_id_stream_post_params__to_json(&params);
-        dispatch(&OP_TEXT_TO_SPEECH_V1_TEXT_TO_SPEECH_VOICE_ID_STREAM_POST, json)
+        match dispatch(&OP_TEXT_TO_SPEECH_V1_TEXT_TO_SPEECH_VOICE_ID_STREAM_POST, json).and_then(iface_text_to_speech__v1_text_to_speech_voice_id_stream_post__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_text_to_speech__v1_text_to_speech_voice_id_stream_post__err(e)),
+        }
     }
 }
 use crate::exports::autostamp::elevenlabs::user as iface_user;
@@ -456,7 +713,7 @@ const OP_USER_GET_USER_INFO_V1_USER_GET: OpSpec = OpSpec {
     method: "GET",
     path_template: "/v1/user",
     fields: &[
-        FieldSpec { snake: "xi_api_key", location: FieldLocation::Header },
+        FieldSpec { snake: "xi_api_key", wire: "xi-api-key", location: FieldLocation::Header },
     ],
     auth: &[
     ],
@@ -466,11 +723,102 @@ const OP_USER_GET_USER_SUBSCRIPTION_INFO_V1_USER_SUBSCRIPTION_GET: OpSpec = OpSp
     method: "GET",
     path_template: "/v1/user/subscription",
     fields: &[
-        FieldSpec { snake: "xi_api_key", location: FieldLocation::Header },
+        FieldSpec { snake: "xi_api_key", wire: "xi-api-key", location: FieldLocation::Header },
     ],
     auth: &[
     ],
 };
+
+fn iface_user__subscription_response_model_currency_enum__to_str(e: &iface_user::SubscriptionResponseModelCurrencyEnum) -> &'static str {
+    match e {
+        iface_user::SubscriptionResponseModelCurrencyEnum::Usd => "usd",
+        iface_user::SubscriptionResponseModelCurrencyEnum::Eur => "eur",
+    }
+}
+
+fn iface_user__subscription_response_model_status_enum__to_str(e: &iface_user::SubscriptionResponseModelStatusEnum) -> &'static str {
+    match e {
+        iface_user::SubscriptionResponseModelStatusEnum::Trialing => "trialing",
+        iface_user::SubscriptionResponseModelStatusEnum::Active => "active",
+        iface_user::SubscriptionResponseModelStatusEnum::Incomplete => "incomplete",
+        iface_user::SubscriptionResponseModelStatusEnum::IncompleteExpired => "incomplete_expired",
+        iface_user::SubscriptionResponseModelStatusEnum::PastDue => "past_due",
+        iface_user::SubscriptionResponseModelStatusEnum::Canceled => "canceled",
+        iface_user::SubscriptionResponseModelStatusEnum::Unpaid => "unpaid",
+        iface_user::SubscriptionResponseModelStatusEnum::Free => "free",
+    }
+}
+
+fn iface_user__response_model__to_json(p: &iface_user::ResponseModel) -> Value {
+    let mut m = Map::new();
+    m.insert("is_new_user".into(), Value::Bool(*(&p.is_new_user)));
+    m.insert("subscription".into(), iface_user__subscription_response_model__to_json(&p.subscription));
+    m.insert("xi_api_key".into(), Value::String((&p.xi_api_key).clone()));
+    Value::Object(m)
+}
+
+fn iface_user__subscription_response_model__to_json(p: &iface_user::SubscriptionResponseModel) -> Value {
+    let mut m = Map::new();
+    m.insert("allowed_to_extend_character_limit".into(), Value::Bool(*(&p.allowed_to_extend_character_limit)));
+    m.insert("available_models".into(), Value::Array((&p.available_models).iter().map(|v| iface_user__tts_model_response_model__to_json(v)).collect()));
+    m.insert("can_extend_character_limit".into(), Value::Bool(*(&p.can_extend_character_limit)));
+    m.insert("can_extend_voice_limit".into(), Value::Bool(*(&p.can_extend_voice_limit)));
+    m.insert("can_use_delayed_payment_methods".into(), Value::Bool(*(&p.can_use_delayed_payment_methods)));
+    m.insert("can_use_instant_voice_cloning".into(), Value::Bool(*(&p.can_use_instant_voice_cloning)));
+    m.insert("can_use_professional_voice_cloning".into(), Value::Bool(*(&p.can_use_professional_voice_cloning)));
+    m.insert("character_count".into(), Value::Number(serde_json::Number::from(*(&p.character_count))));
+    m.insert("character_limit".into(), Value::Number(serde_json::Number::from(*(&p.character_limit))));
+    m.insert("currency".into(), Value::String(iface_user__subscription_response_model_currency_enum__to_str(&p.currency).into()));
+    m.insert("next_character_count_reset_unix".into(), Value::Number(serde_json::Number::from(*(&p.next_character_count_reset_unix))));
+    m.insert("professional_voice_limit".into(), Value::Number(serde_json::Number::from(*(&p.professional_voice_limit))));
+    m.insert("status".into(), Value::String(iface_user__subscription_response_model_status_enum__to_str(&p.status).into()));
+    m.insert("tier".into(), Value::String((&p.tier).clone()));
+    m.insert("voice_limit".into(), Value::Number(serde_json::Number::from(*(&p.voice_limit))));
+    Value::Object(m)
+}
+
+fn iface_user__tts_model_response_model__to_json(p: &iface_user::TtsModelResponseModel) -> Value {
+    let mut m = Map::new();
+    m.insert("display_name".into(), Value::String((&p.display_name).clone()));
+    m.insert("model_id".into(), Value::String((&p.model_id).clone()));
+    m.insert("supported_language".into(), Value::Array((&p.supported_language).iter().map(|v| iface_user__language_response_model__to_json(v)).collect()));
+    Value::Object(m)
+}
+
+fn iface_user__language_response_model__to_json(p: &iface_user::LanguageResponseModel) -> Value {
+    let mut m = Map::new();
+    m.insert("display_name".into(), Value::String((&p.display_name).clone()));
+    m.insert("iso_code".into(), Value::String((&p.iso_code).clone()));
+    Value::Object(m)
+}
+
+fn iface_user__extended_subscription_response_model__to_json(p: &iface_user::ExtendedSubscriptionResponseModel) -> Value {
+    let mut m = Map::new();
+    m.insert("allowed_to_extend_character_limit".into(), Value::Bool(*(&p.allowed_to_extend_character_limit)));
+    m.insert("available_models".into(), Value::Array((&p.available_models).iter().map(|v| iface_user__tts_model_response_model__to_json(v)).collect()));
+    m.insert("can_extend_character_limit".into(), Value::Bool(*(&p.can_extend_character_limit)));
+    m.insert("can_extend_voice_limit".into(), Value::Bool(*(&p.can_extend_voice_limit)));
+    m.insert("can_use_delayed_payment_methods".into(), Value::Bool(*(&p.can_use_delayed_payment_methods)));
+    m.insert("can_use_instant_voice_cloning".into(), Value::Bool(*(&p.can_use_instant_voice_cloning)));
+    m.insert("can_use_professional_voice_cloning".into(), Value::Bool(*(&p.can_use_professional_voice_cloning)));
+    m.insert("character_count".into(), Value::Number(serde_json::Number::from(*(&p.character_count))));
+    m.insert("character_limit".into(), Value::Number(serde_json::Number::from(*(&p.character_limit))));
+    m.insert("currency".into(), Value::String(iface_user__subscription_response_model_currency_enum__to_str(&p.currency).into()));
+    m.insert("next_character_count_reset_unix".into(), Value::Number(serde_json::Number::from(*(&p.next_character_count_reset_unix))));
+    m.insert("next_invoice".into(), iface_user__invoice_response_model__to_json(&p.next_invoice));
+    m.insert("professional_voice_limit".into(), Value::Number(serde_json::Number::from(*(&p.professional_voice_limit))));
+    m.insert("status".into(), Value::String(iface_user__subscription_response_model_status_enum__to_str(&p.status).into()));
+    m.insert("tier".into(), Value::String((&p.tier).clone()));
+    m.insert("voice_limit".into(), Value::Number(serde_json::Number::from(*(&p.voice_limit))));
+    Value::Object(m)
+}
+
+fn iface_user__invoice_response_model__to_json(p: &iface_user::InvoiceResponseModel) -> Value {
+    let mut m = Map::new();
+    m.insert("amount_due_cents".into(), Value::Number(serde_json::Number::from(*(&p.amount_due_cents))));
+    m.insert("next_payment_attempt_unix".into(), Value::Number(serde_json::Number::from(*(&p.next_payment_attempt_unix))));
+    Value::Object(m)
+}
 
 fn iface_user__get_user_info_v1_user_get_params__to_json(p: &iface_user::GetUserInfoV1UserGetParams) -> Value {
     let mut m = Map::new();
@@ -484,14 +832,161 @@ fn iface_user__get_user_subscription_info_v1_user_subscription_get_params__to_js
     Value::Object(m)
 }
 
-impl iface_user::Guest for crate::Component {
-    fn get_user_info_v1_user_get(params: iface_user::GetUserInfoV1UserGetParams) -> Result<String, String> {
-        let json = iface_user__get_user_info_v1_user_get_params__to_json(&params);
-        dispatch(&OP_USER_GET_USER_INFO_V1_USER_GET, json)
+fn iface_user__response_model__from_json(v: &Value) -> Option<iface_user::ResponseModel> {
+    let m = v.as_object()?;
+    Some(iface_user::ResponseModel {
+        is_new_user: m.get("is_new_user").and_then(|v| (v).as_bool()).unwrap_or_default(),
+        subscription: match m.get("subscription").and_then(|v| iface_user__subscription_response_model__from_json(v)) { Some(x) => x, None => return None },
+        xi_api_key: m.get("xi_api_key").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+    })
+}
+
+fn iface_user__subscription_response_model__from_json(v: &Value) -> Option<iface_user::SubscriptionResponseModel> {
+    let m = v.as_object()?;
+    Some(iface_user::SubscriptionResponseModel {
+        allowed_to_extend_character_limit: m.get("allowed_to_extend_character_limit").and_then(|v| (v).as_bool()).unwrap_or_default(),
+        available_models: m.get("available_models").and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| iface_user__tts_model_response_model__from_json(x)).collect())).unwrap_or_default(),
+        can_extend_character_limit: m.get("can_extend_character_limit").and_then(|v| (v).as_bool()).unwrap_or_default(),
+        can_extend_voice_limit: m.get("can_extend_voice_limit").and_then(|v| (v).as_bool()).unwrap_or_default(),
+        can_use_delayed_payment_methods: m.get("can_use_delayed_payment_methods").and_then(|v| (v).as_bool()).unwrap_or_default(),
+        can_use_instant_voice_cloning: m.get("can_use_instant_voice_cloning").and_then(|v| (v).as_bool()).unwrap_or_default(),
+        can_use_professional_voice_cloning: m.get("can_use_professional_voice_cloning").and_then(|v| (v).as_bool()).unwrap_or_default(),
+        character_count: m.get("character_count").and_then(|v| (v).as_i64().map(|n| n as i32)).unwrap_or_default(),
+        character_limit: m.get("character_limit").and_then(|v| (v).as_i64().map(|n| n as i32)).unwrap_or_default(),
+        currency: match m.get("currency").and_then(|v| (v).as_str().and_then(iface_user__subscription_response_model_currency_enum__from_str)) { Some(x) => x, None => return None },
+        next_character_count_reset_unix: m.get("next_character_count_reset_unix").and_then(|v| (v).as_i64().map(|n| n as i32)).unwrap_or_default(),
+        professional_voice_limit: m.get("professional_voice_limit").and_then(|v| (v).as_i64().map(|n| n as i32)).unwrap_or_default(),
+        status: match m.get("status").and_then(|v| (v).as_str().and_then(iface_user__subscription_response_model_status_enum__from_str)) { Some(x) => x, None => return None },
+        tier: m.get("tier").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        voice_limit: m.get("voice_limit").and_then(|v| (v).as_i64().map(|n| n as i32)).unwrap_or_default(),
+    })
+}
+
+fn iface_user__tts_model_response_model__from_json(v: &Value) -> Option<iface_user::TtsModelResponseModel> {
+    let m = v.as_object()?;
+    Some(iface_user::TtsModelResponseModel {
+        display_name: m.get("display_name").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        model_id: m.get("model_id").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        supported_language: m.get("supported_language").and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| iface_user__language_response_model__from_json(x)).collect())).unwrap_or_default(),
+    })
+}
+
+fn iface_user__language_response_model__from_json(v: &Value) -> Option<iface_user::LanguageResponseModel> {
+    let m = v.as_object()?;
+    Some(iface_user::LanguageResponseModel {
+        display_name: m.get("display_name").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        iso_code: m.get("iso_code").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+    })
+}
+
+fn iface_user__extended_subscription_response_model__from_json(v: &Value) -> Option<iface_user::ExtendedSubscriptionResponseModel> {
+    let m = v.as_object()?;
+    Some(iface_user::ExtendedSubscriptionResponseModel {
+        allowed_to_extend_character_limit: m.get("allowed_to_extend_character_limit").and_then(|v| (v).as_bool()).unwrap_or_default(),
+        available_models: m.get("available_models").and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| iface_user__tts_model_response_model__from_json(x)).collect())).unwrap_or_default(),
+        can_extend_character_limit: m.get("can_extend_character_limit").and_then(|v| (v).as_bool()).unwrap_or_default(),
+        can_extend_voice_limit: m.get("can_extend_voice_limit").and_then(|v| (v).as_bool()).unwrap_or_default(),
+        can_use_delayed_payment_methods: m.get("can_use_delayed_payment_methods").and_then(|v| (v).as_bool()).unwrap_or_default(),
+        can_use_instant_voice_cloning: m.get("can_use_instant_voice_cloning").and_then(|v| (v).as_bool()).unwrap_or_default(),
+        can_use_professional_voice_cloning: m.get("can_use_professional_voice_cloning").and_then(|v| (v).as_bool()).unwrap_or_default(),
+        character_count: m.get("character_count").and_then(|v| (v).as_i64().map(|n| n as i32)).unwrap_or_default(),
+        character_limit: m.get("character_limit").and_then(|v| (v).as_i64().map(|n| n as i32)).unwrap_or_default(),
+        currency: match m.get("currency").and_then(|v| (v).as_str().and_then(iface_user__subscription_response_model_currency_enum__from_str)) { Some(x) => x, None => return None },
+        next_character_count_reset_unix: m.get("next_character_count_reset_unix").and_then(|v| (v).as_i64().map(|n| n as i32)).unwrap_or_default(),
+        next_invoice: match m.get("next_invoice").and_then(|v| iface_user__invoice_response_model__from_json(v)) { Some(x) => x, None => return None },
+        professional_voice_limit: m.get("professional_voice_limit").and_then(|v| (v).as_i64().map(|n| n as i32)).unwrap_or_default(),
+        status: match m.get("status").and_then(|v| (v).as_str().and_then(iface_user__subscription_response_model_status_enum__from_str)) { Some(x) => x, None => return None },
+        tier: m.get("tier").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        voice_limit: m.get("voice_limit").and_then(|v| (v).as_i64().map(|n| n as i32)).unwrap_or_default(),
+    })
+}
+
+fn iface_user__invoice_response_model__from_json(v: &Value) -> Option<iface_user::InvoiceResponseModel> {
+    let m = v.as_object()?;
+    Some(iface_user::InvoiceResponseModel {
+        amount_due_cents: m.get("amount_due_cents").and_then(|v| (v).as_i64().map(|n| n as i32)).unwrap_or_default(),
+        next_payment_attempt_unix: m.get("next_payment_attempt_unix").and_then(|v| (v).as_i64().map(|n| n as i32)).unwrap_or_default(),
+    })
+}
+
+fn iface_user__subscription_response_model_currency_enum__from_str(s: &str) -> Option<iface_user::SubscriptionResponseModelCurrencyEnum> {
+    match s {
+        "usd" => Some(iface_user::SubscriptionResponseModelCurrencyEnum::Usd),
+        "eur" => Some(iface_user::SubscriptionResponseModelCurrencyEnum::Eur),
+        _ => None,
     }
-    fn get_user_subscription_info_v1_user_subscription_get(params: iface_user::GetUserSubscriptionInfoV1UserSubscriptionGetParams) -> Result<String, String> {
+}
+
+fn iface_user__subscription_response_model_status_enum__from_str(s: &str) -> Option<iface_user::SubscriptionResponseModelStatusEnum> {
+    match s {
+        "trialing" => Some(iface_user::SubscriptionResponseModelStatusEnum::Trialing),
+        "active" => Some(iface_user::SubscriptionResponseModelStatusEnum::Active),
+        "incomplete" => Some(iface_user::SubscriptionResponseModelStatusEnum::Incomplete),
+        "incomplete_expired" => Some(iface_user::SubscriptionResponseModelStatusEnum::IncompleteExpired),
+        "past_due" => Some(iface_user::SubscriptionResponseModelStatusEnum::PastDue),
+        "canceled" => Some(iface_user::SubscriptionResponseModelStatusEnum::Canceled),
+        "unpaid" => Some(iface_user::SubscriptionResponseModelStatusEnum::Unpaid),
+        "free" => Some(iface_user::SubscriptionResponseModelStatusEnum::Free),
+        _ => None,
+    }
+}
+
+fn iface_user__get_user_info_v1_user_get__ok(body: String) -> Result<iface_user::ResponseModel, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match iface_user__response_model__from_json(&v) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_user__get_user_info_v1_user_get__err(e: crate::runtime::DispatchError) -> iface_user::GetUserInfoV1UserGetError {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => match status {
+            422u16 => iface_user::GetUserInfoV1UserGetError::UnprocessableEntity(body),
+            _ => iface_user::GetUserInfoV1UserGetError::Other(body),
+        },
+        crate::runtime::DispatchError::Transport(m) => iface_user::GetUserInfoV1UserGetError::Other(m),
+    }
+}
+
+fn iface_user__get_user_subscription_info_v1_user_subscription_get__ok(body: String) -> Result<iface_user::ExtendedSubscriptionResponseModel, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match iface_user__extended_subscription_response_model__from_json(&v) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_user__get_user_subscription_info_v1_user_subscription_get__err(e: crate::runtime::DispatchError) -> iface_user::GetUserSubscriptionInfoV1UserSubscriptionGetError {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => match status {
+            422u16 => iface_user::GetUserSubscriptionInfoV1UserSubscriptionGetError::UnprocessableEntity(body),
+            _ => iface_user::GetUserSubscriptionInfoV1UserSubscriptionGetError::Other(body),
+        },
+        crate::runtime::DispatchError::Transport(m) => iface_user::GetUserSubscriptionInfoV1UserSubscriptionGetError::Other(m),
+    }
+}
+
+impl iface_user::Guest for crate::Component {
+    fn get_user_info_v1_user_get(params: iface_user::GetUserInfoV1UserGetParams) -> Result<iface_user::ResponseModel, iface_user::GetUserInfoV1UserGetError> {
+        let json = iface_user__get_user_info_v1_user_get_params__to_json(&params);
+        match dispatch(&OP_USER_GET_USER_INFO_V1_USER_GET, json).and_then(iface_user__get_user_info_v1_user_get__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_user__get_user_info_v1_user_get__err(e)),
+        }
+    }
+    fn get_user_subscription_info_v1_user_subscription_get(params: iface_user::GetUserSubscriptionInfoV1UserSubscriptionGetParams) -> Result<iface_user::ExtendedSubscriptionResponseModel, iface_user::GetUserSubscriptionInfoV1UserSubscriptionGetError> {
         let json = iface_user__get_user_subscription_info_v1_user_subscription_get_params__to_json(&params);
-        dispatch(&OP_USER_GET_USER_SUBSCRIPTION_INFO_V1_USER_SUBSCRIPTION_GET, json)
+        match dispatch(&OP_USER_GET_USER_SUBSCRIPTION_INFO_V1_USER_SUBSCRIPTION_GET, json).and_then(iface_user__get_user_subscription_info_v1_user_subscription_get__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_user__get_user_subscription_info_v1_user_subscription_get__err(e)),
+        }
     }
 }
 use crate::exports::autostamp::elevenlabs::voices as iface_voices;
@@ -500,7 +995,7 @@ const OP_VOICES_GET_VOICES_V1_VOICES_GET: OpSpec = OpSpec {
     method: "GET",
     path_template: "/v1/voices",
     fields: &[
-        FieldSpec { snake: "xi_api_key", location: FieldLocation::Header },
+        FieldSpec { snake: "xi_api_key", wire: "xi-api-key", location: FieldLocation::Header },
     ],
     auth: &[
     ],
@@ -510,7 +1005,11 @@ const OP_VOICES_ADD_VOICE_V1_VOICES_ADD_POST: OpSpec = OpSpec {
     method: "POST",
     path_template: "/v1/voices/add",
     fields: &[
-        FieldSpec { snake: "xi_api_key", location: FieldLocation::Header },
+        FieldSpec { snake: "xi_api_key", wire: "xi-api-key", location: FieldLocation::Header },
+        FieldSpec { snake: "description", wire: "description", location: FieldLocation::Body },
+        FieldSpec { snake: "files", wire: "files", location: FieldLocation::Body },
+        FieldSpec { snake: "labels", wire: "labels", location: FieldLocation::Body },
+        FieldSpec { snake: "name", wire: "name", location: FieldLocation::Body },
     ],
     auth: &[
     ],
@@ -529,9 +1028,9 @@ const OP_VOICES_GET_VOICE_V1_VOICES_VOICE_ID_GET: OpSpec = OpSpec {
     method: "GET",
     path_template: "/v1/voices/{voice_id}",
     fields: &[
-        FieldSpec { snake: "voice_id", location: FieldLocation::Path },
-        FieldSpec { snake: "with_settings", location: FieldLocation::Query },
-        FieldSpec { snake: "xi_api_key", location: FieldLocation::Header },
+        FieldSpec { snake: "voice_id", wire: "voice_id", location: FieldLocation::Path },
+        FieldSpec { snake: "with_settings", wire: "with_settings", location: FieldLocation::Query },
+        FieldSpec { snake: "xi_api_key", wire: "xi-api-key", location: FieldLocation::Header },
     ],
     auth: &[
     ],
@@ -541,8 +1040,8 @@ const OP_VOICES_DELETE_VOICE_V1_VOICES_VOICE_ID_DELETE: OpSpec = OpSpec {
     method: "DELETE",
     path_template: "/v1/voices/{voice_id}",
     fields: &[
-        FieldSpec { snake: "voice_id", location: FieldLocation::Path },
-        FieldSpec { snake: "xi_api_key", location: FieldLocation::Header },
+        FieldSpec { snake: "voice_id", wire: "voice_id", location: FieldLocation::Path },
+        FieldSpec { snake: "xi_api_key", wire: "xi-api-key", location: FieldLocation::Header },
     ],
     auth: &[
     ],
@@ -552,8 +1051,12 @@ const OP_VOICES_EDIT_VOICE_V1_VOICES_VOICE_ID_EDIT_POST: OpSpec = OpSpec {
     method: "POST",
     path_template: "/v1/voices/{voice_id}/edit",
     fields: &[
-        FieldSpec { snake: "voice_id", location: FieldLocation::Path },
-        FieldSpec { snake: "xi_api_key", location: FieldLocation::Header },
+        FieldSpec { snake: "voice_id", wire: "voice_id", location: FieldLocation::Path },
+        FieldSpec { snake: "xi_api_key", wire: "xi-api-key", location: FieldLocation::Header },
+        FieldSpec { snake: "description", wire: "description", location: FieldLocation::Body },
+        FieldSpec { snake: "files", wire: "files", location: FieldLocation::Body },
+        FieldSpec { snake: "labels", wire: "labels", location: FieldLocation::Body },
+        FieldSpec { snake: "name", wire: "name", location: FieldLocation::Body },
     ],
     auth: &[
     ],
@@ -563,8 +1066,8 @@ const OP_VOICES_GET_VOICE_SETTINGS_V1_VOICES_VOICE_ID_SETTINGS_GET: OpSpec = OpS
     method: "GET",
     path_template: "/v1/voices/{voice_id}/settings",
     fields: &[
-        FieldSpec { snake: "voice_id", location: FieldLocation::Path },
-        FieldSpec { snake: "xi_api_key", location: FieldLocation::Header },
+        FieldSpec { snake: "voice_id", wire: "voice_id", location: FieldLocation::Path },
+        FieldSpec { snake: "xi_api_key", wire: "xi-api-key", location: FieldLocation::Header },
     ],
     auth: &[
     ],
@@ -574,13 +1077,106 @@ const OP_VOICES_EDIT_VOICE_SETTINGS_V1_VOICES_VOICE_ID_SETTINGS_EDIT_POST: OpSpe
     method: "POST",
     path_template: "/v1/voices/{voice_id}/settings/edit",
     fields: &[
-        FieldSpec { snake: "voice_id", location: FieldLocation::Path },
-        FieldSpec { snake: "xi_api_key", location: FieldLocation::Header },
-        FieldSpec { snake: "body", location: FieldLocation::Body },
+        FieldSpec { snake: "voice_id", wire: "voice_id", location: FieldLocation::Path },
+        FieldSpec { snake: "xi_api_key", wire: "xi-api-key", location: FieldLocation::Header },
+        FieldSpec { snake: "similarity_boost", wire: "similarity_boost", location: FieldLocation::Body },
+        FieldSpec { snake: "stability", wire: "stability", location: FieldLocation::Body },
     ],
     auth: &[
     ],
 };
+
+fn iface_voices__fine_tuning_response_model_finetuning_state_enum__to_str(e: &iface_voices::FineTuningResponseModelFinetuningStateEnum) -> &'static str {
+    match e {
+        iface_voices::FineTuningResponseModelFinetuningStateEnum::NotStarted => "not_started",
+        iface_voices::FineTuningResponseModelFinetuningStateEnum::IsFineTuning => "is_fine_tuning",
+        iface_voices::FineTuningResponseModelFinetuningStateEnum::FineTuned => "fine_tuned",
+    }
+}
+
+fn iface_voices__get_voices_response_model__to_json(p: &iface_voices::GetVoicesResponseModel) -> Value {
+    let mut m = Map::new();
+    m.insert("voices".into(), Value::Array((&p.voices).iter().map(|v| iface_voices__voice_response_model__to_json(v)).collect()));
+    Value::Object(m)
+}
+
+fn iface_voices__voice_response_model__to_json(p: &iface_voices::VoiceResponseModel) -> Value {
+    let mut m = Map::new();
+    m.insert("available_for_tiers".into(), Value::Array((&p.available_for_tiers).iter().map(|v| Value::String((v).clone())).collect()));
+    m.insert("category".into(), Value::String((&p.category).clone()));
+    m.insert("description".into(), Value::String((&p.description).clone()));
+    m.insert("fine_tuning".into(), iface_voices__fine_tuning_response_model__to_json(&p.fine_tuning));
+    m.insert("labels".into(), iface_voices__voice_response_model_labels__to_json(&p.labels));
+    m.insert("name".into(), Value::String((&p.name).clone()));
+    m.insert("preview_url".into(), Value::String((&p.preview_url).clone()));
+    m.insert("samples".into(), Value::Array((&p.samples).iter().map(|v| iface_voices__sample_response_model__to_json(v)).collect()));
+    m.insert("settings".into(), iface_voices__voice_settings_response_model__to_json(&p.settings));
+    m.insert("voice_id".into(), Value::String((&p.voice_id).clone()));
+    Value::Object(m)
+}
+
+fn iface_voices__fine_tuning_response_model__to_json(p: &iface_voices::FineTuningResponseModel) -> Value {
+    let mut m = Map::new();
+    m.insert("fine_tuning_requested".into(), Value::Bool(*(&p.fine_tuning_requested)));
+    m.insert("finetuning_state".into(), Value::String(iface_voices__fine_tuning_response_model_finetuning_state_enum__to_str(&p.finetuning_state).into()));
+    m.insert("is_allowed_to_fine_tune".into(), Value::Bool(*(&p.is_allowed_to_fine_tune)));
+    m.insert("model_id".into(), Value::String((&p.model_id).clone()));
+    m.insert("slice_ids".into(), Value::Array((&p.slice_ids).iter().map(|v| Value::String((v).clone())).collect()));
+    m.insert("verification_attempts".into(), Value::Array((&p.verification_attempts).iter().map(|v| iface_voices__verification_attempt_response_model__to_json(v)).collect()));
+    m.insert("verification_attempts_count".into(), Value::Number(serde_json::Number::from(*(&p.verification_attempts_count))));
+    m.insert("verification_failures".into(), Value::Array((&p.verification_failures).iter().map(|v| Value::String((v).clone())).collect()));
+    Value::Object(m)
+}
+
+fn iface_voices__verification_attempt_response_model__to_json(p: &iface_voices::VerificationAttemptResponseModel) -> Value {
+    let mut m = Map::new();
+    m.insert("accepted".into(), Value::Bool(*(&p.accepted)));
+    m.insert("date_unix".into(), Value::Number(serde_json::Number::from(*(&p.date_unix))));
+    m.insert("levenshtein_distance".into(), serde_json::Number::from_f64(*(&p.levenshtein_distance)).map(Value::Number).unwrap_or(Value::Null));
+    m.insert("recording".into(), iface_voices__recording_response_model__to_json(&p.recording));
+    m.insert("similarity".into(), serde_json::Number::from_f64(*(&p.similarity)).map(Value::Number).unwrap_or(Value::Null));
+    m.insert("text".into(), Value::String((&p.text).clone()));
+    Value::Object(m)
+}
+
+fn iface_voices__recording_response_model__to_json(p: &iface_voices::RecordingResponseModel) -> Value {
+    let mut m = Map::new();
+    m.insert("mime_type".into(), Value::String((&p.mime_type).clone()));
+    m.insert("recording_id".into(), Value::String((&p.recording_id).clone()));
+    m.insert("size_bytes".into(), Value::Number(serde_json::Number::from(*(&p.size_bytes))));
+    m.insert("transcription".into(), Value::String((&p.transcription).clone()));
+    m.insert("upload_date_unix".into(), Value::Number(serde_json::Number::from(*(&p.upload_date_unix))));
+    Value::Object(m)
+}
+
+fn iface_voices__voice_response_model_labels__to_json(p: &iface_voices::VoiceResponseModelLabels) -> Value {
+    let mut m = Map::new();
+    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_voices__sample_response_model__to_json(p: &iface_voices::SampleResponseModel) -> Value {
+    let mut m = Map::new();
+    m.insert("file_name".into(), Value::String((&p.file_name).clone()));
+    m.insert("hash".into(), Value::String((&p.hash).clone()));
+    m.insert("mime_type".into(), Value::String((&p.mime_type).clone()));
+    m.insert("sample_id".into(), Value::String((&p.sample_id).clone()));
+    m.insert("size_bytes".into(), Value::Number(serde_json::Number::from(*(&p.size_bytes))));
+    Value::Object(m)
+}
+
+fn iface_voices__voice_settings_response_model__to_json(p: &iface_voices::VoiceSettingsResponseModel) -> Value {
+    let mut m = Map::new();
+    m.insert("similarity_boost".into(), serde_json::Number::from_f64(*(&p.similarity_boost)).map(Value::Number).unwrap_or(Value::Null));
+    m.insert("stability".into(), serde_json::Number::from_f64(*(&p.stability)).map(Value::Number).unwrap_or(Value::Null));
+    Value::Object(m)
+}
+
+fn iface_voices__add_voice_response_model__to_json(p: &iface_voices::AddVoiceResponseModel) -> Value {
+    let mut m = Map::new();
+    m.insert("voice_id".into(), Value::String((&p.voice_id).clone()));
+    Value::Object(m)
+}
 
 fn iface_voices__get_voices_v1_voices_get_params__to_json(p: &iface_voices::GetVoicesV1VoicesGetParams) -> Value {
     let mut m = Map::new();
@@ -591,6 +1187,10 @@ fn iface_voices__get_voices_v1_voices_get_params__to_json(p: &iface_voices::GetV
 fn iface_voices__add_voice_v1_voices_add_post_params__to_json(p: &iface_voices::AddVoiceV1VoicesAddPostParams) -> Value {
     let mut m = Map::new();
     m.insert("xi_api_key".into(), match (&p.xi_api_key) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("description".into(), match (&p.description) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("files".into(), Value::Array((&p.files).iter().map(|v| Value::String((v).clone())).collect()));
+    m.insert("labels".into(), match (&p.labels) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("name".into(), Value::String((&p.name).clone()));
     Value::Object(m)
 }
 
@@ -613,6 +1213,10 @@ fn iface_voices__edit_voice_v1_voices_voice_id_edit_post_params__to_json(p: &ifa
     let mut m = Map::new();
     m.insert("voice_id".into(), Value::String((&p.voice_id).clone()));
     m.insert("xi_api_key".into(), match (&p.xi_api_key) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("description".into(), match (&p.description) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("files".into(), match (&p.files) { Some(v) => Value::Array((v).iter().map(|v| Value::String((v).clone())).collect()), None => Value::Null });
+    m.insert("labels".into(), match (&p.labels) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("name".into(), Value::String((&p.name).clone()));
     Value::Object(m)
 }
 
@@ -627,41 +1231,312 @@ fn iface_voices__edit_voice_settings_v1_voices_voice_id_settings_edit_post_param
     let mut m = Map::new();
     m.insert("voice_id".into(), Value::String((&p.voice_id).clone()));
     m.insert("xi_api_key".into(), match (&p.xi_api_key) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    m.insert("body".into(), Value::String((&p.body).clone()));
+    m.insert("similarity_boost".into(), serde_json::Number::from_f64(*(&p.similarity_boost)).map(Value::Number).unwrap_or(Value::Null));
+    m.insert("stability".into(), serde_json::Number::from_f64(*(&p.stability)).map(Value::Number).unwrap_or(Value::Null));
     Value::Object(m)
 }
 
+fn iface_voices__get_voices_response_model__from_json(v: &Value) -> Option<iface_voices::GetVoicesResponseModel> {
+    let m = v.as_object()?;
+    Some(iface_voices::GetVoicesResponseModel {
+        voices: m.get("voices").and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| iface_voices__voice_response_model__from_json(x)).collect())).unwrap_or_default(),
+    })
+}
+
+fn iface_voices__voice_response_model__from_json(v: &Value) -> Option<iface_voices::VoiceResponseModel> {
+    let m = v.as_object()?;
+    Some(iface_voices::VoiceResponseModel {
+        available_for_tiers: m.get("available_for_tiers").and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| (x).as_str().map(|s| s.to_string())).collect())).unwrap_or_default(),
+        category: m.get("category").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        description: m.get("description").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        fine_tuning: match m.get("fine_tuning").and_then(|v| iface_voices__fine_tuning_response_model__from_json(v)) { Some(x) => x, None => return None },
+        labels: match m.get("labels").and_then(|v| iface_voices__voice_response_model_labels__from_json(v)) { Some(x) => x, None => return None },
+        name: m.get("name").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        preview_url: m.get("preview_url").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        samples: m.get("samples").and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| iface_voices__sample_response_model__from_json(x)).collect())).unwrap_or_default(),
+        settings: match m.get("settings").and_then(|v| iface_voices__voice_settings_response_model__from_json(v)) { Some(x) => x, None => return None },
+        voice_id: m.get("voice_id").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+    })
+}
+
+fn iface_voices__fine_tuning_response_model__from_json(v: &Value) -> Option<iface_voices::FineTuningResponseModel> {
+    let m = v.as_object()?;
+    Some(iface_voices::FineTuningResponseModel {
+        fine_tuning_requested: m.get("fine_tuning_requested").and_then(|v| (v).as_bool()).unwrap_or_default(),
+        finetuning_state: match m.get("finetuning_state").and_then(|v| (v).as_str().and_then(iface_voices__fine_tuning_response_model_finetuning_state_enum__from_str)) { Some(x) => x, None => return None },
+        is_allowed_to_fine_tune: m.get("is_allowed_to_fine_tune").and_then(|v| (v).as_bool()).unwrap_or_default(),
+        model_id: m.get("model_id").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        slice_ids: m.get("slice_ids").and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| (x).as_str().map(|s| s.to_string())).collect())).unwrap_or_default(),
+        verification_attempts: m.get("verification_attempts").and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| iface_voices__verification_attempt_response_model__from_json(x)).collect())).unwrap_or_default(),
+        verification_attempts_count: m.get("verification_attempts_count").and_then(|v| (v).as_i64().map(|n| n as i32)).unwrap_or_default(),
+        verification_failures: m.get("verification_failures").and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| (x).as_str().map(|s| s.to_string())).collect())).unwrap_or_default(),
+    })
+}
+
+fn iface_voices__verification_attempt_response_model__from_json(v: &Value) -> Option<iface_voices::VerificationAttemptResponseModel> {
+    let m = v.as_object()?;
+    Some(iface_voices::VerificationAttemptResponseModel {
+        accepted: m.get("accepted").and_then(|v| (v).as_bool()).unwrap_or_default(),
+        date_unix: m.get("date_unix").and_then(|v| (v).as_i64().map(|n| n as i32)).unwrap_or_default(),
+        levenshtein_distance: m.get("levenshtein_distance").and_then(|v| (v).as_f64()).unwrap_or_default(),
+        recording: match m.get("recording").and_then(|v| iface_voices__recording_response_model__from_json(v)) { Some(x) => x, None => return None },
+        similarity: m.get("similarity").and_then(|v| (v).as_f64()).unwrap_or_default(),
+        text: m.get("text").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+    })
+}
+
+fn iface_voices__recording_response_model__from_json(v: &Value) -> Option<iface_voices::RecordingResponseModel> {
+    let m = v.as_object()?;
+    Some(iface_voices::RecordingResponseModel {
+        mime_type: m.get("mime_type").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        recording_id: m.get("recording_id").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        size_bytes: m.get("size_bytes").and_then(|v| (v).as_i64().map(|n| n as i32)).unwrap_or_default(),
+        transcription: m.get("transcription").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        upload_date_unix: m.get("upload_date_unix").and_then(|v| (v).as_i64().map(|n| n as i32)).unwrap_or_default(),
+    })
+}
+
+fn iface_voices__voice_response_model_labels__from_json(v: &Value) -> Option<iface_voices::VoiceResponseModelLabels> {
+    let m = v.as_object()?;
+    Some(iface_voices::VoiceResponseModelLabels {
+        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    })
+}
+
+fn iface_voices__sample_response_model__from_json(v: &Value) -> Option<iface_voices::SampleResponseModel> {
+    let m = v.as_object()?;
+    Some(iface_voices::SampleResponseModel {
+        file_name: m.get("file_name").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        hash: m.get("hash").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        mime_type: m.get("mime_type").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        sample_id: m.get("sample_id").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        size_bytes: m.get("size_bytes").and_then(|v| (v).as_i64().map(|n| n as i32)).unwrap_or_default(),
+    })
+}
+
+fn iface_voices__voice_settings_response_model__from_json(v: &Value) -> Option<iface_voices::VoiceSettingsResponseModel> {
+    let m = v.as_object()?;
+    Some(iface_voices::VoiceSettingsResponseModel {
+        similarity_boost: m.get("similarity_boost").and_then(|v| (v).as_f64()).unwrap_or_default(),
+        stability: m.get("stability").and_then(|v| (v).as_f64()).unwrap_or_default(),
+    })
+}
+
+fn iface_voices__add_voice_response_model__from_json(v: &Value) -> Option<iface_voices::AddVoiceResponseModel> {
+    let m = v.as_object()?;
+    Some(iface_voices::AddVoiceResponseModel {
+        voice_id: m.get("voice_id").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+    })
+}
+
+fn iface_voices__fine_tuning_response_model_finetuning_state_enum__from_str(s: &str) -> Option<iface_voices::FineTuningResponseModelFinetuningStateEnum> {
+    match s {
+        "not_started" => Some(iface_voices::FineTuningResponseModelFinetuningStateEnum::NotStarted),
+        "is_fine_tuning" => Some(iface_voices::FineTuningResponseModelFinetuningStateEnum::IsFineTuning),
+        "fine_tuned" => Some(iface_voices::FineTuningResponseModelFinetuningStateEnum::FineTuned),
+        _ => None,
+    }
+}
+
+fn iface_voices__get_voices_v1_voices_get__ok(body: String) -> Result<iface_voices::GetVoicesResponseModel, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match iface_voices__get_voices_response_model__from_json(&v) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_voices__get_voices_v1_voices_get__err(e: crate::runtime::DispatchError) -> iface_voices::GetVoicesV1VoicesGetError {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => match status {
+            422u16 => iface_voices::GetVoicesV1VoicesGetError::UnprocessableEntity(body),
+            _ => iface_voices::GetVoicesV1VoicesGetError::Other(body),
+        },
+        crate::runtime::DispatchError::Transport(m) => iface_voices::GetVoicesV1VoicesGetError::Other(m),
+    }
+}
+
+fn iface_voices__add_voice_v1_voices_add_post__ok(body: String) -> Result<iface_voices::AddVoiceResponseModel, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match iface_voices__add_voice_response_model__from_json(&v) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_voices__add_voice_v1_voices_add_post__err(e: crate::runtime::DispatchError) -> iface_voices::AddVoiceV1VoicesAddPostError {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => match status {
+            422u16 => iface_voices::AddVoiceV1VoicesAddPostError::UnprocessableEntity(body),
+            _ => iface_voices::AddVoiceV1VoicesAddPostError::Other(body),
+        },
+        crate::runtime::DispatchError::Transport(m) => iface_voices::AddVoiceV1VoicesAddPostError::Other(m),
+    }
+}
+
+fn iface_voices__get_default_voice_settings_v1_voices_settings_default_get__ok(body: String) -> Result<iface_voices::VoiceSettingsResponseModel, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match iface_voices__voice_settings_response_model__from_json(&v) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_voices__get_default_voice_settings_v1_voices_settings_default_get__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
+fn iface_voices__get_voice_v1_voices_voice_id_get__ok(body: String) -> Result<iface_voices::VoiceResponseModel, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match iface_voices__voice_response_model__from_json(&v) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_voices__get_voice_v1_voices_voice_id_get__err(e: crate::runtime::DispatchError) -> iface_voices::GetVoiceV1VoicesVoiceIdGetError {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => match status {
+            422u16 => iface_voices::GetVoiceV1VoicesVoiceIdGetError::UnprocessableEntity(body),
+            _ => iface_voices::GetVoiceV1VoicesVoiceIdGetError::Other(body),
+        },
+        crate::runtime::DispatchError::Transport(m) => iface_voices::GetVoiceV1VoicesVoiceIdGetError::Other(m),
+    }
+}
+
+fn iface_voices__delete_voice_v1_voices_voice_id_delete__ok(body: String) -> Result<String, crate::runtime::DispatchError> {
+    Ok(body)
+}
+
+fn iface_voices__delete_voice_v1_voices_voice_id_delete__err(e: crate::runtime::DispatchError) -> iface_voices::DeleteVoiceV1VoicesVoiceIdDeleteError {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => match status {
+            422u16 => iface_voices::DeleteVoiceV1VoicesVoiceIdDeleteError::UnprocessableEntity(body),
+            _ => iface_voices::DeleteVoiceV1VoicesVoiceIdDeleteError::Other(body),
+        },
+        crate::runtime::DispatchError::Transport(m) => iface_voices::DeleteVoiceV1VoicesVoiceIdDeleteError::Other(m),
+    }
+}
+
+fn iface_voices__edit_voice_v1_voices_voice_id_edit_post__ok(body: String) -> Result<String, crate::runtime::DispatchError> {
+    Ok(body)
+}
+
+fn iface_voices__edit_voice_v1_voices_voice_id_edit_post__err(e: crate::runtime::DispatchError) -> iface_voices::EditVoiceV1VoicesVoiceIdEditPostError {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => match status {
+            422u16 => iface_voices::EditVoiceV1VoicesVoiceIdEditPostError::UnprocessableEntity(body),
+            _ => iface_voices::EditVoiceV1VoicesVoiceIdEditPostError::Other(body),
+        },
+        crate::runtime::DispatchError::Transport(m) => iface_voices::EditVoiceV1VoicesVoiceIdEditPostError::Other(m),
+    }
+}
+
+fn iface_voices__get_voice_settings_v1_voices_voice_id_settings_get__ok(body: String) -> Result<iface_voices::VoiceSettingsResponseModel, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match iface_voices__voice_settings_response_model__from_json(&v) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_voices__get_voice_settings_v1_voices_voice_id_settings_get__err(e: crate::runtime::DispatchError) -> iface_voices::GetVoiceSettingsV1VoicesVoiceIdSettingsGetError {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => match status {
+            422u16 => iface_voices::GetVoiceSettingsV1VoicesVoiceIdSettingsGetError::UnprocessableEntity(body),
+            _ => iface_voices::GetVoiceSettingsV1VoicesVoiceIdSettingsGetError::Other(body),
+        },
+        crate::runtime::DispatchError::Transport(m) => iface_voices::GetVoiceSettingsV1VoicesVoiceIdSettingsGetError::Other(m),
+    }
+}
+
+fn iface_voices__edit_voice_settings_v1_voices_voice_id_settings_edit_post__ok(body: String) -> Result<String, crate::runtime::DispatchError> {
+    Ok(body)
+}
+
+fn iface_voices__edit_voice_settings_v1_voices_voice_id_settings_edit_post__err(e: crate::runtime::DispatchError) -> iface_voices::EditVoiceSettingsV1VoicesVoiceIdSettingsEditPostError {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => match status {
+            422u16 => iface_voices::EditVoiceSettingsV1VoicesVoiceIdSettingsEditPostError::UnprocessableEntity(body),
+            _ => iface_voices::EditVoiceSettingsV1VoicesVoiceIdSettingsEditPostError::Other(body),
+        },
+        crate::runtime::DispatchError::Transport(m) => iface_voices::EditVoiceSettingsV1VoicesVoiceIdSettingsEditPostError::Other(m),
+    }
+}
+
 impl iface_voices::Guest for crate::Component {
-    fn get_voices_v1_voices_get(params: iface_voices::GetVoicesV1VoicesGetParams) -> Result<String, String> {
+    fn get_voices_v1_voices_get(params: iface_voices::GetVoicesV1VoicesGetParams) -> Result<iface_voices::GetVoicesResponseModel, iface_voices::GetVoicesV1VoicesGetError> {
         let json = iface_voices__get_voices_v1_voices_get_params__to_json(&params);
-        dispatch(&OP_VOICES_GET_VOICES_V1_VOICES_GET, json)
+        match dispatch(&OP_VOICES_GET_VOICES_V1_VOICES_GET, json).and_then(iface_voices__get_voices_v1_voices_get__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_voices__get_voices_v1_voices_get__err(e)),
+        }
     }
-    fn add_voice_v1_voices_add_post(params: iface_voices::AddVoiceV1VoicesAddPostParams) -> Result<String, String> {
+    fn add_voice_v1_voices_add_post(params: iface_voices::AddVoiceV1VoicesAddPostParams) -> Result<iface_voices::AddVoiceResponseModel, iface_voices::AddVoiceV1VoicesAddPostError> {
         let json = iface_voices__add_voice_v1_voices_add_post_params__to_json(&params);
-        dispatch(&OP_VOICES_ADD_VOICE_V1_VOICES_ADD_POST, json)
+        match dispatch(&OP_VOICES_ADD_VOICE_V1_VOICES_ADD_POST, json).and_then(iface_voices__add_voice_v1_voices_add_post__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_voices__add_voice_v1_voices_add_post__err(e)),
+        }
     }
-    fn get_default_voice_settings_v1_voices_settings_default_get() -> Result<String, String> {
-        dispatch(&OP_VOICES_GET_DEFAULT_VOICE_SETTINGS_V1_VOICES_SETTINGS_DEFAULT_GET, Value::Object(Map::new()))
+    fn get_default_voice_settings_v1_voices_settings_default_get() -> Result<iface_voices::VoiceSettingsResponseModel, String> {
+        match dispatch(&OP_VOICES_GET_DEFAULT_VOICE_SETTINGS_V1_VOICES_SETTINGS_DEFAULT_GET, Value::Object(Map::new())).and_then(iface_voices__get_default_voice_settings_v1_voices_settings_default_get__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_voices__get_default_voice_settings_v1_voices_settings_default_get__err(e)),
+        }
     }
-    fn get_voice_v1_voices_voice_id_get(params: iface_voices::GetVoiceV1VoicesVoiceIdGetParams) -> Result<String, String> {
+    fn get_voice_v1_voices_voice_id_get(params: iface_voices::GetVoiceV1VoicesVoiceIdGetParams) -> Result<iface_voices::VoiceResponseModel, iface_voices::GetVoiceV1VoicesVoiceIdGetError> {
         let json = iface_voices__get_voice_v1_voices_voice_id_get_params__to_json(&params);
-        dispatch(&OP_VOICES_GET_VOICE_V1_VOICES_VOICE_ID_GET, json)
+        match dispatch(&OP_VOICES_GET_VOICE_V1_VOICES_VOICE_ID_GET, json).and_then(iface_voices__get_voice_v1_voices_voice_id_get__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_voices__get_voice_v1_voices_voice_id_get__err(e)),
+        }
     }
-    fn delete_voice_v1_voices_voice_id_delete(params: iface_voices::DeleteVoiceV1VoicesVoiceIdDeleteParams) -> Result<String, String> {
+    fn delete_voice_v1_voices_voice_id_delete(params: iface_voices::DeleteVoiceV1VoicesVoiceIdDeleteParams) -> Result<String, iface_voices::DeleteVoiceV1VoicesVoiceIdDeleteError> {
         let json = iface_voices__delete_voice_v1_voices_voice_id_delete_params__to_json(&params);
-        dispatch(&OP_VOICES_DELETE_VOICE_V1_VOICES_VOICE_ID_DELETE, json)
+        match dispatch(&OP_VOICES_DELETE_VOICE_V1_VOICES_VOICE_ID_DELETE, json).and_then(iface_voices__delete_voice_v1_voices_voice_id_delete__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_voices__delete_voice_v1_voices_voice_id_delete__err(e)),
+        }
     }
-    fn edit_voice_v1_voices_voice_id_edit_post(params: iface_voices::EditVoiceV1VoicesVoiceIdEditPostParams) -> Result<String, String> {
+    fn edit_voice_v1_voices_voice_id_edit_post(params: iface_voices::EditVoiceV1VoicesVoiceIdEditPostParams) -> Result<String, iface_voices::EditVoiceV1VoicesVoiceIdEditPostError> {
         let json = iface_voices__edit_voice_v1_voices_voice_id_edit_post_params__to_json(&params);
-        dispatch(&OP_VOICES_EDIT_VOICE_V1_VOICES_VOICE_ID_EDIT_POST, json)
+        match dispatch(&OP_VOICES_EDIT_VOICE_V1_VOICES_VOICE_ID_EDIT_POST, json).and_then(iface_voices__edit_voice_v1_voices_voice_id_edit_post__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_voices__edit_voice_v1_voices_voice_id_edit_post__err(e)),
+        }
     }
-    fn get_voice_settings_v1_voices_voice_id_settings_get(params: iface_voices::GetVoiceSettingsV1VoicesVoiceIdSettingsGetParams) -> Result<String, String> {
+    fn get_voice_settings_v1_voices_voice_id_settings_get(params: iface_voices::GetVoiceSettingsV1VoicesVoiceIdSettingsGetParams) -> Result<iface_voices::VoiceSettingsResponseModel, iface_voices::GetVoiceSettingsV1VoicesVoiceIdSettingsGetError> {
         let json = iface_voices__get_voice_settings_v1_voices_voice_id_settings_get_params__to_json(&params);
-        dispatch(&OP_VOICES_GET_VOICE_SETTINGS_V1_VOICES_VOICE_ID_SETTINGS_GET, json)
+        match dispatch(&OP_VOICES_GET_VOICE_SETTINGS_V1_VOICES_VOICE_ID_SETTINGS_GET, json).and_then(iface_voices__get_voice_settings_v1_voices_voice_id_settings_get__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_voices__get_voice_settings_v1_voices_voice_id_settings_get__err(e)),
+        }
     }
-    fn edit_voice_settings_v1_voices_voice_id_settings_edit_post(params: iface_voices::EditVoiceSettingsV1VoicesVoiceIdSettingsEditPostParams) -> Result<String, String> {
+    fn edit_voice_settings_v1_voices_voice_id_settings_edit_post(params: iface_voices::EditVoiceSettingsV1VoicesVoiceIdSettingsEditPostParams) -> Result<String, iface_voices::EditVoiceSettingsV1VoicesVoiceIdSettingsEditPostError> {
         let json = iface_voices__edit_voice_settings_v1_voices_voice_id_settings_edit_post_params__to_json(&params);
-        dispatch(&OP_VOICES_EDIT_VOICE_SETTINGS_V1_VOICES_VOICE_ID_SETTINGS_EDIT_POST, json)
+        match dispatch(&OP_VOICES_EDIT_VOICE_SETTINGS_V1_VOICES_VOICE_ID_SETTINGS_EDIT_POST, json).and_then(iface_voices__edit_voice_settings_v1_voices_voice_id_settings_edit_post__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_voices__edit_voice_settings_v1_voices_voice_id_settings_edit_post__err(e)),
+        }
     }
 }
 use crate::exports::autostamp::elevenlabs::samples as iface_samples;
@@ -670,9 +1545,9 @@ const OP_SAMPLES_DELETE_SAMPLE_V1_VOICES_VOICE_ID_SAMPLES_SAMPLE_ID_DELETE: OpSp
     method: "DELETE",
     path_template: "/v1/voices/{voice_id}/samples/{sample_id}",
     fields: &[
-        FieldSpec { snake: "voice_id", location: FieldLocation::Path },
-        FieldSpec { snake: "sample_id", location: FieldLocation::Path },
-        FieldSpec { snake: "xi_api_key", location: FieldLocation::Header },
+        FieldSpec { snake: "voice_id", wire: "voice_id", location: FieldLocation::Path },
+        FieldSpec { snake: "sample_id", wire: "sample_id", location: FieldLocation::Path },
+        FieldSpec { snake: "xi_api_key", wire: "xi-api-key", location: FieldLocation::Header },
     ],
     auth: &[
     ],
@@ -682,9 +1557,9 @@ const OP_SAMPLES_GET_AUDIO_FROM_SAMPLE_V1_VOICES_VOICE_ID_SAMPLES_SAMPLE_ID_AUDI
     method: "GET",
     path_template: "/v1/voices/{voice_id}/samples/{sample_id}/audio",
     fields: &[
-        FieldSpec { snake: "voice_id", location: FieldLocation::Path },
-        FieldSpec { snake: "sample_id", location: FieldLocation::Path },
-        FieldSpec { snake: "xi_api_key", location: FieldLocation::Header },
+        FieldSpec { snake: "voice_id", wire: "voice_id", location: FieldLocation::Path },
+        FieldSpec { snake: "sample_id", wire: "sample_id", location: FieldLocation::Path },
+        FieldSpec { snake: "xi_api_key", wire: "xi-api-key", location: FieldLocation::Header },
     ],
     auth: &[
     ],
@@ -706,14 +1581,48 @@ fn iface_samples__get_audio_from_sample_v1_voices_voice_id_samples_sample_id_aud
     Value::Object(m)
 }
 
-impl iface_samples::Guest for crate::Component {
-    fn delete_sample_v1_voices_voice_id_samples_sample_id_delete(params: iface_samples::DeleteSampleV1VoicesVoiceIdSamplesSampleIdDeleteParams) -> Result<String, String> {
-        let json = iface_samples__delete_sample_v1_voices_voice_id_samples_sample_id_delete_params__to_json(&params);
-        dispatch(&OP_SAMPLES_DELETE_SAMPLE_V1_VOICES_VOICE_ID_SAMPLES_SAMPLE_ID_DELETE, json)
+fn iface_samples__delete_sample_v1_voices_voice_id_samples_sample_id_delete__ok(body: String) -> Result<String, crate::runtime::DispatchError> {
+    Ok(body)
+}
+
+fn iface_samples__delete_sample_v1_voices_voice_id_samples_sample_id_delete__err(e: crate::runtime::DispatchError) -> iface_samples::DeleteSampleV1VoicesVoiceIdSamplesSampleIdDeleteError {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => match status {
+            422u16 => iface_samples::DeleteSampleV1VoicesVoiceIdSamplesSampleIdDeleteError::UnprocessableEntity(body),
+            _ => iface_samples::DeleteSampleV1VoicesVoiceIdSamplesSampleIdDeleteError::Other(body),
+        },
+        crate::runtime::DispatchError::Transport(m) => iface_samples::DeleteSampleV1VoicesVoiceIdSamplesSampleIdDeleteError::Other(m),
     }
-    fn get_audio_from_sample_v1_voices_voice_id_samples_sample_id_audio_get(params: iface_samples::GetAudioFromSampleV1VoicesVoiceIdSamplesSampleIdAudioGetParams) -> Result<String, String> {
+}
+
+fn iface_samples__get_audio_from_sample_v1_voices_voice_id_samples_sample_id_audio_get__ok(body: String) -> Result<String, crate::runtime::DispatchError> {
+    Ok(body)
+}
+
+fn iface_samples__get_audio_from_sample_v1_voices_voice_id_samples_sample_id_audio_get__err(e: crate::runtime::DispatchError) -> iface_samples::GetAudioFromSampleV1VoicesVoiceIdSamplesSampleIdAudioGetError {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => match status {
+            422u16 => iface_samples::GetAudioFromSampleV1VoicesVoiceIdSamplesSampleIdAudioGetError::UnprocessableEntity(body),
+            _ => iface_samples::GetAudioFromSampleV1VoicesVoiceIdSamplesSampleIdAudioGetError::Other(body),
+        },
+        crate::runtime::DispatchError::Transport(m) => iface_samples::GetAudioFromSampleV1VoicesVoiceIdSamplesSampleIdAudioGetError::Other(m),
+    }
+}
+
+impl iface_samples::Guest for crate::Component {
+    fn delete_sample_v1_voices_voice_id_samples_sample_id_delete(params: iface_samples::DeleteSampleV1VoicesVoiceIdSamplesSampleIdDeleteParams) -> Result<String, iface_samples::DeleteSampleV1VoicesVoiceIdSamplesSampleIdDeleteError> {
+        let json = iface_samples__delete_sample_v1_voices_voice_id_samples_sample_id_delete_params__to_json(&params);
+        match dispatch(&OP_SAMPLES_DELETE_SAMPLE_V1_VOICES_VOICE_ID_SAMPLES_SAMPLE_ID_DELETE, json).and_then(iface_samples__delete_sample_v1_voices_voice_id_samples_sample_id_delete__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_samples__delete_sample_v1_voices_voice_id_samples_sample_id_delete__err(e)),
+        }
+    }
+    fn get_audio_from_sample_v1_voices_voice_id_samples_sample_id_audio_get(params: iface_samples::GetAudioFromSampleV1VoicesVoiceIdSamplesSampleIdAudioGetParams) -> Result<String, iface_samples::GetAudioFromSampleV1VoicesVoiceIdSamplesSampleIdAudioGetError> {
         let json = iface_samples__get_audio_from_sample_v1_voices_voice_id_samples_sample_id_audio_get_params__to_json(&params);
-        dispatch(&OP_SAMPLES_GET_AUDIO_FROM_SAMPLE_V1_VOICES_VOICE_ID_SAMPLES_SAMPLE_ID_AUDIO_GET, json)
+        match dispatch(&OP_SAMPLES_GET_AUDIO_FROM_SAMPLE_V1_VOICES_VOICE_ID_SAMPLES_SAMPLE_ID_AUDIO_GET, json).and_then(iface_samples__get_audio_from_sample_v1_voices_voice_id_samples_sample_id_audio_get__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_samples__get_audio_from_sample_v1_voices_voice_id_samples_sample_id_audio_get__err(e)),
+        }
     }
 }
 

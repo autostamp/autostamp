@@ -44,10 +44,15 @@ pub(crate) enum FieldLocation {
     Body,
 }
 
-/// A single operation parameter: the snake-case key it carries in the params JSON and where
-/// it belongs in the request.
+/// A single operation parameter. `snake` keys the field in the internal params JSON (and, for a
+/// path field, matches the `{snake}` placeholder in the path template); `wire` is the verbatim name
+/// the field takes on the HTTP wire (query key, header name, or body property). The two differ
+/// whenever the source name isn't already snake_case (e.g. `dryRun` → snake `dry_run`, wire
+/// `dryRun`), and let distinct inputs that share a snake key (`DateCreated`, `DateCreated<`) still
+/// travel under their true names.
 pub(crate) struct FieldSpec {
     pub(crate) snake: &'static str,
+    pub(crate) wire: &'static str,
     pub(crate) location: FieldLocation,
 }
 
@@ -71,6 +76,16 @@ pub(crate) struct AuthApply {
     pub(crate) kind: AuthKind,
 }
 
+/// The failure modes of [`dispatch`], kept structured so each generated operation can map them
+/// onto its own typed error: an `Http` failure carries the response status and body (routed to
+/// the matching error-variant case), while a `Transport` failure carries a message for the
+/// catch-all case (a secret lookup, connection, or decode failure that never produced an HTTP
+/// status).
+pub(crate) enum DispatchError {
+    Http { status: u16, body: String },
+    Transport(String),
+}
+
 /// A single API operation: HTTP method, path template (with `{snake}` placeholders), the
 /// parameter fields, and the security schemes to apply.
 pub(crate) struct OpSpec {
@@ -81,8 +96,9 @@ pub(crate) struct OpSpec {
 }
 
 /// Execute `op` with the supplied `params` (a JSON object keyed by snake-case field names)
-/// and return the response body as a string, or an error message.
-pub(crate) fn dispatch(op: &OpSpec, params: Value) -> Result<String, String> {
+/// and return the raw 2xx response body, or a structured [`DispatchError`] the caller maps
+/// onto the operation's typed error.
+pub(crate) fn dispatch(op: &OpSpec, params: Value) -> Result<String, DispatchError> {
     let obj = match &params {
         Value::Object(map) => Some(map),
         _ => None,
@@ -105,10 +121,10 @@ pub(crate) fn dispatch(op: &OpSpec, params: Value) -> Result<String, String> {
                 let placeholder = format!("{{{}}}", field.snake);
                 path = path.replace(&placeholder, &percent_encode(&scalar(value)));
             }
-            FieldLocation::Query => query.push((field.snake.to_string(), scalar(value))),
-            FieldLocation::Header => headers.push((field.snake.to_string(), scalar(value))),
+            FieldLocation::Query => query.push((field.wire.to_string(), scalar(value))),
+            FieldLocation::Header => headers.push((field.wire.to_string(), scalar(value))),
             FieldLocation::Body => {
-                body.insert(field.snake.to_string(), value.clone());
+                body.insert(field.wire.to_string(), value.clone());
             }
         }
     }
@@ -116,7 +132,7 @@ pub(crate) fn dispatch(op: &OpSpec, params: Value) -> Result<String, String> {
     // Apply each resolved security scheme, sourcing its value from wasmcloud:secrets.
     let mut cookies: Vec<String> = Vec::new();
     for apply in op.auth {
-        let secret = fetch_secret(apply.secret_key)?;
+        let secret = fetch_secret(apply.secret_key).map_err(DispatchError::Transport)?;
         match &apply.kind {
             AuthKind::Bearer => headers.push(("authorization".into(), format!("Bearer {secret}"))),
             AuthKind::Basic => {
@@ -177,17 +193,18 @@ fn fetch_secret(key: &str) -> Result<String, String> {
 }
 
 /// Build and send the outgoing request with `wstd`, returning the response body on a 2xx
-/// status. The generated guest exports are synchronous, so the async `wstd` client is driven
-/// to completion on a local reactor via `wstd::runtime::block_on`.
+/// status and a structured [`DispatchError`] otherwise. The generated guest exports are
+/// synchronous, so the async `wstd` client is driven to completion on a local reactor via
+/// `wstd::runtime::block_on`.
 fn perform(
     method: &str,
     path_with_query: &str,
     headers: &[(String, String)],
     body: &[u8],
-) -> Result<String, String> {
+) -> Result<String, DispatchError> {
     let url = join_url(crate::BASE_URL, path_with_query);
     let method = Method::from_bytes(method.as_bytes())
-        .map_err(|err| format!("invalid HTTP method `{method}`: {err}"))?;
+        .map_err(|err| DispatchError::Transport(format!("invalid HTTP method `{method}`: {err}")))?;
 
     let mut builder = Request::builder().method(method).uri(url);
     for (name, value) in headers {
@@ -199,27 +216,29 @@ fn perform(
         } else {
             Body::from(body.to_vec())
         })
-        .map_err(|err| format!("failed to build request: {err}"))?;
+        .map_err(|err| DispatchError::Transport(format!("failed to build request: {err}")))?;
 
     wstd::runtime::block_on(async move {
         let client = Client::new();
         let response = client
             .send(request)
             .await
-            .map_err(|err| format!("request failed: {err:#}"))?;
+            .map_err(|err| DispatchError::Transport(format!("request failed: {err:#}")))?;
 
         let status = response.status().as_u16();
         let mut response_body = response.into_body();
-        let bytes = response_body
-            .contents()
-            .await
-            .map_err(|err| format!("failed to read response body: {err:#}"))?;
+        let bytes = response_body.contents().await.map_err(|err| {
+            DispatchError::Transport(format!("failed to read response body: {err:#}"))
+        })?;
         let body_text = String::from_utf8_lossy(bytes).into_owned();
 
         if (200..300).contains(&status) {
             Ok(body_text)
         } else {
-            Err(format!("HTTP {status}: {body_text}"))
+            Err(DispatchError::Http {
+                status,
+                body: body_text,
+            })
         }
     })
 }
@@ -288,29 +307,116 @@ const OP_V_VERSION_GET_V_VERSION_FORMAT: OpSpec = OpSpec {
     method: "GET",
     path_template: "/v{version}/{format}",
     fields: &[
-        FieldSpec { snake: "version", location: FieldLocation::Path },
-        FieldSpec { snake: "format", location: FieldLocation::Path },
-        FieldSpec { snake: "q", location: FieldLocation::Query },
-        FieldSpec { snake: "key", location: FieldLocation::Query },
-        FieldSpec { snake: "abbrv", location: FieldLocation::Query },
-        FieldSpec { snake: "address_only", location: FieldLocation::Query },
-        FieldSpec { snake: "add_request", location: FieldLocation::Query },
-        FieldSpec { snake: "bounds", location: FieldLocation::Query },
-        FieldSpec { snake: "countrycode", location: FieldLocation::Query },
-        FieldSpec { snake: "jsonp", location: FieldLocation::Query },
-        FieldSpec { snake: "language", location: FieldLocation::Query },
-        FieldSpec { snake: "limit", location: FieldLocation::Query },
-        FieldSpec { snake: "min_confidence", location: FieldLocation::Query },
-        FieldSpec { snake: "no_annotations", location: FieldLocation::Query },
-        FieldSpec { snake: "no_dedupe", location: FieldLocation::Query },
-        FieldSpec { snake: "no_record", location: FieldLocation::Query },
-        FieldSpec { snake: "pretty", location: FieldLocation::Query },
-        FieldSpec { snake: "proximity", location: FieldLocation::Query },
-        FieldSpec { snake: "roadinfo", location: FieldLocation::Query },
+        FieldSpec { snake: "version", wire: "version", location: FieldLocation::Path },
+        FieldSpec { snake: "format", wire: "format", location: FieldLocation::Path },
+        FieldSpec { snake: "q", wire: "q", location: FieldLocation::Query },
+        FieldSpec { snake: "key", wire: "key", location: FieldLocation::Query },
+        FieldSpec { snake: "abbrv", wire: "abbrv", location: FieldLocation::Query },
+        FieldSpec { snake: "address_only", wire: "address_only", location: FieldLocation::Query },
+        FieldSpec { snake: "add_request", wire: "add_request", location: FieldLocation::Query },
+        FieldSpec { snake: "bounds", wire: "bounds", location: FieldLocation::Query },
+        FieldSpec { snake: "countrycode", wire: "countrycode", location: FieldLocation::Query },
+        FieldSpec { snake: "jsonp", wire: "jsonp", location: FieldLocation::Query },
+        FieldSpec { snake: "language", wire: "language", location: FieldLocation::Query },
+        FieldSpec { snake: "limit", wire: "limit", location: FieldLocation::Query },
+        FieldSpec { snake: "min_confidence", wire: "min_confidence", location: FieldLocation::Query },
+        FieldSpec { snake: "no_annotations", wire: "no_annotations", location: FieldLocation::Query },
+        FieldSpec { snake: "no_dedupe", wire: "no_dedupe", location: FieldLocation::Query },
+        FieldSpec { snake: "no_record", wire: "no_record", location: FieldLocation::Query },
+        FieldSpec { snake: "pretty", wire: "pretty", location: FieldLocation::Query },
+        FieldSpec { snake: "proximity", wire: "proximity", location: FieldLocation::Query },
+        FieldSpec { snake: "roadinfo", wire: "roadinfo", location: FieldLocation::Query },
     ],
     auth: &[
     ],
 };
+
+fn iface_v_version__response__to_json(p: &iface_v_version::Response) -> Value {
+    let mut m = Map::new();
+    m.insert("documentation".into(), match (&p.documentation) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("licenses".into(), match (&p.licenses) { Some(v) => Value::Array((v).iter().map(|v| iface_v_version__response_licenses_item__to_json(v)).collect()), None => Value::Null });
+    m.insert("rate".into(), match (&p.rate) { Some(v) => iface_v_version__response_rate__to_json(v), None => Value::Null });
+    m.insert("results".into(), match (&p.results) { Some(v) => Value::Array((v).iter().map(|v| iface_v_version__response_results_item__to_json(v)).collect()), None => Value::Null });
+    m.insert("status".into(), match (&p.status) { Some(v) => iface_v_version__response_status__to_json(v), None => Value::Null });
+    m.insert("stay_informed".into(), match (&p.stay_informed) { Some(v) => iface_v_version__response_stay_informed__to_json(v), None => Value::Null });
+    m.insert("thanks".into(), match (&p.thanks) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("timestamp".into(), match (&p.timestamp) { Some(v) => iface_v_version__response_timestamp__to_json(v), None => Value::Null });
+    m.insert("total_results".into(), match (&p.total_results) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_v_version__response_licenses_item__to_json(p: &iface_v_version::ResponseLicensesItem) -> Value {
+    let mut m = Map::new();
+    m.insert("name".into(), match (&p.name) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("url".into(), match (&p.url) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_v_version__response_rate__to_json(p: &iface_v_version::ResponseRate) -> Value {
+    let mut m = Map::new();
+    m.insert("limit".into(), match (&p.limit) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("remaining".into(), match (&p.remaining) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("reset".into(), match (&p.reset) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_v_version__response_results_item__to_json(p: &iface_v_version::ResponseResultsItem) -> Value {
+    let mut m = Map::new();
+    m.insert("annotations".into(), match (&p.annotations) { Some(v) => iface_v_version__response_results_item_annotations__to_json(v), None => Value::Null });
+    m.insert("bounds".into(), match (&p.bounds) { Some(v) => iface_v_version__response_results_item_bounds__to_json(v), None => Value::Null });
+    m.insert("components".into(), match (&p.components) { Some(v) => iface_v_version__response_results_item_components__to_json(v), None => Value::Null });
+    m.insert("confidence".into(), match (&p.confidence) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("formatted".into(), match (&p.formatted) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("geometry".into(), match (&p.geometry) { Some(v) => iface_v_version__lat_lng__to_json(v), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_v_version__response_results_item_annotations__to_json(p: &iface_v_version::ResponseResultsItemAnnotations) -> Value {
+    let mut m = Map::new();
+    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_v_version__response_results_item_bounds__to_json(p: &iface_v_version::ResponseResultsItemBounds) -> Value {
+    let mut m = Map::new();
+    m.insert("northeast".into(), match (&p.northeast) { Some(v) => iface_v_version__lat_lng__to_json(v), None => Value::Null });
+    m.insert("southwest".into(), match (&p.southwest) { Some(v) => iface_v_version__lat_lng__to_json(v), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_v_version__lat_lng__to_json(p: &iface_v_version::LatLng) -> Value {
+    let mut m = Map::new();
+    m.insert("lat".into(), match (&p.lat) { Some(v) => serde_json::Number::from_f64(*(v)).map(Value::Number).unwrap_or(Value::Null), None => Value::Null });
+    m.insert("lng".into(), match (&p.lng) { Some(v) => serde_json::Number::from_f64(*(v)).map(Value::Number).unwrap_or(Value::Null), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_v_version__response_results_item_components__to_json(p: &iface_v_version::ResponseResultsItemComponents) -> Value {
+    let mut m = Map::new();
+    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_v_version__response_status__to_json(p: &iface_v_version::ResponseStatus) -> Value {
+    let mut m = Map::new();
+    m.insert("code".into(), match (&p.code) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("message".into(), match (&p.message) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_v_version__response_stay_informed__to_json(p: &iface_v_version::ResponseStayInformed) -> Value {
+    let mut m = Map::new();
+    m.insert("blog".into(), match (&p.blog) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("twitter".into(), match (&p.twitter) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_v_version__response_timestamp__to_json(p: &iface_v_version::ResponseTimestamp) -> Value {
+    let mut m = Map::new();
+    m.insert("created_http".into(), match (&p.created_http) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("created_unix".into(), match (&p.created_unix) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    Value::Object(m)
+}
 
 fn iface_v_version__get_v_version_format_params__to_json(p: &iface_v_version::GetVVersionFormatParams) -> Value {
     let mut m = Map::new();
@@ -336,10 +442,142 @@ fn iface_v_version__get_v_version_format_params__to_json(p: &iface_v_version::Ge
     Value::Object(m)
 }
 
+fn iface_v_version__response__from_json(v: &Value) -> Option<iface_v_version::Response> {
+    let m = v.as_object()?;
+    Some(iface_v_version::Response {
+        documentation: m.get("documentation").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        licenses: m.get("licenses").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| iface_v_version__response_licenses_item__from_json(x)).collect())),
+        rate: m.get("rate").filter(|v| !v.is_null()).and_then(|v| iface_v_version__response_rate__from_json(v)),
+        results: m.get("results").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| iface_v_version__response_results_item__from_json(x)).collect())),
+        status: m.get("status").filter(|v| !v.is_null()).and_then(|v| iface_v_version__response_status__from_json(v)),
+        stay_informed: m.get("stay_informed").filter(|v| !v.is_null()).and_then(|v| iface_v_version__response_stay_informed__from_json(v)),
+        thanks: m.get("thanks").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        timestamp: m.get("timestamp").filter(|v| !v.is_null()).and_then(|v| iface_v_version__response_timestamp__from_json(v)),
+        total_results: m.get("total_results").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+    })
+}
+
+fn iface_v_version__response_licenses_item__from_json(v: &Value) -> Option<iface_v_version::ResponseLicensesItem> {
+    let m = v.as_object()?;
+    Some(iface_v_version::ResponseLicensesItem {
+        name: m.get("name").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        url: m.get("url").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    })
+}
+
+fn iface_v_version__response_rate__from_json(v: &Value) -> Option<iface_v_version::ResponseRate> {
+    let m = v.as_object()?;
+    Some(iface_v_version::ResponseRate {
+        limit: m.get("limit").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        remaining: m.get("remaining").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        reset: m.get("reset").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+    })
+}
+
+fn iface_v_version__response_results_item__from_json(v: &Value) -> Option<iface_v_version::ResponseResultsItem> {
+    let m = v.as_object()?;
+    Some(iface_v_version::ResponseResultsItem {
+        annotations: m.get("annotations").filter(|v| !v.is_null()).and_then(|v| iface_v_version__response_results_item_annotations__from_json(v)),
+        bounds: m.get("bounds").filter(|v| !v.is_null()).and_then(|v| iface_v_version__response_results_item_bounds__from_json(v)),
+        components: m.get("components").filter(|v| !v.is_null()).and_then(|v| iface_v_version__response_results_item_components__from_json(v)),
+        confidence: m.get("confidence").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        formatted: m.get("formatted").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        geometry: m.get("geometry").filter(|v| !v.is_null()).and_then(|v| iface_v_version__lat_lng__from_json(v)),
+    })
+}
+
+fn iface_v_version__response_results_item_annotations__from_json(v: &Value) -> Option<iface_v_version::ResponseResultsItemAnnotations> {
+    let m = v.as_object()?;
+    Some(iface_v_version::ResponseResultsItemAnnotations {
+        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    })
+}
+
+fn iface_v_version__response_results_item_bounds__from_json(v: &Value) -> Option<iface_v_version::ResponseResultsItemBounds> {
+    let m = v.as_object()?;
+    Some(iface_v_version::ResponseResultsItemBounds {
+        northeast: m.get("northeast").filter(|v| !v.is_null()).and_then(|v| iface_v_version__lat_lng__from_json(v)),
+        southwest: m.get("southwest").filter(|v| !v.is_null()).and_then(|v| iface_v_version__lat_lng__from_json(v)),
+    })
+}
+
+fn iface_v_version__lat_lng__from_json(v: &Value) -> Option<iface_v_version::LatLng> {
+    let m = v.as_object()?;
+    Some(iface_v_version::LatLng {
+        lat: m.get("lat").filter(|v| !v.is_null()).and_then(|v| (v).as_f64()),
+        lng: m.get("lng").filter(|v| !v.is_null()).and_then(|v| (v).as_f64()),
+    })
+}
+
+fn iface_v_version__response_results_item_components__from_json(v: &Value) -> Option<iface_v_version::ResponseResultsItemComponents> {
+    let m = v.as_object()?;
+    Some(iface_v_version::ResponseResultsItemComponents {
+        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    })
+}
+
+fn iface_v_version__response_status__from_json(v: &Value) -> Option<iface_v_version::ResponseStatus> {
+    let m = v.as_object()?;
+    Some(iface_v_version::ResponseStatus {
+        code: m.get("code").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        message: m.get("message").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    })
+}
+
+fn iface_v_version__response_stay_informed__from_json(v: &Value) -> Option<iface_v_version::ResponseStayInformed> {
+    let m = v.as_object()?;
+    Some(iface_v_version::ResponseStayInformed {
+        blog: m.get("blog").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        twitter: m.get("twitter").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    })
+}
+
+fn iface_v_version__response_timestamp__from_json(v: &Value) -> Option<iface_v_version::ResponseTimestamp> {
+    let m = v.as_object()?;
+    Some(iface_v_version::ResponseTimestamp {
+        created_http: m.get("created_http").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        created_unix: m.get("created_unix").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+    })
+}
+
+fn iface_v_version__get_v_version_format__ok(body: String) -> Result<iface_v_version::Response, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match iface_v_version__response__from_json(&v) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_v_version__get_v_version_format__err(e: crate::runtime::DispatchError) -> iface_v_version::GetVVersionFormatError {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => match status {
+            400u16 => iface_v_version::GetVVersionFormatError::BadRequest(body),
+            401u16 => iface_v_version::GetVVersionFormatError::Unauthorized(body),
+            402u16 => iface_v_version::GetVVersionFormatError::PaymentRequired(body),
+            403u16 => iface_v_version::GetVVersionFormatError::Forbidden(body),
+            404u16 => iface_v_version::GetVVersionFormatError::NotFound(body),
+            405u16 => iface_v_version::GetVVersionFormatError::MethodNotAllowed(body),
+            408u16 => iface_v_version::GetVVersionFormatError::RequestTimeout(body),
+            410u16 => iface_v_version::GetVVersionFormatError::Gone(body),
+            426u16 => iface_v_version::GetVVersionFormatError::UpgradeRequired(body),
+            429u16 => iface_v_version::GetVVersionFormatError::TooManyRequests(body),
+            503u16 => iface_v_version::GetVVersionFormatError::ServiceUnavailable(body),
+            _ => iface_v_version::GetVVersionFormatError::Other(body),
+        },
+        crate::runtime::DispatchError::Transport(m) => iface_v_version::GetVVersionFormatError::Other(m),
+    }
+}
+
 impl iface_v_version::Guest for crate::Component {
-    fn get_v_version_format(params: iface_v_version::GetVVersionFormatParams) -> Result<String, String> {
+    fn get_v_version_format(params: iface_v_version::GetVVersionFormatParams) -> Result<iface_v_version::Response, iface_v_version::GetVVersionFormatError> {
         let json = iface_v_version__get_v_version_format_params__to_json(&params);
-        dispatch(&OP_V_VERSION_GET_V_VERSION_FORMAT, json)
+        match dispatch(&OP_V_VERSION_GET_V_VERSION_FORMAT, json).and_then(iface_v_version__get_v_version_format__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_v_version__get_v_version_format__err(e)),
+        }
     }
 }
 

@@ -44,10 +44,15 @@ pub(crate) enum FieldLocation {
     Body,
 }
 
-/// A single operation parameter: the snake-case key it carries in the params JSON and where
-/// it belongs in the request.
+/// A single operation parameter. `snake` keys the field in the internal params JSON (and, for a
+/// path field, matches the `{snake}` placeholder in the path template); `wire` is the verbatim name
+/// the field takes on the HTTP wire (query key, header name, or body property). The two differ
+/// whenever the source name isn't already snake_case (e.g. `dryRun` → snake `dry_run`, wire
+/// `dryRun`), and let distinct inputs that share a snake key (`DateCreated`, `DateCreated<`) still
+/// travel under their true names.
 pub(crate) struct FieldSpec {
     pub(crate) snake: &'static str,
+    pub(crate) wire: &'static str,
     pub(crate) location: FieldLocation,
 }
 
@@ -71,6 +76,16 @@ pub(crate) struct AuthApply {
     pub(crate) kind: AuthKind,
 }
 
+/// The failure modes of [`dispatch`], kept structured so each generated operation can map them
+/// onto its own typed error: an `Http` failure carries the response status and body (routed to
+/// the matching error-variant case), while a `Transport` failure carries a message for the
+/// catch-all case (a secret lookup, connection, or decode failure that never produced an HTTP
+/// status).
+pub(crate) enum DispatchError {
+    Http { status: u16, body: String },
+    Transport(String),
+}
+
 /// A single API operation: HTTP method, path template (with `{snake}` placeholders), the
 /// parameter fields, and the security schemes to apply.
 pub(crate) struct OpSpec {
@@ -81,8 +96,9 @@ pub(crate) struct OpSpec {
 }
 
 /// Execute `op` with the supplied `params` (a JSON object keyed by snake-case field names)
-/// and return the response body as a string, or an error message.
-pub(crate) fn dispatch(op: &OpSpec, params: Value) -> Result<String, String> {
+/// and return the raw 2xx response body, or a structured [`DispatchError`] the caller maps
+/// onto the operation's typed error.
+pub(crate) fn dispatch(op: &OpSpec, params: Value) -> Result<String, DispatchError> {
     let obj = match &params {
         Value::Object(map) => Some(map),
         _ => None,
@@ -105,10 +121,10 @@ pub(crate) fn dispatch(op: &OpSpec, params: Value) -> Result<String, String> {
                 let placeholder = format!("{{{}}}", field.snake);
                 path = path.replace(&placeholder, &percent_encode(&scalar(value)));
             }
-            FieldLocation::Query => query.push((field.snake.to_string(), scalar(value))),
-            FieldLocation::Header => headers.push((field.snake.to_string(), scalar(value))),
+            FieldLocation::Query => query.push((field.wire.to_string(), scalar(value))),
+            FieldLocation::Header => headers.push((field.wire.to_string(), scalar(value))),
             FieldLocation::Body => {
-                body.insert(field.snake.to_string(), value.clone());
+                body.insert(field.wire.to_string(), value.clone());
             }
         }
     }
@@ -116,7 +132,7 @@ pub(crate) fn dispatch(op: &OpSpec, params: Value) -> Result<String, String> {
     // Apply each resolved security scheme, sourcing its value from wasmcloud:secrets.
     let mut cookies: Vec<String> = Vec::new();
     for apply in op.auth {
-        let secret = fetch_secret(apply.secret_key)?;
+        let secret = fetch_secret(apply.secret_key).map_err(DispatchError::Transport)?;
         match &apply.kind {
             AuthKind::Bearer => headers.push(("authorization".into(), format!("Bearer {secret}"))),
             AuthKind::Basic => {
@@ -177,17 +193,18 @@ fn fetch_secret(key: &str) -> Result<String, String> {
 }
 
 /// Build and send the outgoing request with `wstd`, returning the response body on a 2xx
-/// status. The generated guest exports are synchronous, so the async `wstd` client is driven
-/// to completion on a local reactor via `wstd::runtime::block_on`.
+/// status and a structured [`DispatchError`] otherwise. The generated guest exports are
+/// synchronous, so the async `wstd` client is driven to completion on a local reactor via
+/// `wstd::runtime::block_on`.
 fn perform(
     method: &str,
     path_with_query: &str,
     headers: &[(String, String)],
     body: &[u8],
-) -> Result<String, String> {
+) -> Result<String, DispatchError> {
     let url = join_url(crate::BASE_URL, path_with_query);
     let method = Method::from_bytes(method.as_bytes())
-        .map_err(|err| format!("invalid HTTP method `{method}`: {err}"))?;
+        .map_err(|err| DispatchError::Transport(format!("invalid HTTP method `{method}`: {err}")))?;
 
     let mut builder = Request::builder().method(method).uri(url);
     for (name, value) in headers {
@@ -199,27 +216,29 @@ fn perform(
         } else {
             Body::from(body.to_vec())
         })
-        .map_err(|err| format!("failed to build request: {err}"))?;
+        .map_err(|err| DispatchError::Transport(format!("failed to build request: {err}")))?;
 
     wstd::runtime::block_on(async move {
         let client = Client::new();
         let response = client
             .send(request)
             .await
-            .map_err(|err| format!("request failed: {err:#}"))?;
+            .map_err(|err| DispatchError::Transport(format!("request failed: {err:#}")))?;
 
         let status = response.status().as_u16();
         let mut response_body = response.into_body();
-        let bytes = response_body
-            .contents()
-            .await
-            .map_err(|err| format!("failed to read response body: {err:#}"))?;
+        let bytes = response_body.contents().await.map_err(|err| {
+            DispatchError::Transport(format!("failed to read response body: {err:#}"))
+        })?;
         let body_text = String::from_utf8_lossy(bytes).into_owned();
 
         if (200..300).contains(&status) {
             Ok(body_text)
         } else {
-            Err(format!("HTTP {status}: {body_text}"))
+            Err(DispatchError::Http {
+                status,
+                body: body_text,
+            })
         }
     })
 }
@@ -288,12 +307,12 @@ const OP_AUDIT_LOGS_GET_GROUP_LEVEL_AUDIT_LOGS: OpSpec = OpSpec {
     method: "POST",
     path_template: "/group/{group_id}/audit",
     fields: &[
-        FieldSpec { snake: "group_id", location: FieldLocation::Path },
-        FieldSpec { snake: "from", location: FieldLocation::Query },
-        FieldSpec { snake: "to", location: FieldLocation::Query },
-        FieldSpec { snake: "page", location: FieldLocation::Query },
-        FieldSpec { snake: "sort_order", location: FieldLocation::Query },
-        FieldSpec { snake: "filters", location: FieldLocation::Body },
+        FieldSpec { snake: "group_id", wire: "groupId", location: FieldLocation::Path },
+        FieldSpec { snake: "from", wire: "from", location: FieldLocation::Query },
+        FieldSpec { snake: "to", wire: "to", location: FieldLocation::Query },
+        FieldSpec { snake: "page", wire: "page", location: FieldLocation::Query },
+        FieldSpec { snake: "sort_order", wire: "sortOrder", location: FieldLocation::Query },
+        FieldSpec { snake: "filters", wire: "filters", location: FieldLocation::Body },
     ],
     auth: &[
     ],
@@ -303,12 +322,12 @@ const OP_AUDIT_LOGS_GET_ORGANIZATION_LEVEL_AUDIT_LOGS: OpSpec = OpSpec {
     method: "POST",
     path_template: "/org/{org_id}/audit",
     fields: &[
-        FieldSpec { snake: "org_id", location: FieldLocation::Path },
-        FieldSpec { snake: "from", location: FieldLocation::Query },
-        FieldSpec { snake: "to", location: FieldLocation::Query },
-        FieldSpec { snake: "page", location: FieldLocation::Query },
-        FieldSpec { snake: "sort_order", location: FieldLocation::Query },
-        FieldSpec { snake: "filters", location: FieldLocation::Body },
+        FieldSpec { snake: "org_id", wire: "orgId", location: FieldLocation::Path },
+        FieldSpec { snake: "from", wire: "from", location: FieldLocation::Query },
+        FieldSpec { snake: "to", wire: "to", location: FieldLocation::Query },
+        FieldSpec { snake: "page", wire: "page", location: FieldLocation::Query },
+        FieldSpec { snake: "sort_order", wire: "sortOrder", location: FieldLocation::Query },
+        FieldSpec { snake: "filters", wire: "filters", location: FieldLocation::Body },
     ],
     auth: &[
     ],
@@ -429,9 +448,9 @@ fn iface_audit_logs__get_group_level_audit_logs_body_filters__to_json(p: &iface_
     let mut m = Map::new();
     m.insert("email".into(), match (&p.email) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("event".into(), match (&p.event) { Some(v) => Value::String(iface_audit_logs__get_group_level_audit_logs_body_filters_event_enum__to_str(v).into()), None => Value::Null });
-    m.insert("exclude_event".into(), match (&p.exclude_event) { Some(v) => Value::String(iface_audit_logs__get_group_level_audit_logs_body_filters_event_enum__to_str(v).into()), None => Value::Null });
-    m.insert("project_id".into(), match (&p.project_id) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    m.insert("user_id".into(), match (&p.user_id) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("excludeEvent".into(), match (&p.exclude_event) { Some(v) => Value::String(iface_audit_logs__get_group_level_audit_logs_body_filters_event_enum__to_str(v).into()), None => Value::Null });
+    m.insert("projectId".into(), match (&p.project_id) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("userId".into(), match (&p.user_id) { Some(v) => Value::String((v).clone()), None => Value::Null });
     Value::Object(m)
 }
 
@@ -439,9 +458,9 @@ fn iface_audit_logs__get_organization_level_audit_logs_body_filters__to_json(p: 
     let mut m = Map::new();
     m.insert("email".into(), match (&p.email) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("event".into(), match (&p.event) { Some(v) => Value::String(iface_audit_logs__get_organization_level_audit_logs_body_filters_event_enum__to_str(v).into()), None => Value::Null });
-    m.insert("exclude_event".into(), match (&p.exclude_event) { Some(v) => Value::String(iface_audit_logs__get_organization_level_audit_logs_body_filters_event_enum__to_str(v).into()), None => Value::Null });
-    m.insert("project_id".into(), match (&p.project_id) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    m.insert("user_id".into(), match (&p.user_id) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("excludeEvent".into(), match (&p.exclude_event) { Some(v) => Value::String(iface_audit_logs__get_organization_level_audit_logs_body_filters_event_enum__to_str(v).into()), None => Value::Null });
+    m.insert("projectId".into(), match (&p.project_id) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("userId".into(), match (&p.user_id) { Some(v) => Value::String((v).clone()), None => Value::Null });
     Value::Object(m)
 }
 
@@ -467,14 +486,42 @@ fn iface_audit_logs__get_organization_level_audit_logs_params__to_json(p: &iface
     Value::Object(m)
 }
 
+fn iface_audit_logs__get_group_level_audit_logs__ok(body: String) -> Result<String, crate::runtime::DispatchError> {
+    Ok(body)
+}
+
+fn iface_audit_logs__get_group_level_audit_logs__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
+fn iface_audit_logs__get_organization_level_audit_logs__ok(body: String) -> Result<String, crate::runtime::DispatchError> {
+    Ok(body)
+}
+
+fn iface_audit_logs__get_organization_level_audit_logs__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
 impl iface_audit_logs::Guest for crate::Component {
     fn get_group_level_audit_logs(params: iface_audit_logs::GetGroupLevelAuditLogsParams) -> Result<String, String> {
         let json = iface_audit_logs__get_group_level_audit_logs_params__to_json(&params);
-        dispatch(&OP_AUDIT_LOGS_GET_GROUP_LEVEL_AUDIT_LOGS, json)
+        match dispatch(&OP_AUDIT_LOGS_GET_GROUP_LEVEL_AUDIT_LOGS, json).and_then(iface_audit_logs__get_group_level_audit_logs__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_audit_logs__get_group_level_audit_logs__err(e)),
+        }
     }
     fn get_organization_level_audit_logs(params: iface_audit_logs::GetOrganizationLevelAuditLogsParams) -> Result<String, String> {
         let json = iface_audit_logs__get_organization_level_audit_logs_params__to_json(&params);
-        dispatch(&OP_AUDIT_LOGS_GET_ORGANIZATION_LEVEL_AUDIT_LOGS, json)
+        match dispatch(&OP_AUDIT_LOGS_GET_ORGANIZATION_LEVEL_AUDIT_LOGS, json).and_then(iface_audit_logs__get_organization_level_audit_logs__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_audit_logs__get_organization_level_audit_logs__err(e)),
+        }
     }
 }
 use crate::exports::autostamp::snyk::groups as iface_groups;
@@ -483,7 +530,7 @@ const OP_GROUPS_LIST_ALL_MEMBERS_IN_A_GROUP: OpSpec = OpSpec {
     method: "GET",
     path_template: "/group/{group_id}/members",
     fields: &[
-        FieldSpec { snake: "group_id", location: FieldLocation::Path },
+        FieldSpec { snake: "group_id", wire: "groupId", location: FieldLocation::Path },
     ],
     auth: &[
     ],
@@ -493,10 +540,10 @@ const OP_GROUPS_ADD_A_MEMBER_TO_AN_ORGANIZATION_WITHIN_A_GROUP: OpSpec = OpSpec 
     method: "POST",
     path_template: "/group/{group_id}/org/{org_id}/members",
     fields: &[
-        FieldSpec { snake: "group_id", location: FieldLocation::Path },
-        FieldSpec { snake: "org_id", location: FieldLocation::Path },
-        FieldSpec { snake: "role", location: FieldLocation::Body },
-        FieldSpec { snake: "user_id", location: FieldLocation::Body },
+        FieldSpec { snake: "group_id", wire: "groupId", location: FieldLocation::Path },
+        FieldSpec { snake: "org_id", wire: "orgId", location: FieldLocation::Path },
+        FieldSpec { snake: "role", wire: "role", location: FieldLocation::Body },
+        FieldSpec { snake: "user_id", wire: "userId", location: FieldLocation::Body },
     ],
     auth: &[
     ],
@@ -506,10 +553,10 @@ const OP_GROUPS_LIST_ALL_ORGANIZATIONS_IN_A_GROUP: OpSpec = OpSpec {
     method: "GET",
     path_template: "/group/{group_id}/orgs",
     fields: &[
-        FieldSpec { snake: "group_id", location: FieldLocation::Path },
-        FieldSpec { snake: "per_page", location: FieldLocation::Query },
-        FieldSpec { snake: "page", location: FieldLocation::Query },
-        FieldSpec { snake: "name", location: FieldLocation::Query },
+        FieldSpec { snake: "group_id", wire: "groupId", location: FieldLocation::Path },
+        FieldSpec { snake: "per_page", wire: "perPage", location: FieldLocation::Query },
+        FieldSpec { snake: "page", wire: "page", location: FieldLocation::Query },
+        FieldSpec { snake: "name", wire: "name", location: FieldLocation::Query },
     ],
     auth: &[
     ],
@@ -519,7 +566,7 @@ const OP_GROUPS_LIST_ALL_ROLES_IN_A_GROUP: OpSpec = OpSpec {
     method: "GET",
     path_template: "/group/{group_id}/roles",
     fields: &[
-        FieldSpec { snake: "group_id", location: FieldLocation::Path },
+        FieldSpec { snake: "group_id", wire: "groupId", location: FieldLocation::Path },
     ],
     auth: &[
     ],
@@ -529,7 +576,7 @@ const OP_GROUPS_VIEW_GROUP_SETTINGS: OpSpec = OpSpec {
     method: "GET",
     path_template: "/group/{group_id}/settings",
     fields: &[
-        FieldSpec { snake: "group_id", location: FieldLocation::Path },
+        FieldSpec { snake: "group_id", wire: "groupId", location: FieldLocation::Path },
     ],
     auth: &[
     ],
@@ -539,7 +586,7 @@ const OP_GROUPS_UPDATE_GROUP_SETTINGS: OpSpec = OpSpec {
     method: "PUT",
     path_template: "/group/{group_id}/settings",
     fields: &[
-        FieldSpec { snake: "group_id", location: FieldLocation::Path },
+        FieldSpec { snake: "group_id", wire: "groupId", location: FieldLocation::Path },
     ],
     auth: &[
     ],
@@ -549,9 +596,9 @@ const OP_GROUPS_LIST_ALL_TAGS_IN_A_GROUP: OpSpec = OpSpec {
     method: "GET",
     path_template: "/group/{group_id}/tags",
     fields: &[
-        FieldSpec { snake: "group_id", location: FieldLocation::Path },
-        FieldSpec { snake: "per_page", location: FieldLocation::Query },
-        FieldSpec { snake: "page", location: FieldLocation::Query },
+        FieldSpec { snake: "group_id", wire: "groupId", location: FieldLocation::Path },
+        FieldSpec { snake: "per_page", wire: "perPage", location: FieldLocation::Query },
+        FieldSpec { snake: "page", wire: "page", location: FieldLocation::Query },
     ],
     auth: &[
     ],
@@ -561,14 +608,54 @@ const OP_GROUPS_DELETE_TAG_FROM_GROUP: OpSpec = OpSpec {
     method: "POST",
     path_template: "/group/{group_id}/tags/delete",
     fields: &[
-        FieldSpec { snake: "group_id", location: FieldLocation::Path },
-        FieldSpec { snake: "force", location: FieldLocation::Body },
-        FieldSpec { snake: "key", location: FieldLocation::Body },
-        FieldSpec { snake: "value", location: FieldLocation::Body },
+        FieldSpec { snake: "group_id", wire: "groupId", location: FieldLocation::Path },
+        FieldSpec { snake: "force", wire: "force", location: FieldLocation::Body },
+        FieldSpec { snake: "key", wire: "key", location: FieldLocation::Body },
+        FieldSpec { snake: "value", wire: "value", location: FieldLocation::Body },
     ],
     auth: &[
     ],
 };
+
+fn iface_groups__view_group_settings_response__to_json(p: &iface_groups::ViewGroupSettingsResponse) -> Value {
+    let mut m = Map::new();
+    m.insert("requestAccess".into(), match (&p.request_access) { Some(v) => iface_groups__view_group_settings_response_request_access__to_json(v), None => Value::Null });
+    m.insert("sessionLength".into(), match (&p.session_length) { Some(v) => serde_json::Number::from_f64(*(v)).map(Value::Number).unwrap_or(Value::Null), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_groups__view_group_settings_response_request_access__to_json(p: &iface_groups::ViewGroupSettingsResponseRequestAccess) -> Value {
+    let mut m = Map::new();
+    m.insert("enabled".into(), Value::Bool(*(&p.enabled)));
+    Value::Object(m)
+}
+
+fn iface_groups__update_group_settings_response__to_json(p: &iface_groups::UpdateGroupSettingsResponse) -> Value {
+    let mut m = Map::new();
+    m.insert("requestAccess".into(), match (&p.request_access) { Some(v) => iface_groups__update_group_settings_response_request_access__to_json(v), None => Value::Null });
+    m.insert("sessionLength".into(), match (&p.session_length) { Some(v) => serde_json::Number::from_f64(*(v)).map(Value::Number).unwrap_or(Value::Null), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_groups__update_group_settings_response_request_access__to_json(p: &iface_groups::UpdateGroupSettingsResponseRequestAccess) -> Value {
+    let mut m = Map::new();
+    m.insert("enabled".into(), Value::Bool(*(&p.enabled)));
+    Value::Object(m)
+}
+
+fn iface_groups__list_all_tags_in_a_group_response__to_json(p: &iface_groups::ListAllTagsInAGroupResponse) -> Value {
+    let mut m = Map::new();
+    m.insert("tags".into(), match (&p.tags) { Some(v) => Value::Array((v).iter().map(|v| Value::String((v).clone())).collect()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_groups__delete_tag_from_group_response__to_json(p: &iface_groups::DeleteTagFromGroupResponse) -> Value {
+    let mut m = Map::new();
+    m.insert("force".into(), match (&p.force) { Some(v) => Value::Bool(*(v)), None => Value::Null });
+    m.insert("key".into(), match (&p.key) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("value".into(), match (&p.value) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
 
 fn iface_groups__list_all_members_in_a_group_params__to_json(p: &iface_groups::ListAllMembersInAGroupParams) -> Value {
     let mut m = Map::new();
@@ -629,38 +716,231 @@ fn iface_groups__delete_tag_from_group_params__to_json(p: &iface_groups::DeleteT
     Value::Object(m)
 }
 
+fn iface_groups__view_group_settings_response__from_json(v: &Value) -> Option<iface_groups::ViewGroupSettingsResponse> {
+    let m = v.as_object()?;
+    Some(iface_groups::ViewGroupSettingsResponse {
+        request_access: m.get("requestAccess").filter(|v| !v.is_null()).and_then(|v| iface_groups__view_group_settings_response_request_access__from_json(v)),
+        session_length: m.get("sessionLength").filter(|v| !v.is_null()).and_then(|v| (v).as_f64()),
+    })
+}
+
+fn iface_groups__view_group_settings_response_request_access__from_json(v: &Value) -> Option<iface_groups::ViewGroupSettingsResponseRequestAccess> {
+    let m = v.as_object()?;
+    Some(iface_groups::ViewGroupSettingsResponseRequestAccess {
+        enabled: m.get("enabled").and_then(|v| (v).as_bool()).unwrap_or_default(),
+    })
+}
+
+fn iface_groups__update_group_settings_response__from_json(v: &Value) -> Option<iface_groups::UpdateGroupSettingsResponse> {
+    let m = v.as_object()?;
+    Some(iface_groups::UpdateGroupSettingsResponse {
+        request_access: m.get("requestAccess").filter(|v| !v.is_null()).and_then(|v| iface_groups__update_group_settings_response_request_access__from_json(v)),
+        session_length: m.get("sessionLength").filter(|v| !v.is_null()).and_then(|v| (v).as_f64()),
+    })
+}
+
+fn iface_groups__update_group_settings_response_request_access__from_json(v: &Value) -> Option<iface_groups::UpdateGroupSettingsResponseRequestAccess> {
+    let m = v.as_object()?;
+    Some(iface_groups::UpdateGroupSettingsResponseRequestAccess {
+        enabled: m.get("enabled").and_then(|v| (v).as_bool()).unwrap_or_default(),
+    })
+}
+
+fn iface_groups__list_all_tags_in_a_group_response__from_json(v: &Value) -> Option<iface_groups::ListAllTagsInAGroupResponse> {
+    let m = v.as_object()?;
+    Some(iface_groups::ListAllTagsInAGroupResponse {
+        tags: m.get("tags").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| (x).as_str().map(|s| s.to_string())).collect())),
+    })
+}
+
+fn iface_groups__delete_tag_from_group_response__from_json(v: &Value) -> Option<iface_groups::DeleteTagFromGroupResponse> {
+    let m = v.as_object()?;
+    Some(iface_groups::DeleteTagFromGroupResponse {
+        force: m.get("force").filter(|v| !v.is_null()).and_then(|v| (v).as_bool()),
+        key: m.get("key").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        value: m.get("value").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    })
+}
+
+fn iface_groups__list_all_members_in_a_group__ok(body: String) -> Result<Vec<String>, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match (&v).as_array().map(|a| a.iter().filter_map(|x| (x).as_str().map(|s| s.to_string())).collect()) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_groups__list_all_members_in_a_group__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
+fn iface_groups__add_a_member_to_an_organization_within_a_group__ok(body: String) -> Result<String, crate::runtime::DispatchError> {
+    Ok(body)
+}
+
+fn iface_groups__add_a_member_to_an_organization_within_a_group__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
+fn iface_groups__list_all_organizations_in_a_group__ok(body: String) -> Result<String, crate::runtime::DispatchError> {
+    Ok(body)
+}
+
+fn iface_groups__list_all_organizations_in_a_group__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
+fn iface_groups__list_all_roles_in_a_group__ok(body: String) -> Result<String, crate::runtime::DispatchError> {
+    Ok(body)
+}
+
+fn iface_groups__list_all_roles_in_a_group__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
+fn iface_groups__view_group_settings__ok(body: String) -> Result<iface_groups::ViewGroupSettingsResponse, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match iface_groups__view_group_settings_response__from_json(&v) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_groups__view_group_settings__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
+fn iface_groups__update_group_settings__ok(body: String) -> Result<iface_groups::UpdateGroupSettingsResponse, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match iface_groups__update_group_settings_response__from_json(&v) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_groups__update_group_settings__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
+fn iface_groups__list_all_tags_in_a_group__ok(body: String) -> Result<iface_groups::ListAllTagsInAGroupResponse, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match iface_groups__list_all_tags_in_a_group_response__from_json(&v) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_groups__list_all_tags_in_a_group__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
+fn iface_groups__delete_tag_from_group__ok(body: String) -> Result<iface_groups::DeleteTagFromGroupResponse, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match iface_groups__delete_tag_from_group_response__from_json(&v) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_groups__delete_tag_from_group__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
 impl iface_groups::Guest for crate::Component {
-    fn list_all_members_in_a_group(params: iface_groups::ListAllMembersInAGroupParams) -> Result<String, String> {
+    fn list_all_members_in_a_group(params: iface_groups::ListAllMembersInAGroupParams) -> Result<Vec<String>, String> {
         let json = iface_groups__list_all_members_in_a_group_params__to_json(&params);
-        dispatch(&OP_GROUPS_LIST_ALL_MEMBERS_IN_A_GROUP, json)
+        match dispatch(&OP_GROUPS_LIST_ALL_MEMBERS_IN_A_GROUP, json).and_then(iface_groups__list_all_members_in_a_group__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_groups__list_all_members_in_a_group__err(e)),
+        }
     }
     fn add_a_member_to_an_organization_within_a_group(params: iface_groups::AddAMemberToAnOrganizationWithinAGroupParams) -> Result<String, String> {
         let json = iface_groups__add_a_member_to_an_organization_within_a_group_params__to_json(&params);
-        dispatch(&OP_GROUPS_ADD_A_MEMBER_TO_AN_ORGANIZATION_WITHIN_A_GROUP, json)
+        match dispatch(&OP_GROUPS_ADD_A_MEMBER_TO_AN_ORGANIZATION_WITHIN_A_GROUP, json).and_then(iface_groups__add_a_member_to_an_organization_within_a_group__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_groups__add_a_member_to_an_organization_within_a_group__err(e)),
+        }
     }
     fn list_all_organizations_in_a_group(params: iface_groups::ListAllOrganizationsInAGroupParams) -> Result<String, String> {
         let json = iface_groups__list_all_organizations_in_a_group_params__to_json(&params);
-        dispatch(&OP_GROUPS_LIST_ALL_ORGANIZATIONS_IN_A_GROUP, json)
+        match dispatch(&OP_GROUPS_LIST_ALL_ORGANIZATIONS_IN_A_GROUP, json).and_then(iface_groups__list_all_organizations_in_a_group__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_groups__list_all_organizations_in_a_group__err(e)),
+        }
     }
     fn list_all_roles_in_a_group(params: iface_groups::ListAllRolesInAGroupParams) -> Result<String, String> {
         let json = iface_groups__list_all_roles_in_a_group_params__to_json(&params);
-        dispatch(&OP_GROUPS_LIST_ALL_ROLES_IN_A_GROUP, json)
+        match dispatch(&OP_GROUPS_LIST_ALL_ROLES_IN_A_GROUP, json).and_then(iface_groups__list_all_roles_in_a_group__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_groups__list_all_roles_in_a_group__err(e)),
+        }
     }
-    fn view_group_settings(params: iface_groups::ViewGroupSettingsParams) -> Result<String, String> {
+    fn view_group_settings(params: iface_groups::ViewGroupSettingsParams) -> Result<iface_groups::ViewGroupSettingsResponse, String> {
         let json = iface_groups__view_group_settings_params__to_json(&params);
-        dispatch(&OP_GROUPS_VIEW_GROUP_SETTINGS, json)
+        match dispatch(&OP_GROUPS_VIEW_GROUP_SETTINGS, json).and_then(iface_groups__view_group_settings__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_groups__view_group_settings__err(e)),
+        }
     }
-    fn update_group_settings(params: iface_groups::UpdateGroupSettingsParams) -> Result<String, String> {
+    fn update_group_settings(params: iface_groups::UpdateGroupSettingsParams) -> Result<iface_groups::UpdateGroupSettingsResponse, String> {
         let json = iface_groups__update_group_settings_params__to_json(&params);
-        dispatch(&OP_GROUPS_UPDATE_GROUP_SETTINGS, json)
+        match dispatch(&OP_GROUPS_UPDATE_GROUP_SETTINGS, json).and_then(iface_groups__update_group_settings__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_groups__update_group_settings__err(e)),
+        }
     }
-    fn list_all_tags_in_a_group(params: iface_groups::ListAllTagsInAGroupParams) -> Result<String, String> {
+    fn list_all_tags_in_a_group(params: iface_groups::ListAllTagsInAGroupParams) -> Result<iface_groups::ListAllTagsInAGroupResponse, String> {
         let json = iface_groups__list_all_tags_in_a_group_params__to_json(&params);
-        dispatch(&OP_GROUPS_LIST_ALL_TAGS_IN_A_GROUP, json)
+        match dispatch(&OP_GROUPS_LIST_ALL_TAGS_IN_A_GROUP, json).and_then(iface_groups__list_all_tags_in_a_group__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_groups__list_all_tags_in_a_group__err(e)),
+        }
     }
-    fn delete_tag_from_group(params: iface_groups::DeleteTagFromGroupParams) -> Result<String, String> {
+    fn delete_tag_from_group(params: iface_groups::DeleteTagFromGroupParams) -> Result<iface_groups::DeleteTagFromGroupResponse, String> {
         let json = iface_groups__delete_tag_from_group_params__to_json(&params);
-        dispatch(&OP_GROUPS_DELETE_TAG_FROM_GROUP, json)
+        match dispatch(&OP_GROUPS_DELETE_TAG_FROM_GROUP, json).and_then(iface_groups__delete_tag_from_group__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_groups__delete_tag_from_group__err(e)),
+        }
     }
 }
 use crate::exports::autostamp::snyk::monitor as iface_monitor;
@@ -669,9 +949,9 @@ const OP_MONITOR_DEP_GRAPH: OpSpec = OpSpec {
     method: "POST",
     path_template: "/monitor/dep-graph",
     fields: &[
-        FieldSpec { snake: "org", location: FieldLocation::Query },
-        FieldSpec { snake: "dep_graph", location: FieldLocation::Body },
-        FieldSpec { snake: "meta", location: FieldLocation::Body },
+        FieldSpec { snake: "org", wire: "org", location: FieldLocation::Query },
+        FieldSpec { snake: "dep_graph", wire: "depGraph", location: FieldLocation::Body },
+        FieldSpec { snake: "meta", wire: "meta", location: FieldLocation::Body },
     ],
     auth: &[
     ],
@@ -680,16 +960,16 @@ const OP_MONITOR_DEP_GRAPH: OpSpec = OpSpec {
 fn iface_monitor__dep_graph_body_dep_graph__to_json(p: &iface_monitor::DepGraphBodyDepGraph) -> Value {
     let mut m = Map::new();
     m.insert("graph".into(), iface_monitor__dep_graph_body_dep_graph_graph__to_json(&p.graph));
-    m.insert("pkg_manager".into(), iface_monitor__dep_graph_body_dep_graph_pkg_manager__to_json(&p.pkg_manager));
+    m.insert("pkgManager".into(), iface_monitor__dep_graph_body_dep_graph_pkg_manager__to_json(&p.pkg_manager));
     m.insert("pkgs".into(), Value::Array((&p.pkgs).iter().map(|v| Value::String((v).clone())).collect()));
-    m.insert("schema_version".into(), Value::String((&p.schema_version).clone()));
+    m.insert("schemaVersion".into(), Value::String((&p.schema_version).clone()));
     Value::Object(m)
 }
 
 fn iface_monitor__dep_graph_body_dep_graph_graph__to_json(p: &iface_monitor::DepGraphBodyDepGraphGraph) -> Value {
     let mut m = Map::new();
     m.insert("nodes".into(), Value::Array((&p.nodes).iter().map(|v| Value::String((v).clone())).collect()));
-    m.insert("root_node_id".into(), Value::String((&p.root_node_id).clone()));
+    m.insert("rootNodeId".into(), Value::String((&p.root_node_id).clone()));
     Value::Object(m)
 }
 
@@ -702,7 +982,7 @@ fn iface_monitor__dep_graph_body_dep_graph_pkg_manager__to_json(p: &iface_monito
 
 fn iface_monitor__dep_graph_body_meta__to_json(p: &iface_monitor::DepGraphBodyMeta) -> Value {
     let mut m = Map::new();
-    m.insert("target_framework".into(), match (&p.target_framework) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("targetFramework".into(), match (&p.target_framework) { Some(v) => Value::String((v).clone()), None => Value::Null });
     Value::Object(m)
 }
 
@@ -714,10 +994,24 @@ fn iface_monitor__dep_graph_params__to_json(p: &iface_monitor::DepGraphParams) -
     Value::Object(m)
 }
 
+fn iface_monitor__dep_graph__ok(body: String) -> Result<String, crate::runtime::DispatchError> {
+    Ok(body)
+}
+
+fn iface_monitor__dep_graph__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
 impl iface_monitor::Guest for crate::Component {
     fn dep_graph(params: iface_monitor::DepGraphParams) -> Result<String, String> {
         let json = iface_monitor__dep_graph_params__to_json(&params);
-        dispatch(&OP_MONITOR_DEP_GRAPH, json)
+        match dispatch(&OP_MONITOR_DEP_GRAPH, json).and_then(iface_monitor__dep_graph__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_monitor__dep_graph__err(e)),
+        }
     }
 }
 use crate::exports::autostamp::snyk::organizations as iface_organizations;
@@ -726,9 +1020,9 @@ const OP_ORGANIZATIONS_CREATE_A_NEW_ORGANIZATION: OpSpec = OpSpec {
     method: "POST",
     path_template: "/org",
     fields: &[
-        FieldSpec { snake: "group_id", location: FieldLocation::Body },
-        FieldSpec { snake: "name", location: FieldLocation::Body },
-        FieldSpec { snake: "source_org_id", location: FieldLocation::Body },
+        FieldSpec { snake: "group_id", wire: "groupId", location: FieldLocation::Body },
+        FieldSpec { snake: "name", wire: "name", location: FieldLocation::Body },
+        FieldSpec { snake: "source_org_id", wire: "sourceOrgId", location: FieldLocation::Body },
     ],
     auth: &[
     ],
@@ -738,7 +1032,7 @@ const OP_ORGANIZATIONS_REMOVE_ORGANIZATION: OpSpec = OpSpec {
     method: "DELETE",
     path_template: "/org/{org_id}",
     fields: &[
-        FieldSpec { snake: "org_id", location: FieldLocation::Path },
+        FieldSpec { snake: "org_id", wire: "orgId", location: FieldLocation::Path },
     ],
     auth: &[
     ],
@@ -748,9 +1042,9 @@ const OP_ORGANIZATIONS_INVITE_USERS: OpSpec = OpSpec {
     method: "POST",
     path_template: "/org/{org_id}/invite",
     fields: &[
-        FieldSpec { snake: "org_id", location: FieldLocation::Path },
-        FieldSpec { snake: "email", location: FieldLocation::Body },
-        FieldSpec { snake: "is_admin", location: FieldLocation::Body },
+        FieldSpec { snake: "org_id", wire: "orgId", location: FieldLocation::Path },
+        FieldSpec { snake: "email", wire: "email", location: FieldLocation::Body },
+        FieldSpec { snake: "is_admin", wire: "isAdmin", location: FieldLocation::Body },
     ],
     auth: &[
     ],
@@ -760,8 +1054,8 @@ const OP_ORGANIZATIONS_LIST_MEMBERS: OpSpec = OpSpec {
     method: "GET",
     path_template: "/org/{org_id}/members",
     fields: &[
-        FieldSpec { snake: "org_id", location: FieldLocation::Path },
-        FieldSpec { snake: "include_group_admins", location: FieldLocation::Query },
+        FieldSpec { snake: "org_id", wire: "orgId", location: FieldLocation::Path },
+        FieldSpec { snake: "include_group_admins", wire: "includeGroupAdmins", location: FieldLocation::Query },
     ],
     auth: &[
     ],
@@ -771,9 +1065,9 @@ const OP_ORGANIZATIONS_UPDATE_A_MEMBER_S_ROLE_IN_THE_ORGANIZATION: OpSpec = OpSp
     method: "PUT",
     path_template: "/org/{org_id}/members/update/{user_id}",
     fields: &[
-        FieldSpec { snake: "org_id", location: FieldLocation::Path },
-        FieldSpec { snake: "user_id", location: FieldLocation::Path },
-        FieldSpec { snake: "role_public_id", location: FieldLocation::Body },
+        FieldSpec { snake: "org_id", wire: "orgId", location: FieldLocation::Path },
+        FieldSpec { snake: "user_id", wire: "userId", location: FieldLocation::Path },
+        FieldSpec { snake: "role_public_id", wire: "rolePublicId", location: FieldLocation::Body },
     ],
     auth: &[
     ],
@@ -783,9 +1077,9 @@ const OP_ORGANIZATIONS_UPDATE_A_MEMBER_IN_THE_ORGANIZATION: OpSpec = OpSpec {
     method: "PUT",
     path_template: "/org/{org_id}/members/{user_id}",
     fields: &[
-        FieldSpec { snake: "org_id", location: FieldLocation::Path },
-        FieldSpec { snake: "user_id", location: FieldLocation::Path },
-        FieldSpec { snake: "role", location: FieldLocation::Body },
+        FieldSpec { snake: "org_id", wire: "orgId", location: FieldLocation::Path },
+        FieldSpec { snake: "user_id", wire: "userId", location: FieldLocation::Path },
+        FieldSpec { snake: "role", wire: "role", location: FieldLocation::Body },
     ],
     auth: &[
     ],
@@ -795,8 +1089,8 @@ const OP_ORGANIZATIONS_REMOVE_A_MEMBER_FROM_THE_ORGANIZATION: OpSpec = OpSpec {
     method: "DELETE",
     path_template: "/org/{org_id}/members/{user_id}",
     fields: &[
-        FieldSpec { snake: "org_id", location: FieldLocation::Path },
-        FieldSpec { snake: "user_id", location: FieldLocation::Path },
+        FieldSpec { snake: "org_id", wire: "orgId", location: FieldLocation::Path },
+        FieldSpec { snake: "user_id", wire: "userId", location: FieldLocation::Path },
     ],
     auth: &[
     ],
@@ -806,7 +1100,7 @@ const OP_ORGANIZATIONS_GET_ORG_ORG_ID_NOTIFICATION_SETTINGS: OpSpec = OpSpec {
     method: "GET",
     path_template: "/org/{org_id}/notification-settings",
     fields: &[
-        FieldSpec { snake: "org_id", location: FieldLocation::Path },
+        FieldSpec { snake: "org_id", wire: "orgId", location: FieldLocation::Path },
     ],
     auth: &[
     ],
@@ -816,11 +1110,11 @@ const OP_ORGANIZATIONS_SET_NOTIFICATION_SETTINGS: OpSpec = OpSpec {
     method: "PUT",
     path_template: "/org/{org_id}/notification-settings",
     fields: &[
-        FieldSpec { snake: "org_id", location: FieldLocation::Path },
-        FieldSpec { snake: "new_issues_remediations", location: FieldLocation::Body },
-        FieldSpec { snake: "project_imported", location: FieldLocation::Body },
-        FieldSpec { snake: "test_limit", location: FieldLocation::Body },
-        FieldSpec { snake: "weekly_report", location: FieldLocation::Body },
+        FieldSpec { snake: "org_id", wire: "orgId", location: FieldLocation::Path },
+        FieldSpec { snake: "new_issues_remediations", wire: "new-issues-remediations", location: FieldLocation::Body },
+        FieldSpec { snake: "project_imported", wire: "project-imported", location: FieldLocation::Body },
+        FieldSpec { snake: "test_limit", wire: "test-limit", location: FieldLocation::Body },
+        FieldSpec { snake: "weekly_report", wire: "weekly-report", location: FieldLocation::Body },
     ],
     auth: &[
     ],
@@ -830,7 +1124,7 @@ const OP_ORGANIZATIONS_LIST_PENDING_USER_PROVISIONS: OpSpec = OpSpec {
     method: "GET",
     path_template: "/org/{org_id}/provision",
     fields: &[
-        FieldSpec { snake: "org_id", location: FieldLocation::Path },
+        FieldSpec { snake: "org_id", wire: "orgId", location: FieldLocation::Path },
     ],
     auth: &[
     ],
@@ -840,10 +1134,10 @@ const OP_ORGANIZATIONS_PROVISION_A_USER_TO_THE_ORGANIZATION: OpSpec = OpSpec {
     method: "POST",
     path_template: "/org/{org_id}/provision",
     fields: &[
-        FieldSpec { snake: "org_id", location: FieldLocation::Path },
-        FieldSpec { snake: "email", location: FieldLocation::Body },
-        FieldSpec { snake: "role", location: FieldLocation::Body },
-        FieldSpec { snake: "role_public_id", location: FieldLocation::Body },
+        FieldSpec { snake: "org_id", wire: "orgId", location: FieldLocation::Path },
+        FieldSpec { snake: "email", wire: "email", location: FieldLocation::Body },
+        FieldSpec { snake: "role", wire: "role", location: FieldLocation::Body },
+        FieldSpec { snake: "role_public_id", wire: "rolePublicId", location: FieldLocation::Body },
     ],
     auth: &[
     ],
@@ -853,7 +1147,7 @@ const OP_ORGANIZATIONS_DELETE_PENDING_USER_PROVISION: OpSpec = OpSpec {
     method: "DELETE",
     path_template: "/org/{org_id}/provision",
     fields: &[
-        FieldSpec { snake: "org_id", location: FieldLocation::Path },
+        FieldSpec { snake: "org_id", wire: "orgId", location: FieldLocation::Path },
     ],
     auth: &[
     ],
@@ -863,7 +1157,7 @@ const OP_ORGANIZATIONS_VIEW_ORGANIZATION_SETTINGS: OpSpec = OpSpec {
     method: "GET",
     path_template: "/org/{org_id}/settings",
     fields: &[
-        FieldSpec { snake: "org_id", location: FieldLocation::Path },
+        FieldSpec { snake: "org_id", wire: "orgId", location: FieldLocation::Path },
     ],
     auth: &[
     ],
@@ -873,8 +1167,8 @@ const OP_ORGANIZATIONS_UPDATE_ORGANIZATION_SETTINGS: OpSpec = OpSpec {
     method: "PUT",
     path_template: "/org/{org_id}/settings",
     fields: &[
-        FieldSpec { snake: "org_id", location: FieldLocation::Path },
-        FieldSpec { snake: "request_access", location: FieldLocation::Body },
+        FieldSpec { snake: "org_id", wire: "orgId", location: FieldLocation::Path },
+        FieldSpec { snake: "request_access", wire: "requestAccess", location: FieldLocation::Body },
     ],
     auth: &[
     ],
@@ -889,27 +1183,66 @@ const OP_ORGANIZATIONS_LIST_ALL_THE_ORGANIZATIONS_A_USER_BELONGS_TO: OpSpec = Op
     ],
 };
 
-fn iface_organizations__set_notification_settings_body_new_issues_remediations_issue_severity_enum__to_str(e: &iface_organizations::SetNotificationSettingsBodyNewIssuesRemediationsIssueSeverityEnum) -> &'static str {
+fn iface_organizations__get_org_org_id_notification_settings_response_new_issues_remediations_issue_severity_enum__to_str(e: &iface_organizations::GetOrgOrgIdNotificationSettingsResponseNewIssuesRemediationsIssueSeverityEnum) -> &'static str {
     match e {
-        iface_organizations::SetNotificationSettingsBodyNewIssuesRemediationsIssueSeverityEnum::All => "all",
-        iface_organizations::SetNotificationSettingsBodyNewIssuesRemediationsIssueSeverityEnum::High => "high",
+        iface_organizations::GetOrgOrgIdNotificationSettingsResponseNewIssuesRemediationsIssueSeverityEnum::All => "all",
+        iface_organizations::GetOrgOrgIdNotificationSettingsResponseNewIssuesRemediationsIssueSeverityEnum::High => "high",
     }
 }
 
-fn iface_organizations__set_notification_settings_body_new_issues_remediations_issue_type_enum__to_str(e: &iface_organizations::SetNotificationSettingsBodyNewIssuesRemediationsIssueTypeEnum) -> &'static str {
+fn iface_organizations__get_org_org_id_notification_settings_response_new_issues_remediations_issue_type_enum__to_str(e: &iface_organizations::GetOrgOrgIdNotificationSettingsResponseNewIssuesRemediationsIssueTypeEnum) -> &'static str {
     match e {
-        iface_organizations::SetNotificationSettingsBodyNewIssuesRemediationsIssueTypeEnum::All => "all",
-        iface_organizations::SetNotificationSettingsBodyNewIssuesRemediationsIssueTypeEnum::Vuln => "vuln",
-        iface_organizations::SetNotificationSettingsBodyNewIssuesRemediationsIssueTypeEnum::License => "license",
-        iface_organizations::SetNotificationSettingsBodyNewIssuesRemediationsIssueTypeEnum::None => "none",
+        iface_organizations::GetOrgOrgIdNotificationSettingsResponseNewIssuesRemediationsIssueTypeEnum::All => "all",
+        iface_organizations::GetOrgOrgIdNotificationSettingsResponseNewIssuesRemediationsIssueTypeEnum::Vuln => "vuln",
+        iface_organizations::GetOrgOrgIdNotificationSettingsResponseNewIssuesRemediationsIssueTypeEnum::License => "license",
+        iface_organizations::GetOrgOrgIdNotificationSettingsResponseNewIssuesRemediationsIssueTypeEnum::None => "none",
     }
+}
+
+fn iface_organizations__get_org_org_id_notification_settings_response__to_json(p: &iface_organizations::GetOrgOrgIdNotificationSettingsResponse) -> Value {
+    let mut m = Map::new();
+    m.insert("new-issues-remediations".into(), match (&p.new_issues_remediations) { Some(v) => iface_organizations__get_org_org_id_notification_settings_response_new_issues_remediations__to_json(v), None => Value::Null });
+    m.insert("project-imported".into(), match (&p.project_imported) { Some(v) => iface_organizations__get_org_org_id_notification_settings_response_project_imported__to_json(v), None => Value::Null });
+    m.insert("test-limit".into(), match (&p.test_limit) { Some(v) => iface_organizations__get_org_org_id_notification_settings_response_test_limit__to_json(v), None => Value::Null });
+    m.insert("weekly-report".into(), match (&p.weekly_report) { Some(v) => iface_organizations__get_org_org_id_notification_settings_response_weekly_report__to_json(v), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_organizations__get_org_org_id_notification_settings_response_new_issues_remediations__to_json(p: &iface_organizations::GetOrgOrgIdNotificationSettingsResponseNewIssuesRemediations) -> Value {
+    let mut m = Map::new();
+    m.insert("enabled".into(), Value::Bool(*(&p.enabled)));
+    m.insert("inherited".into(), match (&p.inherited) { Some(v) => Value::Bool(*(v)), None => Value::Null });
+    m.insert("issueSeverity".into(), Value::String(iface_organizations__get_org_org_id_notification_settings_response_new_issues_remediations_issue_severity_enum__to_str(&p.issue_severity).into()));
+    m.insert("issueType".into(), Value::String(iface_organizations__get_org_org_id_notification_settings_response_new_issues_remediations_issue_type_enum__to_str(&p.issue_type).into()));
+    Value::Object(m)
+}
+
+fn iface_organizations__get_org_org_id_notification_settings_response_project_imported__to_json(p: &iface_organizations::GetOrgOrgIdNotificationSettingsResponseProjectImported) -> Value {
+    let mut m = Map::new();
+    m.insert("enabled".into(), Value::Bool(*(&p.enabled)));
+    m.insert("inherited".into(), match (&p.inherited) { Some(v) => Value::Bool(*(v)), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_organizations__get_org_org_id_notification_settings_response_test_limit__to_json(p: &iface_organizations::GetOrgOrgIdNotificationSettingsResponseTestLimit) -> Value {
+    let mut m = Map::new();
+    m.insert("enabled".into(), Value::Bool(*(&p.enabled)));
+    m.insert("inherited".into(), match (&p.inherited) { Some(v) => Value::Bool(*(v)), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_organizations__get_org_org_id_notification_settings_response_weekly_report__to_json(p: &iface_organizations::GetOrgOrgIdNotificationSettingsResponseWeeklyReport) -> Value {
+    let mut m = Map::new();
+    m.insert("enabled".into(), Value::Bool(*(&p.enabled)));
+    m.insert("inherited".into(), match (&p.inherited) { Some(v) => Value::Bool(*(v)), None => Value::Null });
+    Value::Object(m)
 }
 
 fn iface_organizations__set_notification_settings_body_new_issues_remediations__to_json(p: &iface_organizations::SetNotificationSettingsBodyNewIssuesRemediations) -> Value {
     let mut m = Map::new();
     m.insert("enabled".into(), Value::Bool(*(&p.enabled)));
-    m.insert("issue_severity".into(), Value::String(iface_organizations__set_notification_settings_body_new_issues_remediations_issue_severity_enum__to_str(&p.issue_severity).into()));
-    m.insert("issue_type".into(), Value::String(iface_organizations__set_notification_settings_body_new_issues_remediations_issue_type_enum__to_str(&p.issue_type).into()));
+    m.insert("issueSeverity".into(), Value::String(iface_organizations__get_org_org_id_notification_settings_response_new_issues_remediations_issue_severity_enum__to_str(&p.issue_severity).into()));
+    m.insert("issueType".into(), Value::String(iface_organizations__get_org_org_id_notification_settings_response_new_issues_remediations_issue_type_enum__to_str(&p.issue_type).into()));
     Value::Object(m)
 }
 
@@ -931,7 +1264,85 @@ fn iface_organizations__set_notification_settings_body_weekly_report__to_json(p:
     Value::Object(m)
 }
 
+fn iface_organizations__set_notification_settings_response__to_json(p: &iface_organizations::SetNotificationSettingsResponse) -> Value {
+    let mut m = Map::new();
+    m.insert("new-issues-remediations".into(), match (&p.new_issues_remediations) { Some(v) => iface_organizations__set_notification_settings_response_new_issues_remediations__to_json(v), None => Value::Null });
+    m.insert("project-imported".into(), match (&p.project_imported) { Some(v) => iface_organizations__set_notification_settings_response_project_imported__to_json(v), None => Value::Null });
+    m.insert("test-limit".into(), match (&p.test_limit) { Some(v) => iface_organizations__set_notification_settings_response_test_limit__to_json(v), None => Value::Null });
+    m.insert("weekly-report".into(), match (&p.weekly_report) { Some(v) => iface_organizations__set_notification_settings_response_weekly_report__to_json(v), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_organizations__set_notification_settings_response_new_issues_remediations__to_json(p: &iface_organizations::SetNotificationSettingsResponseNewIssuesRemediations) -> Value {
+    let mut m = Map::new();
+    m.insert("enabled".into(), Value::Bool(*(&p.enabled)));
+    m.insert("inherited".into(), match (&p.inherited) { Some(v) => Value::Bool(*(v)), None => Value::Null });
+    m.insert("issueSeverity".into(), Value::String(iface_organizations__get_org_org_id_notification_settings_response_new_issues_remediations_issue_severity_enum__to_str(&p.issue_severity).into()));
+    m.insert("issueType".into(), Value::String(iface_organizations__get_org_org_id_notification_settings_response_new_issues_remediations_issue_type_enum__to_str(&p.issue_type).into()));
+    Value::Object(m)
+}
+
+fn iface_organizations__set_notification_settings_response_project_imported__to_json(p: &iface_organizations::SetNotificationSettingsResponseProjectImported) -> Value {
+    let mut m = Map::new();
+    m.insert("enabled".into(), Value::Bool(*(&p.enabled)));
+    m.insert("inherited".into(), match (&p.inherited) { Some(v) => Value::Bool(*(v)), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_organizations__set_notification_settings_response_test_limit__to_json(p: &iface_organizations::SetNotificationSettingsResponseTestLimit) -> Value {
+    let mut m = Map::new();
+    m.insert("enabled".into(), Value::Bool(*(&p.enabled)));
+    m.insert("inherited".into(), match (&p.inherited) { Some(v) => Value::Bool(*(v)), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_organizations__set_notification_settings_response_weekly_report__to_json(p: &iface_organizations::SetNotificationSettingsResponseWeeklyReport) -> Value {
+    let mut m = Map::new();
+    m.insert("enabled".into(), Value::Bool(*(&p.enabled)));
+    m.insert("inherited".into(), match (&p.inherited) { Some(v) => Value::Bool(*(v)), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_organizations__provision_a_user_to_the_organization_response__to_json(p: &iface_organizations::ProvisionAUserToTheOrganizationResponse) -> Value {
+    let mut m = Map::new();
+    m.insert("created".into(), match (&p.created) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("email".into(), match (&p.email) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("role".into(), match (&p.role) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("rolePublicId".into(), match (&p.role_public_id) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_organizations__delete_pending_user_provision_response__to_json(p: &iface_organizations::DeletePendingUserProvisionResponse) -> Value {
+    let mut m = Map::new();
+    m.insert("ok".into(), match (&p.ok) { Some(v) => Value::Bool(*(v)), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_organizations__view_organization_settings_response__to_json(p: &iface_organizations::ViewOrganizationSettingsResponse) -> Value {
+    let mut m = Map::new();
+    m.insert("requestAccess".into(), match (&p.request_access) { Some(v) => iface_organizations__view_organization_settings_response_request_access__to_json(v), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_organizations__view_organization_settings_response_request_access__to_json(p: &iface_organizations::ViewOrganizationSettingsResponseRequestAccess) -> Value {
+    let mut m = Map::new();
+    m.insert("enabled".into(), Value::Bool(*(&p.enabled)));
+    Value::Object(m)
+}
+
 fn iface_organizations__update_organization_settings_body_request_access__to_json(p: &iface_organizations::UpdateOrganizationSettingsBodyRequestAccess) -> Value {
+    let mut m = Map::new();
+    m.insert("enabled".into(), Value::Bool(*(&p.enabled)));
+    Value::Object(m)
+}
+
+fn iface_organizations__update_organization_settings_response__to_json(p: &iface_organizations::UpdateOrganizationSettingsResponse) -> Value {
+    let mut m = Map::new();
+    m.insert("requestAccess".into(), match (&p.request_access) { Some(v) => iface_organizations__update_organization_settings_response_request_access__to_json(v), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_organizations__update_organization_settings_response_request_access__to_json(p: &iface_organizations::UpdateOrganizationSettingsResponseRequestAccess) -> Value {
     let mut m = Map::new();
     m.insert("enabled".into(), Value::Bool(*(&p.enabled)));
     Value::Object(m)
@@ -1039,65 +1450,499 @@ fn iface_organizations__update_organization_settings_params__to_json(p: &iface_o
     Value::Object(m)
 }
 
+fn iface_organizations__get_org_org_id_notification_settings_response__from_json(v: &Value) -> Option<iface_organizations::GetOrgOrgIdNotificationSettingsResponse> {
+    let m = v.as_object()?;
+    Some(iface_organizations::GetOrgOrgIdNotificationSettingsResponse {
+        new_issues_remediations: m.get("new-issues-remediations").filter(|v| !v.is_null()).and_then(|v| iface_organizations__get_org_org_id_notification_settings_response_new_issues_remediations__from_json(v)),
+        project_imported: m.get("project-imported").filter(|v| !v.is_null()).and_then(|v| iface_organizations__get_org_org_id_notification_settings_response_project_imported__from_json(v)),
+        test_limit: m.get("test-limit").filter(|v| !v.is_null()).and_then(|v| iface_organizations__get_org_org_id_notification_settings_response_test_limit__from_json(v)),
+        weekly_report: m.get("weekly-report").filter(|v| !v.is_null()).and_then(|v| iface_organizations__get_org_org_id_notification_settings_response_weekly_report__from_json(v)),
+    })
+}
+
+fn iface_organizations__get_org_org_id_notification_settings_response_new_issues_remediations__from_json(v: &Value) -> Option<iface_organizations::GetOrgOrgIdNotificationSettingsResponseNewIssuesRemediations> {
+    let m = v.as_object()?;
+    Some(iface_organizations::GetOrgOrgIdNotificationSettingsResponseNewIssuesRemediations {
+        enabled: m.get("enabled").and_then(|v| (v).as_bool()).unwrap_or_default(),
+        inherited: m.get("inherited").filter(|v| !v.is_null()).and_then(|v| (v).as_bool()),
+        issue_severity: match m.get("issueSeverity").and_then(|v| (v).as_str().and_then(iface_organizations__get_org_org_id_notification_settings_response_new_issues_remediations_issue_severity_enum__from_str)) { Some(x) => x, None => return None },
+        issue_type: match m.get("issueType").and_then(|v| (v).as_str().and_then(iface_organizations__get_org_org_id_notification_settings_response_new_issues_remediations_issue_type_enum__from_str)) { Some(x) => x, None => return None },
+    })
+}
+
+fn iface_organizations__get_org_org_id_notification_settings_response_project_imported__from_json(v: &Value) -> Option<iface_organizations::GetOrgOrgIdNotificationSettingsResponseProjectImported> {
+    let m = v.as_object()?;
+    Some(iface_organizations::GetOrgOrgIdNotificationSettingsResponseProjectImported {
+        enabled: m.get("enabled").and_then(|v| (v).as_bool()).unwrap_or_default(),
+        inherited: m.get("inherited").filter(|v| !v.is_null()).and_then(|v| (v).as_bool()),
+    })
+}
+
+fn iface_organizations__get_org_org_id_notification_settings_response_test_limit__from_json(v: &Value) -> Option<iface_organizations::GetOrgOrgIdNotificationSettingsResponseTestLimit> {
+    let m = v.as_object()?;
+    Some(iface_organizations::GetOrgOrgIdNotificationSettingsResponseTestLimit {
+        enabled: m.get("enabled").and_then(|v| (v).as_bool()).unwrap_or_default(),
+        inherited: m.get("inherited").filter(|v| !v.is_null()).and_then(|v| (v).as_bool()),
+    })
+}
+
+fn iface_organizations__get_org_org_id_notification_settings_response_weekly_report__from_json(v: &Value) -> Option<iface_organizations::GetOrgOrgIdNotificationSettingsResponseWeeklyReport> {
+    let m = v.as_object()?;
+    Some(iface_organizations::GetOrgOrgIdNotificationSettingsResponseWeeklyReport {
+        enabled: m.get("enabled").and_then(|v| (v).as_bool()).unwrap_or_default(),
+        inherited: m.get("inherited").filter(|v| !v.is_null()).and_then(|v| (v).as_bool()),
+    })
+}
+
+fn iface_organizations__set_notification_settings_response__from_json(v: &Value) -> Option<iface_organizations::SetNotificationSettingsResponse> {
+    let m = v.as_object()?;
+    Some(iface_organizations::SetNotificationSettingsResponse {
+        new_issues_remediations: m.get("new-issues-remediations").filter(|v| !v.is_null()).and_then(|v| iface_organizations__set_notification_settings_response_new_issues_remediations__from_json(v)),
+        project_imported: m.get("project-imported").filter(|v| !v.is_null()).and_then(|v| iface_organizations__set_notification_settings_response_project_imported__from_json(v)),
+        test_limit: m.get("test-limit").filter(|v| !v.is_null()).and_then(|v| iface_organizations__set_notification_settings_response_test_limit__from_json(v)),
+        weekly_report: m.get("weekly-report").filter(|v| !v.is_null()).and_then(|v| iface_organizations__set_notification_settings_response_weekly_report__from_json(v)),
+    })
+}
+
+fn iface_organizations__set_notification_settings_response_new_issues_remediations__from_json(v: &Value) -> Option<iface_organizations::SetNotificationSettingsResponseNewIssuesRemediations> {
+    let m = v.as_object()?;
+    Some(iface_organizations::SetNotificationSettingsResponseNewIssuesRemediations {
+        enabled: m.get("enabled").and_then(|v| (v).as_bool()).unwrap_or_default(),
+        inherited: m.get("inherited").filter(|v| !v.is_null()).and_then(|v| (v).as_bool()),
+        issue_severity: match m.get("issueSeverity").and_then(|v| (v).as_str().and_then(iface_organizations__get_org_org_id_notification_settings_response_new_issues_remediations_issue_severity_enum__from_str)) { Some(x) => x, None => return None },
+        issue_type: match m.get("issueType").and_then(|v| (v).as_str().and_then(iface_organizations__get_org_org_id_notification_settings_response_new_issues_remediations_issue_type_enum__from_str)) { Some(x) => x, None => return None },
+    })
+}
+
+fn iface_organizations__set_notification_settings_response_project_imported__from_json(v: &Value) -> Option<iface_organizations::SetNotificationSettingsResponseProjectImported> {
+    let m = v.as_object()?;
+    Some(iface_organizations::SetNotificationSettingsResponseProjectImported {
+        enabled: m.get("enabled").and_then(|v| (v).as_bool()).unwrap_or_default(),
+        inherited: m.get("inherited").filter(|v| !v.is_null()).and_then(|v| (v).as_bool()),
+    })
+}
+
+fn iface_organizations__set_notification_settings_response_test_limit__from_json(v: &Value) -> Option<iface_organizations::SetNotificationSettingsResponseTestLimit> {
+    let m = v.as_object()?;
+    Some(iface_organizations::SetNotificationSettingsResponseTestLimit {
+        enabled: m.get("enabled").and_then(|v| (v).as_bool()).unwrap_or_default(),
+        inherited: m.get("inherited").filter(|v| !v.is_null()).and_then(|v| (v).as_bool()),
+    })
+}
+
+fn iface_organizations__set_notification_settings_response_weekly_report__from_json(v: &Value) -> Option<iface_organizations::SetNotificationSettingsResponseWeeklyReport> {
+    let m = v.as_object()?;
+    Some(iface_organizations::SetNotificationSettingsResponseWeeklyReport {
+        enabled: m.get("enabled").and_then(|v| (v).as_bool()).unwrap_or_default(),
+        inherited: m.get("inherited").filter(|v| !v.is_null()).and_then(|v| (v).as_bool()),
+    })
+}
+
+fn iface_organizations__provision_a_user_to_the_organization_response__from_json(v: &Value) -> Option<iface_organizations::ProvisionAUserToTheOrganizationResponse> {
+    let m = v.as_object()?;
+    Some(iface_organizations::ProvisionAUserToTheOrganizationResponse {
+        created: m.get("created").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        email: m.get("email").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        role: m.get("role").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        role_public_id: m.get("rolePublicId").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    })
+}
+
+fn iface_organizations__delete_pending_user_provision_response__from_json(v: &Value) -> Option<iface_organizations::DeletePendingUserProvisionResponse> {
+    let m = v.as_object()?;
+    Some(iface_organizations::DeletePendingUserProvisionResponse {
+        ok: m.get("ok").filter(|v| !v.is_null()).and_then(|v| (v).as_bool()),
+    })
+}
+
+fn iface_organizations__view_organization_settings_response__from_json(v: &Value) -> Option<iface_organizations::ViewOrganizationSettingsResponse> {
+    let m = v.as_object()?;
+    Some(iface_organizations::ViewOrganizationSettingsResponse {
+        request_access: m.get("requestAccess").filter(|v| !v.is_null()).and_then(|v| iface_organizations__view_organization_settings_response_request_access__from_json(v)),
+    })
+}
+
+fn iface_organizations__view_organization_settings_response_request_access__from_json(v: &Value) -> Option<iface_organizations::ViewOrganizationSettingsResponseRequestAccess> {
+    let m = v.as_object()?;
+    Some(iface_organizations::ViewOrganizationSettingsResponseRequestAccess {
+        enabled: m.get("enabled").and_then(|v| (v).as_bool()).unwrap_or_default(),
+    })
+}
+
+fn iface_organizations__update_organization_settings_response__from_json(v: &Value) -> Option<iface_organizations::UpdateOrganizationSettingsResponse> {
+    let m = v.as_object()?;
+    Some(iface_organizations::UpdateOrganizationSettingsResponse {
+        request_access: m.get("requestAccess").filter(|v| !v.is_null()).and_then(|v| iface_organizations__update_organization_settings_response_request_access__from_json(v)),
+    })
+}
+
+fn iface_organizations__update_organization_settings_response_request_access__from_json(v: &Value) -> Option<iface_organizations::UpdateOrganizationSettingsResponseRequestAccess> {
+    let m = v.as_object()?;
+    Some(iface_organizations::UpdateOrganizationSettingsResponseRequestAccess {
+        enabled: m.get("enabled").and_then(|v| (v).as_bool()).unwrap_or_default(),
+    })
+}
+
+fn iface_organizations__get_org_org_id_notification_settings_response_new_issues_remediations_issue_severity_enum__from_str(s: &str) -> Option<iface_organizations::GetOrgOrgIdNotificationSettingsResponseNewIssuesRemediationsIssueSeverityEnum> {
+    match s {
+        "all" => Some(iface_organizations::GetOrgOrgIdNotificationSettingsResponseNewIssuesRemediationsIssueSeverityEnum::All),
+        "high" => Some(iface_organizations::GetOrgOrgIdNotificationSettingsResponseNewIssuesRemediationsIssueSeverityEnum::High),
+        _ => None,
+    }
+}
+
+fn iface_organizations__get_org_org_id_notification_settings_response_new_issues_remediations_issue_type_enum__from_str(s: &str) -> Option<iface_organizations::GetOrgOrgIdNotificationSettingsResponseNewIssuesRemediationsIssueTypeEnum> {
+    match s {
+        "all" => Some(iface_organizations::GetOrgOrgIdNotificationSettingsResponseNewIssuesRemediationsIssueTypeEnum::All),
+        "vuln" => Some(iface_organizations::GetOrgOrgIdNotificationSettingsResponseNewIssuesRemediationsIssueTypeEnum::Vuln),
+        "license" => Some(iface_organizations::GetOrgOrgIdNotificationSettingsResponseNewIssuesRemediationsIssueTypeEnum::License),
+        "none" => Some(iface_organizations::GetOrgOrgIdNotificationSettingsResponseNewIssuesRemediationsIssueTypeEnum::None),
+        _ => None,
+    }
+}
+
+fn iface_organizations__create_a_new_organization__ok(body: String) -> Result<String, crate::runtime::DispatchError> {
+    Ok(body)
+}
+
+fn iface_organizations__create_a_new_organization__err(e: crate::runtime::DispatchError) -> iface_organizations::CreateANewOrganizationError {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => match status {
+            400u16 => iface_organizations::CreateANewOrganizationError::BadRequest(body),
+            401u16 => iface_organizations::CreateANewOrganizationError::Unauthorized(body),
+            422u16 => iface_organizations::CreateANewOrganizationError::UnprocessableEntity(body),
+            _ => iface_organizations::CreateANewOrganizationError::Other(body),
+        },
+        crate::runtime::DispatchError::Transport(m) => iface_organizations::CreateANewOrganizationError::Other(m),
+    }
+}
+
+fn iface_organizations__remove_organization__ok(body: String) -> Result<String, crate::runtime::DispatchError> {
+    Ok(body)
+}
+
+fn iface_organizations__remove_organization__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
+fn iface_organizations__invite_users__ok(body: String) -> Result<String, crate::runtime::DispatchError> {
+    Ok(body)
+}
+
+fn iface_organizations__invite_users__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
+fn iface_organizations__list_members__ok(body: String) -> Result<Vec<String>, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match (&v).as_array().map(|a| a.iter().filter_map(|x| (x).as_str().map(|s| s.to_string())).collect()) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_organizations__list_members__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
+fn iface_organizations__update_a_member_s_role_in_the_organization__ok(body: String) -> Result<String, crate::runtime::DispatchError> {
+    Ok(body)
+}
+
+fn iface_organizations__update_a_member_s_role_in_the_organization__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
+fn iface_organizations__update_a_member_in_the_organization__ok(body: String) -> Result<String, crate::runtime::DispatchError> {
+    Ok(body)
+}
+
+fn iface_organizations__update_a_member_in_the_organization__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
+fn iface_organizations__remove_a_member_from_the_organization__ok(body: String) -> Result<String, crate::runtime::DispatchError> {
+    Ok(body)
+}
+
+fn iface_organizations__remove_a_member_from_the_organization__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
+fn iface_organizations__get_org_org_id_notification_settings__ok(body: String) -> Result<iface_organizations::GetOrgOrgIdNotificationSettingsResponse, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match iface_organizations__get_org_org_id_notification_settings_response__from_json(&v) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_organizations__get_org_org_id_notification_settings__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
+fn iface_organizations__set_notification_settings__ok(body: String) -> Result<iface_organizations::SetNotificationSettingsResponse, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match iface_organizations__set_notification_settings_response__from_json(&v) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_organizations__set_notification_settings__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
+fn iface_organizations__list_pending_user_provisions__ok(body: String) -> Result<Vec<String>, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match (&v).as_array().map(|a| a.iter().filter_map(|x| (x).as_str().map(|s| s.to_string())).collect()) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_organizations__list_pending_user_provisions__err(e: crate::runtime::DispatchError) -> iface_organizations::ListPendingUserProvisionsError {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => match status {
+            403u16 => iface_organizations::ListPendingUserProvisionsError::Forbidden(body),
+            _ => iface_organizations::ListPendingUserProvisionsError::Other(body),
+        },
+        crate::runtime::DispatchError::Transport(m) => iface_organizations::ListPendingUserProvisionsError::Other(m),
+    }
+}
+
+fn iface_organizations__provision_a_user_to_the_organization__ok(body: String) -> Result<iface_organizations::ProvisionAUserToTheOrganizationResponse, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match iface_organizations__provision_a_user_to_the_organization_response__from_json(&v) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_organizations__provision_a_user_to_the_organization__err(e: crate::runtime::DispatchError) -> iface_organizations::ProvisionAUserToTheOrganizationError {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => match status {
+            403u16 => iface_organizations::ProvisionAUserToTheOrganizationError::Forbidden(body),
+            _ => iface_organizations::ProvisionAUserToTheOrganizationError::Other(body),
+        },
+        crate::runtime::DispatchError::Transport(m) => iface_organizations::ProvisionAUserToTheOrganizationError::Other(m),
+    }
+}
+
+fn iface_organizations__delete_pending_user_provision__ok(body: String) -> Result<iface_organizations::DeletePendingUserProvisionResponse, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match iface_organizations__delete_pending_user_provision_response__from_json(&v) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_organizations__delete_pending_user_provision__err(e: crate::runtime::DispatchError) -> iface_organizations::DeletePendingUserProvisionError {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => match status {
+            403u16 => iface_organizations::DeletePendingUserProvisionError::Forbidden(body),
+            _ => iface_organizations::DeletePendingUserProvisionError::Other(body),
+        },
+        crate::runtime::DispatchError::Transport(m) => iface_organizations::DeletePendingUserProvisionError::Other(m),
+    }
+}
+
+fn iface_organizations__view_organization_settings__ok(body: String) -> Result<iface_organizations::ViewOrganizationSettingsResponse, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match iface_organizations__view_organization_settings_response__from_json(&v) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_organizations__view_organization_settings__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
+fn iface_organizations__update_organization_settings__ok(body: String) -> Result<iface_organizations::UpdateOrganizationSettingsResponse, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match iface_organizations__update_organization_settings_response__from_json(&v) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_organizations__update_organization_settings__err(e: crate::runtime::DispatchError) -> iface_organizations::UpdateOrganizationSettingsError {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => match status {
+            403u16 => iface_organizations::UpdateOrganizationSettingsError::Forbidden(body),
+            _ => iface_organizations::UpdateOrganizationSettingsError::Other(body),
+        },
+        crate::runtime::DispatchError::Transport(m) => iface_organizations::UpdateOrganizationSettingsError::Other(m),
+    }
+}
+
+fn iface_organizations__list_all_the_organizations_a_user_belongs_to__ok(body: String) -> Result<String, crate::runtime::DispatchError> {
+    Ok(body)
+}
+
+fn iface_organizations__list_all_the_organizations_a_user_belongs_to__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
 impl iface_organizations::Guest for crate::Component {
-    fn create_a_new_organization(params: iface_organizations::CreateANewOrganizationParams) -> Result<String, String> {
+    fn create_a_new_organization(params: iface_organizations::CreateANewOrganizationParams) -> Result<String, iface_organizations::CreateANewOrganizationError> {
         let json = iface_organizations__create_a_new_organization_params__to_json(&params);
-        dispatch(&OP_ORGANIZATIONS_CREATE_A_NEW_ORGANIZATION, json)
+        match dispatch(&OP_ORGANIZATIONS_CREATE_A_NEW_ORGANIZATION, json).and_then(iface_organizations__create_a_new_organization__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_organizations__create_a_new_organization__err(e)),
+        }
     }
     fn remove_organization(params: iface_organizations::RemoveOrganizationParams) -> Result<String, String> {
         let json = iface_organizations__remove_organization_params__to_json(&params);
-        dispatch(&OP_ORGANIZATIONS_REMOVE_ORGANIZATION, json)
+        match dispatch(&OP_ORGANIZATIONS_REMOVE_ORGANIZATION, json).and_then(iface_organizations__remove_organization__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_organizations__remove_organization__err(e)),
+        }
     }
     fn invite_users(params: iface_organizations::InviteUsersParams) -> Result<String, String> {
         let json = iface_organizations__invite_users_params__to_json(&params);
-        dispatch(&OP_ORGANIZATIONS_INVITE_USERS, json)
+        match dispatch(&OP_ORGANIZATIONS_INVITE_USERS, json).and_then(iface_organizations__invite_users__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_organizations__invite_users__err(e)),
+        }
     }
-    fn list_members(params: iface_organizations::ListMembersParams) -> Result<String, String> {
+    fn list_members(params: iface_organizations::ListMembersParams) -> Result<Vec<String>, String> {
         let json = iface_organizations__list_members_params__to_json(&params);
-        dispatch(&OP_ORGANIZATIONS_LIST_MEMBERS, json)
+        match dispatch(&OP_ORGANIZATIONS_LIST_MEMBERS, json).and_then(iface_organizations__list_members__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_organizations__list_members__err(e)),
+        }
     }
     fn update_a_member_s_role_in_the_organization(params: iface_organizations::UpdateAMemberSRoleInTheOrganizationParams) -> Result<String, String> {
         let json = iface_organizations__update_a_member_s_role_in_the_organization_params__to_json(&params);
-        dispatch(&OP_ORGANIZATIONS_UPDATE_A_MEMBER_S_ROLE_IN_THE_ORGANIZATION, json)
+        match dispatch(&OP_ORGANIZATIONS_UPDATE_A_MEMBER_S_ROLE_IN_THE_ORGANIZATION, json).and_then(iface_organizations__update_a_member_s_role_in_the_organization__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_organizations__update_a_member_s_role_in_the_organization__err(e)),
+        }
     }
     fn update_a_member_in_the_organization(params: iface_organizations::UpdateAMemberInTheOrganizationParams) -> Result<String, String> {
         let json = iface_organizations__update_a_member_in_the_organization_params__to_json(&params);
-        dispatch(&OP_ORGANIZATIONS_UPDATE_A_MEMBER_IN_THE_ORGANIZATION, json)
+        match dispatch(&OP_ORGANIZATIONS_UPDATE_A_MEMBER_IN_THE_ORGANIZATION, json).and_then(iface_organizations__update_a_member_in_the_organization__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_organizations__update_a_member_in_the_organization__err(e)),
+        }
     }
     fn remove_a_member_from_the_organization(params: iface_organizations::RemoveAMemberFromTheOrganizationParams) -> Result<String, String> {
         let json = iface_organizations__remove_a_member_from_the_organization_params__to_json(&params);
-        dispatch(&OP_ORGANIZATIONS_REMOVE_A_MEMBER_FROM_THE_ORGANIZATION, json)
+        match dispatch(&OP_ORGANIZATIONS_REMOVE_A_MEMBER_FROM_THE_ORGANIZATION, json).and_then(iface_organizations__remove_a_member_from_the_organization__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_organizations__remove_a_member_from_the_organization__err(e)),
+        }
     }
-    fn get_org_org_id_notification_settings(params: iface_organizations::GetOrgOrgIdNotificationSettingsParams) -> Result<String, String> {
+    fn get_org_org_id_notification_settings(params: iface_organizations::GetOrgOrgIdNotificationSettingsParams) -> Result<iface_organizations::GetOrgOrgIdNotificationSettingsResponse, String> {
         let json = iface_organizations__get_org_org_id_notification_settings_params__to_json(&params);
-        dispatch(&OP_ORGANIZATIONS_GET_ORG_ORG_ID_NOTIFICATION_SETTINGS, json)
+        match dispatch(&OP_ORGANIZATIONS_GET_ORG_ORG_ID_NOTIFICATION_SETTINGS, json).and_then(iface_organizations__get_org_org_id_notification_settings__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_organizations__get_org_org_id_notification_settings__err(e)),
+        }
     }
-    fn set_notification_settings(params: iface_organizations::SetNotificationSettingsParams) -> Result<String, String> {
+    fn set_notification_settings(params: iface_organizations::SetNotificationSettingsParams) -> Result<iface_organizations::SetNotificationSettingsResponse, String> {
         let json = iface_organizations__set_notification_settings_params__to_json(&params);
-        dispatch(&OP_ORGANIZATIONS_SET_NOTIFICATION_SETTINGS, json)
+        match dispatch(&OP_ORGANIZATIONS_SET_NOTIFICATION_SETTINGS, json).and_then(iface_organizations__set_notification_settings__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_organizations__set_notification_settings__err(e)),
+        }
     }
-    fn list_pending_user_provisions(params: iface_organizations::ListPendingUserProvisionsParams) -> Result<String, String> {
+    fn list_pending_user_provisions(params: iface_organizations::ListPendingUserProvisionsParams) -> Result<Vec<String>, iface_organizations::ListPendingUserProvisionsError> {
         let json = iface_organizations__list_pending_user_provisions_params__to_json(&params);
-        dispatch(&OP_ORGANIZATIONS_LIST_PENDING_USER_PROVISIONS, json)
+        match dispatch(&OP_ORGANIZATIONS_LIST_PENDING_USER_PROVISIONS, json).and_then(iface_organizations__list_pending_user_provisions__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_organizations__list_pending_user_provisions__err(e)),
+        }
     }
-    fn provision_a_user_to_the_organization(params: iface_organizations::ProvisionAUserToTheOrganizationParams) -> Result<String, String> {
+    fn provision_a_user_to_the_organization(params: iface_organizations::ProvisionAUserToTheOrganizationParams) -> Result<iface_organizations::ProvisionAUserToTheOrganizationResponse, iface_organizations::ProvisionAUserToTheOrganizationError> {
         let json = iface_organizations__provision_a_user_to_the_organization_params__to_json(&params);
-        dispatch(&OP_ORGANIZATIONS_PROVISION_A_USER_TO_THE_ORGANIZATION, json)
+        match dispatch(&OP_ORGANIZATIONS_PROVISION_A_USER_TO_THE_ORGANIZATION, json).and_then(iface_organizations__provision_a_user_to_the_organization__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_organizations__provision_a_user_to_the_organization__err(e)),
+        }
     }
-    fn delete_pending_user_provision(params: iface_organizations::DeletePendingUserProvisionParams) -> Result<String, String> {
+    fn delete_pending_user_provision(params: iface_organizations::DeletePendingUserProvisionParams) -> Result<iface_organizations::DeletePendingUserProvisionResponse, iface_organizations::DeletePendingUserProvisionError> {
         let json = iface_organizations__delete_pending_user_provision_params__to_json(&params);
-        dispatch(&OP_ORGANIZATIONS_DELETE_PENDING_USER_PROVISION, json)
+        match dispatch(&OP_ORGANIZATIONS_DELETE_PENDING_USER_PROVISION, json).and_then(iface_organizations__delete_pending_user_provision__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_organizations__delete_pending_user_provision__err(e)),
+        }
     }
-    fn view_organization_settings(params: iface_organizations::ViewOrganizationSettingsParams) -> Result<String, String> {
+    fn view_organization_settings(params: iface_organizations::ViewOrganizationSettingsParams) -> Result<iface_organizations::ViewOrganizationSettingsResponse, String> {
         let json = iface_organizations__view_organization_settings_params__to_json(&params);
-        dispatch(&OP_ORGANIZATIONS_VIEW_ORGANIZATION_SETTINGS, json)
+        match dispatch(&OP_ORGANIZATIONS_VIEW_ORGANIZATION_SETTINGS, json).and_then(iface_organizations__view_organization_settings__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_organizations__view_organization_settings__err(e)),
+        }
     }
-    fn update_organization_settings(params: iface_organizations::UpdateOrganizationSettingsParams) -> Result<String, String> {
+    fn update_organization_settings(params: iface_organizations::UpdateOrganizationSettingsParams) -> Result<iface_organizations::UpdateOrganizationSettingsResponse, iface_organizations::UpdateOrganizationSettingsError> {
         let json = iface_organizations__update_organization_settings_params__to_json(&params);
-        dispatch(&OP_ORGANIZATIONS_UPDATE_ORGANIZATION_SETTINGS, json)
+        match dispatch(&OP_ORGANIZATIONS_UPDATE_ORGANIZATION_SETTINGS, json).and_then(iface_organizations__update_organization_settings__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_organizations__update_organization_settings__err(e)),
+        }
     }
     fn list_all_the_organizations_a_user_belongs_to() -> Result<String, String> {
-        dispatch(&OP_ORGANIZATIONS_LIST_ALL_THE_ORGANIZATIONS_A_USER_BELONGS_TO, Value::Object(Map::new()))
+        match dispatch(&OP_ORGANIZATIONS_LIST_ALL_THE_ORGANIZATIONS_A_USER_BELONGS_TO, Value::Object(Map::new())).and_then(iface_organizations__list_all_the_organizations_a_user_belongs_to__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_organizations__list_all_the_organizations_a_user_belongs_to__err(e)),
+        }
     }
 }
 use crate::exports::autostamp::snyk::dependencies as iface_dependencies;
@@ -1106,12 +1951,12 @@ const OP_DEPENDENCIES_LIST_ALL_DEPENDENCIES: OpSpec = OpSpec {
     method: "POST",
     path_template: "/org/{org_id}/dependencies",
     fields: &[
-        FieldSpec { snake: "org_id", location: FieldLocation::Path },
-        FieldSpec { snake: "sort_by", location: FieldLocation::Query },
-        FieldSpec { snake: "order", location: FieldLocation::Query },
-        FieldSpec { snake: "page", location: FieldLocation::Query },
-        FieldSpec { snake: "per_page", location: FieldLocation::Query },
-        FieldSpec { snake: "filters", location: FieldLocation::Body },
+        FieldSpec { snake: "org_id", wire: "orgId", location: FieldLocation::Path },
+        FieldSpec { snake: "sort_by", wire: "sortBy", location: FieldLocation::Query },
+        FieldSpec { snake: "order", wire: "order", location: FieldLocation::Query },
+        FieldSpec { snake: "page", wire: "page", location: FieldLocation::Query },
+        FieldSpec { snake: "per_page", wire: "perPage", location: FieldLocation::Query },
+        FieldSpec { snake: "filters", wire: "filters", location: FieldLocation::Body },
     ],
     auth: &[
     ],
@@ -1135,12 +1980,56 @@ fn iface_dependencies__list_all_dependencies_order_enum__to_str(e: &iface_depend
 
 fn iface_dependencies__list_all_dependencies_body_filters__to_json(p: &iface_dependencies::ListAllDependenciesBodyFilters) -> Value {
     let mut m = Map::new();
-    m.insert("dep_status".into(), match (&p.dep_status) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("depStatus".into(), match (&p.dep_status) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("dependencies".into(), match (&p.dependencies) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("languages".into(), match (&p.languages) { Some(v) => Value::Array((v).iter().map(|v| Value::String((v).clone())).collect()), None => Value::Null });
     m.insert("licenses".into(), match (&p.licenses) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("projects".into(), match (&p.projects) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("severity".into(), match (&p.severity) { Some(v) => Value::Array((v).iter().map(|v| Value::String((v).clone())).collect()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_dependencies__list_all_dependencies_response__to_json(p: &iface_dependencies::ListAllDependenciesResponse) -> Value {
+    let mut m = Map::new();
+    m.insert("results".into(), Value::Array((&p.results).iter().map(|v| iface_dependencies__list_all_dependencies_response_results_item__to_json(v)).collect()));
+    m.insert("total".into(), match (&p.total) { Some(v) => serde_json::Number::from_f64(*(v)).map(Value::Number).unwrap_or(Value::Null), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_dependencies__list_all_dependencies_response_results_item__to_json(p: &iface_dependencies::ListAllDependenciesResponseResultsItem) -> Value {
+    let mut m = Map::new();
+    m.insert("copyright".into(), match (&p.copyright) { Some(v) => Value::Array((v).iter().map(|v| Value::String((v).clone())).collect()), None => Value::Null });
+    m.insert("dependenciesWithIssues".into(), match (&p.dependencies_with_issues) { Some(v) => Value::Array((v).iter().map(|v| Value::String((v).clone())).collect()), None => Value::Null });
+    m.insert("deprecatedVersions".into(), match (&p.deprecated_versions) { Some(v) => Value::Array((v).iter().map(|v| Value::String((v).clone())).collect()), None => Value::Null });
+    m.insert("firstPublishedDate".into(), match (&p.first_published_date) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("id".into(), Value::String((&p.id).clone()));
+    m.insert("isDeprecated".into(), match (&p.is_deprecated) { Some(v) => Value::Bool(*(v)), None => Value::Null });
+    m.insert("issuesCritical".into(), match (&p.issues_critical) { Some(v) => serde_json::Number::from_f64(*(v)).map(Value::Number).unwrap_or(Value::Null), None => Value::Null });
+    m.insert("issuesHigh".into(), match (&p.issues_high) { Some(v) => serde_json::Number::from_f64(*(v)).map(Value::Number).unwrap_or(Value::Null), None => Value::Null });
+    m.insert("issuesLow".into(), match (&p.issues_low) { Some(v) => serde_json::Number::from_f64(*(v)).map(Value::Number).unwrap_or(Value::Null), None => Value::Null });
+    m.insert("issuesMedium".into(), match (&p.issues_medium) { Some(v) => serde_json::Number::from_f64(*(v)).map(Value::Number).unwrap_or(Value::Null), None => Value::Null });
+    m.insert("latestVersion".into(), match (&p.latest_version) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("latestVersionPublishedDate".into(), match (&p.latest_version_published_date) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("licenses".into(), Value::Array((&p.licenses).iter().map(|v| iface_dependencies__list_all_dependencies_response_results_item_licenses_item__to_json(v)).collect()));
+    m.insert("name".into(), Value::String((&p.name).clone()));
+    m.insert("projects".into(), Value::Array((&p.projects).iter().map(|v| iface_dependencies__list_all_dependencies_response_results_item_projects_item__to_json(v)).collect()));
+    m.insert("type".into(), Value::String((&p.type_op).clone()));
+    m.insert("version".into(), Value::String((&p.version).clone()));
+    Value::Object(m)
+}
+
+fn iface_dependencies__list_all_dependencies_response_results_item_licenses_item__to_json(p: &iface_dependencies::ListAllDependenciesResponseResultsItemLicensesItem) -> Value {
+    let mut m = Map::new();
+    m.insert("id".into(), Value::String((&p.id).clone()));
+    m.insert("license".into(), Value::String((&p.license).clone()));
+    m.insert("title".into(), Value::String((&p.title).clone()));
+    Value::Object(m)
+}
+
+fn iface_dependencies__list_all_dependencies_response_results_item_projects_item__to_json(p: &iface_dependencies::ListAllDependenciesResponseResultsItemProjectsItem) -> Value {
+    let mut m = Map::new();
+    m.insert("id".into(), Value::String((&p.id).clone()));
+    m.insert("name".into(), Value::String((&p.name).clone()));
     Value::Object(m)
 }
 
@@ -1155,10 +2044,79 @@ fn iface_dependencies__list_all_dependencies_params__to_json(p: &iface_dependenc
     Value::Object(m)
 }
 
+fn iface_dependencies__list_all_dependencies_response__from_json(v: &Value) -> Option<iface_dependencies::ListAllDependenciesResponse> {
+    let m = v.as_object()?;
+    Some(iface_dependencies::ListAllDependenciesResponse {
+        results: m.get("results").and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| iface_dependencies__list_all_dependencies_response_results_item__from_json(x)).collect())).unwrap_or_default(),
+        total: m.get("total").filter(|v| !v.is_null()).and_then(|v| (v).as_f64()),
+    })
+}
+
+fn iface_dependencies__list_all_dependencies_response_results_item__from_json(v: &Value) -> Option<iface_dependencies::ListAllDependenciesResponseResultsItem> {
+    let m = v.as_object()?;
+    Some(iface_dependencies::ListAllDependenciesResponseResultsItem {
+        copyright: m.get("copyright").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| (x).as_str().map(|s| s.to_string())).collect())),
+        dependencies_with_issues: m.get("dependenciesWithIssues").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| (x).as_str().map(|s| s.to_string())).collect())),
+        deprecated_versions: m.get("deprecatedVersions").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| (x).as_str().map(|s| s.to_string())).collect())),
+        first_published_date: m.get("firstPublishedDate").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        id: m.get("id").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        is_deprecated: m.get("isDeprecated").filter(|v| !v.is_null()).and_then(|v| (v).as_bool()),
+        issues_critical: m.get("issuesCritical").filter(|v| !v.is_null()).and_then(|v| (v).as_f64()),
+        issues_high: m.get("issuesHigh").filter(|v| !v.is_null()).and_then(|v| (v).as_f64()),
+        issues_low: m.get("issuesLow").filter(|v| !v.is_null()).and_then(|v| (v).as_f64()),
+        issues_medium: m.get("issuesMedium").filter(|v| !v.is_null()).and_then(|v| (v).as_f64()),
+        latest_version: m.get("latestVersion").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        latest_version_published_date: m.get("latestVersionPublishedDate").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        licenses: m.get("licenses").and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| iface_dependencies__list_all_dependencies_response_results_item_licenses_item__from_json(x)).collect())).unwrap_or_default(),
+        name: m.get("name").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        projects: m.get("projects").and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| iface_dependencies__list_all_dependencies_response_results_item_projects_item__from_json(x)).collect())).unwrap_or_default(),
+        type_op: m.get("type").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        version: m.get("version").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+    })
+}
+
+fn iface_dependencies__list_all_dependencies_response_results_item_licenses_item__from_json(v: &Value) -> Option<iface_dependencies::ListAllDependenciesResponseResultsItemLicensesItem> {
+    let m = v.as_object()?;
+    Some(iface_dependencies::ListAllDependenciesResponseResultsItemLicensesItem {
+        id: m.get("id").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        license: m.get("license").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        title: m.get("title").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+    })
+}
+
+fn iface_dependencies__list_all_dependencies_response_results_item_projects_item__from_json(v: &Value) -> Option<iface_dependencies::ListAllDependenciesResponseResultsItemProjectsItem> {
+    let m = v.as_object()?;
+    Some(iface_dependencies::ListAllDependenciesResponseResultsItemProjectsItem {
+        id: m.get("id").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        name: m.get("name").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+    })
+}
+
+fn iface_dependencies__list_all_dependencies__ok(body: String) -> Result<iface_dependencies::ListAllDependenciesResponse, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match iface_dependencies__list_all_dependencies_response__from_json(&v) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_dependencies__list_all_dependencies__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
 impl iface_dependencies::Guest for crate::Component {
-    fn list_all_dependencies(params: iface_dependencies::ListAllDependenciesParams) -> Result<String, String> {
+    fn list_all_dependencies(params: iface_dependencies::ListAllDependenciesParams) -> Result<iface_dependencies::ListAllDependenciesResponse, String> {
         let json = iface_dependencies__list_all_dependencies_params__to_json(&params);
-        dispatch(&OP_DEPENDENCIES_LIST_ALL_DEPENDENCIES, json)
+        match dispatch(&OP_DEPENDENCIES_LIST_ALL_DEPENDENCIES, json).and_then(iface_dependencies__list_all_dependencies__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_dependencies__list_all_dependencies__err(e)),
+        }
     }
 }
 use crate::exports::autostamp::snyk::entitlements as iface_entitlements;
@@ -1167,8 +2125,8 @@ const OP_ENTITLEMENTS_GET_AN_ORGANIZATION_S_ENTITLEMENT_VALUE: OpSpec = OpSpec {
     method: "GET",
     path_template: "/org/{org_id}/entitlement/{entitlement_key}",
     fields: &[
-        FieldSpec { snake: "org_id", location: FieldLocation::Path },
-        FieldSpec { snake: "entitlement_key", location: FieldLocation::Path },
+        FieldSpec { snake: "org_id", wire: "orgId", location: FieldLocation::Path },
+        FieldSpec { snake: "entitlement_key", wire: "entitlementKey", location: FieldLocation::Path },
     ],
     auth: &[
     ],
@@ -1178,7 +2136,7 @@ const OP_ENTITLEMENTS_LIST_ALL_ENTITLEMENTS: OpSpec = OpSpec {
     method: "GET",
     path_template: "/org/{org_id}/entitlements",
     fields: &[
-        FieldSpec { snake: "org_id", location: FieldLocation::Path },
+        FieldSpec { snake: "org_id", wire: "orgId", location: FieldLocation::Path },
     ],
     auth: &[
     ],
@@ -1197,14 +2155,42 @@ fn iface_entitlements__list_all_entitlements_params__to_json(p: &iface_entitleme
     Value::Object(m)
 }
 
+fn iface_entitlements__get_an_organization_s_entitlement_value__ok(body: String) -> Result<String, crate::runtime::DispatchError> {
+    Ok(body)
+}
+
+fn iface_entitlements__get_an_organization_s_entitlement_value__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
+fn iface_entitlements__list_all_entitlements__ok(body: String) -> Result<String, crate::runtime::DispatchError> {
+    Ok(body)
+}
+
+fn iface_entitlements__list_all_entitlements__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
 impl iface_entitlements::Guest for crate::Component {
     fn get_an_organization_s_entitlement_value(params: iface_entitlements::GetAnOrganizationSEntitlementValueParams) -> Result<String, String> {
         let json = iface_entitlements__get_an_organization_s_entitlement_value_params__to_json(&params);
-        dispatch(&OP_ENTITLEMENTS_GET_AN_ORGANIZATION_S_ENTITLEMENT_VALUE, json)
+        match dispatch(&OP_ENTITLEMENTS_GET_AN_ORGANIZATION_S_ENTITLEMENT_VALUE, json).and_then(iface_entitlements__get_an_organization_s_entitlement_value__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_entitlements__get_an_organization_s_entitlement_value__err(e)),
+        }
     }
     fn list_all_entitlements(params: iface_entitlements::ListAllEntitlementsParams) -> Result<String, String> {
         let json = iface_entitlements__list_all_entitlements_params__to_json(&params);
-        dispatch(&OP_ENTITLEMENTS_LIST_ALL_ENTITLEMENTS, json)
+        match dispatch(&OP_ENTITLEMENTS_LIST_ALL_ENTITLEMENTS, json).and_then(iface_entitlements__list_all_entitlements__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_entitlements__list_all_entitlements__err(e)),
+        }
     }
 }
 use crate::exports::autostamp::snyk::integrations as iface_integrations;
@@ -1213,7 +2199,7 @@ const OP_INTEGRATIONS_LIST_OP: OpSpec = OpSpec {
     method: "GET",
     path_template: "/org/{org_id}/integrations",
     fields: &[
-        FieldSpec { snake: "org_id", location: FieldLocation::Path },
+        FieldSpec { snake: "org_id", wire: "orgId", location: FieldLocation::Path },
     ],
     auth: &[
     ],
@@ -1223,8 +2209,8 @@ const OP_INTEGRATIONS_ADD_NEW_INTEGRATION: OpSpec = OpSpec {
     method: "POST",
     path_template: "/org/{org_id}/integrations",
     fields: &[
-        FieldSpec { snake: "org_id", location: FieldLocation::Path },
-        FieldSpec { snake: "body", location: FieldLocation::Body },
+        FieldSpec { snake: "org_id", wire: "orgId", location: FieldLocation::Path },
+        FieldSpec { snake: "body", wire: "body", location: FieldLocation::Body },
     ],
     auth: &[
     ],
@@ -1234,9 +2220,9 @@ const OP_INTEGRATIONS_UPDATE_EXISTING_INTEGRATION: OpSpec = OpSpec {
     method: "PUT",
     path_template: "/org/{org_id}/integrations/{integration_id}",
     fields: &[
-        FieldSpec { snake: "org_id", location: FieldLocation::Path },
-        FieldSpec { snake: "integration_id", location: FieldLocation::Path },
-        FieldSpec { snake: "body", location: FieldLocation::Body },
+        FieldSpec { snake: "org_id", wire: "orgId", location: FieldLocation::Path },
+        FieldSpec { snake: "integration_id", wire: "integrationId", location: FieldLocation::Path },
+        FieldSpec { snake: "body", wire: "body", location: FieldLocation::Body },
     ],
     auth: &[
     ],
@@ -1246,8 +2232,8 @@ const OP_INTEGRATIONS_DELETE_CREDENTIALS: OpSpec = OpSpec {
     method: "DELETE",
     path_template: "/org/{org_id}/integrations/{integration_id}/authentication",
     fields: &[
-        FieldSpec { snake: "org_id", location: FieldLocation::Path },
-        FieldSpec { snake: "integration_id", location: FieldLocation::Path },
+        FieldSpec { snake: "org_id", wire: "orgId", location: FieldLocation::Path },
+        FieldSpec { snake: "integration_id", wire: "integrationId", location: FieldLocation::Path },
     ],
     auth: &[
     ],
@@ -1257,8 +2243,8 @@ const OP_INTEGRATIONS_PROVISION_NEW_BROKER_TOKEN: OpSpec = OpSpec {
     method: "POST",
     path_template: "/org/{org_id}/integrations/{integration_id}/authentication/provision-token",
     fields: &[
-        FieldSpec { snake: "org_id", location: FieldLocation::Path },
-        FieldSpec { snake: "integration_id", location: FieldLocation::Path },
+        FieldSpec { snake: "org_id", wire: "orgId", location: FieldLocation::Path },
+        FieldSpec { snake: "integration_id", wire: "integrationId", location: FieldLocation::Path },
     ],
     auth: &[
     ],
@@ -1268,8 +2254,8 @@ const OP_INTEGRATIONS_SWITCH_BETWEEN_BROKER_TOKENS: OpSpec = OpSpec {
     method: "POST",
     path_template: "/org/{org_id}/integrations/{integration_id}/authentication/switch-token",
     fields: &[
-        FieldSpec { snake: "org_id", location: FieldLocation::Path },
-        FieldSpec { snake: "integration_id", location: FieldLocation::Path },
+        FieldSpec { snake: "org_id", wire: "orgId", location: FieldLocation::Path },
+        FieldSpec { snake: "integration_id", wire: "integrationId", location: FieldLocation::Path },
     ],
     auth: &[
     ],
@@ -1279,9 +2265,9 @@ const OP_INTEGRATIONS_CLONE_AN_INTEGRATION_WITH_SETTINGS_AND_CREDENTIALS: OpSpec
     method: "POST",
     path_template: "/org/{org_id}/integrations/{integration_id}/clone",
     fields: &[
-        FieldSpec { snake: "org_id", location: FieldLocation::Path },
-        FieldSpec { snake: "integration_id", location: FieldLocation::Path },
-        FieldSpec { snake: "destination_org_public_id", location: FieldLocation::Body },
+        FieldSpec { snake: "org_id", wire: "orgId", location: FieldLocation::Path },
+        FieldSpec { snake: "integration_id", wire: "integrationId", location: FieldLocation::Path },
+        FieldSpec { snake: "destination_org_public_id", wire: "destinationOrgPublicId", location: FieldLocation::Body },
     ],
     auth: &[
     ],
@@ -1291,8 +2277,8 @@ const OP_INTEGRATIONS_RETRIEVE: OpSpec = OpSpec {
     method: "GET",
     path_template: "/org/{org_id}/integrations/{integration_id}/settings",
     fields: &[
-        FieldSpec { snake: "org_id", location: FieldLocation::Path },
-        FieldSpec { snake: "integration_id", location: FieldLocation::Path },
+        FieldSpec { snake: "org_id", wire: "orgId", location: FieldLocation::Path },
+        FieldSpec { snake: "integration_id", wire: "integrationId", location: FieldLocation::Path },
     ],
     auth: &[
     ],
@@ -1302,19 +2288,19 @@ const OP_INTEGRATIONS_UPDATE: OpSpec = OpSpec {
     method: "PUT",
     path_template: "/org/{org_id}/integrations/{integration_id}/settings",
     fields: &[
-        FieldSpec { snake: "org_id", location: FieldLocation::Path },
-        FieldSpec { snake: "integration_id", location: FieldLocation::Path },
-        FieldSpec { snake: "auto_dep_upgrade_enabled", location: FieldLocation::Body },
-        FieldSpec { snake: "auto_dep_upgrade_ignored_dependencies", location: FieldLocation::Body },
-        FieldSpec { snake: "auto_dep_upgrade_limit", location: FieldLocation::Body },
-        FieldSpec { snake: "auto_dep_upgrade_min_age", location: FieldLocation::Body },
-        FieldSpec { snake: "auto_remediation_prs", location: FieldLocation::Body },
-        FieldSpec { snake: "dockerfile_scm_enabled", location: FieldLocation::Body },
-        FieldSpec { snake: "manual_remediation_prs", location: FieldLocation::Body },
-        FieldSpec { snake: "pull_request_assignment", location: FieldLocation::Body },
-        FieldSpec { snake: "pull_request_fail_on_any_vulns", location: FieldLocation::Body },
-        FieldSpec { snake: "pull_request_fail_only_for_high_severity", location: FieldLocation::Body },
-        FieldSpec { snake: "pull_request_test_enabled", location: FieldLocation::Body },
+        FieldSpec { snake: "org_id", wire: "orgId", location: FieldLocation::Path },
+        FieldSpec { snake: "integration_id", wire: "integrationId", location: FieldLocation::Path },
+        FieldSpec { snake: "auto_dep_upgrade_enabled", wire: "autoDepUpgradeEnabled", location: FieldLocation::Body },
+        FieldSpec { snake: "auto_dep_upgrade_ignored_dependencies", wire: "autoDepUpgradeIgnoredDependencies", location: FieldLocation::Body },
+        FieldSpec { snake: "auto_dep_upgrade_limit", wire: "autoDepUpgradeLimit", location: FieldLocation::Body },
+        FieldSpec { snake: "auto_dep_upgrade_min_age", wire: "autoDepUpgradeMinAge", location: FieldLocation::Body },
+        FieldSpec { snake: "auto_remediation_prs", wire: "autoRemediationPrs", location: FieldLocation::Body },
+        FieldSpec { snake: "dockerfile_scm_enabled", wire: "dockerfileSCMEnabled", location: FieldLocation::Body },
+        FieldSpec { snake: "manual_remediation_prs", wire: "manualRemediationPrs", location: FieldLocation::Body },
+        FieldSpec { snake: "pull_request_assignment", wire: "pullRequestAssignment", location: FieldLocation::Body },
+        FieldSpec { snake: "pull_request_fail_on_any_vulns", wire: "pullRequestFailOnAnyVulns", location: FieldLocation::Body },
+        FieldSpec { snake: "pull_request_fail_only_for_high_severity", wire: "pullRequestFailOnlyForHighSeverity", location: FieldLocation::Body },
+        FieldSpec { snake: "pull_request_test_enabled", wire: "pullRequestTestEnabled", location: FieldLocation::Body },
     ],
     auth: &[
     ],
@@ -1324,31 +2310,75 @@ const OP_INTEGRATIONS_GET_EXISTING_INTEGRATION_BY_TYPE: OpSpec = OpSpec {
     method: "GET",
     path_template: "/org/{org_id}/integrations/{type}",
     fields: &[
-        FieldSpec { snake: "org_id", location: FieldLocation::Path },
-        FieldSpec { snake: "type", location: FieldLocation::Path },
+        FieldSpec { snake: "org_id", wire: "orgId", location: FieldLocation::Path },
+        FieldSpec { snake: "type", wire: "type", location: FieldLocation::Path },
     ],
     auth: &[
     ],
 };
 
-fn iface_integrations__update_body_pull_request_assignment_type_op_enum__to_str(e: &iface_integrations::UpdateBodyPullRequestAssignmentTypeOpEnum) -> &'static str {
+fn iface_integrations__retrieve_response_pull_request_assignment_type_op_enum__to_str(e: &iface_integrations::RetrieveResponsePullRequestAssignmentTypeOpEnum) -> &'static str {
     match e {
-        iface_integrations::UpdateBodyPullRequestAssignmentTypeOpEnum::Auto => "auto",
-        iface_integrations::UpdateBodyPullRequestAssignmentTypeOpEnum::Manual => "manual",
+        iface_integrations::RetrieveResponsePullRequestAssignmentTypeOpEnum::Auto => "auto",
+        iface_integrations::RetrieveResponsePullRequestAssignmentTypeOpEnum::Manual => "manual",
     }
+}
+
+fn iface_integrations__list_op_response__to_json(p: &iface_integrations::ListOpResponse) -> Value {
+    let mut m = Map::new();
+    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_integrations__retrieve_response__to_json(p: &iface_integrations::RetrieveResponse) -> Value {
+    let mut m = Map::new();
+    m.insert("autoDepUpgradeEnabled".into(), match (&p.auto_dep_upgrade_enabled) { Some(v) => Value::Bool(*(v)), None => Value::Null });
+    m.insert("autoDepUpgradeIgnoredDependencies".into(), match (&p.auto_dep_upgrade_ignored_dependencies) { Some(v) => Value::Array((v).iter().map(|v| Value::String((v).clone())).collect()), None => Value::Null });
+    m.insert("autoDepUpgradeLimit".into(), match (&p.auto_dep_upgrade_limit) { Some(v) => serde_json::Number::from_f64(*(v)).map(Value::Number).unwrap_or(Value::Null), None => Value::Null });
+    m.insert("autoDepUpgradeMinAge".into(), match (&p.auto_dep_upgrade_min_age) { Some(v) => serde_json::Number::from_f64(*(v)).map(Value::Number).unwrap_or(Value::Null), None => Value::Null });
+    m.insert("autoRemediationPrs".into(), match (&p.auto_remediation_prs) { Some(v) => iface_integrations__retrieve_response_auto_remediation_prs__to_json(v), None => Value::Null });
+    m.insert("dockerfileSCMEnabled".into(), match (&p.dockerfile_scm_enabled) { Some(v) => Value::Bool(*(v)), None => Value::Null });
+    m.insert("manualRemediationPrs".into(), match (&p.manual_remediation_prs) { Some(v) => iface_integrations__retrieve_response_manual_remediation_prs__to_json(v), None => Value::Null });
+    m.insert("pullRequestAssignment".into(), match (&p.pull_request_assignment) { Some(v) => iface_integrations__retrieve_response_pull_request_assignment__to_json(v), None => Value::Null });
+    m.insert("pullRequestFailOnAnyVulns".into(), match (&p.pull_request_fail_on_any_vulns) { Some(v) => Value::Bool(*(v)), None => Value::Null });
+    m.insert("pullRequestFailOnlyForHighSeverity".into(), match (&p.pull_request_fail_only_for_high_severity) { Some(v) => Value::Bool(*(v)), None => Value::Null });
+    m.insert("pullRequestTestEnabled".into(), match (&p.pull_request_test_enabled) { Some(v) => Value::Bool(*(v)), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_integrations__retrieve_response_auto_remediation_prs__to_json(p: &iface_integrations::RetrieveResponseAutoRemediationPrs) -> Value {
+    let mut m = Map::new();
+    m.insert("backlogPrsEnabled".into(), match (&p.backlog_prs_enabled) { Some(v) => Value::Bool(*(v)), None => Value::Null });
+    m.insert("freshPrsEnabled".into(), match (&p.fresh_prs_enabled) { Some(v) => Value::Bool(*(v)), None => Value::Null });
+    m.insert("usePatchRemediation".into(), match (&p.use_patch_remediation) { Some(v) => Value::Bool(*(v)), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_integrations__retrieve_response_manual_remediation_prs__to_json(p: &iface_integrations::RetrieveResponseManualRemediationPrs) -> Value {
+    let mut m = Map::new();
+    m.insert("usePatchRemediation".into(), match (&p.use_patch_remediation) { Some(v) => Value::Bool(*(v)), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_integrations__retrieve_response_pull_request_assignment__to_json(p: &iface_integrations::RetrieveResponsePullRequestAssignment) -> Value {
+    let mut m = Map::new();
+    m.insert("assignees".into(), match (&p.assignees) { Some(v) => Value::Array((v).iter().map(|v| Value::String((v).clone())).collect()), None => Value::Null });
+    m.insert("enabled".into(), match (&p.enabled) { Some(v) => Value::Bool(*(v)), None => Value::Null });
+    m.insert("type".into(), match (&p.type_op) { Some(v) => Value::String(iface_integrations__retrieve_response_pull_request_assignment_type_op_enum__to_str(v).into()), None => Value::Null });
+    Value::Object(m)
 }
 
 fn iface_integrations__update_body_auto_remediation_prs__to_json(p: &iface_integrations::UpdateBodyAutoRemediationPrs) -> Value {
     let mut m = Map::new();
-    m.insert("backlog_prs_enabled".into(), match (&p.backlog_prs_enabled) { Some(v) => Value::Bool(*(v)), None => Value::Null });
-    m.insert("fresh_prs_enabled".into(), match (&p.fresh_prs_enabled) { Some(v) => Value::Bool(*(v)), None => Value::Null });
-    m.insert("use_patch_remediation".into(), match (&p.use_patch_remediation) { Some(v) => Value::Bool(*(v)), None => Value::Null });
+    m.insert("backlogPrsEnabled".into(), match (&p.backlog_prs_enabled) { Some(v) => Value::Bool(*(v)), None => Value::Null });
+    m.insert("freshPrsEnabled".into(), match (&p.fresh_prs_enabled) { Some(v) => Value::Bool(*(v)), None => Value::Null });
+    m.insert("usePatchRemediation".into(), match (&p.use_patch_remediation) { Some(v) => Value::Bool(*(v)), None => Value::Null });
     Value::Object(m)
 }
 
 fn iface_integrations__update_body_manual_remediation_prs__to_json(p: &iface_integrations::UpdateBodyManualRemediationPrs) -> Value {
     let mut m = Map::new();
-    m.insert("use_patch_remediation".into(), match (&p.use_patch_remediation) { Some(v) => Value::Bool(*(v)), None => Value::Null });
+    m.insert("usePatchRemediation".into(), match (&p.use_patch_remediation) { Some(v) => Value::Bool(*(v)), None => Value::Null });
     Value::Object(m)
 }
 
@@ -1356,7 +2386,51 @@ fn iface_integrations__update_body_pull_request_assignment__to_json(p: &iface_in
     let mut m = Map::new();
     m.insert("assignees".into(), match (&p.assignees) { Some(v) => Value::Array((v).iter().map(|v| Value::String((v).clone())).collect()), None => Value::Null });
     m.insert("enabled".into(), match (&p.enabled) { Some(v) => Value::Bool(*(v)), None => Value::Null });
-    m.insert("type".into(), match (&p.type_op) { Some(v) => Value::String(iface_integrations__update_body_pull_request_assignment_type_op_enum__to_str(v).into()), None => Value::Null });
+    m.insert("type".into(), match (&p.type_op) { Some(v) => Value::String(iface_integrations__retrieve_response_pull_request_assignment_type_op_enum__to_str(v).into()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_integrations__update_response__to_json(p: &iface_integrations::UpdateResponse) -> Value {
+    let mut m = Map::new();
+    m.insert("autoDepUpgradeEnabled".into(), match (&p.auto_dep_upgrade_enabled) { Some(v) => Value::Bool(*(v)), None => Value::Null });
+    m.insert("autoDepUpgradeIgnoredDependencies".into(), match (&p.auto_dep_upgrade_ignored_dependencies) { Some(v) => Value::Array((v).iter().map(|v| Value::String((v).clone())).collect()), None => Value::Null });
+    m.insert("autoDepUpgradeLimit".into(), match (&p.auto_dep_upgrade_limit) { Some(v) => serde_json::Number::from_f64(*(v)).map(Value::Number).unwrap_or(Value::Null), None => Value::Null });
+    m.insert("autoDepUpgradeMinAge".into(), match (&p.auto_dep_upgrade_min_age) { Some(v) => serde_json::Number::from_f64(*(v)).map(Value::Number).unwrap_or(Value::Null), None => Value::Null });
+    m.insert("autoRemediationPrs".into(), match (&p.auto_remediation_prs) { Some(v) => iface_integrations__update_response_auto_remediation_prs__to_json(v), None => Value::Null });
+    m.insert("dockerfileSCMEnabled".into(), match (&p.dockerfile_scm_enabled) { Some(v) => Value::Bool(*(v)), None => Value::Null });
+    m.insert("manualRemediationPrs".into(), match (&p.manual_remediation_prs) { Some(v) => iface_integrations__update_response_manual_remediation_prs__to_json(v), None => Value::Null });
+    m.insert("pullRequestAssignment".into(), match (&p.pull_request_assignment) { Some(v) => iface_integrations__update_response_pull_request_assignment__to_json(v), None => Value::Null });
+    m.insert("pullRequestFailOnAnyVulns".into(), match (&p.pull_request_fail_on_any_vulns) { Some(v) => Value::Bool(*(v)), None => Value::Null });
+    m.insert("pullRequestFailOnlyForHighSeverity".into(), match (&p.pull_request_fail_only_for_high_severity) { Some(v) => Value::Bool(*(v)), None => Value::Null });
+    m.insert("pullRequestTestEnabled".into(), match (&p.pull_request_test_enabled) { Some(v) => Value::Bool(*(v)), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_integrations__update_response_auto_remediation_prs__to_json(p: &iface_integrations::UpdateResponseAutoRemediationPrs) -> Value {
+    let mut m = Map::new();
+    m.insert("backlogPrsEnabled".into(), match (&p.backlog_prs_enabled) { Some(v) => Value::Bool(*(v)), None => Value::Null });
+    m.insert("freshPrsEnabled".into(), match (&p.fresh_prs_enabled) { Some(v) => Value::Bool(*(v)), None => Value::Null });
+    m.insert("usePatchRemediation".into(), match (&p.use_patch_remediation) { Some(v) => Value::Bool(*(v)), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_integrations__update_response_manual_remediation_prs__to_json(p: &iface_integrations::UpdateResponseManualRemediationPrs) -> Value {
+    let mut m = Map::new();
+    m.insert("usePatchRemediation".into(), match (&p.use_patch_remediation) { Some(v) => Value::Bool(*(v)), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_integrations__update_response_pull_request_assignment__to_json(p: &iface_integrations::UpdateResponsePullRequestAssignment) -> Value {
+    let mut m = Map::new();
+    m.insert("assignees".into(), match (&p.assignees) { Some(v) => Value::Array((v).iter().map(|v| Value::String((v).clone())).collect()), None => Value::Null });
+    m.insert("enabled".into(), match (&p.enabled) { Some(v) => Value::Bool(*(v)), None => Value::Null });
+    m.insert("type".into(), match (&p.type_op) { Some(v) => Value::String(iface_integrations__retrieve_response_pull_request_assignment_type_op_enum__to_str(v).into()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_integrations__get_existing_integration_by_type_response__to_json(p: &iface_integrations::GetExistingIntegrationByTypeResponse) -> Value {
+    let mut m = Map::new();
+    m.insert("id".into(), match (&p.id) { Some(v) => Value::String((v).clone()), None => Value::Null });
     Value::Object(m)
 }
 
@@ -1442,46 +2516,320 @@ fn iface_integrations__get_existing_integration_by_type_params__to_json(p: &ifac
     Value::Object(m)
 }
 
+fn iface_integrations__list_op_response__from_json(v: &Value) -> Option<iface_integrations::ListOpResponse> {
+    let m = v.as_object()?;
+    Some(iface_integrations::ListOpResponse {
+        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    })
+}
+
+fn iface_integrations__retrieve_response__from_json(v: &Value) -> Option<iface_integrations::RetrieveResponse> {
+    let m = v.as_object()?;
+    Some(iface_integrations::RetrieveResponse {
+        auto_dep_upgrade_enabled: m.get("autoDepUpgradeEnabled").filter(|v| !v.is_null()).and_then(|v| (v).as_bool()),
+        auto_dep_upgrade_ignored_dependencies: m.get("autoDepUpgradeIgnoredDependencies").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| (x).as_str().map(|s| s.to_string())).collect())),
+        auto_dep_upgrade_limit: m.get("autoDepUpgradeLimit").filter(|v| !v.is_null()).and_then(|v| (v).as_f64()),
+        auto_dep_upgrade_min_age: m.get("autoDepUpgradeMinAge").filter(|v| !v.is_null()).and_then(|v| (v).as_f64()),
+        auto_remediation_prs: m.get("autoRemediationPrs").filter(|v| !v.is_null()).and_then(|v| iface_integrations__retrieve_response_auto_remediation_prs__from_json(v)),
+        dockerfile_scm_enabled: m.get("dockerfileSCMEnabled").filter(|v| !v.is_null()).and_then(|v| (v).as_bool()),
+        manual_remediation_prs: m.get("manualRemediationPrs").filter(|v| !v.is_null()).and_then(|v| iface_integrations__retrieve_response_manual_remediation_prs__from_json(v)),
+        pull_request_assignment: m.get("pullRequestAssignment").filter(|v| !v.is_null()).and_then(|v| iface_integrations__retrieve_response_pull_request_assignment__from_json(v)),
+        pull_request_fail_on_any_vulns: m.get("pullRequestFailOnAnyVulns").filter(|v| !v.is_null()).and_then(|v| (v).as_bool()),
+        pull_request_fail_only_for_high_severity: m.get("pullRequestFailOnlyForHighSeverity").filter(|v| !v.is_null()).and_then(|v| (v).as_bool()),
+        pull_request_test_enabled: m.get("pullRequestTestEnabled").filter(|v| !v.is_null()).and_then(|v| (v).as_bool()),
+    })
+}
+
+fn iface_integrations__retrieve_response_auto_remediation_prs__from_json(v: &Value) -> Option<iface_integrations::RetrieveResponseAutoRemediationPrs> {
+    let m = v.as_object()?;
+    Some(iface_integrations::RetrieveResponseAutoRemediationPrs {
+        backlog_prs_enabled: m.get("backlogPrsEnabled").filter(|v| !v.is_null()).and_then(|v| (v).as_bool()),
+        fresh_prs_enabled: m.get("freshPrsEnabled").filter(|v| !v.is_null()).and_then(|v| (v).as_bool()),
+        use_patch_remediation: m.get("usePatchRemediation").filter(|v| !v.is_null()).and_then(|v| (v).as_bool()),
+    })
+}
+
+fn iface_integrations__retrieve_response_manual_remediation_prs__from_json(v: &Value) -> Option<iface_integrations::RetrieveResponseManualRemediationPrs> {
+    let m = v.as_object()?;
+    Some(iface_integrations::RetrieveResponseManualRemediationPrs {
+        use_patch_remediation: m.get("usePatchRemediation").filter(|v| !v.is_null()).and_then(|v| (v).as_bool()),
+    })
+}
+
+fn iface_integrations__retrieve_response_pull_request_assignment__from_json(v: &Value) -> Option<iface_integrations::RetrieveResponsePullRequestAssignment> {
+    let m = v.as_object()?;
+    Some(iface_integrations::RetrieveResponsePullRequestAssignment {
+        assignees: m.get("assignees").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| (x).as_str().map(|s| s.to_string())).collect())),
+        enabled: m.get("enabled").filter(|v| !v.is_null()).and_then(|v| (v).as_bool()),
+        type_op: m.get("type").filter(|v| !v.is_null()).and_then(|v| (v).as_str().and_then(iface_integrations__retrieve_response_pull_request_assignment_type_op_enum__from_str)),
+    })
+}
+
+fn iface_integrations__update_response__from_json(v: &Value) -> Option<iface_integrations::UpdateResponse> {
+    let m = v.as_object()?;
+    Some(iface_integrations::UpdateResponse {
+        auto_dep_upgrade_enabled: m.get("autoDepUpgradeEnabled").filter(|v| !v.is_null()).and_then(|v| (v).as_bool()),
+        auto_dep_upgrade_ignored_dependencies: m.get("autoDepUpgradeIgnoredDependencies").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| (x).as_str().map(|s| s.to_string())).collect())),
+        auto_dep_upgrade_limit: m.get("autoDepUpgradeLimit").filter(|v| !v.is_null()).and_then(|v| (v).as_f64()),
+        auto_dep_upgrade_min_age: m.get("autoDepUpgradeMinAge").filter(|v| !v.is_null()).and_then(|v| (v).as_f64()),
+        auto_remediation_prs: m.get("autoRemediationPrs").filter(|v| !v.is_null()).and_then(|v| iface_integrations__update_response_auto_remediation_prs__from_json(v)),
+        dockerfile_scm_enabled: m.get("dockerfileSCMEnabled").filter(|v| !v.is_null()).and_then(|v| (v).as_bool()),
+        manual_remediation_prs: m.get("manualRemediationPrs").filter(|v| !v.is_null()).and_then(|v| iface_integrations__update_response_manual_remediation_prs__from_json(v)),
+        pull_request_assignment: m.get("pullRequestAssignment").filter(|v| !v.is_null()).and_then(|v| iface_integrations__update_response_pull_request_assignment__from_json(v)),
+        pull_request_fail_on_any_vulns: m.get("pullRequestFailOnAnyVulns").filter(|v| !v.is_null()).and_then(|v| (v).as_bool()),
+        pull_request_fail_only_for_high_severity: m.get("pullRequestFailOnlyForHighSeverity").filter(|v| !v.is_null()).and_then(|v| (v).as_bool()),
+        pull_request_test_enabled: m.get("pullRequestTestEnabled").filter(|v| !v.is_null()).and_then(|v| (v).as_bool()),
+    })
+}
+
+fn iface_integrations__update_response_auto_remediation_prs__from_json(v: &Value) -> Option<iface_integrations::UpdateResponseAutoRemediationPrs> {
+    let m = v.as_object()?;
+    Some(iface_integrations::UpdateResponseAutoRemediationPrs {
+        backlog_prs_enabled: m.get("backlogPrsEnabled").filter(|v| !v.is_null()).and_then(|v| (v).as_bool()),
+        fresh_prs_enabled: m.get("freshPrsEnabled").filter(|v| !v.is_null()).and_then(|v| (v).as_bool()),
+        use_patch_remediation: m.get("usePatchRemediation").filter(|v| !v.is_null()).and_then(|v| (v).as_bool()),
+    })
+}
+
+fn iface_integrations__update_response_manual_remediation_prs__from_json(v: &Value) -> Option<iface_integrations::UpdateResponseManualRemediationPrs> {
+    let m = v.as_object()?;
+    Some(iface_integrations::UpdateResponseManualRemediationPrs {
+        use_patch_remediation: m.get("usePatchRemediation").filter(|v| !v.is_null()).and_then(|v| (v).as_bool()),
+    })
+}
+
+fn iface_integrations__update_response_pull_request_assignment__from_json(v: &Value) -> Option<iface_integrations::UpdateResponsePullRequestAssignment> {
+    let m = v.as_object()?;
+    Some(iface_integrations::UpdateResponsePullRequestAssignment {
+        assignees: m.get("assignees").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| (x).as_str().map(|s| s.to_string())).collect())),
+        enabled: m.get("enabled").filter(|v| !v.is_null()).and_then(|v| (v).as_bool()),
+        type_op: m.get("type").filter(|v| !v.is_null()).and_then(|v| (v).as_str().and_then(iface_integrations__retrieve_response_pull_request_assignment_type_op_enum__from_str)),
+    })
+}
+
+fn iface_integrations__get_existing_integration_by_type_response__from_json(v: &Value) -> Option<iface_integrations::GetExistingIntegrationByTypeResponse> {
+    let m = v.as_object()?;
+    Some(iface_integrations::GetExistingIntegrationByTypeResponse {
+        id: m.get("id").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    })
+}
+
+fn iface_integrations__retrieve_response_pull_request_assignment_type_op_enum__from_str(s: &str) -> Option<iface_integrations::RetrieveResponsePullRequestAssignmentTypeOpEnum> {
+    match s {
+        "auto" => Some(iface_integrations::RetrieveResponsePullRequestAssignmentTypeOpEnum::Auto),
+        "manual" => Some(iface_integrations::RetrieveResponsePullRequestAssignmentTypeOpEnum::Manual),
+        _ => None,
+    }
+}
+
+fn iface_integrations__list_op__ok(body: String) -> Result<iface_integrations::ListOpResponse, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match iface_integrations__list_op_response__from_json(&v) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_integrations__list_op__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
+fn iface_integrations__add_new_integration__ok(body: String) -> Result<String, crate::runtime::DispatchError> {
+    Ok(body)
+}
+
+fn iface_integrations__add_new_integration__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
+fn iface_integrations__update_existing_integration__ok(body: String) -> Result<String, crate::runtime::DispatchError> {
+    Ok(body)
+}
+
+fn iface_integrations__update_existing_integration__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
+fn iface_integrations__delete_credentials__ok(body: String) -> Result<String, crate::runtime::DispatchError> {
+    Ok(body)
+}
+
+fn iface_integrations__delete_credentials__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
+fn iface_integrations__provision_new_broker_token__ok(body: String) -> Result<String, crate::runtime::DispatchError> {
+    Ok(body)
+}
+
+fn iface_integrations__provision_new_broker_token__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
+fn iface_integrations__switch_between_broker_tokens__ok(body: String) -> Result<String, crate::runtime::DispatchError> {
+    Ok(body)
+}
+
+fn iface_integrations__switch_between_broker_tokens__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
+fn iface_integrations__clone_an_integration_with_settings_and_credentials__ok(body: String) -> Result<String, crate::runtime::DispatchError> {
+    Ok(body)
+}
+
+fn iface_integrations__clone_an_integration_with_settings_and_credentials__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
+fn iface_integrations__retrieve__ok(body: String) -> Result<iface_integrations::RetrieveResponse, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match iface_integrations__retrieve_response__from_json(&v) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_integrations__retrieve__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
+fn iface_integrations__update__ok(body: String) -> Result<iface_integrations::UpdateResponse, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match iface_integrations__update_response__from_json(&v) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_integrations__update__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
+fn iface_integrations__get_existing_integration_by_type__ok(body: String) -> Result<iface_integrations::GetExistingIntegrationByTypeResponse, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match iface_integrations__get_existing_integration_by_type_response__from_json(&v) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_integrations__get_existing_integration_by_type__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
 impl iface_integrations::Guest for crate::Component {
-    fn list_op(params: iface_integrations::ListOpParams) -> Result<String, String> {
+    fn list_op(params: iface_integrations::ListOpParams) -> Result<iface_integrations::ListOpResponse, String> {
         let json = iface_integrations__list_op_params__to_json(&params);
-        dispatch(&OP_INTEGRATIONS_LIST_OP, json)
+        match dispatch(&OP_INTEGRATIONS_LIST_OP, json).and_then(iface_integrations__list_op__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_integrations__list_op__err(e)),
+        }
     }
     fn add_new_integration(params: iface_integrations::AddNewIntegrationParams) -> Result<String, String> {
         let json = iface_integrations__add_new_integration_params__to_json(&params);
-        dispatch(&OP_INTEGRATIONS_ADD_NEW_INTEGRATION, json)
+        match dispatch(&OP_INTEGRATIONS_ADD_NEW_INTEGRATION, json).and_then(iface_integrations__add_new_integration__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_integrations__add_new_integration__err(e)),
+        }
     }
     fn update_existing_integration(params: iface_integrations::UpdateExistingIntegrationParams) -> Result<String, String> {
         let json = iface_integrations__update_existing_integration_params__to_json(&params);
-        dispatch(&OP_INTEGRATIONS_UPDATE_EXISTING_INTEGRATION, json)
+        match dispatch(&OP_INTEGRATIONS_UPDATE_EXISTING_INTEGRATION, json).and_then(iface_integrations__update_existing_integration__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_integrations__update_existing_integration__err(e)),
+        }
     }
     fn delete_credentials(params: iface_integrations::DeleteCredentialsParams) -> Result<String, String> {
         let json = iface_integrations__delete_credentials_params__to_json(&params);
-        dispatch(&OP_INTEGRATIONS_DELETE_CREDENTIALS, json)
+        match dispatch(&OP_INTEGRATIONS_DELETE_CREDENTIALS, json).and_then(iface_integrations__delete_credentials__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_integrations__delete_credentials__err(e)),
+        }
     }
     fn provision_new_broker_token(params: iface_integrations::ProvisionNewBrokerTokenParams) -> Result<String, String> {
         let json = iface_integrations__provision_new_broker_token_params__to_json(&params);
-        dispatch(&OP_INTEGRATIONS_PROVISION_NEW_BROKER_TOKEN, json)
+        match dispatch(&OP_INTEGRATIONS_PROVISION_NEW_BROKER_TOKEN, json).and_then(iface_integrations__provision_new_broker_token__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_integrations__provision_new_broker_token__err(e)),
+        }
     }
     fn switch_between_broker_tokens(params: iface_integrations::SwitchBetweenBrokerTokensParams) -> Result<String, String> {
         let json = iface_integrations__switch_between_broker_tokens_params__to_json(&params);
-        dispatch(&OP_INTEGRATIONS_SWITCH_BETWEEN_BROKER_TOKENS, json)
+        match dispatch(&OP_INTEGRATIONS_SWITCH_BETWEEN_BROKER_TOKENS, json).and_then(iface_integrations__switch_between_broker_tokens__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_integrations__switch_between_broker_tokens__err(e)),
+        }
     }
     fn clone_an_integration_with_settings_and_credentials(params: iface_integrations::CloneAnIntegrationWithSettingsAndCredentialsParams) -> Result<String, String> {
         let json = iface_integrations__clone_an_integration_with_settings_and_credentials_params__to_json(&params);
-        dispatch(&OP_INTEGRATIONS_CLONE_AN_INTEGRATION_WITH_SETTINGS_AND_CREDENTIALS, json)
+        match dispatch(&OP_INTEGRATIONS_CLONE_AN_INTEGRATION_WITH_SETTINGS_AND_CREDENTIALS, json).and_then(iface_integrations__clone_an_integration_with_settings_and_credentials__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_integrations__clone_an_integration_with_settings_and_credentials__err(e)),
+        }
     }
-    fn retrieve(params: iface_integrations::RetrieveParams) -> Result<String, String> {
+    fn retrieve(params: iface_integrations::RetrieveParams) -> Result<iface_integrations::RetrieveResponse, String> {
         let json = iface_integrations__retrieve_params__to_json(&params);
-        dispatch(&OP_INTEGRATIONS_RETRIEVE, json)
+        match dispatch(&OP_INTEGRATIONS_RETRIEVE, json).and_then(iface_integrations__retrieve__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_integrations__retrieve__err(e)),
+        }
     }
-    fn update(params: iface_integrations::UpdateParams) -> Result<String, String> {
+    fn update(params: iface_integrations::UpdateParams) -> Result<iface_integrations::UpdateResponse, String> {
         let json = iface_integrations__update_params__to_json(&params);
-        dispatch(&OP_INTEGRATIONS_UPDATE, json)
+        match dispatch(&OP_INTEGRATIONS_UPDATE, json).and_then(iface_integrations__update__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_integrations__update__err(e)),
+        }
     }
-    fn get_existing_integration_by_type(params: iface_integrations::GetExistingIntegrationByTypeParams) -> Result<String, String> {
+    fn get_existing_integration_by_type(params: iface_integrations::GetExistingIntegrationByTypeParams) -> Result<iface_integrations::GetExistingIntegrationByTypeResponse, String> {
         let json = iface_integrations__get_existing_integration_by_type_params__to_json(&params);
-        dispatch(&OP_INTEGRATIONS_GET_EXISTING_INTEGRATION_BY_TYPE, json)
+        match dispatch(&OP_INTEGRATIONS_GET_EXISTING_INTEGRATION_BY_TYPE, json).and_then(iface_integrations__get_existing_integration_by_type__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_integrations__get_existing_integration_by_type__err(e)),
+        }
     }
 }
 use crate::exports::autostamp::snyk::import_projects as iface_import_projects;
@@ -1490,9 +2838,9 @@ const OP_IMPORT_PROJECTS_IMPORT_TARGETS: OpSpec = OpSpec {
     method: "POST",
     path_template: "/org/{org_id}/integrations/{integration_id}/import",
     fields: &[
-        FieldSpec { snake: "org_id", location: FieldLocation::Path },
-        FieldSpec { snake: "integration_id", location: FieldLocation::Path },
-        FieldSpec { snake: "body", location: FieldLocation::Body },
+        FieldSpec { snake: "org_id", wire: "orgId", location: FieldLocation::Path },
+        FieldSpec { snake: "integration_id", wire: "integrationId", location: FieldLocation::Path },
+        FieldSpec { snake: "body", wire: "body", location: FieldLocation::Body },
     ],
     auth: &[
     ],
@@ -1502,13 +2850,22 @@ const OP_IMPORT_PROJECTS_GET_IMPORT_JOB_DETAILS: OpSpec = OpSpec {
     method: "GET",
     path_template: "/org/{org_id}/integrations/{integration_id}/import/{job_id}",
     fields: &[
-        FieldSpec { snake: "org_id", location: FieldLocation::Path },
-        FieldSpec { snake: "integration_id", location: FieldLocation::Path },
-        FieldSpec { snake: "job_id", location: FieldLocation::Path },
+        FieldSpec { snake: "org_id", wire: "orgId", location: FieldLocation::Path },
+        FieldSpec { snake: "integration_id", wire: "integrationId", location: FieldLocation::Path },
+        FieldSpec { snake: "job_id", wire: "jobId", location: FieldLocation::Path },
     ],
     auth: &[
     ],
 };
+
+fn iface_import_projects__get_import_job_details_response__to_json(p: &iface_import_projects::GetImportJobDetailsResponse) -> Value {
+    let mut m = Map::new();
+    m.insert("created".into(), match (&p.created) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("id".into(), match (&p.id) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("logs".into(), match (&p.logs) { Some(v) => Value::Array((v).iter().map(|v| Value::String((v).clone())).collect()), None => Value::Null });
+    m.insert("status".into(), match (&p.status) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
 
 fn iface_import_projects__import_targets_params__to_json(p: &iface_import_projects::ImportTargetsParams) -> Value {
     let mut m = Map::new();
@@ -1526,14 +2883,59 @@ fn iface_import_projects__get_import_job_details_params__to_json(p: &iface_impor
     Value::Object(m)
 }
 
+fn iface_import_projects__get_import_job_details_response__from_json(v: &Value) -> Option<iface_import_projects::GetImportJobDetailsResponse> {
+    let m = v.as_object()?;
+    Some(iface_import_projects::GetImportJobDetailsResponse {
+        created: m.get("created").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        id: m.get("id").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        logs: m.get("logs").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| (x).as_str().map(|s| s.to_string())).collect())),
+        status: m.get("status").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    })
+}
+
+fn iface_import_projects__import_targets__ok(body: String) -> Result<String, crate::runtime::DispatchError> {
+    Ok(body)
+}
+
+fn iface_import_projects__import_targets__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
+fn iface_import_projects__get_import_job_details__ok(body: String) -> Result<iface_import_projects::GetImportJobDetailsResponse, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match iface_import_projects__get_import_job_details_response__from_json(&v) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_import_projects__get_import_job_details__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
 impl iface_import_projects::Guest for crate::Component {
     fn import_targets(params: iface_import_projects::ImportTargetsParams) -> Result<String, String> {
         let json = iface_import_projects__import_targets_params__to_json(&params);
-        dispatch(&OP_IMPORT_PROJECTS_IMPORT_TARGETS, json)
+        match dispatch(&OP_IMPORT_PROJECTS_IMPORT_TARGETS, json).and_then(iface_import_projects__import_targets__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_import_projects__import_targets__err(e)),
+        }
     }
-    fn get_import_job_details(params: iface_import_projects::GetImportJobDetailsParams) -> Result<String, String> {
+    fn get_import_job_details(params: iface_import_projects::GetImportJobDetailsParams) -> Result<iface_import_projects::GetImportJobDetailsResponse, String> {
         let json = iface_import_projects__get_import_job_details_params__to_json(&params);
-        dispatch(&OP_IMPORT_PROJECTS_GET_IMPORT_JOB_DETAILS, json)
+        match dispatch(&OP_IMPORT_PROJECTS_GET_IMPORT_JOB_DETAILS, json).and_then(iface_import_projects__get_import_job_details__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_import_projects__get_import_job_details__err(e)),
+        }
     }
 }
 use crate::exports::autostamp::snyk::licenses as iface_licenses;
@@ -1542,10 +2944,10 @@ const OP_LICENSES_LIST_ALL_LICENSES: OpSpec = OpSpec {
     method: "POST",
     path_template: "/org/{org_id}/licenses",
     fields: &[
-        FieldSpec { snake: "org_id", location: FieldLocation::Path },
-        FieldSpec { snake: "sort_by", location: FieldLocation::Query },
-        FieldSpec { snake: "order", location: FieldLocation::Query },
-        FieldSpec { snake: "filters", location: FieldLocation::Body },
+        FieldSpec { snake: "org_id", wire: "orgId", location: FieldLocation::Path },
+        FieldSpec { snake: "sort_by", wire: "sortBy", location: FieldLocation::Query },
+        FieldSpec { snake: "order", wire: "order", location: FieldLocation::Query },
+        FieldSpec { snake: "filters", wire: "filters", location: FieldLocation::Body },
     ],
     auth: &[
     ],
@@ -1567,6 +2969,15 @@ fn iface_licenses__list_all_licenses_order_enum__to_str(e: &iface_licenses::List
     }
 }
 
+fn iface_licenses__list_all_licenses_response_results_item_severity_enum__to_str(e: &iface_licenses::ListAllLicensesResponseResultsItemSeverityEnum) -> &'static str {
+    match e {
+        iface_licenses::ListAllLicensesResponseResultsItemSeverityEnum::None => "none",
+        iface_licenses::ListAllLicensesResponseResultsItemSeverityEnum::High => "high",
+        iface_licenses::ListAllLicensesResponseResultsItemSeverityEnum::Medium => "medium",
+        iface_licenses::ListAllLicensesResponseResultsItemSeverityEnum::Low => "low",
+    }
+}
+
 fn iface_licenses__list_all_licenses_body_filters__to_json(p: &iface_licenses::ListAllLicensesBodyFilters) -> Value {
     let mut m = Map::new();
     m.insert("dependencies".into(), match (&p.dependencies) { Some(v) => Value::String((v).clone()), None => Value::Null });
@@ -1574,6 +2985,39 @@ fn iface_licenses__list_all_licenses_body_filters__to_json(p: &iface_licenses::L
     m.insert("licenses".into(), match (&p.licenses) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("projects".into(), match (&p.projects) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("severity".into(), match (&p.severity) { Some(v) => Value::Array((v).iter().map(|v| Value::String((v).clone())).collect()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_licenses__list_all_licenses_response__to_json(p: &iface_licenses::ListAllLicensesResponse) -> Value {
+    let mut m = Map::new();
+    m.insert("results".into(), Value::Array((&p.results).iter().map(|v| iface_licenses__list_all_licenses_response_results_item__to_json(v)).collect()));
+    m.insert("total".into(), match (&p.total) { Some(v) => serde_json::Number::from_f64(*(v)).map(Value::Number).unwrap_or(Value::Null), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_licenses__list_all_licenses_response_results_item__to_json(p: &iface_licenses::ListAllLicensesResponseResultsItem) -> Value {
+    let mut m = Map::new();
+    m.insert("dependencies".into(), Value::Array((&p.dependencies).iter().map(|v| iface_licenses__list_all_licenses_response_results_item_dependencies_item__to_json(v)).collect()));
+    m.insert("id".into(), Value::String((&p.id).clone()));
+    m.insert("instructions".into(), match (&p.instructions) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("projects".into(), Value::Array((&p.projects).iter().map(|v| iface_licenses__list_all_licenses_response_results_item_projects_item__to_json(v)).collect()));
+    m.insert("severity".into(), match (&p.severity) { Some(v) => Value::String(iface_licenses__list_all_licenses_response_results_item_severity_enum__to_str(v).into()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_licenses__list_all_licenses_response_results_item_dependencies_item__to_json(p: &iface_licenses::ListAllLicensesResponseResultsItemDependenciesItem) -> Value {
+    let mut m = Map::new();
+    m.insert("id".into(), Value::String((&p.id).clone()));
+    m.insert("name".into(), Value::String((&p.name).clone()));
+    m.insert("packageManager".into(), Value::String((&p.package_manager).clone()));
+    m.insert("version".into(), Value::String((&p.version).clone()));
+    Value::Object(m)
+}
+
+fn iface_licenses__list_all_licenses_response_results_item_projects_item__to_json(p: &iface_licenses::ListAllLicensesResponseResultsItemProjectsItem) -> Value {
+    let mut m = Map::new();
+    m.insert("id".into(), Value::String((&p.id).clone()));
+    m.insert("name".into(), Value::String((&p.name).clone()));
     Value::Object(m)
 }
 
@@ -1586,10 +3030,78 @@ fn iface_licenses__list_all_licenses_params__to_json(p: &iface_licenses::ListAll
     Value::Object(m)
 }
 
+fn iface_licenses__list_all_licenses_response__from_json(v: &Value) -> Option<iface_licenses::ListAllLicensesResponse> {
+    let m = v.as_object()?;
+    Some(iface_licenses::ListAllLicensesResponse {
+        results: m.get("results").and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| iface_licenses__list_all_licenses_response_results_item__from_json(x)).collect())).unwrap_or_default(),
+        total: m.get("total").filter(|v| !v.is_null()).and_then(|v| (v).as_f64()),
+    })
+}
+
+fn iface_licenses__list_all_licenses_response_results_item__from_json(v: &Value) -> Option<iface_licenses::ListAllLicensesResponseResultsItem> {
+    let m = v.as_object()?;
+    Some(iface_licenses::ListAllLicensesResponseResultsItem {
+        dependencies: m.get("dependencies").and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| iface_licenses__list_all_licenses_response_results_item_dependencies_item__from_json(x)).collect())).unwrap_or_default(),
+        id: m.get("id").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        instructions: m.get("instructions").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        projects: m.get("projects").and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| iface_licenses__list_all_licenses_response_results_item_projects_item__from_json(x)).collect())).unwrap_or_default(),
+        severity: m.get("severity").filter(|v| !v.is_null()).and_then(|v| (v).as_str().and_then(iface_licenses__list_all_licenses_response_results_item_severity_enum__from_str)),
+    })
+}
+
+fn iface_licenses__list_all_licenses_response_results_item_dependencies_item__from_json(v: &Value) -> Option<iface_licenses::ListAllLicensesResponseResultsItemDependenciesItem> {
+    let m = v.as_object()?;
+    Some(iface_licenses::ListAllLicensesResponseResultsItemDependenciesItem {
+        id: m.get("id").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        name: m.get("name").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        package_manager: m.get("packageManager").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        version: m.get("version").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+    })
+}
+
+fn iface_licenses__list_all_licenses_response_results_item_projects_item__from_json(v: &Value) -> Option<iface_licenses::ListAllLicensesResponseResultsItemProjectsItem> {
+    let m = v.as_object()?;
+    Some(iface_licenses::ListAllLicensesResponseResultsItemProjectsItem {
+        id: m.get("id").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        name: m.get("name").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+    })
+}
+
+fn iface_licenses__list_all_licenses_response_results_item_severity_enum__from_str(s: &str) -> Option<iface_licenses::ListAllLicensesResponseResultsItemSeverityEnum> {
+    match s {
+        "none" => Some(iface_licenses::ListAllLicensesResponseResultsItemSeverityEnum::None),
+        "high" => Some(iface_licenses::ListAllLicensesResponseResultsItemSeverityEnum::High),
+        "medium" => Some(iface_licenses::ListAllLicensesResponseResultsItemSeverityEnum::Medium),
+        "low" => Some(iface_licenses::ListAllLicensesResponseResultsItemSeverityEnum::Low),
+        _ => None,
+    }
+}
+
+fn iface_licenses__list_all_licenses__ok(body: String) -> Result<iface_licenses::ListAllLicensesResponse, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match iface_licenses__list_all_licenses_response__from_json(&v) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_licenses__list_all_licenses__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
 impl iface_licenses::Guest for crate::Component {
-    fn list_all_licenses(params: iface_licenses::ListAllLicensesParams) -> Result<String, String> {
+    fn list_all_licenses(params: iface_licenses::ListAllLicensesParams) -> Result<iface_licenses::ListAllLicensesResponse, String> {
         let json = iface_licenses__list_all_licenses_params__to_json(&params);
-        dispatch(&OP_LICENSES_LIST_ALL_LICENSES, json)
+        match dispatch(&OP_LICENSES_LIST_ALL_LICENSES, json).and_then(iface_licenses__list_all_licenses__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_licenses__list_all_licenses__err(e)),
+        }
     }
 }
 use crate::exports::autostamp::snyk::projects as iface_projects;
@@ -1598,8 +3110,8 @@ const OP_PROJECTS_RETRIEVE_A_SINGLE_PROJECT: OpSpec = OpSpec {
     method: "GET",
     path_template: "/org/{org_id}/project/{project_id}",
     fields: &[
-        FieldSpec { snake: "org_id", location: FieldLocation::Path },
-        FieldSpec { snake: "project_id", location: FieldLocation::Path },
+        FieldSpec { snake: "org_id", wire: "orgId", location: FieldLocation::Path },
+        FieldSpec { snake: "project_id", wire: "projectId", location: FieldLocation::Path },
     ],
     auth: &[
     ],
@@ -1609,10 +3121,10 @@ const OP_PROJECTS_UPDATE_A_PROJECT: OpSpec = OpSpec {
     method: "PUT",
     path_template: "/org/{org_id}/project/{project_id}",
     fields: &[
-        FieldSpec { snake: "org_id", location: FieldLocation::Path },
-        FieldSpec { snake: "project_id", location: FieldLocation::Path },
-        FieldSpec { snake: "branch", location: FieldLocation::Body },
-        FieldSpec { snake: "owner", location: FieldLocation::Body },
+        FieldSpec { snake: "org_id", wire: "orgId", location: FieldLocation::Path },
+        FieldSpec { snake: "project_id", wire: "projectId", location: FieldLocation::Path },
+        FieldSpec { snake: "branch", wire: "branch", location: FieldLocation::Body },
+        FieldSpec { snake: "owner", wire: "owner", location: FieldLocation::Body },
     ],
     auth: &[
     ],
@@ -1622,8 +3134,8 @@ const OP_PROJECTS_DELETE_A_PROJECT: OpSpec = OpSpec {
     method: "DELETE",
     path_template: "/org/{org_id}/project/{project_id}",
     fields: &[
-        FieldSpec { snake: "org_id", location: FieldLocation::Path },
-        FieldSpec { snake: "project_id", location: FieldLocation::Path },
+        FieldSpec { snake: "org_id", wire: "orgId", location: FieldLocation::Path },
+        FieldSpec { snake: "project_id", wire: "projectId", location: FieldLocation::Path },
     ],
     auth: &[
     ],
@@ -1633,8 +3145,8 @@ const OP_PROJECTS_ACTIVATE: OpSpec = OpSpec {
     method: "POST",
     path_template: "/org/{org_id}/project/{project_id}/activate",
     fields: &[
-        FieldSpec { snake: "org_id", location: FieldLocation::Path },
-        FieldSpec { snake: "project_id", location: FieldLocation::Path },
+        FieldSpec { snake: "org_id", wire: "orgId", location: FieldLocation::Path },
+        FieldSpec { snake: "project_id", wire: "projectId", location: FieldLocation::Path },
     ],
     auth: &[
     ],
@@ -1644,11 +3156,11 @@ const OP_PROJECTS_LIST_ALL_AGGREGATED_ISSUES: OpSpec = OpSpec {
     method: "POST",
     path_template: "/org/{org_id}/project/{project_id}/aggregated-issues",
     fields: &[
-        FieldSpec { snake: "org_id", location: FieldLocation::Path },
-        FieldSpec { snake: "project_id", location: FieldLocation::Path },
-        FieldSpec { snake: "filters", location: FieldLocation::Body },
-        FieldSpec { snake: "include_description", location: FieldLocation::Body },
-        FieldSpec { snake: "include_introduced_through", location: FieldLocation::Body },
+        FieldSpec { snake: "org_id", wire: "orgId", location: FieldLocation::Path },
+        FieldSpec { snake: "project_id", wire: "projectId", location: FieldLocation::Path },
+        FieldSpec { snake: "filters", wire: "filters", location: FieldLocation::Body },
+        FieldSpec { snake: "include_description", wire: "includeDescription", location: FieldLocation::Body },
+        FieldSpec { snake: "include_introduced_through", wire: "includeIntroducedThrough", location: FieldLocation::Body },
     ],
     auth: &[
     ],
@@ -1658,11 +3170,11 @@ const OP_PROJECTS_APPLYING_ATTRIBUTES: OpSpec = OpSpec {
     method: "POST",
     path_template: "/org/{org_id}/project/{project_id}/attributes",
     fields: &[
-        FieldSpec { snake: "org_id", location: FieldLocation::Path },
-        FieldSpec { snake: "project_id", location: FieldLocation::Path },
-        FieldSpec { snake: "criticality", location: FieldLocation::Body },
-        FieldSpec { snake: "environment", location: FieldLocation::Body },
-        FieldSpec { snake: "lifecycle", location: FieldLocation::Body },
+        FieldSpec { snake: "org_id", wire: "orgId", location: FieldLocation::Path },
+        FieldSpec { snake: "project_id", wire: "projectId", location: FieldLocation::Path },
+        FieldSpec { snake: "criticality", wire: "criticality", location: FieldLocation::Body },
+        FieldSpec { snake: "environment", wire: "environment", location: FieldLocation::Body },
+        FieldSpec { snake: "lifecycle", wire: "lifecycle", location: FieldLocation::Body },
     ],
     auth: &[
     ],
@@ -1672,8 +3184,8 @@ const OP_PROJECTS_DEACTIVATE: OpSpec = OpSpec {
     method: "POST",
     path_template: "/org/{org_id}/project/{project_id}/deactivate",
     fields: &[
-        FieldSpec { snake: "org_id", location: FieldLocation::Path },
-        FieldSpec { snake: "project_id", location: FieldLocation::Path },
+        FieldSpec { snake: "org_id", wire: "orgId", location: FieldLocation::Path },
+        FieldSpec { snake: "project_id", wire: "projectId", location: FieldLocation::Path },
     ],
     auth: &[
     ],
@@ -1683,8 +3195,8 @@ const OP_PROJECTS_GET_PROJECT_DEPENDENCY_GRAPH: OpSpec = OpSpec {
     method: "GET",
     path_template: "/org/{org_id}/project/{project_id}/dep-graph",
     fields: &[
-        FieldSpec { snake: "org_id", location: FieldLocation::Path },
-        FieldSpec { snake: "project_id", location: FieldLocation::Path },
+        FieldSpec { snake: "org_id", wire: "orgId", location: FieldLocation::Path },
+        FieldSpec { snake: "project_id", wire: "projectId", location: FieldLocation::Path },
     ],
     auth: &[
     ],
@@ -1694,11 +3206,11 @@ const OP_PROJECTS_LIST_ALL_PROJECT_SNAPSHOTS: OpSpec = OpSpec {
     method: "POST",
     path_template: "/org/{org_id}/project/{project_id}/history",
     fields: &[
-        FieldSpec { snake: "org_id", location: FieldLocation::Path },
-        FieldSpec { snake: "project_id", location: FieldLocation::Path },
-        FieldSpec { snake: "per_page", location: FieldLocation::Query },
-        FieldSpec { snake: "page", location: FieldLocation::Query },
-        FieldSpec { snake: "filters", location: FieldLocation::Body },
+        FieldSpec { snake: "org_id", wire: "orgId", location: FieldLocation::Path },
+        FieldSpec { snake: "project_id", wire: "projectId", location: FieldLocation::Path },
+        FieldSpec { snake: "per_page", wire: "perPage", location: FieldLocation::Query },
+        FieldSpec { snake: "page", wire: "page", location: FieldLocation::Query },
+        FieldSpec { snake: "filters", wire: "filters", location: FieldLocation::Body },
     ],
     auth: &[
     ],
@@ -1708,12 +3220,12 @@ const OP_PROJECTS_LIST_ALL_PROJECT_SNAPSHOT_AGGREGATED_ISSUES: OpSpec = OpSpec {
     method: "POST",
     path_template: "/org/{org_id}/project/{project_id}/history/{snapshot_id}/aggregated-issues",
     fields: &[
-        FieldSpec { snake: "org_id", location: FieldLocation::Path },
-        FieldSpec { snake: "project_id", location: FieldLocation::Path },
-        FieldSpec { snake: "snapshot_id", location: FieldLocation::Path },
-        FieldSpec { snake: "filters", location: FieldLocation::Body },
-        FieldSpec { snake: "include_description", location: FieldLocation::Body },
-        FieldSpec { snake: "include_introduced_through", location: FieldLocation::Body },
+        FieldSpec { snake: "org_id", wire: "orgId", location: FieldLocation::Path },
+        FieldSpec { snake: "project_id", wire: "projectId", location: FieldLocation::Path },
+        FieldSpec { snake: "snapshot_id", wire: "snapshotId", location: FieldLocation::Path },
+        FieldSpec { snake: "filters", wire: "filters", location: FieldLocation::Body },
+        FieldSpec { snake: "include_description", wire: "includeDescription", location: FieldLocation::Body },
+        FieldSpec { snake: "include_introduced_through", wire: "includeIntroducedThrough", location: FieldLocation::Body },
     ],
     auth: &[
     ],
@@ -1723,12 +3235,12 @@ const OP_PROJECTS_LIST_ALL_PROJECT_SNAPSHOT_ISSUE_PATHS: OpSpec = OpSpec {
     method: "GET",
     path_template: "/org/{org_id}/project/{project_id}/history/{snapshot_id}/issue/{issue_id}/paths",
     fields: &[
-        FieldSpec { snake: "org_id", location: FieldLocation::Path },
-        FieldSpec { snake: "project_id", location: FieldLocation::Path },
-        FieldSpec { snake: "snapshot_id", location: FieldLocation::Path },
-        FieldSpec { snake: "issue_id", location: FieldLocation::Path },
-        FieldSpec { snake: "per_page", location: FieldLocation::Query },
-        FieldSpec { snake: "page", location: FieldLocation::Query },
+        FieldSpec { snake: "org_id", wire: "orgId", location: FieldLocation::Path },
+        FieldSpec { snake: "project_id", wire: "projectId", location: FieldLocation::Path },
+        FieldSpec { snake: "snapshot_id", wire: "snapshotId", location: FieldLocation::Path },
+        FieldSpec { snake: "issue_id", wire: "issueId", location: FieldLocation::Path },
+        FieldSpec { snake: "per_page", wire: "perPage", location: FieldLocation::Query },
+        FieldSpec { snake: "page", wire: "page", location: FieldLocation::Query },
     ],
     auth: &[
     ],
@@ -1738,9 +3250,9 @@ const OP_PROJECTS_RETRIEVE_IGNORE: OpSpec = OpSpec {
     method: "GET",
     path_template: "/org/{org_id}/project/{project_id}/ignore/{issue_id}",
     fields: &[
-        FieldSpec { snake: "org_id", location: FieldLocation::Path },
-        FieldSpec { snake: "project_id", location: FieldLocation::Path },
-        FieldSpec { snake: "issue_id", location: FieldLocation::Path },
+        FieldSpec { snake: "org_id", wire: "orgId", location: FieldLocation::Path },
+        FieldSpec { snake: "project_id", wire: "projectId", location: FieldLocation::Path },
+        FieldSpec { snake: "issue_id", wire: "issueId", location: FieldLocation::Path },
     ],
     auth: &[
     ],
@@ -1750,14 +3262,14 @@ const OP_PROJECTS_ADD_IGNORE: OpSpec = OpSpec {
     method: "POST",
     path_template: "/org/{org_id}/project/{project_id}/ignore/{issue_id}",
     fields: &[
-        FieldSpec { snake: "org_id", location: FieldLocation::Path },
-        FieldSpec { snake: "project_id", location: FieldLocation::Path },
-        FieldSpec { snake: "issue_id", location: FieldLocation::Path },
-        FieldSpec { snake: "disregard_if_fixable", location: FieldLocation::Body },
-        FieldSpec { snake: "expires", location: FieldLocation::Body },
-        FieldSpec { snake: "ignore_path", location: FieldLocation::Body },
-        FieldSpec { snake: "reason", location: FieldLocation::Body },
-        FieldSpec { snake: "reason_type", location: FieldLocation::Body },
+        FieldSpec { snake: "org_id", wire: "orgId", location: FieldLocation::Path },
+        FieldSpec { snake: "project_id", wire: "projectId", location: FieldLocation::Path },
+        FieldSpec { snake: "issue_id", wire: "issueId", location: FieldLocation::Path },
+        FieldSpec { snake: "disregard_if_fixable", wire: "disregardIfFixable", location: FieldLocation::Body },
+        FieldSpec { snake: "expires", wire: "expires", location: FieldLocation::Body },
+        FieldSpec { snake: "ignore_path", wire: "ignorePath", location: FieldLocation::Body },
+        FieldSpec { snake: "reason", wire: "reason", location: FieldLocation::Body },
+        FieldSpec { snake: "reason_type", wire: "reasonType", location: FieldLocation::Body },
     ],
     auth: &[
     ],
@@ -1767,9 +3279,9 @@ const OP_PROJECTS_REPLACE_IGNORES: OpSpec = OpSpec {
     method: "PUT",
     path_template: "/org/{org_id}/project/{project_id}/ignore/{issue_id}",
     fields: &[
-        FieldSpec { snake: "org_id", location: FieldLocation::Path },
-        FieldSpec { snake: "project_id", location: FieldLocation::Path },
-        FieldSpec { snake: "issue_id", location: FieldLocation::Path },
+        FieldSpec { snake: "org_id", wire: "orgId", location: FieldLocation::Path },
+        FieldSpec { snake: "project_id", wire: "projectId", location: FieldLocation::Path },
+        FieldSpec { snake: "issue_id", wire: "issueId", location: FieldLocation::Path },
     ],
     auth: &[
     ],
@@ -1779,9 +3291,9 @@ const OP_PROJECTS_DELETE_IGNORES: OpSpec = OpSpec {
     method: "DELETE",
     path_template: "/org/{org_id}/project/{project_id}/ignore/{issue_id}",
     fields: &[
-        FieldSpec { snake: "org_id", location: FieldLocation::Path },
-        FieldSpec { snake: "project_id", location: FieldLocation::Path },
-        FieldSpec { snake: "issue_id", location: FieldLocation::Path },
+        FieldSpec { snake: "org_id", wire: "orgId", location: FieldLocation::Path },
+        FieldSpec { snake: "project_id", wire: "projectId", location: FieldLocation::Path },
+        FieldSpec { snake: "issue_id", wire: "issueId", location: FieldLocation::Path },
     ],
     auth: &[
     ],
@@ -1791,8 +3303,8 @@ const OP_PROJECTS_LIST_ALL_IGNORES: OpSpec = OpSpec {
     method: "GET",
     path_template: "/org/{org_id}/project/{project_id}/ignores",
     fields: &[
-        FieldSpec { snake: "org_id", location: FieldLocation::Path },
-        FieldSpec { snake: "project_id", location: FieldLocation::Path },
+        FieldSpec { snake: "org_id", wire: "orgId", location: FieldLocation::Path },
+        FieldSpec { snake: "project_id", wire: "projectId", location: FieldLocation::Path },
     ],
     auth: &[
     ],
@@ -1802,10 +3314,10 @@ const OP_PROJECTS_CREATE_JIRA_ISSUE: OpSpec = OpSpec {
     method: "POST",
     path_template: "/org/{org_id}/project/{project_id}/issue/{issue_id}/jira-issue",
     fields: &[
-        FieldSpec { snake: "issue_id", location: FieldLocation::Path },
-        FieldSpec { snake: "org_id", location: FieldLocation::Path },
-        FieldSpec { snake: "project_id", location: FieldLocation::Path },
-        FieldSpec { snake: "fields", location: FieldLocation::Body },
+        FieldSpec { snake: "issue_id", wire: "issueId", location: FieldLocation::Path },
+        FieldSpec { snake: "org_id", wire: "orgId", location: FieldLocation::Path },
+        FieldSpec { snake: "project_id", wire: "projectId", location: FieldLocation::Path },
+        FieldSpec { snake: "fields", wire: "fields", location: FieldLocation::Body },
     ],
     auth: &[
     ],
@@ -1815,12 +3327,12 @@ const OP_PROJECTS_LIST_ALL_PROJECT_ISSUE_PATHS: OpSpec = OpSpec {
     method: "GET",
     path_template: "/org/{org_id}/project/{project_id}/issue/{issue_id}/paths",
     fields: &[
-        FieldSpec { snake: "org_id", location: FieldLocation::Path },
-        FieldSpec { snake: "project_id", location: FieldLocation::Path },
-        FieldSpec { snake: "issue_id", location: FieldLocation::Path },
-        FieldSpec { snake: "snapshot_id", location: FieldLocation::Query },
-        FieldSpec { snake: "per_page", location: FieldLocation::Query },
-        FieldSpec { snake: "page", location: FieldLocation::Query },
+        FieldSpec { snake: "org_id", wire: "orgId", location: FieldLocation::Path },
+        FieldSpec { snake: "project_id", wire: "projectId", location: FieldLocation::Path },
+        FieldSpec { snake: "issue_id", wire: "issueId", location: FieldLocation::Path },
+        FieldSpec { snake: "snapshot_id", wire: "snapshotId", location: FieldLocation::Query },
+        FieldSpec { snake: "per_page", wire: "perPage", location: FieldLocation::Query },
+        FieldSpec { snake: "page", wire: "page", location: FieldLocation::Query },
     ],
     auth: &[
     ],
@@ -1830,8 +3342,8 @@ const OP_PROJECTS_LIST_ALL_JIRA_ISSUES: OpSpec = OpSpec {
     method: "GET",
     path_template: "/org/{org_id}/project/{project_id}/jira-issues",
     fields: &[
-        FieldSpec { snake: "org_id", location: FieldLocation::Path },
-        FieldSpec { snake: "project_id", location: FieldLocation::Path },
+        FieldSpec { snake: "org_id", wire: "orgId", location: FieldLocation::Path },
+        FieldSpec { snake: "project_id", wire: "projectId", location: FieldLocation::Path },
     ],
     auth: &[
     ],
@@ -1841,9 +3353,9 @@ const OP_PROJECTS_MOVE_PROJECT_TO_A_DIFFERENT_ORGANIZATION: OpSpec = OpSpec {
     method: "PUT",
     path_template: "/org/{org_id}/project/{project_id}/move",
     fields: &[
-        FieldSpec { snake: "org_id", location: FieldLocation::Path },
-        FieldSpec { snake: "project_id", location: FieldLocation::Path },
-        FieldSpec { snake: "target_org_id", location: FieldLocation::Body },
+        FieldSpec { snake: "org_id", wire: "orgId", location: FieldLocation::Path },
+        FieldSpec { snake: "project_id", wire: "projectId", location: FieldLocation::Path },
+        FieldSpec { snake: "target_org_id", wire: "targetOrgId", location: FieldLocation::Body },
     ],
     auth: &[
     ],
@@ -1853,8 +3365,8 @@ const OP_PROJECTS_LIST_PROJECT_SETTINGS: OpSpec = OpSpec {
     method: "GET",
     path_template: "/org/{org_id}/project/{project_id}/settings",
     fields: &[
-        FieldSpec { snake: "org_id", location: FieldLocation::Path },
-        FieldSpec { snake: "project_id", location: FieldLocation::Path },
+        FieldSpec { snake: "org_id", wire: "orgId", location: FieldLocation::Path },
+        FieldSpec { snake: "project_id", wire: "projectId", location: FieldLocation::Path },
     ],
     auth: &[
     ],
@@ -1864,17 +3376,17 @@ const OP_PROJECTS_UPDATE_PROJECT_SETTINGS: OpSpec = OpSpec {
     method: "PUT",
     path_template: "/org/{org_id}/project/{project_id}/settings",
     fields: &[
-        FieldSpec { snake: "org_id", location: FieldLocation::Path },
-        FieldSpec { snake: "project_id", location: FieldLocation::Path },
-        FieldSpec { snake: "auto_dep_upgrade_enabled", location: FieldLocation::Body },
-        FieldSpec { snake: "auto_dep_upgrade_ignored_dependencies", location: FieldLocation::Body },
-        FieldSpec { snake: "auto_dep_upgrade_limit", location: FieldLocation::Body },
-        FieldSpec { snake: "auto_dep_upgrade_min_age", location: FieldLocation::Body },
-        FieldSpec { snake: "auto_remediation_prs", location: FieldLocation::Body },
-        FieldSpec { snake: "pull_request_assignment", location: FieldLocation::Body },
-        FieldSpec { snake: "pull_request_fail_on_any_vulns", location: FieldLocation::Body },
-        FieldSpec { snake: "pull_request_fail_only_for_high_severity", location: FieldLocation::Body },
-        FieldSpec { snake: "pull_request_test_enabled", location: FieldLocation::Body },
+        FieldSpec { snake: "org_id", wire: "orgId", location: FieldLocation::Path },
+        FieldSpec { snake: "project_id", wire: "projectId", location: FieldLocation::Path },
+        FieldSpec { snake: "auto_dep_upgrade_enabled", wire: "autoDepUpgradeEnabled", location: FieldLocation::Body },
+        FieldSpec { snake: "auto_dep_upgrade_ignored_dependencies", wire: "autoDepUpgradeIgnoredDependencies", location: FieldLocation::Body },
+        FieldSpec { snake: "auto_dep_upgrade_limit", wire: "autoDepUpgradeLimit", location: FieldLocation::Body },
+        FieldSpec { snake: "auto_dep_upgrade_min_age", wire: "autoDepUpgradeMinAge", location: FieldLocation::Body },
+        FieldSpec { snake: "auto_remediation_prs", wire: "autoRemediationPrs", location: FieldLocation::Body },
+        FieldSpec { snake: "pull_request_assignment", wire: "pullRequestAssignment", location: FieldLocation::Body },
+        FieldSpec { snake: "pull_request_fail_on_any_vulns", wire: "pullRequestFailOnAnyVulns", location: FieldLocation::Body },
+        FieldSpec { snake: "pull_request_fail_only_for_high_severity", wire: "pullRequestFailOnlyForHighSeverity", location: FieldLocation::Body },
+        FieldSpec { snake: "pull_request_test_enabled", wire: "pullRequestTestEnabled", location: FieldLocation::Body },
     ],
     auth: &[
     ],
@@ -1884,8 +3396,8 @@ const OP_PROJECTS_DELETE_PROJECT_SETTINGS: OpSpec = OpSpec {
     method: "DELETE",
     path_template: "/org/{org_id}/project/{project_id}/settings",
     fields: &[
-        FieldSpec { snake: "org_id", location: FieldLocation::Path },
-        FieldSpec { snake: "project_id", location: FieldLocation::Path },
+        FieldSpec { snake: "org_id", wire: "orgId", location: FieldLocation::Path },
+        FieldSpec { snake: "project_id", wire: "projectId", location: FieldLocation::Path },
     ],
     auth: &[
     ],
@@ -1895,10 +3407,10 @@ const OP_PROJECTS_ADD_A_TAG_TO_A_PROJECT: OpSpec = OpSpec {
     method: "POST",
     path_template: "/org/{org_id}/project/{project_id}/tags",
     fields: &[
-        FieldSpec { snake: "org_id", location: FieldLocation::Path },
-        FieldSpec { snake: "project_id", location: FieldLocation::Path },
-        FieldSpec { snake: "key", location: FieldLocation::Body },
-        FieldSpec { snake: "value", location: FieldLocation::Body },
+        FieldSpec { snake: "org_id", wire: "orgId", location: FieldLocation::Path },
+        FieldSpec { snake: "project_id", wire: "projectId", location: FieldLocation::Path },
+        FieldSpec { snake: "key", wire: "key", location: FieldLocation::Body },
+        FieldSpec { snake: "value", wire: "value", location: FieldLocation::Body },
     ],
     auth: &[
     ],
@@ -1908,10 +3420,10 @@ const OP_PROJECTS_REMOVE_A_TAG_FROM_A_PROJECT: OpSpec = OpSpec {
     method: "POST",
     path_template: "/org/{org_id}/project/{project_id}/tags/remove",
     fields: &[
-        FieldSpec { snake: "org_id", location: FieldLocation::Path },
-        FieldSpec { snake: "project_id", location: FieldLocation::Path },
-        FieldSpec { snake: "key", location: FieldLocation::Body },
-        FieldSpec { snake: "value", location: FieldLocation::Body },
+        FieldSpec { snake: "org_id", wire: "orgId", location: FieldLocation::Path },
+        FieldSpec { snake: "project_id", wire: "projectId", location: FieldLocation::Path },
+        FieldSpec { snake: "key", wire: "key", location: FieldLocation::Body },
+        FieldSpec { snake: "value", wire: "value", location: FieldLocation::Body },
     ],
     auth: &[
     ],
@@ -1921,12 +3433,23 @@ const OP_PROJECTS_LIST_ALL_PROJECTS: OpSpec = OpSpec {
     method: "POST",
     path_template: "/org/{org_id}/projects",
     fields: &[
-        FieldSpec { snake: "org_id", location: FieldLocation::Path },
-        FieldSpec { snake: "filters", location: FieldLocation::Body },
+        FieldSpec { snake: "org_id", wire: "orgId", location: FieldLocation::Path },
+        FieldSpec { snake: "filters", wire: "filters", location: FieldLocation::Body },
     ],
     auth: &[
     ],
 };
+
+fn iface_projects__list_all_project_snapshots_response_snapshots_item_method_enum__to_str(e: &iface_projects::ListAllProjectSnapshotsResponseSnapshotsItemMethodEnum) -> &'static str {
+    match e {
+        iface_projects::ListAllProjectSnapshotsResponseSnapshotsItemMethodEnum::Api => "api",
+        iface_projects::ListAllProjectSnapshotsResponseSnapshotsItemMethodEnum::Cli => "cli",
+        iface_projects::ListAllProjectSnapshotsResponseSnapshotsItemMethodEnum::Recurring => "recurring",
+        iface_projects::ListAllProjectSnapshotsResponseSnapshotsItemMethodEnum::Web => "web",
+        iface_projects::ListAllProjectSnapshotsResponseSnapshotsItemMethodEnum::WebTest => "web-test",
+        iface_projects::ListAllProjectSnapshotsResponseSnapshotsItemMethodEnum::Wizard => "wizard",
+    }
+}
 
 fn iface_projects__add_ignore_body_reason_type_enum__to_str(e: &iface_projects::AddIgnoreBodyReasonTypeEnum) -> &'static str {
     match e {
@@ -1936,11 +3459,100 @@ fn iface_projects__add_ignore_body_reason_type_enum__to_str(e: &iface_projects::
     }
 }
 
-fn iface_projects__update_project_settings_body_pull_request_assignment_type_op_enum__to_str(e: &iface_projects::UpdateProjectSettingsBodyPullRequestAssignmentTypeOpEnum) -> &'static str {
+fn iface_projects__list_project_settings_response_pull_request_assignment_type_op_enum__to_str(e: &iface_projects::ListProjectSettingsResponsePullRequestAssignmentTypeOpEnum) -> &'static str {
     match e {
-        iface_projects::UpdateProjectSettingsBodyPullRequestAssignmentTypeOpEnum::Auto => "auto",
-        iface_projects::UpdateProjectSettingsBodyPullRequestAssignmentTypeOpEnum::Manual => "manual",
+        iface_projects::ListProjectSettingsResponsePullRequestAssignmentTypeOpEnum::Auto => "auto",
+        iface_projects::ListProjectSettingsResponsePullRequestAssignmentTypeOpEnum::Manual => "manual",
     }
+}
+
+fn iface_projects__retrieve_a_single_project_response__to_json(p: &iface_projects::RetrieveASingleProjectResponse) -> Value {
+    let mut m = Map::new();
+    m.insert("attributes".into(), match (&p.attributes) { Some(v) => iface_projects__retrieve_a_single_project_response_attributes__to_json(v), None => Value::Null });
+    m.insert("branch".into(), match (&p.branch) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("browseUrl".into(), match (&p.browse_url) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("created".into(), match (&p.created) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("hostname".into(), match (&p.hostname) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("id".into(), match (&p.id) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("imageBaseImage".into(), match (&p.image_base_image) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("imageCluster".into(), match (&p.image_cluster) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("imageId".into(), match (&p.image_id) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("imagePlatform".into(), match (&p.image_platform) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("imageTag".into(), match (&p.image_tag) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("importingUser".into(), match (&p.importing_user) { Some(v) => iface_projects__retrieve_a_single_project_response_importing_user__to_json(v), None => Value::Null });
+    m.insert("isMonitored".into(), match (&p.is_monitored) { Some(v) => Value::Bool(*(v)), None => Value::Null });
+    m.insert("issueCountsBySeverity".into(), match (&p.issue_counts_by_severity) { Some(v) => iface_projects__retrieve_a_single_project_response_issue_counts_by_severity__to_json(v), None => Value::Null });
+    m.insert("lastTestedDate".into(), match (&p.last_tested_date) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("name".into(), match (&p.name) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("origin".into(), match (&p.origin) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("owner".into(), match (&p.owner) { Some(v) => iface_projects__retrieve_a_single_project_response_owner__to_json(v), None => Value::Null });
+    m.insert("readOnly".into(), match (&p.read_only) { Some(v) => Value::Bool(*(v)), None => Value::Null });
+    m.insert("remediation".into(), match (&p.remediation) { Some(v) => iface_projects__retrieve_a_single_project_response_remediation__to_json(v), None => Value::Null });
+    m.insert("remoteRepoUrl".into(), match (&p.remote_repo_url) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("tags".into(), match (&p.tags) { Some(v) => Value::Array((v).iter().map(|v| Value::String((v).clone())).collect()), None => Value::Null });
+    m.insert("targetReference".into(), match (&p.target_reference) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("testFrequency".into(), match (&p.test_frequency) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("totalDependencies".into(), match (&p.total_dependencies) { Some(v) => serde_json::Number::from_f64(*(v)).map(Value::Number).unwrap_or(Value::Null), None => Value::Null });
+    m.insert("type".into(), match (&p.type_op) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_projects__retrieve_a_single_project_response_attributes__to_json(p: &iface_projects::RetrieveASingleProjectResponseAttributes) -> Value {
+    let mut m = Map::new();
+    m.insert("criticality".into(), match (&p.criticality) { Some(v) => Value::Array((v).iter().map(|v| Value::String((v).clone())).collect()), None => Value::Null });
+    m.insert("environment".into(), match (&p.environment) { Some(v) => Value::Array((v).iter().map(|v| Value::String((v).clone())).collect()), None => Value::Null });
+    m.insert("lifecycle".into(), match (&p.lifecycle) { Some(v) => Value::Array((v).iter().map(|v| Value::String((v).clone())).collect()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_projects__retrieve_a_single_project_response_importing_user__to_json(p: &iface_projects::RetrieveASingleProjectResponseImportingUser) -> Value {
+    let mut m = Map::new();
+    m.insert("email".into(), match (&p.email) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("id".into(), match (&p.id) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("name".into(), match (&p.name) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("username".into(), match (&p.username) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_projects__retrieve_a_single_project_response_issue_counts_by_severity__to_json(p: &iface_projects::RetrieveASingleProjectResponseIssueCountsBySeverity) -> Value {
+    let mut m = Map::new();
+    m.insert("critical".into(), match (&p.critical) { Some(v) => serde_json::Number::from_f64(*(v)).map(Value::Number).unwrap_or(Value::Null), None => Value::Null });
+    m.insert("high".into(), match (&p.high) { Some(v) => serde_json::Number::from_f64(*(v)).map(Value::Number).unwrap_or(Value::Null), None => Value::Null });
+    m.insert("low".into(), match (&p.low) { Some(v) => serde_json::Number::from_f64(*(v)).map(Value::Number).unwrap_or(Value::Null), None => Value::Null });
+    m.insert("medium".into(), match (&p.medium) { Some(v) => serde_json::Number::from_f64(*(v)).map(Value::Number).unwrap_or(Value::Null), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_projects__retrieve_a_single_project_response_owner__to_json(p: &iface_projects::RetrieveASingleProjectResponseOwner) -> Value {
+    let mut m = Map::new();
+    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_projects__retrieve_a_single_project_response_remediation__to_json(p: &iface_projects::RetrieveASingleProjectResponseRemediation) -> Value {
+    let mut m = Map::new();
+    m.insert("patch".into(), match (&p.patch) { Some(v) => iface_projects__retrieve_a_single_project_response_remediation_patch__to_json(v), None => Value::Null });
+    m.insert("pin".into(), match (&p.pin) { Some(v) => iface_projects__retrieve_a_single_project_response_remediation_pin__to_json(v), None => Value::Null });
+    m.insert("upgrade".into(), match (&p.upgrade) { Some(v) => iface_projects__retrieve_a_single_project_response_remediation_upgrade__to_json(v), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_projects__retrieve_a_single_project_response_remediation_patch__to_json(p: &iface_projects::RetrieveASingleProjectResponseRemediationPatch) -> Value {
+    let mut m = Map::new();
+    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_projects__retrieve_a_single_project_response_remediation_pin__to_json(p: &iface_projects::RetrieveASingleProjectResponseRemediationPin) -> Value {
+    let mut m = Map::new();
+    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_projects__retrieve_a_single_project_response_remediation_upgrade__to_json(p: &iface_projects::RetrieveASingleProjectResponseRemediationUpgrade) -> Value {
+    let mut m = Map::new();
+    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
 }
 
 fn iface_projects__update_a_project_body_owner__to_json(p: &iface_projects::UpdateAProjectBodyOwner) -> Value {
@@ -1949,9 +3561,98 @@ fn iface_projects__update_a_project_body_owner__to_json(p: &iface_projects::Upda
     Value::Object(m)
 }
 
+fn iface_projects__update_a_project_response__to_json(p: &iface_projects::UpdateAProjectResponse) -> Value {
+    let mut m = Map::new();
+    m.insert("attributes".into(), match (&p.attributes) { Some(v) => iface_projects__update_a_project_response_attributes__to_json(v), None => Value::Null });
+    m.insert("branch".into(), match (&p.branch) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("browseUrl".into(), match (&p.browse_url) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("created".into(), match (&p.created) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("hostname".into(), match (&p.hostname) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("id".into(), match (&p.id) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("imageBaseImage".into(), match (&p.image_base_image) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("imageCluster".into(), match (&p.image_cluster) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("imageId".into(), match (&p.image_id) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("imagePlatform".into(), match (&p.image_platform) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("imageTag".into(), match (&p.image_tag) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("importingUser".into(), match (&p.importing_user) { Some(v) => iface_projects__update_a_project_response_importing_user__to_json(v), None => Value::Null });
+    m.insert("isMonitored".into(), match (&p.is_monitored) { Some(v) => Value::Bool(*(v)), None => Value::Null });
+    m.insert("issueCountsBySeverity".into(), match (&p.issue_counts_by_severity) { Some(v) => iface_projects__update_a_project_response_issue_counts_by_severity__to_json(v), None => Value::Null });
+    m.insert("lastTestedDate".into(), match (&p.last_tested_date) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("name".into(), match (&p.name) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("origin".into(), match (&p.origin) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("owner".into(), match (&p.owner) { Some(v) => iface_projects__update_a_project_response_owner__to_json(v), None => Value::Null });
+    m.insert("readOnly".into(), match (&p.read_only) { Some(v) => Value::Bool(*(v)), None => Value::Null });
+    m.insert("remediation".into(), match (&p.remediation) { Some(v) => iface_projects__update_a_project_response_remediation__to_json(v), None => Value::Null });
+    m.insert("remoteRepoUrl".into(), match (&p.remote_repo_url) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("tags".into(), match (&p.tags) { Some(v) => Value::Array((v).iter().map(|v| Value::String((v).clone())).collect()), None => Value::Null });
+    m.insert("targetReference".into(), match (&p.target_reference) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("testFrequency".into(), match (&p.test_frequency) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("totalDependencies".into(), match (&p.total_dependencies) { Some(v) => serde_json::Number::from_f64(*(v)).map(Value::Number).unwrap_or(Value::Null), None => Value::Null });
+    m.insert("type".into(), match (&p.type_op) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_projects__update_a_project_response_attributes__to_json(p: &iface_projects::UpdateAProjectResponseAttributes) -> Value {
+    let mut m = Map::new();
+    m.insert("criticality".into(), match (&p.criticality) { Some(v) => Value::Array((v).iter().map(|v| Value::String((v).clone())).collect()), None => Value::Null });
+    m.insert("environment".into(), match (&p.environment) { Some(v) => Value::Array((v).iter().map(|v| Value::String((v).clone())).collect()), None => Value::Null });
+    m.insert("lifecycle".into(), match (&p.lifecycle) { Some(v) => Value::Array((v).iter().map(|v| Value::String((v).clone())).collect()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_projects__update_a_project_response_importing_user__to_json(p: &iface_projects::UpdateAProjectResponseImportingUser) -> Value {
+    let mut m = Map::new();
+    m.insert("email".into(), match (&p.email) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("id".into(), match (&p.id) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("name".into(), match (&p.name) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("username".into(), match (&p.username) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_projects__update_a_project_response_issue_counts_by_severity__to_json(p: &iface_projects::UpdateAProjectResponseIssueCountsBySeverity) -> Value {
+    let mut m = Map::new();
+    m.insert("critical".into(), match (&p.critical) { Some(v) => serde_json::Number::from_f64(*(v)).map(Value::Number).unwrap_or(Value::Null), None => Value::Null });
+    m.insert("high".into(), match (&p.high) { Some(v) => serde_json::Number::from_f64(*(v)).map(Value::Number).unwrap_or(Value::Null), None => Value::Null });
+    m.insert("low".into(), match (&p.low) { Some(v) => serde_json::Number::from_f64(*(v)).map(Value::Number).unwrap_or(Value::Null), None => Value::Null });
+    m.insert("medium".into(), match (&p.medium) { Some(v) => serde_json::Number::from_f64(*(v)).map(Value::Number).unwrap_or(Value::Null), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_projects__update_a_project_response_owner__to_json(p: &iface_projects::UpdateAProjectResponseOwner) -> Value {
+    let mut m = Map::new();
+    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_projects__update_a_project_response_remediation__to_json(p: &iface_projects::UpdateAProjectResponseRemediation) -> Value {
+    let mut m = Map::new();
+    m.insert("patch".into(), match (&p.patch) { Some(v) => iface_projects__update_a_project_response_remediation_patch__to_json(v), None => Value::Null });
+    m.insert("pin".into(), match (&p.pin) { Some(v) => iface_projects__update_a_project_response_remediation_pin__to_json(v), None => Value::Null });
+    m.insert("upgrade".into(), match (&p.upgrade) { Some(v) => iface_projects__update_a_project_response_remediation_upgrade__to_json(v), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_projects__update_a_project_response_remediation_patch__to_json(p: &iface_projects::UpdateAProjectResponseRemediationPatch) -> Value {
+    let mut m = Map::new();
+    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_projects__update_a_project_response_remediation_pin__to_json(p: &iface_projects::UpdateAProjectResponseRemediationPin) -> Value {
+    let mut m = Map::new();
+    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_projects__update_a_project_response_remediation_upgrade__to_json(p: &iface_projects::UpdateAProjectResponseRemediationUpgrade) -> Value {
+    let mut m = Map::new();
+    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
 fn iface_projects__list_all_aggregated_issues_body_filters__to_json(p: &iface_projects::ListAllAggregatedIssuesBodyFilters) -> Value {
     let mut m = Map::new();
-    m.insert("exploit_maturity".into(), match (&p.exploit_maturity) { Some(v) => Value::Array((v).iter().map(|v| Value::String((v).clone())).collect()), None => Value::Null });
+    m.insert("exploitMaturity".into(), match (&p.exploit_maturity) { Some(v) => Value::Array((v).iter().map(|v| Value::String((v).clone())).collect()), None => Value::Null });
     m.insert("ignored".into(), match (&p.ignored) { Some(v) => Value::Bool(*(v)), None => Value::Null });
     m.insert("patched".into(), match (&p.patched) { Some(v) => Value::Bool(*(v)), None => Value::Null });
     m.insert("priority".into(), match (&p.priority) { Some(v) => iface_projects__list_all_aggregated_issues_body_filters_priority__to_json(v), None => Value::Null });
@@ -1973,15 +3674,237 @@ fn iface_projects__list_all_aggregated_issues_body_filters_priority_score__to_js
     Value::Object(m)
 }
 
+fn iface_projects__list_all_aggregated_issues_response__to_json(p: &iface_projects::ListAllAggregatedIssuesResponse) -> Value {
+    let mut m = Map::new();
+    m.insert("issues".into(), match (&p.issues) { Some(v) => Value::Array((v).iter().map(|v| iface_projects__list_all_aggregated_issues_response_issues_item__to_json(v)).collect()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_projects__list_all_aggregated_issues_response_issues_item__to_json(p: &iface_projects::ListAllAggregatedIssuesResponseIssuesItem) -> Value {
+    let mut m = Map::new();
+    m.insert("fixInfo".into(), match (&p.fix_info) { Some(v) => iface_projects__list_all_aggregated_issues_response_issues_item_fix_info__to_json(v), None => Value::Null });
+    m.insert("id".into(), Value::String((&p.id).clone()));
+    m.insert("ignoreReasons".into(), match (&p.ignore_reasons) { Some(v) => Value::Array((v).iter().map(|v| Value::String((v).clone())).collect()), None => Value::Null });
+    m.insert("introducedThrough".into(), match (&p.introduced_through) { Some(v) => Value::Array((v).iter().map(|v| Value::String((v).clone())).collect()), None => Value::Null });
+    m.insert("isIgnored".into(), Value::Bool(*(&p.is_ignored)));
+    m.insert("isPatched".into(), Value::Bool(*(&p.is_patched)));
+    m.insert("issueData".into(), iface_projects__list_all_aggregated_issues_response_issues_item_issue_data__to_json(&p.issue_data));
+    m.insert("issueType".into(), Value::String((&p.issue_type).clone()));
+    m.insert("links".into(), match (&p.links) { Some(v) => iface_projects__list_all_aggregated_issues_response_issues_item_links__to_json(v), None => Value::Null });
+    m.insert("pkgName".into(), Value::String((&p.pkg_name).clone()));
+    m.insert("pkgVersions".into(), Value::Array((&p.pkg_versions).iter().map(|v| Value::String((v).clone())).collect()));
+    m.insert("priority".into(), match (&p.priority) { Some(v) => iface_projects__list_all_aggregated_issues_response_issues_item_priority__to_json(v), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_projects__list_all_aggregated_issues_response_issues_item_fix_info__to_json(p: &iface_projects::ListAllAggregatedIssuesResponseIssuesItemFixInfo) -> Value {
+    let mut m = Map::new();
+    m.insert("fixedIn".into(), match (&p.fixed_in) { Some(v) => Value::Array((v).iter().map(|v| Value::String((v).clone())).collect()), None => Value::Null });
+    m.insert("isFixable".into(), match (&p.is_fixable) { Some(v) => Value::Bool(*(v)), None => Value::Null });
+    m.insert("isPartiallyFixable".into(), match (&p.is_partially_fixable) { Some(v) => Value::Bool(*(v)), None => Value::Null });
+    m.insert("isPatchable".into(), match (&p.is_patchable) { Some(v) => Value::Bool(*(v)), None => Value::Null });
+    m.insert("isPinnable".into(), match (&p.is_pinnable) { Some(v) => Value::Bool(*(v)), None => Value::Null });
+    m.insert("isUpgradable".into(), match (&p.is_upgradable) { Some(v) => Value::Bool(*(v)), None => Value::Null });
+    m.insert("nearestFixedInVersion".into(), match (&p.nearest_fixed_in_version) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_projects__list_all_aggregated_issues_response_issues_item_issue_data__to_json(p: &iface_projects::ListAllAggregatedIssuesResponseIssuesItemIssueData) -> Value {
+    let mut m = Map::new();
+    m.insert("CVSSv3".into(), Value::String((&p.cvs_sv3).clone()));
+    m.insert("credit".into(), Value::Array((&p.credit).iter().map(|v| Value::String((v).clone())).collect()));
+    m.insert("cvssScore".into(), serde_json::Number::from_f64(*(&p.cvss_score)).map(Value::Number).unwrap_or(Value::Null));
+    m.insert("description".into(), Value::String((&p.description).clone()));
+    m.insert("disclosureTime".into(), Value::String((&p.disclosure_time).clone()));
+    m.insert("exploitMaturity".into(), Value::String((&p.exploit_maturity).clone()));
+    m.insert("id".into(), Value::String((&p.id).clone()));
+    m.insert("identifiers".into(), iface_projects__list_all_aggregated_issues_response_issues_item_issue_data_identifiers__to_json(&p.identifiers));
+    m.insert("isMaliciousPackage".into(), Value::Bool(*(&p.is_malicious_package)));
+    m.insert("language".into(), Value::String((&p.language).clone()));
+    m.insert("nearestFixedInVersion".into(), Value::String((&p.nearest_fixed_in_version).clone()));
+    m.insert("originalSeverity".into(), Value::String((&p.original_severity).clone()));
+    m.insert("patches".into(), Value::Array((&p.patches).iter().map(|v| Value::String((v).clone())).collect()));
+    m.insert("path".into(), Value::String((&p.path).clone()));
+    m.insert("publicationTime".into(), Value::String((&p.publication_time).clone()));
+    m.insert("semver".into(), iface_projects__list_all_aggregated_issues_response_issues_item_issue_data_semver__to_json(&p.semver));
+    m.insert("severity".into(), Value::String((&p.severity).clone()));
+    m.insert("title".into(), Value::String((&p.title).clone()));
+    m.insert("url".into(), Value::String((&p.url).clone()));
+    m.insert("violatedPolicyPublicId".into(), Value::String((&p.violated_policy_public_id).clone()));
+    Value::Object(m)
+}
+
+fn iface_projects__list_all_aggregated_issues_response_issues_item_issue_data_identifiers__to_json(p: &iface_projects::ListAllAggregatedIssuesResponseIssuesItemIssueDataIdentifiers) -> Value {
+    let mut m = Map::new();
+    m.insert("CVE".into(), match (&p.cve) { Some(v) => Value::Array((v).iter().map(|v| Value::String((v).clone())).collect()), None => Value::Null });
+    m.insert("CWE".into(), match (&p.cwe) { Some(v) => Value::Array((v).iter().map(|v| Value::String((v).clone())).collect()), None => Value::Null });
+    m.insert("OSVDB".into(), match (&p.osvdb) { Some(v) => Value::Array((v).iter().map(|v| Value::String((v).clone())).collect()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_projects__list_all_aggregated_issues_response_issues_item_issue_data_semver__to_json(p: &iface_projects::ListAllAggregatedIssuesResponseIssuesItemIssueDataSemver) -> Value {
+    let mut m = Map::new();
+    m.insert("unaffected".into(), match (&p.unaffected) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("vulnerable".into(), match (&p.vulnerable) { Some(v) => Value::Array((v).iter().map(|v| Value::String((v).clone())).collect()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_projects__list_all_aggregated_issues_response_issues_item_links__to_json(p: &iface_projects::ListAllAggregatedIssuesResponseIssuesItemLinks) -> Value {
+    let mut m = Map::new();
+    m.insert("paths".into(), match (&p.paths) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_projects__list_all_aggregated_issues_response_issues_item_priority__to_json(p: &iface_projects::ListAllAggregatedIssuesResponseIssuesItemPriority) -> Value {
+    let mut m = Map::new();
+    m.insert("factors".into(), match (&p.factors) { Some(v) => Value::Array((v).iter().map(|v| Value::String((v).clone())).collect()), None => Value::Null });
+    m.insert("score".into(), match (&p.score) { Some(v) => serde_json::Number::from_f64(*(v)).map(Value::Number).unwrap_or(Value::Null), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_projects__applying_attributes_response__to_json(p: &iface_projects::ApplyingAttributesResponse) -> Value {
+    let mut m = Map::new();
+    m.insert("attributes".into(), match (&p.attributes) { Some(v) => iface_projects__applying_attributes_response_attributes__to_json(v), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_projects__applying_attributes_response_attributes__to_json(p: &iface_projects::ApplyingAttributesResponseAttributes) -> Value {
+    let mut m = Map::new();
+    m.insert("criticality".into(), match (&p.criticality) { Some(v) => Value::Array((v).iter().map(|v| Value::String((v).clone())).collect()), None => Value::Null });
+    m.insert("environment".into(), match (&p.environment) { Some(v) => Value::Array((v).iter().map(|v| Value::String((v).clone())).collect()), None => Value::Null });
+    m.insert("lifecycle".into(), match (&p.lifecycle) { Some(v) => Value::Array((v).iter().map(|v| Value::String((v).clone())).collect()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_projects__get_project_dependency_graph_response__to_json(p: &iface_projects::GetProjectDependencyGraphResponse) -> Value {
+    let mut m = Map::new();
+    m.insert("depGraph".into(), iface_projects__get_project_dependency_graph_response_dep_graph__to_json(&p.dep_graph));
+    Value::Object(m)
+}
+
+fn iface_projects__get_project_dependency_graph_response_dep_graph__to_json(p: &iface_projects::GetProjectDependencyGraphResponseDepGraph) -> Value {
+    let mut m = Map::new();
+    m.insert("graph".into(), iface_projects__get_project_dependency_graph_response_dep_graph_graph__to_json(&p.graph));
+    m.insert("pkgManager".into(), iface_projects__get_project_dependency_graph_response_dep_graph_pkg_manager__to_json(&p.pkg_manager));
+    m.insert("pkgs".into(), Value::Array((&p.pkgs).iter().map(|v| iface_projects__get_project_dependency_graph_response_dep_graph_pkgs_item__to_json(v)).collect()));
+    m.insert("schemaVersion".into(), Value::String((&p.schema_version).clone()));
+    Value::Object(m)
+}
+
+fn iface_projects__get_project_dependency_graph_response_dep_graph_graph__to_json(p: &iface_projects::GetProjectDependencyGraphResponseDepGraphGraph) -> Value {
+    let mut m = Map::new();
+    m.insert("nodes".into(), match (&p.nodes) { Some(v) => Value::Array((v).iter().map(|v| iface_projects__get_project_dependency_graph_response_dep_graph_graph_nodes_item__to_json(v)).collect()), None => Value::Null });
+    m.insert("rootNodeId".into(), Value::String((&p.root_node_id).clone()));
+    Value::Object(m)
+}
+
+fn iface_projects__get_project_dependency_graph_response_dep_graph_graph_nodes_item__to_json(p: &iface_projects::GetProjectDependencyGraphResponseDepGraphGraphNodesItem) -> Value {
+    let mut m = Map::new();
+    m.insert("deps".into(), Value::Array((&p.deps).iter().map(|v| iface_projects__get_project_dependency_graph_response_dep_graph_graph_nodes_item_deps_item__to_json(v)).collect()));
+    m.insert("nodeId".into(), Value::String((&p.node_id).clone()));
+    m.insert("pkgId".into(), Value::String((&p.pkg_id).clone()));
+    Value::Object(m)
+}
+
+fn iface_projects__get_project_dependency_graph_response_dep_graph_graph_nodes_item_deps_item__to_json(p: &iface_projects::GetProjectDependencyGraphResponseDepGraphGraphNodesItemDepsItem) -> Value {
+    let mut m = Map::new();
+    m.insert("nodeId".into(), Value::String((&p.node_id).clone()));
+    Value::Object(m)
+}
+
+fn iface_projects__get_project_dependency_graph_response_dep_graph_pkg_manager__to_json(p: &iface_projects::GetProjectDependencyGraphResponseDepGraphPkgManager) -> Value {
+    let mut m = Map::new();
+    m.insert("name".into(), Value::String((&p.name).clone()));
+    m.insert("repositories".into(), match (&p.repositories) { Some(v) => Value::Array((v).iter().map(|v| iface_projects__get_project_dependency_graph_response_dep_graph_pkg_manager_repositories_item__to_json(v)).collect()), None => Value::Null });
+    m.insert("version".into(), match (&p.version) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_projects__get_project_dependency_graph_response_dep_graph_pkg_manager_repositories_item__to_json(p: &iface_projects::GetProjectDependencyGraphResponseDepGraphPkgManagerRepositoriesItem) -> Value {
+    let mut m = Map::new();
+    m.insert("alias".into(), Value::String((&p.alias).clone()));
+    Value::Object(m)
+}
+
+fn iface_projects__get_project_dependency_graph_response_dep_graph_pkgs_item__to_json(p: &iface_projects::GetProjectDependencyGraphResponseDepGraphPkgsItem) -> Value {
+    let mut m = Map::new();
+    m.insert("id".into(), Value::String((&p.id).clone()));
+    m.insert("info".into(), iface_projects__get_project_dependency_graph_response_dep_graph_pkgs_item_info__to_json(&p.info));
+    Value::Object(m)
+}
+
+fn iface_projects__get_project_dependency_graph_response_dep_graph_pkgs_item_info__to_json(p: &iface_projects::GetProjectDependencyGraphResponseDepGraphPkgsItemInfo) -> Value {
+    let mut m = Map::new();
+    m.insert("name".into(), Value::String((&p.name).clone()));
+    m.insert("version".into(), match (&p.version) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
 fn iface_projects__list_all_project_snapshots_body_filters__to_json(p: &iface_projects::ListAllProjectSnapshotsBodyFilters) -> Value {
     let mut m = Map::new();
-    m.insert("image_id".into(), match (&p.image_id) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("imageId".into(), match (&p.image_id) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_projects__list_all_project_snapshots_response__to_json(p: &iface_projects::ListAllProjectSnapshotsResponse) -> Value {
+    let mut m = Map::new();
+    m.insert("snapshots".into(), match (&p.snapshots) { Some(v) => Value::Array((v).iter().map(|v| iface_projects__list_all_project_snapshots_response_snapshots_item__to_json(v)).collect()), None => Value::Null });
+    m.insert("total".into(), match (&p.total) { Some(v) => serde_json::Number::from_f64(*(v)).map(Value::Number).unwrap_or(Value::Null), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_projects__list_all_project_snapshots_response_snapshots_item__to_json(p: &iface_projects::ListAllProjectSnapshotsResponseSnapshotsItem) -> Value {
+    let mut m = Map::new();
+    m.insert("created".into(), Value::String((&p.created).clone()));
+    m.insert("id".into(), Value::String((&p.id).clone()));
+    m.insert("imageBaseImage".into(), match (&p.image_base_image) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("imageId".into(), match (&p.image_id) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("imagePlatform".into(), match (&p.image_platform) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("imageTag".into(), match (&p.image_tag) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("issueCounts".into(), iface_projects__list_all_project_snapshots_response_snapshots_item_issue_counts__to_json(&p.issue_counts));
+    m.insert("method".into(), match (&p.method) { Some(v) => Value::String(iface_projects__list_all_project_snapshots_response_snapshots_item_method_enum__to_str(v).into()), None => Value::Null });
+    m.insert("totalDependencies".into(), serde_json::Number::from_f64(*(&p.total_dependencies)).map(Value::Number).unwrap_or(Value::Null));
+    Value::Object(m)
+}
+
+fn iface_projects__list_all_project_snapshots_response_snapshots_item_issue_counts__to_json(p: &iface_projects::ListAllProjectSnapshotsResponseSnapshotsItemIssueCounts) -> Value {
+    let mut m = Map::new();
+    m.insert("license".into(), match (&p.license) { Some(v) => iface_projects__list_all_project_snapshots_response_snapshots_item_issue_counts_license__to_json(v), None => Value::Null });
+    m.insert("sast".into(), match (&p.sast) { Some(v) => iface_projects__list_all_project_snapshots_response_snapshots_item_issue_counts_sast__to_json(v), None => Value::Null });
+    m.insert("vuln".into(), match (&p.vuln) { Some(v) => iface_projects__list_all_project_snapshots_response_snapshots_item_issue_counts_vuln__to_json(v), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_projects__list_all_project_snapshots_response_snapshots_item_issue_counts_license__to_json(p: &iface_projects::ListAllProjectSnapshotsResponseSnapshotsItemIssueCountsLicense) -> Value {
+    let mut m = Map::new();
+    m.insert("critical".into(), serde_json::Number::from_f64(*(&p.critical)).map(Value::Number).unwrap_or(Value::Null));
+    m.insert("high".into(), serde_json::Number::from_f64(*(&p.high)).map(Value::Number).unwrap_or(Value::Null));
+    m.insert("low".into(), serde_json::Number::from_f64(*(&p.low)).map(Value::Number).unwrap_or(Value::Null));
+    m.insert("medium".into(), serde_json::Number::from_f64(*(&p.medium)).map(Value::Number).unwrap_or(Value::Null));
+    Value::Object(m)
+}
+
+fn iface_projects__list_all_project_snapshots_response_snapshots_item_issue_counts_sast__to_json(p: &iface_projects::ListAllProjectSnapshotsResponseSnapshotsItemIssueCountsSast) -> Value {
+    let mut m = Map::new();
+    m.insert("critical".into(), serde_json::Number::from_f64(*(&p.critical)).map(Value::Number).unwrap_or(Value::Null));
+    m.insert("high".into(), serde_json::Number::from_f64(*(&p.high)).map(Value::Number).unwrap_or(Value::Null));
+    m.insert("low".into(), serde_json::Number::from_f64(*(&p.low)).map(Value::Number).unwrap_or(Value::Null));
+    m.insert("medium".into(), serde_json::Number::from_f64(*(&p.medium)).map(Value::Number).unwrap_or(Value::Null));
+    Value::Object(m)
+}
+
+fn iface_projects__list_all_project_snapshots_response_snapshots_item_issue_counts_vuln__to_json(p: &iface_projects::ListAllProjectSnapshotsResponseSnapshotsItemIssueCountsVuln) -> Value {
+    let mut m = Map::new();
+    m.insert("critical".into(), serde_json::Number::from_f64(*(&p.critical)).map(Value::Number).unwrap_or(Value::Null));
+    m.insert("high".into(), serde_json::Number::from_f64(*(&p.high)).map(Value::Number).unwrap_or(Value::Null));
+    m.insert("low".into(), serde_json::Number::from_f64(*(&p.low)).map(Value::Number).unwrap_or(Value::Null));
+    m.insert("medium".into(), serde_json::Number::from_f64(*(&p.medium)).map(Value::Number).unwrap_or(Value::Null));
     Value::Object(m)
 }
 
 fn iface_projects__list_all_project_snapshot_aggregated_issues_body_filters__to_json(p: &iface_projects::ListAllProjectSnapshotAggregatedIssuesBodyFilters) -> Value {
     let mut m = Map::new();
-    m.insert("exploit_maturity".into(), match (&p.exploit_maturity) { Some(v) => Value::Array((v).iter().map(|v| Value::String((v).clone())).collect()), None => Value::Null });
+    m.insert("exploitMaturity".into(), match (&p.exploit_maturity) { Some(v) => Value::Array((v).iter().map(|v| Value::String((v).clone())).collect()), None => Value::Null });
     m.insert("ignored".into(), match (&p.ignored) { Some(v) => Value::Bool(*(v)), None => Value::Null });
     m.insert("patched".into(), match (&p.patched) { Some(v) => Value::Bool(*(v)), None => Value::Null });
     m.insert("priority".into(), match (&p.priority) { Some(v) => iface_projects__list_all_project_snapshot_aggregated_issues_body_filters_priority__to_json(v), None => Value::Null });
@@ -2000,6 +3923,131 @@ fn iface_projects__list_all_project_snapshot_aggregated_issues_body_filters_prio
     let mut m = Map::new();
     m.insert("max".into(), match (&p.max) { Some(v) => serde_json::Number::from_f64(*(v)).map(Value::Number).unwrap_or(Value::Null), None => Value::Null });
     m.insert("min".into(), match (&p.min) { Some(v) => serde_json::Number::from_f64(*(v)).map(Value::Number).unwrap_or(Value::Null), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_projects__list_all_project_snapshot_aggregated_issues_response__to_json(p: &iface_projects::ListAllProjectSnapshotAggregatedIssuesResponse) -> Value {
+    let mut m = Map::new();
+    m.insert("issues".into(), match (&p.issues) { Some(v) => Value::Array((v).iter().map(|v| iface_projects__list_all_project_snapshot_aggregated_issues_response_issues_item__to_json(v)).collect()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_projects__list_all_project_snapshot_aggregated_issues_response_issues_item__to_json(p: &iface_projects::ListAllProjectSnapshotAggregatedIssuesResponseIssuesItem) -> Value {
+    let mut m = Map::new();
+    m.insert("fixInfo".into(), match (&p.fix_info) { Some(v) => iface_projects__list_all_project_snapshot_aggregated_issues_response_issues_item_fix_info__to_json(v), None => Value::Null });
+    m.insert("id".into(), Value::String((&p.id).clone()));
+    m.insert("ignoreReasons".into(), match (&p.ignore_reasons) { Some(v) => Value::Array((v).iter().map(|v| Value::String((v).clone())).collect()), None => Value::Null });
+    m.insert("introducedThrough".into(), match (&p.introduced_through) { Some(v) => Value::Array((v).iter().map(|v| Value::String((v).clone())).collect()), None => Value::Null });
+    m.insert("isIgnored".into(), Value::Bool(*(&p.is_ignored)));
+    m.insert("isPatched".into(), Value::Bool(*(&p.is_patched)));
+    m.insert("issueData".into(), iface_projects__list_all_project_snapshot_aggregated_issues_response_issues_item_issue_data__to_json(&p.issue_data));
+    m.insert("issueType".into(), Value::String((&p.issue_type).clone()));
+    m.insert("links".into(), match (&p.links) { Some(v) => iface_projects__list_all_project_snapshot_aggregated_issues_response_issues_item_links__to_json(v), None => Value::Null });
+    m.insert("pkgName".into(), Value::String((&p.pkg_name).clone()));
+    m.insert("pkgVersions".into(), Value::Array((&p.pkg_versions).iter().map(|v| Value::String((v).clone())).collect()));
+    m.insert("priority".into(), match (&p.priority) { Some(v) => iface_projects__list_all_project_snapshot_aggregated_issues_response_issues_item_priority__to_json(v), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_projects__list_all_project_snapshot_aggregated_issues_response_issues_item_fix_info__to_json(p: &iface_projects::ListAllProjectSnapshotAggregatedIssuesResponseIssuesItemFixInfo) -> Value {
+    let mut m = Map::new();
+    m.insert("fixedIn".into(), match (&p.fixed_in) { Some(v) => Value::Array((v).iter().map(|v| Value::String((v).clone())).collect()), None => Value::Null });
+    m.insert("isFixable".into(), match (&p.is_fixable) { Some(v) => Value::Bool(*(v)), None => Value::Null });
+    m.insert("isPartiallyFixable".into(), match (&p.is_partially_fixable) { Some(v) => Value::Bool(*(v)), None => Value::Null });
+    m.insert("isPatchable".into(), match (&p.is_patchable) { Some(v) => Value::Bool(*(v)), None => Value::Null });
+    m.insert("isPinnable".into(), match (&p.is_pinnable) { Some(v) => Value::Bool(*(v)), None => Value::Null });
+    m.insert("isUpgradable".into(), match (&p.is_upgradable) { Some(v) => Value::Bool(*(v)), None => Value::Null });
+    m.insert("nearestFixedInVersion".into(), match (&p.nearest_fixed_in_version) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_projects__list_all_project_snapshot_aggregated_issues_response_issues_item_issue_data__to_json(p: &iface_projects::ListAllProjectSnapshotAggregatedIssuesResponseIssuesItemIssueData) -> Value {
+    let mut m = Map::new();
+    m.insert("CVSSv3".into(), Value::String((&p.cvs_sv3).clone()));
+    m.insert("credit".into(), Value::Array((&p.credit).iter().map(|v| Value::String((v).clone())).collect()));
+    m.insert("cvssScore".into(), serde_json::Number::from_f64(*(&p.cvss_score)).map(Value::Number).unwrap_or(Value::Null));
+    m.insert("description".into(), Value::String((&p.description).clone()));
+    m.insert("disclosureTime".into(), Value::String((&p.disclosure_time).clone()));
+    m.insert("exploitMaturity".into(), Value::String((&p.exploit_maturity).clone()));
+    m.insert("id".into(), Value::String((&p.id).clone()));
+    m.insert("identifiers".into(), iface_projects__list_all_project_snapshot_aggregated_issues_response_issues_item_issue_data_identifiers__to_json(&p.identifiers));
+    m.insert("isMaliciousPackage".into(), Value::Bool(*(&p.is_malicious_package)));
+    m.insert("language".into(), Value::String((&p.language).clone()));
+    m.insert("nearestFixedInVersion".into(), Value::String((&p.nearest_fixed_in_version).clone()));
+    m.insert("originalSeverity".into(), Value::String((&p.original_severity).clone()));
+    m.insert("patches".into(), Value::Array((&p.patches).iter().map(|v| Value::String((v).clone())).collect()));
+    m.insert("path".into(), Value::String((&p.path).clone()));
+    m.insert("publicationTime".into(), Value::String((&p.publication_time).clone()));
+    m.insert("semver".into(), iface_projects__list_all_project_snapshot_aggregated_issues_response_issues_item_issue_data_semver__to_json(&p.semver));
+    m.insert("severity".into(), Value::String((&p.severity).clone()));
+    m.insert("title".into(), Value::String((&p.title).clone()));
+    m.insert("url".into(), Value::String((&p.url).clone()));
+    m.insert("violatedPolicyPublicId".into(), Value::String((&p.violated_policy_public_id).clone()));
+    Value::Object(m)
+}
+
+fn iface_projects__list_all_project_snapshot_aggregated_issues_response_issues_item_issue_data_identifiers__to_json(p: &iface_projects::ListAllProjectSnapshotAggregatedIssuesResponseIssuesItemIssueDataIdentifiers) -> Value {
+    let mut m = Map::new();
+    m.insert("CVE".into(), match (&p.cve) { Some(v) => Value::Array((v).iter().map(|v| Value::String((v).clone())).collect()), None => Value::Null });
+    m.insert("CWE".into(), match (&p.cwe) { Some(v) => Value::Array((v).iter().map(|v| Value::String((v).clone())).collect()), None => Value::Null });
+    m.insert("OSVDB".into(), match (&p.osvdb) { Some(v) => Value::Array((v).iter().map(|v| Value::String((v).clone())).collect()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_projects__list_all_project_snapshot_aggregated_issues_response_issues_item_issue_data_semver__to_json(p: &iface_projects::ListAllProjectSnapshotAggregatedIssuesResponseIssuesItemIssueDataSemver) -> Value {
+    let mut m = Map::new();
+    m.insert("unaffected".into(), match (&p.unaffected) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("vulnerable".into(), match (&p.vulnerable) { Some(v) => Value::Array((v).iter().map(|v| Value::String((v).clone())).collect()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_projects__list_all_project_snapshot_aggregated_issues_response_issues_item_links__to_json(p: &iface_projects::ListAllProjectSnapshotAggregatedIssuesResponseIssuesItemLinks) -> Value {
+    let mut m = Map::new();
+    m.insert("paths".into(), match (&p.paths) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_projects__list_all_project_snapshot_aggregated_issues_response_issues_item_priority__to_json(p: &iface_projects::ListAllProjectSnapshotAggregatedIssuesResponseIssuesItemPriority) -> Value {
+    let mut m = Map::new();
+    m.insert("factors".into(), match (&p.factors) { Some(v) => Value::Array((v).iter().map(|v| Value::String((v).clone())).collect()), None => Value::Null });
+    m.insert("score".into(), match (&p.score) { Some(v) => serde_json::Number::from_f64(*(v)).map(Value::Number).unwrap_or(Value::Null), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_projects__list_all_project_snapshot_issue_paths_response__to_json(p: &iface_projects::ListAllProjectSnapshotIssuePathsResponse) -> Value {
+    let mut m = Map::new();
+    m.insert("links".into(), match (&p.links) { Some(v) => iface_projects__list_all_project_snapshot_issue_paths_response_links__to_json(v), None => Value::Null });
+    m.insert("paths".into(), match (&p.paths) { Some(v) => Value::Array((v).iter().map(|v| Value::Array((v).iter().map(|v| iface_projects__list_all_project_snapshot_issue_paths_response_paths_item_item__to_json(v)).collect())).collect()), None => Value::Null });
+    m.insert("snapshotId".into(), match (&p.snapshot_id) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("total".into(), match (&p.total) { Some(v) => serde_json::Number::from_f64(*(v)).map(Value::Number).unwrap_or(Value::Null), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_projects__list_all_project_snapshot_issue_paths_response_links__to_json(p: &iface_projects::ListAllProjectSnapshotIssuePathsResponseLinks) -> Value {
+    let mut m = Map::new();
+    m.insert("last".into(), match (&p.last) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("next".into(), match (&p.next) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("prev".into(), match (&p.prev) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_projects__list_all_project_snapshot_issue_paths_response_paths_item_item__to_json(p: &iface_projects::ListAllProjectSnapshotIssuePathsResponsePathsItemItem) -> Value {
+    let mut m = Map::new();
+    m.insert("fixVersion".into(), match (&p.fix_version) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("name".into(), match (&p.name) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("version".into(), match (&p.version) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_projects__ignore_path__to_json(p: &iface_projects::IgnorePath) -> Value {
+    let mut m = Map::new();
+    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_projects__issue_id__to_json(p: &iface_projects::IssueId) -> Value {
+    let mut m = Map::new();
+    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
     Value::Object(m)
 }
 
@@ -2023,11 +4071,79 @@ fn iface_projects__create_jira_issue_body_fields_project__to_json(p: &iface_proj
     Value::Object(m)
 }
 
+fn iface_projects__create_jira_issue_response__to_json(p: &iface_projects::CreateJiraIssueResponse) -> Value {
+    let mut m = Map::new();
+    m.insert("jiraIssue".into(), match (&p.jira_issue) { Some(v) => iface_projects__create_jira_issue_response_jira_issue__to_json(v), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_projects__create_jira_issue_response_jira_issue__to_json(p: &iface_projects::CreateJiraIssueResponseJiraIssue) -> Value {
+    let mut m = Map::new();
+    m.insert("id".into(), match (&p.id) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("key".into(), match (&p.key) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_projects__list_all_project_issue_paths_response__to_json(p: &iface_projects::ListAllProjectIssuePathsResponse) -> Value {
+    let mut m = Map::new();
+    m.insert("links".into(), match (&p.links) { Some(v) => iface_projects__list_all_project_issue_paths_response_links__to_json(v), None => Value::Null });
+    m.insert("paths".into(), match (&p.paths) { Some(v) => Value::Array((v).iter().map(|v| Value::Array((v).iter().map(|v| iface_projects__list_all_project_issue_paths_response_paths_item_item__to_json(v)).collect())).collect()), None => Value::Null });
+    m.insert("snapshotId".into(), match (&p.snapshot_id) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("total".into(), match (&p.total) { Some(v) => serde_json::Number::from_f64(*(v)).map(Value::Number).unwrap_or(Value::Null), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_projects__list_all_project_issue_paths_response_links__to_json(p: &iface_projects::ListAllProjectIssuePathsResponseLinks) -> Value {
+    let mut m = Map::new();
+    m.insert("last".into(), match (&p.last) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("next".into(), match (&p.next) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("prev".into(), match (&p.prev) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_projects__list_all_project_issue_paths_response_paths_item_item__to_json(p: &iface_projects::ListAllProjectIssuePathsResponsePathsItemItem) -> Value {
+    let mut m = Map::new();
+    m.insert("fixVersion".into(), match (&p.fix_version) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("name".into(), match (&p.name) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("version".into(), match (&p.version) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_projects__list_project_settings_response__to_json(p: &iface_projects::ListProjectSettingsResponse) -> Value {
+    let mut m = Map::new();
+    m.insert("autoDepUpgradeEnabled".into(), match (&p.auto_dep_upgrade_enabled) { Some(v) => Value::Bool(*(v)), None => Value::Null });
+    m.insert("autoDepUpgradeIgnoredDependencies".into(), match (&p.auto_dep_upgrade_ignored_dependencies) { Some(v) => Value::Array((v).iter().map(|v| Value::String((v).clone())).collect()), None => Value::Null });
+    m.insert("autoDepUpgradeLimit".into(), match (&p.auto_dep_upgrade_limit) { Some(v) => serde_json::Number::from_f64(*(v)).map(Value::Number).unwrap_or(Value::Null), None => Value::Null });
+    m.insert("autoDepUpgradeMinAge".into(), match (&p.auto_dep_upgrade_min_age) { Some(v) => serde_json::Number::from_f64(*(v)).map(Value::Number).unwrap_or(Value::Null), None => Value::Null });
+    m.insert("autoRemediationPrs".into(), match (&p.auto_remediation_prs) { Some(v) => iface_projects__list_project_settings_response_auto_remediation_prs__to_json(v), None => Value::Null });
+    m.insert("pullRequestAssignment".into(), match (&p.pull_request_assignment) { Some(v) => iface_projects__list_project_settings_response_pull_request_assignment__to_json(v), None => Value::Null });
+    m.insert("pullRequestFailOnAnyVulns".into(), match (&p.pull_request_fail_on_any_vulns) { Some(v) => Value::Bool(*(v)), None => Value::Null });
+    m.insert("pullRequestFailOnlyForHighSeverity".into(), match (&p.pull_request_fail_only_for_high_severity) { Some(v) => Value::Bool(*(v)), None => Value::Null });
+    m.insert("pullRequestTestEnabled".into(), match (&p.pull_request_test_enabled) { Some(v) => Value::Bool(*(v)), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_projects__list_project_settings_response_auto_remediation_prs__to_json(p: &iface_projects::ListProjectSettingsResponseAutoRemediationPrs) -> Value {
+    let mut m = Map::new();
+    m.insert("backlogPrsEnabled".into(), match (&p.backlog_prs_enabled) { Some(v) => Value::Bool(*(v)), None => Value::Null });
+    m.insert("freshPrsEnabled".into(), match (&p.fresh_prs_enabled) { Some(v) => Value::Bool(*(v)), None => Value::Null });
+    m.insert("usePatchRemediation".into(), match (&p.use_patch_remediation) { Some(v) => Value::Bool(*(v)), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_projects__list_project_settings_response_pull_request_assignment__to_json(p: &iface_projects::ListProjectSettingsResponsePullRequestAssignment) -> Value {
+    let mut m = Map::new();
+    m.insert("assignees".into(), match (&p.assignees) { Some(v) => Value::Array((v).iter().map(|v| Value::String((v).clone())).collect()), None => Value::Null });
+    m.insert("enabled".into(), match (&p.enabled) { Some(v) => Value::Bool(*(v)), None => Value::Null });
+    m.insert("type".into(), match (&p.type_op) { Some(v) => Value::String(iface_projects__list_project_settings_response_pull_request_assignment_type_op_enum__to_str(v).into()), None => Value::Null });
+    Value::Object(m)
+}
+
 fn iface_projects__update_project_settings_body_auto_remediation_prs__to_json(p: &iface_projects::UpdateProjectSettingsBodyAutoRemediationPrs) -> Value {
     let mut m = Map::new();
-    m.insert("backlog_prs_enabled".into(), match (&p.backlog_prs_enabled) { Some(v) => Value::Bool(*(v)), None => Value::Null });
-    m.insert("fresh_prs_enabled".into(), match (&p.fresh_prs_enabled) { Some(v) => Value::Bool(*(v)), None => Value::Null });
-    m.insert("use_patch_remediation".into(), match (&p.use_patch_remediation) { Some(v) => Value::Bool(*(v)), None => Value::Null });
+    m.insert("backlogPrsEnabled".into(), match (&p.backlog_prs_enabled) { Some(v) => Value::Bool(*(v)), None => Value::Null });
+    m.insert("freshPrsEnabled".into(), match (&p.fresh_prs_enabled) { Some(v) => Value::Bool(*(v)), None => Value::Null });
+    m.insert("usePatchRemediation".into(), match (&p.use_patch_remediation) { Some(v) => Value::Bool(*(v)), None => Value::Null });
     Value::Object(m)
 }
 
@@ -2035,14 +4151,56 @@ fn iface_projects__update_project_settings_body_pull_request_assignment__to_json
     let mut m = Map::new();
     m.insert("assignees".into(), match (&p.assignees) { Some(v) => Value::Array((v).iter().map(|v| Value::String((v).clone())).collect()), None => Value::Null });
     m.insert("enabled".into(), match (&p.enabled) { Some(v) => Value::Bool(*(v)), None => Value::Null });
-    m.insert("type".into(), match (&p.type_op) { Some(v) => Value::String(iface_projects__update_project_settings_body_pull_request_assignment_type_op_enum__to_str(v).into()), None => Value::Null });
+    m.insert("type".into(), match (&p.type_op) { Some(v) => Value::String(iface_projects__list_project_settings_response_pull_request_assignment_type_op_enum__to_str(v).into()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_projects__update_project_settings_response__to_json(p: &iface_projects::UpdateProjectSettingsResponse) -> Value {
+    let mut m = Map::new();
+    m.insert("autoDepUpgradeEnabled".into(), match (&p.auto_dep_upgrade_enabled) { Some(v) => Value::Bool(*(v)), None => Value::Null });
+    m.insert("autoDepUpgradeIgnoredDependencies".into(), match (&p.auto_dep_upgrade_ignored_dependencies) { Some(v) => Value::Array((v).iter().map(|v| Value::String((v).clone())).collect()), None => Value::Null });
+    m.insert("autoDepUpgradeLimit".into(), match (&p.auto_dep_upgrade_limit) { Some(v) => serde_json::Number::from_f64(*(v)).map(Value::Number).unwrap_or(Value::Null), None => Value::Null });
+    m.insert("autoDepUpgradeMinAge".into(), match (&p.auto_dep_upgrade_min_age) { Some(v) => serde_json::Number::from_f64(*(v)).map(Value::Number).unwrap_or(Value::Null), None => Value::Null });
+    m.insert("autoRemediationPrs".into(), match (&p.auto_remediation_prs) { Some(v) => iface_projects__update_project_settings_response_auto_remediation_prs__to_json(v), None => Value::Null });
+    m.insert("pullRequestAssignment".into(), match (&p.pull_request_assignment) { Some(v) => iface_projects__update_project_settings_response_pull_request_assignment__to_json(v), None => Value::Null });
+    m.insert("pullRequestFailOnAnyVulns".into(), match (&p.pull_request_fail_on_any_vulns) { Some(v) => Value::Bool(*(v)), None => Value::Null });
+    m.insert("pullRequestFailOnlyForHighSeverity".into(), match (&p.pull_request_fail_only_for_high_severity) { Some(v) => Value::Bool(*(v)), None => Value::Null });
+    m.insert("pullRequestTestEnabled".into(), match (&p.pull_request_test_enabled) { Some(v) => Value::Bool(*(v)), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_projects__update_project_settings_response_auto_remediation_prs__to_json(p: &iface_projects::UpdateProjectSettingsResponseAutoRemediationPrs) -> Value {
+    let mut m = Map::new();
+    m.insert("backlogPrsEnabled".into(), match (&p.backlog_prs_enabled) { Some(v) => Value::Bool(*(v)), None => Value::Null });
+    m.insert("freshPrsEnabled".into(), match (&p.fresh_prs_enabled) { Some(v) => Value::Bool(*(v)), None => Value::Null });
+    m.insert("usePatchRemediation".into(), match (&p.use_patch_remediation) { Some(v) => Value::Bool(*(v)), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_projects__update_project_settings_response_pull_request_assignment__to_json(p: &iface_projects::UpdateProjectSettingsResponsePullRequestAssignment) -> Value {
+    let mut m = Map::new();
+    m.insert("assignees".into(), match (&p.assignees) { Some(v) => Value::Array((v).iter().map(|v| Value::String((v).clone())).collect()), None => Value::Null });
+    m.insert("enabled".into(), match (&p.enabled) { Some(v) => Value::Bool(*(v)), None => Value::Null });
+    m.insert("type".into(), match (&p.type_op) { Some(v) => Value::String(iface_projects__list_project_settings_response_pull_request_assignment_type_op_enum__to_str(v).into()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_projects__add_a_tag_to_a_project_response__to_json(p: &iface_projects::AddATagToAProjectResponse) -> Value {
+    let mut m = Map::new();
+    m.insert("tags".into(), match (&p.tags) { Some(v) => Value::Array((v).iter().map(|v| Value::String((v).clone())).collect()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_projects__remove_a_tag_from_a_project_response__to_json(p: &iface_projects::RemoveATagFromAProjectResponse) -> Value {
+    let mut m = Map::new();
+    m.insert("tags".into(), match (&p.tags) { Some(v) => Value::Array((v).iter().map(|v| Value::String((v).clone())).collect()), None => Value::Null });
     Value::Object(m)
 }
 
 fn iface_projects__list_all_projects_body_filters__to_json(p: &iface_projects::ListAllProjectsBodyFilters) -> Value {
     let mut m = Map::new();
     m.insert("attributes".into(), match (&p.attributes) { Some(v) => iface_projects__list_all_projects_body_filters_attributes__to_json(v), None => Value::Null });
-    m.insert("is_monitored".into(), match (&p.is_monitored) { Some(v) => Value::Bool(*(v)), None => Value::Null });
+    m.insert("isMonitored".into(), match (&p.is_monitored) { Some(v) => Value::Bool(*(v)), None => Value::Null });
     m.insert("name".into(), match (&p.name) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("origin".into(), match (&p.origin) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("tags".into(), match (&p.tags) { Some(v) => iface_projects__list_all_projects_body_filters_tags__to_json(v), None => Value::Null });
@@ -2061,6 +4219,81 @@ fn iface_projects__list_all_projects_body_filters_attributes__to_json(p: &iface_
 fn iface_projects__list_all_projects_body_filters_tags__to_json(p: &iface_projects::ListAllProjectsBodyFiltersTags) -> Value {
     let mut m = Map::new();
     m.insert("includes".into(), match (&p.includes) { Some(v) => Value::Array((v).iter().map(|v| Value::String((v).clone())).collect()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_projects__list_all_projects_response__to_json(p: &iface_projects::ListAllProjectsResponse) -> Value {
+    let mut m = Map::new();
+    m.insert("org".into(), match (&p.org) { Some(v) => iface_projects__list_all_projects_response_org__to_json(v), None => Value::Null });
+    m.insert("projects".into(), match (&p.projects) { Some(v) => Value::Array((v).iter().map(|v| iface_projects__list_all_projects_response_projects_item__to_json(v)).collect()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_projects__list_all_projects_response_org__to_json(p: &iface_projects::ListAllProjectsResponseOrg) -> Value {
+    let mut m = Map::new();
+    m.insert("id".into(), match (&p.id) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("name".into(), match (&p.name) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_projects__list_all_projects_response_projects_item__to_json(p: &iface_projects::ListAllProjectsResponseProjectsItem) -> Value {
+    let mut m = Map::new();
+    m.insert("attributes".into(), match (&p.attributes) { Some(v) => iface_projects__list_all_projects_response_projects_item_attributes__to_json(v), None => Value::Null });
+    m.insert("branch".into(), match (&p.branch) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("browseUrl".into(), match (&p.browse_url) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("created".into(), match (&p.created) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("id".into(), match (&p.id) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("imageBaseImage".into(), match (&p.image_base_image) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("imageCluster".into(), match (&p.image_cluster) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("imageId".into(), match (&p.image_id) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("imagePlatform".into(), match (&p.image_platform) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("imageTag".into(), match (&p.image_tag) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("importingUser".into(), match (&p.importing_user) { Some(v) => iface_projects__list_all_projects_response_projects_item_importing_user__to_json(v), None => Value::Null });
+    m.insert("isMonitored".into(), match (&p.is_monitored) { Some(v) => Value::Bool(*(v)), None => Value::Null });
+    m.insert("issueCountsBySeverity".into(), match (&p.issue_counts_by_severity) { Some(v) => iface_projects__list_all_projects_response_projects_item_issue_counts_by_severity__to_json(v), None => Value::Null });
+    m.insert("lastTestedDate".into(), match (&p.last_tested_date) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("name".into(), match (&p.name) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("origin".into(), match (&p.origin) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("owner".into(), match (&p.owner) { Some(v) => iface_projects__list_all_projects_response_projects_item_owner__to_json(v), None => Value::Null });
+    m.insert("readOnly".into(), match (&p.read_only) { Some(v) => Value::Bool(*(v)), None => Value::Null });
+    m.insert("remoteRepoUrl".into(), match (&p.remote_repo_url) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("tags".into(), match (&p.tags) { Some(v) => Value::Array((v).iter().map(|v| Value::String((v).clone())).collect()), None => Value::Null });
+    m.insert("targetReference".into(), match (&p.target_reference) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("testFrequency".into(), match (&p.test_frequency) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("totalDependencies".into(), match (&p.total_dependencies) { Some(v) => serde_json::Number::from_f64(*(v)).map(Value::Number).unwrap_or(Value::Null), None => Value::Null });
+    m.insert("type".into(), match (&p.type_op) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_projects__list_all_projects_response_projects_item_attributes__to_json(p: &iface_projects::ListAllProjectsResponseProjectsItemAttributes) -> Value {
+    let mut m = Map::new();
+    m.insert("criticality".into(), match (&p.criticality) { Some(v) => Value::Array((v).iter().map(|v| Value::String((v).clone())).collect()), None => Value::Null });
+    m.insert("environment".into(), match (&p.environment) { Some(v) => Value::Array((v).iter().map(|v| Value::String((v).clone())).collect()), None => Value::Null });
+    m.insert("lifecycle".into(), match (&p.lifecycle) { Some(v) => Value::Array((v).iter().map(|v| Value::String((v).clone())).collect()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_projects__list_all_projects_response_projects_item_importing_user__to_json(p: &iface_projects::ListAllProjectsResponseProjectsItemImportingUser) -> Value {
+    let mut m = Map::new();
+    m.insert("email".into(), match (&p.email) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("id".into(), match (&p.id) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("name".into(), match (&p.name) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("username".into(), match (&p.username) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_projects__list_all_projects_response_projects_item_issue_counts_by_severity__to_json(p: &iface_projects::ListAllProjectsResponseProjectsItemIssueCountsBySeverity) -> Value {
+    let mut m = Map::new();
+    m.insert("critical".into(), match (&p.critical) { Some(v) => serde_json::Number::from_f64(*(v)).map(Value::Number).unwrap_or(Value::Null), None => Value::Null });
+    m.insert("high".into(), match (&p.high) { Some(v) => serde_json::Number::from_f64(*(v)).map(Value::Number).unwrap_or(Value::Null), None => Value::Null });
+    m.insert("low".into(), match (&p.low) { Some(v) => serde_json::Number::from_f64(*(v)).map(Value::Number).unwrap_or(Value::Null), None => Value::Null });
+    m.insert("medium".into(), match (&p.medium) { Some(v) => serde_json::Number::from_f64(*(v)).map(Value::Number).unwrap_or(Value::Null), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_projects__list_all_projects_response_projects_item_owner__to_json(p: &iface_projects::ListAllProjectsResponseProjectsItemOwner) -> Value {
+    let mut m = Map::new();
+    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
     Value::Object(m)
 }
 
@@ -2294,110 +4527,1420 @@ fn iface_projects__list_all_projects_params__to_json(p: &iface_projects::ListAll
     Value::Object(m)
 }
 
-impl iface_projects::Guest for crate::Component {
-    fn retrieve_a_single_project(params: iface_projects::RetrieveASingleProjectParams) -> Result<String, String> {
-        let json = iface_projects__retrieve_a_single_project_params__to_json(&params);
-        dispatch(&OP_PROJECTS_RETRIEVE_A_SINGLE_PROJECT, json)
+fn iface_projects__retrieve_a_single_project_response__from_json(v: &Value) -> Option<iface_projects::RetrieveASingleProjectResponse> {
+    let m = v.as_object()?;
+    Some(iface_projects::RetrieveASingleProjectResponse {
+        attributes: m.get("attributes").filter(|v| !v.is_null()).and_then(|v| iface_projects__retrieve_a_single_project_response_attributes__from_json(v)),
+        branch: m.get("branch").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        browse_url: m.get("browseUrl").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        created: m.get("created").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        hostname: m.get("hostname").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        id: m.get("id").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        image_base_image: m.get("imageBaseImage").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        image_cluster: m.get("imageCluster").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        image_id: m.get("imageId").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        image_platform: m.get("imagePlatform").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        image_tag: m.get("imageTag").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        importing_user: m.get("importingUser").filter(|v| !v.is_null()).and_then(|v| iface_projects__retrieve_a_single_project_response_importing_user__from_json(v)),
+        is_monitored: m.get("isMonitored").filter(|v| !v.is_null()).and_then(|v| (v).as_bool()),
+        issue_counts_by_severity: m.get("issueCountsBySeverity").filter(|v| !v.is_null()).and_then(|v| iface_projects__retrieve_a_single_project_response_issue_counts_by_severity__from_json(v)),
+        last_tested_date: m.get("lastTestedDate").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        name: m.get("name").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        origin: m.get("origin").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        owner: m.get("owner").filter(|v| !v.is_null()).and_then(|v| iface_projects__retrieve_a_single_project_response_owner__from_json(v)),
+        read_only: m.get("readOnly").filter(|v| !v.is_null()).and_then(|v| (v).as_bool()),
+        remediation: m.get("remediation").filter(|v| !v.is_null()).and_then(|v| iface_projects__retrieve_a_single_project_response_remediation__from_json(v)),
+        remote_repo_url: m.get("remoteRepoUrl").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        tags: m.get("tags").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| (x).as_str().map(|s| s.to_string())).collect())),
+        target_reference: m.get("targetReference").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        test_frequency: m.get("testFrequency").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        total_dependencies: m.get("totalDependencies").filter(|v| !v.is_null()).and_then(|v| (v).as_f64()),
+        type_op: m.get("type").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    })
+}
+
+fn iface_projects__retrieve_a_single_project_response_attributes__from_json(v: &Value) -> Option<iface_projects::RetrieveASingleProjectResponseAttributes> {
+    let m = v.as_object()?;
+    Some(iface_projects::RetrieveASingleProjectResponseAttributes {
+        criticality: m.get("criticality").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| (x).as_str().map(|s| s.to_string())).collect())),
+        environment: m.get("environment").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| (x).as_str().map(|s| s.to_string())).collect())),
+        lifecycle: m.get("lifecycle").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| (x).as_str().map(|s| s.to_string())).collect())),
+    })
+}
+
+fn iface_projects__retrieve_a_single_project_response_importing_user__from_json(v: &Value) -> Option<iface_projects::RetrieveASingleProjectResponseImportingUser> {
+    let m = v.as_object()?;
+    Some(iface_projects::RetrieveASingleProjectResponseImportingUser {
+        email: m.get("email").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        id: m.get("id").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        name: m.get("name").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        username: m.get("username").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    })
+}
+
+fn iface_projects__retrieve_a_single_project_response_issue_counts_by_severity__from_json(v: &Value) -> Option<iface_projects::RetrieveASingleProjectResponseIssueCountsBySeverity> {
+    let m = v.as_object()?;
+    Some(iface_projects::RetrieveASingleProjectResponseIssueCountsBySeverity {
+        critical: m.get("critical").filter(|v| !v.is_null()).and_then(|v| (v).as_f64()),
+        high: m.get("high").filter(|v| !v.is_null()).and_then(|v| (v).as_f64()),
+        low: m.get("low").filter(|v| !v.is_null()).and_then(|v| (v).as_f64()),
+        medium: m.get("medium").filter(|v| !v.is_null()).and_then(|v| (v).as_f64()),
+    })
+}
+
+fn iface_projects__retrieve_a_single_project_response_owner__from_json(v: &Value) -> Option<iface_projects::RetrieveASingleProjectResponseOwner> {
+    let m = v.as_object()?;
+    Some(iface_projects::RetrieveASingleProjectResponseOwner {
+        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    })
+}
+
+fn iface_projects__retrieve_a_single_project_response_remediation__from_json(v: &Value) -> Option<iface_projects::RetrieveASingleProjectResponseRemediation> {
+    let m = v.as_object()?;
+    Some(iface_projects::RetrieveASingleProjectResponseRemediation {
+        patch: m.get("patch").filter(|v| !v.is_null()).and_then(|v| iface_projects__retrieve_a_single_project_response_remediation_patch__from_json(v)),
+        pin: m.get("pin").filter(|v| !v.is_null()).and_then(|v| iface_projects__retrieve_a_single_project_response_remediation_pin__from_json(v)),
+        upgrade: m.get("upgrade").filter(|v| !v.is_null()).and_then(|v| iface_projects__retrieve_a_single_project_response_remediation_upgrade__from_json(v)),
+    })
+}
+
+fn iface_projects__retrieve_a_single_project_response_remediation_patch__from_json(v: &Value) -> Option<iface_projects::RetrieveASingleProjectResponseRemediationPatch> {
+    let m = v.as_object()?;
+    Some(iface_projects::RetrieveASingleProjectResponseRemediationPatch {
+        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    })
+}
+
+fn iface_projects__retrieve_a_single_project_response_remediation_pin__from_json(v: &Value) -> Option<iface_projects::RetrieveASingleProjectResponseRemediationPin> {
+    let m = v.as_object()?;
+    Some(iface_projects::RetrieveASingleProjectResponseRemediationPin {
+        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    })
+}
+
+fn iface_projects__retrieve_a_single_project_response_remediation_upgrade__from_json(v: &Value) -> Option<iface_projects::RetrieveASingleProjectResponseRemediationUpgrade> {
+    let m = v.as_object()?;
+    Some(iface_projects::RetrieveASingleProjectResponseRemediationUpgrade {
+        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    })
+}
+
+fn iface_projects__update_a_project_response__from_json(v: &Value) -> Option<iface_projects::UpdateAProjectResponse> {
+    let m = v.as_object()?;
+    Some(iface_projects::UpdateAProjectResponse {
+        attributes: m.get("attributes").filter(|v| !v.is_null()).and_then(|v| iface_projects__update_a_project_response_attributes__from_json(v)),
+        branch: m.get("branch").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        browse_url: m.get("browseUrl").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        created: m.get("created").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        hostname: m.get("hostname").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        id: m.get("id").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        image_base_image: m.get("imageBaseImage").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        image_cluster: m.get("imageCluster").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        image_id: m.get("imageId").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        image_platform: m.get("imagePlatform").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        image_tag: m.get("imageTag").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        importing_user: m.get("importingUser").filter(|v| !v.is_null()).and_then(|v| iface_projects__update_a_project_response_importing_user__from_json(v)),
+        is_monitored: m.get("isMonitored").filter(|v| !v.is_null()).and_then(|v| (v).as_bool()),
+        issue_counts_by_severity: m.get("issueCountsBySeverity").filter(|v| !v.is_null()).and_then(|v| iface_projects__update_a_project_response_issue_counts_by_severity__from_json(v)),
+        last_tested_date: m.get("lastTestedDate").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        name: m.get("name").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        origin: m.get("origin").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        owner: m.get("owner").filter(|v| !v.is_null()).and_then(|v| iface_projects__update_a_project_response_owner__from_json(v)),
+        read_only: m.get("readOnly").filter(|v| !v.is_null()).and_then(|v| (v).as_bool()),
+        remediation: m.get("remediation").filter(|v| !v.is_null()).and_then(|v| iface_projects__update_a_project_response_remediation__from_json(v)),
+        remote_repo_url: m.get("remoteRepoUrl").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        tags: m.get("tags").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| (x).as_str().map(|s| s.to_string())).collect())),
+        target_reference: m.get("targetReference").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        test_frequency: m.get("testFrequency").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        total_dependencies: m.get("totalDependencies").filter(|v| !v.is_null()).and_then(|v| (v).as_f64()),
+        type_op: m.get("type").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    })
+}
+
+fn iface_projects__update_a_project_response_attributes__from_json(v: &Value) -> Option<iface_projects::UpdateAProjectResponseAttributes> {
+    let m = v.as_object()?;
+    Some(iface_projects::UpdateAProjectResponseAttributes {
+        criticality: m.get("criticality").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| (x).as_str().map(|s| s.to_string())).collect())),
+        environment: m.get("environment").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| (x).as_str().map(|s| s.to_string())).collect())),
+        lifecycle: m.get("lifecycle").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| (x).as_str().map(|s| s.to_string())).collect())),
+    })
+}
+
+fn iface_projects__update_a_project_response_importing_user__from_json(v: &Value) -> Option<iface_projects::UpdateAProjectResponseImportingUser> {
+    let m = v.as_object()?;
+    Some(iface_projects::UpdateAProjectResponseImportingUser {
+        email: m.get("email").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        id: m.get("id").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        name: m.get("name").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        username: m.get("username").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    })
+}
+
+fn iface_projects__update_a_project_response_issue_counts_by_severity__from_json(v: &Value) -> Option<iface_projects::UpdateAProjectResponseIssueCountsBySeverity> {
+    let m = v.as_object()?;
+    Some(iface_projects::UpdateAProjectResponseIssueCountsBySeverity {
+        critical: m.get("critical").filter(|v| !v.is_null()).and_then(|v| (v).as_f64()),
+        high: m.get("high").filter(|v| !v.is_null()).and_then(|v| (v).as_f64()),
+        low: m.get("low").filter(|v| !v.is_null()).and_then(|v| (v).as_f64()),
+        medium: m.get("medium").filter(|v| !v.is_null()).and_then(|v| (v).as_f64()),
+    })
+}
+
+fn iface_projects__update_a_project_response_owner__from_json(v: &Value) -> Option<iface_projects::UpdateAProjectResponseOwner> {
+    let m = v.as_object()?;
+    Some(iface_projects::UpdateAProjectResponseOwner {
+        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    })
+}
+
+fn iface_projects__update_a_project_response_remediation__from_json(v: &Value) -> Option<iface_projects::UpdateAProjectResponseRemediation> {
+    let m = v.as_object()?;
+    Some(iface_projects::UpdateAProjectResponseRemediation {
+        patch: m.get("patch").filter(|v| !v.is_null()).and_then(|v| iface_projects__update_a_project_response_remediation_patch__from_json(v)),
+        pin: m.get("pin").filter(|v| !v.is_null()).and_then(|v| iface_projects__update_a_project_response_remediation_pin__from_json(v)),
+        upgrade: m.get("upgrade").filter(|v| !v.is_null()).and_then(|v| iface_projects__update_a_project_response_remediation_upgrade__from_json(v)),
+    })
+}
+
+fn iface_projects__update_a_project_response_remediation_patch__from_json(v: &Value) -> Option<iface_projects::UpdateAProjectResponseRemediationPatch> {
+    let m = v.as_object()?;
+    Some(iface_projects::UpdateAProjectResponseRemediationPatch {
+        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    })
+}
+
+fn iface_projects__update_a_project_response_remediation_pin__from_json(v: &Value) -> Option<iface_projects::UpdateAProjectResponseRemediationPin> {
+    let m = v.as_object()?;
+    Some(iface_projects::UpdateAProjectResponseRemediationPin {
+        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    })
+}
+
+fn iface_projects__update_a_project_response_remediation_upgrade__from_json(v: &Value) -> Option<iface_projects::UpdateAProjectResponseRemediationUpgrade> {
+    let m = v.as_object()?;
+    Some(iface_projects::UpdateAProjectResponseRemediationUpgrade {
+        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    })
+}
+
+fn iface_projects__list_all_aggregated_issues_response__from_json(v: &Value) -> Option<iface_projects::ListAllAggregatedIssuesResponse> {
+    let m = v.as_object()?;
+    Some(iface_projects::ListAllAggregatedIssuesResponse {
+        issues: m.get("issues").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| iface_projects__list_all_aggregated_issues_response_issues_item__from_json(x)).collect())),
+    })
+}
+
+fn iface_projects__list_all_aggregated_issues_response_issues_item__from_json(v: &Value) -> Option<iface_projects::ListAllAggregatedIssuesResponseIssuesItem> {
+    let m = v.as_object()?;
+    Some(iface_projects::ListAllAggregatedIssuesResponseIssuesItem {
+        fix_info: m.get("fixInfo").filter(|v| !v.is_null()).and_then(|v| iface_projects__list_all_aggregated_issues_response_issues_item_fix_info__from_json(v)),
+        id: m.get("id").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        ignore_reasons: m.get("ignoreReasons").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| (x).as_str().map(|s| s.to_string())).collect())),
+        introduced_through: m.get("introducedThrough").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| (x).as_str().map(|s| s.to_string())).collect())),
+        is_ignored: m.get("isIgnored").and_then(|v| (v).as_bool()).unwrap_or_default(),
+        is_patched: m.get("isPatched").and_then(|v| (v).as_bool()).unwrap_or_default(),
+        issue_data: match m.get("issueData").and_then(|v| iface_projects__list_all_aggregated_issues_response_issues_item_issue_data__from_json(v)) { Some(x) => x, None => return None },
+        issue_type: m.get("issueType").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        links: m.get("links").filter(|v| !v.is_null()).and_then(|v| iface_projects__list_all_aggregated_issues_response_issues_item_links__from_json(v)),
+        pkg_name: m.get("pkgName").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        pkg_versions: m.get("pkgVersions").and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| (x).as_str().map(|s| s.to_string())).collect())).unwrap_or_default(),
+        priority: m.get("priority").filter(|v| !v.is_null()).and_then(|v| iface_projects__list_all_aggregated_issues_response_issues_item_priority__from_json(v)),
+    })
+}
+
+fn iface_projects__list_all_aggregated_issues_response_issues_item_fix_info__from_json(v: &Value) -> Option<iface_projects::ListAllAggregatedIssuesResponseIssuesItemFixInfo> {
+    let m = v.as_object()?;
+    Some(iface_projects::ListAllAggregatedIssuesResponseIssuesItemFixInfo {
+        fixed_in: m.get("fixedIn").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| (x).as_str().map(|s| s.to_string())).collect())),
+        is_fixable: m.get("isFixable").filter(|v| !v.is_null()).and_then(|v| (v).as_bool()),
+        is_partially_fixable: m.get("isPartiallyFixable").filter(|v| !v.is_null()).and_then(|v| (v).as_bool()),
+        is_patchable: m.get("isPatchable").filter(|v| !v.is_null()).and_then(|v| (v).as_bool()),
+        is_pinnable: m.get("isPinnable").filter(|v| !v.is_null()).and_then(|v| (v).as_bool()),
+        is_upgradable: m.get("isUpgradable").filter(|v| !v.is_null()).and_then(|v| (v).as_bool()),
+        nearest_fixed_in_version: m.get("nearestFixedInVersion").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    })
+}
+
+fn iface_projects__list_all_aggregated_issues_response_issues_item_issue_data__from_json(v: &Value) -> Option<iface_projects::ListAllAggregatedIssuesResponseIssuesItemIssueData> {
+    let m = v.as_object()?;
+    Some(iface_projects::ListAllAggregatedIssuesResponseIssuesItemIssueData {
+        cvs_sv3: m.get("CVSSv3").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        credit: m.get("credit").and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| (x).as_str().map(|s| s.to_string())).collect())).unwrap_or_default(),
+        cvss_score: m.get("cvssScore").and_then(|v| (v).as_f64()).unwrap_or_default(),
+        description: m.get("description").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        disclosure_time: m.get("disclosureTime").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        exploit_maturity: m.get("exploitMaturity").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        id: m.get("id").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        identifiers: match m.get("identifiers").and_then(|v| iface_projects__list_all_aggregated_issues_response_issues_item_issue_data_identifiers__from_json(v)) { Some(x) => x, None => return None },
+        is_malicious_package: m.get("isMaliciousPackage").and_then(|v| (v).as_bool()).unwrap_or_default(),
+        language: m.get("language").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        nearest_fixed_in_version: m.get("nearestFixedInVersion").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        original_severity: m.get("originalSeverity").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        patches: m.get("patches").and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| (x).as_str().map(|s| s.to_string())).collect())).unwrap_or_default(),
+        path: m.get("path").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        publication_time: m.get("publicationTime").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        semver: match m.get("semver").and_then(|v| iface_projects__list_all_aggregated_issues_response_issues_item_issue_data_semver__from_json(v)) { Some(x) => x, None => return None },
+        severity: m.get("severity").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        title: m.get("title").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        url: m.get("url").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        violated_policy_public_id: m.get("violatedPolicyPublicId").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+    })
+}
+
+fn iface_projects__list_all_aggregated_issues_response_issues_item_issue_data_identifiers__from_json(v: &Value) -> Option<iface_projects::ListAllAggregatedIssuesResponseIssuesItemIssueDataIdentifiers> {
+    let m = v.as_object()?;
+    Some(iface_projects::ListAllAggregatedIssuesResponseIssuesItemIssueDataIdentifiers {
+        cve: m.get("CVE").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| (x).as_str().map(|s| s.to_string())).collect())),
+        cwe: m.get("CWE").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| (x).as_str().map(|s| s.to_string())).collect())),
+        osvdb: m.get("OSVDB").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| (x).as_str().map(|s| s.to_string())).collect())),
+    })
+}
+
+fn iface_projects__list_all_aggregated_issues_response_issues_item_issue_data_semver__from_json(v: &Value) -> Option<iface_projects::ListAllAggregatedIssuesResponseIssuesItemIssueDataSemver> {
+    let m = v.as_object()?;
+    Some(iface_projects::ListAllAggregatedIssuesResponseIssuesItemIssueDataSemver {
+        unaffected: m.get("unaffected").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        vulnerable: m.get("vulnerable").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| (x).as_str().map(|s| s.to_string())).collect())),
+    })
+}
+
+fn iface_projects__list_all_aggregated_issues_response_issues_item_links__from_json(v: &Value) -> Option<iface_projects::ListAllAggregatedIssuesResponseIssuesItemLinks> {
+    let m = v.as_object()?;
+    Some(iface_projects::ListAllAggregatedIssuesResponseIssuesItemLinks {
+        paths: m.get("paths").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    })
+}
+
+fn iface_projects__list_all_aggregated_issues_response_issues_item_priority__from_json(v: &Value) -> Option<iface_projects::ListAllAggregatedIssuesResponseIssuesItemPriority> {
+    let m = v.as_object()?;
+    Some(iface_projects::ListAllAggregatedIssuesResponseIssuesItemPriority {
+        factors: m.get("factors").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| (x).as_str().map(|s| s.to_string())).collect())),
+        score: m.get("score").filter(|v| !v.is_null()).and_then(|v| (v).as_f64()),
+    })
+}
+
+fn iface_projects__applying_attributes_response__from_json(v: &Value) -> Option<iface_projects::ApplyingAttributesResponse> {
+    let m = v.as_object()?;
+    Some(iface_projects::ApplyingAttributesResponse {
+        attributes: m.get("attributes").filter(|v| !v.is_null()).and_then(|v| iface_projects__applying_attributes_response_attributes__from_json(v)),
+    })
+}
+
+fn iface_projects__applying_attributes_response_attributes__from_json(v: &Value) -> Option<iface_projects::ApplyingAttributesResponseAttributes> {
+    let m = v.as_object()?;
+    Some(iface_projects::ApplyingAttributesResponseAttributes {
+        criticality: m.get("criticality").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| (x).as_str().map(|s| s.to_string())).collect())),
+        environment: m.get("environment").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| (x).as_str().map(|s| s.to_string())).collect())),
+        lifecycle: m.get("lifecycle").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| (x).as_str().map(|s| s.to_string())).collect())),
+    })
+}
+
+fn iface_projects__get_project_dependency_graph_response__from_json(v: &Value) -> Option<iface_projects::GetProjectDependencyGraphResponse> {
+    let m = v.as_object()?;
+    Some(iface_projects::GetProjectDependencyGraphResponse {
+        dep_graph: match m.get("depGraph").and_then(|v| iface_projects__get_project_dependency_graph_response_dep_graph__from_json(v)) { Some(x) => x, None => return None },
+    })
+}
+
+fn iface_projects__get_project_dependency_graph_response_dep_graph__from_json(v: &Value) -> Option<iface_projects::GetProjectDependencyGraphResponseDepGraph> {
+    let m = v.as_object()?;
+    Some(iface_projects::GetProjectDependencyGraphResponseDepGraph {
+        graph: match m.get("graph").and_then(|v| iface_projects__get_project_dependency_graph_response_dep_graph_graph__from_json(v)) { Some(x) => x, None => return None },
+        pkg_manager: match m.get("pkgManager").and_then(|v| iface_projects__get_project_dependency_graph_response_dep_graph_pkg_manager__from_json(v)) { Some(x) => x, None => return None },
+        pkgs: m.get("pkgs").and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| iface_projects__get_project_dependency_graph_response_dep_graph_pkgs_item__from_json(x)).collect())).unwrap_or_default(),
+        schema_version: m.get("schemaVersion").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+    })
+}
+
+fn iface_projects__get_project_dependency_graph_response_dep_graph_graph__from_json(v: &Value) -> Option<iface_projects::GetProjectDependencyGraphResponseDepGraphGraph> {
+    let m = v.as_object()?;
+    Some(iface_projects::GetProjectDependencyGraphResponseDepGraphGraph {
+        nodes: m.get("nodes").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| iface_projects__get_project_dependency_graph_response_dep_graph_graph_nodes_item__from_json(x)).collect())),
+        root_node_id: m.get("rootNodeId").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+    })
+}
+
+fn iface_projects__get_project_dependency_graph_response_dep_graph_graph_nodes_item__from_json(v: &Value) -> Option<iface_projects::GetProjectDependencyGraphResponseDepGraphGraphNodesItem> {
+    let m = v.as_object()?;
+    Some(iface_projects::GetProjectDependencyGraphResponseDepGraphGraphNodesItem {
+        deps: m.get("deps").and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| iface_projects__get_project_dependency_graph_response_dep_graph_graph_nodes_item_deps_item__from_json(x)).collect())).unwrap_or_default(),
+        node_id: m.get("nodeId").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        pkg_id: m.get("pkgId").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+    })
+}
+
+fn iface_projects__get_project_dependency_graph_response_dep_graph_graph_nodes_item_deps_item__from_json(v: &Value) -> Option<iface_projects::GetProjectDependencyGraphResponseDepGraphGraphNodesItemDepsItem> {
+    let m = v.as_object()?;
+    Some(iface_projects::GetProjectDependencyGraphResponseDepGraphGraphNodesItemDepsItem {
+        node_id: m.get("nodeId").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+    })
+}
+
+fn iface_projects__get_project_dependency_graph_response_dep_graph_pkg_manager__from_json(v: &Value) -> Option<iface_projects::GetProjectDependencyGraphResponseDepGraphPkgManager> {
+    let m = v.as_object()?;
+    Some(iface_projects::GetProjectDependencyGraphResponseDepGraphPkgManager {
+        name: m.get("name").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        repositories: m.get("repositories").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| iface_projects__get_project_dependency_graph_response_dep_graph_pkg_manager_repositories_item__from_json(x)).collect())),
+        version: m.get("version").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    })
+}
+
+fn iface_projects__get_project_dependency_graph_response_dep_graph_pkg_manager_repositories_item__from_json(v: &Value) -> Option<iface_projects::GetProjectDependencyGraphResponseDepGraphPkgManagerRepositoriesItem> {
+    let m = v.as_object()?;
+    Some(iface_projects::GetProjectDependencyGraphResponseDepGraphPkgManagerRepositoriesItem {
+        alias: m.get("alias").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+    })
+}
+
+fn iface_projects__get_project_dependency_graph_response_dep_graph_pkgs_item__from_json(v: &Value) -> Option<iface_projects::GetProjectDependencyGraphResponseDepGraphPkgsItem> {
+    let m = v.as_object()?;
+    Some(iface_projects::GetProjectDependencyGraphResponseDepGraphPkgsItem {
+        id: m.get("id").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        info: match m.get("info").and_then(|v| iface_projects__get_project_dependency_graph_response_dep_graph_pkgs_item_info__from_json(v)) { Some(x) => x, None => return None },
+    })
+}
+
+fn iface_projects__get_project_dependency_graph_response_dep_graph_pkgs_item_info__from_json(v: &Value) -> Option<iface_projects::GetProjectDependencyGraphResponseDepGraphPkgsItemInfo> {
+    let m = v.as_object()?;
+    Some(iface_projects::GetProjectDependencyGraphResponseDepGraphPkgsItemInfo {
+        name: m.get("name").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        version: m.get("version").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    })
+}
+
+fn iface_projects__list_all_project_snapshots_response__from_json(v: &Value) -> Option<iface_projects::ListAllProjectSnapshotsResponse> {
+    let m = v.as_object()?;
+    Some(iface_projects::ListAllProjectSnapshotsResponse {
+        snapshots: m.get("snapshots").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| iface_projects__list_all_project_snapshots_response_snapshots_item__from_json(x)).collect())),
+        total: m.get("total").filter(|v| !v.is_null()).and_then(|v| (v).as_f64()),
+    })
+}
+
+fn iface_projects__list_all_project_snapshots_response_snapshots_item__from_json(v: &Value) -> Option<iface_projects::ListAllProjectSnapshotsResponseSnapshotsItem> {
+    let m = v.as_object()?;
+    Some(iface_projects::ListAllProjectSnapshotsResponseSnapshotsItem {
+        created: m.get("created").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        id: m.get("id").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        image_base_image: m.get("imageBaseImage").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        image_id: m.get("imageId").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        image_platform: m.get("imagePlatform").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        image_tag: m.get("imageTag").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        issue_counts: match m.get("issueCounts").and_then(|v| iface_projects__list_all_project_snapshots_response_snapshots_item_issue_counts__from_json(v)) { Some(x) => x, None => return None },
+        method: m.get("method").filter(|v| !v.is_null()).and_then(|v| (v).as_str().and_then(iface_projects__list_all_project_snapshots_response_snapshots_item_method_enum__from_str)),
+        total_dependencies: m.get("totalDependencies").and_then(|v| (v).as_f64()).unwrap_or_default(),
+    })
+}
+
+fn iface_projects__list_all_project_snapshots_response_snapshots_item_issue_counts__from_json(v: &Value) -> Option<iface_projects::ListAllProjectSnapshotsResponseSnapshotsItemIssueCounts> {
+    let m = v.as_object()?;
+    Some(iface_projects::ListAllProjectSnapshotsResponseSnapshotsItemIssueCounts {
+        license: m.get("license").filter(|v| !v.is_null()).and_then(|v| iface_projects__list_all_project_snapshots_response_snapshots_item_issue_counts_license__from_json(v)),
+        sast: m.get("sast").filter(|v| !v.is_null()).and_then(|v| iface_projects__list_all_project_snapshots_response_snapshots_item_issue_counts_sast__from_json(v)),
+        vuln: m.get("vuln").filter(|v| !v.is_null()).and_then(|v| iface_projects__list_all_project_snapshots_response_snapshots_item_issue_counts_vuln__from_json(v)),
+    })
+}
+
+fn iface_projects__list_all_project_snapshots_response_snapshots_item_issue_counts_license__from_json(v: &Value) -> Option<iface_projects::ListAllProjectSnapshotsResponseSnapshotsItemIssueCountsLicense> {
+    let m = v.as_object()?;
+    Some(iface_projects::ListAllProjectSnapshotsResponseSnapshotsItemIssueCountsLicense {
+        critical: m.get("critical").and_then(|v| (v).as_f64()).unwrap_or_default(),
+        high: m.get("high").and_then(|v| (v).as_f64()).unwrap_or_default(),
+        low: m.get("low").and_then(|v| (v).as_f64()).unwrap_or_default(),
+        medium: m.get("medium").and_then(|v| (v).as_f64()).unwrap_or_default(),
+    })
+}
+
+fn iface_projects__list_all_project_snapshots_response_snapshots_item_issue_counts_sast__from_json(v: &Value) -> Option<iface_projects::ListAllProjectSnapshotsResponseSnapshotsItemIssueCountsSast> {
+    let m = v.as_object()?;
+    Some(iface_projects::ListAllProjectSnapshotsResponseSnapshotsItemIssueCountsSast {
+        critical: m.get("critical").and_then(|v| (v).as_f64()).unwrap_or_default(),
+        high: m.get("high").and_then(|v| (v).as_f64()).unwrap_or_default(),
+        low: m.get("low").and_then(|v| (v).as_f64()).unwrap_or_default(),
+        medium: m.get("medium").and_then(|v| (v).as_f64()).unwrap_or_default(),
+    })
+}
+
+fn iface_projects__list_all_project_snapshots_response_snapshots_item_issue_counts_vuln__from_json(v: &Value) -> Option<iface_projects::ListAllProjectSnapshotsResponseSnapshotsItemIssueCountsVuln> {
+    let m = v.as_object()?;
+    Some(iface_projects::ListAllProjectSnapshotsResponseSnapshotsItemIssueCountsVuln {
+        critical: m.get("critical").and_then(|v| (v).as_f64()).unwrap_or_default(),
+        high: m.get("high").and_then(|v| (v).as_f64()).unwrap_or_default(),
+        low: m.get("low").and_then(|v| (v).as_f64()).unwrap_or_default(),
+        medium: m.get("medium").and_then(|v| (v).as_f64()).unwrap_or_default(),
+    })
+}
+
+fn iface_projects__list_all_project_snapshot_aggregated_issues_response__from_json(v: &Value) -> Option<iface_projects::ListAllProjectSnapshotAggregatedIssuesResponse> {
+    let m = v.as_object()?;
+    Some(iface_projects::ListAllProjectSnapshotAggregatedIssuesResponse {
+        issues: m.get("issues").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| iface_projects__list_all_project_snapshot_aggregated_issues_response_issues_item__from_json(x)).collect())),
+    })
+}
+
+fn iface_projects__list_all_project_snapshot_aggregated_issues_response_issues_item__from_json(v: &Value) -> Option<iface_projects::ListAllProjectSnapshotAggregatedIssuesResponseIssuesItem> {
+    let m = v.as_object()?;
+    Some(iface_projects::ListAllProjectSnapshotAggregatedIssuesResponseIssuesItem {
+        fix_info: m.get("fixInfo").filter(|v| !v.is_null()).and_then(|v| iface_projects__list_all_project_snapshot_aggregated_issues_response_issues_item_fix_info__from_json(v)),
+        id: m.get("id").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        ignore_reasons: m.get("ignoreReasons").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| (x).as_str().map(|s| s.to_string())).collect())),
+        introduced_through: m.get("introducedThrough").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| (x).as_str().map(|s| s.to_string())).collect())),
+        is_ignored: m.get("isIgnored").and_then(|v| (v).as_bool()).unwrap_or_default(),
+        is_patched: m.get("isPatched").and_then(|v| (v).as_bool()).unwrap_or_default(),
+        issue_data: match m.get("issueData").and_then(|v| iface_projects__list_all_project_snapshot_aggregated_issues_response_issues_item_issue_data__from_json(v)) { Some(x) => x, None => return None },
+        issue_type: m.get("issueType").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        links: m.get("links").filter(|v| !v.is_null()).and_then(|v| iface_projects__list_all_project_snapshot_aggregated_issues_response_issues_item_links__from_json(v)),
+        pkg_name: m.get("pkgName").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        pkg_versions: m.get("pkgVersions").and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| (x).as_str().map(|s| s.to_string())).collect())).unwrap_or_default(),
+        priority: m.get("priority").filter(|v| !v.is_null()).and_then(|v| iface_projects__list_all_project_snapshot_aggregated_issues_response_issues_item_priority__from_json(v)),
+    })
+}
+
+fn iface_projects__list_all_project_snapshot_aggregated_issues_response_issues_item_fix_info__from_json(v: &Value) -> Option<iface_projects::ListAllProjectSnapshotAggregatedIssuesResponseIssuesItemFixInfo> {
+    let m = v.as_object()?;
+    Some(iface_projects::ListAllProjectSnapshotAggregatedIssuesResponseIssuesItemFixInfo {
+        fixed_in: m.get("fixedIn").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| (x).as_str().map(|s| s.to_string())).collect())),
+        is_fixable: m.get("isFixable").filter(|v| !v.is_null()).and_then(|v| (v).as_bool()),
+        is_partially_fixable: m.get("isPartiallyFixable").filter(|v| !v.is_null()).and_then(|v| (v).as_bool()),
+        is_patchable: m.get("isPatchable").filter(|v| !v.is_null()).and_then(|v| (v).as_bool()),
+        is_pinnable: m.get("isPinnable").filter(|v| !v.is_null()).and_then(|v| (v).as_bool()),
+        is_upgradable: m.get("isUpgradable").filter(|v| !v.is_null()).and_then(|v| (v).as_bool()),
+        nearest_fixed_in_version: m.get("nearestFixedInVersion").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    })
+}
+
+fn iface_projects__list_all_project_snapshot_aggregated_issues_response_issues_item_issue_data__from_json(v: &Value) -> Option<iface_projects::ListAllProjectSnapshotAggregatedIssuesResponseIssuesItemIssueData> {
+    let m = v.as_object()?;
+    Some(iface_projects::ListAllProjectSnapshotAggregatedIssuesResponseIssuesItemIssueData {
+        cvs_sv3: m.get("CVSSv3").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        credit: m.get("credit").and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| (x).as_str().map(|s| s.to_string())).collect())).unwrap_or_default(),
+        cvss_score: m.get("cvssScore").and_then(|v| (v).as_f64()).unwrap_or_default(),
+        description: m.get("description").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        disclosure_time: m.get("disclosureTime").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        exploit_maturity: m.get("exploitMaturity").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        id: m.get("id").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        identifiers: match m.get("identifiers").and_then(|v| iface_projects__list_all_project_snapshot_aggregated_issues_response_issues_item_issue_data_identifiers__from_json(v)) { Some(x) => x, None => return None },
+        is_malicious_package: m.get("isMaliciousPackage").and_then(|v| (v).as_bool()).unwrap_or_default(),
+        language: m.get("language").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        nearest_fixed_in_version: m.get("nearestFixedInVersion").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        original_severity: m.get("originalSeverity").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        patches: m.get("patches").and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| (x).as_str().map(|s| s.to_string())).collect())).unwrap_or_default(),
+        path: m.get("path").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        publication_time: m.get("publicationTime").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        semver: match m.get("semver").and_then(|v| iface_projects__list_all_project_snapshot_aggregated_issues_response_issues_item_issue_data_semver__from_json(v)) { Some(x) => x, None => return None },
+        severity: m.get("severity").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        title: m.get("title").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        url: m.get("url").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        violated_policy_public_id: m.get("violatedPolicyPublicId").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+    })
+}
+
+fn iface_projects__list_all_project_snapshot_aggregated_issues_response_issues_item_issue_data_identifiers__from_json(v: &Value) -> Option<iface_projects::ListAllProjectSnapshotAggregatedIssuesResponseIssuesItemIssueDataIdentifiers> {
+    let m = v.as_object()?;
+    Some(iface_projects::ListAllProjectSnapshotAggregatedIssuesResponseIssuesItemIssueDataIdentifiers {
+        cve: m.get("CVE").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| (x).as_str().map(|s| s.to_string())).collect())),
+        cwe: m.get("CWE").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| (x).as_str().map(|s| s.to_string())).collect())),
+        osvdb: m.get("OSVDB").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| (x).as_str().map(|s| s.to_string())).collect())),
+    })
+}
+
+fn iface_projects__list_all_project_snapshot_aggregated_issues_response_issues_item_issue_data_semver__from_json(v: &Value) -> Option<iface_projects::ListAllProjectSnapshotAggregatedIssuesResponseIssuesItemIssueDataSemver> {
+    let m = v.as_object()?;
+    Some(iface_projects::ListAllProjectSnapshotAggregatedIssuesResponseIssuesItemIssueDataSemver {
+        unaffected: m.get("unaffected").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        vulnerable: m.get("vulnerable").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| (x).as_str().map(|s| s.to_string())).collect())),
+    })
+}
+
+fn iface_projects__list_all_project_snapshot_aggregated_issues_response_issues_item_links__from_json(v: &Value) -> Option<iface_projects::ListAllProjectSnapshotAggregatedIssuesResponseIssuesItemLinks> {
+    let m = v.as_object()?;
+    Some(iface_projects::ListAllProjectSnapshotAggregatedIssuesResponseIssuesItemLinks {
+        paths: m.get("paths").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    })
+}
+
+fn iface_projects__list_all_project_snapshot_aggregated_issues_response_issues_item_priority__from_json(v: &Value) -> Option<iface_projects::ListAllProjectSnapshotAggregatedIssuesResponseIssuesItemPriority> {
+    let m = v.as_object()?;
+    Some(iface_projects::ListAllProjectSnapshotAggregatedIssuesResponseIssuesItemPriority {
+        factors: m.get("factors").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| (x).as_str().map(|s| s.to_string())).collect())),
+        score: m.get("score").filter(|v| !v.is_null()).and_then(|v| (v).as_f64()),
+    })
+}
+
+fn iface_projects__list_all_project_snapshot_issue_paths_response__from_json(v: &Value) -> Option<iface_projects::ListAllProjectSnapshotIssuePathsResponse> {
+    let m = v.as_object()?;
+    Some(iface_projects::ListAllProjectSnapshotIssuePathsResponse {
+        links: m.get("links").filter(|v| !v.is_null()).and_then(|v| iface_projects__list_all_project_snapshot_issue_paths_response_links__from_json(v)),
+        paths: m.get("paths").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| (x).as_array().map(|a| a.iter().filter_map(|x| iface_projects__list_all_project_snapshot_issue_paths_response_paths_item_item__from_json(x)).collect())).collect())),
+        snapshot_id: m.get("snapshotId").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        total: m.get("total").filter(|v| !v.is_null()).and_then(|v| (v).as_f64()),
+    })
+}
+
+fn iface_projects__list_all_project_snapshot_issue_paths_response_links__from_json(v: &Value) -> Option<iface_projects::ListAllProjectSnapshotIssuePathsResponseLinks> {
+    let m = v.as_object()?;
+    Some(iface_projects::ListAllProjectSnapshotIssuePathsResponseLinks {
+        last: m.get("last").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        next: m.get("next").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        prev: m.get("prev").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    })
+}
+
+fn iface_projects__list_all_project_snapshot_issue_paths_response_paths_item_item__from_json(v: &Value) -> Option<iface_projects::ListAllProjectSnapshotIssuePathsResponsePathsItemItem> {
+    let m = v.as_object()?;
+    Some(iface_projects::ListAllProjectSnapshotIssuePathsResponsePathsItemItem {
+        fix_version: m.get("fixVersion").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        name: m.get("name").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        version: m.get("version").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    })
+}
+
+fn iface_projects__ignore_path__from_json(v: &Value) -> Option<iface_projects::IgnorePath> {
+    let m = v.as_object()?;
+    Some(iface_projects::IgnorePath {
+        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    })
+}
+
+fn iface_projects__issue_id__from_json(v: &Value) -> Option<iface_projects::IssueId> {
+    let m = v.as_object()?;
+    Some(iface_projects::IssueId {
+        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    })
+}
+
+fn iface_projects__create_jira_issue_response__from_json(v: &Value) -> Option<iface_projects::CreateJiraIssueResponse> {
+    let m = v.as_object()?;
+    Some(iface_projects::CreateJiraIssueResponse {
+        jira_issue: m.get("jiraIssue").filter(|v| !v.is_null()).and_then(|v| iface_projects__create_jira_issue_response_jira_issue__from_json(v)),
+    })
+}
+
+fn iface_projects__create_jira_issue_response_jira_issue__from_json(v: &Value) -> Option<iface_projects::CreateJiraIssueResponseJiraIssue> {
+    let m = v.as_object()?;
+    Some(iface_projects::CreateJiraIssueResponseJiraIssue {
+        id: m.get("id").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        key: m.get("key").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    })
+}
+
+fn iface_projects__list_all_project_issue_paths_response__from_json(v: &Value) -> Option<iface_projects::ListAllProjectIssuePathsResponse> {
+    let m = v.as_object()?;
+    Some(iface_projects::ListAllProjectIssuePathsResponse {
+        links: m.get("links").filter(|v| !v.is_null()).and_then(|v| iface_projects__list_all_project_issue_paths_response_links__from_json(v)),
+        paths: m.get("paths").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| (x).as_array().map(|a| a.iter().filter_map(|x| iface_projects__list_all_project_issue_paths_response_paths_item_item__from_json(x)).collect())).collect())),
+        snapshot_id: m.get("snapshotId").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        total: m.get("total").filter(|v| !v.is_null()).and_then(|v| (v).as_f64()),
+    })
+}
+
+fn iface_projects__list_all_project_issue_paths_response_links__from_json(v: &Value) -> Option<iface_projects::ListAllProjectIssuePathsResponseLinks> {
+    let m = v.as_object()?;
+    Some(iface_projects::ListAllProjectIssuePathsResponseLinks {
+        last: m.get("last").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        next: m.get("next").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        prev: m.get("prev").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    })
+}
+
+fn iface_projects__list_all_project_issue_paths_response_paths_item_item__from_json(v: &Value) -> Option<iface_projects::ListAllProjectIssuePathsResponsePathsItemItem> {
+    let m = v.as_object()?;
+    Some(iface_projects::ListAllProjectIssuePathsResponsePathsItemItem {
+        fix_version: m.get("fixVersion").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        name: m.get("name").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        version: m.get("version").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    })
+}
+
+fn iface_projects__list_project_settings_response__from_json(v: &Value) -> Option<iface_projects::ListProjectSettingsResponse> {
+    let m = v.as_object()?;
+    Some(iface_projects::ListProjectSettingsResponse {
+        auto_dep_upgrade_enabled: m.get("autoDepUpgradeEnabled").filter(|v| !v.is_null()).and_then(|v| (v).as_bool()),
+        auto_dep_upgrade_ignored_dependencies: m.get("autoDepUpgradeIgnoredDependencies").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| (x).as_str().map(|s| s.to_string())).collect())),
+        auto_dep_upgrade_limit: m.get("autoDepUpgradeLimit").filter(|v| !v.is_null()).and_then(|v| (v).as_f64()),
+        auto_dep_upgrade_min_age: m.get("autoDepUpgradeMinAge").filter(|v| !v.is_null()).and_then(|v| (v).as_f64()),
+        auto_remediation_prs: m.get("autoRemediationPrs").filter(|v| !v.is_null()).and_then(|v| iface_projects__list_project_settings_response_auto_remediation_prs__from_json(v)),
+        pull_request_assignment: m.get("pullRequestAssignment").filter(|v| !v.is_null()).and_then(|v| iface_projects__list_project_settings_response_pull_request_assignment__from_json(v)),
+        pull_request_fail_on_any_vulns: m.get("pullRequestFailOnAnyVulns").filter(|v| !v.is_null()).and_then(|v| (v).as_bool()),
+        pull_request_fail_only_for_high_severity: m.get("pullRequestFailOnlyForHighSeverity").filter(|v| !v.is_null()).and_then(|v| (v).as_bool()),
+        pull_request_test_enabled: m.get("pullRequestTestEnabled").filter(|v| !v.is_null()).and_then(|v| (v).as_bool()),
+    })
+}
+
+fn iface_projects__list_project_settings_response_auto_remediation_prs__from_json(v: &Value) -> Option<iface_projects::ListProjectSettingsResponseAutoRemediationPrs> {
+    let m = v.as_object()?;
+    Some(iface_projects::ListProjectSettingsResponseAutoRemediationPrs {
+        backlog_prs_enabled: m.get("backlogPrsEnabled").filter(|v| !v.is_null()).and_then(|v| (v).as_bool()),
+        fresh_prs_enabled: m.get("freshPrsEnabled").filter(|v| !v.is_null()).and_then(|v| (v).as_bool()),
+        use_patch_remediation: m.get("usePatchRemediation").filter(|v| !v.is_null()).and_then(|v| (v).as_bool()),
+    })
+}
+
+fn iface_projects__list_project_settings_response_pull_request_assignment__from_json(v: &Value) -> Option<iface_projects::ListProjectSettingsResponsePullRequestAssignment> {
+    let m = v.as_object()?;
+    Some(iface_projects::ListProjectSettingsResponsePullRequestAssignment {
+        assignees: m.get("assignees").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| (x).as_str().map(|s| s.to_string())).collect())),
+        enabled: m.get("enabled").filter(|v| !v.is_null()).and_then(|v| (v).as_bool()),
+        type_op: m.get("type").filter(|v| !v.is_null()).and_then(|v| (v).as_str().and_then(iface_projects__list_project_settings_response_pull_request_assignment_type_op_enum__from_str)),
+    })
+}
+
+fn iface_projects__update_project_settings_response__from_json(v: &Value) -> Option<iface_projects::UpdateProjectSettingsResponse> {
+    let m = v.as_object()?;
+    Some(iface_projects::UpdateProjectSettingsResponse {
+        auto_dep_upgrade_enabled: m.get("autoDepUpgradeEnabled").filter(|v| !v.is_null()).and_then(|v| (v).as_bool()),
+        auto_dep_upgrade_ignored_dependencies: m.get("autoDepUpgradeIgnoredDependencies").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| (x).as_str().map(|s| s.to_string())).collect())),
+        auto_dep_upgrade_limit: m.get("autoDepUpgradeLimit").filter(|v| !v.is_null()).and_then(|v| (v).as_f64()),
+        auto_dep_upgrade_min_age: m.get("autoDepUpgradeMinAge").filter(|v| !v.is_null()).and_then(|v| (v).as_f64()),
+        auto_remediation_prs: m.get("autoRemediationPrs").filter(|v| !v.is_null()).and_then(|v| iface_projects__update_project_settings_response_auto_remediation_prs__from_json(v)),
+        pull_request_assignment: m.get("pullRequestAssignment").filter(|v| !v.is_null()).and_then(|v| iface_projects__update_project_settings_response_pull_request_assignment__from_json(v)),
+        pull_request_fail_on_any_vulns: m.get("pullRequestFailOnAnyVulns").filter(|v| !v.is_null()).and_then(|v| (v).as_bool()),
+        pull_request_fail_only_for_high_severity: m.get("pullRequestFailOnlyForHighSeverity").filter(|v| !v.is_null()).and_then(|v| (v).as_bool()),
+        pull_request_test_enabled: m.get("pullRequestTestEnabled").filter(|v| !v.is_null()).and_then(|v| (v).as_bool()),
+    })
+}
+
+fn iface_projects__update_project_settings_response_auto_remediation_prs__from_json(v: &Value) -> Option<iface_projects::UpdateProjectSettingsResponseAutoRemediationPrs> {
+    let m = v.as_object()?;
+    Some(iface_projects::UpdateProjectSettingsResponseAutoRemediationPrs {
+        backlog_prs_enabled: m.get("backlogPrsEnabled").filter(|v| !v.is_null()).and_then(|v| (v).as_bool()),
+        fresh_prs_enabled: m.get("freshPrsEnabled").filter(|v| !v.is_null()).and_then(|v| (v).as_bool()),
+        use_patch_remediation: m.get("usePatchRemediation").filter(|v| !v.is_null()).and_then(|v| (v).as_bool()),
+    })
+}
+
+fn iface_projects__update_project_settings_response_pull_request_assignment__from_json(v: &Value) -> Option<iface_projects::UpdateProjectSettingsResponsePullRequestAssignment> {
+    let m = v.as_object()?;
+    Some(iface_projects::UpdateProjectSettingsResponsePullRequestAssignment {
+        assignees: m.get("assignees").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| (x).as_str().map(|s| s.to_string())).collect())),
+        enabled: m.get("enabled").filter(|v| !v.is_null()).and_then(|v| (v).as_bool()),
+        type_op: m.get("type").filter(|v| !v.is_null()).and_then(|v| (v).as_str().and_then(iface_projects__list_project_settings_response_pull_request_assignment_type_op_enum__from_str)),
+    })
+}
+
+fn iface_projects__add_a_tag_to_a_project_response__from_json(v: &Value) -> Option<iface_projects::AddATagToAProjectResponse> {
+    let m = v.as_object()?;
+    Some(iface_projects::AddATagToAProjectResponse {
+        tags: m.get("tags").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| (x).as_str().map(|s| s.to_string())).collect())),
+    })
+}
+
+fn iface_projects__remove_a_tag_from_a_project_response__from_json(v: &Value) -> Option<iface_projects::RemoveATagFromAProjectResponse> {
+    let m = v.as_object()?;
+    Some(iface_projects::RemoveATagFromAProjectResponse {
+        tags: m.get("tags").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| (x).as_str().map(|s| s.to_string())).collect())),
+    })
+}
+
+fn iface_projects__list_all_projects_response__from_json(v: &Value) -> Option<iface_projects::ListAllProjectsResponse> {
+    let m = v.as_object()?;
+    Some(iface_projects::ListAllProjectsResponse {
+        org: m.get("org").filter(|v| !v.is_null()).and_then(|v| iface_projects__list_all_projects_response_org__from_json(v)),
+        projects: m.get("projects").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| iface_projects__list_all_projects_response_projects_item__from_json(x)).collect())),
+    })
+}
+
+fn iface_projects__list_all_projects_response_org__from_json(v: &Value) -> Option<iface_projects::ListAllProjectsResponseOrg> {
+    let m = v.as_object()?;
+    Some(iface_projects::ListAllProjectsResponseOrg {
+        id: m.get("id").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        name: m.get("name").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    })
+}
+
+fn iface_projects__list_all_projects_response_projects_item__from_json(v: &Value) -> Option<iface_projects::ListAllProjectsResponseProjectsItem> {
+    let m = v.as_object()?;
+    Some(iface_projects::ListAllProjectsResponseProjectsItem {
+        attributes: m.get("attributes").filter(|v| !v.is_null()).and_then(|v| iface_projects__list_all_projects_response_projects_item_attributes__from_json(v)),
+        branch: m.get("branch").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        browse_url: m.get("browseUrl").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        created: m.get("created").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        id: m.get("id").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        image_base_image: m.get("imageBaseImage").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        image_cluster: m.get("imageCluster").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        image_id: m.get("imageId").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        image_platform: m.get("imagePlatform").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        image_tag: m.get("imageTag").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        importing_user: m.get("importingUser").filter(|v| !v.is_null()).and_then(|v| iface_projects__list_all_projects_response_projects_item_importing_user__from_json(v)),
+        is_monitored: m.get("isMonitored").filter(|v| !v.is_null()).and_then(|v| (v).as_bool()),
+        issue_counts_by_severity: m.get("issueCountsBySeverity").filter(|v| !v.is_null()).and_then(|v| iface_projects__list_all_projects_response_projects_item_issue_counts_by_severity__from_json(v)),
+        last_tested_date: m.get("lastTestedDate").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        name: m.get("name").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        origin: m.get("origin").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        owner: m.get("owner").filter(|v| !v.is_null()).and_then(|v| iface_projects__list_all_projects_response_projects_item_owner__from_json(v)),
+        read_only: m.get("readOnly").filter(|v| !v.is_null()).and_then(|v| (v).as_bool()),
+        remote_repo_url: m.get("remoteRepoUrl").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        tags: m.get("tags").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| (x).as_str().map(|s| s.to_string())).collect())),
+        target_reference: m.get("targetReference").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        test_frequency: m.get("testFrequency").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        total_dependencies: m.get("totalDependencies").filter(|v| !v.is_null()).and_then(|v| (v).as_f64()),
+        type_op: m.get("type").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    })
+}
+
+fn iface_projects__list_all_projects_response_projects_item_attributes__from_json(v: &Value) -> Option<iface_projects::ListAllProjectsResponseProjectsItemAttributes> {
+    let m = v.as_object()?;
+    Some(iface_projects::ListAllProjectsResponseProjectsItemAttributes {
+        criticality: m.get("criticality").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| (x).as_str().map(|s| s.to_string())).collect())),
+        environment: m.get("environment").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| (x).as_str().map(|s| s.to_string())).collect())),
+        lifecycle: m.get("lifecycle").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| (x).as_str().map(|s| s.to_string())).collect())),
+    })
+}
+
+fn iface_projects__list_all_projects_response_projects_item_importing_user__from_json(v: &Value) -> Option<iface_projects::ListAllProjectsResponseProjectsItemImportingUser> {
+    let m = v.as_object()?;
+    Some(iface_projects::ListAllProjectsResponseProjectsItemImportingUser {
+        email: m.get("email").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        id: m.get("id").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        name: m.get("name").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        username: m.get("username").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    })
+}
+
+fn iface_projects__list_all_projects_response_projects_item_issue_counts_by_severity__from_json(v: &Value) -> Option<iface_projects::ListAllProjectsResponseProjectsItemIssueCountsBySeverity> {
+    let m = v.as_object()?;
+    Some(iface_projects::ListAllProjectsResponseProjectsItemIssueCountsBySeverity {
+        critical: m.get("critical").filter(|v| !v.is_null()).and_then(|v| (v).as_f64()),
+        high: m.get("high").filter(|v| !v.is_null()).and_then(|v| (v).as_f64()),
+        low: m.get("low").filter(|v| !v.is_null()).and_then(|v| (v).as_f64()),
+        medium: m.get("medium").filter(|v| !v.is_null()).and_then(|v| (v).as_f64()),
+    })
+}
+
+fn iface_projects__list_all_projects_response_projects_item_owner__from_json(v: &Value) -> Option<iface_projects::ListAllProjectsResponseProjectsItemOwner> {
+    let m = v.as_object()?;
+    Some(iface_projects::ListAllProjectsResponseProjectsItemOwner {
+        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    })
+}
+
+fn iface_projects__list_all_project_snapshots_response_snapshots_item_method_enum__from_str(s: &str) -> Option<iface_projects::ListAllProjectSnapshotsResponseSnapshotsItemMethodEnum> {
+    match s {
+        "api" => Some(iface_projects::ListAllProjectSnapshotsResponseSnapshotsItemMethodEnum::Api),
+        "cli" => Some(iface_projects::ListAllProjectSnapshotsResponseSnapshotsItemMethodEnum::Cli),
+        "recurring" => Some(iface_projects::ListAllProjectSnapshotsResponseSnapshotsItemMethodEnum::Recurring),
+        "web" => Some(iface_projects::ListAllProjectSnapshotsResponseSnapshotsItemMethodEnum::Web),
+        "web-test" => Some(iface_projects::ListAllProjectSnapshotsResponseSnapshotsItemMethodEnum::WebTest),
+        "wizard" => Some(iface_projects::ListAllProjectSnapshotsResponseSnapshotsItemMethodEnum::Wizard),
+        _ => None,
     }
-    fn update_a_project(params: iface_projects::UpdateAProjectParams) -> Result<String, String> {
+}
+
+fn iface_projects__list_project_settings_response_pull_request_assignment_type_op_enum__from_str(s: &str) -> Option<iface_projects::ListProjectSettingsResponsePullRequestAssignmentTypeOpEnum> {
+    match s {
+        "auto" => Some(iface_projects::ListProjectSettingsResponsePullRequestAssignmentTypeOpEnum::Auto),
+        "manual" => Some(iface_projects::ListProjectSettingsResponsePullRequestAssignmentTypeOpEnum::Manual),
+        _ => None,
+    }
+}
+
+fn iface_projects__retrieve_a_single_project__ok(body: String) -> Result<iface_projects::RetrieveASingleProjectResponse, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match iface_projects__retrieve_a_single_project_response__from_json(&v) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_projects__retrieve_a_single_project__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
+fn iface_projects__update_a_project__ok(body: String) -> Result<iface_projects::UpdateAProjectResponse, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match iface_projects__update_a_project_response__from_json(&v) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_projects__update_a_project__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
+fn iface_projects__delete_a_project__ok(body: String) -> Result<String, crate::runtime::DispatchError> {
+    Ok(body)
+}
+
+fn iface_projects__delete_a_project__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
+fn iface_projects__activate__ok(body: String) -> Result<String, crate::runtime::DispatchError> {
+    Ok(body)
+}
+
+fn iface_projects__activate__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
+fn iface_projects__list_all_aggregated_issues__ok(body: String) -> Result<iface_projects::ListAllAggregatedIssuesResponse, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match iface_projects__list_all_aggregated_issues_response__from_json(&v) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_projects__list_all_aggregated_issues__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
+fn iface_projects__applying_attributes__ok(body: String) -> Result<iface_projects::ApplyingAttributesResponse, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match iface_projects__applying_attributes_response__from_json(&v) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_projects__applying_attributes__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
+fn iface_projects__deactivate__ok(body: String) -> Result<String, crate::runtime::DispatchError> {
+    Ok(body)
+}
+
+fn iface_projects__deactivate__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
+fn iface_projects__get_project_dependency_graph__ok(body: String) -> Result<iface_projects::GetProjectDependencyGraphResponse, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match iface_projects__get_project_dependency_graph_response__from_json(&v) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_projects__get_project_dependency_graph__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
+fn iface_projects__list_all_project_snapshots__ok(body: String) -> Result<iface_projects::ListAllProjectSnapshotsResponse, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match iface_projects__list_all_project_snapshots_response__from_json(&v) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_projects__list_all_project_snapshots__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
+fn iface_projects__list_all_project_snapshot_aggregated_issues__ok(body: String) -> Result<iface_projects::ListAllProjectSnapshotAggregatedIssuesResponse, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match iface_projects__list_all_project_snapshot_aggregated_issues_response__from_json(&v) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_projects__list_all_project_snapshot_aggregated_issues__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
+fn iface_projects__list_all_project_snapshot_issue_paths__ok(body: String) -> Result<iface_projects::ListAllProjectSnapshotIssuePathsResponse, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match iface_projects__list_all_project_snapshot_issue_paths_response__from_json(&v) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_projects__list_all_project_snapshot_issue_paths__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
+fn iface_projects__retrieve_ignore__ok(body: String) -> Result<iface_projects::IgnorePath, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match iface_projects__ignore_path__from_json(&v) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_projects__retrieve_ignore__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
+fn iface_projects__add_ignore__ok(body: String) -> Result<iface_projects::IgnorePath, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match iface_projects__ignore_path__from_json(&v) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_projects__add_ignore__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
+fn iface_projects__replace_ignores__ok(body: String) -> Result<Vec<String>, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match (&v).as_array().map(|a| a.iter().filter_map(|x| (x).as_str().map(|s| s.to_string())).collect()) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_projects__replace_ignores__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
+fn iface_projects__delete_ignores__ok(body: String) -> Result<String, crate::runtime::DispatchError> {
+    Ok(body)
+}
+
+fn iface_projects__delete_ignores__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
+fn iface_projects__list_all_ignores__ok(body: String) -> Result<iface_projects::IssueId, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match iface_projects__issue_id__from_json(&v) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_projects__list_all_ignores__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
+fn iface_projects__create_jira_issue__ok(body: String) -> Result<iface_projects::CreateJiraIssueResponse, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match iface_projects__create_jira_issue_response__from_json(&v) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_projects__create_jira_issue__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
+fn iface_projects__list_all_project_issue_paths__ok(body: String) -> Result<iface_projects::ListAllProjectIssuePathsResponse, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match iface_projects__list_all_project_issue_paths_response__from_json(&v) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_projects__list_all_project_issue_paths__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
+fn iface_projects__list_all_jira_issues__ok(body: String) -> Result<iface_projects::IssueId, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match iface_projects__issue_id__from_json(&v) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_projects__list_all_jira_issues__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
+fn iface_projects__move_project_to_a_different_organization__ok(body: String) -> Result<String, crate::runtime::DispatchError> {
+    Ok(body)
+}
+
+fn iface_projects__move_project_to_a_different_organization__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
+fn iface_projects__list_project_settings__ok(body: String) -> Result<iface_projects::ListProjectSettingsResponse, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match iface_projects__list_project_settings_response__from_json(&v) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_projects__list_project_settings__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
+fn iface_projects__update_project_settings__ok(body: String) -> Result<iface_projects::UpdateProjectSettingsResponse, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match iface_projects__update_project_settings_response__from_json(&v) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_projects__update_project_settings__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
+fn iface_projects__delete_project_settings__ok(body: String) -> Result<String, crate::runtime::DispatchError> {
+    Ok(body)
+}
+
+fn iface_projects__delete_project_settings__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
+fn iface_projects__add_a_tag_to_a_project__ok(body: String) -> Result<iface_projects::AddATagToAProjectResponse, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match iface_projects__add_a_tag_to_a_project_response__from_json(&v) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_projects__add_a_tag_to_a_project__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
+fn iface_projects__remove_a_tag_from_a_project__ok(body: String) -> Result<iface_projects::RemoveATagFromAProjectResponse, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match iface_projects__remove_a_tag_from_a_project_response__from_json(&v) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_projects__remove_a_tag_from_a_project__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
+fn iface_projects__list_all_projects__ok(body: String) -> Result<iface_projects::ListAllProjectsResponse, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match iface_projects__list_all_projects_response__from_json(&v) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_projects__list_all_projects__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
+impl iface_projects::Guest for crate::Component {
+    fn retrieve_a_single_project(params: iface_projects::RetrieveASingleProjectParams) -> Result<iface_projects::RetrieveASingleProjectResponse, String> {
+        let json = iface_projects__retrieve_a_single_project_params__to_json(&params);
+        match dispatch(&OP_PROJECTS_RETRIEVE_A_SINGLE_PROJECT, json).and_then(iface_projects__retrieve_a_single_project__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_projects__retrieve_a_single_project__err(e)),
+        }
+    }
+    fn update_a_project(params: iface_projects::UpdateAProjectParams) -> Result<iface_projects::UpdateAProjectResponse, String> {
         let json = iface_projects__update_a_project_params__to_json(&params);
-        dispatch(&OP_PROJECTS_UPDATE_A_PROJECT, json)
+        match dispatch(&OP_PROJECTS_UPDATE_A_PROJECT, json).and_then(iface_projects__update_a_project__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_projects__update_a_project__err(e)),
+        }
     }
     fn delete_a_project(params: iface_projects::DeleteAProjectParams) -> Result<String, String> {
         let json = iface_projects__delete_a_project_params__to_json(&params);
-        dispatch(&OP_PROJECTS_DELETE_A_PROJECT, json)
+        match dispatch(&OP_PROJECTS_DELETE_A_PROJECT, json).and_then(iface_projects__delete_a_project__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_projects__delete_a_project__err(e)),
+        }
     }
     fn activate(params: iface_projects::ActivateParams) -> Result<String, String> {
         let json = iface_projects__activate_params__to_json(&params);
-        dispatch(&OP_PROJECTS_ACTIVATE, json)
+        match dispatch(&OP_PROJECTS_ACTIVATE, json).and_then(iface_projects__activate__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_projects__activate__err(e)),
+        }
     }
-    fn list_all_aggregated_issues(params: iface_projects::ListAllAggregatedIssuesParams) -> Result<String, String> {
+    fn list_all_aggregated_issues(params: iface_projects::ListAllAggregatedIssuesParams) -> Result<iface_projects::ListAllAggregatedIssuesResponse, String> {
         let json = iface_projects__list_all_aggregated_issues_params__to_json(&params);
-        dispatch(&OP_PROJECTS_LIST_ALL_AGGREGATED_ISSUES, json)
+        match dispatch(&OP_PROJECTS_LIST_ALL_AGGREGATED_ISSUES, json).and_then(iface_projects__list_all_aggregated_issues__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_projects__list_all_aggregated_issues__err(e)),
+        }
     }
-    fn applying_attributes(params: iface_projects::ApplyingAttributesParams) -> Result<String, String> {
+    fn applying_attributes(params: iface_projects::ApplyingAttributesParams) -> Result<iface_projects::ApplyingAttributesResponse, String> {
         let json = iface_projects__applying_attributes_params__to_json(&params);
-        dispatch(&OP_PROJECTS_APPLYING_ATTRIBUTES, json)
+        match dispatch(&OP_PROJECTS_APPLYING_ATTRIBUTES, json).and_then(iface_projects__applying_attributes__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_projects__applying_attributes__err(e)),
+        }
     }
     fn deactivate(params: iface_projects::DeactivateParams) -> Result<String, String> {
         let json = iface_projects__deactivate_params__to_json(&params);
-        dispatch(&OP_PROJECTS_DEACTIVATE, json)
+        match dispatch(&OP_PROJECTS_DEACTIVATE, json).and_then(iface_projects__deactivate__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_projects__deactivate__err(e)),
+        }
     }
-    fn get_project_dependency_graph(params: iface_projects::GetProjectDependencyGraphParams) -> Result<String, String> {
+    fn get_project_dependency_graph(params: iface_projects::GetProjectDependencyGraphParams) -> Result<iface_projects::GetProjectDependencyGraphResponse, String> {
         let json = iface_projects__get_project_dependency_graph_params__to_json(&params);
-        dispatch(&OP_PROJECTS_GET_PROJECT_DEPENDENCY_GRAPH, json)
+        match dispatch(&OP_PROJECTS_GET_PROJECT_DEPENDENCY_GRAPH, json).and_then(iface_projects__get_project_dependency_graph__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_projects__get_project_dependency_graph__err(e)),
+        }
     }
-    fn list_all_project_snapshots(params: iface_projects::ListAllProjectSnapshotsParams) -> Result<String, String> {
+    fn list_all_project_snapshots(params: iface_projects::ListAllProjectSnapshotsParams) -> Result<iface_projects::ListAllProjectSnapshotsResponse, String> {
         let json = iface_projects__list_all_project_snapshots_params__to_json(&params);
-        dispatch(&OP_PROJECTS_LIST_ALL_PROJECT_SNAPSHOTS, json)
+        match dispatch(&OP_PROJECTS_LIST_ALL_PROJECT_SNAPSHOTS, json).and_then(iface_projects__list_all_project_snapshots__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_projects__list_all_project_snapshots__err(e)),
+        }
     }
-    fn list_all_project_snapshot_aggregated_issues(params: iface_projects::ListAllProjectSnapshotAggregatedIssuesParams) -> Result<String, String> {
+    fn list_all_project_snapshot_aggregated_issues(params: iface_projects::ListAllProjectSnapshotAggregatedIssuesParams) -> Result<iface_projects::ListAllProjectSnapshotAggregatedIssuesResponse, String> {
         let json = iface_projects__list_all_project_snapshot_aggregated_issues_params__to_json(&params);
-        dispatch(&OP_PROJECTS_LIST_ALL_PROJECT_SNAPSHOT_AGGREGATED_ISSUES, json)
+        match dispatch(&OP_PROJECTS_LIST_ALL_PROJECT_SNAPSHOT_AGGREGATED_ISSUES, json).and_then(iface_projects__list_all_project_snapshot_aggregated_issues__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_projects__list_all_project_snapshot_aggregated_issues__err(e)),
+        }
     }
-    fn list_all_project_snapshot_issue_paths(params: iface_projects::ListAllProjectSnapshotIssuePathsParams) -> Result<String, String> {
+    fn list_all_project_snapshot_issue_paths(params: iface_projects::ListAllProjectSnapshotIssuePathsParams) -> Result<iface_projects::ListAllProjectSnapshotIssuePathsResponse, String> {
         let json = iface_projects__list_all_project_snapshot_issue_paths_params__to_json(&params);
-        dispatch(&OP_PROJECTS_LIST_ALL_PROJECT_SNAPSHOT_ISSUE_PATHS, json)
+        match dispatch(&OP_PROJECTS_LIST_ALL_PROJECT_SNAPSHOT_ISSUE_PATHS, json).and_then(iface_projects__list_all_project_snapshot_issue_paths__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_projects__list_all_project_snapshot_issue_paths__err(e)),
+        }
     }
-    fn retrieve_ignore(params: iface_projects::RetrieveIgnoreParams) -> Result<String, String> {
+    fn retrieve_ignore(params: iface_projects::RetrieveIgnoreParams) -> Result<iface_projects::IgnorePath, String> {
         let json = iface_projects__retrieve_ignore_params__to_json(&params);
-        dispatch(&OP_PROJECTS_RETRIEVE_IGNORE, json)
+        match dispatch(&OP_PROJECTS_RETRIEVE_IGNORE, json).and_then(iface_projects__retrieve_ignore__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_projects__retrieve_ignore__err(e)),
+        }
     }
-    fn add_ignore(params: iface_projects::AddIgnoreParams) -> Result<String, String> {
+    fn add_ignore(params: iface_projects::AddIgnoreParams) -> Result<iface_projects::IgnorePath, String> {
         let json = iface_projects__add_ignore_params__to_json(&params);
-        dispatch(&OP_PROJECTS_ADD_IGNORE, json)
+        match dispatch(&OP_PROJECTS_ADD_IGNORE, json).and_then(iface_projects__add_ignore__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_projects__add_ignore__err(e)),
+        }
     }
-    fn replace_ignores(params: iface_projects::ReplaceIgnoresParams) -> Result<String, String> {
+    fn replace_ignores(params: iface_projects::ReplaceIgnoresParams) -> Result<Vec<String>, String> {
         let json = iface_projects__replace_ignores_params__to_json(&params);
-        dispatch(&OP_PROJECTS_REPLACE_IGNORES, json)
+        match dispatch(&OP_PROJECTS_REPLACE_IGNORES, json).and_then(iface_projects__replace_ignores__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_projects__replace_ignores__err(e)),
+        }
     }
     fn delete_ignores(params: iface_projects::DeleteIgnoresParams) -> Result<String, String> {
         let json = iface_projects__delete_ignores_params__to_json(&params);
-        dispatch(&OP_PROJECTS_DELETE_IGNORES, json)
+        match dispatch(&OP_PROJECTS_DELETE_IGNORES, json).and_then(iface_projects__delete_ignores__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_projects__delete_ignores__err(e)),
+        }
     }
-    fn list_all_ignores(params: iface_projects::ListAllIgnoresParams) -> Result<String, String> {
+    fn list_all_ignores(params: iface_projects::ListAllIgnoresParams) -> Result<iface_projects::IssueId, String> {
         let json = iface_projects__list_all_ignores_params__to_json(&params);
-        dispatch(&OP_PROJECTS_LIST_ALL_IGNORES, json)
+        match dispatch(&OP_PROJECTS_LIST_ALL_IGNORES, json).and_then(iface_projects__list_all_ignores__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_projects__list_all_ignores__err(e)),
+        }
     }
-    fn create_jira_issue(params: iface_projects::CreateJiraIssueParams) -> Result<String, String> {
+    fn create_jira_issue(params: iface_projects::CreateJiraIssueParams) -> Result<iface_projects::CreateJiraIssueResponse, String> {
         let json = iface_projects__create_jira_issue_params__to_json(&params);
-        dispatch(&OP_PROJECTS_CREATE_JIRA_ISSUE, json)
+        match dispatch(&OP_PROJECTS_CREATE_JIRA_ISSUE, json).and_then(iface_projects__create_jira_issue__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_projects__create_jira_issue__err(e)),
+        }
     }
-    fn list_all_project_issue_paths(params: iface_projects::ListAllProjectIssuePathsParams) -> Result<String, String> {
+    fn list_all_project_issue_paths(params: iface_projects::ListAllProjectIssuePathsParams) -> Result<iface_projects::ListAllProjectIssuePathsResponse, String> {
         let json = iface_projects__list_all_project_issue_paths_params__to_json(&params);
-        dispatch(&OP_PROJECTS_LIST_ALL_PROJECT_ISSUE_PATHS, json)
+        match dispatch(&OP_PROJECTS_LIST_ALL_PROJECT_ISSUE_PATHS, json).and_then(iface_projects__list_all_project_issue_paths__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_projects__list_all_project_issue_paths__err(e)),
+        }
     }
-    fn list_all_jira_issues(params: iface_projects::ListAllJiraIssuesParams) -> Result<String, String> {
+    fn list_all_jira_issues(params: iface_projects::ListAllJiraIssuesParams) -> Result<iface_projects::IssueId, String> {
         let json = iface_projects__list_all_jira_issues_params__to_json(&params);
-        dispatch(&OP_PROJECTS_LIST_ALL_JIRA_ISSUES, json)
+        match dispatch(&OP_PROJECTS_LIST_ALL_JIRA_ISSUES, json).and_then(iface_projects__list_all_jira_issues__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_projects__list_all_jira_issues__err(e)),
+        }
     }
     fn move_project_to_a_different_organization(params: iface_projects::MoveProjectToADifferentOrganizationParams) -> Result<String, String> {
         let json = iface_projects__move_project_to_a_different_organization_params__to_json(&params);
-        dispatch(&OP_PROJECTS_MOVE_PROJECT_TO_A_DIFFERENT_ORGANIZATION, json)
+        match dispatch(&OP_PROJECTS_MOVE_PROJECT_TO_A_DIFFERENT_ORGANIZATION, json).and_then(iface_projects__move_project_to_a_different_organization__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_projects__move_project_to_a_different_organization__err(e)),
+        }
     }
-    fn list_project_settings(params: iface_projects::ListProjectSettingsParams) -> Result<String, String> {
+    fn list_project_settings(params: iface_projects::ListProjectSettingsParams) -> Result<iface_projects::ListProjectSettingsResponse, String> {
         let json = iface_projects__list_project_settings_params__to_json(&params);
-        dispatch(&OP_PROJECTS_LIST_PROJECT_SETTINGS, json)
+        match dispatch(&OP_PROJECTS_LIST_PROJECT_SETTINGS, json).and_then(iface_projects__list_project_settings__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_projects__list_project_settings__err(e)),
+        }
     }
-    fn update_project_settings(params: iface_projects::UpdateProjectSettingsParams) -> Result<String, String> {
+    fn update_project_settings(params: iface_projects::UpdateProjectSettingsParams) -> Result<iface_projects::UpdateProjectSettingsResponse, String> {
         let json = iface_projects__update_project_settings_params__to_json(&params);
-        dispatch(&OP_PROJECTS_UPDATE_PROJECT_SETTINGS, json)
+        match dispatch(&OP_PROJECTS_UPDATE_PROJECT_SETTINGS, json).and_then(iface_projects__update_project_settings__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_projects__update_project_settings__err(e)),
+        }
     }
     fn delete_project_settings(params: iface_projects::DeleteProjectSettingsParams) -> Result<String, String> {
         let json = iface_projects__delete_project_settings_params__to_json(&params);
-        dispatch(&OP_PROJECTS_DELETE_PROJECT_SETTINGS, json)
+        match dispatch(&OP_PROJECTS_DELETE_PROJECT_SETTINGS, json).and_then(iface_projects__delete_project_settings__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_projects__delete_project_settings__err(e)),
+        }
     }
-    fn add_a_tag_to_a_project(params: iface_projects::AddATagToAProjectParams) -> Result<String, String> {
+    fn add_a_tag_to_a_project(params: iface_projects::AddATagToAProjectParams) -> Result<iface_projects::AddATagToAProjectResponse, String> {
         let json = iface_projects__add_a_tag_to_a_project_params__to_json(&params);
-        dispatch(&OP_PROJECTS_ADD_A_TAG_TO_A_PROJECT, json)
+        match dispatch(&OP_PROJECTS_ADD_A_TAG_TO_A_PROJECT, json).and_then(iface_projects__add_a_tag_to_a_project__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_projects__add_a_tag_to_a_project__err(e)),
+        }
     }
-    fn remove_a_tag_from_a_project(params: iface_projects::RemoveATagFromAProjectParams) -> Result<String, String> {
+    fn remove_a_tag_from_a_project(params: iface_projects::RemoveATagFromAProjectParams) -> Result<iface_projects::RemoveATagFromAProjectResponse, String> {
         let json = iface_projects__remove_a_tag_from_a_project_params__to_json(&params);
-        dispatch(&OP_PROJECTS_REMOVE_A_TAG_FROM_A_PROJECT, json)
+        match dispatch(&OP_PROJECTS_REMOVE_A_TAG_FROM_A_PROJECT, json).and_then(iface_projects__remove_a_tag_from_a_project__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_projects__remove_a_tag_from_a_project__err(e)),
+        }
     }
-    fn list_all_projects(params: iface_projects::ListAllProjectsParams) -> Result<String, String> {
+    fn list_all_projects(params: iface_projects::ListAllProjectsParams) -> Result<iface_projects::ListAllProjectsResponse, String> {
         let json = iface_projects__list_all_projects_params__to_json(&params);
-        dispatch(&OP_PROJECTS_LIST_ALL_PROJECTS, json)
+        match dispatch(&OP_PROJECTS_LIST_ALL_PROJECTS, json).and_then(iface_projects__list_all_projects__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_projects__list_all_projects__err(e)),
+        }
     }
 }
 use crate::exports::autostamp::snyk::webhooks as iface_webhooks;
@@ -2406,7 +5949,7 @@ const OP_WEBHOOKS_LIST_WEBHOOKS: OpSpec = OpSpec {
     method: "GET",
     path_template: "/org/{org_id}/webhooks",
     fields: &[
-        FieldSpec { snake: "org_id", location: FieldLocation::Path },
+        FieldSpec { snake: "org_id", wire: "orgId", location: FieldLocation::Path },
     ],
     auth: &[
     ],
@@ -2416,9 +5959,9 @@ const OP_WEBHOOKS_CREATE_A_WEBHOOK: OpSpec = OpSpec {
     method: "POST",
     path_template: "/org/{org_id}/webhooks",
     fields: &[
-        FieldSpec { snake: "org_id", location: FieldLocation::Path },
-        FieldSpec { snake: "secret", location: FieldLocation::Body },
-        FieldSpec { snake: "url", location: FieldLocation::Body },
+        FieldSpec { snake: "org_id", wire: "orgId", location: FieldLocation::Path },
+        FieldSpec { snake: "secret", wire: "secret", location: FieldLocation::Body },
+        FieldSpec { snake: "url", wire: "url", location: FieldLocation::Body },
     ],
     auth: &[
     ],
@@ -2428,8 +5971,8 @@ const OP_WEBHOOKS_RETRIEVE_A_WEBHOOK: OpSpec = OpSpec {
     method: "GET",
     path_template: "/org/{org_id}/webhooks/{webhook_id}",
     fields: &[
-        FieldSpec { snake: "org_id", location: FieldLocation::Path },
-        FieldSpec { snake: "webhook_id", location: FieldLocation::Path },
+        FieldSpec { snake: "org_id", wire: "orgId", location: FieldLocation::Path },
+        FieldSpec { snake: "webhook_id", wire: "webhookId", location: FieldLocation::Path },
     ],
     auth: &[
     ],
@@ -2439,8 +5982,8 @@ const OP_WEBHOOKS_DELETE_A_WEBHOOK: OpSpec = OpSpec {
     method: "DELETE",
     path_template: "/org/{org_id}/webhooks/{webhook_id}",
     fields: &[
-        FieldSpec { snake: "org_id", location: FieldLocation::Path },
-        FieldSpec { snake: "webhook_id", location: FieldLocation::Path },
+        FieldSpec { snake: "org_id", wire: "orgId", location: FieldLocation::Path },
+        FieldSpec { snake: "webhook_id", wire: "webhookId", location: FieldLocation::Path },
     ],
     auth: &[
     ],
@@ -2450,8 +5993,8 @@ const OP_WEBHOOKS_PING_A_WEBHOOK: OpSpec = OpSpec {
     method: "POST",
     path_template: "/org/{org_id}/webhooks/{webhook_id}/ping",
     fields: &[
-        FieldSpec { snake: "org_id", location: FieldLocation::Path },
-        FieldSpec { snake: "webhook_id", location: FieldLocation::Path },
+        FieldSpec { snake: "org_id", wire: "orgId", location: FieldLocation::Path },
+        FieldSpec { snake: "webhook_id", wire: "webhookId", location: FieldLocation::Path },
     ],
     auth: &[
     ],
@@ -2492,26 +6035,96 @@ fn iface_webhooks__ping_a_webhook_params__to_json(p: &iface_webhooks::PingAWebho
     Value::Object(m)
 }
 
+fn iface_webhooks__list_webhooks__ok(body: String) -> Result<String, crate::runtime::DispatchError> {
+    Ok(body)
+}
+
+fn iface_webhooks__list_webhooks__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
+fn iface_webhooks__create_a_webhook__ok(body: String) -> Result<String, crate::runtime::DispatchError> {
+    Ok(body)
+}
+
+fn iface_webhooks__create_a_webhook__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
+fn iface_webhooks__retrieve_a_webhook__ok(body: String) -> Result<String, crate::runtime::DispatchError> {
+    Ok(body)
+}
+
+fn iface_webhooks__retrieve_a_webhook__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
+fn iface_webhooks__delete_a_webhook__ok(body: String) -> Result<String, crate::runtime::DispatchError> {
+    Ok(body)
+}
+
+fn iface_webhooks__delete_a_webhook__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
+fn iface_webhooks__ping_a_webhook__ok(body: String) -> Result<String, crate::runtime::DispatchError> {
+    Ok(body)
+}
+
+fn iface_webhooks__ping_a_webhook__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
 impl iface_webhooks::Guest for crate::Component {
     fn list_webhooks(params: iface_webhooks::ListWebhooksParams) -> Result<String, String> {
         let json = iface_webhooks__list_webhooks_params__to_json(&params);
-        dispatch(&OP_WEBHOOKS_LIST_WEBHOOKS, json)
+        match dispatch(&OP_WEBHOOKS_LIST_WEBHOOKS, json).and_then(iface_webhooks__list_webhooks__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_webhooks__list_webhooks__err(e)),
+        }
     }
     fn create_a_webhook(params: iface_webhooks::CreateAWebhookParams) -> Result<String, String> {
         let json = iface_webhooks__create_a_webhook_params__to_json(&params);
-        dispatch(&OP_WEBHOOKS_CREATE_A_WEBHOOK, json)
+        match dispatch(&OP_WEBHOOKS_CREATE_A_WEBHOOK, json).and_then(iface_webhooks__create_a_webhook__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_webhooks__create_a_webhook__err(e)),
+        }
     }
     fn retrieve_a_webhook(params: iface_webhooks::RetrieveAWebhookParams) -> Result<String, String> {
         let json = iface_webhooks__retrieve_a_webhook_params__to_json(&params);
-        dispatch(&OP_WEBHOOKS_RETRIEVE_A_WEBHOOK, json)
+        match dispatch(&OP_WEBHOOKS_RETRIEVE_A_WEBHOOK, json).and_then(iface_webhooks__retrieve_a_webhook__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_webhooks__retrieve_a_webhook__err(e)),
+        }
     }
     fn delete_a_webhook(params: iface_webhooks::DeleteAWebhookParams) -> Result<String, String> {
         let json = iface_webhooks__delete_a_webhook_params__to_json(&params);
-        dispatch(&OP_WEBHOOKS_DELETE_A_WEBHOOK, json)
+        match dispatch(&OP_WEBHOOKS_DELETE_A_WEBHOOK, json).and_then(iface_webhooks__delete_a_webhook__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_webhooks__delete_a_webhook__err(e)),
+        }
     }
     fn ping_a_webhook(params: iface_webhooks::PingAWebhookParams) -> Result<String, String> {
         let json = iface_webhooks__ping_a_webhook_params__to_json(&params);
-        dispatch(&OP_WEBHOOKS_PING_A_WEBHOOK, json)
+        match dispatch(&OP_WEBHOOKS_PING_A_WEBHOOK, json).and_then(iface_webhooks__ping_a_webhook__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_webhooks__ping_a_webhook__err(e)),
+        }
     }
 }
 use crate::exports::autostamp::snyk::reporting_api as iface_reporting_api;
@@ -2520,10 +6133,10 @@ const OP_REPORTING_API_GET_ISSUE_COUNTS: OpSpec = OpSpec {
     method: "POST",
     path_template: "/reporting/counts/issues",
     fields: &[
-        FieldSpec { snake: "from", location: FieldLocation::Query },
-        FieldSpec { snake: "to", location: FieldLocation::Query },
-        FieldSpec { snake: "group_by", location: FieldLocation::Query },
-        FieldSpec { snake: "filters", location: FieldLocation::Body },
+        FieldSpec { snake: "from", wire: "from", location: FieldLocation::Query },
+        FieldSpec { snake: "to", wire: "to", location: FieldLocation::Query },
+        FieldSpec { snake: "group_by", wire: "groupBy", location: FieldLocation::Query },
+        FieldSpec { snake: "filters", wire: "filters", location: FieldLocation::Body },
     ],
     auth: &[
     ],
@@ -2533,8 +6146,8 @@ const OP_REPORTING_API_GET_LATEST_ISSUE_COUNTS: OpSpec = OpSpec {
     method: "POST",
     path_template: "/reporting/counts/issues/latest",
     fields: &[
-        FieldSpec { snake: "group_by", location: FieldLocation::Query },
-        FieldSpec { snake: "filters", location: FieldLocation::Body },
+        FieldSpec { snake: "group_by", wire: "groupBy", location: FieldLocation::Query },
+        FieldSpec { snake: "filters", wire: "filters", location: FieldLocation::Body },
     ],
     auth: &[
     ],
@@ -2544,9 +6157,9 @@ const OP_REPORTING_API_GET_PROJECT_COUNTS: OpSpec = OpSpec {
     method: "POST",
     path_template: "/reporting/counts/projects",
     fields: &[
-        FieldSpec { snake: "from", location: FieldLocation::Query },
-        FieldSpec { snake: "to", location: FieldLocation::Query },
-        FieldSpec { snake: "filters", location: FieldLocation::Body },
+        FieldSpec { snake: "from", wire: "from", location: FieldLocation::Query },
+        FieldSpec { snake: "to", wire: "to", location: FieldLocation::Query },
+        FieldSpec { snake: "filters", wire: "filters", location: FieldLocation::Body },
     ],
     auth: &[
     ],
@@ -2556,7 +6169,7 @@ const OP_REPORTING_API_GET_LATEST_PROJECT_COUNTS: OpSpec = OpSpec {
     method: "POST",
     path_template: "/reporting/counts/projects/latest",
     fields: &[
-        FieldSpec { snake: "filters", location: FieldLocation::Body },
+        FieldSpec { snake: "filters", wire: "filters", location: FieldLocation::Body },
     ],
     auth: &[
     ],
@@ -2566,10 +6179,10 @@ const OP_REPORTING_API_GET_TEST_COUNTS: OpSpec = OpSpec {
     method: "POST",
     path_template: "/reporting/counts/tests",
     fields: &[
-        FieldSpec { snake: "from", location: FieldLocation::Query },
-        FieldSpec { snake: "to", location: FieldLocation::Query },
-        FieldSpec { snake: "group_by", location: FieldLocation::Query },
-        FieldSpec { snake: "filters", location: FieldLocation::Body },
+        FieldSpec { snake: "from", wire: "from", location: FieldLocation::Query },
+        FieldSpec { snake: "to", wire: "to", location: FieldLocation::Query },
+        FieldSpec { snake: "group_by", wire: "groupBy", location: FieldLocation::Query },
+        FieldSpec { snake: "filters", wire: "filters", location: FieldLocation::Body },
     ],
     auth: &[
     ],
@@ -2579,14 +6192,14 @@ const OP_REPORTING_API_GET_LIST_OF_ISSUES: OpSpec = OpSpec {
     method: "POST",
     path_template: "/reporting/issues/",
     fields: &[
-        FieldSpec { snake: "from", location: FieldLocation::Query },
-        FieldSpec { snake: "to", location: FieldLocation::Query },
-        FieldSpec { snake: "page", location: FieldLocation::Query },
-        FieldSpec { snake: "per_page", location: FieldLocation::Query },
-        FieldSpec { snake: "sort_by", location: FieldLocation::Query },
-        FieldSpec { snake: "order", location: FieldLocation::Query },
-        FieldSpec { snake: "group_by", location: FieldLocation::Query },
-        FieldSpec { snake: "filters", location: FieldLocation::Body },
+        FieldSpec { snake: "from", wire: "from", location: FieldLocation::Query },
+        FieldSpec { snake: "to", wire: "to", location: FieldLocation::Query },
+        FieldSpec { snake: "page", wire: "page", location: FieldLocation::Query },
+        FieldSpec { snake: "per_page", wire: "perPage", location: FieldLocation::Query },
+        FieldSpec { snake: "sort_by", wire: "sortBy", location: FieldLocation::Query },
+        FieldSpec { snake: "order", wire: "order", location: FieldLocation::Query },
+        FieldSpec { snake: "group_by", wire: "groupBy", location: FieldLocation::Query },
+        FieldSpec { snake: "filters", wire: "filters", location: FieldLocation::Body },
     ],
     auth: &[
     ],
@@ -2596,12 +6209,12 @@ const OP_REPORTING_API_GET_LIST_OF_LATEST_ISSUES: OpSpec = OpSpec {
     method: "POST",
     path_template: "/reporting/issues/latest",
     fields: &[
-        FieldSpec { snake: "page", location: FieldLocation::Query },
-        FieldSpec { snake: "per_page", location: FieldLocation::Query },
-        FieldSpec { snake: "sort_by", location: FieldLocation::Query },
-        FieldSpec { snake: "order", location: FieldLocation::Query },
-        FieldSpec { snake: "group_by", location: FieldLocation::Query },
-        FieldSpec { snake: "filters", location: FieldLocation::Body },
+        FieldSpec { snake: "page", wire: "page", location: FieldLocation::Query },
+        FieldSpec { snake: "per_page", wire: "perPage", location: FieldLocation::Query },
+        FieldSpec { snake: "sort_by", wire: "sortBy", location: FieldLocation::Query },
+        FieldSpec { snake: "order", wire: "order", location: FieldLocation::Query },
+        FieldSpec { snake: "group_by", wire: "groupBy", location: FieldLocation::Query },
+        FieldSpec { snake: "filters", wire: "filters", location: FieldLocation::Body },
     ],
     auth: &[
     ],
@@ -2647,13 +6260,13 @@ fn iface_reporting_api__get_issue_counts_body_filters__to_json(p: &iface_reporti
     let mut m = Map::new();
     m.insert("fixable".into(), match (&p.fixable) { Some(v) => Value::Bool(*(v)), None => Value::Null });
     m.insert("ignored".into(), match (&p.ignored) { Some(v) => Value::Bool(*(v)), None => Value::Null });
-    m.insert("is_patchable".into(), match (&p.is_patchable) { Some(v) => Value::Bool(*(v)), None => Value::Null });
-    m.insert("is_pinnable".into(), match (&p.is_pinnable) { Some(v) => Value::Bool(*(v)), None => Value::Null });
-    m.insert("is_upgradable".into(), match (&p.is_upgradable) { Some(v) => Value::Bool(*(v)), None => Value::Null });
+    m.insert("isPatchable".into(), match (&p.is_patchable) { Some(v) => Value::Bool(*(v)), None => Value::Null });
+    m.insert("isPinnable".into(), match (&p.is_pinnable) { Some(v) => Value::Bool(*(v)), None => Value::Null });
+    m.insert("isUpgradable".into(), match (&p.is_upgradable) { Some(v) => Value::Bool(*(v)), None => Value::Null });
     m.insert("languages".into(), match (&p.languages) { Some(v) => Value::Array((v).iter().map(|v| Value::String((v).clone())).collect()), None => Value::Null });
     m.insert("orgs".into(), Value::String((&p.orgs).clone()));
     m.insert("patched".into(), match (&p.patched) { Some(v) => Value::Bool(*(v)), None => Value::Null });
-    m.insert("priority_score".into(), match (&p.priority_score) { Some(v) => iface_reporting_api__get_issue_counts_body_filters_priority_score__to_json(v), None => Value::Null });
+    m.insert("priorityScore".into(), match (&p.priority_score) { Some(v) => iface_reporting_api__get_issue_counts_body_filters_priority_score__to_json(v), None => Value::Null });
     m.insert("projects".into(), match (&p.projects) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("severity".into(), match (&p.severity) { Some(v) => Value::Array((v).iter().map(|v| Value::String((v).clone())).collect()), None => Value::Null });
     m.insert("types".into(), match (&p.types) { Some(v) => Value::Array((v).iter().map(|v| Value::String((v).clone())).collect()), None => Value::Null });
@@ -2667,17 +6280,48 @@ fn iface_reporting_api__get_issue_counts_body_filters_priority_score__to_json(p:
     Value::Object(m)
 }
 
+fn iface_reporting_api__get_issue_counts_response__to_json(p: &iface_reporting_api::GetIssueCountsResponse) -> Value {
+    let mut m = Map::new();
+    m.insert("results".into(), Value::Array((&p.results).iter().map(|v| iface_reporting_api__get_issue_counts_response_results_item__to_json(v)).collect()));
+    Value::Object(m)
+}
+
+fn iface_reporting_api__get_issue_counts_response_results_item__to_json(p: &iface_reporting_api::GetIssueCountsResponseResultsItem) -> Value {
+    let mut m = Map::new();
+    m.insert("count".into(), serde_json::Number::from_f64(*(&p.count)).map(Value::Number).unwrap_or(Value::Null));
+    m.insert("day".into(), Value::String((&p.day).clone()));
+    m.insert("fixable".into(), match (&p.fixable) { Some(v) => iface_reporting_api__get_issue_counts_response_results_item_fixable__to_json(v), None => Value::Null });
+    m.insert("severity".into(), match (&p.severity) { Some(v) => iface_reporting_api__get_issue_counts_response_results_item_severity__to_json(v), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_reporting_api__get_issue_counts_response_results_item_fixable__to_json(p: &iface_reporting_api::GetIssueCountsResponseResultsItemFixable) -> Value {
+    let mut m = Map::new();
+    m.insert("false".into(), match (&p.false_) { Some(v) => serde_json::Number::from_f64(*(v)).map(Value::Number).unwrap_or(Value::Null), None => Value::Null });
+    m.insert("true".into(), match (&p.true_) { Some(v) => serde_json::Number::from_f64(*(v)).map(Value::Number).unwrap_or(Value::Null), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_reporting_api__get_issue_counts_response_results_item_severity__to_json(p: &iface_reporting_api::GetIssueCountsResponseResultsItemSeverity) -> Value {
+    let mut m = Map::new();
+    m.insert("critical".into(), match (&p.critical) { Some(v) => serde_json::Number::from_f64(*(v)).map(Value::Number).unwrap_or(Value::Null), None => Value::Null });
+    m.insert("high".into(), match (&p.high) { Some(v) => serde_json::Number::from_f64(*(v)).map(Value::Number).unwrap_or(Value::Null), None => Value::Null });
+    m.insert("low".into(), match (&p.low) { Some(v) => serde_json::Number::from_f64(*(v)).map(Value::Number).unwrap_or(Value::Null), None => Value::Null });
+    m.insert("medium".into(), match (&p.medium) { Some(v) => serde_json::Number::from_f64(*(v)).map(Value::Number).unwrap_or(Value::Null), None => Value::Null });
+    Value::Object(m)
+}
+
 fn iface_reporting_api__get_latest_issue_counts_body_filters__to_json(p: &iface_reporting_api::GetLatestIssueCountsBodyFilters) -> Value {
     let mut m = Map::new();
     m.insert("fixable".into(), match (&p.fixable) { Some(v) => Value::Bool(*(v)), None => Value::Null });
     m.insert("ignored".into(), match (&p.ignored) { Some(v) => Value::Bool(*(v)), None => Value::Null });
-    m.insert("is_patchable".into(), match (&p.is_patchable) { Some(v) => Value::Bool(*(v)), None => Value::Null });
-    m.insert("is_pinnable".into(), match (&p.is_pinnable) { Some(v) => Value::Bool(*(v)), None => Value::Null });
-    m.insert("is_upgradable".into(), match (&p.is_upgradable) { Some(v) => Value::Bool(*(v)), None => Value::Null });
+    m.insert("isPatchable".into(), match (&p.is_patchable) { Some(v) => Value::Bool(*(v)), None => Value::Null });
+    m.insert("isPinnable".into(), match (&p.is_pinnable) { Some(v) => Value::Bool(*(v)), None => Value::Null });
+    m.insert("isUpgradable".into(), match (&p.is_upgradable) { Some(v) => Value::Bool(*(v)), None => Value::Null });
     m.insert("languages".into(), match (&p.languages) { Some(v) => Value::Array((v).iter().map(|v| Value::String((v).clone())).collect()), None => Value::Null });
     m.insert("orgs".into(), Value::String((&p.orgs).clone()));
     m.insert("patched".into(), match (&p.patched) { Some(v) => Value::Bool(*(v)), None => Value::Null });
-    m.insert("priority_score".into(), match (&p.priority_score) { Some(v) => iface_reporting_api__get_latest_issue_counts_body_filters_priority_score__to_json(v), None => Value::Null });
+    m.insert("priorityScore".into(), match (&p.priority_score) { Some(v) => iface_reporting_api__get_latest_issue_counts_body_filters_priority_score__to_json(v), None => Value::Null });
     m.insert("projects".into(), match (&p.projects) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("severity".into(), match (&p.severity) { Some(v) => Value::Array((v).iter().map(|v| Value::String((v).clone())).collect()), None => Value::Null });
     m.insert("types".into(), match (&p.types) { Some(v) => Value::Array((v).iter().map(|v| Value::String((v).clone())).collect()), None => Value::Null });
@@ -2691,11 +6335,55 @@ fn iface_reporting_api__get_latest_issue_counts_body_filters_priority_score__to_
     Value::Object(m)
 }
 
+fn iface_reporting_api__get_latest_issue_counts_response__to_json(p: &iface_reporting_api::GetLatestIssueCountsResponse) -> Value {
+    let mut m = Map::new();
+    m.insert("results".into(), Value::Array((&p.results).iter().map(|v| iface_reporting_api__get_latest_issue_counts_response_results_item__to_json(v)).collect()));
+    Value::Object(m)
+}
+
+fn iface_reporting_api__get_latest_issue_counts_response_results_item__to_json(p: &iface_reporting_api::GetLatestIssueCountsResponseResultsItem) -> Value {
+    let mut m = Map::new();
+    m.insert("count".into(), serde_json::Number::from_f64(*(&p.count)).map(Value::Number).unwrap_or(Value::Null));
+    m.insert("day".into(), Value::String((&p.day).clone()));
+    m.insert("fixable".into(), match (&p.fixable) { Some(v) => iface_reporting_api__get_latest_issue_counts_response_results_item_fixable__to_json(v), None => Value::Null });
+    m.insert("severity".into(), match (&p.severity) { Some(v) => iface_reporting_api__get_latest_issue_counts_response_results_item_severity__to_json(v), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_reporting_api__get_latest_issue_counts_response_results_item_fixable__to_json(p: &iface_reporting_api::GetLatestIssueCountsResponseResultsItemFixable) -> Value {
+    let mut m = Map::new();
+    m.insert("false".into(), match (&p.false_) { Some(v) => serde_json::Number::from_f64(*(v)).map(Value::Number).unwrap_or(Value::Null), None => Value::Null });
+    m.insert("true".into(), match (&p.true_) { Some(v) => serde_json::Number::from_f64(*(v)).map(Value::Number).unwrap_or(Value::Null), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_reporting_api__get_latest_issue_counts_response_results_item_severity__to_json(p: &iface_reporting_api::GetLatestIssueCountsResponseResultsItemSeverity) -> Value {
+    let mut m = Map::new();
+    m.insert("critical".into(), match (&p.critical) { Some(v) => serde_json::Number::from_f64(*(v)).map(Value::Number).unwrap_or(Value::Null), None => Value::Null });
+    m.insert("high".into(), match (&p.high) { Some(v) => serde_json::Number::from_f64(*(v)).map(Value::Number).unwrap_or(Value::Null), None => Value::Null });
+    m.insert("low".into(), match (&p.low) { Some(v) => serde_json::Number::from_f64(*(v)).map(Value::Number).unwrap_or(Value::Null), None => Value::Null });
+    m.insert("medium".into(), match (&p.medium) { Some(v) => serde_json::Number::from_f64(*(v)).map(Value::Number).unwrap_or(Value::Null), None => Value::Null });
+    Value::Object(m)
+}
+
 fn iface_reporting_api__get_project_counts_body_filters__to_json(p: &iface_reporting_api::GetProjectCountsBodyFilters) -> Value {
     let mut m = Map::new();
     m.insert("languages".into(), match (&p.languages) { Some(v) => Value::Array((v).iter().map(|v| Value::String((v).clone())).collect()), None => Value::Null });
     m.insert("orgs".into(), Value::String((&p.orgs).clone()));
     m.insert("projects".into(), match (&p.projects) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_reporting_api__get_project_counts_response__to_json(p: &iface_reporting_api::GetProjectCountsResponse) -> Value {
+    let mut m = Map::new();
+    m.insert("results".into(), Value::Array((&p.results).iter().map(|v| iface_reporting_api__get_project_counts_response_results_item__to_json(v)).collect()));
+    Value::Object(m)
+}
+
+fn iface_reporting_api__get_project_counts_response_results_item__to_json(p: &iface_reporting_api::GetProjectCountsResponseResultsItem) -> Value {
+    let mut m = Map::new();
+    m.insert("count".into(), serde_json::Number::from_f64(*(&p.count)).map(Value::Number).unwrap_or(Value::Null));
+    m.insert("day".into(), Value::String((&p.day).clone()));
     Value::Object(m)
 }
 
@@ -2707,30 +6395,71 @@ fn iface_reporting_api__get_latest_project_counts_body_filters__to_json(p: &ifac
     Value::Object(m)
 }
 
+fn iface_reporting_api__get_latest_project_counts_response__to_json(p: &iface_reporting_api::GetLatestProjectCountsResponse) -> Value {
+    let mut m = Map::new();
+    m.insert("results".into(), Value::Array((&p.results).iter().map(|v| iface_reporting_api__get_latest_project_counts_response_results_item__to_json(v)).collect()));
+    Value::Object(m)
+}
+
+fn iface_reporting_api__get_latest_project_counts_response_results_item__to_json(p: &iface_reporting_api::GetLatestProjectCountsResponseResultsItem) -> Value {
+    let mut m = Map::new();
+    m.insert("count".into(), serde_json::Number::from_f64(*(&p.count)).map(Value::Number).unwrap_or(Value::Null));
+    m.insert("day".into(), Value::String((&p.day).clone()));
+    Value::Object(m)
+}
+
 fn iface_reporting_api__get_test_counts_body_filters__to_json(p: &iface_reporting_api::GetTestCountsBodyFilters) -> Value {
     let mut m = Map::new();
-    m.insert("is_private".into(), match (&p.is_private) { Some(v) => Value::Bool(*(v)), None => Value::Null });
-    m.insert("issues_prevented".into(), match (&p.issues_prevented) { Some(v) => Value::Bool(*(v)), None => Value::Null });
+    m.insert("isPrivate".into(), match (&p.is_private) { Some(v) => Value::Bool(*(v)), None => Value::Null });
+    m.insert("issuesPrevented".into(), match (&p.issues_prevented) { Some(v) => Value::Bool(*(v)), None => Value::Null });
     m.insert("orgs".into(), Value::String((&p.orgs).clone()));
     m.insert("projects".into(), match (&p.projects) { Some(v) => Value::String((v).clone()), None => Value::Null });
     Value::Object(m)
 }
 
+fn iface_reporting_api__get_test_counts_response__to_json(p: &iface_reporting_api::GetTestCountsResponse) -> Value {
+    let mut m = Map::new();
+    m.insert("results".into(), Value::Array((&p.results).iter().map(|v| iface_reporting_api__get_test_counts_response_results_item__to_json(v)).collect()));
+    Value::Object(m)
+}
+
+fn iface_reporting_api__get_test_counts_response_results_item__to_json(p: &iface_reporting_api::GetTestCountsResponseResultsItem) -> Value {
+    let mut m = Map::new();
+    m.insert("count".into(), serde_json::Number::from_f64(*(&p.count)).map(Value::Number).unwrap_or(Value::Null));
+    m.insert("isPrivate".into(), match (&p.is_private) { Some(v) => iface_reporting_api__get_test_counts_response_results_item_is_private__to_json(v), None => Value::Null });
+    m.insert("issuesPrevented".into(), match (&p.issues_prevented) { Some(v) => iface_reporting_api__get_test_counts_response_results_item_issues_prevented__to_json(v), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_reporting_api__get_test_counts_response_results_item_is_private__to_json(p: &iface_reporting_api::GetTestCountsResponseResultsItemIsPrivate) -> Value {
+    let mut m = Map::new();
+    m.insert("false".into(), match (&p.false_) { Some(v) => serde_json::Number::from_f64(*(v)).map(Value::Number).unwrap_or(Value::Null), None => Value::Null });
+    m.insert("true".into(), match (&p.true_) { Some(v) => serde_json::Number::from_f64(*(v)).map(Value::Number).unwrap_or(Value::Null), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_reporting_api__get_test_counts_response_results_item_issues_prevented__to_json(p: &iface_reporting_api::GetTestCountsResponseResultsItemIssuesPrevented) -> Value {
+    let mut m = Map::new();
+    m.insert("false".into(), match (&p.false_) { Some(v) => serde_json::Number::from_f64(*(v)).map(Value::Number).unwrap_or(Value::Null), None => Value::Null });
+    m.insert("true".into(), match (&p.true_) { Some(v) => serde_json::Number::from_f64(*(v)).map(Value::Number).unwrap_or(Value::Null), None => Value::Null });
+    Value::Object(m)
+}
+
 fn iface_reporting_api__get_list_of_issues_body_filters__to_json(p: &iface_reporting_api::GetListOfIssuesBodyFilters) -> Value {
     let mut m = Map::new();
-    m.insert("exploit_maturity".into(), match (&p.exploit_maturity) { Some(v) => Value::Array((v).iter().map(|v| Value::String((v).clone())).collect()), None => Value::Null });
+    m.insert("exploitMaturity".into(), match (&p.exploit_maturity) { Some(v) => Value::Array((v).iter().map(|v| Value::String((v).clone())).collect()), None => Value::Null });
     m.insert("fixable".into(), match (&p.fixable) { Some(v) => Value::Bool(*(v)), None => Value::Null });
     m.insert("identifier".into(), match (&p.identifier) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("ignored".into(), match (&p.ignored) { Some(v) => Value::Bool(*(v)), None => Value::Null });
-    m.insert("is_fixed".into(), match (&p.is_fixed) { Some(v) => Value::Bool(*(v)), None => Value::Null });
-    m.insert("is_patchable".into(), match (&p.is_patchable) { Some(v) => Value::Bool(*(v)), None => Value::Null });
-    m.insert("is_pinnable".into(), match (&p.is_pinnable) { Some(v) => Value::Bool(*(v)), None => Value::Null });
-    m.insert("is_upgradable".into(), match (&p.is_upgradable) { Some(v) => Value::Bool(*(v)), None => Value::Null });
+    m.insert("isFixed".into(), match (&p.is_fixed) { Some(v) => Value::Bool(*(v)), None => Value::Null });
+    m.insert("isPatchable".into(), match (&p.is_patchable) { Some(v) => Value::Bool(*(v)), None => Value::Null });
+    m.insert("isPinnable".into(), match (&p.is_pinnable) { Some(v) => Value::Bool(*(v)), None => Value::Null });
+    m.insert("isUpgradable".into(), match (&p.is_upgradable) { Some(v) => Value::Bool(*(v)), None => Value::Null });
     m.insert("issues".into(), match (&p.issues) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("languages".into(), match (&p.languages) { Some(v) => Value::Array((v).iter().map(|v| Value::String((v).clone())).collect()), None => Value::Null });
     m.insert("orgs".into(), Value::String((&p.orgs).clone()));
     m.insert("patched".into(), match (&p.patched) { Some(v) => Value::Bool(*(v)), None => Value::Null });
-    m.insert("priority_score".into(), match (&p.priority_score) { Some(v) => iface_reporting_api__get_list_of_issues_body_filters_priority_score__to_json(v), None => Value::Null });
+    m.insert("priorityScore".into(), match (&p.priority_score) { Some(v) => iface_reporting_api__get_list_of_issues_body_filters_priority_score__to_json(v), None => Value::Null });
     m.insert("projects".into(), match (&p.projects) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("severity".into(), match (&p.severity) { Some(v) => Value::Array((v).iter().map(|v| Value::String((v).clone())).collect()), None => Value::Null });
     m.insert("types".into(), match (&p.types) { Some(v) => Value::Array((v).iter().map(|v| Value::String((v).clone())).collect()), None => Value::Null });
@@ -2744,21 +6473,86 @@ fn iface_reporting_api__get_list_of_issues_body_filters_priority_score__to_json(
     Value::Object(m)
 }
 
+fn iface_reporting_api__get_list_of_issues_response__to_json(p: &iface_reporting_api::GetListOfIssuesResponse) -> Value {
+    let mut m = Map::new();
+    m.insert("results".into(), Value::Array((&p.results).iter().map(|v| iface_reporting_api__get_list_of_issues_response_results_item__to_json(v)).collect()));
+    m.insert("total".into(), serde_json::Number::from_f64(*(&p.total)).map(Value::Number).unwrap_or(Value::Null));
+    Value::Object(m)
+}
+
+fn iface_reporting_api__get_list_of_issues_response_results_item__to_json(p: &iface_reporting_api::GetListOfIssuesResponseResultsItem) -> Value {
+    let mut m = Map::new();
+    m.insert("fixedDate".into(), match (&p.fixed_date) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("introducedDate".into(), Value::String((&p.introduced_date).clone()));
+    m.insert("isFixed".into(), Value::Bool(*(&p.is_fixed)));
+    m.insert("issue".into(), iface_reporting_api__get_list_of_issues_response_results_item_issue__to_json(&p.issue));
+    m.insert("patchedDate".into(), match (&p.patched_date) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_reporting_api__get_list_of_issues_response_results_item_issue__to_json(p: &iface_reporting_api::GetListOfIssuesResponseResultsItemIssue) -> Value {
+    let mut m = Map::new();
+    m.insert("CVSSv3".into(), match (&p.cvs_sv3) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("credit".into(), match (&p.credit) { Some(v) => Value::Array((v).iter().map(|v| Value::String((v).clone())).collect()), None => Value::Null });
+    m.insert("cvssScore".into(), match (&p.cvss_score) { Some(v) => serde_json::Number::from_f64(*(v)).map(Value::Number).unwrap_or(Value::Null), None => Value::Null });
+    m.insert("disclosureTime".into(), match (&p.disclosure_time) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("exploitMaturity".into(), Value::String((&p.exploit_maturity).clone()));
+    m.insert("id".into(), Value::String((&p.id).clone()));
+    m.insert("identifiers".into(), match (&p.identifiers) { Some(v) => iface_reporting_api__get_list_of_issues_response_results_item_issue_identifiers__to_json(v), None => Value::Null });
+    m.insert("ignored".into(), match (&p.ignored) { Some(v) => Value::Array((v).iter().map(|v| Value::String((v).clone())).collect()), None => Value::Null });
+    m.insert("isIgnored".into(), match (&p.is_ignored) { Some(v) => Value::Bool(*(v)), None => Value::Null });
+    m.insert("isPatchable".into(), match (&p.is_patchable) { Some(v) => Value::Bool(*(v)), None => Value::Null });
+    m.insert("isPatched".into(), match (&p.is_patched) { Some(v) => Value::Bool(*(v)), None => Value::Null });
+    m.insert("isPinnable".into(), match (&p.is_pinnable) { Some(v) => Value::Bool(*(v)), None => Value::Null });
+    m.insert("isUpgradable".into(), match (&p.is_upgradable) { Some(v) => Value::Bool(*(v)), None => Value::Null });
+    m.insert("jiraIssueUrl".into(), match (&p.jira_issue_url) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("language".into(), match (&p.language) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("originalSeverity".into(), Value::String((&p.original_severity).clone()));
+    m.insert("package".into(), Value::String((&p.package_op).clone()));
+    m.insert("packageManager".into(), match (&p.package_manager) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("patches".into(), match (&p.patches) { Some(v) => Value::Array((v).iter().map(|v| Value::String((v).clone())).collect()), None => Value::Null });
+    m.insert("priorityScore".into(), match (&p.priority_score) { Some(v) => serde_json::Number::from_f64(*(v)).map(Value::Number).unwrap_or(Value::Null), None => Value::Null });
+    m.insert("publicationTime".into(), match (&p.publication_time) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("semver".into(), match (&p.semver) { Some(v) => iface_reporting_api__get_list_of_issues_response_results_item_issue_semver__to_json(v), None => Value::Null });
+    m.insert("severity".into(), Value::String((&p.severity).clone()));
+    m.insert("title".into(), Value::String((&p.title).clone()));
+    m.insert("type".into(), Value::String((&p.type_op).clone()));
+    m.insert("uniqueSeveritiesList".into(), match (&p.unique_severities_list) { Some(v) => Value::Array((v).iter().map(|v| Value::String((v).clone())).collect()), None => Value::Null });
+    m.insert("url".into(), Value::String((&p.url).clone()));
+    m.insert("version".into(), Value::String((&p.version).clone()));
+    Value::Object(m)
+}
+
+fn iface_reporting_api__get_list_of_issues_response_results_item_issue_identifiers__to_json(p: &iface_reporting_api::GetListOfIssuesResponseResultsItemIssueIdentifiers) -> Value {
+    let mut m = Map::new();
+    m.insert("CVE".into(), match (&p.cve) { Some(v) => Value::Array((v).iter().map(|v| Value::String((v).clone())).collect()), None => Value::Null });
+    m.insert("CWE".into(), match (&p.cwe) { Some(v) => Value::Array((v).iter().map(|v| Value::String((v).clone())).collect()), None => Value::Null });
+    m.insert("OSVDB".into(), match (&p.osvdb) { Some(v) => Value::Array((v).iter().map(|v| Value::String((v).clone())).collect()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_reporting_api__get_list_of_issues_response_results_item_issue_semver__to_json(p: &iface_reporting_api::GetListOfIssuesResponseResultsItemIssueSemver) -> Value {
+    let mut m = Map::new();
+    m.insert("unaffected".into(), match (&p.unaffected) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("vulnerable".into(), match (&p.vulnerable) { Some(v) => Value::Array((v).iter().map(|v| Value::String((v).clone())).collect()), None => Value::Null });
+    Value::Object(m)
+}
+
 fn iface_reporting_api__get_list_of_latest_issues_body_filters__to_json(p: &iface_reporting_api::GetListOfLatestIssuesBodyFilters) -> Value {
     let mut m = Map::new();
-    m.insert("exploit_maturity".into(), match (&p.exploit_maturity) { Some(v) => Value::Array((v).iter().map(|v| Value::String((v).clone())).collect()), None => Value::Null });
+    m.insert("exploitMaturity".into(), match (&p.exploit_maturity) { Some(v) => Value::Array((v).iter().map(|v| Value::String((v).clone())).collect()), None => Value::Null });
     m.insert("fixable".into(), match (&p.fixable) { Some(v) => Value::Bool(*(v)), None => Value::Null });
     m.insert("identifier".into(), match (&p.identifier) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("ignored".into(), match (&p.ignored) { Some(v) => Value::Bool(*(v)), None => Value::Null });
-    m.insert("is_fixed".into(), match (&p.is_fixed) { Some(v) => Value::Bool(*(v)), None => Value::Null });
-    m.insert("is_patchable".into(), match (&p.is_patchable) { Some(v) => Value::Bool(*(v)), None => Value::Null });
-    m.insert("is_pinnable".into(), match (&p.is_pinnable) { Some(v) => Value::Bool(*(v)), None => Value::Null });
-    m.insert("is_upgradable".into(), match (&p.is_upgradable) { Some(v) => Value::Bool(*(v)), None => Value::Null });
+    m.insert("isFixed".into(), match (&p.is_fixed) { Some(v) => Value::Bool(*(v)), None => Value::Null });
+    m.insert("isPatchable".into(), match (&p.is_patchable) { Some(v) => Value::Bool(*(v)), None => Value::Null });
+    m.insert("isPinnable".into(), match (&p.is_pinnable) { Some(v) => Value::Bool(*(v)), None => Value::Null });
+    m.insert("isUpgradable".into(), match (&p.is_upgradable) { Some(v) => Value::Bool(*(v)), None => Value::Null });
     m.insert("issues".into(), match (&p.issues) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("languages".into(), match (&p.languages) { Some(v) => Value::Array((v).iter().map(|v| Value::String((v).clone())).collect()), None => Value::Null });
     m.insert("orgs".into(), Value::String((&p.orgs).clone()));
     m.insert("patched".into(), match (&p.patched) { Some(v) => Value::Bool(*(v)), None => Value::Null });
-    m.insert("priority_score".into(), match (&p.priority_score) { Some(v) => iface_reporting_api__get_list_of_latest_issues_body_filters_priority_score__to_json(v), None => Value::Null });
+    m.insert("priorityScore".into(), match (&p.priority_score) { Some(v) => iface_reporting_api__get_list_of_latest_issues_body_filters_priority_score__to_json(v), None => Value::Null });
     m.insert("projects".into(), match (&p.projects) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("severity".into(), match (&p.severity) { Some(v) => Value::Array((v).iter().map(|v| Value::String((v).clone())).collect()), None => Value::Null });
     m.insert("types".into(), match (&p.types) { Some(v) => Value::Array((v).iter().map(|v| Value::String((v).clone())).collect()), None => Value::Null });
@@ -2769,6 +6563,71 @@ fn iface_reporting_api__get_list_of_latest_issues_body_filters_priority_score__t
     let mut m = Map::new();
     m.insert("max".into(), match (&p.max) { Some(v) => serde_json::Number::from_f64(*(v)).map(Value::Number).unwrap_or(Value::Null), None => Value::Null });
     m.insert("min".into(), match (&p.min) { Some(v) => serde_json::Number::from_f64(*(v)).map(Value::Number).unwrap_or(Value::Null), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_reporting_api__get_list_of_latest_issues_response__to_json(p: &iface_reporting_api::GetListOfLatestIssuesResponse) -> Value {
+    let mut m = Map::new();
+    m.insert("results".into(), Value::Array((&p.results).iter().map(|v| iface_reporting_api__get_list_of_latest_issues_response_results_item__to_json(v)).collect()));
+    m.insert("total".into(), serde_json::Number::from_f64(*(&p.total)).map(Value::Number).unwrap_or(Value::Null));
+    Value::Object(m)
+}
+
+fn iface_reporting_api__get_list_of_latest_issues_response_results_item__to_json(p: &iface_reporting_api::GetListOfLatestIssuesResponseResultsItem) -> Value {
+    let mut m = Map::new();
+    m.insert("fixedDate".into(), match (&p.fixed_date) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("introducedDate".into(), Value::String((&p.introduced_date).clone()));
+    m.insert("isFixed".into(), Value::Bool(*(&p.is_fixed)));
+    m.insert("issue".into(), iface_reporting_api__get_list_of_latest_issues_response_results_item_issue__to_json(&p.issue));
+    m.insert("patchedDate".into(), match (&p.patched_date) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_reporting_api__get_list_of_latest_issues_response_results_item_issue__to_json(p: &iface_reporting_api::GetListOfLatestIssuesResponseResultsItemIssue) -> Value {
+    let mut m = Map::new();
+    m.insert("CVSSv3".into(), match (&p.cvs_sv3) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("credit".into(), match (&p.credit) { Some(v) => Value::Array((v).iter().map(|v| Value::String((v).clone())).collect()), None => Value::Null });
+    m.insert("cvssScore".into(), match (&p.cvss_score) { Some(v) => serde_json::Number::from_f64(*(v)).map(Value::Number).unwrap_or(Value::Null), None => Value::Null });
+    m.insert("disclosureTime".into(), match (&p.disclosure_time) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("exploitMaturity".into(), Value::String((&p.exploit_maturity).clone()));
+    m.insert("id".into(), Value::String((&p.id).clone()));
+    m.insert("identifiers".into(), match (&p.identifiers) { Some(v) => iface_reporting_api__get_list_of_latest_issues_response_results_item_issue_identifiers__to_json(v), None => Value::Null });
+    m.insert("ignored".into(), match (&p.ignored) { Some(v) => Value::Array((v).iter().map(|v| Value::String((v).clone())).collect()), None => Value::Null });
+    m.insert("isIgnored".into(), match (&p.is_ignored) { Some(v) => Value::Bool(*(v)), None => Value::Null });
+    m.insert("isPatchable".into(), match (&p.is_patchable) { Some(v) => Value::Bool(*(v)), None => Value::Null });
+    m.insert("isPatched".into(), match (&p.is_patched) { Some(v) => Value::Bool(*(v)), None => Value::Null });
+    m.insert("isPinnable".into(), match (&p.is_pinnable) { Some(v) => Value::Bool(*(v)), None => Value::Null });
+    m.insert("isUpgradable".into(), match (&p.is_upgradable) { Some(v) => Value::Bool(*(v)), None => Value::Null });
+    m.insert("jiraIssueUrl".into(), match (&p.jira_issue_url) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("language".into(), match (&p.language) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("originalSeverity".into(), Value::String((&p.original_severity).clone()));
+    m.insert("package".into(), Value::String((&p.package_op).clone()));
+    m.insert("packageManager".into(), match (&p.package_manager) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("patches".into(), match (&p.patches) { Some(v) => Value::Array((v).iter().map(|v| Value::String((v).clone())).collect()), None => Value::Null });
+    m.insert("priorityScore".into(), match (&p.priority_score) { Some(v) => serde_json::Number::from_f64(*(v)).map(Value::Number).unwrap_or(Value::Null), None => Value::Null });
+    m.insert("publicationTime".into(), match (&p.publication_time) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("semver".into(), match (&p.semver) { Some(v) => iface_reporting_api__get_list_of_latest_issues_response_results_item_issue_semver__to_json(v), None => Value::Null });
+    m.insert("severity".into(), Value::String((&p.severity).clone()));
+    m.insert("title".into(), Value::String((&p.title).clone()));
+    m.insert("type".into(), Value::String((&p.type_op).clone()));
+    m.insert("uniqueSeveritiesList".into(), match (&p.unique_severities_list) { Some(v) => Value::Array((v).iter().map(|v| Value::String((v).clone())).collect()), None => Value::Null });
+    m.insert("url".into(), Value::String((&p.url).clone()));
+    m.insert("version".into(), Value::String((&p.version).clone()));
+    Value::Object(m)
+}
+
+fn iface_reporting_api__get_list_of_latest_issues_response_results_item_issue_identifiers__to_json(p: &iface_reporting_api::GetListOfLatestIssuesResponseResultsItemIssueIdentifiers) -> Value {
+    let mut m = Map::new();
+    m.insert("CVE".into(), match (&p.cve) { Some(v) => Value::Array((v).iter().map(|v| Value::String((v).clone())).collect()), None => Value::Null });
+    m.insert("CWE".into(), match (&p.cwe) { Some(v) => Value::Array((v).iter().map(|v| Value::String((v).clone())).collect()), None => Value::Null });
+    m.insert("OSVDB".into(), match (&p.osvdb) { Some(v) => Value::Array((v).iter().map(|v| Value::String((v).clone())).collect()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_reporting_api__get_list_of_latest_issues_response_results_item_issue_semver__to_json(p: &iface_reporting_api::GetListOfLatestIssuesResponseResultsItemIssueSemver) -> Value {
+    let mut m = Map::new();
+    m.insert("unaffected".into(), match (&p.unaffected) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("vulnerable".into(), match (&p.vulnerable) { Some(v) => Value::Array((v).iter().map(|v| Value::String((v).clone())).collect()), None => Value::Null });
     Value::Object(m)
 }
 
@@ -2835,34 +6694,474 @@ fn iface_reporting_api__get_list_of_latest_issues_params__to_json(p: &iface_repo
     Value::Object(m)
 }
 
+fn iface_reporting_api__get_issue_counts_response__from_json(v: &Value) -> Option<iface_reporting_api::GetIssueCountsResponse> {
+    let m = v.as_object()?;
+    Some(iface_reporting_api::GetIssueCountsResponse {
+        results: m.get("results").and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| iface_reporting_api__get_issue_counts_response_results_item__from_json(x)).collect())).unwrap_or_default(),
+    })
+}
+
+fn iface_reporting_api__get_issue_counts_response_results_item__from_json(v: &Value) -> Option<iface_reporting_api::GetIssueCountsResponseResultsItem> {
+    let m = v.as_object()?;
+    Some(iface_reporting_api::GetIssueCountsResponseResultsItem {
+        count: m.get("count").and_then(|v| (v).as_f64()).unwrap_or_default(),
+        day: m.get("day").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        fixable: m.get("fixable").filter(|v| !v.is_null()).and_then(|v| iface_reporting_api__get_issue_counts_response_results_item_fixable__from_json(v)),
+        severity: m.get("severity").filter(|v| !v.is_null()).and_then(|v| iface_reporting_api__get_issue_counts_response_results_item_severity__from_json(v)),
+    })
+}
+
+fn iface_reporting_api__get_issue_counts_response_results_item_fixable__from_json(v: &Value) -> Option<iface_reporting_api::GetIssueCountsResponseResultsItemFixable> {
+    let m = v.as_object()?;
+    Some(iface_reporting_api::GetIssueCountsResponseResultsItemFixable {
+        false_: m.get("false").filter(|v| !v.is_null()).and_then(|v| (v).as_f64()),
+        true_: m.get("true").filter(|v| !v.is_null()).and_then(|v| (v).as_f64()),
+    })
+}
+
+fn iface_reporting_api__get_issue_counts_response_results_item_severity__from_json(v: &Value) -> Option<iface_reporting_api::GetIssueCountsResponseResultsItemSeverity> {
+    let m = v.as_object()?;
+    Some(iface_reporting_api::GetIssueCountsResponseResultsItemSeverity {
+        critical: m.get("critical").filter(|v| !v.is_null()).and_then(|v| (v).as_f64()),
+        high: m.get("high").filter(|v| !v.is_null()).and_then(|v| (v).as_f64()),
+        low: m.get("low").filter(|v| !v.is_null()).and_then(|v| (v).as_f64()),
+        medium: m.get("medium").filter(|v| !v.is_null()).and_then(|v| (v).as_f64()),
+    })
+}
+
+fn iface_reporting_api__get_latest_issue_counts_response__from_json(v: &Value) -> Option<iface_reporting_api::GetLatestIssueCountsResponse> {
+    let m = v.as_object()?;
+    Some(iface_reporting_api::GetLatestIssueCountsResponse {
+        results: m.get("results").and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| iface_reporting_api__get_latest_issue_counts_response_results_item__from_json(x)).collect())).unwrap_or_default(),
+    })
+}
+
+fn iface_reporting_api__get_latest_issue_counts_response_results_item__from_json(v: &Value) -> Option<iface_reporting_api::GetLatestIssueCountsResponseResultsItem> {
+    let m = v.as_object()?;
+    Some(iface_reporting_api::GetLatestIssueCountsResponseResultsItem {
+        count: m.get("count").and_then(|v| (v).as_f64()).unwrap_or_default(),
+        day: m.get("day").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        fixable: m.get("fixable").filter(|v| !v.is_null()).and_then(|v| iface_reporting_api__get_latest_issue_counts_response_results_item_fixable__from_json(v)),
+        severity: m.get("severity").filter(|v| !v.is_null()).and_then(|v| iface_reporting_api__get_latest_issue_counts_response_results_item_severity__from_json(v)),
+    })
+}
+
+fn iface_reporting_api__get_latest_issue_counts_response_results_item_fixable__from_json(v: &Value) -> Option<iface_reporting_api::GetLatestIssueCountsResponseResultsItemFixable> {
+    let m = v.as_object()?;
+    Some(iface_reporting_api::GetLatestIssueCountsResponseResultsItemFixable {
+        false_: m.get("false").filter(|v| !v.is_null()).and_then(|v| (v).as_f64()),
+        true_: m.get("true").filter(|v| !v.is_null()).and_then(|v| (v).as_f64()),
+    })
+}
+
+fn iface_reporting_api__get_latest_issue_counts_response_results_item_severity__from_json(v: &Value) -> Option<iface_reporting_api::GetLatestIssueCountsResponseResultsItemSeverity> {
+    let m = v.as_object()?;
+    Some(iface_reporting_api::GetLatestIssueCountsResponseResultsItemSeverity {
+        critical: m.get("critical").filter(|v| !v.is_null()).and_then(|v| (v).as_f64()),
+        high: m.get("high").filter(|v| !v.is_null()).and_then(|v| (v).as_f64()),
+        low: m.get("low").filter(|v| !v.is_null()).and_then(|v| (v).as_f64()),
+        medium: m.get("medium").filter(|v| !v.is_null()).and_then(|v| (v).as_f64()),
+    })
+}
+
+fn iface_reporting_api__get_project_counts_response__from_json(v: &Value) -> Option<iface_reporting_api::GetProjectCountsResponse> {
+    let m = v.as_object()?;
+    Some(iface_reporting_api::GetProjectCountsResponse {
+        results: m.get("results").and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| iface_reporting_api__get_project_counts_response_results_item__from_json(x)).collect())).unwrap_or_default(),
+    })
+}
+
+fn iface_reporting_api__get_project_counts_response_results_item__from_json(v: &Value) -> Option<iface_reporting_api::GetProjectCountsResponseResultsItem> {
+    let m = v.as_object()?;
+    Some(iface_reporting_api::GetProjectCountsResponseResultsItem {
+        count: m.get("count").and_then(|v| (v).as_f64()).unwrap_or_default(),
+        day: m.get("day").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+    })
+}
+
+fn iface_reporting_api__get_latest_project_counts_response__from_json(v: &Value) -> Option<iface_reporting_api::GetLatestProjectCountsResponse> {
+    let m = v.as_object()?;
+    Some(iface_reporting_api::GetLatestProjectCountsResponse {
+        results: m.get("results").and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| iface_reporting_api__get_latest_project_counts_response_results_item__from_json(x)).collect())).unwrap_or_default(),
+    })
+}
+
+fn iface_reporting_api__get_latest_project_counts_response_results_item__from_json(v: &Value) -> Option<iface_reporting_api::GetLatestProjectCountsResponseResultsItem> {
+    let m = v.as_object()?;
+    Some(iface_reporting_api::GetLatestProjectCountsResponseResultsItem {
+        count: m.get("count").and_then(|v| (v).as_f64()).unwrap_or_default(),
+        day: m.get("day").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+    })
+}
+
+fn iface_reporting_api__get_test_counts_response__from_json(v: &Value) -> Option<iface_reporting_api::GetTestCountsResponse> {
+    let m = v.as_object()?;
+    Some(iface_reporting_api::GetTestCountsResponse {
+        results: m.get("results").and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| iface_reporting_api__get_test_counts_response_results_item__from_json(x)).collect())).unwrap_or_default(),
+    })
+}
+
+fn iface_reporting_api__get_test_counts_response_results_item__from_json(v: &Value) -> Option<iface_reporting_api::GetTestCountsResponseResultsItem> {
+    let m = v.as_object()?;
+    Some(iface_reporting_api::GetTestCountsResponseResultsItem {
+        count: m.get("count").and_then(|v| (v).as_f64()).unwrap_or_default(),
+        is_private: m.get("isPrivate").filter(|v| !v.is_null()).and_then(|v| iface_reporting_api__get_test_counts_response_results_item_is_private__from_json(v)),
+        issues_prevented: m.get("issuesPrevented").filter(|v| !v.is_null()).and_then(|v| iface_reporting_api__get_test_counts_response_results_item_issues_prevented__from_json(v)),
+    })
+}
+
+fn iface_reporting_api__get_test_counts_response_results_item_is_private__from_json(v: &Value) -> Option<iface_reporting_api::GetTestCountsResponseResultsItemIsPrivate> {
+    let m = v.as_object()?;
+    Some(iface_reporting_api::GetTestCountsResponseResultsItemIsPrivate {
+        false_: m.get("false").filter(|v| !v.is_null()).and_then(|v| (v).as_f64()),
+        true_: m.get("true").filter(|v| !v.is_null()).and_then(|v| (v).as_f64()),
+    })
+}
+
+fn iface_reporting_api__get_test_counts_response_results_item_issues_prevented__from_json(v: &Value) -> Option<iface_reporting_api::GetTestCountsResponseResultsItemIssuesPrevented> {
+    let m = v.as_object()?;
+    Some(iface_reporting_api::GetTestCountsResponseResultsItemIssuesPrevented {
+        false_: m.get("false").filter(|v| !v.is_null()).and_then(|v| (v).as_f64()),
+        true_: m.get("true").filter(|v| !v.is_null()).and_then(|v| (v).as_f64()),
+    })
+}
+
+fn iface_reporting_api__get_list_of_issues_response__from_json(v: &Value) -> Option<iface_reporting_api::GetListOfIssuesResponse> {
+    let m = v.as_object()?;
+    Some(iface_reporting_api::GetListOfIssuesResponse {
+        results: m.get("results").and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| iface_reporting_api__get_list_of_issues_response_results_item__from_json(x)).collect())).unwrap_or_default(),
+        total: m.get("total").and_then(|v| (v).as_f64()).unwrap_or_default(),
+    })
+}
+
+fn iface_reporting_api__get_list_of_issues_response_results_item__from_json(v: &Value) -> Option<iface_reporting_api::GetListOfIssuesResponseResultsItem> {
+    let m = v.as_object()?;
+    Some(iface_reporting_api::GetListOfIssuesResponseResultsItem {
+        fixed_date: m.get("fixedDate").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        introduced_date: m.get("introducedDate").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        is_fixed: m.get("isFixed").and_then(|v| (v).as_bool()).unwrap_or_default(),
+        issue: match m.get("issue").and_then(|v| iface_reporting_api__get_list_of_issues_response_results_item_issue__from_json(v)) { Some(x) => x, None => return None },
+        patched_date: m.get("patchedDate").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    })
+}
+
+fn iface_reporting_api__get_list_of_issues_response_results_item_issue__from_json(v: &Value) -> Option<iface_reporting_api::GetListOfIssuesResponseResultsItemIssue> {
+    let m = v.as_object()?;
+    Some(iface_reporting_api::GetListOfIssuesResponseResultsItemIssue {
+        cvs_sv3: m.get("CVSSv3").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        credit: m.get("credit").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| (x).as_str().map(|s| s.to_string())).collect())),
+        cvss_score: m.get("cvssScore").filter(|v| !v.is_null()).and_then(|v| (v).as_f64()),
+        disclosure_time: m.get("disclosureTime").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        exploit_maturity: m.get("exploitMaturity").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        id: m.get("id").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        identifiers: m.get("identifiers").filter(|v| !v.is_null()).and_then(|v| iface_reporting_api__get_list_of_issues_response_results_item_issue_identifiers__from_json(v)),
+        ignored: m.get("ignored").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| (x).as_str().map(|s| s.to_string())).collect())),
+        is_ignored: m.get("isIgnored").filter(|v| !v.is_null()).and_then(|v| (v).as_bool()),
+        is_patchable: m.get("isPatchable").filter(|v| !v.is_null()).and_then(|v| (v).as_bool()),
+        is_patched: m.get("isPatched").filter(|v| !v.is_null()).and_then(|v| (v).as_bool()),
+        is_pinnable: m.get("isPinnable").filter(|v| !v.is_null()).and_then(|v| (v).as_bool()),
+        is_upgradable: m.get("isUpgradable").filter(|v| !v.is_null()).and_then(|v| (v).as_bool()),
+        jira_issue_url: m.get("jiraIssueUrl").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        language: m.get("language").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        original_severity: m.get("originalSeverity").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        package_op: m.get("package").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        package_manager: m.get("packageManager").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        patches: m.get("patches").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| (x).as_str().map(|s| s.to_string())).collect())),
+        priority_score: m.get("priorityScore").filter(|v| !v.is_null()).and_then(|v| (v).as_f64()),
+        publication_time: m.get("publicationTime").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        semver: m.get("semver").filter(|v| !v.is_null()).and_then(|v| iface_reporting_api__get_list_of_issues_response_results_item_issue_semver__from_json(v)),
+        severity: m.get("severity").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        title: m.get("title").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        type_op: m.get("type").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        unique_severities_list: m.get("uniqueSeveritiesList").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| (x).as_str().map(|s| s.to_string())).collect())),
+        url: m.get("url").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        version: m.get("version").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+    })
+}
+
+fn iface_reporting_api__get_list_of_issues_response_results_item_issue_identifiers__from_json(v: &Value) -> Option<iface_reporting_api::GetListOfIssuesResponseResultsItemIssueIdentifiers> {
+    let m = v.as_object()?;
+    Some(iface_reporting_api::GetListOfIssuesResponseResultsItemIssueIdentifiers {
+        cve: m.get("CVE").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| (x).as_str().map(|s| s.to_string())).collect())),
+        cwe: m.get("CWE").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| (x).as_str().map(|s| s.to_string())).collect())),
+        osvdb: m.get("OSVDB").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| (x).as_str().map(|s| s.to_string())).collect())),
+    })
+}
+
+fn iface_reporting_api__get_list_of_issues_response_results_item_issue_semver__from_json(v: &Value) -> Option<iface_reporting_api::GetListOfIssuesResponseResultsItemIssueSemver> {
+    let m = v.as_object()?;
+    Some(iface_reporting_api::GetListOfIssuesResponseResultsItemIssueSemver {
+        unaffected: m.get("unaffected").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        vulnerable: m.get("vulnerable").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| (x).as_str().map(|s| s.to_string())).collect())),
+    })
+}
+
+fn iface_reporting_api__get_list_of_latest_issues_response__from_json(v: &Value) -> Option<iface_reporting_api::GetListOfLatestIssuesResponse> {
+    let m = v.as_object()?;
+    Some(iface_reporting_api::GetListOfLatestIssuesResponse {
+        results: m.get("results").and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| iface_reporting_api__get_list_of_latest_issues_response_results_item__from_json(x)).collect())).unwrap_or_default(),
+        total: m.get("total").and_then(|v| (v).as_f64()).unwrap_or_default(),
+    })
+}
+
+fn iface_reporting_api__get_list_of_latest_issues_response_results_item__from_json(v: &Value) -> Option<iface_reporting_api::GetListOfLatestIssuesResponseResultsItem> {
+    let m = v.as_object()?;
+    Some(iface_reporting_api::GetListOfLatestIssuesResponseResultsItem {
+        fixed_date: m.get("fixedDate").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        introduced_date: m.get("introducedDate").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        is_fixed: m.get("isFixed").and_then(|v| (v).as_bool()).unwrap_or_default(),
+        issue: match m.get("issue").and_then(|v| iface_reporting_api__get_list_of_latest_issues_response_results_item_issue__from_json(v)) { Some(x) => x, None => return None },
+        patched_date: m.get("patchedDate").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    })
+}
+
+fn iface_reporting_api__get_list_of_latest_issues_response_results_item_issue__from_json(v: &Value) -> Option<iface_reporting_api::GetListOfLatestIssuesResponseResultsItemIssue> {
+    let m = v.as_object()?;
+    Some(iface_reporting_api::GetListOfLatestIssuesResponseResultsItemIssue {
+        cvs_sv3: m.get("CVSSv3").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        credit: m.get("credit").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| (x).as_str().map(|s| s.to_string())).collect())),
+        cvss_score: m.get("cvssScore").filter(|v| !v.is_null()).and_then(|v| (v).as_f64()),
+        disclosure_time: m.get("disclosureTime").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        exploit_maturity: m.get("exploitMaturity").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        id: m.get("id").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        identifiers: m.get("identifiers").filter(|v| !v.is_null()).and_then(|v| iface_reporting_api__get_list_of_latest_issues_response_results_item_issue_identifiers__from_json(v)),
+        ignored: m.get("ignored").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| (x).as_str().map(|s| s.to_string())).collect())),
+        is_ignored: m.get("isIgnored").filter(|v| !v.is_null()).and_then(|v| (v).as_bool()),
+        is_patchable: m.get("isPatchable").filter(|v| !v.is_null()).and_then(|v| (v).as_bool()),
+        is_patched: m.get("isPatched").filter(|v| !v.is_null()).and_then(|v| (v).as_bool()),
+        is_pinnable: m.get("isPinnable").filter(|v| !v.is_null()).and_then(|v| (v).as_bool()),
+        is_upgradable: m.get("isUpgradable").filter(|v| !v.is_null()).and_then(|v| (v).as_bool()),
+        jira_issue_url: m.get("jiraIssueUrl").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        language: m.get("language").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        original_severity: m.get("originalSeverity").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        package_op: m.get("package").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        package_manager: m.get("packageManager").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        patches: m.get("patches").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| (x).as_str().map(|s| s.to_string())).collect())),
+        priority_score: m.get("priorityScore").filter(|v| !v.is_null()).and_then(|v| (v).as_f64()),
+        publication_time: m.get("publicationTime").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        semver: m.get("semver").filter(|v| !v.is_null()).and_then(|v| iface_reporting_api__get_list_of_latest_issues_response_results_item_issue_semver__from_json(v)),
+        severity: m.get("severity").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        title: m.get("title").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        type_op: m.get("type").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        unique_severities_list: m.get("uniqueSeveritiesList").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| (x).as_str().map(|s| s.to_string())).collect())),
+        url: m.get("url").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        version: m.get("version").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+    })
+}
+
+fn iface_reporting_api__get_list_of_latest_issues_response_results_item_issue_identifiers__from_json(v: &Value) -> Option<iface_reporting_api::GetListOfLatestIssuesResponseResultsItemIssueIdentifiers> {
+    let m = v.as_object()?;
+    Some(iface_reporting_api::GetListOfLatestIssuesResponseResultsItemIssueIdentifiers {
+        cve: m.get("CVE").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| (x).as_str().map(|s| s.to_string())).collect())),
+        cwe: m.get("CWE").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| (x).as_str().map(|s| s.to_string())).collect())),
+        osvdb: m.get("OSVDB").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| (x).as_str().map(|s| s.to_string())).collect())),
+    })
+}
+
+fn iface_reporting_api__get_list_of_latest_issues_response_results_item_issue_semver__from_json(v: &Value) -> Option<iface_reporting_api::GetListOfLatestIssuesResponseResultsItemIssueSemver> {
+    let m = v.as_object()?;
+    Some(iface_reporting_api::GetListOfLatestIssuesResponseResultsItemIssueSemver {
+        unaffected: m.get("unaffected").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        vulnerable: m.get("vulnerable").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| (x).as_str().map(|s| s.to_string())).collect())),
+    })
+}
+
+fn iface_reporting_api__get_issue_counts__ok(body: String) -> Result<iface_reporting_api::GetIssueCountsResponse, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match iface_reporting_api__get_issue_counts_response__from_json(&v) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_reporting_api__get_issue_counts__err(e: crate::runtime::DispatchError) -> iface_reporting_api::GetIssueCountsError {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => match status {
+            400u16 => iface_reporting_api::GetIssueCountsError::BadRequest(body),
+            _ => iface_reporting_api::GetIssueCountsError::Other(body),
+        },
+        crate::runtime::DispatchError::Transport(m) => iface_reporting_api::GetIssueCountsError::Other(m),
+    }
+}
+
+fn iface_reporting_api__get_latest_issue_counts__ok(body: String) -> Result<iface_reporting_api::GetLatestIssueCountsResponse, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match iface_reporting_api__get_latest_issue_counts_response__from_json(&v) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_reporting_api__get_latest_issue_counts__err(e: crate::runtime::DispatchError) -> iface_reporting_api::GetLatestIssueCountsError {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => match status {
+            400u16 => iface_reporting_api::GetLatestIssueCountsError::BadRequest(body),
+            _ => iface_reporting_api::GetLatestIssueCountsError::Other(body),
+        },
+        crate::runtime::DispatchError::Transport(m) => iface_reporting_api::GetLatestIssueCountsError::Other(m),
+    }
+}
+
+fn iface_reporting_api__get_project_counts__ok(body: String) -> Result<iface_reporting_api::GetProjectCountsResponse, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match iface_reporting_api__get_project_counts_response__from_json(&v) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_reporting_api__get_project_counts__err(e: crate::runtime::DispatchError) -> iface_reporting_api::GetProjectCountsError {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => match status {
+            400u16 => iface_reporting_api::GetProjectCountsError::BadRequest(body),
+            _ => iface_reporting_api::GetProjectCountsError::Other(body),
+        },
+        crate::runtime::DispatchError::Transport(m) => iface_reporting_api::GetProjectCountsError::Other(m),
+    }
+}
+
+fn iface_reporting_api__get_latest_project_counts__ok(body: String) -> Result<iface_reporting_api::GetLatestProjectCountsResponse, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match iface_reporting_api__get_latest_project_counts_response__from_json(&v) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_reporting_api__get_latest_project_counts__err(e: crate::runtime::DispatchError) -> iface_reporting_api::GetLatestProjectCountsError {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => match status {
+            400u16 => iface_reporting_api::GetLatestProjectCountsError::BadRequest(body),
+            _ => iface_reporting_api::GetLatestProjectCountsError::Other(body),
+        },
+        crate::runtime::DispatchError::Transport(m) => iface_reporting_api::GetLatestProjectCountsError::Other(m),
+    }
+}
+
+fn iface_reporting_api__get_test_counts__ok(body: String) -> Result<iface_reporting_api::GetTestCountsResponse, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match iface_reporting_api__get_test_counts_response__from_json(&v) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_reporting_api__get_test_counts__err(e: crate::runtime::DispatchError) -> iface_reporting_api::GetTestCountsError {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => match status {
+            400u16 => iface_reporting_api::GetTestCountsError::BadRequest(body),
+            _ => iface_reporting_api::GetTestCountsError::Other(body),
+        },
+        crate::runtime::DispatchError::Transport(m) => iface_reporting_api::GetTestCountsError::Other(m),
+    }
+}
+
+fn iface_reporting_api__get_list_of_issues__ok(body: String) -> Result<iface_reporting_api::GetListOfIssuesResponse, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match iface_reporting_api__get_list_of_issues_response__from_json(&v) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_reporting_api__get_list_of_issues__err(e: crate::runtime::DispatchError) -> iface_reporting_api::GetListOfIssuesError {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => match status {
+            400u16 => iface_reporting_api::GetListOfIssuesError::BadRequest(body),
+            _ => iface_reporting_api::GetListOfIssuesError::Other(body),
+        },
+        crate::runtime::DispatchError::Transport(m) => iface_reporting_api::GetListOfIssuesError::Other(m),
+    }
+}
+
+fn iface_reporting_api__get_list_of_latest_issues__ok(body: String) -> Result<iface_reporting_api::GetListOfLatestIssuesResponse, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match iface_reporting_api__get_list_of_latest_issues_response__from_json(&v) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_reporting_api__get_list_of_latest_issues__err(e: crate::runtime::DispatchError) -> iface_reporting_api::GetListOfLatestIssuesError {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => match status {
+            400u16 => iface_reporting_api::GetListOfLatestIssuesError::BadRequest(body),
+            _ => iface_reporting_api::GetListOfLatestIssuesError::Other(body),
+        },
+        crate::runtime::DispatchError::Transport(m) => iface_reporting_api::GetListOfLatestIssuesError::Other(m),
+    }
+}
+
 impl iface_reporting_api::Guest for crate::Component {
-    fn get_issue_counts(params: iface_reporting_api::GetIssueCountsParams) -> Result<String, String> {
+    fn get_issue_counts(params: iface_reporting_api::GetIssueCountsParams) -> Result<iface_reporting_api::GetIssueCountsResponse, iface_reporting_api::GetIssueCountsError> {
         let json = iface_reporting_api__get_issue_counts_params__to_json(&params);
-        dispatch(&OP_REPORTING_API_GET_ISSUE_COUNTS, json)
+        match dispatch(&OP_REPORTING_API_GET_ISSUE_COUNTS, json).and_then(iface_reporting_api__get_issue_counts__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_reporting_api__get_issue_counts__err(e)),
+        }
     }
-    fn get_latest_issue_counts(params: iface_reporting_api::GetLatestIssueCountsParams) -> Result<String, String> {
+    fn get_latest_issue_counts(params: iface_reporting_api::GetLatestIssueCountsParams) -> Result<iface_reporting_api::GetLatestIssueCountsResponse, iface_reporting_api::GetLatestIssueCountsError> {
         let json = iface_reporting_api__get_latest_issue_counts_params__to_json(&params);
-        dispatch(&OP_REPORTING_API_GET_LATEST_ISSUE_COUNTS, json)
+        match dispatch(&OP_REPORTING_API_GET_LATEST_ISSUE_COUNTS, json).and_then(iface_reporting_api__get_latest_issue_counts__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_reporting_api__get_latest_issue_counts__err(e)),
+        }
     }
-    fn get_project_counts(params: iface_reporting_api::GetProjectCountsParams) -> Result<String, String> {
+    fn get_project_counts(params: iface_reporting_api::GetProjectCountsParams) -> Result<iface_reporting_api::GetProjectCountsResponse, iface_reporting_api::GetProjectCountsError> {
         let json = iface_reporting_api__get_project_counts_params__to_json(&params);
-        dispatch(&OP_REPORTING_API_GET_PROJECT_COUNTS, json)
+        match dispatch(&OP_REPORTING_API_GET_PROJECT_COUNTS, json).and_then(iface_reporting_api__get_project_counts__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_reporting_api__get_project_counts__err(e)),
+        }
     }
-    fn get_latest_project_counts(params: iface_reporting_api::GetLatestProjectCountsParams) -> Result<String, String> {
+    fn get_latest_project_counts(params: iface_reporting_api::GetLatestProjectCountsParams) -> Result<iface_reporting_api::GetLatestProjectCountsResponse, iface_reporting_api::GetLatestProjectCountsError> {
         let json = iface_reporting_api__get_latest_project_counts_params__to_json(&params);
-        dispatch(&OP_REPORTING_API_GET_LATEST_PROJECT_COUNTS, json)
+        match dispatch(&OP_REPORTING_API_GET_LATEST_PROJECT_COUNTS, json).and_then(iface_reporting_api__get_latest_project_counts__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_reporting_api__get_latest_project_counts__err(e)),
+        }
     }
-    fn get_test_counts(params: iface_reporting_api::GetTestCountsParams) -> Result<String, String> {
+    fn get_test_counts(params: iface_reporting_api::GetTestCountsParams) -> Result<iface_reporting_api::GetTestCountsResponse, iface_reporting_api::GetTestCountsError> {
         let json = iface_reporting_api__get_test_counts_params__to_json(&params);
-        dispatch(&OP_REPORTING_API_GET_TEST_COUNTS, json)
+        match dispatch(&OP_REPORTING_API_GET_TEST_COUNTS, json).and_then(iface_reporting_api__get_test_counts__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_reporting_api__get_test_counts__err(e)),
+        }
     }
-    fn get_list_of_issues(params: iface_reporting_api::GetListOfIssuesParams) -> Result<String, String> {
+    fn get_list_of_issues(params: iface_reporting_api::GetListOfIssuesParams) -> Result<iface_reporting_api::GetListOfIssuesResponse, iface_reporting_api::GetListOfIssuesError> {
         let json = iface_reporting_api__get_list_of_issues_params__to_json(&params);
-        dispatch(&OP_REPORTING_API_GET_LIST_OF_ISSUES, json)
+        match dispatch(&OP_REPORTING_API_GET_LIST_OF_ISSUES, json).and_then(iface_reporting_api__get_list_of_issues__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_reporting_api__get_list_of_issues__err(e)),
+        }
     }
-    fn get_list_of_latest_issues(params: iface_reporting_api::GetListOfLatestIssuesParams) -> Result<String, String> {
+    fn get_list_of_latest_issues(params: iface_reporting_api::GetListOfLatestIssuesParams) -> Result<iface_reporting_api::GetListOfLatestIssuesResponse, iface_reporting_api::GetListOfLatestIssuesError> {
         let json = iface_reporting_api__get_list_of_latest_issues_params__to_json(&params);
-        dispatch(&OP_REPORTING_API_GET_LIST_OF_LATEST_ISSUES, json)
+        match dispatch(&OP_REPORTING_API_GET_LIST_OF_LATEST_ISSUES, json).and_then(iface_reporting_api__get_list_of_latest_issues__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_reporting_api__get_list_of_latest_issues__err(e)),
+        }
     }
 }
 use crate::exports::autostamp::snyk::test as iface_test;
@@ -2871,8 +7170,8 @@ const OP_TEST_COMPOSER_JSON_COMPOSER_LOCK_FILE: OpSpec = OpSpec {
     method: "POST",
     path_template: "/test/composer",
     fields: &[
-        FieldSpec { snake: "encoding", location: FieldLocation::Body },
-        FieldSpec { snake: "files", location: FieldLocation::Body },
+        FieldSpec { snake: "encoding", wire: "encoding", location: FieldLocation::Body },
+        FieldSpec { snake: "files", wire: "files", location: FieldLocation::Body },
     ],
     auth: &[
     ],
@@ -2882,8 +7181,8 @@ const OP_TEST_DEP_GRAPH: OpSpec = OpSpec {
     method: "POST",
     path_template: "/test/dep-graph",
     fields: &[
-        FieldSpec { snake: "org", location: FieldLocation::Query },
-        FieldSpec { snake: "dep_graph", location: FieldLocation::Body },
+        FieldSpec { snake: "org", wire: "org", location: FieldLocation::Query },
+        FieldSpec { snake: "dep_graph", wire: "depGraph", location: FieldLocation::Body },
     ],
     auth: &[
     ],
@@ -2893,9 +7192,9 @@ const OP_TEST_GOPKG_TOML_GOPKG_LOCK_FILE: OpSpec = OpSpec {
     method: "POST",
     path_template: "/test/golangdep",
     fields: &[
-        FieldSpec { snake: "org", location: FieldLocation::Query },
-        FieldSpec { snake: "encoding", location: FieldLocation::Body },
-        FieldSpec { snake: "files", location: FieldLocation::Body },
+        FieldSpec { snake: "org", wire: "org", location: FieldLocation::Query },
+        FieldSpec { snake: "encoding", wire: "encoding", location: FieldLocation::Body },
+        FieldSpec { snake: "files", wire: "files", location: FieldLocation::Body },
     ],
     auth: &[
     ],
@@ -2905,8 +7204,8 @@ const OP_TEST_VENDOR_JSON_FILE: OpSpec = OpSpec {
     method: "POST",
     path_template: "/test/govendor",
     fields: &[
-        FieldSpec { snake: "encoding", location: FieldLocation::Body },
-        FieldSpec { snake: "files", location: FieldLocation::Body },
+        FieldSpec { snake: "encoding", wire: "encoding", location: FieldLocation::Body },
+        FieldSpec { snake: "files", wire: "files", location: FieldLocation::Body },
     ],
     auth: &[
     ],
@@ -2916,8 +7215,8 @@ const OP_TEST_GRADLE_FILE: OpSpec = OpSpec {
     method: "POST",
     path_template: "/test/gradle",
     fields: &[
-        FieldSpec { snake: "encoding", location: FieldLocation::Body },
-        FieldSpec { snake: "files", location: FieldLocation::Body },
+        FieldSpec { snake: "encoding", wire: "encoding", location: FieldLocation::Body },
+        FieldSpec { snake: "files", wire: "files", location: FieldLocation::Body },
     ],
     auth: &[
     ],
@@ -2927,11 +7226,11 @@ const OP_TEST_FOR_ISSUES_IN_A_PUBLIC_PACKAGE_BY_GROUP_NAME_AND_VERSION: OpSpec =
     method: "GET",
     path_template: "/test/gradle/{group}/{name}/{version}",
     fields: &[
-        FieldSpec { snake: "group", location: FieldLocation::Path },
-        FieldSpec { snake: "name", location: FieldLocation::Path },
-        FieldSpec { snake: "version", location: FieldLocation::Path },
-        FieldSpec { snake: "org", location: FieldLocation::Query },
-        FieldSpec { snake: "repository", location: FieldLocation::Query },
+        FieldSpec { snake: "group", wire: "group", location: FieldLocation::Path },
+        FieldSpec { snake: "name", wire: "name", location: FieldLocation::Path },
+        FieldSpec { snake: "version", wire: "version", location: FieldLocation::Path },
+        FieldSpec { snake: "org", wire: "org", location: FieldLocation::Query },
+        FieldSpec { snake: "repository", wire: "repository", location: FieldLocation::Query },
     ],
     auth: &[
     ],
@@ -2941,10 +7240,10 @@ const OP_TEST_MAVEN_FILE: OpSpec = OpSpec {
     method: "POST",
     path_template: "/test/maven",
     fields: &[
-        FieldSpec { snake: "org", location: FieldLocation::Query },
-        FieldSpec { snake: "repository", location: FieldLocation::Query },
-        FieldSpec { snake: "encoding", location: FieldLocation::Body },
-        FieldSpec { snake: "files", location: FieldLocation::Body },
+        FieldSpec { snake: "org", wire: "org", location: FieldLocation::Query },
+        FieldSpec { snake: "repository", wire: "repository", location: FieldLocation::Query },
+        FieldSpec { snake: "encoding", wire: "encoding", location: FieldLocation::Body },
+        FieldSpec { snake: "files", wire: "files", location: FieldLocation::Body },
     ],
     auth: &[
     ],
@@ -2954,11 +7253,11 @@ const OP_TEST_FOR_ISSUES_IN_A_PUBLIC_PACKAGE_BY_GROUP_ID_ARTIFACT_ID_AND_VERSION
     method: "GET",
     path_template: "/test/maven/{group_id}/{artifact_id}/{version}",
     fields: &[
-        FieldSpec { snake: "group_id", location: FieldLocation::Path },
-        FieldSpec { snake: "artifact_id", location: FieldLocation::Path },
-        FieldSpec { snake: "version", location: FieldLocation::Path },
-        FieldSpec { snake: "org", location: FieldLocation::Query },
-        FieldSpec { snake: "repository", location: FieldLocation::Query },
+        FieldSpec { snake: "group_id", wire: "groupId", location: FieldLocation::Path },
+        FieldSpec { snake: "artifact_id", wire: "artifactId", location: FieldLocation::Path },
+        FieldSpec { snake: "version", wire: "version", location: FieldLocation::Path },
+        FieldSpec { snake: "org", wire: "org", location: FieldLocation::Query },
+        FieldSpec { snake: "repository", wire: "repository", location: FieldLocation::Query },
     ],
     auth: &[
     ],
@@ -2968,8 +7267,8 @@ const OP_TEST_PACKAGE_JSON_PACKAGE_LOCK_JSON_FILE: OpSpec = OpSpec {
     method: "POST",
     path_template: "/test/npm",
     fields: &[
-        FieldSpec { snake: "encoding", location: FieldLocation::Body },
-        FieldSpec { snake: "files", location: FieldLocation::Body },
+        FieldSpec { snake: "encoding", wire: "encoding", location: FieldLocation::Body },
+        FieldSpec { snake: "files", wire: "files", location: FieldLocation::Body },
     ],
     auth: &[
     ],
@@ -2979,9 +7278,9 @@ const OP_TEST_FOR_ISSUES_IN_A_PUBLIC_PACKAGE_BY_NAME_AND_VERSION: OpSpec = OpSpe
     method: "GET",
     path_template: "/test/npm/{package_name}/{version}",
     fields: &[
-        FieldSpec { snake: "package_name", location: FieldLocation::Path },
-        FieldSpec { snake: "version", location: FieldLocation::Path },
-        FieldSpec { snake: "org", location: FieldLocation::Query },
+        FieldSpec { snake: "package_name", wire: "packageName", location: FieldLocation::Path },
+        FieldSpec { snake: "version", wire: "version", location: FieldLocation::Path },
+        FieldSpec { snake: "org", wire: "org", location: FieldLocation::Query },
     ],
     auth: &[
     ],
@@ -2991,8 +7290,8 @@ const OP_TEST_REQUIREMENTS_TXT_FILE: OpSpec = OpSpec {
     method: "POST",
     path_template: "/test/pip",
     fields: &[
-        FieldSpec { snake: "encoding", location: FieldLocation::Body },
-        FieldSpec { snake: "files", location: FieldLocation::Body },
+        FieldSpec { snake: "encoding", wire: "encoding", location: FieldLocation::Body },
+        FieldSpec { snake: "files", wire: "files", location: FieldLocation::Body },
     ],
     auth: &[
     ],
@@ -3002,9 +7301,9 @@ const OP_TEST_GET_TEST_PIP_PACKAGE_NAME_VERSION: OpSpec = OpSpec {
     method: "GET",
     path_template: "/test/pip/{package_name}/{version}",
     fields: &[
-        FieldSpec { snake: "package_name", location: FieldLocation::Path },
-        FieldSpec { snake: "version", location: FieldLocation::Path },
-        FieldSpec { snake: "org", location: FieldLocation::Query },
+        FieldSpec { snake: "package_name", wire: "packageName", location: FieldLocation::Path },
+        FieldSpec { snake: "version", wire: "version", location: FieldLocation::Path },
+        FieldSpec { snake: "org", wire: "org", location: FieldLocation::Query },
     ],
     auth: &[
     ],
@@ -3014,8 +7313,8 @@ const OP_TEST_GEMFILE_LOCK_FILE: OpSpec = OpSpec {
     method: "POST",
     path_template: "/test/rubygems",
     fields: &[
-        FieldSpec { snake: "encoding", location: FieldLocation::Body },
-        FieldSpec { snake: "files", location: FieldLocation::Body },
+        FieldSpec { snake: "encoding", wire: "encoding", location: FieldLocation::Body },
+        FieldSpec { snake: "files", wire: "files", location: FieldLocation::Body },
     ],
     auth: &[
     ],
@@ -3025,9 +7324,9 @@ const OP_TEST_FOR_ISSUES_IN_A_PUBLIC_GEM_BY_NAME_AND_VERSION: OpSpec = OpSpec {
     method: "GET",
     path_template: "/test/rubygems/{gem_name}/{version}",
     fields: &[
-        FieldSpec { snake: "gem_name", location: FieldLocation::Path },
-        FieldSpec { snake: "version", location: FieldLocation::Path },
-        FieldSpec { snake: "org", location: FieldLocation::Query },
+        FieldSpec { snake: "gem_name", wire: "gemName", location: FieldLocation::Path },
+        FieldSpec { snake: "version", wire: "version", location: FieldLocation::Path },
+        FieldSpec { snake: "org", wire: "org", location: FieldLocation::Query },
     ],
     auth: &[
     ],
@@ -3037,8 +7336,8 @@ const OP_TEST_SBT_FILE: OpSpec = OpSpec {
     method: "POST",
     path_template: "/test/sbt",
     fields: &[
-        FieldSpec { snake: "encoding", location: FieldLocation::Body },
-        FieldSpec { snake: "files", location: FieldLocation::Body },
+        FieldSpec { snake: "encoding", wire: "encoding", location: FieldLocation::Body },
+        FieldSpec { snake: "files", wire: "files", location: FieldLocation::Body },
     ],
     auth: &[
     ],
@@ -3048,11 +7347,11 @@ const OP_TEST_GET_TEST_SBT_GROUP_ID_ARTIFACT_ID_VERSION: OpSpec = OpSpec {
     method: "GET",
     path_template: "/test/sbt/{group_id}/{artifact_id}/{version}",
     fields: &[
-        FieldSpec { snake: "group_id", location: FieldLocation::Path },
-        FieldSpec { snake: "artifact_id", location: FieldLocation::Path },
-        FieldSpec { snake: "version", location: FieldLocation::Path },
-        FieldSpec { snake: "org", location: FieldLocation::Query },
-        FieldSpec { snake: "repository", location: FieldLocation::Query },
+        FieldSpec { snake: "group_id", wire: "groupId", location: FieldLocation::Path },
+        FieldSpec { snake: "artifact_id", wire: "artifactId", location: FieldLocation::Path },
+        FieldSpec { snake: "version", wire: "version", location: FieldLocation::Path },
+        FieldSpec { snake: "org", wire: "org", location: FieldLocation::Query },
+        FieldSpec { snake: "repository", wire: "repository", location: FieldLocation::Query },
     ],
     auth: &[
     ],
@@ -3062,8 +7361,8 @@ const OP_TEST_PACKAGE_JSON_YARN_LOCK_FILE: OpSpec = OpSpec {
     method: "POST",
     path_template: "/test/yarn",
     fields: &[
-        FieldSpec { snake: "encoding", location: FieldLocation::Body },
-        FieldSpec { snake: "files", location: FieldLocation::Body },
+        FieldSpec { snake: "encoding", wire: "encoding", location: FieldLocation::Body },
+        FieldSpec { snake: "files", wire: "files", location: FieldLocation::Body },
     ],
     auth: &[
     ],
@@ -3092,16 +7391,16 @@ fn iface_test__composer_json_composer_lock_file_body_files_target__to_json(p: &i
 fn iface_test__dep_graph_body_dep_graph__to_json(p: &iface_test::DepGraphBodyDepGraph) -> Value {
     let mut m = Map::new();
     m.insert("graph".into(), iface_test__dep_graph_body_dep_graph_graph__to_json(&p.graph));
-    m.insert("pkg_manager".into(), iface_test__dep_graph_body_dep_graph_pkg_manager__to_json(&p.pkg_manager));
+    m.insert("pkgManager".into(), iface_test__dep_graph_body_dep_graph_pkg_manager__to_json(&p.pkg_manager));
     m.insert("pkgs".into(), Value::Array((&p.pkgs).iter().map(|v| Value::String((v).clone())).collect()));
-    m.insert("schema_version".into(), Value::String((&p.schema_version).clone()));
+    m.insert("schemaVersion".into(), Value::String((&p.schema_version).clone()));
     Value::Object(m)
 }
 
 fn iface_test__dep_graph_body_dep_graph_graph__to_json(p: &iface_test::DepGraphBodyDepGraphGraph) -> Value {
     let mut m = Map::new();
     m.insert("nodes".into(), Value::Array((&p.nodes).iter().map(|v| Value::String((v).clone())).collect()));
-    m.insert("root_node_id".into(), Value::String((&p.root_node_id).clone()));
+    m.insert("rootNodeId".into(), Value::String((&p.root_node_id).clone()));
     Value::Object(m)
 }
 
@@ -3358,74 +7657,312 @@ fn iface_test__package_json_yarn_lock_file_params__to_json(p: &iface_test::Packa
     Value::Object(m)
 }
 
+fn iface_test__composer_json_composer_lock_file__ok(body: String) -> Result<String, crate::runtime::DispatchError> {
+    Ok(body)
+}
+
+fn iface_test__composer_json_composer_lock_file__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
+fn iface_test__dep_graph__ok(body: String) -> Result<String, crate::runtime::DispatchError> {
+    Ok(body)
+}
+
+fn iface_test__dep_graph__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
+fn iface_test__gopkg_toml_gopkg_lock_file__ok(body: String) -> Result<String, crate::runtime::DispatchError> {
+    Ok(body)
+}
+
+fn iface_test__gopkg_toml_gopkg_lock_file__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
+fn iface_test__vendor_json_file__ok(body: String) -> Result<String, crate::runtime::DispatchError> {
+    Ok(body)
+}
+
+fn iface_test__vendor_json_file__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
+fn iface_test__gradle_file__ok(body: String) -> Result<String, crate::runtime::DispatchError> {
+    Ok(body)
+}
+
+fn iface_test__gradle_file__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
+fn iface_test__for_issues_in_a_public_package_by_group_name_and_version__ok(body: String) -> Result<String, crate::runtime::DispatchError> {
+    Ok(body)
+}
+
+fn iface_test__for_issues_in_a_public_package_by_group_name_and_version__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
+fn iface_test__maven_file__ok(body: String) -> Result<String, crate::runtime::DispatchError> {
+    Ok(body)
+}
+
+fn iface_test__maven_file__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
+fn iface_test__for_issues_in_a_public_package_by_group_id_artifact_id_and_version__ok(body: String) -> Result<String, crate::runtime::DispatchError> {
+    Ok(body)
+}
+
+fn iface_test__for_issues_in_a_public_package_by_group_id_artifact_id_and_version__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
+fn iface_test__package_json_package_lock_json_file__ok(body: String) -> Result<String, crate::runtime::DispatchError> {
+    Ok(body)
+}
+
+fn iface_test__package_json_package_lock_json_file__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
+fn iface_test__for_issues_in_a_public_package_by_name_and_version__ok(body: String) -> Result<String, crate::runtime::DispatchError> {
+    Ok(body)
+}
+
+fn iface_test__for_issues_in_a_public_package_by_name_and_version__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
+fn iface_test__requirements_txt_file__ok(body: String) -> Result<String, crate::runtime::DispatchError> {
+    Ok(body)
+}
+
+fn iface_test__requirements_txt_file__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
+fn iface_test__get_test_pip_package_name_version__ok(body: String) -> Result<String, crate::runtime::DispatchError> {
+    Ok(body)
+}
+
+fn iface_test__get_test_pip_package_name_version__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
+fn iface_test__gemfile_lock_file__ok(body: String) -> Result<String, crate::runtime::DispatchError> {
+    Ok(body)
+}
+
+fn iface_test__gemfile_lock_file__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
+fn iface_test__for_issues_in_a_public_gem_by_name_and_version__ok(body: String) -> Result<String, crate::runtime::DispatchError> {
+    Ok(body)
+}
+
+fn iface_test__for_issues_in_a_public_gem_by_name_and_version__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
+fn iface_test__sbt_file__ok(body: String) -> Result<String, crate::runtime::DispatchError> {
+    Ok(body)
+}
+
+fn iface_test__sbt_file__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
+fn iface_test__get_test_sbt_group_id_artifact_id_version__ok(body: String) -> Result<String, crate::runtime::DispatchError> {
+    Ok(body)
+}
+
+fn iface_test__get_test_sbt_group_id_artifact_id_version__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
+fn iface_test__package_json_yarn_lock_file__ok(body: String) -> Result<String, crate::runtime::DispatchError> {
+    Ok(body)
+}
+
+fn iface_test__package_json_yarn_lock_file__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
 impl iface_test::Guest for crate::Component {
     fn composer_json_composer_lock_file(params: iface_test::ComposerJsonComposerLockFileParams) -> Result<String, String> {
         let json = iface_test__composer_json_composer_lock_file_params__to_json(&params);
-        dispatch(&OP_TEST_COMPOSER_JSON_COMPOSER_LOCK_FILE, json)
+        match dispatch(&OP_TEST_COMPOSER_JSON_COMPOSER_LOCK_FILE, json).and_then(iface_test__composer_json_composer_lock_file__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_test__composer_json_composer_lock_file__err(e)),
+        }
     }
     fn dep_graph(params: iface_test::DepGraphParams) -> Result<String, String> {
         let json = iface_test__dep_graph_params__to_json(&params);
-        dispatch(&OP_TEST_DEP_GRAPH, json)
+        match dispatch(&OP_TEST_DEP_GRAPH, json).and_then(iface_test__dep_graph__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_test__dep_graph__err(e)),
+        }
     }
     fn gopkg_toml_gopkg_lock_file(params: iface_test::GopkgTomlGopkgLockFileParams) -> Result<String, String> {
         let json = iface_test__gopkg_toml_gopkg_lock_file_params__to_json(&params);
-        dispatch(&OP_TEST_GOPKG_TOML_GOPKG_LOCK_FILE, json)
+        match dispatch(&OP_TEST_GOPKG_TOML_GOPKG_LOCK_FILE, json).and_then(iface_test__gopkg_toml_gopkg_lock_file__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_test__gopkg_toml_gopkg_lock_file__err(e)),
+        }
     }
     fn vendor_json_file(params: iface_test::VendorJsonFileParams) -> Result<String, String> {
         let json = iface_test__vendor_json_file_params__to_json(&params);
-        dispatch(&OP_TEST_VENDOR_JSON_FILE, json)
+        match dispatch(&OP_TEST_VENDOR_JSON_FILE, json).and_then(iface_test__vendor_json_file__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_test__vendor_json_file__err(e)),
+        }
     }
     fn gradle_file(params: iface_test::GradleFileParams) -> Result<String, String> {
         let json = iface_test__gradle_file_params__to_json(&params);
-        dispatch(&OP_TEST_GRADLE_FILE, json)
+        match dispatch(&OP_TEST_GRADLE_FILE, json).and_then(iface_test__gradle_file__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_test__gradle_file__err(e)),
+        }
     }
     fn for_issues_in_a_public_package_by_group_name_and_version(params: iface_test::ForIssuesInAPublicPackageByGroupNameAndVersionParams) -> Result<String, String> {
         let json = iface_test__for_issues_in_a_public_package_by_group_name_and_version_params__to_json(&params);
-        dispatch(&OP_TEST_FOR_ISSUES_IN_A_PUBLIC_PACKAGE_BY_GROUP_NAME_AND_VERSION, json)
+        match dispatch(&OP_TEST_FOR_ISSUES_IN_A_PUBLIC_PACKAGE_BY_GROUP_NAME_AND_VERSION, json).and_then(iface_test__for_issues_in_a_public_package_by_group_name_and_version__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_test__for_issues_in_a_public_package_by_group_name_and_version__err(e)),
+        }
     }
     fn maven_file(params: iface_test::MavenFileParams) -> Result<String, String> {
         let json = iface_test__maven_file_params__to_json(&params);
-        dispatch(&OP_TEST_MAVEN_FILE, json)
+        match dispatch(&OP_TEST_MAVEN_FILE, json).and_then(iface_test__maven_file__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_test__maven_file__err(e)),
+        }
     }
     fn for_issues_in_a_public_package_by_group_id_artifact_id_and_version(params: iface_test::ForIssuesInAPublicPackageByGroupIdArtifactIdAndVersionParams) -> Result<String, String> {
         let json = iface_test__for_issues_in_a_public_package_by_group_id_artifact_id_and_version_params__to_json(&params);
-        dispatch(&OP_TEST_FOR_ISSUES_IN_A_PUBLIC_PACKAGE_BY_GROUP_ID_ARTIFACT_ID_AND_VERSION, json)
+        match dispatch(&OP_TEST_FOR_ISSUES_IN_A_PUBLIC_PACKAGE_BY_GROUP_ID_ARTIFACT_ID_AND_VERSION, json).and_then(iface_test__for_issues_in_a_public_package_by_group_id_artifact_id_and_version__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_test__for_issues_in_a_public_package_by_group_id_artifact_id_and_version__err(e)),
+        }
     }
     fn package_json_package_lock_json_file(params: iface_test::PackageJsonPackageLockJsonFileParams) -> Result<String, String> {
         let json = iface_test__package_json_package_lock_json_file_params__to_json(&params);
-        dispatch(&OP_TEST_PACKAGE_JSON_PACKAGE_LOCK_JSON_FILE, json)
+        match dispatch(&OP_TEST_PACKAGE_JSON_PACKAGE_LOCK_JSON_FILE, json).and_then(iface_test__package_json_package_lock_json_file__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_test__package_json_package_lock_json_file__err(e)),
+        }
     }
     fn for_issues_in_a_public_package_by_name_and_version(params: iface_test::ForIssuesInAPublicPackageByNameAndVersionParams) -> Result<String, String> {
         let json = iface_test__for_issues_in_a_public_package_by_name_and_version_params__to_json(&params);
-        dispatch(&OP_TEST_FOR_ISSUES_IN_A_PUBLIC_PACKAGE_BY_NAME_AND_VERSION, json)
+        match dispatch(&OP_TEST_FOR_ISSUES_IN_A_PUBLIC_PACKAGE_BY_NAME_AND_VERSION, json).and_then(iface_test__for_issues_in_a_public_package_by_name_and_version__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_test__for_issues_in_a_public_package_by_name_and_version__err(e)),
+        }
     }
     fn requirements_txt_file(params: iface_test::RequirementsTxtFileParams) -> Result<String, String> {
         let json = iface_test__requirements_txt_file_params__to_json(&params);
-        dispatch(&OP_TEST_REQUIREMENTS_TXT_FILE, json)
+        match dispatch(&OP_TEST_REQUIREMENTS_TXT_FILE, json).and_then(iface_test__requirements_txt_file__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_test__requirements_txt_file__err(e)),
+        }
     }
     fn get_test_pip_package_name_version(params: iface_test::GetTestPipPackageNameVersionParams) -> Result<String, String> {
         let json = iface_test__get_test_pip_package_name_version_params__to_json(&params);
-        dispatch(&OP_TEST_GET_TEST_PIP_PACKAGE_NAME_VERSION, json)
+        match dispatch(&OP_TEST_GET_TEST_PIP_PACKAGE_NAME_VERSION, json).and_then(iface_test__get_test_pip_package_name_version__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_test__get_test_pip_package_name_version__err(e)),
+        }
     }
     fn gemfile_lock_file(params: iface_test::GemfileLockFileParams) -> Result<String, String> {
         let json = iface_test__gemfile_lock_file_params__to_json(&params);
-        dispatch(&OP_TEST_GEMFILE_LOCK_FILE, json)
+        match dispatch(&OP_TEST_GEMFILE_LOCK_FILE, json).and_then(iface_test__gemfile_lock_file__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_test__gemfile_lock_file__err(e)),
+        }
     }
     fn for_issues_in_a_public_gem_by_name_and_version(params: iface_test::ForIssuesInAPublicGemByNameAndVersionParams) -> Result<String, String> {
         let json = iface_test__for_issues_in_a_public_gem_by_name_and_version_params__to_json(&params);
-        dispatch(&OP_TEST_FOR_ISSUES_IN_A_PUBLIC_GEM_BY_NAME_AND_VERSION, json)
+        match dispatch(&OP_TEST_FOR_ISSUES_IN_A_PUBLIC_GEM_BY_NAME_AND_VERSION, json).and_then(iface_test__for_issues_in_a_public_gem_by_name_and_version__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_test__for_issues_in_a_public_gem_by_name_and_version__err(e)),
+        }
     }
     fn sbt_file(params: iface_test::SbtFileParams) -> Result<String, String> {
         let json = iface_test__sbt_file_params__to_json(&params);
-        dispatch(&OP_TEST_SBT_FILE, json)
+        match dispatch(&OP_TEST_SBT_FILE, json).and_then(iface_test__sbt_file__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_test__sbt_file__err(e)),
+        }
     }
     fn get_test_sbt_group_id_artifact_id_version(params: iface_test::GetTestSbtGroupIdArtifactIdVersionParams) -> Result<String, String> {
         let json = iface_test__get_test_sbt_group_id_artifact_id_version_params__to_json(&params);
-        dispatch(&OP_TEST_GET_TEST_SBT_GROUP_ID_ARTIFACT_ID_VERSION, json)
+        match dispatch(&OP_TEST_GET_TEST_SBT_GROUP_ID_ARTIFACT_ID_VERSION, json).and_then(iface_test__get_test_sbt_group_id_artifact_id_version__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_test__get_test_sbt_group_id_artifact_id_version__err(e)),
+        }
     }
     fn package_json_yarn_lock_file(params: iface_test::PackageJsonYarnLockFileParams) -> Result<String, String> {
         let json = iface_test__package_json_yarn_lock_file_params__to_json(&params);
-        dispatch(&OP_TEST_PACKAGE_JSON_YARN_LOCK_FILE, json)
+        match dispatch(&OP_TEST_PACKAGE_JSON_YARN_LOCK_FILE, json).and_then(iface_test__package_json_yarn_lock_file__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_test__package_json_yarn_lock_file__err(e)),
+        }
     }
 }
 use crate::exports::autostamp::snyk::users as iface_users;
@@ -3443,7 +7980,7 @@ const OP_USERS_GET_ORGANIZATION_NOTIFICATION_SETTINGS: OpSpec = OpSpec {
     method: "GET",
     path_template: "/user/me/notification-settings/org/{org_id}",
     fields: &[
-        FieldSpec { snake: "org_id", location: FieldLocation::Path },
+        FieldSpec { snake: "org_id", wire: "orgId", location: FieldLocation::Path },
     ],
     auth: &[
     ],
@@ -3453,11 +7990,11 @@ const OP_USERS_MODIFY_ORGANIZATION_NOTIFICATION_SETTINGS: OpSpec = OpSpec {
     method: "PUT",
     path_template: "/user/me/notification-settings/org/{org_id}",
     fields: &[
-        FieldSpec { snake: "org_id", location: FieldLocation::Path },
-        FieldSpec { snake: "new_issues_remediations", location: FieldLocation::Body },
-        FieldSpec { snake: "project_imported", location: FieldLocation::Body },
-        FieldSpec { snake: "test_limit", location: FieldLocation::Body },
-        FieldSpec { snake: "weekly_report", location: FieldLocation::Body },
+        FieldSpec { snake: "org_id", wire: "orgId", location: FieldLocation::Path },
+        FieldSpec { snake: "new_issues_remediations", wire: "new-issues-remediations", location: FieldLocation::Body },
+        FieldSpec { snake: "project_imported", wire: "project-imported", location: FieldLocation::Body },
+        FieldSpec { snake: "test_limit", wire: "test-limit", location: FieldLocation::Body },
+        FieldSpec { snake: "weekly_report", wire: "weekly-report", location: FieldLocation::Body },
     ],
     auth: &[
     ],
@@ -3467,8 +8004,8 @@ const OP_USERS_GET_PROJECT_NOTIFICATION_SETTINGS: OpSpec = OpSpec {
     method: "GET",
     path_template: "/user/me/notification-settings/org/{org_id}/project/{project_id}",
     fields: &[
-        FieldSpec { snake: "org_id", location: FieldLocation::Path },
-        FieldSpec { snake: "project_id", location: FieldLocation::Path },
+        FieldSpec { snake: "org_id", wire: "orgId", location: FieldLocation::Path },
+        FieldSpec { snake: "project_id", wire: "projectId", location: FieldLocation::Path },
     ],
     auth: &[
     ],
@@ -3478,9 +8015,9 @@ const OP_USERS_MODIFY_PROJECT_NOTIFICATION_SETTINGS: OpSpec = OpSpec {
     method: "PUT",
     path_template: "/user/me/notification-settings/org/{org_id}/project/{project_id}",
     fields: &[
-        FieldSpec { snake: "org_id", location: FieldLocation::Path },
-        FieldSpec { snake: "project_id", location: FieldLocation::Path },
-        FieldSpec { snake: "new_issues_remediations", location: FieldLocation::Body },
+        FieldSpec { snake: "org_id", wire: "orgId", location: FieldLocation::Path },
+        FieldSpec { snake: "project_id", wire: "projectId", location: FieldLocation::Path },
+        FieldSpec { snake: "new_issues_remediations", wire: "new-issues-remediations", location: FieldLocation::Body },
     ],
     auth: &[
     ],
@@ -3490,33 +8027,81 @@ const OP_USERS_GET_USER_DETAILS: OpSpec = OpSpec {
     method: "GET",
     path_template: "/user/{user_id}",
     fields: &[
-        FieldSpec { snake: "user_id", location: FieldLocation::Path },
+        FieldSpec { snake: "user_id", wire: "userId", location: FieldLocation::Path },
     ],
     auth: &[
     ],
 };
 
-fn iface_users__modify_organization_notification_settings_body_new_issues_remediations_issue_severity_enum__to_str(e: &iface_users::ModifyOrganizationNotificationSettingsBodyNewIssuesRemediationsIssueSeverityEnum) -> &'static str {
+fn iface_users__get_organization_notification_settings_response_new_issues_remediations_issue_severity_enum__to_str(e: &iface_users::GetOrganizationNotificationSettingsResponseNewIssuesRemediationsIssueSeverityEnum) -> &'static str {
     match e {
-        iface_users::ModifyOrganizationNotificationSettingsBodyNewIssuesRemediationsIssueSeverityEnum::All => "all",
-        iface_users::ModifyOrganizationNotificationSettingsBodyNewIssuesRemediationsIssueSeverityEnum::High => "high",
+        iface_users::GetOrganizationNotificationSettingsResponseNewIssuesRemediationsIssueSeverityEnum::All => "all",
+        iface_users::GetOrganizationNotificationSettingsResponseNewIssuesRemediationsIssueSeverityEnum::High => "high",
     }
 }
 
-fn iface_users__modify_organization_notification_settings_body_new_issues_remediations_issue_type_enum__to_str(e: &iface_users::ModifyOrganizationNotificationSettingsBodyNewIssuesRemediationsIssueTypeEnum) -> &'static str {
+fn iface_users__get_organization_notification_settings_response_new_issues_remediations_issue_type_enum__to_str(e: &iface_users::GetOrganizationNotificationSettingsResponseNewIssuesRemediationsIssueTypeEnum) -> &'static str {
     match e {
-        iface_users::ModifyOrganizationNotificationSettingsBodyNewIssuesRemediationsIssueTypeEnum::All => "all",
-        iface_users::ModifyOrganizationNotificationSettingsBodyNewIssuesRemediationsIssueTypeEnum::Vuln => "vuln",
-        iface_users::ModifyOrganizationNotificationSettingsBodyNewIssuesRemediationsIssueTypeEnum::License => "license",
-        iface_users::ModifyOrganizationNotificationSettingsBodyNewIssuesRemediationsIssueTypeEnum::None => "none",
+        iface_users::GetOrganizationNotificationSettingsResponseNewIssuesRemediationsIssueTypeEnum::All => "all",
+        iface_users::GetOrganizationNotificationSettingsResponseNewIssuesRemediationsIssueTypeEnum::Vuln => "vuln",
+        iface_users::GetOrganizationNotificationSettingsResponseNewIssuesRemediationsIssueTypeEnum::License => "license",
+        iface_users::GetOrganizationNotificationSettingsResponseNewIssuesRemediationsIssueTypeEnum::None => "none",
     }
+}
+
+fn iface_users__get_my_details_response__to_json(p: &iface_users::GetMyDetailsResponse) -> Value {
+    let mut m = Map::new();
+    m.insert("email".into(), match (&p.email) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("id".into(), match (&p.id) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("orgs".into(), match (&p.orgs) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("username".into(), match (&p.username) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_users__get_organization_notification_settings_response__to_json(p: &iface_users::GetOrganizationNotificationSettingsResponse) -> Value {
+    let mut m = Map::new();
+    m.insert("new-issues-remediations".into(), match (&p.new_issues_remediations) { Some(v) => iface_users__get_organization_notification_settings_response_new_issues_remediations__to_json(v), None => Value::Null });
+    m.insert("project-imported".into(), match (&p.project_imported) { Some(v) => iface_users__get_organization_notification_settings_response_project_imported__to_json(v), None => Value::Null });
+    m.insert("test-limit".into(), match (&p.test_limit) { Some(v) => iface_users__get_organization_notification_settings_response_test_limit__to_json(v), None => Value::Null });
+    m.insert("weekly-report".into(), match (&p.weekly_report) { Some(v) => iface_users__get_organization_notification_settings_response_weekly_report__to_json(v), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_users__get_organization_notification_settings_response_new_issues_remediations__to_json(p: &iface_users::GetOrganizationNotificationSettingsResponseNewIssuesRemediations) -> Value {
+    let mut m = Map::new();
+    m.insert("enabled".into(), Value::Bool(*(&p.enabled)));
+    m.insert("inherited".into(), match (&p.inherited) { Some(v) => Value::Bool(*(v)), None => Value::Null });
+    m.insert("issueSeverity".into(), Value::String(iface_users__get_organization_notification_settings_response_new_issues_remediations_issue_severity_enum__to_str(&p.issue_severity).into()));
+    m.insert("issueType".into(), Value::String(iface_users__get_organization_notification_settings_response_new_issues_remediations_issue_type_enum__to_str(&p.issue_type).into()));
+    Value::Object(m)
+}
+
+fn iface_users__get_organization_notification_settings_response_project_imported__to_json(p: &iface_users::GetOrganizationNotificationSettingsResponseProjectImported) -> Value {
+    let mut m = Map::new();
+    m.insert("enabled".into(), Value::Bool(*(&p.enabled)));
+    m.insert("inherited".into(), match (&p.inherited) { Some(v) => Value::Bool(*(v)), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_users__get_organization_notification_settings_response_test_limit__to_json(p: &iface_users::GetOrganizationNotificationSettingsResponseTestLimit) -> Value {
+    let mut m = Map::new();
+    m.insert("enabled".into(), Value::Bool(*(&p.enabled)));
+    m.insert("inherited".into(), match (&p.inherited) { Some(v) => Value::Bool(*(v)), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_users__get_organization_notification_settings_response_weekly_report__to_json(p: &iface_users::GetOrganizationNotificationSettingsResponseWeeklyReport) -> Value {
+    let mut m = Map::new();
+    m.insert("enabled".into(), Value::Bool(*(&p.enabled)));
+    m.insert("inherited".into(), match (&p.inherited) { Some(v) => Value::Bool(*(v)), None => Value::Null });
+    Value::Object(m)
 }
 
 fn iface_users__modify_organization_notification_settings_body_new_issues_remediations__to_json(p: &iface_users::ModifyOrganizationNotificationSettingsBodyNewIssuesRemediations) -> Value {
     let mut m = Map::new();
     m.insert("enabled".into(), Value::Bool(*(&p.enabled)));
-    m.insert("issue_severity".into(), Value::String(iface_users__modify_organization_notification_settings_body_new_issues_remediations_issue_severity_enum__to_str(&p.issue_severity).into()));
-    m.insert("issue_type".into(), Value::String(iface_users__modify_organization_notification_settings_body_new_issues_remediations_issue_type_enum__to_str(&p.issue_type).into()));
+    m.insert("issueSeverity".into(), Value::String(iface_users__get_organization_notification_settings_response_new_issues_remediations_issue_severity_enum__to_str(&p.issue_severity).into()));
+    m.insert("issueType".into(), Value::String(iface_users__get_organization_notification_settings_response_new_issues_remediations_issue_type_enum__to_str(&p.issue_type).into()));
     Value::Object(m)
 }
 
@@ -3538,11 +8123,98 @@ fn iface_users__modify_organization_notification_settings_body_weekly_report__to
     Value::Object(m)
 }
 
+fn iface_users__modify_organization_notification_settings_response__to_json(p: &iface_users::ModifyOrganizationNotificationSettingsResponse) -> Value {
+    let mut m = Map::new();
+    m.insert("new-issues-remediations".into(), match (&p.new_issues_remediations) { Some(v) => iface_users__modify_organization_notification_settings_response_new_issues_remediations__to_json(v), None => Value::Null });
+    m.insert("project-imported".into(), match (&p.project_imported) { Some(v) => iface_users__modify_organization_notification_settings_response_project_imported__to_json(v), None => Value::Null });
+    m.insert("test-limit".into(), match (&p.test_limit) { Some(v) => iface_users__modify_organization_notification_settings_response_test_limit__to_json(v), None => Value::Null });
+    m.insert("weekly-report".into(), match (&p.weekly_report) { Some(v) => iface_users__modify_organization_notification_settings_response_weekly_report__to_json(v), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_users__modify_organization_notification_settings_response_new_issues_remediations__to_json(p: &iface_users::ModifyOrganizationNotificationSettingsResponseNewIssuesRemediations) -> Value {
+    let mut m = Map::new();
+    m.insert("enabled".into(), Value::Bool(*(&p.enabled)));
+    m.insert("inherited".into(), match (&p.inherited) { Some(v) => Value::Bool(*(v)), None => Value::Null });
+    m.insert("issueSeverity".into(), Value::String(iface_users__get_organization_notification_settings_response_new_issues_remediations_issue_severity_enum__to_str(&p.issue_severity).into()));
+    m.insert("issueType".into(), Value::String(iface_users__get_organization_notification_settings_response_new_issues_remediations_issue_type_enum__to_str(&p.issue_type).into()));
+    Value::Object(m)
+}
+
+fn iface_users__modify_organization_notification_settings_response_project_imported__to_json(p: &iface_users::ModifyOrganizationNotificationSettingsResponseProjectImported) -> Value {
+    let mut m = Map::new();
+    m.insert("enabled".into(), Value::Bool(*(&p.enabled)));
+    m.insert("inherited".into(), match (&p.inherited) { Some(v) => Value::Bool(*(v)), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_users__modify_organization_notification_settings_response_test_limit__to_json(p: &iface_users::ModifyOrganizationNotificationSettingsResponseTestLimit) -> Value {
+    let mut m = Map::new();
+    m.insert("enabled".into(), Value::Bool(*(&p.enabled)));
+    m.insert("inherited".into(), match (&p.inherited) { Some(v) => Value::Bool(*(v)), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_users__modify_organization_notification_settings_response_weekly_report__to_json(p: &iface_users::ModifyOrganizationNotificationSettingsResponseWeeklyReport) -> Value {
+    let mut m = Map::new();
+    m.insert("enabled".into(), Value::Bool(*(&p.enabled)));
+    m.insert("inherited".into(), match (&p.inherited) { Some(v) => Value::Bool(*(v)), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_users__get_project_notification_settings_response__to_json(p: &iface_users::GetProjectNotificationSettingsResponse) -> Value {
+    let mut m = Map::new();
+    m.insert("new-issues-remediations".into(), match (&p.new_issues_remediations) { Some(v) => iface_users__get_project_notification_settings_response_new_issues_remediations__to_json(v), None => Value::Null });
+    m.insert("project-imported".into(), match (&p.project_imported) { Some(v) => iface_users__get_project_notification_settings_response_project_imported__to_json(v), None => Value::Null });
+    m.insert("test-limit".into(), match (&p.test_limit) { Some(v) => iface_users__get_project_notification_settings_response_test_limit__to_json(v), None => Value::Null });
+    m.insert("weekly-report".into(), match (&p.weekly_report) { Some(v) => iface_users__get_project_notification_settings_response_weekly_report__to_json(v), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_users__get_project_notification_settings_response_new_issues_remediations__to_json(p: &iface_users::GetProjectNotificationSettingsResponseNewIssuesRemediations) -> Value {
+    let mut m = Map::new();
+    m.insert("enabled".into(), Value::Bool(*(&p.enabled)));
+    m.insert("inherited".into(), match (&p.inherited) { Some(v) => Value::Bool(*(v)), None => Value::Null });
+    m.insert("issueSeverity".into(), Value::String(iface_users__get_organization_notification_settings_response_new_issues_remediations_issue_severity_enum__to_str(&p.issue_severity).into()));
+    m.insert("issueType".into(), Value::String(iface_users__get_organization_notification_settings_response_new_issues_remediations_issue_type_enum__to_str(&p.issue_type).into()));
+    Value::Object(m)
+}
+
+fn iface_users__get_project_notification_settings_response_project_imported__to_json(p: &iface_users::GetProjectNotificationSettingsResponseProjectImported) -> Value {
+    let mut m = Map::new();
+    m.insert("enabled".into(), Value::Bool(*(&p.enabled)));
+    m.insert("inherited".into(), match (&p.inherited) { Some(v) => Value::Bool(*(v)), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_users__get_project_notification_settings_response_test_limit__to_json(p: &iface_users::GetProjectNotificationSettingsResponseTestLimit) -> Value {
+    let mut m = Map::new();
+    m.insert("enabled".into(), Value::Bool(*(&p.enabled)));
+    m.insert("inherited".into(), match (&p.inherited) { Some(v) => Value::Bool(*(v)), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_users__get_project_notification_settings_response_weekly_report__to_json(p: &iface_users::GetProjectNotificationSettingsResponseWeeklyReport) -> Value {
+    let mut m = Map::new();
+    m.insert("enabled".into(), Value::Bool(*(&p.enabled)));
+    m.insert("inherited".into(), match (&p.inherited) { Some(v) => Value::Bool(*(v)), None => Value::Null });
+    Value::Object(m)
+}
+
 fn iface_users__modify_project_notification_settings_body_new_issues_remediations__to_json(p: &iface_users::ModifyProjectNotificationSettingsBodyNewIssuesRemediations) -> Value {
     let mut m = Map::new();
     m.insert("enabled".into(), Value::Bool(*(&p.enabled)));
-    m.insert("issue_severity".into(), Value::String(iface_users__modify_organization_notification_settings_body_new_issues_remediations_issue_severity_enum__to_str(&p.issue_severity).into()));
-    m.insert("issue_type".into(), Value::String(iface_users__modify_organization_notification_settings_body_new_issues_remediations_issue_type_enum__to_str(&p.issue_type).into()));
+    m.insert("issueSeverity".into(), Value::String(iface_users__get_organization_notification_settings_response_new_issues_remediations_issue_severity_enum__to_str(&p.issue_severity).into()));
+    m.insert("issueType".into(), Value::String(iface_users__get_organization_notification_settings_response_new_issues_remediations_issue_type_enum__to_str(&p.issue_type).into()));
+    Value::Object(m)
+}
+
+fn iface_users__get_user_details_response__to_json(p: &iface_users::GetUserDetailsResponse) -> Value {
+    let mut m = Map::new();
+    m.insert("email".into(), match (&p.email) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("id".into(), match (&p.id) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("name".into(), match (&p.name) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("username".into(), match (&p.username) { Some(v) => Value::String((v).clone()), None => Value::Null });
     Value::Object(m)
 }
 
@@ -3583,29 +8255,326 @@ fn iface_users__get_user_details_params__to_json(p: &iface_users::GetUserDetails
     Value::Object(m)
 }
 
+fn iface_users__get_my_details_response__from_json(v: &Value) -> Option<iface_users::GetMyDetailsResponse> {
+    let m = v.as_object()?;
+    Some(iface_users::GetMyDetailsResponse {
+        email: m.get("email").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        id: m.get("id").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        orgs: m.get("orgs").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        username: m.get("username").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    })
+}
+
+fn iface_users__get_organization_notification_settings_response__from_json(v: &Value) -> Option<iface_users::GetOrganizationNotificationSettingsResponse> {
+    let m = v.as_object()?;
+    Some(iface_users::GetOrganizationNotificationSettingsResponse {
+        new_issues_remediations: m.get("new-issues-remediations").filter(|v| !v.is_null()).and_then(|v| iface_users__get_organization_notification_settings_response_new_issues_remediations__from_json(v)),
+        project_imported: m.get("project-imported").filter(|v| !v.is_null()).and_then(|v| iface_users__get_organization_notification_settings_response_project_imported__from_json(v)),
+        test_limit: m.get("test-limit").filter(|v| !v.is_null()).and_then(|v| iface_users__get_organization_notification_settings_response_test_limit__from_json(v)),
+        weekly_report: m.get("weekly-report").filter(|v| !v.is_null()).and_then(|v| iface_users__get_organization_notification_settings_response_weekly_report__from_json(v)),
+    })
+}
+
+fn iface_users__get_organization_notification_settings_response_new_issues_remediations__from_json(v: &Value) -> Option<iface_users::GetOrganizationNotificationSettingsResponseNewIssuesRemediations> {
+    let m = v.as_object()?;
+    Some(iface_users::GetOrganizationNotificationSettingsResponseNewIssuesRemediations {
+        enabled: m.get("enabled").and_then(|v| (v).as_bool()).unwrap_or_default(),
+        inherited: m.get("inherited").filter(|v| !v.is_null()).and_then(|v| (v).as_bool()),
+        issue_severity: match m.get("issueSeverity").and_then(|v| (v).as_str().and_then(iface_users__get_organization_notification_settings_response_new_issues_remediations_issue_severity_enum__from_str)) { Some(x) => x, None => return None },
+        issue_type: match m.get("issueType").and_then(|v| (v).as_str().and_then(iface_users__get_organization_notification_settings_response_new_issues_remediations_issue_type_enum__from_str)) { Some(x) => x, None => return None },
+    })
+}
+
+fn iface_users__get_organization_notification_settings_response_project_imported__from_json(v: &Value) -> Option<iface_users::GetOrganizationNotificationSettingsResponseProjectImported> {
+    let m = v.as_object()?;
+    Some(iface_users::GetOrganizationNotificationSettingsResponseProjectImported {
+        enabled: m.get("enabled").and_then(|v| (v).as_bool()).unwrap_or_default(),
+        inherited: m.get("inherited").filter(|v| !v.is_null()).and_then(|v| (v).as_bool()),
+    })
+}
+
+fn iface_users__get_organization_notification_settings_response_test_limit__from_json(v: &Value) -> Option<iface_users::GetOrganizationNotificationSettingsResponseTestLimit> {
+    let m = v.as_object()?;
+    Some(iface_users::GetOrganizationNotificationSettingsResponseTestLimit {
+        enabled: m.get("enabled").and_then(|v| (v).as_bool()).unwrap_or_default(),
+        inherited: m.get("inherited").filter(|v| !v.is_null()).and_then(|v| (v).as_bool()),
+    })
+}
+
+fn iface_users__get_organization_notification_settings_response_weekly_report__from_json(v: &Value) -> Option<iface_users::GetOrganizationNotificationSettingsResponseWeeklyReport> {
+    let m = v.as_object()?;
+    Some(iface_users::GetOrganizationNotificationSettingsResponseWeeklyReport {
+        enabled: m.get("enabled").and_then(|v| (v).as_bool()).unwrap_or_default(),
+        inherited: m.get("inherited").filter(|v| !v.is_null()).and_then(|v| (v).as_bool()),
+    })
+}
+
+fn iface_users__modify_organization_notification_settings_response__from_json(v: &Value) -> Option<iface_users::ModifyOrganizationNotificationSettingsResponse> {
+    let m = v.as_object()?;
+    Some(iface_users::ModifyOrganizationNotificationSettingsResponse {
+        new_issues_remediations: m.get("new-issues-remediations").filter(|v| !v.is_null()).and_then(|v| iface_users__modify_organization_notification_settings_response_new_issues_remediations__from_json(v)),
+        project_imported: m.get("project-imported").filter(|v| !v.is_null()).and_then(|v| iface_users__modify_organization_notification_settings_response_project_imported__from_json(v)),
+        test_limit: m.get("test-limit").filter(|v| !v.is_null()).and_then(|v| iface_users__modify_organization_notification_settings_response_test_limit__from_json(v)),
+        weekly_report: m.get("weekly-report").filter(|v| !v.is_null()).and_then(|v| iface_users__modify_organization_notification_settings_response_weekly_report__from_json(v)),
+    })
+}
+
+fn iface_users__modify_organization_notification_settings_response_new_issues_remediations__from_json(v: &Value) -> Option<iface_users::ModifyOrganizationNotificationSettingsResponseNewIssuesRemediations> {
+    let m = v.as_object()?;
+    Some(iface_users::ModifyOrganizationNotificationSettingsResponseNewIssuesRemediations {
+        enabled: m.get("enabled").and_then(|v| (v).as_bool()).unwrap_or_default(),
+        inherited: m.get("inherited").filter(|v| !v.is_null()).and_then(|v| (v).as_bool()),
+        issue_severity: match m.get("issueSeverity").and_then(|v| (v).as_str().and_then(iface_users__get_organization_notification_settings_response_new_issues_remediations_issue_severity_enum__from_str)) { Some(x) => x, None => return None },
+        issue_type: match m.get("issueType").and_then(|v| (v).as_str().and_then(iface_users__get_organization_notification_settings_response_new_issues_remediations_issue_type_enum__from_str)) { Some(x) => x, None => return None },
+    })
+}
+
+fn iface_users__modify_organization_notification_settings_response_project_imported__from_json(v: &Value) -> Option<iface_users::ModifyOrganizationNotificationSettingsResponseProjectImported> {
+    let m = v.as_object()?;
+    Some(iface_users::ModifyOrganizationNotificationSettingsResponseProjectImported {
+        enabled: m.get("enabled").and_then(|v| (v).as_bool()).unwrap_or_default(),
+        inherited: m.get("inherited").filter(|v| !v.is_null()).and_then(|v| (v).as_bool()),
+    })
+}
+
+fn iface_users__modify_organization_notification_settings_response_test_limit__from_json(v: &Value) -> Option<iface_users::ModifyOrganizationNotificationSettingsResponseTestLimit> {
+    let m = v.as_object()?;
+    Some(iface_users::ModifyOrganizationNotificationSettingsResponseTestLimit {
+        enabled: m.get("enabled").and_then(|v| (v).as_bool()).unwrap_or_default(),
+        inherited: m.get("inherited").filter(|v| !v.is_null()).and_then(|v| (v).as_bool()),
+    })
+}
+
+fn iface_users__modify_organization_notification_settings_response_weekly_report__from_json(v: &Value) -> Option<iface_users::ModifyOrganizationNotificationSettingsResponseWeeklyReport> {
+    let m = v.as_object()?;
+    Some(iface_users::ModifyOrganizationNotificationSettingsResponseWeeklyReport {
+        enabled: m.get("enabled").and_then(|v| (v).as_bool()).unwrap_or_default(),
+        inherited: m.get("inherited").filter(|v| !v.is_null()).and_then(|v| (v).as_bool()),
+    })
+}
+
+fn iface_users__get_project_notification_settings_response__from_json(v: &Value) -> Option<iface_users::GetProjectNotificationSettingsResponse> {
+    let m = v.as_object()?;
+    Some(iface_users::GetProjectNotificationSettingsResponse {
+        new_issues_remediations: m.get("new-issues-remediations").filter(|v| !v.is_null()).and_then(|v| iface_users__get_project_notification_settings_response_new_issues_remediations__from_json(v)),
+        project_imported: m.get("project-imported").filter(|v| !v.is_null()).and_then(|v| iface_users__get_project_notification_settings_response_project_imported__from_json(v)),
+        test_limit: m.get("test-limit").filter(|v| !v.is_null()).and_then(|v| iface_users__get_project_notification_settings_response_test_limit__from_json(v)),
+        weekly_report: m.get("weekly-report").filter(|v| !v.is_null()).and_then(|v| iface_users__get_project_notification_settings_response_weekly_report__from_json(v)),
+    })
+}
+
+fn iface_users__get_project_notification_settings_response_new_issues_remediations__from_json(v: &Value) -> Option<iface_users::GetProjectNotificationSettingsResponseNewIssuesRemediations> {
+    let m = v.as_object()?;
+    Some(iface_users::GetProjectNotificationSettingsResponseNewIssuesRemediations {
+        enabled: m.get("enabled").and_then(|v| (v).as_bool()).unwrap_or_default(),
+        inherited: m.get("inherited").filter(|v| !v.is_null()).and_then(|v| (v).as_bool()),
+        issue_severity: match m.get("issueSeverity").and_then(|v| (v).as_str().and_then(iface_users__get_organization_notification_settings_response_new_issues_remediations_issue_severity_enum__from_str)) { Some(x) => x, None => return None },
+        issue_type: match m.get("issueType").and_then(|v| (v).as_str().and_then(iface_users__get_organization_notification_settings_response_new_issues_remediations_issue_type_enum__from_str)) { Some(x) => x, None => return None },
+    })
+}
+
+fn iface_users__get_project_notification_settings_response_project_imported__from_json(v: &Value) -> Option<iface_users::GetProjectNotificationSettingsResponseProjectImported> {
+    let m = v.as_object()?;
+    Some(iface_users::GetProjectNotificationSettingsResponseProjectImported {
+        enabled: m.get("enabled").and_then(|v| (v).as_bool()).unwrap_or_default(),
+        inherited: m.get("inherited").filter(|v| !v.is_null()).and_then(|v| (v).as_bool()),
+    })
+}
+
+fn iface_users__get_project_notification_settings_response_test_limit__from_json(v: &Value) -> Option<iface_users::GetProjectNotificationSettingsResponseTestLimit> {
+    let m = v.as_object()?;
+    Some(iface_users::GetProjectNotificationSettingsResponseTestLimit {
+        enabled: m.get("enabled").and_then(|v| (v).as_bool()).unwrap_or_default(),
+        inherited: m.get("inherited").filter(|v| !v.is_null()).and_then(|v| (v).as_bool()),
+    })
+}
+
+fn iface_users__get_project_notification_settings_response_weekly_report__from_json(v: &Value) -> Option<iface_users::GetProjectNotificationSettingsResponseWeeklyReport> {
+    let m = v.as_object()?;
+    Some(iface_users::GetProjectNotificationSettingsResponseWeeklyReport {
+        enabled: m.get("enabled").and_then(|v| (v).as_bool()).unwrap_or_default(),
+        inherited: m.get("inherited").filter(|v| !v.is_null()).and_then(|v| (v).as_bool()),
+    })
+}
+
+fn iface_users__get_user_details_response__from_json(v: &Value) -> Option<iface_users::GetUserDetailsResponse> {
+    let m = v.as_object()?;
+    Some(iface_users::GetUserDetailsResponse {
+        email: m.get("email").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        id: m.get("id").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        name: m.get("name").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        username: m.get("username").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    })
+}
+
+fn iface_users__get_organization_notification_settings_response_new_issues_remediations_issue_severity_enum__from_str(s: &str) -> Option<iface_users::GetOrganizationNotificationSettingsResponseNewIssuesRemediationsIssueSeverityEnum> {
+    match s {
+        "all" => Some(iface_users::GetOrganizationNotificationSettingsResponseNewIssuesRemediationsIssueSeverityEnum::All),
+        "high" => Some(iface_users::GetOrganizationNotificationSettingsResponseNewIssuesRemediationsIssueSeverityEnum::High),
+        _ => None,
+    }
+}
+
+fn iface_users__get_organization_notification_settings_response_new_issues_remediations_issue_type_enum__from_str(s: &str) -> Option<iface_users::GetOrganizationNotificationSettingsResponseNewIssuesRemediationsIssueTypeEnum> {
+    match s {
+        "all" => Some(iface_users::GetOrganizationNotificationSettingsResponseNewIssuesRemediationsIssueTypeEnum::All),
+        "vuln" => Some(iface_users::GetOrganizationNotificationSettingsResponseNewIssuesRemediationsIssueTypeEnum::Vuln),
+        "license" => Some(iface_users::GetOrganizationNotificationSettingsResponseNewIssuesRemediationsIssueTypeEnum::License),
+        "none" => Some(iface_users::GetOrganizationNotificationSettingsResponseNewIssuesRemediationsIssueTypeEnum::None),
+        _ => None,
+    }
+}
+
+fn iface_users__get_my_details__ok(body: String) -> Result<iface_users::GetMyDetailsResponse, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match iface_users__get_my_details_response__from_json(&v) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_users__get_my_details__err(e: crate::runtime::DispatchError) -> iface_users::GetMyDetailsError {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => match status {
+            401u16 => iface_users::GetMyDetailsError::Unauthorized(body),
+            _ => iface_users::GetMyDetailsError::Other(body),
+        },
+        crate::runtime::DispatchError::Transport(m) => iface_users::GetMyDetailsError::Other(m),
+    }
+}
+
+fn iface_users__get_organization_notification_settings__ok(body: String) -> Result<iface_users::GetOrganizationNotificationSettingsResponse, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match iface_users__get_organization_notification_settings_response__from_json(&v) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_users__get_organization_notification_settings__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
+fn iface_users__modify_organization_notification_settings__ok(body: String) -> Result<iface_users::ModifyOrganizationNotificationSettingsResponse, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match iface_users__modify_organization_notification_settings_response__from_json(&v) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_users__modify_organization_notification_settings__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
+fn iface_users__get_project_notification_settings__ok(body: String) -> Result<iface_users::GetProjectNotificationSettingsResponse, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match iface_users__get_project_notification_settings_response__from_json(&v) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_users__get_project_notification_settings__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
+fn iface_users__modify_project_notification_settings__ok(body: String) -> Result<String, crate::runtime::DispatchError> {
+    Ok(body)
+}
+
+fn iface_users__modify_project_notification_settings__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
+fn iface_users__get_user_details__ok(body: String) -> Result<iface_users::GetUserDetailsResponse, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match iface_users__get_user_details_response__from_json(&v) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_users__get_user_details__err(e: crate::runtime::DispatchError) -> iface_users::GetUserDetailsError {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => match status {
+            400u16 => iface_users::GetUserDetailsError::BadRequest(body),
+            401u16 => iface_users::GetUserDetailsError::Unauthorized(body),
+            404u16 => iface_users::GetUserDetailsError::NotFound(body),
+            _ => iface_users::GetUserDetailsError::Other(body),
+        },
+        crate::runtime::DispatchError::Transport(m) => iface_users::GetUserDetailsError::Other(m),
+    }
+}
+
 impl iface_users::Guest for crate::Component {
-    fn get_my_details() -> Result<String, String> {
-        dispatch(&OP_USERS_GET_MY_DETAILS, Value::Object(Map::new()))
+    fn get_my_details() -> Result<iface_users::GetMyDetailsResponse, iface_users::GetMyDetailsError> {
+        match dispatch(&OP_USERS_GET_MY_DETAILS, Value::Object(Map::new())).and_then(iface_users__get_my_details__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_users__get_my_details__err(e)),
+        }
     }
-    fn get_organization_notification_settings(params: iface_users::GetOrganizationNotificationSettingsParams) -> Result<String, String> {
+    fn get_organization_notification_settings(params: iface_users::GetOrganizationNotificationSettingsParams) -> Result<iface_users::GetOrganizationNotificationSettingsResponse, String> {
         let json = iface_users__get_organization_notification_settings_params__to_json(&params);
-        dispatch(&OP_USERS_GET_ORGANIZATION_NOTIFICATION_SETTINGS, json)
+        match dispatch(&OP_USERS_GET_ORGANIZATION_NOTIFICATION_SETTINGS, json).and_then(iface_users__get_organization_notification_settings__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_users__get_organization_notification_settings__err(e)),
+        }
     }
-    fn modify_organization_notification_settings(params: iface_users::ModifyOrganizationNotificationSettingsParams) -> Result<String, String> {
+    fn modify_organization_notification_settings(params: iface_users::ModifyOrganizationNotificationSettingsParams) -> Result<iface_users::ModifyOrganizationNotificationSettingsResponse, String> {
         let json = iface_users__modify_organization_notification_settings_params__to_json(&params);
-        dispatch(&OP_USERS_MODIFY_ORGANIZATION_NOTIFICATION_SETTINGS, json)
+        match dispatch(&OP_USERS_MODIFY_ORGANIZATION_NOTIFICATION_SETTINGS, json).and_then(iface_users__modify_organization_notification_settings__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_users__modify_organization_notification_settings__err(e)),
+        }
     }
-    fn get_project_notification_settings(params: iface_users::GetProjectNotificationSettingsParams) -> Result<String, String> {
+    fn get_project_notification_settings(params: iface_users::GetProjectNotificationSettingsParams) -> Result<iface_users::GetProjectNotificationSettingsResponse, String> {
         let json = iface_users__get_project_notification_settings_params__to_json(&params);
-        dispatch(&OP_USERS_GET_PROJECT_NOTIFICATION_SETTINGS, json)
+        match dispatch(&OP_USERS_GET_PROJECT_NOTIFICATION_SETTINGS, json).and_then(iface_users__get_project_notification_settings__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_users__get_project_notification_settings__err(e)),
+        }
     }
     fn modify_project_notification_settings(params: iface_users::ModifyProjectNotificationSettingsParams) -> Result<String, String> {
         let json = iface_users__modify_project_notification_settings_params__to_json(&params);
-        dispatch(&OP_USERS_MODIFY_PROJECT_NOTIFICATION_SETTINGS, json)
+        match dispatch(&OP_USERS_MODIFY_PROJECT_NOTIFICATION_SETTINGS, json).and_then(iface_users__modify_project_notification_settings__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_users__modify_project_notification_settings__err(e)),
+        }
     }
-    fn get_user_details(params: iface_users::GetUserDetailsParams) -> Result<String, String> {
+    fn get_user_details(params: iface_users::GetUserDetailsParams) -> Result<iface_users::GetUserDetailsResponse, iface_users::GetUserDetailsError> {
         let json = iface_users__get_user_details_params__to_json(&params);
-        dispatch(&OP_USERS_GET_USER_DETAILS, json)
+        match dispatch(&OP_USERS_GET_USER_DETAILS, json).and_then(iface_users__get_user_details__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_users__get_user_details__err(e)),
+        }
     }
 }
 

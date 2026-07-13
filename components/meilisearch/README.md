@@ -11,8 +11,8 @@ triggered.
 
 | Setting | Value |
 | --- | --- |
-| Package | `autostamp:meilisearch@0.3.0` |
-| Published version | `0.3.0+meilisearch-1.0.0` |
+| Package | `autostamp:meilisearch@0.5.0` |
+| Published version | `0.5.0+meilisearch-1.0.0` |
 | Tag filter | all tags |
 | Operations generated | 66 |
 | Infer API-key credentials | enabled — not triggered |

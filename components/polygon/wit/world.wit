@@ -1,6 +1,170 @@
-package autostamp:polygon@0.3.0;
+package autostamp:polygon@0.5.0;
 
 interface stocks {
+  record company {
+    /// Country in which this country is based.
+    country: option<string>,
+    /// Exchange this company is traded on.
+    exchange: option<string>,
+    /// Industry this country operated/produces in.
+    industry: option<string>,
+    /// Market cap as of the last updated timestamp.
+    marketcap: option<f64>,
+    /// Name of the company.
+    name: option<string>,
+    /// Sector that this company is traded in.
+    sector: option<string>,
+    /// The actual exchange symbol this company is traded under.
+    symbol: option<string>,
+    /// Last time this company record was updated.
+    updated: option<string>
+  }
+
+  record get-v1-historic-agg-size-symbol-date-response {
+    /// Date that was evaluated from the request
+    day: option<string>,
+    /// Milliseconds of latency for the query results
+    ms-latency: option<s32>,
+    /// Status of this requests response
+    status: option<string>,
+    /// Symbol that was evaluated from the request
+    symbol: option<string>,
+    ticks: option<list<aggregate>>
+  }
+
+  record aggregate {
+    /// Close price
+    c: option<s32>,
+    /// High price
+    h: option<s32>,
+    /// Transactions ( 1 transaction contains X shares exchanged )
+    k: option<s32>,
+    /// Low price
+    l: option<s32>,
+    /// Open price
+    o: option<s32>,
+    /// Timestamp of this aggregation
+    t: option<s32>,
+    /// Total Volume of all trades ( total shares exchanged )
+    v: option<s32>
+  }
+
+  record get-v1-historic-quotes-symbol-date-response {
+    /// Date that was evaluated from the request
+    day: option<string>,
+    /// Milliseconds of latency for the query results
+    ms-latency: option<s32>,
+    /// Status of this requests response
+    status: option<string>,
+    /// Symbol that was evaluated from the request
+    symbol: option<string>,
+    ticks: option<list<quote>>
+  }
+
+  record quote {
+    /// Ask Exchange
+    a-e: option<string>,
+    /// Ask Price
+    a-p: option<f64>,
+    /// Ask Size
+    a-s: option<s32>,
+    /// Bid Exchange
+    b-e: option<string>,
+    /// Bid Price
+    b-p: option<f64>,
+    /// Bid Size
+    b-s: option<s32>,
+    /// Condition of this quote
+    c: option<s32>,
+    /// Timestamp of this trade
+    t: option<s32>
+  }
+
+  record get-v1-historic-trades-symbol-date-response {
+    /// Date that was evaluated from the request
+    day: option<string>,
+    /// Milliseconds of latency for the query results
+    ms-latency: option<s32>,
+    /// Status of this requests response
+    status: option<string>,
+    /// Symbol that was evaluated from the request
+    symbol: option<string>,
+    ticks: option<list<trade>>
+  }
+
+  record trade {
+    /// Condition 1 of this trade
+    c1: option<s32>,
+    /// Condition 2 of this trade
+    c2: option<s32>,
+    /// Condition 3 of this trade
+    c3: option<s32>,
+    /// Condition 4 of this trade
+    c4: option<s32>,
+    /// The exchange this trade happened on
+    e: option<string>,
+    /// Price of this trade
+    p: option<f64>,
+    /// Size of the trade
+    s: option<s32>,
+    /// Timestamp of this trade
+    t: option<s32>
+  }
+
+  record get-v1-last-stocks-symbol-response {
+    last: option<last-trade>,
+    /// Status of this requests response
+    status: option<string>,
+    /// Symbol that was evaluated from the request
+    symbol: option<string>
+  }
+
+  record last-trade {
+    /// Condition 1 of the trade
+    cond1: option<s32>,
+    /// Condition 2 of the trade
+    cond2: option<s32>,
+    /// Condition 3 of the trade
+    cond3: option<s32>,
+    /// Condition 4 of the trade
+    cond4: option<s32>,
+    /// Exchange this trade happened on
+    exchange: option<s32>,
+    /// Price of the trade
+    price: option<f64>,
+    /// Size of this trade
+    size: option<s32>,
+    /// Timestamp of this trade
+    timestamp: option<s32>
+  }
+
+  record get-v1-last-quote-stocks-symbol-response {
+    last: option<last-quote>,
+    /// Status of this requests response
+    status: option<string>,
+    /// Symbol that was evaluated from the request
+    symbol: option<string>
+  }
+
+  record last-quote {
+    /// Exchange the ask happened on
+    askexchange: option<s32>,
+    /// Ask Price
+    askprice: option<f64>,
+    /// Ask Size
+    asksize: option<s32>,
+    /// Exchange the bid happened on
+    bidexchange: option<s32>,
+    /// Bid Price
+    bidprice: option<f64>,
+    /// Bid Size
+    bidsize: option<s32>,
+    /// Condition of the quote
+    cond: option<s32>,
+    /// Timestamp of this trade
+    timestamp: option<s32>
+  }
+
   /// Available Companies
   record get-v1-companies-params {
     /// Which field to sort by. For desc place a `-` in front of the field name. eg `?sort=-marketcap`
@@ -10,7 +174,7 @@ interface stocks {
     /// Which page of results to return
     page: option<f64>
   }
-  get-v1-companies: func(params: get-v1-companies-params) -> result<string, string>;
+  get-v1-companies: func(params: get-v1-companies-params) -> result<list<company>, string>;
 
   /// Historic Aggregates
   record get-v1-historic-agg-size-symbol-date-params {
@@ -25,7 +189,7 @@ interface stocks {
     /// Limit the size of response, max: 10000
     limit: option<s32>
   }
-  get-v1-historic-agg-size-symbol-date: func(params: get-v1-historic-agg-size-symbol-date-params) -> result<string, string>;
+  get-v1-historic-agg-size-symbol-date: func(params: get-v1-historic-agg-size-symbol-date-params) -> result<get-v1-historic-agg-size-symbol-date-response, string>;
 
   /// Historic Quotes
   record get-v1-historic-quotes-symbol-date-params {
@@ -38,7 +202,7 @@ interface stocks {
     /// Limit the size of response, max: 10000
     limit: option<s32>
   }
-  get-v1-historic-quotes-symbol-date: func(params: get-v1-historic-quotes-symbol-date-params) -> result<string, string>;
+  get-v1-historic-quotes-symbol-date: func(params: get-v1-historic-quotes-symbol-date-params) -> result<get-v1-historic-quotes-symbol-date-response, string>;
 
   /// Historic Trades
   record get-v1-historic-trades-symbol-date-params {
@@ -51,28 +215,83 @@ interface stocks {
     /// Limit the size of response, max: 10000
     limit: option<s32>
   }
-  get-v1-historic-trades-symbol-date: func(params: get-v1-historic-trades-symbol-date-params) -> result<string, string>;
+  get-v1-historic-trades-symbol-date: func(params: get-v1-historic-trades-symbol-date-params) -> result<get-v1-historic-trades-symbol-date-response, string>;
 
   /// Last Trade for a Symbol
   record get-v1-last-stocks-symbol-params {
     /// Symbol of the stock to get
     symbol: string
   }
-  get-v1-last-stocks-symbol: func(params: get-v1-last-stocks-symbol-params) -> result<string, string>;
+  get-v1-last-stocks-symbol: func(params: get-v1-last-stocks-symbol-params) -> result<get-v1-last-stocks-symbol-response, string>;
 
   /// Last Quote for a Symbol
   record get-v1-last-quote-stocks-symbol-params {
     /// Symbol of the stock to get
     symbol: string
   }
-  get-v1-last-quote-stocks-symbol: func(params: get-v1-last-quote-stocks-symbol-params) -> result<string, string>;
+  get-v1-last-quote-stocks-symbol: func(params: get-v1-last-quote-stocks-symbol-params) -> result<get-v1-last-quote-stocks-symbol-response, string>;
 
 }
 
 
 interface currencies {
+  record get-v1-historic-forex-from-to-date-response {
+    /// Date that was evaluated from the request
+    day: option<string>,
+    /// Milliseconds of latency for the query results
+    ms-latency: option<s32>,
+    /// Status of this requests response
+    status: option<string>,
+    /// Symbol that was evaluated from the request
+    symbol: option<string>,
+    ticks: option<list<forex>>
+  }
+
+  record forex {
+    /// Ask price
+    a: option<s32>,
+    /// Bid price
+    b: option<s32>,
+    /// Timestamp of this trade
+    t: option<s32>
+  }
+
+  record get-v1-last-currencies-from-to-response {
+    last: option<last-forex-trade>,
+    /// Status of this requests response
+    status: option<string>,
+    /// Symbol Pair that was evaluated from the request
+    symbol: option<string>
+  }
+
+  record last-forex-trade {
+    /// Exchange this trade happened on
+    exchange: option<s32>,
+    /// Price of the trade
+    price: option<f64>,
+    /// Timestamp of this trade
+    timestamp: option<s32>
+  }
+
+  record get-v1-last-quote-currencies-from-to-response {
+    last: option<last-forex-quote>,
+    /// Status of this requests response
+    status: option<string>,
+    /// Symbol Pair that was evaluated from the request
+    symbol: option<string>
+  }
+
+  record last-forex-quote {
+    /// Ask Price
+    askprice: option<f64>,
+    /// Bid Price
+    bidprice: option<f64>,
+    /// Timestamp of this trade
+    timestamp: option<s32>
+  }
+
   /// Available Currencies
-  get-v1-currencies: func() -> result<string, string>;
+  get-v1-currencies: func() -> result<list<string>, string>;
 
   /// Historic Forex Ticks
   record get-v1-historic-forex-from-to-date-params {
@@ -87,7 +306,7 @@ interface currencies {
     /// Limit the size of response, max: 10000
     limit: option<s32>
   }
-  get-v1-historic-forex-from-to-date: func(params: get-v1-historic-forex-from-to-date-params) -> result<string, string>;
+  get-v1-historic-forex-from-to-date: func(params: get-v1-historic-forex-from-to-date-params) -> result<get-v1-historic-forex-from-to-date-response, string>;
 
   /// Last Trade for a Currency Pair
   record get-v1-last-currencies-from-to-params {
@@ -96,7 +315,7 @@ interface currencies {
     /// To Symbol of the pair
     to: string
   }
-  get-v1-last-currencies-from-to: func(params: get-v1-last-currencies-from-to-params) -> result<string, string>;
+  get-v1-last-currencies-from-to: func(params: get-v1-last-currencies-from-to-params) -> result<get-v1-last-currencies-from-to-response, string>;
 
   /// Last Quote for a Currency Pair
   record get-v1-last-quote-currencies-from-to-params {
@@ -105,7 +324,7 @@ interface currencies {
     /// To Symbol of the pair
     to: string
   }
-  get-v1-last-quote-currencies-from-to: func(params: get-v1-last-quote-currencies-from-to-params) -> result<string, string>;
+  get-v1-last-quote-currencies-from-to: func(params: get-v1-last-quote-currencies-from-to-params) -> result<get-v1-last-quote-currencies-from-to-response, string>;
 
 }
 /// The component world: imports the secrets host capability

@@ -44,10 +44,15 @@ pub(crate) enum FieldLocation {
     Body,
 }
 
-/// A single operation parameter: the snake-case key it carries in the params JSON and where
-/// it belongs in the request.
+/// A single operation parameter. `snake` keys the field in the internal params JSON (and, for a
+/// path field, matches the `{snake}` placeholder in the path template); `wire` is the verbatim name
+/// the field takes on the HTTP wire (query key, header name, or body property). The two differ
+/// whenever the source name isn't already snake_case (e.g. `dryRun` → snake `dry_run`, wire
+/// `dryRun`), and let distinct inputs that share a snake key (`DateCreated`, `DateCreated<`) still
+/// travel under their true names.
 pub(crate) struct FieldSpec {
     pub(crate) snake: &'static str,
+    pub(crate) wire: &'static str,
     pub(crate) location: FieldLocation,
 }
 
@@ -71,6 +76,16 @@ pub(crate) struct AuthApply {
     pub(crate) kind: AuthKind,
 }
 
+/// The failure modes of [`dispatch`], kept structured so each generated operation can map them
+/// onto its own typed error: an `Http` failure carries the response status and body (routed to
+/// the matching error-variant case), while a `Transport` failure carries a message for the
+/// catch-all case (a secret lookup, connection, or decode failure that never produced an HTTP
+/// status).
+pub(crate) enum DispatchError {
+    Http { status: u16, body: String },
+    Transport(String),
+}
+
 /// A single API operation: HTTP method, path template (with `{snake}` placeholders), the
 /// parameter fields, and the security schemes to apply.
 pub(crate) struct OpSpec {
@@ -81,8 +96,9 @@ pub(crate) struct OpSpec {
 }
 
 /// Execute `op` with the supplied `params` (a JSON object keyed by snake-case field names)
-/// and return the response body as a string, or an error message.
-pub(crate) fn dispatch(op: &OpSpec, params: Value) -> Result<String, String> {
+/// and return the raw 2xx response body, or a structured [`DispatchError`] the caller maps
+/// onto the operation's typed error.
+pub(crate) fn dispatch(op: &OpSpec, params: Value) -> Result<String, DispatchError> {
     let obj = match &params {
         Value::Object(map) => Some(map),
         _ => None,
@@ -105,10 +121,10 @@ pub(crate) fn dispatch(op: &OpSpec, params: Value) -> Result<String, String> {
                 let placeholder = format!("{{{}}}", field.snake);
                 path = path.replace(&placeholder, &percent_encode(&scalar(value)));
             }
-            FieldLocation::Query => query.push((field.snake.to_string(), scalar(value))),
-            FieldLocation::Header => headers.push((field.snake.to_string(), scalar(value))),
+            FieldLocation::Query => query.push((field.wire.to_string(), scalar(value))),
+            FieldLocation::Header => headers.push((field.wire.to_string(), scalar(value))),
             FieldLocation::Body => {
-                body.insert(field.snake.to_string(), value.clone());
+                body.insert(field.wire.to_string(), value.clone());
             }
         }
     }
@@ -116,7 +132,7 @@ pub(crate) fn dispatch(op: &OpSpec, params: Value) -> Result<String, String> {
     // Apply each resolved security scheme, sourcing its value from wasmcloud:secrets.
     let mut cookies: Vec<String> = Vec::new();
     for apply in op.auth {
-        let secret = fetch_secret(apply.secret_key)?;
+        let secret = fetch_secret(apply.secret_key).map_err(DispatchError::Transport)?;
         match &apply.kind {
             AuthKind::Bearer => headers.push(("authorization".into(), format!("Bearer {secret}"))),
             AuthKind::Basic => {
@@ -177,17 +193,18 @@ fn fetch_secret(key: &str) -> Result<String, String> {
 }
 
 /// Build and send the outgoing request with `wstd`, returning the response body on a 2xx
-/// status. The generated guest exports are synchronous, so the async `wstd` client is driven
-/// to completion on a local reactor via `wstd::runtime::block_on`.
+/// status and a structured [`DispatchError`] otherwise. The generated guest exports are
+/// synchronous, so the async `wstd` client is driven to completion on a local reactor via
+/// `wstd::runtime::block_on`.
 fn perform(
     method: &str,
     path_with_query: &str,
     headers: &[(String, String)],
     body: &[u8],
-) -> Result<String, String> {
+) -> Result<String, DispatchError> {
     let url = join_url(crate::BASE_URL, path_with_query);
     let method = Method::from_bytes(method.as_bytes())
-        .map_err(|err| format!("invalid HTTP method `{method}`: {err}"))?;
+        .map_err(|err| DispatchError::Transport(format!("invalid HTTP method `{method}`: {err}")))?;
 
     let mut builder = Request::builder().method(method).uri(url);
     for (name, value) in headers {
@@ -199,27 +216,29 @@ fn perform(
         } else {
             Body::from(body.to_vec())
         })
-        .map_err(|err| format!("failed to build request: {err}"))?;
+        .map_err(|err| DispatchError::Transport(format!("failed to build request: {err}")))?;
 
     wstd::runtime::block_on(async move {
         let client = Client::new();
         let response = client
             .send(request)
             .await
-            .map_err(|err| format!("request failed: {err:#}"))?;
+            .map_err(|err| DispatchError::Transport(format!("request failed: {err:#}")))?;
 
         let status = response.status().as_u16();
         let mut response_body = response.into_body();
-        let bytes = response_body
-            .contents()
-            .await
-            .map_err(|err| format!("failed to read response body: {err:#}"))?;
+        let bytes = response_body.contents().await.map_err(|err| {
+            DispatchError::Transport(format!("failed to read response body: {err:#}"))
+        })?;
         let body_text = String::from_utf8_lossy(bytes).into_owned();
 
         if (200..300).contains(&status) {
             Ok(body_text)
         } else {
-            Err(format!("HTTP {status}: {body_text}"))
+            Err(DispatchError::Http {
+                status,
+                body: body_text,
+            })
         }
     })
 }
@@ -288,7 +307,7 @@ const OP_ACCOUNTS_POST_CLOSE_ACCOUNT: OpSpec = OpSpec {
     method: "POST",
     path_template: "/closeAccount",
     fields: &[
-        FieldSpec { snake: "account_code", location: FieldLocation::Body },
+        FieldSpec { snake: "account_code", wire: "accountCode", location: FieldLocation::Body },
     ],
     auth: &[
         AuthApply { secret_key: "BasicAuth", kind: AuthKind::Basic },
@@ -299,9 +318,9 @@ const OP_ACCOUNTS_POST_CREATE_ACCOUNT: OpSpec = OpSpec {
     method: "POST",
     path_template: "/createAccount",
     fields: &[
-        FieldSpec { snake: "account_holder_code", location: FieldLocation::Body },
-        FieldSpec { snake: "payout_schedule", location: FieldLocation::Body },
-        FieldSpec { snake: "payout_schedule_reason", location: FieldLocation::Body },
+        FieldSpec { snake: "account_holder_code", wire: "accountHolderCode", location: FieldLocation::Body },
+        FieldSpec { snake: "payout_schedule", wire: "payoutSchedule", location: FieldLocation::Body },
+        FieldSpec { snake: "payout_schedule_reason", wire: "payoutScheduleReason", location: FieldLocation::Body },
     ],
     auth: &[
         AuthApply { secret_key: "BasicAuth", kind: AuthKind::Basic },
@@ -312,13 +331,22 @@ const OP_ACCOUNTS_POST_UPDATE_ACCOUNT: OpSpec = OpSpec {
     method: "POST",
     path_template: "/updateAccount",
     fields: &[
-        FieldSpec { snake: "account_code", location: FieldLocation::Body },
-        FieldSpec { snake: "payout_schedule", location: FieldLocation::Body },
+        FieldSpec { snake: "account_code", wire: "accountCode", location: FieldLocation::Body },
+        FieldSpec { snake: "payout_schedule", wire: "payoutSchedule", location: FieldLocation::Body },
     ],
     auth: &[
         AuthApply { secret_key: "BasicAuth", kind: AuthKind::Basic },
     ],
 };
+
+fn iface_accounts__close_account_response_status_enum__to_str(e: &iface_accounts::CloseAccountResponseStatusEnum) -> &'static str {
+    match e {
+        iface_accounts::CloseAccountResponseStatusEnum::Active => "Active",
+        iface_accounts::CloseAccountResponseStatusEnum::Closed => "Closed",
+        iface_accounts::CloseAccountResponseStatusEnum::Inactive => "Inactive",
+        iface_accounts::CloseAccountResponseStatusEnum::Suspended => "Suspended",
+    }
+}
 
 fn iface_accounts__create_account_request_payout_schedule_enum__to_str(e: &iface_accounts::CreateAccountRequestPayoutScheduleEnum) -> &'static str {
     match e {
@@ -348,11 +376,49 @@ fn iface_accounts__update_payout_schedule_request_action_enum__to_str(e: &iface_
     }
 }
 
+fn iface_accounts__close_account_response__to_json(p: &iface_accounts::CloseAccountResponse) -> Value {
+    let mut m = Map::new();
+    m.insert("pspReference".into(), match (&p.psp_reference) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("resultCode".into(), match (&p.result_code) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("status".into(), match (&p.status) { Some(v) => Value::String(iface_accounts__close_account_response_status_enum__to_str(v).into()), None => Value::Null });
+    m.insert("submittedAsync".into(), match (&p.submitted_async) { Some(v) => Value::Bool(*(v)), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_accounts__create_account_response__to_json(p: &iface_accounts::CreateAccountResponse) -> Value {
+    let mut m = Map::new();
+    m.insert("accountCode".into(), match (&p.account_code) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("accountHolderCode".into(), match (&p.account_holder_code) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("payoutSchedule".into(), match (&p.payout_schedule) { Some(v) => iface_accounts__payout_schedule_response__to_json(v), None => Value::Null });
+    m.insert("pspReference".into(), match (&p.psp_reference) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("resultCode".into(), match (&p.result_code) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("status".into(), match (&p.status) { Some(v) => Value::String(iface_accounts__close_account_response_status_enum__to_str(v).into()), None => Value::Null });
+    m.insert("submittedAsync".into(), match (&p.submitted_async) { Some(v) => Value::Bool(*(v)), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_accounts__payout_schedule_response__to_json(p: &iface_accounts::PayoutScheduleResponse) -> Value {
+    let mut m = Map::new();
+    m.insert("nextScheduledPayout".into(), match (&p.next_scheduled_payout) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("schedule".into(), match (&p.schedule) { Some(v) => Value::String(iface_accounts__create_account_request_payout_schedule_enum__to_str(v).into()), None => Value::Null });
+    Value::Object(m)
+}
+
 fn iface_accounts__update_payout_schedule_request__to_json(p: &iface_accounts::UpdatePayoutScheduleRequest) -> Value {
     let mut m = Map::new();
     m.insert("action".into(), match (&p.action) { Some(v) => Value::String(iface_accounts__update_payout_schedule_request_action_enum__to_str(v).into()), None => Value::Null });
     m.insert("reason".into(), match (&p.reason) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("schedule".into(), Value::String(iface_accounts__create_account_request_payout_schedule_enum__to_str(&p.schedule).into()));
+    Value::Object(m)
+}
+
+fn iface_accounts__update_account_response__to_json(p: &iface_accounts::UpdateAccountResponse) -> Value {
+    let mut m = Map::new();
+    m.insert("accountCode".into(), Value::String((&p.account_code).clone()));
+    m.insert("payoutSchedule".into(), match (&p.payout_schedule) { Some(v) => iface_accounts__payout_schedule_response__to_json(v), None => Value::Null });
+    m.insert("pspReference".into(), match (&p.psp_reference) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("resultCode".into(), match (&p.result_code) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("submittedAsync".into(), match (&p.submitted_async) { Some(v) => Value::Bool(*(v)), None => Value::Null });
     Value::Object(m)
 }
 
@@ -377,18 +443,175 @@ fn iface_accounts__post_update_account_params__to_json(p: &iface_accounts::PostU
     Value::Object(m)
 }
 
+fn iface_accounts__close_account_response__from_json(v: &Value) -> Option<iface_accounts::CloseAccountResponse> {
+    let m = v.as_object()?;
+    Some(iface_accounts::CloseAccountResponse {
+        psp_reference: m.get("pspReference").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        result_code: m.get("resultCode").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        status: m.get("status").filter(|v| !v.is_null()).and_then(|v| (v).as_str().and_then(iface_accounts__close_account_response_status_enum__from_str)),
+        submitted_async: m.get("submittedAsync").filter(|v| !v.is_null()).and_then(|v| (v).as_bool()),
+    })
+}
+
+fn iface_accounts__create_account_response__from_json(v: &Value) -> Option<iface_accounts::CreateAccountResponse> {
+    let m = v.as_object()?;
+    Some(iface_accounts::CreateAccountResponse {
+        account_code: m.get("accountCode").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        account_holder_code: m.get("accountHolderCode").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        payout_schedule: m.get("payoutSchedule").filter(|v| !v.is_null()).and_then(|v| iface_accounts__payout_schedule_response__from_json(v)),
+        psp_reference: m.get("pspReference").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        result_code: m.get("resultCode").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        status: m.get("status").filter(|v| !v.is_null()).and_then(|v| (v).as_str().and_then(iface_accounts__close_account_response_status_enum__from_str)),
+        submitted_async: m.get("submittedAsync").filter(|v| !v.is_null()).and_then(|v| (v).as_bool()),
+    })
+}
+
+fn iface_accounts__payout_schedule_response__from_json(v: &Value) -> Option<iface_accounts::PayoutScheduleResponse> {
+    let m = v.as_object()?;
+    Some(iface_accounts::PayoutScheduleResponse {
+        next_scheduled_payout: m.get("nextScheduledPayout").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        schedule: m.get("schedule").filter(|v| !v.is_null()).and_then(|v| (v).as_str().and_then(iface_accounts__create_account_request_payout_schedule_enum__from_str)),
+    })
+}
+
+fn iface_accounts__update_account_response__from_json(v: &Value) -> Option<iface_accounts::UpdateAccountResponse> {
+    let m = v.as_object()?;
+    Some(iface_accounts::UpdateAccountResponse {
+        account_code: m.get("accountCode").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        payout_schedule: m.get("payoutSchedule").filter(|v| !v.is_null()).and_then(|v| iface_accounts__payout_schedule_response__from_json(v)),
+        psp_reference: m.get("pspReference").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        result_code: m.get("resultCode").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        submitted_async: m.get("submittedAsync").filter(|v| !v.is_null()).and_then(|v| (v).as_bool()),
+    })
+}
+
+fn iface_accounts__close_account_response_status_enum__from_str(s: &str) -> Option<iface_accounts::CloseAccountResponseStatusEnum> {
+    match s {
+        "Active" => Some(iface_accounts::CloseAccountResponseStatusEnum::Active),
+        "Closed" => Some(iface_accounts::CloseAccountResponseStatusEnum::Closed),
+        "Inactive" => Some(iface_accounts::CloseAccountResponseStatusEnum::Inactive),
+        "Suspended" => Some(iface_accounts::CloseAccountResponseStatusEnum::Suspended),
+        _ => None,
+    }
+}
+
+fn iface_accounts__create_account_request_payout_schedule_enum__from_str(s: &str) -> Option<iface_accounts::CreateAccountRequestPayoutScheduleEnum> {
+    match s {
+        "BIWEEKLY_ON_1ST_AND_15TH_AT_MIDNIGHT" => Some(iface_accounts::CreateAccountRequestPayoutScheduleEnum::BiweeklyOnV1stAndV15thAtMidnight),
+        "DAILY" => Some(iface_accounts::CreateAccountRequestPayoutScheduleEnum::Daily),
+        "DAILY_AU" => Some(iface_accounts::CreateAccountRequestPayoutScheduleEnum::DailyAu),
+        "DAILY_EU" => Some(iface_accounts::CreateAccountRequestPayoutScheduleEnum::DailyEu),
+        "DAILY_SG" => Some(iface_accounts::CreateAccountRequestPayoutScheduleEnum::DailySg),
+        "DAILY_US" => Some(iface_accounts::CreateAccountRequestPayoutScheduleEnum::DailyUs),
+        "HOLD" => Some(iface_accounts::CreateAccountRequestPayoutScheduleEnum::Hold),
+        "MONTHLY" => Some(iface_accounts::CreateAccountRequestPayoutScheduleEnum::Monthly),
+        "WEEKLY" => Some(iface_accounts::CreateAccountRequestPayoutScheduleEnum::Weekly),
+        "WEEKLY_MON_TO_FRI_AU" => Some(iface_accounts::CreateAccountRequestPayoutScheduleEnum::WeeklyMonToFriAu),
+        "WEEKLY_MON_TO_FRI_EU" => Some(iface_accounts::CreateAccountRequestPayoutScheduleEnum::WeeklyMonToFriEu),
+        "WEEKLY_MON_TO_FRI_US" => Some(iface_accounts::CreateAccountRequestPayoutScheduleEnum::WeeklyMonToFriUs),
+        "WEEKLY_ON_TUE_FRI_MIDNIGHT" => Some(iface_accounts::CreateAccountRequestPayoutScheduleEnum::WeeklyOnTueFriMidnight),
+        "WEEKLY_SUN_TO_THU_AU" => Some(iface_accounts::CreateAccountRequestPayoutScheduleEnum::WeeklySunToThuAu),
+        "WEEKLY_SUN_TO_THU_US" => Some(iface_accounts::CreateAccountRequestPayoutScheduleEnum::WeeklySunToThuUs),
+        _ => None,
+    }
+}
+
+fn iface_accounts__post_close_account__ok(body: String) -> Result<iface_accounts::CloseAccountResponse, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match iface_accounts__close_account_response__from_json(&v) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_accounts__post_close_account__err(e: crate::runtime::DispatchError) -> iface_accounts::PostCloseAccountError {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => match status {
+            400u16 => iface_accounts::PostCloseAccountError::BadRequest(body),
+            401u16 => iface_accounts::PostCloseAccountError::Unauthorized(body),
+            403u16 => iface_accounts::PostCloseAccountError::Forbidden(body),
+            422u16 => iface_accounts::PostCloseAccountError::UnprocessableEntity(body),
+            500u16 => iface_accounts::PostCloseAccountError::InternalServerError(body),
+            _ => iface_accounts::PostCloseAccountError::Other(body),
+        },
+        crate::runtime::DispatchError::Transport(m) => iface_accounts::PostCloseAccountError::Other(m),
+    }
+}
+
+fn iface_accounts__post_create_account__ok(body: String) -> Result<iface_accounts::CreateAccountResponse, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match iface_accounts__create_account_response__from_json(&v) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_accounts__post_create_account__err(e: crate::runtime::DispatchError) -> iface_accounts::PostCreateAccountError {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => match status {
+            400u16 => iface_accounts::PostCreateAccountError::BadRequest(body),
+            401u16 => iface_accounts::PostCreateAccountError::Unauthorized(body),
+            403u16 => iface_accounts::PostCreateAccountError::Forbidden(body),
+            422u16 => iface_accounts::PostCreateAccountError::UnprocessableEntity(body),
+            500u16 => iface_accounts::PostCreateAccountError::InternalServerError(body),
+            _ => iface_accounts::PostCreateAccountError::Other(body),
+        },
+        crate::runtime::DispatchError::Transport(m) => iface_accounts::PostCreateAccountError::Other(m),
+    }
+}
+
+fn iface_accounts__post_update_account__ok(body: String) -> Result<iface_accounts::UpdateAccountResponse, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match iface_accounts__update_account_response__from_json(&v) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_accounts__post_update_account__err(e: crate::runtime::DispatchError) -> iface_accounts::PostUpdateAccountError {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => match status {
+            400u16 => iface_accounts::PostUpdateAccountError::BadRequest(body),
+            401u16 => iface_accounts::PostUpdateAccountError::Unauthorized(body),
+            403u16 => iface_accounts::PostUpdateAccountError::Forbidden(body),
+            422u16 => iface_accounts::PostUpdateAccountError::UnprocessableEntity(body),
+            500u16 => iface_accounts::PostUpdateAccountError::InternalServerError(body),
+            _ => iface_accounts::PostUpdateAccountError::Other(body),
+        },
+        crate::runtime::DispatchError::Transport(m) => iface_accounts::PostUpdateAccountError::Other(m),
+    }
+}
+
 impl iface_accounts::Guest for crate::Component {
-    fn post_close_account(params: iface_accounts::PostCloseAccountParams) -> Result<String, String> {
+    fn post_close_account(params: iface_accounts::PostCloseAccountParams) -> Result<iface_accounts::CloseAccountResponse, iface_accounts::PostCloseAccountError> {
         let json = iface_accounts__post_close_account_params__to_json(&params);
-        dispatch(&OP_ACCOUNTS_POST_CLOSE_ACCOUNT, json)
+        match dispatch(&OP_ACCOUNTS_POST_CLOSE_ACCOUNT, json).and_then(iface_accounts__post_close_account__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_accounts__post_close_account__err(e)),
+        }
     }
-    fn post_create_account(params: iface_accounts::PostCreateAccountParams) -> Result<String, String> {
+    fn post_create_account(params: iface_accounts::PostCreateAccountParams) -> Result<iface_accounts::CreateAccountResponse, iface_accounts::PostCreateAccountError> {
         let json = iface_accounts__post_create_account_params__to_json(&params);
-        dispatch(&OP_ACCOUNTS_POST_CREATE_ACCOUNT, json)
+        match dispatch(&OP_ACCOUNTS_POST_CREATE_ACCOUNT, json).and_then(iface_accounts__post_create_account__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_accounts__post_create_account__err(e)),
+        }
     }
-    fn post_update_account(params: iface_accounts::PostUpdateAccountParams) -> Result<String, String> {
+    fn post_update_account(params: iface_accounts::PostUpdateAccountParams) -> Result<iface_accounts::UpdateAccountResponse, iface_accounts::PostUpdateAccountError> {
         let json = iface_accounts__post_update_account_params__to_json(&params);
-        dispatch(&OP_ACCOUNTS_POST_UPDATE_ACCOUNT, json)
+        match dispatch(&OP_ACCOUNTS_POST_UPDATE_ACCOUNT, json).and_then(iface_accounts__post_update_account__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_accounts__post_update_account__err(e)),
+        }
     }
 }
 use crate::exports::autostamp::adyen::account_holders as iface_account_holders;
@@ -397,7 +620,7 @@ const OP_ACCOUNT_HOLDERS_POST_CLOSE_ACCOUNT_HOLDER: OpSpec = OpSpec {
     method: "POST",
     path_template: "/closeAccountHolder",
     fields: &[
-        FieldSpec { snake: "account_holder_code", location: FieldLocation::Body },
+        FieldSpec { snake: "account_holder_code", wire: "accountHolderCode", location: FieldLocation::Body },
     ],
     auth: &[
         AuthApply { secret_key: "BasicAuth", kind: AuthKind::Basic },
@@ -408,11 +631,11 @@ const OP_ACCOUNT_HOLDERS_POST_CREATE_ACCOUNT_HOLDER: OpSpec = OpSpec {
     method: "POST",
     path_template: "/createAccountHolder",
     fields: &[
-        FieldSpec { snake: "account_holder_code", location: FieldLocation::Body },
-        FieldSpec { snake: "account_holder_details", location: FieldLocation::Body },
-        FieldSpec { snake: "create_default_account", location: FieldLocation::Body },
-        FieldSpec { snake: "legal_entity", location: FieldLocation::Body },
-        FieldSpec { snake: "processing_tier", location: FieldLocation::Body },
+        FieldSpec { snake: "account_holder_code", wire: "accountHolderCode", location: FieldLocation::Body },
+        FieldSpec { snake: "account_holder_details", wire: "accountHolderDetails", location: FieldLocation::Body },
+        FieldSpec { snake: "create_default_account", wire: "createDefaultAccount", location: FieldLocation::Body },
+        FieldSpec { snake: "legal_entity", wire: "legalEntity", location: FieldLocation::Body },
+        FieldSpec { snake: "processing_tier", wire: "processingTier", location: FieldLocation::Body },
     ],
     auth: &[
         AuthApply { secret_key: "BasicAuth", kind: AuthKind::Basic },
@@ -423,8 +646,8 @@ const OP_ACCOUNT_HOLDERS_POST_GET_ACCOUNT_HOLDER: OpSpec = OpSpec {
     method: "POST",
     path_template: "/getAccountHolder",
     fields: &[
-        FieldSpec { snake: "account_code", location: FieldLocation::Body },
-        FieldSpec { snake: "account_holder_code", location: FieldLocation::Body },
+        FieldSpec { snake: "account_code", wire: "accountCode", location: FieldLocation::Body },
+        FieldSpec { snake: "account_holder_code", wire: "accountHolderCode", location: FieldLocation::Body },
     ],
     auth: &[
         AuthApply { secret_key: "BasicAuth", kind: AuthKind::Basic },
@@ -435,9 +658,9 @@ const OP_ACCOUNT_HOLDERS_POST_GET_TAX_FORM: OpSpec = OpSpec {
     method: "POST",
     path_template: "/getTaxForm",
     fields: &[
-        FieldSpec { snake: "account_holder_code", location: FieldLocation::Body },
-        FieldSpec { snake: "form_type", location: FieldLocation::Body },
-        FieldSpec { snake: "year", location: FieldLocation::Body },
+        FieldSpec { snake: "account_holder_code", wire: "accountHolderCode", location: FieldLocation::Body },
+        FieldSpec { snake: "form_type", wire: "formType", location: FieldLocation::Body },
+        FieldSpec { snake: "year", wire: "year", location: FieldLocation::Body },
     ],
     auth: &[
         AuthApply { secret_key: "BasicAuth", kind: AuthKind::Basic },
@@ -448,7 +671,7 @@ const OP_ACCOUNT_HOLDERS_POST_SUSPEND_ACCOUNT_HOLDER: OpSpec = OpSpec {
     method: "POST",
     path_template: "/suspendAccountHolder",
     fields: &[
-        FieldSpec { snake: "account_holder_code", location: FieldLocation::Body },
+        FieldSpec { snake: "account_holder_code", wire: "accountHolderCode", location: FieldLocation::Body },
     ],
     auth: &[
         AuthApply { secret_key: "BasicAuth", kind: AuthKind::Basic },
@@ -459,7 +682,7 @@ const OP_ACCOUNT_HOLDERS_POST_UN_SUSPEND_ACCOUNT_HOLDER: OpSpec = OpSpec {
     method: "POST",
     path_template: "/unSuspendAccountHolder",
     fields: &[
-        FieldSpec { snake: "account_holder_code", location: FieldLocation::Body },
+        FieldSpec { snake: "account_holder_code", wire: "accountHolderCode", location: FieldLocation::Body },
     ],
     auth: &[
         AuthApply { secret_key: "BasicAuth", kind: AuthKind::Basic },
@@ -470,9 +693,9 @@ const OP_ACCOUNT_HOLDERS_POST_UPDATE_ACCOUNT_HOLDER: OpSpec = OpSpec {
     method: "POST",
     path_template: "/updateAccountHolder",
     fields: &[
-        FieldSpec { snake: "account_holder_code", location: FieldLocation::Body },
-        FieldSpec { snake: "account_holder_details", location: FieldLocation::Body },
-        FieldSpec { snake: "processing_tier", location: FieldLocation::Body },
+        FieldSpec { snake: "account_holder_code", wire: "accountHolderCode", location: FieldLocation::Body },
+        FieldSpec { snake: "account_holder_details", wire: "accountHolderDetails", location: FieldLocation::Body },
+        FieldSpec { snake: "processing_tier", wire: "processingTier", location: FieldLocation::Body },
     ],
     auth: &[
         AuthApply { secret_key: "BasicAuth", kind: AuthKind::Basic },
@@ -483,15 +706,31 @@ const OP_ACCOUNT_HOLDERS_POST_UPDATE_ACCOUNT_HOLDER_STATE: OpSpec = OpSpec {
     method: "POST",
     path_template: "/updateAccountHolderState",
     fields: &[
-        FieldSpec { snake: "account_holder_code", location: FieldLocation::Body },
-        FieldSpec { snake: "disable", location: FieldLocation::Body },
-        FieldSpec { snake: "reason", location: FieldLocation::Body },
-        FieldSpec { snake: "state_type", location: FieldLocation::Body },
+        FieldSpec { snake: "account_holder_code", wire: "accountHolderCode", location: FieldLocation::Body },
+        FieldSpec { snake: "disable", wire: "disable", location: FieldLocation::Body },
+        FieldSpec { snake: "reason", wire: "reason", location: FieldLocation::Body },
+        FieldSpec { snake: "state_type", wire: "stateType", location: FieldLocation::Body },
     ],
     auth: &[
         AuthApply { secret_key: "BasicAuth", kind: AuthKind::Basic },
     ],
 };
+
+fn iface_account_holders__account_event_event_enum__to_str(e: &iface_account_holders::AccountEventEventEnum) -> &'static str {
+    match e {
+        iface_account_holders::AccountEventEventEnum::InactivateAccount => "InactivateAccount",
+        iface_account_holders::AccountEventEventEnum::RefundNotPaidOutTransfers => "RefundNotPaidOutTransfers",
+    }
+}
+
+fn iface_account_holders__account_holder_status_status_enum__to_str(e: &iface_account_holders::AccountHolderStatusStatusEnum) -> &'static str {
+    match e {
+        iface_account_holders::AccountHolderStatusStatusEnum::Active => "Active",
+        iface_account_holders::AccountHolderStatusStatusEnum::Closed => "Closed",
+        iface_account_holders::AccountHolderStatusStatusEnum::Inactive => "Inactive",
+        iface_account_holders::AccountHolderStatusStatusEnum::Suspended => "Suspended",
+    }
+}
 
 fn iface_account_holders__vias_name_gender_enum__to_str(e: &iface_account_holders::ViasNameGenderEnum) -> &'static str {
     match e {
@@ -536,6 +775,217 @@ fn iface_account_holders__create_account_holder_request_legal_entity_enum__to_st
     }
 }
 
+fn iface_account_holders__field_type_field_name_enum__to_str(e: &iface_account_holders::FieldTypeFieldNameEnum) -> &'static str {
+    match e {
+        iface_account_holders::FieldTypeFieldNameEnum::AccountCode => "accountCode",
+        iface_account_holders::FieldTypeFieldNameEnum::AccountHolderCode => "accountHolderCode",
+        iface_account_holders::FieldTypeFieldNameEnum::AccountHolderDetails => "accountHolderDetails",
+        iface_account_holders::FieldTypeFieldNameEnum::AccountNumber => "accountNumber",
+        iface_account_holders::FieldTypeFieldNameEnum::AccountStateType => "accountStateType",
+        iface_account_holders::FieldTypeFieldNameEnum::AccountStatus => "accountStatus",
+        iface_account_holders::FieldTypeFieldNameEnum::AccountType => "accountType",
+        iface_account_holders::FieldTypeFieldNameEnum::Address => "address",
+        iface_account_holders::FieldTypeFieldNameEnum::BalanceAccount => "balanceAccount",
+        iface_account_holders::FieldTypeFieldNameEnum::BalanceAccountActive => "balanceAccountActive",
+        iface_account_holders::FieldTypeFieldNameEnum::BalanceAccountCode => "balanceAccountCode",
+        iface_account_holders::FieldTypeFieldNameEnum::BalanceAccountId => "balanceAccountId",
+        iface_account_holders::FieldTypeFieldNameEnum::BankAccount => "bankAccount",
+        iface_account_holders::FieldTypeFieldNameEnum::BankAccountCode => "bankAccountCode",
+        iface_account_holders::FieldTypeFieldNameEnum::BankAccountName => "bankAccountName",
+        iface_account_holders::FieldTypeFieldNameEnum::BankAccountUuid => "bankAccountUUID",
+        iface_account_holders::FieldTypeFieldNameEnum::BankBicSwift => "bankBicSwift",
+        iface_account_holders::FieldTypeFieldNameEnum::BankCity => "bankCity",
+        iface_account_holders::FieldTypeFieldNameEnum::BankCode => "bankCode",
+        iface_account_holders::FieldTypeFieldNameEnum::BankName => "bankName",
+        iface_account_holders::FieldTypeFieldNameEnum::BankStatement => "bankStatement",
+        iface_account_holders::FieldTypeFieldNameEnum::BranchCode => "branchCode",
+        iface_account_holders::FieldTypeFieldNameEnum::BusinessContact => "businessContact",
+        iface_account_holders::FieldTypeFieldNameEnum::CardToken => "cardToken",
+        iface_account_holders::FieldTypeFieldNameEnum::CheckCode => "checkCode",
+        iface_account_holders::FieldTypeFieldNameEnum::City => "city",
+        iface_account_holders::FieldTypeFieldNameEnum::CompanyRegistration => "companyRegistration",
+        iface_account_holders::FieldTypeFieldNameEnum::ConstitutionalDocument => "constitutionalDocument",
+        iface_account_holders::FieldTypeFieldNameEnum::Controller => "controller",
+        iface_account_holders::FieldTypeFieldNameEnum::Country => "country",
+        iface_account_holders::FieldTypeFieldNameEnum::CountryCode => "countryCode",
+        iface_account_holders::FieldTypeFieldNameEnum::Currency => "currency",
+        iface_account_holders::FieldTypeFieldNameEnum::CurrencyCode => "currencyCode",
+        iface_account_holders::FieldTypeFieldNameEnum::DateOfBirth => "dateOfBirth",
+        iface_account_holders::FieldTypeFieldNameEnum::DestinationAccountCode => "destinationAccountCode",
+        iface_account_holders::FieldTypeFieldNameEnum::Document => "document",
+        iface_account_holders::FieldTypeFieldNameEnum::DocumentContent => "documentContent",
+        iface_account_holders::FieldTypeFieldNameEnum::DocumentExpirationDate => "documentExpirationDate",
+        iface_account_holders::FieldTypeFieldNameEnum::DocumentIssuerCountry => "documentIssuerCountry",
+        iface_account_holders::FieldTypeFieldNameEnum::DocumentIssuerState => "documentIssuerState",
+        iface_account_holders::FieldTypeFieldNameEnum::DocumentName => "documentName",
+        iface_account_holders::FieldTypeFieldNameEnum::DocumentNumber => "documentNumber",
+        iface_account_holders::FieldTypeFieldNameEnum::DocumentType => "documentType",
+        iface_account_holders::FieldTypeFieldNameEnum::DoingBusinessAs => "doingBusinessAs",
+        iface_account_holders::FieldTypeFieldNameEnum::DrivingLicence => "drivingLicence",
+        iface_account_holders::FieldTypeFieldNameEnum::DrivingLicenceBack => "drivingLicenceBack",
+        iface_account_holders::FieldTypeFieldNameEnum::DrivingLicenceFront => "drivingLicenceFront",
+        iface_account_holders::FieldTypeFieldNameEnum::DrivingLicense => "drivingLicense",
+        iface_account_holders::FieldTypeFieldNameEnum::Email => "email",
+        iface_account_holders::FieldTypeFieldNameEnum::FirstName => "firstName",
+        iface_account_holders::FieldTypeFieldNameEnum::FormType => "formType",
+        iface_account_holders::FieldTypeFieldNameEnum::FullPhoneNumber => "fullPhoneNumber",
+        iface_account_holders::FieldTypeFieldNameEnum::Gender => "gender",
+        iface_account_holders::FieldTypeFieldNameEnum::HopWebserviceUser => "hopWebserviceUser",
+        iface_account_holders::FieldTypeFieldNameEnum::HouseNumberOrName => "houseNumberOrName",
+        iface_account_holders::FieldTypeFieldNameEnum::Iban => "iban",
+        iface_account_holders::FieldTypeFieldNameEnum::IdCard => "idCard",
+        iface_account_holders::FieldTypeFieldNameEnum::IdNumber => "idNumber",
+        iface_account_holders::FieldTypeFieldNameEnum::IdentityDocument => "identityDocument",
+        iface_account_holders::FieldTypeFieldNameEnum::IndividualDetails => "individualDetails",
+        iface_account_holders::FieldTypeFieldNameEnum::Infix => "infix",
+        iface_account_holders::FieldTypeFieldNameEnum::JobTitle => "jobTitle",
+        iface_account_holders::FieldTypeFieldNameEnum::LastName => "lastName",
+        iface_account_holders::FieldTypeFieldNameEnum::LastReviewDate => "lastReviewDate",
+        iface_account_holders::FieldTypeFieldNameEnum::LegalArrangement => "legalArrangement",
+        iface_account_holders::FieldTypeFieldNameEnum::LegalArrangementCode => "legalArrangementCode",
+        iface_account_holders::FieldTypeFieldNameEnum::LegalArrangementEntity => "legalArrangementEntity",
+        iface_account_holders::FieldTypeFieldNameEnum::LegalArrangementEntityCode => "legalArrangementEntityCode",
+        iface_account_holders::FieldTypeFieldNameEnum::LegalArrangementLegalForm => "legalArrangementLegalForm",
+        iface_account_holders::FieldTypeFieldNameEnum::LegalArrangementMember => "legalArrangementMember",
+        iface_account_holders::FieldTypeFieldNameEnum::LegalArrangementMembers => "legalArrangementMembers",
+        iface_account_holders::FieldTypeFieldNameEnum::LegalArrangementName => "legalArrangementName",
+        iface_account_holders::FieldTypeFieldNameEnum::LegalArrangementReference => "legalArrangementReference",
+        iface_account_holders::FieldTypeFieldNameEnum::LegalArrangementRegistrationNumber => "legalArrangementRegistrationNumber",
+        iface_account_holders::FieldTypeFieldNameEnum::LegalArrangementTaxNumber => "legalArrangementTaxNumber",
+        iface_account_holders::FieldTypeFieldNameEnum::LegalArrangementType => "legalArrangementType",
+        iface_account_holders::FieldTypeFieldNameEnum::LegalBusinessName => "legalBusinessName",
+        iface_account_holders::FieldTypeFieldNameEnum::LegalEntity => "legalEntity",
+        iface_account_holders::FieldTypeFieldNameEnum::LegalEntityType => "legalEntityType",
+        iface_account_holders::FieldTypeFieldNameEnum::Logo => "logo",
+        iface_account_holders::FieldTypeFieldNameEnum::MerchantAccount => "merchantAccount",
+        iface_account_holders::FieldTypeFieldNameEnum::MerchantCategoryCode => "merchantCategoryCode",
+        iface_account_holders::FieldTypeFieldNameEnum::MerchantHouseNumber => "merchantHouseNumber",
+        iface_account_holders::FieldTypeFieldNameEnum::MerchantReference => "merchantReference",
+        iface_account_holders::FieldTypeFieldNameEnum::MicroDeposit => "microDeposit",
+        iface_account_holders::FieldTypeFieldNameEnum::Name => "name",
+        iface_account_holders::FieldTypeFieldNameEnum::Nationality => "nationality",
+        iface_account_holders::FieldTypeFieldNameEnum::OriginalReference => "originalReference",
+        iface_account_holders::FieldTypeFieldNameEnum::OwnerCity => "ownerCity",
+        iface_account_holders::FieldTypeFieldNameEnum::OwnerCountryCode => "ownerCountryCode",
+        iface_account_holders::FieldTypeFieldNameEnum::OwnerDateOfBirth => "ownerDateOfBirth",
+        iface_account_holders::FieldTypeFieldNameEnum::OwnerHouseNumberOrName => "ownerHouseNumberOrName",
+        iface_account_holders::FieldTypeFieldNameEnum::OwnerName => "ownerName",
+        iface_account_holders::FieldTypeFieldNameEnum::OwnerPostalCode => "ownerPostalCode",
+        iface_account_holders::FieldTypeFieldNameEnum::OwnerState => "ownerState",
+        iface_account_holders::FieldTypeFieldNameEnum::OwnerStreet => "ownerStreet",
+        iface_account_holders::FieldTypeFieldNameEnum::Passport => "passport",
+        iface_account_holders::FieldTypeFieldNameEnum::PassportNumber => "passportNumber",
+        iface_account_holders::FieldTypeFieldNameEnum::PayoutMethod => "payoutMethod",
+        iface_account_holders::FieldTypeFieldNameEnum::PayoutMethodCode => "payoutMethodCode",
+        iface_account_holders::FieldTypeFieldNameEnum::PayoutSchedule => "payoutSchedule",
+        iface_account_holders::FieldTypeFieldNameEnum::PciSelfAssessment => "pciSelfAssessment",
+        iface_account_holders::FieldTypeFieldNameEnum::PersonalData => "personalData",
+        iface_account_holders::FieldTypeFieldNameEnum::PhoneCountryCode => "phoneCountryCode",
+        iface_account_holders::FieldTypeFieldNameEnum::PhoneNumber => "phoneNumber",
+        iface_account_holders::FieldTypeFieldNameEnum::PostalCode => "postalCode",
+        iface_account_holders::FieldTypeFieldNameEnum::PrimaryCurrency => "primaryCurrency",
+        iface_account_holders::FieldTypeFieldNameEnum::Reason => "reason",
+        iface_account_holders::FieldTypeFieldNameEnum::ReturnUrl => "returnUrl",
+        iface_account_holders::FieldTypeFieldNameEnum::Schedule => "schedule",
+        iface_account_holders::FieldTypeFieldNameEnum::Shareholder => "shareholder",
+        iface_account_holders::FieldTypeFieldNameEnum::ShareholderCode => "shareholderCode",
+        iface_account_holders::FieldTypeFieldNameEnum::ShareholderCodeAndSignatoryCode => "shareholderCodeAndSignatoryCode",
+        iface_account_holders::FieldTypeFieldNameEnum::ShareholderCodeOrSignatoryCode => "shareholderCodeOrSignatoryCode",
+        iface_account_holders::FieldTypeFieldNameEnum::ShareholderType => "shareholderType",
+        iface_account_holders::FieldTypeFieldNameEnum::ShareholderTypes => "shareholderTypes",
+        iface_account_holders::FieldTypeFieldNameEnum::ShopperInteraction => "shopperInteraction",
+        iface_account_holders::FieldTypeFieldNameEnum::Signatory => "signatory",
+        iface_account_holders::FieldTypeFieldNameEnum::SignatoryCode => "signatoryCode",
+        iface_account_holders::FieldTypeFieldNameEnum::SocialSecurityNumber => "socialSecurityNumber",
+        iface_account_holders::FieldTypeFieldNameEnum::SourceAccountCode => "sourceAccountCode",
+        iface_account_holders::FieldTypeFieldNameEnum::SplitAccount => "splitAccount",
+        iface_account_holders::FieldTypeFieldNameEnum::SplitConfigurationUuid => "splitConfigurationUUID",
+        iface_account_holders::FieldTypeFieldNameEnum::SplitCurrency => "splitCurrency",
+        iface_account_holders::FieldTypeFieldNameEnum::SplitValue => "splitValue",
+        iface_account_holders::FieldTypeFieldNameEnum::Splits => "splits",
+        iface_account_holders::FieldTypeFieldNameEnum::StateOrProvince => "stateOrProvince",
+        iface_account_holders::FieldTypeFieldNameEnum::Status => "status",
+        iface_account_holders::FieldTypeFieldNameEnum::StockExchange => "stockExchange",
+        iface_account_holders::FieldTypeFieldNameEnum::StockNumber => "stockNumber",
+        iface_account_holders::FieldTypeFieldNameEnum::StockTicker => "stockTicker",
+        iface_account_holders::FieldTypeFieldNameEnum::Store => "store",
+        iface_account_holders::FieldTypeFieldNameEnum::StoreDetail => "storeDetail",
+        iface_account_holders::FieldTypeFieldNameEnum::StoreName => "storeName",
+        iface_account_holders::FieldTypeFieldNameEnum::StoreReference => "storeReference",
+        iface_account_holders::FieldTypeFieldNameEnum::Street => "street",
+        iface_account_holders::FieldTypeFieldNameEnum::TaxId => "taxId",
+        iface_account_holders::FieldTypeFieldNameEnum::Tier => "tier",
+        iface_account_holders::FieldTypeFieldNameEnum::TierNumber => "tierNumber",
+        iface_account_holders::FieldTypeFieldNameEnum::TransferCode => "transferCode",
+        iface_account_holders::FieldTypeFieldNameEnum::UltimateParentCompany => "ultimateParentCompany",
+        iface_account_holders::FieldTypeFieldNameEnum::UltimateParentCompanyAddressDetails => "ultimateParentCompanyAddressDetails",
+        iface_account_holders::FieldTypeFieldNameEnum::UltimateParentCompanyAddressDetailsCountry => "ultimateParentCompanyAddressDetailsCountry",
+        iface_account_holders::FieldTypeFieldNameEnum::UltimateParentCompanyBusinessDetails => "ultimateParentCompanyBusinessDetails",
+        iface_account_holders::FieldTypeFieldNameEnum::UltimateParentCompanyBusinessDetailsLegalBusinessName => "ultimateParentCompanyBusinessDetailsLegalBusinessName",
+        iface_account_holders::FieldTypeFieldNameEnum::UltimateParentCompanyBusinessDetailsRegistrationNumber => "ultimateParentCompanyBusinessDetailsRegistrationNumber",
+        iface_account_holders::FieldTypeFieldNameEnum::UltimateParentCompanyCode => "ultimateParentCompanyCode",
+        iface_account_holders::FieldTypeFieldNameEnum::UltimateParentCompanyStockExchange => "ultimateParentCompanyStockExchange",
+        iface_account_holders::FieldTypeFieldNameEnum::UltimateParentCompanyStockNumber => "ultimateParentCompanyStockNumber",
+        iface_account_holders::FieldTypeFieldNameEnum::UltimateParentCompanyStockNumberOrStockTicker => "ultimateParentCompanyStockNumberOrStockTicker",
+        iface_account_holders::FieldTypeFieldNameEnum::UltimateParentCompanyStockTicker => "ultimateParentCompanyStockTicker",
+        iface_account_holders::FieldTypeFieldNameEnum::Unknown => "unknown",
+        iface_account_holders::FieldTypeFieldNameEnum::Value => "value",
+        iface_account_holders::FieldTypeFieldNameEnum::VerificationType => "verificationType",
+        iface_account_holders::FieldTypeFieldNameEnum::VirtualAccount => "virtualAccount",
+        iface_account_holders::FieldTypeFieldNameEnum::VisaNumber => "visaNumber",
+        iface_account_holders::FieldTypeFieldNameEnum::WebAddress => "webAddress",
+        iface_account_holders::FieldTypeFieldNameEnum::Year => "year",
+    }
+}
+
+fn iface_account_holders__kyc_check_status_data_status_enum__to_str(e: &iface_account_holders::KycCheckStatusDataStatusEnum) -> &'static str {
+    match e {
+        iface_account_holders::KycCheckStatusDataStatusEnum::AwaitingData => "AWAITING_DATA",
+        iface_account_holders::KycCheckStatusDataStatusEnum::DataProvided => "DATA_PROVIDED",
+        iface_account_holders::KycCheckStatusDataStatusEnum::Failed => "FAILED",
+        iface_account_holders::KycCheckStatusDataStatusEnum::InvalidData => "INVALID_DATA",
+        iface_account_holders::KycCheckStatusDataStatusEnum::Passed => "PASSED",
+        iface_account_holders::KycCheckStatusDataStatusEnum::Pending => "PENDING",
+        iface_account_holders::KycCheckStatusDataStatusEnum::PendingReview => "PENDING_REVIEW",
+        iface_account_holders::KycCheckStatusDataStatusEnum::RetryLimitReached => "RETRY_LIMIT_REACHED",
+        iface_account_holders::KycCheckStatusDataStatusEnum::Unchecked => "UNCHECKED",
+    }
+}
+
+fn iface_account_holders__kyc_check_status_data_type_op_enum__to_str(e: &iface_account_holders::KycCheckStatusDataTypeOpEnum) -> &'static str {
+    match e {
+        iface_account_holders::KycCheckStatusDataTypeOpEnum::BankAccountVerification => "BANK_ACCOUNT_VERIFICATION",
+        iface_account_holders::KycCheckStatusDataTypeOpEnum::CardVerification => "CARD_VERIFICATION",
+        iface_account_holders::KycCheckStatusDataTypeOpEnum::CompanyVerification => "COMPANY_VERIFICATION",
+        iface_account_holders::KycCheckStatusDataTypeOpEnum::IdentityVerification => "IDENTITY_VERIFICATION",
+        iface_account_holders::KycCheckStatusDataTypeOpEnum::LegalArrangementVerification => "LEGAL_ARRANGEMENT_VERIFICATION",
+        iface_account_holders::KycCheckStatusDataTypeOpEnum::NonprofitVerification => "NONPROFIT_VERIFICATION",
+        iface_account_holders::KycCheckStatusDataTypeOpEnum::PassportVerification => "PASSPORT_VERIFICATION",
+        iface_account_holders::KycCheckStatusDataTypeOpEnum::PayoutMethodVerification => "PAYOUT_METHOD_VERIFICATION",
+        iface_account_holders::KycCheckStatusDataTypeOpEnum::PciVerification => "PCI_VERIFICATION",
+    }
+}
+
+fn iface_account_holders__payout_schedule_response_schedule_enum__to_str(e: &iface_account_holders::PayoutScheduleResponseScheduleEnum) -> &'static str {
+    match e {
+        iface_account_holders::PayoutScheduleResponseScheduleEnum::BiweeklyOnV1stAndV15thAtMidnight => "BIWEEKLY_ON_1ST_AND_15TH_AT_MIDNIGHT",
+        iface_account_holders::PayoutScheduleResponseScheduleEnum::Daily => "DAILY",
+        iface_account_holders::PayoutScheduleResponseScheduleEnum::DailyAu => "DAILY_AU",
+        iface_account_holders::PayoutScheduleResponseScheduleEnum::DailyEu => "DAILY_EU",
+        iface_account_holders::PayoutScheduleResponseScheduleEnum::DailySg => "DAILY_SG",
+        iface_account_holders::PayoutScheduleResponseScheduleEnum::DailyUs => "DAILY_US",
+        iface_account_holders::PayoutScheduleResponseScheduleEnum::Hold => "HOLD",
+        iface_account_holders::PayoutScheduleResponseScheduleEnum::Monthly => "MONTHLY",
+        iface_account_holders::PayoutScheduleResponseScheduleEnum::Weekly => "WEEKLY",
+        iface_account_holders::PayoutScheduleResponseScheduleEnum::WeeklyMonToFriAu => "WEEKLY_MON_TO_FRI_AU",
+        iface_account_holders::PayoutScheduleResponseScheduleEnum::WeeklyMonToFriEu => "WEEKLY_MON_TO_FRI_EU",
+        iface_account_holders::PayoutScheduleResponseScheduleEnum::WeeklyMonToFriUs => "WEEKLY_MON_TO_FRI_US",
+        iface_account_holders::PayoutScheduleResponseScheduleEnum::WeeklyOnTueFriMidnight => "WEEKLY_ON_TUE_FRI_MIDNIGHT",
+        iface_account_holders::PayoutScheduleResponseScheduleEnum::WeeklySunToThuAu => "WEEKLY_SUN_TO_THU_AU",
+        iface_account_holders::PayoutScheduleResponseScheduleEnum::WeeklySunToThuUs => "WEEKLY_SUN_TO_THU_US",
+    }
+}
+
 fn iface_account_holders__update_account_holder_state_request_state_type_enum__to_str(e: &iface_account_holders::UpdateAccountHolderStateRequestStateTypeEnum) -> &'static str {
     match e {
         iface_account_holders::UpdateAccountHolderStateRequestStateTypeEnum::LimitedPayout => "LimitedPayout",
@@ -547,19 +997,79 @@ fn iface_account_holders__update_account_holder_state_request_state_type_enum__t
     }
 }
 
+fn iface_account_holders__close_account_holder_response__to_json(p: &iface_account_holders::CloseAccountHolderResponse) -> Value {
+    let mut m = Map::new();
+    m.insert("accountHolderStatus".into(), match (&p.account_holder_status) { Some(v) => iface_account_holders__account_holder_status__to_json(v), None => Value::Null });
+    m.insert("pspReference".into(), match (&p.psp_reference) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("resultCode".into(), match (&p.result_code) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("submittedAsync".into(), match (&p.submitted_async) { Some(v) => Value::Bool(*(v)), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_account_holders__account_holder_status__to_json(p: &iface_account_holders::AccountHolderStatus) -> Value {
+    let mut m = Map::new();
+    m.insert("events".into(), match (&p.events) { Some(v) => Value::Array((v).iter().map(|v| iface_account_holders__account_event_wrapper__to_json(v)).collect()), None => Value::Null });
+    m.insert("payoutState".into(), match (&p.payout_state) { Some(v) => iface_account_holders__account_payout_state__to_json(v), None => Value::Null });
+    m.insert("processingState".into(), match (&p.processing_state) { Some(v) => iface_account_holders__account_processing_state__to_json(v), None => Value::Null });
+    m.insert("status".into(), Value::String(iface_account_holders__account_holder_status_status_enum__to_str(&p.status).into()));
+    m.insert("statusReason".into(), match (&p.status_reason) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_account_holders__account_event_wrapper__to_json(p: &iface_account_holders::AccountEventWrapper) -> Value {
+    let mut m = Map::new();
+    m.insert("AccountEvent".into(), match (&p.account_event) { Some(v) => iface_account_holders__account_event__to_json(v), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_account_holders__account_event__to_json(p: &iface_account_holders::AccountEvent) -> Value {
+    let mut m = Map::new();
+    m.insert("event".into(), match (&p.event) { Some(v) => Value::String(iface_account_holders__account_event_event_enum__to_str(v).into()), None => Value::Null });
+    m.insert("executionDate".into(), match (&p.execution_date) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("reason".into(), match (&p.reason) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_account_holders__account_payout_state__to_json(p: &iface_account_holders::AccountPayoutState) -> Value {
+    let mut m = Map::new();
+    m.insert("allowPayout".into(), match (&p.allow_payout) { Some(v) => Value::Bool(*(v)), None => Value::Null });
+    m.insert("disableReason".into(), match (&p.disable_reason) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("disabled".into(), match (&p.disabled) { Some(v) => Value::Bool(*(v)), None => Value::Null });
+    m.insert("payoutLimit".into(), match (&p.payout_limit) { Some(v) => iface_account_holders__amount__to_json(v), None => Value::Null });
+    m.insert("tierNumber".into(), match (&p.tier_number) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_account_holders__amount__to_json(p: &iface_account_holders::Amount) -> Value {
+    let mut m = Map::new();
+    m.insert("currency".into(), Value::String((&p.currency).clone()));
+    m.insert("value".into(), Value::Number(serde_json::Number::from(*(&p.value))));
+    Value::Object(m)
+}
+
+fn iface_account_holders__account_processing_state__to_json(p: &iface_account_holders::AccountProcessingState) -> Value {
+    let mut m = Map::new();
+    m.insert("disableReason".into(), match (&p.disable_reason) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("disabled".into(), match (&p.disabled) { Some(v) => Value::Bool(*(v)), None => Value::Null });
+    m.insert("processedFrom".into(), match (&p.processed_from) { Some(v) => iface_account_holders__amount__to_json(v), None => Value::Null });
+    m.insert("processedTo".into(), match (&p.processed_to) { Some(v) => iface_account_holders__amount__to_json(v), None => Value::Null });
+    m.insert("tierNumber".into(), match (&p.tier_number) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    Value::Object(m)
+}
+
 fn iface_account_holders__account_holder_details__to_json(p: &iface_account_holders::AccountHolderDetails) -> Value {
     let mut m = Map::new();
     m.insert("address".into(), iface_account_holders__vias_address__to_json(&p.address));
-    m.insert("bank_account_details".into(), match (&p.bank_account_details) { Some(v) => Value::Array((v).iter().map(|v| iface_account_holders__bank_account_detail_wrapper__to_json(v)).collect()), None => Value::Null });
-    m.insert("business_details".into(), match (&p.business_details) { Some(v) => iface_account_holders__business_details__to_json(v), None => Value::Null });
+    m.insert("bankAccountDetails".into(), match (&p.bank_account_details) { Some(v) => Value::Array((v).iter().map(|v| iface_account_holders__bank_account_detail_wrapper__to_json(v)).collect()), None => Value::Null });
+    m.insert("businessDetails".into(), match (&p.business_details) { Some(v) => iface_account_holders__business_details__to_json(v), None => Value::Null });
     m.insert("email".into(), match (&p.email) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    m.insert("full_phone_number".into(), match (&p.full_phone_number) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    m.insert("individual_details".into(), match (&p.individual_details) { Some(v) => iface_account_holders__individual_details__to_json(v), None => Value::Null });
-    m.insert("last_review_date".into(), match (&p.last_review_date) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    m.insert("merchant_category_code".into(), match (&p.merchant_category_code) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("fullPhoneNumber".into(), match (&p.full_phone_number) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("individualDetails".into(), match (&p.individual_details) { Some(v) => iface_account_holders__individual_details__to_json(v), None => Value::Null });
+    m.insert("lastReviewDate".into(), match (&p.last_review_date) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("merchantCategoryCode".into(), match (&p.merchant_category_code) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("metadata".into(), match (&p.metadata) { Some(v) => iface_account_holders__account_holder_details_metadata__to_json(v), None => Value::Null });
-    m.insert("principal_business_address".into(), match (&p.principal_business_address) { Some(v) => iface_account_holders__vias_address__to_json(v), None => Value::Null });
-    m.insert("web_address".into(), match (&p.web_address) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("principalBusinessAddress".into(), match (&p.principal_business_address) { Some(v) => iface_account_holders__vias_address__to_json(v), None => Value::Null });
+    m.insert("webAddress".into(), match (&p.web_address) { Some(v) => Value::String((v).clone()), None => Value::Null });
     Value::Object(m)
 }
 
@@ -567,87 +1077,87 @@ fn iface_account_holders__vias_address__to_json(p: &iface_account_holders::ViasA
     let mut m = Map::new();
     m.insert("city".into(), match (&p.city) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("country".into(), Value::String((&p.country).clone()));
-    m.insert("house_number_or_name".into(), match (&p.house_number_or_name) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    m.insert("postal_code".into(), match (&p.postal_code) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    m.insert("state_or_province".into(), match (&p.state_or_province) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("houseNumberOrName".into(), match (&p.house_number_or_name) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("postalCode".into(), match (&p.postal_code) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("stateOrProvince".into(), match (&p.state_or_province) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("street".into(), match (&p.street) { Some(v) => Value::String((v).clone()), None => Value::Null });
     Value::Object(m)
 }
 
 fn iface_account_holders__bank_account_detail_wrapper__to_json(p: &iface_account_holders::BankAccountDetailWrapper) -> Value {
     let mut m = Map::new();
-    m.insert("bank_account_detail".into(), match (&p.bank_account_detail) { Some(v) => iface_account_holders__bank_account_detail__to_json(v), None => Value::Null });
+    m.insert("BankAccountDetail".into(), match (&p.bank_account_detail) { Some(v) => iface_account_holders__bank_account_detail__to_json(v), None => Value::Null });
     Value::Object(m)
 }
 
 fn iface_account_holders__bank_account_detail__to_json(p: &iface_account_holders::BankAccountDetail) -> Value {
     let mut m = Map::new();
-    m.insert("account_number".into(), match (&p.account_number) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    m.insert("account_type".into(), match (&p.account_type) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    m.insert("bank_account_name".into(), match (&p.bank_account_name) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    m.insert("bank_account_uuid".into(), match (&p.bank_account_uuid) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    m.insert("bank_bic_swift".into(), match (&p.bank_bic_swift) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    m.insert("bank_city".into(), match (&p.bank_city) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    m.insert("bank_code".into(), match (&p.bank_code) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    m.insert("bank_name".into(), match (&p.bank_name) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    m.insert("branch_code".into(), match (&p.branch_code) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    m.insert("check_code".into(), match (&p.check_code) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    m.insert("country_code".into(), match (&p.country_code) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    m.insert("currency_code".into(), match (&p.currency_code) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("accountNumber".into(), match (&p.account_number) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("accountType".into(), match (&p.account_type) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("bankAccountName".into(), match (&p.bank_account_name) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("bankAccountUUID".into(), match (&p.bank_account_uuid) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("bankBicSwift".into(), match (&p.bank_bic_swift) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("bankCity".into(), match (&p.bank_city) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("bankCode".into(), match (&p.bank_code) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("bankName".into(), match (&p.bank_name) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("branchCode".into(), match (&p.branch_code) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("checkCode".into(), match (&p.check_code) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("countryCode".into(), match (&p.country_code) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("currencyCode".into(), match (&p.currency_code) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("iban".into(), match (&p.iban) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    m.insert("owner_city".into(), match (&p.owner_city) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    m.insert("owner_country_code".into(), match (&p.owner_country_code) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    m.insert("owner_date_of_birth".into(), match (&p.owner_date_of_birth) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    m.insert("owner_house_number_or_name".into(), match (&p.owner_house_number_or_name) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    m.insert("owner_name".into(), match (&p.owner_name) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    m.insert("owner_nationality".into(), match (&p.owner_nationality) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    m.insert("owner_postal_code".into(), match (&p.owner_postal_code) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    m.insert("owner_state".into(), match (&p.owner_state) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    m.insert("owner_street".into(), match (&p.owner_street) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    m.insert("primary_account".into(), match (&p.primary_account) { Some(v) => Value::Bool(*(v)), None => Value::Null });
-    m.insert("tax_id".into(), match (&p.tax_id) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    m.insert("url_for_verification".into(), match (&p.url_for_verification) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("ownerCity".into(), match (&p.owner_city) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("ownerCountryCode".into(), match (&p.owner_country_code) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("ownerDateOfBirth".into(), match (&p.owner_date_of_birth) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("ownerHouseNumberOrName".into(), match (&p.owner_house_number_or_name) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("ownerName".into(), match (&p.owner_name) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("ownerNationality".into(), match (&p.owner_nationality) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("ownerPostalCode".into(), match (&p.owner_postal_code) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("ownerState".into(), match (&p.owner_state) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("ownerStreet".into(), match (&p.owner_street) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("primaryAccount".into(), match (&p.primary_account) { Some(v) => Value::Bool(*(v)), None => Value::Null });
+    m.insert("taxId".into(), match (&p.tax_id) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("urlForVerification".into(), match (&p.url_for_verification) { Some(v) => Value::String((v).clone()), None => Value::Null });
     Value::Object(m)
 }
 
 fn iface_account_holders__business_details__to_json(p: &iface_account_holders::BusinessDetails) -> Value {
     let mut m = Map::new();
-    m.insert("doing_business_as".into(), match (&p.doing_business_as) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    m.insert("legal_business_name".into(), match (&p.legal_business_name) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    m.insert("listed_ultimate_parent_company".into(), match (&p.listed_ultimate_parent_company) { Some(v) => Value::Array((v).iter().map(|v| iface_account_holders__ultimate_parent_company_wrapper__to_json(v)).collect()), None => Value::Null });
+    m.insert("doingBusinessAs".into(), match (&p.doing_business_as) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("legalBusinessName".into(), match (&p.legal_business_name) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("listedUltimateParentCompany".into(), match (&p.listed_ultimate_parent_company) { Some(v) => Value::Array((v).iter().map(|v| iface_account_holders__ultimate_parent_company_wrapper__to_json(v)).collect()), None => Value::Null });
     m.insert("shareholders".into(), match (&p.shareholders) { Some(v) => Value::Array((v).iter().map(|v| iface_account_holders__shareholder_contact_wrapper__to_json(v)).collect()), None => Value::Null });
     m.insert("signatories".into(), match (&p.signatories) { Some(v) => Value::Array((v).iter().map(|v| iface_account_holders__signatory_contact_wrapper__to_json(v)).collect()), None => Value::Null });
-    m.insert("tax_id".into(), match (&p.tax_id) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("taxId".into(), match (&p.tax_id) { Some(v) => Value::String((v).clone()), None => Value::Null });
     Value::Object(m)
 }
 
 fn iface_account_holders__ultimate_parent_company_wrapper__to_json(p: &iface_account_holders::UltimateParentCompanyWrapper) -> Value {
     let mut m = Map::new();
-    m.insert("ultimate_parent_company".into(), match (&p.ultimate_parent_company) { Some(v) => iface_account_holders__ultimate_parent_company__to_json(v), None => Value::Null });
+    m.insert("UltimateParentCompany".into(), match (&p.ultimate_parent_company) { Some(v) => iface_account_holders__ultimate_parent_company__to_json(v), None => Value::Null });
     Value::Object(m)
 }
 
 fn iface_account_holders__ultimate_parent_company__to_json(p: &iface_account_holders::UltimateParentCompany) -> Value {
     let mut m = Map::new();
     m.insert("address".into(), match (&p.address) { Some(v) => iface_account_holders__vias_address__to_json(v), None => Value::Null });
-    m.insert("business_details".into(), match (&p.business_details) { Some(v) => iface_account_holders__ultimate_parent_company_business_details__to_json(v), None => Value::Null });
-    m.insert("ultimate_parent_company_code".into(), match (&p.ultimate_parent_company_code) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("businessDetails".into(), match (&p.business_details) { Some(v) => iface_account_holders__ultimate_parent_company_business_details__to_json(v), None => Value::Null });
+    m.insert("ultimateParentCompanyCode".into(), match (&p.ultimate_parent_company_code) { Some(v) => Value::String((v).clone()), None => Value::Null });
     Value::Object(m)
 }
 
 fn iface_account_holders__ultimate_parent_company_business_details__to_json(p: &iface_account_holders::UltimateParentCompanyBusinessDetails) -> Value {
     let mut m = Map::new();
-    m.insert("legal_business_name".into(), match (&p.legal_business_name) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    m.insert("registration_number".into(), match (&p.registration_number) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    m.insert("stock_exchange".into(), match (&p.stock_exchange) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    m.insert("stock_number".into(), match (&p.stock_number) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    m.insert("stock_ticker".into(), match (&p.stock_ticker) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("legalBusinessName".into(), match (&p.legal_business_name) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("registrationNumber".into(), match (&p.registration_number) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("stockExchange".into(), match (&p.stock_exchange) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("stockNumber".into(), match (&p.stock_number) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("stockTicker".into(), match (&p.stock_ticker) { Some(v) => Value::String((v).clone()), None => Value::Null });
     Value::Object(m)
 }
 
 fn iface_account_holders__shareholder_contact_wrapper__to_json(p: &iface_account_holders::ShareholderContactWrapper) -> Value {
     let mut m = Map::new();
-    m.insert("shareholder_contact".into(), match (&p.shareholder_contact) { Some(v) => iface_account_holders__shareholder_contact__to_json(v), None => Value::Null });
+    m.insert("ShareholderContact".into(), match (&p.shareholder_contact) { Some(v) => iface_account_holders__shareholder_contact__to_json(v), None => Value::Null });
     Value::Object(m)
 }
 
@@ -655,46 +1165,46 @@ fn iface_account_holders__shareholder_contact__to_json(p: &iface_account_holders
     let mut m = Map::new();
     m.insert("address".into(), match (&p.address) { Some(v) => iface_account_holders__vias_address__to_json(v), None => Value::Null });
     m.insert("email".into(), match (&p.email) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    m.insert("full_phone_number".into(), match (&p.full_phone_number) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    m.insert("job_title".into(), match (&p.job_title) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("fullPhoneNumber".into(), match (&p.full_phone_number) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("jobTitle".into(), match (&p.job_title) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("name".into(), match (&p.name) { Some(v) => iface_account_holders__vias_name__to_json(v), None => Value::Null });
-    m.insert("personal_data".into(), match (&p.personal_data) { Some(v) => iface_account_holders__vias_personal_data__to_json(v), None => Value::Null });
-    m.insert("phone_number".into(), match (&p.phone_number) { Some(v) => iface_account_holders__vias_phone_number__to_json(v), None => Value::Null });
-    m.insert("shareholder_code".into(), match (&p.shareholder_code) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    m.insert("shareholder_type".into(), match (&p.shareholder_type) { Some(v) => Value::String(iface_account_holders__shareholder_contact_shareholder_type_enum__to_str(v).into()), None => Value::Null });
-    m.insert("web_address".into(), match (&p.web_address) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("personalData".into(), match (&p.personal_data) { Some(v) => iface_account_holders__vias_personal_data__to_json(v), None => Value::Null });
+    m.insert("phoneNumber".into(), match (&p.phone_number) { Some(v) => iface_account_holders__vias_phone_number__to_json(v), None => Value::Null });
+    m.insert("shareholderCode".into(), match (&p.shareholder_code) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("shareholderType".into(), match (&p.shareholder_type) { Some(v) => Value::String(iface_account_holders__shareholder_contact_shareholder_type_enum__to_str(v).into()), None => Value::Null });
+    m.insert("webAddress".into(), match (&p.web_address) { Some(v) => Value::String((v).clone()), None => Value::Null });
     Value::Object(m)
 }
 
 fn iface_account_holders__vias_name__to_json(p: &iface_account_holders::ViasName) -> Value {
     let mut m = Map::new();
-    m.insert("first_name".into(), match (&p.first_name) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("firstName".into(), match (&p.first_name) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("gender".into(), match (&p.gender) { Some(v) => Value::String(iface_account_holders__vias_name_gender_enum__to_str(v).into()), None => Value::Null });
     m.insert("infix".into(), match (&p.infix) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    m.insert("last_name".into(), match (&p.last_name) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("lastName".into(), match (&p.last_name) { Some(v) => Value::String((v).clone()), None => Value::Null });
     Value::Object(m)
 }
 
 fn iface_account_holders__vias_personal_data__to_json(p: &iface_account_holders::ViasPersonalData) -> Value {
     let mut m = Map::new();
-    m.insert("date_of_birth".into(), match (&p.date_of_birth) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    m.insert("document_data".into(), match (&p.document_data) { Some(v) => Value::Array((v).iter().map(|v| iface_account_holders__personal_document_data_wrapper__to_json(v)).collect()), None => Value::Null });
-    m.insert("id_number".into(), match (&p.id_number) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("dateOfBirth".into(), match (&p.date_of_birth) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("documentData".into(), match (&p.document_data) { Some(v) => Value::Array((v).iter().map(|v| iface_account_holders__personal_document_data_wrapper__to_json(v)).collect()), None => Value::Null });
+    m.insert("idNumber".into(), match (&p.id_number) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("nationality".into(), match (&p.nationality) { Some(v) => Value::String((v).clone()), None => Value::Null });
     Value::Object(m)
 }
 
 fn iface_account_holders__personal_document_data_wrapper__to_json(p: &iface_account_holders::PersonalDocumentDataWrapper) -> Value {
     let mut m = Map::new();
-    m.insert("personal_document_data".into(), match (&p.personal_document_data) { Some(v) => iface_account_holders__personal_document_data__to_json(v), None => Value::Null });
+    m.insert("PersonalDocumentData".into(), match (&p.personal_document_data) { Some(v) => iface_account_holders__personal_document_data__to_json(v), None => Value::Null });
     Value::Object(m)
 }
 
 fn iface_account_holders__personal_document_data__to_json(p: &iface_account_holders::PersonalDocumentData) -> Value {
     let mut m = Map::new();
-    m.insert("expiration_date".into(), match (&p.expiration_date) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    m.insert("issuer_country".into(), match (&p.issuer_country) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    m.insert("issuer_state".into(), match (&p.issuer_state) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("expirationDate".into(), match (&p.expiration_date) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("issuerCountry".into(), match (&p.issuer_country) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("issuerState".into(), match (&p.issuer_state) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("number".into(), match (&p.number) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("type".into(), Value::String(iface_account_holders__personal_document_data_type_op_enum__to_str(&p.type_op).into()));
     Value::Object(m)
@@ -702,15 +1212,15 @@ fn iface_account_holders__personal_document_data__to_json(p: &iface_account_hold
 
 fn iface_account_holders__vias_phone_number__to_json(p: &iface_account_holders::ViasPhoneNumber) -> Value {
     let mut m = Map::new();
-    m.insert("phone_country_code".into(), match (&p.phone_country_code) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    m.insert("phone_number".into(), match (&p.phone_number) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    m.insert("phone_type".into(), match (&p.phone_type) { Some(v) => Value::String(iface_account_holders__vias_phone_number_phone_type_enum__to_str(v).into()), None => Value::Null });
+    m.insert("phoneCountryCode".into(), match (&p.phone_country_code) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("phoneNumber".into(), match (&p.phone_number) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("phoneType".into(), match (&p.phone_type) { Some(v) => Value::String(iface_account_holders__vias_phone_number_phone_type_enum__to_str(v).into()), None => Value::Null });
     Value::Object(m)
 }
 
 fn iface_account_holders__signatory_contact_wrapper__to_json(p: &iface_account_holders::SignatoryContactWrapper) -> Value {
     let mut m = Map::new();
-    m.insert("signatory_contact".into(), match (&p.signatory_contact) { Some(v) => iface_account_holders__signatory_contact__to_json(v), None => Value::Null });
+    m.insert("SignatoryContact".into(), match (&p.signatory_contact) { Some(v) => iface_account_holders__signatory_contact__to_json(v), None => Value::Null });
     Value::Object(m)
 }
 
@@ -718,27 +1228,209 @@ fn iface_account_holders__signatory_contact__to_json(p: &iface_account_holders::
     let mut m = Map::new();
     m.insert("address".into(), match (&p.address) { Some(v) => iface_account_holders__vias_address__to_json(v), None => Value::Null });
     m.insert("email".into(), match (&p.email) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    m.insert("full_phone_number".into(), match (&p.full_phone_number) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    m.insert("job_title".into(), match (&p.job_title) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("fullPhoneNumber".into(), match (&p.full_phone_number) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("jobTitle".into(), match (&p.job_title) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("name".into(), match (&p.name) { Some(v) => iface_account_holders__vias_name__to_json(v), None => Value::Null });
-    m.insert("personal_data".into(), match (&p.personal_data) { Some(v) => iface_account_holders__vias_personal_data__to_json(v), None => Value::Null });
-    m.insert("phone_number".into(), match (&p.phone_number) { Some(v) => iface_account_holders__vias_phone_number__to_json(v), None => Value::Null });
-    m.insert("signatory_code".into(), match (&p.signatory_code) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    m.insert("signatory_reference".into(), match (&p.signatory_reference) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    m.insert("web_address".into(), match (&p.web_address) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("personalData".into(), match (&p.personal_data) { Some(v) => iface_account_holders__vias_personal_data__to_json(v), None => Value::Null });
+    m.insert("phoneNumber".into(), match (&p.phone_number) { Some(v) => iface_account_holders__vias_phone_number__to_json(v), None => Value::Null });
+    m.insert("signatoryCode".into(), match (&p.signatory_code) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("signatoryReference".into(), match (&p.signatory_reference) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("webAddress".into(), match (&p.web_address) { Some(v) => Value::String((v).clone()), None => Value::Null });
     Value::Object(m)
 }
 
 fn iface_account_holders__individual_details__to_json(p: &iface_account_holders::IndividualDetails) -> Value {
     let mut m = Map::new();
     m.insert("name".into(), match (&p.name) { Some(v) => iface_account_holders__vias_name__to_json(v), None => Value::Null });
-    m.insert("personal_data".into(), match (&p.personal_data) { Some(v) => iface_account_holders__vias_personal_data__to_json(v), None => Value::Null });
+    m.insert("personalData".into(), match (&p.personal_data) { Some(v) => iface_account_holders__vias_personal_data__to_json(v), None => Value::Null });
     Value::Object(m)
 }
 
 fn iface_account_holders__account_holder_details_metadata__to_json(p: &iface_account_holders::AccountHolderDetailsMetadata) -> Value {
     let mut m = Map::new();
     m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_account_holders__create_account_holder_response__to_json(p: &iface_account_holders::CreateAccountHolderResponse) -> Value {
+    let mut m = Map::new();
+    m.insert("accountCode".into(), match (&p.account_code) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("accountHolderCode".into(), match (&p.account_holder_code) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("accountHolderDetails".into(), match (&p.account_holder_details) { Some(v) => iface_account_holders__account_holder_details__to_json(v), None => Value::Null });
+    m.insert("accountHolderStatus".into(), match (&p.account_holder_status) { Some(v) => iface_account_holders__account_holder_status__to_json(v), None => Value::Null });
+    m.insert("invalidFields".into(), match (&p.invalid_fields) { Some(v) => Value::Array((v).iter().map(|v| iface_account_holders__error_field_type_wrapper__to_json(v)).collect()), None => Value::Null });
+    m.insert("pspReference".into(), match (&p.psp_reference) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("resultCode".into(), match (&p.result_code) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("submittedAsync".into(), match (&p.submitted_async) { Some(v) => Value::Bool(*(v)), None => Value::Null });
+    m.insert("verification".into(), match (&p.verification) { Some(v) => iface_account_holders__kyc_verification_result__to_json(v), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_account_holders__error_field_type_wrapper__to_json(p: &iface_account_holders::ErrorFieldTypeWrapper) -> Value {
+    let mut m = Map::new();
+    m.insert("ErrorFieldType".into(), match (&p.error_field_type) { Some(v) => iface_account_holders__error_field_type__to_json(v), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_account_holders__error_field_type__to_json(p: &iface_account_holders::ErrorFieldType) -> Value {
+    let mut m = Map::new();
+    m.insert("errorCode".into(), match (&p.error_code) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("errorDescription".into(), match (&p.error_description) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("fieldType".into(), match (&p.field_type) { Some(v) => iface_account_holders__field_type__to_json(v), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_account_holders__field_type__to_json(p: &iface_account_holders::FieldType) -> Value {
+    let mut m = Map::new();
+    m.insert("field".into(), match (&p.field) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("fieldName".into(), match (&p.field_name) { Some(v) => Value::String(iface_account_holders__field_type_field_name_enum__to_str(v).into()), None => Value::Null });
+    m.insert("shareholderCode".into(), match (&p.shareholder_code) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_account_holders__kyc_verification_result__to_json(p: &iface_account_holders::KycVerificationResult) -> Value {
+    let mut m = Map::new();
+    m.insert("accountHolder".into(), match (&p.account_holder) { Some(v) => iface_account_holders__kyc_check_result__to_json(v), None => Value::Null });
+    m.insert("bankAccounts".into(), match (&p.bank_accounts) { Some(v) => Value::Array((v).iter().map(|v| iface_account_holders__kyc_bank_account_check_result__to_json(v)).collect()), None => Value::Null });
+    m.insert("shareholders".into(), match (&p.shareholders) { Some(v) => Value::Array((v).iter().map(|v| iface_account_holders__kyc_shareholder_check_result__to_json(v)).collect()), None => Value::Null });
+    m.insert("signatories".into(), match (&p.signatories) { Some(v) => Value::Array((v).iter().map(|v| iface_account_holders__kyc_signatory_check_result__to_json(v)).collect()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_account_holders__kyc_check_result__to_json(p: &iface_account_holders::KycCheckResult) -> Value {
+    let mut m = Map::new();
+    m.insert("checks".into(), match (&p.checks) { Some(v) => Value::Array((v).iter().map(|v| iface_account_holders__kyc_check_status_data__to_json(v)).collect()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_account_holders__kyc_check_status_data__to_json(p: &iface_account_holders::KycCheckStatusData) -> Value {
+    let mut m = Map::new();
+    m.insert("requiredFields".into(), match (&p.required_fields) { Some(v) => Value::Array((v).iter().map(|v| Value::String((v).clone())).collect()), None => Value::Null });
+    m.insert("status".into(), Value::String(iface_account_holders__kyc_check_status_data_status_enum__to_str(&p.status).into()));
+    m.insert("summary".into(), match (&p.summary) { Some(v) => iface_account_holders__kyc_check_summary__to_json(v), None => Value::Null });
+    m.insert("type".into(), Value::String(iface_account_holders__kyc_check_status_data_type_op_enum__to_str(&p.type_op).into()));
+    Value::Object(m)
+}
+
+fn iface_account_holders__kyc_check_summary__to_json(p: &iface_account_holders::KycCheckSummary) -> Value {
+    let mut m = Map::new();
+    m.insert("code".into(), Value::Number(serde_json::Number::from(*(&p.code))));
+    m.insert("description".into(), match (&p.description) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_account_holders__kyc_bank_account_check_result__to_json(p: &iface_account_holders::KycBankAccountCheckResult) -> Value {
+    let mut m = Map::new();
+    m.insert("bankAccountUUID".into(), match (&p.bank_account_uuid) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("checks".into(), match (&p.checks) { Some(v) => Value::Array((v).iter().map(|v| iface_account_holders__kyc_check_status_data__to_json(v)).collect()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_account_holders__kyc_shareholder_check_result__to_json(p: &iface_account_holders::KycShareholderCheckResult) -> Value {
+    let mut m = Map::new();
+    m.insert("checks".into(), match (&p.checks) { Some(v) => Value::Array((v).iter().map(|v| iface_account_holders__kyc_check_status_data__to_json(v)).collect()), None => Value::Null });
+    m.insert("shareholderCode".into(), match (&p.shareholder_code) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_account_holders__kyc_signatory_check_result__to_json(p: &iface_account_holders::KycSignatoryCheckResult) -> Value {
+    let mut m = Map::new();
+    m.insert("checks".into(), match (&p.checks) { Some(v) => Value::Array((v).iter().map(|v| iface_account_holders__kyc_check_status_data__to_json(v)).collect()), None => Value::Null });
+    m.insert("signatoryCode".into(), match (&p.signatory_code) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_account_holders__get_account_holder_response__to_json(p: &iface_account_holders::GetAccountHolderResponse) -> Value {
+    let mut m = Map::new();
+    m.insert("accountHolderCode".into(), match (&p.account_holder_code) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("accountHolderDetails".into(), match (&p.account_holder_details) { Some(v) => iface_account_holders__account_holder_details__to_json(v), None => Value::Null });
+    m.insert("accountHolderStatus".into(), match (&p.account_holder_status) { Some(v) => iface_account_holders__account_holder_status__to_json(v), None => Value::Null });
+    m.insert("accounts".into(), match (&p.accounts) { Some(v) => Value::Array((v).iter().map(|v| iface_account_holders__account_wrapper__to_json(v)).collect()), None => Value::Null });
+    m.insert("legalEntity".into(), match (&p.legal_entity) { Some(v) => Value::String(iface_account_holders__create_account_holder_request_legal_entity_enum__to_str(v).into()), None => Value::Null });
+    m.insert("pspReference".into(), match (&p.psp_reference) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("resultCode".into(), match (&p.result_code) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("submittedAsync".into(), match (&p.submitted_async) { Some(v) => Value::Bool(*(v)), None => Value::Null });
+    m.insert("verification".into(), match (&p.verification) { Some(v) => iface_account_holders__kyc_verification_result__to_json(v), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_account_holders__account_wrapper__to_json(p: &iface_account_holders::AccountWrapper) -> Value {
+    let mut m = Map::new();
+    m.insert("Account".into(), match (&p.account) { Some(v) => iface_account_holders__account__to_json(v), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_account_holders__account__to_json(p: &iface_account_holders::Account) -> Value {
+    let mut m = Map::new();
+    m.insert("accountCode".into(), match (&p.account_code) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("beneficiaryAccount".into(), match (&p.beneficiary_account) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("beneficiaryMerchantReference".into(), match (&p.beneficiary_merchant_reference) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("payoutSchedule".into(), match (&p.payout_schedule) { Some(v) => iface_account_holders__payout_schedule_response__to_json(v), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_account_holders__payout_schedule_response__to_json(p: &iface_account_holders::PayoutScheduleResponse) -> Value {
+    let mut m = Map::new();
+    m.insert("nextScheduledPayout".into(), match (&p.next_scheduled_payout) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("schedule".into(), match (&p.schedule) { Some(v) => Value::String(iface_account_holders__payout_schedule_response_schedule_enum__to_str(v).into()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_account_holders__get_tax_form_response__to_json(p: &iface_account_holders::GetTaxFormResponse) -> Value {
+    let mut m = Map::new();
+    m.insert("content".into(), match (&p.content) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("contentType".into(), match (&p.content_type) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("pspReference".into(), match (&p.psp_reference) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("resultCode".into(), match (&p.result_code) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("submittedAsync".into(), match (&p.submitted_async) { Some(v) => Value::Bool(*(v)), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_account_holders__suspend_account_holder_response__to_json(p: &iface_account_holders::SuspendAccountHolderResponse) -> Value {
+    let mut m = Map::new();
+    m.insert("accountHolderStatus".into(), match (&p.account_holder_status) { Some(v) => iface_account_holders__account_holder_status__to_json(v), None => Value::Null });
+    m.insert("pspReference".into(), match (&p.psp_reference) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("resultCode".into(), match (&p.result_code) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("submittedAsync".into(), match (&p.submitted_async) { Some(v) => Value::Bool(*(v)), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_account_holders__un_suspend_account_holder_response__to_json(p: &iface_account_holders::UnSuspendAccountHolderResponse) -> Value {
+    let mut m = Map::new();
+    m.insert("accountHolderStatus".into(), match (&p.account_holder_status) { Some(v) => iface_account_holders__account_holder_status__to_json(v), None => Value::Null });
+    m.insert("pspReference".into(), match (&p.psp_reference) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("resultCode".into(), match (&p.result_code) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("submittedAsync".into(), match (&p.submitted_async) { Some(v) => Value::Bool(*(v)), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_account_holders__update_account_holder_response__to_json(p: &iface_account_holders::UpdateAccountHolderResponse) -> Value {
+    let mut m = Map::new();
+    m.insert("accountHolderCode".into(), match (&p.account_holder_code) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("accountHolderDetails".into(), match (&p.account_holder_details) { Some(v) => iface_account_holders__account_holder_details__to_json(v), None => Value::Null });
+    m.insert("accountHolderStatus".into(), match (&p.account_holder_status) { Some(v) => iface_account_holders__account_holder_status__to_json(v), None => Value::Null });
+    m.insert("invalidFields".into(), match (&p.invalid_fields) { Some(v) => Value::Array((v).iter().map(|v| iface_account_holders__error_field_type_wrapper__to_json(v)).collect()), None => Value::Null });
+    m.insert("pspReference".into(), match (&p.psp_reference) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("resultCode".into(), match (&p.result_code) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("submittedAsync".into(), match (&p.submitted_async) { Some(v) => Value::Bool(*(v)), None => Value::Null });
+    m.insert("updatedFields".into(), match (&p.updated_fields) { Some(v) => Value::Array((v).iter().map(|v| iface_account_holders__field_type_wrapper__to_json(v)).collect()), None => Value::Null });
+    m.insert("verification".into(), match (&p.verification) { Some(v) => iface_account_holders__kyc_verification_result__to_json(v), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_account_holders__field_type_wrapper__to_json(p: &iface_account_holders::FieldTypeWrapper) -> Value {
+    let mut m = Map::new();
+    m.insert("FieldType".into(), match (&p.field_type) { Some(v) => iface_account_holders__field_type__to_json(v), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_account_holders__get_account_holder_status_response__to_json(p: &iface_account_holders::GetAccountHolderStatusResponse) -> Value {
+    let mut m = Map::new();
+    m.insert("accountHolderCode".into(), match (&p.account_holder_code) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("accountHolderStatus".into(), match (&p.account_holder_status) { Some(v) => iface_account_holders__account_holder_status__to_json(v), None => Value::Null });
+    m.insert("pspReference".into(), match (&p.psp_reference) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("resultCode".into(), match (&p.result_code) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("submittedAsync".into(), match (&p.submitted_async) { Some(v) => Value::Bool(*(v)), None => Value::Null });
     Value::Object(m)
 }
 
@@ -802,38 +1494,1027 @@ fn iface_account_holders__post_update_account_holder_state_params__to_json(p: &i
     Value::Object(m)
 }
 
+fn iface_account_holders__close_account_holder_response__from_json(v: &Value) -> Option<iface_account_holders::CloseAccountHolderResponse> {
+    let m = v.as_object()?;
+    Some(iface_account_holders::CloseAccountHolderResponse {
+        account_holder_status: m.get("accountHolderStatus").filter(|v| !v.is_null()).and_then(|v| iface_account_holders__account_holder_status__from_json(v)),
+        psp_reference: m.get("pspReference").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        result_code: m.get("resultCode").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        submitted_async: m.get("submittedAsync").filter(|v| !v.is_null()).and_then(|v| (v).as_bool()),
+    })
+}
+
+fn iface_account_holders__account_holder_status__from_json(v: &Value) -> Option<iface_account_holders::AccountHolderStatus> {
+    let m = v.as_object()?;
+    Some(iface_account_holders::AccountHolderStatus {
+        events: m.get("events").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| iface_account_holders__account_event_wrapper__from_json(x)).collect())),
+        payout_state: m.get("payoutState").filter(|v| !v.is_null()).and_then(|v| iface_account_holders__account_payout_state__from_json(v)),
+        processing_state: m.get("processingState").filter(|v| !v.is_null()).and_then(|v| iface_account_holders__account_processing_state__from_json(v)),
+        status: match m.get("status").and_then(|v| (v).as_str().and_then(iface_account_holders__account_holder_status_status_enum__from_str)) { Some(x) => x, None => return None },
+        status_reason: m.get("statusReason").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    })
+}
+
+fn iface_account_holders__account_event_wrapper__from_json(v: &Value) -> Option<iface_account_holders::AccountEventWrapper> {
+    let m = v.as_object()?;
+    Some(iface_account_holders::AccountEventWrapper {
+        account_event: m.get("AccountEvent").filter(|v| !v.is_null()).and_then(|v| iface_account_holders__account_event__from_json(v)),
+    })
+}
+
+fn iface_account_holders__account_event__from_json(v: &Value) -> Option<iface_account_holders::AccountEvent> {
+    let m = v.as_object()?;
+    Some(iface_account_holders::AccountEvent {
+        event: m.get("event").filter(|v| !v.is_null()).and_then(|v| (v).as_str().and_then(iface_account_holders__account_event_event_enum__from_str)),
+        execution_date: m.get("executionDate").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        reason: m.get("reason").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    })
+}
+
+fn iface_account_holders__account_payout_state__from_json(v: &Value) -> Option<iface_account_holders::AccountPayoutState> {
+    let m = v.as_object()?;
+    Some(iface_account_holders::AccountPayoutState {
+        allow_payout: m.get("allowPayout").filter(|v| !v.is_null()).and_then(|v| (v).as_bool()),
+        disable_reason: m.get("disableReason").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        disabled: m.get("disabled").filter(|v| !v.is_null()).and_then(|v| (v).as_bool()),
+        payout_limit: m.get("payoutLimit").filter(|v| !v.is_null()).and_then(|v| iface_account_holders__amount__from_json(v)),
+        tier_number: m.get("tierNumber").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+    })
+}
+
+fn iface_account_holders__amount__from_json(v: &Value) -> Option<iface_account_holders::Amount> {
+    let m = v.as_object()?;
+    Some(iface_account_holders::Amount {
+        currency: m.get("currency").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        value: m.get("value").and_then(|v| (v).as_i64()).unwrap_or_default(),
+    })
+}
+
+fn iface_account_holders__account_processing_state__from_json(v: &Value) -> Option<iface_account_holders::AccountProcessingState> {
+    let m = v.as_object()?;
+    Some(iface_account_holders::AccountProcessingState {
+        disable_reason: m.get("disableReason").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        disabled: m.get("disabled").filter(|v| !v.is_null()).and_then(|v| (v).as_bool()),
+        processed_from: m.get("processedFrom").filter(|v| !v.is_null()).and_then(|v| iface_account_holders__amount__from_json(v)),
+        processed_to: m.get("processedTo").filter(|v| !v.is_null()).and_then(|v| iface_account_holders__amount__from_json(v)),
+        tier_number: m.get("tierNumber").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+    })
+}
+
+fn iface_account_holders__account_holder_details__from_json(v: &Value) -> Option<iface_account_holders::AccountHolderDetails> {
+    let m = v.as_object()?;
+    Some(iface_account_holders::AccountHolderDetails {
+        address: match m.get("address").and_then(|v| iface_account_holders__vias_address__from_json(v)) { Some(x) => x, None => return None },
+        bank_account_details: m.get("bankAccountDetails").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| iface_account_holders__bank_account_detail_wrapper__from_json(x)).collect())),
+        business_details: m.get("businessDetails").filter(|v| !v.is_null()).and_then(|v| iface_account_holders__business_details__from_json(v)),
+        email: m.get("email").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        full_phone_number: m.get("fullPhoneNumber").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        individual_details: m.get("individualDetails").filter(|v| !v.is_null()).and_then(|v| iface_account_holders__individual_details__from_json(v)),
+        last_review_date: m.get("lastReviewDate").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        merchant_category_code: m.get("merchantCategoryCode").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        metadata: m.get("metadata").filter(|v| !v.is_null()).and_then(|v| iface_account_holders__account_holder_details_metadata__from_json(v)),
+        principal_business_address: m.get("principalBusinessAddress").filter(|v| !v.is_null()).and_then(|v| iface_account_holders__vias_address__from_json(v)),
+        web_address: m.get("webAddress").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    })
+}
+
+fn iface_account_holders__vias_address__from_json(v: &Value) -> Option<iface_account_holders::ViasAddress> {
+    let m = v.as_object()?;
+    Some(iface_account_holders::ViasAddress {
+        city: m.get("city").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        country: m.get("country").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        house_number_or_name: m.get("houseNumberOrName").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        postal_code: m.get("postalCode").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        state_or_province: m.get("stateOrProvince").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        street: m.get("street").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    })
+}
+
+fn iface_account_holders__bank_account_detail_wrapper__from_json(v: &Value) -> Option<iface_account_holders::BankAccountDetailWrapper> {
+    let m = v.as_object()?;
+    Some(iface_account_holders::BankAccountDetailWrapper {
+        bank_account_detail: m.get("BankAccountDetail").filter(|v| !v.is_null()).and_then(|v| iface_account_holders__bank_account_detail__from_json(v)),
+    })
+}
+
+fn iface_account_holders__bank_account_detail__from_json(v: &Value) -> Option<iface_account_holders::BankAccountDetail> {
+    let m = v.as_object()?;
+    Some(iface_account_holders::BankAccountDetail {
+        account_number: m.get("accountNumber").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        account_type: m.get("accountType").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        bank_account_name: m.get("bankAccountName").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        bank_account_uuid: m.get("bankAccountUUID").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        bank_bic_swift: m.get("bankBicSwift").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        bank_city: m.get("bankCity").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        bank_code: m.get("bankCode").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        bank_name: m.get("bankName").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        branch_code: m.get("branchCode").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        check_code: m.get("checkCode").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        country_code: m.get("countryCode").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        currency_code: m.get("currencyCode").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        iban: m.get("iban").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        owner_city: m.get("ownerCity").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        owner_country_code: m.get("ownerCountryCode").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        owner_date_of_birth: m.get("ownerDateOfBirth").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        owner_house_number_or_name: m.get("ownerHouseNumberOrName").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        owner_name: m.get("ownerName").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        owner_nationality: m.get("ownerNationality").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        owner_postal_code: m.get("ownerPostalCode").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        owner_state: m.get("ownerState").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        owner_street: m.get("ownerStreet").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        primary_account: m.get("primaryAccount").filter(|v| !v.is_null()).and_then(|v| (v).as_bool()),
+        tax_id: m.get("taxId").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        url_for_verification: m.get("urlForVerification").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    })
+}
+
+fn iface_account_holders__business_details__from_json(v: &Value) -> Option<iface_account_holders::BusinessDetails> {
+    let m = v.as_object()?;
+    Some(iface_account_holders::BusinessDetails {
+        doing_business_as: m.get("doingBusinessAs").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        legal_business_name: m.get("legalBusinessName").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        listed_ultimate_parent_company: m.get("listedUltimateParentCompany").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| iface_account_holders__ultimate_parent_company_wrapper__from_json(x)).collect())),
+        shareholders: m.get("shareholders").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| iface_account_holders__shareholder_contact_wrapper__from_json(x)).collect())),
+        signatories: m.get("signatories").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| iface_account_holders__signatory_contact_wrapper__from_json(x)).collect())),
+        tax_id: m.get("taxId").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    })
+}
+
+fn iface_account_holders__ultimate_parent_company_wrapper__from_json(v: &Value) -> Option<iface_account_holders::UltimateParentCompanyWrapper> {
+    let m = v.as_object()?;
+    Some(iface_account_holders::UltimateParentCompanyWrapper {
+        ultimate_parent_company: m.get("UltimateParentCompany").filter(|v| !v.is_null()).and_then(|v| iface_account_holders__ultimate_parent_company__from_json(v)),
+    })
+}
+
+fn iface_account_holders__ultimate_parent_company__from_json(v: &Value) -> Option<iface_account_holders::UltimateParentCompany> {
+    let m = v.as_object()?;
+    Some(iface_account_holders::UltimateParentCompany {
+        address: m.get("address").filter(|v| !v.is_null()).and_then(|v| iface_account_holders__vias_address__from_json(v)),
+        business_details: m.get("businessDetails").filter(|v| !v.is_null()).and_then(|v| iface_account_holders__ultimate_parent_company_business_details__from_json(v)),
+        ultimate_parent_company_code: m.get("ultimateParentCompanyCode").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    })
+}
+
+fn iface_account_holders__ultimate_parent_company_business_details__from_json(v: &Value) -> Option<iface_account_holders::UltimateParentCompanyBusinessDetails> {
+    let m = v.as_object()?;
+    Some(iface_account_holders::UltimateParentCompanyBusinessDetails {
+        legal_business_name: m.get("legalBusinessName").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        registration_number: m.get("registrationNumber").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        stock_exchange: m.get("stockExchange").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        stock_number: m.get("stockNumber").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        stock_ticker: m.get("stockTicker").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    })
+}
+
+fn iface_account_holders__shareholder_contact_wrapper__from_json(v: &Value) -> Option<iface_account_holders::ShareholderContactWrapper> {
+    let m = v.as_object()?;
+    Some(iface_account_holders::ShareholderContactWrapper {
+        shareholder_contact: m.get("ShareholderContact").filter(|v| !v.is_null()).and_then(|v| iface_account_holders__shareholder_contact__from_json(v)),
+    })
+}
+
+fn iface_account_holders__shareholder_contact__from_json(v: &Value) -> Option<iface_account_holders::ShareholderContact> {
+    let m = v.as_object()?;
+    Some(iface_account_holders::ShareholderContact {
+        address: m.get("address").filter(|v| !v.is_null()).and_then(|v| iface_account_holders__vias_address__from_json(v)),
+        email: m.get("email").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        full_phone_number: m.get("fullPhoneNumber").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        job_title: m.get("jobTitle").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        name: m.get("name").filter(|v| !v.is_null()).and_then(|v| iface_account_holders__vias_name__from_json(v)),
+        personal_data: m.get("personalData").filter(|v| !v.is_null()).and_then(|v| iface_account_holders__vias_personal_data__from_json(v)),
+        phone_number: m.get("phoneNumber").filter(|v| !v.is_null()).and_then(|v| iface_account_holders__vias_phone_number__from_json(v)),
+        shareholder_code: m.get("shareholderCode").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        shareholder_type: m.get("shareholderType").filter(|v| !v.is_null()).and_then(|v| (v).as_str().and_then(iface_account_holders__shareholder_contact_shareholder_type_enum__from_str)),
+        web_address: m.get("webAddress").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    })
+}
+
+fn iface_account_holders__vias_name__from_json(v: &Value) -> Option<iface_account_holders::ViasName> {
+    let m = v.as_object()?;
+    Some(iface_account_holders::ViasName {
+        first_name: m.get("firstName").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        gender: m.get("gender").filter(|v| !v.is_null()).and_then(|v| (v).as_str().and_then(iface_account_holders__vias_name_gender_enum__from_str)),
+        infix: m.get("infix").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        last_name: m.get("lastName").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    })
+}
+
+fn iface_account_holders__vias_personal_data__from_json(v: &Value) -> Option<iface_account_holders::ViasPersonalData> {
+    let m = v.as_object()?;
+    Some(iface_account_holders::ViasPersonalData {
+        date_of_birth: m.get("dateOfBirth").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        document_data: m.get("documentData").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| iface_account_holders__personal_document_data_wrapper__from_json(x)).collect())),
+        id_number: m.get("idNumber").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        nationality: m.get("nationality").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    })
+}
+
+fn iface_account_holders__personal_document_data_wrapper__from_json(v: &Value) -> Option<iface_account_holders::PersonalDocumentDataWrapper> {
+    let m = v.as_object()?;
+    Some(iface_account_holders::PersonalDocumentDataWrapper {
+        personal_document_data: m.get("PersonalDocumentData").filter(|v| !v.is_null()).and_then(|v| iface_account_holders__personal_document_data__from_json(v)),
+    })
+}
+
+fn iface_account_holders__personal_document_data__from_json(v: &Value) -> Option<iface_account_holders::PersonalDocumentData> {
+    let m = v.as_object()?;
+    Some(iface_account_holders::PersonalDocumentData {
+        expiration_date: m.get("expirationDate").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        issuer_country: m.get("issuerCountry").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        issuer_state: m.get("issuerState").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        number: m.get("number").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        type_op: match m.get("type").and_then(|v| (v).as_str().and_then(iface_account_holders__personal_document_data_type_op_enum__from_str)) { Some(x) => x, None => return None },
+    })
+}
+
+fn iface_account_holders__vias_phone_number__from_json(v: &Value) -> Option<iface_account_holders::ViasPhoneNumber> {
+    let m = v.as_object()?;
+    Some(iface_account_holders::ViasPhoneNumber {
+        phone_country_code: m.get("phoneCountryCode").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        phone_number: m.get("phoneNumber").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        phone_type: m.get("phoneType").filter(|v| !v.is_null()).and_then(|v| (v).as_str().and_then(iface_account_holders__vias_phone_number_phone_type_enum__from_str)),
+    })
+}
+
+fn iface_account_holders__signatory_contact_wrapper__from_json(v: &Value) -> Option<iface_account_holders::SignatoryContactWrapper> {
+    let m = v.as_object()?;
+    Some(iface_account_holders::SignatoryContactWrapper {
+        signatory_contact: m.get("SignatoryContact").filter(|v| !v.is_null()).and_then(|v| iface_account_holders__signatory_contact__from_json(v)),
+    })
+}
+
+fn iface_account_holders__signatory_contact__from_json(v: &Value) -> Option<iface_account_holders::SignatoryContact> {
+    let m = v.as_object()?;
+    Some(iface_account_holders::SignatoryContact {
+        address: m.get("address").filter(|v| !v.is_null()).and_then(|v| iface_account_holders__vias_address__from_json(v)),
+        email: m.get("email").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        full_phone_number: m.get("fullPhoneNumber").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        job_title: m.get("jobTitle").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        name: m.get("name").filter(|v| !v.is_null()).and_then(|v| iface_account_holders__vias_name__from_json(v)),
+        personal_data: m.get("personalData").filter(|v| !v.is_null()).and_then(|v| iface_account_holders__vias_personal_data__from_json(v)),
+        phone_number: m.get("phoneNumber").filter(|v| !v.is_null()).and_then(|v| iface_account_holders__vias_phone_number__from_json(v)),
+        signatory_code: m.get("signatoryCode").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        signatory_reference: m.get("signatoryReference").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        web_address: m.get("webAddress").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    })
+}
+
+fn iface_account_holders__individual_details__from_json(v: &Value) -> Option<iface_account_holders::IndividualDetails> {
+    let m = v.as_object()?;
+    Some(iface_account_holders::IndividualDetails {
+        name: m.get("name").filter(|v| !v.is_null()).and_then(|v| iface_account_holders__vias_name__from_json(v)),
+        personal_data: m.get("personalData").filter(|v| !v.is_null()).and_then(|v| iface_account_holders__vias_personal_data__from_json(v)),
+    })
+}
+
+fn iface_account_holders__account_holder_details_metadata__from_json(v: &Value) -> Option<iface_account_holders::AccountHolderDetailsMetadata> {
+    let m = v.as_object()?;
+    Some(iface_account_holders::AccountHolderDetailsMetadata {
+        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    })
+}
+
+fn iface_account_holders__create_account_holder_response__from_json(v: &Value) -> Option<iface_account_holders::CreateAccountHolderResponse> {
+    let m = v.as_object()?;
+    Some(iface_account_holders::CreateAccountHolderResponse {
+        account_code: m.get("accountCode").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        account_holder_code: m.get("accountHolderCode").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        account_holder_details: m.get("accountHolderDetails").filter(|v| !v.is_null()).and_then(|v| iface_account_holders__account_holder_details__from_json(v)),
+        account_holder_status: m.get("accountHolderStatus").filter(|v| !v.is_null()).and_then(|v| iface_account_holders__account_holder_status__from_json(v)),
+        invalid_fields: m.get("invalidFields").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| iface_account_holders__error_field_type_wrapper__from_json(x)).collect())),
+        psp_reference: m.get("pspReference").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        result_code: m.get("resultCode").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        submitted_async: m.get("submittedAsync").filter(|v| !v.is_null()).and_then(|v| (v).as_bool()),
+        verification: m.get("verification").filter(|v| !v.is_null()).and_then(|v| iface_account_holders__kyc_verification_result__from_json(v)),
+    })
+}
+
+fn iface_account_holders__error_field_type_wrapper__from_json(v: &Value) -> Option<iface_account_holders::ErrorFieldTypeWrapper> {
+    let m = v.as_object()?;
+    Some(iface_account_holders::ErrorFieldTypeWrapper {
+        error_field_type: m.get("ErrorFieldType").filter(|v| !v.is_null()).and_then(|v| iface_account_holders__error_field_type__from_json(v)),
+    })
+}
+
+fn iface_account_holders__error_field_type__from_json(v: &Value) -> Option<iface_account_holders::ErrorFieldType> {
+    let m = v.as_object()?;
+    Some(iface_account_holders::ErrorFieldType {
+        error_code: m.get("errorCode").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        error_description: m.get("errorDescription").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        field_type: m.get("fieldType").filter(|v| !v.is_null()).and_then(|v| iface_account_holders__field_type__from_json(v)),
+    })
+}
+
+fn iface_account_holders__field_type__from_json(v: &Value) -> Option<iface_account_holders::FieldType> {
+    let m = v.as_object()?;
+    Some(iface_account_holders::FieldType {
+        field: m.get("field").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        field_name: m.get("fieldName").filter(|v| !v.is_null()).and_then(|v| (v).as_str().and_then(iface_account_holders__field_type_field_name_enum__from_str)),
+        shareholder_code: m.get("shareholderCode").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    })
+}
+
+fn iface_account_holders__kyc_verification_result__from_json(v: &Value) -> Option<iface_account_holders::KycVerificationResult> {
+    let m = v.as_object()?;
+    Some(iface_account_holders::KycVerificationResult {
+        account_holder: m.get("accountHolder").filter(|v| !v.is_null()).and_then(|v| iface_account_holders__kyc_check_result__from_json(v)),
+        bank_accounts: m.get("bankAccounts").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| iface_account_holders__kyc_bank_account_check_result__from_json(x)).collect())),
+        shareholders: m.get("shareholders").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| iface_account_holders__kyc_shareholder_check_result__from_json(x)).collect())),
+        signatories: m.get("signatories").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| iface_account_holders__kyc_signatory_check_result__from_json(x)).collect())),
+    })
+}
+
+fn iface_account_holders__kyc_check_result__from_json(v: &Value) -> Option<iface_account_holders::KycCheckResult> {
+    let m = v.as_object()?;
+    Some(iface_account_holders::KycCheckResult {
+        checks: m.get("checks").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| iface_account_holders__kyc_check_status_data__from_json(x)).collect())),
+    })
+}
+
+fn iface_account_holders__kyc_check_status_data__from_json(v: &Value) -> Option<iface_account_holders::KycCheckStatusData> {
+    let m = v.as_object()?;
+    Some(iface_account_holders::KycCheckStatusData {
+        required_fields: m.get("requiredFields").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| (x).as_str().map(|s| s.to_string())).collect())),
+        status: match m.get("status").and_then(|v| (v).as_str().and_then(iface_account_holders__kyc_check_status_data_status_enum__from_str)) { Some(x) => x, None => return None },
+        summary: m.get("summary").filter(|v| !v.is_null()).and_then(|v| iface_account_holders__kyc_check_summary__from_json(v)),
+        type_op: match m.get("type").and_then(|v| (v).as_str().and_then(iface_account_holders__kyc_check_status_data_type_op_enum__from_str)) { Some(x) => x, None => return None },
+    })
+}
+
+fn iface_account_holders__kyc_check_summary__from_json(v: &Value) -> Option<iface_account_holders::KycCheckSummary> {
+    let m = v.as_object()?;
+    Some(iface_account_holders::KycCheckSummary {
+        code: m.get("code").and_then(|v| (v).as_i64().map(|n| n as i32)).unwrap_or_default(),
+        description: m.get("description").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    })
+}
+
+fn iface_account_holders__kyc_bank_account_check_result__from_json(v: &Value) -> Option<iface_account_holders::KycBankAccountCheckResult> {
+    let m = v.as_object()?;
+    Some(iface_account_holders::KycBankAccountCheckResult {
+        bank_account_uuid: m.get("bankAccountUUID").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        checks: m.get("checks").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| iface_account_holders__kyc_check_status_data__from_json(x)).collect())),
+    })
+}
+
+fn iface_account_holders__kyc_shareholder_check_result__from_json(v: &Value) -> Option<iface_account_holders::KycShareholderCheckResult> {
+    let m = v.as_object()?;
+    Some(iface_account_holders::KycShareholderCheckResult {
+        checks: m.get("checks").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| iface_account_holders__kyc_check_status_data__from_json(x)).collect())),
+        shareholder_code: m.get("shareholderCode").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    })
+}
+
+fn iface_account_holders__kyc_signatory_check_result__from_json(v: &Value) -> Option<iface_account_holders::KycSignatoryCheckResult> {
+    let m = v.as_object()?;
+    Some(iface_account_holders::KycSignatoryCheckResult {
+        checks: m.get("checks").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| iface_account_holders__kyc_check_status_data__from_json(x)).collect())),
+        signatory_code: m.get("signatoryCode").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    })
+}
+
+fn iface_account_holders__get_account_holder_response__from_json(v: &Value) -> Option<iface_account_holders::GetAccountHolderResponse> {
+    let m = v.as_object()?;
+    Some(iface_account_holders::GetAccountHolderResponse {
+        account_holder_code: m.get("accountHolderCode").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        account_holder_details: m.get("accountHolderDetails").filter(|v| !v.is_null()).and_then(|v| iface_account_holders__account_holder_details__from_json(v)),
+        account_holder_status: m.get("accountHolderStatus").filter(|v| !v.is_null()).and_then(|v| iface_account_holders__account_holder_status__from_json(v)),
+        accounts: m.get("accounts").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| iface_account_holders__account_wrapper__from_json(x)).collect())),
+        legal_entity: m.get("legalEntity").filter(|v| !v.is_null()).and_then(|v| (v).as_str().and_then(iface_account_holders__create_account_holder_request_legal_entity_enum__from_str)),
+        psp_reference: m.get("pspReference").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        result_code: m.get("resultCode").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        submitted_async: m.get("submittedAsync").filter(|v| !v.is_null()).and_then(|v| (v).as_bool()),
+        verification: m.get("verification").filter(|v| !v.is_null()).and_then(|v| iface_account_holders__kyc_verification_result__from_json(v)),
+    })
+}
+
+fn iface_account_holders__account_wrapper__from_json(v: &Value) -> Option<iface_account_holders::AccountWrapper> {
+    let m = v.as_object()?;
+    Some(iface_account_holders::AccountWrapper {
+        account: m.get("Account").filter(|v| !v.is_null()).and_then(|v| iface_account_holders__account__from_json(v)),
+    })
+}
+
+fn iface_account_holders__account__from_json(v: &Value) -> Option<iface_account_holders::Account> {
+    let m = v.as_object()?;
+    Some(iface_account_holders::Account {
+        account_code: m.get("accountCode").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        beneficiary_account: m.get("beneficiaryAccount").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        beneficiary_merchant_reference: m.get("beneficiaryMerchantReference").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        payout_schedule: m.get("payoutSchedule").filter(|v| !v.is_null()).and_then(|v| iface_account_holders__payout_schedule_response__from_json(v)),
+    })
+}
+
+fn iface_account_holders__payout_schedule_response__from_json(v: &Value) -> Option<iface_account_holders::PayoutScheduleResponse> {
+    let m = v.as_object()?;
+    Some(iface_account_holders::PayoutScheduleResponse {
+        next_scheduled_payout: m.get("nextScheduledPayout").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        schedule: m.get("schedule").filter(|v| !v.is_null()).and_then(|v| (v).as_str().and_then(iface_account_holders__payout_schedule_response_schedule_enum__from_str)),
+    })
+}
+
+fn iface_account_holders__get_tax_form_response__from_json(v: &Value) -> Option<iface_account_holders::GetTaxFormResponse> {
+    let m = v.as_object()?;
+    Some(iface_account_holders::GetTaxFormResponse {
+        content: m.get("content").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        content_type: m.get("contentType").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        psp_reference: m.get("pspReference").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        result_code: m.get("resultCode").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        submitted_async: m.get("submittedAsync").filter(|v| !v.is_null()).and_then(|v| (v).as_bool()),
+    })
+}
+
+fn iface_account_holders__suspend_account_holder_response__from_json(v: &Value) -> Option<iface_account_holders::SuspendAccountHolderResponse> {
+    let m = v.as_object()?;
+    Some(iface_account_holders::SuspendAccountHolderResponse {
+        account_holder_status: m.get("accountHolderStatus").filter(|v| !v.is_null()).and_then(|v| iface_account_holders__account_holder_status__from_json(v)),
+        psp_reference: m.get("pspReference").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        result_code: m.get("resultCode").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        submitted_async: m.get("submittedAsync").filter(|v| !v.is_null()).and_then(|v| (v).as_bool()),
+    })
+}
+
+fn iface_account_holders__un_suspend_account_holder_response__from_json(v: &Value) -> Option<iface_account_holders::UnSuspendAccountHolderResponse> {
+    let m = v.as_object()?;
+    Some(iface_account_holders::UnSuspendAccountHolderResponse {
+        account_holder_status: m.get("accountHolderStatus").filter(|v| !v.is_null()).and_then(|v| iface_account_holders__account_holder_status__from_json(v)),
+        psp_reference: m.get("pspReference").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        result_code: m.get("resultCode").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        submitted_async: m.get("submittedAsync").filter(|v| !v.is_null()).and_then(|v| (v).as_bool()),
+    })
+}
+
+fn iface_account_holders__update_account_holder_response__from_json(v: &Value) -> Option<iface_account_holders::UpdateAccountHolderResponse> {
+    let m = v.as_object()?;
+    Some(iface_account_holders::UpdateAccountHolderResponse {
+        account_holder_code: m.get("accountHolderCode").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        account_holder_details: m.get("accountHolderDetails").filter(|v| !v.is_null()).and_then(|v| iface_account_holders__account_holder_details__from_json(v)),
+        account_holder_status: m.get("accountHolderStatus").filter(|v| !v.is_null()).and_then(|v| iface_account_holders__account_holder_status__from_json(v)),
+        invalid_fields: m.get("invalidFields").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| iface_account_holders__error_field_type_wrapper__from_json(x)).collect())),
+        psp_reference: m.get("pspReference").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        result_code: m.get("resultCode").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        submitted_async: m.get("submittedAsync").filter(|v| !v.is_null()).and_then(|v| (v).as_bool()),
+        updated_fields: m.get("updatedFields").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| iface_account_holders__field_type_wrapper__from_json(x)).collect())),
+        verification: m.get("verification").filter(|v| !v.is_null()).and_then(|v| iface_account_holders__kyc_verification_result__from_json(v)),
+    })
+}
+
+fn iface_account_holders__field_type_wrapper__from_json(v: &Value) -> Option<iface_account_holders::FieldTypeWrapper> {
+    let m = v.as_object()?;
+    Some(iface_account_holders::FieldTypeWrapper {
+        field_type: m.get("FieldType").filter(|v| !v.is_null()).and_then(|v| iface_account_holders__field_type__from_json(v)),
+    })
+}
+
+fn iface_account_holders__get_account_holder_status_response__from_json(v: &Value) -> Option<iface_account_holders::GetAccountHolderStatusResponse> {
+    let m = v.as_object()?;
+    Some(iface_account_holders::GetAccountHolderStatusResponse {
+        account_holder_code: m.get("accountHolderCode").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        account_holder_status: m.get("accountHolderStatus").filter(|v| !v.is_null()).and_then(|v| iface_account_holders__account_holder_status__from_json(v)),
+        psp_reference: m.get("pspReference").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        result_code: m.get("resultCode").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        submitted_async: m.get("submittedAsync").filter(|v| !v.is_null()).and_then(|v| (v).as_bool()),
+    })
+}
+
+fn iface_account_holders__account_event_event_enum__from_str(s: &str) -> Option<iface_account_holders::AccountEventEventEnum> {
+    match s {
+        "InactivateAccount" => Some(iface_account_holders::AccountEventEventEnum::InactivateAccount),
+        "RefundNotPaidOutTransfers" => Some(iface_account_holders::AccountEventEventEnum::RefundNotPaidOutTransfers),
+        _ => None,
+    }
+}
+
+fn iface_account_holders__account_holder_status_status_enum__from_str(s: &str) -> Option<iface_account_holders::AccountHolderStatusStatusEnum> {
+    match s {
+        "Active" => Some(iface_account_holders::AccountHolderStatusStatusEnum::Active),
+        "Closed" => Some(iface_account_holders::AccountHolderStatusStatusEnum::Closed),
+        "Inactive" => Some(iface_account_holders::AccountHolderStatusStatusEnum::Inactive),
+        "Suspended" => Some(iface_account_holders::AccountHolderStatusStatusEnum::Suspended),
+        _ => None,
+    }
+}
+
+fn iface_account_holders__vias_name_gender_enum__from_str(s: &str) -> Option<iface_account_holders::ViasNameGenderEnum> {
+    match s {
+        "MALE" => Some(iface_account_holders::ViasNameGenderEnum::Male),
+        "FEMALE" => Some(iface_account_holders::ViasNameGenderEnum::Female),
+        "UNKNOWN" => Some(iface_account_holders::ViasNameGenderEnum::Unknown),
+        _ => None,
+    }
+}
+
+fn iface_account_holders__personal_document_data_type_op_enum__from_str(s: &str) -> Option<iface_account_holders::PersonalDocumentDataTypeOpEnum> {
+    match s {
+        "DRIVINGLICENSE" => Some(iface_account_holders::PersonalDocumentDataTypeOpEnum::Drivinglicense),
+        "ID" => Some(iface_account_holders::PersonalDocumentDataTypeOpEnum::Id),
+        "PASSPORT" => Some(iface_account_holders::PersonalDocumentDataTypeOpEnum::Passport),
+        "SOCIALSECURITY" => Some(iface_account_holders::PersonalDocumentDataTypeOpEnum::Socialsecurity),
+        "VISA" => Some(iface_account_holders::PersonalDocumentDataTypeOpEnum::Visa),
+        _ => None,
+    }
+}
+
+fn iface_account_holders__vias_phone_number_phone_type_enum__from_str(s: &str) -> Option<iface_account_holders::ViasPhoneNumberPhoneTypeEnum> {
+    match s {
+        "Fax" => Some(iface_account_holders::ViasPhoneNumberPhoneTypeEnum::Fax),
+        "Landline" => Some(iface_account_holders::ViasPhoneNumberPhoneTypeEnum::Landline),
+        "Mobile" => Some(iface_account_holders::ViasPhoneNumberPhoneTypeEnum::Mobile),
+        "SIP" => Some(iface_account_holders::ViasPhoneNumberPhoneTypeEnum::Sip),
+        _ => None,
+    }
+}
+
+fn iface_account_holders__shareholder_contact_shareholder_type_enum__from_str(s: &str) -> Option<iface_account_holders::ShareholderContactShareholderTypeEnum> {
+    match s {
+        "Controller" => Some(iface_account_holders::ShareholderContactShareholderTypeEnum::Controller),
+        "Owner" => Some(iface_account_holders::ShareholderContactShareholderTypeEnum::Owner),
+        "Signatory" => Some(iface_account_holders::ShareholderContactShareholderTypeEnum::Signatory),
+        _ => None,
+    }
+}
+
+fn iface_account_holders__create_account_holder_request_legal_entity_enum__from_str(s: &str) -> Option<iface_account_holders::CreateAccountHolderRequestLegalEntityEnum> {
+    match s {
+        "Business" => Some(iface_account_holders::CreateAccountHolderRequestLegalEntityEnum::Business),
+        "Individual" => Some(iface_account_holders::CreateAccountHolderRequestLegalEntityEnum::Individual),
+        "NonProfit" => Some(iface_account_holders::CreateAccountHolderRequestLegalEntityEnum::NonProfit),
+        _ => None,
+    }
+}
+
+fn iface_account_holders__field_type_field_name_enum__from_str(s: &str) -> Option<iface_account_holders::FieldTypeFieldNameEnum> {
+    match s {
+        "accountCode" => Some(iface_account_holders::FieldTypeFieldNameEnum::AccountCode),
+        "accountHolderCode" => Some(iface_account_holders::FieldTypeFieldNameEnum::AccountHolderCode),
+        "accountHolderDetails" => Some(iface_account_holders::FieldTypeFieldNameEnum::AccountHolderDetails),
+        "accountNumber" => Some(iface_account_holders::FieldTypeFieldNameEnum::AccountNumber),
+        "accountStateType" => Some(iface_account_holders::FieldTypeFieldNameEnum::AccountStateType),
+        "accountStatus" => Some(iface_account_holders::FieldTypeFieldNameEnum::AccountStatus),
+        "accountType" => Some(iface_account_holders::FieldTypeFieldNameEnum::AccountType),
+        "address" => Some(iface_account_holders::FieldTypeFieldNameEnum::Address),
+        "balanceAccount" => Some(iface_account_holders::FieldTypeFieldNameEnum::BalanceAccount),
+        "balanceAccountActive" => Some(iface_account_holders::FieldTypeFieldNameEnum::BalanceAccountActive),
+        "balanceAccountCode" => Some(iface_account_holders::FieldTypeFieldNameEnum::BalanceAccountCode),
+        "balanceAccountId" => Some(iface_account_holders::FieldTypeFieldNameEnum::BalanceAccountId),
+        "bankAccount" => Some(iface_account_holders::FieldTypeFieldNameEnum::BankAccount),
+        "bankAccountCode" => Some(iface_account_holders::FieldTypeFieldNameEnum::BankAccountCode),
+        "bankAccountName" => Some(iface_account_holders::FieldTypeFieldNameEnum::BankAccountName),
+        "bankAccountUUID" => Some(iface_account_holders::FieldTypeFieldNameEnum::BankAccountUuid),
+        "bankBicSwift" => Some(iface_account_holders::FieldTypeFieldNameEnum::BankBicSwift),
+        "bankCity" => Some(iface_account_holders::FieldTypeFieldNameEnum::BankCity),
+        "bankCode" => Some(iface_account_holders::FieldTypeFieldNameEnum::BankCode),
+        "bankName" => Some(iface_account_holders::FieldTypeFieldNameEnum::BankName),
+        "bankStatement" => Some(iface_account_holders::FieldTypeFieldNameEnum::BankStatement),
+        "branchCode" => Some(iface_account_holders::FieldTypeFieldNameEnum::BranchCode),
+        "businessContact" => Some(iface_account_holders::FieldTypeFieldNameEnum::BusinessContact),
+        "cardToken" => Some(iface_account_holders::FieldTypeFieldNameEnum::CardToken),
+        "checkCode" => Some(iface_account_holders::FieldTypeFieldNameEnum::CheckCode),
+        "city" => Some(iface_account_holders::FieldTypeFieldNameEnum::City),
+        "companyRegistration" => Some(iface_account_holders::FieldTypeFieldNameEnum::CompanyRegistration),
+        "constitutionalDocument" => Some(iface_account_holders::FieldTypeFieldNameEnum::ConstitutionalDocument),
+        "controller" => Some(iface_account_holders::FieldTypeFieldNameEnum::Controller),
+        "country" => Some(iface_account_holders::FieldTypeFieldNameEnum::Country),
+        "countryCode" => Some(iface_account_holders::FieldTypeFieldNameEnum::CountryCode),
+        "currency" => Some(iface_account_holders::FieldTypeFieldNameEnum::Currency),
+        "currencyCode" => Some(iface_account_holders::FieldTypeFieldNameEnum::CurrencyCode),
+        "dateOfBirth" => Some(iface_account_holders::FieldTypeFieldNameEnum::DateOfBirth),
+        "destinationAccountCode" => Some(iface_account_holders::FieldTypeFieldNameEnum::DestinationAccountCode),
+        "document" => Some(iface_account_holders::FieldTypeFieldNameEnum::Document),
+        "documentContent" => Some(iface_account_holders::FieldTypeFieldNameEnum::DocumentContent),
+        "documentExpirationDate" => Some(iface_account_holders::FieldTypeFieldNameEnum::DocumentExpirationDate),
+        "documentIssuerCountry" => Some(iface_account_holders::FieldTypeFieldNameEnum::DocumentIssuerCountry),
+        "documentIssuerState" => Some(iface_account_holders::FieldTypeFieldNameEnum::DocumentIssuerState),
+        "documentName" => Some(iface_account_holders::FieldTypeFieldNameEnum::DocumentName),
+        "documentNumber" => Some(iface_account_holders::FieldTypeFieldNameEnum::DocumentNumber),
+        "documentType" => Some(iface_account_holders::FieldTypeFieldNameEnum::DocumentType),
+        "doingBusinessAs" => Some(iface_account_holders::FieldTypeFieldNameEnum::DoingBusinessAs),
+        "drivingLicence" => Some(iface_account_holders::FieldTypeFieldNameEnum::DrivingLicence),
+        "drivingLicenceBack" => Some(iface_account_holders::FieldTypeFieldNameEnum::DrivingLicenceBack),
+        "drivingLicenceFront" => Some(iface_account_holders::FieldTypeFieldNameEnum::DrivingLicenceFront),
+        "drivingLicense" => Some(iface_account_holders::FieldTypeFieldNameEnum::DrivingLicense),
+        "email" => Some(iface_account_holders::FieldTypeFieldNameEnum::Email),
+        "firstName" => Some(iface_account_holders::FieldTypeFieldNameEnum::FirstName),
+        "formType" => Some(iface_account_holders::FieldTypeFieldNameEnum::FormType),
+        "fullPhoneNumber" => Some(iface_account_holders::FieldTypeFieldNameEnum::FullPhoneNumber),
+        "gender" => Some(iface_account_holders::FieldTypeFieldNameEnum::Gender),
+        "hopWebserviceUser" => Some(iface_account_holders::FieldTypeFieldNameEnum::HopWebserviceUser),
+        "houseNumberOrName" => Some(iface_account_holders::FieldTypeFieldNameEnum::HouseNumberOrName),
+        "iban" => Some(iface_account_holders::FieldTypeFieldNameEnum::Iban),
+        "idCard" => Some(iface_account_holders::FieldTypeFieldNameEnum::IdCard),
+        "idNumber" => Some(iface_account_holders::FieldTypeFieldNameEnum::IdNumber),
+        "identityDocument" => Some(iface_account_holders::FieldTypeFieldNameEnum::IdentityDocument),
+        "individualDetails" => Some(iface_account_holders::FieldTypeFieldNameEnum::IndividualDetails),
+        "infix" => Some(iface_account_holders::FieldTypeFieldNameEnum::Infix),
+        "jobTitle" => Some(iface_account_holders::FieldTypeFieldNameEnum::JobTitle),
+        "lastName" => Some(iface_account_holders::FieldTypeFieldNameEnum::LastName),
+        "lastReviewDate" => Some(iface_account_holders::FieldTypeFieldNameEnum::LastReviewDate),
+        "legalArrangement" => Some(iface_account_holders::FieldTypeFieldNameEnum::LegalArrangement),
+        "legalArrangementCode" => Some(iface_account_holders::FieldTypeFieldNameEnum::LegalArrangementCode),
+        "legalArrangementEntity" => Some(iface_account_holders::FieldTypeFieldNameEnum::LegalArrangementEntity),
+        "legalArrangementEntityCode" => Some(iface_account_holders::FieldTypeFieldNameEnum::LegalArrangementEntityCode),
+        "legalArrangementLegalForm" => Some(iface_account_holders::FieldTypeFieldNameEnum::LegalArrangementLegalForm),
+        "legalArrangementMember" => Some(iface_account_holders::FieldTypeFieldNameEnum::LegalArrangementMember),
+        "legalArrangementMembers" => Some(iface_account_holders::FieldTypeFieldNameEnum::LegalArrangementMembers),
+        "legalArrangementName" => Some(iface_account_holders::FieldTypeFieldNameEnum::LegalArrangementName),
+        "legalArrangementReference" => Some(iface_account_holders::FieldTypeFieldNameEnum::LegalArrangementReference),
+        "legalArrangementRegistrationNumber" => Some(iface_account_holders::FieldTypeFieldNameEnum::LegalArrangementRegistrationNumber),
+        "legalArrangementTaxNumber" => Some(iface_account_holders::FieldTypeFieldNameEnum::LegalArrangementTaxNumber),
+        "legalArrangementType" => Some(iface_account_holders::FieldTypeFieldNameEnum::LegalArrangementType),
+        "legalBusinessName" => Some(iface_account_holders::FieldTypeFieldNameEnum::LegalBusinessName),
+        "legalEntity" => Some(iface_account_holders::FieldTypeFieldNameEnum::LegalEntity),
+        "legalEntityType" => Some(iface_account_holders::FieldTypeFieldNameEnum::LegalEntityType),
+        "logo" => Some(iface_account_holders::FieldTypeFieldNameEnum::Logo),
+        "merchantAccount" => Some(iface_account_holders::FieldTypeFieldNameEnum::MerchantAccount),
+        "merchantCategoryCode" => Some(iface_account_holders::FieldTypeFieldNameEnum::MerchantCategoryCode),
+        "merchantHouseNumber" => Some(iface_account_holders::FieldTypeFieldNameEnum::MerchantHouseNumber),
+        "merchantReference" => Some(iface_account_holders::FieldTypeFieldNameEnum::MerchantReference),
+        "microDeposit" => Some(iface_account_holders::FieldTypeFieldNameEnum::MicroDeposit),
+        "name" => Some(iface_account_holders::FieldTypeFieldNameEnum::Name),
+        "nationality" => Some(iface_account_holders::FieldTypeFieldNameEnum::Nationality),
+        "originalReference" => Some(iface_account_holders::FieldTypeFieldNameEnum::OriginalReference),
+        "ownerCity" => Some(iface_account_holders::FieldTypeFieldNameEnum::OwnerCity),
+        "ownerCountryCode" => Some(iface_account_holders::FieldTypeFieldNameEnum::OwnerCountryCode),
+        "ownerDateOfBirth" => Some(iface_account_holders::FieldTypeFieldNameEnum::OwnerDateOfBirth),
+        "ownerHouseNumberOrName" => Some(iface_account_holders::FieldTypeFieldNameEnum::OwnerHouseNumberOrName),
+        "ownerName" => Some(iface_account_holders::FieldTypeFieldNameEnum::OwnerName),
+        "ownerPostalCode" => Some(iface_account_holders::FieldTypeFieldNameEnum::OwnerPostalCode),
+        "ownerState" => Some(iface_account_holders::FieldTypeFieldNameEnum::OwnerState),
+        "ownerStreet" => Some(iface_account_holders::FieldTypeFieldNameEnum::OwnerStreet),
+        "passport" => Some(iface_account_holders::FieldTypeFieldNameEnum::Passport),
+        "passportNumber" => Some(iface_account_holders::FieldTypeFieldNameEnum::PassportNumber),
+        "payoutMethod" => Some(iface_account_holders::FieldTypeFieldNameEnum::PayoutMethod),
+        "payoutMethodCode" => Some(iface_account_holders::FieldTypeFieldNameEnum::PayoutMethodCode),
+        "payoutSchedule" => Some(iface_account_holders::FieldTypeFieldNameEnum::PayoutSchedule),
+        "pciSelfAssessment" => Some(iface_account_holders::FieldTypeFieldNameEnum::PciSelfAssessment),
+        "personalData" => Some(iface_account_holders::FieldTypeFieldNameEnum::PersonalData),
+        "phoneCountryCode" => Some(iface_account_holders::FieldTypeFieldNameEnum::PhoneCountryCode),
+        "phoneNumber" => Some(iface_account_holders::FieldTypeFieldNameEnum::PhoneNumber),
+        "postalCode" => Some(iface_account_holders::FieldTypeFieldNameEnum::PostalCode),
+        "primaryCurrency" => Some(iface_account_holders::FieldTypeFieldNameEnum::PrimaryCurrency),
+        "reason" => Some(iface_account_holders::FieldTypeFieldNameEnum::Reason),
+        "returnUrl" => Some(iface_account_holders::FieldTypeFieldNameEnum::ReturnUrl),
+        "schedule" => Some(iface_account_holders::FieldTypeFieldNameEnum::Schedule),
+        "shareholder" => Some(iface_account_holders::FieldTypeFieldNameEnum::Shareholder),
+        "shareholderCode" => Some(iface_account_holders::FieldTypeFieldNameEnum::ShareholderCode),
+        "shareholderCodeAndSignatoryCode" => Some(iface_account_holders::FieldTypeFieldNameEnum::ShareholderCodeAndSignatoryCode),
+        "shareholderCodeOrSignatoryCode" => Some(iface_account_holders::FieldTypeFieldNameEnum::ShareholderCodeOrSignatoryCode),
+        "shareholderType" => Some(iface_account_holders::FieldTypeFieldNameEnum::ShareholderType),
+        "shareholderTypes" => Some(iface_account_holders::FieldTypeFieldNameEnum::ShareholderTypes),
+        "shopperInteraction" => Some(iface_account_holders::FieldTypeFieldNameEnum::ShopperInteraction),
+        "signatory" => Some(iface_account_holders::FieldTypeFieldNameEnum::Signatory),
+        "signatoryCode" => Some(iface_account_holders::FieldTypeFieldNameEnum::SignatoryCode),
+        "socialSecurityNumber" => Some(iface_account_holders::FieldTypeFieldNameEnum::SocialSecurityNumber),
+        "sourceAccountCode" => Some(iface_account_holders::FieldTypeFieldNameEnum::SourceAccountCode),
+        "splitAccount" => Some(iface_account_holders::FieldTypeFieldNameEnum::SplitAccount),
+        "splitConfigurationUUID" => Some(iface_account_holders::FieldTypeFieldNameEnum::SplitConfigurationUuid),
+        "splitCurrency" => Some(iface_account_holders::FieldTypeFieldNameEnum::SplitCurrency),
+        "splitValue" => Some(iface_account_holders::FieldTypeFieldNameEnum::SplitValue),
+        "splits" => Some(iface_account_holders::FieldTypeFieldNameEnum::Splits),
+        "stateOrProvince" => Some(iface_account_holders::FieldTypeFieldNameEnum::StateOrProvince),
+        "status" => Some(iface_account_holders::FieldTypeFieldNameEnum::Status),
+        "stockExchange" => Some(iface_account_holders::FieldTypeFieldNameEnum::StockExchange),
+        "stockNumber" => Some(iface_account_holders::FieldTypeFieldNameEnum::StockNumber),
+        "stockTicker" => Some(iface_account_holders::FieldTypeFieldNameEnum::StockTicker),
+        "store" => Some(iface_account_holders::FieldTypeFieldNameEnum::Store),
+        "storeDetail" => Some(iface_account_holders::FieldTypeFieldNameEnum::StoreDetail),
+        "storeName" => Some(iface_account_holders::FieldTypeFieldNameEnum::StoreName),
+        "storeReference" => Some(iface_account_holders::FieldTypeFieldNameEnum::StoreReference),
+        "street" => Some(iface_account_holders::FieldTypeFieldNameEnum::Street),
+        "taxId" => Some(iface_account_holders::FieldTypeFieldNameEnum::TaxId),
+        "tier" => Some(iface_account_holders::FieldTypeFieldNameEnum::Tier),
+        "tierNumber" => Some(iface_account_holders::FieldTypeFieldNameEnum::TierNumber),
+        "transferCode" => Some(iface_account_holders::FieldTypeFieldNameEnum::TransferCode),
+        "ultimateParentCompany" => Some(iface_account_holders::FieldTypeFieldNameEnum::UltimateParentCompany),
+        "ultimateParentCompanyAddressDetails" => Some(iface_account_holders::FieldTypeFieldNameEnum::UltimateParentCompanyAddressDetails),
+        "ultimateParentCompanyAddressDetailsCountry" => Some(iface_account_holders::FieldTypeFieldNameEnum::UltimateParentCompanyAddressDetailsCountry),
+        "ultimateParentCompanyBusinessDetails" => Some(iface_account_holders::FieldTypeFieldNameEnum::UltimateParentCompanyBusinessDetails),
+        "ultimateParentCompanyBusinessDetailsLegalBusinessName" => Some(iface_account_holders::FieldTypeFieldNameEnum::UltimateParentCompanyBusinessDetailsLegalBusinessName),
+        "ultimateParentCompanyBusinessDetailsRegistrationNumber" => Some(iface_account_holders::FieldTypeFieldNameEnum::UltimateParentCompanyBusinessDetailsRegistrationNumber),
+        "ultimateParentCompanyCode" => Some(iface_account_holders::FieldTypeFieldNameEnum::UltimateParentCompanyCode),
+        "ultimateParentCompanyStockExchange" => Some(iface_account_holders::FieldTypeFieldNameEnum::UltimateParentCompanyStockExchange),
+        "ultimateParentCompanyStockNumber" => Some(iface_account_holders::FieldTypeFieldNameEnum::UltimateParentCompanyStockNumber),
+        "ultimateParentCompanyStockNumberOrStockTicker" => Some(iface_account_holders::FieldTypeFieldNameEnum::UltimateParentCompanyStockNumberOrStockTicker),
+        "ultimateParentCompanyStockTicker" => Some(iface_account_holders::FieldTypeFieldNameEnum::UltimateParentCompanyStockTicker),
+        "unknown" => Some(iface_account_holders::FieldTypeFieldNameEnum::Unknown),
+        "value" => Some(iface_account_holders::FieldTypeFieldNameEnum::Value),
+        "verificationType" => Some(iface_account_holders::FieldTypeFieldNameEnum::VerificationType),
+        "virtualAccount" => Some(iface_account_holders::FieldTypeFieldNameEnum::VirtualAccount),
+        "visaNumber" => Some(iface_account_holders::FieldTypeFieldNameEnum::VisaNumber),
+        "webAddress" => Some(iface_account_holders::FieldTypeFieldNameEnum::WebAddress),
+        "year" => Some(iface_account_holders::FieldTypeFieldNameEnum::Year),
+        _ => None,
+    }
+}
+
+fn iface_account_holders__kyc_check_status_data_status_enum__from_str(s: &str) -> Option<iface_account_holders::KycCheckStatusDataStatusEnum> {
+    match s {
+        "AWAITING_DATA" => Some(iface_account_holders::KycCheckStatusDataStatusEnum::AwaitingData),
+        "DATA_PROVIDED" => Some(iface_account_holders::KycCheckStatusDataStatusEnum::DataProvided),
+        "FAILED" => Some(iface_account_holders::KycCheckStatusDataStatusEnum::Failed),
+        "INVALID_DATA" => Some(iface_account_holders::KycCheckStatusDataStatusEnum::InvalidData),
+        "PASSED" => Some(iface_account_holders::KycCheckStatusDataStatusEnum::Passed),
+        "PENDING" => Some(iface_account_holders::KycCheckStatusDataStatusEnum::Pending),
+        "PENDING_REVIEW" => Some(iface_account_holders::KycCheckStatusDataStatusEnum::PendingReview),
+        "RETRY_LIMIT_REACHED" => Some(iface_account_holders::KycCheckStatusDataStatusEnum::RetryLimitReached),
+        "UNCHECKED" => Some(iface_account_holders::KycCheckStatusDataStatusEnum::Unchecked),
+        _ => None,
+    }
+}
+
+fn iface_account_holders__kyc_check_status_data_type_op_enum__from_str(s: &str) -> Option<iface_account_holders::KycCheckStatusDataTypeOpEnum> {
+    match s {
+        "BANK_ACCOUNT_VERIFICATION" => Some(iface_account_holders::KycCheckStatusDataTypeOpEnum::BankAccountVerification),
+        "CARD_VERIFICATION" => Some(iface_account_holders::KycCheckStatusDataTypeOpEnum::CardVerification),
+        "COMPANY_VERIFICATION" => Some(iface_account_holders::KycCheckStatusDataTypeOpEnum::CompanyVerification),
+        "IDENTITY_VERIFICATION" => Some(iface_account_holders::KycCheckStatusDataTypeOpEnum::IdentityVerification),
+        "LEGAL_ARRANGEMENT_VERIFICATION" => Some(iface_account_holders::KycCheckStatusDataTypeOpEnum::LegalArrangementVerification),
+        "NONPROFIT_VERIFICATION" => Some(iface_account_holders::KycCheckStatusDataTypeOpEnum::NonprofitVerification),
+        "PASSPORT_VERIFICATION" => Some(iface_account_holders::KycCheckStatusDataTypeOpEnum::PassportVerification),
+        "PAYOUT_METHOD_VERIFICATION" => Some(iface_account_holders::KycCheckStatusDataTypeOpEnum::PayoutMethodVerification),
+        "PCI_VERIFICATION" => Some(iface_account_holders::KycCheckStatusDataTypeOpEnum::PciVerification),
+        _ => None,
+    }
+}
+
+fn iface_account_holders__payout_schedule_response_schedule_enum__from_str(s: &str) -> Option<iface_account_holders::PayoutScheduleResponseScheduleEnum> {
+    match s {
+        "BIWEEKLY_ON_1ST_AND_15TH_AT_MIDNIGHT" => Some(iface_account_holders::PayoutScheduleResponseScheduleEnum::BiweeklyOnV1stAndV15thAtMidnight),
+        "DAILY" => Some(iface_account_holders::PayoutScheduleResponseScheduleEnum::Daily),
+        "DAILY_AU" => Some(iface_account_holders::PayoutScheduleResponseScheduleEnum::DailyAu),
+        "DAILY_EU" => Some(iface_account_holders::PayoutScheduleResponseScheduleEnum::DailyEu),
+        "DAILY_SG" => Some(iface_account_holders::PayoutScheduleResponseScheduleEnum::DailySg),
+        "DAILY_US" => Some(iface_account_holders::PayoutScheduleResponseScheduleEnum::DailyUs),
+        "HOLD" => Some(iface_account_holders::PayoutScheduleResponseScheduleEnum::Hold),
+        "MONTHLY" => Some(iface_account_holders::PayoutScheduleResponseScheduleEnum::Monthly),
+        "WEEKLY" => Some(iface_account_holders::PayoutScheduleResponseScheduleEnum::Weekly),
+        "WEEKLY_MON_TO_FRI_AU" => Some(iface_account_holders::PayoutScheduleResponseScheduleEnum::WeeklyMonToFriAu),
+        "WEEKLY_MON_TO_FRI_EU" => Some(iface_account_holders::PayoutScheduleResponseScheduleEnum::WeeklyMonToFriEu),
+        "WEEKLY_MON_TO_FRI_US" => Some(iface_account_holders::PayoutScheduleResponseScheduleEnum::WeeklyMonToFriUs),
+        "WEEKLY_ON_TUE_FRI_MIDNIGHT" => Some(iface_account_holders::PayoutScheduleResponseScheduleEnum::WeeklyOnTueFriMidnight),
+        "WEEKLY_SUN_TO_THU_AU" => Some(iface_account_holders::PayoutScheduleResponseScheduleEnum::WeeklySunToThuAu),
+        "WEEKLY_SUN_TO_THU_US" => Some(iface_account_holders::PayoutScheduleResponseScheduleEnum::WeeklySunToThuUs),
+        _ => None,
+    }
+}
+
+fn iface_account_holders__post_close_account_holder__ok(body: String) -> Result<iface_account_holders::CloseAccountHolderResponse, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match iface_account_holders__close_account_holder_response__from_json(&v) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_account_holders__post_close_account_holder__err(e: crate::runtime::DispatchError) -> iface_account_holders::PostCloseAccountHolderError {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => match status {
+            400u16 => iface_account_holders::PostCloseAccountHolderError::BadRequest(body),
+            401u16 => iface_account_holders::PostCloseAccountHolderError::Unauthorized(body),
+            403u16 => iface_account_holders::PostCloseAccountHolderError::Forbidden(body),
+            422u16 => iface_account_holders::PostCloseAccountHolderError::UnprocessableEntity(body),
+            500u16 => iface_account_holders::PostCloseAccountHolderError::InternalServerError(body),
+            _ => iface_account_holders::PostCloseAccountHolderError::Other(body),
+        },
+        crate::runtime::DispatchError::Transport(m) => iface_account_holders::PostCloseAccountHolderError::Other(m),
+    }
+}
+
+fn iface_account_holders__post_create_account_holder__ok(body: String) -> Result<iface_account_holders::CreateAccountHolderResponse, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match iface_account_holders__create_account_holder_response__from_json(&v) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_account_holders__post_create_account_holder__err(e: crate::runtime::DispatchError) -> iface_account_holders::PostCreateAccountHolderError {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => match status {
+            400u16 => iface_account_holders::PostCreateAccountHolderError::BadRequest(body),
+            401u16 => iface_account_holders::PostCreateAccountHolderError::Unauthorized(body),
+            403u16 => iface_account_holders::PostCreateAccountHolderError::Forbidden(body),
+            422u16 => iface_account_holders::PostCreateAccountHolderError::UnprocessableEntity(body),
+            500u16 => iface_account_holders::PostCreateAccountHolderError::InternalServerError(body),
+            _ => iface_account_holders::PostCreateAccountHolderError::Other(body),
+        },
+        crate::runtime::DispatchError::Transport(m) => iface_account_holders::PostCreateAccountHolderError::Other(m),
+    }
+}
+
+fn iface_account_holders__post_get_account_holder__ok(body: String) -> Result<iface_account_holders::GetAccountHolderResponse, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match iface_account_holders__get_account_holder_response__from_json(&v) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_account_holders__post_get_account_holder__err(e: crate::runtime::DispatchError) -> iface_account_holders::PostGetAccountHolderError {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => match status {
+            400u16 => iface_account_holders::PostGetAccountHolderError::BadRequest(body),
+            401u16 => iface_account_holders::PostGetAccountHolderError::Unauthorized(body),
+            403u16 => iface_account_holders::PostGetAccountHolderError::Forbidden(body),
+            422u16 => iface_account_holders::PostGetAccountHolderError::UnprocessableEntity(body),
+            500u16 => iface_account_holders::PostGetAccountHolderError::InternalServerError(body),
+            _ => iface_account_holders::PostGetAccountHolderError::Other(body),
+        },
+        crate::runtime::DispatchError::Transport(m) => iface_account_holders::PostGetAccountHolderError::Other(m),
+    }
+}
+
+fn iface_account_holders__post_get_tax_form__ok(body: String) -> Result<iface_account_holders::GetTaxFormResponse, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match iface_account_holders__get_tax_form_response__from_json(&v) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_account_holders__post_get_tax_form__err(e: crate::runtime::DispatchError) -> iface_account_holders::PostGetTaxFormError {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => match status {
+            400u16 => iface_account_holders::PostGetTaxFormError::BadRequest(body),
+            401u16 => iface_account_holders::PostGetTaxFormError::Unauthorized(body),
+            403u16 => iface_account_holders::PostGetTaxFormError::Forbidden(body),
+            422u16 => iface_account_holders::PostGetTaxFormError::UnprocessableEntity(body),
+            500u16 => iface_account_holders::PostGetTaxFormError::InternalServerError(body),
+            _ => iface_account_holders::PostGetTaxFormError::Other(body),
+        },
+        crate::runtime::DispatchError::Transport(m) => iface_account_holders::PostGetTaxFormError::Other(m),
+    }
+}
+
+fn iface_account_holders__post_suspend_account_holder__ok(body: String) -> Result<iface_account_holders::SuspendAccountHolderResponse, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match iface_account_holders__suspend_account_holder_response__from_json(&v) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_account_holders__post_suspend_account_holder__err(e: crate::runtime::DispatchError) -> iface_account_holders::PostSuspendAccountHolderError {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => match status {
+            400u16 => iface_account_holders::PostSuspendAccountHolderError::BadRequest(body),
+            401u16 => iface_account_holders::PostSuspendAccountHolderError::Unauthorized(body),
+            403u16 => iface_account_holders::PostSuspendAccountHolderError::Forbidden(body),
+            422u16 => iface_account_holders::PostSuspendAccountHolderError::UnprocessableEntity(body),
+            500u16 => iface_account_holders::PostSuspendAccountHolderError::InternalServerError(body),
+            _ => iface_account_holders::PostSuspendAccountHolderError::Other(body),
+        },
+        crate::runtime::DispatchError::Transport(m) => iface_account_holders::PostSuspendAccountHolderError::Other(m),
+    }
+}
+
+fn iface_account_holders__post_un_suspend_account_holder__ok(body: String) -> Result<iface_account_holders::UnSuspendAccountHolderResponse, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match iface_account_holders__un_suspend_account_holder_response__from_json(&v) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_account_holders__post_un_suspend_account_holder__err(e: crate::runtime::DispatchError) -> iface_account_holders::PostUnSuspendAccountHolderError {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => match status {
+            400u16 => iface_account_holders::PostUnSuspendAccountHolderError::BadRequest(body),
+            401u16 => iface_account_holders::PostUnSuspendAccountHolderError::Unauthorized(body),
+            403u16 => iface_account_holders::PostUnSuspendAccountHolderError::Forbidden(body),
+            422u16 => iface_account_holders::PostUnSuspendAccountHolderError::UnprocessableEntity(body),
+            500u16 => iface_account_holders::PostUnSuspendAccountHolderError::InternalServerError(body),
+            _ => iface_account_holders::PostUnSuspendAccountHolderError::Other(body),
+        },
+        crate::runtime::DispatchError::Transport(m) => iface_account_holders::PostUnSuspendAccountHolderError::Other(m),
+    }
+}
+
+fn iface_account_holders__post_update_account_holder__ok(body: String) -> Result<iface_account_holders::UpdateAccountHolderResponse, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match iface_account_holders__update_account_holder_response__from_json(&v) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_account_holders__post_update_account_holder__err(e: crate::runtime::DispatchError) -> iface_account_holders::PostUpdateAccountHolderError {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => match status {
+            400u16 => iface_account_holders::PostUpdateAccountHolderError::BadRequest(body),
+            401u16 => iface_account_holders::PostUpdateAccountHolderError::Unauthorized(body),
+            403u16 => iface_account_holders::PostUpdateAccountHolderError::Forbidden(body),
+            422u16 => iface_account_holders::PostUpdateAccountHolderError::UnprocessableEntity(body),
+            500u16 => iface_account_holders::PostUpdateAccountHolderError::InternalServerError(body),
+            _ => iface_account_holders::PostUpdateAccountHolderError::Other(body),
+        },
+        crate::runtime::DispatchError::Transport(m) => iface_account_holders::PostUpdateAccountHolderError::Other(m),
+    }
+}
+
+fn iface_account_holders__post_update_account_holder_state__ok(body: String) -> Result<iface_account_holders::GetAccountHolderStatusResponse, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match iface_account_holders__get_account_holder_status_response__from_json(&v) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_account_holders__post_update_account_holder_state__err(e: crate::runtime::DispatchError) -> iface_account_holders::PostUpdateAccountHolderStateError {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => match status {
+            400u16 => iface_account_holders::PostUpdateAccountHolderStateError::BadRequest(body),
+            401u16 => iface_account_holders::PostUpdateAccountHolderStateError::Unauthorized(body),
+            403u16 => iface_account_holders::PostUpdateAccountHolderStateError::Forbidden(body),
+            422u16 => iface_account_holders::PostUpdateAccountHolderStateError::UnprocessableEntity(body),
+            500u16 => iface_account_holders::PostUpdateAccountHolderStateError::InternalServerError(body),
+            _ => iface_account_holders::PostUpdateAccountHolderStateError::Other(body),
+        },
+        crate::runtime::DispatchError::Transport(m) => iface_account_holders::PostUpdateAccountHolderStateError::Other(m),
+    }
+}
+
 impl iface_account_holders::Guest for crate::Component {
-    fn post_close_account_holder(params: iface_account_holders::PostCloseAccountHolderParams) -> Result<String, String> {
+    fn post_close_account_holder(params: iface_account_holders::PostCloseAccountHolderParams) -> Result<iface_account_holders::CloseAccountHolderResponse, iface_account_holders::PostCloseAccountHolderError> {
         let json = iface_account_holders__post_close_account_holder_params__to_json(&params);
-        dispatch(&OP_ACCOUNT_HOLDERS_POST_CLOSE_ACCOUNT_HOLDER, json)
+        match dispatch(&OP_ACCOUNT_HOLDERS_POST_CLOSE_ACCOUNT_HOLDER, json).and_then(iface_account_holders__post_close_account_holder__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_account_holders__post_close_account_holder__err(e)),
+        }
     }
-    fn post_create_account_holder(params: iface_account_holders::PostCreateAccountHolderParams) -> Result<String, String> {
+    fn post_create_account_holder(params: iface_account_holders::PostCreateAccountHolderParams) -> Result<iface_account_holders::CreateAccountHolderResponse, iface_account_holders::PostCreateAccountHolderError> {
         let json = iface_account_holders__post_create_account_holder_params__to_json(&params);
-        dispatch(&OP_ACCOUNT_HOLDERS_POST_CREATE_ACCOUNT_HOLDER, json)
+        match dispatch(&OP_ACCOUNT_HOLDERS_POST_CREATE_ACCOUNT_HOLDER, json).and_then(iface_account_holders__post_create_account_holder__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_account_holders__post_create_account_holder__err(e)),
+        }
     }
-    fn post_get_account_holder(params: iface_account_holders::PostGetAccountHolderParams) -> Result<String, String> {
+    fn post_get_account_holder(params: iface_account_holders::PostGetAccountHolderParams) -> Result<iface_account_holders::GetAccountHolderResponse, iface_account_holders::PostGetAccountHolderError> {
         let json = iface_account_holders__post_get_account_holder_params__to_json(&params);
-        dispatch(&OP_ACCOUNT_HOLDERS_POST_GET_ACCOUNT_HOLDER, json)
+        match dispatch(&OP_ACCOUNT_HOLDERS_POST_GET_ACCOUNT_HOLDER, json).and_then(iface_account_holders__post_get_account_holder__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_account_holders__post_get_account_holder__err(e)),
+        }
     }
-    fn post_get_tax_form(params: iface_account_holders::PostGetTaxFormParams) -> Result<String, String> {
+    fn post_get_tax_form(params: iface_account_holders::PostGetTaxFormParams) -> Result<iface_account_holders::GetTaxFormResponse, iface_account_holders::PostGetTaxFormError> {
         let json = iface_account_holders__post_get_tax_form_params__to_json(&params);
-        dispatch(&OP_ACCOUNT_HOLDERS_POST_GET_TAX_FORM, json)
+        match dispatch(&OP_ACCOUNT_HOLDERS_POST_GET_TAX_FORM, json).and_then(iface_account_holders__post_get_tax_form__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_account_holders__post_get_tax_form__err(e)),
+        }
     }
-    fn post_suspend_account_holder(params: iface_account_holders::PostSuspendAccountHolderParams) -> Result<String, String> {
+    fn post_suspend_account_holder(params: iface_account_holders::PostSuspendAccountHolderParams) -> Result<iface_account_holders::SuspendAccountHolderResponse, iface_account_holders::PostSuspendAccountHolderError> {
         let json = iface_account_holders__post_suspend_account_holder_params__to_json(&params);
-        dispatch(&OP_ACCOUNT_HOLDERS_POST_SUSPEND_ACCOUNT_HOLDER, json)
+        match dispatch(&OP_ACCOUNT_HOLDERS_POST_SUSPEND_ACCOUNT_HOLDER, json).and_then(iface_account_holders__post_suspend_account_holder__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_account_holders__post_suspend_account_holder__err(e)),
+        }
     }
-    fn post_un_suspend_account_holder(params: iface_account_holders::PostUnSuspendAccountHolderParams) -> Result<String, String> {
+    fn post_un_suspend_account_holder(params: iface_account_holders::PostUnSuspendAccountHolderParams) -> Result<iface_account_holders::UnSuspendAccountHolderResponse, iface_account_holders::PostUnSuspendAccountHolderError> {
         let json = iface_account_holders__post_un_suspend_account_holder_params__to_json(&params);
-        dispatch(&OP_ACCOUNT_HOLDERS_POST_UN_SUSPEND_ACCOUNT_HOLDER, json)
+        match dispatch(&OP_ACCOUNT_HOLDERS_POST_UN_SUSPEND_ACCOUNT_HOLDER, json).and_then(iface_account_holders__post_un_suspend_account_holder__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_account_holders__post_un_suspend_account_holder__err(e)),
+        }
     }
-    fn post_update_account_holder(params: iface_account_holders::PostUpdateAccountHolderParams) -> Result<String, String> {
+    fn post_update_account_holder(params: iface_account_holders::PostUpdateAccountHolderParams) -> Result<iface_account_holders::UpdateAccountHolderResponse, iface_account_holders::PostUpdateAccountHolderError> {
         let json = iface_account_holders__post_update_account_holder_params__to_json(&params);
-        dispatch(&OP_ACCOUNT_HOLDERS_POST_UPDATE_ACCOUNT_HOLDER, json)
+        match dispatch(&OP_ACCOUNT_HOLDERS_POST_UPDATE_ACCOUNT_HOLDER, json).and_then(iface_account_holders__post_update_account_holder__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_account_holders__post_update_account_holder__err(e)),
+        }
     }
-    fn post_update_account_holder_state(params: iface_account_holders::PostUpdateAccountHolderStateParams) -> Result<String, String> {
+    fn post_update_account_holder_state(params: iface_account_holders::PostUpdateAccountHolderStateParams) -> Result<iface_account_holders::GetAccountHolderStatusResponse, iface_account_holders::PostUpdateAccountHolderStateError> {
         let json = iface_account_holders__post_update_account_holder_state_params__to_json(&params);
-        dispatch(&OP_ACCOUNT_HOLDERS_POST_UPDATE_ACCOUNT_HOLDER_STATE, json)
+        match dispatch(&OP_ACCOUNT_HOLDERS_POST_UPDATE_ACCOUNT_HOLDER_STATE, json).and_then(iface_account_holders__post_update_account_holder_state__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_account_holders__post_update_account_holder_state__err(e)),
+        }
     }
 }
 use crate::exports::autostamp::adyen::verification as iface_verification;
@@ -842,8 +2523,8 @@ const OP_VERIFICATION_POST_DELETE_BANK_ACCOUNTS: OpSpec = OpSpec {
     method: "POST",
     path_template: "/deleteBankAccounts",
     fields: &[
-        FieldSpec { snake: "account_holder_code", location: FieldLocation::Body },
-        FieldSpec { snake: "bank_account_uui_ds", location: FieldLocation::Body },
+        FieldSpec { snake: "account_holder_code", wire: "accountHolderCode", location: FieldLocation::Body },
+        FieldSpec { snake: "bank_account_uui_ds", wire: "bankAccountUUIDs", location: FieldLocation::Body },
     ],
     auth: &[
         AuthApply { secret_key: "BasicAuth", kind: AuthKind::Basic },
@@ -854,8 +2535,8 @@ const OP_VERIFICATION_POST_DELETE_LEGAL_ARRANGEMENTS: OpSpec = OpSpec {
     method: "POST",
     path_template: "/deleteLegalArrangements",
     fields: &[
-        FieldSpec { snake: "account_holder_code", location: FieldLocation::Body },
-        FieldSpec { snake: "legal_arrangements", location: FieldLocation::Body },
+        FieldSpec { snake: "account_holder_code", wire: "accountHolderCode", location: FieldLocation::Body },
+        FieldSpec { snake: "legal_arrangements", wire: "legalArrangements", location: FieldLocation::Body },
     ],
     auth: &[
         AuthApply { secret_key: "BasicAuth", kind: AuthKind::Basic },
@@ -866,8 +2547,8 @@ const OP_VERIFICATION_POST_DELETE_SHAREHOLDERS: OpSpec = OpSpec {
     method: "POST",
     path_template: "/deleteShareholders",
     fields: &[
-        FieldSpec { snake: "account_holder_code", location: FieldLocation::Body },
-        FieldSpec { snake: "shareholder_codes", location: FieldLocation::Body },
+        FieldSpec { snake: "account_holder_code", wire: "accountHolderCode", location: FieldLocation::Body },
+        FieldSpec { snake: "shareholder_codes", wire: "shareholderCodes", location: FieldLocation::Body },
     ],
     auth: &[
         AuthApply { secret_key: "BasicAuth", kind: AuthKind::Basic },
@@ -878,8 +2559,8 @@ const OP_VERIFICATION_POST_DELETE_SIGNATORIES: OpSpec = OpSpec {
     method: "POST",
     path_template: "/deleteSignatories",
     fields: &[
-        FieldSpec { snake: "account_holder_code", location: FieldLocation::Body },
-        FieldSpec { snake: "signatory_codes", location: FieldLocation::Body },
+        FieldSpec { snake: "account_holder_code", wire: "accountHolderCode", location: FieldLocation::Body },
+        FieldSpec { snake: "signatory_codes", wire: "signatoryCodes", location: FieldLocation::Body },
     ],
     auth: &[
         AuthApply { secret_key: "BasicAuth", kind: AuthKind::Basic },
@@ -890,9 +2571,9 @@ const OP_VERIFICATION_POST_GET_UPLOADED_DOCUMENTS: OpSpec = OpSpec {
     method: "POST",
     path_template: "/getUploadedDocuments",
     fields: &[
-        FieldSpec { snake: "account_holder_code", location: FieldLocation::Body },
-        FieldSpec { snake: "bank_account_uuid", location: FieldLocation::Body },
-        FieldSpec { snake: "shareholder_code", location: FieldLocation::Body },
+        FieldSpec { snake: "account_holder_code", wire: "accountHolderCode", location: FieldLocation::Body },
+        FieldSpec { snake: "bank_account_uuid", wire: "bankAccountUUID", location: FieldLocation::Body },
+        FieldSpec { snake: "shareholder_code", wire: "shareholderCode", location: FieldLocation::Body },
     ],
     auth: &[
         AuthApply { secret_key: "BasicAuth", kind: AuthKind::Basic },
@@ -903,11 +2584,11 @@ const OP_VERIFICATION_POST_UPLOAD_DOCUMENT: OpSpec = OpSpec {
     method: "POST",
     path_template: "/uploadDocument",
     fields: &[
-        FieldSpec { snake: "account_holder_code", location: FieldLocation::Body },
-        FieldSpec { snake: "bank_account_uuid", location: FieldLocation::Body },
-        FieldSpec { snake: "document_content", location: FieldLocation::Body },
-        FieldSpec { snake: "document_detail", location: FieldLocation::Body },
-        FieldSpec { snake: "shareholder_code", location: FieldLocation::Body },
+        FieldSpec { snake: "account_holder_code", wire: "accountHolderCode", location: FieldLocation::Body },
+        FieldSpec { snake: "bank_account_uuid", wire: "bankAccountUUID", location: FieldLocation::Body },
+        FieldSpec { snake: "document_content", wire: "documentContent", location: FieldLocation::Body },
+        FieldSpec { snake: "document_detail", wire: "documentDetail", location: FieldLocation::Body },
+        FieldSpec { snake: "shareholder_code", wire: "shareholderCode", location: FieldLocation::Body },
     ],
     auth: &[
         AuthApply { secret_key: "BasicAuth", kind: AuthKind::Basic },
@@ -930,28 +2611,633 @@ fn iface_verification__document_detail_document_type_enum__to_str(e: &iface_veri
     }
 }
 
+fn iface_verification__vias_name_gender_enum__to_str(e: &iface_verification::ViasNameGenderEnum) -> &'static str {
+    match e {
+        iface_verification::ViasNameGenderEnum::Male => "MALE",
+        iface_verification::ViasNameGenderEnum::Female => "FEMALE",
+        iface_verification::ViasNameGenderEnum::Unknown => "UNKNOWN",
+    }
+}
+
+fn iface_verification__personal_document_data_type_op_enum__to_str(e: &iface_verification::PersonalDocumentDataTypeOpEnum) -> &'static str {
+    match e {
+        iface_verification::PersonalDocumentDataTypeOpEnum::Drivinglicense => "DRIVINGLICENSE",
+        iface_verification::PersonalDocumentDataTypeOpEnum::Id => "ID",
+        iface_verification::PersonalDocumentDataTypeOpEnum::Passport => "PASSPORT",
+        iface_verification::PersonalDocumentDataTypeOpEnum::Socialsecurity => "SOCIALSECURITY",
+        iface_verification::PersonalDocumentDataTypeOpEnum::Visa => "VISA",
+    }
+}
+
+fn iface_verification__vias_phone_number_phone_type_enum__to_str(e: &iface_verification::ViasPhoneNumberPhoneTypeEnum) -> &'static str {
+    match e {
+        iface_verification::ViasPhoneNumberPhoneTypeEnum::Fax => "Fax",
+        iface_verification::ViasPhoneNumberPhoneTypeEnum::Landline => "Landline",
+        iface_verification::ViasPhoneNumberPhoneTypeEnum::Mobile => "Mobile",
+        iface_verification::ViasPhoneNumberPhoneTypeEnum::Sip => "SIP",
+    }
+}
+
+fn iface_verification__shareholder_contact_shareholder_type_enum__to_str(e: &iface_verification::ShareholderContactShareholderTypeEnum) -> &'static str {
+    match e {
+        iface_verification::ShareholderContactShareholderTypeEnum::Controller => "Controller",
+        iface_verification::ShareholderContactShareholderTypeEnum::Owner => "Owner",
+        iface_verification::ShareholderContactShareholderTypeEnum::Signatory => "Signatory",
+    }
+}
+
+fn iface_verification__account_event_event_enum__to_str(e: &iface_verification::AccountEventEventEnum) -> &'static str {
+    match e {
+        iface_verification::AccountEventEventEnum::InactivateAccount => "InactivateAccount",
+        iface_verification::AccountEventEventEnum::RefundNotPaidOutTransfers => "RefundNotPaidOutTransfers",
+    }
+}
+
+fn iface_verification__account_holder_status_status_enum__to_str(e: &iface_verification::AccountHolderStatusStatusEnum) -> &'static str {
+    match e {
+        iface_verification::AccountHolderStatusStatusEnum::Active => "Active",
+        iface_verification::AccountHolderStatusStatusEnum::Closed => "Closed",
+        iface_verification::AccountHolderStatusStatusEnum::Inactive => "Inactive",
+        iface_verification::AccountHolderStatusStatusEnum::Suspended => "Suspended",
+    }
+}
+
+fn iface_verification__field_type_field_name_enum__to_str(e: &iface_verification::FieldTypeFieldNameEnum) -> &'static str {
+    match e {
+        iface_verification::FieldTypeFieldNameEnum::AccountCode => "accountCode",
+        iface_verification::FieldTypeFieldNameEnum::AccountHolderCode => "accountHolderCode",
+        iface_verification::FieldTypeFieldNameEnum::AccountHolderDetails => "accountHolderDetails",
+        iface_verification::FieldTypeFieldNameEnum::AccountNumber => "accountNumber",
+        iface_verification::FieldTypeFieldNameEnum::AccountStateType => "accountStateType",
+        iface_verification::FieldTypeFieldNameEnum::AccountStatus => "accountStatus",
+        iface_verification::FieldTypeFieldNameEnum::AccountType => "accountType",
+        iface_verification::FieldTypeFieldNameEnum::Address => "address",
+        iface_verification::FieldTypeFieldNameEnum::BalanceAccount => "balanceAccount",
+        iface_verification::FieldTypeFieldNameEnum::BalanceAccountActive => "balanceAccountActive",
+        iface_verification::FieldTypeFieldNameEnum::BalanceAccountCode => "balanceAccountCode",
+        iface_verification::FieldTypeFieldNameEnum::BalanceAccountId => "balanceAccountId",
+        iface_verification::FieldTypeFieldNameEnum::BankAccount => "bankAccount",
+        iface_verification::FieldTypeFieldNameEnum::BankAccountCode => "bankAccountCode",
+        iface_verification::FieldTypeFieldNameEnum::BankAccountName => "bankAccountName",
+        iface_verification::FieldTypeFieldNameEnum::BankAccountUuid => "bankAccountUUID",
+        iface_verification::FieldTypeFieldNameEnum::BankBicSwift => "bankBicSwift",
+        iface_verification::FieldTypeFieldNameEnum::BankCity => "bankCity",
+        iface_verification::FieldTypeFieldNameEnum::BankCode => "bankCode",
+        iface_verification::FieldTypeFieldNameEnum::BankName => "bankName",
+        iface_verification::FieldTypeFieldNameEnum::BankStatement => "bankStatement",
+        iface_verification::FieldTypeFieldNameEnum::BranchCode => "branchCode",
+        iface_verification::FieldTypeFieldNameEnum::BusinessContact => "businessContact",
+        iface_verification::FieldTypeFieldNameEnum::CardToken => "cardToken",
+        iface_verification::FieldTypeFieldNameEnum::CheckCode => "checkCode",
+        iface_verification::FieldTypeFieldNameEnum::City => "city",
+        iface_verification::FieldTypeFieldNameEnum::CompanyRegistration => "companyRegistration",
+        iface_verification::FieldTypeFieldNameEnum::ConstitutionalDocument => "constitutionalDocument",
+        iface_verification::FieldTypeFieldNameEnum::Controller => "controller",
+        iface_verification::FieldTypeFieldNameEnum::Country => "country",
+        iface_verification::FieldTypeFieldNameEnum::CountryCode => "countryCode",
+        iface_verification::FieldTypeFieldNameEnum::Currency => "currency",
+        iface_verification::FieldTypeFieldNameEnum::CurrencyCode => "currencyCode",
+        iface_verification::FieldTypeFieldNameEnum::DateOfBirth => "dateOfBirth",
+        iface_verification::FieldTypeFieldNameEnum::DestinationAccountCode => "destinationAccountCode",
+        iface_verification::FieldTypeFieldNameEnum::Document => "document",
+        iface_verification::FieldTypeFieldNameEnum::DocumentContent => "documentContent",
+        iface_verification::FieldTypeFieldNameEnum::DocumentExpirationDate => "documentExpirationDate",
+        iface_verification::FieldTypeFieldNameEnum::DocumentIssuerCountry => "documentIssuerCountry",
+        iface_verification::FieldTypeFieldNameEnum::DocumentIssuerState => "documentIssuerState",
+        iface_verification::FieldTypeFieldNameEnum::DocumentName => "documentName",
+        iface_verification::FieldTypeFieldNameEnum::DocumentNumber => "documentNumber",
+        iface_verification::FieldTypeFieldNameEnum::DocumentType => "documentType",
+        iface_verification::FieldTypeFieldNameEnum::DoingBusinessAs => "doingBusinessAs",
+        iface_verification::FieldTypeFieldNameEnum::DrivingLicence => "drivingLicence",
+        iface_verification::FieldTypeFieldNameEnum::DrivingLicenceBack => "drivingLicenceBack",
+        iface_verification::FieldTypeFieldNameEnum::DrivingLicenceFront => "drivingLicenceFront",
+        iface_verification::FieldTypeFieldNameEnum::DrivingLicense => "drivingLicense",
+        iface_verification::FieldTypeFieldNameEnum::Email => "email",
+        iface_verification::FieldTypeFieldNameEnum::FirstName => "firstName",
+        iface_verification::FieldTypeFieldNameEnum::FormType => "formType",
+        iface_verification::FieldTypeFieldNameEnum::FullPhoneNumber => "fullPhoneNumber",
+        iface_verification::FieldTypeFieldNameEnum::Gender => "gender",
+        iface_verification::FieldTypeFieldNameEnum::HopWebserviceUser => "hopWebserviceUser",
+        iface_verification::FieldTypeFieldNameEnum::HouseNumberOrName => "houseNumberOrName",
+        iface_verification::FieldTypeFieldNameEnum::Iban => "iban",
+        iface_verification::FieldTypeFieldNameEnum::IdCard => "idCard",
+        iface_verification::FieldTypeFieldNameEnum::IdNumber => "idNumber",
+        iface_verification::FieldTypeFieldNameEnum::IdentityDocument => "identityDocument",
+        iface_verification::FieldTypeFieldNameEnum::IndividualDetails => "individualDetails",
+        iface_verification::FieldTypeFieldNameEnum::Infix => "infix",
+        iface_verification::FieldTypeFieldNameEnum::JobTitle => "jobTitle",
+        iface_verification::FieldTypeFieldNameEnum::LastName => "lastName",
+        iface_verification::FieldTypeFieldNameEnum::LastReviewDate => "lastReviewDate",
+        iface_verification::FieldTypeFieldNameEnum::LegalArrangement => "legalArrangement",
+        iface_verification::FieldTypeFieldNameEnum::LegalArrangementCode => "legalArrangementCode",
+        iface_verification::FieldTypeFieldNameEnum::LegalArrangementEntity => "legalArrangementEntity",
+        iface_verification::FieldTypeFieldNameEnum::LegalArrangementEntityCode => "legalArrangementEntityCode",
+        iface_verification::FieldTypeFieldNameEnum::LegalArrangementLegalForm => "legalArrangementLegalForm",
+        iface_verification::FieldTypeFieldNameEnum::LegalArrangementMember => "legalArrangementMember",
+        iface_verification::FieldTypeFieldNameEnum::LegalArrangementMembers => "legalArrangementMembers",
+        iface_verification::FieldTypeFieldNameEnum::LegalArrangementName => "legalArrangementName",
+        iface_verification::FieldTypeFieldNameEnum::LegalArrangementReference => "legalArrangementReference",
+        iface_verification::FieldTypeFieldNameEnum::LegalArrangementRegistrationNumber => "legalArrangementRegistrationNumber",
+        iface_verification::FieldTypeFieldNameEnum::LegalArrangementTaxNumber => "legalArrangementTaxNumber",
+        iface_verification::FieldTypeFieldNameEnum::LegalArrangementType => "legalArrangementType",
+        iface_verification::FieldTypeFieldNameEnum::LegalBusinessName => "legalBusinessName",
+        iface_verification::FieldTypeFieldNameEnum::LegalEntity => "legalEntity",
+        iface_verification::FieldTypeFieldNameEnum::LegalEntityType => "legalEntityType",
+        iface_verification::FieldTypeFieldNameEnum::Logo => "logo",
+        iface_verification::FieldTypeFieldNameEnum::MerchantAccount => "merchantAccount",
+        iface_verification::FieldTypeFieldNameEnum::MerchantCategoryCode => "merchantCategoryCode",
+        iface_verification::FieldTypeFieldNameEnum::MerchantHouseNumber => "merchantHouseNumber",
+        iface_verification::FieldTypeFieldNameEnum::MerchantReference => "merchantReference",
+        iface_verification::FieldTypeFieldNameEnum::MicroDeposit => "microDeposit",
+        iface_verification::FieldTypeFieldNameEnum::Name => "name",
+        iface_verification::FieldTypeFieldNameEnum::Nationality => "nationality",
+        iface_verification::FieldTypeFieldNameEnum::OriginalReference => "originalReference",
+        iface_verification::FieldTypeFieldNameEnum::OwnerCity => "ownerCity",
+        iface_verification::FieldTypeFieldNameEnum::OwnerCountryCode => "ownerCountryCode",
+        iface_verification::FieldTypeFieldNameEnum::OwnerDateOfBirth => "ownerDateOfBirth",
+        iface_verification::FieldTypeFieldNameEnum::OwnerHouseNumberOrName => "ownerHouseNumberOrName",
+        iface_verification::FieldTypeFieldNameEnum::OwnerName => "ownerName",
+        iface_verification::FieldTypeFieldNameEnum::OwnerPostalCode => "ownerPostalCode",
+        iface_verification::FieldTypeFieldNameEnum::OwnerState => "ownerState",
+        iface_verification::FieldTypeFieldNameEnum::OwnerStreet => "ownerStreet",
+        iface_verification::FieldTypeFieldNameEnum::Passport => "passport",
+        iface_verification::FieldTypeFieldNameEnum::PassportNumber => "passportNumber",
+        iface_verification::FieldTypeFieldNameEnum::PayoutMethod => "payoutMethod",
+        iface_verification::FieldTypeFieldNameEnum::PayoutMethodCode => "payoutMethodCode",
+        iface_verification::FieldTypeFieldNameEnum::PayoutSchedule => "payoutSchedule",
+        iface_verification::FieldTypeFieldNameEnum::PciSelfAssessment => "pciSelfAssessment",
+        iface_verification::FieldTypeFieldNameEnum::PersonalData => "personalData",
+        iface_verification::FieldTypeFieldNameEnum::PhoneCountryCode => "phoneCountryCode",
+        iface_verification::FieldTypeFieldNameEnum::PhoneNumber => "phoneNumber",
+        iface_verification::FieldTypeFieldNameEnum::PostalCode => "postalCode",
+        iface_verification::FieldTypeFieldNameEnum::PrimaryCurrency => "primaryCurrency",
+        iface_verification::FieldTypeFieldNameEnum::Reason => "reason",
+        iface_verification::FieldTypeFieldNameEnum::ReturnUrl => "returnUrl",
+        iface_verification::FieldTypeFieldNameEnum::Schedule => "schedule",
+        iface_verification::FieldTypeFieldNameEnum::Shareholder => "shareholder",
+        iface_verification::FieldTypeFieldNameEnum::ShareholderCode => "shareholderCode",
+        iface_verification::FieldTypeFieldNameEnum::ShareholderCodeAndSignatoryCode => "shareholderCodeAndSignatoryCode",
+        iface_verification::FieldTypeFieldNameEnum::ShareholderCodeOrSignatoryCode => "shareholderCodeOrSignatoryCode",
+        iface_verification::FieldTypeFieldNameEnum::ShareholderType => "shareholderType",
+        iface_verification::FieldTypeFieldNameEnum::ShareholderTypes => "shareholderTypes",
+        iface_verification::FieldTypeFieldNameEnum::ShopperInteraction => "shopperInteraction",
+        iface_verification::FieldTypeFieldNameEnum::Signatory => "signatory",
+        iface_verification::FieldTypeFieldNameEnum::SignatoryCode => "signatoryCode",
+        iface_verification::FieldTypeFieldNameEnum::SocialSecurityNumber => "socialSecurityNumber",
+        iface_verification::FieldTypeFieldNameEnum::SourceAccountCode => "sourceAccountCode",
+        iface_verification::FieldTypeFieldNameEnum::SplitAccount => "splitAccount",
+        iface_verification::FieldTypeFieldNameEnum::SplitConfigurationUuid => "splitConfigurationUUID",
+        iface_verification::FieldTypeFieldNameEnum::SplitCurrency => "splitCurrency",
+        iface_verification::FieldTypeFieldNameEnum::SplitValue => "splitValue",
+        iface_verification::FieldTypeFieldNameEnum::Splits => "splits",
+        iface_verification::FieldTypeFieldNameEnum::StateOrProvince => "stateOrProvince",
+        iface_verification::FieldTypeFieldNameEnum::Status => "status",
+        iface_verification::FieldTypeFieldNameEnum::StockExchange => "stockExchange",
+        iface_verification::FieldTypeFieldNameEnum::StockNumber => "stockNumber",
+        iface_verification::FieldTypeFieldNameEnum::StockTicker => "stockTicker",
+        iface_verification::FieldTypeFieldNameEnum::Store => "store",
+        iface_verification::FieldTypeFieldNameEnum::StoreDetail => "storeDetail",
+        iface_verification::FieldTypeFieldNameEnum::StoreName => "storeName",
+        iface_verification::FieldTypeFieldNameEnum::StoreReference => "storeReference",
+        iface_verification::FieldTypeFieldNameEnum::Street => "street",
+        iface_verification::FieldTypeFieldNameEnum::TaxId => "taxId",
+        iface_verification::FieldTypeFieldNameEnum::Tier => "tier",
+        iface_verification::FieldTypeFieldNameEnum::TierNumber => "tierNumber",
+        iface_verification::FieldTypeFieldNameEnum::TransferCode => "transferCode",
+        iface_verification::FieldTypeFieldNameEnum::UltimateParentCompany => "ultimateParentCompany",
+        iface_verification::FieldTypeFieldNameEnum::UltimateParentCompanyAddressDetails => "ultimateParentCompanyAddressDetails",
+        iface_verification::FieldTypeFieldNameEnum::UltimateParentCompanyAddressDetailsCountry => "ultimateParentCompanyAddressDetailsCountry",
+        iface_verification::FieldTypeFieldNameEnum::UltimateParentCompanyBusinessDetails => "ultimateParentCompanyBusinessDetails",
+        iface_verification::FieldTypeFieldNameEnum::UltimateParentCompanyBusinessDetailsLegalBusinessName => "ultimateParentCompanyBusinessDetailsLegalBusinessName",
+        iface_verification::FieldTypeFieldNameEnum::UltimateParentCompanyBusinessDetailsRegistrationNumber => "ultimateParentCompanyBusinessDetailsRegistrationNumber",
+        iface_verification::FieldTypeFieldNameEnum::UltimateParentCompanyCode => "ultimateParentCompanyCode",
+        iface_verification::FieldTypeFieldNameEnum::UltimateParentCompanyStockExchange => "ultimateParentCompanyStockExchange",
+        iface_verification::FieldTypeFieldNameEnum::UltimateParentCompanyStockNumber => "ultimateParentCompanyStockNumber",
+        iface_verification::FieldTypeFieldNameEnum::UltimateParentCompanyStockNumberOrStockTicker => "ultimateParentCompanyStockNumberOrStockTicker",
+        iface_verification::FieldTypeFieldNameEnum::UltimateParentCompanyStockTicker => "ultimateParentCompanyStockTicker",
+        iface_verification::FieldTypeFieldNameEnum::Unknown => "unknown",
+        iface_verification::FieldTypeFieldNameEnum::Value => "value",
+        iface_verification::FieldTypeFieldNameEnum::VerificationType => "verificationType",
+        iface_verification::FieldTypeFieldNameEnum::VirtualAccount => "virtualAccount",
+        iface_verification::FieldTypeFieldNameEnum::VisaNumber => "visaNumber",
+        iface_verification::FieldTypeFieldNameEnum::WebAddress => "webAddress",
+        iface_verification::FieldTypeFieldNameEnum::Year => "year",
+    }
+}
+
+fn iface_verification__kyc_check_status_data_status_enum__to_str(e: &iface_verification::KycCheckStatusDataStatusEnum) -> &'static str {
+    match e {
+        iface_verification::KycCheckStatusDataStatusEnum::AwaitingData => "AWAITING_DATA",
+        iface_verification::KycCheckStatusDataStatusEnum::DataProvided => "DATA_PROVIDED",
+        iface_verification::KycCheckStatusDataStatusEnum::Failed => "FAILED",
+        iface_verification::KycCheckStatusDataStatusEnum::InvalidData => "INVALID_DATA",
+        iface_verification::KycCheckStatusDataStatusEnum::Passed => "PASSED",
+        iface_verification::KycCheckStatusDataStatusEnum::Pending => "PENDING",
+        iface_verification::KycCheckStatusDataStatusEnum::PendingReview => "PENDING_REVIEW",
+        iface_verification::KycCheckStatusDataStatusEnum::RetryLimitReached => "RETRY_LIMIT_REACHED",
+        iface_verification::KycCheckStatusDataStatusEnum::Unchecked => "UNCHECKED",
+    }
+}
+
+fn iface_verification__kyc_check_status_data_type_op_enum__to_str(e: &iface_verification::KycCheckStatusDataTypeOpEnum) -> &'static str {
+    match e {
+        iface_verification::KycCheckStatusDataTypeOpEnum::BankAccountVerification => "BANK_ACCOUNT_VERIFICATION",
+        iface_verification::KycCheckStatusDataTypeOpEnum::CardVerification => "CARD_VERIFICATION",
+        iface_verification::KycCheckStatusDataTypeOpEnum::CompanyVerification => "COMPANY_VERIFICATION",
+        iface_verification::KycCheckStatusDataTypeOpEnum::IdentityVerification => "IDENTITY_VERIFICATION",
+        iface_verification::KycCheckStatusDataTypeOpEnum::LegalArrangementVerification => "LEGAL_ARRANGEMENT_VERIFICATION",
+        iface_verification::KycCheckStatusDataTypeOpEnum::NonprofitVerification => "NONPROFIT_VERIFICATION",
+        iface_verification::KycCheckStatusDataTypeOpEnum::PassportVerification => "PASSPORT_VERIFICATION",
+        iface_verification::KycCheckStatusDataTypeOpEnum::PayoutMethodVerification => "PAYOUT_METHOD_VERIFICATION",
+        iface_verification::KycCheckStatusDataTypeOpEnum::PciVerification => "PCI_VERIFICATION",
+    }
+}
+
+fn iface_verification__generic_response__to_json(p: &iface_verification::GenericResponse) -> Value {
+    let mut m = Map::new();
+    m.insert("pspReference".into(), match (&p.psp_reference) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("resultCode".into(), match (&p.result_code) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("submittedAsync".into(), match (&p.submitted_async) { Some(v) => Value::Bool(*(v)), None => Value::Null });
+    Value::Object(m)
+}
+
 fn iface_verification__legal_arrangement_request_wrapper__to_json(p: &iface_verification::LegalArrangementRequestWrapper) -> Value {
     let mut m = Map::new();
-    m.insert("legal_arrangement_request".into(), match (&p.legal_arrangement_request) { Some(v) => iface_verification__legal_arrangement_request__to_json(v), None => Value::Null });
+    m.insert("LegalArrangementRequest".into(), match (&p.legal_arrangement_request) { Some(v) => iface_verification__legal_arrangement_request__to_json(v), None => Value::Null });
     Value::Object(m)
 }
 
 fn iface_verification__legal_arrangement_request__to_json(p: &iface_verification::LegalArrangementRequest) -> Value {
     let mut m = Map::new();
-    m.insert("legal_arrangement_code".into(), Value::String((&p.legal_arrangement_code).clone()));
-    m.insert("legal_arrangement_entity_codes".into(), match (&p.legal_arrangement_entity_codes) { Some(v) => Value::Array((v).iter().map(|v| Value::String((v).clone())).collect()), None => Value::Null });
+    m.insert("legalArrangementCode".into(), Value::String((&p.legal_arrangement_code).clone()));
+    m.insert("legalArrangementEntityCodes".into(), match (&p.legal_arrangement_entity_codes) { Some(v) => Value::Array((v).iter().map(|v| Value::String((v).clone())).collect()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_verification__get_uploaded_documents_response__to_json(p: &iface_verification::GetUploadedDocumentsResponse) -> Value {
+    let mut m = Map::new();
+    m.insert("documentDetails".into(), match (&p.document_details) { Some(v) => Value::Array((v).iter().map(|v| iface_verification__document_detail_wrapper__to_json(v)).collect()), None => Value::Null });
+    m.insert("pspReference".into(), match (&p.psp_reference) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("resultCode".into(), match (&p.result_code) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("submittedAsync".into(), match (&p.submitted_async) { Some(v) => Value::Bool(*(v)), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_verification__document_detail_wrapper__to_json(p: &iface_verification::DocumentDetailWrapper) -> Value {
+    let mut m = Map::new();
+    m.insert("DocumentDetail".into(), match (&p.document_detail) { Some(v) => iface_verification__document_detail__to_json(v), None => Value::Null });
     Value::Object(m)
 }
 
 fn iface_verification__document_detail__to_json(p: &iface_verification::DocumentDetail) -> Value {
     let mut m = Map::new();
-    m.insert("account_holder_code".into(), match (&p.account_holder_code) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    m.insert("bank_account_uuid".into(), match (&p.bank_account_uuid) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("accountHolderCode".into(), match (&p.account_holder_code) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("bankAccountUUID".into(), match (&p.bank_account_uuid) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("description".into(), match (&p.description) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    m.insert("document_type".into(), Value::String(iface_verification__document_detail_document_type_enum__to_str(&p.document_type).into()));
+    m.insert("documentType".into(), Value::String(iface_verification__document_detail_document_type_enum__to_str(&p.document_type).into()));
     m.insert("filename".into(), match (&p.filename) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    m.insert("shareholder_code".into(), match (&p.shareholder_code) { Some(v) => Value::String((v).clone()), None => Value::Null });
-    m.insert("signatory_code".into(), match (&p.signatory_code) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("shareholderCode".into(), match (&p.shareholder_code) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("signatoryCode".into(), match (&p.signatory_code) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_verification__update_account_holder_response__to_json(p: &iface_verification::UpdateAccountHolderResponse) -> Value {
+    let mut m = Map::new();
+    m.insert("accountHolderCode".into(), match (&p.account_holder_code) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("accountHolderDetails".into(), match (&p.account_holder_details) { Some(v) => iface_verification__account_holder_details__to_json(v), None => Value::Null });
+    m.insert("accountHolderStatus".into(), match (&p.account_holder_status) { Some(v) => iface_verification__account_holder_status__to_json(v), None => Value::Null });
+    m.insert("invalidFields".into(), match (&p.invalid_fields) { Some(v) => Value::Array((v).iter().map(|v| iface_verification__error_field_type_wrapper__to_json(v)).collect()), None => Value::Null });
+    m.insert("pspReference".into(), match (&p.psp_reference) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("resultCode".into(), match (&p.result_code) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("submittedAsync".into(), match (&p.submitted_async) { Some(v) => Value::Bool(*(v)), None => Value::Null });
+    m.insert("updatedFields".into(), match (&p.updated_fields) { Some(v) => Value::Array((v).iter().map(|v| iface_verification__field_type_wrapper__to_json(v)).collect()), None => Value::Null });
+    m.insert("verification".into(), match (&p.verification) { Some(v) => iface_verification__kyc_verification_result__to_json(v), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_verification__account_holder_details__to_json(p: &iface_verification::AccountHolderDetails) -> Value {
+    let mut m = Map::new();
+    m.insert("address".into(), iface_verification__vias_address__to_json(&p.address));
+    m.insert("bankAccountDetails".into(), match (&p.bank_account_details) { Some(v) => Value::Array((v).iter().map(|v| iface_verification__bank_account_detail_wrapper__to_json(v)).collect()), None => Value::Null });
+    m.insert("businessDetails".into(), match (&p.business_details) { Some(v) => iface_verification__business_details__to_json(v), None => Value::Null });
+    m.insert("email".into(), match (&p.email) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("fullPhoneNumber".into(), match (&p.full_phone_number) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("individualDetails".into(), match (&p.individual_details) { Some(v) => iface_verification__individual_details__to_json(v), None => Value::Null });
+    m.insert("lastReviewDate".into(), match (&p.last_review_date) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("merchantCategoryCode".into(), match (&p.merchant_category_code) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("metadata".into(), match (&p.metadata) { Some(v) => iface_verification__account_holder_details_metadata__to_json(v), None => Value::Null });
+    m.insert("principalBusinessAddress".into(), match (&p.principal_business_address) { Some(v) => iface_verification__vias_address__to_json(v), None => Value::Null });
+    m.insert("webAddress".into(), match (&p.web_address) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_verification__vias_address__to_json(p: &iface_verification::ViasAddress) -> Value {
+    let mut m = Map::new();
+    m.insert("city".into(), match (&p.city) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("country".into(), Value::String((&p.country).clone()));
+    m.insert("houseNumberOrName".into(), match (&p.house_number_or_name) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("postalCode".into(), match (&p.postal_code) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("stateOrProvince".into(), match (&p.state_or_province) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("street".into(), match (&p.street) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_verification__bank_account_detail_wrapper__to_json(p: &iface_verification::BankAccountDetailWrapper) -> Value {
+    let mut m = Map::new();
+    m.insert("BankAccountDetail".into(), match (&p.bank_account_detail) { Some(v) => iface_verification__bank_account_detail__to_json(v), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_verification__bank_account_detail__to_json(p: &iface_verification::BankAccountDetail) -> Value {
+    let mut m = Map::new();
+    m.insert("accountNumber".into(), match (&p.account_number) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("accountType".into(), match (&p.account_type) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("bankAccountName".into(), match (&p.bank_account_name) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("bankAccountUUID".into(), match (&p.bank_account_uuid) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("bankBicSwift".into(), match (&p.bank_bic_swift) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("bankCity".into(), match (&p.bank_city) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("bankCode".into(), match (&p.bank_code) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("bankName".into(), match (&p.bank_name) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("branchCode".into(), match (&p.branch_code) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("checkCode".into(), match (&p.check_code) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("countryCode".into(), match (&p.country_code) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("currencyCode".into(), match (&p.currency_code) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("iban".into(), match (&p.iban) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("ownerCity".into(), match (&p.owner_city) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("ownerCountryCode".into(), match (&p.owner_country_code) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("ownerDateOfBirth".into(), match (&p.owner_date_of_birth) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("ownerHouseNumberOrName".into(), match (&p.owner_house_number_or_name) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("ownerName".into(), match (&p.owner_name) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("ownerNationality".into(), match (&p.owner_nationality) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("ownerPostalCode".into(), match (&p.owner_postal_code) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("ownerState".into(), match (&p.owner_state) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("ownerStreet".into(), match (&p.owner_street) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("primaryAccount".into(), match (&p.primary_account) { Some(v) => Value::Bool(*(v)), None => Value::Null });
+    m.insert("taxId".into(), match (&p.tax_id) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("urlForVerification".into(), match (&p.url_for_verification) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_verification__business_details__to_json(p: &iface_verification::BusinessDetails) -> Value {
+    let mut m = Map::new();
+    m.insert("doingBusinessAs".into(), match (&p.doing_business_as) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("legalBusinessName".into(), match (&p.legal_business_name) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("listedUltimateParentCompany".into(), match (&p.listed_ultimate_parent_company) { Some(v) => Value::Array((v).iter().map(|v| iface_verification__ultimate_parent_company_wrapper__to_json(v)).collect()), None => Value::Null });
+    m.insert("shareholders".into(), match (&p.shareholders) { Some(v) => Value::Array((v).iter().map(|v| iface_verification__shareholder_contact_wrapper__to_json(v)).collect()), None => Value::Null });
+    m.insert("signatories".into(), match (&p.signatories) { Some(v) => Value::Array((v).iter().map(|v| iface_verification__signatory_contact_wrapper__to_json(v)).collect()), None => Value::Null });
+    m.insert("taxId".into(), match (&p.tax_id) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_verification__ultimate_parent_company_wrapper__to_json(p: &iface_verification::UltimateParentCompanyWrapper) -> Value {
+    let mut m = Map::new();
+    m.insert("UltimateParentCompany".into(), match (&p.ultimate_parent_company) { Some(v) => iface_verification__ultimate_parent_company__to_json(v), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_verification__ultimate_parent_company__to_json(p: &iface_verification::UltimateParentCompany) -> Value {
+    let mut m = Map::new();
+    m.insert("address".into(), match (&p.address) { Some(v) => iface_verification__vias_address__to_json(v), None => Value::Null });
+    m.insert("businessDetails".into(), match (&p.business_details) { Some(v) => iface_verification__ultimate_parent_company_business_details__to_json(v), None => Value::Null });
+    m.insert("ultimateParentCompanyCode".into(), match (&p.ultimate_parent_company_code) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_verification__ultimate_parent_company_business_details__to_json(p: &iface_verification::UltimateParentCompanyBusinessDetails) -> Value {
+    let mut m = Map::new();
+    m.insert("legalBusinessName".into(), match (&p.legal_business_name) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("registrationNumber".into(), match (&p.registration_number) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("stockExchange".into(), match (&p.stock_exchange) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("stockNumber".into(), match (&p.stock_number) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("stockTicker".into(), match (&p.stock_ticker) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_verification__shareholder_contact_wrapper__to_json(p: &iface_verification::ShareholderContactWrapper) -> Value {
+    let mut m = Map::new();
+    m.insert("ShareholderContact".into(), match (&p.shareholder_contact) { Some(v) => iface_verification__shareholder_contact__to_json(v), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_verification__shareholder_contact__to_json(p: &iface_verification::ShareholderContact) -> Value {
+    let mut m = Map::new();
+    m.insert("address".into(), match (&p.address) { Some(v) => iface_verification__vias_address__to_json(v), None => Value::Null });
+    m.insert("email".into(), match (&p.email) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("fullPhoneNumber".into(), match (&p.full_phone_number) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("jobTitle".into(), match (&p.job_title) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("name".into(), match (&p.name) { Some(v) => iface_verification__vias_name__to_json(v), None => Value::Null });
+    m.insert("personalData".into(), match (&p.personal_data) { Some(v) => iface_verification__vias_personal_data__to_json(v), None => Value::Null });
+    m.insert("phoneNumber".into(), match (&p.phone_number) { Some(v) => iface_verification__vias_phone_number__to_json(v), None => Value::Null });
+    m.insert("shareholderCode".into(), match (&p.shareholder_code) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("shareholderType".into(), match (&p.shareholder_type) { Some(v) => Value::String(iface_verification__shareholder_contact_shareholder_type_enum__to_str(v).into()), None => Value::Null });
+    m.insert("webAddress".into(), match (&p.web_address) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_verification__vias_name__to_json(p: &iface_verification::ViasName) -> Value {
+    let mut m = Map::new();
+    m.insert("firstName".into(), match (&p.first_name) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("gender".into(), match (&p.gender) { Some(v) => Value::String(iface_verification__vias_name_gender_enum__to_str(v).into()), None => Value::Null });
+    m.insert("infix".into(), match (&p.infix) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("lastName".into(), match (&p.last_name) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_verification__vias_personal_data__to_json(p: &iface_verification::ViasPersonalData) -> Value {
+    let mut m = Map::new();
+    m.insert("dateOfBirth".into(), match (&p.date_of_birth) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("documentData".into(), match (&p.document_data) { Some(v) => Value::Array((v).iter().map(|v| iface_verification__personal_document_data_wrapper__to_json(v)).collect()), None => Value::Null });
+    m.insert("idNumber".into(), match (&p.id_number) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("nationality".into(), match (&p.nationality) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_verification__personal_document_data_wrapper__to_json(p: &iface_verification::PersonalDocumentDataWrapper) -> Value {
+    let mut m = Map::new();
+    m.insert("PersonalDocumentData".into(), match (&p.personal_document_data) { Some(v) => iface_verification__personal_document_data__to_json(v), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_verification__personal_document_data__to_json(p: &iface_verification::PersonalDocumentData) -> Value {
+    let mut m = Map::new();
+    m.insert("expirationDate".into(), match (&p.expiration_date) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("issuerCountry".into(), match (&p.issuer_country) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("issuerState".into(), match (&p.issuer_state) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("number".into(), match (&p.number) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("type".into(), Value::String(iface_verification__personal_document_data_type_op_enum__to_str(&p.type_op).into()));
+    Value::Object(m)
+}
+
+fn iface_verification__vias_phone_number__to_json(p: &iface_verification::ViasPhoneNumber) -> Value {
+    let mut m = Map::new();
+    m.insert("phoneCountryCode".into(), match (&p.phone_country_code) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("phoneNumber".into(), match (&p.phone_number) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("phoneType".into(), match (&p.phone_type) { Some(v) => Value::String(iface_verification__vias_phone_number_phone_type_enum__to_str(v).into()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_verification__signatory_contact_wrapper__to_json(p: &iface_verification::SignatoryContactWrapper) -> Value {
+    let mut m = Map::new();
+    m.insert("SignatoryContact".into(), match (&p.signatory_contact) { Some(v) => iface_verification__signatory_contact__to_json(v), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_verification__signatory_contact__to_json(p: &iface_verification::SignatoryContact) -> Value {
+    let mut m = Map::new();
+    m.insert("address".into(), match (&p.address) { Some(v) => iface_verification__vias_address__to_json(v), None => Value::Null });
+    m.insert("email".into(), match (&p.email) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("fullPhoneNumber".into(), match (&p.full_phone_number) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("jobTitle".into(), match (&p.job_title) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("name".into(), match (&p.name) { Some(v) => iface_verification__vias_name__to_json(v), None => Value::Null });
+    m.insert("personalData".into(), match (&p.personal_data) { Some(v) => iface_verification__vias_personal_data__to_json(v), None => Value::Null });
+    m.insert("phoneNumber".into(), match (&p.phone_number) { Some(v) => iface_verification__vias_phone_number__to_json(v), None => Value::Null });
+    m.insert("signatoryCode".into(), match (&p.signatory_code) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("signatoryReference".into(), match (&p.signatory_reference) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("webAddress".into(), match (&p.web_address) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_verification__individual_details__to_json(p: &iface_verification::IndividualDetails) -> Value {
+    let mut m = Map::new();
+    m.insert("name".into(), match (&p.name) { Some(v) => iface_verification__vias_name__to_json(v), None => Value::Null });
+    m.insert("personalData".into(), match (&p.personal_data) { Some(v) => iface_verification__vias_personal_data__to_json(v), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_verification__account_holder_details_metadata__to_json(p: &iface_verification::AccountHolderDetailsMetadata) -> Value {
+    let mut m = Map::new();
+    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_verification__account_holder_status__to_json(p: &iface_verification::AccountHolderStatus) -> Value {
+    let mut m = Map::new();
+    m.insert("events".into(), match (&p.events) { Some(v) => Value::Array((v).iter().map(|v| iface_verification__account_event_wrapper__to_json(v)).collect()), None => Value::Null });
+    m.insert("payoutState".into(), match (&p.payout_state) { Some(v) => iface_verification__account_payout_state__to_json(v), None => Value::Null });
+    m.insert("processingState".into(), match (&p.processing_state) { Some(v) => iface_verification__account_processing_state__to_json(v), None => Value::Null });
+    m.insert("status".into(), Value::String(iface_verification__account_holder_status_status_enum__to_str(&p.status).into()));
+    m.insert("statusReason".into(), match (&p.status_reason) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_verification__account_event_wrapper__to_json(p: &iface_verification::AccountEventWrapper) -> Value {
+    let mut m = Map::new();
+    m.insert("AccountEvent".into(), match (&p.account_event) { Some(v) => iface_verification__account_event__to_json(v), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_verification__account_event__to_json(p: &iface_verification::AccountEvent) -> Value {
+    let mut m = Map::new();
+    m.insert("event".into(), match (&p.event) { Some(v) => Value::String(iface_verification__account_event_event_enum__to_str(v).into()), None => Value::Null });
+    m.insert("executionDate".into(), match (&p.execution_date) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("reason".into(), match (&p.reason) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_verification__account_payout_state__to_json(p: &iface_verification::AccountPayoutState) -> Value {
+    let mut m = Map::new();
+    m.insert("allowPayout".into(), match (&p.allow_payout) { Some(v) => Value::Bool(*(v)), None => Value::Null });
+    m.insert("disableReason".into(), match (&p.disable_reason) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("disabled".into(), match (&p.disabled) { Some(v) => Value::Bool(*(v)), None => Value::Null });
+    m.insert("payoutLimit".into(), match (&p.payout_limit) { Some(v) => iface_verification__amount__to_json(v), None => Value::Null });
+    m.insert("tierNumber".into(), match (&p.tier_number) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_verification__amount__to_json(p: &iface_verification::Amount) -> Value {
+    let mut m = Map::new();
+    m.insert("currency".into(), Value::String((&p.currency).clone()));
+    m.insert("value".into(), Value::Number(serde_json::Number::from(*(&p.value))));
+    Value::Object(m)
+}
+
+fn iface_verification__account_processing_state__to_json(p: &iface_verification::AccountProcessingState) -> Value {
+    let mut m = Map::new();
+    m.insert("disableReason".into(), match (&p.disable_reason) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("disabled".into(), match (&p.disabled) { Some(v) => Value::Bool(*(v)), None => Value::Null });
+    m.insert("processedFrom".into(), match (&p.processed_from) { Some(v) => iface_verification__amount__to_json(v), None => Value::Null });
+    m.insert("processedTo".into(), match (&p.processed_to) { Some(v) => iface_verification__amount__to_json(v), None => Value::Null });
+    m.insert("tierNumber".into(), match (&p.tier_number) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_verification__error_field_type_wrapper__to_json(p: &iface_verification::ErrorFieldTypeWrapper) -> Value {
+    let mut m = Map::new();
+    m.insert("ErrorFieldType".into(), match (&p.error_field_type) { Some(v) => iface_verification__error_field_type__to_json(v), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_verification__error_field_type__to_json(p: &iface_verification::ErrorFieldType) -> Value {
+    let mut m = Map::new();
+    m.insert("errorCode".into(), match (&p.error_code) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("errorDescription".into(), match (&p.error_description) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("fieldType".into(), match (&p.field_type) { Some(v) => iface_verification__field_type__to_json(v), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_verification__field_type__to_json(p: &iface_verification::FieldType) -> Value {
+    let mut m = Map::new();
+    m.insert("field".into(), match (&p.field) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("fieldName".into(), match (&p.field_name) { Some(v) => Value::String(iface_verification__field_type_field_name_enum__to_str(v).into()), None => Value::Null });
+    m.insert("shareholderCode".into(), match (&p.shareholder_code) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_verification__field_type_wrapper__to_json(p: &iface_verification::FieldTypeWrapper) -> Value {
+    let mut m = Map::new();
+    m.insert("FieldType".into(), match (&p.field_type) { Some(v) => iface_verification__field_type__to_json(v), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_verification__kyc_verification_result__to_json(p: &iface_verification::KycVerificationResult) -> Value {
+    let mut m = Map::new();
+    m.insert("accountHolder".into(), match (&p.account_holder) { Some(v) => iface_verification__kyc_check_result__to_json(v), None => Value::Null });
+    m.insert("bankAccounts".into(), match (&p.bank_accounts) { Some(v) => Value::Array((v).iter().map(|v| iface_verification__kyc_bank_account_check_result__to_json(v)).collect()), None => Value::Null });
+    m.insert("shareholders".into(), match (&p.shareholders) { Some(v) => Value::Array((v).iter().map(|v| iface_verification__kyc_shareholder_check_result__to_json(v)).collect()), None => Value::Null });
+    m.insert("signatories".into(), match (&p.signatories) { Some(v) => Value::Array((v).iter().map(|v| iface_verification__kyc_signatory_check_result__to_json(v)).collect()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_verification__kyc_check_result__to_json(p: &iface_verification::KycCheckResult) -> Value {
+    let mut m = Map::new();
+    m.insert("checks".into(), match (&p.checks) { Some(v) => Value::Array((v).iter().map(|v| iface_verification__kyc_check_status_data__to_json(v)).collect()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_verification__kyc_check_status_data__to_json(p: &iface_verification::KycCheckStatusData) -> Value {
+    let mut m = Map::new();
+    m.insert("requiredFields".into(), match (&p.required_fields) { Some(v) => Value::Array((v).iter().map(|v| Value::String((v).clone())).collect()), None => Value::Null });
+    m.insert("status".into(), Value::String(iface_verification__kyc_check_status_data_status_enum__to_str(&p.status).into()));
+    m.insert("summary".into(), match (&p.summary) { Some(v) => iface_verification__kyc_check_summary__to_json(v), None => Value::Null });
+    m.insert("type".into(), Value::String(iface_verification__kyc_check_status_data_type_op_enum__to_str(&p.type_op).into()));
+    Value::Object(m)
+}
+
+fn iface_verification__kyc_check_summary__to_json(p: &iface_verification::KycCheckSummary) -> Value {
+    let mut m = Map::new();
+    m.insert("code".into(), Value::Number(serde_json::Number::from(*(&p.code))));
+    m.insert("description".into(), match (&p.description) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_verification__kyc_bank_account_check_result__to_json(p: &iface_verification::KycBankAccountCheckResult) -> Value {
+    let mut m = Map::new();
+    m.insert("bankAccountUUID".into(), match (&p.bank_account_uuid) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("checks".into(), match (&p.checks) { Some(v) => Value::Array((v).iter().map(|v| iface_verification__kyc_check_status_data__to_json(v)).collect()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_verification__kyc_shareholder_check_result__to_json(p: &iface_verification::KycShareholderCheckResult) -> Value {
+    let mut m = Map::new();
+    m.insert("checks".into(), match (&p.checks) { Some(v) => Value::Array((v).iter().map(|v| iface_verification__kyc_check_status_data__to_json(v)).collect()), None => Value::Null });
+    m.insert("shareholderCode".into(), match (&p.shareholder_code) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_verification__kyc_signatory_check_result__to_json(p: &iface_verification::KycSignatoryCheckResult) -> Value {
+    let mut m = Map::new();
+    m.insert("checks".into(), match (&p.checks) { Some(v) => Value::Array((v).iter().map(|v| iface_verification__kyc_check_status_data__to_json(v)).collect()), None => Value::Null });
+    m.insert("signatoryCode".into(), match (&p.signatory_code) { Some(v) => Value::String((v).clone()), None => Value::Null });
     Value::Object(m)
 }
 
@@ -1001,30 +3287,882 @@ fn iface_verification__post_upload_document_params__to_json(p: &iface_verificati
     Value::Object(m)
 }
 
+fn iface_verification__generic_response__from_json(v: &Value) -> Option<iface_verification::GenericResponse> {
+    let m = v.as_object()?;
+    Some(iface_verification::GenericResponse {
+        psp_reference: m.get("pspReference").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        result_code: m.get("resultCode").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        submitted_async: m.get("submittedAsync").filter(|v| !v.is_null()).and_then(|v| (v).as_bool()),
+    })
+}
+
+fn iface_verification__get_uploaded_documents_response__from_json(v: &Value) -> Option<iface_verification::GetUploadedDocumentsResponse> {
+    let m = v.as_object()?;
+    Some(iface_verification::GetUploadedDocumentsResponse {
+        document_details: m.get("documentDetails").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| iface_verification__document_detail_wrapper__from_json(x)).collect())),
+        psp_reference: m.get("pspReference").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        result_code: m.get("resultCode").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        submitted_async: m.get("submittedAsync").filter(|v| !v.is_null()).and_then(|v| (v).as_bool()),
+    })
+}
+
+fn iface_verification__document_detail_wrapper__from_json(v: &Value) -> Option<iface_verification::DocumentDetailWrapper> {
+    let m = v.as_object()?;
+    Some(iface_verification::DocumentDetailWrapper {
+        document_detail: m.get("DocumentDetail").filter(|v| !v.is_null()).and_then(|v| iface_verification__document_detail__from_json(v)),
+    })
+}
+
+fn iface_verification__document_detail__from_json(v: &Value) -> Option<iface_verification::DocumentDetail> {
+    let m = v.as_object()?;
+    Some(iface_verification::DocumentDetail {
+        account_holder_code: m.get("accountHolderCode").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        bank_account_uuid: m.get("bankAccountUUID").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        description: m.get("description").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        document_type: match m.get("documentType").and_then(|v| (v).as_str().and_then(iface_verification__document_detail_document_type_enum__from_str)) { Some(x) => x, None => return None },
+        filename: m.get("filename").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        shareholder_code: m.get("shareholderCode").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        signatory_code: m.get("signatoryCode").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    })
+}
+
+fn iface_verification__update_account_holder_response__from_json(v: &Value) -> Option<iface_verification::UpdateAccountHolderResponse> {
+    let m = v.as_object()?;
+    Some(iface_verification::UpdateAccountHolderResponse {
+        account_holder_code: m.get("accountHolderCode").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        account_holder_details: m.get("accountHolderDetails").filter(|v| !v.is_null()).and_then(|v| iface_verification__account_holder_details__from_json(v)),
+        account_holder_status: m.get("accountHolderStatus").filter(|v| !v.is_null()).and_then(|v| iface_verification__account_holder_status__from_json(v)),
+        invalid_fields: m.get("invalidFields").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| iface_verification__error_field_type_wrapper__from_json(x)).collect())),
+        psp_reference: m.get("pspReference").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        result_code: m.get("resultCode").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        submitted_async: m.get("submittedAsync").filter(|v| !v.is_null()).and_then(|v| (v).as_bool()),
+        updated_fields: m.get("updatedFields").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| iface_verification__field_type_wrapper__from_json(x)).collect())),
+        verification: m.get("verification").filter(|v| !v.is_null()).and_then(|v| iface_verification__kyc_verification_result__from_json(v)),
+    })
+}
+
+fn iface_verification__account_holder_details__from_json(v: &Value) -> Option<iface_verification::AccountHolderDetails> {
+    let m = v.as_object()?;
+    Some(iface_verification::AccountHolderDetails {
+        address: match m.get("address").and_then(|v| iface_verification__vias_address__from_json(v)) { Some(x) => x, None => return None },
+        bank_account_details: m.get("bankAccountDetails").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| iface_verification__bank_account_detail_wrapper__from_json(x)).collect())),
+        business_details: m.get("businessDetails").filter(|v| !v.is_null()).and_then(|v| iface_verification__business_details__from_json(v)),
+        email: m.get("email").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        full_phone_number: m.get("fullPhoneNumber").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        individual_details: m.get("individualDetails").filter(|v| !v.is_null()).and_then(|v| iface_verification__individual_details__from_json(v)),
+        last_review_date: m.get("lastReviewDate").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        merchant_category_code: m.get("merchantCategoryCode").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        metadata: m.get("metadata").filter(|v| !v.is_null()).and_then(|v| iface_verification__account_holder_details_metadata__from_json(v)),
+        principal_business_address: m.get("principalBusinessAddress").filter(|v| !v.is_null()).and_then(|v| iface_verification__vias_address__from_json(v)),
+        web_address: m.get("webAddress").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    })
+}
+
+fn iface_verification__vias_address__from_json(v: &Value) -> Option<iface_verification::ViasAddress> {
+    let m = v.as_object()?;
+    Some(iface_verification::ViasAddress {
+        city: m.get("city").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        country: m.get("country").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        house_number_or_name: m.get("houseNumberOrName").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        postal_code: m.get("postalCode").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        state_or_province: m.get("stateOrProvince").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        street: m.get("street").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    })
+}
+
+fn iface_verification__bank_account_detail_wrapper__from_json(v: &Value) -> Option<iface_verification::BankAccountDetailWrapper> {
+    let m = v.as_object()?;
+    Some(iface_verification::BankAccountDetailWrapper {
+        bank_account_detail: m.get("BankAccountDetail").filter(|v| !v.is_null()).and_then(|v| iface_verification__bank_account_detail__from_json(v)),
+    })
+}
+
+fn iface_verification__bank_account_detail__from_json(v: &Value) -> Option<iface_verification::BankAccountDetail> {
+    let m = v.as_object()?;
+    Some(iface_verification::BankAccountDetail {
+        account_number: m.get("accountNumber").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        account_type: m.get("accountType").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        bank_account_name: m.get("bankAccountName").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        bank_account_uuid: m.get("bankAccountUUID").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        bank_bic_swift: m.get("bankBicSwift").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        bank_city: m.get("bankCity").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        bank_code: m.get("bankCode").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        bank_name: m.get("bankName").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        branch_code: m.get("branchCode").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        check_code: m.get("checkCode").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        country_code: m.get("countryCode").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        currency_code: m.get("currencyCode").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        iban: m.get("iban").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        owner_city: m.get("ownerCity").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        owner_country_code: m.get("ownerCountryCode").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        owner_date_of_birth: m.get("ownerDateOfBirth").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        owner_house_number_or_name: m.get("ownerHouseNumberOrName").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        owner_name: m.get("ownerName").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        owner_nationality: m.get("ownerNationality").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        owner_postal_code: m.get("ownerPostalCode").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        owner_state: m.get("ownerState").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        owner_street: m.get("ownerStreet").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        primary_account: m.get("primaryAccount").filter(|v| !v.is_null()).and_then(|v| (v).as_bool()),
+        tax_id: m.get("taxId").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        url_for_verification: m.get("urlForVerification").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    })
+}
+
+fn iface_verification__business_details__from_json(v: &Value) -> Option<iface_verification::BusinessDetails> {
+    let m = v.as_object()?;
+    Some(iface_verification::BusinessDetails {
+        doing_business_as: m.get("doingBusinessAs").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        legal_business_name: m.get("legalBusinessName").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        listed_ultimate_parent_company: m.get("listedUltimateParentCompany").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| iface_verification__ultimate_parent_company_wrapper__from_json(x)).collect())),
+        shareholders: m.get("shareholders").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| iface_verification__shareholder_contact_wrapper__from_json(x)).collect())),
+        signatories: m.get("signatories").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| iface_verification__signatory_contact_wrapper__from_json(x)).collect())),
+        tax_id: m.get("taxId").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    })
+}
+
+fn iface_verification__ultimate_parent_company_wrapper__from_json(v: &Value) -> Option<iface_verification::UltimateParentCompanyWrapper> {
+    let m = v.as_object()?;
+    Some(iface_verification::UltimateParentCompanyWrapper {
+        ultimate_parent_company: m.get("UltimateParentCompany").filter(|v| !v.is_null()).and_then(|v| iface_verification__ultimate_parent_company__from_json(v)),
+    })
+}
+
+fn iface_verification__ultimate_parent_company__from_json(v: &Value) -> Option<iface_verification::UltimateParentCompany> {
+    let m = v.as_object()?;
+    Some(iface_verification::UltimateParentCompany {
+        address: m.get("address").filter(|v| !v.is_null()).and_then(|v| iface_verification__vias_address__from_json(v)),
+        business_details: m.get("businessDetails").filter(|v| !v.is_null()).and_then(|v| iface_verification__ultimate_parent_company_business_details__from_json(v)),
+        ultimate_parent_company_code: m.get("ultimateParentCompanyCode").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    })
+}
+
+fn iface_verification__ultimate_parent_company_business_details__from_json(v: &Value) -> Option<iface_verification::UltimateParentCompanyBusinessDetails> {
+    let m = v.as_object()?;
+    Some(iface_verification::UltimateParentCompanyBusinessDetails {
+        legal_business_name: m.get("legalBusinessName").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        registration_number: m.get("registrationNumber").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        stock_exchange: m.get("stockExchange").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        stock_number: m.get("stockNumber").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        stock_ticker: m.get("stockTicker").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    })
+}
+
+fn iface_verification__shareholder_contact_wrapper__from_json(v: &Value) -> Option<iface_verification::ShareholderContactWrapper> {
+    let m = v.as_object()?;
+    Some(iface_verification::ShareholderContactWrapper {
+        shareholder_contact: m.get("ShareholderContact").filter(|v| !v.is_null()).and_then(|v| iface_verification__shareholder_contact__from_json(v)),
+    })
+}
+
+fn iface_verification__shareholder_contact__from_json(v: &Value) -> Option<iface_verification::ShareholderContact> {
+    let m = v.as_object()?;
+    Some(iface_verification::ShareholderContact {
+        address: m.get("address").filter(|v| !v.is_null()).and_then(|v| iface_verification__vias_address__from_json(v)),
+        email: m.get("email").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        full_phone_number: m.get("fullPhoneNumber").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        job_title: m.get("jobTitle").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        name: m.get("name").filter(|v| !v.is_null()).and_then(|v| iface_verification__vias_name__from_json(v)),
+        personal_data: m.get("personalData").filter(|v| !v.is_null()).and_then(|v| iface_verification__vias_personal_data__from_json(v)),
+        phone_number: m.get("phoneNumber").filter(|v| !v.is_null()).and_then(|v| iface_verification__vias_phone_number__from_json(v)),
+        shareholder_code: m.get("shareholderCode").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        shareholder_type: m.get("shareholderType").filter(|v| !v.is_null()).and_then(|v| (v).as_str().and_then(iface_verification__shareholder_contact_shareholder_type_enum__from_str)),
+        web_address: m.get("webAddress").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    })
+}
+
+fn iface_verification__vias_name__from_json(v: &Value) -> Option<iface_verification::ViasName> {
+    let m = v.as_object()?;
+    Some(iface_verification::ViasName {
+        first_name: m.get("firstName").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        gender: m.get("gender").filter(|v| !v.is_null()).and_then(|v| (v).as_str().and_then(iface_verification__vias_name_gender_enum__from_str)),
+        infix: m.get("infix").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        last_name: m.get("lastName").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    })
+}
+
+fn iface_verification__vias_personal_data__from_json(v: &Value) -> Option<iface_verification::ViasPersonalData> {
+    let m = v.as_object()?;
+    Some(iface_verification::ViasPersonalData {
+        date_of_birth: m.get("dateOfBirth").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        document_data: m.get("documentData").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| iface_verification__personal_document_data_wrapper__from_json(x)).collect())),
+        id_number: m.get("idNumber").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        nationality: m.get("nationality").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    })
+}
+
+fn iface_verification__personal_document_data_wrapper__from_json(v: &Value) -> Option<iface_verification::PersonalDocumentDataWrapper> {
+    let m = v.as_object()?;
+    Some(iface_verification::PersonalDocumentDataWrapper {
+        personal_document_data: m.get("PersonalDocumentData").filter(|v| !v.is_null()).and_then(|v| iface_verification__personal_document_data__from_json(v)),
+    })
+}
+
+fn iface_verification__personal_document_data__from_json(v: &Value) -> Option<iface_verification::PersonalDocumentData> {
+    let m = v.as_object()?;
+    Some(iface_verification::PersonalDocumentData {
+        expiration_date: m.get("expirationDate").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        issuer_country: m.get("issuerCountry").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        issuer_state: m.get("issuerState").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        number: m.get("number").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        type_op: match m.get("type").and_then(|v| (v).as_str().and_then(iface_verification__personal_document_data_type_op_enum__from_str)) { Some(x) => x, None => return None },
+    })
+}
+
+fn iface_verification__vias_phone_number__from_json(v: &Value) -> Option<iface_verification::ViasPhoneNumber> {
+    let m = v.as_object()?;
+    Some(iface_verification::ViasPhoneNumber {
+        phone_country_code: m.get("phoneCountryCode").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        phone_number: m.get("phoneNumber").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        phone_type: m.get("phoneType").filter(|v| !v.is_null()).and_then(|v| (v).as_str().and_then(iface_verification__vias_phone_number_phone_type_enum__from_str)),
+    })
+}
+
+fn iface_verification__signatory_contact_wrapper__from_json(v: &Value) -> Option<iface_verification::SignatoryContactWrapper> {
+    let m = v.as_object()?;
+    Some(iface_verification::SignatoryContactWrapper {
+        signatory_contact: m.get("SignatoryContact").filter(|v| !v.is_null()).and_then(|v| iface_verification__signatory_contact__from_json(v)),
+    })
+}
+
+fn iface_verification__signatory_contact__from_json(v: &Value) -> Option<iface_verification::SignatoryContact> {
+    let m = v.as_object()?;
+    Some(iface_verification::SignatoryContact {
+        address: m.get("address").filter(|v| !v.is_null()).and_then(|v| iface_verification__vias_address__from_json(v)),
+        email: m.get("email").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        full_phone_number: m.get("fullPhoneNumber").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        job_title: m.get("jobTitle").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        name: m.get("name").filter(|v| !v.is_null()).and_then(|v| iface_verification__vias_name__from_json(v)),
+        personal_data: m.get("personalData").filter(|v| !v.is_null()).and_then(|v| iface_verification__vias_personal_data__from_json(v)),
+        phone_number: m.get("phoneNumber").filter(|v| !v.is_null()).and_then(|v| iface_verification__vias_phone_number__from_json(v)),
+        signatory_code: m.get("signatoryCode").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        signatory_reference: m.get("signatoryReference").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        web_address: m.get("webAddress").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    })
+}
+
+fn iface_verification__individual_details__from_json(v: &Value) -> Option<iface_verification::IndividualDetails> {
+    let m = v.as_object()?;
+    Some(iface_verification::IndividualDetails {
+        name: m.get("name").filter(|v| !v.is_null()).and_then(|v| iface_verification__vias_name__from_json(v)),
+        personal_data: m.get("personalData").filter(|v| !v.is_null()).and_then(|v| iface_verification__vias_personal_data__from_json(v)),
+    })
+}
+
+fn iface_verification__account_holder_details_metadata__from_json(v: &Value) -> Option<iface_verification::AccountHolderDetailsMetadata> {
+    let m = v.as_object()?;
+    Some(iface_verification::AccountHolderDetailsMetadata {
+        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    })
+}
+
+fn iface_verification__account_holder_status__from_json(v: &Value) -> Option<iface_verification::AccountHolderStatus> {
+    let m = v.as_object()?;
+    Some(iface_verification::AccountHolderStatus {
+        events: m.get("events").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| iface_verification__account_event_wrapper__from_json(x)).collect())),
+        payout_state: m.get("payoutState").filter(|v| !v.is_null()).and_then(|v| iface_verification__account_payout_state__from_json(v)),
+        processing_state: m.get("processingState").filter(|v| !v.is_null()).and_then(|v| iface_verification__account_processing_state__from_json(v)),
+        status: match m.get("status").and_then(|v| (v).as_str().and_then(iface_verification__account_holder_status_status_enum__from_str)) { Some(x) => x, None => return None },
+        status_reason: m.get("statusReason").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    })
+}
+
+fn iface_verification__account_event_wrapper__from_json(v: &Value) -> Option<iface_verification::AccountEventWrapper> {
+    let m = v.as_object()?;
+    Some(iface_verification::AccountEventWrapper {
+        account_event: m.get("AccountEvent").filter(|v| !v.is_null()).and_then(|v| iface_verification__account_event__from_json(v)),
+    })
+}
+
+fn iface_verification__account_event__from_json(v: &Value) -> Option<iface_verification::AccountEvent> {
+    let m = v.as_object()?;
+    Some(iface_verification::AccountEvent {
+        event: m.get("event").filter(|v| !v.is_null()).and_then(|v| (v).as_str().and_then(iface_verification__account_event_event_enum__from_str)),
+        execution_date: m.get("executionDate").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        reason: m.get("reason").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    })
+}
+
+fn iface_verification__account_payout_state__from_json(v: &Value) -> Option<iface_verification::AccountPayoutState> {
+    let m = v.as_object()?;
+    Some(iface_verification::AccountPayoutState {
+        allow_payout: m.get("allowPayout").filter(|v| !v.is_null()).and_then(|v| (v).as_bool()),
+        disable_reason: m.get("disableReason").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        disabled: m.get("disabled").filter(|v| !v.is_null()).and_then(|v| (v).as_bool()),
+        payout_limit: m.get("payoutLimit").filter(|v| !v.is_null()).and_then(|v| iface_verification__amount__from_json(v)),
+        tier_number: m.get("tierNumber").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+    })
+}
+
+fn iface_verification__amount__from_json(v: &Value) -> Option<iface_verification::Amount> {
+    let m = v.as_object()?;
+    Some(iface_verification::Amount {
+        currency: m.get("currency").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        value: m.get("value").and_then(|v| (v).as_i64()).unwrap_or_default(),
+    })
+}
+
+fn iface_verification__account_processing_state__from_json(v: &Value) -> Option<iface_verification::AccountProcessingState> {
+    let m = v.as_object()?;
+    Some(iface_verification::AccountProcessingState {
+        disable_reason: m.get("disableReason").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        disabled: m.get("disabled").filter(|v| !v.is_null()).and_then(|v| (v).as_bool()),
+        processed_from: m.get("processedFrom").filter(|v| !v.is_null()).and_then(|v| iface_verification__amount__from_json(v)),
+        processed_to: m.get("processedTo").filter(|v| !v.is_null()).and_then(|v| iface_verification__amount__from_json(v)),
+        tier_number: m.get("tierNumber").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+    })
+}
+
+fn iface_verification__error_field_type_wrapper__from_json(v: &Value) -> Option<iface_verification::ErrorFieldTypeWrapper> {
+    let m = v.as_object()?;
+    Some(iface_verification::ErrorFieldTypeWrapper {
+        error_field_type: m.get("ErrorFieldType").filter(|v| !v.is_null()).and_then(|v| iface_verification__error_field_type__from_json(v)),
+    })
+}
+
+fn iface_verification__error_field_type__from_json(v: &Value) -> Option<iface_verification::ErrorFieldType> {
+    let m = v.as_object()?;
+    Some(iface_verification::ErrorFieldType {
+        error_code: m.get("errorCode").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        error_description: m.get("errorDescription").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        field_type: m.get("fieldType").filter(|v| !v.is_null()).and_then(|v| iface_verification__field_type__from_json(v)),
+    })
+}
+
+fn iface_verification__field_type__from_json(v: &Value) -> Option<iface_verification::FieldType> {
+    let m = v.as_object()?;
+    Some(iface_verification::FieldType {
+        field: m.get("field").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        field_name: m.get("fieldName").filter(|v| !v.is_null()).and_then(|v| (v).as_str().and_then(iface_verification__field_type_field_name_enum__from_str)),
+        shareholder_code: m.get("shareholderCode").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    })
+}
+
+fn iface_verification__field_type_wrapper__from_json(v: &Value) -> Option<iface_verification::FieldTypeWrapper> {
+    let m = v.as_object()?;
+    Some(iface_verification::FieldTypeWrapper {
+        field_type: m.get("FieldType").filter(|v| !v.is_null()).and_then(|v| iface_verification__field_type__from_json(v)),
+    })
+}
+
+fn iface_verification__kyc_verification_result__from_json(v: &Value) -> Option<iface_verification::KycVerificationResult> {
+    let m = v.as_object()?;
+    Some(iface_verification::KycVerificationResult {
+        account_holder: m.get("accountHolder").filter(|v| !v.is_null()).and_then(|v| iface_verification__kyc_check_result__from_json(v)),
+        bank_accounts: m.get("bankAccounts").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| iface_verification__kyc_bank_account_check_result__from_json(x)).collect())),
+        shareholders: m.get("shareholders").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| iface_verification__kyc_shareholder_check_result__from_json(x)).collect())),
+        signatories: m.get("signatories").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| iface_verification__kyc_signatory_check_result__from_json(x)).collect())),
+    })
+}
+
+fn iface_verification__kyc_check_result__from_json(v: &Value) -> Option<iface_verification::KycCheckResult> {
+    let m = v.as_object()?;
+    Some(iface_verification::KycCheckResult {
+        checks: m.get("checks").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| iface_verification__kyc_check_status_data__from_json(x)).collect())),
+    })
+}
+
+fn iface_verification__kyc_check_status_data__from_json(v: &Value) -> Option<iface_verification::KycCheckStatusData> {
+    let m = v.as_object()?;
+    Some(iface_verification::KycCheckStatusData {
+        required_fields: m.get("requiredFields").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| (x).as_str().map(|s| s.to_string())).collect())),
+        status: match m.get("status").and_then(|v| (v).as_str().and_then(iface_verification__kyc_check_status_data_status_enum__from_str)) { Some(x) => x, None => return None },
+        summary: m.get("summary").filter(|v| !v.is_null()).and_then(|v| iface_verification__kyc_check_summary__from_json(v)),
+        type_op: match m.get("type").and_then(|v| (v).as_str().and_then(iface_verification__kyc_check_status_data_type_op_enum__from_str)) { Some(x) => x, None => return None },
+    })
+}
+
+fn iface_verification__kyc_check_summary__from_json(v: &Value) -> Option<iface_verification::KycCheckSummary> {
+    let m = v.as_object()?;
+    Some(iface_verification::KycCheckSummary {
+        code: m.get("code").and_then(|v| (v).as_i64().map(|n| n as i32)).unwrap_or_default(),
+        description: m.get("description").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    })
+}
+
+fn iface_verification__kyc_bank_account_check_result__from_json(v: &Value) -> Option<iface_verification::KycBankAccountCheckResult> {
+    let m = v.as_object()?;
+    Some(iface_verification::KycBankAccountCheckResult {
+        bank_account_uuid: m.get("bankAccountUUID").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        checks: m.get("checks").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| iface_verification__kyc_check_status_data__from_json(x)).collect())),
+    })
+}
+
+fn iface_verification__kyc_shareholder_check_result__from_json(v: &Value) -> Option<iface_verification::KycShareholderCheckResult> {
+    let m = v.as_object()?;
+    Some(iface_verification::KycShareholderCheckResult {
+        checks: m.get("checks").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| iface_verification__kyc_check_status_data__from_json(x)).collect())),
+        shareholder_code: m.get("shareholderCode").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    })
+}
+
+fn iface_verification__kyc_signatory_check_result__from_json(v: &Value) -> Option<iface_verification::KycSignatoryCheckResult> {
+    let m = v.as_object()?;
+    Some(iface_verification::KycSignatoryCheckResult {
+        checks: m.get("checks").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| iface_verification__kyc_check_status_data__from_json(x)).collect())),
+        signatory_code: m.get("signatoryCode").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    })
+}
+
+fn iface_verification__document_detail_document_type_enum__from_str(s: &str) -> Option<iface_verification::DocumentDetailDocumentTypeEnum> {
+    match s {
+        "BANK_STATEMENT" => Some(iface_verification::DocumentDetailDocumentTypeEnum::BankStatement),
+        "BSN" => Some(iface_verification::DocumentDetailDocumentTypeEnum::Bsn),
+        "DRIVING_LICENCE" => Some(iface_verification::DocumentDetailDocumentTypeEnum::DrivingLicence),
+        "DRIVING_LICENCE_BACK" => Some(iface_verification::DocumentDetailDocumentTypeEnum::DrivingLicenceBack),
+        "DRIVING_LICENCE_FRONT" => Some(iface_verification::DocumentDetailDocumentTypeEnum::DrivingLicenceFront),
+        "ID_CARD" => Some(iface_verification::DocumentDetailDocumentTypeEnum::IdCard),
+        "ID_CARD_BACK" => Some(iface_verification::DocumentDetailDocumentTypeEnum::IdCardBack),
+        "ID_CARD_FRONT" => Some(iface_verification::DocumentDetailDocumentTypeEnum::IdCardFront),
+        "PASSPORT" => Some(iface_verification::DocumentDetailDocumentTypeEnum::Passport),
+        "PROOF_OF_RESIDENCY" => Some(iface_verification::DocumentDetailDocumentTypeEnum::ProofOfResidency),
+        "SSN" => Some(iface_verification::DocumentDetailDocumentTypeEnum::Ssn),
+        _ => None,
+    }
+}
+
+fn iface_verification__vias_name_gender_enum__from_str(s: &str) -> Option<iface_verification::ViasNameGenderEnum> {
+    match s {
+        "MALE" => Some(iface_verification::ViasNameGenderEnum::Male),
+        "FEMALE" => Some(iface_verification::ViasNameGenderEnum::Female),
+        "UNKNOWN" => Some(iface_verification::ViasNameGenderEnum::Unknown),
+        _ => None,
+    }
+}
+
+fn iface_verification__personal_document_data_type_op_enum__from_str(s: &str) -> Option<iface_verification::PersonalDocumentDataTypeOpEnum> {
+    match s {
+        "DRIVINGLICENSE" => Some(iface_verification::PersonalDocumentDataTypeOpEnum::Drivinglicense),
+        "ID" => Some(iface_verification::PersonalDocumentDataTypeOpEnum::Id),
+        "PASSPORT" => Some(iface_verification::PersonalDocumentDataTypeOpEnum::Passport),
+        "SOCIALSECURITY" => Some(iface_verification::PersonalDocumentDataTypeOpEnum::Socialsecurity),
+        "VISA" => Some(iface_verification::PersonalDocumentDataTypeOpEnum::Visa),
+        _ => None,
+    }
+}
+
+fn iface_verification__vias_phone_number_phone_type_enum__from_str(s: &str) -> Option<iface_verification::ViasPhoneNumberPhoneTypeEnum> {
+    match s {
+        "Fax" => Some(iface_verification::ViasPhoneNumberPhoneTypeEnum::Fax),
+        "Landline" => Some(iface_verification::ViasPhoneNumberPhoneTypeEnum::Landline),
+        "Mobile" => Some(iface_verification::ViasPhoneNumberPhoneTypeEnum::Mobile),
+        "SIP" => Some(iface_verification::ViasPhoneNumberPhoneTypeEnum::Sip),
+        _ => None,
+    }
+}
+
+fn iface_verification__shareholder_contact_shareholder_type_enum__from_str(s: &str) -> Option<iface_verification::ShareholderContactShareholderTypeEnum> {
+    match s {
+        "Controller" => Some(iface_verification::ShareholderContactShareholderTypeEnum::Controller),
+        "Owner" => Some(iface_verification::ShareholderContactShareholderTypeEnum::Owner),
+        "Signatory" => Some(iface_verification::ShareholderContactShareholderTypeEnum::Signatory),
+        _ => None,
+    }
+}
+
+fn iface_verification__account_event_event_enum__from_str(s: &str) -> Option<iface_verification::AccountEventEventEnum> {
+    match s {
+        "InactivateAccount" => Some(iface_verification::AccountEventEventEnum::InactivateAccount),
+        "RefundNotPaidOutTransfers" => Some(iface_verification::AccountEventEventEnum::RefundNotPaidOutTransfers),
+        _ => None,
+    }
+}
+
+fn iface_verification__account_holder_status_status_enum__from_str(s: &str) -> Option<iface_verification::AccountHolderStatusStatusEnum> {
+    match s {
+        "Active" => Some(iface_verification::AccountHolderStatusStatusEnum::Active),
+        "Closed" => Some(iface_verification::AccountHolderStatusStatusEnum::Closed),
+        "Inactive" => Some(iface_verification::AccountHolderStatusStatusEnum::Inactive),
+        "Suspended" => Some(iface_verification::AccountHolderStatusStatusEnum::Suspended),
+        _ => None,
+    }
+}
+
+fn iface_verification__field_type_field_name_enum__from_str(s: &str) -> Option<iface_verification::FieldTypeFieldNameEnum> {
+    match s {
+        "accountCode" => Some(iface_verification::FieldTypeFieldNameEnum::AccountCode),
+        "accountHolderCode" => Some(iface_verification::FieldTypeFieldNameEnum::AccountHolderCode),
+        "accountHolderDetails" => Some(iface_verification::FieldTypeFieldNameEnum::AccountHolderDetails),
+        "accountNumber" => Some(iface_verification::FieldTypeFieldNameEnum::AccountNumber),
+        "accountStateType" => Some(iface_verification::FieldTypeFieldNameEnum::AccountStateType),
+        "accountStatus" => Some(iface_verification::FieldTypeFieldNameEnum::AccountStatus),
+        "accountType" => Some(iface_verification::FieldTypeFieldNameEnum::AccountType),
+        "address" => Some(iface_verification::FieldTypeFieldNameEnum::Address),
+        "balanceAccount" => Some(iface_verification::FieldTypeFieldNameEnum::BalanceAccount),
+        "balanceAccountActive" => Some(iface_verification::FieldTypeFieldNameEnum::BalanceAccountActive),
+        "balanceAccountCode" => Some(iface_verification::FieldTypeFieldNameEnum::BalanceAccountCode),
+        "balanceAccountId" => Some(iface_verification::FieldTypeFieldNameEnum::BalanceAccountId),
+        "bankAccount" => Some(iface_verification::FieldTypeFieldNameEnum::BankAccount),
+        "bankAccountCode" => Some(iface_verification::FieldTypeFieldNameEnum::BankAccountCode),
+        "bankAccountName" => Some(iface_verification::FieldTypeFieldNameEnum::BankAccountName),
+        "bankAccountUUID" => Some(iface_verification::FieldTypeFieldNameEnum::BankAccountUuid),
+        "bankBicSwift" => Some(iface_verification::FieldTypeFieldNameEnum::BankBicSwift),
+        "bankCity" => Some(iface_verification::FieldTypeFieldNameEnum::BankCity),
+        "bankCode" => Some(iface_verification::FieldTypeFieldNameEnum::BankCode),
+        "bankName" => Some(iface_verification::FieldTypeFieldNameEnum::BankName),
+        "bankStatement" => Some(iface_verification::FieldTypeFieldNameEnum::BankStatement),
+        "branchCode" => Some(iface_verification::FieldTypeFieldNameEnum::BranchCode),
+        "businessContact" => Some(iface_verification::FieldTypeFieldNameEnum::BusinessContact),
+        "cardToken" => Some(iface_verification::FieldTypeFieldNameEnum::CardToken),
+        "checkCode" => Some(iface_verification::FieldTypeFieldNameEnum::CheckCode),
+        "city" => Some(iface_verification::FieldTypeFieldNameEnum::City),
+        "companyRegistration" => Some(iface_verification::FieldTypeFieldNameEnum::CompanyRegistration),
+        "constitutionalDocument" => Some(iface_verification::FieldTypeFieldNameEnum::ConstitutionalDocument),
+        "controller" => Some(iface_verification::FieldTypeFieldNameEnum::Controller),
+        "country" => Some(iface_verification::FieldTypeFieldNameEnum::Country),
+        "countryCode" => Some(iface_verification::FieldTypeFieldNameEnum::CountryCode),
+        "currency" => Some(iface_verification::FieldTypeFieldNameEnum::Currency),
+        "currencyCode" => Some(iface_verification::FieldTypeFieldNameEnum::CurrencyCode),
+        "dateOfBirth" => Some(iface_verification::FieldTypeFieldNameEnum::DateOfBirth),
+        "destinationAccountCode" => Some(iface_verification::FieldTypeFieldNameEnum::DestinationAccountCode),
+        "document" => Some(iface_verification::FieldTypeFieldNameEnum::Document),
+        "documentContent" => Some(iface_verification::FieldTypeFieldNameEnum::DocumentContent),
+        "documentExpirationDate" => Some(iface_verification::FieldTypeFieldNameEnum::DocumentExpirationDate),
+        "documentIssuerCountry" => Some(iface_verification::FieldTypeFieldNameEnum::DocumentIssuerCountry),
+        "documentIssuerState" => Some(iface_verification::FieldTypeFieldNameEnum::DocumentIssuerState),
+        "documentName" => Some(iface_verification::FieldTypeFieldNameEnum::DocumentName),
+        "documentNumber" => Some(iface_verification::FieldTypeFieldNameEnum::DocumentNumber),
+        "documentType" => Some(iface_verification::FieldTypeFieldNameEnum::DocumentType),
+        "doingBusinessAs" => Some(iface_verification::FieldTypeFieldNameEnum::DoingBusinessAs),
+        "drivingLicence" => Some(iface_verification::FieldTypeFieldNameEnum::DrivingLicence),
+        "drivingLicenceBack" => Some(iface_verification::FieldTypeFieldNameEnum::DrivingLicenceBack),
+        "drivingLicenceFront" => Some(iface_verification::FieldTypeFieldNameEnum::DrivingLicenceFront),
+        "drivingLicense" => Some(iface_verification::FieldTypeFieldNameEnum::DrivingLicense),
+        "email" => Some(iface_verification::FieldTypeFieldNameEnum::Email),
+        "firstName" => Some(iface_verification::FieldTypeFieldNameEnum::FirstName),
+        "formType" => Some(iface_verification::FieldTypeFieldNameEnum::FormType),
+        "fullPhoneNumber" => Some(iface_verification::FieldTypeFieldNameEnum::FullPhoneNumber),
+        "gender" => Some(iface_verification::FieldTypeFieldNameEnum::Gender),
+        "hopWebserviceUser" => Some(iface_verification::FieldTypeFieldNameEnum::HopWebserviceUser),
+        "houseNumberOrName" => Some(iface_verification::FieldTypeFieldNameEnum::HouseNumberOrName),
+        "iban" => Some(iface_verification::FieldTypeFieldNameEnum::Iban),
+        "idCard" => Some(iface_verification::FieldTypeFieldNameEnum::IdCard),
+        "idNumber" => Some(iface_verification::FieldTypeFieldNameEnum::IdNumber),
+        "identityDocument" => Some(iface_verification::FieldTypeFieldNameEnum::IdentityDocument),
+        "individualDetails" => Some(iface_verification::FieldTypeFieldNameEnum::IndividualDetails),
+        "infix" => Some(iface_verification::FieldTypeFieldNameEnum::Infix),
+        "jobTitle" => Some(iface_verification::FieldTypeFieldNameEnum::JobTitle),
+        "lastName" => Some(iface_verification::FieldTypeFieldNameEnum::LastName),
+        "lastReviewDate" => Some(iface_verification::FieldTypeFieldNameEnum::LastReviewDate),
+        "legalArrangement" => Some(iface_verification::FieldTypeFieldNameEnum::LegalArrangement),
+        "legalArrangementCode" => Some(iface_verification::FieldTypeFieldNameEnum::LegalArrangementCode),
+        "legalArrangementEntity" => Some(iface_verification::FieldTypeFieldNameEnum::LegalArrangementEntity),
+        "legalArrangementEntityCode" => Some(iface_verification::FieldTypeFieldNameEnum::LegalArrangementEntityCode),
+        "legalArrangementLegalForm" => Some(iface_verification::FieldTypeFieldNameEnum::LegalArrangementLegalForm),
+        "legalArrangementMember" => Some(iface_verification::FieldTypeFieldNameEnum::LegalArrangementMember),
+        "legalArrangementMembers" => Some(iface_verification::FieldTypeFieldNameEnum::LegalArrangementMembers),
+        "legalArrangementName" => Some(iface_verification::FieldTypeFieldNameEnum::LegalArrangementName),
+        "legalArrangementReference" => Some(iface_verification::FieldTypeFieldNameEnum::LegalArrangementReference),
+        "legalArrangementRegistrationNumber" => Some(iface_verification::FieldTypeFieldNameEnum::LegalArrangementRegistrationNumber),
+        "legalArrangementTaxNumber" => Some(iface_verification::FieldTypeFieldNameEnum::LegalArrangementTaxNumber),
+        "legalArrangementType" => Some(iface_verification::FieldTypeFieldNameEnum::LegalArrangementType),
+        "legalBusinessName" => Some(iface_verification::FieldTypeFieldNameEnum::LegalBusinessName),
+        "legalEntity" => Some(iface_verification::FieldTypeFieldNameEnum::LegalEntity),
+        "legalEntityType" => Some(iface_verification::FieldTypeFieldNameEnum::LegalEntityType),
+        "logo" => Some(iface_verification::FieldTypeFieldNameEnum::Logo),
+        "merchantAccount" => Some(iface_verification::FieldTypeFieldNameEnum::MerchantAccount),
+        "merchantCategoryCode" => Some(iface_verification::FieldTypeFieldNameEnum::MerchantCategoryCode),
+        "merchantHouseNumber" => Some(iface_verification::FieldTypeFieldNameEnum::MerchantHouseNumber),
+        "merchantReference" => Some(iface_verification::FieldTypeFieldNameEnum::MerchantReference),
+        "microDeposit" => Some(iface_verification::FieldTypeFieldNameEnum::MicroDeposit),
+        "name" => Some(iface_verification::FieldTypeFieldNameEnum::Name),
+        "nationality" => Some(iface_verification::FieldTypeFieldNameEnum::Nationality),
+        "originalReference" => Some(iface_verification::FieldTypeFieldNameEnum::OriginalReference),
+        "ownerCity" => Some(iface_verification::FieldTypeFieldNameEnum::OwnerCity),
+        "ownerCountryCode" => Some(iface_verification::FieldTypeFieldNameEnum::OwnerCountryCode),
+        "ownerDateOfBirth" => Some(iface_verification::FieldTypeFieldNameEnum::OwnerDateOfBirth),
+        "ownerHouseNumberOrName" => Some(iface_verification::FieldTypeFieldNameEnum::OwnerHouseNumberOrName),
+        "ownerName" => Some(iface_verification::FieldTypeFieldNameEnum::OwnerName),
+        "ownerPostalCode" => Some(iface_verification::FieldTypeFieldNameEnum::OwnerPostalCode),
+        "ownerState" => Some(iface_verification::FieldTypeFieldNameEnum::OwnerState),
+        "ownerStreet" => Some(iface_verification::FieldTypeFieldNameEnum::OwnerStreet),
+        "passport" => Some(iface_verification::FieldTypeFieldNameEnum::Passport),
+        "passportNumber" => Some(iface_verification::FieldTypeFieldNameEnum::PassportNumber),
+        "payoutMethod" => Some(iface_verification::FieldTypeFieldNameEnum::PayoutMethod),
+        "payoutMethodCode" => Some(iface_verification::FieldTypeFieldNameEnum::PayoutMethodCode),
+        "payoutSchedule" => Some(iface_verification::FieldTypeFieldNameEnum::PayoutSchedule),
+        "pciSelfAssessment" => Some(iface_verification::FieldTypeFieldNameEnum::PciSelfAssessment),
+        "personalData" => Some(iface_verification::FieldTypeFieldNameEnum::PersonalData),
+        "phoneCountryCode" => Some(iface_verification::FieldTypeFieldNameEnum::PhoneCountryCode),
+        "phoneNumber" => Some(iface_verification::FieldTypeFieldNameEnum::PhoneNumber),
+        "postalCode" => Some(iface_verification::FieldTypeFieldNameEnum::PostalCode),
+        "primaryCurrency" => Some(iface_verification::FieldTypeFieldNameEnum::PrimaryCurrency),
+        "reason" => Some(iface_verification::FieldTypeFieldNameEnum::Reason),
+        "returnUrl" => Some(iface_verification::FieldTypeFieldNameEnum::ReturnUrl),
+        "schedule" => Some(iface_verification::FieldTypeFieldNameEnum::Schedule),
+        "shareholder" => Some(iface_verification::FieldTypeFieldNameEnum::Shareholder),
+        "shareholderCode" => Some(iface_verification::FieldTypeFieldNameEnum::ShareholderCode),
+        "shareholderCodeAndSignatoryCode" => Some(iface_verification::FieldTypeFieldNameEnum::ShareholderCodeAndSignatoryCode),
+        "shareholderCodeOrSignatoryCode" => Some(iface_verification::FieldTypeFieldNameEnum::ShareholderCodeOrSignatoryCode),
+        "shareholderType" => Some(iface_verification::FieldTypeFieldNameEnum::ShareholderType),
+        "shareholderTypes" => Some(iface_verification::FieldTypeFieldNameEnum::ShareholderTypes),
+        "shopperInteraction" => Some(iface_verification::FieldTypeFieldNameEnum::ShopperInteraction),
+        "signatory" => Some(iface_verification::FieldTypeFieldNameEnum::Signatory),
+        "signatoryCode" => Some(iface_verification::FieldTypeFieldNameEnum::SignatoryCode),
+        "socialSecurityNumber" => Some(iface_verification::FieldTypeFieldNameEnum::SocialSecurityNumber),
+        "sourceAccountCode" => Some(iface_verification::FieldTypeFieldNameEnum::SourceAccountCode),
+        "splitAccount" => Some(iface_verification::FieldTypeFieldNameEnum::SplitAccount),
+        "splitConfigurationUUID" => Some(iface_verification::FieldTypeFieldNameEnum::SplitConfigurationUuid),
+        "splitCurrency" => Some(iface_verification::FieldTypeFieldNameEnum::SplitCurrency),
+        "splitValue" => Some(iface_verification::FieldTypeFieldNameEnum::SplitValue),
+        "splits" => Some(iface_verification::FieldTypeFieldNameEnum::Splits),
+        "stateOrProvince" => Some(iface_verification::FieldTypeFieldNameEnum::StateOrProvince),
+        "status" => Some(iface_verification::FieldTypeFieldNameEnum::Status),
+        "stockExchange" => Some(iface_verification::FieldTypeFieldNameEnum::StockExchange),
+        "stockNumber" => Some(iface_verification::FieldTypeFieldNameEnum::StockNumber),
+        "stockTicker" => Some(iface_verification::FieldTypeFieldNameEnum::StockTicker),
+        "store" => Some(iface_verification::FieldTypeFieldNameEnum::Store),
+        "storeDetail" => Some(iface_verification::FieldTypeFieldNameEnum::StoreDetail),
+        "storeName" => Some(iface_verification::FieldTypeFieldNameEnum::StoreName),
+        "storeReference" => Some(iface_verification::FieldTypeFieldNameEnum::StoreReference),
+        "street" => Some(iface_verification::FieldTypeFieldNameEnum::Street),
+        "taxId" => Some(iface_verification::FieldTypeFieldNameEnum::TaxId),
+        "tier" => Some(iface_verification::FieldTypeFieldNameEnum::Tier),
+        "tierNumber" => Some(iface_verification::FieldTypeFieldNameEnum::TierNumber),
+        "transferCode" => Some(iface_verification::FieldTypeFieldNameEnum::TransferCode),
+        "ultimateParentCompany" => Some(iface_verification::FieldTypeFieldNameEnum::UltimateParentCompany),
+        "ultimateParentCompanyAddressDetails" => Some(iface_verification::FieldTypeFieldNameEnum::UltimateParentCompanyAddressDetails),
+        "ultimateParentCompanyAddressDetailsCountry" => Some(iface_verification::FieldTypeFieldNameEnum::UltimateParentCompanyAddressDetailsCountry),
+        "ultimateParentCompanyBusinessDetails" => Some(iface_verification::FieldTypeFieldNameEnum::UltimateParentCompanyBusinessDetails),
+        "ultimateParentCompanyBusinessDetailsLegalBusinessName" => Some(iface_verification::FieldTypeFieldNameEnum::UltimateParentCompanyBusinessDetailsLegalBusinessName),
+        "ultimateParentCompanyBusinessDetailsRegistrationNumber" => Some(iface_verification::FieldTypeFieldNameEnum::UltimateParentCompanyBusinessDetailsRegistrationNumber),
+        "ultimateParentCompanyCode" => Some(iface_verification::FieldTypeFieldNameEnum::UltimateParentCompanyCode),
+        "ultimateParentCompanyStockExchange" => Some(iface_verification::FieldTypeFieldNameEnum::UltimateParentCompanyStockExchange),
+        "ultimateParentCompanyStockNumber" => Some(iface_verification::FieldTypeFieldNameEnum::UltimateParentCompanyStockNumber),
+        "ultimateParentCompanyStockNumberOrStockTicker" => Some(iface_verification::FieldTypeFieldNameEnum::UltimateParentCompanyStockNumberOrStockTicker),
+        "ultimateParentCompanyStockTicker" => Some(iface_verification::FieldTypeFieldNameEnum::UltimateParentCompanyStockTicker),
+        "unknown" => Some(iface_verification::FieldTypeFieldNameEnum::Unknown),
+        "value" => Some(iface_verification::FieldTypeFieldNameEnum::Value),
+        "verificationType" => Some(iface_verification::FieldTypeFieldNameEnum::VerificationType),
+        "virtualAccount" => Some(iface_verification::FieldTypeFieldNameEnum::VirtualAccount),
+        "visaNumber" => Some(iface_verification::FieldTypeFieldNameEnum::VisaNumber),
+        "webAddress" => Some(iface_verification::FieldTypeFieldNameEnum::WebAddress),
+        "year" => Some(iface_verification::FieldTypeFieldNameEnum::Year),
+        _ => None,
+    }
+}
+
+fn iface_verification__kyc_check_status_data_status_enum__from_str(s: &str) -> Option<iface_verification::KycCheckStatusDataStatusEnum> {
+    match s {
+        "AWAITING_DATA" => Some(iface_verification::KycCheckStatusDataStatusEnum::AwaitingData),
+        "DATA_PROVIDED" => Some(iface_verification::KycCheckStatusDataStatusEnum::DataProvided),
+        "FAILED" => Some(iface_verification::KycCheckStatusDataStatusEnum::Failed),
+        "INVALID_DATA" => Some(iface_verification::KycCheckStatusDataStatusEnum::InvalidData),
+        "PASSED" => Some(iface_verification::KycCheckStatusDataStatusEnum::Passed),
+        "PENDING" => Some(iface_verification::KycCheckStatusDataStatusEnum::Pending),
+        "PENDING_REVIEW" => Some(iface_verification::KycCheckStatusDataStatusEnum::PendingReview),
+        "RETRY_LIMIT_REACHED" => Some(iface_verification::KycCheckStatusDataStatusEnum::RetryLimitReached),
+        "UNCHECKED" => Some(iface_verification::KycCheckStatusDataStatusEnum::Unchecked),
+        _ => None,
+    }
+}
+
+fn iface_verification__kyc_check_status_data_type_op_enum__from_str(s: &str) -> Option<iface_verification::KycCheckStatusDataTypeOpEnum> {
+    match s {
+        "BANK_ACCOUNT_VERIFICATION" => Some(iface_verification::KycCheckStatusDataTypeOpEnum::BankAccountVerification),
+        "CARD_VERIFICATION" => Some(iface_verification::KycCheckStatusDataTypeOpEnum::CardVerification),
+        "COMPANY_VERIFICATION" => Some(iface_verification::KycCheckStatusDataTypeOpEnum::CompanyVerification),
+        "IDENTITY_VERIFICATION" => Some(iface_verification::KycCheckStatusDataTypeOpEnum::IdentityVerification),
+        "LEGAL_ARRANGEMENT_VERIFICATION" => Some(iface_verification::KycCheckStatusDataTypeOpEnum::LegalArrangementVerification),
+        "NONPROFIT_VERIFICATION" => Some(iface_verification::KycCheckStatusDataTypeOpEnum::NonprofitVerification),
+        "PASSPORT_VERIFICATION" => Some(iface_verification::KycCheckStatusDataTypeOpEnum::PassportVerification),
+        "PAYOUT_METHOD_VERIFICATION" => Some(iface_verification::KycCheckStatusDataTypeOpEnum::PayoutMethodVerification),
+        "PCI_VERIFICATION" => Some(iface_verification::KycCheckStatusDataTypeOpEnum::PciVerification),
+        _ => None,
+    }
+}
+
+fn iface_verification__post_delete_bank_accounts__ok(body: String) -> Result<iface_verification::GenericResponse, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match iface_verification__generic_response__from_json(&v) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_verification__post_delete_bank_accounts__err(e: crate::runtime::DispatchError) -> iface_verification::PostDeleteBankAccountsError {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => match status {
+            400u16 => iface_verification::PostDeleteBankAccountsError::BadRequest(body),
+            401u16 => iface_verification::PostDeleteBankAccountsError::Unauthorized(body),
+            403u16 => iface_verification::PostDeleteBankAccountsError::Forbidden(body),
+            422u16 => iface_verification::PostDeleteBankAccountsError::UnprocessableEntity(body),
+            500u16 => iface_verification::PostDeleteBankAccountsError::InternalServerError(body),
+            _ => iface_verification::PostDeleteBankAccountsError::Other(body),
+        },
+        crate::runtime::DispatchError::Transport(m) => iface_verification::PostDeleteBankAccountsError::Other(m),
+    }
+}
+
+fn iface_verification__post_delete_legal_arrangements__ok(body: String) -> Result<iface_verification::GenericResponse, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match iface_verification__generic_response__from_json(&v) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_verification__post_delete_legal_arrangements__err(e: crate::runtime::DispatchError) -> iface_verification::PostDeleteLegalArrangementsError {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => match status {
+            400u16 => iface_verification::PostDeleteLegalArrangementsError::BadRequest(body),
+            401u16 => iface_verification::PostDeleteLegalArrangementsError::Unauthorized(body),
+            403u16 => iface_verification::PostDeleteLegalArrangementsError::Forbidden(body),
+            422u16 => iface_verification::PostDeleteLegalArrangementsError::UnprocessableEntity(body),
+            500u16 => iface_verification::PostDeleteLegalArrangementsError::InternalServerError(body),
+            _ => iface_verification::PostDeleteLegalArrangementsError::Other(body),
+        },
+        crate::runtime::DispatchError::Transport(m) => iface_verification::PostDeleteLegalArrangementsError::Other(m),
+    }
+}
+
+fn iface_verification__post_delete_shareholders__ok(body: String) -> Result<iface_verification::GenericResponse, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match iface_verification__generic_response__from_json(&v) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_verification__post_delete_shareholders__err(e: crate::runtime::DispatchError) -> iface_verification::PostDeleteShareholdersError {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => match status {
+            400u16 => iface_verification::PostDeleteShareholdersError::BadRequest(body),
+            401u16 => iface_verification::PostDeleteShareholdersError::Unauthorized(body),
+            403u16 => iface_verification::PostDeleteShareholdersError::Forbidden(body),
+            422u16 => iface_verification::PostDeleteShareholdersError::UnprocessableEntity(body),
+            500u16 => iface_verification::PostDeleteShareholdersError::InternalServerError(body),
+            _ => iface_verification::PostDeleteShareholdersError::Other(body),
+        },
+        crate::runtime::DispatchError::Transport(m) => iface_verification::PostDeleteShareholdersError::Other(m),
+    }
+}
+
+fn iface_verification__post_delete_signatories__ok(body: String) -> Result<iface_verification::GenericResponse, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match iface_verification__generic_response__from_json(&v) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_verification__post_delete_signatories__err(e: crate::runtime::DispatchError) -> iface_verification::PostDeleteSignatoriesError {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => match status {
+            400u16 => iface_verification::PostDeleteSignatoriesError::BadRequest(body),
+            401u16 => iface_verification::PostDeleteSignatoriesError::Unauthorized(body),
+            403u16 => iface_verification::PostDeleteSignatoriesError::Forbidden(body),
+            422u16 => iface_verification::PostDeleteSignatoriesError::UnprocessableEntity(body),
+            500u16 => iface_verification::PostDeleteSignatoriesError::InternalServerError(body),
+            _ => iface_verification::PostDeleteSignatoriesError::Other(body),
+        },
+        crate::runtime::DispatchError::Transport(m) => iface_verification::PostDeleteSignatoriesError::Other(m),
+    }
+}
+
+fn iface_verification__post_get_uploaded_documents__ok(body: String) -> Result<iface_verification::GetUploadedDocumentsResponse, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match iface_verification__get_uploaded_documents_response__from_json(&v) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_verification__post_get_uploaded_documents__err(e: crate::runtime::DispatchError) -> iface_verification::PostGetUploadedDocumentsError {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => match status {
+            400u16 => iface_verification::PostGetUploadedDocumentsError::BadRequest(body),
+            401u16 => iface_verification::PostGetUploadedDocumentsError::Unauthorized(body),
+            403u16 => iface_verification::PostGetUploadedDocumentsError::Forbidden(body),
+            422u16 => iface_verification::PostGetUploadedDocumentsError::UnprocessableEntity(body),
+            500u16 => iface_verification::PostGetUploadedDocumentsError::InternalServerError(body),
+            _ => iface_verification::PostGetUploadedDocumentsError::Other(body),
+        },
+        crate::runtime::DispatchError::Transport(m) => iface_verification::PostGetUploadedDocumentsError::Other(m),
+    }
+}
+
+fn iface_verification__post_upload_document__ok(body: String) -> Result<iface_verification::UpdateAccountHolderResponse, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match iface_verification__update_account_holder_response__from_json(&v) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_verification__post_upload_document__err(e: crate::runtime::DispatchError) -> iface_verification::PostUploadDocumentError {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => match status {
+            400u16 => iface_verification::PostUploadDocumentError::BadRequest(body),
+            401u16 => iface_verification::PostUploadDocumentError::Unauthorized(body),
+            403u16 => iface_verification::PostUploadDocumentError::Forbidden(body),
+            422u16 => iface_verification::PostUploadDocumentError::UnprocessableEntity(body),
+            500u16 => iface_verification::PostUploadDocumentError::InternalServerError(body),
+            _ => iface_verification::PostUploadDocumentError::Other(body),
+        },
+        crate::runtime::DispatchError::Transport(m) => iface_verification::PostUploadDocumentError::Other(m),
+    }
+}
+
 impl iface_verification::Guest for crate::Component {
-    fn post_delete_bank_accounts(params: iface_verification::PostDeleteBankAccountsParams) -> Result<String, String> {
+    fn post_delete_bank_accounts(params: iface_verification::PostDeleteBankAccountsParams) -> Result<iface_verification::GenericResponse, iface_verification::PostDeleteBankAccountsError> {
         let json = iface_verification__post_delete_bank_accounts_params__to_json(&params);
-        dispatch(&OP_VERIFICATION_POST_DELETE_BANK_ACCOUNTS, json)
+        match dispatch(&OP_VERIFICATION_POST_DELETE_BANK_ACCOUNTS, json).and_then(iface_verification__post_delete_bank_accounts__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_verification__post_delete_bank_accounts__err(e)),
+        }
     }
-    fn post_delete_legal_arrangements(params: iface_verification::PostDeleteLegalArrangementsParams) -> Result<String, String> {
+    fn post_delete_legal_arrangements(params: iface_verification::PostDeleteLegalArrangementsParams) -> Result<iface_verification::GenericResponse, iface_verification::PostDeleteLegalArrangementsError> {
         let json = iface_verification__post_delete_legal_arrangements_params__to_json(&params);
-        dispatch(&OP_VERIFICATION_POST_DELETE_LEGAL_ARRANGEMENTS, json)
+        match dispatch(&OP_VERIFICATION_POST_DELETE_LEGAL_ARRANGEMENTS, json).and_then(iface_verification__post_delete_legal_arrangements__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_verification__post_delete_legal_arrangements__err(e)),
+        }
     }
-    fn post_delete_shareholders(params: iface_verification::PostDeleteShareholdersParams) -> Result<String, String> {
+    fn post_delete_shareholders(params: iface_verification::PostDeleteShareholdersParams) -> Result<iface_verification::GenericResponse, iface_verification::PostDeleteShareholdersError> {
         let json = iface_verification__post_delete_shareholders_params__to_json(&params);
-        dispatch(&OP_VERIFICATION_POST_DELETE_SHAREHOLDERS, json)
+        match dispatch(&OP_VERIFICATION_POST_DELETE_SHAREHOLDERS, json).and_then(iface_verification__post_delete_shareholders__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_verification__post_delete_shareholders__err(e)),
+        }
     }
-    fn post_delete_signatories(params: iface_verification::PostDeleteSignatoriesParams) -> Result<String, String> {
+    fn post_delete_signatories(params: iface_verification::PostDeleteSignatoriesParams) -> Result<iface_verification::GenericResponse, iface_verification::PostDeleteSignatoriesError> {
         let json = iface_verification__post_delete_signatories_params__to_json(&params);
-        dispatch(&OP_VERIFICATION_POST_DELETE_SIGNATORIES, json)
+        match dispatch(&OP_VERIFICATION_POST_DELETE_SIGNATORIES, json).and_then(iface_verification__post_delete_signatories__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_verification__post_delete_signatories__err(e)),
+        }
     }
-    fn post_get_uploaded_documents(params: iface_verification::PostGetUploadedDocumentsParams) -> Result<String, String> {
+    fn post_get_uploaded_documents(params: iface_verification::PostGetUploadedDocumentsParams) -> Result<iface_verification::GetUploadedDocumentsResponse, iface_verification::PostGetUploadedDocumentsError> {
         let json = iface_verification__post_get_uploaded_documents_params__to_json(&params);
-        dispatch(&OP_VERIFICATION_POST_GET_UPLOADED_DOCUMENTS, json)
+        match dispatch(&OP_VERIFICATION_POST_GET_UPLOADED_DOCUMENTS, json).and_then(iface_verification__post_get_uploaded_documents__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_verification__post_get_uploaded_documents__err(e)),
+        }
     }
-    fn post_upload_document(params: iface_verification::PostUploadDocumentParams) -> Result<String, String> {
+    fn post_upload_document(params: iface_verification::PostUploadDocumentParams) -> Result<iface_verification::UpdateAccountHolderResponse, iface_verification::PostUploadDocumentError> {
         let json = iface_verification__post_upload_document_params__to_json(&params);
-        dispatch(&OP_VERIFICATION_POST_UPLOAD_DOCUMENT, json)
+        match dispatch(&OP_VERIFICATION_POST_UPLOAD_DOCUMENT, json).and_then(iface_verification__post_upload_document__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_verification__post_upload_document__err(e)),
+        }
     }
 }
 

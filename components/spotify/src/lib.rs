@@ -44,10 +44,15 @@ pub(crate) enum FieldLocation {
     Body,
 }
 
-/// A single operation parameter: the snake-case key it carries in the params JSON and where
-/// it belongs in the request.
+/// A single operation parameter. `snake` keys the field in the internal params JSON (and, for a
+/// path field, matches the `{snake}` placeholder in the path template); `wire` is the verbatim name
+/// the field takes on the HTTP wire (query key, header name, or body property). The two differ
+/// whenever the source name isn't already snake_case (e.g. `dryRun` → snake `dry_run`, wire
+/// `dryRun`), and let distinct inputs that share a snake key (`DateCreated`, `DateCreated<`) still
+/// travel under their true names.
 pub(crate) struct FieldSpec {
     pub(crate) snake: &'static str,
+    pub(crate) wire: &'static str,
     pub(crate) location: FieldLocation,
 }
 
@@ -71,6 +76,16 @@ pub(crate) struct AuthApply {
     pub(crate) kind: AuthKind,
 }
 
+/// The failure modes of [`dispatch`], kept structured so each generated operation can map them
+/// onto its own typed error: an `Http` failure carries the response status and body (routed to
+/// the matching error-variant case), while a `Transport` failure carries a message for the
+/// catch-all case (a secret lookup, connection, or decode failure that never produced an HTTP
+/// status).
+pub(crate) enum DispatchError {
+    Http { status: u16, body: String },
+    Transport(String),
+}
+
 /// A single API operation: HTTP method, path template (with `{snake}` placeholders), the
 /// parameter fields, and the security schemes to apply.
 pub(crate) struct OpSpec {
@@ -81,8 +96,9 @@ pub(crate) struct OpSpec {
 }
 
 /// Execute `op` with the supplied `params` (a JSON object keyed by snake-case field names)
-/// and return the response body as a string, or an error message.
-pub(crate) fn dispatch(op: &OpSpec, params: Value) -> Result<String, String> {
+/// and return the raw 2xx response body, or a structured [`DispatchError`] the caller maps
+/// onto the operation's typed error.
+pub(crate) fn dispatch(op: &OpSpec, params: Value) -> Result<String, DispatchError> {
     let obj = match &params {
         Value::Object(map) => Some(map),
         _ => None,
@@ -105,10 +121,10 @@ pub(crate) fn dispatch(op: &OpSpec, params: Value) -> Result<String, String> {
                 let placeholder = format!("{{{}}}", field.snake);
                 path = path.replace(&placeholder, &percent_encode(&scalar(value)));
             }
-            FieldLocation::Query => query.push((field.snake.to_string(), scalar(value))),
-            FieldLocation::Header => headers.push((field.snake.to_string(), scalar(value))),
+            FieldLocation::Query => query.push((field.wire.to_string(), scalar(value))),
+            FieldLocation::Header => headers.push((field.wire.to_string(), scalar(value))),
             FieldLocation::Body => {
-                body.insert(field.snake.to_string(), value.clone());
+                body.insert(field.wire.to_string(), value.clone());
             }
         }
     }
@@ -116,7 +132,7 @@ pub(crate) fn dispatch(op: &OpSpec, params: Value) -> Result<String, String> {
     // Apply each resolved security scheme, sourcing its value from wasmcloud:secrets.
     let mut cookies: Vec<String> = Vec::new();
     for apply in op.auth {
-        let secret = fetch_secret(apply.secret_key)?;
+        let secret = fetch_secret(apply.secret_key).map_err(DispatchError::Transport)?;
         match &apply.kind {
             AuthKind::Bearer => headers.push(("authorization".into(), format!("Bearer {secret}"))),
             AuthKind::Basic => {
@@ -177,17 +193,18 @@ fn fetch_secret(key: &str) -> Result<String, String> {
 }
 
 /// Build and send the outgoing request with `wstd`, returning the response body on a 2xx
-/// status. The generated guest exports are synchronous, so the async `wstd` client is driven
-/// to completion on a local reactor via `wstd::runtime::block_on`.
+/// status and a structured [`DispatchError`] otherwise. The generated guest exports are
+/// synchronous, so the async `wstd` client is driven to completion on a local reactor via
+/// `wstd::runtime::block_on`.
 fn perform(
     method: &str,
     path_with_query: &str,
     headers: &[(String, String)],
     body: &[u8],
-) -> Result<String, String> {
+) -> Result<String, DispatchError> {
     let url = join_url(crate::BASE_URL, path_with_query);
     let method = Method::from_bytes(method.as_bytes())
-        .map_err(|err| format!("invalid HTTP method `{method}`: {err}"))?;
+        .map_err(|err| DispatchError::Transport(format!("invalid HTTP method `{method}`: {err}")))?;
 
     let mut builder = Request::builder().method(method).uri(url);
     for (name, value) in headers {
@@ -199,27 +216,29 @@ fn perform(
         } else {
             Body::from(body.to_vec())
         })
-        .map_err(|err| format!("failed to build request: {err}"))?;
+        .map_err(|err| DispatchError::Transport(format!("failed to build request: {err}")))?;
 
     wstd::runtime::block_on(async move {
         let client = Client::new();
         let response = client
             .send(request)
             .await
-            .map_err(|err| format!("request failed: {err:#}"))?;
+            .map_err(|err| DispatchError::Transport(format!("request failed: {err:#}")))?;
 
         let status = response.status().as_u16();
         let mut response_body = response.into_body();
-        let bytes = response_body
-            .contents()
-            .await
-            .map_err(|err| format!("failed to read response body: {err:#}"))?;
+        let bytes = response_body.contents().await.map_err(|err| {
+            DispatchError::Transport(format!("failed to read response body: {err:#}"))
+        })?;
         let body_text = String::from_utf8_lossy(bytes).into_owned();
 
         if (200..300).contains(&status) {
             Ok(body_text)
         } else {
-            Err(format!("HTTP {status}: {body_text}"))
+            Err(DispatchError::Http {
+                status,
+                body: body_text,
+            })
         }
     })
 }
@@ -288,8 +307,8 @@ const OP_ALBUMS_GET_MULTIPLE_ALBUMS: OpSpec = OpSpec {
     method: "GET",
     path_template: "/albums",
     fields: &[
-        FieldSpec { snake: "ids", location: FieldLocation::Query },
-        FieldSpec { snake: "market", location: FieldLocation::Query },
+        FieldSpec { snake: "ids", wire: "ids", location: FieldLocation::Query },
+        FieldSpec { snake: "market", wire: "market", location: FieldLocation::Query },
     ],
     auth: &[
         AuthApply { secret_key: "oauth_2_0", kind: AuthKind::Bearer },
@@ -300,8 +319,8 @@ const OP_ALBUMS_GET_AN_ALBUM: OpSpec = OpSpec {
     method: "GET",
     path_template: "/albums/{id}",
     fields: &[
-        FieldSpec { snake: "id", location: FieldLocation::Path },
-        FieldSpec { snake: "market", location: FieldLocation::Query },
+        FieldSpec { snake: "id", wire: "id", location: FieldLocation::Path },
+        FieldSpec { snake: "market", wire: "market", location: FieldLocation::Query },
     ],
     auth: &[
         AuthApply { secret_key: "oauth_2_0", kind: AuthKind::Bearer },
@@ -312,10 +331,10 @@ const OP_ALBUMS_GET_AN_ALBUMS_TRACKS: OpSpec = OpSpec {
     method: "GET",
     path_template: "/albums/{id}/tracks",
     fields: &[
-        FieldSpec { snake: "id", location: FieldLocation::Path },
-        FieldSpec { snake: "market", location: FieldLocation::Query },
-        FieldSpec { snake: "limit", location: FieldLocation::Query },
-        FieldSpec { snake: "offset", location: FieldLocation::Query },
+        FieldSpec { snake: "id", wire: "id", location: FieldLocation::Path },
+        FieldSpec { snake: "market", wire: "market", location: FieldLocation::Query },
+        FieldSpec { snake: "limit", wire: "limit", location: FieldLocation::Query },
+        FieldSpec { snake: "offset", wire: "offset", location: FieldLocation::Query },
     ],
     auth: &[
         AuthApply { secret_key: "oauth_2_0", kind: AuthKind::Bearer },
@@ -326,9 +345,9 @@ const OP_ALBUMS_GET_NEW_RELEASES: OpSpec = OpSpec {
     method: "GET",
     path_template: "/browse/new-releases",
     fields: &[
-        FieldSpec { snake: "country", location: FieldLocation::Query },
-        FieldSpec { snake: "limit", location: FieldLocation::Query },
-        FieldSpec { snake: "offset", location: FieldLocation::Query },
+        FieldSpec { snake: "country", wire: "country", location: FieldLocation::Query },
+        FieldSpec { snake: "limit", wire: "limit", location: FieldLocation::Query },
+        FieldSpec { snake: "offset", wire: "offset", location: FieldLocation::Query },
     ],
     auth: &[
         AuthApply { secret_key: "oauth_2_0", kind: AuthKind::Bearer },
@@ -339,9 +358,9 @@ const OP_ALBUMS_GET_USERS_SAVED_ALBUMS: OpSpec = OpSpec {
     method: "GET",
     path_template: "/me/albums",
     fields: &[
-        FieldSpec { snake: "limit", location: FieldLocation::Query },
-        FieldSpec { snake: "offset", location: FieldLocation::Query },
-        FieldSpec { snake: "market", location: FieldLocation::Query },
+        FieldSpec { snake: "limit", wire: "limit", location: FieldLocation::Query },
+        FieldSpec { snake: "offset", wire: "offset", location: FieldLocation::Query },
+        FieldSpec { snake: "market", wire: "market", location: FieldLocation::Query },
     ],
     auth: &[
         AuthApply { secret_key: "oauth_2_0", kind: AuthKind::Bearer },
@@ -352,7 +371,8 @@ const OP_ALBUMS_SAVE_ALBUMS_USER: OpSpec = OpSpec {
     method: "PUT",
     path_template: "/me/albums",
     fields: &[
-        FieldSpec { snake: "ids", location: FieldLocation::Query },
+        FieldSpec { snake: "ids", wire: "ids", location: FieldLocation::Query },
+        FieldSpec { snake: "ids_v2", wire: "ids", location: FieldLocation::Body },
     ],
     auth: &[
         AuthApply { secret_key: "oauth_2_0", kind: AuthKind::Bearer },
@@ -363,7 +383,8 @@ const OP_ALBUMS_REMOVE_ALBUMS_USER: OpSpec = OpSpec {
     method: "DELETE",
     path_template: "/me/albums",
     fields: &[
-        FieldSpec { snake: "ids", location: FieldLocation::Query },
+        FieldSpec { snake: "ids", wire: "ids", location: FieldLocation::Query },
+        FieldSpec { snake: "ids_v2", wire: "ids", location: FieldLocation::Body },
     ],
     auth: &[
         AuthApply { secret_key: "oauth_2_0", kind: AuthKind::Bearer },
@@ -374,12 +395,160 @@ const OP_ALBUMS_CHECK_USERS_SAVED_ALBUMS: OpSpec = OpSpec {
     method: "GET",
     path_template: "/me/albums/contains",
     fields: &[
-        FieldSpec { snake: "ids", location: FieldLocation::Query },
+        FieldSpec { snake: "ids", wire: "ids", location: FieldLocation::Query },
     ],
     auth: &[
         AuthApply { secret_key: "oauth_2_0", kind: AuthKind::Bearer },
     ],
 };
+
+fn iface_albums__album_object_album_type_enum__to_str(e: &iface_albums::AlbumObjectAlbumTypeEnum) -> &'static str {
+    match e {
+        iface_albums::AlbumObjectAlbumTypeEnum::Album => "album",
+        iface_albums::AlbumObjectAlbumTypeEnum::Single => "single",
+        iface_albums::AlbumObjectAlbumTypeEnum::Compilation => "compilation",
+    }
+}
+
+fn iface_albums__album_object_release_date_precision_enum__to_str(e: &iface_albums::AlbumObjectReleaseDatePrecisionEnum) -> &'static str {
+    match e {
+        iface_albums::AlbumObjectReleaseDatePrecisionEnum::Year => "year",
+        iface_albums::AlbumObjectReleaseDatePrecisionEnum::Month => "month",
+        iface_albums::AlbumObjectReleaseDatePrecisionEnum::Day => "day",
+    }
+}
+
+fn iface_albums__album_restriction_object_reason_enum__to_str(e: &iface_albums::AlbumRestrictionObjectReasonEnum) -> &'static str {
+    match e {
+        iface_albums::AlbumRestrictionObjectReasonEnum::Market => "market",
+        iface_albums::AlbumRestrictionObjectReasonEnum::Product => "product",
+        iface_albums::AlbumRestrictionObjectReasonEnum::Explicit => "explicit",
+    }
+}
+
+fn iface_albums__album_object_type_op_enum__to_str(e: &iface_albums::AlbumObjectTypeOpEnum) -> &'static str {
+    match e {
+        iface_albums::AlbumObjectTypeOpEnum::Album => "album",
+    }
+}
+
+fn iface_albums__artist_object_type_op_enum__to_str(e: &iface_albums::ArtistObjectTypeOpEnum) -> &'static str {
+    match e {
+        iface_albums::ArtistObjectTypeOpEnum::Artist => "artist",
+    }
+}
+
+fn iface_albums__get_multiple_albums_response__to_json(p: &iface_albums::GetMultipleAlbumsResponse) -> Value {
+    let mut m = Map::new();
+    m.insert("albums".into(), Value::Array((&p.albums).iter().map(|v| iface_albums__album_object__to_json(v)).collect()));
+    Value::Object(m)
+}
+
+fn iface_albums__album_object__to_json(p: &iface_albums::AlbumObject) -> Value {
+    let mut m = Map::new();
+    m.insert("album_type".into(), Value::String(iface_albums__album_object_album_type_enum__to_str(&p.album_type).into()));
+    m.insert("available_markets".into(), Value::Array((&p.available_markets).iter().map(|v| Value::String((v).clone())).collect()));
+    m.insert("copyrights".into(), match (&p.copyrights) { Some(v) => Value::Array((v).iter().map(|v| iface_albums__copyright_object__to_json(v)).collect()), None => Value::Null });
+    m.insert("external_ids".into(), match (&p.external_ids) { Some(v) => iface_albums__external_id_object__to_json(v), None => Value::Null });
+    m.insert("external_urls".into(), iface_albums__external_url_object__to_json(&p.external_urls));
+    m.insert("genres".into(), match (&p.genres) { Some(v) => Value::Array((v).iter().map(|v| Value::String((v).clone())).collect()), None => Value::Null });
+    m.insert("href".into(), Value::String((&p.href).clone()));
+    m.insert("id".into(), Value::String((&p.id).clone()));
+    m.insert("images".into(), Value::Array((&p.images).iter().map(|v| iface_albums__image_object__to_json(v)).collect()));
+    m.insert("label".into(), match (&p.label) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("name".into(), Value::String((&p.name).clone()));
+    m.insert("popularity".into(), match (&p.popularity) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("release_date".into(), Value::String((&p.release_date).clone()));
+    m.insert("release_date_precision".into(), Value::String(iface_albums__album_object_release_date_precision_enum__to_str(&p.release_date_precision).into()));
+    m.insert("restrictions".into(), match (&p.restrictions) { Some(v) => iface_albums__album_restriction_object__to_json(v), None => Value::Null });
+    m.insert("total_tracks".into(), Value::Number(serde_json::Number::from(*(&p.total_tracks))));
+    m.insert("type".into(), Value::String(iface_albums__album_object_type_op_enum__to_str(&p.type_op).into()));
+    m.insert("uri".into(), Value::String((&p.uri).clone()));
+    m.insert("artists".into(), match (&p.artists) { Some(v) => Value::Array((v).iter().map(|v| iface_albums__artist_object__to_json(v)).collect()), None => Value::Null });
+    m.insert("tracks".into(), match (&p.tracks) { Some(v) => iface_albums__paging_simplified_track_object__to_json(v), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_albums__copyright_object__to_json(p: &iface_albums::CopyrightObject) -> Value {
+    let mut m = Map::new();
+    m.insert("text".into(), match (&p.text) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("type".into(), match (&p.type_op) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_albums__external_id_object__to_json(p: &iface_albums::ExternalIdObject) -> Value {
+    let mut m = Map::new();
+    m.insert("ean".into(), match (&p.ean) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("isrc".into(), match (&p.isrc) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("upc".into(), match (&p.upc) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_albums__external_url_object__to_json(p: &iface_albums::ExternalUrlObject) -> Value {
+    let mut m = Map::new();
+    m.insert("spotify".into(), match (&p.spotify) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_albums__image_object__to_json(p: &iface_albums::ImageObject) -> Value {
+    let mut m = Map::new();
+    m.insert("height".into(), Value::Number(serde_json::Number::from(*(&p.height))));
+    m.insert("url".into(), Value::String((&p.url).clone()));
+    m.insert("width".into(), Value::Number(serde_json::Number::from(*(&p.width))));
+    Value::Object(m)
+}
+
+fn iface_albums__album_restriction_object__to_json(p: &iface_albums::AlbumRestrictionObject) -> Value {
+    let mut m = Map::new();
+    m.insert("reason".into(), match (&p.reason) { Some(v) => Value::String(iface_albums__album_restriction_object_reason_enum__to_str(v).into()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_albums__artist_object__to_json(p: &iface_albums::ArtistObject) -> Value {
+    let mut m = Map::new();
+    m.insert("external_urls".into(), match (&p.external_urls) { Some(v) => iface_albums__external_url_object__to_json(v), None => Value::Null });
+    m.insert("followers".into(), match (&p.followers) { Some(v) => iface_albums__followers_object__to_json(v), None => Value::Null });
+    m.insert("genres".into(), match (&p.genres) { Some(v) => Value::Array((v).iter().map(|v| Value::String((v).clone())).collect()), None => Value::Null });
+    m.insert("href".into(), match (&p.href) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("id".into(), match (&p.id) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("images".into(), match (&p.images) { Some(v) => Value::Array((v).iter().map(|v| iface_albums__image_object__to_json(v)).collect()), None => Value::Null });
+    m.insert("name".into(), match (&p.name) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("popularity".into(), match (&p.popularity) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("type".into(), match (&p.type_op) { Some(v) => Value::String(iface_albums__artist_object_type_op_enum__to_str(v).into()), None => Value::Null });
+    m.insert("uri".into(), match (&p.uri) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_albums__followers_object__to_json(p: &iface_albums::FollowersObject) -> Value {
+    let mut m = Map::new();
+    m.insert("href".into(), match (&p.href) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("total".into(), match (&p.total) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_albums__paging_simplified_track_object__to_json(p: &iface_albums::PagingSimplifiedTrackObject) -> Value {
+    let mut m = Map::new();
+    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_albums__get_new_releases_response__to_json(p: &iface_albums::GetNewReleasesResponse) -> Value {
+    let mut m = Map::new();
+    m.insert("albums".into(), iface_albums__paging_simplified_album_object__to_json(&p.albums));
+    Value::Object(m)
+}
+
+fn iface_albums__paging_simplified_album_object__to_json(p: &iface_albums::PagingSimplifiedAlbumObject) -> Value {
+    let mut m = Map::new();
+    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_albums__paging_saved_album_object__to_json(p: &iface_albums::PagingSavedAlbumObject) -> Value {
+    let mut m = Map::new();
+    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
 
 fn iface_albums__get_multiple_albums_params__to_json(p: &iface_albums::GetMultipleAlbumsParams) -> Value {
     let mut m = Map::new();
@@ -423,12 +592,14 @@ fn iface_albums__get_users_saved_albums_params__to_json(p: &iface_albums::GetUse
 fn iface_albums__save_albums_user_params__to_json(p: &iface_albums::SaveAlbumsUserParams) -> Value {
     let mut m = Map::new();
     m.insert("ids".into(), Value::String((&p.ids).clone()));
+    m.insert("ids_v2".into(), match (&p.ids_v2) { Some(v) => Value::Array((v).iter().map(|v| Value::String((v).clone())).collect()), None => Value::Null });
     Value::Object(m)
 }
 
 fn iface_albums__remove_albums_user_params__to_json(p: &iface_albums::RemoveAlbumsUserParams) -> Value {
     let mut m = Map::new();
     m.insert("ids".into(), Value::String((&p.ids).clone()));
+    m.insert("ids_v2".into(), match (&p.ids_v2) { Some(v) => Value::Array((v).iter().map(|v| Value::String((v).clone())).collect()), None => Value::Null });
     Value::Object(m)
 }
 
@@ -438,38 +609,398 @@ fn iface_albums__check_users_saved_albums_params__to_json(p: &iface_albums::Chec
     Value::Object(m)
 }
 
+fn iface_albums__get_multiple_albums_response__from_json(v: &Value) -> Option<iface_albums::GetMultipleAlbumsResponse> {
+    let m = v.as_object()?;
+    Some(iface_albums::GetMultipleAlbumsResponse {
+        albums: m.get("albums").and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| iface_albums__album_object__from_json(x)).collect())).unwrap_or_default(),
+    })
+}
+
+fn iface_albums__album_object__from_json(v: &Value) -> Option<iface_albums::AlbumObject> {
+    let m = v.as_object()?;
+    Some(iface_albums::AlbumObject {
+        album_type: match m.get("album_type").and_then(|v| (v).as_str().and_then(iface_albums__album_object_album_type_enum__from_str)) { Some(x) => x, None => return None },
+        available_markets: m.get("available_markets").and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| (x).as_str().map(|s| s.to_string())).collect())).unwrap_or_default(),
+        copyrights: m.get("copyrights").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| iface_albums__copyright_object__from_json(x)).collect())),
+        external_ids: m.get("external_ids").filter(|v| !v.is_null()).and_then(|v| iface_albums__external_id_object__from_json(v)),
+        external_urls: match m.get("external_urls").and_then(|v| iface_albums__external_url_object__from_json(v)) { Some(x) => x, None => return None },
+        genres: m.get("genres").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| (x).as_str().map(|s| s.to_string())).collect())),
+        href: m.get("href").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        id: m.get("id").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        images: m.get("images").and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| iface_albums__image_object__from_json(x)).collect())).unwrap_or_default(),
+        label: m.get("label").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        name: m.get("name").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        popularity: m.get("popularity").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        release_date: m.get("release_date").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        release_date_precision: match m.get("release_date_precision").and_then(|v| (v).as_str().and_then(iface_albums__album_object_release_date_precision_enum__from_str)) { Some(x) => x, None => return None },
+        restrictions: m.get("restrictions").filter(|v| !v.is_null()).and_then(|v| iface_albums__album_restriction_object__from_json(v)),
+        total_tracks: m.get("total_tracks").and_then(|v| (v).as_i64().map(|n| n as i32)).unwrap_or_default(),
+        type_op: match m.get("type").and_then(|v| (v).as_str().and_then(iface_albums__album_object_type_op_enum__from_str)) { Some(x) => x, None => return None },
+        uri: m.get("uri").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        artists: m.get("artists").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| iface_albums__artist_object__from_json(x)).collect())),
+        tracks: m.get("tracks").filter(|v| !v.is_null()).and_then(|v| iface_albums__paging_simplified_track_object__from_json(v)),
+    })
+}
+
+fn iface_albums__copyright_object__from_json(v: &Value) -> Option<iface_albums::CopyrightObject> {
+    let m = v.as_object()?;
+    Some(iface_albums::CopyrightObject {
+        text: m.get("text").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        type_op: m.get("type").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    })
+}
+
+fn iface_albums__external_id_object__from_json(v: &Value) -> Option<iface_albums::ExternalIdObject> {
+    let m = v.as_object()?;
+    Some(iface_albums::ExternalIdObject {
+        ean: m.get("ean").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        isrc: m.get("isrc").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        upc: m.get("upc").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    })
+}
+
+fn iface_albums__external_url_object__from_json(v: &Value) -> Option<iface_albums::ExternalUrlObject> {
+    let m = v.as_object()?;
+    Some(iface_albums::ExternalUrlObject {
+        spotify: m.get("spotify").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    })
+}
+
+fn iface_albums__image_object__from_json(v: &Value) -> Option<iface_albums::ImageObject> {
+    let m = v.as_object()?;
+    Some(iface_albums::ImageObject {
+        height: m.get("height").and_then(|v| (v).as_i64().map(|n| n as i32)).unwrap_or_default(),
+        url: m.get("url").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        width: m.get("width").and_then(|v| (v).as_i64().map(|n| n as i32)).unwrap_or_default(),
+    })
+}
+
+fn iface_albums__album_restriction_object__from_json(v: &Value) -> Option<iface_albums::AlbumRestrictionObject> {
+    let m = v.as_object()?;
+    Some(iface_albums::AlbumRestrictionObject {
+        reason: m.get("reason").filter(|v| !v.is_null()).and_then(|v| (v).as_str().and_then(iface_albums__album_restriction_object_reason_enum__from_str)),
+    })
+}
+
+fn iface_albums__artist_object__from_json(v: &Value) -> Option<iface_albums::ArtistObject> {
+    let m = v.as_object()?;
+    Some(iface_albums::ArtistObject {
+        external_urls: m.get("external_urls").filter(|v| !v.is_null()).and_then(|v| iface_albums__external_url_object__from_json(v)),
+        followers: m.get("followers").filter(|v| !v.is_null()).and_then(|v| iface_albums__followers_object__from_json(v)),
+        genres: m.get("genres").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| (x).as_str().map(|s| s.to_string())).collect())),
+        href: m.get("href").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        id: m.get("id").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        images: m.get("images").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| iface_albums__image_object__from_json(x)).collect())),
+        name: m.get("name").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        popularity: m.get("popularity").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        type_op: m.get("type").filter(|v| !v.is_null()).and_then(|v| (v).as_str().and_then(iface_albums__artist_object_type_op_enum__from_str)),
+        uri: m.get("uri").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    })
+}
+
+fn iface_albums__followers_object__from_json(v: &Value) -> Option<iface_albums::FollowersObject> {
+    let m = v.as_object()?;
+    Some(iface_albums::FollowersObject {
+        href: m.get("href").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        total: m.get("total").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+    })
+}
+
+fn iface_albums__paging_simplified_track_object__from_json(v: &Value) -> Option<iface_albums::PagingSimplifiedTrackObject> {
+    let m = v.as_object()?;
+    Some(iface_albums::PagingSimplifiedTrackObject {
+        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    })
+}
+
+fn iface_albums__get_new_releases_response__from_json(v: &Value) -> Option<iface_albums::GetNewReleasesResponse> {
+    let m = v.as_object()?;
+    Some(iface_albums::GetNewReleasesResponse {
+        albums: match m.get("albums").and_then(|v| iface_albums__paging_simplified_album_object__from_json(v)) { Some(x) => x, None => return None },
+    })
+}
+
+fn iface_albums__paging_simplified_album_object__from_json(v: &Value) -> Option<iface_albums::PagingSimplifiedAlbumObject> {
+    let m = v.as_object()?;
+    Some(iface_albums::PagingSimplifiedAlbumObject {
+        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    })
+}
+
+fn iface_albums__paging_saved_album_object__from_json(v: &Value) -> Option<iface_albums::PagingSavedAlbumObject> {
+    let m = v.as_object()?;
+    Some(iface_albums::PagingSavedAlbumObject {
+        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    })
+}
+
+fn iface_albums__album_object_album_type_enum__from_str(s: &str) -> Option<iface_albums::AlbumObjectAlbumTypeEnum> {
+    match s {
+        "album" => Some(iface_albums::AlbumObjectAlbumTypeEnum::Album),
+        "single" => Some(iface_albums::AlbumObjectAlbumTypeEnum::Single),
+        "compilation" => Some(iface_albums::AlbumObjectAlbumTypeEnum::Compilation),
+        _ => None,
+    }
+}
+
+fn iface_albums__album_object_release_date_precision_enum__from_str(s: &str) -> Option<iface_albums::AlbumObjectReleaseDatePrecisionEnum> {
+    match s {
+        "year" => Some(iface_albums::AlbumObjectReleaseDatePrecisionEnum::Year),
+        "month" => Some(iface_albums::AlbumObjectReleaseDatePrecisionEnum::Month),
+        "day" => Some(iface_albums::AlbumObjectReleaseDatePrecisionEnum::Day),
+        _ => None,
+    }
+}
+
+fn iface_albums__album_restriction_object_reason_enum__from_str(s: &str) -> Option<iface_albums::AlbumRestrictionObjectReasonEnum> {
+    match s {
+        "market" => Some(iface_albums::AlbumRestrictionObjectReasonEnum::Market),
+        "product" => Some(iface_albums::AlbumRestrictionObjectReasonEnum::Product),
+        "explicit" => Some(iface_albums::AlbumRestrictionObjectReasonEnum::Explicit),
+        _ => None,
+    }
+}
+
+fn iface_albums__album_object_type_op_enum__from_str(s: &str) -> Option<iface_albums::AlbumObjectTypeOpEnum> {
+    match s {
+        "album" => Some(iface_albums::AlbumObjectTypeOpEnum::Album),
+        _ => None,
+    }
+}
+
+fn iface_albums__artist_object_type_op_enum__from_str(s: &str) -> Option<iface_albums::ArtistObjectTypeOpEnum> {
+    match s {
+        "artist" => Some(iface_albums::ArtistObjectTypeOpEnum::Artist),
+        _ => None,
+    }
+}
+
+fn iface_albums__get_multiple_albums__ok(body: String) -> Result<iface_albums::GetMultipleAlbumsResponse, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match iface_albums__get_multiple_albums_response__from_json(&v) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_albums__get_multiple_albums__err(e: crate::runtime::DispatchError) -> iface_albums::GetMultipleAlbumsError {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => match status {
+            401u16 => iface_albums::GetMultipleAlbumsError::Unauthorized(body),
+            403u16 => iface_albums::GetMultipleAlbumsError::Forbidden(body),
+            429u16 => iface_albums::GetMultipleAlbumsError::TooManyRequests(body),
+            _ => iface_albums::GetMultipleAlbumsError::Other(body),
+        },
+        crate::runtime::DispatchError::Transport(m) => iface_albums::GetMultipleAlbumsError::Other(m),
+    }
+}
+
+fn iface_albums__get_an_album__ok(body: String) -> Result<iface_albums::AlbumObject, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match iface_albums__album_object__from_json(&v) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_albums__get_an_album__err(e: crate::runtime::DispatchError) -> iface_albums::GetAnAlbumError {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => match status {
+            401u16 => iface_albums::GetAnAlbumError::Unauthorized(body),
+            403u16 => iface_albums::GetAnAlbumError::Forbidden(body),
+            429u16 => iface_albums::GetAnAlbumError::TooManyRequests(body),
+            _ => iface_albums::GetAnAlbumError::Other(body),
+        },
+        crate::runtime::DispatchError::Transport(m) => iface_albums::GetAnAlbumError::Other(m),
+    }
+}
+
+fn iface_albums__get_an_albums_tracks__ok(body: String) -> Result<iface_albums::PagingSimplifiedTrackObject, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match iface_albums__paging_simplified_track_object__from_json(&v) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_albums__get_an_albums_tracks__err(e: crate::runtime::DispatchError) -> iface_albums::GetAnAlbumsTracksError {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => match status {
+            401u16 => iface_albums::GetAnAlbumsTracksError::Unauthorized(body),
+            403u16 => iface_albums::GetAnAlbumsTracksError::Forbidden(body),
+            429u16 => iface_albums::GetAnAlbumsTracksError::TooManyRequests(body),
+            _ => iface_albums::GetAnAlbumsTracksError::Other(body),
+        },
+        crate::runtime::DispatchError::Transport(m) => iface_albums::GetAnAlbumsTracksError::Other(m),
+    }
+}
+
+fn iface_albums__get_new_releases__ok(body: String) -> Result<iface_albums::GetNewReleasesResponse, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match iface_albums__get_new_releases_response__from_json(&v) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_albums__get_new_releases__err(e: crate::runtime::DispatchError) -> iface_albums::GetNewReleasesError {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => match status {
+            401u16 => iface_albums::GetNewReleasesError::Unauthorized(body),
+            403u16 => iface_albums::GetNewReleasesError::Forbidden(body),
+            429u16 => iface_albums::GetNewReleasesError::TooManyRequests(body),
+            _ => iface_albums::GetNewReleasesError::Other(body),
+        },
+        crate::runtime::DispatchError::Transport(m) => iface_albums::GetNewReleasesError::Other(m),
+    }
+}
+
+fn iface_albums__get_users_saved_albums__ok(body: String) -> Result<iface_albums::PagingSavedAlbumObject, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match iface_albums__paging_saved_album_object__from_json(&v) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_albums__get_users_saved_albums__err(e: crate::runtime::DispatchError) -> iface_albums::GetUsersSavedAlbumsError {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => match status {
+            401u16 => iface_albums::GetUsersSavedAlbumsError::Unauthorized(body),
+            403u16 => iface_albums::GetUsersSavedAlbumsError::Forbidden(body),
+            429u16 => iface_albums::GetUsersSavedAlbumsError::TooManyRequests(body),
+            _ => iface_albums::GetUsersSavedAlbumsError::Other(body),
+        },
+        crate::runtime::DispatchError::Transport(m) => iface_albums::GetUsersSavedAlbumsError::Other(m),
+    }
+}
+
+fn iface_albums__save_albums_user__ok(body: String) -> Result<String, crate::runtime::DispatchError> {
+    Ok(body)
+}
+
+fn iface_albums__save_albums_user__err(e: crate::runtime::DispatchError) -> iface_albums::SaveAlbumsUserError {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => match status {
+            401u16 => iface_albums::SaveAlbumsUserError::Unauthorized(body),
+            403u16 => iface_albums::SaveAlbumsUserError::Forbidden(body),
+            429u16 => iface_albums::SaveAlbumsUserError::TooManyRequests(body),
+            _ => iface_albums::SaveAlbumsUserError::Other(body),
+        },
+        crate::runtime::DispatchError::Transport(m) => iface_albums::SaveAlbumsUserError::Other(m),
+    }
+}
+
+fn iface_albums__remove_albums_user__ok(body: String) -> Result<String, crate::runtime::DispatchError> {
+    Ok(body)
+}
+
+fn iface_albums__remove_albums_user__err(e: crate::runtime::DispatchError) -> iface_albums::RemoveAlbumsUserError {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => match status {
+            401u16 => iface_albums::RemoveAlbumsUserError::Unauthorized(body),
+            403u16 => iface_albums::RemoveAlbumsUserError::Forbidden(body),
+            429u16 => iface_albums::RemoveAlbumsUserError::TooManyRequests(body),
+            _ => iface_albums::RemoveAlbumsUserError::Other(body),
+        },
+        crate::runtime::DispatchError::Transport(m) => iface_albums::RemoveAlbumsUserError::Other(m),
+    }
+}
+
+fn iface_albums__check_users_saved_albums__ok(body: String) -> Result<Vec<bool>, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match (&v).as_array().map(|a| a.iter().filter_map(|x| (x).as_bool()).collect()) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_albums__check_users_saved_albums__err(e: crate::runtime::DispatchError) -> iface_albums::CheckUsersSavedAlbumsError {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => match status {
+            401u16 => iface_albums::CheckUsersSavedAlbumsError::Unauthorized(body),
+            403u16 => iface_albums::CheckUsersSavedAlbumsError::Forbidden(body),
+            429u16 => iface_albums::CheckUsersSavedAlbumsError::TooManyRequests(body),
+            _ => iface_albums::CheckUsersSavedAlbumsError::Other(body),
+        },
+        crate::runtime::DispatchError::Transport(m) => iface_albums::CheckUsersSavedAlbumsError::Other(m),
+    }
+}
+
 impl iface_albums::Guest for crate::Component {
-    fn get_multiple_albums(params: iface_albums::GetMultipleAlbumsParams) -> Result<String, String> {
+    fn get_multiple_albums(params: iface_albums::GetMultipleAlbumsParams) -> Result<iface_albums::GetMultipleAlbumsResponse, iface_albums::GetMultipleAlbumsError> {
         let json = iface_albums__get_multiple_albums_params__to_json(&params);
-        dispatch(&OP_ALBUMS_GET_MULTIPLE_ALBUMS, json)
+        match dispatch(&OP_ALBUMS_GET_MULTIPLE_ALBUMS, json).and_then(iface_albums__get_multiple_albums__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_albums__get_multiple_albums__err(e)),
+        }
     }
-    fn get_an_album(params: iface_albums::GetAnAlbumParams) -> Result<String, String> {
+    fn get_an_album(params: iface_albums::GetAnAlbumParams) -> Result<iface_albums::AlbumObject, iface_albums::GetAnAlbumError> {
         let json = iface_albums__get_an_album_params__to_json(&params);
-        dispatch(&OP_ALBUMS_GET_AN_ALBUM, json)
+        match dispatch(&OP_ALBUMS_GET_AN_ALBUM, json).and_then(iface_albums__get_an_album__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_albums__get_an_album__err(e)),
+        }
     }
-    fn get_an_albums_tracks(params: iface_albums::GetAnAlbumsTracksParams) -> Result<String, String> {
+    fn get_an_albums_tracks(params: iface_albums::GetAnAlbumsTracksParams) -> Result<iface_albums::PagingSimplifiedTrackObject, iface_albums::GetAnAlbumsTracksError> {
         let json = iface_albums__get_an_albums_tracks_params__to_json(&params);
-        dispatch(&OP_ALBUMS_GET_AN_ALBUMS_TRACKS, json)
+        match dispatch(&OP_ALBUMS_GET_AN_ALBUMS_TRACKS, json).and_then(iface_albums__get_an_albums_tracks__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_albums__get_an_albums_tracks__err(e)),
+        }
     }
-    fn get_new_releases(params: iface_albums::GetNewReleasesParams) -> Result<String, String> {
+    fn get_new_releases(params: iface_albums::GetNewReleasesParams) -> Result<iface_albums::GetNewReleasesResponse, iface_albums::GetNewReleasesError> {
         let json = iface_albums__get_new_releases_params__to_json(&params);
-        dispatch(&OP_ALBUMS_GET_NEW_RELEASES, json)
+        match dispatch(&OP_ALBUMS_GET_NEW_RELEASES, json).and_then(iface_albums__get_new_releases__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_albums__get_new_releases__err(e)),
+        }
     }
-    fn get_users_saved_albums(params: iface_albums::GetUsersSavedAlbumsParams) -> Result<String, String> {
+    fn get_users_saved_albums(params: iface_albums::GetUsersSavedAlbumsParams) -> Result<iface_albums::PagingSavedAlbumObject, iface_albums::GetUsersSavedAlbumsError> {
         let json = iface_albums__get_users_saved_albums_params__to_json(&params);
-        dispatch(&OP_ALBUMS_GET_USERS_SAVED_ALBUMS, json)
+        match dispatch(&OP_ALBUMS_GET_USERS_SAVED_ALBUMS, json).and_then(iface_albums__get_users_saved_albums__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_albums__get_users_saved_albums__err(e)),
+        }
     }
-    fn save_albums_user(params: iface_albums::SaveAlbumsUserParams) -> Result<String, String> {
+    fn save_albums_user(params: iface_albums::SaveAlbumsUserParams) -> Result<String, iface_albums::SaveAlbumsUserError> {
         let json = iface_albums__save_albums_user_params__to_json(&params);
-        dispatch(&OP_ALBUMS_SAVE_ALBUMS_USER, json)
+        match dispatch(&OP_ALBUMS_SAVE_ALBUMS_USER, json).and_then(iface_albums__save_albums_user__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_albums__save_albums_user__err(e)),
+        }
     }
-    fn remove_albums_user(params: iface_albums::RemoveAlbumsUserParams) -> Result<String, String> {
+    fn remove_albums_user(params: iface_albums::RemoveAlbumsUserParams) -> Result<String, iface_albums::RemoveAlbumsUserError> {
         let json = iface_albums__remove_albums_user_params__to_json(&params);
-        dispatch(&OP_ALBUMS_REMOVE_ALBUMS_USER, json)
+        match dispatch(&OP_ALBUMS_REMOVE_ALBUMS_USER, json).and_then(iface_albums__remove_albums_user__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_albums__remove_albums_user__err(e)),
+        }
     }
-    fn check_users_saved_albums(params: iface_albums::CheckUsersSavedAlbumsParams) -> Result<String, String> {
+    fn check_users_saved_albums(params: iface_albums::CheckUsersSavedAlbumsParams) -> Result<Vec<bool>, iface_albums::CheckUsersSavedAlbumsError> {
         let json = iface_albums__check_users_saved_albums_params__to_json(&params);
-        dispatch(&OP_ALBUMS_CHECK_USERS_SAVED_ALBUMS, json)
+        match dispatch(&OP_ALBUMS_CHECK_USERS_SAVED_ALBUMS, json).and_then(iface_albums__check_users_saved_albums__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_albums__check_users_saved_albums__err(e)),
+        }
     }
 }
 use crate::exports::autostamp::spotify::artists as iface_artists;
@@ -478,7 +1009,7 @@ const OP_ARTISTS_GET_MULTIPLE_ARTISTS: OpSpec = OpSpec {
     method: "GET",
     path_template: "/artists",
     fields: &[
-        FieldSpec { snake: "ids", location: FieldLocation::Query },
+        FieldSpec { snake: "ids", wire: "ids", location: FieldLocation::Query },
     ],
     auth: &[
         AuthApply { secret_key: "oauth_2_0", kind: AuthKind::Bearer },
@@ -489,7 +1020,7 @@ const OP_ARTISTS_GET_AN_ARTIST: OpSpec = OpSpec {
     method: "GET",
     path_template: "/artists/{id}",
     fields: &[
-        FieldSpec { snake: "id", location: FieldLocation::Path },
+        FieldSpec { snake: "id", wire: "id", location: FieldLocation::Path },
     ],
     auth: &[
         AuthApply { secret_key: "oauth_2_0", kind: AuthKind::Bearer },
@@ -500,11 +1031,11 @@ const OP_ARTISTS_GET_AN_ARTISTS_ALBUMS: OpSpec = OpSpec {
     method: "GET",
     path_template: "/artists/{id}/albums",
     fields: &[
-        FieldSpec { snake: "id", location: FieldLocation::Path },
-        FieldSpec { snake: "include_groups", location: FieldLocation::Query },
-        FieldSpec { snake: "market", location: FieldLocation::Query },
-        FieldSpec { snake: "limit", location: FieldLocation::Query },
-        FieldSpec { snake: "offset", location: FieldLocation::Query },
+        FieldSpec { snake: "id", wire: "id", location: FieldLocation::Path },
+        FieldSpec { snake: "include_groups", wire: "include_groups", location: FieldLocation::Query },
+        FieldSpec { snake: "market", wire: "market", location: FieldLocation::Query },
+        FieldSpec { snake: "limit", wire: "limit", location: FieldLocation::Query },
+        FieldSpec { snake: "offset", wire: "offset", location: FieldLocation::Query },
     ],
     auth: &[
         AuthApply { secret_key: "oauth_2_0", kind: AuthKind::Bearer },
@@ -515,7 +1046,7 @@ const OP_ARTISTS_GET_AN_ARTISTS_RELATED_ARTISTS: OpSpec = OpSpec {
     method: "GET",
     path_template: "/artists/{id}/related-artists",
     fields: &[
-        FieldSpec { snake: "id", location: FieldLocation::Path },
+        FieldSpec { snake: "id", wire: "id", location: FieldLocation::Path },
     ],
     auth: &[
         AuthApply { secret_key: "oauth_2_0", kind: AuthKind::Bearer },
@@ -526,13 +1057,218 @@ const OP_ARTISTS_GET_AN_ARTISTS_TOP_TRACKS: OpSpec = OpSpec {
     method: "GET",
     path_template: "/artists/{id}/top-tracks",
     fields: &[
-        FieldSpec { snake: "id", location: FieldLocation::Path },
-        FieldSpec { snake: "market", location: FieldLocation::Query },
+        FieldSpec { snake: "id", wire: "id", location: FieldLocation::Path },
+        FieldSpec { snake: "market", wire: "market", location: FieldLocation::Query },
     ],
     auth: &[
         AuthApply { secret_key: "oauth_2_0", kind: AuthKind::Bearer },
     ],
 };
+
+fn iface_artists__artist_object_type_op_enum__to_str(e: &iface_artists::ArtistObjectTypeOpEnum) -> &'static str {
+    match e {
+        iface_artists::ArtistObjectTypeOpEnum::Artist => "artist",
+    }
+}
+
+fn iface_artists__simplified_album_object_album_type_enum__to_str(e: &iface_artists::SimplifiedAlbumObjectAlbumTypeEnum) -> &'static str {
+    match e {
+        iface_artists::SimplifiedAlbumObjectAlbumTypeEnum::Album => "album",
+        iface_artists::SimplifiedAlbumObjectAlbumTypeEnum::Single => "single",
+        iface_artists::SimplifiedAlbumObjectAlbumTypeEnum::Compilation => "compilation",
+    }
+}
+
+fn iface_artists__simplified_album_object_release_date_precision_enum__to_str(e: &iface_artists::SimplifiedAlbumObjectReleaseDatePrecisionEnum) -> &'static str {
+    match e {
+        iface_artists::SimplifiedAlbumObjectReleaseDatePrecisionEnum::Year => "year",
+        iface_artists::SimplifiedAlbumObjectReleaseDatePrecisionEnum::Month => "month",
+        iface_artists::SimplifiedAlbumObjectReleaseDatePrecisionEnum::Day => "day",
+    }
+}
+
+fn iface_artists__album_restriction_object_reason_enum__to_str(e: &iface_artists::AlbumRestrictionObjectReasonEnum) -> &'static str {
+    match e {
+        iface_artists::AlbumRestrictionObjectReasonEnum::Market => "market",
+        iface_artists::AlbumRestrictionObjectReasonEnum::Product => "product",
+        iface_artists::AlbumRestrictionObjectReasonEnum::Explicit => "explicit",
+    }
+}
+
+fn iface_artists__simplified_album_object_type_op_enum__to_str(e: &iface_artists::SimplifiedAlbumObjectTypeOpEnum) -> &'static str {
+    match e {
+        iface_artists::SimplifiedAlbumObjectTypeOpEnum::Album => "album",
+    }
+}
+
+fn iface_artists__simplified_album_object_album_group_enum__to_str(e: &iface_artists::SimplifiedAlbumObjectAlbumGroupEnum) -> &'static str {
+    match e {
+        iface_artists::SimplifiedAlbumObjectAlbumGroupEnum::Album => "album",
+        iface_artists::SimplifiedAlbumObjectAlbumGroupEnum::Single => "single",
+        iface_artists::SimplifiedAlbumObjectAlbumGroupEnum::Compilation => "compilation",
+        iface_artists::SimplifiedAlbumObjectAlbumGroupEnum::AppearsOn => "appears_on",
+    }
+}
+
+fn iface_artists__track_object_type_op_enum__to_str(e: &iface_artists::TrackObjectTypeOpEnum) -> &'static str {
+    match e {
+        iface_artists::TrackObjectTypeOpEnum::Track => "track",
+    }
+}
+
+fn iface_artists__get_multiple_artists_response__to_json(p: &iface_artists::GetMultipleArtistsResponse) -> Value {
+    let mut m = Map::new();
+    m.insert("artists".into(), Value::Array((&p.artists).iter().map(|v| iface_artists__artist_object__to_json(v)).collect()));
+    Value::Object(m)
+}
+
+fn iface_artists__artist_object__to_json(p: &iface_artists::ArtistObject) -> Value {
+    let mut m = Map::new();
+    m.insert("external_urls".into(), match (&p.external_urls) { Some(v) => iface_artists__external_url_object__to_json(v), None => Value::Null });
+    m.insert("followers".into(), match (&p.followers) { Some(v) => iface_artists__followers_object__to_json(v), None => Value::Null });
+    m.insert("genres".into(), match (&p.genres) { Some(v) => Value::Array((v).iter().map(|v| Value::String((v).clone())).collect()), None => Value::Null });
+    m.insert("href".into(), match (&p.href) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("id".into(), match (&p.id) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("images".into(), match (&p.images) { Some(v) => Value::Array((v).iter().map(|v| iface_artists__image_object__to_json(v)).collect()), None => Value::Null });
+    m.insert("name".into(), match (&p.name) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("popularity".into(), match (&p.popularity) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("type".into(), match (&p.type_op) { Some(v) => Value::String(iface_artists__artist_object_type_op_enum__to_str(v).into()), None => Value::Null });
+    m.insert("uri".into(), match (&p.uri) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_artists__external_url_object__to_json(p: &iface_artists::ExternalUrlObject) -> Value {
+    let mut m = Map::new();
+    m.insert("spotify".into(), match (&p.spotify) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_artists__followers_object__to_json(p: &iface_artists::FollowersObject) -> Value {
+    let mut m = Map::new();
+    m.insert("href".into(), match (&p.href) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("total".into(), match (&p.total) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_artists__image_object__to_json(p: &iface_artists::ImageObject) -> Value {
+    let mut m = Map::new();
+    m.insert("height".into(), Value::Number(serde_json::Number::from(*(&p.height))));
+    m.insert("url".into(), Value::String((&p.url).clone()));
+    m.insert("width".into(), Value::Number(serde_json::Number::from(*(&p.width))));
+    Value::Object(m)
+}
+
+fn iface_artists__paging_simplified_album_object__to_json(p: &iface_artists::PagingSimplifiedAlbumObject) -> Value {
+    let mut m = Map::new();
+    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_artists__get_an_artists_related_artists_response__to_json(p: &iface_artists::GetAnArtistsRelatedArtistsResponse) -> Value {
+    let mut m = Map::new();
+    m.insert("artists".into(), Value::Array((&p.artists).iter().map(|v| iface_artists__artist_object__to_json(v)).collect()));
+    Value::Object(m)
+}
+
+fn iface_artists__get_an_artists_top_tracks_response__to_json(p: &iface_artists::GetAnArtistsTopTracksResponse) -> Value {
+    let mut m = Map::new();
+    m.insert("tracks".into(), Value::Array((&p.tracks).iter().map(|v| iface_artists__track_object__to_json(v)).collect()));
+    Value::Object(m)
+}
+
+fn iface_artists__track_object__to_json(p: &iface_artists::TrackObject) -> Value {
+    let mut m = Map::new();
+    m.insert("album".into(), match (&p.album) { Some(v) => iface_artists__simplified_album_object__to_json(v), None => Value::Null });
+    m.insert("artists".into(), match (&p.artists) { Some(v) => Value::Array((v).iter().map(|v| iface_artists__artist_object__to_json(v)).collect()), None => Value::Null });
+    m.insert("available_markets".into(), match (&p.available_markets) { Some(v) => Value::Array((v).iter().map(|v| Value::String((v).clone())).collect()), None => Value::Null });
+    m.insert("disc_number".into(), match (&p.disc_number) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("duration_ms".into(), match (&p.duration_ms) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("explicit".into(), match (&p.explicit) { Some(v) => Value::Bool(*(v)), None => Value::Null });
+    m.insert("external_ids".into(), match (&p.external_ids) { Some(v) => iface_artists__external_id_object__to_json(v), None => Value::Null });
+    m.insert("external_urls".into(), match (&p.external_urls) { Some(v) => iface_artists__external_url_object__to_json(v), None => Value::Null });
+    m.insert("href".into(), match (&p.href) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("id".into(), match (&p.id) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("is_local".into(), match (&p.is_local) { Some(v) => Value::Bool(*(v)), None => Value::Null });
+    m.insert("is_playable".into(), match (&p.is_playable) { Some(v) => Value::Bool(*(v)), None => Value::Null });
+    m.insert("linked_from".into(), match (&p.linked_from) { Some(v) => iface_artists__track_object_linked_from__to_json(v), None => Value::Null });
+    m.insert("name".into(), match (&p.name) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("popularity".into(), match (&p.popularity) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("preview_url".into(), match (&p.preview_url) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("restrictions".into(), match (&p.restrictions) { Some(v) => iface_artists__track_restriction_object__to_json(v), None => Value::Null });
+    m.insert("track_number".into(), match (&p.track_number) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("type".into(), match (&p.type_op) { Some(v) => Value::String(iface_artists__track_object_type_op_enum__to_str(v).into()), None => Value::Null });
+    m.insert("uri".into(), match (&p.uri) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_artists__simplified_album_object__to_json(p: &iface_artists::SimplifiedAlbumObject) -> Value {
+    let mut m = Map::new();
+    m.insert("album_type".into(), Value::String(iface_artists__simplified_album_object_album_type_enum__to_str(&p.album_type).into()));
+    m.insert("available_markets".into(), Value::Array((&p.available_markets).iter().map(|v| Value::String((v).clone())).collect()));
+    m.insert("copyrights".into(), match (&p.copyrights) { Some(v) => Value::Array((v).iter().map(|v| iface_artists__copyright_object__to_json(v)).collect()), None => Value::Null });
+    m.insert("external_ids".into(), match (&p.external_ids) { Some(v) => iface_artists__external_id_object__to_json(v), None => Value::Null });
+    m.insert("external_urls".into(), iface_artists__external_url_object__to_json(&p.external_urls));
+    m.insert("genres".into(), match (&p.genres) { Some(v) => Value::Array((v).iter().map(|v| Value::String((v).clone())).collect()), None => Value::Null });
+    m.insert("href".into(), Value::String((&p.href).clone()));
+    m.insert("id".into(), Value::String((&p.id).clone()));
+    m.insert("images".into(), Value::Array((&p.images).iter().map(|v| iface_artists__image_object__to_json(v)).collect()));
+    m.insert("label".into(), match (&p.label) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("name".into(), Value::String((&p.name).clone()));
+    m.insert("popularity".into(), match (&p.popularity) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("release_date".into(), Value::String((&p.release_date).clone()));
+    m.insert("release_date_precision".into(), Value::String(iface_artists__simplified_album_object_release_date_precision_enum__to_str(&p.release_date_precision).into()));
+    m.insert("restrictions".into(), match (&p.restrictions) { Some(v) => iface_artists__album_restriction_object__to_json(v), None => Value::Null });
+    m.insert("total_tracks".into(), Value::Number(serde_json::Number::from(*(&p.total_tracks))));
+    m.insert("type".into(), Value::String(iface_artists__simplified_album_object_type_op_enum__to_str(&p.type_op).into()));
+    m.insert("uri".into(), Value::String((&p.uri).clone()));
+    m.insert("album_group".into(), match (&p.album_group) { Some(v) => Value::String(iface_artists__simplified_album_object_album_group_enum__to_str(v).into()), None => Value::Null });
+    m.insert("artists".into(), Value::Array((&p.artists).iter().map(|v| iface_artists__simplified_artist_object__to_json(v)).collect()));
+    Value::Object(m)
+}
+
+fn iface_artists__copyright_object__to_json(p: &iface_artists::CopyrightObject) -> Value {
+    let mut m = Map::new();
+    m.insert("text".into(), match (&p.text) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("type".into(), match (&p.type_op) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_artists__external_id_object__to_json(p: &iface_artists::ExternalIdObject) -> Value {
+    let mut m = Map::new();
+    m.insert("ean".into(), match (&p.ean) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("isrc".into(), match (&p.isrc) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("upc".into(), match (&p.upc) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_artists__album_restriction_object__to_json(p: &iface_artists::AlbumRestrictionObject) -> Value {
+    let mut m = Map::new();
+    m.insert("reason".into(), match (&p.reason) { Some(v) => Value::String(iface_artists__album_restriction_object_reason_enum__to_str(v).into()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_artists__simplified_artist_object__to_json(p: &iface_artists::SimplifiedArtistObject) -> Value {
+    let mut m = Map::new();
+    m.insert("external_urls".into(), match (&p.external_urls) { Some(v) => iface_artists__external_url_object__to_json(v), None => Value::Null });
+    m.insert("href".into(), match (&p.href) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("id".into(), match (&p.id) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("name".into(), match (&p.name) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("type".into(), match (&p.type_op) { Some(v) => Value::String(iface_artists__artist_object_type_op_enum__to_str(v).into()), None => Value::Null });
+    m.insert("uri".into(), match (&p.uri) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_artists__track_object_linked_from__to_json(p: &iface_artists::TrackObjectLinkedFrom) -> Value {
+    let mut m = Map::new();
+    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_artists__track_restriction_object__to_json(p: &iface_artists::TrackRestrictionObject) -> Value {
+    let mut m = Map::new();
+    m.insert("reason".into(), match (&p.reason) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
 
 fn iface_artists__get_multiple_artists_params__to_json(p: &iface_artists::GetMultipleArtistsParams) -> Value {
     let mut m = Map::new();
@@ -569,26 +1305,384 @@ fn iface_artists__get_an_artists_top_tracks_params__to_json(p: &iface_artists::G
     Value::Object(m)
 }
 
+fn iface_artists__get_multiple_artists_response__from_json(v: &Value) -> Option<iface_artists::GetMultipleArtistsResponse> {
+    let m = v.as_object()?;
+    Some(iface_artists::GetMultipleArtistsResponse {
+        artists: m.get("artists").and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| iface_artists__artist_object__from_json(x)).collect())).unwrap_or_default(),
+    })
+}
+
+fn iface_artists__artist_object__from_json(v: &Value) -> Option<iface_artists::ArtistObject> {
+    let m = v.as_object()?;
+    Some(iface_artists::ArtistObject {
+        external_urls: m.get("external_urls").filter(|v| !v.is_null()).and_then(|v| iface_artists__external_url_object__from_json(v)),
+        followers: m.get("followers").filter(|v| !v.is_null()).and_then(|v| iface_artists__followers_object__from_json(v)),
+        genres: m.get("genres").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| (x).as_str().map(|s| s.to_string())).collect())),
+        href: m.get("href").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        id: m.get("id").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        images: m.get("images").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| iface_artists__image_object__from_json(x)).collect())),
+        name: m.get("name").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        popularity: m.get("popularity").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        type_op: m.get("type").filter(|v| !v.is_null()).and_then(|v| (v).as_str().and_then(iface_artists__artist_object_type_op_enum__from_str)),
+        uri: m.get("uri").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    })
+}
+
+fn iface_artists__external_url_object__from_json(v: &Value) -> Option<iface_artists::ExternalUrlObject> {
+    let m = v.as_object()?;
+    Some(iface_artists::ExternalUrlObject {
+        spotify: m.get("spotify").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    })
+}
+
+fn iface_artists__followers_object__from_json(v: &Value) -> Option<iface_artists::FollowersObject> {
+    let m = v.as_object()?;
+    Some(iface_artists::FollowersObject {
+        href: m.get("href").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        total: m.get("total").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+    })
+}
+
+fn iface_artists__image_object__from_json(v: &Value) -> Option<iface_artists::ImageObject> {
+    let m = v.as_object()?;
+    Some(iface_artists::ImageObject {
+        height: m.get("height").and_then(|v| (v).as_i64().map(|n| n as i32)).unwrap_or_default(),
+        url: m.get("url").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        width: m.get("width").and_then(|v| (v).as_i64().map(|n| n as i32)).unwrap_or_default(),
+    })
+}
+
+fn iface_artists__paging_simplified_album_object__from_json(v: &Value) -> Option<iface_artists::PagingSimplifiedAlbumObject> {
+    let m = v.as_object()?;
+    Some(iface_artists::PagingSimplifiedAlbumObject {
+        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    })
+}
+
+fn iface_artists__get_an_artists_related_artists_response__from_json(v: &Value) -> Option<iface_artists::GetAnArtistsRelatedArtistsResponse> {
+    let m = v.as_object()?;
+    Some(iface_artists::GetAnArtistsRelatedArtistsResponse {
+        artists: m.get("artists").and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| iface_artists__artist_object__from_json(x)).collect())).unwrap_or_default(),
+    })
+}
+
+fn iface_artists__get_an_artists_top_tracks_response__from_json(v: &Value) -> Option<iface_artists::GetAnArtistsTopTracksResponse> {
+    let m = v.as_object()?;
+    Some(iface_artists::GetAnArtistsTopTracksResponse {
+        tracks: m.get("tracks").and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| iface_artists__track_object__from_json(x)).collect())).unwrap_or_default(),
+    })
+}
+
+fn iface_artists__track_object__from_json(v: &Value) -> Option<iface_artists::TrackObject> {
+    let m = v.as_object()?;
+    Some(iface_artists::TrackObject {
+        album: m.get("album").filter(|v| !v.is_null()).and_then(|v| iface_artists__simplified_album_object__from_json(v)),
+        artists: m.get("artists").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| iface_artists__artist_object__from_json(x)).collect())),
+        available_markets: m.get("available_markets").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| (x).as_str().map(|s| s.to_string())).collect())),
+        disc_number: m.get("disc_number").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        duration_ms: m.get("duration_ms").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        explicit: m.get("explicit").filter(|v| !v.is_null()).and_then(|v| (v).as_bool()),
+        external_ids: m.get("external_ids").filter(|v| !v.is_null()).and_then(|v| iface_artists__external_id_object__from_json(v)),
+        external_urls: m.get("external_urls").filter(|v| !v.is_null()).and_then(|v| iface_artists__external_url_object__from_json(v)),
+        href: m.get("href").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        id: m.get("id").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        is_local: m.get("is_local").filter(|v| !v.is_null()).and_then(|v| (v).as_bool()),
+        is_playable: m.get("is_playable").filter(|v| !v.is_null()).and_then(|v| (v).as_bool()),
+        linked_from: m.get("linked_from").filter(|v| !v.is_null()).and_then(|v| iface_artists__track_object_linked_from__from_json(v)),
+        name: m.get("name").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        popularity: m.get("popularity").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        preview_url: m.get("preview_url").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        restrictions: m.get("restrictions").filter(|v| !v.is_null()).and_then(|v| iface_artists__track_restriction_object__from_json(v)),
+        track_number: m.get("track_number").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        type_op: m.get("type").filter(|v| !v.is_null()).and_then(|v| (v).as_str().and_then(iface_artists__track_object_type_op_enum__from_str)),
+        uri: m.get("uri").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    })
+}
+
+fn iface_artists__simplified_album_object__from_json(v: &Value) -> Option<iface_artists::SimplifiedAlbumObject> {
+    let m = v.as_object()?;
+    Some(iface_artists::SimplifiedAlbumObject {
+        album_type: match m.get("album_type").and_then(|v| (v).as_str().and_then(iface_artists__simplified_album_object_album_type_enum__from_str)) { Some(x) => x, None => return None },
+        available_markets: m.get("available_markets").and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| (x).as_str().map(|s| s.to_string())).collect())).unwrap_or_default(),
+        copyrights: m.get("copyrights").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| iface_artists__copyright_object__from_json(x)).collect())),
+        external_ids: m.get("external_ids").filter(|v| !v.is_null()).and_then(|v| iface_artists__external_id_object__from_json(v)),
+        external_urls: match m.get("external_urls").and_then(|v| iface_artists__external_url_object__from_json(v)) { Some(x) => x, None => return None },
+        genres: m.get("genres").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| (x).as_str().map(|s| s.to_string())).collect())),
+        href: m.get("href").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        id: m.get("id").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        images: m.get("images").and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| iface_artists__image_object__from_json(x)).collect())).unwrap_or_default(),
+        label: m.get("label").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        name: m.get("name").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        popularity: m.get("popularity").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        release_date: m.get("release_date").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        release_date_precision: match m.get("release_date_precision").and_then(|v| (v).as_str().and_then(iface_artists__simplified_album_object_release_date_precision_enum__from_str)) { Some(x) => x, None => return None },
+        restrictions: m.get("restrictions").filter(|v| !v.is_null()).and_then(|v| iface_artists__album_restriction_object__from_json(v)),
+        total_tracks: m.get("total_tracks").and_then(|v| (v).as_i64().map(|n| n as i32)).unwrap_or_default(),
+        type_op: match m.get("type").and_then(|v| (v).as_str().and_then(iface_artists__simplified_album_object_type_op_enum__from_str)) { Some(x) => x, None => return None },
+        uri: m.get("uri").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        album_group: m.get("album_group").filter(|v| !v.is_null()).and_then(|v| (v).as_str().and_then(iface_artists__simplified_album_object_album_group_enum__from_str)),
+        artists: m.get("artists").and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| iface_artists__simplified_artist_object__from_json(x)).collect())).unwrap_or_default(),
+    })
+}
+
+fn iface_artists__copyright_object__from_json(v: &Value) -> Option<iface_artists::CopyrightObject> {
+    let m = v.as_object()?;
+    Some(iface_artists::CopyrightObject {
+        text: m.get("text").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        type_op: m.get("type").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    })
+}
+
+fn iface_artists__external_id_object__from_json(v: &Value) -> Option<iface_artists::ExternalIdObject> {
+    let m = v.as_object()?;
+    Some(iface_artists::ExternalIdObject {
+        ean: m.get("ean").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        isrc: m.get("isrc").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        upc: m.get("upc").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    })
+}
+
+fn iface_artists__album_restriction_object__from_json(v: &Value) -> Option<iface_artists::AlbumRestrictionObject> {
+    let m = v.as_object()?;
+    Some(iface_artists::AlbumRestrictionObject {
+        reason: m.get("reason").filter(|v| !v.is_null()).and_then(|v| (v).as_str().and_then(iface_artists__album_restriction_object_reason_enum__from_str)),
+    })
+}
+
+fn iface_artists__simplified_artist_object__from_json(v: &Value) -> Option<iface_artists::SimplifiedArtistObject> {
+    let m = v.as_object()?;
+    Some(iface_artists::SimplifiedArtistObject {
+        external_urls: m.get("external_urls").filter(|v| !v.is_null()).and_then(|v| iface_artists__external_url_object__from_json(v)),
+        href: m.get("href").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        id: m.get("id").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        name: m.get("name").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        type_op: m.get("type").filter(|v| !v.is_null()).and_then(|v| (v).as_str().and_then(iface_artists__artist_object_type_op_enum__from_str)),
+        uri: m.get("uri").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    })
+}
+
+fn iface_artists__track_object_linked_from__from_json(v: &Value) -> Option<iface_artists::TrackObjectLinkedFrom> {
+    let m = v.as_object()?;
+    Some(iface_artists::TrackObjectLinkedFrom {
+        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    })
+}
+
+fn iface_artists__track_restriction_object__from_json(v: &Value) -> Option<iface_artists::TrackRestrictionObject> {
+    let m = v.as_object()?;
+    Some(iface_artists::TrackRestrictionObject {
+        reason: m.get("reason").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    })
+}
+
+fn iface_artists__artist_object_type_op_enum__from_str(s: &str) -> Option<iface_artists::ArtistObjectTypeOpEnum> {
+    match s {
+        "artist" => Some(iface_artists::ArtistObjectTypeOpEnum::Artist),
+        _ => None,
+    }
+}
+
+fn iface_artists__simplified_album_object_album_type_enum__from_str(s: &str) -> Option<iface_artists::SimplifiedAlbumObjectAlbumTypeEnum> {
+    match s {
+        "album" => Some(iface_artists::SimplifiedAlbumObjectAlbumTypeEnum::Album),
+        "single" => Some(iface_artists::SimplifiedAlbumObjectAlbumTypeEnum::Single),
+        "compilation" => Some(iface_artists::SimplifiedAlbumObjectAlbumTypeEnum::Compilation),
+        _ => None,
+    }
+}
+
+fn iface_artists__simplified_album_object_release_date_precision_enum__from_str(s: &str) -> Option<iface_artists::SimplifiedAlbumObjectReleaseDatePrecisionEnum> {
+    match s {
+        "year" => Some(iface_artists::SimplifiedAlbumObjectReleaseDatePrecisionEnum::Year),
+        "month" => Some(iface_artists::SimplifiedAlbumObjectReleaseDatePrecisionEnum::Month),
+        "day" => Some(iface_artists::SimplifiedAlbumObjectReleaseDatePrecisionEnum::Day),
+        _ => None,
+    }
+}
+
+fn iface_artists__album_restriction_object_reason_enum__from_str(s: &str) -> Option<iface_artists::AlbumRestrictionObjectReasonEnum> {
+    match s {
+        "market" => Some(iface_artists::AlbumRestrictionObjectReasonEnum::Market),
+        "product" => Some(iface_artists::AlbumRestrictionObjectReasonEnum::Product),
+        "explicit" => Some(iface_artists::AlbumRestrictionObjectReasonEnum::Explicit),
+        _ => None,
+    }
+}
+
+fn iface_artists__simplified_album_object_type_op_enum__from_str(s: &str) -> Option<iface_artists::SimplifiedAlbumObjectTypeOpEnum> {
+    match s {
+        "album" => Some(iface_artists::SimplifiedAlbumObjectTypeOpEnum::Album),
+        _ => None,
+    }
+}
+
+fn iface_artists__simplified_album_object_album_group_enum__from_str(s: &str) -> Option<iface_artists::SimplifiedAlbumObjectAlbumGroupEnum> {
+    match s {
+        "album" => Some(iface_artists::SimplifiedAlbumObjectAlbumGroupEnum::Album),
+        "single" => Some(iface_artists::SimplifiedAlbumObjectAlbumGroupEnum::Single),
+        "compilation" => Some(iface_artists::SimplifiedAlbumObjectAlbumGroupEnum::Compilation),
+        "appears_on" => Some(iface_artists::SimplifiedAlbumObjectAlbumGroupEnum::AppearsOn),
+        _ => None,
+    }
+}
+
+fn iface_artists__track_object_type_op_enum__from_str(s: &str) -> Option<iface_artists::TrackObjectTypeOpEnum> {
+    match s {
+        "track" => Some(iface_artists::TrackObjectTypeOpEnum::Track),
+        _ => None,
+    }
+}
+
+fn iface_artists__get_multiple_artists__ok(body: String) -> Result<iface_artists::GetMultipleArtistsResponse, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match iface_artists__get_multiple_artists_response__from_json(&v) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_artists__get_multiple_artists__err(e: crate::runtime::DispatchError) -> iface_artists::GetMultipleArtistsError {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => match status {
+            401u16 => iface_artists::GetMultipleArtistsError::Unauthorized(body),
+            403u16 => iface_artists::GetMultipleArtistsError::Forbidden(body),
+            429u16 => iface_artists::GetMultipleArtistsError::TooManyRequests(body),
+            _ => iface_artists::GetMultipleArtistsError::Other(body),
+        },
+        crate::runtime::DispatchError::Transport(m) => iface_artists::GetMultipleArtistsError::Other(m),
+    }
+}
+
+fn iface_artists__get_an_artist__ok(body: String) -> Result<iface_artists::ArtistObject, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match iface_artists__artist_object__from_json(&v) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_artists__get_an_artist__err(e: crate::runtime::DispatchError) -> iface_artists::GetAnArtistError {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => match status {
+            401u16 => iface_artists::GetAnArtistError::Unauthorized(body),
+            403u16 => iface_artists::GetAnArtistError::Forbidden(body),
+            429u16 => iface_artists::GetAnArtistError::TooManyRequests(body),
+            _ => iface_artists::GetAnArtistError::Other(body),
+        },
+        crate::runtime::DispatchError::Transport(m) => iface_artists::GetAnArtistError::Other(m),
+    }
+}
+
+fn iface_artists__get_an_artists_albums__ok(body: String) -> Result<iface_artists::PagingSimplifiedAlbumObject, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match iface_artists__paging_simplified_album_object__from_json(&v) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_artists__get_an_artists_albums__err(e: crate::runtime::DispatchError) -> iface_artists::GetAnArtistsAlbumsError {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => match status {
+            401u16 => iface_artists::GetAnArtistsAlbumsError::Unauthorized(body),
+            403u16 => iface_artists::GetAnArtistsAlbumsError::Forbidden(body),
+            429u16 => iface_artists::GetAnArtistsAlbumsError::TooManyRequests(body),
+            _ => iface_artists::GetAnArtistsAlbumsError::Other(body),
+        },
+        crate::runtime::DispatchError::Transport(m) => iface_artists::GetAnArtistsAlbumsError::Other(m),
+    }
+}
+
+fn iface_artists__get_an_artists_related_artists__ok(body: String) -> Result<iface_artists::GetAnArtistsRelatedArtistsResponse, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match iface_artists__get_an_artists_related_artists_response__from_json(&v) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_artists__get_an_artists_related_artists__err(e: crate::runtime::DispatchError) -> iface_artists::GetAnArtistsRelatedArtistsError {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => match status {
+            401u16 => iface_artists::GetAnArtistsRelatedArtistsError::Unauthorized(body),
+            403u16 => iface_artists::GetAnArtistsRelatedArtistsError::Forbidden(body),
+            429u16 => iface_artists::GetAnArtistsRelatedArtistsError::TooManyRequests(body),
+            _ => iface_artists::GetAnArtistsRelatedArtistsError::Other(body),
+        },
+        crate::runtime::DispatchError::Transport(m) => iface_artists::GetAnArtistsRelatedArtistsError::Other(m),
+    }
+}
+
+fn iface_artists__get_an_artists_top_tracks__ok(body: String) -> Result<iface_artists::GetAnArtistsTopTracksResponse, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match iface_artists__get_an_artists_top_tracks_response__from_json(&v) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_artists__get_an_artists_top_tracks__err(e: crate::runtime::DispatchError) -> iface_artists::GetAnArtistsTopTracksError {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => match status {
+            401u16 => iface_artists::GetAnArtistsTopTracksError::Unauthorized(body),
+            403u16 => iface_artists::GetAnArtistsTopTracksError::Forbidden(body),
+            429u16 => iface_artists::GetAnArtistsTopTracksError::TooManyRequests(body),
+            _ => iface_artists::GetAnArtistsTopTracksError::Other(body),
+        },
+        crate::runtime::DispatchError::Transport(m) => iface_artists::GetAnArtistsTopTracksError::Other(m),
+    }
+}
+
 impl iface_artists::Guest for crate::Component {
-    fn get_multiple_artists(params: iface_artists::GetMultipleArtistsParams) -> Result<String, String> {
+    fn get_multiple_artists(params: iface_artists::GetMultipleArtistsParams) -> Result<iface_artists::GetMultipleArtistsResponse, iface_artists::GetMultipleArtistsError> {
         let json = iface_artists__get_multiple_artists_params__to_json(&params);
-        dispatch(&OP_ARTISTS_GET_MULTIPLE_ARTISTS, json)
+        match dispatch(&OP_ARTISTS_GET_MULTIPLE_ARTISTS, json).and_then(iface_artists__get_multiple_artists__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_artists__get_multiple_artists__err(e)),
+        }
     }
-    fn get_an_artist(params: iface_artists::GetAnArtistParams) -> Result<String, String> {
+    fn get_an_artist(params: iface_artists::GetAnArtistParams) -> Result<iface_artists::ArtistObject, iface_artists::GetAnArtistError> {
         let json = iface_artists__get_an_artist_params__to_json(&params);
-        dispatch(&OP_ARTISTS_GET_AN_ARTIST, json)
+        match dispatch(&OP_ARTISTS_GET_AN_ARTIST, json).and_then(iface_artists__get_an_artist__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_artists__get_an_artist__err(e)),
+        }
     }
-    fn get_an_artists_albums(params: iface_artists::GetAnArtistsAlbumsParams) -> Result<String, String> {
+    fn get_an_artists_albums(params: iface_artists::GetAnArtistsAlbumsParams) -> Result<iface_artists::PagingSimplifiedAlbumObject, iface_artists::GetAnArtistsAlbumsError> {
         let json = iface_artists__get_an_artists_albums_params__to_json(&params);
-        dispatch(&OP_ARTISTS_GET_AN_ARTISTS_ALBUMS, json)
+        match dispatch(&OP_ARTISTS_GET_AN_ARTISTS_ALBUMS, json).and_then(iface_artists__get_an_artists_albums__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_artists__get_an_artists_albums__err(e)),
+        }
     }
-    fn get_an_artists_related_artists(params: iface_artists::GetAnArtistsRelatedArtistsParams) -> Result<String, String> {
+    fn get_an_artists_related_artists(params: iface_artists::GetAnArtistsRelatedArtistsParams) -> Result<iface_artists::GetAnArtistsRelatedArtistsResponse, iface_artists::GetAnArtistsRelatedArtistsError> {
         let json = iface_artists__get_an_artists_related_artists_params__to_json(&params);
-        dispatch(&OP_ARTISTS_GET_AN_ARTISTS_RELATED_ARTISTS, json)
+        match dispatch(&OP_ARTISTS_GET_AN_ARTISTS_RELATED_ARTISTS, json).and_then(iface_artists__get_an_artists_related_artists__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_artists__get_an_artists_related_artists__err(e)),
+        }
     }
-    fn get_an_artists_top_tracks(params: iface_artists::GetAnArtistsTopTracksParams) -> Result<String, String> {
+    fn get_an_artists_top_tracks(params: iface_artists::GetAnArtistsTopTracksParams) -> Result<iface_artists::GetAnArtistsTopTracksResponse, iface_artists::GetAnArtistsTopTracksError> {
         let json = iface_artists__get_an_artists_top_tracks_params__to_json(&params);
-        dispatch(&OP_ARTISTS_GET_AN_ARTISTS_TOP_TRACKS, json)
+        match dispatch(&OP_ARTISTS_GET_AN_ARTISTS_TOP_TRACKS, json).and_then(iface_artists__get_an_artists_top_tracks__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_artists__get_an_artists_top_tracks__err(e)),
+        }
     }
 }
 use crate::exports::autostamp::spotify::tracks as iface_tracks;
@@ -597,7 +1691,7 @@ const OP_TRACKS_GET_AUDIO_ANALYSIS: OpSpec = OpSpec {
     method: "GET",
     path_template: "/audio-analysis/{id}",
     fields: &[
-        FieldSpec { snake: "id", location: FieldLocation::Path },
+        FieldSpec { snake: "id", wire: "id", location: FieldLocation::Path },
     ],
     auth: &[
         AuthApply { secret_key: "oauth_2_0", kind: AuthKind::Bearer },
@@ -608,7 +1702,7 @@ const OP_TRACKS_GET_SEVERAL_AUDIO_FEATURES: OpSpec = OpSpec {
     method: "GET",
     path_template: "/audio-features",
     fields: &[
-        FieldSpec { snake: "ids", location: FieldLocation::Query },
+        FieldSpec { snake: "ids", wire: "ids", location: FieldLocation::Query },
     ],
     auth: &[
         AuthApply { secret_key: "oauth_2_0", kind: AuthKind::Bearer },
@@ -619,7 +1713,7 @@ const OP_TRACKS_GET_AUDIO_FEATURES: OpSpec = OpSpec {
     method: "GET",
     path_template: "/audio-features/{id}",
     fields: &[
-        FieldSpec { snake: "id", location: FieldLocation::Path },
+        FieldSpec { snake: "id", wire: "id", location: FieldLocation::Path },
     ],
     auth: &[
         AuthApply { secret_key: "oauth_2_0", kind: AuthKind::Bearer },
@@ -630,9 +1724,9 @@ const OP_TRACKS_GET_USERS_SAVED_TRACKS: OpSpec = OpSpec {
     method: "GET",
     path_template: "/me/tracks",
     fields: &[
-        FieldSpec { snake: "market", location: FieldLocation::Query },
-        FieldSpec { snake: "limit", location: FieldLocation::Query },
-        FieldSpec { snake: "offset", location: FieldLocation::Query },
+        FieldSpec { snake: "market", wire: "market", location: FieldLocation::Query },
+        FieldSpec { snake: "limit", wire: "limit", location: FieldLocation::Query },
+        FieldSpec { snake: "offset", wire: "offset", location: FieldLocation::Query },
     ],
     auth: &[
         AuthApply { secret_key: "oauth_2_0", kind: AuthKind::Bearer },
@@ -643,7 +1737,8 @@ const OP_TRACKS_SAVE_TRACKS_USER: OpSpec = OpSpec {
     method: "PUT",
     path_template: "/me/tracks",
     fields: &[
-        FieldSpec { snake: "ids", location: FieldLocation::Query },
+        FieldSpec { snake: "ids", wire: "ids", location: FieldLocation::Query },
+        FieldSpec { snake: "ids_v2", wire: "ids", location: FieldLocation::Body },
     ],
     auth: &[
         AuthApply { secret_key: "oauth_2_0", kind: AuthKind::Bearer },
@@ -654,7 +1749,8 @@ const OP_TRACKS_REMOVE_TRACKS_USER: OpSpec = OpSpec {
     method: "DELETE",
     path_template: "/me/tracks",
     fields: &[
-        FieldSpec { snake: "ids", location: FieldLocation::Query },
+        FieldSpec { snake: "ids", wire: "ids", location: FieldLocation::Query },
+        FieldSpec { snake: "ids_v2", wire: "ids", location: FieldLocation::Body },
     ],
     auth: &[
         AuthApply { secret_key: "oauth_2_0", kind: AuthKind::Bearer },
@@ -665,7 +1761,7 @@ const OP_TRACKS_CHECK_USERS_SAVED_TRACKS: OpSpec = OpSpec {
     method: "GET",
     path_template: "/me/tracks/contains",
     fields: &[
-        FieldSpec { snake: "ids", location: FieldLocation::Query },
+        FieldSpec { snake: "ids", wire: "ids", location: FieldLocation::Query },
     ],
     auth: &[
         AuthApply { secret_key: "oauth_2_0", kind: AuthKind::Bearer },
@@ -676,53 +1772,53 @@ const OP_TRACKS_GET_RECOMMENDATIONS: OpSpec = OpSpec {
     method: "GET",
     path_template: "/recommendations",
     fields: &[
-        FieldSpec { snake: "limit", location: FieldLocation::Query },
-        FieldSpec { snake: "market", location: FieldLocation::Query },
-        FieldSpec { snake: "seed_artists", location: FieldLocation::Query },
-        FieldSpec { snake: "seed_genres", location: FieldLocation::Query },
-        FieldSpec { snake: "seed_tracks", location: FieldLocation::Query },
-        FieldSpec { snake: "min_acousticness", location: FieldLocation::Query },
-        FieldSpec { snake: "max_acousticness", location: FieldLocation::Query },
-        FieldSpec { snake: "target_acousticness", location: FieldLocation::Query },
-        FieldSpec { snake: "min_danceability", location: FieldLocation::Query },
-        FieldSpec { snake: "max_danceability", location: FieldLocation::Query },
-        FieldSpec { snake: "target_danceability", location: FieldLocation::Query },
-        FieldSpec { snake: "min_duration_ms", location: FieldLocation::Query },
-        FieldSpec { snake: "max_duration_ms", location: FieldLocation::Query },
-        FieldSpec { snake: "target_duration_ms", location: FieldLocation::Query },
-        FieldSpec { snake: "min_energy", location: FieldLocation::Query },
-        FieldSpec { snake: "max_energy", location: FieldLocation::Query },
-        FieldSpec { snake: "target_energy", location: FieldLocation::Query },
-        FieldSpec { snake: "min_instrumentalness", location: FieldLocation::Query },
-        FieldSpec { snake: "max_instrumentalness", location: FieldLocation::Query },
-        FieldSpec { snake: "target_instrumentalness", location: FieldLocation::Query },
-        FieldSpec { snake: "min_key", location: FieldLocation::Query },
-        FieldSpec { snake: "max_key", location: FieldLocation::Query },
-        FieldSpec { snake: "target_key", location: FieldLocation::Query },
-        FieldSpec { snake: "min_liveness", location: FieldLocation::Query },
-        FieldSpec { snake: "max_liveness", location: FieldLocation::Query },
-        FieldSpec { snake: "target_liveness", location: FieldLocation::Query },
-        FieldSpec { snake: "min_loudness", location: FieldLocation::Query },
-        FieldSpec { snake: "max_loudness", location: FieldLocation::Query },
-        FieldSpec { snake: "target_loudness", location: FieldLocation::Query },
-        FieldSpec { snake: "min_mode", location: FieldLocation::Query },
-        FieldSpec { snake: "max_mode", location: FieldLocation::Query },
-        FieldSpec { snake: "target_mode", location: FieldLocation::Query },
-        FieldSpec { snake: "min_popularity", location: FieldLocation::Query },
-        FieldSpec { snake: "max_popularity", location: FieldLocation::Query },
-        FieldSpec { snake: "target_popularity", location: FieldLocation::Query },
-        FieldSpec { snake: "min_speechiness", location: FieldLocation::Query },
-        FieldSpec { snake: "max_speechiness", location: FieldLocation::Query },
-        FieldSpec { snake: "target_speechiness", location: FieldLocation::Query },
-        FieldSpec { snake: "min_tempo", location: FieldLocation::Query },
-        FieldSpec { snake: "max_tempo", location: FieldLocation::Query },
-        FieldSpec { snake: "target_tempo", location: FieldLocation::Query },
-        FieldSpec { snake: "min_time_signature", location: FieldLocation::Query },
-        FieldSpec { snake: "max_time_signature", location: FieldLocation::Query },
-        FieldSpec { snake: "target_time_signature", location: FieldLocation::Query },
-        FieldSpec { snake: "min_valence", location: FieldLocation::Query },
-        FieldSpec { snake: "max_valence", location: FieldLocation::Query },
-        FieldSpec { snake: "target_valence", location: FieldLocation::Query },
+        FieldSpec { snake: "limit", wire: "limit", location: FieldLocation::Query },
+        FieldSpec { snake: "market", wire: "market", location: FieldLocation::Query },
+        FieldSpec { snake: "seed_artists", wire: "seed_artists", location: FieldLocation::Query },
+        FieldSpec { snake: "seed_genres", wire: "seed_genres", location: FieldLocation::Query },
+        FieldSpec { snake: "seed_tracks", wire: "seed_tracks", location: FieldLocation::Query },
+        FieldSpec { snake: "min_acousticness", wire: "min_acousticness", location: FieldLocation::Query },
+        FieldSpec { snake: "max_acousticness", wire: "max_acousticness", location: FieldLocation::Query },
+        FieldSpec { snake: "target_acousticness", wire: "target_acousticness", location: FieldLocation::Query },
+        FieldSpec { snake: "min_danceability", wire: "min_danceability", location: FieldLocation::Query },
+        FieldSpec { snake: "max_danceability", wire: "max_danceability", location: FieldLocation::Query },
+        FieldSpec { snake: "target_danceability", wire: "target_danceability", location: FieldLocation::Query },
+        FieldSpec { snake: "min_duration_ms", wire: "min_duration_ms", location: FieldLocation::Query },
+        FieldSpec { snake: "max_duration_ms", wire: "max_duration_ms", location: FieldLocation::Query },
+        FieldSpec { snake: "target_duration_ms", wire: "target_duration_ms", location: FieldLocation::Query },
+        FieldSpec { snake: "min_energy", wire: "min_energy", location: FieldLocation::Query },
+        FieldSpec { snake: "max_energy", wire: "max_energy", location: FieldLocation::Query },
+        FieldSpec { snake: "target_energy", wire: "target_energy", location: FieldLocation::Query },
+        FieldSpec { snake: "min_instrumentalness", wire: "min_instrumentalness", location: FieldLocation::Query },
+        FieldSpec { snake: "max_instrumentalness", wire: "max_instrumentalness", location: FieldLocation::Query },
+        FieldSpec { snake: "target_instrumentalness", wire: "target_instrumentalness", location: FieldLocation::Query },
+        FieldSpec { snake: "min_key", wire: "min_key", location: FieldLocation::Query },
+        FieldSpec { snake: "max_key", wire: "max_key", location: FieldLocation::Query },
+        FieldSpec { snake: "target_key", wire: "target_key", location: FieldLocation::Query },
+        FieldSpec { snake: "min_liveness", wire: "min_liveness", location: FieldLocation::Query },
+        FieldSpec { snake: "max_liveness", wire: "max_liveness", location: FieldLocation::Query },
+        FieldSpec { snake: "target_liveness", wire: "target_liveness", location: FieldLocation::Query },
+        FieldSpec { snake: "min_loudness", wire: "min_loudness", location: FieldLocation::Query },
+        FieldSpec { snake: "max_loudness", wire: "max_loudness", location: FieldLocation::Query },
+        FieldSpec { snake: "target_loudness", wire: "target_loudness", location: FieldLocation::Query },
+        FieldSpec { snake: "min_mode", wire: "min_mode", location: FieldLocation::Query },
+        FieldSpec { snake: "max_mode", wire: "max_mode", location: FieldLocation::Query },
+        FieldSpec { snake: "target_mode", wire: "target_mode", location: FieldLocation::Query },
+        FieldSpec { snake: "min_popularity", wire: "min_popularity", location: FieldLocation::Query },
+        FieldSpec { snake: "max_popularity", wire: "max_popularity", location: FieldLocation::Query },
+        FieldSpec { snake: "target_popularity", wire: "target_popularity", location: FieldLocation::Query },
+        FieldSpec { snake: "min_speechiness", wire: "min_speechiness", location: FieldLocation::Query },
+        FieldSpec { snake: "max_speechiness", wire: "max_speechiness", location: FieldLocation::Query },
+        FieldSpec { snake: "target_speechiness", wire: "target_speechiness", location: FieldLocation::Query },
+        FieldSpec { snake: "min_tempo", wire: "min_tempo", location: FieldLocation::Query },
+        FieldSpec { snake: "max_tempo", wire: "max_tempo", location: FieldLocation::Query },
+        FieldSpec { snake: "target_tempo", wire: "target_tempo", location: FieldLocation::Query },
+        FieldSpec { snake: "min_time_signature", wire: "min_time_signature", location: FieldLocation::Query },
+        FieldSpec { snake: "max_time_signature", wire: "max_time_signature", location: FieldLocation::Query },
+        FieldSpec { snake: "target_time_signature", wire: "target_time_signature", location: FieldLocation::Query },
+        FieldSpec { snake: "min_valence", wire: "min_valence", location: FieldLocation::Query },
+        FieldSpec { snake: "max_valence", wire: "max_valence", location: FieldLocation::Query },
+        FieldSpec { snake: "target_valence", wire: "target_valence", location: FieldLocation::Query },
     ],
     auth: &[
         AuthApply { secret_key: "oauth_2_0", kind: AuthKind::Bearer },
@@ -733,8 +1829,8 @@ const OP_TRACKS_GET_SEVERAL_TRACKS: OpSpec = OpSpec {
     method: "GET",
     path_template: "/tracks",
     fields: &[
-        FieldSpec { snake: "market", location: FieldLocation::Query },
-        FieldSpec { snake: "ids", location: FieldLocation::Query },
+        FieldSpec { snake: "market", wire: "market", location: FieldLocation::Query },
+        FieldSpec { snake: "ids", wire: "ids", location: FieldLocation::Query },
     ],
     auth: &[
         AuthApply { secret_key: "oauth_2_0", kind: AuthKind::Bearer },
@@ -745,13 +1841,383 @@ const OP_TRACKS_GET_TRACK: OpSpec = OpSpec {
     method: "GET",
     path_template: "/tracks/{id}",
     fields: &[
-        FieldSpec { snake: "id", location: FieldLocation::Path },
-        FieldSpec { snake: "market", location: FieldLocation::Query },
+        FieldSpec { snake: "id", wire: "id", location: FieldLocation::Path },
+        FieldSpec { snake: "market", wire: "market", location: FieldLocation::Query },
     ],
     auth: &[
         AuthApply { secret_key: "oauth_2_0", kind: AuthKind::Bearer },
     ],
 };
+
+fn iface_tracks__audio_features_object_type_op_enum__to_str(e: &iface_tracks::AudioFeaturesObjectTypeOpEnum) -> &'static str {
+    match e {
+        iface_tracks::AudioFeaturesObjectTypeOpEnum::AudioFeatures => "audio_features",
+    }
+}
+
+fn iface_tracks__simplified_album_object_album_type_enum__to_str(e: &iface_tracks::SimplifiedAlbumObjectAlbumTypeEnum) -> &'static str {
+    match e {
+        iface_tracks::SimplifiedAlbumObjectAlbumTypeEnum::Album => "album",
+        iface_tracks::SimplifiedAlbumObjectAlbumTypeEnum::Single => "single",
+        iface_tracks::SimplifiedAlbumObjectAlbumTypeEnum::Compilation => "compilation",
+    }
+}
+
+fn iface_tracks__simplified_album_object_release_date_precision_enum__to_str(e: &iface_tracks::SimplifiedAlbumObjectReleaseDatePrecisionEnum) -> &'static str {
+    match e {
+        iface_tracks::SimplifiedAlbumObjectReleaseDatePrecisionEnum::Year => "year",
+        iface_tracks::SimplifiedAlbumObjectReleaseDatePrecisionEnum::Month => "month",
+        iface_tracks::SimplifiedAlbumObjectReleaseDatePrecisionEnum::Day => "day",
+    }
+}
+
+fn iface_tracks__album_restriction_object_reason_enum__to_str(e: &iface_tracks::AlbumRestrictionObjectReasonEnum) -> &'static str {
+    match e {
+        iface_tracks::AlbumRestrictionObjectReasonEnum::Market => "market",
+        iface_tracks::AlbumRestrictionObjectReasonEnum::Product => "product",
+        iface_tracks::AlbumRestrictionObjectReasonEnum::Explicit => "explicit",
+    }
+}
+
+fn iface_tracks__simplified_album_object_type_op_enum__to_str(e: &iface_tracks::SimplifiedAlbumObjectTypeOpEnum) -> &'static str {
+    match e {
+        iface_tracks::SimplifiedAlbumObjectTypeOpEnum::Album => "album",
+    }
+}
+
+fn iface_tracks__simplified_album_object_album_group_enum__to_str(e: &iface_tracks::SimplifiedAlbumObjectAlbumGroupEnum) -> &'static str {
+    match e {
+        iface_tracks::SimplifiedAlbumObjectAlbumGroupEnum::Album => "album",
+        iface_tracks::SimplifiedAlbumObjectAlbumGroupEnum::Single => "single",
+        iface_tracks::SimplifiedAlbumObjectAlbumGroupEnum::Compilation => "compilation",
+        iface_tracks::SimplifiedAlbumObjectAlbumGroupEnum::AppearsOn => "appears_on",
+    }
+}
+
+fn iface_tracks__simplified_artist_object_type_op_enum__to_str(e: &iface_tracks::SimplifiedArtistObjectTypeOpEnum) -> &'static str {
+    match e {
+        iface_tracks::SimplifiedArtistObjectTypeOpEnum::Artist => "artist",
+    }
+}
+
+fn iface_tracks__track_object_type_op_enum__to_str(e: &iface_tracks::TrackObjectTypeOpEnum) -> &'static str {
+    match e {
+        iface_tracks::TrackObjectTypeOpEnum::Track => "track",
+    }
+}
+
+fn iface_tracks__audio_analysis_object__to_json(p: &iface_tracks::AudioAnalysisObject) -> Value {
+    let mut m = Map::new();
+    m.insert("bars".into(), match (&p.bars) { Some(v) => Value::Array((v).iter().map(|v| iface_tracks__time_interval_object__to_json(v)).collect()), None => Value::Null });
+    m.insert("beats".into(), match (&p.beats) { Some(v) => Value::Array((v).iter().map(|v| iface_tracks__time_interval_object__to_json(v)).collect()), None => Value::Null });
+    m.insert("meta".into(), match (&p.meta) { Some(v) => iface_tracks__audio_analysis_object_meta__to_json(v), None => Value::Null });
+    m.insert("sections".into(), match (&p.sections) { Some(v) => Value::Array((v).iter().map(|v| iface_tracks__section_object__to_json(v)).collect()), None => Value::Null });
+    m.insert("segments".into(), match (&p.segments) { Some(v) => Value::Array((v).iter().map(|v| iface_tracks__segment_object__to_json(v)).collect()), None => Value::Null });
+    m.insert("tatums".into(), match (&p.tatums) { Some(v) => Value::Array((v).iter().map(|v| iface_tracks__time_interval_object__to_json(v)).collect()), None => Value::Null });
+    m.insert("track".into(), match (&p.track) { Some(v) => iface_tracks__audio_analysis_object_track__to_json(v), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_tracks__time_interval_object__to_json(p: &iface_tracks::TimeIntervalObject) -> Value {
+    let mut m = Map::new();
+    m.insert("confidence".into(), match (&p.confidence) { Some(v) => serde_json::Number::from_f64(*(v)).map(Value::Number).unwrap_or(Value::Null), None => Value::Null });
+    m.insert("duration".into(), match (&p.duration) { Some(v) => serde_json::Number::from_f64(*(v)).map(Value::Number).unwrap_or(Value::Null), None => Value::Null });
+    m.insert("start".into(), match (&p.start) { Some(v) => serde_json::Number::from_f64(*(v)).map(Value::Number).unwrap_or(Value::Null), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_tracks__audio_analysis_object_meta__to_json(p: &iface_tracks::AudioAnalysisObjectMeta) -> Value {
+    let mut m = Map::new();
+    m.insert("analysis_time".into(), match (&p.analysis_time) { Some(v) => serde_json::Number::from_f64(*(v)).map(Value::Number).unwrap_or(Value::Null), None => Value::Null });
+    m.insert("analyzer_version".into(), match (&p.analyzer_version) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("detailed_status".into(), match (&p.detailed_status) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("input_process".into(), match (&p.input_process) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("platform".into(), match (&p.platform) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("status_code".into(), match (&p.status_code) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("timestamp".into(), match (&p.timestamp) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_tracks__section_object__to_json(p: &iface_tracks::SectionObject) -> Value {
+    let mut m = Map::new();
+    m.insert("confidence".into(), match (&p.confidence) { Some(v) => serde_json::Number::from_f64(*(v)).map(Value::Number).unwrap_or(Value::Null), None => Value::Null });
+    m.insert("duration".into(), match (&p.duration) { Some(v) => serde_json::Number::from_f64(*(v)).map(Value::Number).unwrap_or(Value::Null), None => Value::Null });
+    m.insert("key".into(), match (&p.key) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("key_confidence".into(), match (&p.key_confidence) { Some(v) => serde_json::Number::from_f64(*(v)).map(Value::Number).unwrap_or(Value::Null), None => Value::Null });
+    m.insert("loudness".into(), match (&p.loudness) { Some(v) => serde_json::Number::from_f64(*(v)).map(Value::Number).unwrap_or(Value::Null), None => Value::Null });
+    m.insert("mode".into(), match (&p.mode) { Some(v) => serde_json::Number::from_f64(*(v)).map(Value::Number).unwrap_or(Value::Null), None => Value::Null });
+    m.insert("mode_confidence".into(), match (&p.mode_confidence) { Some(v) => serde_json::Number::from_f64(*(v)).map(Value::Number).unwrap_or(Value::Null), None => Value::Null });
+    m.insert("start".into(), match (&p.start) { Some(v) => serde_json::Number::from_f64(*(v)).map(Value::Number).unwrap_or(Value::Null), None => Value::Null });
+    m.insert("tempo".into(), match (&p.tempo) { Some(v) => serde_json::Number::from_f64(*(v)).map(Value::Number).unwrap_or(Value::Null), None => Value::Null });
+    m.insert("tempo_confidence".into(), match (&p.tempo_confidence) { Some(v) => serde_json::Number::from_f64(*(v)).map(Value::Number).unwrap_or(Value::Null), None => Value::Null });
+    m.insert("time_signature".into(), match (&p.time_signature) { Some(v) => iface_tracks__time_signature__to_json(v), None => Value::Null });
+    m.insert("time_signature_confidence".into(), match (&p.time_signature_confidence) { Some(v) => serde_json::Number::from_f64(*(v)).map(Value::Number).unwrap_or(Value::Null), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_tracks__time_signature__to_json(p: &iface_tracks::TimeSignature) -> Value {
+    let mut m = Map::new();
+    m.insert("value".into(), Value::String((&p.value).clone()));
+    Value::Object(m)
+}
+
+fn iface_tracks__segment_object__to_json(p: &iface_tracks::SegmentObject) -> Value {
+    let mut m = Map::new();
+    m.insert("confidence".into(), match (&p.confidence) { Some(v) => serde_json::Number::from_f64(*(v)).map(Value::Number).unwrap_or(Value::Null), None => Value::Null });
+    m.insert("duration".into(), match (&p.duration) { Some(v) => serde_json::Number::from_f64(*(v)).map(Value::Number).unwrap_or(Value::Null), None => Value::Null });
+    m.insert("loudness_end".into(), match (&p.loudness_end) { Some(v) => serde_json::Number::from_f64(*(v)).map(Value::Number).unwrap_or(Value::Null), None => Value::Null });
+    m.insert("loudness_max".into(), match (&p.loudness_max) { Some(v) => serde_json::Number::from_f64(*(v)).map(Value::Number).unwrap_or(Value::Null), None => Value::Null });
+    m.insert("loudness_max_time".into(), match (&p.loudness_max_time) { Some(v) => serde_json::Number::from_f64(*(v)).map(Value::Number).unwrap_or(Value::Null), None => Value::Null });
+    m.insert("loudness_start".into(), match (&p.loudness_start) { Some(v) => serde_json::Number::from_f64(*(v)).map(Value::Number).unwrap_or(Value::Null), None => Value::Null });
+    m.insert("pitches".into(), match (&p.pitches) { Some(v) => Value::Array((v).iter().map(|v| serde_json::Number::from_f64(*(v)).map(Value::Number).unwrap_or(Value::Null)).collect()), None => Value::Null });
+    m.insert("start".into(), match (&p.start) { Some(v) => serde_json::Number::from_f64(*(v)).map(Value::Number).unwrap_or(Value::Null), None => Value::Null });
+    m.insert("timbre".into(), match (&p.timbre) { Some(v) => Value::Array((v).iter().map(|v| serde_json::Number::from_f64(*(v)).map(Value::Number).unwrap_or(Value::Null)).collect()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_tracks__audio_analysis_object_track__to_json(p: &iface_tracks::AudioAnalysisObjectTrack) -> Value {
+    let mut m = Map::new();
+    m.insert("analysis_channels".into(), match (&p.analysis_channels) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("analysis_sample_rate".into(), match (&p.analysis_sample_rate) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("code_version".into(), match (&p.code_version) { Some(v) => serde_json::Number::from_f64(*(v)).map(Value::Number).unwrap_or(Value::Null), None => Value::Null });
+    m.insert("codestring".into(), match (&p.codestring) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("duration".into(), match (&p.duration) { Some(v) => serde_json::Number::from_f64(*(v)).map(Value::Number).unwrap_or(Value::Null), None => Value::Null });
+    m.insert("echoprint_version".into(), match (&p.echoprint_version) { Some(v) => serde_json::Number::from_f64(*(v)).map(Value::Number).unwrap_or(Value::Null), None => Value::Null });
+    m.insert("echoprintstring".into(), match (&p.echoprintstring) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("end_of_fade_in".into(), match (&p.end_of_fade_in) { Some(v) => serde_json::Number::from_f64(*(v)).map(Value::Number).unwrap_or(Value::Null), None => Value::Null });
+    m.insert("key".into(), match (&p.key) { Some(v) => iface_tracks__key__to_json(v), None => Value::Null });
+    m.insert("key_confidence".into(), match (&p.key_confidence) { Some(v) => serde_json::Number::from_f64(*(v)).map(Value::Number).unwrap_or(Value::Null), None => Value::Null });
+    m.insert("loudness".into(), match (&p.loudness) { Some(v) => iface_tracks__loudness__to_json(v), None => Value::Null });
+    m.insert("mode".into(), match (&p.mode) { Some(v) => iface_tracks__mode__to_json(v), None => Value::Null });
+    m.insert("mode_confidence".into(), match (&p.mode_confidence) { Some(v) => serde_json::Number::from_f64(*(v)).map(Value::Number).unwrap_or(Value::Null), None => Value::Null });
+    m.insert("num_samples".into(), match (&p.num_samples) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("offset_seconds".into(), match (&p.offset_seconds) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("rhythm_version".into(), match (&p.rhythm_version) { Some(v) => serde_json::Number::from_f64(*(v)).map(Value::Number).unwrap_or(Value::Null), None => Value::Null });
+    m.insert("rhythmstring".into(), match (&p.rhythmstring) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("sample_md5".into(), match (&p.sample_md5) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("start_of_fade_out".into(), match (&p.start_of_fade_out) { Some(v) => serde_json::Number::from_f64(*(v)).map(Value::Number).unwrap_or(Value::Null), None => Value::Null });
+    m.insert("synch_version".into(), match (&p.synch_version) { Some(v) => serde_json::Number::from_f64(*(v)).map(Value::Number).unwrap_or(Value::Null), None => Value::Null });
+    m.insert("synchstring".into(), match (&p.synchstring) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("tempo".into(), match (&p.tempo) { Some(v) => iface_tracks__tempo__to_json(v), None => Value::Null });
+    m.insert("tempo_confidence".into(), match (&p.tempo_confidence) { Some(v) => serde_json::Number::from_f64(*(v)).map(Value::Number).unwrap_or(Value::Null), None => Value::Null });
+    m.insert("time_signature".into(), match (&p.time_signature) { Some(v) => iface_tracks__time_signature__to_json(v), None => Value::Null });
+    m.insert("time_signature_confidence".into(), match (&p.time_signature_confidence) { Some(v) => serde_json::Number::from_f64(*(v)).map(Value::Number).unwrap_or(Value::Null), None => Value::Null });
+    m.insert("window_seconds".into(), match (&p.window_seconds) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_tracks__key__to_json(p: &iface_tracks::Key) -> Value {
+    let mut m = Map::new();
+    m.insert("value".into(), Value::String((&p.value).clone()));
+    Value::Object(m)
+}
+
+fn iface_tracks__loudness__to_json(p: &iface_tracks::Loudness) -> Value {
+    let mut m = Map::new();
+    m.insert("value".into(), Value::String((&p.value).clone()));
+    Value::Object(m)
+}
+
+fn iface_tracks__mode__to_json(p: &iface_tracks::Mode) -> Value {
+    let mut m = Map::new();
+    m.insert("value".into(), Value::String((&p.value).clone()));
+    Value::Object(m)
+}
+
+fn iface_tracks__tempo__to_json(p: &iface_tracks::Tempo) -> Value {
+    let mut m = Map::new();
+    m.insert("value".into(), Value::String((&p.value).clone()));
+    Value::Object(m)
+}
+
+fn iface_tracks__get_several_audio_features_response__to_json(p: &iface_tracks::GetSeveralAudioFeaturesResponse) -> Value {
+    let mut m = Map::new();
+    m.insert("audio_features".into(), Value::Array((&p.audio_features).iter().map(|v| iface_tracks__audio_features_object__to_json(v)).collect()));
+    Value::Object(m)
+}
+
+fn iface_tracks__audio_features_object__to_json(p: &iface_tracks::AudioFeaturesObject) -> Value {
+    let mut m = Map::new();
+    m.insert("acousticness".into(), match (&p.acousticness) { Some(v) => serde_json::Number::from_f64(*(v)).map(Value::Number).unwrap_or(Value::Null), None => Value::Null });
+    m.insert("analysis_url".into(), match (&p.analysis_url) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("danceability".into(), match (&p.danceability) { Some(v) => serde_json::Number::from_f64(*(v)).map(Value::Number).unwrap_or(Value::Null), None => Value::Null });
+    m.insert("duration_ms".into(), match (&p.duration_ms) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("energy".into(), match (&p.energy) { Some(v) => serde_json::Number::from_f64(*(v)).map(Value::Number).unwrap_or(Value::Null), None => Value::Null });
+    m.insert("id".into(), match (&p.id) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("instrumentalness".into(), match (&p.instrumentalness) { Some(v) => serde_json::Number::from_f64(*(v)).map(Value::Number).unwrap_or(Value::Null), None => Value::Null });
+    m.insert("key".into(), match (&p.key) { Some(v) => iface_tracks__key__to_json(v), None => Value::Null });
+    m.insert("liveness".into(), match (&p.liveness) { Some(v) => serde_json::Number::from_f64(*(v)).map(Value::Number).unwrap_or(Value::Null), None => Value::Null });
+    m.insert("loudness".into(), match (&p.loudness) { Some(v) => iface_tracks__loudness__to_json(v), None => Value::Null });
+    m.insert("mode".into(), match (&p.mode) { Some(v) => iface_tracks__mode__to_json(v), None => Value::Null });
+    m.insert("speechiness".into(), match (&p.speechiness) { Some(v) => serde_json::Number::from_f64(*(v)).map(Value::Number).unwrap_or(Value::Null), None => Value::Null });
+    m.insert("tempo".into(), match (&p.tempo) { Some(v) => iface_tracks__tempo__to_json(v), None => Value::Null });
+    m.insert("time_signature".into(), match (&p.time_signature) { Some(v) => iface_tracks__time_signature__to_json(v), None => Value::Null });
+    m.insert("track_href".into(), match (&p.track_href) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("type".into(), match (&p.type_op) { Some(v) => Value::String(iface_tracks__audio_features_object_type_op_enum__to_str(v).into()), None => Value::Null });
+    m.insert("uri".into(), match (&p.uri) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("valence".into(), match (&p.valence) { Some(v) => serde_json::Number::from_f64(*(v)).map(Value::Number).unwrap_or(Value::Null), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_tracks__paging_saved_track_object__to_json(p: &iface_tracks::PagingSavedTrackObject) -> Value {
+    let mut m = Map::new();
+    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_tracks__recommendations_object__to_json(p: &iface_tracks::RecommendationsObject) -> Value {
+    let mut m = Map::new();
+    m.insert("seeds".into(), Value::Array((&p.seeds).iter().map(|v| iface_tracks__recommendation_seed_object__to_json(v)).collect()));
+    m.insert("tracks".into(), Value::Array((&p.tracks).iter().map(|v| iface_tracks__track_object__to_json(v)).collect()));
+    Value::Object(m)
+}
+
+fn iface_tracks__recommendation_seed_object__to_json(p: &iface_tracks::RecommendationSeedObject) -> Value {
+    let mut m = Map::new();
+    m.insert("afterFilteringSize".into(), match (&p.after_filtering_size) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("afterRelinkingSize".into(), match (&p.after_relinking_size) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("href".into(), match (&p.href) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("id".into(), match (&p.id) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("initialPoolSize".into(), match (&p.initial_pool_size) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("type".into(), match (&p.type_op) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_tracks__track_object__to_json(p: &iface_tracks::TrackObject) -> Value {
+    let mut m = Map::new();
+    m.insert("album".into(), match (&p.album) { Some(v) => iface_tracks__simplified_album_object__to_json(v), None => Value::Null });
+    m.insert("artists".into(), match (&p.artists) { Some(v) => Value::Array((v).iter().map(|v| iface_tracks__artist_object__to_json(v)).collect()), None => Value::Null });
+    m.insert("available_markets".into(), match (&p.available_markets) { Some(v) => Value::Array((v).iter().map(|v| Value::String((v).clone())).collect()), None => Value::Null });
+    m.insert("disc_number".into(), match (&p.disc_number) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("duration_ms".into(), match (&p.duration_ms) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("explicit".into(), match (&p.explicit) { Some(v) => Value::Bool(*(v)), None => Value::Null });
+    m.insert("external_ids".into(), match (&p.external_ids) { Some(v) => iface_tracks__external_id_object__to_json(v), None => Value::Null });
+    m.insert("external_urls".into(), match (&p.external_urls) { Some(v) => iface_tracks__external_url_object__to_json(v), None => Value::Null });
+    m.insert("href".into(), match (&p.href) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("id".into(), match (&p.id) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("is_local".into(), match (&p.is_local) { Some(v) => Value::Bool(*(v)), None => Value::Null });
+    m.insert("is_playable".into(), match (&p.is_playable) { Some(v) => Value::Bool(*(v)), None => Value::Null });
+    m.insert("linked_from".into(), match (&p.linked_from) { Some(v) => iface_tracks__track_object_linked_from__to_json(v), None => Value::Null });
+    m.insert("name".into(), match (&p.name) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("popularity".into(), match (&p.popularity) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("preview_url".into(), match (&p.preview_url) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("restrictions".into(), match (&p.restrictions) { Some(v) => iface_tracks__track_restriction_object__to_json(v), None => Value::Null });
+    m.insert("track_number".into(), match (&p.track_number) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("type".into(), match (&p.type_op) { Some(v) => Value::String(iface_tracks__track_object_type_op_enum__to_str(v).into()), None => Value::Null });
+    m.insert("uri".into(), match (&p.uri) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_tracks__simplified_album_object__to_json(p: &iface_tracks::SimplifiedAlbumObject) -> Value {
+    let mut m = Map::new();
+    m.insert("album_type".into(), Value::String(iface_tracks__simplified_album_object_album_type_enum__to_str(&p.album_type).into()));
+    m.insert("available_markets".into(), Value::Array((&p.available_markets).iter().map(|v| Value::String((v).clone())).collect()));
+    m.insert("copyrights".into(), match (&p.copyrights) { Some(v) => Value::Array((v).iter().map(|v| iface_tracks__copyright_object__to_json(v)).collect()), None => Value::Null });
+    m.insert("external_ids".into(), match (&p.external_ids) { Some(v) => iface_tracks__external_id_object__to_json(v), None => Value::Null });
+    m.insert("external_urls".into(), iface_tracks__external_url_object__to_json(&p.external_urls));
+    m.insert("genres".into(), match (&p.genres) { Some(v) => Value::Array((v).iter().map(|v| Value::String((v).clone())).collect()), None => Value::Null });
+    m.insert("href".into(), Value::String((&p.href).clone()));
+    m.insert("id".into(), Value::String((&p.id).clone()));
+    m.insert("images".into(), Value::Array((&p.images).iter().map(|v| iface_tracks__image_object__to_json(v)).collect()));
+    m.insert("label".into(), match (&p.label) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("name".into(), Value::String((&p.name).clone()));
+    m.insert("popularity".into(), match (&p.popularity) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("release_date".into(), Value::String((&p.release_date).clone()));
+    m.insert("release_date_precision".into(), Value::String(iface_tracks__simplified_album_object_release_date_precision_enum__to_str(&p.release_date_precision).into()));
+    m.insert("restrictions".into(), match (&p.restrictions) { Some(v) => iface_tracks__album_restriction_object__to_json(v), None => Value::Null });
+    m.insert("total_tracks".into(), Value::Number(serde_json::Number::from(*(&p.total_tracks))));
+    m.insert("type".into(), Value::String(iface_tracks__simplified_album_object_type_op_enum__to_str(&p.type_op).into()));
+    m.insert("uri".into(), Value::String((&p.uri).clone()));
+    m.insert("album_group".into(), match (&p.album_group) { Some(v) => Value::String(iface_tracks__simplified_album_object_album_group_enum__to_str(v).into()), None => Value::Null });
+    m.insert("artists".into(), Value::Array((&p.artists).iter().map(|v| iface_tracks__simplified_artist_object__to_json(v)).collect()));
+    Value::Object(m)
+}
+
+fn iface_tracks__copyright_object__to_json(p: &iface_tracks::CopyrightObject) -> Value {
+    let mut m = Map::new();
+    m.insert("text".into(), match (&p.text) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("type".into(), match (&p.type_op) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_tracks__external_id_object__to_json(p: &iface_tracks::ExternalIdObject) -> Value {
+    let mut m = Map::new();
+    m.insert("ean".into(), match (&p.ean) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("isrc".into(), match (&p.isrc) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("upc".into(), match (&p.upc) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_tracks__external_url_object__to_json(p: &iface_tracks::ExternalUrlObject) -> Value {
+    let mut m = Map::new();
+    m.insert("spotify".into(), match (&p.spotify) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_tracks__image_object__to_json(p: &iface_tracks::ImageObject) -> Value {
+    let mut m = Map::new();
+    m.insert("height".into(), Value::Number(serde_json::Number::from(*(&p.height))));
+    m.insert("url".into(), Value::String((&p.url).clone()));
+    m.insert("width".into(), Value::Number(serde_json::Number::from(*(&p.width))));
+    Value::Object(m)
+}
+
+fn iface_tracks__album_restriction_object__to_json(p: &iface_tracks::AlbumRestrictionObject) -> Value {
+    let mut m = Map::new();
+    m.insert("reason".into(), match (&p.reason) { Some(v) => Value::String(iface_tracks__album_restriction_object_reason_enum__to_str(v).into()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_tracks__simplified_artist_object__to_json(p: &iface_tracks::SimplifiedArtistObject) -> Value {
+    let mut m = Map::new();
+    m.insert("external_urls".into(), match (&p.external_urls) { Some(v) => iface_tracks__external_url_object__to_json(v), None => Value::Null });
+    m.insert("href".into(), match (&p.href) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("id".into(), match (&p.id) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("name".into(), match (&p.name) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("type".into(), match (&p.type_op) { Some(v) => Value::String(iface_tracks__simplified_artist_object_type_op_enum__to_str(v).into()), None => Value::Null });
+    m.insert("uri".into(), match (&p.uri) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_tracks__artist_object__to_json(p: &iface_tracks::ArtistObject) -> Value {
+    let mut m = Map::new();
+    m.insert("external_urls".into(), match (&p.external_urls) { Some(v) => iface_tracks__external_url_object__to_json(v), None => Value::Null });
+    m.insert("followers".into(), match (&p.followers) { Some(v) => iface_tracks__followers_object__to_json(v), None => Value::Null });
+    m.insert("genres".into(), match (&p.genres) { Some(v) => Value::Array((v).iter().map(|v| Value::String((v).clone())).collect()), None => Value::Null });
+    m.insert("href".into(), match (&p.href) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("id".into(), match (&p.id) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("images".into(), match (&p.images) { Some(v) => Value::Array((v).iter().map(|v| iface_tracks__image_object__to_json(v)).collect()), None => Value::Null });
+    m.insert("name".into(), match (&p.name) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("popularity".into(), match (&p.popularity) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("type".into(), match (&p.type_op) { Some(v) => Value::String(iface_tracks__simplified_artist_object_type_op_enum__to_str(v).into()), None => Value::Null });
+    m.insert("uri".into(), match (&p.uri) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_tracks__followers_object__to_json(p: &iface_tracks::FollowersObject) -> Value {
+    let mut m = Map::new();
+    m.insert("href".into(), match (&p.href) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("total".into(), match (&p.total) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_tracks__track_object_linked_from__to_json(p: &iface_tracks::TrackObjectLinkedFrom) -> Value {
+    let mut m = Map::new();
+    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_tracks__track_restriction_object__to_json(p: &iface_tracks::TrackRestrictionObject) -> Value {
+    let mut m = Map::new();
+    m.insert("reason".into(), match (&p.reason) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_tracks__get_several_tracks_response__to_json(p: &iface_tracks::GetSeveralTracksResponse) -> Value {
+    let mut m = Map::new();
+    m.insert("tracks".into(), Value::Array((&p.tracks).iter().map(|v| iface_tracks__track_object__to_json(v)).collect()));
+    Value::Object(m)
+}
 
 fn iface_tracks__get_audio_analysis_params__to_json(p: &iface_tracks::GetAudioAnalysisParams) -> Value {
     let mut m = Map::new();
@@ -782,12 +2248,14 @@ fn iface_tracks__get_users_saved_tracks_params__to_json(p: &iface_tracks::GetUse
 fn iface_tracks__save_tracks_user_params__to_json(p: &iface_tracks::SaveTracksUserParams) -> Value {
     let mut m = Map::new();
     m.insert("ids".into(), Value::String((&p.ids).clone()));
+    m.insert("ids_v2".into(), match (&p.ids_v2) { Some(v) => Value::Array((v).iter().map(|v| Value::String((v).clone())).collect()), None => Value::Null });
     Value::Object(m)
 }
 
 fn iface_tracks__remove_tracks_user_params__to_json(p: &iface_tracks::RemoveTracksUserParams) -> Value {
     let mut m = Map::new();
     m.insert("ids".into(), Value::String((&p.ids).clone()));
+    m.insert("ids_v2".into(), match (&p.ids_v2) { Some(v) => Value::Array((v).iter().map(|v| Value::String((v).clone())).collect()), None => Value::Null });
     Value::Object(m)
 }
 
@@ -863,46 +2331,699 @@ fn iface_tracks__get_track_params__to_json(p: &iface_tracks::GetTrackParams) -> 
     Value::Object(m)
 }
 
+fn iface_tracks__audio_analysis_object__from_json(v: &Value) -> Option<iface_tracks::AudioAnalysisObject> {
+    let m = v.as_object()?;
+    Some(iface_tracks::AudioAnalysisObject {
+        bars: m.get("bars").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| iface_tracks__time_interval_object__from_json(x)).collect())),
+        beats: m.get("beats").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| iface_tracks__time_interval_object__from_json(x)).collect())),
+        meta: m.get("meta").filter(|v| !v.is_null()).and_then(|v| iface_tracks__audio_analysis_object_meta__from_json(v)),
+        sections: m.get("sections").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| iface_tracks__section_object__from_json(x)).collect())),
+        segments: m.get("segments").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| iface_tracks__segment_object__from_json(x)).collect())),
+        tatums: m.get("tatums").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| iface_tracks__time_interval_object__from_json(x)).collect())),
+        track: m.get("track").filter(|v| !v.is_null()).and_then(|v| iface_tracks__audio_analysis_object_track__from_json(v)),
+    })
+}
+
+fn iface_tracks__time_interval_object__from_json(v: &Value) -> Option<iface_tracks::TimeIntervalObject> {
+    let m = v.as_object()?;
+    Some(iface_tracks::TimeIntervalObject {
+        confidence: m.get("confidence").filter(|v| !v.is_null()).and_then(|v| (v).as_f64()),
+        duration: m.get("duration").filter(|v| !v.is_null()).and_then(|v| (v).as_f64()),
+        start: m.get("start").filter(|v| !v.is_null()).and_then(|v| (v).as_f64()),
+    })
+}
+
+fn iface_tracks__audio_analysis_object_meta__from_json(v: &Value) -> Option<iface_tracks::AudioAnalysisObjectMeta> {
+    let m = v.as_object()?;
+    Some(iface_tracks::AudioAnalysisObjectMeta {
+        analysis_time: m.get("analysis_time").filter(|v| !v.is_null()).and_then(|v| (v).as_f64()),
+        analyzer_version: m.get("analyzer_version").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        detailed_status: m.get("detailed_status").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        input_process: m.get("input_process").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        platform: m.get("platform").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        status_code: m.get("status_code").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        timestamp: m.get("timestamp").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+    })
+}
+
+fn iface_tracks__section_object__from_json(v: &Value) -> Option<iface_tracks::SectionObject> {
+    let m = v.as_object()?;
+    Some(iface_tracks::SectionObject {
+        confidence: m.get("confidence").filter(|v| !v.is_null()).and_then(|v| (v).as_f64()),
+        duration: m.get("duration").filter(|v| !v.is_null()).and_then(|v| (v).as_f64()),
+        key: m.get("key").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        key_confidence: m.get("key_confidence").filter(|v| !v.is_null()).and_then(|v| (v).as_f64()),
+        loudness: m.get("loudness").filter(|v| !v.is_null()).and_then(|v| (v).as_f64()),
+        mode: m.get("mode").filter(|v| !v.is_null()).and_then(|v| (v).as_f64()),
+        mode_confidence: m.get("mode_confidence").filter(|v| !v.is_null()).and_then(|v| (v).as_f64()),
+        start: m.get("start").filter(|v| !v.is_null()).and_then(|v| (v).as_f64()),
+        tempo: m.get("tempo").filter(|v| !v.is_null()).and_then(|v| (v).as_f64()),
+        tempo_confidence: m.get("tempo_confidence").filter(|v| !v.is_null()).and_then(|v| (v).as_f64()),
+        time_signature: m.get("time_signature").filter(|v| !v.is_null()).and_then(|v| iface_tracks__time_signature__from_json(v)),
+        time_signature_confidence: m.get("time_signature_confidence").filter(|v| !v.is_null()).and_then(|v| (v).as_f64()),
+    })
+}
+
+fn iface_tracks__time_signature__from_json(v: &Value) -> Option<iface_tracks::TimeSignature> {
+    let m = v.as_object()?;
+    Some(iface_tracks::TimeSignature {
+        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+    })
+}
+
+fn iface_tracks__segment_object__from_json(v: &Value) -> Option<iface_tracks::SegmentObject> {
+    let m = v.as_object()?;
+    Some(iface_tracks::SegmentObject {
+        confidence: m.get("confidence").filter(|v| !v.is_null()).and_then(|v| (v).as_f64()),
+        duration: m.get("duration").filter(|v| !v.is_null()).and_then(|v| (v).as_f64()),
+        loudness_end: m.get("loudness_end").filter(|v| !v.is_null()).and_then(|v| (v).as_f64()),
+        loudness_max: m.get("loudness_max").filter(|v| !v.is_null()).and_then(|v| (v).as_f64()),
+        loudness_max_time: m.get("loudness_max_time").filter(|v| !v.is_null()).and_then(|v| (v).as_f64()),
+        loudness_start: m.get("loudness_start").filter(|v| !v.is_null()).and_then(|v| (v).as_f64()),
+        pitches: m.get("pitches").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| (x).as_f64()).collect())),
+        start: m.get("start").filter(|v| !v.is_null()).and_then(|v| (v).as_f64()),
+        timbre: m.get("timbre").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| (x).as_f64()).collect())),
+    })
+}
+
+fn iface_tracks__audio_analysis_object_track__from_json(v: &Value) -> Option<iface_tracks::AudioAnalysisObjectTrack> {
+    let m = v.as_object()?;
+    Some(iface_tracks::AudioAnalysisObjectTrack {
+        analysis_channels: m.get("analysis_channels").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        analysis_sample_rate: m.get("analysis_sample_rate").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        code_version: m.get("code_version").filter(|v| !v.is_null()).and_then(|v| (v).as_f64()),
+        codestring: m.get("codestring").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        duration: m.get("duration").filter(|v| !v.is_null()).and_then(|v| (v).as_f64()),
+        echoprint_version: m.get("echoprint_version").filter(|v| !v.is_null()).and_then(|v| (v).as_f64()),
+        echoprintstring: m.get("echoprintstring").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        end_of_fade_in: m.get("end_of_fade_in").filter(|v| !v.is_null()).and_then(|v| (v).as_f64()),
+        key: m.get("key").filter(|v| !v.is_null()).and_then(|v| iface_tracks__key__from_json(v)),
+        key_confidence: m.get("key_confidence").filter(|v| !v.is_null()).and_then(|v| (v).as_f64()),
+        loudness: m.get("loudness").filter(|v| !v.is_null()).and_then(|v| iface_tracks__loudness__from_json(v)),
+        mode: m.get("mode").filter(|v| !v.is_null()).and_then(|v| iface_tracks__mode__from_json(v)),
+        mode_confidence: m.get("mode_confidence").filter(|v| !v.is_null()).and_then(|v| (v).as_f64()),
+        num_samples: m.get("num_samples").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        offset_seconds: m.get("offset_seconds").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        rhythm_version: m.get("rhythm_version").filter(|v| !v.is_null()).and_then(|v| (v).as_f64()),
+        rhythmstring: m.get("rhythmstring").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        sample_md5: m.get("sample_md5").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        start_of_fade_out: m.get("start_of_fade_out").filter(|v| !v.is_null()).and_then(|v| (v).as_f64()),
+        synch_version: m.get("synch_version").filter(|v| !v.is_null()).and_then(|v| (v).as_f64()),
+        synchstring: m.get("synchstring").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        tempo: m.get("tempo").filter(|v| !v.is_null()).and_then(|v| iface_tracks__tempo__from_json(v)),
+        tempo_confidence: m.get("tempo_confidence").filter(|v| !v.is_null()).and_then(|v| (v).as_f64()),
+        time_signature: m.get("time_signature").filter(|v| !v.is_null()).and_then(|v| iface_tracks__time_signature__from_json(v)),
+        time_signature_confidence: m.get("time_signature_confidence").filter(|v| !v.is_null()).and_then(|v| (v).as_f64()),
+        window_seconds: m.get("window_seconds").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+    })
+}
+
+fn iface_tracks__key__from_json(v: &Value) -> Option<iface_tracks::Key> {
+    let m = v.as_object()?;
+    Some(iface_tracks::Key {
+        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+    })
+}
+
+fn iface_tracks__loudness__from_json(v: &Value) -> Option<iface_tracks::Loudness> {
+    let m = v.as_object()?;
+    Some(iface_tracks::Loudness {
+        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+    })
+}
+
+fn iface_tracks__mode__from_json(v: &Value) -> Option<iface_tracks::Mode> {
+    let m = v.as_object()?;
+    Some(iface_tracks::Mode {
+        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+    })
+}
+
+fn iface_tracks__tempo__from_json(v: &Value) -> Option<iface_tracks::Tempo> {
+    let m = v.as_object()?;
+    Some(iface_tracks::Tempo {
+        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+    })
+}
+
+fn iface_tracks__get_several_audio_features_response__from_json(v: &Value) -> Option<iface_tracks::GetSeveralAudioFeaturesResponse> {
+    let m = v.as_object()?;
+    Some(iface_tracks::GetSeveralAudioFeaturesResponse {
+        audio_features: m.get("audio_features").and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| iface_tracks__audio_features_object__from_json(x)).collect())).unwrap_or_default(),
+    })
+}
+
+fn iface_tracks__audio_features_object__from_json(v: &Value) -> Option<iface_tracks::AudioFeaturesObject> {
+    let m = v.as_object()?;
+    Some(iface_tracks::AudioFeaturesObject {
+        acousticness: m.get("acousticness").filter(|v| !v.is_null()).and_then(|v| (v).as_f64()),
+        analysis_url: m.get("analysis_url").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        danceability: m.get("danceability").filter(|v| !v.is_null()).and_then(|v| (v).as_f64()),
+        duration_ms: m.get("duration_ms").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        energy: m.get("energy").filter(|v| !v.is_null()).and_then(|v| (v).as_f64()),
+        id: m.get("id").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        instrumentalness: m.get("instrumentalness").filter(|v| !v.is_null()).and_then(|v| (v).as_f64()),
+        key: m.get("key").filter(|v| !v.is_null()).and_then(|v| iface_tracks__key__from_json(v)),
+        liveness: m.get("liveness").filter(|v| !v.is_null()).and_then(|v| (v).as_f64()),
+        loudness: m.get("loudness").filter(|v| !v.is_null()).and_then(|v| iface_tracks__loudness__from_json(v)),
+        mode: m.get("mode").filter(|v| !v.is_null()).and_then(|v| iface_tracks__mode__from_json(v)),
+        speechiness: m.get("speechiness").filter(|v| !v.is_null()).and_then(|v| (v).as_f64()),
+        tempo: m.get("tempo").filter(|v| !v.is_null()).and_then(|v| iface_tracks__tempo__from_json(v)),
+        time_signature: m.get("time_signature").filter(|v| !v.is_null()).and_then(|v| iface_tracks__time_signature__from_json(v)),
+        track_href: m.get("track_href").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        type_op: m.get("type").filter(|v| !v.is_null()).and_then(|v| (v).as_str().and_then(iface_tracks__audio_features_object_type_op_enum__from_str)),
+        uri: m.get("uri").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        valence: m.get("valence").filter(|v| !v.is_null()).and_then(|v| (v).as_f64()),
+    })
+}
+
+fn iface_tracks__paging_saved_track_object__from_json(v: &Value) -> Option<iface_tracks::PagingSavedTrackObject> {
+    let m = v.as_object()?;
+    Some(iface_tracks::PagingSavedTrackObject {
+        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    })
+}
+
+fn iface_tracks__recommendations_object__from_json(v: &Value) -> Option<iface_tracks::RecommendationsObject> {
+    let m = v.as_object()?;
+    Some(iface_tracks::RecommendationsObject {
+        seeds: m.get("seeds").and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| iface_tracks__recommendation_seed_object__from_json(x)).collect())).unwrap_or_default(),
+        tracks: m.get("tracks").and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| iface_tracks__track_object__from_json(x)).collect())).unwrap_or_default(),
+    })
+}
+
+fn iface_tracks__recommendation_seed_object__from_json(v: &Value) -> Option<iface_tracks::RecommendationSeedObject> {
+    let m = v.as_object()?;
+    Some(iface_tracks::RecommendationSeedObject {
+        after_filtering_size: m.get("afterFilteringSize").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        after_relinking_size: m.get("afterRelinkingSize").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        href: m.get("href").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        id: m.get("id").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        initial_pool_size: m.get("initialPoolSize").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        type_op: m.get("type").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    })
+}
+
+fn iface_tracks__track_object__from_json(v: &Value) -> Option<iface_tracks::TrackObject> {
+    let m = v.as_object()?;
+    Some(iface_tracks::TrackObject {
+        album: m.get("album").filter(|v| !v.is_null()).and_then(|v| iface_tracks__simplified_album_object__from_json(v)),
+        artists: m.get("artists").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| iface_tracks__artist_object__from_json(x)).collect())),
+        available_markets: m.get("available_markets").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| (x).as_str().map(|s| s.to_string())).collect())),
+        disc_number: m.get("disc_number").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        duration_ms: m.get("duration_ms").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        explicit: m.get("explicit").filter(|v| !v.is_null()).and_then(|v| (v).as_bool()),
+        external_ids: m.get("external_ids").filter(|v| !v.is_null()).and_then(|v| iface_tracks__external_id_object__from_json(v)),
+        external_urls: m.get("external_urls").filter(|v| !v.is_null()).and_then(|v| iface_tracks__external_url_object__from_json(v)),
+        href: m.get("href").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        id: m.get("id").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        is_local: m.get("is_local").filter(|v| !v.is_null()).and_then(|v| (v).as_bool()),
+        is_playable: m.get("is_playable").filter(|v| !v.is_null()).and_then(|v| (v).as_bool()),
+        linked_from: m.get("linked_from").filter(|v| !v.is_null()).and_then(|v| iface_tracks__track_object_linked_from__from_json(v)),
+        name: m.get("name").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        popularity: m.get("popularity").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        preview_url: m.get("preview_url").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        restrictions: m.get("restrictions").filter(|v| !v.is_null()).and_then(|v| iface_tracks__track_restriction_object__from_json(v)),
+        track_number: m.get("track_number").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        type_op: m.get("type").filter(|v| !v.is_null()).and_then(|v| (v).as_str().and_then(iface_tracks__track_object_type_op_enum__from_str)),
+        uri: m.get("uri").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    })
+}
+
+fn iface_tracks__simplified_album_object__from_json(v: &Value) -> Option<iface_tracks::SimplifiedAlbumObject> {
+    let m = v.as_object()?;
+    Some(iface_tracks::SimplifiedAlbumObject {
+        album_type: match m.get("album_type").and_then(|v| (v).as_str().and_then(iface_tracks__simplified_album_object_album_type_enum__from_str)) { Some(x) => x, None => return None },
+        available_markets: m.get("available_markets").and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| (x).as_str().map(|s| s.to_string())).collect())).unwrap_or_default(),
+        copyrights: m.get("copyrights").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| iface_tracks__copyright_object__from_json(x)).collect())),
+        external_ids: m.get("external_ids").filter(|v| !v.is_null()).and_then(|v| iface_tracks__external_id_object__from_json(v)),
+        external_urls: match m.get("external_urls").and_then(|v| iface_tracks__external_url_object__from_json(v)) { Some(x) => x, None => return None },
+        genres: m.get("genres").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| (x).as_str().map(|s| s.to_string())).collect())),
+        href: m.get("href").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        id: m.get("id").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        images: m.get("images").and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| iface_tracks__image_object__from_json(x)).collect())).unwrap_or_default(),
+        label: m.get("label").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        name: m.get("name").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        popularity: m.get("popularity").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        release_date: m.get("release_date").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        release_date_precision: match m.get("release_date_precision").and_then(|v| (v).as_str().and_then(iface_tracks__simplified_album_object_release_date_precision_enum__from_str)) { Some(x) => x, None => return None },
+        restrictions: m.get("restrictions").filter(|v| !v.is_null()).and_then(|v| iface_tracks__album_restriction_object__from_json(v)),
+        total_tracks: m.get("total_tracks").and_then(|v| (v).as_i64().map(|n| n as i32)).unwrap_or_default(),
+        type_op: match m.get("type").and_then(|v| (v).as_str().and_then(iface_tracks__simplified_album_object_type_op_enum__from_str)) { Some(x) => x, None => return None },
+        uri: m.get("uri").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        album_group: m.get("album_group").filter(|v| !v.is_null()).and_then(|v| (v).as_str().and_then(iface_tracks__simplified_album_object_album_group_enum__from_str)),
+        artists: m.get("artists").and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| iface_tracks__simplified_artist_object__from_json(x)).collect())).unwrap_or_default(),
+    })
+}
+
+fn iface_tracks__copyright_object__from_json(v: &Value) -> Option<iface_tracks::CopyrightObject> {
+    let m = v.as_object()?;
+    Some(iface_tracks::CopyrightObject {
+        text: m.get("text").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        type_op: m.get("type").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    })
+}
+
+fn iface_tracks__external_id_object__from_json(v: &Value) -> Option<iface_tracks::ExternalIdObject> {
+    let m = v.as_object()?;
+    Some(iface_tracks::ExternalIdObject {
+        ean: m.get("ean").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        isrc: m.get("isrc").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        upc: m.get("upc").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    })
+}
+
+fn iface_tracks__external_url_object__from_json(v: &Value) -> Option<iface_tracks::ExternalUrlObject> {
+    let m = v.as_object()?;
+    Some(iface_tracks::ExternalUrlObject {
+        spotify: m.get("spotify").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    })
+}
+
+fn iface_tracks__image_object__from_json(v: &Value) -> Option<iface_tracks::ImageObject> {
+    let m = v.as_object()?;
+    Some(iface_tracks::ImageObject {
+        height: m.get("height").and_then(|v| (v).as_i64().map(|n| n as i32)).unwrap_or_default(),
+        url: m.get("url").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        width: m.get("width").and_then(|v| (v).as_i64().map(|n| n as i32)).unwrap_or_default(),
+    })
+}
+
+fn iface_tracks__album_restriction_object__from_json(v: &Value) -> Option<iface_tracks::AlbumRestrictionObject> {
+    let m = v.as_object()?;
+    Some(iface_tracks::AlbumRestrictionObject {
+        reason: m.get("reason").filter(|v| !v.is_null()).and_then(|v| (v).as_str().and_then(iface_tracks__album_restriction_object_reason_enum__from_str)),
+    })
+}
+
+fn iface_tracks__simplified_artist_object__from_json(v: &Value) -> Option<iface_tracks::SimplifiedArtistObject> {
+    let m = v.as_object()?;
+    Some(iface_tracks::SimplifiedArtistObject {
+        external_urls: m.get("external_urls").filter(|v| !v.is_null()).and_then(|v| iface_tracks__external_url_object__from_json(v)),
+        href: m.get("href").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        id: m.get("id").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        name: m.get("name").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        type_op: m.get("type").filter(|v| !v.is_null()).and_then(|v| (v).as_str().and_then(iface_tracks__simplified_artist_object_type_op_enum__from_str)),
+        uri: m.get("uri").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    })
+}
+
+fn iface_tracks__artist_object__from_json(v: &Value) -> Option<iface_tracks::ArtistObject> {
+    let m = v.as_object()?;
+    Some(iface_tracks::ArtistObject {
+        external_urls: m.get("external_urls").filter(|v| !v.is_null()).and_then(|v| iface_tracks__external_url_object__from_json(v)),
+        followers: m.get("followers").filter(|v| !v.is_null()).and_then(|v| iface_tracks__followers_object__from_json(v)),
+        genres: m.get("genres").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| (x).as_str().map(|s| s.to_string())).collect())),
+        href: m.get("href").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        id: m.get("id").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        images: m.get("images").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| iface_tracks__image_object__from_json(x)).collect())),
+        name: m.get("name").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        popularity: m.get("popularity").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        type_op: m.get("type").filter(|v| !v.is_null()).and_then(|v| (v).as_str().and_then(iface_tracks__simplified_artist_object_type_op_enum__from_str)),
+        uri: m.get("uri").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    })
+}
+
+fn iface_tracks__followers_object__from_json(v: &Value) -> Option<iface_tracks::FollowersObject> {
+    let m = v.as_object()?;
+    Some(iface_tracks::FollowersObject {
+        href: m.get("href").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        total: m.get("total").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+    })
+}
+
+fn iface_tracks__track_object_linked_from__from_json(v: &Value) -> Option<iface_tracks::TrackObjectLinkedFrom> {
+    let m = v.as_object()?;
+    Some(iface_tracks::TrackObjectLinkedFrom {
+        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    })
+}
+
+fn iface_tracks__track_restriction_object__from_json(v: &Value) -> Option<iface_tracks::TrackRestrictionObject> {
+    let m = v.as_object()?;
+    Some(iface_tracks::TrackRestrictionObject {
+        reason: m.get("reason").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    })
+}
+
+fn iface_tracks__get_several_tracks_response__from_json(v: &Value) -> Option<iface_tracks::GetSeveralTracksResponse> {
+    let m = v.as_object()?;
+    Some(iface_tracks::GetSeveralTracksResponse {
+        tracks: m.get("tracks").and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| iface_tracks__track_object__from_json(x)).collect())).unwrap_or_default(),
+    })
+}
+
+fn iface_tracks__audio_features_object_type_op_enum__from_str(s: &str) -> Option<iface_tracks::AudioFeaturesObjectTypeOpEnum> {
+    match s {
+        "audio_features" => Some(iface_tracks::AudioFeaturesObjectTypeOpEnum::AudioFeatures),
+        _ => None,
+    }
+}
+
+fn iface_tracks__simplified_album_object_album_type_enum__from_str(s: &str) -> Option<iface_tracks::SimplifiedAlbumObjectAlbumTypeEnum> {
+    match s {
+        "album" => Some(iface_tracks::SimplifiedAlbumObjectAlbumTypeEnum::Album),
+        "single" => Some(iface_tracks::SimplifiedAlbumObjectAlbumTypeEnum::Single),
+        "compilation" => Some(iface_tracks::SimplifiedAlbumObjectAlbumTypeEnum::Compilation),
+        _ => None,
+    }
+}
+
+fn iface_tracks__simplified_album_object_release_date_precision_enum__from_str(s: &str) -> Option<iface_tracks::SimplifiedAlbumObjectReleaseDatePrecisionEnum> {
+    match s {
+        "year" => Some(iface_tracks::SimplifiedAlbumObjectReleaseDatePrecisionEnum::Year),
+        "month" => Some(iface_tracks::SimplifiedAlbumObjectReleaseDatePrecisionEnum::Month),
+        "day" => Some(iface_tracks::SimplifiedAlbumObjectReleaseDatePrecisionEnum::Day),
+        _ => None,
+    }
+}
+
+fn iface_tracks__album_restriction_object_reason_enum__from_str(s: &str) -> Option<iface_tracks::AlbumRestrictionObjectReasonEnum> {
+    match s {
+        "market" => Some(iface_tracks::AlbumRestrictionObjectReasonEnum::Market),
+        "product" => Some(iface_tracks::AlbumRestrictionObjectReasonEnum::Product),
+        "explicit" => Some(iface_tracks::AlbumRestrictionObjectReasonEnum::Explicit),
+        _ => None,
+    }
+}
+
+fn iface_tracks__simplified_album_object_type_op_enum__from_str(s: &str) -> Option<iface_tracks::SimplifiedAlbumObjectTypeOpEnum> {
+    match s {
+        "album" => Some(iface_tracks::SimplifiedAlbumObjectTypeOpEnum::Album),
+        _ => None,
+    }
+}
+
+fn iface_tracks__simplified_album_object_album_group_enum__from_str(s: &str) -> Option<iface_tracks::SimplifiedAlbumObjectAlbumGroupEnum> {
+    match s {
+        "album" => Some(iface_tracks::SimplifiedAlbumObjectAlbumGroupEnum::Album),
+        "single" => Some(iface_tracks::SimplifiedAlbumObjectAlbumGroupEnum::Single),
+        "compilation" => Some(iface_tracks::SimplifiedAlbumObjectAlbumGroupEnum::Compilation),
+        "appears_on" => Some(iface_tracks::SimplifiedAlbumObjectAlbumGroupEnum::AppearsOn),
+        _ => None,
+    }
+}
+
+fn iface_tracks__simplified_artist_object_type_op_enum__from_str(s: &str) -> Option<iface_tracks::SimplifiedArtistObjectTypeOpEnum> {
+    match s {
+        "artist" => Some(iface_tracks::SimplifiedArtistObjectTypeOpEnum::Artist),
+        _ => None,
+    }
+}
+
+fn iface_tracks__track_object_type_op_enum__from_str(s: &str) -> Option<iface_tracks::TrackObjectTypeOpEnum> {
+    match s {
+        "track" => Some(iface_tracks::TrackObjectTypeOpEnum::Track),
+        _ => None,
+    }
+}
+
+fn iface_tracks__get_audio_analysis__ok(body: String) -> Result<iface_tracks::AudioAnalysisObject, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match iface_tracks__audio_analysis_object__from_json(&v) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_tracks__get_audio_analysis__err(e: crate::runtime::DispatchError) -> iface_tracks::GetAudioAnalysisError {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => match status {
+            401u16 => iface_tracks::GetAudioAnalysisError::Unauthorized(body),
+            403u16 => iface_tracks::GetAudioAnalysisError::Forbidden(body),
+            429u16 => iface_tracks::GetAudioAnalysisError::TooManyRequests(body),
+            _ => iface_tracks::GetAudioAnalysisError::Other(body),
+        },
+        crate::runtime::DispatchError::Transport(m) => iface_tracks::GetAudioAnalysisError::Other(m),
+    }
+}
+
+fn iface_tracks__get_several_audio_features__ok(body: String) -> Result<iface_tracks::GetSeveralAudioFeaturesResponse, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match iface_tracks__get_several_audio_features_response__from_json(&v) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_tracks__get_several_audio_features__err(e: crate::runtime::DispatchError) -> iface_tracks::GetSeveralAudioFeaturesError {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => match status {
+            401u16 => iface_tracks::GetSeveralAudioFeaturesError::Unauthorized(body),
+            403u16 => iface_tracks::GetSeveralAudioFeaturesError::Forbidden(body),
+            429u16 => iface_tracks::GetSeveralAudioFeaturesError::TooManyRequests(body),
+            _ => iface_tracks::GetSeveralAudioFeaturesError::Other(body),
+        },
+        crate::runtime::DispatchError::Transport(m) => iface_tracks::GetSeveralAudioFeaturesError::Other(m),
+    }
+}
+
+fn iface_tracks__get_audio_features__ok(body: String) -> Result<iface_tracks::AudioFeaturesObject, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match iface_tracks__audio_features_object__from_json(&v) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_tracks__get_audio_features__err(e: crate::runtime::DispatchError) -> iface_tracks::GetAudioFeaturesError {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => match status {
+            401u16 => iface_tracks::GetAudioFeaturesError::Unauthorized(body),
+            403u16 => iface_tracks::GetAudioFeaturesError::Forbidden(body),
+            429u16 => iface_tracks::GetAudioFeaturesError::TooManyRequests(body),
+            _ => iface_tracks::GetAudioFeaturesError::Other(body),
+        },
+        crate::runtime::DispatchError::Transport(m) => iface_tracks::GetAudioFeaturesError::Other(m),
+    }
+}
+
+fn iface_tracks__get_users_saved_tracks__ok(body: String) -> Result<iface_tracks::PagingSavedTrackObject, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match iface_tracks__paging_saved_track_object__from_json(&v) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_tracks__get_users_saved_tracks__err(e: crate::runtime::DispatchError) -> iface_tracks::GetUsersSavedTracksError {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => match status {
+            401u16 => iface_tracks::GetUsersSavedTracksError::Unauthorized(body),
+            403u16 => iface_tracks::GetUsersSavedTracksError::Forbidden(body),
+            429u16 => iface_tracks::GetUsersSavedTracksError::TooManyRequests(body),
+            _ => iface_tracks::GetUsersSavedTracksError::Other(body),
+        },
+        crate::runtime::DispatchError::Transport(m) => iface_tracks::GetUsersSavedTracksError::Other(m),
+    }
+}
+
+fn iface_tracks__save_tracks_user__ok(body: String) -> Result<String, crate::runtime::DispatchError> {
+    Ok(body)
+}
+
+fn iface_tracks__save_tracks_user__err(e: crate::runtime::DispatchError) -> iface_tracks::SaveTracksUserError {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => match status {
+            401u16 => iface_tracks::SaveTracksUserError::Unauthorized(body),
+            403u16 => iface_tracks::SaveTracksUserError::Forbidden(body),
+            429u16 => iface_tracks::SaveTracksUserError::TooManyRequests(body),
+            _ => iface_tracks::SaveTracksUserError::Other(body),
+        },
+        crate::runtime::DispatchError::Transport(m) => iface_tracks::SaveTracksUserError::Other(m),
+    }
+}
+
+fn iface_tracks__remove_tracks_user__ok(body: String) -> Result<String, crate::runtime::DispatchError> {
+    Ok(body)
+}
+
+fn iface_tracks__remove_tracks_user__err(e: crate::runtime::DispatchError) -> iface_tracks::RemoveTracksUserError {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => match status {
+            401u16 => iface_tracks::RemoveTracksUserError::Unauthorized(body),
+            403u16 => iface_tracks::RemoveTracksUserError::Forbidden(body),
+            429u16 => iface_tracks::RemoveTracksUserError::TooManyRequests(body),
+            _ => iface_tracks::RemoveTracksUserError::Other(body),
+        },
+        crate::runtime::DispatchError::Transport(m) => iface_tracks::RemoveTracksUserError::Other(m),
+    }
+}
+
+fn iface_tracks__check_users_saved_tracks__ok(body: String) -> Result<Vec<bool>, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match (&v).as_array().map(|a| a.iter().filter_map(|x| (x).as_bool()).collect()) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_tracks__check_users_saved_tracks__err(e: crate::runtime::DispatchError) -> iface_tracks::CheckUsersSavedTracksError {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => match status {
+            401u16 => iface_tracks::CheckUsersSavedTracksError::Unauthorized(body),
+            403u16 => iface_tracks::CheckUsersSavedTracksError::Forbidden(body),
+            429u16 => iface_tracks::CheckUsersSavedTracksError::TooManyRequests(body),
+            _ => iface_tracks::CheckUsersSavedTracksError::Other(body),
+        },
+        crate::runtime::DispatchError::Transport(m) => iface_tracks::CheckUsersSavedTracksError::Other(m),
+    }
+}
+
+fn iface_tracks__get_recommendations__ok(body: String) -> Result<iface_tracks::RecommendationsObject, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match iface_tracks__recommendations_object__from_json(&v) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_tracks__get_recommendations__err(e: crate::runtime::DispatchError) -> iface_tracks::GetRecommendationsError {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => match status {
+            401u16 => iface_tracks::GetRecommendationsError::Unauthorized(body),
+            403u16 => iface_tracks::GetRecommendationsError::Forbidden(body),
+            429u16 => iface_tracks::GetRecommendationsError::TooManyRequests(body),
+            _ => iface_tracks::GetRecommendationsError::Other(body),
+        },
+        crate::runtime::DispatchError::Transport(m) => iface_tracks::GetRecommendationsError::Other(m),
+    }
+}
+
+fn iface_tracks__get_several_tracks__ok(body: String) -> Result<iface_tracks::GetSeveralTracksResponse, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match iface_tracks__get_several_tracks_response__from_json(&v) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_tracks__get_several_tracks__err(e: crate::runtime::DispatchError) -> iface_tracks::GetSeveralTracksError {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => match status {
+            401u16 => iface_tracks::GetSeveralTracksError::Unauthorized(body),
+            403u16 => iface_tracks::GetSeveralTracksError::Forbidden(body),
+            429u16 => iface_tracks::GetSeveralTracksError::TooManyRequests(body),
+            _ => iface_tracks::GetSeveralTracksError::Other(body),
+        },
+        crate::runtime::DispatchError::Transport(m) => iface_tracks::GetSeveralTracksError::Other(m),
+    }
+}
+
+fn iface_tracks__get_track__ok(body: String) -> Result<iface_tracks::TrackObject, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match iface_tracks__track_object__from_json(&v) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_tracks__get_track__err(e: crate::runtime::DispatchError) -> iface_tracks::GetTrackError {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => match status {
+            401u16 => iface_tracks::GetTrackError::Unauthorized(body),
+            403u16 => iface_tracks::GetTrackError::Forbidden(body),
+            429u16 => iface_tracks::GetTrackError::TooManyRequests(body),
+            _ => iface_tracks::GetTrackError::Other(body),
+        },
+        crate::runtime::DispatchError::Transport(m) => iface_tracks::GetTrackError::Other(m),
+    }
+}
+
 impl iface_tracks::Guest for crate::Component {
-    fn get_audio_analysis(params: iface_tracks::GetAudioAnalysisParams) -> Result<String, String> {
+    fn get_audio_analysis(params: iface_tracks::GetAudioAnalysisParams) -> Result<iface_tracks::AudioAnalysisObject, iface_tracks::GetAudioAnalysisError> {
         let json = iface_tracks__get_audio_analysis_params__to_json(&params);
-        dispatch(&OP_TRACKS_GET_AUDIO_ANALYSIS, json)
+        match dispatch(&OP_TRACKS_GET_AUDIO_ANALYSIS, json).and_then(iface_tracks__get_audio_analysis__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_tracks__get_audio_analysis__err(e)),
+        }
     }
-    fn get_several_audio_features(params: iface_tracks::GetSeveralAudioFeaturesParams) -> Result<String, String> {
+    fn get_several_audio_features(params: iface_tracks::GetSeveralAudioFeaturesParams) -> Result<iface_tracks::GetSeveralAudioFeaturesResponse, iface_tracks::GetSeveralAudioFeaturesError> {
         let json = iface_tracks__get_several_audio_features_params__to_json(&params);
-        dispatch(&OP_TRACKS_GET_SEVERAL_AUDIO_FEATURES, json)
+        match dispatch(&OP_TRACKS_GET_SEVERAL_AUDIO_FEATURES, json).and_then(iface_tracks__get_several_audio_features__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_tracks__get_several_audio_features__err(e)),
+        }
     }
-    fn get_audio_features(params: iface_tracks::GetAudioFeaturesParams) -> Result<String, String> {
+    fn get_audio_features(params: iface_tracks::GetAudioFeaturesParams) -> Result<iface_tracks::AudioFeaturesObject, iface_tracks::GetAudioFeaturesError> {
         let json = iface_tracks__get_audio_features_params__to_json(&params);
-        dispatch(&OP_TRACKS_GET_AUDIO_FEATURES, json)
+        match dispatch(&OP_TRACKS_GET_AUDIO_FEATURES, json).and_then(iface_tracks__get_audio_features__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_tracks__get_audio_features__err(e)),
+        }
     }
-    fn get_users_saved_tracks(params: iface_tracks::GetUsersSavedTracksParams) -> Result<String, String> {
+    fn get_users_saved_tracks(params: iface_tracks::GetUsersSavedTracksParams) -> Result<iface_tracks::PagingSavedTrackObject, iface_tracks::GetUsersSavedTracksError> {
         let json = iface_tracks__get_users_saved_tracks_params__to_json(&params);
-        dispatch(&OP_TRACKS_GET_USERS_SAVED_TRACKS, json)
+        match dispatch(&OP_TRACKS_GET_USERS_SAVED_TRACKS, json).and_then(iface_tracks__get_users_saved_tracks__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_tracks__get_users_saved_tracks__err(e)),
+        }
     }
-    fn save_tracks_user(params: iface_tracks::SaveTracksUserParams) -> Result<String, String> {
+    fn save_tracks_user(params: iface_tracks::SaveTracksUserParams) -> Result<String, iface_tracks::SaveTracksUserError> {
         let json = iface_tracks__save_tracks_user_params__to_json(&params);
-        dispatch(&OP_TRACKS_SAVE_TRACKS_USER, json)
+        match dispatch(&OP_TRACKS_SAVE_TRACKS_USER, json).and_then(iface_tracks__save_tracks_user__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_tracks__save_tracks_user__err(e)),
+        }
     }
-    fn remove_tracks_user(params: iface_tracks::RemoveTracksUserParams) -> Result<String, String> {
+    fn remove_tracks_user(params: iface_tracks::RemoveTracksUserParams) -> Result<String, iface_tracks::RemoveTracksUserError> {
         let json = iface_tracks__remove_tracks_user_params__to_json(&params);
-        dispatch(&OP_TRACKS_REMOVE_TRACKS_USER, json)
+        match dispatch(&OP_TRACKS_REMOVE_TRACKS_USER, json).and_then(iface_tracks__remove_tracks_user__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_tracks__remove_tracks_user__err(e)),
+        }
     }
-    fn check_users_saved_tracks(params: iface_tracks::CheckUsersSavedTracksParams) -> Result<String, String> {
+    fn check_users_saved_tracks(params: iface_tracks::CheckUsersSavedTracksParams) -> Result<Vec<bool>, iface_tracks::CheckUsersSavedTracksError> {
         let json = iface_tracks__check_users_saved_tracks_params__to_json(&params);
-        dispatch(&OP_TRACKS_CHECK_USERS_SAVED_TRACKS, json)
+        match dispatch(&OP_TRACKS_CHECK_USERS_SAVED_TRACKS, json).and_then(iface_tracks__check_users_saved_tracks__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_tracks__check_users_saved_tracks__err(e)),
+        }
     }
-    fn get_recommendations(params: iface_tracks::GetRecommendationsParams) -> Result<String, String> {
+    fn get_recommendations(params: iface_tracks::GetRecommendationsParams) -> Result<iface_tracks::RecommendationsObject, iface_tracks::GetRecommendationsError> {
         let json = iface_tracks__get_recommendations_params__to_json(&params);
-        dispatch(&OP_TRACKS_GET_RECOMMENDATIONS, json)
+        match dispatch(&OP_TRACKS_GET_RECOMMENDATIONS, json).and_then(iface_tracks__get_recommendations__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_tracks__get_recommendations__err(e)),
+        }
     }
-    fn get_several_tracks(params: iface_tracks::GetSeveralTracksParams) -> Result<String, String> {
+    fn get_several_tracks(params: iface_tracks::GetSeveralTracksParams) -> Result<iface_tracks::GetSeveralTracksResponse, iface_tracks::GetSeveralTracksError> {
         let json = iface_tracks__get_several_tracks_params__to_json(&params);
-        dispatch(&OP_TRACKS_GET_SEVERAL_TRACKS, json)
+        match dispatch(&OP_TRACKS_GET_SEVERAL_TRACKS, json).and_then(iface_tracks__get_several_tracks__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_tracks__get_several_tracks__err(e)),
+        }
     }
-    fn get_track(params: iface_tracks::GetTrackParams) -> Result<String, String> {
+    fn get_track(params: iface_tracks::GetTrackParams) -> Result<iface_tracks::TrackObject, iface_tracks::GetTrackError> {
         let json = iface_tracks__get_track_params__to_json(&params);
-        dispatch(&OP_TRACKS_GET_TRACK, json)
+        match dispatch(&OP_TRACKS_GET_TRACK, json).and_then(iface_tracks__get_track__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_tracks__get_track__err(e)),
+        }
     }
 }
 use crate::exports::autostamp::spotify::audiobooks as iface_audiobooks;
@@ -911,8 +3032,8 @@ const OP_AUDIOBOOKS_GET_MULTIPLE_AUDIOBOOKS: OpSpec = OpSpec {
     method: "GET",
     path_template: "/audiobooks",
     fields: &[
-        FieldSpec { snake: "ids", location: FieldLocation::Query },
-        FieldSpec { snake: "market", location: FieldLocation::Query },
+        FieldSpec { snake: "ids", wire: "ids", location: FieldLocation::Query },
+        FieldSpec { snake: "market", wire: "market", location: FieldLocation::Query },
     ],
     auth: &[
         AuthApply { secret_key: "oauth_2_0", kind: AuthKind::Bearer },
@@ -923,8 +3044,8 @@ const OP_AUDIOBOOKS_GET_AN_AUDIOBOOK: OpSpec = OpSpec {
     method: "GET",
     path_template: "/audiobooks/{id}",
     fields: &[
-        FieldSpec { snake: "id", location: FieldLocation::Path },
-        FieldSpec { snake: "market", location: FieldLocation::Query },
+        FieldSpec { snake: "id", wire: "id", location: FieldLocation::Path },
+        FieldSpec { snake: "market", wire: "market", location: FieldLocation::Query },
     ],
     auth: &[
         AuthApply { secret_key: "oauth_2_0", kind: AuthKind::Bearer },
@@ -935,10 +3056,10 @@ const OP_AUDIOBOOKS_GET_AUDIOBOOK_CHAPTERS: OpSpec = OpSpec {
     method: "GET",
     path_template: "/audiobooks/{id}/chapters",
     fields: &[
-        FieldSpec { snake: "id", location: FieldLocation::Path },
-        FieldSpec { snake: "market", location: FieldLocation::Query },
-        FieldSpec { snake: "limit", location: FieldLocation::Query },
-        FieldSpec { snake: "offset", location: FieldLocation::Query },
+        FieldSpec { snake: "id", wire: "id", location: FieldLocation::Path },
+        FieldSpec { snake: "market", wire: "market", location: FieldLocation::Query },
+        FieldSpec { snake: "limit", wire: "limit", location: FieldLocation::Query },
+        FieldSpec { snake: "offset", wire: "offset", location: FieldLocation::Query },
     ],
     auth: &[
         AuthApply { secret_key: "oauth_2_0", kind: AuthKind::Bearer },
@@ -949,8 +3070,8 @@ const OP_AUDIOBOOKS_GET_USERS_SAVED_AUDIOBOOKS: OpSpec = OpSpec {
     method: "GET",
     path_template: "/me/audiobooks",
     fields: &[
-        FieldSpec { snake: "limit", location: FieldLocation::Query },
-        FieldSpec { snake: "offset", location: FieldLocation::Query },
+        FieldSpec { snake: "limit", wire: "limit", location: FieldLocation::Query },
+        FieldSpec { snake: "offset", wire: "offset", location: FieldLocation::Query },
     ],
     auth: &[
         AuthApply { secret_key: "oauth_2_0", kind: AuthKind::Bearer },
@@ -961,7 +3082,7 @@ const OP_AUDIOBOOKS_SAVE_AUDIOBOOKS_USER: OpSpec = OpSpec {
     method: "PUT",
     path_template: "/me/audiobooks",
     fields: &[
-        FieldSpec { snake: "ids", location: FieldLocation::Query },
+        FieldSpec { snake: "ids", wire: "ids", location: FieldLocation::Query },
     ],
     auth: &[
         AuthApply { secret_key: "oauth_2_0", kind: AuthKind::Bearer },
@@ -972,7 +3093,7 @@ const OP_AUDIOBOOKS_REMOVE_AUDIOBOOKS_USER: OpSpec = OpSpec {
     method: "DELETE",
     path_template: "/me/audiobooks",
     fields: &[
-        FieldSpec { snake: "ids", location: FieldLocation::Query },
+        FieldSpec { snake: "ids", wire: "ids", location: FieldLocation::Query },
     ],
     auth: &[
         AuthApply { secret_key: "oauth_2_0", kind: AuthKind::Bearer },
@@ -983,12 +3104,94 @@ const OP_AUDIOBOOKS_CHECK_USERS_SAVED_AUDIOBOOKS: OpSpec = OpSpec {
     method: "GET",
     path_template: "/me/audiobooks/contains",
     fields: &[
-        FieldSpec { snake: "ids", location: FieldLocation::Query },
+        FieldSpec { snake: "ids", wire: "ids", location: FieldLocation::Query },
     ],
     auth: &[
         AuthApply { secret_key: "oauth_2_0", kind: AuthKind::Bearer },
     ],
 };
+
+fn iface_audiobooks__audiobook_object_type_op_enum__to_str(e: &iface_audiobooks::AudiobookObjectTypeOpEnum) -> &'static str {
+    match e {
+        iface_audiobooks::AudiobookObjectTypeOpEnum::Audiobook => "audiobook",
+    }
+}
+
+fn iface_audiobooks__get_multiple_audiobooks_response__to_json(p: &iface_audiobooks::GetMultipleAudiobooksResponse) -> Value {
+    let mut m = Map::new();
+    m.insert("audiobooks".into(), Value::Array((&p.audiobooks).iter().map(|v| iface_audiobooks__audiobook_object__to_json(v)).collect()));
+    Value::Object(m)
+}
+
+fn iface_audiobooks__audiobook_object__to_json(p: &iface_audiobooks::AudiobookObject) -> Value {
+    let mut m = Map::new();
+    m.insert("authors".into(), Value::Array((&p.authors).iter().map(|v| iface_audiobooks__author_object__to_json(v)).collect()));
+    m.insert("available_markets".into(), Value::Array((&p.available_markets).iter().map(|v| Value::String((v).clone())).collect()));
+    m.insert("copyrights".into(), Value::Array((&p.copyrights).iter().map(|v| iface_audiobooks__copyright_object__to_json(v)).collect()));
+    m.insert("description".into(), Value::String((&p.description).clone()));
+    m.insert("edition".into(), match (&p.edition) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("explicit".into(), Value::Bool(*(&p.explicit)));
+    m.insert("external_urls".into(), iface_audiobooks__external_url_object__to_json(&p.external_urls));
+    m.insert("href".into(), Value::String((&p.href).clone()));
+    m.insert("html_description".into(), Value::String((&p.html_description).clone()));
+    m.insert("id".into(), Value::String((&p.id).clone()));
+    m.insert("images".into(), Value::Array((&p.images).iter().map(|v| iface_audiobooks__image_object__to_json(v)).collect()));
+    m.insert("languages".into(), Value::Array((&p.languages).iter().map(|v| Value::String((v).clone())).collect()));
+    m.insert("media_type".into(), Value::String((&p.media_type).clone()));
+    m.insert("name".into(), Value::String((&p.name).clone()));
+    m.insert("narrators".into(), Value::Array((&p.narrators).iter().map(|v| iface_audiobooks__narrator_object__to_json(v)).collect()));
+    m.insert("publisher".into(), Value::String((&p.publisher).clone()));
+    m.insert("total_chapters".into(), Value::Number(serde_json::Number::from(*(&p.total_chapters))));
+    m.insert("type".into(), Value::String(iface_audiobooks__audiobook_object_type_op_enum__to_str(&p.type_op).into()));
+    m.insert("uri".into(), Value::String((&p.uri).clone()));
+    m.insert("chapters".into(), Value::String((&p.chapters).clone()));
+    Value::Object(m)
+}
+
+fn iface_audiobooks__author_object__to_json(p: &iface_audiobooks::AuthorObject) -> Value {
+    let mut m = Map::new();
+    m.insert("name".into(), match (&p.name) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_audiobooks__copyright_object__to_json(p: &iface_audiobooks::CopyrightObject) -> Value {
+    let mut m = Map::new();
+    m.insert("text".into(), match (&p.text) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("type".into(), match (&p.type_op) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_audiobooks__external_url_object__to_json(p: &iface_audiobooks::ExternalUrlObject) -> Value {
+    let mut m = Map::new();
+    m.insert("spotify".into(), match (&p.spotify) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_audiobooks__image_object__to_json(p: &iface_audiobooks::ImageObject) -> Value {
+    let mut m = Map::new();
+    m.insert("height".into(), Value::Number(serde_json::Number::from(*(&p.height))));
+    m.insert("url".into(), Value::String((&p.url).clone()));
+    m.insert("width".into(), Value::Number(serde_json::Number::from(*(&p.width))));
+    Value::Object(m)
+}
+
+fn iface_audiobooks__narrator_object__to_json(p: &iface_audiobooks::NarratorObject) -> Value {
+    let mut m = Map::new();
+    m.insert("name".into(), match (&p.name) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_audiobooks__paging_simplified_chapter_object__to_json(p: &iface_audiobooks::PagingSimplifiedChapterObject) -> Value {
+    let mut m = Map::new();
+    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_audiobooks__paging_simplified_audiobook_object__to_json(p: &iface_audiobooks::PagingSimplifiedAudiobookObject) -> Value {
+    let mut m = Map::new();
+    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
 
 fn iface_audiobooks__get_multiple_audiobooks_params__to_json(p: &iface_audiobooks::GetMultipleAudiobooksParams) -> Value {
     let mut m = Map::new();
@@ -1038,34 +3241,296 @@ fn iface_audiobooks__check_users_saved_audiobooks_params__to_json(p: &iface_audi
     Value::Object(m)
 }
 
+fn iface_audiobooks__get_multiple_audiobooks_response__from_json(v: &Value) -> Option<iface_audiobooks::GetMultipleAudiobooksResponse> {
+    let m = v.as_object()?;
+    Some(iface_audiobooks::GetMultipleAudiobooksResponse {
+        audiobooks: m.get("audiobooks").and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| iface_audiobooks__audiobook_object__from_json(x)).collect())).unwrap_or_default(),
+    })
+}
+
+fn iface_audiobooks__audiobook_object__from_json(v: &Value) -> Option<iface_audiobooks::AudiobookObject> {
+    let m = v.as_object()?;
+    Some(iface_audiobooks::AudiobookObject {
+        authors: m.get("authors").and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| iface_audiobooks__author_object__from_json(x)).collect())).unwrap_or_default(),
+        available_markets: m.get("available_markets").and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| (x).as_str().map(|s| s.to_string())).collect())).unwrap_or_default(),
+        copyrights: m.get("copyrights").and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| iface_audiobooks__copyright_object__from_json(x)).collect())).unwrap_or_default(),
+        description: m.get("description").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        edition: m.get("edition").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        explicit: m.get("explicit").and_then(|v| (v).as_bool()).unwrap_or_default(),
+        external_urls: match m.get("external_urls").and_then(|v| iface_audiobooks__external_url_object__from_json(v)) { Some(x) => x, None => return None },
+        href: m.get("href").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        html_description: m.get("html_description").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        id: m.get("id").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        images: m.get("images").and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| iface_audiobooks__image_object__from_json(x)).collect())).unwrap_or_default(),
+        languages: m.get("languages").and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| (x).as_str().map(|s| s.to_string())).collect())).unwrap_or_default(),
+        media_type: m.get("media_type").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        name: m.get("name").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        narrators: m.get("narrators").and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| iface_audiobooks__narrator_object__from_json(x)).collect())).unwrap_or_default(),
+        publisher: m.get("publisher").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        total_chapters: m.get("total_chapters").and_then(|v| (v).as_i64().map(|n| n as i32)).unwrap_or_default(),
+        type_op: match m.get("type").and_then(|v| (v).as_str().and_then(iface_audiobooks__audiobook_object_type_op_enum__from_str)) { Some(x) => x, None => return None },
+        uri: m.get("uri").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        chapters: m.get("chapters").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+    })
+}
+
+fn iface_audiobooks__author_object__from_json(v: &Value) -> Option<iface_audiobooks::AuthorObject> {
+    let m = v.as_object()?;
+    Some(iface_audiobooks::AuthorObject {
+        name: m.get("name").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    })
+}
+
+fn iface_audiobooks__copyright_object__from_json(v: &Value) -> Option<iface_audiobooks::CopyrightObject> {
+    let m = v.as_object()?;
+    Some(iface_audiobooks::CopyrightObject {
+        text: m.get("text").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        type_op: m.get("type").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    })
+}
+
+fn iface_audiobooks__external_url_object__from_json(v: &Value) -> Option<iface_audiobooks::ExternalUrlObject> {
+    let m = v.as_object()?;
+    Some(iface_audiobooks::ExternalUrlObject {
+        spotify: m.get("spotify").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    })
+}
+
+fn iface_audiobooks__image_object__from_json(v: &Value) -> Option<iface_audiobooks::ImageObject> {
+    let m = v.as_object()?;
+    Some(iface_audiobooks::ImageObject {
+        height: m.get("height").and_then(|v| (v).as_i64().map(|n| n as i32)).unwrap_or_default(),
+        url: m.get("url").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        width: m.get("width").and_then(|v| (v).as_i64().map(|n| n as i32)).unwrap_or_default(),
+    })
+}
+
+fn iface_audiobooks__narrator_object__from_json(v: &Value) -> Option<iface_audiobooks::NarratorObject> {
+    let m = v.as_object()?;
+    Some(iface_audiobooks::NarratorObject {
+        name: m.get("name").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    })
+}
+
+fn iface_audiobooks__paging_simplified_chapter_object__from_json(v: &Value) -> Option<iface_audiobooks::PagingSimplifiedChapterObject> {
+    let m = v.as_object()?;
+    Some(iface_audiobooks::PagingSimplifiedChapterObject {
+        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    })
+}
+
+fn iface_audiobooks__paging_simplified_audiobook_object__from_json(v: &Value) -> Option<iface_audiobooks::PagingSimplifiedAudiobookObject> {
+    let m = v.as_object()?;
+    Some(iface_audiobooks::PagingSimplifiedAudiobookObject {
+        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    })
+}
+
+fn iface_audiobooks__audiobook_object_type_op_enum__from_str(s: &str) -> Option<iface_audiobooks::AudiobookObjectTypeOpEnum> {
+    match s {
+        "audiobook" => Some(iface_audiobooks::AudiobookObjectTypeOpEnum::Audiobook),
+        _ => None,
+    }
+}
+
+fn iface_audiobooks__get_multiple_audiobooks__ok(body: String) -> Result<iface_audiobooks::GetMultipleAudiobooksResponse, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match iface_audiobooks__get_multiple_audiobooks_response__from_json(&v) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_audiobooks__get_multiple_audiobooks__err(e: crate::runtime::DispatchError) -> iface_audiobooks::GetMultipleAudiobooksError {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => match status {
+            401u16 => iface_audiobooks::GetMultipleAudiobooksError::Unauthorized(body),
+            403u16 => iface_audiobooks::GetMultipleAudiobooksError::Forbidden(body),
+            429u16 => iface_audiobooks::GetMultipleAudiobooksError::TooManyRequests(body),
+            _ => iface_audiobooks::GetMultipleAudiobooksError::Other(body),
+        },
+        crate::runtime::DispatchError::Transport(m) => iface_audiobooks::GetMultipleAudiobooksError::Other(m),
+    }
+}
+
+fn iface_audiobooks__get_an_audiobook__ok(body: String) -> Result<iface_audiobooks::AudiobookObject, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match iface_audiobooks__audiobook_object__from_json(&v) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_audiobooks__get_an_audiobook__err(e: crate::runtime::DispatchError) -> iface_audiobooks::GetAnAudiobookError {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => match status {
+            400u16 => iface_audiobooks::GetAnAudiobookError::BadRequest(body),
+            401u16 => iface_audiobooks::GetAnAudiobookError::Unauthorized(body),
+            403u16 => iface_audiobooks::GetAnAudiobookError::Forbidden(body),
+            404u16 => iface_audiobooks::GetAnAudiobookError::NotFound(body),
+            429u16 => iface_audiobooks::GetAnAudiobookError::TooManyRequests(body),
+            _ => iface_audiobooks::GetAnAudiobookError::Other(body),
+        },
+        crate::runtime::DispatchError::Transport(m) => iface_audiobooks::GetAnAudiobookError::Other(m),
+    }
+}
+
+fn iface_audiobooks__get_audiobook_chapters__ok(body: String) -> Result<iface_audiobooks::PagingSimplifiedChapterObject, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match iface_audiobooks__paging_simplified_chapter_object__from_json(&v) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_audiobooks__get_audiobook_chapters__err(e: crate::runtime::DispatchError) -> iface_audiobooks::GetAudiobookChaptersError {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => match status {
+            401u16 => iface_audiobooks::GetAudiobookChaptersError::Unauthorized(body),
+            403u16 => iface_audiobooks::GetAudiobookChaptersError::Forbidden(body),
+            429u16 => iface_audiobooks::GetAudiobookChaptersError::TooManyRequests(body),
+            _ => iface_audiobooks::GetAudiobookChaptersError::Other(body),
+        },
+        crate::runtime::DispatchError::Transport(m) => iface_audiobooks::GetAudiobookChaptersError::Other(m),
+    }
+}
+
+fn iface_audiobooks__get_users_saved_audiobooks__ok(body: String) -> Result<iface_audiobooks::PagingSimplifiedAudiobookObject, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match iface_audiobooks__paging_simplified_audiobook_object__from_json(&v) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_audiobooks__get_users_saved_audiobooks__err(e: crate::runtime::DispatchError) -> iface_audiobooks::GetUsersSavedAudiobooksError {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => match status {
+            401u16 => iface_audiobooks::GetUsersSavedAudiobooksError::Unauthorized(body),
+            403u16 => iface_audiobooks::GetUsersSavedAudiobooksError::Forbidden(body),
+            429u16 => iface_audiobooks::GetUsersSavedAudiobooksError::TooManyRequests(body),
+            _ => iface_audiobooks::GetUsersSavedAudiobooksError::Other(body),
+        },
+        crate::runtime::DispatchError::Transport(m) => iface_audiobooks::GetUsersSavedAudiobooksError::Other(m),
+    }
+}
+
+fn iface_audiobooks__save_audiobooks_user__ok(body: String) -> Result<String, crate::runtime::DispatchError> {
+    Ok(body)
+}
+
+fn iface_audiobooks__save_audiobooks_user__err(e: crate::runtime::DispatchError) -> iface_audiobooks::SaveAudiobooksUserError {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => match status {
+            401u16 => iface_audiobooks::SaveAudiobooksUserError::Unauthorized(body),
+            403u16 => iface_audiobooks::SaveAudiobooksUserError::Forbidden(body),
+            429u16 => iface_audiobooks::SaveAudiobooksUserError::TooManyRequests(body),
+            _ => iface_audiobooks::SaveAudiobooksUserError::Other(body),
+        },
+        crate::runtime::DispatchError::Transport(m) => iface_audiobooks::SaveAudiobooksUserError::Other(m),
+    }
+}
+
+fn iface_audiobooks__remove_audiobooks_user__ok(body: String) -> Result<String, crate::runtime::DispatchError> {
+    Ok(body)
+}
+
+fn iface_audiobooks__remove_audiobooks_user__err(e: crate::runtime::DispatchError) -> iface_audiobooks::RemoveAudiobooksUserError {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => match status {
+            401u16 => iface_audiobooks::RemoveAudiobooksUserError::Unauthorized(body),
+            403u16 => iface_audiobooks::RemoveAudiobooksUserError::Forbidden(body),
+            429u16 => iface_audiobooks::RemoveAudiobooksUserError::TooManyRequests(body),
+            _ => iface_audiobooks::RemoveAudiobooksUserError::Other(body),
+        },
+        crate::runtime::DispatchError::Transport(m) => iface_audiobooks::RemoveAudiobooksUserError::Other(m),
+    }
+}
+
+fn iface_audiobooks__check_users_saved_audiobooks__ok(body: String) -> Result<Vec<bool>, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match (&v).as_array().map(|a| a.iter().filter_map(|x| (x).as_bool()).collect()) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_audiobooks__check_users_saved_audiobooks__err(e: crate::runtime::DispatchError) -> iface_audiobooks::CheckUsersSavedAudiobooksError {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => match status {
+            401u16 => iface_audiobooks::CheckUsersSavedAudiobooksError::Unauthorized(body),
+            403u16 => iface_audiobooks::CheckUsersSavedAudiobooksError::Forbidden(body),
+            429u16 => iface_audiobooks::CheckUsersSavedAudiobooksError::TooManyRequests(body),
+            _ => iface_audiobooks::CheckUsersSavedAudiobooksError::Other(body),
+        },
+        crate::runtime::DispatchError::Transport(m) => iface_audiobooks::CheckUsersSavedAudiobooksError::Other(m),
+    }
+}
+
 impl iface_audiobooks::Guest for crate::Component {
-    fn get_multiple_audiobooks(params: iface_audiobooks::GetMultipleAudiobooksParams) -> Result<String, String> {
+    fn get_multiple_audiobooks(params: iface_audiobooks::GetMultipleAudiobooksParams) -> Result<iface_audiobooks::GetMultipleAudiobooksResponse, iface_audiobooks::GetMultipleAudiobooksError> {
         let json = iface_audiobooks__get_multiple_audiobooks_params__to_json(&params);
-        dispatch(&OP_AUDIOBOOKS_GET_MULTIPLE_AUDIOBOOKS, json)
+        match dispatch(&OP_AUDIOBOOKS_GET_MULTIPLE_AUDIOBOOKS, json).and_then(iface_audiobooks__get_multiple_audiobooks__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_audiobooks__get_multiple_audiobooks__err(e)),
+        }
     }
-    fn get_an_audiobook(params: iface_audiobooks::GetAnAudiobookParams) -> Result<String, String> {
+    fn get_an_audiobook(params: iface_audiobooks::GetAnAudiobookParams) -> Result<iface_audiobooks::AudiobookObject, iface_audiobooks::GetAnAudiobookError> {
         let json = iface_audiobooks__get_an_audiobook_params__to_json(&params);
-        dispatch(&OP_AUDIOBOOKS_GET_AN_AUDIOBOOK, json)
+        match dispatch(&OP_AUDIOBOOKS_GET_AN_AUDIOBOOK, json).and_then(iface_audiobooks__get_an_audiobook__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_audiobooks__get_an_audiobook__err(e)),
+        }
     }
-    fn get_audiobook_chapters(params: iface_audiobooks::GetAudiobookChaptersParams) -> Result<String, String> {
+    fn get_audiobook_chapters(params: iface_audiobooks::GetAudiobookChaptersParams) -> Result<iface_audiobooks::PagingSimplifiedChapterObject, iface_audiobooks::GetAudiobookChaptersError> {
         let json = iface_audiobooks__get_audiobook_chapters_params__to_json(&params);
-        dispatch(&OP_AUDIOBOOKS_GET_AUDIOBOOK_CHAPTERS, json)
+        match dispatch(&OP_AUDIOBOOKS_GET_AUDIOBOOK_CHAPTERS, json).and_then(iface_audiobooks__get_audiobook_chapters__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_audiobooks__get_audiobook_chapters__err(e)),
+        }
     }
-    fn get_users_saved_audiobooks(params: iface_audiobooks::GetUsersSavedAudiobooksParams) -> Result<String, String> {
+    fn get_users_saved_audiobooks(params: iface_audiobooks::GetUsersSavedAudiobooksParams) -> Result<iface_audiobooks::PagingSimplifiedAudiobookObject, iface_audiobooks::GetUsersSavedAudiobooksError> {
         let json = iface_audiobooks__get_users_saved_audiobooks_params__to_json(&params);
-        dispatch(&OP_AUDIOBOOKS_GET_USERS_SAVED_AUDIOBOOKS, json)
+        match dispatch(&OP_AUDIOBOOKS_GET_USERS_SAVED_AUDIOBOOKS, json).and_then(iface_audiobooks__get_users_saved_audiobooks__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_audiobooks__get_users_saved_audiobooks__err(e)),
+        }
     }
-    fn save_audiobooks_user(params: iface_audiobooks::SaveAudiobooksUserParams) -> Result<String, String> {
+    fn save_audiobooks_user(params: iface_audiobooks::SaveAudiobooksUserParams) -> Result<String, iface_audiobooks::SaveAudiobooksUserError> {
         let json = iface_audiobooks__save_audiobooks_user_params__to_json(&params);
-        dispatch(&OP_AUDIOBOOKS_SAVE_AUDIOBOOKS_USER, json)
+        match dispatch(&OP_AUDIOBOOKS_SAVE_AUDIOBOOKS_USER, json).and_then(iface_audiobooks__save_audiobooks_user__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_audiobooks__save_audiobooks_user__err(e)),
+        }
     }
-    fn remove_audiobooks_user(params: iface_audiobooks::RemoveAudiobooksUserParams) -> Result<String, String> {
+    fn remove_audiobooks_user(params: iface_audiobooks::RemoveAudiobooksUserParams) -> Result<String, iface_audiobooks::RemoveAudiobooksUserError> {
         let json = iface_audiobooks__remove_audiobooks_user_params__to_json(&params);
-        dispatch(&OP_AUDIOBOOKS_REMOVE_AUDIOBOOKS_USER, json)
+        match dispatch(&OP_AUDIOBOOKS_REMOVE_AUDIOBOOKS_USER, json).and_then(iface_audiobooks__remove_audiobooks_user__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_audiobooks__remove_audiobooks_user__err(e)),
+        }
     }
-    fn check_users_saved_audiobooks(params: iface_audiobooks::CheckUsersSavedAudiobooksParams) -> Result<String, String> {
+    fn check_users_saved_audiobooks(params: iface_audiobooks::CheckUsersSavedAudiobooksParams) -> Result<Vec<bool>, iface_audiobooks::CheckUsersSavedAudiobooksError> {
         let json = iface_audiobooks__check_users_saved_audiobooks_params__to_json(&params);
-        dispatch(&OP_AUDIOBOOKS_CHECK_USERS_SAVED_AUDIOBOOKS, json)
+        match dispatch(&OP_AUDIOBOOKS_CHECK_USERS_SAVED_AUDIOBOOKS, json).and_then(iface_audiobooks__check_users_saved_audiobooks__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_audiobooks__check_users_saved_audiobooks__err(e)),
+        }
     }
 }
 use crate::exports::autostamp::spotify::categories as iface_categories;
@@ -1074,10 +3539,10 @@ const OP_CATEGORIES_GET_CATEGORIES: OpSpec = OpSpec {
     method: "GET",
     path_template: "/browse/categories",
     fields: &[
-        FieldSpec { snake: "country", location: FieldLocation::Query },
-        FieldSpec { snake: "locale", location: FieldLocation::Query },
-        FieldSpec { snake: "limit", location: FieldLocation::Query },
-        FieldSpec { snake: "offset", location: FieldLocation::Query },
+        FieldSpec { snake: "country", wire: "country", location: FieldLocation::Query },
+        FieldSpec { snake: "locale", wire: "locale", location: FieldLocation::Query },
+        FieldSpec { snake: "limit", wire: "limit", location: FieldLocation::Query },
+        FieldSpec { snake: "offset", wire: "offset", location: FieldLocation::Query },
     ],
     auth: &[
         AuthApply { secret_key: "oauth_2_0", kind: AuthKind::Bearer },
@@ -1088,14 +3553,48 @@ const OP_CATEGORIES_GET_A_CATEGORY: OpSpec = OpSpec {
     method: "GET",
     path_template: "/browse/categories/{category_id}",
     fields: &[
-        FieldSpec { snake: "category_id", location: FieldLocation::Path },
-        FieldSpec { snake: "country", location: FieldLocation::Query },
-        FieldSpec { snake: "locale", location: FieldLocation::Query },
+        FieldSpec { snake: "category_id", wire: "category_id", location: FieldLocation::Path },
+        FieldSpec { snake: "country", wire: "country", location: FieldLocation::Query },
+        FieldSpec { snake: "locale", wire: "locale", location: FieldLocation::Query },
     ],
     auth: &[
         AuthApply { secret_key: "oauth_2_0", kind: AuthKind::Bearer },
     ],
 };
+
+fn iface_categories__get_categories_response__to_json(p: &iface_categories::GetCategoriesResponse) -> Value {
+    let mut m = Map::new();
+    m.insert("categories".into(), iface_categories__paging_object__to_json(&p.categories));
+    Value::Object(m)
+}
+
+fn iface_categories__paging_object__to_json(p: &iface_categories::PagingObject) -> Value {
+    let mut m = Map::new();
+    m.insert("href".into(), Value::String((&p.href).clone()));
+    m.insert("limit".into(), Value::Number(serde_json::Number::from(*(&p.limit))));
+    m.insert("next".into(), Value::String((&p.next).clone()));
+    m.insert("offset".into(), Value::Number(serde_json::Number::from(*(&p.offset))));
+    m.insert("previous".into(), Value::String((&p.previous).clone()));
+    m.insert("total".into(), Value::Number(serde_json::Number::from(*(&p.total))));
+    Value::Object(m)
+}
+
+fn iface_categories__category_object__to_json(p: &iface_categories::CategoryObject) -> Value {
+    let mut m = Map::new();
+    m.insert("href".into(), Value::String((&p.href).clone()));
+    m.insert("icons".into(), Value::Array((&p.icons).iter().map(|v| iface_categories__image_object__to_json(v)).collect()));
+    m.insert("id".into(), Value::String((&p.id).clone()));
+    m.insert("name".into(), Value::String((&p.name).clone()));
+    Value::Object(m)
+}
+
+fn iface_categories__image_object__to_json(p: &iface_categories::ImageObject) -> Value {
+    let mut m = Map::new();
+    m.insert("height".into(), Value::Number(serde_json::Number::from(*(&p.height))));
+    m.insert("url".into(), Value::String((&p.url).clone()));
+    m.insert("width".into(), Value::Number(serde_json::Number::from(*(&p.width))));
+    Value::Object(m)
+}
 
 fn iface_categories__get_categories_params__to_json(p: &iface_categories::GetCategoriesParams) -> Value {
     let mut m = Map::new();
@@ -1114,14 +3613,104 @@ fn iface_categories__get_a_category_params__to_json(p: &iface_categories::GetACa
     Value::Object(m)
 }
 
-impl iface_categories::Guest for crate::Component {
-    fn get_categories(params: iface_categories::GetCategoriesParams) -> Result<String, String> {
-        let json = iface_categories__get_categories_params__to_json(&params);
-        dispatch(&OP_CATEGORIES_GET_CATEGORIES, json)
+fn iface_categories__get_categories_response__from_json(v: &Value) -> Option<iface_categories::GetCategoriesResponse> {
+    let m = v.as_object()?;
+    Some(iface_categories::GetCategoriesResponse {
+        categories: match m.get("categories").and_then(|v| iface_categories__paging_object__from_json(v)) { Some(x) => x, None => return None },
+    })
+}
+
+fn iface_categories__paging_object__from_json(v: &Value) -> Option<iface_categories::PagingObject> {
+    let m = v.as_object()?;
+    Some(iface_categories::PagingObject {
+        href: m.get("href").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        limit: m.get("limit").and_then(|v| (v).as_i64().map(|n| n as i32)).unwrap_or_default(),
+        next: m.get("next").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        offset: m.get("offset").and_then(|v| (v).as_i64().map(|n| n as i32)).unwrap_or_default(),
+        previous: m.get("previous").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        total: m.get("total").and_then(|v| (v).as_i64().map(|n| n as i32)).unwrap_or_default(),
+    })
+}
+
+fn iface_categories__category_object__from_json(v: &Value) -> Option<iface_categories::CategoryObject> {
+    let m = v.as_object()?;
+    Some(iface_categories::CategoryObject {
+        href: m.get("href").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        icons: m.get("icons").and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| iface_categories__image_object__from_json(x)).collect())).unwrap_or_default(),
+        id: m.get("id").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        name: m.get("name").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+    })
+}
+
+fn iface_categories__image_object__from_json(v: &Value) -> Option<iface_categories::ImageObject> {
+    let m = v.as_object()?;
+    Some(iface_categories::ImageObject {
+        height: m.get("height").and_then(|v| (v).as_i64().map(|n| n as i32)).unwrap_or_default(),
+        url: m.get("url").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        width: m.get("width").and_then(|v| (v).as_i64().map(|n| n as i32)).unwrap_or_default(),
+    })
+}
+
+fn iface_categories__get_categories__ok(body: String) -> Result<iface_categories::GetCategoriesResponse, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match iface_categories__get_categories_response__from_json(&v) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
     }
-    fn get_a_category(params: iface_categories::GetACategoryParams) -> Result<String, String> {
+}
+
+fn iface_categories__get_categories__err(e: crate::runtime::DispatchError) -> iface_categories::GetCategoriesError {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => match status {
+            401u16 => iface_categories::GetCategoriesError::Unauthorized(body),
+            403u16 => iface_categories::GetCategoriesError::Forbidden(body),
+            429u16 => iface_categories::GetCategoriesError::TooManyRequests(body),
+            _ => iface_categories::GetCategoriesError::Other(body),
+        },
+        crate::runtime::DispatchError::Transport(m) => iface_categories::GetCategoriesError::Other(m),
+    }
+}
+
+fn iface_categories__get_a_category__ok(body: String) -> Result<iface_categories::CategoryObject, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match iface_categories__category_object__from_json(&v) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_categories__get_a_category__err(e: crate::runtime::DispatchError) -> iface_categories::GetACategoryError {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => match status {
+            401u16 => iface_categories::GetACategoryError::Unauthorized(body),
+            403u16 => iface_categories::GetACategoryError::Forbidden(body),
+            429u16 => iface_categories::GetACategoryError::TooManyRequests(body),
+            _ => iface_categories::GetACategoryError::Other(body),
+        },
+        crate::runtime::DispatchError::Transport(m) => iface_categories::GetACategoryError::Other(m),
+    }
+}
+
+impl iface_categories::Guest for crate::Component {
+    fn get_categories(params: iface_categories::GetCategoriesParams) -> Result<iface_categories::GetCategoriesResponse, iface_categories::GetCategoriesError> {
+        let json = iface_categories__get_categories_params__to_json(&params);
+        match dispatch(&OP_CATEGORIES_GET_CATEGORIES, json).and_then(iface_categories__get_categories__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_categories__get_categories__err(e)),
+        }
+    }
+    fn get_a_category(params: iface_categories::GetACategoryParams) -> Result<iface_categories::CategoryObject, iface_categories::GetACategoryError> {
         let json = iface_categories__get_a_category_params__to_json(&params);
-        dispatch(&OP_CATEGORIES_GET_A_CATEGORY, json)
+        match dispatch(&OP_CATEGORIES_GET_A_CATEGORY, json).and_then(iface_categories__get_a_category__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_categories__get_a_category__err(e)),
+        }
     }
 }
 use crate::exports::autostamp::spotify::playlists as iface_playlists;
@@ -1130,10 +3719,10 @@ const OP_PLAYLISTS_GET_A_CATEGORIES_PLAYLISTS: OpSpec = OpSpec {
     method: "GET",
     path_template: "/browse/categories/{category_id}/playlists",
     fields: &[
-        FieldSpec { snake: "category_id", location: FieldLocation::Path },
-        FieldSpec { snake: "country", location: FieldLocation::Query },
-        FieldSpec { snake: "limit", location: FieldLocation::Query },
-        FieldSpec { snake: "offset", location: FieldLocation::Query },
+        FieldSpec { snake: "category_id", wire: "category_id", location: FieldLocation::Path },
+        FieldSpec { snake: "country", wire: "country", location: FieldLocation::Query },
+        FieldSpec { snake: "limit", wire: "limit", location: FieldLocation::Query },
+        FieldSpec { snake: "offset", wire: "offset", location: FieldLocation::Query },
     ],
     auth: &[
         AuthApply { secret_key: "oauth_2_0", kind: AuthKind::Bearer },
@@ -1144,11 +3733,11 @@ const OP_PLAYLISTS_GET_FEATURED_PLAYLISTS: OpSpec = OpSpec {
     method: "GET",
     path_template: "/browse/featured-playlists",
     fields: &[
-        FieldSpec { snake: "country", location: FieldLocation::Query },
-        FieldSpec { snake: "locale", location: FieldLocation::Query },
-        FieldSpec { snake: "timestamp", location: FieldLocation::Query },
-        FieldSpec { snake: "limit", location: FieldLocation::Query },
-        FieldSpec { snake: "offset", location: FieldLocation::Query },
+        FieldSpec { snake: "country", wire: "country", location: FieldLocation::Query },
+        FieldSpec { snake: "locale", wire: "locale", location: FieldLocation::Query },
+        FieldSpec { snake: "timestamp", wire: "timestamp", location: FieldLocation::Query },
+        FieldSpec { snake: "limit", wire: "limit", location: FieldLocation::Query },
+        FieldSpec { snake: "offset", wire: "offset", location: FieldLocation::Query },
     ],
     auth: &[
         AuthApply { secret_key: "oauth_2_0", kind: AuthKind::Bearer },
@@ -1159,8 +3748,8 @@ const OP_PLAYLISTS_GET_A_LIST_OF_CURRENT_USERS_PLAYLISTS: OpSpec = OpSpec {
     method: "GET",
     path_template: "/me/playlists",
     fields: &[
-        FieldSpec { snake: "limit", location: FieldLocation::Query },
-        FieldSpec { snake: "offset", location: FieldLocation::Query },
+        FieldSpec { snake: "limit", wire: "limit", location: FieldLocation::Query },
+        FieldSpec { snake: "offset", wire: "offset", location: FieldLocation::Query },
     ],
     auth: &[
         AuthApply { secret_key: "oauth_2_0", kind: AuthKind::Bearer },
@@ -1171,10 +3760,10 @@ const OP_PLAYLISTS_GET_PLAYLIST: OpSpec = OpSpec {
     method: "GET",
     path_template: "/playlists/{playlist_id}",
     fields: &[
-        FieldSpec { snake: "playlist_id", location: FieldLocation::Path },
-        FieldSpec { snake: "market", location: FieldLocation::Query },
-        FieldSpec { snake: "fields", location: FieldLocation::Query },
-        FieldSpec { snake: "additional_types", location: FieldLocation::Query },
+        FieldSpec { snake: "playlist_id", wire: "playlist_id", location: FieldLocation::Path },
+        FieldSpec { snake: "market", wire: "market", location: FieldLocation::Query },
+        FieldSpec { snake: "fields", wire: "fields", location: FieldLocation::Query },
+        FieldSpec { snake: "additional_types", wire: "additional_types", location: FieldLocation::Query },
     ],
     auth: &[
         AuthApply { secret_key: "oauth_2_0", kind: AuthKind::Bearer },
@@ -1185,11 +3774,11 @@ const OP_PLAYLISTS_CHANGE_PLAYLIST_DETAILS: OpSpec = OpSpec {
     method: "PUT",
     path_template: "/playlists/{playlist_id}",
     fields: &[
-        FieldSpec { snake: "playlist_id", location: FieldLocation::Path },
-        FieldSpec { snake: "collaborative", location: FieldLocation::Body },
-        FieldSpec { snake: "description", location: FieldLocation::Body },
-        FieldSpec { snake: "name", location: FieldLocation::Body },
-        FieldSpec { snake: "public", location: FieldLocation::Body },
+        FieldSpec { snake: "playlist_id", wire: "playlist_id", location: FieldLocation::Path },
+        FieldSpec { snake: "collaborative", wire: "collaborative", location: FieldLocation::Body },
+        FieldSpec { snake: "description", wire: "description", location: FieldLocation::Body },
+        FieldSpec { snake: "name", wire: "name", location: FieldLocation::Body },
+        FieldSpec { snake: "public", wire: "public", location: FieldLocation::Body },
     ],
     auth: &[
         AuthApply { secret_key: "oauth_2_0", kind: AuthKind::Bearer },
@@ -1200,7 +3789,7 @@ const OP_PLAYLISTS_GET_PLAYLIST_COVER: OpSpec = OpSpec {
     method: "GET",
     path_template: "/playlists/{playlist_id}/images",
     fields: &[
-        FieldSpec { snake: "playlist_id", location: FieldLocation::Path },
+        FieldSpec { snake: "playlist_id", wire: "playlist_id", location: FieldLocation::Path },
     ],
     auth: &[
         AuthApply { secret_key: "oauth_2_0", kind: AuthKind::Bearer },
@@ -1211,7 +3800,8 @@ const OP_PLAYLISTS_UPLOAD_CUSTOM_PLAYLIST_COVER: OpSpec = OpSpec {
     method: "PUT",
     path_template: "/playlists/{playlist_id}/images",
     fields: &[
-        FieldSpec { snake: "playlist_id", location: FieldLocation::Path },
+        FieldSpec { snake: "playlist_id", wire: "playlist_id", location: FieldLocation::Path },
+        FieldSpec { snake: "body", wire: "body", location: FieldLocation::Body },
     ],
     auth: &[
         AuthApply { secret_key: "oauth_2_0", kind: AuthKind::Bearer },
@@ -1222,12 +3812,12 @@ const OP_PLAYLISTS_GET_PLAYLISTS_TRACKS: OpSpec = OpSpec {
     method: "GET",
     path_template: "/playlists/{playlist_id}/tracks",
     fields: &[
-        FieldSpec { snake: "playlist_id", location: FieldLocation::Path },
-        FieldSpec { snake: "market", location: FieldLocation::Query },
-        FieldSpec { snake: "fields", location: FieldLocation::Query },
-        FieldSpec { snake: "limit", location: FieldLocation::Query },
-        FieldSpec { snake: "offset", location: FieldLocation::Query },
-        FieldSpec { snake: "additional_types", location: FieldLocation::Query },
+        FieldSpec { snake: "playlist_id", wire: "playlist_id", location: FieldLocation::Path },
+        FieldSpec { snake: "market", wire: "market", location: FieldLocation::Query },
+        FieldSpec { snake: "fields", wire: "fields", location: FieldLocation::Query },
+        FieldSpec { snake: "limit", wire: "limit", location: FieldLocation::Query },
+        FieldSpec { snake: "offset", wire: "offset", location: FieldLocation::Query },
+        FieldSpec { snake: "additional_types", wire: "additional_types", location: FieldLocation::Query },
     ],
     auth: &[
         AuthApply { secret_key: "oauth_2_0", kind: AuthKind::Bearer },
@@ -1238,9 +3828,11 @@ const OP_PLAYLISTS_ADD_TRACKS_TO_PLAYLIST: OpSpec = OpSpec {
     method: "POST",
     path_template: "/playlists/{playlist_id}/tracks",
     fields: &[
-        FieldSpec { snake: "playlist_id", location: FieldLocation::Path },
-        FieldSpec { snake: "position", location: FieldLocation::Query },
-        FieldSpec { snake: "uris", location: FieldLocation::Query },
+        FieldSpec { snake: "playlist_id", wire: "playlist_id", location: FieldLocation::Path },
+        FieldSpec { snake: "position", wire: "position", location: FieldLocation::Query },
+        FieldSpec { snake: "uris", wire: "uris", location: FieldLocation::Query },
+        FieldSpec { snake: "position_v2", wire: "position", location: FieldLocation::Body },
+        FieldSpec { snake: "uris_v2", wire: "uris", location: FieldLocation::Body },
     ],
     auth: &[
         AuthApply { secret_key: "oauth_2_0", kind: AuthKind::Bearer },
@@ -1251,12 +3843,13 @@ const OP_PLAYLISTS_REORDER_OR_REPLACE_PLAYLISTS_TRACKS: OpSpec = OpSpec {
     method: "PUT",
     path_template: "/playlists/{playlist_id}/tracks",
     fields: &[
-        FieldSpec { snake: "playlist_id", location: FieldLocation::Path },
-        FieldSpec { snake: "uris", location: FieldLocation::Query },
-        FieldSpec { snake: "insert_before", location: FieldLocation::Body },
-        FieldSpec { snake: "range_length", location: FieldLocation::Body },
-        FieldSpec { snake: "range_start", location: FieldLocation::Body },
-        FieldSpec { snake: "snapshot_id", location: FieldLocation::Body },
+        FieldSpec { snake: "playlist_id", wire: "playlist_id", location: FieldLocation::Path },
+        FieldSpec { snake: "uris", wire: "uris", location: FieldLocation::Query },
+        FieldSpec { snake: "insert_before", wire: "insert_before", location: FieldLocation::Body },
+        FieldSpec { snake: "range_length", wire: "range_length", location: FieldLocation::Body },
+        FieldSpec { snake: "range_start", wire: "range_start", location: FieldLocation::Body },
+        FieldSpec { snake: "snapshot_id", wire: "snapshot_id", location: FieldLocation::Body },
+        FieldSpec { snake: "uris_v2", wire: "uris", location: FieldLocation::Body },
     ],
     auth: &[
         AuthApply { secret_key: "oauth_2_0", kind: AuthKind::Bearer },
@@ -1267,9 +3860,9 @@ const OP_PLAYLISTS_REMOVE_TRACKS_PLAYLIST: OpSpec = OpSpec {
     method: "DELETE",
     path_template: "/playlists/{playlist_id}/tracks",
     fields: &[
-        FieldSpec { snake: "playlist_id", location: FieldLocation::Path },
-        FieldSpec { snake: "snapshot_id", location: FieldLocation::Body },
-        FieldSpec { snake: "tracks", location: FieldLocation::Body },
+        FieldSpec { snake: "playlist_id", wire: "playlist_id", location: FieldLocation::Path },
+        FieldSpec { snake: "snapshot_id", wire: "snapshot_id", location: FieldLocation::Body },
+        FieldSpec { snake: "tracks", wire: "tracks", location: FieldLocation::Body },
     ],
     auth: &[
         AuthApply { secret_key: "oauth_2_0", kind: AuthKind::Bearer },
@@ -1280,9 +3873,9 @@ const OP_PLAYLISTS_GET_LIST_USERS_PLAYLISTS: OpSpec = OpSpec {
     method: "GET",
     path_template: "/users/{user_id}/playlists",
     fields: &[
-        FieldSpec { snake: "user_id", location: FieldLocation::Path },
-        FieldSpec { snake: "limit", location: FieldLocation::Query },
-        FieldSpec { snake: "offset", location: FieldLocation::Query },
+        FieldSpec { snake: "user_id", wire: "user_id", location: FieldLocation::Path },
+        FieldSpec { snake: "limit", wire: "limit", location: FieldLocation::Query },
+        FieldSpec { snake: "offset", wire: "offset", location: FieldLocation::Query },
     ],
     auth: &[
         AuthApply { secret_key: "oauth_2_0", kind: AuthKind::Bearer },
@@ -1293,20 +3886,115 @@ const OP_PLAYLISTS_CREATE_PLAYLIST: OpSpec = OpSpec {
     method: "POST",
     path_template: "/users/{user_id}/playlists",
     fields: &[
-        FieldSpec { snake: "user_id", location: FieldLocation::Path },
-        FieldSpec { snake: "collaborative", location: FieldLocation::Body },
-        FieldSpec { snake: "description", location: FieldLocation::Body },
-        FieldSpec { snake: "name", location: FieldLocation::Body },
-        FieldSpec { snake: "public", location: FieldLocation::Body },
+        FieldSpec { snake: "user_id", wire: "user_id", location: FieldLocation::Path },
+        FieldSpec { snake: "collaborative", wire: "collaborative", location: FieldLocation::Body },
+        FieldSpec { snake: "description", wire: "description", location: FieldLocation::Body },
+        FieldSpec { snake: "name", wire: "name", location: FieldLocation::Body },
+        FieldSpec { snake: "public", wire: "public", location: FieldLocation::Body },
     ],
     auth: &[
         AuthApply { secret_key: "oauth_2_0", kind: AuthKind::Bearer },
     ],
 };
 
+fn iface_playlists__playlist_owner_object_type_op_enum__to_str(e: &iface_playlists::PlaylistOwnerObjectTypeOpEnum) -> &'static str {
+    match e {
+        iface_playlists::PlaylistOwnerObjectTypeOpEnum::User => "user",
+    }
+}
+
+fn iface_playlists__paging_featured_playlist_object__to_json(p: &iface_playlists::PagingFeaturedPlaylistObject) -> Value {
+    let mut m = Map::new();
+    m.insert("message".into(), match (&p.message) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("playlists".into(), match (&p.playlists) { Some(v) => iface_playlists__paging_playlist_object__to_json(v), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_playlists__paging_playlist_object__to_json(p: &iface_playlists::PagingPlaylistObject) -> Value {
+    let mut m = Map::new();
+    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_playlists__playlist_object__to_json(p: &iface_playlists::PlaylistObject) -> Value {
+    let mut m = Map::new();
+    m.insert("collaborative".into(), match (&p.collaborative) { Some(v) => Value::Bool(*(v)), None => Value::Null });
+    m.insert("description".into(), match (&p.description) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("external_urls".into(), match (&p.external_urls) { Some(v) => iface_playlists__external_url_object__to_json(v), None => Value::Null });
+    m.insert("followers".into(), match (&p.followers) { Some(v) => iface_playlists__followers_object__to_json(v), None => Value::Null });
+    m.insert("href".into(), match (&p.href) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("id".into(), match (&p.id) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("images".into(), match (&p.images) { Some(v) => Value::Array((v).iter().map(|v| iface_playlists__image_object__to_json(v)).collect()), None => Value::Null });
+    m.insert("name".into(), match (&p.name) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("owner".into(), match (&p.owner) { Some(v) => iface_playlists__playlist_owner_object__to_json(v), None => Value::Null });
+    m.insert("public".into(), match (&p.public) { Some(v) => Value::Bool(*(v)), None => Value::Null });
+    m.insert("snapshot_id".into(), match (&p.snapshot_id) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("tracks".into(), match (&p.tracks) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("type".into(), match (&p.type_op) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("uri".into(), match (&p.uri) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_playlists__external_url_object__to_json(p: &iface_playlists::ExternalUrlObject) -> Value {
+    let mut m = Map::new();
+    m.insert("spotify".into(), match (&p.spotify) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_playlists__followers_object__to_json(p: &iface_playlists::FollowersObject) -> Value {
+    let mut m = Map::new();
+    m.insert("href".into(), match (&p.href) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("total".into(), match (&p.total) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_playlists__image_object__to_json(p: &iface_playlists::ImageObject) -> Value {
+    let mut m = Map::new();
+    m.insert("height".into(), Value::Number(serde_json::Number::from(*(&p.height))));
+    m.insert("url".into(), Value::String((&p.url).clone()));
+    m.insert("width".into(), Value::Number(serde_json::Number::from(*(&p.width))));
+    Value::Object(m)
+}
+
+fn iface_playlists__playlist_owner_object__to_json(p: &iface_playlists::PlaylistOwnerObject) -> Value {
+    let mut m = Map::new();
+    m.insert("external_urls".into(), match (&p.external_urls) { Some(v) => iface_playlists__external_url_object__to_json(v), None => Value::Null });
+    m.insert("followers".into(), match (&p.followers) { Some(v) => iface_playlists__followers_object__to_json(v), None => Value::Null });
+    m.insert("href".into(), match (&p.href) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("id".into(), match (&p.id) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("type".into(), match (&p.type_op) { Some(v) => Value::String(iface_playlists__playlist_owner_object_type_op_enum__to_str(v).into()), None => Value::Null });
+    m.insert("uri".into(), match (&p.uri) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("display_name".into(), match (&p.display_name) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_playlists__paging_playlist_track_object__to_json(p: &iface_playlists::PagingPlaylistTrackObject) -> Value {
+    let mut m = Map::new();
+    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_playlists__add_tracks_to_playlist_response__to_json(p: &iface_playlists::AddTracksToPlaylistResponse) -> Value {
+    let mut m = Map::new();
+    m.insert("snapshot_id".into(), match (&p.snapshot_id) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_playlists__reorder_or_replace_playlists_tracks_response__to_json(p: &iface_playlists::ReorderOrReplacePlaylistsTracksResponse) -> Value {
+    let mut m = Map::new();
+    m.insert("snapshot_id".into(), match (&p.snapshot_id) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
 fn iface_playlists__remove_tracks_playlist_body_tracks_item__to_json(p: &iface_playlists::RemoveTracksPlaylistBodyTracksItem) -> Value {
     let mut m = Map::new();
     m.insert("uri".into(), match (&p.uri) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_playlists__remove_tracks_playlist_response__to_json(p: &iface_playlists::RemoveTracksPlaylistResponse) -> Value {
+    let mut m = Map::new();
+    m.insert("snapshot_id".into(), match (&p.snapshot_id) { Some(v) => Value::String((v).clone()), None => Value::Null });
     Value::Object(m)
 }
 
@@ -1364,6 +4052,7 @@ fn iface_playlists__get_playlist_cover_params__to_json(p: &iface_playlists::GetP
 fn iface_playlists__upload_custom_playlist_cover_params__to_json(p: &iface_playlists::UploadCustomPlaylistCoverParams) -> Value {
     let mut m = Map::new();
     m.insert("playlist_id".into(), Value::String((&p.playlist_id).clone()));
+    m.insert("body".into(), match (&p.body) { Some(v) => Value::String((v).clone()), None => Value::Null });
     Value::Object(m)
 }
 
@@ -1383,6 +4072,8 @@ fn iface_playlists__add_tracks_to_playlist_params__to_json(p: &iface_playlists::
     m.insert("playlist_id".into(), Value::String((&p.playlist_id).clone()));
     m.insert("position".into(), match (&p.position) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
     m.insert("uris".into(), match (&p.uris) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("position_v2".into(), match (&p.position_v2) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("uris_v2".into(), match (&p.uris_v2) { Some(v) => Value::Array((v).iter().map(|v| Value::String((v).clone())).collect()), None => Value::Null });
     Value::Object(m)
 }
 
@@ -1394,6 +4085,7 @@ fn iface_playlists__reorder_or_replace_playlists_tracks_params__to_json(p: &ifac
     m.insert("range_length".into(), match (&p.range_length) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
     m.insert("range_start".into(), match (&p.range_start) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
     m.insert("snapshot_id".into(), match (&p.snapshot_id) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("uris_v2".into(), match (&p.uris_v2) { Some(v) => Value::Array((v).iter().map(|v| Value::String((v).clone())).collect()), None => Value::Null });
     Value::Object(m)
 }
 
@@ -1423,58 +4115,489 @@ fn iface_playlists__create_playlist_params__to_json(p: &iface_playlists::CreateP
     Value::Object(m)
 }
 
+fn iface_playlists__paging_featured_playlist_object__from_json(v: &Value) -> Option<iface_playlists::PagingFeaturedPlaylistObject> {
+    let m = v.as_object()?;
+    Some(iface_playlists::PagingFeaturedPlaylistObject {
+        message: m.get("message").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        playlists: m.get("playlists").filter(|v| !v.is_null()).and_then(|v| iface_playlists__paging_playlist_object__from_json(v)),
+    })
+}
+
+fn iface_playlists__paging_playlist_object__from_json(v: &Value) -> Option<iface_playlists::PagingPlaylistObject> {
+    let m = v.as_object()?;
+    Some(iface_playlists::PagingPlaylistObject {
+        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    })
+}
+
+fn iface_playlists__playlist_object__from_json(v: &Value) -> Option<iface_playlists::PlaylistObject> {
+    let m = v.as_object()?;
+    Some(iface_playlists::PlaylistObject {
+        collaborative: m.get("collaborative").filter(|v| !v.is_null()).and_then(|v| (v).as_bool()),
+        description: m.get("description").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        external_urls: m.get("external_urls").filter(|v| !v.is_null()).and_then(|v| iface_playlists__external_url_object__from_json(v)),
+        followers: m.get("followers").filter(|v| !v.is_null()).and_then(|v| iface_playlists__followers_object__from_json(v)),
+        href: m.get("href").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        id: m.get("id").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        images: m.get("images").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| iface_playlists__image_object__from_json(x)).collect())),
+        name: m.get("name").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        owner: m.get("owner").filter(|v| !v.is_null()).and_then(|v| iface_playlists__playlist_owner_object__from_json(v)),
+        public: m.get("public").filter(|v| !v.is_null()).and_then(|v| (v).as_bool()),
+        snapshot_id: m.get("snapshot_id").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        tracks: m.get("tracks").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        type_op: m.get("type").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        uri: m.get("uri").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    })
+}
+
+fn iface_playlists__external_url_object__from_json(v: &Value) -> Option<iface_playlists::ExternalUrlObject> {
+    let m = v.as_object()?;
+    Some(iface_playlists::ExternalUrlObject {
+        spotify: m.get("spotify").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    })
+}
+
+fn iface_playlists__followers_object__from_json(v: &Value) -> Option<iface_playlists::FollowersObject> {
+    let m = v.as_object()?;
+    Some(iface_playlists::FollowersObject {
+        href: m.get("href").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        total: m.get("total").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+    })
+}
+
+fn iface_playlists__image_object__from_json(v: &Value) -> Option<iface_playlists::ImageObject> {
+    let m = v.as_object()?;
+    Some(iface_playlists::ImageObject {
+        height: m.get("height").and_then(|v| (v).as_i64().map(|n| n as i32)).unwrap_or_default(),
+        url: m.get("url").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        width: m.get("width").and_then(|v| (v).as_i64().map(|n| n as i32)).unwrap_or_default(),
+    })
+}
+
+fn iface_playlists__playlist_owner_object__from_json(v: &Value) -> Option<iface_playlists::PlaylistOwnerObject> {
+    let m = v.as_object()?;
+    Some(iface_playlists::PlaylistOwnerObject {
+        external_urls: m.get("external_urls").filter(|v| !v.is_null()).and_then(|v| iface_playlists__external_url_object__from_json(v)),
+        followers: m.get("followers").filter(|v| !v.is_null()).and_then(|v| iface_playlists__followers_object__from_json(v)),
+        href: m.get("href").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        id: m.get("id").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        type_op: m.get("type").filter(|v| !v.is_null()).and_then(|v| (v).as_str().and_then(iface_playlists__playlist_owner_object_type_op_enum__from_str)),
+        uri: m.get("uri").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        display_name: m.get("display_name").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    })
+}
+
+fn iface_playlists__paging_playlist_track_object__from_json(v: &Value) -> Option<iface_playlists::PagingPlaylistTrackObject> {
+    let m = v.as_object()?;
+    Some(iface_playlists::PagingPlaylistTrackObject {
+        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    })
+}
+
+fn iface_playlists__add_tracks_to_playlist_response__from_json(v: &Value) -> Option<iface_playlists::AddTracksToPlaylistResponse> {
+    let m = v.as_object()?;
+    Some(iface_playlists::AddTracksToPlaylistResponse {
+        snapshot_id: m.get("snapshot_id").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    })
+}
+
+fn iface_playlists__reorder_or_replace_playlists_tracks_response__from_json(v: &Value) -> Option<iface_playlists::ReorderOrReplacePlaylistsTracksResponse> {
+    let m = v.as_object()?;
+    Some(iface_playlists::ReorderOrReplacePlaylistsTracksResponse {
+        snapshot_id: m.get("snapshot_id").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    })
+}
+
+fn iface_playlists__remove_tracks_playlist_response__from_json(v: &Value) -> Option<iface_playlists::RemoveTracksPlaylistResponse> {
+    let m = v.as_object()?;
+    Some(iface_playlists::RemoveTracksPlaylistResponse {
+        snapshot_id: m.get("snapshot_id").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    })
+}
+
+fn iface_playlists__playlist_owner_object_type_op_enum__from_str(s: &str) -> Option<iface_playlists::PlaylistOwnerObjectTypeOpEnum> {
+    match s {
+        "user" => Some(iface_playlists::PlaylistOwnerObjectTypeOpEnum::User),
+        _ => None,
+    }
+}
+
+fn iface_playlists__get_a_categories_playlists__ok(body: String) -> Result<iface_playlists::PagingFeaturedPlaylistObject, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match iface_playlists__paging_featured_playlist_object__from_json(&v) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_playlists__get_a_categories_playlists__err(e: crate::runtime::DispatchError) -> iface_playlists::GetACategoriesPlaylistsError {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => match status {
+            401u16 => iface_playlists::GetACategoriesPlaylistsError::Unauthorized(body),
+            403u16 => iface_playlists::GetACategoriesPlaylistsError::Forbidden(body),
+            429u16 => iface_playlists::GetACategoriesPlaylistsError::TooManyRequests(body),
+            _ => iface_playlists::GetACategoriesPlaylistsError::Other(body),
+        },
+        crate::runtime::DispatchError::Transport(m) => iface_playlists::GetACategoriesPlaylistsError::Other(m),
+    }
+}
+
+fn iface_playlists__get_featured_playlists__ok(body: String) -> Result<iface_playlists::PagingFeaturedPlaylistObject, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match iface_playlists__paging_featured_playlist_object__from_json(&v) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_playlists__get_featured_playlists__err(e: crate::runtime::DispatchError) -> iface_playlists::GetFeaturedPlaylistsError {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => match status {
+            401u16 => iface_playlists::GetFeaturedPlaylistsError::Unauthorized(body),
+            403u16 => iface_playlists::GetFeaturedPlaylistsError::Forbidden(body),
+            429u16 => iface_playlists::GetFeaturedPlaylistsError::TooManyRequests(body),
+            _ => iface_playlists::GetFeaturedPlaylistsError::Other(body),
+        },
+        crate::runtime::DispatchError::Transport(m) => iface_playlists::GetFeaturedPlaylistsError::Other(m),
+    }
+}
+
+fn iface_playlists__get_a_list_of_current_users_playlists__ok(body: String) -> Result<iface_playlists::PagingPlaylistObject, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match iface_playlists__paging_playlist_object__from_json(&v) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_playlists__get_a_list_of_current_users_playlists__err(e: crate::runtime::DispatchError) -> iface_playlists::GetAListOfCurrentUsersPlaylistsError {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => match status {
+            401u16 => iface_playlists::GetAListOfCurrentUsersPlaylistsError::Unauthorized(body),
+            403u16 => iface_playlists::GetAListOfCurrentUsersPlaylistsError::Forbidden(body),
+            429u16 => iface_playlists::GetAListOfCurrentUsersPlaylistsError::TooManyRequests(body),
+            _ => iface_playlists::GetAListOfCurrentUsersPlaylistsError::Other(body),
+        },
+        crate::runtime::DispatchError::Transport(m) => iface_playlists::GetAListOfCurrentUsersPlaylistsError::Other(m),
+    }
+}
+
+fn iface_playlists__get_playlist__ok(body: String) -> Result<iface_playlists::PlaylistObject, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match iface_playlists__playlist_object__from_json(&v) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_playlists__get_playlist__err(e: crate::runtime::DispatchError) -> iface_playlists::GetPlaylistError {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => match status {
+            401u16 => iface_playlists::GetPlaylistError::Unauthorized(body),
+            403u16 => iface_playlists::GetPlaylistError::Forbidden(body),
+            429u16 => iface_playlists::GetPlaylistError::TooManyRequests(body),
+            _ => iface_playlists::GetPlaylistError::Other(body),
+        },
+        crate::runtime::DispatchError::Transport(m) => iface_playlists::GetPlaylistError::Other(m),
+    }
+}
+
+fn iface_playlists__change_playlist_details__ok(body: String) -> Result<String, crate::runtime::DispatchError> {
+    Ok(body)
+}
+
+fn iface_playlists__change_playlist_details__err(e: crate::runtime::DispatchError) -> iface_playlists::ChangePlaylistDetailsError {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => match status {
+            401u16 => iface_playlists::ChangePlaylistDetailsError::Unauthorized(body),
+            403u16 => iface_playlists::ChangePlaylistDetailsError::Forbidden(body),
+            429u16 => iface_playlists::ChangePlaylistDetailsError::TooManyRequests(body),
+            _ => iface_playlists::ChangePlaylistDetailsError::Other(body),
+        },
+        crate::runtime::DispatchError::Transport(m) => iface_playlists::ChangePlaylistDetailsError::Other(m),
+    }
+}
+
+fn iface_playlists__get_playlist_cover__ok(body: String) -> Result<Vec<iface_playlists::ImageObject>, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match (&v).as_array().map(|a| a.iter().filter_map(|x| iface_playlists__image_object__from_json(x)).collect()) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_playlists__get_playlist_cover__err(e: crate::runtime::DispatchError) -> iface_playlists::GetPlaylistCoverError {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => match status {
+            401u16 => iface_playlists::GetPlaylistCoverError::Unauthorized(body),
+            403u16 => iface_playlists::GetPlaylistCoverError::Forbidden(body),
+            429u16 => iface_playlists::GetPlaylistCoverError::TooManyRequests(body),
+            _ => iface_playlists::GetPlaylistCoverError::Other(body),
+        },
+        crate::runtime::DispatchError::Transport(m) => iface_playlists::GetPlaylistCoverError::Other(m),
+    }
+}
+
+fn iface_playlists__upload_custom_playlist_cover__ok(body: String) -> Result<String, crate::runtime::DispatchError> {
+    Ok(body)
+}
+
+fn iface_playlists__upload_custom_playlist_cover__err(e: crate::runtime::DispatchError) -> iface_playlists::UploadCustomPlaylistCoverError {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => match status {
+            401u16 => iface_playlists::UploadCustomPlaylistCoverError::Unauthorized(body),
+            403u16 => iface_playlists::UploadCustomPlaylistCoverError::Forbidden(body),
+            429u16 => iface_playlists::UploadCustomPlaylistCoverError::TooManyRequests(body),
+            _ => iface_playlists::UploadCustomPlaylistCoverError::Other(body),
+        },
+        crate::runtime::DispatchError::Transport(m) => iface_playlists::UploadCustomPlaylistCoverError::Other(m),
+    }
+}
+
+fn iface_playlists__get_playlists_tracks__ok(body: String) -> Result<iface_playlists::PagingPlaylistTrackObject, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match iface_playlists__paging_playlist_track_object__from_json(&v) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_playlists__get_playlists_tracks__err(e: crate::runtime::DispatchError) -> iface_playlists::GetPlaylistsTracksError {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => match status {
+            401u16 => iface_playlists::GetPlaylistsTracksError::Unauthorized(body),
+            403u16 => iface_playlists::GetPlaylistsTracksError::Forbidden(body),
+            429u16 => iface_playlists::GetPlaylistsTracksError::TooManyRequests(body),
+            _ => iface_playlists::GetPlaylistsTracksError::Other(body),
+        },
+        crate::runtime::DispatchError::Transport(m) => iface_playlists::GetPlaylistsTracksError::Other(m),
+    }
+}
+
+fn iface_playlists__add_tracks_to_playlist__ok(body: String) -> Result<iface_playlists::AddTracksToPlaylistResponse, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match iface_playlists__add_tracks_to_playlist_response__from_json(&v) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_playlists__add_tracks_to_playlist__err(e: crate::runtime::DispatchError) -> iface_playlists::AddTracksToPlaylistError {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => match status {
+            401u16 => iface_playlists::AddTracksToPlaylistError::Unauthorized(body),
+            403u16 => iface_playlists::AddTracksToPlaylistError::Forbidden(body),
+            429u16 => iface_playlists::AddTracksToPlaylistError::TooManyRequests(body),
+            _ => iface_playlists::AddTracksToPlaylistError::Other(body),
+        },
+        crate::runtime::DispatchError::Transport(m) => iface_playlists::AddTracksToPlaylistError::Other(m),
+    }
+}
+
+fn iface_playlists__reorder_or_replace_playlists_tracks__ok(body: String) -> Result<iface_playlists::ReorderOrReplacePlaylistsTracksResponse, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match iface_playlists__reorder_or_replace_playlists_tracks_response__from_json(&v) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_playlists__reorder_or_replace_playlists_tracks__err(e: crate::runtime::DispatchError) -> iface_playlists::ReorderOrReplacePlaylistsTracksError {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => match status {
+            401u16 => iface_playlists::ReorderOrReplacePlaylistsTracksError::Unauthorized(body),
+            403u16 => iface_playlists::ReorderOrReplacePlaylistsTracksError::Forbidden(body),
+            429u16 => iface_playlists::ReorderOrReplacePlaylistsTracksError::TooManyRequests(body),
+            _ => iface_playlists::ReorderOrReplacePlaylistsTracksError::Other(body),
+        },
+        crate::runtime::DispatchError::Transport(m) => iface_playlists::ReorderOrReplacePlaylistsTracksError::Other(m),
+    }
+}
+
+fn iface_playlists__remove_tracks_playlist__ok(body: String) -> Result<iface_playlists::RemoveTracksPlaylistResponse, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match iface_playlists__remove_tracks_playlist_response__from_json(&v) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_playlists__remove_tracks_playlist__err(e: crate::runtime::DispatchError) -> iface_playlists::RemoveTracksPlaylistError {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => match status {
+            401u16 => iface_playlists::RemoveTracksPlaylistError::Unauthorized(body),
+            403u16 => iface_playlists::RemoveTracksPlaylistError::Forbidden(body),
+            429u16 => iface_playlists::RemoveTracksPlaylistError::TooManyRequests(body),
+            _ => iface_playlists::RemoveTracksPlaylistError::Other(body),
+        },
+        crate::runtime::DispatchError::Transport(m) => iface_playlists::RemoveTracksPlaylistError::Other(m),
+    }
+}
+
+fn iface_playlists__get_list_users_playlists__ok(body: String) -> Result<iface_playlists::PagingPlaylistObject, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match iface_playlists__paging_playlist_object__from_json(&v) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_playlists__get_list_users_playlists__err(e: crate::runtime::DispatchError) -> iface_playlists::GetListUsersPlaylistsError {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => match status {
+            401u16 => iface_playlists::GetListUsersPlaylistsError::Unauthorized(body),
+            403u16 => iface_playlists::GetListUsersPlaylistsError::Forbidden(body),
+            429u16 => iface_playlists::GetListUsersPlaylistsError::TooManyRequests(body),
+            _ => iface_playlists::GetListUsersPlaylistsError::Other(body),
+        },
+        crate::runtime::DispatchError::Transport(m) => iface_playlists::GetListUsersPlaylistsError::Other(m),
+    }
+}
+
+fn iface_playlists__create_playlist__ok(body: String) -> Result<iface_playlists::PlaylistObject, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match iface_playlists__playlist_object__from_json(&v) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_playlists__create_playlist__err(e: crate::runtime::DispatchError) -> iface_playlists::CreatePlaylistError {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => match status {
+            401u16 => iface_playlists::CreatePlaylistError::Unauthorized(body),
+            403u16 => iface_playlists::CreatePlaylistError::Forbidden(body),
+            429u16 => iface_playlists::CreatePlaylistError::TooManyRequests(body),
+            _ => iface_playlists::CreatePlaylistError::Other(body),
+        },
+        crate::runtime::DispatchError::Transport(m) => iface_playlists::CreatePlaylistError::Other(m),
+    }
+}
+
 impl iface_playlists::Guest for crate::Component {
-    fn get_a_categories_playlists(params: iface_playlists::GetACategoriesPlaylistsParams) -> Result<String, String> {
+    fn get_a_categories_playlists(params: iface_playlists::GetACategoriesPlaylistsParams) -> Result<iface_playlists::PagingFeaturedPlaylistObject, iface_playlists::GetACategoriesPlaylistsError> {
         let json = iface_playlists__get_a_categories_playlists_params__to_json(&params);
-        dispatch(&OP_PLAYLISTS_GET_A_CATEGORIES_PLAYLISTS, json)
+        match dispatch(&OP_PLAYLISTS_GET_A_CATEGORIES_PLAYLISTS, json).and_then(iface_playlists__get_a_categories_playlists__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_playlists__get_a_categories_playlists__err(e)),
+        }
     }
-    fn get_featured_playlists(params: iface_playlists::GetFeaturedPlaylistsParams) -> Result<String, String> {
+    fn get_featured_playlists(params: iface_playlists::GetFeaturedPlaylistsParams) -> Result<iface_playlists::PagingFeaturedPlaylistObject, iface_playlists::GetFeaturedPlaylistsError> {
         let json = iface_playlists__get_featured_playlists_params__to_json(&params);
-        dispatch(&OP_PLAYLISTS_GET_FEATURED_PLAYLISTS, json)
+        match dispatch(&OP_PLAYLISTS_GET_FEATURED_PLAYLISTS, json).and_then(iface_playlists__get_featured_playlists__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_playlists__get_featured_playlists__err(e)),
+        }
     }
-    fn get_a_list_of_current_users_playlists(params: iface_playlists::GetAListOfCurrentUsersPlaylistsParams) -> Result<String, String> {
+    fn get_a_list_of_current_users_playlists(params: iface_playlists::GetAListOfCurrentUsersPlaylistsParams) -> Result<iface_playlists::PagingPlaylistObject, iface_playlists::GetAListOfCurrentUsersPlaylistsError> {
         let json = iface_playlists__get_a_list_of_current_users_playlists_params__to_json(&params);
-        dispatch(&OP_PLAYLISTS_GET_A_LIST_OF_CURRENT_USERS_PLAYLISTS, json)
+        match dispatch(&OP_PLAYLISTS_GET_A_LIST_OF_CURRENT_USERS_PLAYLISTS, json).and_then(iface_playlists__get_a_list_of_current_users_playlists__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_playlists__get_a_list_of_current_users_playlists__err(e)),
+        }
     }
-    fn get_playlist(params: iface_playlists::GetPlaylistParams) -> Result<String, String> {
+    fn get_playlist(params: iface_playlists::GetPlaylistParams) -> Result<iface_playlists::PlaylistObject, iface_playlists::GetPlaylistError> {
         let json = iface_playlists__get_playlist_params__to_json(&params);
-        dispatch(&OP_PLAYLISTS_GET_PLAYLIST, json)
+        match dispatch(&OP_PLAYLISTS_GET_PLAYLIST, json).and_then(iface_playlists__get_playlist__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_playlists__get_playlist__err(e)),
+        }
     }
-    fn change_playlist_details(params: iface_playlists::ChangePlaylistDetailsParams) -> Result<String, String> {
+    fn change_playlist_details(params: iface_playlists::ChangePlaylistDetailsParams) -> Result<String, iface_playlists::ChangePlaylistDetailsError> {
         let json = iface_playlists__change_playlist_details_params__to_json(&params);
-        dispatch(&OP_PLAYLISTS_CHANGE_PLAYLIST_DETAILS, json)
+        match dispatch(&OP_PLAYLISTS_CHANGE_PLAYLIST_DETAILS, json).and_then(iface_playlists__change_playlist_details__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_playlists__change_playlist_details__err(e)),
+        }
     }
-    fn get_playlist_cover(params: iface_playlists::GetPlaylistCoverParams) -> Result<String, String> {
+    fn get_playlist_cover(params: iface_playlists::GetPlaylistCoverParams) -> Result<Vec<iface_playlists::ImageObject>, iface_playlists::GetPlaylistCoverError> {
         let json = iface_playlists__get_playlist_cover_params__to_json(&params);
-        dispatch(&OP_PLAYLISTS_GET_PLAYLIST_COVER, json)
+        match dispatch(&OP_PLAYLISTS_GET_PLAYLIST_COVER, json).and_then(iface_playlists__get_playlist_cover__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_playlists__get_playlist_cover__err(e)),
+        }
     }
-    fn upload_custom_playlist_cover(params: iface_playlists::UploadCustomPlaylistCoverParams) -> Result<String, String> {
+    fn upload_custom_playlist_cover(params: iface_playlists::UploadCustomPlaylistCoverParams) -> Result<String, iface_playlists::UploadCustomPlaylistCoverError> {
         let json = iface_playlists__upload_custom_playlist_cover_params__to_json(&params);
-        dispatch(&OP_PLAYLISTS_UPLOAD_CUSTOM_PLAYLIST_COVER, json)
+        match dispatch(&OP_PLAYLISTS_UPLOAD_CUSTOM_PLAYLIST_COVER, json).and_then(iface_playlists__upload_custom_playlist_cover__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_playlists__upload_custom_playlist_cover__err(e)),
+        }
     }
-    fn get_playlists_tracks(params: iface_playlists::GetPlaylistsTracksParams) -> Result<String, String> {
+    fn get_playlists_tracks(params: iface_playlists::GetPlaylistsTracksParams) -> Result<iface_playlists::PagingPlaylistTrackObject, iface_playlists::GetPlaylistsTracksError> {
         let json = iface_playlists__get_playlists_tracks_params__to_json(&params);
-        dispatch(&OP_PLAYLISTS_GET_PLAYLISTS_TRACKS, json)
+        match dispatch(&OP_PLAYLISTS_GET_PLAYLISTS_TRACKS, json).and_then(iface_playlists__get_playlists_tracks__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_playlists__get_playlists_tracks__err(e)),
+        }
     }
-    fn add_tracks_to_playlist(params: iface_playlists::AddTracksToPlaylistParams) -> Result<String, String> {
+    fn add_tracks_to_playlist(params: iface_playlists::AddTracksToPlaylistParams) -> Result<iface_playlists::AddTracksToPlaylistResponse, iface_playlists::AddTracksToPlaylistError> {
         let json = iface_playlists__add_tracks_to_playlist_params__to_json(&params);
-        dispatch(&OP_PLAYLISTS_ADD_TRACKS_TO_PLAYLIST, json)
+        match dispatch(&OP_PLAYLISTS_ADD_TRACKS_TO_PLAYLIST, json).and_then(iface_playlists__add_tracks_to_playlist__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_playlists__add_tracks_to_playlist__err(e)),
+        }
     }
-    fn reorder_or_replace_playlists_tracks(params: iface_playlists::ReorderOrReplacePlaylistsTracksParams) -> Result<String, String> {
+    fn reorder_or_replace_playlists_tracks(params: iface_playlists::ReorderOrReplacePlaylistsTracksParams) -> Result<iface_playlists::ReorderOrReplacePlaylistsTracksResponse, iface_playlists::ReorderOrReplacePlaylistsTracksError> {
         let json = iface_playlists__reorder_or_replace_playlists_tracks_params__to_json(&params);
-        dispatch(&OP_PLAYLISTS_REORDER_OR_REPLACE_PLAYLISTS_TRACKS, json)
+        match dispatch(&OP_PLAYLISTS_REORDER_OR_REPLACE_PLAYLISTS_TRACKS, json).and_then(iface_playlists__reorder_or_replace_playlists_tracks__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_playlists__reorder_or_replace_playlists_tracks__err(e)),
+        }
     }
-    fn remove_tracks_playlist(params: iface_playlists::RemoveTracksPlaylistParams) -> Result<String, String> {
+    fn remove_tracks_playlist(params: iface_playlists::RemoveTracksPlaylistParams) -> Result<iface_playlists::RemoveTracksPlaylistResponse, iface_playlists::RemoveTracksPlaylistError> {
         let json = iface_playlists__remove_tracks_playlist_params__to_json(&params);
-        dispatch(&OP_PLAYLISTS_REMOVE_TRACKS_PLAYLIST, json)
+        match dispatch(&OP_PLAYLISTS_REMOVE_TRACKS_PLAYLIST, json).and_then(iface_playlists__remove_tracks_playlist__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_playlists__remove_tracks_playlist__err(e)),
+        }
     }
-    fn get_list_users_playlists(params: iface_playlists::GetListUsersPlaylistsParams) -> Result<String, String> {
+    fn get_list_users_playlists(params: iface_playlists::GetListUsersPlaylistsParams) -> Result<iface_playlists::PagingPlaylistObject, iface_playlists::GetListUsersPlaylistsError> {
         let json = iface_playlists__get_list_users_playlists_params__to_json(&params);
-        dispatch(&OP_PLAYLISTS_GET_LIST_USERS_PLAYLISTS, json)
+        match dispatch(&OP_PLAYLISTS_GET_LIST_USERS_PLAYLISTS, json).and_then(iface_playlists__get_list_users_playlists__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_playlists__get_list_users_playlists__err(e)),
+        }
     }
-    fn create_playlist(params: iface_playlists::CreatePlaylistParams) -> Result<String, String> {
+    fn create_playlist(params: iface_playlists::CreatePlaylistParams) -> Result<iface_playlists::PlaylistObject, iface_playlists::CreatePlaylistError> {
         let json = iface_playlists__create_playlist_params__to_json(&params);
-        dispatch(&OP_PLAYLISTS_CREATE_PLAYLIST, json)
+        match dispatch(&OP_PLAYLISTS_CREATE_PLAYLIST, json).and_then(iface_playlists__create_playlist__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_playlists__create_playlist__err(e)),
+        }
     }
 }
 use crate::exports::autostamp::spotify::chapters as iface_chapters;
@@ -1483,8 +4606,8 @@ const OP_CHAPTERS_GET_SEVERAL_CHAPTERS: OpSpec = OpSpec {
     method: "GET",
     path_template: "/chapters",
     fields: &[
-        FieldSpec { snake: "ids", location: FieldLocation::Query },
-        FieldSpec { snake: "market", location: FieldLocation::Query },
+        FieldSpec { snake: "ids", wire: "ids", location: FieldLocation::Query },
+        FieldSpec { snake: "market", wire: "market", location: FieldLocation::Query },
     ],
     auth: &[
         AuthApply { secret_key: "oauth_2_0", kind: AuthKind::Bearer },
@@ -1495,13 +4618,25 @@ const OP_CHAPTERS_GET_A_CHAPTER: OpSpec = OpSpec {
     method: "GET",
     path_template: "/chapters/{id}",
     fields: &[
-        FieldSpec { snake: "id", location: FieldLocation::Path },
-        FieldSpec { snake: "market", location: FieldLocation::Query },
+        FieldSpec { snake: "id", wire: "id", location: FieldLocation::Path },
+        FieldSpec { snake: "market", wire: "market", location: FieldLocation::Query },
     ],
     auth: &[
         AuthApply { secret_key: "oauth_2_0", kind: AuthKind::Bearer },
     ],
 };
+
+fn iface_chapters__get_several_chapters_response__to_json(p: &iface_chapters::GetSeveralChaptersResponse) -> Value {
+    let mut m = Map::new();
+    m.insert("chapters".into(), Value::Array((&p.chapters).iter().map(|v| iface_chapters__chapter_object__to_json(v)).collect()));
+    Value::Object(m)
+}
+
+fn iface_chapters__chapter_object__to_json(p: &iface_chapters::ChapterObject) -> Value {
+    let mut m = Map::new();
+    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
 
 fn iface_chapters__get_several_chapters_params__to_json(p: &iface_chapters::GetSeveralChaptersParams) -> Value {
     let mut m = Map::new();
@@ -1517,14 +4652,80 @@ fn iface_chapters__get_a_chapter_params__to_json(p: &iface_chapters::GetAChapter
     Value::Object(m)
 }
 
-impl iface_chapters::Guest for crate::Component {
-    fn get_several_chapters(params: iface_chapters::GetSeveralChaptersParams) -> Result<String, String> {
-        let json = iface_chapters__get_several_chapters_params__to_json(&params);
-        dispatch(&OP_CHAPTERS_GET_SEVERAL_CHAPTERS, json)
+fn iface_chapters__get_several_chapters_response__from_json(v: &Value) -> Option<iface_chapters::GetSeveralChaptersResponse> {
+    let m = v.as_object()?;
+    Some(iface_chapters::GetSeveralChaptersResponse {
+        chapters: m.get("chapters").and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| iface_chapters__chapter_object__from_json(x)).collect())).unwrap_or_default(),
+    })
+}
+
+fn iface_chapters__chapter_object__from_json(v: &Value) -> Option<iface_chapters::ChapterObject> {
+    let m = v.as_object()?;
+    Some(iface_chapters::ChapterObject {
+        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    })
+}
+
+fn iface_chapters__get_several_chapters__ok(body: String) -> Result<iface_chapters::GetSeveralChaptersResponse, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match iface_chapters__get_several_chapters_response__from_json(&v) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
     }
-    fn get_a_chapter(params: iface_chapters::GetAChapterParams) -> Result<String, String> {
+}
+
+fn iface_chapters__get_several_chapters__err(e: crate::runtime::DispatchError) -> iface_chapters::GetSeveralChaptersError {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => match status {
+            401u16 => iface_chapters::GetSeveralChaptersError::Unauthorized(body),
+            403u16 => iface_chapters::GetSeveralChaptersError::Forbidden(body),
+            429u16 => iface_chapters::GetSeveralChaptersError::TooManyRequests(body),
+            _ => iface_chapters::GetSeveralChaptersError::Other(body),
+        },
+        crate::runtime::DispatchError::Transport(m) => iface_chapters::GetSeveralChaptersError::Other(m),
+    }
+}
+
+fn iface_chapters__get_a_chapter__ok(body: String) -> Result<iface_chapters::ChapterObject, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match iface_chapters__chapter_object__from_json(&v) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_chapters__get_a_chapter__err(e: crate::runtime::DispatchError) -> iface_chapters::GetAChapterError {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => match status {
+            401u16 => iface_chapters::GetAChapterError::Unauthorized(body),
+            403u16 => iface_chapters::GetAChapterError::Forbidden(body),
+            429u16 => iface_chapters::GetAChapterError::TooManyRequests(body),
+            _ => iface_chapters::GetAChapterError::Other(body),
+        },
+        crate::runtime::DispatchError::Transport(m) => iface_chapters::GetAChapterError::Other(m),
+    }
+}
+
+impl iface_chapters::Guest for crate::Component {
+    fn get_several_chapters(params: iface_chapters::GetSeveralChaptersParams) -> Result<iface_chapters::GetSeveralChaptersResponse, iface_chapters::GetSeveralChaptersError> {
+        let json = iface_chapters__get_several_chapters_params__to_json(&params);
+        match dispatch(&OP_CHAPTERS_GET_SEVERAL_CHAPTERS, json).and_then(iface_chapters__get_several_chapters__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_chapters__get_several_chapters__err(e)),
+        }
+    }
+    fn get_a_chapter(params: iface_chapters::GetAChapterParams) -> Result<iface_chapters::ChapterObject, iface_chapters::GetAChapterError> {
         let json = iface_chapters__get_a_chapter_params__to_json(&params);
-        dispatch(&OP_CHAPTERS_GET_A_CHAPTER, json)
+        match dispatch(&OP_CHAPTERS_GET_A_CHAPTER, json).and_then(iface_chapters__get_a_chapter__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_chapters__get_a_chapter__err(e)),
+        }
     }
 }
 use crate::exports::autostamp::spotify::episodes as iface_episodes;
@@ -1533,8 +4734,8 @@ const OP_EPISODES_GET_MULTIPLE_EPISODES: OpSpec = OpSpec {
     method: "GET",
     path_template: "/episodes",
     fields: &[
-        FieldSpec { snake: "ids", location: FieldLocation::Query },
-        FieldSpec { snake: "market", location: FieldLocation::Query },
+        FieldSpec { snake: "ids", wire: "ids", location: FieldLocation::Query },
+        FieldSpec { snake: "market", wire: "market", location: FieldLocation::Query },
     ],
     auth: &[
         AuthApply { secret_key: "oauth_2_0", kind: AuthKind::Bearer },
@@ -1545,8 +4746,8 @@ const OP_EPISODES_GET_AN_EPISODE: OpSpec = OpSpec {
     method: "GET",
     path_template: "/episodes/{id}",
     fields: &[
-        FieldSpec { snake: "id", location: FieldLocation::Path },
-        FieldSpec { snake: "market", location: FieldLocation::Query },
+        FieldSpec { snake: "id", wire: "id", location: FieldLocation::Path },
+        FieldSpec { snake: "market", wire: "market", location: FieldLocation::Query },
     ],
     auth: &[
         AuthApply { secret_key: "oauth_2_0", kind: AuthKind::Bearer },
@@ -1557,9 +4758,9 @@ const OP_EPISODES_GET_USERS_SAVED_EPISODES: OpSpec = OpSpec {
     method: "GET",
     path_template: "/me/episodes",
     fields: &[
-        FieldSpec { snake: "market", location: FieldLocation::Query },
-        FieldSpec { snake: "limit", location: FieldLocation::Query },
-        FieldSpec { snake: "offset", location: FieldLocation::Query },
+        FieldSpec { snake: "market", wire: "market", location: FieldLocation::Query },
+        FieldSpec { snake: "limit", wire: "limit", location: FieldLocation::Query },
+        FieldSpec { snake: "offset", wire: "offset", location: FieldLocation::Query },
     ],
     auth: &[
         AuthApply { secret_key: "oauth_2_0", kind: AuthKind::Bearer },
@@ -1570,7 +4771,8 @@ const OP_EPISODES_SAVE_EPISODES_USER: OpSpec = OpSpec {
     method: "PUT",
     path_template: "/me/episodes",
     fields: &[
-        FieldSpec { snake: "ids", location: FieldLocation::Query },
+        FieldSpec { snake: "ids", wire: "ids", location: FieldLocation::Query },
+        FieldSpec { snake: "ids_v2", wire: "ids", location: FieldLocation::Body },
     ],
     auth: &[
         AuthApply { secret_key: "oauth_2_0", kind: AuthKind::Bearer },
@@ -1581,7 +4783,8 @@ const OP_EPISODES_REMOVE_EPISODES_USER: OpSpec = OpSpec {
     method: "DELETE",
     path_template: "/me/episodes",
     fields: &[
-        FieldSpec { snake: "ids", location: FieldLocation::Query },
+        FieldSpec { snake: "ids", wire: "ids", location: FieldLocation::Query },
+        FieldSpec { snake: "ids_v2", wire: "ids", location: FieldLocation::Body },
     ],
     auth: &[
         AuthApply { secret_key: "oauth_2_0", kind: AuthKind::Bearer },
@@ -1592,12 +4795,30 @@ const OP_EPISODES_CHECK_USERS_SAVED_EPISODES: OpSpec = OpSpec {
     method: "GET",
     path_template: "/me/episodes/contains",
     fields: &[
-        FieldSpec { snake: "ids", location: FieldLocation::Query },
+        FieldSpec { snake: "ids", wire: "ids", location: FieldLocation::Query },
     ],
     auth: &[
         AuthApply { secret_key: "oauth_2_0", kind: AuthKind::Bearer },
     ],
 };
+
+fn iface_episodes__get_multiple_episodes_response__to_json(p: &iface_episodes::GetMultipleEpisodesResponse) -> Value {
+    let mut m = Map::new();
+    m.insert("episodes".into(), Value::Array((&p.episodes).iter().map(|v| iface_episodes__episode_object__to_json(v)).collect()));
+    Value::Object(m)
+}
+
+fn iface_episodes__episode_object__to_json(p: &iface_episodes::EpisodeObject) -> Value {
+    let mut m = Map::new();
+    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_episodes__paging_saved_episode_object__to_json(p: &iface_episodes::PagingSavedEpisodeObject) -> Value {
+    let mut m = Map::new();
+    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
 
 fn iface_episodes__get_multiple_episodes_params__to_json(p: &iface_episodes::GetMultipleEpisodesParams) -> Value {
     let mut m = Map::new();
@@ -1624,12 +4845,14 @@ fn iface_episodes__get_users_saved_episodes_params__to_json(p: &iface_episodes::
 fn iface_episodes__save_episodes_user_params__to_json(p: &iface_episodes::SaveEpisodesUserParams) -> Value {
     let mut m = Map::new();
     m.insert("ids".into(), Value::String((&p.ids).clone()));
+    m.insert("ids_v2".into(), match (&p.ids_v2) { Some(v) => Value::Array((v).iter().map(|v| Value::String((v).clone())).collect()), None => Value::Null });
     Value::Object(m)
 }
 
 fn iface_episodes__remove_episodes_user_params__to_json(p: &iface_episodes::RemoveEpisodesUserParams) -> Value {
     let mut m = Map::new();
     m.insert("ids".into(), Value::String((&p.ids).clone()));
+    m.insert("ids_v2".into(), match (&p.ids_v2) { Some(v) => Value::Array((v).iter().map(|v| Value::String((v).clone())).collect()), None => Value::Null });
     Value::Object(m)
 }
 
@@ -1639,30 +4862,193 @@ fn iface_episodes__check_users_saved_episodes_params__to_json(p: &iface_episodes
     Value::Object(m)
 }
 
+fn iface_episodes__get_multiple_episodes_response__from_json(v: &Value) -> Option<iface_episodes::GetMultipleEpisodesResponse> {
+    let m = v.as_object()?;
+    Some(iface_episodes::GetMultipleEpisodesResponse {
+        episodes: m.get("episodes").and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| iface_episodes__episode_object__from_json(x)).collect())).unwrap_or_default(),
+    })
+}
+
+fn iface_episodes__episode_object__from_json(v: &Value) -> Option<iface_episodes::EpisodeObject> {
+    let m = v.as_object()?;
+    Some(iface_episodes::EpisodeObject {
+        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    })
+}
+
+fn iface_episodes__paging_saved_episode_object__from_json(v: &Value) -> Option<iface_episodes::PagingSavedEpisodeObject> {
+    let m = v.as_object()?;
+    Some(iface_episodes::PagingSavedEpisodeObject {
+        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    })
+}
+
+fn iface_episodes__get_multiple_episodes__ok(body: String) -> Result<iface_episodes::GetMultipleEpisodesResponse, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match iface_episodes__get_multiple_episodes_response__from_json(&v) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_episodes__get_multiple_episodes__err(e: crate::runtime::DispatchError) -> iface_episodes::GetMultipleEpisodesError {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => match status {
+            401u16 => iface_episodes::GetMultipleEpisodesError::Unauthorized(body),
+            403u16 => iface_episodes::GetMultipleEpisodesError::Forbidden(body),
+            429u16 => iface_episodes::GetMultipleEpisodesError::TooManyRequests(body),
+            _ => iface_episodes::GetMultipleEpisodesError::Other(body),
+        },
+        crate::runtime::DispatchError::Transport(m) => iface_episodes::GetMultipleEpisodesError::Other(m),
+    }
+}
+
+fn iface_episodes__get_an_episode__ok(body: String) -> Result<iface_episodes::EpisodeObject, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match iface_episodes__episode_object__from_json(&v) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_episodes__get_an_episode__err(e: crate::runtime::DispatchError) -> iface_episodes::GetAnEpisodeError {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => match status {
+            401u16 => iface_episodes::GetAnEpisodeError::Unauthorized(body),
+            403u16 => iface_episodes::GetAnEpisodeError::Forbidden(body),
+            429u16 => iface_episodes::GetAnEpisodeError::TooManyRequests(body),
+            _ => iface_episodes::GetAnEpisodeError::Other(body),
+        },
+        crate::runtime::DispatchError::Transport(m) => iface_episodes::GetAnEpisodeError::Other(m),
+    }
+}
+
+fn iface_episodes__get_users_saved_episodes__ok(body: String) -> Result<iface_episodes::PagingSavedEpisodeObject, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match iface_episodes__paging_saved_episode_object__from_json(&v) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_episodes__get_users_saved_episodes__err(e: crate::runtime::DispatchError) -> iface_episodes::GetUsersSavedEpisodesError {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => match status {
+            401u16 => iface_episodes::GetUsersSavedEpisodesError::Unauthorized(body),
+            403u16 => iface_episodes::GetUsersSavedEpisodesError::Forbidden(body),
+            429u16 => iface_episodes::GetUsersSavedEpisodesError::TooManyRequests(body),
+            _ => iface_episodes::GetUsersSavedEpisodesError::Other(body),
+        },
+        crate::runtime::DispatchError::Transport(m) => iface_episodes::GetUsersSavedEpisodesError::Other(m),
+    }
+}
+
+fn iface_episodes__save_episodes_user__ok(body: String) -> Result<String, crate::runtime::DispatchError> {
+    Ok(body)
+}
+
+fn iface_episodes__save_episodes_user__err(e: crate::runtime::DispatchError) -> iface_episodes::SaveEpisodesUserError {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => match status {
+            401u16 => iface_episodes::SaveEpisodesUserError::Unauthorized(body),
+            403u16 => iface_episodes::SaveEpisodesUserError::Forbidden(body),
+            429u16 => iface_episodes::SaveEpisodesUserError::TooManyRequests(body),
+            _ => iface_episodes::SaveEpisodesUserError::Other(body),
+        },
+        crate::runtime::DispatchError::Transport(m) => iface_episodes::SaveEpisodesUserError::Other(m),
+    }
+}
+
+fn iface_episodes__remove_episodes_user__ok(body: String) -> Result<String, crate::runtime::DispatchError> {
+    Ok(body)
+}
+
+fn iface_episodes__remove_episodes_user__err(e: crate::runtime::DispatchError) -> iface_episodes::RemoveEpisodesUserError {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => match status {
+            401u16 => iface_episodes::RemoveEpisodesUserError::Unauthorized(body),
+            403u16 => iface_episodes::RemoveEpisodesUserError::Forbidden(body),
+            429u16 => iface_episodes::RemoveEpisodesUserError::TooManyRequests(body),
+            _ => iface_episodes::RemoveEpisodesUserError::Other(body),
+        },
+        crate::runtime::DispatchError::Transport(m) => iface_episodes::RemoveEpisodesUserError::Other(m),
+    }
+}
+
+fn iface_episodes__check_users_saved_episodes__ok(body: String) -> Result<Vec<bool>, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match (&v).as_array().map(|a| a.iter().filter_map(|x| (x).as_bool()).collect()) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_episodes__check_users_saved_episodes__err(e: crate::runtime::DispatchError) -> iface_episodes::CheckUsersSavedEpisodesError {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => match status {
+            401u16 => iface_episodes::CheckUsersSavedEpisodesError::Unauthorized(body),
+            403u16 => iface_episodes::CheckUsersSavedEpisodesError::Forbidden(body),
+            429u16 => iface_episodes::CheckUsersSavedEpisodesError::TooManyRequests(body),
+            _ => iface_episodes::CheckUsersSavedEpisodesError::Other(body),
+        },
+        crate::runtime::DispatchError::Transport(m) => iface_episodes::CheckUsersSavedEpisodesError::Other(m),
+    }
+}
+
 impl iface_episodes::Guest for crate::Component {
-    fn get_multiple_episodes(params: iface_episodes::GetMultipleEpisodesParams) -> Result<String, String> {
+    fn get_multiple_episodes(params: iface_episodes::GetMultipleEpisodesParams) -> Result<iface_episodes::GetMultipleEpisodesResponse, iface_episodes::GetMultipleEpisodesError> {
         let json = iface_episodes__get_multiple_episodes_params__to_json(&params);
-        dispatch(&OP_EPISODES_GET_MULTIPLE_EPISODES, json)
+        match dispatch(&OP_EPISODES_GET_MULTIPLE_EPISODES, json).and_then(iface_episodes__get_multiple_episodes__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_episodes__get_multiple_episodes__err(e)),
+        }
     }
-    fn get_an_episode(params: iface_episodes::GetAnEpisodeParams) -> Result<String, String> {
+    fn get_an_episode(params: iface_episodes::GetAnEpisodeParams) -> Result<iface_episodes::EpisodeObject, iface_episodes::GetAnEpisodeError> {
         let json = iface_episodes__get_an_episode_params__to_json(&params);
-        dispatch(&OP_EPISODES_GET_AN_EPISODE, json)
+        match dispatch(&OP_EPISODES_GET_AN_EPISODE, json).and_then(iface_episodes__get_an_episode__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_episodes__get_an_episode__err(e)),
+        }
     }
-    fn get_users_saved_episodes(params: iface_episodes::GetUsersSavedEpisodesParams) -> Result<String, String> {
+    fn get_users_saved_episodes(params: iface_episodes::GetUsersSavedEpisodesParams) -> Result<iface_episodes::PagingSavedEpisodeObject, iface_episodes::GetUsersSavedEpisodesError> {
         let json = iface_episodes__get_users_saved_episodes_params__to_json(&params);
-        dispatch(&OP_EPISODES_GET_USERS_SAVED_EPISODES, json)
+        match dispatch(&OP_EPISODES_GET_USERS_SAVED_EPISODES, json).and_then(iface_episodes__get_users_saved_episodes__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_episodes__get_users_saved_episodes__err(e)),
+        }
     }
-    fn save_episodes_user(params: iface_episodes::SaveEpisodesUserParams) -> Result<String, String> {
+    fn save_episodes_user(params: iface_episodes::SaveEpisodesUserParams) -> Result<String, iface_episodes::SaveEpisodesUserError> {
         let json = iface_episodes__save_episodes_user_params__to_json(&params);
-        dispatch(&OP_EPISODES_SAVE_EPISODES_USER, json)
+        match dispatch(&OP_EPISODES_SAVE_EPISODES_USER, json).and_then(iface_episodes__save_episodes_user__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_episodes__save_episodes_user__err(e)),
+        }
     }
-    fn remove_episodes_user(params: iface_episodes::RemoveEpisodesUserParams) -> Result<String, String> {
+    fn remove_episodes_user(params: iface_episodes::RemoveEpisodesUserParams) -> Result<String, iface_episodes::RemoveEpisodesUserError> {
         let json = iface_episodes__remove_episodes_user_params__to_json(&params);
-        dispatch(&OP_EPISODES_REMOVE_EPISODES_USER, json)
+        match dispatch(&OP_EPISODES_REMOVE_EPISODES_USER, json).and_then(iface_episodes__remove_episodes_user__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_episodes__remove_episodes_user__err(e)),
+        }
     }
-    fn check_users_saved_episodes(params: iface_episodes::CheckUsersSavedEpisodesParams) -> Result<String, String> {
+    fn check_users_saved_episodes(params: iface_episodes::CheckUsersSavedEpisodesParams) -> Result<Vec<bool>, iface_episodes::CheckUsersSavedEpisodesError> {
         let json = iface_episodes__check_users_saved_episodes_params__to_json(&params);
-        dispatch(&OP_EPISODES_CHECK_USERS_SAVED_EPISODES, json)
+        match dispatch(&OP_EPISODES_CHECK_USERS_SAVED_EPISODES, json).and_then(iface_episodes__check_users_saved_episodes__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_episodes__check_users_saved_episodes__err(e)),
+        }
     }
 }
 use crate::exports::autostamp::spotify::markets as iface_markets;
@@ -1677,9 +5063,48 @@ const OP_MARKETS_GET_AVAILABLE_MARKETS: OpSpec = OpSpec {
     ],
 };
 
+fn iface_markets__get_available_markets_response__to_json(p: &iface_markets::GetAvailableMarketsResponse) -> Value {
+    let mut m = Map::new();
+    m.insert("markets".into(), match (&p.markets) { Some(v) => Value::Array((v).iter().map(|v| Value::String((v).clone())).collect()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_markets__get_available_markets_response__from_json(v: &Value) -> Option<iface_markets::GetAvailableMarketsResponse> {
+    let m = v.as_object()?;
+    Some(iface_markets::GetAvailableMarketsResponse {
+        markets: m.get("markets").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| (x).as_str().map(|s| s.to_string())).collect())),
+    })
+}
+
+fn iface_markets__get_available_markets__ok(body: String) -> Result<iface_markets::GetAvailableMarketsResponse, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match iface_markets__get_available_markets_response__from_json(&v) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_markets__get_available_markets__err(e: crate::runtime::DispatchError) -> iface_markets::GetAvailableMarketsError {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => match status {
+            401u16 => iface_markets::GetAvailableMarketsError::Unauthorized(body),
+            403u16 => iface_markets::GetAvailableMarketsError::Forbidden(body),
+            429u16 => iface_markets::GetAvailableMarketsError::TooManyRequests(body),
+            _ => iface_markets::GetAvailableMarketsError::Other(body),
+        },
+        crate::runtime::DispatchError::Transport(m) => iface_markets::GetAvailableMarketsError::Other(m),
+    }
+}
+
 impl iface_markets::Guest for crate::Component {
-    fn get_available_markets() -> Result<String, String> {
-        dispatch(&OP_MARKETS_GET_AVAILABLE_MARKETS, Value::Object(Map::new()))
+    fn get_available_markets() -> Result<iface_markets::GetAvailableMarketsResponse, iface_markets::GetAvailableMarketsError> {
+        match dispatch(&OP_MARKETS_GET_AVAILABLE_MARKETS, Value::Object(Map::new())).and_then(iface_markets__get_available_markets__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_markets__get_available_markets__err(e)),
+        }
     }
 }
 use crate::exports::autostamp::spotify::users as iface_users;
@@ -1698,9 +5123,9 @@ const OP_USERS_GET_FOLLOWED: OpSpec = OpSpec {
     method: "GET",
     path_template: "/me/following",
     fields: &[
-        FieldSpec { snake: "type", location: FieldLocation::Query },
-        FieldSpec { snake: "after", location: FieldLocation::Query },
-        FieldSpec { snake: "limit", location: FieldLocation::Query },
+        FieldSpec { snake: "type", wire: "type", location: FieldLocation::Query },
+        FieldSpec { snake: "after", wire: "after", location: FieldLocation::Query },
+        FieldSpec { snake: "limit", wire: "limit", location: FieldLocation::Query },
     ],
     auth: &[
         AuthApply { secret_key: "oauth_2_0", kind: AuthKind::Bearer },
@@ -1711,8 +5136,9 @@ const OP_USERS_FOLLOW_ARTISTS_USERS: OpSpec = OpSpec {
     method: "PUT",
     path_template: "/me/following",
     fields: &[
-        FieldSpec { snake: "type", location: FieldLocation::Query },
-        FieldSpec { snake: "ids", location: FieldLocation::Query },
+        FieldSpec { snake: "type", wire: "type", location: FieldLocation::Query },
+        FieldSpec { snake: "ids", wire: "ids", location: FieldLocation::Query },
+        FieldSpec { snake: "ids_v2", wire: "ids", location: FieldLocation::Body },
     ],
     auth: &[
         AuthApply { secret_key: "oauth_2_0", kind: AuthKind::Bearer },
@@ -1723,8 +5149,9 @@ const OP_USERS_UNFOLLOW_ARTISTS_USERS: OpSpec = OpSpec {
     method: "DELETE",
     path_template: "/me/following",
     fields: &[
-        FieldSpec { snake: "type", location: FieldLocation::Query },
-        FieldSpec { snake: "ids", location: FieldLocation::Query },
+        FieldSpec { snake: "type", wire: "type", location: FieldLocation::Query },
+        FieldSpec { snake: "ids", wire: "ids", location: FieldLocation::Query },
+        FieldSpec { snake: "ids_v2", wire: "ids", location: FieldLocation::Body },
     ],
     auth: &[
         AuthApply { secret_key: "oauth_2_0", kind: AuthKind::Bearer },
@@ -1735,8 +5162,8 @@ const OP_USERS_CHECK_CURRENT_USER_FOLLOWS: OpSpec = OpSpec {
     method: "GET",
     path_template: "/me/following/contains",
     fields: &[
-        FieldSpec { snake: "type", location: FieldLocation::Query },
-        FieldSpec { snake: "ids", location: FieldLocation::Query },
+        FieldSpec { snake: "type", wire: "type", location: FieldLocation::Query },
+        FieldSpec { snake: "ids", wire: "ids", location: FieldLocation::Query },
     ],
     auth: &[
         AuthApply { secret_key: "oauth_2_0", kind: AuthKind::Bearer },
@@ -1747,10 +5174,10 @@ const OP_USERS_GET_USERS_TOP_ARTISTS_AND_TRACKS: OpSpec = OpSpec {
     method: "GET",
     path_template: "/me/top/{type}",
     fields: &[
-        FieldSpec { snake: "type", location: FieldLocation::Path },
-        FieldSpec { snake: "time_range", location: FieldLocation::Query },
-        FieldSpec { snake: "limit", location: FieldLocation::Query },
-        FieldSpec { snake: "offset", location: FieldLocation::Query },
+        FieldSpec { snake: "type", wire: "type", location: FieldLocation::Path },
+        FieldSpec { snake: "time_range", wire: "time_range", location: FieldLocation::Query },
+        FieldSpec { snake: "limit", wire: "limit", location: FieldLocation::Query },
+        FieldSpec { snake: "offset", wire: "offset", location: FieldLocation::Query },
     ],
     auth: &[
         AuthApply { secret_key: "oauth_2_0", kind: AuthKind::Bearer },
@@ -1761,8 +5188,8 @@ const OP_USERS_FOLLOW_PLAYLIST: OpSpec = OpSpec {
     method: "PUT",
     path_template: "/playlists/{playlist_id}/followers",
     fields: &[
-        FieldSpec { snake: "playlist_id", location: FieldLocation::Path },
-        FieldSpec { snake: "public", location: FieldLocation::Body },
+        FieldSpec { snake: "playlist_id", wire: "playlist_id", location: FieldLocation::Path },
+        FieldSpec { snake: "public", wire: "public", location: FieldLocation::Body },
     ],
     auth: &[
         AuthApply { secret_key: "oauth_2_0", kind: AuthKind::Bearer },
@@ -1773,7 +5200,7 @@ const OP_USERS_UNFOLLOW_PLAYLIST: OpSpec = OpSpec {
     method: "DELETE",
     path_template: "/playlists/{playlist_id}/followers",
     fields: &[
-        FieldSpec { snake: "playlist_id", location: FieldLocation::Path },
+        FieldSpec { snake: "playlist_id", wire: "playlist_id", location: FieldLocation::Path },
     ],
     auth: &[
         AuthApply { secret_key: "oauth_2_0", kind: AuthKind::Bearer },
@@ -1784,8 +5211,8 @@ const OP_USERS_CHECK_IF_USER_FOLLOWS_PLAYLIST: OpSpec = OpSpec {
     method: "GET",
     path_template: "/playlists/{playlist_id}/followers/contains",
     fields: &[
-        FieldSpec { snake: "playlist_id", location: FieldLocation::Path },
-        FieldSpec { snake: "ids", location: FieldLocation::Query },
+        FieldSpec { snake: "playlist_id", wire: "playlist_id", location: FieldLocation::Path },
+        FieldSpec { snake: "ids", wire: "ids", location: FieldLocation::Query },
     ],
     auth: &[
         AuthApply { secret_key: "oauth_2_0", kind: AuthKind::Bearer },
@@ -1796,7 +5223,7 @@ const OP_USERS_GET_USERS_PROFILE: OpSpec = OpSpec {
     method: "GET",
     path_template: "/users/{user_id}",
     fields: &[
-        FieldSpec { snake: "user_id", location: FieldLocation::Path },
+        FieldSpec { snake: "user_id", wire: "user_id", location: FieldLocation::Path },
     ],
     auth: &[
         AuthApply { secret_key: "oauth_2_0", kind: AuthKind::Bearer },
@@ -1816,6 +5243,82 @@ fn iface_users__follow_artists_users_type_op_enum__to_str(e: &iface_users::Follo
     }
 }
 
+fn iface_users__public_user_object_type_op_enum__to_str(e: &iface_users::PublicUserObjectTypeOpEnum) -> &'static str {
+    match e {
+        iface_users::PublicUserObjectTypeOpEnum::User => "user",
+    }
+}
+
+fn iface_users__private_user_object__to_json(p: &iface_users::PrivateUserObject) -> Value {
+    let mut m = Map::new();
+    m.insert("country".into(), match (&p.country) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("display_name".into(), match (&p.display_name) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("email".into(), match (&p.email) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("explicit_content".into(), match (&p.explicit_content) { Some(v) => iface_users__explicit_content_settings_object__to_json(v), None => Value::Null });
+    m.insert("external_urls".into(), match (&p.external_urls) { Some(v) => iface_users__external_url_object__to_json(v), None => Value::Null });
+    m.insert("followers".into(), match (&p.followers) { Some(v) => iface_users__followers_object__to_json(v), None => Value::Null });
+    m.insert("href".into(), match (&p.href) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("id".into(), match (&p.id) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("images".into(), match (&p.images) { Some(v) => Value::Array((v).iter().map(|v| iface_users__image_object__to_json(v)).collect()), None => Value::Null });
+    m.insert("product".into(), match (&p.product) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("type".into(), match (&p.type_op) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("uri".into(), match (&p.uri) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_users__explicit_content_settings_object__to_json(p: &iface_users::ExplicitContentSettingsObject) -> Value {
+    let mut m = Map::new();
+    m.insert("filter_enabled".into(), match (&p.filter_enabled) { Some(v) => Value::Bool(*(v)), None => Value::Null });
+    m.insert("filter_locked".into(), match (&p.filter_locked) { Some(v) => Value::Bool(*(v)), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_users__external_url_object__to_json(p: &iface_users::ExternalUrlObject) -> Value {
+    let mut m = Map::new();
+    m.insert("spotify".into(), match (&p.spotify) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_users__followers_object__to_json(p: &iface_users::FollowersObject) -> Value {
+    let mut m = Map::new();
+    m.insert("href".into(), match (&p.href) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("total".into(), match (&p.total) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_users__image_object__to_json(p: &iface_users::ImageObject) -> Value {
+    let mut m = Map::new();
+    m.insert("height".into(), Value::Number(serde_json::Number::from(*(&p.height))));
+    m.insert("url".into(), Value::String((&p.url).clone()));
+    m.insert("width".into(), Value::Number(serde_json::Number::from(*(&p.width))));
+    Value::Object(m)
+}
+
+fn iface_users__get_followed_response__to_json(p: &iface_users::GetFollowedResponse) -> Value {
+    let mut m = Map::new();
+    m.insert("artists".into(), iface_users__cursor_paging_simplified_artist_object__to_json(&p.artists));
+    Value::Object(m)
+}
+
+fn iface_users__cursor_paging_simplified_artist_object__to_json(p: &iface_users::CursorPagingSimplifiedArtistObject) -> Value {
+    let mut m = Map::new();
+    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_users__public_user_object__to_json(p: &iface_users::PublicUserObject) -> Value {
+    let mut m = Map::new();
+    m.insert("display_name".into(), match (&p.display_name) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("external_urls".into(), match (&p.external_urls) { Some(v) => iface_users__external_url_object__to_json(v), None => Value::Null });
+    m.insert("followers".into(), match (&p.followers) { Some(v) => iface_users__followers_object__to_json(v), None => Value::Null });
+    m.insert("href".into(), match (&p.href) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("id".into(), match (&p.id) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("images".into(), match (&p.images) { Some(v) => Value::Array((v).iter().map(|v| iface_users__image_object__to_json(v)).collect()), None => Value::Null });
+    m.insert("type".into(), match (&p.type_op) { Some(v) => Value::String(iface_users__public_user_object_type_op_enum__to_str(v).into()), None => Value::Null });
+    m.insert("uri".into(), match (&p.uri) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
 fn iface_users__get_followed_params__to_json(p: &iface_users::GetFollowedParams) -> Value {
     let mut m = Map::new();
     m.insert("type".into(), Value::String(iface_users__get_followed_type_op_enum__to_str(&p.type_op).into()));
@@ -1828,6 +5331,7 @@ fn iface_users__follow_artists_users_params__to_json(p: &iface_users::FollowArti
     let mut m = Map::new();
     m.insert("type".into(), Value::String(iface_users__follow_artists_users_type_op_enum__to_str(&p.type_op).into()));
     m.insert("ids".into(), Value::String((&p.ids).clone()));
+    m.insert("ids_v2".into(), Value::Array((&p.ids_v2).iter().map(|v| Value::String((v).clone())).collect()));
     Value::Object(m)
 }
 
@@ -1835,6 +5339,7 @@ fn iface_users__unfollow_artists_users_params__to_json(p: &iface_users::Unfollow
     let mut m = Map::new();
     m.insert("type".into(), Value::String(iface_users__follow_artists_users_type_op_enum__to_str(&p.type_op).into()));
     m.insert("ids".into(), Value::String((&p.ids).clone()));
+    m.insert("ids_v2".into(), match (&p.ids_v2) { Some(v) => Value::Array((v).iter().map(|v| Value::String((v).clone())).collect()), None => Value::Null });
     Value::Object(m)
 }
 
@@ -1880,45 +5385,355 @@ fn iface_users__get_users_profile_params__to_json(p: &iface_users::GetUsersProfi
     Value::Object(m)
 }
 
+fn iface_users__private_user_object__from_json(v: &Value) -> Option<iface_users::PrivateUserObject> {
+    let m = v.as_object()?;
+    Some(iface_users::PrivateUserObject {
+        country: m.get("country").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        display_name: m.get("display_name").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        email: m.get("email").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        explicit_content: m.get("explicit_content").filter(|v| !v.is_null()).and_then(|v| iface_users__explicit_content_settings_object__from_json(v)),
+        external_urls: m.get("external_urls").filter(|v| !v.is_null()).and_then(|v| iface_users__external_url_object__from_json(v)),
+        followers: m.get("followers").filter(|v| !v.is_null()).and_then(|v| iface_users__followers_object__from_json(v)),
+        href: m.get("href").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        id: m.get("id").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        images: m.get("images").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| iface_users__image_object__from_json(x)).collect())),
+        product: m.get("product").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        type_op: m.get("type").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        uri: m.get("uri").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    })
+}
+
+fn iface_users__explicit_content_settings_object__from_json(v: &Value) -> Option<iface_users::ExplicitContentSettingsObject> {
+    let m = v.as_object()?;
+    Some(iface_users::ExplicitContentSettingsObject {
+        filter_enabled: m.get("filter_enabled").filter(|v| !v.is_null()).and_then(|v| (v).as_bool()),
+        filter_locked: m.get("filter_locked").filter(|v| !v.is_null()).and_then(|v| (v).as_bool()),
+    })
+}
+
+fn iface_users__external_url_object__from_json(v: &Value) -> Option<iface_users::ExternalUrlObject> {
+    let m = v.as_object()?;
+    Some(iface_users::ExternalUrlObject {
+        spotify: m.get("spotify").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    })
+}
+
+fn iface_users__followers_object__from_json(v: &Value) -> Option<iface_users::FollowersObject> {
+    let m = v.as_object()?;
+    Some(iface_users::FollowersObject {
+        href: m.get("href").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        total: m.get("total").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+    })
+}
+
+fn iface_users__image_object__from_json(v: &Value) -> Option<iface_users::ImageObject> {
+    let m = v.as_object()?;
+    Some(iface_users::ImageObject {
+        height: m.get("height").and_then(|v| (v).as_i64().map(|n| n as i32)).unwrap_or_default(),
+        url: m.get("url").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        width: m.get("width").and_then(|v| (v).as_i64().map(|n| n as i32)).unwrap_or_default(),
+    })
+}
+
+fn iface_users__get_followed_response__from_json(v: &Value) -> Option<iface_users::GetFollowedResponse> {
+    let m = v.as_object()?;
+    Some(iface_users::GetFollowedResponse {
+        artists: match m.get("artists").and_then(|v| iface_users__cursor_paging_simplified_artist_object__from_json(v)) { Some(x) => x, None => return None },
+    })
+}
+
+fn iface_users__cursor_paging_simplified_artist_object__from_json(v: &Value) -> Option<iface_users::CursorPagingSimplifiedArtistObject> {
+    let m = v.as_object()?;
+    Some(iface_users::CursorPagingSimplifiedArtistObject {
+        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    })
+}
+
+fn iface_users__public_user_object__from_json(v: &Value) -> Option<iface_users::PublicUserObject> {
+    let m = v.as_object()?;
+    Some(iface_users::PublicUserObject {
+        display_name: m.get("display_name").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        external_urls: m.get("external_urls").filter(|v| !v.is_null()).and_then(|v| iface_users__external_url_object__from_json(v)),
+        followers: m.get("followers").filter(|v| !v.is_null()).and_then(|v| iface_users__followers_object__from_json(v)),
+        href: m.get("href").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        id: m.get("id").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        images: m.get("images").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| iface_users__image_object__from_json(x)).collect())),
+        type_op: m.get("type").filter(|v| !v.is_null()).and_then(|v| (v).as_str().and_then(iface_users__public_user_object_type_op_enum__from_str)),
+        uri: m.get("uri").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    })
+}
+
+fn iface_users__public_user_object_type_op_enum__from_str(s: &str) -> Option<iface_users::PublicUserObjectTypeOpEnum> {
+    match s {
+        "user" => Some(iface_users::PublicUserObjectTypeOpEnum::User),
+        _ => None,
+    }
+}
+
+fn iface_users__get_current_users_profile__ok(body: String) -> Result<iface_users::PrivateUserObject, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match iface_users__private_user_object__from_json(&v) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_users__get_current_users_profile__err(e: crate::runtime::DispatchError) -> iface_users::GetCurrentUsersProfileError {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => match status {
+            401u16 => iface_users::GetCurrentUsersProfileError::Unauthorized(body),
+            403u16 => iface_users::GetCurrentUsersProfileError::Forbidden(body),
+            429u16 => iface_users::GetCurrentUsersProfileError::TooManyRequests(body),
+            _ => iface_users::GetCurrentUsersProfileError::Other(body),
+        },
+        crate::runtime::DispatchError::Transport(m) => iface_users::GetCurrentUsersProfileError::Other(m),
+    }
+}
+
+fn iface_users__get_followed__ok(body: String) -> Result<iface_users::GetFollowedResponse, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match iface_users__get_followed_response__from_json(&v) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_users__get_followed__err(e: crate::runtime::DispatchError) -> iface_users::GetFollowedError {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => match status {
+            401u16 => iface_users::GetFollowedError::Unauthorized(body),
+            403u16 => iface_users::GetFollowedError::Forbidden(body),
+            429u16 => iface_users::GetFollowedError::TooManyRequests(body),
+            _ => iface_users::GetFollowedError::Other(body),
+        },
+        crate::runtime::DispatchError::Transport(m) => iface_users::GetFollowedError::Other(m),
+    }
+}
+
+fn iface_users__follow_artists_users__ok(body: String) -> Result<String, crate::runtime::DispatchError> {
+    Ok(body)
+}
+
+fn iface_users__follow_artists_users__err(e: crate::runtime::DispatchError) -> iface_users::FollowArtistsUsersError {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => match status {
+            401u16 => iface_users::FollowArtistsUsersError::Unauthorized(body),
+            403u16 => iface_users::FollowArtistsUsersError::Forbidden(body),
+            429u16 => iface_users::FollowArtistsUsersError::TooManyRequests(body),
+            _ => iface_users::FollowArtistsUsersError::Other(body),
+        },
+        crate::runtime::DispatchError::Transport(m) => iface_users::FollowArtistsUsersError::Other(m),
+    }
+}
+
+fn iface_users__unfollow_artists_users__ok(body: String) -> Result<String, crate::runtime::DispatchError> {
+    Ok(body)
+}
+
+fn iface_users__unfollow_artists_users__err(e: crate::runtime::DispatchError) -> iface_users::UnfollowArtistsUsersError {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => match status {
+            401u16 => iface_users::UnfollowArtistsUsersError::Unauthorized(body),
+            403u16 => iface_users::UnfollowArtistsUsersError::Forbidden(body),
+            429u16 => iface_users::UnfollowArtistsUsersError::TooManyRequests(body),
+            _ => iface_users::UnfollowArtistsUsersError::Other(body),
+        },
+        crate::runtime::DispatchError::Transport(m) => iface_users::UnfollowArtistsUsersError::Other(m),
+    }
+}
+
+fn iface_users__check_current_user_follows__ok(body: String) -> Result<Vec<bool>, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match (&v).as_array().map(|a| a.iter().filter_map(|x| (x).as_bool()).collect()) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_users__check_current_user_follows__err(e: crate::runtime::DispatchError) -> iface_users::CheckCurrentUserFollowsError {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => match status {
+            401u16 => iface_users::CheckCurrentUserFollowsError::Unauthorized(body),
+            403u16 => iface_users::CheckCurrentUserFollowsError::Forbidden(body),
+            429u16 => iface_users::CheckCurrentUserFollowsError::TooManyRequests(body),
+            _ => iface_users::CheckCurrentUserFollowsError::Other(body),
+        },
+        crate::runtime::DispatchError::Transport(m) => iface_users::CheckCurrentUserFollowsError::Other(m),
+    }
+}
+
+fn iface_users__get_users_top_artists_and_tracks__ok(body: String) -> Result<String, crate::runtime::DispatchError> {
+    Ok(body)
+}
+
+fn iface_users__get_users_top_artists_and_tracks__err(e: crate::runtime::DispatchError) -> iface_users::GetUsersTopArtistsAndTracksError {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => match status {
+            401u16 => iface_users::GetUsersTopArtistsAndTracksError::Unauthorized(body),
+            403u16 => iface_users::GetUsersTopArtistsAndTracksError::Forbidden(body),
+            429u16 => iface_users::GetUsersTopArtistsAndTracksError::TooManyRequests(body),
+            _ => iface_users::GetUsersTopArtistsAndTracksError::Other(body),
+        },
+        crate::runtime::DispatchError::Transport(m) => iface_users::GetUsersTopArtistsAndTracksError::Other(m),
+    }
+}
+
+fn iface_users__follow_playlist__ok(body: String) -> Result<String, crate::runtime::DispatchError> {
+    Ok(body)
+}
+
+fn iface_users__follow_playlist__err(e: crate::runtime::DispatchError) -> iface_users::FollowPlaylistError {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => match status {
+            401u16 => iface_users::FollowPlaylistError::Unauthorized(body),
+            403u16 => iface_users::FollowPlaylistError::Forbidden(body),
+            429u16 => iface_users::FollowPlaylistError::TooManyRequests(body),
+            _ => iface_users::FollowPlaylistError::Other(body),
+        },
+        crate::runtime::DispatchError::Transport(m) => iface_users::FollowPlaylistError::Other(m),
+    }
+}
+
+fn iface_users__unfollow_playlist__ok(body: String) -> Result<String, crate::runtime::DispatchError> {
+    Ok(body)
+}
+
+fn iface_users__unfollow_playlist__err(e: crate::runtime::DispatchError) -> iface_users::UnfollowPlaylistError {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => match status {
+            401u16 => iface_users::UnfollowPlaylistError::Unauthorized(body),
+            403u16 => iface_users::UnfollowPlaylistError::Forbidden(body),
+            429u16 => iface_users::UnfollowPlaylistError::TooManyRequests(body),
+            _ => iface_users::UnfollowPlaylistError::Other(body),
+        },
+        crate::runtime::DispatchError::Transport(m) => iface_users::UnfollowPlaylistError::Other(m),
+    }
+}
+
+fn iface_users__check_if_user_follows_playlist__ok(body: String) -> Result<Vec<bool>, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match (&v).as_array().map(|a| a.iter().filter_map(|x| (x).as_bool()).collect()) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_users__check_if_user_follows_playlist__err(e: crate::runtime::DispatchError) -> iface_users::CheckIfUserFollowsPlaylistError {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => match status {
+            401u16 => iface_users::CheckIfUserFollowsPlaylistError::Unauthorized(body),
+            403u16 => iface_users::CheckIfUserFollowsPlaylistError::Forbidden(body),
+            429u16 => iface_users::CheckIfUserFollowsPlaylistError::TooManyRequests(body),
+            _ => iface_users::CheckIfUserFollowsPlaylistError::Other(body),
+        },
+        crate::runtime::DispatchError::Transport(m) => iface_users::CheckIfUserFollowsPlaylistError::Other(m),
+    }
+}
+
+fn iface_users__get_users_profile__ok(body: String) -> Result<iface_users::PublicUserObject, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match iface_users__public_user_object__from_json(&v) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_users__get_users_profile__err(e: crate::runtime::DispatchError) -> iface_users::GetUsersProfileError {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => match status {
+            401u16 => iface_users::GetUsersProfileError::Unauthorized(body),
+            403u16 => iface_users::GetUsersProfileError::Forbidden(body),
+            429u16 => iface_users::GetUsersProfileError::TooManyRequests(body),
+            _ => iface_users::GetUsersProfileError::Other(body),
+        },
+        crate::runtime::DispatchError::Transport(m) => iface_users::GetUsersProfileError::Other(m),
+    }
+}
+
 impl iface_users::Guest for crate::Component {
-    fn get_current_users_profile() -> Result<String, String> {
-        dispatch(&OP_USERS_GET_CURRENT_USERS_PROFILE, Value::Object(Map::new()))
+    fn get_current_users_profile() -> Result<iface_users::PrivateUserObject, iface_users::GetCurrentUsersProfileError> {
+        match dispatch(&OP_USERS_GET_CURRENT_USERS_PROFILE, Value::Object(Map::new())).and_then(iface_users__get_current_users_profile__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_users__get_current_users_profile__err(e)),
+        }
     }
-    fn get_followed(params: iface_users::GetFollowedParams) -> Result<String, String> {
+    fn get_followed(params: iface_users::GetFollowedParams) -> Result<iface_users::GetFollowedResponse, iface_users::GetFollowedError> {
         let json = iface_users__get_followed_params__to_json(&params);
-        dispatch(&OP_USERS_GET_FOLLOWED, json)
+        match dispatch(&OP_USERS_GET_FOLLOWED, json).and_then(iface_users__get_followed__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_users__get_followed__err(e)),
+        }
     }
-    fn follow_artists_users(params: iface_users::FollowArtistsUsersParams) -> Result<String, String> {
+    fn follow_artists_users(params: iface_users::FollowArtistsUsersParams) -> Result<String, iface_users::FollowArtistsUsersError> {
         let json = iface_users__follow_artists_users_params__to_json(&params);
-        dispatch(&OP_USERS_FOLLOW_ARTISTS_USERS, json)
+        match dispatch(&OP_USERS_FOLLOW_ARTISTS_USERS, json).and_then(iface_users__follow_artists_users__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_users__follow_artists_users__err(e)),
+        }
     }
-    fn unfollow_artists_users(params: iface_users::UnfollowArtistsUsersParams) -> Result<String, String> {
+    fn unfollow_artists_users(params: iface_users::UnfollowArtistsUsersParams) -> Result<String, iface_users::UnfollowArtistsUsersError> {
         let json = iface_users__unfollow_artists_users_params__to_json(&params);
-        dispatch(&OP_USERS_UNFOLLOW_ARTISTS_USERS, json)
+        match dispatch(&OP_USERS_UNFOLLOW_ARTISTS_USERS, json).and_then(iface_users__unfollow_artists_users__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_users__unfollow_artists_users__err(e)),
+        }
     }
-    fn check_current_user_follows(params: iface_users::CheckCurrentUserFollowsParams) -> Result<String, String> {
+    fn check_current_user_follows(params: iface_users::CheckCurrentUserFollowsParams) -> Result<Vec<bool>, iface_users::CheckCurrentUserFollowsError> {
         let json = iface_users__check_current_user_follows_params__to_json(&params);
-        dispatch(&OP_USERS_CHECK_CURRENT_USER_FOLLOWS, json)
+        match dispatch(&OP_USERS_CHECK_CURRENT_USER_FOLLOWS, json).and_then(iface_users__check_current_user_follows__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_users__check_current_user_follows__err(e)),
+        }
     }
-    fn get_users_top_artists_and_tracks(params: iface_users::GetUsersTopArtistsAndTracksParams) -> Result<String, String> {
+    fn get_users_top_artists_and_tracks(params: iface_users::GetUsersTopArtistsAndTracksParams) -> Result<String, iface_users::GetUsersTopArtistsAndTracksError> {
         let json = iface_users__get_users_top_artists_and_tracks_params__to_json(&params);
-        dispatch(&OP_USERS_GET_USERS_TOP_ARTISTS_AND_TRACKS, json)
+        match dispatch(&OP_USERS_GET_USERS_TOP_ARTISTS_AND_TRACKS, json).and_then(iface_users__get_users_top_artists_and_tracks__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_users__get_users_top_artists_and_tracks__err(e)),
+        }
     }
-    fn follow_playlist(params: iface_users::FollowPlaylistParams) -> Result<String, String> {
+    fn follow_playlist(params: iface_users::FollowPlaylistParams) -> Result<String, iface_users::FollowPlaylistError> {
         let json = iface_users__follow_playlist_params__to_json(&params);
-        dispatch(&OP_USERS_FOLLOW_PLAYLIST, json)
+        match dispatch(&OP_USERS_FOLLOW_PLAYLIST, json).and_then(iface_users__follow_playlist__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_users__follow_playlist__err(e)),
+        }
     }
-    fn unfollow_playlist(params: iface_users::UnfollowPlaylistParams) -> Result<String, String> {
+    fn unfollow_playlist(params: iface_users::UnfollowPlaylistParams) -> Result<String, iface_users::UnfollowPlaylistError> {
         let json = iface_users__unfollow_playlist_params__to_json(&params);
-        dispatch(&OP_USERS_UNFOLLOW_PLAYLIST, json)
+        match dispatch(&OP_USERS_UNFOLLOW_PLAYLIST, json).and_then(iface_users__unfollow_playlist__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_users__unfollow_playlist__err(e)),
+        }
     }
-    fn check_if_user_follows_playlist(params: iface_users::CheckIfUserFollowsPlaylistParams) -> Result<String, String> {
+    fn check_if_user_follows_playlist(params: iface_users::CheckIfUserFollowsPlaylistParams) -> Result<Vec<bool>, iface_users::CheckIfUserFollowsPlaylistError> {
         let json = iface_users__check_if_user_follows_playlist_params__to_json(&params);
-        dispatch(&OP_USERS_CHECK_IF_USER_FOLLOWS_PLAYLIST, json)
+        match dispatch(&OP_USERS_CHECK_IF_USER_FOLLOWS_PLAYLIST, json).and_then(iface_users__check_if_user_follows_playlist__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_users__check_if_user_follows_playlist__err(e)),
+        }
     }
-    fn get_users_profile(params: iface_users::GetUsersProfileParams) -> Result<String, String> {
+    fn get_users_profile(params: iface_users::GetUsersProfileParams) -> Result<iface_users::PublicUserObject, iface_users::GetUsersProfileError> {
         let json = iface_users__get_users_profile_params__to_json(&params);
-        dispatch(&OP_USERS_GET_USERS_PROFILE, json)
+        match dispatch(&OP_USERS_GET_USERS_PROFILE, json).and_then(iface_users__get_users_profile__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_users__get_users_profile__err(e)),
+        }
     }
 }
 use crate::exports::autostamp::spotify::player as iface_player;
@@ -1927,8 +5742,8 @@ const OP_PLAYER_GET_INFORMATION_ABOUT_THE_USERS_CURRENT_PLAYBACK: OpSpec = OpSpe
     method: "GET",
     path_template: "/me/player",
     fields: &[
-        FieldSpec { snake: "market", location: FieldLocation::Query },
-        FieldSpec { snake: "additional_types", location: FieldLocation::Query },
+        FieldSpec { snake: "market", wire: "market", location: FieldLocation::Query },
+        FieldSpec { snake: "additional_types", wire: "additional_types", location: FieldLocation::Query },
     ],
     auth: &[
         AuthApply { secret_key: "oauth_2_0", kind: AuthKind::Bearer },
@@ -1939,8 +5754,8 @@ const OP_PLAYER_TRANSFER_A_USERS_PLAYBACK: OpSpec = OpSpec {
     method: "PUT",
     path_template: "/me/player",
     fields: &[
-        FieldSpec { snake: "device_ids", location: FieldLocation::Body },
-        FieldSpec { snake: "play", location: FieldLocation::Body },
+        FieldSpec { snake: "device_ids", wire: "device_ids", location: FieldLocation::Body },
+        FieldSpec { snake: "play", wire: "play", location: FieldLocation::Body },
     ],
     auth: &[
         AuthApply { secret_key: "oauth_2_0", kind: AuthKind::Bearer },
@@ -1951,8 +5766,8 @@ const OP_PLAYER_GET_THE_USERS_CURRENTLY_PLAYING_TRACK: OpSpec = OpSpec {
     method: "GET",
     path_template: "/me/player/currently-playing",
     fields: &[
-        FieldSpec { snake: "market", location: FieldLocation::Query },
-        FieldSpec { snake: "additional_types", location: FieldLocation::Query },
+        FieldSpec { snake: "market", wire: "market", location: FieldLocation::Query },
+        FieldSpec { snake: "additional_types", wire: "additional_types", location: FieldLocation::Query },
     ],
     auth: &[
         AuthApply { secret_key: "oauth_2_0", kind: AuthKind::Bearer },
@@ -1973,7 +5788,7 @@ const OP_PLAYER_SKIP_USERS_PLAYBACK_TO_NEXT_TRACK: OpSpec = OpSpec {
     method: "POST",
     path_template: "/me/player/next",
     fields: &[
-        FieldSpec { snake: "device_id", location: FieldLocation::Query },
+        FieldSpec { snake: "device_id", wire: "device_id", location: FieldLocation::Query },
     ],
     auth: &[
         AuthApply { secret_key: "oauth_2_0", kind: AuthKind::Bearer },
@@ -1984,7 +5799,7 @@ const OP_PLAYER_PAUSE_A_USERS_PLAYBACK: OpSpec = OpSpec {
     method: "PUT",
     path_template: "/me/player/pause",
     fields: &[
-        FieldSpec { snake: "device_id", location: FieldLocation::Query },
+        FieldSpec { snake: "device_id", wire: "device_id", location: FieldLocation::Query },
     ],
     auth: &[
         AuthApply { secret_key: "oauth_2_0", kind: AuthKind::Bearer },
@@ -1995,11 +5810,11 @@ const OP_PLAYER_START_A_USERS_PLAYBACK: OpSpec = OpSpec {
     method: "PUT",
     path_template: "/me/player/play",
     fields: &[
-        FieldSpec { snake: "device_id", location: FieldLocation::Query },
-        FieldSpec { snake: "context_uri", location: FieldLocation::Body },
-        FieldSpec { snake: "offset", location: FieldLocation::Body },
-        FieldSpec { snake: "position_ms", location: FieldLocation::Body },
-        FieldSpec { snake: "uris", location: FieldLocation::Body },
+        FieldSpec { snake: "device_id", wire: "device_id", location: FieldLocation::Query },
+        FieldSpec { snake: "context_uri", wire: "context_uri", location: FieldLocation::Body },
+        FieldSpec { snake: "offset", wire: "offset", location: FieldLocation::Body },
+        FieldSpec { snake: "position_ms", wire: "position_ms", location: FieldLocation::Body },
+        FieldSpec { snake: "uris", wire: "uris", location: FieldLocation::Body },
     ],
     auth: &[
         AuthApply { secret_key: "oauth_2_0", kind: AuthKind::Bearer },
@@ -2010,7 +5825,7 @@ const OP_PLAYER_SKIP_USERS_PLAYBACK_TO_PREVIOUS_TRACK: OpSpec = OpSpec {
     method: "POST",
     path_template: "/me/player/previous",
     fields: &[
-        FieldSpec { snake: "device_id", location: FieldLocation::Query },
+        FieldSpec { snake: "device_id", wire: "device_id", location: FieldLocation::Query },
     ],
     auth: &[
         AuthApply { secret_key: "oauth_2_0", kind: AuthKind::Bearer },
@@ -2031,8 +5846,8 @@ const OP_PLAYER_ADD_TO_QUEUE: OpSpec = OpSpec {
     method: "POST",
     path_template: "/me/player/queue",
     fields: &[
-        FieldSpec { snake: "uri", location: FieldLocation::Query },
-        FieldSpec { snake: "device_id", location: FieldLocation::Query },
+        FieldSpec { snake: "uri", wire: "uri", location: FieldLocation::Query },
+        FieldSpec { snake: "device_id", wire: "device_id", location: FieldLocation::Query },
     ],
     auth: &[
         AuthApply { secret_key: "oauth_2_0", kind: AuthKind::Bearer },
@@ -2043,9 +5858,9 @@ const OP_PLAYER_GET_RECENTLY_PLAYED: OpSpec = OpSpec {
     method: "GET",
     path_template: "/me/player/recently-played",
     fields: &[
-        FieldSpec { snake: "limit", location: FieldLocation::Query },
-        FieldSpec { snake: "after", location: FieldLocation::Query },
-        FieldSpec { snake: "before", location: FieldLocation::Query },
+        FieldSpec { snake: "limit", wire: "limit", location: FieldLocation::Query },
+        FieldSpec { snake: "after", wire: "after", location: FieldLocation::Query },
+        FieldSpec { snake: "before", wire: "before", location: FieldLocation::Query },
     ],
     auth: &[
         AuthApply { secret_key: "oauth_2_0", kind: AuthKind::Bearer },
@@ -2056,8 +5871,8 @@ const OP_PLAYER_SET_REPEAT_MODE_ON_USERS_PLAYBACK: OpSpec = OpSpec {
     method: "PUT",
     path_template: "/me/player/repeat",
     fields: &[
-        FieldSpec { snake: "state", location: FieldLocation::Query },
-        FieldSpec { snake: "device_id", location: FieldLocation::Query },
+        FieldSpec { snake: "state", wire: "state", location: FieldLocation::Query },
+        FieldSpec { snake: "device_id", wire: "device_id", location: FieldLocation::Query },
     ],
     auth: &[
         AuthApply { secret_key: "oauth_2_0", kind: AuthKind::Bearer },
@@ -2068,8 +5883,8 @@ const OP_PLAYER_SEEK_TO_POSITION_IN_CURRENTLY_PLAYING_TRACK: OpSpec = OpSpec {
     method: "PUT",
     path_template: "/me/player/seek",
     fields: &[
-        FieldSpec { snake: "position_ms", location: FieldLocation::Query },
-        FieldSpec { snake: "device_id", location: FieldLocation::Query },
+        FieldSpec { snake: "position_ms", wire: "position_ms", location: FieldLocation::Query },
+        FieldSpec { snake: "device_id", wire: "device_id", location: FieldLocation::Query },
     ],
     auth: &[
         AuthApply { secret_key: "oauth_2_0", kind: AuthKind::Bearer },
@@ -2080,8 +5895,8 @@ const OP_PLAYER_TOGGLE_SHUFFLE_FOR_USERS_PLAYBACK: OpSpec = OpSpec {
     method: "PUT",
     path_template: "/me/player/shuffle",
     fields: &[
-        FieldSpec { snake: "state", location: FieldLocation::Query },
-        FieldSpec { snake: "device_id", location: FieldLocation::Query },
+        FieldSpec { snake: "state", wire: "state", location: FieldLocation::Query },
+        FieldSpec { snake: "device_id", wire: "device_id", location: FieldLocation::Query },
     ],
     auth: &[
         AuthApply { secret_key: "oauth_2_0", kind: AuthKind::Bearer },
@@ -2092,15 +5907,91 @@ const OP_PLAYER_SET_VOLUME_FOR_USERS_PLAYBACK: OpSpec = OpSpec {
     method: "PUT",
     path_template: "/me/player/volume",
     fields: &[
-        FieldSpec { snake: "volume_percent", location: FieldLocation::Query },
-        FieldSpec { snake: "device_id", location: FieldLocation::Query },
+        FieldSpec { snake: "volume_percent", wire: "volume_percent", location: FieldLocation::Query },
+        FieldSpec { snake: "device_id", wire: "device_id", location: FieldLocation::Query },
     ],
     auth: &[
         AuthApply { secret_key: "oauth_2_0", kind: AuthKind::Bearer },
     ],
 };
 
+fn iface_player__currently_playing_context_object__to_json(p: &iface_player::CurrentlyPlayingContextObject) -> Value {
+    let mut m = Map::new();
+    m.insert("actions".into(), match (&p.actions) { Some(v) => iface_player__disallows_object__to_json(v), None => Value::Null });
+    m.insert("context".into(), match (&p.context) { Some(v) => iface_player__context_object__to_json(v), None => Value::Null });
+    m.insert("currently_playing_type".into(), match (&p.currently_playing_type) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("device".into(), match (&p.device) { Some(v) => iface_player__device_object__to_json(v), None => Value::Null });
+    m.insert("is_playing".into(), match (&p.is_playing) { Some(v) => Value::Bool(*(v)), None => Value::Null });
+    m.insert("item".into(), match (&p.item) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("progress_ms".into(), match (&p.progress_ms) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("repeat_state".into(), match (&p.repeat_state) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("shuffle_state".into(), match (&p.shuffle_state) { Some(v) => Value::Bool(*(v)), None => Value::Null });
+    m.insert("timestamp".into(), match (&p.timestamp) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_player__disallows_object__to_json(p: &iface_player::DisallowsObject) -> Value {
+    let mut m = Map::new();
+    m.insert("interrupting_playback".into(), match (&p.interrupting_playback) { Some(v) => Value::Bool(*(v)), None => Value::Null });
+    m.insert("pausing".into(), match (&p.pausing) { Some(v) => Value::Bool(*(v)), None => Value::Null });
+    m.insert("resuming".into(), match (&p.resuming) { Some(v) => Value::Bool(*(v)), None => Value::Null });
+    m.insert("seeking".into(), match (&p.seeking) { Some(v) => Value::Bool(*(v)), None => Value::Null });
+    m.insert("skipping_next".into(), match (&p.skipping_next) { Some(v) => Value::Bool(*(v)), None => Value::Null });
+    m.insert("skipping_prev".into(), match (&p.skipping_prev) { Some(v) => Value::Bool(*(v)), None => Value::Null });
+    m.insert("toggling_repeat_context".into(), match (&p.toggling_repeat_context) { Some(v) => Value::Bool(*(v)), None => Value::Null });
+    m.insert("toggling_repeat_track".into(), match (&p.toggling_repeat_track) { Some(v) => Value::Bool(*(v)), None => Value::Null });
+    m.insert("toggling_shuffle".into(), match (&p.toggling_shuffle) { Some(v) => Value::Bool(*(v)), None => Value::Null });
+    m.insert("transferring_playback".into(), match (&p.transferring_playback) { Some(v) => Value::Bool(*(v)), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_player__context_object__to_json(p: &iface_player::ContextObject) -> Value {
+    let mut m = Map::new();
+    m.insert("external_urls".into(), match (&p.external_urls) { Some(v) => iface_player__external_url_object__to_json(v), None => Value::Null });
+    m.insert("href".into(), match (&p.href) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("type".into(), match (&p.type_op) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("uri".into(), match (&p.uri) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_player__external_url_object__to_json(p: &iface_player::ExternalUrlObject) -> Value {
+    let mut m = Map::new();
+    m.insert("spotify".into(), match (&p.spotify) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_player__device_object__to_json(p: &iface_player::DeviceObject) -> Value {
+    let mut m = Map::new();
+    m.insert("id".into(), match (&p.id) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("is_active".into(), match (&p.is_active) { Some(v) => Value::Bool(*(v)), None => Value::Null });
+    m.insert("is_private_session".into(), match (&p.is_private_session) { Some(v) => Value::Bool(*(v)), None => Value::Null });
+    m.insert("is_restricted".into(), match (&p.is_restricted) { Some(v) => Value::Bool(*(v)), None => Value::Null });
+    m.insert("name".into(), match (&p.name) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("type".into(), match (&p.type_op) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("volume_percent".into(), match (&p.volume_percent) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_player__get_a_users_available_devices_response__to_json(p: &iface_player::GetAUsersAvailableDevicesResponse) -> Value {
+    let mut m = Map::new();
+    m.insert("devices".into(), Value::Array((&p.devices).iter().map(|v| iface_player__device_object__to_json(v)).collect()));
+    Value::Object(m)
+}
+
 fn iface_player__start_a_users_playback_body_offset__to_json(p: &iface_player::StartAUsersPlaybackBodyOffset) -> Value {
+    let mut m = Map::new();
+    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_player__queue_object__to_json(p: &iface_player::QueueObject) -> Value {
+    let mut m = Map::new();
+    m.insert("currently_playing".into(), match (&p.currently_playing) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("queue".into(), match (&p.queue) { Some(v) => Value::Array((v).iter().map(|v| Value::String((v).clone())).collect()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_player__cursor_paging_play_history_object__to_json(p: &iface_player::CursorPagingPlayHistoryObject) -> Value {
     let mut m = Map::new();
     m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
     Value::Object(m)
@@ -2198,64 +6089,468 @@ fn iface_player__set_volume_for_users_playback_params__to_json(p: &iface_player:
     Value::Object(m)
 }
 
+fn iface_player__currently_playing_context_object__from_json(v: &Value) -> Option<iface_player::CurrentlyPlayingContextObject> {
+    let m = v.as_object()?;
+    Some(iface_player::CurrentlyPlayingContextObject {
+        actions: m.get("actions").filter(|v| !v.is_null()).and_then(|v| iface_player__disallows_object__from_json(v)),
+        context: m.get("context").filter(|v| !v.is_null()).and_then(|v| iface_player__context_object__from_json(v)),
+        currently_playing_type: m.get("currently_playing_type").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        device: m.get("device").filter(|v| !v.is_null()).and_then(|v| iface_player__device_object__from_json(v)),
+        is_playing: m.get("is_playing").filter(|v| !v.is_null()).and_then(|v| (v).as_bool()),
+        item: m.get("item").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        progress_ms: m.get("progress_ms").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        repeat_state: m.get("repeat_state").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        shuffle_state: m.get("shuffle_state").filter(|v| !v.is_null()).and_then(|v| (v).as_bool()),
+        timestamp: m.get("timestamp").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+    })
+}
+
+fn iface_player__disallows_object__from_json(v: &Value) -> Option<iface_player::DisallowsObject> {
+    let m = v.as_object()?;
+    Some(iface_player::DisallowsObject {
+        interrupting_playback: m.get("interrupting_playback").filter(|v| !v.is_null()).and_then(|v| (v).as_bool()),
+        pausing: m.get("pausing").filter(|v| !v.is_null()).and_then(|v| (v).as_bool()),
+        resuming: m.get("resuming").filter(|v| !v.is_null()).and_then(|v| (v).as_bool()),
+        seeking: m.get("seeking").filter(|v| !v.is_null()).and_then(|v| (v).as_bool()),
+        skipping_next: m.get("skipping_next").filter(|v| !v.is_null()).and_then(|v| (v).as_bool()),
+        skipping_prev: m.get("skipping_prev").filter(|v| !v.is_null()).and_then(|v| (v).as_bool()),
+        toggling_repeat_context: m.get("toggling_repeat_context").filter(|v| !v.is_null()).and_then(|v| (v).as_bool()),
+        toggling_repeat_track: m.get("toggling_repeat_track").filter(|v| !v.is_null()).and_then(|v| (v).as_bool()),
+        toggling_shuffle: m.get("toggling_shuffle").filter(|v| !v.is_null()).and_then(|v| (v).as_bool()),
+        transferring_playback: m.get("transferring_playback").filter(|v| !v.is_null()).and_then(|v| (v).as_bool()),
+    })
+}
+
+fn iface_player__context_object__from_json(v: &Value) -> Option<iface_player::ContextObject> {
+    let m = v.as_object()?;
+    Some(iface_player::ContextObject {
+        external_urls: m.get("external_urls").filter(|v| !v.is_null()).and_then(|v| iface_player__external_url_object__from_json(v)),
+        href: m.get("href").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        type_op: m.get("type").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        uri: m.get("uri").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    })
+}
+
+fn iface_player__external_url_object__from_json(v: &Value) -> Option<iface_player::ExternalUrlObject> {
+    let m = v.as_object()?;
+    Some(iface_player::ExternalUrlObject {
+        spotify: m.get("spotify").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    })
+}
+
+fn iface_player__device_object__from_json(v: &Value) -> Option<iface_player::DeviceObject> {
+    let m = v.as_object()?;
+    Some(iface_player::DeviceObject {
+        id: m.get("id").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        is_active: m.get("is_active").filter(|v| !v.is_null()).and_then(|v| (v).as_bool()),
+        is_private_session: m.get("is_private_session").filter(|v| !v.is_null()).and_then(|v| (v).as_bool()),
+        is_restricted: m.get("is_restricted").filter(|v| !v.is_null()).and_then(|v| (v).as_bool()),
+        name: m.get("name").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        type_op: m.get("type").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        volume_percent: m.get("volume_percent").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+    })
+}
+
+fn iface_player__get_a_users_available_devices_response__from_json(v: &Value) -> Option<iface_player::GetAUsersAvailableDevicesResponse> {
+    let m = v.as_object()?;
+    Some(iface_player::GetAUsersAvailableDevicesResponse {
+        devices: m.get("devices").and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| iface_player__device_object__from_json(x)).collect())).unwrap_or_default(),
+    })
+}
+
+fn iface_player__queue_object__from_json(v: &Value) -> Option<iface_player::QueueObject> {
+    let m = v.as_object()?;
+    Some(iface_player::QueueObject {
+        currently_playing: m.get("currently_playing").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        queue: m.get("queue").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| (x).as_str().map(|s| s.to_string())).collect())),
+    })
+}
+
+fn iface_player__cursor_paging_play_history_object__from_json(v: &Value) -> Option<iface_player::CursorPagingPlayHistoryObject> {
+    let m = v.as_object()?;
+    Some(iface_player::CursorPagingPlayHistoryObject {
+        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    })
+}
+
+fn iface_player__get_information_about_the_users_current_playback__ok(body: String) -> Result<iface_player::CurrentlyPlayingContextObject, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match iface_player__currently_playing_context_object__from_json(&v) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_player__get_information_about_the_users_current_playback__err(e: crate::runtime::DispatchError) -> iface_player::GetInformationAboutTheUsersCurrentPlaybackError {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => match status {
+            401u16 => iface_player::GetInformationAboutTheUsersCurrentPlaybackError::Unauthorized(body),
+            403u16 => iface_player::GetInformationAboutTheUsersCurrentPlaybackError::Forbidden(body),
+            429u16 => iface_player::GetInformationAboutTheUsersCurrentPlaybackError::TooManyRequests(body),
+            _ => iface_player::GetInformationAboutTheUsersCurrentPlaybackError::Other(body),
+        },
+        crate::runtime::DispatchError::Transport(m) => iface_player::GetInformationAboutTheUsersCurrentPlaybackError::Other(m),
+    }
+}
+
+fn iface_player__transfer_a_users_playback__ok(body: String) -> Result<String, crate::runtime::DispatchError> {
+    Ok(body)
+}
+
+fn iface_player__transfer_a_users_playback__err(e: crate::runtime::DispatchError) -> iface_player::TransferAUsersPlaybackError {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => match status {
+            401u16 => iface_player::TransferAUsersPlaybackError::Unauthorized(body),
+            403u16 => iface_player::TransferAUsersPlaybackError::Forbidden(body),
+            429u16 => iface_player::TransferAUsersPlaybackError::TooManyRequests(body),
+            _ => iface_player::TransferAUsersPlaybackError::Other(body),
+        },
+        crate::runtime::DispatchError::Transport(m) => iface_player::TransferAUsersPlaybackError::Other(m),
+    }
+}
+
+fn iface_player__get_the_users_currently_playing_track__ok(body: String) -> Result<iface_player::CurrentlyPlayingContextObject, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match iface_player__currently_playing_context_object__from_json(&v) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_player__get_the_users_currently_playing_track__err(e: crate::runtime::DispatchError) -> iface_player::GetTheUsersCurrentlyPlayingTrackError {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => match status {
+            401u16 => iface_player::GetTheUsersCurrentlyPlayingTrackError::Unauthorized(body),
+            403u16 => iface_player::GetTheUsersCurrentlyPlayingTrackError::Forbidden(body),
+            429u16 => iface_player::GetTheUsersCurrentlyPlayingTrackError::TooManyRequests(body),
+            _ => iface_player::GetTheUsersCurrentlyPlayingTrackError::Other(body),
+        },
+        crate::runtime::DispatchError::Transport(m) => iface_player::GetTheUsersCurrentlyPlayingTrackError::Other(m),
+    }
+}
+
+fn iface_player__get_a_users_available_devices__ok(body: String) -> Result<iface_player::GetAUsersAvailableDevicesResponse, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match iface_player__get_a_users_available_devices_response__from_json(&v) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_player__get_a_users_available_devices__err(e: crate::runtime::DispatchError) -> iface_player::GetAUsersAvailableDevicesError {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => match status {
+            401u16 => iface_player::GetAUsersAvailableDevicesError::Unauthorized(body),
+            403u16 => iface_player::GetAUsersAvailableDevicesError::Forbidden(body),
+            429u16 => iface_player::GetAUsersAvailableDevicesError::TooManyRequests(body),
+            _ => iface_player::GetAUsersAvailableDevicesError::Other(body),
+        },
+        crate::runtime::DispatchError::Transport(m) => iface_player::GetAUsersAvailableDevicesError::Other(m),
+    }
+}
+
+fn iface_player__skip_users_playback_to_next_track__ok(body: String) -> Result<String, crate::runtime::DispatchError> {
+    Ok(body)
+}
+
+fn iface_player__skip_users_playback_to_next_track__err(e: crate::runtime::DispatchError) -> iface_player::SkipUsersPlaybackToNextTrackError {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => match status {
+            401u16 => iface_player::SkipUsersPlaybackToNextTrackError::Unauthorized(body),
+            403u16 => iface_player::SkipUsersPlaybackToNextTrackError::Forbidden(body),
+            429u16 => iface_player::SkipUsersPlaybackToNextTrackError::TooManyRequests(body),
+            _ => iface_player::SkipUsersPlaybackToNextTrackError::Other(body),
+        },
+        crate::runtime::DispatchError::Transport(m) => iface_player::SkipUsersPlaybackToNextTrackError::Other(m),
+    }
+}
+
+fn iface_player__pause_a_users_playback__ok(body: String) -> Result<String, crate::runtime::DispatchError> {
+    Ok(body)
+}
+
+fn iface_player__pause_a_users_playback__err(e: crate::runtime::DispatchError) -> iface_player::PauseAUsersPlaybackError {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => match status {
+            401u16 => iface_player::PauseAUsersPlaybackError::Unauthorized(body),
+            403u16 => iface_player::PauseAUsersPlaybackError::Forbidden(body),
+            429u16 => iface_player::PauseAUsersPlaybackError::TooManyRequests(body),
+            _ => iface_player::PauseAUsersPlaybackError::Other(body),
+        },
+        crate::runtime::DispatchError::Transport(m) => iface_player::PauseAUsersPlaybackError::Other(m),
+    }
+}
+
+fn iface_player__start_a_users_playback__ok(body: String) -> Result<String, crate::runtime::DispatchError> {
+    Ok(body)
+}
+
+fn iface_player__start_a_users_playback__err(e: crate::runtime::DispatchError) -> iface_player::StartAUsersPlaybackError {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => match status {
+            401u16 => iface_player::StartAUsersPlaybackError::Unauthorized(body),
+            403u16 => iface_player::StartAUsersPlaybackError::Forbidden(body),
+            429u16 => iface_player::StartAUsersPlaybackError::TooManyRequests(body),
+            _ => iface_player::StartAUsersPlaybackError::Other(body),
+        },
+        crate::runtime::DispatchError::Transport(m) => iface_player::StartAUsersPlaybackError::Other(m),
+    }
+}
+
+fn iface_player__skip_users_playback_to_previous_track__ok(body: String) -> Result<String, crate::runtime::DispatchError> {
+    Ok(body)
+}
+
+fn iface_player__skip_users_playback_to_previous_track__err(e: crate::runtime::DispatchError) -> iface_player::SkipUsersPlaybackToPreviousTrackError {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => match status {
+            401u16 => iface_player::SkipUsersPlaybackToPreviousTrackError::Unauthorized(body),
+            403u16 => iface_player::SkipUsersPlaybackToPreviousTrackError::Forbidden(body),
+            429u16 => iface_player::SkipUsersPlaybackToPreviousTrackError::TooManyRequests(body),
+            _ => iface_player::SkipUsersPlaybackToPreviousTrackError::Other(body),
+        },
+        crate::runtime::DispatchError::Transport(m) => iface_player::SkipUsersPlaybackToPreviousTrackError::Other(m),
+    }
+}
+
+fn iface_player__get_queue__ok(body: String) -> Result<iface_player::QueueObject, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match iface_player__queue_object__from_json(&v) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_player__get_queue__err(e: crate::runtime::DispatchError) -> iface_player::GetQueueError {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => match status {
+            401u16 => iface_player::GetQueueError::Unauthorized(body),
+            403u16 => iface_player::GetQueueError::Forbidden(body),
+            429u16 => iface_player::GetQueueError::TooManyRequests(body),
+            _ => iface_player::GetQueueError::Other(body),
+        },
+        crate::runtime::DispatchError::Transport(m) => iface_player::GetQueueError::Other(m),
+    }
+}
+
+fn iface_player__add_to_queue__ok(body: String) -> Result<String, crate::runtime::DispatchError> {
+    Ok(body)
+}
+
+fn iface_player__add_to_queue__err(e: crate::runtime::DispatchError) -> iface_player::AddToQueueError {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => match status {
+            401u16 => iface_player::AddToQueueError::Unauthorized(body),
+            403u16 => iface_player::AddToQueueError::Forbidden(body),
+            429u16 => iface_player::AddToQueueError::TooManyRequests(body),
+            _ => iface_player::AddToQueueError::Other(body),
+        },
+        crate::runtime::DispatchError::Transport(m) => iface_player::AddToQueueError::Other(m),
+    }
+}
+
+fn iface_player__get_recently_played__ok(body: String) -> Result<iface_player::CursorPagingPlayHistoryObject, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match iface_player__cursor_paging_play_history_object__from_json(&v) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_player__get_recently_played__err(e: crate::runtime::DispatchError) -> iface_player::GetRecentlyPlayedError {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => match status {
+            401u16 => iface_player::GetRecentlyPlayedError::Unauthorized(body),
+            403u16 => iface_player::GetRecentlyPlayedError::Forbidden(body),
+            429u16 => iface_player::GetRecentlyPlayedError::TooManyRequests(body),
+            _ => iface_player::GetRecentlyPlayedError::Other(body),
+        },
+        crate::runtime::DispatchError::Transport(m) => iface_player::GetRecentlyPlayedError::Other(m),
+    }
+}
+
+fn iface_player__set_repeat_mode_on_users_playback__ok(body: String) -> Result<String, crate::runtime::DispatchError> {
+    Ok(body)
+}
+
+fn iface_player__set_repeat_mode_on_users_playback__err(e: crate::runtime::DispatchError) -> iface_player::SetRepeatModeOnUsersPlaybackError {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => match status {
+            401u16 => iface_player::SetRepeatModeOnUsersPlaybackError::Unauthorized(body),
+            403u16 => iface_player::SetRepeatModeOnUsersPlaybackError::Forbidden(body),
+            429u16 => iface_player::SetRepeatModeOnUsersPlaybackError::TooManyRequests(body),
+            _ => iface_player::SetRepeatModeOnUsersPlaybackError::Other(body),
+        },
+        crate::runtime::DispatchError::Transport(m) => iface_player::SetRepeatModeOnUsersPlaybackError::Other(m),
+    }
+}
+
+fn iface_player__seek_to_position_in_currently_playing_track__ok(body: String) -> Result<String, crate::runtime::DispatchError> {
+    Ok(body)
+}
+
+fn iface_player__seek_to_position_in_currently_playing_track__err(e: crate::runtime::DispatchError) -> iface_player::SeekToPositionInCurrentlyPlayingTrackError {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => match status {
+            401u16 => iface_player::SeekToPositionInCurrentlyPlayingTrackError::Unauthorized(body),
+            403u16 => iface_player::SeekToPositionInCurrentlyPlayingTrackError::Forbidden(body),
+            429u16 => iface_player::SeekToPositionInCurrentlyPlayingTrackError::TooManyRequests(body),
+            _ => iface_player::SeekToPositionInCurrentlyPlayingTrackError::Other(body),
+        },
+        crate::runtime::DispatchError::Transport(m) => iface_player::SeekToPositionInCurrentlyPlayingTrackError::Other(m),
+    }
+}
+
+fn iface_player__toggle_shuffle_for_users_playback__ok(body: String) -> Result<String, crate::runtime::DispatchError> {
+    Ok(body)
+}
+
+fn iface_player__toggle_shuffle_for_users_playback__err(e: crate::runtime::DispatchError) -> iface_player::ToggleShuffleForUsersPlaybackError {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => match status {
+            401u16 => iface_player::ToggleShuffleForUsersPlaybackError::Unauthorized(body),
+            403u16 => iface_player::ToggleShuffleForUsersPlaybackError::Forbidden(body),
+            429u16 => iface_player::ToggleShuffleForUsersPlaybackError::TooManyRequests(body),
+            _ => iface_player::ToggleShuffleForUsersPlaybackError::Other(body),
+        },
+        crate::runtime::DispatchError::Transport(m) => iface_player::ToggleShuffleForUsersPlaybackError::Other(m),
+    }
+}
+
+fn iface_player__set_volume_for_users_playback__ok(body: String) -> Result<String, crate::runtime::DispatchError> {
+    Ok(body)
+}
+
+fn iface_player__set_volume_for_users_playback__err(e: crate::runtime::DispatchError) -> iface_player::SetVolumeForUsersPlaybackError {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => match status {
+            401u16 => iface_player::SetVolumeForUsersPlaybackError::Unauthorized(body),
+            403u16 => iface_player::SetVolumeForUsersPlaybackError::Forbidden(body),
+            429u16 => iface_player::SetVolumeForUsersPlaybackError::TooManyRequests(body),
+            _ => iface_player::SetVolumeForUsersPlaybackError::Other(body),
+        },
+        crate::runtime::DispatchError::Transport(m) => iface_player::SetVolumeForUsersPlaybackError::Other(m),
+    }
+}
+
 impl iface_player::Guest for crate::Component {
-    fn get_information_about_the_users_current_playback(params: iface_player::GetInformationAboutTheUsersCurrentPlaybackParams) -> Result<String, String> {
+    fn get_information_about_the_users_current_playback(params: iface_player::GetInformationAboutTheUsersCurrentPlaybackParams) -> Result<iface_player::CurrentlyPlayingContextObject, iface_player::GetInformationAboutTheUsersCurrentPlaybackError> {
         let json = iface_player__get_information_about_the_users_current_playback_params__to_json(&params);
-        dispatch(&OP_PLAYER_GET_INFORMATION_ABOUT_THE_USERS_CURRENT_PLAYBACK, json)
+        match dispatch(&OP_PLAYER_GET_INFORMATION_ABOUT_THE_USERS_CURRENT_PLAYBACK, json).and_then(iface_player__get_information_about_the_users_current_playback__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_player__get_information_about_the_users_current_playback__err(e)),
+        }
     }
-    fn transfer_a_users_playback(params: iface_player::TransferAUsersPlaybackParams) -> Result<String, String> {
+    fn transfer_a_users_playback(params: iface_player::TransferAUsersPlaybackParams) -> Result<String, iface_player::TransferAUsersPlaybackError> {
         let json = iface_player__transfer_a_users_playback_params__to_json(&params);
-        dispatch(&OP_PLAYER_TRANSFER_A_USERS_PLAYBACK, json)
+        match dispatch(&OP_PLAYER_TRANSFER_A_USERS_PLAYBACK, json).and_then(iface_player__transfer_a_users_playback__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_player__transfer_a_users_playback__err(e)),
+        }
     }
-    fn get_the_users_currently_playing_track(params: iface_player::GetTheUsersCurrentlyPlayingTrackParams) -> Result<String, String> {
+    fn get_the_users_currently_playing_track(params: iface_player::GetTheUsersCurrentlyPlayingTrackParams) -> Result<iface_player::CurrentlyPlayingContextObject, iface_player::GetTheUsersCurrentlyPlayingTrackError> {
         let json = iface_player__get_the_users_currently_playing_track_params__to_json(&params);
-        dispatch(&OP_PLAYER_GET_THE_USERS_CURRENTLY_PLAYING_TRACK, json)
+        match dispatch(&OP_PLAYER_GET_THE_USERS_CURRENTLY_PLAYING_TRACK, json).and_then(iface_player__get_the_users_currently_playing_track__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_player__get_the_users_currently_playing_track__err(e)),
+        }
     }
-    fn get_a_users_available_devices() -> Result<String, String> {
-        dispatch(&OP_PLAYER_GET_A_USERS_AVAILABLE_DEVICES, Value::Object(Map::new()))
+    fn get_a_users_available_devices() -> Result<iface_player::GetAUsersAvailableDevicesResponse, iface_player::GetAUsersAvailableDevicesError> {
+        match dispatch(&OP_PLAYER_GET_A_USERS_AVAILABLE_DEVICES, Value::Object(Map::new())).and_then(iface_player__get_a_users_available_devices__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_player__get_a_users_available_devices__err(e)),
+        }
     }
-    fn skip_users_playback_to_next_track(params: iface_player::SkipUsersPlaybackToNextTrackParams) -> Result<String, String> {
+    fn skip_users_playback_to_next_track(params: iface_player::SkipUsersPlaybackToNextTrackParams) -> Result<String, iface_player::SkipUsersPlaybackToNextTrackError> {
         let json = iface_player__skip_users_playback_to_next_track_params__to_json(&params);
-        dispatch(&OP_PLAYER_SKIP_USERS_PLAYBACK_TO_NEXT_TRACK, json)
+        match dispatch(&OP_PLAYER_SKIP_USERS_PLAYBACK_TO_NEXT_TRACK, json).and_then(iface_player__skip_users_playback_to_next_track__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_player__skip_users_playback_to_next_track__err(e)),
+        }
     }
-    fn pause_a_users_playback(params: iface_player::PauseAUsersPlaybackParams) -> Result<String, String> {
+    fn pause_a_users_playback(params: iface_player::PauseAUsersPlaybackParams) -> Result<String, iface_player::PauseAUsersPlaybackError> {
         let json = iface_player__pause_a_users_playback_params__to_json(&params);
-        dispatch(&OP_PLAYER_PAUSE_A_USERS_PLAYBACK, json)
+        match dispatch(&OP_PLAYER_PAUSE_A_USERS_PLAYBACK, json).and_then(iface_player__pause_a_users_playback__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_player__pause_a_users_playback__err(e)),
+        }
     }
-    fn start_a_users_playback(params: iface_player::StartAUsersPlaybackParams) -> Result<String, String> {
+    fn start_a_users_playback(params: iface_player::StartAUsersPlaybackParams) -> Result<String, iface_player::StartAUsersPlaybackError> {
         let json = iface_player__start_a_users_playback_params__to_json(&params);
-        dispatch(&OP_PLAYER_START_A_USERS_PLAYBACK, json)
+        match dispatch(&OP_PLAYER_START_A_USERS_PLAYBACK, json).and_then(iface_player__start_a_users_playback__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_player__start_a_users_playback__err(e)),
+        }
     }
-    fn skip_users_playback_to_previous_track(params: iface_player::SkipUsersPlaybackToPreviousTrackParams) -> Result<String, String> {
+    fn skip_users_playback_to_previous_track(params: iface_player::SkipUsersPlaybackToPreviousTrackParams) -> Result<String, iface_player::SkipUsersPlaybackToPreviousTrackError> {
         let json = iface_player__skip_users_playback_to_previous_track_params__to_json(&params);
-        dispatch(&OP_PLAYER_SKIP_USERS_PLAYBACK_TO_PREVIOUS_TRACK, json)
+        match dispatch(&OP_PLAYER_SKIP_USERS_PLAYBACK_TO_PREVIOUS_TRACK, json).and_then(iface_player__skip_users_playback_to_previous_track__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_player__skip_users_playback_to_previous_track__err(e)),
+        }
     }
-    fn get_queue() -> Result<String, String> {
-        dispatch(&OP_PLAYER_GET_QUEUE, Value::Object(Map::new()))
+    fn get_queue() -> Result<iface_player::QueueObject, iface_player::GetQueueError> {
+        match dispatch(&OP_PLAYER_GET_QUEUE, Value::Object(Map::new())).and_then(iface_player__get_queue__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_player__get_queue__err(e)),
+        }
     }
-    fn add_to_queue(params: iface_player::AddToQueueParams) -> Result<String, String> {
+    fn add_to_queue(params: iface_player::AddToQueueParams) -> Result<String, iface_player::AddToQueueError> {
         let json = iface_player__add_to_queue_params__to_json(&params);
-        dispatch(&OP_PLAYER_ADD_TO_QUEUE, json)
+        match dispatch(&OP_PLAYER_ADD_TO_QUEUE, json).and_then(iface_player__add_to_queue__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_player__add_to_queue__err(e)),
+        }
     }
-    fn get_recently_played(params: iface_player::GetRecentlyPlayedParams) -> Result<String, String> {
+    fn get_recently_played(params: iface_player::GetRecentlyPlayedParams) -> Result<iface_player::CursorPagingPlayHistoryObject, iface_player::GetRecentlyPlayedError> {
         let json = iface_player__get_recently_played_params__to_json(&params);
-        dispatch(&OP_PLAYER_GET_RECENTLY_PLAYED, json)
+        match dispatch(&OP_PLAYER_GET_RECENTLY_PLAYED, json).and_then(iface_player__get_recently_played__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_player__get_recently_played__err(e)),
+        }
     }
-    fn set_repeat_mode_on_users_playback(params: iface_player::SetRepeatModeOnUsersPlaybackParams) -> Result<String, String> {
+    fn set_repeat_mode_on_users_playback(params: iface_player::SetRepeatModeOnUsersPlaybackParams) -> Result<String, iface_player::SetRepeatModeOnUsersPlaybackError> {
         let json = iface_player__set_repeat_mode_on_users_playback_params__to_json(&params);
-        dispatch(&OP_PLAYER_SET_REPEAT_MODE_ON_USERS_PLAYBACK, json)
+        match dispatch(&OP_PLAYER_SET_REPEAT_MODE_ON_USERS_PLAYBACK, json).and_then(iface_player__set_repeat_mode_on_users_playback__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_player__set_repeat_mode_on_users_playback__err(e)),
+        }
     }
-    fn seek_to_position_in_currently_playing_track(params: iface_player::SeekToPositionInCurrentlyPlayingTrackParams) -> Result<String, String> {
+    fn seek_to_position_in_currently_playing_track(params: iface_player::SeekToPositionInCurrentlyPlayingTrackParams) -> Result<String, iface_player::SeekToPositionInCurrentlyPlayingTrackError> {
         let json = iface_player__seek_to_position_in_currently_playing_track_params__to_json(&params);
-        dispatch(&OP_PLAYER_SEEK_TO_POSITION_IN_CURRENTLY_PLAYING_TRACK, json)
+        match dispatch(&OP_PLAYER_SEEK_TO_POSITION_IN_CURRENTLY_PLAYING_TRACK, json).and_then(iface_player__seek_to_position_in_currently_playing_track__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_player__seek_to_position_in_currently_playing_track__err(e)),
+        }
     }
-    fn toggle_shuffle_for_users_playback(params: iface_player::ToggleShuffleForUsersPlaybackParams) -> Result<String, String> {
+    fn toggle_shuffle_for_users_playback(params: iface_player::ToggleShuffleForUsersPlaybackParams) -> Result<String, iface_player::ToggleShuffleForUsersPlaybackError> {
         let json = iface_player__toggle_shuffle_for_users_playback_params__to_json(&params);
-        dispatch(&OP_PLAYER_TOGGLE_SHUFFLE_FOR_USERS_PLAYBACK, json)
+        match dispatch(&OP_PLAYER_TOGGLE_SHUFFLE_FOR_USERS_PLAYBACK, json).and_then(iface_player__toggle_shuffle_for_users_playback__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_player__toggle_shuffle_for_users_playback__err(e)),
+        }
     }
-    fn set_volume_for_users_playback(params: iface_player::SetVolumeForUsersPlaybackParams) -> Result<String, String> {
+    fn set_volume_for_users_playback(params: iface_player::SetVolumeForUsersPlaybackParams) -> Result<String, iface_player::SetVolumeForUsersPlaybackError> {
         let json = iface_player__set_volume_for_users_playback_params__to_json(&params);
-        dispatch(&OP_PLAYER_SET_VOLUME_FOR_USERS_PLAYBACK, json)
+        match dispatch(&OP_PLAYER_SET_VOLUME_FOR_USERS_PLAYBACK, json).and_then(iface_player__set_volume_for_users_playback__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_player__set_volume_for_users_playback__err(e)),
+        }
     }
 }
 use crate::exports::autostamp::spotify::shows as iface_shows;
@@ -2264,8 +6559,8 @@ const OP_SHOWS_GET_USERS_SAVED_SHOWS: OpSpec = OpSpec {
     method: "GET",
     path_template: "/me/shows",
     fields: &[
-        FieldSpec { snake: "limit", location: FieldLocation::Query },
-        FieldSpec { snake: "offset", location: FieldLocation::Query },
+        FieldSpec { snake: "limit", wire: "limit", location: FieldLocation::Query },
+        FieldSpec { snake: "offset", wire: "offset", location: FieldLocation::Query },
     ],
     auth: &[
         AuthApply { secret_key: "oauth_2_0", kind: AuthKind::Bearer },
@@ -2276,7 +6571,7 @@ const OP_SHOWS_SAVE_SHOWS_USER: OpSpec = OpSpec {
     method: "PUT",
     path_template: "/me/shows",
     fields: &[
-        FieldSpec { snake: "ids", location: FieldLocation::Query },
+        FieldSpec { snake: "ids", wire: "ids", location: FieldLocation::Query },
     ],
     auth: &[
         AuthApply { secret_key: "oauth_2_0", kind: AuthKind::Bearer },
@@ -2287,8 +6582,8 @@ const OP_SHOWS_REMOVE_SHOWS_USER: OpSpec = OpSpec {
     method: "DELETE",
     path_template: "/me/shows",
     fields: &[
-        FieldSpec { snake: "ids", location: FieldLocation::Query },
-        FieldSpec { snake: "market", location: FieldLocation::Query },
+        FieldSpec { snake: "ids", wire: "ids", location: FieldLocation::Query },
+        FieldSpec { snake: "market", wire: "market", location: FieldLocation::Query },
     ],
     auth: &[
         AuthApply { secret_key: "oauth_2_0", kind: AuthKind::Bearer },
@@ -2299,7 +6594,7 @@ const OP_SHOWS_CHECK_USERS_SAVED_SHOWS: OpSpec = OpSpec {
     method: "GET",
     path_template: "/me/shows/contains",
     fields: &[
-        FieldSpec { snake: "ids", location: FieldLocation::Query },
+        FieldSpec { snake: "ids", wire: "ids", location: FieldLocation::Query },
     ],
     auth: &[
         AuthApply { secret_key: "oauth_2_0", kind: AuthKind::Bearer },
@@ -2310,8 +6605,8 @@ const OP_SHOWS_GET_MULTIPLE_SHOWS: OpSpec = OpSpec {
     method: "GET",
     path_template: "/shows",
     fields: &[
-        FieldSpec { snake: "market", location: FieldLocation::Query },
-        FieldSpec { snake: "ids", location: FieldLocation::Query },
+        FieldSpec { snake: "market", wire: "market", location: FieldLocation::Query },
+        FieldSpec { snake: "ids", wire: "ids", location: FieldLocation::Query },
     ],
     auth: &[
         AuthApply { secret_key: "oauth_2_0", kind: AuthKind::Bearer },
@@ -2322,8 +6617,8 @@ const OP_SHOWS_GET_A_SHOW: OpSpec = OpSpec {
     method: "GET",
     path_template: "/shows/{id}",
     fields: &[
-        FieldSpec { snake: "market", location: FieldLocation::Query },
-        FieldSpec { snake: "id", location: FieldLocation::Path },
+        FieldSpec { snake: "market", wire: "market", location: FieldLocation::Query },
+        FieldSpec { snake: "id", wire: "id", location: FieldLocation::Path },
     ],
     auth: &[
         AuthApply { secret_key: "oauth_2_0", kind: AuthKind::Bearer },
@@ -2334,15 +6629,105 @@ const OP_SHOWS_GET_A_SHOWS_EPISODES: OpSpec = OpSpec {
     method: "GET",
     path_template: "/shows/{id}/episodes",
     fields: &[
-        FieldSpec { snake: "id", location: FieldLocation::Path },
-        FieldSpec { snake: "market", location: FieldLocation::Query },
-        FieldSpec { snake: "limit", location: FieldLocation::Query },
-        FieldSpec { snake: "offset", location: FieldLocation::Query },
+        FieldSpec { snake: "id", wire: "id", location: FieldLocation::Path },
+        FieldSpec { snake: "market", wire: "market", location: FieldLocation::Query },
+        FieldSpec { snake: "limit", wire: "limit", location: FieldLocation::Query },
+        FieldSpec { snake: "offset", wire: "offset", location: FieldLocation::Query },
     ],
     auth: &[
         AuthApply { secret_key: "oauth_2_0", kind: AuthKind::Bearer },
     ],
 };
+
+fn iface_shows__simplified_show_object_type_op_enum__to_str(e: &iface_shows::SimplifiedShowObjectTypeOpEnum) -> &'static str {
+    match e {
+        iface_shows::SimplifiedShowObjectTypeOpEnum::Show => "show",
+    }
+}
+
+fn iface_shows__paging_saved_show_object__to_json(p: &iface_shows::PagingSavedShowObject) -> Value {
+    let mut m = Map::new();
+    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_shows__get_multiple_shows_response__to_json(p: &iface_shows::GetMultipleShowsResponse) -> Value {
+    let mut m = Map::new();
+    m.insert("shows".into(), Value::Array((&p.shows).iter().map(|v| iface_shows__simplified_show_object__to_json(v)).collect()));
+    Value::Object(m)
+}
+
+fn iface_shows__simplified_show_object__to_json(p: &iface_shows::SimplifiedShowObject) -> Value {
+    let mut m = Map::new();
+    m.insert("available_markets".into(), Value::Array((&p.available_markets).iter().map(|v| Value::String((v).clone())).collect()));
+    m.insert("copyrights".into(), Value::Array((&p.copyrights).iter().map(|v| iface_shows__copyright_object__to_json(v)).collect()));
+    m.insert("description".into(), Value::String((&p.description).clone()));
+    m.insert("explicit".into(), Value::Bool(*(&p.explicit)));
+    m.insert("external_urls".into(), iface_shows__external_url_object__to_json(&p.external_urls));
+    m.insert("href".into(), Value::String((&p.href).clone()));
+    m.insert("html_description".into(), Value::String((&p.html_description).clone()));
+    m.insert("id".into(), Value::String((&p.id).clone()));
+    m.insert("images".into(), Value::Array((&p.images).iter().map(|v| iface_shows__image_object__to_json(v)).collect()));
+    m.insert("is_externally_hosted".into(), Value::Bool(*(&p.is_externally_hosted)));
+    m.insert("languages".into(), Value::Array((&p.languages).iter().map(|v| Value::String((v).clone())).collect()));
+    m.insert("media_type".into(), Value::String((&p.media_type).clone()));
+    m.insert("name".into(), Value::String((&p.name).clone()));
+    m.insert("publisher".into(), Value::String((&p.publisher).clone()));
+    m.insert("total_episodes".into(), Value::Number(serde_json::Number::from(*(&p.total_episodes))));
+    m.insert("type".into(), Value::String(iface_shows__simplified_show_object_type_op_enum__to_str(&p.type_op).into()));
+    m.insert("uri".into(), Value::String((&p.uri).clone()));
+    Value::Object(m)
+}
+
+fn iface_shows__copyright_object__to_json(p: &iface_shows::CopyrightObject) -> Value {
+    let mut m = Map::new();
+    m.insert("text".into(), match (&p.text) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("type".into(), match (&p.type_op) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_shows__external_url_object__to_json(p: &iface_shows::ExternalUrlObject) -> Value {
+    let mut m = Map::new();
+    m.insert("spotify".into(), match (&p.spotify) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_shows__image_object__to_json(p: &iface_shows::ImageObject) -> Value {
+    let mut m = Map::new();
+    m.insert("height".into(), Value::Number(serde_json::Number::from(*(&p.height))));
+    m.insert("url".into(), Value::String((&p.url).clone()));
+    m.insert("width".into(), Value::Number(serde_json::Number::from(*(&p.width))));
+    Value::Object(m)
+}
+
+fn iface_shows__show_object__to_json(p: &iface_shows::ShowObject) -> Value {
+    let mut m = Map::new();
+    m.insert("available_markets".into(), Value::Array((&p.available_markets).iter().map(|v| Value::String((v).clone())).collect()));
+    m.insert("copyrights".into(), Value::Array((&p.copyrights).iter().map(|v| iface_shows__copyright_object__to_json(v)).collect()));
+    m.insert("description".into(), Value::String((&p.description).clone()));
+    m.insert("explicit".into(), Value::Bool(*(&p.explicit)));
+    m.insert("external_urls".into(), iface_shows__external_url_object__to_json(&p.external_urls));
+    m.insert("href".into(), Value::String((&p.href).clone()));
+    m.insert("html_description".into(), Value::String((&p.html_description).clone()));
+    m.insert("id".into(), Value::String((&p.id).clone()));
+    m.insert("images".into(), Value::Array((&p.images).iter().map(|v| iface_shows__image_object__to_json(v)).collect()));
+    m.insert("is_externally_hosted".into(), Value::Bool(*(&p.is_externally_hosted)));
+    m.insert("languages".into(), Value::Array((&p.languages).iter().map(|v| Value::String((v).clone())).collect()));
+    m.insert("media_type".into(), Value::String((&p.media_type).clone()));
+    m.insert("name".into(), Value::String((&p.name).clone()));
+    m.insert("publisher".into(), Value::String((&p.publisher).clone()));
+    m.insert("total_episodes".into(), Value::Number(serde_json::Number::from(*(&p.total_episodes))));
+    m.insert("type".into(), Value::String(iface_shows__simplified_show_object_type_op_enum__to_str(&p.type_op).into()));
+    m.insert("uri".into(), Value::String((&p.uri).clone()));
+    m.insert("episodes".into(), Value::String((&p.episodes).clone()));
+    Value::Object(m)
+}
+
+fn iface_shows__paging_simplified_episode_object__to_json(p: &iface_shows::PagingSimplifiedEpisodeObject) -> Value {
+    let mut m = Map::new();
+    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
 
 fn iface_shows__get_users_saved_shows_params__to_json(p: &iface_shows::GetUsersSavedShowsParams) -> Value {
     let mut m = Map::new();
@@ -2393,34 +6778,301 @@ fn iface_shows__get_a_shows_episodes_params__to_json(p: &iface_shows::GetAShowsE
     Value::Object(m)
 }
 
+fn iface_shows__paging_saved_show_object__from_json(v: &Value) -> Option<iface_shows::PagingSavedShowObject> {
+    let m = v.as_object()?;
+    Some(iface_shows::PagingSavedShowObject {
+        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    })
+}
+
+fn iface_shows__get_multiple_shows_response__from_json(v: &Value) -> Option<iface_shows::GetMultipleShowsResponse> {
+    let m = v.as_object()?;
+    Some(iface_shows::GetMultipleShowsResponse {
+        shows: m.get("shows").and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| iface_shows__simplified_show_object__from_json(x)).collect())).unwrap_or_default(),
+    })
+}
+
+fn iface_shows__simplified_show_object__from_json(v: &Value) -> Option<iface_shows::SimplifiedShowObject> {
+    let m = v.as_object()?;
+    Some(iface_shows::SimplifiedShowObject {
+        available_markets: m.get("available_markets").and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| (x).as_str().map(|s| s.to_string())).collect())).unwrap_or_default(),
+        copyrights: m.get("copyrights").and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| iface_shows__copyright_object__from_json(x)).collect())).unwrap_or_default(),
+        description: m.get("description").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        explicit: m.get("explicit").and_then(|v| (v).as_bool()).unwrap_or_default(),
+        external_urls: match m.get("external_urls").and_then(|v| iface_shows__external_url_object__from_json(v)) { Some(x) => x, None => return None },
+        href: m.get("href").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        html_description: m.get("html_description").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        id: m.get("id").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        images: m.get("images").and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| iface_shows__image_object__from_json(x)).collect())).unwrap_or_default(),
+        is_externally_hosted: m.get("is_externally_hosted").and_then(|v| (v).as_bool()).unwrap_or_default(),
+        languages: m.get("languages").and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| (x).as_str().map(|s| s.to_string())).collect())).unwrap_or_default(),
+        media_type: m.get("media_type").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        name: m.get("name").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        publisher: m.get("publisher").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        total_episodes: m.get("total_episodes").and_then(|v| (v).as_i64().map(|n| n as i32)).unwrap_or_default(),
+        type_op: match m.get("type").and_then(|v| (v).as_str().and_then(iface_shows__simplified_show_object_type_op_enum__from_str)) { Some(x) => x, None => return None },
+        uri: m.get("uri").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+    })
+}
+
+fn iface_shows__copyright_object__from_json(v: &Value) -> Option<iface_shows::CopyrightObject> {
+    let m = v.as_object()?;
+    Some(iface_shows::CopyrightObject {
+        text: m.get("text").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        type_op: m.get("type").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    })
+}
+
+fn iface_shows__external_url_object__from_json(v: &Value) -> Option<iface_shows::ExternalUrlObject> {
+    let m = v.as_object()?;
+    Some(iface_shows::ExternalUrlObject {
+        spotify: m.get("spotify").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    })
+}
+
+fn iface_shows__image_object__from_json(v: &Value) -> Option<iface_shows::ImageObject> {
+    let m = v.as_object()?;
+    Some(iface_shows::ImageObject {
+        height: m.get("height").and_then(|v| (v).as_i64().map(|n| n as i32)).unwrap_or_default(),
+        url: m.get("url").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        width: m.get("width").and_then(|v| (v).as_i64().map(|n| n as i32)).unwrap_or_default(),
+    })
+}
+
+fn iface_shows__show_object__from_json(v: &Value) -> Option<iface_shows::ShowObject> {
+    let m = v.as_object()?;
+    Some(iface_shows::ShowObject {
+        available_markets: m.get("available_markets").and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| (x).as_str().map(|s| s.to_string())).collect())).unwrap_or_default(),
+        copyrights: m.get("copyrights").and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| iface_shows__copyright_object__from_json(x)).collect())).unwrap_or_default(),
+        description: m.get("description").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        explicit: m.get("explicit").and_then(|v| (v).as_bool()).unwrap_or_default(),
+        external_urls: match m.get("external_urls").and_then(|v| iface_shows__external_url_object__from_json(v)) { Some(x) => x, None => return None },
+        href: m.get("href").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        html_description: m.get("html_description").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        id: m.get("id").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        images: m.get("images").and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| iface_shows__image_object__from_json(x)).collect())).unwrap_or_default(),
+        is_externally_hosted: m.get("is_externally_hosted").and_then(|v| (v).as_bool()).unwrap_or_default(),
+        languages: m.get("languages").and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| (x).as_str().map(|s| s.to_string())).collect())).unwrap_or_default(),
+        media_type: m.get("media_type").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        name: m.get("name").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        publisher: m.get("publisher").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        total_episodes: m.get("total_episodes").and_then(|v| (v).as_i64().map(|n| n as i32)).unwrap_or_default(),
+        type_op: match m.get("type").and_then(|v| (v).as_str().and_then(iface_shows__simplified_show_object_type_op_enum__from_str)) { Some(x) => x, None => return None },
+        uri: m.get("uri").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        episodes: m.get("episodes").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+    })
+}
+
+fn iface_shows__paging_simplified_episode_object__from_json(v: &Value) -> Option<iface_shows::PagingSimplifiedEpisodeObject> {
+    let m = v.as_object()?;
+    Some(iface_shows::PagingSimplifiedEpisodeObject {
+        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    })
+}
+
+fn iface_shows__simplified_show_object_type_op_enum__from_str(s: &str) -> Option<iface_shows::SimplifiedShowObjectTypeOpEnum> {
+    match s {
+        "show" => Some(iface_shows::SimplifiedShowObjectTypeOpEnum::Show),
+        _ => None,
+    }
+}
+
+fn iface_shows__get_users_saved_shows__ok(body: String) -> Result<iface_shows::PagingSavedShowObject, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match iface_shows__paging_saved_show_object__from_json(&v) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_shows__get_users_saved_shows__err(e: crate::runtime::DispatchError) -> iface_shows::GetUsersSavedShowsError {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => match status {
+            401u16 => iface_shows::GetUsersSavedShowsError::Unauthorized(body),
+            403u16 => iface_shows::GetUsersSavedShowsError::Forbidden(body),
+            429u16 => iface_shows::GetUsersSavedShowsError::TooManyRequests(body),
+            _ => iface_shows::GetUsersSavedShowsError::Other(body),
+        },
+        crate::runtime::DispatchError::Transport(m) => iface_shows::GetUsersSavedShowsError::Other(m),
+    }
+}
+
+fn iface_shows__save_shows_user__ok(body: String) -> Result<String, crate::runtime::DispatchError> {
+    Ok(body)
+}
+
+fn iface_shows__save_shows_user__err(e: crate::runtime::DispatchError) -> iface_shows::SaveShowsUserError {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => match status {
+            401u16 => iface_shows::SaveShowsUserError::Unauthorized(body),
+            403u16 => iface_shows::SaveShowsUserError::Forbidden(body),
+            429u16 => iface_shows::SaveShowsUserError::TooManyRequests(body),
+            _ => iface_shows::SaveShowsUserError::Other(body),
+        },
+        crate::runtime::DispatchError::Transport(m) => iface_shows::SaveShowsUserError::Other(m),
+    }
+}
+
+fn iface_shows__remove_shows_user__ok(body: String) -> Result<String, crate::runtime::DispatchError> {
+    Ok(body)
+}
+
+fn iface_shows__remove_shows_user__err(e: crate::runtime::DispatchError) -> iface_shows::RemoveShowsUserError {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => match status {
+            401u16 => iface_shows::RemoveShowsUserError::Unauthorized(body),
+            403u16 => iface_shows::RemoveShowsUserError::Forbidden(body),
+            429u16 => iface_shows::RemoveShowsUserError::TooManyRequests(body),
+            _ => iface_shows::RemoveShowsUserError::Other(body),
+        },
+        crate::runtime::DispatchError::Transport(m) => iface_shows::RemoveShowsUserError::Other(m),
+    }
+}
+
+fn iface_shows__check_users_saved_shows__ok(body: String) -> Result<Vec<bool>, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match (&v).as_array().map(|a| a.iter().filter_map(|x| (x).as_bool()).collect()) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_shows__check_users_saved_shows__err(e: crate::runtime::DispatchError) -> iface_shows::CheckUsersSavedShowsError {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => match status {
+            401u16 => iface_shows::CheckUsersSavedShowsError::Unauthorized(body),
+            403u16 => iface_shows::CheckUsersSavedShowsError::Forbidden(body),
+            429u16 => iface_shows::CheckUsersSavedShowsError::TooManyRequests(body),
+            _ => iface_shows::CheckUsersSavedShowsError::Other(body),
+        },
+        crate::runtime::DispatchError::Transport(m) => iface_shows::CheckUsersSavedShowsError::Other(m),
+    }
+}
+
+fn iface_shows__get_multiple_shows__ok(body: String) -> Result<iface_shows::GetMultipleShowsResponse, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match iface_shows__get_multiple_shows_response__from_json(&v) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_shows__get_multiple_shows__err(e: crate::runtime::DispatchError) -> iface_shows::GetMultipleShowsError {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => match status {
+            401u16 => iface_shows::GetMultipleShowsError::Unauthorized(body),
+            403u16 => iface_shows::GetMultipleShowsError::Forbidden(body),
+            429u16 => iface_shows::GetMultipleShowsError::TooManyRequests(body),
+            _ => iface_shows::GetMultipleShowsError::Other(body),
+        },
+        crate::runtime::DispatchError::Transport(m) => iface_shows::GetMultipleShowsError::Other(m),
+    }
+}
+
+fn iface_shows__get_a_show__ok(body: String) -> Result<iface_shows::ShowObject, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match iface_shows__show_object__from_json(&v) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_shows__get_a_show__err(e: crate::runtime::DispatchError) -> iface_shows::GetAShowError {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => match status {
+            401u16 => iface_shows::GetAShowError::Unauthorized(body),
+            403u16 => iface_shows::GetAShowError::Forbidden(body),
+            429u16 => iface_shows::GetAShowError::TooManyRequests(body),
+            _ => iface_shows::GetAShowError::Other(body),
+        },
+        crate::runtime::DispatchError::Transport(m) => iface_shows::GetAShowError::Other(m),
+    }
+}
+
+fn iface_shows__get_a_shows_episodes__ok(body: String) -> Result<iface_shows::PagingSimplifiedEpisodeObject, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match iface_shows__paging_simplified_episode_object__from_json(&v) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_shows__get_a_shows_episodes__err(e: crate::runtime::DispatchError) -> iface_shows::GetAShowsEpisodesError {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => match status {
+            401u16 => iface_shows::GetAShowsEpisodesError::Unauthorized(body),
+            403u16 => iface_shows::GetAShowsEpisodesError::Forbidden(body),
+            429u16 => iface_shows::GetAShowsEpisodesError::TooManyRequests(body),
+            _ => iface_shows::GetAShowsEpisodesError::Other(body),
+        },
+        crate::runtime::DispatchError::Transport(m) => iface_shows::GetAShowsEpisodesError::Other(m),
+    }
+}
+
 impl iface_shows::Guest for crate::Component {
-    fn get_users_saved_shows(params: iface_shows::GetUsersSavedShowsParams) -> Result<String, String> {
+    fn get_users_saved_shows(params: iface_shows::GetUsersSavedShowsParams) -> Result<iface_shows::PagingSavedShowObject, iface_shows::GetUsersSavedShowsError> {
         let json = iface_shows__get_users_saved_shows_params__to_json(&params);
-        dispatch(&OP_SHOWS_GET_USERS_SAVED_SHOWS, json)
+        match dispatch(&OP_SHOWS_GET_USERS_SAVED_SHOWS, json).and_then(iface_shows__get_users_saved_shows__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_shows__get_users_saved_shows__err(e)),
+        }
     }
-    fn save_shows_user(params: iface_shows::SaveShowsUserParams) -> Result<String, String> {
+    fn save_shows_user(params: iface_shows::SaveShowsUserParams) -> Result<String, iface_shows::SaveShowsUserError> {
         let json = iface_shows__save_shows_user_params__to_json(&params);
-        dispatch(&OP_SHOWS_SAVE_SHOWS_USER, json)
+        match dispatch(&OP_SHOWS_SAVE_SHOWS_USER, json).and_then(iface_shows__save_shows_user__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_shows__save_shows_user__err(e)),
+        }
     }
-    fn remove_shows_user(params: iface_shows::RemoveShowsUserParams) -> Result<String, String> {
+    fn remove_shows_user(params: iface_shows::RemoveShowsUserParams) -> Result<String, iface_shows::RemoveShowsUserError> {
         let json = iface_shows__remove_shows_user_params__to_json(&params);
-        dispatch(&OP_SHOWS_REMOVE_SHOWS_USER, json)
+        match dispatch(&OP_SHOWS_REMOVE_SHOWS_USER, json).and_then(iface_shows__remove_shows_user__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_shows__remove_shows_user__err(e)),
+        }
     }
-    fn check_users_saved_shows(params: iface_shows::CheckUsersSavedShowsParams) -> Result<String, String> {
+    fn check_users_saved_shows(params: iface_shows::CheckUsersSavedShowsParams) -> Result<Vec<bool>, iface_shows::CheckUsersSavedShowsError> {
         let json = iface_shows__check_users_saved_shows_params__to_json(&params);
-        dispatch(&OP_SHOWS_CHECK_USERS_SAVED_SHOWS, json)
+        match dispatch(&OP_SHOWS_CHECK_USERS_SAVED_SHOWS, json).and_then(iface_shows__check_users_saved_shows__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_shows__check_users_saved_shows__err(e)),
+        }
     }
-    fn get_multiple_shows(params: iface_shows::GetMultipleShowsParams) -> Result<String, String> {
+    fn get_multiple_shows(params: iface_shows::GetMultipleShowsParams) -> Result<iface_shows::GetMultipleShowsResponse, iface_shows::GetMultipleShowsError> {
         let json = iface_shows__get_multiple_shows_params__to_json(&params);
-        dispatch(&OP_SHOWS_GET_MULTIPLE_SHOWS, json)
+        match dispatch(&OP_SHOWS_GET_MULTIPLE_SHOWS, json).and_then(iface_shows__get_multiple_shows__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_shows__get_multiple_shows__err(e)),
+        }
     }
-    fn get_a_show(params: iface_shows::GetAShowParams) -> Result<String, String> {
+    fn get_a_show(params: iface_shows::GetAShowParams) -> Result<iface_shows::ShowObject, iface_shows::GetAShowError> {
         let json = iface_shows__get_a_show_params__to_json(&params);
-        dispatch(&OP_SHOWS_GET_A_SHOW, json)
+        match dispatch(&OP_SHOWS_GET_A_SHOW, json).and_then(iface_shows__get_a_show__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_shows__get_a_show__err(e)),
+        }
     }
-    fn get_a_shows_episodes(params: iface_shows::GetAShowsEpisodesParams) -> Result<String, String> {
+    fn get_a_shows_episodes(params: iface_shows::GetAShowsEpisodesParams) -> Result<iface_shows::PagingSimplifiedEpisodeObject, iface_shows::GetAShowsEpisodesError> {
         let json = iface_shows__get_a_shows_episodes_params__to_json(&params);
-        dispatch(&OP_SHOWS_GET_A_SHOWS_EPISODES, json)
+        match dispatch(&OP_SHOWS_GET_A_SHOWS_EPISODES, json).and_then(iface_shows__get_a_shows_episodes__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_shows__get_a_shows_episodes__err(e)),
+        }
     }
 }
 use crate::exports::autostamp::spotify::genres as iface_genres;
@@ -2435,9 +7087,48 @@ const OP_GENRES_GET_RECOMMENDATION_GENRES: OpSpec = OpSpec {
     ],
 };
 
+fn iface_genres__get_recommendation_genres_response__to_json(p: &iface_genres::GetRecommendationGenresResponse) -> Value {
+    let mut m = Map::new();
+    m.insert("genres".into(), Value::Array((&p.genres).iter().map(|v| Value::String((v).clone())).collect()));
+    Value::Object(m)
+}
+
+fn iface_genres__get_recommendation_genres_response__from_json(v: &Value) -> Option<iface_genres::GetRecommendationGenresResponse> {
+    let m = v.as_object()?;
+    Some(iface_genres::GetRecommendationGenresResponse {
+        genres: m.get("genres").and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| (x).as_str().map(|s| s.to_string())).collect())).unwrap_or_default(),
+    })
+}
+
+fn iface_genres__get_recommendation_genres__ok(body: String) -> Result<iface_genres::GetRecommendationGenresResponse, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match iface_genres__get_recommendation_genres_response__from_json(&v) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_genres__get_recommendation_genres__err(e: crate::runtime::DispatchError) -> iface_genres::GetRecommendationGenresError {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => match status {
+            401u16 => iface_genres::GetRecommendationGenresError::Unauthorized(body),
+            403u16 => iface_genres::GetRecommendationGenresError::Forbidden(body),
+            429u16 => iface_genres::GetRecommendationGenresError::TooManyRequests(body),
+            _ => iface_genres::GetRecommendationGenresError::Other(body),
+        },
+        crate::runtime::DispatchError::Transport(m) => iface_genres::GetRecommendationGenresError::Other(m),
+    }
+}
+
 impl iface_genres::Guest for crate::Component {
-    fn get_recommendation_genres() -> Result<String, String> {
-        dispatch(&OP_GENRES_GET_RECOMMENDATION_GENRES, Value::Object(Map::new()))
+    fn get_recommendation_genres() -> Result<iface_genres::GetRecommendationGenresResponse, iface_genres::GetRecommendationGenresError> {
+        match dispatch(&OP_GENRES_GET_RECOMMENDATION_GENRES, Value::Object(Map::new())).and_then(iface_genres__get_recommendation_genres__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_genres__get_recommendation_genres__err(e)),
+        }
     }
 }
 use crate::exports::autostamp::spotify::search as iface_search;
@@ -2446,12 +7137,12 @@ const OP_SEARCH_SEARCH: OpSpec = OpSpec {
     method: "GET",
     path_template: "/search",
     fields: &[
-        FieldSpec { snake: "q", location: FieldLocation::Query },
-        FieldSpec { snake: "type", location: FieldLocation::Query },
-        FieldSpec { snake: "market", location: FieldLocation::Query },
-        FieldSpec { snake: "limit", location: FieldLocation::Query },
-        FieldSpec { snake: "offset", location: FieldLocation::Query },
-        FieldSpec { snake: "include_external", location: FieldLocation::Query },
+        FieldSpec { snake: "q", wire: "q", location: FieldLocation::Query },
+        FieldSpec { snake: "type", wire: "type", location: FieldLocation::Query },
+        FieldSpec { snake: "market", wire: "market", location: FieldLocation::Query },
+        FieldSpec { snake: "limit", wire: "limit", location: FieldLocation::Query },
+        FieldSpec { snake: "offset", wire: "offset", location: FieldLocation::Query },
+        FieldSpec { snake: "include_external", wire: "include_external", location: FieldLocation::Query },
     ],
     auth: &[
         AuthApply { secret_key: "oauth_2_0", kind: AuthKind::Bearer },
@@ -2476,6 +7167,60 @@ fn iface_search__search_include_external_enum__to_str(e: &iface_search::SearchIn
     }
 }
 
+fn iface_search__search_response__to_json(p: &iface_search::SearchResponse) -> Value {
+    let mut m = Map::new();
+    m.insert("albums".into(), match (&p.albums) { Some(v) => iface_search__paging_simplified_album_object__to_json(v), None => Value::Null });
+    m.insert("artists".into(), match (&p.artists) { Some(v) => iface_search__paging_artist_object__to_json(v), None => Value::Null });
+    m.insert("audiobooks".into(), match (&p.audiobooks) { Some(v) => iface_search__paging_simplified_audiobook_object__to_json(v), None => Value::Null });
+    m.insert("episodes".into(), match (&p.episodes) { Some(v) => iface_search__paging_simplified_episode_object__to_json(v), None => Value::Null });
+    m.insert("playlists".into(), match (&p.playlists) { Some(v) => iface_search__paging_playlist_object__to_json(v), None => Value::Null });
+    m.insert("shows".into(), match (&p.shows) { Some(v) => iface_search__paging_simplified_show_object__to_json(v), None => Value::Null });
+    m.insert("tracks".into(), match (&p.tracks) { Some(v) => iface_search__paging_track_object__to_json(v), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_search__paging_simplified_album_object__to_json(p: &iface_search::PagingSimplifiedAlbumObject) -> Value {
+    let mut m = Map::new();
+    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_search__paging_artist_object__to_json(p: &iface_search::PagingArtistObject) -> Value {
+    let mut m = Map::new();
+    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_search__paging_simplified_audiobook_object__to_json(p: &iface_search::PagingSimplifiedAudiobookObject) -> Value {
+    let mut m = Map::new();
+    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_search__paging_simplified_episode_object__to_json(p: &iface_search::PagingSimplifiedEpisodeObject) -> Value {
+    let mut m = Map::new();
+    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_search__paging_playlist_object__to_json(p: &iface_search::PagingPlaylistObject) -> Value {
+    let mut m = Map::new();
+    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_search__paging_simplified_show_object__to_json(p: &iface_search::PagingSimplifiedShowObject) -> Value {
+    let mut m = Map::new();
+    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_search__paging_track_object__to_json(p: &iface_search::PagingTrackObject) -> Value {
+    let mut m = Map::new();
+    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
 fn iface_search__search_params__to_json(p: &iface_search::SearchParams) -> Value {
     let mut m = Map::new();
     m.insert("q".into(), Value::String((&p.q).clone()));
@@ -2487,10 +7232,98 @@ fn iface_search__search_params__to_json(p: &iface_search::SearchParams) -> Value
     Value::Object(m)
 }
 
+fn iface_search__search_response__from_json(v: &Value) -> Option<iface_search::SearchResponse> {
+    let m = v.as_object()?;
+    Some(iface_search::SearchResponse {
+        albums: m.get("albums").filter(|v| !v.is_null()).and_then(|v| iface_search__paging_simplified_album_object__from_json(v)),
+        artists: m.get("artists").filter(|v| !v.is_null()).and_then(|v| iface_search__paging_artist_object__from_json(v)),
+        audiobooks: m.get("audiobooks").filter(|v| !v.is_null()).and_then(|v| iface_search__paging_simplified_audiobook_object__from_json(v)),
+        episodes: m.get("episodes").filter(|v| !v.is_null()).and_then(|v| iface_search__paging_simplified_episode_object__from_json(v)),
+        playlists: m.get("playlists").filter(|v| !v.is_null()).and_then(|v| iface_search__paging_playlist_object__from_json(v)),
+        shows: m.get("shows").filter(|v| !v.is_null()).and_then(|v| iface_search__paging_simplified_show_object__from_json(v)),
+        tracks: m.get("tracks").filter(|v| !v.is_null()).and_then(|v| iface_search__paging_track_object__from_json(v)),
+    })
+}
+
+fn iface_search__paging_simplified_album_object__from_json(v: &Value) -> Option<iface_search::PagingSimplifiedAlbumObject> {
+    let m = v.as_object()?;
+    Some(iface_search::PagingSimplifiedAlbumObject {
+        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    })
+}
+
+fn iface_search__paging_artist_object__from_json(v: &Value) -> Option<iface_search::PagingArtistObject> {
+    let m = v.as_object()?;
+    Some(iface_search::PagingArtistObject {
+        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    })
+}
+
+fn iface_search__paging_simplified_audiobook_object__from_json(v: &Value) -> Option<iface_search::PagingSimplifiedAudiobookObject> {
+    let m = v.as_object()?;
+    Some(iface_search::PagingSimplifiedAudiobookObject {
+        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    })
+}
+
+fn iface_search__paging_simplified_episode_object__from_json(v: &Value) -> Option<iface_search::PagingSimplifiedEpisodeObject> {
+    let m = v.as_object()?;
+    Some(iface_search::PagingSimplifiedEpisodeObject {
+        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    })
+}
+
+fn iface_search__paging_playlist_object__from_json(v: &Value) -> Option<iface_search::PagingPlaylistObject> {
+    let m = v.as_object()?;
+    Some(iface_search::PagingPlaylistObject {
+        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    })
+}
+
+fn iface_search__paging_simplified_show_object__from_json(v: &Value) -> Option<iface_search::PagingSimplifiedShowObject> {
+    let m = v.as_object()?;
+    Some(iface_search::PagingSimplifiedShowObject {
+        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    })
+}
+
+fn iface_search__paging_track_object__from_json(v: &Value) -> Option<iface_search::PagingTrackObject> {
+    let m = v.as_object()?;
+    Some(iface_search::PagingTrackObject {
+        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    })
+}
+
+fn iface_search__search__ok(body: String) -> Result<iface_search::SearchResponse, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match iface_search__search_response__from_json(&v) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_search__search__err(e: crate::runtime::DispatchError) -> iface_search::SearchError {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => match status {
+            401u16 => iface_search::SearchError::Unauthorized(body),
+            403u16 => iface_search::SearchError::Forbidden(body),
+            429u16 => iface_search::SearchError::TooManyRequests(body),
+            _ => iface_search::SearchError::Other(body),
+        },
+        crate::runtime::DispatchError::Transport(m) => iface_search::SearchError::Other(m),
+    }
+}
+
 impl iface_search::Guest for crate::Component {
-    fn search(params: iface_search::SearchParams) -> Result<String, String> {
+    fn search(params: iface_search::SearchParams) -> Result<iface_search::SearchResponse, iface_search::SearchError> {
         let json = iface_search__search_params__to_json(&params);
-        dispatch(&OP_SEARCH_SEARCH, json)
+        match dispatch(&OP_SEARCH_SEARCH, json).and_then(iface_search__search__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_search__search__err(e)),
+        }
     }
 }
 

@@ -44,10 +44,15 @@ pub(crate) enum FieldLocation {
     Body,
 }
 
-/// A single operation parameter: the snake-case key it carries in the params JSON and where
-/// it belongs in the request.
+/// A single operation parameter. `snake` keys the field in the internal params JSON (and, for a
+/// path field, matches the `{snake}` placeholder in the path template); `wire` is the verbatim name
+/// the field takes on the HTTP wire (query key, header name, or body property). The two differ
+/// whenever the source name isn't already snake_case (e.g. `dryRun` → snake `dry_run`, wire
+/// `dryRun`), and let distinct inputs that share a snake key (`DateCreated`, `DateCreated<`) still
+/// travel under their true names.
 pub(crate) struct FieldSpec {
     pub(crate) snake: &'static str,
+    pub(crate) wire: &'static str,
     pub(crate) location: FieldLocation,
 }
 
@@ -71,6 +76,16 @@ pub(crate) struct AuthApply {
     pub(crate) kind: AuthKind,
 }
 
+/// The failure modes of [`dispatch`], kept structured so each generated operation can map them
+/// onto its own typed error: an `Http` failure carries the response status and body (routed to
+/// the matching error-variant case), while a `Transport` failure carries a message for the
+/// catch-all case (a secret lookup, connection, or decode failure that never produced an HTTP
+/// status).
+pub(crate) enum DispatchError {
+    Http { status: u16, body: String },
+    Transport(String),
+}
+
 /// A single API operation: HTTP method, path template (with `{snake}` placeholders), the
 /// parameter fields, and the security schemes to apply.
 pub(crate) struct OpSpec {
@@ -81,8 +96,9 @@ pub(crate) struct OpSpec {
 }
 
 /// Execute `op` with the supplied `params` (a JSON object keyed by snake-case field names)
-/// and return the response body as a string, or an error message.
-pub(crate) fn dispatch(op: &OpSpec, params: Value) -> Result<String, String> {
+/// and return the raw 2xx response body, or a structured [`DispatchError`] the caller maps
+/// onto the operation's typed error.
+pub(crate) fn dispatch(op: &OpSpec, params: Value) -> Result<String, DispatchError> {
     let obj = match &params {
         Value::Object(map) => Some(map),
         _ => None,
@@ -105,10 +121,10 @@ pub(crate) fn dispatch(op: &OpSpec, params: Value) -> Result<String, String> {
                 let placeholder = format!("{{{}}}", field.snake);
                 path = path.replace(&placeholder, &percent_encode(&scalar(value)));
             }
-            FieldLocation::Query => query.push((field.snake.to_string(), scalar(value))),
-            FieldLocation::Header => headers.push((field.snake.to_string(), scalar(value))),
+            FieldLocation::Query => query.push((field.wire.to_string(), scalar(value))),
+            FieldLocation::Header => headers.push((field.wire.to_string(), scalar(value))),
             FieldLocation::Body => {
-                body.insert(field.snake.to_string(), value.clone());
+                body.insert(field.wire.to_string(), value.clone());
             }
         }
     }
@@ -116,7 +132,7 @@ pub(crate) fn dispatch(op: &OpSpec, params: Value) -> Result<String, String> {
     // Apply each resolved security scheme, sourcing its value from wasmcloud:secrets.
     let mut cookies: Vec<String> = Vec::new();
     for apply in op.auth {
-        let secret = fetch_secret(apply.secret_key)?;
+        let secret = fetch_secret(apply.secret_key).map_err(DispatchError::Transport)?;
         match &apply.kind {
             AuthKind::Bearer => headers.push(("authorization".into(), format!("Bearer {secret}"))),
             AuthKind::Basic => {
@@ -177,17 +193,18 @@ fn fetch_secret(key: &str) -> Result<String, String> {
 }
 
 /// Build and send the outgoing request with `wstd`, returning the response body on a 2xx
-/// status. The generated guest exports are synchronous, so the async `wstd` client is driven
-/// to completion on a local reactor via `wstd::runtime::block_on`.
+/// status and a structured [`DispatchError`] otherwise. The generated guest exports are
+/// synchronous, so the async `wstd` client is driven to completion on a local reactor via
+/// `wstd::runtime::block_on`.
 fn perform(
     method: &str,
     path_with_query: &str,
     headers: &[(String, String)],
     body: &[u8],
-) -> Result<String, String> {
+) -> Result<String, DispatchError> {
     let url = join_url(crate::BASE_URL, path_with_query);
     let method = Method::from_bytes(method.as_bytes())
-        .map_err(|err| format!("invalid HTTP method `{method}`: {err}"))?;
+        .map_err(|err| DispatchError::Transport(format!("invalid HTTP method `{method}`: {err}")))?;
 
     let mut builder = Request::builder().method(method).uri(url);
     for (name, value) in headers {
@@ -199,27 +216,29 @@ fn perform(
         } else {
             Body::from(body.to_vec())
         })
-        .map_err(|err| format!("failed to build request: {err}"))?;
+        .map_err(|err| DispatchError::Transport(format!("failed to build request: {err}")))?;
 
     wstd::runtime::block_on(async move {
         let client = Client::new();
         let response = client
             .send(request)
             .await
-            .map_err(|err| format!("request failed: {err:#}"))?;
+            .map_err(|err| DispatchError::Transport(format!("request failed: {err:#}")))?;
 
         let status = response.status().as_u16();
         let mut response_body = response.into_body();
-        let bytes = response_body
-            .contents()
-            .await
-            .map_err(|err| format!("failed to read response body: {err:#}"))?;
+        let bytes = response_body.contents().await.map_err(|err| {
+            DispatchError::Transport(format!("failed to read response body: {err:#}"))
+        })?;
         let body_text = String::from_utf8_lossy(bytes).into_owned();
 
         if (200..300).contains(&status) {
             Ok(body_text)
         } else {
-            Err(format!("HTTP {status}: {body_text}"))
+            Err(DispatchError::Http {
+                status,
+                body: body_text,
+            })
         }
     })
 }
@@ -288,7 +307,7 @@ const OP_API_ACCOUNT_CTRL_GET_ACCOUNT_SERVICES_BY_ACCOUNT_ID: OpSpec = OpSpec {
     method: "GET",
     path_template: "/api/accounts/{account_id}",
     fields: &[
-        FieldSpec { snake: "account_id", location: FieldLocation::Path },
+        FieldSpec { snake: "account_id", wire: "account_id", location: FieldLocation::Path },
     ],
     auth: &[
         AuthApply { secret_key: "bearerAuth", kind: AuthKind::Bearer },
@@ -299,7 +318,7 @@ const OP_API_ACCOUNT_CTRL_GET_LOCATIONS_BY_ACCOUNT_ID: OpSpec = OpSpec {
     method: "GET",
     path_template: "/api/accounts/{account_id}/locations",
     fields: &[
-        FieldSpec { snake: "account_id", location: FieldLocation::Path },
+        FieldSpec { snake: "account_id", wire: "account_id", location: FieldLocation::Path },
     ],
     auth: &[
         AuthApply { secret_key: "bearerAuth", kind: AuthKind::Bearer },
@@ -310,13 +329,144 @@ const OP_API_ACCOUNT_CTRL_GET_LOCATION_BY_ID: OpSpec = OpSpec {
     method: "GET",
     path_template: "/api/accounts/{account_id}/locations/{location_id}",
     fields: &[
-        FieldSpec { snake: "account_id", location: FieldLocation::Path },
-        FieldSpec { snake: "location_id", location: FieldLocation::Path },
+        FieldSpec { snake: "account_id", wire: "account_id", location: FieldLocation::Path },
+        FieldSpec { snake: "location_id", wire: "location_id", location: FieldLocation::Path },
     ],
     auth: &[
         AuthApply { secret_key: "bearerAuth", kind: AuthKind::Bearer },
     ],
 };
+
+fn iface_api__account_hal_response__to_json(p: &iface_api::AccountHalResponse) -> Value {
+    let mut m = Map::new();
+    m.insert("_embedded".into(), match (&p.embedded) { Some(v) => iface_api__account_embedded_object__to_json(v), None => Value::Null });
+    m.insert("_links".into(), match (&p.links) { Some(v) => iface_api__links__to_json(v), None => Value::Null });
+    m.insert("page".into(), match (&p.page) { Some(v) => serde_json::Number::from_f64(*(v)).map(Value::Number).unwrap_or(Value::Null), None => Value::Null });
+    m.insert("page_size".into(), match (&p.page_size) { Some(v) => serde_json::Number::from_f64(*(v)).map(Value::Number).unwrap_or(Value::Null), None => Value::Null });
+    m.insert("total_items".into(), match (&p.total_items) { Some(v) => serde_json::Number::from_f64(*(v)).map(Value::Number).unwrap_or(Value::Null), None => Value::Null });
+    m.insert("total_pages".into(), match (&p.total_pages) { Some(v) => serde_json::Number::from_f64(*(v)).map(Value::Number).unwrap_or(Value::Null), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_api__account_embedded_object__to_json(p: &iface_api::AccountEmbeddedObject) -> Value {
+    let mut m = Map::new();
+    m.insert("data".into(), match (&p.data) { Some(v) => iface_api__account__to_json(v), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_api__account__to_json(p: &iface_api::Account) -> Value {
+    let mut m = Map::new();
+    m.insert("address".into(), match (&p.address) { Some(v) => iface_api__address__to_json(v), None => Value::Null });
+    m.insert("id".into(), match (&p.id) { Some(v) => serde_json::Number::from_f64(*(v)).map(Value::Number).unwrap_or(Value::Null), None => Value::Null });
+    m.insert("name".into(), match (&p.name) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("status".into(), match (&p.status) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_api__address__to_json(p: &iface_api::Address) -> Value {
+    let mut m = Map::new();
+    m.insert("address_1".into(), match (&p.address_v1) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("address_2".into(), match (&p.address_v2) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("city".into(), match (&p.city) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("country".into(), match (&p.country) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("postal_code".into(), match (&p.postal_code) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("state".into(), match (&p.state) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_api__links__to_json(p: &iface_api::Links) -> Value {
+    let mut m = Map::new();
+    m.insert("first".into(), match (&p.first) { Some(v) => iface_api__first_href__to_json(v), None => Value::Null });
+    m.insert("last".into(), match (&p.last) { Some(v) => iface_api__last_href__to_json(v), None => Value::Null });
+    m.insert("next".into(), match (&p.next) { Some(v) => iface_api__next_href__to_json(v), None => Value::Null });
+    m.insert("prev".into(), match (&p.prev) { Some(v) => iface_api__prev_href__to_json(v), None => Value::Null });
+    m.insert("self".into(), match (&p.self_) { Some(v) => iface_api__self_href__to_json(v), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_api__first_href__to_json(p: &iface_api::FirstHref) -> Value {
+    let mut m = Map::new();
+    m.insert("href".into(), match (&p.href) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_api__last_href__to_json(p: &iface_api::LastHref) -> Value {
+    let mut m = Map::new();
+    m.insert("href".into(), match (&p.href) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_api__next_href__to_json(p: &iface_api::NextHref) -> Value {
+    let mut m = Map::new();
+    m.insert("href".into(), match (&p.href) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_api__prev_href__to_json(p: &iface_api::PrevHref) -> Value {
+    let mut m = Map::new();
+    m.insert("href".into(), match (&p.href) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_api__self_href__to_json(p: &iface_api::SelfHref) -> Value {
+    let mut m = Map::new();
+    m.insert("href".into(), match (&p.href) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_api__locations_hal_response__to_json(p: &iface_api::LocationsHalResponse) -> Value {
+    let mut m = Map::new();
+    m.insert("_embedded".into(), match (&p.embedded) { Some(v) => iface_api__locations_embedded_object__to_json(v), None => Value::Null });
+    m.insert("_links".into(), match (&p.links) { Some(v) => iface_api__links__to_json(v), None => Value::Null });
+    m.insert("page".into(), match (&p.page) { Some(v) => serde_json::Number::from_f64(*(v)).map(Value::Number).unwrap_or(Value::Null), None => Value::Null });
+    m.insert("page_size".into(), match (&p.page_size) { Some(v) => serde_json::Number::from_f64(*(v)).map(Value::Number).unwrap_or(Value::Null), None => Value::Null });
+    m.insert("total_items".into(), match (&p.total_items) { Some(v) => serde_json::Number::from_f64(*(v)).map(Value::Number).unwrap_or(Value::Null), None => Value::Null });
+    m.insert("total_pages".into(), match (&p.total_pages) { Some(v) => serde_json::Number::from_f64(*(v)).map(Value::Number).unwrap_or(Value::Null), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_api__locations_embedded_object__to_json(p: &iface_api::LocationsEmbeddedObject) -> Value {
+    let mut m = Map::new();
+    m.insert("data".into(), match (&p.data) { Some(v) => Value::Array((v).iter().map(|v| iface_api__location__to_json(v)).collect()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_api__location__to_json(p: &iface_api::Location) -> Value {
+    let mut m = Map::new();
+    m.insert("address".into(), match (&p.address) { Some(v) => iface_api__address_with_time_zone__to_json(v), None => Value::Null });
+    m.insert("id".into(), match (&p.id) { Some(v) => serde_json::Number::from_f64(*(v)).map(Value::Number).unwrap_or(Value::Null), None => Value::Null });
+    m.insert("name".into(), match (&p.name) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_api__address_with_time_zone__to_json(p: &iface_api::AddressWithTimeZone) -> Value {
+    let mut m = Map::new();
+    m.insert("address_1".into(), match (&p.address_v1) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("address_2".into(), match (&p.address_v2) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("city".into(), match (&p.city) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("country".into(), match (&p.country) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("postal_code".into(), match (&p.postal_code) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("state".into(), match (&p.state) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("time_zone".into(), match (&p.time_zone) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_api__location_hal_response__to_json(p: &iface_api::LocationHalResponse) -> Value {
+    let mut m = Map::new();
+    m.insert("_embedded".into(), match (&p.embedded) { Some(v) => iface_api__location_embedded_object__to_json(v), None => Value::Null });
+    m.insert("_links".into(), match (&p.links) { Some(v) => iface_api__links__to_json(v), None => Value::Null });
+    m.insert("page".into(), match (&p.page) { Some(v) => serde_json::Number::from_f64(*(v)).map(Value::Number).unwrap_or(Value::Null), None => Value::Null });
+    m.insert("page_size".into(), match (&p.page_size) { Some(v) => serde_json::Number::from_f64(*(v)).map(Value::Number).unwrap_or(Value::Null), None => Value::Null });
+    m.insert("total_items".into(), match (&p.total_items) { Some(v) => serde_json::Number::from_f64(*(v)).map(Value::Number).unwrap_or(Value::Null), None => Value::Null });
+    m.insert("total_pages".into(), match (&p.total_pages) { Some(v) => serde_json::Number::from_f64(*(v)).map(Value::Number).unwrap_or(Value::Null), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_api__location_embedded_object__to_json(p: &iface_api::LocationEmbeddedObject) -> Value {
+    let mut m = Map::new();
+    m.insert("data".into(), match (&p.data) { Some(v) => iface_api__location__to_json(v), None => Value::Null });
+    Value::Object(m)
+}
 
 fn iface_api__account_ctrl_get_account_services_by_account_id_params__to_json(p: &iface_api::AccountCtrlGetAccountServicesByAccountIdParams) -> Value {
     let mut m = Map::new();
@@ -337,18 +487,234 @@ fn iface_api__account_ctrl_get_location_by_id_params__to_json(p: &iface_api::Acc
     Value::Object(m)
 }
 
+fn iface_api__account_hal_response__from_json(v: &Value) -> Option<iface_api::AccountHalResponse> {
+    let m = v.as_object()?;
+    Some(iface_api::AccountHalResponse {
+        embedded: m.get("_embedded").filter(|v| !v.is_null()).and_then(|v| iface_api__account_embedded_object__from_json(v)),
+        links: m.get("_links").filter(|v| !v.is_null()).and_then(|v| iface_api__links__from_json(v)),
+        page: m.get("page").filter(|v| !v.is_null()).and_then(|v| (v).as_f64()),
+        page_size: m.get("page_size").filter(|v| !v.is_null()).and_then(|v| (v).as_f64()),
+        total_items: m.get("total_items").filter(|v| !v.is_null()).and_then(|v| (v).as_f64()),
+        total_pages: m.get("total_pages").filter(|v| !v.is_null()).and_then(|v| (v).as_f64()),
+    })
+}
+
+fn iface_api__account_embedded_object__from_json(v: &Value) -> Option<iface_api::AccountEmbeddedObject> {
+    let m = v.as_object()?;
+    Some(iface_api::AccountEmbeddedObject {
+        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| iface_api__account__from_json(v)),
+    })
+}
+
+fn iface_api__account__from_json(v: &Value) -> Option<iface_api::Account> {
+    let m = v.as_object()?;
+    Some(iface_api::Account {
+        address: m.get("address").filter(|v| !v.is_null()).and_then(|v| iface_api__address__from_json(v)),
+        id: m.get("id").filter(|v| !v.is_null()).and_then(|v| (v).as_f64()),
+        name: m.get("name").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        status: m.get("status").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    })
+}
+
+fn iface_api__address__from_json(v: &Value) -> Option<iface_api::Address> {
+    let m = v.as_object()?;
+    Some(iface_api::Address {
+        address_v1: m.get("address_1").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        address_v2: m.get("address_2").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        city: m.get("city").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        country: m.get("country").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        postal_code: m.get("postal_code").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        state: m.get("state").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    })
+}
+
+fn iface_api__links__from_json(v: &Value) -> Option<iface_api::Links> {
+    let m = v.as_object()?;
+    Some(iface_api::Links {
+        first: m.get("first").filter(|v| !v.is_null()).and_then(|v| iface_api__first_href__from_json(v)),
+        last: m.get("last").filter(|v| !v.is_null()).and_then(|v| iface_api__last_href__from_json(v)),
+        next: m.get("next").filter(|v| !v.is_null()).and_then(|v| iface_api__next_href__from_json(v)),
+        prev: m.get("prev").filter(|v| !v.is_null()).and_then(|v| iface_api__prev_href__from_json(v)),
+        self_: m.get("self").filter(|v| !v.is_null()).and_then(|v| iface_api__self_href__from_json(v)),
+    })
+}
+
+fn iface_api__first_href__from_json(v: &Value) -> Option<iface_api::FirstHref> {
+    let m = v.as_object()?;
+    Some(iface_api::FirstHref {
+        href: m.get("href").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    })
+}
+
+fn iface_api__last_href__from_json(v: &Value) -> Option<iface_api::LastHref> {
+    let m = v.as_object()?;
+    Some(iface_api::LastHref {
+        href: m.get("href").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    })
+}
+
+fn iface_api__next_href__from_json(v: &Value) -> Option<iface_api::NextHref> {
+    let m = v.as_object()?;
+    Some(iface_api::NextHref {
+        href: m.get("href").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    })
+}
+
+fn iface_api__prev_href__from_json(v: &Value) -> Option<iface_api::PrevHref> {
+    let m = v.as_object()?;
+    Some(iface_api::PrevHref {
+        href: m.get("href").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    })
+}
+
+fn iface_api__self_href__from_json(v: &Value) -> Option<iface_api::SelfHref> {
+    let m = v.as_object()?;
+    Some(iface_api::SelfHref {
+        href: m.get("href").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    })
+}
+
+fn iface_api__locations_hal_response__from_json(v: &Value) -> Option<iface_api::LocationsHalResponse> {
+    let m = v.as_object()?;
+    Some(iface_api::LocationsHalResponse {
+        embedded: m.get("_embedded").filter(|v| !v.is_null()).and_then(|v| iface_api__locations_embedded_object__from_json(v)),
+        links: m.get("_links").filter(|v| !v.is_null()).and_then(|v| iface_api__links__from_json(v)),
+        page: m.get("page").filter(|v| !v.is_null()).and_then(|v| (v).as_f64()),
+        page_size: m.get("page_size").filter(|v| !v.is_null()).and_then(|v| (v).as_f64()),
+        total_items: m.get("total_items").filter(|v| !v.is_null()).and_then(|v| (v).as_f64()),
+        total_pages: m.get("total_pages").filter(|v| !v.is_null()).and_then(|v| (v).as_f64()),
+    })
+}
+
+fn iface_api__locations_embedded_object__from_json(v: &Value) -> Option<iface_api::LocationsEmbeddedObject> {
+    let m = v.as_object()?;
+    Some(iface_api::LocationsEmbeddedObject {
+        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| iface_api__location__from_json(x)).collect())),
+    })
+}
+
+fn iface_api__location__from_json(v: &Value) -> Option<iface_api::Location> {
+    let m = v.as_object()?;
+    Some(iface_api::Location {
+        address: m.get("address").filter(|v| !v.is_null()).and_then(|v| iface_api__address_with_time_zone__from_json(v)),
+        id: m.get("id").filter(|v| !v.is_null()).and_then(|v| (v).as_f64()),
+        name: m.get("name").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    })
+}
+
+fn iface_api__address_with_time_zone__from_json(v: &Value) -> Option<iface_api::AddressWithTimeZone> {
+    let m = v.as_object()?;
+    Some(iface_api::AddressWithTimeZone {
+        address_v1: m.get("address_1").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        address_v2: m.get("address_2").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        city: m.get("city").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        country: m.get("country").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        postal_code: m.get("postal_code").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        state: m.get("state").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        time_zone: m.get("time_zone").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    })
+}
+
+fn iface_api__location_hal_response__from_json(v: &Value) -> Option<iface_api::LocationHalResponse> {
+    let m = v.as_object()?;
+    Some(iface_api::LocationHalResponse {
+        embedded: m.get("_embedded").filter(|v| !v.is_null()).and_then(|v| iface_api__location_embedded_object__from_json(v)),
+        links: m.get("_links").filter(|v| !v.is_null()).and_then(|v| iface_api__links__from_json(v)),
+        page: m.get("page").filter(|v| !v.is_null()).and_then(|v| (v).as_f64()),
+        page_size: m.get("page_size").filter(|v| !v.is_null()).and_then(|v| (v).as_f64()),
+        total_items: m.get("total_items").filter(|v| !v.is_null()).and_then(|v| (v).as_f64()),
+        total_pages: m.get("total_pages").filter(|v| !v.is_null()).and_then(|v| (v).as_f64()),
+    })
+}
+
+fn iface_api__location_embedded_object__from_json(v: &Value) -> Option<iface_api::LocationEmbeddedObject> {
+    let m = v.as_object()?;
+    Some(iface_api::LocationEmbeddedObject {
+        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| iface_api__location__from_json(v)),
+    })
+}
+
+fn iface_api__account_ctrl_get_account_services_by_account_id__ok(body: String) -> Result<iface_api::AccountHalResponse, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match iface_api__account_hal_response__from_json(&v) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_api__account_ctrl_get_account_services_by_account_id__err(e: crate::runtime::DispatchError) -> iface_api::AccountCtrlGetAccountServicesByAccountIdError {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => match status {
+            404u16 => iface_api::AccountCtrlGetAccountServicesByAccountIdError::NotFound(body),
+            _ => iface_api::AccountCtrlGetAccountServicesByAccountIdError::Other(body),
+        },
+        crate::runtime::DispatchError::Transport(m) => iface_api::AccountCtrlGetAccountServicesByAccountIdError::Other(m),
+    }
+}
+
+fn iface_api__account_ctrl_get_locations_by_account_id__ok(body: String) -> Result<iface_api::LocationsHalResponse, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match iface_api__locations_hal_response__from_json(&v) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_api__account_ctrl_get_locations_by_account_id__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
+fn iface_api__account_ctrl_get_location_by_id__ok(body: String) -> Result<iface_api::LocationHalResponse, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match iface_api__location_hal_response__from_json(&v) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_api__account_ctrl_get_location_by_id__err(e: crate::runtime::DispatchError) -> iface_api::AccountCtrlGetLocationByIdError {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => match status {
+            404u16 => iface_api::AccountCtrlGetLocationByIdError::NotFound(body),
+            _ => iface_api::AccountCtrlGetLocationByIdError::Other(body),
+        },
+        crate::runtime::DispatchError::Transport(m) => iface_api::AccountCtrlGetLocationByIdError::Other(m),
+    }
+}
+
 impl iface_api::Guest for crate::Component {
-    fn account_ctrl_get_account_services_by_account_id(params: iface_api::AccountCtrlGetAccountServicesByAccountIdParams) -> Result<String, String> {
+    fn account_ctrl_get_account_services_by_account_id(params: iface_api::AccountCtrlGetAccountServicesByAccountIdParams) -> Result<iface_api::AccountHalResponse, iface_api::AccountCtrlGetAccountServicesByAccountIdError> {
         let json = iface_api__account_ctrl_get_account_services_by_account_id_params__to_json(&params);
-        dispatch(&OP_API_ACCOUNT_CTRL_GET_ACCOUNT_SERVICES_BY_ACCOUNT_ID, json)
+        match dispatch(&OP_API_ACCOUNT_CTRL_GET_ACCOUNT_SERVICES_BY_ACCOUNT_ID, json).and_then(iface_api__account_ctrl_get_account_services_by_account_id__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_api__account_ctrl_get_account_services_by_account_id__err(e)),
+        }
     }
-    fn account_ctrl_get_locations_by_account_id(params: iface_api::AccountCtrlGetLocationsByAccountIdParams) -> Result<String, String> {
+    fn account_ctrl_get_locations_by_account_id(params: iface_api::AccountCtrlGetLocationsByAccountIdParams) -> Result<iface_api::LocationsHalResponse, String> {
         let json = iface_api__account_ctrl_get_locations_by_account_id_params__to_json(&params);
-        dispatch(&OP_API_ACCOUNT_CTRL_GET_LOCATIONS_BY_ACCOUNT_ID, json)
+        match dispatch(&OP_API_ACCOUNT_CTRL_GET_LOCATIONS_BY_ACCOUNT_ID, json).and_then(iface_api__account_ctrl_get_locations_by_account_id__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_api__account_ctrl_get_locations_by_account_id__err(e)),
+        }
     }
-    fn account_ctrl_get_location_by_id(params: iface_api::AccountCtrlGetLocationByIdParams) -> Result<String, String> {
+    fn account_ctrl_get_location_by_id(params: iface_api::AccountCtrlGetLocationByIdParams) -> Result<iface_api::LocationHalResponse, iface_api::AccountCtrlGetLocationByIdError> {
         let json = iface_api__account_ctrl_get_location_by_id_params__to_json(&params);
-        dispatch(&OP_API_ACCOUNT_CTRL_GET_LOCATION_BY_ID, json)
+        match dispatch(&OP_API_ACCOUNT_CTRL_GET_LOCATION_BY_ID, json).and_then(iface_api__account_ctrl_get_location_by_id__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_api__account_ctrl_get_location_by_id__err(e)),
+        }
     }
 }
 

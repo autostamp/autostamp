@@ -6,29 +6,92 @@
 /// | Secret name | Applied to each request as |
 /// | --- | --- |
 /// | `HubAuth` | `Authorization: Bearer <secret>` |
-package autostamp:docker@0.3.0;
+package autostamp:docker@0.5.0;
 
 interface discovery {
+  record namespace-data {
+    namespaces: option<list<string>>
+  }
+
+  record namespace-metadata {
+    datasets: option<list<dataset-model>>,
+    extra-repos: option<list<string>>,
+    namespace: option<string>
+  }
+
+  record dataset-model {
+    name: option<dataset-type>,
+    timespans: option<list<timespan-type>>,
+    views: option<list<dataview-type>>
+  }
+
+  record dataset-type {
+    /// opaque schema; raw JSON
+    value: string
+  }
+
+  record timespan-type {
+    /// opaque schema; raw JSON
+    value: string
+  }
+
+  record dataview-type {
+    /// opaque schema; raw JSON
+    value: string
+  }
+
   /// Get namespaces and repos
-  get-namespaces: func() -> result<string, string>;
+  get-namespaces: func() -> result<namespace-data, string>;
 
   /// Get namespace
   record get-namespace-params {
     /// Namespace to fetch data for
     namespace: string
   }
-  get-namespace: func(params: get-namespace-params) -> result<string, string>;
+  get-namespace: func(params: get-namespace-params) -> result<namespace-metadata, string>;
 
 }
 
 
 interface namespaces {
+  record year-data {
+    years: option<list<year-model>>
+  }
+
+  record year-model {
+    year: option<s32>
+  }
+
+  record timespan-data {
+    /// opaque schema; raw JSON
+    value: string
+  }
+
+  record timespan-model {
+    /// opaque schema; raw JSON
+    value: string
+  }
+
+  record response-data {
+    data: option<list<response-data-file>>
+  }
+
+  record response-data-file {
+    size: option<s64>,
+    url: option<string>
+  }
+
+  variant get-namespace-timespan-metadata-error {
+    not-found(string),
+    other(string)
+  }
+
   /// Get years with data
   record get-namespace-years-params {
     /// Namespace to fetch data for
     namespace: string
   }
-  get-namespace-years: func(params: get-namespace-years-params) -> result<string, string>;
+  get-namespace-years: func(params: get-namespace-years-params) -> result<year-data, string>;
 
   /// Get timespans with data
   record get-namespace-timespans-params {
@@ -39,7 +102,7 @@ interface namespaces {
     /// Type of timespan to fetch data for
     timespantype: string
   }
-  get-namespace-timespans: func(params: get-namespace-timespans-params) -> result<string, string>;
+  get-namespace-timespans: func(params: get-namespace-timespans-params) -> result<timespan-data, string>;
 
   /// Get namespace metadata for timespan
   record get-namespace-timespan-metadata-params {
@@ -52,7 +115,7 @@ interface namespaces {
     /// Timespan to fetch data for
     timespan: string
   }
-  get-namespace-timespan-metadata: func(params: get-namespace-timespan-metadata-params) -> result<string, string>;
+  get-namespace-timespan-metadata: func(params: get-namespace-timespan-metadata-params) -> result<timespan-model, get-namespace-timespan-metadata-error>;
 
   /// Get namespace data for timespan
   record get-namespace-data-by-timespan-params {
@@ -67,11 +130,28 @@ interface namespaces {
     /// Type of data to fetch
     dataview: string
   }
-  get-namespace-data-by-timespan: func(params: get-namespace-data-by-timespan-params) -> result<string, string>;
+  get-namespace-data-by-timespan: func(params: get-namespace-data-by-timespan-params) -> result<response-data, string>;
 
 }
 
 interface authentication {
+  /// successful user login response
+  record post-users-login-success-response {
+    /// Created authentication token.
+    /// 
+    token: option<string>
+  }
+
+  variant post-users2-fa-login-error {
+    unauthorized(string),
+    other(string)
+  }
+
+  variant post-users-login-error {
+    unauthorized(string),
+    other(string)
+  }
+
   /// Second factor authentication.
   record post-users2-fa-login-params {
     /// The Time-based One-Time Password of the Docker Hub account to authenticate with.
@@ -79,7 +159,7 @@ interface authentication {
     /// The intermediate 2FA token returned from `/v2/users/login` API.
     login-v2fa-token: string
   }
-  post-users2-fa-login: func(params: post-users2-fa-login-params) -> result<string, string>;
+  post-users2-fa-login: func(params: post-users2-fa-login-params) -> result<post-users-login-success-response, post-users2-fa-login-error>;
 
   /// Create an authentication token
   record post-users-login-params {
@@ -88,7 +168,7 @@ interface authentication {
     /// The username of the Docker Hub account to authenticate with.
     username: string
   }
-  post-users-login: func(params: post-users-login-params) -> result<string, string>;
+  post-users-login: func(params: post-users-login-params) -> result<post-users-login-success-response, post-users-login-error>;
 
 }
 /// The component world: imports the secrets host capability

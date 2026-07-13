@@ -44,10 +44,15 @@ pub(crate) enum FieldLocation {
     Body,
 }
 
-/// A single operation parameter: the snake-case key it carries in the params JSON and where
-/// it belongs in the request.
+/// A single operation parameter. `snake` keys the field in the internal params JSON (and, for a
+/// path field, matches the `{snake}` placeholder in the path template); `wire` is the verbatim name
+/// the field takes on the HTTP wire (query key, header name, or body property). The two differ
+/// whenever the source name isn't already snake_case (e.g. `dryRun` → snake `dry_run`, wire
+/// `dryRun`), and let distinct inputs that share a snake key (`DateCreated`, `DateCreated<`) still
+/// travel under their true names.
 pub(crate) struct FieldSpec {
     pub(crate) snake: &'static str,
+    pub(crate) wire: &'static str,
     pub(crate) location: FieldLocation,
 }
 
@@ -71,6 +76,16 @@ pub(crate) struct AuthApply {
     pub(crate) kind: AuthKind,
 }
 
+/// The failure modes of [`dispatch`], kept structured so each generated operation can map them
+/// onto its own typed error: an `Http` failure carries the response status and body (routed to
+/// the matching error-variant case), while a `Transport` failure carries a message for the
+/// catch-all case (a secret lookup, connection, or decode failure that never produced an HTTP
+/// status).
+pub(crate) enum DispatchError {
+    Http { status: u16, body: String },
+    Transport(String),
+}
+
 /// A single API operation: HTTP method, path template (with `{snake}` placeholders), the
 /// parameter fields, and the security schemes to apply.
 pub(crate) struct OpSpec {
@@ -81,8 +96,9 @@ pub(crate) struct OpSpec {
 }
 
 /// Execute `op` with the supplied `params` (a JSON object keyed by snake-case field names)
-/// and return the response body as a string, or an error message.
-pub(crate) fn dispatch(op: &OpSpec, params: Value) -> Result<String, String> {
+/// and return the raw 2xx response body, or a structured [`DispatchError`] the caller maps
+/// onto the operation's typed error.
+pub(crate) fn dispatch(op: &OpSpec, params: Value) -> Result<String, DispatchError> {
     let obj = match &params {
         Value::Object(map) => Some(map),
         _ => None,
@@ -105,10 +121,10 @@ pub(crate) fn dispatch(op: &OpSpec, params: Value) -> Result<String, String> {
                 let placeholder = format!("{{{}}}", field.snake);
                 path = path.replace(&placeholder, &percent_encode(&scalar(value)));
             }
-            FieldLocation::Query => query.push((field.snake.to_string(), scalar(value))),
-            FieldLocation::Header => headers.push((field.snake.to_string(), scalar(value))),
+            FieldLocation::Query => query.push((field.wire.to_string(), scalar(value))),
+            FieldLocation::Header => headers.push((field.wire.to_string(), scalar(value))),
             FieldLocation::Body => {
-                body.insert(field.snake.to_string(), value.clone());
+                body.insert(field.wire.to_string(), value.clone());
             }
         }
     }
@@ -116,7 +132,7 @@ pub(crate) fn dispatch(op: &OpSpec, params: Value) -> Result<String, String> {
     // Apply each resolved security scheme, sourcing its value from wasmcloud:secrets.
     let mut cookies: Vec<String> = Vec::new();
     for apply in op.auth {
-        let secret = fetch_secret(apply.secret_key)?;
+        let secret = fetch_secret(apply.secret_key).map_err(DispatchError::Transport)?;
         match &apply.kind {
             AuthKind::Bearer => headers.push(("authorization".into(), format!("Bearer {secret}"))),
             AuthKind::Basic => {
@@ -177,17 +193,18 @@ fn fetch_secret(key: &str) -> Result<String, String> {
 }
 
 /// Build and send the outgoing request with `wstd`, returning the response body on a 2xx
-/// status. The generated guest exports are synchronous, so the async `wstd` client is driven
-/// to completion on a local reactor via `wstd::runtime::block_on`.
+/// status and a structured [`DispatchError`] otherwise. The generated guest exports are
+/// synchronous, so the async `wstd` client is driven to completion on a local reactor via
+/// `wstd::runtime::block_on`.
 fn perform(
     method: &str,
     path_with_query: &str,
     headers: &[(String, String)],
     body: &[u8],
-) -> Result<String, String> {
+) -> Result<String, DispatchError> {
     let url = join_url(crate::BASE_URL, path_with_query);
     let method = Method::from_bytes(method.as_bytes())
-        .map_err(|err| format!("invalid HTTP method `{method}`: {err}"))?;
+        .map_err(|err| DispatchError::Transport(format!("invalid HTTP method `{method}`: {err}")))?;
 
     let mut builder = Request::builder().method(method).uri(url);
     for (name, value) in headers {
@@ -199,27 +216,29 @@ fn perform(
         } else {
             Body::from(body.to_vec())
         })
-        .map_err(|err| format!("failed to build request: {err}"))?;
+        .map_err(|err| DispatchError::Transport(format!("failed to build request: {err}")))?;
 
     wstd::runtime::block_on(async move {
         let client = Client::new();
         let response = client
             .send(request)
             .await
-            .map_err(|err| format!("request failed: {err:#}"))?;
+            .map_err(|err| DispatchError::Transport(format!("request failed: {err:#}")))?;
 
         let status = response.status().as_u16();
         let mut response_body = response.into_body();
-        let bytes = response_body
-            .contents()
-            .await
-            .map_err(|err| format!("failed to read response body: {err:#}"))?;
+        let bytes = response_body.contents().await.map_err(|err| {
+            DispatchError::Transport(format!("failed to read response body: {err:#}"))
+        })?;
         let body_text = String::from_utf8_lossy(bytes).into_owned();
 
         if (200..300).contains(&status) {
             Ok(body_text)
         } else {
-            Err(format!("HTTP {status}: {body_text}"))
+            Err(DispatchError::Http {
+                status,
+                body: body_text,
+            })
         }
     })
 }
@@ -288,10 +307,10 @@ const OP_CALENDARS_GET_CALENDARS_ALL_DVD_START_DATE_DAYS: OpSpec = OpSpec {
     method: "GET",
     path_template: "/calendars/all/dvd/{start_date}/{days}",
     fields: &[
-        FieldSpec { snake: "start_date", location: FieldLocation::Path },
-        FieldSpec { snake: "days", location: FieldLocation::Path },
-        FieldSpec { snake: "trakt_api_version", location: FieldLocation::Header },
-        FieldSpec { snake: "trakt_api_key", location: FieldLocation::Header },
+        FieldSpec { snake: "start_date", wire: "start_date", location: FieldLocation::Path },
+        FieldSpec { snake: "days", wire: "days", location: FieldLocation::Path },
+        FieldSpec { snake: "trakt_api_version", wire: "trakt-api-version", location: FieldLocation::Header },
+        FieldSpec { snake: "trakt_api_key", wire: "trakt-api-key", location: FieldLocation::Header },
     ],
     auth: &[
     ],
@@ -301,10 +320,10 @@ const OP_CALENDARS_GET_CALENDARS_ALL_MOVIES_START_DATE_DAYS: OpSpec = OpSpec {
     method: "GET",
     path_template: "/calendars/all/movies/{start_date}/{days}",
     fields: &[
-        FieldSpec { snake: "start_date", location: FieldLocation::Path },
-        FieldSpec { snake: "days", location: FieldLocation::Path },
-        FieldSpec { snake: "trakt_api_version", location: FieldLocation::Header },
-        FieldSpec { snake: "trakt_api_key", location: FieldLocation::Header },
+        FieldSpec { snake: "start_date", wire: "start_date", location: FieldLocation::Path },
+        FieldSpec { snake: "days", wire: "days", location: FieldLocation::Path },
+        FieldSpec { snake: "trakt_api_version", wire: "trakt-api-version", location: FieldLocation::Header },
+        FieldSpec { snake: "trakt_api_key", wire: "trakt-api-key", location: FieldLocation::Header },
     ],
     auth: &[
     ],
@@ -314,10 +333,10 @@ const OP_CALENDARS_GET_CALENDARS_ALL_SHOWS_NEW_START_DATE_DAYS: OpSpec = OpSpec 
     method: "GET",
     path_template: "/calendars/all/shows/new/{start_date}/{days}",
     fields: &[
-        FieldSpec { snake: "start_date", location: FieldLocation::Path },
-        FieldSpec { snake: "days", location: FieldLocation::Path },
-        FieldSpec { snake: "trakt_api_version", location: FieldLocation::Header },
-        FieldSpec { snake: "trakt_api_key", location: FieldLocation::Header },
+        FieldSpec { snake: "start_date", wire: "start_date", location: FieldLocation::Path },
+        FieldSpec { snake: "days", wire: "days", location: FieldLocation::Path },
+        FieldSpec { snake: "trakt_api_version", wire: "trakt-api-version", location: FieldLocation::Header },
+        FieldSpec { snake: "trakt_api_key", wire: "trakt-api-key", location: FieldLocation::Header },
     ],
     auth: &[
     ],
@@ -327,10 +346,10 @@ const OP_CALENDARS_GET_CALENDARS_ALL_SHOWS_PREMIERES_START_DATE_DAYS: OpSpec = O
     method: "GET",
     path_template: "/calendars/all/shows/premieres/{start_date}/{days}",
     fields: &[
-        FieldSpec { snake: "start_date", location: FieldLocation::Path },
-        FieldSpec { snake: "days", location: FieldLocation::Path },
-        FieldSpec { snake: "trakt_api_version", location: FieldLocation::Header },
-        FieldSpec { snake: "trakt_api_key", location: FieldLocation::Header },
+        FieldSpec { snake: "start_date", wire: "start_date", location: FieldLocation::Path },
+        FieldSpec { snake: "days", wire: "days", location: FieldLocation::Path },
+        FieldSpec { snake: "trakt_api_version", wire: "trakt-api-version", location: FieldLocation::Header },
+        FieldSpec { snake: "trakt_api_key", wire: "trakt-api-key", location: FieldLocation::Header },
     ],
     auth: &[
     ],
@@ -340,10 +359,10 @@ const OP_CALENDARS_GET_CALENDARS_ALL_SHOWS_START_DATE_DAYS: OpSpec = OpSpec {
     method: "GET",
     path_template: "/calendars/all/shows/{start_date}/{days}",
     fields: &[
-        FieldSpec { snake: "start_date", location: FieldLocation::Path },
-        FieldSpec { snake: "days", location: FieldLocation::Path },
-        FieldSpec { snake: "trakt_api_version", location: FieldLocation::Header },
-        FieldSpec { snake: "trakt_api_key", location: FieldLocation::Header },
+        FieldSpec { snake: "start_date", wire: "start_date", location: FieldLocation::Path },
+        FieldSpec { snake: "days", wire: "days", location: FieldLocation::Path },
+        FieldSpec { snake: "trakt_api_version", wire: "trakt-api-version", location: FieldLocation::Header },
+        FieldSpec { snake: "trakt_api_key", wire: "trakt-api-key", location: FieldLocation::Header },
     ],
     auth: &[
     ],
@@ -353,10 +372,10 @@ const OP_CALENDARS_GET_DVD_RELEASES: OpSpec = OpSpec {
     method: "GET",
     path_template: "/calendars/my/dvd/{start_date}/{days}",
     fields: &[
-        FieldSpec { snake: "start_date", location: FieldLocation::Path },
-        FieldSpec { snake: "days", location: FieldLocation::Path },
-        FieldSpec { snake: "trakt_api_version", location: FieldLocation::Header },
-        FieldSpec { snake: "trakt_api_key", location: FieldLocation::Header },
+        FieldSpec { snake: "start_date", wire: "start_date", location: FieldLocation::Path },
+        FieldSpec { snake: "days", wire: "days", location: FieldLocation::Path },
+        FieldSpec { snake: "trakt_api_version", wire: "trakt-api-version", location: FieldLocation::Header },
+        FieldSpec { snake: "trakt_api_key", wire: "trakt-api-key", location: FieldLocation::Header },
     ],
     auth: &[
         AuthApply { secret_key: "oauth2", kind: AuthKind::Bearer },
@@ -367,10 +386,10 @@ const OP_CALENDARS_GET_MOVIES: OpSpec = OpSpec {
     method: "GET",
     path_template: "/calendars/my/movies/{start_date}/{days}",
     fields: &[
-        FieldSpec { snake: "start_date", location: FieldLocation::Path },
-        FieldSpec { snake: "days", location: FieldLocation::Path },
-        FieldSpec { snake: "trakt_api_version", location: FieldLocation::Header },
-        FieldSpec { snake: "trakt_api_key", location: FieldLocation::Header },
+        FieldSpec { snake: "start_date", wire: "start_date", location: FieldLocation::Path },
+        FieldSpec { snake: "days", wire: "days", location: FieldLocation::Path },
+        FieldSpec { snake: "trakt_api_version", wire: "trakt-api-version", location: FieldLocation::Header },
+        FieldSpec { snake: "trakt_api_key", wire: "trakt-api-key", location: FieldLocation::Header },
     ],
     auth: &[
         AuthApply { secret_key: "oauth2", kind: AuthKind::Bearer },
@@ -381,10 +400,10 @@ const OP_CALENDARS_GET_NEW_SHOWS: OpSpec = OpSpec {
     method: "GET",
     path_template: "/calendars/my/shows/new/{start_date}/{days}",
     fields: &[
-        FieldSpec { snake: "start_date", location: FieldLocation::Path },
-        FieldSpec { snake: "days", location: FieldLocation::Path },
-        FieldSpec { snake: "trakt_api_version", location: FieldLocation::Header },
-        FieldSpec { snake: "trakt_api_key", location: FieldLocation::Header },
+        FieldSpec { snake: "start_date", wire: "start_date", location: FieldLocation::Path },
+        FieldSpec { snake: "days", wire: "days", location: FieldLocation::Path },
+        FieldSpec { snake: "trakt_api_version", wire: "trakt-api-version", location: FieldLocation::Header },
+        FieldSpec { snake: "trakt_api_key", wire: "trakt-api-key", location: FieldLocation::Header },
     ],
     auth: &[
         AuthApply { secret_key: "oauth2", kind: AuthKind::Bearer },
@@ -395,10 +414,10 @@ const OP_CALENDARS_GET_SEASON_PREMIERES: OpSpec = OpSpec {
     method: "GET",
     path_template: "/calendars/my/shows/premieres/{start_date}/{days}",
     fields: &[
-        FieldSpec { snake: "start_date", location: FieldLocation::Path },
-        FieldSpec { snake: "days", location: FieldLocation::Path },
-        FieldSpec { snake: "trakt_api_version", location: FieldLocation::Header },
-        FieldSpec { snake: "trakt_api_key", location: FieldLocation::Header },
+        FieldSpec { snake: "start_date", wire: "start_date", location: FieldLocation::Path },
+        FieldSpec { snake: "days", wire: "days", location: FieldLocation::Path },
+        FieldSpec { snake: "trakt_api_version", wire: "trakt-api-version", location: FieldLocation::Header },
+        FieldSpec { snake: "trakt_api_key", wire: "trakt-api-key", location: FieldLocation::Header },
     ],
     auth: &[
         AuthApply { secret_key: "oauth2", kind: AuthKind::Bearer },
@@ -409,10 +428,10 @@ const OP_CALENDARS_GET_SHOWS: OpSpec = OpSpec {
     method: "GET",
     path_template: "/calendars/my/shows/{start_date}/{days}",
     fields: &[
-        FieldSpec { snake: "start_date", location: FieldLocation::Path },
-        FieldSpec { snake: "days", location: FieldLocation::Path },
-        FieldSpec { snake: "trakt_api_version", location: FieldLocation::Header },
-        FieldSpec { snake: "trakt_api_key", location: FieldLocation::Header },
+        FieldSpec { snake: "start_date", wire: "start_date", location: FieldLocation::Path },
+        FieldSpec { snake: "days", wire: "days", location: FieldLocation::Path },
+        FieldSpec { snake: "trakt_api_version", wire: "trakt-api-version", location: FieldLocation::Header },
+        FieldSpec { snake: "trakt_api_key", wire: "trakt-api-key", location: FieldLocation::Header },
     ],
     auth: &[
         AuthApply { secret_key: "oauth2", kind: AuthKind::Bearer },
@@ -509,46 +528,186 @@ fn iface_calendars__get_shows_params__to_json(p: &iface_calendars::GetShowsParam
     Value::Object(m)
 }
 
+fn iface_calendars__get_calendars_all_dvd_start_date_days__ok(body: String) -> Result<String, crate::runtime::DispatchError> {
+    Ok(body)
+}
+
+fn iface_calendars__get_calendars_all_dvd_start_date_days__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
+fn iface_calendars__get_calendars_all_movies_start_date_days__ok(body: String) -> Result<String, crate::runtime::DispatchError> {
+    Ok(body)
+}
+
+fn iface_calendars__get_calendars_all_movies_start_date_days__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
+fn iface_calendars__get_calendars_all_shows_new_start_date_days__ok(body: String) -> Result<String, crate::runtime::DispatchError> {
+    Ok(body)
+}
+
+fn iface_calendars__get_calendars_all_shows_new_start_date_days__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
+fn iface_calendars__get_calendars_all_shows_premieres_start_date_days__ok(body: String) -> Result<String, crate::runtime::DispatchError> {
+    Ok(body)
+}
+
+fn iface_calendars__get_calendars_all_shows_premieres_start_date_days__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
+fn iface_calendars__get_calendars_all_shows_start_date_days__ok(body: String) -> Result<String, crate::runtime::DispatchError> {
+    Ok(body)
+}
+
+fn iface_calendars__get_calendars_all_shows_start_date_days__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
+fn iface_calendars__get_dvd_releases__ok(body: String) -> Result<String, crate::runtime::DispatchError> {
+    Ok(body)
+}
+
+fn iface_calendars__get_dvd_releases__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
+fn iface_calendars__get_movies__ok(body: String) -> Result<String, crate::runtime::DispatchError> {
+    Ok(body)
+}
+
+fn iface_calendars__get_movies__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
+fn iface_calendars__get_new_shows__ok(body: String) -> Result<String, crate::runtime::DispatchError> {
+    Ok(body)
+}
+
+fn iface_calendars__get_new_shows__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
+fn iface_calendars__get_season_premieres__ok(body: String) -> Result<String, crate::runtime::DispatchError> {
+    Ok(body)
+}
+
+fn iface_calendars__get_season_premieres__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
+fn iface_calendars__get_shows__ok(body: String) -> Result<String, crate::runtime::DispatchError> {
+    Ok(body)
+}
+
+fn iface_calendars__get_shows__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
 impl iface_calendars::Guest for crate::Component {
     fn get_calendars_all_dvd_start_date_days(params: iface_calendars::GetCalendarsAllDvdStartDateDaysParams) -> Result<String, String> {
         let json = iface_calendars__get_calendars_all_dvd_start_date_days_params__to_json(&params);
-        dispatch(&OP_CALENDARS_GET_CALENDARS_ALL_DVD_START_DATE_DAYS, json)
+        match dispatch(&OP_CALENDARS_GET_CALENDARS_ALL_DVD_START_DATE_DAYS, json).and_then(iface_calendars__get_calendars_all_dvd_start_date_days__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_calendars__get_calendars_all_dvd_start_date_days__err(e)),
+        }
     }
     fn get_calendars_all_movies_start_date_days(params: iface_calendars::GetCalendarsAllMoviesStartDateDaysParams) -> Result<String, String> {
         let json = iface_calendars__get_calendars_all_movies_start_date_days_params__to_json(&params);
-        dispatch(&OP_CALENDARS_GET_CALENDARS_ALL_MOVIES_START_DATE_DAYS, json)
+        match dispatch(&OP_CALENDARS_GET_CALENDARS_ALL_MOVIES_START_DATE_DAYS, json).and_then(iface_calendars__get_calendars_all_movies_start_date_days__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_calendars__get_calendars_all_movies_start_date_days__err(e)),
+        }
     }
     fn get_calendars_all_shows_new_start_date_days(params: iface_calendars::GetCalendarsAllShowsNewStartDateDaysParams) -> Result<String, String> {
         let json = iface_calendars__get_calendars_all_shows_new_start_date_days_params__to_json(&params);
-        dispatch(&OP_CALENDARS_GET_CALENDARS_ALL_SHOWS_NEW_START_DATE_DAYS, json)
+        match dispatch(&OP_CALENDARS_GET_CALENDARS_ALL_SHOWS_NEW_START_DATE_DAYS, json).and_then(iface_calendars__get_calendars_all_shows_new_start_date_days__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_calendars__get_calendars_all_shows_new_start_date_days__err(e)),
+        }
     }
     fn get_calendars_all_shows_premieres_start_date_days(params: iface_calendars::GetCalendarsAllShowsPremieresStartDateDaysParams) -> Result<String, String> {
         let json = iface_calendars__get_calendars_all_shows_premieres_start_date_days_params__to_json(&params);
-        dispatch(&OP_CALENDARS_GET_CALENDARS_ALL_SHOWS_PREMIERES_START_DATE_DAYS, json)
+        match dispatch(&OP_CALENDARS_GET_CALENDARS_ALL_SHOWS_PREMIERES_START_DATE_DAYS, json).and_then(iface_calendars__get_calendars_all_shows_premieres_start_date_days__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_calendars__get_calendars_all_shows_premieres_start_date_days__err(e)),
+        }
     }
     fn get_calendars_all_shows_start_date_days(params: iface_calendars::GetCalendarsAllShowsStartDateDaysParams) -> Result<String, String> {
         let json = iface_calendars__get_calendars_all_shows_start_date_days_params__to_json(&params);
-        dispatch(&OP_CALENDARS_GET_CALENDARS_ALL_SHOWS_START_DATE_DAYS, json)
+        match dispatch(&OP_CALENDARS_GET_CALENDARS_ALL_SHOWS_START_DATE_DAYS, json).and_then(iface_calendars__get_calendars_all_shows_start_date_days__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_calendars__get_calendars_all_shows_start_date_days__err(e)),
+        }
     }
     fn get_dvd_releases(params: iface_calendars::GetDvdReleasesParams) -> Result<String, String> {
         let json = iface_calendars__get_dvd_releases_params__to_json(&params);
-        dispatch(&OP_CALENDARS_GET_DVD_RELEASES, json)
+        match dispatch(&OP_CALENDARS_GET_DVD_RELEASES, json).and_then(iface_calendars__get_dvd_releases__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_calendars__get_dvd_releases__err(e)),
+        }
     }
     fn get_movies(params: iface_calendars::GetMoviesParams) -> Result<String, String> {
         let json = iface_calendars__get_movies_params__to_json(&params);
-        dispatch(&OP_CALENDARS_GET_MOVIES, json)
+        match dispatch(&OP_CALENDARS_GET_MOVIES, json).and_then(iface_calendars__get_movies__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_calendars__get_movies__err(e)),
+        }
     }
     fn get_new_shows(params: iface_calendars::GetNewShowsParams) -> Result<String, String> {
         let json = iface_calendars__get_new_shows_params__to_json(&params);
-        dispatch(&OP_CALENDARS_GET_NEW_SHOWS, json)
+        match dispatch(&OP_CALENDARS_GET_NEW_SHOWS, json).and_then(iface_calendars__get_new_shows__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_calendars__get_new_shows__err(e)),
+        }
     }
     fn get_season_premieres(params: iface_calendars::GetSeasonPremieresParams) -> Result<String, String> {
         let json = iface_calendars__get_season_premieres_params__to_json(&params);
-        dispatch(&OP_CALENDARS_GET_SEASON_PREMIERES, json)
+        match dispatch(&OP_CALENDARS_GET_SEASON_PREMIERES, json).and_then(iface_calendars__get_season_premieres__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_calendars__get_season_premieres__err(e)),
+        }
     }
     fn get_shows(params: iface_calendars::GetShowsParams) -> Result<String, String> {
         let json = iface_calendars__get_shows_params__to_json(&params);
-        dispatch(&OP_CALENDARS_GET_SHOWS, json)
+        match dispatch(&OP_CALENDARS_GET_SHOWS, json).and_then(iface_calendars__get_shows__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_calendars__get_shows__err(e)),
+        }
     }
 }
 use crate::exports::autostamp::trakt::certifications as iface_certifications;
@@ -557,9 +716,9 @@ const OP_CERTIFICATIONS_GET_CERTIFICATIONS: OpSpec = OpSpec {
     method: "GET",
     path_template: "/certifications/{type}",
     fields: &[
-        FieldSpec { snake: "type", location: FieldLocation::Path },
-        FieldSpec { snake: "trakt_api_version", location: FieldLocation::Header },
-        FieldSpec { snake: "trakt_api_key", location: FieldLocation::Header },
+        FieldSpec { snake: "type", wire: "type", location: FieldLocation::Path },
+        FieldSpec { snake: "trakt_api_version", wire: "trakt-api-version", location: FieldLocation::Header },
+        FieldSpec { snake: "trakt_api_key", wire: "trakt-api-key", location: FieldLocation::Header },
     ],
     auth: &[
     ],
@@ -573,10 +732,24 @@ fn iface_certifications__get_certifications_params__to_json(p: &iface_certificat
     Value::Object(m)
 }
 
+fn iface_certifications__get_certifications__ok(body: String) -> Result<String, crate::runtime::DispatchError> {
+    Ok(body)
+}
+
+fn iface_certifications__get_certifications__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
 impl iface_certifications::Guest for crate::Component {
     fn get_certifications(params: iface_certifications::GetCertificationsParams) -> Result<String, String> {
         let json = iface_certifications__get_certifications_params__to_json(&params);
-        dispatch(&OP_CERTIFICATIONS_GET_CERTIFICATIONS, json)
+        match dispatch(&OP_CERTIFICATIONS_GET_CERTIFICATIONS, json).and_then(iface_certifications__get_certifications__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_certifications__get_certifications__err(e)),
+        }
     }
 }
 use crate::exports::autostamp::trakt::checkin as iface_checkin;
@@ -585,13 +758,13 @@ const OP_CHECKIN_CHECK_INTO_AN_ITEM: OpSpec = OpSpec {
     method: "POST",
     path_template: "/checkin",
     fields: &[
-        FieldSpec { snake: "trakt_api_version", location: FieldLocation::Header },
-        FieldSpec { snake: "trakt_api_key", location: FieldLocation::Header },
-        FieldSpec { snake: "app_date", location: FieldLocation::Body },
-        FieldSpec { snake: "app_version", location: FieldLocation::Body },
-        FieldSpec { snake: "message", location: FieldLocation::Body },
-        FieldSpec { snake: "movie", location: FieldLocation::Body },
-        FieldSpec { snake: "sharing", location: FieldLocation::Body },
+        FieldSpec { snake: "trakt_api_version", wire: "trakt-api-version", location: FieldLocation::Header },
+        FieldSpec { snake: "trakt_api_key", wire: "trakt-api-key", location: FieldLocation::Header },
+        FieldSpec { snake: "app_date", wire: "app_date", location: FieldLocation::Body },
+        FieldSpec { snake: "app_version", wire: "app_version", location: FieldLocation::Body },
+        FieldSpec { snake: "message", wire: "message", location: FieldLocation::Body },
+        FieldSpec { snake: "movie", wire: "movie", location: FieldLocation::Body },
+        FieldSpec { snake: "sharing", wire: "sharing", location: FieldLocation::Body },
     ],
     auth: &[
         AuthApply { secret_key: "oauth2", kind: AuthKind::Bearer },
@@ -602,8 +775,8 @@ const OP_CHECKIN_DELETE_ANY_ACTIVE_CHECKINS: OpSpec = OpSpec {
     method: "DELETE",
     path_template: "/checkin",
     fields: &[
-        FieldSpec { snake: "trakt_api_version", location: FieldLocation::Header },
-        FieldSpec { snake: "trakt_api_key", location: FieldLocation::Header },
+        FieldSpec { snake: "trakt_api_version", wire: "trakt-api-version", location: FieldLocation::Header },
+        FieldSpec { snake: "trakt_api_key", wire: "trakt-api-key", location: FieldLocation::Header },
     ],
     auth: &[
         AuthApply { secret_key: "oauth2", kind: AuthKind::Bearer },
@@ -654,14 +827,45 @@ fn iface_checkin__delete_any_active_checkins_params__to_json(p: &iface_checkin::
     Value::Object(m)
 }
 
+fn iface_checkin__check_into_an_item__ok(body: String) -> Result<String, crate::runtime::DispatchError> {
+    Ok(body)
+}
+
+fn iface_checkin__check_into_an_item__err(e: crate::runtime::DispatchError) -> iface_checkin::CheckIntoAnItemError {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => match status {
+            409u16 => iface_checkin::CheckIntoAnItemError::Conflict(body),
+            _ => iface_checkin::CheckIntoAnItemError::Other(body),
+        },
+        crate::runtime::DispatchError::Transport(m) => iface_checkin::CheckIntoAnItemError::Other(m),
+    }
+}
+
+fn iface_checkin__delete_any_active_checkins__ok(body: String) -> Result<String, crate::runtime::DispatchError> {
+    Ok(body)
+}
+
+fn iface_checkin__delete_any_active_checkins__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
 impl iface_checkin::Guest for crate::Component {
-    fn check_into_an_item(params: iface_checkin::CheckIntoAnItemParams) -> Result<String, String> {
+    fn check_into_an_item(params: iface_checkin::CheckIntoAnItemParams) -> Result<String, iface_checkin::CheckIntoAnItemError> {
         let json = iface_checkin__check_into_an_item_params__to_json(&params);
-        dispatch(&OP_CHECKIN_CHECK_INTO_AN_ITEM, json)
+        match dispatch(&OP_CHECKIN_CHECK_INTO_AN_ITEM, json).and_then(iface_checkin__check_into_an_item__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_checkin__check_into_an_item__err(e)),
+        }
     }
     fn delete_any_active_checkins(params: iface_checkin::DeleteAnyActiveCheckinsParams) -> Result<String, String> {
         let json = iface_checkin__delete_any_active_checkins_params__to_json(&params);
-        dispatch(&OP_CHECKIN_DELETE_ANY_ACTIVE_CHECKINS, json)
+        match dispatch(&OP_CHECKIN_DELETE_ANY_ACTIVE_CHECKINS, json).and_then(iface_checkin__delete_any_active_checkins__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_checkin__delete_any_active_checkins__err(e)),
+        }
     }
 }
 use crate::exports::autostamp::trakt::comments as iface_comments;
@@ -670,12 +874,12 @@ const OP_COMMENTS_POST_A_COMMENT: OpSpec = OpSpec {
     method: "POST",
     path_template: "/comments",
     fields: &[
-        FieldSpec { snake: "trakt_api_version", location: FieldLocation::Header },
-        FieldSpec { snake: "trakt_api_key", location: FieldLocation::Header },
-        FieldSpec { snake: "comment", location: FieldLocation::Body },
-        FieldSpec { snake: "movie", location: FieldLocation::Body },
-        FieldSpec { snake: "sharing", location: FieldLocation::Body },
-        FieldSpec { snake: "spoiler", location: FieldLocation::Body },
+        FieldSpec { snake: "trakt_api_version", wire: "trakt-api-version", location: FieldLocation::Header },
+        FieldSpec { snake: "trakt_api_key", wire: "trakt-api-key", location: FieldLocation::Header },
+        FieldSpec { snake: "comment", wire: "comment", location: FieldLocation::Body },
+        FieldSpec { snake: "movie", wire: "movie", location: FieldLocation::Body },
+        FieldSpec { snake: "sharing", wire: "sharing", location: FieldLocation::Body },
+        FieldSpec { snake: "spoiler", wire: "spoiler", location: FieldLocation::Body },
     ],
     auth: &[
         AuthApply { secret_key: "oauth2", kind: AuthKind::Bearer },
@@ -686,11 +890,11 @@ const OP_COMMENTS_GET_RECENTLY_CREATED_COMMENTS: OpSpec = OpSpec {
     method: "GET",
     path_template: "/comments/recent/{comment_type}/{type}",
     fields: &[
-        FieldSpec { snake: "comment_type", location: FieldLocation::Path },
-        FieldSpec { snake: "type", location: FieldLocation::Path },
-        FieldSpec { snake: "include_replies", location: FieldLocation::Query },
-        FieldSpec { snake: "trakt_api_version", location: FieldLocation::Header },
-        FieldSpec { snake: "trakt_api_key", location: FieldLocation::Header },
+        FieldSpec { snake: "comment_type", wire: "comment_type", location: FieldLocation::Path },
+        FieldSpec { snake: "type", wire: "type", location: FieldLocation::Path },
+        FieldSpec { snake: "include_replies", wire: "include_replies", location: FieldLocation::Query },
+        FieldSpec { snake: "trakt_api_version", wire: "trakt-api-version", location: FieldLocation::Header },
+        FieldSpec { snake: "trakt_api_key", wire: "trakt-api-key", location: FieldLocation::Header },
     ],
     auth: &[
     ],
@@ -700,11 +904,11 @@ const OP_COMMENTS_GET_TRENDING_COMMENTS: OpSpec = OpSpec {
     method: "GET",
     path_template: "/comments/trending/{comment_type}/{type}",
     fields: &[
-        FieldSpec { snake: "comment_type", location: FieldLocation::Path },
-        FieldSpec { snake: "type", location: FieldLocation::Path },
-        FieldSpec { snake: "include_replies", location: FieldLocation::Query },
-        FieldSpec { snake: "trakt_api_version", location: FieldLocation::Header },
-        FieldSpec { snake: "trakt_api_key", location: FieldLocation::Header },
+        FieldSpec { snake: "comment_type", wire: "comment_type", location: FieldLocation::Path },
+        FieldSpec { snake: "type", wire: "type", location: FieldLocation::Path },
+        FieldSpec { snake: "include_replies", wire: "include_replies", location: FieldLocation::Query },
+        FieldSpec { snake: "trakt_api_version", wire: "trakt-api-version", location: FieldLocation::Header },
+        FieldSpec { snake: "trakt_api_key", wire: "trakt-api-key", location: FieldLocation::Header },
     ],
     auth: &[
     ],
@@ -714,11 +918,11 @@ const OP_COMMENTS_GET_RECENTLY_UPDATED_COMMENTS: OpSpec = OpSpec {
     method: "GET",
     path_template: "/comments/updates/{comment_type}/{type}",
     fields: &[
-        FieldSpec { snake: "comment_type", location: FieldLocation::Path },
-        FieldSpec { snake: "type", location: FieldLocation::Path },
-        FieldSpec { snake: "include_replies", location: FieldLocation::Query },
-        FieldSpec { snake: "trakt_api_version", location: FieldLocation::Header },
-        FieldSpec { snake: "trakt_api_key", location: FieldLocation::Header },
+        FieldSpec { snake: "comment_type", wire: "comment_type", location: FieldLocation::Path },
+        FieldSpec { snake: "type", wire: "type", location: FieldLocation::Path },
+        FieldSpec { snake: "include_replies", wire: "include_replies", location: FieldLocation::Query },
+        FieldSpec { snake: "trakt_api_version", wire: "trakt-api-version", location: FieldLocation::Header },
+        FieldSpec { snake: "trakt_api_key", wire: "trakt-api-key", location: FieldLocation::Header },
     ],
     auth: &[
     ],
@@ -728,9 +932,9 @@ const OP_COMMENTS_GET_A_COMMENT_OR_REPLY: OpSpec = OpSpec {
     method: "GET",
     path_template: "/comments/{id}",
     fields: &[
-        FieldSpec { snake: "id", location: FieldLocation::Path },
-        FieldSpec { snake: "trakt_api_version", location: FieldLocation::Header },
-        FieldSpec { snake: "trakt_api_key", location: FieldLocation::Header },
+        FieldSpec { snake: "id", wire: "id", location: FieldLocation::Path },
+        FieldSpec { snake: "trakt_api_version", wire: "trakt-api-version", location: FieldLocation::Header },
+        FieldSpec { snake: "trakt_api_key", wire: "trakt-api-key", location: FieldLocation::Header },
     ],
     auth: &[
     ],
@@ -740,11 +944,11 @@ const OP_COMMENTS_UPDATE_A_COMMENT_OR_REPLY: OpSpec = OpSpec {
     method: "PUT",
     path_template: "/comments/{id}",
     fields: &[
-        FieldSpec { snake: "trakt_api_version", location: FieldLocation::Header },
-        FieldSpec { snake: "trakt_api_key", location: FieldLocation::Header },
-        FieldSpec { snake: "id", location: FieldLocation::Path },
-        FieldSpec { snake: "comment", location: FieldLocation::Body },
-        FieldSpec { snake: "spoiler", location: FieldLocation::Body },
+        FieldSpec { snake: "trakt_api_version", wire: "trakt-api-version", location: FieldLocation::Header },
+        FieldSpec { snake: "trakt_api_key", wire: "trakt-api-key", location: FieldLocation::Header },
+        FieldSpec { snake: "id", wire: "id", location: FieldLocation::Path },
+        FieldSpec { snake: "comment", wire: "comment", location: FieldLocation::Body },
+        FieldSpec { snake: "spoiler", wire: "spoiler", location: FieldLocation::Body },
     ],
     auth: &[
         AuthApply { secret_key: "oauth2", kind: AuthKind::Bearer },
@@ -755,9 +959,9 @@ const OP_COMMENTS_DELETE_A_COMMENT_OR_REPLY: OpSpec = OpSpec {
     method: "DELETE",
     path_template: "/comments/{id}",
     fields: &[
-        FieldSpec { snake: "trakt_api_version", location: FieldLocation::Header },
-        FieldSpec { snake: "trakt_api_key", location: FieldLocation::Header },
-        FieldSpec { snake: "id", location: FieldLocation::Path },
+        FieldSpec { snake: "trakt_api_version", wire: "trakt-api-version", location: FieldLocation::Header },
+        FieldSpec { snake: "trakt_api_key", wire: "trakt-api-key", location: FieldLocation::Header },
+        FieldSpec { snake: "id", wire: "id", location: FieldLocation::Path },
     ],
     auth: &[
         AuthApply { secret_key: "oauth2", kind: AuthKind::Bearer },
@@ -768,9 +972,9 @@ const OP_COMMENTS_GET_THE_ATTACHED_MEDIA_ITEM: OpSpec = OpSpec {
     method: "GET",
     path_template: "/comments/{id}/item",
     fields: &[
-        FieldSpec { snake: "id", location: FieldLocation::Path },
-        FieldSpec { snake: "trakt_api_version", location: FieldLocation::Header },
-        FieldSpec { snake: "trakt_api_key", location: FieldLocation::Header },
+        FieldSpec { snake: "id", wire: "id", location: FieldLocation::Path },
+        FieldSpec { snake: "trakt_api_version", wire: "trakt-api-version", location: FieldLocation::Header },
+        FieldSpec { snake: "trakt_api_key", wire: "trakt-api-key", location: FieldLocation::Header },
     ],
     auth: &[
     ],
@@ -780,9 +984,9 @@ const OP_COMMENTS_LIKE_A_COMMENT: OpSpec = OpSpec {
     method: "POST",
     path_template: "/comments/{id}/like",
     fields: &[
-        FieldSpec { snake: "id", location: FieldLocation::Path },
-        FieldSpec { snake: "trakt_api_version", location: FieldLocation::Header },
-        FieldSpec { snake: "trakt_api_key", location: FieldLocation::Header },
+        FieldSpec { snake: "id", wire: "id", location: FieldLocation::Path },
+        FieldSpec { snake: "trakt_api_version", wire: "trakt-api-version", location: FieldLocation::Header },
+        FieldSpec { snake: "trakt_api_key", wire: "trakt-api-key", location: FieldLocation::Header },
     ],
     auth: &[
         AuthApply { secret_key: "oauth2", kind: AuthKind::Bearer },
@@ -793,9 +997,9 @@ const OP_COMMENTS_REMOVE_LIKE_ON_A_COMMENT: OpSpec = OpSpec {
     method: "DELETE",
     path_template: "/comments/{id}/like",
     fields: &[
-        FieldSpec { snake: "trakt_api_version", location: FieldLocation::Header },
-        FieldSpec { snake: "trakt_api_key", location: FieldLocation::Header },
-        FieldSpec { snake: "id", location: FieldLocation::Path },
+        FieldSpec { snake: "trakt_api_version", wire: "trakt-api-version", location: FieldLocation::Header },
+        FieldSpec { snake: "trakt_api_key", wire: "trakt-api-key", location: FieldLocation::Header },
+        FieldSpec { snake: "id", wire: "id", location: FieldLocation::Path },
     ],
     auth: &[
         AuthApply { secret_key: "oauth2", kind: AuthKind::Bearer },
@@ -806,9 +1010,9 @@ const OP_COMMENTS_GET_ALL_USERS_WHO_LIKED_A_COMMENT: OpSpec = OpSpec {
     method: "GET",
     path_template: "/comments/{id}/likes",
     fields: &[
-        FieldSpec { snake: "id", location: FieldLocation::Path },
-        FieldSpec { snake: "trakt_api_version", location: FieldLocation::Header },
-        FieldSpec { snake: "trakt_api_key", location: FieldLocation::Header },
+        FieldSpec { snake: "id", wire: "id", location: FieldLocation::Path },
+        FieldSpec { snake: "trakt_api_version", wire: "trakt-api-version", location: FieldLocation::Header },
+        FieldSpec { snake: "trakt_api_key", wire: "trakt-api-key", location: FieldLocation::Header },
     ],
     auth: &[
     ],
@@ -818,9 +1022,9 @@ const OP_COMMENTS_GET_REPLIES_FOR_A_COMMENT: OpSpec = OpSpec {
     method: "GET",
     path_template: "/comments/{id}/replies",
     fields: &[
-        FieldSpec { snake: "id", location: FieldLocation::Path },
-        FieldSpec { snake: "trakt_api_version", location: FieldLocation::Header },
-        FieldSpec { snake: "trakt_api_key", location: FieldLocation::Header },
+        FieldSpec { snake: "id", wire: "id", location: FieldLocation::Path },
+        FieldSpec { snake: "trakt_api_version", wire: "trakt-api-version", location: FieldLocation::Header },
+        FieldSpec { snake: "trakt_api_key", wire: "trakt-api-key", location: FieldLocation::Header },
     ],
     auth: &[
     ],
@@ -830,11 +1034,11 @@ const OP_COMMENTS_POST_A_REPLY_FOR_A_COMMENT: OpSpec = OpSpec {
     method: "POST",
     path_template: "/comments/{id}/replies",
     fields: &[
-        FieldSpec { snake: "trakt_api_version", location: FieldLocation::Header },
-        FieldSpec { snake: "trakt_api_key", location: FieldLocation::Header },
-        FieldSpec { snake: "id", location: FieldLocation::Path },
-        FieldSpec { snake: "comment", location: FieldLocation::Body },
-        FieldSpec { snake: "spoiler", location: FieldLocation::Body },
+        FieldSpec { snake: "trakt_api_version", wire: "trakt-api-version", location: FieldLocation::Header },
+        FieldSpec { snake: "trakt_api_key", wire: "trakt-api-key", location: FieldLocation::Header },
+        FieldSpec { snake: "id", wire: "id", location: FieldLocation::Path },
+        FieldSpec { snake: "comment", wire: "comment", location: FieldLocation::Body },
+        FieldSpec { snake: "spoiler", wire: "spoiler", location: FieldLocation::Body },
     ],
     auth: &[
         AuthApply { secret_key: "oauth2", kind: AuthKind::Bearer },
@@ -983,58 +1187,240 @@ fn iface_comments__post_a_reply_for_a_comment_params__to_json(p: &iface_comments
     Value::Object(m)
 }
 
+fn iface_comments__post_a_comment__ok(body: String) -> Result<String, crate::runtime::DispatchError> {
+    Ok(body)
+}
+
+fn iface_comments__post_a_comment__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
+fn iface_comments__get_recently_created_comments__ok(body: String) -> Result<String, crate::runtime::DispatchError> {
+    Ok(body)
+}
+
+fn iface_comments__get_recently_created_comments__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
+fn iface_comments__get_trending_comments__ok(body: String) -> Result<String, crate::runtime::DispatchError> {
+    Ok(body)
+}
+
+fn iface_comments__get_trending_comments__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
+fn iface_comments__get_recently_updated_comments__ok(body: String) -> Result<String, crate::runtime::DispatchError> {
+    Ok(body)
+}
+
+fn iface_comments__get_recently_updated_comments__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
+fn iface_comments__get_a_comment_or_reply__ok(body: String) -> Result<String, crate::runtime::DispatchError> {
+    Ok(body)
+}
+
+fn iface_comments__get_a_comment_or_reply__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
+fn iface_comments__update_a_comment_or_reply__ok(body: String) -> Result<String, crate::runtime::DispatchError> {
+    Ok(body)
+}
+
+fn iface_comments__update_a_comment_or_reply__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
+fn iface_comments__delete_a_comment_or_reply__ok(body: String) -> Result<String, crate::runtime::DispatchError> {
+    Ok(body)
+}
+
+fn iface_comments__delete_a_comment_or_reply__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
+fn iface_comments__get_the_attached_media_item__ok(body: String) -> Result<String, crate::runtime::DispatchError> {
+    Ok(body)
+}
+
+fn iface_comments__get_the_attached_media_item__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
+fn iface_comments__like_a_comment__ok(body: String) -> Result<String, crate::runtime::DispatchError> {
+    Ok(body)
+}
+
+fn iface_comments__like_a_comment__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
+fn iface_comments__remove_like_on_a_comment__ok(body: String) -> Result<String, crate::runtime::DispatchError> {
+    Ok(body)
+}
+
+fn iface_comments__remove_like_on_a_comment__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
+fn iface_comments__get_all_users_who_liked_a_comment__ok(body: String) -> Result<String, crate::runtime::DispatchError> {
+    Ok(body)
+}
+
+fn iface_comments__get_all_users_who_liked_a_comment__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
+fn iface_comments__get_replies_for_a_comment__ok(body: String) -> Result<String, crate::runtime::DispatchError> {
+    Ok(body)
+}
+
+fn iface_comments__get_replies_for_a_comment__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
+fn iface_comments__post_a_reply_for_a_comment__ok(body: String) -> Result<String, crate::runtime::DispatchError> {
+    Ok(body)
+}
+
+fn iface_comments__post_a_reply_for_a_comment__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
 impl iface_comments::Guest for crate::Component {
     fn post_a_comment(params: iface_comments::PostACommentParams) -> Result<String, String> {
         let json = iface_comments__post_a_comment_params__to_json(&params);
-        dispatch(&OP_COMMENTS_POST_A_COMMENT, json)
+        match dispatch(&OP_COMMENTS_POST_A_COMMENT, json).and_then(iface_comments__post_a_comment__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_comments__post_a_comment__err(e)),
+        }
     }
     fn get_recently_created_comments(params: iface_comments::GetRecentlyCreatedCommentsParams) -> Result<String, String> {
         let json = iface_comments__get_recently_created_comments_params__to_json(&params);
-        dispatch(&OP_COMMENTS_GET_RECENTLY_CREATED_COMMENTS, json)
+        match dispatch(&OP_COMMENTS_GET_RECENTLY_CREATED_COMMENTS, json).and_then(iface_comments__get_recently_created_comments__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_comments__get_recently_created_comments__err(e)),
+        }
     }
     fn get_trending_comments(params: iface_comments::GetTrendingCommentsParams) -> Result<String, String> {
         let json = iface_comments__get_trending_comments_params__to_json(&params);
-        dispatch(&OP_COMMENTS_GET_TRENDING_COMMENTS, json)
+        match dispatch(&OP_COMMENTS_GET_TRENDING_COMMENTS, json).and_then(iface_comments__get_trending_comments__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_comments__get_trending_comments__err(e)),
+        }
     }
     fn get_recently_updated_comments(params: iface_comments::GetRecentlyUpdatedCommentsParams) -> Result<String, String> {
         let json = iface_comments__get_recently_updated_comments_params__to_json(&params);
-        dispatch(&OP_COMMENTS_GET_RECENTLY_UPDATED_COMMENTS, json)
+        match dispatch(&OP_COMMENTS_GET_RECENTLY_UPDATED_COMMENTS, json).and_then(iface_comments__get_recently_updated_comments__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_comments__get_recently_updated_comments__err(e)),
+        }
     }
     fn get_a_comment_or_reply(params: iface_comments::GetACommentOrReplyParams) -> Result<String, String> {
         let json = iface_comments__get_a_comment_or_reply_params__to_json(&params);
-        dispatch(&OP_COMMENTS_GET_A_COMMENT_OR_REPLY, json)
+        match dispatch(&OP_COMMENTS_GET_A_COMMENT_OR_REPLY, json).and_then(iface_comments__get_a_comment_or_reply__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_comments__get_a_comment_or_reply__err(e)),
+        }
     }
     fn update_a_comment_or_reply(params: iface_comments::UpdateACommentOrReplyParams) -> Result<String, String> {
         let json = iface_comments__update_a_comment_or_reply_params__to_json(&params);
-        dispatch(&OP_COMMENTS_UPDATE_A_COMMENT_OR_REPLY, json)
+        match dispatch(&OP_COMMENTS_UPDATE_A_COMMENT_OR_REPLY, json).and_then(iface_comments__update_a_comment_or_reply__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_comments__update_a_comment_or_reply__err(e)),
+        }
     }
     fn delete_a_comment_or_reply(params: iface_comments::DeleteACommentOrReplyParams) -> Result<String, String> {
         let json = iface_comments__delete_a_comment_or_reply_params__to_json(&params);
-        dispatch(&OP_COMMENTS_DELETE_A_COMMENT_OR_REPLY, json)
+        match dispatch(&OP_COMMENTS_DELETE_A_COMMENT_OR_REPLY, json).and_then(iface_comments__delete_a_comment_or_reply__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_comments__delete_a_comment_or_reply__err(e)),
+        }
     }
     fn get_the_attached_media_item(params: iface_comments::GetTheAttachedMediaItemParams) -> Result<String, String> {
         let json = iface_comments__get_the_attached_media_item_params__to_json(&params);
-        dispatch(&OP_COMMENTS_GET_THE_ATTACHED_MEDIA_ITEM, json)
+        match dispatch(&OP_COMMENTS_GET_THE_ATTACHED_MEDIA_ITEM, json).and_then(iface_comments__get_the_attached_media_item__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_comments__get_the_attached_media_item__err(e)),
+        }
     }
     fn like_a_comment(params: iface_comments::LikeACommentParams) -> Result<String, String> {
         let json = iface_comments__like_a_comment_params__to_json(&params);
-        dispatch(&OP_COMMENTS_LIKE_A_COMMENT, json)
+        match dispatch(&OP_COMMENTS_LIKE_A_COMMENT, json).and_then(iface_comments__like_a_comment__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_comments__like_a_comment__err(e)),
+        }
     }
     fn remove_like_on_a_comment(params: iface_comments::RemoveLikeOnACommentParams) -> Result<String, String> {
         let json = iface_comments__remove_like_on_a_comment_params__to_json(&params);
-        dispatch(&OP_COMMENTS_REMOVE_LIKE_ON_A_COMMENT, json)
+        match dispatch(&OP_COMMENTS_REMOVE_LIKE_ON_A_COMMENT, json).and_then(iface_comments__remove_like_on_a_comment__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_comments__remove_like_on_a_comment__err(e)),
+        }
     }
     fn get_all_users_who_liked_a_comment(params: iface_comments::GetAllUsersWhoLikedACommentParams) -> Result<String, String> {
         let json = iface_comments__get_all_users_who_liked_a_comment_params__to_json(&params);
-        dispatch(&OP_COMMENTS_GET_ALL_USERS_WHO_LIKED_A_COMMENT, json)
+        match dispatch(&OP_COMMENTS_GET_ALL_USERS_WHO_LIKED_A_COMMENT, json).and_then(iface_comments__get_all_users_who_liked_a_comment__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_comments__get_all_users_who_liked_a_comment__err(e)),
+        }
     }
     fn get_replies_for_a_comment(params: iface_comments::GetRepliesForACommentParams) -> Result<String, String> {
         let json = iface_comments__get_replies_for_a_comment_params__to_json(&params);
-        dispatch(&OP_COMMENTS_GET_REPLIES_FOR_A_COMMENT, json)
+        match dispatch(&OP_COMMENTS_GET_REPLIES_FOR_A_COMMENT, json).and_then(iface_comments__get_replies_for_a_comment__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_comments__get_replies_for_a_comment__err(e)),
+        }
     }
     fn post_a_reply_for_a_comment(params: iface_comments::PostAReplyForACommentParams) -> Result<String, String> {
         let json = iface_comments__post_a_reply_for_a_comment_params__to_json(&params);
-        dispatch(&OP_COMMENTS_POST_A_REPLY_FOR_A_COMMENT, json)
+        match dispatch(&OP_COMMENTS_POST_A_REPLY_FOR_A_COMMENT, json).and_then(iface_comments__post_a_reply_for_a_comment__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_comments__post_a_reply_for_a_comment__err(e)),
+        }
     }
 }
 use crate::exports::autostamp::trakt::countries as iface_countries;
@@ -1043,9 +1429,9 @@ const OP_COUNTRIES_GET_COUNTRIES: OpSpec = OpSpec {
     method: "GET",
     path_template: "/countries/{type}",
     fields: &[
-        FieldSpec { snake: "type", location: FieldLocation::Path },
-        FieldSpec { snake: "trakt_api_version", location: FieldLocation::Header },
-        FieldSpec { snake: "trakt_api_key", location: FieldLocation::Header },
+        FieldSpec { snake: "type", wire: "type", location: FieldLocation::Path },
+        FieldSpec { snake: "trakt_api_version", wire: "trakt-api-version", location: FieldLocation::Header },
+        FieldSpec { snake: "trakt_api_key", wire: "trakt-api-key", location: FieldLocation::Header },
     ],
     auth: &[
     ],
@@ -1059,10 +1445,24 @@ fn iface_countries__get_countries_params__to_json(p: &iface_countries::GetCountr
     Value::Object(m)
 }
 
+fn iface_countries__get_countries__ok(body: String) -> Result<String, crate::runtime::DispatchError> {
+    Ok(body)
+}
+
+fn iface_countries__get_countries__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
 impl iface_countries::Guest for crate::Component {
     fn get_countries(params: iface_countries::GetCountriesParams) -> Result<String, String> {
         let json = iface_countries__get_countries_params__to_json(&params);
-        dispatch(&OP_COUNTRIES_GET_COUNTRIES, json)
+        match dispatch(&OP_COUNTRIES_GET_COUNTRIES, json).and_then(iface_countries__get_countries__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_countries__get_countries__err(e)),
+        }
     }
 }
 use crate::exports::autostamp::trakt::genres as iface_genres;
@@ -1071,9 +1471,9 @@ const OP_GENRES_GET_GENRES: OpSpec = OpSpec {
     method: "GET",
     path_template: "/genres/{type}",
     fields: &[
-        FieldSpec { snake: "type", location: FieldLocation::Path },
-        FieldSpec { snake: "trakt_api_version", location: FieldLocation::Header },
-        FieldSpec { snake: "trakt_api_key", location: FieldLocation::Header },
+        FieldSpec { snake: "type", wire: "type", location: FieldLocation::Path },
+        FieldSpec { snake: "trakt_api_version", wire: "trakt-api-version", location: FieldLocation::Header },
+        FieldSpec { snake: "trakt_api_key", wire: "trakt-api-key", location: FieldLocation::Header },
     ],
     auth: &[
     ],
@@ -1087,10 +1487,24 @@ fn iface_genres__get_genres_params__to_json(p: &iface_genres::GetGenresParams) -
     Value::Object(m)
 }
 
+fn iface_genres__get_genres__ok(body: String) -> Result<String, crate::runtime::DispatchError> {
+    Ok(body)
+}
+
+fn iface_genres__get_genres__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
 impl iface_genres::Guest for crate::Component {
     fn get_genres(params: iface_genres::GetGenresParams) -> Result<String, String> {
         let json = iface_genres__get_genres_params__to_json(&params);
-        dispatch(&OP_GENRES_GET_GENRES, json)
+        match dispatch(&OP_GENRES_GET_GENRES, json).and_then(iface_genres__get_genres__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_genres__get_genres__err(e)),
+        }
     }
 }
 use crate::exports::autostamp::trakt::languages as iface_languages;
@@ -1099,9 +1513,9 @@ const OP_LANGUAGES_GET_LANGUAGES: OpSpec = OpSpec {
     method: "GET",
     path_template: "/languages/{type}",
     fields: &[
-        FieldSpec { snake: "type", location: FieldLocation::Path },
-        FieldSpec { snake: "trakt_api_version", location: FieldLocation::Header },
-        FieldSpec { snake: "trakt_api_key", location: FieldLocation::Header },
+        FieldSpec { snake: "type", wire: "type", location: FieldLocation::Path },
+        FieldSpec { snake: "trakt_api_version", wire: "trakt-api-version", location: FieldLocation::Header },
+        FieldSpec { snake: "trakt_api_key", wire: "trakt-api-key", location: FieldLocation::Header },
     ],
     auth: &[
     ],
@@ -1115,10 +1529,24 @@ fn iface_languages__get_languages_params__to_json(p: &iface_languages::GetLangua
     Value::Object(m)
 }
 
+fn iface_languages__get_languages__ok(body: String) -> Result<String, crate::runtime::DispatchError> {
+    Ok(body)
+}
+
+fn iface_languages__get_languages__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
 impl iface_languages::Guest for crate::Component {
     fn get_languages(params: iface_languages::GetLanguagesParams) -> Result<String, String> {
         let json = iface_languages__get_languages_params__to_json(&params);
-        dispatch(&OP_LANGUAGES_GET_LANGUAGES, json)
+        match dispatch(&OP_LANGUAGES_GET_LANGUAGES, json).and_then(iface_languages__get_languages__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_languages__get_languages__err(e)),
+        }
     }
 }
 use crate::exports::autostamp::trakt::lists as iface_lists;
@@ -1127,8 +1555,8 @@ const OP_LISTS_GET_POPULAR_LISTS: OpSpec = OpSpec {
     method: "GET",
     path_template: "/lists/popular",
     fields: &[
-        FieldSpec { snake: "trakt_api_version", location: FieldLocation::Header },
-        FieldSpec { snake: "trakt_api_key", location: FieldLocation::Header },
+        FieldSpec { snake: "trakt_api_version", wire: "trakt-api-version", location: FieldLocation::Header },
+        FieldSpec { snake: "trakt_api_key", wire: "trakt-api-key", location: FieldLocation::Header },
     ],
     auth: &[
     ],
@@ -1138,8 +1566,8 @@ const OP_LISTS_GET_TRENDING_LISTS: OpSpec = OpSpec {
     method: "GET",
     path_template: "/lists/trending",
     fields: &[
-        FieldSpec { snake: "trakt_api_version", location: FieldLocation::Header },
-        FieldSpec { snake: "trakt_api_key", location: FieldLocation::Header },
+        FieldSpec { snake: "trakt_api_version", wire: "trakt-api-version", location: FieldLocation::Header },
+        FieldSpec { snake: "trakt_api_key", wire: "trakt-api-key", location: FieldLocation::Header },
     ],
     auth: &[
     ],
@@ -1149,9 +1577,9 @@ const OP_LISTS_GET_LIST: OpSpec = OpSpec {
     method: "GET",
     path_template: "/lists/{id}",
     fields: &[
-        FieldSpec { snake: "id", location: FieldLocation::Path },
-        FieldSpec { snake: "trakt_api_version", location: FieldLocation::Header },
-        FieldSpec { snake: "trakt_api_key", location: FieldLocation::Header },
+        FieldSpec { snake: "id", wire: "id", location: FieldLocation::Path },
+        FieldSpec { snake: "trakt_api_version", wire: "trakt-api-version", location: FieldLocation::Header },
+        FieldSpec { snake: "trakt_api_key", wire: "trakt-api-key", location: FieldLocation::Header },
     ],
     auth: &[
     ],
@@ -1161,10 +1589,10 @@ const OP_LISTS_GET_ALL_LIST_COMMENTS: OpSpec = OpSpec {
     method: "GET",
     path_template: "/lists/{id}/comments/{sort}",
     fields: &[
-        FieldSpec { snake: "id", location: FieldLocation::Path },
-        FieldSpec { snake: "sort", location: FieldLocation::Path },
-        FieldSpec { snake: "trakt_api_version", location: FieldLocation::Header },
-        FieldSpec { snake: "trakt_api_key", location: FieldLocation::Header },
+        FieldSpec { snake: "id", wire: "id", location: FieldLocation::Path },
+        FieldSpec { snake: "sort", wire: "sort", location: FieldLocation::Path },
+        FieldSpec { snake: "trakt_api_version", wire: "trakt-api-version", location: FieldLocation::Header },
+        FieldSpec { snake: "trakt_api_key", wire: "trakt-api-key", location: FieldLocation::Header },
     ],
     auth: &[
     ],
@@ -1174,10 +1602,10 @@ const OP_LISTS_GET_ITEMS_ON_A_LIST: OpSpec = OpSpec {
     method: "GET",
     path_template: "/lists/{id}/items/{type}",
     fields: &[
-        FieldSpec { snake: "id", location: FieldLocation::Path },
-        FieldSpec { snake: "type", location: FieldLocation::Path },
-        FieldSpec { snake: "trakt_api_version", location: FieldLocation::Header },
-        FieldSpec { snake: "trakt_api_key", location: FieldLocation::Header },
+        FieldSpec { snake: "id", wire: "id", location: FieldLocation::Path },
+        FieldSpec { snake: "type", wire: "type", location: FieldLocation::Path },
+        FieldSpec { snake: "trakt_api_version", wire: "trakt-api-version", location: FieldLocation::Header },
+        FieldSpec { snake: "trakt_api_key", wire: "trakt-api-key", location: FieldLocation::Header },
     ],
     auth: &[
     ],
@@ -1187,9 +1615,9 @@ const OP_LISTS_GET_ALL_USERS_WHO_LIKED_A_LIST: OpSpec = OpSpec {
     method: "GET",
     path_template: "/lists/{id}/likes",
     fields: &[
-        FieldSpec { snake: "id", location: FieldLocation::Path },
-        FieldSpec { snake: "trakt_api_version", location: FieldLocation::Header },
-        FieldSpec { snake: "trakt_api_key", location: FieldLocation::Header },
+        FieldSpec { snake: "id", wire: "id", location: FieldLocation::Path },
+        FieldSpec { snake: "trakt_api_version", wire: "trakt-api-version", location: FieldLocation::Header },
+        FieldSpec { snake: "trakt_api_key", wire: "trakt-api-key", location: FieldLocation::Header },
     ],
     auth: &[
     ],
@@ -1243,30 +1671,114 @@ fn iface_lists__get_all_users_who_liked_a_list_params__to_json(p: &iface_lists::
     Value::Object(m)
 }
 
+fn iface_lists__get_popular_lists__ok(body: String) -> Result<String, crate::runtime::DispatchError> {
+    Ok(body)
+}
+
+fn iface_lists__get_popular_lists__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
+fn iface_lists__get_trending_lists__ok(body: String) -> Result<String, crate::runtime::DispatchError> {
+    Ok(body)
+}
+
+fn iface_lists__get_trending_lists__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
+fn iface_lists__get_list__ok(body: String) -> Result<String, crate::runtime::DispatchError> {
+    Ok(body)
+}
+
+fn iface_lists__get_list__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
+fn iface_lists__get_all_list_comments__ok(body: String) -> Result<String, crate::runtime::DispatchError> {
+    Ok(body)
+}
+
+fn iface_lists__get_all_list_comments__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
+fn iface_lists__get_items_on_a_list__ok(body: String) -> Result<String, crate::runtime::DispatchError> {
+    Ok(body)
+}
+
+fn iface_lists__get_items_on_a_list__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
+fn iface_lists__get_all_users_who_liked_a_list__ok(body: String) -> Result<String, crate::runtime::DispatchError> {
+    Ok(body)
+}
+
+fn iface_lists__get_all_users_who_liked_a_list__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
 impl iface_lists::Guest for crate::Component {
     fn get_popular_lists(params: iface_lists::GetPopularListsParams) -> Result<String, String> {
         let json = iface_lists__get_popular_lists_params__to_json(&params);
-        dispatch(&OP_LISTS_GET_POPULAR_LISTS, json)
+        match dispatch(&OP_LISTS_GET_POPULAR_LISTS, json).and_then(iface_lists__get_popular_lists__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_lists__get_popular_lists__err(e)),
+        }
     }
     fn get_trending_lists(params: iface_lists::GetTrendingListsParams) -> Result<String, String> {
         let json = iface_lists__get_trending_lists_params__to_json(&params);
-        dispatch(&OP_LISTS_GET_TRENDING_LISTS, json)
+        match dispatch(&OP_LISTS_GET_TRENDING_LISTS, json).and_then(iface_lists__get_trending_lists__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_lists__get_trending_lists__err(e)),
+        }
     }
     fn get_list(params: iface_lists::GetListParams) -> Result<String, String> {
         let json = iface_lists__get_list_params__to_json(&params);
-        dispatch(&OP_LISTS_GET_LIST, json)
+        match dispatch(&OP_LISTS_GET_LIST, json).and_then(iface_lists__get_list__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_lists__get_list__err(e)),
+        }
     }
     fn get_all_list_comments(params: iface_lists::GetAllListCommentsParams) -> Result<String, String> {
         let json = iface_lists__get_all_list_comments_params__to_json(&params);
-        dispatch(&OP_LISTS_GET_ALL_LIST_COMMENTS, json)
+        match dispatch(&OP_LISTS_GET_ALL_LIST_COMMENTS, json).and_then(iface_lists__get_all_list_comments__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_lists__get_all_list_comments__err(e)),
+        }
     }
     fn get_items_on_a_list(params: iface_lists::GetItemsOnAListParams) -> Result<String, String> {
         let json = iface_lists__get_items_on_a_list_params__to_json(&params);
-        dispatch(&OP_LISTS_GET_ITEMS_ON_A_LIST, json)
+        match dispatch(&OP_LISTS_GET_ITEMS_ON_A_LIST, json).and_then(iface_lists__get_items_on_a_list__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_lists__get_items_on_a_list__err(e)),
+        }
     }
     fn get_all_users_who_liked_a_list(params: iface_lists::GetAllUsersWhoLikedAListParams) -> Result<String, String> {
         let json = iface_lists__get_all_users_who_liked_a_list_params__to_json(&params);
-        dispatch(&OP_LISTS_GET_ALL_USERS_WHO_LIKED_A_LIST, json)
+        match dispatch(&OP_LISTS_GET_ALL_USERS_WHO_LIKED_A_LIST, json).and_then(iface_lists__get_all_users_who_liked_a_list__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_lists__get_all_users_who_liked_a_list__err(e)),
+        }
     }
 }
 use crate::exports::autostamp::trakt::movies as iface_movies;
@@ -1275,8 +1787,8 @@ const OP_MOVIES_GET_THE_MOST_ANTICIPATED_MOVIES: OpSpec = OpSpec {
     method: "GET",
     path_template: "/movies/anticipated",
     fields: &[
-        FieldSpec { snake: "trakt_api_version", location: FieldLocation::Header },
-        FieldSpec { snake: "trakt_api_key", location: FieldLocation::Header },
+        FieldSpec { snake: "trakt_api_version", wire: "trakt-api-version", location: FieldLocation::Header },
+        FieldSpec { snake: "trakt_api_key", wire: "trakt-api-key", location: FieldLocation::Header },
     ],
     auth: &[
     ],
@@ -1286,8 +1798,8 @@ const OP_MOVIES_GET_THE_WEEKEND_BOX_OFFICE: OpSpec = OpSpec {
     method: "GET",
     path_template: "/movies/boxoffice",
     fields: &[
-        FieldSpec { snake: "trakt_api_version", location: FieldLocation::Header },
-        FieldSpec { snake: "trakt_api_key", location: FieldLocation::Header },
+        FieldSpec { snake: "trakt_api_version", wire: "trakt-api-version", location: FieldLocation::Header },
+        FieldSpec { snake: "trakt_api_key", wire: "trakt-api-key", location: FieldLocation::Header },
     ],
     auth: &[
     ],
@@ -1297,9 +1809,9 @@ const OP_MOVIES_GET_THE_MOST_COLLECTED_MOVIES: OpSpec = OpSpec {
     method: "GET",
     path_template: "/movies/collected/{period}",
     fields: &[
-        FieldSpec { snake: "period", location: FieldLocation::Path },
-        FieldSpec { snake: "trakt_api_version", location: FieldLocation::Header },
-        FieldSpec { snake: "trakt_api_key", location: FieldLocation::Header },
+        FieldSpec { snake: "period", wire: "period", location: FieldLocation::Path },
+        FieldSpec { snake: "trakt_api_version", wire: "trakt-api-version", location: FieldLocation::Header },
+        FieldSpec { snake: "trakt_api_key", wire: "trakt-api-key", location: FieldLocation::Header },
     ],
     auth: &[
     ],
@@ -1309,9 +1821,9 @@ const OP_MOVIES_GET_THE_MOST_PLAYED_MOVIES: OpSpec = OpSpec {
     method: "GET",
     path_template: "/movies/played/{period}",
     fields: &[
-        FieldSpec { snake: "period", location: FieldLocation::Path },
-        FieldSpec { snake: "trakt_api_version", location: FieldLocation::Header },
-        FieldSpec { snake: "trakt_api_key", location: FieldLocation::Header },
+        FieldSpec { snake: "period", wire: "period", location: FieldLocation::Path },
+        FieldSpec { snake: "trakt_api_version", wire: "trakt-api-version", location: FieldLocation::Header },
+        FieldSpec { snake: "trakt_api_key", wire: "trakt-api-key", location: FieldLocation::Header },
     ],
     auth: &[
     ],
@@ -1321,8 +1833,8 @@ const OP_MOVIES_GET_POPULAR_MOVIES: OpSpec = OpSpec {
     method: "GET",
     path_template: "/movies/popular",
     fields: &[
-        FieldSpec { snake: "trakt_api_version", location: FieldLocation::Header },
-        FieldSpec { snake: "trakt_api_key", location: FieldLocation::Header },
+        FieldSpec { snake: "trakt_api_version", wire: "trakt-api-version", location: FieldLocation::Header },
+        FieldSpec { snake: "trakt_api_key", wire: "trakt-api-key", location: FieldLocation::Header },
     ],
     auth: &[
     ],
@@ -1332,9 +1844,9 @@ const OP_MOVIES_GET_THE_MOST_RECOMMENDED_MOVIES: OpSpec = OpSpec {
     method: "GET",
     path_template: "/movies/recommended/{period}",
     fields: &[
-        FieldSpec { snake: "period", location: FieldLocation::Path },
-        FieldSpec { snake: "trakt_api_version", location: FieldLocation::Header },
-        FieldSpec { snake: "trakt_api_key", location: FieldLocation::Header },
+        FieldSpec { snake: "period", wire: "period", location: FieldLocation::Path },
+        FieldSpec { snake: "trakt_api_version", wire: "trakt-api-version", location: FieldLocation::Header },
+        FieldSpec { snake: "trakt_api_key", wire: "trakt-api-key", location: FieldLocation::Header },
     ],
     auth: &[
     ],
@@ -1344,8 +1856,8 @@ const OP_MOVIES_GET_TRENDING_MOVIES: OpSpec = OpSpec {
     method: "GET",
     path_template: "/movies/trending",
     fields: &[
-        FieldSpec { snake: "trakt_api_version", location: FieldLocation::Header },
-        FieldSpec { snake: "trakt_api_key", location: FieldLocation::Header },
+        FieldSpec { snake: "trakt_api_version", wire: "trakt-api-version", location: FieldLocation::Header },
+        FieldSpec { snake: "trakt_api_key", wire: "trakt-api-key", location: FieldLocation::Header },
     ],
     auth: &[
     ],
@@ -1355,9 +1867,9 @@ const OP_MOVIES_GET_RECENTLY_UPDATED_MOVIE_TRAKT_I_DS: OpSpec = OpSpec {
     method: "GET",
     path_template: "/movies/updates/id/{start_date}",
     fields: &[
-        FieldSpec { snake: "start_date", location: FieldLocation::Path },
-        FieldSpec { snake: "trakt_api_version", location: FieldLocation::Header },
-        FieldSpec { snake: "trakt_api_key", location: FieldLocation::Header },
+        FieldSpec { snake: "start_date", wire: "start_date", location: FieldLocation::Path },
+        FieldSpec { snake: "trakt_api_version", wire: "trakt-api-version", location: FieldLocation::Header },
+        FieldSpec { snake: "trakt_api_key", wire: "trakt-api-key", location: FieldLocation::Header },
     ],
     auth: &[
     ],
@@ -1367,9 +1879,9 @@ const OP_MOVIES_GET_RECENTLY_UPDATED_MOVIES: OpSpec = OpSpec {
     method: "GET",
     path_template: "/movies/updates/{start_date}",
     fields: &[
-        FieldSpec { snake: "start_date", location: FieldLocation::Path },
-        FieldSpec { snake: "trakt_api_version", location: FieldLocation::Header },
-        FieldSpec { snake: "trakt_api_key", location: FieldLocation::Header },
+        FieldSpec { snake: "start_date", wire: "start_date", location: FieldLocation::Path },
+        FieldSpec { snake: "trakt_api_version", wire: "trakt-api-version", location: FieldLocation::Header },
+        FieldSpec { snake: "trakt_api_key", wire: "trakt-api-key", location: FieldLocation::Header },
     ],
     auth: &[
     ],
@@ -1379,9 +1891,9 @@ const OP_MOVIES_GET_THE_MOST_WATCHED_MOVIES: OpSpec = OpSpec {
     method: "GET",
     path_template: "/movies/watched/{period}",
     fields: &[
-        FieldSpec { snake: "period", location: FieldLocation::Path },
-        FieldSpec { snake: "trakt_api_version", location: FieldLocation::Header },
-        FieldSpec { snake: "trakt_api_key", location: FieldLocation::Header },
+        FieldSpec { snake: "period", wire: "period", location: FieldLocation::Path },
+        FieldSpec { snake: "trakt_api_version", wire: "trakt-api-version", location: FieldLocation::Header },
+        FieldSpec { snake: "trakt_api_key", wire: "trakt-api-key", location: FieldLocation::Header },
     ],
     auth: &[
     ],
@@ -1391,9 +1903,9 @@ const OP_MOVIES_GET_A_MOVIE: OpSpec = OpSpec {
     method: "GET",
     path_template: "/movies/{id}",
     fields: &[
-        FieldSpec { snake: "id", location: FieldLocation::Path },
-        FieldSpec { snake: "trakt_api_version", location: FieldLocation::Header },
-        FieldSpec { snake: "trakt_api_key", location: FieldLocation::Header },
+        FieldSpec { snake: "id", wire: "id", location: FieldLocation::Path },
+        FieldSpec { snake: "trakt_api_version", wire: "trakt-api-version", location: FieldLocation::Header },
+        FieldSpec { snake: "trakt_api_key", wire: "trakt-api-key", location: FieldLocation::Header },
     ],
     auth: &[
     ],
@@ -1403,9 +1915,9 @@ const OP_MOVIES_GET_ALL_MOVIE_ALIASES: OpSpec = OpSpec {
     method: "GET",
     path_template: "/movies/{id}/aliases",
     fields: &[
-        FieldSpec { snake: "id", location: FieldLocation::Path },
-        FieldSpec { snake: "trakt_api_version", location: FieldLocation::Header },
-        FieldSpec { snake: "trakt_api_key", location: FieldLocation::Header },
+        FieldSpec { snake: "id", wire: "id", location: FieldLocation::Path },
+        FieldSpec { snake: "trakt_api_version", wire: "trakt-api-version", location: FieldLocation::Header },
+        FieldSpec { snake: "trakt_api_key", wire: "trakt-api-key", location: FieldLocation::Header },
     ],
     auth: &[
     ],
@@ -1415,10 +1927,10 @@ const OP_MOVIES_GET_ALL_MOVIE_COMMENTS: OpSpec = OpSpec {
     method: "GET",
     path_template: "/movies/{id}/comments/{sort}",
     fields: &[
-        FieldSpec { snake: "id", location: FieldLocation::Path },
-        FieldSpec { snake: "sort", location: FieldLocation::Path },
-        FieldSpec { snake: "trakt_api_version", location: FieldLocation::Header },
-        FieldSpec { snake: "trakt_api_key", location: FieldLocation::Header },
+        FieldSpec { snake: "id", wire: "id", location: FieldLocation::Path },
+        FieldSpec { snake: "sort", wire: "sort", location: FieldLocation::Path },
+        FieldSpec { snake: "trakt_api_version", wire: "trakt-api-version", location: FieldLocation::Header },
+        FieldSpec { snake: "trakt_api_key", wire: "trakt-api-key", location: FieldLocation::Header },
     ],
     auth: &[
     ],
@@ -1428,11 +1940,11 @@ const OP_MOVIES_GET_LISTS_CONTAINING_THIS_MOVIE: OpSpec = OpSpec {
     method: "GET",
     path_template: "/movies/{id}/lists/{type}/{sort}",
     fields: &[
-        FieldSpec { snake: "id", location: FieldLocation::Path },
-        FieldSpec { snake: "type", location: FieldLocation::Path },
-        FieldSpec { snake: "sort", location: FieldLocation::Path },
-        FieldSpec { snake: "trakt_api_version", location: FieldLocation::Header },
-        FieldSpec { snake: "trakt_api_key", location: FieldLocation::Header },
+        FieldSpec { snake: "id", wire: "id", location: FieldLocation::Path },
+        FieldSpec { snake: "type", wire: "type", location: FieldLocation::Path },
+        FieldSpec { snake: "sort", wire: "sort", location: FieldLocation::Path },
+        FieldSpec { snake: "trakt_api_version", wire: "trakt-api-version", location: FieldLocation::Header },
+        FieldSpec { snake: "trakt_api_key", wire: "trakt-api-key", location: FieldLocation::Header },
     ],
     auth: &[
     ],
@@ -1442,9 +1954,9 @@ const OP_MOVIES_GET_ALL_PEOPLE_FOR_A_MOVIE: OpSpec = OpSpec {
     method: "GET",
     path_template: "/movies/{id}/people",
     fields: &[
-        FieldSpec { snake: "id", location: FieldLocation::Path },
-        FieldSpec { snake: "trakt_api_version", location: FieldLocation::Header },
-        FieldSpec { snake: "trakt_api_key", location: FieldLocation::Header },
+        FieldSpec { snake: "id", wire: "id", location: FieldLocation::Path },
+        FieldSpec { snake: "trakt_api_version", wire: "trakt-api-version", location: FieldLocation::Header },
+        FieldSpec { snake: "trakt_api_key", wire: "trakt-api-key", location: FieldLocation::Header },
     ],
     auth: &[
     ],
@@ -1454,9 +1966,9 @@ const OP_MOVIES_GET_MOVIE_RATINGS: OpSpec = OpSpec {
     method: "GET",
     path_template: "/movies/{id}/ratings",
     fields: &[
-        FieldSpec { snake: "id", location: FieldLocation::Path },
-        FieldSpec { snake: "trakt_api_version", location: FieldLocation::Header },
-        FieldSpec { snake: "trakt_api_key", location: FieldLocation::Header },
+        FieldSpec { snake: "id", wire: "id", location: FieldLocation::Path },
+        FieldSpec { snake: "trakt_api_version", wire: "trakt-api-version", location: FieldLocation::Header },
+        FieldSpec { snake: "trakt_api_key", wire: "trakt-api-key", location: FieldLocation::Header },
     ],
     auth: &[
     ],
@@ -1466,9 +1978,9 @@ const OP_MOVIES_GET_RELATED_MOVIES: OpSpec = OpSpec {
     method: "GET",
     path_template: "/movies/{id}/related",
     fields: &[
-        FieldSpec { snake: "id", location: FieldLocation::Path },
-        FieldSpec { snake: "trakt_api_version", location: FieldLocation::Header },
-        FieldSpec { snake: "trakt_api_key", location: FieldLocation::Header },
+        FieldSpec { snake: "id", wire: "id", location: FieldLocation::Path },
+        FieldSpec { snake: "trakt_api_version", wire: "trakt-api-version", location: FieldLocation::Header },
+        FieldSpec { snake: "trakt_api_key", wire: "trakt-api-key", location: FieldLocation::Header },
     ],
     auth: &[
     ],
@@ -1478,10 +1990,10 @@ const OP_MOVIES_GET_ALL_MOVIE_RELEASES: OpSpec = OpSpec {
     method: "GET",
     path_template: "/movies/{id}/releases/{country}",
     fields: &[
-        FieldSpec { snake: "id", location: FieldLocation::Path },
-        FieldSpec { snake: "country", location: FieldLocation::Path },
-        FieldSpec { snake: "trakt_api_version", location: FieldLocation::Header },
-        FieldSpec { snake: "trakt_api_key", location: FieldLocation::Header },
+        FieldSpec { snake: "id", wire: "id", location: FieldLocation::Path },
+        FieldSpec { snake: "country", wire: "country", location: FieldLocation::Path },
+        FieldSpec { snake: "trakt_api_version", wire: "trakt-api-version", location: FieldLocation::Header },
+        FieldSpec { snake: "trakt_api_key", wire: "trakt-api-key", location: FieldLocation::Header },
     ],
     auth: &[
     ],
@@ -1491,9 +2003,9 @@ const OP_MOVIES_GET_MOVIE_STATS: OpSpec = OpSpec {
     method: "GET",
     path_template: "/movies/{id}/stats",
     fields: &[
-        FieldSpec { snake: "id", location: FieldLocation::Path },
-        FieldSpec { snake: "trakt_api_version", location: FieldLocation::Header },
-        FieldSpec { snake: "trakt_api_key", location: FieldLocation::Header },
+        FieldSpec { snake: "id", wire: "id", location: FieldLocation::Path },
+        FieldSpec { snake: "trakt_api_version", wire: "trakt-api-version", location: FieldLocation::Header },
+        FieldSpec { snake: "trakt_api_key", wire: "trakt-api-key", location: FieldLocation::Header },
     ],
     auth: &[
     ],
@@ -1503,9 +2015,9 @@ const OP_MOVIES_GET_MOVIE_STUDIOS: OpSpec = OpSpec {
     method: "GET",
     path_template: "/movies/{id}/studios",
     fields: &[
-        FieldSpec { snake: "id", location: FieldLocation::Path },
-        FieldSpec { snake: "trakt_api_version", location: FieldLocation::Header },
-        FieldSpec { snake: "trakt_api_key", location: FieldLocation::Header },
+        FieldSpec { snake: "id", wire: "id", location: FieldLocation::Path },
+        FieldSpec { snake: "trakt_api_version", wire: "trakt-api-version", location: FieldLocation::Header },
+        FieldSpec { snake: "trakt_api_key", wire: "trakt-api-key", location: FieldLocation::Header },
     ],
     auth: &[
     ],
@@ -1515,10 +2027,10 @@ const OP_MOVIES_GET_ALL_MOVIE_TRANSLATIONS: OpSpec = OpSpec {
     method: "GET",
     path_template: "/movies/{id}/translations/{language}",
     fields: &[
-        FieldSpec { snake: "id", location: FieldLocation::Path },
-        FieldSpec { snake: "language", location: FieldLocation::Path },
-        FieldSpec { snake: "trakt_api_version", location: FieldLocation::Header },
-        FieldSpec { snake: "trakt_api_key", location: FieldLocation::Header },
+        FieldSpec { snake: "id", wire: "id", location: FieldLocation::Path },
+        FieldSpec { snake: "language", wire: "language", location: FieldLocation::Path },
+        FieldSpec { snake: "trakt_api_version", wire: "trakt-api-version", location: FieldLocation::Header },
+        FieldSpec { snake: "trakt_api_key", wire: "trakt-api-key", location: FieldLocation::Header },
     ],
     auth: &[
     ],
@@ -1528,9 +2040,9 @@ const OP_MOVIES_GET_USERS_WATCHING_RIGHT_NOW: OpSpec = OpSpec {
     method: "GET",
     path_template: "/movies/{id}/watching",
     fields: &[
-        FieldSpec { snake: "id", location: FieldLocation::Path },
-        FieldSpec { snake: "trakt_api_version", location: FieldLocation::Header },
-        FieldSpec { snake: "trakt_api_key", location: FieldLocation::Header },
+        FieldSpec { snake: "id", wire: "id", location: FieldLocation::Path },
+        FieldSpec { snake: "trakt_api_version", wire: "trakt-api-version", location: FieldLocation::Header },
+        FieldSpec { snake: "trakt_api_key", wire: "trakt-api-key", location: FieldLocation::Header },
     ],
     auth: &[
     ],
@@ -1713,94 +2225,402 @@ fn iface_movies__get_users_watching_right_now_params__to_json(p: &iface_movies::
     Value::Object(m)
 }
 
+fn iface_movies__get_the_most_anticipated_movies__ok(body: String) -> Result<String, crate::runtime::DispatchError> {
+    Ok(body)
+}
+
+fn iface_movies__get_the_most_anticipated_movies__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
+fn iface_movies__get_the_weekend_box_office__ok(body: String) -> Result<String, crate::runtime::DispatchError> {
+    Ok(body)
+}
+
+fn iface_movies__get_the_weekend_box_office__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
+fn iface_movies__get_the_most_collected_movies__ok(body: String) -> Result<String, crate::runtime::DispatchError> {
+    Ok(body)
+}
+
+fn iface_movies__get_the_most_collected_movies__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
+fn iface_movies__get_the_most_played_movies__ok(body: String) -> Result<String, crate::runtime::DispatchError> {
+    Ok(body)
+}
+
+fn iface_movies__get_the_most_played_movies__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
+fn iface_movies__get_popular_movies__ok(body: String) -> Result<String, crate::runtime::DispatchError> {
+    Ok(body)
+}
+
+fn iface_movies__get_popular_movies__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
+fn iface_movies__get_the_most_recommended_movies__ok(body: String) -> Result<String, crate::runtime::DispatchError> {
+    Ok(body)
+}
+
+fn iface_movies__get_the_most_recommended_movies__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
+fn iface_movies__get_trending_movies__ok(body: String) -> Result<String, crate::runtime::DispatchError> {
+    Ok(body)
+}
+
+fn iface_movies__get_trending_movies__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
+fn iface_movies__get_recently_updated_movie_trakt_i_ds__ok(body: String) -> Result<String, crate::runtime::DispatchError> {
+    Ok(body)
+}
+
+fn iface_movies__get_recently_updated_movie_trakt_i_ds__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
+fn iface_movies__get_recently_updated_movies__ok(body: String) -> Result<String, crate::runtime::DispatchError> {
+    Ok(body)
+}
+
+fn iface_movies__get_recently_updated_movies__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
+fn iface_movies__get_the_most_watched_movies__ok(body: String) -> Result<String, crate::runtime::DispatchError> {
+    Ok(body)
+}
+
+fn iface_movies__get_the_most_watched_movies__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
+fn iface_movies__get_a_movie__ok(body: String) -> Result<String, crate::runtime::DispatchError> {
+    Ok(body)
+}
+
+fn iface_movies__get_a_movie__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
+fn iface_movies__get_all_movie_aliases__ok(body: String) -> Result<String, crate::runtime::DispatchError> {
+    Ok(body)
+}
+
+fn iface_movies__get_all_movie_aliases__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
+fn iface_movies__get_all_movie_comments__ok(body: String) -> Result<String, crate::runtime::DispatchError> {
+    Ok(body)
+}
+
+fn iface_movies__get_all_movie_comments__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
+fn iface_movies__get_lists_containing_this_movie__ok(body: String) -> Result<String, crate::runtime::DispatchError> {
+    Ok(body)
+}
+
+fn iface_movies__get_lists_containing_this_movie__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
+fn iface_movies__get_all_people_for_a_movie__ok(body: String) -> Result<String, crate::runtime::DispatchError> {
+    Ok(body)
+}
+
+fn iface_movies__get_all_people_for_a_movie__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
+fn iface_movies__get_movie_ratings__ok(body: String) -> Result<String, crate::runtime::DispatchError> {
+    Ok(body)
+}
+
+fn iface_movies__get_movie_ratings__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
+fn iface_movies__get_related_movies__ok(body: String) -> Result<String, crate::runtime::DispatchError> {
+    Ok(body)
+}
+
+fn iface_movies__get_related_movies__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
+fn iface_movies__get_all_movie_releases__ok(body: String) -> Result<String, crate::runtime::DispatchError> {
+    Ok(body)
+}
+
+fn iface_movies__get_all_movie_releases__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
+fn iface_movies__get_movie_stats__ok(body: String) -> Result<String, crate::runtime::DispatchError> {
+    Ok(body)
+}
+
+fn iface_movies__get_movie_stats__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
+fn iface_movies__get_movie_studios__ok(body: String) -> Result<String, crate::runtime::DispatchError> {
+    Ok(body)
+}
+
+fn iface_movies__get_movie_studios__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
+fn iface_movies__get_all_movie_translations__ok(body: String) -> Result<String, crate::runtime::DispatchError> {
+    Ok(body)
+}
+
+fn iface_movies__get_all_movie_translations__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
+fn iface_movies__get_users_watching_right_now__ok(body: String) -> Result<String, crate::runtime::DispatchError> {
+    Ok(body)
+}
+
+fn iface_movies__get_users_watching_right_now__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
 impl iface_movies::Guest for crate::Component {
     fn get_the_most_anticipated_movies(params: iface_movies::GetTheMostAnticipatedMoviesParams) -> Result<String, String> {
         let json = iface_movies__get_the_most_anticipated_movies_params__to_json(&params);
-        dispatch(&OP_MOVIES_GET_THE_MOST_ANTICIPATED_MOVIES, json)
+        match dispatch(&OP_MOVIES_GET_THE_MOST_ANTICIPATED_MOVIES, json).and_then(iface_movies__get_the_most_anticipated_movies__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_movies__get_the_most_anticipated_movies__err(e)),
+        }
     }
     fn get_the_weekend_box_office(params: iface_movies::GetTheWeekendBoxOfficeParams) -> Result<String, String> {
         let json = iface_movies__get_the_weekend_box_office_params__to_json(&params);
-        dispatch(&OP_MOVIES_GET_THE_WEEKEND_BOX_OFFICE, json)
+        match dispatch(&OP_MOVIES_GET_THE_WEEKEND_BOX_OFFICE, json).and_then(iface_movies__get_the_weekend_box_office__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_movies__get_the_weekend_box_office__err(e)),
+        }
     }
     fn get_the_most_collected_movies(params: iface_movies::GetTheMostCollectedMoviesParams) -> Result<String, String> {
         let json = iface_movies__get_the_most_collected_movies_params__to_json(&params);
-        dispatch(&OP_MOVIES_GET_THE_MOST_COLLECTED_MOVIES, json)
+        match dispatch(&OP_MOVIES_GET_THE_MOST_COLLECTED_MOVIES, json).and_then(iface_movies__get_the_most_collected_movies__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_movies__get_the_most_collected_movies__err(e)),
+        }
     }
     fn get_the_most_played_movies(params: iface_movies::GetTheMostPlayedMoviesParams) -> Result<String, String> {
         let json = iface_movies__get_the_most_played_movies_params__to_json(&params);
-        dispatch(&OP_MOVIES_GET_THE_MOST_PLAYED_MOVIES, json)
+        match dispatch(&OP_MOVIES_GET_THE_MOST_PLAYED_MOVIES, json).and_then(iface_movies__get_the_most_played_movies__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_movies__get_the_most_played_movies__err(e)),
+        }
     }
     fn get_popular_movies(params: iface_movies::GetPopularMoviesParams) -> Result<String, String> {
         let json = iface_movies__get_popular_movies_params__to_json(&params);
-        dispatch(&OP_MOVIES_GET_POPULAR_MOVIES, json)
+        match dispatch(&OP_MOVIES_GET_POPULAR_MOVIES, json).and_then(iface_movies__get_popular_movies__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_movies__get_popular_movies__err(e)),
+        }
     }
     fn get_the_most_recommended_movies(params: iface_movies::GetTheMostRecommendedMoviesParams) -> Result<String, String> {
         let json = iface_movies__get_the_most_recommended_movies_params__to_json(&params);
-        dispatch(&OP_MOVIES_GET_THE_MOST_RECOMMENDED_MOVIES, json)
+        match dispatch(&OP_MOVIES_GET_THE_MOST_RECOMMENDED_MOVIES, json).and_then(iface_movies__get_the_most_recommended_movies__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_movies__get_the_most_recommended_movies__err(e)),
+        }
     }
     fn get_trending_movies(params: iface_movies::GetTrendingMoviesParams) -> Result<String, String> {
         let json = iface_movies__get_trending_movies_params__to_json(&params);
-        dispatch(&OP_MOVIES_GET_TRENDING_MOVIES, json)
+        match dispatch(&OP_MOVIES_GET_TRENDING_MOVIES, json).and_then(iface_movies__get_trending_movies__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_movies__get_trending_movies__err(e)),
+        }
     }
     fn get_recently_updated_movie_trakt_i_ds(params: iface_movies::GetRecentlyUpdatedMovieTraktIDsParams) -> Result<String, String> {
         let json = iface_movies__get_recently_updated_movie_trakt_i_ds_params__to_json(&params);
-        dispatch(&OP_MOVIES_GET_RECENTLY_UPDATED_MOVIE_TRAKT_I_DS, json)
+        match dispatch(&OP_MOVIES_GET_RECENTLY_UPDATED_MOVIE_TRAKT_I_DS, json).and_then(iface_movies__get_recently_updated_movie_trakt_i_ds__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_movies__get_recently_updated_movie_trakt_i_ds__err(e)),
+        }
     }
     fn get_recently_updated_movies(params: iface_movies::GetRecentlyUpdatedMoviesParams) -> Result<String, String> {
         let json = iface_movies__get_recently_updated_movies_params__to_json(&params);
-        dispatch(&OP_MOVIES_GET_RECENTLY_UPDATED_MOVIES, json)
+        match dispatch(&OP_MOVIES_GET_RECENTLY_UPDATED_MOVIES, json).and_then(iface_movies__get_recently_updated_movies__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_movies__get_recently_updated_movies__err(e)),
+        }
     }
     fn get_the_most_watched_movies(params: iface_movies::GetTheMostWatchedMoviesParams) -> Result<String, String> {
         let json = iface_movies__get_the_most_watched_movies_params__to_json(&params);
-        dispatch(&OP_MOVIES_GET_THE_MOST_WATCHED_MOVIES, json)
+        match dispatch(&OP_MOVIES_GET_THE_MOST_WATCHED_MOVIES, json).and_then(iface_movies__get_the_most_watched_movies__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_movies__get_the_most_watched_movies__err(e)),
+        }
     }
     fn get_a_movie(params: iface_movies::GetAMovieParams) -> Result<String, String> {
         let json = iface_movies__get_a_movie_params__to_json(&params);
-        dispatch(&OP_MOVIES_GET_A_MOVIE, json)
+        match dispatch(&OP_MOVIES_GET_A_MOVIE, json).and_then(iface_movies__get_a_movie__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_movies__get_a_movie__err(e)),
+        }
     }
     fn get_all_movie_aliases(params: iface_movies::GetAllMovieAliasesParams) -> Result<String, String> {
         let json = iface_movies__get_all_movie_aliases_params__to_json(&params);
-        dispatch(&OP_MOVIES_GET_ALL_MOVIE_ALIASES, json)
+        match dispatch(&OP_MOVIES_GET_ALL_MOVIE_ALIASES, json).and_then(iface_movies__get_all_movie_aliases__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_movies__get_all_movie_aliases__err(e)),
+        }
     }
     fn get_all_movie_comments(params: iface_movies::GetAllMovieCommentsParams) -> Result<String, String> {
         let json = iface_movies__get_all_movie_comments_params__to_json(&params);
-        dispatch(&OP_MOVIES_GET_ALL_MOVIE_COMMENTS, json)
+        match dispatch(&OP_MOVIES_GET_ALL_MOVIE_COMMENTS, json).and_then(iface_movies__get_all_movie_comments__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_movies__get_all_movie_comments__err(e)),
+        }
     }
     fn get_lists_containing_this_movie(params: iface_movies::GetListsContainingThisMovieParams) -> Result<String, String> {
         let json = iface_movies__get_lists_containing_this_movie_params__to_json(&params);
-        dispatch(&OP_MOVIES_GET_LISTS_CONTAINING_THIS_MOVIE, json)
+        match dispatch(&OP_MOVIES_GET_LISTS_CONTAINING_THIS_MOVIE, json).and_then(iface_movies__get_lists_containing_this_movie__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_movies__get_lists_containing_this_movie__err(e)),
+        }
     }
     fn get_all_people_for_a_movie(params: iface_movies::GetAllPeopleForAMovieParams) -> Result<String, String> {
         let json = iface_movies__get_all_people_for_a_movie_params__to_json(&params);
-        dispatch(&OP_MOVIES_GET_ALL_PEOPLE_FOR_A_MOVIE, json)
+        match dispatch(&OP_MOVIES_GET_ALL_PEOPLE_FOR_A_MOVIE, json).and_then(iface_movies__get_all_people_for_a_movie__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_movies__get_all_people_for_a_movie__err(e)),
+        }
     }
     fn get_movie_ratings(params: iface_movies::GetMovieRatingsParams) -> Result<String, String> {
         let json = iface_movies__get_movie_ratings_params__to_json(&params);
-        dispatch(&OP_MOVIES_GET_MOVIE_RATINGS, json)
+        match dispatch(&OP_MOVIES_GET_MOVIE_RATINGS, json).and_then(iface_movies__get_movie_ratings__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_movies__get_movie_ratings__err(e)),
+        }
     }
     fn get_related_movies(params: iface_movies::GetRelatedMoviesParams) -> Result<String, String> {
         let json = iface_movies__get_related_movies_params__to_json(&params);
-        dispatch(&OP_MOVIES_GET_RELATED_MOVIES, json)
+        match dispatch(&OP_MOVIES_GET_RELATED_MOVIES, json).and_then(iface_movies__get_related_movies__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_movies__get_related_movies__err(e)),
+        }
     }
     fn get_all_movie_releases(params: iface_movies::GetAllMovieReleasesParams) -> Result<String, String> {
         let json = iface_movies__get_all_movie_releases_params__to_json(&params);
-        dispatch(&OP_MOVIES_GET_ALL_MOVIE_RELEASES, json)
+        match dispatch(&OP_MOVIES_GET_ALL_MOVIE_RELEASES, json).and_then(iface_movies__get_all_movie_releases__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_movies__get_all_movie_releases__err(e)),
+        }
     }
     fn get_movie_stats(params: iface_movies::GetMovieStatsParams) -> Result<String, String> {
         let json = iface_movies__get_movie_stats_params__to_json(&params);
-        dispatch(&OP_MOVIES_GET_MOVIE_STATS, json)
+        match dispatch(&OP_MOVIES_GET_MOVIE_STATS, json).and_then(iface_movies__get_movie_stats__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_movies__get_movie_stats__err(e)),
+        }
     }
     fn get_movie_studios(params: iface_movies::GetMovieStudiosParams) -> Result<String, String> {
         let json = iface_movies__get_movie_studios_params__to_json(&params);
-        dispatch(&OP_MOVIES_GET_MOVIE_STUDIOS, json)
+        match dispatch(&OP_MOVIES_GET_MOVIE_STUDIOS, json).and_then(iface_movies__get_movie_studios__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_movies__get_movie_studios__err(e)),
+        }
     }
     fn get_all_movie_translations(params: iface_movies::GetAllMovieTranslationsParams) -> Result<String, String> {
         let json = iface_movies__get_all_movie_translations_params__to_json(&params);
-        dispatch(&OP_MOVIES_GET_ALL_MOVIE_TRANSLATIONS, json)
+        match dispatch(&OP_MOVIES_GET_ALL_MOVIE_TRANSLATIONS, json).and_then(iface_movies__get_all_movie_translations__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_movies__get_all_movie_translations__err(e)),
+        }
     }
     fn get_users_watching_right_now(params: iface_movies::GetUsersWatchingRightNowParams) -> Result<String, String> {
         let json = iface_movies__get_users_watching_right_now_params__to_json(&params);
-        dispatch(&OP_MOVIES_GET_USERS_WATCHING_RIGHT_NOW, json)
+        match dispatch(&OP_MOVIES_GET_USERS_WATCHING_RIGHT_NOW, json).and_then(iface_movies__get_users_watching_right_now__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_movies__get_users_watching_right_now__err(e)),
+        }
     }
 }
 use crate::exports::autostamp::trakt::networks as iface_networks;
@@ -1809,8 +2629,8 @@ const OP_NETWORKS_GET_NETWORKS: OpSpec = OpSpec {
     method: "GET",
     path_template: "/networks",
     fields: &[
-        FieldSpec { snake: "trakt_api_version", location: FieldLocation::Header },
-        FieldSpec { snake: "trakt_api_key", location: FieldLocation::Header },
+        FieldSpec { snake: "trakt_api_version", wire: "trakt-api-version", location: FieldLocation::Header },
+        FieldSpec { snake: "trakt_api_key", wire: "trakt-api-key", location: FieldLocation::Header },
     ],
     auth: &[
     ],
@@ -1823,10 +2643,24 @@ fn iface_networks__get_networks_params__to_json(p: &iface_networks::GetNetworksP
     Value::Object(m)
 }
 
+fn iface_networks__get_networks__ok(body: String) -> Result<String, crate::runtime::DispatchError> {
+    Ok(body)
+}
+
+fn iface_networks__get_networks__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
 impl iface_networks::Guest for crate::Component {
     fn get_networks(params: iface_networks::GetNetworksParams) -> Result<String, String> {
         let json = iface_networks__get_networks_params__to_json(&params);
-        dispatch(&OP_NETWORKS_GET_NETWORKS, json)
+        match dispatch(&OP_NETWORKS_GET_NETWORKS, json).and_then(iface_networks__get_networks__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_networks__get_networks__err(e)),
+        }
     }
 }
 use crate::exports::autostamp::trakt::authentication_o_auth as iface_authentication_o_auth;
@@ -1835,11 +2669,11 @@ const OP_AUTHENTICATION_O_AUTH_AUTHORIZE_APPLICATION: OpSpec = OpSpec {
     method: "GET",
     path_template: "/oauth/authorize",
     fields: &[
-        FieldSpec { snake: "response_type", location: FieldLocation::Query },
-        FieldSpec { snake: "client_id", location: FieldLocation::Query },
-        FieldSpec { snake: "redirect_uri", location: FieldLocation::Query },
-        FieldSpec { snake: "state", location: FieldLocation::Query },
-        FieldSpec { snake: "body", location: FieldLocation::Body },
+        FieldSpec { snake: "response_type", wire: "response_type", location: FieldLocation::Query },
+        FieldSpec { snake: "client_id", wire: "client_id", location: FieldLocation::Query },
+        FieldSpec { snake: "redirect_uri", wire: "redirect_uri", location: FieldLocation::Query },
+        FieldSpec { snake: "state", wire: "state", location: FieldLocation::Query },
+        FieldSpec { snake: "body", wire: "body", location: FieldLocation::Body },
     ],
     auth: &[
     ],
@@ -1849,9 +2683,9 @@ const OP_AUTHENTICATION_O_AUTH_REVOKE_AN_ACCESS_TOKEN: OpSpec = OpSpec {
     method: "POST",
     path_template: "/oauth/revoke",
     fields: &[
-        FieldSpec { snake: "client_id", location: FieldLocation::Body },
-        FieldSpec { snake: "client_secret", location: FieldLocation::Body },
-        FieldSpec { snake: "token", location: FieldLocation::Body },
+        FieldSpec { snake: "client_id", wire: "client_id", location: FieldLocation::Body },
+        FieldSpec { snake: "client_secret", wire: "client_secret", location: FieldLocation::Body },
+        FieldSpec { snake: "token", wire: "token", location: FieldLocation::Body },
     ],
     auth: &[
     ],
@@ -1861,11 +2695,11 @@ const OP_AUTHENTICATION_O_AUTH_EXCHANGE_REFRESH_TOKEN_FOR_ACCESS_TOKEN: OpSpec =
     method: "POST",
     path_template: "/oauth/token",
     fields: &[
-        FieldSpec { snake: "client_id", location: FieldLocation::Body },
-        FieldSpec { snake: "client_secret", location: FieldLocation::Body },
-        FieldSpec { snake: "grant_type", location: FieldLocation::Body },
-        FieldSpec { snake: "redirect_uri", location: FieldLocation::Body },
-        FieldSpec { snake: "refresh_token", location: FieldLocation::Body },
+        FieldSpec { snake: "client_id", wire: "client_id", location: FieldLocation::Body },
+        FieldSpec { snake: "client_secret", wire: "client_secret", location: FieldLocation::Body },
+        FieldSpec { snake: "grant_type", wire: "grant_type", location: FieldLocation::Body },
+        FieldSpec { snake: "redirect_uri", wire: "redirect_uri", location: FieldLocation::Body },
+        FieldSpec { snake: "refresh_token", wire: "refresh_token", location: FieldLocation::Body },
     ],
     auth: &[
     ],
@@ -1899,18 +2733,63 @@ fn iface_authentication_o_auth__exchange_refresh_token_for_access_token_params__
     Value::Object(m)
 }
 
+fn iface_authentication_o_auth__authorize_application__ok(body: String) -> Result<String, crate::runtime::DispatchError> {
+    Ok(body)
+}
+
+fn iface_authentication_o_auth__authorize_application__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
+fn iface_authentication_o_auth__revoke_an_access_token__ok(body: String) -> Result<String, crate::runtime::DispatchError> {
+    Ok(body)
+}
+
+fn iface_authentication_o_auth__revoke_an_access_token__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
+fn iface_authentication_o_auth__exchange_refresh_token_for_access_token__ok(body: String) -> Result<String, crate::runtime::DispatchError> {
+    Ok(body)
+}
+
+fn iface_authentication_o_auth__exchange_refresh_token_for_access_token__err(e: crate::runtime::DispatchError) -> iface_authentication_o_auth::ExchangeRefreshTokenForAccessTokenError {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => match status {
+            401u16 => iface_authentication_o_auth::ExchangeRefreshTokenForAccessTokenError::Unauthorized(body),
+            _ => iface_authentication_o_auth::ExchangeRefreshTokenForAccessTokenError::Other(body),
+        },
+        crate::runtime::DispatchError::Transport(m) => iface_authentication_o_auth::ExchangeRefreshTokenForAccessTokenError::Other(m),
+    }
+}
+
 impl iface_authentication_o_auth::Guest for crate::Component {
     fn authorize_application(params: iface_authentication_o_auth::AuthorizeApplicationParams) -> Result<String, String> {
         let json = iface_authentication_o_auth__authorize_application_params__to_json(&params);
-        dispatch(&OP_AUTHENTICATION_O_AUTH_AUTHORIZE_APPLICATION, json)
+        match dispatch(&OP_AUTHENTICATION_O_AUTH_AUTHORIZE_APPLICATION, json).and_then(iface_authentication_o_auth__authorize_application__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_authentication_o_auth__authorize_application__err(e)),
+        }
     }
     fn revoke_an_access_token(params: iface_authentication_o_auth::RevokeAnAccessTokenParams) -> Result<String, String> {
         let json = iface_authentication_o_auth__revoke_an_access_token_params__to_json(&params);
-        dispatch(&OP_AUTHENTICATION_O_AUTH_REVOKE_AN_ACCESS_TOKEN, json)
+        match dispatch(&OP_AUTHENTICATION_O_AUTH_REVOKE_AN_ACCESS_TOKEN, json).and_then(iface_authentication_o_auth__revoke_an_access_token__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_authentication_o_auth__revoke_an_access_token__err(e)),
+        }
     }
-    fn exchange_refresh_token_for_access_token(params: iface_authentication_o_auth::ExchangeRefreshTokenForAccessTokenParams) -> Result<String, String> {
+    fn exchange_refresh_token_for_access_token(params: iface_authentication_o_auth::ExchangeRefreshTokenForAccessTokenParams) -> Result<String, iface_authentication_o_auth::ExchangeRefreshTokenForAccessTokenError> {
         let json = iface_authentication_o_auth__exchange_refresh_token_for_access_token_params__to_json(&params);
-        dispatch(&OP_AUTHENTICATION_O_AUTH_EXCHANGE_REFRESH_TOKEN_FOR_ACCESS_TOKEN, json)
+        match dispatch(&OP_AUTHENTICATION_O_AUTH_EXCHANGE_REFRESH_TOKEN_FOR_ACCESS_TOKEN, json).and_then(iface_authentication_o_auth__exchange_refresh_token_for_access_token__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_authentication_o_auth__exchange_refresh_token_for_access_token__err(e)),
+        }
     }
 }
 use crate::exports::autostamp::trakt::authentication_devices as iface_authentication_devices;
@@ -1919,7 +2798,7 @@ const OP_AUTHENTICATION_DEVICES_GENERATE_NEW_DEVICE_CODES: OpSpec = OpSpec {
     method: "POST",
     path_template: "/oauth/device/code",
     fields: &[
-        FieldSpec { snake: "client_id", location: FieldLocation::Body },
+        FieldSpec { snake: "client_id", wire: "client_id", location: FieldLocation::Body },
     ],
     auth: &[
     ],
@@ -1929,9 +2808,9 @@ const OP_AUTHENTICATION_DEVICES_POLL_FOR_THE_ACCESS_TOKEN: OpSpec = OpSpec {
     method: "POST",
     path_template: "/oauth/device/token",
     fields: &[
-        FieldSpec { snake: "client_id", location: FieldLocation::Body },
-        FieldSpec { snake: "client_secret", location: FieldLocation::Body },
-        FieldSpec { snake: "code", location: FieldLocation::Body },
+        FieldSpec { snake: "client_id", wire: "client_id", location: FieldLocation::Body },
+        FieldSpec { snake: "client_secret", wire: "client_secret", location: FieldLocation::Body },
+        FieldSpec { snake: "code", wire: "code", location: FieldLocation::Body },
     ],
     auth: &[
     ],
@@ -1951,14 +2830,42 @@ fn iface_authentication_devices__poll_for_the_access_token_params__to_json(p: &i
     Value::Object(m)
 }
 
+fn iface_authentication_devices__generate_new_device_codes__ok(body: String) -> Result<String, crate::runtime::DispatchError> {
+    Ok(body)
+}
+
+fn iface_authentication_devices__generate_new_device_codes__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
+fn iface_authentication_devices__poll_for_the_access_token__ok(body: String) -> Result<String, crate::runtime::DispatchError> {
+    Ok(body)
+}
+
+fn iface_authentication_devices__poll_for_the_access_token__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
 impl iface_authentication_devices::Guest for crate::Component {
     fn generate_new_device_codes(params: iface_authentication_devices::GenerateNewDeviceCodesParams) -> Result<String, String> {
         let json = iface_authentication_devices__generate_new_device_codes_params__to_json(&params);
-        dispatch(&OP_AUTHENTICATION_DEVICES_GENERATE_NEW_DEVICE_CODES, json)
+        match dispatch(&OP_AUTHENTICATION_DEVICES_GENERATE_NEW_DEVICE_CODES, json).and_then(iface_authentication_devices__generate_new_device_codes__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_authentication_devices__generate_new_device_codes__err(e)),
+        }
     }
     fn poll_for_the_access_token(params: iface_authentication_devices::PollForTheAccessTokenParams) -> Result<String, String> {
         let json = iface_authentication_devices__poll_for_the_access_token_params__to_json(&params);
-        dispatch(&OP_AUTHENTICATION_DEVICES_POLL_FOR_THE_ACCESS_TOKEN, json)
+        match dispatch(&OP_AUTHENTICATION_DEVICES_POLL_FOR_THE_ACCESS_TOKEN, json).and_then(iface_authentication_devices__poll_for_the_access_token__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_authentication_devices__poll_for_the_access_token__err(e)),
+        }
     }
 }
 use crate::exports::autostamp::trakt::people as iface_people;
@@ -1967,9 +2874,9 @@ const OP_PEOPLE_GET_RECENTLY_UPDATED_PEOPLE_TRAKT_I_DS: OpSpec = OpSpec {
     method: "GET",
     path_template: "/people/updates/id/{start_date}",
     fields: &[
-        FieldSpec { snake: "start_date", location: FieldLocation::Path },
-        FieldSpec { snake: "trakt_api_version", location: FieldLocation::Header },
-        FieldSpec { snake: "trakt_api_key", location: FieldLocation::Header },
+        FieldSpec { snake: "start_date", wire: "start_date", location: FieldLocation::Path },
+        FieldSpec { snake: "trakt_api_version", wire: "trakt-api-version", location: FieldLocation::Header },
+        FieldSpec { snake: "trakt_api_key", wire: "trakt-api-key", location: FieldLocation::Header },
     ],
     auth: &[
     ],
@@ -1979,9 +2886,9 @@ const OP_PEOPLE_GET_RECENTLY_UPDATED_PEOPLE: OpSpec = OpSpec {
     method: "GET",
     path_template: "/people/updates/{start_date}",
     fields: &[
-        FieldSpec { snake: "start_date", location: FieldLocation::Path },
-        FieldSpec { snake: "trakt_api_version", location: FieldLocation::Header },
-        FieldSpec { snake: "trakt_api_key", location: FieldLocation::Header },
+        FieldSpec { snake: "start_date", wire: "start_date", location: FieldLocation::Path },
+        FieldSpec { snake: "trakt_api_version", wire: "trakt-api-version", location: FieldLocation::Header },
+        FieldSpec { snake: "trakt_api_key", wire: "trakt-api-key", location: FieldLocation::Header },
     ],
     auth: &[
     ],
@@ -1991,9 +2898,9 @@ const OP_PEOPLE_GET_A_SINGLE_PERSON: OpSpec = OpSpec {
     method: "GET",
     path_template: "/people/{id}",
     fields: &[
-        FieldSpec { snake: "id", location: FieldLocation::Path },
-        FieldSpec { snake: "trakt_api_version", location: FieldLocation::Header },
-        FieldSpec { snake: "trakt_api_key", location: FieldLocation::Header },
+        FieldSpec { snake: "id", wire: "id", location: FieldLocation::Path },
+        FieldSpec { snake: "trakt_api_version", wire: "trakt-api-version", location: FieldLocation::Header },
+        FieldSpec { snake: "trakt_api_key", wire: "trakt-api-key", location: FieldLocation::Header },
     ],
     auth: &[
     ],
@@ -2003,11 +2910,11 @@ const OP_PEOPLE_GET_LISTS_CONTAINING_THIS_PERSON: OpSpec = OpSpec {
     method: "GET",
     path_template: "/people/{id}/lists/{type}/{sort}",
     fields: &[
-        FieldSpec { snake: "id", location: FieldLocation::Path },
-        FieldSpec { snake: "type", location: FieldLocation::Path },
-        FieldSpec { snake: "sort", location: FieldLocation::Path },
-        FieldSpec { snake: "trakt_api_version", location: FieldLocation::Header },
-        FieldSpec { snake: "trakt_api_key", location: FieldLocation::Header },
+        FieldSpec { snake: "id", wire: "id", location: FieldLocation::Path },
+        FieldSpec { snake: "type", wire: "type", location: FieldLocation::Path },
+        FieldSpec { snake: "sort", wire: "sort", location: FieldLocation::Path },
+        FieldSpec { snake: "trakt_api_version", wire: "trakt-api-version", location: FieldLocation::Header },
+        FieldSpec { snake: "trakt_api_key", wire: "trakt-api-key", location: FieldLocation::Header },
     ],
     auth: &[
     ],
@@ -2017,9 +2924,9 @@ const OP_PEOPLE_GET_MOVIE_CREDITS: OpSpec = OpSpec {
     method: "GET",
     path_template: "/people/{id}/movies",
     fields: &[
-        FieldSpec { snake: "id", location: FieldLocation::Path },
-        FieldSpec { snake: "trakt_api_version", location: FieldLocation::Header },
-        FieldSpec { snake: "trakt_api_key", location: FieldLocation::Header },
+        FieldSpec { snake: "id", wire: "id", location: FieldLocation::Path },
+        FieldSpec { snake: "trakt_api_version", wire: "trakt-api-version", location: FieldLocation::Header },
+        FieldSpec { snake: "trakt_api_key", wire: "trakt-api-key", location: FieldLocation::Header },
     ],
     auth: &[
     ],
@@ -2029,9 +2936,9 @@ const OP_PEOPLE_GET_SHOW_CREDITS: OpSpec = OpSpec {
     method: "GET",
     path_template: "/people/{id}/shows",
     fields: &[
-        FieldSpec { snake: "id", location: FieldLocation::Path },
-        FieldSpec { snake: "trakt_api_version", location: FieldLocation::Header },
-        FieldSpec { snake: "trakt_api_key", location: FieldLocation::Header },
+        FieldSpec { snake: "id", wire: "id", location: FieldLocation::Path },
+        FieldSpec { snake: "trakt_api_version", wire: "trakt-api-version", location: FieldLocation::Header },
+        FieldSpec { snake: "trakt_api_key", wire: "trakt-api-key", location: FieldLocation::Header },
     ],
     auth: &[
     ],
@@ -2087,30 +2994,114 @@ fn iface_people__get_show_credits_params__to_json(p: &iface_people::GetShowCredi
     Value::Object(m)
 }
 
+fn iface_people__get_recently_updated_people_trakt_i_ds__ok(body: String) -> Result<String, crate::runtime::DispatchError> {
+    Ok(body)
+}
+
+fn iface_people__get_recently_updated_people_trakt_i_ds__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
+fn iface_people__get_recently_updated_people__ok(body: String) -> Result<String, crate::runtime::DispatchError> {
+    Ok(body)
+}
+
+fn iface_people__get_recently_updated_people__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
+fn iface_people__get_a_single_person__ok(body: String) -> Result<String, crate::runtime::DispatchError> {
+    Ok(body)
+}
+
+fn iface_people__get_a_single_person__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
+fn iface_people__get_lists_containing_this_person__ok(body: String) -> Result<String, crate::runtime::DispatchError> {
+    Ok(body)
+}
+
+fn iface_people__get_lists_containing_this_person__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
+fn iface_people__get_movie_credits__ok(body: String) -> Result<String, crate::runtime::DispatchError> {
+    Ok(body)
+}
+
+fn iface_people__get_movie_credits__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
+fn iface_people__get_show_credits__ok(body: String) -> Result<String, crate::runtime::DispatchError> {
+    Ok(body)
+}
+
+fn iface_people__get_show_credits__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
 impl iface_people::Guest for crate::Component {
     fn get_recently_updated_people_trakt_i_ds(params: iface_people::GetRecentlyUpdatedPeopleTraktIDsParams) -> Result<String, String> {
         let json = iface_people__get_recently_updated_people_trakt_i_ds_params__to_json(&params);
-        dispatch(&OP_PEOPLE_GET_RECENTLY_UPDATED_PEOPLE_TRAKT_I_DS, json)
+        match dispatch(&OP_PEOPLE_GET_RECENTLY_UPDATED_PEOPLE_TRAKT_I_DS, json).and_then(iface_people__get_recently_updated_people_trakt_i_ds__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_people__get_recently_updated_people_trakt_i_ds__err(e)),
+        }
     }
     fn get_recently_updated_people(params: iface_people::GetRecentlyUpdatedPeopleParams) -> Result<String, String> {
         let json = iface_people__get_recently_updated_people_params__to_json(&params);
-        dispatch(&OP_PEOPLE_GET_RECENTLY_UPDATED_PEOPLE, json)
+        match dispatch(&OP_PEOPLE_GET_RECENTLY_UPDATED_PEOPLE, json).and_then(iface_people__get_recently_updated_people__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_people__get_recently_updated_people__err(e)),
+        }
     }
     fn get_a_single_person(params: iface_people::GetASinglePersonParams) -> Result<String, String> {
         let json = iface_people__get_a_single_person_params__to_json(&params);
-        dispatch(&OP_PEOPLE_GET_A_SINGLE_PERSON, json)
+        match dispatch(&OP_PEOPLE_GET_A_SINGLE_PERSON, json).and_then(iface_people__get_a_single_person__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_people__get_a_single_person__err(e)),
+        }
     }
     fn get_lists_containing_this_person(params: iface_people::GetListsContainingThisPersonParams) -> Result<String, String> {
         let json = iface_people__get_lists_containing_this_person_params__to_json(&params);
-        dispatch(&OP_PEOPLE_GET_LISTS_CONTAINING_THIS_PERSON, json)
+        match dispatch(&OP_PEOPLE_GET_LISTS_CONTAINING_THIS_PERSON, json).and_then(iface_people__get_lists_containing_this_person__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_people__get_lists_containing_this_person__err(e)),
+        }
     }
     fn get_movie_credits(params: iface_people::GetMovieCreditsParams) -> Result<String, String> {
         let json = iface_people__get_movie_credits_params__to_json(&params);
-        dispatch(&OP_PEOPLE_GET_MOVIE_CREDITS, json)
+        match dispatch(&OP_PEOPLE_GET_MOVIE_CREDITS, json).and_then(iface_people__get_movie_credits__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_people__get_movie_credits__err(e)),
+        }
     }
     fn get_show_credits(params: iface_people::GetShowCreditsParams) -> Result<String, String> {
         let json = iface_people__get_show_credits_params__to_json(&params);
-        dispatch(&OP_PEOPLE_GET_SHOW_CREDITS, json)
+        match dispatch(&OP_PEOPLE_GET_SHOW_CREDITS, json).and_then(iface_people__get_show_credits__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_people__get_show_credits__err(e)),
+        }
     }
 }
 use crate::exports::autostamp::trakt::recommendations as iface_recommendations;
@@ -2119,10 +3110,10 @@ const OP_RECOMMENDATIONS_GET_MOVIE_RECOMMENDATIONS: OpSpec = OpSpec {
     method: "GET",
     path_template: "/recommendations/movies",
     fields: &[
-        FieldSpec { snake: "ignore_collected", location: FieldLocation::Query },
-        FieldSpec { snake: "ignore_watchlisted", location: FieldLocation::Query },
-        FieldSpec { snake: "trakt_api_version", location: FieldLocation::Header },
-        FieldSpec { snake: "trakt_api_key", location: FieldLocation::Header },
+        FieldSpec { snake: "ignore_collected", wire: "ignore_collected", location: FieldLocation::Query },
+        FieldSpec { snake: "ignore_watchlisted", wire: "ignore_watchlisted", location: FieldLocation::Query },
+        FieldSpec { snake: "trakt_api_version", wire: "trakt-api-version", location: FieldLocation::Header },
+        FieldSpec { snake: "trakt_api_key", wire: "trakt-api-key", location: FieldLocation::Header },
     ],
     auth: &[
         AuthApply { secret_key: "oauth2", kind: AuthKind::Bearer },
@@ -2133,9 +3124,9 @@ const OP_RECOMMENDATIONS_HIDE_A_MOVIE_RECOMMENDATION: OpSpec = OpSpec {
     method: "DELETE",
     path_template: "/recommendations/movies/{id}",
     fields: &[
-        FieldSpec { snake: "id", location: FieldLocation::Path },
-        FieldSpec { snake: "trakt_api_version", location: FieldLocation::Header },
-        FieldSpec { snake: "trakt_api_key", location: FieldLocation::Header },
+        FieldSpec { snake: "id", wire: "id", location: FieldLocation::Path },
+        FieldSpec { snake: "trakt_api_version", wire: "trakt-api-version", location: FieldLocation::Header },
+        FieldSpec { snake: "trakt_api_key", wire: "trakt-api-key", location: FieldLocation::Header },
     ],
     auth: &[
         AuthApply { secret_key: "oauth2", kind: AuthKind::Bearer },
@@ -2146,10 +3137,10 @@ const OP_RECOMMENDATIONS_GET_SHOW_RECOMMENDATIONS: OpSpec = OpSpec {
     method: "GET",
     path_template: "/recommendations/shows",
     fields: &[
-        FieldSpec { snake: "ignore_collected", location: FieldLocation::Query },
-        FieldSpec { snake: "ignore_watchlisted", location: FieldLocation::Query },
-        FieldSpec { snake: "trakt_api_version", location: FieldLocation::Header },
-        FieldSpec { snake: "trakt_api_key", location: FieldLocation::Header },
+        FieldSpec { snake: "ignore_collected", wire: "ignore_collected", location: FieldLocation::Query },
+        FieldSpec { snake: "ignore_watchlisted", wire: "ignore_watchlisted", location: FieldLocation::Query },
+        FieldSpec { snake: "trakt_api_version", wire: "trakt-api-version", location: FieldLocation::Header },
+        FieldSpec { snake: "trakt_api_key", wire: "trakt-api-key", location: FieldLocation::Header },
     ],
     auth: &[
         AuthApply { secret_key: "oauth2", kind: AuthKind::Bearer },
@@ -2160,9 +3151,9 @@ const OP_RECOMMENDATIONS_HIDE_A_SHOW_RECOMMENDATION: OpSpec = OpSpec {
     method: "DELETE",
     path_template: "/recommendations/shows/{id}",
     fields: &[
-        FieldSpec { snake: "id", location: FieldLocation::Path },
-        FieldSpec { snake: "trakt_api_version", location: FieldLocation::Header },
-        FieldSpec { snake: "trakt_api_key", location: FieldLocation::Header },
+        FieldSpec { snake: "id", wire: "id", location: FieldLocation::Path },
+        FieldSpec { snake: "trakt_api_version", wire: "trakt-api-version", location: FieldLocation::Header },
+        FieldSpec { snake: "trakt_api_key", wire: "trakt-api-key", location: FieldLocation::Header },
     ],
     auth: &[
         AuthApply { secret_key: "oauth2", kind: AuthKind::Bearer },
@@ -2210,22 +3201,78 @@ fn iface_recommendations__hide_a_show_recommendation_params__to_json(p: &iface_r
     Value::Object(m)
 }
 
+fn iface_recommendations__get_movie_recommendations__ok(body: String) -> Result<String, crate::runtime::DispatchError> {
+    Ok(body)
+}
+
+fn iface_recommendations__get_movie_recommendations__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
+fn iface_recommendations__hide_a_movie_recommendation__ok(body: String) -> Result<String, crate::runtime::DispatchError> {
+    Ok(body)
+}
+
+fn iface_recommendations__hide_a_movie_recommendation__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
+fn iface_recommendations__get_show_recommendations__ok(body: String) -> Result<String, crate::runtime::DispatchError> {
+    Ok(body)
+}
+
+fn iface_recommendations__get_show_recommendations__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
+fn iface_recommendations__hide_a_show_recommendation__ok(body: String) -> Result<String, crate::runtime::DispatchError> {
+    Ok(body)
+}
+
+fn iface_recommendations__hide_a_show_recommendation__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
 impl iface_recommendations::Guest for crate::Component {
     fn get_movie_recommendations(params: iface_recommendations::GetMovieRecommendationsParams) -> Result<String, String> {
         let json = iface_recommendations__get_movie_recommendations_params__to_json(&params);
-        dispatch(&OP_RECOMMENDATIONS_GET_MOVIE_RECOMMENDATIONS, json)
+        match dispatch(&OP_RECOMMENDATIONS_GET_MOVIE_RECOMMENDATIONS, json).and_then(iface_recommendations__get_movie_recommendations__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_recommendations__get_movie_recommendations__err(e)),
+        }
     }
     fn hide_a_movie_recommendation(params: iface_recommendations::HideAMovieRecommendationParams) -> Result<String, String> {
         let json = iface_recommendations__hide_a_movie_recommendation_params__to_json(&params);
-        dispatch(&OP_RECOMMENDATIONS_HIDE_A_MOVIE_RECOMMENDATION, json)
+        match dispatch(&OP_RECOMMENDATIONS_HIDE_A_MOVIE_RECOMMENDATION, json).and_then(iface_recommendations__hide_a_movie_recommendation__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_recommendations__hide_a_movie_recommendation__err(e)),
+        }
     }
     fn get_show_recommendations(params: iface_recommendations::GetShowRecommendationsParams) -> Result<String, String> {
         let json = iface_recommendations__get_show_recommendations_params__to_json(&params);
-        dispatch(&OP_RECOMMENDATIONS_GET_SHOW_RECOMMENDATIONS, json)
+        match dispatch(&OP_RECOMMENDATIONS_GET_SHOW_RECOMMENDATIONS, json).and_then(iface_recommendations__get_show_recommendations__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_recommendations__get_show_recommendations__err(e)),
+        }
     }
     fn hide_a_show_recommendation(params: iface_recommendations::HideAShowRecommendationParams) -> Result<String, String> {
         let json = iface_recommendations__hide_a_show_recommendation_params__to_json(&params);
-        dispatch(&OP_RECOMMENDATIONS_HIDE_A_SHOW_RECOMMENDATION, json)
+        match dispatch(&OP_RECOMMENDATIONS_HIDE_A_SHOW_RECOMMENDATION, json).and_then(iface_recommendations__hide_a_show_recommendation__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_recommendations__hide_a_show_recommendation__err(e)),
+        }
     }
 }
 use crate::exports::autostamp::trakt::scrobble as iface_scrobble;
@@ -2234,12 +3281,12 @@ const OP_SCROBBLE_PAUSE_WATCHING_IN_A_MEDIA_CENTER: OpSpec = OpSpec {
     method: "POST",
     path_template: "/scrobble/pause",
     fields: &[
-        FieldSpec { snake: "trakt_api_version", location: FieldLocation::Header },
-        FieldSpec { snake: "trakt_api_key", location: FieldLocation::Header },
-        FieldSpec { snake: "app_date", location: FieldLocation::Body },
-        FieldSpec { snake: "app_version", location: FieldLocation::Body },
-        FieldSpec { snake: "movie", location: FieldLocation::Body },
-        FieldSpec { snake: "progress", location: FieldLocation::Body },
+        FieldSpec { snake: "trakt_api_version", wire: "trakt-api-version", location: FieldLocation::Header },
+        FieldSpec { snake: "trakt_api_key", wire: "trakt-api-key", location: FieldLocation::Header },
+        FieldSpec { snake: "app_date", wire: "app_date", location: FieldLocation::Body },
+        FieldSpec { snake: "app_version", wire: "app_version", location: FieldLocation::Body },
+        FieldSpec { snake: "movie", wire: "movie", location: FieldLocation::Body },
+        FieldSpec { snake: "progress", wire: "progress", location: FieldLocation::Body },
     ],
     auth: &[
         AuthApply { secret_key: "oauth2", kind: AuthKind::Bearer },
@@ -2250,12 +3297,12 @@ const OP_SCROBBLE_START_WATCHING_IN_A_MEDIA_CENTER: OpSpec = OpSpec {
     method: "POST",
     path_template: "/scrobble/start",
     fields: &[
-        FieldSpec { snake: "trakt_api_version", location: FieldLocation::Header },
-        FieldSpec { snake: "trakt_api_key", location: FieldLocation::Header },
-        FieldSpec { snake: "app_date", location: FieldLocation::Body },
-        FieldSpec { snake: "app_version", location: FieldLocation::Body },
-        FieldSpec { snake: "movie", location: FieldLocation::Body },
-        FieldSpec { snake: "progress", location: FieldLocation::Body },
+        FieldSpec { snake: "trakt_api_version", wire: "trakt-api-version", location: FieldLocation::Header },
+        FieldSpec { snake: "trakt_api_key", wire: "trakt-api-key", location: FieldLocation::Header },
+        FieldSpec { snake: "app_date", wire: "app_date", location: FieldLocation::Body },
+        FieldSpec { snake: "app_version", wire: "app_version", location: FieldLocation::Body },
+        FieldSpec { snake: "movie", wire: "movie", location: FieldLocation::Body },
+        FieldSpec { snake: "progress", wire: "progress", location: FieldLocation::Body },
     ],
     auth: &[
         AuthApply { secret_key: "oauth2", kind: AuthKind::Bearer },
@@ -2266,12 +3313,12 @@ const OP_SCROBBLE_STOP_OR_FINISH_WATCHING_IN_A_MEDIA_CENTER: OpSpec = OpSpec {
     method: "POST",
     path_template: "/scrobble/stop",
     fields: &[
-        FieldSpec { snake: "trakt_api_version", location: FieldLocation::Header },
-        FieldSpec { snake: "trakt_api_key", location: FieldLocation::Header },
-        FieldSpec { snake: "app_date", location: FieldLocation::Body },
-        FieldSpec { snake: "app_version", location: FieldLocation::Body },
-        FieldSpec { snake: "movie", location: FieldLocation::Body },
-        FieldSpec { snake: "progress", location: FieldLocation::Body },
+        FieldSpec { snake: "trakt_api_version", wire: "trakt-api-version", location: FieldLocation::Header },
+        FieldSpec { snake: "trakt_api_key", wire: "trakt-api-key", location: FieldLocation::Header },
+        FieldSpec { snake: "app_date", wire: "app_date", location: FieldLocation::Body },
+        FieldSpec { snake: "app_version", wire: "app_version", location: FieldLocation::Body },
+        FieldSpec { snake: "movie", wire: "movie", location: FieldLocation::Body },
+        FieldSpec { snake: "progress", wire: "progress", location: FieldLocation::Body },
     ],
     auth: &[
         AuthApply { secret_key: "oauth2", kind: AuthKind::Bearer },
@@ -2362,18 +3409,63 @@ fn iface_scrobble__stop_or_finish_watching_in_a_media_center_params__to_json(p: 
     Value::Object(m)
 }
 
+fn iface_scrobble__pause_watching_in_a_media_center__ok(body: String) -> Result<String, crate::runtime::DispatchError> {
+    Ok(body)
+}
+
+fn iface_scrobble__pause_watching_in_a_media_center__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
+fn iface_scrobble__start_watching_in_a_media_center__ok(body: String) -> Result<String, crate::runtime::DispatchError> {
+    Ok(body)
+}
+
+fn iface_scrobble__start_watching_in_a_media_center__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
+fn iface_scrobble__stop_or_finish_watching_in_a_media_center__ok(body: String) -> Result<String, crate::runtime::DispatchError> {
+    Ok(body)
+}
+
+fn iface_scrobble__stop_or_finish_watching_in_a_media_center__err(e: crate::runtime::DispatchError) -> iface_scrobble::StopOrFinishWatchingInAMediaCenterError {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => match status {
+            409u16 => iface_scrobble::StopOrFinishWatchingInAMediaCenterError::Conflict(body),
+            _ => iface_scrobble::StopOrFinishWatchingInAMediaCenterError::Other(body),
+        },
+        crate::runtime::DispatchError::Transport(m) => iface_scrobble::StopOrFinishWatchingInAMediaCenterError::Other(m),
+    }
+}
+
 impl iface_scrobble::Guest for crate::Component {
     fn pause_watching_in_a_media_center(params: iface_scrobble::PauseWatchingInAMediaCenterParams) -> Result<String, String> {
         let json = iface_scrobble__pause_watching_in_a_media_center_params__to_json(&params);
-        dispatch(&OP_SCROBBLE_PAUSE_WATCHING_IN_A_MEDIA_CENTER, json)
+        match dispatch(&OP_SCROBBLE_PAUSE_WATCHING_IN_A_MEDIA_CENTER, json).and_then(iface_scrobble__pause_watching_in_a_media_center__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_scrobble__pause_watching_in_a_media_center__err(e)),
+        }
     }
     fn start_watching_in_a_media_center(params: iface_scrobble::StartWatchingInAMediaCenterParams) -> Result<String, String> {
         let json = iface_scrobble__start_watching_in_a_media_center_params__to_json(&params);
-        dispatch(&OP_SCROBBLE_START_WATCHING_IN_A_MEDIA_CENTER, json)
+        match dispatch(&OP_SCROBBLE_START_WATCHING_IN_A_MEDIA_CENTER, json).and_then(iface_scrobble__start_watching_in_a_media_center__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_scrobble__start_watching_in_a_media_center__err(e)),
+        }
     }
-    fn stop_or_finish_watching_in_a_media_center(params: iface_scrobble::StopOrFinishWatchingInAMediaCenterParams) -> Result<String, String> {
+    fn stop_or_finish_watching_in_a_media_center(params: iface_scrobble::StopOrFinishWatchingInAMediaCenterParams) -> Result<String, iface_scrobble::StopOrFinishWatchingInAMediaCenterError> {
         let json = iface_scrobble__stop_or_finish_watching_in_a_media_center_params__to_json(&params);
-        dispatch(&OP_SCROBBLE_STOP_OR_FINISH_WATCHING_IN_A_MEDIA_CENTER, json)
+        match dispatch(&OP_SCROBBLE_STOP_OR_FINISH_WATCHING_IN_A_MEDIA_CENTER, json).and_then(iface_scrobble__stop_or_finish_watching_in_a_media_center__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_scrobble__stop_or_finish_watching_in_a_media_center__err(e)),
+        }
     }
 }
 use crate::exports::autostamp::trakt::search as iface_search;
@@ -2382,11 +3474,11 @@ const OP_SEARCH_GET_ID_LOOKUP_RESULTS: OpSpec = OpSpec {
     method: "GET",
     path_template: "/search/{id_type}/{id}",
     fields: &[
-        FieldSpec { snake: "id_type", location: FieldLocation::Path },
-        FieldSpec { snake: "id", location: FieldLocation::Path },
-        FieldSpec { snake: "type", location: FieldLocation::Query },
-        FieldSpec { snake: "trakt_api_version", location: FieldLocation::Header },
-        FieldSpec { snake: "trakt_api_key", location: FieldLocation::Header },
+        FieldSpec { snake: "id_type", wire: "id_type", location: FieldLocation::Path },
+        FieldSpec { snake: "id", wire: "id", location: FieldLocation::Path },
+        FieldSpec { snake: "type", wire: "type", location: FieldLocation::Query },
+        FieldSpec { snake: "trakt_api_version", wire: "trakt-api-version", location: FieldLocation::Header },
+        FieldSpec { snake: "trakt_api_key", wire: "trakt-api-key", location: FieldLocation::Header },
     ],
     auth: &[
     ],
@@ -2396,10 +3488,10 @@ const OP_SEARCH_GET_TEXT_QUERY_RESULTS: OpSpec = OpSpec {
     method: "GET",
     path_template: "/search/{type}",
     fields: &[
-        FieldSpec { snake: "type", location: FieldLocation::Path },
-        FieldSpec { snake: "query", location: FieldLocation::Query },
-        FieldSpec { snake: "trakt_api_version", location: FieldLocation::Header },
-        FieldSpec { snake: "trakt_api_key", location: FieldLocation::Header },
+        FieldSpec { snake: "type", wire: "type", location: FieldLocation::Path },
+        FieldSpec { snake: "query", wire: "query", location: FieldLocation::Query },
+        FieldSpec { snake: "trakt_api_version", wire: "trakt-api-version", location: FieldLocation::Header },
+        FieldSpec { snake: "trakt_api_key", wire: "trakt-api-key", location: FieldLocation::Header },
     ],
     auth: &[
     ],
@@ -2448,14 +3540,42 @@ fn iface_search__get_text_query_results_params__to_json(p: &iface_search::GetTex
     Value::Object(m)
 }
 
+fn iface_search__get_id_lookup_results__ok(body: String) -> Result<String, crate::runtime::DispatchError> {
+    Ok(body)
+}
+
+fn iface_search__get_id_lookup_results__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
+fn iface_search__get_text_query_results__ok(body: String) -> Result<String, crate::runtime::DispatchError> {
+    Ok(body)
+}
+
+fn iface_search__get_text_query_results__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
 impl iface_search::Guest for crate::Component {
     fn get_id_lookup_results(params: iface_search::GetIdLookupResultsParams) -> Result<String, String> {
         let json = iface_search__get_id_lookup_results_params__to_json(&params);
-        dispatch(&OP_SEARCH_GET_ID_LOOKUP_RESULTS, json)
+        match dispatch(&OP_SEARCH_GET_ID_LOOKUP_RESULTS, json).and_then(iface_search__get_id_lookup_results__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_search__get_id_lookup_results__err(e)),
+        }
     }
     fn get_text_query_results(params: iface_search::GetTextQueryResultsParams) -> Result<String, String> {
         let json = iface_search__get_text_query_results_params__to_json(&params);
-        dispatch(&OP_SEARCH_GET_TEXT_QUERY_RESULTS, json)
+        match dispatch(&OP_SEARCH_GET_TEXT_QUERY_RESULTS, json).and_then(iface_search__get_text_query_results__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_search__get_text_query_results__err(e)),
+        }
     }
 }
 use crate::exports::autostamp::trakt::shows as iface_shows;
@@ -2464,8 +3584,8 @@ const OP_SHOWS_GET_THE_MOST_ANTICIPATED_SHOWS: OpSpec = OpSpec {
     method: "GET",
     path_template: "/shows/anticipated",
     fields: &[
-        FieldSpec { snake: "trakt_api_version", location: FieldLocation::Header },
-        FieldSpec { snake: "trakt_api_key", location: FieldLocation::Header },
+        FieldSpec { snake: "trakt_api_version", wire: "trakt-api-version", location: FieldLocation::Header },
+        FieldSpec { snake: "trakt_api_key", wire: "trakt-api-key", location: FieldLocation::Header },
     ],
     auth: &[
     ],
@@ -2475,9 +3595,9 @@ const OP_SHOWS_GET_THE_MOST_COLLECTED_SHOWS: OpSpec = OpSpec {
     method: "GET",
     path_template: "/shows/collected/{period}",
     fields: &[
-        FieldSpec { snake: "period", location: FieldLocation::Path },
-        FieldSpec { snake: "trakt_api_version", location: FieldLocation::Header },
-        FieldSpec { snake: "trakt_api_key", location: FieldLocation::Header },
+        FieldSpec { snake: "period", wire: "period", location: FieldLocation::Path },
+        FieldSpec { snake: "trakt_api_version", wire: "trakt-api-version", location: FieldLocation::Header },
+        FieldSpec { snake: "trakt_api_key", wire: "trakt-api-key", location: FieldLocation::Header },
     ],
     auth: &[
     ],
@@ -2487,9 +3607,9 @@ const OP_SHOWS_GET_THE_MOST_PLAYED_SHOWS: OpSpec = OpSpec {
     method: "GET",
     path_template: "/shows/played/{period}",
     fields: &[
-        FieldSpec { snake: "period", location: FieldLocation::Path },
-        FieldSpec { snake: "trakt_api_version", location: FieldLocation::Header },
-        FieldSpec { snake: "trakt_api_key", location: FieldLocation::Header },
+        FieldSpec { snake: "period", wire: "period", location: FieldLocation::Path },
+        FieldSpec { snake: "trakt_api_version", wire: "trakt-api-version", location: FieldLocation::Header },
+        FieldSpec { snake: "trakt_api_key", wire: "trakt-api-key", location: FieldLocation::Header },
     ],
     auth: &[
     ],
@@ -2499,8 +3619,8 @@ const OP_SHOWS_GET_POPULAR_SHOWS: OpSpec = OpSpec {
     method: "GET",
     path_template: "/shows/popular",
     fields: &[
-        FieldSpec { snake: "trakt_api_version", location: FieldLocation::Header },
-        FieldSpec { snake: "trakt_api_key", location: FieldLocation::Header },
+        FieldSpec { snake: "trakt_api_version", wire: "trakt-api-version", location: FieldLocation::Header },
+        FieldSpec { snake: "trakt_api_key", wire: "trakt-api-key", location: FieldLocation::Header },
     ],
     auth: &[
     ],
@@ -2510,9 +3630,9 @@ const OP_SHOWS_GET_THE_MOST_RECOMMENDED_SHOWS: OpSpec = OpSpec {
     method: "GET",
     path_template: "/shows/recommended/{period}",
     fields: &[
-        FieldSpec { snake: "period", location: FieldLocation::Path },
-        FieldSpec { snake: "trakt_api_version", location: FieldLocation::Header },
-        FieldSpec { snake: "trakt_api_key", location: FieldLocation::Header },
+        FieldSpec { snake: "period", wire: "period", location: FieldLocation::Path },
+        FieldSpec { snake: "trakt_api_version", wire: "trakt-api-version", location: FieldLocation::Header },
+        FieldSpec { snake: "trakt_api_key", wire: "trakt-api-key", location: FieldLocation::Header },
     ],
     auth: &[
     ],
@@ -2522,8 +3642,8 @@ const OP_SHOWS_GET_TRENDING_SHOWS: OpSpec = OpSpec {
     method: "GET",
     path_template: "/shows/trending",
     fields: &[
-        FieldSpec { snake: "trakt_api_version", location: FieldLocation::Header },
-        FieldSpec { snake: "trakt_api_key", location: FieldLocation::Header },
+        FieldSpec { snake: "trakt_api_version", wire: "trakt-api-version", location: FieldLocation::Header },
+        FieldSpec { snake: "trakt_api_key", wire: "trakt-api-key", location: FieldLocation::Header },
     ],
     auth: &[
     ],
@@ -2533,9 +3653,9 @@ const OP_SHOWS_GET_RECENTLY_UPDATED_SHOW_TRAKT_I_DS: OpSpec = OpSpec {
     method: "GET",
     path_template: "/shows/updates/id/{start_date}",
     fields: &[
-        FieldSpec { snake: "start_date", location: FieldLocation::Path },
-        FieldSpec { snake: "trakt_api_version", location: FieldLocation::Header },
-        FieldSpec { snake: "trakt_api_key", location: FieldLocation::Header },
+        FieldSpec { snake: "start_date", wire: "start_date", location: FieldLocation::Path },
+        FieldSpec { snake: "trakt_api_version", wire: "trakt-api-version", location: FieldLocation::Header },
+        FieldSpec { snake: "trakt_api_key", wire: "trakt-api-key", location: FieldLocation::Header },
     ],
     auth: &[
     ],
@@ -2545,9 +3665,9 @@ const OP_SHOWS_GET_RECENTLY_UPDATED_SHOWS: OpSpec = OpSpec {
     method: "GET",
     path_template: "/shows/updates/{start_date}",
     fields: &[
-        FieldSpec { snake: "start_date", location: FieldLocation::Path },
-        FieldSpec { snake: "trakt_api_version", location: FieldLocation::Header },
-        FieldSpec { snake: "trakt_api_key", location: FieldLocation::Header },
+        FieldSpec { snake: "start_date", wire: "start_date", location: FieldLocation::Path },
+        FieldSpec { snake: "trakt_api_version", wire: "trakt-api-version", location: FieldLocation::Header },
+        FieldSpec { snake: "trakt_api_key", wire: "trakt-api-key", location: FieldLocation::Header },
     ],
     auth: &[
     ],
@@ -2557,9 +3677,9 @@ const OP_SHOWS_GET_THE_MOST_WATCHED_SHOWS: OpSpec = OpSpec {
     method: "GET",
     path_template: "/shows/watched/{period}",
     fields: &[
-        FieldSpec { snake: "period", location: FieldLocation::Path },
-        FieldSpec { snake: "trakt_api_version", location: FieldLocation::Header },
-        FieldSpec { snake: "trakt_api_key", location: FieldLocation::Header },
+        FieldSpec { snake: "period", wire: "period", location: FieldLocation::Path },
+        FieldSpec { snake: "trakt_api_version", wire: "trakt-api-version", location: FieldLocation::Header },
+        FieldSpec { snake: "trakt_api_key", wire: "trakt-api-key", location: FieldLocation::Header },
     ],
     auth: &[
     ],
@@ -2569,9 +3689,9 @@ const OP_SHOWS_GET_A_SINGLE_SHOW: OpSpec = OpSpec {
     method: "GET",
     path_template: "/shows/{id}",
     fields: &[
-        FieldSpec { snake: "id", location: FieldLocation::Path },
-        FieldSpec { snake: "trakt_api_version", location: FieldLocation::Header },
-        FieldSpec { snake: "trakt_api_key", location: FieldLocation::Header },
+        FieldSpec { snake: "id", wire: "id", location: FieldLocation::Path },
+        FieldSpec { snake: "trakt_api_version", wire: "trakt-api-version", location: FieldLocation::Header },
+        FieldSpec { snake: "trakt_api_key", wire: "trakt-api-key", location: FieldLocation::Header },
     ],
     auth: &[
     ],
@@ -2581,9 +3701,9 @@ const OP_SHOWS_GET_ALL_SHOW_ALIASES: OpSpec = OpSpec {
     method: "GET",
     path_template: "/shows/{id}/aliases",
     fields: &[
-        FieldSpec { snake: "id", location: FieldLocation::Path },
-        FieldSpec { snake: "trakt_api_version", location: FieldLocation::Header },
-        FieldSpec { snake: "trakt_api_key", location: FieldLocation::Header },
+        FieldSpec { snake: "id", wire: "id", location: FieldLocation::Path },
+        FieldSpec { snake: "trakt_api_version", wire: "trakt-api-version", location: FieldLocation::Header },
+        FieldSpec { snake: "trakt_api_key", wire: "trakt-api-key", location: FieldLocation::Header },
     ],
     auth: &[
     ],
@@ -2593,9 +3713,9 @@ const OP_SHOWS_GET_ALL_SHOW_CERTIFICATIONS: OpSpec = OpSpec {
     method: "GET",
     path_template: "/shows/{id}/certifications",
     fields: &[
-        FieldSpec { snake: "id", location: FieldLocation::Path },
-        FieldSpec { snake: "trakt_api_version", location: FieldLocation::Header },
-        FieldSpec { snake: "trakt_api_key", location: FieldLocation::Header },
+        FieldSpec { snake: "id", wire: "id", location: FieldLocation::Path },
+        FieldSpec { snake: "trakt_api_version", wire: "trakt-api-version", location: FieldLocation::Header },
+        FieldSpec { snake: "trakt_api_key", wire: "trakt-api-key", location: FieldLocation::Header },
     ],
     auth: &[
     ],
@@ -2605,10 +3725,10 @@ const OP_SHOWS_GET_ALL_SHOW_COMMENTS: OpSpec = OpSpec {
     method: "GET",
     path_template: "/shows/{id}/comments/{sort}",
     fields: &[
-        FieldSpec { snake: "id", location: FieldLocation::Path },
-        FieldSpec { snake: "sort", location: FieldLocation::Path },
-        FieldSpec { snake: "trakt_api_version", location: FieldLocation::Header },
-        FieldSpec { snake: "trakt_api_key", location: FieldLocation::Header },
+        FieldSpec { snake: "id", wire: "id", location: FieldLocation::Path },
+        FieldSpec { snake: "sort", wire: "sort", location: FieldLocation::Path },
+        FieldSpec { snake: "trakt_api_version", wire: "trakt-api-version", location: FieldLocation::Header },
+        FieldSpec { snake: "trakt_api_key", wire: "trakt-api-key", location: FieldLocation::Header },
     ],
     auth: &[
     ],
@@ -2618,9 +3738,9 @@ const OP_SHOWS_GET_LAST_EPISODE: OpSpec = OpSpec {
     method: "GET",
     path_template: "/shows/{id}/last_episode",
     fields: &[
-        FieldSpec { snake: "id", location: FieldLocation::Path },
-        FieldSpec { snake: "trakt_api_version", location: FieldLocation::Header },
-        FieldSpec { snake: "trakt_api_key", location: FieldLocation::Header },
+        FieldSpec { snake: "id", wire: "id", location: FieldLocation::Path },
+        FieldSpec { snake: "trakt_api_version", wire: "trakt-api-version", location: FieldLocation::Header },
+        FieldSpec { snake: "trakt_api_key", wire: "trakt-api-key", location: FieldLocation::Header },
     ],
     auth: &[
     ],
@@ -2630,11 +3750,11 @@ const OP_SHOWS_GET_LISTS_CONTAINING_THIS_SHOW: OpSpec = OpSpec {
     method: "GET",
     path_template: "/shows/{id}/lists/{type}/{sort}",
     fields: &[
-        FieldSpec { snake: "id", location: FieldLocation::Path },
-        FieldSpec { snake: "type", location: FieldLocation::Path },
-        FieldSpec { snake: "sort", location: FieldLocation::Path },
-        FieldSpec { snake: "trakt_api_version", location: FieldLocation::Header },
-        FieldSpec { snake: "trakt_api_key", location: FieldLocation::Header },
+        FieldSpec { snake: "id", wire: "id", location: FieldLocation::Path },
+        FieldSpec { snake: "type", wire: "type", location: FieldLocation::Path },
+        FieldSpec { snake: "sort", wire: "sort", location: FieldLocation::Path },
+        FieldSpec { snake: "trakt_api_version", wire: "trakt-api-version", location: FieldLocation::Header },
+        FieldSpec { snake: "trakt_api_key", wire: "trakt-api-key", location: FieldLocation::Header },
     ],
     auth: &[
     ],
@@ -2644,9 +3764,9 @@ const OP_SHOWS_GET_NEXT_EPISODE: OpSpec = OpSpec {
     method: "GET",
     path_template: "/shows/{id}/next_episode",
     fields: &[
-        FieldSpec { snake: "id", location: FieldLocation::Path },
-        FieldSpec { snake: "trakt_api_version", location: FieldLocation::Header },
-        FieldSpec { snake: "trakt_api_key", location: FieldLocation::Header },
+        FieldSpec { snake: "id", wire: "id", location: FieldLocation::Path },
+        FieldSpec { snake: "trakt_api_version", wire: "trakt-api-version", location: FieldLocation::Header },
+        FieldSpec { snake: "trakt_api_key", wire: "trakt-api-key", location: FieldLocation::Header },
     ],
     auth: &[
     ],
@@ -2656,9 +3776,9 @@ const OP_SHOWS_GET_ALL_PEOPLE_FOR_A_SHOW: OpSpec = OpSpec {
     method: "GET",
     path_template: "/shows/{id}/people",
     fields: &[
-        FieldSpec { snake: "id", location: FieldLocation::Path },
-        FieldSpec { snake: "trakt_api_version", location: FieldLocation::Header },
-        FieldSpec { snake: "trakt_api_key", location: FieldLocation::Header },
+        FieldSpec { snake: "id", wire: "id", location: FieldLocation::Path },
+        FieldSpec { snake: "trakt_api_version", wire: "trakt-api-version", location: FieldLocation::Header },
+        FieldSpec { snake: "trakt_api_key", wire: "trakt-api-key", location: FieldLocation::Header },
     ],
     auth: &[
     ],
@@ -2668,12 +3788,12 @@ const OP_SHOWS_GET_SHOW_COLLECTION_PROGRESS: OpSpec = OpSpec {
     method: "GET",
     path_template: "/shows/{id}/progress/collection",
     fields: &[
-        FieldSpec { snake: "id", location: FieldLocation::Path },
-        FieldSpec { snake: "hidden", location: FieldLocation::Query },
-        FieldSpec { snake: "specials", location: FieldLocation::Query },
-        FieldSpec { snake: "count_specials", location: FieldLocation::Query },
-        FieldSpec { snake: "trakt_api_version", location: FieldLocation::Header },
-        FieldSpec { snake: "trakt_api_key", location: FieldLocation::Header },
+        FieldSpec { snake: "id", wire: "id", location: FieldLocation::Path },
+        FieldSpec { snake: "hidden", wire: "hidden", location: FieldLocation::Query },
+        FieldSpec { snake: "specials", wire: "specials", location: FieldLocation::Query },
+        FieldSpec { snake: "count_specials", wire: "count_specials", location: FieldLocation::Query },
+        FieldSpec { snake: "trakt_api_version", wire: "trakt-api-version", location: FieldLocation::Header },
+        FieldSpec { snake: "trakt_api_key", wire: "trakt-api-key", location: FieldLocation::Header },
     ],
     auth: &[
         AuthApply { secret_key: "oauth2", kind: AuthKind::Bearer },
@@ -2684,12 +3804,12 @@ const OP_SHOWS_GET_SHOW_WATCHED_PROGRESS: OpSpec = OpSpec {
     method: "GET",
     path_template: "/shows/{id}/progress/watched",
     fields: &[
-        FieldSpec { snake: "id", location: FieldLocation::Path },
-        FieldSpec { snake: "hidden", location: FieldLocation::Query },
-        FieldSpec { snake: "specials", location: FieldLocation::Query },
-        FieldSpec { snake: "count_specials", location: FieldLocation::Query },
-        FieldSpec { snake: "trakt_api_version", location: FieldLocation::Header },
-        FieldSpec { snake: "trakt_api_key", location: FieldLocation::Header },
+        FieldSpec { snake: "id", wire: "id", location: FieldLocation::Path },
+        FieldSpec { snake: "hidden", wire: "hidden", location: FieldLocation::Query },
+        FieldSpec { snake: "specials", wire: "specials", location: FieldLocation::Query },
+        FieldSpec { snake: "count_specials", wire: "count_specials", location: FieldLocation::Query },
+        FieldSpec { snake: "trakt_api_version", wire: "trakt-api-version", location: FieldLocation::Header },
+        FieldSpec { snake: "trakt_api_key", wire: "trakt-api-key", location: FieldLocation::Header },
     ],
     auth: &[
         AuthApply { secret_key: "oauth2", kind: AuthKind::Bearer },
@@ -2700,9 +3820,9 @@ const OP_SHOWS_RESET_SHOW_PROGRESS: OpSpec = OpSpec {
     method: "POST",
     path_template: "/shows/{id}/progress/watched/reset",
     fields: &[
-        FieldSpec { snake: "id", location: FieldLocation::Path },
-        FieldSpec { snake: "trakt_api_version", location: FieldLocation::Header },
-        FieldSpec { snake: "trakt_api_key", location: FieldLocation::Header },
+        FieldSpec { snake: "id", wire: "id", location: FieldLocation::Path },
+        FieldSpec { snake: "trakt_api_version", wire: "trakt-api-version", location: FieldLocation::Header },
+        FieldSpec { snake: "trakt_api_key", wire: "trakt-api-key", location: FieldLocation::Header },
     ],
     auth: &[
         AuthApply { secret_key: "oauth2", kind: AuthKind::Bearer },
@@ -2713,9 +3833,9 @@ const OP_SHOWS_UNDO_RESET_SHOW_PROGRESS: OpSpec = OpSpec {
     method: "DELETE",
     path_template: "/shows/{id}/progress/watched/reset",
     fields: &[
-        FieldSpec { snake: "trakt_api_version", location: FieldLocation::Header },
-        FieldSpec { snake: "trakt_api_key", location: FieldLocation::Header },
-        FieldSpec { snake: "id", location: FieldLocation::Path },
+        FieldSpec { snake: "trakt_api_version", wire: "trakt-api-version", location: FieldLocation::Header },
+        FieldSpec { snake: "trakt_api_key", wire: "trakt-api-key", location: FieldLocation::Header },
+        FieldSpec { snake: "id", wire: "id", location: FieldLocation::Path },
     ],
     auth: &[
         AuthApply { secret_key: "oauth2", kind: AuthKind::Bearer },
@@ -2726,9 +3846,9 @@ const OP_SHOWS_GET_SHOW_RATINGS: OpSpec = OpSpec {
     method: "GET",
     path_template: "/shows/{id}/ratings",
     fields: &[
-        FieldSpec { snake: "id", location: FieldLocation::Path },
-        FieldSpec { snake: "trakt_api_version", location: FieldLocation::Header },
-        FieldSpec { snake: "trakt_api_key", location: FieldLocation::Header },
+        FieldSpec { snake: "id", wire: "id", location: FieldLocation::Path },
+        FieldSpec { snake: "trakt_api_version", wire: "trakt-api-version", location: FieldLocation::Header },
+        FieldSpec { snake: "trakt_api_key", wire: "trakt-api-key", location: FieldLocation::Header },
     ],
     auth: &[
     ],
@@ -2738,9 +3858,9 @@ const OP_SHOWS_GET_RELATED_SHOWS: OpSpec = OpSpec {
     method: "GET",
     path_template: "/shows/{id}/related",
     fields: &[
-        FieldSpec { snake: "id", location: FieldLocation::Path },
-        FieldSpec { snake: "trakt_api_version", location: FieldLocation::Header },
-        FieldSpec { snake: "trakt_api_key", location: FieldLocation::Header },
+        FieldSpec { snake: "id", wire: "id", location: FieldLocation::Path },
+        FieldSpec { snake: "trakt_api_version", wire: "trakt-api-version", location: FieldLocation::Header },
+        FieldSpec { snake: "trakt_api_key", wire: "trakt-api-key", location: FieldLocation::Header },
     ],
     auth: &[
     ],
@@ -2750,9 +3870,9 @@ const OP_SHOWS_GET_SHOW_STATS: OpSpec = OpSpec {
     method: "GET",
     path_template: "/shows/{id}/stats",
     fields: &[
-        FieldSpec { snake: "id", location: FieldLocation::Path },
-        FieldSpec { snake: "trakt_api_version", location: FieldLocation::Header },
-        FieldSpec { snake: "trakt_api_key", location: FieldLocation::Header },
+        FieldSpec { snake: "id", wire: "id", location: FieldLocation::Path },
+        FieldSpec { snake: "trakt_api_version", wire: "trakt-api-version", location: FieldLocation::Header },
+        FieldSpec { snake: "trakt_api_key", wire: "trakt-api-key", location: FieldLocation::Header },
     ],
     auth: &[
     ],
@@ -2762,9 +3882,9 @@ const OP_SHOWS_GET_SHOW_STUDIOS: OpSpec = OpSpec {
     method: "GET",
     path_template: "/shows/{id}/studios",
     fields: &[
-        FieldSpec { snake: "id", location: FieldLocation::Path },
-        FieldSpec { snake: "trakt_api_version", location: FieldLocation::Header },
-        FieldSpec { snake: "trakt_api_key", location: FieldLocation::Header },
+        FieldSpec { snake: "id", wire: "id", location: FieldLocation::Path },
+        FieldSpec { snake: "trakt_api_version", wire: "trakt-api-version", location: FieldLocation::Header },
+        FieldSpec { snake: "trakt_api_key", wire: "trakt-api-key", location: FieldLocation::Header },
     ],
     auth: &[
     ],
@@ -2774,10 +3894,10 @@ const OP_SHOWS_GET_ALL_SHOW_TRANSLATIONS: OpSpec = OpSpec {
     method: "GET",
     path_template: "/shows/{id}/translations/{language}",
     fields: &[
-        FieldSpec { snake: "id", location: FieldLocation::Path },
-        FieldSpec { snake: "language", location: FieldLocation::Path },
-        FieldSpec { snake: "trakt_api_version", location: FieldLocation::Header },
-        FieldSpec { snake: "trakt_api_key", location: FieldLocation::Header },
+        FieldSpec { snake: "id", wire: "id", location: FieldLocation::Path },
+        FieldSpec { snake: "language", wire: "language", location: FieldLocation::Path },
+        FieldSpec { snake: "trakt_api_version", wire: "trakt-api-version", location: FieldLocation::Header },
+        FieldSpec { snake: "trakt_api_key", wire: "trakt-api-key", location: FieldLocation::Header },
     ],
     auth: &[
     ],
@@ -2787,9 +3907,9 @@ const OP_SHOWS_GET_SHOWS_ID_WATCHING: OpSpec = OpSpec {
     method: "GET",
     path_template: "/shows/{id}/watching",
     fields: &[
-        FieldSpec { snake: "id", location: FieldLocation::Path },
-        FieldSpec { snake: "trakt_api_version", location: FieldLocation::Header },
-        FieldSpec { snake: "trakt_api_key", location: FieldLocation::Header },
+        FieldSpec { snake: "id", wire: "id", location: FieldLocation::Path },
+        FieldSpec { snake: "trakt_api_version", wire: "trakt-api-version", location: FieldLocation::Header },
+        FieldSpec { snake: "trakt_api_key", wire: "trakt-api-key", location: FieldLocation::Header },
     ],
     auth: &[
     ],
@@ -3032,114 +4152,492 @@ fn iface_shows__get_shows_id_watching_params__to_json(p: &iface_shows::GetShowsI
     Value::Object(m)
 }
 
+fn iface_shows__get_the_most_anticipated_shows__ok(body: String) -> Result<String, crate::runtime::DispatchError> {
+    Ok(body)
+}
+
+fn iface_shows__get_the_most_anticipated_shows__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
+fn iface_shows__get_the_most_collected_shows__ok(body: String) -> Result<String, crate::runtime::DispatchError> {
+    Ok(body)
+}
+
+fn iface_shows__get_the_most_collected_shows__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
+fn iface_shows__get_the_most_played_shows__ok(body: String) -> Result<String, crate::runtime::DispatchError> {
+    Ok(body)
+}
+
+fn iface_shows__get_the_most_played_shows__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
+fn iface_shows__get_popular_shows__ok(body: String) -> Result<String, crate::runtime::DispatchError> {
+    Ok(body)
+}
+
+fn iface_shows__get_popular_shows__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
+fn iface_shows__get_the_most_recommended_shows__ok(body: String) -> Result<String, crate::runtime::DispatchError> {
+    Ok(body)
+}
+
+fn iface_shows__get_the_most_recommended_shows__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
+fn iface_shows__get_trending_shows__ok(body: String) -> Result<String, crate::runtime::DispatchError> {
+    Ok(body)
+}
+
+fn iface_shows__get_trending_shows__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
+fn iface_shows__get_recently_updated_show_trakt_i_ds__ok(body: String) -> Result<String, crate::runtime::DispatchError> {
+    Ok(body)
+}
+
+fn iface_shows__get_recently_updated_show_trakt_i_ds__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
+fn iface_shows__get_recently_updated_shows__ok(body: String) -> Result<String, crate::runtime::DispatchError> {
+    Ok(body)
+}
+
+fn iface_shows__get_recently_updated_shows__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
+fn iface_shows__get_the_most_watched_shows__ok(body: String) -> Result<String, crate::runtime::DispatchError> {
+    Ok(body)
+}
+
+fn iface_shows__get_the_most_watched_shows__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
+fn iface_shows__get_a_single_show__ok(body: String) -> Result<String, crate::runtime::DispatchError> {
+    Ok(body)
+}
+
+fn iface_shows__get_a_single_show__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
+fn iface_shows__get_all_show_aliases__ok(body: String) -> Result<String, crate::runtime::DispatchError> {
+    Ok(body)
+}
+
+fn iface_shows__get_all_show_aliases__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
+fn iface_shows__get_all_show_certifications__ok(body: String) -> Result<String, crate::runtime::DispatchError> {
+    Ok(body)
+}
+
+fn iface_shows__get_all_show_certifications__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
+fn iface_shows__get_all_show_comments__ok(body: String) -> Result<String, crate::runtime::DispatchError> {
+    Ok(body)
+}
+
+fn iface_shows__get_all_show_comments__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
+fn iface_shows__get_last_episode__ok(body: String) -> Result<String, crate::runtime::DispatchError> {
+    Ok(body)
+}
+
+fn iface_shows__get_last_episode__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
+fn iface_shows__get_lists_containing_this_show__ok(body: String) -> Result<String, crate::runtime::DispatchError> {
+    Ok(body)
+}
+
+fn iface_shows__get_lists_containing_this_show__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
+fn iface_shows__get_next_episode__ok(body: String) -> Result<String, crate::runtime::DispatchError> {
+    Ok(body)
+}
+
+fn iface_shows__get_next_episode__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
+fn iface_shows__get_all_people_for_a_show__ok(body: String) -> Result<String, crate::runtime::DispatchError> {
+    Ok(body)
+}
+
+fn iface_shows__get_all_people_for_a_show__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
+fn iface_shows__get_show_collection_progress__ok(body: String) -> Result<String, crate::runtime::DispatchError> {
+    Ok(body)
+}
+
+fn iface_shows__get_show_collection_progress__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
+fn iface_shows__get_show_watched_progress__ok(body: String) -> Result<String, crate::runtime::DispatchError> {
+    Ok(body)
+}
+
+fn iface_shows__get_show_watched_progress__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
+fn iface_shows__reset_show_progress__ok(body: String) -> Result<String, crate::runtime::DispatchError> {
+    Ok(body)
+}
+
+fn iface_shows__reset_show_progress__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
+fn iface_shows__undo_reset_show_progress__ok(body: String) -> Result<String, crate::runtime::DispatchError> {
+    Ok(body)
+}
+
+fn iface_shows__undo_reset_show_progress__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
+fn iface_shows__get_show_ratings__ok(body: String) -> Result<String, crate::runtime::DispatchError> {
+    Ok(body)
+}
+
+fn iface_shows__get_show_ratings__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
+fn iface_shows__get_related_shows__ok(body: String) -> Result<String, crate::runtime::DispatchError> {
+    Ok(body)
+}
+
+fn iface_shows__get_related_shows__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
+fn iface_shows__get_show_stats__ok(body: String) -> Result<String, crate::runtime::DispatchError> {
+    Ok(body)
+}
+
+fn iface_shows__get_show_stats__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
+fn iface_shows__get_show_studios__ok(body: String) -> Result<String, crate::runtime::DispatchError> {
+    Ok(body)
+}
+
+fn iface_shows__get_show_studios__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
+fn iface_shows__get_all_show_translations__ok(body: String) -> Result<String, crate::runtime::DispatchError> {
+    Ok(body)
+}
+
+fn iface_shows__get_all_show_translations__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
+fn iface_shows__get_shows_id_watching__ok(body: String) -> Result<String, crate::runtime::DispatchError> {
+    Ok(body)
+}
+
+fn iface_shows__get_shows_id_watching__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
 impl iface_shows::Guest for crate::Component {
     fn get_the_most_anticipated_shows(params: iface_shows::GetTheMostAnticipatedShowsParams) -> Result<String, String> {
         let json = iface_shows__get_the_most_anticipated_shows_params__to_json(&params);
-        dispatch(&OP_SHOWS_GET_THE_MOST_ANTICIPATED_SHOWS, json)
+        match dispatch(&OP_SHOWS_GET_THE_MOST_ANTICIPATED_SHOWS, json).and_then(iface_shows__get_the_most_anticipated_shows__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_shows__get_the_most_anticipated_shows__err(e)),
+        }
     }
     fn get_the_most_collected_shows(params: iface_shows::GetTheMostCollectedShowsParams) -> Result<String, String> {
         let json = iface_shows__get_the_most_collected_shows_params__to_json(&params);
-        dispatch(&OP_SHOWS_GET_THE_MOST_COLLECTED_SHOWS, json)
+        match dispatch(&OP_SHOWS_GET_THE_MOST_COLLECTED_SHOWS, json).and_then(iface_shows__get_the_most_collected_shows__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_shows__get_the_most_collected_shows__err(e)),
+        }
     }
     fn get_the_most_played_shows(params: iface_shows::GetTheMostPlayedShowsParams) -> Result<String, String> {
         let json = iface_shows__get_the_most_played_shows_params__to_json(&params);
-        dispatch(&OP_SHOWS_GET_THE_MOST_PLAYED_SHOWS, json)
+        match dispatch(&OP_SHOWS_GET_THE_MOST_PLAYED_SHOWS, json).and_then(iface_shows__get_the_most_played_shows__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_shows__get_the_most_played_shows__err(e)),
+        }
     }
     fn get_popular_shows(params: iface_shows::GetPopularShowsParams) -> Result<String, String> {
         let json = iface_shows__get_popular_shows_params__to_json(&params);
-        dispatch(&OP_SHOWS_GET_POPULAR_SHOWS, json)
+        match dispatch(&OP_SHOWS_GET_POPULAR_SHOWS, json).and_then(iface_shows__get_popular_shows__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_shows__get_popular_shows__err(e)),
+        }
     }
     fn get_the_most_recommended_shows(params: iface_shows::GetTheMostRecommendedShowsParams) -> Result<String, String> {
         let json = iface_shows__get_the_most_recommended_shows_params__to_json(&params);
-        dispatch(&OP_SHOWS_GET_THE_MOST_RECOMMENDED_SHOWS, json)
+        match dispatch(&OP_SHOWS_GET_THE_MOST_RECOMMENDED_SHOWS, json).and_then(iface_shows__get_the_most_recommended_shows__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_shows__get_the_most_recommended_shows__err(e)),
+        }
     }
     fn get_trending_shows(params: iface_shows::GetTrendingShowsParams) -> Result<String, String> {
         let json = iface_shows__get_trending_shows_params__to_json(&params);
-        dispatch(&OP_SHOWS_GET_TRENDING_SHOWS, json)
+        match dispatch(&OP_SHOWS_GET_TRENDING_SHOWS, json).and_then(iface_shows__get_trending_shows__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_shows__get_trending_shows__err(e)),
+        }
     }
     fn get_recently_updated_show_trakt_i_ds(params: iface_shows::GetRecentlyUpdatedShowTraktIDsParams) -> Result<String, String> {
         let json = iface_shows__get_recently_updated_show_trakt_i_ds_params__to_json(&params);
-        dispatch(&OP_SHOWS_GET_RECENTLY_UPDATED_SHOW_TRAKT_I_DS, json)
+        match dispatch(&OP_SHOWS_GET_RECENTLY_UPDATED_SHOW_TRAKT_I_DS, json).and_then(iface_shows__get_recently_updated_show_trakt_i_ds__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_shows__get_recently_updated_show_trakt_i_ds__err(e)),
+        }
     }
     fn get_recently_updated_shows(params: iface_shows::GetRecentlyUpdatedShowsParams) -> Result<String, String> {
         let json = iface_shows__get_recently_updated_shows_params__to_json(&params);
-        dispatch(&OP_SHOWS_GET_RECENTLY_UPDATED_SHOWS, json)
+        match dispatch(&OP_SHOWS_GET_RECENTLY_UPDATED_SHOWS, json).and_then(iface_shows__get_recently_updated_shows__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_shows__get_recently_updated_shows__err(e)),
+        }
     }
     fn get_the_most_watched_shows(params: iface_shows::GetTheMostWatchedShowsParams) -> Result<String, String> {
         let json = iface_shows__get_the_most_watched_shows_params__to_json(&params);
-        dispatch(&OP_SHOWS_GET_THE_MOST_WATCHED_SHOWS, json)
+        match dispatch(&OP_SHOWS_GET_THE_MOST_WATCHED_SHOWS, json).and_then(iface_shows__get_the_most_watched_shows__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_shows__get_the_most_watched_shows__err(e)),
+        }
     }
     fn get_a_single_show(params: iface_shows::GetASingleShowParams) -> Result<String, String> {
         let json = iface_shows__get_a_single_show_params__to_json(&params);
-        dispatch(&OP_SHOWS_GET_A_SINGLE_SHOW, json)
+        match dispatch(&OP_SHOWS_GET_A_SINGLE_SHOW, json).and_then(iface_shows__get_a_single_show__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_shows__get_a_single_show__err(e)),
+        }
     }
     fn get_all_show_aliases(params: iface_shows::GetAllShowAliasesParams) -> Result<String, String> {
         let json = iface_shows__get_all_show_aliases_params__to_json(&params);
-        dispatch(&OP_SHOWS_GET_ALL_SHOW_ALIASES, json)
+        match dispatch(&OP_SHOWS_GET_ALL_SHOW_ALIASES, json).and_then(iface_shows__get_all_show_aliases__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_shows__get_all_show_aliases__err(e)),
+        }
     }
     fn get_all_show_certifications(params: iface_shows::GetAllShowCertificationsParams) -> Result<String, String> {
         let json = iface_shows__get_all_show_certifications_params__to_json(&params);
-        dispatch(&OP_SHOWS_GET_ALL_SHOW_CERTIFICATIONS, json)
+        match dispatch(&OP_SHOWS_GET_ALL_SHOW_CERTIFICATIONS, json).and_then(iface_shows__get_all_show_certifications__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_shows__get_all_show_certifications__err(e)),
+        }
     }
     fn get_all_show_comments(params: iface_shows::GetAllShowCommentsParams) -> Result<String, String> {
         let json = iface_shows__get_all_show_comments_params__to_json(&params);
-        dispatch(&OP_SHOWS_GET_ALL_SHOW_COMMENTS, json)
+        match dispatch(&OP_SHOWS_GET_ALL_SHOW_COMMENTS, json).and_then(iface_shows__get_all_show_comments__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_shows__get_all_show_comments__err(e)),
+        }
     }
     fn get_last_episode(params: iface_shows::GetLastEpisodeParams) -> Result<String, String> {
         let json = iface_shows__get_last_episode_params__to_json(&params);
-        dispatch(&OP_SHOWS_GET_LAST_EPISODE, json)
+        match dispatch(&OP_SHOWS_GET_LAST_EPISODE, json).and_then(iface_shows__get_last_episode__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_shows__get_last_episode__err(e)),
+        }
     }
     fn get_lists_containing_this_show(params: iface_shows::GetListsContainingThisShowParams) -> Result<String, String> {
         let json = iface_shows__get_lists_containing_this_show_params__to_json(&params);
-        dispatch(&OP_SHOWS_GET_LISTS_CONTAINING_THIS_SHOW, json)
+        match dispatch(&OP_SHOWS_GET_LISTS_CONTAINING_THIS_SHOW, json).and_then(iface_shows__get_lists_containing_this_show__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_shows__get_lists_containing_this_show__err(e)),
+        }
     }
     fn get_next_episode(params: iface_shows::GetNextEpisodeParams) -> Result<String, String> {
         let json = iface_shows__get_next_episode_params__to_json(&params);
-        dispatch(&OP_SHOWS_GET_NEXT_EPISODE, json)
+        match dispatch(&OP_SHOWS_GET_NEXT_EPISODE, json).and_then(iface_shows__get_next_episode__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_shows__get_next_episode__err(e)),
+        }
     }
     fn get_all_people_for_a_show(params: iface_shows::GetAllPeopleForAShowParams) -> Result<String, String> {
         let json = iface_shows__get_all_people_for_a_show_params__to_json(&params);
-        dispatch(&OP_SHOWS_GET_ALL_PEOPLE_FOR_A_SHOW, json)
+        match dispatch(&OP_SHOWS_GET_ALL_PEOPLE_FOR_A_SHOW, json).and_then(iface_shows__get_all_people_for_a_show__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_shows__get_all_people_for_a_show__err(e)),
+        }
     }
     fn get_show_collection_progress(params: iface_shows::GetShowCollectionProgressParams) -> Result<String, String> {
         let json = iface_shows__get_show_collection_progress_params__to_json(&params);
-        dispatch(&OP_SHOWS_GET_SHOW_COLLECTION_PROGRESS, json)
+        match dispatch(&OP_SHOWS_GET_SHOW_COLLECTION_PROGRESS, json).and_then(iface_shows__get_show_collection_progress__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_shows__get_show_collection_progress__err(e)),
+        }
     }
     fn get_show_watched_progress(params: iface_shows::GetShowWatchedProgressParams) -> Result<String, String> {
         let json = iface_shows__get_show_watched_progress_params__to_json(&params);
-        dispatch(&OP_SHOWS_GET_SHOW_WATCHED_PROGRESS, json)
+        match dispatch(&OP_SHOWS_GET_SHOW_WATCHED_PROGRESS, json).and_then(iface_shows__get_show_watched_progress__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_shows__get_show_watched_progress__err(e)),
+        }
     }
     fn reset_show_progress(params: iface_shows::ResetShowProgressParams) -> Result<String, String> {
         let json = iface_shows__reset_show_progress_params__to_json(&params);
-        dispatch(&OP_SHOWS_RESET_SHOW_PROGRESS, json)
+        match dispatch(&OP_SHOWS_RESET_SHOW_PROGRESS, json).and_then(iface_shows__reset_show_progress__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_shows__reset_show_progress__err(e)),
+        }
     }
     fn undo_reset_show_progress(params: iface_shows::UndoResetShowProgressParams) -> Result<String, String> {
         let json = iface_shows__undo_reset_show_progress_params__to_json(&params);
-        dispatch(&OP_SHOWS_UNDO_RESET_SHOW_PROGRESS, json)
+        match dispatch(&OP_SHOWS_UNDO_RESET_SHOW_PROGRESS, json).and_then(iface_shows__undo_reset_show_progress__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_shows__undo_reset_show_progress__err(e)),
+        }
     }
     fn get_show_ratings(params: iface_shows::GetShowRatingsParams) -> Result<String, String> {
         let json = iface_shows__get_show_ratings_params__to_json(&params);
-        dispatch(&OP_SHOWS_GET_SHOW_RATINGS, json)
+        match dispatch(&OP_SHOWS_GET_SHOW_RATINGS, json).and_then(iface_shows__get_show_ratings__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_shows__get_show_ratings__err(e)),
+        }
     }
     fn get_related_shows(params: iface_shows::GetRelatedShowsParams) -> Result<String, String> {
         let json = iface_shows__get_related_shows_params__to_json(&params);
-        dispatch(&OP_SHOWS_GET_RELATED_SHOWS, json)
+        match dispatch(&OP_SHOWS_GET_RELATED_SHOWS, json).and_then(iface_shows__get_related_shows__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_shows__get_related_shows__err(e)),
+        }
     }
     fn get_show_stats(params: iface_shows::GetShowStatsParams) -> Result<String, String> {
         let json = iface_shows__get_show_stats_params__to_json(&params);
-        dispatch(&OP_SHOWS_GET_SHOW_STATS, json)
+        match dispatch(&OP_SHOWS_GET_SHOW_STATS, json).and_then(iface_shows__get_show_stats__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_shows__get_show_stats__err(e)),
+        }
     }
     fn get_show_studios(params: iface_shows::GetShowStudiosParams) -> Result<String, String> {
         let json = iface_shows__get_show_studios_params__to_json(&params);
-        dispatch(&OP_SHOWS_GET_SHOW_STUDIOS, json)
+        match dispatch(&OP_SHOWS_GET_SHOW_STUDIOS, json).and_then(iface_shows__get_show_studios__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_shows__get_show_studios__err(e)),
+        }
     }
     fn get_all_show_translations(params: iface_shows::GetAllShowTranslationsParams) -> Result<String, String> {
         let json = iface_shows__get_all_show_translations_params__to_json(&params);
-        dispatch(&OP_SHOWS_GET_ALL_SHOW_TRANSLATIONS, json)
+        match dispatch(&OP_SHOWS_GET_ALL_SHOW_TRANSLATIONS, json).and_then(iface_shows__get_all_show_translations__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_shows__get_all_show_translations__err(e)),
+        }
     }
     fn get_shows_id_watching(params: iface_shows::GetShowsIdWatchingParams) -> Result<String, String> {
         let json = iface_shows__get_shows_id_watching_params__to_json(&params);
-        dispatch(&OP_SHOWS_GET_SHOWS_ID_WATCHING, json)
+        match dispatch(&OP_SHOWS_GET_SHOWS_ID_WATCHING, json).and_then(iface_shows__get_shows_id_watching__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_shows__get_shows_id_watching__err(e)),
+        }
     }
 }
 use crate::exports::autostamp::trakt::seasons as iface_seasons;
@@ -3148,9 +4646,9 @@ const OP_SEASONS_GET_ALL_SEASONS_FOR_A_SHOW: OpSpec = OpSpec {
     method: "GET",
     path_template: "/shows/{id}/seasons",
     fields: &[
-        FieldSpec { snake: "id", location: FieldLocation::Path },
-        FieldSpec { snake: "trakt_api_version", location: FieldLocation::Header },
-        FieldSpec { snake: "trakt_api_key", location: FieldLocation::Header },
+        FieldSpec { snake: "id", wire: "id", location: FieldLocation::Path },
+        FieldSpec { snake: "trakt_api_version", wire: "trakt-api-version", location: FieldLocation::Header },
+        FieldSpec { snake: "trakt_api_key", wire: "trakt-api-key", location: FieldLocation::Header },
     ],
     auth: &[
     ],
@@ -3160,11 +4658,11 @@ const OP_SEASONS_GET_SINGLE_SEASON_FOR_A_SHOW: OpSpec = OpSpec {
     method: "GET",
     path_template: "/shows/{id}/seasons/{season}",
     fields: &[
-        FieldSpec { snake: "id", location: FieldLocation::Path },
-        FieldSpec { snake: "season", location: FieldLocation::Path },
-        FieldSpec { snake: "translations", location: FieldLocation::Query },
-        FieldSpec { snake: "trakt_api_version", location: FieldLocation::Header },
-        FieldSpec { snake: "trakt_api_key", location: FieldLocation::Header },
+        FieldSpec { snake: "id", wire: "id", location: FieldLocation::Path },
+        FieldSpec { snake: "season", wire: "season", location: FieldLocation::Path },
+        FieldSpec { snake: "translations", wire: "translations", location: FieldLocation::Query },
+        FieldSpec { snake: "trakt_api_version", wire: "trakt-api-version", location: FieldLocation::Header },
+        FieldSpec { snake: "trakt_api_key", wire: "trakt-api-key", location: FieldLocation::Header },
     ],
     auth: &[
     ],
@@ -3174,11 +4672,11 @@ const OP_SEASONS_GET_ALL_SEASON_COMMENTS: OpSpec = OpSpec {
     method: "GET",
     path_template: "/shows/{id}/seasons/{season}/comments/{sort}",
     fields: &[
-        FieldSpec { snake: "id", location: FieldLocation::Path },
-        FieldSpec { snake: "season", location: FieldLocation::Path },
-        FieldSpec { snake: "sort", location: FieldLocation::Path },
-        FieldSpec { snake: "trakt_api_version", location: FieldLocation::Header },
-        FieldSpec { snake: "trakt_api_key", location: FieldLocation::Header },
+        FieldSpec { snake: "id", wire: "id", location: FieldLocation::Path },
+        FieldSpec { snake: "season", wire: "season", location: FieldLocation::Path },
+        FieldSpec { snake: "sort", wire: "sort", location: FieldLocation::Path },
+        FieldSpec { snake: "trakt_api_version", wire: "trakt-api-version", location: FieldLocation::Header },
+        FieldSpec { snake: "trakt_api_key", wire: "trakt-api-key", location: FieldLocation::Header },
     ],
     auth: &[
     ],
@@ -3188,12 +4686,12 @@ const OP_SEASONS_GET_LISTS_CONTAINING_THIS_SEASON: OpSpec = OpSpec {
     method: "GET",
     path_template: "/shows/{id}/seasons/{season}/lists/{type}/{sort}",
     fields: &[
-        FieldSpec { snake: "id", location: FieldLocation::Path },
-        FieldSpec { snake: "season", location: FieldLocation::Path },
-        FieldSpec { snake: "type", location: FieldLocation::Path },
-        FieldSpec { snake: "sort", location: FieldLocation::Path },
-        FieldSpec { snake: "trakt_api_version", location: FieldLocation::Header },
-        FieldSpec { snake: "trakt_api_key", location: FieldLocation::Header },
+        FieldSpec { snake: "id", wire: "id", location: FieldLocation::Path },
+        FieldSpec { snake: "season", wire: "season", location: FieldLocation::Path },
+        FieldSpec { snake: "type", wire: "type", location: FieldLocation::Path },
+        FieldSpec { snake: "sort", wire: "sort", location: FieldLocation::Path },
+        FieldSpec { snake: "trakt_api_version", wire: "trakt-api-version", location: FieldLocation::Header },
+        FieldSpec { snake: "trakt_api_key", wire: "trakt-api-key", location: FieldLocation::Header },
     ],
     auth: &[
     ],
@@ -3203,10 +4701,10 @@ const OP_SEASONS_GET_ALL_PEOPLE_FOR_A_SEASON: OpSpec = OpSpec {
     method: "GET",
     path_template: "/shows/{id}/seasons/{season}/people",
     fields: &[
-        FieldSpec { snake: "id", location: FieldLocation::Path },
-        FieldSpec { snake: "season", location: FieldLocation::Path },
-        FieldSpec { snake: "trakt_api_version", location: FieldLocation::Header },
-        FieldSpec { snake: "trakt_api_key", location: FieldLocation::Header },
+        FieldSpec { snake: "id", wire: "id", location: FieldLocation::Path },
+        FieldSpec { snake: "season", wire: "season", location: FieldLocation::Path },
+        FieldSpec { snake: "trakt_api_version", wire: "trakt-api-version", location: FieldLocation::Header },
+        FieldSpec { snake: "trakt_api_key", wire: "trakt-api-key", location: FieldLocation::Header },
     ],
     auth: &[
     ],
@@ -3216,10 +4714,10 @@ const OP_SEASONS_GET_SEASON_RATINGS: OpSpec = OpSpec {
     method: "GET",
     path_template: "/shows/{id}/seasons/{season}/ratings",
     fields: &[
-        FieldSpec { snake: "id", location: FieldLocation::Path },
-        FieldSpec { snake: "season", location: FieldLocation::Path },
-        FieldSpec { snake: "trakt_api_version", location: FieldLocation::Header },
-        FieldSpec { snake: "trakt_api_key", location: FieldLocation::Header },
+        FieldSpec { snake: "id", wire: "id", location: FieldLocation::Path },
+        FieldSpec { snake: "season", wire: "season", location: FieldLocation::Path },
+        FieldSpec { snake: "trakt_api_version", wire: "trakt-api-version", location: FieldLocation::Header },
+        FieldSpec { snake: "trakt_api_key", wire: "trakt-api-key", location: FieldLocation::Header },
     ],
     auth: &[
     ],
@@ -3229,10 +4727,10 @@ const OP_SEASONS_GET_SEASON_STATS: OpSpec = OpSpec {
     method: "GET",
     path_template: "/shows/{id}/seasons/{season}/stats",
     fields: &[
-        FieldSpec { snake: "id", location: FieldLocation::Path },
-        FieldSpec { snake: "season", location: FieldLocation::Path },
-        FieldSpec { snake: "trakt_api_version", location: FieldLocation::Header },
-        FieldSpec { snake: "trakt_api_key", location: FieldLocation::Header },
+        FieldSpec { snake: "id", wire: "id", location: FieldLocation::Path },
+        FieldSpec { snake: "season", wire: "season", location: FieldLocation::Path },
+        FieldSpec { snake: "trakt_api_version", wire: "trakt-api-version", location: FieldLocation::Header },
+        FieldSpec { snake: "trakt_api_key", wire: "trakt-api-key", location: FieldLocation::Header },
     ],
     auth: &[
     ],
@@ -3242,11 +4740,11 @@ const OP_SEASONS_GET_ALL_SEASON_TRANSLATIONS: OpSpec = OpSpec {
     method: "GET",
     path_template: "/shows/{id}/seasons/{season}/translations/{language}",
     fields: &[
-        FieldSpec { snake: "id", location: FieldLocation::Path },
-        FieldSpec { snake: "season", location: FieldLocation::Path },
-        FieldSpec { snake: "language", location: FieldLocation::Path },
-        FieldSpec { snake: "trakt_api_version", location: FieldLocation::Header },
-        FieldSpec { snake: "trakt_api_key", location: FieldLocation::Header },
+        FieldSpec { snake: "id", wire: "id", location: FieldLocation::Path },
+        FieldSpec { snake: "season", wire: "season", location: FieldLocation::Path },
+        FieldSpec { snake: "language", wire: "language", location: FieldLocation::Path },
+        FieldSpec { snake: "trakt_api_version", wire: "trakt-api-version", location: FieldLocation::Header },
+        FieldSpec { snake: "trakt_api_key", wire: "trakt-api-key", location: FieldLocation::Header },
     ],
     auth: &[
     ],
@@ -3256,10 +4754,10 @@ const OP_SEASONS_GET_SHOWS_ID_SEASONS_SEASON_WATCHING: OpSpec = OpSpec {
     method: "GET",
     path_template: "/shows/{id}/seasons/{season}/watching",
     fields: &[
-        FieldSpec { snake: "id", location: FieldLocation::Path },
-        FieldSpec { snake: "season", location: FieldLocation::Path },
-        FieldSpec { snake: "trakt_api_version", location: FieldLocation::Header },
-        FieldSpec { snake: "trakt_api_key", location: FieldLocation::Header },
+        FieldSpec { snake: "id", wire: "id", location: FieldLocation::Path },
+        FieldSpec { snake: "season", wire: "season", location: FieldLocation::Path },
+        FieldSpec { snake: "trakt_api_version", wire: "trakt-api-version", location: FieldLocation::Header },
+        FieldSpec { snake: "trakt_api_key", wire: "trakt-api-key", location: FieldLocation::Header },
     ],
     auth: &[
     ],
@@ -3350,42 +4848,168 @@ fn iface_seasons__get_shows_id_seasons_season_watching_params__to_json(p: &iface
     Value::Object(m)
 }
 
+fn iface_seasons__get_all_seasons_for_a_show__ok(body: String) -> Result<String, crate::runtime::DispatchError> {
+    Ok(body)
+}
+
+fn iface_seasons__get_all_seasons_for_a_show__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
+fn iface_seasons__get_single_season_for_a_show__ok(body: String) -> Result<String, crate::runtime::DispatchError> {
+    Ok(body)
+}
+
+fn iface_seasons__get_single_season_for_a_show__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
+fn iface_seasons__get_all_season_comments__ok(body: String) -> Result<String, crate::runtime::DispatchError> {
+    Ok(body)
+}
+
+fn iface_seasons__get_all_season_comments__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
+fn iface_seasons__get_lists_containing_this_season__ok(body: String) -> Result<String, crate::runtime::DispatchError> {
+    Ok(body)
+}
+
+fn iface_seasons__get_lists_containing_this_season__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
+fn iface_seasons__get_all_people_for_a_season__ok(body: String) -> Result<String, crate::runtime::DispatchError> {
+    Ok(body)
+}
+
+fn iface_seasons__get_all_people_for_a_season__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
+fn iface_seasons__get_season_ratings__ok(body: String) -> Result<String, crate::runtime::DispatchError> {
+    Ok(body)
+}
+
+fn iface_seasons__get_season_ratings__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
+fn iface_seasons__get_season_stats__ok(body: String) -> Result<String, crate::runtime::DispatchError> {
+    Ok(body)
+}
+
+fn iface_seasons__get_season_stats__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
+fn iface_seasons__get_all_season_translations__ok(body: String) -> Result<String, crate::runtime::DispatchError> {
+    Ok(body)
+}
+
+fn iface_seasons__get_all_season_translations__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
+fn iface_seasons__get_shows_id_seasons_season_watching__ok(body: String) -> Result<String, crate::runtime::DispatchError> {
+    Ok(body)
+}
+
+fn iface_seasons__get_shows_id_seasons_season_watching__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
 impl iface_seasons::Guest for crate::Component {
     fn get_all_seasons_for_a_show(params: iface_seasons::GetAllSeasonsForAShowParams) -> Result<String, String> {
         let json = iface_seasons__get_all_seasons_for_a_show_params__to_json(&params);
-        dispatch(&OP_SEASONS_GET_ALL_SEASONS_FOR_A_SHOW, json)
+        match dispatch(&OP_SEASONS_GET_ALL_SEASONS_FOR_A_SHOW, json).and_then(iface_seasons__get_all_seasons_for_a_show__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_seasons__get_all_seasons_for_a_show__err(e)),
+        }
     }
     fn get_single_season_for_a_show(params: iface_seasons::GetSingleSeasonForAShowParams) -> Result<String, String> {
         let json = iface_seasons__get_single_season_for_a_show_params__to_json(&params);
-        dispatch(&OP_SEASONS_GET_SINGLE_SEASON_FOR_A_SHOW, json)
+        match dispatch(&OP_SEASONS_GET_SINGLE_SEASON_FOR_A_SHOW, json).and_then(iface_seasons__get_single_season_for_a_show__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_seasons__get_single_season_for_a_show__err(e)),
+        }
     }
     fn get_all_season_comments(params: iface_seasons::GetAllSeasonCommentsParams) -> Result<String, String> {
         let json = iface_seasons__get_all_season_comments_params__to_json(&params);
-        dispatch(&OP_SEASONS_GET_ALL_SEASON_COMMENTS, json)
+        match dispatch(&OP_SEASONS_GET_ALL_SEASON_COMMENTS, json).and_then(iface_seasons__get_all_season_comments__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_seasons__get_all_season_comments__err(e)),
+        }
     }
     fn get_lists_containing_this_season(params: iface_seasons::GetListsContainingThisSeasonParams) -> Result<String, String> {
         let json = iface_seasons__get_lists_containing_this_season_params__to_json(&params);
-        dispatch(&OP_SEASONS_GET_LISTS_CONTAINING_THIS_SEASON, json)
+        match dispatch(&OP_SEASONS_GET_LISTS_CONTAINING_THIS_SEASON, json).and_then(iface_seasons__get_lists_containing_this_season__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_seasons__get_lists_containing_this_season__err(e)),
+        }
     }
     fn get_all_people_for_a_season(params: iface_seasons::GetAllPeopleForASeasonParams) -> Result<String, String> {
         let json = iface_seasons__get_all_people_for_a_season_params__to_json(&params);
-        dispatch(&OP_SEASONS_GET_ALL_PEOPLE_FOR_A_SEASON, json)
+        match dispatch(&OP_SEASONS_GET_ALL_PEOPLE_FOR_A_SEASON, json).and_then(iface_seasons__get_all_people_for_a_season__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_seasons__get_all_people_for_a_season__err(e)),
+        }
     }
     fn get_season_ratings(params: iface_seasons::GetSeasonRatingsParams) -> Result<String, String> {
         let json = iface_seasons__get_season_ratings_params__to_json(&params);
-        dispatch(&OP_SEASONS_GET_SEASON_RATINGS, json)
+        match dispatch(&OP_SEASONS_GET_SEASON_RATINGS, json).and_then(iface_seasons__get_season_ratings__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_seasons__get_season_ratings__err(e)),
+        }
     }
     fn get_season_stats(params: iface_seasons::GetSeasonStatsParams) -> Result<String, String> {
         let json = iface_seasons__get_season_stats_params__to_json(&params);
-        dispatch(&OP_SEASONS_GET_SEASON_STATS, json)
+        match dispatch(&OP_SEASONS_GET_SEASON_STATS, json).and_then(iface_seasons__get_season_stats__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_seasons__get_season_stats__err(e)),
+        }
     }
     fn get_all_season_translations(params: iface_seasons::GetAllSeasonTranslationsParams) -> Result<String, String> {
         let json = iface_seasons__get_all_season_translations_params__to_json(&params);
-        dispatch(&OP_SEASONS_GET_ALL_SEASON_TRANSLATIONS, json)
+        match dispatch(&OP_SEASONS_GET_ALL_SEASON_TRANSLATIONS, json).and_then(iface_seasons__get_all_season_translations__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_seasons__get_all_season_translations__err(e)),
+        }
     }
     fn get_shows_id_seasons_season_watching(params: iface_seasons::GetShowsIdSeasonsSeasonWatchingParams) -> Result<String, String> {
         let json = iface_seasons__get_shows_id_seasons_season_watching_params__to_json(&params);
-        dispatch(&OP_SEASONS_GET_SHOWS_ID_SEASONS_SEASON_WATCHING, json)
+        match dispatch(&OP_SEASONS_GET_SHOWS_ID_SEASONS_SEASON_WATCHING, json).and_then(iface_seasons__get_shows_id_seasons_season_watching__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_seasons__get_shows_id_seasons_season_watching__err(e)),
+        }
     }
 }
 use crate::exports::autostamp::trakt::episodes as iface_episodes;
@@ -3394,11 +5018,11 @@ const OP_EPISODES_GET_A_SINGLE_EPISODE_FOR_A_SHOW: OpSpec = OpSpec {
     method: "GET",
     path_template: "/shows/{id}/seasons/{season}/episodes/{episode}",
     fields: &[
-        FieldSpec { snake: "id", location: FieldLocation::Path },
-        FieldSpec { snake: "season", location: FieldLocation::Path },
-        FieldSpec { snake: "episode", location: FieldLocation::Path },
-        FieldSpec { snake: "trakt_api_version", location: FieldLocation::Header },
-        FieldSpec { snake: "trakt_api_key", location: FieldLocation::Header },
+        FieldSpec { snake: "id", wire: "id", location: FieldLocation::Path },
+        FieldSpec { snake: "season", wire: "season", location: FieldLocation::Path },
+        FieldSpec { snake: "episode", wire: "episode", location: FieldLocation::Path },
+        FieldSpec { snake: "trakt_api_version", wire: "trakt-api-version", location: FieldLocation::Header },
+        FieldSpec { snake: "trakt_api_key", wire: "trakt-api-key", location: FieldLocation::Header },
     ],
     auth: &[
     ],
@@ -3408,12 +5032,12 @@ const OP_EPISODES_GET_ALL_EPISODE_COMMENTS: OpSpec = OpSpec {
     method: "GET",
     path_template: "/shows/{id}/seasons/{season}/episodes/{episode}/comments/{sort}",
     fields: &[
-        FieldSpec { snake: "id", location: FieldLocation::Path },
-        FieldSpec { snake: "season", location: FieldLocation::Path },
-        FieldSpec { snake: "episode", location: FieldLocation::Path },
-        FieldSpec { snake: "sort", location: FieldLocation::Path },
-        FieldSpec { snake: "trakt_api_version", location: FieldLocation::Header },
-        FieldSpec { snake: "trakt_api_key", location: FieldLocation::Header },
+        FieldSpec { snake: "id", wire: "id", location: FieldLocation::Path },
+        FieldSpec { snake: "season", wire: "season", location: FieldLocation::Path },
+        FieldSpec { snake: "episode", wire: "episode", location: FieldLocation::Path },
+        FieldSpec { snake: "sort", wire: "sort", location: FieldLocation::Path },
+        FieldSpec { snake: "trakt_api_version", wire: "trakt-api-version", location: FieldLocation::Header },
+        FieldSpec { snake: "trakt_api_key", wire: "trakt-api-key", location: FieldLocation::Header },
     ],
     auth: &[
     ],
@@ -3423,13 +5047,13 @@ const OP_EPISODES_GET_LISTS_CONTAINING_THIS_EPISODE: OpSpec = OpSpec {
     method: "GET",
     path_template: "/shows/{id}/seasons/{season}/episodes/{episode}/lists/{type}/{sort}",
     fields: &[
-        FieldSpec { snake: "id", location: FieldLocation::Path },
-        FieldSpec { snake: "season", location: FieldLocation::Path },
-        FieldSpec { snake: "episode", location: FieldLocation::Path },
-        FieldSpec { snake: "type", location: FieldLocation::Path },
-        FieldSpec { snake: "sort", location: FieldLocation::Path },
-        FieldSpec { snake: "trakt_api_version", location: FieldLocation::Header },
-        FieldSpec { snake: "trakt_api_key", location: FieldLocation::Header },
+        FieldSpec { snake: "id", wire: "id", location: FieldLocation::Path },
+        FieldSpec { snake: "season", wire: "season", location: FieldLocation::Path },
+        FieldSpec { snake: "episode", wire: "episode", location: FieldLocation::Path },
+        FieldSpec { snake: "type", wire: "type", location: FieldLocation::Path },
+        FieldSpec { snake: "sort", wire: "sort", location: FieldLocation::Path },
+        FieldSpec { snake: "trakt_api_version", wire: "trakt-api-version", location: FieldLocation::Header },
+        FieldSpec { snake: "trakt_api_key", wire: "trakt-api-key", location: FieldLocation::Header },
     ],
     auth: &[
     ],
@@ -3439,11 +5063,11 @@ const OP_EPISODES_GET_ALL_PEOPLE_FOR_AN_EPISODE: OpSpec = OpSpec {
     method: "GET",
     path_template: "/shows/{id}/seasons/{season}/episodes/{episode}/people",
     fields: &[
-        FieldSpec { snake: "id", location: FieldLocation::Path },
-        FieldSpec { snake: "season", location: FieldLocation::Path },
-        FieldSpec { snake: "episode", location: FieldLocation::Path },
-        FieldSpec { snake: "trakt_api_version", location: FieldLocation::Header },
-        FieldSpec { snake: "trakt_api_key", location: FieldLocation::Header },
+        FieldSpec { snake: "id", wire: "id", location: FieldLocation::Path },
+        FieldSpec { snake: "season", wire: "season", location: FieldLocation::Path },
+        FieldSpec { snake: "episode", wire: "episode", location: FieldLocation::Path },
+        FieldSpec { snake: "trakt_api_version", wire: "trakt-api-version", location: FieldLocation::Header },
+        FieldSpec { snake: "trakt_api_key", wire: "trakt-api-key", location: FieldLocation::Header },
     ],
     auth: &[
     ],
@@ -3453,11 +5077,11 @@ const OP_EPISODES_GET_EPISODE_RATINGS: OpSpec = OpSpec {
     method: "GET",
     path_template: "/shows/{id}/seasons/{season}/episodes/{episode}/ratings",
     fields: &[
-        FieldSpec { snake: "id", location: FieldLocation::Path },
-        FieldSpec { snake: "season", location: FieldLocation::Path },
-        FieldSpec { snake: "episode", location: FieldLocation::Path },
-        FieldSpec { snake: "trakt_api_version", location: FieldLocation::Header },
-        FieldSpec { snake: "trakt_api_key", location: FieldLocation::Header },
+        FieldSpec { snake: "id", wire: "id", location: FieldLocation::Path },
+        FieldSpec { snake: "season", wire: "season", location: FieldLocation::Path },
+        FieldSpec { snake: "episode", wire: "episode", location: FieldLocation::Path },
+        FieldSpec { snake: "trakt_api_version", wire: "trakt-api-version", location: FieldLocation::Header },
+        FieldSpec { snake: "trakt_api_key", wire: "trakt-api-key", location: FieldLocation::Header },
     ],
     auth: &[
     ],
@@ -3467,11 +5091,11 @@ const OP_EPISODES_GET_EPISODE_STATS: OpSpec = OpSpec {
     method: "GET",
     path_template: "/shows/{id}/seasons/{season}/episodes/{episode}/stats",
     fields: &[
-        FieldSpec { snake: "id", location: FieldLocation::Path },
-        FieldSpec { snake: "season", location: FieldLocation::Path },
-        FieldSpec { snake: "episode", location: FieldLocation::Path },
-        FieldSpec { snake: "trakt_api_version", location: FieldLocation::Header },
-        FieldSpec { snake: "trakt_api_key", location: FieldLocation::Header },
+        FieldSpec { snake: "id", wire: "id", location: FieldLocation::Path },
+        FieldSpec { snake: "season", wire: "season", location: FieldLocation::Path },
+        FieldSpec { snake: "episode", wire: "episode", location: FieldLocation::Path },
+        FieldSpec { snake: "trakt_api_version", wire: "trakt-api-version", location: FieldLocation::Header },
+        FieldSpec { snake: "trakt_api_key", wire: "trakt-api-key", location: FieldLocation::Header },
     ],
     auth: &[
     ],
@@ -3481,12 +5105,12 @@ const OP_EPISODES_GET_ALL_EPISODE_TRANSLATIONS: OpSpec = OpSpec {
     method: "GET",
     path_template: "/shows/{id}/seasons/{season}/episodes/{episode}/translations/{language}",
     fields: &[
-        FieldSpec { snake: "id", location: FieldLocation::Path },
-        FieldSpec { snake: "season", location: FieldLocation::Path },
-        FieldSpec { snake: "episode", location: FieldLocation::Path },
-        FieldSpec { snake: "language", location: FieldLocation::Path },
-        FieldSpec { snake: "trakt_api_version", location: FieldLocation::Header },
-        FieldSpec { snake: "trakt_api_key", location: FieldLocation::Header },
+        FieldSpec { snake: "id", wire: "id", location: FieldLocation::Path },
+        FieldSpec { snake: "season", wire: "season", location: FieldLocation::Path },
+        FieldSpec { snake: "episode", wire: "episode", location: FieldLocation::Path },
+        FieldSpec { snake: "language", wire: "language", location: FieldLocation::Path },
+        FieldSpec { snake: "trakt_api_version", wire: "trakt-api-version", location: FieldLocation::Header },
+        FieldSpec { snake: "trakt_api_key", wire: "trakt-api-key", location: FieldLocation::Header },
     ],
     auth: &[
     ],
@@ -3496,11 +5120,11 @@ const OP_EPISODES_GET_SHOWS_ID_SEASONS_SEASON_EPISODES_EPISODE_WATCHING: OpSpec 
     method: "GET",
     path_template: "/shows/{id}/seasons/{season}/episodes/{episode}/watching",
     fields: &[
-        FieldSpec { snake: "id", location: FieldLocation::Path },
-        FieldSpec { snake: "season", location: FieldLocation::Path },
-        FieldSpec { snake: "episode", location: FieldLocation::Path },
-        FieldSpec { snake: "trakt_api_version", location: FieldLocation::Header },
-        FieldSpec { snake: "trakt_api_key", location: FieldLocation::Header },
+        FieldSpec { snake: "id", wire: "id", location: FieldLocation::Path },
+        FieldSpec { snake: "season", wire: "season", location: FieldLocation::Path },
+        FieldSpec { snake: "episode", wire: "episode", location: FieldLocation::Path },
+        FieldSpec { snake: "trakt_api_version", wire: "trakt-api-version", location: FieldLocation::Header },
+        FieldSpec { snake: "trakt_api_key", wire: "trakt-api-key", location: FieldLocation::Header },
     ],
     auth: &[
     ],
@@ -3590,38 +5214,150 @@ fn iface_episodes__get_shows_id_seasons_season_episodes_episode_watching_params_
     Value::Object(m)
 }
 
+fn iface_episodes__get_a_single_episode_for_a_show__ok(body: String) -> Result<String, crate::runtime::DispatchError> {
+    Ok(body)
+}
+
+fn iface_episodes__get_a_single_episode_for_a_show__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
+fn iface_episodes__get_all_episode_comments__ok(body: String) -> Result<String, crate::runtime::DispatchError> {
+    Ok(body)
+}
+
+fn iface_episodes__get_all_episode_comments__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
+fn iface_episodes__get_lists_containing_this_episode__ok(body: String) -> Result<String, crate::runtime::DispatchError> {
+    Ok(body)
+}
+
+fn iface_episodes__get_lists_containing_this_episode__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
+fn iface_episodes__get_all_people_for_an_episode__ok(body: String) -> Result<String, crate::runtime::DispatchError> {
+    Ok(body)
+}
+
+fn iface_episodes__get_all_people_for_an_episode__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
+fn iface_episodes__get_episode_ratings__ok(body: String) -> Result<String, crate::runtime::DispatchError> {
+    Ok(body)
+}
+
+fn iface_episodes__get_episode_ratings__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
+fn iface_episodes__get_episode_stats__ok(body: String) -> Result<String, crate::runtime::DispatchError> {
+    Ok(body)
+}
+
+fn iface_episodes__get_episode_stats__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
+fn iface_episodes__get_all_episode_translations__ok(body: String) -> Result<String, crate::runtime::DispatchError> {
+    Ok(body)
+}
+
+fn iface_episodes__get_all_episode_translations__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
+fn iface_episodes__get_shows_id_seasons_season_episodes_episode_watching__ok(body: String) -> Result<String, crate::runtime::DispatchError> {
+    Ok(body)
+}
+
+fn iface_episodes__get_shows_id_seasons_season_episodes_episode_watching__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
 impl iface_episodes::Guest for crate::Component {
     fn get_a_single_episode_for_a_show(params: iface_episodes::GetASingleEpisodeForAShowParams) -> Result<String, String> {
         let json = iface_episodes__get_a_single_episode_for_a_show_params__to_json(&params);
-        dispatch(&OP_EPISODES_GET_A_SINGLE_EPISODE_FOR_A_SHOW, json)
+        match dispatch(&OP_EPISODES_GET_A_SINGLE_EPISODE_FOR_A_SHOW, json).and_then(iface_episodes__get_a_single_episode_for_a_show__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_episodes__get_a_single_episode_for_a_show__err(e)),
+        }
     }
     fn get_all_episode_comments(params: iface_episodes::GetAllEpisodeCommentsParams) -> Result<String, String> {
         let json = iface_episodes__get_all_episode_comments_params__to_json(&params);
-        dispatch(&OP_EPISODES_GET_ALL_EPISODE_COMMENTS, json)
+        match dispatch(&OP_EPISODES_GET_ALL_EPISODE_COMMENTS, json).and_then(iface_episodes__get_all_episode_comments__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_episodes__get_all_episode_comments__err(e)),
+        }
     }
     fn get_lists_containing_this_episode(params: iface_episodes::GetListsContainingThisEpisodeParams) -> Result<String, String> {
         let json = iface_episodes__get_lists_containing_this_episode_params__to_json(&params);
-        dispatch(&OP_EPISODES_GET_LISTS_CONTAINING_THIS_EPISODE, json)
+        match dispatch(&OP_EPISODES_GET_LISTS_CONTAINING_THIS_EPISODE, json).and_then(iface_episodes__get_lists_containing_this_episode__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_episodes__get_lists_containing_this_episode__err(e)),
+        }
     }
     fn get_all_people_for_an_episode(params: iface_episodes::GetAllPeopleForAnEpisodeParams) -> Result<String, String> {
         let json = iface_episodes__get_all_people_for_an_episode_params__to_json(&params);
-        dispatch(&OP_EPISODES_GET_ALL_PEOPLE_FOR_AN_EPISODE, json)
+        match dispatch(&OP_EPISODES_GET_ALL_PEOPLE_FOR_AN_EPISODE, json).and_then(iface_episodes__get_all_people_for_an_episode__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_episodes__get_all_people_for_an_episode__err(e)),
+        }
     }
     fn get_episode_ratings(params: iface_episodes::GetEpisodeRatingsParams) -> Result<String, String> {
         let json = iface_episodes__get_episode_ratings_params__to_json(&params);
-        dispatch(&OP_EPISODES_GET_EPISODE_RATINGS, json)
+        match dispatch(&OP_EPISODES_GET_EPISODE_RATINGS, json).and_then(iface_episodes__get_episode_ratings__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_episodes__get_episode_ratings__err(e)),
+        }
     }
     fn get_episode_stats(params: iface_episodes::GetEpisodeStatsParams) -> Result<String, String> {
         let json = iface_episodes__get_episode_stats_params__to_json(&params);
-        dispatch(&OP_EPISODES_GET_EPISODE_STATS, json)
+        match dispatch(&OP_EPISODES_GET_EPISODE_STATS, json).and_then(iface_episodes__get_episode_stats__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_episodes__get_episode_stats__err(e)),
+        }
     }
     fn get_all_episode_translations(params: iface_episodes::GetAllEpisodeTranslationsParams) -> Result<String, String> {
         let json = iface_episodes__get_all_episode_translations_params__to_json(&params);
-        dispatch(&OP_EPISODES_GET_ALL_EPISODE_TRANSLATIONS, json)
+        match dispatch(&OP_EPISODES_GET_ALL_EPISODE_TRANSLATIONS, json).and_then(iface_episodes__get_all_episode_translations__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_episodes__get_all_episode_translations__err(e)),
+        }
     }
     fn get_shows_id_seasons_season_episodes_episode_watching(params: iface_episodes::GetShowsIdSeasonsSeasonEpisodesEpisodeWatchingParams) -> Result<String, String> {
         let json = iface_episodes__get_shows_id_seasons_season_episodes_episode_watching_params__to_json(&params);
-        dispatch(&OP_EPISODES_GET_SHOWS_ID_SEASONS_SEASON_EPISODES_EPISODE_WATCHING, json)
+        match dispatch(&OP_EPISODES_GET_SHOWS_ID_SEASONS_SEASON_EPISODES_EPISODE_WATCHING, json).and_then(iface_episodes__get_shows_id_seasons_season_episodes_episode_watching__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_episodes__get_shows_id_seasons_season_episodes_episode_watching__err(e)),
+        }
     }
 }
 use crate::exports::autostamp::trakt::sync as iface_sync;
@@ -3630,12 +5366,12 @@ const OP_SYNC_ADD_ITEMS_TO_COLLECTION: OpSpec = OpSpec {
     method: "POST",
     path_template: "/sync/collection",
     fields: &[
-        FieldSpec { snake: "trakt_api_version", location: FieldLocation::Header },
-        FieldSpec { snake: "trakt_api_key", location: FieldLocation::Header },
-        FieldSpec { snake: "episodes", location: FieldLocation::Body },
-        FieldSpec { snake: "movies", location: FieldLocation::Body },
-        FieldSpec { snake: "seasons", location: FieldLocation::Body },
-        FieldSpec { snake: "shows", location: FieldLocation::Body },
+        FieldSpec { snake: "trakt_api_version", wire: "trakt-api-version", location: FieldLocation::Header },
+        FieldSpec { snake: "trakt_api_key", wire: "trakt-api-key", location: FieldLocation::Header },
+        FieldSpec { snake: "episodes", wire: "episodes", location: FieldLocation::Body },
+        FieldSpec { snake: "movies", wire: "movies", location: FieldLocation::Body },
+        FieldSpec { snake: "seasons", wire: "seasons", location: FieldLocation::Body },
+        FieldSpec { snake: "shows", wire: "shows", location: FieldLocation::Body },
     ],
     auth: &[
         AuthApply { secret_key: "oauth2", kind: AuthKind::Bearer },
@@ -3646,12 +5382,12 @@ const OP_SYNC_REMOVE_ITEMS_FROM_COLLECTION: OpSpec = OpSpec {
     method: "POST",
     path_template: "/sync/collection/remove",
     fields: &[
-        FieldSpec { snake: "trakt_api_version", location: FieldLocation::Header },
-        FieldSpec { snake: "trakt_api_key", location: FieldLocation::Header },
-        FieldSpec { snake: "episodes", location: FieldLocation::Body },
-        FieldSpec { snake: "movies", location: FieldLocation::Body },
-        FieldSpec { snake: "seasons", location: FieldLocation::Body },
-        FieldSpec { snake: "shows", location: FieldLocation::Body },
+        FieldSpec { snake: "trakt_api_version", wire: "trakt-api-version", location: FieldLocation::Header },
+        FieldSpec { snake: "trakt_api_key", wire: "trakt-api-key", location: FieldLocation::Header },
+        FieldSpec { snake: "episodes", wire: "episodes", location: FieldLocation::Body },
+        FieldSpec { snake: "movies", wire: "movies", location: FieldLocation::Body },
+        FieldSpec { snake: "seasons", wire: "seasons", location: FieldLocation::Body },
+        FieldSpec { snake: "shows", wire: "shows", location: FieldLocation::Body },
     ],
     auth: &[
         AuthApply { secret_key: "oauth2", kind: AuthKind::Bearer },
@@ -3662,9 +5398,9 @@ const OP_SYNC_GET_COLLECTION: OpSpec = OpSpec {
     method: "GET",
     path_template: "/sync/collection/{type}",
     fields: &[
-        FieldSpec { snake: "type", location: FieldLocation::Path },
-        FieldSpec { snake: "trakt_api_version", location: FieldLocation::Header },
-        FieldSpec { snake: "trakt_api_key", location: FieldLocation::Header },
+        FieldSpec { snake: "type", wire: "type", location: FieldLocation::Path },
+        FieldSpec { snake: "trakt_api_version", wire: "trakt-api-version", location: FieldLocation::Header },
+        FieldSpec { snake: "trakt_api_key", wire: "trakt-api-key", location: FieldLocation::Header },
     ],
     auth: &[
         AuthApply { secret_key: "oauth2", kind: AuthKind::Bearer },
@@ -3675,12 +5411,12 @@ const OP_SYNC_ADD_ITEMS_TO_WATCHED_HISTORY: OpSpec = OpSpec {
     method: "POST",
     path_template: "/sync/history",
     fields: &[
-        FieldSpec { snake: "trakt_api_version", location: FieldLocation::Header },
-        FieldSpec { snake: "trakt_api_key", location: FieldLocation::Header },
-        FieldSpec { snake: "episodes", location: FieldLocation::Body },
-        FieldSpec { snake: "movies", location: FieldLocation::Body },
-        FieldSpec { snake: "seasons", location: FieldLocation::Body },
-        FieldSpec { snake: "shows", location: FieldLocation::Body },
+        FieldSpec { snake: "trakt_api_version", wire: "trakt-api-version", location: FieldLocation::Header },
+        FieldSpec { snake: "trakt_api_key", wire: "trakt-api-key", location: FieldLocation::Header },
+        FieldSpec { snake: "episodes", wire: "episodes", location: FieldLocation::Body },
+        FieldSpec { snake: "movies", wire: "movies", location: FieldLocation::Body },
+        FieldSpec { snake: "seasons", wire: "seasons", location: FieldLocation::Body },
+        FieldSpec { snake: "shows", wire: "shows", location: FieldLocation::Body },
     ],
     auth: &[
         AuthApply { secret_key: "oauth2", kind: AuthKind::Bearer },
@@ -3691,13 +5427,13 @@ const OP_SYNC_REMOVE_ITEMS_FROM_HISTORY: OpSpec = OpSpec {
     method: "POST",
     path_template: "/sync/history/remove",
     fields: &[
-        FieldSpec { snake: "trakt_api_version", location: FieldLocation::Header },
-        FieldSpec { snake: "trakt_api_key", location: FieldLocation::Header },
-        FieldSpec { snake: "episodes", location: FieldLocation::Body },
-        FieldSpec { snake: "ids", location: FieldLocation::Body },
-        FieldSpec { snake: "movies", location: FieldLocation::Body },
-        FieldSpec { snake: "seasons", location: FieldLocation::Body },
-        FieldSpec { snake: "shows", location: FieldLocation::Body },
+        FieldSpec { snake: "trakt_api_version", wire: "trakt-api-version", location: FieldLocation::Header },
+        FieldSpec { snake: "trakt_api_key", wire: "trakt-api-key", location: FieldLocation::Header },
+        FieldSpec { snake: "episodes", wire: "episodes", location: FieldLocation::Body },
+        FieldSpec { snake: "ids", wire: "ids", location: FieldLocation::Body },
+        FieldSpec { snake: "movies", wire: "movies", location: FieldLocation::Body },
+        FieldSpec { snake: "seasons", wire: "seasons", location: FieldLocation::Body },
+        FieldSpec { snake: "shows", wire: "shows", location: FieldLocation::Body },
     ],
     auth: &[
         AuthApply { secret_key: "oauth2", kind: AuthKind::Bearer },
@@ -3708,12 +5444,12 @@ const OP_SYNC_GET_WATCHED_HISTORY: OpSpec = OpSpec {
     method: "GET",
     path_template: "/sync/history/{type}/{id}",
     fields: &[
-        FieldSpec { snake: "type", location: FieldLocation::Path },
-        FieldSpec { snake: "id", location: FieldLocation::Path },
-        FieldSpec { snake: "start_at", location: FieldLocation::Query },
-        FieldSpec { snake: "end_at", location: FieldLocation::Query },
-        FieldSpec { snake: "trakt_api_version", location: FieldLocation::Header },
-        FieldSpec { snake: "trakt_api_key", location: FieldLocation::Header },
+        FieldSpec { snake: "type", wire: "type", location: FieldLocation::Path },
+        FieldSpec { snake: "id", wire: "id", location: FieldLocation::Path },
+        FieldSpec { snake: "start_at", wire: "start_at", location: FieldLocation::Query },
+        FieldSpec { snake: "end_at", wire: "end_at", location: FieldLocation::Query },
+        FieldSpec { snake: "trakt_api_version", wire: "trakt-api-version", location: FieldLocation::Header },
+        FieldSpec { snake: "trakt_api_key", wire: "trakt-api-key", location: FieldLocation::Header },
     ],
     auth: &[
         AuthApply { secret_key: "oauth2", kind: AuthKind::Bearer },
@@ -3724,8 +5460,8 @@ const OP_SYNC_GET_LAST_ACTIVITY: OpSpec = OpSpec {
     method: "GET",
     path_template: "/sync/last_activities",
     fields: &[
-        FieldSpec { snake: "trakt_api_version", location: FieldLocation::Header },
-        FieldSpec { snake: "trakt_api_key", location: FieldLocation::Header },
+        FieldSpec { snake: "trakt_api_version", wire: "trakt-api-version", location: FieldLocation::Header },
+        FieldSpec { snake: "trakt_api_key", wire: "trakt-api-key", location: FieldLocation::Header },
     ],
     auth: &[
         AuthApply { secret_key: "oauth2", kind: AuthKind::Bearer },
@@ -3736,9 +5472,9 @@ const OP_SYNC_REMOVE_A_PLAYBACK_ITEM: OpSpec = OpSpec {
     method: "DELETE",
     path_template: "/sync/playback/{id}",
     fields: &[
-        FieldSpec { snake: "id", location: FieldLocation::Path },
-        FieldSpec { snake: "trakt_api_version", location: FieldLocation::Header },
-        FieldSpec { snake: "trakt_api_key", location: FieldLocation::Header },
+        FieldSpec { snake: "id", wire: "id", location: FieldLocation::Path },
+        FieldSpec { snake: "trakt_api_version", wire: "trakt-api-version", location: FieldLocation::Header },
+        FieldSpec { snake: "trakt_api_key", wire: "trakt-api-key", location: FieldLocation::Header },
     ],
     auth: &[
         AuthApply { secret_key: "oauth2", kind: AuthKind::Bearer },
@@ -3749,11 +5485,11 @@ const OP_SYNC_GET_PLAYBACK_PROGRESS: OpSpec = OpSpec {
     method: "GET",
     path_template: "/sync/playback/{type}",
     fields: &[
-        FieldSpec { snake: "type", location: FieldLocation::Path },
-        FieldSpec { snake: "start_at", location: FieldLocation::Query },
-        FieldSpec { snake: "end_at", location: FieldLocation::Query },
-        FieldSpec { snake: "trakt_api_version", location: FieldLocation::Header },
-        FieldSpec { snake: "trakt_api_key", location: FieldLocation::Header },
+        FieldSpec { snake: "type", wire: "type", location: FieldLocation::Path },
+        FieldSpec { snake: "start_at", wire: "start_at", location: FieldLocation::Query },
+        FieldSpec { snake: "end_at", wire: "end_at", location: FieldLocation::Query },
+        FieldSpec { snake: "trakt_api_version", wire: "trakt-api-version", location: FieldLocation::Header },
+        FieldSpec { snake: "trakt_api_key", wire: "trakt-api-key", location: FieldLocation::Header },
     ],
     auth: &[
         AuthApply { secret_key: "oauth2", kind: AuthKind::Bearer },
@@ -3764,12 +5500,12 @@ const OP_SYNC_ADD_NEW_RATINGS: OpSpec = OpSpec {
     method: "POST",
     path_template: "/sync/ratings",
     fields: &[
-        FieldSpec { snake: "trakt_api_version", location: FieldLocation::Header },
-        FieldSpec { snake: "trakt_api_key", location: FieldLocation::Header },
-        FieldSpec { snake: "episodes", location: FieldLocation::Body },
-        FieldSpec { snake: "movies", location: FieldLocation::Body },
-        FieldSpec { snake: "seasons", location: FieldLocation::Body },
-        FieldSpec { snake: "shows", location: FieldLocation::Body },
+        FieldSpec { snake: "trakt_api_version", wire: "trakt-api-version", location: FieldLocation::Header },
+        FieldSpec { snake: "trakt_api_key", wire: "trakt-api-key", location: FieldLocation::Header },
+        FieldSpec { snake: "episodes", wire: "episodes", location: FieldLocation::Body },
+        FieldSpec { snake: "movies", wire: "movies", location: FieldLocation::Body },
+        FieldSpec { snake: "seasons", wire: "seasons", location: FieldLocation::Body },
+        FieldSpec { snake: "shows", wire: "shows", location: FieldLocation::Body },
     ],
     auth: &[
         AuthApply { secret_key: "oauth2", kind: AuthKind::Bearer },
@@ -3780,12 +5516,12 @@ const OP_SYNC_REMOVE_RATINGS: OpSpec = OpSpec {
     method: "POST",
     path_template: "/sync/ratings/remove",
     fields: &[
-        FieldSpec { snake: "trakt_api_version", location: FieldLocation::Header },
-        FieldSpec { snake: "trakt_api_key", location: FieldLocation::Header },
-        FieldSpec { snake: "episodes", location: FieldLocation::Body },
-        FieldSpec { snake: "movies", location: FieldLocation::Body },
-        FieldSpec { snake: "seasons", location: FieldLocation::Body },
-        FieldSpec { snake: "shows", location: FieldLocation::Body },
+        FieldSpec { snake: "trakt_api_version", wire: "trakt-api-version", location: FieldLocation::Header },
+        FieldSpec { snake: "trakt_api_key", wire: "trakt-api-key", location: FieldLocation::Header },
+        FieldSpec { snake: "episodes", wire: "episodes", location: FieldLocation::Body },
+        FieldSpec { snake: "movies", wire: "movies", location: FieldLocation::Body },
+        FieldSpec { snake: "seasons", wire: "seasons", location: FieldLocation::Body },
+        FieldSpec { snake: "shows", wire: "shows", location: FieldLocation::Body },
     ],
     auth: &[
         AuthApply { secret_key: "oauth2", kind: AuthKind::Bearer },
@@ -3796,10 +5532,10 @@ const OP_SYNC_GET_RATINGS: OpSpec = OpSpec {
     method: "GET",
     path_template: "/sync/ratings/{type}/{rating}",
     fields: &[
-        FieldSpec { snake: "type", location: FieldLocation::Path },
-        FieldSpec { snake: "rating", location: FieldLocation::Path },
-        FieldSpec { snake: "trakt_api_version", location: FieldLocation::Header },
-        FieldSpec { snake: "trakt_api_key", location: FieldLocation::Header },
+        FieldSpec { snake: "type", wire: "type", location: FieldLocation::Path },
+        FieldSpec { snake: "rating", wire: "rating", location: FieldLocation::Path },
+        FieldSpec { snake: "trakt_api_version", wire: "trakt-api-version", location: FieldLocation::Header },
+        FieldSpec { snake: "trakt_api_key", wire: "trakt-api-key", location: FieldLocation::Header },
     ],
     auth: &[
         AuthApply { secret_key: "oauth2", kind: AuthKind::Bearer },
@@ -3810,10 +5546,10 @@ const OP_SYNC_ADD_ITEMS_TO_PERSONAL_RECOMMENDATIONS: OpSpec = OpSpec {
     method: "POST",
     path_template: "/sync/recommendations",
     fields: &[
-        FieldSpec { snake: "trakt_api_version", location: FieldLocation::Header },
-        FieldSpec { snake: "trakt_api_key", location: FieldLocation::Header },
-        FieldSpec { snake: "movies", location: FieldLocation::Body },
-        FieldSpec { snake: "shows", location: FieldLocation::Body },
+        FieldSpec { snake: "trakt_api_version", wire: "trakt-api-version", location: FieldLocation::Header },
+        FieldSpec { snake: "trakt_api_key", wire: "trakt-api-key", location: FieldLocation::Header },
+        FieldSpec { snake: "movies", wire: "movies", location: FieldLocation::Body },
+        FieldSpec { snake: "shows", wire: "shows", location: FieldLocation::Body },
     ],
     auth: &[
         AuthApply { secret_key: "oauth2", kind: AuthKind::Bearer },
@@ -3824,10 +5560,10 @@ const OP_SYNC_REMOVE_ITEMS_FROM_PERSONAL_RECOMMENDATIONS: OpSpec = OpSpec {
     method: "POST",
     path_template: "/sync/recommendations/remove",
     fields: &[
-        FieldSpec { snake: "trakt_api_version", location: FieldLocation::Header },
-        FieldSpec { snake: "trakt_api_key", location: FieldLocation::Header },
-        FieldSpec { snake: "movies", location: FieldLocation::Body },
-        FieldSpec { snake: "shows", location: FieldLocation::Body },
+        FieldSpec { snake: "trakt_api_version", wire: "trakt-api-version", location: FieldLocation::Header },
+        FieldSpec { snake: "trakt_api_key", wire: "trakt-api-key", location: FieldLocation::Header },
+        FieldSpec { snake: "movies", wire: "movies", location: FieldLocation::Body },
+        FieldSpec { snake: "shows", wire: "shows", location: FieldLocation::Body },
     ],
     auth: &[
         AuthApply { secret_key: "oauth2", kind: AuthKind::Bearer },
@@ -3838,9 +5574,9 @@ const OP_SYNC_REORDER_PERSONALLY_RECOMMENDED_ITEMS: OpSpec = OpSpec {
     method: "POST",
     path_template: "/sync/recommendations/reorder",
     fields: &[
-        FieldSpec { snake: "trakt_api_version", location: FieldLocation::Header },
-        FieldSpec { snake: "trakt_api_key", location: FieldLocation::Header },
-        FieldSpec { snake: "rank", location: FieldLocation::Body },
+        FieldSpec { snake: "trakt_api_version", wire: "trakt-api-version", location: FieldLocation::Header },
+        FieldSpec { snake: "trakt_api_key", wire: "trakt-api-key", location: FieldLocation::Header },
+        FieldSpec { snake: "rank", wire: "rank", location: FieldLocation::Body },
     ],
     auth: &[
         AuthApply { secret_key: "oauth2", kind: AuthKind::Bearer },
@@ -3851,10 +5587,10 @@ const OP_SYNC_GET_PERSONAL_RECOMMENDATIONS: OpSpec = OpSpec {
     method: "GET",
     path_template: "/sync/recommendations/{type}/{sort}",
     fields: &[
-        FieldSpec { snake: "type", location: FieldLocation::Path },
-        FieldSpec { snake: "sort", location: FieldLocation::Path },
-        FieldSpec { snake: "trakt_api_version", location: FieldLocation::Header },
-        FieldSpec { snake: "trakt_api_key", location: FieldLocation::Header },
+        FieldSpec { snake: "type", wire: "type", location: FieldLocation::Path },
+        FieldSpec { snake: "sort", wire: "sort", location: FieldLocation::Path },
+        FieldSpec { snake: "trakt_api_version", wire: "trakt-api-version", location: FieldLocation::Header },
+        FieldSpec { snake: "trakt_api_key", wire: "trakt-api-key", location: FieldLocation::Header },
     ],
     auth: &[
         AuthApply { secret_key: "oauth2", kind: AuthKind::Bearer },
@@ -3865,9 +5601,9 @@ const OP_SYNC_GET_WATCHED: OpSpec = OpSpec {
     method: "GET",
     path_template: "/sync/watched/{type}",
     fields: &[
-        FieldSpec { snake: "type", location: FieldLocation::Path },
-        FieldSpec { snake: "trakt_api_version", location: FieldLocation::Header },
-        FieldSpec { snake: "trakt_api_key", location: FieldLocation::Header },
+        FieldSpec { snake: "type", wire: "type", location: FieldLocation::Path },
+        FieldSpec { snake: "trakt_api_version", wire: "trakt-api-version", location: FieldLocation::Header },
+        FieldSpec { snake: "trakt_api_key", wire: "trakt-api-key", location: FieldLocation::Header },
     ],
     auth: &[
         AuthApply { secret_key: "oauth2", kind: AuthKind::Bearer },
@@ -3878,12 +5614,12 @@ const OP_SYNC_ADD_ITEMS_TO_WATCHLIST: OpSpec = OpSpec {
     method: "POST",
     path_template: "/sync/watchlist",
     fields: &[
-        FieldSpec { snake: "trakt_api_version", location: FieldLocation::Header },
-        FieldSpec { snake: "trakt_api_key", location: FieldLocation::Header },
-        FieldSpec { snake: "episodes", location: FieldLocation::Body },
-        FieldSpec { snake: "movies", location: FieldLocation::Body },
-        FieldSpec { snake: "seasons", location: FieldLocation::Body },
-        FieldSpec { snake: "shows", location: FieldLocation::Body },
+        FieldSpec { snake: "trakt_api_version", wire: "trakt-api-version", location: FieldLocation::Header },
+        FieldSpec { snake: "trakt_api_key", wire: "trakt-api-key", location: FieldLocation::Header },
+        FieldSpec { snake: "episodes", wire: "episodes", location: FieldLocation::Body },
+        FieldSpec { snake: "movies", wire: "movies", location: FieldLocation::Body },
+        FieldSpec { snake: "seasons", wire: "seasons", location: FieldLocation::Body },
+        FieldSpec { snake: "shows", wire: "shows", location: FieldLocation::Body },
     ],
     auth: &[
         AuthApply { secret_key: "oauth2", kind: AuthKind::Bearer },
@@ -3894,12 +5630,12 @@ const OP_SYNC_REMOVE_ITEMS_FROM_WATCHLIST: OpSpec = OpSpec {
     method: "POST",
     path_template: "/sync/watchlist/remove",
     fields: &[
-        FieldSpec { snake: "trakt_api_version", location: FieldLocation::Header },
-        FieldSpec { snake: "trakt_api_key", location: FieldLocation::Header },
-        FieldSpec { snake: "episodes", location: FieldLocation::Body },
-        FieldSpec { snake: "movies", location: FieldLocation::Body },
-        FieldSpec { snake: "seasons", location: FieldLocation::Body },
-        FieldSpec { snake: "shows", location: FieldLocation::Body },
+        FieldSpec { snake: "trakt_api_version", wire: "trakt-api-version", location: FieldLocation::Header },
+        FieldSpec { snake: "trakt_api_key", wire: "trakt-api-key", location: FieldLocation::Header },
+        FieldSpec { snake: "episodes", wire: "episodes", location: FieldLocation::Body },
+        FieldSpec { snake: "movies", wire: "movies", location: FieldLocation::Body },
+        FieldSpec { snake: "seasons", wire: "seasons", location: FieldLocation::Body },
+        FieldSpec { snake: "shows", wire: "shows", location: FieldLocation::Body },
     ],
     auth: &[
         AuthApply { secret_key: "oauth2", kind: AuthKind::Bearer },
@@ -3910,9 +5646,9 @@ const OP_SYNC_REORDER_WATCHLIST_ITEMS: OpSpec = OpSpec {
     method: "POST",
     path_template: "/sync/watchlist/reorder",
     fields: &[
-        FieldSpec { snake: "trakt_api_version", location: FieldLocation::Header },
-        FieldSpec { snake: "trakt_api_key", location: FieldLocation::Header },
-        FieldSpec { snake: "rank", location: FieldLocation::Body },
+        FieldSpec { snake: "trakt_api_version", wire: "trakt-api-version", location: FieldLocation::Header },
+        FieldSpec { snake: "trakt_api_key", wire: "trakt-api-key", location: FieldLocation::Header },
+        FieldSpec { snake: "rank", wire: "rank", location: FieldLocation::Body },
     ],
     auth: &[
         AuthApply { secret_key: "oauth2", kind: AuthKind::Bearer },
@@ -3923,10 +5659,10 @@ const OP_SYNC_GET_WATCHLIST: OpSpec = OpSpec {
     method: "GET",
     path_template: "/sync/watchlist/{type}/{sort}",
     fields: &[
-        FieldSpec { snake: "type", location: FieldLocation::Path },
-        FieldSpec { snake: "sort", location: FieldLocation::Path },
-        FieldSpec { snake: "trakt_api_version", location: FieldLocation::Header },
-        FieldSpec { snake: "trakt_api_key", location: FieldLocation::Header },
+        FieldSpec { snake: "type", wire: "type", location: FieldLocation::Path },
+        FieldSpec { snake: "sort", wire: "sort", location: FieldLocation::Path },
+        FieldSpec { snake: "trakt_api_version", wire: "trakt-api-version", location: FieldLocation::Header },
+        FieldSpec { snake: "trakt_api_key", wire: "trakt-api-key", location: FieldLocation::Header },
     ],
     auth: &[
         AuthApply { secret_key: "oauth2", kind: AuthKind::Bearer },
@@ -4855,90 +6591,387 @@ fn iface_sync__get_watchlist_params__to_json(p: &iface_sync::GetWatchlistParams)
     Value::Object(m)
 }
 
+fn iface_sync__add_items_to_collection__ok(body: String) -> Result<String, crate::runtime::DispatchError> {
+    Ok(body)
+}
+
+fn iface_sync__add_items_to_collection__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
+fn iface_sync__remove_items_from_collection__ok(body: String) -> Result<String, crate::runtime::DispatchError> {
+    Ok(body)
+}
+
+fn iface_sync__remove_items_from_collection__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
+fn iface_sync__get_collection__ok(body: String) -> Result<String, crate::runtime::DispatchError> {
+    Ok(body)
+}
+
+fn iface_sync__get_collection__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
+fn iface_sync__add_items_to_watched_history__ok(body: String) -> Result<String, crate::runtime::DispatchError> {
+    Ok(body)
+}
+
+fn iface_sync__add_items_to_watched_history__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
+fn iface_sync__remove_items_from_history__ok(body: String) -> Result<String, crate::runtime::DispatchError> {
+    Ok(body)
+}
+
+fn iface_sync__remove_items_from_history__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
+fn iface_sync__get_watched_history__ok(body: String) -> Result<String, crate::runtime::DispatchError> {
+    Ok(body)
+}
+
+fn iface_sync__get_watched_history__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
+fn iface_sync__get_last_activity__ok(body: String) -> Result<String, crate::runtime::DispatchError> {
+    Ok(body)
+}
+
+fn iface_sync__get_last_activity__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
+fn iface_sync__remove_a_playback_item__ok(body: String) -> Result<String, crate::runtime::DispatchError> {
+    Ok(body)
+}
+
+fn iface_sync__remove_a_playback_item__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
+fn iface_sync__get_playback_progress__ok(body: String) -> Result<String, crate::runtime::DispatchError> {
+    Ok(body)
+}
+
+fn iface_sync__get_playback_progress__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
+fn iface_sync__add_new_ratings__ok(body: String) -> Result<String, crate::runtime::DispatchError> {
+    Ok(body)
+}
+
+fn iface_sync__add_new_ratings__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
+fn iface_sync__remove_ratings__ok(body: String) -> Result<String, crate::runtime::DispatchError> {
+    Ok(body)
+}
+
+fn iface_sync__remove_ratings__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
+fn iface_sync__get_ratings__ok(body: String) -> Result<String, crate::runtime::DispatchError> {
+    Ok(body)
+}
+
+fn iface_sync__get_ratings__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
+fn iface_sync__add_items_to_personal_recommendations__ok(body: String) -> Result<String, crate::runtime::DispatchError> {
+    Ok(body)
+}
+
+fn iface_sync__add_items_to_personal_recommendations__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
+fn iface_sync__remove_items_from_personal_recommendations__ok(body: String) -> Result<String, crate::runtime::DispatchError> {
+    Ok(body)
+}
+
+fn iface_sync__remove_items_from_personal_recommendations__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
+fn iface_sync__reorder_personally_recommended_items__ok(body: String) -> Result<String, crate::runtime::DispatchError> {
+    Ok(body)
+}
+
+fn iface_sync__reorder_personally_recommended_items__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
+fn iface_sync__get_personal_recommendations__ok(body: String) -> Result<String, crate::runtime::DispatchError> {
+    Ok(body)
+}
+
+fn iface_sync__get_personal_recommendations__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
+fn iface_sync__get_watched__ok(body: String) -> Result<String, crate::runtime::DispatchError> {
+    Ok(body)
+}
+
+fn iface_sync__get_watched__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
+fn iface_sync__add_items_to_watchlist__ok(body: String) -> Result<String, crate::runtime::DispatchError> {
+    Ok(body)
+}
+
+fn iface_sync__add_items_to_watchlist__err(e: crate::runtime::DispatchError) -> iface_sync::AddItemsToWatchlistError {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => match status {
+            420u16 => iface_sync::AddItemsToWatchlistError::StatusV420(body),
+            _ => iface_sync::AddItemsToWatchlistError::Other(body),
+        },
+        crate::runtime::DispatchError::Transport(m) => iface_sync::AddItemsToWatchlistError::Other(m),
+    }
+}
+
+fn iface_sync__remove_items_from_watchlist__ok(body: String) -> Result<String, crate::runtime::DispatchError> {
+    Ok(body)
+}
+
+fn iface_sync__remove_items_from_watchlist__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
+fn iface_sync__reorder_watchlist_items__ok(body: String) -> Result<String, crate::runtime::DispatchError> {
+    Ok(body)
+}
+
+fn iface_sync__reorder_watchlist_items__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
+fn iface_sync__get_watchlist__ok(body: String) -> Result<String, crate::runtime::DispatchError> {
+    Ok(body)
+}
+
+fn iface_sync__get_watchlist__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
 impl iface_sync::Guest for crate::Component {
     fn add_items_to_collection(params: iface_sync::AddItemsToCollectionParams) -> Result<String, String> {
         let json = iface_sync__add_items_to_collection_params__to_json(&params);
-        dispatch(&OP_SYNC_ADD_ITEMS_TO_COLLECTION, json)
+        match dispatch(&OP_SYNC_ADD_ITEMS_TO_COLLECTION, json).and_then(iface_sync__add_items_to_collection__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_sync__add_items_to_collection__err(e)),
+        }
     }
     fn remove_items_from_collection(params: iface_sync::RemoveItemsFromCollectionParams) -> Result<String, String> {
         let json = iface_sync__remove_items_from_collection_params__to_json(&params);
-        dispatch(&OP_SYNC_REMOVE_ITEMS_FROM_COLLECTION, json)
+        match dispatch(&OP_SYNC_REMOVE_ITEMS_FROM_COLLECTION, json).and_then(iface_sync__remove_items_from_collection__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_sync__remove_items_from_collection__err(e)),
+        }
     }
     fn get_collection(params: iface_sync::GetCollectionParams) -> Result<String, String> {
         let json = iface_sync__get_collection_params__to_json(&params);
-        dispatch(&OP_SYNC_GET_COLLECTION, json)
+        match dispatch(&OP_SYNC_GET_COLLECTION, json).and_then(iface_sync__get_collection__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_sync__get_collection__err(e)),
+        }
     }
     fn add_items_to_watched_history(params: iface_sync::AddItemsToWatchedHistoryParams) -> Result<String, String> {
         let json = iface_sync__add_items_to_watched_history_params__to_json(&params);
-        dispatch(&OP_SYNC_ADD_ITEMS_TO_WATCHED_HISTORY, json)
+        match dispatch(&OP_SYNC_ADD_ITEMS_TO_WATCHED_HISTORY, json).and_then(iface_sync__add_items_to_watched_history__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_sync__add_items_to_watched_history__err(e)),
+        }
     }
     fn remove_items_from_history(params: iface_sync::RemoveItemsFromHistoryParams) -> Result<String, String> {
         let json = iface_sync__remove_items_from_history_params__to_json(&params);
-        dispatch(&OP_SYNC_REMOVE_ITEMS_FROM_HISTORY, json)
+        match dispatch(&OP_SYNC_REMOVE_ITEMS_FROM_HISTORY, json).and_then(iface_sync__remove_items_from_history__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_sync__remove_items_from_history__err(e)),
+        }
     }
     fn get_watched_history(params: iface_sync::GetWatchedHistoryParams) -> Result<String, String> {
         let json = iface_sync__get_watched_history_params__to_json(&params);
-        dispatch(&OP_SYNC_GET_WATCHED_HISTORY, json)
+        match dispatch(&OP_SYNC_GET_WATCHED_HISTORY, json).and_then(iface_sync__get_watched_history__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_sync__get_watched_history__err(e)),
+        }
     }
     fn get_last_activity(params: iface_sync::GetLastActivityParams) -> Result<String, String> {
         let json = iface_sync__get_last_activity_params__to_json(&params);
-        dispatch(&OP_SYNC_GET_LAST_ACTIVITY, json)
+        match dispatch(&OP_SYNC_GET_LAST_ACTIVITY, json).and_then(iface_sync__get_last_activity__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_sync__get_last_activity__err(e)),
+        }
     }
     fn remove_a_playback_item(params: iface_sync::RemoveAPlaybackItemParams) -> Result<String, String> {
         let json = iface_sync__remove_a_playback_item_params__to_json(&params);
-        dispatch(&OP_SYNC_REMOVE_A_PLAYBACK_ITEM, json)
+        match dispatch(&OP_SYNC_REMOVE_A_PLAYBACK_ITEM, json).and_then(iface_sync__remove_a_playback_item__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_sync__remove_a_playback_item__err(e)),
+        }
     }
     fn get_playback_progress(params: iface_sync::GetPlaybackProgressParams) -> Result<String, String> {
         let json = iface_sync__get_playback_progress_params__to_json(&params);
-        dispatch(&OP_SYNC_GET_PLAYBACK_PROGRESS, json)
+        match dispatch(&OP_SYNC_GET_PLAYBACK_PROGRESS, json).and_then(iface_sync__get_playback_progress__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_sync__get_playback_progress__err(e)),
+        }
     }
     fn add_new_ratings(params: iface_sync::AddNewRatingsParams) -> Result<String, String> {
         let json = iface_sync__add_new_ratings_params__to_json(&params);
-        dispatch(&OP_SYNC_ADD_NEW_RATINGS, json)
+        match dispatch(&OP_SYNC_ADD_NEW_RATINGS, json).and_then(iface_sync__add_new_ratings__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_sync__add_new_ratings__err(e)),
+        }
     }
     fn remove_ratings(params: iface_sync::RemoveRatingsParams) -> Result<String, String> {
         let json = iface_sync__remove_ratings_params__to_json(&params);
-        dispatch(&OP_SYNC_REMOVE_RATINGS, json)
+        match dispatch(&OP_SYNC_REMOVE_RATINGS, json).and_then(iface_sync__remove_ratings__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_sync__remove_ratings__err(e)),
+        }
     }
     fn get_ratings(params: iface_sync::GetRatingsParams) -> Result<String, String> {
         let json = iface_sync__get_ratings_params__to_json(&params);
-        dispatch(&OP_SYNC_GET_RATINGS, json)
+        match dispatch(&OP_SYNC_GET_RATINGS, json).and_then(iface_sync__get_ratings__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_sync__get_ratings__err(e)),
+        }
     }
     fn add_items_to_personal_recommendations(params: iface_sync::AddItemsToPersonalRecommendationsParams) -> Result<String, String> {
         let json = iface_sync__add_items_to_personal_recommendations_params__to_json(&params);
-        dispatch(&OP_SYNC_ADD_ITEMS_TO_PERSONAL_RECOMMENDATIONS, json)
+        match dispatch(&OP_SYNC_ADD_ITEMS_TO_PERSONAL_RECOMMENDATIONS, json).and_then(iface_sync__add_items_to_personal_recommendations__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_sync__add_items_to_personal_recommendations__err(e)),
+        }
     }
     fn remove_items_from_personal_recommendations(params: iface_sync::RemoveItemsFromPersonalRecommendationsParams) -> Result<String, String> {
         let json = iface_sync__remove_items_from_personal_recommendations_params__to_json(&params);
-        dispatch(&OP_SYNC_REMOVE_ITEMS_FROM_PERSONAL_RECOMMENDATIONS, json)
+        match dispatch(&OP_SYNC_REMOVE_ITEMS_FROM_PERSONAL_RECOMMENDATIONS, json).and_then(iface_sync__remove_items_from_personal_recommendations__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_sync__remove_items_from_personal_recommendations__err(e)),
+        }
     }
     fn reorder_personally_recommended_items(params: iface_sync::ReorderPersonallyRecommendedItemsParams) -> Result<String, String> {
         let json = iface_sync__reorder_personally_recommended_items_params__to_json(&params);
-        dispatch(&OP_SYNC_REORDER_PERSONALLY_RECOMMENDED_ITEMS, json)
+        match dispatch(&OP_SYNC_REORDER_PERSONALLY_RECOMMENDED_ITEMS, json).and_then(iface_sync__reorder_personally_recommended_items__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_sync__reorder_personally_recommended_items__err(e)),
+        }
     }
     fn get_personal_recommendations(params: iface_sync::GetPersonalRecommendationsParams) -> Result<String, String> {
         let json = iface_sync__get_personal_recommendations_params__to_json(&params);
-        dispatch(&OP_SYNC_GET_PERSONAL_RECOMMENDATIONS, json)
+        match dispatch(&OP_SYNC_GET_PERSONAL_RECOMMENDATIONS, json).and_then(iface_sync__get_personal_recommendations__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_sync__get_personal_recommendations__err(e)),
+        }
     }
     fn get_watched(params: iface_sync::GetWatchedParams) -> Result<String, String> {
         let json = iface_sync__get_watched_params__to_json(&params);
-        dispatch(&OP_SYNC_GET_WATCHED, json)
+        match dispatch(&OP_SYNC_GET_WATCHED, json).and_then(iface_sync__get_watched__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_sync__get_watched__err(e)),
+        }
     }
-    fn add_items_to_watchlist(params: iface_sync::AddItemsToWatchlistParams) -> Result<String, String> {
+    fn add_items_to_watchlist(params: iface_sync::AddItemsToWatchlistParams) -> Result<String, iface_sync::AddItemsToWatchlistError> {
         let json = iface_sync__add_items_to_watchlist_params__to_json(&params);
-        dispatch(&OP_SYNC_ADD_ITEMS_TO_WATCHLIST, json)
+        match dispatch(&OP_SYNC_ADD_ITEMS_TO_WATCHLIST, json).and_then(iface_sync__add_items_to_watchlist__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_sync__add_items_to_watchlist__err(e)),
+        }
     }
     fn remove_items_from_watchlist(params: iface_sync::RemoveItemsFromWatchlistParams) -> Result<String, String> {
         let json = iface_sync__remove_items_from_watchlist_params__to_json(&params);
-        dispatch(&OP_SYNC_REMOVE_ITEMS_FROM_WATCHLIST, json)
+        match dispatch(&OP_SYNC_REMOVE_ITEMS_FROM_WATCHLIST, json).and_then(iface_sync__remove_items_from_watchlist__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_sync__remove_items_from_watchlist__err(e)),
+        }
     }
     fn reorder_watchlist_items(params: iface_sync::ReorderWatchlistItemsParams) -> Result<String, String> {
         let json = iface_sync__reorder_watchlist_items_params__to_json(&params);
-        dispatch(&OP_SYNC_REORDER_WATCHLIST_ITEMS, json)
+        match dispatch(&OP_SYNC_REORDER_WATCHLIST_ITEMS, json).and_then(iface_sync__reorder_watchlist_items__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_sync__reorder_watchlist_items__err(e)),
+        }
     }
     fn get_watchlist(params: iface_sync::GetWatchlistParams) -> Result<String, String> {
         let json = iface_sync__get_watchlist_params__to_json(&params);
-        dispatch(&OP_SYNC_GET_WATCHLIST, json)
+        match dispatch(&OP_SYNC_GET_WATCHLIST, json).and_then(iface_sync__get_watchlist__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_sync__get_watchlist__err(e)),
+        }
     }
 }
 use crate::exports::autostamp::trakt::users as iface_users;
@@ -4947,10 +6980,10 @@ const OP_USERS_GET_HIDDEN_ITEMS: OpSpec = OpSpec {
     method: "GET",
     path_template: "/users/hidden/{section}",
     fields: &[
-        FieldSpec { snake: "section", location: FieldLocation::Path },
-        FieldSpec { snake: "type", location: FieldLocation::Query },
-        FieldSpec { snake: "trakt_api_version", location: FieldLocation::Header },
-        FieldSpec { snake: "trakt_api_key", location: FieldLocation::Header },
+        FieldSpec { snake: "section", wire: "section", location: FieldLocation::Path },
+        FieldSpec { snake: "type", wire: "type", location: FieldLocation::Query },
+        FieldSpec { snake: "trakt_api_version", wire: "trakt-api-version", location: FieldLocation::Header },
+        FieldSpec { snake: "trakt_api_key", wire: "trakt-api-key", location: FieldLocation::Header },
     ],
     auth: &[
         AuthApply { secret_key: "oauth2", kind: AuthKind::Bearer },
@@ -4961,12 +6994,12 @@ const OP_USERS_ADD_HIDDEN_ITEMS: OpSpec = OpSpec {
     method: "POST",
     path_template: "/users/hidden/{section}",
     fields: &[
-        FieldSpec { snake: "section", location: FieldLocation::Path },
-        FieldSpec { snake: "trakt_api_version", location: FieldLocation::Header },
-        FieldSpec { snake: "trakt_api_key", location: FieldLocation::Header },
-        FieldSpec { snake: "movies", location: FieldLocation::Body },
-        FieldSpec { snake: "seasons", location: FieldLocation::Body },
-        FieldSpec { snake: "shows", location: FieldLocation::Body },
+        FieldSpec { snake: "section", wire: "section", location: FieldLocation::Path },
+        FieldSpec { snake: "trakt_api_version", wire: "trakt-api-version", location: FieldLocation::Header },
+        FieldSpec { snake: "trakt_api_key", wire: "trakt-api-key", location: FieldLocation::Header },
+        FieldSpec { snake: "movies", wire: "movies", location: FieldLocation::Body },
+        FieldSpec { snake: "seasons", wire: "seasons", location: FieldLocation::Body },
+        FieldSpec { snake: "shows", wire: "shows", location: FieldLocation::Body },
     ],
     auth: &[
         AuthApply { secret_key: "oauth2", kind: AuthKind::Bearer },
@@ -4977,12 +7010,12 @@ const OP_USERS_REMOVE_HIDDEN_ITEMS: OpSpec = OpSpec {
     method: "POST",
     path_template: "/users/hidden/{section}/remove",
     fields: &[
-        FieldSpec { snake: "section", location: FieldLocation::Path },
-        FieldSpec { snake: "trakt_api_version", location: FieldLocation::Header },
-        FieldSpec { snake: "trakt_api_key", location: FieldLocation::Header },
-        FieldSpec { snake: "movies", location: FieldLocation::Body },
-        FieldSpec { snake: "seasons", location: FieldLocation::Body },
-        FieldSpec { snake: "shows", location: FieldLocation::Body },
+        FieldSpec { snake: "section", wire: "section", location: FieldLocation::Path },
+        FieldSpec { snake: "trakt_api_version", wire: "trakt-api-version", location: FieldLocation::Header },
+        FieldSpec { snake: "trakt_api_key", wire: "trakt-api-key", location: FieldLocation::Header },
+        FieldSpec { snake: "movies", wire: "movies", location: FieldLocation::Body },
+        FieldSpec { snake: "seasons", wire: "seasons", location: FieldLocation::Body },
+        FieldSpec { snake: "shows", wire: "shows", location: FieldLocation::Body },
     ],
     auth: &[
         AuthApply { secret_key: "oauth2", kind: AuthKind::Bearer },
@@ -4993,8 +7026,8 @@ const OP_USERS_GET_FOLLOW_REQUESTS: OpSpec = OpSpec {
     method: "GET",
     path_template: "/users/requests",
     fields: &[
-        FieldSpec { snake: "trakt_api_version", location: FieldLocation::Header },
-        FieldSpec { snake: "trakt_api_key", location: FieldLocation::Header },
+        FieldSpec { snake: "trakt_api_version", wire: "trakt-api-version", location: FieldLocation::Header },
+        FieldSpec { snake: "trakt_api_key", wire: "trakt-api-key", location: FieldLocation::Header },
     ],
     auth: &[
         AuthApply { secret_key: "oauth2", kind: AuthKind::Bearer },
@@ -5005,8 +7038,8 @@ const OP_USERS_GET_PENDING_FOLLOWING_REQUESTS: OpSpec = OpSpec {
     method: "GET",
     path_template: "/users/requests/following",
     fields: &[
-        FieldSpec { snake: "trakt_api_version", location: FieldLocation::Header },
-        FieldSpec { snake: "trakt_api_key", location: FieldLocation::Header },
+        FieldSpec { snake: "trakt_api_version", wire: "trakt-api-version", location: FieldLocation::Header },
+        FieldSpec { snake: "trakt_api_key", wire: "trakt-api-key", location: FieldLocation::Header },
     ],
     auth: &[
         AuthApply { secret_key: "oauth2", kind: AuthKind::Bearer },
@@ -5017,9 +7050,9 @@ const OP_USERS_APPROVE_FOLLOW_REQUEST: OpSpec = OpSpec {
     method: "POST",
     path_template: "/users/requests/{id}",
     fields: &[
-        FieldSpec { snake: "id", location: FieldLocation::Path },
-        FieldSpec { snake: "trakt_api_version", location: FieldLocation::Header },
-        FieldSpec { snake: "trakt_api_key", location: FieldLocation::Header },
+        FieldSpec { snake: "id", wire: "id", location: FieldLocation::Path },
+        FieldSpec { snake: "trakt_api_version", wire: "trakt-api-version", location: FieldLocation::Header },
+        FieldSpec { snake: "trakt_api_key", wire: "trakt-api-key", location: FieldLocation::Header },
     ],
     auth: &[
         AuthApply { secret_key: "oauth2", kind: AuthKind::Bearer },
@@ -5030,9 +7063,9 @@ const OP_USERS_DENY_FOLLOW_REQUEST: OpSpec = OpSpec {
     method: "DELETE",
     path_template: "/users/requests/{id}",
     fields: &[
-        FieldSpec { snake: "trakt_api_version", location: FieldLocation::Header },
-        FieldSpec { snake: "trakt_api_key", location: FieldLocation::Header },
-        FieldSpec { snake: "id", location: FieldLocation::Path },
+        FieldSpec { snake: "trakt_api_version", wire: "trakt-api-version", location: FieldLocation::Header },
+        FieldSpec { snake: "trakt_api_key", wire: "trakt-api-key", location: FieldLocation::Header },
+        FieldSpec { snake: "id", wire: "id", location: FieldLocation::Path },
     ],
     auth: &[
         AuthApply { secret_key: "oauth2", kind: AuthKind::Bearer },
@@ -5043,9 +7076,9 @@ const OP_USERS_GET_SAVED_FILTERS: OpSpec = OpSpec {
     method: "GET",
     path_template: "/users/saved_filters/{section}",
     fields: &[
-        FieldSpec { snake: "section", location: FieldLocation::Path },
-        FieldSpec { snake: "trakt_api_version", location: FieldLocation::Header },
-        FieldSpec { snake: "trakt_api_key", location: FieldLocation::Header },
+        FieldSpec { snake: "section", wire: "section", location: FieldLocation::Path },
+        FieldSpec { snake: "trakt_api_version", wire: "trakt-api-version", location: FieldLocation::Header },
+        FieldSpec { snake: "trakt_api_key", wire: "trakt-api-key", location: FieldLocation::Header },
     ],
     auth: &[
         AuthApply { secret_key: "oauth2", kind: AuthKind::Bearer },
@@ -5056,8 +7089,8 @@ const OP_USERS_RETRIEVE_SETTINGS: OpSpec = OpSpec {
     method: "GET",
     path_template: "/users/settings",
     fields: &[
-        FieldSpec { snake: "trakt_api_version", location: FieldLocation::Header },
-        FieldSpec { snake: "trakt_api_key", location: FieldLocation::Header },
+        FieldSpec { snake: "trakt_api_version", wire: "trakt-api-version", location: FieldLocation::Header },
+        FieldSpec { snake: "trakt_api_key", wire: "trakt-api-key", location: FieldLocation::Header },
     ],
     auth: &[
         AuthApply { secret_key: "oauth2", kind: AuthKind::Bearer },
@@ -5068,9 +7101,9 @@ const OP_USERS_GET_USER_PROFILE: OpSpec = OpSpec {
     method: "GET",
     path_template: "/users/{id}",
     fields: &[
-        FieldSpec { snake: "id", location: FieldLocation::Path },
-        FieldSpec { snake: "trakt_api_version", location: FieldLocation::Header },
-        FieldSpec { snake: "trakt_api_key", location: FieldLocation::Header },
+        FieldSpec { snake: "id", wire: "id", location: FieldLocation::Path },
+        FieldSpec { snake: "trakt_api_version", wire: "trakt-api-version", location: FieldLocation::Header },
+        FieldSpec { snake: "trakt_api_key", wire: "trakt-api-key", location: FieldLocation::Header },
     ],
     auth: &[
     ],
@@ -5080,10 +7113,10 @@ const OP_USERS_GET_USERS_ID_COLLECTION_TYPE: OpSpec = OpSpec {
     method: "GET",
     path_template: "/users/{id}/collection/{type}",
     fields: &[
-        FieldSpec { snake: "id", location: FieldLocation::Path },
-        FieldSpec { snake: "type", location: FieldLocation::Path },
-        FieldSpec { snake: "trakt_api_version", location: FieldLocation::Header },
-        FieldSpec { snake: "trakt_api_key", location: FieldLocation::Header },
+        FieldSpec { snake: "id", wire: "id", location: FieldLocation::Path },
+        FieldSpec { snake: "type", wire: "type", location: FieldLocation::Path },
+        FieldSpec { snake: "trakt_api_version", wire: "trakt-api-version", location: FieldLocation::Header },
+        FieldSpec { snake: "trakt_api_key", wire: "trakt-api-key", location: FieldLocation::Header },
     ],
     auth: &[
     ],
@@ -5093,12 +7126,12 @@ const OP_USERS_GET_COMMENTS: OpSpec = OpSpec {
     method: "GET",
     path_template: "/users/{id}/comments/{comment_type}/{type}",
     fields: &[
-        FieldSpec { snake: "id", location: FieldLocation::Path },
-        FieldSpec { snake: "comment_type", location: FieldLocation::Path },
-        FieldSpec { snake: "type", location: FieldLocation::Path },
-        FieldSpec { snake: "include_replies", location: FieldLocation::Query },
-        FieldSpec { snake: "trakt_api_version", location: FieldLocation::Header },
-        FieldSpec { snake: "trakt_api_key", location: FieldLocation::Header },
+        FieldSpec { snake: "id", wire: "id", location: FieldLocation::Path },
+        FieldSpec { snake: "comment_type", wire: "comment_type", location: FieldLocation::Path },
+        FieldSpec { snake: "type", wire: "type", location: FieldLocation::Path },
+        FieldSpec { snake: "include_replies", wire: "include_replies", location: FieldLocation::Query },
+        FieldSpec { snake: "trakt_api_version", wire: "trakt-api-version", location: FieldLocation::Header },
+        FieldSpec { snake: "trakt_api_key", wire: "trakt-api-key", location: FieldLocation::Header },
     ],
     auth: &[
     ],
@@ -5108,9 +7141,9 @@ const OP_USERS_FOLLOW_THIS_USER: OpSpec = OpSpec {
     method: "POST",
     path_template: "/users/{id}/follow",
     fields: &[
-        FieldSpec { snake: "id", location: FieldLocation::Path },
-        FieldSpec { snake: "trakt_api_version", location: FieldLocation::Header },
-        FieldSpec { snake: "trakt_api_key", location: FieldLocation::Header },
+        FieldSpec { snake: "id", wire: "id", location: FieldLocation::Path },
+        FieldSpec { snake: "trakt_api_version", wire: "trakt-api-version", location: FieldLocation::Header },
+        FieldSpec { snake: "trakt_api_key", wire: "trakt-api-key", location: FieldLocation::Header },
     ],
     auth: &[
         AuthApply { secret_key: "oauth2", kind: AuthKind::Bearer },
@@ -5121,9 +7154,9 @@ const OP_USERS_UNFOLLOW_THIS_USER: OpSpec = OpSpec {
     method: "DELETE",
     path_template: "/users/{id}/follow",
     fields: &[
-        FieldSpec { snake: "trakt_api_version", location: FieldLocation::Header },
-        FieldSpec { snake: "trakt_api_key", location: FieldLocation::Header },
-        FieldSpec { snake: "id", location: FieldLocation::Path },
+        FieldSpec { snake: "trakt_api_version", wire: "trakt-api-version", location: FieldLocation::Header },
+        FieldSpec { snake: "trakt_api_key", wire: "trakt-api-key", location: FieldLocation::Header },
+        FieldSpec { snake: "id", wire: "id", location: FieldLocation::Path },
     ],
     auth: &[
         AuthApply { secret_key: "oauth2", kind: AuthKind::Bearer },
@@ -5134,9 +7167,9 @@ const OP_USERS_GET_FOLLOWERS: OpSpec = OpSpec {
     method: "GET",
     path_template: "/users/{id}/followers",
     fields: &[
-        FieldSpec { snake: "id", location: FieldLocation::Path },
-        FieldSpec { snake: "trakt_api_version", location: FieldLocation::Header },
-        FieldSpec { snake: "trakt_api_key", location: FieldLocation::Header },
+        FieldSpec { snake: "id", wire: "id", location: FieldLocation::Path },
+        FieldSpec { snake: "trakt_api_version", wire: "trakt-api-version", location: FieldLocation::Header },
+        FieldSpec { snake: "trakt_api_key", wire: "trakt-api-key", location: FieldLocation::Header },
     ],
     auth: &[
     ],
@@ -5146,9 +7179,9 @@ const OP_USERS_GET_FOLLOWING: OpSpec = OpSpec {
     method: "GET",
     path_template: "/users/{id}/following",
     fields: &[
-        FieldSpec { snake: "id", location: FieldLocation::Path },
-        FieldSpec { snake: "trakt_api_version", location: FieldLocation::Header },
-        FieldSpec { snake: "trakt_api_key", location: FieldLocation::Header },
+        FieldSpec { snake: "id", wire: "id", location: FieldLocation::Path },
+        FieldSpec { snake: "trakt_api_version", wire: "trakt-api-version", location: FieldLocation::Header },
+        FieldSpec { snake: "trakt_api_key", wire: "trakt-api-key", location: FieldLocation::Header },
     ],
     auth: &[
     ],
@@ -5158,9 +7191,9 @@ const OP_USERS_GET_FRIENDS: OpSpec = OpSpec {
     method: "GET",
     path_template: "/users/{id}/friends",
     fields: &[
-        FieldSpec { snake: "id", location: FieldLocation::Path },
-        FieldSpec { snake: "trakt_api_version", location: FieldLocation::Header },
-        FieldSpec { snake: "trakt_api_key", location: FieldLocation::Header },
+        FieldSpec { snake: "id", wire: "id", location: FieldLocation::Path },
+        FieldSpec { snake: "trakt_api_version", wire: "trakt-api-version", location: FieldLocation::Header },
+        FieldSpec { snake: "trakt_api_key", wire: "trakt-api-key", location: FieldLocation::Header },
     ],
     auth: &[
     ],
@@ -5170,13 +7203,13 @@ const OP_USERS_GET_USERS_ID_HISTORY_TYPE_ITEM_ID: OpSpec = OpSpec {
     method: "GET",
     path_template: "/users/{id}/history/{type}/{item_id}",
     fields: &[
-        FieldSpec { snake: "id", location: FieldLocation::Path },
-        FieldSpec { snake: "type", location: FieldLocation::Path },
-        FieldSpec { snake: "item_id", location: FieldLocation::Path },
-        FieldSpec { snake: "start_at", location: FieldLocation::Query },
-        FieldSpec { snake: "end_at", location: FieldLocation::Query },
-        FieldSpec { snake: "trakt_api_version", location: FieldLocation::Header },
-        FieldSpec { snake: "trakt_api_key", location: FieldLocation::Header },
+        FieldSpec { snake: "id", wire: "id", location: FieldLocation::Path },
+        FieldSpec { snake: "type", wire: "type", location: FieldLocation::Path },
+        FieldSpec { snake: "item_id", wire: "item_id", location: FieldLocation::Path },
+        FieldSpec { snake: "start_at", wire: "start_at", location: FieldLocation::Query },
+        FieldSpec { snake: "end_at", wire: "end_at", location: FieldLocation::Query },
+        FieldSpec { snake: "trakt_api_version", wire: "trakt-api-version", location: FieldLocation::Header },
+        FieldSpec { snake: "trakt_api_key", wire: "trakt-api-key", location: FieldLocation::Header },
     ],
     auth: &[
     ],
@@ -5186,10 +7219,10 @@ const OP_USERS_GET_LIKES: OpSpec = OpSpec {
     method: "GET",
     path_template: "/users/{id}/likes/{type}",
     fields: &[
-        FieldSpec { snake: "id", location: FieldLocation::Path },
-        FieldSpec { snake: "type", location: FieldLocation::Path },
-        FieldSpec { snake: "trakt_api_version", location: FieldLocation::Header },
-        FieldSpec { snake: "trakt_api_key", location: FieldLocation::Header },
+        FieldSpec { snake: "id", wire: "id", location: FieldLocation::Path },
+        FieldSpec { snake: "type", wire: "type", location: FieldLocation::Path },
+        FieldSpec { snake: "trakt_api_version", wire: "trakt-api-version", location: FieldLocation::Header },
+        FieldSpec { snake: "trakt_api_key", wire: "trakt-api-key", location: FieldLocation::Header },
     ],
     auth: &[
         AuthApply { secret_key: "oauth2", kind: AuthKind::Bearer },
@@ -5200,9 +7233,9 @@ const OP_USERS_GET_A_USER_S_PERSONAL_LISTS: OpSpec = OpSpec {
     method: "GET",
     path_template: "/users/{id}/lists",
     fields: &[
-        FieldSpec { snake: "id", location: FieldLocation::Path },
-        FieldSpec { snake: "trakt_api_version", location: FieldLocation::Header },
-        FieldSpec { snake: "trakt_api_key", location: FieldLocation::Header },
+        FieldSpec { snake: "id", wire: "id", location: FieldLocation::Path },
+        FieldSpec { snake: "trakt_api_version", wire: "trakt-api-version", location: FieldLocation::Header },
+        FieldSpec { snake: "trakt_api_key", wire: "trakt-api-key", location: FieldLocation::Header },
     ],
     auth: &[
     ],
@@ -5212,16 +7245,16 @@ const OP_USERS_CREATE_PERSONAL_LIST: OpSpec = OpSpec {
     method: "POST",
     path_template: "/users/{id}/lists",
     fields: &[
-        FieldSpec { snake: "trakt_api_version", location: FieldLocation::Header },
-        FieldSpec { snake: "trakt_api_key", location: FieldLocation::Header },
-        FieldSpec { snake: "id", location: FieldLocation::Path },
-        FieldSpec { snake: "allow_comments", location: FieldLocation::Body },
-        FieldSpec { snake: "description", location: FieldLocation::Body },
-        FieldSpec { snake: "display_numbers", location: FieldLocation::Body },
-        FieldSpec { snake: "name", location: FieldLocation::Body },
-        FieldSpec { snake: "privacy", location: FieldLocation::Body },
-        FieldSpec { snake: "sort_by", location: FieldLocation::Body },
-        FieldSpec { snake: "sort_how", location: FieldLocation::Body },
+        FieldSpec { snake: "trakt_api_version", wire: "trakt-api-version", location: FieldLocation::Header },
+        FieldSpec { snake: "trakt_api_key", wire: "trakt-api-key", location: FieldLocation::Header },
+        FieldSpec { snake: "id", wire: "id", location: FieldLocation::Path },
+        FieldSpec { snake: "allow_comments", wire: "allow_comments", location: FieldLocation::Body },
+        FieldSpec { snake: "description", wire: "description", location: FieldLocation::Body },
+        FieldSpec { snake: "display_numbers", wire: "display_numbers", location: FieldLocation::Body },
+        FieldSpec { snake: "name", wire: "name", location: FieldLocation::Body },
+        FieldSpec { snake: "privacy", wire: "privacy", location: FieldLocation::Body },
+        FieldSpec { snake: "sort_by", wire: "sort_by", location: FieldLocation::Body },
+        FieldSpec { snake: "sort_how", wire: "sort_how", location: FieldLocation::Body },
     ],
     auth: &[
         AuthApply { secret_key: "oauth2", kind: AuthKind::Bearer },
@@ -5232,9 +7265,9 @@ const OP_USERS_GET_ALL_LISTS_A_USER_CAN_COLLABORATE_ON: OpSpec = OpSpec {
     method: "GET",
     path_template: "/users/{id}/lists/collaborations",
     fields: &[
-        FieldSpec { snake: "id", location: FieldLocation::Path },
-        FieldSpec { snake: "trakt_api_version", location: FieldLocation::Header },
-        FieldSpec { snake: "trakt_api_key", location: FieldLocation::Header },
+        FieldSpec { snake: "id", wire: "id", location: FieldLocation::Path },
+        FieldSpec { snake: "trakt_api_version", wire: "trakt-api-version", location: FieldLocation::Header },
+        FieldSpec { snake: "trakt_api_key", wire: "trakt-api-key", location: FieldLocation::Header },
     ],
     auth: &[
     ],
@@ -5244,10 +7277,10 @@ const OP_USERS_REORDER_A_USER_S_LISTS: OpSpec = OpSpec {
     method: "POST",
     path_template: "/users/{id}/lists/reorder",
     fields: &[
-        FieldSpec { snake: "id", location: FieldLocation::Path },
-        FieldSpec { snake: "trakt_api_version", location: FieldLocation::Header },
-        FieldSpec { snake: "trakt_api_key", location: FieldLocation::Header },
-        FieldSpec { snake: "rank", location: FieldLocation::Body },
+        FieldSpec { snake: "id", wire: "id", location: FieldLocation::Path },
+        FieldSpec { snake: "trakt_api_version", wire: "trakt-api-version", location: FieldLocation::Header },
+        FieldSpec { snake: "trakt_api_key", wire: "trakt-api-key", location: FieldLocation::Header },
+        FieldSpec { snake: "rank", wire: "rank", location: FieldLocation::Body },
     ],
     auth: &[
         AuthApply { secret_key: "oauth2", kind: AuthKind::Bearer },
@@ -5258,10 +7291,10 @@ const OP_USERS_GET_PERSONAL_LIST: OpSpec = OpSpec {
     method: "GET",
     path_template: "/users/{id}/lists/{list_id}",
     fields: &[
-        FieldSpec { snake: "id", location: FieldLocation::Path },
-        FieldSpec { snake: "list_id", location: FieldLocation::Path },
-        FieldSpec { snake: "trakt_api_version", location: FieldLocation::Header },
-        FieldSpec { snake: "trakt_api_key", location: FieldLocation::Header },
+        FieldSpec { snake: "id", wire: "id", location: FieldLocation::Path },
+        FieldSpec { snake: "list_id", wire: "list_id", location: FieldLocation::Path },
+        FieldSpec { snake: "trakt_api_version", wire: "trakt-api-version", location: FieldLocation::Header },
+        FieldSpec { snake: "trakt_api_key", wire: "trakt-api-key", location: FieldLocation::Header },
     ],
     auth: &[
     ],
@@ -5271,15 +7304,15 @@ const OP_USERS_UPDATE_PERSONAL_LIST: OpSpec = OpSpec {
     method: "PUT",
     path_template: "/users/{id}/lists/{list_id}",
     fields: &[
-        FieldSpec { snake: "trakt_api_version", location: FieldLocation::Header },
-        FieldSpec { snake: "trakt_api_key", location: FieldLocation::Header },
-        FieldSpec { snake: "id", location: FieldLocation::Path },
-        FieldSpec { snake: "list_id", location: FieldLocation::Path },
-        FieldSpec { snake: "display_numbers", location: FieldLocation::Body },
-        FieldSpec { snake: "name", location: FieldLocation::Body },
-        FieldSpec { snake: "privacy", location: FieldLocation::Body },
-        FieldSpec { snake: "sort_by", location: FieldLocation::Body },
-        FieldSpec { snake: "sort_how", location: FieldLocation::Body },
+        FieldSpec { snake: "trakt_api_version", wire: "trakt-api-version", location: FieldLocation::Header },
+        FieldSpec { snake: "trakt_api_key", wire: "trakt-api-key", location: FieldLocation::Header },
+        FieldSpec { snake: "id", wire: "id", location: FieldLocation::Path },
+        FieldSpec { snake: "list_id", wire: "list_id", location: FieldLocation::Path },
+        FieldSpec { snake: "display_numbers", wire: "display_numbers", location: FieldLocation::Body },
+        FieldSpec { snake: "name", wire: "name", location: FieldLocation::Body },
+        FieldSpec { snake: "privacy", wire: "privacy", location: FieldLocation::Body },
+        FieldSpec { snake: "sort_by", wire: "sort_by", location: FieldLocation::Body },
+        FieldSpec { snake: "sort_how", wire: "sort_how", location: FieldLocation::Body },
     ],
     auth: &[
         AuthApply { secret_key: "oauth2", kind: AuthKind::Bearer },
@@ -5290,10 +7323,10 @@ const OP_USERS_DELETE_A_USER_S_PERSONAL_LIST: OpSpec = OpSpec {
     method: "DELETE",
     path_template: "/users/{id}/lists/{list_id}",
     fields: &[
-        FieldSpec { snake: "trakt_api_version", location: FieldLocation::Header },
-        FieldSpec { snake: "trakt_api_key", location: FieldLocation::Header },
-        FieldSpec { snake: "id", location: FieldLocation::Path },
-        FieldSpec { snake: "list_id", location: FieldLocation::Path },
+        FieldSpec { snake: "trakt_api_version", wire: "trakt-api-version", location: FieldLocation::Header },
+        FieldSpec { snake: "trakt_api_key", wire: "trakt-api-key", location: FieldLocation::Header },
+        FieldSpec { snake: "id", wire: "id", location: FieldLocation::Path },
+        FieldSpec { snake: "list_id", wire: "list_id", location: FieldLocation::Path },
     ],
     auth: &[
         AuthApply { secret_key: "oauth2", kind: AuthKind::Bearer },
@@ -5304,11 +7337,11 @@ const OP_USERS_GET_USERS_ID_LISTS_LIST_ID_COMMENTS_SORT: OpSpec = OpSpec {
     method: "GET",
     path_template: "/users/{id}/lists/{list_id}/comments/{sort}",
     fields: &[
-        FieldSpec { snake: "id", location: FieldLocation::Path },
-        FieldSpec { snake: "list_id", location: FieldLocation::Path },
-        FieldSpec { snake: "sort", location: FieldLocation::Path },
-        FieldSpec { snake: "trakt_api_version", location: FieldLocation::Header },
-        FieldSpec { snake: "trakt_api_key", location: FieldLocation::Header },
+        FieldSpec { snake: "id", wire: "id", location: FieldLocation::Path },
+        FieldSpec { snake: "list_id", wire: "list_id", location: FieldLocation::Path },
+        FieldSpec { snake: "sort", wire: "sort", location: FieldLocation::Path },
+        FieldSpec { snake: "trakt_api_version", wire: "trakt-api-version", location: FieldLocation::Header },
+        FieldSpec { snake: "trakt_api_key", wire: "trakt-api-key", location: FieldLocation::Header },
     ],
     auth: &[
     ],
@@ -5318,15 +7351,15 @@ const OP_USERS_ADD_ITEMS_TO_PERSONAL_LIST: OpSpec = OpSpec {
     method: "POST",
     path_template: "/users/{id}/lists/{list_id}/items",
     fields: &[
-        FieldSpec { snake: "id", location: FieldLocation::Path },
-        FieldSpec { snake: "list_id", location: FieldLocation::Path },
-        FieldSpec { snake: "trakt_api_version", location: FieldLocation::Header },
-        FieldSpec { snake: "trakt_api_key", location: FieldLocation::Header },
-        FieldSpec { snake: "episodes", location: FieldLocation::Body },
-        FieldSpec { snake: "movies", location: FieldLocation::Body },
-        FieldSpec { snake: "people", location: FieldLocation::Body },
-        FieldSpec { snake: "seasons", location: FieldLocation::Body },
-        FieldSpec { snake: "shows", location: FieldLocation::Body },
+        FieldSpec { snake: "id", wire: "id", location: FieldLocation::Path },
+        FieldSpec { snake: "list_id", wire: "list_id", location: FieldLocation::Path },
+        FieldSpec { snake: "trakt_api_version", wire: "trakt-api-version", location: FieldLocation::Header },
+        FieldSpec { snake: "trakt_api_key", wire: "trakt-api-key", location: FieldLocation::Header },
+        FieldSpec { snake: "episodes", wire: "episodes", location: FieldLocation::Body },
+        FieldSpec { snake: "movies", wire: "movies", location: FieldLocation::Body },
+        FieldSpec { snake: "people", wire: "people", location: FieldLocation::Body },
+        FieldSpec { snake: "seasons", wire: "seasons", location: FieldLocation::Body },
+        FieldSpec { snake: "shows", wire: "shows", location: FieldLocation::Body },
     ],
     auth: &[
         AuthApply { secret_key: "oauth2", kind: AuthKind::Bearer },
@@ -5337,15 +7370,15 @@ const OP_USERS_REMOVE_ITEMS_FROM_PERSONAL_LIST: OpSpec = OpSpec {
     method: "POST",
     path_template: "/users/{id}/lists/{list_id}/items/remove",
     fields: &[
-        FieldSpec { snake: "id", location: FieldLocation::Path },
-        FieldSpec { snake: "list_id", location: FieldLocation::Path },
-        FieldSpec { snake: "trakt_api_version", location: FieldLocation::Header },
-        FieldSpec { snake: "trakt_api_key", location: FieldLocation::Header },
-        FieldSpec { snake: "episodes", location: FieldLocation::Body },
-        FieldSpec { snake: "movies", location: FieldLocation::Body },
-        FieldSpec { snake: "people", location: FieldLocation::Body },
-        FieldSpec { snake: "seasons", location: FieldLocation::Body },
-        FieldSpec { snake: "shows", location: FieldLocation::Body },
+        FieldSpec { snake: "id", wire: "id", location: FieldLocation::Path },
+        FieldSpec { snake: "list_id", wire: "list_id", location: FieldLocation::Path },
+        FieldSpec { snake: "trakt_api_version", wire: "trakt-api-version", location: FieldLocation::Header },
+        FieldSpec { snake: "trakt_api_key", wire: "trakt-api-key", location: FieldLocation::Header },
+        FieldSpec { snake: "episodes", wire: "episodes", location: FieldLocation::Body },
+        FieldSpec { snake: "movies", wire: "movies", location: FieldLocation::Body },
+        FieldSpec { snake: "people", wire: "people", location: FieldLocation::Body },
+        FieldSpec { snake: "seasons", wire: "seasons", location: FieldLocation::Body },
+        FieldSpec { snake: "shows", wire: "shows", location: FieldLocation::Body },
     ],
     auth: &[
         AuthApply { secret_key: "oauth2", kind: AuthKind::Bearer },
@@ -5356,11 +7389,11 @@ const OP_USERS_REORDER_ITEMS_ON_A_LIST: OpSpec = OpSpec {
     method: "POST",
     path_template: "/users/{id}/lists/{list_id}/items/reorder",
     fields: &[
-        FieldSpec { snake: "id", location: FieldLocation::Path },
-        FieldSpec { snake: "list_id", location: FieldLocation::Path },
-        FieldSpec { snake: "trakt_api_version", location: FieldLocation::Header },
-        FieldSpec { snake: "trakt_api_key", location: FieldLocation::Header },
-        FieldSpec { snake: "rank", location: FieldLocation::Body },
+        FieldSpec { snake: "id", wire: "id", location: FieldLocation::Path },
+        FieldSpec { snake: "list_id", wire: "list_id", location: FieldLocation::Path },
+        FieldSpec { snake: "trakt_api_version", wire: "trakt-api-version", location: FieldLocation::Header },
+        FieldSpec { snake: "trakt_api_key", wire: "trakt-api-key", location: FieldLocation::Header },
+        FieldSpec { snake: "rank", wire: "rank", location: FieldLocation::Body },
     ],
     auth: &[
         AuthApply { secret_key: "oauth2", kind: AuthKind::Bearer },
@@ -5371,11 +7404,11 @@ const OP_USERS_GET_ITEMS_ON_A_PERSONAL_LIST: OpSpec = OpSpec {
     method: "GET",
     path_template: "/users/{id}/lists/{list_id}/items/{type}",
     fields: &[
-        FieldSpec { snake: "id", location: FieldLocation::Path },
-        FieldSpec { snake: "list_id", location: FieldLocation::Path },
-        FieldSpec { snake: "type", location: FieldLocation::Path },
-        FieldSpec { snake: "trakt_api_version", location: FieldLocation::Header },
-        FieldSpec { snake: "trakt_api_key", location: FieldLocation::Header },
+        FieldSpec { snake: "id", wire: "id", location: FieldLocation::Path },
+        FieldSpec { snake: "list_id", wire: "list_id", location: FieldLocation::Path },
+        FieldSpec { snake: "type", wire: "type", location: FieldLocation::Path },
+        FieldSpec { snake: "trakt_api_version", wire: "trakt-api-version", location: FieldLocation::Header },
+        FieldSpec { snake: "trakt_api_key", wire: "trakt-api-key", location: FieldLocation::Header },
     ],
     auth: &[
     ],
@@ -5385,10 +7418,10 @@ const OP_USERS_LIKE_A_LIST: OpSpec = OpSpec {
     method: "POST",
     path_template: "/users/{id}/lists/{list_id}/like",
     fields: &[
-        FieldSpec { snake: "id", location: FieldLocation::Path },
-        FieldSpec { snake: "list_id", location: FieldLocation::Path },
-        FieldSpec { snake: "trakt_api_version", location: FieldLocation::Header },
-        FieldSpec { snake: "trakt_api_key", location: FieldLocation::Header },
+        FieldSpec { snake: "id", wire: "id", location: FieldLocation::Path },
+        FieldSpec { snake: "list_id", wire: "list_id", location: FieldLocation::Path },
+        FieldSpec { snake: "trakt_api_version", wire: "trakt-api-version", location: FieldLocation::Header },
+        FieldSpec { snake: "trakt_api_key", wire: "trakt-api-key", location: FieldLocation::Header },
     ],
     auth: &[
         AuthApply { secret_key: "oauth2", kind: AuthKind::Bearer },
@@ -5399,10 +7432,10 @@ const OP_USERS_REMOVE_LIKE_ON_A_LIST: OpSpec = OpSpec {
     method: "DELETE",
     path_template: "/users/{id}/lists/{list_id}/like",
     fields: &[
-        FieldSpec { snake: "trakt_api_version", location: FieldLocation::Header },
-        FieldSpec { snake: "trakt_api_key", location: FieldLocation::Header },
-        FieldSpec { snake: "id", location: FieldLocation::Path },
-        FieldSpec { snake: "list_id", location: FieldLocation::Path },
+        FieldSpec { snake: "trakt_api_version", wire: "trakt-api-version", location: FieldLocation::Header },
+        FieldSpec { snake: "trakt_api_key", wire: "trakt-api-key", location: FieldLocation::Header },
+        FieldSpec { snake: "id", wire: "id", location: FieldLocation::Path },
+        FieldSpec { snake: "list_id", wire: "list_id", location: FieldLocation::Path },
     ],
     auth: &[
         AuthApply { secret_key: "oauth2", kind: AuthKind::Bearer },
@@ -5413,10 +7446,10 @@ const OP_USERS_GET_USERS_ID_LISTS_LIST_ID_LIKES: OpSpec = OpSpec {
     method: "GET",
     path_template: "/users/{id}/lists/{list_id}/likes",
     fields: &[
-        FieldSpec { snake: "id", location: FieldLocation::Path },
-        FieldSpec { snake: "list_id", location: FieldLocation::Path },
-        FieldSpec { snake: "trakt_api_version", location: FieldLocation::Header },
-        FieldSpec { snake: "trakt_api_key", location: FieldLocation::Header },
+        FieldSpec { snake: "id", wire: "id", location: FieldLocation::Path },
+        FieldSpec { snake: "list_id", wire: "list_id", location: FieldLocation::Path },
+        FieldSpec { snake: "trakt_api_version", wire: "trakt-api-version", location: FieldLocation::Header },
+        FieldSpec { snake: "trakt_api_key", wire: "trakt-api-key", location: FieldLocation::Header },
     ],
     auth: &[
     ],
@@ -5426,11 +7459,11 @@ const OP_USERS_GET_USERS_ID_RATINGS_TYPE_RATING: OpSpec = OpSpec {
     method: "GET",
     path_template: "/users/{id}/ratings/{type}/{rating}",
     fields: &[
-        FieldSpec { snake: "id", location: FieldLocation::Path },
-        FieldSpec { snake: "type", location: FieldLocation::Path },
-        FieldSpec { snake: "rating", location: FieldLocation::Path },
-        FieldSpec { snake: "trakt_api_version", location: FieldLocation::Header },
-        FieldSpec { snake: "trakt_api_key", location: FieldLocation::Header },
+        FieldSpec { snake: "id", wire: "id", location: FieldLocation::Path },
+        FieldSpec { snake: "type", wire: "type", location: FieldLocation::Path },
+        FieldSpec { snake: "rating", wire: "rating", location: FieldLocation::Path },
+        FieldSpec { snake: "trakt_api_version", wire: "trakt-api-version", location: FieldLocation::Header },
+        FieldSpec { snake: "trakt_api_key", wire: "trakt-api-key", location: FieldLocation::Header },
     ],
     auth: &[
     ],
@@ -5440,11 +7473,11 @@ const OP_USERS_GET_USERS_ID_RECOMMENDATIONS_TYPE_SORT: OpSpec = OpSpec {
     method: "GET",
     path_template: "/users/{id}/recommendations/{type}/{sort}",
     fields: &[
-        FieldSpec { snake: "id", location: FieldLocation::Path },
-        FieldSpec { snake: "type", location: FieldLocation::Path },
-        FieldSpec { snake: "sort", location: FieldLocation::Path },
-        FieldSpec { snake: "trakt_api_version", location: FieldLocation::Header },
-        FieldSpec { snake: "trakt_api_key", location: FieldLocation::Header },
+        FieldSpec { snake: "id", wire: "id", location: FieldLocation::Path },
+        FieldSpec { snake: "type", wire: "type", location: FieldLocation::Path },
+        FieldSpec { snake: "sort", wire: "sort", location: FieldLocation::Path },
+        FieldSpec { snake: "trakt_api_version", wire: "trakt-api-version", location: FieldLocation::Header },
+        FieldSpec { snake: "trakt_api_key", wire: "trakt-api-key", location: FieldLocation::Header },
     ],
     auth: &[
         AuthApply { secret_key: "oauth2", kind: AuthKind::Bearer },
@@ -5455,9 +7488,9 @@ const OP_USERS_GET_STATS: OpSpec = OpSpec {
     method: "GET",
     path_template: "/users/{id}/stats",
     fields: &[
-        FieldSpec { snake: "id", location: FieldLocation::Path },
-        FieldSpec { snake: "trakt_api_version", location: FieldLocation::Header },
-        FieldSpec { snake: "trakt_api_key", location: FieldLocation::Header },
+        FieldSpec { snake: "id", wire: "id", location: FieldLocation::Path },
+        FieldSpec { snake: "trakt_api_version", wire: "trakt-api-version", location: FieldLocation::Header },
+        FieldSpec { snake: "trakt_api_key", wire: "trakt-api-key", location: FieldLocation::Header },
     ],
     auth: &[
     ],
@@ -5467,10 +7500,10 @@ const OP_USERS_GET_USERS_ID_WATCHED_TYPE: OpSpec = OpSpec {
     method: "GET",
     path_template: "/users/{id}/watched/{type}",
     fields: &[
-        FieldSpec { snake: "id", location: FieldLocation::Path },
-        FieldSpec { snake: "type", location: FieldLocation::Path },
-        FieldSpec { snake: "trakt_api_version", location: FieldLocation::Header },
-        FieldSpec { snake: "trakt_api_key", location: FieldLocation::Header },
+        FieldSpec { snake: "id", wire: "id", location: FieldLocation::Path },
+        FieldSpec { snake: "type", wire: "type", location: FieldLocation::Path },
+        FieldSpec { snake: "trakt_api_version", wire: "trakt-api-version", location: FieldLocation::Header },
+        FieldSpec { snake: "trakt_api_key", wire: "trakt-api-key", location: FieldLocation::Header },
     ],
     auth: &[
     ],
@@ -5480,9 +7513,9 @@ const OP_USERS_GET_WATCHING: OpSpec = OpSpec {
     method: "GET",
     path_template: "/users/{id}/watching",
     fields: &[
-        FieldSpec { snake: "id", location: FieldLocation::Path },
-        FieldSpec { snake: "trakt_api_version", location: FieldLocation::Header },
-        FieldSpec { snake: "trakt_api_key", location: FieldLocation::Header },
+        FieldSpec { snake: "id", wire: "id", location: FieldLocation::Path },
+        FieldSpec { snake: "trakt_api_version", wire: "trakt-api-version", location: FieldLocation::Header },
+        FieldSpec { snake: "trakt_api_key", wire: "trakt-api-key", location: FieldLocation::Header },
     ],
     auth: &[
     ],
@@ -5492,11 +7525,11 @@ const OP_USERS_GET_USERS_ID_WATCHLIST_TYPE_SORT: OpSpec = OpSpec {
     method: "GET",
     path_template: "/users/{id}/watchlist/{type}/{sort}",
     fields: &[
-        FieldSpec { snake: "id", location: FieldLocation::Path },
-        FieldSpec { snake: "type", location: FieldLocation::Path },
-        FieldSpec { snake: "sort", location: FieldLocation::Path },
-        FieldSpec { snake: "trakt_api_version", location: FieldLocation::Header },
-        FieldSpec { snake: "trakt_api_key", location: FieldLocation::Header },
+        FieldSpec { snake: "id", wire: "id", location: FieldLocation::Path },
+        FieldSpec { snake: "type", wire: "type", location: FieldLocation::Path },
+        FieldSpec { snake: "sort", wire: "sort", location: FieldLocation::Path },
+        FieldSpec { snake: "trakt_api_version", wire: "trakt-api-version", location: FieldLocation::Header },
+        FieldSpec { snake: "trakt_api_key", wire: "trakt-api-key", location: FieldLocation::Header },
     ],
     auth: &[
     ],
@@ -6174,166 +8207,732 @@ fn iface_users__get_users_id_watchlist_type_sort_params__to_json(p: &iface_users
     Value::Object(m)
 }
 
+fn iface_users__get_hidden_items__ok(body: String) -> Result<String, crate::runtime::DispatchError> {
+    Ok(body)
+}
+
+fn iface_users__get_hidden_items__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
+fn iface_users__add_hidden_items__ok(body: String) -> Result<String, crate::runtime::DispatchError> {
+    Ok(body)
+}
+
+fn iface_users__add_hidden_items__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
+fn iface_users__remove_hidden_items__ok(body: String) -> Result<String, crate::runtime::DispatchError> {
+    Ok(body)
+}
+
+fn iface_users__remove_hidden_items__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
+fn iface_users__get_follow_requests__ok(body: String) -> Result<String, crate::runtime::DispatchError> {
+    Ok(body)
+}
+
+fn iface_users__get_follow_requests__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
+fn iface_users__get_pending_following_requests__ok(body: String) -> Result<String, crate::runtime::DispatchError> {
+    Ok(body)
+}
+
+fn iface_users__get_pending_following_requests__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
+fn iface_users__approve_follow_request__ok(body: String) -> Result<String, crate::runtime::DispatchError> {
+    Ok(body)
+}
+
+fn iface_users__approve_follow_request__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
+fn iface_users__deny_follow_request__ok(body: String) -> Result<String, crate::runtime::DispatchError> {
+    Ok(body)
+}
+
+fn iface_users__deny_follow_request__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
+fn iface_users__get_saved_filters__ok(body: String) -> Result<String, crate::runtime::DispatchError> {
+    Ok(body)
+}
+
+fn iface_users__get_saved_filters__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
+fn iface_users__retrieve_settings__ok(body: String) -> Result<String, crate::runtime::DispatchError> {
+    Ok(body)
+}
+
+fn iface_users__retrieve_settings__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
+fn iface_users__get_user_profile__ok(body: String) -> Result<String, crate::runtime::DispatchError> {
+    Ok(body)
+}
+
+fn iface_users__get_user_profile__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
+fn iface_users__get_users_id_collection_type__ok(body: String) -> Result<String, crate::runtime::DispatchError> {
+    Ok(body)
+}
+
+fn iface_users__get_users_id_collection_type__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
+fn iface_users__get_comments__ok(body: String) -> Result<String, crate::runtime::DispatchError> {
+    Ok(body)
+}
+
+fn iface_users__get_comments__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
+fn iface_users__follow_this_user__ok(body: String) -> Result<String, crate::runtime::DispatchError> {
+    Ok(body)
+}
+
+fn iface_users__follow_this_user__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
+fn iface_users__unfollow_this_user__ok(body: String) -> Result<String, crate::runtime::DispatchError> {
+    Ok(body)
+}
+
+fn iface_users__unfollow_this_user__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
+fn iface_users__get_followers__ok(body: String) -> Result<String, crate::runtime::DispatchError> {
+    Ok(body)
+}
+
+fn iface_users__get_followers__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
+fn iface_users__get_following__ok(body: String) -> Result<String, crate::runtime::DispatchError> {
+    Ok(body)
+}
+
+fn iface_users__get_following__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
+fn iface_users__get_friends__ok(body: String) -> Result<String, crate::runtime::DispatchError> {
+    Ok(body)
+}
+
+fn iface_users__get_friends__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
+fn iface_users__get_users_id_history_type_item_id__ok(body: String) -> Result<String, crate::runtime::DispatchError> {
+    Ok(body)
+}
+
+fn iface_users__get_users_id_history_type_item_id__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
+fn iface_users__get_likes__ok(body: String) -> Result<String, crate::runtime::DispatchError> {
+    Ok(body)
+}
+
+fn iface_users__get_likes__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
+fn iface_users__get_a_user_s_personal_lists__ok(body: String) -> Result<String, crate::runtime::DispatchError> {
+    Ok(body)
+}
+
+fn iface_users__get_a_user_s_personal_lists__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
+fn iface_users__create_personal_list__ok(body: String) -> Result<String, crate::runtime::DispatchError> {
+    Ok(body)
+}
+
+fn iface_users__create_personal_list__err(e: crate::runtime::DispatchError) -> iface_users::CreatePersonalListError {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => match status {
+            420u16 => iface_users::CreatePersonalListError::StatusV420(body),
+            _ => iface_users::CreatePersonalListError::Other(body),
+        },
+        crate::runtime::DispatchError::Transport(m) => iface_users::CreatePersonalListError::Other(m),
+    }
+}
+
+fn iface_users__get_all_lists_a_user_can_collaborate_on__ok(body: String) -> Result<String, crate::runtime::DispatchError> {
+    Ok(body)
+}
+
+fn iface_users__get_all_lists_a_user_can_collaborate_on__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
+fn iface_users__reorder_a_user_s_lists__ok(body: String) -> Result<String, crate::runtime::DispatchError> {
+    Ok(body)
+}
+
+fn iface_users__reorder_a_user_s_lists__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
+fn iface_users__get_personal_list__ok(body: String) -> Result<String, crate::runtime::DispatchError> {
+    Ok(body)
+}
+
+fn iface_users__get_personal_list__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
+fn iface_users__update_personal_list__ok(body: String) -> Result<String, crate::runtime::DispatchError> {
+    Ok(body)
+}
+
+fn iface_users__update_personal_list__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
+fn iface_users__delete_a_user_s_personal_list__ok(body: String) -> Result<String, crate::runtime::DispatchError> {
+    Ok(body)
+}
+
+fn iface_users__delete_a_user_s_personal_list__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
+fn iface_users__get_users_id_lists_list_id_comments_sort__ok(body: String) -> Result<String, crate::runtime::DispatchError> {
+    Ok(body)
+}
+
+fn iface_users__get_users_id_lists_list_id_comments_sort__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
+fn iface_users__add_items_to_personal_list__ok(body: String) -> Result<String, crate::runtime::DispatchError> {
+    Ok(body)
+}
+
+fn iface_users__add_items_to_personal_list__err(e: crate::runtime::DispatchError) -> iface_users::AddItemsToPersonalListError {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => match status {
+            420u16 => iface_users::AddItemsToPersonalListError::StatusV420(body),
+            _ => iface_users::AddItemsToPersonalListError::Other(body),
+        },
+        crate::runtime::DispatchError::Transport(m) => iface_users::AddItemsToPersonalListError::Other(m),
+    }
+}
+
+fn iface_users__remove_items_from_personal_list__ok(body: String) -> Result<String, crate::runtime::DispatchError> {
+    Ok(body)
+}
+
+fn iface_users__remove_items_from_personal_list__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
+fn iface_users__reorder_items_on_a_list__ok(body: String) -> Result<String, crate::runtime::DispatchError> {
+    Ok(body)
+}
+
+fn iface_users__reorder_items_on_a_list__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
+fn iface_users__get_items_on_a_personal_list__ok(body: String) -> Result<String, crate::runtime::DispatchError> {
+    Ok(body)
+}
+
+fn iface_users__get_items_on_a_personal_list__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
+fn iface_users__like_a_list__ok(body: String) -> Result<String, crate::runtime::DispatchError> {
+    Ok(body)
+}
+
+fn iface_users__like_a_list__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
+fn iface_users__remove_like_on_a_list__ok(body: String) -> Result<String, crate::runtime::DispatchError> {
+    Ok(body)
+}
+
+fn iface_users__remove_like_on_a_list__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
+fn iface_users__get_users_id_lists_list_id_likes__ok(body: String) -> Result<String, crate::runtime::DispatchError> {
+    Ok(body)
+}
+
+fn iface_users__get_users_id_lists_list_id_likes__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
+fn iface_users__get_users_id_ratings_type_rating__ok(body: String) -> Result<String, crate::runtime::DispatchError> {
+    Ok(body)
+}
+
+fn iface_users__get_users_id_ratings_type_rating__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
+fn iface_users__get_users_id_recommendations_type_sort__ok(body: String) -> Result<String, crate::runtime::DispatchError> {
+    Ok(body)
+}
+
+fn iface_users__get_users_id_recommendations_type_sort__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
+fn iface_users__get_stats__ok(body: String) -> Result<String, crate::runtime::DispatchError> {
+    Ok(body)
+}
+
+fn iface_users__get_stats__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
+fn iface_users__get_users_id_watched_type__ok(body: String) -> Result<String, crate::runtime::DispatchError> {
+    Ok(body)
+}
+
+fn iface_users__get_users_id_watched_type__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
+fn iface_users__get_watching__ok(body: String) -> Result<String, crate::runtime::DispatchError> {
+    Ok(body)
+}
+
+fn iface_users__get_watching__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
+fn iface_users__get_users_id_watchlist_type_sort__ok(body: String) -> Result<String, crate::runtime::DispatchError> {
+    Ok(body)
+}
+
+fn iface_users__get_users_id_watchlist_type_sort__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
 impl iface_users::Guest for crate::Component {
     fn get_hidden_items(params: iface_users::GetHiddenItemsParams) -> Result<String, String> {
         let json = iface_users__get_hidden_items_params__to_json(&params);
-        dispatch(&OP_USERS_GET_HIDDEN_ITEMS, json)
+        match dispatch(&OP_USERS_GET_HIDDEN_ITEMS, json).and_then(iface_users__get_hidden_items__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_users__get_hidden_items__err(e)),
+        }
     }
     fn add_hidden_items(params: iface_users::AddHiddenItemsParams) -> Result<String, String> {
         let json = iface_users__add_hidden_items_params__to_json(&params);
-        dispatch(&OP_USERS_ADD_HIDDEN_ITEMS, json)
+        match dispatch(&OP_USERS_ADD_HIDDEN_ITEMS, json).and_then(iface_users__add_hidden_items__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_users__add_hidden_items__err(e)),
+        }
     }
     fn remove_hidden_items(params: iface_users::RemoveHiddenItemsParams) -> Result<String, String> {
         let json = iface_users__remove_hidden_items_params__to_json(&params);
-        dispatch(&OP_USERS_REMOVE_HIDDEN_ITEMS, json)
+        match dispatch(&OP_USERS_REMOVE_HIDDEN_ITEMS, json).and_then(iface_users__remove_hidden_items__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_users__remove_hidden_items__err(e)),
+        }
     }
     fn get_follow_requests(params: iface_users::GetFollowRequestsParams) -> Result<String, String> {
         let json = iface_users__get_follow_requests_params__to_json(&params);
-        dispatch(&OP_USERS_GET_FOLLOW_REQUESTS, json)
+        match dispatch(&OP_USERS_GET_FOLLOW_REQUESTS, json).and_then(iface_users__get_follow_requests__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_users__get_follow_requests__err(e)),
+        }
     }
     fn get_pending_following_requests(params: iface_users::GetPendingFollowingRequestsParams) -> Result<String, String> {
         let json = iface_users__get_pending_following_requests_params__to_json(&params);
-        dispatch(&OP_USERS_GET_PENDING_FOLLOWING_REQUESTS, json)
+        match dispatch(&OP_USERS_GET_PENDING_FOLLOWING_REQUESTS, json).and_then(iface_users__get_pending_following_requests__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_users__get_pending_following_requests__err(e)),
+        }
     }
     fn approve_follow_request(params: iface_users::ApproveFollowRequestParams) -> Result<String, String> {
         let json = iface_users__approve_follow_request_params__to_json(&params);
-        dispatch(&OP_USERS_APPROVE_FOLLOW_REQUEST, json)
+        match dispatch(&OP_USERS_APPROVE_FOLLOW_REQUEST, json).and_then(iface_users__approve_follow_request__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_users__approve_follow_request__err(e)),
+        }
     }
     fn deny_follow_request(params: iface_users::DenyFollowRequestParams) -> Result<String, String> {
         let json = iface_users__deny_follow_request_params__to_json(&params);
-        dispatch(&OP_USERS_DENY_FOLLOW_REQUEST, json)
+        match dispatch(&OP_USERS_DENY_FOLLOW_REQUEST, json).and_then(iface_users__deny_follow_request__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_users__deny_follow_request__err(e)),
+        }
     }
     fn get_saved_filters(params: iface_users::GetSavedFiltersParams) -> Result<String, String> {
         let json = iface_users__get_saved_filters_params__to_json(&params);
-        dispatch(&OP_USERS_GET_SAVED_FILTERS, json)
+        match dispatch(&OP_USERS_GET_SAVED_FILTERS, json).and_then(iface_users__get_saved_filters__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_users__get_saved_filters__err(e)),
+        }
     }
     fn retrieve_settings(params: iface_users::RetrieveSettingsParams) -> Result<String, String> {
         let json = iface_users__retrieve_settings_params__to_json(&params);
-        dispatch(&OP_USERS_RETRIEVE_SETTINGS, json)
+        match dispatch(&OP_USERS_RETRIEVE_SETTINGS, json).and_then(iface_users__retrieve_settings__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_users__retrieve_settings__err(e)),
+        }
     }
     fn get_user_profile(params: iface_users::GetUserProfileParams) -> Result<String, String> {
         let json = iface_users__get_user_profile_params__to_json(&params);
-        dispatch(&OP_USERS_GET_USER_PROFILE, json)
+        match dispatch(&OP_USERS_GET_USER_PROFILE, json).and_then(iface_users__get_user_profile__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_users__get_user_profile__err(e)),
+        }
     }
     fn get_users_id_collection_type(params: iface_users::GetUsersIdCollectionTypeParams) -> Result<String, String> {
         let json = iface_users__get_users_id_collection_type_params__to_json(&params);
-        dispatch(&OP_USERS_GET_USERS_ID_COLLECTION_TYPE, json)
+        match dispatch(&OP_USERS_GET_USERS_ID_COLLECTION_TYPE, json).and_then(iface_users__get_users_id_collection_type__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_users__get_users_id_collection_type__err(e)),
+        }
     }
     fn get_comments(params: iface_users::GetCommentsParams) -> Result<String, String> {
         let json = iface_users__get_comments_params__to_json(&params);
-        dispatch(&OP_USERS_GET_COMMENTS, json)
+        match dispatch(&OP_USERS_GET_COMMENTS, json).and_then(iface_users__get_comments__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_users__get_comments__err(e)),
+        }
     }
     fn follow_this_user(params: iface_users::FollowThisUserParams) -> Result<String, String> {
         let json = iface_users__follow_this_user_params__to_json(&params);
-        dispatch(&OP_USERS_FOLLOW_THIS_USER, json)
+        match dispatch(&OP_USERS_FOLLOW_THIS_USER, json).and_then(iface_users__follow_this_user__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_users__follow_this_user__err(e)),
+        }
     }
     fn unfollow_this_user(params: iface_users::UnfollowThisUserParams) -> Result<String, String> {
         let json = iface_users__unfollow_this_user_params__to_json(&params);
-        dispatch(&OP_USERS_UNFOLLOW_THIS_USER, json)
+        match dispatch(&OP_USERS_UNFOLLOW_THIS_USER, json).and_then(iface_users__unfollow_this_user__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_users__unfollow_this_user__err(e)),
+        }
     }
     fn get_followers(params: iface_users::GetFollowersParams) -> Result<String, String> {
         let json = iface_users__get_followers_params__to_json(&params);
-        dispatch(&OP_USERS_GET_FOLLOWERS, json)
+        match dispatch(&OP_USERS_GET_FOLLOWERS, json).and_then(iface_users__get_followers__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_users__get_followers__err(e)),
+        }
     }
     fn get_following(params: iface_users::GetFollowingParams) -> Result<String, String> {
         let json = iface_users__get_following_params__to_json(&params);
-        dispatch(&OP_USERS_GET_FOLLOWING, json)
+        match dispatch(&OP_USERS_GET_FOLLOWING, json).and_then(iface_users__get_following__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_users__get_following__err(e)),
+        }
     }
     fn get_friends(params: iface_users::GetFriendsParams) -> Result<String, String> {
         let json = iface_users__get_friends_params__to_json(&params);
-        dispatch(&OP_USERS_GET_FRIENDS, json)
+        match dispatch(&OP_USERS_GET_FRIENDS, json).and_then(iface_users__get_friends__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_users__get_friends__err(e)),
+        }
     }
     fn get_users_id_history_type_item_id(params: iface_users::GetUsersIdHistoryTypeItemIdParams) -> Result<String, String> {
         let json = iface_users__get_users_id_history_type_item_id_params__to_json(&params);
-        dispatch(&OP_USERS_GET_USERS_ID_HISTORY_TYPE_ITEM_ID, json)
+        match dispatch(&OP_USERS_GET_USERS_ID_HISTORY_TYPE_ITEM_ID, json).and_then(iface_users__get_users_id_history_type_item_id__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_users__get_users_id_history_type_item_id__err(e)),
+        }
     }
     fn get_likes(params: iface_users::GetLikesParams) -> Result<String, String> {
         let json = iface_users__get_likes_params__to_json(&params);
-        dispatch(&OP_USERS_GET_LIKES, json)
+        match dispatch(&OP_USERS_GET_LIKES, json).and_then(iface_users__get_likes__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_users__get_likes__err(e)),
+        }
     }
     fn get_a_user_s_personal_lists(params: iface_users::GetAUserSPersonalListsParams) -> Result<String, String> {
         let json = iface_users__get_a_user_s_personal_lists_params__to_json(&params);
-        dispatch(&OP_USERS_GET_A_USER_S_PERSONAL_LISTS, json)
+        match dispatch(&OP_USERS_GET_A_USER_S_PERSONAL_LISTS, json).and_then(iface_users__get_a_user_s_personal_lists__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_users__get_a_user_s_personal_lists__err(e)),
+        }
     }
-    fn create_personal_list(params: iface_users::CreatePersonalListParams) -> Result<String, String> {
+    fn create_personal_list(params: iface_users::CreatePersonalListParams) -> Result<String, iface_users::CreatePersonalListError> {
         let json = iface_users__create_personal_list_params__to_json(&params);
-        dispatch(&OP_USERS_CREATE_PERSONAL_LIST, json)
+        match dispatch(&OP_USERS_CREATE_PERSONAL_LIST, json).and_then(iface_users__create_personal_list__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_users__create_personal_list__err(e)),
+        }
     }
     fn get_all_lists_a_user_can_collaborate_on(params: iface_users::GetAllListsAUserCanCollaborateOnParams) -> Result<String, String> {
         let json = iface_users__get_all_lists_a_user_can_collaborate_on_params__to_json(&params);
-        dispatch(&OP_USERS_GET_ALL_LISTS_A_USER_CAN_COLLABORATE_ON, json)
+        match dispatch(&OP_USERS_GET_ALL_LISTS_A_USER_CAN_COLLABORATE_ON, json).and_then(iface_users__get_all_lists_a_user_can_collaborate_on__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_users__get_all_lists_a_user_can_collaborate_on__err(e)),
+        }
     }
     fn reorder_a_user_s_lists(params: iface_users::ReorderAUserSListsParams) -> Result<String, String> {
         let json = iface_users__reorder_a_user_s_lists_params__to_json(&params);
-        dispatch(&OP_USERS_REORDER_A_USER_S_LISTS, json)
+        match dispatch(&OP_USERS_REORDER_A_USER_S_LISTS, json).and_then(iface_users__reorder_a_user_s_lists__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_users__reorder_a_user_s_lists__err(e)),
+        }
     }
     fn get_personal_list(params: iface_users::GetPersonalListParams) -> Result<String, String> {
         let json = iface_users__get_personal_list_params__to_json(&params);
-        dispatch(&OP_USERS_GET_PERSONAL_LIST, json)
+        match dispatch(&OP_USERS_GET_PERSONAL_LIST, json).and_then(iface_users__get_personal_list__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_users__get_personal_list__err(e)),
+        }
     }
     fn update_personal_list(params: iface_users::UpdatePersonalListParams) -> Result<String, String> {
         let json = iface_users__update_personal_list_params__to_json(&params);
-        dispatch(&OP_USERS_UPDATE_PERSONAL_LIST, json)
+        match dispatch(&OP_USERS_UPDATE_PERSONAL_LIST, json).and_then(iface_users__update_personal_list__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_users__update_personal_list__err(e)),
+        }
     }
     fn delete_a_user_s_personal_list(params: iface_users::DeleteAUserSPersonalListParams) -> Result<String, String> {
         let json = iface_users__delete_a_user_s_personal_list_params__to_json(&params);
-        dispatch(&OP_USERS_DELETE_A_USER_S_PERSONAL_LIST, json)
+        match dispatch(&OP_USERS_DELETE_A_USER_S_PERSONAL_LIST, json).and_then(iface_users__delete_a_user_s_personal_list__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_users__delete_a_user_s_personal_list__err(e)),
+        }
     }
     fn get_users_id_lists_list_id_comments_sort(params: iface_users::GetUsersIdListsListIdCommentsSortParams) -> Result<String, String> {
         let json = iface_users__get_users_id_lists_list_id_comments_sort_params__to_json(&params);
-        dispatch(&OP_USERS_GET_USERS_ID_LISTS_LIST_ID_COMMENTS_SORT, json)
+        match dispatch(&OP_USERS_GET_USERS_ID_LISTS_LIST_ID_COMMENTS_SORT, json).and_then(iface_users__get_users_id_lists_list_id_comments_sort__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_users__get_users_id_lists_list_id_comments_sort__err(e)),
+        }
     }
-    fn add_items_to_personal_list(params: iface_users::AddItemsToPersonalListParams) -> Result<String, String> {
+    fn add_items_to_personal_list(params: iface_users::AddItemsToPersonalListParams) -> Result<String, iface_users::AddItemsToPersonalListError> {
         let json = iface_users__add_items_to_personal_list_params__to_json(&params);
-        dispatch(&OP_USERS_ADD_ITEMS_TO_PERSONAL_LIST, json)
+        match dispatch(&OP_USERS_ADD_ITEMS_TO_PERSONAL_LIST, json).and_then(iface_users__add_items_to_personal_list__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_users__add_items_to_personal_list__err(e)),
+        }
     }
     fn remove_items_from_personal_list(params: iface_users::RemoveItemsFromPersonalListParams) -> Result<String, String> {
         let json = iface_users__remove_items_from_personal_list_params__to_json(&params);
-        dispatch(&OP_USERS_REMOVE_ITEMS_FROM_PERSONAL_LIST, json)
+        match dispatch(&OP_USERS_REMOVE_ITEMS_FROM_PERSONAL_LIST, json).and_then(iface_users__remove_items_from_personal_list__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_users__remove_items_from_personal_list__err(e)),
+        }
     }
     fn reorder_items_on_a_list(params: iface_users::ReorderItemsOnAListParams) -> Result<String, String> {
         let json = iface_users__reorder_items_on_a_list_params__to_json(&params);
-        dispatch(&OP_USERS_REORDER_ITEMS_ON_A_LIST, json)
+        match dispatch(&OP_USERS_REORDER_ITEMS_ON_A_LIST, json).and_then(iface_users__reorder_items_on_a_list__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_users__reorder_items_on_a_list__err(e)),
+        }
     }
     fn get_items_on_a_personal_list(params: iface_users::GetItemsOnAPersonalListParams) -> Result<String, String> {
         let json = iface_users__get_items_on_a_personal_list_params__to_json(&params);
-        dispatch(&OP_USERS_GET_ITEMS_ON_A_PERSONAL_LIST, json)
+        match dispatch(&OP_USERS_GET_ITEMS_ON_A_PERSONAL_LIST, json).and_then(iface_users__get_items_on_a_personal_list__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_users__get_items_on_a_personal_list__err(e)),
+        }
     }
     fn like_a_list(params: iface_users::LikeAListParams) -> Result<String, String> {
         let json = iface_users__like_a_list_params__to_json(&params);
-        dispatch(&OP_USERS_LIKE_A_LIST, json)
+        match dispatch(&OP_USERS_LIKE_A_LIST, json).and_then(iface_users__like_a_list__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_users__like_a_list__err(e)),
+        }
     }
     fn remove_like_on_a_list(params: iface_users::RemoveLikeOnAListParams) -> Result<String, String> {
         let json = iface_users__remove_like_on_a_list_params__to_json(&params);
-        dispatch(&OP_USERS_REMOVE_LIKE_ON_A_LIST, json)
+        match dispatch(&OP_USERS_REMOVE_LIKE_ON_A_LIST, json).and_then(iface_users__remove_like_on_a_list__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_users__remove_like_on_a_list__err(e)),
+        }
     }
     fn get_users_id_lists_list_id_likes(params: iface_users::GetUsersIdListsListIdLikesParams) -> Result<String, String> {
         let json = iface_users__get_users_id_lists_list_id_likes_params__to_json(&params);
-        dispatch(&OP_USERS_GET_USERS_ID_LISTS_LIST_ID_LIKES, json)
+        match dispatch(&OP_USERS_GET_USERS_ID_LISTS_LIST_ID_LIKES, json).and_then(iface_users__get_users_id_lists_list_id_likes__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_users__get_users_id_lists_list_id_likes__err(e)),
+        }
     }
     fn get_users_id_ratings_type_rating(params: iface_users::GetUsersIdRatingsTypeRatingParams) -> Result<String, String> {
         let json = iface_users__get_users_id_ratings_type_rating_params__to_json(&params);
-        dispatch(&OP_USERS_GET_USERS_ID_RATINGS_TYPE_RATING, json)
+        match dispatch(&OP_USERS_GET_USERS_ID_RATINGS_TYPE_RATING, json).and_then(iface_users__get_users_id_ratings_type_rating__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_users__get_users_id_ratings_type_rating__err(e)),
+        }
     }
     fn get_users_id_recommendations_type_sort(params: iface_users::GetUsersIdRecommendationsTypeSortParams) -> Result<String, String> {
         let json = iface_users__get_users_id_recommendations_type_sort_params__to_json(&params);
-        dispatch(&OP_USERS_GET_USERS_ID_RECOMMENDATIONS_TYPE_SORT, json)
+        match dispatch(&OP_USERS_GET_USERS_ID_RECOMMENDATIONS_TYPE_SORT, json).and_then(iface_users__get_users_id_recommendations_type_sort__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_users__get_users_id_recommendations_type_sort__err(e)),
+        }
     }
     fn get_stats(params: iface_users::GetStatsParams) -> Result<String, String> {
         let json = iface_users__get_stats_params__to_json(&params);
-        dispatch(&OP_USERS_GET_STATS, json)
+        match dispatch(&OP_USERS_GET_STATS, json).and_then(iface_users__get_stats__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_users__get_stats__err(e)),
+        }
     }
     fn get_users_id_watched_type(params: iface_users::GetUsersIdWatchedTypeParams) -> Result<String, String> {
         let json = iface_users__get_users_id_watched_type_params__to_json(&params);
-        dispatch(&OP_USERS_GET_USERS_ID_WATCHED_TYPE, json)
+        match dispatch(&OP_USERS_GET_USERS_ID_WATCHED_TYPE, json).and_then(iface_users__get_users_id_watched_type__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_users__get_users_id_watched_type__err(e)),
+        }
     }
     fn get_watching(params: iface_users::GetWatchingParams) -> Result<String, String> {
         let json = iface_users__get_watching_params__to_json(&params);
-        dispatch(&OP_USERS_GET_WATCHING, json)
+        match dispatch(&OP_USERS_GET_WATCHING, json).and_then(iface_users__get_watching__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_users__get_watching__err(e)),
+        }
     }
     fn get_users_id_watchlist_type_sort(params: iface_users::GetUsersIdWatchlistTypeSortParams) -> Result<String, String> {
         let json = iface_users__get_users_id_watchlist_type_sort_params__to_json(&params);
-        dispatch(&OP_USERS_GET_USERS_ID_WATCHLIST_TYPE_SORT, json)
+        match dispatch(&OP_USERS_GET_USERS_ID_WATCHLIST_TYPE_SORT, json).and_then(iface_users__get_users_id_watchlist_type_sort__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_users__get_users_id_watchlist_type_sort__err(e)),
+        }
     }
 }
 

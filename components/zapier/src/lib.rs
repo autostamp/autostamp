@@ -44,10 +44,15 @@ pub(crate) enum FieldLocation {
     Body,
 }
 
-/// A single operation parameter: the snake-case key it carries in the params JSON and where
-/// it belongs in the request.
+/// A single operation parameter. `snake` keys the field in the internal params JSON (and, for a
+/// path field, matches the `{snake}` placeholder in the path template); `wire` is the verbatim name
+/// the field takes on the HTTP wire (query key, header name, or body property). The two differ
+/// whenever the source name isn't already snake_case (e.g. `dryRun` → snake `dry_run`, wire
+/// `dryRun`), and let distinct inputs that share a snake key (`DateCreated`, `DateCreated<`) still
+/// travel under their true names.
 pub(crate) struct FieldSpec {
     pub(crate) snake: &'static str,
+    pub(crate) wire: &'static str,
     pub(crate) location: FieldLocation,
 }
 
@@ -71,6 +76,16 @@ pub(crate) struct AuthApply {
     pub(crate) kind: AuthKind,
 }
 
+/// The failure modes of [`dispatch`], kept structured so each generated operation can map them
+/// onto its own typed error: an `Http` failure carries the response status and body (routed to
+/// the matching error-variant case), while a `Transport` failure carries a message for the
+/// catch-all case (a secret lookup, connection, or decode failure that never produced an HTTP
+/// status).
+pub(crate) enum DispatchError {
+    Http { status: u16, body: String },
+    Transport(String),
+}
+
 /// A single API operation: HTTP method, path template (with `{snake}` placeholders), the
 /// parameter fields, and the security schemes to apply.
 pub(crate) struct OpSpec {
@@ -81,8 +96,9 @@ pub(crate) struct OpSpec {
 }
 
 /// Execute `op` with the supplied `params` (a JSON object keyed by snake-case field names)
-/// and return the response body as a string, or an error message.
-pub(crate) fn dispatch(op: &OpSpec, params: Value) -> Result<String, String> {
+/// and return the raw 2xx response body, or a structured [`DispatchError`] the caller maps
+/// onto the operation's typed error.
+pub(crate) fn dispatch(op: &OpSpec, params: Value) -> Result<String, DispatchError> {
     let obj = match &params {
         Value::Object(map) => Some(map),
         _ => None,
@@ -105,10 +121,10 @@ pub(crate) fn dispatch(op: &OpSpec, params: Value) -> Result<String, String> {
                 let placeholder = format!("{{{}}}", field.snake);
                 path = path.replace(&placeholder, &percent_encode(&scalar(value)));
             }
-            FieldLocation::Query => query.push((field.snake.to_string(), scalar(value))),
-            FieldLocation::Header => headers.push((field.snake.to_string(), scalar(value))),
+            FieldLocation::Query => query.push((field.wire.to_string(), scalar(value))),
+            FieldLocation::Header => headers.push((field.wire.to_string(), scalar(value))),
             FieldLocation::Body => {
-                body.insert(field.snake.to_string(), value.clone());
+                body.insert(field.wire.to_string(), value.clone());
             }
         }
     }
@@ -116,7 +132,7 @@ pub(crate) fn dispatch(op: &OpSpec, params: Value) -> Result<String, String> {
     // Apply each resolved security scheme, sourcing its value from wasmcloud:secrets.
     let mut cookies: Vec<String> = Vec::new();
     for apply in op.auth {
-        let secret = fetch_secret(apply.secret_key)?;
+        let secret = fetch_secret(apply.secret_key).map_err(DispatchError::Transport)?;
         match &apply.kind {
             AuthKind::Bearer => headers.push(("authorization".into(), format!("Bearer {secret}"))),
             AuthKind::Basic => {
@@ -177,17 +193,18 @@ fn fetch_secret(key: &str) -> Result<String, String> {
 }
 
 /// Build and send the outgoing request with `wstd`, returning the response body on a 2xx
-/// status. The generated guest exports are synchronous, so the async `wstd` client is driven
-/// to completion on a local reactor via `wstd::runtime::block_on`.
+/// status and a structured [`DispatchError`] otherwise. The generated guest exports are
+/// synchronous, so the async `wstd` client is driven to completion on a local reactor via
+/// `wstd::runtime::block_on`.
 fn perform(
     method: &str,
     path_with_query: &str,
     headers: &[(String, String)],
     body: &[u8],
-) -> Result<String, String> {
+) -> Result<String, DispatchError> {
     let url = join_url(crate::BASE_URL, path_with_query);
     let method = Method::from_bytes(method.as_bytes())
-        .map_err(|err| format!("invalid HTTP method `{method}`: {err}"))?;
+        .map_err(|err| DispatchError::Transport(format!("invalid HTTP method `{method}`: {err}")))?;
 
     let mut builder = Request::builder().method(method).uri(url);
     for (name, value) in headers {
@@ -199,27 +216,29 @@ fn perform(
         } else {
             Body::from(body.to_vec())
         })
-        .map_err(|err| format!("failed to build request: {err}"))?;
+        .map_err(|err| DispatchError::Transport(format!("failed to build request: {err}")))?;
 
     wstd::runtime::block_on(async move {
         let client = Client::new();
         let response = client
             .send(request)
             .await
-            .map_err(|err| format!("request failed: {err:#}"))?;
+            .map_err(|err| DispatchError::Transport(format!("request failed: {err:#}")))?;
 
         let status = response.status().as_u16();
         let mut response_body = response.into_body();
-        let bytes = response_body
-            .contents()
-            .await
-            .map_err(|err| format!("failed to read response body: {err:#}"))?;
+        let bytes = response_body.contents().await.map_err(|err| {
+            DispatchError::Transport(format!("failed to read response body: {err:#}"))
+        })?;
         let body_text = String::from_utf8_lossy(bytes).into_owned();
 
         if (200..300).contains(&status) {
             Ok(body_text)
         } else {
-            Err(format!("HTTP {status}: {body_text}"))
+            Err(DispatchError::Http {
+                status,
+                body: body_text,
+            })
         }
     })
 }
@@ -308,7 +327,7 @@ const OP_API_GET_EXECUTION_LOG_ENDPOINT: OpSpec = OpSpec {
     method: "GET",
     path_template: "/api/v1/execution-log/{execution_log_id}/",
     fields: &[
-        FieldSpec { snake: "execution_log_id", location: FieldLocation::Path },
+        FieldSpec { snake: "execution_log_id", wire: "execution_log_id", location: FieldLocation::Path },
     ],
     auth: &[
         AuthApply { secret_key: "SessionAuth", kind: AuthKind::ApiKeyCookie("sessionid") },
@@ -329,14 +348,84 @@ const OP_API_EXECUTE_APP_ACTION_ENDPOINT: OpSpec = OpSpec {
     method: "POST",
     path_template: "/api/v1/exposed/{exposed_app_action_id}/execute/",
     fields: &[
-        FieldSpec { snake: "exposed_app_action_id", location: FieldLocation::Path },
-        FieldSpec { snake: "instructions", location: FieldLocation::Body },
-        FieldSpec { snake: "preview_only", location: FieldLocation::Body },
+        FieldSpec { snake: "exposed_app_action_id", wire: "exposed_app_action_id", location: FieldLocation::Path },
+        FieldSpec { snake: "instructions", wire: "instructions", location: FieldLocation::Body },
+        FieldSpec { snake: "preview_only", wire: "preview_only", location: FieldLocation::Body },
     ],
     auth: &[
         AuthApply { secret_key: "SessionAuth", kind: AuthKind::ApiKeyCookie("sessionid") },
     ],
 };
+
+fn iface_api__execute_response_status_enum__to_str(e: &iface_api::ExecuteResponseStatusEnum) -> &'static str {
+    match e {
+        iface_api::ExecuteResponseStatusEnum::Success => "success",
+        iface_api::ExecuteResponseStatusEnum::Error => "error",
+        iface_api::ExecuteResponseStatusEnum::Empty => "empty",
+        iface_api::ExecuteResponseStatusEnum::Preview => "preview",
+    }
+}
+
+fn iface_api__execute_response__to_json(p: &iface_api::ExecuteResponse) -> Value {
+    let mut m = Map::new();
+    m.insert("action_used".into(), Value::String((&p.action_used).clone()));
+    m.insert("additional_results".into(), Value::Array((&p.additional_results).iter().map(|v| iface_api__execute_response_additional_results_item__to_json(v)).collect()));
+    m.insert("assistant_hint".into(), match (&p.assistant_hint) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("error".into(), match (&p.error) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("id".into(), Value::String((&p.id).clone()));
+    m.insert("input_params".into(), iface_api__execute_response_input_params__to_json(&p.input_params));
+    m.insert("result".into(), match (&p.result_op) { Some(v) => iface_api__execute_response_result_op__to_json(v), None => Value::Null });
+    m.insert("result_field_labels".into(), match (&p.result_field_labels) { Some(v) => iface_api__execute_response_result_field_labels__to_json(v), None => Value::Null });
+    m.insert("review_url".into(), Value::String((&p.review_url).clone()));
+    m.insert("status".into(), match (&p.status) { Some(v) => Value::String(iface_api__execute_response_status_enum__to_str(v).into()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_api__execute_response_additional_results_item__to_json(p: &iface_api::ExecuteResponseAdditionalResultsItem) -> Value {
+    let mut m = Map::new();
+    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_api__execute_response_input_params__to_json(p: &iface_api::ExecuteResponseInputParams) -> Value {
+    let mut m = Map::new();
+    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_api__execute_response_result_op__to_json(p: &iface_api::ExecuteResponseResultOp) -> Value {
+    let mut m = Map::new();
+    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_api__execute_response_result_field_labels__to_json(p: &iface_api::ExecuteResponseResultFieldLabels) -> Value {
+    let mut m = Map::new();
+    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_api__exposed_action_response_schema__to_json(p: &iface_api::ExposedActionResponseSchema) -> Value {
+    let mut m = Map::new();
+    m.insert("configuration_link".into(), Value::String((&p.configuration_link).clone()));
+    m.insert("results".into(), Value::Array((&p.results).iter().map(|v| iface_api__exposed_action_schema__to_json(v)).collect()));
+    Value::Object(m)
+}
+
+fn iface_api__exposed_action_schema__to_json(p: &iface_api::ExposedActionSchema) -> Value {
+    let mut m = Map::new();
+    m.insert("description".into(), Value::String((&p.description).clone()));
+    m.insert("id".into(), Value::String((&p.id).clone()));
+    m.insert("operation_id".into(), Value::String((&p.operation_id).clone()));
+    m.insert("params".into(), iface_api__exposed_action_schema_params__to_json(&p.params));
+    Value::Object(m)
+}
+
+fn iface_api__exposed_action_schema_params__to_json(p: &iface_api::ExposedActionSchemaParams) -> Value {
+    let mut m = Map::new();
+    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
 
 fn iface_api__get_execution_log_endpoint_params__to_json(p: &iface_api::GetExecutionLogEndpointParams) -> Value {
     let mut m = Map::new();
@@ -352,23 +441,199 @@ fn iface_api__execute_app_action_endpoint_params__to_json(p: &iface_api::Execute
     Value::Object(m)
 }
 
+fn iface_api__execute_response__from_json(v: &Value) -> Option<iface_api::ExecuteResponse> {
+    let m = v.as_object()?;
+    Some(iface_api::ExecuteResponse {
+        action_used: m.get("action_used").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        additional_results: m.get("additional_results").and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| iface_api__execute_response_additional_results_item__from_json(x)).collect())).unwrap_or_default(),
+        assistant_hint: m.get("assistant_hint").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        error: m.get("error").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        id: m.get("id").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        input_params: match m.get("input_params").and_then(|v| iface_api__execute_response_input_params__from_json(v)) { Some(x) => x, None => return None },
+        result_op: m.get("result").filter(|v| !v.is_null()).and_then(|v| iface_api__execute_response_result_op__from_json(v)),
+        result_field_labels: m.get("result_field_labels").filter(|v| !v.is_null()).and_then(|v| iface_api__execute_response_result_field_labels__from_json(v)),
+        review_url: m.get("review_url").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        status: m.get("status").filter(|v| !v.is_null()).and_then(|v| (v).as_str().and_then(iface_api__execute_response_status_enum__from_str)),
+    })
+}
+
+fn iface_api__execute_response_additional_results_item__from_json(v: &Value) -> Option<iface_api::ExecuteResponseAdditionalResultsItem> {
+    let m = v.as_object()?;
+    Some(iface_api::ExecuteResponseAdditionalResultsItem {
+        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    })
+}
+
+fn iface_api__execute_response_input_params__from_json(v: &Value) -> Option<iface_api::ExecuteResponseInputParams> {
+    let m = v.as_object()?;
+    Some(iface_api::ExecuteResponseInputParams {
+        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    })
+}
+
+fn iface_api__execute_response_result_op__from_json(v: &Value) -> Option<iface_api::ExecuteResponseResultOp> {
+    let m = v.as_object()?;
+    Some(iface_api::ExecuteResponseResultOp {
+        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    })
+}
+
+fn iface_api__execute_response_result_field_labels__from_json(v: &Value) -> Option<iface_api::ExecuteResponseResultFieldLabels> {
+    let m = v.as_object()?;
+    Some(iface_api::ExecuteResponseResultFieldLabels {
+        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    })
+}
+
+fn iface_api__exposed_action_response_schema__from_json(v: &Value) -> Option<iface_api::ExposedActionResponseSchema> {
+    let m = v.as_object()?;
+    Some(iface_api::ExposedActionResponseSchema {
+        configuration_link: m.get("configuration_link").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        results: m.get("results").and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| iface_api__exposed_action_schema__from_json(x)).collect())).unwrap_or_default(),
+    })
+}
+
+fn iface_api__exposed_action_schema__from_json(v: &Value) -> Option<iface_api::ExposedActionSchema> {
+    let m = v.as_object()?;
+    Some(iface_api::ExposedActionSchema {
+        description: m.get("description").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        id: m.get("id").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        operation_id: m.get("operation_id").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        params: match m.get("params").and_then(|v| iface_api__exposed_action_schema_params__from_json(v)) { Some(x) => x, None => return None },
+    })
+}
+
+fn iface_api__exposed_action_schema_params__from_json(v: &Value) -> Option<iface_api::ExposedActionSchemaParams> {
+    let m = v.as_object()?;
+    Some(iface_api::ExposedActionSchemaParams {
+        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    })
+}
+
+fn iface_api__execute_response_status_enum__from_str(s: &str) -> Option<iface_api::ExecuteResponseStatusEnum> {
+    match s {
+        "success" => Some(iface_api::ExecuteResponseStatusEnum::Success),
+        "error" => Some(iface_api::ExecuteResponseStatusEnum::Error),
+        "empty" => Some(iface_api::ExecuteResponseStatusEnum::Empty),
+        "preview" => Some(iface_api::ExecuteResponseStatusEnum::Preview),
+        _ => None,
+    }
+}
+
+fn iface_api__check__ok(body: String) -> Result<String, crate::runtime::DispatchError> {
+    Ok(body)
+}
+
+fn iface_api__check__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
+fn iface_api__get_configuration_link__ok(body: String) -> Result<String, crate::runtime::DispatchError> {
+    Ok(body)
+}
+
+fn iface_api__get_configuration_link__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
+fn iface_api__get_execution_log_endpoint__ok(body: String) -> Result<iface_api::ExecuteResponse, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match iface_api__execute_response__from_json(&v) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_api__get_execution_log_endpoint__err(e: crate::runtime::DispatchError) -> iface_api::GetExecutionLogEndpointError {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => match status {
+            400u16 => iface_api::GetExecutionLogEndpointError::BadRequest(body),
+            _ => iface_api::GetExecutionLogEndpointError::Other(body),
+        },
+        crate::runtime::DispatchError::Transport(m) => iface_api::GetExecutionLogEndpointError::Other(m),
+    }
+}
+
+fn iface_api__list_exposed_actions__ok(body: String) -> Result<iface_api::ExposedActionResponseSchema, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match iface_api__exposed_action_response_schema__from_json(&v) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_api__list_exposed_actions__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
+fn iface_api__execute_app_action_endpoint__ok(body: String) -> Result<iface_api::ExecuteResponse, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match iface_api__execute_response__from_json(&v) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_api__execute_app_action_endpoint__err(e: crate::runtime::DispatchError) -> iface_api::ExecuteAppActionEndpointError {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => match status {
+            400u16 => iface_api::ExecuteAppActionEndpointError::BadRequest(body),
+            _ => iface_api::ExecuteAppActionEndpointError::Other(body),
+        },
+        crate::runtime::DispatchError::Transport(m) => iface_api::ExecuteAppActionEndpointError::Other(m),
+    }
+}
+
 impl iface_api::Guest for crate::Component {
     fn check() -> Result<String, String> {
-        dispatch(&OP_API_CHECK, Value::Object(Map::new()))
+        match dispatch(&OP_API_CHECK, Value::Object(Map::new())).and_then(iface_api__check__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_api__check__err(e)),
+        }
     }
     fn get_configuration_link() -> Result<String, String> {
-        dispatch(&OP_API_GET_CONFIGURATION_LINK, Value::Object(Map::new()))
+        match dispatch(&OP_API_GET_CONFIGURATION_LINK, Value::Object(Map::new())).and_then(iface_api__get_configuration_link__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_api__get_configuration_link__err(e)),
+        }
     }
-    fn get_execution_log_endpoint(params: iface_api::GetExecutionLogEndpointParams) -> Result<String, String> {
+    fn get_execution_log_endpoint(params: iface_api::GetExecutionLogEndpointParams) -> Result<iface_api::ExecuteResponse, iface_api::GetExecutionLogEndpointError> {
         let json = iface_api__get_execution_log_endpoint_params__to_json(&params);
-        dispatch(&OP_API_GET_EXECUTION_LOG_ENDPOINT, json)
+        match dispatch(&OP_API_GET_EXECUTION_LOG_ENDPOINT, json).and_then(iface_api__get_execution_log_endpoint__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_api__get_execution_log_endpoint__err(e)),
+        }
     }
-    fn list_exposed_actions() -> Result<String, String> {
-        dispatch(&OP_API_LIST_EXPOSED_ACTIONS, Value::Object(Map::new()))
+    fn list_exposed_actions() -> Result<iface_api::ExposedActionResponseSchema, String> {
+        match dispatch(&OP_API_LIST_EXPOSED_ACTIONS, Value::Object(Map::new())).and_then(iface_api__list_exposed_actions__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_api__list_exposed_actions__err(e)),
+        }
     }
-    fn execute_app_action_endpoint(params: iface_api::ExecuteAppActionEndpointParams) -> Result<String, String> {
+    fn execute_app_action_endpoint(params: iface_api::ExecuteAppActionEndpointParams) -> Result<iface_api::ExecuteResponse, iface_api::ExecuteAppActionEndpointError> {
         let json = iface_api__execute_app_action_endpoint_params__to_json(&params);
-        dispatch(&OP_API_EXECUTE_APP_ACTION_ENDPOINT, json)
+        match dispatch(&OP_API_EXECUTE_APP_ACTION_ENDPOINT, json).and_then(iface_api__execute_app_action_endpoint__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_api__execute_app_action_endpoint__err(e)),
+        }
     }
 }
 

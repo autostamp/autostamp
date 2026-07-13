@@ -44,10 +44,15 @@ pub(crate) enum FieldLocation {
     Body,
 }
 
-/// A single operation parameter: the snake-case key it carries in the params JSON and where
-/// it belongs in the request.
+/// A single operation parameter. `snake` keys the field in the internal params JSON (and, for a
+/// path field, matches the `{snake}` placeholder in the path template); `wire` is the verbatim name
+/// the field takes on the HTTP wire (query key, header name, or body property). The two differ
+/// whenever the source name isn't already snake_case (e.g. `dryRun` → snake `dry_run`, wire
+/// `dryRun`), and let distinct inputs that share a snake key (`DateCreated`, `DateCreated<`) still
+/// travel under their true names.
 pub(crate) struct FieldSpec {
     pub(crate) snake: &'static str,
+    pub(crate) wire: &'static str,
     pub(crate) location: FieldLocation,
 }
 
@@ -71,6 +76,16 @@ pub(crate) struct AuthApply {
     pub(crate) kind: AuthKind,
 }
 
+/// The failure modes of [`dispatch`], kept structured so each generated operation can map them
+/// onto its own typed error: an `Http` failure carries the response status and body (routed to
+/// the matching error-variant case), while a `Transport` failure carries a message for the
+/// catch-all case (a secret lookup, connection, or decode failure that never produced an HTTP
+/// status).
+pub(crate) enum DispatchError {
+    Http { status: u16, body: String },
+    Transport(String),
+}
+
 /// A single API operation: HTTP method, path template (with `{snake}` placeholders), the
 /// parameter fields, and the security schemes to apply.
 pub(crate) struct OpSpec {
@@ -81,8 +96,9 @@ pub(crate) struct OpSpec {
 }
 
 /// Execute `op` with the supplied `params` (a JSON object keyed by snake-case field names)
-/// and return the response body as a string, or an error message.
-pub(crate) fn dispatch(op: &OpSpec, params: Value) -> Result<String, String> {
+/// and return the raw 2xx response body, or a structured [`DispatchError`] the caller maps
+/// onto the operation's typed error.
+pub(crate) fn dispatch(op: &OpSpec, params: Value) -> Result<String, DispatchError> {
     let obj = match &params {
         Value::Object(map) => Some(map),
         _ => None,
@@ -105,10 +121,10 @@ pub(crate) fn dispatch(op: &OpSpec, params: Value) -> Result<String, String> {
                 let placeholder = format!("{{{}}}", field.snake);
                 path = path.replace(&placeholder, &percent_encode(&scalar(value)));
             }
-            FieldLocation::Query => query.push((field.snake.to_string(), scalar(value))),
-            FieldLocation::Header => headers.push((field.snake.to_string(), scalar(value))),
+            FieldLocation::Query => query.push((field.wire.to_string(), scalar(value))),
+            FieldLocation::Header => headers.push((field.wire.to_string(), scalar(value))),
             FieldLocation::Body => {
-                body.insert(field.snake.to_string(), value.clone());
+                body.insert(field.wire.to_string(), value.clone());
             }
         }
     }
@@ -116,7 +132,7 @@ pub(crate) fn dispatch(op: &OpSpec, params: Value) -> Result<String, String> {
     // Apply each resolved security scheme, sourcing its value from wasmcloud:secrets.
     let mut cookies: Vec<String> = Vec::new();
     for apply in op.auth {
-        let secret = fetch_secret(apply.secret_key)?;
+        let secret = fetch_secret(apply.secret_key).map_err(DispatchError::Transport)?;
         match &apply.kind {
             AuthKind::Bearer => headers.push(("authorization".into(), format!("Bearer {secret}"))),
             AuthKind::Basic => {
@@ -177,17 +193,18 @@ fn fetch_secret(key: &str) -> Result<String, String> {
 }
 
 /// Build and send the outgoing request with `wstd`, returning the response body on a 2xx
-/// status. The generated guest exports are synchronous, so the async `wstd` client is driven
-/// to completion on a local reactor via `wstd::runtime::block_on`.
+/// status and a structured [`DispatchError`] otherwise. The generated guest exports are
+/// synchronous, so the async `wstd` client is driven to completion on a local reactor via
+/// `wstd::runtime::block_on`.
 fn perform(
     method: &str,
     path_with_query: &str,
     headers: &[(String, String)],
     body: &[u8],
-) -> Result<String, String> {
+) -> Result<String, DispatchError> {
     let url = join_url(crate::BASE_URL, path_with_query);
     let method = Method::from_bytes(method.as_bytes())
-        .map_err(|err| format!("invalid HTTP method `{method}`: {err}"))?;
+        .map_err(|err| DispatchError::Transport(format!("invalid HTTP method `{method}`: {err}")))?;
 
     let mut builder = Request::builder().method(method).uri(url);
     for (name, value) in headers {
@@ -199,27 +216,29 @@ fn perform(
         } else {
             Body::from(body.to_vec())
         })
-        .map_err(|err| format!("failed to build request: {err}"))?;
+        .map_err(|err| DispatchError::Transport(format!("failed to build request: {err}")))?;
 
     wstd::runtime::block_on(async move {
         let client = Client::new();
         let response = client
             .send(request)
             .await
-            .map_err(|err| format!("request failed: {err:#}"))?;
+            .map_err(|err| DispatchError::Transport(format!("request failed: {err:#}")))?;
 
         let status = response.status().as_u16();
         let mut response_body = response.into_body();
-        let bytes = response_body
-            .contents()
-            .await
-            .map_err(|err| format!("failed to read response body: {err:#}"))?;
+        let bytes = response_body.contents().await.map_err(|err| {
+            DispatchError::Transport(format!("failed to read response body: {err:#}"))
+        })?;
         let body_text = String::from_utf8_lossy(bytes).into_owned();
 
         if (200..300).contains(&status) {
             Ok(body_text)
         } else {
-            Err(format!("HTTP {status}: {body_text}"))
+            Err(DispatchError::Http {
+                status,
+                body: body_text,
+            })
         }
     })
 }
@@ -297,11 +316,11 @@ const OP_ACCOUNT_MEMBERSHIP_CREATE_ACCOUNT: OpSpec = OpSpec {
     method: "POST",
     path_template: "/accounts",
     fields: &[
-        FieldSpec { snake: "extra_seats_block", location: FieldLocation::Body },
-        FieldSpec { snake: "name", location: FieldLocation::Body },
-        FieldSpec { snake: "payment_method_id", location: FieldLocation::Body },
-        FieldSpec { snake: "period", location: FieldLocation::Body },
-        FieldSpec { snake: "type_id", location: FieldLocation::Body },
+        FieldSpec { snake: "extra_seats_block", wire: "extra_seats_block", location: FieldLocation::Body },
+        FieldSpec { snake: "name", wire: "name", location: FieldLocation::Body },
+        FieldSpec { snake: "payment_method_id", wire: "payment_method_id", location: FieldLocation::Body },
+        FieldSpec { snake: "period", wire: "period", location: FieldLocation::Body },
+        FieldSpec { snake: "type_id", wire: "type_id", location: FieldLocation::Body },
     ],
     auth: &[
     ],
@@ -311,6 +330,7 @@ const OP_ACCOUNT_MEMBERSHIP_GET_ACCOUNT: OpSpec = OpSpec {
     method: "GET",
     path_template: "/accounts/{account_id}",
     fields: &[
+        FieldSpec { snake: "account_id", wire: "account_id", location: FieldLocation::Path },
     ],
     auth: &[
     ],
@@ -320,13 +340,14 @@ const OP_ACCOUNT_MEMBERSHIP_UPDATE_ACCOUNT: OpSpec = OpSpec {
     method: "PUT",
     path_template: "/accounts/{account_id}",
     fields: &[
-        FieldSpec { snake: "billing_details", location: FieldLocation::Body },
-        FieldSpec { snake: "billing_email", location: FieldLocation::Body },
-        FieldSpec { snake: "billing_name", location: FieldLocation::Body },
-        FieldSpec { snake: "extra_seats_block", location: FieldLocation::Body },
-        FieldSpec { snake: "name", location: FieldLocation::Body },
-        FieldSpec { snake: "slug", location: FieldLocation::Body },
-        FieldSpec { snake: "type_id", location: FieldLocation::Body },
+        FieldSpec { snake: "account_id", wire: "account_id", location: FieldLocation::Path },
+        FieldSpec { snake: "billing_details", wire: "billing_details", location: FieldLocation::Body },
+        FieldSpec { snake: "billing_email", wire: "billing_email", location: FieldLocation::Body },
+        FieldSpec { snake: "billing_name", wire: "billing_name", location: FieldLocation::Body },
+        FieldSpec { snake: "extra_seats_block", wire: "extra_seats_block", location: FieldLocation::Body },
+        FieldSpec { snake: "name", wire: "name", location: FieldLocation::Body },
+        FieldSpec { snake: "slug", wire: "slug", location: FieldLocation::Body },
+        FieldSpec { snake: "type_id", wire: "type_id", location: FieldLocation::Body },
     ],
     auth: &[
     ],
@@ -336,6 +357,7 @@ const OP_ACCOUNT_MEMBERSHIP_CANCEL_ACCOUNT: OpSpec = OpSpec {
     method: "DELETE",
     path_template: "/accounts/{account_id}",
     fields: &[
+        FieldSpec { snake: "account_id", wire: "account_id", location: FieldLocation::Path },
     ],
     auth: &[
     ],
@@ -348,6 +370,41 @@ fn iface_account_membership__account_setup_period_enum__to_str(e: &iface_account
     }
 }
 
+fn iface_account_membership__account_membership__to_json(p: &iface_account_membership::AccountMembership) -> Value {
+    let mut m = Map::new();
+    m.insert("billing_details".into(), match (&p.billing_details) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("billing_email".into(), match (&p.billing_email) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("billing_name".into(), match (&p.billing_name) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("billing_period".into(), match (&p.billing_period) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("capabilities".into(), match (&p.capabilities) { Some(v) => iface_account_membership__account_membership_capabilities__to_json(v), None => Value::Null });
+    m.insert("created_at".into(), match (&p.created_at) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("id".into(), match (&p.id) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("name".into(), match (&p.name) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("owner_ids".into(), match (&p.owner_ids) { Some(v) => Value::Array((v).iter().map(|v| Value::String((v).clone())).collect()), None => Value::Null });
+    m.insert("payment_method_id".into(), match (&p.payment_method_id) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("roles_allowed".into(), match (&p.roles_allowed) { Some(v) => Value::Array((v).iter().map(|v| Value::String((v).clone())).collect()), None => Value::Null });
+    m.insert("slug".into(), match (&p.slug) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("type".into(), match (&p.type_op) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("type_id".into(), match (&p.type_id) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("type_name".into(), match (&p.type_name) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("updated_at".into(), match (&p.updated_at) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_account_membership__account_membership_capabilities__to_json(p: &iface_account_membership::AccountMembershipCapabilities) -> Value {
+    let mut m = Map::new();
+    m.insert("collaborators".into(), match (&p.collaborators) { Some(v) => iface_account_membership__account_usage_capability__to_json(v), None => Value::Null });
+    m.insert("sites".into(), match (&p.sites) { Some(v) => iface_account_membership__account_usage_capability__to_json(v), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_account_membership__account_usage_capability__to_json(p: &iface_account_membership::AccountUsageCapability) -> Value {
+    let mut m = Map::new();
+    m.insert("included".into(), match (&p.included) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("used".into(), match (&p.used) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    Value::Object(m)
+}
+
 fn iface_account_membership__create_account_params__to_json(p: &iface_account_membership::CreateAccountParams) -> Value {
     let mut m = Map::new();
     m.insert("extra_seats_block".into(), match (&p.extra_seats_block) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
@@ -358,8 +415,15 @@ fn iface_account_membership__create_account_params__to_json(p: &iface_account_me
     Value::Object(m)
 }
 
+fn iface_account_membership__get_account_params__to_json(p: &iface_account_membership::GetAccountParams) -> Value {
+    let mut m = Map::new();
+    m.insert("account_id".into(), Value::String((&p.account_id).clone()));
+    Value::Object(m)
+}
+
 fn iface_account_membership__update_account_params__to_json(p: &iface_account_membership::UpdateAccountParams) -> Value {
     let mut m = Map::new();
+    m.insert("account_id".into(), Value::String((&p.account_id).clone()));
     m.insert("billing_details".into(), match (&p.billing_details) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("billing_email".into(), match (&p.billing_email) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("billing_name".into(), match (&p.billing_name) { Some(v) => Value::String((v).clone()), None => Value::Null });
@@ -370,23 +434,167 @@ fn iface_account_membership__update_account_params__to_json(p: &iface_account_me
     Value::Object(m)
 }
 
+fn iface_account_membership__cancel_account_params__to_json(p: &iface_account_membership::CancelAccountParams) -> Value {
+    let mut m = Map::new();
+    m.insert("account_id".into(), Value::String((&p.account_id).clone()));
+    Value::Object(m)
+}
+
+fn iface_account_membership__account_membership__from_json(v: &Value) -> Option<iface_account_membership::AccountMembership> {
+    let m = v.as_object()?;
+    Some(iface_account_membership::AccountMembership {
+        billing_details: m.get("billing_details").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        billing_email: m.get("billing_email").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        billing_name: m.get("billing_name").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        billing_period: m.get("billing_period").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        capabilities: m.get("capabilities").filter(|v| !v.is_null()).and_then(|v| iface_account_membership__account_membership_capabilities__from_json(v)),
+        created_at: m.get("created_at").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        id: m.get("id").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        name: m.get("name").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        owner_ids: m.get("owner_ids").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| (x).as_str().map(|s| s.to_string())).collect())),
+        payment_method_id: m.get("payment_method_id").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        roles_allowed: m.get("roles_allowed").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| (x).as_str().map(|s| s.to_string())).collect())),
+        slug: m.get("slug").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        type_op: m.get("type").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        type_id: m.get("type_id").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        type_name: m.get("type_name").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        updated_at: m.get("updated_at").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    })
+}
+
+fn iface_account_membership__account_membership_capabilities__from_json(v: &Value) -> Option<iface_account_membership::AccountMembershipCapabilities> {
+    let m = v.as_object()?;
+    Some(iface_account_membership::AccountMembershipCapabilities {
+        collaborators: m.get("collaborators").filter(|v| !v.is_null()).and_then(|v| iface_account_membership__account_usage_capability__from_json(v)),
+        sites: m.get("sites").filter(|v| !v.is_null()).and_then(|v| iface_account_membership__account_usage_capability__from_json(v)),
+    })
+}
+
+fn iface_account_membership__account_usage_capability__from_json(v: &Value) -> Option<iface_account_membership::AccountUsageCapability> {
+    let m = v.as_object()?;
+    Some(iface_account_membership::AccountUsageCapability {
+        included: m.get("included").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        used: m.get("used").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+    })
+}
+
+fn iface_account_membership__list_accounts_for_user__ok(body: String) -> Result<Vec<iface_account_membership::AccountMembership>, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match (&v).as_array().map(|a| a.iter().filter_map(|x| iface_account_membership__account_membership__from_json(x)).collect()) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_account_membership__list_accounts_for_user__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
+fn iface_account_membership__create_account__ok(body: String) -> Result<iface_account_membership::AccountMembership, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match iface_account_membership__account_membership__from_json(&v) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_account_membership__create_account__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
+fn iface_account_membership__get_account__ok(body: String) -> Result<Vec<iface_account_membership::AccountMembership>, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match (&v).as_array().map(|a| a.iter().filter_map(|x| iface_account_membership__account_membership__from_json(x)).collect()) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_account_membership__get_account__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
+fn iface_account_membership__update_account__ok(body: String) -> Result<iface_account_membership::AccountMembership, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match iface_account_membership__account_membership__from_json(&v) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_account_membership__update_account__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
+fn iface_account_membership__cancel_account__ok(body: String) -> Result<String, crate::runtime::DispatchError> {
+    Ok(body)
+}
+
+fn iface_account_membership__cancel_account__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
 impl iface_account_membership::Guest for crate::Component {
-    fn list_accounts_for_user() -> Result<String, String> {
-        dispatch(&OP_ACCOUNT_MEMBERSHIP_LIST_ACCOUNTS_FOR_USER, Value::Object(Map::new()))
+    fn list_accounts_for_user() -> Result<Vec<iface_account_membership::AccountMembership>, String> {
+        match dispatch(&OP_ACCOUNT_MEMBERSHIP_LIST_ACCOUNTS_FOR_USER, Value::Object(Map::new())).and_then(iface_account_membership__list_accounts_for_user__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_account_membership__list_accounts_for_user__err(e)),
+        }
     }
-    fn create_account(params: iface_account_membership::CreateAccountParams) -> Result<String, String> {
+    fn create_account(params: iface_account_membership::CreateAccountParams) -> Result<iface_account_membership::AccountMembership, String> {
         let json = iface_account_membership__create_account_params__to_json(&params);
-        dispatch(&OP_ACCOUNT_MEMBERSHIP_CREATE_ACCOUNT, json)
+        match dispatch(&OP_ACCOUNT_MEMBERSHIP_CREATE_ACCOUNT, json).and_then(iface_account_membership__create_account__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_account_membership__create_account__err(e)),
+        }
     }
-    fn get_account() -> Result<String, String> {
-        dispatch(&OP_ACCOUNT_MEMBERSHIP_GET_ACCOUNT, Value::Object(Map::new()))
+    fn get_account(params: iface_account_membership::GetAccountParams) -> Result<Vec<iface_account_membership::AccountMembership>, String> {
+        let json = iface_account_membership__get_account_params__to_json(&params);
+        match dispatch(&OP_ACCOUNT_MEMBERSHIP_GET_ACCOUNT, json).and_then(iface_account_membership__get_account__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_account_membership__get_account__err(e)),
+        }
     }
-    fn update_account(params: iface_account_membership::UpdateAccountParams) -> Result<String, String> {
+    fn update_account(params: iface_account_membership::UpdateAccountParams) -> Result<iface_account_membership::AccountMembership, String> {
         let json = iface_account_membership__update_account_params__to_json(&params);
-        dispatch(&OP_ACCOUNT_MEMBERSHIP_UPDATE_ACCOUNT, json)
+        match dispatch(&OP_ACCOUNT_MEMBERSHIP_UPDATE_ACCOUNT, json).and_then(iface_account_membership__update_account__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_account_membership__update_account__err(e)),
+        }
     }
-    fn cancel_account() -> Result<String, String> {
-        dispatch(&OP_ACCOUNT_MEMBERSHIP_CANCEL_ACCOUNT, Value::Object(Map::new()))
+    fn cancel_account(params: iface_account_membership::CancelAccountParams) -> Result<String, String> {
+        let json = iface_account_membership__cancel_account_params__to_json(&params);
+        match dispatch(&OP_ACCOUNT_MEMBERSHIP_CANCEL_ACCOUNT, json).and_then(iface_account_membership__cancel_account__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_account_membership__cancel_account__err(e)),
+        }
     }
 }
 use crate::exports::autostamp::netlify::account_type as iface_account_type;
@@ -400,9 +608,70 @@ const OP_ACCOUNT_TYPE_LIST_ACCOUNT_TYPES_FOR_USER: OpSpec = OpSpec {
     ],
 };
 
+fn iface_account_type__account_type__to_json(p: &iface_account_type::AccountType) -> Value {
+    let mut m = Map::new();
+    m.insert("capabilities".into(), match (&p.capabilities) { Some(v) => iface_account_type__account_type_capabilities__to_json(v), None => Value::Null });
+    m.insert("description".into(), match (&p.description) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("id".into(), match (&p.id) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("monthly_dollar_price".into(), match (&p.monthly_dollar_price) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("monthly_seats_addon_dollar_price".into(), match (&p.monthly_seats_addon_dollar_price) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("name".into(), match (&p.name) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("yearly_dollar_price".into(), match (&p.yearly_dollar_price) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("yearly_seats_addon_dollar_price".into(), match (&p.yearly_seats_addon_dollar_price) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_account_type__account_type_capabilities__to_json(p: &iface_account_type::AccountTypeCapabilities) -> Value {
+    let mut m = Map::new();
+    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_account_type__account_type__from_json(v: &Value) -> Option<iface_account_type::AccountType> {
+    let m = v.as_object()?;
+    Some(iface_account_type::AccountType {
+        capabilities: m.get("capabilities").filter(|v| !v.is_null()).and_then(|v| iface_account_type__account_type_capabilities__from_json(v)),
+        description: m.get("description").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        id: m.get("id").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        monthly_dollar_price: m.get("monthly_dollar_price").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        monthly_seats_addon_dollar_price: m.get("monthly_seats_addon_dollar_price").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        name: m.get("name").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        yearly_dollar_price: m.get("yearly_dollar_price").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        yearly_seats_addon_dollar_price: m.get("yearly_seats_addon_dollar_price").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+    })
+}
+
+fn iface_account_type__account_type_capabilities__from_json(v: &Value) -> Option<iface_account_type::AccountTypeCapabilities> {
+    let m = v.as_object()?;
+    Some(iface_account_type::AccountTypeCapabilities {
+        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    })
+}
+
+fn iface_account_type__list_account_types_for_user__ok(body: String) -> Result<Vec<iface_account_type::AccountType>, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match (&v).as_array().map(|a| a.iter().filter_map(|x| iface_account_type__account_type__from_json(x)).collect()) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_account_type__list_account_types_for_user__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
 impl iface_account_type::Guest for crate::Component {
-    fn list_account_types_for_user() -> Result<String, String> {
-        dispatch(&OP_ACCOUNT_TYPE_LIST_ACCOUNT_TYPES_FOR_USER, Value::Object(Map::new()))
+    fn list_account_types_for_user() -> Result<Vec<iface_account_type::AccountType>, String> {
+        match dispatch(&OP_ACCOUNT_TYPE_LIST_ACCOUNT_TYPES_FOR_USER, Value::Object(Map::new())).and_then(iface_account_type__list_account_types_for_user__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_account_type__list_account_types_for_user__err(e)),
+        }
     }
 }
 use crate::exports::autostamp::netlify::audit_log as iface_audit_log;
@@ -411,17 +680,38 @@ const OP_AUDIT_LOG_LIST_ACCOUNT_AUDIT_EVENTS: OpSpec = OpSpec {
     method: "GET",
     path_template: "/accounts/{account_id}/audit",
     fields: &[
-        FieldSpec { snake: "query", location: FieldLocation::Query },
-        FieldSpec { snake: "log_type", location: FieldLocation::Query },
-        FieldSpec { snake: "page", location: FieldLocation::Query },
-        FieldSpec { snake: "per_page", location: FieldLocation::Query },
+        FieldSpec { snake: "account_id", wire: "account_id", location: FieldLocation::Path },
+        FieldSpec { snake: "query", wire: "query", location: FieldLocation::Query },
+        FieldSpec { snake: "log_type", wire: "log_type", location: FieldLocation::Query },
+        FieldSpec { snake: "page", wire: "page", location: FieldLocation::Query },
+        FieldSpec { snake: "per_page", wire: "per_page", location: FieldLocation::Query },
     ],
     auth: &[
     ],
 };
 
+fn iface_audit_log__audit_log__to_json(p: &iface_audit_log::AuditLog) -> Value {
+    let mut m = Map::new();
+    m.insert("account_id".into(), match (&p.account_id) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("id".into(), match (&p.id) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("payload".into(), match (&p.payload) { Some(v) => iface_audit_log__audit_log_payload__to_json(v), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_audit_log__audit_log_payload__to_json(p: &iface_audit_log::AuditLogPayload) -> Value {
+    let mut m = Map::new();
+    m.insert("action".into(), match (&p.action) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("actor_email".into(), match (&p.actor_email) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("actor_id".into(), match (&p.actor_id) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("actor_name".into(), match (&p.actor_name) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("log_type".into(), match (&p.log_type) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("timestamp".into(), match (&p.timestamp) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
 fn iface_audit_log__list_account_audit_events_params__to_json(p: &iface_audit_log::ListAccountAuditEventsParams) -> Value {
     let mut m = Map::new();
+    m.insert("account_id".into(), Value::String((&p.account_id).clone()));
     m.insert("query".into(), match (&p.query) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("log_type".into(), match (&p.log_type) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("page".into(), match (&p.page) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
@@ -429,10 +719,52 @@ fn iface_audit_log__list_account_audit_events_params__to_json(p: &iface_audit_lo
     Value::Object(m)
 }
 
+fn iface_audit_log__audit_log__from_json(v: &Value) -> Option<iface_audit_log::AuditLog> {
+    let m = v.as_object()?;
+    Some(iface_audit_log::AuditLog {
+        account_id: m.get("account_id").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        id: m.get("id").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        payload: m.get("payload").filter(|v| !v.is_null()).and_then(|v| iface_audit_log__audit_log_payload__from_json(v)),
+    })
+}
+
+fn iface_audit_log__audit_log_payload__from_json(v: &Value) -> Option<iface_audit_log::AuditLogPayload> {
+    let m = v.as_object()?;
+    Some(iface_audit_log::AuditLogPayload {
+        action: m.get("action").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        actor_email: m.get("actor_email").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        actor_id: m.get("actor_id").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        actor_name: m.get("actor_name").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        log_type: m.get("log_type").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        timestamp: m.get("timestamp").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    })
+}
+
+fn iface_audit_log__list_account_audit_events__ok(body: String) -> Result<Vec<iface_audit_log::AuditLog>, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match (&v).as_array().map(|a| a.iter().filter_map(|x| iface_audit_log__audit_log__from_json(x)).collect()) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_audit_log__list_account_audit_events__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
 impl iface_audit_log::Guest for crate::Component {
-    fn list_account_audit_events(params: iface_audit_log::ListAccountAuditEventsParams) -> Result<String, String> {
+    fn list_account_audit_events(params: iface_audit_log::ListAccountAuditEventsParams) -> Result<Vec<iface_audit_log::AuditLog>, String> {
         let json = iface_audit_log__list_account_audit_events_params__to_json(&params);
-        dispatch(&OP_AUDIT_LOG_LIST_ACCOUNT_AUDIT_EVENTS, json)
+        match dispatch(&OP_AUDIT_LOG_LIST_ACCOUNT_AUDIT_EVENTS, json).and_then(iface_audit_log__list_account_audit_events__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_audit_log__list_account_audit_events__err(e)),
+        }
     }
 }
 use crate::exports::autostamp::netlify::environment_variables as iface_environment_variables;
@@ -441,10 +773,10 @@ const OP_ENVIRONMENT_VARIABLES_GET_ENV_VARS: OpSpec = OpSpec {
     method: "GET",
     path_template: "/accounts/{account_id}/env",
     fields: &[
-        FieldSpec { snake: "account_id", location: FieldLocation::Path },
-        FieldSpec { snake: "context_name", location: FieldLocation::Query },
-        FieldSpec { snake: "scope", location: FieldLocation::Query },
-        FieldSpec { snake: "site_id", location: FieldLocation::Query },
+        FieldSpec { snake: "account_id", wire: "account_id", location: FieldLocation::Path },
+        FieldSpec { snake: "context_name", wire: "context_name", location: FieldLocation::Query },
+        FieldSpec { snake: "scope", wire: "scope", location: FieldLocation::Query },
+        FieldSpec { snake: "site_id", wire: "site_id", location: FieldLocation::Query },
     ],
     auth: &[
     ],
@@ -454,9 +786,9 @@ const OP_ENVIRONMENT_VARIABLES_CREATE_ENV_VARS: OpSpec = OpSpec {
     method: "POST",
     path_template: "/accounts/{account_id}/env",
     fields: &[
-        FieldSpec { snake: "account_id", location: FieldLocation::Path },
-        FieldSpec { snake: "site_id", location: FieldLocation::Query },
-        FieldSpec { snake: "body", location: FieldLocation::Body },
+        FieldSpec { snake: "account_id", wire: "account_id", location: FieldLocation::Path },
+        FieldSpec { snake: "site_id", wire: "site_id", location: FieldLocation::Query },
+        FieldSpec { snake: "body", wire: "body", location: FieldLocation::Body },
     ],
     auth: &[
     ],
@@ -466,9 +798,9 @@ const OP_ENVIRONMENT_VARIABLES_GET_ENV_VAR: OpSpec = OpSpec {
     method: "GET",
     path_template: "/accounts/{account_id}/env/{key}",
     fields: &[
-        FieldSpec { snake: "account_id", location: FieldLocation::Path },
-        FieldSpec { snake: "key", location: FieldLocation::Path },
-        FieldSpec { snake: "site_id", location: FieldLocation::Query },
+        FieldSpec { snake: "account_id", wire: "account_id", location: FieldLocation::Path },
+        FieldSpec { snake: "key", wire: "key", location: FieldLocation::Path },
+        FieldSpec { snake: "site_id", wire: "site_id", location: FieldLocation::Query },
     ],
     auth: &[
     ],
@@ -478,11 +810,12 @@ const OP_ENVIRONMENT_VARIABLES_UPDATE_ENV_VAR: OpSpec = OpSpec {
     method: "PUT",
     path_template: "/accounts/{account_id}/env/{key}",
     fields: &[
-        FieldSpec { snake: "account_id", location: FieldLocation::Path },
-        FieldSpec { snake: "key", location: FieldLocation::Path },
-        FieldSpec { snake: "site_id", location: FieldLocation::Query },
-        FieldSpec { snake: "scopes", location: FieldLocation::Body },
-        FieldSpec { snake: "values", location: FieldLocation::Body },
+        FieldSpec { snake: "account_id", wire: "account_id", location: FieldLocation::Path },
+        FieldSpec { snake: "key", wire: "key", location: FieldLocation::Path },
+        FieldSpec { snake: "site_id", wire: "site_id", location: FieldLocation::Query },
+        FieldSpec { snake: "key_v2", wire: "key", location: FieldLocation::Body },
+        FieldSpec { snake: "scopes", wire: "scopes", location: FieldLocation::Body },
+        FieldSpec { snake: "values", wire: "values", location: FieldLocation::Body },
     ],
     auth: &[
     ],
@@ -492,11 +825,11 @@ const OP_ENVIRONMENT_VARIABLES_SET_ENV_VAR_VALUE: OpSpec = OpSpec {
     method: "PATCH",
     path_template: "/accounts/{account_id}/env/{key}",
     fields: &[
-        FieldSpec { snake: "account_id", location: FieldLocation::Path },
-        FieldSpec { snake: "key", location: FieldLocation::Path },
-        FieldSpec { snake: "site_id", location: FieldLocation::Query },
-        FieldSpec { snake: "context", location: FieldLocation::Body },
-        FieldSpec { snake: "value", location: FieldLocation::Body },
+        FieldSpec { snake: "account_id", wire: "account_id", location: FieldLocation::Path },
+        FieldSpec { snake: "key", wire: "key", location: FieldLocation::Path },
+        FieldSpec { snake: "site_id", wire: "site_id", location: FieldLocation::Query },
+        FieldSpec { snake: "context", wire: "context", location: FieldLocation::Body },
+        FieldSpec { snake: "value", wire: "value", location: FieldLocation::Body },
     ],
     auth: &[
     ],
@@ -506,9 +839,9 @@ const OP_ENVIRONMENT_VARIABLES_DELETE_ENV_VAR: OpSpec = OpSpec {
     method: "DELETE",
     path_template: "/accounts/{account_id}/env/{key}",
     fields: &[
-        FieldSpec { snake: "account_id", location: FieldLocation::Path },
-        FieldSpec { snake: "key", location: FieldLocation::Path },
-        FieldSpec { snake: "site_id", location: FieldLocation::Query },
+        FieldSpec { snake: "account_id", wire: "account_id", location: FieldLocation::Path },
+        FieldSpec { snake: "key", wire: "key", location: FieldLocation::Path },
+        FieldSpec { snake: "site_id", wire: "site_id", location: FieldLocation::Query },
     ],
     auth: &[
     ],
@@ -518,10 +851,10 @@ const OP_ENVIRONMENT_VARIABLES_DELETE_ENV_VAR_VALUE: OpSpec = OpSpec {
     method: "DELETE",
     path_template: "/accounts/{account_id}/env/{key}/value/{id}",
     fields: &[
-        FieldSpec { snake: "account_id", location: FieldLocation::Path },
-        FieldSpec { snake: "id", location: FieldLocation::Path },
-        FieldSpec { snake: "key", location: FieldLocation::Path },
-        FieldSpec { snake: "site_id", location: FieldLocation::Query },
+        FieldSpec { snake: "account_id", wire: "account_id", location: FieldLocation::Path },
+        FieldSpec { snake: "id", wire: "id", location: FieldLocation::Path },
+        FieldSpec { snake: "key", wire: "key", location: FieldLocation::Path },
+        FieldSpec { snake: "site_id", wire: "site_id", location: FieldLocation::Query },
     ],
     auth: &[
     ],
@@ -555,11 +888,22 @@ fn iface_environment_variables__set_env_var_value_body_context_enum__to_str(e: &
     }
 }
 
-fn iface_environment_variables__create_env_vars_body_item__to_json(p: &iface_environment_variables::CreateEnvVarsBodyItem) -> Value {
+fn iface_environment_variables__env_var__to_json(p: &iface_environment_variables::EnvVar) -> Value {
     let mut m = Map::new();
     m.insert("key".into(), match (&p.key) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("scopes".into(), match (&p.scopes) { Some(v) => Value::Array((v).iter().map(|v| Value::String(iface_environment_variables__get_env_vars_scope_enum__to_str(v).into())).collect()), None => Value::Null });
+    m.insert("updated_at".into(), match (&p.updated_at) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("updated_by".into(), match (&p.updated_by) { Some(v) => iface_environment_variables__env_var_user__to_json(v), None => Value::Null });
     m.insert("values".into(), match (&p.values) { Some(v) => Value::Array((v).iter().map(|v| iface_environment_variables__env_var_value__to_json(v)).collect()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_environment_variables__env_var_user__to_json(p: &iface_environment_variables::EnvVarUser) -> Value {
+    let mut m = Map::new();
+    m.insert("avatar_url".into(), match (&p.avatar_url) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("email".into(), match (&p.email) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("full_name".into(), match (&p.full_name) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("id".into(), match (&p.id) { Some(v) => Value::String((v).clone()), None => Value::Null });
     Value::Object(m)
 }
 
@@ -568,6 +912,14 @@ fn iface_environment_variables__env_var_value__to_json(p: &iface_environment_var
     m.insert("context".into(), match (&p.context) { Some(v) => Value::String(iface_environment_variables__get_env_vars_context_name_enum__to_str(v).into()), None => Value::Null });
     m.insert("id".into(), match (&p.id) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("value".into(), match (&p.value) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_environment_variables__create_env_vars_body_item__to_json(p: &iface_environment_variables::CreateEnvVarsBodyItem) -> Value {
+    let mut m = Map::new();
+    m.insert("key".into(), match (&p.key) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("scopes".into(), match (&p.scopes) { Some(v) => Value::Array((v).iter().map(|v| Value::String(iface_environment_variables__get_env_vars_scope_enum__to_str(v).into())).collect()), None => Value::Null });
+    m.insert("values".into(), match (&p.values) { Some(v) => Value::Array((v).iter().map(|v| iface_environment_variables__env_var_value__to_json(v)).collect()), None => Value::Null });
     Value::Object(m)
 }
 
@@ -601,6 +953,7 @@ fn iface_environment_variables__update_env_var_params__to_json(p: &iface_environ
     m.insert("account_id".into(), Value::String((&p.account_id).clone()));
     m.insert("key".into(), Value::String((&p.key).clone()));
     m.insert("site_id".into(), match (&p.site_id) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("key_v2".into(), match (&p.key_v2) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("scopes".into(), match (&p.scopes) { Some(v) => Value::Array((v).iter().map(|v| Value::String(iface_environment_variables__get_env_vars_scope_enum__to_str(v).into())).collect()), None => Value::Null });
     m.insert("values".into(), match (&p.values) { Some(v) => Value::Array((v).iter().map(|v| iface_environment_variables__env_var_value__to_json(v)).collect()), None => Value::Null });
     Value::Object(m)
@@ -633,34 +986,218 @@ fn iface_environment_variables__delete_env_var_value_params__to_json(p: &iface_e
     Value::Object(m)
 }
 
+fn iface_environment_variables__env_var__from_json(v: &Value) -> Option<iface_environment_variables::EnvVar> {
+    let m = v.as_object()?;
+    Some(iface_environment_variables::EnvVar {
+        key: m.get("key").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        scopes: m.get("scopes").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| (x).as_str().and_then(iface_environment_variables__get_env_vars_scope_enum__from_str)).collect())),
+        updated_at: m.get("updated_at").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        updated_by: m.get("updated_by").filter(|v| !v.is_null()).and_then(|v| iface_environment_variables__env_var_user__from_json(v)),
+        values: m.get("values").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| iface_environment_variables__env_var_value__from_json(x)).collect())),
+    })
+}
+
+fn iface_environment_variables__env_var_user__from_json(v: &Value) -> Option<iface_environment_variables::EnvVarUser> {
+    let m = v.as_object()?;
+    Some(iface_environment_variables::EnvVarUser {
+        avatar_url: m.get("avatar_url").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        email: m.get("email").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        full_name: m.get("full_name").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        id: m.get("id").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    })
+}
+
+fn iface_environment_variables__env_var_value__from_json(v: &Value) -> Option<iface_environment_variables::EnvVarValue> {
+    let m = v.as_object()?;
+    Some(iface_environment_variables::EnvVarValue {
+        context: m.get("context").filter(|v| !v.is_null()).and_then(|v| (v).as_str().and_then(iface_environment_variables__get_env_vars_context_name_enum__from_str)),
+        id: m.get("id").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        value: m.get("value").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    })
+}
+
+fn iface_environment_variables__get_env_vars_context_name_enum__from_str(s: &str) -> Option<iface_environment_variables::GetEnvVarsContextNameEnum> {
+    match s {
+        "all" => Some(iface_environment_variables::GetEnvVarsContextNameEnum::All),
+        "dev" => Some(iface_environment_variables::GetEnvVarsContextNameEnum::Dev),
+        "branch-deploy" => Some(iface_environment_variables::GetEnvVarsContextNameEnum::BranchDeploy),
+        "deploy-preview" => Some(iface_environment_variables::GetEnvVarsContextNameEnum::DeployPreview),
+        "production" => Some(iface_environment_variables::GetEnvVarsContextNameEnum::Production),
+        _ => None,
+    }
+}
+
+fn iface_environment_variables__get_env_vars_scope_enum__from_str(s: &str) -> Option<iface_environment_variables::GetEnvVarsScopeEnum> {
+    match s {
+        "builds" => Some(iface_environment_variables::GetEnvVarsScopeEnum::Builds),
+        "functions" => Some(iface_environment_variables::GetEnvVarsScopeEnum::Functions),
+        "runtime" => Some(iface_environment_variables::GetEnvVarsScopeEnum::Runtime),
+        "post-processing" => Some(iface_environment_variables::GetEnvVarsScopeEnum::PostProcessing),
+        _ => None,
+    }
+}
+
+fn iface_environment_variables__get_env_vars__ok(body: String) -> Result<Vec<iface_environment_variables::EnvVar>, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match (&v).as_array().map(|a| a.iter().filter_map(|x| iface_environment_variables__env_var__from_json(x)).collect()) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_environment_variables__get_env_vars__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
+fn iface_environment_variables__create_env_vars__ok(body: String) -> Result<Vec<iface_environment_variables::EnvVar>, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match (&v).as_array().map(|a| a.iter().filter_map(|x| iface_environment_variables__env_var__from_json(x)).collect()) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_environment_variables__create_env_vars__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
+fn iface_environment_variables__get_env_var__ok(body: String) -> Result<iface_environment_variables::EnvVar, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match iface_environment_variables__env_var__from_json(&v) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_environment_variables__get_env_var__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
+fn iface_environment_variables__update_env_var__ok(body: String) -> Result<iface_environment_variables::EnvVar, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match iface_environment_variables__env_var__from_json(&v) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_environment_variables__update_env_var__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
+fn iface_environment_variables__set_env_var_value__ok(body: String) -> Result<iface_environment_variables::EnvVar, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match iface_environment_variables__env_var__from_json(&v) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_environment_variables__set_env_var_value__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
+fn iface_environment_variables__delete_env_var__ok(body: String) -> Result<String, crate::runtime::DispatchError> {
+    Ok(body)
+}
+
+fn iface_environment_variables__delete_env_var__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
+fn iface_environment_variables__delete_env_var_value__ok(body: String) -> Result<String, crate::runtime::DispatchError> {
+    Ok(body)
+}
+
+fn iface_environment_variables__delete_env_var_value__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
 impl iface_environment_variables::Guest for crate::Component {
-    fn get_env_vars(params: iface_environment_variables::GetEnvVarsParams) -> Result<String, String> {
+    fn get_env_vars(params: iface_environment_variables::GetEnvVarsParams) -> Result<Vec<iface_environment_variables::EnvVar>, String> {
         let json = iface_environment_variables__get_env_vars_params__to_json(&params);
-        dispatch(&OP_ENVIRONMENT_VARIABLES_GET_ENV_VARS, json)
+        match dispatch(&OP_ENVIRONMENT_VARIABLES_GET_ENV_VARS, json).and_then(iface_environment_variables__get_env_vars__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_environment_variables__get_env_vars__err(e)),
+        }
     }
-    fn create_env_vars(params: iface_environment_variables::CreateEnvVarsParams) -> Result<String, String> {
+    fn create_env_vars(params: iface_environment_variables::CreateEnvVarsParams) -> Result<Vec<iface_environment_variables::EnvVar>, String> {
         let json = iface_environment_variables__create_env_vars_params__to_json(&params);
-        dispatch(&OP_ENVIRONMENT_VARIABLES_CREATE_ENV_VARS, json)
+        match dispatch(&OP_ENVIRONMENT_VARIABLES_CREATE_ENV_VARS, json).and_then(iface_environment_variables__create_env_vars__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_environment_variables__create_env_vars__err(e)),
+        }
     }
-    fn get_env_var(params: iface_environment_variables::GetEnvVarParams) -> Result<String, String> {
+    fn get_env_var(params: iface_environment_variables::GetEnvVarParams) -> Result<iface_environment_variables::EnvVar, String> {
         let json = iface_environment_variables__get_env_var_params__to_json(&params);
-        dispatch(&OP_ENVIRONMENT_VARIABLES_GET_ENV_VAR, json)
+        match dispatch(&OP_ENVIRONMENT_VARIABLES_GET_ENV_VAR, json).and_then(iface_environment_variables__get_env_var__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_environment_variables__get_env_var__err(e)),
+        }
     }
-    fn update_env_var(params: iface_environment_variables::UpdateEnvVarParams) -> Result<String, String> {
+    fn update_env_var(params: iface_environment_variables::UpdateEnvVarParams) -> Result<iface_environment_variables::EnvVar, String> {
         let json = iface_environment_variables__update_env_var_params__to_json(&params);
-        dispatch(&OP_ENVIRONMENT_VARIABLES_UPDATE_ENV_VAR, json)
+        match dispatch(&OP_ENVIRONMENT_VARIABLES_UPDATE_ENV_VAR, json).and_then(iface_environment_variables__update_env_var__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_environment_variables__update_env_var__err(e)),
+        }
     }
-    fn set_env_var_value(params: iface_environment_variables::SetEnvVarValueParams) -> Result<String, String> {
+    fn set_env_var_value(params: iface_environment_variables::SetEnvVarValueParams) -> Result<iface_environment_variables::EnvVar, String> {
         let json = iface_environment_variables__set_env_var_value_params__to_json(&params);
-        dispatch(&OP_ENVIRONMENT_VARIABLES_SET_ENV_VAR_VALUE, json)
+        match dispatch(&OP_ENVIRONMENT_VARIABLES_SET_ENV_VAR_VALUE, json).and_then(iface_environment_variables__set_env_var_value__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_environment_variables__set_env_var_value__err(e)),
+        }
     }
     fn delete_env_var(params: iface_environment_variables::DeleteEnvVarParams) -> Result<String, String> {
         let json = iface_environment_variables__delete_env_var_params__to_json(&params);
-        dispatch(&OP_ENVIRONMENT_VARIABLES_DELETE_ENV_VAR, json)
+        match dispatch(&OP_ENVIRONMENT_VARIABLES_DELETE_ENV_VAR, json).and_then(iface_environment_variables__delete_env_var__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_environment_variables__delete_env_var__err(e)),
+        }
     }
     fn delete_env_var_value(params: iface_environment_variables::DeleteEnvVarValueParams) -> Result<String, String> {
         let json = iface_environment_variables__delete_env_var_value_params__to_json(&params);
-        dispatch(&OP_ENVIRONMENT_VARIABLES_DELETE_ENV_VAR_VALUE, json)
+        match dispatch(&OP_ENVIRONMENT_VARIABLES_DELETE_ENV_VAR_VALUE, json).and_then(iface_environment_variables__delete_env_var_value__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_environment_variables__delete_env_var_value__err(e)),
+        }
     }
 }
 use crate::exports::autostamp::netlify::payment_method as iface_payment_method;
@@ -674,9 +1211,72 @@ const OP_PAYMENT_METHOD_LIST_PAYMENT_METHODS_FOR_USER: OpSpec = OpSpec {
     ],
 };
 
+fn iface_payment_method__payment_method__to_json(p: &iface_payment_method::PaymentMethod) -> Value {
+    let mut m = Map::new();
+    m.insert("created_at".into(), match (&p.created_at) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("data".into(), match (&p.data) { Some(v) => iface_payment_method__payment_method_data__to_json(v), None => Value::Null });
+    m.insert("id".into(), match (&p.id) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("method_name".into(), match (&p.method_name) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("state".into(), match (&p.state) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("type".into(), match (&p.type_op) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("updated_at".into(), match (&p.updated_at) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_payment_method__payment_method_data__to_json(p: &iface_payment_method::PaymentMethodData) -> Value {
+    let mut m = Map::new();
+    m.insert("card_type".into(), match (&p.card_type) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("email".into(), match (&p.email) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("last4".into(), match (&p.last4) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_payment_method__payment_method__from_json(v: &Value) -> Option<iface_payment_method::PaymentMethod> {
+    let m = v.as_object()?;
+    Some(iface_payment_method::PaymentMethod {
+        created_at: m.get("created_at").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| iface_payment_method__payment_method_data__from_json(v)),
+        id: m.get("id").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        method_name: m.get("method_name").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        state: m.get("state").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        type_op: m.get("type").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        updated_at: m.get("updated_at").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    })
+}
+
+fn iface_payment_method__payment_method_data__from_json(v: &Value) -> Option<iface_payment_method::PaymentMethodData> {
+    let m = v.as_object()?;
+    Some(iface_payment_method::PaymentMethodData {
+        card_type: m.get("card_type").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        email: m.get("email").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        last4: m.get("last4").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    })
+}
+
+fn iface_payment_method__list_payment_methods_for_user__ok(body: String) -> Result<Vec<iface_payment_method::PaymentMethod>, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match (&v).as_array().map(|a| a.iter().filter_map(|x| iface_payment_method__payment_method__from_json(x)).collect()) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_payment_method__list_payment_methods_for_user__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
 impl iface_payment_method::Guest for crate::Component {
-    fn list_payment_methods_for_user() -> Result<String, String> {
-        dispatch(&OP_PAYMENT_METHOD_LIST_PAYMENT_METHODS_FOR_USER, Value::Object(Map::new()))
+    fn list_payment_methods_for_user() -> Result<Vec<iface_payment_method::PaymentMethod>, String> {
+        match dispatch(&OP_PAYMENT_METHOD_LIST_PAYMENT_METHODS_FOR_USER, Value::Object(Map::new())).and_then(iface_payment_method__list_payment_methods_for_user__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_payment_method__list_payment_methods_for_user__err(e)),
+        }
     }
 }
 use crate::exports::autostamp::netlify::build as iface_build;
@@ -685,6 +1285,7 @@ const OP_BUILD_GET_SITE_BUILD: OpSpec = OpSpec {
     method: "GET",
     path_template: "/builds/{build_id}",
     fields: &[
+        FieldSpec { snake: "build_id", wire: "build_id", location: FieldLocation::Path },
     ],
     auth: &[
     ],
@@ -694,6 +1295,7 @@ const OP_BUILD_NOTIFY_BUILD_START: OpSpec = OpSpec {
     method: "POST",
     path_template: "/builds/{build_id}/start",
     fields: &[
+        FieldSpec { snake: "build_id", wire: "build_id", location: FieldLocation::Path },
     ],
     auth: &[
     ],
@@ -703,8 +1305,9 @@ const OP_BUILD_LIST_SITE_BUILDS: OpSpec = OpSpec {
     method: "GET",
     path_template: "/sites/{site_id}/builds",
     fields: &[
-        FieldSpec { snake: "page", location: FieldLocation::Query },
-        FieldSpec { snake: "per_page", location: FieldLocation::Query },
+        FieldSpec { snake: "site_id", wire: "site_id", location: FieldLocation::Path },
+        FieldSpec { snake: "page", wire: "page", location: FieldLocation::Query },
+        FieldSpec { snake: "per_page", wire: "per_page", location: FieldLocation::Query },
     ],
     auth: &[
     ],
@@ -714,8 +1317,9 @@ const OP_BUILD_CREATE_SITE_BUILD: OpSpec = OpSpec {
     method: "POST",
     path_template: "/sites/{site_id}/builds",
     fields: &[
-        FieldSpec { snake: "clear_cache", location: FieldLocation::Body },
-        FieldSpec { snake: "image", location: FieldLocation::Body },
+        FieldSpec { snake: "site_id", wire: "site_id", location: FieldLocation::Path },
+        FieldSpec { snake: "clear_cache", wire: "clear_cache", location: FieldLocation::Body },
+        FieldSpec { snake: "image", wire: "image", location: FieldLocation::Body },
     ],
     auth: &[
     ],
@@ -725,13 +1329,61 @@ const OP_BUILD_GET_ACCOUNT_BUILD_STATUS: OpSpec = OpSpec {
     method: "GET",
     path_template: "/{account_id}/builds/status",
     fields: &[
+        FieldSpec { snake: "account_id", wire: "account_id", location: FieldLocation::Path },
     ],
     auth: &[
     ],
 };
 
+fn iface_build__build__to_json(p: &iface_build::Build) -> Value {
+    let mut m = Map::new();
+    m.insert("created_at".into(), match (&p.created_at) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("deploy_id".into(), match (&p.deploy_id) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("done".into(), match (&p.done) { Some(v) => Value::Bool(*(v)), None => Value::Null });
+    m.insert("error".into(), match (&p.error) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("id".into(), match (&p.id) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("sha".into(), match (&p.sha) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_build__status__to_json(p: &iface_build::Status) -> Value {
+    let mut m = Map::new();
+    m.insert("active".into(), match (&p.active) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("build_count".into(), match (&p.build_count) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("enqueued".into(), match (&p.enqueued) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("minutes".into(), match (&p.minutes) { Some(v) => iface_build__status_minutes__to_json(v), None => Value::Null });
+    m.insert("pending_concurrency".into(), match (&p.pending_concurrency) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_build__status_minutes__to_json(p: &iface_build::StatusMinutes) -> Value {
+    let mut m = Map::new();
+    m.insert("current".into(), match (&p.current) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("current_average_sec".into(), match (&p.current_average_sec) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("included_minutes".into(), match (&p.included_minutes) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("included_minutes_with_packs".into(), match (&p.included_minutes_with_packs) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("last_updated_at".into(), match (&p.last_updated_at) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("period_end_date".into(), match (&p.period_end_date) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("period_start_date".into(), match (&p.period_start_date) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("previous".into(), match (&p.previous) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_build__get_site_build_params__to_json(p: &iface_build::GetSiteBuildParams) -> Value {
+    let mut m = Map::new();
+    m.insert("build_id".into(), Value::String((&p.build_id).clone()));
+    Value::Object(m)
+}
+
+fn iface_build__notify_build_start_params__to_json(p: &iface_build::NotifyBuildStartParams) -> Value {
+    let mut m = Map::new();
+    m.insert("build_id".into(), Value::String((&p.build_id).clone()));
+    Value::Object(m)
+}
+
 fn iface_build__list_site_builds_params__to_json(p: &iface_build::ListSiteBuildsParams) -> Value {
     let mut m = Map::new();
+    m.insert("site_id".into(), Value::String((&p.site_id).clone()));
     m.insert("page".into(), match (&p.page) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
     m.insert("per_page".into(), match (&p.per_page) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
     Value::Object(m)
@@ -739,28 +1391,173 @@ fn iface_build__list_site_builds_params__to_json(p: &iface_build::ListSiteBuilds
 
 fn iface_build__create_site_build_params__to_json(p: &iface_build::CreateSiteBuildParams) -> Value {
     let mut m = Map::new();
+    m.insert("site_id".into(), Value::String((&p.site_id).clone()));
     m.insert("clear_cache".into(), match (&p.clear_cache) { Some(v) => Value::Bool(*(v)), None => Value::Null });
     m.insert("image".into(), match (&p.image) { Some(v) => Value::String((v).clone()), None => Value::Null });
     Value::Object(m)
 }
 
+fn iface_build__get_account_build_status_params__to_json(p: &iface_build::GetAccountBuildStatusParams) -> Value {
+    let mut m = Map::new();
+    m.insert("account_id".into(), Value::String((&p.account_id).clone()));
+    Value::Object(m)
+}
+
+fn iface_build__build__from_json(v: &Value) -> Option<iface_build::Build> {
+    let m = v.as_object()?;
+    Some(iface_build::Build {
+        created_at: m.get("created_at").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        deploy_id: m.get("deploy_id").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        done: m.get("done").filter(|v| !v.is_null()).and_then(|v| (v).as_bool()),
+        error: m.get("error").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        id: m.get("id").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        sha: m.get("sha").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    })
+}
+
+fn iface_build__status__from_json(v: &Value) -> Option<iface_build::Status> {
+    let m = v.as_object()?;
+    Some(iface_build::Status {
+        active: m.get("active").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        build_count: m.get("build_count").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        enqueued: m.get("enqueued").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        minutes: m.get("minutes").filter(|v| !v.is_null()).and_then(|v| iface_build__status_minutes__from_json(v)),
+        pending_concurrency: m.get("pending_concurrency").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+    })
+}
+
+fn iface_build__status_minutes__from_json(v: &Value) -> Option<iface_build::StatusMinutes> {
+    let m = v.as_object()?;
+    Some(iface_build::StatusMinutes {
+        current: m.get("current").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        current_average_sec: m.get("current_average_sec").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        included_minutes: m.get("included_minutes").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        included_minutes_with_packs: m.get("included_minutes_with_packs").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        last_updated_at: m.get("last_updated_at").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        period_end_date: m.get("period_end_date").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        period_start_date: m.get("period_start_date").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        previous: m.get("previous").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+    })
+}
+
+fn iface_build__get_site_build__ok(body: String) -> Result<iface_build::Build, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match iface_build__build__from_json(&v) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_build__get_site_build__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
+fn iface_build__notify_build_start__ok(body: String) -> Result<String, crate::runtime::DispatchError> {
+    Ok(body)
+}
+
+fn iface_build__notify_build_start__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
+fn iface_build__list_site_builds__ok(body: String) -> Result<Vec<iface_build::Build>, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match (&v).as_array().map(|a| a.iter().filter_map(|x| iface_build__build__from_json(x)).collect()) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_build__list_site_builds__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
+fn iface_build__create_site_build__ok(body: String) -> Result<iface_build::Build, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match iface_build__build__from_json(&v) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_build__create_site_build__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
+fn iface_build__get_account_build_status__ok(body: String) -> Result<Vec<iface_build::Status>, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match (&v).as_array().map(|a| a.iter().filter_map(|x| iface_build__status__from_json(x)).collect()) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_build__get_account_build_status__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
 impl iface_build::Guest for crate::Component {
-    fn get_site_build() -> Result<String, String> {
-        dispatch(&OP_BUILD_GET_SITE_BUILD, Value::Object(Map::new()))
+    fn get_site_build(params: iface_build::GetSiteBuildParams) -> Result<iface_build::Build, String> {
+        let json = iface_build__get_site_build_params__to_json(&params);
+        match dispatch(&OP_BUILD_GET_SITE_BUILD, json).and_then(iface_build__get_site_build__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_build__get_site_build__err(e)),
+        }
     }
-    fn notify_build_start() -> Result<String, String> {
-        dispatch(&OP_BUILD_NOTIFY_BUILD_START, Value::Object(Map::new()))
+    fn notify_build_start(params: iface_build::NotifyBuildStartParams) -> Result<String, String> {
+        let json = iface_build__notify_build_start_params__to_json(&params);
+        match dispatch(&OP_BUILD_NOTIFY_BUILD_START, json).and_then(iface_build__notify_build_start__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_build__notify_build_start__err(e)),
+        }
     }
-    fn list_site_builds(params: iface_build::ListSiteBuildsParams) -> Result<String, String> {
+    fn list_site_builds(params: iface_build::ListSiteBuildsParams) -> Result<Vec<iface_build::Build>, String> {
         let json = iface_build__list_site_builds_params__to_json(&params);
-        dispatch(&OP_BUILD_LIST_SITE_BUILDS, json)
+        match dispatch(&OP_BUILD_LIST_SITE_BUILDS, json).and_then(iface_build__list_site_builds__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_build__list_site_builds__err(e)),
+        }
     }
-    fn create_site_build(params: iface_build::CreateSiteBuildParams) -> Result<String, String> {
+    fn create_site_build(params: iface_build::CreateSiteBuildParams) -> Result<iface_build::Build, String> {
         let json = iface_build__create_site_build_params__to_json(&params);
-        dispatch(&OP_BUILD_CREATE_SITE_BUILD, json)
+        match dispatch(&OP_BUILD_CREATE_SITE_BUILD, json).and_then(iface_build__create_site_build__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_build__create_site_build__err(e)),
+        }
     }
-    fn get_account_build_status() -> Result<String, String> {
-        dispatch(&OP_BUILD_GET_ACCOUNT_BUILD_STATUS, Value::Object(Map::new()))
+    fn get_account_build_status(params: iface_build::GetAccountBuildStatusParams) -> Result<Vec<iface_build::Status>, String> {
+        let json = iface_build__get_account_build_status_params__to_json(&params);
+        match dispatch(&OP_BUILD_GET_ACCOUNT_BUILD_STATUS, json).and_then(iface_build__get_account_build_status__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_build__get_account_build_status__err(e)),
+        }
     }
 }
 use crate::exports::autostamp::netlify::build_log_msg as iface_build_log_msg;
@@ -769,14 +1566,36 @@ const OP_BUILD_LOG_MSG_UPDATE_SITE_BUILD_LOG: OpSpec = OpSpec {
     method: "POST",
     path_template: "/builds/{build_id}/log",
     fields: &[
+        FieldSpec { snake: "build_id", wire: "build_id", location: FieldLocation::Path },
     ],
     auth: &[
     ],
 };
 
+fn iface_build_log_msg__update_site_build_log_params__to_json(p: &iface_build_log_msg::UpdateSiteBuildLogParams) -> Value {
+    let mut m = Map::new();
+    m.insert("build_id".into(), Value::String((&p.build_id).clone()));
+    Value::Object(m)
+}
+
+fn iface_build_log_msg__update_site_build_log__ok(body: String) -> Result<String, crate::runtime::DispatchError> {
+    Ok(body)
+}
+
+fn iface_build_log_msg__update_site_build_log__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
 impl iface_build_log_msg::Guest for crate::Component {
-    fn update_site_build_log() -> Result<String, String> {
-        dispatch(&OP_BUILD_LOG_MSG_UPDATE_SITE_BUILD_LOG, Value::Object(Map::new()))
+    fn update_site_build_log(params: iface_build_log_msg::UpdateSiteBuildLogParams) -> Result<String, String> {
+        let json = iface_build_log_msg__update_site_build_log_params__to_json(&params);
+        match dispatch(&OP_BUILD_LOG_MSG_UPDATE_SITE_BUILD_LOG, json).and_then(iface_build_log_msg__update_site_build_log__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_build_log_msg__update_site_build_log__err(e)),
+        }
     }
 }
 use crate::exports::autostamp::netlify::deploy_key as iface_deploy_key;
@@ -803,6 +1622,7 @@ const OP_DEPLOY_KEY_GET_DEPLOY_KEY: OpSpec = OpSpec {
     method: "GET",
     path_template: "/deploy_keys/{key_id}",
     fields: &[
+        FieldSpec { snake: "key_id", wire: "key_id", location: FieldLocation::Path },
     ],
     auth: &[
     ],
@@ -812,23 +1632,132 @@ const OP_DEPLOY_KEY_DELETE_DEPLOY_KEY: OpSpec = OpSpec {
     method: "DELETE",
     path_template: "/deploy_keys/{key_id}",
     fields: &[
+        FieldSpec { snake: "key_id", wire: "key_id", location: FieldLocation::Path },
     ],
     auth: &[
     ],
 };
 
+fn iface_deploy_key__deploy_key__to_json(p: &iface_deploy_key::DeployKey) -> Value {
+    let mut m = Map::new();
+    m.insert("created_at".into(), match (&p.created_at) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("id".into(), match (&p.id) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("public_key".into(), match (&p.public_key) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_deploy_key__get_deploy_key_params__to_json(p: &iface_deploy_key::GetDeployKeyParams) -> Value {
+    let mut m = Map::new();
+    m.insert("key_id".into(), Value::String((&p.key_id).clone()));
+    Value::Object(m)
+}
+
+fn iface_deploy_key__delete_deploy_key_params__to_json(p: &iface_deploy_key::DeleteDeployKeyParams) -> Value {
+    let mut m = Map::new();
+    m.insert("key_id".into(), Value::String((&p.key_id).clone()));
+    Value::Object(m)
+}
+
+fn iface_deploy_key__deploy_key__from_json(v: &Value) -> Option<iface_deploy_key::DeployKey> {
+    let m = v.as_object()?;
+    Some(iface_deploy_key::DeployKey {
+        created_at: m.get("created_at").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        id: m.get("id").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        public_key: m.get("public_key").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    })
+}
+
+fn iface_deploy_key__list_deploy_keys__ok(body: String) -> Result<Vec<iface_deploy_key::DeployKey>, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match (&v).as_array().map(|a| a.iter().filter_map(|x| iface_deploy_key__deploy_key__from_json(x)).collect()) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_deploy_key__list_deploy_keys__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
+fn iface_deploy_key__create_deploy_key__ok(body: String) -> Result<iface_deploy_key::DeployKey, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match iface_deploy_key__deploy_key__from_json(&v) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_deploy_key__create_deploy_key__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
+fn iface_deploy_key__get_deploy_key__ok(body: String) -> Result<iface_deploy_key::DeployKey, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match iface_deploy_key__deploy_key__from_json(&v) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_deploy_key__get_deploy_key__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
+fn iface_deploy_key__delete_deploy_key__ok(body: String) -> Result<String, crate::runtime::DispatchError> {
+    Ok(body)
+}
+
+fn iface_deploy_key__delete_deploy_key__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
 impl iface_deploy_key::Guest for crate::Component {
-    fn list_deploy_keys() -> Result<String, String> {
-        dispatch(&OP_DEPLOY_KEY_LIST_DEPLOY_KEYS, Value::Object(Map::new()))
+    fn list_deploy_keys() -> Result<Vec<iface_deploy_key::DeployKey>, String> {
+        match dispatch(&OP_DEPLOY_KEY_LIST_DEPLOY_KEYS, Value::Object(Map::new())).and_then(iface_deploy_key__list_deploy_keys__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_deploy_key__list_deploy_keys__err(e)),
+        }
     }
-    fn create_deploy_key() -> Result<String, String> {
-        dispatch(&OP_DEPLOY_KEY_CREATE_DEPLOY_KEY, Value::Object(Map::new()))
+    fn create_deploy_key() -> Result<iface_deploy_key::DeployKey, String> {
+        match dispatch(&OP_DEPLOY_KEY_CREATE_DEPLOY_KEY, Value::Object(Map::new())).and_then(iface_deploy_key__create_deploy_key__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_deploy_key__create_deploy_key__err(e)),
+        }
     }
-    fn get_deploy_key() -> Result<String, String> {
-        dispatch(&OP_DEPLOY_KEY_GET_DEPLOY_KEY, Value::Object(Map::new()))
+    fn get_deploy_key(params: iface_deploy_key::GetDeployKeyParams) -> Result<iface_deploy_key::DeployKey, String> {
+        let json = iface_deploy_key__get_deploy_key_params__to_json(&params);
+        match dispatch(&OP_DEPLOY_KEY_GET_DEPLOY_KEY, json).and_then(iface_deploy_key__get_deploy_key__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_deploy_key__get_deploy_key__err(e)),
+        }
     }
-    fn delete_deploy_key() -> Result<String, String> {
-        dispatch(&OP_DEPLOY_KEY_DELETE_DEPLOY_KEY, Value::Object(Map::new()))
+    fn delete_deploy_key(params: iface_deploy_key::DeleteDeployKeyParams) -> Result<String, String> {
+        let json = iface_deploy_key__delete_deploy_key_params__to_json(&params);
+        match dispatch(&OP_DEPLOY_KEY_DELETE_DEPLOY_KEY, json).and_then(iface_deploy_key__delete_deploy_key__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_deploy_key__delete_deploy_key__err(e)),
+        }
     }
 }
 use crate::exports::autostamp::netlify::deploy as iface_deploy;
@@ -837,7 +1766,7 @@ const OP_DEPLOY_GET_DEPLOY: OpSpec = OpSpec {
     method: "GET",
     path_template: "/deploys/{deploy_id}",
     fields: &[
-        FieldSpec { snake: "deploy_id", location: FieldLocation::Path },
+        FieldSpec { snake: "deploy_id", wire: "deploy_id", location: FieldLocation::Path },
     ],
     auth: &[
     ],
@@ -847,7 +1776,7 @@ const OP_DEPLOY_DELETE_DEPLOY: OpSpec = OpSpec {
     method: "DELETE",
     path_template: "/deploys/{deploy_id}",
     fields: &[
-        FieldSpec { snake: "deploy_id", location: FieldLocation::Path },
+        FieldSpec { snake: "deploy_id", wire: "deploy_id", location: FieldLocation::Path },
     ],
     auth: &[
     ],
@@ -857,7 +1786,7 @@ const OP_DEPLOY_CANCEL_SITE_DEPLOY: OpSpec = OpSpec {
     method: "POST",
     path_template: "/deploys/{deploy_id}/cancel",
     fields: &[
-        FieldSpec { snake: "deploy_id", location: FieldLocation::Path },
+        FieldSpec { snake: "deploy_id", wire: "deploy_id", location: FieldLocation::Path },
     ],
     auth: &[
     ],
@@ -867,7 +1796,7 @@ const OP_DEPLOY_LOCK_DEPLOY: OpSpec = OpSpec {
     method: "POST",
     path_template: "/deploys/{deploy_id}/lock",
     fields: &[
-        FieldSpec { snake: "deploy_id", location: FieldLocation::Path },
+        FieldSpec { snake: "deploy_id", wire: "deploy_id", location: FieldLocation::Path },
     ],
     auth: &[
     ],
@@ -877,7 +1806,7 @@ const OP_DEPLOY_UNLOCK_DEPLOY: OpSpec = OpSpec {
     method: "POST",
     path_template: "/deploys/{deploy_id}/unlock",
     fields: &[
-        FieldSpec { snake: "deploy_id", location: FieldLocation::Path },
+        FieldSpec { snake: "deploy_id", wire: "deploy_id", location: FieldLocation::Path },
     ],
     auth: &[
     ],
@@ -887,8 +1816,14 @@ const OP_DEPLOY_LIST_SITE_DEPLOYS: OpSpec = OpSpec {
     method: "GET",
     path_template: "/sites/{site_id}/deploys",
     fields: &[
-        FieldSpec { snake: "page", location: FieldLocation::Query },
-        FieldSpec { snake: "per_page", location: FieldLocation::Query },
+        FieldSpec { snake: "site_id", wire: "site_id", location: FieldLocation::Path },
+        FieldSpec { snake: "deploy_previews", wire: "deploy-previews", location: FieldLocation::Query },
+        FieldSpec { snake: "production", wire: "production", location: FieldLocation::Query },
+        FieldSpec { snake: "state", wire: "state", location: FieldLocation::Query },
+        FieldSpec { snake: "branch", wire: "branch", location: FieldLocation::Query },
+        FieldSpec { snake: "latest_published", wire: "latest-published", location: FieldLocation::Query },
+        FieldSpec { snake: "page", wire: "page", location: FieldLocation::Query },
+        FieldSpec { snake: "per_page", wire: "per_page", location: FieldLocation::Query },
     ],
     auth: &[
     ],
@@ -898,15 +1833,21 @@ const OP_DEPLOY_CREATE_SITE_DEPLOY: OpSpec = OpSpec {
     method: "POST",
     path_template: "/sites/{site_id}/deploys",
     fields: &[
-        FieldSpec { snake: "title", location: FieldLocation::Query },
-        FieldSpec { snake: "async", location: FieldLocation::Body },
-        FieldSpec { snake: "branch", location: FieldLocation::Body },
-        FieldSpec { snake: "draft", location: FieldLocation::Body },
-        FieldSpec { snake: "files", location: FieldLocation::Body },
-        FieldSpec { snake: "framework", location: FieldLocation::Body },
-        FieldSpec { snake: "function_schedules", location: FieldLocation::Body },
-        FieldSpec { snake: "functions", location: FieldLocation::Body },
-        FieldSpec { snake: "functions_config", location: FieldLocation::Body },
+        FieldSpec { snake: "site_id", wire: "site_id", location: FieldLocation::Path },
+        FieldSpec { snake: "deploy_previews", wire: "deploy-previews", location: FieldLocation::Query },
+        FieldSpec { snake: "production", wire: "production", location: FieldLocation::Query },
+        FieldSpec { snake: "state", wire: "state", location: FieldLocation::Query },
+        FieldSpec { snake: "branch", wire: "branch", location: FieldLocation::Query },
+        FieldSpec { snake: "latest_published", wire: "latest-published", location: FieldLocation::Query },
+        FieldSpec { snake: "title", wire: "title", location: FieldLocation::Query },
+        FieldSpec { snake: "async", wire: "async", location: FieldLocation::Body },
+        FieldSpec { snake: "branch_v2", wire: "branch", location: FieldLocation::Body },
+        FieldSpec { snake: "draft", wire: "draft", location: FieldLocation::Body },
+        FieldSpec { snake: "files", wire: "files", location: FieldLocation::Body },
+        FieldSpec { snake: "framework", wire: "framework", location: FieldLocation::Body },
+        FieldSpec { snake: "function_schedules", wire: "function_schedules", location: FieldLocation::Body },
+        FieldSpec { snake: "functions", wire: "functions", location: FieldLocation::Body },
+        FieldSpec { snake: "functions_config", wire: "functions_config", location: FieldLocation::Body },
     ],
     auth: &[
     ],
@@ -916,8 +1857,8 @@ const OP_DEPLOY_GET_SITE_DEPLOY: OpSpec = OpSpec {
     method: "GET",
     path_template: "/sites/{site_id}/deploys/{deploy_id}",
     fields: &[
-        FieldSpec { snake: "site_id", location: FieldLocation::Path },
-        FieldSpec { snake: "deploy_id", location: FieldLocation::Path },
+        FieldSpec { snake: "site_id", wire: "site_id", location: FieldLocation::Path },
+        FieldSpec { snake: "deploy_id", wire: "deploy_id", location: FieldLocation::Path },
     ],
     auth: &[
     ],
@@ -927,16 +1868,16 @@ const OP_DEPLOY_UPDATE_SITE_DEPLOY: OpSpec = OpSpec {
     method: "PUT",
     path_template: "/sites/{site_id}/deploys/{deploy_id}",
     fields: &[
-        FieldSpec { snake: "site_id", location: FieldLocation::Path },
-        FieldSpec { snake: "deploy_id", location: FieldLocation::Path },
-        FieldSpec { snake: "async", location: FieldLocation::Body },
-        FieldSpec { snake: "branch", location: FieldLocation::Body },
-        FieldSpec { snake: "draft", location: FieldLocation::Body },
-        FieldSpec { snake: "files", location: FieldLocation::Body },
-        FieldSpec { snake: "framework", location: FieldLocation::Body },
-        FieldSpec { snake: "function_schedules", location: FieldLocation::Body },
-        FieldSpec { snake: "functions", location: FieldLocation::Body },
-        FieldSpec { snake: "functions_config", location: FieldLocation::Body },
+        FieldSpec { snake: "site_id", wire: "site_id", location: FieldLocation::Path },
+        FieldSpec { snake: "deploy_id", wire: "deploy_id", location: FieldLocation::Path },
+        FieldSpec { snake: "async", wire: "async", location: FieldLocation::Body },
+        FieldSpec { snake: "branch", wire: "branch", location: FieldLocation::Body },
+        FieldSpec { snake: "draft", wire: "draft", location: FieldLocation::Body },
+        FieldSpec { snake: "files", wire: "files", location: FieldLocation::Body },
+        FieldSpec { snake: "framework", wire: "framework", location: FieldLocation::Body },
+        FieldSpec { snake: "function_schedules", wire: "function_schedules", location: FieldLocation::Body },
+        FieldSpec { snake: "functions", wire: "functions", location: FieldLocation::Body },
+        FieldSpec { snake: "functions_config", wire: "functions_config", location: FieldLocation::Body },
     ],
     auth: &[
     ],
@@ -946,8 +1887,8 @@ const OP_DEPLOY_DELETE_SITE_DEPLOY: OpSpec = OpSpec {
     method: "DELETE",
     path_template: "/sites/{site_id}/deploys/{deploy_id}",
     fields: &[
-        FieldSpec { snake: "deploy_id", location: FieldLocation::Path },
-        FieldSpec { snake: "site_id", location: FieldLocation::Path },
+        FieldSpec { snake: "deploy_id", wire: "deploy_id", location: FieldLocation::Path },
+        FieldSpec { snake: "site_id", wire: "site_id", location: FieldLocation::Path },
     ],
     auth: &[
     ],
@@ -957,8 +1898,8 @@ const OP_DEPLOY_RESTORE_SITE_DEPLOY: OpSpec = OpSpec {
     method: "POST",
     path_template: "/sites/{site_id}/deploys/{deploy_id}/restore",
     fields: &[
-        FieldSpec { snake: "site_id", location: FieldLocation::Path },
-        FieldSpec { snake: "deploy_id", location: FieldLocation::Path },
+        FieldSpec { snake: "site_id", wire: "site_id", location: FieldLocation::Path },
+        FieldSpec { snake: "deploy_id", wire: "deploy_id", location: FieldLocation::Path },
     ],
     auth: &[
     ],
@@ -968,14 +1909,64 @@ const OP_DEPLOY_ROLLBACK_SITE_DEPLOY: OpSpec = OpSpec {
     method: "PUT",
     path_template: "/sites/{site_id}/rollback",
     fields: &[
+        FieldSpec { snake: "site_id", wire: "site_id", location: FieldLocation::Path },
     ],
     auth: &[
     ],
 };
 
-fn iface_deploy__files_files__to_json(p: &iface_deploy::FilesFiles) -> Value {
+fn iface_deploy__list_site_deploys_state_enum__to_str(e: &iface_deploy::ListSiteDeploysStateEnum) -> &'static str {
+    match e {
+        iface_deploy::ListSiteDeploysStateEnum::New => "new",
+        iface_deploy::ListSiteDeploysStateEnum::PendingReview => "pending_review",
+        iface_deploy::ListSiteDeploysStateEnum::Accepted => "accepted",
+        iface_deploy::ListSiteDeploysStateEnum::Rejected => "rejected",
+        iface_deploy::ListSiteDeploysStateEnum::Enqueued => "enqueued",
+        iface_deploy::ListSiteDeploysStateEnum::Building => "building",
+        iface_deploy::ListSiteDeploysStateEnum::Uploading => "uploading",
+        iface_deploy::ListSiteDeploysStateEnum::Uploaded => "uploaded",
+        iface_deploy::ListSiteDeploysStateEnum::Preparing => "preparing",
+        iface_deploy::ListSiteDeploysStateEnum::Prepared => "prepared",
+        iface_deploy::ListSiteDeploysStateEnum::Processing => "processing",
+        iface_deploy::ListSiteDeploysStateEnum::Ready => "ready",
+        iface_deploy::ListSiteDeploysStateEnum::Error => "error",
+        iface_deploy::ListSiteDeploysStateEnum::Retrying => "retrying",
+    }
+}
+
+fn iface_deploy__deploy__to_json(p: &iface_deploy::Deploy) -> Value {
     let mut m = Map::new();
-    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("admin_url".into(), match (&p.admin_url) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("branch".into(), match (&p.branch) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("build_id".into(), match (&p.build_id) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("commit_ref".into(), match (&p.commit_ref) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("commit_url".into(), match (&p.commit_url) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("context".into(), match (&p.context) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("created_at".into(), match (&p.created_at) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("deploy_ssl_url".into(), match (&p.deploy_ssl_url) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("deploy_url".into(), match (&p.deploy_url) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("draft".into(), match (&p.draft) { Some(v) => Value::Bool(*(v)), None => Value::Null });
+    m.insert("error_message".into(), match (&p.error_message) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("framework".into(), match (&p.framework) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("function_schedules".into(), match (&p.function_schedules) { Some(v) => Value::Array((v).iter().map(|v| iface_deploy__function_schedule__to_json(v)).collect()), None => Value::Null });
+    m.insert("id".into(), match (&p.id) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("locked".into(), match (&p.locked) { Some(v) => Value::Bool(*(v)), None => Value::Null });
+    m.insert("name".into(), match (&p.name) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("published_at".into(), match (&p.published_at) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("required".into(), match (&p.required) { Some(v) => Value::Array((v).iter().map(|v| Value::String((v).clone())).collect()), None => Value::Null });
+    m.insert("required_functions".into(), match (&p.required_functions) { Some(v) => Value::Array((v).iter().map(|v| Value::String((v).clone())).collect()), None => Value::Null });
+    m.insert("review_id".into(), match (&p.review_id) { Some(v) => serde_json::Number::from_f64(*(v)).map(Value::Number).unwrap_or(Value::Null), None => Value::Null });
+    m.insert("review_url".into(), match (&p.review_url) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("screenshot_url".into(), match (&p.screenshot_url) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("site_capabilities".into(), match (&p.site_capabilities) { Some(v) => iface_deploy__deploy_site_capabilities__to_json(v), None => Value::Null });
+    m.insert("site_id".into(), match (&p.site_id) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("skipped".into(), match (&p.skipped) { Some(v) => Value::Bool(*(v)), None => Value::Null });
+    m.insert("ssl_url".into(), match (&p.ssl_url) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("state".into(), match (&p.state) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("title".into(), match (&p.title) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("updated_at".into(), match (&p.updated_at) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("url".into(), match (&p.url) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("user_id".into(), match (&p.user_id) { Some(v) => Value::String((v).clone()), None => Value::Null });
     Value::Object(m)
 }
 
@@ -983,6 +1974,18 @@ fn iface_deploy__function_schedule__to_json(p: &iface_deploy::FunctionSchedule) 
     let mut m = Map::new();
     m.insert("cron".into(), match (&p.cron) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("name".into(), match (&p.name) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_deploy__deploy_site_capabilities__to_json(p: &iface_deploy::DeploySiteCapabilities) -> Value {
+    let mut m = Map::new();
+    m.insert("large_media_enabled".into(), match (&p.large_media_enabled) { Some(v) => Value::Bool(*(v)), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_deploy__files_files__to_json(p: &iface_deploy::FilesFiles) -> Value {
+    let mut m = Map::new();
+    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
     Value::Object(m)
 }
 
@@ -1030,6 +2033,12 @@ fn iface_deploy__unlock_deploy_params__to_json(p: &iface_deploy::UnlockDeployPar
 
 fn iface_deploy__list_site_deploys_params__to_json(p: &iface_deploy::ListSiteDeploysParams) -> Value {
     let mut m = Map::new();
+    m.insert("site_id".into(), Value::String((&p.site_id).clone()));
+    m.insert("deploy_previews".into(), match (&p.deploy_previews) { Some(v) => Value::Bool(*(v)), None => Value::Null });
+    m.insert("production".into(), match (&p.production) { Some(v) => Value::Bool(*(v)), None => Value::Null });
+    m.insert("state".into(), match (&p.state) { Some(v) => Value::String(iface_deploy__list_site_deploys_state_enum__to_str(v).into()), None => Value::Null });
+    m.insert("branch".into(), match (&p.branch) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("latest_published".into(), match (&p.latest_published) { Some(v) => Value::Bool(*(v)), None => Value::Null });
     m.insert("page".into(), match (&p.page) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
     m.insert("per_page".into(), match (&p.per_page) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
     Value::Object(m)
@@ -1037,9 +2046,15 @@ fn iface_deploy__list_site_deploys_params__to_json(p: &iface_deploy::ListSiteDep
 
 fn iface_deploy__create_site_deploy_params__to_json(p: &iface_deploy::CreateSiteDeployParams) -> Value {
     let mut m = Map::new();
+    m.insert("site_id".into(), Value::String((&p.site_id).clone()));
+    m.insert("deploy_previews".into(), match (&p.deploy_previews) { Some(v) => Value::Bool(*(v)), None => Value::Null });
+    m.insert("production".into(), match (&p.production) { Some(v) => Value::Bool(*(v)), None => Value::Null });
+    m.insert("state".into(), match (&p.state) { Some(v) => Value::String(iface_deploy__list_site_deploys_state_enum__to_str(v).into()), None => Value::Null });
+    m.insert("branch".into(), match (&p.branch) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("latest_published".into(), match (&p.latest_published) { Some(v) => Value::Bool(*(v)), None => Value::Null });
     m.insert("title".into(), match (&p.title) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("async".into(), match (&p.async_op) { Some(v) => Value::Bool(*(v)), None => Value::Null });
-    m.insert("branch".into(), match (&p.branch) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("branch_v2".into(), match (&p.branch_v2) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("draft".into(), match (&p.draft) { Some(v) => Value::Bool(*(v)), None => Value::Null });
     m.insert("files".into(), match (&p.files) { Some(v) => iface_deploy__files_files__to_json(v), None => Value::Null });
     m.insert("framework".into(), match (&p.framework) { Some(v) => Value::String((v).clone()), None => Value::Null });
@@ -1085,53 +2100,343 @@ fn iface_deploy__restore_site_deploy_params__to_json(p: &iface_deploy::RestoreSi
     Value::Object(m)
 }
 
+fn iface_deploy__rollback_site_deploy_params__to_json(p: &iface_deploy::RollbackSiteDeployParams) -> Value {
+    let mut m = Map::new();
+    m.insert("site_id".into(), Value::String((&p.site_id).clone()));
+    Value::Object(m)
+}
+
+fn iface_deploy__deploy__from_json(v: &Value) -> Option<iface_deploy::Deploy> {
+    let m = v.as_object()?;
+    Some(iface_deploy::Deploy {
+        admin_url: m.get("admin_url").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        branch: m.get("branch").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        build_id: m.get("build_id").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        commit_ref: m.get("commit_ref").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        commit_url: m.get("commit_url").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        context: m.get("context").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        created_at: m.get("created_at").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        deploy_ssl_url: m.get("deploy_ssl_url").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        deploy_url: m.get("deploy_url").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        draft: m.get("draft").filter(|v| !v.is_null()).and_then(|v| (v).as_bool()),
+        error_message: m.get("error_message").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        framework: m.get("framework").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        function_schedules: m.get("function_schedules").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| iface_deploy__function_schedule__from_json(x)).collect())),
+        id: m.get("id").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        locked: m.get("locked").filter(|v| !v.is_null()).and_then(|v| (v).as_bool()),
+        name: m.get("name").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        published_at: m.get("published_at").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        required: m.get("required").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| (x).as_str().map(|s| s.to_string())).collect())),
+        required_functions: m.get("required_functions").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| (x).as_str().map(|s| s.to_string())).collect())),
+        review_id: m.get("review_id").filter(|v| !v.is_null()).and_then(|v| (v).as_f64()),
+        review_url: m.get("review_url").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        screenshot_url: m.get("screenshot_url").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        site_capabilities: m.get("site_capabilities").filter(|v| !v.is_null()).and_then(|v| iface_deploy__deploy_site_capabilities__from_json(v)),
+        site_id: m.get("site_id").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        skipped: m.get("skipped").filter(|v| !v.is_null()).and_then(|v| (v).as_bool()),
+        ssl_url: m.get("ssl_url").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        state: m.get("state").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        title: m.get("title").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        updated_at: m.get("updated_at").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        url: m.get("url").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        user_id: m.get("user_id").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    })
+}
+
+fn iface_deploy__function_schedule__from_json(v: &Value) -> Option<iface_deploy::FunctionSchedule> {
+    let m = v.as_object()?;
+    Some(iface_deploy::FunctionSchedule {
+        cron: m.get("cron").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        name: m.get("name").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    })
+}
+
+fn iface_deploy__deploy_site_capabilities__from_json(v: &Value) -> Option<iface_deploy::DeploySiteCapabilities> {
+    let m = v.as_object()?;
+    Some(iface_deploy::DeploySiteCapabilities {
+        large_media_enabled: m.get("large_media_enabled").filter(|v| !v.is_null()).and_then(|v| (v).as_bool()),
+    })
+}
+
+fn iface_deploy__get_deploy__ok(body: String) -> Result<iface_deploy::Deploy, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match iface_deploy__deploy__from_json(&v) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_deploy__get_deploy__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
+fn iface_deploy__delete_deploy__ok(body: String) -> Result<String, crate::runtime::DispatchError> {
+    Ok(body)
+}
+
+fn iface_deploy__delete_deploy__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
+fn iface_deploy__cancel_site_deploy__ok(body: String) -> Result<iface_deploy::Deploy, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match iface_deploy__deploy__from_json(&v) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_deploy__cancel_site_deploy__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
+fn iface_deploy__lock_deploy__ok(body: String) -> Result<iface_deploy::Deploy, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match iface_deploy__deploy__from_json(&v) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_deploy__lock_deploy__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
+fn iface_deploy__unlock_deploy__ok(body: String) -> Result<iface_deploy::Deploy, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match iface_deploy__deploy__from_json(&v) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_deploy__unlock_deploy__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
+fn iface_deploy__list_site_deploys__ok(body: String) -> Result<Vec<iface_deploy::Deploy>, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match (&v).as_array().map(|a| a.iter().filter_map(|x| iface_deploy__deploy__from_json(x)).collect()) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_deploy__list_site_deploys__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
+fn iface_deploy__create_site_deploy__ok(body: String) -> Result<iface_deploy::Deploy, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match iface_deploy__deploy__from_json(&v) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_deploy__create_site_deploy__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
+fn iface_deploy__get_site_deploy__ok(body: String) -> Result<iface_deploy::Deploy, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match iface_deploy__deploy__from_json(&v) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_deploy__get_site_deploy__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
+fn iface_deploy__update_site_deploy__ok(body: String) -> Result<iface_deploy::Deploy, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match iface_deploy__deploy__from_json(&v) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_deploy__update_site_deploy__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
+fn iface_deploy__delete_site_deploy__ok(body: String) -> Result<String, crate::runtime::DispatchError> {
+    Ok(body)
+}
+
+fn iface_deploy__delete_site_deploy__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
+fn iface_deploy__restore_site_deploy__ok(body: String) -> Result<iface_deploy::Deploy, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match iface_deploy__deploy__from_json(&v) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_deploy__restore_site_deploy__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
+fn iface_deploy__rollback_site_deploy__ok(body: String) -> Result<String, crate::runtime::DispatchError> {
+    Ok(body)
+}
+
+fn iface_deploy__rollback_site_deploy__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
 impl iface_deploy::Guest for crate::Component {
-    fn get_deploy(params: iface_deploy::GetDeployParams) -> Result<String, String> {
+    fn get_deploy(params: iface_deploy::GetDeployParams) -> Result<iface_deploy::Deploy, String> {
         let json = iface_deploy__get_deploy_params__to_json(&params);
-        dispatch(&OP_DEPLOY_GET_DEPLOY, json)
+        match dispatch(&OP_DEPLOY_GET_DEPLOY, json).and_then(iface_deploy__get_deploy__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_deploy__get_deploy__err(e)),
+        }
     }
     fn delete_deploy(params: iface_deploy::DeleteDeployParams) -> Result<String, String> {
         let json = iface_deploy__delete_deploy_params__to_json(&params);
-        dispatch(&OP_DEPLOY_DELETE_DEPLOY, json)
+        match dispatch(&OP_DEPLOY_DELETE_DEPLOY, json).and_then(iface_deploy__delete_deploy__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_deploy__delete_deploy__err(e)),
+        }
     }
-    fn cancel_site_deploy(params: iface_deploy::CancelSiteDeployParams) -> Result<String, String> {
+    fn cancel_site_deploy(params: iface_deploy::CancelSiteDeployParams) -> Result<iface_deploy::Deploy, String> {
         let json = iface_deploy__cancel_site_deploy_params__to_json(&params);
-        dispatch(&OP_DEPLOY_CANCEL_SITE_DEPLOY, json)
+        match dispatch(&OP_DEPLOY_CANCEL_SITE_DEPLOY, json).and_then(iface_deploy__cancel_site_deploy__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_deploy__cancel_site_deploy__err(e)),
+        }
     }
-    fn lock_deploy(params: iface_deploy::LockDeployParams) -> Result<String, String> {
+    fn lock_deploy(params: iface_deploy::LockDeployParams) -> Result<iface_deploy::Deploy, String> {
         let json = iface_deploy__lock_deploy_params__to_json(&params);
-        dispatch(&OP_DEPLOY_LOCK_DEPLOY, json)
+        match dispatch(&OP_DEPLOY_LOCK_DEPLOY, json).and_then(iface_deploy__lock_deploy__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_deploy__lock_deploy__err(e)),
+        }
     }
-    fn unlock_deploy(params: iface_deploy::UnlockDeployParams) -> Result<String, String> {
+    fn unlock_deploy(params: iface_deploy::UnlockDeployParams) -> Result<iface_deploy::Deploy, String> {
         let json = iface_deploy__unlock_deploy_params__to_json(&params);
-        dispatch(&OP_DEPLOY_UNLOCK_DEPLOY, json)
+        match dispatch(&OP_DEPLOY_UNLOCK_DEPLOY, json).and_then(iface_deploy__unlock_deploy__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_deploy__unlock_deploy__err(e)),
+        }
     }
-    fn list_site_deploys(params: iface_deploy::ListSiteDeploysParams) -> Result<String, String> {
+    fn list_site_deploys(params: iface_deploy::ListSiteDeploysParams) -> Result<Vec<iface_deploy::Deploy>, String> {
         let json = iface_deploy__list_site_deploys_params__to_json(&params);
-        dispatch(&OP_DEPLOY_LIST_SITE_DEPLOYS, json)
+        match dispatch(&OP_DEPLOY_LIST_SITE_DEPLOYS, json).and_then(iface_deploy__list_site_deploys__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_deploy__list_site_deploys__err(e)),
+        }
     }
-    fn create_site_deploy(params: iface_deploy::CreateSiteDeployParams) -> Result<String, String> {
+    fn create_site_deploy(params: iface_deploy::CreateSiteDeployParams) -> Result<iface_deploy::Deploy, String> {
         let json = iface_deploy__create_site_deploy_params__to_json(&params);
-        dispatch(&OP_DEPLOY_CREATE_SITE_DEPLOY, json)
+        match dispatch(&OP_DEPLOY_CREATE_SITE_DEPLOY, json).and_then(iface_deploy__create_site_deploy__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_deploy__create_site_deploy__err(e)),
+        }
     }
-    fn get_site_deploy(params: iface_deploy::GetSiteDeployParams) -> Result<String, String> {
+    fn get_site_deploy(params: iface_deploy::GetSiteDeployParams) -> Result<iface_deploy::Deploy, String> {
         let json = iface_deploy__get_site_deploy_params__to_json(&params);
-        dispatch(&OP_DEPLOY_GET_SITE_DEPLOY, json)
+        match dispatch(&OP_DEPLOY_GET_SITE_DEPLOY, json).and_then(iface_deploy__get_site_deploy__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_deploy__get_site_deploy__err(e)),
+        }
     }
-    fn update_site_deploy(params: iface_deploy::UpdateSiteDeployParams) -> Result<String, String> {
+    fn update_site_deploy(params: iface_deploy::UpdateSiteDeployParams) -> Result<iface_deploy::Deploy, String> {
         let json = iface_deploy__update_site_deploy_params__to_json(&params);
-        dispatch(&OP_DEPLOY_UPDATE_SITE_DEPLOY, json)
+        match dispatch(&OP_DEPLOY_UPDATE_SITE_DEPLOY, json).and_then(iface_deploy__update_site_deploy__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_deploy__update_site_deploy__err(e)),
+        }
     }
     fn delete_site_deploy(params: iface_deploy::DeleteSiteDeployParams) -> Result<String, String> {
         let json = iface_deploy__delete_site_deploy_params__to_json(&params);
-        dispatch(&OP_DEPLOY_DELETE_SITE_DEPLOY, json)
+        match dispatch(&OP_DEPLOY_DELETE_SITE_DEPLOY, json).and_then(iface_deploy__delete_site_deploy__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_deploy__delete_site_deploy__err(e)),
+        }
     }
-    fn restore_site_deploy(params: iface_deploy::RestoreSiteDeployParams) -> Result<String, String> {
+    fn restore_site_deploy(params: iface_deploy::RestoreSiteDeployParams) -> Result<iface_deploy::Deploy, String> {
         let json = iface_deploy__restore_site_deploy_params__to_json(&params);
-        dispatch(&OP_DEPLOY_RESTORE_SITE_DEPLOY, json)
+        match dispatch(&OP_DEPLOY_RESTORE_SITE_DEPLOY, json).and_then(iface_deploy__restore_site_deploy__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_deploy__restore_site_deploy__err(e)),
+        }
     }
-    fn rollback_site_deploy() -> Result<String, String> {
-        dispatch(&OP_DEPLOY_ROLLBACK_SITE_DEPLOY, Value::Object(Map::new()))
+    fn rollback_site_deploy(params: iface_deploy::RollbackSiteDeployParams) -> Result<String, String> {
+        let json = iface_deploy__rollback_site_deploy_params__to_json(&params);
+        match dispatch(&OP_DEPLOY_ROLLBACK_SITE_DEPLOY, json).and_then(iface_deploy__rollback_site_deploy__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_deploy__rollback_site_deploy__err(e)),
+        }
     }
 }
 use crate::exports::autostamp::netlify::file as iface_file;
@@ -1140,10 +2445,10 @@ const OP_FILE_UPLOAD_DEPLOY_FILE: OpSpec = OpSpec {
     method: "PUT",
     path_template: "/deploys/{deploy_id}/files/{path}",
     fields: &[
-        FieldSpec { snake: "deploy_id", location: FieldLocation::Path },
-        FieldSpec { snake: "path", location: FieldLocation::Path },
-        FieldSpec { snake: "size", location: FieldLocation::Query },
-        FieldSpec { snake: "body", location: FieldLocation::Body },
+        FieldSpec { snake: "deploy_id", wire: "deploy_id", location: FieldLocation::Path },
+        FieldSpec { snake: "path", wire: "path", location: FieldLocation::Path },
+        FieldSpec { snake: "size", wire: "size", location: FieldLocation::Query },
+        FieldSpec { snake: "body", wire: "body", location: FieldLocation::Body },
     ],
     auth: &[
     ],
@@ -1153,7 +2458,7 @@ const OP_FILE_LIST_SITE_FILES: OpSpec = OpSpec {
     method: "GET",
     path_template: "/sites/{site_id}/files",
     fields: &[
-        FieldSpec { snake: "site_id", location: FieldLocation::Path },
+        FieldSpec { snake: "site_id", wire: "site_id", location: FieldLocation::Path },
     ],
     auth: &[
     ],
@@ -1163,12 +2468,22 @@ const OP_FILE_GET_SITE_FILE_BY_PATH_NAME: OpSpec = OpSpec {
     method: "GET",
     path_template: "/sites/{site_id}/files/{file_path}",
     fields: &[
-        FieldSpec { snake: "site_id", location: FieldLocation::Path },
-        FieldSpec { snake: "file_path", location: FieldLocation::Path },
+        FieldSpec { snake: "site_id", wire: "site_id", location: FieldLocation::Path },
+        FieldSpec { snake: "file_path", wire: "file_path", location: FieldLocation::Path },
     ],
     auth: &[
     ],
 };
+
+fn iface_file__file__to_json(p: &iface_file::File) -> Value {
+    let mut m = Map::new();
+    m.insert("id".into(), match (&p.id) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("mime_type".into(), match (&p.mime_type) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("path".into(), match (&p.path) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("sha".into(), match (&p.sha) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("size".into(), match (&p.size) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    Value::Object(m)
+}
 
 fn iface_file__upload_deploy_file_params__to_json(p: &iface_file::UploadDeployFileParams) -> Value {
     let mut m = Map::new();
@@ -1192,18 +2507,92 @@ fn iface_file__get_site_file_by_path_name_params__to_json(p: &iface_file::GetSit
     Value::Object(m)
 }
 
+fn iface_file__file__from_json(v: &Value) -> Option<iface_file::File> {
+    let m = v.as_object()?;
+    Some(iface_file::File {
+        id: m.get("id").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        mime_type: m.get("mime_type").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        path: m.get("path").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        sha: m.get("sha").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        size: m.get("size").filter(|v| !v.is_null()).and_then(|v| (v).as_i64()),
+    })
+}
+
+fn iface_file__upload_deploy_file__ok(body: String) -> Result<iface_file::File, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match iface_file__file__from_json(&v) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_file__upload_deploy_file__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
+fn iface_file__list_site_files__ok(body: String) -> Result<Vec<iface_file::File>, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match (&v).as_array().map(|a| a.iter().filter_map(|x| iface_file__file__from_json(x)).collect()) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_file__list_site_files__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
+fn iface_file__get_site_file_by_path_name__ok(body: String) -> Result<iface_file::File, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match iface_file__file__from_json(&v) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_file__get_site_file_by_path_name__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
 impl iface_file::Guest for crate::Component {
-    fn upload_deploy_file(params: iface_file::UploadDeployFileParams) -> Result<String, String> {
+    fn upload_deploy_file(params: iface_file::UploadDeployFileParams) -> Result<iface_file::File, String> {
         let json = iface_file__upload_deploy_file_params__to_json(&params);
-        dispatch(&OP_FILE_UPLOAD_DEPLOY_FILE, json)
+        match dispatch(&OP_FILE_UPLOAD_DEPLOY_FILE, json).and_then(iface_file__upload_deploy_file__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_file__upload_deploy_file__err(e)),
+        }
     }
-    fn list_site_files(params: iface_file::ListSiteFilesParams) -> Result<String, String> {
+    fn list_site_files(params: iface_file::ListSiteFilesParams) -> Result<Vec<iface_file::File>, String> {
         let json = iface_file__list_site_files_params__to_json(&params);
-        dispatch(&OP_FILE_LIST_SITE_FILES, json)
+        match dispatch(&OP_FILE_LIST_SITE_FILES, json).and_then(iface_file__list_site_files__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_file__list_site_files__err(e)),
+        }
     }
-    fn get_site_file_by_path_name(params: iface_file::GetSiteFileByPathNameParams) -> Result<String, String> {
+    fn get_site_file_by_path_name(params: iface_file::GetSiteFileByPathNameParams) -> Result<iface_file::File, String> {
         let json = iface_file__get_site_file_by_path_name_params__to_json(&params);
-        dispatch(&OP_FILE_GET_SITE_FILE_BY_PATH_NAME, json)
+        match dispatch(&OP_FILE_GET_SITE_FILE_BY_PATH_NAME, json).and_then(iface_file__get_site_file_by_path_name__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_file__get_site_file_by_path_name__err(e)),
+        }
     }
 }
 use crate::exports::autostamp::netlify::function as iface_function;
@@ -1212,16 +2601,24 @@ const OP_FUNCTION_UPLOAD_DEPLOY_FUNCTION: OpSpec = OpSpec {
     method: "PUT",
     path_template: "/deploys/{deploy_id}/functions/{name}",
     fields: &[
-        FieldSpec { snake: "deploy_id", location: FieldLocation::Path },
-        FieldSpec { snake: "name", location: FieldLocation::Path },
-        FieldSpec { snake: "runtime", location: FieldLocation::Query },
-        FieldSpec { snake: "size", location: FieldLocation::Query },
-        FieldSpec { snake: "x_nf_retry_count", location: FieldLocation::Header },
-        FieldSpec { snake: "body", location: FieldLocation::Body },
+        FieldSpec { snake: "deploy_id", wire: "deploy_id", location: FieldLocation::Path },
+        FieldSpec { snake: "name", wire: "name", location: FieldLocation::Path },
+        FieldSpec { snake: "runtime", wire: "runtime", location: FieldLocation::Query },
+        FieldSpec { snake: "size", wire: "size", location: FieldLocation::Query },
+        FieldSpec { snake: "x_nf_retry_count", wire: "X-Nf-Retry-Count", location: FieldLocation::Header },
+        FieldSpec { snake: "body", wire: "body", location: FieldLocation::Body },
     ],
     auth: &[
     ],
 };
+
+fn iface_function__function__to_json(p: &iface_function::Function) -> Value {
+    let mut m = Map::new();
+    m.insert("id".into(), match (&p.id) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("name".into(), match (&p.name) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("sha".into(), match (&p.sha) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
 
 fn iface_function__upload_deploy_function_params__to_json(p: &iface_function::UploadDeployFunctionParams) -> Value {
     let mut m = Map::new();
@@ -1234,10 +2631,40 @@ fn iface_function__upload_deploy_function_params__to_json(p: &iface_function::Up
     Value::Object(m)
 }
 
+fn iface_function__function__from_json(v: &Value) -> Option<iface_function::Function> {
+    let m = v.as_object()?;
+    Some(iface_function::Function {
+        id: m.get("id").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        name: m.get("name").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        sha: m.get("sha").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    })
+}
+
+fn iface_function__upload_deploy_function__ok(body: String) -> Result<iface_function::Function, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match iface_function__function__from_json(&v) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_function__upload_deploy_function__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
 impl iface_function::Guest for crate::Component {
-    fn upload_deploy_function(params: iface_function::UploadDeployFunctionParams) -> Result<String, String> {
+    fn upload_deploy_function(params: iface_function::UploadDeployFunctionParams) -> Result<iface_function::Function, String> {
         let json = iface_function__upload_deploy_function_params__to_json(&params);
-        dispatch(&OP_FUNCTION_UPLOAD_DEPLOY_FUNCTION, json)
+        match dispatch(&OP_FUNCTION_UPLOAD_DEPLOY_FUNCTION, json).and_then(iface_function__upload_deploy_function__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_function__upload_deploy_function__err(e)),
+        }
     }
 }
 use crate::exports::autostamp::netlify::x_internal as iface_x_internal;
@@ -1246,14 +2673,14 @@ const OP_X_INTERNAL_CREATE_PLUGIN_RUN: OpSpec = OpSpec {
     method: "POST",
     path_template: "/deploys/{deploy_id}/plugin_runs",
     fields: &[
-        FieldSpec { snake: "deploy_id", location: FieldLocation::Path },
-        FieldSpec { snake: "package", location: FieldLocation::Body },
-        FieldSpec { snake: "reporting_event", location: FieldLocation::Body },
-        FieldSpec { snake: "state", location: FieldLocation::Body },
-        FieldSpec { snake: "summary", location: FieldLocation::Body },
-        FieldSpec { snake: "text", location: FieldLocation::Body },
-        FieldSpec { snake: "title", location: FieldLocation::Body },
-        FieldSpec { snake: "version", location: FieldLocation::Body },
+        FieldSpec { snake: "deploy_id", wire: "deploy_id", location: FieldLocation::Path },
+        FieldSpec { snake: "package", wire: "package", location: FieldLocation::Body },
+        FieldSpec { snake: "reporting_event", wire: "reporting_event", location: FieldLocation::Body },
+        FieldSpec { snake: "state", wire: "state", location: FieldLocation::Body },
+        FieldSpec { snake: "summary", wire: "summary", location: FieldLocation::Body },
+        FieldSpec { snake: "text", wire: "text", location: FieldLocation::Body },
+        FieldSpec { snake: "title", wire: "title", location: FieldLocation::Body },
+        FieldSpec { snake: "version", wire: "version", location: FieldLocation::Body },
     ],
     auth: &[
     ],
@@ -1263,9 +2690,9 @@ const OP_X_INTERNAL_GET_LATEST_PLUGIN_RUNS: OpSpec = OpSpec {
     method: "GET",
     path_template: "/sites/{site_id}/plugin_runs/latest",
     fields: &[
-        FieldSpec { snake: "site_id", location: FieldLocation::Path },
-        FieldSpec { snake: "packages", location: FieldLocation::Query },
-        FieldSpec { snake: "state", location: FieldLocation::Query },
+        FieldSpec { snake: "site_id", wire: "site_id", location: FieldLocation::Path },
+        FieldSpec { snake: "packages", wire: "packages", location: FieldLocation::Query },
+        FieldSpec { snake: "state", wire: "state", location: FieldLocation::Query },
     ],
     auth: &[
     ],
@@ -1275,13 +2702,33 @@ const OP_X_INTERNAL_UPDATE_PLUGIN: OpSpec = OpSpec {
     method: "PUT",
     path_template: "/sites/{site_id}/plugins/{package}",
     fields: &[
-        FieldSpec { snake: "site_id", location: FieldLocation::Path },
-        FieldSpec { snake: "package", location: FieldLocation::Path },
-        FieldSpec { snake: "pinned_version", location: FieldLocation::Body },
+        FieldSpec { snake: "site_id", wire: "site_id", location: FieldLocation::Path },
+        FieldSpec { snake: "package", wire: "package", location: FieldLocation::Path },
+        FieldSpec { snake: "pinned_version", wire: "pinned_version", location: FieldLocation::Body },
     ],
     auth: &[
     ],
 };
+
+fn iface_x_internal__plugin_run__to_json(p: &iface_x_internal::PluginRun) -> Value {
+    let mut m = Map::new();
+    m.insert("package".into(), match (&p.package_op) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("reporting_event".into(), match (&p.reporting_event) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("state".into(), match (&p.state) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("summary".into(), match (&p.summary) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("text".into(), match (&p.text) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("title".into(), match (&p.title) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("version".into(), match (&p.version) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("deploy_id".into(), match (&p.deploy_id) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_x_internal__plugin__to_json(p: &iface_x_internal::Plugin) -> Value {
+    let mut m = Map::new();
+    m.insert("package".into(), match (&p.package_op) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("pinned_version".into(), match (&p.pinned_version) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
 
 fn iface_x_internal__create_plugin_run_params__to_json(p: &iface_x_internal::CreatePluginRunParams) -> Value {
     let mut m = Map::new();
@@ -1312,18 +2759,103 @@ fn iface_x_internal__update_plugin_params__to_json(p: &iface_x_internal::UpdateP
     Value::Object(m)
 }
 
+fn iface_x_internal__plugin_run__from_json(v: &Value) -> Option<iface_x_internal::PluginRun> {
+    let m = v.as_object()?;
+    Some(iface_x_internal::PluginRun {
+        package_op: m.get("package").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        reporting_event: m.get("reporting_event").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        state: m.get("state").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        summary: m.get("summary").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        text: m.get("text").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        title: m.get("title").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        version: m.get("version").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        deploy_id: m.get("deploy_id").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    })
+}
+
+fn iface_x_internal__plugin__from_json(v: &Value) -> Option<iface_x_internal::Plugin> {
+    let m = v.as_object()?;
+    Some(iface_x_internal::Plugin {
+        package_op: m.get("package").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        pinned_version: m.get("pinned_version").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    })
+}
+
+fn iface_x_internal__create_plugin_run__ok(body: String) -> Result<iface_x_internal::PluginRun, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match iface_x_internal__plugin_run__from_json(&v) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_x_internal__create_plugin_run__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
+fn iface_x_internal__get_latest_plugin_runs__ok(body: String) -> Result<Vec<iface_x_internal::PluginRun>, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match (&v).as_array().map(|a| a.iter().filter_map(|x| iface_x_internal__plugin_run__from_json(x)).collect()) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_x_internal__get_latest_plugin_runs__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
+fn iface_x_internal__update_plugin__ok(body: String) -> Result<iface_x_internal::Plugin, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match iface_x_internal__plugin__from_json(&v) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_x_internal__update_plugin__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
 impl iface_x_internal::Guest for crate::Component {
-    fn create_plugin_run(params: iface_x_internal::CreatePluginRunParams) -> Result<String, String> {
+    fn create_plugin_run(params: iface_x_internal::CreatePluginRunParams) -> Result<iface_x_internal::PluginRun, String> {
         let json = iface_x_internal__create_plugin_run_params__to_json(&params);
-        dispatch(&OP_X_INTERNAL_CREATE_PLUGIN_RUN, json)
+        match dispatch(&OP_X_INTERNAL_CREATE_PLUGIN_RUN, json).and_then(iface_x_internal__create_plugin_run__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_x_internal__create_plugin_run__err(e)),
+        }
     }
-    fn get_latest_plugin_runs(params: iface_x_internal::GetLatestPluginRunsParams) -> Result<String, String> {
+    fn get_latest_plugin_runs(params: iface_x_internal::GetLatestPluginRunsParams) -> Result<Vec<iface_x_internal::PluginRun>, String> {
         let json = iface_x_internal__get_latest_plugin_runs_params__to_json(&params);
-        dispatch(&OP_X_INTERNAL_GET_LATEST_PLUGIN_RUNS, json)
+        match dispatch(&OP_X_INTERNAL_GET_LATEST_PLUGIN_RUNS, json).and_then(iface_x_internal__get_latest_plugin_runs__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_x_internal__get_latest_plugin_runs__err(e)),
+        }
     }
-    fn update_plugin(params: iface_x_internal::UpdatePluginParams) -> Result<String, String> {
+    fn update_plugin(params: iface_x_internal::UpdatePluginParams) -> Result<iface_x_internal::Plugin, String> {
         let json = iface_x_internal__update_plugin_params__to_json(&params);
-        dispatch(&OP_X_INTERNAL_UPDATE_PLUGIN, json)
+        match dispatch(&OP_X_INTERNAL_UPDATE_PLUGIN, json).and_then(iface_x_internal__update_plugin__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_x_internal__update_plugin__err(e)),
+        }
     }
 }
 use crate::exports::autostamp::netlify::dns_zone as iface_dns_zone;
@@ -1332,7 +2864,7 @@ const OP_DNS_ZONE_GET_DNS_ZONES: OpSpec = OpSpec {
     method: "GET",
     path_template: "/dns_zones",
     fields: &[
-        FieldSpec { snake: "account_slug", location: FieldLocation::Query },
+        FieldSpec { snake: "account_slug", wire: "account_slug", location: FieldLocation::Query },
     ],
     auth: &[
     ],
@@ -1342,9 +2874,9 @@ const OP_DNS_ZONE_CREATE_DNS_ZONE: OpSpec = OpSpec {
     method: "POST",
     path_template: "/dns_zones",
     fields: &[
-        FieldSpec { snake: "account_slug", location: FieldLocation::Body },
-        FieldSpec { snake: "name", location: FieldLocation::Body },
-        FieldSpec { snake: "site_id", location: FieldLocation::Body },
+        FieldSpec { snake: "account_slug", wire: "account_slug", location: FieldLocation::Body },
+        FieldSpec { snake: "name", wire: "name", location: FieldLocation::Body },
+        FieldSpec { snake: "site_id", wire: "site_id", location: FieldLocation::Body },
     ],
     auth: &[
     ],
@@ -1354,6 +2886,7 @@ const OP_DNS_ZONE_GET_DNS_ZONE: OpSpec = OpSpec {
     method: "GET",
     path_template: "/dns_zones/{zone_id}",
     fields: &[
+        FieldSpec { snake: "zone_id", wire: "zone_id", location: FieldLocation::Path },
     ],
     auth: &[
     ],
@@ -1363,6 +2896,7 @@ const OP_DNS_ZONE_DELETE_DNS_ZONE: OpSpec = OpSpec {
     method: "DELETE",
     path_template: "/dns_zones/{zone_id}",
     fields: &[
+        FieldSpec { snake: "zone_id", wire: "zone_id", location: FieldLocation::Path },
     ],
     auth: &[
     ],
@@ -1372,6 +2906,7 @@ const OP_DNS_ZONE_GET_DNS_RECORDS: OpSpec = OpSpec {
     method: "GET",
     path_template: "/dns_zones/{zone_id}/dns_records",
     fields: &[
+        FieldSpec { snake: "zone_id", wire: "zone_id", location: FieldLocation::Path },
     ],
     auth: &[
     ],
@@ -1381,15 +2916,16 @@ const OP_DNS_ZONE_CREATE_DNS_RECORD: OpSpec = OpSpec {
     method: "POST",
     path_template: "/dns_zones/{zone_id}/dns_records",
     fields: &[
-        FieldSpec { snake: "flag", location: FieldLocation::Body },
-        FieldSpec { snake: "hostname", location: FieldLocation::Body },
-        FieldSpec { snake: "port", location: FieldLocation::Body },
-        FieldSpec { snake: "priority", location: FieldLocation::Body },
-        FieldSpec { snake: "tag", location: FieldLocation::Body },
-        FieldSpec { snake: "ttl", location: FieldLocation::Body },
-        FieldSpec { snake: "type", location: FieldLocation::Body },
-        FieldSpec { snake: "value", location: FieldLocation::Body },
-        FieldSpec { snake: "weight", location: FieldLocation::Body },
+        FieldSpec { snake: "zone_id", wire: "zone_id", location: FieldLocation::Path },
+        FieldSpec { snake: "flag", wire: "flag", location: FieldLocation::Body },
+        FieldSpec { snake: "hostname", wire: "hostname", location: FieldLocation::Body },
+        FieldSpec { snake: "port", wire: "port", location: FieldLocation::Body },
+        FieldSpec { snake: "priority", wire: "priority", location: FieldLocation::Body },
+        FieldSpec { snake: "tag", wire: "tag", location: FieldLocation::Body },
+        FieldSpec { snake: "ttl", wire: "ttl", location: FieldLocation::Body },
+        FieldSpec { snake: "type", wire: "type", location: FieldLocation::Body },
+        FieldSpec { snake: "value", wire: "value", location: FieldLocation::Body },
+        FieldSpec { snake: "weight", wire: "weight", location: FieldLocation::Body },
     ],
     auth: &[
     ],
@@ -1399,6 +2935,8 @@ const OP_DNS_ZONE_GET_INDIVIDUAL_DNS_RECORD: OpSpec = OpSpec {
     method: "GET",
     path_template: "/dns_zones/{zone_id}/dns_records/{dns_record_id}",
     fields: &[
+        FieldSpec { snake: "zone_id", wire: "zone_id", location: FieldLocation::Path },
+        FieldSpec { snake: "dns_record_id", wire: "dns_record_id", location: FieldLocation::Path },
     ],
     auth: &[
     ],
@@ -1408,6 +2946,8 @@ const OP_DNS_ZONE_DELETE_DNS_RECORD: OpSpec = OpSpec {
     method: "DELETE",
     path_template: "/dns_zones/{zone_id}/dns_records/{dns_record_id}",
     fields: &[
+        FieldSpec { snake: "zone_id", wire: "zone_id", location: FieldLocation::Path },
+        FieldSpec { snake: "dns_record_id", wire: "dns_record_id", location: FieldLocation::Path },
     ],
     auth: &[
     ],
@@ -1417,6 +2957,10 @@ const OP_DNS_ZONE_TRANSFER_DNS_ZONE: OpSpec = OpSpec {
     method: "PUT",
     path_template: "/dns_zones/{zone_id}/transfer",
     fields: &[
+        FieldSpec { snake: "zone_id", wire: "zone_id", location: FieldLocation::Path },
+        FieldSpec { snake: "account_id", wire: "account_id", location: FieldLocation::Query },
+        FieldSpec { snake: "transfer_account_id", wire: "transfer_account_id", location: FieldLocation::Query },
+        FieldSpec { snake: "transfer_user_id", wire: "transfer_user_id", location: FieldLocation::Query },
     ],
     auth: &[
     ],
@@ -1426,6 +2970,7 @@ const OP_DNS_ZONE_GET_DNS_FOR_SITE: OpSpec = OpSpec {
     method: "GET",
     path_template: "/sites/{site_id}/dns",
     fields: &[
+        FieldSpec { snake: "site_id", wire: "site_id", location: FieldLocation::Path },
     ],
     auth: &[
     ],
@@ -1435,10 +2980,60 @@ const OP_DNS_ZONE_CONFIGURE_DNS_FOR_SITE: OpSpec = OpSpec {
     method: "PUT",
     path_template: "/sites/{site_id}/dns",
     fields: &[
+        FieldSpec { snake: "site_id", wire: "site_id", location: FieldLocation::Path },
     ],
     auth: &[
     ],
 };
+
+fn iface_dns_zone__dns_zones__to_json(p: &iface_dns_zone::DnsZones) -> Value {
+    let mut m = Map::new();
+    m.insert("value".into(), Value::String((&p.value).clone()));
+    Value::Object(m)
+}
+
+fn iface_dns_zone__dns_zone__to_json(p: &iface_dns_zone::DnsZone) -> Value {
+    let mut m = Map::new();
+    m.insert("account_id".into(), match (&p.account_id) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("account_name".into(), match (&p.account_name) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("account_slug".into(), match (&p.account_slug) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("created_at".into(), match (&p.created_at) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("dedicated".into(), match (&p.dedicated) { Some(v) => Value::Bool(*(v)), None => Value::Null });
+    m.insert("dns_servers".into(), match (&p.dns_servers) { Some(v) => Value::Array((v).iter().map(|v| Value::String((v).clone())).collect()), None => Value::Null });
+    m.insert("domain".into(), match (&p.domain) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("errors".into(), match (&p.errors) { Some(v) => Value::Array((v).iter().map(|v| Value::String((v).clone())).collect()), None => Value::Null });
+    m.insert("id".into(), match (&p.id) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("ipv6_enabled".into(), match (&p.ipv6_enabled) { Some(v) => Value::Bool(*(v)), None => Value::Null });
+    m.insert("name".into(), match (&p.name) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("records".into(), match (&p.records) { Some(v) => Value::Array((v).iter().map(|v| iface_dns_zone__dns_record__to_json(v)).collect()), None => Value::Null });
+    m.insert("site_id".into(), match (&p.site_id) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("supported_record_types".into(), match (&p.supported_record_types) { Some(v) => Value::Array((v).iter().map(|v| Value::String((v).clone())).collect()), None => Value::Null });
+    m.insert("updated_at".into(), match (&p.updated_at) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("user_id".into(), match (&p.user_id) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_dns_zone__dns_record__to_json(p: &iface_dns_zone::DnsRecord) -> Value {
+    let mut m = Map::new();
+    m.insert("dns_zone_id".into(), match (&p.dns_zone_id) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("flag".into(), match (&p.flag) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("hostname".into(), match (&p.hostname) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("id".into(), match (&p.id) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("managed".into(), match (&p.managed) { Some(v) => Value::Bool(*(v)), None => Value::Null });
+    m.insert("priority".into(), match (&p.priority) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("site_id".into(), match (&p.site_id) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("tag".into(), match (&p.tag) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("ttl".into(), match (&p.ttl) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("type".into(), match (&p.type_op) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("value".into(), match (&p.value) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_dns_zone__dns_records__to_json(p: &iface_dns_zone::DnsRecords) -> Value {
+    let mut m = Map::new();
+    m.insert("value".into(), Value::String((&p.value).clone()));
+    Value::Object(m)
+}
 
 fn iface_dns_zone__get_dns_zones_params__to_json(p: &iface_dns_zone::GetDnsZonesParams) -> Value {
     let mut m = Map::new();
@@ -1454,8 +3049,27 @@ fn iface_dns_zone__create_dns_zone_params__to_json(p: &iface_dns_zone::CreateDns
     Value::Object(m)
 }
 
+fn iface_dns_zone__get_dns_zone_params__to_json(p: &iface_dns_zone::GetDnsZoneParams) -> Value {
+    let mut m = Map::new();
+    m.insert("zone_id".into(), Value::String((&p.zone_id).clone()));
+    Value::Object(m)
+}
+
+fn iface_dns_zone__delete_dns_zone_params__to_json(p: &iface_dns_zone::DeleteDnsZoneParams) -> Value {
+    let mut m = Map::new();
+    m.insert("zone_id".into(), Value::String((&p.zone_id).clone()));
+    Value::Object(m)
+}
+
+fn iface_dns_zone__get_dns_records_params__to_json(p: &iface_dns_zone::GetDnsRecordsParams) -> Value {
+    let mut m = Map::new();
+    m.insert("zone_id".into(), Value::String((&p.zone_id).clone()));
+    Value::Object(m)
+}
+
 fn iface_dns_zone__create_dns_record_params__to_json(p: &iface_dns_zone::CreateDnsRecordParams) -> Value {
     let mut m = Map::new();
+    m.insert("zone_id".into(), Value::String((&p.zone_id).clone()));
     m.insert("flag".into(), match (&p.flag) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
     m.insert("hostname".into(), match (&p.hostname) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("port".into(), match (&p.port) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
@@ -1468,42 +3082,355 @@ fn iface_dns_zone__create_dns_record_params__to_json(p: &iface_dns_zone::CreateD
     Value::Object(m)
 }
 
+fn iface_dns_zone__get_individual_dns_record_params__to_json(p: &iface_dns_zone::GetIndividualDnsRecordParams) -> Value {
+    let mut m = Map::new();
+    m.insert("zone_id".into(), Value::String((&p.zone_id).clone()));
+    m.insert("dns_record_id".into(), Value::String((&p.dns_record_id).clone()));
+    Value::Object(m)
+}
+
+fn iface_dns_zone__delete_dns_record_params__to_json(p: &iface_dns_zone::DeleteDnsRecordParams) -> Value {
+    let mut m = Map::new();
+    m.insert("zone_id".into(), Value::String((&p.zone_id).clone()));
+    m.insert("dns_record_id".into(), Value::String((&p.dns_record_id).clone()));
+    Value::Object(m)
+}
+
+fn iface_dns_zone__transfer_dns_zone_params__to_json(p: &iface_dns_zone::TransferDnsZoneParams) -> Value {
+    let mut m = Map::new();
+    m.insert("zone_id".into(), Value::String((&p.zone_id).clone()));
+    m.insert("account_id".into(), Value::String((&p.account_id).clone()));
+    m.insert("transfer_account_id".into(), Value::String((&p.transfer_account_id).clone()));
+    m.insert("transfer_user_id".into(), Value::String((&p.transfer_user_id).clone()));
+    Value::Object(m)
+}
+
+fn iface_dns_zone__get_dns_for_site_params__to_json(p: &iface_dns_zone::GetDnsForSiteParams) -> Value {
+    let mut m = Map::new();
+    m.insert("site_id".into(), Value::String((&p.site_id).clone()));
+    Value::Object(m)
+}
+
+fn iface_dns_zone__configure_dns_for_site_params__to_json(p: &iface_dns_zone::ConfigureDnsForSiteParams) -> Value {
+    let mut m = Map::new();
+    m.insert("site_id".into(), Value::String((&p.site_id).clone()));
+    Value::Object(m)
+}
+
+fn iface_dns_zone__dns_zones__from_json(v: &Value) -> Option<iface_dns_zone::DnsZones> {
+    let m = v.as_object()?;
+    Some(iface_dns_zone::DnsZones {
+        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+    })
+}
+
+fn iface_dns_zone__dns_zone__from_json(v: &Value) -> Option<iface_dns_zone::DnsZone> {
+    let m = v.as_object()?;
+    Some(iface_dns_zone::DnsZone {
+        account_id: m.get("account_id").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        account_name: m.get("account_name").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        account_slug: m.get("account_slug").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        created_at: m.get("created_at").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        dedicated: m.get("dedicated").filter(|v| !v.is_null()).and_then(|v| (v).as_bool()),
+        dns_servers: m.get("dns_servers").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| (x).as_str().map(|s| s.to_string())).collect())),
+        domain: m.get("domain").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        errors: m.get("errors").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| (x).as_str().map(|s| s.to_string())).collect())),
+        id: m.get("id").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        ipv6_enabled: m.get("ipv6_enabled").filter(|v| !v.is_null()).and_then(|v| (v).as_bool()),
+        name: m.get("name").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        records: m.get("records").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| iface_dns_zone__dns_record__from_json(x)).collect())),
+        site_id: m.get("site_id").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        supported_record_types: m.get("supported_record_types").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| (x).as_str().map(|s| s.to_string())).collect())),
+        updated_at: m.get("updated_at").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        user_id: m.get("user_id").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    })
+}
+
+fn iface_dns_zone__dns_record__from_json(v: &Value) -> Option<iface_dns_zone::DnsRecord> {
+    let m = v.as_object()?;
+    Some(iface_dns_zone::DnsRecord {
+        dns_zone_id: m.get("dns_zone_id").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        flag: m.get("flag").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        hostname: m.get("hostname").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        id: m.get("id").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        managed: m.get("managed").filter(|v| !v.is_null()).and_then(|v| (v).as_bool()),
+        priority: m.get("priority").filter(|v| !v.is_null()).and_then(|v| (v).as_i64()),
+        site_id: m.get("site_id").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        tag: m.get("tag").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        ttl: m.get("ttl").filter(|v| !v.is_null()).and_then(|v| (v).as_i64()),
+        type_op: m.get("type").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        value: m.get("value").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    })
+}
+
+fn iface_dns_zone__dns_records__from_json(v: &Value) -> Option<iface_dns_zone::DnsRecords> {
+    let m = v.as_object()?;
+    Some(iface_dns_zone::DnsRecords {
+        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+    })
+}
+
+fn iface_dns_zone__get_dns_zones__ok(body: String) -> Result<iface_dns_zone::DnsZones, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match iface_dns_zone__dns_zones__from_json(&v) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_dns_zone__get_dns_zones__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
+fn iface_dns_zone__create_dns_zone__ok(body: String) -> Result<iface_dns_zone::DnsZone, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match iface_dns_zone__dns_zone__from_json(&v) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_dns_zone__create_dns_zone__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
+fn iface_dns_zone__get_dns_zone__ok(body: String) -> Result<iface_dns_zone::DnsZone, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match iface_dns_zone__dns_zone__from_json(&v) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_dns_zone__get_dns_zone__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
+fn iface_dns_zone__delete_dns_zone__ok(body: String) -> Result<String, crate::runtime::DispatchError> {
+    Ok(body)
+}
+
+fn iface_dns_zone__delete_dns_zone__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
+fn iface_dns_zone__get_dns_records__ok(body: String) -> Result<iface_dns_zone::DnsRecords, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match iface_dns_zone__dns_records__from_json(&v) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_dns_zone__get_dns_records__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
+fn iface_dns_zone__create_dns_record__ok(body: String) -> Result<iface_dns_zone::DnsRecord, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match iface_dns_zone__dns_record__from_json(&v) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_dns_zone__create_dns_record__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
+fn iface_dns_zone__get_individual_dns_record__ok(body: String) -> Result<iface_dns_zone::DnsRecord, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match iface_dns_zone__dns_record__from_json(&v) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_dns_zone__get_individual_dns_record__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
+fn iface_dns_zone__delete_dns_record__ok(body: String) -> Result<String, crate::runtime::DispatchError> {
+    Ok(body)
+}
+
+fn iface_dns_zone__delete_dns_record__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
+fn iface_dns_zone__transfer_dns_zone__ok(body: String) -> Result<iface_dns_zone::DnsZone, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match iface_dns_zone__dns_zone__from_json(&v) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_dns_zone__transfer_dns_zone__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
+fn iface_dns_zone__get_dns_for_site__ok(body: String) -> Result<Vec<iface_dns_zone::DnsZone>, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match (&v).as_array().map(|a| a.iter().filter_map(|x| iface_dns_zone__dns_zone__from_json(x)).collect()) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_dns_zone__get_dns_for_site__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
+fn iface_dns_zone__configure_dns_for_site__ok(body: String) -> Result<Vec<iface_dns_zone::DnsZone>, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match (&v).as_array().map(|a| a.iter().filter_map(|x| iface_dns_zone__dns_zone__from_json(x)).collect()) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_dns_zone__configure_dns_for_site__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
 impl iface_dns_zone::Guest for crate::Component {
-    fn get_dns_zones(params: iface_dns_zone::GetDnsZonesParams) -> Result<String, String> {
+    fn get_dns_zones(params: iface_dns_zone::GetDnsZonesParams) -> Result<iface_dns_zone::DnsZones, String> {
         let json = iface_dns_zone__get_dns_zones_params__to_json(&params);
-        dispatch(&OP_DNS_ZONE_GET_DNS_ZONES, json)
+        match dispatch(&OP_DNS_ZONE_GET_DNS_ZONES, json).and_then(iface_dns_zone__get_dns_zones__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_dns_zone__get_dns_zones__err(e)),
+        }
     }
-    fn create_dns_zone(params: iface_dns_zone::CreateDnsZoneParams) -> Result<String, String> {
+    fn create_dns_zone(params: iface_dns_zone::CreateDnsZoneParams) -> Result<iface_dns_zone::DnsZone, String> {
         let json = iface_dns_zone__create_dns_zone_params__to_json(&params);
-        dispatch(&OP_DNS_ZONE_CREATE_DNS_ZONE, json)
+        match dispatch(&OP_DNS_ZONE_CREATE_DNS_ZONE, json).and_then(iface_dns_zone__create_dns_zone__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_dns_zone__create_dns_zone__err(e)),
+        }
     }
-    fn get_dns_zone() -> Result<String, String> {
-        dispatch(&OP_DNS_ZONE_GET_DNS_ZONE, Value::Object(Map::new()))
+    fn get_dns_zone(params: iface_dns_zone::GetDnsZoneParams) -> Result<iface_dns_zone::DnsZone, String> {
+        let json = iface_dns_zone__get_dns_zone_params__to_json(&params);
+        match dispatch(&OP_DNS_ZONE_GET_DNS_ZONE, json).and_then(iface_dns_zone__get_dns_zone__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_dns_zone__get_dns_zone__err(e)),
+        }
     }
-    fn delete_dns_zone() -> Result<String, String> {
-        dispatch(&OP_DNS_ZONE_DELETE_DNS_ZONE, Value::Object(Map::new()))
+    fn delete_dns_zone(params: iface_dns_zone::DeleteDnsZoneParams) -> Result<String, String> {
+        let json = iface_dns_zone__delete_dns_zone_params__to_json(&params);
+        match dispatch(&OP_DNS_ZONE_DELETE_DNS_ZONE, json).and_then(iface_dns_zone__delete_dns_zone__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_dns_zone__delete_dns_zone__err(e)),
+        }
     }
-    fn get_dns_records() -> Result<String, String> {
-        dispatch(&OP_DNS_ZONE_GET_DNS_RECORDS, Value::Object(Map::new()))
+    fn get_dns_records(params: iface_dns_zone::GetDnsRecordsParams) -> Result<iface_dns_zone::DnsRecords, String> {
+        let json = iface_dns_zone__get_dns_records_params__to_json(&params);
+        match dispatch(&OP_DNS_ZONE_GET_DNS_RECORDS, json).and_then(iface_dns_zone__get_dns_records__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_dns_zone__get_dns_records__err(e)),
+        }
     }
-    fn create_dns_record(params: iface_dns_zone::CreateDnsRecordParams) -> Result<String, String> {
+    fn create_dns_record(params: iface_dns_zone::CreateDnsRecordParams) -> Result<iface_dns_zone::DnsRecord, String> {
         let json = iface_dns_zone__create_dns_record_params__to_json(&params);
-        dispatch(&OP_DNS_ZONE_CREATE_DNS_RECORD, json)
+        match dispatch(&OP_DNS_ZONE_CREATE_DNS_RECORD, json).and_then(iface_dns_zone__create_dns_record__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_dns_zone__create_dns_record__err(e)),
+        }
     }
-    fn get_individual_dns_record() -> Result<String, String> {
-        dispatch(&OP_DNS_ZONE_GET_INDIVIDUAL_DNS_RECORD, Value::Object(Map::new()))
+    fn get_individual_dns_record(params: iface_dns_zone::GetIndividualDnsRecordParams) -> Result<iface_dns_zone::DnsRecord, String> {
+        let json = iface_dns_zone__get_individual_dns_record_params__to_json(&params);
+        match dispatch(&OP_DNS_ZONE_GET_INDIVIDUAL_DNS_RECORD, json).and_then(iface_dns_zone__get_individual_dns_record__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_dns_zone__get_individual_dns_record__err(e)),
+        }
     }
-    fn delete_dns_record() -> Result<String, String> {
-        dispatch(&OP_DNS_ZONE_DELETE_DNS_RECORD, Value::Object(Map::new()))
+    fn delete_dns_record(params: iface_dns_zone::DeleteDnsRecordParams) -> Result<String, String> {
+        let json = iface_dns_zone__delete_dns_record_params__to_json(&params);
+        match dispatch(&OP_DNS_ZONE_DELETE_DNS_RECORD, json).and_then(iface_dns_zone__delete_dns_record__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_dns_zone__delete_dns_record__err(e)),
+        }
     }
-    fn transfer_dns_zone() -> Result<String, String> {
-        dispatch(&OP_DNS_ZONE_TRANSFER_DNS_ZONE, Value::Object(Map::new()))
+    fn transfer_dns_zone(params: iface_dns_zone::TransferDnsZoneParams) -> Result<iface_dns_zone::DnsZone, String> {
+        let json = iface_dns_zone__transfer_dns_zone_params__to_json(&params);
+        match dispatch(&OP_DNS_ZONE_TRANSFER_DNS_ZONE, json).and_then(iface_dns_zone__transfer_dns_zone__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_dns_zone__transfer_dns_zone__err(e)),
+        }
     }
-    fn get_dns_for_site() -> Result<String, String> {
-        dispatch(&OP_DNS_ZONE_GET_DNS_FOR_SITE, Value::Object(Map::new()))
+    fn get_dns_for_site(params: iface_dns_zone::GetDnsForSiteParams) -> Result<Vec<iface_dns_zone::DnsZone>, String> {
+        let json = iface_dns_zone__get_dns_for_site_params__to_json(&params);
+        match dispatch(&OP_DNS_ZONE_GET_DNS_FOR_SITE, json).and_then(iface_dns_zone__get_dns_for_site__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_dns_zone__get_dns_for_site__err(e)),
+        }
     }
-    fn configure_dns_for_site() -> Result<String, String> {
-        dispatch(&OP_DNS_ZONE_CONFIGURE_DNS_FOR_SITE, Value::Object(Map::new()))
+    fn configure_dns_for_site(params: iface_dns_zone::ConfigureDnsForSiteParams) -> Result<Vec<iface_dns_zone::DnsZone>, String> {
+        let json = iface_dns_zone__configure_dns_for_site_params__to_json(&params);
+        match dispatch(&OP_DNS_ZONE_CONFIGURE_DNS_FOR_SITE, json).and_then(iface_dns_zone__configure_dns_for_site__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_dns_zone__configure_dns_for_site__err(e)),
+        }
     }
 }
 use crate::exports::autostamp::netlify::submission as iface_submission;
@@ -1512,9 +3439,9 @@ const OP_SUBMISSION_LIST_FORM_SUBMISSIONS: OpSpec = OpSpec {
     method: "GET",
     path_template: "/forms/{form_id}/submissions",
     fields: &[
-        FieldSpec { snake: "form_id", location: FieldLocation::Path },
-        FieldSpec { snake: "page", location: FieldLocation::Query },
-        FieldSpec { snake: "per_page", location: FieldLocation::Query },
+        FieldSpec { snake: "form_id", wire: "form_id", location: FieldLocation::Path },
+        FieldSpec { snake: "page", wire: "page", location: FieldLocation::Query },
+        FieldSpec { snake: "per_page", wire: "per_page", location: FieldLocation::Query },
     ],
     auth: &[
     ],
@@ -1524,9 +3451,9 @@ const OP_SUBMISSION_LIST_SITE_SUBMISSIONS: OpSpec = OpSpec {
     method: "GET",
     path_template: "/sites/{site_id}/submissions",
     fields: &[
-        FieldSpec { snake: "site_id", location: FieldLocation::Path },
-        FieldSpec { snake: "page", location: FieldLocation::Query },
-        FieldSpec { snake: "per_page", location: FieldLocation::Query },
+        FieldSpec { snake: "site_id", wire: "site_id", location: FieldLocation::Path },
+        FieldSpec { snake: "page", wire: "page", location: FieldLocation::Query },
+        FieldSpec { snake: "per_page", wire: "per_page", location: FieldLocation::Query },
     ],
     auth: &[
     ],
@@ -1536,9 +3463,10 @@ const OP_SUBMISSION_LIST_FORM_SUBMISSION: OpSpec = OpSpec {
     method: "GET",
     path_template: "/submissions/{submission_id}",
     fields: &[
-        FieldSpec { snake: "query", location: FieldLocation::Query },
-        FieldSpec { snake: "page", location: FieldLocation::Query },
-        FieldSpec { snake: "per_page", location: FieldLocation::Query },
+        FieldSpec { snake: "submission_id", wire: "submission_id", location: FieldLocation::Path },
+        FieldSpec { snake: "query", wire: "query", location: FieldLocation::Query },
+        FieldSpec { snake: "page", wire: "page", location: FieldLocation::Query },
+        FieldSpec { snake: "per_page", wire: "per_page", location: FieldLocation::Query },
     ],
     auth: &[
     ],
@@ -1548,10 +3476,34 @@ const OP_SUBMISSION_DELETE_SUBMISSION: OpSpec = OpSpec {
     method: "DELETE",
     path_template: "/submissions/{submission_id}",
     fields: &[
+        FieldSpec { snake: "submission_id", wire: "submission_id", location: FieldLocation::Path },
     ],
     auth: &[
     ],
 };
+
+fn iface_submission__submission__to_json(p: &iface_submission::Submission) -> Value {
+    let mut m = Map::new();
+    m.insert("body".into(), match (&p.body) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("company".into(), match (&p.company) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("created_at".into(), match (&p.created_at) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("data".into(), match (&p.data) { Some(v) => iface_submission__submission_data__to_json(v), None => Value::Null });
+    m.insert("email".into(), match (&p.email) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("first_name".into(), match (&p.first_name) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("id".into(), match (&p.id) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("last_name".into(), match (&p.last_name) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("name".into(), match (&p.name) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("number".into(), match (&p.number) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("site_url".into(), match (&p.site_url) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("summary".into(), match (&p.summary) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_submission__submission_data__to_json(p: &iface_submission::SubmissionData) -> Value {
+    let mut m = Map::new();
+    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
 
 fn iface_submission__list_form_submissions_params__to_json(p: &iface_submission::ListFormSubmissionsParams) -> Value {
     let mut m = Map::new();
@@ -1571,27 +3523,137 @@ fn iface_submission__list_site_submissions_params__to_json(p: &iface_submission:
 
 fn iface_submission__list_form_submission_params__to_json(p: &iface_submission::ListFormSubmissionParams) -> Value {
     let mut m = Map::new();
+    m.insert("submission_id".into(), Value::String((&p.submission_id).clone()));
     m.insert("query".into(), match (&p.query) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("page".into(), match (&p.page) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
     m.insert("per_page".into(), match (&p.per_page) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
     Value::Object(m)
 }
 
+fn iface_submission__delete_submission_params__to_json(p: &iface_submission::DeleteSubmissionParams) -> Value {
+    let mut m = Map::new();
+    m.insert("submission_id".into(), Value::String((&p.submission_id).clone()));
+    Value::Object(m)
+}
+
+fn iface_submission__submission__from_json(v: &Value) -> Option<iface_submission::Submission> {
+    let m = v.as_object()?;
+    Some(iface_submission::Submission {
+        body: m.get("body").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        company: m.get("company").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        created_at: m.get("created_at").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| iface_submission__submission_data__from_json(v)),
+        email: m.get("email").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        first_name: m.get("first_name").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        id: m.get("id").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        last_name: m.get("last_name").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        name: m.get("name").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        number: m.get("number").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        site_url: m.get("site_url").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        summary: m.get("summary").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    })
+}
+
+fn iface_submission__submission_data__from_json(v: &Value) -> Option<iface_submission::SubmissionData> {
+    let m = v.as_object()?;
+    Some(iface_submission::SubmissionData {
+        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    })
+}
+
+fn iface_submission__list_form_submissions__ok(body: String) -> Result<Vec<iface_submission::Submission>, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match (&v).as_array().map(|a| a.iter().filter_map(|x| iface_submission__submission__from_json(x)).collect()) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_submission__list_form_submissions__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
+fn iface_submission__list_site_submissions__ok(body: String) -> Result<Vec<iface_submission::Submission>, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match (&v).as_array().map(|a| a.iter().filter_map(|x| iface_submission__submission__from_json(x)).collect()) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_submission__list_site_submissions__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
+fn iface_submission__list_form_submission__ok(body: String) -> Result<Vec<iface_submission::Submission>, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match (&v).as_array().map(|a| a.iter().filter_map(|x| iface_submission__submission__from_json(x)).collect()) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_submission__list_form_submission__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
+fn iface_submission__delete_submission__ok(body: String) -> Result<String, crate::runtime::DispatchError> {
+    Ok(body)
+}
+
+fn iface_submission__delete_submission__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
 impl iface_submission::Guest for crate::Component {
-    fn list_form_submissions(params: iface_submission::ListFormSubmissionsParams) -> Result<String, String> {
+    fn list_form_submissions(params: iface_submission::ListFormSubmissionsParams) -> Result<Vec<iface_submission::Submission>, String> {
         let json = iface_submission__list_form_submissions_params__to_json(&params);
-        dispatch(&OP_SUBMISSION_LIST_FORM_SUBMISSIONS, json)
+        match dispatch(&OP_SUBMISSION_LIST_FORM_SUBMISSIONS, json).and_then(iface_submission__list_form_submissions__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_submission__list_form_submissions__err(e)),
+        }
     }
-    fn list_site_submissions(params: iface_submission::ListSiteSubmissionsParams) -> Result<String, String> {
+    fn list_site_submissions(params: iface_submission::ListSiteSubmissionsParams) -> Result<Vec<iface_submission::Submission>, String> {
         let json = iface_submission__list_site_submissions_params__to_json(&params);
-        dispatch(&OP_SUBMISSION_LIST_SITE_SUBMISSIONS, json)
+        match dispatch(&OP_SUBMISSION_LIST_SITE_SUBMISSIONS, json).and_then(iface_submission__list_site_submissions__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_submission__list_site_submissions__err(e)),
+        }
     }
-    fn list_form_submission(params: iface_submission::ListFormSubmissionParams) -> Result<String, String> {
+    fn list_form_submission(params: iface_submission::ListFormSubmissionParams) -> Result<Vec<iface_submission::Submission>, String> {
         let json = iface_submission__list_form_submission_params__to_json(&params);
-        dispatch(&OP_SUBMISSION_LIST_FORM_SUBMISSION, json)
+        match dispatch(&OP_SUBMISSION_LIST_FORM_SUBMISSION, json).and_then(iface_submission__list_form_submission__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_submission__list_form_submission__err(e)),
+        }
     }
-    fn delete_submission() -> Result<String, String> {
-        dispatch(&OP_SUBMISSION_DELETE_SUBMISSION, Value::Object(Map::new()))
+    fn delete_submission(params: iface_submission::DeleteSubmissionParams) -> Result<String, String> {
+        let json = iface_submission__delete_submission_params__to_json(&params);
+        match dispatch(&OP_SUBMISSION_DELETE_SUBMISSION, json).and_then(iface_submission__delete_submission__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_submission__delete_submission__err(e)),
+        }
     }
 }
 use crate::exports::autostamp::netlify::hook as iface_hook;
@@ -1600,7 +3662,7 @@ const OP_HOOK_LIST_HOOKS_BY_SITE_ID: OpSpec = OpSpec {
     method: "GET",
     path_template: "/hooks",
     fields: &[
-        FieldSpec { snake: "site_id", location: FieldLocation::Query },
+        FieldSpec { snake: "site_id", wire: "site_id", location: FieldLocation::Query },
     ],
     auth: &[
     ],
@@ -1610,14 +3672,15 @@ const OP_HOOK_CREATE_HOOK_BY_SITE_ID: OpSpec = OpSpec {
     method: "POST",
     path_template: "/hooks",
     fields: &[
-        FieldSpec { snake: "site_id", location: FieldLocation::Query },
-        FieldSpec { snake: "created_at", location: FieldLocation::Body },
-        FieldSpec { snake: "data", location: FieldLocation::Body },
-        FieldSpec { snake: "disabled", location: FieldLocation::Body },
-        FieldSpec { snake: "event", location: FieldLocation::Body },
-        FieldSpec { snake: "id", location: FieldLocation::Body },
-        FieldSpec { snake: "type", location: FieldLocation::Body },
-        FieldSpec { snake: "updated_at", location: FieldLocation::Body },
+        FieldSpec { snake: "site_id", wire: "site_id", location: FieldLocation::Query },
+        FieldSpec { snake: "created_at", wire: "created_at", location: FieldLocation::Body },
+        FieldSpec { snake: "data", wire: "data", location: FieldLocation::Body },
+        FieldSpec { snake: "disabled", wire: "disabled", location: FieldLocation::Body },
+        FieldSpec { snake: "event", wire: "event", location: FieldLocation::Body },
+        FieldSpec { snake: "id", wire: "id", location: FieldLocation::Body },
+        FieldSpec { snake: "site_id_v2", wire: "site_id", location: FieldLocation::Body },
+        FieldSpec { snake: "type", wire: "type", location: FieldLocation::Body },
+        FieldSpec { snake: "updated_at", wire: "updated_at", location: FieldLocation::Body },
     ],
     auth: &[
     ],
@@ -1627,6 +3690,7 @@ const OP_HOOK_GET_HOOK: OpSpec = OpSpec {
     method: "GET",
     path_template: "/hooks/{hook_id}",
     fields: &[
+        FieldSpec { snake: "hook_id", wire: "hook_id", location: FieldLocation::Path },
     ],
     auth: &[
     ],
@@ -1636,14 +3700,15 @@ const OP_HOOK_UPDATE_HOOK: OpSpec = OpSpec {
     method: "PUT",
     path_template: "/hooks/{hook_id}",
     fields: &[
-        FieldSpec { snake: "created_at", location: FieldLocation::Body },
-        FieldSpec { snake: "data", location: FieldLocation::Body },
-        FieldSpec { snake: "disabled", location: FieldLocation::Body },
-        FieldSpec { snake: "event", location: FieldLocation::Body },
-        FieldSpec { snake: "id", location: FieldLocation::Body },
-        FieldSpec { snake: "site_id", location: FieldLocation::Body },
-        FieldSpec { snake: "type", location: FieldLocation::Body },
-        FieldSpec { snake: "updated_at", location: FieldLocation::Body },
+        FieldSpec { snake: "hook_id", wire: "hook_id", location: FieldLocation::Path },
+        FieldSpec { snake: "created_at", wire: "created_at", location: FieldLocation::Body },
+        FieldSpec { snake: "data", wire: "data", location: FieldLocation::Body },
+        FieldSpec { snake: "disabled", wire: "disabled", location: FieldLocation::Body },
+        FieldSpec { snake: "event", wire: "event", location: FieldLocation::Body },
+        FieldSpec { snake: "id", wire: "id", location: FieldLocation::Body },
+        FieldSpec { snake: "site_id", wire: "site_id", location: FieldLocation::Body },
+        FieldSpec { snake: "type", wire: "type", location: FieldLocation::Body },
+        FieldSpec { snake: "updated_at", wire: "updated_at", location: FieldLocation::Body },
     ],
     auth: &[
     ],
@@ -1653,6 +3718,7 @@ const OP_HOOK_DELETE_HOOK: OpSpec = OpSpec {
     method: "DELETE",
     path_template: "/hooks/{hook_id}",
     fields: &[
+        FieldSpec { snake: "hook_id", wire: "hook_id", location: FieldLocation::Path },
     ],
     auth: &[
     ],
@@ -1662,10 +3728,24 @@ const OP_HOOK_ENABLE_HOOK: OpSpec = OpSpec {
     method: "POST",
     path_template: "/hooks/{hook_id}/enable",
     fields: &[
+        FieldSpec { snake: "hook_id", wire: "hook_id", location: FieldLocation::Path },
     ],
     auth: &[
     ],
 };
+
+fn iface_hook__hook__to_json(p: &iface_hook::Hook) -> Value {
+    let mut m = Map::new();
+    m.insert("created_at".into(), match (&p.created_at) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("data".into(), match (&p.data) { Some(v) => iface_hook__hook_data__to_json(v), None => Value::Null });
+    m.insert("disabled".into(), match (&p.disabled) { Some(v) => Value::Bool(*(v)), None => Value::Null });
+    m.insert("event".into(), match (&p.event) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("id".into(), match (&p.id) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("site_id".into(), match (&p.site_id) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("type".into(), match (&p.type_op) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("updated_at".into(), match (&p.updated_at) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
 
 fn iface_hook__hook_data__to_json(p: &iface_hook::HookData) -> Value {
     let mut m = Map::new();
@@ -1687,13 +3767,21 @@ fn iface_hook__create_hook_by_site_id_params__to_json(p: &iface_hook::CreateHook
     m.insert("disabled".into(), match (&p.disabled) { Some(v) => Value::Bool(*(v)), None => Value::Null });
     m.insert("event".into(), match (&p.event) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("id".into(), match (&p.id) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("site_id_v2".into(), match (&p.site_id_v2) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("type".into(), match (&p.type_op) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("updated_at".into(), match (&p.updated_at) { Some(v) => Value::String((v).clone()), None => Value::Null });
     Value::Object(m)
 }
 
+fn iface_hook__get_hook_params__to_json(p: &iface_hook::GetHookParams) -> Value {
+    let mut m = Map::new();
+    m.insert("hook_id".into(), Value::String((&p.hook_id).clone()));
+    Value::Object(m)
+}
+
 fn iface_hook__update_hook_params__to_json(p: &iface_hook::UpdateHookParams) -> Value {
     let mut m = Map::new();
+    m.insert("hook_id".into(), Value::String((&p.hook_id).clone()));
     m.insert("created_at".into(), match (&p.created_at) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("data".into(), match (&p.data) { Some(v) => iface_hook__hook_data__to_json(v), None => Value::Null });
     m.insert("disabled".into(), match (&p.disabled) { Some(v) => Value::Bool(*(v)), None => Value::Null });
@@ -1705,27 +3793,182 @@ fn iface_hook__update_hook_params__to_json(p: &iface_hook::UpdateHookParams) -> 
     Value::Object(m)
 }
 
+fn iface_hook__delete_hook_params__to_json(p: &iface_hook::DeleteHookParams) -> Value {
+    let mut m = Map::new();
+    m.insert("hook_id".into(), Value::String((&p.hook_id).clone()));
+    Value::Object(m)
+}
+
+fn iface_hook__enable_hook_params__to_json(p: &iface_hook::EnableHookParams) -> Value {
+    let mut m = Map::new();
+    m.insert("hook_id".into(), Value::String((&p.hook_id).clone()));
+    Value::Object(m)
+}
+
+fn iface_hook__hook__from_json(v: &Value) -> Option<iface_hook::Hook> {
+    let m = v.as_object()?;
+    Some(iface_hook::Hook {
+        created_at: m.get("created_at").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| iface_hook__hook_data__from_json(v)),
+        disabled: m.get("disabled").filter(|v| !v.is_null()).and_then(|v| (v).as_bool()),
+        event: m.get("event").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        id: m.get("id").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        site_id: m.get("site_id").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        type_op: m.get("type").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        updated_at: m.get("updated_at").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    })
+}
+
+fn iface_hook__hook_data__from_json(v: &Value) -> Option<iface_hook::HookData> {
+    let m = v.as_object()?;
+    Some(iface_hook::HookData {
+        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    })
+}
+
+fn iface_hook__list_hooks_by_site_id__ok(body: String) -> Result<Vec<iface_hook::Hook>, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match (&v).as_array().map(|a| a.iter().filter_map(|x| iface_hook__hook__from_json(x)).collect()) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_hook__list_hooks_by_site_id__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
+fn iface_hook__create_hook_by_site_id__ok(body: String) -> Result<iface_hook::Hook, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match iface_hook__hook__from_json(&v) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_hook__create_hook_by_site_id__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
+fn iface_hook__get_hook__ok(body: String) -> Result<iface_hook::Hook, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match iface_hook__hook__from_json(&v) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_hook__get_hook__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
+fn iface_hook__update_hook__ok(body: String) -> Result<iface_hook::Hook, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match iface_hook__hook__from_json(&v) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_hook__update_hook__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
+fn iface_hook__delete_hook__ok(body: String) -> Result<String, crate::runtime::DispatchError> {
+    Ok(body)
+}
+
+fn iface_hook__delete_hook__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
+fn iface_hook__enable_hook__ok(body: String) -> Result<iface_hook::Hook, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match iface_hook__hook__from_json(&v) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_hook__enable_hook__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
 impl iface_hook::Guest for crate::Component {
-    fn list_hooks_by_site_id(params: iface_hook::ListHooksBySiteIdParams) -> Result<String, String> {
+    fn list_hooks_by_site_id(params: iface_hook::ListHooksBySiteIdParams) -> Result<Vec<iface_hook::Hook>, String> {
         let json = iface_hook__list_hooks_by_site_id_params__to_json(&params);
-        dispatch(&OP_HOOK_LIST_HOOKS_BY_SITE_ID, json)
+        match dispatch(&OP_HOOK_LIST_HOOKS_BY_SITE_ID, json).and_then(iface_hook__list_hooks_by_site_id__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_hook__list_hooks_by_site_id__err(e)),
+        }
     }
-    fn create_hook_by_site_id(params: iface_hook::CreateHookBySiteIdParams) -> Result<String, String> {
+    fn create_hook_by_site_id(params: iface_hook::CreateHookBySiteIdParams) -> Result<iface_hook::Hook, String> {
         let json = iface_hook__create_hook_by_site_id_params__to_json(&params);
-        dispatch(&OP_HOOK_CREATE_HOOK_BY_SITE_ID, json)
+        match dispatch(&OP_HOOK_CREATE_HOOK_BY_SITE_ID, json).and_then(iface_hook__create_hook_by_site_id__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_hook__create_hook_by_site_id__err(e)),
+        }
     }
-    fn get_hook() -> Result<String, String> {
-        dispatch(&OP_HOOK_GET_HOOK, Value::Object(Map::new()))
+    fn get_hook(params: iface_hook::GetHookParams) -> Result<iface_hook::Hook, String> {
+        let json = iface_hook__get_hook_params__to_json(&params);
+        match dispatch(&OP_HOOK_GET_HOOK, json).and_then(iface_hook__get_hook__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_hook__get_hook__err(e)),
+        }
     }
-    fn update_hook(params: iface_hook::UpdateHookParams) -> Result<String, String> {
+    fn update_hook(params: iface_hook::UpdateHookParams) -> Result<iface_hook::Hook, String> {
         let json = iface_hook__update_hook_params__to_json(&params);
-        dispatch(&OP_HOOK_UPDATE_HOOK, json)
+        match dispatch(&OP_HOOK_UPDATE_HOOK, json).and_then(iface_hook__update_hook__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_hook__update_hook__err(e)),
+        }
     }
-    fn delete_hook() -> Result<String, String> {
-        dispatch(&OP_HOOK_DELETE_HOOK, Value::Object(Map::new()))
+    fn delete_hook(params: iface_hook::DeleteHookParams) -> Result<String, String> {
+        let json = iface_hook__delete_hook_params__to_json(&params);
+        match dispatch(&OP_HOOK_DELETE_HOOK, json).and_then(iface_hook__delete_hook__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_hook__delete_hook__err(e)),
+        }
     }
-    fn enable_hook() -> Result<String, String> {
-        dispatch(&OP_HOOK_ENABLE_HOOK, Value::Object(Map::new()))
+    fn enable_hook(params: iface_hook::EnableHookParams) -> Result<iface_hook::Hook, String> {
+        let json = iface_hook__enable_hook_params__to_json(&params);
+        match dispatch(&OP_HOOK_ENABLE_HOOK, json).and_then(iface_hook__enable_hook__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_hook__enable_hook__err(e)),
+        }
     }
 }
 use crate::exports::autostamp::netlify::hook_type as iface_hook_type;
@@ -1739,9 +3982,60 @@ const OP_HOOK_TYPE_LIST_HOOK_TYPES: OpSpec = OpSpec {
     ],
 };
 
+fn iface_hook_type__hook_type__to_json(p: &iface_hook_type::HookType) -> Value {
+    let mut m = Map::new();
+    m.insert("events".into(), match (&p.events) { Some(v) => Value::Array((v).iter().map(|v| Value::String((v).clone())).collect()), None => Value::Null });
+    m.insert("fields".into(), match (&p.fields) { Some(v) => Value::Array((v).iter().map(|v| iface_hook_type__hook_type_fields_item__to_json(v)).collect()), None => Value::Null });
+    m.insert("name".into(), match (&p.name) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_hook_type__hook_type_fields_item__to_json(p: &iface_hook_type::HookTypeFieldsItem) -> Value {
+    let mut m = Map::new();
+    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_hook_type__hook_type__from_json(v: &Value) -> Option<iface_hook_type::HookType> {
+    let m = v.as_object()?;
+    Some(iface_hook_type::HookType {
+        events: m.get("events").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| (x).as_str().map(|s| s.to_string())).collect())),
+        fields: m.get("fields").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| iface_hook_type__hook_type_fields_item__from_json(x)).collect())),
+        name: m.get("name").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    })
+}
+
+fn iface_hook_type__hook_type_fields_item__from_json(v: &Value) -> Option<iface_hook_type::HookTypeFieldsItem> {
+    let m = v.as_object()?;
+    Some(iface_hook_type::HookTypeFieldsItem {
+        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    })
+}
+
+fn iface_hook_type__list_hook_types__ok(body: String) -> Result<Vec<iface_hook_type::HookType>, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match (&v).as_array().map(|a| a.iter().filter_map(|x| iface_hook_type__hook_type__from_json(x)).collect()) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_hook_type__list_hook_types__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
 impl iface_hook_type::Guest for crate::Component {
-    fn list_hook_types() -> Result<String, String> {
-        dispatch(&OP_HOOK_TYPE_LIST_HOOK_TYPES, Value::Object(Map::new()))
+    fn list_hook_types() -> Result<Vec<iface_hook_type::HookType>, String> {
+        match dispatch(&OP_HOOK_TYPE_LIST_HOOK_TYPES, Value::Object(Map::new())).and_then(iface_hook_type__list_hook_types__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_hook_type__list_hook_types__err(e)),
+        }
     }
 }
 use crate::exports::autostamp::netlify::ticket as iface_ticket;
@@ -1750,7 +4044,7 @@ const OP_TICKET_CREATE_TICKET: OpSpec = OpSpec {
     method: "POST",
     path_template: "/oauth/tickets",
     fields: &[
-        FieldSpec { snake: "client_id", location: FieldLocation::Query },
+        FieldSpec { snake: "client_id", wire: "client_id", location: FieldLocation::Query },
     ],
     auth: &[
     ],
@@ -1760,11 +4054,20 @@ const OP_TICKET_SHOW_TICKET: OpSpec = OpSpec {
     method: "GET",
     path_template: "/oauth/tickets/{ticket_id}",
     fields: &[
-        FieldSpec { snake: "ticket_id", location: FieldLocation::Path },
+        FieldSpec { snake: "ticket_id", wire: "ticket_id", location: FieldLocation::Path },
     ],
     auth: &[
     ],
 };
+
+fn iface_ticket__ticket__to_json(p: &iface_ticket::Ticket) -> Value {
+    let mut m = Map::new();
+    m.insert("authorized".into(), match (&p.authorized) { Some(v) => Value::Bool(*(v)), None => Value::Null });
+    m.insert("client_id".into(), match (&p.client_id) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("created_at".into(), match (&p.created_at) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("id".into(), match (&p.id) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
 
 fn iface_ticket__create_ticket_params__to_json(p: &iface_ticket::CreateTicketParams) -> Value {
     let mut m = Map::new();
@@ -1778,14 +4081,66 @@ fn iface_ticket__show_ticket_params__to_json(p: &iface_ticket::ShowTicketParams)
     Value::Object(m)
 }
 
-impl iface_ticket::Guest for crate::Component {
-    fn create_ticket(params: iface_ticket::CreateTicketParams) -> Result<String, String> {
-        let json = iface_ticket__create_ticket_params__to_json(&params);
-        dispatch(&OP_TICKET_CREATE_TICKET, json)
+fn iface_ticket__ticket__from_json(v: &Value) -> Option<iface_ticket::Ticket> {
+    let m = v.as_object()?;
+    Some(iface_ticket::Ticket {
+        authorized: m.get("authorized").filter(|v| !v.is_null()).and_then(|v| (v).as_bool()),
+        client_id: m.get("client_id").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        created_at: m.get("created_at").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        id: m.get("id").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    })
+}
+
+fn iface_ticket__create_ticket__ok(body: String) -> Result<iface_ticket::Ticket, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match iface_ticket__ticket__from_json(&v) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
     }
-    fn show_ticket(params: iface_ticket::ShowTicketParams) -> Result<String, String> {
+}
+
+fn iface_ticket__create_ticket__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
+fn iface_ticket__show_ticket__ok(body: String) -> Result<iface_ticket::Ticket, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match iface_ticket__ticket__from_json(&v) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_ticket__show_ticket__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
+impl iface_ticket::Guest for crate::Component {
+    fn create_ticket(params: iface_ticket::CreateTicketParams) -> Result<iface_ticket::Ticket, String> {
+        let json = iface_ticket__create_ticket_params__to_json(&params);
+        match dispatch(&OP_TICKET_CREATE_TICKET, json).and_then(iface_ticket__create_ticket__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_ticket__create_ticket__err(e)),
+        }
+    }
+    fn show_ticket(params: iface_ticket::ShowTicketParams) -> Result<iface_ticket::Ticket, String> {
         let json = iface_ticket__show_ticket_params__to_json(&params);
-        dispatch(&OP_TICKET_SHOW_TICKET, json)
+        match dispatch(&OP_TICKET_SHOW_TICKET, json).and_then(iface_ticket__show_ticket__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_ticket__show_ticket__err(e)),
+        }
     }
 }
 use crate::exports::autostamp::netlify::access_token as iface_access_token;
@@ -1794,11 +4149,21 @@ const OP_ACCESS_TOKEN_EXCHANGE_TICKET: OpSpec = OpSpec {
     method: "POST",
     path_template: "/oauth/tickets/{ticket_id}/exchange",
     fields: &[
-        FieldSpec { snake: "ticket_id", location: FieldLocation::Path },
+        FieldSpec { snake: "ticket_id", wire: "ticket_id", location: FieldLocation::Path },
     ],
     auth: &[
     ],
 };
+
+fn iface_access_token__access_token__to_json(p: &iface_access_token::AccessToken) -> Value {
+    let mut m = Map::new();
+    m.insert("access_token".into(), match (&p.access_token) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("created_at".into(), match (&p.created_at) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("id".into(), match (&p.id) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("user_email".into(), match (&p.user_email) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("user_id".into(), match (&p.user_id) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
 
 fn iface_access_token__exchange_ticket_params__to_json(p: &iface_access_token::ExchangeTicketParams) -> Value {
     let mut m = Map::new();
@@ -1806,10 +4171,42 @@ fn iface_access_token__exchange_ticket_params__to_json(p: &iface_access_token::E
     Value::Object(m)
 }
 
+fn iface_access_token__access_token__from_json(v: &Value) -> Option<iface_access_token::AccessToken> {
+    let m = v.as_object()?;
+    Some(iface_access_token::AccessToken {
+        access_token: m.get("access_token").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        created_at: m.get("created_at").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        id: m.get("id").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        user_email: m.get("user_email").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        user_id: m.get("user_id").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    })
+}
+
+fn iface_access_token__exchange_ticket__ok(body: String) -> Result<iface_access_token::AccessToken, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match iface_access_token__access_token__from_json(&v) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_access_token__exchange_ticket__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
 impl iface_access_token::Guest for crate::Component {
-    fn exchange_ticket(params: iface_access_token::ExchangeTicketParams) -> Result<String, String> {
+    fn exchange_ticket(params: iface_access_token::ExchangeTicketParams) -> Result<iface_access_token::AccessToken, String> {
         let json = iface_access_token__exchange_ticket_params__to_json(&params);
-        dispatch(&OP_ACCESS_TOKEN_EXCHANGE_TICKET, json)
+        match dispatch(&OP_ACCESS_TOKEN_EXCHANGE_TICKET, json).and_then(iface_access_token__exchange_ticket__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_access_token__exchange_ticket__err(e)),
+        }
     }
 }
 use crate::exports::autostamp::netlify::service as iface_service;
@@ -1818,6 +4215,7 @@ const OP_SERVICE_GET_SERVICES: OpSpec = OpSpec {
     method: "GET",
     path_template: "/services/",
     fields: &[
+        FieldSpec { snake: "search", wire: "search", location: FieldLocation::Query },
     ],
     auth: &[
     ],
@@ -1827,6 +4225,7 @@ const OP_SERVICE_SHOW_SERVICE: OpSpec = OpSpec {
     method: "GET",
     path_template: "/services/{addon_name}",
     fields: &[
+        FieldSpec { snake: "addon_name", wire: "addonName", location: FieldLocation::Path },
     ],
     auth: &[
     ],
@@ -1836,20 +4235,168 @@ const OP_SERVICE_SHOW_SERVICE_MANIFEST: OpSpec = OpSpec {
     method: "GET",
     path_template: "/services/{addon_name}/manifest",
     fields: &[
+        FieldSpec { snake: "addon_name", wire: "addonName", location: FieldLocation::Path },
     ],
     auth: &[
     ],
 };
 
+fn iface_service__service__to_json(p: &iface_service::Service) -> Value {
+    let mut m = Map::new();
+    m.insert("created_at".into(), match (&p.created_at) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("description".into(), match (&p.description) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("environments".into(), match (&p.environments) { Some(v) => Value::Array((v).iter().map(|v| Value::String((v).clone())).collect()), None => Value::Null });
+    m.insert("events".into(), match (&p.events) { Some(v) => Value::Array((v).iter().map(|v| iface_service__service_events_item__to_json(v)).collect()), None => Value::Null });
+    m.insert("icon".into(), match (&p.icon) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("id".into(), match (&p.id) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("long_description".into(), match (&p.long_description) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("manifest_url".into(), match (&p.manifest_url) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("name".into(), match (&p.name) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("service_path".into(), match (&p.service_path) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("slug".into(), match (&p.slug) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("tags".into(), match (&p.tags) { Some(v) => Value::Array((v).iter().map(|v| Value::String((v).clone())).collect()), None => Value::Null });
+    m.insert("updated_at".into(), match (&p.updated_at) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_service__service_events_item__to_json(p: &iface_service::ServiceEventsItem) -> Value {
+    let mut m = Map::new();
+    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_service__show_service_manifest_response__to_json(p: &iface_service::ShowServiceManifestResponse) -> Value {
+    let mut m = Map::new();
+    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_service__get_services_params__to_json(p: &iface_service::GetServicesParams) -> Value {
+    let mut m = Map::new();
+    m.insert("search".into(), match (&p.search) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_service__show_service_params__to_json(p: &iface_service::ShowServiceParams) -> Value {
+    let mut m = Map::new();
+    m.insert("addon_name".into(), Value::String((&p.addon_name).clone()));
+    Value::Object(m)
+}
+
+fn iface_service__show_service_manifest_params__to_json(p: &iface_service::ShowServiceManifestParams) -> Value {
+    let mut m = Map::new();
+    m.insert("addon_name".into(), Value::String((&p.addon_name).clone()));
+    Value::Object(m)
+}
+
+fn iface_service__service__from_json(v: &Value) -> Option<iface_service::Service> {
+    let m = v.as_object()?;
+    Some(iface_service::Service {
+        created_at: m.get("created_at").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        description: m.get("description").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        environments: m.get("environments").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| (x).as_str().map(|s| s.to_string())).collect())),
+        events: m.get("events").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| iface_service__service_events_item__from_json(x)).collect())),
+        icon: m.get("icon").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        id: m.get("id").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        long_description: m.get("long_description").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        manifest_url: m.get("manifest_url").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        name: m.get("name").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        service_path: m.get("service_path").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        slug: m.get("slug").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        tags: m.get("tags").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| (x).as_str().map(|s| s.to_string())).collect())),
+        updated_at: m.get("updated_at").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    })
+}
+
+fn iface_service__service_events_item__from_json(v: &Value) -> Option<iface_service::ServiceEventsItem> {
+    let m = v.as_object()?;
+    Some(iface_service::ServiceEventsItem {
+        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    })
+}
+
+fn iface_service__show_service_manifest_response__from_json(v: &Value) -> Option<iface_service::ShowServiceManifestResponse> {
+    let m = v.as_object()?;
+    Some(iface_service::ShowServiceManifestResponse {
+        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    })
+}
+
+fn iface_service__get_services__ok(body: String) -> Result<Vec<iface_service::Service>, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match (&v).as_array().map(|a| a.iter().filter_map(|x| iface_service__service__from_json(x)).collect()) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_service__get_services__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
+fn iface_service__show_service__ok(body: String) -> Result<iface_service::Service, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match iface_service__service__from_json(&v) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_service__show_service__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
+fn iface_service__show_service_manifest__ok(body: String) -> Result<iface_service::ShowServiceManifestResponse, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match iface_service__show_service_manifest_response__from_json(&v) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_service__show_service_manifest__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
 impl iface_service::Guest for crate::Component {
-    fn get_services() -> Result<String, String> {
-        dispatch(&OP_SERVICE_GET_SERVICES, Value::Object(Map::new()))
+    fn get_services(params: iface_service::GetServicesParams) -> Result<Vec<iface_service::Service>, String> {
+        let json = iface_service__get_services_params__to_json(&params);
+        match dispatch(&OP_SERVICE_GET_SERVICES, json).and_then(iface_service__get_services__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_service__get_services__err(e)),
+        }
     }
-    fn show_service() -> Result<String, String> {
-        dispatch(&OP_SERVICE_SHOW_SERVICE, Value::Object(Map::new()))
+    fn show_service(params: iface_service::ShowServiceParams) -> Result<iface_service::Service, String> {
+        let json = iface_service__show_service_params__to_json(&params);
+        match dispatch(&OP_SERVICE_SHOW_SERVICE, json).and_then(iface_service__show_service__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_service__show_service__err(e)),
+        }
     }
-    fn show_service_manifest() -> Result<String, String> {
-        dispatch(&OP_SERVICE_SHOW_SERVICE_MANIFEST, Value::Object(Map::new()))
+    fn show_service_manifest(params: iface_service::ShowServiceManifestParams) -> Result<iface_service::ShowServiceManifestResponse, String> {
+        let json = iface_service__show_service_manifest_params__to_json(&params);
+        match dispatch(&OP_SERVICE_SHOW_SERVICE_MANIFEST, json).and_then(iface_service__show_service_manifest__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_service__show_service_manifest__err(e)),
+        }
     }
 }
 use crate::exports::autostamp::netlify::site as iface_site;
@@ -1858,10 +4405,10 @@ const OP_SITE_LIST_SITES: OpSpec = OpSpec {
     method: "GET",
     path_template: "/sites",
     fields: &[
-        FieldSpec { snake: "name", location: FieldLocation::Query },
-        FieldSpec { snake: "filter", location: FieldLocation::Query },
-        FieldSpec { snake: "page", location: FieldLocation::Query },
-        FieldSpec { snake: "per_page", location: FieldLocation::Query },
+        FieldSpec { snake: "name", wire: "name", location: FieldLocation::Query },
+        FieldSpec { snake: "filter", wire: "filter", location: FieldLocation::Query },
+        FieldSpec { snake: "page", wire: "page", location: FieldLocation::Query },
+        FieldSpec { snake: "per_page", wire: "per_page", location: FieldLocation::Query },
     ],
     auth: &[
     ],
@@ -1871,8 +4418,40 @@ const OP_SITE_CREATE_SITE: OpSpec = OpSpec {
     method: "POST",
     path_template: "/sites",
     fields: &[
-        FieldSpec { snake: "configure_dns", location: FieldLocation::Query },
-        FieldSpec { snake: "value", location: FieldLocation::Body },
+        FieldSpec { snake: "configure_dns", wire: "configure_dns", location: FieldLocation::Query },
+        FieldSpec { snake: "account_name", wire: "account_name", location: FieldLocation::Body },
+        FieldSpec { snake: "account_slug", wire: "account_slug", location: FieldLocation::Body },
+        FieldSpec { snake: "admin_url", wire: "admin_url", location: FieldLocation::Body },
+        FieldSpec { snake: "build_image", wire: "build_image", location: FieldLocation::Body },
+        FieldSpec { snake: "build_settings", wire: "build_settings", location: FieldLocation::Body },
+        FieldSpec { snake: "capabilities", wire: "capabilities", location: FieldLocation::Body },
+        FieldSpec { snake: "created_at", wire: "created_at", location: FieldLocation::Body },
+        FieldSpec { snake: "custom_domain", wire: "custom_domain", location: FieldLocation::Body },
+        FieldSpec { snake: "default_hooks_data", wire: "default_hooks_data", location: FieldLocation::Body },
+        FieldSpec { snake: "deploy_hook", wire: "deploy_hook", location: FieldLocation::Body },
+        FieldSpec { snake: "deploy_url", wire: "deploy_url", location: FieldLocation::Body },
+        FieldSpec { snake: "domain_aliases", wire: "domain_aliases", location: FieldLocation::Body },
+        FieldSpec { snake: "force_ssl", wire: "force_ssl", location: FieldLocation::Body },
+        FieldSpec { snake: "git_provider", wire: "git_provider", location: FieldLocation::Body },
+        FieldSpec { snake: "id", wire: "id", location: FieldLocation::Body },
+        FieldSpec { snake: "id_domain", wire: "id_domain", location: FieldLocation::Body },
+        FieldSpec { snake: "managed_dns", wire: "managed_dns", location: FieldLocation::Body },
+        FieldSpec { snake: "name", wire: "name", location: FieldLocation::Body },
+        FieldSpec { snake: "notification_email", wire: "notification_email", location: FieldLocation::Body },
+        FieldSpec { snake: "password", wire: "password", location: FieldLocation::Body },
+        FieldSpec { snake: "plan", wire: "plan", location: FieldLocation::Body },
+        FieldSpec { snake: "prerender", wire: "prerender", location: FieldLocation::Body },
+        FieldSpec { snake: "processing_settings", wire: "processing_settings", location: FieldLocation::Body },
+        FieldSpec { snake: "published_deploy", wire: "published_deploy", location: FieldLocation::Body },
+        FieldSpec { snake: "screenshot_url", wire: "screenshot_url", location: FieldLocation::Body },
+        FieldSpec { snake: "session_id", wire: "session_id", location: FieldLocation::Body },
+        FieldSpec { snake: "ssl", wire: "ssl", location: FieldLocation::Body },
+        FieldSpec { snake: "ssl_url", wire: "ssl_url", location: FieldLocation::Body },
+        FieldSpec { snake: "state", wire: "state", location: FieldLocation::Body },
+        FieldSpec { snake: "updated_at", wire: "updated_at", location: FieldLocation::Body },
+        FieldSpec { snake: "url", wire: "url", location: FieldLocation::Body },
+        FieldSpec { snake: "user_id", wire: "user_id", location: FieldLocation::Body },
+        FieldSpec { snake: "repo", wire: "repo", location: FieldLocation::Body },
     ],
     auth: &[
     ],
@@ -1882,6 +4461,7 @@ const OP_SITE_GET_SITE: OpSpec = OpSpec {
     method: "GET",
     path_template: "/sites/{site_id}",
     fields: &[
+        FieldSpec { snake: "site_id", wire: "site_id", location: FieldLocation::Path },
     ],
     auth: &[
     ],
@@ -1891,7 +4471,40 @@ const OP_SITE_UPDATE_SITE: OpSpec = OpSpec {
     method: "PATCH",
     path_template: "/sites/{site_id}",
     fields: &[
-        FieldSpec { snake: "value", location: FieldLocation::Body },
+        FieldSpec { snake: "site_id", wire: "site_id", location: FieldLocation::Path },
+        FieldSpec { snake: "account_name", wire: "account_name", location: FieldLocation::Body },
+        FieldSpec { snake: "account_slug", wire: "account_slug", location: FieldLocation::Body },
+        FieldSpec { snake: "admin_url", wire: "admin_url", location: FieldLocation::Body },
+        FieldSpec { snake: "build_image", wire: "build_image", location: FieldLocation::Body },
+        FieldSpec { snake: "build_settings", wire: "build_settings", location: FieldLocation::Body },
+        FieldSpec { snake: "capabilities", wire: "capabilities", location: FieldLocation::Body },
+        FieldSpec { snake: "created_at", wire: "created_at", location: FieldLocation::Body },
+        FieldSpec { snake: "custom_domain", wire: "custom_domain", location: FieldLocation::Body },
+        FieldSpec { snake: "default_hooks_data", wire: "default_hooks_data", location: FieldLocation::Body },
+        FieldSpec { snake: "deploy_hook", wire: "deploy_hook", location: FieldLocation::Body },
+        FieldSpec { snake: "deploy_url", wire: "deploy_url", location: FieldLocation::Body },
+        FieldSpec { snake: "domain_aliases", wire: "domain_aliases", location: FieldLocation::Body },
+        FieldSpec { snake: "force_ssl", wire: "force_ssl", location: FieldLocation::Body },
+        FieldSpec { snake: "git_provider", wire: "git_provider", location: FieldLocation::Body },
+        FieldSpec { snake: "id", wire: "id", location: FieldLocation::Body },
+        FieldSpec { snake: "id_domain", wire: "id_domain", location: FieldLocation::Body },
+        FieldSpec { snake: "managed_dns", wire: "managed_dns", location: FieldLocation::Body },
+        FieldSpec { snake: "name", wire: "name", location: FieldLocation::Body },
+        FieldSpec { snake: "notification_email", wire: "notification_email", location: FieldLocation::Body },
+        FieldSpec { snake: "password", wire: "password", location: FieldLocation::Body },
+        FieldSpec { snake: "plan", wire: "plan", location: FieldLocation::Body },
+        FieldSpec { snake: "prerender", wire: "prerender", location: FieldLocation::Body },
+        FieldSpec { snake: "processing_settings", wire: "processing_settings", location: FieldLocation::Body },
+        FieldSpec { snake: "published_deploy", wire: "published_deploy", location: FieldLocation::Body },
+        FieldSpec { snake: "screenshot_url", wire: "screenshot_url", location: FieldLocation::Body },
+        FieldSpec { snake: "session_id", wire: "session_id", location: FieldLocation::Body },
+        FieldSpec { snake: "ssl", wire: "ssl", location: FieldLocation::Body },
+        FieldSpec { snake: "ssl_url", wire: "ssl_url", location: FieldLocation::Body },
+        FieldSpec { snake: "state", wire: "state", location: FieldLocation::Body },
+        FieldSpec { snake: "updated_at", wire: "updated_at", location: FieldLocation::Body },
+        FieldSpec { snake: "url", wire: "url", location: FieldLocation::Body },
+        FieldSpec { snake: "user_id", wire: "user_id", location: FieldLocation::Body },
+        FieldSpec { snake: "repo", wire: "repo", location: FieldLocation::Body },
     ],
     auth: &[
     ],
@@ -1901,6 +4514,7 @@ const OP_SITE_DELETE_SITE: OpSpec = OpSpec {
     method: "DELETE",
     path_template: "/sites/{site_id}",
     fields: &[
+        FieldSpec { snake: "site_id", wire: "site_id", location: FieldLocation::Path },
     ],
     auth: &[
     ],
@@ -1910,6 +4524,7 @@ const OP_SITE_UNLINK_SITE_REPO: OpSpec = OpSpec {
     method: "PUT",
     path_template: "/sites/{site_id}/unlink_repo",
     fields: &[
+        FieldSpec { snake: "site_id", wire: "site_id", location: FieldLocation::Path },
     ],
     auth: &[
     ],
@@ -1919,10 +4534,10 @@ const OP_SITE_LIST_SITES_FOR_ACCOUNT: OpSpec = OpSpec {
     method: "GET",
     path_template: "/{account_slug}/sites",
     fields: &[
-        FieldSpec { snake: "name", location: FieldLocation::Query },
-        FieldSpec { snake: "account_slug", location: FieldLocation::Path },
-        FieldSpec { snake: "page", location: FieldLocation::Query },
-        FieldSpec { snake: "per_page", location: FieldLocation::Query },
+        FieldSpec { snake: "name", wire: "name", location: FieldLocation::Query },
+        FieldSpec { snake: "account_slug", wire: "account_slug", location: FieldLocation::Path },
+        FieldSpec { snake: "page", wire: "page", location: FieldLocation::Query },
+        FieldSpec { snake: "per_page", wire: "per_page", location: FieldLocation::Query },
     ],
     auth: &[
     ],
@@ -1932,9 +4547,41 @@ const OP_SITE_CREATE_SITE_IN_TEAM: OpSpec = OpSpec {
     method: "POST",
     path_template: "/{account_slug}/sites",
     fields: &[
-        FieldSpec { snake: "configure_dns", location: FieldLocation::Query },
-        FieldSpec { snake: "account_slug", location: FieldLocation::Path },
-        FieldSpec { snake: "value", location: FieldLocation::Body },
+        FieldSpec { snake: "configure_dns", wire: "configure_dns", location: FieldLocation::Query },
+        FieldSpec { snake: "account_slug", wire: "account_slug", location: FieldLocation::Path },
+        FieldSpec { snake: "account_name", wire: "account_name", location: FieldLocation::Body },
+        FieldSpec { snake: "account_slug_v2", wire: "account_slug", location: FieldLocation::Body },
+        FieldSpec { snake: "admin_url", wire: "admin_url", location: FieldLocation::Body },
+        FieldSpec { snake: "build_image", wire: "build_image", location: FieldLocation::Body },
+        FieldSpec { snake: "build_settings", wire: "build_settings", location: FieldLocation::Body },
+        FieldSpec { snake: "capabilities", wire: "capabilities", location: FieldLocation::Body },
+        FieldSpec { snake: "created_at", wire: "created_at", location: FieldLocation::Body },
+        FieldSpec { snake: "custom_domain", wire: "custom_domain", location: FieldLocation::Body },
+        FieldSpec { snake: "default_hooks_data", wire: "default_hooks_data", location: FieldLocation::Body },
+        FieldSpec { snake: "deploy_hook", wire: "deploy_hook", location: FieldLocation::Body },
+        FieldSpec { snake: "deploy_url", wire: "deploy_url", location: FieldLocation::Body },
+        FieldSpec { snake: "domain_aliases", wire: "domain_aliases", location: FieldLocation::Body },
+        FieldSpec { snake: "force_ssl", wire: "force_ssl", location: FieldLocation::Body },
+        FieldSpec { snake: "git_provider", wire: "git_provider", location: FieldLocation::Body },
+        FieldSpec { snake: "id", wire: "id", location: FieldLocation::Body },
+        FieldSpec { snake: "id_domain", wire: "id_domain", location: FieldLocation::Body },
+        FieldSpec { snake: "managed_dns", wire: "managed_dns", location: FieldLocation::Body },
+        FieldSpec { snake: "name", wire: "name", location: FieldLocation::Body },
+        FieldSpec { snake: "notification_email", wire: "notification_email", location: FieldLocation::Body },
+        FieldSpec { snake: "password", wire: "password", location: FieldLocation::Body },
+        FieldSpec { snake: "plan", wire: "plan", location: FieldLocation::Body },
+        FieldSpec { snake: "prerender", wire: "prerender", location: FieldLocation::Body },
+        FieldSpec { snake: "processing_settings", wire: "processing_settings", location: FieldLocation::Body },
+        FieldSpec { snake: "published_deploy", wire: "published_deploy", location: FieldLocation::Body },
+        FieldSpec { snake: "screenshot_url", wire: "screenshot_url", location: FieldLocation::Body },
+        FieldSpec { snake: "session_id", wire: "session_id", location: FieldLocation::Body },
+        FieldSpec { snake: "ssl", wire: "ssl", location: FieldLocation::Body },
+        FieldSpec { snake: "ssl_url", wire: "ssl_url", location: FieldLocation::Body },
+        FieldSpec { snake: "state", wire: "state", location: FieldLocation::Body },
+        FieldSpec { snake: "updated_at", wire: "updated_at", location: FieldLocation::Body },
+        FieldSpec { snake: "url", wire: "url", location: FieldLocation::Body },
+        FieldSpec { snake: "user_id", wire: "user_id", location: FieldLocation::Body },
+        FieldSpec { snake: "repo", wire: "repo", location: FieldLocation::Body },
     ],
     auth: &[
     ],
@@ -1946,6 +4593,193 @@ fn iface_site__list_sites_filter_enum__to_str(e: &iface_site::ListSitesFilterEnu
         iface_site::ListSitesFilterEnum::Owner => "owner",
         iface_site::ListSitesFilterEnum::Guest => "guest",
     }
+}
+
+fn iface_site__site__to_json(p: &iface_site::Site) -> Value {
+    let mut m = Map::new();
+    m.insert("account_name".into(), match (&p.account_name) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("account_slug".into(), match (&p.account_slug) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("admin_url".into(), match (&p.admin_url) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("build_image".into(), match (&p.build_image) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("build_settings".into(), match (&p.build_settings) { Some(v) => iface_site__repo_info__to_json(v), None => Value::Null });
+    m.insert("capabilities".into(), match (&p.capabilities) { Some(v) => iface_site__site_capabilities__to_json(v), None => Value::Null });
+    m.insert("created_at".into(), match (&p.created_at) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("custom_domain".into(), match (&p.custom_domain) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("default_hooks_data".into(), match (&p.default_hooks_data) { Some(v) => iface_site__site_default_hooks_data__to_json(v), None => Value::Null });
+    m.insert("deploy_hook".into(), match (&p.deploy_hook) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("deploy_url".into(), match (&p.deploy_url) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("domain_aliases".into(), match (&p.domain_aliases) { Some(v) => Value::Array((v).iter().map(|v| Value::String((v).clone())).collect()), None => Value::Null });
+    m.insert("force_ssl".into(), match (&p.force_ssl) { Some(v) => Value::Bool(*(v)), None => Value::Null });
+    m.insert("git_provider".into(), match (&p.git_provider) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("id".into(), match (&p.id) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("id_domain".into(), match (&p.id_domain) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("managed_dns".into(), match (&p.managed_dns) { Some(v) => Value::Bool(*(v)), None => Value::Null });
+    m.insert("name".into(), match (&p.name) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("notification_email".into(), match (&p.notification_email) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("password".into(), match (&p.password) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("plan".into(), match (&p.plan) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("prerender".into(), match (&p.prerender) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("processing_settings".into(), match (&p.processing_settings) { Some(v) => iface_site__site_processing_settings__to_json(v), None => Value::Null });
+    m.insert("published_deploy".into(), match (&p.published_deploy) { Some(v) => iface_site__deploy__to_json(v), None => Value::Null });
+    m.insert("screenshot_url".into(), match (&p.screenshot_url) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("session_id".into(), match (&p.session_id) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("ssl".into(), match (&p.ssl) { Some(v) => Value::Bool(*(v)), None => Value::Null });
+    m.insert("ssl_url".into(), match (&p.ssl_url) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("state".into(), match (&p.state) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("updated_at".into(), match (&p.updated_at) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("url".into(), match (&p.url) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("user_id".into(), match (&p.user_id) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_site__repo_info__to_json(p: &iface_site::RepoInfo) -> Value {
+    let mut m = Map::new();
+    m.insert("allowed_branches".into(), match (&p.allowed_branches) { Some(v) => Value::Array((v).iter().map(|v| Value::String((v).clone())).collect()), None => Value::Null });
+    m.insert("cmd".into(), match (&p.cmd) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("deploy_key_id".into(), match (&p.deploy_key_id) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("dir".into(), match (&p.dir) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("env".into(), match (&p.env) { Some(v) => iface_site__repo_info_env__to_json(v), None => Value::Null });
+    m.insert("functions_dir".into(), match (&p.functions_dir) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("id".into(), match (&p.id) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("installation_id".into(), match (&p.installation_id) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("private_logs".into(), match (&p.private_logs) { Some(v) => Value::Bool(*(v)), None => Value::Null });
+    m.insert("provider".into(), match (&p.provider) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("public_repo".into(), match (&p.public_repo) { Some(v) => Value::Bool(*(v)), None => Value::Null });
+    m.insert("repo_branch".into(), match (&p.repo_branch) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("repo_path".into(), match (&p.repo_path) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("repo_url".into(), match (&p.repo_url) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("stop_builds".into(), match (&p.stop_builds) { Some(v) => Value::Bool(*(v)), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_site__repo_info_env__to_json(p: &iface_site::RepoInfoEnv) -> Value {
+    let mut m = Map::new();
+    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_site__site_capabilities__to_json(p: &iface_site::SiteCapabilities) -> Value {
+    let mut m = Map::new();
+    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_site__site_default_hooks_data__to_json(p: &iface_site::SiteDefaultHooksData) -> Value {
+    let mut m = Map::new();
+    m.insert("access_token".into(), match (&p.access_token) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_site__site_processing_settings__to_json(p: &iface_site::SiteProcessingSettings) -> Value {
+    let mut m = Map::new();
+    m.insert("css".into(), match (&p.css) { Some(v) => iface_site__minify_options__to_json(v), None => Value::Null });
+    m.insert("html".into(), match (&p.html) { Some(v) => iface_site__site_processing_settings_html__to_json(v), None => Value::Null });
+    m.insert("images".into(), match (&p.images) { Some(v) => iface_site__site_processing_settings_images__to_json(v), None => Value::Null });
+    m.insert("js".into(), match (&p.js) { Some(v) => iface_site__minify_options__to_json(v), None => Value::Null });
+    m.insert("skip".into(), match (&p.skip) { Some(v) => Value::Bool(*(v)), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_site__minify_options__to_json(p: &iface_site::MinifyOptions) -> Value {
+    let mut m = Map::new();
+    m.insert("bundle".into(), match (&p.bundle) { Some(v) => Value::Bool(*(v)), None => Value::Null });
+    m.insert("minify".into(), match (&p.minify) { Some(v) => Value::Bool(*(v)), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_site__site_processing_settings_html__to_json(p: &iface_site::SiteProcessingSettingsHtml) -> Value {
+    let mut m = Map::new();
+    m.insert("pretty_urls".into(), match (&p.pretty_urls) { Some(v) => Value::Bool(*(v)), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_site__site_processing_settings_images__to_json(p: &iface_site::SiteProcessingSettingsImages) -> Value {
+    let mut m = Map::new();
+    m.insert("optimize".into(), match (&p.optimize) { Some(v) => Value::Bool(*(v)), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_site__deploy__to_json(p: &iface_site::Deploy) -> Value {
+    let mut m = Map::new();
+    m.insert("admin_url".into(), match (&p.admin_url) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("branch".into(), match (&p.branch) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("build_id".into(), match (&p.build_id) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("commit_ref".into(), match (&p.commit_ref) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("commit_url".into(), match (&p.commit_url) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("context".into(), match (&p.context) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("created_at".into(), match (&p.created_at) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("deploy_ssl_url".into(), match (&p.deploy_ssl_url) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("deploy_url".into(), match (&p.deploy_url) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("draft".into(), match (&p.draft) { Some(v) => Value::Bool(*(v)), None => Value::Null });
+    m.insert("error_message".into(), match (&p.error_message) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("framework".into(), match (&p.framework) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("function_schedules".into(), match (&p.function_schedules) { Some(v) => Value::Array((v).iter().map(|v| iface_site__function_schedule__to_json(v)).collect()), None => Value::Null });
+    m.insert("id".into(), match (&p.id) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("locked".into(), match (&p.locked) { Some(v) => Value::Bool(*(v)), None => Value::Null });
+    m.insert("name".into(), match (&p.name) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("published_at".into(), match (&p.published_at) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("required".into(), match (&p.required) { Some(v) => Value::Array((v).iter().map(|v| Value::String((v).clone())).collect()), None => Value::Null });
+    m.insert("required_functions".into(), match (&p.required_functions) { Some(v) => Value::Array((v).iter().map(|v| Value::String((v).clone())).collect()), None => Value::Null });
+    m.insert("review_id".into(), match (&p.review_id) { Some(v) => serde_json::Number::from_f64(*(v)).map(Value::Number).unwrap_or(Value::Null), None => Value::Null });
+    m.insert("review_url".into(), match (&p.review_url) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("screenshot_url".into(), match (&p.screenshot_url) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("site_capabilities".into(), match (&p.site_capabilities) { Some(v) => iface_site__deploy_site_capabilities__to_json(v), None => Value::Null });
+    m.insert("site_id".into(), match (&p.site_id) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("skipped".into(), match (&p.skipped) { Some(v) => Value::Bool(*(v)), None => Value::Null });
+    m.insert("ssl_url".into(), match (&p.ssl_url) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("state".into(), match (&p.state) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("title".into(), match (&p.title) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("updated_at".into(), match (&p.updated_at) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("url".into(), match (&p.url) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("user_id".into(), match (&p.user_id) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_site__function_schedule__to_json(p: &iface_site::FunctionSchedule) -> Value {
+    let mut m = Map::new();
+    m.insert("cron".into(), match (&p.cron) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("name".into(), match (&p.name) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_site__deploy_site_capabilities__to_json(p: &iface_site::DeploySiteCapabilities) -> Value {
+    let mut m = Map::new();
+    m.insert("large_media_enabled".into(), match (&p.large_media_enabled) { Some(v) => Value::Bool(*(v)), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_site__setup_capabilities__to_json(p: &iface_site::SetupCapabilities) -> Value {
+    let mut m = Map::new();
+    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_site__setup_default_hooks_data__to_json(p: &iface_site::SetupDefaultHooksData) -> Value {
+    let mut m = Map::new();
+    m.insert("access_token".into(), match (&p.access_token) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_site__setup_processing_settings__to_json(p: &iface_site::SetupProcessingSettings) -> Value {
+    let mut m = Map::new();
+    m.insert("css".into(), match (&p.css) { Some(v) => iface_site__minify_options__to_json(v), None => Value::Null });
+    m.insert("html".into(), match (&p.html) { Some(v) => iface_site__setup_processing_settings_html__to_json(v), None => Value::Null });
+    m.insert("images".into(), match (&p.images) { Some(v) => iface_site__setup_processing_settings_images__to_json(v), None => Value::Null });
+    m.insert("js".into(), match (&p.js) { Some(v) => iface_site__minify_options__to_json(v), None => Value::Null });
+    m.insert("skip".into(), match (&p.skip) { Some(v) => Value::Bool(*(v)), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_site__setup_processing_settings_html__to_json(p: &iface_site::SetupProcessingSettingsHtml) -> Value {
+    let mut m = Map::new();
+    m.insert("pretty_urls".into(), match (&p.pretty_urls) { Some(v) => Value::Bool(*(v)), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_site__setup_processing_settings_images__to_json(p: &iface_site::SetupProcessingSettingsImages) -> Value {
+    let mut m = Map::new();
+    m.insert("optimize".into(), match (&p.optimize) { Some(v) => Value::Bool(*(v)), None => Value::Null });
+    Value::Object(m)
 }
 
 fn iface_site__list_sites_params__to_json(p: &iface_site::ListSitesParams) -> Value {
@@ -1960,13 +4794,96 @@ fn iface_site__list_sites_params__to_json(p: &iface_site::ListSitesParams) -> Va
 fn iface_site__create_site_params__to_json(p: &iface_site::CreateSiteParams) -> Value {
     let mut m = Map::new();
     m.insert("configure_dns".into(), match (&p.configure_dns) { Some(v) => Value::Bool(*(v)), None => Value::Null });
-    m.insert("value".into(), Value::String((&p.value).clone()));
+    m.insert("account_name".into(), match (&p.account_name) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("account_slug".into(), match (&p.account_slug) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("admin_url".into(), match (&p.admin_url) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("build_image".into(), match (&p.build_image) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("build_settings".into(), match (&p.build_settings) { Some(v) => iface_site__repo_info__to_json(v), None => Value::Null });
+    m.insert("capabilities".into(), match (&p.capabilities) { Some(v) => iface_site__setup_capabilities__to_json(v), None => Value::Null });
+    m.insert("created_at".into(), match (&p.created_at) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("custom_domain".into(), match (&p.custom_domain) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("default_hooks_data".into(), match (&p.default_hooks_data) { Some(v) => iface_site__setup_default_hooks_data__to_json(v), None => Value::Null });
+    m.insert("deploy_hook".into(), match (&p.deploy_hook) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("deploy_url".into(), match (&p.deploy_url) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("domain_aliases".into(), match (&p.domain_aliases) { Some(v) => Value::Array((v).iter().map(|v| Value::String((v).clone())).collect()), None => Value::Null });
+    m.insert("force_ssl".into(), match (&p.force_ssl) { Some(v) => Value::Bool(*(v)), None => Value::Null });
+    m.insert("git_provider".into(), match (&p.git_provider) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("id".into(), match (&p.id) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("id_domain".into(), match (&p.id_domain) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("managed_dns".into(), match (&p.managed_dns) { Some(v) => Value::Bool(*(v)), None => Value::Null });
+    m.insert("name".into(), match (&p.name) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("notification_email".into(), match (&p.notification_email) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("password".into(), match (&p.password) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("plan".into(), match (&p.plan) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("prerender".into(), match (&p.prerender) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("processing_settings".into(), match (&p.processing_settings) { Some(v) => iface_site__setup_processing_settings__to_json(v), None => Value::Null });
+    m.insert("published_deploy".into(), match (&p.published_deploy) { Some(v) => iface_site__deploy__to_json(v), None => Value::Null });
+    m.insert("screenshot_url".into(), match (&p.screenshot_url) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("session_id".into(), match (&p.session_id) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("ssl".into(), match (&p.ssl) { Some(v) => Value::Bool(*(v)), None => Value::Null });
+    m.insert("ssl_url".into(), match (&p.ssl_url) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("state".into(), match (&p.state) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("updated_at".into(), match (&p.updated_at) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("url".into(), match (&p.url) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("user_id".into(), match (&p.user_id) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("repo".into(), match (&p.repo) { Some(v) => iface_site__repo_info__to_json(v), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_site__get_site_params__to_json(p: &iface_site::GetSiteParams) -> Value {
+    let mut m = Map::new();
+    m.insert("site_id".into(), Value::String((&p.site_id).clone()));
     Value::Object(m)
 }
 
 fn iface_site__update_site_params__to_json(p: &iface_site::UpdateSiteParams) -> Value {
     let mut m = Map::new();
-    m.insert("value".into(), Value::String((&p.value).clone()));
+    m.insert("site_id".into(), Value::String((&p.site_id).clone()));
+    m.insert("account_name".into(), match (&p.account_name) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("account_slug".into(), match (&p.account_slug) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("admin_url".into(), match (&p.admin_url) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("build_image".into(), match (&p.build_image) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("build_settings".into(), match (&p.build_settings) { Some(v) => iface_site__repo_info__to_json(v), None => Value::Null });
+    m.insert("capabilities".into(), match (&p.capabilities) { Some(v) => iface_site__setup_capabilities__to_json(v), None => Value::Null });
+    m.insert("created_at".into(), match (&p.created_at) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("custom_domain".into(), match (&p.custom_domain) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("default_hooks_data".into(), match (&p.default_hooks_data) { Some(v) => iface_site__setup_default_hooks_data__to_json(v), None => Value::Null });
+    m.insert("deploy_hook".into(), match (&p.deploy_hook) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("deploy_url".into(), match (&p.deploy_url) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("domain_aliases".into(), match (&p.domain_aliases) { Some(v) => Value::Array((v).iter().map(|v| Value::String((v).clone())).collect()), None => Value::Null });
+    m.insert("force_ssl".into(), match (&p.force_ssl) { Some(v) => Value::Bool(*(v)), None => Value::Null });
+    m.insert("git_provider".into(), match (&p.git_provider) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("id".into(), match (&p.id) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("id_domain".into(), match (&p.id_domain) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("managed_dns".into(), match (&p.managed_dns) { Some(v) => Value::Bool(*(v)), None => Value::Null });
+    m.insert("name".into(), match (&p.name) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("notification_email".into(), match (&p.notification_email) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("password".into(), match (&p.password) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("plan".into(), match (&p.plan) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("prerender".into(), match (&p.prerender) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("processing_settings".into(), match (&p.processing_settings) { Some(v) => iface_site__setup_processing_settings__to_json(v), None => Value::Null });
+    m.insert("published_deploy".into(), match (&p.published_deploy) { Some(v) => iface_site__deploy__to_json(v), None => Value::Null });
+    m.insert("screenshot_url".into(), match (&p.screenshot_url) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("session_id".into(), match (&p.session_id) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("ssl".into(), match (&p.ssl) { Some(v) => Value::Bool(*(v)), None => Value::Null });
+    m.insert("ssl_url".into(), match (&p.ssl_url) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("state".into(), match (&p.state) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("updated_at".into(), match (&p.updated_at) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("url".into(), match (&p.url) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("user_id".into(), match (&p.user_id) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("repo".into(), match (&p.repo) { Some(v) => iface_site__repo_info__to_json(v), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_site__delete_site_params__to_json(p: &iface_site::DeleteSiteParams) -> Value {
+    let mut m = Map::new();
+    m.insert("site_id".into(), Value::String((&p.site_id).clone()));
+    Value::Object(m)
+}
+
+fn iface_site__unlink_site_repo_params__to_json(p: &iface_site::UnlinkSiteRepoParams) -> Value {
+    let mut m = Map::new();
+    m.insert("site_id".into(), Value::String((&p.site_id).clone()));
     Value::Object(m)
 }
 
@@ -1983,39 +4900,403 @@ fn iface_site__create_site_in_team_params__to_json(p: &iface_site::CreateSiteInT
     let mut m = Map::new();
     m.insert("configure_dns".into(), match (&p.configure_dns) { Some(v) => Value::Bool(*(v)), None => Value::Null });
     m.insert("account_slug".into(), Value::String((&p.account_slug).clone()));
-    m.insert("value".into(), Value::String((&p.value).clone()));
+    m.insert("account_name".into(), match (&p.account_name) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("account_slug_v2".into(), match (&p.account_slug_v2) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("admin_url".into(), match (&p.admin_url) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("build_image".into(), match (&p.build_image) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("build_settings".into(), match (&p.build_settings) { Some(v) => iface_site__repo_info__to_json(v), None => Value::Null });
+    m.insert("capabilities".into(), match (&p.capabilities) { Some(v) => iface_site__setup_capabilities__to_json(v), None => Value::Null });
+    m.insert("created_at".into(), match (&p.created_at) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("custom_domain".into(), match (&p.custom_domain) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("default_hooks_data".into(), match (&p.default_hooks_data) { Some(v) => iface_site__setup_default_hooks_data__to_json(v), None => Value::Null });
+    m.insert("deploy_hook".into(), match (&p.deploy_hook) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("deploy_url".into(), match (&p.deploy_url) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("domain_aliases".into(), match (&p.domain_aliases) { Some(v) => Value::Array((v).iter().map(|v| Value::String((v).clone())).collect()), None => Value::Null });
+    m.insert("force_ssl".into(), match (&p.force_ssl) { Some(v) => Value::Bool(*(v)), None => Value::Null });
+    m.insert("git_provider".into(), match (&p.git_provider) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("id".into(), match (&p.id) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("id_domain".into(), match (&p.id_domain) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("managed_dns".into(), match (&p.managed_dns) { Some(v) => Value::Bool(*(v)), None => Value::Null });
+    m.insert("name".into(), match (&p.name) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("notification_email".into(), match (&p.notification_email) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("password".into(), match (&p.password) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("plan".into(), match (&p.plan) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("prerender".into(), match (&p.prerender) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("processing_settings".into(), match (&p.processing_settings) { Some(v) => iface_site__setup_processing_settings__to_json(v), None => Value::Null });
+    m.insert("published_deploy".into(), match (&p.published_deploy) { Some(v) => iface_site__deploy__to_json(v), None => Value::Null });
+    m.insert("screenshot_url".into(), match (&p.screenshot_url) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("session_id".into(), match (&p.session_id) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("ssl".into(), match (&p.ssl) { Some(v) => Value::Bool(*(v)), None => Value::Null });
+    m.insert("ssl_url".into(), match (&p.ssl_url) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("state".into(), match (&p.state) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("updated_at".into(), match (&p.updated_at) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("url".into(), match (&p.url) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("user_id".into(), match (&p.user_id) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("repo".into(), match (&p.repo) { Some(v) => iface_site__repo_info__to_json(v), None => Value::Null });
     Value::Object(m)
 }
 
+fn iface_site__site__from_json(v: &Value) -> Option<iface_site::Site> {
+    let m = v.as_object()?;
+    Some(iface_site::Site {
+        account_name: m.get("account_name").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        account_slug: m.get("account_slug").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        admin_url: m.get("admin_url").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        build_image: m.get("build_image").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        build_settings: m.get("build_settings").filter(|v| !v.is_null()).and_then(|v| iface_site__repo_info__from_json(v)),
+        capabilities: m.get("capabilities").filter(|v| !v.is_null()).and_then(|v| iface_site__site_capabilities__from_json(v)),
+        created_at: m.get("created_at").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        custom_domain: m.get("custom_domain").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        default_hooks_data: m.get("default_hooks_data").filter(|v| !v.is_null()).and_then(|v| iface_site__site_default_hooks_data__from_json(v)),
+        deploy_hook: m.get("deploy_hook").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        deploy_url: m.get("deploy_url").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        domain_aliases: m.get("domain_aliases").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| (x).as_str().map(|s| s.to_string())).collect())),
+        force_ssl: m.get("force_ssl").filter(|v| !v.is_null()).and_then(|v| (v).as_bool()),
+        git_provider: m.get("git_provider").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        id: m.get("id").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        id_domain: m.get("id_domain").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        managed_dns: m.get("managed_dns").filter(|v| !v.is_null()).and_then(|v| (v).as_bool()),
+        name: m.get("name").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        notification_email: m.get("notification_email").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        password: m.get("password").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        plan: m.get("plan").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        prerender: m.get("prerender").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        processing_settings: m.get("processing_settings").filter(|v| !v.is_null()).and_then(|v| iface_site__site_processing_settings__from_json(v)),
+        published_deploy: m.get("published_deploy").filter(|v| !v.is_null()).and_then(|v| iface_site__deploy__from_json(v)),
+        screenshot_url: m.get("screenshot_url").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        session_id: m.get("session_id").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        ssl: m.get("ssl").filter(|v| !v.is_null()).and_then(|v| (v).as_bool()),
+        ssl_url: m.get("ssl_url").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        state: m.get("state").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        updated_at: m.get("updated_at").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        url: m.get("url").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        user_id: m.get("user_id").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    })
+}
+
+fn iface_site__repo_info__from_json(v: &Value) -> Option<iface_site::RepoInfo> {
+    let m = v.as_object()?;
+    Some(iface_site::RepoInfo {
+        allowed_branches: m.get("allowed_branches").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| (x).as_str().map(|s| s.to_string())).collect())),
+        cmd: m.get("cmd").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        deploy_key_id: m.get("deploy_key_id").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        dir: m.get("dir").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        env: m.get("env").filter(|v| !v.is_null()).and_then(|v| iface_site__repo_info_env__from_json(v)),
+        functions_dir: m.get("functions_dir").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        id: m.get("id").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        installation_id: m.get("installation_id").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        private_logs: m.get("private_logs").filter(|v| !v.is_null()).and_then(|v| (v).as_bool()),
+        provider: m.get("provider").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        public_repo: m.get("public_repo").filter(|v| !v.is_null()).and_then(|v| (v).as_bool()),
+        repo_branch: m.get("repo_branch").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        repo_path: m.get("repo_path").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        repo_url: m.get("repo_url").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        stop_builds: m.get("stop_builds").filter(|v| !v.is_null()).and_then(|v| (v).as_bool()),
+    })
+}
+
+fn iface_site__repo_info_env__from_json(v: &Value) -> Option<iface_site::RepoInfoEnv> {
+    let m = v.as_object()?;
+    Some(iface_site::RepoInfoEnv {
+        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    })
+}
+
+fn iface_site__site_capabilities__from_json(v: &Value) -> Option<iface_site::SiteCapabilities> {
+    let m = v.as_object()?;
+    Some(iface_site::SiteCapabilities {
+        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    })
+}
+
+fn iface_site__site_default_hooks_data__from_json(v: &Value) -> Option<iface_site::SiteDefaultHooksData> {
+    let m = v.as_object()?;
+    Some(iface_site::SiteDefaultHooksData {
+        access_token: m.get("access_token").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    })
+}
+
+fn iface_site__site_processing_settings__from_json(v: &Value) -> Option<iface_site::SiteProcessingSettings> {
+    let m = v.as_object()?;
+    Some(iface_site::SiteProcessingSettings {
+        css: m.get("css").filter(|v| !v.is_null()).and_then(|v| iface_site__minify_options__from_json(v)),
+        html: m.get("html").filter(|v| !v.is_null()).and_then(|v| iface_site__site_processing_settings_html__from_json(v)),
+        images: m.get("images").filter(|v| !v.is_null()).and_then(|v| iface_site__site_processing_settings_images__from_json(v)),
+        js: m.get("js").filter(|v| !v.is_null()).and_then(|v| iface_site__minify_options__from_json(v)),
+        skip: m.get("skip").filter(|v| !v.is_null()).and_then(|v| (v).as_bool()),
+    })
+}
+
+fn iface_site__minify_options__from_json(v: &Value) -> Option<iface_site::MinifyOptions> {
+    let m = v.as_object()?;
+    Some(iface_site::MinifyOptions {
+        bundle: m.get("bundle").filter(|v| !v.is_null()).and_then(|v| (v).as_bool()),
+        minify: m.get("minify").filter(|v| !v.is_null()).and_then(|v| (v).as_bool()),
+    })
+}
+
+fn iface_site__site_processing_settings_html__from_json(v: &Value) -> Option<iface_site::SiteProcessingSettingsHtml> {
+    let m = v.as_object()?;
+    Some(iface_site::SiteProcessingSettingsHtml {
+        pretty_urls: m.get("pretty_urls").filter(|v| !v.is_null()).and_then(|v| (v).as_bool()),
+    })
+}
+
+fn iface_site__site_processing_settings_images__from_json(v: &Value) -> Option<iface_site::SiteProcessingSettingsImages> {
+    let m = v.as_object()?;
+    Some(iface_site::SiteProcessingSettingsImages {
+        optimize: m.get("optimize").filter(|v| !v.is_null()).and_then(|v| (v).as_bool()),
+    })
+}
+
+fn iface_site__deploy__from_json(v: &Value) -> Option<iface_site::Deploy> {
+    let m = v.as_object()?;
+    Some(iface_site::Deploy {
+        admin_url: m.get("admin_url").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        branch: m.get("branch").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        build_id: m.get("build_id").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        commit_ref: m.get("commit_ref").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        commit_url: m.get("commit_url").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        context: m.get("context").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        created_at: m.get("created_at").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        deploy_ssl_url: m.get("deploy_ssl_url").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        deploy_url: m.get("deploy_url").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        draft: m.get("draft").filter(|v| !v.is_null()).and_then(|v| (v).as_bool()),
+        error_message: m.get("error_message").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        framework: m.get("framework").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        function_schedules: m.get("function_schedules").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| iface_site__function_schedule__from_json(x)).collect())),
+        id: m.get("id").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        locked: m.get("locked").filter(|v| !v.is_null()).and_then(|v| (v).as_bool()),
+        name: m.get("name").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        published_at: m.get("published_at").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        required: m.get("required").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| (x).as_str().map(|s| s.to_string())).collect())),
+        required_functions: m.get("required_functions").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| (x).as_str().map(|s| s.to_string())).collect())),
+        review_id: m.get("review_id").filter(|v| !v.is_null()).and_then(|v| (v).as_f64()),
+        review_url: m.get("review_url").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        screenshot_url: m.get("screenshot_url").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        site_capabilities: m.get("site_capabilities").filter(|v| !v.is_null()).and_then(|v| iface_site__deploy_site_capabilities__from_json(v)),
+        site_id: m.get("site_id").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        skipped: m.get("skipped").filter(|v| !v.is_null()).and_then(|v| (v).as_bool()),
+        ssl_url: m.get("ssl_url").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        state: m.get("state").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        title: m.get("title").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        updated_at: m.get("updated_at").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        url: m.get("url").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        user_id: m.get("user_id").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    })
+}
+
+fn iface_site__function_schedule__from_json(v: &Value) -> Option<iface_site::FunctionSchedule> {
+    let m = v.as_object()?;
+    Some(iface_site::FunctionSchedule {
+        cron: m.get("cron").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        name: m.get("name").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    })
+}
+
+fn iface_site__deploy_site_capabilities__from_json(v: &Value) -> Option<iface_site::DeploySiteCapabilities> {
+    let m = v.as_object()?;
+    Some(iface_site::DeploySiteCapabilities {
+        large_media_enabled: m.get("large_media_enabled").filter(|v| !v.is_null()).and_then(|v| (v).as_bool()),
+    })
+}
+
+fn iface_site__list_sites__ok(body: String) -> Result<Vec<iface_site::Site>, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match (&v).as_array().map(|a| a.iter().filter_map(|x| iface_site__site__from_json(x)).collect()) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_site__list_sites__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
+fn iface_site__create_site__ok(body: String) -> Result<iface_site::Site, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match iface_site__site__from_json(&v) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_site__create_site__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
+fn iface_site__get_site__ok(body: String) -> Result<iface_site::Site, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match iface_site__site__from_json(&v) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_site__get_site__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
+fn iface_site__update_site__ok(body: String) -> Result<iface_site::Site, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match iface_site__site__from_json(&v) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_site__update_site__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
+fn iface_site__delete_site__ok(body: String) -> Result<String, crate::runtime::DispatchError> {
+    Ok(body)
+}
+
+fn iface_site__delete_site__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
+fn iface_site__unlink_site_repo__ok(body: String) -> Result<iface_site::Site, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match iface_site__site__from_json(&v) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_site__unlink_site_repo__err(e: crate::runtime::DispatchError) -> iface_site::UnlinkSiteRepoError {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => match status {
+            404u16 => iface_site::UnlinkSiteRepoError::NotFound(body),
+            _ => iface_site::UnlinkSiteRepoError::Other(body),
+        },
+        crate::runtime::DispatchError::Transport(m) => iface_site::UnlinkSiteRepoError::Other(m),
+    }
+}
+
+fn iface_site__list_sites_for_account__ok(body: String) -> Result<Vec<iface_site::Site>, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match (&v).as_array().map(|a| a.iter().filter_map(|x| iface_site__site__from_json(x)).collect()) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_site__list_sites_for_account__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
+fn iface_site__create_site_in_team__ok(body: String) -> Result<iface_site::Site, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match iface_site__site__from_json(&v) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_site__create_site_in_team__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
 impl iface_site::Guest for crate::Component {
-    fn list_sites(params: iface_site::ListSitesParams) -> Result<String, String> {
+    fn list_sites(params: iface_site::ListSitesParams) -> Result<Vec<iface_site::Site>, String> {
         let json = iface_site__list_sites_params__to_json(&params);
-        dispatch(&OP_SITE_LIST_SITES, json)
+        match dispatch(&OP_SITE_LIST_SITES, json).and_then(iface_site__list_sites__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_site__list_sites__err(e)),
+        }
     }
-    fn create_site(params: iface_site::CreateSiteParams) -> Result<String, String> {
+    fn create_site(params: iface_site::CreateSiteParams) -> Result<iface_site::Site, String> {
         let json = iface_site__create_site_params__to_json(&params);
-        dispatch(&OP_SITE_CREATE_SITE, json)
+        match dispatch(&OP_SITE_CREATE_SITE, json).and_then(iface_site__create_site__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_site__create_site__err(e)),
+        }
     }
-    fn get_site() -> Result<String, String> {
-        dispatch(&OP_SITE_GET_SITE, Value::Object(Map::new()))
+    fn get_site(params: iface_site::GetSiteParams) -> Result<iface_site::Site, String> {
+        let json = iface_site__get_site_params__to_json(&params);
+        match dispatch(&OP_SITE_GET_SITE, json).and_then(iface_site__get_site__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_site__get_site__err(e)),
+        }
     }
-    fn update_site(params: iface_site::UpdateSiteParams) -> Result<String, String> {
+    fn update_site(params: iface_site::UpdateSiteParams) -> Result<iface_site::Site, String> {
         let json = iface_site__update_site_params__to_json(&params);
-        dispatch(&OP_SITE_UPDATE_SITE, json)
+        match dispatch(&OP_SITE_UPDATE_SITE, json).and_then(iface_site__update_site__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_site__update_site__err(e)),
+        }
     }
-    fn delete_site() -> Result<String, String> {
-        dispatch(&OP_SITE_DELETE_SITE, Value::Object(Map::new()))
+    fn delete_site(params: iface_site::DeleteSiteParams) -> Result<String, String> {
+        let json = iface_site__delete_site_params__to_json(&params);
+        match dispatch(&OP_SITE_DELETE_SITE, json).and_then(iface_site__delete_site__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_site__delete_site__err(e)),
+        }
     }
-    fn unlink_site_repo() -> Result<String, String> {
-        dispatch(&OP_SITE_UNLINK_SITE_REPO, Value::Object(Map::new()))
+    fn unlink_site_repo(params: iface_site::UnlinkSiteRepoParams) -> Result<iface_site::Site, iface_site::UnlinkSiteRepoError> {
+        let json = iface_site__unlink_site_repo_params__to_json(&params);
+        match dispatch(&OP_SITE_UNLINK_SITE_REPO, json).and_then(iface_site__unlink_site_repo__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_site__unlink_site_repo__err(e)),
+        }
     }
-    fn list_sites_for_account(params: iface_site::ListSitesForAccountParams) -> Result<String, String> {
+    fn list_sites_for_account(params: iface_site::ListSitesForAccountParams) -> Result<Vec<iface_site::Site>, String> {
         let json = iface_site__list_sites_for_account_params__to_json(&params);
-        dispatch(&OP_SITE_LIST_SITES_FOR_ACCOUNT, json)
+        match dispatch(&OP_SITE_LIST_SITES_FOR_ACCOUNT, json).and_then(iface_site__list_sites_for_account__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_site__list_sites_for_account__err(e)),
+        }
     }
-    fn create_site_in_team(params: iface_site::CreateSiteInTeamParams) -> Result<String, String> {
+    fn create_site_in_team(params: iface_site::CreateSiteInTeamParams) -> Result<iface_site::Site, String> {
         let json = iface_site__create_site_in_team_params__to_json(&params);
-        dispatch(&OP_SITE_CREATE_SITE_IN_TEAM, json)
+        match dispatch(&OP_SITE_CREATE_SITE_IN_TEAM, json).and_then(iface_site__create_site_in_team__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_site__create_site_in_team__err(e)),
+        }
     }
 }
 use crate::exports::autostamp::netlify::asset as iface_asset;
@@ -2024,6 +5305,7 @@ const OP_ASSET_LIST_SITE_ASSETS: OpSpec = OpSpec {
     method: "GET",
     path_template: "/sites/{site_id}/assets",
     fields: &[
+        FieldSpec { snake: "site_id", wire: "site_id", location: FieldLocation::Path },
     ],
     auth: &[
     ],
@@ -2033,10 +5315,11 @@ const OP_ASSET_CREATE_SITE_ASSET: OpSpec = OpSpec {
     method: "POST",
     path_template: "/sites/{site_id}/assets",
     fields: &[
-        FieldSpec { snake: "name", location: FieldLocation::Query },
-        FieldSpec { snake: "size", location: FieldLocation::Query },
-        FieldSpec { snake: "content_type", location: FieldLocation::Query },
-        FieldSpec { snake: "visibility", location: FieldLocation::Query },
+        FieldSpec { snake: "site_id", wire: "site_id", location: FieldLocation::Path },
+        FieldSpec { snake: "name", wire: "name", location: FieldLocation::Query },
+        FieldSpec { snake: "size", wire: "size", location: FieldLocation::Query },
+        FieldSpec { snake: "content_type", wire: "content_type", location: FieldLocation::Query },
+        FieldSpec { snake: "visibility", wire: "visibility", location: FieldLocation::Query },
     ],
     auth: &[
     ],
@@ -2046,6 +5329,8 @@ const OP_ASSET_GET_SITE_ASSET_INFO: OpSpec = OpSpec {
     method: "GET",
     path_template: "/sites/{site_id}/assets/{asset_id}",
     fields: &[
+        FieldSpec { snake: "site_id", wire: "site_id", location: FieldLocation::Path },
+        FieldSpec { snake: "asset_id", wire: "asset_id", location: FieldLocation::Path },
     ],
     auth: &[
     ],
@@ -2055,7 +5340,9 @@ const OP_ASSET_UPDATE_SITE_ASSET: OpSpec = OpSpec {
     method: "PUT",
     path_template: "/sites/{site_id}/assets/{asset_id}",
     fields: &[
-        FieldSpec { snake: "state", location: FieldLocation::Query },
+        FieldSpec { snake: "site_id", wire: "site_id", location: FieldLocation::Path },
+        FieldSpec { snake: "asset_id", wire: "asset_id", location: FieldLocation::Path },
+        FieldSpec { snake: "state", wire: "state", location: FieldLocation::Query },
     ],
     auth: &[
     ],
@@ -2065,13 +5352,59 @@ const OP_ASSET_DELETE_SITE_ASSET: OpSpec = OpSpec {
     method: "DELETE",
     path_template: "/sites/{site_id}/assets/{asset_id}",
     fields: &[
+        FieldSpec { snake: "site_id", wire: "site_id", location: FieldLocation::Path },
+        FieldSpec { snake: "asset_id", wire: "asset_id", location: FieldLocation::Path },
     ],
     auth: &[
     ],
 };
 
+fn iface_asset__asset__to_json(p: &iface_asset::Asset) -> Value {
+    let mut m = Map::new();
+    m.insert("content_type".into(), match (&p.content_type) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("created_at".into(), match (&p.created_at) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("creator_id".into(), match (&p.creator_id) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("id".into(), match (&p.id) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("key".into(), match (&p.key) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("name".into(), match (&p.name) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("site_id".into(), match (&p.site_id) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("size".into(), match (&p.size) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("state".into(), match (&p.state) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("updated_at".into(), match (&p.updated_at) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("url".into(), match (&p.url) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("visibility".into(), match (&p.visibility) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_asset__signature__to_json(p: &iface_asset::Signature) -> Value {
+    let mut m = Map::new();
+    m.insert("asset".into(), match (&p.asset) { Some(v) => iface_asset__asset__to_json(v), None => Value::Null });
+    m.insert("form".into(), match (&p.form) { Some(v) => iface_asset__form__to_json(v), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_asset__form__to_json(p: &iface_asset::Form) -> Value {
+    let mut m = Map::new();
+    m.insert("fields".into(), match (&p.fields) { Some(v) => iface_asset__form_fields__to_json(v), None => Value::Null });
+    m.insert("url".into(), match (&p.url) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_asset__form_fields__to_json(p: &iface_asset::FormFields) -> Value {
+    let mut m = Map::new();
+    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_asset__list_site_assets_params__to_json(p: &iface_asset::ListSiteAssetsParams) -> Value {
+    let mut m = Map::new();
+    m.insert("site_id".into(), Value::String((&p.site_id).clone()));
+    Value::Object(m)
+}
+
 fn iface_asset__create_site_asset_params__to_json(p: &iface_asset::CreateSiteAssetParams) -> Value {
     let mut m = Map::new();
+    m.insert("site_id".into(), Value::String((&p.site_id).clone()));
     m.insert("name".into(), Value::String((&p.name).clone()));
     m.insert("size".into(), Value::Number(serde_json::Number::from(*(&p.size))));
     m.insert("content_type".into(), Value::String((&p.content_type).clone()));
@@ -2079,29 +5412,187 @@ fn iface_asset__create_site_asset_params__to_json(p: &iface_asset::CreateSiteAss
     Value::Object(m)
 }
 
+fn iface_asset__get_site_asset_info_params__to_json(p: &iface_asset::GetSiteAssetInfoParams) -> Value {
+    let mut m = Map::new();
+    m.insert("site_id".into(), Value::String((&p.site_id).clone()));
+    m.insert("asset_id".into(), Value::String((&p.asset_id).clone()));
+    Value::Object(m)
+}
+
 fn iface_asset__update_site_asset_params__to_json(p: &iface_asset::UpdateSiteAssetParams) -> Value {
     let mut m = Map::new();
+    m.insert("site_id".into(), Value::String((&p.site_id).clone()));
+    m.insert("asset_id".into(), Value::String((&p.asset_id).clone()));
     m.insert("state".into(), Value::String((&p.state).clone()));
     Value::Object(m)
 }
 
+fn iface_asset__delete_site_asset_params__to_json(p: &iface_asset::DeleteSiteAssetParams) -> Value {
+    let mut m = Map::new();
+    m.insert("site_id".into(), Value::String((&p.site_id).clone()));
+    m.insert("asset_id".into(), Value::String((&p.asset_id).clone()));
+    Value::Object(m)
+}
+
+fn iface_asset__asset__from_json(v: &Value) -> Option<iface_asset::Asset> {
+    let m = v.as_object()?;
+    Some(iface_asset::Asset {
+        content_type: m.get("content_type").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        created_at: m.get("created_at").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        creator_id: m.get("creator_id").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        id: m.get("id").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        key: m.get("key").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        name: m.get("name").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        site_id: m.get("site_id").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        size: m.get("size").filter(|v| !v.is_null()).and_then(|v| (v).as_i64()),
+        state: m.get("state").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        updated_at: m.get("updated_at").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        url: m.get("url").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        visibility: m.get("visibility").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    })
+}
+
+fn iface_asset__signature__from_json(v: &Value) -> Option<iface_asset::Signature> {
+    let m = v.as_object()?;
+    Some(iface_asset::Signature {
+        asset: m.get("asset").filter(|v| !v.is_null()).and_then(|v| iface_asset__asset__from_json(v)),
+        form: m.get("form").filter(|v| !v.is_null()).and_then(|v| iface_asset__form__from_json(v)),
+    })
+}
+
+fn iface_asset__form__from_json(v: &Value) -> Option<iface_asset::Form> {
+    let m = v.as_object()?;
+    Some(iface_asset::Form {
+        fields: m.get("fields").filter(|v| !v.is_null()).and_then(|v| iface_asset__form_fields__from_json(v)),
+        url: m.get("url").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    })
+}
+
+fn iface_asset__form_fields__from_json(v: &Value) -> Option<iface_asset::FormFields> {
+    let m = v.as_object()?;
+    Some(iface_asset::FormFields {
+        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    })
+}
+
+fn iface_asset__list_site_assets__ok(body: String) -> Result<Vec<iface_asset::Asset>, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match (&v).as_array().map(|a| a.iter().filter_map(|x| iface_asset__asset__from_json(x)).collect()) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_asset__list_site_assets__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
+fn iface_asset__create_site_asset__ok(body: String) -> Result<iface_asset::Signature, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match iface_asset__signature__from_json(&v) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_asset__create_site_asset__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
+fn iface_asset__get_site_asset_info__ok(body: String) -> Result<iface_asset::Asset, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match iface_asset__asset__from_json(&v) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_asset__get_site_asset_info__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
+fn iface_asset__update_site_asset__ok(body: String) -> Result<iface_asset::Asset, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match iface_asset__asset__from_json(&v) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_asset__update_site_asset__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
+fn iface_asset__delete_site_asset__ok(body: String) -> Result<String, crate::runtime::DispatchError> {
+    Ok(body)
+}
+
+fn iface_asset__delete_site_asset__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
 impl iface_asset::Guest for crate::Component {
-    fn list_site_assets() -> Result<String, String> {
-        dispatch(&OP_ASSET_LIST_SITE_ASSETS, Value::Object(Map::new()))
+    fn list_site_assets(params: iface_asset::ListSiteAssetsParams) -> Result<Vec<iface_asset::Asset>, String> {
+        let json = iface_asset__list_site_assets_params__to_json(&params);
+        match dispatch(&OP_ASSET_LIST_SITE_ASSETS, json).and_then(iface_asset__list_site_assets__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_asset__list_site_assets__err(e)),
+        }
     }
-    fn create_site_asset(params: iface_asset::CreateSiteAssetParams) -> Result<String, String> {
+    fn create_site_asset(params: iface_asset::CreateSiteAssetParams) -> Result<iface_asset::Signature, String> {
         let json = iface_asset__create_site_asset_params__to_json(&params);
-        dispatch(&OP_ASSET_CREATE_SITE_ASSET, json)
+        match dispatch(&OP_ASSET_CREATE_SITE_ASSET, json).and_then(iface_asset__create_site_asset__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_asset__create_site_asset__err(e)),
+        }
     }
-    fn get_site_asset_info() -> Result<String, String> {
-        dispatch(&OP_ASSET_GET_SITE_ASSET_INFO, Value::Object(Map::new()))
+    fn get_site_asset_info(params: iface_asset::GetSiteAssetInfoParams) -> Result<iface_asset::Asset, String> {
+        let json = iface_asset__get_site_asset_info_params__to_json(&params);
+        match dispatch(&OP_ASSET_GET_SITE_ASSET_INFO, json).and_then(iface_asset__get_site_asset_info__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_asset__get_site_asset_info__err(e)),
+        }
     }
-    fn update_site_asset(params: iface_asset::UpdateSiteAssetParams) -> Result<String, String> {
+    fn update_site_asset(params: iface_asset::UpdateSiteAssetParams) -> Result<iface_asset::Asset, String> {
         let json = iface_asset__update_site_asset_params__to_json(&params);
-        dispatch(&OP_ASSET_UPDATE_SITE_ASSET, json)
+        match dispatch(&OP_ASSET_UPDATE_SITE_ASSET, json).and_then(iface_asset__update_site_asset__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_asset__update_site_asset__err(e)),
+        }
     }
-    fn delete_site_asset() -> Result<String, String> {
-        dispatch(&OP_ASSET_DELETE_SITE_ASSET, Value::Object(Map::new()))
+    fn delete_site_asset(params: iface_asset::DeleteSiteAssetParams) -> Result<String, String> {
+        let json = iface_asset__delete_site_asset_params__to_json(&params);
+        match dispatch(&OP_ASSET_DELETE_SITE_ASSET, json).and_then(iface_asset__delete_site_asset__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_asset__delete_site_asset__err(e)),
+        }
     }
 }
 use crate::exports::autostamp::netlify::asset_public_signature as iface_asset_public_signature;
@@ -2110,14 +5601,58 @@ const OP_ASSET_PUBLIC_SIGNATURE_GET_SITE_ASSET_PUBLIC_SIGNATURE: OpSpec = OpSpec
     method: "GET",
     path_template: "/sites/{site_id}/assets/{asset_id}/public_signature",
     fields: &[
+        FieldSpec { snake: "site_id", wire: "site_id", location: FieldLocation::Path },
+        FieldSpec { snake: "asset_id", wire: "asset_id", location: FieldLocation::Path },
     ],
     auth: &[
     ],
 };
 
+fn iface_asset_public_signature__asset_public_signature__to_json(p: &iface_asset_public_signature::AssetPublicSignature) -> Value {
+    let mut m = Map::new();
+    m.insert("url".into(), match (&p.url) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_asset_public_signature__get_site_asset_public_signature_params__to_json(p: &iface_asset_public_signature::GetSiteAssetPublicSignatureParams) -> Value {
+    let mut m = Map::new();
+    m.insert("site_id".into(), Value::String((&p.site_id).clone()));
+    m.insert("asset_id".into(), Value::String((&p.asset_id).clone()));
+    Value::Object(m)
+}
+
+fn iface_asset_public_signature__asset_public_signature__from_json(v: &Value) -> Option<iface_asset_public_signature::AssetPublicSignature> {
+    let m = v.as_object()?;
+    Some(iface_asset_public_signature::AssetPublicSignature {
+        url: m.get("url").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    })
+}
+
+fn iface_asset_public_signature__get_site_asset_public_signature__ok(body: String) -> Result<iface_asset_public_signature::AssetPublicSignature, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match iface_asset_public_signature__asset_public_signature__from_json(&v) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_asset_public_signature__get_site_asset_public_signature__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
 impl iface_asset_public_signature::Guest for crate::Component {
-    fn get_site_asset_public_signature() -> Result<String, String> {
-        dispatch(&OP_ASSET_PUBLIC_SIGNATURE_GET_SITE_ASSET_PUBLIC_SIGNATURE, Value::Object(Map::new()))
+    fn get_site_asset_public_signature(params: iface_asset_public_signature::GetSiteAssetPublicSignatureParams) -> Result<iface_asset_public_signature::AssetPublicSignature, String> {
+        let json = iface_asset_public_signature__get_site_asset_public_signature_params__to_json(&params);
+        match dispatch(&OP_ASSET_PUBLIC_SIGNATURE_GET_SITE_ASSET_PUBLIC_SIGNATURE, json).and_then(iface_asset_public_signature__get_site_asset_public_signature__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_asset_public_signature__get_site_asset_public_signature__err(e)),
+        }
     }
 }
 use crate::exports::autostamp::netlify::build_hook as iface_build_hook;
@@ -2126,6 +5661,7 @@ const OP_BUILD_HOOK_LIST_SITE_BUILD_HOOKS: OpSpec = OpSpec {
     method: "GET",
     path_template: "/sites/{site_id}/build_hooks",
     fields: &[
+        FieldSpec { snake: "site_id", wire: "site_id", location: FieldLocation::Path },
     ],
     auth: &[
     ],
@@ -2135,8 +5671,9 @@ const OP_BUILD_HOOK_CREATE_SITE_BUILD_HOOK: OpSpec = OpSpec {
     method: "POST",
     path_template: "/sites/{site_id}/build_hooks",
     fields: &[
-        FieldSpec { snake: "branch", location: FieldLocation::Body },
-        FieldSpec { snake: "title", location: FieldLocation::Body },
+        FieldSpec { snake: "site_id", wire: "site_id", location: FieldLocation::Path },
+        FieldSpec { snake: "branch", wire: "branch", location: FieldLocation::Body },
+        FieldSpec { snake: "title", wire: "title", location: FieldLocation::Body },
     ],
     auth: &[
     ],
@@ -2146,6 +5683,8 @@ const OP_BUILD_HOOK_GET_SITE_BUILD_HOOK: OpSpec = OpSpec {
     method: "GET",
     path_template: "/sites/{site_id}/build_hooks/{id}",
     fields: &[
+        FieldSpec { snake: "site_id", wire: "site_id", location: FieldLocation::Path },
+        FieldSpec { snake: "id", wire: "id", location: FieldLocation::Path },
     ],
     auth: &[
     ],
@@ -2155,8 +5694,10 @@ const OP_BUILD_HOOK_UPDATE_SITE_BUILD_HOOK: OpSpec = OpSpec {
     method: "PUT",
     path_template: "/sites/{site_id}/build_hooks/{id}",
     fields: &[
-        FieldSpec { snake: "branch", location: FieldLocation::Body },
-        FieldSpec { snake: "title", location: FieldLocation::Body },
+        FieldSpec { snake: "site_id", wire: "site_id", location: FieldLocation::Path },
+        FieldSpec { snake: "id", wire: "id", location: FieldLocation::Path },
+        FieldSpec { snake: "branch", wire: "branch", location: FieldLocation::Body },
+        FieldSpec { snake: "title", wire: "title", location: FieldLocation::Body },
     ],
     auth: &[
     ],
@@ -2166,42 +5707,184 @@ const OP_BUILD_HOOK_DELETE_SITE_BUILD_HOOK: OpSpec = OpSpec {
     method: "DELETE",
     path_template: "/sites/{site_id}/build_hooks/{id}",
     fields: &[
+        FieldSpec { snake: "site_id", wire: "site_id", location: FieldLocation::Path },
+        FieldSpec { snake: "id", wire: "id", location: FieldLocation::Path },
     ],
     auth: &[
     ],
 };
 
-fn iface_build_hook__create_site_build_hook_params__to_json(p: &iface_build_hook::CreateSiteBuildHookParams) -> Value {
+fn iface_build_hook__build_hook__to_json(p: &iface_build_hook::BuildHook) -> Value {
     let mut m = Map::new();
     m.insert("branch".into(), match (&p.branch) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("created_at".into(), match (&p.created_at) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("id".into(), match (&p.id) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("site_id".into(), match (&p.site_id) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("title".into(), match (&p.title) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("url".into(), match (&p.url) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_build_hook__list_site_build_hooks_params__to_json(p: &iface_build_hook::ListSiteBuildHooksParams) -> Value {
+    let mut m = Map::new();
+    m.insert("site_id".into(), Value::String((&p.site_id).clone()));
+    Value::Object(m)
+}
+
+fn iface_build_hook__create_site_build_hook_params__to_json(p: &iface_build_hook::CreateSiteBuildHookParams) -> Value {
+    let mut m = Map::new();
+    m.insert("site_id".into(), Value::String((&p.site_id).clone()));
+    m.insert("branch".into(), match (&p.branch) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("title".into(), match (&p.title) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_build_hook__get_site_build_hook_params__to_json(p: &iface_build_hook::GetSiteBuildHookParams) -> Value {
+    let mut m = Map::new();
+    m.insert("site_id".into(), Value::String((&p.site_id).clone()));
+    m.insert("id".into(), Value::String((&p.id).clone()));
     Value::Object(m)
 }
 
 fn iface_build_hook__update_site_build_hook_params__to_json(p: &iface_build_hook::UpdateSiteBuildHookParams) -> Value {
     let mut m = Map::new();
+    m.insert("site_id".into(), Value::String((&p.site_id).clone()));
+    m.insert("id".into(), Value::String((&p.id).clone()));
     m.insert("branch".into(), match (&p.branch) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("title".into(), match (&p.title) { Some(v) => Value::String((v).clone()), None => Value::Null });
     Value::Object(m)
 }
 
+fn iface_build_hook__delete_site_build_hook_params__to_json(p: &iface_build_hook::DeleteSiteBuildHookParams) -> Value {
+    let mut m = Map::new();
+    m.insert("site_id".into(), Value::String((&p.site_id).clone()));
+    m.insert("id".into(), Value::String((&p.id).clone()));
+    Value::Object(m)
+}
+
+fn iface_build_hook__build_hook__from_json(v: &Value) -> Option<iface_build_hook::BuildHook> {
+    let m = v.as_object()?;
+    Some(iface_build_hook::BuildHook {
+        branch: m.get("branch").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        created_at: m.get("created_at").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        id: m.get("id").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        site_id: m.get("site_id").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        title: m.get("title").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        url: m.get("url").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    })
+}
+
+fn iface_build_hook__list_site_build_hooks__ok(body: String) -> Result<Vec<iface_build_hook::BuildHook>, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match (&v).as_array().map(|a| a.iter().filter_map(|x| iface_build_hook__build_hook__from_json(x)).collect()) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_build_hook__list_site_build_hooks__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
+fn iface_build_hook__create_site_build_hook__ok(body: String) -> Result<iface_build_hook::BuildHook, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match iface_build_hook__build_hook__from_json(&v) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_build_hook__create_site_build_hook__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
+fn iface_build_hook__get_site_build_hook__ok(body: String) -> Result<iface_build_hook::BuildHook, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match iface_build_hook__build_hook__from_json(&v) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_build_hook__get_site_build_hook__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
+fn iface_build_hook__update_site_build_hook__ok(body: String) -> Result<String, crate::runtime::DispatchError> {
+    Ok(body)
+}
+
+fn iface_build_hook__update_site_build_hook__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
+fn iface_build_hook__delete_site_build_hook__ok(body: String) -> Result<String, crate::runtime::DispatchError> {
+    Ok(body)
+}
+
+fn iface_build_hook__delete_site_build_hook__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
 impl iface_build_hook::Guest for crate::Component {
-    fn list_site_build_hooks() -> Result<String, String> {
-        dispatch(&OP_BUILD_HOOK_LIST_SITE_BUILD_HOOKS, Value::Object(Map::new()))
+    fn list_site_build_hooks(params: iface_build_hook::ListSiteBuildHooksParams) -> Result<Vec<iface_build_hook::BuildHook>, String> {
+        let json = iface_build_hook__list_site_build_hooks_params__to_json(&params);
+        match dispatch(&OP_BUILD_HOOK_LIST_SITE_BUILD_HOOKS, json).and_then(iface_build_hook__list_site_build_hooks__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_build_hook__list_site_build_hooks__err(e)),
+        }
     }
-    fn create_site_build_hook(params: iface_build_hook::CreateSiteBuildHookParams) -> Result<String, String> {
+    fn create_site_build_hook(params: iface_build_hook::CreateSiteBuildHookParams) -> Result<iface_build_hook::BuildHook, String> {
         let json = iface_build_hook__create_site_build_hook_params__to_json(&params);
-        dispatch(&OP_BUILD_HOOK_CREATE_SITE_BUILD_HOOK, json)
+        match dispatch(&OP_BUILD_HOOK_CREATE_SITE_BUILD_HOOK, json).and_then(iface_build_hook__create_site_build_hook__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_build_hook__create_site_build_hook__err(e)),
+        }
     }
-    fn get_site_build_hook() -> Result<String, String> {
-        dispatch(&OP_BUILD_HOOK_GET_SITE_BUILD_HOOK, Value::Object(Map::new()))
+    fn get_site_build_hook(params: iface_build_hook::GetSiteBuildHookParams) -> Result<iface_build_hook::BuildHook, String> {
+        let json = iface_build_hook__get_site_build_hook_params__to_json(&params);
+        match dispatch(&OP_BUILD_HOOK_GET_SITE_BUILD_HOOK, json).and_then(iface_build_hook__get_site_build_hook__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_build_hook__get_site_build_hook__err(e)),
+        }
     }
     fn update_site_build_hook(params: iface_build_hook::UpdateSiteBuildHookParams) -> Result<String, String> {
         let json = iface_build_hook__update_site_build_hook_params__to_json(&params);
-        dispatch(&OP_BUILD_HOOK_UPDATE_SITE_BUILD_HOOK, json)
+        match dispatch(&OP_BUILD_HOOK_UPDATE_SITE_BUILD_HOOK, json).and_then(iface_build_hook__update_site_build_hook__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_build_hook__update_site_build_hook__err(e)),
+        }
     }
-    fn delete_site_build_hook() -> Result<String, String> {
-        dispatch(&OP_BUILD_HOOK_DELETE_SITE_BUILD_HOOK, Value::Object(Map::new()))
+    fn delete_site_build_hook(params: iface_build_hook::DeleteSiteBuildHookParams) -> Result<String, String> {
+        let json = iface_build_hook__delete_site_build_hook_params__to_json(&params);
+        match dispatch(&OP_BUILD_HOOK_DELETE_SITE_BUILD_HOOK, json).and_then(iface_build_hook__delete_site_build_hook__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_build_hook__delete_site_build_hook__err(e)),
+        }
     }
 }
 use crate::exports::autostamp::netlify::deployed_branch as iface_deployed_branch;
@@ -2210,14 +5893,66 @@ const OP_DEPLOYED_BRANCH_LIST_SITE_DEPLOYED_BRANCHES: OpSpec = OpSpec {
     method: "GET",
     path_template: "/sites/{site_id}/deployed-branches",
     fields: &[
+        FieldSpec { snake: "site_id", wire: "site_id", location: FieldLocation::Path },
     ],
     auth: &[
     ],
 };
 
+fn iface_deployed_branch__deployed_branch__to_json(p: &iface_deployed_branch::DeployedBranch) -> Value {
+    let mut m = Map::new();
+    m.insert("deploy_id".into(), match (&p.deploy_id) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("id".into(), match (&p.id) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("name".into(), match (&p.name) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("slug".into(), match (&p.slug) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("ssl_url".into(), match (&p.ssl_url) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("url".into(), match (&p.url) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_deployed_branch__list_site_deployed_branches_params__to_json(p: &iface_deployed_branch::ListSiteDeployedBranchesParams) -> Value {
+    let mut m = Map::new();
+    m.insert("site_id".into(), Value::String((&p.site_id).clone()));
+    Value::Object(m)
+}
+
+fn iface_deployed_branch__deployed_branch__from_json(v: &Value) -> Option<iface_deployed_branch::DeployedBranch> {
+    let m = v.as_object()?;
+    Some(iface_deployed_branch::DeployedBranch {
+        deploy_id: m.get("deploy_id").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        id: m.get("id").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        name: m.get("name").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        slug: m.get("slug").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        ssl_url: m.get("ssl_url").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        url: m.get("url").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    })
+}
+
+fn iface_deployed_branch__list_site_deployed_branches__ok(body: String) -> Result<Vec<iface_deployed_branch::DeployedBranch>, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match (&v).as_array().map(|a| a.iter().filter_map(|x| iface_deployed_branch__deployed_branch__from_json(x)).collect()) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_deployed_branch__list_site_deployed_branches__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
 impl iface_deployed_branch::Guest for crate::Component {
-    fn list_site_deployed_branches() -> Result<String, String> {
-        dispatch(&OP_DEPLOYED_BRANCH_LIST_SITE_DEPLOYED_BRANCHES, Value::Object(Map::new()))
+    fn list_site_deployed_branches(params: iface_deployed_branch::ListSiteDeployedBranchesParams) -> Result<Vec<iface_deployed_branch::DeployedBranch>, String> {
+        let json = iface_deployed_branch__list_site_deployed_branches_params__to_json(&params);
+        match dispatch(&OP_DEPLOYED_BRANCH_LIST_SITE_DEPLOYED_BRANCHES, json).and_then(iface_deployed_branch__list_site_deployed_branches__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_deployed_branch__list_site_deployed_branches__err(e)),
+        }
     }
 }
 use crate::exports::autostamp::netlify::form as iface_form;
@@ -2226,7 +5961,7 @@ const OP_FORM_LIST_SITE_FORMS: OpSpec = OpSpec {
     method: "GET",
     path_template: "/sites/{site_id}/forms",
     fields: &[
-        FieldSpec { snake: "site_id", location: FieldLocation::Path },
+        FieldSpec { snake: "site_id", wire: "site_id", location: FieldLocation::Path },
     ],
     auth: &[
     ],
@@ -2236,12 +5971,30 @@ const OP_FORM_DELETE_SITE_FORM: OpSpec = OpSpec {
     method: "DELETE",
     path_template: "/sites/{site_id}/forms/{form_id}",
     fields: &[
-        FieldSpec { snake: "site_id", location: FieldLocation::Path },
-        FieldSpec { snake: "form_id", location: FieldLocation::Path },
+        FieldSpec { snake: "site_id", wire: "site_id", location: FieldLocation::Path },
+        FieldSpec { snake: "form_id", wire: "form_id", location: FieldLocation::Path },
     ],
     auth: &[
     ],
 };
+
+fn iface_form__form__to_json(p: &iface_form::Form) -> Value {
+    let mut m = Map::new();
+    m.insert("created_at".into(), match (&p.created_at) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("fields".into(), match (&p.fields) { Some(v) => Value::Array((v).iter().map(|v| iface_form__form_fields_item__to_json(v)).collect()), None => Value::Null });
+    m.insert("id".into(), match (&p.id) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("name".into(), match (&p.name) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("paths".into(), match (&p.paths) { Some(v) => Value::Array((v).iter().map(|v| Value::String((v).clone())).collect()), None => Value::Null });
+    m.insert("site_id".into(), match (&p.site_id) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("submission_count".into(), match (&p.submission_count) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_form__form_fields_item__to_json(p: &iface_form::FormFieldsItem) -> Value {
+    let mut m = Map::new();
+    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
 
 fn iface_form__list_site_forms_params__to_json(p: &iface_form::ListSiteFormsParams) -> Value {
     let mut m = Map::new();
@@ -2256,14 +6009,69 @@ fn iface_form__delete_site_form_params__to_json(p: &iface_form::DeleteSiteFormPa
     Value::Object(m)
 }
 
+fn iface_form__form__from_json(v: &Value) -> Option<iface_form::Form> {
+    let m = v.as_object()?;
+    Some(iface_form::Form {
+        created_at: m.get("created_at").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        fields: m.get("fields").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| iface_form__form_fields_item__from_json(x)).collect())),
+        id: m.get("id").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        name: m.get("name").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        paths: m.get("paths").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| (x).as_str().map(|s| s.to_string())).collect())),
+        site_id: m.get("site_id").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        submission_count: m.get("submission_count").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+    })
+}
+
+fn iface_form__form_fields_item__from_json(v: &Value) -> Option<iface_form::FormFieldsItem> {
+    let m = v.as_object()?;
+    Some(iface_form::FormFieldsItem {
+        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    })
+}
+
+fn iface_form__list_site_forms__ok(body: String) -> Result<Vec<iface_form::Form>, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match (&v).as_array().map(|a| a.iter().filter_map(|x| iface_form__form__from_json(x)).collect()) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_form__list_site_forms__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
+fn iface_form__delete_site_form__ok(body: String) -> Result<String, crate::runtime::DispatchError> {
+    Ok(body)
+}
+
+fn iface_form__delete_site_form__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
 impl iface_form::Guest for crate::Component {
-    fn list_site_forms(params: iface_form::ListSiteFormsParams) -> Result<String, String> {
+    fn list_site_forms(params: iface_form::ListSiteFormsParams) -> Result<Vec<iface_form::Form>, String> {
         let json = iface_form__list_site_forms_params__to_json(&params);
-        dispatch(&OP_FORM_LIST_SITE_FORMS, json)
+        match dispatch(&OP_FORM_LIST_SITE_FORMS, json).and_then(iface_form__list_site_forms__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_form__list_site_forms__err(e)),
+        }
     }
     fn delete_site_form(params: iface_form::DeleteSiteFormParams) -> Result<String, String> {
         let json = iface_form__delete_site_form_params__to_json(&params);
-        dispatch(&OP_FORM_DELETE_SITE_FORM, json)
+        match dispatch(&OP_FORM_DELETE_SITE_FORM, json).and_then(iface_form__delete_site_form__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_form__delete_site_form__err(e)),
+        }
     }
 }
 use crate::exports::autostamp::netlify::metadata as iface_metadata;
@@ -2272,6 +6080,7 @@ const OP_METADATA_GET_SITE_METADATA: OpSpec = OpSpec {
     method: "GET",
     path_template: "/sites/{site_id}/metadata",
     fields: &[
+        FieldSpec { snake: "site_id", wire: "site_id", location: FieldLocation::Path },
     ],
     auth: &[
     ],
@@ -2281,25 +6090,82 @@ const OP_METADATA_UPDATE_SITE_METADATA: OpSpec = OpSpec {
     method: "PUT",
     path_template: "/sites/{site_id}/metadata",
     fields: &[
-        FieldSpec { snake: "data", location: FieldLocation::Body },
+        FieldSpec { snake: "site_id", wire: "site_id", location: FieldLocation::Path },
+        FieldSpec { snake: "data", wire: "data", location: FieldLocation::Body },
     ],
     auth: &[
     ],
 };
 
-fn iface_metadata__update_site_metadata_params__to_json(p: &iface_metadata::UpdateSiteMetadataParams) -> Value {
+fn iface_metadata__metadata__to_json(p: &iface_metadata::Metadata) -> Value {
     let mut m = Map::new();
     m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
     Value::Object(m)
 }
 
+fn iface_metadata__get_site_metadata_params__to_json(p: &iface_metadata::GetSiteMetadataParams) -> Value {
+    let mut m = Map::new();
+    m.insert("site_id".into(), Value::String((&p.site_id).clone()));
+    Value::Object(m)
+}
+
+fn iface_metadata__update_site_metadata_params__to_json(p: &iface_metadata::UpdateSiteMetadataParams) -> Value {
+    let mut m = Map::new();
+    m.insert("site_id".into(), Value::String((&p.site_id).clone()));
+    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_metadata__metadata__from_json(v: &Value) -> Option<iface_metadata::Metadata> {
+    let m = v.as_object()?;
+    Some(iface_metadata::Metadata {
+        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    })
+}
+
+fn iface_metadata__get_site_metadata__ok(body: String) -> Result<iface_metadata::Metadata, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match iface_metadata__metadata__from_json(&v) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_metadata__get_site_metadata__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
+fn iface_metadata__update_site_metadata__ok(body: String) -> Result<String, crate::runtime::DispatchError> {
+    Ok(body)
+}
+
+fn iface_metadata__update_site_metadata__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
 impl iface_metadata::Guest for crate::Component {
-    fn get_site_metadata() -> Result<String, String> {
-        dispatch(&OP_METADATA_GET_SITE_METADATA, Value::Object(Map::new()))
+    fn get_site_metadata(params: iface_metadata::GetSiteMetadataParams) -> Result<iface_metadata::Metadata, String> {
+        let json = iface_metadata__get_site_metadata_params__to_json(&params);
+        match dispatch(&OP_METADATA_GET_SITE_METADATA, json).and_then(iface_metadata__get_site_metadata__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_metadata__get_site_metadata__err(e)),
+        }
     }
     fn update_site_metadata(params: iface_metadata::UpdateSiteMetadataParams) -> Result<String, String> {
         let json = iface_metadata__update_site_metadata_params__to_json(&params);
-        dispatch(&OP_METADATA_UPDATE_SITE_METADATA, json)
+        match dispatch(&OP_METADATA_UPDATE_SITE_METADATA, json).and_then(iface_metadata__update_site_metadata__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_metadata__update_site_metadata__err(e)),
+        }
     }
 }
 use crate::exports::autostamp::netlify::service_instance as iface_service_instance;
@@ -2308,6 +6174,7 @@ const OP_SERVICE_INSTANCE_LIST_SERVICE_INSTANCES_FOR_SITE: OpSpec = OpSpec {
     method: "GET",
     path_template: "/sites/{site_id}/service-instances",
     fields: &[
+        FieldSpec { snake: "site_id", wire: "site_id", location: FieldLocation::Path },
     ],
     auth: &[
     ],
@@ -2317,7 +6184,9 @@ const OP_SERVICE_INSTANCE_CREATE_SERVICE_INSTANCE: OpSpec = OpSpec {
     method: "POST",
     path_template: "/sites/{site_id}/services/{addon}/instances",
     fields: &[
-        FieldSpec { snake: "data", location: FieldLocation::Body },
+        FieldSpec { snake: "site_id", wire: "site_id", location: FieldLocation::Path },
+        FieldSpec { snake: "addon", wire: "addon", location: FieldLocation::Path },
+        FieldSpec { snake: "data", wire: "data", location: FieldLocation::Body },
     ],
     auth: &[
     ],
@@ -2327,6 +6196,9 @@ const OP_SERVICE_INSTANCE_SHOW_SERVICE_INSTANCE: OpSpec = OpSpec {
     method: "GET",
     path_template: "/sites/{site_id}/services/{addon}/instances/{instance_id}",
     fields: &[
+        FieldSpec { snake: "site_id", wire: "site_id", location: FieldLocation::Path },
+        FieldSpec { snake: "addon", wire: "addon", location: FieldLocation::Path },
+        FieldSpec { snake: "instance_id", wire: "instance_id", location: FieldLocation::Path },
     ],
     auth: &[
     ],
@@ -2336,7 +6208,10 @@ const OP_SERVICE_INSTANCE_UPDATE_SERVICE_INSTANCE: OpSpec = OpSpec {
     method: "PUT",
     path_template: "/sites/{site_id}/services/{addon}/instances/{instance_id}",
     fields: &[
-        FieldSpec { snake: "data", location: FieldLocation::Body },
+        FieldSpec { snake: "site_id", wire: "site_id", location: FieldLocation::Path },
+        FieldSpec { snake: "addon", wire: "addon", location: FieldLocation::Path },
+        FieldSpec { snake: "instance_id", wire: "instance_id", location: FieldLocation::Path },
+        FieldSpec { snake: "data", wire: "data", location: FieldLocation::Body },
     ],
     auth: &[
     ],
@@ -2346,40 +6221,251 @@ const OP_SERVICE_INSTANCE_DELETE_SERVICE_INSTANCE: OpSpec = OpSpec {
     method: "DELETE",
     path_template: "/sites/{site_id}/services/{addon}/instances/{instance_id}",
     fields: &[
+        FieldSpec { snake: "site_id", wire: "site_id", location: FieldLocation::Path },
+        FieldSpec { snake: "addon", wire: "addon", location: FieldLocation::Path },
+        FieldSpec { snake: "instance_id", wire: "instance_id", location: FieldLocation::Path },
     ],
     auth: &[
     ],
 };
 
-fn iface_service_instance__create_service_instance_params__to_json(p: &iface_service_instance::CreateServiceInstanceParams) -> Value {
+fn iface_service_instance__service_instance__to_json(p: &iface_service_instance::ServiceInstance) -> Value {
+    let mut m = Map::new();
+    m.insert("auth_url".into(), match (&p.auth_url) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("config".into(), match (&p.config) { Some(v) => iface_service_instance__service_instance_config__to_json(v), None => Value::Null });
+    m.insert("created_at".into(), match (&p.created_at) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("env".into(), match (&p.env) { Some(v) => iface_service_instance__service_instance_env__to_json(v), None => Value::Null });
+    m.insert("external_attributes".into(), match (&p.external_attributes) { Some(v) => iface_service_instance__service_instance_external_attributes__to_json(v), None => Value::Null });
+    m.insert("id".into(), match (&p.id) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("service_name".into(), match (&p.service_name) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("service_path".into(), match (&p.service_path) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("service_slug".into(), match (&p.service_slug) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("snippets".into(), match (&p.snippets) { Some(v) => Value::Array((v).iter().map(|v| iface_service_instance__service_instance_snippets_item__to_json(v)).collect()), None => Value::Null });
+    m.insert("updated_at".into(), match (&p.updated_at) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("url".into(), match (&p.url) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_service_instance__service_instance_config__to_json(p: &iface_service_instance::ServiceInstanceConfig) -> Value {
     let mut m = Map::new();
     m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_service_instance__service_instance_env__to_json(p: &iface_service_instance::ServiceInstanceEnv) -> Value {
+    let mut m = Map::new();
+    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_service_instance__service_instance_external_attributes__to_json(p: &iface_service_instance::ServiceInstanceExternalAttributes) -> Value {
+    let mut m = Map::new();
+    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_service_instance__service_instance_snippets_item__to_json(p: &iface_service_instance::ServiceInstanceSnippetsItem) -> Value {
+    let mut m = Map::new();
+    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_service_instance__list_service_instances_for_site_params__to_json(p: &iface_service_instance::ListServiceInstancesForSiteParams) -> Value {
+    let mut m = Map::new();
+    m.insert("site_id".into(), Value::String((&p.site_id).clone()));
+    Value::Object(m)
+}
+
+fn iface_service_instance__create_service_instance_params__to_json(p: &iface_service_instance::CreateServiceInstanceParams) -> Value {
+    let mut m = Map::new();
+    m.insert("site_id".into(), Value::String((&p.site_id).clone()));
+    m.insert("addon".into(), Value::String((&p.addon).clone()));
+    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_service_instance__show_service_instance_params__to_json(p: &iface_service_instance::ShowServiceInstanceParams) -> Value {
+    let mut m = Map::new();
+    m.insert("site_id".into(), Value::String((&p.site_id).clone()));
+    m.insert("addon".into(), Value::String((&p.addon).clone()));
+    m.insert("instance_id".into(), Value::String((&p.instance_id).clone()));
     Value::Object(m)
 }
 
 fn iface_service_instance__update_service_instance_params__to_json(p: &iface_service_instance::UpdateServiceInstanceParams) -> Value {
     let mut m = Map::new();
+    m.insert("site_id".into(), Value::String((&p.site_id).clone()));
+    m.insert("addon".into(), Value::String((&p.addon).clone()));
+    m.insert("instance_id".into(), Value::String((&p.instance_id).clone()));
     m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
     Value::Object(m)
 }
 
+fn iface_service_instance__delete_service_instance_params__to_json(p: &iface_service_instance::DeleteServiceInstanceParams) -> Value {
+    let mut m = Map::new();
+    m.insert("site_id".into(), Value::String((&p.site_id).clone()));
+    m.insert("addon".into(), Value::String((&p.addon).clone()));
+    m.insert("instance_id".into(), Value::String((&p.instance_id).clone()));
+    Value::Object(m)
+}
+
+fn iface_service_instance__service_instance__from_json(v: &Value) -> Option<iface_service_instance::ServiceInstance> {
+    let m = v.as_object()?;
+    Some(iface_service_instance::ServiceInstance {
+        auth_url: m.get("auth_url").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        config: m.get("config").filter(|v| !v.is_null()).and_then(|v| iface_service_instance__service_instance_config__from_json(v)),
+        created_at: m.get("created_at").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        env: m.get("env").filter(|v| !v.is_null()).and_then(|v| iface_service_instance__service_instance_env__from_json(v)),
+        external_attributes: m.get("external_attributes").filter(|v| !v.is_null()).and_then(|v| iface_service_instance__service_instance_external_attributes__from_json(v)),
+        id: m.get("id").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        service_name: m.get("service_name").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        service_path: m.get("service_path").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        service_slug: m.get("service_slug").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        snippets: m.get("snippets").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| iface_service_instance__service_instance_snippets_item__from_json(x)).collect())),
+        updated_at: m.get("updated_at").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        url: m.get("url").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    })
+}
+
+fn iface_service_instance__service_instance_config__from_json(v: &Value) -> Option<iface_service_instance::ServiceInstanceConfig> {
+    let m = v.as_object()?;
+    Some(iface_service_instance::ServiceInstanceConfig {
+        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    })
+}
+
+fn iface_service_instance__service_instance_env__from_json(v: &Value) -> Option<iface_service_instance::ServiceInstanceEnv> {
+    let m = v.as_object()?;
+    Some(iface_service_instance::ServiceInstanceEnv {
+        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    })
+}
+
+fn iface_service_instance__service_instance_external_attributes__from_json(v: &Value) -> Option<iface_service_instance::ServiceInstanceExternalAttributes> {
+    let m = v.as_object()?;
+    Some(iface_service_instance::ServiceInstanceExternalAttributes {
+        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    })
+}
+
+fn iface_service_instance__service_instance_snippets_item__from_json(v: &Value) -> Option<iface_service_instance::ServiceInstanceSnippetsItem> {
+    let m = v.as_object()?;
+    Some(iface_service_instance::ServiceInstanceSnippetsItem {
+        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    })
+}
+
+fn iface_service_instance__list_service_instances_for_site__ok(body: String) -> Result<Vec<iface_service_instance::ServiceInstance>, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match (&v).as_array().map(|a| a.iter().filter_map(|x| iface_service_instance__service_instance__from_json(x)).collect()) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_service_instance__list_service_instances_for_site__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
+fn iface_service_instance__create_service_instance__ok(body: String) -> Result<iface_service_instance::ServiceInstance, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match iface_service_instance__service_instance__from_json(&v) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_service_instance__create_service_instance__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
+fn iface_service_instance__show_service_instance__ok(body: String) -> Result<iface_service_instance::ServiceInstance, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match iface_service_instance__service_instance__from_json(&v) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_service_instance__show_service_instance__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
+fn iface_service_instance__update_service_instance__ok(body: String) -> Result<String, crate::runtime::DispatchError> {
+    Ok(body)
+}
+
+fn iface_service_instance__update_service_instance__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
+fn iface_service_instance__delete_service_instance__ok(body: String) -> Result<String, crate::runtime::DispatchError> {
+    Ok(body)
+}
+
+fn iface_service_instance__delete_service_instance__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
 impl iface_service_instance::Guest for crate::Component {
-    fn list_service_instances_for_site() -> Result<String, String> {
-        dispatch(&OP_SERVICE_INSTANCE_LIST_SERVICE_INSTANCES_FOR_SITE, Value::Object(Map::new()))
+    fn list_service_instances_for_site(params: iface_service_instance::ListServiceInstancesForSiteParams) -> Result<Vec<iface_service_instance::ServiceInstance>, String> {
+        let json = iface_service_instance__list_service_instances_for_site_params__to_json(&params);
+        match dispatch(&OP_SERVICE_INSTANCE_LIST_SERVICE_INSTANCES_FOR_SITE, json).and_then(iface_service_instance__list_service_instances_for_site__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_service_instance__list_service_instances_for_site__err(e)),
+        }
     }
-    fn create_service_instance(params: iface_service_instance::CreateServiceInstanceParams) -> Result<String, String> {
+    fn create_service_instance(params: iface_service_instance::CreateServiceInstanceParams) -> Result<iface_service_instance::ServiceInstance, String> {
         let json = iface_service_instance__create_service_instance_params__to_json(&params);
-        dispatch(&OP_SERVICE_INSTANCE_CREATE_SERVICE_INSTANCE, json)
+        match dispatch(&OP_SERVICE_INSTANCE_CREATE_SERVICE_INSTANCE, json).and_then(iface_service_instance__create_service_instance__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_service_instance__create_service_instance__err(e)),
+        }
     }
-    fn show_service_instance() -> Result<String, String> {
-        dispatch(&OP_SERVICE_INSTANCE_SHOW_SERVICE_INSTANCE, Value::Object(Map::new()))
+    fn show_service_instance(params: iface_service_instance::ShowServiceInstanceParams) -> Result<iface_service_instance::ServiceInstance, String> {
+        let json = iface_service_instance__show_service_instance_params__to_json(&params);
+        match dispatch(&OP_SERVICE_INSTANCE_SHOW_SERVICE_INSTANCE, json).and_then(iface_service_instance__show_service_instance__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_service_instance__show_service_instance__err(e)),
+        }
     }
     fn update_service_instance(params: iface_service_instance::UpdateServiceInstanceParams) -> Result<String, String> {
         let json = iface_service_instance__update_service_instance_params__to_json(&params);
-        dispatch(&OP_SERVICE_INSTANCE_UPDATE_SERVICE_INSTANCE, json)
+        match dispatch(&OP_SERVICE_INSTANCE_UPDATE_SERVICE_INSTANCE, json).and_then(iface_service_instance__update_service_instance__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_service_instance__update_service_instance__err(e)),
+        }
     }
-    fn delete_service_instance() -> Result<String, String> {
-        dispatch(&OP_SERVICE_INSTANCE_DELETE_SERVICE_INSTANCE, Value::Object(Map::new()))
+    fn delete_service_instance(params: iface_service_instance::DeleteServiceInstanceParams) -> Result<String, String> {
+        let json = iface_service_instance__delete_service_instance_params__to_json(&params);
+        match dispatch(&OP_SERVICE_INSTANCE_DELETE_SERVICE_INSTANCE, json).and_then(iface_service_instance__delete_service_instance__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_service_instance__delete_service_instance__err(e)),
+        }
     }
 }
 use crate::exports::autostamp::netlify::snippet as iface_snippet;
@@ -2388,6 +6474,7 @@ const OP_SNIPPET_LIST_SITE_SNIPPETS: OpSpec = OpSpec {
     method: "GET",
     path_template: "/sites/{site_id}/snippets",
     fields: &[
+        FieldSpec { snake: "site_id", wire: "site_id", location: FieldLocation::Path },
     ],
     auth: &[
     ],
@@ -2397,13 +6484,14 @@ const OP_SNIPPET_CREATE_SITE_SNIPPET: OpSpec = OpSpec {
     method: "POST",
     path_template: "/sites/{site_id}/snippets",
     fields: &[
-        FieldSpec { snake: "general", location: FieldLocation::Body },
-        FieldSpec { snake: "general_position", location: FieldLocation::Body },
-        FieldSpec { snake: "goal", location: FieldLocation::Body },
-        FieldSpec { snake: "goal_position", location: FieldLocation::Body },
-        FieldSpec { snake: "id", location: FieldLocation::Body },
-        FieldSpec { snake: "site_id", location: FieldLocation::Body },
-        FieldSpec { snake: "title", location: FieldLocation::Body },
+        FieldSpec { snake: "site_id", wire: "site_id", location: FieldLocation::Path },
+        FieldSpec { snake: "general", wire: "general", location: FieldLocation::Body },
+        FieldSpec { snake: "general_position", wire: "general_position", location: FieldLocation::Body },
+        FieldSpec { snake: "goal", wire: "goal", location: FieldLocation::Body },
+        FieldSpec { snake: "goal_position", wire: "goal_position", location: FieldLocation::Body },
+        FieldSpec { snake: "id", wire: "id", location: FieldLocation::Body },
+        FieldSpec { snake: "site_id_v2", wire: "site_id", location: FieldLocation::Body },
+        FieldSpec { snake: "title", wire: "title", location: FieldLocation::Body },
     ],
     auth: &[
     ],
@@ -2413,6 +6501,8 @@ const OP_SNIPPET_GET_SITE_SNIPPET: OpSpec = OpSpec {
     method: "GET",
     path_template: "/sites/{site_id}/snippets/{snippet_id}",
     fields: &[
+        FieldSpec { snake: "site_id", wire: "site_id", location: FieldLocation::Path },
+        FieldSpec { snake: "snippet_id", wire: "snippet_id", location: FieldLocation::Path },
     ],
     auth: &[
     ],
@@ -2422,13 +6512,15 @@ const OP_SNIPPET_UPDATE_SITE_SNIPPET: OpSpec = OpSpec {
     method: "PUT",
     path_template: "/sites/{site_id}/snippets/{snippet_id}",
     fields: &[
-        FieldSpec { snake: "general", location: FieldLocation::Body },
-        FieldSpec { snake: "general_position", location: FieldLocation::Body },
-        FieldSpec { snake: "goal", location: FieldLocation::Body },
-        FieldSpec { snake: "goal_position", location: FieldLocation::Body },
-        FieldSpec { snake: "id", location: FieldLocation::Body },
-        FieldSpec { snake: "site_id", location: FieldLocation::Body },
-        FieldSpec { snake: "title", location: FieldLocation::Body },
+        FieldSpec { snake: "site_id", wire: "site_id", location: FieldLocation::Path },
+        FieldSpec { snake: "snippet_id", wire: "snippet_id", location: FieldLocation::Path },
+        FieldSpec { snake: "general", wire: "general", location: FieldLocation::Body },
+        FieldSpec { snake: "general_position", wire: "general_position", location: FieldLocation::Body },
+        FieldSpec { snake: "goal", wire: "goal", location: FieldLocation::Body },
+        FieldSpec { snake: "goal_position", wire: "goal_position", location: FieldLocation::Body },
+        FieldSpec { snake: "id", wire: "id", location: FieldLocation::Body },
+        FieldSpec { snake: "site_id_v2", wire: "site_id", location: FieldLocation::Body },
+        FieldSpec { snake: "title", wire: "title", location: FieldLocation::Body },
     ],
     auth: &[
     ],
@@ -2438,12 +6530,14 @@ const OP_SNIPPET_DELETE_SITE_SNIPPET: OpSpec = OpSpec {
     method: "DELETE",
     path_template: "/sites/{site_id}/snippets/{snippet_id}",
     fields: &[
+        FieldSpec { snake: "site_id", wire: "site_id", location: FieldLocation::Path },
+        FieldSpec { snake: "snippet_id", wire: "snippet_id", location: FieldLocation::Path },
     ],
     auth: &[
     ],
 };
 
-fn iface_snippet__create_site_snippet_params__to_json(p: &iface_snippet::CreateSiteSnippetParams) -> Value {
+fn iface_snippet__snippet__to_json(p: &iface_snippet::Snippet) -> Value {
     let mut m = Map::new();
     m.insert("general".into(), match (&p.general) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("general_position".into(), match (&p.general_position) { Some(v) => Value::String((v).clone()), None => Value::Null });
@@ -2452,38 +6546,180 @@ fn iface_snippet__create_site_snippet_params__to_json(p: &iface_snippet::CreateS
     m.insert("id".into(), match (&p.id) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
     m.insert("site_id".into(), match (&p.site_id) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("title".into(), match (&p.title) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_snippet__list_site_snippets_params__to_json(p: &iface_snippet::ListSiteSnippetsParams) -> Value {
+    let mut m = Map::new();
+    m.insert("site_id".into(), Value::String((&p.site_id).clone()));
+    Value::Object(m)
+}
+
+fn iface_snippet__create_site_snippet_params__to_json(p: &iface_snippet::CreateSiteSnippetParams) -> Value {
+    let mut m = Map::new();
+    m.insert("site_id".into(), Value::String((&p.site_id).clone()));
+    m.insert("general".into(), match (&p.general) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("general_position".into(), match (&p.general_position) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("goal".into(), match (&p.goal) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("goal_position".into(), match (&p.goal_position) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("id".into(), match (&p.id) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("site_id_v2".into(), match (&p.site_id_v2) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("title".into(), match (&p.title) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_snippet__get_site_snippet_params__to_json(p: &iface_snippet::GetSiteSnippetParams) -> Value {
+    let mut m = Map::new();
+    m.insert("site_id".into(), Value::String((&p.site_id).clone()));
+    m.insert("snippet_id".into(), Value::String((&p.snippet_id).clone()));
     Value::Object(m)
 }
 
 fn iface_snippet__update_site_snippet_params__to_json(p: &iface_snippet::UpdateSiteSnippetParams) -> Value {
     let mut m = Map::new();
+    m.insert("site_id".into(), Value::String((&p.site_id).clone()));
+    m.insert("snippet_id".into(), Value::String((&p.snippet_id).clone()));
     m.insert("general".into(), match (&p.general) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("general_position".into(), match (&p.general_position) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("goal".into(), match (&p.goal) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("goal_position".into(), match (&p.goal_position) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("id".into(), match (&p.id) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
-    m.insert("site_id".into(), match (&p.site_id) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("site_id_v2".into(), match (&p.site_id_v2) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("title".into(), match (&p.title) { Some(v) => Value::String((v).clone()), None => Value::Null });
     Value::Object(m)
 }
 
+fn iface_snippet__delete_site_snippet_params__to_json(p: &iface_snippet::DeleteSiteSnippetParams) -> Value {
+    let mut m = Map::new();
+    m.insert("site_id".into(), Value::String((&p.site_id).clone()));
+    m.insert("snippet_id".into(), Value::String((&p.snippet_id).clone()));
+    Value::Object(m)
+}
+
+fn iface_snippet__snippet__from_json(v: &Value) -> Option<iface_snippet::Snippet> {
+    let m = v.as_object()?;
+    Some(iface_snippet::Snippet {
+        general: m.get("general").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        general_position: m.get("general_position").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        goal: m.get("goal").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        goal_position: m.get("goal_position").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        id: m.get("id").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        site_id: m.get("site_id").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        title: m.get("title").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    })
+}
+
+fn iface_snippet__list_site_snippets__ok(body: String) -> Result<Vec<iface_snippet::Snippet>, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match (&v).as_array().map(|a| a.iter().filter_map(|x| iface_snippet__snippet__from_json(x)).collect()) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_snippet__list_site_snippets__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
+fn iface_snippet__create_site_snippet__ok(body: String) -> Result<iface_snippet::Snippet, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match iface_snippet__snippet__from_json(&v) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_snippet__create_site_snippet__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
+fn iface_snippet__get_site_snippet__ok(body: String) -> Result<iface_snippet::Snippet, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match iface_snippet__snippet__from_json(&v) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_snippet__get_site_snippet__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
+fn iface_snippet__update_site_snippet__ok(body: String) -> Result<String, crate::runtime::DispatchError> {
+    Ok(body)
+}
+
+fn iface_snippet__update_site_snippet__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
+fn iface_snippet__delete_site_snippet__ok(body: String) -> Result<String, crate::runtime::DispatchError> {
+    Ok(body)
+}
+
+fn iface_snippet__delete_site_snippet__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
 impl iface_snippet::Guest for crate::Component {
-    fn list_site_snippets() -> Result<String, String> {
-        dispatch(&OP_SNIPPET_LIST_SITE_SNIPPETS, Value::Object(Map::new()))
+    fn list_site_snippets(params: iface_snippet::ListSiteSnippetsParams) -> Result<Vec<iface_snippet::Snippet>, String> {
+        let json = iface_snippet__list_site_snippets_params__to_json(&params);
+        match dispatch(&OP_SNIPPET_LIST_SITE_SNIPPETS, json).and_then(iface_snippet__list_site_snippets__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_snippet__list_site_snippets__err(e)),
+        }
     }
-    fn create_site_snippet(params: iface_snippet::CreateSiteSnippetParams) -> Result<String, String> {
+    fn create_site_snippet(params: iface_snippet::CreateSiteSnippetParams) -> Result<iface_snippet::Snippet, String> {
         let json = iface_snippet__create_site_snippet_params__to_json(&params);
-        dispatch(&OP_SNIPPET_CREATE_SITE_SNIPPET, json)
+        match dispatch(&OP_SNIPPET_CREATE_SITE_SNIPPET, json).and_then(iface_snippet__create_site_snippet__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_snippet__create_site_snippet__err(e)),
+        }
     }
-    fn get_site_snippet() -> Result<String, String> {
-        dispatch(&OP_SNIPPET_GET_SITE_SNIPPET, Value::Object(Map::new()))
+    fn get_site_snippet(params: iface_snippet::GetSiteSnippetParams) -> Result<iface_snippet::Snippet, String> {
+        let json = iface_snippet__get_site_snippet_params__to_json(&params);
+        match dispatch(&OP_SNIPPET_GET_SITE_SNIPPET, json).and_then(iface_snippet__get_site_snippet__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_snippet__get_site_snippet__err(e)),
+        }
     }
     fn update_site_snippet(params: iface_snippet::UpdateSiteSnippetParams) -> Result<String, String> {
         let json = iface_snippet__update_site_snippet_params__to_json(&params);
-        dispatch(&OP_SNIPPET_UPDATE_SITE_SNIPPET, json)
+        match dispatch(&OP_SNIPPET_UPDATE_SITE_SNIPPET, json).and_then(iface_snippet__update_site_snippet__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_snippet__update_site_snippet__err(e)),
+        }
     }
-    fn delete_site_snippet() -> Result<String, String> {
-        dispatch(&OP_SNIPPET_DELETE_SITE_SNIPPET, Value::Object(Map::new()))
+    fn delete_site_snippet(params: iface_snippet::DeleteSiteSnippetParams) -> Result<String, String> {
+        let json = iface_snippet__delete_site_snippet_params__to_json(&params);
+        match dispatch(&OP_SNIPPET_DELETE_SITE_SNIPPET, json).and_then(iface_snippet__delete_site_snippet__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_snippet__delete_site_snippet__err(e)),
+        }
     }
 }
 use crate::exports::autostamp::netlify::sni_certificate as iface_sni_certificate;
@@ -2492,7 +6728,7 @@ const OP_SNI_CERTIFICATE_SHOW_SITE_TLS_CERTIFICATE: OpSpec = OpSpec {
     method: "GET",
     path_template: "/sites/{site_id}/ssl",
     fields: &[
-        FieldSpec { snake: "site_id", location: FieldLocation::Path },
+        FieldSpec { snake: "site_id", wire: "site_id", location: FieldLocation::Path },
     ],
     auth: &[
     ],
@@ -2502,14 +6738,24 @@ const OP_SNI_CERTIFICATE_PROVISION_SITE_TLS_CERTIFICATE: OpSpec = OpSpec {
     method: "POST",
     path_template: "/sites/{site_id}/ssl",
     fields: &[
-        FieldSpec { snake: "site_id", location: FieldLocation::Path },
-        FieldSpec { snake: "certificate", location: FieldLocation::Query },
-        FieldSpec { snake: "key", location: FieldLocation::Query },
-        FieldSpec { snake: "ca_certificates", location: FieldLocation::Query },
+        FieldSpec { snake: "site_id", wire: "site_id", location: FieldLocation::Path },
+        FieldSpec { snake: "certificate", wire: "certificate", location: FieldLocation::Query },
+        FieldSpec { snake: "key", wire: "key", location: FieldLocation::Query },
+        FieldSpec { snake: "ca_certificates", wire: "ca_certificates", location: FieldLocation::Query },
     ],
     auth: &[
     ],
 };
+
+fn iface_sni_certificate__sni_certificate__to_json(p: &iface_sni_certificate::SniCertificate) -> Value {
+    let mut m = Map::new();
+    m.insert("created_at".into(), match (&p.created_at) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("domains".into(), match (&p.domains) { Some(v) => Value::Array((v).iter().map(|v| Value::String((v).clone())).collect()), None => Value::Null });
+    m.insert("expires_at".into(), match (&p.expires_at) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("state".into(), match (&p.state) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("updated_at".into(), match (&p.updated_at) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
 
 fn iface_sni_certificate__show_site_tls_certificate_params__to_json(p: &iface_sni_certificate::ShowSiteTlsCertificateParams) -> Value {
     let mut m = Map::new();
@@ -2526,14 +6772,67 @@ fn iface_sni_certificate__provision_site_tls_certificate_params__to_json(p: &ifa
     Value::Object(m)
 }
 
-impl iface_sni_certificate::Guest for crate::Component {
-    fn show_site_tls_certificate(params: iface_sni_certificate::ShowSiteTlsCertificateParams) -> Result<String, String> {
-        let json = iface_sni_certificate__show_site_tls_certificate_params__to_json(&params);
-        dispatch(&OP_SNI_CERTIFICATE_SHOW_SITE_TLS_CERTIFICATE, json)
+fn iface_sni_certificate__sni_certificate__from_json(v: &Value) -> Option<iface_sni_certificate::SniCertificate> {
+    let m = v.as_object()?;
+    Some(iface_sni_certificate::SniCertificate {
+        created_at: m.get("created_at").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        domains: m.get("domains").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| (x).as_str().map(|s| s.to_string())).collect())),
+        expires_at: m.get("expires_at").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        state: m.get("state").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        updated_at: m.get("updated_at").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    })
+}
+
+fn iface_sni_certificate__show_site_tls_certificate__ok(body: String) -> Result<iface_sni_certificate::SniCertificate, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match iface_sni_certificate__sni_certificate__from_json(&v) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
     }
-    fn provision_site_tls_certificate(params: iface_sni_certificate::ProvisionSiteTlsCertificateParams) -> Result<String, String> {
+}
+
+fn iface_sni_certificate__show_site_tls_certificate__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
+fn iface_sni_certificate__provision_site_tls_certificate__ok(body: String) -> Result<iface_sni_certificate::SniCertificate, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match iface_sni_certificate__sni_certificate__from_json(&v) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_sni_certificate__provision_site_tls_certificate__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
+impl iface_sni_certificate::Guest for crate::Component {
+    fn show_site_tls_certificate(params: iface_sni_certificate::ShowSiteTlsCertificateParams) -> Result<iface_sni_certificate::SniCertificate, String> {
+        let json = iface_sni_certificate__show_site_tls_certificate_params__to_json(&params);
+        match dispatch(&OP_SNI_CERTIFICATE_SHOW_SITE_TLS_CERTIFICATE, json).and_then(iface_sni_certificate__show_site_tls_certificate__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_sni_certificate__show_site_tls_certificate__err(e)),
+        }
+    }
+    fn provision_site_tls_certificate(params: iface_sni_certificate::ProvisionSiteTlsCertificateParams) -> Result<iface_sni_certificate::SniCertificate, String> {
         let json = iface_sni_certificate__provision_site_tls_certificate_params__to_json(&params);
-        dispatch(&OP_SNI_CERTIFICATE_PROVISION_SITE_TLS_CERTIFICATE, json)
+        match dispatch(&OP_SNI_CERTIFICATE_PROVISION_SITE_TLS_CERTIFICATE, json).and_then(iface_sni_certificate__provision_site_tls_certificate__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_sni_certificate__provision_site_tls_certificate__err(e)),
+        }
     }
 }
 use crate::exports::autostamp::netlify::split_test as iface_split_test;
@@ -2542,6 +6841,7 @@ const OP_SPLIT_TEST_GET_SPLIT_TESTS: OpSpec = OpSpec {
     method: "GET",
     path_template: "/sites/{site_id}/traffic_splits",
     fields: &[
+        FieldSpec { snake: "site_id", wire: "site_id", location: FieldLocation::Path },
     ],
     auth: &[
     ],
@@ -2551,7 +6851,8 @@ const OP_SPLIT_TEST_CREATE_SPLIT_TEST: OpSpec = OpSpec {
     method: "POST",
     path_template: "/sites/{site_id}/traffic_splits",
     fields: &[
-        FieldSpec { snake: "branch_tests", location: FieldLocation::Body },
+        FieldSpec { snake: "site_id", wire: "site_id", location: FieldLocation::Path },
+        FieldSpec { snake: "branch_tests", wire: "branch_tests", location: FieldLocation::Body },
     ],
     auth: &[
     ],
@@ -2561,6 +6862,8 @@ const OP_SPLIT_TEST_GET_SPLIT_TEST: OpSpec = OpSpec {
     method: "GET",
     path_template: "/sites/{site_id}/traffic_splits/{split_test_id}",
     fields: &[
+        FieldSpec { snake: "site_id", wire: "site_id", location: FieldLocation::Path },
+        FieldSpec { snake: "split_test_id", wire: "split_test_id", location: FieldLocation::Path },
     ],
     auth: &[
     ],
@@ -2570,7 +6873,9 @@ const OP_SPLIT_TEST_UPDATE_SPLIT_TEST: OpSpec = OpSpec {
     method: "PUT",
     path_template: "/sites/{site_id}/traffic_splits/{split_test_id}",
     fields: &[
-        FieldSpec { snake: "branch_tests", location: FieldLocation::Body },
+        FieldSpec { snake: "site_id", wire: "site_id", location: FieldLocation::Path },
+        FieldSpec { snake: "split_test_id", wire: "split_test_id", location: FieldLocation::Path },
+        FieldSpec { snake: "branch_tests", wire: "branch_tests", location: FieldLocation::Body },
     ],
     auth: &[
     ],
@@ -2580,6 +6885,8 @@ const OP_SPLIT_TEST_ENABLE_SPLIT_TEST: OpSpec = OpSpec {
     method: "POST",
     path_template: "/sites/{site_id}/traffic_splits/{split_test_id}/publish",
     fields: &[
+        FieldSpec { snake: "site_id", wire: "site_id", location: FieldLocation::Path },
+        FieldSpec { snake: "split_test_id", wire: "split_test_id", location: FieldLocation::Path },
     ],
     auth: &[
     ],
@@ -2589,10 +6896,18 @@ const OP_SPLIT_TEST_DISABLE_SPLIT_TEST: OpSpec = OpSpec {
     method: "POST",
     path_template: "/sites/{site_id}/traffic_splits/{split_test_id}/unpublish",
     fields: &[
+        FieldSpec { snake: "site_id", wire: "site_id", location: FieldLocation::Path },
+        FieldSpec { snake: "split_test_id", wire: "split_test_id", location: FieldLocation::Path },
     ],
     auth: &[
     ],
 };
+
+fn iface_split_test__split_tests__to_json(p: &iface_split_test::SplitTests) -> Value {
+    let mut m = Map::new();
+    m.insert("value".into(), Value::String((&p.value).clone()));
+    Value::Object(m)
+}
 
 fn iface_split_test__setup_branch_tests__to_json(p: &iface_split_test::SetupBranchTests) -> Value {
     let mut m = Map::new();
@@ -2600,38 +6915,233 @@ fn iface_split_test__setup_branch_tests__to_json(p: &iface_split_test::SetupBran
     Value::Object(m)
 }
 
+fn iface_split_test__split_test__to_json(p: &iface_split_test::SplitTest) -> Value {
+    let mut m = Map::new();
+    m.insert("active".into(), match (&p.active) { Some(v) => Value::Bool(*(v)), None => Value::Null });
+    m.insert("branches".into(), match (&p.branches) { Some(v) => Value::Array((v).iter().map(|v| iface_split_test__split_test_branches_item__to_json(v)).collect()), None => Value::Null });
+    m.insert("created_at".into(), match (&p.created_at) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("id".into(), match (&p.id) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("name".into(), match (&p.name) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("path".into(), match (&p.path) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("site_id".into(), match (&p.site_id) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("unpublished_at".into(), match (&p.unpublished_at) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("updated_at".into(), match (&p.updated_at) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_split_test__split_test_branches_item__to_json(p: &iface_split_test::SplitTestBranchesItem) -> Value {
+    let mut m = Map::new();
+    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_split_test__get_split_tests_params__to_json(p: &iface_split_test::GetSplitTestsParams) -> Value {
+    let mut m = Map::new();
+    m.insert("site_id".into(), Value::String((&p.site_id).clone()));
+    Value::Object(m)
+}
+
 fn iface_split_test__create_split_test_params__to_json(p: &iface_split_test::CreateSplitTestParams) -> Value {
     let mut m = Map::new();
+    m.insert("site_id".into(), Value::String((&p.site_id).clone()));
     m.insert("branch_tests".into(), match (&p.branch_tests) { Some(v) => iface_split_test__setup_branch_tests__to_json(v), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_split_test__get_split_test_params__to_json(p: &iface_split_test::GetSplitTestParams) -> Value {
+    let mut m = Map::new();
+    m.insert("site_id".into(), Value::String((&p.site_id).clone()));
+    m.insert("split_test_id".into(), Value::String((&p.split_test_id).clone()));
     Value::Object(m)
 }
 
 fn iface_split_test__update_split_test_params__to_json(p: &iface_split_test::UpdateSplitTestParams) -> Value {
     let mut m = Map::new();
+    m.insert("site_id".into(), Value::String((&p.site_id).clone()));
+    m.insert("split_test_id".into(), Value::String((&p.split_test_id).clone()));
     m.insert("branch_tests".into(), match (&p.branch_tests) { Some(v) => iface_split_test__setup_branch_tests__to_json(v), None => Value::Null });
     Value::Object(m)
 }
 
+fn iface_split_test__enable_split_test_params__to_json(p: &iface_split_test::EnableSplitTestParams) -> Value {
+    let mut m = Map::new();
+    m.insert("site_id".into(), Value::String((&p.site_id).clone()));
+    m.insert("split_test_id".into(), Value::String((&p.split_test_id).clone()));
+    Value::Object(m)
+}
+
+fn iface_split_test__disable_split_test_params__to_json(p: &iface_split_test::DisableSplitTestParams) -> Value {
+    let mut m = Map::new();
+    m.insert("site_id".into(), Value::String((&p.site_id).clone()));
+    m.insert("split_test_id".into(), Value::String((&p.split_test_id).clone()));
+    Value::Object(m)
+}
+
+fn iface_split_test__split_tests__from_json(v: &Value) -> Option<iface_split_test::SplitTests> {
+    let m = v.as_object()?;
+    Some(iface_split_test::SplitTests {
+        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+    })
+}
+
+fn iface_split_test__split_test__from_json(v: &Value) -> Option<iface_split_test::SplitTest> {
+    let m = v.as_object()?;
+    Some(iface_split_test::SplitTest {
+        active: m.get("active").filter(|v| !v.is_null()).and_then(|v| (v).as_bool()),
+        branches: m.get("branches").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| iface_split_test__split_test_branches_item__from_json(x)).collect())),
+        created_at: m.get("created_at").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        id: m.get("id").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        name: m.get("name").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        path: m.get("path").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        site_id: m.get("site_id").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        unpublished_at: m.get("unpublished_at").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        updated_at: m.get("updated_at").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    })
+}
+
+fn iface_split_test__split_test_branches_item__from_json(v: &Value) -> Option<iface_split_test::SplitTestBranchesItem> {
+    let m = v.as_object()?;
+    Some(iface_split_test::SplitTestBranchesItem {
+        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    })
+}
+
+fn iface_split_test__get_split_tests__ok(body: String) -> Result<iface_split_test::SplitTests, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match iface_split_test__split_tests__from_json(&v) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_split_test__get_split_tests__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
+fn iface_split_test__create_split_test__ok(body: String) -> Result<iface_split_test::SplitTest, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match iface_split_test__split_test__from_json(&v) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_split_test__create_split_test__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
+fn iface_split_test__get_split_test__ok(body: String) -> Result<iface_split_test::SplitTest, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match iface_split_test__split_test__from_json(&v) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_split_test__get_split_test__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
+fn iface_split_test__update_split_test__ok(body: String) -> Result<iface_split_test::SplitTest, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match iface_split_test__split_test__from_json(&v) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_split_test__update_split_test__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
+fn iface_split_test__enable_split_test__ok(body: String) -> Result<String, crate::runtime::DispatchError> {
+    Ok(body)
+}
+
+fn iface_split_test__enable_split_test__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
+fn iface_split_test__disable_split_test__ok(body: String) -> Result<String, crate::runtime::DispatchError> {
+    Ok(body)
+}
+
+fn iface_split_test__disable_split_test__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
 impl iface_split_test::Guest for crate::Component {
-    fn get_split_tests() -> Result<String, String> {
-        dispatch(&OP_SPLIT_TEST_GET_SPLIT_TESTS, Value::Object(Map::new()))
+    fn get_split_tests(params: iface_split_test::GetSplitTestsParams) -> Result<iface_split_test::SplitTests, String> {
+        let json = iface_split_test__get_split_tests_params__to_json(&params);
+        match dispatch(&OP_SPLIT_TEST_GET_SPLIT_TESTS, json).and_then(iface_split_test__get_split_tests__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_split_test__get_split_tests__err(e)),
+        }
     }
-    fn create_split_test(params: iface_split_test::CreateSplitTestParams) -> Result<String, String> {
+    fn create_split_test(params: iface_split_test::CreateSplitTestParams) -> Result<iface_split_test::SplitTest, String> {
         let json = iface_split_test__create_split_test_params__to_json(&params);
-        dispatch(&OP_SPLIT_TEST_CREATE_SPLIT_TEST, json)
+        match dispatch(&OP_SPLIT_TEST_CREATE_SPLIT_TEST, json).and_then(iface_split_test__create_split_test__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_split_test__create_split_test__err(e)),
+        }
     }
-    fn get_split_test() -> Result<String, String> {
-        dispatch(&OP_SPLIT_TEST_GET_SPLIT_TEST, Value::Object(Map::new()))
+    fn get_split_test(params: iface_split_test::GetSplitTestParams) -> Result<iface_split_test::SplitTest, String> {
+        let json = iface_split_test__get_split_test_params__to_json(&params);
+        match dispatch(&OP_SPLIT_TEST_GET_SPLIT_TEST, json).and_then(iface_split_test__get_split_test__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_split_test__get_split_test__err(e)),
+        }
     }
-    fn update_split_test(params: iface_split_test::UpdateSplitTestParams) -> Result<String, String> {
+    fn update_split_test(params: iface_split_test::UpdateSplitTestParams) -> Result<iface_split_test::SplitTest, String> {
         let json = iface_split_test__update_split_test_params__to_json(&params);
-        dispatch(&OP_SPLIT_TEST_UPDATE_SPLIT_TEST, json)
+        match dispatch(&OP_SPLIT_TEST_UPDATE_SPLIT_TEST, json).and_then(iface_split_test__update_split_test__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_split_test__update_split_test__err(e)),
+        }
     }
-    fn enable_split_test() -> Result<String, String> {
-        dispatch(&OP_SPLIT_TEST_ENABLE_SPLIT_TEST, Value::Object(Map::new()))
+    fn enable_split_test(params: iface_split_test::EnableSplitTestParams) -> Result<String, String> {
+        let json = iface_split_test__enable_split_test_params__to_json(&params);
+        match dispatch(&OP_SPLIT_TEST_ENABLE_SPLIT_TEST, json).and_then(iface_split_test__enable_split_test__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_split_test__enable_split_test__err(e)),
+        }
     }
-    fn disable_split_test() -> Result<String, String> {
-        dispatch(&OP_SPLIT_TEST_DISABLE_SPLIT_TEST, Value::Object(Map::new()))
+    fn disable_split_test(params: iface_split_test::DisableSplitTestParams) -> Result<String, String> {
+        let json = iface_split_test__disable_split_test_params__to_json(&params);
+        match dispatch(&OP_SPLIT_TEST_DISABLE_SPLIT_TEST, json).and_then(iface_split_test__disable_split_test__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_split_test__disable_split_test__err(e)),
+        }
     }
 }
 use crate::exports::autostamp::netlify::user as iface_user;
@@ -2645,9 +7155,76 @@ const OP_USER_GET_CURRENT_USER: OpSpec = OpSpec {
     ],
 };
 
+fn iface_user__user__to_json(p: &iface_user::User) -> Value {
+    let mut m = Map::new();
+    m.insert("affiliate_id".into(), match (&p.affiliate_id) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("avatar_url".into(), match (&p.avatar_url) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("created_at".into(), match (&p.created_at) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("email".into(), match (&p.email) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("full_name".into(), match (&p.full_name) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("id".into(), match (&p.id) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("last_login".into(), match (&p.last_login) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("login_providers".into(), match (&p.login_providers) { Some(v) => Value::Array((v).iter().map(|v| Value::String((v).clone())).collect()), None => Value::Null });
+    m.insert("onboarding_progress".into(), match (&p.onboarding_progress) { Some(v) => iface_user__user_onboarding_progress__to_json(v), None => Value::Null });
+    m.insert("site_count".into(), match (&p.site_count) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("uid".into(), match (&p.uid) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_user__user_onboarding_progress__to_json(p: &iface_user::UserOnboardingProgress) -> Value {
+    let mut m = Map::new();
+    m.insert("slides".into(), match (&p.slides) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_user__user__from_json(v: &Value) -> Option<iface_user::User> {
+    let m = v.as_object()?;
+    Some(iface_user::User {
+        affiliate_id: m.get("affiliate_id").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        avatar_url: m.get("avatar_url").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        created_at: m.get("created_at").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        email: m.get("email").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        full_name: m.get("full_name").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        id: m.get("id").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        last_login: m.get("last_login").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        login_providers: m.get("login_providers").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| (x).as_str().map(|s| s.to_string())).collect())),
+        onboarding_progress: m.get("onboarding_progress").filter(|v| !v.is_null()).and_then(|v| iface_user__user_onboarding_progress__from_json(v)),
+        site_count: m.get("site_count").filter(|v| !v.is_null()).and_then(|v| (v).as_i64()),
+        uid: m.get("uid").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    })
+}
+
+fn iface_user__user_onboarding_progress__from_json(v: &Value) -> Option<iface_user::UserOnboardingProgress> {
+    let m = v.as_object()?;
+    Some(iface_user::UserOnboardingProgress {
+        slides: m.get("slides").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    })
+}
+
+fn iface_user__get_current_user__ok(body: String) -> Result<Vec<iface_user::User>, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match (&v).as_array().map(|a| a.iter().filter_map(|x| iface_user__user__from_json(x)).collect()) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_user__get_current_user__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
 impl iface_user::Guest for crate::Component {
-    fn get_current_user() -> Result<String, String> {
-        dispatch(&OP_USER_GET_CURRENT_USER, Value::Object(Map::new()))
+    fn get_current_user() -> Result<Vec<iface_user::User>, String> {
+        match dispatch(&OP_USER_GET_CURRENT_USER, Value::Object(Map::new())).and_then(iface_user__get_current_user__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_user__get_current_user__err(e)),
+        }
     }
 }
 use crate::exports::autostamp::netlify::member as iface_member;
@@ -2656,6 +7233,7 @@ const OP_MEMBER_LIST_MEMBERS_FOR_ACCOUNT: OpSpec = OpSpec {
     method: "GET",
     path_template: "/{account_slug}/members",
     fields: &[
+        FieldSpec { snake: "account_slug", wire: "account_slug", location: FieldLocation::Path },
     ],
     auth: &[
     ],
@@ -2665,8 +7243,9 @@ const OP_MEMBER_ADD_MEMBER_TO_ACCOUNT: OpSpec = OpSpec {
     method: "POST",
     path_template: "/{account_slug}/members",
     fields: &[
-        FieldSpec { snake: "email", location: FieldLocation::Body },
-        FieldSpec { snake: "role", location: FieldLocation::Body },
+        FieldSpec { snake: "account_slug", wire: "account_slug", location: FieldLocation::Path },
+        FieldSpec { snake: "email", wire: "email", location: FieldLocation::Body },
+        FieldSpec { snake: "role", wire: "role", location: FieldLocation::Body },
     ],
     auth: &[
     ],
@@ -2676,6 +7255,8 @@ const OP_MEMBER_GET_ACCOUNT_MEMBER: OpSpec = OpSpec {
     method: "GET",
     path_template: "/{account_slug}/members/{member_id}",
     fields: &[
+        FieldSpec { snake: "account_slug", wire: "account_slug", location: FieldLocation::Path },
+        FieldSpec { snake: "member_id", wire: "member_id", location: FieldLocation::Path },
     ],
     auth: &[
     ],
@@ -2685,9 +7266,11 @@ const OP_MEMBER_UPDATE_ACCOUNT_MEMBER: OpSpec = OpSpec {
     method: "PUT",
     path_template: "/{account_slug}/members/{member_id}",
     fields: &[
-        FieldSpec { snake: "role", location: FieldLocation::Body },
-        FieldSpec { snake: "site_access", location: FieldLocation::Body },
-        FieldSpec { snake: "site_ids", location: FieldLocation::Body },
+        FieldSpec { snake: "account_slug", wire: "account_slug", location: FieldLocation::Path },
+        FieldSpec { snake: "member_id", wire: "member_id", location: FieldLocation::Path },
+        FieldSpec { snake: "role", wire: "role", location: FieldLocation::Body },
+        FieldSpec { snake: "site_access", wire: "site_access", location: FieldLocation::Body },
+        FieldSpec { snake: "site_ids", wire: "site_ids", location: FieldLocation::Body },
     ],
     auth: &[
     ],
@@ -2697,6 +7280,8 @@ const OP_MEMBER_REMOVE_ACCOUNT_MEMBER: OpSpec = OpSpec {
     method: "DELETE",
     path_template: "/{account_slug}/members/{member_id}",
     fields: &[
+        FieldSpec { snake: "account_slug", wire: "account_slug", location: FieldLocation::Path },
+        FieldSpec { snake: "member_id", wire: "member_id", location: FieldLocation::Path },
     ],
     auth: &[
     ],
@@ -2718,38 +7303,183 @@ fn iface_member__account_update_member_setup_site_access_enum__to_str(e: &iface_
     }
 }
 
+fn iface_member__member__to_json(p: &iface_member::Member) -> Value {
+    let mut m = Map::new();
+    m.insert("avatar".into(), match (&p.avatar) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("email".into(), match (&p.email) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("full_name".into(), match (&p.full_name) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("id".into(), match (&p.id) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("role".into(), match (&p.role) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_member__list_members_for_account_params__to_json(p: &iface_member::ListMembersForAccountParams) -> Value {
+    let mut m = Map::new();
+    m.insert("account_slug".into(), Value::String((&p.account_slug).clone()));
+    Value::Object(m)
+}
+
 fn iface_member__add_member_to_account_params__to_json(p: &iface_member::AddMemberToAccountParams) -> Value {
     let mut m = Map::new();
+    m.insert("account_slug".into(), Value::String((&p.account_slug).clone()));
     m.insert("email".into(), match (&p.email) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("role".into(), match (&p.role) { Some(v) => Value::String(iface_member__account_add_member_setup_role_enum__to_str(v).into()), None => Value::Null });
     Value::Object(m)
 }
 
+fn iface_member__get_account_member_params__to_json(p: &iface_member::GetAccountMemberParams) -> Value {
+    let mut m = Map::new();
+    m.insert("account_slug".into(), Value::String((&p.account_slug).clone()));
+    m.insert("member_id".into(), Value::String((&p.member_id).clone()));
+    Value::Object(m)
+}
+
 fn iface_member__update_account_member_params__to_json(p: &iface_member::UpdateAccountMemberParams) -> Value {
     let mut m = Map::new();
+    m.insert("account_slug".into(), Value::String((&p.account_slug).clone()));
+    m.insert("member_id".into(), Value::String((&p.member_id).clone()));
     m.insert("role".into(), match (&p.role) { Some(v) => Value::String(iface_member__account_add_member_setup_role_enum__to_str(v).into()), None => Value::Null });
     m.insert("site_access".into(), match (&p.site_access) { Some(v) => Value::String(iface_member__account_update_member_setup_site_access_enum__to_str(v).into()), None => Value::Null });
     m.insert("site_ids".into(), match (&p.site_ids) { Some(v) => Value::Array((v).iter().map(|v| Value::String((v).clone())).collect()), None => Value::Null });
     Value::Object(m)
 }
 
+fn iface_member__remove_account_member_params__to_json(p: &iface_member::RemoveAccountMemberParams) -> Value {
+    let mut m = Map::new();
+    m.insert("account_slug".into(), Value::String((&p.account_slug).clone()));
+    m.insert("member_id".into(), Value::String((&p.member_id).clone()));
+    Value::Object(m)
+}
+
+fn iface_member__member__from_json(v: &Value) -> Option<iface_member::Member> {
+    let m = v.as_object()?;
+    Some(iface_member::Member {
+        avatar: m.get("avatar").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        email: m.get("email").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        full_name: m.get("full_name").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        id: m.get("id").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        role: m.get("role").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    })
+}
+
+fn iface_member__list_members_for_account__ok(body: String) -> Result<Vec<iface_member::Member>, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match (&v).as_array().map(|a| a.iter().filter_map(|x| iface_member__member__from_json(x)).collect()) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_member__list_members_for_account__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
+fn iface_member__add_member_to_account__ok(body: String) -> Result<Vec<iface_member::Member>, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match (&v).as_array().map(|a| a.iter().filter_map(|x| iface_member__member__from_json(x)).collect()) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_member__add_member_to_account__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
+fn iface_member__get_account_member__ok(body: String) -> Result<iface_member::Member, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match iface_member__member__from_json(&v) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_member__get_account_member__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
+fn iface_member__update_account_member__ok(body: String) -> Result<iface_member::Member, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match iface_member__member__from_json(&v) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_member__update_account_member__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
+fn iface_member__remove_account_member__ok(body: String) -> Result<String, crate::runtime::DispatchError> {
+    Ok(body)
+}
+
+fn iface_member__remove_account_member__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
 impl iface_member::Guest for crate::Component {
-    fn list_members_for_account() -> Result<String, String> {
-        dispatch(&OP_MEMBER_LIST_MEMBERS_FOR_ACCOUNT, Value::Object(Map::new()))
+    fn list_members_for_account(params: iface_member::ListMembersForAccountParams) -> Result<Vec<iface_member::Member>, String> {
+        let json = iface_member__list_members_for_account_params__to_json(&params);
+        match dispatch(&OP_MEMBER_LIST_MEMBERS_FOR_ACCOUNT, json).and_then(iface_member__list_members_for_account__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_member__list_members_for_account__err(e)),
+        }
     }
-    fn add_member_to_account(params: iface_member::AddMemberToAccountParams) -> Result<String, String> {
+    fn add_member_to_account(params: iface_member::AddMemberToAccountParams) -> Result<Vec<iface_member::Member>, String> {
         let json = iface_member__add_member_to_account_params__to_json(&params);
-        dispatch(&OP_MEMBER_ADD_MEMBER_TO_ACCOUNT, json)
+        match dispatch(&OP_MEMBER_ADD_MEMBER_TO_ACCOUNT, json).and_then(iface_member__add_member_to_account__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_member__add_member_to_account__err(e)),
+        }
     }
-    fn get_account_member() -> Result<String, String> {
-        dispatch(&OP_MEMBER_GET_ACCOUNT_MEMBER, Value::Object(Map::new()))
+    fn get_account_member(params: iface_member::GetAccountMemberParams) -> Result<iface_member::Member, String> {
+        let json = iface_member__get_account_member_params__to_json(&params);
+        match dispatch(&OP_MEMBER_GET_ACCOUNT_MEMBER, json).and_then(iface_member__get_account_member__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_member__get_account_member__err(e)),
+        }
     }
-    fn update_account_member(params: iface_member::UpdateAccountMemberParams) -> Result<String, String> {
+    fn update_account_member(params: iface_member::UpdateAccountMemberParams) -> Result<iface_member::Member, String> {
         let json = iface_member__update_account_member_params__to_json(&params);
-        dispatch(&OP_MEMBER_UPDATE_ACCOUNT_MEMBER, json)
+        match dispatch(&OP_MEMBER_UPDATE_ACCOUNT_MEMBER, json).and_then(iface_member__update_account_member__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_member__update_account_member__err(e)),
+        }
     }
-    fn remove_account_member() -> Result<String, String> {
-        dispatch(&OP_MEMBER_REMOVE_ACCOUNT_MEMBER, Value::Object(Map::new()))
+    fn remove_account_member(params: iface_member::RemoveAccountMemberParams) -> Result<String, String> {
+        let json = iface_member__remove_account_member_params__to_json(&params);
+        match dispatch(&OP_MEMBER_REMOVE_ACCOUNT_MEMBER, json).and_then(iface_member__remove_account_member__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_member__remove_account_member__err(e)),
+        }
     }
 }
 

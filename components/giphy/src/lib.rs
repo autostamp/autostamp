@@ -44,10 +44,15 @@ pub(crate) enum FieldLocation {
     Body,
 }
 
-/// A single operation parameter: the snake-case key it carries in the params JSON and where
-/// it belongs in the request.
+/// A single operation parameter. `snake` keys the field in the internal params JSON (and, for a
+/// path field, matches the `{snake}` placeholder in the path template); `wire` is the verbatim name
+/// the field takes on the HTTP wire (query key, header name, or body property). The two differ
+/// whenever the source name isn't already snake_case (e.g. `dryRun` → snake `dry_run`, wire
+/// `dryRun`), and let distinct inputs that share a snake key (`DateCreated`, `DateCreated<`) still
+/// travel under their true names.
 pub(crate) struct FieldSpec {
     pub(crate) snake: &'static str,
+    pub(crate) wire: &'static str,
     pub(crate) location: FieldLocation,
 }
 
@@ -71,6 +76,16 @@ pub(crate) struct AuthApply {
     pub(crate) kind: AuthKind,
 }
 
+/// The failure modes of [`dispatch`], kept structured so each generated operation can map them
+/// onto its own typed error: an `Http` failure carries the response status and body (routed to
+/// the matching error-variant case), while a `Transport` failure carries a message for the
+/// catch-all case (a secret lookup, connection, or decode failure that never produced an HTTP
+/// status).
+pub(crate) enum DispatchError {
+    Http { status: u16, body: String },
+    Transport(String),
+}
+
 /// A single API operation: HTTP method, path template (with `{snake}` placeholders), the
 /// parameter fields, and the security schemes to apply.
 pub(crate) struct OpSpec {
@@ -81,8 +96,9 @@ pub(crate) struct OpSpec {
 }
 
 /// Execute `op` with the supplied `params` (a JSON object keyed by snake-case field names)
-/// and return the response body as a string, or an error message.
-pub(crate) fn dispatch(op: &OpSpec, params: Value) -> Result<String, String> {
+/// and return the raw 2xx response body, or a structured [`DispatchError`] the caller maps
+/// onto the operation's typed error.
+pub(crate) fn dispatch(op: &OpSpec, params: Value) -> Result<String, DispatchError> {
     let obj = match &params {
         Value::Object(map) => Some(map),
         _ => None,
@@ -105,10 +121,10 @@ pub(crate) fn dispatch(op: &OpSpec, params: Value) -> Result<String, String> {
                 let placeholder = format!("{{{}}}", field.snake);
                 path = path.replace(&placeholder, &percent_encode(&scalar(value)));
             }
-            FieldLocation::Query => query.push((field.snake.to_string(), scalar(value))),
-            FieldLocation::Header => headers.push((field.snake.to_string(), scalar(value))),
+            FieldLocation::Query => query.push((field.wire.to_string(), scalar(value))),
+            FieldLocation::Header => headers.push((field.wire.to_string(), scalar(value))),
             FieldLocation::Body => {
-                body.insert(field.snake.to_string(), value.clone());
+                body.insert(field.wire.to_string(), value.clone());
             }
         }
     }
@@ -116,7 +132,7 @@ pub(crate) fn dispatch(op: &OpSpec, params: Value) -> Result<String, String> {
     // Apply each resolved security scheme, sourcing its value from wasmcloud:secrets.
     let mut cookies: Vec<String> = Vec::new();
     for apply in op.auth {
-        let secret = fetch_secret(apply.secret_key)?;
+        let secret = fetch_secret(apply.secret_key).map_err(DispatchError::Transport)?;
         match &apply.kind {
             AuthKind::Bearer => headers.push(("authorization".into(), format!("Bearer {secret}"))),
             AuthKind::Basic => {
@@ -177,17 +193,18 @@ fn fetch_secret(key: &str) -> Result<String, String> {
 }
 
 /// Build and send the outgoing request with `wstd`, returning the response body on a 2xx
-/// status. The generated guest exports are synchronous, so the async `wstd` client is driven
-/// to completion on a local reactor via `wstd::runtime::block_on`.
+/// status and a structured [`DispatchError`] otherwise. The generated guest exports are
+/// synchronous, so the async `wstd` client is driven to completion on a local reactor via
+/// `wstd::runtime::block_on`.
 fn perform(
     method: &str,
     path_with_query: &str,
     headers: &[(String, String)],
     body: &[u8],
-) -> Result<String, String> {
+) -> Result<String, DispatchError> {
     let url = join_url(crate::BASE_URL, path_with_query);
     let method = Method::from_bytes(method.as_bytes())
-        .map_err(|err| format!("invalid HTTP method `{method}`: {err}"))?;
+        .map_err(|err| DispatchError::Transport(format!("invalid HTTP method `{method}`: {err}")))?;
 
     let mut builder = Request::builder().method(method).uri(url);
     for (name, value) in headers {
@@ -199,27 +216,29 @@ fn perform(
         } else {
             Body::from(body.to_vec())
         })
-        .map_err(|err| format!("failed to build request: {err}"))?;
+        .map_err(|err| DispatchError::Transport(format!("failed to build request: {err}")))?;
 
     wstd::runtime::block_on(async move {
         let client = Client::new();
         let response = client
             .send(request)
             .await
-            .map_err(|err| format!("request failed: {err:#}"))?;
+            .map_err(|err| DispatchError::Transport(format!("request failed: {err:#}")))?;
 
         let status = response.status().as_u16();
         let mut response_body = response.into_body();
-        let bytes = response_body
-            .contents()
-            .await
-            .map_err(|err| format!("failed to read response body: {err:#}"))?;
+        let bytes = response_body.contents().await.map_err(|err| {
+            DispatchError::Transport(format!("failed to read response body: {err:#}"))
+        })?;
         let body_text = String::from_utf8_lossy(bytes).into_owned();
 
         if (200..300).contains(&status) {
             Ok(body_text)
         } else {
-            Err(format!("HTTP {status}: {body_text}"))
+            Err(DispatchError::Http {
+                status,
+                body: body_text,
+            })
         }
     })
 }
@@ -288,7 +307,7 @@ const OP_GIFS_GET_GIFS_BY_ID: OpSpec = OpSpec {
     method: "GET",
     path_template: "/gifs",
     fields: &[
-        FieldSpec { snake: "ids", location: FieldLocation::Query },
+        FieldSpec { snake: "ids", wire: "ids", location: FieldLocation::Query },
     ],
     auth: &[
         AuthApply { secret_key: "api_key", kind: AuthKind::ApiKeyQuery("api_key") },
@@ -299,8 +318,8 @@ const OP_GIFS_RANDOM_GIF: OpSpec = OpSpec {
     method: "GET",
     path_template: "/gifs/random",
     fields: &[
-        FieldSpec { snake: "tag", location: FieldLocation::Query },
-        FieldSpec { snake: "rating", location: FieldLocation::Query },
+        FieldSpec { snake: "tag", wire: "tag", location: FieldLocation::Query },
+        FieldSpec { snake: "rating", wire: "rating", location: FieldLocation::Query },
     ],
     auth: &[
         AuthApply { secret_key: "api_key", kind: AuthKind::ApiKeyQuery("api_key") },
@@ -311,11 +330,11 @@ const OP_GIFS_SEARCH_GIFS: OpSpec = OpSpec {
     method: "GET",
     path_template: "/gifs/search",
     fields: &[
-        FieldSpec { snake: "q", location: FieldLocation::Query },
-        FieldSpec { snake: "limit", location: FieldLocation::Query },
-        FieldSpec { snake: "offset", location: FieldLocation::Query },
-        FieldSpec { snake: "rating", location: FieldLocation::Query },
-        FieldSpec { snake: "lang", location: FieldLocation::Query },
+        FieldSpec { snake: "q", wire: "q", location: FieldLocation::Query },
+        FieldSpec { snake: "limit", wire: "limit", location: FieldLocation::Query },
+        FieldSpec { snake: "offset", wire: "offset", location: FieldLocation::Query },
+        FieldSpec { snake: "rating", wire: "rating", location: FieldLocation::Query },
+        FieldSpec { snake: "lang", wire: "lang", location: FieldLocation::Query },
     ],
     auth: &[
         AuthApply { secret_key: "api_key", kind: AuthKind::ApiKeyQuery("api_key") },
@@ -326,7 +345,7 @@ const OP_GIFS_TRANSLATE_GIF: OpSpec = OpSpec {
     method: "GET",
     path_template: "/gifs/translate",
     fields: &[
-        FieldSpec { snake: "s", location: FieldLocation::Query },
+        FieldSpec { snake: "s", wire: "s", location: FieldLocation::Query },
     ],
     auth: &[
         AuthApply { secret_key: "api_key", kind: AuthKind::ApiKeyQuery("api_key") },
@@ -337,9 +356,9 @@ const OP_GIFS_TRENDING_GIFS: OpSpec = OpSpec {
     method: "GET",
     path_template: "/gifs/trending",
     fields: &[
-        FieldSpec { snake: "limit", location: FieldLocation::Query },
-        FieldSpec { snake: "offset", location: FieldLocation::Query },
-        FieldSpec { snake: "rating", location: FieldLocation::Query },
+        FieldSpec { snake: "limit", wire: "limit", location: FieldLocation::Query },
+        FieldSpec { snake: "offset", wire: "offset", location: FieldLocation::Query },
+        FieldSpec { snake: "rating", wire: "rating", location: FieldLocation::Query },
     ],
     auth: &[
         AuthApply { secret_key: "api_key", kind: AuthKind::ApiKeyQuery("api_key") },
@@ -350,12 +369,420 @@ const OP_GIFS_GET_GIF_BY_ID: OpSpec = OpSpec {
     method: "GET",
     path_template: "/gifs/{gif_id}",
     fields: &[
-        FieldSpec { snake: "gif_id", location: FieldLocation::Path },
+        FieldSpec { snake: "gif_id", wire: "gifId", location: FieldLocation::Path },
     ],
     auth: &[
         AuthApply { secret_key: "api_key", kind: AuthKind::ApiKeyQuery("api_key") },
     ],
 };
+
+fn iface_gifs__gif_type_op_enum__to_str(e: &iface_gifs::GifTypeOpEnum) -> &'static str {
+    match e {
+        iface_gifs::GifTypeOpEnum::Gif => "gif",
+    }
+}
+
+fn iface_gifs__get_gifs_by_id_response__to_json(p: &iface_gifs::GetGifsByIdResponse) -> Value {
+    let mut m = Map::new();
+    m.insert("data".into(), match (&p.data) { Some(v) => Value::Array((v).iter().map(|v| iface_gifs__gif__to_json(v)).collect()), None => Value::Null });
+    m.insert("meta".into(), match (&p.meta) { Some(v) => iface_gifs__meta__to_json(v), None => Value::Null });
+    m.insert("pagination".into(), match (&p.pagination) { Some(v) => iface_gifs__pagination__to_json(v), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_gifs__gif__to_json(p: &iface_gifs::Gif) -> Value {
+    let mut m = Map::new();
+    m.insert("bitly_url".into(), match (&p.bitly_url) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("content_url".into(), match (&p.content_url) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("create_datetime".into(), match (&p.create_datetime) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("embded_url".into(), match (&p.embded_url) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("featured_tags".into(), match (&p.featured_tags) { Some(v) => Value::Array((v).iter().map(|v| Value::String((v).clone())).collect()), None => Value::Null });
+    m.insert("id".into(), match (&p.id) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("images".into(), match (&p.images) { Some(v) => iface_gifs__gif_images__to_json(v), None => Value::Null });
+    m.insert("import_datetime".into(), match (&p.import_datetime) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("rating".into(), match (&p.rating) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("slug".into(), match (&p.slug) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("source".into(), match (&p.source) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("source_post_url".into(), match (&p.source_post_url) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("source_tld".into(), match (&p.source_tld) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("tags".into(), match (&p.tags) { Some(v) => Value::Array((v).iter().map(|v| Value::String((v).clone())).collect()), None => Value::Null });
+    m.insert("trending_datetime".into(), match (&p.trending_datetime) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("type".into(), match (&p.type_op) { Some(v) => Value::String(iface_gifs__gif_type_op_enum__to_str(v).into()), None => Value::Null });
+    m.insert("update_datetime".into(), match (&p.update_datetime) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("url".into(), match (&p.url) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("user".into(), match (&p.user) { Some(v) => iface_gifs__user__to_json(v), None => Value::Null });
+    m.insert("username".into(), match (&p.username) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_gifs__gif_images__to_json(p: &iface_gifs::GifImages) -> Value {
+    let mut m = Map::new();
+    m.insert("downsized".into(), match (&p.downsized) { Some(v) => iface_gifs__gif_images_downsized__to_json(v), None => Value::Null });
+    m.insert("downsized_large".into(), match (&p.downsized_large) { Some(v) => iface_gifs__gif_images_downsized_large__to_json(v), None => Value::Null });
+    m.insert("downsized_medium".into(), match (&p.downsized_medium) { Some(v) => iface_gifs__gif_images_downsized_medium__to_json(v), None => Value::Null });
+    m.insert("downsized_small".into(), match (&p.downsized_small) { Some(v) => iface_gifs__gif_images_downsized_small__to_json(v), None => Value::Null });
+    m.insert("downsized_still".into(), match (&p.downsized_still) { Some(v) => iface_gifs__gif_images_downsized_still__to_json(v), None => Value::Null });
+    m.insert("fixed_height".into(), match (&p.fixed_height) { Some(v) => iface_gifs__gif_images_fixed_height__to_json(v), None => Value::Null });
+    m.insert("fixed_height_downsampled".into(), match (&p.fixed_height_downsampled) { Some(v) => iface_gifs__gif_images_fixed_height_downsampled__to_json(v), None => Value::Null });
+    m.insert("fixed_height_small".into(), match (&p.fixed_height_small) { Some(v) => iface_gifs__gif_images_fixed_height_small__to_json(v), None => Value::Null });
+    m.insert("fixed_height_small_still".into(), match (&p.fixed_height_small_still) { Some(v) => iface_gifs__gif_images_fixed_height_small_still__to_json(v), None => Value::Null });
+    m.insert("fixed_height_still".into(), match (&p.fixed_height_still) { Some(v) => iface_gifs__gif_images_fixed_height_still__to_json(v), None => Value::Null });
+    m.insert("fixed_width".into(), match (&p.fixed_width) { Some(v) => iface_gifs__gif_images_fixed_width__to_json(v), None => Value::Null });
+    m.insert("fixed_width_downsampled".into(), match (&p.fixed_width_downsampled) { Some(v) => iface_gifs__gif_images_fixed_width_downsampled__to_json(v), None => Value::Null });
+    m.insert("fixed_width_small".into(), match (&p.fixed_width_small) { Some(v) => iface_gifs__gif_images_fixed_width_small__to_json(v), None => Value::Null });
+    m.insert("fixed_width_small_still".into(), match (&p.fixed_width_small_still) { Some(v) => iface_gifs__gif_images_fixed_width_small_still__to_json(v), None => Value::Null });
+    m.insert("fixed_width_still".into(), match (&p.fixed_width_still) { Some(v) => iface_gifs__gif_images_fixed_width_still__to_json(v), None => Value::Null });
+    m.insert("looping".into(), match (&p.looping) { Some(v) => iface_gifs__gif_images_looping__to_json(v), None => Value::Null });
+    m.insert("original".into(), match (&p.original) { Some(v) => iface_gifs__gif_images_original__to_json(v), None => Value::Null });
+    m.insert("original_still".into(), match (&p.original_still) { Some(v) => iface_gifs__gif_images_original_still__to_json(v), None => Value::Null });
+    m.insert("preview".into(), match (&p.preview) { Some(v) => iface_gifs__gif_images_preview__to_json(v), None => Value::Null });
+    m.insert("preview_gif".into(), match (&p.preview_gif) { Some(v) => iface_gifs__gif_images_preview_gif__to_json(v), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_gifs__gif_images_downsized__to_json(p: &iface_gifs::GifImagesDownsized) -> Value {
+    let mut m = Map::new();
+    m.insert("frames".into(), match (&p.frames) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("height".into(), match (&p.height) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("mp4".into(), match (&p.mp4) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("mp4_size".into(), match (&p.mp4_size) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("size".into(), match (&p.size) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("url".into(), match (&p.url) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("webp".into(), match (&p.webp) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("webp_size".into(), match (&p.webp_size) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("width".into(), match (&p.width) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_gifs__gif_images_downsized_large__to_json(p: &iface_gifs::GifImagesDownsizedLarge) -> Value {
+    let mut m = Map::new();
+    m.insert("frames".into(), match (&p.frames) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("height".into(), match (&p.height) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("mp4".into(), match (&p.mp4) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("mp4_size".into(), match (&p.mp4_size) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("size".into(), match (&p.size) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("url".into(), match (&p.url) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("webp".into(), match (&p.webp) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("webp_size".into(), match (&p.webp_size) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("width".into(), match (&p.width) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_gifs__gif_images_downsized_medium__to_json(p: &iface_gifs::GifImagesDownsizedMedium) -> Value {
+    let mut m = Map::new();
+    m.insert("frames".into(), match (&p.frames) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("height".into(), match (&p.height) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("mp4".into(), match (&p.mp4) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("mp4_size".into(), match (&p.mp4_size) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("size".into(), match (&p.size) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("url".into(), match (&p.url) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("webp".into(), match (&p.webp) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("webp_size".into(), match (&p.webp_size) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("width".into(), match (&p.width) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_gifs__gif_images_downsized_small__to_json(p: &iface_gifs::GifImagesDownsizedSmall) -> Value {
+    let mut m = Map::new();
+    m.insert("frames".into(), match (&p.frames) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("height".into(), match (&p.height) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("mp4".into(), match (&p.mp4) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("mp4_size".into(), match (&p.mp4_size) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("size".into(), match (&p.size) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("url".into(), match (&p.url) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("webp".into(), match (&p.webp) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("webp_size".into(), match (&p.webp_size) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("width".into(), match (&p.width) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_gifs__gif_images_downsized_still__to_json(p: &iface_gifs::GifImagesDownsizedStill) -> Value {
+    let mut m = Map::new();
+    m.insert("frames".into(), match (&p.frames) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("height".into(), match (&p.height) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("mp4".into(), match (&p.mp4) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("mp4_size".into(), match (&p.mp4_size) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("size".into(), match (&p.size) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("url".into(), match (&p.url) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("webp".into(), match (&p.webp) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("webp_size".into(), match (&p.webp_size) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("width".into(), match (&p.width) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_gifs__gif_images_fixed_height__to_json(p: &iface_gifs::GifImagesFixedHeight) -> Value {
+    let mut m = Map::new();
+    m.insert("frames".into(), match (&p.frames) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("height".into(), match (&p.height) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("mp4".into(), match (&p.mp4) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("mp4_size".into(), match (&p.mp4_size) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("size".into(), match (&p.size) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("url".into(), match (&p.url) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("webp".into(), match (&p.webp) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("webp_size".into(), match (&p.webp_size) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("width".into(), match (&p.width) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_gifs__gif_images_fixed_height_downsampled__to_json(p: &iface_gifs::GifImagesFixedHeightDownsampled) -> Value {
+    let mut m = Map::new();
+    m.insert("frames".into(), match (&p.frames) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("height".into(), match (&p.height) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("mp4".into(), match (&p.mp4) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("mp4_size".into(), match (&p.mp4_size) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("size".into(), match (&p.size) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("url".into(), match (&p.url) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("webp".into(), match (&p.webp) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("webp_size".into(), match (&p.webp_size) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("width".into(), match (&p.width) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_gifs__gif_images_fixed_height_small__to_json(p: &iface_gifs::GifImagesFixedHeightSmall) -> Value {
+    let mut m = Map::new();
+    m.insert("frames".into(), match (&p.frames) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("height".into(), match (&p.height) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("mp4".into(), match (&p.mp4) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("mp4_size".into(), match (&p.mp4_size) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("size".into(), match (&p.size) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("url".into(), match (&p.url) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("webp".into(), match (&p.webp) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("webp_size".into(), match (&p.webp_size) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("width".into(), match (&p.width) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_gifs__gif_images_fixed_height_small_still__to_json(p: &iface_gifs::GifImagesFixedHeightSmallStill) -> Value {
+    let mut m = Map::new();
+    m.insert("frames".into(), match (&p.frames) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("height".into(), match (&p.height) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("mp4".into(), match (&p.mp4) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("mp4_size".into(), match (&p.mp4_size) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("size".into(), match (&p.size) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("url".into(), match (&p.url) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("webp".into(), match (&p.webp) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("webp_size".into(), match (&p.webp_size) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("width".into(), match (&p.width) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_gifs__gif_images_fixed_height_still__to_json(p: &iface_gifs::GifImagesFixedHeightStill) -> Value {
+    let mut m = Map::new();
+    m.insert("frames".into(), match (&p.frames) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("height".into(), match (&p.height) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("mp4".into(), match (&p.mp4) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("mp4_size".into(), match (&p.mp4_size) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("size".into(), match (&p.size) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("url".into(), match (&p.url) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("webp".into(), match (&p.webp) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("webp_size".into(), match (&p.webp_size) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("width".into(), match (&p.width) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_gifs__gif_images_fixed_width__to_json(p: &iface_gifs::GifImagesFixedWidth) -> Value {
+    let mut m = Map::new();
+    m.insert("frames".into(), match (&p.frames) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("height".into(), match (&p.height) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("mp4".into(), match (&p.mp4) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("mp4_size".into(), match (&p.mp4_size) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("size".into(), match (&p.size) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("url".into(), match (&p.url) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("webp".into(), match (&p.webp) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("webp_size".into(), match (&p.webp_size) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("width".into(), match (&p.width) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_gifs__gif_images_fixed_width_downsampled__to_json(p: &iface_gifs::GifImagesFixedWidthDownsampled) -> Value {
+    let mut m = Map::new();
+    m.insert("frames".into(), match (&p.frames) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("height".into(), match (&p.height) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("mp4".into(), match (&p.mp4) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("mp4_size".into(), match (&p.mp4_size) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("size".into(), match (&p.size) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("url".into(), match (&p.url) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("webp".into(), match (&p.webp) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("webp_size".into(), match (&p.webp_size) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("width".into(), match (&p.width) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_gifs__gif_images_fixed_width_small__to_json(p: &iface_gifs::GifImagesFixedWidthSmall) -> Value {
+    let mut m = Map::new();
+    m.insert("frames".into(), match (&p.frames) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("height".into(), match (&p.height) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("mp4".into(), match (&p.mp4) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("mp4_size".into(), match (&p.mp4_size) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("size".into(), match (&p.size) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("url".into(), match (&p.url) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("webp".into(), match (&p.webp) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("webp_size".into(), match (&p.webp_size) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("width".into(), match (&p.width) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_gifs__gif_images_fixed_width_small_still__to_json(p: &iface_gifs::GifImagesFixedWidthSmallStill) -> Value {
+    let mut m = Map::new();
+    m.insert("frames".into(), match (&p.frames) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("height".into(), match (&p.height) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("mp4".into(), match (&p.mp4) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("mp4_size".into(), match (&p.mp4_size) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("size".into(), match (&p.size) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("url".into(), match (&p.url) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("webp".into(), match (&p.webp) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("webp_size".into(), match (&p.webp_size) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("width".into(), match (&p.width) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_gifs__gif_images_fixed_width_still__to_json(p: &iface_gifs::GifImagesFixedWidthStill) -> Value {
+    let mut m = Map::new();
+    m.insert("frames".into(), match (&p.frames) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("height".into(), match (&p.height) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("mp4".into(), match (&p.mp4) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("mp4_size".into(), match (&p.mp4_size) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("size".into(), match (&p.size) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("url".into(), match (&p.url) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("webp".into(), match (&p.webp) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("webp_size".into(), match (&p.webp_size) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("width".into(), match (&p.width) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_gifs__gif_images_looping__to_json(p: &iface_gifs::GifImagesLooping) -> Value {
+    let mut m = Map::new();
+    m.insert("frames".into(), match (&p.frames) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("height".into(), match (&p.height) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("mp4".into(), match (&p.mp4) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("mp4_size".into(), match (&p.mp4_size) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("size".into(), match (&p.size) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("url".into(), match (&p.url) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("webp".into(), match (&p.webp) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("webp_size".into(), match (&p.webp_size) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("width".into(), match (&p.width) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_gifs__gif_images_original__to_json(p: &iface_gifs::GifImagesOriginal) -> Value {
+    let mut m = Map::new();
+    m.insert("frames".into(), match (&p.frames) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("height".into(), match (&p.height) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("mp4".into(), match (&p.mp4) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("mp4_size".into(), match (&p.mp4_size) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("size".into(), match (&p.size) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("url".into(), match (&p.url) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("webp".into(), match (&p.webp) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("webp_size".into(), match (&p.webp_size) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("width".into(), match (&p.width) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_gifs__gif_images_original_still__to_json(p: &iface_gifs::GifImagesOriginalStill) -> Value {
+    let mut m = Map::new();
+    m.insert("frames".into(), match (&p.frames) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("height".into(), match (&p.height) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("mp4".into(), match (&p.mp4) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("mp4_size".into(), match (&p.mp4_size) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("size".into(), match (&p.size) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("url".into(), match (&p.url) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("webp".into(), match (&p.webp) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("webp_size".into(), match (&p.webp_size) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("width".into(), match (&p.width) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_gifs__gif_images_preview__to_json(p: &iface_gifs::GifImagesPreview) -> Value {
+    let mut m = Map::new();
+    m.insert("frames".into(), match (&p.frames) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("height".into(), match (&p.height) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("mp4".into(), match (&p.mp4) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("mp4_size".into(), match (&p.mp4_size) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("size".into(), match (&p.size) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("url".into(), match (&p.url) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("webp".into(), match (&p.webp) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("webp_size".into(), match (&p.webp_size) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("width".into(), match (&p.width) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_gifs__gif_images_preview_gif__to_json(p: &iface_gifs::GifImagesPreviewGif) -> Value {
+    let mut m = Map::new();
+    m.insert("frames".into(), match (&p.frames) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("height".into(), match (&p.height) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("mp4".into(), match (&p.mp4) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("mp4_size".into(), match (&p.mp4_size) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("size".into(), match (&p.size) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("url".into(), match (&p.url) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("webp".into(), match (&p.webp) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("webp_size".into(), match (&p.webp_size) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("width".into(), match (&p.width) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_gifs__user__to_json(p: &iface_gifs::User) -> Value {
+    let mut m = Map::new();
+    m.insert("avatar_url".into(), match (&p.avatar_url) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("banner_url".into(), match (&p.banner_url) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("display_name".into(), match (&p.display_name) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("profile_url".into(), match (&p.profile_url) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("twitter".into(), match (&p.twitter) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("username".into(), match (&p.username) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_gifs__meta__to_json(p: &iface_gifs::Meta) -> Value {
+    let mut m = Map::new();
+    m.insert("msg".into(), match (&p.msg) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("response_id".into(), match (&p.response_id) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("status".into(), match (&p.status) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_gifs__pagination__to_json(p: &iface_gifs::Pagination) -> Value {
+    let mut m = Map::new();
+    m.insert("count".into(), match (&p.count) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("offset".into(), match (&p.offset) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("total_count".into(), match (&p.total_count) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_gifs__random_gif_response__to_json(p: &iface_gifs::RandomGifResponse) -> Value {
+    let mut m = Map::new();
+    m.insert("data".into(), match (&p.data) { Some(v) => iface_gifs__gif__to_json(v), None => Value::Null });
+    m.insert("meta".into(), match (&p.meta) { Some(v) => iface_gifs__meta__to_json(v), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_gifs__search_gifs_response__to_json(p: &iface_gifs::SearchGifsResponse) -> Value {
+    let mut m = Map::new();
+    m.insert("data".into(), match (&p.data) { Some(v) => Value::Array((v).iter().map(|v| iface_gifs__gif__to_json(v)).collect()), None => Value::Null });
+    m.insert("meta".into(), match (&p.meta) { Some(v) => iface_gifs__meta__to_json(v), None => Value::Null });
+    m.insert("pagination".into(), match (&p.pagination) { Some(v) => iface_gifs__pagination__to_json(v), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_gifs__translate_gif_response__to_json(p: &iface_gifs::TranslateGifResponse) -> Value {
+    let mut m = Map::new();
+    m.insert("data".into(), match (&p.data) { Some(v) => iface_gifs__gif__to_json(v), None => Value::Null });
+    m.insert("meta".into(), match (&p.meta) { Some(v) => iface_gifs__meta__to_json(v), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_gifs__trending_gifs_response__to_json(p: &iface_gifs::TrendingGifsResponse) -> Value {
+    let mut m = Map::new();
+    m.insert("data".into(), match (&p.data) { Some(v) => Value::Array((v).iter().map(|v| iface_gifs__gif__to_json(v)).collect()), None => Value::Null });
+    m.insert("meta".into(), match (&p.meta) { Some(v) => iface_gifs__meta__to_json(v), None => Value::Null });
+    m.insert("pagination".into(), match (&p.pagination) { Some(v) => iface_gifs__pagination__to_json(v), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_gifs__get_gif_by_id_response__to_json(p: &iface_gifs::GetGifByIdResponse) -> Value {
+    let mut m = Map::new();
+    m.insert("data".into(), match (&p.data) { Some(v) => iface_gifs__gif__to_json(v), None => Value::Null });
+    m.insert("meta".into(), match (&p.meta) { Some(v) => iface_gifs__meta__to_json(v), None => Value::Null });
+    Value::Object(m)
+}
 
 fn iface_gifs__get_gifs_by_id_params__to_json(p: &iface_gifs::GetGifsByIdParams) -> Value {
     let mut m = Map::new();
@@ -400,30 +827,632 @@ fn iface_gifs__get_gif_by_id_params__to_json(p: &iface_gifs::GetGifByIdParams) -
     Value::Object(m)
 }
 
+fn iface_gifs__get_gifs_by_id_response__from_json(v: &Value) -> Option<iface_gifs::GetGifsByIdResponse> {
+    let m = v.as_object()?;
+    Some(iface_gifs::GetGifsByIdResponse {
+        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| iface_gifs__gif__from_json(x)).collect())),
+        meta: m.get("meta").filter(|v| !v.is_null()).and_then(|v| iface_gifs__meta__from_json(v)),
+        pagination: m.get("pagination").filter(|v| !v.is_null()).and_then(|v| iface_gifs__pagination__from_json(v)),
+    })
+}
+
+fn iface_gifs__gif__from_json(v: &Value) -> Option<iface_gifs::Gif> {
+    let m = v.as_object()?;
+    Some(iface_gifs::Gif {
+        bitly_url: m.get("bitly_url").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        content_url: m.get("content_url").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        create_datetime: m.get("create_datetime").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        embded_url: m.get("embded_url").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        featured_tags: m.get("featured_tags").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| (x).as_str().map(|s| s.to_string())).collect())),
+        id: m.get("id").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        images: m.get("images").filter(|v| !v.is_null()).and_then(|v| iface_gifs__gif_images__from_json(v)),
+        import_datetime: m.get("import_datetime").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        rating: m.get("rating").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        slug: m.get("slug").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        source: m.get("source").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        source_post_url: m.get("source_post_url").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        source_tld: m.get("source_tld").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        tags: m.get("tags").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| (x).as_str().map(|s| s.to_string())).collect())),
+        trending_datetime: m.get("trending_datetime").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        type_op: m.get("type").filter(|v| !v.is_null()).and_then(|v| (v).as_str().and_then(iface_gifs__gif_type_op_enum__from_str)),
+        update_datetime: m.get("update_datetime").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        url: m.get("url").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        user: m.get("user").filter(|v| !v.is_null()).and_then(|v| iface_gifs__user__from_json(v)),
+        username: m.get("username").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    })
+}
+
+fn iface_gifs__gif_images__from_json(v: &Value) -> Option<iface_gifs::GifImages> {
+    let m = v.as_object()?;
+    Some(iface_gifs::GifImages {
+        downsized: m.get("downsized").filter(|v| !v.is_null()).and_then(|v| iface_gifs__gif_images_downsized__from_json(v)),
+        downsized_large: m.get("downsized_large").filter(|v| !v.is_null()).and_then(|v| iface_gifs__gif_images_downsized_large__from_json(v)),
+        downsized_medium: m.get("downsized_medium").filter(|v| !v.is_null()).and_then(|v| iface_gifs__gif_images_downsized_medium__from_json(v)),
+        downsized_small: m.get("downsized_small").filter(|v| !v.is_null()).and_then(|v| iface_gifs__gif_images_downsized_small__from_json(v)),
+        downsized_still: m.get("downsized_still").filter(|v| !v.is_null()).and_then(|v| iface_gifs__gif_images_downsized_still__from_json(v)),
+        fixed_height: m.get("fixed_height").filter(|v| !v.is_null()).and_then(|v| iface_gifs__gif_images_fixed_height__from_json(v)),
+        fixed_height_downsampled: m.get("fixed_height_downsampled").filter(|v| !v.is_null()).and_then(|v| iface_gifs__gif_images_fixed_height_downsampled__from_json(v)),
+        fixed_height_small: m.get("fixed_height_small").filter(|v| !v.is_null()).and_then(|v| iface_gifs__gif_images_fixed_height_small__from_json(v)),
+        fixed_height_small_still: m.get("fixed_height_small_still").filter(|v| !v.is_null()).and_then(|v| iface_gifs__gif_images_fixed_height_small_still__from_json(v)),
+        fixed_height_still: m.get("fixed_height_still").filter(|v| !v.is_null()).and_then(|v| iface_gifs__gif_images_fixed_height_still__from_json(v)),
+        fixed_width: m.get("fixed_width").filter(|v| !v.is_null()).and_then(|v| iface_gifs__gif_images_fixed_width__from_json(v)),
+        fixed_width_downsampled: m.get("fixed_width_downsampled").filter(|v| !v.is_null()).and_then(|v| iface_gifs__gif_images_fixed_width_downsampled__from_json(v)),
+        fixed_width_small: m.get("fixed_width_small").filter(|v| !v.is_null()).and_then(|v| iface_gifs__gif_images_fixed_width_small__from_json(v)),
+        fixed_width_small_still: m.get("fixed_width_small_still").filter(|v| !v.is_null()).and_then(|v| iface_gifs__gif_images_fixed_width_small_still__from_json(v)),
+        fixed_width_still: m.get("fixed_width_still").filter(|v| !v.is_null()).and_then(|v| iface_gifs__gif_images_fixed_width_still__from_json(v)),
+        looping: m.get("looping").filter(|v| !v.is_null()).and_then(|v| iface_gifs__gif_images_looping__from_json(v)),
+        original: m.get("original").filter(|v| !v.is_null()).and_then(|v| iface_gifs__gif_images_original__from_json(v)),
+        original_still: m.get("original_still").filter(|v| !v.is_null()).and_then(|v| iface_gifs__gif_images_original_still__from_json(v)),
+        preview: m.get("preview").filter(|v| !v.is_null()).and_then(|v| iface_gifs__gif_images_preview__from_json(v)),
+        preview_gif: m.get("preview_gif").filter(|v| !v.is_null()).and_then(|v| iface_gifs__gif_images_preview_gif__from_json(v)),
+    })
+}
+
+fn iface_gifs__gif_images_downsized__from_json(v: &Value) -> Option<iface_gifs::GifImagesDownsized> {
+    let m = v.as_object()?;
+    Some(iface_gifs::GifImagesDownsized {
+        frames: m.get("frames").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        height: m.get("height").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        mp4: m.get("mp4").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        mp4_size: m.get("mp4_size").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        size: m.get("size").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        url: m.get("url").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        webp: m.get("webp").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        webp_size: m.get("webp_size").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        width: m.get("width").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    })
+}
+
+fn iface_gifs__gif_images_downsized_large__from_json(v: &Value) -> Option<iface_gifs::GifImagesDownsizedLarge> {
+    let m = v.as_object()?;
+    Some(iface_gifs::GifImagesDownsizedLarge {
+        frames: m.get("frames").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        height: m.get("height").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        mp4: m.get("mp4").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        mp4_size: m.get("mp4_size").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        size: m.get("size").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        url: m.get("url").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        webp: m.get("webp").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        webp_size: m.get("webp_size").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        width: m.get("width").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    })
+}
+
+fn iface_gifs__gif_images_downsized_medium__from_json(v: &Value) -> Option<iface_gifs::GifImagesDownsizedMedium> {
+    let m = v.as_object()?;
+    Some(iface_gifs::GifImagesDownsizedMedium {
+        frames: m.get("frames").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        height: m.get("height").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        mp4: m.get("mp4").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        mp4_size: m.get("mp4_size").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        size: m.get("size").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        url: m.get("url").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        webp: m.get("webp").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        webp_size: m.get("webp_size").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        width: m.get("width").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    })
+}
+
+fn iface_gifs__gif_images_downsized_small__from_json(v: &Value) -> Option<iface_gifs::GifImagesDownsizedSmall> {
+    let m = v.as_object()?;
+    Some(iface_gifs::GifImagesDownsizedSmall {
+        frames: m.get("frames").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        height: m.get("height").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        mp4: m.get("mp4").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        mp4_size: m.get("mp4_size").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        size: m.get("size").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        url: m.get("url").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        webp: m.get("webp").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        webp_size: m.get("webp_size").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        width: m.get("width").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    })
+}
+
+fn iface_gifs__gif_images_downsized_still__from_json(v: &Value) -> Option<iface_gifs::GifImagesDownsizedStill> {
+    let m = v.as_object()?;
+    Some(iface_gifs::GifImagesDownsizedStill {
+        frames: m.get("frames").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        height: m.get("height").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        mp4: m.get("mp4").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        mp4_size: m.get("mp4_size").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        size: m.get("size").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        url: m.get("url").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        webp: m.get("webp").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        webp_size: m.get("webp_size").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        width: m.get("width").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    })
+}
+
+fn iface_gifs__gif_images_fixed_height__from_json(v: &Value) -> Option<iface_gifs::GifImagesFixedHeight> {
+    let m = v.as_object()?;
+    Some(iface_gifs::GifImagesFixedHeight {
+        frames: m.get("frames").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        height: m.get("height").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        mp4: m.get("mp4").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        mp4_size: m.get("mp4_size").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        size: m.get("size").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        url: m.get("url").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        webp: m.get("webp").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        webp_size: m.get("webp_size").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        width: m.get("width").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    })
+}
+
+fn iface_gifs__gif_images_fixed_height_downsampled__from_json(v: &Value) -> Option<iface_gifs::GifImagesFixedHeightDownsampled> {
+    let m = v.as_object()?;
+    Some(iface_gifs::GifImagesFixedHeightDownsampled {
+        frames: m.get("frames").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        height: m.get("height").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        mp4: m.get("mp4").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        mp4_size: m.get("mp4_size").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        size: m.get("size").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        url: m.get("url").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        webp: m.get("webp").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        webp_size: m.get("webp_size").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        width: m.get("width").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    })
+}
+
+fn iface_gifs__gif_images_fixed_height_small__from_json(v: &Value) -> Option<iface_gifs::GifImagesFixedHeightSmall> {
+    let m = v.as_object()?;
+    Some(iface_gifs::GifImagesFixedHeightSmall {
+        frames: m.get("frames").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        height: m.get("height").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        mp4: m.get("mp4").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        mp4_size: m.get("mp4_size").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        size: m.get("size").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        url: m.get("url").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        webp: m.get("webp").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        webp_size: m.get("webp_size").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        width: m.get("width").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    })
+}
+
+fn iface_gifs__gif_images_fixed_height_small_still__from_json(v: &Value) -> Option<iface_gifs::GifImagesFixedHeightSmallStill> {
+    let m = v.as_object()?;
+    Some(iface_gifs::GifImagesFixedHeightSmallStill {
+        frames: m.get("frames").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        height: m.get("height").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        mp4: m.get("mp4").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        mp4_size: m.get("mp4_size").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        size: m.get("size").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        url: m.get("url").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        webp: m.get("webp").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        webp_size: m.get("webp_size").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        width: m.get("width").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    })
+}
+
+fn iface_gifs__gif_images_fixed_height_still__from_json(v: &Value) -> Option<iface_gifs::GifImagesFixedHeightStill> {
+    let m = v.as_object()?;
+    Some(iface_gifs::GifImagesFixedHeightStill {
+        frames: m.get("frames").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        height: m.get("height").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        mp4: m.get("mp4").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        mp4_size: m.get("mp4_size").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        size: m.get("size").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        url: m.get("url").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        webp: m.get("webp").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        webp_size: m.get("webp_size").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        width: m.get("width").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    })
+}
+
+fn iface_gifs__gif_images_fixed_width__from_json(v: &Value) -> Option<iface_gifs::GifImagesFixedWidth> {
+    let m = v.as_object()?;
+    Some(iface_gifs::GifImagesFixedWidth {
+        frames: m.get("frames").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        height: m.get("height").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        mp4: m.get("mp4").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        mp4_size: m.get("mp4_size").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        size: m.get("size").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        url: m.get("url").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        webp: m.get("webp").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        webp_size: m.get("webp_size").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        width: m.get("width").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    })
+}
+
+fn iface_gifs__gif_images_fixed_width_downsampled__from_json(v: &Value) -> Option<iface_gifs::GifImagesFixedWidthDownsampled> {
+    let m = v.as_object()?;
+    Some(iface_gifs::GifImagesFixedWidthDownsampled {
+        frames: m.get("frames").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        height: m.get("height").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        mp4: m.get("mp4").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        mp4_size: m.get("mp4_size").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        size: m.get("size").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        url: m.get("url").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        webp: m.get("webp").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        webp_size: m.get("webp_size").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        width: m.get("width").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    })
+}
+
+fn iface_gifs__gif_images_fixed_width_small__from_json(v: &Value) -> Option<iface_gifs::GifImagesFixedWidthSmall> {
+    let m = v.as_object()?;
+    Some(iface_gifs::GifImagesFixedWidthSmall {
+        frames: m.get("frames").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        height: m.get("height").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        mp4: m.get("mp4").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        mp4_size: m.get("mp4_size").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        size: m.get("size").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        url: m.get("url").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        webp: m.get("webp").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        webp_size: m.get("webp_size").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        width: m.get("width").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    })
+}
+
+fn iface_gifs__gif_images_fixed_width_small_still__from_json(v: &Value) -> Option<iface_gifs::GifImagesFixedWidthSmallStill> {
+    let m = v.as_object()?;
+    Some(iface_gifs::GifImagesFixedWidthSmallStill {
+        frames: m.get("frames").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        height: m.get("height").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        mp4: m.get("mp4").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        mp4_size: m.get("mp4_size").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        size: m.get("size").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        url: m.get("url").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        webp: m.get("webp").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        webp_size: m.get("webp_size").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        width: m.get("width").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    })
+}
+
+fn iface_gifs__gif_images_fixed_width_still__from_json(v: &Value) -> Option<iface_gifs::GifImagesFixedWidthStill> {
+    let m = v.as_object()?;
+    Some(iface_gifs::GifImagesFixedWidthStill {
+        frames: m.get("frames").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        height: m.get("height").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        mp4: m.get("mp4").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        mp4_size: m.get("mp4_size").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        size: m.get("size").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        url: m.get("url").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        webp: m.get("webp").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        webp_size: m.get("webp_size").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        width: m.get("width").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    })
+}
+
+fn iface_gifs__gif_images_looping__from_json(v: &Value) -> Option<iface_gifs::GifImagesLooping> {
+    let m = v.as_object()?;
+    Some(iface_gifs::GifImagesLooping {
+        frames: m.get("frames").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        height: m.get("height").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        mp4: m.get("mp4").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        mp4_size: m.get("mp4_size").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        size: m.get("size").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        url: m.get("url").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        webp: m.get("webp").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        webp_size: m.get("webp_size").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        width: m.get("width").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    })
+}
+
+fn iface_gifs__gif_images_original__from_json(v: &Value) -> Option<iface_gifs::GifImagesOriginal> {
+    let m = v.as_object()?;
+    Some(iface_gifs::GifImagesOriginal {
+        frames: m.get("frames").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        height: m.get("height").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        mp4: m.get("mp4").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        mp4_size: m.get("mp4_size").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        size: m.get("size").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        url: m.get("url").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        webp: m.get("webp").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        webp_size: m.get("webp_size").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        width: m.get("width").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    })
+}
+
+fn iface_gifs__gif_images_original_still__from_json(v: &Value) -> Option<iface_gifs::GifImagesOriginalStill> {
+    let m = v.as_object()?;
+    Some(iface_gifs::GifImagesOriginalStill {
+        frames: m.get("frames").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        height: m.get("height").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        mp4: m.get("mp4").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        mp4_size: m.get("mp4_size").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        size: m.get("size").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        url: m.get("url").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        webp: m.get("webp").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        webp_size: m.get("webp_size").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        width: m.get("width").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    })
+}
+
+fn iface_gifs__gif_images_preview__from_json(v: &Value) -> Option<iface_gifs::GifImagesPreview> {
+    let m = v.as_object()?;
+    Some(iface_gifs::GifImagesPreview {
+        frames: m.get("frames").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        height: m.get("height").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        mp4: m.get("mp4").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        mp4_size: m.get("mp4_size").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        size: m.get("size").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        url: m.get("url").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        webp: m.get("webp").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        webp_size: m.get("webp_size").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        width: m.get("width").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    })
+}
+
+fn iface_gifs__gif_images_preview_gif__from_json(v: &Value) -> Option<iface_gifs::GifImagesPreviewGif> {
+    let m = v.as_object()?;
+    Some(iface_gifs::GifImagesPreviewGif {
+        frames: m.get("frames").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        height: m.get("height").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        mp4: m.get("mp4").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        mp4_size: m.get("mp4_size").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        size: m.get("size").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        url: m.get("url").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        webp: m.get("webp").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        webp_size: m.get("webp_size").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        width: m.get("width").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    })
+}
+
+fn iface_gifs__user__from_json(v: &Value) -> Option<iface_gifs::User> {
+    let m = v.as_object()?;
+    Some(iface_gifs::User {
+        avatar_url: m.get("avatar_url").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        banner_url: m.get("banner_url").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        display_name: m.get("display_name").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        profile_url: m.get("profile_url").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        twitter: m.get("twitter").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        username: m.get("username").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    })
+}
+
+fn iface_gifs__meta__from_json(v: &Value) -> Option<iface_gifs::Meta> {
+    let m = v.as_object()?;
+    Some(iface_gifs::Meta {
+        msg: m.get("msg").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        response_id: m.get("response_id").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        status: m.get("status").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+    })
+}
+
+fn iface_gifs__pagination__from_json(v: &Value) -> Option<iface_gifs::Pagination> {
+    let m = v.as_object()?;
+    Some(iface_gifs::Pagination {
+        count: m.get("count").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        offset: m.get("offset").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        total_count: m.get("total_count").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+    })
+}
+
+fn iface_gifs__random_gif_response__from_json(v: &Value) -> Option<iface_gifs::RandomGifResponse> {
+    let m = v.as_object()?;
+    Some(iface_gifs::RandomGifResponse {
+        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| iface_gifs__gif__from_json(v)),
+        meta: m.get("meta").filter(|v| !v.is_null()).and_then(|v| iface_gifs__meta__from_json(v)),
+    })
+}
+
+fn iface_gifs__search_gifs_response__from_json(v: &Value) -> Option<iface_gifs::SearchGifsResponse> {
+    let m = v.as_object()?;
+    Some(iface_gifs::SearchGifsResponse {
+        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| iface_gifs__gif__from_json(x)).collect())),
+        meta: m.get("meta").filter(|v| !v.is_null()).and_then(|v| iface_gifs__meta__from_json(v)),
+        pagination: m.get("pagination").filter(|v| !v.is_null()).and_then(|v| iface_gifs__pagination__from_json(v)),
+    })
+}
+
+fn iface_gifs__translate_gif_response__from_json(v: &Value) -> Option<iface_gifs::TranslateGifResponse> {
+    let m = v.as_object()?;
+    Some(iface_gifs::TranslateGifResponse {
+        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| iface_gifs__gif__from_json(v)),
+        meta: m.get("meta").filter(|v| !v.is_null()).and_then(|v| iface_gifs__meta__from_json(v)),
+    })
+}
+
+fn iface_gifs__trending_gifs_response__from_json(v: &Value) -> Option<iface_gifs::TrendingGifsResponse> {
+    let m = v.as_object()?;
+    Some(iface_gifs::TrendingGifsResponse {
+        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| iface_gifs__gif__from_json(x)).collect())),
+        meta: m.get("meta").filter(|v| !v.is_null()).and_then(|v| iface_gifs__meta__from_json(v)),
+        pagination: m.get("pagination").filter(|v| !v.is_null()).and_then(|v| iface_gifs__pagination__from_json(v)),
+    })
+}
+
+fn iface_gifs__get_gif_by_id_response__from_json(v: &Value) -> Option<iface_gifs::GetGifByIdResponse> {
+    let m = v.as_object()?;
+    Some(iface_gifs::GetGifByIdResponse {
+        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| iface_gifs__gif__from_json(v)),
+        meta: m.get("meta").filter(|v| !v.is_null()).and_then(|v| iface_gifs__meta__from_json(v)),
+    })
+}
+
+fn iface_gifs__gif_type_op_enum__from_str(s: &str) -> Option<iface_gifs::GifTypeOpEnum> {
+    match s {
+        "gif" => Some(iface_gifs::GifTypeOpEnum::Gif),
+        _ => None,
+    }
+}
+
+fn iface_gifs__get_gifs_by_id__ok(body: String) -> Result<iface_gifs::GetGifsByIdResponse, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match iface_gifs__get_gifs_by_id_response__from_json(&v) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_gifs__get_gifs_by_id__err(e: crate::runtime::DispatchError) -> iface_gifs::GetGifsByIdError {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => match status {
+            400u16 => iface_gifs::GetGifsByIdError::BadRequest(body),
+            403u16 => iface_gifs::GetGifsByIdError::Forbidden(body),
+            404u16 => iface_gifs::GetGifsByIdError::NotFound(body),
+            429u16 => iface_gifs::GetGifsByIdError::TooManyRequests(body),
+            _ => iface_gifs::GetGifsByIdError::Other(body),
+        },
+        crate::runtime::DispatchError::Transport(m) => iface_gifs::GetGifsByIdError::Other(m),
+    }
+}
+
+fn iface_gifs__random_gif__ok(body: String) -> Result<iface_gifs::RandomGifResponse, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match iface_gifs__random_gif_response__from_json(&v) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_gifs__random_gif__err(e: crate::runtime::DispatchError) -> iface_gifs::RandomGifError {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => match status {
+            400u16 => iface_gifs::RandomGifError::BadRequest(body),
+            403u16 => iface_gifs::RandomGifError::Forbidden(body),
+            404u16 => iface_gifs::RandomGifError::NotFound(body),
+            429u16 => iface_gifs::RandomGifError::TooManyRequests(body),
+            _ => iface_gifs::RandomGifError::Other(body),
+        },
+        crate::runtime::DispatchError::Transport(m) => iface_gifs::RandomGifError::Other(m),
+    }
+}
+
+fn iface_gifs__search_gifs__ok(body: String) -> Result<iface_gifs::SearchGifsResponse, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match iface_gifs__search_gifs_response__from_json(&v) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_gifs__search_gifs__err(e: crate::runtime::DispatchError) -> iface_gifs::SearchGifsError {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => match status {
+            400u16 => iface_gifs::SearchGifsError::BadRequest(body),
+            403u16 => iface_gifs::SearchGifsError::Forbidden(body),
+            404u16 => iface_gifs::SearchGifsError::NotFound(body),
+            429u16 => iface_gifs::SearchGifsError::TooManyRequests(body),
+            _ => iface_gifs::SearchGifsError::Other(body),
+        },
+        crate::runtime::DispatchError::Transport(m) => iface_gifs::SearchGifsError::Other(m),
+    }
+}
+
+fn iface_gifs__translate_gif__ok(body: String) -> Result<iface_gifs::TranslateGifResponse, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match iface_gifs__translate_gif_response__from_json(&v) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_gifs__translate_gif__err(e: crate::runtime::DispatchError) -> iface_gifs::TranslateGifError {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => match status {
+            400u16 => iface_gifs::TranslateGifError::BadRequest(body),
+            403u16 => iface_gifs::TranslateGifError::Forbidden(body),
+            404u16 => iface_gifs::TranslateGifError::NotFound(body),
+            429u16 => iface_gifs::TranslateGifError::TooManyRequests(body),
+            _ => iface_gifs::TranslateGifError::Other(body),
+        },
+        crate::runtime::DispatchError::Transport(m) => iface_gifs::TranslateGifError::Other(m),
+    }
+}
+
+fn iface_gifs__trending_gifs__ok(body: String) -> Result<iface_gifs::TrendingGifsResponse, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match iface_gifs__trending_gifs_response__from_json(&v) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_gifs__trending_gifs__err(e: crate::runtime::DispatchError) -> iface_gifs::TrendingGifsError {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => match status {
+            400u16 => iface_gifs::TrendingGifsError::BadRequest(body),
+            403u16 => iface_gifs::TrendingGifsError::Forbidden(body),
+            404u16 => iface_gifs::TrendingGifsError::NotFound(body),
+            429u16 => iface_gifs::TrendingGifsError::TooManyRequests(body),
+            _ => iface_gifs::TrendingGifsError::Other(body),
+        },
+        crate::runtime::DispatchError::Transport(m) => iface_gifs::TrendingGifsError::Other(m),
+    }
+}
+
+fn iface_gifs__get_gif_by_id__ok(body: String) -> Result<iface_gifs::GetGifByIdResponse, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match iface_gifs__get_gif_by_id_response__from_json(&v) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_gifs__get_gif_by_id__err(e: crate::runtime::DispatchError) -> iface_gifs::GetGifByIdError {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => match status {
+            400u16 => iface_gifs::GetGifByIdError::BadRequest(body),
+            403u16 => iface_gifs::GetGifByIdError::Forbidden(body),
+            404u16 => iface_gifs::GetGifByIdError::NotFound(body),
+            429u16 => iface_gifs::GetGifByIdError::TooManyRequests(body),
+            _ => iface_gifs::GetGifByIdError::Other(body),
+        },
+        crate::runtime::DispatchError::Transport(m) => iface_gifs::GetGifByIdError::Other(m),
+    }
+}
+
 impl iface_gifs::Guest for crate::Component {
-    fn get_gifs_by_id(params: iface_gifs::GetGifsByIdParams) -> Result<String, String> {
+    fn get_gifs_by_id(params: iface_gifs::GetGifsByIdParams) -> Result<iface_gifs::GetGifsByIdResponse, iface_gifs::GetGifsByIdError> {
         let json = iface_gifs__get_gifs_by_id_params__to_json(&params);
-        dispatch(&OP_GIFS_GET_GIFS_BY_ID, json)
+        match dispatch(&OP_GIFS_GET_GIFS_BY_ID, json).and_then(iface_gifs__get_gifs_by_id__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_gifs__get_gifs_by_id__err(e)),
+        }
     }
-    fn random_gif(params: iface_gifs::RandomGifParams) -> Result<String, String> {
+    fn random_gif(params: iface_gifs::RandomGifParams) -> Result<iface_gifs::RandomGifResponse, iface_gifs::RandomGifError> {
         let json = iface_gifs__random_gif_params__to_json(&params);
-        dispatch(&OP_GIFS_RANDOM_GIF, json)
+        match dispatch(&OP_GIFS_RANDOM_GIF, json).and_then(iface_gifs__random_gif__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_gifs__random_gif__err(e)),
+        }
     }
-    fn search_gifs(params: iface_gifs::SearchGifsParams) -> Result<String, String> {
+    fn search_gifs(params: iface_gifs::SearchGifsParams) -> Result<iface_gifs::SearchGifsResponse, iface_gifs::SearchGifsError> {
         let json = iface_gifs__search_gifs_params__to_json(&params);
-        dispatch(&OP_GIFS_SEARCH_GIFS, json)
+        match dispatch(&OP_GIFS_SEARCH_GIFS, json).and_then(iface_gifs__search_gifs__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_gifs__search_gifs__err(e)),
+        }
     }
-    fn translate_gif(params: iface_gifs::TranslateGifParams) -> Result<String, String> {
+    fn translate_gif(params: iface_gifs::TranslateGifParams) -> Result<iface_gifs::TranslateGifResponse, iface_gifs::TranslateGifError> {
         let json = iface_gifs__translate_gif_params__to_json(&params);
-        dispatch(&OP_GIFS_TRANSLATE_GIF, json)
+        match dispatch(&OP_GIFS_TRANSLATE_GIF, json).and_then(iface_gifs__translate_gif__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_gifs__translate_gif__err(e)),
+        }
     }
-    fn trending_gifs(params: iface_gifs::TrendingGifsParams) -> Result<String, String> {
+    fn trending_gifs(params: iface_gifs::TrendingGifsParams) -> Result<iface_gifs::TrendingGifsResponse, iface_gifs::TrendingGifsError> {
         let json = iface_gifs__trending_gifs_params__to_json(&params);
-        dispatch(&OP_GIFS_TRENDING_GIFS, json)
+        match dispatch(&OP_GIFS_TRENDING_GIFS, json).and_then(iface_gifs__trending_gifs__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_gifs__trending_gifs__err(e)),
+        }
     }
-    fn get_gif_by_id(params: iface_gifs::GetGifByIdParams) -> Result<String, String> {
+    fn get_gif_by_id(params: iface_gifs::GetGifByIdParams) -> Result<iface_gifs::GetGifByIdResponse, iface_gifs::GetGifByIdError> {
         let json = iface_gifs__get_gif_by_id_params__to_json(&params);
-        dispatch(&OP_GIFS_GET_GIF_BY_ID, json)
+        match dispatch(&OP_GIFS_GET_GIF_BY_ID, json).and_then(iface_gifs__get_gif_by_id__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_gifs__get_gif_by_id__err(e)),
+        }
     }
 }
 use crate::exports::autostamp::giphy::stickers as iface_stickers;
@@ -432,8 +1461,8 @@ const OP_STICKERS_RANDOM_STICKER: OpSpec = OpSpec {
     method: "GET",
     path_template: "/stickers/random",
     fields: &[
-        FieldSpec { snake: "tag", location: FieldLocation::Query },
-        FieldSpec { snake: "rating", location: FieldLocation::Query },
+        FieldSpec { snake: "tag", wire: "tag", location: FieldLocation::Query },
+        FieldSpec { snake: "rating", wire: "rating", location: FieldLocation::Query },
     ],
     auth: &[
         AuthApply { secret_key: "api_key", kind: AuthKind::ApiKeyQuery("api_key") },
@@ -444,11 +1473,11 @@ const OP_STICKERS_SEARCH_STICKERS: OpSpec = OpSpec {
     method: "GET",
     path_template: "/stickers/search",
     fields: &[
-        FieldSpec { snake: "q", location: FieldLocation::Query },
-        FieldSpec { snake: "limit", location: FieldLocation::Query },
-        FieldSpec { snake: "offset", location: FieldLocation::Query },
-        FieldSpec { snake: "rating", location: FieldLocation::Query },
-        FieldSpec { snake: "lang", location: FieldLocation::Query },
+        FieldSpec { snake: "q", wire: "q", location: FieldLocation::Query },
+        FieldSpec { snake: "limit", wire: "limit", location: FieldLocation::Query },
+        FieldSpec { snake: "offset", wire: "offset", location: FieldLocation::Query },
+        FieldSpec { snake: "rating", wire: "rating", location: FieldLocation::Query },
+        FieldSpec { snake: "lang", wire: "lang", location: FieldLocation::Query },
     ],
     auth: &[
         AuthApply { secret_key: "api_key", kind: AuthKind::ApiKeyQuery("api_key") },
@@ -459,7 +1488,7 @@ const OP_STICKERS_TRANSLATE_STICKER: OpSpec = OpSpec {
     method: "GET",
     path_template: "/stickers/translate",
     fields: &[
-        FieldSpec { snake: "s", location: FieldLocation::Query },
+        FieldSpec { snake: "s", wire: "s", location: FieldLocation::Query },
     ],
     auth: &[
         AuthApply { secret_key: "api_key", kind: AuthKind::ApiKeyQuery("api_key") },
@@ -470,14 +1499,407 @@ const OP_STICKERS_TRENDING_STICKERS: OpSpec = OpSpec {
     method: "GET",
     path_template: "/stickers/trending",
     fields: &[
-        FieldSpec { snake: "limit", location: FieldLocation::Query },
-        FieldSpec { snake: "offset", location: FieldLocation::Query },
-        FieldSpec { snake: "rating", location: FieldLocation::Query },
+        FieldSpec { snake: "limit", wire: "limit", location: FieldLocation::Query },
+        FieldSpec { snake: "offset", wire: "offset", location: FieldLocation::Query },
+        FieldSpec { snake: "rating", wire: "rating", location: FieldLocation::Query },
     ],
     auth: &[
         AuthApply { secret_key: "api_key", kind: AuthKind::ApiKeyQuery("api_key") },
     ],
 };
+
+fn iface_stickers__gif_type_op_enum__to_str(e: &iface_stickers::GifTypeOpEnum) -> &'static str {
+    match e {
+        iface_stickers::GifTypeOpEnum::Gif => "gif",
+    }
+}
+
+fn iface_stickers__random_sticker_response__to_json(p: &iface_stickers::RandomStickerResponse) -> Value {
+    let mut m = Map::new();
+    m.insert("data".into(), match (&p.data) { Some(v) => iface_stickers__gif__to_json(v), None => Value::Null });
+    m.insert("meta".into(), match (&p.meta) { Some(v) => iface_stickers__meta__to_json(v), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_stickers__gif__to_json(p: &iface_stickers::Gif) -> Value {
+    let mut m = Map::new();
+    m.insert("bitly_url".into(), match (&p.bitly_url) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("content_url".into(), match (&p.content_url) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("create_datetime".into(), match (&p.create_datetime) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("embded_url".into(), match (&p.embded_url) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("featured_tags".into(), match (&p.featured_tags) { Some(v) => Value::Array((v).iter().map(|v| Value::String((v).clone())).collect()), None => Value::Null });
+    m.insert("id".into(), match (&p.id) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("images".into(), match (&p.images) { Some(v) => iface_stickers__gif_images__to_json(v), None => Value::Null });
+    m.insert("import_datetime".into(), match (&p.import_datetime) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("rating".into(), match (&p.rating) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("slug".into(), match (&p.slug) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("source".into(), match (&p.source) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("source_post_url".into(), match (&p.source_post_url) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("source_tld".into(), match (&p.source_tld) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("tags".into(), match (&p.tags) { Some(v) => Value::Array((v).iter().map(|v| Value::String((v).clone())).collect()), None => Value::Null });
+    m.insert("trending_datetime".into(), match (&p.trending_datetime) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("type".into(), match (&p.type_op) { Some(v) => Value::String(iface_stickers__gif_type_op_enum__to_str(v).into()), None => Value::Null });
+    m.insert("update_datetime".into(), match (&p.update_datetime) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("url".into(), match (&p.url) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("user".into(), match (&p.user) { Some(v) => iface_stickers__user__to_json(v), None => Value::Null });
+    m.insert("username".into(), match (&p.username) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_stickers__gif_images__to_json(p: &iface_stickers::GifImages) -> Value {
+    let mut m = Map::new();
+    m.insert("downsized".into(), match (&p.downsized) { Some(v) => iface_stickers__gif_images_downsized__to_json(v), None => Value::Null });
+    m.insert("downsized_large".into(), match (&p.downsized_large) { Some(v) => iface_stickers__gif_images_downsized_large__to_json(v), None => Value::Null });
+    m.insert("downsized_medium".into(), match (&p.downsized_medium) { Some(v) => iface_stickers__gif_images_downsized_medium__to_json(v), None => Value::Null });
+    m.insert("downsized_small".into(), match (&p.downsized_small) { Some(v) => iface_stickers__gif_images_downsized_small__to_json(v), None => Value::Null });
+    m.insert("downsized_still".into(), match (&p.downsized_still) { Some(v) => iface_stickers__gif_images_downsized_still__to_json(v), None => Value::Null });
+    m.insert("fixed_height".into(), match (&p.fixed_height) { Some(v) => iface_stickers__gif_images_fixed_height__to_json(v), None => Value::Null });
+    m.insert("fixed_height_downsampled".into(), match (&p.fixed_height_downsampled) { Some(v) => iface_stickers__gif_images_fixed_height_downsampled__to_json(v), None => Value::Null });
+    m.insert("fixed_height_small".into(), match (&p.fixed_height_small) { Some(v) => iface_stickers__gif_images_fixed_height_small__to_json(v), None => Value::Null });
+    m.insert("fixed_height_small_still".into(), match (&p.fixed_height_small_still) { Some(v) => iface_stickers__gif_images_fixed_height_small_still__to_json(v), None => Value::Null });
+    m.insert("fixed_height_still".into(), match (&p.fixed_height_still) { Some(v) => iface_stickers__gif_images_fixed_height_still__to_json(v), None => Value::Null });
+    m.insert("fixed_width".into(), match (&p.fixed_width) { Some(v) => iface_stickers__gif_images_fixed_width__to_json(v), None => Value::Null });
+    m.insert("fixed_width_downsampled".into(), match (&p.fixed_width_downsampled) { Some(v) => iface_stickers__gif_images_fixed_width_downsampled__to_json(v), None => Value::Null });
+    m.insert("fixed_width_small".into(), match (&p.fixed_width_small) { Some(v) => iface_stickers__gif_images_fixed_width_small__to_json(v), None => Value::Null });
+    m.insert("fixed_width_small_still".into(), match (&p.fixed_width_small_still) { Some(v) => iface_stickers__gif_images_fixed_width_small_still__to_json(v), None => Value::Null });
+    m.insert("fixed_width_still".into(), match (&p.fixed_width_still) { Some(v) => iface_stickers__gif_images_fixed_width_still__to_json(v), None => Value::Null });
+    m.insert("looping".into(), match (&p.looping) { Some(v) => iface_stickers__gif_images_looping__to_json(v), None => Value::Null });
+    m.insert("original".into(), match (&p.original) { Some(v) => iface_stickers__gif_images_original__to_json(v), None => Value::Null });
+    m.insert("original_still".into(), match (&p.original_still) { Some(v) => iface_stickers__gif_images_original_still__to_json(v), None => Value::Null });
+    m.insert("preview".into(), match (&p.preview) { Some(v) => iface_stickers__gif_images_preview__to_json(v), None => Value::Null });
+    m.insert("preview_gif".into(), match (&p.preview_gif) { Some(v) => iface_stickers__gif_images_preview_gif__to_json(v), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_stickers__gif_images_downsized__to_json(p: &iface_stickers::GifImagesDownsized) -> Value {
+    let mut m = Map::new();
+    m.insert("frames".into(), match (&p.frames) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("height".into(), match (&p.height) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("mp4".into(), match (&p.mp4) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("mp4_size".into(), match (&p.mp4_size) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("size".into(), match (&p.size) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("url".into(), match (&p.url) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("webp".into(), match (&p.webp) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("webp_size".into(), match (&p.webp_size) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("width".into(), match (&p.width) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_stickers__gif_images_downsized_large__to_json(p: &iface_stickers::GifImagesDownsizedLarge) -> Value {
+    let mut m = Map::new();
+    m.insert("frames".into(), match (&p.frames) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("height".into(), match (&p.height) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("mp4".into(), match (&p.mp4) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("mp4_size".into(), match (&p.mp4_size) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("size".into(), match (&p.size) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("url".into(), match (&p.url) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("webp".into(), match (&p.webp) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("webp_size".into(), match (&p.webp_size) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("width".into(), match (&p.width) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_stickers__gif_images_downsized_medium__to_json(p: &iface_stickers::GifImagesDownsizedMedium) -> Value {
+    let mut m = Map::new();
+    m.insert("frames".into(), match (&p.frames) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("height".into(), match (&p.height) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("mp4".into(), match (&p.mp4) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("mp4_size".into(), match (&p.mp4_size) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("size".into(), match (&p.size) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("url".into(), match (&p.url) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("webp".into(), match (&p.webp) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("webp_size".into(), match (&p.webp_size) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("width".into(), match (&p.width) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_stickers__gif_images_downsized_small__to_json(p: &iface_stickers::GifImagesDownsizedSmall) -> Value {
+    let mut m = Map::new();
+    m.insert("frames".into(), match (&p.frames) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("height".into(), match (&p.height) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("mp4".into(), match (&p.mp4) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("mp4_size".into(), match (&p.mp4_size) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("size".into(), match (&p.size) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("url".into(), match (&p.url) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("webp".into(), match (&p.webp) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("webp_size".into(), match (&p.webp_size) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("width".into(), match (&p.width) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_stickers__gif_images_downsized_still__to_json(p: &iface_stickers::GifImagesDownsizedStill) -> Value {
+    let mut m = Map::new();
+    m.insert("frames".into(), match (&p.frames) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("height".into(), match (&p.height) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("mp4".into(), match (&p.mp4) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("mp4_size".into(), match (&p.mp4_size) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("size".into(), match (&p.size) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("url".into(), match (&p.url) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("webp".into(), match (&p.webp) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("webp_size".into(), match (&p.webp_size) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("width".into(), match (&p.width) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_stickers__gif_images_fixed_height__to_json(p: &iface_stickers::GifImagesFixedHeight) -> Value {
+    let mut m = Map::new();
+    m.insert("frames".into(), match (&p.frames) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("height".into(), match (&p.height) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("mp4".into(), match (&p.mp4) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("mp4_size".into(), match (&p.mp4_size) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("size".into(), match (&p.size) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("url".into(), match (&p.url) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("webp".into(), match (&p.webp) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("webp_size".into(), match (&p.webp_size) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("width".into(), match (&p.width) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_stickers__gif_images_fixed_height_downsampled__to_json(p: &iface_stickers::GifImagesFixedHeightDownsampled) -> Value {
+    let mut m = Map::new();
+    m.insert("frames".into(), match (&p.frames) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("height".into(), match (&p.height) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("mp4".into(), match (&p.mp4) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("mp4_size".into(), match (&p.mp4_size) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("size".into(), match (&p.size) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("url".into(), match (&p.url) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("webp".into(), match (&p.webp) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("webp_size".into(), match (&p.webp_size) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("width".into(), match (&p.width) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_stickers__gif_images_fixed_height_small__to_json(p: &iface_stickers::GifImagesFixedHeightSmall) -> Value {
+    let mut m = Map::new();
+    m.insert("frames".into(), match (&p.frames) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("height".into(), match (&p.height) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("mp4".into(), match (&p.mp4) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("mp4_size".into(), match (&p.mp4_size) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("size".into(), match (&p.size) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("url".into(), match (&p.url) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("webp".into(), match (&p.webp) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("webp_size".into(), match (&p.webp_size) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("width".into(), match (&p.width) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_stickers__gif_images_fixed_height_small_still__to_json(p: &iface_stickers::GifImagesFixedHeightSmallStill) -> Value {
+    let mut m = Map::new();
+    m.insert("frames".into(), match (&p.frames) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("height".into(), match (&p.height) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("mp4".into(), match (&p.mp4) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("mp4_size".into(), match (&p.mp4_size) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("size".into(), match (&p.size) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("url".into(), match (&p.url) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("webp".into(), match (&p.webp) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("webp_size".into(), match (&p.webp_size) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("width".into(), match (&p.width) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_stickers__gif_images_fixed_height_still__to_json(p: &iface_stickers::GifImagesFixedHeightStill) -> Value {
+    let mut m = Map::new();
+    m.insert("frames".into(), match (&p.frames) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("height".into(), match (&p.height) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("mp4".into(), match (&p.mp4) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("mp4_size".into(), match (&p.mp4_size) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("size".into(), match (&p.size) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("url".into(), match (&p.url) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("webp".into(), match (&p.webp) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("webp_size".into(), match (&p.webp_size) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("width".into(), match (&p.width) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_stickers__gif_images_fixed_width__to_json(p: &iface_stickers::GifImagesFixedWidth) -> Value {
+    let mut m = Map::new();
+    m.insert("frames".into(), match (&p.frames) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("height".into(), match (&p.height) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("mp4".into(), match (&p.mp4) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("mp4_size".into(), match (&p.mp4_size) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("size".into(), match (&p.size) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("url".into(), match (&p.url) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("webp".into(), match (&p.webp) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("webp_size".into(), match (&p.webp_size) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("width".into(), match (&p.width) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_stickers__gif_images_fixed_width_downsampled__to_json(p: &iface_stickers::GifImagesFixedWidthDownsampled) -> Value {
+    let mut m = Map::new();
+    m.insert("frames".into(), match (&p.frames) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("height".into(), match (&p.height) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("mp4".into(), match (&p.mp4) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("mp4_size".into(), match (&p.mp4_size) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("size".into(), match (&p.size) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("url".into(), match (&p.url) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("webp".into(), match (&p.webp) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("webp_size".into(), match (&p.webp_size) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("width".into(), match (&p.width) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_stickers__gif_images_fixed_width_small__to_json(p: &iface_stickers::GifImagesFixedWidthSmall) -> Value {
+    let mut m = Map::new();
+    m.insert("frames".into(), match (&p.frames) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("height".into(), match (&p.height) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("mp4".into(), match (&p.mp4) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("mp4_size".into(), match (&p.mp4_size) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("size".into(), match (&p.size) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("url".into(), match (&p.url) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("webp".into(), match (&p.webp) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("webp_size".into(), match (&p.webp_size) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("width".into(), match (&p.width) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_stickers__gif_images_fixed_width_small_still__to_json(p: &iface_stickers::GifImagesFixedWidthSmallStill) -> Value {
+    let mut m = Map::new();
+    m.insert("frames".into(), match (&p.frames) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("height".into(), match (&p.height) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("mp4".into(), match (&p.mp4) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("mp4_size".into(), match (&p.mp4_size) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("size".into(), match (&p.size) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("url".into(), match (&p.url) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("webp".into(), match (&p.webp) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("webp_size".into(), match (&p.webp_size) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("width".into(), match (&p.width) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_stickers__gif_images_fixed_width_still__to_json(p: &iface_stickers::GifImagesFixedWidthStill) -> Value {
+    let mut m = Map::new();
+    m.insert("frames".into(), match (&p.frames) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("height".into(), match (&p.height) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("mp4".into(), match (&p.mp4) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("mp4_size".into(), match (&p.mp4_size) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("size".into(), match (&p.size) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("url".into(), match (&p.url) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("webp".into(), match (&p.webp) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("webp_size".into(), match (&p.webp_size) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("width".into(), match (&p.width) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_stickers__gif_images_looping__to_json(p: &iface_stickers::GifImagesLooping) -> Value {
+    let mut m = Map::new();
+    m.insert("frames".into(), match (&p.frames) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("height".into(), match (&p.height) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("mp4".into(), match (&p.mp4) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("mp4_size".into(), match (&p.mp4_size) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("size".into(), match (&p.size) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("url".into(), match (&p.url) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("webp".into(), match (&p.webp) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("webp_size".into(), match (&p.webp_size) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("width".into(), match (&p.width) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_stickers__gif_images_original__to_json(p: &iface_stickers::GifImagesOriginal) -> Value {
+    let mut m = Map::new();
+    m.insert("frames".into(), match (&p.frames) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("height".into(), match (&p.height) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("mp4".into(), match (&p.mp4) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("mp4_size".into(), match (&p.mp4_size) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("size".into(), match (&p.size) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("url".into(), match (&p.url) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("webp".into(), match (&p.webp) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("webp_size".into(), match (&p.webp_size) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("width".into(), match (&p.width) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_stickers__gif_images_original_still__to_json(p: &iface_stickers::GifImagesOriginalStill) -> Value {
+    let mut m = Map::new();
+    m.insert("frames".into(), match (&p.frames) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("height".into(), match (&p.height) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("mp4".into(), match (&p.mp4) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("mp4_size".into(), match (&p.mp4_size) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("size".into(), match (&p.size) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("url".into(), match (&p.url) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("webp".into(), match (&p.webp) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("webp_size".into(), match (&p.webp_size) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("width".into(), match (&p.width) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_stickers__gif_images_preview__to_json(p: &iface_stickers::GifImagesPreview) -> Value {
+    let mut m = Map::new();
+    m.insert("frames".into(), match (&p.frames) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("height".into(), match (&p.height) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("mp4".into(), match (&p.mp4) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("mp4_size".into(), match (&p.mp4_size) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("size".into(), match (&p.size) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("url".into(), match (&p.url) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("webp".into(), match (&p.webp) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("webp_size".into(), match (&p.webp_size) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("width".into(), match (&p.width) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_stickers__gif_images_preview_gif__to_json(p: &iface_stickers::GifImagesPreviewGif) -> Value {
+    let mut m = Map::new();
+    m.insert("frames".into(), match (&p.frames) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("height".into(), match (&p.height) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("mp4".into(), match (&p.mp4) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("mp4_size".into(), match (&p.mp4_size) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("size".into(), match (&p.size) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("url".into(), match (&p.url) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("webp".into(), match (&p.webp) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("webp_size".into(), match (&p.webp_size) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("width".into(), match (&p.width) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_stickers__user__to_json(p: &iface_stickers::User) -> Value {
+    let mut m = Map::new();
+    m.insert("avatar_url".into(), match (&p.avatar_url) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("banner_url".into(), match (&p.banner_url) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("display_name".into(), match (&p.display_name) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("profile_url".into(), match (&p.profile_url) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("twitter".into(), match (&p.twitter) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("username".into(), match (&p.username) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_stickers__meta__to_json(p: &iface_stickers::Meta) -> Value {
+    let mut m = Map::new();
+    m.insert("msg".into(), match (&p.msg) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("response_id".into(), match (&p.response_id) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("status".into(), match (&p.status) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_stickers__search_stickers_response__to_json(p: &iface_stickers::SearchStickersResponse) -> Value {
+    let mut m = Map::new();
+    m.insert("data".into(), match (&p.data) { Some(v) => Value::Array((v).iter().map(|v| iface_stickers__gif__to_json(v)).collect()), None => Value::Null });
+    m.insert("meta".into(), match (&p.meta) { Some(v) => iface_stickers__meta__to_json(v), None => Value::Null });
+    m.insert("pagination".into(), match (&p.pagination) { Some(v) => iface_stickers__pagination__to_json(v), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_stickers__pagination__to_json(p: &iface_stickers::Pagination) -> Value {
+    let mut m = Map::new();
+    m.insert("count".into(), match (&p.count) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("offset".into(), match (&p.offset) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("total_count".into(), match (&p.total_count) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_stickers__translate_sticker_response__to_json(p: &iface_stickers::TranslateStickerResponse) -> Value {
+    let mut m = Map::new();
+    m.insert("data".into(), match (&p.data) { Some(v) => iface_stickers__gif__to_json(v), None => Value::Null });
+    m.insert("meta".into(), match (&p.meta) { Some(v) => iface_stickers__meta__to_json(v), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_stickers__trending_stickers_response__to_json(p: &iface_stickers::TrendingStickersResponse) -> Value {
+    let mut m = Map::new();
+    m.insert("data".into(), match (&p.data) { Some(v) => Value::Array((v).iter().map(|v| iface_stickers__gif__to_json(v)).collect()), None => Value::Null });
+    m.insert("meta".into(), match (&p.meta) { Some(v) => iface_stickers__meta__to_json(v), None => Value::Null });
+    m.insert("pagination".into(), match (&p.pagination) { Some(v) => iface_stickers__pagination__to_json(v), None => Value::Null });
+    Value::Object(m)
+}
 
 fn iface_stickers__random_sticker_params__to_json(p: &iface_stickers::RandomStickerParams) -> Value {
     let mut m = Map::new();
@@ -510,22 +1932,553 @@ fn iface_stickers__trending_stickers_params__to_json(p: &iface_stickers::Trendin
     Value::Object(m)
 }
 
+fn iface_stickers__random_sticker_response__from_json(v: &Value) -> Option<iface_stickers::RandomStickerResponse> {
+    let m = v.as_object()?;
+    Some(iface_stickers::RandomStickerResponse {
+        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| iface_stickers__gif__from_json(v)),
+        meta: m.get("meta").filter(|v| !v.is_null()).and_then(|v| iface_stickers__meta__from_json(v)),
+    })
+}
+
+fn iface_stickers__gif__from_json(v: &Value) -> Option<iface_stickers::Gif> {
+    let m = v.as_object()?;
+    Some(iface_stickers::Gif {
+        bitly_url: m.get("bitly_url").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        content_url: m.get("content_url").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        create_datetime: m.get("create_datetime").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        embded_url: m.get("embded_url").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        featured_tags: m.get("featured_tags").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| (x).as_str().map(|s| s.to_string())).collect())),
+        id: m.get("id").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        images: m.get("images").filter(|v| !v.is_null()).and_then(|v| iface_stickers__gif_images__from_json(v)),
+        import_datetime: m.get("import_datetime").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        rating: m.get("rating").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        slug: m.get("slug").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        source: m.get("source").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        source_post_url: m.get("source_post_url").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        source_tld: m.get("source_tld").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        tags: m.get("tags").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| (x).as_str().map(|s| s.to_string())).collect())),
+        trending_datetime: m.get("trending_datetime").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        type_op: m.get("type").filter(|v| !v.is_null()).and_then(|v| (v).as_str().and_then(iface_stickers__gif_type_op_enum__from_str)),
+        update_datetime: m.get("update_datetime").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        url: m.get("url").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        user: m.get("user").filter(|v| !v.is_null()).and_then(|v| iface_stickers__user__from_json(v)),
+        username: m.get("username").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    })
+}
+
+fn iface_stickers__gif_images__from_json(v: &Value) -> Option<iface_stickers::GifImages> {
+    let m = v.as_object()?;
+    Some(iface_stickers::GifImages {
+        downsized: m.get("downsized").filter(|v| !v.is_null()).and_then(|v| iface_stickers__gif_images_downsized__from_json(v)),
+        downsized_large: m.get("downsized_large").filter(|v| !v.is_null()).and_then(|v| iface_stickers__gif_images_downsized_large__from_json(v)),
+        downsized_medium: m.get("downsized_medium").filter(|v| !v.is_null()).and_then(|v| iface_stickers__gif_images_downsized_medium__from_json(v)),
+        downsized_small: m.get("downsized_small").filter(|v| !v.is_null()).and_then(|v| iface_stickers__gif_images_downsized_small__from_json(v)),
+        downsized_still: m.get("downsized_still").filter(|v| !v.is_null()).and_then(|v| iface_stickers__gif_images_downsized_still__from_json(v)),
+        fixed_height: m.get("fixed_height").filter(|v| !v.is_null()).and_then(|v| iface_stickers__gif_images_fixed_height__from_json(v)),
+        fixed_height_downsampled: m.get("fixed_height_downsampled").filter(|v| !v.is_null()).and_then(|v| iface_stickers__gif_images_fixed_height_downsampled__from_json(v)),
+        fixed_height_small: m.get("fixed_height_small").filter(|v| !v.is_null()).and_then(|v| iface_stickers__gif_images_fixed_height_small__from_json(v)),
+        fixed_height_small_still: m.get("fixed_height_small_still").filter(|v| !v.is_null()).and_then(|v| iface_stickers__gif_images_fixed_height_small_still__from_json(v)),
+        fixed_height_still: m.get("fixed_height_still").filter(|v| !v.is_null()).and_then(|v| iface_stickers__gif_images_fixed_height_still__from_json(v)),
+        fixed_width: m.get("fixed_width").filter(|v| !v.is_null()).and_then(|v| iface_stickers__gif_images_fixed_width__from_json(v)),
+        fixed_width_downsampled: m.get("fixed_width_downsampled").filter(|v| !v.is_null()).and_then(|v| iface_stickers__gif_images_fixed_width_downsampled__from_json(v)),
+        fixed_width_small: m.get("fixed_width_small").filter(|v| !v.is_null()).and_then(|v| iface_stickers__gif_images_fixed_width_small__from_json(v)),
+        fixed_width_small_still: m.get("fixed_width_small_still").filter(|v| !v.is_null()).and_then(|v| iface_stickers__gif_images_fixed_width_small_still__from_json(v)),
+        fixed_width_still: m.get("fixed_width_still").filter(|v| !v.is_null()).and_then(|v| iface_stickers__gif_images_fixed_width_still__from_json(v)),
+        looping: m.get("looping").filter(|v| !v.is_null()).and_then(|v| iface_stickers__gif_images_looping__from_json(v)),
+        original: m.get("original").filter(|v| !v.is_null()).and_then(|v| iface_stickers__gif_images_original__from_json(v)),
+        original_still: m.get("original_still").filter(|v| !v.is_null()).and_then(|v| iface_stickers__gif_images_original_still__from_json(v)),
+        preview: m.get("preview").filter(|v| !v.is_null()).and_then(|v| iface_stickers__gif_images_preview__from_json(v)),
+        preview_gif: m.get("preview_gif").filter(|v| !v.is_null()).and_then(|v| iface_stickers__gif_images_preview_gif__from_json(v)),
+    })
+}
+
+fn iface_stickers__gif_images_downsized__from_json(v: &Value) -> Option<iface_stickers::GifImagesDownsized> {
+    let m = v.as_object()?;
+    Some(iface_stickers::GifImagesDownsized {
+        frames: m.get("frames").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        height: m.get("height").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        mp4: m.get("mp4").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        mp4_size: m.get("mp4_size").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        size: m.get("size").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        url: m.get("url").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        webp: m.get("webp").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        webp_size: m.get("webp_size").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        width: m.get("width").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    })
+}
+
+fn iface_stickers__gif_images_downsized_large__from_json(v: &Value) -> Option<iface_stickers::GifImagesDownsizedLarge> {
+    let m = v.as_object()?;
+    Some(iface_stickers::GifImagesDownsizedLarge {
+        frames: m.get("frames").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        height: m.get("height").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        mp4: m.get("mp4").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        mp4_size: m.get("mp4_size").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        size: m.get("size").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        url: m.get("url").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        webp: m.get("webp").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        webp_size: m.get("webp_size").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        width: m.get("width").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    })
+}
+
+fn iface_stickers__gif_images_downsized_medium__from_json(v: &Value) -> Option<iface_stickers::GifImagesDownsizedMedium> {
+    let m = v.as_object()?;
+    Some(iface_stickers::GifImagesDownsizedMedium {
+        frames: m.get("frames").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        height: m.get("height").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        mp4: m.get("mp4").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        mp4_size: m.get("mp4_size").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        size: m.get("size").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        url: m.get("url").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        webp: m.get("webp").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        webp_size: m.get("webp_size").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        width: m.get("width").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    })
+}
+
+fn iface_stickers__gif_images_downsized_small__from_json(v: &Value) -> Option<iface_stickers::GifImagesDownsizedSmall> {
+    let m = v.as_object()?;
+    Some(iface_stickers::GifImagesDownsizedSmall {
+        frames: m.get("frames").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        height: m.get("height").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        mp4: m.get("mp4").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        mp4_size: m.get("mp4_size").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        size: m.get("size").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        url: m.get("url").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        webp: m.get("webp").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        webp_size: m.get("webp_size").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        width: m.get("width").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    })
+}
+
+fn iface_stickers__gif_images_downsized_still__from_json(v: &Value) -> Option<iface_stickers::GifImagesDownsizedStill> {
+    let m = v.as_object()?;
+    Some(iface_stickers::GifImagesDownsizedStill {
+        frames: m.get("frames").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        height: m.get("height").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        mp4: m.get("mp4").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        mp4_size: m.get("mp4_size").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        size: m.get("size").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        url: m.get("url").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        webp: m.get("webp").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        webp_size: m.get("webp_size").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        width: m.get("width").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    })
+}
+
+fn iface_stickers__gif_images_fixed_height__from_json(v: &Value) -> Option<iface_stickers::GifImagesFixedHeight> {
+    let m = v.as_object()?;
+    Some(iface_stickers::GifImagesFixedHeight {
+        frames: m.get("frames").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        height: m.get("height").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        mp4: m.get("mp4").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        mp4_size: m.get("mp4_size").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        size: m.get("size").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        url: m.get("url").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        webp: m.get("webp").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        webp_size: m.get("webp_size").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        width: m.get("width").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    })
+}
+
+fn iface_stickers__gif_images_fixed_height_downsampled__from_json(v: &Value) -> Option<iface_stickers::GifImagesFixedHeightDownsampled> {
+    let m = v.as_object()?;
+    Some(iface_stickers::GifImagesFixedHeightDownsampled {
+        frames: m.get("frames").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        height: m.get("height").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        mp4: m.get("mp4").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        mp4_size: m.get("mp4_size").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        size: m.get("size").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        url: m.get("url").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        webp: m.get("webp").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        webp_size: m.get("webp_size").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        width: m.get("width").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    })
+}
+
+fn iface_stickers__gif_images_fixed_height_small__from_json(v: &Value) -> Option<iface_stickers::GifImagesFixedHeightSmall> {
+    let m = v.as_object()?;
+    Some(iface_stickers::GifImagesFixedHeightSmall {
+        frames: m.get("frames").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        height: m.get("height").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        mp4: m.get("mp4").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        mp4_size: m.get("mp4_size").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        size: m.get("size").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        url: m.get("url").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        webp: m.get("webp").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        webp_size: m.get("webp_size").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        width: m.get("width").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    })
+}
+
+fn iface_stickers__gif_images_fixed_height_small_still__from_json(v: &Value) -> Option<iface_stickers::GifImagesFixedHeightSmallStill> {
+    let m = v.as_object()?;
+    Some(iface_stickers::GifImagesFixedHeightSmallStill {
+        frames: m.get("frames").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        height: m.get("height").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        mp4: m.get("mp4").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        mp4_size: m.get("mp4_size").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        size: m.get("size").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        url: m.get("url").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        webp: m.get("webp").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        webp_size: m.get("webp_size").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        width: m.get("width").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    })
+}
+
+fn iface_stickers__gif_images_fixed_height_still__from_json(v: &Value) -> Option<iface_stickers::GifImagesFixedHeightStill> {
+    let m = v.as_object()?;
+    Some(iface_stickers::GifImagesFixedHeightStill {
+        frames: m.get("frames").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        height: m.get("height").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        mp4: m.get("mp4").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        mp4_size: m.get("mp4_size").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        size: m.get("size").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        url: m.get("url").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        webp: m.get("webp").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        webp_size: m.get("webp_size").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        width: m.get("width").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    })
+}
+
+fn iface_stickers__gif_images_fixed_width__from_json(v: &Value) -> Option<iface_stickers::GifImagesFixedWidth> {
+    let m = v.as_object()?;
+    Some(iface_stickers::GifImagesFixedWidth {
+        frames: m.get("frames").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        height: m.get("height").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        mp4: m.get("mp4").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        mp4_size: m.get("mp4_size").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        size: m.get("size").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        url: m.get("url").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        webp: m.get("webp").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        webp_size: m.get("webp_size").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        width: m.get("width").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    })
+}
+
+fn iface_stickers__gif_images_fixed_width_downsampled__from_json(v: &Value) -> Option<iface_stickers::GifImagesFixedWidthDownsampled> {
+    let m = v.as_object()?;
+    Some(iface_stickers::GifImagesFixedWidthDownsampled {
+        frames: m.get("frames").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        height: m.get("height").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        mp4: m.get("mp4").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        mp4_size: m.get("mp4_size").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        size: m.get("size").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        url: m.get("url").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        webp: m.get("webp").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        webp_size: m.get("webp_size").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        width: m.get("width").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    })
+}
+
+fn iface_stickers__gif_images_fixed_width_small__from_json(v: &Value) -> Option<iface_stickers::GifImagesFixedWidthSmall> {
+    let m = v.as_object()?;
+    Some(iface_stickers::GifImagesFixedWidthSmall {
+        frames: m.get("frames").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        height: m.get("height").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        mp4: m.get("mp4").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        mp4_size: m.get("mp4_size").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        size: m.get("size").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        url: m.get("url").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        webp: m.get("webp").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        webp_size: m.get("webp_size").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        width: m.get("width").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    })
+}
+
+fn iface_stickers__gif_images_fixed_width_small_still__from_json(v: &Value) -> Option<iface_stickers::GifImagesFixedWidthSmallStill> {
+    let m = v.as_object()?;
+    Some(iface_stickers::GifImagesFixedWidthSmallStill {
+        frames: m.get("frames").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        height: m.get("height").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        mp4: m.get("mp4").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        mp4_size: m.get("mp4_size").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        size: m.get("size").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        url: m.get("url").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        webp: m.get("webp").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        webp_size: m.get("webp_size").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        width: m.get("width").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    })
+}
+
+fn iface_stickers__gif_images_fixed_width_still__from_json(v: &Value) -> Option<iface_stickers::GifImagesFixedWidthStill> {
+    let m = v.as_object()?;
+    Some(iface_stickers::GifImagesFixedWidthStill {
+        frames: m.get("frames").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        height: m.get("height").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        mp4: m.get("mp4").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        mp4_size: m.get("mp4_size").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        size: m.get("size").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        url: m.get("url").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        webp: m.get("webp").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        webp_size: m.get("webp_size").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        width: m.get("width").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    })
+}
+
+fn iface_stickers__gif_images_looping__from_json(v: &Value) -> Option<iface_stickers::GifImagesLooping> {
+    let m = v.as_object()?;
+    Some(iface_stickers::GifImagesLooping {
+        frames: m.get("frames").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        height: m.get("height").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        mp4: m.get("mp4").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        mp4_size: m.get("mp4_size").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        size: m.get("size").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        url: m.get("url").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        webp: m.get("webp").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        webp_size: m.get("webp_size").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        width: m.get("width").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    })
+}
+
+fn iface_stickers__gif_images_original__from_json(v: &Value) -> Option<iface_stickers::GifImagesOriginal> {
+    let m = v.as_object()?;
+    Some(iface_stickers::GifImagesOriginal {
+        frames: m.get("frames").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        height: m.get("height").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        mp4: m.get("mp4").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        mp4_size: m.get("mp4_size").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        size: m.get("size").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        url: m.get("url").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        webp: m.get("webp").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        webp_size: m.get("webp_size").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        width: m.get("width").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    })
+}
+
+fn iface_stickers__gif_images_original_still__from_json(v: &Value) -> Option<iface_stickers::GifImagesOriginalStill> {
+    let m = v.as_object()?;
+    Some(iface_stickers::GifImagesOriginalStill {
+        frames: m.get("frames").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        height: m.get("height").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        mp4: m.get("mp4").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        mp4_size: m.get("mp4_size").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        size: m.get("size").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        url: m.get("url").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        webp: m.get("webp").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        webp_size: m.get("webp_size").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        width: m.get("width").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    })
+}
+
+fn iface_stickers__gif_images_preview__from_json(v: &Value) -> Option<iface_stickers::GifImagesPreview> {
+    let m = v.as_object()?;
+    Some(iface_stickers::GifImagesPreview {
+        frames: m.get("frames").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        height: m.get("height").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        mp4: m.get("mp4").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        mp4_size: m.get("mp4_size").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        size: m.get("size").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        url: m.get("url").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        webp: m.get("webp").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        webp_size: m.get("webp_size").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        width: m.get("width").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    })
+}
+
+fn iface_stickers__gif_images_preview_gif__from_json(v: &Value) -> Option<iface_stickers::GifImagesPreviewGif> {
+    let m = v.as_object()?;
+    Some(iface_stickers::GifImagesPreviewGif {
+        frames: m.get("frames").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        height: m.get("height").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        mp4: m.get("mp4").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        mp4_size: m.get("mp4_size").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        size: m.get("size").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        url: m.get("url").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        webp: m.get("webp").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        webp_size: m.get("webp_size").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        width: m.get("width").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    })
+}
+
+fn iface_stickers__user__from_json(v: &Value) -> Option<iface_stickers::User> {
+    let m = v.as_object()?;
+    Some(iface_stickers::User {
+        avatar_url: m.get("avatar_url").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        banner_url: m.get("banner_url").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        display_name: m.get("display_name").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        profile_url: m.get("profile_url").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        twitter: m.get("twitter").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        username: m.get("username").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    })
+}
+
+fn iface_stickers__meta__from_json(v: &Value) -> Option<iface_stickers::Meta> {
+    let m = v.as_object()?;
+    Some(iface_stickers::Meta {
+        msg: m.get("msg").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        response_id: m.get("response_id").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        status: m.get("status").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+    })
+}
+
+fn iface_stickers__search_stickers_response__from_json(v: &Value) -> Option<iface_stickers::SearchStickersResponse> {
+    let m = v.as_object()?;
+    Some(iface_stickers::SearchStickersResponse {
+        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| iface_stickers__gif__from_json(x)).collect())),
+        meta: m.get("meta").filter(|v| !v.is_null()).and_then(|v| iface_stickers__meta__from_json(v)),
+        pagination: m.get("pagination").filter(|v| !v.is_null()).and_then(|v| iface_stickers__pagination__from_json(v)),
+    })
+}
+
+fn iface_stickers__pagination__from_json(v: &Value) -> Option<iface_stickers::Pagination> {
+    let m = v.as_object()?;
+    Some(iface_stickers::Pagination {
+        count: m.get("count").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        offset: m.get("offset").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        total_count: m.get("total_count").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+    })
+}
+
+fn iface_stickers__translate_sticker_response__from_json(v: &Value) -> Option<iface_stickers::TranslateStickerResponse> {
+    let m = v.as_object()?;
+    Some(iface_stickers::TranslateStickerResponse {
+        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| iface_stickers__gif__from_json(v)),
+        meta: m.get("meta").filter(|v| !v.is_null()).and_then(|v| iface_stickers__meta__from_json(v)),
+    })
+}
+
+fn iface_stickers__trending_stickers_response__from_json(v: &Value) -> Option<iface_stickers::TrendingStickersResponse> {
+    let m = v.as_object()?;
+    Some(iface_stickers::TrendingStickersResponse {
+        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| iface_stickers__gif__from_json(x)).collect())),
+        meta: m.get("meta").filter(|v| !v.is_null()).and_then(|v| iface_stickers__meta__from_json(v)),
+        pagination: m.get("pagination").filter(|v| !v.is_null()).and_then(|v| iface_stickers__pagination__from_json(v)),
+    })
+}
+
+fn iface_stickers__gif_type_op_enum__from_str(s: &str) -> Option<iface_stickers::GifTypeOpEnum> {
+    match s {
+        "gif" => Some(iface_stickers::GifTypeOpEnum::Gif),
+        _ => None,
+    }
+}
+
+fn iface_stickers__random_sticker__ok(body: String) -> Result<iface_stickers::RandomStickerResponse, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match iface_stickers__random_sticker_response__from_json(&v) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_stickers__random_sticker__err(e: crate::runtime::DispatchError) -> iface_stickers::RandomStickerError {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => match status {
+            400u16 => iface_stickers::RandomStickerError::BadRequest(body),
+            403u16 => iface_stickers::RandomStickerError::Forbidden(body),
+            404u16 => iface_stickers::RandomStickerError::NotFound(body),
+            429u16 => iface_stickers::RandomStickerError::TooManyRequests(body),
+            _ => iface_stickers::RandomStickerError::Other(body),
+        },
+        crate::runtime::DispatchError::Transport(m) => iface_stickers::RandomStickerError::Other(m),
+    }
+}
+
+fn iface_stickers__search_stickers__ok(body: String) -> Result<iface_stickers::SearchStickersResponse, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match iface_stickers__search_stickers_response__from_json(&v) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_stickers__search_stickers__err(e: crate::runtime::DispatchError) -> iface_stickers::SearchStickersError {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => match status {
+            400u16 => iface_stickers::SearchStickersError::BadRequest(body),
+            403u16 => iface_stickers::SearchStickersError::Forbidden(body),
+            404u16 => iface_stickers::SearchStickersError::NotFound(body),
+            429u16 => iface_stickers::SearchStickersError::TooManyRequests(body),
+            _ => iface_stickers::SearchStickersError::Other(body),
+        },
+        crate::runtime::DispatchError::Transport(m) => iface_stickers::SearchStickersError::Other(m),
+    }
+}
+
+fn iface_stickers__translate_sticker__ok(body: String) -> Result<iface_stickers::TranslateStickerResponse, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match iface_stickers__translate_sticker_response__from_json(&v) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_stickers__translate_sticker__err(e: crate::runtime::DispatchError) -> iface_stickers::TranslateStickerError {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => match status {
+            400u16 => iface_stickers::TranslateStickerError::BadRequest(body),
+            403u16 => iface_stickers::TranslateStickerError::Forbidden(body),
+            404u16 => iface_stickers::TranslateStickerError::NotFound(body),
+            429u16 => iface_stickers::TranslateStickerError::TooManyRequests(body),
+            _ => iface_stickers::TranslateStickerError::Other(body),
+        },
+        crate::runtime::DispatchError::Transport(m) => iface_stickers::TranslateStickerError::Other(m),
+    }
+}
+
+fn iface_stickers__trending_stickers__ok(body: String) -> Result<iface_stickers::TrendingStickersResponse, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match iface_stickers__trending_stickers_response__from_json(&v) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_stickers__trending_stickers__err(e: crate::runtime::DispatchError) -> iface_stickers::TrendingStickersError {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => match status {
+            400u16 => iface_stickers::TrendingStickersError::BadRequest(body),
+            403u16 => iface_stickers::TrendingStickersError::Forbidden(body),
+            404u16 => iface_stickers::TrendingStickersError::NotFound(body),
+            429u16 => iface_stickers::TrendingStickersError::TooManyRequests(body),
+            _ => iface_stickers::TrendingStickersError::Other(body),
+        },
+        crate::runtime::DispatchError::Transport(m) => iface_stickers::TrendingStickersError::Other(m),
+    }
+}
+
 impl iface_stickers::Guest for crate::Component {
-    fn random_sticker(params: iface_stickers::RandomStickerParams) -> Result<String, String> {
+    fn random_sticker(params: iface_stickers::RandomStickerParams) -> Result<iface_stickers::RandomStickerResponse, iface_stickers::RandomStickerError> {
         let json = iface_stickers__random_sticker_params__to_json(&params);
-        dispatch(&OP_STICKERS_RANDOM_STICKER, json)
+        match dispatch(&OP_STICKERS_RANDOM_STICKER, json).and_then(iface_stickers__random_sticker__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_stickers__random_sticker__err(e)),
+        }
     }
-    fn search_stickers(params: iface_stickers::SearchStickersParams) -> Result<String, String> {
+    fn search_stickers(params: iface_stickers::SearchStickersParams) -> Result<iface_stickers::SearchStickersResponse, iface_stickers::SearchStickersError> {
         let json = iface_stickers__search_stickers_params__to_json(&params);
-        dispatch(&OP_STICKERS_SEARCH_STICKERS, json)
+        match dispatch(&OP_STICKERS_SEARCH_STICKERS, json).and_then(iface_stickers__search_stickers__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_stickers__search_stickers__err(e)),
+        }
     }
-    fn translate_sticker(params: iface_stickers::TranslateStickerParams) -> Result<String, String> {
+    fn translate_sticker(params: iface_stickers::TranslateStickerParams) -> Result<iface_stickers::TranslateStickerResponse, iface_stickers::TranslateStickerError> {
         let json = iface_stickers__translate_sticker_params__to_json(&params);
-        dispatch(&OP_STICKERS_TRANSLATE_STICKER, json)
+        match dispatch(&OP_STICKERS_TRANSLATE_STICKER, json).and_then(iface_stickers__translate_sticker__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_stickers__translate_sticker__err(e)),
+        }
     }
-    fn trending_stickers(params: iface_stickers::TrendingStickersParams) -> Result<String, String> {
+    fn trending_stickers(params: iface_stickers::TrendingStickersParams) -> Result<iface_stickers::TrendingStickersResponse, iface_stickers::TrendingStickersError> {
         let json = iface_stickers__trending_stickers_params__to_json(&params);
-        dispatch(&OP_STICKERS_TRENDING_STICKERS, json)
+        match dispatch(&OP_STICKERS_TRENDING_STICKERS, json).and_then(iface_stickers__trending_stickers__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_stickers__trending_stickers__err(e)),
+        }
     }
 }
 

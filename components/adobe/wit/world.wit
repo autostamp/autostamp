@@ -6,7 +6,7 @@
 /// | Secret name | Applied to each request as |
 /// | --- | --- |
 /// | `aemAuth` | `Authorization: Basic base64(<secret>)` |
-package autostamp:adobe@0.3.0;
+package autostamp:adobe@0.5.0;
 
 interface cq {
   record post-cq-actions-params {
@@ -21,6 +21,59 @@ interface cq {
 
 
 interface sling {
+  record truststore-info {
+    aliases: option<list<truststore-items>>,
+    /// False if truststore don't exist
+    exists: option<bool>
+  }
+
+  record truststore-items {
+    /// Truststore alias name
+    alias: option<string>,
+    entry-type: option<string>,
+    /// e.g. "CN=Admin"
+    issuer: option<string>,
+    /// e.g. "Sun Jun 30 23:59:50 AEST 2019"
+    not-after: option<string>,
+    /// e.g. "Sun Jul 01 12:00:00 AEST 2018"
+    not-before: option<string>,
+    /// 18165099476682912368
+    serial-number: option<s32>,
+    /// e.g. "CN=localhost"
+    subject: option<string>
+  }
+
+  record keystore-info {
+    aliases: option<list<keystore-items>>,
+    /// False if truststore don't exist
+    exists: option<bool>
+  }
+
+  record keystore-items {
+    /// e.g. "RSA"
+    algorithm: option<string>,
+    /// Keystore alias name
+    alias: option<string>,
+    chain: option<list<keystore-chain-items>>,
+    /// e.g. "privateKey"
+    entry-type: option<string>,
+    /// e.g. "PKCS#8"
+    format: option<string>
+  }
+
+  record keystore-chain-items {
+    /// e.g. "CN=Admin"
+    issuer: option<string>,
+    /// e.g. "Sun Jun 30 23:59:50 AEST 2019"
+    not-after: option<string>,
+    /// e.g. "Sun Jul 01 12:00:00 AEST 2018"
+    not-before: option<string>,
+    /// 18165099476682912368
+    serial-number: option<s32>,
+    /// e.g. "CN=localhost"
+    subject: option<string>
+  }
+
   record post-config-adobe-granite-saml-authentication-handler-params {
     key-store-password: option<string>,
     key-store-password-type-hint: option<string>,
@@ -253,7 +306,10 @@ interface sling {
   }
   delete-agent: func(params: delete-agent-params) -> result<string, string>;
 
-  post-truststore-pkcs12: func() -> result<string, string>;
+  record post-truststore-pkcs12-params {
+    truststore-p12: option<string>
+  }
+  post-truststore-pkcs12: func(params: post-truststore-pkcs12-params) -> result<string, string>;
 
   get-truststore: func() -> result<string, string>;
 
@@ -272,11 +328,12 @@ interface sling {
     new-password: option<string>,
     re-password: option<string>,
     key-store-type: option<string>,
-    remove-alias: option<string>
+    remove-alias: option<string>,
+    certificate: option<string>
   }
   post-truststore: func(params: post-truststore-params) -> result<string, string>;
 
-  get-truststore-info: func() -> result<string, string>;
+  get-truststore-info: func() -> result<truststore-info, string>;
 
   record post-tree-activation-params {
     ignoredeactivated: bool,
@@ -297,15 +354,18 @@ interface sling {
     key-store-pass: option<string>,
     alias: option<string>,
     new-alias: option<string>,
-    remove-alias: option<string>
+    remove-alias: option<string>,
+    cert-chain: option<string>,
+    key-store: option<string>,
+    pk: option<string>
   }
-  post-authorizable-keystore: func(params: post-authorizable-keystore-params) -> result<string, string>;
+  post-authorizable-keystore: func(params: post-authorizable-keystore-params) -> result<keystore-info, string>;
 
   record get-authorizable-keystore-params {
     intermediate-path: string,
     authorizable-id: string
   }
-  get-authorizable-keystore: func(params: get-authorizable-keystore-params) -> result<string, string>;
+  get-authorizable-keystore: func(params: get-authorizable-keystore-params) -> result<keystore-info, string>;
 
   record get-keystore-params {
     intermediate-path: string,
@@ -330,7 +390,8 @@ interface sling {
     path: string,
     name: string,
     operation: option<string>,
-    delete-authorizable: option<string>
+    delete-authorizable: option<string>,
+    file: option<string>
   }
   post-node: func(params: post-node-params) -> result<string, string>;
 
@@ -371,6 +432,26 @@ interface custom {
 }
 
 interface crx {
+  record install-status {
+    status: option<install-status-status>
+  }
+
+  record install-status-status {
+    finished: option<bool>,
+    item-count: option<s32>
+  }
+
+  variant get-package-manager-servlet-error {
+    not-found(string),
+    method-not-allowed(string),
+    other(string)
+  }
+
+  variant get-crxde-status-error {
+    not-found(string),
+    other(string)
+  }
+
   record post-set-password-params {
     old: string,
     plain: string,
@@ -378,7 +459,7 @@ interface crx {
   }
   post-set-password: func(params: post-set-password-params) -> result<string, string>;
 
-  get-install-status: func() -> result<string, string>;
+  get-install-status: func() -> result<install-status, string>;
 
   record post-package-service-params {
     cmd: string
@@ -393,11 +474,12 @@ interface crx {
     package-version: option<string>,
     charset: option<string>,
     force: option<bool>,
-    recursive: option<bool>
+    recursive: option<bool>,
+    package-op: option<string>
   }
   post-package-service-json: func(params: post-package-service-json-params) -> result<string, string>;
 
-  get-package-manager-servlet: func() -> result<string, string>;
+  get-package-manager-servlet: func() -> result<string, get-package-manager-servlet-error>;
 
   record post-package-update-params {
     group-name: string,
@@ -409,7 +491,7 @@ interface crx {
   }
   post-package-update: func(params: post-package-update-params) -> result<string, string>;
 
-  get-crxde-status: func() -> result<string, string>;
+  get-crxde-status: func() -> result<string, get-crxde-status-error>;
 
 }
 
@@ -420,13 +502,160 @@ interface granite {
     truststore-password: string,
     truststore-password-confirm: string,
     https-hostname: string,
-    https-port: string
+    https-port: string,
+    certificate-file: option<string>,
+    privatekey-file: option<string>
   }
   ssl-setup: func(params: ssl-setup-params) -> result<string, string>;
 
 }
 
 interface console {
+  record bundle-info {
+    data: option<list<bundle-data>>,
+    s: option<list<s32>>,
+    /// Status description of all bundles
+    status: option<string>
+  }
+
+  record bundle-data {
+    /// Bundle category
+    category: option<string>,
+    /// Is bundle a fragment
+    fragment: option<bool>,
+    /// Bundle ID
+    id: option<s32>,
+    /// Bundle name
+    name: option<string>,
+    props: option<list<bundle-data-prop>>,
+    /// Bundle state value
+    state: option<string>,
+    /// Numeric raw bundle state value
+    state-raw: option<s32>,
+    /// Bundle symbolic name
+    symbolic-name: option<string>,
+    /// Bundle version
+    version: option<string>
+  }
+
+  record bundle-data-prop {
+    /// Bundle data key
+    key: option<string>,
+    /// Bundle data value
+    value: option<string>
+  }
+
+  record saml-configuration-info {
+    /// needed for configuration binding
+    bundle-location: option<string>,
+    /// Title
+    description: option<string>,
+    /// Persistent Identity (PID)
+    pid: option<string>,
+    properties: option<saml-configuration-properties>,
+    /// needed for configuraiton binding
+    service-location: option<string>,
+    /// Title
+    title: option<string>
+  }
+
+  record saml-configuration-properties {
+    add-group-memberships: option<saml-configuration-property-items-boolean>,
+    assertion-consumer-service-url: option<saml-configuration-property-items-string>,
+    clock-tolerance: option<saml-configuration-property-items-long>,
+    create-user: option<saml-configuration-property-items-boolean>,
+    default-groups: option<saml-configuration-property-items-array>,
+    default-redirect-url: option<saml-configuration-property-items-string>,
+    digest-method: option<saml-configuration-property-items-string>,
+    group-membership-attribute: option<saml-configuration-property-items-string>,
+    handle-logout: option<saml-configuration-property-items-boolean>,
+    idp-cert-alias: option<saml-configuration-property-items-string>,
+    idp-http-redirect: option<saml-configuration-property-items-boolean>,
+    idp-url: option<saml-configuration-property-items-string>,
+    key-store-password: option<saml-configuration-property-items-string>,
+    logout-url: option<saml-configuration-property-items-string>,
+    name-id-format: option<saml-configuration-property-items-string>,
+    path: option<saml-configuration-property-items-array>,
+    service-ranking: option<saml-configuration-property-items-long>,
+    service-provider-entity-id: option<saml-configuration-property-items-string>,
+    signature-method: option<saml-configuration-property-items-string>,
+    sp-private-key-alias: option<saml-configuration-property-items-string>,
+    synchronize-attributes: option<saml-configuration-property-items-array>,
+    use-encryption: option<saml-configuration-property-items-boolean>,
+    user-id-attribute: option<saml-configuration-property-items-string>,
+    user-intermediate-path: option<saml-configuration-property-items-string>
+  }
+
+  record saml-configuration-property-items-boolean {
+    /// Property description
+    description: option<string>,
+    /// True if property is set
+    is-set: option<bool>,
+    /// property name
+    name: option<string>,
+    /// True if optional
+    optional: option<bool>,
+    /// Property type, 1=String, 3=long, 11=boolean, 12=Password
+    type-op: option<s32>,
+    /// Property value
+    value: option<bool>
+  }
+
+  record saml-configuration-property-items-string {
+    /// Property description
+    description: option<string>,
+    /// True if property is set
+    is-set: option<bool>,
+    /// property name
+    name: option<string>,
+    /// True if optional
+    optional: option<bool>,
+    /// Property type, 1=String, 3=long, 11=boolean, 12=Password
+    type-op: option<s32>,
+    /// Property value
+    value: option<string>
+  }
+
+  record saml-configuration-property-items-long {
+    /// Property description
+    description: option<string>,
+    /// True if property is set
+    is-set: option<bool>,
+    /// property name
+    name: option<string>,
+    /// True if optional
+    optional: option<bool>,
+    /// Property type, 1=String, 3=long, 11=boolean, 12=Password
+    type-op: option<s32>,
+    /// Property value
+    value: option<s32>
+  }
+
+  record saml-configuration-property-items-array {
+    /// Property description
+    description: option<string>,
+    /// True if property is set
+    is-set: option<bool>,
+    /// property name
+    name: option<string>,
+    /// True if optional
+    optional: option<bool>,
+    /// Property type, 1=String, 3=long, 11=boolean, 12=Password
+    type-op: option<s32>,
+    /// Property value
+    values: option<list<string>>
+  }
+
+  variant get-config-mgr-error {
+    server-error(string),
+    other(string)
+  }
+
+  variant post-saml-configuration-error {
+    found(string),
+    other(string)
+  }
+
   record post-bundle-params {
     name: string,
     action: string
@@ -436,9 +665,9 @@ interface console {
   record get-bundle-info-params {
     name: string
   }
-  get-bundle-info: func(params: get-bundle-info-params) -> result<string, string>;
+  get-bundle-info: func(params: get-bundle-info-params) -> result<bundle-info, string>;
 
-  get-config-mgr: func() -> result<string, string>;
+  get-config-mgr: func() -> result<string, get-config-mgr-error>;
 
   record post-saml-configuration-params {
     post: option<bool>,
@@ -472,7 +701,7 @@ interface console {
     user-intermediate-path: option<string>,
     propertylist: option<list<string>>
   }
-  post-saml-configuration: func(params: post-saml-configuration-params) -> result<string, string>;
+  post-saml-configuration: func(params: post-saml-configuration-params) -> result<saml-configuration-info, post-saml-configuration-error>;
 
   record post-jmx-repository-params {
     action: string

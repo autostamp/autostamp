@@ -44,10 +44,15 @@ pub(crate) enum FieldLocation {
     Body,
 }
 
-/// A single operation parameter: the snake-case key it carries in the params JSON and where
-/// it belongs in the request.
+/// A single operation parameter. `snake` keys the field in the internal params JSON (and, for a
+/// path field, matches the `{snake}` placeholder in the path template); `wire` is the verbatim name
+/// the field takes on the HTTP wire (query key, header name, or body property). The two differ
+/// whenever the source name isn't already snake_case (e.g. `dryRun` → snake `dry_run`, wire
+/// `dryRun`), and let distinct inputs that share a snake key (`DateCreated`, `DateCreated<`) still
+/// travel under their true names.
 pub(crate) struct FieldSpec {
     pub(crate) snake: &'static str,
+    pub(crate) wire: &'static str,
     pub(crate) location: FieldLocation,
 }
 
@@ -71,6 +76,16 @@ pub(crate) struct AuthApply {
     pub(crate) kind: AuthKind,
 }
 
+/// The failure modes of [`dispatch`], kept structured so each generated operation can map them
+/// onto its own typed error: an `Http` failure carries the response status and body (routed to
+/// the matching error-variant case), while a `Transport` failure carries a message for the
+/// catch-all case (a secret lookup, connection, or decode failure that never produced an HTTP
+/// status).
+pub(crate) enum DispatchError {
+    Http { status: u16, body: String },
+    Transport(String),
+}
+
 /// A single API operation: HTTP method, path template (with `{snake}` placeholders), the
 /// parameter fields, and the security schemes to apply.
 pub(crate) struct OpSpec {
@@ -81,8 +96,9 @@ pub(crate) struct OpSpec {
 }
 
 /// Execute `op` with the supplied `params` (a JSON object keyed by snake-case field names)
-/// and return the response body as a string, or an error message.
-pub(crate) fn dispatch(op: &OpSpec, params: Value) -> Result<String, String> {
+/// and return the raw 2xx response body, or a structured [`DispatchError`] the caller maps
+/// onto the operation's typed error.
+pub(crate) fn dispatch(op: &OpSpec, params: Value) -> Result<String, DispatchError> {
     let obj = match &params {
         Value::Object(map) => Some(map),
         _ => None,
@@ -105,10 +121,10 @@ pub(crate) fn dispatch(op: &OpSpec, params: Value) -> Result<String, String> {
                 let placeholder = format!("{{{}}}", field.snake);
                 path = path.replace(&placeholder, &percent_encode(&scalar(value)));
             }
-            FieldLocation::Query => query.push((field.snake.to_string(), scalar(value))),
-            FieldLocation::Header => headers.push((field.snake.to_string(), scalar(value))),
+            FieldLocation::Query => query.push((field.wire.to_string(), scalar(value))),
+            FieldLocation::Header => headers.push((field.wire.to_string(), scalar(value))),
             FieldLocation::Body => {
-                body.insert(field.snake.to_string(), value.clone());
+                body.insert(field.wire.to_string(), value.clone());
             }
         }
     }
@@ -116,7 +132,7 @@ pub(crate) fn dispatch(op: &OpSpec, params: Value) -> Result<String, String> {
     // Apply each resolved security scheme, sourcing its value from wasmcloud:secrets.
     let mut cookies: Vec<String> = Vec::new();
     for apply in op.auth {
-        let secret = fetch_secret(apply.secret_key)?;
+        let secret = fetch_secret(apply.secret_key).map_err(DispatchError::Transport)?;
         match &apply.kind {
             AuthKind::Bearer => headers.push(("authorization".into(), format!("Bearer {secret}"))),
             AuthKind::Basic => {
@@ -177,17 +193,18 @@ fn fetch_secret(key: &str) -> Result<String, String> {
 }
 
 /// Build and send the outgoing request with `wstd`, returning the response body on a 2xx
-/// status. The generated guest exports are synchronous, so the async `wstd` client is driven
-/// to completion on a local reactor via `wstd::runtime::block_on`.
+/// status and a structured [`DispatchError`] otherwise. The generated guest exports are
+/// synchronous, so the async `wstd` client is driven to completion on a local reactor via
+/// `wstd::runtime::block_on`.
 fn perform(
     method: &str,
     path_with_query: &str,
     headers: &[(String, String)],
     body: &[u8],
-) -> Result<String, String> {
+) -> Result<String, DispatchError> {
     let url = join_url(crate::BASE_URL, path_with_query);
     let method = Method::from_bytes(method.as_bytes())
-        .map_err(|err| format!("invalid HTTP method `{method}`: {err}"))?;
+        .map_err(|err| DispatchError::Transport(format!("invalid HTTP method `{method}`: {err}")))?;
 
     let mut builder = Request::builder().method(method).uri(url);
     for (name, value) in headers {
@@ -199,27 +216,29 @@ fn perform(
         } else {
             Body::from(body.to_vec())
         })
-        .map_err(|err| format!("failed to build request: {err}"))?;
+        .map_err(|err| DispatchError::Transport(format!("failed to build request: {err}")))?;
 
     wstd::runtime::block_on(async move {
         let client = Client::new();
         let response = client
             .send(request)
             .await
-            .map_err(|err| format!("request failed: {err:#}"))?;
+            .map_err(|err| DispatchError::Transport(format!("request failed: {err:#}")))?;
 
         let status = response.status().as_u16();
         let mut response_body = response.into_body();
-        let bytes = response_body
-            .contents()
-            .await
-            .map_err(|err| format!("failed to read response body: {err:#}"))?;
+        let bytes = response_body.contents().await.map_err(|err| {
+            DispatchError::Transport(format!("failed to read response body: {err:#}"))
+        })?;
         let body_text = String::from_utf8_lossy(bytes).into_owned();
 
         if (200..300).contains(&status) {
             Ok(body_text)
         } else {
-            Err(format!("HTTP {status}: {body_text}"))
+            Err(DispatchError::Http {
+                status,
+                body: body_text,
+            })
         }
     })
 }
@@ -288,15 +307,15 @@ const OP_ACTION_GET_ACTIONS_BY_ID_ACTION: OpSpec = OpSpec {
     method: "GET",
     path_template: "/actions/{id_action}",
     fields: &[
-        FieldSpec { snake: "id_action", location: FieldLocation::Path },
-        FieldSpec { snake: "display", location: FieldLocation::Query },
-        FieldSpec { snake: "entities", location: FieldLocation::Query },
-        FieldSpec { snake: "fields", location: FieldLocation::Query },
-        FieldSpec { snake: "member", location: FieldLocation::Query },
-        FieldSpec { snake: "member_fields", location: FieldLocation::Query },
-        FieldSpec { snake: "member_creator", location: FieldLocation::Query },
-        FieldSpec { snake: "member_creator_fields", location: FieldLocation::Query },
-        FieldSpec { snake: "token", location: FieldLocation::Query },
+        FieldSpec { snake: "id_action", wire: "idAction", location: FieldLocation::Path },
+        FieldSpec { snake: "display", wire: "display", location: FieldLocation::Query },
+        FieldSpec { snake: "entities", wire: "entities", location: FieldLocation::Query },
+        FieldSpec { snake: "fields", wire: "fields", location: FieldLocation::Query },
+        FieldSpec { snake: "member", wire: "member", location: FieldLocation::Query },
+        FieldSpec { snake: "member_fields", wire: "member_fields", location: FieldLocation::Query },
+        FieldSpec { snake: "member_creator", wire: "memberCreator", location: FieldLocation::Query },
+        FieldSpec { snake: "member_creator_fields", wire: "memberCreator_fields", location: FieldLocation::Query },
+        FieldSpec { snake: "token", wire: "token", location: FieldLocation::Query },
     ],
     auth: &[
         AuthApply { secret_key: "api_key", kind: AuthKind::ApiKeyQuery("key") },
@@ -307,9 +326,9 @@ const OP_ACTION_UPDATE_ACTIONS_BY_ID_ACTION: OpSpec = OpSpec {
     method: "PUT",
     path_template: "/actions/{id_action}",
     fields: &[
-        FieldSpec { snake: "id_action", location: FieldLocation::Path },
-        FieldSpec { snake: "token", location: FieldLocation::Query },
-        FieldSpec { snake: "text", location: FieldLocation::Body },
+        FieldSpec { snake: "id_action", wire: "idAction", location: FieldLocation::Path },
+        FieldSpec { snake: "token", wire: "token", location: FieldLocation::Query },
+        FieldSpec { snake: "text", wire: "text", location: FieldLocation::Body },
     ],
     auth: &[
         AuthApply { secret_key: "api_key", kind: AuthKind::ApiKeyQuery("key") },
@@ -320,8 +339,8 @@ const OP_ACTION_DELETE_ACTIONS_BY_ID_ACTION: OpSpec = OpSpec {
     method: "DELETE",
     path_template: "/actions/{id_action}",
     fields: &[
-        FieldSpec { snake: "id_action", location: FieldLocation::Path },
-        FieldSpec { snake: "token", location: FieldLocation::Query },
+        FieldSpec { snake: "id_action", wire: "idAction", location: FieldLocation::Path },
+        FieldSpec { snake: "token", wire: "token", location: FieldLocation::Query },
     ],
     auth: &[
         AuthApply { secret_key: "api_key", kind: AuthKind::ApiKeyQuery("key") },
@@ -332,9 +351,9 @@ const OP_ACTION_GET_ACTIONS_BOARD_BY_ID_ACTION: OpSpec = OpSpec {
     method: "GET",
     path_template: "/actions/{id_action}/board",
     fields: &[
-        FieldSpec { snake: "id_action", location: FieldLocation::Path },
-        FieldSpec { snake: "fields", location: FieldLocation::Query },
-        FieldSpec { snake: "token", location: FieldLocation::Query },
+        FieldSpec { snake: "id_action", wire: "idAction", location: FieldLocation::Path },
+        FieldSpec { snake: "fields", wire: "fields", location: FieldLocation::Query },
+        FieldSpec { snake: "token", wire: "token", location: FieldLocation::Query },
     ],
     auth: &[
         AuthApply { secret_key: "api_key", kind: AuthKind::ApiKeyQuery("key") },
@@ -345,9 +364,9 @@ const OP_ACTION_GET_ACTIONS_BOARD_BY_ID_ACTION_BY_FIELD: OpSpec = OpSpec {
     method: "GET",
     path_template: "/actions/{id_action}/board/{field}",
     fields: &[
-        FieldSpec { snake: "id_action", location: FieldLocation::Path },
-        FieldSpec { snake: "field", location: FieldLocation::Path },
-        FieldSpec { snake: "token", location: FieldLocation::Query },
+        FieldSpec { snake: "id_action", wire: "idAction", location: FieldLocation::Path },
+        FieldSpec { snake: "field", wire: "field", location: FieldLocation::Path },
+        FieldSpec { snake: "token", wire: "token", location: FieldLocation::Query },
     ],
     auth: &[
         AuthApply { secret_key: "api_key", kind: AuthKind::ApiKeyQuery("key") },
@@ -358,9 +377,9 @@ const OP_ACTION_GET_ACTIONS_CARD_BY_ID_ACTION: OpSpec = OpSpec {
     method: "GET",
     path_template: "/actions/{id_action}/card",
     fields: &[
-        FieldSpec { snake: "id_action", location: FieldLocation::Path },
-        FieldSpec { snake: "fields", location: FieldLocation::Query },
-        FieldSpec { snake: "token", location: FieldLocation::Query },
+        FieldSpec { snake: "id_action", wire: "idAction", location: FieldLocation::Path },
+        FieldSpec { snake: "fields", wire: "fields", location: FieldLocation::Query },
+        FieldSpec { snake: "token", wire: "token", location: FieldLocation::Query },
     ],
     auth: &[
         AuthApply { secret_key: "api_key", kind: AuthKind::ApiKeyQuery("key") },
@@ -371,9 +390,9 @@ const OP_ACTION_GET_ACTIONS_CARD_BY_ID_ACTION_BY_FIELD: OpSpec = OpSpec {
     method: "GET",
     path_template: "/actions/{id_action}/card/{field}",
     fields: &[
-        FieldSpec { snake: "id_action", location: FieldLocation::Path },
-        FieldSpec { snake: "field", location: FieldLocation::Path },
-        FieldSpec { snake: "token", location: FieldLocation::Query },
+        FieldSpec { snake: "id_action", wire: "idAction", location: FieldLocation::Path },
+        FieldSpec { snake: "field", wire: "field", location: FieldLocation::Path },
+        FieldSpec { snake: "token", wire: "token", location: FieldLocation::Query },
     ],
     auth: &[
         AuthApply { secret_key: "api_key", kind: AuthKind::ApiKeyQuery("key") },
@@ -384,8 +403,8 @@ const OP_ACTION_GET_ACTIONS_DISPLAY_BY_ID_ACTION: OpSpec = OpSpec {
     method: "GET",
     path_template: "/actions/{id_action}/display",
     fields: &[
-        FieldSpec { snake: "id_action", location: FieldLocation::Path },
-        FieldSpec { snake: "token", location: FieldLocation::Query },
+        FieldSpec { snake: "id_action", wire: "idAction", location: FieldLocation::Path },
+        FieldSpec { snake: "token", wire: "token", location: FieldLocation::Query },
     ],
     auth: &[
         AuthApply { secret_key: "api_key", kind: AuthKind::ApiKeyQuery("key") },
@@ -396,8 +415,8 @@ const OP_ACTION_GET_ACTIONS_ENTITIES_BY_ID_ACTION: OpSpec = OpSpec {
     method: "GET",
     path_template: "/actions/{id_action}/entities",
     fields: &[
-        FieldSpec { snake: "id_action", location: FieldLocation::Path },
-        FieldSpec { snake: "token", location: FieldLocation::Query },
+        FieldSpec { snake: "id_action", wire: "idAction", location: FieldLocation::Path },
+        FieldSpec { snake: "token", wire: "token", location: FieldLocation::Query },
     ],
     auth: &[
         AuthApply { secret_key: "api_key", kind: AuthKind::ApiKeyQuery("key") },
@@ -408,9 +427,9 @@ const OP_ACTION_GET_ACTIONS_LIST_BY_ID_ACTION: OpSpec = OpSpec {
     method: "GET",
     path_template: "/actions/{id_action}/list",
     fields: &[
-        FieldSpec { snake: "id_action", location: FieldLocation::Path },
-        FieldSpec { snake: "fields", location: FieldLocation::Query },
-        FieldSpec { snake: "token", location: FieldLocation::Query },
+        FieldSpec { snake: "id_action", wire: "idAction", location: FieldLocation::Path },
+        FieldSpec { snake: "fields", wire: "fields", location: FieldLocation::Query },
+        FieldSpec { snake: "token", wire: "token", location: FieldLocation::Query },
     ],
     auth: &[
         AuthApply { secret_key: "api_key", kind: AuthKind::ApiKeyQuery("key") },
@@ -421,9 +440,9 @@ const OP_ACTION_GET_ACTIONS_LIST_BY_ID_ACTION_BY_FIELD: OpSpec = OpSpec {
     method: "GET",
     path_template: "/actions/{id_action}/list/{field}",
     fields: &[
-        FieldSpec { snake: "id_action", location: FieldLocation::Path },
-        FieldSpec { snake: "field", location: FieldLocation::Path },
-        FieldSpec { snake: "token", location: FieldLocation::Query },
+        FieldSpec { snake: "id_action", wire: "idAction", location: FieldLocation::Path },
+        FieldSpec { snake: "field", wire: "field", location: FieldLocation::Path },
+        FieldSpec { snake: "token", wire: "token", location: FieldLocation::Query },
     ],
     auth: &[
         AuthApply { secret_key: "api_key", kind: AuthKind::ApiKeyQuery("key") },
@@ -434,9 +453,9 @@ const OP_ACTION_GET_ACTIONS_MEMBER_BY_ID_ACTION: OpSpec = OpSpec {
     method: "GET",
     path_template: "/actions/{id_action}/member",
     fields: &[
-        FieldSpec { snake: "id_action", location: FieldLocation::Path },
-        FieldSpec { snake: "fields", location: FieldLocation::Query },
-        FieldSpec { snake: "token", location: FieldLocation::Query },
+        FieldSpec { snake: "id_action", wire: "idAction", location: FieldLocation::Path },
+        FieldSpec { snake: "fields", wire: "fields", location: FieldLocation::Query },
+        FieldSpec { snake: "token", wire: "token", location: FieldLocation::Query },
     ],
     auth: &[
         AuthApply { secret_key: "api_key", kind: AuthKind::ApiKeyQuery("key") },
@@ -447,9 +466,9 @@ const OP_ACTION_GET_ACTIONS_MEMBER_BY_ID_ACTION_BY_FIELD: OpSpec = OpSpec {
     method: "GET",
     path_template: "/actions/{id_action}/member/{field}",
     fields: &[
-        FieldSpec { snake: "id_action", location: FieldLocation::Path },
-        FieldSpec { snake: "field", location: FieldLocation::Path },
-        FieldSpec { snake: "token", location: FieldLocation::Query },
+        FieldSpec { snake: "id_action", wire: "idAction", location: FieldLocation::Path },
+        FieldSpec { snake: "field", wire: "field", location: FieldLocation::Path },
+        FieldSpec { snake: "token", wire: "token", location: FieldLocation::Query },
     ],
     auth: &[
         AuthApply { secret_key: "api_key", kind: AuthKind::ApiKeyQuery("key") },
@@ -460,9 +479,9 @@ const OP_ACTION_GET_ACTIONS_MEMBER_CREATOR_BY_ID_ACTION: OpSpec = OpSpec {
     method: "GET",
     path_template: "/actions/{id_action}/memberCreator",
     fields: &[
-        FieldSpec { snake: "id_action", location: FieldLocation::Path },
-        FieldSpec { snake: "fields", location: FieldLocation::Query },
-        FieldSpec { snake: "token", location: FieldLocation::Query },
+        FieldSpec { snake: "id_action", wire: "idAction", location: FieldLocation::Path },
+        FieldSpec { snake: "fields", wire: "fields", location: FieldLocation::Query },
+        FieldSpec { snake: "token", wire: "token", location: FieldLocation::Query },
     ],
     auth: &[
         AuthApply { secret_key: "api_key", kind: AuthKind::ApiKeyQuery("key") },
@@ -473,9 +492,9 @@ const OP_ACTION_GET_ACTIONS_MEMBER_CREATOR_BY_ID_ACTION_BY_FIELD: OpSpec = OpSpe
     method: "GET",
     path_template: "/actions/{id_action}/memberCreator/{field}",
     fields: &[
-        FieldSpec { snake: "id_action", location: FieldLocation::Path },
-        FieldSpec { snake: "field", location: FieldLocation::Path },
-        FieldSpec { snake: "token", location: FieldLocation::Query },
+        FieldSpec { snake: "id_action", wire: "idAction", location: FieldLocation::Path },
+        FieldSpec { snake: "field", wire: "field", location: FieldLocation::Path },
+        FieldSpec { snake: "token", wire: "token", location: FieldLocation::Query },
     ],
     auth: &[
         AuthApply { secret_key: "api_key", kind: AuthKind::ApiKeyQuery("key") },
@@ -486,9 +505,9 @@ const OP_ACTION_GET_ACTIONS_ORGANIZATION_BY_ID_ACTION: OpSpec = OpSpec {
     method: "GET",
     path_template: "/actions/{id_action}/organization",
     fields: &[
-        FieldSpec { snake: "id_action", location: FieldLocation::Path },
-        FieldSpec { snake: "fields", location: FieldLocation::Query },
-        FieldSpec { snake: "token", location: FieldLocation::Query },
+        FieldSpec { snake: "id_action", wire: "idAction", location: FieldLocation::Path },
+        FieldSpec { snake: "fields", wire: "fields", location: FieldLocation::Query },
+        FieldSpec { snake: "token", wire: "token", location: FieldLocation::Query },
     ],
     auth: &[
         AuthApply { secret_key: "api_key", kind: AuthKind::ApiKeyQuery("key") },
@@ -499,9 +518,9 @@ const OP_ACTION_GET_ACTIONS_ORGANIZATION_BY_ID_ACTION_BY_FIELD: OpSpec = OpSpec 
     method: "GET",
     path_template: "/actions/{id_action}/organization/{field}",
     fields: &[
-        FieldSpec { snake: "id_action", location: FieldLocation::Path },
-        FieldSpec { snake: "field", location: FieldLocation::Path },
-        FieldSpec { snake: "token", location: FieldLocation::Query },
+        FieldSpec { snake: "id_action", wire: "idAction", location: FieldLocation::Path },
+        FieldSpec { snake: "field", wire: "field", location: FieldLocation::Path },
+        FieldSpec { snake: "token", wire: "token", location: FieldLocation::Query },
     ],
     auth: &[
         AuthApply { secret_key: "api_key", kind: AuthKind::ApiKeyQuery("key") },
@@ -512,9 +531,9 @@ const OP_ACTION_UPDATE_ACTIONS_TEXT_BY_ID_ACTION: OpSpec = OpSpec {
     method: "PUT",
     path_template: "/actions/{id_action}/text",
     fields: &[
-        FieldSpec { snake: "id_action", location: FieldLocation::Path },
-        FieldSpec { snake: "token", location: FieldLocation::Query },
-        FieldSpec { snake: "value", location: FieldLocation::Body },
+        FieldSpec { snake: "id_action", wire: "idAction", location: FieldLocation::Path },
+        FieldSpec { snake: "token", wire: "token", location: FieldLocation::Query },
+        FieldSpec { snake: "value", wire: "value", location: FieldLocation::Body },
     ],
     auth: &[
         AuthApply { secret_key: "api_key", kind: AuthKind::ApiKeyQuery("key") },
@@ -525,10 +544,10 @@ const OP_ACTION_GET_ACTIONS_BY_ID_ACTION_BY_FIELD: OpSpec = OpSpec {
     method: "GET",
     path_template: "/actions/{id_action}/{field}",
     fields: &[
-        FieldSpec { snake: "id_action", location: FieldLocation::Path },
-        FieldSpec { snake: "field", location: FieldLocation::Path },
-        FieldSpec { snake: "key", location: FieldLocation::Query },
-        FieldSpec { snake: "token", location: FieldLocation::Query },
+        FieldSpec { snake: "id_action", wire: "idAction", location: FieldLocation::Path },
+        FieldSpec { snake: "field", wire: "field", location: FieldLocation::Path },
+        FieldSpec { snake: "key", wire: "key", location: FieldLocation::Query },
+        FieldSpec { snake: "token", wire: "token", location: FieldLocation::Query },
     ],
     auth: &[
     ],
@@ -690,82 +709,405 @@ fn iface_action__get_actions_by_id_action_by_field_params__to_json(p: &iface_act
     Value::Object(m)
 }
 
+fn iface_action__get_actions_by_id_action__ok(body: String) -> Result<String, crate::runtime::DispatchError> {
+    Ok(body)
+}
+
+fn iface_action__get_actions_by_id_action__err(e: crate::runtime::DispatchError) -> iface_action::GetActionsByIdActionError {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => match status {
+            400u16 => iface_action::GetActionsByIdActionError::BadRequest(body),
+            _ => iface_action::GetActionsByIdActionError::Other(body),
+        },
+        crate::runtime::DispatchError::Transport(m) => iface_action::GetActionsByIdActionError::Other(m),
+    }
+}
+
+fn iface_action__update_actions_by_id_action__ok(body: String) -> Result<String, crate::runtime::DispatchError> {
+    Ok(body)
+}
+
+fn iface_action__update_actions_by_id_action__err(e: crate::runtime::DispatchError) -> iface_action::UpdateActionsByIdActionError {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => match status {
+            400u16 => iface_action::UpdateActionsByIdActionError::BadRequest(body),
+            _ => iface_action::UpdateActionsByIdActionError::Other(body),
+        },
+        crate::runtime::DispatchError::Transport(m) => iface_action::UpdateActionsByIdActionError::Other(m),
+    }
+}
+
+fn iface_action__delete_actions_by_id_action__ok(body: String) -> Result<String, crate::runtime::DispatchError> {
+    Ok(body)
+}
+
+fn iface_action__delete_actions_by_id_action__err(e: crate::runtime::DispatchError) -> iface_action::DeleteActionsByIdActionError {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => match status {
+            400u16 => iface_action::DeleteActionsByIdActionError::BadRequest(body),
+            _ => iface_action::DeleteActionsByIdActionError::Other(body),
+        },
+        crate::runtime::DispatchError::Transport(m) => iface_action::DeleteActionsByIdActionError::Other(m),
+    }
+}
+
+fn iface_action__get_actions_board_by_id_action__ok(body: String) -> Result<String, crate::runtime::DispatchError> {
+    Ok(body)
+}
+
+fn iface_action__get_actions_board_by_id_action__err(e: crate::runtime::DispatchError) -> iface_action::GetActionsBoardByIdActionError {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => match status {
+            400u16 => iface_action::GetActionsBoardByIdActionError::BadRequest(body),
+            _ => iface_action::GetActionsBoardByIdActionError::Other(body),
+        },
+        crate::runtime::DispatchError::Transport(m) => iface_action::GetActionsBoardByIdActionError::Other(m),
+    }
+}
+
+fn iface_action__get_actions_board_by_id_action_by_field__ok(body: String) -> Result<String, crate::runtime::DispatchError> {
+    Ok(body)
+}
+
+fn iface_action__get_actions_board_by_id_action_by_field__err(e: crate::runtime::DispatchError) -> iface_action::GetActionsBoardByIdActionByFieldError {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => match status {
+            400u16 => iface_action::GetActionsBoardByIdActionByFieldError::BadRequest(body),
+            _ => iface_action::GetActionsBoardByIdActionByFieldError::Other(body),
+        },
+        crate::runtime::DispatchError::Transport(m) => iface_action::GetActionsBoardByIdActionByFieldError::Other(m),
+    }
+}
+
+fn iface_action__get_actions_card_by_id_action__ok(body: String) -> Result<String, crate::runtime::DispatchError> {
+    Ok(body)
+}
+
+fn iface_action__get_actions_card_by_id_action__err(e: crate::runtime::DispatchError) -> iface_action::GetActionsCardByIdActionError {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => match status {
+            400u16 => iface_action::GetActionsCardByIdActionError::BadRequest(body),
+            _ => iface_action::GetActionsCardByIdActionError::Other(body),
+        },
+        crate::runtime::DispatchError::Transport(m) => iface_action::GetActionsCardByIdActionError::Other(m),
+    }
+}
+
+fn iface_action__get_actions_card_by_id_action_by_field__ok(body: String) -> Result<String, crate::runtime::DispatchError> {
+    Ok(body)
+}
+
+fn iface_action__get_actions_card_by_id_action_by_field__err(e: crate::runtime::DispatchError) -> iface_action::GetActionsCardByIdActionByFieldError {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => match status {
+            400u16 => iface_action::GetActionsCardByIdActionByFieldError::BadRequest(body),
+            _ => iface_action::GetActionsCardByIdActionByFieldError::Other(body),
+        },
+        crate::runtime::DispatchError::Transport(m) => iface_action::GetActionsCardByIdActionByFieldError::Other(m),
+    }
+}
+
+fn iface_action__get_actions_display_by_id_action__ok(body: String) -> Result<String, crate::runtime::DispatchError> {
+    Ok(body)
+}
+
+fn iface_action__get_actions_display_by_id_action__err(e: crate::runtime::DispatchError) -> iface_action::GetActionsDisplayByIdActionError {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => match status {
+            400u16 => iface_action::GetActionsDisplayByIdActionError::BadRequest(body),
+            _ => iface_action::GetActionsDisplayByIdActionError::Other(body),
+        },
+        crate::runtime::DispatchError::Transport(m) => iface_action::GetActionsDisplayByIdActionError::Other(m),
+    }
+}
+
+fn iface_action__get_actions_entities_by_id_action__ok(body: String) -> Result<String, crate::runtime::DispatchError> {
+    Ok(body)
+}
+
+fn iface_action__get_actions_entities_by_id_action__err(e: crate::runtime::DispatchError) -> iface_action::GetActionsEntitiesByIdActionError {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => match status {
+            400u16 => iface_action::GetActionsEntitiesByIdActionError::BadRequest(body),
+            _ => iface_action::GetActionsEntitiesByIdActionError::Other(body),
+        },
+        crate::runtime::DispatchError::Transport(m) => iface_action::GetActionsEntitiesByIdActionError::Other(m),
+    }
+}
+
+fn iface_action__get_actions_list_by_id_action__ok(body: String) -> Result<String, crate::runtime::DispatchError> {
+    Ok(body)
+}
+
+fn iface_action__get_actions_list_by_id_action__err(e: crate::runtime::DispatchError) -> iface_action::GetActionsListByIdActionError {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => match status {
+            400u16 => iface_action::GetActionsListByIdActionError::BadRequest(body),
+            _ => iface_action::GetActionsListByIdActionError::Other(body),
+        },
+        crate::runtime::DispatchError::Transport(m) => iface_action::GetActionsListByIdActionError::Other(m),
+    }
+}
+
+fn iface_action__get_actions_list_by_id_action_by_field__ok(body: String) -> Result<String, crate::runtime::DispatchError> {
+    Ok(body)
+}
+
+fn iface_action__get_actions_list_by_id_action_by_field__err(e: crate::runtime::DispatchError) -> iface_action::GetActionsListByIdActionByFieldError {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => match status {
+            400u16 => iface_action::GetActionsListByIdActionByFieldError::BadRequest(body),
+            _ => iface_action::GetActionsListByIdActionByFieldError::Other(body),
+        },
+        crate::runtime::DispatchError::Transport(m) => iface_action::GetActionsListByIdActionByFieldError::Other(m),
+    }
+}
+
+fn iface_action__get_actions_member_by_id_action__ok(body: String) -> Result<String, crate::runtime::DispatchError> {
+    Ok(body)
+}
+
+fn iface_action__get_actions_member_by_id_action__err(e: crate::runtime::DispatchError) -> iface_action::GetActionsMemberByIdActionError {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => match status {
+            400u16 => iface_action::GetActionsMemberByIdActionError::BadRequest(body),
+            _ => iface_action::GetActionsMemberByIdActionError::Other(body),
+        },
+        crate::runtime::DispatchError::Transport(m) => iface_action::GetActionsMemberByIdActionError::Other(m),
+    }
+}
+
+fn iface_action__get_actions_member_by_id_action_by_field__ok(body: String) -> Result<String, crate::runtime::DispatchError> {
+    Ok(body)
+}
+
+fn iface_action__get_actions_member_by_id_action_by_field__err(e: crate::runtime::DispatchError) -> iface_action::GetActionsMemberByIdActionByFieldError {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => match status {
+            400u16 => iface_action::GetActionsMemberByIdActionByFieldError::BadRequest(body),
+            _ => iface_action::GetActionsMemberByIdActionByFieldError::Other(body),
+        },
+        crate::runtime::DispatchError::Transport(m) => iface_action::GetActionsMemberByIdActionByFieldError::Other(m),
+    }
+}
+
+fn iface_action__get_actions_member_creator_by_id_action__ok(body: String) -> Result<String, crate::runtime::DispatchError> {
+    Ok(body)
+}
+
+fn iface_action__get_actions_member_creator_by_id_action__err(e: crate::runtime::DispatchError) -> iface_action::GetActionsMemberCreatorByIdActionError {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => match status {
+            400u16 => iface_action::GetActionsMemberCreatorByIdActionError::BadRequest(body),
+            _ => iface_action::GetActionsMemberCreatorByIdActionError::Other(body),
+        },
+        crate::runtime::DispatchError::Transport(m) => iface_action::GetActionsMemberCreatorByIdActionError::Other(m),
+    }
+}
+
+fn iface_action__get_actions_member_creator_by_id_action_by_field__ok(body: String) -> Result<String, crate::runtime::DispatchError> {
+    Ok(body)
+}
+
+fn iface_action__get_actions_member_creator_by_id_action_by_field__err(e: crate::runtime::DispatchError) -> iface_action::GetActionsMemberCreatorByIdActionByFieldError {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => match status {
+            400u16 => iface_action::GetActionsMemberCreatorByIdActionByFieldError::BadRequest(body),
+            _ => iface_action::GetActionsMemberCreatorByIdActionByFieldError::Other(body),
+        },
+        crate::runtime::DispatchError::Transport(m) => iface_action::GetActionsMemberCreatorByIdActionByFieldError::Other(m),
+    }
+}
+
+fn iface_action__get_actions_organization_by_id_action__ok(body: String) -> Result<String, crate::runtime::DispatchError> {
+    Ok(body)
+}
+
+fn iface_action__get_actions_organization_by_id_action__err(e: crate::runtime::DispatchError) -> iface_action::GetActionsOrganizationByIdActionError {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => match status {
+            400u16 => iface_action::GetActionsOrganizationByIdActionError::BadRequest(body),
+            _ => iface_action::GetActionsOrganizationByIdActionError::Other(body),
+        },
+        crate::runtime::DispatchError::Transport(m) => iface_action::GetActionsOrganizationByIdActionError::Other(m),
+    }
+}
+
+fn iface_action__get_actions_organization_by_id_action_by_field__ok(body: String) -> Result<String, crate::runtime::DispatchError> {
+    Ok(body)
+}
+
+fn iface_action__get_actions_organization_by_id_action_by_field__err(e: crate::runtime::DispatchError) -> iface_action::GetActionsOrganizationByIdActionByFieldError {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => match status {
+            400u16 => iface_action::GetActionsOrganizationByIdActionByFieldError::BadRequest(body),
+            _ => iface_action::GetActionsOrganizationByIdActionByFieldError::Other(body),
+        },
+        crate::runtime::DispatchError::Transport(m) => iface_action::GetActionsOrganizationByIdActionByFieldError::Other(m),
+    }
+}
+
+fn iface_action__update_actions_text_by_id_action__ok(body: String) -> Result<String, crate::runtime::DispatchError> {
+    Ok(body)
+}
+
+fn iface_action__update_actions_text_by_id_action__err(e: crate::runtime::DispatchError) -> iface_action::UpdateActionsTextByIdActionError {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => match status {
+            400u16 => iface_action::UpdateActionsTextByIdActionError::BadRequest(body),
+            _ => iface_action::UpdateActionsTextByIdActionError::Other(body),
+        },
+        crate::runtime::DispatchError::Transport(m) => iface_action::UpdateActionsTextByIdActionError::Other(m),
+    }
+}
+
+fn iface_action__get_actions_by_id_action_by_field__ok(body: String) -> Result<String, crate::runtime::DispatchError> {
+    Ok(body)
+}
+
+fn iface_action__get_actions_by_id_action_by_field__err(e: crate::runtime::DispatchError) -> iface_action::GetActionsByIdActionByFieldError {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => match status {
+            400u16 => iface_action::GetActionsByIdActionByFieldError::BadRequest(body),
+            _ => iface_action::GetActionsByIdActionByFieldError::Other(body),
+        },
+        crate::runtime::DispatchError::Transport(m) => iface_action::GetActionsByIdActionByFieldError::Other(m),
+    }
+}
+
 impl iface_action::Guest for crate::Component {
-    fn get_actions_by_id_action(params: iface_action::GetActionsByIdActionParams) -> Result<String, String> {
+    fn get_actions_by_id_action(params: iface_action::GetActionsByIdActionParams) -> Result<String, iface_action::GetActionsByIdActionError> {
         let json = iface_action__get_actions_by_id_action_params__to_json(&params);
-        dispatch(&OP_ACTION_GET_ACTIONS_BY_ID_ACTION, json)
+        match dispatch(&OP_ACTION_GET_ACTIONS_BY_ID_ACTION, json).and_then(iface_action__get_actions_by_id_action__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_action__get_actions_by_id_action__err(e)),
+        }
     }
-    fn update_actions_by_id_action(params: iface_action::UpdateActionsByIdActionParams) -> Result<String, String> {
+    fn update_actions_by_id_action(params: iface_action::UpdateActionsByIdActionParams) -> Result<String, iface_action::UpdateActionsByIdActionError> {
         let json = iface_action__update_actions_by_id_action_params__to_json(&params);
-        dispatch(&OP_ACTION_UPDATE_ACTIONS_BY_ID_ACTION, json)
+        match dispatch(&OP_ACTION_UPDATE_ACTIONS_BY_ID_ACTION, json).and_then(iface_action__update_actions_by_id_action__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_action__update_actions_by_id_action__err(e)),
+        }
     }
-    fn delete_actions_by_id_action(params: iface_action::DeleteActionsByIdActionParams) -> Result<String, String> {
+    fn delete_actions_by_id_action(params: iface_action::DeleteActionsByIdActionParams) -> Result<String, iface_action::DeleteActionsByIdActionError> {
         let json = iface_action__delete_actions_by_id_action_params__to_json(&params);
-        dispatch(&OP_ACTION_DELETE_ACTIONS_BY_ID_ACTION, json)
+        match dispatch(&OP_ACTION_DELETE_ACTIONS_BY_ID_ACTION, json).and_then(iface_action__delete_actions_by_id_action__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_action__delete_actions_by_id_action__err(e)),
+        }
     }
-    fn get_actions_board_by_id_action(params: iface_action::GetActionsBoardByIdActionParams) -> Result<String, String> {
+    fn get_actions_board_by_id_action(params: iface_action::GetActionsBoardByIdActionParams) -> Result<String, iface_action::GetActionsBoardByIdActionError> {
         let json = iface_action__get_actions_board_by_id_action_params__to_json(&params);
-        dispatch(&OP_ACTION_GET_ACTIONS_BOARD_BY_ID_ACTION, json)
+        match dispatch(&OP_ACTION_GET_ACTIONS_BOARD_BY_ID_ACTION, json).and_then(iface_action__get_actions_board_by_id_action__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_action__get_actions_board_by_id_action__err(e)),
+        }
     }
-    fn get_actions_board_by_id_action_by_field(params: iface_action::GetActionsBoardByIdActionByFieldParams) -> Result<String, String> {
+    fn get_actions_board_by_id_action_by_field(params: iface_action::GetActionsBoardByIdActionByFieldParams) -> Result<String, iface_action::GetActionsBoardByIdActionByFieldError> {
         let json = iface_action__get_actions_board_by_id_action_by_field_params__to_json(&params);
-        dispatch(&OP_ACTION_GET_ACTIONS_BOARD_BY_ID_ACTION_BY_FIELD, json)
+        match dispatch(&OP_ACTION_GET_ACTIONS_BOARD_BY_ID_ACTION_BY_FIELD, json).and_then(iface_action__get_actions_board_by_id_action_by_field__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_action__get_actions_board_by_id_action_by_field__err(e)),
+        }
     }
-    fn get_actions_card_by_id_action(params: iface_action::GetActionsCardByIdActionParams) -> Result<String, String> {
+    fn get_actions_card_by_id_action(params: iface_action::GetActionsCardByIdActionParams) -> Result<String, iface_action::GetActionsCardByIdActionError> {
         let json = iface_action__get_actions_card_by_id_action_params__to_json(&params);
-        dispatch(&OP_ACTION_GET_ACTIONS_CARD_BY_ID_ACTION, json)
+        match dispatch(&OP_ACTION_GET_ACTIONS_CARD_BY_ID_ACTION, json).and_then(iface_action__get_actions_card_by_id_action__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_action__get_actions_card_by_id_action__err(e)),
+        }
     }
-    fn get_actions_card_by_id_action_by_field(params: iface_action::GetActionsCardByIdActionByFieldParams) -> Result<String, String> {
+    fn get_actions_card_by_id_action_by_field(params: iface_action::GetActionsCardByIdActionByFieldParams) -> Result<String, iface_action::GetActionsCardByIdActionByFieldError> {
         let json = iface_action__get_actions_card_by_id_action_by_field_params__to_json(&params);
-        dispatch(&OP_ACTION_GET_ACTIONS_CARD_BY_ID_ACTION_BY_FIELD, json)
+        match dispatch(&OP_ACTION_GET_ACTIONS_CARD_BY_ID_ACTION_BY_FIELD, json).and_then(iface_action__get_actions_card_by_id_action_by_field__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_action__get_actions_card_by_id_action_by_field__err(e)),
+        }
     }
-    fn get_actions_display_by_id_action(params: iface_action::GetActionsDisplayByIdActionParams) -> Result<String, String> {
+    fn get_actions_display_by_id_action(params: iface_action::GetActionsDisplayByIdActionParams) -> Result<String, iface_action::GetActionsDisplayByIdActionError> {
         let json = iface_action__get_actions_display_by_id_action_params__to_json(&params);
-        dispatch(&OP_ACTION_GET_ACTIONS_DISPLAY_BY_ID_ACTION, json)
+        match dispatch(&OP_ACTION_GET_ACTIONS_DISPLAY_BY_ID_ACTION, json).and_then(iface_action__get_actions_display_by_id_action__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_action__get_actions_display_by_id_action__err(e)),
+        }
     }
-    fn get_actions_entities_by_id_action(params: iface_action::GetActionsEntitiesByIdActionParams) -> Result<String, String> {
+    fn get_actions_entities_by_id_action(params: iface_action::GetActionsEntitiesByIdActionParams) -> Result<String, iface_action::GetActionsEntitiesByIdActionError> {
         let json = iface_action__get_actions_entities_by_id_action_params__to_json(&params);
-        dispatch(&OP_ACTION_GET_ACTIONS_ENTITIES_BY_ID_ACTION, json)
+        match dispatch(&OP_ACTION_GET_ACTIONS_ENTITIES_BY_ID_ACTION, json).and_then(iface_action__get_actions_entities_by_id_action__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_action__get_actions_entities_by_id_action__err(e)),
+        }
     }
-    fn get_actions_list_by_id_action(params: iface_action::GetActionsListByIdActionParams) -> Result<String, String> {
+    fn get_actions_list_by_id_action(params: iface_action::GetActionsListByIdActionParams) -> Result<String, iface_action::GetActionsListByIdActionError> {
         let json = iface_action__get_actions_list_by_id_action_params__to_json(&params);
-        dispatch(&OP_ACTION_GET_ACTIONS_LIST_BY_ID_ACTION, json)
+        match dispatch(&OP_ACTION_GET_ACTIONS_LIST_BY_ID_ACTION, json).and_then(iface_action__get_actions_list_by_id_action__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_action__get_actions_list_by_id_action__err(e)),
+        }
     }
-    fn get_actions_list_by_id_action_by_field(params: iface_action::GetActionsListByIdActionByFieldParams) -> Result<String, String> {
+    fn get_actions_list_by_id_action_by_field(params: iface_action::GetActionsListByIdActionByFieldParams) -> Result<String, iface_action::GetActionsListByIdActionByFieldError> {
         let json = iface_action__get_actions_list_by_id_action_by_field_params__to_json(&params);
-        dispatch(&OP_ACTION_GET_ACTIONS_LIST_BY_ID_ACTION_BY_FIELD, json)
+        match dispatch(&OP_ACTION_GET_ACTIONS_LIST_BY_ID_ACTION_BY_FIELD, json).and_then(iface_action__get_actions_list_by_id_action_by_field__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_action__get_actions_list_by_id_action_by_field__err(e)),
+        }
     }
-    fn get_actions_member_by_id_action(params: iface_action::GetActionsMemberByIdActionParams) -> Result<String, String> {
+    fn get_actions_member_by_id_action(params: iface_action::GetActionsMemberByIdActionParams) -> Result<String, iface_action::GetActionsMemberByIdActionError> {
         let json = iface_action__get_actions_member_by_id_action_params__to_json(&params);
-        dispatch(&OP_ACTION_GET_ACTIONS_MEMBER_BY_ID_ACTION, json)
+        match dispatch(&OP_ACTION_GET_ACTIONS_MEMBER_BY_ID_ACTION, json).and_then(iface_action__get_actions_member_by_id_action__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_action__get_actions_member_by_id_action__err(e)),
+        }
     }
-    fn get_actions_member_by_id_action_by_field(params: iface_action::GetActionsMemberByIdActionByFieldParams) -> Result<String, String> {
+    fn get_actions_member_by_id_action_by_field(params: iface_action::GetActionsMemberByIdActionByFieldParams) -> Result<String, iface_action::GetActionsMemberByIdActionByFieldError> {
         let json = iface_action__get_actions_member_by_id_action_by_field_params__to_json(&params);
-        dispatch(&OP_ACTION_GET_ACTIONS_MEMBER_BY_ID_ACTION_BY_FIELD, json)
+        match dispatch(&OP_ACTION_GET_ACTIONS_MEMBER_BY_ID_ACTION_BY_FIELD, json).and_then(iface_action__get_actions_member_by_id_action_by_field__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_action__get_actions_member_by_id_action_by_field__err(e)),
+        }
     }
-    fn get_actions_member_creator_by_id_action(params: iface_action::GetActionsMemberCreatorByIdActionParams) -> Result<String, String> {
+    fn get_actions_member_creator_by_id_action(params: iface_action::GetActionsMemberCreatorByIdActionParams) -> Result<String, iface_action::GetActionsMemberCreatorByIdActionError> {
         let json = iface_action__get_actions_member_creator_by_id_action_params__to_json(&params);
-        dispatch(&OP_ACTION_GET_ACTIONS_MEMBER_CREATOR_BY_ID_ACTION, json)
+        match dispatch(&OP_ACTION_GET_ACTIONS_MEMBER_CREATOR_BY_ID_ACTION, json).and_then(iface_action__get_actions_member_creator_by_id_action__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_action__get_actions_member_creator_by_id_action__err(e)),
+        }
     }
-    fn get_actions_member_creator_by_id_action_by_field(params: iface_action::GetActionsMemberCreatorByIdActionByFieldParams) -> Result<String, String> {
+    fn get_actions_member_creator_by_id_action_by_field(params: iface_action::GetActionsMemberCreatorByIdActionByFieldParams) -> Result<String, iface_action::GetActionsMemberCreatorByIdActionByFieldError> {
         let json = iface_action__get_actions_member_creator_by_id_action_by_field_params__to_json(&params);
-        dispatch(&OP_ACTION_GET_ACTIONS_MEMBER_CREATOR_BY_ID_ACTION_BY_FIELD, json)
+        match dispatch(&OP_ACTION_GET_ACTIONS_MEMBER_CREATOR_BY_ID_ACTION_BY_FIELD, json).and_then(iface_action__get_actions_member_creator_by_id_action_by_field__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_action__get_actions_member_creator_by_id_action_by_field__err(e)),
+        }
     }
-    fn get_actions_organization_by_id_action(params: iface_action::GetActionsOrganizationByIdActionParams) -> Result<String, String> {
+    fn get_actions_organization_by_id_action(params: iface_action::GetActionsOrganizationByIdActionParams) -> Result<String, iface_action::GetActionsOrganizationByIdActionError> {
         let json = iface_action__get_actions_organization_by_id_action_params__to_json(&params);
-        dispatch(&OP_ACTION_GET_ACTIONS_ORGANIZATION_BY_ID_ACTION, json)
+        match dispatch(&OP_ACTION_GET_ACTIONS_ORGANIZATION_BY_ID_ACTION, json).and_then(iface_action__get_actions_organization_by_id_action__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_action__get_actions_organization_by_id_action__err(e)),
+        }
     }
-    fn get_actions_organization_by_id_action_by_field(params: iface_action::GetActionsOrganizationByIdActionByFieldParams) -> Result<String, String> {
+    fn get_actions_organization_by_id_action_by_field(params: iface_action::GetActionsOrganizationByIdActionByFieldParams) -> Result<String, iface_action::GetActionsOrganizationByIdActionByFieldError> {
         let json = iface_action__get_actions_organization_by_id_action_by_field_params__to_json(&params);
-        dispatch(&OP_ACTION_GET_ACTIONS_ORGANIZATION_BY_ID_ACTION_BY_FIELD, json)
+        match dispatch(&OP_ACTION_GET_ACTIONS_ORGANIZATION_BY_ID_ACTION_BY_FIELD, json).and_then(iface_action__get_actions_organization_by_id_action_by_field__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_action__get_actions_organization_by_id_action_by_field__err(e)),
+        }
     }
-    fn update_actions_text_by_id_action(params: iface_action::UpdateActionsTextByIdActionParams) -> Result<String, String> {
+    fn update_actions_text_by_id_action(params: iface_action::UpdateActionsTextByIdActionParams) -> Result<String, iface_action::UpdateActionsTextByIdActionError> {
         let json = iface_action__update_actions_text_by_id_action_params__to_json(&params);
-        dispatch(&OP_ACTION_UPDATE_ACTIONS_TEXT_BY_ID_ACTION, json)
+        match dispatch(&OP_ACTION_UPDATE_ACTIONS_TEXT_BY_ID_ACTION, json).and_then(iface_action__update_actions_text_by_id_action__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_action__update_actions_text_by_id_action__err(e)),
+        }
     }
-    fn get_actions_by_id_action_by_field(params: iface_action::GetActionsByIdActionByFieldParams) -> Result<String, String> {
+    fn get_actions_by_id_action_by_field(params: iface_action::GetActionsByIdActionByFieldParams) -> Result<String, iface_action::GetActionsByIdActionByFieldError> {
         let json = iface_action__get_actions_by_id_action_by_field_params__to_json(&params);
-        dispatch(&OP_ACTION_GET_ACTIONS_BY_ID_ACTION_BY_FIELD, json)
+        match dispatch(&OP_ACTION_GET_ACTIONS_BY_ID_ACTION_BY_FIELD, json).and_then(iface_action__get_actions_by_id_action_by_field__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_action__get_actions_by_id_action_by_field__err(e)),
+        }
     }
 }
 use crate::exports::autostamp::trello::batch as iface_batch;
@@ -774,9 +1116,9 @@ const OP_BATCH_GET_BATCH: OpSpec = OpSpec {
     method: "GET",
     path_template: "/batch",
     fields: &[
-        FieldSpec { snake: "urls", location: FieldLocation::Query },
-        FieldSpec { snake: "key", location: FieldLocation::Query },
-        FieldSpec { snake: "token", location: FieldLocation::Query },
+        FieldSpec { snake: "urls", wire: "urls", location: FieldLocation::Query },
+        FieldSpec { snake: "key", wire: "key", location: FieldLocation::Query },
+        FieldSpec { snake: "token", wire: "token", location: FieldLocation::Query },
     ],
     auth: &[
     ],
@@ -790,10 +1132,27 @@ fn iface_batch__get_batch_params__to_json(p: &iface_batch::GetBatchParams) -> Va
     Value::Object(m)
 }
 
+fn iface_batch__get_batch__ok(body: String) -> Result<String, crate::runtime::DispatchError> {
+    Ok(body)
+}
+
+fn iface_batch__get_batch__err(e: crate::runtime::DispatchError) -> iface_batch::GetBatchError {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => match status {
+            400u16 => iface_batch::GetBatchError::BadRequest(body),
+            _ => iface_batch::GetBatchError::Other(body),
+        },
+        crate::runtime::DispatchError::Transport(m) => iface_batch::GetBatchError::Other(m),
+    }
+}
+
 impl iface_batch::Guest for crate::Component {
-    fn get_batch(params: iface_batch::GetBatchParams) -> Result<String, String> {
+    fn get_batch(params: iface_batch::GetBatchParams) -> Result<String, iface_batch::GetBatchError> {
         let json = iface_batch__get_batch_params__to_json(&params);
-        dispatch(&OP_BATCH_GET_BATCH, json)
+        match dispatch(&OP_BATCH_GET_BATCH, json).and_then(iface_batch__get_batch__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_batch__get_batch__err(e)),
+        }
     }
 }
 use crate::exports::autostamp::trello::board as iface_board;
@@ -802,30 +1161,38 @@ const OP_BOARD_ADD_BOARDS: OpSpec = OpSpec {
     method: "POST",
     path_template: "/boards",
     fields: &[
-        FieldSpec { snake: "token", location: FieldLocation::Query },
-        FieldSpec { snake: "closed", location: FieldLocation::Body },
-        FieldSpec { snake: "desc", location: FieldLocation::Body },
-        FieldSpec { snake: "id_board_source", location: FieldLocation::Body },
-        FieldSpec { snake: "id_organization", location: FieldLocation::Body },
-        FieldSpec { snake: "keep_from_source", location: FieldLocation::Body },
-        FieldSpec { snake: "label_names_blue", location: FieldLocation::Body },
-        FieldSpec { snake: "label_names_green", location: FieldLocation::Body },
-        FieldSpec { snake: "label_names_orange", location: FieldLocation::Body },
-        FieldSpec { snake: "label_names_purple", location: FieldLocation::Body },
-        FieldSpec { snake: "label_names_red", location: FieldLocation::Body },
-        FieldSpec { snake: "label_names_yellow", location: FieldLocation::Body },
-        FieldSpec { snake: "name", location: FieldLocation::Body },
-        FieldSpec { snake: "power_ups", location: FieldLocation::Body },
-        FieldSpec { snake: "prefs_background", location: FieldLocation::Body },
-        FieldSpec { snake: "prefs_calendar_feed_enabled", location: FieldLocation::Body },
-        FieldSpec { snake: "prefs_card_aging", location: FieldLocation::Body },
-        FieldSpec { snake: "prefs_card_covers", location: FieldLocation::Body },
-        FieldSpec { snake: "prefs_comments", location: FieldLocation::Body },
-        FieldSpec { snake: "prefs_invitations", location: FieldLocation::Body },
-        FieldSpec { snake: "prefs_permission_level", location: FieldLocation::Body },
-        FieldSpec { snake: "prefs_self_join", location: FieldLocation::Body },
-        FieldSpec { snake: "prefs_voting", location: FieldLocation::Body },
-        FieldSpec { snake: "subscribed", location: FieldLocation::Body },
+        FieldSpec { snake: "token", wire: "token", location: FieldLocation::Query },
+        FieldSpec { snake: "closed", wire: "closed", location: FieldLocation::Body },
+        FieldSpec { snake: "desc", wire: "desc", location: FieldLocation::Body },
+        FieldSpec { snake: "id_board_source", wire: "idBoardSource", location: FieldLocation::Body },
+        FieldSpec { snake: "id_organization", wire: "idOrganization", location: FieldLocation::Body },
+        FieldSpec { snake: "keep_from_source", wire: "keepFromSource", location: FieldLocation::Body },
+        FieldSpec { snake: "label_names_blue", wire: "labelNames/blue", location: FieldLocation::Body },
+        FieldSpec { snake: "label_names_green", wire: "labelNames/green", location: FieldLocation::Body },
+        FieldSpec { snake: "label_names_orange", wire: "labelNames/orange", location: FieldLocation::Body },
+        FieldSpec { snake: "label_names_purple", wire: "labelNames/purple", location: FieldLocation::Body },
+        FieldSpec { snake: "label_names_red", wire: "labelNames/red", location: FieldLocation::Body },
+        FieldSpec { snake: "label_names_yellow", wire: "labelNames/yellow", location: FieldLocation::Body },
+        FieldSpec { snake: "name", wire: "name", location: FieldLocation::Body },
+        FieldSpec { snake: "power_ups", wire: "powerUps", location: FieldLocation::Body },
+        FieldSpec { snake: "prefs_background", wire: "prefs/background", location: FieldLocation::Body },
+        FieldSpec { snake: "prefs_calendar_feed_enabled", wire: "prefs/calendarFeedEnabled", location: FieldLocation::Body },
+        FieldSpec { snake: "prefs_card_aging", wire: "prefs/cardAging", location: FieldLocation::Body },
+        FieldSpec { snake: "prefs_card_covers", wire: "prefs/cardCovers", location: FieldLocation::Body },
+        FieldSpec { snake: "prefs_comments", wire: "prefs/comments", location: FieldLocation::Body },
+        FieldSpec { snake: "prefs_invitations", wire: "prefs/invitations", location: FieldLocation::Body },
+        FieldSpec { snake: "prefs_permission_level", wire: "prefs/permissionLevel", location: FieldLocation::Body },
+        FieldSpec { snake: "prefs_self_join", wire: "prefs/selfJoin", location: FieldLocation::Body },
+        FieldSpec { snake: "prefs_voting", wire: "prefs/voting", location: FieldLocation::Body },
+        FieldSpec { snake: "prefs_background_v2", wire: "prefs_background", location: FieldLocation::Body },
+        FieldSpec { snake: "prefs_card_aging_v2", wire: "prefs_cardAging", location: FieldLocation::Body },
+        FieldSpec { snake: "prefs_card_covers_v2", wire: "prefs_cardCovers", location: FieldLocation::Body },
+        FieldSpec { snake: "prefs_comments_v2", wire: "prefs_comments", location: FieldLocation::Body },
+        FieldSpec { snake: "prefs_invitations_v2", wire: "prefs_invitations", location: FieldLocation::Body },
+        FieldSpec { snake: "prefs_permission_level_v2", wire: "prefs_permissionLevel", location: FieldLocation::Body },
+        FieldSpec { snake: "prefs_self_join_v2", wire: "prefs_selfJoin", location: FieldLocation::Body },
+        FieldSpec { snake: "prefs_voting_v2", wire: "prefs_voting", location: FieldLocation::Body },
+        FieldSpec { snake: "subscribed", wire: "subscribed", location: FieldLocation::Body },
     ],
     auth: &[
         AuthApply { secret_key: "api_key", kind: AuthKind::ApiKeyQuery("key") },
@@ -836,45 +1203,45 @@ const OP_BOARD_GET_BOARDS_BY_ID_BOARD: OpSpec = OpSpec {
     method: "GET",
     path_template: "/boards/{id_board}",
     fields: &[
-        FieldSpec { snake: "id_board", location: FieldLocation::Path },
-        FieldSpec { snake: "actions", location: FieldLocation::Query },
-        FieldSpec { snake: "actions_entities", location: FieldLocation::Query },
-        FieldSpec { snake: "actions_display", location: FieldLocation::Query },
-        FieldSpec { snake: "actions_format", location: FieldLocation::Query },
-        FieldSpec { snake: "actions_since", location: FieldLocation::Query },
-        FieldSpec { snake: "actions_limit", location: FieldLocation::Query },
-        FieldSpec { snake: "action_fields", location: FieldLocation::Query },
-        FieldSpec { snake: "action_member", location: FieldLocation::Query },
-        FieldSpec { snake: "action_member_fields", location: FieldLocation::Query },
-        FieldSpec { snake: "action_member_creator", location: FieldLocation::Query },
-        FieldSpec { snake: "action_member_creator_fields", location: FieldLocation::Query },
-        FieldSpec { snake: "cards", location: FieldLocation::Query },
-        FieldSpec { snake: "card_fields", location: FieldLocation::Query },
-        FieldSpec { snake: "card_attachments", location: FieldLocation::Query },
-        FieldSpec { snake: "card_attachment_fields", location: FieldLocation::Query },
-        FieldSpec { snake: "card_checklists", location: FieldLocation::Query },
-        FieldSpec { snake: "card_stickers", location: FieldLocation::Query },
-        FieldSpec { snake: "board_stars", location: FieldLocation::Query },
-        FieldSpec { snake: "labels", location: FieldLocation::Query },
-        FieldSpec { snake: "label_fields", location: FieldLocation::Query },
-        FieldSpec { snake: "labels_limit", location: FieldLocation::Query },
-        FieldSpec { snake: "lists", location: FieldLocation::Query },
-        FieldSpec { snake: "list_fields", location: FieldLocation::Query },
-        FieldSpec { snake: "memberships", location: FieldLocation::Query },
-        FieldSpec { snake: "memberships_member", location: FieldLocation::Query },
-        FieldSpec { snake: "memberships_member_fields", location: FieldLocation::Query },
-        FieldSpec { snake: "members", location: FieldLocation::Query },
-        FieldSpec { snake: "member_fields", location: FieldLocation::Query },
-        FieldSpec { snake: "members_invited", location: FieldLocation::Query },
-        FieldSpec { snake: "members_invited_fields", location: FieldLocation::Query },
-        FieldSpec { snake: "checklists", location: FieldLocation::Query },
-        FieldSpec { snake: "checklist_fields", location: FieldLocation::Query },
-        FieldSpec { snake: "organization", location: FieldLocation::Query },
-        FieldSpec { snake: "organization_fields", location: FieldLocation::Query },
-        FieldSpec { snake: "organization_memberships", location: FieldLocation::Query },
-        FieldSpec { snake: "my_prefs", location: FieldLocation::Query },
-        FieldSpec { snake: "fields", location: FieldLocation::Query },
-        FieldSpec { snake: "token", location: FieldLocation::Query },
+        FieldSpec { snake: "id_board", wire: "idBoard", location: FieldLocation::Path },
+        FieldSpec { snake: "actions", wire: "actions", location: FieldLocation::Query },
+        FieldSpec { snake: "actions_entities", wire: "actions_entities", location: FieldLocation::Query },
+        FieldSpec { snake: "actions_display", wire: "actions_display", location: FieldLocation::Query },
+        FieldSpec { snake: "actions_format", wire: "actions_format", location: FieldLocation::Query },
+        FieldSpec { snake: "actions_since", wire: "actions_since", location: FieldLocation::Query },
+        FieldSpec { snake: "actions_limit", wire: "actions_limit", location: FieldLocation::Query },
+        FieldSpec { snake: "action_fields", wire: "action_fields", location: FieldLocation::Query },
+        FieldSpec { snake: "action_member", wire: "action_member", location: FieldLocation::Query },
+        FieldSpec { snake: "action_member_fields", wire: "action_member_fields", location: FieldLocation::Query },
+        FieldSpec { snake: "action_member_creator", wire: "action_memberCreator", location: FieldLocation::Query },
+        FieldSpec { snake: "action_member_creator_fields", wire: "action_memberCreator_fields", location: FieldLocation::Query },
+        FieldSpec { snake: "cards", wire: "cards", location: FieldLocation::Query },
+        FieldSpec { snake: "card_fields", wire: "card_fields", location: FieldLocation::Query },
+        FieldSpec { snake: "card_attachments", wire: "card_attachments", location: FieldLocation::Query },
+        FieldSpec { snake: "card_attachment_fields", wire: "card_attachment_fields", location: FieldLocation::Query },
+        FieldSpec { snake: "card_checklists", wire: "card_checklists", location: FieldLocation::Query },
+        FieldSpec { snake: "card_stickers", wire: "card_stickers", location: FieldLocation::Query },
+        FieldSpec { snake: "board_stars", wire: "boardStars", location: FieldLocation::Query },
+        FieldSpec { snake: "labels", wire: "labels", location: FieldLocation::Query },
+        FieldSpec { snake: "label_fields", wire: "label_fields", location: FieldLocation::Query },
+        FieldSpec { snake: "labels_limit", wire: "labels_limit", location: FieldLocation::Query },
+        FieldSpec { snake: "lists", wire: "lists", location: FieldLocation::Query },
+        FieldSpec { snake: "list_fields", wire: "list_fields", location: FieldLocation::Query },
+        FieldSpec { snake: "memberships", wire: "memberships", location: FieldLocation::Query },
+        FieldSpec { snake: "memberships_member", wire: "memberships_member", location: FieldLocation::Query },
+        FieldSpec { snake: "memberships_member_fields", wire: "memberships_member_fields", location: FieldLocation::Query },
+        FieldSpec { snake: "members", wire: "members", location: FieldLocation::Query },
+        FieldSpec { snake: "member_fields", wire: "member_fields", location: FieldLocation::Query },
+        FieldSpec { snake: "members_invited", wire: "membersInvited", location: FieldLocation::Query },
+        FieldSpec { snake: "members_invited_fields", wire: "membersInvited_fields", location: FieldLocation::Query },
+        FieldSpec { snake: "checklists", wire: "checklists", location: FieldLocation::Query },
+        FieldSpec { snake: "checklist_fields", wire: "checklist_fields", location: FieldLocation::Query },
+        FieldSpec { snake: "organization", wire: "organization", location: FieldLocation::Query },
+        FieldSpec { snake: "organization_fields", wire: "organization_fields", location: FieldLocation::Query },
+        FieldSpec { snake: "organization_memberships", wire: "organization_memberships", location: FieldLocation::Query },
+        FieldSpec { snake: "my_prefs", wire: "myPrefs", location: FieldLocation::Query },
+        FieldSpec { snake: "fields", wire: "fields", location: FieldLocation::Query },
+        FieldSpec { snake: "token", wire: "token", location: FieldLocation::Query },
     ],
     auth: &[
         AuthApply { secret_key: "api_key", kind: AuthKind::ApiKeyQuery("key") },
@@ -885,31 +1252,39 @@ const OP_BOARD_UPDATE_BOARDS_BY_ID_BOARD: OpSpec = OpSpec {
     method: "PUT",
     path_template: "/boards/{id_board}",
     fields: &[
-        FieldSpec { snake: "id_board", location: FieldLocation::Path },
-        FieldSpec { snake: "token", location: FieldLocation::Query },
-        FieldSpec { snake: "closed", location: FieldLocation::Body },
-        FieldSpec { snake: "desc", location: FieldLocation::Body },
-        FieldSpec { snake: "id_board_source", location: FieldLocation::Body },
-        FieldSpec { snake: "id_organization", location: FieldLocation::Body },
-        FieldSpec { snake: "keep_from_source", location: FieldLocation::Body },
-        FieldSpec { snake: "label_names_blue", location: FieldLocation::Body },
-        FieldSpec { snake: "label_names_green", location: FieldLocation::Body },
-        FieldSpec { snake: "label_names_orange", location: FieldLocation::Body },
-        FieldSpec { snake: "label_names_purple", location: FieldLocation::Body },
-        FieldSpec { snake: "label_names_red", location: FieldLocation::Body },
-        FieldSpec { snake: "label_names_yellow", location: FieldLocation::Body },
-        FieldSpec { snake: "name", location: FieldLocation::Body },
-        FieldSpec { snake: "power_ups", location: FieldLocation::Body },
-        FieldSpec { snake: "prefs_background", location: FieldLocation::Body },
-        FieldSpec { snake: "prefs_calendar_feed_enabled", location: FieldLocation::Body },
-        FieldSpec { snake: "prefs_card_aging", location: FieldLocation::Body },
-        FieldSpec { snake: "prefs_card_covers", location: FieldLocation::Body },
-        FieldSpec { snake: "prefs_comments", location: FieldLocation::Body },
-        FieldSpec { snake: "prefs_invitations", location: FieldLocation::Body },
-        FieldSpec { snake: "prefs_permission_level", location: FieldLocation::Body },
-        FieldSpec { snake: "prefs_self_join", location: FieldLocation::Body },
-        FieldSpec { snake: "prefs_voting", location: FieldLocation::Body },
-        FieldSpec { snake: "subscribed", location: FieldLocation::Body },
+        FieldSpec { snake: "id_board", wire: "idBoard", location: FieldLocation::Path },
+        FieldSpec { snake: "token", wire: "token", location: FieldLocation::Query },
+        FieldSpec { snake: "closed", wire: "closed", location: FieldLocation::Body },
+        FieldSpec { snake: "desc", wire: "desc", location: FieldLocation::Body },
+        FieldSpec { snake: "id_board_source", wire: "idBoardSource", location: FieldLocation::Body },
+        FieldSpec { snake: "id_organization", wire: "idOrganization", location: FieldLocation::Body },
+        FieldSpec { snake: "keep_from_source", wire: "keepFromSource", location: FieldLocation::Body },
+        FieldSpec { snake: "label_names_blue", wire: "labelNames/blue", location: FieldLocation::Body },
+        FieldSpec { snake: "label_names_green", wire: "labelNames/green", location: FieldLocation::Body },
+        FieldSpec { snake: "label_names_orange", wire: "labelNames/orange", location: FieldLocation::Body },
+        FieldSpec { snake: "label_names_purple", wire: "labelNames/purple", location: FieldLocation::Body },
+        FieldSpec { snake: "label_names_red", wire: "labelNames/red", location: FieldLocation::Body },
+        FieldSpec { snake: "label_names_yellow", wire: "labelNames/yellow", location: FieldLocation::Body },
+        FieldSpec { snake: "name", wire: "name", location: FieldLocation::Body },
+        FieldSpec { snake: "power_ups", wire: "powerUps", location: FieldLocation::Body },
+        FieldSpec { snake: "prefs_background", wire: "prefs/background", location: FieldLocation::Body },
+        FieldSpec { snake: "prefs_calendar_feed_enabled", wire: "prefs/calendarFeedEnabled", location: FieldLocation::Body },
+        FieldSpec { snake: "prefs_card_aging", wire: "prefs/cardAging", location: FieldLocation::Body },
+        FieldSpec { snake: "prefs_card_covers", wire: "prefs/cardCovers", location: FieldLocation::Body },
+        FieldSpec { snake: "prefs_comments", wire: "prefs/comments", location: FieldLocation::Body },
+        FieldSpec { snake: "prefs_invitations", wire: "prefs/invitations", location: FieldLocation::Body },
+        FieldSpec { snake: "prefs_permission_level", wire: "prefs/permissionLevel", location: FieldLocation::Body },
+        FieldSpec { snake: "prefs_self_join", wire: "prefs/selfJoin", location: FieldLocation::Body },
+        FieldSpec { snake: "prefs_voting", wire: "prefs/voting", location: FieldLocation::Body },
+        FieldSpec { snake: "prefs_background_v2", wire: "prefs_background", location: FieldLocation::Body },
+        FieldSpec { snake: "prefs_card_aging_v2", wire: "prefs_cardAging", location: FieldLocation::Body },
+        FieldSpec { snake: "prefs_card_covers_v2", wire: "prefs_cardCovers", location: FieldLocation::Body },
+        FieldSpec { snake: "prefs_comments_v2", wire: "prefs_comments", location: FieldLocation::Body },
+        FieldSpec { snake: "prefs_invitations_v2", wire: "prefs_invitations", location: FieldLocation::Body },
+        FieldSpec { snake: "prefs_permission_level_v2", wire: "prefs_permissionLevel", location: FieldLocation::Body },
+        FieldSpec { snake: "prefs_self_join_v2", wire: "prefs_selfJoin", location: FieldLocation::Body },
+        FieldSpec { snake: "prefs_voting_v2", wire: "prefs_voting", location: FieldLocation::Body },
+        FieldSpec { snake: "subscribed", wire: "subscribed", location: FieldLocation::Body },
     ],
     auth: &[
         AuthApply { secret_key: "api_key", kind: AuthKind::ApiKeyQuery("key") },
@@ -920,22 +1295,22 @@ const OP_BOARD_GET_BOARDS_ACTIONS_BY_ID_BOARD: OpSpec = OpSpec {
     method: "GET",
     path_template: "/boards/{id_board}/actions",
     fields: &[
-        FieldSpec { snake: "id_board", location: FieldLocation::Path },
-        FieldSpec { snake: "entities", location: FieldLocation::Query },
-        FieldSpec { snake: "display", location: FieldLocation::Query },
-        FieldSpec { snake: "filter", location: FieldLocation::Query },
-        FieldSpec { snake: "fields", location: FieldLocation::Query },
-        FieldSpec { snake: "limit", location: FieldLocation::Query },
-        FieldSpec { snake: "format", location: FieldLocation::Query },
-        FieldSpec { snake: "since", location: FieldLocation::Query },
-        FieldSpec { snake: "before", location: FieldLocation::Query },
-        FieldSpec { snake: "page", location: FieldLocation::Query },
-        FieldSpec { snake: "id_models", location: FieldLocation::Query },
-        FieldSpec { snake: "member", location: FieldLocation::Query },
-        FieldSpec { snake: "member_fields", location: FieldLocation::Query },
-        FieldSpec { snake: "member_creator", location: FieldLocation::Query },
-        FieldSpec { snake: "member_creator_fields", location: FieldLocation::Query },
-        FieldSpec { snake: "token", location: FieldLocation::Query },
+        FieldSpec { snake: "id_board", wire: "idBoard", location: FieldLocation::Path },
+        FieldSpec { snake: "entities", wire: "entities", location: FieldLocation::Query },
+        FieldSpec { snake: "display", wire: "display", location: FieldLocation::Query },
+        FieldSpec { snake: "filter", wire: "filter", location: FieldLocation::Query },
+        FieldSpec { snake: "fields", wire: "fields", location: FieldLocation::Query },
+        FieldSpec { snake: "limit", wire: "limit", location: FieldLocation::Query },
+        FieldSpec { snake: "format", wire: "format", location: FieldLocation::Query },
+        FieldSpec { snake: "since", wire: "since", location: FieldLocation::Query },
+        FieldSpec { snake: "before", wire: "before", location: FieldLocation::Query },
+        FieldSpec { snake: "page", wire: "page", location: FieldLocation::Query },
+        FieldSpec { snake: "id_models", wire: "idModels", location: FieldLocation::Query },
+        FieldSpec { snake: "member", wire: "member", location: FieldLocation::Query },
+        FieldSpec { snake: "member_fields", wire: "member_fields", location: FieldLocation::Query },
+        FieldSpec { snake: "member_creator", wire: "memberCreator", location: FieldLocation::Query },
+        FieldSpec { snake: "member_creator_fields", wire: "memberCreator_fields", location: FieldLocation::Query },
+        FieldSpec { snake: "token", wire: "token", location: FieldLocation::Query },
     ],
     auth: &[
         AuthApply { secret_key: "api_key", kind: AuthKind::ApiKeyQuery("key") },
@@ -946,9 +1321,9 @@ const OP_BOARD_GET_BOARDS_BOARD_STARS_BY_ID_BOARD: OpSpec = OpSpec {
     method: "GET",
     path_template: "/boards/{id_board}/boardStars",
     fields: &[
-        FieldSpec { snake: "id_board", location: FieldLocation::Path },
-        FieldSpec { snake: "filter", location: FieldLocation::Query },
-        FieldSpec { snake: "token", location: FieldLocation::Query },
+        FieldSpec { snake: "id_board", wire: "idBoard", location: FieldLocation::Path },
+        FieldSpec { snake: "filter", wire: "filter", location: FieldLocation::Query },
+        FieldSpec { snake: "token", wire: "token", location: FieldLocation::Query },
     ],
     auth: &[
         AuthApply { secret_key: "api_key", kind: AuthKind::ApiKeyQuery("key") },
@@ -959,8 +1334,8 @@ const OP_BOARD_ADD_BOARDS_CALENDAR_KEY_GENERATE_BY_ID_BOARD: OpSpec = OpSpec {
     method: "POST",
     path_template: "/boards/{id_board}/calendarKey/generate",
     fields: &[
-        FieldSpec { snake: "id_board", location: FieldLocation::Path },
-        FieldSpec { snake: "token", location: FieldLocation::Query },
+        FieldSpec { snake: "id_board", wire: "idBoard", location: FieldLocation::Path },
+        FieldSpec { snake: "token", wire: "token", location: FieldLocation::Query },
     ],
     auth: &[
         AuthApply { secret_key: "api_key", kind: AuthKind::ApiKeyQuery("key") },
@@ -971,21 +1346,21 @@ const OP_BOARD_GET_BOARDS_CARDS_BY_ID_BOARD: OpSpec = OpSpec {
     method: "GET",
     path_template: "/boards/{id_board}/cards",
     fields: &[
-        FieldSpec { snake: "id_board", location: FieldLocation::Path },
-        FieldSpec { snake: "actions", location: FieldLocation::Query },
-        FieldSpec { snake: "attachments", location: FieldLocation::Query },
-        FieldSpec { snake: "attachment_fields", location: FieldLocation::Query },
-        FieldSpec { snake: "stickers", location: FieldLocation::Query },
-        FieldSpec { snake: "members", location: FieldLocation::Query },
-        FieldSpec { snake: "member_fields", location: FieldLocation::Query },
-        FieldSpec { snake: "check_item_states", location: FieldLocation::Query },
-        FieldSpec { snake: "checklists", location: FieldLocation::Query },
-        FieldSpec { snake: "limit", location: FieldLocation::Query },
-        FieldSpec { snake: "since", location: FieldLocation::Query },
-        FieldSpec { snake: "before", location: FieldLocation::Query },
-        FieldSpec { snake: "filter", location: FieldLocation::Query },
-        FieldSpec { snake: "fields", location: FieldLocation::Query },
-        FieldSpec { snake: "token", location: FieldLocation::Query },
+        FieldSpec { snake: "id_board", wire: "idBoard", location: FieldLocation::Path },
+        FieldSpec { snake: "actions", wire: "actions", location: FieldLocation::Query },
+        FieldSpec { snake: "attachments", wire: "attachments", location: FieldLocation::Query },
+        FieldSpec { snake: "attachment_fields", wire: "attachment_fields", location: FieldLocation::Query },
+        FieldSpec { snake: "stickers", wire: "stickers", location: FieldLocation::Query },
+        FieldSpec { snake: "members", wire: "members", location: FieldLocation::Query },
+        FieldSpec { snake: "member_fields", wire: "member_fields", location: FieldLocation::Query },
+        FieldSpec { snake: "check_item_states", wire: "checkItemStates", location: FieldLocation::Query },
+        FieldSpec { snake: "checklists", wire: "checklists", location: FieldLocation::Query },
+        FieldSpec { snake: "limit", wire: "limit", location: FieldLocation::Query },
+        FieldSpec { snake: "since", wire: "since", location: FieldLocation::Query },
+        FieldSpec { snake: "before", wire: "before", location: FieldLocation::Query },
+        FieldSpec { snake: "filter", wire: "filter", location: FieldLocation::Query },
+        FieldSpec { snake: "fields", wire: "fields", location: FieldLocation::Query },
+        FieldSpec { snake: "token", wire: "token", location: FieldLocation::Query },
     ],
     auth: &[
         AuthApply { secret_key: "api_key", kind: AuthKind::ApiKeyQuery("key") },
@@ -996,10 +1371,10 @@ const OP_BOARD_GET_BOARDS_CARDS_BY_ID_BOARD_BY_FILTER: OpSpec = OpSpec {
     method: "GET",
     path_template: "/boards/{id_board}/cards/{filter}",
     fields: &[
-        FieldSpec { snake: "id_board", location: FieldLocation::Path },
-        FieldSpec { snake: "filter", location: FieldLocation::Path },
-        FieldSpec { snake: "key", location: FieldLocation::Query },
-        FieldSpec { snake: "token", location: FieldLocation::Query },
+        FieldSpec { snake: "id_board", wire: "idBoard", location: FieldLocation::Path },
+        FieldSpec { snake: "filter", wire: "filter", location: FieldLocation::Path },
+        FieldSpec { snake: "key", wire: "key", location: FieldLocation::Query },
+        FieldSpec { snake: "token", wire: "token", location: FieldLocation::Query },
     ],
     auth: &[
     ],
@@ -1009,25 +1384,25 @@ const OP_BOARD_GET_BOARDS_CARDS_BY_ID_BOARD_BY_ID_CARD: OpSpec = OpSpec {
     method: "GET",
     path_template: "/boards/{id_board}/cards/{id_card}",
     fields: &[
-        FieldSpec { snake: "id_board", location: FieldLocation::Path },
-        FieldSpec { snake: "id_card", location: FieldLocation::Path },
-        FieldSpec { snake: "attachments", location: FieldLocation::Query },
-        FieldSpec { snake: "attachment_fields", location: FieldLocation::Query },
-        FieldSpec { snake: "actions", location: FieldLocation::Query },
-        FieldSpec { snake: "actions_entities", location: FieldLocation::Query },
-        FieldSpec { snake: "actions_display", location: FieldLocation::Query },
-        FieldSpec { snake: "actions_limit", location: FieldLocation::Query },
-        FieldSpec { snake: "action_fields", location: FieldLocation::Query },
-        FieldSpec { snake: "action_member_creator_fields", location: FieldLocation::Query },
-        FieldSpec { snake: "members", location: FieldLocation::Query },
-        FieldSpec { snake: "member_fields", location: FieldLocation::Query },
-        FieldSpec { snake: "check_item_states", location: FieldLocation::Query },
-        FieldSpec { snake: "check_item_state_fields", location: FieldLocation::Query },
-        FieldSpec { snake: "labels", location: FieldLocation::Query },
-        FieldSpec { snake: "checklists", location: FieldLocation::Query },
-        FieldSpec { snake: "checklist_fields", location: FieldLocation::Query },
-        FieldSpec { snake: "fields", location: FieldLocation::Query },
-        FieldSpec { snake: "token", location: FieldLocation::Query },
+        FieldSpec { snake: "id_board", wire: "idBoard", location: FieldLocation::Path },
+        FieldSpec { snake: "id_card", wire: "idCard", location: FieldLocation::Path },
+        FieldSpec { snake: "attachments", wire: "attachments", location: FieldLocation::Query },
+        FieldSpec { snake: "attachment_fields", wire: "attachment_fields", location: FieldLocation::Query },
+        FieldSpec { snake: "actions", wire: "actions", location: FieldLocation::Query },
+        FieldSpec { snake: "actions_entities", wire: "actions_entities", location: FieldLocation::Query },
+        FieldSpec { snake: "actions_display", wire: "actions_display", location: FieldLocation::Query },
+        FieldSpec { snake: "actions_limit", wire: "actions_limit", location: FieldLocation::Query },
+        FieldSpec { snake: "action_fields", wire: "action_fields", location: FieldLocation::Query },
+        FieldSpec { snake: "action_member_creator_fields", wire: "action_memberCreator_fields", location: FieldLocation::Query },
+        FieldSpec { snake: "members", wire: "members", location: FieldLocation::Query },
+        FieldSpec { snake: "member_fields", wire: "member_fields", location: FieldLocation::Query },
+        FieldSpec { snake: "check_item_states", wire: "checkItemStates", location: FieldLocation::Query },
+        FieldSpec { snake: "check_item_state_fields", wire: "checkItemState_fields", location: FieldLocation::Query },
+        FieldSpec { snake: "labels", wire: "labels", location: FieldLocation::Query },
+        FieldSpec { snake: "checklists", wire: "checklists", location: FieldLocation::Query },
+        FieldSpec { snake: "checklist_fields", wire: "checklist_fields", location: FieldLocation::Query },
+        FieldSpec { snake: "fields", wire: "fields", location: FieldLocation::Query },
+        FieldSpec { snake: "token", wire: "token", location: FieldLocation::Query },
     ],
     auth: &[
         AuthApply { secret_key: "api_key", kind: AuthKind::ApiKeyQuery("key") },
@@ -1038,14 +1413,14 @@ const OP_BOARD_GET_BOARDS_CHECKLISTS_BY_ID_BOARD: OpSpec = OpSpec {
     method: "GET",
     path_template: "/boards/{id_board}/checklists",
     fields: &[
-        FieldSpec { snake: "id_board", location: FieldLocation::Path },
-        FieldSpec { snake: "cards", location: FieldLocation::Query },
-        FieldSpec { snake: "card_fields", location: FieldLocation::Query },
-        FieldSpec { snake: "check_items", location: FieldLocation::Query },
-        FieldSpec { snake: "check_item_fields", location: FieldLocation::Query },
-        FieldSpec { snake: "filter", location: FieldLocation::Query },
-        FieldSpec { snake: "fields", location: FieldLocation::Query },
-        FieldSpec { snake: "token", location: FieldLocation::Query },
+        FieldSpec { snake: "id_board", wire: "idBoard", location: FieldLocation::Path },
+        FieldSpec { snake: "cards", wire: "cards", location: FieldLocation::Query },
+        FieldSpec { snake: "card_fields", wire: "card_fields", location: FieldLocation::Query },
+        FieldSpec { snake: "check_items", wire: "checkItems", location: FieldLocation::Query },
+        FieldSpec { snake: "check_item_fields", wire: "checkItem_fields", location: FieldLocation::Query },
+        FieldSpec { snake: "filter", wire: "filter", location: FieldLocation::Query },
+        FieldSpec { snake: "fields", wire: "fields", location: FieldLocation::Query },
+        FieldSpec { snake: "token", wire: "token", location: FieldLocation::Query },
     ],
     auth: &[
         AuthApply { secret_key: "api_key", kind: AuthKind::ApiKeyQuery("key") },
@@ -1056,9 +1431,9 @@ const OP_BOARD_ADD_BOARDS_CHECKLISTS_BY_ID_BOARD: OpSpec = OpSpec {
     method: "POST",
     path_template: "/boards/{id_board}/checklists",
     fields: &[
-        FieldSpec { snake: "id_board", location: FieldLocation::Path },
-        FieldSpec { snake: "token", location: FieldLocation::Query },
-        FieldSpec { snake: "name", location: FieldLocation::Body },
+        FieldSpec { snake: "id_board", wire: "idBoard", location: FieldLocation::Path },
+        FieldSpec { snake: "token", wire: "token", location: FieldLocation::Query },
+        FieldSpec { snake: "name", wire: "name", location: FieldLocation::Body },
     ],
     auth: &[
         AuthApply { secret_key: "api_key", kind: AuthKind::ApiKeyQuery("key") },
@@ -1069,9 +1444,9 @@ const OP_BOARD_UPDATE_BOARDS_CLOSED_BY_ID_BOARD: OpSpec = OpSpec {
     method: "PUT",
     path_template: "/boards/{id_board}/closed",
     fields: &[
-        FieldSpec { snake: "id_board", location: FieldLocation::Path },
-        FieldSpec { snake: "token", location: FieldLocation::Query },
-        FieldSpec { snake: "value", location: FieldLocation::Body },
+        FieldSpec { snake: "id_board", wire: "idBoard", location: FieldLocation::Path },
+        FieldSpec { snake: "token", wire: "token", location: FieldLocation::Query },
+        FieldSpec { snake: "value", wire: "value", location: FieldLocation::Body },
     ],
     auth: &[
         AuthApply { secret_key: "api_key", kind: AuthKind::ApiKeyQuery("key") },
@@ -1082,10 +1457,10 @@ const OP_BOARD_GET_BOARDS_DELTAS_BY_ID_BOARD: OpSpec = OpSpec {
     method: "GET",
     path_template: "/boards/{id_board}/deltas",
     fields: &[
-        FieldSpec { snake: "id_board", location: FieldLocation::Path },
-        FieldSpec { snake: "tags", location: FieldLocation::Query },
-        FieldSpec { snake: "ix_last_update", location: FieldLocation::Query },
-        FieldSpec { snake: "token", location: FieldLocation::Query },
+        FieldSpec { snake: "id_board", wire: "idBoard", location: FieldLocation::Path },
+        FieldSpec { snake: "tags", wire: "tags", location: FieldLocation::Query },
+        FieldSpec { snake: "ix_last_update", wire: "ixLastUpdate", location: FieldLocation::Query },
+        FieldSpec { snake: "token", wire: "token", location: FieldLocation::Query },
     ],
     auth: &[
         AuthApply { secret_key: "api_key", kind: AuthKind::ApiKeyQuery("key") },
@@ -1096,9 +1471,9 @@ const OP_BOARD_UPDATE_BOARDS_DESC_BY_ID_BOARD: OpSpec = OpSpec {
     method: "PUT",
     path_template: "/boards/{id_board}/desc",
     fields: &[
-        FieldSpec { snake: "id_board", location: FieldLocation::Path },
-        FieldSpec { snake: "token", location: FieldLocation::Query },
-        FieldSpec { snake: "value", location: FieldLocation::Body },
+        FieldSpec { snake: "id_board", wire: "idBoard", location: FieldLocation::Path },
+        FieldSpec { snake: "token", wire: "token", location: FieldLocation::Query },
+        FieldSpec { snake: "value", wire: "value", location: FieldLocation::Body },
     ],
     auth: &[
         AuthApply { secret_key: "api_key", kind: AuthKind::ApiKeyQuery("key") },
@@ -1109,8 +1484,8 @@ const OP_BOARD_ADD_BOARDS_EMAIL_KEY_GENERATE_BY_ID_BOARD: OpSpec = OpSpec {
     method: "POST",
     path_template: "/boards/{id_board}/emailKey/generate",
     fields: &[
-        FieldSpec { snake: "id_board", location: FieldLocation::Path },
-        FieldSpec { snake: "token", location: FieldLocation::Query },
+        FieldSpec { snake: "id_board", wire: "idBoard", location: FieldLocation::Path },
+        FieldSpec { snake: "token", wire: "token", location: FieldLocation::Query },
     ],
     auth: &[
         AuthApply { secret_key: "api_key", kind: AuthKind::ApiKeyQuery("key") },
@@ -1121,9 +1496,9 @@ const OP_BOARD_UPDATE_BOARDS_ID_ORGANIZATION_BY_ID_BOARD: OpSpec = OpSpec {
     method: "PUT",
     path_template: "/boards/{id_board}/idOrganization",
     fields: &[
-        FieldSpec { snake: "id_board", location: FieldLocation::Path },
-        FieldSpec { snake: "token", location: FieldLocation::Query },
-        FieldSpec { snake: "value", location: FieldLocation::Body },
+        FieldSpec { snake: "id_board", wire: "idBoard", location: FieldLocation::Path },
+        FieldSpec { snake: "token", wire: "token", location: FieldLocation::Query },
+        FieldSpec { snake: "value", wire: "value", location: FieldLocation::Body },
     ],
     auth: &[
         AuthApply { secret_key: "api_key", kind: AuthKind::ApiKeyQuery("key") },
@@ -1134,9 +1509,9 @@ const OP_BOARD_UPDATE_BOARDS_LABEL_NAMES_BLUE_BY_ID_BOARD: OpSpec = OpSpec {
     method: "PUT",
     path_template: "/boards/{id_board}/labelNames/blue",
     fields: &[
-        FieldSpec { snake: "id_board", location: FieldLocation::Path },
-        FieldSpec { snake: "token", location: FieldLocation::Query },
-        FieldSpec { snake: "value", location: FieldLocation::Body },
+        FieldSpec { snake: "id_board", wire: "idBoard", location: FieldLocation::Path },
+        FieldSpec { snake: "token", wire: "token", location: FieldLocation::Query },
+        FieldSpec { snake: "value", wire: "value", location: FieldLocation::Body },
     ],
     auth: &[
         AuthApply { secret_key: "api_key", kind: AuthKind::ApiKeyQuery("key") },
@@ -1147,9 +1522,9 @@ const OP_BOARD_UPDATE_BOARDS_LABEL_NAMES_GREEN_BY_ID_BOARD: OpSpec = OpSpec {
     method: "PUT",
     path_template: "/boards/{id_board}/labelNames/green",
     fields: &[
-        FieldSpec { snake: "id_board", location: FieldLocation::Path },
-        FieldSpec { snake: "token", location: FieldLocation::Query },
-        FieldSpec { snake: "value", location: FieldLocation::Body },
+        FieldSpec { snake: "id_board", wire: "idBoard", location: FieldLocation::Path },
+        FieldSpec { snake: "token", wire: "token", location: FieldLocation::Query },
+        FieldSpec { snake: "value", wire: "value", location: FieldLocation::Body },
     ],
     auth: &[
         AuthApply { secret_key: "api_key", kind: AuthKind::ApiKeyQuery("key") },
@@ -1160,9 +1535,9 @@ const OP_BOARD_UPDATE_BOARDS_LABEL_NAMES_ORANGE_BY_ID_BOARD: OpSpec = OpSpec {
     method: "PUT",
     path_template: "/boards/{id_board}/labelNames/orange",
     fields: &[
-        FieldSpec { snake: "id_board", location: FieldLocation::Path },
-        FieldSpec { snake: "token", location: FieldLocation::Query },
-        FieldSpec { snake: "value", location: FieldLocation::Body },
+        FieldSpec { snake: "id_board", wire: "idBoard", location: FieldLocation::Path },
+        FieldSpec { snake: "token", wire: "token", location: FieldLocation::Query },
+        FieldSpec { snake: "value", wire: "value", location: FieldLocation::Body },
     ],
     auth: &[
         AuthApply { secret_key: "api_key", kind: AuthKind::ApiKeyQuery("key") },
@@ -1173,9 +1548,9 @@ const OP_BOARD_UPDATE_BOARDS_LABEL_NAMES_PURPLE_BY_ID_BOARD: OpSpec = OpSpec {
     method: "PUT",
     path_template: "/boards/{id_board}/labelNames/purple",
     fields: &[
-        FieldSpec { snake: "id_board", location: FieldLocation::Path },
-        FieldSpec { snake: "token", location: FieldLocation::Query },
-        FieldSpec { snake: "value", location: FieldLocation::Body },
+        FieldSpec { snake: "id_board", wire: "idBoard", location: FieldLocation::Path },
+        FieldSpec { snake: "token", wire: "token", location: FieldLocation::Query },
+        FieldSpec { snake: "value", wire: "value", location: FieldLocation::Body },
     ],
     auth: &[
         AuthApply { secret_key: "api_key", kind: AuthKind::ApiKeyQuery("key") },
@@ -1186,9 +1561,9 @@ const OP_BOARD_UPDATE_BOARDS_LABEL_NAMES_RED_BY_ID_BOARD: OpSpec = OpSpec {
     method: "PUT",
     path_template: "/boards/{id_board}/labelNames/red",
     fields: &[
-        FieldSpec { snake: "id_board", location: FieldLocation::Path },
-        FieldSpec { snake: "token", location: FieldLocation::Query },
-        FieldSpec { snake: "value", location: FieldLocation::Body },
+        FieldSpec { snake: "id_board", wire: "idBoard", location: FieldLocation::Path },
+        FieldSpec { snake: "token", wire: "token", location: FieldLocation::Query },
+        FieldSpec { snake: "value", wire: "value", location: FieldLocation::Body },
     ],
     auth: &[
         AuthApply { secret_key: "api_key", kind: AuthKind::ApiKeyQuery("key") },
@@ -1199,9 +1574,9 @@ const OP_BOARD_UPDATE_BOARDS_LABEL_NAMES_YELLOW_BY_ID_BOARD: OpSpec = OpSpec {
     method: "PUT",
     path_template: "/boards/{id_board}/labelNames/yellow",
     fields: &[
-        FieldSpec { snake: "id_board", location: FieldLocation::Path },
-        FieldSpec { snake: "token", location: FieldLocation::Query },
-        FieldSpec { snake: "value", location: FieldLocation::Body },
+        FieldSpec { snake: "id_board", wire: "idBoard", location: FieldLocation::Path },
+        FieldSpec { snake: "token", wire: "token", location: FieldLocation::Query },
+        FieldSpec { snake: "value", wire: "value", location: FieldLocation::Body },
     ],
     auth: &[
         AuthApply { secret_key: "api_key", kind: AuthKind::ApiKeyQuery("key") },
@@ -1212,10 +1587,10 @@ const OP_BOARD_GET_BOARDS_LABELS_BY_ID_BOARD: OpSpec = OpSpec {
     method: "GET",
     path_template: "/boards/{id_board}/labels",
     fields: &[
-        FieldSpec { snake: "id_board", location: FieldLocation::Path },
-        FieldSpec { snake: "fields", location: FieldLocation::Query },
-        FieldSpec { snake: "limit", location: FieldLocation::Query },
-        FieldSpec { snake: "token", location: FieldLocation::Query },
+        FieldSpec { snake: "id_board", wire: "idBoard", location: FieldLocation::Path },
+        FieldSpec { snake: "fields", wire: "fields", location: FieldLocation::Query },
+        FieldSpec { snake: "limit", wire: "limit", location: FieldLocation::Query },
+        FieldSpec { snake: "token", wire: "token", location: FieldLocation::Query },
     ],
     auth: &[
         AuthApply { secret_key: "api_key", kind: AuthKind::ApiKeyQuery("key") },
@@ -1226,10 +1601,10 @@ const OP_BOARD_ADD_BOARDS_LABELS_BY_ID_BOARD: OpSpec = OpSpec {
     method: "POST",
     path_template: "/boards/{id_board}/labels",
     fields: &[
-        FieldSpec { snake: "id_board", location: FieldLocation::Path },
-        FieldSpec { snake: "token", location: FieldLocation::Query },
-        FieldSpec { snake: "color", location: FieldLocation::Body },
-        FieldSpec { snake: "name", location: FieldLocation::Body },
+        FieldSpec { snake: "id_board", wire: "idBoard", location: FieldLocation::Path },
+        FieldSpec { snake: "token", wire: "token", location: FieldLocation::Query },
+        FieldSpec { snake: "color", wire: "color", location: FieldLocation::Body },
+        FieldSpec { snake: "name", wire: "name", location: FieldLocation::Body },
     ],
     auth: &[
         AuthApply { secret_key: "api_key", kind: AuthKind::ApiKeyQuery("key") },
@@ -1240,10 +1615,10 @@ const OP_BOARD_GET_BOARDS_LABELS_BY_ID_BOARD_BY_ID_LABEL: OpSpec = OpSpec {
     method: "GET",
     path_template: "/boards/{id_board}/labels/{id_label}",
     fields: &[
-        FieldSpec { snake: "id_board", location: FieldLocation::Path },
-        FieldSpec { snake: "id_label", location: FieldLocation::Path },
-        FieldSpec { snake: "fields", location: FieldLocation::Query },
-        FieldSpec { snake: "token", location: FieldLocation::Query },
+        FieldSpec { snake: "id_board", wire: "idBoard", location: FieldLocation::Path },
+        FieldSpec { snake: "id_label", wire: "idLabel", location: FieldLocation::Path },
+        FieldSpec { snake: "fields", wire: "fields", location: FieldLocation::Query },
+        FieldSpec { snake: "token", wire: "token", location: FieldLocation::Query },
     ],
     auth: &[
         AuthApply { secret_key: "api_key", kind: AuthKind::ApiKeyQuery("key") },
@@ -1254,12 +1629,12 @@ const OP_BOARD_GET_BOARDS_LISTS_BY_ID_BOARD: OpSpec = OpSpec {
     method: "GET",
     path_template: "/boards/{id_board}/lists",
     fields: &[
-        FieldSpec { snake: "id_board", location: FieldLocation::Path },
-        FieldSpec { snake: "cards", location: FieldLocation::Query },
-        FieldSpec { snake: "card_fields", location: FieldLocation::Query },
-        FieldSpec { snake: "filter", location: FieldLocation::Query },
-        FieldSpec { snake: "fields", location: FieldLocation::Query },
-        FieldSpec { snake: "token", location: FieldLocation::Query },
+        FieldSpec { snake: "id_board", wire: "idBoard", location: FieldLocation::Path },
+        FieldSpec { snake: "cards", wire: "cards", location: FieldLocation::Query },
+        FieldSpec { snake: "card_fields", wire: "card_fields", location: FieldLocation::Query },
+        FieldSpec { snake: "filter", wire: "filter", location: FieldLocation::Query },
+        FieldSpec { snake: "fields", wire: "fields", location: FieldLocation::Query },
+        FieldSpec { snake: "token", wire: "token", location: FieldLocation::Query },
     ],
     auth: &[
         AuthApply { secret_key: "api_key", kind: AuthKind::ApiKeyQuery("key") },
@@ -1270,10 +1645,10 @@ const OP_BOARD_ADD_BOARDS_LISTS_BY_ID_BOARD: OpSpec = OpSpec {
     method: "POST",
     path_template: "/boards/{id_board}/lists",
     fields: &[
-        FieldSpec { snake: "id_board", location: FieldLocation::Path },
-        FieldSpec { snake: "token", location: FieldLocation::Query },
-        FieldSpec { snake: "name", location: FieldLocation::Body },
-        FieldSpec { snake: "pos", location: FieldLocation::Body },
+        FieldSpec { snake: "id_board", wire: "idBoard", location: FieldLocation::Path },
+        FieldSpec { snake: "token", wire: "token", location: FieldLocation::Query },
+        FieldSpec { snake: "name", wire: "name", location: FieldLocation::Body },
+        FieldSpec { snake: "pos", wire: "pos", location: FieldLocation::Body },
     ],
     auth: &[
         AuthApply { secret_key: "api_key", kind: AuthKind::ApiKeyQuery("key") },
@@ -1284,10 +1659,10 @@ const OP_BOARD_GET_BOARDS_LISTS_BY_ID_BOARD_BY_FILTER: OpSpec = OpSpec {
     method: "GET",
     path_template: "/boards/{id_board}/lists/{filter}",
     fields: &[
-        FieldSpec { snake: "id_board", location: FieldLocation::Path },
-        FieldSpec { snake: "filter", location: FieldLocation::Path },
-        FieldSpec { snake: "key", location: FieldLocation::Query },
-        FieldSpec { snake: "token", location: FieldLocation::Query },
+        FieldSpec { snake: "id_board", wire: "idBoard", location: FieldLocation::Path },
+        FieldSpec { snake: "filter", wire: "filter", location: FieldLocation::Path },
+        FieldSpec { snake: "key", wire: "key", location: FieldLocation::Query },
+        FieldSpec { snake: "token", wire: "token", location: FieldLocation::Query },
     ],
     auth: &[
     ],
@@ -1297,8 +1672,8 @@ const OP_BOARD_ADD_BOARDS_MARK_AS_VIEWED_BY_ID_BOARD: OpSpec = OpSpec {
     method: "POST",
     path_template: "/boards/{id_board}/markAsViewed",
     fields: &[
-        FieldSpec { snake: "id_board", location: FieldLocation::Path },
-        FieldSpec { snake: "token", location: FieldLocation::Query },
+        FieldSpec { snake: "id_board", wire: "idBoard", location: FieldLocation::Path },
+        FieldSpec { snake: "token", wire: "token", location: FieldLocation::Query },
     ],
     auth: &[
         AuthApply { secret_key: "api_key", kind: AuthKind::ApiKeyQuery("key") },
@@ -1309,11 +1684,11 @@ const OP_BOARD_GET_BOARDS_MEMBERS_BY_ID_BOARD: OpSpec = OpSpec {
     method: "GET",
     path_template: "/boards/{id_board}/members",
     fields: &[
-        FieldSpec { snake: "id_board", location: FieldLocation::Path },
-        FieldSpec { snake: "filter", location: FieldLocation::Query },
-        FieldSpec { snake: "fields", location: FieldLocation::Query },
-        FieldSpec { snake: "activity", location: FieldLocation::Query },
-        FieldSpec { snake: "token", location: FieldLocation::Query },
+        FieldSpec { snake: "id_board", wire: "idBoard", location: FieldLocation::Path },
+        FieldSpec { snake: "filter", wire: "filter", location: FieldLocation::Query },
+        FieldSpec { snake: "fields", wire: "fields", location: FieldLocation::Query },
+        FieldSpec { snake: "activity", wire: "activity", location: FieldLocation::Query },
+        FieldSpec { snake: "token", wire: "token", location: FieldLocation::Query },
     ],
     auth: &[
         AuthApply { secret_key: "api_key", kind: AuthKind::ApiKeyQuery("key") },
@@ -1324,11 +1699,11 @@ const OP_BOARD_UPDATE_BOARDS_MEMBERS_BY_ID_BOARD: OpSpec = OpSpec {
     method: "PUT",
     path_template: "/boards/{id_board}/members",
     fields: &[
-        FieldSpec { snake: "id_board", location: FieldLocation::Path },
-        FieldSpec { snake: "token", location: FieldLocation::Query },
-        FieldSpec { snake: "email", location: FieldLocation::Body },
-        FieldSpec { snake: "full_name", location: FieldLocation::Body },
-        FieldSpec { snake: "type", location: FieldLocation::Body },
+        FieldSpec { snake: "id_board", wire: "idBoard", location: FieldLocation::Path },
+        FieldSpec { snake: "token", wire: "token", location: FieldLocation::Query },
+        FieldSpec { snake: "email", wire: "email", location: FieldLocation::Body },
+        FieldSpec { snake: "full_name", wire: "fullName", location: FieldLocation::Body },
+        FieldSpec { snake: "type", wire: "type", location: FieldLocation::Body },
     ],
     auth: &[
         AuthApply { secret_key: "api_key", kind: AuthKind::ApiKeyQuery("key") },
@@ -1339,10 +1714,10 @@ const OP_BOARD_GET_BOARDS_MEMBERS_BY_ID_BOARD_BY_FILTER: OpSpec = OpSpec {
     method: "GET",
     path_template: "/boards/{id_board}/members/{filter}",
     fields: &[
-        FieldSpec { snake: "id_board", location: FieldLocation::Path },
-        FieldSpec { snake: "filter", location: FieldLocation::Path },
-        FieldSpec { snake: "key", location: FieldLocation::Query },
-        FieldSpec { snake: "token", location: FieldLocation::Query },
+        FieldSpec { snake: "id_board", wire: "idBoard", location: FieldLocation::Path },
+        FieldSpec { snake: "filter", wire: "filter", location: FieldLocation::Path },
+        FieldSpec { snake: "key", wire: "key", location: FieldLocation::Query },
+        FieldSpec { snake: "token", wire: "token", location: FieldLocation::Query },
     ],
     auth: &[
     ],
@@ -1352,12 +1727,12 @@ const OP_BOARD_UPDATE_BOARDS_MEMBERS_BY_ID_BOARD_BY_ID_MEMBER: OpSpec = OpSpec {
     method: "PUT",
     path_template: "/boards/{id_board}/members/{id_member}",
     fields: &[
-        FieldSpec { snake: "id_board", location: FieldLocation::Path },
-        FieldSpec { snake: "id_member", location: FieldLocation::Path },
-        FieldSpec { snake: "token", location: FieldLocation::Query },
-        FieldSpec { snake: "email", location: FieldLocation::Body },
-        FieldSpec { snake: "full_name", location: FieldLocation::Body },
-        FieldSpec { snake: "type", location: FieldLocation::Body },
+        FieldSpec { snake: "id_board", wire: "idBoard", location: FieldLocation::Path },
+        FieldSpec { snake: "id_member", wire: "idMember", location: FieldLocation::Path },
+        FieldSpec { snake: "token", wire: "token", location: FieldLocation::Query },
+        FieldSpec { snake: "email", wire: "email", location: FieldLocation::Body },
+        FieldSpec { snake: "full_name", wire: "fullName", location: FieldLocation::Body },
+        FieldSpec { snake: "type", wire: "type", location: FieldLocation::Body },
     ],
     auth: &[
         AuthApply { secret_key: "api_key", kind: AuthKind::ApiKeyQuery("key") },
@@ -1368,9 +1743,9 @@ const OP_BOARD_DELETE_BOARDS_MEMBERS_BY_ID_BOARD_BY_ID_MEMBER: OpSpec = OpSpec {
     method: "DELETE",
     path_template: "/boards/{id_board}/members/{id_member}",
     fields: &[
-        FieldSpec { snake: "id_board", location: FieldLocation::Path },
-        FieldSpec { snake: "id_member", location: FieldLocation::Path },
-        FieldSpec { snake: "token", location: FieldLocation::Query },
+        FieldSpec { snake: "id_board", wire: "idBoard", location: FieldLocation::Path },
+        FieldSpec { snake: "id_member", wire: "idMember", location: FieldLocation::Path },
+        FieldSpec { snake: "token", wire: "token", location: FieldLocation::Query },
     ],
     auth: &[
         AuthApply { secret_key: "api_key", kind: AuthKind::ApiKeyQuery("key") },
@@ -1381,22 +1756,22 @@ const OP_BOARD_GET_BOARDS_MEMBERS_CARDS_BY_ID_BOARD_BY_ID_MEMBER: OpSpec = OpSpe
     method: "GET",
     path_template: "/boards/{id_board}/members/{id_member}/cards",
     fields: &[
-        FieldSpec { snake: "id_board", location: FieldLocation::Path },
-        FieldSpec { snake: "id_member", location: FieldLocation::Path },
-        FieldSpec { snake: "actions", location: FieldLocation::Query },
-        FieldSpec { snake: "attachments", location: FieldLocation::Query },
-        FieldSpec { snake: "attachment_fields", location: FieldLocation::Query },
-        FieldSpec { snake: "members", location: FieldLocation::Query },
-        FieldSpec { snake: "member_fields", location: FieldLocation::Query },
-        FieldSpec { snake: "check_item_states", location: FieldLocation::Query },
-        FieldSpec { snake: "checklists", location: FieldLocation::Query },
-        FieldSpec { snake: "board", location: FieldLocation::Query },
-        FieldSpec { snake: "board_fields", location: FieldLocation::Query },
-        FieldSpec { snake: "list", location: FieldLocation::Query },
-        FieldSpec { snake: "list_fields", location: FieldLocation::Query },
-        FieldSpec { snake: "filter", location: FieldLocation::Query },
-        FieldSpec { snake: "fields", location: FieldLocation::Query },
-        FieldSpec { snake: "token", location: FieldLocation::Query },
+        FieldSpec { snake: "id_board", wire: "idBoard", location: FieldLocation::Path },
+        FieldSpec { snake: "id_member", wire: "idMember", location: FieldLocation::Path },
+        FieldSpec { snake: "actions", wire: "actions", location: FieldLocation::Query },
+        FieldSpec { snake: "attachments", wire: "attachments", location: FieldLocation::Query },
+        FieldSpec { snake: "attachment_fields", wire: "attachment_fields", location: FieldLocation::Query },
+        FieldSpec { snake: "members", wire: "members", location: FieldLocation::Query },
+        FieldSpec { snake: "member_fields", wire: "member_fields", location: FieldLocation::Query },
+        FieldSpec { snake: "check_item_states", wire: "checkItemStates", location: FieldLocation::Query },
+        FieldSpec { snake: "checklists", wire: "checklists", location: FieldLocation::Query },
+        FieldSpec { snake: "board", wire: "board", location: FieldLocation::Query },
+        FieldSpec { snake: "board_fields", wire: "board_fields", location: FieldLocation::Query },
+        FieldSpec { snake: "list", wire: "list", location: FieldLocation::Query },
+        FieldSpec { snake: "list_fields", wire: "list_fields", location: FieldLocation::Query },
+        FieldSpec { snake: "filter", wire: "filter", location: FieldLocation::Query },
+        FieldSpec { snake: "fields", wire: "fields", location: FieldLocation::Query },
+        FieldSpec { snake: "token", wire: "token", location: FieldLocation::Query },
     ],
     auth: &[
         AuthApply { secret_key: "api_key", kind: AuthKind::ApiKeyQuery("key") },
@@ -1407,9 +1782,9 @@ const OP_BOARD_GET_BOARDS_MEMBERS_INVITED_BY_ID_BOARD: OpSpec = OpSpec {
     method: "GET",
     path_template: "/boards/{id_board}/membersInvited",
     fields: &[
-        FieldSpec { snake: "id_board", location: FieldLocation::Path },
-        FieldSpec { snake: "fields", location: FieldLocation::Query },
-        FieldSpec { snake: "token", location: FieldLocation::Query },
+        FieldSpec { snake: "id_board", wire: "idBoard", location: FieldLocation::Path },
+        FieldSpec { snake: "fields", wire: "fields", location: FieldLocation::Query },
+        FieldSpec { snake: "token", wire: "token", location: FieldLocation::Query },
     ],
     auth: &[
         AuthApply { secret_key: "api_key", kind: AuthKind::ApiKeyQuery("key") },
@@ -1420,9 +1795,9 @@ const OP_BOARD_GET_BOARDS_MEMBERS_INVITED_BY_ID_BOARD_BY_FIELD: OpSpec = OpSpec 
     method: "GET",
     path_template: "/boards/{id_board}/membersInvited/{field}",
     fields: &[
-        FieldSpec { snake: "id_board", location: FieldLocation::Path },
-        FieldSpec { snake: "field", location: FieldLocation::Path },
-        FieldSpec { snake: "token", location: FieldLocation::Query },
+        FieldSpec { snake: "id_board", wire: "idBoard", location: FieldLocation::Path },
+        FieldSpec { snake: "field", wire: "field", location: FieldLocation::Path },
+        FieldSpec { snake: "token", wire: "token", location: FieldLocation::Query },
     ],
     auth: &[
         AuthApply { secret_key: "api_key", kind: AuthKind::ApiKeyQuery("key") },
@@ -1433,11 +1808,11 @@ const OP_BOARD_GET_BOARDS_MEMBERSHIPS_BY_ID_BOARD: OpSpec = OpSpec {
     method: "GET",
     path_template: "/boards/{id_board}/memberships",
     fields: &[
-        FieldSpec { snake: "id_board", location: FieldLocation::Path },
-        FieldSpec { snake: "filter", location: FieldLocation::Query },
-        FieldSpec { snake: "member", location: FieldLocation::Query },
-        FieldSpec { snake: "member_fields", location: FieldLocation::Query },
-        FieldSpec { snake: "token", location: FieldLocation::Query },
+        FieldSpec { snake: "id_board", wire: "idBoard", location: FieldLocation::Path },
+        FieldSpec { snake: "filter", wire: "filter", location: FieldLocation::Query },
+        FieldSpec { snake: "member", wire: "member", location: FieldLocation::Query },
+        FieldSpec { snake: "member_fields", wire: "member_fields", location: FieldLocation::Query },
+        FieldSpec { snake: "token", wire: "token", location: FieldLocation::Query },
     ],
     auth: &[
         AuthApply { secret_key: "api_key", kind: AuthKind::ApiKeyQuery("key") },
@@ -1448,11 +1823,11 @@ const OP_BOARD_GET_BOARDS_MEMBERSHIPS_BY_ID_BOARD_BY_ID_MEMBERSHIP: OpSpec = OpS
     method: "GET",
     path_template: "/boards/{id_board}/memberships/{id_membership}",
     fields: &[
-        FieldSpec { snake: "id_board", location: FieldLocation::Path },
-        FieldSpec { snake: "id_membership", location: FieldLocation::Path },
-        FieldSpec { snake: "member", location: FieldLocation::Query },
-        FieldSpec { snake: "member_fields", location: FieldLocation::Query },
-        FieldSpec { snake: "token", location: FieldLocation::Query },
+        FieldSpec { snake: "id_board", wire: "idBoard", location: FieldLocation::Path },
+        FieldSpec { snake: "id_membership", wire: "idMembership", location: FieldLocation::Path },
+        FieldSpec { snake: "member", wire: "member", location: FieldLocation::Query },
+        FieldSpec { snake: "member_fields", wire: "member_fields", location: FieldLocation::Query },
+        FieldSpec { snake: "token", wire: "token", location: FieldLocation::Query },
     ],
     auth: &[
         AuthApply { secret_key: "api_key", kind: AuthKind::ApiKeyQuery("key") },
@@ -1463,11 +1838,11 @@ const OP_BOARD_UPDATE_BOARDS_MEMBERSHIPS_BY_ID_BOARD_BY_ID_MEMBERSHIP: OpSpec = 
     method: "PUT",
     path_template: "/boards/{id_board}/memberships/{id_membership}",
     fields: &[
-        FieldSpec { snake: "id_board", location: FieldLocation::Path },
-        FieldSpec { snake: "id_membership", location: FieldLocation::Path },
-        FieldSpec { snake: "token", location: FieldLocation::Query },
-        FieldSpec { snake: "member_fields", location: FieldLocation::Body },
-        FieldSpec { snake: "type", location: FieldLocation::Body },
+        FieldSpec { snake: "id_board", wire: "idBoard", location: FieldLocation::Path },
+        FieldSpec { snake: "id_membership", wire: "idMembership", location: FieldLocation::Path },
+        FieldSpec { snake: "token", wire: "token", location: FieldLocation::Query },
+        FieldSpec { snake: "member_fields", wire: "member_fields", location: FieldLocation::Body },
+        FieldSpec { snake: "type", wire: "type", location: FieldLocation::Body },
     ],
     auth: &[
         AuthApply { secret_key: "api_key", kind: AuthKind::ApiKeyQuery("key") },
@@ -1478,8 +1853,8 @@ const OP_BOARD_GET_BOARDS_MY_PREFS_BY_ID_BOARD: OpSpec = OpSpec {
     method: "GET",
     path_template: "/boards/{id_board}/myPrefs",
     fields: &[
-        FieldSpec { snake: "id_board", location: FieldLocation::Path },
-        FieldSpec { snake: "token", location: FieldLocation::Query },
+        FieldSpec { snake: "id_board", wire: "idBoard", location: FieldLocation::Path },
+        FieldSpec { snake: "token", wire: "token", location: FieldLocation::Query },
     ],
     auth: &[
         AuthApply { secret_key: "api_key", kind: AuthKind::ApiKeyQuery("key") },
@@ -1490,9 +1865,9 @@ const OP_BOARD_UPDATE_BOARDS_MY_PREFS_EMAIL_POSITION_BY_ID_BOARD: OpSpec = OpSpe
     method: "PUT",
     path_template: "/boards/{id_board}/myPrefs/emailPosition",
     fields: &[
-        FieldSpec { snake: "id_board", location: FieldLocation::Path },
-        FieldSpec { snake: "token", location: FieldLocation::Query },
-        FieldSpec { snake: "value", location: FieldLocation::Body },
+        FieldSpec { snake: "id_board", wire: "idBoard", location: FieldLocation::Path },
+        FieldSpec { snake: "token", wire: "token", location: FieldLocation::Query },
+        FieldSpec { snake: "value", wire: "value", location: FieldLocation::Body },
     ],
     auth: &[
         AuthApply { secret_key: "api_key", kind: AuthKind::ApiKeyQuery("key") },
@@ -1503,9 +1878,9 @@ const OP_BOARD_UPDATE_BOARDS_MY_PREFS_ID_EMAIL_LIST_BY_ID_BOARD: OpSpec = OpSpec
     method: "PUT",
     path_template: "/boards/{id_board}/myPrefs/idEmailList",
     fields: &[
-        FieldSpec { snake: "id_board", location: FieldLocation::Path },
-        FieldSpec { snake: "token", location: FieldLocation::Query },
-        FieldSpec { snake: "value", location: FieldLocation::Body },
+        FieldSpec { snake: "id_board", wire: "idBoard", location: FieldLocation::Path },
+        FieldSpec { snake: "token", wire: "token", location: FieldLocation::Query },
+        FieldSpec { snake: "value", wire: "value", location: FieldLocation::Body },
     ],
     auth: &[
         AuthApply { secret_key: "api_key", kind: AuthKind::ApiKeyQuery("key") },
@@ -1516,9 +1891,9 @@ const OP_BOARD_UPDATE_BOARDS_MY_PREFS_SHOW_LIST_GUIDE_BY_ID_BOARD: OpSpec = OpSp
     method: "PUT",
     path_template: "/boards/{id_board}/myPrefs/showListGuide",
     fields: &[
-        FieldSpec { snake: "id_board", location: FieldLocation::Path },
-        FieldSpec { snake: "token", location: FieldLocation::Query },
-        FieldSpec { snake: "value", location: FieldLocation::Body },
+        FieldSpec { snake: "id_board", wire: "idBoard", location: FieldLocation::Path },
+        FieldSpec { snake: "token", wire: "token", location: FieldLocation::Query },
+        FieldSpec { snake: "value", wire: "value", location: FieldLocation::Body },
     ],
     auth: &[
         AuthApply { secret_key: "api_key", kind: AuthKind::ApiKeyQuery("key") },
@@ -1529,9 +1904,9 @@ const OP_BOARD_UPDATE_BOARDS_MY_PREFS_SHOW_SIDEBAR_BY_ID_BOARD: OpSpec = OpSpec 
     method: "PUT",
     path_template: "/boards/{id_board}/myPrefs/showSidebar",
     fields: &[
-        FieldSpec { snake: "id_board", location: FieldLocation::Path },
-        FieldSpec { snake: "token", location: FieldLocation::Query },
-        FieldSpec { snake: "value", location: FieldLocation::Body },
+        FieldSpec { snake: "id_board", wire: "idBoard", location: FieldLocation::Path },
+        FieldSpec { snake: "token", wire: "token", location: FieldLocation::Query },
+        FieldSpec { snake: "value", wire: "value", location: FieldLocation::Body },
     ],
     auth: &[
         AuthApply { secret_key: "api_key", kind: AuthKind::ApiKeyQuery("key") },
@@ -1542,9 +1917,9 @@ const OP_BOARD_UPDATE_BOARDS_MY_PREFS_SHOW_SIDEBAR_ACTIVITY_BY_ID_BOARD: OpSpec 
     method: "PUT",
     path_template: "/boards/{id_board}/myPrefs/showSidebarActivity",
     fields: &[
-        FieldSpec { snake: "id_board", location: FieldLocation::Path },
-        FieldSpec { snake: "token", location: FieldLocation::Query },
-        FieldSpec { snake: "value", location: FieldLocation::Body },
+        FieldSpec { snake: "id_board", wire: "idBoard", location: FieldLocation::Path },
+        FieldSpec { snake: "token", wire: "token", location: FieldLocation::Query },
+        FieldSpec { snake: "value", wire: "value", location: FieldLocation::Body },
     ],
     auth: &[
         AuthApply { secret_key: "api_key", kind: AuthKind::ApiKeyQuery("key") },
@@ -1555,9 +1930,9 @@ const OP_BOARD_UPDATE_BOARDS_MY_PREFS_SHOW_SIDEBAR_BOARD_ACTIONS_BY_ID_BOARD: Op
     method: "PUT",
     path_template: "/boards/{id_board}/myPrefs/showSidebarBoardActions",
     fields: &[
-        FieldSpec { snake: "id_board", location: FieldLocation::Path },
-        FieldSpec { snake: "token", location: FieldLocation::Query },
-        FieldSpec { snake: "value", location: FieldLocation::Body },
+        FieldSpec { snake: "id_board", wire: "idBoard", location: FieldLocation::Path },
+        FieldSpec { snake: "token", wire: "token", location: FieldLocation::Query },
+        FieldSpec { snake: "value", wire: "value", location: FieldLocation::Body },
     ],
     auth: &[
         AuthApply { secret_key: "api_key", kind: AuthKind::ApiKeyQuery("key") },
@@ -1568,9 +1943,9 @@ const OP_BOARD_UPDATE_BOARDS_MY_PREFS_SHOW_SIDEBAR_MEMBERS_BY_ID_BOARD: OpSpec =
     method: "PUT",
     path_template: "/boards/{id_board}/myPrefs/showSidebarMembers",
     fields: &[
-        FieldSpec { snake: "id_board", location: FieldLocation::Path },
-        FieldSpec { snake: "token", location: FieldLocation::Query },
-        FieldSpec { snake: "value", location: FieldLocation::Body },
+        FieldSpec { snake: "id_board", wire: "idBoard", location: FieldLocation::Path },
+        FieldSpec { snake: "token", wire: "token", location: FieldLocation::Query },
+        FieldSpec { snake: "value", wire: "value", location: FieldLocation::Body },
     ],
     auth: &[
         AuthApply { secret_key: "api_key", kind: AuthKind::ApiKeyQuery("key") },
@@ -1581,9 +1956,9 @@ const OP_BOARD_UPDATE_BOARDS_NAME_BY_ID_BOARD: OpSpec = OpSpec {
     method: "PUT",
     path_template: "/boards/{id_board}/name",
     fields: &[
-        FieldSpec { snake: "id_board", location: FieldLocation::Path },
-        FieldSpec { snake: "token", location: FieldLocation::Query },
-        FieldSpec { snake: "value", location: FieldLocation::Body },
+        FieldSpec { snake: "id_board", wire: "idBoard", location: FieldLocation::Path },
+        FieldSpec { snake: "token", wire: "token", location: FieldLocation::Query },
+        FieldSpec { snake: "value", wire: "value", location: FieldLocation::Body },
     ],
     auth: &[
         AuthApply { secret_key: "api_key", kind: AuthKind::ApiKeyQuery("key") },
@@ -1594,9 +1969,9 @@ const OP_BOARD_GET_BOARDS_ORGANIZATION_BY_ID_BOARD: OpSpec = OpSpec {
     method: "GET",
     path_template: "/boards/{id_board}/organization",
     fields: &[
-        FieldSpec { snake: "id_board", location: FieldLocation::Path },
-        FieldSpec { snake: "fields", location: FieldLocation::Query },
-        FieldSpec { snake: "token", location: FieldLocation::Query },
+        FieldSpec { snake: "id_board", wire: "idBoard", location: FieldLocation::Path },
+        FieldSpec { snake: "fields", wire: "fields", location: FieldLocation::Query },
+        FieldSpec { snake: "token", wire: "token", location: FieldLocation::Query },
     ],
     auth: &[
         AuthApply { secret_key: "api_key", kind: AuthKind::ApiKeyQuery("key") },
@@ -1607,9 +1982,9 @@ const OP_BOARD_GET_BOARDS_ORGANIZATION_BY_ID_BOARD_BY_FIELD: OpSpec = OpSpec {
     method: "GET",
     path_template: "/boards/{id_board}/organization/{field}",
     fields: &[
-        FieldSpec { snake: "id_board", location: FieldLocation::Path },
-        FieldSpec { snake: "field", location: FieldLocation::Path },
-        FieldSpec { snake: "token", location: FieldLocation::Query },
+        FieldSpec { snake: "id_board", wire: "idBoard", location: FieldLocation::Path },
+        FieldSpec { snake: "field", wire: "field", location: FieldLocation::Path },
+        FieldSpec { snake: "token", wire: "token", location: FieldLocation::Query },
     ],
     auth: &[
         AuthApply { secret_key: "api_key", kind: AuthKind::ApiKeyQuery("key") },
@@ -1620,9 +1995,9 @@ const OP_BOARD_ADD_BOARDS_POWER_UPS_BY_ID_BOARD: OpSpec = OpSpec {
     method: "POST",
     path_template: "/boards/{id_board}/powerUps",
     fields: &[
-        FieldSpec { snake: "id_board", location: FieldLocation::Path },
-        FieldSpec { snake: "token", location: FieldLocation::Query },
-        FieldSpec { snake: "value", location: FieldLocation::Body },
+        FieldSpec { snake: "id_board", wire: "idBoard", location: FieldLocation::Path },
+        FieldSpec { snake: "token", wire: "token", location: FieldLocation::Query },
+        FieldSpec { snake: "value", wire: "value", location: FieldLocation::Body },
     ],
     auth: &[
         AuthApply { secret_key: "api_key", kind: AuthKind::ApiKeyQuery("key") },
@@ -1633,9 +2008,9 @@ const OP_BOARD_DELETE_BOARDS_POWER_UPS_BY_ID_BOARD_BY_POWER_UP: OpSpec = OpSpec 
     method: "DELETE",
     path_template: "/boards/{id_board}/powerUps/{power_up}",
     fields: &[
-        FieldSpec { snake: "id_board", location: FieldLocation::Path },
-        FieldSpec { snake: "power_up", location: FieldLocation::Path },
-        FieldSpec { snake: "token", location: FieldLocation::Query },
+        FieldSpec { snake: "id_board", wire: "idBoard", location: FieldLocation::Path },
+        FieldSpec { snake: "power_up", wire: "powerUp", location: FieldLocation::Path },
+        FieldSpec { snake: "token", wire: "token", location: FieldLocation::Query },
     ],
     auth: &[
         AuthApply { secret_key: "api_key", kind: AuthKind::ApiKeyQuery("key") },
@@ -1646,9 +2021,9 @@ const OP_BOARD_UPDATE_BOARDS_PREFS_BACKGROUND_BY_ID_BOARD: OpSpec = OpSpec {
     method: "PUT",
     path_template: "/boards/{id_board}/prefs/background",
     fields: &[
-        FieldSpec { snake: "id_board", location: FieldLocation::Path },
-        FieldSpec { snake: "token", location: FieldLocation::Query },
-        FieldSpec { snake: "value", location: FieldLocation::Body },
+        FieldSpec { snake: "id_board", wire: "idBoard", location: FieldLocation::Path },
+        FieldSpec { snake: "token", wire: "token", location: FieldLocation::Query },
+        FieldSpec { snake: "value", wire: "value", location: FieldLocation::Body },
     ],
     auth: &[
         AuthApply { secret_key: "api_key", kind: AuthKind::ApiKeyQuery("key") },
@@ -1659,9 +2034,9 @@ const OP_BOARD_UPDATE_BOARDS_PREFS_CALENDAR_FEED_ENABLED_BY_ID_BOARD: OpSpec = O
     method: "PUT",
     path_template: "/boards/{id_board}/prefs/calendarFeedEnabled",
     fields: &[
-        FieldSpec { snake: "id_board", location: FieldLocation::Path },
-        FieldSpec { snake: "token", location: FieldLocation::Query },
-        FieldSpec { snake: "value", location: FieldLocation::Body },
+        FieldSpec { snake: "id_board", wire: "idBoard", location: FieldLocation::Path },
+        FieldSpec { snake: "token", wire: "token", location: FieldLocation::Query },
+        FieldSpec { snake: "value", wire: "value", location: FieldLocation::Body },
     ],
     auth: &[
         AuthApply { secret_key: "api_key", kind: AuthKind::ApiKeyQuery("key") },
@@ -1672,9 +2047,9 @@ const OP_BOARD_UPDATE_BOARDS_PREFS_CARD_AGING_BY_ID_BOARD: OpSpec = OpSpec {
     method: "PUT",
     path_template: "/boards/{id_board}/prefs/cardAging",
     fields: &[
-        FieldSpec { snake: "id_board", location: FieldLocation::Path },
-        FieldSpec { snake: "token", location: FieldLocation::Query },
-        FieldSpec { snake: "value", location: FieldLocation::Body },
+        FieldSpec { snake: "id_board", wire: "idBoard", location: FieldLocation::Path },
+        FieldSpec { snake: "token", wire: "token", location: FieldLocation::Query },
+        FieldSpec { snake: "value", wire: "value", location: FieldLocation::Body },
     ],
     auth: &[
         AuthApply { secret_key: "api_key", kind: AuthKind::ApiKeyQuery("key") },
@@ -1685,9 +2060,9 @@ const OP_BOARD_UPDATE_BOARDS_PREFS_CARD_COVERS_BY_ID_BOARD: OpSpec = OpSpec {
     method: "PUT",
     path_template: "/boards/{id_board}/prefs/cardCovers",
     fields: &[
-        FieldSpec { snake: "id_board", location: FieldLocation::Path },
-        FieldSpec { snake: "token", location: FieldLocation::Query },
-        FieldSpec { snake: "value", location: FieldLocation::Body },
+        FieldSpec { snake: "id_board", wire: "idBoard", location: FieldLocation::Path },
+        FieldSpec { snake: "token", wire: "token", location: FieldLocation::Query },
+        FieldSpec { snake: "value", wire: "value", location: FieldLocation::Body },
     ],
     auth: &[
         AuthApply { secret_key: "api_key", kind: AuthKind::ApiKeyQuery("key") },
@@ -1698,9 +2073,9 @@ const OP_BOARD_UPDATE_BOARDS_PREFS_COMMENTS_BY_ID_BOARD: OpSpec = OpSpec {
     method: "PUT",
     path_template: "/boards/{id_board}/prefs/comments",
     fields: &[
-        FieldSpec { snake: "id_board", location: FieldLocation::Path },
-        FieldSpec { snake: "token", location: FieldLocation::Query },
-        FieldSpec { snake: "value", location: FieldLocation::Body },
+        FieldSpec { snake: "id_board", wire: "idBoard", location: FieldLocation::Path },
+        FieldSpec { snake: "token", wire: "token", location: FieldLocation::Query },
+        FieldSpec { snake: "value", wire: "value", location: FieldLocation::Body },
     ],
     auth: &[
         AuthApply { secret_key: "api_key", kind: AuthKind::ApiKeyQuery("key") },
@@ -1711,9 +2086,9 @@ const OP_BOARD_UPDATE_BOARDS_PREFS_INVITATIONS_BY_ID_BOARD: OpSpec = OpSpec {
     method: "PUT",
     path_template: "/boards/{id_board}/prefs/invitations",
     fields: &[
-        FieldSpec { snake: "id_board", location: FieldLocation::Path },
-        FieldSpec { snake: "token", location: FieldLocation::Query },
-        FieldSpec { snake: "value", location: FieldLocation::Body },
+        FieldSpec { snake: "id_board", wire: "idBoard", location: FieldLocation::Path },
+        FieldSpec { snake: "token", wire: "token", location: FieldLocation::Query },
+        FieldSpec { snake: "value", wire: "value", location: FieldLocation::Body },
     ],
     auth: &[
         AuthApply { secret_key: "api_key", kind: AuthKind::ApiKeyQuery("key") },
@@ -1724,9 +2099,9 @@ const OP_BOARD_UPDATE_BOARDS_PREFS_PERMISSION_LEVEL_BY_ID_BOARD: OpSpec = OpSpec
     method: "PUT",
     path_template: "/boards/{id_board}/prefs/permissionLevel",
     fields: &[
-        FieldSpec { snake: "id_board", location: FieldLocation::Path },
-        FieldSpec { snake: "token", location: FieldLocation::Query },
-        FieldSpec { snake: "value", location: FieldLocation::Body },
+        FieldSpec { snake: "id_board", wire: "idBoard", location: FieldLocation::Path },
+        FieldSpec { snake: "token", wire: "token", location: FieldLocation::Query },
+        FieldSpec { snake: "value", wire: "value", location: FieldLocation::Body },
     ],
     auth: &[
         AuthApply { secret_key: "api_key", kind: AuthKind::ApiKeyQuery("key") },
@@ -1737,9 +2112,9 @@ const OP_BOARD_UPDATE_BOARDS_PREFS_SELF_JOIN_BY_ID_BOARD: OpSpec = OpSpec {
     method: "PUT",
     path_template: "/boards/{id_board}/prefs/selfJoin",
     fields: &[
-        FieldSpec { snake: "id_board", location: FieldLocation::Path },
-        FieldSpec { snake: "token", location: FieldLocation::Query },
-        FieldSpec { snake: "value", location: FieldLocation::Body },
+        FieldSpec { snake: "id_board", wire: "idBoard", location: FieldLocation::Path },
+        FieldSpec { snake: "token", wire: "token", location: FieldLocation::Query },
+        FieldSpec { snake: "value", wire: "value", location: FieldLocation::Body },
     ],
     auth: &[
         AuthApply { secret_key: "api_key", kind: AuthKind::ApiKeyQuery("key") },
@@ -1750,9 +2125,9 @@ const OP_BOARD_UPDATE_BOARDS_PREFS_VOTING_BY_ID_BOARD: OpSpec = OpSpec {
     method: "PUT",
     path_template: "/boards/{id_board}/prefs/voting",
     fields: &[
-        FieldSpec { snake: "id_board", location: FieldLocation::Path },
-        FieldSpec { snake: "token", location: FieldLocation::Query },
-        FieldSpec { snake: "value", location: FieldLocation::Body },
+        FieldSpec { snake: "id_board", wire: "idBoard", location: FieldLocation::Path },
+        FieldSpec { snake: "token", wire: "token", location: FieldLocation::Query },
+        FieldSpec { snake: "value", wire: "value", location: FieldLocation::Body },
     ],
     auth: &[
         AuthApply { secret_key: "api_key", kind: AuthKind::ApiKeyQuery("key") },
@@ -1763,9 +2138,9 @@ const OP_BOARD_UPDATE_BOARDS_SUBSCRIBED_BY_ID_BOARD: OpSpec = OpSpec {
     method: "PUT",
     path_template: "/boards/{id_board}/subscribed",
     fields: &[
-        FieldSpec { snake: "id_board", location: FieldLocation::Path },
-        FieldSpec { snake: "token", location: FieldLocation::Query },
-        FieldSpec { snake: "value", location: FieldLocation::Body },
+        FieldSpec { snake: "id_board", wire: "idBoard", location: FieldLocation::Path },
+        FieldSpec { snake: "token", wire: "token", location: FieldLocation::Query },
+        FieldSpec { snake: "value", wire: "value", location: FieldLocation::Body },
     ],
     auth: &[
         AuthApply { secret_key: "api_key", kind: AuthKind::ApiKeyQuery("key") },
@@ -1776,10 +2151,10 @@ const OP_BOARD_GET_BOARDS_BY_ID_BOARD_BY_FIELD: OpSpec = OpSpec {
     method: "GET",
     path_template: "/boards/{id_board}/{field}",
     fields: &[
-        FieldSpec { snake: "id_board", location: FieldLocation::Path },
-        FieldSpec { snake: "field", location: FieldLocation::Path },
-        FieldSpec { snake: "key", location: FieldLocation::Query },
-        FieldSpec { snake: "token", location: FieldLocation::Query },
+        FieldSpec { snake: "id_board", wire: "idBoard", location: FieldLocation::Path },
+        FieldSpec { snake: "field", wire: "field", location: FieldLocation::Path },
+        FieldSpec { snake: "key", wire: "key", location: FieldLocation::Query },
+        FieldSpec { snake: "token", wire: "token", location: FieldLocation::Query },
     ],
     auth: &[
     ],
@@ -1810,6 +2185,14 @@ fn iface_board__add_boards_params__to_json(p: &iface_board::AddBoardsParams) -> 
     m.insert("prefs_permission_level".into(), match (&p.prefs_permission_level) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("prefs_self_join".into(), match (&p.prefs_self_join) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("prefs_voting".into(), match (&p.prefs_voting) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("prefs_background_v2".into(), match (&p.prefs_background_v2) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("prefs_card_aging_v2".into(), match (&p.prefs_card_aging_v2) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("prefs_card_covers_v2".into(), match (&p.prefs_card_covers_v2) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("prefs_comments_v2".into(), match (&p.prefs_comments_v2) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("prefs_invitations_v2".into(), match (&p.prefs_invitations_v2) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("prefs_permission_level_v2".into(), match (&p.prefs_permission_level_v2) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("prefs_self_join_v2".into(), match (&p.prefs_self_join_v2) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("prefs_voting_v2".into(), match (&p.prefs_voting_v2) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("subscribed".into(), match (&p.subscribed) { Some(v) => Value::String((v).clone()), None => Value::Null });
     Value::Object(m)
 }
@@ -1884,6 +2267,14 @@ fn iface_board__update_boards_by_id_board_params__to_json(p: &iface_board::Updat
     m.insert("prefs_permission_level".into(), match (&p.prefs_permission_level) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("prefs_self_join".into(), match (&p.prefs_self_join) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("prefs_voting".into(), match (&p.prefs_voting) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("prefs_background_v2".into(), match (&p.prefs_background_v2) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("prefs_card_aging_v2".into(), match (&p.prefs_card_aging_v2) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("prefs_card_covers_v2".into(), match (&p.prefs_card_covers_v2) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("prefs_comments_v2".into(), match (&p.prefs_comments_v2) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("prefs_invitations_v2".into(), match (&p.prefs_invitations_v2) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("prefs_permission_level_v2".into(), match (&p.prefs_permission_level_v2) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("prefs_self_join_v2".into(), match (&p.prefs_self_join_v2) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("prefs_voting_v2".into(), match (&p.prefs_voting_v2) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("subscribed".into(), match (&p.subscribed) { Some(v) => Value::String((v).clone()), None => Value::Null });
     Value::Object(m)
 }
@@ -2456,262 +2847,1350 @@ fn iface_board__get_boards_by_id_board_by_field_params__to_json(p: &iface_board:
     Value::Object(m)
 }
 
+fn iface_board__add_boards__ok(body: String) -> Result<String, crate::runtime::DispatchError> {
+    Ok(body)
+}
+
+fn iface_board__add_boards__err(e: crate::runtime::DispatchError) -> iface_board::AddBoardsError {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => match status {
+            400u16 => iface_board::AddBoardsError::BadRequest(body),
+            _ => iface_board::AddBoardsError::Other(body),
+        },
+        crate::runtime::DispatchError::Transport(m) => iface_board::AddBoardsError::Other(m),
+    }
+}
+
+fn iface_board__get_boards_by_id_board__ok(body: String) -> Result<String, crate::runtime::DispatchError> {
+    Ok(body)
+}
+
+fn iface_board__get_boards_by_id_board__err(e: crate::runtime::DispatchError) -> iface_board::GetBoardsByIdBoardError {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => match status {
+            400u16 => iface_board::GetBoardsByIdBoardError::BadRequest(body),
+            _ => iface_board::GetBoardsByIdBoardError::Other(body),
+        },
+        crate::runtime::DispatchError::Transport(m) => iface_board::GetBoardsByIdBoardError::Other(m),
+    }
+}
+
+fn iface_board__update_boards_by_id_board__ok(body: String) -> Result<String, crate::runtime::DispatchError> {
+    Ok(body)
+}
+
+fn iface_board__update_boards_by_id_board__err(e: crate::runtime::DispatchError) -> iface_board::UpdateBoardsByIdBoardError {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => match status {
+            400u16 => iface_board::UpdateBoardsByIdBoardError::BadRequest(body),
+            _ => iface_board::UpdateBoardsByIdBoardError::Other(body),
+        },
+        crate::runtime::DispatchError::Transport(m) => iface_board::UpdateBoardsByIdBoardError::Other(m),
+    }
+}
+
+fn iface_board__get_boards_actions_by_id_board__ok(body: String) -> Result<String, crate::runtime::DispatchError> {
+    Ok(body)
+}
+
+fn iface_board__get_boards_actions_by_id_board__err(e: crate::runtime::DispatchError) -> iface_board::GetBoardsActionsByIdBoardError {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => match status {
+            400u16 => iface_board::GetBoardsActionsByIdBoardError::BadRequest(body),
+            _ => iface_board::GetBoardsActionsByIdBoardError::Other(body),
+        },
+        crate::runtime::DispatchError::Transport(m) => iface_board::GetBoardsActionsByIdBoardError::Other(m),
+    }
+}
+
+fn iface_board__get_boards_board_stars_by_id_board__ok(body: String) -> Result<String, crate::runtime::DispatchError> {
+    Ok(body)
+}
+
+fn iface_board__get_boards_board_stars_by_id_board__err(e: crate::runtime::DispatchError) -> iface_board::GetBoardsBoardStarsByIdBoardError {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => match status {
+            400u16 => iface_board::GetBoardsBoardStarsByIdBoardError::BadRequest(body),
+            _ => iface_board::GetBoardsBoardStarsByIdBoardError::Other(body),
+        },
+        crate::runtime::DispatchError::Transport(m) => iface_board::GetBoardsBoardStarsByIdBoardError::Other(m),
+    }
+}
+
+fn iface_board__add_boards_calendar_key_generate_by_id_board__ok(body: String) -> Result<String, crate::runtime::DispatchError> {
+    Ok(body)
+}
+
+fn iface_board__add_boards_calendar_key_generate_by_id_board__err(e: crate::runtime::DispatchError) -> iface_board::AddBoardsCalendarKeyGenerateByIdBoardError {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => match status {
+            400u16 => iface_board::AddBoardsCalendarKeyGenerateByIdBoardError::BadRequest(body),
+            _ => iface_board::AddBoardsCalendarKeyGenerateByIdBoardError::Other(body),
+        },
+        crate::runtime::DispatchError::Transport(m) => iface_board::AddBoardsCalendarKeyGenerateByIdBoardError::Other(m),
+    }
+}
+
+fn iface_board__get_boards_cards_by_id_board__ok(body: String) -> Result<String, crate::runtime::DispatchError> {
+    Ok(body)
+}
+
+fn iface_board__get_boards_cards_by_id_board__err(e: crate::runtime::DispatchError) -> iface_board::GetBoardsCardsByIdBoardError {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => match status {
+            400u16 => iface_board::GetBoardsCardsByIdBoardError::BadRequest(body),
+            _ => iface_board::GetBoardsCardsByIdBoardError::Other(body),
+        },
+        crate::runtime::DispatchError::Transport(m) => iface_board::GetBoardsCardsByIdBoardError::Other(m),
+    }
+}
+
+fn iface_board__get_boards_cards_by_id_board_by_filter__ok(body: String) -> Result<String, crate::runtime::DispatchError> {
+    Ok(body)
+}
+
+fn iface_board__get_boards_cards_by_id_board_by_filter__err(e: crate::runtime::DispatchError) -> iface_board::GetBoardsCardsByIdBoardByFilterError {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => match status {
+            400u16 => iface_board::GetBoardsCardsByIdBoardByFilterError::BadRequest(body),
+            _ => iface_board::GetBoardsCardsByIdBoardByFilterError::Other(body),
+        },
+        crate::runtime::DispatchError::Transport(m) => iface_board::GetBoardsCardsByIdBoardByFilterError::Other(m),
+    }
+}
+
+fn iface_board__get_boards_cards_by_id_board_by_id_card__ok(body: String) -> Result<String, crate::runtime::DispatchError> {
+    Ok(body)
+}
+
+fn iface_board__get_boards_cards_by_id_board_by_id_card__err(e: crate::runtime::DispatchError) -> iface_board::GetBoardsCardsByIdBoardByIdCardError {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => match status {
+            400u16 => iface_board::GetBoardsCardsByIdBoardByIdCardError::BadRequest(body),
+            _ => iface_board::GetBoardsCardsByIdBoardByIdCardError::Other(body),
+        },
+        crate::runtime::DispatchError::Transport(m) => iface_board::GetBoardsCardsByIdBoardByIdCardError::Other(m),
+    }
+}
+
+fn iface_board__get_boards_checklists_by_id_board__ok(body: String) -> Result<String, crate::runtime::DispatchError> {
+    Ok(body)
+}
+
+fn iface_board__get_boards_checklists_by_id_board__err(e: crate::runtime::DispatchError) -> iface_board::GetBoardsChecklistsByIdBoardError {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => match status {
+            400u16 => iface_board::GetBoardsChecklistsByIdBoardError::BadRequest(body),
+            _ => iface_board::GetBoardsChecklistsByIdBoardError::Other(body),
+        },
+        crate::runtime::DispatchError::Transport(m) => iface_board::GetBoardsChecklistsByIdBoardError::Other(m),
+    }
+}
+
+fn iface_board__add_boards_checklists_by_id_board__ok(body: String) -> Result<String, crate::runtime::DispatchError> {
+    Ok(body)
+}
+
+fn iface_board__add_boards_checklists_by_id_board__err(e: crate::runtime::DispatchError) -> iface_board::AddBoardsChecklistsByIdBoardError {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => match status {
+            400u16 => iface_board::AddBoardsChecklistsByIdBoardError::BadRequest(body),
+            _ => iface_board::AddBoardsChecklistsByIdBoardError::Other(body),
+        },
+        crate::runtime::DispatchError::Transport(m) => iface_board::AddBoardsChecklistsByIdBoardError::Other(m),
+    }
+}
+
+fn iface_board__update_boards_closed_by_id_board__ok(body: String) -> Result<String, crate::runtime::DispatchError> {
+    Ok(body)
+}
+
+fn iface_board__update_boards_closed_by_id_board__err(e: crate::runtime::DispatchError) -> iface_board::UpdateBoardsClosedByIdBoardError {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => match status {
+            400u16 => iface_board::UpdateBoardsClosedByIdBoardError::BadRequest(body),
+            _ => iface_board::UpdateBoardsClosedByIdBoardError::Other(body),
+        },
+        crate::runtime::DispatchError::Transport(m) => iface_board::UpdateBoardsClosedByIdBoardError::Other(m),
+    }
+}
+
+fn iface_board__get_boards_deltas_by_id_board__ok(body: String) -> Result<String, crate::runtime::DispatchError> {
+    Ok(body)
+}
+
+fn iface_board__get_boards_deltas_by_id_board__err(e: crate::runtime::DispatchError) -> iface_board::GetBoardsDeltasByIdBoardError {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => match status {
+            400u16 => iface_board::GetBoardsDeltasByIdBoardError::BadRequest(body),
+            _ => iface_board::GetBoardsDeltasByIdBoardError::Other(body),
+        },
+        crate::runtime::DispatchError::Transport(m) => iface_board::GetBoardsDeltasByIdBoardError::Other(m),
+    }
+}
+
+fn iface_board__update_boards_desc_by_id_board__ok(body: String) -> Result<String, crate::runtime::DispatchError> {
+    Ok(body)
+}
+
+fn iface_board__update_boards_desc_by_id_board__err(e: crate::runtime::DispatchError) -> iface_board::UpdateBoardsDescByIdBoardError {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => match status {
+            400u16 => iface_board::UpdateBoardsDescByIdBoardError::BadRequest(body),
+            _ => iface_board::UpdateBoardsDescByIdBoardError::Other(body),
+        },
+        crate::runtime::DispatchError::Transport(m) => iface_board::UpdateBoardsDescByIdBoardError::Other(m),
+    }
+}
+
+fn iface_board__add_boards_email_key_generate_by_id_board__ok(body: String) -> Result<String, crate::runtime::DispatchError> {
+    Ok(body)
+}
+
+fn iface_board__add_boards_email_key_generate_by_id_board__err(e: crate::runtime::DispatchError) -> iface_board::AddBoardsEmailKeyGenerateByIdBoardError {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => match status {
+            400u16 => iface_board::AddBoardsEmailKeyGenerateByIdBoardError::BadRequest(body),
+            _ => iface_board::AddBoardsEmailKeyGenerateByIdBoardError::Other(body),
+        },
+        crate::runtime::DispatchError::Transport(m) => iface_board::AddBoardsEmailKeyGenerateByIdBoardError::Other(m),
+    }
+}
+
+fn iface_board__update_boards_id_organization_by_id_board__ok(body: String) -> Result<String, crate::runtime::DispatchError> {
+    Ok(body)
+}
+
+fn iface_board__update_boards_id_organization_by_id_board__err(e: crate::runtime::DispatchError) -> iface_board::UpdateBoardsIdOrganizationByIdBoardError {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => match status {
+            400u16 => iface_board::UpdateBoardsIdOrganizationByIdBoardError::BadRequest(body),
+            _ => iface_board::UpdateBoardsIdOrganizationByIdBoardError::Other(body),
+        },
+        crate::runtime::DispatchError::Transport(m) => iface_board::UpdateBoardsIdOrganizationByIdBoardError::Other(m),
+    }
+}
+
+fn iface_board__update_boards_label_names_blue_by_id_board__ok(body: String) -> Result<String, crate::runtime::DispatchError> {
+    Ok(body)
+}
+
+fn iface_board__update_boards_label_names_blue_by_id_board__err(e: crate::runtime::DispatchError) -> iface_board::UpdateBoardsLabelNamesBlueByIdBoardError {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => match status {
+            400u16 => iface_board::UpdateBoardsLabelNamesBlueByIdBoardError::BadRequest(body),
+            _ => iface_board::UpdateBoardsLabelNamesBlueByIdBoardError::Other(body),
+        },
+        crate::runtime::DispatchError::Transport(m) => iface_board::UpdateBoardsLabelNamesBlueByIdBoardError::Other(m),
+    }
+}
+
+fn iface_board__update_boards_label_names_green_by_id_board__ok(body: String) -> Result<String, crate::runtime::DispatchError> {
+    Ok(body)
+}
+
+fn iface_board__update_boards_label_names_green_by_id_board__err(e: crate::runtime::DispatchError) -> iface_board::UpdateBoardsLabelNamesGreenByIdBoardError {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => match status {
+            400u16 => iface_board::UpdateBoardsLabelNamesGreenByIdBoardError::BadRequest(body),
+            _ => iface_board::UpdateBoardsLabelNamesGreenByIdBoardError::Other(body),
+        },
+        crate::runtime::DispatchError::Transport(m) => iface_board::UpdateBoardsLabelNamesGreenByIdBoardError::Other(m),
+    }
+}
+
+fn iface_board__update_boards_label_names_orange_by_id_board__ok(body: String) -> Result<String, crate::runtime::DispatchError> {
+    Ok(body)
+}
+
+fn iface_board__update_boards_label_names_orange_by_id_board__err(e: crate::runtime::DispatchError) -> iface_board::UpdateBoardsLabelNamesOrangeByIdBoardError {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => match status {
+            400u16 => iface_board::UpdateBoardsLabelNamesOrangeByIdBoardError::BadRequest(body),
+            _ => iface_board::UpdateBoardsLabelNamesOrangeByIdBoardError::Other(body),
+        },
+        crate::runtime::DispatchError::Transport(m) => iface_board::UpdateBoardsLabelNamesOrangeByIdBoardError::Other(m),
+    }
+}
+
+fn iface_board__update_boards_label_names_purple_by_id_board__ok(body: String) -> Result<String, crate::runtime::DispatchError> {
+    Ok(body)
+}
+
+fn iface_board__update_boards_label_names_purple_by_id_board__err(e: crate::runtime::DispatchError) -> iface_board::UpdateBoardsLabelNamesPurpleByIdBoardError {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => match status {
+            400u16 => iface_board::UpdateBoardsLabelNamesPurpleByIdBoardError::BadRequest(body),
+            _ => iface_board::UpdateBoardsLabelNamesPurpleByIdBoardError::Other(body),
+        },
+        crate::runtime::DispatchError::Transport(m) => iface_board::UpdateBoardsLabelNamesPurpleByIdBoardError::Other(m),
+    }
+}
+
+fn iface_board__update_boards_label_names_red_by_id_board__ok(body: String) -> Result<String, crate::runtime::DispatchError> {
+    Ok(body)
+}
+
+fn iface_board__update_boards_label_names_red_by_id_board__err(e: crate::runtime::DispatchError) -> iface_board::UpdateBoardsLabelNamesRedByIdBoardError {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => match status {
+            400u16 => iface_board::UpdateBoardsLabelNamesRedByIdBoardError::BadRequest(body),
+            _ => iface_board::UpdateBoardsLabelNamesRedByIdBoardError::Other(body),
+        },
+        crate::runtime::DispatchError::Transport(m) => iface_board::UpdateBoardsLabelNamesRedByIdBoardError::Other(m),
+    }
+}
+
+fn iface_board__update_boards_label_names_yellow_by_id_board__ok(body: String) -> Result<String, crate::runtime::DispatchError> {
+    Ok(body)
+}
+
+fn iface_board__update_boards_label_names_yellow_by_id_board__err(e: crate::runtime::DispatchError) -> iface_board::UpdateBoardsLabelNamesYellowByIdBoardError {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => match status {
+            400u16 => iface_board::UpdateBoardsLabelNamesYellowByIdBoardError::BadRequest(body),
+            _ => iface_board::UpdateBoardsLabelNamesYellowByIdBoardError::Other(body),
+        },
+        crate::runtime::DispatchError::Transport(m) => iface_board::UpdateBoardsLabelNamesYellowByIdBoardError::Other(m),
+    }
+}
+
+fn iface_board__get_boards_labels_by_id_board__ok(body: String) -> Result<String, crate::runtime::DispatchError> {
+    Ok(body)
+}
+
+fn iface_board__get_boards_labels_by_id_board__err(e: crate::runtime::DispatchError) -> iface_board::GetBoardsLabelsByIdBoardError {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => match status {
+            400u16 => iface_board::GetBoardsLabelsByIdBoardError::BadRequest(body),
+            _ => iface_board::GetBoardsLabelsByIdBoardError::Other(body),
+        },
+        crate::runtime::DispatchError::Transport(m) => iface_board::GetBoardsLabelsByIdBoardError::Other(m),
+    }
+}
+
+fn iface_board__add_boards_labels_by_id_board__ok(body: String) -> Result<String, crate::runtime::DispatchError> {
+    Ok(body)
+}
+
+fn iface_board__add_boards_labels_by_id_board__err(e: crate::runtime::DispatchError) -> iface_board::AddBoardsLabelsByIdBoardError {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => match status {
+            400u16 => iface_board::AddBoardsLabelsByIdBoardError::BadRequest(body),
+            _ => iface_board::AddBoardsLabelsByIdBoardError::Other(body),
+        },
+        crate::runtime::DispatchError::Transport(m) => iface_board::AddBoardsLabelsByIdBoardError::Other(m),
+    }
+}
+
+fn iface_board__get_boards_labels_by_id_board_by_id_label__ok(body: String) -> Result<String, crate::runtime::DispatchError> {
+    Ok(body)
+}
+
+fn iface_board__get_boards_labels_by_id_board_by_id_label__err(e: crate::runtime::DispatchError) -> iface_board::GetBoardsLabelsByIdBoardByIdLabelError {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => match status {
+            400u16 => iface_board::GetBoardsLabelsByIdBoardByIdLabelError::BadRequest(body),
+            _ => iface_board::GetBoardsLabelsByIdBoardByIdLabelError::Other(body),
+        },
+        crate::runtime::DispatchError::Transport(m) => iface_board::GetBoardsLabelsByIdBoardByIdLabelError::Other(m),
+    }
+}
+
+fn iface_board__get_boards_lists_by_id_board__ok(body: String) -> Result<String, crate::runtime::DispatchError> {
+    Ok(body)
+}
+
+fn iface_board__get_boards_lists_by_id_board__err(e: crate::runtime::DispatchError) -> iface_board::GetBoardsListsByIdBoardError {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => match status {
+            400u16 => iface_board::GetBoardsListsByIdBoardError::BadRequest(body),
+            _ => iface_board::GetBoardsListsByIdBoardError::Other(body),
+        },
+        crate::runtime::DispatchError::Transport(m) => iface_board::GetBoardsListsByIdBoardError::Other(m),
+    }
+}
+
+fn iface_board__add_boards_lists_by_id_board__ok(body: String) -> Result<String, crate::runtime::DispatchError> {
+    Ok(body)
+}
+
+fn iface_board__add_boards_lists_by_id_board__err(e: crate::runtime::DispatchError) -> iface_board::AddBoardsListsByIdBoardError {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => match status {
+            400u16 => iface_board::AddBoardsListsByIdBoardError::BadRequest(body),
+            _ => iface_board::AddBoardsListsByIdBoardError::Other(body),
+        },
+        crate::runtime::DispatchError::Transport(m) => iface_board::AddBoardsListsByIdBoardError::Other(m),
+    }
+}
+
+fn iface_board__get_boards_lists_by_id_board_by_filter__ok(body: String) -> Result<String, crate::runtime::DispatchError> {
+    Ok(body)
+}
+
+fn iface_board__get_boards_lists_by_id_board_by_filter__err(e: crate::runtime::DispatchError) -> iface_board::GetBoardsListsByIdBoardByFilterError {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => match status {
+            400u16 => iface_board::GetBoardsListsByIdBoardByFilterError::BadRequest(body),
+            _ => iface_board::GetBoardsListsByIdBoardByFilterError::Other(body),
+        },
+        crate::runtime::DispatchError::Transport(m) => iface_board::GetBoardsListsByIdBoardByFilterError::Other(m),
+    }
+}
+
+fn iface_board__add_boards_mark_as_viewed_by_id_board__ok(body: String) -> Result<String, crate::runtime::DispatchError> {
+    Ok(body)
+}
+
+fn iface_board__add_boards_mark_as_viewed_by_id_board__err(e: crate::runtime::DispatchError) -> iface_board::AddBoardsMarkAsViewedByIdBoardError {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => match status {
+            400u16 => iface_board::AddBoardsMarkAsViewedByIdBoardError::BadRequest(body),
+            _ => iface_board::AddBoardsMarkAsViewedByIdBoardError::Other(body),
+        },
+        crate::runtime::DispatchError::Transport(m) => iface_board::AddBoardsMarkAsViewedByIdBoardError::Other(m),
+    }
+}
+
+fn iface_board__get_boards_members_by_id_board__ok(body: String) -> Result<String, crate::runtime::DispatchError> {
+    Ok(body)
+}
+
+fn iface_board__get_boards_members_by_id_board__err(e: crate::runtime::DispatchError) -> iface_board::GetBoardsMembersByIdBoardError {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => match status {
+            400u16 => iface_board::GetBoardsMembersByIdBoardError::BadRequest(body),
+            _ => iface_board::GetBoardsMembersByIdBoardError::Other(body),
+        },
+        crate::runtime::DispatchError::Transport(m) => iface_board::GetBoardsMembersByIdBoardError::Other(m),
+    }
+}
+
+fn iface_board__update_boards_members_by_id_board__ok(body: String) -> Result<String, crate::runtime::DispatchError> {
+    Ok(body)
+}
+
+fn iface_board__update_boards_members_by_id_board__err(e: crate::runtime::DispatchError) -> iface_board::UpdateBoardsMembersByIdBoardError {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => match status {
+            400u16 => iface_board::UpdateBoardsMembersByIdBoardError::BadRequest(body),
+            _ => iface_board::UpdateBoardsMembersByIdBoardError::Other(body),
+        },
+        crate::runtime::DispatchError::Transport(m) => iface_board::UpdateBoardsMembersByIdBoardError::Other(m),
+    }
+}
+
+fn iface_board__get_boards_members_by_id_board_by_filter__ok(body: String) -> Result<String, crate::runtime::DispatchError> {
+    Ok(body)
+}
+
+fn iface_board__get_boards_members_by_id_board_by_filter__err(e: crate::runtime::DispatchError) -> iface_board::GetBoardsMembersByIdBoardByFilterError {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => match status {
+            400u16 => iface_board::GetBoardsMembersByIdBoardByFilterError::BadRequest(body),
+            _ => iface_board::GetBoardsMembersByIdBoardByFilterError::Other(body),
+        },
+        crate::runtime::DispatchError::Transport(m) => iface_board::GetBoardsMembersByIdBoardByFilterError::Other(m),
+    }
+}
+
+fn iface_board__update_boards_members_by_id_board_by_id_member__ok(body: String) -> Result<String, crate::runtime::DispatchError> {
+    Ok(body)
+}
+
+fn iface_board__update_boards_members_by_id_board_by_id_member__err(e: crate::runtime::DispatchError) -> iface_board::UpdateBoardsMembersByIdBoardByIdMemberError {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => match status {
+            400u16 => iface_board::UpdateBoardsMembersByIdBoardByIdMemberError::BadRequest(body),
+            _ => iface_board::UpdateBoardsMembersByIdBoardByIdMemberError::Other(body),
+        },
+        crate::runtime::DispatchError::Transport(m) => iface_board::UpdateBoardsMembersByIdBoardByIdMemberError::Other(m),
+    }
+}
+
+fn iface_board__delete_boards_members_by_id_board_by_id_member__ok(body: String) -> Result<String, crate::runtime::DispatchError> {
+    Ok(body)
+}
+
+fn iface_board__delete_boards_members_by_id_board_by_id_member__err(e: crate::runtime::DispatchError) -> iface_board::DeleteBoardsMembersByIdBoardByIdMemberError {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => match status {
+            400u16 => iface_board::DeleteBoardsMembersByIdBoardByIdMemberError::BadRequest(body),
+            _ => iface_board::DeleteBoardsMembersByIdBoardByIdMemberError::Other(body),
+        },
+        crate::runtime::DispatchError::Transport(m) => iface_board::DeleteBoardsMembersByIdBoardByIdMemberError::Other(m),
+    }
+}
+
+fn iface_board__get_boards_members_cards_by_id_board_by_id_member__ok(body: String) -> Result<String, crate::runtime::DispatchError> {
+    Ok(body)
+}
+
+fn iface_board__get_boards_members_cards_by_id_board_by_id_member__err(e: crate::runtime::DispatchError) -> iface_board::GetBoardsMembersCardsByIdBoardByIdMemberError {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => match status {
+            400u16 => iface_board::GetBoardsMembersCardsByIdBoardByIdMemberError::BadRequest(body),
+            _ => iface_board::GetBoardsMembersCardsByIdBoardByIdMemberError::Other(body),
+        },
+        crate::runtime::DispatchError::Transport(m) => iface_board::GetBoardsMembersCardsByIdBoardByIdMemberError::Other(m),
+    }
+}
+
+fn iface_board__get_boards_members_invited_by_id_board__ok(body: String) -> Result<String, crate::runtime::DispatchError> {
+    Ok(body)
+}
+
+fn iface_board__get_boards_members_invited_by_id_board__err(e: crate::runtime::DispatchError) -> iface_board::GetBoardsMembersInvitedByIdBoardError {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => match status {
+            400u16 => iface_board::GetBoardsMembersInvitedByIdBoardError::BadRequest(body),
+            _ => iface_board::GetBoardsMembersInvitedByIdBoardError::Other(body),
+        },
+        crate::runtime::DispatchError::Transport(m) => iface_board::GetBoardsMembersInvitedByIdBoardError::Other(m),
+    }
+}
+
+fn iface_board__get_boards_members_invited_by_id_board_by_field__ok(body: String) -> Result<String, crate::runtime::DispatchError> {
+    Ok(body)
+}
+
+fn iface_board__get_boards_members_invited_by_id_board_by_field__err(e: crate::runtime::DispatchError) -> iface_board::GetBoardsMembersInvitedByIdBoardByFieldError {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => match status {
+            400u16 => iface_board::GetBoardsMembersInvitedByIdBoardByFieldError::BadRequest(body),
+            _ => iface_board::GetBoardsMembersInvitedByIdBoardByFieldError::Other(body),
+        },
+        crate::runtime::DispatchError::Transport(m) => iface_board::GetBoardsMembersInvitedByIdBoardByFieldError::Other(m),
+    }
+}
+
+fn iface_board__get_boards_memberships_by_id_board__ok(body: String) -> Result<String, crate::runtime::DispatchError> {
+    Ok(body)
+}
+
+fn iface_board__get_boards_memberships_by_id_board__err(e: crate::runtime::DispatchError) -> iface_board::GetBoardsMembershipsByIdBoardError {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => match status {
+            400u16 => iface_board::GetBoardsMembershipsByIdBoardError::BadRequest(body),
+            _ => iface_board::GetBoardsMembershipsByIdBoardError::Other(body),
+        },
+        crate::runtime::DispatchError::Transport(m) => iface_board::GetBoardsMembershipsByIdBoardError::Other(m),
+    }
+}
+
+fn iface_board__get_boards_memberships_by_id_board_by_id_membership__ok(body: String) -> Result<String, crate::runtime::DispatchError> {
+    Ok(body)
+}
+
+fn iface_board__get_boards_memberships_by_id_board_by_id_membership__err(e: crate::runtime::DispatchError) -> iface_board::GetBoardsMembershipsByIdBoardByIdMembershipError {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => match status {
+            400u16 => iface_board::GetBoardsMembershipsByIdBoardByIdMembershipError::BadRequest(body),
+            _ => iface_board::GetBoardsMembershipsByIdBoardByIdMembershipError::Other(body),
+        },
+        crate::runtime::DispatchError::Transport(m) => iface_board::GetBoardsMembershipsByIdBoardByIdMembershipError::Other(m),
+    }
+}
+
+fn iface_board__update_boards_memberships_by_id_board_by_id_membership__ok(body: String) -> Result<String, crate::runtime::DispatchError> {
+    Ok(body)
+}
+
+fn iface_board__update_boards_memberships_by_id_board_by_id_membership__err(e: crate::runtime::DispatchError) -> iface_board::UpdateBoardsMembershipsByIdBoardByIdMembershipError {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => match status {
+            400u16 => iface_board::UpdateBoardsMembershipsByIdBoardByIdMembershipError::BadRequest(body),
+            _ => iface_board::UpdateBoardsMembershipsByIdBoardByIdMembershipError::Other(body),
+        },
+        crate::runtime::DispatchError::Transport(m) => iface_board::UpdateBoardsMembershipsByIdBoardByIdMembershipError::Other(m),
+    }
+}
+
+fn iface_board__get_boards_my_prefs_by_id_board__ok(body: String) -> Result<String, crate::runtime::DispatchError> {
+    Ok(body)
+}
+
+fn iface_board__get_boards_my_prefs_by_id_board__err(e: crate::runtime::DispatchError) -> iface_board::GetBoardsMyPrefsByIdBoardError {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => match status {
+            400u16 => iface_board::GetBoardsMyPrefsByIdBoardError::BadRequest(body),
+            _ => iface_board::GetBoardsMyPrefsByIdBoardError::Other(body),
+        },
+        crate::runtime::DispatchError::Transport(m) => iface_board::GetBoardsMyPrefsByIdBoardError::Other(m),
+    }
+}
+
+fn iface_board__update_boards_my_prefs_email_position_by_id_board__ok(body: String) -> Result<String, crate::runtime::DispatchError> {
+    Ok(body)
+}
+
+fn iface_board__update_boards_my_prefs_email_position_by_id_board__err(e: crate::runtime::DispatchError) -> iface_board::UpdateBoardsMyPrefsEmailPositionByIdBoardError {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => match status {
+            400u16 => iface_board::UpdateBoardsMyPrefsEmailPositionByIdBoardError::BadRequest(body),
+            _ => iface_board::UpdateBoardsMyPrefsEmailPositionByIdBoardError::Other(body),
+        },
+        crate::runtime::DispatchError::Transport(m) => iface_board::UpdateBoardsMyPrefsEmailPositionByIdBoardError::Other(m),
+    }
+}
+
+fn iface_board__update_boards_my_prefs_id_email_list_by_id_board__ok(body: String) -> Result<String, crate::runtime::DispatchError> {
+    Ok(body)
+}
+
+fn iface_board__update_boards_my_prefs_id_email_list_by_id_board__err(e: crate::runtime::DispatchError) -> iface_board::UpdateBoardsMyPrefsIdEmailListByIdBoardError {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => match status {
+            400u16 => iface_board::UpdateBoardsMyPrefsIdEmailListByIdBoardError::BadRequest(body),
+            _ => iface_board::UpdateBoardsMyPrefsIdEmailListByIdBoardError::Other(body),
+        },
+        crate::runtime::DispatchError::Transport(m) => iface_board::UpdateBoardsMyPrefsIdEmailListByIdBoardError::Other(m),
+    }
+}
+
+fn iface_board__update_boards_my_prefs_show_list_guide_by_id_board__ok(body: String) -> Result<String, crate::runtime::DispatchError> {
+    Ok(body)
+}
+
+fn iface_board__update_boards_my_prefs_show_list_guide_by_id_board__err(e: crate::runtime::DispatchError) -> iface_board::UpdateBoardsMyPrefsShowListGuideByIdBoardError {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => match status {
+            400u16 => iface_board::UpdateBoardsMyPrefsShowListGuideByIdBoardError::BadRequest(body),
+            _ => iface_board::UpdateBoardsMyPrefsShowListGuideByIdBoardError::Other(body),
+        },
+        crate::runtime::DispatchError::Transport(m) => iface_board::UpdateBoardsMyPrefsShowListGuideByIdBoardError::Other(m),
+    }
+}
+
+fn iface_board__update_boards_my_prefs_show_sidebar_by_id_board__ok(body: String) -> Result<String, crate::runtime::DispatchError> {
+    Ok(body)
+}
+
+fn iface_board__update_boards_my_prefs_show_sidebar_by_id_board__err(e: crate::runtime::DispatchError) -> iface_board::UpdateBoardsMyPrefsShowSidebarByIdBoardError {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => match status {
+            400u16 => iface_board::UpdateBoardsMyPrefsShowSidebarByIdBoardError::BadRequest(body),
+            _ => iface_board::UpdateBoardsMyPrefsShowSidebarByIdBoardError::Other(body),
+        },
+        crate::runtime::DispatchError::Transport(m) => iface_board::UpdateBoardsMyPrefsShowSidebarByIdBoardError::Other(m),
+    }
+}
+
+fn iface_board__update_boards_my_prefs_show_sidebar_activity_by_id_board__ok(body: String) -> Result<String, crate::runtime::DispatchError> {
+    Ok(body)
+}
+
+fn iface_board__update_boards_my_prefs_show_sidebar_activity_by_id_board__err(e: crate::runtime::DispatchError) -> iface_board::UpdateBoardsMyPrefsShowSidebarActivityByIdBoardError {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => match status {
+            400u16 => iface_board::UpdateBoardsMyPrefsShowSidebarActivityByIdBoardError::BadRequest(body),
+            _ => iface_board::UpdateBoardsMyPrefsShowSidebarActivityByIdBoardError::Other(body),
+        },
+        crate::runtime::DispatchError::Transport(m) => iface_board::UpdateBoardsMyPrefsShowSidebarActivityByIdBoardError::Other(m),
+    }
+}
+
+fn iface_board__update_boards_my_prefs_show_sidebar_board_actions_by_id_board__ok(body: String) -> Result<String, crate::runtime::DispatchError> {
+    Ok(body)
+}
+
+fn iface_board__update_boards_my_prefs_show_sidebar_board_actions_by_id_board__err(e: crate::runtime::DispatchError) -> iface_board::UpdateBoardsMyPrefsShowSidebarBoardActionsByIdBoardError {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => match status {
+            400u16 => iface_board::UpdateBoardsMyPrefsShowSidebarBoardActionsByIdBoardError::BadRequest(body),
+            _ => iface_board::UpdateBoardsMyPrefsShowSidebarBoardActionsByIdBoardError::Other(body),
+        },
+        crate::runtime::DispatchError::Transport(m) => iface_board::UpdateBoardsMyPrefsShowSidebarBoardActionsByIdBoardError::Other(m),
+    }
+}
+
+fn iface_board__update_boards_my_prefs_show_sidebar_members_by_id_board__ok(body: String) -> Result<String, crate::runtime::DispatchError> {
+    Ok(body)
+}
+
+fn iface_board__update_boards_my_prefs_show_sidebar_members_by_id_board__err(e: crate::runtime::DispatchError) -> iface_board::UpdateBoardsMyPrefsShowSidebarMembersByIdBoardError {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => match status {
+            400u16 => iface_board::UpdateBoardsMyPrefsShowSidebarMembersByIdBoardError::BadRequest(body),
+            _ => iface_board::UpdateBoardsMyPrefsShowSidebarMembersByIdBoardError::Other(body),
+        },
+        crate::runtime::DispatchError::Transport(m) => iface_board::UpdateBoardsMyPrefsShowSidebarMembersByIdBoardError::Other(m),
+    }
+}
+
+fn iface_board__update_boards_name_by_id_board__ok(body: String) -> Result<String, crate::runtime::DispatchError> {
+    Ok(body)
+}
+
+fn iface_board__update_boards_name_by_id_board__err(e: crate::runtime::DispatchError) -> iface_board::UpdateBoardsNameByIdBoardError {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => match status {
+            400u16 => iface_board::UpdateBoardsNameByIdBoardError::BadRequest(body),
+            _ => iface_board::UpdateBoardsNameByIdBoardError::Other(body),
+        },
+        crate::runtime::DispatchError::Transport(m) => iface_board::UpdateBoardsNameByIdBoardError::Other(m),
+    }
+}
+
+fn iface_board__get_boards_organization_by_id_board__ok(body: String) -> Result<String, crate::runtime::DispatchError> {
+    Ok(body)
+}
+
+fn iface_board__get_boards_organization_by_id_board__err(e: crate::runtime::DispatchError) -> iface_board::GetBoardsOrganizationByIdBoardError {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => match status {
+            400u16 => iface_board::GetBoardsOrganizationByIdBoardError::BadRequest(body),
+            _ => iface_board::GetBoardsOrganizationByIdBoardError::Other(body),
+        },
+        crate::runtime::DispatchError::Transport(m) => iface_board::GetBoardsOrganizationByIdBoardError::Other(m),
+    }
+}
+
+fn iface_board__get_boards_organization_by_id_board_by_field__ok(body: String) -> Result<String, crate::runtime::DispatchError> {
+    Ok(body)
+}
+
+fn iface_board__get_boards_organization_by_id_board_by_field__err(e: crate::runtime::DispatchError) -> iface_board::GetBoardsOrganizationByIdBoardByFieldError {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => match status {
+            400u16 => iface_board::GetBoardsOrganizationByIdBoardByFieldError::BadRequest(body),
+            _ => iface_board::GetBoardsOrganizationByIdBoardByFieldError::Other(body),
+        },
+        crate::runtime::DispatchError::Transport(m) => iface_board::GetBoardsOrganizationByIdBoardByFieldError::Other(m),
+    }
+}
+
+fn iface_board__add_boards_power_ups_by_id_board__ok(body: String) -> Result<String, crate::runtime::DispatchError> {
+    Ok(body)
+}
+
+fn iface_board__add_boards_power_ups_by_id_board__err(e: crate::runtime::DispatchError) -> iface_board::AddBoardsPowerUpsByIdBoardError {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => match status {
+            400u16 => iface_board::AddBoardsPowerUpsByIdBoardError::BadRequest(body),
+            _ => iface_board::AddBoardsPowerUpsByIdBoardError::Other(body),
+        },
+        crate::runtime::DispatchError::Transport(m) => iface_board::AddBoardsPowerUpsByIdBoardError::Other(m),
+    }
+}
+
+fn iface_board__delete_boards_power_ups_by_id_board_by_power_up__ok(body: String) -> Result<String, crate::runtime::DispatchError> {
+    Ok(body)
+}
+
+fn iface_board__delete_boards_power_ups_by_id_board_by_power_up__err(e: crate::runtime::DispatchError) -> iface_board::DeleteBoardsPowerUpsByIdBoardByPowerUpError {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => match status {
+            400u16 => iface_board::DeleteBoardsPowerUpsByIdBoardByPowerUpError::BadRequest(body),
+            _ => iface_board::DeleteBoardsPowerUpsByIdBoardByPowerUpError::Other(body),
+        },
+        crate::runtime::DispatchError::Transport(m) => iface_board::DeleteBoardsPowerUpsByIdBoardByPowerUpError::Other(m),
+    }
+}
+
+fn iface_board__update_boards_prefs_background_by_id_board__ok(body: String) -> Result<String, crate::runtime::DispatchError> {
+    Ok(body)
+}
+
+fn iface_board__update_boards_prefs_background_by_id_board__err(e: crate::runtime::DispatchError) -> iface_board::UpdateBoardsPrefsBackgroundByIdBoardError {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => match status {
+            400u16 => iface_board::UpdateBoardsPrefsBackgroundByIdBoardError::BadRequest(body),
+            _ => iface_board::UpdateBoardsPrefsBackgroundByIdBoardError::Other(body),
+        },
+        crate::runtime::DispatchError::Transport(m) => iface_board::UpdateBoardsPrefsBackgroundByIdBoardError::Other(m),
+    }
+}
+
+fn iface_board__update_boards_prefs_calendar_feed_enabled_by_id_board__ok(body: String) -> Result<String, crate::runtime::DispatchError> {
+    Ok(body)
+}
+
+fn iface_board__update_boards_prefs_calendar_feed_enabled_by_id_board__err(e: crate::runtime::DispatchError) -> iface_board::UpdateBoardsPrefsCalendarFeedEnabledByIdBoardError {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => match status {
+            400u16 => iface_board::UpdateBoardsPrefsCalendarFeedEnabledByIdBoardError::BadRequest(body),
+            _ => iface_board::UpdateBoardsPrefsCalendarFeedEnabledByIdBoardError::Other(body),
+        },
+        crate::runtime::DispatchError::Transport(m) => iface_board::UpdateBoardsPrefsCalendarFeedEnabledByIdBoardError::Other(m),
+    }
+}
+
+fn iface_board__update_boards_prefs_card_aging_by_id_board__ok(body: String) -> Result<String, crate::runtime::DispatchError> {
+    Ok(body)
+}
+
+fn iface_board__update_boards_prefs_card_aging_by_id_board__err(e: crate::runtime::DispatchError) -> iface_board::UpdateBoardsPrefsCardAgingByIdBoardError {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => match status {
+            400u16 => iface_board::UpdateBoardsPrefsCardAgingByIdBoardError::BadRequest(body),
+            _ => iface_board::UpdateBoardsPrefsCardAgingByIdBoardError::Other(body),
+        },
+        crate::runtime::DispatchError::Transport(m) => iface_board::UpdateBoardsPrefsCardAgingByIdBoardError::Other(m),
+    }
+}
+
+fn iface_board__update_boards_prefs_card_covers_by_id_board__ok(body: String) -> Result<String, crate::runtime::DispatchError> {
+    Ok(body)
+}
+
+fn iface_board__update_boards_prefs_card_covers_by_id_board__err(e: crate::runtime::DispatchError) -> iface_board::UpdateBoardsPrefsCardCoversByIdBoardError {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => match status {
+            400u16 => iface_board::UpdateBoardsPrefsCardCoversByIdBoardError::BadRequest(body),
+            _ => iface_board::UpdateBoardsPrefsCardCoversByIdBoardError::Other(body),
+        },
+        crate::runtime::DispatchError::Transport(m) => iface_board::UpdateBoardsPrefsCardCoversByIdBoardError::Other(m),
+    }
+}
+
+fn iface_board__update_boards_prefs_comments_by_id_board__ok(body: String) -> Result<String, crate::runtime::DispatchError> {
+    Ok(body)
+}
+
+fn iface_board__update_boards_prefs_comments_by_id_board__err(e: crate::runtime::DispatchError) -> iface_board::UpdateBoardsPrefsCommentsByIdBoardError {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => match status {
+            400u16 => iface_board::UpdateBoardsPrefsCommentsByIdBoardError::BadRequest(body),
+            _ => iface_board::UpdateBoardsPrefsCommentsByIdBoardError::Other(body),
+        },
+        crate::runtime::DispatchError::Transport(m) => iface_board::UpdateBoardsPrefsCommentsByIdBoardError::Other(m),
+    }
+}
+
+fn iface_board__update_boards_prefs_invitations_by_id_board__ok(body: String) -> Result<String, crate::runtime::DispatchError> {
+    Ok(body)
+}
+
+fn iface_board__update_boards_prefs_invitations_by_id_board__err(e: crate::runtime::DispatchError) -> iface_board::UpdateBoardsPrefsInvitationsByIdBoardError {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => match status {
+            400u16 => iface_board::UpdateBoardsPrefsInvitationsByIdBoardError::BadRequest(body),
+            _ => iface_board::UpdateBoardsPrefsInvitationsByIdBoardError::Other(body),
+        },
+        crate::runtime::DispatchError::Transport(m) => iface_board::UpdateBoardsPrefsInvitationsByIdBoardError::Other(m),
+    }
+}
+
+fn iface_board__update_boards_prefs_permission_level_by_id_board__ok(body: String) -> Result<String, crate::runtime::DispatchError> {
+    Ok(body)
+}
+
+fn iface_board__update_boards_prefs_permission_level_by_id_board__err(e: crate::runtime::DispatchError) -> iface_board::UpdateBoardsPrefsPermissionLevelByIdBoardError {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => match status {
+            400u16 => iface_board::UpdateBoardsPrefsPermissionLevelByIdBoardError::BadRequest(body),
+            _ => iface_board::UpdateBoardsPrefsPermissionLevelByIdBoardError::Other(body),
+        },
+        crate::runtime::DispatchError::Transport(m) => iface_board::UpdateBoardsPrefsPermissionLevelByIdBoardError::Other(m),
+    }
+}
+
+fn iface_board__update_boards_prefs_self_join_by_id_board__ok(body: String) -> Result<String, crate::runtime::DispatchError> {
+    Ok(body)
+}
+
+fn iface_board__update_boards_prefs_self_join_by_id_board__err(e: crate::runtime::DispatchError) -> iface_board::UpdateBoardsPrefsSelfJoinByIdBoardError {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => match status {
+            400u16 => iface_board::UpdateBoardsPrefsSelfJoinByIdBoardError::BadRequest(body),
+            _ => iface_board::UpdateBoardsPrefsSelfJoinByIdBoardError::Other(body),
+        },
+        crate::runtime::DispatchError::Transport(m) => iface_board::UpdateBoardsPrefsSelfJoinByIdBoardError::Other(m),
+    }
+}
+
+fn iface_board__update_boards_prefs_voting_by_id_board__ok(body: String) -> Result<String, crate::runtime::DispatchError> {
+    Ok(body)
+}
+
+fn iface_board__update_boards_prefs_voting_by_id_board__err(e: crate::runtime::DispatchError) -> iface_board::UpdateBoardsPrefsVotingByIdBoardError {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => match status {
+            400u16 => iface_board::UpdateBoardsPrefsVotingByIdBoardError::BadRequest(body),
+            _ => iface_board::UpdateBoardsPrefsVotingByIdBoardError::Other(body),
+        },
+        crate::runtime::DispatchError::Transport(m) => iface_board::UpdateBoardsPrefsVotingByIdBoardError::Other(m),
+    }
+}
+
+fn iface_board__update_boards_subscribed_by_id_board__ok(body: String) -> Result<String, crate::runtime::DispatchError> {
+    Ok(body)
+}
+
+fn iface_board__update_boards_subscribed_by_id_board__err(e: crate::runtime::DispatchError) -> iface_board::UpdateBoardsSubscribedByIdBoardError {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => match status {
+            400u16 => iface_board::UpdateBoardsSubscribedByIdBoardError::BadRequest(body),
+            _ => iface_board::UpdateBoardsSubscribedByIdBoardError::Other(body),
+        },
+        crate::runtime::DispatchError::Transport(m) => iface_board::UpdateBoardsSubscribedByIdBoardError::Other(m),
+    }
+}
+
+fn iface_board__get_boards_by_id_board_by_field__ok(body: String) -> Result<String, crate::runtime::DispatchError> {
+    Ok(body)
+}
+
+fn iface_board__get_boards_by_id_board_by_field__err(e: crate::runtime::DispatchError) -> iface_board::GetBoardsByIdBoardByFieldError {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => match status {
+            400u16 => iface_board::GetBoardsByIdBoardByFieldError::BadRequest(body),
+            _ => iface_board::GetBoardsByIdBoardByFieldError::Other(body),
+        },
+        crate::runtime::DispatchError::Transport(m) => iface_board::GetBoardsByIdBoardByFieldError::Other(m),
+    }
+}
+
 impl iface_board::Guest for crate::Component {
-    fn add_boards(params: iface_board::AddBoardsParams) -> Result<String, String> {
+    fn add_boards(params: iface_board::AddBoardsParams) -> Result<String, iface_board::AddBoardsError> {
         let json = iface_board__add_boards_params__to_json(&params);
-        dispatch(&OP_BOARD_ADD_BOARDS, json)
+        match dispatch(&OP_BOARD_ADD_BOARDS, json).and_then(iface_board__add_boards__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_board__add_boards__err(e)),
+        }
     }
-    fn get_boards_by_id_board(params: iface_board::GetBoardsByIdBoardParams) -> Result<String, String> {
+    fn get_boards_by_id_board(params: iface_board::GetBoardsByIdBoardParams) -> Result<String, iface_board::GetBoardsByIdBoardError> {
         let json = iface_board__get_boards_by_id_board_params__to_json(&params);
-        dispatch(&OP_BOARD_GET_BOARDS_BY_ID_BOARD, json)
+        match dispatch(&OP_BOARD_GET_BOARDS_BY_ID_BOARD, json).and_then(iface_board__get_boards_by_id_board__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_board__get_boards_by_id_board__err(e)),
+        }
     }
-    fn update_boards_by_id_board(params: iface_board::UpdateBoardsByIdBoardParams) -> Result<String, String> {
+    fn update_boards_by_id_board(params: iface_board::UpdateBoardsByIdBoardParams) -> Result<String, iface_board::UpdateBoardsByIdBoardError> {
         let json = iface_board__update_boards_by_id_board_params__to_json(&params);
-        dispatch(&OP_BOARD_UPDATE_BOARDS_BY_ID_BOARD, json)
+        match dispatch(&OP_BOARD_UPDATE_BOARDS_BY_ID_BOARD, json).and_then(iface_board__update_boards_by_id_board__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_board__update_boards_by_id_board__err(e)),
+        }
     }
-    fn get_boards_actions_by_id_board(params: iface_board::GetBoardsActionsByIdBoardParams) -> Result<String, String> {
+    fn get_boards_actions_by_id_board(params: iface_board::GetBoardsActionsByIdBoardParams) -> Result<String, iface_board::GetBoardsActionsByIdBoardError> {
         let json = iface_board__get_boards_actions_by_id_board_params__to_json(&params);
-        dispatch(&OP_BOARD_GET_BOARDS_ACTIONS_BY_ID_BOARD, json)
+        match dispatch(&OP_BOARD_GET_BOARDS_ACTIONS_BY_ID_BOARD, json).and_then(iface_board__get_boards_actions_by_id_board__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_board__get_boards_actions_by_id_board__err(e)),
+        }
     }
-    fn get_boards_board_stars_by_id_board(params: iface_board::GetBoardsBoardStarsByIdBoardParams) -> Result<String, String> {
+    fn get_boards_board_stars_by_id_board(params: iface_board::GetBoardsBoardStarsByIdBoardParams) -> Result<String, iface_board::GetBoardsBoardStarsByIdBoardError> {
         let json = iface_board__get_boards_board_stars_by_id_board_params__to_json(&params);
-        dispatch(&OP_BOARD_GET_BOARDS_BOARD_STARS_BY_ID_BOARD, json)
+        match dispatch(&OP_BOARD_GET_BOARDS_BOARD_STARS_BY_ID_BOARD, json).and_then(iface_board__get_boards_board_stars_by_id_board__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_board__get_boards_board_stars_by_id_board__err(e)),
+        }
     }
-    fn add_boards_calendar_key_generate_by_id_board(params: iface_board::AddBoardsCalendarKeyGenerateByIdBoardParams) -> Result<String, String> {
+    fn add_boards_calendar_key_generate_by_id_board(params: iface_board::AddBoardsCalendarKeyGenerateByIdBoardParams) -> Result<String, iface_board::AddBoardsCalendarKeyGenerateByIdBoardError> {
         let json = iface_board__add_boards_calendar_key_generate_by_id_board_params__to_json(&params);
-        dispatch(&OP_BOARD_ADD_BOARDS_CALENDAR_KEY_GENERATE_BY_ID_BOARD, json)
+        match dispatch(&OP_BOARD_ADD_BOARDS_CALENDAR_KEY_GENERATE_BY_ID_BOARD, json).and_then(iface_board__add_boards_calendar_key_generate_by_id_board__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_board__add_boards_calendar_key_generate_by_id_board__err(e)),
+        }
     }
-    fn get_boards_cards_by_id_board(params: iface_board::GetBoardsCardsByIdBoardParams) -> Result<String, String> {
+    fn get_boards_cards_by_id_board(params: iface_board::GetBoardsCardsByIdBoardParams) -> Result<String, iface_board::GetBoardsCardsByIdBoardError> {
         let json = iface_board__get_boards_cards_by_id_board_params__to_json(&params);
-        dispatch(&OP_BOARD_GET_BOARDS_CARDS_BY_ID_BOARD, json)
+        match dispatch(&OP_BOARD_GET_BOARDS_CARDS_BY_ID_BOARD, json).and_then(iface_board__get_boards_cards_by_id_board__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_board__get_boards_cards_by_id_board__err(e)),
+        }
     }
-    fn get_boards_cards_by_id_board_by_filter(params: iface_board::GetBoardsCardsByIdBoardByFilterParams) -> Result<String, String> {
+    fn get_boards_cards_by_id_board_by_filter(params: iface_board::GetBoardsCardsByIdBoardByFilterParams) -> Result<String, iface_board::GetBoardsCardsByIdBoardByFilterError> {
         let json = iface_board__get_boards_cards_by_id_board_by_filter_params__to_json(&params);
-        dispatch(&OP_BOARD_GET_BOARDS_CARDS_BY_ID_BOARD_BY_FILTER, json)
+        match dispatch(&OP_BOARD_GET_BOARDS_CARDS_BY_ID_BOARD_BY_FILTER, json).and_then(iface_board__get_boards_cards_by_id_board_by_filter__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_board__get_boards_cards_by_id_board_by_filter__err(e)),
+        }
     }
-    fn get_boards_cards_by_id_board_by_id_card(params: iface_board::GetBoardsCardsByIdBoardByIdCardParams) -> Result<String, String> {
+    fn get_boards_cards_by_id_board_by_id_card(params: iface_board::GetBoardsCardsByIdBoardByIdCardParams) -> Result<String, iface_board::GetBoardsCardsByIdBoardByIdCardError> {
         let json = iface_board__get_boards_cards_by_id_board_by_id_card_params__to_json(&params);
-        dispatch(&OP_BOARD_GET_BOARDS_CARDS_BY_ID_BOARD_BY_ID_CARD, json)
+        match dispatch(&OP_BOARD_GET_BOARDS_CARDS_BY_ID_BOARD_BY_ID_CARD, json).and_then(iface_board__get_boards_cards_by_id_board_by_id_card__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_board__get_boards_cards_by_id_board_by_id_card__err(e)),
+        }
     }
-    fn get_boards_checklists_by_id_board(params: iface_board::GetBoardsChecklistsByIdBoardParams) -> Result<String, String> {
+    fn get_boards_checklists_by_id_board(params: iface_board::GetBoardsChecklistsByIdBoardParams) -> Result<String, iface_board::GetBoardsChecklistsByIdBoardError> {
         let json = iface_board__get_boards_checklists_by_id_board_params__to_json(&params);
-        dispatch(&OP_BOARD_GET_BOARDS_CHECKLISTS_BY_ID_BOARD, json)
+        match dispatch(&OP_BOARD_GET_BOARDS_CHECKLISTS_BY_ID_BOARD, json).and_then(iface_board__get_boards_checklists_by_id_board__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_board__get_boards_checklists_by_id_board__err(e)),
+        }
     }
-    fn add_boards_checklists_by_id_board(params: iface_board::AddBoardsChecklistsByIdBoardParams) -> Result<String, String> {
+    fn add_boards_checklists_by_id_board(params: iface_board::AddBoardsChecklistsByIdBoardParams) -> Result<String, iface_board::AddBoardsChecklistsByIdBoardError> {
         let json = iface_board__add_boards_checklists_by_id_board_params__to_json(&params);
-        dispatch(&OP_BOARD_ADD_BOARDS_CHECKLISTS_BY_ID_BOARD, json)
+        match dispatch(&OP_BOARD_ADD_BOARDS_CHECKLISTS_BY_ID_BOARD, json).and_then(iface_board__add_boards_checklists_by_id_board__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_board__add_boards_checklists_by_id_board__err(e)),
+        }
     }
-    fn update_boards_closed_by_id_board(params: iface_board::UpdateBoardsClosedByIdBoardParams) -> Result<String, String> {
+    fn update_boards_closed_by_id_board(params: iface_board::UpdateBoardsClosedByIdBoardParams) -> Result<String, iface_board::UpdateBoardsClosedByIdBoardError> {
         let json = iface_board__update_boards_closed_by_id_board_params__to_json(&params);
-        dispatch(&OP_BOARD_UPDATE_BOARDS_CLOSED_BY_ID_BOARD, json)
+        match dispatch(&OP_BOARD_UPDATE_BOARDS_CLOSED_BY_ID_BOARD, json).and_then(iface_board__update_boards_closed_by_id_board__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_board__update_boards_closed_by_id_board__err(e)),
+        }
     }
-    fn get_boards_deltas_by_id_board(params: iface_board::GetBoardsDeltasByIdBoardParams) -> Result<String, String> {
+    fn get_boards_deltas_by_id_board(params: iface_board::GetBoardsDeltasByIdBoardParams) -> Result<String, iface_board::GetBoardsDeltasByIdBoardError> {
         let json = iface_board__get_boards_deltas_by_id_board_params__to_json(&params);
-        dispatch(&OP_BOARD_GET_BOARDS_DELTAS_BY_ID_BOARD, json)
+        match dispatch(&OP_BOARD_GET_BOARDS_DELTAS_BY_ID_BOARD, json).and_then(iface_board__get_boards_deltas_by_id_board__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_board__get_boards_deltas_by_id_board__err(e)),
+        }
     }
-    fn update_boards_desc_by_id_board(params: iface_board::UpdateBoardsDescByIdBoardParams) -> Result<String, String> {
+    fn update_boards_desc_by_id_board(params: iface_board::UpdateBoardsDescByIdBoardParams) -> Result<String, iface_board::UpdateBoardsDescByIdBoardError> {
         let json = iface_board__update_boards_desc_by_id_board_params__to_json(&params);
-        dispatch(&OP_BOARD_UPDATE_BOARDS_DESC_BY_ID_BOARD, json)
+        match dispatch(&OP_BOARD_UPDATE_BOARDS_DESC_BY_ID_BOARD, json).and_then(iface_board__update_boards_desc_by_id_board__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_board__update_boards_desc_by_id_board__err(e)),
+        }
     }
-    fn add_boards_email_key_generate_by_id_board(params: iface_board::AddBoardsEmailKeyGenerateByIdBoardParams) -> Result<String, String> {
+    fn add_boards_email_key_generate_by_id_board(params: iface_board::AddBoardsEmailKeyGenerateByIdBoardParams) -> Result<String, iface_board::AddBoardsEmailKeyGenerateByIdBoardError> {
         let json = iface_board__add_boards_email_key_generate_by_id_board_params__to_json(&params);
-        dispatch(&OP_BOARD_ADD_BOARDS_EMAIL_KEY_GENERATE_BY_ID_BOARD, json)
+        match dispatch(&OP_BOARD_ADD_BOARDS_EMAIL_KEY_GENERATE_BY_ID_BOARD, json).and_then(iface_board__add_boards_email_key_generate_by_id_board__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_board__add_boards_email_key_generate_by_id_board__err(e)),
+        }
     }
-    fn update_boards_id_organization_by_id_board(params: iface_board::UpdateBoardsIdOrganizationByIdBoardParams) -> Result<String, String> {
+    fn update_boards_id_organization_by_id_board(params: iface_board::UpdateBoardsIdOrganizationByIdBoardParams) -> Result<String, iface_board::UpdateBoardsIdOrganizationByIdBoardError> {
         let json = iface_board__update_boards_id_organization_by_id_board_params__to_json(&params);
-        dispatch(&OP_BOARD_UPDATE_BOARDS_ID_ORGANIZATION_BY_ID_BOARD, json)
+        match dispatch(&OP_BOARD_UPDATE_BOARDS_ID_ORGANIZATION_BY_ID_BOARD, json).and_then(iface_board__update_boards_id_organization_by_id_board__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_board__update_boards_id_organization_by_id_board__err(e)),
+        }
     }
-    fn update_boards_label_names_blue_by_id_board(params: iface_board::UpdateBoardsLabelNamesBlueByIdBoardParams) -> Result<String, String> {
+    fn update_boards_label_names_blue_by_id_board(params: iface_board::UpdateBoardsLabelNamesBlueByIdBoardParams) -> Result<String, iface_board::UpdateBoardsLabelNamesBlueByIdBoardError> {
         let json = iface_board__update_boards_label_names_blue_by_id_board_params__to_json(&params);
-        dispatch(&OP_BOARD_UPDATE_BOARDS_LABEL_NAMES_BLUE_BY_ID_BOARD, json)
+        match dispatch(&OP_BOARD_UPDATE_BOARDS_LABEL_NAMES_BLUE_BY_ID_BOARD, json).and_then(iface_board__update_boards_label_names_blue_by_id_board__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_board__update_boards_label_names_blue_by_id_board__err(e)),
+        }
     }
-    fn update_boards_label_names_green_by_id_board(params: iface_board::UpdateBoardsLabelNamesGreenByIdBoardParams) -> Result<String, String> {
+    fn update_boards_label_names_green_by_id_board(params: iface_board::UpdateBoardsLabelNamesGreenByIdBoardParams) -> Result<String, iface_board::UpdateBoardsLabelNamesGreenByIdBoardError> {
         let json = iface_board__update_boards_label_names_green_by_id_board_params__to_json(&params);
-        dispatch(&OP_BOARD_UPDATE_BOARDS_LABEL_NAMES_GREEN_BY_ID_BOARD, json)
+        match dispatch(&OP_BOARD_UPDATE_BOARDS_LABEL_NAMES_GREEN_BY_ID_BOARD, json).and_then(iface_board__update_boards_label_names_green_by_id_board__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_board__update_boards_label_names_green_by_id_board__err(e)),
+        }
     }
-    fn update_boards_label_names_orange_by_id_board(params: iface_board::UpdateBoardsLabelNamesOrangeByIdBoardParams) -> Result<String, String> {
+    fn update_boards_label_names_orange_by_id_board(params: iface_board::UpdateBoardsLabelNamesOrangeByIdBoardParams) -> Result<String, iface_board::UpdateBoardsLabelNamesOrangeByIdBoardError> {
         let json = iface_board__update_boards_label_names_orange_by_id_board_params__to_json(&params);
-        dispatch(&OP_BOARD_UPDATE_BOARDS_LABEL_NAMES_ORANGE_BY_ID_BOARD, json)
+        match dispatch(&OP_BOARD_UPDATE_BOARDS_LABEL_NAMES_ORANGE_BY_ID_BOARD, json).and_then(iface_board__update_boards_label_names_orange_by_id_board__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_board__update_boards_label_names_orange_by_id_board__err(e)),
+        }
     }
-    fn update_boards_label_names_purple_by_id_board(params: iface_board::UpdateBoardsLabelNamesPurpleByIdBoardParams) -> Result<String, String> {
+    fn update_boards_label_names_purple_by_id_board(params: iface_board::UpdateBoardsLabelNamesPurpleByIdBoardParams) -> Result<String, iface_board::UpdateBoardsLabelNamesPurpleByIdBoardError> {
         let json = iface_board__update_boards_label_names_purple_by_id_board_params__to_json(&params);
-        dispatch(&OP_BOARD_UPDATE_BOARDS_LABEL_NAMES_PURPLE_BY_ID_BOARD, json)
+        match dispatch(&OP_BOARD_UPDATE_BOARDS_LABEL_NAMES_PURPLE_BY_ID_BOARD, json).and_then(iface_board__update_boards_label_names_purple_by_id_board__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_board__update_boards_label_names_purple_by_id_board__err(e)),
+        }
     }
-    fn update_boards_label_names_red_by_id_board(params: iface_board::UpdateBoardsLabelNamesRedByIdBoardParams) -> Result<String, String> {
+    fn update_boards_label_names_red_by_id_board(params: iface_board::UpdateBoardsLabelNamesRedByIdBoardParams) -> Result<String, iface_board::UpdateBoardsLabelNamesRedByIdBoardError> {
         let json = iface_board__update_boards_label_names_red_by_id_board_params__to_json(&params);
-        dispatch(&OP_BOARD_UPDATE_BOARDS_LABEL_NAMES_RED_BY_ID_BOARD, json)
+        match dispatch(&OP_BOARD_UPDATE_BOARDS_LABEL_NAMES_RED_BY_ID_BOARD, json).and_then(iface_board__update_boards_label_names_red_by_id_board__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_board__update_boards_label_names_red_by_id_board__err(e)),
+        }
     }
-    fn update_boards_label_names_yellow_by_id_board(params: iface_board::UpdateBoardsLabelNamesYellowByIdBoardParams) -> Result<String, String> {
+    fn update_boards_label_names_yellow_by_id_board(params: iface_board::UpdateBoardsLabelNamesYellowByIdBoardParams) -> Result<String, iface_board::UpdateBoardsLabelNamesYellowByIdBoardError> {
         let json = iface_board__update_boards_label_names_yellow_by_id_board_params__to_json(&params);
-        dispatch(&OP_BOARD_UPDATE_BOARDS_LABEL_NAMES_YELLOW_BY_ID_BOARD, json)
+        match dispatch(&OP_BOARD_UPDATE_BOARDS_LABEL_NAMES_YELLOW_BY_ID_BOARD, json).and_then(iface_board__update_boards_label_names_yellow_by_id_board__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_board__update_boards_label_names_yellow_by_id_board__err(e)),
+        }
     }
-    fn get_boards_labels_by_id_board(params: iface_board::GetBoardsLabelsByIdBoardParams) -> Result<String, String> {
+    fn get_boards_labels_by_id_board(params: iface_board::GetBoardsLabelsByIdBoardParams) -> Result<String, iface_board::GetBoardsLabelsByIdBoardError> {
         let json = iface_board__get_boards_labels_by_id_board_params__to_json(&params);
-        dispatch(&OP_BOARD_GET_BOARDS_LABELS_BY_ID_BOARD, json)
+        match dispatch(&OP_BOARD_GET_BOARDS_LABELS_BY_ID_BOARD, json).and_then(iface_board__get_boards_labels_by_id_board__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_board__get_boards_labels_by_id_board__err(e)),
+        }
     }
-    fn add_boards_labels_by_id_board(params: iface_board::AddBoardsLabelsByIdBoardParams) -> Result<String, String> {
+    fn add_boards_labels_by_id_board(params: iface_board::AddBoardsLabelsByIdBoardParams) -> Result<String, iface_board::AddBoardsLabelsByIdBoardError> {
         let json = iface_board__add_boards_labels_by_id_board_params__to_json(&params);
-        dispatch(&OP_BOARD_ADD_BOARDS_LABELS_BY_ID_BOARD, json)
+        match dispatch(&OP_BOARD_ADD_BOARDS_LABELS_BY_ID_BOARD, json).and_then(iface_board__add_boards_labels_by_id_board__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_board__add_boards_labels_by_id_board__err(e)),
+        }
     }
-    fn get_boards_labels_by_id_board_by_id_label(params: iface_board::GetBoardsLabelsByIdBoardByIdLabelParams) -> Result<String, String> {
+    fn get_boards_labels_by_id_board_by_id_label(params: iface_board::GetBoardsLabelsByIdBoardByIdLabelParams) -> Result<String, iface_board::GetBoardsLabelsByIdBoardByIdLabelError> {
         let json = iface_board__get_boards_labels_by_id_board_by_id_label_params__to_json(&params);
-        dispatch(&OP_BOARD_GET_BOARDS_LABELS_BY_ID_BOARD_BY_ID_LABEL, json)
+        match dispatch(&OP_BOARD_GET_BOARDS_LABELS_BY_ID_BOARD_BY_ID_LABEL, json).and_then(iface_board__get_boards_labels_by_id_board_by_id_label__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_board__get_boards_labels_by_id_board_by_id_label__err(e)),
+        }
     }
-    fn get_boards_lists_by_id_board(params: iface_board::GetBoardsListsByIdBoardParams) -> Result<String, String> {
+    fn get_boards_lists_by_id_board(params: iface_board::GetBoardsListsByIdBoardParams) -> Result<String, iface_board::GetBoardsListsByIdBoardError> {
         let json = iface_board__get_boards_lists_by_id_board_params__to_json(&params);
-        dispatch(&OP_BOARD_GET_BOARDS_LISTS_BY_ID_BOARD, json)
+        match dispatch(&OP_BOARD_GET_BOARDS_LISTS_BY_ID_BOARD, json).and_then(iface_board__get_boards_lists_by_id_board__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_board__get_boards_lists_by_id_board__err(e)),
+        }
     }
-    fn add_boards_lists_by_id_board(params: iface_board::AddBoardsListsByIdBoardParams) -> Result<String, String> {
+    fn add_boards_lists_by_id_board(params: iface_board::AddBoardsListsByIdBoardParams) -> Result<String, iface_board::AddBoardsListsByIdBoardError> {
         let json = iface_board__add_boards_lists_by_id_board_params__to_json(&params);
-        dispatch(&OP_BOARD_ADD_BOARDS_LISTS_BY_ID_BOARD, json)
+        match dispatch(&OP_BOARD_ADD_BOARDS_LISTS_BY_ID_BOARD, json).and_then(iface_board__add_boards_lists_by_id_board__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_board__add_boards_lists_by_id_board__err(e)),
+        }
     }
-    fn get_boards_lists_by_id_board_by_filter(params: iface_board::GetBoardsListsByIdBoardByFilterParams) -> Result<String, String> {
+    fn get_boards_lists_by_id_board_by_filter(params: iface_board::GetBoardsListsByIdBoardByFilterParams) -> Result<String, iface_board::GetBoardsListsByIdBoardByFilterError> {
         let json = iface_board__get_boards_lists_by_id_board_by_filter_params__to_json(&params);
-        dispatch(&OP_BOARD_GET_BOARDS_LISTS_BY_ID_BOARD_BY_FILTER, json)
+        match dispatch(&OP_BOARD_GET_BOARDS_LISTS_BY_ID_BOARD_BY_FILTER, json).and_then(iface_board__get_boards_lists_by_id_board_by_filter__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_board__get_boards_lists_by_id_board_by_filter__err(e)),
+        }
     }
-    fn add_boards_mark_as_viewed_by_id_board(params: iface_board::AddBoardsMarkAsViewedByIdBoardParams) -> Result<String, String> {
+    fn add_boards_mark_as_viewed_by_id_board(params: iface_board::AddBoardsMarkAsViewedByIdBoardParams) -> Result<String, iface_board::AddBoardsMarkAsViewedByIdBoardError> {
         let json = iface_board__add_boards_mark_as_viewed_by_id_board_params__to_json(&params);
-        dispatch(&OP_BOARD_ADD_BOARDS_MARK_AS_VIEWED_BY_ID_BOARD, json)
+        match dispatch(&OP_BOARD_ADD_BOARDS_MARK_AS_VIEWED_BY_ID_BOARD, json).and_then(iface_board__add_boards_mark_as_viewed_by_id_board__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_board__add_boards_mark_as_viewed_by_id_board__err(e)),
+        }
     }
-    fn get_boards_members_by_id_board(params: iface_board::GetBoardsMembersByIdBoardParams) -> Result<String, String> {
+    fn get_boards_members_by_id_board(params: iface_board::GetBoardsMembersByIdBoardParams) -> Result<String, iface_board::GetBoardsMembersByIdBoardError> {
         let json = iface_board__get_boards_members_by_id_board_params__to_json(&params);
-        dispatch(&OP_BOARD_GET_BOARDS_MEMBERS_BY_ID_BOARD, json)
+        match dispatch(&OP_BOARD_GET_BOARDS_MEMBERS_BY_ID_BOARD, json).and_then(iface_board__get_boards_members_by_id_board__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_board__get_boards_members_by_id_board__err(e)),
+        }
     }
-    fn update_boards_members_by_id_board(params: iface_board::UpdateBoardsMembersByIdBoardParams) -> Result<String, String> {
+    fn update_boards_members_by_id_board(params: iface_board::UpdateBoardsMembersByIdBoardParams) -> Result<String, iface_board::UpdateBoardsMembersByIdBoardError> {
         let json = iface_board__update_boards_members_by_id_board_params__to_json(&params);
-        dispatch(&OP_BOARD_UPDATE_BOARDS_MEMBERS_BY_ID_BOARD, json)
+        match dispatch(&OP_BOARD_UPDATE_BOARDS_MEMBERS_BY_ID_BOARD, json).and_then(iface_board__update_boards_members_by_id_board__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_board__update_boards_members_by_id_board__err(e)),
+        }
     }
-    fn get_boards_members_by_id_board_by_filter(params: iface_board::GetBoardsMembersByIdBoardByFilterParams) -> Result<String, String> {
+    fn get_boards_members_by_id_board_by_filter(params: iface_board::GetBoardsMembersByIdBoardByFilterParams) -> Result<String, iface_board::GetBoardsMembersByIdBoardByFilterError> {
         let json = iface_board__get_boards_members_by_id_board_by_filter_params__to_json(&params);
-        dispatch(&OP_BOARD_GET_BOARDS_MEMBERS_BY_ID_BOARD_BY_FILTER, json)
+        match dispatch(&OP_BOARD_GET_BOARDS_MEMBERS_BY_ID_BOARD_BY_FILTER, json).and_then(iface_board__get_boards_members_by_id_board_by_filter__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_board__get_boards_members_by_id_board_by_filter__err(e)),
+        }
     }
-    fn update_boards_members_by_id_board_by_id_member(params: iface_board::UpdateBoardsMembersByIdBoardByIdMemberParams) -> Result<String, String> {
+    fn update_boards_members_by_id_board_by_id_member(params: iface_board::UpdateBoardsMembersByIdBoardByIdMemberParams) -> Result<String, iface_board::UpdateBoardsMembersByIdBoardByIdMemberError> {
         let json = iface_board__update_boards_members_by_id_board_by_id_member_params__to_json(&params);
-        dispatch(&OP_BOARD_UPDATE_BOARDS_MEMBERS_BY_ID_BOARD_BY_ID_MEMBER, json)
+        match dispatch(&OP_BOARD_UPDATE_BOARDS_MEMBERS_BY_ID_BOARD_BY_ID_MEMBER, json).and_then(iface_board__update_boards_members_by_id_board_by_id_member__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_board__update_boards_members_by_id_board_by_id_member__err(e)),
+        }
     }
-    fn delete_boards_members_by_id_board_by_id_member(params: iface_board::DeleteBoardsMembersByIdBoardByIdMemberParams) -> Result<String, String> {
+    fn delete_boards_members_by_id_board_by_id_member(params: iface_board::DeleteBoardsMembersByIdBoardByIdMemberParams) -> Result<String, iface_board::DeleteBoardsMembersByIdBoardByIdMemberError> {
         let json = iface_board__delete_boards_members_by_id_board_by_id_member_params__to_json(&params);
-        dispatch(&OP_BOARD_DELETE_BOARDS_MEMBERS_BY_ID_BOARD_BY_ID_MEMBER, json)
+        match dispatch(&OP_BOARD_DELETE_BOARDS_MEMBERS_BY_ID_BOARD_BY_ID_MEMBER, json).and_then(iface_board__delete_boards_members_by_id_board_by_id_member__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_board__delete_boards_members_by_id_board_by_id_member__err(e)),
+        }
     }
-    fn get_boards_members_cards_by_id_board_by_id_member(params: iface_board::GetBoardsMembersCardsByIdBoardByIdMemberParams) -> Result<String, String> {
+    fn get_boards_members_cards_by_id_board_by_id_member(params: iface_board::GetBoardsMembersCardsByIdBoardByIdMemberParams) -> Result<String, iface_board::GetBoardsMembersCardsByIdBoardByIdMemberError> {
         let json = iface_board__get_boards_members_cards_by_id_board_by_id_member_params__to_json(&params);
-        dispatch(&OP_BOARD_GET_BOARDS_MEMBERS_CARDS_BY_ID_BOARD_BY_ID_MEMBER, json)
+        match dispatch(&OP_BOARD_GET_BOARDS_MEMBERS_CARDS_BY_ID_BOARD_BY_ID_MEMBER, json).and_then(iface_board__get_boards_members_cards_by_id_board_by_id_member__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_board__get_boards_members_cards_by_id_board_by_id_member__err(e)),
+        }
     }
-    fn get_boards_members_invited_by_id_board(params: iface_board::GetBoardsMembersInvitedByIdBoardParams) -> Result<String, String> {
+    fn get_boards_members_invited_by_id_board(params: iface_board::GetBoardsMembersInvitedByIdBoardParams) -> Result<String, iface_board::GetBoardsMembersInvitedByIdBoardError> {
         let json = iface_board__get_boards_members_invited_by_id_board_params__to_json(&params);
-        dispatch(&OP_BOARD_GET_BOARDS_MEMBERS_INVITED_BY_ID_BOARD, json)
+        match dispatch(&OP_BOARD_GET_BOARDS_MEMBERS_INVITED_BY_ID_BOARD, json).and_then(iface_board__get_boards_members_invited_by_id_board__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_board__get_boards_members_invited_by_id_board__err(e)),
+        }
     }
-    fn get_boards_members_invited_by_id_board_by_field(params: iface_board::GetBoardsMembersInvitedByIdBoardByFieldParams) -> Result<String, String> {
+    fn get_boards_members_invited_by_id_board_by_field(params: iface_board::GetBoardsMembersInvitedByIdBoardByFieldParams) -> Result<String, iface_board::GetBoardsMembersInvitedByIdBoardByFieldError> {
         let json = iface_board__get_boards_members_invited_by_id_board_by_field_params__to_json(&params);
-        dispatch(&OP_BOARD_GET_BOARDS_MEMBERS_INVITED_BY_ID_BOARD_BY_FIELD, json)
+        match dispatch(&OP_BOARD_GET_BOARDS_MEMBERS_INVITED_BY_ID_BOARD_BY_FIELD, json).and_then(iface_board__get_boards_members_invited_by_id_board_by_field__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_board__get_boards_members_invited_by_id_board_by_field__err(e)),
+        }
     }
-    fn get_boards_memberships_by_id_board(params: iface_board::GetBoardsMembershipsByIdBoardParams) -> Result<String, String> {
+    fn get_boards_memberships_by_id_board(params: iface_board::GetBoardsMembershipsByIdBoardParams) -> Result<String, iface_board::GetBoardsMembershipsByIdBoardError> {
         let json = iface_board__get_boards_memberships_by_id_board_params__to_json(&params);
-        dispatch(&OP_BOARD_GET_BOARDS_MEMBERSHIPS_BY_ID_BOARD, json)
+        match dispatch(&OP_BOARD_GET_BOARDS_MEMBERSHIPS_BY_ID_BOARD, json).and_then(iface_board__get_boards_memberships_by_id_board__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_board__get_boards_memberships_by_id_board__err(e)),
+        }
     }
-    fn get_boards_memberships_by_id_board_by_id_membership(params: iface_board::GetBoardsMembershipsByIdBoardByIdMembershipParams) -> Result<String, String> {
+    fn get_boards_memberships_by_id_board_by_id_membership(params: iface_board::GetBoardsMembershipsByIdBoardByIdMembershipParams) -> Result<String, iface_board::GetBoardsMembershipsByIdBoardByIdMembershipError> {
         let json = iface_board__get_boards_memberships_by_id_board_by_id_membership_params__to_json(&params);
-        dispatch(&OP_BOARD_GET_BOARDS_MEMBERSHIPS_BY_ID_BOARD_BY_ID_MEMBERSHIP, json)
+        match dispatch(&OP_BOARD_GET_BOARDS_MEMBERSHIPS_BY_ID_BOARD_BY_ID_MEMBERSHIP, json).and_then(iface_board__get_boards_memberships_by_id_board_by_id_membership__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_board__get_boards_memberships_by_id_board_by_id_membership__err(e)),
+        }
     }
-    fn update_boards_memberships_by_id_board_by_id_membership(params: iface_board::UpdateBoardsMembershipsByIdBoardByIdMembershipParams) -> Result<String, String> {
+    fn update_boards_memberships_by_id_board_by_id_membership(params: iface_board::UpdateBoardsMembershipsByIdBoardByIdMembershipParams) -> Result<String, iface_board::UpdateBoardsMembershipsByIdBoardByIdMembershipError> {
         let json = iface_board__update_boards_memberships_by_id_board_by_id_membership_params__to_json(&params);
-        dispatch(&OP_BOARD_UPDATE_BOARDS_MEMBERSHIPS_BY_ID_BOARD_BY_ID_MEMBERSHIP, json)
+        match dispatch(&OP_BOARD_UPDATE_BOARDS_MEMBERSHIPS_BY_ID_BOARD_BY_ID_MEMBERSHIP, json).and_then(iface_board__update_boards_memberships_by_id_board_by_id_membership__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_board__update_boards_memberships_by_id_board_by_id_membership__err(e)),
+        }
     }
-    fn get_boards_my_prefs_by_id_board(params: iface_board::GetBoardsMyPrefsByIdBoardParams) -> Result<String, String> {
+    fn get_boards_my_prefs_by_id_board(params: iface_board::GetBoardsMyPrefsByIdBoardParams) -> Result<String, iface_board::GetBoardsMyPrefsByIdBoardError> {
         let json = iface_board__get_boards_my_prefs_by_id_board_params__to_json(&params);
-        dispatch(&OP_BOARD_GET_BOARDS_MY_PREFS_BY_ID_BOARD, json)
+        match dispatch(&OP_BOARD_GET_BOARDS_MY_PREFS_BY_ID_BOARD, json).and_then(iface_board__get_boards_my_prefs_by_id_board__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_board__get_boards_my_prefs_by_id_board__err(e)),
+        }
     }
-    fn update_boards_my_prefs_email_position_by_id_board(params: iface_board::UpdateBoardsMyPrefsEmailPositionByIdBoardParams) -> Result<String, String> {
+    fn update_boards_my_prefs_email_position_by_id_board(params: iface_board::UpdateBoardsMyPrefsEmailPositionByIdBoardParams) -> Result<String, iface_board::UpdateBoardsMyPrefsEmailPositionByIdBoardError> {
         let json = iface_board__update_boards_my_prefs_email_position_by_id_board_params__to_json(&params);
-        dispatch(&OP_BOARD_UPDATE_BOARDS_MY_PREFS_EMAIL_POSITION_BY_ID_BOARD, json)
+        match dispatch(&OP_BOARD_UPDATE_BOARDS_MY_PREFS_EMAIL_POSITION_BY_ID_BOARD, json).and_then(iface_board__update_boards_my_prefs_email_position_by_id_board__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_board__update_boards_my_prefs_email_position_by_id_board__err(e)),
+        }
     }
-    fn update_boards_my_prefs_id_email_list_by_id_board(params: iface_board::UpdateBoardsMyPrefsIdEmailListByIdBoardParams) -> Result<String, String> {
+    fn update_boards_my_prefs_id_email_list_by_id_board(params: iface_board::UpdateBoardsMyPrefsIdEmailListByIdBoardParams) -> Result<String, iface_board::UpdateBoardsMyPrefsIdEmailListByIdBoardError> {
         let json = iface_board__update_boards_my_prefs_id_email_list_by_id_board_params__to_json(&params);
-        dispatch(&OP_BOARD_UPDATE_BOARDS_MY_PREFS_ID_EMAIL_LIST_BY_ID_BOARD, json)
+        match dispatch(&OP_BOARD_UPDATE_BOARDS_MY_PREFS_ID_EMAIL_LIST_BY_ID_BOARD, json).and_then(iface_board__update_boards_my_prefs_id_email_list_by_id_board__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_board__update_boards_my_prefs_id_email_list_by_id_board__err(e)),
+        }
     }
-    fn update_boards_my_prefs_show_list_guide_by_id_board(params: iface_board::UpdateBoardsMyPrefsShowListGuideByIdBoardParams) -> Result<String, String> {
+    fn update_boards_my_prefs_show_list_guide_by_id_board(params: iface_board::UpdateBoardsMyPrefsShowListGuideByIdBoardParams) -> Result<String, iface_board::UpdateBoardsMyPrefsShowListGuideByIdBoardError> {
         let json = iface_board__update_boards_my_prefs_show_list_guide_by_id_board_params__to_json(&params);
-        dispatch(&OP_BOARD_UPDATE_BOARDS_MY_PREFS_SHOW_LIST_GUIDE_BY_ID_BOARD, json)
+        match dispatch(&OP_BOARD_UPDATE_BOARDS_MY_PREFS_SHOW_LIST_GUIDE_BY_ID_BOARD, json).and_then(iface_board__update_boards_my_prefs_show_list_guide_by_id_board__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_board__update_boards_my_prefs_show_list_guide_by_id_board__err(e)),
+        }
     }
-    fn update_boards_my_prefs_show_sidebar_by_id_board(params: iface_board::UpdateBoardsMyPrefsShowSidebarByIdBoardParams) -> Result<String, String> {
+    fn update_boards_my_prefs_show_sidebar_by_id_board(params: iface_board::UpdateBoardsMyPrefsShowSidebarByIdBoardParams) -> Result<String, iface_board::UpdateBoardsMyPrefsShowSidebarByIdBoardError> {
         let json = iface_board__update_boards_my_prefs_show_sidebar_by_id_board_params__to_json(&params);
-        dispatch(&OP_BOARD_UPDATE_BOARDS_MY_PREFS_SHOW_SIDEBAR_BY_ID_BOARD, json)
+        match dispatch(&OP_BOARD_UPDATE_BOARDS_MY_PREFS_SHOW_SIDEBAR_BY_ID_BOARD, json).and_then(iface_board__update_boards_my_prefs_show_sidebar_by_id_board__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_board__update_boards_my_prefs_show_sidebar_by_id_board__err(e)),
+        }
     }
-    fn update_boards_my_prefs_show_sidebar_activity_by_id_board(params: iface_board::UpdateBoardsMyPrefsShowSidebarActivityByIdBoardParams) -> Result<String, String> {
+    fn update_boards_my_prefs_show_sidebar_activity_by_id_board(params: iface_board::UpdateBoardsMyPrefsShowSidebarActivityByIdBoardParams) -> Result<String, iface_board::UpdateBoardsMyPrefsShowSidebarActivityByIdBoardError> {
         let json = iface_board__update_boards_my_prefs_show_sidebar_activity_by_id_board_params__to_json(&params);
-        dispatch(&OP_BOARD_UPDATE_BOARDS_MY_PREFS_SHOW_SIDEBAR_ACTIVITY_BY_ID_BOARD, json)
+        match dispatch(&OP_BOARD_UPDATE_BOARDS_MY_PREFS_SHOW_SIDEBAR_ACTIVITY_BY_ID_BOARD, json).and_then(iface_board__update_boards_my_prefs_show_sidebar_activity_by_id_board__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_board__update_boards_my_prefs_show_sidebar_activity_by_id_board__err(e)),
+        }
     }
-    fn update_boards_my_prefs_show_sidebar_board_actions_by_id_board(params: iface_board::UpdateBoardsMyPrefsShowSidebarBoardActionsByIdBoardParams) -> Result<String, String> {
+    fn update_boards_my_prefs_show_sidebar_board_actions_by_id_board(params: iface_board::UpdateBoardsMyPrefsShowSidebarBoardActionsByIdBoardParams) -> Result<String, iface_board::UpdateBoardsMyPrefsShowSidebarBoardActionsByIdBoardError> {
         let json = iface_board__update_boards_my_prefs_show_sidebar_board_actions_by_id_board_params__to_json(&params);
-        dispatch(&OP_BOARD_UPDATE_BOARDS_MY_PREFS_SHOW_SIDEBAR_BOARD_ACTIONS_BY_ID_BOARD, json)
+        match dispatch(&OP_BOARD_UPDATE_BOARDS_MY_PREFS_SHOW_SIDEBAR_BOARD_ACTIONS_BY_ID_BOARD, json).and_then(iface_board__update_boards_my_prefs_show_sidebar_board_actions_by_id_board__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_board__update_boards_my_prefs_show_sidebar_board_actions_by_id_board__err(e)),
+        }
     }
-    fn update_boards_my_prefs_show_sidebar_members_by_id_board(params: iface_board::UpdateBoardsMyPrefsShowSidebarMembersByIdBoardParams) -> Result<String, String> {
+    fn update_boards_my_prefs_show_sidebar_members_by_id_board(params: iface_board::UpdateBoardsMyPrefsShowSidebarMembersByIdBoardParams) -> Result<String, iface_board::UpdateBoardsMyPrefsShowSidebarMembersByIdBoardError> {
         let json = iface_board__update_boards_my_prefs_show_sidebar_members_by_id_board_params__to_json(&params);
-        dispatch(&OP_BOARD_UPDATE_BOARDS_MY_PREFS_SHOW_SIDEBAR_MEMBERS_BY_ID_BOARD, json)
+        match dispatch(&OP_BOARD_UPDATE_BOARDS_MY_PREFS_SHOW_SIDEBAR_MEMBERS_BY_ID_BOARD, json).and_then(iface_board__update_boards_my_prefs_show_sidebar_members_by_id_board__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_board__update_boards_my_prefs_show_sidebar_members_by_id_board__err(e)),
+        }
     }
-    fn update_boards_name_by_id_board(params: iface_board::UpdateBoardsNameByIdBoardParams) -> Result<String, String> {
+    fn update_boards_name_by_id_board(params: iface_board::UpdateBoardsNameByIdBoardParams) -> Result<String, iface_board::UpdateBoardsNameByIdBoardError> {
         let json = iface_board__update_boards_name_by_id_board_params__to_json(&params);
-        dispatch(&OP_BOARD_UPDATE_BOARDS_NAME_BY_ID_BOARD, json)
+        match dispatch(&OP_BOARD_UPDATE_BOARDS_NAME_BY_ID_BOARD, json).and_then(iface_board__update_boards_name_by_id_board__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_board__update_boards_name_by_id_board__err(e)),
+        }
     }
-    fn get_boards_organization_by_id_board(params: iface_board::GetBoardsOrganizationByIdBoardParams) -> Result<String, String> {
+    fn get_boards_organization_by_id_board(params: iface_board::GetBoardsOrganizationByIdBoardParams) -> Result<String, iface_board::GetBoardsOrganizationByIdBoardError> {
         let json = iface_board__get_boards_organization_by_id_board_params__to_json(&params);
-        dispatch(&OP_BOARD_GET_BOARDS_ORGANIZATION_BY_ID_BOARD, json)
+        match dispatch(&OP_BOARD_GET_BOARDS_ORGANIZATION_BY_ID_BOARD, json).and_then(iface_board__get_boards_organization_by_id_board__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_board__get_boards_organization_by_id_board__err(e)),
+        }
     }
-    fn get_boards_organization_by_id_board_by_field(params: iface_board::GetBoardsOrganizationByIdBoardByFieldParams) -> Result<String, String> {
+    fn get_boards_organization_by_id_board_by_field(params: iface_board::GetBoardsOrganizationByIdBoardByFieldParams) -> Result<String, iface_board::GetBoardsOrganizationByIdBoardByFieldError> {
         let json = iface_board__get_boards_organization_by_id_board_by_field_params__to_json(&params);
-        dispatch(&OP_BOARD_GET_BOARDS_ORGANIZATION_BY_ID_BOARD_BY_FIELD, json)
+        match dispatch(&OP_BOARD_GET_BOARDS_ORGANIZATION_BY_ID_BOARD_BY_FIELD, json).and_then(iface_board__get_boards_organization_by_id_board_by_field__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_board__get_boards_organization_by_id_board_by_field__err(e)),
+        }
     }
-    fn add_boards_power_ups_by_id_board(params: iface_board::AddBoardsPowerUpsByIdBoardParams) -> Result<String, String> {
+    fn add_boards_power_ups_by_id_board(params: iface_board::AddBoardsPowerUpsByIdBoardParams) -> Result<String, iface_board::AddBoardsPowerUpsByIdBoardError> {
         let json = iface_board__add_boards_power_ups_by_id_board_params__to_json(&params);
-        dispatch(&OP_BOARD_ADD_BOARDS_POWER_UPS_BY_ID_BOARD, json)
+        match dispatch(&OP_BOARD_ADD_BOARDS_POWER_UPS_BY_ID_BOARD, json).and_then(iface_board__add_boards_power_ups_by_id_board__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_board__add_boards_power_ups_by_id_board__err(e)),
+        }
     }
-    fn delete_boards_power_ups_by_id_board_by_power_up(params: iface_board::DeleteBoardsPowerUpsByIdBoardByPowerUpParams) -> Result<String, String> {
+    fn delete_boards_power_ups_by_id_board_by_power_up(params: iface_board::DeleteBoardsPowerUpsByIdBoardByPowerUpParams) -> Result<String, iface_board::DeleteBoardsPowerUpsByIdBoardByPowerUpError> {
         let json = iface_board__delete_boards_power_ups_by_id_board_by_power_up_params__to_json(&params);
-        dispatch(&OP_BOARD_DELETE_BOARDS_POWER_UPS_BY_ID_BOARD_BY_POWER_UP, json)
+        match dispatch(&OP_BOARD_DELETE_BOARDS_POWER_UPS_BY_ID_BOARD_BY_POWER_UP, json).and_then(iface_board__delete_boards_power_ups_by_id_board_by_power_up__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_board__delete_boards_power_ups_by_id_board_by_power_up__err(e)),
+        }
     }
-    fn update_boards_prefs_background_by_id_board(params: iface_board::UpdateBoardsPrefsBackgroundByIdBoardParams) -> Result<String, String> {
+    fn update_boards_prefs_background_by_id_board(params: iface_board::UpdateBoardsPrefsBackgroundByIdBoardParams) -> Result<String, iface_board::UpdateBoardsPrefsBackgroundByIdBoardError> {
         let json = iface_board__update_boards_prefs_background_by_id_board_params__to_json(&params);
-        dispatch(&OP_BOARD_UPDATE_BOARDS_PREFS_BACKGROUND_BY_ID_BOARD, json)
+        match dispatch(&OP_BOARD_UPDATE_BOARDS_PREFS_BACKGROUND_BY_ID_BOARD, json).and_then(iface_board__update_boards_prefs_background_by_id_board__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_board__update_boards_prefs_background_by_id_board__err(e)),
+        }
     }
-    fn update_boards_prefs_calendar_feed_enabled_by_id_board(params: iface_board::UpdateBoardsPrefsCalendarFeedEnabledByIdBoardParams) -> Result<String, String> {
+    fn update_boards_prefs_calendar_feed_enabled_by_id_board(params: iface_board::UpdateBoardsPrefsCalendarFeedEnabledByIdBoardParams) -> Result<String, iface_board::UpdateBoardsPrefsCalendarFeedEnabledByIdBoardError> {
         let json = iface_board__update_boards_prefs_calendar_feed_enabled_by_id_board_params__to_json(&params);
-        dispatch(&OP_BOARD_UPDATE_BOARDS_PREFS_CALENDAR_FEED_ENABLED_BY_ID_BOARD, json)
+        match dispatch(&OP_BOARD_UPDATE_BOARDS_PREFS_CALENDAR_FEED_ENABLED_BY_ID_BOARD, json).and_then(iface_board__update_boards_prefs_calendar_feed_enabled_by_id_board__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_board__update_boards_prefs_calendar_feed_enabled_by_id_board__err(e)),
+        }
     }
-    fn update_boards_prefs_card_aging_by_id_board(params: iface_board::UpdateBoardsPrefsCardAgingByIdBoardParams) -> Result<String, String> {
+    fn update_boards_prefs_card_aging_by_id_board(params: iface_board::UpdateBoardsPrefsCardAgingByIdBoardParams) -> Result<String, iface_board::UpdateBoardsPrefsCardAgingByIdBoardError> {
         let json = iface_board__update_boards_prefs_card_aging_by_id_board_params__to_json(&params);
-        dispatch(&OP_BOARD_UPDATE_BOARDS_PREFS_CARD_AGING_BY_ID_BOARD, json)
+        match dispatch(&OP_BOARD_UPDATE_BOARDS_PREFS_CARD_AGING_BY_ID_BOARD, json).and_then(iface_board__update_boards_prefs_card_aging_by_id_board__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_board__update_boards_prefs_card_aging_by_id_board__err(e)),
+        }
     }
-    fn update_boards_prefs_card_covers_by_id_board(params: iface_board::UpdateBoardsPrefsCardCoversByIdBoardParams) -> Result<String, String> {
+    fn update_boards_prefs_card_covers_by_id_board(params: iface_board::UpdateBoardsPrefsCardCoversByIdBoardParams) -> Result<String, iface_board::UpdateBoardsPrefsCardCoversByIdBoardError> {
         let json = iface_board__update_boards_prefs_card_covers_by_id_board_params__to_json(&params);
-        dispatch(&OP_BOARD_UPDATE_BOARDS_PREFS_CARD_COVERS_BY_ID_BOARD, json)
+        match dispatch(&OP_BOARD_UPDATE_BOARDS_PREFS_CARD_COVERS_BY_ID_BOARD, json).and_then(iface_board__update_boards_prefs_card_covers_by_id_board__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_board__update_boards_prefs_card_covers_by_id_board__err(e)),
+        }
     }
-    fn update_boards_prefs_comments_by_id_board(params: iface_board::UpdateBoardsPrefsCommentsByIdBoardParams) -> Result<String, String> {
+    fn update_boards_prefs_comments_by_id_board(params: iface_board::UpdateBoardsPrefsCommentsByIdBoardParams) -> Result<String, iface_board::UpdateBoardsPrefsCommentsByIdBoardError> {
         let json = iface_board__update_boards_prefs_comments_by_id_board_params__to_json(&params);
-        dispatch(&OP_BOARD_UPDATE_BOARDS_PREFS_COMMENTS_BY_ID_BOARD, json)
+        match dispatch(&OP_BOARD_UPDATE_BOARDS_PREFS_COMMENTS_BY_ID_BOARD, json).and_then(iface_board__update_boards_prefs_comments_by_id_board__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_board__update_boards_prefs_comments_by_id_board__err(e)),
+        }
     }
-    fn update_boards_prefs_invitations_by_id_board(params: iface_board::UpdateBoardsPrefsInvitationsByIdBoardParams) -> Result<String, String> {
+    fn update_boards_prefs_invitations_by_id_board(params: iface_board::UpdateBoardsPrefsInvitationsByIdBoardParams) -> Result<String, iface_board::UpdateBoardsPrefsInvitationsByIdBoardError> {
         let json = iface_board__update_boards_prefs_invitations_by_id_board_params__to_json(&params);
-        dispatch(&OP_BOARD_UPDATE_BOARDS_PREFS_INVITATIONS_BY_ID_BOARD, json)
+        match dispatch(&OP_BOARD_UPDATE_BOARDS_PREFS_INVITATIONS_BY_ID_BOARD, json).and_then(iface_board__update_boards_prefs_invitations_by_id_board__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_board__update_boards_prefs_invitations_by_id_board__err(e)),
+        }
     }
-    fn update_boards_prefs_permission_level_by_id_board(params: iface_board::UpdateBoardsPrefsPermissionLevelByIdBoardParams) -> Result<String, String> {
+    fn update_boards_prefs_permission_level_by_id_board(params: iface_board::UpdateBoardsPrefsPermissionLevelByIdBoardParams) -> Result<String, iface_board::UpdateBoardsPrefsPermissionLevelByIdBoardError> {
         let json = iface_board__update_boards_prefs_permission_level_by_id_board_params__to_json(&params);
-        dispatch(&OP_BOARD_UPDATE_BOARDS_PREFS_PERMISSION_LEVEL_BY_ID_BOARD, json)
+        match dispatch(&OP_BOARD_UPDATE_BOARDS_PREFS_PERMISSION_LEVEL_BY_ID_BOARD, json).and_then(iface_board__update_boards_prefs_permission_level_by_id_board__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_board__update_boards_prefs_permission_level_by_id_board__err(e)),
+        }
     }
-    fn update_boards_prefs_self_join_by_id_board(params: iface_board::UpdateBoardsPrefsSelfJoinByIdBoardParams) -> Result<String, String> {
+    fn update_boards_prefs_self_join_by_id_board(params: iface_board::UpdateBoardsPrefsSelfJoinByIdBoardParams) -> Result<String, iface_board::UpdateBoardsPrefsSelfJoinByIdBoardError> {
         let json = iface_board__update_boards_prefs_self_join_by_id_board_params__to_json(&params);
-        dispatch(&OP_BOARD_UPDATE_BOARDS_PREFS_SELF_JOIN_BY_ID_BOARD, json)
+        match dispatch(&OP_BOARD_UPDATE_BOARDS_PREFS_SELF_JOIN_BY_ID_BOARD, json).and_then(iface_board__update_boards_prefs_self_join_by_id_board__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_board__update_boards_prefs_self_join_by_id_board__err(e)),
+        }
     }
-    fn update_boards_prefs_voting_by_id_board(params: iface_board::UpdateBoardsPrefsVotingByIdBoardParams) -> Result<String, String> {
+    fn update_boards_prefs_voting_by_id_board(params: iface_board::UpdateBoardsPrefsVotingByIdBoardParams) -> Result<String, iface_board::UpdateBoardsPrefsVotingByIdBoardError> {
         let json = iface_board__update_boards_prefs_voting_by_id_board_params__to_json(&params);
-        dispatch(&OP_BOARD_UPDATE_BOARDS_PREFS_VOTING_BY_ID_BOARD, json)
+        match dispatch(&OP_BOARD_UPDATE_BOARDS_PREFS_VOTING_BY_ID_BOARD, json).and_then(iface_board__update_boards_prefs_voting_by_id_board__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_board__update_boards_prefs_voting_by_id_board__err(e)),
+        }
     }
-    fn update_boards_subscribed_by_id_board(params: iface_board::UpdateBoardsSubscribedByIdBoardParams) -> Result<String, String> {
+    fn update_boards_subscribed_by_id_board(params: iface_board::UpdateBoardsSubscribedByIdBoardParams) -> Result<String, iface_board::UpdateBoardsSubscribedByIdBoardError> {
         let json = iface_board__update_boards_subscribed_by_id_board_params__to_json(&params);
-        dispatch(&OP_BOARD_UPDATE_BOARDS_SUBSCRIBED_BY_ID_BOARD, json)
+        match dispatch(&OP_BOARD_UPDATE_BOARDS_SUBSCRIBED_BY_ID_BOARD, json).and_then(iface_board__update_boards_subscribed_by_id_board__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_board__update_boards_subscribed_by_id_board__err(e)),
+        }
     }
-    fn get_boards_by_id_board_by_field(params: iface_board::GetBoardsByIdBoardByFieldParams) -> Result<String, String> {
+    fn get_boards_by_id_board_by_field(params: iface_board::GetBoardsByIdBoardByFieldParams) -> Result<String, iface_board::GetBoardsByIdBoardByFieldError> {
         let json = iface_board__get_boards_by_id_board_by_field_params__to_json(&params);
-        dispatch(&OP_BOARD_GET_BOARDS_BY_ID_BOARD_BY_FIELD, json)
+        match dispatch(&OP_BOARD_GET_BOARDS_BY_ID_BOARD_BY_FIELD, json).and_then(iface_board__get_boards_by_id_board_by_field__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_board__get_boards_by_id_board_by_field__err(e)),
+        }
     }
 }
 use crate::exports::autostamp::trello::card as iface_card;
@@ -2720,23 +4199,23 @@ const OP_CARD_ADD_CARDS: OpSpec = OpSpec {
     method: "POST",
     path_template: "/cards",
     fields: &[
-        FieldSpec { snake: "token", location: FieldLocation::Query },
-        FieldSpec { snake: "closed", location: FieldLocation::Body },
-        FieldSpec { snake: "desc", location: FieldLocation::Body },
-        FieldSpec { snake: "due", location: FieldLocation::Body },
-        FieldSpec { snake: "file_source", location: FieldLocation::Body },
-        FieldSpec { snake: "id_attachment_cover", location: FieldLocation::Body },
-        FieldSpec { snake: "id_board", location: FieldLocation::Body },
-        FieldSpec { snake: "id_card_source", location: FieldLocation::Body },
-        FieldSpec { snake: "id_labels", location: FieldLocation::Body },
-        FieldSpec { snake: "id_list", location: FieldLocation::Body },
-        FieldSpec { snake: "id_members", location: FieldLocation::Body },
-        FieldSpec { snake: "keep_from_source", location: FieldLocation::Body },
-        FieldSpec { snake: "labels", location: FieldLocation::Body },
-        FieldSpec { snake: "name", location: FieldLocation::Body },
-        FieldSpec { snake: "pos", location: FieldLocation::Body },
-        FieldSpec { snake: "subscribed", location: FieldLocation::Body },
-        FieldSpec { snake: "url_source", location: FieldLocation::Body },
+        FieldSpec { snake: "token", wire: "token", location: FieldLocation::Query },
+        FieldSpec { snake: "closed", wire: "closed", location: FieldLocation::Body },
+        FieldSpec { snake: "desc", wire: "desc", location: FieldLocation::Body },
+        FieldSpec { snake: "due", wire: "due", location: FieldLocation::Body },
+        FieldSpec { snake: "file_source", wire: "fileSource", location: FieldLocation::Body },
+        FieldSpec { snake: "id_attachment_cover", wire: "idAttachmentCover", location: FieldLocation::Body },
+        FieldSpec { snake: "id_board", wire: "idBoard", location: FieldLocation::Body },
+        FieldSpec { snake: "id_card_source", wire: "idCardSource", location: FieldLocation::Body },
+        FieldSpec { snake: "id_labels", wire: "idLabels", location: FieldLocation::Body },
+        FieldSpec { snake: "id_list", wire: "idList", location: FieldLocation::Body },
+        FieldSpec { snake: "id_members", wire: "idMembers", location: FieldLocation::Body },
+        FieldSpec { snake: "keep_from_source", wire: "keepFromSource", location: FieldLocation::Body },
+        FieldSpec { snake: "labels", wire: "labels", location: FieldLocation::Body },
+        FieldSpec { snake: "name", wire: "name", location: FieldLocation::Body },
+        FieldSpec { snake: "pos", wire: "pos", location: FieldLocation::Body },
+        FieldSpec { snake: "subscribed", wire: "subscribed", location: FieldLocation::Body },
+        FieldSpec { snake: "url_source", wire: "urlSource", location: FieldLocation::Body },
     ],
     auth: &[
         AuthApply { secret_key: "api_key", kind: AuthKind::ApiKeyQuery("key") },
@@ -2747,31 +4226,31 @@ const OP_CARD_GET_CARDS_BY_ID_CARD: OpSpec = OpSpec {
     method: "GET",
     path_template: "/cards/{id_card}",
     fields: &[
-        FieldSpec { snake: "id_card", location: FieldLocation::Path },
-        FieldSpec { snake: "actions", location: FieldLocation::Query },
-        FieldSpec { snake: "actions_entities", location: FieldLocation::Query },
-        FieldSpec { snake: "actions_display", location: FieldLocation::Query },
-        FieldSpec { snake: "actions_limit", location: FieldLocation::Query },
-        FieldSpec { snake: "action_fields", location: FieldLocation::Query },
-        FieldSpec { snake: "action_member_creator_fields", location: FieldLocation::Query },
-        FieldSpec { snake: "attachments", location: FieldLocation::Query },
-        FieldSpec { snake: "attachment_fields", location: FieldLocation::Query },
-        FieldSpec { snake: "members", location: FieldLocation::Query },
-        FieldSpec { snake: "member_fields", location: FieldLocation::Query },
-        FieldSpec { snake: "members_voted", location: FieldLocation::Query },
-        FieldSpec { snake: "member_voted_fields", location: FieldLocation::Query },
-        FieldSpec { snake: "check_item_states", location: FieldLocation::Query },
-        FieldSpec { snake: "check_item_state_fields", location: FieldLocation::Query },
-        FieldSpec { snake: "checklists", location: FieldLocation::Query },
-        FieldSpec { snake: "checklist_fields", location: FieldLocation::Query },
-        FieldSpec { snake: "board", location: FieldLocation::Query },
-        FieldSpec { snake: "board_fields", location: FieldLocation::Query },
-        FieldSpec { snake: "list", location: FieldLocation::Query },
-        FieldSpec { snake: "list_fields", location: FieldLocation::Query },
-        FieldSpec { snake: "stickers", location: FieldLocation::Query },
-        FieldSpec { snake: "sticker_fields", location: FieldLocation::Query },
-        FieldSpec { snake: "fields", location: FieldLocation::Query },
-        FieldSpec { snake: "token", location: FieldLocation::Query },
+        FieldSpec { snake: "id_card", wire: "idCard", location: FieldLocation::Path },
+        FieldSpec { snake: "actions", wire: "actions", location: FieldLocation::Query },
+        FieldSpec { snake: "actions_entities", wire: "actions_entities", location: FieldLocation::Query },
+        FieldSpec { snake: "actions_display", wire: "actions_display", location: FieldLocation::Query },
+        FieldSpec { snake: "actions_limit", wire: "actions_limit", location: FieldLocation::Query },
+        FieldSpec { snake: "action_fields", wire: "action_fields", location: FieldLocation::Query },
+        FieldSpec { snake: "action_member_creator_fields", wire: "action_memberCreator_fields", location: FieldLocation::Query },
+        FieldSpec { snake: "attachments", wire: "attachments", location: FieldLocation::Query },
+        FieldSpec { snake: "attachment_fields", wire: "attachment_fields", location: FieldLocation::Query },
+        FieldSpec { snake: "members", wire: "members", location: FieldLocation::Query },
+        FieldSpec { snake: "member_fields", wire: "member_fields", location: FieldLocation::Query },
+        FieldSpec { snake: "members_voted", wire: "membersVoted", location: FieldLocation::Query },
+        FieldSpec { snake: "member_voted_fields", wire: "memberVoted_fields", location: FieldLocation::Query },
+        FieldSpec { snake: "check_item_states", wire: "checkItemStates", location: FieldLocation::Query },
+        FieldSpec { snake: "check_item_state_fields", wire: "checkItemState_fields", location: FieldLocation::Query },
+        FieldSpec { snake: "checklists", wire: "checklists", location: FieldLocation::Query },
+        FieldSpec { snake: "checklist_fields", wire: "checklist_fields", location: FieldLocation::Query },
+        FieldSpec { snake: "board", wire: "board", location: FieldLocation::Query },
+        FieldSpec { snake: "board_fields", wire: "board_fields", location: FieldLocation::Query },
+        FieldSpec { snake: "list", wire: "list", location: FieldLocation::Query },
+        FieldSpec { snake: "list_fields", wire: "list_fields", location: FieldLocation::Query },
+        FieldSpec { snake: "stickers", wire: "stickers", location: FieldLocation::Query },
+        FieldSpec { snake: "sticker_fields", wire: "sticker_fields", location: FieldLocation::Query },
+        FieldSpec { snake: "fields", wire: "fields", location: FieldLocation::Query },
+        FieldSpec { snake: "token", wire: "token", location: FieldLocation::Query },
     ],
     auth: &[
         AuthApply { secret_key: "api_key", kind: AuthKind::ApiKeyQuery("key") },
@@ -2782,24 +4261,24 @@ const OP_CARD_UPDATE_CARDS_BY_ID_CARD: OpSpec = OpSpec {
     method: "PUT",
     path_template: "/cards/{id_card}",
     fields: &[
-        FieldSpec { snake: "id_card", location: FieldLocation::Path },
-        FieldSpec { snake: "token", location: FieldLocation::Query },
-        FieldSpec { snake: "closed", location: FieldLocation::Body },
-        FieldSpec { snake: "desc", location: FieldLocation::Body },
-        FieldSpec { snake: "due", location: FieldLocation::Body },
-        FieldSpec { snake: "file_source", location: FieldLocation::Body },
-        FieldSpec { snake: "id_attachment_cover", location: FieldLocation::Body },
-        FieldSpec { snake: "id_board", location: FieldLocation::Body },
-        FieldSpec { snake: "id_card_source", location: FieldLocation::Body },
-        FieldSpec { snake: "id_labels", location: FieldLocation::Body },
-        FieldSpec { snake: "id_list", location: FieldLocation::Body },
-        FieldSpec { snake: "id_members", location: FieldLocation::Body },
-        FieldSpec { snake: "keep_from_source", location: FieldLocation::Body },
-        FieldSpec { snake: "labels", location: FieldLocation::Body },
-        FieldSpec { snake: "name", location: FieldLocation::Body },
-        FieldSpec { snake: "pos", location: FieldLocation::Body },
-        FieldSpec { snake: "subscribed", location: FieldLocation::Body },
-        FieldSpec { snake: "url_source", location: FieldLocation::Body },
+        FieldSpec { snake: "id_card", wire: "idCard", location: FieldLocation::Path },
+        FieldSpec { snake: "token", wire: "token", location: FieldLocation::Query },
+        FieldSpec { snake: "closed", wire: "closed", location: FieldLocation::Body },
+        FieldSpec { snake: "desc", wire: "desc", location: FieldLocation::Body },
+        FieldSpec { snake: "due", wire: "due", location: FieldLocation::Body },
+        FieldSpec { snake: "file_source", wire: "fileSource", location: FieldLocation::Body },
+        FieldSpec { snake: "id_attachment_cover", wire: "idAttachmentCover", location: FieldLocation::Body },
+        FieldSpec { snake: "id_board", wire: "idBoard", location: FieldLocation::Body },
+        FieldSpec { snake: "id_card_source", wire: "idCardSource", location: FieldLocation::Body },
+        FieldSpec { snake: "id_labels", wire: "idLabels", location: FieldLocation::Body },
+        FieldSpec { snake: "id_list", wire: "idList", location: FieldLocation::Body },
+        FieldSpec { snake: "id_members", wire: "idMembers", location: FieldLocation::Body },
+        FieldSpec { snake: "keep_from_source", wire: "keepFromSource", location: FieldLocation::Body },
+        FieldSpec { snake: "labels", wire: "labels", location: FieldLocation::Body },
+        FieldSpec { snake: "name", wire: "name", location: FieldLocation::Body },
+        FieldSpec { snake: "pos", wire: "pos", location: FieldLocation::Body },
+        FieldSpec { snake: "subscribed", wire: "subscribed", location: FieldLocation::Body },
+        FieldSpec { snake: "url_source", wire: "urlSource", location: FieldLocation::Body },
     ],
     auth: &[
         AuthApply { secret_key: "api_key", kind: AuthKind::ApiKeyQuery("key") },
@@ -2810,8 +4289,8 @@ const OP_CARD_DELETE_CARDS_BY_ID_CARD: OpSpec = OpSpec {
     method: "DELETE",
     path_template: "/cards/{id_card}",
     fields: &[
-        FieldSpec { snake: "id_card", location: FieldLocation::Path },
-        FieldSpec { snake: "token", location: FieldLocation::Query },
+        FieldSpec { snake: "id_card", wire: "idCard", location: FieldLocation::Path },
+        FieldSpec { snake: "token", wire: "token", location: FieldLocation::Query },
     ],
     auth: &[
         AuthApply { secret_key: "api_key", kind: AuthKind::ApiKeyQuery("key") },
@@ -2822,22 +4301,22 @@ const OP_CARD_GET_CARDS_ACTIONS_BY_ID_CARD: OpSpec = OpSpec {
     method: "GET",
     path_template: "/cards/{id_card}/actions",
     fields: &[
-        FieldSpec { snake: "id_card", location: FieldLocation::Path },
-        FieldSpec { snake: "entities", location: FieldLocation::Query },
-        FieldSpec { snake: "display", location: FieldLocation::Query },
-        FieldSpec { snake: "filter", location: FieldLocation::Query },
-        FieldSpec { snake: "fields", location: FieldLocation::Query },
-        FieldSpec { snake: "limit", location: FieldLocation::Query },
-        FieldSpec { snake: "format", location: FieldLocation::Query },
-        FieldSpec { snake: "since", location: FieldLocation::Query },
-        FieldSpec { snake: "before", location: FieldLocation::Query },
-        FieldSpec { snake: "page", location: FieldLocation::Query },
-        FieldSpec { snake: "id_models", location: FieldLocation::Query },
-        FieldSpec { snake: "member", location: FieldLocation::Query },
-        FieldSpec { snake: "member_fields", location: FieldLocation::Query },
-        FieldSpec { snake: "member_creator", location: FieldLocation::Query },
-        FieldSpec { snake: "member_creator_fields", location: FieldLocation::Query },
-        FieldSpec { snake: "token", location: FieldLocation::Query },
+        FieldSpec { snake: "id_card", wire: "idCard", location: FieldLocation::Path },
+        FieldSpec { snake: "entities", wire: "entities", location: FieldLocation::Query },
+        FieldSpec { snake: "display", wire: "display", location: FieldLocation::Query },
+        FieldSpec { snake: "filter", wire: "filter", location: FieldLocation::Query },
+        FieldSpec { snake: "fields", wire: "fields", location: FieldLocation::Query },
+        FieldSpec { snake: "limit", wire: "limit", location: FieldLocation::Query },
+        FieldSpec { snake: "format", wire: "format", location: FieldLocation::Query },
+        FieldSpec { snake: "since", wire: "since", location: FieldLocation::Query },
+        FieldSpec { snake: "before", wire: "before", location: FieldLocation::Query },
+        FieldSpec { snake: "page", wire: "page", location: FieldLocation::Query },
+        FieldSpec { snake: "id_models", wire: "idModels", location: FieldLocation::Query },
+        FieldSpec { snake: "member", wire: "member", location: FieldLocation::Query },
+        FieldSpec { snake: "member_fields", wire: "member_fields", location: FieldLocation::Query },
+        FieldSpec { snake: "member_creator", wire: "memberCreator", location: FieldLocation::Query },
+        FieldSpec { snake: "member_creator_fields", wire: "memberCreator_fields", location: FieldLocation::Query },
+        FieldSpec { snake: "token", wire: "token", location: FieldLocation::Query },
     ],
     auth: &[
         AuthApply { secret_key: "api_key", kind: AuthKind::ApiKeyQuery("key") },
@@ -2848,9 +4327,9 @@ const OP_CARD_ADD_CARDS_ACTIONS_COMMENTS_BY_ID_CARD: OpSpec = OpSpec {
     method: "POST",
     path_template: "/cards/{id_card}/actions/comments",
     fields: &[
-        FieldSpec { snake: "id_card", location: FieldLocation::Path },
-        FieldSpec { snake: "token", location: FieldLocation::Query },
-        FieldSpec { snake: "text", location: FieldLocation::Body },
+        FieldSpec { snake: "id_card", wire: "idCard", location: FieldLocation::Path },
+        FieldSpec { snake: "token", wire: "token", location: FieldLocation::Query },
+        FieldSpec { snake: "text", wire: "text", location: FieldLocation::Body },
     ],
     auth: &[
         AuthApply { secret_key: "api_key", kind: AuthKind::ApiKeyQuery("key") },
@@ -2861,10 +4340,10 @@ const OP_CARD_UPDATE_CARDS_ACTIONS_COMMENTS_BY_ID_CARD_BY_ID_ACTION: OpSpec = Op
     method: "PUT",
     path_template: "/cards/{id_card}/actions/{id_action}/comments",
     fields: &[
-        FieldSpec { snake: "id_card", location: FieldLocation::Path },
-        FieldSpec { snake: "id_action", location: FieldLocation::Path },
-        FieldSpec { snake: "token", location: FieldLocation::Query },
-        FieldSpec { snake: "text", location: FieldLocation::Body },
+        FieldSpec { snake: "id_card", wire: "idCard", location: FieldLocation::Path },
+        FieldSpec { snake: "id_action", wire: "idAction", location: FieldLocation::Path },
+        FieldSpec { snake: "token", wire: "token", location: FieldLocation::Query },
+        FieldSpec { snake: "text", wire: "text", location: FieldLocation::Body },
     ],
     auth: &[
         AuthApply { secret_key: "api_key", kind: AuthKind::ApiKeyQuery("key") },
@@ -2875,9 +4354,9 @@ const OP_CARD_DELETE_CARDS_ACTIONS_COMMENTS_BY_ID_CARD_BY_ID_ACTION: OpSpec = Op
     method: "DELETE",
     path_template: "/cards/{id_card}/actions/{id_action}/comments",
     fields: &[
-        FieldSpec { snake: "id_card", location: FieldLocation::Path },
-        FieldSpec { snake: "id_action", location: FieldLocation::Path },
-        FieldSpec { snake: "token", location: FieldLocation::Query },
+        FieldSpec { snake: "id_card", wire: "idCard", location: FieldLocation::Path },
+        FieldSpec { snake: "id_action", wire: "idAction", location: FieldLocation::Path },
+        FieldSpec { snake: "token", wire: "token", location: FieldLocation::Query },
     ],
     auth: &[
         AuthApply { secret_key: "api_key", kind: AuthKind::ApiKeyQuery("key") },
@@ -2888,10 +4367,10 @@ const OP_CARD_GET_CARDS_ATTACHMENTS_BY_ID_CARD: OpSpec = OpSpec {
     method: "GET",
     path_template: "/cards/{id_card}/attachments",
     fields: &[
-        FieldSpec { snake: "id_card", location: FieldLocation::Path },
-        FieldSpec { snake: "fields", location: FieldLocation::Query },
-        FieldSpec { snake: "filter", location: FieldLocation::Query },
-        FieldSpec { snake: "token", location: FieldLocation::Query },
+        FieldSpec { snake: "id_card", wire: "idCard", location: FieldLocation::Path },
+        FieldSpec { snake: "fields", wire: "fields", location: FieldLocation::Query },
+        FieldSpec { snake: "filter", wire: "filter", location: FieldLocation::Query },
+        FieldSpec { snake: "token", wire: "token", location: FieldLocation::Query },
     ],
     auth: &[
         AuthApply { secret_key: "api_key", kind: AuthKind::ApiKeyQuery("key") },
@@ -2902,12 +4381,12 @@ const OP_CARD_ADD_CARDS_ATTACHMENTS_BY_ID_CARD: OpSpec = OpSpec {
     method: "POST",
     path_template: "/cards/{id_card}/attachments",
     fields: &[
-        FieldSpec { snake: "id_card", location: FieldLocation::Path },
-        FieldSpec { snake: "token", location: FieldLocation::Query },
-        FieldSpec { snake: "file", location: FieldLocation::Body },
-        FieldSpec { snake: "mime_type", location: FieldLocation::Body },
-        FieldSpec { snake: "name", location: FieldLocation::Body },
-        FieldSpec { snake: "url", location: FieldLocation::Body },
+        FieldSpec { snake: "id_card", wire: "idCard", location: FieldLocation::Path },
+        FieldSpec { snake: "token", wire: "token", location: FieldLocation::Query },
+        FieldSpec { snake: "file", wire: "file", location: FieldLocation::Body },
+        FieldSpec { snake: "mime_type", wire: "mimeType", location: FieldLocation::Body },
+        FieldSpec { snake: "name", wire: "name", location: FieldLocation::Body },
+        FieldSpec { snake: "url", wire: "url", location: FieldLocation::Body },
     ],
     auth: &[
         AuthApply { secret_key: "api_key", kind: AuthKind::ApiKeyQuery("key") },
@@ -2918,10 +4397,10 @@ const OP_CARD_GET_CARDS_ATTACHMENTS_BY_ID_CARD_BY_ID_ATTACHMENT: OpSpec = OpSpec
     method: "GET",
     path_template: "/cards/{id_card}/attachments/{id_attachment}",
     fields: &[
-        FieldSpec { snake: "id_card", location: FieldLocation::Path },
-        FieldSpec { snake: "id_attachment", location: FieldLocation::Path },
-        FieldSpec { snake: "fields", location: FieldLocation::Query },
-        FieldSpec { snake: "token", location: FieldLocation::Query },
+        FieldSpec { snake: "id_card", wire: "idCard", location: FieldLocation::Path },
+        FieldSpec { snake: "id_attachment", wire: "idAttachment", location: FieldLocation::Path },
+        FieldSpec { snake: "fields", wire: "fields", location: FieldLocation::Query },
+        FieldSpec { snake: "token", wire: "token", location: FieldLocation::Query },
     ],
     auth: &[
         AuthApply { secret_key: "api_key", kind: AuthKind::ApiKeyQuery("key") },
@@ -2932,9 +4411,9 @@ const OP_CARD_DELETE_CARDS_ATTACHMENTS_BY_ID_CARD_BY_ID_ATTACHMENT: OpSpec = OpS
     method: "DELETE",
     path_template: "/cards/{id_card}/attachments/{id_attachment}",
     fields: &[
-        FieldSpec { snake: "id_card", location: FieldLocation::Path },
-        FieldSpec { snake: "id_attachment", location: FieldLocation::Path },
-        FieldSpec { snake: "token", location: FieldLocation::Query },
+        FieldSpec { snake: "id_card", wire: "idCard", location: FieldLocation::Path },
+        FieldSpec { snake: "id_attachment", wire: "idAttachment", location: FieldLocation::Path },
+        FieldSpec { snake: "token", wire: "token", location: FieldLocation::Query },
     ],
     auth: &[
         AuthApply { secret_key: "api_key", kind: AuthKind::ApiKeyQuery("key") },
@@ -2945,9 +4424,9 @@ const OP_CARD_GET_CARDS_BOARD_BY_ID_CARD: OpSpec = OpSpec {
     method: "GET",
     path_template: "/cards/{id_card}/board",
     fields: &[
-        FieldSpec { snake: "id_card", location: FieldLocation::Path },
-        FieldSpec { snake: "fields", location: FieldLocation::Query },
-        FieldSpec { snake: "token", location: FieldLocation::Query },
+        FieldSpec { snake: "id_card", wire: "idCard", location: FieldLocation::Path },
+        FieldSpec { snake: "fields", wire: "fields", location: FieldLocation::Query },
+        FieldSpec { snake: "token", wire: "token", location: FieldLocation::Query },
     ],
     auth: &[
         AuthApply { secret_key: "api_key", kind: AuthKind::ApiKeyQuery("key") },
@@ -2958,9 +4437,9 @@ const OP_CARD_GET_CARDS_BOARD_BY_ID_CARD_BY_FIELD: OpSpec = OpSpec {
     method: "GET",
     path_template: "/cards/{id_card}/board/{field}",
     fields: &[
-        FieldSpec { snake: "id_card", location: FieldLocation::Path },
-        FieldSpec { snake: "field", location: FieldLocation::Path },
-        FieldSpec { snake: "token", location: FieldLocation::Query },
+        FieldSpec { snake: "id_card", wire: "idCard", location: FieldLocation::Path },
+        FieldSpec { snake: "field", wire: "field", location: FieldLocation::Path },
+        FieldSpec { snake: "token", wire: "token", location: FieldLocation::Query },
     ],
     auth: &[
         AuthApply { secret_key: "api_key", kind: AuthKind::ApiKeyQuery("key") },
@@ -2971,9 +4450,9 @@ const OP_CARD_GET_CARDS_CHECK_ITEM_STATES_BY_ID_CARD: OpSpec = OpSpec {
     method: "GET",
     path_template: "/cards/{id_card}/checkItemStates",
     fields: &[
-        FieldSpec { snake: "id_card", location: FieldLocation::Path },
-        FieldSpec { snake: "fields", location: FieldLocation::Query },
-        FieldSpec { snake: "token", location: FieldLocation::Query },
+        FieldSpec { snake: "id_card", wire: "idCard", location: FieldLocation::Path },
+        FieldSpec { snake: "fields", wire: "fields", location: FieldLocation::Query },
+        FieldSpec { snake: "token", wire: "token", location: FieldLocation::Query },
     ],
     auth: &[
         AuthApply { secret_key: "api_key", kind: AuthKind::ApiKeyQuery("key") },
@@ -2984,14 +4463,14 @@ const OP_CARD_UPDATE_CARDS_CHECKLIST_CHECK_ITEM_BY_ID_CARD_BY_ID_CHECKLIST_CURRE
     method: "PUT",
     path_template: "/cards/{id_card}/checklist/{id_checklist_current}/checkItem/{id_check_item}",
     fields: &[
-        FieldSpec { snake: "id_card", location: FieldLocation::Path },
-        FieldSpec { snake: "id_checklist_current", location: FieldLocation::Path },
-        FieldSpec { snake: "id_check_item", location: FieldLocation::Path },
-        FieldSpec { snake: "token", location: FieldLocation::Query },
-        FieldSpec { snake: "id_checklist", location: FieldLocation::Body },
-        FieldSpec { snake: "name", location: FieldLocation::Body },
-        FieldSpec { snake: "pos", location: FieldLocation::Body },
-        FieldSpec { snake: "state", location: FieldLocation::Body },
+        FieldSpec { snake: "id_card", wire: "idCard", location: FieldLocation::Path },
+        FieldSpec { snake: "id_checklist_current", wire: "idChecklistCurrent", location: FieldLocation::Path },
+        FieldSpec { snake: "id_check_item", wire: "idCheckItem", location: FieldLocation::Path },
+        FieldSpec { snake: "token", wire: "token", location: FieldLocation::Query },
+        FieldSpec { snake: "id_checklist", wire: "idChecklist", location: FieldLocation::Body },
+        FieldSpec { snake: "name", wire: "name", location: FieldLocation::Body },
+        FieldSpec { snake: "pos", wire: "pos", location: FieldLocation::Body },
+        FieldSpec { snake: "state", wire: "state", location: FieldLocation::Body },
     ],
     auth: &[
         AuthApply { secret_key: "api_key", kind: AuthKind::ApiKeyQuery("key") },
@@ -3002,11 +4481,11 @@ const OP_CARD_ADD_CARDS_CHECKLIST_CHECK_ITEM_BY_ID_CARD_BY_ID_CHECKLIST: OpSpec 
     method: "POST",
     path_template: "/cards/{id_card}/checklist/{id_checklist}/checkItem",
     fields: &[
-        FieldSpec { snake: "id_card", location: FieldLocation::Path },
-        FieldSpec { snake: "id_checklist", location: FieldLocation::Path },
-        FieldSpec { snake: "token", location: FieldLocation::Query },
-        FieldSpec { snake: "name", location: FieldLocation::Body },
-        FieldSpec { snake: "pos", location: FieldLocation::Body },
+        FieldSpec { snake: "id_card", wire: "idCard", location: FieldLocation::Path },
+        FieldSpec { snake: "id_checklist", wire: "idChecklist", location: FieldLocation::Path },
+        FieldSpec { snake: "token", wire: "token", location: FieldLocation::Query },
+        FieldSpec { snake: "name", wire: "name", location: FieldLocation::Body },
+        FieldSpec { snake: "pos", wire: "pos", location: FieldLocation::Body },
     ],
     auth: &[
         AuthApply { secret_key: "api_key", kind: AuthKind::ApiKeyQuery("key") },
@@ -3017,10 +4496,10 @@ const OP_CARD_DELETE_CARDS_CHECKLIST_CHECK_ITEM_BY_ID_CARD_BY_ID_CHECKLIST_BY_ID
     method: "DELETE",
     path_template: "/cards/{id_card}/checklist/{id_checklist}/checkItem/{id_check_item}",
     fields: &[
-        FieldSpec { snake: "id_card", location: FieldLocation::Path },
-        FieldSpec { snake: "id_checklist", location: FieldLocation::Path },
-        FieldSpec { snake: "id_check_item", location: FieldLocation::Path },
-        FieldSpec { snake: "token", location: FieldLocation::Query },
+        FieldSpec { snake: "id_card", wire: "idCard", location: FieldLocation::Path },
+        FieldSpec { snake: "id_checklist", wire: "idChecklist", location: FieldLocation::Path },
+        FieldSpec { snake: "id_check_item", wire: "idCheckItem", location: FieldLocation::Path },
+        FieldSpec { snake: "token", wire: "token", location: FieldLocation::Query },
     ],
     auth: &[
         AuthApply { secret_key: "api_key", kind: AuthKind::ApiKeyQuery("key") },
@@ -3031,10 +4510,10 @@ const OP_CARD_ADD_CARDS_CHECKLIST_CHECK_ITEM_CONVERT_TO_CARD_BY_ID_CARD_BY_ID_CH
     method: "POST",
     path_template: "/cards/{id_card}/checklist/{id_checklist}/checkItem/{id_check_item}/convertToCard",
     fields: &[
-        FieldSpec { snake: "id_card", location: FieldLocation::Path },
-        FieldSpec { snake: "id_checklist", location: FieldLocation::Path },
-        FieldSpec { snake: "id_check_item", location: FieldLocation::Path },
-        FieldSpec { snake: "token", location: FieldLocation::Query },
+        FieldSpec { snake: "id_card", wire: "idCard", location: FieldLocation::Path },
+        FieldSpec { snake: "id_checklist", wire: "idChecklist", location: FieldLocation::Path },
+        FieldSpec { snake: "id_check_item", wire: "idCheckItem", location: FieldLocation::Path },
+        FieldSpec { snake: "token", wire: "token", location: FieldLocation::Query },
     ],
     auth: &[
         AuthApply { secret_key: "api_key", kind: AuthKind::ApiKeyQuery("key") },
@@ -3045,11 +4524,11 @@ const OP_CARD_UPDATE_CARDS_CHECKLIST_CHECK_ITEM_NAME_BY_ID_CARD_BY_ID_CHECKLIST_
     method: "PUT",
     path_template: "/cards/{id_card}/checklist/{id_checklist}/checkItem/{id_check_item}/name",
     fields: &[
-        FieldSpec { snake: "id_card", location: FieldLocation::Path },
-        FieldSpec { snake: "id_checklist", location: FieldLocation::Path },
-        FieldSpec { snake: "id_check_item", location: FieldLocation::Path },
-        FieldSpec { snake: "token", location: FieldLocation::Query },
-        FieldSpec { snake: "value", location: FieldLocation::Body },
+        FieldSpec { snake: "id_card", wire: "idCard", location: FieldLocation::Path },
+        FieldSpec { snake: "id_checklist", wire: "idChecklist", location: FieldLocation::Path },
+        FieldSpec { snake: "id_check_item", wire: "idCheckItem", location: FieldLocation::Path },
+        FieldSpec { snake: "token", wire: "token", location: FieldLocation::Query },
+        FieldSpec { snake: "value", wire: "value", location: FieldLocation::Body },
     ],
     auth: &[
         AuthApply { secret_key: "api_key", kind: AuthKind::ApiKeyQuery("key") },
@@ -3060,11 +4539,11 @@ const OP_CARD_UPDATE_CARDS_CHECKLIST_CHECK_ITEM_POS_BY_ID_CARD_BY_ID_CHECKLIST_B
     method: "PUT",
     path_template: "/cards/{id_card}/checklist/{id_checklist}/checkItem/{id_check_item}/pos",
     fields: &[
-        FieldSpec { snake: "id_card", location: FieldLocation::Path },
-        FieldSpec { snake: "id_checklist", location: FieldLocation::Path },
-        FieldSpec { snake: "id_check_item", location: FieldLocation::Path },
-        FieldSpec { snake: "token", location: FieldLocation::Query },
-        FieldSpec { snake: "value", location: FieldLocation::Body },
+        FieldSpec { snake: "id_card", wire: "idCard", location: FieldLocation::Path },
+        FieldSpec { snake: "id_checklist", wire: "idChecklist", location: FieldLocation::Path },
+        FieldSpec { snake: "id_check_item", wire: "idCheckItem", location: FieldLocation::Path },
+        FieldSpec { snake: "token", wire: "token", location: FieldLocation::Query },
+        FieldSpec { snake: "value", wire: "value", location: FieldLocation::Body },
     ],
     auth: &[
         AuthApply { secret_key: "api_key", kind: AuthKind::ApiKeyQuery("key") },
@@ -3075,11 +4554,11 @@ const OP_CARD_UPDATE_CARDS_CHECKLIST_CHECK_ITEM_STATE_BY_ID_CARD_BY_ID_CHECKLIST
     method: "PUT",
     path_template: "/cards/{id_card}/checklist/{id_checklist}/checkItem/{id_check_item}/state",
     fields: &[
-        FieldSpec { snake: "id_card", location: FieldLocation::Path },
-        FieldSpec { snake: "id_checklist", location: FieldLocation::Path },
-        FieldSpec { snake: "id_check_item", location: FieldLocation::Path },
-        FieldSpec { snake: "token", location: FieldLocation::Query },
-        FieldSpec { snake: "value", location: FieldLocation::Body },
+        FieldSpec { snake: "id_card", wire: "idCard", location: FieldLocation::Path },
+        FieldSpec { snake: "id_checklist", wire: "idChecklist", location: FieldLocation::Path },
+        FieldSpec { snake: "id_check_item", wire: "idCheckItem", location: FieldLocation::Path },
+        FieldSpec { snake: "token", wire: "token", location: FieldLocation::Query },
+        FieldSpec { snake: "value", wire: "value", location: FieldLocation::Body },
     ],
     auth: &[
         AuthApply { secret_key: "api_key", kind: AuthKind::ApiKeyQuery("key") },
@@ -3090,14 +4569,14 @@ const OP_CARD_GET_CARDS_CHECKLISTS_BY_ID_CARD: OpSpec = OpSpec {
     method: "GET",
     path_template: "/cards/{id_card}/checklists",
     fields: &[
-        FieldSpec { snake: "id_card", location: FieldLocation::Path },
-        FieldSpec { snake: "cards", location: FieldLocation::Query },
-        FieldSpec { snake: "card_fields", location: FieldLocation::Query },
-        FieldSpec { snake: "check_items", location: FieldLocation::Query },
-        FieldSpec { snake: "check_item_fields", location: FieldLocation::Query },
-        FieldSpec { snake: "filter", location: FieldLocation::Query },
-        FieldSpec { snake: "fields", location: FieldLocation::Query },
-        FieldSpec { snake: "token", location: FieldLocation::Query },
+        FieldSpec { snake: "id_card", wire: "idCard", location: FieldLocation::Path },
+        FieldSpec { snake: "cards", wire: "cards", location: FieldLocation::Query },
+        FieldSpec { snake: "card_fields", wire: "card_fields", location: FieldLocation::Query },
+        FieldSpec { snake: "check_items", wire: "checkItems", location: FieldLocation::Query },
+        FieldSpec { snake: "check_item_fields", wire: "checkItem_fields", location: FieldLocation::Query },
+        FieldSpec { snake: "filter", wire: "filter", location: FieldLocation::Query },
+        FieldSpec { snake: "fields", wire: "fields", location: FieldLocation::Query },
+        FieldSpec { snake: "token", wire: "token", location: FieldLocation::Query },
     ],
     auth: &[
         AuthApply { secret_key: "api_key", kind: AuthKind::ApiKeyQuery("key") },
@@ -3108,11 +4587,11 @@ const OP_CARD_ADD_CARDS_CHECKLISTS_BY_ID_CARD: OpSpec = OpSpec {
     method: "POST",
     path_template: "/cards/{id_card}/checklists",
     fields: &[
-        FieldSpec { snake: "id_card", location: FieldLocation::Path },
-        FieldSpec { snake: "token", location: FieldLocation::Query },
-        FieldSpec { snake: "id_checklist_source", location: FieldLocation::Body },
-        FieldSpec { snake: "name", location: FieldLocation::Body },
-        FieldSpec { snake: "value", location: FieldLocation::Body },
+        FieldSpec { snake: "id_card", wire: "idCard", location: FieldLocation::Path },
+        FieldSpec { snake: "token", wire: "token", location: FieldLocation::Query },
+        FieldSpec { snake: "id_checklist_source", wire: "idChecklistSource", location: FieldLocation::Body },
+        FieldSpec { snake: "name", wire: "name", location: FieldLocation::Body },
+        FieldSpec { snake: "value", wire: "value", location: FieldLocation::Body },
     ],
     auth: &[
         AuthApply { secret_key: "api_key", kind: AuthKind::ApiKeyQuery("key") },
@@ -3123,9 +4602,9 @@ const OP_CARD_DELETE_CARDS_CHECKLISTS_BY_ID_CARD_BY_ID_CHECKLIST: OpSpec = OpSpe
     method: "DELETE",
     path_template: "/cards/{id_card}/checklists/{id_checklist}",
     fields: &[
-        FieldSpec { snake: "id_card", location: FieldLocation::Path },
-        FieldSpec { snake: "id_checklist", location: FieldLocation::Path },
-        FieldSpec { snake: "token", location: FieldLocation::Query },
+        FieldSpec { snake: "id_card", wire: "idCard", location: FieldLocation::Path },
+        FieldSpec { snake: "id_checklist", wire: "idChecklist", location: FieldLocation::Path },
+        FieldSpec { snake: "token", wire: "token", location: FieldLocation::Query },
     ],
     auth: &[
         AuthApply { secret_key: "api_key", kind: AuthKind::ApiKeyQuery("key") },
@@ -3136,9 +4615,9 @@ const OP_CARD_UPDATE_CARDS_CLOSED_BY_ID_CARD: OpSpec = OpSpec {
     method: "PUT",
     path_template: "/cards/{id_card}/closed",
     fields: &[
-        FieldSpec { snake: "id_card", location: FieldLocation::Path },
-        FieldSpec { snake: "token", location: FieldLocation::Query },
-        FieldSpec { snake: "value", location: FieldLocation::Body },
+        FieldSpec { snake: "id_card", wire: "idCard", location: FieldLocation::Path },
+        FieldSpec { snake: "token", wire: "token", location: FieldLocation::Query },
+        FieldSpec { snake: "value", wire: "value", location: FieldLocation::Body },
     ],
     auth: &[
         AuthApply { secret_key: "api_key", kind: AuthKind::ApiKeyQuery("key") },
@@ -3149,9 +4628,9 @@ const OP_CARD_UPDATE_CARDS_DESC_BY_ID_CARD: OpSpec = OpSpec {
     method: "PUT",
     path_template: "/cards/{id_card}/desc",
     fields: &[
-        FieldSpec { snake: "id_card", location: FieldLocation::Path },
-        FieldSpec { snake: "token", location: FieldLocation::Query },
-        FieldSpec { snake: "value", location: FieldLocation::Body },
+        FieldSpec { snake: "id_card", wire: "idCard", location: FieldLocation::Path },
+        FieldSpec { snake: "token", wire: "token", location: FieldLocation::Query },
+        FieldSpec { snake: "value", wire: "value", location: FieldLocation::Body },
     ],
     auth: &[
         AuthApply { secret_key: "api_key", kind: AuthKind::ApiKeyQuery("key") },
@@ -3162,9 +4641,9 @@ const OP_CARD_UPDATE_CARDS_DUE_BY_ID_CARD: OpSpec = OpSpec {
     method: "PUT",
     path_template: "/cards/{id_card}/due",
     fields: &[
-        FieldSpec { snake: "id_card", location: FieldLocation::Path },
-        FieldSpec { snake: "token", location: FieldLocation::Query },
-        FieldSpec { snake: "value", location: FieldLocation::Body },
+        FieldSpec { snake: "id_card", wire: "idCard", location: FieldLocation::Path },
+        FieldSpec { snake: "token", wire: "token", location: FieldLocation::Query },
+        FieldSpec { snake: "value", wire: "value", location: FieldLocation::Body },
     ],
     auth: &[
         AuthApply { secret_key: "api_key", kind: AuthKind::ApiKeyQuery("key") },
@@ -3175,9 +4654,9 @@ const OP_CARD_UPDATE_CARDS_ID_ATTACHMENT_COVER_BY_ID_CARD: OpSpec = OpSpec {
     method: "PUT",
     path_template: "/cards/{id_card}/idAttachmentCover",
     fields: &[
-        FieldSpec { snake: "id_card", location: FieldLocation::Path },
-        FieldSpec { snake: "token", location: FieldLocation::Query },
-        FieldSpec { snake: "value", location: FieldLocation::Body },
+        FieldSpec { snake: "id_card", wire: "idCard", location: FieldLocation::Path },
+        FieldSpec { snake: "token", wire: "token", location: FieldLocation::Query },
+        FieldSpec { snake: "value", wire: "value", location: FieldLocation::Body },
     ],
     auth: &[
         AuthApply { secret_key: "api_key", kind: AuthKind::ApiKeyQuery("key") },
@@ -3188,10 +4667,10 @@ const OP_CARD_UPDATE_CARDS_ID_BOARD_BY_ID_CARD: OpSpec = OpSpec {
     method: "PUT",
     path_template: "/cards/{id_card}/idBoard",
     fields: &[
-        FieldSpec { snake: "id_card", location: FieldLocation::Path },
-        FieldSpec { snake: "token", location: FieldLocation::Query },
-        FieldSpec { snake: "id_list", location: FieldLocation::Body },
-        FieldSpec { snake: "value", location: FieldLocation::Body },
+        FieldSpec { snake: "id_card", wire: "idCard", location: FieldLocation::Path },
+        FieldSpec { snake: "token", wire: "token", location: FieldLocation::Query },
+        FieldSpec { snake: "id_list", wire: "idList", location: FieldLocation::Body },
+        FieldSpec { snake: "value", wire: "value", location: FieldLocation::Body },
     ],
     auth: &[
         AuthApply { secret_key: "api_key", kind: AuthKind::ApiKeyQuery("key") },
@@ -3202,9 +4681,9 @@ const OP_CARD_ADD_CARDS_ID_LABELS_BY_ID_CARD: OpSpec = OpSpec {
     method: "POST",
     path_template: "/cards/{id_card}/idLabels",
     fields: &[
-        FieldSpec { snake: "id_card", location: FieldLocation::Path },
-        FieldSpec { snake: "token", location: FieldLocation::Query },
-        FieldSpec { snake: "value", location: FieldLocation::Body },
+        FieldSpec { snake: "id_card", wire: "idCard", location: FieldLocation::Path },
+        FieldSpec { snake: "token", wire: "token", location: FieldLocation::Query },
+        FieldSpec { snake: "value", wire: "value", location: FieldLocation::Body },
     ],
     auth: &[
         AuthApply { secret_key: "api_key", kind: AuthKind::ApiKeyQuery("key") },
@@ -3215,9 +4694,9 @@ const OP_CARD_DELETE_CARDS_ID_LABELS_BY_ID_CARD_BY_ID_LABEL: OpSpec = OpSpec {
     method: "DELETE",
     path_template: "/cards/{id_card}/idLabels/{id_label}",
     fields: &[
-        FieldSpec { snake: "id_card", location: FieldLocation::Path },
-        FieldSpec { snake: "id_label", location: FieldLocation::Path },
-        FieldSpec { snake: "token", location: FieldLocation::Query },
+        FieldSpec { snake: "id_card", wire: "idCard", location: FieldLocation::Path },
+        FieldSpec { snake: "id_label", wire: "idLabel", location: FieldLocation::Path },
+        FieldSpec { snake: "token", wire: "token", location: FieldLocation::Query },
     ],
     auth: &[
         AuthApply { secret_key: "api_key", kind: AuthKind::ApiKeyQuery("key") },
@@ -3228,9 +4707,9 @@ const OP_CARD_UPDATE_CARDS_ID_LIST_BY_ID_CARD: OpSpec = OpSpec {
     method: "PUT",
     path_template: "/cards/{id_card}/idList",
     fields: &[
-        FieldSpec { snake: "id_card", location: FieldLocation::Path },
-        FieldSpec { snake: "token", location: FieldLocation::Query },
-        FieldSpec { snake: "value", location: FieldLocation::Body },
+        FieldSpec { snake: "id_card", wire: "idCard", location: FieldLocation::Path },
+        FieldSpec { snake: "token", wire: "token", location: FieldLocation::Query },
+        FieldSpec { snake: "value", wire: "value", location: FieldLocation::Body },
     ],
     auth: &[
         AuthApply { secret_key: "api_key", kind: AuthKind::ApiKeyQuery("key") },
@@ -3241,9 +4720,9 @@ const OP_CARD_ADD_CARDS_ID_MEMBERS_BY_ID_CARD: OpSpec = OpSpec {
     method: "POST",
     path_template: "/cards/{id_card}/idMembers",
     fields: &[
-        FieldSpec { snake: "id_card", location: FieldLocation::Path },
-        FieldSpec { snake: "token", location: FieldLocation::Query },
-        FieldSpec { snake: "value", location: FieldLocation::Body },
+        FieldSpec { snake: "id_card", wire: "idCard", location: FieldLocation::Path },
+        FieldSpec { snake: "token", wire: "token", location: FieldLocation::Query },
+        FieldSpec { snake: "value", wire: "value", location: FieldLocation::Body },
     ],
     auth: &[
         AuthApply { secret_key: "api_key", kind: AuthKind::ApiKeyQuery("key") },
@@ -3254,9 +4733,9 @@ const OP_CARD_UPDATE_CARDS_ID_MEMBERS_BY_ID_CARD: OpSpec = OpSpec {
     method: "PUT",
     path_template: "/cards/{id_card}/idMembers",
     fields: &[
-        FieldSpec { snake: "id_card", location: FieldLocation::Path },
-        FieldSpec { snake: "token", location: FieldLocation::Query },
-        FieldSpec { snake: "value", location: FieldLocation::Body },
+        FieldSpec { snake: "id_card", wire: "idCard", location: FieldLocation::Path },
+        FieldSpec { snake: "token", wire: "token", location: FieldLocation::Query },
+        FieldSpec { snake: "value", wire: "value", location: FieldLocation::Body },
     ],
     auth: &[
         AuthApply { secret_key: "api_key", kind: AuthKind::ApiKeyQuery("key") },
@@ -3267,9 +4746,9 @@ const OP_CARD_DELETE_CARDS_ID_MEMBERS_BY_ID_CARD_BY_ID_MEMBER: OpSpec = OpSpec {
     method: "DELETE",
     path_template: "/cards/{id_card}/idMembers/{id_member}",
     fields: &[
-        FieldSpec { snake: "id_card", location: FieldLocation::Path },
-        FieldSpec { snake: "id_member", location: FieldLocation::Path },
-        FieldSpec { snake: "token", location: FieldLocation::Query },
+        FieldSpec { snake: "id_card", wire: "idCard", location: FieldLocation::Path },
+        FieldSpec { snake: "id_member", wire: "idMember", location: FieldLocation::Path },
+        FieldSpec { snake: "token", wire: "token", location: FieldLocation::Query },
     ],
     auth: &[
         AuthApply { secret_key: "api_key", kind: AuthKind::ApiKeyQuery("key") },
@@ -3280,11 +4759,11 @@ const OP_CARD_ADD_CARDS_LABELS_BY_ID_CARD: OpSpec = OpSpec {
     method: "POST",
     path_template: "/cards/{id_card}/labels",
     fields: &[
-        FieldSpec { snake: "id_card", location: FieldLocation::Path },
-        FieldSpec { snake: "token", location: FieldLocation::Query },
-        FieldSpec { snake: "color", location: FieldLocation::Body },
-        FieldSpec { snake: "name", location: FieldLocation::Body },
-        FieldSpec { snake: "value", location: FieldLocation::Body },
+        FieldSpec { snake: "id_card", wire: "idCard", location: FieldLocation::Path },
+        FieldSpec { snake: "token", wire: "token", location: FieldLocation::Query },
+        FieldSpec { snake: "color", wire: "color", location: FieldLocation::Body },
+        FieldSpec { snake: "name", wire: "name", location: FieldLocation::Body },
+        FieldSpec { snake: "value", wire: "value", location: FieldLocation::Body },
     ],
     auth: &[
         AuthApply { secret_key: "api_key", kind: AuthKind::ApiKeyQuery("key") },
@@ -3295,11 +4774,11 @@ const OP_CARD_UPDATE_CARDS_LABELS_BY_ID_CARD: OpSpec = OpSpec {
     method: "PUT",
     path_template: "/cards/{id_card}/labels",
     fields: &[
-        FieldSpec { snake: "id_card", location: FieldLocation::Path },
-        FieldSpec { snake: "token", location: FieldLocation::Query },
-        FieldSpec { snake: "color", location: FieldLocation::Body },
-        FieldSpec { snake: "name", location: FieldLocation::Body },
-        FieldSpec { snake: "value", location: FieldLocation::Body },
+        FieldSpec { snake: "id_card", wire: "idCard", location: FieldLocation::Path },
+        FieldSpec { snake: "token", wire: "token", location: FieldLocation::Query },
+        FieldSpec { snake: "color", wire: "color", location: FieldLocation::Body },
+        FieldSpec { snake: "name", wire: "name", location: FieldLocation::Body },
+        FieldSpec { snake: "value", wire: "value", location: FieldLocation::Body },
     ],
     auth: &[
         AuthApply { secret_key: "api_key", kind: AuthKind::ApiKeyQuery("key") },
@@ -3310,9 +4789,9 @@ const OP_CARD_DELETE_CARDS_LABELS_BY_ID_CARD_BY_COLOR: OpSpec = OpSpec {
     method: "DELETE",
     path_template: "/cards/{id_card}/labels/{color}",
     fields: &[
-        FieldSpec { snake: "id_card", location: FieldLocation::Path },
-        FieldSpec { snake: "color", location: FieldLocation::Path },
-        FieldSpec { snake: "token", location: FieldLocation::Query },
+        FieldSpec { snake: "id_card", wire: "idCard", location: FieldLocation::Path },
+        FieldSpec { snake: "color", wire: "color", location: FieldLocation::Path },
+        FieldSpec { snake: "token", wire: "token", location: FieldLocation::Query },
     ],
     auth: &[
         AuthApply { secret_key: "api_key", kind: AuthKind::ApiKeyQuery("key") },
@@ -3323,9 +4802,9 @@ const OP_CARD_GET_CARDS_LIST_BY_ID_CARD: OpSpec = OpSpec {
     method: "GET",
     path_template: "/cards/{id_card}/list",
     fields: &[
-        FieldSpec { snake: "id_card", location: FieldLocation::Path },
-        FieldSpec { snake: "fields", location: FieldLocation::Query },
-        FieldSpec { snake: "token", location: FieldLocation::Query },
+        FieldSpec { snake: "id_card", wire: "idCard", location: FieldLocation::Path },
+        FieldSpec { snake: "fields", wire: "fields", location: FieldLocation::Query },
+        FieldSpec { snake: "token", wire: "token", location: FieldLocation::Query },
     ],
     auth: &[
         AuthApply { secret_key: "api_key", kind: AuthKind::ApiKeyQuery("key") },
@@ -3336,9 +4815,9 @@ const OP_CARD_GET_CARDS_LIST_BY_ID_CARD_BY_FIELD: OpSpec = OpSpec {
     method: "GET",
     path_template: "/cards/{id_card}/list/{field}",
     fields: &[
-        FieldSpec { snake: "id_card", location: FieldLocation::Path },
-        FieldSpec { snake: "field", location: FieldLocation::Path },
-        FieldSpec { snake: "token", location: FieldLocation::Query },
+        FieldSpec { snake: "id_card", wire: "idCard", location: FieldLocation::Path },
+        FieldSpec { snake: "field", wire: "field", location: FieldLocation::Path },
+        FieldSpec { snake: "token", wire: "token", location: FieldLocation::Query },
     ],
     auth: &[
         AuthApply { secret_key: "api_key", kind: AuthKind::ApiKeyQuery("key") },
@@ -3349,8 +4828,8 @@ const OP_CARD_ADD_CARDS_MARK_ASSOCIATED_NOTIFICATIONS_READ_BY_ID_CARD: OpSpec = 
     method: "POST",
     path_template: "/cards/{id_card}/markAssociatedNotificationsRead",
     fields: &[
-        FieldSpec { snake: "id_card", location: FieldLocation::Path },
-        FieldSpec { snake: "token", location: FieldLocation::Query },
+        FieldSpec { snake: "id_card", wire: "idCard", location: FieldLocation::Path },
+        FieldSpec { snake: "token", wire: "token", location: FieldLocation::Query },
     ],
     auth: &[
         AuthApply { secret_key: "api_key", kind: AuthKind::ApiKeyQuery("key") },
@@ -3361,9 +4840,9 @@ const OP_CARD_GET_CARDS_MEMBERS_BY_ID_CARD: OpSpec = OpSpec {
     method: "GET",
     path_template: "/cards/{id_card}/members",
     fields: &[
-        FieldSpec { snake: "id_card", location: FieldLocation::Path },
-        FieldSpec { snake: "fields", location: FieldLocation::Query },
-        FieldSpec { snake: "token", location: FieldLocation::Query },
+        FieldSpec { snake: "id_card", wire: "idCard", location: FieldLocation::Path },
+        FieldSpec { snake: "fields", wire: "fields", location: FieldLocation::Query },
+        FieldSpec { snake: "token", wire: "token", location: FieldLocation::Query },
     ],
     auth: &[
         AuthApply { secret_key: "api_key", kind: AuthKind::ApiKeyQuery("key") },
@@ -3374,9 +4853,9 @@ const OP_CARD_GET_CARDS_MEMBERS_VOTED_BY_ID_CARD: OpSpec = OpSpec {
     method: "GET",
     path_template: "/cards/{id_card}/membersVoted",
     fields: &[
-        FieldSpec { snake: "id_card", location: FieldLocation::Path },
-        FieldSpec { snake: "fields", location: FieldLocation::Query },
-        FieldSpec { snake: "token", location: FieldLocation::Query },
+        FieldSpec { snake: "id_card", wire: "idCard", location: FieldLocation::Path },
+        FieldSpec { snake: "fields", wire: "fields", location: FieldLocation::Query },
+        FieldSpec { snake: "token", wire: "token", location: FieldLocation::Query },
     ],
     auth: &[
         AuthApply { secret_key: "api_key", kind: AuthKind::ApiKeyQuery("key") },
@@ -3387,9 +4866,9 @@ const OP_CARD_ADD_CARDS_MEMBERS_VOTED_BY_ID_CARD: OpSpec = OpSpec {
     method: "POST",
     path_template: "/cards/{id_card}/membersVoted",
     fields: &[
-        FieldSpec { snake: "id_card", location: FieldLocation::Path },
-        FieldSpec { snake: "token", location: FieldLocation::Query },
-        FieldSpec { snake: "value", location: FieldLocation::Body },
+        FieldSpec { snake: "id_card", wire: "idCard", location: FieldLocation::Path },
+        FieldSpec { snake: "token", wire: "token", location: FieldLocation::Query },
+        FieldSpec { snake: "value", wire: "value", location: FieldLocation::Body },
     ],
     auth: &[
         AuthApply { secret_key: "api_key", kind: AuthKind::ApiKeyQuery("key") },
@@ -3400,9 +4879,9 @@ const OP_CARD_DELETE_CARDS_MEMBERS_VOTED_BY_ID_CARD_BY_ID_MEMBER: OpSpec = OpSpe
     method: "DELETE",
     path_template: "/cards/{id_card}/membersVoted/{id_member}",
     fields: &[
-        FieldSpec { snake: "id_card", location: FieldLocation::Path },
-        FieldSpec { snake: "id_member", location: FieldLocation::Path },
-        FieldSpec { snake: "token", location: FieldLocation::Query },
+        FieldSpec { snake: "id_card", wire: "idCard", location: FieldLocation::Path },
+        FieldSpec { snake: "id_member", wire: "idMember", location: FieldLocation::Path },
+        FieldSpec { snake: "token", wire: "token", location: FieldLocation::Query },
     ],
     auth: &[
         AuthApply { secret_key: "api_key", kind: AuthKind::ApiKeyQuery("key") },
@@ -3413,9 +4892,9 @@ const OP_CARD_UPDATE_CARDS_NAME_BY_ID_CARD: OpSpec = OpSpec {
     method: "PUT",
     path_template: "/cards/{id_card}/name",
     fields: &[
-        FieldSpec { snake: "id_card", location: FieldLocation::Path },
-        FieldSpec { snake: "token", location: FieldLocation::Query },
-        FieldSpec { snake: "value", location: FieldLocation::Body },
+        FieldSpec { snake: "id_card", wire: "idCard", location: FieldLocation::Path },
+        FieldSpec { snake: "token", wire: "token", location: FieldLocation::Query },
+        FieldSpec { snake: "value", wire: "value", location: FieldLocation::Body },
     ],
     auth: &[
         AuthApply { secret_key: "api_key", kind: AuthKind::ApiKeyQuery("key") },
@@ -3426,9 +4905,9 @@ const OP_CARD_UPDATE_CARDS_POS_BY_ID_CARD: OpSpec = OpSpec {
     method: "PUT",
     path_template: "/cards/{id_card}/pos",
     fields: &[
-        FieldSpec { snake: "id_card", location: FieldLocation::Path },
-        FieldSpec { snake: "token", location: FieldLocation::Query },
-        FieldSpec { snake: "value", location: FieldLocation::Body },
+        FieldSpec { snake: "id_card", wire: "idCard", location: FieldLocation::Path },
+        FieldSpec { snake: "token", wire: "token", location: FieldLocation::Query },
+        FieldSpec { snake: "value", wire: "value", location: FieldLocation::Body },
     ],
     auth: &[
         AuthApply { secret_key: "api_key", kind: AuthKind::ApiKeyQuery("key") },
@@ -3439,9 +4918,9 @@ const OP_CARD_GET_CARDS_STICKERS_BY_ID_CARD: OpSpec = OpSpec {
     method: "GET",
     path_template: "/cards/{id_card}/stickers",
     fields: &[
-        FieldSpec { snake: "id_card", location: FieldLocation::Path },
-        FieldSpec { snake: "fields", location: FieldLocation::Query },
-        FieldSpec { snake: "token", location: FieldLocation::Query },
+        FieldSpec { snake: "id_card", wire: "idCard", location: FieldLocation::Path },
+        FieldSpec { snake: "fields", wire: "fields", location: FieldLocation::Query },
+        FieldSpec { snake: "token", wire: "token", location: FieldLocation::Query },
     ],
     auth: &[
         AuthApply { secret_key: "api_key", kind: AuthKind::ApiKeyQuery("key") },
@@ -3452,13 +4931,13 @@ const OP_CARD_ADD_CARDS_STICKERS_BY_ID_CARD: OpSpec = OpSpec {
     method: "POST",
     path_template: "/cards/{id_card}/stickers",
     fields: &[
-        FieldSpec { snake: "id_card", location: FieldLocation::Path },
-        FieldSpec { snake: "token", location: FieldLocation::Query },
-        FieldSpec { snake: "image", location: FieldLocation::Body },
-        FieldSpec { snake: "left", location: FieldLocation::Body },
-        FieldSpec { snake: "rotate", location: FieldLocation::Body },
-        FieldSpec { snake: "top", location: FieldLocation::Body },
-        FieldSpec { snake: "z_index", location: FieldLocation::Body },
+        FieldSpec { snake: "id_card", wire: "idCard", location: FieldLocation::Path },
+        FieldSpec { snake: "token", wire: "token", location: FieldLocation::Query },
+        FieldSpec { snake: "image", wire: "image", location: FieldLocation::Body },
+        FieldSpec { snake: "left", wire: "left", location: FieldLocation::Body },
+        FieldSpec { snake: "rotate", wire: "rotate", location: FieldLocation::Body },
+        FieldSpec { snake: "top", wire: "top", location: FieldLocation::Body },
+        FieldSpec { snake: "z_index", wire: "zIndex", location: FieldLocation::Body },
     ],
     auth: &[
         AuthApply { secret_key: "api_key", kind: AuthKind::ApiKeyQuery("key") },
@@ -3469,10 +4948,10 @@ const OP_CARD_GET_CARDS_STICKERS_BY_ID_CARD_BY_ID_STICKER: OpSpec = OpSpec {
     method: "GET",
     path_template: "/cards/{id_card}/stickers/{id_sticker}",
     fields: &[
-        FieldSpec { snake: "id_card", location: FieldLocation::Path },
-        FieldSpec { snake: "id_sticker", location: FieldLocation::Path },
-        FieldSpec { snake: "fields", location: FieldLocation::Query },
-        FieldSpec { snake: "token", location: FieldLocation::Query },
+        FieldSpec { snake: "id_card", wire: "idCard", location: FieldLocation::Path },
+        FieldSpec { snake: "id_sticker", wire: "idSticker", location: FieldLocation::Path },
+        FieldSpec { snake: "fields", wire: "fields", location: FieldLocation::Query },
+        FieldSpec { snake: "token", wire: "token", location: FieldLocation::Query },
     ],
     auth: &[
         AuthApply { secret_key: "api_key", kind: AuthKind::ApiKeyQuery("key") },
@@ -3483,14 +4962,14 @@ const OP_CARD_UPDATE_CARDS_STICKERS_BY_ID_CARD_BY_ID_STICKER: OpSpec = OpSpec {
     method: "PUT",
     path_template: "/cards/{id_card}/stickers/{id_sticker}",
     fields: &[
-        FieldSpec { snake: "id_card", location: FieldLocation::Path },
-        FieldSpec { snake: "id_sticker", location: FieldLocation::Path },
-        FieldSpec { snake: "token", location: FieldLocation::Query },
-        FieldSpec { snake: "image", location: FieldLocation::Body },
-        FieldSpec { snake: "left", location: FieldLocation::Body },
-        FieldSpec { snake: "rotate", location: FieldLocation::Body },
-        FieldSpec { snake: "top", location: FieldLocation::Body },
-        FieldSpec { snake: "z_index", location: FieldLocation::Body },
+        FieldSpec { snake: "id_card", wire: "idCard", location: FieldLocation::Path },
+        FieldSpec { snake: "id_sticker", wire: "idSticker", location: FieldLocation::Path },
+        FieldSpec { snake: "token", wire: "token", location: FieldLocation::Query },
+        FieldSpec { snake: "image", wire: "image", location: FieldLocation::Body },
+        FieldSpec { snake: "left", wire: "left", location: FieldLocation::Body },
+        FieldSpec { snake: "rotate", wire: "rotate", location: FieldLocation::Body },
+        FieldSpec { snake: "top", wire: "top", location: FieldLocation::Body },
+        FieldSpec { snake: "z_index", wire: "zIndex", location: FieldLocation::Body },
     ],
     auth: &[
         AuthApply { secret_key: "api_key", kind: AuthKind::ApiKeyQuery("key") },
@@ -3501,9 +4980,9 @@ const OP_CARD_DELETE_CARDS_STICKERS_BY_ID_CARD_BY_ID_STICKER: OpSpec = OpSpec {
     method: "DELETE",
     path_template: "/cards/{id_card}/stickers/{id_sticker}",
     fields: &[
-        FieldSpec { snake: "id_card", location: FieldLocation::Path },
-        FieldSpec { snake: "id_sticker", location: FieldLocation::Path },
-        FieldSpec { snake: "token", location: FieldLocation::Query },
+        FieldSpec { snake: "id_card", wire: "idCard", location: FieldLocation::Path },
+        FieldSpec { snake: "id_sticker", wire: "idSticker", location: FieldLocation::Path },
+        FieldSpec { snake: "token", wire: "token", location: FieldLocation::Query },
     ],
     auth: &[
         AuthApply { secret_key: "api_key", kind: AuthKind::ApiKeyQuery("key") },
@@ -3514,9 +4993,9 @@ const OP_CARD_UPDATE_CARDS_SUBSCRIBED_BY_ID_CARD: OpSpec = OpSpec {
     method: "PUT",
     path_template: "/cards/{id_card}/subscribed",
     fields: &[
-        FieldSpec { snake: "id_card", location: FieldLocation::Path },
-        FieldSpec { snake: "token", location: FieldLocation::Query },
-        FieldSpec { snake: "value", location: FieldLocation::Body },
+        FieldSpec { snake: "id_card", wire: "idCard", location: FieldLocation::Path },
+        FieldSpec { snake: "token", wire: "token", location: FieldLocation::Query },
+        FieldSpec { snake: "value", wire: "value", location: FieldLocation::Body },
     ],
     auth: &[
         AuthApply { secret_key: "api_key", kind: AuthKind::ApiKeyQuery("key") },
@@ -3527,10 +5006,10 @@ const OP_CARD_GET_CARDS_BY_ID_CARD_BY_FIELD: OpSpec = OpSpec {
     method: "GET",
     path_template: "/cards/{id_card}/{field}",
     fields: &[
-        FieldSpec { snake: "id_card", location: FieldLocation::Path },
-        FieldSpec { snake: "field", location: FieldLocation::Path },
-        FieldSpec { snake: "key", location: FieldLocation::Query },
-        FieldSpec { snake: "token", location: FieldLocation::Query },
+        FieldSpec { snake: "id_card", wire: "idCard", location: FieldLocation::Path },
+        FieldSpec { snake: "field", wire: "field", location: FieldLocation::Path },
+        FieldSpec { snake: "key", wire: "key", location: FieldLocation::Query },
+        FieldSpec { snake: "token", wire: "token", location: FieldLocation::Query },
     ],
     auth: &[
     ],
@@ -4082,226 +5561,1161 @@ fn iface_card__get_cards_by_id_card_by_field_params__to_json(p: &iface_card::Get
     Value::Object(m)
 }
 
+fn iface_card__add_cards__ok(body: String) -> Result<String, crate::runtime::DispatchError> {
+    Ok(body)
+}
+
+fn iface_card__add_cards__err(e: crate::runtime::DispatchError) -> iface_card::AddCardsError {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => match status {
+            400u16 => iface_card::AddCardsError::BadRequest(body),
+            _ => iface_card::AddCardsError::Other(body),
+        },
+        crate::runtime::DispatchError::Transport(m) => iface_card::AddCardsError::Other(m),
+    }
+}
+
+fn iface_card__get_cards_by_id_card__ok(body: String) -> Result<String, crate::runtime::DispatchError> {
+    Ok(body)
+}
+
+fn iface_card__get_cards_by_id_card__err(e: crate::runtime::DispatchError) -> iface_card::GetCardsByIdCardError {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => match status {
+            400u16 => iface_card::GetCardsByIdCardError::BadRequest(body),
+            _ => iface_card::GetCardsByIdCardError::Other(body),
+        },
+        crate::runtime::DispatchError::Transport(m) => iface_card::GetCardsByIdCardError::Other(m),
+    }
+}
+
+fn iface_card__update_cards_by_id_card__ok(body: String) -> Result<String, crate::runtime::DispatchError> {
+    Ok(body)
+}
+
+fn iface_card__update_cards_by_id_card__err(e: crate::runtime::DispatchError) -> iface_card::UpdateCardsByIdCardError {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => match status {
+            400u16 => iface_card::UpdateCardsByIdCardError::BadRequest(body),
+            _ => iface_card::UpdateCardsByIdCardError::Other(body),
+        },
+        crate::runtime::DispatchError::Transport(m) => iface_card::UpdateCardsByIdCardError::Other(m),
+    }
+}
+
+fn iface_card__delete_cards_by_id_card__ok(body: String) -> Result<String, crate::runtime::DispatchError> {
+    Ok(body)
+}
+
+fn iface_card__delete_cards_by_id_card__err(e: crate::runtime::DispatchError) -> iface_card::DeleteCardsByIdCardError {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => match status {
+            400u16 => iface_card::DeleteCardsByIdCardError::BadRequest(body),
+            _ => iface_card::DeleteCardsByIdCardError::Other(body),
+        },
+        crate::runtime::DispatchError::Transport(m) => iface_card::DeleteCardsByIdCardError::Other(m),
+    }
+}
+
+fn iface_card__get_cards_actions_by_id_card__ok(body: String) -> Result<String, crate::runtime::DispatchError> {
+    Ok(body)
+}
+
+fn iface_card__get_cards_actions_by_id_card__err(e: crate::runtime::DispatchError) -> iface_card::GetCardsActionsByIdCardError {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => match status {
+            400u16 => iface_card::GetCardsActionsByIdCardError::BadRequest(body),
+            _ => iface_card::GetCardsActionsByIdCardError::Other(body),
+        },
+        crate::runtime::DispatchError::Transport(m) => iface_card::GetCardsActionsByIdCardError::Other(m),
+    }
+}
+
+fn iface_card__add_cards_actions_comments_by_id_card__ok(body: String) -> Result<String, crate::runtime::DispatchError> {
+    Ok(body)
+}
+
+fn iface_card__add_cards_actions_comments_by_id_card__err(e: crate::runtime::DispatchError) -> iface_card::AddCardsActionsCommentsByIdCardError {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => match status {
+            400u16 => iface_card::AddCardsActionsCommentsByIdCardError::BadRequest(body),
+            _ => iface_card::AddCardsActionsCommentsByIdCardError::Other(body),
+        },
+        crate::runtime::DispatchError::Transport(m) => iface_card::AddCardsActionsCommentsByIdCardError::Other(m),
+    }
+}
+
+fn iface_card__update_cards_actions_comments_by_id_card_by_id_action__ok(body: String) -> Result<String, crate::runtime::DispatchError> {
+    Ok(body)
+}
+
+fn iface_card__update_cards_actions_comments_by_id_card_by_id_action__err(e: crate::runtime::DispatchError) -> iface_card::UpdateCardsActionsCommentsByIdCardByIdActionError {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => match status {
+            400u16 => iface_card::UpdateCardsActionsCommentsByIdCardByIdActionError::BadRequest(body),
+            _ => iface_card::UpdateCardsActionsCommentsByIdCardByIdActionError::Other(body),
+        },
+        crate::runtime::DispatchError::Transport(m) => iface_card::UpdateCardsActionsCommentsByIdCardByIdActionError::Other(m),
+    }
+}
+
+fn iface_card__delete_cards_actions_comments_by_id_card_by_id_action__ok(body: String) -> Result<String, crate::runtime::DispatchError> {
+    Ok(body)
+}
+
+fn iface_card__delete_cards_actions_comments_by_id_card_by_id_action__err(e: crate::runtime::DispatchError) -> iface_card::DeleteCardsActionsCommentsByIdCardByIdActionError {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => match status {
+            400u16 => iface_card::DeleteCardsActionsCommentsByIdCardByIdActionError::BadRequest(body),
+            _ => iface_card::DeleteCardsActionsCommentsByIdCardByIdActionError::Other(body),
+        },
+        crate::runtime::DispatchError::Transport(m) => iface_card::DeleteCardsActionsCommentsByIdCardByIdActionError::Other(m),
+    }
+}
+
+fn iface_card__get_cards_attachments_by_id_card__ok(body: String) -> Result<String, crate::runtime::DispatchError> {
+    Ok(body)
+}
+
+fn iface_card__get_cards_attachments_by_id_card__err(e: crate::runtime::DispatchError) -> iface_card::GetCardsAttachmentsByIdCardError {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => match status {
+            400u16 => iface_card::GetCardsAttachmentsByIdCardError::BadRequest(body),
+            _ => iface_card::GetCardsAttachmentsByIdCardError::Other(body),
+        },
+        crate::runtime::DispatchError::Transport(m) => iface_card::GetCardsAttachmentsByIdCardError::Other(m),
+    }
+}
+
+fn iface_card__add_cards_attachments_by_id_card__ok(body: String) -> Result<String, crate::runtime::DispatchError> {
+    Ok(body)
+}
+
+fn iface_card__add_cards_attachments_by_id_card__err(e: crate::runtime::DispatchError) -> iface_card::AddCardsAttachmentsByIdCardError {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => match status {
+            400u16 => iface_card::AddCardsAttachmentsByIdCardError::BadRequest(body),
+            _ => iface_card::AddCardsAttachmentsByIdCardError::Other(body),
+        },
+        crate::runtime::DispatchError::Transport(m) => iface_card::AddCardsAttachmentsByIdCardError::Other(m),
+    }
+}
+
+fn iface_card__get_cards_attachments_by_id_card_by_id_attachment__ok(body: String) -> Result<String, crate::runtime::DispatchError> {
+    Ok(body)
+}
+
+fn iface_card__get_cards_attachments_by_id_card_by_id_attachment__err(e: crate::runtime::DispatchError) -> iface_card::GetCardsAttachmentsByIdCardByIdAttachmentError {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => match status {
+            400u16 => iface_card::GetCardsAttachmentsByIdCardByIdAttachmentError::BadRequest(body),
+            _ => iface_card::GetCardsAttachmentsByIdCardByIdAttachmentError::Other(body),
+        },
+        crate::runtime::DispatchError::Transport(m) => iface_card::GetCardsAttachmentsByIdCardByIdAttachmentError::Other(m),
+    }
+}
+
+fn iface_card__delete_cards_attachments_by_id_card_by_id_attachment__ok(body: String) -> Result<String, crate::runtime::DispatchError> {
+    Ok(body)
+}
+
+fn iface_card__delete_cards_attachments_by_id_card_by_id_attachment__err(e: crate::runtime::DispatchError) -> iface_card::DeleteCardsAttachmentsByIdCardByIdAttachmentError {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => match status {
+            400u16 => iface_card::DeleteCardsAttachmentsByIdCardByIdAttachmentError::BadRequest(body),
+            _ => iface_card::DeleteCardsAttachmentsByIdCardByIdAttachmentError::Other(body),
+        },
+        crate::runtime::DispatchError::Transport(m) => iface_card::DeleteCardsAttachmentsByIdCardByIdAttachmentError::Other(m),
+    }
+}
+
+fn iface_card__get_cards_board_by_id_card__ok(body: String) -> Result<String, crate::runtime::DispatchError> {
+    Ok(body)
+}
+
+fn iface_card__get_cards_board_by_id_card__err(e: crate::runtime::DispatchError) -> iface_card::GetCardsBoardByIdCardError {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => match status {
+            400u16 => iface_card::GetCardsBoardByIdCardError::BadRequest(body),
+            _ => iface_card::GetCardsBoardByIdCardError::Other(body),
+        },
+        crate::runtime::DispatchError::Transport(m) => iface_card::GetCardsBoardByIdCardError::Other(m),
+    }
+}
+
+fn iface_card__get_cards_board_by_id_card_by_field__ok(body: String) -> Result<String, crate::runtime::DispatchError> {
+    Ok(body)
+}
+
+fn iface_card__get_cards_board_by_id_card_by_field__err(e: crate::runtime::DispatchError) -> iface_card::GetCardsBoardByIdCardByFieldError {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => match status {
+            400u16 => iface_card::GetCardsBoardByIdCardByFieldError::BadRequest(body),
+            _ => iface_card::GetCardsBoardByIdCardByFieldError::Other(body),
+        },
+        crate::runtime::DispatchError::Transport(m) => iface_card::GetCardsBoardByIdCardByFieldError::Other(m),
+    }
+}
+
+fn iface_card__get_cards_check_item_states_by_id_card__ok(body: String) -> Result<String, crate::runtime::DispatchError> {
+    Ok(body)
+}
+
+fn iface_card__get_cards_check_item_states_by_id_card__err(e: crate::runtime::DispatchError) -> iface_card::GetCardsCheckItemStatesByIdCardError {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => match status {
+            400u16 => iface_card::GetCardsCheckItemStatesByIdCardError::BadRequest(body),
+            _ => iface_card::GetCardsCheckItemStatesByIdCardError::Other(body),
+        },
+        crate::runtime::DispatchError::Transport(m) => iface_card::GetCardsCheckItemStatesByIdCardError::Other(m),
+    }
+}
+
+fn iface_card__update_cards_checklist_check_item_by_id_card_by_id_checklist_current_by_id_check_item__ok(body: String) -> Result<String, crate::runtime::DispatchError> {
+    Ok(body)
+}
+
+fn iface_card__update_cards_checklist_check_item_by_id_card_by_id_checklist_current_by_id_check_item__err(e: crate::runtime::DispatchError) -> iface_card::UpdateCardsChecklistCheckItemByIdCardByIdChecklistCurrentByIdCheckItemError {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => match status {
+            400u16 => iface_card::UpdateCardsChecklistCheckItemByIdCardByIdChecklistCurrentByIdCheckItemError::BadRequest(body),
+            _ => iface_card::UpdateCardsChecklistCheckItemByIdCardByIdChecklistCurrentByIdCheckItemError::Other(body),
+        },
+        crate::runtime::DispatchError::Transport(m) => iface_card::UpdateCardsChecklistCheckItemByIdCardByIdChecklistCurrentByIdCheckItemError::Other(m),
+    }
+}
+
+fn iface_card__add_cards_checklist_check_item_by_id_card_by_id_checklist__ok(body: String) -> Result<String, crate::runtime::DispatchError> {
+    Ok(body)
+}
+
+fn iface_card__add_cards_checklist_check_item_by_id_card_by_id_checklist__err(e: crate::runtime::DispatchError) -> iface_card::AddCardsChecklistCheckItemByIdCardByIdChecklistError {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => match status {
+            400u16 => iface_card::AddCardsChecklistCheckItemByIdCardByIdChecklistError::BadRequest(body),
+            _ => iface_card::AddCardsChecklistCheckItemByIdCardByIdChecklistError::Other(body),
+        },
+        crate::runtime::DispatchError::Transport(m) => iface_card::AddCardsChecklistCheckItemByIdCardByIdChecklistError::Other(m),
+    }
+}
+
+fn iface_card__delete_cards_checklist_check_item_by_id_card_by_id_checklist_by_id_check_item__ok(body: String) -> Result<String, crate::runtime::DispatchError> {
+    Ok(body)
+}
+
+fn iface_card__delete_cards_checklist_check_item_by_id_card_by_id_checklist_by_id_check_item__err(e: crate::runtime::DispatchError) -> iface_card::DeleteCardsChecklistCheckItemByIdCardByIdChecklistByIdCheckItemError {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => match status {
+            400u16 => iface_card::DeleteCardsChecklistCheckItemByIdCardByIdChecklistByIdCheckItemError::BadRequest(body),
+            _ => iface_card::DeleteCardsChecklistCheckItemByIdCardByIdChecklistByIdCheckItemError::Other(body),
+        },
+        crate::runtime::DispatchError::Transport(m) => iface_card::DeleteCardsChecklistCheckItemByIdCardByIdChecklistByIdCheckItemError::Other(m),
+    }
+}
+
+fn iface_card__add_cards_checklist_check_item_convert_to_card_by_id_card_by_id_checklist_by_id_check_item__ok(body: String) -> Result<String, crate::runtime::DispatchError> {
+    Ok(body)
+}
+
+fn iface_card__add_cards_checklist_check_item_convert_to_card_by_id_card_by_id_checklist_by_id_check_item__err(e: crate::runtime::DispatchError) -> iface_card::AddCardsChecklistCheckItemConvertToCardByIdCardByIdChecklistByIdCheckItemError {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => match status {
+            400u16 => iface_card::AddCardsChecklistCheckItemConvertToCardByIdCardByIdChecklistByIdCheckItemError::BadRequest(body),
+            _ => iface_card::AddCardsChecklistCheckItemConvertToCardByIdCardByIdChecklistByIdCheckItemError::Other(body),
+        },
+        crate::runtime::DispatchError::Transport(m) => iface_card::AddCardsChecklistCheckItemConvertToCardByIdCardByIdChecklistByIdCheckItemError::Other(m),
+    }
+}
+
+fn iface_card__update_cards_checklist_check_item_name_by_id_card_by_id_checklist_by_id_check_item__ok(body: String) -> Result<String, crate::runtime::DispatchError> {
+    Ok(body)
+}
+
+fn iface_card__update_cards_checklist_check_item_name_by_id_card_by_id_checklist_by_id_check_item__err(e: crate::runtime::DispatchError) -> iface_card::UpdateCardsChecklistCheckItemNameByIdCardByIdChecklistByIdCheckItemError {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => match status {
+            400u16 => iface_card::UpdateCardsChecklistCheckItemNameByIdCardByIdChecklistByIdCheckItemError::BadRequest(body),
+            _ => iface_card::UpdateCardsChecklistCheckItemNameByIdCardByIdChecklistByIdCheckItemError::Other(body),
+        },
+        crate::runtime::DispatchError::Transport(m) => iface_card::UpdateCardsChecklistCheckItemNameByIdCardByIdChecklistByIdCheckItemError::Other(m),
+    }
+}
+
+fn iface_card__update_cards_checklist_check_item_pos_by_id_card_by_id_checklist_by_id_check_item__ok(body: String) -> Result<String, crate::runtime::DispatchError> {
+    Ok(body)
+}
+
+fn iface_card__update_cards_checklist_check_item_pos_by_id_card_by_id_checklist_by_id_check_item__err(e: crate::runtime::DispatchError) -> iface_card::UpdateCardsChecklistCheckItemPosByIdCardByIdChecklistByIdCheckItemError {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => match status {
+            400u16 => iface_card::UpdateCardsChecklistCheckItemPosByIdCardByIdChecklistByIdCheckItemError::BadRequest(body),
+            _ => iface_card::UpdateCardsChecklistCheckItemPosByIdCardByIdChecklistByIdCheckItemError::Other(body),
+        },
+        crate::runtime::DispatchError::Transport(m) => iface_card::UpdateCardsChecklistCheckItemPosByIdCardByIdChecklistByIdCheckItemError::Other(m),
+    }
+}
+
+fn iface_card__update_cards_checklist_check_item_state_by_id_card_by_id_checklist_by_id_check_item__ok(body: String) -> Result<String, crate::runtime::DispatchError> {
+    Ok(body)
+}
+
+fn iface_card__update_cards_checklist_check_item_state_by_id_card_by_id_checklist_by_id_check_item__err(e: crate::runtime::DispatchError) -> iface_card::UpdateCardsChecklistCheckItemStateByIdCardByIdChecklistByIdCheckItemError {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => match status {
+            400u16 => iface_card::UpdateCardsChecklistCheckItemStateByIdCardByIdChecklistByIdCheckItemError::BadRequest(body),
+            _ => iface_card::UpdateCardsChecklistCheckItemStateByIdCardByIdChecklistByIdCheckItemError::Other(body),
+        },
+        crate::runtime::DispatchError::Transport(m) => iface_card::UpdateCardsChecklistCheckItemStateByIdCardByIdChecklistByIdCheckItemError::Other(m),
+    }
+}
+
+fn iface_card__get_cards_checklists_by_id_card__ok(body: String) -> Result<String, crate::runtime::DispatchError> {
+    Ok(body)
+}
+
+fn iface_card__get_cards_checklists_by_id_card__err(e: crate::runtime::DispatchError) -> iface_card::GetCardsChecklistsByIdCardError {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => match status {
+            400u16 => iface_card::GetCardsChecklistsByIdCardError::BadRequest(body),
+            _ => iface_card::GetCardsChecklistsByIdCardError::Other(body),
+        },
+        crate::runtime::DispatchError::Transport(m) => iface_card::GetCardsChecklistsByIdCardError::Other(m),
+    }
+}
+
+fn iface_card__add_cards_checklists_by_id_card__ok(body: String) -> Result<String, crate::runtime::DispatchError> {
+    Ok(body)
+}
+
+fn iface_card__add_cards_checklists_by_id_card__err(e: crate::runtime::DispatchError) -> iface_card::AddCardsChecklistsByIdCardError {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => match status {
+            400u16 => iface_card::AddCardsChecklistsByIdCardError::BadRequest(body),
+            _ => iface_card::AddCardsChecklistsByIdCardError::Other(body),
+        },
+        crate::runtime::DispatchError::Transport(m) => iface_card::AddCardsChecklistsByIdCardError::Other(m),
+    }
+}
+
+fn iface_card__delete_cards_checklists_by_id_card_by_id_checklist__ok(body: String) -> Result<String, crate::runtime::DispatchError> {
+    Ok(body)
+}
+
+fn iface_card__delete_cards_checklists_by_id_card_by_id_checklist__err(e: crate::runtime::DispatchError) -> iface_card::DeleteCardsChecklistsByIdCardByIdChecklistError {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => match status {
+            400u16 => iface_card::DeleteCardsChecklistsByIdCardByIdChecklistError::BadRequest(body),
+            _ => iface_card::DeleteCardsChecklistsByIdCardByIdChecklistError::Other(body),
+        },
+        crate::runtime::DispatchError::Transport(m) => iface_card::DeleteCardsChecklistsByIdCardByIdChecklistError::Other(m),
+    }
+}
+
+fn iface_card__update_cards_closed_by_id_card__ok(body: String) -> Result<String, crate::runtime::DispatchError> {
+    Ok(body)
+}
+
+fn iface_card__update_cards_closed_by_id_card__err(e: crate::runtime::DispatchError) -> iface_card::UpdateCardsClosedByIdCardError {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => match status {
+            400u16 => iface_card::UpdateCardsClosedByIdCardError::BadRequest(body),
+            _ => iface_card::UpdateCardsClosedByIdCardError::Other(body),
+        },
+        crate::runtime::DispatchError::Transport(m) => iface_card::UpdateCardsClosedByIdCardError::Other(m),
+    }
+}
+
+fn iface_card__update_cards_desc_by_id_card__ok(body: String) -> Result<String, crate::runtime::DispatchError> {
+    Ok(body)
+}
+
+fn iface_card__update_cards_desc_by_id_card__err(e: crate::runtime::DispatchError) -> iface_card::UpdateCardsDescByIdCardError {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => match status {
+            400u16 => iface_card::UpdateCardsDescByIdCardError::BadRequest(body),
+            _ => iface_card::UpdateCardsDescByIdCardError::Other(body),
+        },
+        crate::runtime::DispatchError::Transport(m) => iface_card::UpdateCardsDescByIdCardError::Other(m),
+    }
+}
+
+fn iface_card__update_cards_due_by_id_card__ok(body: String) -> Result<String, crate::runtime::DispatchError> {
+    Ok(body)
+}
+
+fn iface_card__update_cards_due_by_id_card__err(e: crate::runtime::DispatchError) -> iface_card::UpdateCardsDueByIdCardError {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => match status {
+            400u16 => iface_card::UpdateCardsDueByIdCardError::BadRequest(body),
+            _ => iface_card::UpdateCardsDueByIdCardError::Other(body),
+        },
+        crate::runtime::DispatchError::Transport(m) => iface_card::UpdateCardsDueByIdCardError::Other(m),
+    }
+}
+
+fn iface_card__update_cards_id_attachment_cover_by_id_card__ok(body: String) -> Result<String, crate::runtime::DispatchError> {
+    Ok(body)
+}
+
+fn iface_card__update_cards_id_attachment_cover_by_id_card__err(e: crate::runtime::DispatchError) -> iface_card::UpdateCardsIdAttachmentCoverByIdCardError {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => match status {
+            400u16 => iface_card::UpdateCardsIdAttachmentCoverByIdCardError::BadRequest(body),
+            _ => iface_card::UpdateCardsIdAttachmentCoverByIdCardError::Other(body),
+        },
+        crate::runtime::DispatchError::Transport(m) => iface_card::UpdateCardsIdAttachmentCoverByIdCardError::Other(m),
+    }
+}
+
+fn iface_card__update_cards_id_board_by_id_card__ok(body: String) -> Result<String, crate::runtime::DispatchError> {
+    Ok(body)
+}
+
+fn iface_card__update_cards_id_board_by_id_card__err(e: crate::runtime::DispatchError) -> iface_card::UpdateCardsIdBoardByIdCardError {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => match status {
+            400u16 => iface_card::UpdateCardsIdBoardByIdCardError::BadRequest(body),
+            _ => iface_card::UpdateCardsIdBoardByIdCardError::Other(body),
+        },
+        crate::runtime::DispatchError::Transport(m) => iface_card::UpdateCardsIdBoardByIdCardError::Other(m),
+    }
+}
+
+fn iface_card__add_cards_id_labels_by_id_card__ok(body: String) -> Result<String, crate::runtime::DispatchError> {
+    Ok(body)
+}
+
+fn iface_card__add_cards_id_labels_by_id_card__err(e: crate::runtime::DispatchError) -> iface_card::AddCardsIdLabelsByIdCardError {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => match status {
+            400u16 => iface_card::AddCardsIdLabelsByIdCardError::BadRequest(body),
+            _ => iface_card::AddCardsIdLabelsByIdCardError::Other(body),
+        },
+        crate::runtime::DispatchError::Transport(m) => iface_card::AddCardsIdLabelsByIdCardError::Other(m),
+    }
+}
+
+fn iface_card__delete_cards_id_labels_by_id_card_by_id_label__ok(body: String) -> Result<String, crate::runtime::DispatchError> {
+    Ok(body)
+}
+
+fn iface_card__delete_cards_id_labels_by_id_card_by_id_label__err(e: crate::runtime::DispatchError) -> iface_card::DeleteCardsIdLabelsByIdCardByIdLabelError {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => match status {
+            400u16 => iface_card::DeleteCardsIdLabelsByIdCardByIdLabelError::BadRequest(body),
+            _ => iface_card::DeleteCardsIdLabelsByIdCardByIdLabelError::Other(body),
+        },
+        crate::runtime::DispatchError::Transport(m) => iface_card::DeleteCardsIdLabelsByIdCardByIdLabelError::Other(m),
+    }
+}
+
+fn iface_card__update_cards_id_list_by_id_card__ok(body: String) -> Result<String, crate::runtime::DispatchError> {
+    Ok(body)
+}
+
+fn iface_card__update_cards_id_list_by_id_card__err(e: crate::runtime::DispatchError) -> iface_card::UpdateCardsIdListByIdCardError {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => match status {
+            400u16 => iface_card::UpdateCardsIdListByIdCardError::BadRequest(body),
+            _ => iface_card::UpdateCardsIdListByIdCardError::Other(body),
+        },
+        crate::runtime::DispatchError::Transport(m) => iface_card::UpdateCardsIdListByIdCardError::Other(m),
+    }
+}
+
+fn iface_card__add_cards_id_members_by_id_card__ok(body: String) -> Result<String, crate::runtime::DispatchError> {
+    Ok(body)
+}
+
+fn iface_card__add_cards_id_members_by_id_card__err(e: crate::runtime::DispatchError) -> iface_card::AddCardsIdMembersByIdCardError {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => match status {
+            400u16 => iface_card::AddCardsIdMembersByIdCardError::BadRequest(body),
+            _ => iface_card::AddCardsIdMembersByIdCardError::Other(body),
+        },
+        crate::runtime::DispatchError::Transport(m) => iface_card::AddCardsIdMembersByIdCardError::Other(m),
+    }
+}
+
+fn iface_card__update_cards_id_members_by_id_card__ok(body: String) -> Result<String, crate::runtime::DispatchError> {
+    Ok(body)
+}
+
+fn iface_card__update_cards_id_members_by_id_card__err(e: crate::runtime::DispatchError) -> iface_card::UpdateCardsIdMembersByIdCardError {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => match status {
+            400u16 => iface_card::UpdateCardsIdMembersByIdCardError::BadRequest(body),
+            _ => iface_card::UpdateCardsIdMembersByIdCardError::Other(body),
+        },
+        crate::runtime::DispatchError::Transport(m) => iface_card::UpdateCardsIdMembersByIdCardError::Other(m),
+    }
+}
+
+fn iface_card__delete_cards_id_members_by_id_card_by_id_member__ok(body: String) -> Result<String, crate::runtime::DispatchError> {
+    Ok(body)
+}
+
+fn iface_card__delete_cards_id_members_by_id_card_by_id_member__err(e: crate::runtime::DispatchError) -> iface_card::DeleteCardsIdMembersByIdCardByIdMemberError {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => match status {
+            400u16 => iface_card::DeleteCardsIdMembersByIdCardByIdMemberError::BadRequest(body),
+            _ => iface_card::DeleteCardsIdMembersByIdCardByIdMemberError::Other(body),
+        },
+        crate::runtime::DispatchError::Transport(m) => iface_card::DeleteCardsIdMembersByIdCardByIdMemberError::Other(m),
+    }
+}
+
+fn iface_card__add_cards_labels_by_id_card__ok(body: String) -> Result<String, crate::runtime::DispatchError> {
+    Ok(body)
+}
+
+fn iface_card__add_cards_labels_by_id_card__err(e: crate::runtime::DispatchError) -> iface_card::AddCardsLabelsByIdCardError {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => match status {
+            400u16 => iface_card::AddCardsLabelsByIdCardError::BadRequest(body),
+            _ => iface_card::AddCardsLabelsByIdCardError::Other(body),
+        },
+        crate::runtime::DispatchError::Transport(m) => iface_card::AddCardsLabelsByIdCardError::Other(m),
+    }
+}
+
+fn iface_card__update_cards_labels_by_id_card__ok(body: String) -> Result<String, crate::runtime::DispatchError> {
+    Ok(body)
+}
+
+fn iface_card__update_cards_labels_by_id_card__err(e: crate::runtime::DispatchError) -> iface_card::UpdateCardsLabelsByIdCardError {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => match status {
+            400u16 => iface_card::UpdateCardsLabelsByIdCardError::BadRequest(body),
+            _ => iface_card::UpdateCardsLabelsByIdCardError::Other(body),
+        },
+        crate::runtime::DispatchError::Transport(m) => iface_card::UpdateCardsLabelsByIdCardError::Other(m),
+    }
+}
+
+fn iface_card__delete_cards_labels_by_id_card_by_color__ok(body: String) -> Result<String, crate::runtime::DispatchError> {
+    Ok(body)
+}
+
+fn iface_card__delete_cards_labels_by_id_card_by_color__err(e: crate::runtime::DispatchError) -> iface_card::DeleteCardsLabelsByIdCardByColorError {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => match status {
+            400u16 => iface_card::DeleteCardsLabelsByIdCardByColorError::BadRequest(body),
+            _ => iface_card::DeleteCardsLabelsByIdCardByColorError::Other(body),
+        },
+        crate::runtime::DispatchError::Transport(m) => iface_card::DeleteCardsLabelsByIdCardByColorError::Other(m),
+    }
+}
+
+fn iface_card__get_cards_list_by_id_card__ok(body: String) -> Result<String, crate::runtime::DispatchError> {
+    Ok(body)
+}
+
+fn iface_card__get_cards_list_by_id_card__err(e: crate::runtime::DispatchError) -> iface_card::GetCardsListByIdCardError {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => match status {
+            400u16 => iface_card::GetCardsListByIdCardError::BadRequest(body),
+            _ => iface_card::GetCardsListByIdCardError::Other(body),
+        },
+        crate::runtime::DispatchError::Transport(m) => iface_card::GetCardsListByIdCardError::Other(m),
+    }
+}
+
+fn iface_card__get_cards_list_by_id_card_by_field__ok(body: String) -> Result<String, crate::runtime::DispatchError> {
+    Ok(body)
+}
+
+fn iface_card__get_cards_list_by_id_card_by_field__err(e: crate::runtime::DispatchError) -> iface_card::GetCardsListByIdCardByFieldError {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => match status {
+            400u16 => iface_card::GetCardsListByIdCardByFieldError::BadRequest(body),
+            _ => iface_card::GetCardsListByIdCardByFieldError::Other(body),
+        },
+        crate::runtime::DispatchError::Transport(m) => iface_card::GetCardsListByIdCardByFieldError::Other(m),
+    }
+}
+
+fn iface_card__add_cards_mark_associated_notifications_read_by_id_card__ok(body: String) -> Result<String, crate::runtime::DispatchError> {
+    Ok(body)
+}
+
+fn iface_card__add_cards_mark_associated_notifications_read_by_id_card__err(e: crate::runtime::DispatchError) -> iface_card::AddCardsMarkAssociatedNotificationsReadByIdCardError {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => match status {
+            400u16 => iface_card::AddCardsMarkAssociatedNotificationsReadByIdCardError::BadRequest(body),
+            _ => iface_card::AddCardsMarkAssociatedNotificationsReadByIdCardError::Other(body),
+        },
+        crate::runtime::DispatchError::Transport(m) => iface_card::AddCardsMarkAssociatedNotificationsReadByIdCardError::Other(m),
+    }
+}
+
+fn iface_card__get_cards_members_by_id_card__ok(body: String) -> Result<String, crate::runtime::DispatchError> {
+    Ok(body)
+}
+
+fn iface_card__get_cards_members_by_id_card__err(e: crate::runtime::DispatchError) -> iface_card::GetCardsMembersByIdCardError {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => match status {
+            400u16 => iface_card::GetCardsMembersByIdCardError::BadRequest(body),
+            _ => iface_card::GetCardsMembersByIdCardError::Other(body),
+        },
+        crate::runtime::DispatchError::Transport(m) => iface_card::GetCardsMembersByIdCardError::Other(m),
+    }
+}
+
+fn iface_card__get_cards_members_voted_by_id_card__ok(body: String) -> Result<String, crate::runtime::DispatchError> {
+    Ok(body)
+}
+
+fn iface_card__get_cards_members_voted_by_id_card__err(e: crate::runtime::DispatchError) -> iface_card::GetCardsMembersVotedByIdCardError {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => match status {
+            400u16 => iface_card::GetCardsMembersVotedByIdCardError::BadRequest(body),
+            _ => iface_card::GetCardsMembersVotedByIdCardError::Other(body),
+        },
+        crate::runtime::DispatchError::Transport(m) => iface_card::GetCardsMembersVotedByIdCardError::Other(m),
+    }
+}
+
+fn iface_card__add_cards_members_voted_by_id_card__ok(body: String) -> Result<String, crate::runtime::DispatchError> {
+    Ok(body)
+}
+
+fn iface_card__add_cards_members_voted_by_id_card__err(e: crate::runtime::DispatchError) -> iface_card::AddCardsMembersVotedByIdCardError {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => match status {
+            400u16 => iface_card::AddCardsMembersVotedByIdCardError::BadRequest(body),
+            _ => iface_card::AddCardsMembersVotedByIdCardError::Other(body),
+        },
+        crate::runtime::DispatchError::Transport(m) => iface_card::AddCardsMembersVotedByIdCardError::Other(m),
+    }
+}
+
+fn iface_card__delete_cards_members_voted_by_id_card_by_id_member__ok(body: String) -> Result<String, crate::runtime::DispatchError> {
+    Ok(body)
+}
+
+fn iface_card__delete_cards_members_voted_by_id_card_by_id_member__err(e: crate::runtime::DispatchError) -> iface_card::DeleteCardsMembersVotedByIdCardByIdMemberError {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => match status {
+            400u16 => iface_card::DeleteCardsMembersVotedByIdCardByIdMemberError::BadRequest(body),
+            _ => iface_card::DeleteCardsMembersVotedByIdCardByIdMemberError::Other(body),
+        },
+        crate::runtime::DispatchError::Transport(m) => iface_card::DeleteCardsMembersVotedByIdCardByIdMemberError::Other(m),
+    }
+}
+
+fn iface_card__update_cards_name_by_id_card__ok(body: String) -> Result<String, crate::runtime::DispatchError> {
+    Ok(body)
+}
+
+fn iface_card__update_cards_name_by_id_card__err(e: crate::runtime::DispatchError) -> iface_card::UpdateCardsNameByIdCardError {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => match status {
+            400u16 => iface_card::UpdateCardsNameByIdCardError::BadRequest(body),
+            _ => iface_card::UpdateCardsNameByIdCardError::Other(body),
+        },
+        crate::runtime::DispatchError::Transport(m) => iface_card::UpdateCardsNameByIdCardError::Other(m),
+    }
+}
+
+fn iface_card__update_cards_pos_by_id_card__ok(body: String) -> Result<String, crate::runtime::DispatchError> {
+    Ok(body)
+}
+
+fn iface_card__update_cards_pos_by_id_card__err(e: crate::runtime::DispatchError) -> iface_card::UpdateCardsPosByIdCardError {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => match status {
+            400u16 => iface_card::UpdateCardsPosByIdCardError::BadRequest(body),
+            _ => iface_card::UpdateCardsPosByIdCardError::Other(body),
+        },
+        crate::runtime::DispatchError::Transport(m) => iface_card::UpdateCardsPosByIdCardError::Other(m),
+    }
+}
+
+fn iface_card__get_cards_stickers_by_id_card__ok(body: String) -> Result<String, crate::runtime::DispatchError> {
+    Ok(body)
+}
+
+fn iface_card__get_cards_stickers_by_id_card__err(e: crate::runtime::DispatchError) -> iface_card::GetCardsStickersByIdCardError {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => match status {
+            400u16 => iface_card::GetCardsStickersByIdCardError::BadRequest(body),
+            _ => iface_card::GetCardsStickersByIdCardError::Other(body),
+        },
+        crate::runtime::DispatchError::Transport(m) => iface_card::GetCardsStickersByIdCardError::Other(m),
+    }
+}
+
+fn iface_card__add_cards_stickers_by_id_card__ok(body: String) -> Result<String, crate::runtime::DispatchError> {
+    Ok(body)
+}
+
+fn iface_card__add_cards_stickers_by_id_card__err(e: crate::runtime::DispatchError) -> iface_card::AddCardsStickersByIdCardError {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => match status {
+            400u16 => iface_card::AddCardsStickersByIdCardError::BadRequest(body),
+            _ => iface_card::AddCardsStickersByIdCardError::Other(body),
+        },
+        crate::runtime::DispatchError::Transport(m) => iface_card::AddCardsStickersByIdCardError::Other(m),
+    }
+}
+
+fn iface_card__get_cards_stickers_by_id_card_by_id_sticker__ok(body: String) -> Result<String, crate::runtime::DispatchError> {
+    Ok(body)
+}
+
+fn iface_card__get_cards_stickers_by_id_card_by_id_sticker__err(e: crate::runtime::DispatchError) -> iface_card::GetCardsStickersByIdCardByIdStickerError {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => match status {
+            400u16 => iface_card::GetCardsStickersByIdCardByIdStickerError::BadRequest(body),
+            _ => iface_card::GetCardsStickersByIdCardByIdStickerError::Other(body),
+        },
+        crate::runtime::DispatchError::Transport(m) => iface_card::GetCardsStickersByIdCardByIdStickerError::Other(m),
+    }
+}
+
+fn iface_card__update_cards_stickers_by_id_card_by_id_sticker__ok(body: String) -> Result<String, crate::runtime::DispatchError> {
+    Ok(body)
+}
+
+fn iface_card__update_cards_stickers_by_id_card_by_id_sticker__err(e: crate::runtime::DispatchError) -> iface_card::UpdateCardsStickersByIdCardByIdStickerError {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => match status {
+            400u16 => iface_card::UpdateCardsStickersByIdCardByIdStickerError::BadRequest(body),
+            _ => iface_card::UpdateCardsStickersByIdCardByIdStickerError::Other(body),
+        },
+        crate::runtime::DispatchError::Transport(m) => iface_card::UpdateCardsStickersByIdCardByIdStickerError::Other(m),
+    }
+}
+
+fn iface_card__delete_cards_stickers_by_id_card_by_id_sticker__ok(body: String) -> Result<String, crate::runtime::DispatchError> {
+    Ok(body)
+}
+
+fn iface_card__delete_cards_stickers_by_id_card_by_id_sticker__err(e: crate::runtime::DispatchError) -> iface_card::DeleteCardsStickersByIdCardByIdStickerError {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => match status {
+            400u16 => iface_card::DeleteCardsStickersByIdCardByIdStickerError::BadRequest(body),
+            _ => iface_card::DeleteCardsStickersByIdCardByIdStickerError::Other(body),
+        },
+        crate::runtime::DispatchError::Transport(m) => iface_card::DeleteCardsStickersByIdCardByIdStickerError::Other(m),
+    }
+}
+
+fn iface_card__update_cards_subscribed_by_id_card__ok(body: String) -> Result<String, crate::runtime::DispatchError> {
+    Ok(body)
+}
+
+fn iface_card__update_cards_subscribed_by_id_card__err(e: crate::runtime::DispatchError) -> iface_card::UpdateCardsSubscribedByIdCardError {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => match status {
+            400u16 => iface_card::UpdateCardsSubscribedByIdCardError::BadRequest(body),
+            _ => iface_card::UpdateCardsSubscribedByIdCardError::Other(body),
+        },
+        crate::runtime::DispatchError::Transport(m) => iface_card::UpdateCardsSubscribedByIdCardError::Other(m),
+    }
+}
+
+fn iface_card__get_cards_by_id_card_by_field__ok(body: String) -> Result<String, crate::runtime::DispatchError> {
+    Ok(body)
+}
+
+fn iface_card__get_cards_by_id_card_by_field__err(e: crate::runtime::DispatchError) -> iface_card::GetCardsByIdCardByFieldError {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => match status {
+            400u16 => iface_card::GetCardsByIdCardByFieldError::BadRequest(body),
+            _ => iface_card::GetCardsByIdCardByFieldError::Other(body),
+        },
+        crate::runtime::DispatchError::Transport(m) => iface_card::GetCardsByIdCardByFieldError::Other(m),
+    }
+}
+
 impl iface_card::Guest for crate::Component {
-    fn add_cards(params: iface_card::AddCardsParams) -> Result<String, String> {
+    fn add_cards(params: iface_card::AddCardsParams) -> Result<String, iface_card::AddCardsError> {
         let json = iface_card__add_cards_params__to_json(&params);
-        dispatch(&OP_CARD_ADD_CARDS, json)
+        match dispatch(&OP_CARD_ADD_CARDS, json).and_then(iface_card__add_cards__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_card__add_cards__err(e)),
+        }
     }
-    fn get_cards_by_id_card(params: iface_card::GetCardsByIdCardParams) -> Result<String, String> {
+    fn get_cards_by_id_card(params: iface_card::GetCardsByIdCardParams) -> Result<String, iface_card::GetCardsByIdCardError> {
         let json = iface_card__get_cards_by_id_card_params__to_json(&params);
-        dispatch(&OP_CARD_GET_CARDS_BY_ID_CARD, json)
+        match dispatch(&OP_CARD_GET_CARDS_BY_ID_CARD, json).and_then(iface_card__get_cards_by_id_card__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_card__get_cards_by_id_card__err(e)),
+        }
     }
-    fn update_cards_by_id_card(params: iface_card::UpdateCardsByIdCardParams) -> Result<String, String> {
+    fn update_cards_by_id_card(params: iface_card::UpdateCardsByIdCardParams) -> Result<String, iface_card::UpdateCardsByIdCardError> {
         let json = iface_card__update_cards_by_id_card_params__to_json(&params);
-        dispatch(&OP_CARD_UPDATE_CARDS_BY_ID_CARD, json)
+        match dispatch(&OP_CARD_UPDATE_CARDS_BY_ID_CARD, json).and_then(iface_card__update_cards_by_id_card__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_card__update_cards_by_id_card__err(e)),
+        }
     }
-    fn delete_cards_by_id_card(params: iface_card::DeleteCardsByIdCardParams) -> Result<String, String> {
+    fn delete_cards_by_id_card(params: iface_card::DeleteCardsByIdCardParams) -> Result<String, iface_card::DeleteCardsByIdCardError> {
         let json = iface_card__delete_cards_by_id_card_params__to_json(&params);
-        dispatch(&OP_CARD_DELETE_CARDS_BY_ID_CARD, json)
+        match dispatch(&OP_CARD_DELETE_CARDS_BY_ID_CARD, json).and_then(iface_card__delete_cards_by_id_card__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_card__delete_cards_by_id_card__err(e)),
+        }
     }
-    fn get_cards_actions_by_id_card(params: iface_card::GetCardsActionsByIdCardParams) -> Result<String, String> {
+    fn get_cards_actions_by_id_card(params: iface_card::GetCardsActionsByIdCardParams) -> Result<String, iface_card::GetCardsActionsByIdCardError> {
         let json = iface_card__get_cards_actions_by_id_card_params__to_json(&params);
-        dispatch(&OP_CARD_GET_CARDS_ACTIONS_BY_ID_CARD, json)
+        match dispatch(&OP_CARD_GET_CARDS_ACTIONS_BY_ID_CARD, json).and_then(iface_card__get_cards_actions_by_id_card__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_card__get_cards_actions_by_id_card__err(e)),
+        }
     }
-    fn add_cards_actions_comments_by_id_card(params: iface_card::AddCardsActionsCommentsByIdCardParams) -> Result<String, String> {
+    fn add_cards_actions_comments_by_id_card(params: iface_card::AddCardsActionsCommentsByIdCardParams) -> Result<String, iface_card::AddCardsActionsCommentsByIdCardError> {
         let json = iface_card__add_cards_actions_comments_by_id_card_params__to_json(&params);
-        dispatch(&OP_CARD_ADD_CARDS_ACTIONS_COMMENTS_BY_ID_CARD, json)
+        match dispatch(&OP_CARD_ADD_CARDS_ACTIONS_COMMENTS_BY_ID_CARD, json).and_then(iface_card__add_cards_actions_comments_by_id_card__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_card__add_cards_actions_comments_by_id_card__err(e)),
+        }
     }
-    fn update_cards_actions_comments_by_id_card_by_id_action(params: iface_card::UpdateCardsActionsCommentsByIdCardByIdActionParams) -> Result<String, String> {
+    fn update_cards_actions_comments_by_id_card_by_id_action(params: iface_card::UpdateCardsActionsCommentsByIdCardByIdActionParams) -> Result<String, iface_card::UpdateCardsActionsCommentsByIdCardByIdActionError> {
         let json = iface_card__update_cards_actions_comments_by_id_card_by_id_action_params__to_json(&params);
-        dispatch(&OP_CARD_UPDATE_CARDS_ACTIONS_COMMENTS_BY_ID_CARD_BY_ID_ACTION, json)
+        match dispatch(&OP_CARD_UPDATE_CARDS_ACTIONS_COMMENTS_BY_ID_CARD_BY_ID_ACTION, json).and_then(iface_card__update_cards_actions_comments_by_id_card_by_id_action__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_card__update_cards_actions_comments_by_id_card_by_id_action__err(e)),
+        }
     }
-    fn delete_cards_actions_comments_by_id_card_by_id_action(params: iface_card::DeleteCardsActionsCommentsByIdCardByIdActionParams) -> Result<String, String> {
+    fn delete_cards_actions_comments_by_id_card_by_id_action(params: iface_card::DeleteCardsActionsCommentsByIdCardByIdActionParams) -> Result<String, iface_card::DeleteCardsActionsCommentsByIdCardByIdActionError> {
         let json = iface_card__delete_cards_actions_comments_by_id_card_by_id_action_params__to_json(&params);
-        dispatch(&OP_CARD_DELETE_CARDS_ACTIONS_COMMENTS_BY_ID_CARD_BY_ID_ACTION, json)
+        match dispatch(&OP_CARD_DELETE_CARDS_ACTIONS_COMMENTS_BY_ID_CARD_BY_ID_ACTION, json).and_then(iface_card__delete_cards_actions_comments_by_id_card_by_id_action__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_card__delete_cards_actions_comments_by_id_card_by_id_action__err(e)),
+        }
     }
-    fn get_cards_attachments_by_id_card(params: iface_card::GetCardsAttachmentsByIdCardParams) -> Result<String, String> {
+    fn get_cards_attachments_by_id_card(params: iface_card::GetCardsAttachmentsByIdCardParams) -> Result<String, iface_card::GetCardsAttachmentsByIdCardError> {
         let json = iface_card__get_cards_attachments_by_id_card_params__to_json(&params);
-        dispatch(&OP_CARD_GET_CARDS_ATTACHMENTS_BY_ID_CARD, json)
+        match dispatch(&OP_CARD_GET_CARDS_ATTACHMENTS_BY_ID_CARD, json).and_then(iface_card__get_cards_attachments_by_id_card__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_card__get_cards_attachments_by_id_card__err(e)),
+        }
     }
-    fn add_cards_attachments_by_id_card(params: iface_card::AddCardsAttachmentsByIdCardParams) -> Result<String, String> {
+    fn add_cards_attachments_by_id_card(params: iface_card::AddCardsAttachmentsByIdCardParams) -> Result<String, iface_card::AddCardsAttachmentsByIdCardError> {
         let json = iface_card__add_cards_attachments_by_id_card_params__to_json(&params);
-        dispatch(&OP_CARD_ADD_CARDS_ATTACHMENTS_BY_ID_CARD, json)
+        match dispatch(&OP_CARD_ADD_CARDS_ATTACHMENTS_BY_ID_CARD, json).and_then(iface_card__add_cards_attachments_by_id_card__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_card__add_cards_attachments_by_id_card__err(e)),
+        }
     }
-    fn get_cards_attachments_by_id_card_by_id_attachment(params: iface_card::GetCardsAttachmentsByIdCardByIdAttachmentParams) -> Result<String, String> {
+    fn get_cards_attachments_by_id_card_by_id_attachment(params: iface_card::GetCardsAttachmentsByIdCardByIdAttachmentParams) -> Result<String, iface_card::GetCardsAttachmentsByIdCardByIdAttachmentError> {
         let json = iface_card__get_cards_attachments_by_id_card_by_id_attachment_params__to_json(&params);
-        dispatch(&OP_CARD_GET_CARDS_ATTACHMENTS_BY_ID_CARD_BY_ID_ATTACHMENT, json)
+        match dispatch(&OP_CARD_GET_CARDS_ATTACHMENTS_BY_ID_CARD_BY_ID_ATTACHMENT, json).and_then(iface_card__get_cards_attachments_by_id_card_by_id_attachment__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_card__get_cards_attachments_by_id_card_by_id_attachment__err(e)),
+        }
     }
-    fn delete_cards_attachments_by_id_card_by_id_attachment(params: iface_card::DeleteCardsAttachmentsByIdCardByIdAttachmentParams) -> Result<String, String> {
+    fn delete_cards_attachments_by_id_card_by_id_attachment(params: iface_card::DeleteCardsAttachmentsByIdCardByIdAttachmentParams) -> Result<String, iface_card::DeleteCardsAttachmentsByIdCardByIdAttachmentError> {
         let json = iface_card__delete_cards_attachments_by_id_card_by_id_attachment_params__to_json(&params);
-        dispatch(&OP_CARD_DELETE_CARDS_ATTACHMENTS_BY_ID_CARD_BY_ID_ATTACHMENT, json)
+        match dispatch(&OP_CARD_DELETE_CARDS_ATTACHMENTS_BY_ID_CARD_BY_ID_ATTACHMENT, json).and_then(iface_card__delete_cards_attachments_by_id_card_by_id_attachment__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_card__delete_cards_attachments_by_id_card_by_id_attachment__err(e)),
+        }
     }
-    fn get_cards_board_by_id_card(params: iface_card::GetCardsBoardByIdCardParams) -> Result<String, String> {
+    fn get_cards_board_by_id_card(params: iface_card::GetCardsBoardByIdCardParams) -> Result<String, iface_card::GetCardsBoardByIdCardError> {
         let json = iface_card__get_cards_board_by_id_card_params__to_json(&params);
-        dispatch(&OP_CARD_GET_CARDS_BOARD_BY_ID_CARD, json)
+        match dispatch(&OP_CARD_GET_CARDS_BOARD_BY_ID_CARD, json).and_then(iface_card__get_cards_board_by_id_card__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_card__get_cards_board_by_id_card__err(e)),
+        }
     }
-    fn get_cards_board_by_id_card_by_field(params: iface_card::GetCardsBoardByIdCardByFieldParams) -> Result<String, String> {
+    fn get_cards_board_by_id_card_by_field(params: iface_card::GetCardsBoardByIdCardByFieldParams) -> Result<String, iface_card::GetCardsBoardByIdCardByFieldError> {
         let json = iface_card__get_cards_board_by_id_card_by_field_params__to_json(&params);
-        dispatch(&OP_CARD_GET_CARDS_BOARD_BY_ID_CARD_BY_FIELD, json)
+        match dispatch(&OP_CARD_GET_CARDS_BOARD_BY_ID_CARD_BY_FIELD, json).and_then(iface_card__get_cards_board_by_id_card_by_field__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_card__get_cards_board_by_id_card_by_field__err(e)),
+        }
     }
-    fn get_cards_check_item_states_by_id_card(params: iface_card::GetCardsCheckItemStatesByIdCardParams) -> Result<String, String> {
+    fn get_cards_check_item_states_by_id_card(params: iface_card::GetCardsCheckItemStatesByIdCardParams) -> Result<String, iface_card::GetCardsCheckItemStatesByIdCardError> {
         let json = iface_card__get_cards_check_item_states_by_id_card_params__to_json(&params);
-        dispatch(&OP_CARD_GET_CARDS_CHECK_ITEM_STATES_BY_ID_CARD, json)
+        match dispatch(&OP_CARD_GET_CARDS_CHECK_ITEM_STATES_BY_ID_CARD, json).and_then(iface_card__get_cards_check_item_states_by_id_card__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_card__get_cards_check_item_states_by_id_card__err(e)),
+        }
     }
-    fn update_cards_checklist_check_item_by_id_card_by_id_checklist_current_by_id_check_item(params: iface_card::UpdateCardsChecklistCheckItemByIdCardByIdChecklistCurrentByIdCheckItemParams) -> Result<String, String> {
+    fn update_cards_checklist_check_item_by_id_card_by_id_checklist_current_by_id_check_item(params: iface_card::UpdateCardsChecklistCheckItemByIdCardByIdChecklistCurrentByIdCheckItemParams) -> Result<String, iface_card::UpdateCardsChecklistCheckItemByIdCardByIdChecklistCurrentByIdCheckItemError> {
         let json = iface_card__update_cards_checklist_check_item_by_id_card_by_id_checklist_current_by_id_check_item_params__to_json(&params);
-        dispatch(&OP_CARD_UPDATE_CARDS_CHECKLIST_CHECK_ITEM_BY_ID_CARD_BY_ID_CHECKLIST_CURRENT_BY_ID_CHECK_ITEM, json)
+        match dispatch(&OP_CARD_UPDATE_CARDS_CHECKLIST_CHECK_ITEM_BY_ID_CARD_BY_ID_CHECKLIST_CURRENT_BY_ID_CHECK_ITEM, json).and_then(iface_card__update_cards_checklist_check_item_by_id_card_by_id_checklist_current_by_id_check_item__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_card__update_cards_checklist_check_item_by_id_card_by_id_checklist_current_by_id_check_item__err(e)),
+        }
     }
-    fn add_cards_checklist_check_item_by_id_card_by_id_checklist(params: iface_card::AddCardsChecklistCheckItemByIdCardByIdChecklistParams) -> Result<String, String> {
+    fn add_cards_checklist_check_item_by_id_card_by_id_checklist(params: iface_card::AddCardsChecklistCheckItemByIdCardByIdChecklistParams) -> Result<String, iface_card::AddCardsChecklistCheckItemByIdCardByIdChecklistError> {
         let json = iface_card__add_cards_checklist_check_item_by_id_card_by_id_checklist_params__to_json(&params);
-        dispatch(&OP_CARD_ADD_CARDS_CHECKLIST_CHECK_ITEM_BY_ID_CARD_BY_ID_CHECKLIST, json)
+        match dispatch(&OP_CARD_ADD_CARDS_CHECKLIST_CHECK_ITEM_BY_ID_CARD_BY_ID_CHECKLIST, json).and_then(iface_card__add_cards_checklist_check_item_by_id_card_by_id_checklist__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_card__add_cards_checklist_check_item_by_id_card_by_id_checklist__err(e)),
+        }
     }
-    fn delete_cards_checklist_check_item_by_id_card_by_id_checklist_by_id_check_item(params: iface_card::DeleteCardsChecklistCheckItemByIdCardByIdChecklistByIdCheckItemParams) -> Result<String, String> {
+    fn delete_cards_checklist_check_item_by_id_card_by_id_checklist_by_id_check_item(params: iface_card::DeleteCardsChecklistCheckItemByIdCardByIdChecklistByIdCheckItemParams) -> Result<String, iface_card::DeleteCardsChecklistCheckItemByIdCardByIdChecklistByIdCheckItemError> {
         let json = iface_card__delete_cards_checklist_check_item_by_id_card_by_id_checklist_by_id_check_item_params__to_json(&params);
-        dispatch(&OP_CARD_DELETE_CARDS_CHECKLIST_CHECK_ITEM_BY_ID_CARD_BY_ID_CHECKLIST_BY_ID_CHECK_ITEM, json)
+        match dispatch(&OP_CARD_DELETE_CARDS_CHECKLIST_CHECK_ITEM_BY_ID_CARD_BY_ID_CHECKLIST_BY_ID_CHECK_ITEM, json).and_then(iface_card__delete_cards_checklist_check_item_by_id_card_by_id_checklist_by_id_check_item__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_card__delete_cards_checklist_check_item_by_id_card_by_id_checklist_by_id_check_item__err(e)),
+        }
     }
-    fn add_cards_checklist_check_item_convert_to_card_by_id_card_by_id_checklist_by_id_check_item(params: iface_card::AddCardsChecklistCheckItemConvertToCardByIdCardByIdChecklistByIdCheckItemParams) -> Result<String, String> {
+    fn add_cards_checklist_check_item_convert_to_card_by_id_card_by_id_checklist_by_id_check_item(params: iface_card::AddCardsChecklistCheckItemConvertToCardByIdCardByIdChecklistByIdCheckItemParams) -> Result<String, iface_card::AddCardsChecklistCheckItemConvertToCardByIdCardByIdChecklistByIdCheckItemError> {
         let json = iface_card__add_cards_checklist_check_item_convert_to_card_by_id_card_by_id_checklist_by_id_check_item_params__to_json(&params);
-        dispatch(&OP_CARD_ADD_CARDS_CHECKLIST_CHECK_ITEM_CONVERT_TO_CARD_BY_ID_CARD_BY_ID_CHECKLIST_BY_ID_CHECK_ITEM, json)
+        match dispatch(&OP_CARD_ADD_CARDS_CHECKLIST_CHECK_ITEM_CONVERT_TO_CARD_BY_ID_CARD_BY_ID_CHECKLIST_BY_ID_CHECK_ITEM, json).and_then(iface_card__add_cards_checklist_check_item_convert_to_card_by_id_card_by_id_checklist_by_id_check_item__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_card__add_cards_checklist_check_item_convert_to_card_by_id_card_by_id_checklist_by_id_check_item__err(e)),
+        }
     }
-    fn update_cards_checklist_check_item_name_by_id_card_by_id_checklist_by_id_check_item(params: iface_card::UpdateCardsChecklistCheckItemNameByIdCardByIdChecklistByIdCheckItemParams) -> Result<String, String> {
+    fn update_cards_checklist_check_item_name_by_id_card_by_id_checklist_by_id_check_item(params: iface_card::UpdateCardsChecklistCheckItemNameByIdCardByIdChecklistByIdCheckItemParams) -> Result<String, iface_card::UpdateCardsChecklistCheckItemNameByIdCardByIdChecklistByIdCheckItemError> {
         let json = iface_card__update_cards_checklist_check_item_name_by_id_card_by_id_checklist_by_id_check_item_params__to_json(&params);
-        dispatch(&OP_CARD_UPDATE_CARDS_CHECKLIST_CHECK_ITEM_NAME_BY_ID_CARD_BY_ID_CHECKLIST_BY_ID_CHECK_ITEM, json)
+        match dispatch(&OP_CARD_UPDATE_CARDS_CHECKLIST_CHECK_ITEM_NAME_BY_ID_CARD_BY_ID_CHECKLIST_BY_ID_CHECK_ITEM, json).and_then(iface_card__update_cards_checklist_check_item_name_by_id_card_by_id_checklist_by_id_check_item__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_card__update_cards_checklist_check_item_name_by_id_card_by_id_checklist_by_id_check_item__err(e)),
+        }
     }
-    fn update_cards_checklist_check_item_pos_by_id_card_by_id_checklist_by_id_check_item(params: iface_card::UpdateCardsChecklistCheckItemPosByIdCardByIdChecklistByIdCheckItemParams) -> Result<String, String> {
+    fn update_cards_checklist_check_item_pos_by_id_card_by_id_checklist_by_id_check_item(params: iface_card::UpdateCardsChecklistCheckItemPosByIdCardByIdChecklistByIdCheckItemParams) -> Result<String, iface_card::UpdateCardsChecklistCheckItemPosByIdCardByIdChecklistByIdCheckItemError> {
         let json = iface_card__update_cards_checklist_check_item_pos_by_id_card_by_id_checklist_by_id_check_item_params__to_json(&params);
-        dispatch(&OP_CARD_UPDATE_CARDS_CHECKLIST_CHECK_ITEM_POS_BY_ID_CARD_BY_ID_CHECKLIST_BY_ID_CHECK_ITEM, json)
+        match dispatch(&OP_CARD_UPDATE_CARDS_CHECKLIST_CHECK_ITEM_POS_BY_ID_CARD_BY_ID_CHECKLIST_BY_ID_CHECK_ITEM, json).and_then(iface_card__update_cards_checklist_check_item_pos_by_id_card_by_id_checklist_by_id_check_item__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_card__update_cards_checklist_check_item_pos_by_id_card_by_id_checklist_by_id_check_item__err(e)),
+        }
     }
-    fn update_cards_checklist_check_item_state_by_id_card_by_id_checklist_by_id_check_item(params: iface_card::UpdateCardsChecklistCheckItemStateByIdCardByIdChecklistByIdCheckItemParams) -> Result<String, String> {
+    fn update_cards_checklist_check_item_state_by_id_card_by_id_checklist_by_id_check_item(params: iface_card::UpdateCardsChecklistCheckItemStateByIdCardByIdChecklistByIdCheckItemParams) -> Result<String, iface_card::UpdateCardsChecklistCheckItemStateByIdCardByIdChecklistByIdCheckItemError> {
         let json = iface_card__update_cards_checklist_check_item_state_by_id_card_by_id_checklist_by_id_check_item_params__to_json(&params);
-        dispatch(&OP_CARD_UPDATE_CARDS_CHECKLIST_CHECK_ITEM_STATE_BY_ID_CARD_BY_ID_CHECKLIST_BY_ID_CHECK_ITEM, json)
+        match dispatch(&OP_CARD_UPDATE_CARDS_CHECKLIST_CHECK_ITEM_STATE_BY_ID_CARD_BY_ID_CHECKLIST_BY_ID_CHECK_ITEM, json).and_then(iface_card__update_cards_checklist_check_item_state_by_id_card_by_id_checklist_by_id_check_item__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_card__update_cards_checklist_check_item_state_by_id_card_by_id_checklist_by_id_check_item__err(e)),
+        }
     }
-    fn get_cards_checklists_by_id_card(params: iface_card::GetCardsChecklistsByIdCardParams) -> Result<String, String> {
+    fn get_cards_checklists_by_id_card(params: iface_card::GetCardsChecklistsByIdCardParams) -> Result<String, iface_card::GetCardsChecklistsByIdCardError> {
         let json = iface_card__get_cards_checklists_by_id_card_params__to_json(&params);
-        dispatch(&OP_CARD_GET_CARDS_CHECKLISTS_BY_ID_CARD, json)
+        match dispatch(&OP_CARD_GET_CARDS_CHECKLISTS_BY_ID_CARD, json).and_then(iface_card__get_cards_checklists_by_id_card__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_card__get_cards_checklists_by_id_card__err(e)),
+        }
     }
-    fn add_cards_checklists_by_id_card(params: iface_card::AddCardsChecklistsByIdCardParams) -> Result<String, String> {
+    fn add_cards_checklists_by_id_card(params: iface_card::AddCardsChecklistsByIdCardParams) -> Result<String, iface_card::AddCardsChecklistsByIdCardError> {
         let json = iface_card__add_cards_checklists_by_id_card_params__to_json(&params);
-        dispatch(&OP_CARD_ADD_CARDS_CHECKLISTS_BY_ID_CARD, json)
+        match dispatch(&OP_CARD_ADD_CARDS_CHECKLISTS_BY_ID_CARD, json).and_then(iface_card__add_cards_checklists_by_id_card__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_card__add_cards_checklists_by_id_card__err(e)),
+        }
     }
-    fn delete_cards_checklists_by_id_card_by_id_checklist(params: iface_card::DeleteCardsChecklistsByIdCardByIdChecklistParams) -> Result<String, String> {
+    fn delete_cards_checklists_by_id_card_by_id_checklist(params: iface_card::DeleteCardsChecklistsByIdCardByIdChecklistParams) -> Result<String, iface_card::DeleteCardsChecklistsByIdCardByIdChecklistError> {
         let json = iface_card__delete_cards_checklists_by_id_card_by_id_checklist_params__to_json(&params);
-        dispatch(&OP_CARD_DELETE_CARDS_CHECKLISTS_BY_ID_CARD_BY_ID_CHECKLIST, json)
+        match dispatch(&OP_CARD_DELETE_CARDS_CHECKLISTS_BY_ID_CARD_BY_ID_CHECKLIST, json).and_then(iface_card__delete_cards_checklists_by_id_card_by_id_checklist__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_card__delete_cards_checklists_by_id_card_by_id_checklist__err(e)),
+        }
     }
-    fn update_cards_closed_by_id_card(params: iface_card::UpdateCardsClosedByIdCardParams) -> Result<String, String> {
+    fn update_cards_closed_by_id_card(params: iface_card::UpdateCardsClosedByIdCardParams) -> Result<String, iface_card::UpdateCardsClosedByIdCardError> {
         let json = iface_card__update_cards_closed_by_id_card_params__to_json(&params);
-        dispatch(&OP_CARD_UPDATE_CARDS_CLOSED_BY_ID_CARD, json)
+        match dispatch(&OP_CARD_UPDATE_CARDS_CLOSED_BY_ID_CARD, json).and_then(iface_card__update_cards_closed_by_id_card__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_card__update_cards_closed_by_id_card__err(e)),
+        }
     }
-    fn update_cards_desc_by_id_card(params: iface_card::UpdateCardsDescByIdCardParams) -> Result<String, String> {
+    fn update_cards_desc_by_id_card(params: iface_card::UpdateCardsDescByIdCardParams) -> Result<String, iface_card::UpdateCardsDescByIdCardError> {
         let json = iface_card__update_cards_desc_by_id_card_params__to_json(&params);
-        dispatch(&OP_CARD_UPDATE_CARDS_DESC_BY_ID_CARD, json)
+        match dispatch(&OP_CARD_UPDATE_CARDS_DESC_BY_ID_CARD, json).and_then(iface_card__update_cards_desc_by_id_card__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_card__update_cards_desc_by_id_card__err(e)),
+        }
     }
-    fn update_cards_due_by_id_card(params: iface_card::UpdateCardsDueByIdCardParams) -> Result<String, String> {
+    fn update_cards_due_by_id_card(params: iface_card::UpdateCardsDueByIdCardParams) -> Result<String, iface_card::UpdateCardsDueByIdCardError> {
         let json = iface_card__update_cards_due_by_id_card_params__to_json(&params);
-        dispatch(&OP_CARD_UPDATE_CARDS_DUE_BY_ID_CARD, json)
+        match dispatch(&OP_CARD_UPDATE_CARDS_DUE_BY_ID_CARD, json).and_then(iface_card__update_cards_due_by_id_card__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_card__update_cards_due_by_id_card__err(e)),
+        }
     }
-    fn update_cards_id_attachment_cover_by_id_card(params: iface_card::UpdateCardsIdAttachmentCoverByIdCardParams) -> Result<String, String> {
+    fn update_cards_id_attachment_cover_by_id_card(params: iface_card::UpdateCardsIdAttachmentCoverByIdCardParams) -> Result<String, iface_card::UpdateCardsIdAttachmentCoverByIdCardError> {
         let json = iface_card__update_cards_id_attachment_cover_by_id_card_params__to_json(&params);
-        dispatch(&OP_CARD_UPDATE_CARDS_ID_ATTACHMENT_COVER_BY_ID_CARD, json)
+        match dispatch(&OP_CARD_UPDATE_CARDS_ID_ATTACHMENT_COVER_BY_ID_CARD, json).and_then(iface_card__update_cards_id_attachment_cover_by_id_card__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_card__update_cards_id_attachment_cover_by_id_card__err(e)),
+        }
     }
-    fn update_cards_id_board_by_id_card(params: iface_card::UpdateCardsIdBoardByIdCardParams) -> Result<String, String> {
+    fn update_cards_id_board_by_id_card(params: iface_card::UpdateCardsIdBoardByIdCardParams) -> Result<String, iface_card::UpdateCardsIdBoardByIdCardError> {
         let json = iface_card__update_cards_id_board_by_id_card_params__to_json(&params);
-        dispatch(&OP_CARD_UPDATE_CARDS_ID_BOARD_BY_ID_CARD, json)
+        match dispatch(&OP_CARD_UPDATE_CARDS_ID_BOARD_BY_ID_CARD, json).and_then(iface_card__update_cards_id_board_by_id_card__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_card__update_cards_id_board_by_id_card__err(e)),
+        }
     }
-    fn add_cards_id_labels_by_id_card(params: iface_card::AddCardsIdLabelsByIdCardParams) -> Result<String, String> {
+    fn add_cards_id_labels_by_id_card(params: iface_card::AddCardsIdLabelsByIdCardParams) -> Result<String, iface_card::AddCardsIdLabelsByIdCardError> {
         let json = iface_card__add_cards_id_labels_by_id_card_params__to_json(&params);
-        dispatch(&OP_CARD_ADD_CARDS_ID_LABELS_BY_ID_CARD, json)
+        match dispatch(&OP_CARD_ADD_CARDS_ID_LABELS_BY_ID_CARD, json).and_then(iface_card__add_cards_id_labels_by_id_card__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_card__add_cards_id_labels_by_id_card__err(e)),
+        }
     }
-    fn delete_cards_id_labels_by_id_card_by_id_label(params: iface_card::DeleteCardsIdLabelsByIdCardByIdLabelParams) -> Result<String, String> {
+    fn delete_cards_id_labels_by_id_card_by_id_label(params: iface_card::DeleteCardsIdLabelsByIdCardByIdLabelParams) -> Result<String, iface_card::DeleteCardsIdLabelsByIdCardByIdLabelError> {
         let json = iface_card__delete_cards_id_labels_by_id_card_by_id_label_params__to_json(&params);
-        dispatch(&OP_CARD_DELETE_CARDS_ID_LABELS_BY_ID_CARD_BY_ID_LABEL, json)
+        match dispatch(&OP_CARD_DELETE_CARDS_ID_LABELS_BY_ID_CARD_BY_ID_LABEL, json).and_then(iface_card__delete_cards_id_labels_by_id_card_by_id_label__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_card__delete_cards_id_labels_by_id_card_by_id_label__err(e)),
+        }
     }
-    fn update_cards_id_list_by_id_card(params: iface_card::UpdateCardsIdListByIdCardParams) -> Result<String, String> {
+    fn update_cards_id_list_by_id_card(params: iface_card::UpdateCardsIdListByIdCardParams) -> Result<String, iface_card::UpdateCardsIdListByIdCardError> {
         let json = iface_card__update_cards_id_list_by_id_card_params__to_json(&params);
-        dispatch(&OP_CARD_UPDATE_CARDS_ID_LIST_BY_ID_CARD, json)
+        match dispatch(&OP_CARD_UPDATE_CARDS_ID_LIST_BY_ID_CARD, json).and_then(iface_card__update_cards_id_list_by_id_card__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_card__update_cards_id_list_by_id_card__err(e)),
+        }
     }
-    fn add_cards_id_members_by_id_card(params: iface_card::AddCardsIdMembersByIdCardParams) -> Result<String, String> {
+    fn add_cards_id_members_by_id_card(params: iface_card::AddCardsIdMembersByIdCardParams) -> Result<String, iface_card::AddCardsIdMembersByIdCardError> {
         let json = iface_card__add_cards_id_members_by_id_card_params__to_json(&params);
-        dispatch(&OP_CARD_ADD_CARDS_ID_MEMBERS_BY_ID_CARD, json)
+        match dispatch(&OP_CARD_ADD_CARDS_ID_MEMBERS_BY_ID_CARD, json).and_then(iface_card__add_cards_id_members_by_id_card__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_card__add_cards_id_members_by_id_card__err(e)),
+        }
     }
-    fn update_cards_id_members_by_id_card(params: iface_card::UpdateCardsIdMembersByIdCardParams) -> Result<String, String> {
+    fn update_cards_id_members_by_id_card(params: iface_card::UpdateCardsIdMembersByIdCardParams) -> Result<String, iface_card::UpdateCardsIdMembersByIdCardError> {
         let json = iface_card__update_cards_id_members_by_id_card_params__to_json(&params);
-        dispatch(&OP_CARD_UPDATE_CARDS_ID_MEMBERS_BY_ID_CARD, json)
+        match dispatch(&OP_CARD_UPDATE_CARDS_ID_MEMBERS_BY_ID_CARD, json).and_then(iface_card__update_cards_id_members_by_id_card__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_card__update_cards_id_members_by_id_card__err(e)),
+        }
     }
-    fn delete_cards_id_members_by_id_card_by_id_member(params: iface_card::DeleteCardsIdMembersByIdCardByIdMemberParams) -> Result<String, String> {
+    fn delete_cards_id_members_by_id_card_by_id_member(params: iface_card::DeleteCardsIdMembersByIdCardByIdMemberParams) -> Result<String, iface_card::DeleteCardsIdMembersByIdCardByIdMemberError> {
         let json = iface_card__delete_cards_id_members_by_id_card_by_id_member_params__to_json(&params);
-        dispatch(&OP_CARD_DELETE_CARDS_ID_MEMBERS_BY_ID_CARD_BY_ID_MEMBER, json)
+        match dispatch(&OP_CARD_DELETE_CARDS_ID_MEMBERS_BY_ID_CARD_BY_ID_MEMBER, json).and_then(iface_card__delete_cards_id_members_by_id_card_by_id_member__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_card__delete_cards_id_members_by_id_card_by_id_member__err(e)),
+        }
     }
-    fn add_cards_labels_by_id_card(params: iface_card::AddCardsLabelsByIdCardParams) -> Result<String, String> {
+    fn add_cards_labels_by_id_card(params: iface_card::AddCardsLabelsByIdCardParams) -> Result<String, iface_card::AddCardsLabelsByIdCardError> {
         let json = iface_card__add_cards_labels_by_id_card_params__to_json(&params);
-        dispatch(&OP_CARD_ADD_CARDS_LABELS_BY_ID_CARD, json)
+        match dispatch(&OP_CARD_ADD_CARDS_LABELS_BY_ID_CARD, json).and_then(iface_card__add_cards_labels_by_id_card__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_card__add_cards_labels_by_id_card__err(e)),
+        }
     }
-    fn update_cards_labels_by_id_card(params: iface_card::UpdateCardsLabelsByIdCardParams) -> Result<String, String> {
+    fn update_cards_labels_by_id_card(params: iface_card::UpdateCardsLabelsByIdCardParams) -> Result<String, iface_card::UpdateCardsLabelsByIdCardError> {
         let json = iface_card__update_cards_labels_by_id_card_params__to_json(&params);
-        dispatch(&OP_CARD_UPDATE_CARDS_LABELS_BY_ID_CARD, json)
+        match dispatch(&OP_CARD_UPDATE_CARDS_LABELS_BY_ID_CARD, json).and_then(iface_card__update_cards_labels_by_id_card__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_card__update_cards_labels_by_id_card__err(e)),
+        }
     }
-    fn delete_cards_labels_by_id_card_by_color(params: iface_card::DeleteCardsLabelsByIdCardByColorParams) -> Result<String, String> {
+    fn delete_cards_labels_by_id_card_by_color(params: iface_card::DeleteCardsLabelsByIdCardByColorParams) -> Result<String, iface_card::DeleteCardsLabelsByIdCardByColorError> {
         let json = iface_card__delete_cards_labels_by_id_card_by_color_params__to_json(&params);
-        dispatch(&OP_CARD_DELETE_CARDS_LABELS_BY_ID_CARD_BY_COLOR, json)
+        match dispatch(&OP_CARD_DELETE_CARDS_LABELS_BY_ID_CARD_BY_COLOR, json).and_then(iface_card__delete_cards_labels_by_id_card_by_color__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_card__delete_cards_labels_by_id_card_by_color__err(e)),
+        }
     }
-    fn get_cards_list_by_id_card(params: iface_card::GetCardsListByIdCardParams) -> Result<String, String> {
+    fn get_cards_list_by_id_card(params: iface_card::GetCardsListByIdCardParams) -> Result<String, iface_card::GetCardsListByIdCardError> {
         let json = iface_card__get_cards_list_by_id_card_params__to_json(&params);
-        dispatch(&OP_CARD_GET_CARDS_LIST_BY_ID_CARD, json)
+        match dispatch(&OP_CARD_GET_CARDS_LIST_BY_ID_CARD, json).and_then(iface_card__get_cards_list_by_id_card__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_card__get_cards_list_by_id_card__err(e)),
+        }
     }
-    fn get_cards_list_by_id_card_by_field(params: iface_card::GetCardsListByIdCardByFieldParams) -> Result<String, String> {
+    fn get_cards_list_by_id_card_by_field(params: iface_card::GetCardsListByIdCardByFieldParams) -> Result<String, iface_card::GetCardsListByIdCardByFieldError> {
         let json = iface_card__get_cards_list_by_id_card_by_field_params__to_json(&params);
-        dispatch(&OP_CARD_GET_CARDS_LIST_BY_ID_CARD_BY_FIELD, json)
+        match dispatch(&OP_CARD_GET_CARDS_LIST_BY_ID_CARD_BY_FIELD, json).and_then(iface_card__get_cards_list_by_id_card_by_field__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_card__get_cards_list_by_id_card_by_field__err(e)),
+        }
     }
-    fn add_cards_mark_associated_notifications_read_by_id_card(params: iface_card::AddCardsMarkAssociatedNotificationsReadByIdCardParams) -> Result<String, String> {
+    fn add_cards_mark_associated_notifications_read_by_id_card(params: iface_card::AddCardsMarkAssociatedNotificationsReadByIdCardParams) -> Result<String, iface_card::AddCardsMarkAssociatedNotificationsReadByIdCardError> {
         let json = iface_card__add_cards_mark_associated_notifications_read_by_id_card_params__to_json(&params);
-        dispatch(&OP_CARD_ADD_CARDS_MARK_ASSOCIATED_NOTIFICATIONS_READ_BY_ID_CARD, json)
+        match dispatch(&OP_CARD_ADD_CARDS_MARK_ASSOCIATED_NOTIFICATIONS_READ_BY_ID_CARD, json).and_then(iface_card__add_cards_mark_associated_notifications_read_by_id_card__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_card__add_cards_mark_associated_notifications_read_by_id_card__err(e)),
+        }
     }
-    fn get_cards_members_by_id_card(params: iface_card::GetCardsMembersByIdCardParams) -> Result<String, String> {
+    fn get_cards_members_by_id_card(params: iface_card::GetCardsMembersByIdCardParams) -> Result<String, iface_card::GetCardsMembersByIdCardError> {
         let json = iface_card__get_cards_members_by_id_card_params__to_json(&params);
-        dispatch(&OP_CARD_GET_CARDS_MEMBERS_BY_ID_CARD, json)
+        match dispatch(&OP_CARD_GET_CARDS_MEMBERS_BY_ID_CARD, json).and_then(iface_card__get_cards_members_by_id_card__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_card__get_cards_members_by_id_card__err(e)),
+        }
     }
-    fn get_cards_members_voted_by_id_card(params: iface_card::GetCardsMembersVotedByIdCardParams) -> Result<String, String> {
+    fn get_cards_members_voted_by_id_card(params: iface_card::GetCardsMembersVotedByIdCardParams) -> Result<String, iface_card::GetCardsMembersVotedByIdCardError> {
         let json = iface_card__get_cards_members_voted_by_id_card_params__to_json(&params);
-        dispatch(&OP_CARD_GET_CARDS_MEMBERS_VOTED_BY_ID_CARD, json)
+        match dispatch(&OP_CARD_GET_CARDS_MEMBERS_VOTED_BY_ID_CARD, json).and_then(iface_card__get_cards_members_voted_by_id_card__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_card__get_cards_members_voted_by_id_card__err(e)),
+        }
     }
-    fn add_cards_members_voted_by_id_card(params: iface_card::AddCardsMembersVotedByIdCardParams) -> Result<String, String> {
+    fn add_cards_members_voted_by_id_card(params: iface_card::AddCardsMembersVotedByIdCardParams) -> Result<String, iface_card::AddCardsMembersVotedByIdCardError> {
         let json = iface_card__add_cards_members_voted_by_id_card_params__to_json(&params);
-        dispatch(&OP_CARD_ADD_CARDS_MEMBERS_VOTED_BY_ID_CARD, json)
+        match dispatch(&OP_CARD_ADD_CARDS_MEMBERS_VOTED_BY_ID_CARD, json).and_then(iface_card__add_cards_members_voted_by_id_card__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_card__add_cards_members_voted_by_id_card__err(e)),
+        }
     }
-    fn delete_cards_members_voted_by_id_card_by_id_member(params: iface_card::DeleteCardsMembersVotedByIdCardByIdMemberParams) -> Result<String, String> {
+    fn delete_cards_members_voted_by_id_card_by_id_member(params: iface_card::DeleteCardsMembersVotedByIdCardByIdMemberParams) -> Result<String, iface_card::DeleteCardsMembersVotedByIdCardByIdMemberError> {
         let json = iface_card__delete_cards_members_voted_by_id_card_by_id_member_params__to_json(&params);
-        dispatch(&OP_CARD_DELETE_CARDS_MEMBERS_VOTED_BY_ID_CARD_BY_ID_MEMBER, json)
+        match dispatch(&OP_CARD_DELETE_CARDS_MEMBERS_VOTED_BY_ID_CARD_BY_ID_MEMBER, json).and_then(iface_card__delete_cards_members_voted_by_id_card_by_id_member__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_card__delete_cards_members_voted_by_id_card_by_id_member__err(e)),
+        }
     }
-    fn update_cards_name_by_id_card(params: iface_card::UpdateCardsNameByIdCardParams) -> Result<String, String> {
+    fn update_cards_name_by_id_card(params: iface_card::UpdateCardsNameByIdCardParams) -> Result<String, iface_card::UpdateCardsNameByIdCardError> {
         let json = iface_card__update_cards_name_by_id_card_params__to_json(&params);
-        dispatch(&OP_CARD_UPDATE_CARDS_NAME_BY_ID_CARD, json)
+        match dispatch(&OP_CARD_UPDATE_CARDS_NAME_BY_ID_CARD, json).and_then(iface_card__update_cards_name_by_id_card__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_card__update_cards_name_by_id_card__err(e)),
+        }
     }
-    fn update_cards_pos_by_id_card(params: iface_card::UpdateCardsPosByIdCardParams) -> Result<String, String> {
+    fn update_cards_pos_by_id_card(params: iface_card::UpdateCardsPosByIdCardParams) -> Result<String, iface_card::UpdateCardsPosByIdCardError> {
         let json = iface_card__update_cards_pos_by_id_card_params__to_json(&params);
-        dispatch(&OP_CARD_UPDATE_CARDS_POS_BY_ID_CARD, json)
+        match dispatch(&OP_CARD_UPDATE_CARDS_POS_BY_ID_CARD, json).and_then(iface_card__update_cards_pos_by_id_card__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_card__update_cards_pos_by_id_card__err(e)),
+        }
     }
-    fn get_cards_stickers_by_id_card(params: iface_card::GetCardsStickersByIdCardParams) -> Result<String, String> {
+    fn get_cards_stickers_by_id_card(params: iface_card::GetCardsStickersByIdCardParams) -> Result<String, iface_card::GetCardsStickersByIdCardError> {
         let json = iface_card__get_cards_stickers_by_id_card_params__to_json(&params);
-        dispatch(&OP_CARD_GET_CARDS_STICKERS_BY_ID_CARD, json)
+        match dispatch(&OP_CARD_GET_CARDS_STICKERS_BY_ID_CARD, json).and_then(iface_card__get_cards_stickers_by_id_card__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_card__get_cards_stickers_by_id_card__err(e)),
+        }
     }
-    fn add_cards_stickers_by_id_card(params: iface_card::AddCardsStickersByIdCardParams) -> Result<String, String> {
+    fn add_cards_stickers_by_id_card(params: iface_card::AddCardsStickersByIdCardParams) -> Result<String, iface_card::AddCardsStickersByIdCardError> {
         let json = iface_card__add_cards_stickers_by_id_card_params__to_json(&params);
-        dispatch(&OP_CARD_ADD_CARDS_STICKERS_BY_ID_CARD, json)
+        match dispatch(&OP_CARD_ADD_CARDS_STICKERS_BY_ID_CARD, json).and_then(iface_card__add_cards_stickers_by_id_card__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_card__add_cards_stickers_by_id_card__err(e)),
+        }
     }
-    fn get_cards_stickers_by_id_card_by_id_sticker(params: iface_card::GetCardsStickersByIdCardByIdStickerParams) -> Result<String, String> {
+    fn get_cards_stickers_by_id_card_by_id_sticker(params: iface_card::GetCardsStickersByIdCardByIdStickerParams) -> Result<String, iface_card::GetCardsStickersByIdCardByIdStickerError> {
         let json = iface_card__get_cards_stickers_by_id_card_by_id_sticker_params__to_json(&params);
-        dispatch(&OP_CARD_GET_CARDS_STICKERS_BY_ID_CARD_BY_ID_STICKER, json)
+        match dispatch(&OP_CARD_GET_CARDS_STICKERS_BY_ID_CARD_BY_ID_STICKER, json).and_then(iface_card__get_cards_stickers_by_id_card_by_id_sticker__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_card__get_cards_stickers_by_id_card_by_id_sticker__err(e)),
+        }
     }
-    fn update_cards_stickers_by_id_card_by_id_sticker(params: iface_card::UpdateCardsStickersByIdCardByIdStickerParams) -> Result<String, String> {
+    fn update_cards_stickers_by_id_card_by_id_sticker(params: iface_card::UpdateCardsStickersByIdCardByIdStickerParams) -> Result<String, iface_card::UpdateCardsStickersByIdCardByIdStickerError> {
         let json = iface_card__update_cards_stickers_by_id_card_by_id_sticker_params__to_json(&params);
-        dispatch(&OP_CARD_UPDATE_CARDS_STICKERS_BY_ID_CARD_BY_ID_STICKER, json)
+        match dispatch(&OP_CARD_UPDATE_CARDS_STICKERS_BY_ID_CARD_BY_ID_STICKER, json).and_then(iface_card__update_cards_stickers_by_id_card_by_id_sticker__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_card__update_cards_stickers_by_id_card_by_id_sticker__err(e)),
+        }
     }
-    fn delete_cards_stickers_by_id_card_by_id_sticker(params: iface_card::DeleteCardsStickersByIdCardByIdStickerParams) -> Result<String, String> {
+    fn delete_cards_stickers_by_id_card_by_id_sticker(params: iface_card::DeleteCardsStickersByIdCardByIdStickerParams) -> Result<String, iface_card::DeleteCardsStickersByIdCardByIdStickerError> {
         let json = iface_card__delete_cards_stickers_by_id_card_by_id_sticker_params__to_json(&params);
-        dispatch(&OP_CARD_DELETE_CARDS_STICKERS_BY_ID_CARD_BY_ID_STICKER, json)
+        match dispatch(&OP_CARD_DELETE_CARDS_STICKERS_BY_ID_CARD_BY_ID_STICKER, json).and_then(iface_card__delete_cards_stickers_by_id_card_by_id_sticker__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_card__delete_cards_stickers_by_id_card_by_id_sticker__err(e)),
+        }
     }
-    fn update_cards_subscribed_by_id_card(params: iface_card::UpdateCardsSubscribedByIdCardParams) -> Result<String, String> {
+    fn update_cards_subscribed_by_id_card(params: iface_card::UpdateCardsSubscribedByIdCardParams) -> Result<String, iface_card::UpdateCardsSubscribedByIdCardError> {
         let json = iface_card__update_cards_subscribed_by_id_card_params__to_json(&params);
-        dispatch(&OP_CARD_UPDATE_CARDS_SUBSCRIBED_BY_ID_CARD, json)
+        match dispatch(&OP_CARD_UPDATE_CARDS_SUBSCRIBED_BY_ID_CARD, json).and_then(iface_card__update_cards_subscribed_by_id_card__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_card__update_cards_subscribed_by_id_card__err(e)),
+        }
     }
-    fn get_cards_by_id_card_by_field(params: iface_card::GetCardsByIdCardByFieldParams) -> Result<String, String> {
+    fn get_cards_by_id_card_by_field(params: iface_card::GetCardsByIdCardByFieldParams) -> Result<String, iface_card::GetCardsByIdCardByFieldError> {
         let json = iface_card__get_cards_by_id_card_by_field_params__to_json(&params);
-        dispatch(&OP_CARD_GET_CARDS_BY_ID_CARD_BY_FIELD, json)
+        match dispatch(&OP_CARD_GET_CARDS_BY_ID_CARD_BY_FIELD, json).and_then(iface_card__get_cards_by_id_card_by_field__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_card__get_cards_by_id_card_by_field__err(e)),
+        }
     }
 }
 use crate::exports::autostamp::trello::checklist as iface_checklist;
@@ -4310,12 +6724,12 @@ const OP_CHECKLIST_ADD_CHECKLISTS: OpSpec = OpSpec {
     method: "POST",
     path_template: "/checklists",
     fields: &[
-        FieldSpec { snake: "token", location: FieldLocation::Query },
-        FieldSpec { snake: "id_board", location: FieldLocation::Body },
-        FieldSpec { snake: "id_card", location: FieldLocation::Body },
-        FieldSpec { snake: "id_checklist_source", location: FieldLocation::Body },
-        FieldSpec { snake: "name", location: FieldLocation::Body },
-        FieldSpec { snake: "pos", location: FieldLocation::Body },
+        FieldSpec { snake: "token", wire: "token", location: FieldLocation::Query },
+        FieldSpec { snake: "id_board", wire: "idBoard", location: FieldLocation::Body },
+        FieldSpec { snake: "id_card", wire: "idCard", location: FieldLocation::Body },
+        FieldSpec { snake: "id_checklist_source", wire: "idChecklistSource", location: FieldLocation::Body },
+        FieldSpec { snake: "name", wire: "name", location: FieldLocation::Body },
+        FieldSpec { snake: "pos", wire: "pos", location: FieldLocation::Body },
     ],
     auth: &[
         AuthApply { secret_key: "api_key", kind: AuthKind::ApiKeyQuery("key") },
@@ -4326,13 +6740,13 @@ const OP_CHECKLIST_GET_CHECKLISTS_BY_ID_CHECKLIST: OpSpec = OpSpec {
     method: "GET",
     path_template: "/checklists/{id_checklist}",
     fields: &[
-        FieldSpec { snake: "id_checklist", location: FieldLocation::Path },
-        FieldSpec { snake: "cards", location: FieldLocation::Query },
-        FieldSpec { snake: "card_fields", location: FieldLocation::Query },
-        FieldSpec { snake: "check_items", location: FieldLocation::Query },
-        FieldSpec { snake: "check_item_fields", location: FieldLocation::Query },
-        FieldSpec { snake: "fields", location: FieldLocation::Query },
-        FieldSpec { snake: "token", location: FieldLocation::Query },
+        FieldSpec { snake: "id_checklist", wire: "idChecklist", location: FieldLocation::Path },
+        FieldSpec { snake: "cards", wire: "cards", location: FieldLocation::Query },
+        FieldSpec { snake: "card_fields", wire: "card_fields", location: FieldLocation::Query },
+        FieldSpec { snake: "check_items", wire: "checkItems", location: FieldLocation::Query },
+        FieldSpec { snake: "check_item_fields", wire: "checkItem_fields", location: FieldLocation::Query },
+        FieldSpec { snake: "fields", wire: "fields", location: FieldLocation::Query },
+        FieldSpec { snake: "token", wire: "token", location: FieldLocation::Query },
     ],
     auth: &[
         AuthApply { secret_key: "api_key", kind: AuthKind::ApiKeyQuery("key") },
@@ -4343,13 +6757,13 @@ const OP_CHECKLIST_UPDATE_CHECKLISTS_BY_ID_CHECKLIST: OpSpec = OpSpec {
     method: "PUT",
     path_template: "/checklists/{id_checklist}",
     fields: &[
-        FieldSpec { snake: "id_checklist", location: FieldLocation::Path },
-        FieldSpec { snake: "token", location: FieldLocation::Query },
-        FieldSpec { snake: "id_board", location: FieldLocation::Body },
-        FieldSpec { snake: "id_card", location: FieldLocation::Body },
-        FieldSpec { snake: "id_checklist_source", location: FieldLocation::Body },
-        FieldSpec { snake: "name", location: FieldLocation::Body },
-        FieldSpec { snake: "pos", location: FieldLocation::Body },
+        FieldSpec { snake: "id_checklist", wire: "idChecklist", location: FieldLocation::Path },
+        FieldSpec { snake: "token", wire: "token", location: FieldLocation::Query },
+        FieldSpec { snake: "id_board", wire: "idBoard", location: FieldLocation::Body },
+        FieldSpec { snake: "id_card", wire: "idCard", location: FieldLocation::Body },
+        FieldSpec { snake: "id_checklist_source", wire: "idChecklistSource", location: FieldLocation::Body },
+        FieldSpec { snake: "name", wire: "name", location: FieldLocation::Body },
+        FieldSpec { snake: "pos", wire: "pos", location: FieldLocation::Body },
     ],
     auth: &[
         AuthApply { secret_key: "api_key", kind: AuthKind::ApiKeyQuery("key") },
@@ -4360,8 +6774,8 @@ const OP_CHECKLIST_DELETE_CHECKLISTS_BY_ID_CHECKLIST: OpSpec = OpSpec {
     method: "DELETE",
     path_template: "/checklists/{id_checklist}",
     fields: &[
-        FieldSpec { snake: "id_checklist", location: FieldLocation::Path },
-        FieldSpec { snake: "token", location: FieldLocation::Query },
+        FieldSpec { snake: "id_checklist", wire: "idChecklist", location: FieldLocation::Path },
+        FieldSpec { snake: "token", wire: "token", location: FieldLocation::Query },
     ],
     auth: &[
         AuthApply { secret_key: "api_key", kind: AuthKind::ApiKeyQuery("key") },
@@ -4372,9 +6786,9 @@ const OP_CHECKLIST_GET_CHECKLISTS_BOARD_BY_ID_CHECKLIST: OpSpec = OpSpec {
     method: "GET",
     path_template: "/checklists/{id_checklist}/board",
     fields: &[
-        FieldSpec { snake: "id_checklist", location: FieldLocation::Path },
-        FieldSpec { snake: "fields", location: FieldLocation::Query },
-        FieldSpec { snake: "token", location: FieldLocation::Query },
+        FieldSpec { snake: "id_checklist", wire: "idChecklist", location: FieldLocation::Path },
+        FieldSpec { snake: "fields", wire: "fields", location: FieldLocation::Query },
+        FieldSpec { snake: "token", wire: "token", location: FieldLocation::Query },
     ],
     auth: &[
         AuthApply { secret_key: "api_key", kind: AuthKind::ApiKeyQuery("key") },
@@ -4385,9 +6799,9 @@ const OP_CHECKLIST_GET_CHECKLISTS_BOARD_BY_ID_CHECKLIST_BY_FIELD: OpSpec = OpSpe
     method: "GET",
     path_template: "/checklists/{id_checklist}/board/{field}",
     fields: &[
-        FieldSpec { snake: "id_checklist", location: FieldLocation::Path },
-        FieldSpec { snake: "field", location: FieldLocation::Path },
-        FieldSpec { snake: "token", location: FieldLocation::Query },
+        FieldSpec { snake: "id_checklist", wire: "idChecklist", location: FieldLocation::Path },
+        FieldSpec { snake: "field", wire: "field", location: FieldLocation::Path },
+        FieldSpec { snake: "token", wire: "token", location: FieldLocation::Query },
     ],
     auth: &[
         AuthApply { secret_key: "api_key", kind: AuthKind::ApiKeyQuery("key") },
@@ -4398,21 +6812,21 @@ const OP_CHECKLIST_GET_CHECKLISTS_CARDS_BY_ID_CHECKLIST: OpSpec = OpSpec {
     method: "GET",
     path_template: "/checklists/{id_checklist}/cards",
     fields: &[
-        FieldSpec { snake: "id_checklist", location: FieldLocation::Path },
-        FieldSpec { snake: "actions", location: FieldLocation::Query },
-        FieldSpec { snake: "attachments", location: FieldLocation::Query },
-        FieldSpec { snake: "attachment_fields", location: FieldLocation::Query },
-        FieldSpec { snake: "stickers", location: FieldLocation::Query },
-        FieldSpec { snake: "members", location: FieldLocation::Query },
-        FieldSpec { snake: "member_fields", location: FieldLocation::Query },
-        FieldSpec { snake: "check_item_states", location: FieldLocation::Query },
-        FieldSpec { snake: "checklists", location: FieldLocation::Query },
-        FieldSpec { snake: "limit", location: FieldLocation::Query },
-        FieldSpec { snake: "since", location: FieldLocation::Query },
-        FieldSpec { snake: "before", location: FieldLocation::Query },
-        FieldSpec { snake: "filter", location: FieldLocation::Query },
-        FieldSpec { snake: "fields", location: FieldLocation::Query },
-        FieldSpec { snake: "token", location: FieldLocation::Query },
+        FieldSpec { snake: "id_checklist", wire: "idChecklist", location: FieldLocation::Path },
+        FieldSpec { snake: "actions", wire: "actions", location: FieldLocation::Query },
+        FieldSpec { snake: "attachments", wire: "attachments", location: FieldLocation::Query },
+        FieldSpec { snake: "attachment_fields", wire: "attachment_fields", location: FieldLocation::Query },
+        FieldSpec { snake: "stickers", wire: "stickers", location: FieldLocation::Query },
+        FieldSpec { snake: "members", wire: "members", location: FieldLocation::Query },
+        FieldSpec { snake: "member_fields", wire: "member_fields", location: FieldLocation::Query },
+        FieldSpec { snake: "check_item_states", wire: "checkItemStates", location: FieldLocation::Query },
+        FieldSpec { snake: "checklists", wire: "checklists", location: FieldLocation::Query },
+        FieldSpec { snake: "limit", wire: "limit", location: FieldLocation::Query },
+        FieldSpec { snake: "since", wire: "since", location: FieldLocation::Query },
+        FieldSpec { snake: "before", wire: "before", location: FieldLocation::Query },
+        FieldSpec { snake: "filter", wire: "filter", location: FieldLocation::Query },
+        FieldSpec { snake: "fields", wire: "fields", location: FieldLocation::Query },
+        FieldSpec { snake: "token", wire: "token", location: FieldLocation::Query },
     ],
     auth: &[
         AuthApply { secret_key: "api_key", kind: AuthKind::ApiKeyQuery("key") },
@@ -4423,10 +6837,10 @@ const OP_CHECKLIST_GET_CHECKLISTS_CARDS_BY_ID_CHECKLIST_BY_FILTER: OpSpec = OpSp
     method: "GET",
     path_template: "/checklists/{id_checklist}/cards/{filter}",
     fields: &[
-        FieldSpec { snake: "id_checklist", location: FieldLocation::Path },
-        FieldSpec { snake: "filter", location: FieldLocation::Path },
-        FieldSpec { snake: "key", location: FieldLocation::Query },
-        FieldSpec { snake: "token", location: FieldLocation::Query },
+        FieldSpec { snake: "id_checklist", wire: "idChecklist", location: FieldLocation::Path },
+        FieldSpec { snake: "filter", wire: "filter", location: FieldLocation::Path },
+        FieldSpec { snake: "key", wire: "key", location: FieldLocation::Query },
+        FieldSpec { snake: "token", wire: "token", location: FieldLocation::Query },
     ],
     auth: &[
     ],
@@ -4436,10 +6850,10 @@ const OP_CHECKLIST_GET_CHECKLISTS_CHECK_ITEMS_BY_ID_CHECKLIST: OpSpec = OpSpec {
     method: "GET",
     path_template: "/checklists/{id_checklist}/checkItems",
     fields: &[
-        FieldSpec { snake: "id_checklist", location: FieldLocation::Path },
-        FieldSpec { snake: "filter", location: FieldLocation::Query },
-        FieldSpec { snake: "fields", location: FieldLocation::Query },
-        FieldSpec { snake: "token", location: FieldLocation::Query },
+        FieldSpec { snake: "id_checklist", wire: "idChecklist", location: FieldLocation::Path },
+        FieldSpec { snake: "filter", wire: "filter", location: FieldLocation::Query },
+        FieldSpec { snake: "fields", wire: "fields", location: FieldLocation::Query },
+        FieldSpec { snake: "token", wire: "token", location: FieldLocation::Query },
     ],
     auth: &[
         AuthApply { secret_key: "api_key", kind: AuthKind::ApiKeyQuery("key") },
@@ -4450,11 +6864,11 @@ const OP_CHECKLIST_ADD_CHECKLISTS_CHECK_ITEMS_BY_ID_CHECKLIST: OpSpec = OpSpec {
     method: "POST",
     path_template: "/checklists/{id_checklist}/checkItems",
     fields: &[
-        FieldSpec { snake: "id_checklist", location: FieldLocation::Path },
-        FieldSpec { snake: "token", location: FieldLocation::Query },
-        FieldSpec { snake: "checked", location: FieldLocation::Body },
-        FieldSpec { snake: "name", location: FieldLocation::Body },
-        FieldSpec { snake: "pos", location: FieldLocation::Body },
+        FieldSpec { snake: "id_checklist", wire: "idChecklist", location: FieldLocation::Path },
+        FieldSpec { snake: "token", wire: "token", location: FieldLocation::Query },
+        FieldSpec { snake: "checked", wire: "checked", location: FieldLocation::Body },
+        FieldSpec { snake: "name", wire: "name", location: FieldLocation::Body },
+        FieldSpec { snake: "pos", wire: "pos", location: FieldLocation::Body },
     ],
     auth: &[
         AuthApply { secret_key: "api_key", kind: AuthKind::ApiKeyQuery("key") },
@@ -4465,10 +6879,10 @@ const OP_CHECKLIST_GET_CHECKLISTS_CHECK_ITEMS_BY_ID_CHECKLIST_BY_ID_CHECK_ITEM: 
     method: "GET",
     path_template: "/checklists/{id_checklist}/checkItems/{id_check_item}",
     fields: &[
-        FieldSpec { snake: "id_checklist", location: FieldLocation::Path },
-        FieldSpec { snake: "id_check_item", location: FieldLocation::Path },
-        FieldSpec { snake: "fields", location: FieldLocation::Query },
-        FieldSpec { snake: "token", location: FieldLocation::Query },
+        FieldSpec { snake: "id_checklist", wire: "idChecklist", location: FieldLocation::Path },
+        FieldSpec { snake: "id_check_item", wire: "idCheckItem", location: FieldLocation::Path },
+        FieldSpec { snake: "fields", wire: "fields", location: FieldLocation::Query },
+        FieldSpec { snake: "token", wire: "token", location: FieldLocation::Query },
     ],
     auth: &[
         AuthApply { secret_key: "api_key", kind: AuthKind::ApiKeyQuery("key") },
@@ -4479,9 +6893,9 @@ const OP_CHECKLIST_DELETE_CHECKLISTS_CHECK_ITEMS_BY_ID_CHECKLIST_BY_ID_CHECK_ITE
     method: "DELETE",
     path_template: "/checklists/{id_checklist}/checkItems/{id_check_item}",
     fields: &[
-        FieldSpec { snake: "id_checklist", location: FieldLocation::Path },
-        FieldSpec { snake: "id_check_item", location: FieldLocation::Path },
-        FieldSpec { snake: "token", location: FieldLocation::Query },
+        FieldSpec { snake: "id_checklist", wire: "idChecklist", location: FieldLocation::Path },
+        FieldSpec { snake: "id_check_item", wire: "idCheckItem", location: FieldLocation::Path },
+        FieldSpec { snake: "token", wire: "token", location: FieldLocation::Query },
     ],
     auth: &[
         AuthApply { secret_key: "api_key", kind: AuthKind::ApiKeyQuery("key") },
@@ -4492,9 +6906,9 @@ const OP_CHECKLIST_UPDATE_CHECKLISTS_ID_CARD_BY_ID_CHECKLIST: OpSpec = OpSpec {
     method: "PUT",
     path_template: "/checklists/{id_checklist}/idCard",
     fields: &[
-        FieldSpec { snake: "id_checklist", location: FieldLocation::Path },
-        FieldSpec { snake: "token", location: FieldLocation::Query },
-        FieldSpec { snake: "value", location: FieldLocation::Body },
+        FieldSpec { snake: "id_checklist", wire: "idChecklist", location: FieldLocation::Path },
+        FieldSpec { snake: "token", wire: "token", location: FieldLocation::Query },
+        FieldSpec { snake: "value", wire: "value", location: FieldLocation::Body },
     ],
     auth: &[
         AuthApply { secret_key: "api_key", kind: AuthKind::ApiKeyQuery("key") },
@@ -4505,9 +6919,9 @@ const OP_CHECKLIST_UPDATE_CHECKLISTS_NAME_BY_ID_CHECKLIST: OpSpec = OpSpec {
     method: "PUT",
     path_template: "/checklists/{id_checklist}/name",
     fields: &[
-        FieldSpec { snake: "id_checklist", location: FieldLocation::Path },
-        FieldSpec { snake: "token", location: FieldLocation::Query },
-        FieldSpec { snake: "value", location: FieldLocation::Body },
+        FieldSpec { snake: "id_checklist", wire: "idChecklist", location: FieldLocation::Path },
+        FieldSpec { snake: "token", wire: "token", location: FieldLocation::Query },
+        FieldSpec { snake: "value", wire: "value", location: FieldLocation::Body },
     ],
     auth: &[
         AuthApply { secret_key: "api_key", kind: AuthKind::ApiKeyQuery("key") },
@@ -4518,9 +6932,9 @@ const OP_CHECKLIST_UPDATE_CHECKLISTS_POS_BY_ID_CHECKLIST: OpSpec = OpSpec {
     method: "PUT",
     path_template: "/checklists/{id_checklist}/pos",
     fields: &[
-        FieldSpec { snake: "id_checklist", location: FieldLocation::Path },
-        FieldSpec { snake: "token", location: FieldLocation::Query },
-        FieldSpec { snake: "value", location: FieldLocation::Body },
+        FieldSpec { snake: "id_checklist", wire: "idChecklist", location: FieldLocation::Path },
+        FieldSpec { snake: "token", wire: "token", location: FieldLocation::Query },
+        FieldSpec { snake: "value", wire: "value", location: FieldLocation::Body },
     ],
     auth: &[
         AuthApply { secret_key: "api_key", kind: AuthKind::ApiKeyQuery("key") },
@@ -4531,10 +6945,10 @@ const OP_CHECKLIST_GET_CHECKLISTS_BY_ID_CHECKLIST_BY_FIELD: OpSpec = OpSpec {
     method: "GET",
     path_template: "/checklists/{id_checklist}/{field}",
     fields: &[
-        FieldSpec { snake: "id_checklist", location: FieldLocation::Path },
-        FieldSpec { snake: "field", location: FieldLocation::Path },
-        FieldSpec { snake: "key", location: FieldLocation::Query },
-        FieldSpec { snake: "token", location: FieldLocation::Query },
+        FieldSpec { snake: "id_checklist", wire: "idChecklist", location: FieldLocation::Path },
+        FieldSpec { snake: "field", wire: "field", location: FieldLocation::Path },
+        FieldSpec { snake: "key", wire: "key", location: FieldLocation::Query },
+        FieldSpec { snake: "token", wire: "token", location: FieldLocation::Query },
     ],
     auth: &[
     ],
@@ -4696,70 +7110,342 @@ fn iface_checklist__get_checklists_by_id_checklist_by_field_params__to_json(p: &
     Value::Object(m)
 }
 
+fn iface_checklist__add_checklists__ok(body: String) -> Result<String, crate::runtime::DispatchError> {
+    Ok(body)
+}
+
+fn iface_checklist__add_checklists__err(e: crate::runtime::DispatchError) -> iface_checklist::AddChecklistsError {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => match status {
+            400u16 => iface_checklist::AddChecklistsError::BadRequest(body),
+            _ => iface_checklist::AddChecklistsError::Other(body),
+        },
+        crate::runtime::DispatchError::Transport(m) => iface_checklist::AddChecklistsError::Other(m),
+    }
+}
+
+fn iface_checklist__get_checklists_by_id_checklist__ok(body: String) -> Result<String, crate::runtime::DispatchError> {
+    Ok(body)
+}
+
+fn iface_checklist__get_checklists_by_id_checklist__err(e: crate::runtime::DispatchError) -> iface_checklist::GetChecklistsByIdChecklistError {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => match status {
+            400u16 => iface_checklist::GetChecklistsByIdChecklistError::BadRequest(body),
+            _ => iface_checklist::GetChecklistsByIdChecklistError::Other(body),
+        },
+        crate::runtime::DispatchError::Transport(m) => iface_checklist::GetChecklistsByIdChecklistError::Other(m),
+    }
+}
+
+fn iface_checklist__update_checklists_by_id_checklist__ok(body: String) -> Result<String, crate::runtime::DispatchError> {
+    Ok(body)
+}
+
+fn iface_checklist__update_checklists_by_id_checklist__err(e: crate::runtime::DispatchError) -> iface_checklist::UpdateChecklistsByIdChecklistError {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => match status {
+            400u16 => iface_checklist::UpdateChecklistsByIdChecklistError::BadRequest(body),
+            _ => iface_checklist::UpdateChecklistsByIdChecklistError::Other(body),
+        },
+        crate::runtime::DispatchError::Transport(m) => iface_checklist::UpdateChecklistsByIdChecklistError::Other(m),
+    }
+}
+
+fn iface_checklist__delete_checklists_by_id_checklist__ok(body: String) -> Result<String, crate::runtime::DispatchError> {
+    Ok(body)
+}
+
+fn iface_checklist__delete_checklists_by_id_checklist__err(e: crate::runtime::DispatchError) -> iface_checklist::DeleteChecklistsByIdChecklistError {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => match status {
+            400u16 => iface_checklist::DeleteChecklistsByIdChecklistError::BadRequest(body),
+            _ => iface_checklist::DeleteChecklistsByIdChecklistError::Other(body),
+        },
+        crate::runtime::DispatchError::Transport(m) => iface_checklist::DeleteChecklistsByIdChecklistError::Other(m),
+    }
+}
+
+fn iface_checklist__get_checklists_board_by_id_checklist__ok(body: String) -> Result<String, crate::runtime::DispatchError> {
+    Ok(body)
+}
+
+fn iface_checklist__get_checklists_board_by_id_checklist__err(e: crate::runtime::DispatchError) -> iface_checklist::GetChecklistsBoardByIdChecklistError {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => match status {
+            400u16 => iface_checklist::GetChecklistsBoardByIdChecklistError::BadRequest(body),
+            _ => iface_checklist::GetChecklistsBoardByIdChecklistError::Other(body),
+        },
+        crate::runtime::DispatchError::Transport(m) => iface_checklist::GetChecklistsBoardByIdChecklistError::Other(m),
+    }
+}
+
+fn iface_checklist__get_checklists_board_by_id_checklist_by_field__ok(body: String) -> Result<String, crate::runtime::DispatchError> {
+    Ok(body)
+}
+
+fn iface_checklist__get_checklists_board_by_id_checklist_by_field__err(e: crate::runtime::DispatchError) -> iface_checklist::GetChecklistsBoardByIdChecklistByFieldError {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => match status {
+            400u16 => iface_checklist::GetChecklistsBoardByIdChecklistByFieldError::BadRequest(body),
+            _ => iface_checklist::GetChecklistsBoardByIdChecklistByFieldError::Other(body),
+        },
+        crate::runtime::DispatchError::Transport(m) => iface_checklist::GetChecklistsBoardByIdChecklistByFieldError::Other(m),
+    }
+}
+
+fn iface_checklist__get_checklists_cards_by_id_checklist__ok(body: String) -> Result<String, crate::runtime::DispatchError> {
+    Ok(body)
+}
+
+fn iface_checklist__get_checklists_cards_by_id_checklist__err(e: crate::runtime::DispatchError) -> iface_checklist::GetChecklistsCardsByIdChecklistError {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => match status {
+            400u16 => iface_checklist::GetChecklistsCardsByIdChecklistError::BadRequest(body),
+            _ => iface_checklist::GetChecklistsCardsByIdChecklistError::Other(body),
+        },
+        crate::runtime::DispatchError::Transport(m) => iface_checklist::GetChecklistsCardsByIdChecklistError::Other(m),
+    }
+}
+
+fn iface_checklist__get_checklists_cards_by_id_checklist_by_filter__ok(body: String) -> Result<String, crate::runtime::DispatchError> {
+    Ok(body)
+}
+
+fn iface_checklist__get_checklists_cards_by_id_checklist_by_filter__err(e: crate::runtime::DispatchError) -> iface_checklist::GetChecklistsCardsByIdChecklistByFilterError {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => match status {
+            400u16 => iface_checklist::GetChecklistsCardsByIdChecklistByFilterError::BadRequest(body),
+            _ => iface_checklist::GetChecklistsCardsByIdChecklistByFilterError::Other(body),
+        },
+        crate::runtime::DispatchError::Transport(m) => iface_checklist::GetChecklistsCardsByIdChecklistByFilterError::Other(m),
+    }
+}
+
+fn iface_checklist__get_checklists_check_items_by_id_checklist__ok(body: String) -> Result<String, crate::runtime::DispatchError> {
+    Ok(body)
+}
+
+fn iface_checklist__get_checklists_check_items_by_id_checklist__err(e: crate::runtime::DispatchError) -> iface_checklist::GetChecklistsCheckItemsByIdChecklistError {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => match status {
+            400u16 => iface_checklist::GetChecklistsCheckItemsByIdChecklistError::BadRequest(body),
+            _ => iface_checklist::GetChecklistsCheckItemsByIdChecklistError::Other(body),
+        },
+        crate::runtime::DispatchError::Transport(m) => iface_checklist::GetChecklistsCheckItemsByIdChecklistError::Other(m),
+    }
+}
+
+fn iface_checklist__add_checklists_check_items_by_id_checklist__ok(body: String) -> Result<String, crate::runtime::DispatchError> {
+    Ok(body)
+}
+
+fn iface_checklist__add_checklists_check_items_by_id_checklist__err(e: crate::runtime::DispatchError) -> iface_checklist::AddChecklistsCheckItemsByIdChecklistError {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => match status {
+            400u16 => iface_checklist::AddChecklistsCheckItemsByIdChecklistError::BadRequest(body),
+            _ => iface_checklist::AddChecklistsCheckItemsByIdChecklistError::Other(body),
+        },
+        crate::runtime::DispatchError::Transport(m) => iface_checklist::AddChecklistsCheckItemsByIdChecklistError::Other(m),
+    }
+}
+
+fn iface_checklist__get_checklists_check_items_by_id_checklist_by_id_check_item__ok(body: String) -> Result<String, crate::runtime::DispatchError> {
+    Ok(body)
+}
+
+fn iface_checklist__get_checklists_check_items_by_id_checklist_by_id_check_item__err(e: crate::runtime::DispatchError) -> iface_checklist::GetChecklistsCheckItemsByIdChecklistByIdCheckItemError {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => match status {
+            400u16 => iface_checklist::GetChecklistsCheckItemsByIdChecklistByIdCheckItemError::BadRequest(body),
+            _ => iface_checklist::GetChecklistsCheckItemsByIdChecklistByIdCheckItemError::Other(body),
+        },
+        crate::runtime::DispatchError::Transport(m) => iface_checklist::GetChecklistsCheckItemsByIdChecklistByIdCheckItemError::Other(m),
+    }
+}
+
+fn iface_checklist__delete_checklists_check_items_by_id_checklist_by_id_check_item__ok(body: String) -> Result<String, crate::runtime::DispatchError> {
+    Ok(body)
+}
+
+fn iface_checklist__delete_checklists_check_items_by_id_checklist_by_id_check_item__err(e: crate::runtime::DispatchError) -> iface_checklist::DeleteChecklistsCheckItemsByIdChecklistByIdCheckItemError {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => match status {
+            400u16 => iface_checklist::DeleteChecklistsCheckItemsByIdChecklistByIdCheckItemError::BadRequest(body),
+            _ => iface_checklist::DeleteChecklistsCheckItemsByIdChecklistByIdCheckItemError::Other(body),
+        },
+        crate::runtime::DispatchError::Transport(m) => iface_checklist::DeleteChecklistsCheckItemsByIdChecklistByIdCheckItemError::Other(m),
+    }
+}
+
+fn iface_checklist__update_checklists_id_card_by_id_checklist__ok(body: String) -> Result<String, crate::runtime::DispatchError> {
+    Ok(body)
+}
+
+fn iface_checklist__update_checklists_id_card_by_id_checklist__err(e: crate::runtime::DispatchError) -> iface_checklist::UpdateChecklistsIdCardByIdChecklistError {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => match status {
+            400u16 => iface_checklist::UpdateChecklistsIdCardByIdChecklistError::BadRequest(body),
+            _ => iface_checklist::UpdateChecklistsIdCardByIdChecklistError::Other(body),
+        },
+        crate::runtime::DispatchError::Transport(m) => iface_checklist::UpdateChecklistsIdCardByIdChecklistError::Other(m),
+    }
+}
+
+fn iface_checklist__update_checklists_name_by_id_checklist__ok(body: String) -> Result<String, crate::runtime::DispatchError> {
+    Ok(body)
+}
+
+fn iface_checklist__update_checklists_name_by_id_checklist__err(e: crate::runtime::DispatchError) -> iface_checklist::UpdateChecklistsNameByIdChecklistError {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => match status {
+            400u16 => iface_checklist::UpdateChecklistsNameByIdChecklistError::BadRequest(body),
+            _ => iface_checklist::UpdateChecklistsNameByIdChecklistError::Other(body),
+        },
+        crate::runtime::DispatchError::Transport(m) => iface_checklist::UpdateChecklistsNameByIdChecklistError::Other(m),
+    }
+}
+
+fn iface_checklist__update_checklists_pos_by_id_checklist__ok(body: String) -> Result<String, crate::runtime::DispatchError> {
+    Ok(body)
+}
+
+fn iface_checklist__update_checklists_pos_by_id_checklist__err(e: crate::runtime::DispatchError) -> iface_checklist::UpdateChecklistsPosByIdChecklistError {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => match status {
+            400u16 => iface_checklist::UpdateChecklistsPosByIdChecklistError::BadRequest(body),
+            _ => iface_checklist::UpdateChecklistsPosByIdChecklistError::Other(body),
+        },
+        crate::runtime::DispatchError::Transport(m) => iface_checklist::UpdateChecklistsPosByIdChecklistError::Other(m),
+    }
+}
+
+fn iface_checklist__get_checklists_by_id_checklist_by_field__ok(body: String) -> Result<String, crate::runtime::DispatchError> {
+    Ok(body)
+}
+
+fn iface_checklist__get_checklists_by_id_checklist_by_field__err(e: crate::runtime::DispatchError) -> iface_checklist::GetChecklistsByIdChecklistByFieldError {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => match status {
+            400u16 => iface_checklist::GetChecklistsByIdChecklistByFieldError::BadRequest(body),
+            _ => iface_checklist::GetChecklistsByIdChecklistByFieldError::Other(body),
+        },
+        crate::runtime::DispatchError::Transport(m) => iface_checklist::GetChecklistsByIdChecklistByFieldError::Other(m),
+    }
+}
+
 impl iface_checklist::Guest for crate::Component {
-    fn add_checklists(params: iface_checklist::AddChecklistsParams) -> Result<String, String> {
+    fn add_checklists(params: iface_checklist::AddChecklistsParams) -> Result<String, iface_checklist::AddChecklistsError> {
         let json = iface_checklist__add_checklists_params__to_json(&params);
-        dispatch(&OP_CHECKLIST_ADD_CHECKLISTS, json)
+        match dispatch(&OP_CHECKLIST_ADD_CHECKLISTS, json).and_then(iface_checklist__add_checklists__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_checklist__add_checklists__err(e)),
+        }
     }
-    fn get_checklists_by_id_checklist(params: iface_checklist::GetChecklistsByIdChecklistParams) -> Result<String, String> {
+    fn get_checklists_by_id_checklist(params: iface_checklist::GetChecklistsByIdChecklistParams) -> Result<String, iface_checklist::GetChecklistsByIdChecklistError> {
         let json = iface_checklist__get_checklists_by_id_checklist_params__to_json(&params);
-        dispatch(&OP_CHECKLIST_GET_CHECKLISTS_BY_ID_CHECKLIST, json)
+        match dispatch(&OP_CHECKLIST_GET_CHECKLISTS_BY_ID_CHECKLIST, json).and_then(iface_checklist__get_checklists_by_id_checklist__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_checklist__get_checklists_by_id_checklist__err(e)),
+        }
     }
-    fn update_checklists_by_id_checklist(params: iface_checklist::UpdateChecklistsByIdChecklistParams) -> Result<String, String> {
+    fn update_checklists_by_id_checklist(params: iface_checklist::UpdateChecklistsByIdChecklistParams) -> Result<String, iface_checklist::UpdateChecklistsByIdChecklistError> {
         let json = iface_checklist__update_checklists_by_id_checklist_params__to_json(&params);
-        dispatch(&OP_CHECKLIST_UPDATE_CHECKLISTS_BY_ID_CHECKLIST, json)
+        match dispatch(&OP_CHECKLIST_UPDATE_CHECKLISTS_BY_ID_CHECKLIST, json).and_then(iface_checklist__update_checklists_by_id_checklist__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_checklist__update_checklists_by_id_checklist__err(e)),
+        }
     }
-    fn delete_checklists_by_id_checklist(params: iface_checklist::DeleteChecklistsByIdChecklistParams) -> Result<String, String> {
+    fn delete_checklists_by_id_checklist(params: iface_checklist::DeleteChecklistsByIdChecklistParams) -> Result<String, iface_checklist::DeleteChecklistsByIdChecklistError> {
         let json = iface_checklist__delete_checklists_by_id_checklist_params__to_json(&params);
-        dispatch(&OP_CHECKLIST_DELETE_CHECKLISTS_BY_ID_CHECKLIST, json)
+        match dispatch(&OP_CHECKLIST_DELETE_CHECKLISTS_BY_ID_CHECKLIST, json).and_then(iface_checklist__delete_checklists_by_id_checklist__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_checklist__delete_checklists_by_id_checklist__err(e)),
+        }
     }
-    fn get_checklists_board_by_id_checklist(params: iface_checklist::GetChecklistsBoardByIdChecklistParams) -> Result<String, String> {
+    fn get_checklists_board_by_id_checklist(params: iface_checklist::GetChecklistsBoardByIdChecklistParams) -> Result<String, iface_checklist::GetChecklistsBoardByIdChecklistError> {
         let json = iface_checklist__get_checklists_board_by_id_checklist_params__to_json(&params);
-        dispatch(&OP_CHECKLIST_GET_CHECKLISTS_BOARD_BY_ID_CHECKLIST, json)
+        match dispatch(&OP_CHECKLIST_GET_CHECKLISTS_BOARD_BY_ID_CHECKLIST, json).and_then(iface_checklist__get_checklists_board_by_id_checklist__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_checklist__get_checklists_board_by_id_checklist__err(e)),
+        }
     }
-    fn get_checklists_board_by_id_checklist_by_field(params: iface_checklist::GetChecklistsBoardByIdChecklistByFieldParams) -> Result<String, String> {
+    fn get_checklists_board_by_id_checklist_by_field(params: iface_checklist::GetChecklistsBoardByIdChecklistByFieldParams) -> Result<String, iface_checklist::GetChecklistsBoardByIdChecklistByFieldError> {
         let json = iface_checklist__get_checklists_board_by_id_checklist_by_field_params__to_json(&params);
-        dispatch(&OP_CHECKLIST_GET_CHECKLISTS_BOARD_BY_ID_CHECKLIST_BY_FIELD, json)
+        match dispatch(&OP_CHECKLIST_GET_CHECKLISTS_BOARD_BY_ID_CHECKLIST_BY_FIELD, json).and_then(iface_checklist__get_checklists_board_by_id_checklist_by_field__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_checklist__get_checklists_board_by_id_checklist_by_field__err(e)),
+        }
     }
-    fn get_checklists_cards_by_id_checklist(params: iface_checklist::GetChecklistsCardsByIdChecklistParams) -> Result<String, String> {
+    fn get_checklists_cards_by_id_checklist(params: iface_checklist::GetChecklistsCardsByIdChecklistParams) -> Result<String, iface_checklist::GetChecklistsCardsByIdChecklistError> {
         let json = iface_checklist__get_checklists_cards_by_id_checklist_params__to_json(&params);
-        dispatch(&OP_CHECKLIST_GET_CHECKLISTS_CARDS_BY_ID_CHECKLIST, json)
+        match dispatch(&OP_CHECKLIST_GET_CHECKLISTS_CARDS_BY_ID_CHECKLIST, json).and_then(iface_checklist__get_checklists_cards_by_id_checklist__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_checklist__get_checklists_cards_by_id_checklist__err(e)),
+        }
     }
-    fn get_checklists_cards_by_id_checklist_by_filter(params: iface_checklist::GetChecklistsCardsByIdChecklistByFilterParams) -> Result<String, String> {
+    fn get_checklists_cards_by_id_checklist_by_filter(params: iface_checklist::GetChecklistsCardsByIdChecklistByFilterParams) -> Result<String, iface_checklist::GetChecklistsCardsByIdChecklistByFilterError> {
         let json = iface_checklist__get_checklists_cards_by_id_checklist_by_filter_params__to_json(&params);
-        dispatch(&OP_CHECKLIST_GET_CHECKLISTS_CARDS_BY_ID_CHECKLIST_BY_FILTER, json)
+        match dispatch(&OP_CHECKLIST_GET_CHECKLISTS_CARDS_BY_ID_CHECKLIST_BY_FILTER, json).and_then(iface_checklist__get_checklists_cards_by_id_checklist_by_filter__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_checklist__get_checklists_cards_by_id_checklist_by_filter__err(e)),
+        }
     }
-    fn get_checklists_check_items_by_id_checklist(params: iface_checklist::GetChecklistsCheckItemsByIdChecklistParams) -> Result<String, String> {
+    fn get_checklists_check_items_by_id_checklist(params: iface_checklist::GetChecklistsCheckItemsByIdChecklistParams) -> Result<String, iface_checklist::GetChecklistsCheckItemsByIdChecklistError> {
         let json = iface_checklist__get_checklists_check_items_by_id_checklist_params__to_json(&params);
-        dispatch(&OP_CHECKLIST_GET_CHECKLISTS_CHECK_ITEMS_BY_ID_CHECKLIST, json)
+        match dispatch(&OP_CHECKLIST_GET_CHECKLISTS_CHECK_ITEMS_BY_ID_CHECKLIST, json).and_then(iface_checklist__get_checklists_check_items_by_id_checklist__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_checklist__get_checklists_check_items_by_id_checklist__err(e)),
+        }
     }
-    fn add_checklists_check_items_by_id_checklist(params: iface_checklist::AddChecklistsCheckItemsByIdChecklistParams) -> Result<String, String> {
+    fn add_checklists_check_items_by_id_checklist(params: iface_checklist::AddChecklistsCheckItemsByIdChecklistParams) -> Result<String, iface_checklist::AddChecklistsCheckItemsByIdChecklistError> {
         let json = iface_checklist__add_checklists_check_items_by_id_checklist_params__to_json(&params);
-        dispatch(&OP_CHECKLIST_ADD_CHECKLISTS_CHECK_ITEMS_BY_ID_CHECKLIST, json)
+        match dispatch(&OP_CHECKLIST_ADD_CHECKLISTS_CHECK_ITEMS_BY_ID_CHECKLIST, json).and_then(iface_checklist__add_checklists_check_items_by_id_checklist__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_checklist__add_checklists_check_items_by_id_checklist__err(e)),
+        }
     }
-    fn get_checklists_check_items_by_id_checklist_by_id_check_item(params: iface_checklist::GetChecklistsCheckItemsByIdChecklistByIdCheckItemParams) -> Result<String, String> {
+    fn get_checklists_check_items_by_id_checklist_by_id_check_item(params: iface_checklist::GetChecklistsCheckItemsByIdChecklistByIdCheckItemParams) -> Result<String, iface_checklist::GetChecklistsCheckItemsByIdChecklistByIdCheckItemError> {
         let json = iface_checklist__get_checklists_check_items_by_id_checklist_by_id_check_item_params__to_json(&params);
-        dispatch(&OP_CHECKLIST_GET_CHECKLISTS_CHECK_ITEMS_BY_ID_CHECKLIST_BY_ID_CHECK_ITEM, json)
+        match dispatch(&OP_CHECKLIST_GET_CHECKLISTS_CHECK_ITEMS_BY_ID_CHECKLIST_BY_ID_CHECK_ITEM, json).and_then(iface_checklist__get_checklists_check_items_by_id_checklist_by_id_check_item__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_checklist__get_checklists_check_items_by_id_checklist_by_id_check_item__err(e)),
+        }
     }
-    fn delete_checklists_check_items_by_id_checklist_by_id_check_item(params: iface_checklist::DeleteChecklistsCheckItemsByIdChecklistByIdCheckItemParams) -> Result<String, String> {
+    fn delete_checklists_check_items_by_id_checklist_by_id_check_item(params: iface_checklist::DeleteChecklistsCheckItemsByIdChecklistByIdCheckItemParams) -> Result<String, iface_checklist::DeleteChecklistsCheckItemsByIdChecklistByIdCheckItemError> {
         let json = iface_checklist__delete_checklists_check_items_by_id_checklist_by_id_check_item_params__to_json(&params);
-        dispatch(&OP_CHECKLIST_DELETE_CHECKLISTS_CHECK_ITEMS_BY_ID_CHECKLIST_BY_ID_CHECK_ITEM, json)
+        match dispatch(&OP_CHECKLIST_DELETE_CHECKLISTS_CHECK_ITEMS_BY_ID_CHECKLIST_BY_ID_CHECK_ITEM, json).and_then(iface_checklist__delete_checklists_check_items_by_id_checklist_by_id_check_item__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_checklist__delete_checklists_check_items_by_id_checklist_by_id_check_item__err(e)),
+        }
     }
-    fn update_checklists_id_card_by_id_checklist(params: iface_checklist::UpdateChecklistsIdCardByIdChecklistParams) -> Result<String, String> {
+    fn update_checklists_id_card_by_id_checklist(params: iface_checklist::UpdateChecklistsIdCardByIdChecklistParams) -> Result<String, iface_checklist::UpdateChecklistsIdCardByIdChecklistError> {
         let json = iface_checklist__update_checklists_id_card_by_id_checklist_params__to_json(&params);
-        dispatch(&OP_CHECKLIST_UPDATE_CHECKLISTS_ID_CARD_BY_ID_CHECKLIST, json)
+        match dispatch(&OP_CHECKLIST_UPDATE_CHECKLISTS_ID_CARD_BY_ID_CHECKLIST, json).and_then(iface_checklist__update_checklists_id_card_by_id_checklist__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_checklist__update_checklists_id_card_by_id_checklist__err(e)),
+        }
     }
-    fn update_checklists_name_by_id_checklist(params: iface_checklist::UpdateChecklistsNameByIdChecklistParams) -> Result<String, String> {
+    fn update_checklists_name_by_id_checklist(params: iface_checklist::UpdateChecklistsNameByIdChecklistParams) -> Result<String, iface_checklist::UpdateChecklistsNameByIdChecklistError> {
         let json = iface_checklist__update_checklists_name_by_id_checklist_params__to_json(&params);
-        dispatch(&OP_CHECKLIST_UPDATE_CHECKLISTS_NAME_BY_ID_CHECKLIST, json)
+        match dispatch(&OP_CHECKLIST_UPDATE_CHECKLISTS_NAME_BY_ID_CHECKLIST, json).and_then(iface_checklist__update_checklists_name_by_id_checklist__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_checklist__update_checklists_name_by_id_checklist__err(e)),
+        }
     }
-    fn update_checklists_pos_by_id_checklist(params: iface_checklist::UpdateChecklistsPosByIdChecklistParams) -> Result<String, String> {
+    fn update_checklists_pos_by_id_checklist(params: iface_checklist::UpdateChecklistsPosByIdChecklistParams) -> Result<String, iface_checklist::UpdateChecklistsPosByIdChecklistError> {
         let json = iface_checklist__update_checklists_pos_by_id_checklist_params__to_json(&params);
-        dispatch(&OP_CHECKLIST_UPDATE_CHECKLISTS_POS_BY_ID_CHECKLIST, json)
+        match dispatch(&OP_CHECKLIST_UPDATE_CHECKLISTS_POS_BY_ID_CHECKLIST, json).and_then(iface_checklist__update_checklists_pos_by_id_checklist__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_checklist__update_checklists_pos_by_id_checklist__err(e)),
+        }
     }
-    fn get_checklists_by_id_checklist_by_field(params: iface_checklist::GetChecklistsByIdChecklistByFieldParams) -> Result<String, String> {
+    fn get_checklists_by_id_checklist_by_field(params: iface_checklist::GetChecklistsByIdChecklistByFieldParams) -> Result<String, iface_checklist::GetChecklistsByIdChecklistByFieldError> {
         let json = iface_checklist__get_checklists_by_id_checklist_by_field_params__to_json(&params);
-        dispatch(&OP_CHECKLIST_GET_CHECKLISTS_BY_ID_CHECKLIST_BY_FIELD, json)
+        match dispatch(&OP_CHECKLIST_GET_CHECKLISTS_BY_ID_CHECKLIST_BY_FIELD, json).and_then(iface_checklist__get_checklists_by_id_checklist_by_field__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_checklist__get_checklists_by_id_checklist_by_field__err(e)),
+        }
     }
 }
 use crate::exports::autostamp::trello::label as iface_label;
@@ -4768,10 +7454,10 @@ const OP_LABEL_ADD_LABELS: OpSpec = OpSpec {
     method: "POST",
     path_template: "/labels",
     fields: &[
-        FieldSpec { snake: "token", location: FieldLocation::Query },
-        FieldSpec { snake: "color", location: FieldLocation::Body },
-        FieldSpec { snake: "id_board", location: FieldLocation::Body },
-        FieldSpec { snake: "name", location: FieldLocation::Body },
+        FieldSpec { snake: "token", wire: "token", location: FieldLocation::Query },
+        FieldSpec { snake: "color", wire: "color", location: FieldLocation::Body },
+        FieldSpec { snake: "id_board", wire: "idBoard", location: FieldLocation::Body },
+        FieldSpec { snake: "name", wire: "name", location: FieldLocation::Body },
     ],
     auth: &[
         AuthApply { secret_key: "api_key", kind: AuthKind::ApiKeyQuery("key") },
@@ -4782,9 +7468,9 @@ const OP_LABEL_GET_LABELS_BY_ID_LABEL: OpSpec = OpSpec {
     method: "GET",
     path_template: "/labels/{id_label}",
     fields: &[
-        FieldSpec { snake: "id_label", location: FieldLocation::Path },
-        FieldSpec { snake: "fields", location: FieldLocation::Query },
-        FieldSpec { snake: "token", location: FieldLocation::Query },
+        FieldSpec { snake: "id_label", wire: "idLabel", location: FieldLocation::Path },
+        FieldSpec { snake: "fields", wire: "fields", location: FieldLocation::Query },
+        FieldSpec { snake: "token", wire: "token", location: FieldLocation::Query },
     ],
     auth: &[
         AuthApply { secret_key: "api_key", kind: AuthKind::ApiKeyQuery("key") },
@@ -4795,11 +7481,11 @@ const OP_LABEL_UPDATE_LABELS_BY_ID_LABEL: OpSpec = OpSpec {
     method: "PUT",
     path_template: "/labels/{id_label}",
     fields: &[
-        FieldSpec { snake: "id_label", location: FieldLocation::Path },
-        FieldSpec { snake: "token", location: FieldLocation::Query },
-        FieldSpec { snake: "color", location: FieldLocation::Body },
-        FieldSpec { snake: "id_board", location: FieldLocation::Body },
-        FieldSpec { snake: "name", location: FieldLocation::Body },
+        FieldSpec { snake: "id_label", wire: "idLabel", location: FieldLocation::Path },
+        FieldSpec { snake: "token", wire: "token", location: FieldLocation::Query },
+        FieldSpec { snake: "color", wire: "color", location: FieldLocation::Body },
+        FieldSpec { snake: "id_board", wire: "idBoard", location: FieldLocation::Body },
+        FieldSpec { snake: "name", wire: "name", location: FieldLocation::Body },
     ],
     auth: &[
         AuthApply { secret_key: "api_key", kind: AuthKind::ApiKeyQuery("key") },
@@ -4810,8 +7496,8 @@ const OP_LABEL_DELETE_LABELS_BY_ID_LABEL: OpSpec = OpSpec {
     method: "DELETE",
     path_template: "/labels/{id_label}",
     fields: &[
-        FieldSpec { snake: "id_label", location: FieldLocation::Path },
-        FieldSpec { snake: "token", location: FieldLocation::Query },
+        FieldSpec { snake: "id_label", wire: "idLabel", location: FieldLocation::Path },
+        FieldSpec { snake: "token", wire: "token", location: FieldLocation::Query },
     ],
     auth: &[
         AuthApply { secret_key: "api_key", kind: AuthKind::ApiKeyQuery("key") },
@@ -4822,9 +7508,9 @@ const OP_LABEL_GET_LABELS_BOARD_BY_ID_LABEL: OpSpec = OpSpec {
     method: "GET",
     path_template: "/labels/{id_label}/board",
     fields: &[
-        FieldSpec { snake: "id_label", location: FieldLocation::Path },
-        FieldSpec { snake: "fields", location: FieldLocation::Query },
-        FieldSpec { snake: "token", location: FieldLocation::Query },
+        FieldSpec { snake: "id_label", wire: "idLabel", location: FieldLocation::Path },
+        FieldSpec { snake: "fields", wire: "fields", location: FieldLocation::Query },
+        FieldSpec { snake: "token", wire: "token", location: FieldLocation::Query },
     ],
     auth: &[
         AuthApply { secret_key: "api_key", kind: AuthKind::ApiKeyQuery("key") },
@@ -4835,9 +7521,9 @@ const OP_LABEL_GET_LABELS_BOARD_BY_ID_LABEL_BY_FIELD: OpSpec = OpSpec {
     method: "GET",
     path_template: "/labels/{id_label}/board/{field}",
     fields: &[
-        FieldSpec { snake: "id_label", location: FieldLocation::Path },
-        FieldSpec { snake: "field", location: FieldLocation::Path },
-        FieldSpec { snake: "token", location: FieldLocation::Query },
+        FieldSpec { snake: "id_label", wire: "idLabel", location: FieldLocation::Path },
+        FieldSpec { snake: "field", wire: "field", location: FieldLocation::Path },
+        FieldSpec { snake: "token", wire: "token", location: FieldLocation::Query },
     ],
     auth: &[
         AuthApply { secret_key: "api_key", kind: AuthKind::ApiKeyQuery("key") },
@@ -4848,9 +7534,9 @@ const OP_LABEL_UPDATE_LABELS_COLOR_BY_ID_LABEL: OpSpec = OpSpec {
     method: "PUT",
     path_template: "/labels/{id_label}/color",
     fields: &[
-        FieldSpec { snake: "id_label", location: FieldLocation::Path },
-        FieldSpec { snake: "token", location: FieldLocation::Query },
-        FieldSpec { snake: "value", location: FieldLocation::Body },
+        FieldSpec { snake: "id_label", wire: "idLabel", location: FieldLocation::Path },
+        FieldSpec { snake: "token", wire: "token", location: FieldLocation::Query },
+        FieldSpec { snake: "value", wire: "value", location: FieldLocation::Body },
     ],
     auth: &[
         AuthApply { secret_key: "api_key", kind: AuthKind::ApiKeyQuery("key") },
@@ -4861,9 +7547,9 @@ const OP_LABEL_UPDATE_LABELS_NAME_BY_ID_LABEL: OpSpec = OpSpec {
     method: "PUT",
     path_template: "/labels/{id_label}/name",
     fields: &[
-        FieldSpec { snake: "id_label", location: FieldLocation::Path },
-        FieldSpec { snake: "token", location: FieldLocation::Query },
-        FieldSpec { snake: "value", location: FieldLocation::Body },
+        FieldSpec { snake: "id_label", wire: "idLabel", location: FieldLocation::Path },
+        FieldSpec { snake: "token", wire: "token", location: FieldLocation::Query },
+        FieldSpec { snake: "value", wire: "value", location: FieldLocation::Body },
     ],
     auth: &[
         AuthApply { secret_key: "api_key", kind: AuthKind::ApiKeyQuery("key") },
@@ -4936,38 +7622,174 @@ fn iface_label__update_labels_name_by_id_label_params__to_json(p: &iface_label::
     Value::Object(m)
 }
 
+fn iface_label__add_labels__ok(body: String) -> Result<String, crate::runtime::DispatchError> {
+    Ok(body)
+}
+
+fn iface_label__add_labels__err(e: crate::runtime::DispatchError) -> iface_label::AddLabelsError {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => match status {
+            400u16 => iface_label::AddLabelsError::BadRequest(body),
+            _ => iface_label::AddLabelsError::Other(body),
+        },
+        crate::runtime::DispatchError::Transport(m) => iface_label::AddLabelsError::Other(m),
+    }
+}
+
+fn iface_label__get_labels_by_id_label__ok(body: String) -> Result<String, crate::runtime::DispatchError> {
+    Ok(body)
+}
+
+fn iface_label__get_labels_by_id_label__err(e: crate::runtime::DispatchError) -> iface_label::GetLabelsByIdLabelError {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => match status {
+            400u16 => iface_label::GetLabelsByIdLabelError::BadRequest(body),
+            _ => iface_label::GetLabelsByIdLabelError::Other(body),
+        },
+        crate::runtime::DispatchError::Transport(m) => iface_label::GetLabelsByIdLabelError::Other(m),
+    }
+}
+
+fn iface_label__update_labels_by_id_label__ok(body: String) -> Result<String, crate::runtime::DispatchError> {
+    Ok(body)
+}
+
+fn iface_label__update_labels_by_id_label__err(e: crate::runtime::DispatchError) -> iface_label::UpdateLabelsByIdLabelError {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => match status {
+            400u16 => iface_label::UpdateLabelsByIdLabelError::BadRequest(body),
+            _ => iface_label::UpdateLabelsByIdLabelError::Other(body),
+        },
+        crate::runtime::DispatchError::Transport(m) => iface_label::UpdateLabelsByIdLabelError::Other(m),
+    }
+}
+
+fn iface_label__delete_labels_by_id_label__ok(body: String) -> Result<String, crate::runtime::DispatchError> {
+    Ok(body)
+}
+
+fn iface_label__delete_labels_by_id_label__err(e: crate::runtime::DispatchError) -> iface_label::DeleteLabelsByIdLabelError {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => match status {
+            400u16 => iface_label::DeleteLabelsByIdLabelError::BadRequest(body),
+            _ => iface_label::DeleteLabelsByIdLabelError::Other(body),
+        },
+        crate::runtime::DispatchError::Transport(m) => iface_label::DeleteLabelsByIdLabelError::Other(m),
+    }
+}
+
+fn iface_label__get_labels_board_by_id_label__ok(body: String) -> Result<String, crate::runtime::DispatchError> {
+    Ok(body)
+}
+
+fn iface_label__get_labels_board_by_id_label__err(e: crate::runtime::DispatchError) -> iface_label::GetLabelsBoardByIdLabelError {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => match status {
+            400u16 => iface_label::GetLabelsBoardByIdLabelError::BadRequest(body),
+            _ => iface_label::GetLabelsBoardByIdLabelError::Other(body),
+        },
+        crate::runtime::DispatchError::Transport(m) => iface_label::GetLabelsBoardByIdLabelError::Other(m),
+    }
+}
+
+fn iface_label__get_labels_board_by_id_label_by_field__ok(body: String) -> Result<String, crate::runtime::DispatchError> {
+    Ok(body)
+}
+
+fn iface_label__get_labels_board_by_id_label_by_field__err(e: crate::runtime::DispatchError) -> iface_label::GetLabelsBoardByIdLabelByFieldError {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => match status {
+            400u16 => iface_label::GetLabelsBoardByIdLabelByFieldError::BadRequest(body),
+            _ => iface_label::GetLabelsBoardByIdLabelByFieldError::Other(body),
+        },
+        crate::runtime::DispatchError::Transport(m) => iface_label::GetLabelsBoardByIdLabelByFieldError::Other(m),
+    }
+}
+
+fn iface_label__update_labels_color_by_id_label__ok(body: String) -> Result<String, crate::runtime::DispatchError> {
+    Ok(body)
+}
+
+fn iface_label__update_labels_color_by_id_label__err(e: crate::runtime::DispatchError) -> iface_label::UpdateLabelsColorByIdLabelError {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => match status {
+            400u16 => iface_label::UpdateLabelsColorByIdLabelError::BadRequest(body),
+            _ => iface_label::UpdateLabelsColorByIdLabelError::Other(body),
+        },
+        crate::runtime::DispatchError::Transport(m) => iface_label::UpdateLabelsColorByIdLabelError::Other(m),
+    }
+}
+
+fn iface_label__update_labels_name_by_id_label__ok(body: String) -> Result<String, crate::runtime::DispatchError> {
+    Ok(body)
+}
+
+fn iface_label__update_labels_name_by_id_label__err(e: crate::runtime::DispatchError) -> iface_label::UpdateLabelsNameByIdLabelError {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => match status {
+            400u16 => iface_label::UpdateLabelsNameByIdLabelError::BadRequest(body),
+            _ => iface_label::UpdateLabelsNameByIdLabelError::Other(body),
+        },
+        crate::runtime::DispatchError::Transport(m) => iface_label::UpdateLabelsNameByIdLabelError::Other(m),
+    }
+}
+
 impl iface_label::Guest for crate::Component {
-    fn add_labels(params: iface_label::AddLabelsParams) -> Result<String, String> {
+    fn add_labels(params: iface_label::AddLabelsParams) -> Result<String, iface_label::AddLabelsError> {
         let json = iface_label__add_labels_params__to_json(&params);
-        dispatch(&OP_LABEL_ADD_LABELS, json)
+        match dispatch(&OP_LABEL_ADD_LABELS, json).and_then(iface_label__add_labels__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_label__add_labels__err(e)),
+        }
     }
-    fn get_labels_by_id_label(params: iface_label::GetLabelsByIdLabelParams) -> Result<String, String> {
+    fn get_labels_by_id_label(params: iface_label::GetLabelsByIdLabelParams) -> Result<String, iface_label::GetLabelsByIdLabelError> {
         let json = iface_label__get_labels_by_id_label_params__to_json(&params);
-        dispatch(&OP_LABEL_GET_LABELS_BY_ID_LABEL, json)
+        match dispatch(&OP_LABEL_GET_LABELS_BY_ID_LABEL, json).and_then(iface_label__get_labels_by_id_label__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_label__get_labels_by_id_label__err(e)),
+        }
     }
-    fn update_labels_by_id_label(params: iface_label::UpdateLabelsByIdLabelParams) -> Result<String, String> {
+    fn update_labels_by_id_label(params: iface_label::UpdateLabelsByIdLabelParams) -> Result<String, iface_label::UpdateLabelsByIdLabelError> {
         let json = iface_label__update_labels_by_id_label_params__to_json(&params);
-        dispatch(&OP_LABEL_UPDATE_LABELS_BY_ID_LABEL, json)
+        match dispatch(&OP_LABEL_UPDATE_LABELS_BY_ID_LABEL, json).and_then(iface_label__update_labels_by_id_label__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_label__update_labels_by_id_label__err(e)),
+        }
     }
-    fn delete_labels_by_id_label(params: iface_label::DeleteLabelsByIdLabelParams) -> Result<String, String> {
+    fn delete_labels_by_id_label(params: iface_label::DeleteLabelsByIdLabelParams) -> Result<String, iface_label::DeleteLabelsByIdLabelError> {
         let json = iface_label__delete_labels_by_id_label_params__to_json(&params);
-        dispatch(&OP_LABEL_DELETE_LABELS_BY_ID_LABEL, json)
+        match dispatch(&OP_LABEL_DELETE_LABELS_BY_ID_LABEL, json).and_then(iface_label__delete_labels_by_id_label__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_label__delete_labels_by_id_label__err(e)),
+        }
     }
-    fn get_labels_board_by_id_label(params: iface_label::GetLabelsBoardByIdLabelParams) -> Result<String, String> {
+    fn get_labels_board_by_id_label(params: iface_label::GetLabelsBoardByIdLabelParams) -> Result<String, iface_label::GetLabelsBoardByIdLabelError> {
         let json = iface_label__get_labels_board_by_id_label_params__to_json(&params);
-        dispatch(&OP_LABEL_GET_LABELS_BOARD_BY_ID_LABEL, json)
+        match dispatch(&OP_LABEL_GET_LABELS_BOARD_BY_ID_LABEL, json).and_then(iface_label__get_labels_board_by_id_label__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_label__get_labels_board_by_id_label__err(e)),
+        }
     }
-    fn get_labels_board_by_id_label_by_field(params: iface_label::GetLabelsBoardByIdLabelByFieldParams) -> Result<String, String> {
+    fn get_labels_board_by_id_label_by_field(params: iface_label::GetLabelsBoardByIdLabelByFieldParams) -> Result<String, iface_label::GetLabelsBoardByIdLabelByFieldError> {
         let json = iface_label__get_labels_board_by_id_label_by_field_params__to_json(&params);
-        dispatch(&OP_LABEL_GET_LABELS_BOARD_BY_ID_LABEL_BY_FIELD, json)
+        match dispatch(&OP_LABEL_GET_LABELS_BOARD_BY_ID_LABEL_BY_FIELD, json).and_then(iface_label__get_labels_board_by_id_label_by_field__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_label__get_labels_board_by_id_label_by_field__err(e)),
+        }
     }
-    fn update_labels_color_by_id_label(params: iface_label::UpdateLabelsColorByIdLabelParams) -> Result<String, String> {
+    fn update_labels_color_by_id_label(params: iface_label::UpdateLabelsColorByIdLabelParams) -> Result<String, iface_label::UpdateLabelsColorByIdLabelError> {
         let json = iface_label__update_labels_color_by_id_label_params__to_json(&params);
-        dispatch(&OP_LABEL_UPDATE_LABELS_COLOR_BY_ID_LABEL, json)
+        match dispatch(&OP_LABEL_UPDATE_LABELS_COLOR_BY_ID_LABEL, json).and_then(iface_label__update_labels_color_by_id_label__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_label__update_labels_color_by_id_label__err(e)),
+        }
     }
-    fn update_labels_name_by_id_label(params: iface_label::UpdateLabelsNameByIdLabelParams) -> Result<String, String> {
+    fn update_labels_name_by_id_label(params: iface_label::UpdateLabelsNameByIdLabelParams) -> Result<String, iface_label::UpdateLabelsNameByIdLabelError> {
         let json = iface_label__update_labels_name_by_id_label_params__to_json(&params);
-        dispatch(&OP_LABEL_UPDATE_LABELS_NAME_BY_ID_LABEL, json)
+        match dispatch(&OP_LABEL_UPDATE_LABELS_NAME_BY_ID_LABEL, json).and_then(iface_label__update_labels_name_by_id_label__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_label__update_labels_name_by_id_label__err(e)),
+        }
     }
 }
 use crate::exports::autostamp::trello::list_op as iface_list_op;
@@ -4976,13 +7798,13 @@ const OP_LIST_OP_ADD_LISTS: OpSpec = OpSpec {
     method: "POST",
     path_template: "/lists",
     fields: &[
-        FieldSpec { snake: "token", location: FieldLocation::Query },
-        FieldSpec { snake: "closed", location: FieldLocation::Body },
-        FieldSpec { snake: "id_board", location: FieldLocation::Body },
-        FieldSpec { snake: "id_list_source", location: FieldLocation::Body },
-        FieldSpec { snake: "name", location: FieldLocation::Body },
-        FieldSpec { snake: "pos", location: FieldLocation::Body },
-        FieldSpec { snake: "subscribed", location: FieldLocation::Body },
+        FieldSpec { snake: "token", wire: "token", location: FieldLocation::Query },
+        FieldSpec { snake: "closed", wire: "closed", location: FieldLocation::Body },
+        FieldSpec { snake: "id_board", wire: "idBoard", location: FieldLocation::Body },
+        FieldSpec { snake: "id_list_source", wire: "idListSource", location: FieldLocation::Body },
+        FieldSpec { snake: "name", wire: "name", location: FieldLocation::Body },
+        FieldSpec { snake: "pos", wire: "pos", location: FieldLocation::Body },
+        FieldSpec { snake: "subscribed", wire: "subscribed", location: FieldLocation::Body },
     ],
     auth: &[
         AuthApply { secret_key: "api_key", kind: AuthKind::ApiKeyQuery("key") },
@@ -4993,13 +7815,13 @@ const OP_LIST_OP_GET_LISTS_BY_ID_LIST: OpSpec = OpSpec {
     method: "GET",
     path_template: "/lists/{id_list}",
     fields: &[
-        FieldSpec { snake: "id_list", location: FieldLocation::Path },
-        FieldSpec { snake: "cards", location: FieldLocation::Query },
-        FieldSpec { snake: "card_fields", location: FieldLocation::Query },
-        FieldSpec { snake: "board", location: FieldLocation::Query },
-        FieldSpec { snake: "board_fields", location: FieldLocation::Query },
-        FieldSpec { snake: "fields", location: FieldLocation::Query },
-        FieldSpec { snake: "token", location: FieldLocation::Query },
+        FieldSpec { snake: "id_list", wire: "idList", location: FieldLocation::Path },
+        FieldSpec { snake: "cards", wire: "cards", location: FieldLocation::Query },
+        FieldSpec { snake: "card_fields", wire: "card_fields", location: FieldLocation::Query },
+        FieldSpec { snake: "board", wire: "board", location: FieldLocation::Query },
+        FieldSpec { snake: "board_fields", wire: "board_fields", location: FieldLocation::Query },
+        FieldSpec { snake: "fields", wire: "fields", location: FieldLocation::Query },
+        FieldSpec { snake: "token", wire: "token", location: FieldLocation::Query },
     ],
     auth: &[
         AuthApply { secret_key: "api_key", kind: AuthKind::ApiKeyQuery("key") },
@@ -5010,14 +7832,14 @@ const OP_LIST_OP_UPDATE_LISTS_BY_ID_LIST: OpSpec = OpSpec {
     method: "PUT",
     path_template: "/lists/{id_list}",
     fields: &[
-        FieldSpec { snake: "id_list", location: FieldLocation::Path },
-        FieldSpec { snake: "token", location: FieldLocation::Query },
-        FieldSpec { snake: "closed", location: FieldLocation::Body },
-        FieldSpec { snake: "id_board", location: FieldLocation::Body },
-        FieldSpec { snake: "id_list_source", location: FieldLocation::Body },
-        FieldSpec { snake: "name", location: FieldLocation::Body },
-        FieldSpec { snake: "pos", location: FieldLocation::Body },
-        FieldSpec { snake: "subscribed", location: FieldLocation::Body },
+        FieldSpec { snake: "id_list", wire: "idList", location: FieldLocation::Path },
+        FieldSpec { snake: "token", wire: "token", location: FieldLocation::Query },
+        FieldSpec { snake: "closed", wire: "closed", location: FieldLocation::Body },
+        FieldSpec { snake: "id_board", wire: "idBoard", location: FieldLocation::Body },
+        FieldSpec { snake: "id_list_source", wire: "idListSource", location: FieldLocation::Body },
+        FieldSpec { snake: "name", wire: "name", location: FieldLocation::Body },
+        FieldSpec { snake: "pos", wire: "pos", location: FieldLocation::Body },
+        FieldSpec { snake: "subscribed", wire: "subscribed", location: FieldLocation::Body },
     ],
     auth: &[
         AuthApply { secret_key: "api_key", kind: AuthKind::ApiKeyQuery("key") },
@@ -5028,22 +7850,22 @@ const OP_LIST_OP_GET_LISTS_ACTIONS_BY_ID_LIST: OpSpec = OpSpec {
     method: "GET",
     path_template: "/lists/{id_list}/actions",
     fields: &[
-        FieldSpec { snake: "id_list", location: FieldLocation::Path },
-        FieldSpec { snake: "entities", location: FieldLocation::Query },
-        FieldSpec { snake: "display", location: FieldLocation::Query },
-        FieldSpec { snake: "filter", location: FieldLocation::Query },
-        FieldSpec { snake: "fields", location: FieldLocation::Query },
-        FieldSpec { snake: "limit", location: FieldLocation::Query },
-        FieldSpec { snake: "format", location: FieldLocation::Query },
-        FieldSpec { snake: "since", location: FieldLocation::Query },
-        FieldSpec { snake: "before", location: FieldLocation::Query },
-        FieldSpec { snake: "page", location: FieldLocation::Query },
-        FieldSpec { snake: "id_models", location: FieldLocation::Query },
-        FieldSpec { snake: "member", location: FieldLocation::Query },
-        FieldSpec { snake: "member_fields", location: FieldLocation::Query },
-        FieldSpec { snake: "member_creator", location: FieldLocation::Query },
-        FieldSpec { snake: "member_creator_fields", location: FieldLocation::Query },
-        FieldSpec { snake: "token", location: FieldLocation::Query },
+        FieldSpec { snake: "id_list", wire: "idList", location: FieldLocation::Path },
+        FieldSpec { snake: "entities", wire: "entities", location: FieldLocation::Query },
+        FieldSpec { snake: "display", wire: "display", location: FieldLocation::Query },
+        FieldSpec { snake: "filter", wire: "filter", location: FieldLocation::Query },
+        FieldSpec { snake: "fields", wire: "fields", location: FieldLocation::Query },
+        FieldSpec { snake: "limit", wire: "limit", location: FieldLocation::Query },
+        FieldSpec { snake: "format", wire: "format", location: FieldLocation::Query },
+        FieldSpec { snake: "since", wire: "since", location: FieldLocation::Query },
+        FieldSpec { snake: "before", wire: "before", location: FieldLocation::Query },
+        FieldSpec { snake: "page", wire: "page", location: FieldLocation::Query },
+        FieldSpec { snake: "id_models", wire: "idModels", location: FieldLocation::Query },
+        FieldSpec { snake: "member", wire: "member", location: FieldLocation::Query },
+        FieldSpec { snake: "member_fields", wire: "member_fields", location: FieldLocation::Query },
+        FieldSpec { snake: "member_creator", wire: "memberCreator", location: FieldLocation::Query },
+        FieldSpec { snake: "member_creator_fields", wire: "memberCreator_fields", location: FieldLocation::Query },
+        FieldSpec { snake: "token", wire: "token", location: FieldLocation::Query },
     ],
     auth: &[
         AuthApply { secret_key: "api_key", kind: AuthKind::ApiKeyQuery("key") },
@@ -5054,8 +7876,8 @@ const OP_LIST_OP_ADD_LISTS_ARCHIVE_ALL_CARDS_BY_ID_LIST: OpSpec = OpSpec {
     method: "POST",
     path_template: "/lists/{id_list}/archiveAllCards",
     fields: &[
-        FieldSpec { snake: "id_list", location: FieldLocation::Path },
-        FieldSpec { snake: "token", location: FieldLocation::Query },
+        FieldSpec { snake: "id_list", wire: "idList", location: FieldLocation::Path },
+        FieldSpec { snake: "token", wire: "token", location: FieldLocation::Query },
     ],
     auth: &[
         AuthApply { secret_key: "api_key", kind: AuthKind::ApiKeyQuery("key") },
@@ -5066,9 +7888,9 @@ const OP_LIST_OP_GET_LISTS_BOARD_BY_ID_LIST: OpSpec = OpSpec {
     method: "GET",
     path_template: "/lists/{id_list}/board",
     fields: &[
-        FieldSpec { snake: "id_list", location: FieldLocation::Path },
-        FieldSpec { snake: "fields", location: FieldLocation::Query },
-        FieldSpec { snake: "token", location: FieldLocation::Query },
+        FieldSpec { snake: "id_list", wire: "idList", location: FieldLocation::Path },
+        FieldSpec { snake: "fields", wire: "fields", location: FieldLocation::Query },
+        FieldSpec { snake: "token", wire: "token", location: FieldLocation::Query },
     ],
     auth: &[
         AuthApply { secret_key: "api_key", kind: AuthKind::ApiKeyQuery("key") },
@@ -5079,9 +7901,9 @@ const OP_LIST_OP_GET_LISTS_BOARD_BY_ID_LIST_BY_FIELD: OpSpec = OpSpec {
     method: "GET",
     path_template: "/lists/{id_list}/board/{field}",
     fields: &[
-        FieldSpec { snake: "id_list", location: FieldLocation::Path },
-        FieldSpec { snake: "field", location: FieldLocation::Path },
-        FieldSpec { snake: "token", location: FieldLocation::Query },
+        FieldSpec { snake: "id_list", wire: "idList", location: FieldLocation::Path },
+        FieldSpec { snake: "field", wire: "field", location: FieldLocation::Path },
+        FieldSpec { snake: "token", wire: "token", location: FieldLocation::Query },
     ],
     auth: &[
         AuthApply { secret_key: "api_key", kind: AuthKind::ApiKeyQuery("key") },
@@ -5092,21 +7914,21 @@ const OP_LIST_OP_GET_LISTS_CARDS_BY_ID_LIST: OpSpec = OpSpec {
     method: "GET",
     path_template: "/lists/{id_list}/cards",
     fields: &[
-        FieldSpec { snake: "id_list", location: FieldLocation::Path },
-        FieldSpec { snake: "actions", location: FieldLocation::Query },
-        FieldSpec { snake: "attachments", location: FieldLocation::Query },
-        FieldSpec { snake: "attachment_fields", location: FieldLocation::Query },
-        FieldSpec { snake: "stickers", location: FieldLocation::Query },
-        FieldSpec { snake: "members", location: FieldLocation::Query },
-        FieldSpec { snake: "member_fields", location: FieldLocation::Query },
-        FieldSpec { snake: "check_item_states", location: FieldLocation::Query },
-        FieldSpec { snake: "checklists", location: FieldLocation::Query },
-        FieldSpec { snake: "limit", location: FieldLocation::Query },
-        FieldSpec { snake: "since", location: FieldLocation::Query },
-        FieldSpec { snake: "before", location: FieldLocation::Query },
-        FieldSpec { snake: "filter", location: FieldLocation::Query },
-        FieldSpec { snake: "fields", location: FieldLocation::Query },
-        FieldSpec { snake: "token", location: FieldLocation::Query },
+        FieldSpec { snake: "id_list", wire: "idList", location: FieldLocation::Path },
+        FieldSpec { snake: "actions", wire: "actions", location: FieldLocation::Query },
+        FieldSpec { snake: "attachments", wire: "attachments", location: FieldLocation::Query },
+        FieldSpec { snake: "attachment_fields", wire: "attachment_fields", location: FieldLocation::Query },
+        FieldSpec { snake: "stickers", wire: "stickers", location: FieldLocation::Query },
+        FieldSpec { snake: "members", wire: "members", location: FieldLocation::Query },
+        FieldSpec { snake: "member_fields", wire: "member_fields", location: FieldLocation::Query },
+        FieldSpec { snake: "check_item_states", wire: "checkItemStates", location: FieldLocation::Query },
+        FieldSpec { snake: "checklists", wire: "checklists", location: FieldLocation::Query },
+        FieldSpec { snake: "limit", wire: "limit", location: FieldLocation::Query },
+        FieldSpec { snake: "since", wire: "since", location: FieldLocation::Query },
+        FieldSpec { snake: "before", wire: "before", location: FieldLocation::Query },
+        FieldSpec { snake: "filter", wire: "filter", location: FieldLocation::Query },
+        FieldSpec { snake: "fields", wire: "fields", location: FieldLocation::Query },
+        FieldSpec { snake: "token", wire: "token", location: FieldLocation::Query },
     ],
     auth: &[
         AuthApply { secret_key: "api_key", kind: AuthKind::ApiKeyQuery("key") },
@@ -5117,13 +7939,13 @@ const OP_LIST_OP_ADD_LISTS_CARDS_BY_ID_LIST: OpSpec = OpSpec {
     method: "POST",
     path_template: "/lists/{id_list}/cards",
     fields: &[
-        FieldSpec { snake: "id_list", location: FieldLocation::Path },
-        FieldSpec { snake: "token", location: FieldLocation::Query },
-        FieldSpec { snake: "desc", location: FieldLocation::Body },
-        FieldSpec { snake: "due", location: FieldLocation::Body },
-        FieldSpec { snake: "id_members", location: FieldLocation::Body },
-        FieldSpec { snake: "labels", location: FieldLocation::Body },
-        FieldSpec { snake: "name", location: FieldLocation::Body },
+        FieldSpec { snake: "id_list", wire: "idList", location: FieldLocation::Path },
+        FieldSpec { snake: "token", wire: "token", location: FieldLocation::Query },
+        FieldSpec { snake: "desc", wire: "desc", location: FieldLocation::Body },
+        FieldSpec { snake: "due", wire: "due", location: FieldLocation::Body },
+        FieldSpec { snake: "id_members", wire: "idMembers", location: FieldLocation::Body },
+        FieldSpec { snake: "labels", wire: "labels", location: FieldLocation::Body },
+        FieldSpec { snake: "name", wire: "name", location: FieldLocation::Body },
     ],
     auth: &[
         AuthApply { secret_key: "api_key", kind: AuthKind::ApiKeyQuery("key") },
@@ -5134,10 +7956,10 @@ const OP_LIST_OP_GET_LISTS_CARDS_BY_ID_LIST_BY_FILTER: OpSpec = OpSpec {
     method: "GET",
     path_template: "/lists/{id_list}/cards/{filter}",
     fields: &[
-        FieldSpec { snake: "id_list", location: FieldLocation::Path },
-        FieldSpec { snake: "filter", location: FieldLocation::Path },
-        FieldSpec { snake: "key", location: FieldLocation::Query },
-        FieldSpec { snake: "token", location: FieldLocation::Query },
+        FieldSpec { snake: "id_list", wire: "idList", location: FieldLocation::Path },
+        FieldSpec { snake: "filter", wire: "filter", location: FieldLocation::Path },
+        FieldSpec { snake: "key", wire: "key", location: FieldLocation::Query },
+        FieldSpec { snake: "token", wire: "token", location: FieldLocation::Query },
     ],
     auth: &[
     ],
@@ -5147,9 +7969,9 @@ const OP_LIST_OP_UPDATE_LISTS_CLOSED_BY_ID_LIST: OpSpec = OpSpec {
     method: "PUT",
     path_template: "/lists/{id_list}/closed",
     fields: &[
-        FieldSpec { snake: "id_list", location: FieldLocation::Path },
-        FieldSpec { snake: "token", location: FieldLocation::Query },
-        FieldSpec { snake: "value", location: FieldLocation::Body },
+        FieldSpec { snake: "id_list", wire: "idList", location: FieldLocation::Path },
+        FieldSpec { snake: "token", wire: "token", location: FieldLocation::Query },
+        FieldSpec { snake: "value", wire: "value", location: FieldLocation::Body },
     ],
     auth: &[
         AuthApply { secret_key: "api_key", kind: AuthKind::ApiKeyQuery("key") },
@@ -5160,10 +7982,10 @@ const OP_LIST_OP_UPDATE_LISTS_ID_BOARD_BY_ID_LIST: OpSpec = OpSpec {
     method: "PUT",
     path_template: "/lists/{id_list}/idBoard",
     fields: &[
-        FieldSpec { snake: "id_list", location: FieldLocation::Path },
-        FieldSpec { snake: "token", location: FieldLocation::Query },
-        FieldSpec { snake: "pos", location: FieldLocation::Body },
-        FieldSpec { snake: "value", location: FieldLocation::Body },
+        FieldSpec { snake: "id_list", wire: "idList", location: FieldLocation::Path },
+        FieldSpec { snake: "token", wire: "token", location: FieldLocation::Query },
+        FieldSpec { snake: "pos", wire: "pos", location: FieldLocation::Body },
+        FieldSpec { snake: "value", wire: "value", location: FieldLocation::Body },
     ],
     auth: &[
         AuthApply { secret_key: "api_key", kind: AuthKind::ApiKeyQuery("key") },
@@ -5174,9 +7996,9 @@ const OP_LIST_OP_ADD_LISTS_MOVE_ALL_CARDS_BY_ID_LIST: OpSpec = OpSpec {
     method: "POST",
     path_template: "/lists/{id_list}/moveAllCards",
     fields: &[
-        FieldSpec { snake: "id_list", location: FieldLocation::Path },
-        FieldSpec { snake: "token", location: FieldLocation::Query },
-        FieldSpec { snake: "id_board", location: FieldLocation::Body },
+        FieldSpec { snake: "id_list", wire: "idList", location: FieldLocation::Path },
+        FieldSpec { snake: "token", wire: "token", location: FieldLocation::Query },
+        FieldSpec { snake: "id_board", wire: "idBoard", location: FieldLocation::Body },
     ],
     auth: &[
         AuthApply { secret_key: "api_key", kind: AuthKind::ApiKeyQuery("key") },
@@ -5187,9 +8009,9 @@ const OP_LIST_OP_UPDATE_LISTS_NAME_BY_ID_LIST: OpSpec = OpSpec {
     method: "PUT",
     path_template: "/lists/{id_list}/name",
     fields: &[
-        FieldSpec { snake: "id_list", location: FieldLocation::Path },
-        FieldSpec { snake: "token", location: FieldLocation::Query },
-        FieldSpec { snake: "value", location: FieldLocation::Body },
+        FieldSpec { snake: "id_list", wire: "idList", location: FieldLocation::Path },
+        FieldSpec { snake: "token", wire: "token", location: FieldLocation::Query },
+        FieldSpec { snake: "value", wire: "value", location: FieldLocation::Body },
     ],
     auth: &[
         AuthApply { secret_key: "api_key", kind: AuthKind::ApiKeyQuery("key") },
@@ -5200,9 +8022,9 @@ const OP_LIST_OP_UPDATE_LISTS_POS_BY_ID_LIST: OpSpec = OpSpec {
     method: "PUT",
     path_template: "/lists/{id_list}/pos",
     fields: &[
-        FieldSpec { snake: "id_list", location: FieldLocation::Path },
-        FieldSpec { snake: "token", location: FieldLocation::Query },
-        FieldSpec { snake: "value", location: FieldLocation::Body },
+        FieldSpec { snake: "id_list", wire: "idList", location: FieldLocation::Path },
+        FieldSpec { snake: "token", wire: "token", location: FieldLocation::Query },
+        FieldSpec { snake: "value", wire: "value", location: FieldLocation::Body },
     ],
     auth: &[
         AuthApply { secret_key: "api_key", kind: AuthKind::ApiKeyQuery("key") },
@@ -5213,9 +8035,9 @@ const OP_LIST_OP_UPDATE_LISTS_SUBSCRIBED_BY_ID_LIST: OpSpec = OpSpec {
     method: "PUT",
     path_template: "/lists/{id_list}/subscribed",
     fields: &[
-        FieldSpec { snake: "id_list", location: FieldLocation::Path },
-        FieldSpec { snake: "token", location: FieldLocation::Query },
-        FieldSpec { snake: "value", location: FieldLocation::Body },
+        FieldSpec { snake: "id_list", wire: "idList", location: FieldLocation::Path },
+        FieldSpec { snake: "token", wire: "token", location: FieldLocation::Query },
+        FieldSpec { snake: "value", wire: "value", location: FieldLocation::Body },
     ],
     auth: &[
         AuthApply { secret_key: "api_key", kind: AuthKind::ApiKeyQuery("key") },
@@ -5226,10 +8048,10 @@ const OP_LIST_OP_GET_LISTS_BY_ID_LIST_BY_FIELD: OpSpec = OpSpec {
     method: "GET",
     path_template: "/lists/{id_list}/{field}",
     fields: &[
-        FieldSpec { snake: "id_list", location: FieldLocation::Path },
-        FieldSpec { snake: "field", location: FieldLocation::Path },
-        FieldSpec { snake: "key", location: FieldLocation::Query },
-        FieldSpec { snake: "token", location: FieldLocation::Query },
+        FieldSpec { snake: "id_list", wire: "idList", location: FieldLocation::Path },
+        FieldSpec { snake: "field", wire: "field", location: FieldLocation::Path },
+        FieldSpec { snake: "key", wire: "key", location: FieldLocation::Query },
+        FieldSpec { snake: "token", wire: "token", location: FieldLocation::Query },
     ],
     auth: &[
     ],
@@ -5415,74 +8237,363 @@ fn iface_list_op__get_lists_by_id_list_by_field_params__to_json(p: &iface_list_o
     Value::Object(m)
 }
 
+fn iface_list_op__add_lists__ok(body: String) -> Result<String, crate::runtime::DispatchError> {
+    Ok(body)
+}
+
+fn iface_list_op__add_lists__err(e: crate::runtime::DispatchError) -> iface_list_op::AddListsError {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => match status {
+            400u16 => iface_list_op::AddListsError::BadRequest(body),
+            _ => iface_list_op::AddListsError::Other(body),
+        },
+        crate::runtime::DispatchError::Transport(m) => iface_list_op::AddListsError::Other(m),
+    }
+}
+
+fn iface_list_op__get_lists_by_id_list__ok(body: String) -> Result<String, crate::runtime::DispatchError> {
+    Ok(body)
+}
+
+fn iface_list_op__get_lists_by_id_list__err(e: crate::runtime::DispatchError) -> iface_list_op::GetListsByIdListError {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => match status {
+            400u16 => iface_list_op::GetListsByIdListError::BadRequest(body),
+            _ => iface_list_op::GetListsByIdListError::Other(body),
+        },
+        crate::runtime::DispatchError::Transport(m) => iface_list_op::GetListsByIdListError::Other(m),
+    }
+}
+
+fn iface_list_op__update_lists_by_id_list__ok(body: String) -> Result<String, crate::runtime::DispatchError> {
+    Ok(body)
+}
+
+fn iface_list_op__update_lists_by_id_list__err(e: crate::runtime::DispatchError) -> iface_list_op::UpdateListsByIdListError {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => match status {
+            400u16 => iface_list_op::UpdateListsByIdListError::BadRequest(body),
+            _ => iface_list_op::UpdateListsByIdListError::Other(body),
+        },
+        crate::runtime::DispatchError::Transport(m) => iface_list_op::UpdateListsByIdListError::Other(m),
+    }
+}
+
+fn iface_list_op__get_lists_actions_by_id_list__ok(body: String) -> Result<String, crate::runtime::DispatchError> {
+    Ok(body)
+}
+
+fn iface_list_op__get_lists_actions_by_id_list__err(e: crate::runtime::DispatchError) -> iface_list_op::GetListsActionsByIdListError {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => match status {
+            400u16 => iface_list_op::GetListsActionsByIdListError::BadRequest(body),
+            _ => iface_list_op::GetListsActionsByIdListError::Other(body),
+        },
+        crate::runtime::DispatchError::Transport(m) => iface_list_op::GetListsActionsByIdListError::Other(m),
+    }
+}
+
+fn iface_list_op__add_lists_archive_all_cards_by_id_list__ok(body: String) -> Result<String, crate::runtime::DispatchError> {
+    Ok(body)
+}
+
+fn iface_list_op__add_lists_archive_all_cards_by_id_list__err(e: crate::runtime::DispatchError) -> iface_list_op::AddListsArchiveAllCardsByIdListError {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => match status {
+            400u16 => iface_list_op::AddListsArchiveAllCardsByIdListError::BadRequest(body),
+            _ => iface_list_op::AddListsArchiveAllCardsByIdListError::Other(body),
+        },
+        crate::runtime::DispatchError::Transport(m) => iface_list_op::AddListsArchiveAllCardsByIdListError::Other(m),
+    }
+}
+
+fn iface_list_op__get_lists_board_by_id_list__ok(body: String) -> Result<String, crate::runtime::DispatchError> {
+    Ok(body)
+}
+
+fn iface_list_op__get_lists_board_by_id_list__err(e: crate::runtime::DispatchError) -> iface_list_op::GetListsBoardByIdListError {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => match status {
+            400u16 => iface_list_op::GetListsBoardByIdListError::BadRequest(body),
+            _ => iface_list_op::GetListsBoardByIdListError::Other(body),
+        },
+        crate::runtime::DispatchError::Transport(m) => iface_list_op::GetListsBoardByIdListError::Other(m),
+    }
+}
+
+fn iface_list_op__get_lists_board_by_id_list_by_field__ok(body: String) -> Result<String, crate::runtime::DispatchError> {
+    Ok(body)
+}
+
+fn iface_list_op__get_lists_board_by_id_list_by_field__err(e: crate::runtime::DispatchError) -> iface_list_op::GetListsBoardByIdListByFieldError {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => match status {
+            400u16 => iface_list_op::GetListsBoardByIdListByFieldError::BadRequest(body),
+            _ => iface_list_op::GetListsBoardByIdListByFieldError::Other(body),
+        },
+        crate::runtime::DispatchError::Transport(m) => iface_list_op::GetListsBoardByIdListByFieldError::Other(m),
+    }
+}
+
+fn iface_list_op__get_lists_cards_by_id_list__ok(body: String) -> Result<String, crate::runtime::DispatchError> {
+    Ok(body)
+}
+
+fn iface_list_op__get_lists_cards_by_id_list__err(e: crate::runtime::DispatchError) -> iface_list_op::GetListsCardsByIdListError {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => match status {
+            400u16 => iface_list_op::GetListsCardsByIdListError::BadRequest(body),
+            _ => iface_list_op::GetListsCardsByIdListError::Other(body),
+        },
+        crate::runtime::DispatchError::Transport(m) => iface_list_op::GetListsCardsByIdListError::Other(m),
+    }
+}
+
+fn iface_list_op__add_lists_cards_by_id_list__ok(body: String) -> Result<String, crate::runtime::DispatchError> {
+    Ok(body)
+}
+
+fn iface_list_op__add_lists_cards_by_id_list__err(e: crate::runtime::DispatchError) -> iface_list_op::AddListsCardsByIdListError {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => match status {
+            400u16 => iface_list_op::AddListsCardsByIdListError::BadRequest(body),
+            _ => iface_list_op::AddListsCardsByIdListError::Other(body),
+        },
+        crate::runtime::DispatchError::Transport(m) => iface_list_op::AddListsCardsByIdListError::Other(m),
+    }
+}
+
+fn iface_list_op__get_lists_cards_by_id_list_by_filter__ok(body: String) -> Result<String, crate::runtime::DispatchError> {
+    Ok(body)
+}
+
+fn iface_list_op__get_lists_cards_by_id_list_by_filter__err(e: crate::runtime::DispatchError) -> iface_list_op::GetListsCardsByIdListByFilterError {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => match status {
+            400u16 => iface_list_op::GetListsCardsByIdListByFilterError::BadRequest(body),
+            _ => iface_list_op::GetListsCardsByIdListByFilterError::Other(body),
+        },
+        crate::runtime::DispatchError::Transport(m) => iface_list_op::GetListsCardsByIdListByFilterError::Other(m),
+    }
+}
+
+fn iface_list_op__update_lists_closed_by_id_list__ok(body: String) -> Result<String, crate::runtime::DispatchError> {
+    Ok(body)
+}
+
+fn iface_list_op__update_lists_closed_by_id_list__err(e: crate::runtime::DispatchError) -> iface_list_op::UpdateListsClosedByIdListError {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => match status {
+            400u16 => iface_list_op::UpdateListsClosedByIdListError::BadRequest(body),
+            _ => iface_list_op::UpdateListsClosedByIdListError::Other(body),
+        },
+        crate::runtime::DispatchError::Transport(m) => iface_list_op::UpdateListsClosedByIdListError::Other(m),
+    }
+}
+
+fn iface_list_op__update_lists_id_board_by_id_list__ok(body: String) -> Result<String, crate::runtime::DispatchError> {
+    Ok(body)
+}
+
+fn iface_list_op__update_lists_id_board_by_id_list__err(e: crate::runtime::DispatchError) -> iface_list_op::UpdateListsIdBoardByIdListError {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => match status {
+            400u16 => iface_list_op::UpdateListsIdBoardByIdListError::BadRequest(body),
+            _ => iface_list_op::UpdateListsIdBoardByIdListError::Other(body),
+        },
+        crate::runtime::DispatchError::Transport(m) => iface_list_op::UpdateListsIdBoardByIdListError::Other(m),
+    }
+}
+
+fn iface_list_op__add_lists_move_all_cards_by_id_list__ok(body: String) -> Result<String, crate::runtime::DispatchError> {
+    Ok(body)
+}
+
+fn iface_list_op__add_lists_move_all_cards_by_id_list__err(e: crate::runtime::DispatchError) -> iface_list_op::AddListsMoveAllCardsByIdListError {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => match status {
+            400u16 => iface_list_op::AddListsMoveAllCardsByIdListError::BadRequest(body),
+            _ => iface_list_op::AddListsMoveAllCardsByIdListError::Other(body),
+        },
+        crate::runtime::DispatchError::Transport(m) => iface_list_op::AddListsMoveAllCardsByIdListError::Other(m),
+    }
+}
+
+fn iface_list_op__update_lists_name_by_id_list__ok(body: String) -> Result<String, crate::runtime::DispatchError> {
+    Ok(body)
+}
+
+fn iface_list_op__update_lists_name_by_id_list__err(e: crate::runtime::DispatchError) -> iface_list_op::UpdateListsNameByIdListError {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => match status {
+            400u16 => iface_list_op::UpdateListsNameByIdListError::BadRequest(body),
+            _ => iface_list_op::UpdateListsNameByIdListError::Other(body),
+        },
+        crate::runtime::DispatchError::Transport(m) => iface_list_op::UpdateListsNameByIdListError::Other(m),
+    }
+}
+
+fn iface_list_op__update_lists_pos_by_id_list__ok(body: String) -> Result<String, crate::runtime::DispatchError> {
+    Ok(body)
+}
+
+fn iface_list_op__update_lists_pos_by_id_list__err(e: crate::runtime::DispatchError) -> iface_list_op::UpdateListsPosByIdListError {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => match status {
+            400u16 => iface_list_op::UpdateListsPosByIdListError::BadRequest(body),
+            _ => iface_list_op::UpdateListsPosByIdListError::Other(body),
+        },
+        crate::runtime::DispatchError::Transport(m) => iface_list_op::UpdateListsPosByIdListError::Other(m),
+    }
+}
+
+fn iface_list_op__update_lists_subscribed_by_id_list__ok(body: String) -> Result<String, crate::runtime::DispatchError> {
+    Ok(body)
+}
+
+fn iface_list_op__update_lists_subscribed_by_id_list__err(e: crate::runtime::DispatchError) -> iface_list_op::UpdateListsSubscribedByIdListError {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => match status {
+            400u16 => iface_list_op::UpdateListsSubscribedByIdListError::BadRequest(body),
+            _ => iface_list_op::UpdateListsSubscribedByIdListError::Other(body),
+        },
+        crate::runtime::DispatchError::Transport(m) => iface_list_op::UpdateListsSubscribedByIdListError::Other(m),
+    }
+}
+
+fn iface_list_op__get_lists_by_id_list_by_field__ok(body: String) -> Result<String, crate::runtime::DispatchError> {
+    Ok(body)
+}
+
+fn iface_list_op__get_lists_by_id_list_by_field__err(e: crate::runtime::DispatchError) -> iface_list_op::GetListsByIdListByFieldError {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => match status {
+            400u16 => iface_list_op::GetListsByIdListByFieldError::BadRequest(body),
+            _ => iface_list_op::GetListsByIdListByFieldError::Other(body),
+        },
+        crate::runtime::DispatchError::Transport(m) => iface_list_op::GetListsByIdListByFieldError::Other(m),
+    }
+}
+
 impl iface_list_op::Guest for crate::Component {
-    fn add_lists(params: iface_list_op::AddListsParams) -> Result<String, String> {
+    fn add_lists(params: iface_list_op::AddListsParams) -> Result<String, iface_list_op::AddListsError> {
         let json = iface_list_op__add_lists_params__to_json(&params);
-        dispatch(&OP_LIST_OP_ADD_LISTS, json)
+        match dispatch(&OP_LIST_OP_ADD_LISTS, json).and_then(iface_list_op__add_lists__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_list_op__add_lists__err(e)),
+        }
     }
-    fn get_lists_by_id_list(params: iface_list_op::GetListsByIdListParams) -> Result<String, String> {
+    fn get_lists_by_id_list(params: iface_list_op::GetListsByIdListParams) -> Result<String, iface_list_op::GetListsByIdListError> {
         let json = iface_list_op__get_lists_by_id_list_params__to_json(&params);
-        dispatch(&OP_LIST_OP_GET_LISTS_BY_ID_LIST, json)
+        match dispatch(&OP_LIST_OP_GET_LISTS_BY_ID_LIST, json).and_then(iface_list_op__get_lists_by_id_list__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_list_op__get_lists_by_id_list__err(e)),
+        }
     }
-    fn update_lists_by_id_list(params: iface_list_op::UpdateListsByIdListParams) -> Result<String, String> {
+    fn update_lists_by_id_list(params: iface_list_op::UpdateListsByIdListParams) -> Result<String, iface_list_op::UpdateListsByIdListError> {
         let json = iface_list_op__update_lists_by_id_list_params__to_json(&params);
-        dispatch(&OP_LIST_OP_UPDATE_LISTS_BY_ID_LIST, json)
+        match dispatch(&OP_LIST_OP_UPDATE_LISTS_BY_ID_LIST, json).and_then(iface_list_op__update_lists_by_id_list__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_list_op__update_lists_by_id_list__err(e)),
+        }
     }
-    fn get_lists_actions_by_id_list(params: iface_list_op::GetListsActionsByIdListParams) -> Result<String, String> {
+    fn get_lists_actions_by_id_list(params: iface_list_op::GetListsActionsByIdListParams) -> Result<String, iface_list_op::GetListsActionsByIdListError> {
         let json = iface_list_op__get_lists_actions_by_id_list_params__to_json(&params);
-        dispatch(&OP_LIST_OP_GET_LISTS_ACTIONS_BY_ID_LIST, json)
+        match dispatch(&OP_LIST_OP_GET_LISTS_ACTIONS_BY_ID_LIST, json).and_then(iface_list_op__get_lists_actions_by_id_list__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_list_op__get_lists_actions_by_id_list__err(e)),
+        }
     }
-    fn add_lists_archive_all_cards_by_id_list(params: iface_list_op::AddListsArchiveAllCardsByIdListParams) -> Result<String, String> {
+    fn add_lists_archive_all_cards_by_id_list(params: iface_list_op::AddListsArchiveAllCardsByIdListParams) -> Result<String, iface_list_op::AddListsArchiveAllCardsByIdListError> {
         let json = iface_list_op__add_lists_archive_all_cards_by_id_list_params__to_json(&params);
-        dispatch(&OP_LIST_OP_ADD_LISTS_ARCHIVE_ALL_CARDS_BY_ID_LIST, json)
+        match dispatch(&OP_LIST_OP_ADD_LISTS_ARCHIVE_ALL_CARDS_BY_ID_LIST, json).and_then(iface_list_op__add_lists_archive_all_cards_by_id_list__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_list_op__add_lists_archive_all_cards_by_id_list__err(e)),
+        }
     }
-    fn get_lists_board_by_id_list(params: iface_list_op::GetListsBoardByIdListParams) -> Result<String, String> {
+    fn get_lists_board_by_id_list(params: iface_list_op::GetListsBoardByIdListParams) -> Result<String, iface_list_op::GetListsBoardByIdListError> {
         let json = iface_list_op__get_lists_board_by_id_list_params__to_json(&params);
-        dispatch(&OP_LIST_OP_GET_LISTS_BOARD_BY_ID_LIST, json)
+        match dispatch(&OP_LIST_OP_GET_LISTS_BOARD_BY_ID_LIST, json).and_then(iface_list_op__get_lists_board_by_id_list__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_list_op__get_lists_board_by_id_list__err(e)),
+        }
     }
-    fn get_lists_board_by_id_list_by_field(params: iface_list_op::GetListsBoardByIdListByFieldParams) -> Result<String, String> {
+    fn get_lists_board_by_id_list_by_field(params: iface_list_op::GetListsBoardByIdListByFieldParams) -> Result<String, iface_list_op::GetListsBoardByIdListByFieldError> {
         let json = iface_list_op__get_lists_board_by_id_list_by_field_params__to_json(&params);
-        dispatch(&OP_LIST_OP_GET_LISTS_BOARD_BY_ID_LIST_BY_FIELD, json)
+        match dispatch(&OP_LIST_OP_GET_LISTS_BOARD_BY_ID_LIST_BY_FIELD, json).and_then(iface_list_op__get_lists_board_by_id_list_by_field__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_list_op__get_lists_board_by_id_list_by_field__err(e)),
+        }
     }
-    fn get_lists_cards_by_id_list(params: iface_list_op::GetListsCardsByIdListParams) -> Result<String, String> {
+    fn get_lists_cards_by_id_list(params: iface_list_op::GetListsCardsByIdListParams) -> Result<String, iface_list_op::GetListsCardsByIdListError> {
         let json = iface_list_op__get_lists_cards_by_id_list_params__to_json(&params);
-        dispatch(&OP_LIST_OP_GET_LISTS_CARDS_BY_ID_LIST, json)
+        match dispatch(&OP_LIST_OP_GET_LISTS_CARDS_BY_ID_LIST, json).and_then(iface_list_op__get_lists_cards_by_id_list__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_list_op__get_lists_cards_by_id_list__err(e)),
+        }
     }
-    fn add_lists_cards_by_id_list(params: iface_list_op::AddListsCardsByIdListParams) -> Result<String, String> {
+    fn add_lists_cards_by_id_list(params: iface_list_op::AddListsCardsByIdListParams) -> Result<String, iface_list_op::AddListsCardsByIdListError> {
         let json = iface_list_op__add_lists_cards_by_id_list_params__to_json(&params);
-        dispatch(&OP_LIST_OP_ADD_LISTS_CARDS_BY_ID_LIST, json)
+        match dispatch(&OP_LIST_OP_ADD_LISTS_CARDS_BY_ID_LIST, json).and_then(iface_list_op__add_lists_cards_by_id_list__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_list_op__add_lists_cards_by_id_list__err(e)),
+        }
     }
-    fn get_lists_cards_by_id_list_by_filter(params: iface_list_op::GetListsCardsByIdListByFilterParams) -> Result<String, String> {
+    fn get_lists_cards_by_id_list_by_filter(params: iface_list_op::GetListsCardsByIdListByFilterParams) -> Result<String, iface_list_op::GetListsCardsByIdListByFilterError> {
         let json = iface_list_op__get_lists_cards_by_id_list_by_filter_params__to_json(&params);
-        dispatch(&OP_LIST_OP_GET_LISTS_CARDS_BY_ID_LIST_BY_FILTER, json)
+        match dispatch(&OP_LIST_OP_GET_LISTS_CARDS_BY_ID_LIST_BY_FILTER, json).and_then(iface_list_op__get_lists_cards_by_id_list_by_filter__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_list_op__get_lists_cards_by_id_list_by_filter__err(e)),
+        }
     }
-    fn update_lists_closed_by_id_list(params: iface_list_op::UpdateListsClosedByIdListParams) -> Result<String, String> {
+    fn update_lists_closed_by_id_list(params: iface_list_op::UpdateListsClosedByIdListParams) -> Result<String, iface_list_op::UpdateListsClosedByIdListError> {
         let json = iface_list_op__update_lists_closed_by_id_list_params__to_json(&params);
-        dispatch(&OP_LIST_OP_UPDATE_LISTS_CLOSED_BY_ID_LIST, json)
+        match dispatch(&OP_LIST_OP_UPDATE_LISTS_CLOSED_BY_ID_LIST, json).and_then(iface_list_op__update_lists_closed_by_id_list__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_list_op__update_lists_closed_by_id_list__err(e)),
+        }
     }
-    fn update_lists_id_board_by_id_list(params: iface_list_op::UpdateListsIdBoardByIdListParams) -> Result<String, String> {
+    fn update_lists_id_board_by_id_list(params: iface_list_op::UpdateListsIdBoardByIdListParams) -> Result<String, iface_list_op::UpdateListsIdBoardByIdListError> {
         let json = iface_list_op__update_lists_id_board_by_id_list_params__to_json(&params);
-        dispatch(&OP_LIST_OP_UPDATE_LISTS_ID_BOARD_BY_ID_LIST, json)
+        match dispatch(&OP_LIST_OP_UPDATE_LISTS_ID_BOARD_BY_ID_LIST, json).and_then(iface_list_op__update_lists_id_board_by_id_list__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_list_op__update_lists_id_board_by_id_list__err(e)),
+        }
     }
-    fn add_lists_move_all_cards_by_id_list(params: iface_list_op::AddListsMoveAllCardsByIdListParams) -> Result<String, String> {
+    fn add_lists_move_all_cards_by_id_list(params: iface_list_op::AddListsMoveAllCardsByIdListParams) -> Result<String, iface_list_op::AddListsMoveAllCardsByIdListError> {
         let json = iface_list_op__add_lists_move_all_cards_by_id_list_params__to_json(&params);
-        dispatch(&OP_LIST_OP_ADD_LISTS_MOVE_ALL_CARDS_BY_ID_LIST, json)
+        match dispatch(&OP_LIST_OP_ADD_LISTS_MOVE_ALL_CARDS_BY_ID_LIST, json).and_then(iface_list_op__add_lists_move_all_cards_by_id_list__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_list_op__add_lists_move_all_cards_by_id_list__err(e)),
+        }
     }
-    fn update_lists_name_by_id_list(params: iface_list_op::UpdateListsNameByIdListParams) -> Result<String, String> {
+    fn update_lists_name_by_id_list(params: iface_list_op::UpdateListsNameByIdListParams) -> Result<String, iface_list_op::UpdateListsNameByIdListError> {
         let json = iface_list_op__update_lists_name_by_id_list_params__to_json(&params);
-        dispatch(&OP_LIST_OP_UPDATE_LISTS_NAME_BY_ID_LIST, json)
+        match dispatch(&OP_LIST_OP_UPDATE_LISTS_NAME_BY_ID_LIST, json).and_then(iface_list_op__update_lists_name_by_id_list__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_list_op__update_lists_name_by_id_list__err(e)),
+        }
     }
-    fn update_lists_pos_by_id_list(params: iface_list_op::UpdateListsPosByIdListParams) -> Result<String, String> {
+    fn update_lists_pos_by_id_list(params: iface_list_op::UpdateListsPosByIdListParams) -> Result<String, iface_list_op::UpdateListsPosByIdListError> {
         let json = iface_list_op__update_lists_pos_by_id_list_params__to_json(&params);
-        dispatch(&OP_LIST_OP_UPDATE_LISTS_POS_BY_ID_LIST, json)
+        match dispatch(&OP_LIST_OP_UPDATE_LISTS_POS_BY_ID_LIST, json).and_then(iface_list_op__update_lists_pos_by_id_list__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_list_op__update_lists_pos_by_id_list__err(e)),
+        }
     }
-    fn update_lists_subscribed_by_id_list(params: iface_list_op::UpdateListsSubscribedByIdListParams) -> Result<String, String> {
+    fn update_lists_subscribed_by_id_list(params: iface_list_op::UpdateListsSubscribedByIdListParams) -> Result<String, iface_list_op::UpdateListsSubscribedByIdListError> {
         let json = iface_list_op__update_lists_subscribed_by_id_list_params__to_json(&params);
-        dispatch(&OP_LIST_OP_UPDATE_LISTS_SUBSCRIBED_BY_ID_LIST, json)
+        match dispatch(&OP_LIST_OP_UPDATE_LISTS_SUBSCRIBED_BY_ID_LIST, json).and_then(iface_list_op__update_lists_subscribed_by_id_list__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_list_op__update_lists_subscribed_by_id_list__err(e)),
+        }
     }
-    fn get_lists_by_id_list_by_field(params: iface_list_op::GetListsByIdListByFieldParams) -> Result<String, String> {
+    fn get_lists_by_id_list_by_field(params: iface_list_op::GetListsByIdListByFieldParams) -> Result<String, iface_list_op::GetListsByIdListByFieldError> {
         let json = iface_list_op__get_lists_by_id_list_by_field_params__to_json(&params);
-        dispatch(&OP_LIST_OP_GET_LISTS_BY_ID_LIST_BY_FIELD, json)
+        match dispatch(&OP_LIST_OP_GET_LISTS_BY_ID_LIST_BY_FIELD, json).and_then(iface_list_op__get_lists_by_id_list_by_field__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_list_op__get_lists_by_id_list_by_field__err(e)),
+        }
     }
 }
 use crate::exports::autostamp::trello::member as iface_member;
@@ -5491,60 +8602,60 @@ const OP_MEMBER_GET_MEMBERS_BY_ID_MEMBER: OpSpec = OpSpec {
     method: "GET",
     path_template: "/members/{id_member}",
     fields: &[
-        FieldSpec { snake: "id_member", location: FieldLocation::Path },
-        FieldSpec { snake: "actions", location: FieldLocation::Query },
-        FieldSpec { snake: "actions_entities", location: FieldLocation::Query },
-        FieldSpec { snake: "actions_display", location: FieldLocation::Query },
-        FieldSpec { snake: "actions_limit", location: FieldLocation::Query },
-        FieldSpec { snake: "action_fields", location: FieldLocation::Query },
-        FieldSpec { snake: "action_since", location: FieldLocation::Query },
-        FieldSpec { snake: "action_before", location: FieldLocation::Query },
-        FieldSpec { snake: "cards", location: FieldLocation::Query },
-        FieldSpec { snake: "card_fields", location: FieldLocation::Query },
-        FieldSpec { snake: "card_members", location: FieldLocation::Query },
-        FieldSpec { snake: "card_member_fields", location: FieldLocation::Query },
-        FieldSpec { snake: "card_attachments", location: FieldLocation::Query },
-        FieldSpec { snake: "card_attachment_fields", location: FieldLocation::Query },
-        FieldSpec { snake: "card_stickers", location: FieldLocation::Query },
-        FieldSpec { snake: "boards", location: FieldLocation::Query },
-        FieldSpec { snake: "board_fields", location: FieldLocation::Query },
-        FieldSpec { snake: "board_actions", location: FieldLocation::Query },
-        FieldSpec { snake: "board_actions_entities", location: FieldLocation::Query },
-        FieldSpec { snake: "board_actions_display", location: FieldLocation::Query },
-        FieldSpec { snake: "board_actions_format", location: FieldLocation::Query },
-        FieldSpec { snake: "board_actions_since", location: FieldLocation::Query },
-        FieldSpec { snake: "board_actions_limit", location: FieldLocation::Query },
-        FieldSpec { snake: "board_action_fields", location: FieldLocation::Query },
-        FieldSpec { snake: "board_lists", location: FieldLocation::Query },
-        FieldSpec { snake: "board_memberships", location: FieldLocation::Query },
-        FieldSpec { snake: "board_organization", location: FieldLocation::Query },
-        FieldSpec { snake: "board_organization_fields", location: FieldLocation::Query },
-        FieldSpec { snake: "boards_invited", location: FieldLocation::Query },
-        FieldSpec { snake: "boards_invited_fields", location: FieldLocation::Query },
-        FieldSpec { snake: "board_stars", location: FieldLocation::Query },
-        FieldSpec { snake: "saved_searches", location: FieldLocation::Query },
-        FieldSpec { snake: "organizations", location: FieldLocation::Query },
-        FieldSpec { snake: "organization_fields", location: FieldLocation::Query },
-        FieldSpec { snake: "organization_paid_account", location: FieldLocation::Query },
-        FieldSpec { snake: "organizations_invited", location: FieldLocation::Query },
-        FieldSpec { snake: "organizations_invited_fields", location: FieldLocation::Query },
-        FieldSpec { snake: "notifications", location: FieldLocation::Query },
-        FieldSpec { snake: "notifications_entities", location: FieldLocation::Query },
-        FieldSpec { snake: "notifications_display", location: FieldLocation::Query },
-        FieldSpec { snake: "notifications_limit", location: FieldLocation::Query },
-        FieldSpec { snake: "notification_fields", location: FieldLocation::Query },
-        FieldSpec { snake: "notification_member_creator", location: FieldLocation::Query },
-        FieldSpec { snake: "notification_member_creator_fields", location: FieldLocation::Query },
-        FieldSpec { snake: "notification_before", location: FieldLocation::Query },
-        FieldSpec { snake: "notification_since", location: FieldLocation::Query },
-        FieldSpec { snake: "tokens", location: FieldLocation::Query },
-        FieldSpec { snake: "paid_account", location: FieldLocation::Query },
-        FieldSpec { snake: "board_backgrounds", location: FieldLocation::Query },
-        FieldSpec { snake: "custom_board_backgrounds", location: FieldLocation::Query },
-        FieldSpec { snake: "custom_stickers", location: FieldLocation::Query },
-        FieldSpec { snake: "custom_emoji", location: FieldLocation::Query },
-        FieldSpec { snake: "fields", location: FieldLocation::Query },
-        FieldSpec { snake: "token", location: FieldLocation::Query },
+        FieldSpec { snake: "id_member", wire: "idMember", location: FieldLocation::Path },
+        FieldSpec { snake: "actions", wire: "actions", location: FieldLocation::Query },
+        FieldSpec { snake: "actions_entities", wire: "actions_entities", location: FieldLocation::Query },
+        FieldSpec { snake: "actions_display", wire: "actions_display", location: FieldLocation::Query },
+        FieldSpec { snake: "actions_limit", wire: "actions_limit", location: FieldLocation::Query },
+        FieldSpec { snake: "action_fields", wire: "action_fields", location: FieldLocation::Query },
+        FieldSpec { snake: "action_since", wire: "action_since", location: FieldLocation::Query },
+        FieldSpec { snake: "action_before", wire: "action_before", location: FieldLocation::Query },
+        FieldSpec { snake: "cards", wire: "cards", location: FieldLocation::Query },
+        FieldSpec { snake: "card_fields", wire: "card_fields", location: FieldLocation::Query },
+        FieldSpec { snake: "card_members", wire: "card_members", location: FieldLocation::Query },
+        FieldSpec { snake: "card_member_fields", wire: "card_member_fields", location: FieldLocation::Query },
+        FieldSpec { snake: "card_attachments", wire: "card_attachments", location: FieldLocation::Query },
+        FieldSpec { snake: "card_attachment_fields", wire: "card_attachment_fields", location: FieldLocation::Query },
+        FieldSpec { snake: "card_stickers", wire: "card_stickers", location: FieldLocation::Query },
+        FieldSpec { snake: "boards", wire: "boards", location: FieldLocation::Query },
+        FieldSpec { snake: "board_fields", wire: "board_fields", location: FieldLocation::Query },
+        FieldSpec { snake: "board_actions", wire: "board_actions", location: FieldLocation::Query },
+        FieldSpec { snake: "board_actions_entities", wire: "board_actions_entities", location: FieldLocation::Query },
+        FieldSpec { snake: "board_actions_display", wire: "board_actions_display", location: FieldLocation::Query },
+        FieldSpec { snake: "board_actions_format", wire: "board_actions_format", location: FieldLocation::Query },
+        FieldSpec { snake: "board_actions_since", wire: "board_actions_since", location: FieldLocation::Query },
+        FieldSpec { snake: "board_actions_limit", wire: "board_actions_limit", location: FieldLocation::Query },
+        FieldSpec { snake: "board_action_fields", wire: "board_action_fields", location: FieldLocation::Query },
+        FieldSpec { snake: "board_lists", wire: "board_lists", location: FieldLocation::Query },
+        FieldSpec { snake: "board_memberships", wire: "board_memberships", location: FieldLocation::Query },
+        FieldSpec { snake: "board_organization", wire: "board_organization", location: FieldLocation::Query },
+        FieldSpec { snake: "board_organization_fields", wire: "board_organization_fields", location: FieldLocation::Query },
+        FieldSpec { snake: "boards_invited", wire: "boardsInvited", location: FieldLocation::Query },
+        FieldSpec { snake: "boards_invited_fields", wire: "boardsInvited_fields", location: FieldLocation::Query },
+        FieldSpec { snake: "board_stars", wire: "boardStars", location: FieldLocation::Query },
+        FieldSpec { snake: "saved_searches", wire: "savedSearches", location: FieldLocation::Query },
+        FieldSpec { snake: "organizations", wire: "organizations", location: FieldLocation::Query },
+        FieldSpec { snake: "organization_fields", wire: "organization_fields", location: FieldLocation::Query },
+        FieldSpec { snake: "organization_paid_account", wire: "organization_paid_account", location: FieldLocation::Query },
+        FieldSpec { snake: "organizations_invited", wire: "organizationsInvited", location: FieldLocation::Query },
+        FieldSpec { snake: "organizations_invited_fields", wire: "organizationsInvited_fields", location: FieldLocation::Query },
+        FieldSpec { snake: "notifications", wire: "notifications", location: FieldLocation::Query },
+        FieldSpec { snake: "notifications_entities", wire: "notifications_entities", location: FieldLocation::Query },
+        FieldSpec { snake: "notifications_display", wire: "notifications_display", location: FieldLocation::Query },
+        FieldSpec { snake: "notifications_limit", wire: "notifications_limit", location: FieldLocation::Query },
+        FieldSpec { snake: "notification_fields", wire: "notification_fields", location: FieldLocation::Query },
+        FieldSpec { snake: "notification_member_creator", wire: "notification_memberCreator", location: FieldLocation::Query },
+        FieldSpec { snake: "notification_member_creator_fields", wire: "notification_memberCreator_fields", location: FieldLocation::Query },
+        FieldSpec { snake: "notification_before", wire: "notification_before", location: FieldLocation::Query },
+        FieldSpec { snake: "notification_since", wire: "notification_since", location: FieldLocation::Query },
+        FieldSpec { snake: "tokens", wire: "tokens", location: FieldLocation::Query },
+        FieldSpec { snake: "paid_account", wire: "paid_account", location: FieldLocation::Query },
+        FieldSpec { snake: "board_backgrounds", wire: "boardBackgrounds", location: FieldLocation::Query },
+        FieldSpec { snake: "custom_board_backgrounds", wire: "customBoardBackgrounds", location: FieldLocation::Query },
+        FieldSpec { snake: "custom_stickers", wire: "customStickers", location: FieldLocation::Query },
+        FieldSpec { snake: "custom_emoji", wire: "customEmoji", location: FieldLocation::Query },
+        FieldSpec { snake: "fields", wire: "fields", location: FieldLocation::Query },
+        FieldSpec { snake: "token", wire: "token", location: FieldLocation::Query },
     ],
     auth: &[
         AuthApply { secret_key: "api_key", kind: AuthKind::ApiKeyQuery("key") },
@@ -5555,16 +8666,16 @@ const OP_MEMBER_UPDATE_MEMBERS_BY_ID_MEMBER: OpSpec = OpSpec {
     method: "PUT",
     path_template: "/members/{id_member}",
     fields: &[
-        FieldSpec { snake: "id_member", location: FieldLocation::Path },
-        FieldSpec { snake: "token", location: FieldLocation::Query },
-        FieldSpec { snake: "avatar_source", location: FieldLocation::Body },
-        FieldSpec { snake: "bio", location: FieldLocation::Body },
-        FieldSpec { snake: "full_name", location: FieldLocation::Body },
-        FieldSpec { snake: "initials", location: FieldLocation::Body },
-        FieldSpec { snake: "prefs_color_blind", location: FieldLocation::Body },
-        FieldSpec { snake: "prefs_locale", location: FieldLocation::Body },
-        FieldSpec { snake: "prefs_minutes_between_summaries", location: FieldLocation::Body },
-        FieldSpec { snake: "username", location: FieldLocation::Body },
+        FieldSpec { snake: "id_member", wire: "idMember", location: FieldLocation::Path },
+        FieldSpec { snake: "token", wire: "token", location: FieldLocation::Query },
+        FieldSpec { snake: "avatar_source", wire: "avatarSource", location: FieldLocation::Body },
+        FieldSpec { snake: "bio", wire: "bio", location: FieldLocation::Body },
+        FieldSpec { snake: "full_name", wire: "fullName", location: FieldLocation::Body },
+        FieldSpec { snake: "initials", wire: "initials", location: FieldLocation::Body },
+        FieldSpec { snake: "prefs_color_blind", wire: "prefs/colorBlind", location: FieldLocation::Body },
+        FieldSpec { snake: "prefs_locale", wire: "prefs/locale", location: FieldLocation::Body },
+        FieldSpec { snake: "prefs_minutes_between_summaries", wire: "prefs/minutesBetweenSummaries", location: FieldLocation::Body },
+        FieldSpec { snake: "username", wire: "username", location: FieldLocation::Body },
     ],
     auth: &[
         AuthApply { secret_key: "api_key", kind: AuthKind::ApiKeyQuery("key") },
@@ -5575,22 +8686,22 @@ const OP_MEMBER_GET_MEMBERS_ACTIONS_BY_ID_MEMBER: OpSpec = OpSpec {
     method: "GET",
     path_template: "/members/{id_member}/actions",
     fields: &[
-        FieldSpec { snake: "id_member", location: FieldLocation::Path },
-        FieldSpec { snake: "entities", location: FieldLocation::Query },
-        FieldSpec { snake: "display", location: FieldLocation::Query },
-        FieldSpec { snake: "filter", location: FieldLocation::Query },
-        FieldSpec { snake: "fields", location: FieldLocation::Query },
-        FieldSpec { snake: "limit", location: FieldLocation::Query },
-        FieldSpec { snake: "format", location: FieldLocation::Query },
-        FieldSpec { snake: "since", location: FieldLocation::Query },
-        FieldSpec { snake: "before", location: FieldLocation::Query },
-        FieldSpec { snake: "page", location: FieldLocation::Query },
-        FieldSpec { snake: "id_models", location: FieldLocation::Query },
-        FieldSpec { snake: "member", location: FieldLocation::Query },
-        FieldSpec { snake: "member_fields", location: FieldLocation::Query },
-        FieldSpec { snake: "member_creator", location: FieldLocation::Query },
-        FieldSpec { snake: "member_creator_fields", location: FieldLocation::Query },
-        FieldSpec { snake: "token", location: FieldLocation::Query },
+        FieldSpec { snake: "id_member", wire: "idMember", location: FieldLocation::Path },
+        FieldSpec { snake: "entities", wire: "entities", location: FieldLocation::Query },
+        FieldSpec { snake: "display", wire: "display", location: FieldLocation::Query },
+        FieldSpec { snake: "filter", wire: "filter", location: FieldLocation::Query },
+        FieldSpec { snake: "fields", wire: "fields", location: FieldLocation::Query },
+        FieldSpec { snake: "limit", wire: "limit", location: FieldLocation::Query },
+        FieldSpec { snake: "format", wire: "format", location: FieldLocation::Query },
+        FieldSpec { snake: "since", wire: "since", location: FieldLocation::Query },
+        FieldSpec { snake: "before", wire: "before", location: FieldLocation::Query },
+        FieldSpec { snake: "page", wire: "page", location: FieldLocation::Query },
+        FieldSpec { snake: "id_models", wire: "idModels", location: FieldLocation::Query },
+        FieldSpec { snake: "member", wire: "member", location: FieldLocation::Query },
+        FieldSpec { snake: "member_fields", wire: "member_fields", location: FieldLocation::Query },
+        FieldSpec { snake: "member_creator", wire: "memberCreator", location: FieldLocation::Query },
+        FieldSpec { snake: "member_creator_fields", wire: "memberCreator_fields", location: FieldLocation::Query },
+        FieldSpec { snake: "token", wire: "token", location: FieldLocation::Query },
     ],
     auth: &[
         AuthApply { secret_key: "api_key", kind: AuthKind::ApiKeyQuery("key") },
@@ -5601,9 +8712,9 @@ const OP_MEMBER_ADD_MEMBERS_AVATAR_BY_ID_MEMBER: OpSpec = OpSpec {
     method: "POST",
     path_template: "/members/{id_member}/avatar",
     fields: &[
-        FieldSpec { snake: "id_member", location: FieldLocation::Path },
-        FieldSpec { snake: "token", location: FieldLocation::Query },
-        FieldSpec { snake: "file", location: FieldLocation::Body },
+        FieldSpec { snake: "id_member", wire: "idMember", location: FieldLocation::Path },
+        FieldSpec { snake: "token", wire: "token", location: FieldLocation::Query },
+        FieldSpec { snake: "file", wire: "file", location: FieldLocation::Body },
     ],
     auth: &[
         AuthApply { secret_key: "api_key", kind: AuthKind::ApiKeyQuery("key") },
@@ -5614,9 +8725,9 @@ const OP_MEMBER_UPDATE_MEMBERS_AVATAR_SOURCE_BY_ID_MEMBER: OpSpec = OpSpec {
     method: "PUT",
     path_template: "/members/{id_member}/avatarSource",
     fields: &[
-        FieldSpec { snake: "id_member", location: FieldLocation::Path },
-        FieldSpec { snake: "token", location: FieldLocation::Query },
-        FieldSpec { snake: "value", location: FieldLocation::Body },
+        FieldSpec { snake: "id_member", wire: "idMember", location: FieldLocation::Path },
+        FieldSpec { snake: "token", wire: "token", location: FieldLocation::Query },
+        FieldSpec { snake: "value", wire: "value", location: FieldLocation::Body },
     ],
     auth: &[
         AuthApply { secret_key: "api_key", kind: AuthKind::ApiKeyQuery("key") },
@@ -5627,9 +8738,9 @@ const OP_MEMBER_UPDATE_MEMBERS_BIO_BY_ID_MEMBER: OpSpec = OpSpec {
     method: "PUT",
     path_template: "/members/{id_member}/bio",
     fields: &[
-        FieldSpec { snake: "id_member", location: FieldLocation::Path },
-        FieldSpec { snake: "token", location: FieldLocation::Query },
-        FieldSpec { snake: "value", location: FieldLocation::Body },
+        FieldSpec { snake: "id_member", wire: "idMember", location: FieldLocation::Path },
+        FieldSpec { snake: "token", wire: "token", location: FieldLocation::Query },
+        FieldSpec { snake: "value", wire: "value", location: FieldLocation::Body },
     ],
     auth: &[
         AuthApply { secret_key: "api_key", kind: AuthKind::ApiKeyQuery("key") },
@@ -5640,9 +8751,9 @@ const OP_MEMBER_GET_MEMBERS_BOARD_BACKGROUNDS_BY_ID_MEMBER: OpSpec = OpSpec {
     method: "GET",
     path_template: "/members/{id_member}/boardBackgrounds",
     fields: &[
-        FieldSpec { snake: "id_member", location: FieldLocation::Path },
-        FieldSpec { snake: "filter", location: FieldLocation::Query },
-        FieldSpec { snake: "token", location: FieldLocation::Query },
+        FieldSpec { snake: "id_member", wire: "idMember", location: FieldLocation::Path },
+        FieldSpec { snake: "filter", wire: "filter", location: FieldLocation::Query },
+        FieldSpec { snake: "token", wire: "token", location: FieldLocation::Query },
     ],
     auth: &[
         AuthApply { secret_key: "api_key", kind: AuthKind::ApiKeyQuery("key") },
@@ -5653,11 +8764,11 @@ const OP_MEMBER_ADD_MEMBERS_BOARD_BACKGROUNDS_BY_ID_MEMBER: OpSpec = OpSpec {
     method: "POST",
     path_template: "/members/{id_member}/boardBackgrounds",
     fields: &[
-        FieldSpec { snake: "id_member", location: FieldLocation::Path },
-        FieldSpec { snake: "token", location: FieldLocation::Query },
-        FieldSpec { snake: "brightness", location: FieldLocation::Body },
-        FieldSpec { snake: "file", location: FieldLocation::Body },
-        FieldSpec { snake: "tile", location: FieldLocation::Body },
+        FieldSpec { snake: "id_member", wire: "idMember", location: FieldLocation::Path },
+        FieldSpec { snake: "token", wire: "token", location: FieldLocation::Query },
+        FieldSpec { snake: "brightness", wire: "brightness", location: FieldLocation::Body },
+        FieldSpec { snake: "file", wire: "file", location: FieldLocation::Body },
+        FieldSpec { snake: "tile", wire: "tile", location: FieldLocation::Body },
     ],
     auth: &[
         AuthApply { secret_key: "api_key", kind: AuthKind::ApiKeyQuery("key") },
@@ -5668,10 +8779,10 @@ const OP_MEMBER_GET_MEMBERS_BOARD_BACKGROUNDS_BY_ID_MEMBER_BY_ID_BOARD_BACKGROUN
     method: "GET",
     path_template: "/members/{id_member}/boardBackgrounds/{id_board_background}",
     fields: &[
-        FieldSpec { snake: "id_member", location: FieldLocation::Path },
-        FieldSpec { snake: "id_board_background", location: FieldLocation::Path },
-        FieldSpec { snake: "fields", location: FieldLocation::Query },
-        FieldSpec { snake: "token", location: FieldLocation::Query },
+        FieldSpec { snake: "id_member", wire: "idMember", location: FieldLocation::Path },
+        FieldSpec { snake: "id_board_background", wire: "idBoardBackground", location: FieldLocation::Path },
+        FieldSpec { snake: "fields", wire: "fields", location: FieldLocation::Query },
+        FieldSpec { snake: "token", wire: "token", location: FieldLocation::Query },
     ],
     auth: &[
         AuthApply { secret_key: "api_key", kind: AuthKind::ApiKeyQuery("key") },
@@ -5682,12 +8793,12 @@ const OP_MEMBER_UPDATE_MEMBERS_BOARD_BACKGROUNDS_BY_ID_MEMBER_BY_ID_BOARD_BACKGR
     method: "PUT",
     path_template: "/members/{id_member}/boardBackgrounds/{id_board_background}",
     fields: &[
-        FieldSpec { snake: "id_member", location: FieldLocation::Path },
-        FieldSpec { snake: "id_board_background", location: FieldLocation::Path },
-        FieldSpec { snake: "token", location: FieldLocation::Query },
-        FieldSpec { snake: "brightness", location: FieldLocation::Body },
-        FieldSpec { snake: "file", location: FieldLocation::Body },
-        FieldSpec { snake: "tile", location: FieldLocation::Body },
+        FieldSpec { snake: "id_member", wire: "idMember", location: FieldLocation::Path },
+        FieldSpec { snake: "id_board_background", wire: "idBoardBackground", location: FieldLocation::Path },
+        FieldSpec { snake: "token", wire: "token", location: FieldLocation::Query },
+        FieldSpec { snake: "brightness", wire: "brightness", location: FieldLocation::Body },
+        FieldSpec { snake: "file", wire: "file", location: FieldLocation::Body },
+        FieldSpec { snake: "tile", wire: "tile", location: FieldLocation::Body },
     ],
     auth: &[
         AuthApply { secret_key: "api_key", kind: AuthKind::ApiKeyQuery("key") },
@@ -5698,9 +8809,9 @@ const OP_MEMBER_DELETE_MEMBERS_BOARD_BACKGROUNDS_BY_ID_MEMBER_BY_ID_BOARD_BACKGR
     method: "DELETE",
     path_template: "/members/{id_member}/boardBackgrounds/{id_board_background}",
     fields: &[
-        FieldSpec { snake: "id_member", location: FieldLocation::Path },
-        FieldSpec { snake: "id_board_background", location: FieldLocation::Path },
-        FieldSpec { snake: "token", location: FieldLocation::Query },
+        FieldSpec { snake: "id_member", wire: "idMember", location: FieldLocation::Path },
+        FieldSpec { snake: "id_board_background", wire: "idBoardBackground", location: FieldLocation::Path },
+        FieldSpec { snake: "token", wire: "token", location: FieldLocation::Query },
     ],
     auth: &[
         AuthApply { secret_key: "api_key", kind: AuthKind::ApiKeyQuery("key") },
@@ -5711,8 +8822,8 @@ const OP_MEMBER_GET_MEMBERS_BOARD_STARS_BY_ID_MEMBER: OpSpec = OpSpec {
     method: "GET",
     path_template: "/members/{id_member}/boardStars",
     fields: &[
-        FieldSpec { snake: "id_member", location: FieldLocation::Path },
-        FieldSpec { snake: "token", location: FieldLocation::Query },
+        FieldSpec { snake: "id_member", wire: "idMember", location: FieldLocation::Path },
+        FieldSpec { snake: "token", wire: "token", location: FieldLocation::Query },
     ],
     auth: &[
         AuthApply { secret_key: "api_key", kind: AuthKind::ApiKeyQuery("key") },
@@ -5723,10 +8834,10 @@ const OP_MEMBER_ADD_MEMBERS_BOARD_STARS_BY_ID_MEMBER: OpSpec = OpSpec {
     method: "POST",
     path_template: "/members/{id_member}/boardStars",
     fields: &[
-        FieldSpec { snake: "id_member", location: FieldLocation::Path },
-        FieldSpec { snake: "token", location: FieldLocation::Query },
-        FieldSpec { snake: "id_board", location: FieldLocation::Body },
-        FieldSpec { snake: "pos", location: FieldLocation::Body },
+        FieldSpec { snake: "id_member", wire: "idMember", location: FieldLocation::Path },
+        FieldSpec { snake: "token", wire: "token", location: FieldLocation::Query },
+        FieldSpec { snake: "id_board", wire: "idBoard", location: FieldLocation::Body },
+        FieldSpec { snake: "pos", wire: "pos", location: FieldLocation::Body },
     ],
     auth: &[
         AuthApply { secret_key: "api_key", kind: AuthKind::ApiKeyQuery("key") },
@@ -5737,9 +8848,9 @@ const OP_MEMBER_GET_MEMBERS_BOARD_STARS_BY_ID_MEMBER_BY_ID_BOARD_STAR: OpSpec = 
     method: "GET",
     path_template: "/members/{id_member}/boardStars/{id_board_star}",
     fields: &[
-        FieldSpec { snake: "id_member", location: FieldLocation::Path },
-        FieldSpec { snake: "id_board_star", location: FieldLocation::Path },
-        FieldSpec { snake: "token", location: FieldLocation::Query },
+        FieldSpec { snake: "id_member", wire: "idMember", location: FieldLocation::Path },
+        FieldSpec { snake: "id_board_star", wire: "idBoardStar", location: FieldLocation::Path },
+        FieldSpec { snake: "token", wire: "token", location: FieldLocation::Query },
     ],
     auth: &[
         AuthApply { secret_key: "api_key", kind: AuthKind::ApiKeyQuery("key") },
@@ -5750,11 +8861,11 @@ const OP_MEMBER_UPDATE_MEMBERS_BOARD_STARS_BY_ID_MEMBER_BY_ID_BOARD_STAR: OpSpec
     method: "PUT",
     path_template: "/members/{id_member}/boardStars/{id_board_star}",
     fields: &[
-        FieldSpec { snake: "id_member", location: FieldLocation::Path },
-        FieldSpec { snake: "id_board_star", location: FieldLocation::Path },
-        FieldSpec { snake: "token", location: FieldLocation::Query },
-        FieldSpec { snake: "id_board", location: FieldLocation::Body },
-        FieldSpec { snake: "pos", location: FieldLocation::Body },
+        FieldSpec { snake: "id_member", wire: "idMember", location: FieldLocation::Path },
+        FieldSpec { snake: "id_board_star", wire: "idBoardStar", location: FieldLocation::Path },
+        FieldSpec { snake: "token", wire: "token", location: FieldLocation::Query },
+        FieldSpec { snake: "id_board", wire: "idBoard", location: FieldLocation::Body },
+        FieldSpec { snake: "pos", wire: "pos", location: FieldLocation::Body },
     ],
     auth: &[
         AuthApply { secret_key: "api_key", kind: AuthKind::ApiKeyQuery("key") },
@@ -5765,9 +8876,9 @@ const OP_MEMBER_DELETE_MEMBERS_BOARD_STARS_BY_ID_MEMBER_BY_ID_BOARD_STAR: OpSpec
     method: "DELETE",
     path_template: "/members/{id_member}/boardStars/{id_board_star}",
     fields: &[
-        FieldSpec { snake: "id_member", location: FieldLocation::Path },
-        FieldSpec { snake: "id_board_star", location: FieldLocation::Path },
-        FieldSpec { snake: "token", location: FieldLocation::Query },
+        FieldSpec { snake: "id_member", wire: "idMember", location: FieldLocation::Path },
+        FieldSpec { snake: "id_board_star", wire: "idBoardStar", location: FieldLocation::Path },
+        FieldSpec { snake: "token", wire: "token", location: FieldLocation::Query },
     ],
     auth: &[
         AuthApply { secret_key: "api_key", kind: AuthKind::ApiKeyQuery("key") },
@@ -5778,10 +8889,10 @@ const OP_MEMBER_UPDATE_MEMBERS_BOARD_STARS_ID_BOARD_BY_ID_MEMBER_BY_ID_BOARD_STA
     method: "PUT",
     path_template: "/members/{id_member}/boardStars/{id_board_star}/idBoard",
     fields: &[
-        FieldSpec { snake: "id_member", location: FieldLocation::Path },
-        FieldSpec { snake: "id_board_star", location: FieldLocation::Path },
-        FieldSpec { snake: "token", location: FieldLocation::Query },
-        FieldSpec { snake: "value", location: FieldLocation::Body },
+        FieldSpec { snake: "id_member", wire: "idMember", location: FieldLocation::Path },
+        FieldSpec { snake: "id_board_star", wire: "idBoardStar", location: FieldLocation::Path },
+        FieldSpec { snake: "token", wire: "token", location: FieldLocation::Query },
+        FieldSpec { snake: "value", wire: "value", location: FieldLocation::Body },
     ],
     auth: &[
         AuthApply { secret_key: "api_key", kind: AuthKind::ApiKeyQuery("key") },
@@ -5792,10 +8903,10 @@ const OP_MEMBER_UPDATE_MEMBERS_BOARD_STARS_POS_BY_ID_MEMBER_BY_ID_BOARD_STAR: Op
     method: "PUT",
     path_template: "/members/{id_member}/boardStars/{id_board_star}/pos",
     fields: &[
-        FieldSpec { snake: "id_member", location: FieldLocation::Path },
-        FieldSpec { snake: "id_board_star", location: FieldLocation::Path },
-        FieldSpec { snake: "token", location: FieldLocation::Query },
-        FieldSpec { snake: "value", location: FieldLocation::Body },
+        FieldSpec { snake: "id_member", wire: "idMember", location: FieldLocation::Path },
+        FieldSpec { snake: "id_board_star", wire: "idBoardStar", location: FieldLocation::Path },
+        FieldSpec { snake: "token", wire: "token", location: FieldLocation::Query },
+        FieldSpec { snake: "value", wire: "value", location: FieldLocation::Body },
     ],
     auth: &[
         AuthApply { secret_key: "api_key", kind: AuthKind::ApiKeyQuery("key") },
@@ -5806,20 +8917,20 @@ const OP_MEMBER_GET_MEMBERS_BOARDS_BY_ID_MEMBER: OpSpec = OpSpec {
     method: "GET",
     path_template: "/members/{id_member}/boards",
     fields: &[
-        FieldSpec { snake: "id_member", location: FieldLocation::Path },
-        FieldSpec { snake: "filter", location: FieldLocation::Query },
-        FieldSpec { snake: "fields", location: FieldLocation::Query },
-        FieldSpec { snake: "actions", location: FieldLocation::Query },
-        FieldSpec { snake: "actions_entities", location: FieldLocation::Query },
-        FieldSpec { snake: "actions_limit", location: FieldLocation::Query },
-        FieldSpec { snake: "actions_format", location: FieldLocation::Query },
-        FieldSpec { snake: "actions_since", location: FieldLocation::Query },
-        FieldSpec { snake: "action_fields", location: FieldLocation::Query },
-        FieldSpec { snake: "memberships", location: FieldLocation::Query },
-        FieldSpec { snake: "organization", location: FieldLocation::Query },
-        FieldSpec { snake: "organization_fields", location: FieldLocation::Query },
-        FieldSpec { snake: "lists", location: FieldLocation::Query },
-        FieldSpec { snake: "token", location: FieldLocation::Query },
+        FieldSpec { snake: "id_member", wire: "idMember", location: FieldLocation::Path },
+        FieldSpec { snake: "filter", wire: "filter", location: FieldLocation::Query },
+        FieldSpec { snake: "fields", wire: "fields", location: FieldLocation::Query },
+        FieldSpec { snake: "actions", wire: "actions", location: FieldLocation::Query },
+        FieldSpec { snake: "actions_entities", wire: "actions_entities", location: FieldLocation::Query },
+        FieldSpec { snake: "actions_limit", wire: "actions_limit", location: FieldLocation::Query },
+        FieldSpec { snake: "actions_format", wire: "actions_format", location: FieldLocation::Query },
+        FieldSpec { snake: "actions_since", wire: "actions_since", location: FieldLocation::Query },
+        FieldSpec { snake: "action_fields", wire: "action_fields", location: FieldLocation::Query },
+        FieldSpec { snake: "memberships", wire: "memberships", location: FieldLocation::Query },
+        FieldSpec { snake: "organization", wire: "organization", location: FieldLocation::Query },
+        FieldSpec { snake: "organization_fields", wire: "organization_fields", location: FieldLocation::Query },
+        FieldSpec { snake: "lists", wire: "lists", location: FieldLocation::Query },
+        FieldSpec { snake: "token", wire: "token", location: FieldLocation::Query },
     ],
     auth: &[
         AuthApply { secret_key: "api_key", kind: AuthKind::ApiKeyQuery("key") },
@@ -5830,10 +8941,10 @@ const OP_MEMBER_GET_MEMBERS_BOARDS_BY_ID_MEMBER_BY_FILTER: OpSpec = OpSpec {
     method: "GET",
     path_template: "/members/{id_member}/boards/{filter}",
     fields: &[
-        FieldSpec { snake: "id_member", location: FieldLocation::Path },
-        FieldSpec { snake: "filter", location: FieldLocation::Path },
-        FieldSpec { snake: "key", location: FieldLocation::Query },
-        FieldSpec { snake: "token", location: FieldLocation::Query },
+        FieldSpec { snake: "id_member", wire: "idMember", location: FieldLocation::Path },
+        FieldSpec { snake: "filter", wire: "filter", location: FieldLocation::Path },
+        FieldSpec { snake: "key", wire: "key", location: FieldLocation::Query },
+        FieldSpec { snake: "token", wire: "token", location: FieldLocation::Query },
     ],
     auth: &[
     ],
@@ -5843,9 +8954,9 @@ const OP_MEMBER_GET_MEMBERS_BOARDS_INVITED_BY_ID_MEMBER: OpSpec = OpSpec {
     method: "GET",
     path_template: "/members/{id_member}/boardsInvited",
     fields: &[
-        FieldSpec { snake: "id_member", location: FieldLocation::Path },
-        FieldSpec { snake: "fields", location: FieldLocation::Query },
-        FieldSpec { snake: "token", location: FieldLocation::Query },
+        FieldSpec { snake: "id_member", wire: "idMember", location: FieldLocation::Path },
+        FieldSpec { snake: "fields", wire: "fields", location: FieldLocation::Query },
+        FieldSpec { snake: "token", wire: "token", location: FieldLocation::Query },
     ],
     auth: &[
         AuthApply { secret_key: "api_key", kind: AuthKind::ApiKeyQuery("key") },
@@ -5856,9 +8967,9 @@ const OP_MEMBER_GET_MEMBERS_BOARDS_INVITED_BY_ID_MEMBER_BY_FIELD: OpSpec = OpSpe
     method: "GET",
     path_template: "/members/{id_member}/boardsInvited/{field}",
     fields: &[
-        FieldSpec { snake: "id_member", location: FieldLocation::Path },
-        FieldSpec { snake: "field", location: FieldLocation::Path },
-        FieldSpec { snake: "token", location: FieldLocation::Query },
+        FieldSpec { snake: "id_member", wire: "idMember", location: FieldLocation::Path },
+        FieldSpec { snake: "field", wire: "field", location: FieldLocation::Path },
+        FieldSpec { snake: "token", wire: "token", location: FieldLocation::Query },
     ],
     auth: &[
         AuthApply { secret_key: "api_key", kind: AuthKind::ApiKeyQuery("key") },
@@ -5869,21 +8980,21 @@ const OP_MEMBER_GET_MEMBERS_CARDS_BY_ID_MEMBER: OpSpec = OpSpec {
     method: "GET",
     path_template: "/members/{id_member}/cards",
     fields: &[
-        FieldSpec { snake: "id_member", location: FieldLocation::Path },
-        FieldSpec { snake: "actions", location: FieldLocation::Query },
-        FieldSpec { snake: "attachments", location: FieldLocation::Query },
-        FieldSpec { snake: "attachment_fields", location: FieldLocation::Query },
-        FieldSpec { snake: "stickers", location: FieldLocation::Query },
-        FieldSpec { snake: "members", location: FieldLocation::Query },
-        FieldSpec { snake: "member_fields", location: FieldLocation::Query },
-        FieldSpec { snake: "check_item_states", location: FieldLocation::Query },
-        FieldSpec { snake: "checklists", location: FieldLocation::Query },
-        FieldSpec { snake: "limit", location: FieldLocation::Query },
-        FieldSpec { snake: "since", location: FieldLocation::Query },
-        FieldSpec { snake: "before", location: FieldLocation::Query },
-        FieldSpec { snake: "filter", location: FieldLocation::Query },
-        FieldSpec { snake: "fields", location: FieldLocation::Query },
-        FieldSpec { snake: "token", location: FieldLocation::Query },
+        FieldSpec { snake: "id_member", wire: "idMember", location: FieldLocation::Path },
+        FieldSpec { snake: "actions", wire: "actions", location: FieldLocation::Query },
+        FieldSpec { snake: "attachments", wire: "attachments", location: FieldLocation::Query },
+        FieldSpec { snake: "attachment_fields", wire: "attachment_fields", location: FieldLocation::Query },
+        FieldSpec { snake: "stickers", wire: "stickers", location: FieldLocation::Query },
+        FieldSpec { snake: "members", wire: "members", location: FieldLocation::Query },
+        FieldSpec { snake: "member_fields", wire: "member_fields", location: FieldLocation::Query },
+        FieldSpec { snake: "check_item_states", wire: "checkItemStates", location: FieldLocation::Query },
+        FieldSpec { snake: "checklists", wire: "checklists", location: FieldLocation::Query },
+        FieldSpec { snake: "limit", wire: "limit", location: FieldLocation::Query },
+        FieldSpec { snake: "since", wire: "since", location: FieldLocation::Query },
+        FieldSpec { snake: "before", wire: "before", location: FieldLocation::Query },
+        FieldSpec { snake: "filter", wire: "filter", location: FieldLocation::Query },
+        FieldSpec { snake: "fields", wire: "fields", location: FieldLocation::Query },
+        FieldSpec { snake: "token", wire: "token", location: FieldLocation::Query },
     ],
     auth: &[
         AuthApply { secret_key: "api_key", kind: AuthKind::ApiKeyQuery("key") },
@@ -5894,10 +9005,10 @@ const OP_MEMBER_GET_MEMBERS_CARDS_BY_ID_MEMBER_BY_FILTER: OpSpec = OpSpec {
     method: "GET",
     path_template: "/members/{id_member}/cards/{filter}",
     fields: &[
-        FieldSpec { snake: "id_member", location: FieldLocation::Path },
-        FieldSpec { snake: "filter", location: FieldLocation::Path },
-        FieldSpec { snake: "key", location: FieldLocation::Query },
-        FieldSpec { snake: "token", location: FieldLocation::Query },
+        FieldSpec { snake: "id_member", wire: "idMember", location: FieldLocation::Path },
+        FieldSpec { snake: "filter", wire: "filter", location: FieldLocation::Path },
+        FieldSpec { snake: "key", wire: "key", location: FieldLocation::Query },
+        FieldSpec { snake: "token", wire: "token", location: FieldLocation::Query },
     ],
     auth: &[
     ],
@@ -5907,9 +9018,9 @@ const OP_MEMBER_GET_MEMBERS_CUSTOM_BOARD_BACKGROUNDS_BY_ID_MEMBER: OpSpec = OpSp
     method: "GET",
     path_template: "/members/{id_member}/customBoardBackgrounds",
     fields: &[
-        FieldSpec { snake: "id_member", location: FieldLocation::Path },
-        FieldSpec { snake: "filter", location: FieldLocation::Query },
-        FieldSpec { snake: "token", location: FieldLocation::Query },
+        FieldSpec { snake: "id_member", wire: "idMember", location: FieldLocation::Path },
+        FieldSpec { snake: "filter", wire: "filter", location: FieldLocation::Query },
+        FieldSpec { snake: "token", wire: "token", location: FieldLocation::Query },
     ],
     auth: &[
         AuthApply { secret_key: "api_key", kind: AuthKind::ApiKeyQuery("key") },
@@ -5920,11 +9031,11 @@ const OP_MEMBER_ADD_MEMBERS_CUSTOM_BOARD_BACKGROUNDS_BY_ID_MEMBER: OpSpec = OpSp
     method: "POST",
     path_template: "/members/{id_member}/customBoardBackgrounds",
     fields: &[
-        FieldSpec { snake: "id_member", location: FieldLocation::Path },
-        FieldSpec { snake: "token", location: FieldLocation::Query },
-        FieldSpec { snake: "brightness", location: FieldLocation::Body },
-        FieldSpec { snake: "file", location: FieldLocation::Body },
-        FieldSpec { snake: "tile", location: FieldLocation::Body },
+        FieldSpec { snake: "id_member", wire: "idMember", location: FieldLocation::Path },
+        FieldSpec { snake: "token", wire: "token", location: FieldLocation::Query },
+        FieldSpec { snake: "brightness", wire: "brightness", location: FieldLocation::Body },
+        FieldSpec { snake: "file", wire: "file", location: FieldLocation::Body },
+        FieldSpec { snake: "tile", wire: "tile", location: FieldLocation::Body },
     ],
     auth: &[
         AuthApply { secret_key: "api_key", kind: AuthKind::ApiKeyQuery("key") },
@@ -5935,10 +9046,10 @@ const OP_MEMBER_GET_MEMBERS_CUSTOM_BOARD_BACKGROUNDS_BY_ID_MEMBER_BY_ID_BOARD_BA
     method: "GET",
     path_template: "/members/{id_member}/customBoardBackgrounds/{id_board_background}",
     fields: &[
-        FieldSpec { snake: "id_member", location: FieldLocation::Path },
-        FieldSpec { snake: "id_board_background", location: FieldLocation::Path },
-        FieldSpec { snake: "fields", location: FieldLocation::Query },
-        FieldSpec { snake: "token", location: FieldLocation::Query },
+        FieldSpec { snake: "id_member", wire: "idMember", location: FieldLocation::Path },
+        FieldSpec { snake: "id_board_background", wire: "idBoardBackground", location: FieldLocation::Path },
+        FieldSpec { snake: "fields", wire: "fields", location: FieldLocation::Query },
+        FieldSpec { snake: "token", wire: "token", location: FieldLocation::Query },
     ],
     auth: &[
         AuthApply { secret_key: "api_key", kind: AuthKind::ApiKeyQuery("key") },
@@ -5949,12 +9060,12 @@ const OP_MEMBER_UPDATE_MEMBERS_CUSTOM_BOARD_BACKGROUNDS_BY_ID_MEMBER_BY_ID_BOARD
     method: "PUT",
     path_template: "/members/{id_member}/customBoardBackgrounds/{id_board_background}",
     fields: &[
-        FieldSpec { snake: "id_member", location: FieldLocation::Path },
-        FieldSpec { snake: "id_board_background", location: FieldLocation::Path },
-        FieldSpec { snake: "token", location: FieldLocation::Query },
-        FieldSpec { snake: "brightness", location: FieldLocation::Body },
-        FieldSpec { snake: "file", location: FieldLocation::Body },
-        FieldSpec { snake: "tile", location: FieldLocation::Body },
+        FieldSpec { snake: "id_member", wire: "idMember", location: FieldLocation::Path },
+        FieldSpec { snake: "id_board_background", wire: "idBoardBackground", location: FieldLocation::Path },
+        FieldSpec { snake: "token", wire: "token", location: FieldLocation::Query },
+        FieldSpec { snake: "brightness", wire: "brightness", location: FieldLocation::Body },
+        FieldSpec { snake: "file", wire: "file", location: FieldLocation::Body },
+        FieldSpec { snake: "tile", wire: "tile", location: FieldLocation::Body },
     ],
     auth: &[
         AuthApply { secret_key: "api_key", kind: AuthKind::ApiKeyQuery("key") },
@@ -5965,9 +9076,9 @@ const OP_MEMBER_DELETE_MEMBERS_CUSTOM_BOARD_BACKGROUNDS_BY_ID_MEMBER_BY_ID_BOARD
     method: "DELETE",
     path_template: "/members/{id_member}/customBoardBackgrounds/{id_board_background}",
     fields: &[
-        FieldSpec { snake: "id_member", location: FieldLocation::Path },
-        FieldSpec { snake: "id_board_background", location: FieldLocation::Path },
-        FieldSpec { snake: "token", location: FieldLocation::Query },
+        FieldSpec { snake: "id_member", wire: "idMember", location: FieldLocation::Path },
+        FieldSpec { snake: "id_board_background", wire: "idBoardBackground", location: FieldLocation::Path },
+        FieldSpec { snake: "token", wire: "token", location: FieldLocation::Query },
     ],
     auth: &[
         AuthApply { secret_key: "api_key", kind: AuthKind::ApiKeyQuery("key") },
@@ -5978,9 +9089,9 @@ const OP_MEMBER_GET_MEMBERS_CUSTOM_EMOJI_BY_ID_MEMBER: OpSpec = OpSpec {
     method: "GET",
     path_template: "/members/{id_member}/customEmoji",
     fields: &[
-        FieldSpec { snake: "id_member", location: FieldLocation::Path },
-        FieldSpec { snake: "filter", location: FieldLocation::Query },
-        FieldSpec { snake: "token", location: FieldLocation::Query },
+        FieldSpec { snake: "id_member", wire: "idMember", location: FieldLocation::Path },
+        FieldSpec { snake: "filter", wire: "filter", location: FieldLocation::Query },
+        FieldSpec { snake: "token", wire: "token", location: FieldLocation::Query },
     ],
     auth: &[
         AuthApply { secret_key: "api_key", kind: AuthKind::ApiKeyQuery("key") },
@@ -5991,10 +9102,10 @@ const OP_MEMBER_ADD_MEMBERS_CUSTOM_EMOJI_BY_ID_MEMBER: OpSpec = OpSpec {
     method: "POST",
     path_template: "/members/{id_member}/customEmoji",
     fields: &[
-        FieldSpec { snake: "id_member", location: FieldLocation::Path },
-        FieldSpec { snake: "token", location: FieldLocation::Query },
-        FieldSpec { snake: "file", location: FieldLocation::Body },
-        FieldSpec { snake: "name", location: FieldLocation::Body },
+        FieldSpec { snake: "id_member", wire: "idMember", location: FieldLocation::Path },
+        FieldSpec { snake: "token", wire: "token", location: FieldLocation::Query },
+        FieldSpec { snake: "file", wire: "file", location: FieldLocation::Body },
+        FieldSpec { snake: "name", wire: "name", location: FieldLocation::Body },
     ],
     auth: &[
         AuthApply { secret_key: "api_key", kind: AuthKind::ApiKeyQuery("key") },
@@ -6005,10 +9116,10 @@ const OP_MEMBER_GET_MEMBERS_CUSTOM_EMOJI_BY_ID_MEMBER_BY_ID_CUSTOM_EMOJI: OpSpec
     method: "GET",
     path_template: "/members/{id_member}/customEmoji/{id_custom_emoji}",
     fields: &[
-        FieldSpec { snake: "id_member", location: FieldLocation::Path },
-        FieldSpec { snake: "id_custom_emoji", location: FieldLocation::Path },
-        FieldSpec { snake: "fields", location: FieldLocation::Query },
-        FieldSpec { snake: "token", location: FieldLocation::Query },
+        FieldSpec { snake: "id_member", wire: "idMember", location: FieldLocation::Path },
+        FieldSpec { snake: "id_custom_emoji", wire: "idCustomEmoji", location: FieldLocation::Path },
+        FieldSpec { snake: "fields", wire: "fields", location: FieldLocation::Query },
+        FieldSpec { snake: "token", wire: "token", location: FieldLocation::Query },
     ],
     auth: &[
         AuthApply { secret_key: "api_key", kind: AuthKind::ApiKeyQuery("key") },
@@ -6019,9 +9130,9 @@ const OP_MEMBER_GET_MEMBERS_CUSTOM_STICKERS_BY_ID_MEMBER: OpSpec = OpSpec {
     method: "GET",
     path_template: "/members/{id_member}/customStickers",
     fields: &[
-        FieldSpec { snake: "id_member", location: FieldLocation::Path },
-        FieldSpec { snake: "filter", location: FieldLocation::Query },
-        FieldSpec { snake: "token", location: FieldLocation::Query },
+        FieldSpec { snake: "id_member", wire: "idMember", location: FieldLocation::Path },
+        FieldSpec { snake: "filter", wire: "filter", location: FieldLocation::Query },
+        FieldSpec { snake: "token", wire: "token", location: FieldLocation::Query },
     ],
     auth: &[
         AuthApply { secret_key: "api_key", kind: AuthKind::ApiKeyQuery("key") },
@@ -6032,9 +9143,9 @@ const OP_MEMBER_ADD_MEMBERS_CUSTOM_STICKERS_BY_ID_MEMBER: OpSpec = OpSpec {
     method: "POST",
     path_template: "/members/{id_member}/customStickers",
     fields: &[
-        FieldSpec { snake: "id_member", location: FieldLocation::Path },
-        FieldSpec { snake: "token", location: FieldLocation::Query },
-        FieldSpec { snake: "file", location: FieldLocation::Body },
+        FieldSpec { snake: "id_member", wire: "idMember", location: FieldLocation::Path },
+        FieldSpec { snake: "token", wire: "token", location: FieldLocation::Query },
+        FieldSpec { snake: "file", wire: "file", location: FieldLocation::Body },
     ],
     auth: &[
         AuthApply { secret_key: "api_key", kind: AuthKind::ApiKeyQuery("key") },
@@ -6045,10 +9156,10 @@ const OP_MEMBER_GET_MEMBERS_CUSTOM_STICKERS_BY_ID_MEMBER_BY_ID_CUSTOM_STICKER: O
     method: "GET",
     path_template: "/members/{id_member}/customStickers/{id_custom_sticker}",
     fields: &[
-        FieldSpec { snake: "id_member", location: FieldLocation::Path },
-        FieldSpec { snake: "id_custom_sticker", location: FieldLocation::Path },
-        FieldSpec { snake: "fields", location: FieldLocation::Query },
-        FieldSpec { snake: "token", location: FieldLocation::Query },
+        FieldSpec { snake: "id_member", wire: "idMember", location: FieldLocation::Path },
+        FieldSpec { snake: "id_custom_sticker", wire: "idCustomSticker", location: FieldLocation::Path },
+        FieldSpec { snake: "fields", wire: "fields", location: FieldLocation::Query },
+        FieldSpec { snake: "token", wire: "token", location: FieldLocation::Query },
     ],
     auth: &[
         AuthApply { secret_key: "api_key", kind: AuthKind::ApiKeyQuery("key") },
@@ -6059,9 +9170,9 @@ const OP_MEMBER_DELETE_MEMBERS_CUSTOM_STICKERS_BY_ID_MEMBER_BY_ID_CUSTOM_STICKER
     method: "DELETE",
     path_template: "/members/{id_member}/customStickers/{id_custom_sticker}",
     fields: &[
-        FieldSpec { snake: "id_member", location: FieldLocation::Path },
-        FieldSpec { snake: "id_custom_sticker", location: FieldLocation::Path },
-        FieldSpec { snake: "token", location: FieldLocation::Query },
+        FieldSpec { snake: "id_member", wire: "idMember", location: FieldLocation::Path },
+        FieldSpec { snake: "id_custom_sticker", wire: "idCustomSticker", location: FieldLocation::Path },
+        FieldSpec { snake: "token", wire: "token", location: FieldLocation::Query },
     ],
     auth: &[
         AuthApply { secret_key: "api_key", kind: AuthKind::ApiKeyQuery("key") },
@@ -6072,10 +9183,10 @@ const OP_MEMBER_GET_MEMBERS_DELTAS_BY_ID_MEMBER: OpSpec = OpSpec {
     method: "GET",
     path_template: "/members/{id_member}/deltas",
     fields: &[
-        FieldSpec { snake: "id_member", location: FieldLocation::Path },
-        FieldSpec { snake: "tags", location: FieldLocation::Query },
-        FieldSpec { snake: "ix_last_update", location: FieldLocation::Query },
-        FieldSpec { snake: "token", location: FieldLocation::Query },
+        FieldSpec { snake: "id_member", wire: "idMember", location: FieldLocation::Path },
+        FieldSpec { snake: "tags", wire: "tags", location: FieldLocation::Query },
+        FieldSpec { snake: "ix_last_update", wire: "ixLastUpdate", location: FieldLocation::Query },
+        FieldSpec { snake: "token", wire: "token", location: FieldLocation::Query },
     ],
     auth: &[
         AuthApply { secret_key: "api_key", kind: AuthKind::ApiKeyQuery("key") },
@@ -6086,9 +9197,9 @@ const OP_MEMBER_UPDATE_MEMBERS_FULL_NAME_BY_ID_MEMBER: OpSpec = OpSpec {
     method: "PUT",
     path_template: "/members/{id_member}/fullName",
     fields: &[
-        FieldSpec { snake: "id_member", location: FieldLocation::Path },
-        FieldSpec { snake: "token", location: FieldLocation::Query },
-        FieldSpec { snake: "value", location: FieldLocation::Body },
+        FieldSpec { snake: "id_member", wire: "idMember", location: FieldLocation::Path },
+        FieldSpec { snake: "token", wire: "token", location: FieldLocation::Query },
+        FieldSpec { snake: "value", wire: "value", location: FieldLocation::Body },
     ],
     auth: &[
         AuthApply { secret_key: "api_key", kind: AuthKind::ApiKeyQuery("key") },
@@ -6099,9 +9210,9 @@ const OP_MEMBER_UPDATE_MEMBERS_INITIALS_BY_ID_MEMBER: OpSpec = OpSpec {
     method: "PUT",
     path_template: "/members/{id_member}/initials",
     fields: &[
-        FieldSpec { snake: "id_member", location: FieldLocation::Path },
-        FieldSpec { snake: "token", location: FieldLocation::Query },
-        FieldSpec { snake: "value", location: FieldLocation::Body },
+        FieldSpec { snake: "id_member", wire: "idMember", location: FieldLocation::Path },
+        FieldSpec { snake: "token", wire: "token", location: FieldLocation::Query },
+        FieldSpec { snake: "value", wire: "value", location: FieldLocation::Body },
     ],
     auth: &[
         AuthApply { secret_key: "api_key", kind: AuthKind::ApiKeyQuery("key") },
@@ -6112,19 +9223,19 @@ const OP_MEMBER_GET_MEMBERS_NOTIFICATIONS_BY_ID_MEMBER: OpSpec = OpSpec {
     method: "GET",
     path_template: "/members/{id_member}/notifications",
     fields: &[
-        FieldSpec { snake: "id_member", location: FieldLocation::Path },
-        FieldSpec { snake: "entities", location: FieldLocation::Query },
-        FieldSpec { snake: "display", location: FieldLocation::Query },
-        FieldSpec { snake: "filter", location: FieldLocation::Query },
-        FieldSpec { snake: "read_filter", location: FieldLocation::Query },
-        FieldSpec { snake: "fields", location: FieldLocation::Query },
-        FieldSpec { snake: "limit", location: FieldLocation::Query },
-        FieldSpec { snake: "page", location: FieldLocation::Query },
-        FieldSpec { snake: "before", location: FieldLocation::Query },
-        FieldSpec { snake: "since", location: FieldLocation::Query },
-        FieldSpec { snake: "member_creator", location: FieldLocation::Query },
-        FieldSpec { snake: "member_creator_fields", location: FieldLocation::Query },
-        FieldSpec { snake: "token", location: FieldLocation::Query },
+        FieldSpec { snake: "id_member", wire: "idMember", location: FieldLocation::Path },
+        FieldSpec { snake: "entities", wire: "entities", location: FieldLocation::Query },
+        FieldSpec { snake: "display", wire: "display", location: FieldLocation::Query },
+        FieldSpec { snake: "filter", wire: "filter", location: FieldLocation::Query },
+        FieldSpec { snake: "read_filter", wire: "read_filter", location: FieldLocation::Query },
+        FieldSpec { snake: "fields", wire: "fields", location: FieldLocation::Query },
+        FieldSpec { snake: "limit", wire: "limit", location: FieldLocation::Query },
+        FieldSpec { snake: "page", wire: "page", location: FieldLocation::Query },
+        FieldSpec { snake: "before", wire: "before", location: FieldLocation::Query },
+        FieldSpec { snake: "since", wire: "since", location: FieldLocation::Query },
+        FieldSpec { snake: "member_creator", wire: "memberCreator", location: FieldLocation::Query },
+        FieldSpec { snake: "member_creator_fields", wire: "memberCreator_fields", location: FieldLocation::Query },
+        FieldSpec { snake: "token", wire: "token", location: FieldLocation::Query },
     ],
     auth: &[
         AuthApply { secret_key: "api_key", kind: AuthKind::ApiKeyQuery("key") },
@@ -6135,10 +9246,10 @@ const OP_MEMBER_GET_MEMBERS_NOTIFICATIONS_BY_ID_MEMBER_BY_FILTER: OpSpec = OpSpe
     method: "GET",
     path_template: "/members/{id_member}/notifications/{filter}",
     fields: &[
-        FieldSpec { snake: "id_member", location: FieldLocation::Path },
-        FieldSpec { snake: "filter", location: FieldLocation::Path },
-        FieldSpec { snake: "key", location: FieldLocation::Query },
-        FieldSpec { snake: "token", location: FieldLocation::Query },
+        FieldSpec { snake: "id_member", wire: "idMember", location: FieldLocation::Path },
+        FieldSpec { snake: "filter", wire: "filter", location: FieldLocation::Path },
+        FieldSpec { snake: "key", wire: "key", location: FieldLocation::Query },
+        FieldSpec { snake: "token", wire: "token", location: FieldLocation::Query },
     ],
     auth: &[
     ],
@@ -6148,9 +9259,9 @@ const OP_MEMBER_ADD_MEMBERS_ONE_TIME_MESSAGES_DISMISSED_BY_ID_MEMBER: OpSpec = O
     method: "POST",
     path_template: "/members/{id_member}/oneTimeMessagesDismissed",
     fields: &[
-        FieldSpec { snake: "id_member", location: FieldLocation::Path },
-        FieldSpec { snake: "token", location: FieldLocation::Query },
-        FieldSpec { snake: "value", location: FieldLocation::Body },
+        FieldSpec { snake: "id_member", wire: "idMember", location: FieldLocation::Path },
+        FieldSpec { snake: "token", wire: "token", location: FieldLocation::Query },
+        FieldSpec { snake: "value", wire: "value", location: FieldLocation::Body },
     ],
     auth: &[
         AuthApply { secret_key: "api_key", kind: AuthKind::ApiKeyQuery("key") },
@@ -6161,11 +9272,11 @@ const OP_MEMBER_GET_MEMBERS_ORGANIZATIONS_BY_ID_MEMBER: OpSpec = OpSpec {
     method: "GET",
     path_template: "/members/{id_member}/organizations",
     fields: &[
-        FieldSpec { snake: "id_member", location: FieldLocation::Path },
-        FieldSpec { snake: "filter", location: FieldLocation::Query },
-        FieldSpec { snake: "fields", location: FieldLocation::Query },
-        FieldSpec { snake: "paid_account", location: FieldLocation::Query },
-        FieldSpec { snake: "token", location: FieldLocation::Query },
+        FieldSpec { snake: "id_member", wire: "idMember", location: FieldLocation::Path },
+        FieldSpec { snake: "filter", wire: "filter", location: FieldLocation::Query },
+        FieldSpec { snake: "fields", wire: "fields", location: FieldLocation::Query },
+        FieldSpec { snake: "paid_account", wire: "paid_account", location: FieldLocation::Query },
+        FieldSpec { snake: "token", wire: "token", location: FieldLocation::Query },
     ],
     auth: &[
         AuthApply { secret_key: "api_key", kind: AuthKind::ApiKeyQuery("key") },
@@ -6176,10 +9287,10 @@ const OP_MEMBER_GET_MEMBERS_ORGANIZATIONS_BY_ID_MEMBER_BY_FILTER: OpSpec = OpSpe
     method: "GET",
     path_template: "/members/{id_member}/organizations/{filter}",
     fields: &[
-        FieldSpec { snake: "id_member", location: FieldLocation::Path },
-        FieldSpec { snake: "filter", location: FieldLocation::Path },
-        FieldSpec { snake: "key", location: FieldLocation::Query },
-        FieldSpec { snake: "token", location: FieldLocation::Query },
+        FieldSpec { snake: "id_member", wire: "idMember", location: FieldLocation::Path },
+        FieldSpec { snake: "filter", wire: "filter", location: FieldLocation::Path },
+        FieldSpec { snake: "key", wire: "key", location: FieldLocation::Query },
+        FieldSpec { snake: "token", wire: "token", location: FieldLocation::Query },
     ],
     auth: &[
     ],
@@ -6189,9 +9300,9 @@ const OP_MEMBER_GET_MEMBERS_ORGANIZATIONS_INVITED_BY_ID_MEMBER: OpSpec = OpSpec 
     method: "GET",
     path_template: "/members/{id_member}/organizationsInvited",
     fields: &[
-        FieldSpec { snake: "id_member", location: FieldLocation::Path },
-        FieldSpec { snake: "fields", location: FieldLocation::Query },
-        FieldSpec { snake: "token", location: FieldLocation::Query },
+        FieldSpec { snake: "id_member", wire: "idMember", location: FieldLocation::Path },
+        FieldSpec { snake: "fields", wire: "fields", location: FieldLocation::Query },
+        FieldSpec { snake: "token", wire: "token", location: FieldLocation::Query },
     ],
     auth: &[
         AuthApply { secret_key: "api_key", kind: AuthKind::ApiKeyQuery("key") },
@@ -6202,9 +9313,9 @@ const OP_MEMBER_GET_MEMBERS_ORGANIZATIONS_INVITED_BY_ID_MEMBER_BY_FIELD: OpSpec 
     method: "GET",
     path_template: "/members/{id_member}/organizationsInvited/{field}",
     fields: &[
-        FieldSpec { snake: "id_member", location: FieldLocation::Path },
-        FieldSpec { snake: "field", location: FieldLocation::Path },
-        FieldSpec { snake: "token", location: FieldLocation::Query },
+        FieldSpec { snake: "id_member", wire: "idMember", location: FieldLocation::Path },
+        FieldSpec { snake: "field", wire: "field", location: FieldLocation::Path },
+        FieldSpec { snake: "token", wire: "token", location: FieldLocation::Query },
     ],
     auth: &[
         AuthApply { secret_key: "api_key", kind: AuthKind::ApiKeyQuery("key") },
@@ -6215,9 +9326,9 @@ const OP_MEMBER_UPDATE_MEMBERS_PREFS_COLOR_BLIND_BY_ID_MEMBER: OpSpec = OpSpec {
     method: "PUT",
     path_template: "/members/{id_member}/prefs/colorBlind",
     fields: &[
-        FieldSpec { snake: "id_member", location: FieldLocation::Path },
-        FieldSpec { snake: "token", location: FieldLocation::Query },
-        FieldSpec { snake: "value", location: FieldLocation::Body },
+        FieldSpec { snake: "id_member", wire: "idMember", location: FieldLocation::Path },
+        FieldSpec { snake: "token", wire: "token", location: FieldLocation::Query },
+        FieldSpec { snake: "value", wire: "value", location: FieldLocation::Body },
     ],
     auth: &[
         AuthApply { secret_key: "api_key", kind: AuthKind::ApiKeyQuery("key") },
@@ -6228,9 +9339,9 @@ const OP_MEMBER_UPDATE_MEMBERS_PREFS_LOCALE_BY_ID_MEMBER: OpSpec = OpSpec {
     method: "PUT",
     path_template: "/members/{id_member}/prefs/locale",
     fields: &[
-        FieldSpec { snake: "id_member", location: FieldLocation::Path },
-        FieldSpec { snake: "token", location: FieldLocation::Query },
-        FieldSpec { snake: "value", location: FieldLocation::Body },
+        FieldSpec { snake: "id_member", wire: "idMember", location: FieldLocation::Path },
+        FieldSpec { snake: "token", wire: "token", location: FieldLocation::Query },
+        FieldSpec { snake: "value", wire: "value", location: FieldLocation::Body },
     ],
     auth: &[
         AuthApply { secret_key: "api_key", kind: AuthKind::ApiKeyQuery("key") },
@@ -6241,9 +9352,9 @@ const OP_MEMBER_UPDATE_MEMBERS_PREFS_MINUTES_BETWEEN_SUMMARIES_BY_ID_MEMBER: OpS
     method: "PUT",
     path_template: "/members/{id_member}/prefs/minutesBetweenSummaries",
     fields: &[
-        FieldSpec { snake: "id_member", location: FieldLocation::Path },
-        FieldSpec { snake: "token", location: FieldLocation::Query },
-        FieldSpec { snake: "value", location: FieldLocation::Body },
+        FieldSpec { snake: "id_member", wire: "idMember", location: FieldLocation::Path },
+        FieldSpec { snake: "token", wire: "token", location: FieldLocation::Query },
+        FieldSpec { snake: "value", wire: "value", location: FieldLocation::Body },
     ],
     auth: &[
         AuthApply { secret_key: "api_key", kind: AuthKind::ApiKeyQuery("key") },
@@ -6254,8 +9365,8 @@ const OP_MEMBER_GET_MEMBERS_SAVED_SEARCHES_BY_ID_MEMBER: OpSpec = OpSpec {
     method: "GET",
     path_template: "/members/{id_member}/savedSearches",
     fields: &[
-        FieldSpec { snake: "id_member", location: FieldLocation::Path },
-        FieldSpec { snake: "token", location: FieldLocation::Query },
+        FieldSpec { snake: "id_member", wire: "idMember", location: FieldLocation::Path },
+        FieldSpec { snake: "token", wire: "token", location: FieldLocation::Query },
     ],
     auth: &[
         AuthApply { secret_key: "api_key", kind: AuthKind::ApiKeyQuery("key") },
@@ -6266,11 +9377,11 @@ const OP_MEMBER_ADD_MEMBERS_SAVED_SEARCHES_BY_ID_MEMBER: OpSpec = OpSpec {
     method: "POST",
     path_template: "/members/{id_member}/savedSearches",
     fields: &[
-        FieldSpec { snake: "id_member", location: FieldLocation::Path },
-        FieldSpec { snake: "token", location: FieldLocation::Query },
-        FieldSpec { snake: "name", location: FieldLocation::Body },
-        FieldSpec { snake: "pos", location: FieldLocation::Body },
-        FieldSpec { snake: "query", location: FieldLocation::Body },
+        FieldSpec { snake: "id_member", wire: "idMember", location: FieldLocation::Path },
+        FieldSpec { snake: "token", wire: "token", location: FieldLocation::Query },
+        FieldSpec { snake: "name", wire: "name", location: FieldLocation::Body },
+        FieldSpec { snake: "pos", wire: "pos", location: FieldLocation::Body },
+        FieldSpec { snake: "query", wire: "query", location: FieldLocation::Body },
     ],
     auth: &[
         AuthApply { secret_key: "api_key", kind: AuthKind::ApiKeyQuery("key") },
@@ -6281,9 +9392,9 @@ const OP_MEMBER_GET_MEMBERS_SAVED_SEARCHES_BY_ID_MEMBER_BY_ID_SAVED_SEARCH: OpSp
     method: "GET",
     path_template: "/members/{id_member}/savedSearches/{id_saved_search}",
     fields: &[
-        FieldSpec { snake: "id_member", location: FieldLocation::Path },
-        FieldSpec { snake: "id_saved_search", location: FieldLocation::Path },
-        FieldSpec { snake: "token", location: FieldLocation::Query },
+        FieldSpec { snake: "id_member", wire: "idMember", location: FieldLocation::Path },
+        FieldSpec { snake: "id_saved_search", wire: "idSavedSearch", location: FieldLocation::Path },
+        FieldSpec { snake: "token", wire: "token", location: FieldLocation::Query },
     ],
     auth: &[
         AuthApply { secret_key: "api_key", kind: AuthKind::ApiKeyQuery("key") },
@@ -6294,12 +9405,12 @@ const OP_MEMBER_UPDATE_MEMBERS_SAVED_SEARCHES_BY_ID_MEMBER_BY_ID_SAVED_SEARCH: O
     method: "PUT",
     path_template: "/members/{id_member}/savedSearches/{id_saved_search}",
     fields: &[
-        FieldSpec { snake: "id_member", location: FieldLocation::Path },
-        FieldSpec { snake: "id_saved_search", location: FieldLocation::Path },
-        FieldSpec { snake: "token", location: FieldLocation::Query },
-        FieldSpec { snake: "name", location: FieldLocation::Body },
-        FieldSpec { snake: "pos", location: FieldLocation::Body },
-        FieldSpec { snake: "query", location: FieldLocation::Body },
+        FieldSpec { snake: "id_member", wire: "idMember", location: FieldLocation::Path },
+        FieldSpec { snake: "id_saved_search", wire: "idSavedSearch", location: FieldLocation::Path },
+        FieldSpec { snake: "token", wire: "token", location: FieldLocation::Query },
+        FieldSpec { snake: "name", wire: "name", location: FieldLocation::Body },
+        FieldSpec { snake: "pos", wire: "pos", location: FieldLocation::Body },
+        FieldSpec { snake: "query", wire: "query", location: FieldLocation::Body },
     ],
     auth: &[
         AuthApply { secret_key: "api_key", kind: AuthKind::ApiKeyQuery("key") },
@@ -6310,9 +9421,9 @@ const OP_MEMBER_DELETE_MEMBERS_SAVED_SEARCHES_BY_ID_MEMBER_BY_ID_SAVED_SEARCH: O
     method: "DELETE",
     path_template: "/members/{id_member}/savedSearches/{id_saved_search}",
     fields: &[
-        FieldSpec { snake: "id_member", location: FieldLocation::Path },
-        FieldSpec { snake: "id_saved_search", location: FieldLocation::Path },
-        FieldSpec { snake: "token", location: FieldLocation::Query },
+        FieldSpec { snake: "id_member", wire: "idMember", location: FieldLocation::Path },
+        FieldSpec { snake: "id_saved_search", wire: "idSavedSearch", location: FieldLocation::Path },
+        FieldSpec { snake: "token", wire: "token", location: FieldLocation::Query },
     ],
     auth: &[
         AuthApply { secret_key: "api_key", kind: AuthKind::ApiKeyQuery("key") },
@@ -6323,10 +9434,10 @@ const OP_MEMBER_UPDATE_MEMBERS_SAVED_SEARCHES_NAME_BY_ID_MEMBER_BY_ID_SAVED_SEAR
     method: "PUT",
     path_template: "/members/{id_member}/savedSearches/{id_saved_search}/name",
     fields: &[
-        FieldSpec { snake: "id_member", location: FieldLocation::Path },
-        FieldSpec { snake: "id_saved_search", location: FieldLocation::Path },
-        FieldSpec { snake: "token", location: FieldLocation::Query },
-        FieldSpec { snake: "value", location: FieldLocation::Body },
+        FieldSpec { snake: "id_member", wire: "idMember", location: FieldLocation::Path },
+        FieldSpec { snake: "id_saved_search", wire: "idSavedSearch", location: FieldLocation::Path },
+        FieldSpec { snake: "token", wire: "token", location: FieldLocation::Query },
+        FieldSpec { snake: "value", wire: "value", location: FieldLocation::Body },
     ],
     auth: &[
         AuthApply { secret_key: "api_key", kind: AuthKind::ApiKeyQuery("key") },
@@ -6337,10 +9448,10 @@ const OP_MEMBER_UPDATE_MEMBERS_SAVED_SEARCHES_POS_BY_ID_MEMBER_BY_ID_SAVED_SEARC
     method: "PUT",
     path_template: "/members/{id_member}/savedSearches/{id_saved_search}/pos",
     fields: &[
-        FieldSpec { snake: "id_member", location: FieldLocation::Path },
-        FieldSpec { snake: "id_saved_search", location: FieldLocation::Path },
-        FieldSpec { snake: "token", location: FieldLocation::Query },
-        FieldSpec { snake: "value", location: FieldLocation::Body },
+        FieldSpec { snake: "id_member", wire: "idMember", location: FieldLocation::Path },
+        FieldSpec { snake: "id_saved_search", wire: "idSavedSearch", location: FieldLocation::Path },
+        FieldSpec { snake: "token", wire: "token", location: FieldLocation::Query },
+        FieldSpec { snake: "value", wire: "value", location: FieldLocation::Body },
     ],
     auth: &[
         AuthApply { secret_key: "api_key", kind: AuthKind::ApiKeyQuery("key") },
@@ -6351,10 +9462,10 @@ const OP_MEMBER_UPDATE_MEMBERS_SAVED_SEARCHES_QUERY_BY_ID_MEMBER_BY_ID_SAVED_SEA
     method: "PUT",
     path_template: "/members/{id_member}/savedSearches/{id_saved_search}/query",
     fields: &[
-        FieldSpec { snake: "id_member", location: FieldLocation::Path },
-        FieldSpec { snake: "id_saved_search", location: FieldLocation::Path },
-        FieldSpec { snake: "token", location: FieldLocation::Query },
-        FieldSpec { snake: "value", location: FieldLocation::Body },
+        FieldSpec { snake: "id_member", wire: "idMember", location: FieldLocation::Path },
+        FieldSpec { snake: "id_saved_search", wire: "idSavedSearch", location: FieldLocation::Path },
+        FieldSpec { snake: "token", wire: "token", location: FieldLocation::Query },
+        FieldSpec { snake: "value", wire: "value", location: FieldLocation::Body },
     ],
     auth: &[
         AuthApply { secret_key: "api_key", kind: AuthKind::ApiKeyQuery("key") },
@@ -6365,9 +9476,9 @@ const OP_MEMBER_GET_MEMBERS_TOKENS_BY_ID_MEMBER: OpSpec = OpSpec {
     method: "GET",
     path_template: "/members/{id_member}/tokens",
     fields: &[
-        FieldSpec { snake: "id_member", location: FieldLocation::Path },
-        FieldSpec { snake: "filter", location: FieldLocation::Query },
-        FieldSpec { snake: "token", location: FieldLocation::Query },
+        FieldSpec { snake: "id_member", wire: "idMember", location: FieldLocation::Path },
+        FieldSpec { snake: "filter", wire: "filter", location: FieldLocation::Query },
+        FieldSpec { snake: "token", wire: "token", location: FieldLocation::Query },
     ],
     auth: &[
         AuthApply { secret_key: "api_key", kind: AuthKind::ApiKeyQuery("key") },
@@ -6378,9 +9489,9 @@ const OP_MEMBER_UPDATE_MEMBERS_USERNAME_BY_ID_MEMBER: OpSpec = OpSpec {
     method: "PUT",
     path_template: "/members/{id_member}/username",
     fields: &[
-        FieldSpec { snake: "id_member", location: FieldLocation::Path },
-        FieldSpec { snake: "token", location: FieldLocation::Query },
-        FieldSpec { snake: "value", location: FieldLocation::Body },
+        FieldSpec { snake: "id_member", wire: "idMember", location: FieldLocation::Path },
+        FieldSpec { snake: "token", wire: "token", location: FieldLocation::Query },
+        FieldSpec { snake: "value", wire: "value", location: FieldLocation::Body },
     ],
     auth: &[
         AuthApply { secret_key: "api_key", kind: AuthKind::ApiKeyQuery("key") },
@@ -6391,10 +9502,10 @@ const OP_MEMBER_GET_MEMBERS_BY_ID_MEMBER_BY_FIELD: OpSpec = OpSpec {
     method: "GET",
     path_template: "/members/{id_member}/{field}",
     fields: &[
-        FieldSpec { snake: "id_member", location: FieldLocation::Path },
-        FieldSpec { snake: "field", location: FieldLocation::Path },
-        FieldSpec { snake: "key", location: FieldLocation::Query },
-        FieldSpec { snake: "token", location: FieldLocation::Query },
+        FieldSpec { snake: "id_member", wire: "idMember", location: FieldLocation::Path },
+        FieldSpec { snake: "field", wire: "field", location: FieldLocation::Path },
+        FieldSpec { snake: "key", wire: "key", location: FieldLocation::Query },
+        FieldSpec { snake: "token", wire: "token", location: FieldLocation::Query },
     ],
     auth: &[
     ],
@@ -7018,246 +10129,1266 @@ fn iface_member__get_members_by_id_member_by_field_params__to_json(p: &iface_mem
     Value::Object(m)
 }
 
+fn iface_member__get_members_by_id_member__ok(body: String) -> Result<String, crate::runtime::DispatchError> {
+    Ok(body)
+}
+
+fn iface_member__get_members_by_id_member__err(e: crate::runtime::DispatchError) -> iface_member::GetMembersByIdMemberError {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => match status {
+            400u16 => iface_member::GetMembersByIdMemberError::BadRequest(body),
+            _ => iface_member::GetMembersByIdMemberError::Other(body),
+        },
+        crate::runtime::DispatchError::Transport(m) => iface_member::GetMembersByIdMemberError::Other(m),
+    }
+}
+
+fn iface_member__update_members_by_id_member__ok(body: String) -> Result<String, crate::runtime::DispatchError> {
+    Ok(body)
+}
+
+fn iface_member__update_members_by_id_member__err(e: crate::runtime::DispatchError) -> iface_member::UpdateMembersByIdMemberError {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => match status {
+            400u16 => iface_member::UpdateMembersByIdMemberError::BadRequest(body),
+            _ => iface_member::UpdateMembersByIdMemberError::Other(body),
+        },
+        crate::runtime::DispatchError::Transport(m) => iface_member::UpdateMembersByIdMemberError::Other(m),
+    }
+}
+
+fn iface_member__get_members_actions_by_id_member__ok(body: String) -> Result<String, crate::runtime::DispatchError> {
+    Ok(body)
+}
+
+fn iface_member__get_members_actions_by_id_member__err(e: crate::runtime::DispatchError) -> iface_member::GetMembersActionsByIdMemberError {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => match status {
+            400u16 => iface_member::GetMembersActionsByIdMemberError::BadRequest(body),
+            _ => iface_member::GetMembersActionsByIdMemberError::Other(body),
+        },
+        crate::runtime::DispatchError::Transport(m) => iface_member::GetMembersActionsByIdMemberError::Other(m),
+    }
+}
+
+fn iface_member__add_members_avatar_by_id_member__ok(body: String) -> Result<String, crate::runtime::DispatchError> {
+    Ok(body)
+}
+
+fn iface_member__add_members_avatar_by_id_member__err(e: crate::runtime::DispatchError) -> iface_member::AddMembersAvatarByIdMemberError {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => match status {
+            400u16 => iface_member::AddMembersAvatarByIdMemberError::BadRequest(body),
+            _ => iface_member::AddMembersAvatarByIdMemberError::Other(body),
+        },
+        crate::runtime::DispatchError::Transport(m) => iface_member::AddMembersAvatarByIdMemberError::Other(m),
+    }
+}
+
+fn iface_member__update_members_avatar_source_by_id_member__ok(body: String) -> Result<String, crate::runtime::DispatchError> {
+    Ok(body)
+}
+
+fn iface_member__update_members_avatar_source_by_id_member__err(e: crate::runtime::DispatchError) -> iface_member::UpdateMembersAvatarSourceByIdMemberError {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => match status {
+            400u16 => iface_member::UpdateMembersAvatarSourceByIdMemberError::BadRequest(body),
+            _ => iface_member::UpdateMembersAvatarSourceByIdMemberError::Other(body),
+        },
+        crate::runtime::DispatchError::Transport(m) => iface_member::UpdateMembersAvatarSourceByIdMemberError::Other(m),
+    }
+}
+
+fn iface_member__update_members_bio_by_id_member__ok(body: String) -> Result<String, crate::runtime::DispatchError> {
+    Ok(body)
+}
+
+fn iface_member__update_members_bio_by_id_member__err(e: crate::runtime::DispatchError) -> iface_member::UpdateMembersBioByIdMemberError {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => match status {
+            400u16 => iface_member::UpdateMembersBioByIdMemberError::BadRequest(body),
+            _ => iface_member::UpdateMembersBioByIdMemberError::Other(body),
+        },
+        crate::runtime::DispatchError::Transport(m) => iface_member::UpdateMembersBioByIdMemberError::Other(m),
+    }
+}
+
+fn iface_member__get_members_board_backgrounds_by_id_member__ok(body: String) -> Result<String, crate::runtime::DispatchError> {
+    Ok(body)
+}
+
+fn iface_member__get_members_board_backgrounds_by_id_member__err(e: crate::runtime::DispatchError) -> iface_member::GetMembersBoardBackgroundsByIdMemberError {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => match status {
+            400u16 => iface_member::GetMembersBoardBackgroundsByIdMemberError::BadRequest(body),
+            _ => iface_member::GetMembersBoardBackgroundsByIdMemberError::Other(body),
+        },
+        crate::runtime::DispatchError::Transport(m) => iface_member::GetMembersBoardBackgroundsByIdMemberError::Other(m),
+    }
+}
+
+fn iface_member__add_members_board_backgrounds_by_id_member__ok(body: String) -> Result<String, crate::runtime::DispatchError> {
+    Ok(body)
+}
+
+fn iface_member__add_members_board_backgrounds_by_id_member__err(e: crate::runtime::DispatchError) -> iface_member::AddMembersBoardBackgroundsByIdMemberError {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => match status {
+            400u16 => iface_member::AddMembersBoardBackgroundsByIdMemberError::BadRequest(body),
+            _ => iface_member::AddMembersBoardBackgroundsByIdMemberError::Other(body),
+        },
+        crate::runtime::DispatchError::Transport(m) => iface_member::AddMembersBoardBackgroundsByIdMemberError::Other(m),
+    }
+}
+
+fn iface_member__get_members_board_backgrounds_by_id_member_by_id_board_background__ok(body: String) -> Result<String, crate::runtime::DispatchError> {
+    Ok(body)
+}
+
+fn iface_member__get_members_board_backgrounds_by_id_member_by_id_board_background__err(e: crate::runtime::DispatchError) -> iface_member::GetMembersBoardBackgroundsByIdMemberByIdBoardBackgroundError {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => match status {
+            400u16 => iface_member::GetMembersBoardBackgroundsByIdMemberByIdBoardBackgroundError::BadRequest(body),
+            _ => iface_member::GetMembersBoardBackgroundsByIdMemberByIdBoardBackgroundError::Other(body),
+        },
+        crate::runtime::DispatchError::Transport(m) => iface_member::GetMembersBoardBackgroundsByIdMemberByIdBoardBackgroundError::Other(m),
+    }
+}
+
+fn iface_member__update_members_board_backgrounds_by_id_member_by_id_board_background__ok(body: String) -> Result<String, crate::runtime::DispatchError> {
+    Ok(body)
+}
+
+fn iface_member__update_members_board_backgrounds_by_id_member_by_id_board_background__err(e: crate::runtime::DispatchError) -> iface_member::UpdateMembersBoardBackgroundsByIdMemberByIdBoardBackgroundError {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => match status {
+            400u16 => iface_member::UpdateMembersBoardBackgroundsByIdMemberByIdBoardBackgroundError::BadRequest(body),
+            _ => iface_member::UpdateMembersBoardBackgroundsByIdMemberByIdBoardBackgroundError::Other(body),
+        },
+        crate::runtime::DispatchError::Transport(m) => iface_member::UpdateMembersBoardBackgroundsByIdMemberByIdBoardBackgroundError::Other(m),
+    }
+}
+
+fn iface_member__delete_members_board_backgrounds_by_id_member_by_id_board_background__ok(body: String) -> Result<String, crate::runtime::DispatchError> {
+    Ok(body)
+}
+
+fn iface_member__delete_members_board_backgrounds_by_id_member_by_id_board_background__err(e: crate::runtime::DispatchError) -> iface_member::DeleteMembersBoardBackgroundsByIdMemberByIdBoardBackgroundError {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => match status {
+            400u16 => iface_member::DeleteMembersBoardBackgroundsByIdMemberByIdBoardBackgroundError::BadRequest(body),
+            _ => iface_member::DeleteMembersBoardBackgroundsByIdMemberByIdBoardBackgroundError::Other(body),
+        },
+        crate::runtime::DispatchError::Transport(m) => iface_member::DeleteMembersBoardBackgroundsByIdMemberByIdBoardBackgroundError::Other(m),
+    }
+}
+
+fn iface_member__get_members_board_stars_by_id_member__ok(body: String) -> Result<String, crate::runtime::DispatchError> {
+    Ok(body)
+}
+
+fn iface_member__get_members_board_stars_by_id_member__err(e: crate::runtime::DispatchError) -> iface_member::GetMembersBoardStarsByIdMemberError {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => match status {
+            400u16 => iface_member::GetMembersBoardStarsByIdMemberError::BadRequest(body),
+            _ => iface_member::GetMembersBoardStarsByIdMemberError::Other(body),
+        },
+        crate::runtime::DispatchError::Transport(m) => iface_member::GetMembersBoardStarsByIdMemberError::Other(m),
+    }
+}
+
+fn iface_member__add_members_board_stars_by_id_member__ok(body: String) -> Result<String, crate::runtime::DispatchError> {
+    Ok(body)
+}
+
+fn iface_member__add_members_board_stars_by_id_member__err(e: crate::runtime::DispatchError) -> iface_member::AddMembersBoardStarsByIdMemberError {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => match status {
+            400u16 => iface_member::AddMembersBoardStarsByIdMemberError::BadRequest(body),
+            _ => iface_member::AddMembersBoardStarsByIdMemberError::Other(body),
+        },
+        crate::runtime::DispatchError::Transport(m) => iface_member::AddMembersBoardStarsByIdMemberError::Other(m),
+    }
+}
+
+fn iface_member__get_members_board_stars_by_id_member_by_id_board_star__ok(body: String) -> Result<String, crate::runtime::DispatchError> {
+    Ok(body)
+}
+
+fn iface_member__get_members_board_stars_by_id_member_by_id_board_star__err(e: crate::runtime::DispatchError) -> iface_member::GetMembersBoardStarsByIdMemberByIdBoardStarError {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => match status {
+            400u16 => iface_member::GetMembersBoardStarsByIdMemberByIdBoardStarError::BadRequest(body),
+            _ => iface_member::GetMembersBoardStarsByIdMemberByIdBoardStarError::Other(body),
+        },
+        crate::runtime::DispatchError::Transport(m) => iface_member::GetMembersBoardStarsByIdMemberByIdBoardStarError::Other(m),
+    }
+}
+
+fn iface_member__update_members_board_stars_by_id_member_by_id_board_star__ok(body: String) -> Result<String, crate::runtime::DispatchError> {
+    Ok(body)
+}
+
+fn iface_member__update_members_board_stars_by_id_member_by_id_board_star__err(e: crate::runtime::DispatchError) -> iface_member::UpdateMembersBoardStarsByIdMemberByIdBoardStarError {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => match status {
+            400u16 => iface_member::UpdateMembersBoardStarsByIdMemberByIdBoardStarError::BadRequest(body),
+            _ => iface_member::UpdateMembersBoardStarsByIdMemberByIdBoardStarError::Other(body),
+        },
+        crate::runtime::DispatchError::Transport(m) => iface_member::UpdateMembersBoardStarsByIdMemberByIdBoardStarError::Other(m),
+    }
+}
+
+fn iface_member__delete_members_board_stars_by_id_member_by_id_board_star__ok(body: String) -> Result<String, crate::runtime::DispatchError> {
+    Ok(body)
+}
+
+fn iface_member__delete_members_board_stars_by_id_member_by_id_board_star__err(e: crate::runtime::DispatchError) -> iface_member::DeleteMembersBoardStarsByIdMemberByIdBoardStarError {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => match status {
+            400u16 => iface_member::DeleteMembersBoardStarsByIdMemberByIdBoardStarError::BadRequest(body),
+            _ => iface_member::DeleteMembersBoardStarsByIdMemberByIdBoardStarError::Other(body),
+        },
+        crate::runtime::DispatchError::Transport(m) => iface_member::DeleteMembersBoardStarsByIdMemberByIdBoardStarError::Other(m),
+    }
+}
+
+fn iface_member__update_members_board_stars_id_board_by_id_member_by_id_board_star__ok(body: String) -> Result<String, crate::runtime::DispatchError> {
+    Ok(body)
+}
+
+fn iface_member__update_members_board_stars_id_board_by_id_member_by_id_board_star__err(e: crate::runtime::DispatchError) -> iface_member::UpdateMembersBoardStarsIdBoardByIdMemberByIdBoardStarError {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => match status {
+            400u16 => iface_member::UpdateMembersBoardStarsIdBoardByIdMemberByIdBoardStarError::BadRequest(body),
+            _ => iface_member::UpdateMembersBoardStarsIdBoardByIdMemberByIdBoardStarError::Other(body),
+        },
+        crate::runtime::DispatchError::Transport(m) => iface_member::UpdateMembersBoardStarsIdBoardByIdMemberByIdBoardStarError::Other(m),
+    }
+}
+
+fn iface_member__update_members_board_stars_pos_by_id_member_by_id_board_star__ok(body: String) -> Result<String, crate::runtime::DispatchError> {
+    Ok(body)
+}
+
+fn iface_member__update_members_board_stars_pos_by_id_member_by_id_board_star__err(e: crate::runtime::DispatchError) -> iface_member::UpdateMembersBoardStarsPosByIdMemberByIdBoardStarError {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => match status {
+            400u16 => iface_member::UpdateMembersBoardStarsPosByIdMemberByIdBoardStarError::BadRequest(body),
+            _ => iface_member::UpdateMembersBoardStarsPosByIdMemberByIdBoardStarError::Other(body),
+        },
+        crate::runtime::DispatchError::Transport(m) => iface_member::UpdateMembersBoardStarsPosByIdMemberByIdBoardStarError::Other(m),
+    }
+}
+
+fn iface_member__get_members_boards_by_id_member__ok(body: String) -> Result<String, crate::runtime::DispatchError> {
+    Ok(body)
+}
+
+fn iface_member__get_members_boards_by_id_member__err(e: crate::runtime::DispatchError) -> iface_member::GetMembersBoardsByIdMemberError {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => match status {
+            400u16 => iface_member::GetMembersBoardsByIdMemberError::BadRequest(body),
+            _ => iface_member::GetMembersBoardsByIdMemberError::Other(body),
+        },
+        crate::runtime::DispatchError::Transport(m) => iface_member::GetMembersBoardsByIdMemberError::Other(m),
+    }
+}
+
+fn iface_member__get_members_boards_by_id_member_by_filter__ok(body: String) -> Result<String, crate::runtime::DispatchError> {
+    Ok(body)
+}
+
+fn iface_member__get_members_boards_by_id_member_by_filter__err(e: crate::runtime::DispatchError) -> iface_member::GetMembersBoardsByIdMemberByFilterError {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => match status {
+            400u16 => iface_member::GetMembersBoardsByIdMemberByFilterError::BadRequest(body),
+            _ => iface_member::GetMembersBoardsByIdMemberByFilterError::Other(body),
+        },
+        crate::runtime::DispatchError::Transport(m) => iface_member::GetMembersBoardsByIdMemberByFilterError::Other(m),
+    }
+}
+
+fn iface_member__get_members_boards_invited_by_id_member__ok(body: String) -> Result<String, crate::runtime::DispatchError> {
+    Ok(body)
+}
+
+fn iface_member__get_members_boards_invited_by_id_member__err(e: crate::runtime::DispatchError) -> iface_member::GetMembersBoardsInvitedByIdMemberError {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => match status {
+            400u16 => iface_member::GetMembersBoardsInvitedByIdMemberError::BadRequest(body),
+            _ => iface_member::GetMembersBoardsInvitedByIdMemberError::Other(body),
+        },
+        crate::runtime::DispatchError::Transport(m) => iface_member::GetMembersBoardsInvitedByIdMemberError::Other(m),
+    }
+}
+
+fn iface_member__get_members_boards_invited_by_id_member_by_field__ok(body: String) -> Result<String, crate::runtime::DispatchError> {
+    Ok(body)
+}
+
+fn iface_member__get_members_boards_invited_by_id_member_by_field__err(e: crate::runtime::DispatchError) -> iface_member::GetMembersBoardsInvitedByIdMemberByFieldError {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => match status {
+            400u16 => iface_member::GetMembersBoardsInvitedByIdMemberByFieldError::BadRequest(body),
+            _ => iface_member::GetMembersBoardsInvitedByIdMemberByFieldError::Other(body),
+        },
+        crate::runtime::DispatchError::Transport(m) => iface_member::GetMembersBoardsInvitedByIdMemberByFieldError::Other(m),
+    }
+}
+
+fn iface_member__get_members_cards_by_id_member__ok(body: String) -> Result<String, crate::runtime::DispatchError> {
+    Ok(body)
+}
+
+fn iface_member__get_members_cards_by_id_member__err(e: crate::runtime::DispatchError) -> iface_member::GetMembersCardsByIdMemberError {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => match status {
+            400u16 => iface_member::GetMembersCardsByIdMemberError::BadRequest(body),
+            _ => iface_member::GetMembersCardsByIdMemberError::Other(body),
+        },
+        crate::runtime::DispatchError::Transport(m) => iface_member::GetMembersCardsByIdMemberError::Other(m),
+    }
+}
+
+fn iface_member__get_members_cards_by_id_member_by_filter__ok(body: String) -> Result<String, crate::runtime::DispatchError> {
+    Ok(body)
+}
+
+fn iface_member__get_members_cards_by_id_member_by_filter__err(e: crate::runtime::DispatchError) -> iface_member::GetMembersCardsByIdMemberByFilterError {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => match status {
+            400u16 => iface_member::GetMembersCardsByIdMemberByFilterError::BadRequest(body),
+            _ => iface_member::GetMembersCardsByIdMemberByFilterError::Other(body),
+        },
+        crate::runtime::DispatchError::Transport(m) => iface_member::GetMembersCardsByIdMemberByFilterError::Other(m),
+    }
+}
+
+fn iface_member__get_members_custom_board_backgrounds_by_id_member__ok(body: String) -> Result<String, crate::runtime::DispatchError> {
+    Ok(body)
+}
+
+fn iface_member__get_members_custom_board_backgrounds_by_id_member__err(e: crate::runtime::DispatchError) -> iface_member::GetMembersCustomBoardBackgroundsByIdMemberError {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => match status {
+            400u16 => iface_member::GetMembersCustomBoardBackgroundsByIdMemberError::BadRequest(body),
+            _ => iface_member::GetMembersCustomBoardBackgroundsByIdMemberError::Other(body),
+        },
+        crate::runtime::DispatchError::Transport(m) => iface_member::GetMembersCustomBoardBackgroundsByIdMemberError::Other(m),
+    }
+}
+
+fn iface_member__add_members_custom_board_backgrounds_by_id_member__ok(body: String) -> Result<String, crate::runtime::DispatchError> {
+    Ok(body)
+}
+
+fn iface_member__add_members_custom_board_backgrounds_by_id_member__err(e: crate::runtime::DispatchError) -> iface_member::AddMembersCustomBoardBackgroundsByIdMemberError {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => match status {
+            400u16 => iface_member::AddMembersCustomBoardBackgroundsByIdMemberError::BadRequest(body),
+            _ => iface_member::AddMembersCustomBoardBackgroundsByIdMemberError::Other(body),
+        },
+        crate::runtime::DispatchError::Transport(m) => iface_member::AddMembersCustomBoardBackgroundsByIdMemberError::Other(m),
+    }
+}
+
+fn iface_member__get_members_custom_board_backgrounds_by_id_member_by_id_board_background__ok(body: String) -> Result<String, crate::runtime::DispatchError> {
+    Ok(body)
+}
+
+fn iface_member__get_members_custom_board_backgrounds_by_id_member_by_id_board_background__err(e: crate::runtime::DispatchError) -> iface_member::GetMembersCustomBoardBackgroundsByIdMemberByIdBoardBackgroundError {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => match status {
+            400u16 => iface_member::GetMembersCustomBoardBackgroundsByIdMemberByIdBoardBackgroundError::BadRequest(body),
+            _ => iface_member::GetMembersCustomBoardBackgroundsByIdMemberByIdBoardBackgroundError::Other(body),
+        },
+        crate::runtime::DispatchError::Transport(m) => iface_member::GetMembersCustomBoardBackgroundsByIdMemberByIdBoardBackgroundError::Other(m),
+    }
+}
+
+fn iface_member__update_members_custom_board_backgrounds_by_id_member_by_id_board_background__ok(body: String) -> Result<String, crate::runtime::DispatchError> {
+    Ok(body)
+}
+
+fn iface_member__update_members_custom_board_backgrounds_by_id_member_by_id_board_background__err(e: crate::runtime::DispatchError) -> iface_member::UpdateMembersCustomBoardBackgroundsByIdMemberByIdBoardBackgroundError {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => match status {
+            400u16 => iface_member::UpdateMembersCustomBoardBackgroundsByIdMemberByIdBoardBackgroundError::BadRequest(body),
+            _ => iface_member::UpdateMembersCustomBoardBackgroundsByIdMemberByIdBoardBackgroundError::Other(body),
+        },
+        crate::runtime::DispatchError::Transport(m) => iface_member::UpdateMembersCustomBoardBackgroundsByIdMemberByIdBoardBackgroundError::Other(m),
+    }
+}
+
+fn iface_member__delete_members_custom_board_backgrounds_by_id_member_by_id_board_background__ok(body: String) -> Result<String, crate::runtime::DispatchError> {
+    Ok(body)
+}
+
+fn iface_member__delete_members_custom_board_backgrounds_by_id_member_by_id_board_background__err(e: crate::runtime::DispatchError) -> iface_member::DeleteMembersCustomBoardBackgroundsByIdMemberByIdBoardBackgroundError {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => match status {
+            400u16 => iface_member::DeleteMembersCustomBoardBackgroundsByIdMemberByIdBoardBackgroundError::BadRequest(body),
+            _ => iface_member::DeleteMembersCustomBoardBackgroundsByIdMemberByIdBoardBackgroundError::Other(body),
+        },
+        crate::runtime::DispatchError::Transport(m) => iface_member::DeleteMembersCustomBoardBackgroundsByIdMemberByIdBoardBackgroundError::Other(m),
+    }
+}
+
+fn iface_member__get_members_custom_emoji_by_id_member__ok(body: String) -> Result<String, crate::runtime::DispatchError> {
+    Ok(body)
+}
+
+fn iface_member__get_members_custom_emoji_by_id_member__err(e: crate::runtime::DispatchError) -> iface_member::GetMembersCustomEmojiByIdMemberError {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => match status {
+            400u16 => iface_member::GetMembersCustomEmojiByIdMemberError::BadRequest(body),
+            _ => iface_member::GetMembersCustomEmojiByIdMemberError::Other(body),
+        },
+        crate::runtime::DispatchError::Transport(m) => iface_member::GetMembersCustomEmojiByIdMemberError::Other(m),
+    }
+}
+
+fn iface_member__add_members_custom_emoji_by_id_member__ok(body: String) -> Result<String, crate::runtime::DispatchError> {
+    Ok(body)
+}
+
+fn iface_member__add_members_custom_emoji_by_id_member__err(e: crate::runtime::DispatchError) -> iface_member::AddMembersCustomEmojiByIdMemberError {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => match status {
+            400u16 => iface_member::AddMembersCustomEmojiByIdMemberError::BadRequest(body),
+            _ => iface_member::AddMembersCustomEmojiByIdMemberError::Other(body),
+        },
+        crate::runtime::DispatchError::Transport(m) => iface_member::AddMembersCustomEmojiByIdMemberError::Other(m),
+    }
+}
+
+fn iface_member__get_members_custom_emoji_by_id_member_by_id_custom_emoji__ok(body: String) -> Result<String, crate::runtime::DispatchError> {
+    Ok(body)
+}
+
+fn iface_member__get_members_custom_emoji_by_id_member_by_id_custom_emoji__err(e: crate::runtime::DispatchError) -> iface_member::GetMembersCustomEmojiByIdMemberByIdCustomEmojiError {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => match status {
+            400u16 => iface_member::GetMembersCustomEmojiByIdMemberByIdCustomEmojiError::BadRequest(body),
+            _ => iface_member::GetMembersCustomEmojiByIdMemberByIdCustomEmojiError::Other(body),
+        },
+        crate::runtime::DispatchError::Transport(m) => iface_member::GetMembersCustomEmojiByIdMemberByIdCustomEmojiError::Other(m),
+    }
+}
+
+fn iface_member__get_members_custom_stickers_by_id_member__ok(body: String) -> Result<String, crate::runtime::DispatchError> {
+    Ok(body)
+}
+
+fn iface_member__get_members_custom_stickers_by_id_member__err(e: crate::runtime::DispatchError) -> iface_member::GetMembersCustomStickersByIdMemberError {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => match status {
+            400u16 => iface_member::GetMembersCustomStickersByIdMemberError::BadRequest(body),
+            _ => iface_member::GetMembersCustomStickersByIdMemberError::Other(body),
+        },
+        crate::runtime::DispatchError::Transport(m) => iface_member::GetMembersCustomStickersByIdMemberError::Other(m),
+    }
+}
+
+fn iface_member__add_members_custom_stickers_by_id_member__ok(body: String) -> Result<String, crate::runtime::DispatchError> {
+    Ok(body)
+}
+
+fn iface_member__add_members_custom_stickers_by_id_member__err(e: crate::runtime::DispatchError) -> iface_member::AddMembersCustomStickersByIdMemberError {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => match status {
+            400u16 => iface_member::AddMembersCustomStickersByIdMemberError::BadRequest(body),
+            _ => iface_member::AddMembersCustomStickersByIdMemberError::Other(body),
+        },
+        crate::runtime::DispatchError::Transport(m) => iface_member::AddMembersCustomStickersByIdMemberError::Other(m),
+    }
+}
+
+fn iface_member__get_members_custom_stickers_by_id_member_by_id_custom_sticker__ok(body: String) -> Result<String, crate::runtime::DispatchError> {
+    Ok(body)
+}
+
+fn iface_member__get_members_custom_stickers_by_id_member_by_id_custom_sticker__err(e: crate::runtime::DispatchError) -> iface_member::GetMembersCustomStickersByIdMemberByIdCustomStickerError {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => match status {
+            400u16 => iface_member::GetMembersCustomStickersByIdMemberByIdCustomStickerError::BadRequest(body),
+            _ => iface_member::GetMembersCustomStickersByIdMemberByIdCustomStickerError::Other(body),
+        },
+        crate::runtime::DispatchError::Transport(m) => iface_member::GetMembersCustomStickersByIdMemberByIdCustomStickerError::Other(m),
+    }
+}
+
+fn iface_member__delete_members_custom_stickers_by_id_member_by_id_custom_sticker__ok(body: String) -> Result<String, crate::runtime::DispatchError> {
+    Ok(body)
+}
+
+fn iface_member__delete_members_custom_stickers_by_id_member_by_id_custom_sticker__err(e: crate::runtime::DispatchError) -> iface_member::DeleteMembersCustomStickersByIdMemberByIdCustomStickerError {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => match status {
+            400u16 => iface_member::DeleteMembersCustomStickersByIdMemberByIdCustomStickerError::BadRequest(body),
+            _ => iface_member::DeleteMembersCustomStickersByIdMemberByIdCustomStickerError::Other(body),
+        },
+        crate::runtime::DispatchError::Transport(m) => iface_member::DeleteMembersCustomStickersByIdMemberByIdCustomStickerError::Other(m),
+    }
+}
+
+fn iface_member__get_members_deltas_by_id_member__ok(body: String) -> Result<String, crate::runtime::DispatchError> {
+    Ok(body)
+}
+
+fn iface_member__get_members_deltas_by_id_member__err(e: crate::runtime::DispatchError) -> iface_member::GetMembersDeltasByIdMemberError {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => match status {
+            400u16 => iface_member::GetMembersDeltasByIdMemberError::BadRequest(body),
+            _ => iface_member::GetMembersDeltasByIdMemberError::Other(body),
+        },
+        crate::runtime::DispatchError::Transport(m) => iface_member::GetMembersDeltasByIdMemberError::Other(m),
+    }
+}
+
+fn iface_member__update_members_full_name_by_id_member__ok(body: String) -> Result<String, crate::runtime::DispatchError> {
+    Ok(body)
+}
+
+fn iface_member__update_members_full_name_by_id_member__err(e: crate::runtime::DispatchError) -> iface_member::UpdateMembersFullNameByIdMemberError {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => match status {
+            400u16 => iface_member::UpdateMembersFullNameByIdMemberError::BadRequest(body),
+            _ => iface_member::UpdateMembersFullNameByIdMemberError::Other(body),
+        },
+        crate::runtime::DispatchError::Transport(m) => iface_member::UpdateMembersFullNameByIdMemberError::Other(m),
+    }
+}
+
+fn iface_member__update_members_initials_by_id_member__ok(body: String) -> Result<String, crate::runtime::DispatchError> {
+    Ok(body)
+}
+
+fn iface_member__update_members_initials_by_id_member__err(e: crate::runtime::DispatchError) -> iface_member::UpdateMembersInitialsByIdMemberError {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => match status {
+            400u16 => iface_member::UpdateMembersInitialsByIdMemberError::BadRequest(body),
+            _ => iface_member::UpdateMembersInitialsByIdMemberError::Other(body),
+        },
+        crate::runtime::DispatchError::Transport(m) => iface_member::UpdateMembersInitialsByIdMemberError::Other(m),
+    }
+}
+
+fn iface_member__get_members_notifications_by_id_member__ok(body: String) -> Result<String, crate::runtime::DispatchError> {
+    Ok(body)
+}
+
+fn iface_member__get_members_notifications_by_id_member__err(e: crate::runtime::DispatchError) -> iface_member::GetMembersNotificationsByIdMemberError {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => match status {
+            400u16 => iface_member::GetMembersNotificationsByIdMemberError::BadRequest(body),
+            _ => iface_member::GetMembersNotificationsByIdMemberError::Other(body),
+        },
+        crate::runtime::DispatchError::Transport(m) => iface_member::GetMembersNotificationsByIdMemberError::Other(m),
+    }
+}
+
+fn iface_member__get_members_notifications_by_id_member_by_filter__ok(body: String) -> Result<String, crate::runtime::DispatchError> {
+    Ok(body)
+}
+
+fn iface_member__get_members_notifications_by_id_member_by_filter__err(e: crate::runtime::DispatchError) -> iface_member::GetMembersNotificationsByIdMemberByFilterError {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => match status {
+            400u16 => iface_member::GetMembersNotificationsByIdMemberByFilterError::BadRequest(body),
+            _ => iface_member::GetMembersNotificationsByIdMemberByFilterError::Other(body),
+        },
+        crate::runtime::DispatchError::Transport(m) => iface_member::GetMembersNotificationsByIdMemberByFilterError::Other(m),
+    }
+}
+
+fn iface_member__add_members_one_time_messages_dismissed_by_id_member__ok(body: String) -> Result<String, crate::runtime::DispatchError> {
+    Ok(body)
+}
+
+fn iface_member__add_members_one_time_messages_dismissed_by_id_member__err(e: crate::runtime::DispatchError) -> iface_member::AddMembersOneTimeMessagesDismissedByIdMemberError {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => match status {
+            400u16 => iface_member::AddMembersOneTimeMessagesDismissedByIdMemberError::BadRequest(body),
+            _ => iface_member::AddMembersOneTimeMessagesDismissedByIdMemberError::Other(body),
+        },
+        crate::runtime::DispatchError::Transport(m) => iface_member::AddMembersOneTimeMessagesDismissedByIdMemberError::Other(m),
+    }
+}
+
+fn iface_member__get_members_organizations_by_id_member__ok(body: String) -> Result<String, crate::runtime::DispatchError> {
+    Ok(body)
+}
+
+fn iface_member__get_members_organizations_by_id_member__err(e: crate::runtime::DispatchError) -> iface_member::GetMembersOrganizationsByIdMemberError {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => match status {
+            400u16 => iface_member::GetMembersOrganizationsByIdMemberError::BadRequest(body),
+            _ => iface_member::GetMembersOrganizationsByIdMemberError::Other(body),
+        },
+        crate::runtime::DispatchError::Transport(m) => iface_member::GetMembersOrganizationsByIdMemberError::Other(m),
+    }
+}
+
+fn iface_member__get_members_organizations_by_id_member_by_filter__ok(body: String) -> Result<String, crate::runtime::DispatchError> {
+    Ok(body)
+}
+
+fn iface_member__get_members_organizations_by_id_member_by_filter__err(e: crate::runtime::DispatchError) -> iface_member::GetMembersOrganizationsByIdMemberByFilterError {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => match status {
+            400u16 => iface_member::GetMembersOrganizationsByIdMemberByFilterError::BadRequest(body),
+            _ => iface_member::GetMembersOrganizationsByIdMemberByFilterError::Other(body),
+        },
+        crate::runtime::DispatchError::Transport(m) => iface_member::GetMembersOrganizationsByIdMemberByFilterError::Other(m),
+    }
+}
+
+fn iface_member__get_members_organizations_invited_by_id_member__ok(body: String) -> Result<String, crate::runtime::DispatchError> {
+    Ok(body)
+}
+
+fn iface_member__get_members_organizations_invited_by_id_member__err(e: crate::runtime::DispatchError) -> iface_member::GetMembersOrganizationsInvitedByIdMemberError {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => match status {
+            400u16 => iface_member::GetMembersOrganizationsInvitedByIdMemberError::BadRequest(body),
+            _ => iface_member::GetMembersOrganizationsInvitedByIdMemberError::Other(body),
+        },
+        crate::runtime::DispatchError::Transport(m) => iface_member::GetMembersOrganizationsInvitedByIdMemberError::Other(m),
+    }
+}
+
+fn iface_member__get_members_organizations_invited_by_id_member_by_field__ok(body: String) -> Result<String, crate::runtime::DispatchError> {
+    Ok(body)
+}
+
+fn iface_member__get_members_organizations_invited_by_id_member_by_field__err(e: crate::runtime::DispatchError) -> iface_member::GetMembersOrganizationsInvitedByIdMemberByFieldError {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => match status {
+            400u16 => iface_member::GetMembersOrganizationsInvitedByIdMemberByFieldError::BadRequest(body),
+            _ => iface_member::GetMembersOrganizationsInvitedByIdMemberByFieldError::Other(body),
+        },
+        crate::runtime::DispatchError::Transport(m) => iface_member::GetMembersOrganizationsInvitedByIdMemberByFieldError::Other(m),
+    }
+}
+
+fn iface_member__update_members_prefs_color_blind_by_id_member__ok(body: String) -> Result<String, crate::runtime::DispatchError> {
+    Ok(body)
+}
+
+fn iface_member__update_members_prefs_color_blind_by_id_member__err(e: crate::runtime::DispatchError) -> iface_member::UpdateMembersPrefsColorBlindByIdMemberError {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => match status {
+            400u16 => iface_member::UpdateMembersPrefsColorBlindByIdMemberError::BadRequest(body),
+            _ => iface_member::UpdateMembersPrefsColorBlindByIdMemberError::Other(body),
+        },
+        crate::runtime::DispatchError::Transport(m) => iface_member::UpdateMembersPrefsColorBlindByIdMemberError::Other(m),
+    }
+}
+
+fn iface_member__update_members_prefs_locale_by_id_member__ok(body: String) -> Result<String, crate::runtime::DispatchError> {
+    Ok(body)
+}
+
+fn iface_member__update_members_prefs_locale_by_id_member__err(e: crate::runtime::DispatchError) -> iface_member::UpdateMembersPrefsLocaleByIdMemberError {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => match status {
+            400u16 => iface_member::UpdateMembersPrefsLocaleByIdMemberError::BadRequest(body),
+            _ => iface_member::UpdateMembersPrefsLocaleByIdMemberError::Other(body),
+        },
+        crate::runtime::DispatchError::Transport(m) => iface_member::UpdateMembersPrefsLocaleByIdMemberError::Other(m),
+    }
+}
+
+fn iface_member__update_members_prefs_minutes_between_summaries_by_id_member__ok(body: String) -> Result<String, crate::runtime::DispatchError> {
+    Ok(body)
+}
+
+fn iface_member__update_members_prefs_minutes_between_summaries_by_id_member__err(e: crate::runtime::DispatchError) -> iface_member::UpdateMembersPrefsMinutesBetweenSummariesByIdMemberError {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => match status {
+            400u16 => iface_member::UpdateMembersPrefsMinutesBetweenSummariesByIdMemberError::BadRequest(body),
+            _ => iface_member::UpdateMembersPrefsMinutesBetweenSummariesByIdMemberError::Other(body),
+        },
+        crate::runtime::DispatchError::Transport(m) => iface_member::UpdateMembersPrefsMinutesBetweenSummariesByIdMemberError::Other(m),
+    }
+}
+
+fn iface_member__get_members_saved_searches_by_id_member__ok(body: String) -> Result<String, crate::runtime::DispatchError> {
+    Ok(body)
+}
+
+fn iface_member__get_members_saved_searches_by_id_member__err(e: crate::runtime::DispatchError) -> iface_member::GetMembersSavedSearchesByIdMemberError {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => match status {
+            400u16 => iface_member::GetMembersSavedSearchesByIdMemberError::BadRequest(body),
+            _ => iface_member::GetMembersSavedSearchesByIdMemberError::Other(body),
+        },
+        crate::runtime::DispatchError::Transport(m) => iface_member::GetMembersSavedSearchesByIdMemberError::Other(m),
+    }
+}
+
+fn iface_member__add_members_saved_searches_by_id_member__ok(body: String) -> Result<String, crate::runtime::DispatchError> {
+    Ok(body)
+}
+
+fn iface_member__add_members_saved_searches_by_id_member__err(e: crate::runtime::DispatchError) -> iface_member::AddMembersSavedSearchesByIdMemberError {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => match status {
+            400u16 => iface_member::AddMembersSavedSearchesByIdMemberError::BadRequest(body),
+            _ => iface_member::AddMembersSavedSearchesByIdMemberError::Other(body),
+        },
+        crate::runtime::DispatchError::Transport(m) => iface_member::AddMembersSavedSearchesByIdMemberError::Other(m),
+    }
+}
+
+fn iface_member__get_members_saved_searches_by_id_member_by_id_saved_search__ok(body: String) -> Result<String, crate::runtime::DispatchError> {
+    Ok(body)
+}
+
+fn iface_member__get_members_saved_searches_by_id_member_by_id_saved_search__err(e: crate::runtime::DispatchError) -> iface_member::GetMembersSavedSearchesByIdMemberByIdSavedSearchError {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => match status {
+            400u16 => iface_member::GetMembersSavedSearchesByIdMemberByIdSavedSearchError::BadRequest(body),
+            _ => iface_member::GetMembersSavedSearchesByIdMemberByIdSavedSearchError::Other(body),
+        },
+        crate::runtime::DispatchError::Transport(m) => iface_member::GetMembersSavedSearchesByIdMemberByIdSavedSearchError::Other(m),
+    }
+}
+
+fn iface_member__update_members_saved_searches_by_id_member_by_id_saved_search__ok(body: String) -> Result<String, crate::runtime::DispatchError> {
+    Ok(body)
+}
+
+fn iface_member__update_members_saved_searches_by_id_member_by_id_saved_search__err(e: crate::runtime::DispatchError) -> iface_member::UpdateMembersSavedSearchesByIdMemberByIdSavedSearchError {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => match status {
+            400u16 => iface_member::UpdateMembersSavedSearchesByIdMemberByIdSavedSearchError::BadRequest(body),
+            _ => iface_member::UpdateMembersSavedSearchesByIdMemberByIdSavedSearchError::Other(body),
+        },
+        crate::runtime::DispatchError::Transport(m) => iface_member::UpdateMembersSavedSearchesByIdMemberByIdSavedSearchError::Other(m),
+    }
+}
+
+fn iface_member__delete_members_saved_searches_by_id_member_by_id_saved_search__ok(body: String) -> Result<String, crate::runtime::DispatchError> {
+    Ok(body)
+}
+
+fn iface_member__delete_members_saved_searches_by_id_member_by_id_saved_search__err(e: crate::runtime::DispatchError) -> iface_member::DeleteMembersSavedSearchesByIdMemberByIdSavedSearchError {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => match status {
+            400u16 => iface_member::DeleteMembersSavedSearchesByIdMemberByIdSavedSearchError::BadRequest(body),
+            _ => iface_member::DeleteMembersSavedSearchesByIdMemberByIdSavedSearchError::Other(body),
+        },
+        crate::runtime::DispatchError::Transport(m) => iface_member::DeleteMembersSavedSearchesByIdMemberByIdSavedSearchError::Other(m),
+    }
+}
+
+fn iface_member__update_members_saved_searches_name_by_id_member_by_id_saved_search__ok(body: String) -> Result<String, crate::runtime::DispatchError> {
+    Ok(body)
+}
+
+fn iface_member__update_members_saved_searches_name_by_id_member_by_id_saved_search__err(e: crate::runtime::DispatchError) -> iface_member::UpdateMembersSavedSearchesNameByIdMemberByIdSavedSearchError {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => match status {
+            400u16 => iface_member::UpdateMembersSavedSearchesNameByIdMemberByIdSavedSearchError::BadRequest(body),
+            _ => iface_member::UpdateMembersSavedSearchesNameByIdMemberByIdSavedSearchError::Other(body),
+        },
+        crate::runtime::DispatchError::Transport(m) => iface_member::UpdateMembersSavedSearchesNameByIdMemberByIdSavedSearchError::Other(m),
+    }
+}
+
+fn iface_member__update_members_saved_searches_pos_by_id_member_by_id_saved_search__ok(body: String) -> Result<String, crate::runtime::DispatchError> {
+    Ok(body)
+}
+
+fn iface_member__update_members_saved_searches_pos_by_id_member_by_id_saved_search__err(e: crate::runtime::DispatchError) -> iface_member::UpdateMembersSavedSearchesPosByIdMemberByIdSavedSearchError {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => match status {
+            400u16 => iface_member::UpdateMembersSavedSearchesPosByIdMemberByIdSavedSearchError::BadRequest(body),
+            _ => iface_member::UpdateMembersSavedSearchesPosByIdMemberByIdSavedSearchError::Other(body),
+        },
+        crate::runtime::DispatchError::Transport(m) => iface_member::UpdateMembersSavedSearchesPosByIdMemberByIdSavedSearchError::Other(m),
+    }
+}
+
+fn iface_member__update_members_saved_searches_query_by_id_member_by_id_saved_search__ok(body: String) -> Result<String, crate::runtime::DispatchError> {
+    Ok(body)
+}
+
+fn iface_member__update_members_saved_searches_query_by_id_member_by_id_saved_search__err(e: crate::runtime::DispatchError) -> iface_member::UpdateMembersSavedSearchesQueryByIdMemberByIdSavedSearchError {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => match status {
+            400u16 => iface_member::UpdateMembersSavedSearchesQueryByIdMemberByIdSavedSearchError::BadRequest(body),
+            _ => iface_member::UpdateMembersSavedSearchesQueryByIdMemberByIdSavedSearchError::Other(body),
+        },
+        crate::runtime::DispatchError::Transport(m) => iface_member::UpdateMembersSavedSearchesQueryByIdMemberByIdSavedSearchError::Other(m),
+    }
+}
+
+fn iface_member__get_members_tokens_by_id_member__ok(body: String) -> Result<String, crate::runtime::DispatchError> {
+    Ok(body)
+}
+
+fn iface_member__get_members_tokens_by_id_member__err(e: crate::runtime::DispatchError) -> iface_member::GetMembersTokensByIdMemberError {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => match status {
+            400u16 => iface_member::GetMembersTokensByIdMemberError::BadRequest(body),
+            _ => iface_member::GetMembersTokensByIdMemberError::Other(body),
+        },
+        crate::runtime::DispatchError::Transport(m) => iface_member::GetMembersTokensByIdMemberError::Other(m),
+    }
+}
+
+fn iface_member__update_members_username_by_id_member__ok(body: String) -> Result<String, crate::runtime::DispatchError> {
+    Ok(body)
+}
+
+fn iface_member__update_members_username_by_id_member__err(e: crate::runtime::DispatchError) -> iface_member::UpdateMembersUsernameByIdMemberError {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => match status {
+            400u16 => iface_member::UpdateMembersUsernameByIdMemberError::BadRequest(body),
+            _ => iface_member::UpdateMembersUsernameByIdMemberError::Other(body),
+        },
+        crate::runtime::DispatchError::Transport(m) => iface_member::UpdateMembersUsernameByIdMemberError::Other(m),
+    }
+}
+
+fn iface_member__get_members_by_id_member_by_field__ok(body: String) -> Result<String, crate::runtime::DispatchError> {
+    Ok(body)
+}
+
+fn iface_member__get_members_by_id_member_by_field__err(e: crate::runtime::DispatchError) -> iface_member::GetMembersByIdMemberByFieldError {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => match status {
+            400u16 => iface_member::GetMembersByIdMemberByFieldError::BadRequest(body),
+            _ => iface_member::GetMembersByIdMemberByFieldError::Other(body),
+        },
+        crate::runtime::DispatchError::Transport(m) => iface_member::GetMembersByIdMemberByFieldError::Other(m),
+    }
+}
+
 impl iface_member::Guest for crate::Component {
-    fn get_members_by_id_member(params: iface_member::GetMembersByIdMemberParams) -> Result<String, String> {
+    fn get_members_by_id_member(params: iface_member::GetMembersByIdMemberParams) -> Result<String, iface_member::GetMembersByIdMemberError> {
         let json = iface_member__get_members_by_id_member_params__to_json(&params);
-        dispatch(&OP_MEMBER_GET_MEMBERS_BY_ID_MEMBER, json)
+        match dispatch(&OP_MEMBER_GET_MEMBERS_BY_ID_MEMBER, json).and_then(iface_member__get_members_by_id_member__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_member__get_members_by_id_member__err(e)),
+        }
     }
-    fn update_members_by_id_member(params: iface_member::UpdateMembersByIdMemberParams) -> Result<String, String> {
+    fn update_members_by_id_member(params: iface_member::UpdateMembersByIdMemberParams) -> Result<String, iface_member::UpdateMembersByIdMemberError> {
         let json = iface_member__update_members_by_id_member_params__to_json(&params);
-        dispatch(&OP_MEMBER_UPDATE_MEMBERS_BY_ID_MEMBER, json)
+        match dispatch(&OP_MEMBER_UPDATE_MEMBERS_BY_ID_MEMBER, json).and_then(iface_member__update_members_by_id_member__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_member__update_members_by_id_member__err(e)),
+        }
     }
-    fn get_members_actions_by_id_member(params: iface_member::GetMembersActionsByIdMemberParams) -> Result<String, String> {
+    fn get_members_actions_by_id_member(params: iface_member::GetMembersActionsByIdMemberParams) -> Result<String, iface_member::GetMembersActionsByIdMemberError> {
         let json = iface_member__get_members_actions_by_id_member_params__to_json(&params);
-        dispatch(&OP_MEMBER_GET_MEMBERS_ACTIONS_BY_ID_MEMBER, json)
+        match dispatch(&OP_MEMBER_GET_MEMBERS_ACTIONS_BY_ID_MEMBER, json).and_then(iface_member__get_members_actions_by_id_member__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_member__get_members_actions_by_id_member__err(e)),
+        }
     }
-    fn add_members_avatar_by_id_member(params: iface_member::AddMembersAvatarByIdMemberParams) -> Result<String, String> {
+    fn add_members_avatar_by_id_member(params: iface_member::AddMembersAvatarByIdMemberParams) -> Result<String, iface_member::AddMembersAvatarByIdMemberError> {
         let json = iface_member__add_members_avatar_by_id_member_params__to_json(&params);
-        dispatch(&OP_MEMBER_ADD_MEMBERS_AVATAR_BY_ID_MEMBER, json)
+        match dispatch(&OP_MEMBER_ADD_MEMBERS_AVATAR_BY_ID_MEMBER, json).and_then(iface_member__add_members_avatar_by_id_member__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_member__add_members_avatar_by_id_member__err(e)),
+        }
     }
-    fn update_members_avatar_source_by_id_member(params: iface_member::UpdateMembersAvatarSourceByIdMemberParams) -> Result<String, String> {
+    fn update_members_avatar_source_by_id_member(params: iface_member::UpdateMembersAvatarSourceByIdMemberParams) -> Result<String, iface_member::UpdateMembersAvatarSourceByIdMemberError> {
         let json = iface_member__update_members_avatar_source_by_id_member_params__to_json(&params);
-        dispatch(&OP_MEMBER_UPDATE_MEMBERS_AVATAR_SOURCE_BY_ID_MEMBER, json)
+        match dispatch(&OP_MEMBER_UPDATE_MEMBERS_AVATAR_SOURCE_BY_ID_MEMBER, json).and_then(iface_member__update_members_avatar_source_by_id_member__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_member__update_members_avatar_source_by_id_member__err(e)),
+        }
     }
-    fn update_members_bio_by_id_member(params: iface_member::UpdateMembersBioByIdMemberParams) -> Result<String, String> {
+    fn update_members_bio_by_id_member(params: iface_member::UpdateMembersBioByIdMemberParams) -> Result<String, iface_member::UpdateMembersBioByIdMemberError> {
         let json = iface_member__update_members_bio_by_id_member_params__to_json(&params);
-        dispatch(&OP_MEMBER_UPDATE_MEMBERS_BIO_BY_ID_MEMBER, json)
+        match dispatch(&OP_MEMBER_UPDATE_MEMBERS_BIO_BY_ID_MEMBER, json).and_then(iface_member__update_members_bio_by_id_member__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_member__update_members_bio_by_id_member__err(e)),
+        }
     }
-    fn get_members_board_backgrounds_by_id_member(params: iface_member::GetMembersBoardBackgroundsByIdMemberParams) -> Result<String, String> {
+    fn get_members_board_backgrounds_by_id_member(params: iface_member::GetMembersBoardBackgroundsByIdMemberParams) -> Result<String, iface_member::GetMembersBoardBackgroundsByIdMemberError> {
         let json = iface_member__get_members_board_backgrounds_by_id_member_params__to_json(&params);
-        dispatch(&OP_MEMBER_GET_MEMBERS_BOARD_BACKGROUNDS_BY_ID_MEMBER, json)
+        match dispatch(&OP_MEMBER_GET_MEMBERS_BOARD_BACKGROUNDS_BY_ID_MEMBER, json).and_then(iface_member__get_members_board_backgrounds_by_id_member__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_member__get_members_board_backgrounds_by_id_member__err(e)),
+        }
     }
-    fn add_members_board_backgrounds_by_id_member(params: iface_member::AddMembersBoardBackgroundsByIdMemberParams) -> Result<String, String> {
+    fn add_members_board_backgrounds_by_id_member(params: iface_member::AddMembersBoardBackgroundsByIdMemberParams) -> Result<String, iface_member::AddMembersBoardBackgroundsByIdMemberError> {
         let json = iface_member__add_members_board_backgrounds_by_id_member_params__to_json(&params);
-        dispatch(&OP_MEMBER_ADD_MEMBERS_BOARD_BACKGROUNDS_BY_ID_MEMBER, json)
+        match dispatch(&OP_MEMBER_ADD_MEMBERS_BOARD_BACKGROUNDS_BY_ID_MEMBER, json).and_then(iface_member__add_members_board_backgrounds_by_id_member__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_member__add_members_board_backgrounds_by_id_member__err(e)),
+        }
     }
-    fn get_members_board_backgrounds_by_id_member_by_id_board_background(params: iface_member::GetMembersBoardBackgroundsByIdMemberByIdBoardBackgroundParams) -> Result<String, String> {
+    fn get_members_board_backgrounds_by_id_member_by_id_board_background(params: iface_member::GetMembersBoardBackgroundsByIdMemberByIdBoardBackgroundParams) -> Result<String, iface_member::GetMembersBoardBackgroundsByIdMemberByIdBoardBackgroundError> {
         let json = iface_member__get_members_board_backgrounds_by_id_member_by_id_board_background_params__to_json(&params);
-        dispatch(&OP_MEMBER_GET_MEMBERS_BOARD_BACKGROUNDS_BY_ID_MEMBER_BY_ID_BOARD_BACKGROUND, json)
+        match dispatch(&OP_MEMBER_GET_MEMBERS_BOARD_BACKGROUNDS_BY_ID_MEMBER_BY_ID_BOARD_BACKGROUND, json).and_then(iface_member__get_members_board_backgrounds_by_id_member_by_id_board_background__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_member__get_members_board_backgrounds_by_id_member_by_id_board_background__err(e)),
+        }
     }
-    fn update_members_board_backgrounds_by_id_member_by_id_board_background(params: iface_member::UpdateMembersBoardBackgroundsByIdMemberByIdBoardBackgroundParams) -> Result<String, String> {
+    fn update_members_board_backgrounds_by_id_member_by_id_board_background(params: iface_member::UpdateMembersBoardBackgroundsByIdMemberByIdBoardBackgroundParams) -> Result<String, iface_member::UpdateMembersBoardBackgroundsByIdMemberByIdBoardBackgroundError> {
         let json = iface_member__update_members_board_backgrounds_by_id_member_by_id_board_background_params__to_json(&params);
-        dispatch(&OP_MEMBER_UPDATE_MEMBERS_BOARD_BACKGROUNDS_BY_ID_MEMBER_BY_ID_BOARD_BACKGROUND, json)
+        match dispatch(&OP_MEMBER_UPDATE_MEMBERS_BOARD_BACKGROUNDS_BY_ID_MEMBER_BY_ID_BOARD_BACKGROUND, json).and_then(iface_member__update_members_board_backgrounds_by_id_member_by_id_board_background__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_member__update_members_board_backgrounds_by_id_member_by_id_board_background__err(e)),
+        }
     }
-    fn delete_members_board_backgrounds_by_id_member_by_id_board_background(params: iface_member::DeleteMembersBoardBackgroundsByIdMemberByIdBoardBackgroundParams) -> Result<String, String> {
+    fn delete_members_board_backgrounds_by_id_member_by_id_board_background(params: iface_member::DeleteMembersBoardBackgroundsByIdMemberByIdBoardBackgroundParams) -> Result<String, iface_member::DeleteMembersBoardBackgroundsByIdMemberByIdBoardBackgroundError> {
         let json = iface_member__delete_members_board_backgrounds_by_id_member_by_id_board_background_params__to_json(&params);
-        dispatch(&OP_MEMBER_DELETE_MEMBERS_BOARD_BACKGROUNDS_BY_ID_MEMBER_BY_ID_BOARD_BACKGROUND, json)
+        match dispatch(&OP_MEMBER_DELETE_MEMBERS_BOARD_BACKGROUNDS_BY_ID_MEMBER_BY_ID_BOARD_BACKGROUND, json).and_then(iface_member__delete_members_board_backgrounds_by_id_member_by_id_board_background__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_member__delete_members_board_backgrounds_by_id_member_by_id_board_background__err(e)),
+        }
     }
-    fn get_members_board_stars_by_id_member(params: iface_member::GetMembersBoardStarsByIdMemberParams) -> Result<String, String> {
+    fn get_members_board_stars_by_id_member(params: iface_member::GetMembersBoardStarsByIdMemberParams) -> Result<String, iface_member::GetMembersBoardStarsByIdMemberError> {
         let json = iface_member__get_members_board_stars_by_id_member_params__to_json(&params);
-        dispatch(&OP_MEMBER_GET_MEMBERS_BOARD_STARS_BY_ID_MEMBER, json)
+        match dispatch(&OP_MEMBER_GET_MEMBERS_BOARD_STARS_BY_ID_MEMBER, json).and_then(iface_member__get_members_board_stars_by_id_member__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_member__get_members_board_stars_by_id_member__err(e)),
+        }
     }
-    fn add_members_board_stars_by_id_member(params: iface_member::AddMembersBoardStarsByIdMemberParams) -> Result<String, String> {
+    fn add_members_board_stars_by_id_member(params: iface_member::AddMembersBoardStarsByIdMemberParams) -> Result<String, iface_member::AddMembersBoardStarsByIdMemberError> {
         let json = iface_member__add_members_board_stars_by_id_member_params__to_json(&params);
-        dispatch(&OP_MEMBER_ADD_MEMBERS_BOARD_STARS_BY_ID_MEMBER, json)
+        match dispatch(&OP_MEMBER_ADD_MEMBERS_BOARD_STARS_BY_ID_MEMBER, json).and_then(iface_member__add_members_board_stars_by_id_member__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_member__add_members_board_stars_by_id_member__err(e)),
+        }
     }
-    fn get_members_board_stars_by_id_member_by_id_board_star(params: iface_member::GetMembersBoardStarsByIdMemberByIdBoardStarParams) -> Result<String, String> {
+    fn get_members_board_stars_by_id_member_by_id_board_star(params: iface_member::GetMembersBoardStarsByIdMemberByIdBoardStarParams) -> Result<String, iface_member::GetMembersBoardStarsByIdMemberByIdBoardStarError> {
         let json = iface_member__get_members_board_stars_by_id_member_by_id_board_star_params__to_json(&params);
-        dispatch(&OP_MEMBER_GET_MEMBERS_BOARD_STARS_BY_ID_MEMBER_BY_ID_BOARD_STAR, json)
+        match dispatch(&OP_MEMBER_GET_MEMBERS_BOARD_STARS_BY_ID_MEMBER_BY_ID_BOARD_STAR, json).and_then(iface_member__get_members_board_stars_by_id_member_by_id_board_star__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_member__get_members_board_stars_by_id_member_by_id_board_star__err(e)),
+        }
     }
-    fn update_members_board_stars_by_id_member_by_id_board_star(params: iface_member::UpdateMembersBoardStarsByIdMemberByIdBoardStarParams) -> Result<String, String> {
+    fn update_members_board_stars_by_id_member_by_id_board_star(params: iface_member::UpdateMembersBoardStarsByIdMemberByIdBoardStarParams) -> Result<String, iface_member::UpdateMembersBoardStarsByIdMemberByIdBoardStarError> {
         let json = iface_member__update_members_board_stars_by_id_member_by_id_board_star_params__to_json(&params);
-        dispatch(&OP_MEMBER_UPDATE_MEMBERS_BOARD_STARS_BY_ID_MEMBER_BY_ID_BOARD_STAR, json)
+        match dispatch(&OP_MEMBER_UPDATE_MEMBERS_BOARD_STARS_BY_ID_MEMBER_BY_ID_BOARD_STAR, json).and_then(iface_member__update_members_board_stars_by_id_member_by_id_board_star__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_member__update_members_board_stars_by_id_member_by_id_board_star__err(e)),
+        }
     }
-    fn delete_members_board_stars_by_id_member_by_id_board_star(params: iface_member::DeleteMembersBoardStarsByIdMemberByIdBoardStarParams) -> Result<String, String> {
+    fn delete_members_board_stars_by_id_member_by_id_board_star(params: iface_member::DeleteMembersBoardStarsByIdMemberByIdBoardStarParams) -> Result<String, iface_member::DeleteMembersBoardStarsByIdMemberByIdBoardStarError> {
         let json = iface_member__delete_members_board_stars_by_id_member_by_id_board_star_params__to_json(&params);
-        dispatch(&OP_MEMBER_DELETE_MEMBERS_BOARD_STARS_BY_ID_MEMBER_BY_ID_BOARD_STAR, json)
+        match dispatch(&OP_MEMBER_DELETE_MEMBERS_BOARD_STARS_BY_ID_MEMBER_BY_ID_BOARD_STAR, json).and_then(iface_member__delete_members_board_stars_by_id_member_by_id_board_star__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_member__delete_members_board_stars_by_id_member_by_id_board_star__err(e)),
+        }
     }
-    fn update_members_board_stars_id_board_by_id_member_by_id_board_star(params: iface_member::UpdateMembersBoardStarsIdBoardByIdMemberByIdBoardStarParams) -> Result<String, String> {
+    fn update_members_board_stars_id_board_by_id_member_by_id_board_star(params: iface_member::UpdateMembersBoardStarsIdBoardByIdMemberByIdBoardStarParams) -> Result<String, iface_member::UpdateMembersBoardStarsIdBoardByIdMemberByIdBoardStarError> {
         let json = iface_member__update_members_board_stars_id_board_by_id_member_by_id_board_star_params__to_json(&params);
-        dispatch(&OP_MEMBER_UPDATE_MEMBERS_BOARD_STARS_ID_BOARD_BY_ID_MEMBER_BY_ID_BOARD_STAR, json)
+        match dispatch(&OP_MEMBER_UPDATE_MEMBERS_BOARD_STARS_ID_BOARD_BY_ID_MEMBER_BY_ID_BOARD_STAR, json).and_then(iface_member__update_members_board_stars_id_board_by_id_member_by_id_board_star__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_member__update_members_board_stars_id_board_by_id_member_by_id_board_star__err(e)),
+        }
     }
-    fn update_members_board_stars_pos_by_id_member_by_id_board_star(params: iface_member::UpdateMembersBoardStarsPosByIdMemberByIdBoardStarParams) -> Result<String, String> {
+    fn update_members_board_stars_pos_by_id_member_by_id_board_star(params: iface_member::UpdateMembersBoardStarsPosByIdMemberByIdBoardStarParams) -> Result<String, iface_member::UpdateMembersBoardStarsPosByIdMemberByIdBoardStarError> {
         let json = iface_member__update_members_board_stars_pos_by_id_member_by_id_board_star_params__to_json(&params);
-        dispatch(&OP_MEMBER_UPDATE_MEMBERS_BOARD_STARS_POS_BY_ID_MEMBER_BY_ID_BOARD_STAR, json)
+        match dispatch(&OP_MEMBER_UPDATE_MEMBERS_BOARD_STARS_POS_BY_ID_MEMBER_BY_ID_BOARD_STAR, json).and_then(iface_member__update_members_board_stars_pos_by_id_member_by_id_board_star__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_member__update_members_board_stars_pos_by_id_member_by_id_board_star__err(e)),
+        }
     }
-    fn get_members_boards_by_id_member(params: iface_member::GetMembersBoardsByIdMemberParams) -> Result<String, String> {
+    fn get_members_boards_by_id_member(params: iface_member::GetMembersBoardsByIdMemberParams) -> Result<String, iface_member::GetMembersBoardsByIdMemberError> {
         let json = iface_member__get_members_boards_by_id_member_params__to_json(&params);
-        dispatch(&OP_MEMBER_GET_MEMBERS_BOARDS_BY_ID_MEMBER, json)
+        match dispatch(&OP_MEMBER_GET_MEMBERS_BOARDS_BY_ID_MEMBER, json).and_then(iface_member__get_members_boards_by_id_member__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_member__get_members_boards_by_id_member__err(e)),
+        }
     }
-    fn get_members_boards_by_id_member_by_filter(params: iface_member::GetMembersBoardsByIdMemberByFilterParams) -> Result<String, String> {
+    fn get_members_boards_by_id_member_by_filter(params: iface_member::GetMembersBoardsByIdMemberByFilterParams) -> Result<String, iface_member::GetMembersBoardsByIdMemberByFilterError> {
         let json = iface_member__get_members_boards_by_id_member_by_filter_params__to_json(&params);
-        dispatch(&OP_MEMBER_GET_MEMBERS_BOARDS_BY_ID_MEMBER_BY_FILTER, json)
+        match dispatch(&OP_MEMBER_GET_MEMBERS_BOARDS_BY_ID_MEMBER_BY_FILTER, json).and_then(iface_member__get_members_boards_by_id_member_by_filter__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_member__get_members_boards_by_id_member_by_filter__err(e)),
+        }
     }
-    fn get_members_boards_invited_by_id_member(params: iface_member::GetMembersBoardsInvitedByIdMemberParams) -> Result<String, String> {
+    fn get_members_boards_invited_by_id_member(params: iface_member::GetMembersBoardsInvitedByIdMemberParams) -> Result<String, iface_member::GetMembersBoardsInvitedByIdMemberError> {
         let json = iface_member__get_members_boards_invited_by_id_member_params__to_json(&params);
-        dispatch(&OP_MEMBER_GET_MEMBERS_BOARDS_INVITED_BY_ID_MEMBER, json)
+        match dispatch(&OP_MEMBER_GET_MEMBERS_BOARDS_INVITED_BY_ID_MEMBER, json).and_then(iface_member__get_members_boards_invited_by_id_member__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_member__get_members_boards_invited_by_id_member__err(e)),
+        }
     }
-    fn get_members_boards_invited_by_id_member_by_field(params: iface_member::GetMembersBoardsInvitedByIdMemberByFieldParams) -> Result<String, String> {
+    fn get_members_boards_invited_by_id_member_by_field(params: iface_member::GetMembersBoardsInvitedByIdMemberByFieldParams) -> Result<String, iface_member::GetMembersBoardsInvitedByIdMemberByFieldError> {
         let json = iface_member__get_members_boards_invited_by_id_member_by_field_params__to_json(&params);
-        dispatch(&OP_MEMBER_GET_MEMBERS_BOARDS_INVITED_BY_ID_MEMBER_BY_FIELD, json)
+        match dispatch(&OP_MEMBER_GET_MEMBERS_BOARDS_INVITED_BY_ID_MEMBER_BY_FIELD, json).and_then(iface_member__get_members_boards_invited_by_id_member_by_field__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_member__get_members_boards_invited_by_id_member_by_field__err(e)),
+        }
     }
-    fn get_members_cards_by_id_member(params: iface_member::GetMembersCardsByIdMemberParams) -> Result<String, String> {
+    fn get_members_cards_by_id_member(params: iface_member::GetMembersCardsByIdMemberParams) -> Result<String, iface_member::GetMembersCardsByIdMemberError> {
         let json = iface_member__get_members_cards_by_id_member_params__to_json(&params);
-        dispatch(&OP_MEMBER_GET_MEMBERS_CARDS_BY_ID_MEMBER, json)
+        match dispatch(&OP_MEMBER_GET_MEMBERS_CARDS_BY_ID_MEMBER, json).and_then(iface_member__get_members_cards_by_id_member__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_member__get_members_cards_by_id_member__err(e)),
+        }
     }
-    fn get_members_cards_by_id_member_by_filter(params: iface_member::GetMembersCardsByIdMemberByFilterParams) -> Result<String, String> {
+    fn get_members_cards_by_id_member_by_filter(params: iface_member::GetMembersCardsByIdMemberByFilterParams) -> Result<String, iface_member::GetMembersCardsByIdMemberByFilterError> {
         let json = iface_member__get_members_cards_by_id_member_by_filter_params__to_json(&params);
-        dispatch(&OP_MEMBER_GET_MEMBERS_CARDS_BY_ID_MEMBER_BY_FILTER, json)
+        match dispatch(&OP_MEMBER_GET_MEMBERS_CARDS_BY_ID_MEMBER_BY_FILTER, json).and_then(iface_member__get_members_cards_by_id_member_by_filter__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_member__get_members_cards_by_id_member_by_filter__err(e)),
+        }
     }
-    fn get_members_custom_board_backgrounds_by_id_member(params: iface_member::GetMembersCustomBoardBackgroundsByIdMemberParams) -> Result<String, String> {
+    fn get_members_custom_board_backgrounds_by_id_member(params: iface_member::GetMembersCustomBoardBackgroundsByIdMemberParams) -> Result<String, iface_member::GetMembersCustomBoardBackgroundsByIdMemberError> {
         let json = iface_member__get_members_custom_board_backgrounds_by_id_member_params__to_json(&params);
-        dispatch(&OP_MEMBER_GET_MEMBERS_CUSTOM_BOARD_BACKGROUNDS_BY_ID_MEMBER, json)
+        match dispatch(&OP_MEMBER_GET_MEMBERS_CUSTOM_BOARD_BACKGROUNDS_BY_ID_MEMBER, json).and_then(iface_member__get_members_custom_board_backgrounds_by_id_member__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_member__get_members_custom_board_backgrounds_by_id_member__err(e)),
+        }
     }
-    fn add_members_custom_board_backgrounds_by_id_member(params: iface_member::AddMembersCustomBoardBackgroundsByIdMemberParams) -> Result<String, String> {
+    fn add_members_custom_board_backgrounds_by_id_member(params: iface_member::AddMembersCustomBoardBackgroundsByIdMemberParams) -> Result<String, iface_member::AddMembersCustomBoardBackgroundsByIdMemberError> {
         let json = iface_member__add_members_custom_board_backgrounds_by_id_member_params__to_json(&params);
-        dispatch(&OP_MEMBER_ADD_MEMBERS_CUSTOM_BOARD_BACKGROUNDS_BY_ID_MEMBER, json)
+        match dispatch(&OP_MEMBER_ADD_MEMBERS_CUSTOM_BOARD_BACKGROUNDS_BY_ID_MEMBER, json).and_then(iface_member__add_members_custom_board_backgrounds_by_id_member__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_member__add_members_custom_board_backgrounds_by_id_member__err(e)),
+        }
     }
-    fn get_members_custom_board_backgrounds_by_id_member_by_id_board_background(params: iface_member::GetMembersCustomBoardBackgroundsByIdMemberByIdBoardBackgroundParams) -> Result<String, String> {
+    fn get_members_custom_board_backgrounds_by_id_member_by_id_board_background(params: iface_member::GetMembersCustomBoardBackgroundsByIdMemberByIdBoardBackgroundParams) -> Result<String, iface_member::GetMembersCustomBoardBackgroundsByIdMemberByIdBoardBackgroundError> {
         let json = iface_member__get_members_custom_board_backgrounds_by_id_member_by_id_board_background_params__to_json(&params);
-        dispatch(&OP_MEMBER_GET_MEMBERS_CUSTOM_BOARD_BACKGROUNDS_BY_ID_MEMBER_BY_ID_BOARD_BACKGROUND, json)
+        match dispatch(&OP_MEMBER_GET_MEMBERS_CUSTOM_BOARD_BACKGROUNDS_BY_ID_MEMBER_BY_ID_BOARD_BACKGROUND, json).and_then(iface_member__get_members_custom_board_backgrounds_by_id_member_by_id_board_background__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_member__get_members_custom_board_backgrounds_by_id_member_by_id_board_background__err(e)),
+        }
     }
-    fn update_members_custom_board_backgrounds_by_id_member_by_id_board_background(params: iface_member::UpdateMembersCustomBoardBackgroundsByIdMemberByIdBoardBackgroundParams) -> Result<String, String> {
+    fn update_members_custom_board_backgrounds_by_id_member_by_id_board_background(params: iface_member::UpdateMembersCustomBoardBackgroundsByIdMemberByIdBoardBackgroundParams) -> Result<String, iface_member::UpdateMembersCustomBoardBackgroundsByIdMemberByIdBoardBackgroundError> {
         let json = iface_member__update_members_custom_board_backgrounds_by_id_member_by_id_board_background_params__to_json(&params);
-        dispatch(&OP_MEMBER_UPDATE_MEMBERS_CUSTOM_BOARD_BACKGROUNDS_BY_ID_MEMBER_BY_ID_BOARD_BACKGROUND, json)
+        match dispatch(&OP_MEMBER_UPDATE_MEMBERS_CUSTOM_BOARD_BACKGROUNDS_BY_ID_MEMBER_BY_ID_BOARD_BACKGROUND, json).and_then(iface_member__update_members_custom_board_backgrounds_by_id_member_by_id_board_background__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_member__update_members_custom_board_backgrounds_by_id_member_by_id_board_background__err(e)),
+        }
     }
-    fn delete_members_custom_board_backgrounds_by_id_member_by_id_board_background(params: iface_member::DeleteMembersCustomBoardBackgroundsByIdMemberByIdBoardBackgroundParams) -> Result<String, String> {
+    fn delete_members_custom_board_backgrounds_by_id_member_by_id_board_background(params: iface_member::DeleteMembersCustomBoardBackgroundsByIdMemberByIdBoardBackgroundParams) -> Result<String, iface_member::DeleteMembersCustomBoardBackgroundsByIdMemberByIdBoardBackgroundError> {
         let json = iface_member__delete_members_custom_board_backgrounds_by_id_member_by_id_board_background_params__to_json(&params);
-        dispatch(&OP_MEMBER_DELETE_MEMBERS_CUSTOM_BOARD_BACKGROUNDS_BY_ID_MEMBER_BY_ID_BOARD_BACKGROUND, json)
+        match dispatch(&OP_MEMBER_DELETE_MEMBERS_CUSTOM_BOARD_BACKGROUNDS_BY_ID_MEMBER_BY_ID_BOARD_BACKGROUND, json).and_then(iface_member__delete_members_custom_board_backgrounds_by_id_member_by_id_board_background__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_member__delete_members_custom_board_backgrounds_by_id_member_by_id_board_background__err(e)),
+        }
     }
-    fn get_members_custom_emoji_by_id_member(params: iface_member::GetMembersCustomEmojiByIdMemberParams) -> Result<String, String> {
+    fn get_members_custom_emoji_by_id_member(params: iface_member::GetMembersCustomEmojiByIdMemberParams) -> Result<String, iface_member::GetMembersCustomEmojiByIdMemberError> {
         let json = iface_member__get_members_custom_emoji_by_id_member_params__to_json(&params);
-        dispatch(&OP_MEMBER_GET_MEMBERS_CUSTOM_EMOJI_BY_ID_MEMBER, json)
+        match dispatch(&OP_MEMBER_GET_MEMBERS_CUSTOM_EMOJI_BY_ID_MEMBER, json).and_then(iface_member__get_members_custom_emoji_by_id_member__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_member__get_members_custom_emoji_by_id_member__err(e)),
+        }
     }
-    fn add_members_custom_emoji_by_id_member(params: iface_member::AddMembersCustomEmojiByIdMemberParams) -> Result<String, String> {
+    fn add_members_custom_emoji_by_id_member(params: iface_member::AddMembersCustomEmojiByIdMemberParams) -> Result<String, iface_member::AddMembersCustomEmojiByIdMemberError> {
         let json = iface_member__add_members_custom_emoji_by_id_member_params__to_json(&params);
-        dispatch(&OP_MEMBER_ADD_MEMBERS_CUSTOM_EMOJI_BY_ID_MEMBER, json)
+        match dispatch(&OP_MEMBER_ADD_MEMBERS_CUSTOM_EMOJI_BY_ID_MEMBER, json).and_then(iface_member__add_members_custom_emoji_by_id_member__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_member__add_members_custom_emoji_by_id_member__err(e)),
+        }
     }
-    fn get_members_custom_emoji_by_id_member_by_id_custom_emoji(params: iface_member::GetMembersCustomEmojiByIdMemberByIdCustomEmojiParams) -> Result<String, String> {
+    fn get_members_custom_emoji_by_id_member_by_id_custom_emoji(params: iface_member::GetMembersCustomEmojiByIdMemberByIdCustomEmojiParams) -> Result<String, iface_member::GetMembersCustomEmojiByIdMemberByIdCustomEmojiError> {
         let json = iface_member__get_members_custom_emoji_by_id_member_by_id_custom_emoji_params__to_json(&params);
-        dispatch(&OP_MEMBER_GET_MEMBERS_CUSTOM_EMOJI_BY_ID_MEMBER_BY_ID_CUSTOM_EMOJI, json)
+        match dispatch(&OP_MEMBER_GET_MEMBERS_CUSTOM_EMOJI_BY_ID_MEMBER_BY_ID_CUSTOM_EMOJI, json).and_then(iface_member__get_members_custom_emoji_by_id_member_by_id_custom_emoji__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_member__get_members_custom_emoji_by_id_member_by_id_custom_emoji__err(e)),
+        }
     }
-    fn get_members_custom_stickers_by_id_member(params: iface_member::GetMembersCustomStickersByIdMemberParams) -> Result<String, String> {
+    fn get_members_custom_stickers_by_id_member(params: iface_member::GetMembersCustomStickersByIdMemberParams) -> Result<String, iface_member::GetMembersCustomStickersByIdMemberError> {
         let json = iface_member__get_members_custom_stickers_by_id_member_params__to_json(&params);
-        dispatch(&OP_MEMBER_GET_MEMBERS_CUSTOM_STICKERS_BY_ID_MEMBER, json)
+        match dispatch(&OP_MEMBER_GET_MEMBERS_CUSTOM_STICKERS_BY_ID_MEMBER, json).and_then(iface_member__get_members_custom_stickers_by_id_member__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_member__get_members_custom_stickers_by_id_member__err(e)),
+        }
     }
-    fn add_members_custom_stickers_by_id_member(params: iface_member::AddMembersCustomStickersByIdMemberParams) -> Result<String, String> {
+    fn add_members_custom_stickers_by_id_member(params: iface_member::AddMembersCustomStickersByIdMemberParams) -> Result<String, iface_member::AddMembersCustomStickersByIdMemberError> {
         let json = iface_member__add_members_custom_stickers_by_id_member_params__to_json(&params);
-        dispatch(&OP_MEMBER_ADD_MEMBERS_CUSTOM_STICKERS_BY_ID_MEMBER, json)
+        match dispatch(&OP_MEMBER_ADD_MEMBERS_CUSTOM_STICKERS_BY_ID_MEMBER, json).and_then(iface_member__add_members_custom_stickers_by_id_member__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_member__add_members_custom_stickers_by_id_member__err(e)),
+        }
     }
-    fn get_members_custom_stickers_by_id_member_by_id_custom_sticker(params: iface_member::GetMembersCustomStickersByIdMemberByIdCustomStickerParams) -> Result<String, String> {
+    fn get_members_custom_stickers_by_id_member_by_id_custom_sticker(params: iface_member::GetMembersCustomStickersByIdMemberByIdCustomStickerParams) -> Result<String, iface_member::GetMembersCustomStickersByIdMemberByIdCustomStickerError> {
         let json = iface_member__get_members_custom_stickers_by_id_member_by_id_custom_sticker_params__to_json(&params);
-        dispatch(&OP_MEMBER_GET_MEMBERS_CUSTOM_STICKERS_BY_ID_MEMBER_BY_ID_CUSTOM_STICKER, json)
+        match dispatch(&OP_MEMBER_GET_MEMBERS_CUSTOM_STICKERS_BY_ID_MEMBER_BY_ID_CUSTOM_STICKER, json).and_then(iface_member__get_members_custom_stickers_by_id_member_by_id_custom_sticker__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_member__get_members_custom_stickers_by_id_member_by_id_custom_sticker__err(e)),
+        }
     }
-    fn delete_members_custom_stickers_by_id_member_by_id_custom_sticker(params: iface_member::DeleteMembersCustomStickersByIdMemberByIdCustomStickerParams) -> Result<String, String> {
+    fn delete_members_custom_stickers_by_id_member_by_id_custom_sticker(params: iface_member::DeleteMembersCustomStickersByIdMemberByIdCustomStickerParams) -> Result<String, iface_member::DeleteMembersCustomStickersByIdMemberByIdCustomStickerError> {
         let json = iface_member__delete_members_custom_stickers_by_id_member_by_id_custom_sticker_params__to_json(&params);
-        dispatch(&OP_MEMBER_DELETE_MEMBERS_CUSTOM_STICKERS_BY_ID_MEMBER_BY_ID_CUSTOM_STICKER, json)
+        match dispatch(&OP_MEMBER_DELETE_MEMBERS_CUSTOM_STICKERS_BY_ID_MEMBER_BY_ID_CUSTOM_STICKER, json).and_then(iface_member__delete_members_custom_stickers_by_id_member_by_id_custom_sticker__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_member__delete_members_custom_stickers_by_id_member_by_id_custom_sticker__err(e)),
+        }
     }
-    fn get_members_deltas_by_id_member(params: iface_member::GetMembersDeltasByIdMemberParams) -> Result<String, String> {
+    fn get_members_deltas_by_id_member(params: iface_member::GetMembersDeltasByIdMemberParams) -> Result<String, iface_member::GetMembersDeltasByIdMemberError> {
         let json = iface_member__get_members_deltas_by_id_member_params__to_json(&params);
-        dispatch(&OP_MEMBER_GET_MEMBERS_DELTAS_BY_ID_MEMBER, json)
+        match dispatch(&OP_MEMBER_GET_MEMBERS_DELTAS_BY_ID_MEMBER, json).and_then(iface_member__get_members_deltas_by_id_member__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_member__get_members_deltas_by_id_member__err(e)),
+        }
     }
-    fn update_members_full_name_by_id_member(params: iface_member::UpdateMembersFullNameByIdMemberParams) -> Result<String, String> {
+    fn update_members_full_name_by_id_member(params: iface_member::UpdateMembersFullNameByIdMemberParams) -> Result<String, iface_member::UpdateMembersFullNameByIdMemberError> {
         let json = iface_member__update_members_full_name_by_id_member_params__to_json(&params);
-        dispatch(&OP_MEMBER_UPDATE_MEMBERS_FULL_NAME_BY_ID_MEMBER, json)
+        match dispatch(&OP_MEMBER_UPDATE_MEMBERS_FULL_NAME_BY_ID_MEMBER, json).and_then(iface_member__update_members_full_name_by_id_member__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_member__update_members_full_name_by_id_member__err(e)),
+        }
     }
-    fn update_members_initials_by_id_member(params: iface_member::UpdateMembersInitialsByIdMemberParams) -> Result<String, String> {
+    fn update_members_initials_by_id_member(params: iface_member::UpdateMembersInitialsByIdMemberParams) -> Result<String, iface_member::UpdateMembersInitialsByIdMemberError> {
         let json = iface_member__update_members_initials_by_id_member_params__to_json(&params);
-        dispatch(&OP_MEMBER_UPDATE_MEMBERS_INITIALS_BY_ID_MEMBER, json)
+        match dispatch(&OP_MEMBER_UPDATE_MEMBERS_INITIALS_BY_ID_MEMBER, json).and_then(iface_member__update_members_initials_by_id_member__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_member__update_members_initials_by_id_member__err(e)),
+        }
     }
-    fn get_members_notifications_by_id_member(params: iface_member::GetMembersNotificationsByIdMemberParams) -> Result<String, String> {
+    fn get_members_notifications_by_id_member(params: iface_member::GetMembersNotificationsByIdMemberParams) -> Result<String, iface_member::GetMembersNotificationsByIdMemberError> {
         let json = iface_member__get_members_notifications_by_id_member_params__to_json(&params);
-        dispatch(&OP_MEMBER_GET_MEMBERS_NOTIFICATIONS_BY_ID_MEMBER, json)
+        match dispatch(&OP_MEMBER_GET_MEMBERS_NOTIFICATIONS_BY_ID_MEMBER, json).and_then(iface_member__get_members_notifications_by_id_member__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_member__get_members_notifications_by_id_member__err(e)),
+        }
     }
-    fn get_members_notifications_by_id_member_by_filter(params: iface_member::GetMembersNotificationsByIdMemberByFilterParams) -> Result<String, String> {
+    fn get_members_notifications_by_id_member_by_filter(params: iface_member::GetMembersNotificationsByIdMemberByFilterParams) -> Result<String, iface_member::GetMembersNotificationsByIdMemberByFilterError> {
         let json = iface_member__get_members_notifications_by_id_member_by_filter_params__to_json(&params);
-        dispatch(&OP_MEMBER_GET_MEMBERS_NOTIFICATIONS_BY_ID_MEMBER_BY_FILTER, json)
+        match dispatch(&OP_MEMBER_GET_MEMBERS_NOTIFICATIONS_BY_ID_MEMBER_BY_FILTER, json).and_then(iface_member__get_members_notifications_by_id_member_by_filter__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_member__get_members_notifications_by_id_member_by_filter__err(e)),
+        }
     }
-    fn add_members_one_time_messages_dismissed_by_id_member(params: iface_member::AddMembersOneTimeMessagesDismissedByIdMemberParams) -> Result<String, String> {
+    fn add_members_one_time_messages_dismissed_by_id_member(params: iface_member::AddMembersOneTimeMessagesDismissedByIdMemberParams) -> Result<String, iface_member::AddMembersOneTimeMessagesDismissedByIdMemberError> {
         let json = iface_member__add_members_one_time_messages_dismissed_by_id_member_params__to_json(&params);
-        dispatch(&OP_MEMBER_ADD_MEMBERS_ONE_TIME_MESSAGES_DISMISSED_BY_ID_MEMBER, json)
+        match dispatch(&OP_MEMBER_ADD_MEMBERS_ONE_TIME_MESSAGES_DISMISSED_BY_ID_MEMBER, json).and_then(iface_member__add_members_one_time_messages_dismissed_by_id_member__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_member__add_members_one_time_messages_dismissed_by_id_member__err(e)),
+        }
     }
-    fn get_members_organizations_by_id_member(params: iface_member::GetMembersOrganizationsByIdMemberParams) -> Result<String, String> {
+    fn get_members_organizations_by_id_member(params: iface_member::GetMembersOrganizationsByIdMemberParams) -> Result<String, iface_member::GetMembersOrganizationsByIdMemberError> {
         let json = iface_member__get_members_organizations_by_id_member_params__to_json(&params);
-        dispatch(&OP_MEMBER_GET_MEMBERS_ORGANIZATIONS_BY_ID_MEMBER, json)
+        match dispatch(&OP_MEMBER_GET_MEMBERS_ORGANIZATIONS_BY_ID_MEMBER, json).and_then(iface_member__get_members_organizations_by_id_member__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_member__get_members_organizations_by_id_member__err(e)),
+        }
     }
-    fn get_members_organizations_by_id_member_by_filter(params: iface_member::GetMembersOrganizationsByIdMemberByFilterParams) -> Result<String, String> {
+    fn get_members_organizations_by_id_member_by_filter(params: iface_member::GetMembersOrganizationsByIdMemberByFilterParams) -> Result<String, iface_member::GetMembersOrganizationsByIdMemberByFilterError> {
         let json = iface_member__get_members_organizations_by_id_member_by_filter_params__to_json(&params);
-        dispatch(&OP_MEMBER_GET_MEMBERS_ORGANIZATIONS_BY_ID_MEMBER_BY_FILTER, json)
+        match dispatch(&OP_MEMBER_GET_MEMBERS_ORGANIZATIONS_BY_ID_MEMBER_BY_FILTER, json).and_then(iface_member__get_members_organizations_by_id_member_by_filter__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_member__get_members_organizations_by_id_member_by_filter__err(e)),
+        }
     }
-    fn get_members_organizations_invited_by_id_member(params: iface_member::GetMembersOrganizationsInvitedByIdMemberParams) -> Result<String, String> {
+    fn get_members_organizations_invited_by_id_member(params: iface_member::GetMembersOrganizationsInvitedByIdMemberParams) -> Result<String, iface_member::GetMembersOrganizationsInvitedByIdMemberError> {
         let json = iface_member__get_members_organizations_invited_by_id_member_params__to_json(&params);
-        dispatch(&OP_MEMBER_GET_MEMBERS_ORGANIZATIONS_INVITED_BY_ID_MEMBER, json)
+        match dispatch(&OP_MEMBER_GET_MEMBERS_ORGANIZATIONS_INVITED_BY_ID_MEMBER, json).and_then(iface_member__get_members_organizations_invited_by_id_member__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_member__get_members_organizations_invited_by_id_member__err(e)),
+        }
     }
-    fn get_members_organizations_invited_by_id_member_by_field(params: iface_member::GetMembersOrganizationsInvitedByIdMemberByFieldParams) -> Result<String, String> {
+    fn get_members_organizations_invited_by_id_member_by_field(params: iface_member::GetMembersOrganizationsInvitedByIdMemberByFieldParams) -> Result<String, iface_member::GetMembersOrganizationsInvitedByIdMemberByFieldError> {
         let json = iface_member__get_members_organizations_invited_by_id_member_by_field_params__to_json(&params);
-        dispatch(&OP_MEMBER_GET_MEMBERS_ORGANIZATIONS_INVITED_BY_ID_MEMBER_BY_FIELD, json)
+        match dispatch(&OP_MEMBER_GET_MEMBERS_ORGANIZATIONS_INVITED_BY_ID_MEMBER_BY_FIELD, json).and_then(iface_member__get_members_organizations_invited_by_id_member_by_field__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_member__get_members_organizations_invited_by_id_member_by_field__err(e)),
+        }
     }
-    fn update_members_prefs_color_blind_by_id_member(params: iface_member::UpdateMembersPrefsColorBlindByIdMemberParams) -> Result<String, String> {
+    fn update_members_prefs_color_blind_by_id_member(params: iface_member::UpdateMembersPrefsColorBlindByIdMemberParams) -> Result<String, iface_member::UpdateMembersPrefsColorBlindByIdMemberError> {
         let json = iface_member__update_members_prefs_color_blind_by_id_member_params__to_json(&params);
-        dispatch(&OP_MEMBER_UPDATE_MEMBERS_PREFS_COLOR_BLIND_BY_ID_MEMBER, json)
+        match dispatch(&OP_MEMBER_UPDATE_MEMBERS_PREFS_COLOR_BLIND_BY_ID_MEMBER, json).and_then(iface_member__update_members_prefs_color_blind_by_id_member__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_member__update_members_prefs_color_blind_by_id_member__err(e)),
+        }
     }
-    fn update_members_prefs_locale_by_id_member(params: iface_member::UpdateMembersPrefsLocaleByIdMemberParams) -> Result<String, String> {
+    fn update_members_prefs_locale_by_id_member(params: iface_member::UpdateMembersPrefsLocaleByIdMemberParams) -> Result<String, iface_member::UpdateMembersPrefsLocaleByIdMemberError> {
         let json = iface_member__update_members_prefs_locale_by_id_member_params__to_json(&params);
-        dispatch(&OP_MEMBER_UPDATE_MEMBERS_PREFS_LOCALE_BY_ID_MEMBER, json)
+        match dispatch(&OP_MEMBER_UPDATE_MEMBERS_PREFS_LOCALE_BY_ID_MEMBER, json).and_then(iface_member__update_members_prefs_locale_by_id_member__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_member__update_members_prefs_locale_by_id_member__err(e)),
+        }
     }
-    fn update_members_prefs_minutes_between_summaries_by_id_member(params: iface_member::UpdateMembersPrefsMinutesBetweenSummariesByIdMemberParams) -> Result<String, String> {
+    fn update_members_prefs_minutes_between_summaries_by_id_member(params: iface_member::UpdateMembersPrefsMinutesBetweenSummariesByIdMemberParams) -> Result<String, iface_member::UpdateMembersPrefsMinutesBetweenSummariesByIdMemberError> {
         let json = iface_member__update_members_prefs_minutes_between_summaries_by_id_member_params__to_json(&params);
-        dispatch(&OP_MEMBER_UPDATE_MEMBERS_PREFS_MINUTES_BETWEEN_SUMMARIES_BY_ID_MEMBER, json)
+        match dispatch(&OP_MEMBER_UPDATE_MEMBERS_PREFS_MINUTES_BETWEEN_SUMMARIES_BY_ID_MEMBER, json).and_then(iface_member__update_members_prefs_minutes_between_summaries_by_id_member__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_member__update_members_prefs_minutes_between_summaries_by_id_member__err(e)),
+        }
     }
-    fn get_members_saved_searches_by_id_member(params: iface_member::GetMembersSavedSearchesByIdMemberParams) -> Result<String, String> {
+    fn get_members_saved_searches_by_id_member(params: iface_member::GetMembersSavedSearchesByIdMemberParams) -> Result<String, iface_member::GetMembersSavedSearchesByIdMemberError> {
         let json = iface_member__get_members_saved_searches_by_id_member_params__to_json(&params);
-        dispatch(&OP_MEMBER_GET_MEMBERS_SAVED_SEARCHES_BY_ID_MEMBER, json)
+        match dispatch(&OP_MEMBER_GET_MEMBERS_SAVED_SEARCHES_BY_ID_MEMBER, json).and_then(iface_member__get_members_saved_searches_by_id_member__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_member__get_members_saved_searches_by_id_member__err(e)),
+        }
     }
-    fn add_members_saved_searches_by_id_member(params: iface_member::AddMembersSavedSearchesByIdMemberParams) -> Result<String, String> {
+    fn add_members_saved_searches_by_id_member(params: iface_member::AddMembersSavedSearchesByIdMemberParams) -> Result<String, iface_member::AddMembersSavedSearchesByIdMemberError> {
         let json = iface_member__add_members_saved_searches_by_id_member_params__to_json(&params);
-        dispatch(&OP_MEMBER_ADD_MEMBERS_SAVED_SEARCHES_BY_ID_MEMBER, json)
+        match dispatch(&OP_MEMBER_ADD_MEMBERS_SAVED_SEARCHES_BY_ID_MEMBER, json).and_then(iface_member__add_members_saved_searches_by_id_member__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_member__add_members_saved_searches_by_id_member__err(e)),
+        }
     }
-    fn get_members_saved_searches_by_id_member_by_id_saved_search(params: iface_member::GetMembersSavedSearchesByIdMemberByIdSavedSearchParams) -> Result<String, String> {
+    fn get_members_saved_searches_by_id_member_by_id_saved_search(params: iface_member::GetMembersSavedSearchesByIdMemberByIdSavedSearchParams) -> Result<String, iface_member::GetMembersSavedSearchesByIdMemberByIdSavedSearchError> {
         let json = iface_member__get_members_saved_searches_by_id_member_by_id_saved_search_params__to_json(&params);
-        dispatch(&OP_MEMBER_GET_MEMBERS_SAVED_SEARCHES_BY_ID_MEMBER_BY_ID_SAVED_SEARCH, json)
+        match dispatch(&OP_MEMBER_GET_MEMBERS_SAVED_SEARCHES_BY_ID_MEMBER_BY_ID_SAVED_SEARCH, json).and_then(iface_member__get_members_saved_searches_by_id_member_by_id_saved_search__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_member__get_members_saved_searches_by_id_member_by_id_saved_search__err(e)),
+        }
     }
-    fn update_members_saved_searches_by_id_member_by_id_saved_search(params: iface_member::UpdateMembersSavedSearchesByIdMemberByIdSavedSearchParams) -> Result<String, String> {
+    fn update_members_saved_searches_by_id_member_by_id_saved_search(params: iface_member::UpdateMembersSavedSearchesByIdMemberByIdSavedSearchParams) -> Result<String, iface_member::UpdateMembersSavedSearchesByIdMemberByIdSavedSearchError> {
         let json = iface_member__update_members_saved_searches_by_id_member_by_id_saved_search_params__to_json(&params);
-        dispatch(&OP_MEMBER_UPDATE_MEMBERS_SAVED_SEARCHES_BY_ID_MEMBER_BY_ID_SAVED_SEARCH, json)
+        match dispatch(&OP_MEMBER_UPDATE_MEMBERS_SAVED_SEARCHES_BY_ID_MEMBER_BY_ID_SAVED_SEARCH, json).and_then(iface_member__update_members_saved_searches_by_id_member_by_id_saved_search__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_member__update_members_saved_searches_by_id_member_by_id_saved_search__err(e)),
+        }
     }
-    fn delete_members_saved_searches_by_id_member_by_id_saved_search(params: iface_member::DeleteMembersSavedSearchesByIdMemberByIdSavedSearchParams) -> Result<String, String> {
+    fn delete_members_saved_searches_by_id_member_by_id_saved_search(params: iface_member::DeleteMembersSavedSearchesByIdMemberByIdSavedSearchParams) -> Result<String, iface_member::DeleteMembersSavedSearchesByIdMemberByIdSavedSearchError> {
         let json = iface_member__delete_members_saved_searches_by_id_member_by_id_saved_search_params__to_json(&params);
-        dispatch(&OP_MEMBER_DELETE_MEMBERS_SAVED_SEARCHES_BY_ID_MEMBER_BY_ID_SAVED_SEARCH, json)
+        match dispatch(&OP_MEMBER_DELETE_MEMBERS_SAVED_SEARCHES_BY_ID_MEMBER_BY_ID_SAVED_SEARCH, json).and_then(iface_member__delete_members_saved_searches_by_id_member_by_id_saved_search__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_member__delete_members_saved_searches_by_id_member_by_id_saved_search__err(e)),
+        }
     }
-    fn update_members_saved_searches_name_by_id_member_by_id_saved_search(params: iface_member::UpdateMembersSavedSearchesNameByIdMemberByIdSavedSearchParams) -> Result<String, String> {
+    fn update_members_saved_searches_name_by_id_member_by_id_saved_search(params: iface_member::UpdateMembersSavedSearchesNameByIdMemberByIdSavedSearchParams) -> Result<String, iface_member::UpdateMembersSavedSearchesNameByIdMemberByIdSavedSearchError> {
         let json = iface_member__update_members_saved_searches_name_by_id_member_by_id_saved_search_params__to_json(&params);
-        dispatch(&OP_MEMBER_UPDATE_MEMBERS_SAVED_SEARCHES_NAME_BY_ID_MEMBER_BY_ID_SAVED_SEARCH, json)
+        match dispatch(&OP_MEMBER_UPDATE_MEMBERS_SAVED_SEARCHES_NAME_BY_ID_MEMBER_BY_ID_SAVED_SEARCH, json).and_then(iface_member__update_members_saved_searches_name_by_id_member_by_id_saved_search__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_member__update_members_saved_searches_name_by_id_member_by_id_saved_search__err(e)),
+        }
     }
-    fn update_members_saved_searches_pos_by_id_member_by_id_saved_search(params: iface_member::UpdateMembersSavedSearchesPosByIdMemberByIdSavedSearchParams) -> Result<String, String> {
+    fn update_members_saved_searches_pos_by_id_member_by_id_saved_search(params: iface_member::UpdateMembersSavedSearchesPosByIdMemberByIdSavedSearchParams) -> Result<String, iface_member::UpdateMembersSavedSearchesPosByIdMemberByIdSavedSearchError> {
         let json = iface_member__update_members_saved_searches_pos_by_id_member_by_id_saved_search_params__to_json(&params);
-        dispatch(&OP_MEMBER_UPDATE_MEMBERS_SAVED_SEARCHES_POS_BY_ID_MEMBER_BY_ID_SAVED_SEARCH, json)
+        match dispatch(&OP_MEMBER_UPDATE_MEMBERS_SAVED_SEARCHES_POS_BY_ID_MEMBER_BY_ID_SAVED_SEARCH, json).and_then(iface_member__update_members_saved_searches_pos_by_id_member_by_id_saved_search__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_member__update_members_saved_searches_pos_by_id_member_by_id_saved_search__err(e)),
+        }
     }
-    fn update_members_saved_searches_query_by_id_member_by_id_saved_search(params: iface_member::UpdateMembersSavedSearchesQueryByIdMemberByIdSavedSearchParams) -> Result<String, String> {
+    fn update_members_saved_searches_query_by_id_member_by_id_saved_search(params: iface_member::UpdateMembersSavedSearchesQueryByIdMemberByIdSavedSearchParams) -> Result<String, iface_member::UpdateMembersSavedSearchesQueryByIdMemberByIdSavedSearchError> {
         let json = iface_member__update_members_saved_searches_query_by_id_member_by_id_saved_search_params__to_json(&params);
-        dispatch(&OP_MEMBER_UPDATE_MEMBERS_SAVED_SEARCHES_QUERY_BY_ID_MEMBER_BY_ID_SAVED_SEARCH, json)
+        match dispatch(&OP_MEMBER_UPDATE_MEMBERS_SAVED_SEARCHES_QUERY_BY_ID_MEMBER_BY_ID_SAVED_SEARCH, json).and_then(iface_member__update_members_saved_searches_query_by_id_member_by_id_saved_search__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_member__update_members_saved_searches_query_by_id_member_by_id_saved_search__err(e)),
+        }
     }
-    fn get_members_tokens_by_id_member(params: iface_member::GetMembersTokensByIdMemberParams) -> Result<String, String> {
+    fn get_members_tokens_by_id_member(params: iface_member::GetMembersTokensByIdMemberParams) -> Result<String, iface_member::GetMembersTokensByIdMemberError> {
         let json = iface_member__get_members_tokens_by_id_member_params__to_json(&params);
-        dispatch(&OP_MEMBER_GET_MEMBERS_TOKENS_BY_ID_MEMBER, json)
+        match dispatch(&OP_MEMBER_GET_MEMBERS_TOKENS_BY_ID_MEMBER, json).and_then(iface_member__get_members_tokens_by_id_member__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_member__get_members_tokens_by_id_member__err(e)),
+        }
     }
-    fn update_members_username_by_id_member(params: iface_member::UpdateMembersUsernameByIdMemberParams) -> Result<String, String> {
+    fn update_members_username_by_id_member(params: iface_member::UpdateMembersUsernameByIdMemberParams) -> Result<String, iface_member::UpdateMembersUsernameByIdMemberError> {
         let json = iface_member__update_members_username_by_id_member_params__to_json(&params);
-        dispatch(&OP_MEMBER_UPDATE_MEMBERS_USERNAME_BY_ID_MEMBER, json)
+        match dispatch(&OP_MEMBER_UPDATE_MEMBERS_USERNAME_BY_ID_MEMBER, json).and_then(iface_member__update_members_username_by_id_member__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_member__update_members_username_by_id_member__err(e)),
+        }
     }
-    fn get_members_by_id_member_by_field(params: iface_member::GetMembersByIdMemberByFieldParams) -> Result<String, String> {
+    fn get_members_by_id_member_by_field(params: iface_member::GetMembersByIdMemberByFieldParams) -> Result<String, iface_member::GetMembersByIdMemberByFieldError> {
         let json = iface_member__get_members_by_id_member_by_field_params__to_json(&params);
-        dispatch(&OP_MEMBER_GET_MEMBERS_BY_ID_MEMBER_BY_FIELD, json)
+        match dispatch(&OP_MEMBER_GET_MEMBERS_BY_ID_MEMBER_BY_FIELD, json).and_then(iface_member__get_members_by_id_member_by_field__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_member__get_members_by_id_member_by_field__err(e)),
+        }
     }
 }
 use crate::exports::autostamp::trello::notification as iface_notification;
@@ -7266,7 +11397,7 @@ const OP_NOTIFICATION_ADD_NOTIFICATIONS_ALL_READ: OpSpec = OpSpec {
     method: "POST",
     path_template: "/notifications/all/read",
     fields: &[
-        FieldSpec { snake: "token", location: FieldLocation::Query },
+        FieldSpec { snake: "token", wire: "token", location: FieldLocation::Query },
     ],
     auth: &[
         AuthApply { secret_key: "api_key", kind: AuthKind::ApiKeyQuery("key") },
@@ -7277,22 +11408,22 @@ const OP_NOTIFICATION_GET_NOTIFICATIONS_BY_ID_NOTIFICATION: OpSpec = OpSpec {
     method: "GET",
     path_template: "/notifications/{id_notification}",
     fields: &[
-        FieldSpec { snake: "id_notification", location: FieldLocation::Path },
-        FieldSpec { snake: "display", location: FieldLocation::Query },
-        FieldSpec { snake: "entities", location: FieldLocation::Query },
-        FieldSpec { snake: "fields", location: FieldLocation::Query },
-        FieldSpec { snake: "member_creator", location: FieldLocation::Query },
-        FieldSpec { snake: "member_creator_fields", location: FieldLocation::Query },
-        FieldSpec { snake: "board", location: FieldLocation::Query },
-        FieldSpec { snake: "board_fields", location: FieldLocation::Query },
-        FieldSpec { snake: "list", location: FieldLocation::Query },
-        FieldSpec { snake: "card", location: FieldLocation::Query },
-        FieldSpec { snake: "card_fields", location: FieldLocation::Query },
-        FieldSpec { snake: "organization", location: FieldLocation::Query },
-        FieldSpec { snake: "organization_fields", location: FieldLocation::Query },
-        FieldSpec { snake: "member", location: FieldLocation::Query },
-        FieldSpec { snake: "member_fields", location: FieldLocation::Query },
-        FieldSpec { snake: "token", location: FieldLocation::Query },
+        FieldSpec { snake: "id_notification", wire: "idNotification", location: FieldLocation::Path },
+        FieldSpec { snake: "display", wire: "display", location: FieldLocation::Query },
+        FieldSpec { snake: "entities", wire: "entities", location: FieldLocation::Query },
+        FieldSpec { snake: "fields", wire: "fields", location: FieldLocation::Query },
+        FieldSpec { snake: "member_creator", wire: "memberCreator", location: FieldLocation::Query },
+        FieldSpec { snake: "member_creator_fields", wire: "memberCreator_fields", location: FieldLocation::Query },
+        FieldSpec { snake: "board", wire: "board", location: FieldLocation::Query },
+        FieldSpec { snake: "board_fields", wire: "board_fields", location: FieldLocation::Query },
+        FieldSpec { snake: "list", wire: "list", location: FieldLocation::Query },
+        FieldSpec { snake: "card", wire: "card", location: FieldLocation::Query },
+        FieldSpec { snake: "card_fields", wire: "card_fields", location: FieldLocation::Query },
+        FieldSpec { snake: "organization", wire: "organization", location: FieldLocation::Query },
+        FieldSpec { snake: "organization_fields", wire: "organization_fields", location: FieldLocation::Query },
+        FieldSpec { snake: "member", wire: "member", location: FieldLocation::Query },
+        FieldSpec { snake: "member_fields", wire: "member_fields", location: FieldLocation::Query },
+        FieldSpec { snake: "token", wire: "token", location: FieldLocation::Query },
     ],
     auth: &[
         AuthApply { secret_key: "api_key", kind: AuthKind::ApiKeyQuery("key") },
@@ -7303,9 +11434,9 @@ const OP_NOTIFICATION_UPDATE_NOTIFICATIONS_BY_ID_NOTIFICATION: OpSpec = OpSpec {
     method: "PUT",
     path_template: "/notifications/{id_notification}",
     fields: &[
-        FieldSpec { snake: "id_notification", location: FieldLocation::Path },
-        FieldSpec { snake: "token", location: FieldLocation::Query },
-        FieldSpec { snake: "unread", location: FieldLocation::Body },
+        FieldSpec { snake: "id_notification", wire: "idNotification", location: FieldLocation::Path },
+        FieldSpec { snake: "token", wire: "token", location: FieldLocation::Query },
+        FieldSpec { snake: "unread", wire: "unread", location: FieldLocation::Body },
     ],
     auth: &[
         AuthApply { secret_key: "api_key", kind: AuthKind::ApiKeyQuery("key") },
@@ -7316,9 +11447,9 @@ const OP_NOTIFICATION_GET_NOTIFICATIONS_BOARD_BY_ID_NOTIFICATION: OpSpec = OpSpe
     method: "GET",
     path_template: "/notifications/{id_notification}/board",
     fields: &[
-        FieldSpec { snake: "id_notification", location: FieldLocation::Path },
-        FieldSpec { snake: "fields", location: FieldLocation::Query },
-        FieldSpec { snake: "token", location: FieldLocation::Query },
+        FieldSpec { snake: "id_notification", wire: "idNotification", location: FieldLocation::Path },
+        FieldSpec { snake: "fields", wire: "fields", location: FieldLocation::Query },
+        FieldSpec { snake: "token", wire: "token", location: FieldLocation::Query },
     ],
     auth: &[
         AuthApply { secret_key: "api_key", kind: AuthKind::ApiKeyQuery("key") },
@@ -7329,9 +11460,9 @@ const OP_NOTIFICATION_GET_NOTIFICATIONS_BOARD_BY_ID_NOTIFICATION_BY_FIELD: OpSpe
     method: "GET",
     path_template: "/notifications/{id_notification}/board/{field}",
     fields: &[
-        FieldSpec { snake: "id_notification", location: FieldLocation::Path },
-        FieldSpec { snake: "field", location: FieldLocation::Path },
-        FieldSpec { snake: "token", location: FieldLocation::Query },
+        FieldSpec { snake: "id_notification", wire: "idNotification", location: FieldLocation::Path },
+        FieldSpec { snake: "field", wire: "field", location: FieldLocation::Path },
+        FieldSpec { snake: "token", wire: "token", location: FieldLocation::Query },
     ],
     auth: &[
         AuthApply { secret_key: "api_key", kind: AuthKind::ApiKeyQuery("key") },
@@ -7342,9 +11473,9 @@ const OP_NOTIFICATION_GET_NOTIFICATIONS_CARD_BY_ID_NOTIFICATION: OpSpec = OpSpec
     method: "GET",
     path_template: "/notifications/{id_notification}/card",
     fields: &[
-        FieldSpec { snake: "id_notification", location: FieldLocation::Path },
-        FieldSpec { snake: "fields", location: FieldLocation::Query },
-        FieldSpec { snake: "token", location: FieldLocation::Query },
+        FieldSpec { snake: "id_notification", wire: "idNotification", location: FieldLocation::Path },
+        FieldSpec { snake: "fields", wire: "fields", location: FieldLocation::Query },
+        FieldSpec { snake: "token", wire: "token", location: FieldLocation::Query },
     ],
     auth: &[
         AuthApply { secret_key: "api_key", kind: AuthKind::ApiKeyQuery("key") },
@@ -7355,9 +11486,9 @@ const OP_NOTIFICATION_GET_NOTIFICATIONS_CARD_BY_ID_NOTIFICATION_BY_FIELD: OpSpec
     method: "GET",
     path_template: "/notifications/{id_notification}/card/{field}",
     fields: &[
-        FieldSpec { snake: "id_notification", location: FieldLocation::Path },
-        FieldSpec { snake: "field", location: FieldLocation::Path },
-        FieldSpec { snake: "token", location: FieldLocation::Query },
+        FieldSpec { snake: "id_notification", wire: "idNotification", location: FieldLocation::Path },
+        FieldSpec { snake: "field", wire: "field", location: FieldLocation::Path },
+        FieldSpec { snake: "token", wire: "token", location: FieldLocation::Query },
     ],
     auth: &[
         AuthApply { secret_key: "api_key", kind: AuthKind::ApiKeyQuery("key") },
@@ -7368,8 +11499,8 @@ const OP_NOTIFICATION_GET_NOTIFICATIONS_DISPLAY_BY_ID_NOTIFICATION: OpSpec = OpS
     method: "GET",
     path_template: "/notifications/{id_notification}/display",
     fields: &[
-        FieldSpec { snake: "id_notification", location: FieldLocation::Path },
-        FieldSpec { snake: "token", location: FieldLocation::Query },
+        FieldSpec { snake: "id_notification", wire: "idNotification", location: FieldLocation::Path },
+        FieldSpec { snake: "token", wire: "token", location: FieldLocation::Query },
     ],
     auth: &[
         AuthApply { secret_key: "api_key", kind: AuthKind::ApiKeyQuery("key") },
@@ -7380,8 +11511,8 @@ const OP_NOTIFICATION_GET_NOTIFICATIONS_ENTITIES_BY_ID_NOTIFICATION: OpSpec = Op
     method: "GET",
     path_template: "/notifications/{id_notification}/entities",
     fields: &[
-        FieldSpec { snake: "id_notification", location: FieldLocation::Path },
-        FieldSpec { snake: "token", location: FieldLocation::Query },
+        FieldSpec { snake: "id_notification", wire: "idNotification", location: FieldLocation::Path },
+        FieldSpec { snake: "token", wire: "token", location: FieldLocation::Query },
     ],
     auth: &[
         AuthApply { secret_key: "api_key", kind: AuthKind::ApiKeyQuery("key") },
@@ -7392,9 +11523,9 @@ const OP_NOTIFICATION_GET_NOTIFICATIONS_LIST_BY_ID_NOTIFICATION: OpSpec = OpSpec
     method: "GET",
     path_template: "/notifications/{id_notification}/list",
     fields: &[
-        FieldSpec { snake: "id_notification", location: FieldLocation::Path },
-        FieldSpec { snake: "fields", location: FieldLocation::Query },
-        FieldSpec { snake: "token", location: FieldLocation::Query },
+        FieldSpec { snake: "id_notification", wire: "idNotification", location: FieldLocation::Path },
+        FieldSpec { snake: "fields", wire: "fields", location: FieldLocation::Query },
+        FieldSpec { snake: "token", wire: "token", location: FieldLocation::Query },
     ],
     auth: &[
         AuthApply { secret_key: "api_key", kind: AuthKind::ApiKeyQuery("key") },
@@ -7405,9 +11536,9 @@ const OP_NOTIFICATION_GET_NOTIFICATIONS_LIST_BY_ID_NOTIFICATION_BY_FIELD: OpSpec
     method: "GET",
     path_template: "/notifications/{id_notification}/list/{field}",
     fields: &[
-        FieldSpec { snake: "id_notification", location: FieldLocation::Path },
-        FieldSpec { snake: "field", location: FieldLocation::Path },
-        FieldSpec { snake: "token", location: FieldLocation::Query },
+        FieldSpec { snake: "id_notification", wire: "idNotification", location: FieldLocation::Path },
+        FieldSpec { snake: "field", wire: "field", location: FieldLocation::Path },
+        FieldSpec { snake: "token", wire: "token", location: FieldLocation::Query },
     ],
     auth: &[
         AuthApply { secret_key: "api_key", kind: AuthKind::ApiKeyQuery("key") },
@@ -7418,9 +11549,9 @@ const OP_NOTIFICATION_GET_NOTIFICATIONS_MEMBER_BY_ID_NOTIFICATION: OpSpec = OpSp
     method: "GET",
     path_template: "/notifications/{id_notification}/member",
     fields: &[
-        FieldSpec { snake: "id_notification", location: FieldLocation::Path },
-        FieldSpec { snake: "fields", location: FieldLocation::Query },
-        FieldSpec { snake: "token", location: FieldLocation::Query },
+        FieldSpec { snake: "id_notification", wire: "idNotification", location: FieldLocation::Path },
+        FieldSpec { snake: "fields", wire: "fields", location: FieldLocation::Query },
+        FieldSpec { snake: "token", wire: "token", location: FieldLocation::Query },
     ],
     auth: &[
         AuthApply { secret_key: "api_key", kind: AuthKind::ApiKeyQuery("key") },
@@ -7431,9 +11562,9 @@ const OP_NOTIFICATION_GET_NOTIFICATIONS_MEMBER_BY_ID_NOTIFICATION_BY_FIELD: OpSp
     method: "GET",
     path_template: "/notifications/{id_notification}/member/{field}",
     fields: &[
-        FieldSpec { snake: "id_notification", location: FieldLocation::Path },
-        FieldSpec { snake: "field", location: FieldLocation::Path },
-        FieldSpec { snake: "token", location: FieldLocation::Query },
+        FieldSpec { snake: "id_notification", wire: "idNotification", location: FieldLocation::Path },
+        FieldSpec { snake: "field", wire: "field", location: FieldLocation::Path },
+        FieldSpec { snake: "token", wire: "token", location: FieldLocation::Query },
     ],
     auth: &[
         AuthApply { secret_key: "api_key", kind: AuthKind::ApiKeyQuery("key") },
@@ -7444,9 +11575,9 @@ const OP_NOTIFICATION_GET_NOTIFICATIONS_MEMBER_CREATOR_BY_ID_NOTIFICATION: OpSpe
     method: "GET",
     path_template: "/notifications/{id_notification}/memberCreator",
     fields: &[
-        FieldSpec { snake: "id_notification", location: FieldLocation::Path },
-        FieldSpec { snake: "fields", location: FieldLocation::Query },
-        FieldSpec { snake: "token", location: FieldLocation::Query },
+        FieldSpec { snake: "id_notification", wire: "idNotification", location: FieldLocation::Path },
+        FieldSpec { snake: "fields", wire: "fields", location: FieldLocation::Query },
+        FieldSpec { snake: "token", wire: "token", location: FieldLocation::Query },
     ],
     auth: &[
         AuthApply { secret_key: "api_key", kind: AuthKind::ApiKeyQuery("key") },
@@ -7457,9 +11588,9 @@ const OP_NOTIFICATION_GET_NOTIFICATIONS_MEMBER_CREATOR_BY_ID_NOTIFICATION_BY_FIE
     method: "GET",
     path_template: "/notifications/{id_notification}/memberCreator/{field}",
     fields: &[
-        FieldSpec { snake: "id_notification", location: FieldLocation::Path },
-        FieldSpec { snake: "field", location: FieldLocation::Path },
-        FieldSpec { snake: "token", location: FieldLocation::Query },
+        FieldSpec { snake: "id_notification", wire: "idNotification", location: FieldLocation::Path },
+        FieldSpec { snake: "field", wire: "field", location: FieldLocation::Path },
+        FieldSpec { snake: "token", wire: "token", location: FieldLocation::Query },
     ],
     auth: &[
         AuthApply { secret_key: "api_key", kind: AuthKind::ApiKeyQuery("key") },
@@ -7470,9 +11601,9 @@ const OP_NOTIFICATION_GET_NOTIFICATIONS_ORGANIZATION_BY_ID_NOTIFICATION: OpSpec 
     method: "GET",
     path_template: "/notifications/{id_notification}/organization",
     fields: &[
-        FieldSpec { snake: "id_notification", location: FieldLocation::Path },
-        FieldSpec { snake: "fields", location: FieldLocation::Query },
-        FieldSpec { snake: "token", location: FieldLocation::Query },
+        FieldSpec { snake: "id_notification", wire: "idNotification", location: FieldLocation::Path },
+        FieldSpec { snake: "fields", wire: "fields", location: FieldLocation::Query },
+        FieldSpec { snake: "token", wire: "token", location: FieldLocation::Query },
     ],
     auth: &[
         AuthApply { secret_key: "api_key", kind: AuthKind::ApiKeyQuery("key") },
@@ -7483,9 +11614,9 @@ const OP_NOTIFICATION_GET_NOTIFICATIONS_ORGANIZATION_BY_ID_NOTIFICATION_BY_FIELD
     method: "GET",
     path_template: "/notifications/{id_notification}/organization/{field}",
     fields: &[
-        FieldSpec { snake: "id_notification", location: FieldLocation::Path },
-        FieldSpec { snake: "field", location: FieldLocation::Path },
-        FieldSpec { snake: "token", location: FieldLocation::Query },
+        FieldSpec { snake: "id_notification", wire: "idNotification", location: FieldLocation::Path },
+        FieldSpec { snake: "field", wire: "field", location: FieldLocation::Path },
+        FieldSpec { snake: "token", wire: "token", location: FieldLocation::Query },
     ],
     auth: &[
         AuthApply { secret_key: "api_key", kind: AuthKind::ApiKeyQuery("key") },
@@ -7496,9 +11627,9 @@ const OP_NOTIFICATION_UPDATE_NOTIFICATIONS_UNREAD_BY_ID_NOTIFICATION: OpSpec = O
     method: "PUT",
     path_template: "/notifications/{id_notification}/unread",
     fields: &[
-        FieldSpec { snake: "id_notification", location: FieldLocation::Path },
-        FieldSpec { snake: "token", location: FieldLocation::Query },
-        FieldSpec { snake: "value", location: FieldLocation::Body },
+        FieldSpec { snake: "id_notification", wire: "idNotification", location: FieldLocation::Path },
+        FieldSpec { snake: "token", wire: "token", location: FieldLocation::Query },
+        FieldSpec { snake: "value", wire: "value", location: FieldLocation::Body },
     ],
     auth: &[
         AuthApply { secret_key: "api_key", kind: AuthKind::ApiKeyQuery("key") },
@@ -7509,10 +11640,10 @@ const OP_NOTIFICATION_GET_NOTIFICATIONS_BY_ID_NOTIFICATION_BY_FIELD: OpSpec = Op
     method: "GET",
     path_template: "/notifications/{id_notification}/{field}",
     fields: &[
-        FieldSpec { snake: "id_notification", location: FieldLocation::Path },
-        FieldSpec { snake: "field", location: FieldLocation::Path },
-        FieldSpec { snake: "key", location: FieldLocation::Query },
-        FieldSpec { snake: "token", location: FieldLocation::Query },
+        FieldSpec { snake: "id_notification", wire: "idNotification", location: FieldLocation::Path },
+        FieldSpec { snake: "field", wire: "field", location: FieldLocation::Path },
+        FieldSpec { snake: "key", wire: "key", location: FieldLocation::Query },
+        FieldSpec { snake: "token", wire: "token", location: FieldLocation::Query },
     ],
     auth: &[
     ],
@@ -7680,82 +11811,405 @@ fn iface_notification__get_notifications_by_id_notification_by_field_params__to_
     Value::Object(m)
 }
 
+fn iface_notification__add_notifications_all_read__ok(body: String) -> Result<String, crate::runtime::DispatchError> {
+    Ok(body)
+}
+
+fn iface_notification__add_notifications_all_read__err(e: crate::runtime::DispatchError) -> iface_notification::AddNotificationsAllReadError {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => match status {
+            400u16 => iface_notification::AddNotificationsAllReadError::BadRequest(body),
+            _ => iface_notification::AddNotificationsAllReadError::Other(body),
+        },
+        crate::runtime::DispatchError::Transport(m) => iface_notification::AddNotificationsAllReadError::Other(m),
+    }
+}
+
+fn iface_notification__get_notifications_by_id_notification__ok(body: String) -> Result<String, crate::runtime::DispatchError> {
+    Ok(body)
+}
+
+fn iface_notification__get_notifications_by_id_notification__err(e: crate::runtime::DispatchError) -> iface_notification::GetNotificationsByIdNotificationError {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => match status {
+            400u16 => iface_notification::GetNotificationsByIdNotificationError::BadRequest(body),
+            _ => iface_notification::GetNotificationsByIdNotificationError::Other(body),
+        },
+        crate::runtime::DispatchError::Transport(m) => iface_notification::GetNotificationsByIdNotificationError::Other(m),
+    }
+}
+
+fn iface_notification__update_notifications_by_id_notification__ok(body: String) -> Result<String, crate::runtime::DispatchError> {
+    Ok(body)
+}
+
+fn iface_notification__update_notifications_by_id_notification__err(e: crate::runtime::DispatchError) -> iface_notification::UpdateNotificationsByIdNotificationError {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => match status {
+            400u16 => iface_notification::UpdateNotificationsByIdNotificationError::BadRequest(body),
+            _ => iface_notification::UpdateNotificationsByIdNotificationError::Other(body),
+        },
+        crate::runtime::DispatchError::Transport(m) => iface_notification::UpdateNotificationsByIdNotificationError::Other(m),
+    }
+}
+
+fn iface_notification__get_notifications_board_by_id_notification__ok(body: String) -> Result<String, crate::runtime::DispatchError> {
+    Ok(body)
+}
+
+fn iface_notification__get_notifications_board_by_id_notification__err(e: crate::runtime::DispatchError) -> iface_notification::GetNotificationsBoardByIdNotificationError {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => match status {
+            400u16 => iface_notification::GetNotificationsBoardByIdNotificationError::BadRequest(body),
+            _ => iface_notification::GetNotificationsBoardByIdNotificationError::Other(body),
+        },
+        crate::runtime::DispatchError::Transport(m) => iface_notification::GetNotificationsBoardByIdNotificationError::Other(m),
+    }
+}
+
+fn iface_notification__get_notifications_board_by_id_notification_by_field__ok(body: String) -> Result<String, crate::runtime::DispatchError> {
+    Ok(body)
+}
+
+fn iface_notification__get_notifications_board_by_id_notification_by_field__err(e: crate::runtime::DispatchError) -> iface_notification::GetNotificationsBoardByIdNotificationByFieldError {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => match status {
+            400u16 => iface_notification::GetNotificationsBoardByIdNotificationByFieldError::BadRequest(body),
+            _ => iface_notification::GetNotificationsBoardByIdNotificationByFieldError::Other(body),
+        },
+        crate::runtime::DispatchError::Transport(m) => iface_notification::GetNotificationsBoardByIdNotificationByFieldError::Other(m),
+    }
+}
+
+fn iface_notification__get_notifications_card_by_id_notification__ok(body: String) -> Result<String, crate::runtime::DispatchError> {
+    Ok(body)
+}
+
+fn iface_notification__get_notifications_card_by_id_notification__err(e: crate::runtime::DispatchError) -> iface_notification::GetNotificationsCardByIdNotificationError {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => match status {
+            400u16 => iface_notification::GetNotificationsCardByIdNotificationError::BadRequest(body),
+            _ => iface_notification::GetNotificationsCardByIdNotificationError::Other(body),
+        },
+        crate::runtime::DispatchError::Transport(m) => iface_notification::GetNotificationsCardByIdNotificationError::Other(m),
+    }
+}
+
+fn iface_notification__get_notifications_card_by_id_notification_by_field__ok(body: String) -> Result<String, crate::runtime::DispatchError> {
+    Ok(body)
+}
+
+fn iface_notification__get_notifications_card_by_id_notification_by_field__err(e: crate::runtime::DispatchError) -> iface_notification::GetNotificationsCardByIdNotificationByFieldError {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => match status {
+            400u16 => iface_notification::GetNotificationsCardByIdNotificationByFieldError::BadRequest(body),
+            _ => iface_notification::GetNotificationsCardByIdNotificationByFieldError::Other(body),
+        },
+        crate::runtime::DispatchError::Transport(m) => iface_notification::GetNotificationsCardByIdNotificationByFieldError::Other(m),
+    }
+}
+
+fn iface_notification__get_notifications_display_by_id_notification__ok(body: String) -> Result<String, crate::runtime::DispatchError> {
+    Ok(body)
+}
+
+fn iface_notification__get_notifications_display_by_id_notification__err(e: crate::runtime::DispatchError) -> iface_notification::GetNotificationsDisplayByIdNotificationError {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => match status {
+            400u16 => iface_notification::GetNotificationsDisplayByIdNotificationError::BadRequest(body),
+            _ => iface_notification::GetNotificationsDisplayByIdNotificationError::Other(body),
+        },
+        crate::runtime::DispatchError::Transport(m) => iface_notification::GetNotificationsDisplayByIdNotificationError::Other(m),
+    }
+}
+
+fn iface_notification__get_notifications_entities_by_id_notification__ok(body: String) -> Result<String, crate::runtime::DispatchError> {
+    Ok(body)
+}
+
+fn iface_notification__get_notifications_entities_by_id_notification__err(e: crate::runtime::DispatchError) -> iface_notification::GetNotificationsEntitiesByIdNotificationError {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => match status {
+            400u16 => iface_notification::GetNotificationsEntitiesByIdNotificationError::BadRequest(body),
+            _ => iface_notification::GetNotificationsEntitiesByIdNotificationError::Other(body),
+        },
+        crate::runtime::DispatchError::Transport(m) => iface_notification::GetNotificationsEntitiesByIdNotificationError::Other(m),
+    }
+}
+
+fn iface_notification__get_notifications_list_by_id_notification__ok(body: String) -> Result<String, crate::runtime::DispatchError> {
+    Ok(body)
+}
+
+fn iface_notification__get_notifications_list_by_id_notification__err(e: crate::runtime::DispatchError) -> iface_notification::GetNotificationsListByIdNotificationError {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => match status {
+            400u16 => iface_notification::GetNotificationsListByIdNotificationError::BadRequest(body),
+            _ => iface_notification::GetNotificationsListByIdNotificationError::Other(body),
+        },
+        crate::runtime::DispatchError::Transport(m) => iface_notification::GetNotificationsListByIdNotificationError::Other(m),
+    }
+}
+
+fn iface_notification__get_notifications_list_by_id_notification_by_field__ok(body: String) -> Result<String, crate::runtime::DispatchError> {
+    Ok(body)
+}
+
+fn iface_notification__get_notifications_list_by_id_notification_by_field__err(e: crate::runtime::DispatchError) -> iface_notification::GetNotificationsListByIdNotificationByFieldError {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => match status {
+            400u16 => iface_notification::GetNotificationsListByIdNotificationByFieldError::BadRequest(body),
+            _ => iface_notification::GetNotificationsListByIdNotificationByFieldError::Other(body),
+        },
+        crate::runtime::DispatchError::Transport(m) => iface_notification::GetNotificationsListByIdNotificationByFieldError::Other(m),
+    }
+}
+
+fn iface_notification__get_notifications_member_by_id_notification__ok(body: String) -> Result<String, crate::runtime::DispatchError> {
+    Ok(body)
+}
+
+fn iface_notification__get_notifications_member_by_id_notification__err(e: crate::runtime::DispatchError) -> iface_notification::GetNotificationsMemberByIdNotificationError {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => match status {
+            400u16 => iface_notification::GetNotificationsMemberByIdNotificationError::BadRequest(body),
+            _ => iface_notification::GetNotificationsMemberByIdNotificationError::Other(body),
+        },
+        crate::runtime::DispatchError::Transport(m) => iface_notification::GetNotificationsMemberByIdNotificationError::Other(m),
+    }
+}
+
+fn iface_notification__get_notifications_member_by_id_notification_by_field__ok(body: String) -> Result<String, crate::runtime::DispatchError> {
+    Ok(body)
+}
+
+fn iface_notification__get_notifications_member_by_id_notification_by_field__err(e: crate::runtime::DispatchError) -> iface_notification::GetNotificationsMemberByIdNotificationByFieldError {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => match status {
+            400u16 => iface_notification::GetNotificationsMemberByIdNotificationByFieldError::BadRequest(body),
+            _ => iface_notification::GetNotificationsMemberByIdNotificationByFieldError::Other(body),
+        },
+        crate::runtime::DispatchError::Transport(m) => iface_notification::GetNotificationsMemberByIdNotificationByFieldError::Other(m),
+    }
+}
+
+fn iface_notification__get_notifications_member_creator_by_id_notification__ok(body: String) -> Result<String, crate::runtime::DispatchError> {
+    Ok(body)
+}
+
+fn iface_notification__get_notifications_member_creator_by_id_notification__err(e: crate::runtime::DispatchError) -> iface_notification::GetNotificationsMemberCreatorByIdNotificationError {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => match status {
+            400u16 => iface_notification::GetNotificationsMemberCreatorByIdNotificationError::BadRequest(body),
+            _ => iface_notification::GetNotificationsMemberCreatorByIdNotificationError::Other(body),
+        },
+        crate::runtime::DispatchError::Transport(m) => iface_notification::GetNotificationsMemberCreatorByIdNotificationError::Other(m),
+    }
+}
+
+fn iface_notification__get_notifications_member_creator_by_id_notification_by_field__ok(body: String) -> Result<String, crate::runtime::DispatchError> {
+    Ok(body)
+}
+
+fn iface_notification__get_notifications_member_creator_by_id_notification_by_field__err(e: crate::runtime::DispatchError) -> iface_notification::GetNotificationsMemberCreatorByIdNotificationByFieldError {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => match status {
+            400u16 => iface_notification::GetNotificationsMemberCreatorByIdNotificationByFieldError::BadRequest(body),
+            _ => iface_notification::GetNotificationsMemberCreatorByIdNotificationByFieldError::Other(body),
+        },
+        crate::runtime::DispatchError::Transport(m) => iface_notification::GetNotificationsMemberCreatorByIdNotificationByFieldError::Other(m),
+    }
+}
+
+fn iface_notification__get_notifications_organization_by_id_notification__ok(body: String) -> Result<String, crate::runtime::DispatchError> {
+    Ok(body)
+}
+
+fn iface_notification__get_notifications_organization_by_id_notification__err(e: crate::runtime::DispatchError) -> iface_notification::GetNotificationsOrganizationByIdNotificationError {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => match status {
+            400u16 => iface_notification::GetNotificationsOrganizationByIdNotificationError::BadRequest(body),
+            _ => iface_notification::GetNotificationsOrganizationByIdNotificationError::Other(body),
+        },
+        crate::runtime::DispatchError::Transport(m) => iface_notification::GetNotificationsOrganizationByIdNotificationError::Other(m),
+    }
+}
+
+fn iface_notification__get_notifications_organization_by_id_notification_by_field__ok(body: String) -> Result<String, crate::runtime::DispatchError> {
+    Ok(body)
+}
+
+fn iface_notification__get_notifications_organization_by_id_notification_by_field__err(e: crate::runtime::DispatchError) -> iface_notification::GetNotificationsOrganizationByIdNotificationByFieldError {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => match status {
+            400u16 => iface_notification::GetNotificationsOrganizationByIdNotificationByFieldError::BadRequest(body),
+            _ => iface_notification::GetNotificationsOrganizationByIdNotificationByFieldError::Other(body),
+        },
+        crate::runtime::DispatchError::Transport(m) => iface_notification::GetNotificationsOrganizationByIdNotificationByFieldError::Other(m),
+    }
+}
+
+fn iface_notification__update_notifications_unread_by_id_notification__ok(body: String) -> Result<String, crate::runtime::DispatchError> {
+    Ok(body)
+}
+
+fn iface_notification__update_notifications_unread_by_id_notification__err(e: crate::runtime::DispatchError) -> iface_notification::UpdateNotificationsUnreadByIdNotificationError {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => match status {
+            400u16 => iface_notification::UpdateNotificationsUnreadByIdNotificationError::BadRequest(body),
+            _ => iface_notification::UpdateNotificationsUnreadByIdNotificationError::Other(body),
+        },
+        crate::runtime::DispatchError::Transport(m) => iface_notification::UpdateNotificationsUnreadByIdNotificationError::Other(m),
+    }
+}
+
+fn iface_notification__get_notifications_by_id_notification_by_field__ok(body: String) -> Result<String, crate::runtime::DispatchError> {
+    Ok(body)
+}
+
+fn iface_notification__get_notifications_by_id_notification_by_field__err(e: crate::runtime::DispatchError) -> iface_notification::GetNotificationsByIdNotificationByFieldError {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => match status {
+            400u16 => iface_notification::GetNotificationsByIdNotificationByFieldError::BadRequest(body),
+            _ => iface_notification::GetNotificationsByIdNotificationByFieldError::Other(body),
+        },
+        crate::runtime::DispatchError::Transport(m) => iface_notification::GetNotificationsByIdNotificationByFieldError::Other(m),
+    }
+}
+
 impl iface_notification::Guest for crate::Component {
-    fn add_notifications_all_read(params: iface_notification::AddNotificationsAllReadParams) -> Result<String, String> {
+    fn add_notifications_all_read(params: iface_notification::AddNotificationsAllReadParams) -> Result<String, iface_notification::AddNotificationsAllReadError> {
         let json = iface_notification__add_notifications_all_read_params__to_json(&params);
-        dispatch(&OP_NOTIFICATION_ADD_NOTIFICATIONS_ALL_READ, json)
+        match dispatch(&OP_NOTIFICATION_ADD_NOTIFICATIONS_ALL_READ, json).and_then(iface_notification__add_notifications_all_read__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_notification__add_notifications_all_read__err(e)),
+        }
     }
-    fn get_notifications_by_id_notification(params: iface_notification::GetNotificationsByIdNotificationParams) -> Result<String, String> {
+    fn get_notifications_by_id_notification(params: iface_notification::GetNotificationsByIdNotificationParams) -> Result<String, iface_notification::GetNotificationsByIdNotificationError> {
         let json = iface_notification__get_notifications_by_id_notification_params__to_json(&params);
-        dispatch(&OP_NOTIFICATION_GET_NOTIFICATIONS_BY_ID_NOTIFICATION, json)
+        match dispatch(&OP_NOTIFICATION_GET_NOTIFICATIONS_BY_ID_NOTIFICATION, json).and_then(iface_notification__get_notifications_by_id_notification__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_notification__get_notifications_by_id_notification__err(e)),
+        }
     }
-    fn update_notifications_by_id_notification(params: iface_notification::UpdateNotificationsByIdNotificationParams) -> Result<String, String> {
+    fn update_notifications_by_id_notification(params: iface_notification::UpdateNotificationsByIdNotificationParams) -> Result<String, iface_notification::UpdateNotificationsByIdNotificationError> {
         let json = iface_notification__update_notifications_by_id_notification_params__to_json(&params);
-        dispatch(&OP_NOTIFICATION_UPDATE_NOTIFICATIONS_BY_ID_NOTIFICATION, json)
+        match dispatch(&OP_NOTIFICATION_UPDATE_NOTIFICATIONS_BY_ID_NOTIFICATION, json).and_then(iface_notification__update_notifications_by_id_notification__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_notification__update_notifications_by_id_notification__err(e)),
+        }
     }
-    fn get_notifications_board_by_id_notification(params: iface_notification::GetNotificationsBoardByIdNotificationParams) -> Result<String, String> {
+    fn get_notifications_board_by_id_notification(params: iface_notification::GetNotificationsBoardByIdNotificationParams) -> Result<String, iface_notification::GetNotificationsBoardByIdNotificationError> {
         let json = iface_notification__get_notifications_board_by_id_notification_params__to_json(&params);
-        dispatch(&OP_NOTIFICATION_GET_NOTIFICATIONS_BOARD_BY_ID_NOTIFICATION, json)
+        match dispatch(&OP_NOTIFICATION_GET_NOTIFICATIONS_BOARD_BY_ID_NOTIFICATION, json).and_then(iface_notification__get_notifications_board_by_id_notification__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_notification__get_notifications_board_by_id_notification__err(e)),
+        }
     }
-    fn get_notifications_board_by_id_notification_by_field(params: iface_notification::GetNotificationsBoardByIdNotificationByFieldParams) -> Result<String, String> {
+    fn get_notifications_board_by_id_notification_by_field(params: iface_notification::GetNotificationsBoardByIdNotificationByFieldParams) -> Result<String, iface_notification::GetNotificationsBoardByIdNotificationByFieldError> {
         let json = iface_notification__get_notifications_board_by_id_notification_by_field_params__to_json(&params);
-        dispatch(&OP_NOTIFICATION_GET_NOTIFICATIONS_BOARD_BY_ID_NOTIFICATION_BY_FIELD, json)
+        match dispatch(&OP_NOTIFICATION_GET_NOTIFICATIONS_BOARD_BY_ID_NOTIFICATION_BY_FIELD, json).and_then(iface_notification__get_notifications_board_by_id_notification_by_field__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_notification__get_notifications_board_by_id_notification_by_field__err(e)),
+        }
     }
-    fn get_notifications_card_by_id_notification(params: iface_notification::GetNotificationsCardByIdNotificationParams) -> Result<String, String> {
+    fn get_notifications_card_by_id_notification(params: iface_notification::GetNotificationsCardByIdNotificationParams) -> Result<String, iface_notification::GetNotificationsCardByIdNotificationError> {
         let json = iface_notification__get_notifications_card_by_id_notification_params__to_json(&params);
-        dispatch(&OP_NOTIFICATION_GET_NOTIFICATIONS_CARD_BY_ID_NOTIFICATION, json)
+        match dispatch(&OP_NOTIFICATION_GET_NOTIFICATIONS_CARD_BY_ID_NOTIFICATION, json).and_then(iface_notification__get_notifications_card_by_id_notification__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_notification__get_notifications_card_by_id_notification__err(e)),
+        }
     }
-    fn get_notifications_card_by_id_notification_by_field(params: iface_notification::GetNotificationsCardByIdNotificationByFieldParams) -> Result<String, String> {
+    fn get_notifications_card_by_id_notification_by_field(params: iface_notification::GetNotificationsCardByIdNotificationByFieldParams) -> Result<String, iface_notification::GetNotificationsCardByIdNotificationByFieldError> {
         let json = iface_notification__get_notifications_card_by_id_notification_by_field_params__to_json(&params);
-        dispatch(&OP_NOTIFICATION_GET_NOTIFICATIONS_CARD_BY_ID_NOTIFICATION_BY_FIELD, json)
+        match dispatch(&OP_NOTIFICATION_GET_NOTIFICATIONS_CARD_BY_ID_NOTIFICATION_BY_FIELD, json).and_then(iface_notification__get_notifications_card_by_id_notification_by_field__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_notification__get_notifications_card_by_id_notification_by_field__err(e)),
+        }
     }
-    fn get_notifications_display_by_id_notification(params: iface_notification::GetNotificationsDisplayByIdNotificationParams) -> Result<String, String> {
+    fn get_notifications_display_by_id_notification(params: iface_notification::GetNotificationsDisplayByIdNotificationParams) -> Result<String, iface_notification::GetNotificationsDisplayByIdNotificationError> {
         let json = iface_notification__get_notifications_display_by_id_notification_params__to_json(&params);
-        dispatch(&OP_NOTIFICATION_GET_NOTIFICATIONS_DISPLAY_BY_ID_NOTIFICATION, json)
+        match dispatch(&OP_NOTIFICATION_GET_NOTIFICATIONS_DISPLAY_BY_ID_NOTIFICATION, json).and_then(iface_notification__get_notifications_display_by_id_notification__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_notification__get_notifications_display_by_id_notification__err(e)),
+        }
     }
-    fn get_notifications_entities_by_id_notification(params: iface_notification::GetNotificationsEntitiesByIdNotificationParams) -> Result<String, String> {
+    fn get_notifications_entities_by_id_notification(params: iface_notification::GetNotificationsEntitiesByIdNotificationParams) -> Result<String, iface_notification::GetNotificationsEntitiesByIdNotificationError> {
         let json = iface_notification__get_notifications_entities_by_id_notification_params__to_json(&params);
-        dispatch(&OP_NOTIFICATION_GET_NOTIFICATIONS_ENTITIES_BY_ID_NOTIFICATION, json)
+        match dispatch(&OP_NOTIFICATION_GET_NOTIFICATIONS_ENTITIES_BY_ID_NOTIFICATION, json).and_then(iface_notification__get_notifications_entities_by_id_notification__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_notification__get_notifications_entities_by_id_notification__err(e)),
+        }
     }
-    fn get_notifications_list_by_id_notification(params: iface_notification::GetNotificationsListByIdNotificationParams) -> Result<String, String> {
+    fn get_notifications_list_by_id_notification(params: iface_notification::GetNotificationsListByIdNotificationParams) -> Result<String, iface_notification::GetNotificationsListByIdNotificationError> {
         let json = iface_notification__get_notifications_list_by_id_notification_params__to_json(&params);
-        dispatch(&OP_NOTIFICATION_GET_NOTIFICATIONS_LIST_BY_ID_NOTIFICATION, json)
+        match dispatch(&OP_NOTIFICATION_GET_NOTIFICATIONS_LIST_BY_ID_NOTIFICATION, json).and_then(iface_notification__get_notifications_list_by_id_notification__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_notification__get_notifications_list_by_id_notification__err(e)),
+        }
     }
-    fn get_notifications_list_by_id_notification_by_field(params: iface_notification::GetNotificationsListByIdNotificationByFieldParams) -> Result<String, String> {
+    fn get_notifications_list_by_id_notification_by_field(params: iface_notification::GetNotificationsListByIdNotificationByFieldParams) -> Result<String, iface_notification::GetNotificationsListByIdNotificationByFieldError> {
         let json = iface_notification__get_notifications_list_by_id_notification_by_field_params__to_json(&params);
-        dispatch(&OP_NOTIFICATION_GET_NOTIFICATIONS_LIST_BY_ID_NOTIFICATION_BY_FIELD, json)
+        match dispatch(&OP_NOTIFICATION_GET_NOTIFICATIONS_LIST_BY_ID_NOTIFICATION_BY_FIELD, json).and_then(iface_notification__get_notifications_list_by_id_notification_by_field__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_notification__get_notifications_list_by_id_notification_by_field__err(e)),
+        }
     }
-    fn get_notifications_member_by_id_notification(params: iface_notification::GetNotificationsMemberByIdNotificationParams) -> Result<String, String> {
+    fn get_notifications_member_by_id_notification(params: iface_notification::GetNotificationsMemberByIdNotificationParams) -> Result<String, iface_notification::GetNotificationsMemberByIdNotificationError> {
         let json = iface_notification__get_notifications_member_by_id_notification_params__to_json(&params);
-        dispatch(&OP_NOTIFICATION_GET_NOTIFICATIONS_MEMBER_BY_ID_NOTIFICATION, json)
+        match dispatch(&OP_NOTIFICATION_GET_NOTIFICATIONS_MEMBER_BY_ID_NOTIFICATION, json).and_then(iface_notification__get_notifications_member_by_id_notification__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_notification__get_notifications_member_by_id_notification__err(e)),
+        }
     }
-    fn get_notifications_member_by_id_notification_by_field(params: iface_notification::GetNotificationsMemberByIdNotificationByFieldParams) -> Result<String, String> {
+    fn get_notifications_member_by_id_notification_by_field(params: iface_notification::GetNotificationsMemberByIdNotificationByFieldParams) -> Result<String, iface_notification::GetNotificationsMemberByIdNotificationByFieldError> {
         let json = iface_notification__get_notifications_member_by_id_notification_by_field_params__to_json(&params);
-        dispatch(&OP_NOTIFICATION_GET_NOTIFICATIONS_MEMBER_BY_ID_NOTIFICATION_BY_FIELD, json)
+        match dispatch(&OP_NOTIFICATION_GET_NOTIFICATIONS_MEMBER_BY_ID_NOTIFICATION_BY_FIELD, json).and_then(iface_notification__get_notifications_member_by_id_notification_by_field__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_notification__get_notifications_member_by_id_notification_by_field__err(e)),
+        }
     }
-    fn get_notifications_member_creator_by_id_notification(params: iface_notification::GetNotificationsMemberCreatorByIdNotificationParams) -> Result<String, String> {
+    fn get_notifications_member_creator_by_id_notification(params: iface_notification::GetNotificationsMemberCreatorByIdNotificationParams) -> Result<String, iface_notification::GetNotificationsMemberCreatorByIdNotificationError> {
         let json = iface_notification__get_notifications_member_creator_by_id_notification_params__to_json(&params);
-        dispatch(&OP_NOTIFICATION_GET_NOTIFICATIONS_MEMBER_CREATOR_BY_ID_NOTIFICATION, json)
+        match dispatch(&OP_NOTIFICATION_GET_NOTIFICATIONS_MEMBER_CREATOR_BY_ID_NOTIFICATION, json).and_then(iface_notification__get_notifications_member_creator_by_id_notification__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_notification__get_notifications_member_creator_by_id_notification__err(e)),
+        }
     }
-    fn get_notifications_member_creator_by_id_notification_by_field(params: iface_notification::GetNotificationsMemberCreatorByIdNotificationByFieldParams) -> Result<String, String> {
+    fn get_notifications_member_creator_by_id_notification_by_field(params: iface_notification::GetNotificationsMemberCreatorByIdNotificationByFieldParams) -> Result<String, iface_notification::GetNotificationsMemberCreatorByIdNotificationByFieldError> {
         let json = iface_notification__get_notifications_member_creator_by_id_notification_by_field_params__to_json(&params);
-        dispatch(&OP_NOTIFICATION_GET_NOTIFICATIONS_MEMBER_CREATOR_BY_ID_NOTIFICATION_BY_FIELD, json)
+        match dispatch(&OP_NOTIFICATION_GET_NOTIFICATIONS_MEMBER_CREATOR_BY_ID_NOTIFICATION_BY_FIELD, json).and_then(iface_notification__get_notifications_member_creator_by_id_notification_by_field__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_notification__get_notifications_member_creator_by_id_notification_by_field__err(e)),
+        }
     }
-    fn get_notifications_organization_by_id_notification(params: iface_notification::GetNotificationsOrganizationByIdNotificationParams) -> Result<String, String> {
+    fn get_notifications_organization_by_id_notification(params: iface_notification::GetNotificationsOrganizationByIdNotificationParams) -> Result<String, iface_notification::GetNotificationsOrganizationByIdNotificationError> {
         let json = iface_notification__get_notifications_organization_by_id_notification_params__to_json(&params);
-        dispatch(&OP_NOTIFICATION_GET_NOTIFICATIONS_ORGANIZATION_BY_ID_NOTIFICATION, json)
+        match dispatch(&OP_NOTIFICATION_GET_NOTIFICATIONS_ORGANIZATION_BY_ID_NOTIFICATION, json).and_then(iface_notification__get_notifications_organization_by_id_notification__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_notification__get_notifications_organization_by_id_notification__err(e)),
+        }
     }
-    fn get_notifications_organization_by_id_notification_by_field(params: iface_notification::GetNotificationsOrganizationByIdNotificationByFieldParams) -> Result<String, String> {
+    fn get_notifications_organization_by_id_notification_by_field(params: iface_notification::GetNotificationsOrganizationByIdNotificationByFieldParams) -> Result<String, iface_notification::GetNotificationsOrganizationByIdNotificationByFieldError> {
         let json = iface_notification__get_notifications_organization_by_id_notification_by_field_params__to_json(&params);
-        dispatch(&OP_NOTIFICATION_GET_NOTIFICATIONS_ORGANIZATION_BY_ID_NOTIFICATION_BY_FIELD, json)
+        match dispatch(&OP_NOTIFICATION_GET_NOTIFICATIONS_ORGANIZATION_BY_ID_NOTIFICATION_BY_FIELD, json).and_then(iface_notification__get_notifications_organization_by_id_notification_by_field__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_notification__get_notifications_organization_by_id_notification_by_field__err(e)),
+        }
     }
-    fn update_notifications_unread_by_id_notification(params: iface_notification::UpdateNotificationsUnreadByIdNotificationParams) -> Result<String, String> {
+    fn update_notifications_unread_by_id_notification(params: iface_notification::UpdateNotificationsUnreadByIdNotificationParams) -> Result<String, iface_notification::UpdateNotificationsUnreadByIdNotificationError> {
         let json = iface_notification__update_notifications_unread_by_id_notification_params__to_json(&params);
-        dispatch(&OP_NOTIFICATION_UPDATE_NOTIFICATIONS_UNREAD_BY_ID_NOTIFICATION, json)
+        match dispatch(&OP_NOTIFICATION_UPDATE_NOTIFICATIONS_UNREAD_BY_ID_NOTIFICATION, json).and_then(iface_notification__update_notifications_unread_by_id_notification__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_notification__update_notifications_unread_by_id_notification__err(e)),
+        }
     }
-    fn get_notifications_by_id_notification_by_field(params: iface_notification::GetNotificationsByIdNotificationByFieldParams) -> Result<String, String> {
+    fn get_notifications_by_id_notification_by_field(params: iface_notification::GetNotificationsByIdNotificationByFieldParams) -> Result<String, iface_notification::GetNotificationsByIdNotificationByFieldError> {
         let json = iface_notification__get_notifications_by_id_notification_by_field_params__to_json(&params);
-        dispatch(&OP_NOTIFICATION_GET_NOTIFICATIONS_BY_ID_NOTIFICATION_BY_FIELD, json)
+        match dispatch(&OP_NOTIFICATION_GET_NOTIFICATIONS_BY_ID_NOTIFICATION_BY_FIELD, json).and_then(iface_notification__get_notifications_by_id_notification_by_field__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_notification__get_notifications_by_id_notification_by_field__err(e)),
+        }
     }
 }
 use crate::exports::autostamp::trello::organization as iface_organization;
@@ -7764,19 +12218,19 @@ const OP_ORGANIZATION_ADD_ORGANIZATIONS: OpSpec = OpSpec {
     method: "POST",
     path_template: "/organizations",
     fields: &[
-        FieldSpec { snake: "token", location: FieldLocation::Query },
-        FieldSpec { snake: "desc", location: FieldLocation::Body },
-        FieldSpec { snake: "display_name", location: FieldLocation::Body },
-        FieldSpec { snake: "name", location: FieldLocation::Body },
-        FieldSpec { snake: "prefs_associated_domain", location: FieldLocation::Body },
-        FieldSpec { snake: "prefs_board_visibility_restrict_org", location: FieldLocation::Body },
-        FieldSpec { snake: "prefs_board_visibility_restrict_private", location: FieldLocation::Body },
-        FieldSpec { snake: "prefs_board_visibility_restrict_public", location: FieldLocation::Body },
-        FieldSpec { snake: "prefs_external_members_disabled", location: FieldLocation::Body },
-        FieldSpec { snake: "prefs_google_apps_version", location: FieldLocation::Body },
-        FieldSpec { snake: "prefs_org_invite_restrict", location: FieldLocation::Body },
-        FieldSpec { snake: "prefs_permission_level", location: FieldLocation::Body },
-        FieldSpec { snake: "website", location: FieldLocation::Body },
+        FieldSpec { snake: "token", wire: "token", location: FieldLocation::Query },
+        FieldSpec { snake: "desc", wire: "desc", location: FieldLocation::Body },
+        FieldSpec { snake: "display_name", wire: "displayName", location: FieldLocation::Body },
+        FieldSpec { snake: "name", wire: "name", location: FieldLocation::Body },
+        FieldSpec { snake: "prefs_associated_domain", wire: "prefs/associatedDomain", location: FieldLocation::Body },
+        FieldSpec { snake: "prefs_board_visibility_restrict_org", wire: "prefs/boardVisibilityRestrict/org", location: FieldLocation::Body },
+        FieldSpec { snake: "prefs_board_visibility_restrict_private", wire: "prefs/boardVisibilityRestrict/private", location: FieldLocation::Body },
+        FieldSpec { snake: "prefs_board_visibility_restrict_public", wire: "prefs/boardVisibilityRestrict/public", location: FieldLocation::Body },
+        FieldSpec { snake: "prefs_external_members_disabled", wire: "prefs/externalMembersDisabled", location: FieldLocation::Body },
+        FieldSpec { snake: "prefs_google_apps_version", wire: "prefs/googleAppsVersion", location: FieldLocation::Body },
+        FieldSpec { snake: "prefs_org_invite_restrict", wire: "prefs/orgInviteRestrict", location: FieldLocation::Body },
+        FieldSpec { snake: "prefs_permission_level", wire: "prefs/permissionLevel", location: FieldLocation::Body },
+        FieldSpec { snake: "website", wire: "website", location: FieldLocation::Body },
     ],
     auth: &[
         AuthApply { secret_key: "api_key", kind: AuthKind::ApiKeyQuery("key") },
@@ -7787,33 +12241,33 @@ const OP_ORGANIZATION_GET_ORGANIZATIONS_BY_ID_ORG: OpSpec = OpSpec {
     method: "GET",
     path_template: "/organizations/{id_org}",
     fields: &[
-        FieldSpec { snake: "id_org", location: FieldLocation::Path },
-        FieldSpec { snake: "actions", location: FieldLocation::Query },
-        FieldSpec { snake: "actions_entities", location: FieldLocation::Query },
-        FieldSpec { snake: "actions_display", location: FieldLocation::Query },
-        FieldSpec { snake: "actions_limit", location: FieldLocation::Query },
-        FieldSpec { snake: "action_fields", location: FieldLocation::Query },
-        FieldSpec { snake: "memberships", location: FieldLocation::Query },
-        FieldSpec { snake: "memberships_member", location: FieldLocation::Query },
-        FieldSpec { snake: "memberships_member_fields", location: FieldLocation::Query },
-        FieldSpec { snake: "members", location: FieldLocation::Query },
-        FieldSpec { snake: "member_fields", location: FieldLocation::Query },
-        FieldSpec { snake: "member_activity", location: FieldLocation::Query },
-        FieldSpec { snake: "members_invited", location: FieldLocation::Query },
-        FieldSpec { snake: "members_invited_fields", location: FieldLocation::Query },
-        FieldSpec { snake: "boards", location: FieldLocation::Query },
-        FieldSpec { snake: "board_fields", location: FieldLocation::Query },
-        FieldSpec { snake: "board_actions", location: FieldLocation::Query },
-        FieldSpec { snake: "board_actions_entities", location: FieldLocation::Query },
-        FieldSpec { snake: "board_actions_display", location: FieldLocation::Query },
-        FieldSpec { snake: "board_actions_format", location: FieldLocation::Query },
-        FieldSpec { snake: "board_actions_since", location: FieldLocation::Query },
-        FieldSpec { snake: "board_actions_limit", location: FieldLocation::Query },
-        FieldSpec { snake: "board_action_fields", location: FieldLocation::Query },
-        FieldSpec { snake: "board_lists", location: FieldLocation::Query },
-        FieldSpec { snake: "paid_account", location: FieldLocation::Query },
-        FieldSpec { snake: "fields", location: FieldLocation::Query },
-        FieldSpec { snake: "token", location: FieldLocation::Query },
+        FieldSpec { snake: "id_org", wire: "idOrg", location: FieldLocation::Path },
+        FieldSpec { snake: "actions", wire: "actions", location: FieldLocation::Query },
+        FieldSpec { snake: "actions_entities", wire: "actions_entities", location: FieldLocation::Query },
+        FieldSpec { snake: "actions_display", wire: "actions_display", location: FieldLocation::Query },
+        FieldSpec { snake: "actions_limit", wire: "actions_limit", location: FieldLocation::Query },
+        FieldSpec { snake: "action_fields", wire: "action_fields", location: FieldLocation::Query },
+        FieldSpec { snake: "memberships", wire: "memberships", location: FieldLocation::Query },
+        FieldSpec { snake: "memberships_member", wire: "memberships_member", location: FieldLocation::Query },
+        FieldSpec { snake: "memberships_member_fields", wire: "memberships_member_fields", location: FieldLocation::Query },
+        FieldSpec { snake: "members", wire: "members", location: FieldLocation::Query },
+        FieldSpec { snake: "member_fields", wire: "member_fields", location: FieldLocation::Query },
+        FieldSpec { snake: "member_activity", wire: "member_activity", location: FieldLocation::Query },
+        FieldSpec { snake: "members_invited", wire: "membersInvited", location: FieldLocation::Query },
+        FieldSpec { snake: "members_invited_fields", wire: "membersInvited_fields", location: FieldLocation::Query },
+        FieldSpec { snake: "boards", wire: "boards", location: FieldLocation::Query },
+        FieldSpec { snake: "board_fields", wire: "board_fields", location: FieldLocation::Query },
+        FieldSpec { snake: "board_actions", wire: "board_actions", location: FieldLocation::Query },
+        FieldSpec { snake: "board_actions_entities", wire: "board_actions_entities", location: FieldLocation::Query },
+        FieldSpec { snake: "board_actions_display", wire: "board_actions_display", location: FieldLocation::Query },
+        FieldSpec { snake: "board_actions_format", wire: "board_actions_format", location: FieldLocation::Query },
+        FieldSpec { snake: "board_actions_since", wire: "board_actions_since", location: FieldLocation::Query },
+        FieldSpec { snake: "board_actions_limit", wire: "board_actions_limit", location: FieldLocation::Query },
+        FieldSpec { snake: "board_action_fields", wire: "board_action_fields", location: FieldLocation::Query },
+        FieldSpec { snake: "board_lists", wire: "board_lists", location: FieldLocation::Query },
+        FieldSpec { snake: "paid_account", wire: "paid_account", location: FieldLocation::Query },
+        FieldSpec { snake: "fields", wire: "fields", location: FieldLocation::Query },
+        FieldSpec { snake: "token", wire: "token", location: FieldLocation::Query },
     ],
     auth: &[
         AuthApply { secret_key: "api_key", kind: AuthKind::ApiKeyQuery("key") },
@@ -7824,20 +12278,20 @@ const OP_ORGANIZATION_UPDATE_ORGANIZATIONS_BY_ID_ORG: OpSpec = OpSpec {
     method: "PUT",
     path_template: "/organizations/{id_org}",
     fields: &[
-        FieldSpec { snake: "id_org", location: FieldLocation::Path },
-        FieldSpec { snake: "token", location: FieldLocation::Query },
-        FieldSpec { snake: "desc", location: FieldLocation::Body },
-        FieldSpec { snake: "display_name", location: FieldLocation::Body },
-        FieldSpec { snake: "name", location: FieldLocation::Body },
-        FieldSpec { snake: "prefs_associated_domain", location: FieldLocation::Body },
-        FieldSpec { snake: "prefs_board_visibility_restrict_org", location: FieldLocation::Body },
-        FieldSpec { snake: "prefs_board_visibility_restrict_private", location: FieldLocation::Body },
-        FieldSpec { snake: "prefs_board_visibility_restrict_public", location: FieldLocation::Body },
-        FieldSpec { snake: "prefs_external_members_disabled", location: FieldLocation::Body },
-        FieldSpec { snake: "prefs_google_apps_version", location: FieldLocation::Body },
-        FieldSpec { snake: "prefs_org_invite_restrict", location: FieldLocation::Body },
-        FieldSpec { snake: "prefs_permission_level", location: FieldLocation::Body },
-        FieldSpec { snake: "website", location: FieldLocation::Body },
+        FieldSpec { snake: "id_org", wire: "idOrg", location: FieldLocation::Path },
+        FieldSpec { snake: "token", wire: "token", location: FieldLocation::Query },
+        FieldSpec { snake: "desc", wire: "desc", location: FieldLocation::Body },
+        FieldSpec { snake: "display_name", wire: "displayName", location: FieldLocation::Body },
+        FieldSpec { snake: "name", wire: "name", location: FieldLocation::Body },
+        FieldSpec { snake: "prefs_associated_domain", wire: "prefs/associatedDomain", location: FieldLocation::Body },
+        FieldSpec { snake: "prefs_board_visibility_restrict_org", wire: "prefs/boardVisibilityRestrict/org", location: FieldLocation::Body },
+        FieldSpec { snake: "prefs_board_visibility_restrict_private", wire: "prefs/boardVisibilityRestrict/private", location: FieldLocation::Body },
+        FieldSpec { snake: "prefs_board_visibility_restrict_public", wire: "prefs/boardVisibilityRestrict/public", location: FieldLocation::Body },
+        FieldSpec { snake: "prefs_external_members_disabled", wire: "prefs/externalMembersDisabled", location: FieldLocation::Body },
+        FieldSpec { snake: "prefs_google_apps_version", wire: "prefs/googleAppsVersion", location: FieldLocation::Body },
+        FieldSpec { snake: "prefs_org_invite_restrict", wire: "prefs/orgInviteRestrict", location: FieldLocation::Body },
+        FieldSpec { snake: "prefs_permission_level", wire: "prefs/permissionLevel", location: FieldLocation::Body },
+        FieldSpec { snake: "website", wire: "website", location: FieldLocation::Body },
     ],
     auth: &[
         AuthApply { secret_key: "api_key", kind: AuthKind::ApiKeyQuery("key") },
@@ -7848,8 +12302,8 @@ const OP_ORGANIZATION_DELETE_ORGANIZATIONS_BY_ID_ORG: OpSpec = OpSpec {
     method: "DELETE",
     path_template: "/organizations/{id_org}",
     fields: &[
-        FieldSpec { snake: "id_org", location: FieldLocation::Path },
-        FieldSpec { snake: "token", location: FieldLocation::Query },
+        FieldSpec { snake: "id_org", wire: "idOrg", location: FieldLocation::Path },
+        FieldSpec { snake: "token", wire: "token", location: FieldLocation::Query },
     ],
     auth: &[
         AuthApply { secret_key: "api_key", kind: AuthKind::ApiKeyQuery("key") },
@@ -7860,22 +12314,22 @@ const OP_ORGANIZATION_GET_ORGANIZATIONS_ACTIONS_BY_ID_ORG: OpSpec = OpSpec {
     method: "GET",
     path_template: "/organizations/{id_org}/actions",
     fields: &[
-        FieldSpec { snake: "id_org", location: FieldLocation::Path },
-        FieldSpec { snake: "entities", location: FieldLocation::Query },
-        FieldSpec { snake: "display", location: FieldLocation::Query },
-        FieldSpec { snake: "filter", location: FieldLocation::Query },
-        FieldSpec { snake: "fields", location: FieldLocation::Query },
-        FieldSpec { snake: "limit", location: FieldLocation::Query },
-        FieldSpec { snake: "format", location: FieldLocation::Query },
-        FieldSpec { snake: "since", location: FieldLocation::Query },
-        FieldSpec { snake: "before", location: FieldLocation::Query },
-        FieldSpec { snake: "page", location: FieldLocation::Query },
-        FieldSpec { snake: "id_models", location: FieldLocation::Query },
-        FieldSpec { snake: "member", location: FieldLocation::Query },
-        FieldSpec { snake: "member_fields", location: FieldLocation::Query },
-        FieldSpec { snake: "member_creator", location: FieldLocation::Query },
-        FieldSpec { snake: "member_creator_fields", location: FieldLocation::Query },
-        FieldSpec { snake: "token", location: FieldLocation::Query },
+        FieldSpec { snake: "id_org", wire: "idOrg", location: FieldLocation::Path },
+        FieldSpec { snake: "entities", wire: "entities", location: FieldLocation::Query },
+        FieldSpec { snake: "display", wire: "display", location: FieldLocation::Query },
+        FieldSpec { snake: "filter", wire: "filter", location: FieldLocation::Query },
+        FieldSpec { snake: "fields", wire: "fields", location: FieldLocation::Query },
+        FieldSpec { snake: "limit", wire: "limit", location: FieldLocation::Query },
+        FieldSpec { snake: "format", wire: "format", location: FieldLocation::Query },
+        FieldSpec { snake: "since", wire: "since", location: FieldLocation::Query },
+        FieldSpec { snake: "before", wire: "before", location: FieldLocation::Query },
+        FieldSpec { snake: "page", wire: "page", location: FieldLocation::Query },
+        FieldSpec { snake: "id_models", wire: "idModels", location: FieldLocation::Query },
+        FieldSpec { snake: "member", wire: "member", location: FieldLocation::Query },
+        FieldSpec { snake: "member_fields", wire: "member_fields", location: FieldLocation::Query },
+        FieldSpec { snake: "member_creator", wire: "memberCreator", location: FieldLocation::Query },
+        FieldSpec { snake: "member_creator_fields", wire: "memberCreator_fields", location: FieldLocation::Query },
+        FieldSpec { snake: "token", wire: "token", location: FieldLocation::Query },
     ],
     auth: &[
         AuthApply { secret_key: "api_key", kind: AuthKind::ApiKeyQuery("key") },
@@ -7886,20 +12340,20 @@ const OP_ORGANIZATION_GET_ORGANIZATIONS_BOARDS_BY_ID_ORG: OpSpec = OpSpec {
     method: "GET",
     path_template: "/organizations/{id_org}/boards",
     fields: &[
-        FieldSpec { snake: "id_org", location: FieldLocation::Path },
-        FieldSpec { snake: "filter", location: FieldLocation::Query },
-        FieldSpec { snake: "fields", location: FieldLocation::Query },
-        FieldSpec { snake: "actions", location: FieldLocation::Query },
-        FieldSpec { snake: "actions_entities", location: FieldLocation::Query },
-        FieldSpec { snake: "actions_limit", location: FieldLocation::Query },
-        FieldSpec { snake: "actions_format", location: FieldLocation::Query },
-        FieldSpec { snake: "actions_since", location: FieldLocation::Query },
-        FieldSpec { snake: "action_fields", location: FieldLocation::Query },
-        FieldSpec { snake: "memberships", location: FieldLocation::Query },
-        FieldSpec { snake: "organization", location: FieldLocation::Query },
-        FieldSpec { snake: "organization_fields", location: FieldLocation::Query },
-        FieldSpec { snake: "lists", location: FieldLocation::Query },
-        FieldSpec { snake: "token", location: FieldLocation::Query },
+        FieldSpec { snake: "id_org", wire: "idOrg", location: FieldLocation::Path },
+        FieldSpec { snake: "filter", wire: "filter", location: FieldLocation::Query },
+        FieldSpec { snake: "fields", wire: "fields", location: FieldLocation::Query },
+        FieldSpec { snake: "actions", wire: "actions", location: FieldLocation::Query },
+        FieldSpec { snake: "actions_entities", wire: "actions_entities", location: FieldLocation::Query },
+        FieldSpec { snake: "actions_limit", wire: "actions_limit", location: FieldLocation::Query },
+        FieldSpec { snake: "actions_format", wire: "actions_format", location: FieldLocation::Query },
+        FieldSpec { snake: "actions_since", wire: "actions_since", location: FieldLocation::Query },
+        FieldSpec { snake: "action_fields", wire: "action_fields", location: FieldLocation::Query },
+        FieldSpec { snake: "memberships", wire: "memberships", location: FieldLocation::Query },
+        FieldSpec { snake: "organization", wire: "organization", location: FieldLocation::Query },
+        FieldSpec { snake: "organization_fields", wire: "organization_fields", location: FieldLocation::Query },
+        FieldSpec { snake: "lists", wire: "lists", location: FieldLocation::Query },
+        FieldSpec { snake: "token", wire: "token", location: FieldLocation::Query },
     ],
     auth: &[
         AuthApply { secret_key: "api_key", kind: AuthKind::ApiKeyQuery("key") },
@@ -7910,10 +12364,10 @@ const OP_ORGANIZATION_GET_ORGANIZATIONS_BOARDS_BY_ID_ORG_BY_FILTER: OpSpec = OpS
     method: "GET",
     path_template: "/organizations/{id_org}/boards/{filter}",
     fields: &[
-        FieldSpec { snake: "id_org", location: FieldLocation::Path },
-        FieldSpec { snake: "filter", location: FieldLocation::Path },
-        FieldSpec { snake: "key", location: FieldLocation::Query },
-        FieldSpec { snake: "token", location: FieldLocation::Query },
+        FieldSpec { snake: "id_org", wire: "idOrg", location: FieldLocation::Path },
+        FieldSpec { snake: "filter", wire: "filter", location: FieldLocation::Path },
+        FieldSpec { snake: "key", wire: "key", location: FieldLocation::Query },
+        FieldSpec { snake: "token", wire: "token", location: FieldLocation::Query },
     ],
     auth: &[
     ],
@@ -7923,10 +12377,10 @@ const OP_ORGANIZATION_GET_ORGANIZATIONS_DELTAS_BY_ID_ORG: OpSpec = OpSpec {
     method: "GET",
     path_template: "/organizations/{id_org}/deltas",
     fields: &[
-        FieldSpec { snake: "id_org", location: FieldLocation::Path },
-        FieldSpec { snake: "tags", location: FieldLocation::Query },
-        FieldSpec { snake: "ix_last_update", location: FieldLocation::Query },
-        FieldSpec { snake: "token", location: FieldLocation::Query },
+        FieldSpec { snake: "id_org", wire: "idOrg", location: FieldLocation::Path },
+        FieldSpec { snake: "tags", wire: "tags", location: FieldLocation::Query },
+        FieldSpec { snake: "ix_last_update", wire: "ixLastUpdate", location: FieldLocation::Query },
+        FieldSpec { snake: "token", wire: "token", location: FieldLocation::Query },
     ],
     auth: &[
         AuthApply { secret_key: "api_key", kind: AuthKind::ApiKeyQuery("key") },
@@ -7937,9 +12391,9 @@ const OP_ORGANIZATION_UPDATE_ORGANIZATIONS_DESC_BY_ID_ORG: OpSpec = OpSpec {
     method: "PUT",
     path_template: "/organizations/{id_org}/desc",
     fields: &[
-        FieldSpec { snake: "id_org", location: FieldLocation::Path },
-        FieldSpec { snake: "token", location: FieldLocation::Query },
-        FieldSpec { snake: "value", location: FieldLocation::Body },
+        FieldSpec { snake: "id_org", wire: "idOrg", location: FieldLocation::Path },
+        FieldSpec { snake: "token", wire: "token", location: FieldLocation::Query },
+        FieldSpec { snake: "value", wire: "value", location: FieldLocation::Body },
     ],
     auth: &[
         AuthApply { secret_key: "api_key", kind: AuthKind::ApiKeyQuery("key") },
@@ -7950,9 +12404,9 @@ const OP_ORGANIZATION_UPDATE_ORGANIZATIONS_DISPLAY_NAME_BY_ID_ORG: OpSpec = OpSp
     method: "PUT",
     path_template: "/organizations/{id_org}/displayName",
     fields: &[
-        FieldSpec { snake: "id_org", location: FieldLocation::Path },
-        FieldSpec { snake: "token", location: FieldLocation::Query },
-        FieldSpec { snake: "value", location: FieldLocation::Body },
+        FieldSpec { snake: "id_org", wire: "idOrg", location: FieldLocation::Path },
+        FieldSpec { snake: "token", wire: "token", location: FieldLocation::Query },
+        FieldSpec { snake: "value", wire: "value", location: FieldLocation::Body },
     ],
     auth: &[
         AuthApply { secret_key: "api_key", kind: AuthKind::ApiKeyQuery("key") },
@@ -7963,9 +12417,9 @@ const OP_ORGANIZATION_ADD_ORGANIZATIONS_LOGO_BY_ID_ORG: OpSpec = OpSpec {
     method: "POST",
     path_template: "/organizations/{id_org}/logo",
     fields: &[
-        FieldSpec { snake: "id_org", location: FieldLocation::Path },
-        FieldSpec { snake: "token", location: FieldLocation::Query },
-        FieldSpec { snake: "file", location: FieldLocation::Body },
+        FieldSpec { snake: "id_org", wire: "idOrg", location: FieldLocation::Path },
+        FieldSpec { snake: "token", wire: "token", location: FieldLocation::Query },
+        FieldSpec { snake: "file", wire: "file", location: FieldLocation::Body },
     ],
     auth: &[
         AuthApply { secret_key: "api_key", kind: AuthKind::ApiKeyQuery("key") },
@@ -7976,8 +12430,8 @@ const OP_ORGANIZATION_DELETE_ORGANIZATIONS_LOGO_BY_ID_ORG: OpSpec = OpSpec {
     method: "DELETE",
     path_template: "/organizations/{id_org}/logo",
     fields: &[
-        FieldSpec { snake: "id_org", location: FieldLocation::Path },
-        FieldSpec { snake: "token", location: FieldLocation::Query },
+        FieldSpec { snake: "id_org", wire: "idOrg", location: FieldLocation::Path },
+        FieldSpec { snake: "token", wire: "token", location: FieldLocation::Query },
     ],
     auth: &[
         AuthApply { secret_key: "api_key", kind: AuthKind::ApiKeyQuery("key") },
@@ -7988,11 +12442,11 @@ const OP_ORGANIZATION_GET_ORGANIZATIONS_MEMBERS_BY_ID_ORG: OpSpec = OpSpec {
     method: "GET",
     path_template: "/organizations/{id_org}/members",
     fields: &[
-        FieldSpec { snake: "id_org", location: FieldLocation::Path },
-        FieldSpec { snake: "filter", location: FieldLocation::Query },
-        FieldSpec { snake: "fields", location: FieldLocation::Query },
-        FieldSpec { snake: "activity", location: FieldLocation::Query },
-        FieldSpec { snake: "token", location: FieldLocation::Query },
+        FieldSpec { snake: "id_org", wire: "idOrg", location: FieldLocation::Path },
+        FieldSpec { snake: "filter", wire: "filter", location: FieldLocation::Query },
+        FieldSpec { snake: "fields", wire: "fields", location: FieldLocation::Query },
+        FieldSpec { snake: "activity", wire: "activity", location: FieldLocation::Query },
+        FieldSpec { snake: "token", wire: "token", location: FieldLocation::Query },
     ],
     auth: &[
         AuthApply { secret_key: "api_key", kind: AuthKind::ApiKeyQuery("key") },
@@ -8003,11 +12457,11 @@ const OP_ORGANIZATION_UPDATE_ORGANIZATIONS_MEMBERS_BY_ID_ORG: OpSpec = OpSpec {
     method: "PUT",
     path_template: "/organizations/{id_org}/members",
     fields: &[
-        FieldSpec { snake: "id_org", location: FieldLocation::Path },
-        FieldSpec { snake: "token", location: FieldLocation::Query },
-        FieldSpec { snake: "email", location: FieldLocation::Body },
-        FieldSpec { snake: "full_name", location: FieldLocation::Body },
-        FieldSpec { snake: "type", location: FieldLocation::Body },
+        FieldSpec { snake: "id_org", wire: "idOrg", location: FieldLocation::Path },
+        FieldSpec { snake: "token", wire: "token", location: FieldLocation::Query },
+        FieldSpec { snake: "email", wire: "email", location: FieldLocation::Body },
+        FieldSpec { snake: "full_name", wire: "fullName", location: FieldLocation::Body },
+        FieldSpec { snake: "type", wire: "type", location: FieldLocation::Body },
     ],
     auth: &[
         AuthApply { secret_key: "api_key", kind: AuthKind::ApiKeyQuery("key") },
@@ -8018,10 +12472,10 @@ const OP_ORGANIZATION_GET_ORGANIZATIONS_MEMBERS_BY_ID_ORG_BY_FILTER: OpSpec = Op
     method: "GET",
     path_template: "/organizations/{id_org}/members/{filter}",
     fields: &[
-        FieldSpec { snake: "id_org", location: FieldLocation::Path },
-        FieldSpec { snake: "filter", location: FieldLocation::Path },
-        FieldSpec { snake: "key", location: FieldLocation::Query },
-        FieldSpec { snake: "token", location: FieldLocation::Query },
+        FieldSpec { snake: "id_org", wire: "idOrg", location: FieldLocation::Path },
+        FieldSpec { snake: "filter", wire: "filter", location: FieldLocation::Path },
+        FieldSpec { snake: "key", wire: "key", location: FieldLocation::Query },
+        FieldSpec { snake: "token", wire: "token", location: FieldLocation::Query },
     ],
     auth: &[
     ],
@@ -8031,12 +12485,12 @@ const OP_ORGANIZATION_UPDATE_ORGANIZATIONS_MEMBERS_BY_ID_ORG_BY_ID_MEMBER: OpSpe
     method: "PUT",
     path_template: "/organizations/{id_org}/members/{id_member}",
     fields: &[
-        FieldSpec { snake: "id_org", location: FieldLocation::Path },
-        FieldSpec { snake: "id_member", location: FieldLocation::Path },
-        FieldSpec { snake: "token", location: FieldLocation::Query },
-        FieldSpec { snake: "email", location: FieldLocation::Body },
-        FieldSpec { snake: "full_name", location: FieldLocation::Body },
-        FieldSpec { snake: "type", location: FieldLocation::Body },
+        FieldSpec { snake: "id_org", wire: "idOrg", location: FieldLocation::Path },
+        FieldSpec { snake: "id_member", wire: "idMember", location: FieldLocation::Path },
+        FieldSpec { snake: "token", wire: "token", location: FieldLocation::Query },
+        FieldSpec { snake: "email", wire: "email", location: FieldLocation::Body },
+        FieldSpec { snake: "full_name", wire: "fullName", location: FieldLocation::Body },
+        FieldSpec { snake: "type", wire: "type", location: FieldLocation::Body },
     ],
     auth: &[
         AuthApply { secret_key: "api_key", kind: AuthKind::ApiKeyQuery("key") },
@@ -8047,9 +12501,9 @@ const OP_ORGANIZATION_DELETE_ORGANIZATIONS_MEMBERS_BY_ID_ORG_BY_ID_MEMBER: OpSpe
     method: "DELETE",
     path_template: "/organizations/{id_org}/members/{id_member}",
     fields: &[
-        FieldSpec { snake: "id_org", location: FieldLocation::Path },
-        FieldSpec { snake: "id_member", location: FieldLocation::Path },
-        FieldSpec { snake: "token", location: FieldLocation::Query },
+        FieldSpec { snake: "id_org", wire: "idOrg", location: FieldLocation::Path },
+        FieldSpec { snake: "id_member", wire: "idMember", location: FieldLocation::Path },
+        FieldSpec { snake: "token", wire: "token", location: FieldLocation::Query },
     ],
     auth: &[
         AuthApply { secret_key: "api_key", kind: AuthKind::ApiKeyQuery("key") },
@@ -8060,9 +12514,9 @@ const OP_ORGANIZATION_DELETE_ORGANIZATIONS_MEMBERS_ALL_BY_ID_ORG_BY_ID_MEMBER: O
     method: "DELETE",
     path_template: "/organizations/{id_org}/members/{id_member}/all",
     fields: &[
-        FieldSpec { snake: "id_org", location: FieldLocation::Path },
-        FieldSpec { snake: "id_member", location: FieldLocation::Path },
-        FieldSpec { snake: "token", location: FieldLocation::Query },
+        FieldSpec { snake: "id_org", wire: "idOrg", location: FieldLocation::Path },
+        FieldSpec { snake: "id_member", wire: "idMember", location: FieldLocation::Path },
+        FieldSpec { snake: "token", wire: "token", location: FieldLocation::Query },
     ],
     auth: &[
         AuthApply { secret_key: "api_key", kind: AuthKind::ApiKeyQuery("key") },
@@ -8073,22 +12527,22 @@ const OP_ORGANIZATION_GET_ORGANIZATIONS_MEMBERS_CARDS_BY_ID_ORG_BY_ID_MEMBER: Op
     method: "GET",
     path_template: "/organizations/{id_org}/members/{id_member}/cards",
     fields: &[
-        FieldSpec { snake: "id_org", location: FieldLocation::Path },
-        FieldSpec { snake: "id_member", location: FieldLocation::Path },
-        FieldSpec { snake: "actions", location: FieldLocation::Query },
-        FieldSpec { snake: "attachments", location: FieldLocation::Query },
-        FieldSpec { snake: "attachment_fields", location: FieldLocation::Query },
-        FieldSpec { snake: "members", location: FieldLocation::Query },
-        FieldSpec { snake: "member_fields", location: FieldLocation::Query },
-        FieldSpec { snake: "check_item_states", location: FieldLocation::Query },
-        FieldSpec { snake: "checklists", location: FieldLocation::Query },
-        FieldSpec { snake: "board", location: FieldLocation::Query },
-        FieldSpec { snake: "board_fields", location: FieldLocation::Query },
-        FieldSpec { snake: "list", location: FieldLocation::Query },
-        FieldSpec { snake: "list_fields", location: FieldLocation::Query },
-        FieldSpec { snake: "filter", location: FieldLocation::Query },
-        FieldSpec { snake: "fields", location: FieldLocation::Query },
-        FieldSpec { snake: "token", location: FieldLocation::Query },
+        FieldSpec { snake: "id_org", wire: "idOrg", location: FieldLocation::Path },
+        FieldSpec { snake: "id_member", wire: "idMember", location: FieldLocation::Path },
+        FieldSpec { snake: "actions", wire: "actions", location: FieldLocation::Query },
+        FieldSpec { snake: "attachments", wire: "attachments", location: FieldLocation::Query },
+        FieldSpec { snake: "attachment_fields", wire: "attachment_fields", location: FieldLocation::Query },
+        FieldSpec { snake: "members", wire: "members", location: FieldLocation::Query },
+        FieldSpec { snake: "member_fields", wire: "member_fields", location: FieldLocation::Query },
+        FieldSpec { snake: "check_item_states", wire: "checkItemStates", location: FieldLocation::Query },
+        FieldSpec { snake: "checklists", wire: "checklists", location: FieldLocation::Query },
+        FieldSpec { snake: "board", wire: "board", location: FieldLocation::Query },
+        FieldSpec { snake: "board_fields", wire: "board_fields", location: FieldLocation::Query },
+        FieldSpec { snake: "list", wire: "list", location: FieldLocation::Query },
+        FieldSpec { snake: "list_fields", wire: "list_fields", location: FieldLocation::Query },
+        FieldSpec { snake: "filter", wire: "filter", location: FieldLocation::Query },
+        FieldSpec { snake: "fields", wire: "fields", location: FieldLocation::Query },
+        FieldSpec { snake: "token", wire: "token", location: FieldLocation::Query },
     ],
     auth: &[
         AuthApply { secret_key: "api_key", kind: AuthKind::ApiKeyQuery("key") },
@@ -8099,10 +12553,10 @@ const OP_ORGANIZATION_UPDATE_ORGANIZATIONS_MEMBERS_DEACTIVATED_BY_ID_ORG_BY_ID_M
     method: "PUT",
     path_template: "/organizations/{id_org}/members/{id_member}/deactivated",
     fields: &[
-        FieldSpec { snake: "id_org", location: FieldLocation::Path },
-        FieldSpec { snake: "id_member", location: FieldLocation::Path },
-        FieldSpec { snake: "token", location: FieldLocation::Query },
-        FieldSpec { snake: "value", location: FieldLocation::Body },
+        FieldSpec { snake: "id_org", wire: "idOrg", location: FieldLocation::Path },
+        FieldSpec { snake: "id_member", wire: "idMember", location: FieldLocation::Path },
+        FieldSpec { snake: "token", wire: "token", location: FieldLocation::Query },
+        FieldSpec { snake: "value", wire: "value", location: FieldLocation::Body },
     ],
     auth: &[
         AuthApply { secret_key: "api_key", kind: AuthKind::ApiKeyQuery("key") },
@@ -8113,9 +12567,9 @@ const OP_ORGANIZATION_GET_ORGANIZATIONS_MEMBERS_INVITED_BY_ID_ORG: OpSpec = OpSp
     method: "GET",
     path_template: "/organizations/{id_org}/membersInvited",
     fields: &[
-        FieldSpec { snake: "id_org", location: FieldLocation::Path },
-        FieldSpec { snake: "fields", location: FieldLocation::Query },
-        FieldSpec { snake: "token", location: FieldLocation::Query },
+        FieldSpec { snake: "id_org", wire: "idOrg", location: FieldLocation::Path },
+        FieldSpec { snake: "fields", wire: "fields", location: FieldLocation::Query },
+        FieldSpec { snake: "token", wire: "token", location: FieldLocation::Query },
     ],
     auth: &[
         AuthApply { secret_key: "api_key", kind: AuthKind::ApiKeyQuery("key") },
@@ -8126,9 +12580,9 @@ const OP_ORGANIZATION_GET_ORGANIZATIONS_MEMBERS_INVITED_BY_ID_ORG_BY_FIELD: OpSp
     method: "GET",
     path_template: "/organizations/{id_org}/membersInvited/{field}",
     fields: &[
-        FieldSpec { snake: "id_org", location: FieldLocation::Path },
-        FieldSpec { snake: "field", location: FieldLocation::Path },
-        FieldSpec { snake: "token", location: FieldLocation::Query },
+        FieldSpec { snake: "id_org", wire: "idOrg", location: FieldLocation::Path },
+        FieldSpec { snake: "field", wire: "field", location: FieldLocation::Path },
+        FieldSpec { snake: "token", wire: "token", location: FieldLocation::Query },
     ],
     auth: &[
         AuthApply { secret_key: "api_key", kind: AuthKind::ApiKeyQuery("key") },
@@ -8139,11 +12593,11 @@ const OP_ORGANIZATION_GET_ORGANIZATIONS_MEMBERSHIPS_BY_ID_ORG: OpSpec = OpSpec {
     method: "GET",
     path_template: "/organizations/{id_org}/memberships",
     fields: &[
-        FieldSpec { snake: "id_org", location: FieldLocation::Path },
-        FieldSpec { snake: "filter", location: FieldLocation::Query },
-        FieldSpec { snake: "member", location: FieldLocation::Query },
-        FieldSpec { snake: "member_fields", location: FieldLocation::Query },
-        FieldSpec { snake: "token", location: FieldLocation::Query },
+        FieldSpec { snake: "id_org", wire: "idOrg", location: FieldLocation::Path },
+        FieldSpec { snake: "filter", wire: "filter", location: FieldLocation::Query },
+        FieldSpec { snake: "member", wire: "member", location: FieldLocation::Query },
+        FieldSpec { snake: "member_fields", wire: "member_fields", location: FieldLocation::Query },
+        FieldSpec { snake: "token", wire: "token", location: FieldLocation::Query },
     ],
     auth: &[
         AuthApply { secret_key: "api_key", kind: AuthKind::ApiKeyQuery("key") },
@@ -8154,11 +12608,11 @@ const OP_ORGANIZATION_GET_ORGANIZATIONS_MEMBERSHIPS_BY_ID_ORG_BY_ID_MEMBERSHIP: 
     method: "GET",
     path_template: "/organizations/{id_org}/memberships/{id_membership}",
     fields: &[
-        FieldSpec { snake: "id_org", location: FieldLocation::Path },
-        FieldSpec { snake: "id_membership", location: FieldLocation::Path },
-        FieldSpec { snake: "member", location: FieldLocation::Query },
-        FieldSpec { snake: "member_fields", location: FieldLocation::Query },
-        FieldSpec { snake: "token", location: FieldLocation::Query },
+        FieldSpec { snake: "id_org", wire: "idOrg", location: FieldLocation::Path },
+        FieldSpec { snake: "id_membership", wire: "idMembership", location: FieldLocation::Path },
+        FieldSpec { snake: "member", wire: "member", location: FieldLocation::Query },
+        FieldSpec { snake: "member_fields", wire: "member_fields", location: FieldLocation::Query },
+        FieldSpec { snake: "token", wire: "token", location: FieldLocation::Query },
     ],
     auth: &[
         AuthApply { secret_key: "api_key", kind: AuthKind::ApiKeyQuery("key") },
@@ -8169,11 +12623,11 @@ const OP_ORGANIZATION_UPDATE_ORGANIZATIONS_MEMBERSHIPS_BY_ID_ORG_BY_ID_MEMBERSHI
     method: "PUT",
     path_template: "/organizations/{id_org}/memberships/{id_membership}",
     fields: &[
-        FieldSpec { snake: "id_org", location: FieldLocation::Path },
-        FieldSpec { snake: "id_membership", location: FieldLocation::Path },
-        FieldSpec { snake: "token", location: FieldLocation::Query },
-        FieldSpec { snake: "member_fields", location: FieldLocation::Body },
-        FieldSpec { snake: "type", location: FieldLocation::Body },
+        FieldSpec { snake: "id_org", wire: "idOrg", location: FieldLocation::Path },
+        FieldSpec { snake: "id_membership", wire: "idMembership", location: FieldLocation::Path },
+        FieldSpec { snake: "token", wire: "token", location: FieldLocation::Query },
+        FieldSpec { snake: "member_fields", wire: "member_fields", location: FieldLocation::Body },
+        FieldSpec { snake: "type", wire: "type", location: FieldLocation::Body },
     ],
     auth: &[
         AuthApply { secret_key: "api_key", kind: AuthKind::ApiKeyQuery("key") },
@@ -8184,9 +12638,9 @@ const OP_ORGANIZATION_UPDATE_ORGANIZATIONS_NAME_BY_ID_ORG: OpSpec = OpSpec {
     method: "PUT",
     path_template: "/organizations/{id_org}/name",
     fields: &[
-        FieldSpec { snake: "id_org", location: FieldLocation::Path },
-        FieldSpec { snake: "token", location: FieldLocation::Query },
-        FieldSpec { snake: "value", location: FieldLocation::Body },
+        FieldSpec { snake: "id_org", wire: "idOrg", location: FieldLocation::Path },
+        FieldSpec { snake: "token", wire: "token", location: FieldLocation::Query },
+        FieldSpec { snake: "value", wire: "value", location: FieldLocation::Body },
     ],
     auth: &[
         AuthApply { secret_key: "api_key", kind: AuthKind::ApiKeyQuery("key") },
@@ -8197,9 +12651,9 @@ const OP_ORGANIZATION_UPDATE_ORGANIZATIONS_PREFS_ASSOCIATED_DOMAIN_BY_ID_ORG: Op
     method: "PUT",
     path_template: "/organizations/{id_org}/prefs/associatedDomain",
     fields: &[
-        FieldSpec { snake: "id_org", location: FieldLocation::Path },
-        FieldSpec { snake: "token", location: FieldLocation::Query },
-        FieldSpec { snake: "value", location: FieldLocation::Body },
+        FieldSpec { snake: "id_org", wire: "idOrg", location: FieldLocation::Path },
+        FieldSpec { snake: "token", wire: "token", location: FieldLocation::Query },
+        FieldSpec { snake: "value", wire: "value", location: FieldLocation::Body },
     ],
     auth: &[
         AuthApply { secret_key: "api_key", kind: AuthKind::ApiKeyQuery("key") },
@@ -8210,8 +12664,8 @@ const OP_ORGANIZATION_DELETE_ORGANIZATIONS_PREFS_ASSOCIATED_DOMAIN_BY_ID_ORG: Op
     method: "DELETE",
     path_template: "/organizations/{id_org}/prefs/associatedDomain",
     fields: &[
-        FieldSpec { snake: "id_org", location: FieldLocation::Path },
-        FieldSpec { snake: "token", location: FieldLocation::Query },
+        FieldSpec { snake: "id_org", wire: "idOrg", location: FieldLocation::Path },
+        FieldSpec { snake: "token", wire: "token", location: FieldLocation::Query },
     ],
     auth: &[
         AuthApply { secret_key: "api_key", kind: AuthKind::ApiKeyQuery("key") },
@@ -8222,9 +12676,9 @@ const OP_ORGANIZATION_UPDATE_ORGANIZATIONS_PREFS_BOARD_VISIBILITY_RESTRICT_ORG_B
     method: "PUT",
     path_template: "/organizations/{id_org}/prefs/boardVisibilityRestrict/org",
     fields: &[
-        FieldSpec { snake: "id_org", location: FieldLocation::Path },
-        FieldSpec { snake: "token", location: FieldLocation::Query },
-        FieldSpec { snake: "value", location: FieldLocation::Body },
+        FieldSpec { snake: "id_org", wire: "idOrg", location: FieldLocation::Path },
+        FieldSpec { snake: "token", wire: "token", location: FieldLocation::Query },
+        FieldSpec { snake: "value", wire: "value", location: FieldLocation::Body },
     ],
     auth: &[
         AuthApply { secret_key: "api_key", kind: AuthKind::ApiKeyQuery("key") },
@@ -8235,9 +12689,9 @@ const OP_ORGANIZATION_UPDATE_ORGANIZATIONS_PREFS_BOARD_VISIBILITY_RESTRICT_PRIVA
     method: "PUT",
     path_template: "/organizations/{id_org}/prefs/boardVisibilityRestrict/private",
     fields: &[
-        FieldSpec { snake: "id_org", location: FieldLocation::Path },
-        FieldSpec { snake: "token", location: FieldLocation::Query },
-        FieldSpec { snake: "value", location: FieldLocation::Body },
+        FieldSpec { snake: "id_org", wire: "idOrg", location: FieldLocation::Path },
+        FieldSpec { snake: "token", wire: "token", location: FieldLocation::Query },
+        FieldSpec { snake: "value", wire: "value", location: FieldLocation::Body },
     ],
     auth: &[
         AuthApply { secret_key: "api_key", kind: AuthKind::ApiKeyQuery("key") },
@@ -8248,9 +12702,9 @@ const OP_ORGANIZATION_UPDATE_ORGANIZATIONS_PREFS_BOARD_VISIBILITY_RESTRICT_PUBLI
     method: "PUT",
     path_template: "/organizations/{id_org}/prefs/boardVisibilityRestrict/public",
     fields: &[
-        FieldSpec { snake: "id_org", location: FieldLocation::Path },
-        FieldSpec { snake: "token", location: FieldLocation::Query },
-        FieldSpec { snake: "value", location: FieldLocation::Body },
+        FieldSpec { snake: "id_org", wire: "idOrg", location: FieldLocation::Path },
+        FieldSpec { snake: "token", wire: "token", location: FieldLocation::Query },
+        FieldSpec { snake: "value", wire: "value", location: FieldLocation::Body },
     ],
     auth: &[
         AuthApply { secret_key: "api_key", kind: AuthKind::ApiKeyQuery("key") },
@@ -8261,9 +12715,9 @@ const OP_ORGANIZATION_UPDATE_ORGANIZATIONS_PREFS_EXTERNAL_MEMBERS_DISABLED_BY_ID
     method: "PUT",
     path_template: "/organizations/{id_org}/prefs/externalMembersDisabled",
     fields: &[
-        FieldSpec { snake: "id_org", location: FieldLocation::Path },
-        FieldSpec { snake: "token", location: FieldLocation::Query },
-        FieldSpec { snake: "value", location: FieldLocation::Body },
+        FieldSpec { snake: "id_org", wire: "idOrg", location: FieldLocation::Path },
+        FieldSpec { snake: "token", wire: "token", location: FieldLocation::Query },
+        FieldSpec { snake: "value", wire: "value", location: FieldLocation::Body },
     ],
     auth: &[
         AuthApply { secret_key: "api_key", kind: AuthKind::ApiKeyQuery("key") },
@@ -8274,9 +12728,9 @@ const OP_ORGANIZATION_UPDATE_ORGANIZATIONS_PREFS_GOOGLE_APPS_VERSION_BY_ID_ORG: 
     method: "PUT",
     path_template: "/organizations/{id_org}/prefs/googleAppsVersion",
     fields: &[
-        FieldSpec { snake: "id_org", location: FieldLocation::Path },
-        FieldSpec { snake: "token", location: FieldLocation::Query },
-        FieldSpec { snake: "value", location: FieldLocation::Body },
+        FieldSpec { snake: "id_org", wire: "idOrg", location: FieldLocation::Path },
+        FieldSpec { snake: "token", wire: "token", location: FieldLocation::Query },
+        FieldSpec { snake: "value", wire: "value", location: FieldLocation::Body },
     ],
     auth: &[
         AuthApply { secret_key: "api_key", kind: AuthKind::ApiKeyQuery("key") },
@@ -8287,9 +12741,9 @@ const OP_ORGANIZATION_UPDATE_ORGANIZATIONS_PREFS_ORG_INVITE_RESTRICT_BY_ID_ORG: 
     method: "PUT",
     path_template: "/organizations/{id_org}/prefs/orgInviteRestrict",
     fields: &[
-        FieldSpec { snake: "id_org", location: FieldLocation::Path },
-        FieldSpec { snake: "token", location: FieldLocation::Query },
-        FieldSpec { snake: "value", location: FieldLocation::Body },
+        FieldSpec { snake: "id_org", wire: "idOrg", location: FieldLocation::Path },
+        FieldSpec { snake: "token", wire: "token", location: FieldLocation::Query },
+        FieldSpec { snake: "value", wire: "value", location: FieldLocation::Body },
     ],
     auth: &[
         AuthApply { secret_key: "api_key", kind: AuthKind::ApiKeyQuery("key") },
@@ -8300,9 +12754,9 @@ const OP_ORGANIZATION_DELETE_ORGANIZATIONS_PREFS_ORG_INVITE_RESTRICT_BY_ID_ORG: 
     method: "DELETE",
     path_template: "/organizations/{id_org}/prefs/orgInviteRestrict",
     fields: &[
-        FieldSpec { snake: "id_org", location: FieldLocation::Path },
-        FieldSpec { snake: "value", location: FieldLocation::Query },
-        FieldSpec { snake: "token", location: FieldLocation::Query },
+        FieldSpec { snake: "id_org", wire: "idOrg", location: FieldLocation::Path },
+        FieldSpec { snake: "value", wire: "value", location: FieldLocation::Query },
+        FieldSpec { snake: "token", wire: "token", location: FieldLocation::Query },
     ],
     auth: &[
         AuthApply { secret_key: "api_key", kind: AuthKind::ApiKeyQuery("key") },
@@ -8313,9 +12767,9 @@ const OP_ORGANIZATION_UPDATE_ORGANIZATIONS_PREFS_PERMISSION_LEVEL_BY_ID_ORG: OpS
     method: "PUT",
     path_template: "/organizations/{id_org}/prefs/permissionLevel",
     fields: &[
-        FieldSpec { snake: "id_org", location: FieldLocation::Path },
-        FieldSpec { snake: "token", location: FieldLocation::Query },
-        FieldSpec { snake: "value", location: FieldLocation::Body },
+        FieldSpec { snake: "id_org", wire: "idOrg", location: FieldLocation::Path },
+        FieldSpec { snake: "token", wire: "token", location: FieldLocation::Query },
+        FieldSpec { snake: "value", wire: "value", location: FieldLocation::Body },
     ],
     auth: &[
         AuthApply { secret_key: "api_key", kind: AuthKind::ApiKeyQuery("key") },
@@ -8326,9 +12780,9 @@ const OP_ORGANIZATION_UPDATE_ORGANIZATIONS_WEBSITE_BY_ID_ORG: OpSpec = OpSpec {
     method: "PUT",
     path_template: "/organizations/{id_org}/website",
     fields: &[
-        FieldSpec { snake: "id_org", location: FieldLocation::Path },
-        FieldSpec { snake: "token", location: FieldLocation::Query },
-        FieldSpec { snake: "value", location: FieldLocation::Body },
+        FieldSpec { snake: "id_org", wire: "idOrg", location: FieldLocation::Path },
+        FieldSpec { snake: "token", wire: "token", location: FieldLocation::Query },
+        FieldSpec { snake: "value", wire: "value", location: FieldLocation::Body },
     ],
     auth: &[
         AuthApply { secret_key: "api_key", kind: AuthKind::ApiKeyQuery("key") },
@@ -8339,10 +12793,10 @@ const OP_ORGANIZATION_GET_ORGANIZATIONS_BY_ID_ORG_BY_FIELD: OpSpec = OpSpec {
     method: "GET",
     path_template: "/organizations/{id_org}/{field}",
     fields: &[
-        FieldSpec { snake: "id_org", location: FieldLocation::Path },
-        FieldSpec { snake: "field", location: FieldLocation::Path },
-        FieldSpec { snake: "key", location: FieldLocation::Query },
-        FieldSpec { snake: "token", location: FieldLocation::Query },
+        FieldSpec { snake: "id_org", wire: "idOrg", location: FieldLocation::Path },
+        FieldSpec { snake: "field", wire: "field", location: FieldLocation::Path },
+        FieldSpec { snake: "key", wire: "key", location: FieldLocation::Query },
+        FieldSpec { snake: "token", wire: "token", location: FieldLocation::Query },
     ],
     auth: &[
     ],
@@ -8749,158 +13203,804 @@ fn iface_organization__get_organizations_by_id_org_by_field_params__to_json(p: &
     Value::Object(m)
 }
 
+fn iface_organization__add_organizations__ok(body: String) -> Result<String, crate::runtime::DispatchError> {
+    Ok(body)
+}
+
+fn iface_organization__add_organizations__err(e: crate::runtime::DispatchError) -> iface_organization::AddOrganizationsError {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => match status {
+            400u16 => iface_organization::AddOrganizationsError::BadRequest(body),
+            _ => iface_organization::AddOrganizationsError::Other(body),
+        },
+        crate::runtime::DispatchError::Transport(m) => iface_organization::AddOrganizationsError::Other(m),
+    }
+}
+
+fn iface_organization__get_organizations_by_id_org__ok(body: String) -> Result<String, crate::runtime::DispatchError> {
+    Ok(body)
+}
+
+fn iface_organization__get_organizations_by_id_org__err(e: crate::runtime::DispatchError) -> iface_organization::GetOrganizationsByIdOrgError {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => match status {
+            400u16 => iface_organization::GetOrganizationsByIdOrgError::BadRequest(body),
+            _ => iface_organization::GetOrganizationsByIdOrgError::Other(body),
+        },
+        crate::runtime::DispatchError::Transport(m) => iface_organization::GetOrganizationsByIdOrgError::Other(m),
+    }
+}
+
+fn iface_organization__update_organizations_by_id_org__ok(body: String) -> Result<String, crate::runtime::DispatchError> {
+    Ok(body)
+}
+
+fn iface_organization__update_organizations_by_id_org__err(e: crate::runtime::DispatchError) -> iface_organization::UpdateOrganizationsByIdOrgError {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => match status {
+            400u16 => iface_organization::UpdateOrganizationsByIdOrgError::BadRequest(body),
+            _ => iface_organization::UpdateOrganizationsByIdOrgError::Other(body),
+        },
+        crate::runtime::DispatchError::Transport(m) => iface_organization::UpdateOrganizationsByIdOrgError::Other(m),
+    }
+}
+
+fn iface_organization__delete_organizations_by_id_org__ok(body: String) -> Result<String, crate::runtime::DispatchError> {
+    Ok(body)
+}
+
+fn iface_organization__delete_organizations_by_id_org__err(e: crate::runtime::DispatchError) -> iface_organization::DeleteOrganizationsByIdOrgError {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => match status {
+            400u16 => iface_organization::DeleteOrganizationsByIdOrgError::BadRequest(body),
+            _ => iface_organization::DeleteOrganizationsByIdOrgError::Other(body),
+        },
+        crate::runtime::DispatchError::Transport(m) => iface_organization::DeleteOrganizationsByIdOrgError::Other(m),
+    }
+}
+
+fn iface_organization__get_organizations_actions_by_id_org__ok(body: String) -> Result<String, crate::runtime::DispatchError> {
+    Ok(body)
+}
+
+fn iface_organization__get_organizations_actions_by_id_org__err(e: crate::runtime::DispatchError) -> iface_organization::GetOrganizationsActionsByIdOrgError {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => match status {
+            400u16 => iface_organization::GetOrganizationsActionsByIdOrgError::BadRequest(body),
+            _ => iface_organization::GetOrganizationsActionsByIdOrgError::Other(body),
+        },
+        crate::runtime::DispatchError::Transport(m) => iface_organization::GetOrganizationsActionsByIdOrgError::Other(m),
+    }
+}
+
+fn iface_organization__get_organizations_boards_by_id_org__ok(body: String) -> Result<String, crate::runtime::DispatchError> {
+    Ok(body)
+}
+
+fn iface_organization__get_organizations_boards_by_id_org__err(e: crate::runtime::DispatchError) -> iface_organization::GetOrganizationsBoardsByIdOrgError {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => match status {
+            400u16 => iface_organization::GetOrganizationsBoardsByIdOrgError::BadRequest(body),
+            _ => iface_organization::GetOrganizationsBoardsByIdOrgError::Other(body),
+        },
+        crate::runtime::DispatchError::Transport(m) => iface_organization::GetOrganizationsBoardsByIdOrgError::Other(m),
+    }
+}
+
+fn iface_organization__get_organizations_boards_by_id_org_by_filter__ok(body: String) -> Result<String, crate::runtime::DispatchError> {
+    Ok(body)
+}
+
+fn iface_organization__get_organizations_boards_by_id_org_by_filter__err(e: crate::runtime::DispatchError) -> iface_organization::GetOrganizationsBoardsByIdOrgByFilterError {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => match status {
+            400u16 => iface_organization::GetOrganizationsBoardsByIdOrgByFilterError::BadRequest(body),
+            _ => iface_organization::GetOrganizationsBoardsByIdOrgByFilterError::Other(body),
+        },
+        crate::runtime::DispatchError::Transport(m) => iface_organization::GetOrganizationsBoardsByIdOrgByFilterError::Other(m),
+    }
+}
+
+fn iface_organization__get_organizations_deltas_by_id_org__ok(body: String) -> Result<String, crate::runtime::DispatchError> {
+    Ok(body)
+}
+
+fn iface_organization__get_organizations_deltas_by_id_org__err(e: crate::runtime::DispatchError) -> iface_organization::GetOrganizationsDeltasByIdOrgError {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => match status {
+            400u16 => iface_organization::GetOrganizationsDeltasByIdOrgError::BadRequest(body),
+            _ => iface_organization::GetOrganizationsDeltasByIdOrgError::Other(body),
+        },
+        crate::runtime::DispatchError::Transport(m) => iface_organization::GetOrganizationsDeltasByIdOrgError::Other(m),
+    }
+}
+
+fn iface_organization__update_organizations_desc_by_id_org__ok(body: String) -> Result<String, crate::runtime::DispatchError> {
+    Ok(body)
+}
+
+fn iface_organization__update_organizations_desc_by_id_org__err(e: crate::runtime::DispatchError) -> iface_organization::UpdateOrganizationsDescByIdOrgError {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => match status {
+            400u16 => iface_organization::UpdateOrganizationsDescByIdOrgError::BadRequest(body),
+            _ => iface_organization::UpdateOrganizationsDescByIdOrgError::Other(body),
+        },
+        crate::runtime::DispatchError::Transport(m) => iface_organization::UpdateOrganizationsDescByIdOrgError::Other(m),
+    }
+}
+
+fn iface_organization__update_organizations_display_name_by_id_org__ok(body: String) -> Result<String, crate::runtime::DispatchError> {
+    Ok(body)
+}
+
+fn iface_organization__update_organizations_display_name_by_id_org__err(e: crate::runtime::DispatchError) -> iface_organization::UpdateOrganizationsDisplayNameByIdOrgError {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => match status {
+            400u16 => iface_organization::UpdateOrganizationsDisplayNameByIdOrgError::BadRequest(body),
+            _ => iface_organization::UpdateOrganizationsDisplayNameByIdOrgError::Other(body),
+        },
+        crate::runtime::DispatchError::Transport(m) => iface_organization::UpdateOrganizationsDisplayNameByIdOrgError::Other(m),
+    }
+}
+
+fn iface_organization__add_organizations_logo_by_id_org__ok(body: String) -> Result<String, crate::runtime::DispatchError> {
+    Ok(body)
+}
+
+fn iface_organization__add_organizations_logo_by_id_org__err(e: crate::runtime::DispatchError) -> iface_organization::AddOrganizationsLogoByIdOrgError {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => match status {
+            400u16 => iface_organization::AddOrganizationsLogoByIdOrgError::BadRequest(body),
+            _ => iface_organization::AddOrganizationsLogoByIdOrgError::Other(body),
+        },
+        crate::runtime::DispatchError::Transport(m) => iface_organization::AddOrganizationsLogoByIdOrgError::Other(m),
+    }
+}
+
+fn iface_organization__delete_organizations_logo_by_id_org__ok(body: String) -> Result<String, crate::runtime::DispatchError> {
+    Ok(body)
+}
+
+fn iface_organization__delete_organizations_logo_by_id_org__err(e: crate::runtime::DispatchError) -> iface_organization::DeleteOrganizationsLogoByIdOrgError {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => match status {
+            400u16 => iface_organization::DeleteOrganizationsLogoByIdOrgError::BadRequest(body),
+            _ => iface_organization::DeleteOrganizationsLogoByIdOrgError::Other(body),
+        },
+        crate::runtime::DispatchError::Transport(m) => iface_organization::DeleteOrganizationsLogoByIdOrgError::Other(m),
+    }
+}
+
+fn iface_organization__get_organizations_members_by_id_org__ok(body: String) -> Result<String, crate::runtime::DispatchError> {
+    Ok(body)
+}
+
+fn iface_organization__get_organizations_members_by_id_org__err(e: crate::runtime::DispatchError) -> iface_organization::GetOrganizationsMembersByIdOrgError {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => match status {
+            400u16 => iface_organization::GetOrganizationsMembersByIdOrgError::BadRequest(body),
+            _ => iface_organization::GetOrganizationsMembersByIdOrgError::Other(body),
+        },
+        crate::runtime::DispatchError::Transport(m) => iface_organization::GetOrganizationsMembersByIdOrgError::Other(m),
+    }
+}
+
+fn iface_organization__update_organizations_members_by_id_org__ok(body: String) -> Result<String, crate::runtime::DispatchError> {
+    Ok(body)
+}
+
+fn iface_organization__update_organizations_members_by_id_org__err(e: crate::runtime::DispatchError) -> iface_organization::UpdateOrganizationsMembersByIdOrgError {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => match status {
+            400u16 => iface_organization::UpdateOrganizationsMembersByIdOrgError::BadRequest(body),
+            _ => iface_organization::UpdateOrganizationsMembersByIdOrgError::Other(body),
+        },
+        crate::runtime::DispatchError::Transport(m) => iface_organization::UpdateOrganizationsMembersByIdOrgError::Other(m),
+    }
+}
+
+fn iface_organization__get_organizations_members_by_id_org_by_filter__ok(body: String) -> Result<String, crate::runtime::DispatchError> {
+    Ok(body)
+}
+
+fn iface_organization__get_organizations_members_by_id_org_by_filter__err(e: crate::runtime::DispatchError) -> iface_organization::GetOrganizationsMembersByIdOrgByFilterError {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => match status {
+            400u16 => iface_organization::GetOrganizationsMembersByIdOrgByFilterError::BadRequest(body),
+            _ => iface_organization::GetOrganizationsMembersByIdOrgByFilterError::Other(body),
+        },
+        crate::runtime::DispatchError::Transport(m) => iface_organization::GetOrganizationsMembersByIdOrgByFilterError::Other(m),
+    }
+}
+
+fn iface_organization__update_organizations_members_by_id_org_by_id_member__ok(body: String) -> Result<String, crate::runtime::DispatchError> {
+    Ok(body)
+}
+
+fn iface_organization__update_organizations_members_by_id_org_by_id_member__err(e: crate::runtime::DispatchError) -> iface_organization::UpdateOrganizationsMembersByIdOrgByIdMemberError {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => match status {
+            400u16 => iface_organization::UpdateOrganizationsMembersByIdOrgByIdMemberError::BadRequest(body),
+            _ => iface_organization::UpdateOrganizationsMembersByIdOrgByIdMemberError::Other(body),
+        },
+        crate::runtime::DispatchError::Transport(m) => iface_organization::UpdateOrganizationsMembersByIdOrgByIdMemberError::Other(m),
+    }
+}
+
+fn iface_organization__delete_organizations_members_by_id_org_by_id_member__ok(body: String) -> Result<String, crate::runtime::DispatchError> {
+    Ok(body)
+}
+
+fn iface_organization__delete_organizations_members_by_id_org_by_id_member__err(e: crate::runtime::DispatchError) -> iface_organization::DeleteOrganizationsMembersByIdOrgByIdMemberError {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => match status {
+            400u16 => iface_organization::DeleteOrganizationsMembersByIdOrgByIdMemberError::BadRequest(body),
+            _ => iface_organization::DeleteOrganizationsMembersByIdOrgByIdMemberError::Other(body),
+        },
+        crate::runtime::DispatchError::Transport(m) => iface_organization::DeleteOrganizationsMembersByIdOrgByIdMemberError::Other(m),
+    }
+}
+
+fn iface_organization__delete_organizations_members_all_by_id_org_by_id_member__ok(body: String) -> Result<String, crate::runtime::DispatchError> {
+    Ok(body)
+}
+
+fn iface_organization__delete_organizations_members_all_by_id_org_by_id_member__err(e: crate::runtime::DispatchError) -> iface_organization::DeleteOrganizationsMembersAllByIdOrgByIdMemberError {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => match status {
+            400u16 => iface_organization::DeleteOrganizationsMembersAllByIdOrgByIdMemberError::BadRequest(body),
+            _ => iface_organization::DeleteOrganizationsMembersAllByIdOrgByIdMemberError::Other(body),
+        },
+        crate::runtime::DispatchError::Transport(m) => iface_organization::DeleteOrganizationsMembersAllByIdOrgByIdMemberError::Other(m),
+    }
+}
+
+fn iface_organization__get_organizations_members_cards_by_id_org_by_id_member__ok(body: String) -> Result<String, crate::runtime::DispatchError> {
+    Ok(body)
+}
+
+fn iface_organization__get_organizations_members_cards_by_id_org_by_id_member__err(e: crate::runtime::DispatchError) -> iface_organization::GetOrganizationsMembersCardsByIdOrgByIdMemberError {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => match status {
+            400u16 => iface_organization::GetOrganizationsMembersCardsByIdOrgByIdMemberError::BadRequest(body),
+            _ => iface_organization::GetOrganizationsMembersCardsByIdOrgByIdMemberError::Other(body),
+        },
+        crate::runtime::DispatchError::Transport(m) => iface_organization::GetOrganizationsMembersCardsByIdOrgByIdMemberError::Other(m),
+    }
+}
+
+fn iface_organization__update_organizations_members_deactivated_by_id_org_by_id_member__ok(body: String) -> Result<String, crate::runtime::DispatchError> {
+    Ok(body)
+}
+
+fn iface_organization__update_organizations_members_deactivated_by_id_org_by_id_member__err(e: crate::runtime::DispatchError) -> iface_organization::UpdateOrganizationsMembersDeactivatedByIdOrgByIdMemberError {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => match status {
+            400u16 => iface_organization::UpdateOrganizationsMembersDeactivatedByIdOrgByIdMemberError::BadRequest(body),
+            _ => iface_organization::UpdateOrganizationsMembersDeactivatedByIdOrgByIdMemberError::Other(body),
+        },
+        crate::runtime::DispatchError::Transport(m) => iface_organization::UpdateOrganizationsMembersDeactivatedByIdOrgByIdMemberError::Other(m),
+    }
+}
+
+fn iface_organization__get_organizations_members_invited_by_id_org__ok(body: String) -> Result<String, crate::runtime::DispatchError> {
+    Ok(body)
+}
+
+fn iface_organization__get_organizations_members_invited_by_id_org__err(e: crate::runtime::DispatchError) -> iface_organization::GetOrganizationsMembersInvitedByIdOrgError {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => match status {
+            400u16 => iface_organization::GetOrganizationsMembersInvitedByIdOrgError::BadRequest(body),
+            _ => iface_organization::GetOrganizationsMembersInvitedByIdOrgError::Other(body),
+        },
+        crate::runtime::DispatchError::Transport(m) => iface_organization::GetOrganizationsMembersInvitedByIdOrgError::Other(m),
+    }
+}
+
+fn iface_organization__get_organizations_members_invited_by_id_org_by_field__ok(body: String) -> Result<String, crate::runtime::DispatchError> {
+    Ok(body)
+}
+
+fn iface_organization__get_organizations_members_invited_by_id_org_by_field__err(e: crate::runtime::DispatchError) -> iface_organization::GetOrganizationsMembersInvitedByIdOrgByFieldError {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => match status {
+            400u16 => iface_organization::GetOrganizationsMembersInvitedByIdOrgByFieldError::BadRequest(body),
+            _ => iface_organization::GetOrganizationsMembersInvitedByIdOrgByFieldError::Other(body),
+        },
+        crate::runtime::DispatchError::Transport(m) => iface_organization::GetOrganizationsMembersInvitedByIdOrgByFieldError::Other(m),
+    }
+}
+
+fn iface_organization__get_organizations_memberships_by_id_org__ok(body: String) -> Result<String, crate::runtime::DispatchError> {
+    Ok(body)
+}
+
+fn iface_organization__get_organizations_memberships_by_id_org__err(e: crate::runtime::DispatchError) -> iface_organization::GetOrganizationsMembershipsByIdOrgError {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => match status {
+            400u16 => iface_organization::GetOrganizationsMembershipsByIdOrgError::BadRequest(body),
+            _ => iface_organization::GetOrganizationsMembershipsByIdOrgError::Other(body),
+        },
+        crate::runtime::DispatchError::Transport(m) => iface_organization::GetOrganizationsMembershipsByIdOrgError::Other(m),
+    }
+}
+
+fn iface_organization__get_organizations_memberships_by_id_org_by_id_membership__ok(body: String) -> Result<String, crate::runtime::DispatchError> {
+    Ok(body)
+}
+
+fn iface_organization__get_organizations_memberships_by_id_org_by_id_membership__err(e: crate::runtime::DispatchError) -> iface_organization::GetOrganizationsMembershipsByIdOrgByIdMembershipError {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => match status {
+            400u16 => iface_organization::GetOrganizationsMembershipsByIdOrgByIdMembershipError::BadRequest(body),
+            _ => iface_organization::GetOrganizationsMembershipsByIdOrgByIdMembershipError::Other(body),
+        },
+        crate::runtime::DispatchError::Transport(m) => iface_organization::GetOrganizationsMembershipsByIdOrgByIdMembershipError::Other(m),
+    }
+}
+
+fn iface_organization__update_organizations_memberships_by_id_org_by_id_membership__ok(body: String) -> Result<String, crate::runtime::DispatchError> {
+    Ok(body)
+}
+
+fn iface_organization__update_organizations_memberships_by_id_org_by_id_membership__err(e: crate::runtime::DispatchError) -> iface_organization::UpdateOrganizationsMembershipsByIdOrgByIdMembershipError {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => match status {
+            400u16 => iface_organization::UpdateOrganizationsMembershipsByIdOrgByIdMembershipError::BadRequest(body),
+            _ => iface_organization::UpdateOrganizationsMembershipsByIdOrgByIdMembershipError::Other(body),
+        },
+        crate::runtime::DispatchError::Transport(m) => iface_organization::UpdateOrganizationsMembershipsByIdOrgByIdMembershipError::Other(m),
+    }
+}
+
+fn iface_organization__update_organizations_name_by_id_org__ok(body: String) -> Result<String, crate::runtime::DispatchError> {
+    Ok(body)
+}
+
+fn iface_organization__update_organizations_name_by_id_org__err(e: crate::runtime::DispatchError) -> iface_organization::UpdateOrganizationsNameByIdOrgError {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => match status {
+            400u16 => iface_organization::UpdateOrganizationsNameByIdOrgError::BadRequest(body),
+            _ => iface_organization::UpdateOrganizationsNameByIdOrgError::Other(body),
+        },
+        crate::runtime::DispatchError::Transport(m) => iface_organization::UpdateOrganizationsNameByIdOrgError::Other(m),
+    }
+}
+
+fn iface_organization__update_organizations_prefs_associated_domain_by_id_org__ok(body: String) -> Result<String, crate::runtime::DispatchError> {
+    Ok(body)
+}
+
+fn iface_organization__update_organizations_prefs_associated_domain_by_id_org__err(e: crate::runtime::DispatchError) -> iface_organization::UpdateOrganizationsPrefsAssociatedDomainByIdOrgError {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => match status {
+            400u16 => iface_organization::UpdateOrganizationsPrefsAssociatedDomainByIdOrgError::BadRequest(body),
+            _ => iface_organization::UpdateOrganizationsPrefsAssociatedDomainByIdOrgError::Other(body),
+        },
+        crate::runtime::DispatchError::Transport(m) => iface_organization::UpdateOrganizationsPrefsAssociatedDomainByIdOrgError::Other(m),
+    }
+}
+
+fn iface_organization__delete_organizations_prefs_associated_domain_by_id_org__ok(body: String) -> Result<String, crate::runtime::DispatchError> {
+    Ok(body)
+}
+
+fn iface_organization__delete_organizations_prefs_associated_domain_by_id_org__err(e: crate::runtime::DispatchError) -> iface_organization::DeleteOrganizationsPrefsAssociatedDomainByIdOrgError {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => match status {
+            400u16 => iface_organization::DeleteOrganizationsPrefsAssociatedDomainByIdOrgError::BadRequest(body),
+            _ => iface_organization::DeleteOrganizationsPrefsAssociatedDomainByIdOrgError::Other(body),
+        },
+        crate::runtime::DispatchError::Transport(m) => iface_organization::DeleteOrganizationsPrefsAssociatedDomainByIdOrgError::Other(m),
+    }
+}
+
+fn iface_organization__update_organizations_prefs_board_visibility_restrict_org_by_id_org__ok(body: String) -> Result<String, crate::runtime::DispatchError> {
+    Ok(body)
+}
+
+fn iface_organization__update_organizations_prefs_board_visibility_restrict_org_by_id_org__err(e: crate::runtime::DispatchError) -> iface_organization::UpdateOrganizationsPrefsBoardVisibilityRestrictOrgByIdOrgError {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => match status {
+            400u16 => iface_organization::UpdateOrganizationsPrefsBoardVisibilityRestrictOrgByIdOrgError::BadRequest(body),
+            _ => iface_organization::UpdateOrganizationsPrefsBoardVisibilityRestrictOrgByIdOrgError::Other(body),
+        },
+        crate::runtime::DispatchError::Transport(m) => iface_organization::UpdateOrganizationsPrefsBoardVisibilityRestrictOrgByIdOrgError::Other(m),
+    }
+}
+
+fn iface_organization__update_organizations_prefs_board_visibility_restrict_private_by_id_org__ok(body: String) -> Result<String, crate::runtime::DispatchError> {
+    Ok(body)
+}
+
+fn iface_organization__update_organizations_prefs_board_visibility_restrict_private_by_id_org__err(e: crate::runtime::DispatchError) -> iface_organization::UpdateOrganizationsPrefsBoardVisibilityRestrictPrivateByIdOrgError {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => match status {
+            400u16 => iface_organization::UpdateOrganizationsPrefsBoardVisibilityRestrictPrivateByIdOrgError::BadRequest(body),
+            _ => iface_organization::UpdateOrganizationsPrefsBoardVisibilityRestrictPrivateByIdOrgError::Other(body),
+        },
+        crate::runtime::DispatchError::Transport(m) => iface_organization::UpdateOrganizationsPrefsBoardVisibilityRestrictPrivateByIdOrgError::Other(m),
+    }
+}
+
+fn iface_organization__update_organizations_prefs_board_visibility_restrict_public_by_id_org__ok(body: String) -> Result<String, crate::runtime::DispatchError> {
+    Ok(body)
+}
+
+fn iface_organization__update_organizations_prefs_board_visibility_restrict_public_by_id_org__err(e: crate::runtime::DispatchError) -> iface_organization::UpdateOrganizationsPrefsBoardVisibilityRestrictPublicByIdOrgError {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => match status {
+            400u16 => iface_organization::UpdateOrganizationsPrefsBoardVisibilityRestrictPublicByIdOrgError::BadRequest(body),
+            _ => iface_organization::UpdateOrganizationsPrefsBoardVisibilityRestrictPublicByIdOrgError::Other(body),
+        },
+        crate::runtime::DispatchError::Transport(m) => iface_organization::UpdateOrganizationsPrefsBoardVisibilityRestrictPublicByIdOrgError::Other(m),
+    }
+}
+
+fn iface_organization__update_organizations_prefs_external_members_disabled_by_id_org__ok(body: String) -> Result<String, crate::runtime::DispatchError> {
+    Ok(body)
+}
+
+fn iface_organization__update_organizations_prefs_external_members_disabled_by_id_org__err(e: crate::runtime::DispatchError) -> iface_organization::UpdateOrganizationsPrefsExternalMembersDisabledByIdOrgError {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => match status {
+            400u16 => iface_organization::UpdateOrganizationsPrefsExternalMembersDisabledByIdOrgError::BadRequest(body),
+            _ => iface_organization::UpdateOrganizationsPrefsExternalMembersDisabledByIdOrgError::Other(body),
+        },
+        crate::runtime::DispatchError::Transport(m) => iface_organization::UpdateOrganizationsPrefsExternalMembersDisabledByIdOrgError::Other(m),
+    }
+}
+
+fn iface_organization__update_organizations_prefs_google_apps_version_by_id_org__ok(body: String) -> Result<String, crate::runtime::DispatchError> {
+    Ok(body)
+}
+
+fn iface_organization__update_organizations_prefs_google_apps_version_by_id_org__err(e: crate::runtime::DispatchError) -> iface_organization::UpdateOrganizationsPrefsGoogleAppsVersionByIdOrgError {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => match status {
+            400u16 => iface_organization::UpdateOrganizationsPrefsGoogleAppsVersionByIdOrgError::BadRequest(body),
+            _ => iface_organization::UpdateOrganizationsPrefsGoogleAppsVersionByIdOrgError::Other(body),
+        },
+        crate::runtime::DispatchError::Transport(m) => iface_organization::UpdateOrganizationsPrefsGoogleAppsVersionByIdOrgError::Other(m),
+    }
+}
+
+fn iface_organization__update_organizations_prefs_org_invite_restrict_by_id_org__ok(body: String) -> Result<String, crate::runtime::DispatchError> {
+    Ok(body)
+}
+
+fn iface_organization__update_organizations_prefs_org_invite_restrict_by_id_org__err(e: crate::runtime::DispatchError) -> iface_organization::UpdateOrganizationsPrefsOrgInviteRestrictByIdOrgError {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => match status {
+            400u16 => iface_organization::UpdateOrganizationsPrefsOrgInviteRestrictByIdOrgError::BadRequest(body),
+            _ => iface_organization::UpdateOrganizationsPrefsOrgInviteRestrictByIdOrgError::Other(body),
+        },
+        crate::runtime::DispatchError::Transport(m) => iface_organization::UpdateOrganizationsPrefsOrgInviteRestrictByIdOrgError::Other(m),
+    }
+}
+
+fn iface_organization__delete_organizations_prefs_org_invite_restrict_by_id_org__ok(body: String) -> Result<String, crate::runtime::DispatchError> {
+    Ok(body)
+}
+
+fn iface_organization__delete_organizations_prefs_org_invite_restrict_by_id_org__err(e: crate::runtime::DispatchError) -> iface_organization::DeleteOrganizationsPrefsOrgInviteRestrictByIdOrgError {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => match status {
+            400u16 => iface_organization::DeleteOrganizationsPrefsOrgInviteRestrictByIdOrgError::BadRequest(body),
+            _ => iface_organization::DeleteOrganizationsPrefsOrgInviteRestrictByIdOrgError::Other(body),
+        },
+        crate::runtime::DispatchError::Transport(m) => iface_organization::DeleteOrganizationsPrefsOrgInviteRestrictByIdOrgError::Other(m),
+    }
+}
+
+fn iface_organization__update_organizations_prefs_permission_level_by_id_org__ok(body: String) -> Result<String, crate::runtime::DispatchError> {
+    Ok(body)
+}
+
+fn iface_organization__update_organizations_prefs_permission_level_by_id_org__err(e: crate::runtime::DispatchError) -> iface_organization::UpdateOrganizationsPrefsPermissionLevelByIdOrgError {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => match status {
+            400u16 => iface_organization::UpdateOrganizationsPrefsPermissionLevelByIdOrgError::BadRequest(body),
+            _ => iface_organization::UpdateOrganizationsPrefsPermissionLevelByIdOrgError::Other(body),
+        },
+        crate::runtime::DispatchError::Transport(m) => iface_organization::UpdateOrganizationsPrefsPermissionLevelByIdOrgError::Other(m),
+    }
+}
+
+fn iface_organization__update_organizations_website_by_id_org__ok(body: String) -> Result<String, crate::runtime::DispatchError> {
+    Ok(body)
+}
+
+fn iface_organization__update_organizations_website_by_id_org__err(e: crate::runtime::DispatchError) -> iface_organization::UpdateOrganizationsWebsiteByIdOrgError {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => match status {
+            400u16 => iface_organization::UpdateOrganizationsWebsiteByIdOrgError::BadRequest(body),
+            _ => iface_organization::UpdateOrganizationsWebsiteByIdOrgError::Other(body),
+        },
+        crate::runtime::DispatchError::Transport(m) => iface_organization::UpdateOrganizationsWebsiteByIdOrgError::Other(m),
+    }
+}
+
+fn iface_organization__get_organizations_by_id_org_by_field__ok(body: String) -> Result<String, crate::runtime::DispatchError> {
+    Ok(body)
+}
+
+fn iface_organization__get_organizations_by_id_org_by_field__err(e: crate::runtime::DispatchError) -> iface_organization::GetOrganizationsByIdOrgByFieldError {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => match status {
+            400u16 => iface_organization::GetOrganizationsByIdOrgByFieldError::BadRequest(body),
+            _ => iface_organization::GetOrganizationsByIdOrgByFieldError::Other(body),
+        },
+        crate::runtime::DispatchError::Transport(m) => iface_organization::GetOrganizationsByIdOrgByFieldError::Other(m),
+    }
+}
+
 impl iface_organization::Guest for crate::Component {
-    fn add_organizations(params: iface_organization::AddOrganizationsParams) -> Result<String, String> {
+    fn add_organizations(params: iface_organization::AddOrganizationsParams) -> Result<String, iface_organization::AddOrganizationsError> {
         let json = iface_organization__add_organizations_params__to_json(&params);
-        dispatch(&OP_ORGANIZATION_ADD_ORGANIZATIONS, json)
+        match dispatch(&OP_ORGANIZATION_ADD_ORGANIZATIONS, json).and_then(iface_organization__add_organizations__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_organization__add_organizations__err(e)),
+        }
     }
-    fn get_organizations_by_id_org(params: iface_organization::GetOrganizationsByIdOrgParams) -> Result<String, String> {
+    fn get_organizations_by_id_org(params: iface_organization::GetOrganizationsByIdOrgParams) -> Result<String, iface_organization::GetOrganizationsByIdOrgError> {
         let json = iface_organization__get_organizations_by_id_org_params__to_json(&params);
-        dispatch(&OP_ORGANIZATION_GET_ORGANIZATIONS_BY_ID_ORG, json)
+        match dispatch(&OP_ORGANIZATION_GET_ORGANIZATIONS_BY_ID_ORG, json).and_then(iface_organization__get_organizations_by_id_org__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_organization__get_organizations_by_id_org__err(e)),
+        }
     }
-    fn update_organizations_by_id_org(params: iface_organization::UpdateOrganizationsByIdOrgParams) -> Result<String, String> {
+    fn update_organizations_by_id_org(params: iface_organization::UpdateOrganizationsByIdOrgParams) -> Result<String, iface_organization::UpdateOrganizationsByIdOrgError> {
         let json = iface_organization__update_organizations_by_id_org_params__to_json(&params);
-        dispatch(&OP_ORGANIZATION_UPDATE_ORGANIZATIONS_BY_ID_ORG, json)
+        match dispatch(&OP_ORGANIZATION_UPDATE_ORGANIZATIONS_BY_ID_ORG, json).and_then(iface_organization__update_organizations_by_id_org__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_organization__update_organizations_by_id_org__err(e)),
+        }
     }
-    fn delete_organizations_by_id_org(params: iface_organization::DeleteOrganizationsByIdOrgParams) -> Result<String, String> {
+    fn delete_organizations_by_id_org(params: iface_organization::DeleteOrganizationsByIdOrgParams) -> Result<String, iface_organization::DeleteOrganizationsByIdOrgError> {
         let json = iface_organization__delete_organizations_by_id_org_params__to_json(&params);
-        dispatch(&OP_ORGANIZATION_DELETE_ORGANIZATIONS_BY_ID_ORG, json)
+        match dispatch(&OP_ORGANIZATION_DELETE_ORGANIZATIONS_BY_ID_ORG, json).and_then(iface_organization__delete_organizations_by_id_org__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_organization__delete_organizations_by_id_org__err(e)),
+        }
     }
-    fn get_organizations_actions_by_id_org(params: iface_organization::GetOrganizationsActionsByIdOrgParams) -> Result<String, String> {
+    fn get_organizations_actions_by_id_org(params: iface_organization::GetOrganizationsActionsByIdOrgParams) -> Result<String, iface_organization::GetOrganizationsActionsByIdOrgError> {
         let json = iface_organization__get_organizations_actions_by_id_org_params__to_json(&params);
-        dispatch(&OP_ORGANIZATION_GET_ORGANIZATIONS_ACTIONS_BY_ID_ORG, json)
+        match dispatch(&OP_ORGANIZATION_GET_ORGANIZATIONS_ACTIONS_BY_ID_ORG, json).and_then(iface_organization__get_organizations_actions_by_id_org__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_organization__get_organizations_actions_by_id_org__err(e)),
+        }
     }
-    fn get_organizations_boards_by_id_org(params: iface_organization::GetOrganizationsBoardsByIdOrgParams) -> Result<String, String> {
+    fn get_organizations_boards_by_id_org(params: iface_organization::GetOrganizationsBoardsByIdOrgParams) -> Result<String, iface_organization::GetOrganizationsBoardsByIdOrgError> {
         let json = iface_organization__get_organizations_boards_by_id_org_params__to_json(&params);
-        dispatch(&OP_ORGANIZATION_GET_ORGANIZATIONS_BOARDS_BY_ID_ORG, json)
+        match dispatch(&OP_ORGANIZATION_GET_ORGANIZATIONS_BOARDS_BY_ID_ORG, json).and_then(iface_organization__get_organizations_boards_by_id_org__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_organization__get_organizations_boards_by_id_org__err(e)),
+        }
     }
-    fn get_organizations_boards_by_id_org_by_filter(params: iface_organization::GetOrganizationsBoardsByIdOrgByFilterParams) -> Result<String, String> {
+    fn get_organizations_boards_by_id_org_by_filter(params: iface_organization::GetOrganizationsBoardsByIdOrgByFilterParams) -> Result<String, iface_organization::GetOrganizationsBoardsByIdOrgByFilterError> {
         let json = iface_organization__get_organizations_boards_by_id_org_by_filter_params__to_json(&params);
-        dispatch(&OP_ORGANIZATION_GET_ORGANIZATIONS_BOARDS_BY_ID_ORG_BY_FILTER, json)
+        match dispatch(&OP_ORGANIZATION_GET_ORGANIZATIONS_BOARDS_BY_ID_ORG_BY_FILTER, json).and_then(iface_organization__get_organizations_boards_by_id_org_by_filter__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_organization__get_organizations_boards_by_id_org_by_filter__err(e)),
+        }
     }
-    fn get_organizations_deltas_by_id_org(params: iface_organization::GetOrganizationsDeltasByIdOrgParams) -> Result<String, String> {
+    fn get_organizations_deltas_by_id_org(params: iface_organization::GetOrganizationsDeltasByIdOrgParams) -> Result<String, iface_organization::GetOrganizationsDeltasByIdOrgError> {
         let json = iface_organization__get_organizations_deltas_by_id_org_params__to_json(&params);
-        dispatch(&OP_ORGANIZATION_GET_ORGANIZATIONS_DELTAS_BY_ID_ORG, json)
+        match dispatch(&OP_ORGANIZATION_GET_ORGANIZATIONS_DELTAS_BY_ID_ORG, json).and_then(iface_organization__get_organizations_deltas_by_id_org__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_organization__get_organizations_deltas_by_id_org__err(e)),
+        }
     }
-    fn update_organizations_desc_by_id_org(params: iface_organization::UpdateOrganizationsDescByIdOrgParams) -> Result<String, String> {
+    fn update_organizations_desc_by_id_org(params: iface_organization::UpdateOrganizationsDescByIdOrgParams) -> Result<String, iface_organization::UpdateOrganizationsDescByIdOrgError> {
         let json = iface_organization__update_organizations_desc_by_id_org_params__to_json(&params);
-        dispatch(&OP_ORGANIZATION_UPDATE_ORGANIZATIONS_DESC_BY_ID_ORG, json)
+        match dispatch(&OP_ORGANIZATION_UPDATE_ORGANIZATIONS_DESC_BY_ID_ORG, json).and_then(iface_organization__update_organizations_desc_by_id_org__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_organization__update_organizations_desc_by_id_org__err(e)),
+        }
     }
-    fn update_organizations_display_name_by_id_org(params: iface_organization::UpdateOrganizationsDisplayNameByIdOrgParams) -> Result<String, String> {
+    fn update_organizations_display_name_by_id_org(params: iface_organization::UpdateOrganizationsDisplayNameByIdOrgParams) -> Result<String, iface_organization::UpdateOrganizationsDisplayNameByIdOrgError> {
         let json = iface_organization__update_organizations_display_name_by_id_org_params__to_json(&params);
-        dispatch(&OP_ORGANIZATION_UPDATE_ORGANIZATIONS_DISPLAY_NAME_BY_ID_ORG, json)
+        match dispatch(&OP_ORGANIZATION_UPDATE_ORGANIZATIONS_DISPLAY_NAME_BY_ID_ORG, json).and_then(iface_organization__update_organizations_display_name_by_id_org__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_organization__update_organizations_display_name_by_id_org__err(e)),
+        }
     }
-    fn add_organizations_logo_by_id_org(params: iface_organization::AddOrganizationsLogoByIdOrgParams) -> Result<String, String> {
+    fn add_organizations_logo_by_id_org(params: iface_organization::AddOrganizationsLogoByIdOrgParams) -> Result<String, iface_organization::AddOrganizationsLogoByIdOrgError> {
         let json = iface_organization__add_organizations_logo_by_id_org_params__to_json(&params);
-        dispatch(&OP_ORGANIZATION_ADD_ORGANIZATIONS_LOGO_BY_ID_ORG, json)
+        match dispatch(&OP_ORGANIZATION_ADD_ORGANIZATIONS_LOGO_BY_ID_ORG, json).and_then(iface_organization__add_organizations_logo_by_id_org__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_organization__add_organizations_logo_by_id_org__err(e)),
+        }
     }
-    fn delete_organizations_logo_by_id_org(params: iface_organization::DeleteOrganizationsLogoByIdOrgParams) -> Result<String, String> {
+    fn delete_organizations_logo_by_id_org(params: iface_organization::DeleteOrganizationsLogoByIdOrgParams) -> Result<String, iface_organization::DeleteOrganizationsLogoByIdOrgError> {
         let json = iface_organization__delete_organizations_logo_by_id_org_params__to_json(&params);
-        dispatch(&OP_ORGANIZATION_DELETE_ORGANIZATIONS_LOGO_BY_ID_ORG, json)
+        match dispatch(&OP_ORGANIZATION_DELETE_ORGANIZATIONS_LOGO_BY_ID_ORG, json).and_then(iface_organization__delete_organizations_logo_by_id_org__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_organization__delete_organizations_logo_by_id_org__err(e)),
+        }
     }
-    fn get_organizations_members_by_id_org(params: iface_organization::GetOrganizationsMembersByIdOrgParams) -> Result<String, String> {
+    fn get_organizations_members_by_id_org(params: iface_organization::GetOrganizationsMembersByIdOrgParams) -> Result<String, iface_organization::GetOrganizationsMembersByIdOrgError> {
         let json = iface_organization__get_organizations_members_by_id_org_params__to_json(&params);
-        dispatch(&OP_ORGANIZATION_GET_ORGANIZATIONS_MEMBERS_BY_ID_ORG, json)
+        match dispatch(&OP_ORGANIZATION_GET_ORGANIZATIONS_MEMBERS_BY_ID_ORG, json).and_then(iface_organization__get_organizations_members_by_id_org__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_organization__get_organizations_members_by_id_org__err(e)),
+        }
     }
-    fn update_organizations_members_by_id_org(params: iface_organization::UpdateOrganizationsMembersByIdOrgParams) -> Result<String, String> {
+    fn update_organizations_members_by_id_org(params: iface_organization::UpdateOrganizationsMembersByIdOrgParams) -> Result<String, iface_organization::UpdateOrganizationsMembersByIdOrgError> {
         let json = iface_organization__update_organizations_members_by_id_org_params__to_json(&params);
-        dispatch(&OP_ORGANIZATION_UPDATE_ORGANIZATIONS_MEMBERS_BY_ID_ORG, json)
+        match dispatch(&OP_ORGANIZATION_UPDATE_ORGANIZATIONS_MEMBERS_BY_ID_ORG, json).and_then(iface_organization__update_organizations_members_by_id_org__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_organization__update_organizations_members_by_id_org__err(e)),
+        }
     }
-    fn get_organizations_members_by_id_org_by_filter(params: iface_organization::GetOrganizationsMembersByIdOrgByFilterParams) -> Result<String, String> {
+    fn get_organizations_members_by_id_org_by_filter(params: iface_organization::GetOrganizationsMembersByIdOrgByFilterParams) -> Result<String, iface_organization::GetOrganizationsMembersByIdOrgByFilterError> {
         let json = iface_organization__get_organizations_members_by_id_org_by_filter_params__to_json(&params);
-        dispatch(&OP_ORGANIZATION_GET_ORGANIZATIONS_MEMBERS_BY_ID_ORG_BY_FILTER, json)
+        match dispatch(&OP_ORGANIZATION_GET_ORGANIZATIONS_MEMBERS_BY_ID_ORG_BY_FILTER, json).and_then(iface_organization__get_organizations_members_by_id_org_by_filter__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_organization__get_organizations_members_by_id_org_by_filter__err(e)),
+        }
     }
-    fn update_organizations_members_by_id_org_by_id_member(params: iface_organization::UpdateOrganizationsMembersByIdOrgByIdMemberParams) -> Result<String, String> {
+    fn update_organizations_members_by_id_org_by_id_member(params: iface_organization::UpdateOrganizationsMembersByIdOrgByIdMemberParams) -> Result<String, iface_organization::UpdateOrganizationsMembersByIdOrgByIdMemberError> {
         let json = iface_organization__update_organizations_members_by_id_org_by_id_member_params__to_json(&params);
-        dispatch(&OP_ORGANIZATION_UPDATE_ORGANIZATIONS_MEMBERS_BY_ID_ORG_BY_ID_MEMBER, json)
+        match dispatch(&OP_ORGANIZATION_UPDATE_ORGANIZATIONS_MEMBERS_BY_ID_ORG_BY_ID_MEMBER, json).and_then(iface_organization__update_organizations_members_by_id_org_by_id_member__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_organization__update_organizations_members_by_id_org_by_id_member__err(e)),
+        }
     }
-    fn delete_organizations_members_by_id_org_by_id_member(params: iface_organization::DeleteOrganizationsMembersByIdOrgByIdMemberParams) -> Result<String, String> {
+    fn delete_organizations_members_by_id_org_by_id_member(params: iface_organization::DeleteOrganizationsMembersByIdOrgByIdMemberParams) -> Result<String, iface_organization::DeleteOrganizationsMembersByIdOrgByIdMemberError> {
         let json = iface_organization__delete_organizations_members_by_id_org_by_id_member_params__to_json(&params);
-        dispatch(&OP_ORGANIZATION_DELETE_ORGANIZATIONS_MEMBERS_BY_ID_ORG_BY_ID_MEMBER, json)
+        match dispatch(&OP_ORGANIZATION_DELETE_ORGANIZATIONS_MEMBERS_BY_ID_ORG_BY_ID_MEMBER, json).and_then(iface_organization__delete_organizations_members_by_id_org_by_id_member__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_organization__delete_organizations_members_by_id_org_by_id_member__err(e)),
+        }
     }
-    fn delete_organizations_members_all_by_id_org_by_id_member(params: iface_organization::DeleteOrganizationsMembersAllByIdOrgByIdMemberParams) -> Result<String, String> {
+    fn delete_organizations_members_all_by_id_org_by_id_member(params: iface_organization::DeleteOrganizationsMembersAllByIdOrgByIdMemberParams) -> Result<String, iface_organization::DeleteOrganizationsMembersAllByIdOrgByIdMemberError> {
         let json = iface_organization__delete_organizations_members_all_by_id_org_by_id_member_params__to_json(&params);
-        dispatch(&OP_ORGANIZATION_DELETE_ORGANIZATIONS_MEMBERS_ALL_BY_ID_ORG_BY_ID_MEMBER, json)
+        match dispatch(&OP_ORGANIZATION_DELETE_ORGANIZATIONS_MEMBERS_ALL_BY_ID_ORG_BY_ID_MEMBER, json).and_then(iface_organization__delete_organizations_members_all_by_id_org_by_id_member__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_organization__delete_organizations_members_all_by_id_org_by_id_member__err(e)),
+        }
     }
-    fn get_organizations_members_cards_by_id_org_by_id_member(params: iface_organization::GetOrganizationsMembersCardsByIdOrgByIdMemberParams) -> Result<String, String> {
+    fn get_organizations_members_cards_by_id_org_by_id_member(params: iface_organization::GetOrganizationsMembersCardsByIdOrgByIdMemberParams) -> Result<String, iface_organization::GetOrganizationsMembersCardsByIdOrgByIdMemberError> {
         let json = iface_organization__get_organizations_members_cards_by_id_org_by_id_member_params__to_json(&params);
-        dispatch(&OP_ORGANIZATION_GET_ORGANIZATIONS_MEMBERS_CARDS_BY_ID_ORG_BY_ID_MEMBER, json)
+        match dispatch(&OP_ORGANIZATION_GET_ORGANIZATIONS_MEMBERS_CARDS_BY_ID_ORG_BY_ID_MEMBER, json).and_then(iface_organization__get_organizations_members_cards_by_id_org_by_id_member__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_organization__get_organizations_members_cards_by_id_org_by_id_member__err(e)),
+        }
     }
-    fn update_organizations_members_deactivated_by_id_org_by_id_member(params: iface_organization::UpdateOrganizationsMembersDeactivatedByIdOrgByIdMemberParams) -> Result<String, String> {
+    fn update_organizations_members_deactivated_by_id_org_by_id_member(params: iface_organization::UpdateOrganizationsMembersDeactivatedByIdOrgByIdMemberParams) -> Result<String, iface_organization::UpdateOrganizationsMembersDeactivatedByIdOrgByIdMemberError> {
         let json = iface_organization__update_organizations_members_deactivated_by_id_org_by_id_member_params__to_json(&params);
-        dispatch(&OP_ORGANIZATION_UPDATE_ORGANIZATIONS_MEMBERS_DEACTIVATED_BY_ID_ORG_BY_ID_MEMBER, json)
+        match dispatch(&OP_ORGANIZATION_UPDATE_ORGANIZATIONS_MEMBERS_DEACTIVATED_BY_ID_ORG_BY_ID_MEMBER, json).and_then(iface_organization__update_organizations_members_deactivated_by_id_org_by_id_member__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_organization__update_organizations_members_deactivated_by_id_org_by_id_member__err(e)),
+        }
     }
-    fn get_organizations_members_invited_by_id_org(params: iface_organization::GetOrganizationsMembersInvitedByIdOrgParams) -> Result<String, String> {
+    fn get_organizations_members_invited_by_id_org(params: iface_organization::GetOrganizationsMembersInvitedByIdOrgParams) -> Result<String, iface_organization::GetOrganizationsMembersInvitedByIdOrgError> {
         let json = iface_organization__get_organizations_members_invited_by_id_org_params__to_json(&params);
-        dispatch(&OP_ORGANIZATION_GET_ORGANIZATIONS_MEMBERS_INVITED_BY_ID_ORG, json)
+        match dispatch(&OP_ORGANIZATION_GET_ORGANIZATIONS_MEMBERS_INVITED_BY_ID_ORG, json).and_then(iface_organization__get_organizations_members_invited_by_id_org__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_organization__get_organizations_members_invited_by_id_org__err(e)),
+        }
     }
-    fn get_organizations_members_invited_by_id_org_by_field(params: iface_organization::GetOrganizationsMembersInvitedByIdOrgByFieldParams) -> Result<String, String> {
+    fn get_organizations_members_invited_by_id_org_by_field(params: iface_organization::GetOrganizationsMembersInvitedByIdOrgByFieldParams) -> Result<String, iface_organization::GetOrganizationsMembersInvitedByIdOrgByFieldError> {
         let json = iface_organization__get_organizations_members_invited_by_id_org_by_field_params__to_json(&params);
-        dispatch(&OP_ORGANIZATION_GET_ORGANIZATIONS_MEMBERS_INVITED_BY_ID_ORG_BY_FIELD, json)
+        match dispatch(&OP_ORGANIZATION_GET_ORGANIZATIONS_MEMBERS_INVITED_BY_ID_ORG_BY_FIELD, json).and_then(iface_organization__get_organizations_members_invited_by_id_org_by_field__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_organization__get_organizations_members_invited_by_id_org_by_field__err(e)),
+        }
     }
-    fn get_organizations_memberships_by_id_org(params: iface_organization::GetOrganizationsMembershipsByIdOrgParams) -> Result<String, String> {
+    fn get_organizations_memberships_by_id_org(params: iface_organization::GetOrganizationsMembershipsByIdOrgParams) -> Result<String, iface_organization::GetOrganizationsMembershipsByIdOrgError> {
         let json = iface_organization__get_organizations_memberships_by_id_org_params__to_json(&params);
-        dispatch(&OP_ORGANIZATION_GET_ORGANIZATIONS_MEMBERSHIPS_BY_ID_ORG, json)
+        match dispatch(&OP_ORGANIZATION_GET_ORGANIZATIONS_MEMBERSHIPS_BY_ID_ORG, json).and_then(iface_organization__get_organizations_memberships_by_id_org__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_organization__get_organizations_memberships_by_id_org__err(e)),
+        }
     }
-    fn get_organizations_memberships_by_id_org_by_id_membership(params: iface_organization::GetOrganizationsMembershipsByIdOrgByIdMembershipParams) -> Result<String, String> {
+    fn get_organizations_memberships_by_id_org_by_id_membership(params: iface_organization::GetOrganizationsMembershipsByIdOrgByIdMembershipParams) -> Result<String, iface_organization::GetOrganizationsMembershipsByIdOrgByIdMembershipError> {
         let json = iface_organization__get_organizations_memberships_by_id_org_by_id_membership_params__to_json(&params);
-        dispatch(&OP_ORGANIZATION_GET_ORGANIZATIONS_MEMBERSHIPS_BY_ID_ORG_BY_ID_MEMBERSHIP, json)
+        match dispatch(&OP_ORGANIZATION_GET_ORGANIZATIONS_MEMBERSHIPS_BY_ID_ORG_BY_ID_MEMBERSHIP, json).and_then(iface_organization__get_organizations_memberships_by_id_org_by_id_membership__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_organization__get_organizations_memberships_by_id_org_by_id_membership__err(e)),
+        }
     }
-    fn update_organizations_memberships_by_id_org_by_id_membership(params: iface_organization::UpdateOrganizationsMembershipsByIdOrgByIdMembershipParams) -> Result<String, String> {
+    fn update_organizations_memberships_by_id_org_by_id_membership(params: iface_organization::UpdateOrganizationsMembershipsByIdOrgByIdMembershipParams) -> Result<String, iface_organization::UpdateOrganizationsMembershipsByIdOrgByIdMembershipError> {
         let json = iface_organization__update_organizations_memberships_by_id_org_by_id_membership_params__to_json(&params);
-        dispatch(&OP_ORGANIZATION_UPDATE_ORGANIZATIONS_MEMBERSHIPS_BY_ID_ORG_BY_ID_MEMBERSHIP, json)
+        match dispatch(&OP_ORGANIZATION_UPDATE_ORGANIZATIONS_MEMBERSHIPS_BY_ID_ORG_BY_ID_MEMBERSHIP, json).and_then(iface_organization__update_organizations_memberships_by_id_org_by_id_membership__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_organization__update_organizations_memberships_by_id_org_by_id_membership__err(e)),
+        }
     }
-    fn update_organizations_name_by_id_org(params: iface_organization::UpdateOrganizationsNameByIdOrgParams) -> Result<String, String> {
+    fn update_organizations_name_by_id_org(params: iface_organization::UpdateOrganizationsNameByIdOrgParams) -> Result<String, iface_organization::UpdateOrganizationsNameByIdOrgError> {
         let json = iface_organization__update_organizations_name_by_id_org_params__to_json(&params);
-        dispatch(&OP_ORGANIZATION_UPDATE_ORGANIZATIONS_NAME_BY_ID_ORG, json)
+        match dispatch(&OP_ORGANIZATION_UPDATE_ORGANIZATIONS_NAME_BY_ID_ORG, json).and_then(iface_organization__update_organizations_name_by_id_org__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_organization__update_organizations_name_by_id_org__err(e)),
+        }
     }
-    fn update_organizations_prefs_associated_domain_by_id_org(params: iface_organization::UpdateOrganizationsPrefsAssociatedDomainByIdOrgParams) -> Result<String, String> {
+    fn update_organizations_prefs_associated_domain_by_id_org(params: iface_organization::UpdateOrganizationsPrefsAssociatedDomainByIdOrgParams) -> Result<String, iface_organization::UpdateOrganizationsPrefsAssociatedDomainByIdOrgError> {
         let json = iface_organization__update_organizations_prefs_associated_domain_by_id_org_params__to_json(&params);
-        dispatch(&OP_ORGANIZATION_UPDATE_ORGANIZATIONS_PREFS_ASSOCIATED_DOMAIN_BY_ID_ORG, json)
+        match dispatch(&OP_ORGANIZATION_UPDATE_ORGANIZATIONS_PREFS_ASSOCIATED_DOMAIN_BY_ID_ORG, json).and_then(iface_organization__update_organizations_prefs_associated_domain_by_id_org__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_organization__update_organizations_prefs_associated_domain_by_id_org__err(e)),
+        }
     }
-    fn delete_organizations_prefs_associated_domain_by_id_org(params: iface_organization::DeleteOrganizationsPrefsAssociatedDomainByIdOrgParams) -> Result<String, String> {
+    fn delete_organizations_prefs_associated_domain_by_id_org(params: iface_organization::DeleteOrganizationsPrefsAssociatedDomainByIdOrgParams) -> Result<String, iface_organization::DeleteOrganizationsPrefsAssociatedDomainByIdOrgError> {
         let json = iface_organization__delete_organizations_prefs_associated_domain_by_id_org_params__to_json(&params);
-        dispatch(&OP_ORGANIZATION_DELETE_ORGANIZATIONS_PREFS_ASSOCIATED_DOMAIN_BY_ID_ORG, json)
+        match dispatch(&OP_ORGANIZATION_DELETE_ORGANIZATIONS_PREFS_ASSOCIATED_DOMAIN_BY_ID_ORG, json).and_then(iface_organization__delete_organizations_prefs_associated_domain_by_id_org__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_organization__delete_organizations_prefs_associated_domain_by_id_org__err(e)),
+        }
     }
-    fn update_organizations_prefs_board_visibility_restrict_org_by_id_org(params: iface_organization::UpdateOrganizationsPrefsBoardVisibilityRestrictOrgByIdOrgParams) -> Result<String, String> {
+    fn update_organizations_prefs_board_visibility_restrict_org_by_id_org(params: iface_organization::UpdateOrganizationsPrefsBoardVisibilityRestrictOrgByIdOrgParams) -> Result<String, iface_organization::UpdateOrganizationsPrefsBoardVisibilityRestrictOrgByIdOrgError> {
         let json = iface_organization__update_organizations_prefs_board_visibility_restrict_org_by_id_org_params__to_json(&params);
-        dispatch(&OP_ORGANIZATION_UPDATE_ORGANIZATIONS_PREFS_BOARD_VISIBILITY_RESTRICT_ORG_BY_ID_ORG, json)
+        match dispatch(&OP_ORGANIZATION_UPDATE_ORGANIZATIONS_PREFS_BOARD_VISIBILITY_RESTRICT_ORG_BY_ID_ORG, json).and_then(iface_organization__update_organizations_prefs_board_visibility_restrict_org_by_id_org__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_organization__update_organizations_prefs_board_visibility_restrict_org_by_id_org__err(e)),
+        }
     }
-    fn update_organizations_prefs_board_visibility_restrict_private_by_id_org(params: iface_organization::UpdateOrganizationsPrefsBoardVisibilityRestrictPrivateByIdOrgParams) -> Result<String, String> {
+    fn update_organizations_prefs_board_visibility_restrict_private_by_id_org(params: iface_organization::UpdateOrganizationsPrefsBoardVisibilityRestrictPrivateByIdOrgParams) -> Result<String, iface_organization::UpdateOrganizationsPrefsBoardVisibilityRestrictPrivateByIdOrgError> {
         let json = iface_organization__update_organizations_prefs_board_visibility_restrict_private_by_id_org_params__to_json(&params);
-        dispatch(&OP_ORGANIZATION_UPDATE_ORGANIZATIONS_PREFS_BOARD_VISIBILITY_RESTRICT_PRIVATE_BY_ID_ORG, json)
+        match dispatch(&OP_ORGANIZATION_UPDATE_ORGANIZATIONS_PREFS_BOARD_VISIBILITY_RESTRICT_PRIVATE_BY_ID_ORG, json).and_then(iface_organization__update_organizations_prefs_board_visibility_restrict_private_by_id_org__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_organization__update_organizations_prefs_board_visibility_restrict_private_by_id_org__err(e)),
+        }
     }
-    fn update_organizations_prefs_board_visibility_restrict_public_by_id_org(params: iface_organization::UpdateOrganizationsPrefsBoardVisibilityRestrictPublicByIdOrgParams) -> Result<String, String> {
+    fn update_organizations_prefs_board_visibility_restrict_public_by_id_org(params: iface_organization::UpdateOrganizationsPrefsBoardVisibilityRestrictPublicByIdOrgParams) -> Result<String, iface_organization::UpdateOrganizationsPrefsBoardVisibilityRestrictPublicByIdOrgError> {
         let json = iface_organization__update_organizations_prefs_board_visibility_restrict_public_by_id_org_params__to_json(&params);
-        dispatch(&OP_ORGANIZATION_UPDATE_ORGANIZATIONS_PREFS_BOARD_VISIBILITY_RESTRICT_PUBLIC_BY_ID_ORG, json)
+        match dispatch(&OP_ORGANIZATION_UPDATE_ORGANIZATIONS_PREFS_BOARD_VISIBILITY_RESTRICT_PUBLIC_BY_ID_ORG, json).and_then(iface_organization__update_organizations_prefs_board_visibility_restrict_public_by_id_org__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_organization__update_organizations_prefs_board_visibility_restrict_public_by_id_org__err(e)),
+        }
     }
-    fn update_organizations_prefs_external_members_disabled_by_id_org(params: iface_organization::UpdateOrganizationsPrefsExternalMembersDisabledByIdOrgParams) -> Result<String, String> {
+    fn update_organizations_prefs_external_members_disabled_by_id_org(params: iface_organization::UpdateOrganizationsPrefsExternalMembersDisabledByIdOrgParams) -> Result<String, iface_organization::UpdateOrganizationsPrefsExternalMembersDisabledByIdOrgError> {
         let json = iface_organization__update_organizations_prefs_external_members_disabled_by_id_org_params__to_json(&params);
-        dispatch(&OP_ORGANIZATION_UPDATE_ORGANIZATIONS_PREFS_EXTERNAL_MEMBERS_DISABLED_BY_ID_ORG, json)
+        match dispatch(&OP_ORGANIZATION_UPDATE_ORGANIZATIONS_PREFS_EXTERNAL_MEMBERS_DISABLED_BY_ID_ORG, json).and_then(iface_organization__update_organizations_prefs_external_members_disabled_by_id_org__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_organization__update_organizations_prefs_external_members_disabled_by_id_org__err(e)),
+        }
     }
-    fn update_organizations_prefs_google_apps_version_by_id_org(params: iface_organization::UpdateOrganizationsPrefsGoogleAppsVersionByIdOrgParams) -> Result<String, String> {
+    fn update_organizations_prefs_google_apps_version_by_id_org(params: iface_organization::UpdateOrganizationsPrefsGoogleAppsVersionByIdOrgParams) -> Result<String, iface_organization::UpdateOrganizationsPrefsGoogleAppsVersionByIdOrgError> {
         let json = iface_organization__update_organizations_prefs_google_apps_version_by_id_org_params__to_json(&params);
-        dispatch(&OP_ORGANIZATION_UPDATE_ORGANIZATIONS_PREFS_GOOGLE_APPS_VERSION_BY_ID_ORG, json)
+        match dispatch(&OP_ORGANIZATION_UPDATE_ORGANIZATIONS_PREFS_GOOGLE_APPS_VERSION_BY_ID_ORG, json).and_then(iface_organization__update_organizations_prefs_google_apps_version_by_id_org__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_organization__update_organizations_prefs_google_apps_version_by_id_org__err(e)),
+        }
     }
-    fn update_organizations_prefs_org_invite_restrict_by_id_org(params: iface_organization::UpdateOrganizationsPrefsOrgInviteRestrictByIdOrgParams) -> Result<String, String> {
+    fn update_organizations_prefs_org_invite_restrict_by_id_org(params: iface_organization::UpdateOrganizationsPrefsOrgInviteRestrictByIdOrgParams) -> Result<String, iface_organization::UpdateOrganizationsPrefsOrgInviteRestrictByIdOrgError> {
         let json = iface_organization__update_organizations_prefs_org_invite_restrict_by_id_org_params__to_json(&params);
-        dispatch(&OP_ORGANIZATION_UPDATE_ORGANIZATIONS_PREFS_ORG_INVITE_RESTRICT_BY_ID_ORG, json)
+        match dispatch(&OP_ORGANIZATION_UPDATE_ORGANIZATIONS_PREFS_ORG_INVITE_RESTRICT_BY_ID_ORG, json).and_then(iface_organization__update_organizations_prefs_org_invite_restrict_by_id_org__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_organization__update_organizations_prefs_org_invite_restrict_by_id_org__err(e)),
+        }
     }
-    fn delete_organizations_prefs_org_invite_restrict_by_id_org(params: iface_organization::DeleteOrganizationsPrefsOrgInviteRestrictByIdOrgParams) -> Result<String, String> {
+    fn delete_organizations_prefs_org_invite_restrict_by_id_org(params: iface_organization::DeleteOrganizationsPrefsOrgInviteRestrictByIdOrgParams) -> Result<String, iface_organization::DeleteOrganizationsPrefsOrgInviteRestrictByIdOrgError> {
         let json = iface_organization__delete_organizations_prefs_org_invite_restrict_by_id_org_params__to_json(&params);
-        dispatch(&OP_ORGANIZATION_DELETE_ORGANIZATIONS_PREFS_ORG_INVITE_RESTRICT_BY_ID_ORG, json)
+        match dispatch(&OP_ORGANIZATION_DELETE_ORGANIZATIONS_PREFS_ORG_INVITE_RESTRICT_BY_ID_ORG, json).and_then(iface_organization__delete_organizations_prefs_org_invite_restrict_by_id_org__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_organization__delete_organizations_prefs_org_invite_restrict_by_id_org__err(e)),
+        }
     }
-    fn update_organizations_prefs_permission_level_by_id_org(params: iface_organization::UpdateOrganizationsPrefsPermissionLevelByIdOrgParams) -> Result<String, String> {
+    fn update_organizations_prefs_permission_level_by_id_org(params: iface_organization::UpdateOrganizationsPrefsPermissionLevelByIdOrgParams) -> Result<String, iface_organization::UpdateOrganizationsPrefsPermissionLevelByIdOrgError> {
         let json = iface_organization__update_organizations_prefs_permission_level_by_id_org_params__to_json(&params);
-        dispatch(&OP_ORGANIZATION_UPDATE_ORGANIZATIONS_PREFS_PERMISSION_LEVEL_BY_ID_ORG, json)
+        match dispatch(&OP_ORGANIZATION_UPDATE_ORGANIZATIONS_PREFS_PERMISSION_LEVEL_BY_ID_ORG, json).and_then(iface_organization__update_organizations_prefs_permission_level_by_id_org__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_organization__update_organizations_prefs_permission_level_by_id_org__err(e)),
+        }
     }
-    fn update_organizations_website_by_id_org(params: iface_organization::UpdateOrganizationsWebsiteByIdOrgParams) -> Result<String, String> {
+    fn update_organizations_website_by_id_org(params: iface_organization::UpdateOrganizationsWebsiteByIdOrgParams) -> Result<String, iface_organization::UpdateOrganizationsWebsiteByIdOrgError> {
         let json = iface_organization__update_organizations_website_by_id_org_params__to_json(&params);
-        dispatch(&OP_ORGANIZATION_UPDATE_ORGANIZATIONS_WEBSITE_BY_ID_ORG, json)
+        match dispatch(&OP_ORGANIZATION_UPDATE_ORGANIZATIONS_WEBSITE_BY_ID_ORG, json).and_then(iface_organization__update_organizations_website_by_id_org__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_organization__update_organizations_website_by_id_org__err(e)),
+        }
     }
-    fn get_organizations_by_id_org_by_field(params: iface_organization::GetOrganizationsByIdOrgByFieldParams) -> Result<String, String> {
+    fn get_organizations_by_id_org_by_field(params: iface_organization::GetOrganizationsByIdOrgByFieldParams) -> Result<String, iface_organization::GetOrganizationsByIdOrgByFieldError> {
         let json = iface_organization__get_organizations_by_id_org_by_field_params__to_json(&params);
-        dispatch(&OP_ORGANIZATION_GET_ORGANIZATIONS_BY_ID_ORG_BY_FIELD, json)
+        match dispatch(&OP_ORGANIZATION_GET_ORGANIZATIONS_BY_ID_ORG_BY_FIELD, json).and_then(iface_organization__get_organizations_by_id_org_by_field__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_organization__get_organizations_by_id_org_by_field__err(e)),
+        }
     }
 }
 use crate::exports::autostamp::trello::search as iface_search;
@@ -8909,28 +14009,28 @@ const OP_SEARCH_GET_SEARCH: OpSpec = OpSpec {
     method: "GET",
     path_template: "/search",
     fields: &[
-        FieldSpec { snake: "query", location: FieldLocation::Query },
-        FieldSpec { snake: "id_boards", location: FieldLocation::Query },
-        FieldSpec { snake: "id_organizations", location: FieldLocation::Query },
-        FieldSpec { snake: "id_cards", location: FieldLocation::Query },
-        FieldSpec { snake: "model_types", location: FieldLocation::Query },
-        FieldSpec { snake: "board_fields", location: FieldLocation::Query },
-        FieldSpec { snake: "boards_limit", location: FieldLocation::Query },
-        FieldSpec { snake: "card_fields", location: FieldLocation::Query },
-        FieldSpec { snake: "cards_limit", location: FieldLocation::Query },
-        FieldSpec { snake: "cards_page", location: FieldLocation::Query },
-        FieldSpec { snake: "card_board", location: FieldLocation::Query },
-        FieldSpec { snake: "card_list", location: FieldLocation::Query },
-        FieldSpec { snake: "card_members", location: FieldLocation::Query },
-        FieldSpec { snake: "card_stickers", location: FieldLocation::Query },
-        FieldSpec { snake: "card_attachments", location: FieldLocation::Query },
-        FieldSpec { snake: "organization_fields", location: FieldLocation::Query },
-        FieldSpec { snake: "organizations_limit", location: FieldLocation::Query },
-        FieldSpec { snake: "member_fields", location: FieldLocation::Query },
-        FieldSpec { snake: "members_limit", location: FieldLocation::Query },
-        FieldSpec { snake: "partial", location: FieldLocation::Query },
-        FieldSpec { snake: "key", location: FieldLocation::Query },
-        FieldSpec { snake: "token", location: FieldLocation::Query },
+        FieldSpec { snake: "query", wire: "query", location: FieldLocation::Query },
+        FieldSpec { snake: "id_boards", wire: "idBoards", location: FieldLocation::Query },
+        FieldSpec { snake: "id_organizations", wire: "idOrganizations", location: FieldLocation::Query },
+        FieldSpec { snake: "id_cards", wire: "idCards", location: FieldLocation::Query },
+        FieldSpec { snake: "model_types", wire: "modelTypes", location: FieldLocation::Query },
+        FieldSpec { snake: "board_fields", wire: "board_fields", location: FieldLocation::Query },
+        FieldSpec { snake: "boards_limit", wire: "boards_limit", location: FieldLocation::Query },
+        FieldSpec { snake: "card_fields", wire: "card_fields", location: FieldLocation::Query },
+        FieldSpec { snake: "cards_limit", wire: "cards_limit", location: FieldLocation::Query },
+        FieldSpec { snake: "cards_page", wire: "cards_page", location: FieldLocation::Query },
+        FieldSpec { snake: "card_board", wire: "card_board", location: FieldLocation::Query },
+        FieldSpec { snake: "card_list", wire: "card_list", location: FieldLocation::Query },
+        FieldSpec { snake: "card_members", wire: "card_members", location: FieldLocation::Query },
+        FieldSpec { snake: "card_stickers", wire: "card_stickers", location: FieldLocation::Query },
+        FieldSpec { snake: "card_attachments", wire: "card_attachments", location: FieldLocation::Query },
+        FieldSpec { snake: "organization_fields", wire: "organization_fields", location: FieldLocation::Query },
+        FieldSpec { snake: "organizations_limit", wire: "organizations_limit", location: FieldLocation::Query },
+        FieldSpec { snake: "member_fields", wire: "member_fields", location: FieldLocation::Query },
+        FieldSpec { snake: "members_limit", wire: "members_limit", location: FieldLocation::Query },
+        FieldSpec { snake: "partial", wire: "partial", location: FieldLocation::Query },
+        FieldSpec { snake: "key", wire: "key", location: FieldLocation::Query },
+        FieldSpec { snake: "token", wire: "token", location: FieldLocation::Query },
     ],
     auth: &[
     ],
@@ -8940,13 +14040,13 @@ const OP_SEARCH_GET_SEARCH_MEMBERS: OpSpec = OpSpec {
     method: "GET",
     path_template: "/search/members",
     fields: &[
-        FieldSpec { snake: "query", location: FieldLocation::Query },
-        FieldSpec { snake: "limit", location: FieldLocation::Query },
-        FieldSpec { snake: "id_board", location: FieldLocation::Query },
-        FieldSpec { snake: "id_organization", location: FieldLocation::Query },
-        FieldSpec { snake: "only_org_members", location: FieldLocation::Query },
-        FieldSpec { snake: "key", location: FieldLocation::Query },
-        FieldSpec { snake: "token", location: FieldLocation::Query },
+        FieldSpec { snake: "query", wire: "query", location: FieldLocation::Query },
+        FieldSpec { snake: "limit", wire: "limit", location: FieldLocation::Query },
+        FieldSpec { snake: "id_board", wire: "idBoard", location: FieldLocation::Query },
+        FieldSpec { snake: "id_organization", wire: "idOrganization", location: FieldLocation::Query },
+        FieldSpec { snake: "only_org_members", wire: "onlyOrgMembers", location: FieldLocation::Query },
+        FieldSpec { snake: "key", wire: "key", location: FieldLocation::Query },
+        FieldSpec { snake: "token", wire: "token", location: FieldLocation::Query },
     ],
     auth: &[
     ],
@@ -8991,14 +14091,48 @@ fn iface_search__get_search_members_params__to_json(p: &iface_search::GetSearchM
     Value::Object(m)
 }
 
-impl iface_search::Guest for crate::Component {
-    fn get_search(params: iface_search::GetSearchParams) -> Result<String, String> {
-        let json = iface_search__get_search_params__to_json(&params);
-        dispatch(&OP_SEARCH_GET_SEARCH, json)
+fn iface_search__get_search__ok(body: String) -> Result<String, crate::runtime::DispatchError> {
+    Ok(body)
+}
+
+fn iface_search__get_search__err(e: crate::runtime::DispatchError) -> iface_search::GetSearchError {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => match status {
+            400u16 => iface_search::GetSearchError::BadRequest(body),
+            _ => iface_search::GetSearchError::Other(body),
+        },
+        crate::runtime::DispatchError::Transport(m) => iface_search::GetSearchError::Other(m),
     }
-    fn get_search_members(params: iface_search::GetSearchMembersParams) -> Result<String, String> {
+}
+
+fn iface_search__get_search_members__ok(body: String) -> Result<String, crate::runtime::DispatchError> {
+    Ok(body)
+}
+
+fn iface_search__get_search_members__err(e: crate::runtime::DispatchError) -> iface_search::GetSearchMembersError {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => match status {
+            400u16 => iface_search::GetSearchMembersError::BadRequest(body),
+            _ => iface_search::GetSearchMembersError::Other(body),
+        },
+        crate::runtime::DispatchError::Transport(m) => iface_search::GetSearchMembersError::Other(m),
+    }
+}
+
+impl iface_search::Guest for crate::Component {
+    fn get_search(params: iface_search::GetSearchParams) -> Result<String, iface_search::GetSearchError> {
+        let json = iface_search__get_search_params__to_json(&params);
+        match dispatch(&OP_SEARCH_GET_SEARCH, json).and_then(iface_search__get_search__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_search__get_search__err(e)),
+        }
+    }
+    fn get_search_members(params: iface_search::GetSearchMembersParams) -> Result<String, iface_search::GetSearchMembersError> {
         let json = iface_search__get_search_members_params__to_json(&params);
-        dispatch(&OP_SEARCH_GET_SEARCH_MEMBERS, json)
+        match dispatch(&OP_SEARCH_GET_SEARCH_MEMBERS, json).and_then(iface_search__get_search_members__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_search__get_search_members__err(e)),
+        }
     }
 }
 use crate::exports::autostamp::trello::session as iface_session;
@@ -9007,9 +14141,9 @@ const OP_SESSION_ADD_SESSIONS: OpSpec = OpSpec {
     method: "POST",
     path_template: "/sessions",
     fields: &[
-        FieldSpec { snake: "token", location: FieldLocation::Query },
-        FieldSpec { snake: "id_board", location: FieldLocation::Body },
-        FieldSpec { snake: "status", location: FieldLocation::Body },
+        FieldSpec { snake: "token", wire: "token", location: FieldLocation::Query },
+        FieldSpec { snake: "id_board", wire: "idBoard", location: FieldLocation::Body },
+        FieldSpec { snake: "status", wire: "status", location: FieldLocation::Body },
     ],
     auth: &[
         AuthApply { secret_key: "api_key", kind: AuthKind::ApiKeyQuery("key") },
@@ -9020,7 +14154,7 @@ const OP_SESSION_GET_SESSIONS_SOCKET: OpSpec = OpSpec {
     method: "GET",
     path_template: "/sessions/socket",
     fields: &[
-        FieldSpec { snake: "token", location: FieldLocation::Query },
+        FieldSpec { snake: "token", wire: "token", location: FieldLocation::Query },
     ],
     auth: &[
         AuthApply { secret_key: "api_key", kind: AuthKind::ApiKeyQuery("key") },
@@ -9031,10 +14165,10 @@ const OP_SESSION_UPDATE_SESSIONS_BY_ID_SESSION: OpSpec = OpSpec {
     method: "PUT",
     path_template: "/sessions/{id_session}",
     fields: &[
-        FieldSpec { snake: "id_session", location: FieldLocation::Path },
-        FieldSpec { snake: "token", location: FieldLocation::Query },
-        FieldSpec { snake: "id_board", location: FieldLocation::Body },
-        FieldSpec { snake: "status", location: FieldLocation::Body },
+        FieldSpec { snake: "id_session", wire: "idSession", location: FieldLocation::Path },
+        FieldSpec { snake: "token", wire: "token", location: FieldLocation::Query },
+        FieldSpec { snake: "id_board", wire: "idBoard", location: FieldLocation::Body },
+        FieldSpec { snake: "status", wire: "status", location: FieldLocation::Body },
     ],
     auth: &[
         AuthApply { secret_key: "api_key", kind: AuthKind::ApiKeyQuery("key") },
@@ -9045,9 +14179,9 @@ const OP_SESSION_UPDATE_SESSIONS_STATUS_BY_ID_SESSION: OpSpec = OpSpec {
     method: "PUT",
     path_template: "/sessions/{id_session}/status",
     fields: &[
-        FieldSpec { snake: "id_session", location: FieldLocation::Path },
-        FieldSpec { snake: "token", location: FieldLocation::Query },
-        FieldSpec { snake: "value", location: FieldLocation::Body },
+        FieldSpec { snake: "id_session", wire: "idSession", location: FieldLocation::Path },
+        FieldSpec { snake: "token", wire: "token", location: FieldLocation::Query },
+        FieldSpec { snake: "value", wire: "value", location: FieldLocation::Body },
     ],
     auth: &[
         AuthApply { secret_key: "api_key", kind: AuthKind::ApiKeyQuery("key") },
@@ -9085,22 +14219,90 @@ fn iface_session__update_sessions_status_by_id_session_params__to_json(p: &iface
     Value::Object(m)
 }
 
+fn iface_session__add_sessions__ok(body: String) -> Result<String, crate::runtime::DispatchError> {
+    Ok(body)
+}
+
+fn iface_session__add_sessions__err(e: crate::runtime::DispatchError) -> iface_session::AddSessionsError {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => match status {
+            400u16 => iface_session::AddSessionsError::BadRequest(body),
+            _ => iface_session::AddSessionsError::Other(body),
+        },
+        crate::runtime::DispatchError::Transport(m) => iface_session::AddSessionsError::Other(m),
+    }
+}
+
+fn iface_session__get_sessions_socket__ok(body: String) -> Result<String, crate::runtime::DispatchError> {
+    Ok(body)
+}
+
+fn iface_session__get_sessions_socket__err(e: crate::runtime::DispatchError) -> iface_session::GetSessionsSocketError {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => match status {
+            400u16 => iface_session::GetSessionsSocketError::BadRequest(body),
+            _ => iface_session::GetSessionsSocketError::Other(body),
+        },
+        crate::runtime::DispatchError::Transport(m) => iface_session::GetSessionsSocketError::Other(m),
+    }
+}
+
+fn iface_session__update_sessions_by_id_session__ok(body: String) -> Result<String, crate::runtime::DispatchError> {
+    Ok(body)
+}
+
+fn iface_session__update_sessions_by_id_session__err(e: crate::runtime::DispatchError) -> iface_session::UpdateSessionsByIdSessionError {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => match status {
+            400u16 => iface_session::UpdateSessionsByIdSessionError::BadRequest(body),
+            _ => iface_session::UpdateSessionsByIdSessionError::Other(body),
+        },
+        crate::runtime::DispatchError::Transport(m) => iface_session::UpdateSessionsByIdSessionError::Other(m),
+    }
+}
+
+fn iface_session__update_sessions_status_by_id_session__ok(body: String) -> Result<String, crate::runtime::DispatchError> {
+    Ok(body)
+}
+
+fn iface_session__update_sessions_status_by_id_session__err(e: crate::runtime::DispatchError) -> iface_session::UpdateSessionsStatusByIdSessionError {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => match status {
+            400u16 => iface_session::UpdateSessionsStatusByIdSessionError::BadRequest(body),
+            _ => iface_session::UpdateSessionsStatusByIdSessionError::Other(body),
+        },
+        crate::runtime::DispatchError::Transport(m) => iface_session::UpdateSessionsStatusByIdSessionError::Other(m),
+    }
+}
+
 impl iface_session::Guest for crate::Component {
-    fn add_sessions(params: iface_session::AddSessionsParams) -> Result<String, String> {
+    fn add_sessions(params: iface_session::AddSessionsParams) -> Result<String, iface_session::AddSessionsError> {
         let json = iface_session__add_sessions_params__to_json(&params);
-        dispatch(&OP_SESSION_ADD_SESSIONS, json)
+        match dispatch(&OP_SESSION_ADD_SESSIONS, json).and_then(iface_session__add_sessions__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_session__add_sessions__err(e)),
+        }
     }
-    fn get_sessions_socket(params: iface_session::GetSessionsSocketParams) -> Result<String, String> {
+    fn get_sessions_socket(params: iface_session::GetSessionsSocketParams) -> Result<String, iface_session::GetSessionsSocketError> {
         let json = iface_session__get_sessions_socket_params__to_json(&params);
-        dispatch(&OP_SESSION_GET_SESSIONS_SOCKET, json)
+        match dispatch(&OP_SESSION_GET_SESSIONS_SOCKET, json).and_then(iface_session__get_sessions_socket__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_session__get_sessions_socket__err(e)),
+        }
     }
-    fn update_sessions_by_id_session(params: iface_session::UpdateSessionsByIdSessionParams) -> Result<String, String> {
+    fn update_sessions_by_id_session(params: iface_session::UpdateSessionsByIdSessionParams) -> Result<String, iface_session::UpdateSessionsByIdSessionError> {
         let json = iface_session__update_sessions_by_id_session_params__to_json(&params);
-        dispatch(&OP_SESSION_UPDATE_SESSIONS_BY_ID_SESSION, json)
+        match dispatch(&OP_SESSION_UPDATE_SESSIONS_BY_ID_SESSION, json).and_then(iface_session__update_sessions_by_id_session__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_session__update_sessions_by_id_session__err(e)),
+        }
     }
-    fn update_sessions_status_by_id_session(params: iface_session::UpdateSessionsStatusByIdSessionParams) -> Result<String, String> {
+    fn update_sessions_status_by_id_session(params: iface_session::UpdateSessionsStatusByIdSessionParams) -> Result<String, iface_session::UpdateSessionsStatusByIdSessionError> {
         let json = iface_session__update_sessions_status_by_id_session_params__to_json(&params);
-        dispatch(&OP_SESSION_UPDATE_SESSIONS_STATUS_BY_ID_SESSION, json)
+        match dispatch(&OP_SESSION_UPDATE_SESSIONS_STATUS_BY_ID_SESSION, json).and_then(iface_session__update_sessions_status_by_id_session__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_session__update_sessions_status_by_id_session__err(e)),
+        }
     }
 }
 use crate::exports::autostamp::trello::token as iface_token;
@@ -9109,9 +14311,10 @@ const OP_TOKEN_GET_TOKENS_BY_TOKEN: OpSpec = OpSpec {
     method: "GET",
     path_template: "/tokens/{token}",
     fields: &[
-        FieldSpec { snake: "token", location: FieldLocation::Path },
-        FieldSpec { snake: "fields", location: FieldLocation::Query },
-        FieldSpec { snake: "webhooks", location: FieldLocation::Query },
+        FieldSpec { snake: "token", wire: "token", location: FieldLocation::Path },
+        FieldSpec { snake: "fields", wire: "fields", location: FieldLocation::Query },
+        FieldSpec { snake: "webhooks", wire: "webhooks", location: FieldLocation::Query },
+        FieldSpec { snake: "token_v2", wire: "token", location: FieldLocation::Query },
     ],
     auth: &[
         AuthApply { secret_key: "api_key", kind: AuthKind::ApiKeyQuery("key") },
@@ -9122,7 +14325,8 @@ const OP_TOKEN_DELETE_TOKENS_BY_TOKEN: OpSpec = OpSpec {
     method: "DELETE",
     path_template: "/tokens/{token}",
     fields: &[
-        FieldSpec { snake: "token", location: FieldLocation::Path },
+        FieldSpec { snake: "token", wire: "token", location: FieldLocation::Path },
+        FieldSpec { snake: "token_v2", wire: "token", location: FieldLocation::Query },
     ],
     auth: &[
         AuthApply { secret_key: "api_key", kind: AuthKind::ApiKeyQuery("key") },
@@ -9133,8 +14337,9 @@ const OP_TOKEN_GET_TOKENS_MEMBER_BY_TOKEN: OpSpec = OpSpec {
     method: "GET",
     path_template: "/tokens/{token}/member",
     fields: &[
-        FieldSpec { snake: "token", location: FieldLocation::Path },
-        FieldSpec { snake: "fields", location: FieldLocation::Query },
+        FieldSpec { snake: "token", wire: "token", location: FieldLocation::Path },
+        FieldSpec { snake: "fields", wire: "fields", location: FieldLocation::Query },
+        FieldSpec { snake: "token_v2", wire: "token", location: FieldLocation::Query },
     ],
     auth: &[
         AuthApply { secret_key: "api_key", kind: AuthKind::ApiKeyQuery("key") },
@@ -9145,8 +14350,9 @@ const OP_TOKEN_GET_TOKENS_MEMBER_BY_TOKEN_BY_FIELD: OpSpec = OpSpec {
     method: "GET",
     path_template: "/tokens/{token}/member/{field}",
     fields: &[
-        FieldSpec { snake: "token", location: FieldLocation::Path },
-        FieldSpec { snake: "field", location: FieldLocation::Path },
+        FieldSpec { snake: "token", wire: "token", location: FieldLocation::Path },
+        FieldSpec { snake: "field", wire: "field", location: FieldLocation::Path },
+        FieldSpec { snake: "token_v2", wire: "token", location: FieldLocation::Query },
     ],
     auth: &[
         AuthApply { secret_key: "api_key", kind: AuthKind::ApiKeyQuery("key") },
@@ -9157,7 +14363,8 @@ const OP_TOKEN_GET_TOKENS_WEBHOOKS_BY_TOKEN: OpSpec = OpSpec {
     method: "GET",
     path_template: "/tokens/{token}/webhooks",
     fields: &[
-        FieldSpec { snake: "token", location: FieldLocation::Path },
+        FieldSpec { snake: "token", wire: "token", location: FieldLocation::Path },
+        FieldSpec { snake: "token_v2", wire: "token", location: FieldLocation::Query },
     ],
     auth: &[
         AuthApply { secret_key: "api_key", kind: AuthKind::ApiKeyQuery("key") },
@@ -9168,10 +14375,11 @@ const OP_TOKEN_ADD_TOKENS_WEBHOOKS_BY_TOKEN: OpSpec = OpSpec {
     method: "POST",
     path_template: "/tokens/{token}/webhooks",
     fields: &[
-        FieldSpec { snake: "token", location: FieldLocation::Path },
-        FieldSpec { snake: "callback_url", location: FieldLocation::Body },
-        FieldSpec { snake: "description", location: FieldLocation::Body },
-        FieldSpec { snake: "id_model", location: FieldLocation::Body },
+        FieldSpec { snake: "token", wire: "token", location: FieldLocation::Path },
+        FieldSpec { snake: "token_v2", wire: "token", location: FieldLocation::Query },
+        FieldSpec { snake: "callback_url", wire: "callbackURL", location: FieldLocation::Body },
+        FieldSpec { snake: "description", wire: "description", location: FieldLocation::Body },
+        FieldSpec { snake: "id_model", wire: "idModel", location: FieldLocation::Body },
     ],
     auth: &[
         AuthApply { secret_key: "api_key", kind: AuthKind::ApiKeyQuery("key") },
@@ -9182,10 +14390,11 @@ const OP_TOKEN_UPDATE_TOKENS_WEBHOOKS_BY_TOKEN: OpSpec = OpSpec {
     method: "PUT",
     path_template: "/tokens/{token}/webhooks",
     fields: &[
-        FieldSpec { snake: "token", location: FieldLocation::Path },
-        FieldSpec { snake: "callback_url", location: FieldLocation::Body },
-        FieldSpec { snake: "description", location: FieldLocation::Body },
-        FieldSpec { snake: "id_model", location: FieldLocation::Body },
+        FieldSpec { snake: "token", wire: "token", location: FieldLocation::Path },
+        FieldSpec { snake: "token_v2", wire: "token", location: FieldLocation::Query },
+        FieldSpec { snake: "callback_url", wire: "callbackURL", location: FieldLocation::Body },
+        FieldSpec { snake: "description", wire: "description", location: FieldLocation::Body },
+        FieldSpec { snake: "id_model", wire: "idModel", location: FieldLocation::Body },
     ],
     auth: &[
         AuthApply { secret_key: "api_key", kind: AuthKind::ApiKeyQuery("key") },
@@ -9196,8 +14405,9 @@ const OP_TOKEN_GET_TOKENS_WEBHOOKS_BY_TOKEN_BY_ID_WEBHOOK: OpSpec = OpSpec {
     method: "GET",
     path_template: "/tokens/{token}/webhooks/{id_webhook}",
     fields: &[
-        FieldSpec { snake: "token", location: FieldLocation::Path },
-        FieldSpec { snake: "id_webhook", location: FieldLocation::Path },
+        FieldSpec { snake: "token", wire: "token", location: FieldLocation::Path },
+        FieldSpec { snake: "id_webhook", wire: "idWebhook", location: FieldLocation::Path },
+        FieldSpec { snake: "token_v2", wire: "token", location: FieldLocation::Query },
     ],
     auth: &[
         AuthApply { secret_key: "api_key", kind: AuthKind::ApiKeyQuery("key") },
@@ -9208,8 +14418,9 @@ const OP_TOKEN_DELETE_TOKENS_WEBHOOKS_BY_TOKEN_BY_ID_WEBHOOK: OpSpec = OpSpec {
     method: "DELETE",
     path_template: "/tokens/{token}/webhooks/{id_webhook}",
     fields: &[
-        FieldSpec { snake: "token", location: FieldLocation::Path },
-        FieldSpec { snake: "id_webhook", location: FieldLocation::Path },
+        FieldSpec { snake: "token", wire: "token", location: FieldLocation::Path },
+        FieldSpec { snake: "id_webhook", wire: "idWebhook", location: FieldLocation::Path },
+        FieldSpec { snake: "token_v2", wire: "token", location: FieldLocation::Query },
     ],
     auth: &[
         AuthApply { secret_key: "api_key", kind: AuthKind::ApiKeyQuery("key") },
@@ -9220,9 +14431,10 @@ const OP_TOKEN_GET_TOKENS_BY_TOKEN_BY_FIELD: OpSpec = OpSpec {
     method: "GET",
     path_template: "/tokens/{token}/{field}",
     fields: &[
-        FieldSpec { snake: "token", location: FieldLocation::Path },
-        FieldSpec { snake: "field", location: FieldLocation::Path },
-        FieldSpec { snake: "key", location: FieldLocation::Query },
+        FieldSpec { snake: "token", wire: "token", location: FieldLocation::Path },
+        FieldSpec { snake: "field", wire: "field", location: FieldLocation::Path },
+        FieldSpec { snake: "key", wire: "key", location: FieldLocation::Query },
+        FieldSpec { snake: "token_v2", wire: "token", location: FieldLocation::Query },
     ],
     auth: &[
     ],
@@ -9233,12 +14445,14 @@ fn iface_token__get_tokens_by_token_params__to_json(p: &iface_token::GetTokensBy
     m.insert("token".into(), Value::String((&p.token).clone()));
     m.insert("fields".into(), match (&p.fields) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("webhooks".into(), match (&p.webhooks) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("token_v2".into(), Value::String((&p.token_v2).clone()));
     Value::Object(m)
 }
 
 fn iface_token__delete_tokens_by_token_params__to_json(p: &iface_token::DeleteTokensByTokenParams) -> Value {
     let mut m = Map::new();
     m.insert("token".into(), Value::String((&p.token).clone()));
+    m.insert("token_v2".into(), Value::String((&p.token_v2).clone()));
     Value::Object(m)
 }
 
@@ -9246,6 +14460,7 @@ fn iface_token__get_tokens_member_by_token_params__to_json(p: &iface_token::GetT
     let mut m = Map::new();
     m.insert("token".into(), Value::String((&p.token).clone()));
     m.insert("fields".into(), match (&p.fields) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("token_v2".into(), Value::String((&p.token_v2).clone()));
     Value::Object(m)
 }
 
@@ -9253,18 +14468,21 @@ fn iface_token__get_tokens_member_by_token_by_field_params__to_json(p: &iface_to
     let mut m = Map::new();
     m.insert("token".into(), Value::String((&p.token).clone()));
     m.insert("field".into(), Value::String((&p.field).clone()));
+    m.insert("token_v2".into(), Value::String((&p.token_v2).clone()));
     Value::Object(m)
 }
 
 fn iface_token__get_tokens_webhooks_by_token_params__to_json(p: &iface_token::GetTokensWebhooksByTokenParams) -> Value {
     let mut m = Map::new();
     m.insert("token".into(), Value::String((&p.token).clone()));
+    m.insert("token_v2".into(), Value::String((&p.token_v2).clone()));
     Value::Object(m)
 }
 
 fn iface_token__add_tokens_webhooks_by_token_params__to_json(p: &iface_token::AddTokensWebhooksByTokenParams) -> Value {
     let mut m = Map::new();
     m.insert("token".into(), Value::String((&p.token).clone()));
+    m.insert("token_v2".into(), Value::String((&p.token_v2).clone()));
     m.insert("callback_url".into(), match (&p.callback_url) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("description".into(), match (&p.description) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("id_model".into(), match (&p.id_model) { Some(v) => Value::String((v).clone()), None => Value::Null });
@@ -9274,6 +14492,7 @@ fn iface_token__add_tokens_webhooks_by_token_params__to_json(p: &iface_token::Ad
 fn iface_token__update_tokens_webhooks_by_token_params__to_json(p: &iface_token::UpdateTokensWebhooksByTokenParams) -> Value {
     let mut m = Map::new();
     m.insert("token".into(), Value::String((&p.token).clone()));
+    m.insert("token_v2".into(), Value::String((&p.token_v2).clone()));
     m.insert("callback_url".into(), match (&p.callback_url) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("description".into(), match (&p.description) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("id_model".into(), match (&p.id_model) { Some(v) => Value::String((v).clone()), None => Value::Null });
@@ -9284,6 +14503,7 @@ fn iface_token__get_tokens_webhooks_by_token_by_id_webhook_params__to_json(p: &i
     let mut m = Map::new();
     m.insert("token".into(), Value::String((&p.token).clone()));
     m.insert("id_webhook".into(), Value::String((&p.id_webhook).clone()));
+    m.insert("token_v2".into(), Value::String((&p.token_v2).clone()));
     Value::Object(m)
 }
 
@@ -9291,6 +14511,7 @@ fn iface_token__delete_tokens_webhooks_by_token_by_id_webhook_params__to_json(p:
     let mut m = Map::new();
     m.insert("token".into(), Value::String((&p.token).clone()));
     m.insert("id_webhook".into(), Value::String((&p.id_webhook).clone()));
+    m.insert("token_v2".into(), Value::String((&p.token_v2).clone()));
     Value::Object(m)
 }
 
@@ -9299,49 +14520,220 @@ fn iface_token__get_tokens_by_token_by_field_params__to_json(p: &iface_token::Ge
     m.insert("token".into(), Value::String((&p.token).clone()));
     m.insert("field".into(), Value::String((&p.field).clone()));
     m.insert("key".into(), Value::String((&p.key).clone()));
+    m.insert("token_v2".into(), Value::String((&p.token_v2).clone()));
     Value::Object(m)
 }
 
+fn iface_token__get_tokens_by_token__ok(body: String) -> Result<String, crate::runtime::DispatchError> {
+    Ok(body)
+}
+
+fn iface_token__get_tokens_by_token__err(e: crate::runtime::DispatchError) -> iface_token::GetTokensByTokenError {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => match status {
+            400u16 => iface_token::GetTokensByTokenError::BadRequest(body),
+            _ => iface_token::GetTokensByTokenError::Other(body),
+        },
+        crate::runtime::DispatchError::Transport(m) => iface_token::GetTokensByTokenError::Other(m),
+    }
+}
+
+fn iface_token__delete_tokens_by_token__ok(body: String) -> Result<String, crate::runtime::DispatchError> {
+    Ok(body)
+}
+
+fn iface_token__delete_tokens_by_token__err(e: crate::runtime::DispatchError) -> iface_token::DeleteTokensByTokenError {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => match status {
+            400u16 => iface_token::DeleteTokensByTokenError::BadRequest(body),
+            _ => iface_token::DeleteTokensByTokenError::Other(body),
+        },
+        crate::runtime::DispatchError::Transport(m) => iface_token::DeleteTokensByTokenError::Other(m),
+    }
+}
+
+fn iface_token__get_tokens_member_by_token__ok(body: String) -> Result<String, crate::runtime::DispatchError> {
+    Ok(body)
+}
+
+fn iface_token__get_tokens_member_by_token__err(e: crate::runtime::DispatchError) -> iface_token::GetTokensMemberByTokenError {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => match status {
+            400u16 => iface_token::GetTokensMemberByTokenError::BadRequest(body),
+            _ => iface_token::GetTokensMemberByTokenError::Other(body),
+        },
+        crate::runtime::DispatchError::Transport(m) => iface_token::GetTokensMemberByTokenError::Other(m),
+    }
+}
+
+fn iface_token__get_tokens_member_by_token_by_field__ok(body: String) -> Result<String, crate::runtime::DispatchError> {
+    Ok(body)
+}
+
+fn iface_token__get_tokens_member_by_token_by_field__err(e: crate::runtime::DispatchError) -> iface_token::GetTokensMemberByTokenByFieldError {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => match status {
+            400u16 => iface_token::GetTokensMemberByTokenByFieldError::BadRequest(body),
+            _ => iface_token::GetTokensMemberByTokenByFieldError::Other(body),
+        },
+        crate::runtime::DispatchError::Transport(m) => iface_token::GetTokensMemberByTokenByFieldError::Other(m),
+    }
+}
+
+fn iface_token__get_tokens_webhooks_by_token__ok(body: String) -> Result<String, crate::runtime::DispatchError> {
+    Ok(body)
+}
+
+fn iface_token__get_tokens_webhooks_by_token__err(e: crate::runtime::DispatchError) -> iface_token::GetTokensWebhooksByTokenError {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => match status {
+            400u16 => iface_token::GetTokensWebhooksByTokenError::BadRequest(body),
+            _ => iface_token::GetTokensWebhooksByTokenError::Other(body),
+        },
+        crate::runtime::DispatchError::Transport(m) => iface_token::GetTokensWebhooksByTokenError::Other(m),
+    }
+}
+
+fn iface_token__add_tokens_webhooks_by_token__ok(body: String) -> Result<String, crate::runtime::DispatchError> {
+    Ok(body)
+}
+
+fn iface_token__add_tokens_webhooks_by_token__err(e: crate::runtime::DispatchError) -> iface_token::AddTokensWebhooksByTokenError {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => match status {
+            400u16 => iface_token::AddTokensWebhooksByTokenError::BadRequest(body),
+            _ => iface_token::AddTokensWebhooksByTokenError::Other(body),
+        },
+        crate::runtime::DispatchError::Transport(m) => iface_token::AddTokensWebhooksByTokenError::Other(m),
+    }
+}
+
+fn iface_token__update_tokens_webhooks_by_token__ok(body: String) -> Result<String, crate::runtime::DispatchError> {
+    Ok(body)
+}
+
+fn iface_token__update_tokens_webhooks_by_token__err(e: crate::runtime::DispatchError) -> iface_token::UpdateTokensWebhooksByTokenError {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => match status {
+            400u16 => iface_token::UpdateTokensWebhooksByTokenError::BadRequest(body),
+            _ => iface_token::UpdateTokensWebhooksByTokenError::Other(body),
+        },
+        crate::runtime::DispatchError::Transport(m) => iface_token::UpdateTokensWebhooksByTokenError::Other(m),
+    }
+}
+
+fn iface_token__get_tokens_webhooks_by_token_by_id_webhook__ok(body: String) -> Result<String, crate::runtime::DispatchError> {
+    Ok(body)
+}
+
+fn iface_token__get_tokens_webhooks_by_token_by_id_webhook__err(e: crate::runtime::DispatchError) -> iface_token::GetTokensWebhooksByTokenByIdWebhookError {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => match status {
+            400u16 => iface_token::GetTokensWebhooksByTokenByIdWebhookError::BadRequest(body),
+            _ => iface_token::GetTokensWebhooksByTokenByIdWebhookError::Other(body),
+        },
+        crate::runtime::DispatchError::Transport(m) => iface_token::GetTokensWebhooksByTokenByIdWebhookError::Other(m),
+    }
+}
+
+fn iface_token__delete_tokens_webhooks_by_token_by_id_webhook__ok(body: String) -> Result<String, crate::runtime::DispatchError> {
+    Ok(body)
+}
+
+fn iface_token__delete_tokens_webhooks_by_token_by_id_webhook__err(e: crate::runtime::DispatchError) -> iface_token::DeleteTokensWebhooksByTokenByIdWebhookError {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => match status {
+            400u16 => iface_token::DeleteTokensWebhooksByTokenByIdWebhookError::BadRequest(body),
+            _ => iface_token::DeleteTokensWebhooksByTokenByIdWebhookError::Other(body),
+        },
+        crate::runtime::DispatchError::Transport(m) => iface_token::DeleteTokensWebhooksByTokenByIdWebhookError::Other(m),
+    }
+}
+
+fn iface_token__get_tokens_by_token_by_field__ok(body: String) -> Result<String, crate::runtime::DispatchError> {
+    Ok(body)
+}
+
+fn iface_token__get_tokens_by_token_by_field__err(e: crate::runtime::DispatchError) -> iface_token::GetTokensByTokenByFieldError {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => match status {
+            400u16 => iface_token::GetTokensByTokenByFieldError::BadRequest(body),
+            _ => iface_token::GetTokensByTokenByFieldError::Other(body),
+        },
+        crate::runtime::DispatchError::Transport(m) => iface_token::GetTokensByTokenByFieldError::Other(m),
+    }
+}
+
 impl iface_token::Guest for crate::Component {
-    fn get_tokens_by_token(params: iface_token::GetTokensByTokenParams) -> Result<String, String> {
+    fn get_tokens_by_token(params: iface_token::GetTokensByTokenParams) -> Result<String, iface_token::GetTokensByTokenError> {
         let json = iface_token__get_tokens_by_token_params__to_json(&params);
-        dispatch(&OP_TOKEN_GET_TOKENS_BY_TOKEN, json)
+        match dispatch(&OP_TOKEN_GET_TOKENS_BY_TOKEN, json).and_then(iface_token__get_tokens_by_token__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_token__get_tokens_by_token__err(e)),
+        }
     }
-    fn delete_tokens_by_token(params: iface_token::DeleteTokensByTokenParams) -> Result<String, String> {
+    fn delete_tokens_by_token(params: iface_token::DeleteTokensByTokenParams) -> Result<String, iface_token::DeleteTokensByTokenError> {
         let json = iface_token__delete_tokens_by_token_params__to_json(&params);
-        dispatch(&OP_TOKEN_DELETE_TOKENS_BY_TOKEN, json)
+        match dispatch(&OP_TOKEN_DELETE_TOKENS_BY_TOKEN, json).and_then(iface_token__delete_tokens_by_token__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_token__delete_tokens_by_token__err(e)),
+        }
     }
-    fn get_tokens_member_by_token(params: iface_token::GetTokensMemberByTokenParams) -> Result<String, String> {
+    fn get_tokens_member_by_token(params: iface_token::GetTokensMemberByTokenParams) -> Result<String, iface_token::GetTokensMemberByTokenError> {
         let json = iface_token__get_tokens_member_by_token_params__to_json(&params);
-        dispatch(&OP_TOKEN_GET_TOKENS_MEMBER_BY_TOKEN, json)
+        match dispatch(&OP_TOKEN_GET_TOKENS_MEMBER_BY_TOKEN, json).and_then(iface_token__get_tokens_member_by_token__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_token__get_tokens_member_by_token__err(e)),
+        }
     }
-    fn get_tokens_member_by_token_by_field(params: iface_token::GetTokensMemberByTokenByFieldParams) -> Result<String, String> {
+    fn get_tokens_member_by_token_by_field(params: iface_token::GetTokensMemberByTokenByFieldParams) -> Result<String, iface_token::GetTokensMemberByTokenByFieldError> {
         let json = iface_token__get_tokens_member_by_token_by_field_params__to_json(&params);
-        dispatch(&OP_TOKEN_GET_TOKENS_MEMBER_BY_TOKEN_BY_FIELD, json)
+        match dispatch(&OP_TOKEN_GET_TOKENS_MEMBER_BY_TOKEN_BY_FIELD, json).and_then(iface_token__get_tokens_member_by_token_by_field__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_token__get_tokens_member_by_token_by_field__err(e)),
+        }
     }
-    fn get_tokens_webhooks_by_token(params: iface_token::GetTokensWebhooksByTokenParams) -> Result<String, String> {
+    fn get_tokens_webhooks_by_token(params: iface_token::GetTokensWebhooksByTokenParams) -> Result<String, iface_token::GetTokensWebhooksByTokenError> {
         let json = iface_token__get_tokens_webhooks_by_token_params__to_json(&params);
-        dispatch(&OP_TOKEN_GET_TOKENS_WEBHOOKS_BY_TOKEN, json)
+        match dispatch(&OP_TOKEN_GET_TOKENS_WEBHOOKS_BY_TOKEN, json).and_then(iface_token__get_tokens_webhooks_by_token__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_token__get_tokens_webhooks_by_token__err(e)),
+        }
     }
-    fn add_tokens_webhooks_by_token(params: iface_token::AddTokensWebhooksByTokenParams) -> Result<String, String> {
+    fn add_tokens_webhooks_by_token(params: iface_token::AddTokensWebhooksByTokenParams) -> Result<String, iface_token::AddTokensWebhooksByTokenError> {
         let json = iface_token__add_tokens_webhooks_by_token_params__to_json(&params);
-        dispatch(&OP_TOKEN_ADD_TOKENS_WEBHOOKS_BY_TOKEN, json)
+        match dispatch(&OP_TOKEN_ADD_TOKENS_WEBHOOKS_BY_TOKEN, json).and_then(iface_token__add_tokens_webhooks_by_token__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_token__add_tokens_webhooks_by_token__err(e)),
+        }
     }
-    fn update_tokens_webhooks_by_token(params: iface_token::UpdateTokensWebhooksByTokenParams) -> Result<String, String> {
+    fn update_tokens_webhooks_by_token(params: iface_token::UpdateTokensWebhooksByTokenParams) -> Result<String, iface_token::UpdateTokensWebhooksByTokenError> {
         let json = iface_token__update_tokens_webhooks_by_token_params__to_json(&params);
-        dispatch(&OP_TOKEN_UPDATE_TOKENS_WEBHOOKS_BY_TOKEN, json)
+        match dispatch(&OP_TOKEN_UPDATE_TOKENS_WEBHOOKS_BY_TOKEN, json).and_then(iface_token__update_tokens_webhooks_by_token__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_token__update_tokens_webhooks_by_token__err(e)),
+        }
     }
-    fn get_tokens_webhooks_by_token_by_id_webhook(params: iface_token::GetTokensWebhooksByTokenByIdWebhookParams) -> Result<String, String> {
+    fn get_tokens_webhooks_by_token_by_id_webhook(params: iface_token::GetTokensWebhooksByTokenByIdWebhookParams) -> Result<String, iface_token::GetTokensWebhooksByTokenByIdWebhookError> {
         let json = iface_token__get_tokens_webhooks_by_token_by_id_webhook_params__to_json(&params);
-        dispatch(&OP_TOKEN_GET_TOKENS_WEBHOOKS_BY_TOKEN_BY_ID_WEBHOOK, json)
+        match dispatch(&OP_TOKEN_GET_TOKENS_WEBHOOKS_BY_TOKEN_BY_ID_WEBHOOK, json).and_then(iface_token__get_tokens_webhooks_by_token_by_id_webhook__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_token__get_tokens_webhooks_by_token_by_id_webhook__err(e)),
+        }
     }
-    fn delete_tokens_webhooks_by_token_by_id_webhook(params: iface_token::DeleteTokensWebhooksByTokenByIdWebhookParams) -> Result<String, String> {
+    fn delete_tokens_webhooks_by_token_by_id_webhook(params: iface_token::DeleteTokensWebhooksByTokenByIdWebhookParams) -> Result<String, iface_token::DeleteTokensWebhooksByTokenByIdWebhookError> {
         let json = iface_token__delete_tokens_webhooks_by_token_by_id_webhook_params__to_json(&params);
-        dispatch(&OP_TOKEN_DELETE_TOKENS_WEBHOOKS_BY_TOKEN_BY_ID_WEBHOOK, json)
+        match dispatch(&OP_TOKEN_DELETE_TOKENS_WEBHOOKS_BY_TOKEN_BY_ID_WEBHOOK, json).and_then(iface_token__delete_tokens_webhooks_by_token_by_id_webhook__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_token__delete_tokens_webhooks_by_token_by_id_webhook__err(e)),
+        }
     }
-    fn get_tokens_by_token_by_field(params: iface_token::GetTokensByTokenByFieldParams) -> Result<String, String> {
+    fn get_tokens_by_token_by_field(params: iface_token::GetTokensByTokenByFieldParams) -> Result<String, iface_token::GetTokensByTokenByFieldError> {
         let json = iface_token__get_tokens_by_token_by_field_params__to_json(&params);
-        dispatch(&OP_TOKEN_GET_TOKENS_BY_TOKEN_BY_FIELD, json)
+        match dispatch(&OP_TOKEN_GET_TOKENS_BY_TOKEN_BY_FIELD, json).and_then(iface_token__get_tokens_by_token_by_field__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_token__get_tokens_by_token_by_field__err(e)),
+        }
     }
 }
 use crate::exports::autostamp::trello::type_op as iface_type_op;
@@ -9350,8 +14742,8 @@ const OP_TYPE_OP_GET_TYPES_BY_ID: OpSpec = OpSpec {
     method: "GET",
     path_template: "/types/{id}",
     fields: &[
-        FieldSpec { snake: "id", location: FieldLocation::Path },
-        FieldSpec { snake: "token", location: FieldLocation::Query },
+        FieldSpec { snake: "id", wire: "id", location: FieldLocation::Path },
+        FieldSpec { snake: "token", wire: "token", location: FieldLocation::Query },
     ],
     auth: &[
         AuthApply { secret_key: "api_key", kind: AuthKind::ApiKeyQuery("key") },
@@ -9365,10 +14757,27 @@ fn iface_type_op__get_types_by_id_params__to_json(p: &iface_type_op::GetTypesByI
     Value::Object(m)
 }
 
+fn iface_type_op__get_types_by_id__ok(body: String) -> Result<String, crate::runtime::DispatchError> {
+    Ok(body)
+}
+
+fn iface_type_op__get_types_by_id__err(e: crate::runtime::DispatchError) -> iface_type_op::GetTypesByIdError {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => match status {
+            400u16 => iface_type_op::GetTypesByIdError::BadRequest(body),
+            _ => iface_type_op::GetTypesByIdError::Other(body),
+        },
+        crate::runtime::DispatchError::Transport(m) => iface_type_op::GetTypesByIdError::Other(m),
+    }
+}
+
 impl iface_type_op::Guest for crate::Component {
-    fn get_types_by_id(params: iface_type_op::GetTypesByIdParams) -> Result<String, String> {
+    fn get_types_by_id(params: iface_type_op::GetTypesByIdParams) -> Result<String, iface_type_op::GetTypesByIdError> {
         let json = iface_type_op__get_types_by_id_params__to_json(&params);
-        dispatch(&OP_TYPE_OP_GET_TYPES_BY_ID, json)
+        match dispatch(&OP_TYPE_OP_GET_TYPES_BY_ID, json).and_then(iface_type_op__get_types_by_id__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_type_op__get_types_by_id__err(e)),
+        }
     }
 }
 use crate::exports::autostamp::trello::webhook as iface_webhook;
@@ -9377,11 +14786,11 @@ const OP_WEBHOOK_ADD_WEBHOOKS: OpSpec = OpSpec {
     method: "POST",
     path_template: "/webhooks",
     fields: &[
-        FieldSpec { snake: "token", location: FieldLocation::Query },
-        FieldSpec { snake: "active", location: FieldLocation::Body },
-        FieldSpec { snake: "callback_url", location: FieldLocation::Body },
-        FieldSpec { snake: "description", location: FieldLocation::Body },
-        FieldSpec { snake: "id_model", location: FieldLocation::Body },
+        FieldSpec { snake: "token", wire: "token", location: FieldLocation::Query },
+        FieldSpec { snake: "active", wire: "active", location: FieldLocation::Body },
+        FieldSpec { snake: "callback_url", wire: "callbackURL", location: FieldLocation::Body },
+        FieldSpec { snake: "description", wire: "description", location: FieldLocation::Body },
+        FieldSpec { snake: "id_model", wire: "idModel", location: FieldLocation::Body },
     ],
     auth: &[
         AuthApply { secret_key: "api_key", kind: AuthKind::ApiKeyQuery("key") },
@@ -9392,11 +14801,11 @@ const OP_WEBHOOK_UPDATE_WEBHOOKS: OpSpec = OpSpec {
     method: "PUT",
     path_template: "/webhooks/",
     fields: &[
-        FieldSpec { snake: "token", location: FieldLocation::Query },
-        FieldSpec { snake: "active", location: FieldLocation::Body },
-        FieldSpec { snake: "callback_url", location: FieldLocation::Body },
-        FieldSpec { snake: "description", location: FieldLocation::Body },
-        FieldSpec { snake: "id_model", location: FieldLocation::Body },
+        FieldSpec { snake: "token", wire: "token", location: FieldLocation::Query },
+        FieldSpec { snake: "active", wire: "active", location: FieldLocation::Body },
+        FieldSpec { snake: "callback_url", wire: "callbackURL", location: FieldLocation::Body },
+        FieldSpec { snake: "description", wire: "description", location: FieldLocation::Body },
+        FieldSpec { snake: "id_model", wire: "idModel", location: FieldLocation::Body },
     ],
     auth: &[
         AuthApply { secret_key: "api_key", kind: AuthKind::ApiKeyQuery("key") },
@@ -9407,8 +14816,8 @@ const OP_WEBHOOK_GET_WEBHOOKS_BY_ID_WEBHOOK: OpSpec = OpSpec {
     method: "GET",
     path_template: "/webhooks/{id_webhook}",
     fields: &[
-        FieldSpec { snake: "id_webhook", location: FieldLocation::Path },
-        FieldSpec { snake: "token", location: FieldLocation::Query },
+        FieldSpec { snake: "id_webhook", wire: "idWebhook", location: FieldLocation::Path },
+        FieldSpec { snake: "token", wire: "token", location: FieldLocation::Query },
     ],
     auth: &[
         AuthApply { secret_key: "api_key", kind: AuthKind::ApiKeyQuery("key") },
@@ -9419,12 +14828,12 @@ const OP_WEBHOOK_UPDATE_WEBHOOKS_BY_ID_WEBHOOK: OpSpec = OpSpec {
     method: "PUT",
     path_template: "/webhooks/{id_webhook}",
     fields: &[
-        FieldSpec { snake: "id_webhook", location: FieldLocation::Path },
-        FieldSpec { snake: "token", location: FieldLocation::Query },
-        FieldSpec { snake: "active", location: FieldLocation::Body },
-        FieldSpec { snake: "callback_url", location: FieldLocation::Body },
-        FieldSpec { snake: "description", location: FieldLocation::Body },
-        FieldSpec { snake: "id_model", location: FieldLocation::Body },
+        FieldSpec { snake: "id_webhook", wire: "idWebhook", location: FieldLocation::Path },
+        FieldSpec { snake: "token", wire: "token", location: FieldLocation::Query },
+        FieldSpec { snake: "active", wire: "active", location: FieldLocation::Body },
+        FieldSpec { snake: "callback_url", wire: "callbackURL", location: FieldLocation::Body },
+        FieldSpec { snake: "description", wire: "description", location: FieldLocation::Body },
+        FieldSpec { snake: "id_model", wire: "idModel", location: FieldLocation::Body },
     ],
     auth: &[
         AuthApply { secret_key: "api_key", kind: AuthKind::ApiKeyQuery("key") },
@@ -9435,8 +14844,8 @@ const OP_WEBHOOK_DELETE_WEBHOOKS_BY_ID_WEBHOOK: OpSpec = OpSpec {
     method: "DELETE",
     path_template: "/webhooks/{id_webhook}",
     fields: &[
-        FieldSpec { snake: "id_webhook", location: FieldLocation::Path },
-        FieldSpec { snake: "token", location: FieldLocation::Query },
+        FieldSpec { snake: "id_webhook", wire: "idWebhook", location: FieldLocation::Path },
+        FieldSpec { snake: "token", wire: "token", location: FieldLocation::Query },
     ],
     auth: &[
         AuthApply { secret_key: "api_key", kind: AuthKind::ApiKeyQuery("key") },
@@ -9447,9 +14856,9 @@ const OP_WEBHOOK_UPDATE_WEBHOOKS_ACTIVE_BY_ID_WEBHOOK: OpSpec = OpSpec {
     method: "PUT",
     path_template: "/webhooks/{id_webhook}/active",
     fields: &[
-        FieldSpec { snake: "id_webhook", location: FieldLocation::Path },
-        FieldSpec { snake: "token", location: FieldLocation::Query },
-        FieldSpec { snake: "value", location: FieldLocation::Body },
+        FieldSpec { snake: "id_webhook", wire: "idWebhook", location: FieldLocation::Path },
+        FieldSpec { snake: "token", wire: "token", location: FieldLocation::Query },
+        FieldSpec { snake: "value", wire: "value", location: FieldLocation::Body },
     ],
     auth: &[
         AuthApply { secret_key: "api_key", kind: AuthKind::ApiKeyQuery("key") },
@@ -9460,9 +14869,9 @@ const OP_WEBHOOK_UPDATE_WEBHOOKS_CALLBACK_URL_BY_ID_WEBHOOK: OpSpec = OpSpec {
     method: "PUT",
     path_template: "/webhooks/{id_webhook}/callbackURL",
     fields: &[
-        FieldSpec { snake: "id_webhook", location: FieldLocation::Path },
-        FieldSpec { snake: "token", location: FieldLocation::Query },
-        FieldSpec { snake: "value", location: FieldLocation::Body },
+        FieldSpec { snake: "id_webhook", wire: "idWebhook", location: FieldLocation::Path },
+        FieldSpec { snake: "token", wire: "token", location: FieldLocation::Query },
+        FieldSpec { snake: "value", wire: "value", location: FieldLocation::Body },
     ],
     auth: &[
         AuthApply { secret_key: "api_key", kind: AuthKind::ApiKeyQuery("key") },
@@ -9473,9 +14882,9 @@ const OP_WEBHOOK_UPDATE_WEBHOOKS_DESCRIPTION_BY_ID_WEBHOOK: OpSpec = OpSpec {
     method: "PUT",
     path_template: "/webhooks/{id_webhook}/description",
     fields: &[
-        FieldSpec { snake: "id_webhook", location: FieldLocation::Path },
-        FieldSpec { snake: "token", location: FieldLocation::Query },
-        FieldSpec { snake: "value", location: FieldLocation::Body },
+        FieldSpec { snake: "id_webhook", wire: "idWebhook", location: FieldLocation::Path },
+        FieldSpec { snake: "token", wire: "token", location: FieldLocation::Query },
+        FieldSpec { snake: "value", wire: "value", location: FieldLocation::Body },
     ],
     auth: &[
         AuthApply { secret_key: "api_key", kind: AuthKind::ApiKeyQuery("key") },
@@ -9486,9 +14895,9 @@ const OP_WEBHOOK_UPDATE_WEBHOOKS_ID_MODEL_BY_ID_WEBHOOK: OpSpec = OpSpec {
     method: "PUT",
     path_template: "/webhooks/{id_webhook}/idModel",
     fields: &[
-        FieldSpec { snake: "id_webhook", location: FieldLocation::Path },
-        FieldSpec { snake: "token", location: FieldLocation::Query },
-        FieldSpec { snake: "value", location: FieldLocation::Body },
+        FieldSpec { snake: "id_webhook", wire: "idWebhook", location: FieldLocation::Path },
+        FieldSpec { snake: "token", wire: "token", location: FieldLocation::Query },
+        FieldSpec { snake: "value", wire: "value", location: FieldLocation::Body },
     ],
     auth: &[
         AuthApply { secret_key: "api_key", kind: AuthKind::ApiKeyQuery("key") },
@@ -9499,10 +14908,10 @@ const OP_WEBHOOK_GET_WEBHOOKS_BY_ID_WEBHOOK_BY_FIELD: OpSpec = OpSpec {
     method: "GET",
     path_template: "/webhooks/{id_webhook}/{field}",
     fields: &[
-        FieldSpec { snake: "id_webhook", location: FieldLocation::Path },
-        FieldSpec { snake: "field", location: FieldLocation::Path },
-        FieldSpec { snake: "key", location: FieldLocation::Query },
-        FieldSpec { snake: "token", location: FieldLocation::Query },
+        FieldSpec { snake: "id_webhook", wire: "idWebhook", location: FieldLocation::Path },
+        FieldSpec { snake: "field", wire: "field", location: FieldLocation::Path },
+        FieldSpec { snake: "key", wire: "key", location: FieldLocation::Query },
+        FieldSpec { snake: "token", wire: "token", location: FieldLocation::Query },
     ],
     auth: &[
     ],
@@ -9594,46 +15003,216 @@ fn iface_webhook__get_webhooks_by_id_webhook_by_field_params__to_json(p: &iface_
     Value::Object(m)
 }
 
+fn iface_webhook__add_webhooks__ok(body: String) -> Result<String, crate::runtime::DispatchError> {
+    Ok(body)
+}
+
+fn iface_webhook__add_webhooks__err(e: crate::runtime::DispatchError) -> iface_webhook::AddWebhooksError {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => match status {
+            400u16 => iface_webhook::AddWebhooksError::BadRequest(body),
+            _ => iface_webhook::AddWebhooksError::Other(body),
+        },
+        crate::runtime::DispatchError::Transport(m) => iface_webhook::AddWebhooksError::Other(m),
+    }
+}
+
+fn iface_webhook__update_webhooks__ok(body: String) -> Result<String, crate::runtime::DispatchError> {
+    Ok(body)
+}
+
+fn iface_webhook__update_webhooks__err(e: crate::runtime::DispatchError) -> iface_webhook::UpdateWebhooksError {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => match status {
+            400u16 => iface_webhook::UpdateWebhooksError::BadRequest(body),
+            _ => iface_webhook::UpdateWebhooksError::Other(body),
+        },
+        crate::runtime::DispatchError::Transport(m) => iface_webhook::UpdateWebhooksError::Other(m),
+    }
+}
+
+fn iface_webhook__get_webhooks_by_id_webhook__ok(body: String) -> Result<String, crate::runtime::DispatchError> {
+    Ok(body)
+}
+
+fn iface_webhook__get_webhooks_by_id_webhook__err(e: crate::runtime::DispatchError) -> iface_webhook::GetWebhooksByIdWebhookError {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => match status {
+            400u16 => iface_webhook::GetWebhooksByIdWebhookError::BadRequest(body),
+            _ => iface_webhook::GetWebhooksByIdWebhookError::Other(body),
+        },
+        crate::runtime::DispatchError::Transport(m) => iface_webhook::GetWebhooksByIdWebhookError::Other(m),
+    }
+}
+
+fn iface_webhook__update_webhooks_by_id_webhook__ok(body: String) -> Result<String, crate::runtime::DispatchError> {
+    Ok(body)
+}
+
+fn iface_webhook__update_webhooks_by_id_webhook__err(e: crate::runtime::DispatchError) -> iface_webhook::UpdateWebhooksByIdWebhookError {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => match status {
+            400u16 => iface_webhook::UpdateWebhooksByIdWebhookError::BadRequest(body),
+            _ => iface_webhook::UpdateWebhooksByIdWebhookError::Other(body),
+        },
+        crate::runtime::DispatchError::Transport(m) => iface_webhook::UpdateWebhooksByIdWebhookError::Other(m),
+    }
+}
+
+fn iface_webhook__delete_webhooks_by_id_webhook__ok(body: String) -> Result<String, crate::runtime::DispatchError> {
+    Ok(body)
+}
+
+fn iface_webhook__delete_webhooks_by_id_webhook__err(e: crate::runtime::DispatchError) -> iface_webhook::DeleteWebhooksByIdWebhookError {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => match status {
+            400u16 => iface_webhook::DeleteWebhooksByIdWebhookError::BadRequest(body),
+            _ => iface_webhook::DeleteWebhooksByIdWebhookError::Other(body),
+        },
+        crate::runtime::DispatchError::Transport(m) => iface_webhook::DeleteWebhooksByIdWebhookError::Other(m),
+    }
+}
+
+fn iface_webhook__update_webhooks_active_by_id_webhook__ok(body: String) -> Result<String, crate::runtime::DispatchError> {
+    Ok(body)
+}
+
+fn iface_webhook__update_webhooks_active_by_id_webhook__err(e: crate::runtime::DispatchError) -> iface_webhook::UpdateWebhooksActiveByIdWebhookError {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => match status {
+            400u16 => iface_webhook::UpdateWebhooksActiveByIdWebhookError::BadRequest(body),
+            _ => iface_webhook::UpdateWebhooksActiveByIdWebhookError::Other(body),
+        },
+        crate::runtime::DispatchError::Transport(m) => iface_webhook::UpdateWebhooksActiveByIdWebhookError::Other(m),
+    }
+}
+
+fn iface_webhook__update_webhooks_callback_url_by_id_webhook__ok(body: String) -> Result<String, crate::runtime::DispatchError> {
+    Ok(body)
+}
+
+fn iface_webhook__update_webhooks_callback_url_by_id_webhook__err(e: crate::runtime::DispatchError) -> iface_webhook::UpdateWebhooksCallbackUrlByIdWebhookError {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => match status {
+            400u16 => iface_webhook::UpdateWebhooksCallbackUrlByIdWebhookError::BadRequest(body),
+            _ => iface_webhook::UpdateWebhooksCallbackUrlByIdWebhookError::Other(body),
+        },
+        crate::runtime::DispatchError::Transport(m) => iface_webhook::UpdateWebhooksCallbackUrlByIdWebhookError::Other(m),
+    }
+}
+
+fn iface_webhook__update_webhooks_description_by_id_webhook__ok(body: String) -> Result<String, crate::runtime::DispatchError> {
+    Ok(body)
+}
+
+fn iface_webhook__update_webhooks_description_by_id_webhook__err(e: crate::runtime::DispatchError) -> iface_webhook::UpdateWebhooksDescriptionByIdWebhookError {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => match status {
+            400u16 => iface_webhook::UpdateWebhooksDescriptionByIdWebhookError::BadRequest(body),
+            _ => iface_webhook::UpdateWebhooksDescriptionByIdWebhookError::Other(body),
+        },
+        crate::runtime::DispatchError::Transport(m) => iface_webhook::UpdateWebhooksDescriptionByIdWebhookError::Other(m),
+    }
+}
+
+fn iface_webhook__update_webhooks_id_model_by_id_webhook__ok(body: String) -> Result<String, crate::runtime::DispatchError> {
+    Ok(body)
+}
+
+fn iface_webhook__update_webhooks_id_model_by_id_webhook__err(e: crate::runtime::DispatchError) -> iface_webhook::UpdateWebhooksIdModelByIdWebhookError {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => match status {
+            400u16 => iface_webhook::UpdateWebhooksIdModelByIdWebhookError::BadRequest(body),
+            _ => iface_webhook::UpdateWebhooksIdModelByIdWebhookError::Other(body),
+        },
+        crate::runtime::DispatchError::Transport(m) => iface_webhook::UpdateWebhooksIdModelByIdWebhookError::Other(m),
+    }
+}
+
+fn iface_webhook__get_webhooks_by_id_webhook_by_field__ok(body: String) -> Result<String, crate::runtime::DispatchError> {
+    Ok(body)
+}
+
+fn iface_webhook__get_webhooks_by_id_webhook_by_field__err(e: crate::runtime::DispatchError) -> iface_webhook::GetWebhooksByIdWebhookByFieldError {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => match status {
+            400u16 => iface_webhook::GetWebhooksByIdWebhookByFieldError::BadRequest(body),
+            _ => iface_webhook::GetWebhooksByIdWebhookByFieldError::Other(body),
+        },
+        crate::runtime::DispatchError::Transport(m) => iface_webhook::GetWebhooksByIdWebhookByFieldError::Other(m),
+    }
+}
+
 impl iface_webhook::Guest for crate::Component {
-    fn add_webhooks(params: iface_webhook::AddWebhooksParams) -> Result<String, String> {
+    fn add_webhooks(params: iface_webhook::AddWebhooksParams) -> Result<String, iface_webhook::AddWebhooksError> {
         let json = iface_webhook__add_webhooks_params__to_json(&params);
-        dispatch(&OP_WEBHOOK_ADD_WEBHOOKS, json)
+        match dispatch(&OP_WEBHOOK_ADD_WEBHOOKS, json).and_then(iface_webhook__add_webhooks__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_webhook__add_webhooks__err(e)),
+        }
     }
-    fn update_webhooks(params: iface_webhook::UpdateWebhooksParams) -> Result<String, String> {
+    fn update_webhooks(params: iface_webhook::UpdateWebhooksParams) -> Result<String, iface_webhook::UpdateWebhooksError> {
         let json = iface_webhook__update_webhooks_params__to_json(&params);
-        dispatch(&OP_WEBHOOK_UPDATE_WEBHOOKS, json)
+        match dispatch(&OP_WEBHOOK_UPDATE_WEBHOOKS, json).and_then(iface_webhook__update_webhooks__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_webhook__update_webhooks__err(e)),
+        }
     }
-    fn get_webhooks_by_id_webhook(params: iface_webhook::GetWebhooksByIdWebhookParams) -> Result<String, String> {
+    fn get_webhooks_by_id_webhook(params: iface_webhook::GetWebhooksByIdWebhookParams) -> Result<String, iface_webhook::GetWebhooksByIdWebhookError> {
         let json = iface_webhook__get_webhooks_by_id_webhook_params__to_json(&params);
-        dispatch(&OP_WEBHOOK_GET_WEBHOOKS_BY_ID_WEBHOOK, json)
+        match dispatch(&OP_WEBHOOK_GET_WEBHOOKS_BY_ID_WEBHOOK, json).and_then(iface_webhook__get_webhooks_by_id_webhook__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_webhook__get_webhooks_by_id_webhook__err(e)),
+        }
     }
-    fn update_webhooks_by_id_webhook(params: iface_webhook::UpdateWebhooksByIdWebhookParams) -> Result<String, String> {
+    fn update_webhooks_by_id_webhook(params: iface_webhook::UpdateWebhooksByIdWebhookParams) -> Result<String, iface_webhook::UpdateWebhooksByIdWebhookError> {
         let json = iface_webhook__update_webhooks_by_id_webhook_params__to_json(&params);
-        dispatch(&OP_WEBHOOK_UPDATE_WEBHOOKS_BY_ID_WEBHOOK, json)
+        match dispatch(&OP_WEBHOOK_UPDATE_WEBHOOKS_BY_ID_WEBHOOK, json).and_then(iface_webhook__update_webhooks_by_id_webhook__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_webhook__update_webhooks_by_id_webhook__err(e)),
+        }
     }
-    fn delete_webhooks_by_id_webhook(params: iface_webhook::DeleteWebhooksByIdWebhookParams) -> Result<String, String> {
+    fn delete_webhooks_by_id_webhook(params: iface_webhook::DeleteWebhooksByIdWebhookParams) -> Result<String, iface_webhook::DeleteWebhooksByIdWebhookError> {
         let json = iface_webhook__delete_webhooks_by_id_webhook_params__to_json(&params);
-        dispatch(&OP_WEBHOOK_DELETE_WEBHOOKS_BY_ID_WEBHOOK, json)
+        match dispatch(&OP_WEBHOOK_DELETE_WEBHOOKS_BY_ID_WEBHOOK, json).and_then(iface_webhook__delete_webhooks_by_id_webhook__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_webhook__delete_webhooks_by_id_webhook__err(e)),
+        }
     }
-    fn update_webhooks_active_by_id_webhook(params: iface_webhook::UpdateWebhooksActiveByIdWebhookParams) -> Result<String, String> {
+    fn update_webhooks_active_by_id_webhook(params: iface_webhook::UpdateWebhooksActiveByIdWebhookParams) -> Result<String, iface_webhook::UpdateWebhooksActiveByIdWebhookError> {
         let json = iface_webhook__update_webhooks_active_by_id_webhook_params__to_json(&params);
-        dispatch(&OP_WEBHOOK_UPDATE_WEBHOOKS_ACTIVE_BY_ID_WEBHOOK, json)
+        match dispatch(&OP_WEBHOOK_UPDATE_WEBHOOKS_ACTIVE_BY_ID_WEBHOOK, json).and_then(iface_webhook__update_webhooks_active_by_id_webhook__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_webhook__update_webhooks_active_by_id_webhook__err(e)),
+        }
     }
-    fn update_webhooks_callback_url_by_id_webhook(params: iface_webhook::UpdateWebhooksCallbackUrlByIdWebhookParams) -> Result<String, String> {
+    fn update_webhooks_callback_url_by_id_webhook(params: iface_webhook::UpdateWebhooksCallbackUrlByIdWebhookParams) -> Result<String, iface_webhook::UpdateWebhooksCallbackUrlByIdWebhookError> {
         let json = iface_webhook__update_webhooks_callback_url_by_id_webhook_params__to_json(&params);
-        dispatch(&OP_WEBHOOK_UPDATE_WEBHOOKS_CALLBACK_URL_BY_ID_WEBHOOK, json)
+        match dispatch(&OP_WEBHOOK_UPDATE_WEBHOOKS_CALLBACK_URL_BY_ID_WEBHOOK, json).and_then(iface_webhook__update_webhooks_callback_url_by_id_webhook__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_webhook__update_webhooks_callback_url_by_id_webhook__err(e)),
+        }
     }
-    fn update_webhooks_description_by_id_webhook(params: iface_webhook::UpdateWebhooksDescriptionByIdWebhookParams) -> Result<String, String> {
+    fn update_webhooks_description_by_id_webhook(params: iface_webhook::UpdateWebhooksDescriptionByIdWebhookParams) -> Result<String, iface_webhook::UpdateWebhooksDescriptionByIdWebhookError> {
         let json = iface_webhook__update_webhooks_description_by_id_webhook_params__to_json(&params);
-        dispatch(&OP_WEBHOOK_UPDATE_WEBHOOKS_DESCRIPTION_BY_ID_WEBHOOK, json)
+        match dispatch(&OP_WEBHOOK_UPDATE_WEBHOOKS_DESCRIPTION_BY_ID_WEBHOOK, json).and_then(iface_webhook__update_webhooks_description_by_id_webhook__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_webhook__update_webhooks_description_by_id_webhook__err(e)),
+        }
     }
-    fn update_webhooks_id_model_by_id_webhook(params: iface_webhook::UpdateWebhooksIdModelByIdWebhookParams) -> Result<String, String> {
+    fn update_webhooks_id_model_by_id_webhook(params: iface_webhook::UpdateWebhooksIdModelByIdWebhookParams) -> Result<String, iface_webhook::UpdateWebhooksIdModelByIdWebhookError> {
         let json = iface_webhook__update_webhooks_id_model_by_id_webhook_params__to_json(&params);
-        dispatch(&OP_WEBHOOK_UPDATE_WEBHOOKS_ID_MODEL_BY_ID_WEBHOOK, json)
+        match dispatch(&OP_WEBHOOK_UPDATE_WEBHOOKS_ID_MODEL_BY_ID_WEBHOOK, json).and_then(iface_webhook__update_webhooks_id_model_by_id_webhook__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_webhook__update_webhooks_id_model_by_id_webhook__err(e)),
+        }
     }
-    fn get_webhooks_by_id_webhook_by_field(params: iface_webhook::GetWebhooksByIdWebhookByFieldParams) -> Result<String, String> {
+    fn get_webhooks_by_id_webhook_by_field(params: iface_webhook::GetWebhooksByIdWebhookByFieldParams) -> Result<String, iface_webhook::GetWebhooksByIdWebhookByFieldError> {
         let json = iface_webhook__get_webhooks_by_id_webhook_by_field_params__to_json(&params);
-        dispatch(&OP_WEBHOOK_GET_WEBHOOKS_BY_ID_WEBHOOK_BY_FIELD, json)
+        match dispatch(&OP_WEBHOOK_GET_WEBHOOKS_BY_ID_WEBHOOK_BY_FIELD, json).and_then(iface_webhook__get_webhooks_by_id_webhook_by_field__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_webhook__get_webhooks_by_id_webhook_by_field__err(e)),
+        }
     }
 }
 

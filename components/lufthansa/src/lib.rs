@@ -44,10 +44,15 @@ pub(crate) enum FieldLocation {
     Body,
 }
 
-/// A single operation parameter: the snake-case key it carries in the params JSON and where
-/// it belongs in the request.
+/// A single operation parameter. `snake` keys the field in the internal params JSON (and, for a
+/// path field, matches the `{snake}` placeholder in the path template); `wire` is the verbatim name
+/// the field takes on the HTTP wire (query key, header name, or body property). The two differ
+/// whenever the source name isn't already snake_case (e.g. `dryRun` → snake `dry_run`, wire
+/// `dryRun`), and let distinct inputs that share a snake key (`DateCreated`, `DateCreated<`) still
+/// travel under their true names.
 pub(crate) struct FieldSpec {
     pub(crate) snake: &'static str,
+    pub(crate) wire: &'static str,
     pub(crate) location: FieldLocation,
 }
 
@@ -71,6 +76,16 @@ pub(crate) struct AuthApply {
     pub(crate) kind: AuthKind,
 }
 
+/// The failure modes of [`dispatch`], kept structured so each generated operation can map them
+/// onto its own typed error: an `Http` failure carries the response status and body (routed to
+/// the matching error-variant case), while a `Transport` failure carries a message for the
+/// catch-all case (a secret lookup, connection, or decode failure that never produced an HTTP
+/// status).
+pub(crate) enum DispatchError {
+    Http { status: u16, body: String },
+    Transport(String),
+}
+
 /// A single API operation: HTTP method, path template (with `{snake}` placeholders), the
 /// parameter fields, and the security schemes to apply.
 pub(crate) struct OpSpec {
@@ -81,8 +96,9 @@ pub(crate) struct OpSpec {
 }
 
 /// Execute `op` with the supplied `params` (a JSON object keyed by snake-case field names)
-/// and return the response body as a string, or an error message.
-pub(crate) fn dispatch(op: &OpSpec, params: Value) -> Result<String, String> {
+/// and return the raw 2xx response body, or a structured [`DispatchError`] the caller maps
+/// onto the operation's typed error.
+pub(crate) fn dispatch(op: &OpSpec, params: Value) -> Result<String, DispatchError> {
     let obj = match &params {
         Value::Object(map) => Some(map),
         _ => None,
@@ -105,10 +121,10 @@ pub(crate) fn dispatch(op: &OpSpec, params: Value) -> Result<String, String> {
                 let placeholder = format!("{{{}}}", field.snake);
                 path = path.replace(&placeholder, &percent_encode(&scalar(value)));
             }
-            FieldLocation::Query => query.push((field.snake.to_string(), scalar(value))),
-            FieldLocation::Header => headers.push((field.snake.to_string(), scalar(value))),
+            FieldLocation::Query => query.push((field.wire.to_string(), scalar(value))),
+            FieldLocation::Header => headers.push((field.wire.to_string(), scalar(value))),
             FieldLocation::Body => {
-                body.insert(field.snake.to_string(), value.clone());
+                body.insert(field.wire.to_string(), value.clone());
             }
         }
     }
@@ -116,7 +132,7 @@ pub(crate) fn dispatch(op: &OpSpec, params: Value) -> Result<String, String> {
     // Apply each resolved security scheme, sourcing its value from wasmcloud:secrets.
     let mut cookies: Vec<String> = Vec::new();
     for apply in op.auth {
-        let secret = fetch_secret(apply.secret_key)?;
+        let secret = fetch_secret(apply.secret_key).map_err(DispatchError::Transport)?;
         match &apply.kind {
             AuthKind::Bearer => headers.push(("authorization".into(), format!("Bearer {secret}"))),
             AuthKind::Basic => {
@@ -177,17 +193,18 @@ fn fetch_secret(key: &str) -> Result<String, String> {
 }
 
 /// Build and send the outgoing request with `wstd`, returning the response body on a 2xx
-/// status. The generated guest exports are synchronous, so the async `wstd` client is driven
-/// to completion on a local reactor via `wstd::runtime::block_on`.
+/// status and a structured [`DispatchError`] otherwise. The generated guest exports are
+/// synchronous, so the async `wstd` client is driven to completion on a local reactor via
+/// `wstd::runtime::block_on`.
 fn perform(
     method: &str,
     path_with_query: &str,
     headers: &[(String, String)],
     body: &[u8],
-) -> Result<String, String> {
+) -> Result<String, DispatchError> {
     let url = join_url(crate::BASE_URL, path_with_query);
     let method = Method::from_bytes(method.as_bytes())
-        .map_err(|err| format!("invalid HTTP method `{method}`: {err}"))?;
+        .map_err(|err| DispatchError::Transport(format!("invalid HTTP method `{method}`: {err}")))?;
 
     let mut builder = Request::builder().method(method).uri(url);
     for (name, value) in headers {
@@ -199,27 +216,29 @@ fn perform(
         } else {
             Body::from(body.to_vec())
         })
-        .map_err(|err| format!("failed to build request: {err}"))?;
+        .map_err(|err| DispatchError::Transport(format!("failed to build request: {err}")))?;
 
     wstd::runtime::block_on(async move {
         let client = Client::new();
         let response = client
             .send(request)
             .await
-            .map_err(|err| format!("request failed: {err:#}"))?;
+            .map_err(|err| DispatchError::Transport(format!("request failed: {err:#}")))?;
 
         let status = response.status().as_u16();
         let mut response_body = response.into_body();
-        let bytes = response_body
-            .contents()
-            .await
-            .map_err(|err| format!("failed to read response body: {err:#}"))?;
+        let bytes = response_body.contents().await.map_err(|err| {
+            DispatchError::Transport(format!("failed to read response body: {err:#}"))
+        })?;
         let body_text = String::from_utf8_lossy(bytes).into_owned();
 
         if (200..300).contains(&status) {
             Ok(body_text)
         } else {
-            Err(format!("HTTP {status}: {body_text}"))
+            Err(DispatchError::Http {
+                status,
+                body: body_text,
+            })
         }
     })
 }
@@ -288,8 +307,8 @@ const OP_BAGGAGE_TRIP_AND_CONTACT: OpSpec = OpSpec {
     method: "GET",
     path_template: "/baggage/baggagetripandcontact/{search_id}",
     fields: &[
-        FieldSpec { snake: "search_id", location: FieldLocation::Path },
-        FieldSpec { snake: "accept", location: FieldLocation::Header },
+        FieldSpec { snake: "search_id", wire: "searchID", location: FieldLocation::Path },
+        FieldSpec { snake: "accept", wire: "Accept", location: FieldLocation::Header },
     ],
     auth: &[
         AuthApply { secret_key: "auth", kind: AuthKind::Bearer },
@@ -303,10 +322,24 @@ fn iface_baggage__trip_and_contact_params__to_json(p: &iface_baggage::TripAndCon
     Value::Object(m)
 }
 
+fn iface_baggage__trip_and_contact__ok(body: String) -> Result<String, crate::runtime::DispatchError> {
+    Ok(body)
+}
+
+fn iface_baggage__trip_and_contact__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
 impl iface_baggage::Guest for crate::Component {
     fn trip_and_contact(params: iface_baggage::TripAndContactParams) -> Result<String, String> {
         let json = iface_baggage__trip_and_contact_params__to_json(&params);
-        dispatch(&OP_BAGGAGE_TRIP_AND_CONTACT, json)
+        match dispatch(&OP_BAGGAGE_TRIP_AND_CONTACT, json).and_then(iface_baggage__trip_and_contact__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_baggage__trip_and_contact__err(e)),
+        }
     }
 }
 use crate::exports::autostamp::lufthansa::offers as iface_offers;
@@ -315,16 +348,16 @@ const OP_OFFERS_ALL_FARES: OpSpec = OpSpec {
     method: "GET",
     path_template: "/offers/fares/allfares",
     fields: &[
-        FieldSpec { snake: "catalogues", location: FieldLocation::Query },
-        FieldSpec { snake: "origin", location: FieldLocation::Query },
-        FieldSpec { snake: "destination", location: FieldLocation::Query },
-        FieldSpec { snake: "travel_date", location: FieldLocation::Query },
-        FieldSpec { snake: "return_date", location: FieldLocation::Query },
-        FieldSpec { snake: "cabin_class", location: FieldLocation::Query },
-        FieldSpec { snake: "travelers", location: FieldLocation::Query },
-        FieldSpec { snake: "fare_family", location: FieldLocation::Query },
-        FieldSpec { snake: "trackingid", location: FieldLocation::Query },
-        FieldSpec { snake: "accept", location: FieldLocation::Header },
+        FieldSpec { snake: "catalogues", wire: "catalogues", location: FieldLocation::Query },
+        FieldSpec { snake: "origin", wire: "origin", location: FieldLocation::Query },
+        FieldSpec { snake: "destination", wire: "destination", location: FieldLocation::Query },
+        FieldSpec { snake: "travel_date", wire: "travel-date", location: FieldLocation::Query },
+        FieldSpec { snake: "return_date", wire: "return-date", location: FieldLocation::Query },
+        FieldSpec { snake: "cabin_class", wire: "cabin-class", location: FieldLocation::Query },
+        FieldSpec { snake: "travelers", wire: "travelers", location: FieldLocation::Query },
+        FieldSpec { snake: "fare_family", wire: "fare-family", location: FieldLocation::Query },
+        FieldSpec { snake: "trackingid", wire: "trackingid", location: FieldLocation::Query },
+        FieldSpec { snake: "accept", wire: "Accept", location: FieldLocation::Header },
     ],
     auth: &[
         AuthApply { secret_key: "auth", kind: AuthKind::Bearer },
@@ -335,17 +368,17 @@ const OP_OFFERS_BEST_FARES: OpSpec = OpSpec {
     method: "GET",
     path_template: "/offers/fares/bestfares",
     fields: &[
-        FieldSpec { snake: "catalogues", location: FieldLocation::Query },
-        FieldSpec { snake: "origin", location: FieldLocation::Query },
-        FieldSpec { snake: "destination", location: FieldLocation::Query },
-        FieldSpec { snake: "travel_date", location: FieldLocation::Query },
-        FieldSpec { snake: "trip_duration", location: FieldLocation::Query },
-        FieldSpec { snake: "range", location: FieldLocation::Query },
-        FieldSpec { snake: "accept", location: FieldLocation::Header },
-        FieldSpec { snake: "cabin_class", location: FieldLocation::Query },
-        FieldSpec { snake: "country", location: FieldLocation::Query },
-        FieldSpec { snake: "trackingid", location: FieldLocation::Query },
-        FieldSpec { snake: "fare_family", location: FieldLocation::Query },
+        FieldSpec { snake: "catalogues", wire: "catalogues", location: FieldLocation::Query },
+        FieldSpec { snake: "origin", wire: "origin", location: FieldLocation::Query },
+        FieldSpec { snake: "destination", wire: "destination", location: FieldLocation::Query },
+        FieldSpec { snake: "travel_date", wire: "travel-date", location: FieldLocation::Query },
+        FieldSpec { snake: "trip_duration", wire: "trip-duration", location: FieldLocation::Query },
+        FieldSpec { snake: "range", wire: "range", location: FieldLocation::Query },
+        FieldSpec { snake: "accept", wire: "Accept", location: FieldLocation::Header },
+        FieldSpec { snake: "cabin_class", wire: "cabin-class", location: FieldLocation::Query },
+        FieldSpec { snake: "country", wire: "country", location: FieldLocation::Query },
+        FieldSpec { snake: "trackingid", wire: "trackingid", location: FieldLocation::Query },
+        FieldSpec { snake: "fare_family", wire: "fare-family", location: FieldLocation::Query },
     ],
     auth: &[
         AuthApply { secret_key: "auth", kind: AuthKind::Bearer },
@@ -356,26 +389,26 @@ const OP_OFFERS_DEEP_LINKS: OpSpec = OpSpec {
     method: "GET",
     path_template: "/offers/fares/deeplink",
     fields: &[
-        FieldSpec { snake: "catalogues", location: FieldLocation::Query },
-        FieldSpec { snake: "trackingid", location: FieldLocation::Query },
-        FieldSpec { snake: "country", location: FieldLocation::Query },
-        FieldSpec { snake: "lang", location: FieldLocation::Query },
-        FieldSpec { snake: "accept", location: FieldLocation::Header },
-        FieldSpec { snake: "origin", location: FieldLocation::Query },
-        FieldSpec { snake: "origin_name", location: FieldLocation::Query },
-        FieldSpec { snake: "destination", location: FieldLocation::Query },
-        FieldSpec { snake: "destination_name", location: FieldLocation::Query },
-        FieldSpec { snake: "travel_date", location: FieldLocation::Query },
-        FieldSpec { snake: "return_date", location: FieldLocation::Query },
-        FieldSpec { snake: "cabin_class", location: FieldLocation::Query },
-        FieldSpec { snake: "outbound_segments", location: FieldLocation::Query },
-        FieldSpec { snake: "return_segments", location: FieldLocation::Query },
-        FieldSpec { snake: "travelers", location: FieldLocation::Query },
-        FieldSpec { snake: "fare", location: FieldLocation::Query },
-        FieldSpec { snake: "net_fare", location: FieldLocation::Query },
-        FieldSpec { snake: "fare_currency", location: FieldLocation::Query },
-        FieldSpec { snake: "partnerid", location: FieldLocation::Query },
-        FieldSpec { snake: "encryption_key", location: FieldLocation::Query },
+        FieldSpec { snake: "catalogues", wire: "catalogues", location: FieldLocation::Query },
+        FieldSpec { snake: "trackingid", wire: "trackingid", location: FieldLocation::Query },
+        FieldSpec { snake: "country", wire: "country", location: FieldLocation::Query },
+        FieldSpec { snake: "lang", wire: "lang", location: FieldLocation::Query },
+        FieldSpec { snake: "accept", wire: "Accept", location: FieldLocation::Header },
+        FieldSpec { snake: "origin", wire: "origin", location: FieldLocation::Query },
+        FieldSpec { snake: "origin_name", wire: "origin-name", location: FieldLocation::Query },
+        FieldSpec { snake: "destination", wire: "destination", location: FieldLocation::Query },
+        FieldSpec { snake: "destination_name", wire: "destination-name", location: FieldLocation::Query },
+        FieldSpec { snake: "travel_date", wire: "travel-date", location: FieldLocation::Query },
+        FieldSpec { snake: "return_date", wire: "return-date", location: FieldLocation::Query },
+        FieldSpec { snake: "cabin_class", wire: "cabin-class", location: FieldLocation::Query },
+        FieldSpec { snake: "outbound_segments", wire: "outbound-segments", location: FieldLocation::Query },
+        FieldSpec { snake: "return_segments", wire: "return-segments", location: FieldLocation::Query },
+        FieldSpec { snake: "travelers", wire: "travelers", location: FieldLocation::Query },
+        FieldSpec { snake: "fare", wire: "fare", location: FieldLocation::Query },
+        FieldSpec { snake: "net_fare", wire: "net-fare", location: FieldLocation::Query },
+        FieldSpec { snake: "fare_currency", wire: "fare-currency", location: FieldLocation::Query },
+        FieldSpec { snake: "partnerid", wire: "partnerid", location: FieldLocation::Query },
+        FieldSpec { snake: "encryption_key", wire: "encryption-key", location: FieldLocation::Query },
     ],
     auth: &[
         AuthApply { secret_key: "auth", kind: AuthKind::Bearer },
@@ -386,19 +419,19 @@ const OP_OFFERS_LH_DEEP_LINKS_FFP: OpSpec = OpSpec {
     method: "GET",
     path_template: "/offers/fares/deeplink/ffp",
     fields: &[
-        FieldSpec { snake: "catalogues", location: FieldLocation::Query },
-        FieldSpec { snake: "origin", location: FieldLocation::Query },
-        FieldSpec { snake: "destination", location: FieldLocation::Query },
-        FieldSpec { snake: "travel_date", location: FieldLocation::Query },
-        FieldSpec { snake: "trackingid", location: FieldLocation::Query },
-        FieldSpec { snake: "country", location: FieldLocation::Query },
-        FieldSpec { snake: "lang", location: FieldLocation::Query },
-        FieldSpec { snake: "accept", location: FieldLocation::Header },
-        FieldSpec { snake: "return_date", location: FieldLocation::Query },
-        FieldSpec { snake: "cabin_class", location: FieldLocation::Query },
-        FieldSpec { snake: "travelers", location: FieldLocation::Query },
-        FieldSpec { snake: "partnerid", location: FieldLocation::Query },
-        FieldSpec { snake: "encryption_key", location: FieldLocation::Query },
+        FieldSpec { snake: "catalogues", wire: "catalogues", location: FieldLocation::Query },
+        FieldSpec { snake: "origin", wire: "origin", location: FieldLocation::Query },
+        FieldSpec { snake: "destination", wire: "destination", location: FieldLocation::Query },
+        FieldSpec { snake: "travel_date", wire: "travel-date", location: FieldLocation::Query },
+        FieldSpec { snake: "trackingid", wire: "trackingid", location: FieldLocation::Query },
+        FieldSpec { snake: "country", wire: "country", location: FieldLocation::Query },
+        FieldSpec { snake: "lang", wire: "lang", location: FieldLocation::Query },
+        FieldSpec { snake: "accept", wire: "Accept", location: FieldLocation::Header },
+        FieldSpec { snake: "return_date", wire: "return-date", location: FieldLocation::Query },
+        FieldSpec { snake: "cabin_class", wire: "cabin-class", location: FieldLocation::Query },
+        FieldSpec { snake: "travelers", wire: "travelers", location: FieldLocation::Query },
+        FieldSpec { snake: "partnerid", wire: "partnerid", location: FieldLocation::Query },
+        FieldSpec { snake: "encryption_key", wire: "encryption-key", location: FieldLocation::Query },
     ],
     auth: &[
         AuthApply { secret_key: "auth", kind: AuthKind::Bearer },
@@ -409,24 +442,24 @@ const OP_OFFERS_LH_DEEP_LINKS_ITCO: OpSpec = OpSpec {
     method: "GET",
     path_template: "/offers/fares/deeplink/itco",
     fields: &[
-        FieldSpec { snake: "catalogues", location: FieldLocation::Query },
-        FieldSpec { snake: "origin", location: FieldLocation::Query },
-        FieldSpec { snake: "destination", location: FieldLocation::Query },
-        FieldSpec { snake: "travel_date", location: FieldLocation::Query },
-        FieldSpec { snake: "outbound_segments", location: FieldLocation::Query },
-        FieldSpec { snake: "fare", location: FieldLocation::Query },
-        FieldSpec { snake: "fare_currency", location: FieldLocation::Query },
-        FieldSpec { snake: "trackingid", location: FieldLocation::Query },
-        FieldSpec { snake: "country", location: FieldLocation::Query },
-        FieldSpec { snake: "lang", location: FieldLocation::Query },
-        FieldSpec { snake: "accept", location: FieldLocation::Header },
-        FieldSpec { snake: "return_date", location: FieldLocation::Query },
-        FieldSpec { snake: "cabin_class", location: FieldLocation::Query },
-        FieldSpec { snake: "return_segments", location: FieldLocation::Query },
-        FieldSpec { snake: "travelers", location: FieldLocation::Query },
-        FieldSpec { snake: "net_fare", location: FieldLocation::Query },
-        FieldSpec { snake: "partnerid", location: FieldLocation::Query },
-        FieldSpec { snake: "encryption_key", location: FieldLocation::Query },
+        FieldSpec { snake: "catalogues", wire: "catalogues", location: FieldLocation::Query },
+        FieldSpec { snake: "origin", wire: "origin", location: FieldLocation::Query },
+        FieldSpec { snake: "destination", wire: "destination", location: FieldLocation::Query },
+        FieldSpec { snake: "travel_date", wire: "travel-date", location: FieldLocation::Query },
+        FieldSpec { snake: "outbound_segments", wire: "outbound-segments", location: FieldLocation::Query },
+        FieldSpec { snake: "fare", wire: "fare", location: FieldLocation::Query },
+        FieldSpec { snake: "fare_currency", wire: "fare-currency", location: FieldLocation::Query },
+        FieldSpec { snake: "trackingid", wire: "trackingid", location: FieldLocation::Query },
+        FieldSpec { snake: "country", wire: "country", location: FieldLocation::Query },
+        FieldSpec { snake: "lang", wire: "lang", location: FieldLocation::Query },
+        FieldSpec { snake: "accept", wire: "Accept", location: FieldLocation::Header },
+        FieldSpec { snake: "return_date", wire: "return-date", location: FieldLocation::Query },
+        FieldSpec { snake: "cabin_class", wire: "cabin-class", location: FieldLocation::Query },
+        FieldSpec { snake: "return_segments", wire: "return-segments", location: FieldLocation::Query },
+        FieldSpec { snake: "travelers", wire: "travelers", location: FieldLocation::Query },
+        FieldSpec { snake: "net_fare", wire: "net-fare", location: FieldLocation::Query },
+        FieldSpec { snake: "partnerid", wire: "partnerid", location: FieldLocation::Query },
+        FieldSpec { snake: "encryption_key", wire: "encryption-key", location: FieldLocation::Query },
     ],
     auth: &[
         AuthApply { secret_key: "auth", kind: AuthKind::Bearer },
@@ -437,12 +470,12 @@ const OP_OFFERS_FARES: OpSpec = OpSpec {
     method: "GET",
     path_template: "/offers/fares/fares",
     fields: &[
-        FieldSpec { snake: "catalogues", location: FieldLocation::Query },
-        FieldSpec { snake: "segments", location: FieldLocation::Query },
-        FieldSpec { snake: "carriers", location: FieldLocation::Query },
-        FieldSpec { snake: "accept", location: FieldLocation::Header },
-        FieldSpec { snake: "travelers", location: FieldLocation::Query },
-        FieldSpec { snake: "fare_types", location: FieldLocation::Query },
+        FieldSpec { snake: "catalogues", wire: "catalogues", location: FieldLocation::Query },
+        FieldSpec { snake: "segments", wire: "segments", location: FieldLocation::Query },
+        FieldSpec { snake: "carriers", wire: "carriers", location: FieldLocation::Query },
+        FieldSpec { snake: "accept", wire: "Accept", location: FieldLocation::Header },
+        FieldSpec { snake: "travelers", wire: "travelers", location: FieldLocation::Query },
+        FieldSpec { snake: "fare_types", wire: "fare-types", location: FieldLocation::Query },
     ],
     auth: &[
         AuthApply { secret_key: "auth", kind: AuthKind::Bearer },
@@ -453,16 +486,16 @@ const OP_OFFERS_LOWEST_FARES: OpSpec = OpSpec {
     method: "GET",
     path_template: "/offers/fares/lowestfares",
     fields: &[
-        FieldSpec { snake: "catalogues", location: FieldLocation::Query },
-        FieldSpec { snake: "origin", location: FieldLocation::Query },
-        FieldSpec { snake: "destination", location: FieldLocation::Query },
-        FieldSpec { snake: "travel_date", location: FieldLocation::Query },
-        FieldSpec { snake: "accept", location: FieldLocation::Header },
-        FieldSpec { snake: "return_date", location: FieldLocation::Query },
-        FieldSpec { snake: "cabin_class", location: FieldLocation::Query },
-        FieldSpec { snake: "travelers", location: FieldLocation::Query },
-        FieldSpec { snake: "fare_family", location: FieldLocation::Query },
-        FieldSpec { snake: "country", location: FieldLocation::Query },
+        FieldSpec { snake: "catalogues", wire: "catalogues", location: FieldLocation::Query },
+        FieldSpec { snake: "origin", wire: "origin", location: FieldLocation::Query },
+        FieldSpec { snake: "destination", wire: "destination", location: FieldLocation::Query },
+        FieldSpec { snake: "travel_date", wire: "travel-date", location: FieldLocation::Query },
+        FieldSpec { snake: "accept", wire: "Accept", location: FieldLocation::Header },
+        FieldSpec { snake: "return_date", wire: "return-date", location: FieldLocation::Query },
+        FieldSpec { snake: "cabin_class", wire: "cabin-class", location: FieldLocation::Query },
+        FieldSpec { snake: "travelers", wire: "travelers", location: FieldLocation::Query },
+        FieldSpec { snake: "fare_family", wire: "fare-family", location: FieldLocation::Query },
+        FieldSpec { snake: "country", wire: "country", location: FieldLocation::Query },
     ],
     auth: &[
         AuthApply { secret_key: "auth", kind: AuthKind::Bearer },
@@ -473,15 +506,15 @@ const OP_OFFERS_FARES_SUBSCRIPTIONS: OpSpec = OpSpec {
     method: "GET",
     path_template: "/offers/fares/subscriptions",
     fields: &[
-        FieldSpec { snake: "origin", location: FieldLocation::Query },
-        FieldSpec { snake: "destination", location: FieldLocation::Query },
-        FieldSpec { snake: "cabin_class", location: FieldLocation::Query },
-        FieldSpec { snake: "trip_duration", location: FieldLocation::Query },
-        FieldSpec { snake: "email", location: FieldLocation::Query },
-        FieldSpec { snake: "lang", location: FieldLocation::Query },
-        FieldSpec { snake: "accept", location: FieldLocation::Header },
-        FieldSpec { snake: "country", location: FieldLocation::Query },
-        FieldSpec { snake: "trackingid", location: FieldLocation::Query },
+        FieldSpec { snake: "origin", wire: "origin", location: FieldLocation::Query },
+        FieldSpec { snake: "destination", wire: "destination", location: FieldLocation::Query },
+        FieldSpec { snake: "cabin_class", wire: "cabin-class", location: FieldLocation::Query },
+        FieldSpec { snake: "trip_duration", wire: "trip-duration", location: FieldLocation::Query },
+        FieldSpec { snake: "email", wire: "email", location: FieldLocation::Query },
+        FieldSpec { snake: "lang", wire: "lang", location: FieldLocation::Query },
+        FieldSpec { snake: "accept", wire: "Accept", location: FieldLocation::Header },
+        FieldSpec { snake: "country", wire: "country", location: FieldLocation::Query },
+        FieldSpec { snake: "trackingid", wire: "trackingid", location: FieldLocation::Query },
     ],
     auth: &[
         AuthApply { secret_key: "auth", kind: AuthKind::Bearer },
@@ -492,12 +525,12 @@ const OP_OFFERS_OND_ROUTE: OpSpec = OpSpec {
     method: "GET",
     path_template: "/offers/ond/route/{origin}/{destination}",
     fields: &[
-        FieldSpec { snake: "origin", location: FieldLocation::Path },
-        FieldSpec { snake: "destination", location: FieldLocation::Path },
-        FieldSpec { snake: "accept", location: FieldLocation::Header },
-        FieldSpec { snake: "catalogues", location: FieldLocation::Query },
-        FieldSpec { snake: "limit", location: FieldLocation::Query },
-        FieldSpec { snake: "offset", location: FieldLocation::Query },
+        FieldSpec { snake: "origin", wire: "origin", location: FieldLocation::Path },
+        FieldSpec { snake: "destination", wire: "destination", location: FieldLocation::Path },
+        FieldSpec { snake: "accept", wire: "Accept", location: FieldLocation::Header },
+        FieldSpec { snake: "catalogues", wire: "catalogues", location: FieldLocation::Query },
+        FieldSpec { snake: "limit", wire: "limit", location: FieldLocation::Query },
+        FieldSpec { snake: "offset", wire: "offset", location: FieldLocation::Query },
     ],
     auth: &[
         AuthApply { secret_key: "auth", kind: AuthKind::Bearer },
@@ -508,10 +541,10 @@ const OP_OFFERS_OND_STATUS: OpSpec = OpSpec {
     method: "GET",
     path_template: "/offers/ond/status",
     fields: &[
-        FieldSpec { snake: "accept", location: FieldLocation::Header },
-        FieldSpec { snake: "catalogues", location: FieldLocation::Query },
-        FieldSpec { snake: "new_routes", location: FieldLocation::Query },
-        FieldSpec { snake: "old_routes", location: FieldLocation::Query },
+        FieldSpec { snake: "accept", wire: "Accept", location: FieldLocation::Header },
+        FieldSpec { snake: "catalogues", wire: "catalogues", location: FieldLocation::Query },
+        FieldSpec { snake: "new_routes", wire: "new-routes", location: FieldLocation::Query },
+        FieldSpec { snake: "old_routes", wire: "old-routes", location: FieldLocation::Query },
     ],
     auth: &[
         AuthApply { secret_key: "auth", kind: AuthKind::Bearer },
@@ -522,9 +555,9 @@ const OP_OFFERS_TOP_OND: OpSpec = OpSpec {
     method: "GET",
     path_template: "/offers/ond/top",
     fields: &[
-        FieldSpec { snake: "accept", location: FieldLocation::Header },
-        FieldSpec { snake: "catalogues", location: FieldLocation::Query },
-        FieldSpec { snake: "origin", location: FieldLocation::Query },
+        FieldSpec { snake: "accept", wire: "Accept", location: FieldLocation::Header },
+        FieldSpec { snake: "catalogues", wire: "catalogues", location: FieldLocation::Query },
+        FieldSpec { snake: "origin", wire: "origin", location: FieldLocation::Query },
     ],
     auth: &[
         AuthApply { secret_key: "auth", kind: AuthKind::Bearer },
@@ -696,50 +729,204 @@ fn iface_offers__top_ond_params__to_json(p: &iface_offers::TopOndParams) -> Valu
     Value::Object(m)
 }
 
+fn iface_offers__all_fares__ok(body: String) -> Result<String, crate::runtime::DispatchError> {
+    Ok(body)
+}
+
+fn iface_offers__all_fares__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
+fn iface_offers__best_fares__ok(body: String) -> Result<String, crate::runtime::DispatchError> {
+    Ok(body)
+}
+
+fn iface_offers__best_fares__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
+fn iface_offers__deep_links__ok(body: String) -> Result<String, crate::runtime::DispatchError> {
+    Ok(body)
+}
+
+fn iface_offers__deep_links__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
+fn iface_offers__lh_deep_links_ffp__ok(body: String) -> Result<String, crate::runtime::DispatchError> {
+    Ok(body)
+}
+
+fn iface_offers__lh_deep_links_ffp__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
+fn iface_offers__lh_deep_links_itco__ok(body: String) -> Result<String, crate::runtime::DispatchError> {
+    Ok(body)
+}
+
+fn iface_offers__lh_deep_links_itco__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
+fn iface_offers__fares__ok(body: String) -> Result<String, crate::runtime::DispatchError> {
+    Ok(body)
+}
+
+fn iface_offers__fares__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
+fn iface_offers__lowest_fares__ok(body: String) -> Result<String, crate::runtime::DispatchError> {
+    Ok(body)
+}
+
+fn iface_offers__lowest_fares__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
+fn iface_offers__fares_subscriptions__ok(body: String) -> Result<String, crate::runtime::DispatchError> {
+    Ok(body)
+}
+
+fn iface_offers__fares_subscriptions__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
+fn iface_offers__ond_route__ok(body: String) -> Result<String, crate::runtime::DispatchError> {
+    Ok(body)
+}
+
+fn iface_offers__ond_route__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
+fn iface_offers__ond_status__ok(body: String) -> Result<String, crate::runtime::DispatchError> {
+    Ok(body)
+}
+
+fn iface_offers__ond_status__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
+fn iface_offers__top_ond__ok(body: String) -> Result<String, crate::runtime::DispatchError> {
+    Ok(body)
+}
+
+fn iface_offers__top_ond__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
 impl iface_offers::Guest for crate::Component {
     fn all_fares(params: iface_offers::AllFaresParams) -> Result<String, String> {
         let json = iface_offers__all_fares_params__to_json(&params);
-        dispatch(&OP_OFFERS_ALL_FARES, json)
+        match dispatch(&OP_OFFERS_ALL_FARES, json).and_then(iface_offers__all_fares__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_offers__all_fares__err(e)),
+        }
     }
     fn best_fares(params: iface_offers::BestFaresParams) -> Result<String, String> {
         let json = iface_offers__best_fares_params__to_json(&params);
-        dispatch(&OP_OFFERS_BEST_FARES, json)
+        match dispatch(&OP_OFFERS_BEST_FARES, json).and_then(iface_offers__best_fares__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_offers__best_fares__err(e)),
+        }
     }
     fn deep_links(params: iface_offers::DeepLinksParams) -> Result<String, String> {
         let json = iface_offers__deep_links_params__to_json(&params);
-        dispatch(&OP_OFFERS_DEEP_LINKS, json)
+        match dispatch(&OP_OFFERS_DEEP_LINKS, json).and_then(iface_offers__deep_links__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_offers__deep_links__err(e)),
+        }
     }
     fn lh_deep_links_ffp(params: iface_offers::LhDeepLinksFfpParams) -> Result<String, String> {
         let json = iface_offers__lh_deep_links_ffp_params__to_json(&params);
-        dispatch(&OP_OFFERS_LH_DEEP_LINKS_FFP, json)
+        match dispatch(&OP_OFFERS_LH_DEEP_LINKS_FFP, json).and_then(iface_offers__lh_deep_links_ffp__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_offers__lh_deep_links_ffp__err(e)),
+        }
     }
     fn lh_deep_links_itco(params: iface_offers::LhDeepLinksItcoParams) -> Result<String, String> {
         let json = iface_offers__lh_deep_links_itco_params__to_json(&params);
-        dispatch(&OP_OFFERS_LH_DEEP_LINKS_ITCO, json)
+        match dispatch(&OP_OFFERS_LH_DEEP_LINKS_ITCO, json).and_then(iface_offers__lh_deep_links_itco__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_offers__lh_deep_links_itco__err(e)),
+        }
     }
     fn fares(params: iface_offers::FaresParams) -> Result<String, String> {
         let json = iface_offers__fares_params__to_json(&params);
-        dispatch(&OP_OFFERS_FARES, json)
+        match dispatch(&OP_OFFERS_FARES, json).and_then(iface_offers__fares__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_offers__fares__err(e)),
+        }
     }
     fn lowest_fares(params: iface_offers::LowestFaresParams) -> Result<String, String> {
         let json = iface_offers__lowest_fares_params__to_json(&params);
-        dispatch(&OP_OFFERS_LOWEST_FARES, json)
+        match dispatch(&OP_OFFERS_LOWEST_FARES, json).and_then(iface_offers__lowest_fares__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_offers__lowest_fares__err(e)),
+        }
     }
     fn fares_subscriptions(params: iface_offers::FaresSubscriptionsParams) -> Result<String, String> {
         let json = iface_offers__fares_subscriptions_params__to_json(&params);
-        dispatch(&OP_OFFERS_FARES_SUBSCRIPTIONS, json)
+        match dispatch(&OP_OFFERS_FARES_SUBSCRIPTIONS, json).and_then(iface_offers__fares_subscriptions__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_offers__fares_subscriptions__err(e)),
+        }
     }
     fn ond_route(params: iface_offers::OndRouteParams) -> Result<String, String> {
         let json = iface_offers__ond_route_params__to_json(&params);
-        dispatch(&OP_OFFERS_OND_ROUTE, json)
+        match dispatch(&OP_OFFERS_OND_ROUTE, json).and_then(iface_offers__ond_route__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_offers__ond_route__err(e)),
+        }
     }
     fn ond_status(params: iface_offers::OndStatusParams) -> Result<String, String> {
         let json = iface_offers__ond_status_params__to_json(&params);
-        dispatch(&OP_OFFERS_OND_STATUS, json)
+        match dispatch(&OP_OFFERS_OND_STATUS, json).and_then(iface_offers__ond_status__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_offers__ond_status__err(e)),
+        }
     }
     fn top_ond(params: iface_offers::TopOndParams) -> Result<String, String> {
         let json = iface_offers__top_ond_params__to_json(&params);
-        dispatch(&OP_OFFERS_TOP_OND, json)
+        match dispatch(&OP_OFFERS_TOP_OND, json).and_then(iface_offers__top_ond__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_offers__top_ond__err(e)),
+        }
     }
 }
 use crate::exports::autostamp::lufthansa::orders as iface_orders;
@@ -748,9 +935,9 @@ const OP_ORDERS_ORDERS: OpSpec = OpSpec {
     method: "GET",
     path_template: "/orders/orders/{order_id}/{name}",
     fields: &[
-        FieldSpec { snake: "order_id", location: FieldLocation::Path },
-        FieldSpec { snake: "accept", location: FieldLocation::Header },
-        FieldSpec { snake: "name", location: FieldLocation::Path },
+        FieldSpec { snake: "order_id", wire: "orderID", location: FieldLocation::Path },
+        FieldSpec { snake: "accept", wire: "Accept", location: FieldLocation::Header },
+        FieldSpec { snake: "name", wire: "name", location: FieldLocation::Path },
     ],
     auth: &[
         AuthApply { secret_key: "auth", kind: AuthKind::Bearer },
@@ -765,10 +952,24 @@ fn iface_orders__orders_params__to_json(p: &iface_orders::OrdersParams) -> Value
     Value::Object(m)
 }
 
+fn iface_orders__orders__ok(body: String) -> Result<String, crate::runtime::DispatchError> {
+    Ok(body)
+}
+
+fn iface_orders__orders__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
 impl iface_orders::Guest for crate::Component {
     fn orders(params: iface_orders::OrdersParams) -> Result<String, String> {
         let json = iface_orders__orders_params__to_json(&params);
-        dispatch(&OP_ORDERS_ORDERS, json)
+        match dispatch(&OP_ORDERS_ORDERS, json).and_then(iface_orders__orders__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_orders__orders__err(e)),
+        }
     }
 }
 use crate::exports::autostamp::lufthansa::preflight as iface_preflight;
@@ -777,9 +978,9 @@ const OP_PREFLIGHT_AUTO_CHECK_IN: OpSpec = OpSpec {
     method: "PUT",
     path_template: "/preflight/autocheckin/{ticketnumber}",
     fields: &[
-        FieldSpec { snake: "ticketnumber", location: FieldLocation::Path },
-        FieldSpec { snake: "email_address", location: FieldLocation::Query },
-        FieldSpec { snake: "accept", location: FieldLocation::Header },
+        FieldSpec { snake: "ticketnumber", wire: "ticketnumber", location: FieldLocation::Path },
+        FieldSpec { snake: "email_address", wire: "emailAddress", location: FieldLocation::Query },
+        FieldSpec { snake: "accept", wire: "Accept", location: FieldLocation::Header },
     ],
     auth: &[
         AuthApply { secret_key: "auth", kind: AuthKind::Bearer },
@@ -794,10 +995,24 @@ fn iface_preflight__auto_check_in_params__to_json(p: &iface_preflight::AutoCheck
     Value::Object(m)
 }
 
+fn iface_preflight__auto_check_in__ok(body: String) -> Result<String, crate::runtime::DispatchError> {
+    Ok(body)
+}
+
+fn iface_preflight__auto_check_in__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
 impl iface_preflight::Guest for crate::Component {
     fn auto_check_in(params: iface_preflight::AutoCheckInParams) -> Result<String, String> {
         let json = iface_preflight__auto_check_in_params__to_json(&params);
-        dispatch(&OP_PREFLIGHT_AUTO_CHECK_IN, json)
+        match dispatch(&OP_PREFLIGHT_AUTO_CHECK_IN, json).and_then(iface_preflight__auto_check_in__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_preflight__auto_check_in__err(e)),
+        }
     }
 }
 use crate::exports::autostamp::lufthansa::promotions as iface_promotions;
@@ -806,11 +1021,11 @@ const OP_PROMOTIONS_PRICE_OFFERS: OpSpec = OpSpec {
     method: "GET",
     path_template: "/promotions/priceoffers/flights/ond/{origin}/{destination}",
     fields: &[
-        FieldSpec { snake: "origin", location: FieldLocation::Path },
-        FieldSpec { snake: "destination", location: FieldLocation::Path },
-        FieldSpec { snake: "departure_date", location: FieldLocation::Query },
-        FieldSpec { snake: "return_date", location: FieldLocation::Query },
-        FieldSpec { snake: "service", location: FieldLocation::Query },
+        FieldSpec { snake: "origin", wire: "origin", location: FieldLocation::Path },
+        FieldSpec { snake: "destination", wire: "destination", location: FieldLocation::Path },
+        FieldSpec { snake: "departure_date", wire: "departureDate", location: FieldLocation::Query },
+        FieldSpec { snake: "return_date", wire: "returnDate", location: FieldLocation::Query },
+        FieldSpec { snake: "service", wire: "service", location: FieldLocation::Query },
     ],
     auth: &[
         AuthApply { secret_key: "auth", kind: AuthKind::Bearer },
@@ -827,10 +1042,24 @@ fn iface_promotions__price_offers_params__to_json(p: &iface_promotions::PriceOff
     Value::Object(m)
 }
 
+fn iface_promotions__price_offers__ok(body: String) -> Result<String, crate::runtime::DispatchError> {
+    Ok(body)
+}
+
+fn iface_promotions__price_offers__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
 impl iface_promotions::Guest for crate::Component {
     fn price_offers(params: iface_promotions::PriceOffersParams) -> Result<String, String> {
         let json = iface_promotions__price_offers_params__to_json(&params);
-        dispatch(&OP_PROMOTIONS_PRICE_OFFERS, json)
+        match dispatch(&OP_PROMOTIONS_PRICE_OFFERS, json).and_then(iface_promotions__price_offers__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_promotions__price_offers__err(e)),
+        }
     }
 }
 use crate::exports::autostamp::lufthansa::reference_data as iface_reference_data;
@@ -839,10 +1068,10 @@ const OP_REFERENCE_DATA_SEAT_DETAILS: OpSpec = OpSpec {
     method: "GET",
     path_template: "/references/seatdetails/{aircraft_code}/{cabin_code}",
     fields: &[
-        FieldSpec { snake: "aircraft_code", location: FieldLocation::Path },
-        FieldSpec { snake: "accept", location: FieldLocation::Header },
-        FieldSpec { snake: "cabin_code", location: FieldLocation::Path },
-        FieldSpec { snake: "lang", location: FieldLocation::Query },
+        FieldSpec { snake: "aircraft_code", wire: "aircraftCode", location: FieldLocation::Path },
+        FieldSpec { snake: "accept", wire: "Accept", location: FieldLocation::Header },
+        FieldSpec { snake: "cabin_code", wire: "cabinCode", location: FieldLocation::Path },
+        FieldSpec { snake: "lang", wire: "lang", location: FieldLocation::Query },
     ],
     auth: &[
         AuthApply { secret_key: "auth", kind: AuthKind::Bearer },
@@ -858,10 +1087,24 @@ fn iface_reference_data__seat_details_params__to_json(p: &iface_reference_data::
     Value::Object(m)
 }
 
+fn iface_reference_data__seat_details__ok(body: String) -> Result<String, crate::runtime::DispatchError> {
+    Ok(body)
+}
+
+fn iface_reference_data__seat_details__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
 impl iface_reference_data::Guest for crate::Component {
     fn seat_details(params: iface_reference_data::SeatDetailsParams) -> Result<String, String> {
         let json = iface_reference_data__seat_details_params__to_json(&params);
-        dispatch(&OP_REFERENCE_DATA_SEAT_DETAILS, json)
+        match dispatch(&OP_REFERENCE_DATA_SEAT_DETAILS, json).and_then(iface_reference_data__seat_details__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_reference_data__seat_details__err(e)),
+        }
     }
 }
 

@@ -44,10 +44,15 @@ pub(crate) enum FieldLocation {
     Body,
 }
 
-/// A single operation parameter: the snake-case key it carries in the params JSON and where
-/// it belongs in the request.
+/// A single operation parameter. `snake` keys the field in the internal params JSON (and, for a
+/// path field, matches the `{snake}` placeholder in the path template); `wire` is the verbatim name
+/// the field takes on the HTTP wire (query key, header name, or body property). The two differ
+/// whenever the source name isn't already snake_case (e.g. `dryRun` → snake `dry_run`, wire
+/// `dryRun`), and let distinct inputs that share a snake key (`DateCreated`, `DateCreated<`) still
+/// travel under their true names.
 pub(crate) struct FieldSpec {
     pub(crate) snake: &'static str,
+    pub(crate) wire: &'static str,
     pub(crate) location: FieldLocation,
 }
 
@@ -71,6 +76,16 @@ pub(crate) struct AuthApply {
     pub(crate) kind: AuthKind,
 }
 
+/// The failure modes of [`dispatch`], kept structured so each generated operation can map them
+/// onto its own typed error: an `Http` failure carries the response status and body (routed to
+/// the matching error-variant case), while a `Transport` failure carries a message for the
+/// catch-all case (a secret lookup, connection, or decode failure that never produced an HTTP
+/// status).
+pub(crate) enum DispatchError {
+    Http { status: u16, body: String },
+    Transport(String),
+}
+
 /// A single API operation: HTTP method, path template (with `{snake}` placeholders), the
 /// parameter fields, and the security schemes to apply.
 pub(crate) struct OpSpec {
@@ -81,8 +96,9 @@ pub(crate) struct OpSpec {
 }
 
 /// Execute `op` with the supplied `params` (a JSON object keyed by snake-case field names)
-/// and return the response body as a string, or an error message.
-pub(crate) fn dispatch(op: &OpSpec, params: Value) -> Result<String, String> {
+/// and return the raw 2xx response body, or a structured [`DispatchError`] the caller maps
+/// onto the operation's typed error.
+pub(crate) fn dispatch(op: &OpSpec, params: Value) -> Result<String, DispatchError> {
     let obj = match &params {
         Value::Object(map) => Some(map),
         _ => None,
@@ -105,10 +121,10 @@ pub(crate) fn dispatch(op: &OpSpec, params: Value) -> Result<String, String> {
                 let placeholder = format!("{{{}}}", field.snake);
                 path = path.replace(&placeholder, &percent_encode(&scalar(value)));
             }
-            FieldLocation::Query => query.push((field.snake.to_string(), scalar(value))),
-            FieldLocation::Header => headers.push((field.snake.to_string(), scalar(value))),
+            FieldLocation::Query => query.push((field.wire.to_string(), scalar(value))),
+            FieldLocation::Header => headers.push((field.wire.to_string(), scalar(value))),
             FieldLocation::Body => {
-                body.insert(field.snake.to_string(), value.clone());
+                body.insert(field.wire.to_string(), value.clone());
             }
         }
     }
@@ -116,7 +132,7 @@ pub(crate) fn dispatch(op: &OpSpec, params: Value) -> Result<String, String> {
     // Apply each resolved security scheme, sourcing its value from wasmcloud:secrets.
     let mut cookies: Vec<String> = Vec::new();
     for apply in op.auth {
-        let secret = fetch_secret(apply.secret_key)?;
+        let secret = fetch_secret(apply.secret_key).map_err(DispatchError::Transport)?;
         match &apply.kind {
             AuthKind::Bearer => headers.push(("authorization".into(), format!("Bearer {secret}"))),
             AuthKind::Basic => {
@@ -177,17 +193,18 @@ fn fetch_secret(key: &str) -> Result<String, String> {
 }
 
 /// Build and send the outgoing request with `wstd`, returning the response body on a 2xx
-/// status. The generated guest exports are synchronous, so the async `wstd` client is driven
-/// to completion on a local reactor via `wstd::runtime::block_on`.
+/// status and a structured [`DispatchError`] otherwise. The generated guest exports are
+/// synchronous, so the async `wstd` client is driven to completion on a local reactor via
+/// `wstd::runtime::block_on`.
 fn perform(
     method: &str,
     path_with_query: &str,
     headers: &[(String, String)],
     body: &[u8],
-) -> Result<String, String> {
+) -> Result<String, DispatchError> {
     let url = join_url(crate::BASE_URL, path_with_query);
     let method = Method::from_bytes(method.as_bytes())
-        .map_err(|err| format!("invalid HTTP method `{method}`: {err}"))?;
+        .map_err(|err| DispatchError::Transport(format!("invalid HTTP method `{method}`: {err}")))?;
 
     let mut builder = Request::builder().method(method).uri(url);
     for (name, value) in headers {
@@ -199,27 +216,29 @@ fn perform(
         } else {
             Body::from(body.to_vec())
         })
-        .map_err(|err| format!("failed to build request: {err}"))?;
+        .map_err(|err| DispatchError::Transport(format!("failed to build request: {err}")))?;
 
     wstd::runtime::block_on(async move {
         let client = Client::new();
         let response = client
             .send(request)
             .await
-            .map_err(|err| format!("request failed: {err:#}"))?;
+            .map_err(|err| DispatchError::Transport(format!("request failed: {err:#}")))?;
 
         let status = response.status().as_u16();
         let mut response_body = response.into_body();
-        let bytes = response_body
-            .contents()
-            .await
-            .map_err(|err| format!("failed to read response body: {err:#}"))?;
+        let bytes = response_body.contents().await.map_err(|err| {
+            DispatchError::Transport(format!("failed to read response body: {err:#}"))
+        })?;
         let body_text = String::from_utf8_lossy(bytes).into_owned();
 
         if (200..300).contains(&status) {
             Ok(body_text)
         } else {
-            Err(format!("HTTP {status}: {body_text}"))
+            Err(DispatchError::Http {
+                status,
+                body: body_text,
+            })
         }
     })
 }
@@ -288,14 +307,42 @@ const OP_ALERTS_GET_ALERTS_LAT_LAT_LON_LON: OpSpec = OpSpec {
     method: "GET",
     path_template: "/alerts?lat={lat}&lon={lon}",
     fields: &[
-        FieldSpec { snake: "lat", location: FieldLocation::Path },
-        FieldSpec { snake: "lon", location: FieldLocation::Path },
-        FieldSpec { snake: "callback", location: FieldLocation::Query },
+        FieldSpec { snake: "lat", wire: "lat", location: FieldLocation::Path },
+        FieldSpec { snake: "lon", wire: "lon", location: FieldLocation::Path },
+        FieldSpec { snake: "callback", wire: "callback", location: FieldLocation::Query },
     ],
     auth: &[
         AuthApply { secret_key: "key", kind: AuthKind::ApiKeyQuery("key") },
     ],
 };
+
+fn iface_alerts__weather_alert__to_json(p: &iface_alerts::WeatherAlert) -> Value {
+    let mut m = Map::new();
+    m.insert("alerts".into(), match (&p.alerts) { Some(v) => Value::Array((v).iter().map(|v| iface_alerts__weather_alert_group__to_json(v)).collect()), None => Value::Null });
+    m.insert("lat".into(), match (&p.lat) { Some(v) => serde_json::Number::from_f64(*(v)).map(Value::Number).unwrap_or(Value::Null), None => Value::Null });
+    m.insert("lon".into(), match (&p.lon) { Some(v) => serde_json::Number::from_f64(*(v)).map(Value::Number).unwrap_or(Value::Null), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_alerts__weather_alert_group__to_json(p: &iface_alerts::WeatherAlertGroup) -> Value {
+    let mut m = Map::new();
+    m.insert("alerts".into(), match (&p.alerts) { Some(v) => Value::Array((v).iter().map(|v| iface_alerts__alert_region_group__to_json(v)).collect()), None => Value::Null });
+    m.insert("description".into(), match (&p.description) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("effective_local".into(), match (&p.effective_local) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("effective_utc".into(), match (&p.effective_utc) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("expires_local".into(), match (&p.expires_local) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("expires_utc".into(), match (&p.expires_utc) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("severity".into(), match (&p.severity) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("title".into(), match (&p.title) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("uri".into(), match (&p.uri) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_alerts__alert_region_group__to_json(p: &iface_alerts::AlertRegionGroup) -> Value {
+    let mut m = Map::new();
+    m.insert("value".into(), Value::String((&p.value).clone()));
+    Value::Object(m)
+}
 
 fn iface_alerts__get_alerts_lat_lat_lon_lon_params__to_json(p: &iface_alerts::GetAlertsLatLatLonLonParams) -> Value {
     let mut m = Map::new();
@@ -305,10 +352,62 @@ fn iface_alerts__get_alerts_lat_lat_lon_lon_params__to_json(p: &iface_alerts::Ge
     Value::Object(m)
 }
 
+fn iface_alerts__weather_alert__from_json(v: &Value) -> Option<iface_alerts::WeatherAlert> {
+    let m = v.as_object()?;
+    Some(iface_alerts::WeatherAlert {
+        alerts: m.get("alerts").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| iface_alerts__weather_alert_group__from_json(x)).collect())),
+        lat: m.get("lat").filter(|v| !v.is_null()).and_then(|v| (v).as_f64()),
+        lon: m.get("lon").filter(|v| !v.is_null()).and_then(|v| (v).as_f64()),
+    })
+}
+
+fn iface_alerts__weather_alert_group__from_json(v: &Value) -> Option<iface_alerts::WeatherAlertGroup> {
+    let m = v.as_object()?;
+    Some(iface_alerts::WeatherAlertGroup {
+        alerts: m.get("alerts").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| iface_alerts__alert_region_group__from_json(x)).collect())),
+        description: m.get("description").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        effective_local: m.get("effective_local").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        effective_utc: m.get("effective_utc").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        expires_local: m.get("expires_local").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        expires_utc: m.get("expires_utc").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        severity: m.get("severity").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        title: m.get("title").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        uri: m.get("uri").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    })
+}
+
+fn iface_alerts__alert_region_group__from_json(v: &Value) -> Option<iface_alerts::AlertRegionGroup> {
+    let m = v.as_object()?;
+    Some(iface_alerts::AlertRegionGroup {
+        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+    })
+}
+
+fn iface_alerts__get_alerts_lat_lat_lon_lon__ok(body: String) -> Result<iface_alerts::WeatherAlert, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match iface_alerts__weather_alert__from_json(&v) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_alerts__get_alerts_lat_lat_lon_lon__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
 impl iface_alerts::Guest for crate::Component {
-    fn get_alerts_lat_lat_lon_lon(params: iface_alerts::GetAlertsLatLatLonLonParams) -> Result<String, String> {
+    fn get_alerts_lat_lat_lon_lon(params: iface_alerts::GetAlertsLatLatLonLonParams) -> Result<iface_alerts::WeatherAlert, String> {
         let json = iface_alerts__get_alerts_lat_lat_lon_lon_params__to_json(&params);
-        dispatch(&OP_ALERTS_GET_ALERTS_LAT_LAT_LON_LON, json)
+        match dispatch(&OP_ALERTS_GET_ALERTS_LAT_LAT_LON_LON, json).and_then(iface_alerts__get_alerts_lat_lat_lon_lon__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_alerts__get_alerts_lat_lat_lon_lon__err(e)),
+        }
     }
 }
 use crate::exports::autostamp::weatherbit::bulk_downloads as iface_bulk_downloads;
@@ -317,7 +416,7 @@ const OP_BULK_DOWNLOADS_GET_BULK_FILES_FILE: OpSpec = OpSpec {
     method: "GET",
     path_template: "/bulk/files/{file}",
     fields: &[
-        FieldSpec { snake: "file", location: FieldLocation::Path },
+        FieldSpec { snake: "file", wire: "file", location: FieldLocation::Path },
     ],
     auth: &[
         AuthApply { secret_key: "key", kind: AuthKind::ApiKeyQuery("key") },
@@ -330,10 +429,24 @@ fn iface_bulk_downloads__get_bulk_files_file_params__to_json(p: &iface_bulk_down
     Value::Object(m)
 }
 
+fn iface_bulk_downloads__get_bulk_files_file__ok(body: String) -> Result<String, crate::runtime::DispatchError> {
+    Ok(body)
+}
+
+fn iface_bulk_downloads__get_bulk_files_file__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
 impl iface_bulk_downloads::Guest for crate::Component {
     fn get_bulk_files_file(params: iface_bulk_downloads::GetBulkFilesFileParams) -> Result<String, String> {
         let json = iface_bulk_downloads__get_bulk_files_file_params__to_json(&params);
-        dispatch(&OP_BULK_DOWNLOADS_GET_BULK_FILES_FILE, json)
+        match dispatch(&OP_BULK_DOWNLOADS_GET_BULK_FILES_FILE, json).and_then(iface_bulk_downloads__get_bulk_files_file__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_bulk_downloads__get_bulk_files_file__err(e)),
+        }
     }
 }
 use crate::exports::autostamp::weatherbit::current_air_quality as iface_current_air_quality;
@@ -342,10 +455,10 @@ const OP_CURRENT_AIR_QUALITY_GET_CURRENT_AIRQUALITY_CITY_CITY_COUNTRY_COUNTRY: O
     method: "GET",
     path_template: "/current/airquality?city={city}&country={country}",
     fields: &[
-        FieldSpec { snake: "city", location: FieldLocation::Path },
-        FieldSpec { snake: "state", location: FieldLocation::Query },
-        FieldSpec { snake: "country", location: FieldLocation::Path },
-        FieldSpec { snake: "callback", location: FieldLocation::Query },
+        FieldSpec { snake: "city", wire: "city", location: FieldLocation::Path },
+        FieldSpec { snake: "state", wire: "state", location: FieldLocation::Query },
+        FieldSpec { snake: "country", wire: "country", location: FieldLocation::Path },
+        FieldSpec { snake: "callback", wire: "callback", location: FieldLocation::Query },
     ],
     auth: &[
         AuthApply { secret_key: "key", kind: AuthKind::ApiKeyQuery("key") },
@@ -356,8 +469,8 @@ const OP_CURRENT_AIR_QUALITY_GET_CURRENT_AIRQUALITY_CITY_ID_CITY_ID: OpSpec = Op
     method: "GET",
     path_template: "/current/airquality?city_id={city_id}",
     fields: &[
-        FieldSpec { snake: "city_id", location: FieldLocation::Path },
-        FieldSpec { snake: "callback", location: FieldLocation::Query },
+        FieldSpec { snake: "city_id", wire: "city_id", location: FieldLocation::Path },
+        FieldSpec { snake: "callback", wire: "callback", location: FieldLocation::Query },
     ],
     auth: &[
         AuthApply { secret_key: "key", kind: AuthKind::ApiKeyQuery("key") },
@@ -368,9 +481,9 @@ const OP_CURRENT_AIR_QUALITY_GET_CURRENT_AIRQUALITY_LAT_LAT_LON_LON: OpSpec = Op
     method: "GET",
     path_template: "/current/airquality?lat={lat}&lon={lon}",
     fields: &[
-        FieldSpec { snake: "lat", location: FieldLocation::Path },
-        FieldSpec { snake: "lon", location: FieldLocation::Path },
-        FieldSpec { snake: "callback", location: FieldLocation::Query },
+        FieldSpec { snake: "lat", wire: "lat", location: FieldLocation::Path },
+        FieldSpec { snake: "lon", wire: "lon", location: FieldLocation::Path },
+        FieldSpec { snake: "callback", wire: "callback", location: FieldLocation::Query },
     ],
     auth: &[
         AuthApply { secret_key: "key", kind: AuthKind::ApiKeyQuery("key") },
@@ -381,14 +494,37 @@ const OP_CURRENT_AIR_QUALITY_GET_CURRENT_AIRQUALITY_POSTAL_CODE_POSTAL_CODE: OpS
     method: "GET",
     path_template: "/current/airquality?postal_code={postal_code}",
     fields: &[
-        FieldSpec { snake: "postal_code", location: FieldLocation::Path },
-        FieldSpec { snake: "country", location: FieldLocation::Query },
-        FieldSpec { snake: "callback", location: FieldLocation::Query },
+        FieldSpec { snake: "postal_code", wire: "postal_code", location: FieldLocation::Path },
+        FieldSpec { snake: "country", wire: "country", location: FieldLocation::Query },
+        FieldSpec { snake: "callback", wire: "callback", location: FieldLocation::Query },
     ],
     auth: &[
         AuthApply { secret_key: "key", kind: AuthKind::ApiKeyQuery("key") },
     ],
 };
+
+fn iface_current_air_quality__aq_current_group__to_json(p: &iface_current_air_quality::AqCurrentGroup) -> Value {
+    let mut m = Map::new();
+    m.insert("city_name".into(), match (&p.city_name) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("country_code".into(), match (&p.country_code) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("data".into(), match (&p.data) { Some(v) => Value::Array((v).iter().map(|v| iface_current_air_quality__aq_current__to_json(v)).collect()), None => Value::Null });
+    m.insert("lat".into(), match (&p.lat) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("lon".into(), match (&p.lon) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("state_code".into(), match (&p.state_code) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("timezone".into(), match (&p.timezone) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_current_air_quality__aq_current__to_json(p: &iface_current_air_quality::AqCurrent) -> Value {
+    let mut m = Map::new();
+    m.insert("aqi".into(), match (&p.aqi) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("no2".into(), match (&p.no2) { Some(v) => serde_json::Number::from_f64(*(v)).map(Value::Number).unwrap_or(Value::Null), None => Value::Null });
+    m.insert("o3".into(), match (&p.o3) { Some(v) => serde_json::Number::from_f64(*(v)).map(Value::Number).unwrap_or(Value::Null), None => Value::Null });
+    m.insert("pm10".into(), match (&p.pm10) { Some(v) => serde_json::Number::from_f64(*(v)).map(Value::Number).unwrap_or(Value::Null), None => Value::Null });
+    m.insert("pm25".into(), match (&p.pm25) { Some(v) => serde_json::Number::from_f64(*(v)).map(Value::Number).unwrap_or(Value::Null), None => Value::Null });
+    m.insert("so2".into(), match (&p.so2) { Some(v) => serde_json::Number::from_f64(*(v)).map(Value::Number).unwrap_or(Value::Null), None => Value::Null });
+    Value::Object(m)
+}
 
 fn iface_current_air_quality__get_current_airquality_city_city_country_country_params__to_json(p: &iface_current_air_quality::GetCurrentAirqualityCityCityCountryCountryParams) -> Value {
     let mut m = Map::new();
@@ -422,22 +558,131 @@ fn iface_current_air_quality__get_current_airquality_postal_code_postal_code_par
     Value::Object(m)
 }
 
+fn iface_current_air_quality__aq_current_group__from_json(v: &Value) -> Option<iface_current_air_quality::AqCurrentGroup> {
+    let m = v.as_object()?;
+    Some(iface_current_air_quality::AqCurrentGroup {
+        city_name: m.get("city_name").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        country_code: m.get("country_code").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| iface_current_air_quality__aq_current__from_json(x)).collect())),
+        lat: m.get("lat").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        lon: m.get("lon").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        state_code: m.get("state_code").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        timezone: m.get("timezone").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    })
+}
+
+fn iface_current_air_quality__aq_current__from_json(v: &Value) -> Option<iface_current_air_quality::AqCurrent> {
+    let m = v.as_object()?;
+    Some(iface_current_air_quality::AqCurrent {
+        aqi: m.get("aqi").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        no2: m.get("no2").filter(|v| !v.is_null()).and_then(|v| (v).as_f64()),
+        o3: m.get("o3").filter(|v| !v.is_null()).and_then(|v| (v).as_f64()),
+        pm10: m.get("pm10").filter(|v| !v.is_null()).and_then(|v| (v).as_f64()),
+        pm25: m.get("pm25").filter(|v| !v.is_null()).and_then(|v| (v).as_f64()),
+        so2: m.get("so2").filter(|v| !v.is_null()).and_then(|v| (v).as_f64()),
+    })
+}
+
+fn iface_current_air_quality__get_current_airquality_city_city_country_country__ok(body: String) -> Result<iface_current_air_quality::AqCurrentGroup, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match iface_current_air_quality__aq_current_group__from_json(&v) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_current_air_quality__get_current_airquality_city_city_country_country__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
+fn iface_current_air_quality__get_current_airquality_city_id_city_id__ok(body: String) -> Result<iface_current_air_quality::AqCurrentGroup, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match iface_current_air_quality__aq_current_group__from_json(&v) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_current_air_quality__get_current_airquality_city_id_city_id__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
+fn iface_current_air_quality__get_current_airquality_lat_lat_lon_lon__ok(body: String) -> Result<iface_current_air_quality::AqCurrentGroup, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match iface_current_air_quality__aq_current_group__from_json(&v) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_current_air_quality__get_current_airquality_lat_lat_lon_lon__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
+fn iface_current_air_quality__get_current_airquality_postal_code_postal_code__ok(body: String) -> Result<iface_current_air_quality::AqCurrentGroup, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match iface_current_air_quality__aq_current_group__from_json(&v) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_current_air_quality__get_current_airquality_postal_code_postal_code__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
 impl iface_current_air_quality::Guest for crate::Component {
-    fn get_current_airquality_city_city_country_country(params: iface_current_air_quality::GetCurrentAirqualityCityCityCountryCountryParams) -> Result<String, String> {
+    fn get_current_airquality_city_city_country_country(params: iface_current_air_quality::GetCurrentAirqualityCityCityCountryCountryParams) -> Result<iface_current_air_quality::AqCurrentGroup, String> {
         let json = iface_current_air_quality__get_current_airquality_city_city_country_country_params__to_json(&params);
-        dispatch(&OP_CURRENT_AIR_QUALITY_GET_CURRENT_AIRQUALITY_CITY_CITY_COUNTRY_COUNTRY, json)
+        match dispatch(&OP_CURRENT_AIR_QUALITY_GET_CURRENT_AIRQUALITY_CITY_CITY_COUNTRY_COUNTRY, json).and_then(iface_current_air_quality__get_current_airquality_city_city_country_country__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_current_air_quality__get_current_airquality_city_city_country_country__err(e)),
+        }
     }
-    fn get_current_airquality_city_id_city_id(params: iface_current_air_quality::GetCurrentAirqualityCityIdCityIdParams) -> Result<String, String> {
+    fn get_current_airquality_city_id_city_id(params: iface_current_air_quality::GetCurrentAirqualityCityIdCityIdParams) -> Result<iface_current_air_quality::AqCurrentGroup, String> {
         let json = iface_current_air_quality__get_current_airquality_city_id_city_id_params__to_json(&params);
-        dispatch(&OP_CURRENT_AIR_QUALITY_GET_CURRENT_AIRQUALITY_CITY_ID_CITY_ID, json)
+        match dispatch(&OP_CURRENT_AIR_QUALITY_GET_CURRENT_AIRQUALITY_CITY_ID_CITY_ID, json).and_then(iface_current_air_quality__get_current_airquality_city_id_city_id__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_current_air_quality__get_current_airquality_city_id_city_id__err(e)),
+        }
     }
-    fn get_current_airquality_lat_lat_lon_lon(params: iface_current_air_quality::GetCurrentAirqualityLatLatLonLonParams) -> Result<String, String> {
+    fn get_current_airquality_lat_lat_lon_lon(params: iface_current_air_quality::GetCurrentAirqualityLatLatLonLonParams) -> Result<iface_current_air_quality::AqCurrentGroup, String> {
         let json = iface_current_air_quality__get_current_airquality_lat_lat_lon_lon_params__to_json(&params);
-        dispatch(&OP_CURRENT_AIR_QUALITY_GET_CURRENT_AIRQUALITY_LAT_LAT_LON_LON, json)
+        match dispatch(&OP_CURRENT_AIR_QUALITY_GET_CURRENT_AIRQUALITY_LAT_LAT_LON_LON, json).and_then(iface_current_air_quality__get_current_airquality_lat_lat_lon_lon__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_current_air_quality__get_current_airquality_lat_lat_lon_lon__err(e)),
+        }
     }
-    fn get_current_airquality_postal_code_postal_code(params: iface_current_air_quality::GetCurrentAirqualityPostalCodePostalCodeParams) -> Result<String, String> {
+    fn get_current_airquality_postal_code_postal_code(params: iface_current_air_quality::GetCurrentAirqualityPostalCodePostalCodeParams) -> Result<iface_current_air_quality::AqCurrentGroup, String> {
         let json = iface_current_air_quality__get_current_airquality_postal_code_postal_code_params__to_json(&params);
-        dispatch(&OP_CURRENT_AIR_QUALITY_GET_CURRENT_AIRQUALITY_POSTAL_CODE_POSTAL_CODE, json)
+        match dispatch(&OP_CURRENT_AIR_QUALITY_GET_CURRENT_AIRQUALITY_POSTAL_CODE_POSTAL_CODE, json).and_then(iface_current_air_quality__get_current_airquality_postal_code_postal_code__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_current_air_quality__get_current_airquality_postal_code_postal_code__err(e)),
+        }
     }
 }
 use crate::exports::autostamp::weatherbit::current_weather_data as iface_current_weather_data;
@@ -446,11 +691,11 @@ const OP_CURRENT_WEATHER_DATA_GET_CURRENT_CITIES_CITIES: OpSpec = OpSpec {
     method: "GET",
     path_template: "/current?cities={cities}",
     fields: &[
-        FieldSpec { snake: "cities", location: FieldLocation::Path },
-        FieldSpec { snake: "units", location: FieldLocation::Query },
-        FieldSpec { snake: "marine", location: FieldLocation::Query },
-        FieldSpec { snake: "lang", location: FieldLocation::Query },
-        FieldSpec { snake: "callback", location: FieldLocation::Query },
+        FieldSpec { snake: "cities", wire: "cities", location: FieldLocation::Path },
+        FieldSpec { snake: "units", wire: "units", location: FieldLocation::Query },
+        FieldSpec { snake: "marine", wire: "marine", location: FieldLocation::Query },
+        FieldSpec { snake: "lang", wire: "lang", location: FieldLocation::Query },
+        FieldSpec { snake: "callback", wire: "callback", location: FieldLocation::Query },
     ],
     auth: &[
         AuthApply { secret_key: "key", kind: AuthKind::ApiKeyQuery("key") },
@@ -461,14 +706,14 @@ const OP_CURRENT_WEATHER_DATA_GET_CURRENT_CITY_CITY_COUNTRY_COUNTRY: OpSpec = Op
     method: "GET",
     path_template: "/current?city={city}&country={country}",
     fields: &[
-        FieldSpec { snake: "city", location: FieldLocation::Path },
-        FieldSpec { snake: "include", location: FieldLocation::Query },
-        FieldSpec { snake: "state", location: FieldLocation::Query },
-        FieldSpec { snake: "country", location: FieldLocation::Path },
-        FieldSpec { snake: "marine", location: FieldLocation::Query },
-        FieldSpec { snake: "units", location: FieldLocation::Query },
-        FieldSpec { snake: "lang", location: FieldLocation::Query },
-        FieldSpec { snake: "callback", location: FieldLocation::Query },
+        FieldSpec { snake: "city", wire: "city", location: FieldLocation::Path },
+        FieldSpec { snake: "include", wire: "include", location: FieldLocation::Query },
+        FieldSpec { snake: "state", wire: "state", location: FieldLocation::Query },
+        FieldSpec { snake: "country", wire: "country", location: FieldLocation::Path },
+        FieldSpec { snake: "marine", wire: "marine", location: FieldLocation::Query },
+        FieldSpec { snake: "units", wire: "units", location: FieldLocation::Query },
+        FieldSpec { snake: "lang", wire: "lang", location: FieldLocation::Query },
+        FieldSpec { snake: "callback", wire: "callback", location: FieldLocation::Query },
     ],
     auth: &[
         AuthApply { secret_key: "key", kind: AuthKind::ApiKeyQuery("key") },
@@ -479,12 +724,12 @@ const OP_CURRENT_WEATHER_DATA_GET_CURRENT_CITY_ID_CITY_ID: OpSpec = OpSpec {
     method: "GET",
     path_template: "/current?city_id={city_id}",
     fields: &[
-        FieldSpec { snake: "city_id", location: FieldLocation::Path },
-        FieldSpec { snake: "units", location: FieldLocation::Query },
-        FieldSpec { snake: "include", location: FieldLocation::Query },
-        FieldSpec { snake: "marine", location: FieldLocation::Query },
-        FieldSpec { snake: "lang", location: FieldLocation::Query },
-        FieldSpec { snake: "callback", location: FieldLocation::Query },
+        FieldSpec { snake: "city_id", wire: "city_id", location: FieldLocation::Path },
+        FieldSpec { snake: "units", wire: "units", location: FieldLocation::Query },
+        FieldSpec { snake: "include", wire: "include", location: FieldLocation::Query },
+        FieldSpec { snake: "marine", wire: "marine", location: FieldLocation::Query },
+        FieldSpec { snake: "lang", wire: "lang", location: FieldLocation::Query },
+        FieldSpec { snake: "callback", wire: "callback", location: FieldLocation::Query },
     ],
     auth: &[
         AuthApply { secret_key: "key", kind: AuthKind::ApiKeyQuery("key") },
@@ -495,13 +740,13 @@ const OP_CURRENT_WEATHER_DATA_GET_CURRENT_LAT_LAT_LON_LON: OpSpec = OpSpec {
     method: "GET",
     path_template: "/current?lat={lat}&lon={lon}",
     fields: &[
-        FieldSpec { snake: "lat", location: FieldLocation::Path },
-        FieldSpec { snake: "lon", location: FieldLocation::Path },
-        FieldSpec { snake: "include", location: FieldLocation::Query },
-        FieldSpec { snake: "marine", location: FieldLocation::Query },
-        FieldSpec { snake: "units", location: FieldLocation::Query },
-        FieldSpec { snake: "lang", location: FieldLocation::Query },
-        FieldSpec { snake: "callback", location: FieldLocation::Query },
+        FieldSpec { snake: "lat", wire: "lat", location: FieldLocation::Path },
+        FieldSpec { snake: "lon", wire: "lon", location: FieldLocation::Path },
+        FieldSpec { snake: "include", wire: "include", location: FieldLocation::Query },
+        FieldSpec { snake: "marine", wire: "marine", location: FieldLocation::Query },
+        FieldSpec { snake: "units", wire: "units", location: FieldLocation::Query },
+        FieldSpec { snake: "lang", wire: "lang", location: FieldLocation::Query },
+        FieldSpec { snake: "callback", wire: "callback", location: FieldLocation::Query },
     ],
     auth: &[
         AuthApply { secret_key: "key", kind: AuthKind::ApiKeyQuery("key") },
@@ -512,10 +757,10 @@ const OP_CURRENT_WEATHER_DATA_GET_CURRENT_POINTS_POINTS: OpSpec = OpSpec {
     method: "GET",
     path_template: "/current?points={points}",
     fields: &[
-        FieldSpec { snake: "points", location: FieldLocation::Path },
-        FieldSpec { snake: "units", location: FieldLocation::Query },
-        FieldSpec { snake: "lang", location: FieldLocation::Query },
-        FieldSpec { snake: "callback", location: FieldLocation::Query },
+        FieldSpec { snake: "points", wire: "points", location: FieldLocation::Path },
+        FieldSpec { snake: "units", wire: "units", location: FieldLocation::Query },
+        FieldSpec { snake: "lang", wire: "lang", location: FieldLocation::Query },
+        FieldSpec { snake: "callback", wire: "callback", location: FieldLocation::Query },
     ],
     auth: &[
         AuthApply { secret_key: "key", kind: AuthKind::ApiKeyQuery("key") },
@@ -526,13 +771,13 @@ const OP_CURRENT_WEATHER_DATA_GET_CURRENT_POSTAL_CODE_POSTAL_CODE: OpSpec = OpSp
     method: "GET",
     path_template: "/current?postal_code={postal_code}",
     fields: &[
-        FieldSpec { snake: "postal_code", location: FieldLocation::Path },
-        FieldSpec { snake: "country", location: FieldLocation::Query },
-        FieldSpec { snake: "include", location: FieldLocation::Query },
-        FieldSpec { snake: "marine", location: FieldLocation::Query },
-        FieldSpec { snake: "units", location: FieldLocation::Query },
-        FieldSpec { snake: "lang", location: FieldLocation::Query },
-        FieldSpec { snake: "callback", location: FieldLocation::Query },
+        FieldSpec { snake: "postal_code", wire: "postal_code", location: FieldLocation::Path },
+        FieldSpec { snake: "country", wire: "country", location: FieldLocation::Query },
+        FieldSpec { snake: "include", wire: "include", location: FieldLocation::Query },
+        FieldSpec { snake: "marine", wire: "marine", location: FieldLocation::Query },
+        FieldSpec { snake: "units", wire: "units", location: FieldLocation::Query },
+        FieldSpec { snake: "lang", wire: "lang", location: FieldLocation::Query },
+        FieldSpec { snake: "callback", wire: "callback", location: FieldLocation::Query },
     ],
     auth: &[
         AuthApply { secret_key: "key", kind: AuthKind::ApiKeyQuery("key") },
@@ -543,11 +788,11 @@ const OP_CURRENT_WEATHER_DATA_GET_CURRENT_STATION_STATION: OpSpec = OpSpec {
     method: "GET",
     path_template: "/current?station={station}",
     fields: &[
-        FieldSpec { snake: "station", location: FieldLocation::Path },
-        FieldSpec { snake: "include", location: FieldLocation::Query },
-        FieldSpec { snake: "units", location: FieldLocation::Query },
-        FieldSpec { snake: "lang", location: FieldLocation::Query },
-        FieldSpec { snake: "callback", location: FieldLocation::Query },
+        FieldSpec { snake: "station", wire: "station", location: FieldLocation::Path },
+        FieldSpec { snake: "include", wire: "include", location: FieldLocation::Query },
+        FieldSpec { snake: "units", wire: "units", location: FieldLocation::Query },
+        FieldSpec { snake: "lang", wire: "lang", location: FieldLocation::Query },
+        FieldSpec { snake: "callback", wire: "callback", location: FieldLocation::Query },
     ],
     auth: &[
         AuthApply { secret_key: "key", kind: AuthKind::ApiKeyQuery("key") },
@@ -558,10 +803,10 @@ const OP_CURRENT_WEATHER_DATA_GET_CURRENT_STATIONS_STATIONS: OpSpec = OpSpec {
     method: "GET",
     path_template: "/current?stations={stations}",
     fields: &[
-        FieldSpec { snake: "stations", location: FieldLocation::Path },
-        FieldSpec { snake: "units", location: FieldLocation::Query },
-        FieldSpec { snake: "lang", location: FieldLocation::Query },
-        FieldSpec { snake: "callback", location: FieldLocation::Query },
+        FieldSpec { snake: "stations", wire: "stations", location: FieldLocation::Path },
+        FieldSpec { snake: "units", wire: "units", location: FieldLocation::Query },
+        FieldSpec { snake: "lang", wire: "lang", location: FieldLocation::Query },
+        FieldSpec { snake: "callback", wire: "callback", location: FieldLocation::Query },
     ],
     auth: &[
         AuthApply { secret_key: "key", kind: AuthKind::ApiKeyQuery("key") },
@@ -623,6 +868,64 @@ fn iface_current_weather_data__get_current_city_city_country_country_include_op_
     match e {
         iface_current_weather_data::GetCurrentCityCityCountryCountryIncludeOpEnum::Minutely => "minutely",
     }
+}
+
+fn iface_current_weather_data__current_obs_group__to_json(p: &iface_current_weather_data::CurrentObsGroup) -> Value {
+    let mut m = Map::new();
+    m.insert("count".into(), match (&p.count) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("data".into(), match (&p.data) { Some(v) => Value::Array((v).iter().map(|v| iface_current_weather_data__current_obs__to_json(v)).collect()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_current_weather_data__current_obs__to_json(p: &iface_current_weather_data::CurrentObs) -> Value {
+    let mut m = Map::new();
+    m.insert("app_temp".into(), match (&p.app_temp) { Some(v) => serde_json::Number::from_f64(*(v)).map(Value::Number).unwrap_or(Value::Null), None => Value::Null });
+    m.insert("aqi".into(), match (&p.aqi) { Some(v) => serde_json::Number::from_f64(*(v)).map(Value::Number).unwrap_or(Value::Null), None => Value::Null });
+    m.insert("city_name".into(), match (&p.city_name) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("clouds".into(), match (&p.clouds) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("country_code".into(), match (&p.country_code) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("datetime".into(), match (&p.datetime) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("dewpt".into(), match (&p.dewpt) { Some(v) => serde_json::Number::from_f64(*(v)).map(Value::Number).unwrap_or(Value::Null), None => Value::Null });
+    m.insert("dhi".into(), match (&p.dhi) { Some(v) => serde_json::Number::from_f64(*(v)).map(Value::Number).unwrap_or(Value::Null), None => Value::Null });
+    m.insert("dni".into(), match (&p.dni) { Some(v) => serde_json::Number::from_f64(*(v)).map(Value::Number).unwrap_or(Value::Null), None => Value::Null });
+    m.insert("elev_angle".into(), match (&p.elev_angle) { Some(v) => serde_json::Number::from_f64(*(v)).map(Value::Number).unwrap_or(Value::Null), None => Value::Null });
+    m.insert("ghi".into(), match (&p.ghi) { Some(v) => serde_json::Number::from_f64(*(v)).map(Value::Number).unwrap_or(Value::Null), None => Value::Null });
+    m.insert("gust".into(), match (&p.gust) { Some(v) => serde_json::Number::from_f64(*(v)).map(Value::Number).unwrap_or(Value::Null), None => Value::Null });
+    m.insert("hour_angle".into(), match (&p.hour_angle) { Some(v) => serde_json::Number::from_f64(*(v)).map(Value::Number).unwrap_or(Value::Null), None => Value::Null });
+    m.insert("lat".into(), match (&p.lat) { Some(v) => serde_json::Number::from_f64(*(v)).map(Value::Number).unwrap_or(Value::Null), None => Value::Null });
+    m.insert("lon".into(), match (&p.lon) { Some(v) => serde_json::Number::from_f64(*(v)).map(Value::Number).unwrap_or(Value::Null), None => Value::Null });
+    m.insert("ob_time".into(), match (&p.ob_time) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("pod".into(), match (&p.pod) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("precip".into(), match (&p.precip) { Some(v) => serde_json::Number::from_f64(*(v)).map(Value::Number).unwrap_or(Value::Null), None => Value::Null });
+    m.insert("pres".into(), match (&p.pres) { Some(v) => serde_json::Number::from_f64(*(v)).map(Value::Number).unwrap_or(Value::Null), None => Value::Null });
+    m.insert("rh".into(), match (&p.rh) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("slp".into(), match (&p.slp) { Some(v) => serde_json::Number::from_f64(*(v)).map(Value::Number).unwrap_or(Value::Null), None => Value::Null });
+    m.insert("snow".into(), match (&p.snow) { Some(v) => serde_json::Number::from_f64(*(v)).map(Value::Number).unwrap_or(Value::Null), None => Value::Null });
+    m.insert("solar_rad".into(), match (&p.solar_rad) { Some(v) => serde_json::Number::from_f64(*(v)).map(Value::Number).unwrap_or(Value::Null), None => Value::Null });
+    m.insert("sources".into(), match (&p.sources) { Some(v) => Value::Array((v).iter().map(|v| Value::String((v).clone())).collect()), None => Value::Null });
+    m.insert("state_code".into(), match (&p.state_code) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("station".into(), match (&p.station) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("sunrise".into(), match (&p.sunrise) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("sunset".into(), match (&p.sunset) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("temp".into(), match (&p.temp) { Some(v) => serde_json::Number::from_f64(*(v)).map(Value::Number).unwrap_or(Value::Null), None => Value::Null });
+    m.insert("timezone".into(), match (&p.timezone) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("ts".into(), match (&p.ts) { Some(v) => serde_json::Number::from_f64(*(v)).map(Value::Number).unwrap_or(Value::Null), None => Value::Null });
+    m.insert("uv".into(), match (&p.uv) { Some(v) => serde_json::Number::from_f64(*(v)).map(Value::Number).unwrap_or(Value::Null), None => Value::Null });
+    m.insert("vis".into(), match (&p.vis) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("weather".into(), match (&p.weather) { Some(v) => iface_current_weather_data__current_obs_weather__to_json(v), None => Value::Null });
+    m.insert("wind_cdir".into(), match (&p.wind_cdir) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("wind_cdir_full".into(), match (&p.wind_cdir_full) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("wind_dir".into(), match (&p.wind_dir) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("wind_speed".into(), match (&p.wind_speed) { Some(v) => serde_json::Number::from_f64(*(v)).map(Value::Number).unwrap_or(Value::Null), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_current_weather_data__current_obs_weather__to_json(p: &iface_current_weather_data::CurrentObsWeather) -> Value {
+    let mut m = Map::new();
+    m.insert("code".into(), match (&p.code) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("description".into(), match (&p.description) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("icon".into(), match (&p.icon) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
 }
 
 fn iface_current_weather_data__get_current_cities_cities_params__to_json(p: &iface_current_weather_data::GetCurrentCitiesCitiesParams) -> Value {
@@ -711,38 +1014,267 @@ fn iface_current_weather_data__get_current_stations_stations_params__to_json(p: 
     Value::Object(m)
 }
 
+fn iface_current_weather_data__current_obs_group__from_json(v: &Value) -> Option<iface_current_weather_data::CurrentObsGroup> {
+    let m = v.as_object()?;
+    Some(iface_current_weather_data::CurrentObsGroup {
+        count: m.get("count").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| iface_current_weather_data__current_obs__from_json(x)).collect())),
+    })
+}
+
+fn iface_current_weather_data__current_obs__from_json(v: &Value) -> Option<iface_current_weather_data::CurrentObs> {
+    let m = v.as_object()?;
+    Some(iface_current_weather_data::CurrentObs {
+        app_temp: m.get("app_temp").filter(|v| !v.is_null()).and_then(|v| (v).as_f64()),
+        aqi: m.get("aqi").filter(|v| !v.is_null()).and_then(|v| (v).as_f64()),
+        city_name: m.get("city_name").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        clouds: m.get("clouds").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        country_code: m.get("country_code").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        datetime: m.get("datetime").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        dewpt: m.get("dewpt").filter(|v| !v.is_null()).and_then(|v| (v).as_f64()),
+        dhi: m.get("dhi").filter(|v| !v.is_null()).and_then(|v| (v).as_f64()),
+        dni: m.get("dni").filter(|v| !v.is_null()).and_then(|v| (v).as_f64()),
+        elev_angle: m.get("elev_angle").filter(|v| !v.is_null()).and_then(|v| (v).as_f64()),
+        ghi: m.get("ghi").filter(|v| !v.is_null()).and_then(|v| (v).as_f64()),
+        gust: m.get("gust").filter(|v| !v.is_null()).and_then(|v| (v).as_f64()),
+        hour_angle: m.get("hour_angle").filter(|v| !v.is_null()).and_then(|v| (v).as_f64()),
+        lat: m.get("lat").filter(|v| !v.is_null()).and_then(|v| (v).as_f64()),
+        lon: m.get("lon").filter(|v| !v.is_null()).and_then(|v| (v).as_f64()),
+        ob_time: m.get("ob_time").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        pod: m.get("pod").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        precip: m.get("precip").filter(|v| !v.is_null()).and_then(|v| (v).as_f64()),
+        pres: m.get("pres").filter(|v| !v.is_null()).and_then(|v| (v).as_f64()),
+        rh: m.get("rh").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        slp: m.get("slp").filter(|v| !v.is_null()).and_then(|v| (v).as_f64()),
+        snow: m.get("snow").filter(|v| !v.is_null()).and_then(|v| (v).as_f64()),
+        solar_rad: m.get("solar_rad").filter(|v| !v.is_null()).and_then(|v| (v).as_f64()),
+        sources: m.get("sources").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| (x).as_str().map(|s| s.to_string())).collect())),
+        state_code: m.get("state_code").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        station: m.get("station").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        sunrise: m.get("sunrise").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        sunset: m.get("sunset").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        temp: m.get("temp").filter(|v| !v.is_null()).and_then(|v| (v).as_f64()),
+        timezone: m.get("timezone").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        ts: m.get("ts").filter(|v| !v.is_null()).and_then(|v| (v).as_f64()),
+        uv: m.get("uv").filter(|v| !v.is_null()).and_then(|v| (v).as_f64()),
+        vis: m.get("vis").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        weather: m.get("weather").filter(|v| !v.is_null()).and_then(|v| iface_current_weather_data__current_obs_weather__from_json(v)),
+        wind_cdir: m.get("wind_cdir").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        wind_cdir_full: m.get("wind_cdir_full").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        wind_dir: m.get("wind_dir").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        wind_speed: m.get("wind_speed").filter(|v| !v.is_null()).and_then(|v| (v).as_f64()),
+    })
+}
+
+fn iface_current_weather_data__current_obs_weather__from_json(v: &Value) -> Option<iface_current_weather_data::CurrentObsWeather> {
+    let m = v.as_object()?;
+    Some(iface_current_weather_data::CurrentObsWeather {
+        code: m.get("code").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        description: m.get("description").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        icon: m.get("icon").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    })
+}
+
+fn iface_current_weather_data__get_current_cities_cities__ok(body: String) -> Result<iface_current_weather_data::CurrentObsGroup, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match iface_current_weather_data__current_obs_group__from_json(&v) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_current_weather_data__get_current_cities_cities__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
+fn iface_current_weather_data__get_current_city_city_country_country__ok(body: String) -> Result<iface_current_weather_data::CurrentObsGroup, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match iface_current_weather_data__current_obs_group__from_json(&v) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_current_weather_data__get_current_city_city_country_country__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
+fn iface_current_weather_data__get_current_city_id_city_id__ok(body: String) -> Result<iface_current_weather_data::CurrentObsGroup, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match iface_current_weather_data__current_obs_group__from_json(&v) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_current_weather_data__get_current_city_id_city_id__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
+fn iface_current_weather_data__get_current_lat_lat_lon_lon__ok(body: String) -> Result<iface_current_weather_data::CurrentObsGroup, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match iface_current_weather_data__current_obs_group__from_json(&v) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_current_weather_data__get_current_lat_lat_lon_lon__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
+fn iface_current_weather_data__get_current_points_points__ok(body: String) -> Result<iface_current_weather_data::CurrentObsGroup, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match iface_current_weather_data__current_obs_group__from_json(&v) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_current_weather_data__get_current_points_points__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
+fn iface_current_weather_data__get_current_postal_code_postal_code__ok(body: String) -> Result<iface_current_weather_data::CurrentObsGroup, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match iface_current_weather_data__current_obs_group__from_json(&v) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_current_weather_data__get_current_postal_code_postal_code__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
+fn iface_current_weather_data__get_current_station_station__ok(body: String) -> Result<iface_current_weather_data::CurrentObsGroup, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match iface_current_weather_data__current_obs_group__from_json(&v) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_current_weather_data__get_current_station_station__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
+fn iface_current_weather_data__get_current_stations_stations__ok(body: String) -> Result<iface_current_weather_data::CurrentObsGroup, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match iface_current_weather_data__current_obs_group__from_json(&v) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_current_weather_data__get_current_stations_stations__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
 impl iface_current_weather_data::Guest for crate::Component {
-    fn get_current_cities_cities(params: iface_current_weather_data::GetCurrentCitiesCitiesParams) -> Result<String, String> {
+    fn get_current_cities_cities(params: iface_current_weather_data::GetCurrentCitiesCitiesParams) -> Result<iface_current_weather_data::CurrentObsGroup, String> {
         let json = iface_current_weather_data__get_current_cities_cities_params__to_json(&params);
-        dispatch(&OP_CURRENT_WEATHER_DATA_GET_CURRENT_CITIES_CITIES, json)
+        match dispatch(&OP_CURRENT_WEATHER_DATA_GET_CURRENT_CITIES_CITIES, json).and_then(iface_current_weather_data__get_current_cities_cities__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_current_weather_data__get_current_cities_cities__err(e)),
+        }
     }
-    fn get_current_city_city_country_country(params: iface_current_weather_data::GetCurrentCityCityCountryCountryParams) -> Result<String, String> {
+    fn get_current_city_city_country_country(params: iface_current_weather_data::GetCurrentCityCityCountryCountryParams) -> Result<iface_current_weather_data::CurrentObsGroup, String> {
         let json = iface_current_weather_data__get_current_city_city_country_country_params__to_json(&params);
-        dispatch(&OP_CURRENT_WEATHER_DATA_GET_CURRENT_CITY_CITY_COUNTRY_COUNTRY, json)
+        match dispatch(&OP_CURRENT_WEATHER_DATA_GET_CURRENT_CITY_CITY_COUNTRY_COUNTRY, json).and_then(iface_current_weather_data__get_current_city_city_country_country__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_current_weather_data__get_current_city_city_country_country__err(e)),
+        }
     }
-    fn get_current_city_id_city_id(params: iface_current_weather_data::GetCurrentCityIdCityIdParams) -> Result<String, String> {
+    fn get_current_city_id_city_id(params: iface_current_weather_data::GetCurrentCityIdCityIdParams) -> Result<iface_current_weather_data::CurrentObsGroup, String> {
         let json = iface_current_weather_data__get_current_city_id_city_id_params__to_json(&params);
-        dispatch(&OP_CURRENT_WEATHER_DATA_GET_CURRENT_CITY_ID_CITY_ID, json)
+        match dispatch(&OP_CURRENT_WEATHER_DATA_GET_CURRENT_CITY_ID_CITY_ID, json).and_then(iface_current_weather_data__get_current_city_id_city_id__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_current_weather_data__get_current_city_id_city_id__err(e)),
+        }
     }
-    fn get_current_lat_lat_lon_lon(params: iface_current_weather_data::GetCurrentLatLatLonLonParams) -> Result<String, String> {
+    fn get_current_lat_lat_lon_lon(params: iface_current_weather_data::GetCurrentLatLatLonLonParams) -> Result<iface_current_weather_data::CurrentObsGroup, String> {
         let json = iface_current_weather_data__get_current_lat_lat_lon_lon_params__to_json(&params);
-        dispatch(&OP_CURRENT_WEATHER_DATA_GET_CURRENT_LAT_LAT_LON_LON, json)
+        match dispatch(&OP_CURRENT_WEATHER_DATA_GET_CURRENT_LAT_LAT_LON_LON, json).and_then(iface_current_weather_data__get_current_lat_lat_lon_lon__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_current_weather_data__get_current_lat_lat_lon_lon__err(e)),
+        }
     }
-    fn get_current_points_points(params: iface_current_weather_data::GetCurrentPointsPointsParams) -> Result<String, String> {
+    fn get_current_points_points(params: iface_current_weather_data::GetCurrentPointsPointsParams) -> Result<iface_current_weather_data::CurrentObsGroup, String> {
         let json = iface_current_weather_data__get_current_points_points_params__to_json(&params);
-        dispatch(&OP_CURRENT_WEATHER_DATA_GET_CURRENT_POINTS_POINTS, json)
+        match dispatch(&OP_CURRENT_WEATHER_DATA_GET_CURRENT_POINTS_POINTS, json).and_then(iface_current_weather_data__get_current_points_points__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_current_weather_data__get_current_points_points__err(e)),
+        }
     }
-    fn get_current_postal_code_postal_code(params: iface_current_weather_data::GetCurrentPostalCodePostalCodeParams) -> Result<String, String> {
+    fn get_current_postal_code_postal_code(params: iface_current_weather_data::GetCurrentPostalCodePostalCodeParams) -> Result<iface_current_weather_data::CurrentObsGroup, String> {
         let json = iface_current_weather_data__get_current_postal_code_postal_code_params__to_json(&params);
-        dispatch(&OP_CURRENT_WEATHER_DATA_GET_CURRENT_POSTAL_CODE_POSTAL_CODE, json)
+        match dispatch(&OP_CURRENT_WEATHER_DATA_GET_CURRENT_POSTAL_CODE_POSTAL_CODE, json).and_then(iface_current_weather_data__get_current_postal_code_postal_code__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_current_weather_data__get_current_postal_code_postal_code__err(e)),
+        }
     }
-    fn get_current_station_station(params: iface_current_weather_data::GetCurrentStationStationParams) -> Result<String, String> {
+    fn get_current_station_station(params: iface_current_weather_data::GetCurrentStationStationParams) -> Result<iface_current_weather_data::CurrentObsGroup, String> {
         let json = iface_current_weather_data__get_current_station_station_params__to_json(&params);
-        dispatch(&OP_CURRENT_WEATHER_DATA_GET_CURRENT_STATION_STATION, json)
+        match dispatch(&OP_CURRENT_WEATHER_DATA_GET_CURRENT_STATION_STATION, json).and_then(iface_current_weather_data__get_current_station_station__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_current_weather_data__get_current_station_station__err(e)),
+        }
     }
-    fn get_current_stations_stations(params: iface_current_weather_data::GetCurrentStationsStationsParams) -> Result<String, String> {
+    fn get_current_stations_stations(params: iface_current_weather_data::GetCurrentStationsStationsParams) -> Result<iface_current_weather_data::CurrentObsGroup, String> {
         let json = iface_current_weather_data__get_current_stations_stations_params__to_json(&params);
-        dispatch(&OP_CURRENT_WEATHER_DATA_GET_CURRENT_STATIONS_STATIONS, json)
+        match dispatch(&OP_CURRENT_WEATHER_DATA_GET_CURRENT_STATIONS_STATIONS, json).and_then(iface_current_weather_data__get_current_stations_stations__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_current_weather_data__get_current_stations_stations__err(e)),
+        }
     }
 }
 use crate::exports::autostamp::weatherbit::air_quality_forecast as iface_air_quality_forecast;
@@ -751,11 +1283,11 @@ const OP_AIR_QUALITY_FORECAST_GET_FORECAST_AIRQUALITY_CITY_CITY_COUNTRY_COUNTRY:
     method: "GET",
     path_template: "/forecast/airquality?city={city}&country={country}",
     fields: &[
-        FieldSpec { snake: "city", location: FieldLocation::Path },
-        FieldSpec { snake: "state", location: FieldLocation::Query },
-        FieldSpec { snake: "country", location: FieldLocation::Path },
-        FieldSpec { snake: "callback", location: FieldLocation::Query },
-        FieldSpec { snake: "hours", location: FieldLocation::Query },
+        FieldSpec { snake: "city", wire: "city", location: FieldLocation::Path },
+        FieldSpec { snake: "state", wire: "state", location: FieldLocation::Query },
+        FieldSpec { snake: "country", wire: "country", location: FieldLocation::Path },
+        FieldSpec { snake: "callback", wire: "callback", location: FieldLocation::Query },
+        FieldSpec { snake: "hours", wire: "hours", location: FieldLocation::Query },
     ],
     auth: &[
         AuthApply { secret_key: "key", kind: AuthKind::ApiKeyQuery("key") },
@@ -766,9 +1298,9 @@ const OP_AIR_QUALITY_FORECAST_GET_FORECAST_AIRQUALITY_CITY_ID_CITY_ID: OpSpec = 
     method: "GET",
     path_template: "/forecast/airquality?city_id={city_id}",
     fields: &[
-        FieldSpec { snake: "city_id", location: FieldLocation::Path },
-        FieldSpec { snake: "callback", location: FieldLocation::Query },
-        FieldSpec { snake: "hours", location: FieldLocation::Query },
+        FieldSpec { snake: "city_id", wire: "city_id", location: FieldLocation::Path },
+        FieldSpec { snake: "callback", wire: "callback", location: FieldLocation::Query },
+        FieldSpec { snake: "hours", wire: "hours", location: FieldLocation::Query },
     ],
     auth: &[
         AuthApply { secret_key: "key", kind: AuthKind::ApiKeyQuery("key") },
@@ -779,10 +1311,10 @@ const OP_AIR_QUALITY_FORECAST_GET_FORECAST_AIRQUALITY_LAT_LAT_LON_LON: OpSpec = 
     method: "GET",
     path_template: "/forecast/airquality?lat={lat}&lon={lon}",
     fields: &[
-        FieldSpec { snake: "lat", location: FieldLocation::Path },
-        FieldSpec { snake: "lon", location: FieldLocation::Path },
-        FieldSpec { snake: "callback", location: FieldLocation::Query },
-        FieldSpec { snake: "hours", location: FieldLocation::Query },
+        FieldSpec { snake: "lat", wire: "lat", location: FieldLocation::Path },
+        FieldSpec { snake: "lon", wire: "lon", location: FieldLocation::Path },
+        FieldSpec { snake: "callback", wire: "callback", location: FieldLocation::Query },
+        FieldSpec { snake: "hours", wire: "hours", location: FieldLocation::Query },
     ],
     auth: &[
         AuthApply { secret_key: "key", kind: AuthKind::ApiKeyQuery("key") },
@@ -793,15 +1325,41 @@ const OP_AIR_QUALITY_FORECAST_GET_FORECAST_AIRQUALITY_POSTAL_CODE_POSTAL_CODE: O
     method: "GET",
     path_template: "/forecast/airquality?postal_code={postal_code}",
     fields: &[
-        FieldSpec { snake: "postal_code", location: FieldLocation::Path },
-        FieldSpec { snake: "country", location: FieldLocation::Query },
-        FieldSpec { snake: "callback", location: FieldLocation::Query },
-        FieldSpec { snake: "hours", location: FieldLocation::Query },
+        FieldSpec { snake: "postal_code", wire: "postal_code", location: FieldLocation::Path },
+        FieldSpec { snake: "country", wire: "country", location: FieldLocation::Query },
+        FieldSpec { snake: "callback", wire: "callback", location: FieldLocation::Query },
+        FieldSpec { snake: "hours", wire: "hours", location: FieldLocation::Query },
     ],
     auth: &[
         AuthApply { secret_key: "key", kind: AuthKind::ApiKeyQuery("key") },
     ],
 };
+
+fn iface_air_quality_forecast__aq_hourly__to_json(p: &iface_air_quality_forecast::AqHourly) -> Value {
+    let mut m = Map::new();
+    m.insert("city_name".into(), match (&p.city_name) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("country_code".into(), match (&p.country_code) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("data".into(), match (&p.data) { Some(v) => Value::Array((v).iter().map(|v| iface_air_quality_forecast__aq_hour__to_json(v)).collect()), None => Value::Null });
+    m.insert("lat".into(), match (&p.lat) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("lon".into(), match (&p.lon) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("state_code".into(), match (&p.state_code) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("timezone".into(), match (&p.timezone) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_air_quality_forecast__aq_hour__to_json(p: &iface_air_quality_forecast::AqHour) -> Value {
+    let mut m = Map::new();
+    m.insert("aqi".into(), match (&p.aqi) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("no2".into(), match (&p.no2) { Some(v) => serde_json::Number::from_f64(*(v)).map(Value::Number).unwrap_or(Value::Null), None => Value::Null });
+    m.insert("o3".into(), match (&p.o3) { Some(v) => serde_json::Number::from_f64(*(v)).map(Value::Number).unwrap_or(Value::Null), None => Value::Null });
+    m.insert("pm10".into(), match (&p.pm10) { Some(v) => serde_json::Number::from_f64(*(v)).map(Value::Number).unwrap_or(Value::Null), None => Value::Null });
+    m.insert("pm25".into(), match (&p.pm25) { Some(v) => serde_json::Number::from_f64(*(v)).map(Value::Number).unwrap_or(Value::Null), None => Value::Null });
+    m.insert("so2".into(), match (&p.so2) { Some(v) => serde_json::Number::from_f64(*(v)).map(Value::Number).unwrap_or(Value::Null), None => Value::Null });
+    m.insert("timestamp_local".into(), match (&p.timestamp_local) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("timestamp_utc".into(), match (&p.timestamp_utc) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("ts".into(), match (&p.ts) { Some(v) => serde_json::Number::from_f64(*(v)).map(Value::Number).unwrap_or(Value::Null), None => Value::Null });
+    Value::Object(m)
+}
 
 fn iface_air_quality_forecast__get_forecast_airquality_city_city_country_country_params__to_json(p: &iface_air_quality_forecast::GetForecastAirqualityCityCityCountryCountryParams) -> Value {
     let mut m = Map::new();
@@ -839,22 +1397,134 @@ fn iface_air_quality_forecast__get_forecast_airquality_postal_code_postal_code_p
     Value::Object(m)
 }
 
+fn iface_air_quality_forecast__aq_hourly__from_json(v: &Value) -> Option<iface_air_quality_forecast::AqHourly> {
+    let m = v.as_object()?;
+    Some(iface_air_quality_forecast::AqHourly {
+        city_name: m.get("city_name").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        country_code: m.get("country_code").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| iface_air_quality_forecast__aq_hour__from_json(x)).collect())),
+        lat: m.get("lat").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        lon: m.get("lon").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        state_code: m.get("state_code").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        timezone: m.get("timezone").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    })
+}
+
+fn iface_air_quality_forecast__aq_hour__from_json(v: &Value) -> Option<iface_air_quality_forecast::AqHour> {
+    let m = v.as_object()?;
+    Some(iface_air_quality_forecast::AqHour {
+        aqi: m.get("aqi").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        no2: m.get("no2").filter(|v| !v.is_null()).and_then(|v| (v).as_f64()),
+        o3: m.get("o3").filter(|v| !v.is_null()).and_then(|v| (v).as_f64()),
+        pm10: m.get("pm10").filter(|v| !v.is_null()).and_then(|v| (v).as_f64()),
+        pm25: m.get("pm25").filter(|v| !v.is_null()).and_then(|v| (v).as_f64()),
+        so2: m.get("so2").filter(|v| !v.is_null()).and_then(|v| (v).as_f64()),
+        timestamp_local: m.get("timestamp_local").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        timestamp_utc: m.get("timestamp_utc").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        ts: m.get("ts").filter(|v| !v.is_null()).and_then(|v| (v).as_f64()),
+    })
+}
+
+fn iface_air_quality_forecast__get_forecast_airquality_city_city_country_country__ok(body: String) -> Result<iface_air_quality_forecast::AqHourly, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match iface_air_quality_forecast__aq_hourly__from_json(&v) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_air_quality_forecast__get_forecast_airquality_city_city_country_country__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
+fn iface_air_quality_forecast__get_forecast_airquality_city_id_city_id__ok(body: String) -> Result<iface_air_quality_forecast::AqHourly, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match iface_air_quality_forecast__aq_hourly__from_json(&v) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_air_quality_forecast__get_forecast_airquality_city_id_city_id__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
+fn iface_air_quality_forecast__get_forecast_airquality_lat_lat_lon_lon__ok(body: String) -> Result<iface_air_quality_forecast::AqHourly, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match iface_air_quality_forecast__aq_hourly__from_json(&v) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_air_quality_forecast__get_forecast_airquality_lat_lat_lon_lon__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
+fn iface_air_quality_forecast__get_forecast_airquality_postal_code_postal_code__ok(body: String) -> Result<iface_air_quality_forecast::AqHourly, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match iface_air_quality_forecast__aq_hourly__from_json(&v) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_air_quality_forecast__get_forecast_airquality_postal_code_postal_code__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
 impl iface_air_quality_forecast::Guest for crate::Component {
-    fn get_forecast_airquality_city_city_country_country(params: iface_air_quality_forecast::GetForecastAirqualityCityCityCountryCountryParams) -> Result<String, String> {
+    fn get_forecast_airquality_city_city_country_country(params: iface_air_quality_forecast::GetForecastAirqualityCityCityCountryCountryParams) -> Result<iface_air_quality_forecast::AqHourly, String> {
         let json = iface_air_quality_forecast__get_forecast_airquality_city_city_country_country_params__to_json(&params);
-        dispatch(&OP_AIR_QUALITY_FORECAST_GET_FORECAST_AIRQUALITY_CITY_CITY_COUNTRY_COUNTRY, json)
+        match dispatch(&OP_AIR_QUALITY_FORECAST_GET_FORECAST_AIRQUALITY_CITY_CITY_COUNTRY_COUNTRY, json).and_then(iface_air_quality_forecast__get_forecast_airquality_city_city_country_country__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_air_quality_forecast__get_forecast_airquality_city_city_country_country__err(e)),
+        }
     }
-    fn get_forecast_airquality_city_id_city_id(params: iface_air_quality_forecast::GetForecastAirqualityCityIdCityIdParams) -> Result<String, String> {
+    fn get_forecast_airquality_city_id_city_id(params: iface_air_quality_forecast::GetForecastAirqualityCityIdCityIdParams) -> Result<iface_air_quality_forecast::AqHourly, String> {
         let json = iface_air_quality_forecast__get_forecast_airquality_city_id_city_id_params__to_json(&params);
-        dispatch(&OP_AIR_QUALITY_FORECAST_GET_FORECAST_AIRQUALITY_CITY_ID_CITY_ID, json)
+        match dispatch(&OP_AIR_QUALITY_FORECAST_GET_FORECAST_AIRQUALITY_CITY_ID_CITY_ID, json).and_then(iface_air_quality_forecast__get_forecast_airquality_city_id_city_id__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_air_quality_forecast__get_forecast_airquality_city_id_city_id__err(e)),
+        }
     }
-    fn get_forecast_airquality_lat_lat_lon_lon(params: iface_air_quality_forecast::GetForecastAirqualityLatLatLonLonParams) -> Result<String, String> {
+    fn get_forecast_airquality_lat_lat_lon_lon(params: iface_air_quality_forecast::GetForecastAirqualityLatLatLonLonParams) -> Result<iface_air_quality_forecast::AqHourly, String> {
         let json = iface_air_quality_forecast__get_forecast_airquality_lat_lat_lon_lon_params__to_json(&params);
-        dispatch(&OP_AIR_QUALITY_FORECAST_GET_FORECAST_AIRQUALITY_LAT_LAT_LON_LON, json)
+        match dispatch(&OP_AIR_QUALITY_FORECAST_GET_FORECAST_AIRQUALITY_LAT_LAT_LON_LON, json).and_then(iface_air_quality_forecast__get_forecast_airquality_lat_lat_lon_lon__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_air_quality_forecast__get_forecast_airquality_lat_lat_lon_lon__err(e)),
+        }
     }
-    fn get_forecast_airquality_postal_code_postal_code(params: iface_air_quality_forecast::GetForecastAirqualityPostalCodePostalCodeParams) -> Result<String, String> {
+    fn get_forecast_airquality_postal_code_postal_code(params: iface_air_quality_forecast::GetForecastAirqualityPostalCodePostalCodeParams) -> Result<iface_air_quality_forecast::AqHourly, String> {
         let json = iface_air_quality_forecast__get_forecast_airquality_postal_code_postal_code_params__to_json(&params);
-        dispatch(&OP_AIR_QUALITY_FORECAST_GET_FORECAST_AIRQUALITY_POSTAL_CODE_POSTAL_CODE, json)
+        match dispatch(&OP_AIR_QUALITY_FORECAST_GET_FORECAST_AIRQUALITY_POSTAL_CODE_POSTAL_CODE, json).and_then(iface_air_quality_forecast__get_forecast_airquality_postal_code_postal_code__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_air_quality_forecast__get_forecast_airquality_postal_code_postal_code__err(e)),
+        }
     }
 }
 use crate::exports::autostamp::weatherbit::v16_day_daily_forecast as iface_v16_day_daily_forecast;
@@ -863,13 +1533,13 @@ const OP_V16_DAY_DAILY_FORECAST_GET_FORECAST_DAILY_CITY_CITY_COUNTRY_COUNTRY: Op
     method: "GET",
     path_template: "/forecast/daily?city={city}&country={country}",
     fields: &[
-        FieldSpec { snake: "city", location: FieldLocation::Path },
-        FieldSpec { snake: "state", location: FieldLocation::Query },
-        FieldSpec { snake: "country", location: FieldLocation::Path },
-        FieldSpec { snake: "days", location: FieldLocation::Query },
-        FieldSpec { snake: "units", location: FieldLocation::Query },
-        FieldSpec { snake: "lang", location: FieldLocation::Query },
-        FieldSpec { snake: "callback", location: FieldLocation::Query },
+        FieldSpec { snake: "city", wire: "city", location: FieldLocation::Path },
+        FieldSpec { snake: "state", wire: "state", location: FieldLocation::Query },
+        FieldSpec { snake: "country", wire: "country", location: FieldLocation::Path },
+        FieldSpec { snake: "days", wire: "days", location: FieldLocation::Query },
+        FieldSpec { snake: "units", wire: "units", location: FieldLocation::Query },
+        FieldSpec { snake: "lang", wire: "lang", location: FieldLocation::Query },
+        FieldSpec { snake: "callback", wire: "callback", location: FieldLocation::Query },
     ],
     auth: &[
         AuthApply { secret_key: "key", kind: AuthKind::ApiKeyQuery("key") },
@@ -880,11 +1550,11 @@ const OP_V16_DAY_DAILY_FORECAST_GET_FORECAST_DAILY_CITY_ID_CITY_ID: OpSpec = OpS
     method: "GET",
     path_template: "/forecast/daily?city_id={city_id}",
     fields: &[
-        FieldSpec { snake: "city_id", location: FieldLocation::Path },
-        FieldSpec { snake: "days", location: FieldLocation::Query },
-        FieldSpec { snake: "units", location: FieldLocation::Query },
-        FieldSpec { snake: "lang", location: FieldLocation::Query },
-        FieldSpec { snake: "callback", location: FieldLocation::Query },
+        FieldSpec { snake: "city_id", wire: "city_id", location: FieldLocation::Path },
+        FieldSpec { snake: "days", wire: "days", location: FieldLocation::Query },
+        FieldSpec { snake: "units", wire: "units", location: FieldLocation::Query },
+        FieldSpec { snake: "lang", wire: "lang", location: FieldLocation::Query },
+        FieldSpec { snake: "callback", wire: "callback", location: FieldLocation::Query },
     ],
     auth: &[
         AuthApply { secret_key: "key", kind: AuthKind::ApiKeyQuery("key") },
@@ -895,12 +1565,12 @@ const OP_V16_DAY_DAILY_FORECAST_GET_FORECAST_DAILY_LAT_LAT_LON_LON: OpSpec = OpS
     method: "GET",
     path_template: "/forecast/daily?lat={lat}&lon={lon}",
     fields: &[
-        FieldSpec { snake: "lat", location: FieldLocation::Path },
-        FieldSpec { snake: "lon", location: FieldLocation::Path },
-        FieldSpec { snake: "days", location: FieldLocation::Query },
-        FieldSpec { snake: "units", location: FieldLocation::Query },
-        FieldSpec { snake: "lang", location: FieldLocation::Query },
-        FieldSpec { snake: "callback", location: FieldLocation::Query },
+        FieldSpec { snake: "lat", wire: "lat", location: FieldLocation::Path },
+        FieldSpec { snake: "lon", wire: "lon", location: FieldLocation::Path },
+        FieldSpec { snake: "days", wire: "days", location: FieldLocation::Query },
+        FieldSpec { snake: "units", wire: "units", location: FieldLocation::Query },
+        FieldSpec { snake: "lang", wire: "lang", location: FieldLocation::Query },
+        FieldSpec { snake: "callback", wire: "callback", location: FieldLocation::Query },
     ],
     auth: &[
         AuthApply { secret_key: "key", kind: AuthKind::ApiKeyQuery("key") },
@@ -911,12 +1581,12 @@ const OP_V16_DAY_DAILY_FORECAST_GET_FORECAST_DAILY_POSTAL_CODE_POSTAL_CODE: OpSp
     method: "GET",
     path_template: "/forecast/daily?postal_code={postal_code}",
     fields: &[
-        FieldSpec { snake: "postal_code", location: FieldLocation::Path },
-        FieldSpec { snake: "country", location: FieldLocation::Query },
-        FieldSpec { snake: "days", location: FieldLocation::Query },
-        FieldSpec { snake: "units", location: FieldLocation::Query },
-        FieldSpec { snake: "lang", location: FieldLocation::Query },
-        FieldSpec { snake: "callback", location: FieldLocation::Query },
+        FieldSpec { snake: "postal_code", wire: "postal_code", location: FieldLocation::Path },
+        FieldSpec { snake: "country", wire: "country", location: FieldLocation::Query },
+        FieldSpec { snake: "days", wire: "days", location: FieldLocation::Query },
+        FieldSpec { snake: "units", wire: "units", location: FieldLocation::Query },
+        FieldSpec { snake: "lang", wire: "lang", location: FieldLocation::Query },
+        FieldSpec { snake: "callback", wire: "callback", location: FieldLocation::Query },
     ],
     auth: &[
         AuthApply { secret_key: "key", kind: AuthKind::ApiKeyQuery("key") },
@@ -968,6 +1638,63 @@ fn iface_v16_day_daily_forecast__get_forecast_daily_city_city_country_country_la
     }
 }
 
+fn iface_v16_day_daily_forecast__forecast_day__to_json(p: &iface_v16_day_daily_forecast::ForecastDay) -> Value {
+    let mut m = Map::new();
+    m.insert("city_name".into(), match (&p.city_name) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("country_code".into(), match (&p.country_code) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("data".into(), match (&p.data) { Some(v) => Value::Array((v).iter().map(|v| iface_v16_day_daily_forecast__forecast__to_json(v)).collect()), None => Value::Null });
+    m.insert("lat".into(), match (&p.lat) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("lon".into(), match (&p.lon) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("state_code".into(), match (&p.state_code) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("timezone".into(), match (&p.timezone) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_v16_day_daily_forecast__forecast__to_json(p: &iface_v16_day_daily_forecast::Forecast) -> Value {
+    let mut m = Map::new();
+    m.insert("app_max_temp".into(), match (&p.app_max_temp) { Some(v) => serde_json::Number::from_f64(*(v)).map(Value::Number).unwrap_or(Value::Null), None => Value::Null });
+    m.insert("app_min_temp".into(), match (&p.app_min_temp) { Some(v) => serde_json::Number::from_f64(*(v)).map(Value::Number).unwrap_or(Value::Null), None => Value::Null });
+    m.insert("clouds".into(), match (&p.clouds) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("datetime".into(), match (&p.datetime) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("dewpt".into(), match (&p.dewpt) { Some(v) => serde_json::Number::from_f64(*(v)).map(Value::Number).unwrap_or(Value::Null), None => Value::Null });
+    m.insert("max_dhi".into(), match (&p.max_dhi) { Some(v) => serde_json::Number::from_f64(*(v)).map(Value::Number).unwrap_or(Value::Null), None => Value::Null });
+    m.insert("max_temp".into(), match (&p.max_temp) { Some(v) => serde_json::Number::from_f64(*(v)).map(Value::Number).unwrap_or(Value::Null), None => Value::Null });
+    m.insert("min_temp".into(), match (&p.min_temp) { Some(v) => serde_json::Number::from_f64(*(v)).map(Value::Number).unwrap_or(Value::Null), None => Value::Null });
+    m.insert("moon_phase".into(), match (&p.moon_phase) { Some(v) => serde_json::Number::from_f64(*(v)).map(Value::Number).unwrap_or(Value::Null), None => Value::Null });
+    m.insert("moonrise_ts".into(), match (&p.moonrise_ts) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("moonset_ts".into(), match (&p.moonset_ts) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("pod".into(), match (&p.pod) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("pop".into(), match (&p.pop) { Some(v) => serde_json::Number::from_f64(*(v)).map(Value::Number).unwrap_or(Value::Null), None => Value::Null });
+    m.insert("precip".into(), match (&p.precip) { Some(v) => serde_json::Number::from_f64(*(v)).map(Value::Number).unwrap_or(Value::Null), None => Value::Null });
+    m.insert("pres".into(), match (&p.pres) { Some(v) => serde_json::Number::from_f64(*(v)).map(Value::Number).unwrap_or(Value::Null), None => Value::Null });
+    m.insert("rh".into(), match (&p.rh) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("slp".into(), match (&p.slp) { Some(v) => serde_json::Number::from_f64(*(v)).map(Value::Number).unwrap_or(Value::Null), None => Value::Null });
+    m.insert("snow".into(), match (&p.snow) { Some(v) => serde_json::Number::from_f64(*(v)).map(Value::Number).unwrap_or(Value::Null), None => Value::Null });
+    m.insert("snow_depth".into(), match (&p.snow_depth) { Some(v) => serde_json::Number::from_f64(*(v)).map(Value::Number).unwrap_or(Value::Null), None => Value::Null });
+    m.insert("sunrise_ts".into(), match (&p.sunrise_ts) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("sunset_ts".into(), match (&p.sunset_ts) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("temp".into(), match (&p.temp) { Some(v) => serde_json::Number::from_f64(*(v)).map(Value::Number).unwrap_or(Value::Null), None => Value::Null });
+    m.insert("timestamp_local".into(), match (&p.timestamp_local) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("timestamp_utc".into(), match (&p.timestamp_utc) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("ts".into(), match (&p.ts) { Some(v) => serde_json::Number::from_f64(*(v)).map(Value::Number).unwrap_or(Value::Null), None => Value::Null });
+    m.insert("uv".into(), match (&p.uv) { Some(v) => serde_json::Number::from_f64(*(v)).map(Value::Number).unwrap_or(Value::Null), None => Value::Null });
+    m.insert("vis".into(), match (&p.vis) { Some(v) => serde_json::Number::from_f64(*(v)).map(Value::Number).unwrap_or(Value::Null), None => Value::Null });
+    m.insert("weather".into(), match (&p.weather) { Some(v) => iface_v16_day_daily_forecast__forecast_weather__to_json(v), None => Value::Null });
+    m.insert("wind_cdir".into(), match (&p.wind_cdir) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("wind_cdir_full".into(), match (&p.wind_cdir_full) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("wind_dir".into(), match (&p.wind_dir) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("wind_spd".into(), match (&p.wind_spd) { Some(v) => serde_json::Number::from_f64(*(v)).map(Value::Number).unwrap_or(Value::Null), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_v16_day_daily_forecast__forecast_weather__to_json(p: &iface_v16_day_daily_forecast::ForecastWeather) -> Value {
+    let mut m = Map::new();
+    m.insert("code".into(), match (&p.code) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("description".into(), match (&p.description) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("icon".into(), match (&p.icon) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
 fn iface_v16_day_daily_forecast__get_forecast_daily_city_city_country_country_params__to_json(p: &iface_v16_day_daily_forecast::GetForecastDailyCityCityCountryCountryParams) -> Value {
     let mut m = Map::new();
     m.insert("city".into(), Value::String((&p.city).clone()));
@@ -1012,22 +1739,166 @@ fn iface_v16_day_daily_forecast__get_forecast_daily_postal_code_postal_code_para
     Value::Object(m)
 }
 
+fn iface_v16_day_daily_forecast__forecast_day__from_json(v: &Value) -> Option<iface_v16_day_daily_forecast::ForecastDay> {
+    let m = v.as_object()?;
+    Some(iface_v16_day_daily_forecast::ForecastDay {
+        city_name: m.get("city_name").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        country_code: m.get("country_code").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| iface_v16_day_daily_forecast__forecast__from_json(x)).collect())),
+        lat: m.get("lat").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        lon: m.get("lon").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        state_code: m.get("state_code").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        timezone: m.get("timezone").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    })
+}
+
+fn iface_v16_day_daily_forecast__forecast__from_json(v: &Value) -> Option<iface_v16_day_daily_forecast::Forecast> {
+    let m = v.as_object()?;
+    Some(iface_v16_day_daily_forecast::Forecast {
+        app_max_temp: m.get("app_max_temp").filter(|v| !v.is_null()).and_then(|v| (v).as_f64()),
+        app_min_temp: m.get("app_min_temp").filter(|v| !v.is_null()).and_then(|v| (v).as_f64()),
+        clouds: m.get("clouds").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        datetime: m.get("datetime").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        dewpt: m.get("dewpt").filter(|v| !v.is_null()).and_then(|v| (v).as_f64()),
+        max_dhi: m.get("max_dhi").filter(|v| !v.is_null()).and_then(|v| (v).as_f64()),
+        max_temp: m.get("max_temp").filter(|v| !v.is_null()).and_then(|v| (v).as_f64()),
+        min_temp: m.get("min_temp").filter(|v| !v.is_null()).and_then(|v| (v).as_f64()),
+        moon_phase: m.get("moon_phase").filter(|v| !v.is_null()).and_then(|v| (v).as_f64()),
+        moonrise_ts: m.get("moonrise_ts").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        moonset_ts: m.get("moonset_ts").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        pod: m.get("pod").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        pop: m.get("pop").filter(|v| !v.is_null()).and_then(|v| (v).as_f64()),
+        precip: m.get("precip").filter(|v| !v.is_null()).and_then(|v| (v).as_f64()),
+        pres: m.get("pres").filter(|v| !v.is_null()).and_then(|v| (v).as_f64()),
+        rh: m.get("rh").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        slp: m.get("slp").filter(|v| !v.is_null()).and_then(|v| (v).as_f64()),
+        snow: m.get("snow").filter(|v| !v.is_null()).and_then(|v| (v).as_f64()),
+        snow_depth: m.get("snow_depth").filter(|v| !v.is_null()).and_then(|v| (v).as_f64()),
+        sunrise_ts: m.get("sunrise_ts").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        sunset_ts: m.get("sunset_ts").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        temp: m.get("temp").filter(|v| !v.is_null()).and_then(|v| (v).as_f64()),
+        timestamp_local: m.get("timestamp_local").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        timestamp_utc: m.get("timestamp_utc").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        ts: m.get("ts").filter(|v| !v.is_null()).and_then(|v| (v).as_f64()),
+        uv: m.get("uv").filter(|v| !v.is_null()).and_then(|v| (v).as_f64()),
+        vis: m.get("vis").filter(|v| !v.is_null()).and_then(|v| (v).as_f64()),
+        weather: m.get("weather").filter(|v| !v.is_null()).and_then(|v| iface_v16_day_daily_forecast__forecast_weather__from_json(v)),
+        wind_cdir: m.get("wind_cdir").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        wind_cdir_full: m.get("wind_cdir_full").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        wind_dir: m.get("wind_dir").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        wind_spd: m.get("wind_spd").filter(|v| !v.is_null()).and_then(|v| (v).as_f64()),
+    })
+}
+
+fn iface_v16_day_daily_forecast__forecast_weather__from_json(v: &Value) -> Option<iface_v16_day_daily_forecast::ForecastWeather> {
+    let m = v.as_object()?;
+    Some(iface_v16_day_daily_forecast::ForecastWeather {
+        code: m.get("code").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        description: m.get("description").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        icon: m.get("icon").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    })
+}
+
+fn iface_v16_day_daily_forecast__get_forecast_daily_city_city_country_country__ok(body: String) -> Result<iface_v16_day_daily_forecast::ForecastDay, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match iface_v16_day_daily_forecast__forecast_day__from_json(&v) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_v16_day_daily_forecast__get_forecast_daily_city_city_country_country__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
+fn iface_v16_day_daily_forecast__get_forecast_daily_city_id_city_id__ok(body: String) -> Result<iface_v16_day_daily_forecast::ForecastDay, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match iface_v16_day_daily_forecast__forecast_day__from_json(&v) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_v16_day_daily_forecast__get_forecast_daily_city_id_city_id__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
+fn iface_v16_day_daily_forecast__get_forecast_daily_lat_lat_lon_lon__ok(body: String) -> Result<iface_v16_day_daily_forecast::ForecastDay, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match iface_v16_day_daily_forecast__forecast_day__from_json(&v) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_v16_day_daily_forecast__get_forecast_daily_lat_lat_lon_lon__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
+fn iface_v16_day_daily_forecast__get_forecast_daily_postal_code_postal_code__ok(body: String) -> Result<iface_v16_day_daily_forecast::ForecastDay, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match iface_v16_day_daily_forecast__forecast_day__from_json(&v) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_v16_day_daily_forecast__get_forecast_daily_postal_code_postal_code__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
 impl iface_v16_day_daily_forecast::Guest for crate::Component {
-    fn get_forecast_daily_city_city_country_country(params: iface_v16_day_daily_forecast::GetForecastDailyCityCityCountryCountryParams) -> Result<String, String> {
+    fn get_forecast_daily_city_city_country_country(params: iface_v16_day_daily_forecast::GetForecastDailyCityCityCountryCountryParams) -> Result<iface_v16_day_daily_forecast::ForecastDay, String> {
         let json = iface_v16_day_daily_forecast__get_forecast_daily_city_city_country_country_params__to_json(&params);
-        dispatch(&OP_V16_DAY_DAILY_FORECAST_GET_FORECAST_DAILY_CITY_CITY_COUNTRY_COUNTRY, json)
+        match dispatch(&OP_V16_DAY_DAILY_FORECAST_GET_FORECAST_DAILY_CITY_CITY_COUNTRY_COUNTRY, json).and_then(iface_v16_day_daily_forecast__get_forecast_daily_city_city_country_country__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_v16_day_daily_forecast__get_forecast_daily_city_city_country_country__err(e)),
+        }
     }
-    fn get_forecast_daily_city_id_city_id(params: iface_v16_day_daily_forecast::GetForecastDailyCityIdCityIdParams) -> Result<String, String> {
+    fn get_forecast_daily_city_id_city_id(params: iface_v16_day_daily_forecast::GetForecastDailyCityIdCityIdParams) -> Result<iface_v16_day_daily_forecast::ForecastDay, String> {
         let json = iface_v16_day_daily_forecast__get_forecast_daily_city_id_city_id_params__to_json(&params);
-        dispatch(&OP_V16_DAY_DAILY_FORECAST_GET_FORECAST_DAILY_CITY_ID_CITY_ID, json)
+        match dispatch(&OP_V16_DAY_DAILY_FORECAST_GET_FORECAST_DAILY_CITY_ID_CITY_ID, json).and_then(iface_v16_day_daily_forecast__get_forecast_daily_city_id_city_id__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_v16_day_daily_forecast__get_forecast_daily_city_id_city_id__err(e)),
+        }
     }
-    fn get_forecast_daily_lat_lat_lon_lon(params: iface_v16_day_daily_forecast::GetForecastDailyLatLatLonLonParams) -> Result<String, String> {
+    fn get_forecast_daily_lat_lat_lon_lon(params: iface_v16_day_daily_forecast::GetForecastDailyLatLatLonLonParams) -> Result<iface_v16_day_daily_forecast::ForecastDay, String> {
         let json = iface_v16_day_daily_forecast__get_forecast_daily_lat_lat_lon_lon_params__to_json(&params);
-        dispatch(&OP_V16_DAY_DAILY_FORECAST_GET_FORECAST_DAILY_LAT_LAT_LON_LON, json)
+        match dispatch(&OP_V16_DAY_DAILY_FORECAST_GET_FORECAST_DAILY_LAT_LAT_LON_LON, json).and_then(iface_v16_day_daily_forecast__get_forecast_daily_lat_lat_lon_lon__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_v16_day_daily_forecast__get_forecast_daily_lat_lat_lon_lon__err(e)),
+        }
     }
-    fn get_forecast_daily_postal_code_postal_code(params: iface_v16_day_daily_forecast::GetForecastDailyPostalCodePostalCodeParams) -> Result<String, String> {
+    fn get_forecast_daily_postal_code_postal_code(params: iface_v16_day_daily_forecast::GetForecastDailyPostalCodePostalCodeParams) -> Result<iface_v16_day_daily_forecast::ForecastDay, String> {
         let json = iface_v16_day_daily_forecast__get_forecast_daily_postal_code_postal_code_params__to_json(&params);
-        dispatch(&OP_V16_DAY_DAILY_FORECAST_GET_FORECAST_DAILY_POSTAL_CODE_POSTAL_CODE, json)
+        match dispatch(&OP_V16_DAY_DAILY_FORECAST_GET_FORECAST_DAILY_POSTAL_CODE_POSTAL_CODE, json).and_then(iface_v16_day_daily_forecast__get_forecast_daily_postal_code_postal_code__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_v16_day_daily_forecast__get_forecast_daily_postal_code_postal_code__err(e)),
+        }
     }
 }
 use crate::exports::autostamp::weatherbit::forecast_degree_day_api as iface_forecast_degree_day_api;
@@ -1036,12 +1907,12 @@ const OP_FORECAST_DEGREE_DAY_API_GET_FORECAST_ENERGY_LAT_LAT_LON_LON: OpSpec = O
     method: "GET",
     path_template: "/forecast/energy?lat={lat}&lon={lon}",
     fields: &[
-        FieldSpec { snake: "lat", location: FieldLocation::Path },
-        FieldSpec { snake: "lon", location: FieldLocation::Path },
-        FieldSpec { snake: "threshold", location: FieldLocation::Query },
-        FieldSpec { snake: "units", location: FieldLocation::Query },
-        FieldSpec { snake: "tp", location: FieldLocation::Query },
-        FieldSpec { snake: "callback", location: FieldLocation::Query },
+        FieldSpec { snake: "lat", wire: "lat", location: FieldLocation::Path },
+        FieldSpec { snake: "lon", wire: "lon", location: FieldLocation::Path },
+        FieldSpec { snake: "threshold", wire: "threshold", location: FieldLocation::Query },
+        FieldSpec { snake: "units", wire: "units", location: FieldLocation::Query },
+        FieldSpec { snake: "tp", wire: "tp", location: FieldLocation::Query },
+        FieldSpec { snake: "callback", wire: "callback", location: FieldLocation::Query },
     ],
     auth: &[
         AuthApply { secret_key: "key", kind: AuthKind::ApiKeyQuery("key") },
@@ -1062,6 +1933,40 @@ fn iface_forecast_degree_day_api__get_forecast_energy_lat_lat_lon_lon_tp_enum__t
     }
 }
 
+fn iface_forecast_degree_day_api__energy_obs_group_forecast__to_json(p: &iface_forecast_degree_day_api::EnergyObsGroupForecast) -> Value {
+    let mut m = Map::new();
+    m.insert("city_name".into(), match (&p.city_name) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("country_code".into(), match (&p.country_code) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("data".into(), match (&p.data) { Some(v) => Value::Array((v).iter().map(|v| iface_forecast_degree_day_api__energy_obs_series__to_json(v)).collect()), None => Value::Null });
+    m.insert("lat".into(), match (&p.lat) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("lon".into(), match (&p.lon) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("state_code".into(), match (&p.state_code) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("threshold_units".into(), match (&p.threshold_units) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("threshold_value".into(), match (&p.threshold_value) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("timezone".into(), match (&p.timezone) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_forecast_degree_day_api__energy_obs_series__to_json(p: &iface_forecast_degree_day_api::EnergyObsSeries) -> Value {
+    let mut m = Map::new();
+    m.insert("cdd".into(), match (&p.cdd) { Some(v) => serde_json::Number::from_f64(*(v)).map(Value::Number).unwrap_or(Value::Null), None => Value::Null });
+    m.insert("clouds".into(), match (&p.clouds) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("date".into(), match (&p.date) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("dewpt".into(), match (&p.dewpt) { Some(v) => serde_json::Number::from_f64(*(v)).map(Value::Number).unwrap_or(Value::Null), None => Value::Null });
+    m.insert("hdd".into(), match (&p.hdd) { Some(v) => serde_json::Number::from_f64(*(v)).map(Value::Number).unwrap_or(Value::Null), None => Value::Null });
+    m.insert("precip".into(), match (&p.precip) { Some(v) => serde_json::Number::from_f64(*(v)).map(Value::Number).unwrap_or(Value::Null), None => Value::Null });
+    m.insert("rh".into(), match (&p.rh) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("snow".into(), match (&p.snow) { Some(v) => serde_json::Number::from_f64(*(v)).map(Value::Number).unwrap_or(Value::Null), None => Value::Null });
+    m.insert("sun_hours".into(), match (&p.sun_hours) { Some(v) => serde_json::Number::from_f64(*(v)).map(Value::Number).unwrap_or(Value::Null), None => Value::Null });
+    m.insert("t_dhi".into(), match (&p.t_dhi) { Some(v) => serde_json::Number::from_f64(*(v)).map(Value::Number).unwrap_or(Value::Null), None => Value::Null });
+    m.insert("t_dni".into(), match (&p.t_dni) { Some(v) => serde_json::Number::from_f64(*(v)).map(Value::Number).unwrap_or(Value::Null), None => Value::Null });
+    m.insert("t_ghi".into(), match (&p.t_ghi) { Some(v) => serde_json::Number::from_f64(*(v)).map(Value::Number).unwrap_or(Value::Null), None => Value::Null });
+    m.insert("temp".into(), match (&p.temp) { Some(v) => serde_json::Number::from_f64(*(v)).map(Value::Number).unwrap_or(Value::Null), None => Value::Null });
+    m.insert("wind_dir".into(), match (&p.wind_dir) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("wind_spd".into(), match (&p.wind_spd) { Some(v) => serde_json::Number::from_f64(*(v)).map(Value::Number).unwrap_or(Value::Null), None => Value::Null });
+    Value::Object(m)
+}
+
 fn iface_forecast_degree_day_api__get_forecast_energy_lat_lat_lon_lon_params__to_json(p: &iface_forecast_degree_day_api::GetForecastEnergyLatLatLonLonParams) -> Value {
     let mut m = Map::new();
     m.insert("lat".into(), Value::String((&p.lat).clone()));
@@ -1073,10 +1978,67 @@ fn iface_forecast_degree_day_api__get_forecast_energy_lat_lat_lon_lon_params__to
     Value::Object(m)
 }
 
+fn iface_forecast_degree_day_api__energy_obs_group_forecast__from_json(v: &Value) -> Option<iface_forecast_degree_day_api::EnergyObsGroupForecast> {
+    let m = v.as_object()?;
+    Some(iface_forecast_degree_day_api::EnergyObsGroupForecast {
+        city_name: m.get("city_name").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        country_code: m.get("country_code").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| iface_forecast_degree_day_api__energy_obs_series__from_json(x)).collect())),
+        lat: m.get("lat").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        lon: m.get("lon").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        state_code: m.get("state_code").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        threshold_units: m.get("threshold_units").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        threshold_value: m.get("threshold_value").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        timezone: m.get("timezone").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    })
+}
+
+fn iface_forecast_degree_day_api__energy_obs_series__from_json(v: &Value) -> Option<iface_forecast_degree_day_api::EnergyObsSeries> {
+    let m = v.as_object()?;
+    Some(iface_forecast_degree_day_api::EnergyObsSeries {
+        cdd: m.get("cdd").filter(|v| !v.is_null()).and_then(|v| (v).as_f64()),
+        clouds: m.get("clouds").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        date: m.get("date").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        dewpt: m.get("dewpt").filter(|v| !v.is_null()).and_then(|v| (v).as_f64()),
+        hdd: m.get("hdd").filter(|v| !v.is_null()).and_then(|v| (v).as_f64()),
+        precip: m.get("precip").filter(|v| !v.is_null()).and_then(|v| (v).as_f64()),
+        rh: m.get("rh").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        snow: m.get("snow").filter(|v| !v.is_null()).and_then(|v| (v).as_f64()),
+        sun_hours: m.get("sun_hours").filter(|v| !v.is_null()).and_then(|v| (v).as_f64()),
+        t_dhi: m.get("t_dhi").filter(|v| !v.is_null()).and_then(|v| (v).as_f64()),
+        t_dni: m.get("t_dni").filter(|v| !v.is_null()).and_then(|v| (v).as_f64()),
+        t_ghi: m.get("t_ghi").filter(|v| !v.is_null()).and_then(|v| (v).as_f64()),
+        temp: m.get("temp").filter(|v| !v.is_null()).and_then(|v| (v).as_f64()),
+        wind_dir: m.get("wind_dir").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        wind_spd: m.get("wind_spd").filter(|v| !v.is_null()).and_then(|v| (v).as_f64()),
+    })
+}
+
+fn iface_forecast_degree_day_api__get_forecast_energy_lat_lat_lon_lon__ok(body: String) -> Result<iface_forecast_degree_day_api::EnergyObsGroupForecast, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match iface_forecast_degree_day_api__energy_obs_group_forecast__from_json(&v) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_forecast_degree_day_api__get_forecast_energy_lat_lat_lon_lon__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
 impl iface_forecast_degree_day_api::Guest for crate::Component {
-    fn get_forecast_energy_lat_lat_lon_lon(params: iface_forecast_degree_day_api::GetForecastEnergyLatLatLonLonParams) -> Result<String, String> {
+    fn get_forecast_energy_lat_lat_lon_lon(params: iface_forecast_degree_day_api::GetForecastEnergyLatLatLonLonParams) -> Result<iface_forecast_degree_day_api::EnergyObsGroupForecast, String> {
         let json = iface_forecast_degree_day_api__get_forecast_energy_lat_lat_lon_lon_params__to_json(&params);
-        dispatch(&OP_FORECAST_DEGREE_DAY_API_GET_FORECAST_ENERGY_LAT_LAT_LON_LON, json)
+        match dispatch(&OP_FORECAST_DEGREE_DAY_API_GET_FORECAST_ENERGY_LAT_LAT_LON_LON, json).and_then(iface_forecast_degree_day_api__get_forecast_energy_lat_lat_lon_lon__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_forecast_degree_day_api__get_forecast_energy_lat_lat_lon_lon__err(e)),
+        }
     }
 }
 use crate::exports::autostamp::weatherbit::v240_hour_hourly_forecast as iface_v240_hour_hourly_forecast;
@@ -1085,13 +2047,13 @@ const OP_V240_HOUR_HOURLY_FORECAST_GET_FORECAST_HOURLY_CITY_CITY_COUNTRY_COUNTRY
     method: "GET",
     path_template: "/forecast/hourly?city={city}&country={country}",
     fields: &[
-        FieldSpec { snake: "city", location: FieldLocation::Path },
-        FieldSpec { snake: "state", location: FieldLocation::Query },
-        FieldSpec { snake: "country", location: FieldLocation::Path },
-        FieldSpec { snake: "units", location: FieldLocation::Query },
-        FieldSpec { snake: "lang", location: FieldLocation::Query },
-        FieldSpec { snake: "callback", location: FieldLocation::Query },
-        FieldSpec { snake: "hours", location: FieldLocation::Query },
+        FieldSpec { snake: "city", wire: "city", location: FieldLocation::Path },
+        FieldSpec { snake: "state", wire: "state", location: FieldLocation::Query },
+        FieldSpec { snake: "country", wire: "country", location: FieldLocation::Path },
+        FieldSpec { snake: "units", wire: "units", location: FieldLocation::Query },
+        FieldSpec { snake: "lang", wire: "lang", location: FieldLocation::Query },
+        FieldSpec { snake: "callback", wire: "callback", location: FieldLocation::Query },
+        FieldSpec { snake: "hours", wire: "hours", location: FieldLocation::Query },
     ],
     auth: &[
         AuthApply { secret_key: "key", kind: AuthKind::ApiKeyQuery("key") },
@@ -1102,11 +2064,11 @@ const OP_V240_HOUR_HOURLY_FORECAST_GET_FORECAST_HOURLY_CITY_ID_CITY_ID: OpSpec =
     method: "GET",
     path_template: "/forecast/hourly?city_id={city_id}",
     fields: &[
-        FieldSpec { snake: "city_id", location: FieldLocation::Path },
-        FieldSpec { snake: "units", location: FieldLocation::Query },
-        FieldSpec { snake: "lang", location: FieldLocation::Query },
-        FieldSpec { snake: "callback", location: FieldLocation::Query },
-        FieldSpec { snake: "hours", location: FieldLocation::Query },
+        FieldSpec { snake: "city_id", wire: "city_id", location: FieldLocation::Path },
+        FieldSpec { snake: "units", wire: "units", location: FieldLocation::Query },
+        FieldSpec { snake: "lang", wire: "lang", location: FieldLocation::Query },
+        FieldSpec { snake: "callback", wire: "callback", location: FieldLocation::Query },
+        FieldSpec { snake: "hours", wire: "hours", location: FieldLocation::Query },
     ],
     auth: &[
         AuthApply { secret_key: "key", kind: AuthKind::ApiKeyQuery("key") },
@@ -1117,12 +2079,12 @@ const OP_V240_HOUR_HOURLY_FORECAST_GET_FORECAST_HOURLY_LAT_LAT_LON_LON: OpSpec =
     method: "GET",
     path_template: "/forecast/hourly?lat={lat}&lon={lon}",
     fields: &[
-        FieldSpec { snake: "lat", location: FieldLocation::Path },
-        FieldSpec { snake: "lon", location: FieldLocation::Path },
-        FieldSpec { snake: "units", location: FieldLocation::Query },
-        FieldSpec { snake: "lang", location: FieldLocation::Query },
-        FieldSpec { snake: "callback", location: FieldLocation::Query },
-        FieldSpec { snake: "hours", location: FieldLocation::Query },
+        FieldSpec { snake: "lat", wire: "lat", location: FieldLocation::Path },
+        FieldSpec { snake: "lon", wire: "lon", location: FieldLocation::Path },
+        FieldSpec { snake: "units", wire: "units", location: FieldLocation::Query },
+        FieldSpec { snake: "lang", wire: "lang", location: FieldLocation::Query },
+        FieldSpec { snake: "callback", wire: "callback", location: FieldLocation::Query },
+        FieldSpec { snake: "hours", wire: "hours", location: FieldLocation::Query },
     ],
     auth: &[
         AuthApply { secret_key: "key", kind: AuthKind::ApiKeyQuery("key") },
@@ -1133,12 +2095,12 @@ const OP_V240_HOUR_HOURLY_FORECAST_GET_FORECAST_HOURLY_POSTAL_CODE_POSTAL_CODE: 
     method: "GET",
     path_template: "/forecast/hourly?postal_code={postal_code}",
     fields: &[
-        FieldSpec { snake: "postal_code", location: FieldLocation::Path },
-        FieldSpec { snake: "country", location: FieldLocation::Query },
-        FieldSpec { snake: "units", location: FieldLocation::Query },
-        FieldSpec { snake: "lang", location: FieldLocation::Query },
-        FieldSpec { snake: "callback", location: FieldLocation::Query },
-        FieldSpec { snake: "hours", location: FieldLocation::Query },
+        FieldSpec { snake: "postal_code", wire: "postal_code", location: FieldLocation::Path },
+        FieldSpec { snake: "country", wire: "country", location: FieldLocation::Query },
+        FieldSpec { snake: "units", wire: "units", location: FieldLocation::Query },
+        FieldSpec { snake: "lang", wire: "lang", location: FieldLocation::Query },
+        FieldSpec { snake: "callback", wire: "callback", location: FieldLocation::Query },
+        FieldSpec { snake: "hours", wire: "hours", location: FieldLocation::Query },
     ],
     auth: &[
         AuthApply { secret_key: "key", kind: AuthKind::ApiKeyQuery("key") },
@@ -1190,6 +2152,59 @@ fn iface_v240_hour_hourly_forecast__get_forecast_hourly_city_city_country_countr
     }
 }
 
+fn iface_v240_hour_hourly_forecast__forecast_hourly__to_json(p: &iface_v240_hour_hourly_forecast::ForecastHourly) -> Value {
+    let mut m = Map::new();
+    m.insert("city_name".into(), match (&p.city_name) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("country_code".into(), match (&p.country_code) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("data".into(), match (&p.data) { Some(v) => Value::Array((v).iter().map(|v| iface_v240_hour_hourly_forecast__forecast_hour__to_json(v)).collect()), None => Value::Null });
+    m.insert("lat".into(), match (&p.lat) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("lon".into(), match (&p.lon) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("state_code".into(), match (&p.state_code) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("timezone".into(), match (&p.timezone) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_v240_hour_hourly_forecast__forecast_hour__to_json(p: &iface_v240_hour_hourly_forecast::ForecastHour) -> Value {
+    let mut m = Map::new();
+    m.insert("app_temp".into(), match (&p.app_temp) { Some(v) => serde_json::Number::from_f64(*(v)).map(Value::Number).unwrap_or(Value::Null), None => Value::Null });
+    m.insert("clouds".into(), match (&p.clouds) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("datetime".into(), match (&p.datetime) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("dewpt".into(), match (&p.dewpt) { Some(v) => serde_json::Number::from_f64(*(v)).map(Value::Number).unwrap_or(Value::Null), None => Value::Null });
+    m.insert("dhi".into(), match (&p.dhi) { Some(v) => serde_json::Number::from_f64(*(v)).map(Value::Number).unwrap_or(Value::Null), None => Value::Null });
+    m.insert("dni".into(), match (&p.dni) { Some(v) => serde_json::Number::from_f64(*(v)).map(Value::Number).unwrap_or(Value::Null), None => Value::Null });
+    m.insert("ghi".into(), match (&p.ghi) { Some(v) => serde_json::Number::from_f64(*(v)).map(Value::Number).unwrap_or(Value::Null), None => Value::Null });
+    m.insert("pod".into(), match (&p.pod) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("pop".into(), match (&p.pop) { Some(v) => serde_json::Number::from_f64(*(v)).map(Value::Number).unwrap_or(Value::Null), None => Value::Null });
+    m.insert("precip".into(), match (&p.precip) { Some(v) => serde_json::Number::from_f64(*(v)).map(Value::Number).unwrap_or(Value::Null), None => Value::Null });
+    m.insert("pres".into(), match (&p.pres) { Some(v) => serde_json::Number::from_f64(*(v)).map(Value::Number).unwrap_or(Value::Null), None => Value::Null });
+    m.insert("rh".into(), match (&p.rh) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("slp".into(), match (&p.slp) { Some(v) => serde_json::Number::from_f64(*(v)).map(Value::Number).unwrap_or(Value::Null), None => Value::Null });
+    m.insert("snow".into(), match (&p.snow) { Some(v) => serde_json::Number::from_f64(*(v)).map(Value::Number).unwrap_or(Value::Null), None => Value::Null });
+    m.insert("snow_depth".into(), match (&p.snow_depth) { Some(v) => serde_json::Number::from_f64(*(v)).map(Value::Number).unwrap_or(Value::Null), None => Value::Null });
+    m.insert("solar_rad".into(), match (&p.solar_rad) { Some(v) => serde_json::Number::from_f64(*(v)).map(Value::Number).unwrap_or(Value::Null), None => Value::Null });
+    m.insert("temp".into(), match (&p.temp) { Some(v) => serde_json::Number::from_f64(*(v)).map(Value::Number).unwrap_or(Value::Null), None => Value::Null });
+    m.insert("timestamp_local".into(), match (&p.timestamp_local) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("timestamp_utc".into(), match (&p.timestamp_utc) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("ts".into(), match (&p.ts) { Some(v) => serde_json::Number::from_f64(*(v)).map(Value::Number).unwrap_or(Value::Null), None => Value::Null });
+    m.insert("uv".into(), match (&p.uv) { Some(v) => serde_json::Number::from_f64(*(v)).map(Value::Number).unwrap_or(Value::Null), None => Value::Null });
+    m.insert("vis".into(), match (&p.vis) { Some(v) => serde_json::Number::from_f64(*(v)).map(Value::Number).unwrap_or(Value::Null), None => Value::Null });
+    m.insert("weather".into(), match (&p.weather) { Some(v) => iface_v240_hour_hourly_forecast__forecast_hour_weather__to_json(v), None => Value::Null });
+    m.insert("wind_cdir".into(), match (&p.wind_cdir) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("wind_cdir_full".into(), match (&p.wind_cdir_full) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("wind_dir".into(), match (&p.wind_dir) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("wind_gust_spd".into(), match (&p.wind_gust_spd) { Some(v) => serde_json::Number::from_f64(*(v)).map(Value::Number).unwrap_or(Value::Null), None => Value::Null });
+    m.insert("wind_spd".into(), match (&p.wind_spd) { Some(v) => serde_json::Number::from_f64(*(v)).map(Value::Number).unwrap_or(Value::Null), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_v240_hour_hourly_forecast__forecast_hour_weather__to_json(p: &iface_v240_hour_hourly_forecast::ForecastHourWeather) -> Value {
+    let mut m = Map::new();
+    m.insert("code".into(), match (&p.code) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("description".into(), match (&p.description) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("icon".into(), match (&p.icon) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
 fn iface_v240_hour_hourly_forecast__get_forecast_hourly_city_city_country_country_params__to_json(p: &iface_v240_hour_hourly_forecast::GetForecastHourlyCityCityCountryCountryParams) -> Value {
     let mut m = Map::new();
     m.insert("city".into(), Value::String((&p.city).clone()));
@@ -1234,22 +2249,162 @@ fn iface_v240_hour_hourly_forecast__get_forecast_hourly_postal_code_postal_code_
     Value::Object(m)
 }
 
+fn iface_v240_hour_hourly_forecast__forecast_hourly__from_json(v: &Value) -> Option<iface_v240_hour_hourly_forecast::ForecastHourly> {
+    let m = v.as_object()?;
+    Some(iface_v240_hour_hourly_forecast::ForecastHourly {
+        city_name: m.get("city_name").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        country_code: m.get("country_code").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| iface_v240_hour_hourly_forecast__forecast_hour__from_json(x)).collect())),
+        lat: m.get("lat").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        lon: m.get("lon").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        state_code: m.get("state_code").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        timezone: m.get("timezone").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    })
+}
+
+fn iface_v240_hour_hourly_forecast__forecast_hour__from_json(v: &Value) -> Option<iface_v240_hour_hourly_forecast::ForecastHour> {
+    let m = v.as_object()?;
+    Some(iface_v240_hour_hourly_forecast::ForecastHour {
+        app_temp: m.get("app_temp").filter(|v| !v.is_null()).and_then(|v| (v).as_f64()),
+        clouds: m.get("clouds").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        datetime: m.get("datetime").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        dewpt: m.get("dewpt").filter(|v| !v.is_null()).and_then(|v| (v).as_f64()),
+        dhi: m.get("dhi").filter(|v| !v.is_null()).and_then(|v| (v).as_f64()),
+        dni: m.get("dni").filter(|v| !v.is_null()).and_then(|v| (v).as_f64()),
+        ghi: m.get("ghi").filter(|v| !v.is_null()).and_then(|v| (v).as_f64()),
+        pod: m.get("pod").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        pop: m.get("pop").filter(|v| !v.is_null()).and_then(|v| (v).as_f64()),
+        precip: m.get("precip").filter(|v| !v.is_null()).and_then(|v| (v).as_f64()),
+        pres: m.get("pres").filter(|v| !v.is_null()).and_then(|v| (v).as_f64()),
+        rh: m.get("rh").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        slp: m.get("slp").filter(|v| !v.is_null()).and_then(|v| (v).as_f64()),
+        snow: m.get("snow").filter(|v| !v.is_null()).and_then(|v| (v).as_f64()),
+        snow_depth: m.get("snow_depth").filter(|v| !v.is_null()).and_then(|v| (v).as_f64()),
+        solar_rad: m.get("solar_rad").filter(|v| !v.is_null()).and_then(|v| (v).as_f64()),
+        temp: m.get("temp").filter(|v| !v.is_null()).and_then(|v| (v).as_f64()),
+        timestamp_local: m.get("timestamp_local").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        timestamp_utc: m.get("timestamp_utc").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        ts: m.get("ts").filter(|v| !v.is_null()).and_then(|v| (v).as_f64()),
+        uv: m.get("uv").filter(|v| !v.is_null()).and_then(|v| (v).as_f64()),
+        vis: m.get("vis").filter(|v| !v.is_null()).and_then(|v| (v).as_f64()),
+        weather: m.get("weather").filter(|v| !v.is_null()).and_then(|v| iface_v240_hour_hourly_forecast__forecast_hour_weather__from_json(v)),
+        wind_cdir: m.get("wind_cdir").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        wind_cdir_full: m.get("wind_cdir_full").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        wind_dir: m.get("wind_dir").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        wind_gust_spd: m.get("wind_gust_spd").filter(|v| !v.is_null()).and_then(|v| (v).as_f64()),
+        wind_spd: m.get("wind_spd").filter(|v| !v.is_null()).and_then(|v| (v).as_f64()),
+    })
+}
+
+fn iface_v240_hour_hourly_forecast__forecast_hour_weather__from_json(v: &Value) -> Option<iface_v240_hour_hourly_forecast::ForecastHourWeather> {
+    let m = v.as_object()?;
+    Some(iface_v240_hour_hourly_forecast::ForecastHourWeather {
+        code: m.get("code").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        description: m.get("description").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        icon: m.get("icon").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    })
+}
+
+fn iface_v240_hour_hourly_forecast__get_forecast_hourly_city_city_country_country__ok(body: String) -> Result<iface_v240_hour_hourly_forecast::ForecastHourly, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match iface_v240_hour_hourly_forecast__forecast_hourly__from_json(&v) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_v240_hour_hourly_forecast__get_forecast_hourly_city_city_country_country__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
+fn iface_v240_hour_hourly_forecast__get_forecast_hourly_city_id_city_id__ok(body: String) -> Result<iface_v240_hour_hourly_forecast::ForecastHourly, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match iface_v240_hour_hourly_forecast__forecast_hourly__from_json(&v) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_v240_hour_hourly_forecast__get_forecast_hourly_city_id_city_id__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
+fn iface_v240_hour_hourly_forecast__get_forecast_hourly_lat_lat_lon_lon__ok(body: String) -> Result<iface_v240_hour_hourly_forecast::ForecastHourly, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match iface_v240_hour_hourly_forecast__forecast_hourly__from_json(&v) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_v240_hour_hourly_forecast__get_forecast_hourly_lat_lat_lon_lon__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
+fn iface_v240_hour_hourly_forecast__get_forecast_hourly_postal_code_postal_code__ok(body: String) -> Result<iface_v240_hour_hourly_forecast::ForecastHourly, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match iface_v240_hour_hourly_forecast__forecast_hourly__from_json(&v) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_v240_hour_hourly_forecast__get_forecast_hourly_postal_code_postal_code__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
 impl iface_v240_hour_hourly_forecast::Guest for crate::Component {
-    fn get_forecast_hourly_city_city_country_country(params: iface_v240_hour_hourly_forecast::GetForecastHourlyCityCityCountryCountryParams) -> Result<String, String> {
+    fn get_forecast_hourly_city_city_country_country(params: iface_v240_hour_hourly_forecast::GetForecastHourlyCityCityCountryCountryParams) -> Result<iface_v240_hour_hourly_forecast::ForecastHourly, String> {
         let json = iface_v240_hour_hourly_forecast__get_forecast_hourly_city_city_country_country_params__to_json(&params);
-        dispatch(&OP_V240_HOUR_HOURLY_FORECAST_GET_FORECAST_HOURLY_CITY_CITY_COUNTRY_COUNTRY, json)
+        match dispatch(&OP_V240_HOUR_HOURLY_FORECAST_GET_FORECAST_HOURLY_CITY_CITY_COUNTRY_COUNTRY, json).and_then(iface_v240_hour_hourly_forecast__get_forecast_hourly_city_city_country_country__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_v240_hour_hourly_forecast__get_forecast_hourly_city_city_country_country__err(e)),
+        }
     }
-    fn get_forecast_hourly_city_id_city_id(params: iface_v240_hour_hourly_forecast::GetForecastHourlyCityIdCityIdParams) -> Result<String, String> {
+    fn get_forecast_hourly_city_id_city_id(params: iface_v240_hour_hourly_forecast::GetForecastHourlyCityIdCityIdParams) -> Result<iface_v240_hour_hourly_forecast::ForecastHourly, String> {
         let json = iface_v240_hour_hourly_forecast__get_forecast_hourly_city_id_city_id_params__to_json(&params);
-        dispatch(&OP_V240_HOUR_HOURLY_FORECAST_GET_FORECAST_HOURLY_CITY_ID_CITY_ID, json)
+        match dispatch(&OP_V240_HOUR_HOURLY_FORECAST_GET_FORECAST_HOURLY_CITY_ID_CITY_ID, json).and_then(iface_v240_hour_hourly_forecast__get_forecast_hourly_city_id_city_id__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_v240_hour_hourly_forecast__get_forecast_hourly_city_id_city_id__err(e)),
+        }
     }
-    fn get_forecast_hourly_lat_lat_lon_lon(params: iface_v240_hour_hourly_forecast::GetForecastHourlyLatLatLonLonParams) -> Result<String, String> {
+    fn get_forecast_hourly_lat_lat_lon_lon(params: iface_v240_hour_hourly_forecast::GetForecastHourlyLatLatLonLonParams) -> Result<iface_v240_hour_hourly_forecast::ForecastHourly, String> {
         let json = iface_v240_hour_hourly_forecast__get_forecast_hourly_lat_lat_lon_lon_params__to_json(&params);
-        dispatch(&OP_V240_HOUR_HOURLY_FORECAST_GET_FORECAST_HOURLY_LAT_LAT_LON_LON, json)
+        match dispatch(&OP_V240_HOUR_HOURLY_FORECAST_GET_FORECAST_HOURLY_LAT_LAT_LON_LON, json).and_then(iface_v240_hour_hourly_forecast__get_forecast_hourly_lat_lat_lon_lon__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_v240_hour_hourly_forecast__get_forecast_hourly_lat_lat_lon_lon__err(e)),
+        }
     }
-    fn get_forecast_hourly_postal_code_postal_code(params: iface_v240_hour_hourly_forecast::GetForecastHourlyPostalCodePostalCodeParams) -> Result<String, String> {
+    fn get_forecast_hourly_postal_code_postal_code(params: iface_v240_hour_hourly_forecast::GetForecastHourlyPostalCodePostalCodeParams) -> Result<iface_v240_hour_hourly_forecast::ForecastHourly, String> {
         let json = iface_v240_hour_hourly_forecast__get_forecast_hourly_postal_code_postal_code_params__to_json(&params);
-        dispatch(&OP_V240_HOUR_HOURLY_FORECAST_GET_FORECAST_HOURLY_POSTAL_CODE_POSTAL_CODE, json)
+        match dispatch(&OP_V240_HOUR_HOURLY_FORECAST_GET_FORECAST_HOURLY_POSTAL_CODE_POSTAL_CODE, json).and_then(iface_v240_hour_hourly_forecast__get_forecast_hourly_postal_code_postal_code__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_v240_hour_hourly_forecast__get_forecast_hourly_postal_code_postal_code__err(e)),
+        }
     }
 }
 use crate::exports::autostamp::weatherbit::historical_air_quality as iface_historical_air_quality;
@@ -1258,10 +2413,10 @@ const OP_HISTORICAL_AIR_QUALITY_GET_HISTORY_AIRQUALITY_CITY_CITY_COUNTRY_COUNTRY
     method: "GET",
     path_template: "/history/airquality?city={city}&country={country}",
     fields: &[
-        FieldSpec { snake: "city", location: FieldLocation::Path },
-        FieldSpec { snake: "state", location: FieldLocation::Query },
-        FieldSpec { snake: "country", location: FieldLocation::Path },
-        FieldSpec { snake: "callback", location: FieldLocation::Query },
+        FieldSpec { snake: "city", wire: "city", location: FieldLocation::Path },
+        FieldSpec { snake: "state", wire: "state", location: FieldLocation::Query },
+        FieldSpec { snake: "country", wire: "country", location: FieldLocation::Path },
+        FieldSpec { snake: "callback", wire: "callback", location: FieldLocation::Query },
     ],
     auth: &[
         AuthApply { secret_key: "key", kind: AuthKind::ApiKeyQuery("key") },
@@ -1272,8 +2427,8 @@ const OP_HISTORICAL_AIR_QUALITY_GET_HISTORY_AIRQUALITY_CITY_ID_CITY_ID: OpSpec =
     method: "GET",
     path_template: "/history/airquality?city_id={city_id}",
     fields: &[
-        FieldSpec { snake: "city_id", location: FieldLocation::Path },
-        FieldSpec { snake: "callback", location: FieldLocation::Query },
+        FieldSpec { snake: "city_id", wire: "city_id", location: FieldLocation::Path },
+        FieldSpec { snake: "callback", wire: "callback", location: FieldLocation::Query },
     ],
     auth: &[
         AuthApply { secret_key: "key", kind: AuthKind::ApiKeyQuery("key") },
@@ -1284,9 +2439,9 @@ const OP_HISTORICAL_AIR_QUALITY_GET_HISTORY_AIRQUALITY_LAT_LAT_LON_LON: OpSpec =
     method: "GET",
     path_template: "/history/airquality?lat={lat}&lon={lon}",
     fields: &[
-        FieldSpec { snake: "lat", location: FieldLocation::Path },
-        FieldSpec { snake: "lon", location: FieldLocation::Path },
-        FieldSpec { snake: "callback", location: FieldLocation::Query },
+        FieldSpec { snake: "lat", wire: "lat", location: FieldLocation::Path },
+        FieldSpec { snake: "lon", wire: "lon", location: FieldLocation::Path },
+        FieldSpec { snake: "callback", wire: "callback", location: FieldLocation::Query },
     ],
     auth: &[
         AuthApply { secret_key: "key", kind: AuthKind::ApiKeyQuery("key") },
@@ -1297,14 +2452,37 @@ const OP_HISTORICAL_AIR_QUALITY_GET_HISTORY_AIRQUALITY_POSTAL_CODE_POSTAL_CODE: 
     method: "GET",
     path_template: "/history/airquality?postal_code={postal_code}",
     fields: &[
-        FieldSpec { snake: "postal_code", location: FieldLocation::Path },
-        FieldSpec { snake: "country", location: FieldLocation::Query },
-        FieldSpec { snake: "callback", location: FieldLocation::Query },
+        FieldSpec { snake: "postal_code", wire: "postal_code", location: FieldLocation::Path },
+        FieldSpec { snake: "country", wire: "country", location: FieldLocation::Query },
+        FieldSpec { snake: "callback", wire: "callback", location: FieldLocation::Query },
     ],
     auth: &[
         AuthApply { secret_key: "key", kind: AuthKind::ApiKeyQuery("key") },
     ],
 };
+
+fn iface_historical_air_quality__aq_current_group__to_json(p: &iface_historical_air_quality::AqCurrentGroup) -> Value {
+    let mut m = Map::new();
+    m.insert("city_name".into(), match (&p.city_name) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("country_code".into(), match (&p.country_code) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("data".into(), match (&p.data) { Some(v) => Value::Array((v).iter().map(|v| iface_historical_air_quality__aq_current__to_json(v)).collect()), None => Value::Null });
+    m.insert("lat".into(), match (&p.lat) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("lon".into(), match (&p.lon) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("state_code".into(), match (&p.state_code) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("timezone".into(), match (&p.timezone) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_historical_air_quality__aq_current__to_json(p: &iface_historical_air_quality::AqCurrent) -> Value {
+    let mut m = Map::new();
+    m.insert("aqi".into(), match (&p.aqi) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("no2".into(), match (&p.no2) { Some(v) => serde_json::Number::from_f64(*(v)).map(Value::Number).unwrap_or(Value::Null), None => Value::Null });
+    m.insert("o3".into(), match (&p.o3) { Some(v) => serde_json::Number::from_f64(*(v)).map(Value::Number).unwrap_or(Value::Null), None => Value::Null });
+    m.insert("pm10".into(), match (&p.pm10) { Some(v) => serde_json::Number::from_f64(*(v)).map(Value::Number).unwrap_or(Value::Null), None => Value::Null });
+    m.insert("pm25".into(), match (&p.pm25) { Some(v) => serde_json::Number::from_f64(*(v)).map(Value::Number).unwrap_or(Value::Null), None => Value::Null });
+    m.insert("so2".into(), match (&p.so2) { Some(v) => serde_json::Number::from_f64(*(v)).map(Value::Number).unwrap_or(Value::Null), None => Value::Null });
+    Value::Object(m)
+}
 
 fn iface_historical_air_quality__get_history_airquality_city_city_country_country_params__to_json(p: &iface_historical_air_quality::GetHistoryAirqualityCityCityCountryCountryParams) -> Value {
     let mut m = Map::new();
@@ -1338,22 +2516,131 @@ fn iface_historical_air_quality__get_history_airquality_postal_code_postal_code_
     Value::Object(m)
 }
 
+fn iface_historical_air_quality__aq_current_group__from_json(v: &Value) -> Option<iface_historical_air_quality::AqCurrentGroup> {
+    let m = v.as_object()?;
+    Some(iface_historical_air_quality::AqCurrentGroup {
+        city_name: m.get("city_name").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        country_code: m.get("country_code").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| iface_historical_air_quality__aq_current__from_json(x)).collect())),
+        lat: m.get("lat").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        lon: m.get("lon").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        state_code: m.get("state_code").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        timezone: m.get("timezone").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    })
+}
+
+fn iface_historical_air_quality__aq_current__from_json(v: &Value) -> Option<iface_historical_air_quality::AqCurrent> {
+    let m = v.as_object()?;
+    Some(iface_historical_air_quality::AqCurrent {
+        aqi: m.get("aqi").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        no2: m.get("no2").filter(|v| !v.is_null()).and_then(|v| (v).as_f64()),
+        o3: m.get("o3").filter(|v| !v.is_null()).and_then(|v| (v).as_f64()),
+        pm10: m.get("pm10").filter(|v| !v.is_null()).and_then(|v| (v).as_f64()),
+        pm25: m.get("pm25").filter(|v| !v.is_null()).and_then(|v| (v).as_f64()),
+        so2: m.get("so2").filter(|v| !v.is_null()).and_then(|v| (v).as_f64()),
+    })
+}
+
+fn iface_historical_air_quality__get_history_airquality_city_city_country_country__ok(body: String) -> Result<iface_historical_air_quality::AqCurrentGroup, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match iface_historical_air_quality__aq_current_group__from_json(&v) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_historical_air_quality__get_history_airquality_city_city_country_country__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
+fn iface_historical_air_quality__get_history_airquality_city_id_city_id__ok(body: String) -> Result<iface_historical_air_quality::AqCurrentGroup, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match iface_historical_air_quality__aq_current_group__from_json(&v) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_historical_air_quality__get_history_airquality_city_id_city_id__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
+fn iface_historical_air_quality__get_history_airquality_lat_lat_lon_lon__ok(body: String) -> Result<iface_historical_air_quality::AqCurrentGroup, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match iface_historical_air_quality__aq_current_group__from_json(&v) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_historical_air_quality__get_history_airquality_lat_lat_lon_lon__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
+fn iface_historical_air_quality__get_history_airquality_postal_code_postal_code__ok(body: String) -> Result<iface_historical_air_quality::AqCurrentGroup, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match iface_historical_air_quality__aq_current_group__from_json(&v) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_historical_air_quality__get_history_airquality_postal_code_postal_code__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
 impl iface_historical_air_quality::Guest for crate::Component {
-    fn get_history_airquality_city_city_country_country(params: iface_historical_air_quality::GetHistoryAirqualityCityCityCountryCountryParams) -> Result<String, String> {
+    fn get_history_airquality_city_city_country_country(params: iface_historical_air_quality::GetHistoryAirqualityCityCityCountryCountryParams) -> Result<iface_historical_air_quality::AqCurrentGroup, String> {
         let json = iface_historical_air_quality__get_history_airquality_city_city_country_country_params__to_json(&params);
-        dispatch(&OP_HISTORICAL_AIR_QUALITY_GET_HISTORY_AIRQUALITY_CITY_CITY_COUNTRY_COUNTRY, json)
+        match dispatch(&OP_HISTORICAL_AIR_QUALITY_GET_HISTORY_AIRQUALITY_CITY_CITY_COUNTRY_COUNTRY, json).and_then(iface_historical_air_quality__get_history_airquality_city_city_country_country__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_historical_air_quality__get_history_airquality_city_city_country_country__err(e)),
+        }
     }
-    fn get_history_airquality_city_id_city_id(params: iface_historical_air_quality::GetHistoryAirqualityCityIdCityIdParams) -> Result<String, String> {
+    fn get_history_airquality_city_id_city_id(params: iface_historical_air_quality::GetHistoryAirqualityCityIdCityIdParams) -> Result<iface_historical_air_quality::AqCurrentGroup, String> {
         let json = iface_historical_air_quality__get_history_airquality_city_id_city_id_params__to_json(&params);
-        dispatch(&OP_HISTORICAL_AIR_QUALITY_GET_HISTORY_AIRQUALITY_CITY_ID_CITY_ID, json)
+        match dispatch(&OP_HISTORICAL_AIR_QUALITY_GET_HISTORY_AIRQUALITY_CITY_ID_CITY_ID, json).and_then(iface_historical_air_quality__get_history_airquality_city_id_city_id__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_historical_air_quality__get_history_airquality_city_id_city_id__err(e)),
+        }
     }
-    fn get_history_airquality_lat_lat_lon_lon(params: iface_historical_air_quality::GetHistoryAirqualityLatLatLonLonParams) -> Result<String, String> {
+    fn get_history_airquality_lat_lat_lon_lon(params: iface_historical_air_quality::GetHistoryAirqualityLatLatLonLonParams) -> Result<iface_historical_air_quality::AqCurrentGroup, String> {
         let json = iface_historical_air_quality__get_history_airquality_lat_lat_lon_lon_params__to_json(&params);
-        dispatch(&OP_HISTORICAL_AIR_QUALITY_GET_HISTORY_AIRQUALITY_LAT_LAT_LON_LON, json)
+        match dispatch(&OP_HISTORICAL_AIR_QUALITY_GET_HISTORY_AIRQUALITY_LAT_LAT_LON_LON, json).and_then(iface_historical_air_quality__get_history_airquality_lat_lat_lon_lon__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_historical_air_quality__get_history_airquality_lat_lat_lon_lon__err(e)),
+        }
     }
-    fn get_history_airquality_postal_code_postal_code(params: iface_historical_air_quality::GetHistoryAirqualityPostalCodePostalCodeParams) -> Result<String, String> {
+    fn get_history_airquality_postal_code_postal_code(params: iface_historical_air_quality::GetHistoryAirqualityPostalCodePostalCodeParams) -> Result<iface_historical_air_quality::AqCurrentGroup, String> {
         let json = iface_historical_air_quality__get_history_airquality_postal_code_postal_code_params__to_json(&params);
-        dispatch(&OP_HISTORICAL_AIR_QUALITY_GET_HISTORY_AIRQUALITY_POSTAL_CODE_POSTAL_CODE, json)
+        match dispatch(&OP_HISTORICAL_AIR_QUALITY_GET_HISTORY_AIRQUALITY_POSTAL_CODE_POSTAL_CODE, json).and_then(iface_historical_air_quality__get_history_airquality_postal_code_postal_code__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_historical_air_quality__get_history_airquality_postal_code_postal_code__err(e)),
+        }
     }
 }
 use crate::exports::autostamp::weatherbit::daily_historical_weather_data as iface_daily_historical_weather_data;
@@ -1362,14 +2649,14 @@ const OP_DAILY_HISTORICAL_WEATHER_DATA_GET_HISTORY_DAILY_CITY_CITY_COUNTRY_COUNT
     method: "GET",
     path_template: "/history/daily?city={city}&country={country}",
     fields: &[
-        FieldSpec { snake: "city", location: FieldLocation::Path },
-        FieldSpec { snake: "state", location: FieldLocation::Query },
-        FieldSpec { snake: "country", location: FieldLocation::Path },
-        FieldSpec { snake: "start_date", location: FieldLocation::Query },
-        FieldSpec { snake: "end_date", location: FieldLocation::Query },
-        FieldSpec { snake: "units", location: FieldLocation::Query },
-        FieldSpec { snake: "lang", location: FieldLocation::Query },
-        FieldSpec { snake: "callback", location: FieldLocation::Query },
+        FieldSpec { snake: "city", wire: "city", location: FieldLocation::Path },
+        FieldSpec { snake: "state", wire: "state", location: FieldLocation::Query },
+        FieldSpec { snake: "country", wire: "country", location: FieldLocation::Path },
+        FieldSpec { snake: "start_date", wire: "start_date", location: FieldLocation::Query },
+        FieldSpec { snake: "end_date", wire: "end_date", location: FieldLocation::Query },
+        FieldSpec { snake: "units", wire: "units", location: FieldLocation::Query },
+        FieldSpec { snake: "lang", wire: "lang", location: FieldLocation::Query },
+        FieldSpec { snake: "callback", wire: "callback", location: FieldLocation::Query },
     ],
     auth: &[
         AuthApply { secret_key: "key", kind: AuthKind::ApiKeyQuery("key") },
@@ -1380,12 +2667,12 @@ const OP_DAILY_HISTORICAL_WEATHER_DATA_GET_HISTORY_DAILY_CITY_ID_CITY_ID: OpSpec
     method: "GET",
     path_template: "/history/daily?city_id={city_id}",
     fields: &[
-        FieldSpec { snake: "city_id", location: FieldLocation::Path },
-        FieldSpec { snake: "start_date", location: FieldLocation::Query },
-        FieldSpec { snake: "end_date", location: FieldLocation::Query },
-        FieldSpec { snake: "units", location: FieldLocation::Query },
-        FieldSpec { snake: "lang", location: FieldLocation::Query },
-        FieldSpec { snake: "callback", location: FieldLocation::Query },
+        FieldSpec { snake: "city_id", wire: "city_id", location: FieldLocation::Path },
+        FieldSpec { snake: "start_date", wire: "start_date", location: FieldLocation::Query },
+        FieldSpec { snake: "end_date", wire: "end_date", location: FieldLocation::Query },
+        FieldSpec { snake: "units", wire: "units", location: FieldLocation::Query },
+        FieldSpec { snake: "lang", wire: "lang", location: FieldLocation::Query },
+        FieldSpec { snake: "callback", wire: "callback", location: FieldLocation::Query },
     ],
     auth: &[
         AuthApply { secret_key: "key", kind: AuthKind::ApiKeyQuery("key") },
@@ -1396,13 +2683,13 @@ const OP_DAILY_HISTORICAL_WEATHER_DATA_GET_HISTORY_DAILY_LAT_LAT_LON_LON: OpSpec
     method: "GET",
     path_template: "/history/daily?lat={lat}&lon={lon}",
     fields: &[
-        FieldSpec { snake: "lat", location: FieldLocation::Path },
-        FieldSpec { snake: "lon", location: FieldLocation::Path },
-        FieldSpec { snake: "start_date", location: FieldLocation::Query },
-        FieldSpec { snake: "end_date", location: FieldLocation::Query },
-        FieldSpec { snake: "units", location: FieldLocation::Query },
-        FieldSpec { snake: "lang", location: FieldLocation::Query },
-        FieldSpec { snake: "callback", location: FieldLocation::Query },
+        FieldSpec { snake: "lat", wire: "lat", location: FieldLocation::Path },
+        FieldSpec { snake: "lon", wire: "lon", location: FieldLocation::Path },
+        FieldSpec { snake: "start_date", wire: "start_date", location: FieldLocation::Query },
+        FieldSpec { snake: "end_date", wire: "end_date", location: FieldLocation::Query },
+        FieldSpec { snake: "units", wire: "units", location: FieldLocation::Query },
+        FieldSpec { snake: "lang", wire: "lang", location: FieldLocation::Query },
+        FieldSpec { snake: "callback", wire: "callback", location: FieldLocation::Query },
     ],
     auth: &[
         AuthApply { secret_key: "key", kind: AuthKind::ApiKeyQuery("key") },
@@ -1413,13 +2700,13 @@ const OP_DAILY_HISTORICAL_WEATHER_DATA_GET_HISTORY_DAILY_POSTAL_CODE_POSTAL_CODE
     method: "GET",
     path_template: "/history/daily?postal_code={postal_code}",
     fields: &[
-        FieldSpec { snake: "postal_code", location: FieldLocation::Path },
-        FieldSpec { snake: "country", location: FieldLocation::Query },
-        FieldSpec { snake: "start_date", location: FieldLocation::Query },
-        FieldSpec { snake: "end_date", location: FieldLocation::Query },
-        FieldSpec { snake: "units", location: FieldLocation::Query },
-        FieldSpec { snake: "lang", location: FieldLocation::Query },
-        FieldSpec { snake: "callback", location: FieldLocation::Query },
+        FieldSpec { snake: "postal_code", wire: "postal_code", location: FieldLocation::Path },
+        FieldSpec { snake: "country", wire: "country", location: FieldLocation::Query },
+        FieldSpec { snake: "start_date", wire: "start_date", location: FieldLocation::Query },
+        FieldSpec { snake: "end_date", wire: "end_date", location: FieldLocation::Query },
+        FieldSpec { snake: "units", wire: "units", location: FieldLocation::Query },
+        FieldSpec { snake: "lang", wire: "lang", location: FieldLocation::Query },
+        FieldSpec { snake: "callback", wire: "callback", location: FieldLocation::Query },
     ],
     auth: &[
         AuthApply { secret_key: "key", kind: AuthKind::ApiKeyQuery("key") },
@@ -1430,12 +2717,12 @@ const OP_DAILY_HISTORICAL_WEATHER_DATA_GET_HISTORY_DAILY_STATION_STATION: OpSpec
     method: "GET",
     path_template: "/history/daily?station={station}",
     fields: &[
-        FieldSpec { snake: "station", location: FieldLocation::Path },
-        FieldSpec { snake: "start_date", location: FieldLocation::Query },
-        FieldSpec { snake: "end_date", location: FieldLocation::Query },
-        FieldSpec { snake: "units", location: FieldLocation::Query },
-        FieldSpec { snake: "lang", location: FieldLocation::Query },
-        FieldSpec { snake: "callback", location: FieldLocation::Query },
+        FieldSpec { snake: "station", wire: "station", location: FieldLocation::Path },
+        FieldSpec { snake: "start_date", wire: "start_date", location: FieldLocation::Query },
+        FieldSpec { snake: "end_date", wire: "end_date", location: FieldLocation::Query },
+        FieldSpec { snake: "units", wire: "units", location: FieldLocation::Query },
+        FieldSpec { snake: "lang", wire: "lang", location: FieldLocation::Query },
+        FieldSpec { snake: "callback", wire: "callback", location: FieldLocation::Query },
     ],
     auth: &[
         AuthApply { secret_key: "key", kind: AuthKind::ApiKeyQuery("key") },
@@ -1485,6 +2772,53 @@ fn iface_daily_historical_weather_data__get_history_daily_city_city_country_coun
         iface_daily_historical_weather_data::GetHistoryDailyCityCityCountryCountryLangEnum::Zh => "zh",
         iface_daily_historical_weather_data::GetHistoryDailyCityCityCountryCountryLangEnum::ZhTw => "zh-tw",
     }
+}
+
+fn iface_daily_historical_weather_data__history_day__to_json(p: &iface_daily_historical_weather_data::HistoryDay) -> Value {
+    let mut m = Map::new();
+    m.insert("city_name".into(), match (&p.city_name) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("country_code".into(), match (&p.country_code) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("data".into(), match (&p.data) { Some(v) => Value::Array((v).iter().map(|v| iface_daily_historical_weather_data__history_day_obj__to_json(v)).collect()), None => Value::Null });
+    m.insert("lat".into(), match (&p.lat) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("lon".into(), match (&p.lon) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("sources".into(), match (&p.sources) { Some(v) => Value::Array((v).iter().map(|v| Value::String((v).clone())).collect()), None => Value::Null });
+    m.insert("state_code".into(), match (&p.state_code) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("timezone".into(), match (&p.timezone) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_daily_historical_weather_data__history_day_obj__to_json(p: &iface_daily_historical_weather_data::HistoryDayObj) -> Value {
+    let mut m = Map::new();
+    m.insert("datetime".into(), match (&p.datetime) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("dewpt".into(), match (&p.dewpt) { Some(v) => serde_json::Number::from_f64(*(v)).map(Value::Number).unwrap_or(Value::Null), None => Value::Null });
+    m.insert("dhi".into(), match (&p.dhi) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("dni".into(), match (&p.dni) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("ghi".into(), match (&p.ghi) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("max_temp".into(), match (&p.max_temp) { Some(v) => serde_json::Number::from_f64(*(v)).map(Value::Number).unwrap_or(Value::Null), None => Value::Null });
+    m.insert("max_temp_ts".into(), match (&p.max_temp_ts) { Some(v) => serde_json::Number::from_f64(*(v)).map(Value::Number).unwrap_or(Value::Null), None => Value::Null });
+    m.insert("max_uv".into(), match (&p.max_uv) { Some(v) => serde_json::Number::from_f64(*(v)).map(Value::Number).unwrap_or(Value::Null), None => Value::Null });
+    m.insert("max_wind_dir".into(), match (&p.max_wind_dir) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("max_wind_spd".into(), match (&p.max_wind_spd) { Some(v) => serde_json::Number::from_f64(*(v)).map(Value::Number).unwrap_or(Value::Null), None => Value::Null });
+    m.insert("max_wind_spd_ts".into(), match (&p.max_wind_spd_ts) { Some(v) => serde_json::Number::from_f64(*(v)).map(Value::Number).unwrap_or(Value::Null), None => Value::Null });
+    m.insert("min_temp".into(), match (&p.min_temp) { Some(v) => serde_json::Number::from_f64(*(v)).map(Value::Number).unwrap_or(Value::Null), None => Value::Null });
+    m.insert("min_temp_ts".into(), match (&p.min_temp_ts) { Some(v) => serde_json::Number::from_f64(*(v)).map(Value::Number).unwrap_or(Value::Null), None => Value::Null });
+    m.insert("precip".into(), match (&p.precip) { Some(v) => serde_json::Number::from_f64(*(v)).map(Value::Number).unwrap_or(Value::Null), None => Value::Null });
+    m.insert("precip_gpm".into(), match (&p.precip_gpm) { Some(v) => serde_json::Number::from_f64(*(v)).map(Value::Number).unwrap_or(Value::Null), None => Value::Null });
+    m.insert("pres".into(), match (&p.pres) { Some(v) => serde_json::Number::from_f64(*(v)).map(Value::Number).unwrap_or(Value::Null), None => Value::Null });
+    m.insert("revision_status".into(), match (&p.revision_status) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("rh".into(), match (&p.rh) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("slp".into(), match (&p.slp) { Some(v) => serde_json::Number::from_f64(*(v)).map(Value::Number).unwrap_or(Value::Null), None => Value::Null });
+    m.insert("snow".into(), match (&p.snow) { Some(v) => serde_json::Number::from_f64(*(v)).map(Value::Number).unwrap_or(Value::Null), None => Value::Null });
+    m.insert("snow_depth".into(), match (&p.snow_depth) { Some(v) => serde_json::Number::from_f64(*(v)).map(Value::Number).unwrap_or(Value::Null), None => Value::Null });
+    m.insert("t_dhi".into(), match (&p.t_dhi) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("t_dni".into(), match (&p.t_dni) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("t_ghi".into(), match (&p.t_ghi) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("temp".into(), match (&p.temp) { Some(v) => serde_json::Number::from_f64(*(v)).map(Value::Number).unwrap_or(Value::Null), None => Value::Null });
+    m.insert("ts".into(), match (&p.ts) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("wind_dir".into(), match (&p.wind_dir) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("wind_gust_spd".into(), match (&p.wind_gust_spd) { Some(v) => serde_json::Number::from_f64(*(v)).map(Value::Number).unwrap_or(Value::Null), None => Value::Null });
+    m.insert("wind_spd".into(), match (&p.wind_spd) { Some(v) => serde_json::Number::from_f64(*(v)).map(Value::Number).unwrap_or(Value::Null), None => Value::Null });
+    Value::Object(m)
 }
 
 fn iface_daily_historical_weather_data__get_history_daily_city_city_country_country_params__to_json(p: &iface_daily_historical_weather_data::GetHistoryDailyCityCityCountryCountryParams) -> Value {
@@ -1546,26 +2880,180 @@ fn iface_daily_historical_weather_data__get_history_daily_station_station_params
     Value::Object(m)
 }
 
+fn iface_daily_historical_weather_data__history_day__from_json(v: &Value) -> Option<iface_daily_historical_weather_data::HistoryDay> {
+    let m = v.as_object()?;
+    Some(iface_daily_historical_weather_data::HistoryDay {
+        city_name: m.get("city_name").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        country_code: m.get("country_code").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| iface_daily_historical_weather_data__history_day_obj__from_json(x)).collect())),
+        lat: m.get("lat").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        lon: m.get("lon").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        sources: m.get("sources").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| (x).as_str().map(|s| s.to_string())).collect())),
+        state_code: m.get("state_code").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        timezone: m.get("timezone").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    })
+}
+
+fn iface_daily_historical_weather_data__history_day_obj__from_json(v: &Value) -> Option<iface_daily_historical_weather_data::HistoryDayObj> {
+    let m = v.as_object()?;
+    Some(iface_daily_historical_weather_data::HistoryDayObj {
+        datetime: m.get("datetime").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        dewpt: m.get("dewpt").filter(|v| !v.is_null()).and_then(|v| (v).as_f64()),
+        dhi: m.get("dhi").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        dni: m.get("dni").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        ghi: m.get("ghi").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        max_temp: m.get("max_temp").filter(|v| !v.is_null()).and_then(|v| (v).as_f64()),
+        max_temp_ts: m.get("max_temp_ts").filter(|v| !v.is_null()).and_then(|v| (v).as_f64()),
+        max_uv: m.get("max_uv").filter(|v| !v.is_null()).and_then(|v| (v).as_f64()),
+        max_wind_dir: m.get("max_wind_dir").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        max_wind_spd: m.get("max_wind_spd").filter(|v| !v.is_null()).and_then(|v| (v).as_f64()),
+        max_wind_spd_ts: m.get("max_wind_spd_ts").filter(|v| !v.is_null()).and_then(|v| (v).as_f64()),
+        min_temp: m.get("min_temp").filter(|v| !v.is_null()).and_then(|v| (v).as_f64()),
+        min_temp_ts: m.get("min_temp_ts").filter(|v| !v.is_null()).and_then(|v| (v).as_f64()),
+        precip: m.get("precip").filter(|v| !v.is_null()).and_then(|v| (v).as_f64()),
+        precip_gpm: m.get("precip_gpm").filter(|v| !v.is_null()).and_then(|v| (v).as_f64()),
+        pres: m.get("pres").filter(|v| !v.is_null()).and_then(|v| (v).as_f64()),
+        revision_status: m.get("revision_status").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        rh: m.get("rh").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        slp: m.get("slp").filter(|v| !v.is_null()).and_then(|v| (v).as_f64()),
+        snow: m.get("snow").filter(|v| !v.is_null()).and_then(|v| (v).as_f64()),
+        snow_depth: m.get("snow_depth").filter(|v| !v.is_null()).and_then(|v| (v).as_f64()),
+        t_dhi: m.get("t_dhi").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        t_dni: m.get("t_dni").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        t_ghi: m.get("t_ghi").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        temp: m.get("temp").filter(|v| !v.is_null()).and_then(|v| (v).as_f64()),
+        ts: m.get("ts").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        wind_dir: m.get("wind_dir").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        wind_gust_spd: m.get("wind_gust_spd").filter(|v| !v.is_null()).and_then(|v| (v).as_f64()),
+        wind_spd: m.get("wind_spd").filter(|v| !v.is_null()).and_then(|v| (v).as_f64()),
+    })
+}
+
+fn iface_daily_historical_weather_data__get_history_daily_city_city_country_country__ok(body: String) -> Result<iface_daily_historical_weather_data::HistoryDay, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match iface_daily_historical_weather_data__history_day__from_json(&v) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_daily_historical_weather_data__get_history_daily_city_city_country_country__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
+fn iface_daily_historical_weather_data__get_history_daily_city_id_city_id__ok(body: String) -> Result<iface_daily_historical_weather_data::HistoryDay, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match iface_daily_historical_weather_data__history_day__from_json(&v) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_daily_historical_weather_data__get_history_daily_city_id_city_id__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
+fn iface_daily_historical_weather_data__get_history_daily_lat_lat_lon_lon__ok(body: String) -> Result<iface_daily_historical_weather_data::HistoryDay, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match iface_daily_historical_weather_data__history_day__from_json(&v) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_daily_historical_weather_data__get_history_daily_lat_lat_lon_lon__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
+fn iface_daily_historical_weather_data__get_history_daily_postal_code_postal_code__ok(body: String) -> Result<iface_daily_historical_weather_data::HistoryDay, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match iface_daily_historical_weather_data__history_day__from_json(&v) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_daily_historical_weather_data__get_history_daily_postal_code_postal_code__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
+fn iface_daily_historical_weather_data__get_history_daily_station_station__ok(body: String) -> Result<iface_daily_historical_weather_data::HistoryDay, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match iface_daily_historical_weather_data__history_day__from_json(&v) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_daily_historical_weather_data__get_history_daily_station_station__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
 impl iface_daily_historical_weather_data::Guest for crate::Component {
-    fn get_history_daily_city_city_country_country(params: iface_daily_historical_weather_data::GetHistoryDailyCityCityCountryCountryParams) -> Result<String, String> {
+    fn get_history_daily_city_city_country_country(params: iface_daily_historical_weather_data::GetHistoryDailyCityCityCountryCountryParams) -> Result<iface_daily_historical_weather_data::HistoryDay, String> {
         let json = iface_daily_historical_weather_data__get_history_daily_city_city_country_country_params__to_json(&params);
-        dispatch(&OP_DAILY_HISTORICAL_WEATHER_DATA_GET_HISTORY_DAILY_CITY_CITY_COUNTRY_COUNTRY, json)
+        match dispatch(&OP_DAILY_HISTORICAL_WEATHER_DATA_GET_HISTORY_DAILY_CITY_CITY_COUNTRY_COUNTRY, json).and_then(iface_daily_historical_weather_data__get_history_daily_city_city_country_country__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_daily_historical_weather_data__get_history_daily_city_city_country_country__err(e)),
+        }
     }
-    fn get_history_daily_city_id_city_id(params: iface_daily_historical_weather_data::GetHistoryDailyCityIdCityIdParams) -> Result<String, String> {
+    fn get_history_daily_city_id_city_id(params: iface_daily_historical_weather_data::GetHistoryDailyCityIdCityIdParams) -> Result<iface_daily_historical_weather_data::HistoryDay, String> {
         let json = iface_daily_historical_weather_data__get_history_daily_city_id_city_id_params__to_json(&params);
-        dispatch(&OP_DAILY_HISTORICAL_WEATHER_DATA_GET_HISTORY_DAILY_CITY_ID_CITY_ID, json)
+        match dispatch(&OP_DAILY_HISTORICAL_WEATHER_DATA_GET_HISTORY_DAILY_CITY_ID_CITY_ID, json).and_then(iface_daily_historical_weather_data__get_history_daily_city_id_city_id__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_daily_historical_weather_data__get_history_daily_city_id_city_id__err(e)),
+        }
     }
-    fn get_history_daily_lat_lat_lon_lon(params: iface_daily_historical_weather_data::GetHistoryDailyLatLatLonLonParams) -> Result<String, String> {
+    fn get_history_daily_lat_lat_lon_lon(params: iface_daily_historical_weather_data::GetHistoryDailyLatLatLonLonParams) -> Result<iface_daily_historical_weather_data::HistoryDay, String> {
         let json = iface_daily_historical_weather_data__get_history_daily_lat_lat_lon_lon_params__to_json(&params);
-        dispatch(&OP_DAILY_HISTORICAL_WEATHER_DATA_GET_HISTORY_DAILY_LAT_LAT_LON_LON, json)
+        match dispatch(&OP_DAILY_HISTORICAL_WEATHER_DATA_GET_HISTORY_DAILY_LAT_LAT_LON_LON, json).and_then(iface_daily_historical_weather_data__get_history_daily_lat_lat_lon_lon__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_daily_historical_weather_data__get_history_daily_lat_lat_lon_lon__err(e)),
+        }
     }
-    fn get_history_daily_postal_code_postal_code(params: iface_daily_historical_weather_data::GetHistoryDailyPostalCodePostalCodeParams) -> Result<String, String> {
+    fn get_history_daily_postal_code_postal_code(params: iface_daily_historical_weather_data::GetHistoryDailyPostalCodePostalCodeParams) -> Result<iface_daily_historical_weather_data::HistoryDay, String> {
         let json = iface_daily_historical_weather_data__get_history_daily_postal_code_postal_code_params__to_json(&params);
-        dispatch(&OP_DAILY_HISTORICAL_WEATHER_DATA_GET_HISTORY_DAILY_POSTAL_CODE_POSTAL_CODE, json)
+        match dispatch(&OP_DAILY_HISTORICAL_WEATHER_DATA_GET_HISTORY_DAILY_POSTAL_CODE_POSTAL_CODE, json).and_then(iface_daily_historical_weather_data__get_history_daily_postal_code_postal_code__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_daily_historical_weather_data__get_history_daily_postal_code_postal_code__err(e)),
+        }
     }
-    fn get_history_daily_station_station(params: iface_daily_historical_weather_data::GetHistoryDailyStationStationParams) -> Result<String, String> {
+    fn get_history_daily_station_station(params: iface_daily_historical_weather_data::GetHistoryDailyStationStationParams) -> Result<iface_daily_historical_weather_data::HistoryDay, String> {
         let json = iface_daily_historical_weather_data__get_history_daily_station_station_params__to_json(&params);
-        dispatch(&OP_DAILY_HISTORICAL_WEATHER_DATA_GET_HISTORY_DAILY_STATION_STATION, json)
+        match dispatch(&OP_DAILY_HISTORICAL_WEATHER_DATA_GET_HISTORY_DAILY_STATION_STATION, json).and_then(iface_daily_historical_weather_data__get_history_daily_station_station__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_daily_historical_weather_data__get_history_daily_station_station__err(e)),
+        }
     }
 }
 use crate::exports::autostamp::weatherbit::historical_degree_day_api as iface_historical_degree_day_api;
@@ -1574,14 +3062,14 @@ const OP_HISTORICAL_DEGREE_DAY_API_GET_HISTORY_ENERGY_LAT_LAT_LON_LON: OpSpec = 
     method: "GET",
     path_template: "/history/energy?lat={lat}&lon={lon}",
     fields: &[
-        FieldSpec { snake: "lat", location: FieldLocation::Path },
-        FieldSpec { snake: "lon", location: FieldLocation::Path },
-        FieldSpec { snake: "start_date", location: FieldLocation::Query },
-        FieldSpec { snake: "end_date", location: FieldLocation::Query },
-        FieldSpec { snake: "tp", location: FieldLocation::Query },
-        FieldSpec { snake: "threshold", location: FieldLocation::Query },
-        FieldSpec { snake: "units", location: FieldLocation::Query },
-        FieldSpec { snake: "callback", location: FieldLocation::Query },
+        FieldSpec { snake: "lat", wire: "lat", location: FieldLocation::Path },
+        FieldSpec { snake: "lon", wire: "lon", location: FieldLocation::Path },
+        FieldSpec { snake: "start_date", wire: "start_date", location: FieldLocation::Query },
+        FieldSpec { snake: "end_date", wire: "end_date", location: FieldLocation::Query },
+        FieldSpec { snake: "tp", wire: "tp", location: FieldLocation::Query },
+        FieldSpec { snake: "threshold", wire: "threshold", location: FieldLocation::Query },
+        FieldSpec { snake: "units", wire: "units", location: FieldLocation::Query },
+        FieldSpec { snake: "callback", wire: "callback", location: FieldLocation::Query },
     ],
     auth: &[
         AuthApply { secret_key: "key", kind: AuthKind::ApiKeyQuery("key") },
@@ -1603,6 +3091,42 @@ fn iface_historical_degree_day_api__get_history_energy_lat_lat_lon_lon_units_enu
     }
 }
 
+fn iface_historical_degree_day_api__energy_obs_group__to_json(p: &iface_historical_degree_day_api::EnergyObsGroup) -> Value {
+    let mut m = Map::new();
+    m.insert("count".into(), match (&p.count) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("data".into(), match (&p.data) { Some(v) => Value::Array((v).iter().map(|v| iface_historical_degree_day_api__energy_obs__to_json(v)).collect()), None => Value::Null });
+    m.insert("end_date".into(), match (&p.end_date) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("start_date".into(), match (&p.start_date) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_historical_degree_day_api__energy_obs__to_json(p: &iface_historical_degree_day_api::EnergyObs) -> Value {
+    let mut m = Map::new();
+    m.insert("cdd".into(), match (&p.cdd) { Some(v) => serde_json::Number::from_f64(*(v)).map(Value::Number).unwrap_or(Value::Null), None => Value::Null });
+    m.insert("city_name".into(), match (&p.city_name) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("clouds".into(), match (&p.clouds) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("country_code".into(), match (&p.country_code) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("dewpt".into(), match (&p.dewpt) { Some(v) => serde_json::Number::from_f64(*(v)).map(Value::Number).unwrap_or(Value::Null), None => Value::Null });
+    m.insert("hdd".into(), match (&p.hdd) { Some(v) => serde_json::Number::from_f64(*(v)).map(Value::Number).unwrap_or(Value::Null), None => Value::Null });
+    m.insert("lat".into(), match (&p.lat) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("lon".into(), match (&p.lon) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("precip".into(), match (&p.precip) { Some(v) => serde_json::Number::from_f64(*(v)).map(Value::Number).unwrap_or(Value::Null), None => Value::Null });
+    m.insert("rh".into(), match (&p.rh) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("snow".into(), match (&p.snow) { Some(v) => serde_json::Number::from_f64(*(v)).map(Value::Number).unwrap_or(Value::Null), None => Value::Null });
+    m.insert("sources".into(), match (&p.sources) { Some(v) => Value::Array((v).iter().map(|v| Value::String((v).clone())).collect()), None => Value::Null });
+    m.insert("state_code".into(), match (&p.state_code) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("station_id".into(), match (&p.station_id) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("sun_hours".into(), match (&p.sun_hours) { Some(v) => serde_json::Number::from_f64(*(v)).map(Value::Number).unwrap_or(Value::Null), None => Value::Null });
+    m.insert("t_dhi".into(), match (&p.t_dhi) { Some(v) => serde_json::Number::from_f64(*(v)).map(Value::Number).unwrap_or(Value::Null), None => Value::Null });
+    m.insert("t_dni".into(), match (&p.t_dni) { Some(v) => serde_json::Number::from_f64(*(v)).map(Value::Number).unwrap_or(Value::Null), None => Value::Null });
+    m.insert("t_ghi".into(), match (&p.t_ghi) { Some(v) => serde_json::Number::from_f64(*(v)).map(Value::Number).unwrap_or(Value::Null), None => Value::Null });
+    m.insert("temp".into(), match (&p.temp) { Some(v) => serde_json::Number::from_f64(*(v)).map(Value::Number).unwrap_or(Value::Null), None => Value::Null });
+    m.insert("timezone".into(), match (&p.timezone) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("wind_dir".into(), match (&p.wind_dir) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("wind_spd".into(), match (&p.wind_spd) { Some(v) => serde_json::Number::from_f64(*(v)).map(Value::Number).unwrap_or(Value::Null), None => Value::Null });
+    Value::Object(m)
+}
+
 fn iface_historical_degree_day_api__get_history_energy_lat_lat_lon_lon_params__to_json(p: &iface_historical_degree_day_api::GetHistoryEnergyLatLatLonLonParams) -> Value {
     let mut m = Map::new();
     m.insert("lat".into(), Value::String((&p.lat).clone()));
@@ -1616,10 +3140,69 @@ fn iface_historical_degree_day_api__get_history_energy_lat_lat_lon_lon_params__t
     Value::Object(m)
 }
 
+fn iface_historical_degree_day_api__energy_obs_group__from_json(v: &Value) -> Option<iface_historical_degree_day_api::EnergyObsGroup> {
+    let m = v.as_object()?;
+    Some(iface_historical_degree_day_api::EnergyObsGroup {
+        count: m.get("count").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| iface_historical_degree_day_api__energy_obs__from_json(x)).collect())),
+        end_date: m.get("end_date").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        start_date: m.get("start_date").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+    })
+}
+
+fn iface_historical_degree_day_api__energy_obs__from_json(v: &Value) -> Option<iface_historical_degree_day_api::EnergyObs> {
+    let m = v.as_object()?;
+    Some(iface_historical_degree_day_api::EnergyObs {
+        cdd: m.get("cdd").filter(|v| !v.is_null()).and_then(|v| (v).as_f64()),
+        city_name: m.get("city_name").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        clouds: m.get("clouds").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        country_code: m.get("country_code").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        dewpt: m.get("dewpt").filter(|v| !v.is_null()).and_then(|v| (v).as_f64()),
+        hdd: m.get("hdd").filter(|v| !v.is_null()).and_then(|v| (v).as_f64()),
+        lat: m.get("lat").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        lon: m.get("lon").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        precip: m.get("precip").filter(|v| !v.is_null()).and_then(|v| (v).as_f64()),
+        rh: m.get("rh").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        snow: m.get("snow").filter(|v| !v.is_null()).and_then(|v| (v).as_f64()),
+        sources: m.get("sources").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| (x).as_str().map(|s| s.to_string())).collect())),
+        state_code: m.get("state_code").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        station_id: m.get("station_id").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        sun_hours: m.get("sun_hours").filter(|v| !v.is_null()).and_then(|v| (v).as_f64()),
+        t_dhi: m.get("t_dhi").filter(|v| !v.is_null()).and_then(|v| (v).as_f64()),
+        t_dni: m.get("t_dni").filter(|v| !v.is_null()).and_then(|v| (v).as_f64()),
+        t_ghi: m.get("t_ghi").filter(|v| !v.is_null()).and_then(|v| (v).as_f64()),
+        temp: m.get("temp").filter(|v| !v.is_null()).and_then(|v| (v).as_f64()),
+        timezone: m.get("timezone").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        wind_dir: m.get("wind_dir").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        wind_spd: m.get("wind_spd").filter(|v| !v.is_null()).and_then(|v| (v).as_f64()),
+    })
+}
+
+fn iface_historical_degree_day_api__get_history_energy_lat_lat_lon_lon__ok(body: String) -> Result<iface_historical_degree_day_api::EnergyObsGroup, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match iface_historical_degree_day_api__energy_obs_group__from_json(&v) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_historical_degree_day_api__get_history_energy_lat_lat_lon_lon__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
 impl iface_historical_degree_day_api::Guest for crate::Component {
-    fn get_history_energy_lat_lat_lon_lon(params: iface_historical_degree_day_api::GetHistoryEnergyLatLatLonLonParams) -> Result<String, String> {
+    fn get_history_energy_lat_lat_lon_lon(params: iface_historical_degree_day_api::GetHistoryEnergyLatLatLonLonParams) -> Result<iface_historical_degree_day_api::EnergyObsGroup, String> {
         let json = iface_historical_degree_day_api__get_history_energy_lat_lat_lon_lon_params__to_json(&params);
-        dispatch(&OP_HISTORICAL_DEGREE_DAY_API_GET_HISTORY_ENERGY_LAT_LAT_LON_LON, json)
+        match dispatch(&OP_HISTORICAL_DEGREE_DAY_API_GET_HISTORY_ENERGY_LAT_LAT_LON_LON, json).and_then(iface_historical_degree_day_api__get_history_energy_lat_lat_lon_lon__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_historical_degree_day_api__get_history_energy_lat_lat_lon_lon__err(e)),
+        }
     }
 }
 use crate::exports::autostamp::weatherbit::hourly_historical_weather_data as iface_hourly_historical_weather_data;
@@ -1628,15 +3211,15 @@ const OP_HOURLY_HISTORICAL_WEATHER_DATA_GET_HISTORY_HOURLY_CITY_CITY_COUNTRY_COU
     method: "GET",
     path_template: "/history/hourly?city={city}&country={country}",
     fields: &[
-        FieldSpec { snake: "city", location: FieldLocation::Path },
-        FieldSpec { snake: "state", location: FieldLocation::Query },
-        FieldSpec { snake: "country", location: FieldLocation::Path },
-        FieldSpec { snake: "start_date", location: FieldLocation::Query },
-        FieldSpec { snake: "end_date", location: FieldLocation::Query },
-        FieldSpec { snake: "units", location: FieldLocation::Query },
-        FieldSpec { snake: "lang", location: FieldLocation::Query },
-        FieldSpec { snake: "tz", location: FieldLocation::Query },
-        FieldSpec { snake: "callback", location: FieldLocation::Query },
+        FieldSpec { snake: "city", wire: "city", location: FieldLocation::Path },
+        FieldSpec { snake: "state", wire: "state", location: FieldLocation::Query },
+        FieldSpec { snake: "country", wire: "country", location: FieldLocation::Path },
+        FieldSpec { snake: "start_date", wire: "start_date", location: FieldLocation::Query },
+        FieldSpec { snake: "end_date", wire: "end_date", location: FieldLocation::Query },
+        FieldSpec { snake: "units", wire: "units", location: FieldLocation::Query },
+        FieldSpec { snake: "lang", wire: "lang", location: FieldLocation::Query },
+        FieldSpec { snake: "tz", wire: "tz", location: FieldLocation::Query },
+        FieldSpec { snake: "callback", wire: "callback", location: FieldLocation::Query },
     ],
     auth: &[
         AuthApply { secret_key: "key", kind: AuthKind::ApiKeyQuery("key") },
@@ -1647,13 +3230,13 @@ const OP_HOURLY_HISTORICAL_WEATHER_DATA_GET_HISTORY_HOURLY_CITY_ID_CITY_ID: OpSp
     method: "GET",
     path_template: "/history/hourly?city_id={city_id}",
     fields: &[
-        FieldSpec { snake: "city_id", location: FieldLocation::Path },
-        FieldSpec { snake: "start_date", location: FieldLocation::Query },
-        FieldSpec { snake: "end_date", location: FieldLocation::Query },
-        FieldSpec { snake: "units", location: FieldLocation::Query },
-        FieldSpec { snake: "lang", location: FieldLocation::Query },
-        FieldSpec { snake: "tz", location: FieldLocation::Query },
-        FieldSpec { snake: "callback", location: FieldLocation::Query },
+        FieldSpec { snake: "city_id", wire: "city_id", location: FieldLocation::Path },
+        FieldSpec { snake: "start_date", wire: "start_date", location: FieldLocation::Query },
+        FieldSpec { snake: "end_date", wire: "end_date", location: FieldLocation::Query },
+        FieldSpec { snake: "units", wire: "units", location: FieldLocation::Query },
+        FieldSpec { snake: "lang", wire: "lang", location: FieldLocation::Query },
+        FieldSpec { snake: "tz", wire: "tz", location: FieldLocation::Query },
+        FieldSpec { snake: "callback", wire: "callback", location: FieldLocation::Query },
     ],
     auth: &[
         AuthApply { secret_key: "key", kind: AuthKind::ApiKeyQuery("key") },
@@ -1664,14 +3247,14 @@ const OP_HOURLY_HISTORICAL_WEATHER_DATA_GET_HISTORY_HOURLY_LAT_LAT_LON_LON: OpSp
     method: "GET",
     path_template: "/history/hourly?lat={lat}&lon={lon}",
     fields: &[
-        FieldSpec { snake: "lat", location: FieldLocation::Path },
-        FieldSpec { snake: "lon", location: FieldLocation::Path },
-        FieldSpec { snake: "start_date", location: FieldLocation::Query },
-        FieldSpec { snake: "end_date", location: FieldLocation::Query },
-        FieldSpec { snake: "units", location: FieldLocation::Query },
-        FieldSpec { snake: "lang", location: FieldLocation::Query },
-        FieldSpec { snake: "tz", location: FieldLocation::Query },
-        FieldSpec { snake: "callback", location: FieldLocation::Query },
+        FieldSpec { snake: "lat", wire: "lat", location: FieldLocation::Path },
+        FieldSpec { snake: "lon", wire: "lon", location: FieldLocation::Path },
+        FieldSpec { snake: "start_date", wire: "start_date", location: FieldLocation::Query },
+        FieldSpec { snake: "end_date", wire: "end_date", location: FieldLocation::Query },
+        FieldSpec { snake: "units", wire: "units", location: FieldLocation::Query },
+        FieldSpec { snake: "lang", wire: "lang", location: FieldLocation::Query },
+        FieldSpec { snake: "tz", wire: "tz", location: FieldLocation::Query },
+        FieldSpec { snake: "callback", wire: "callback", location: FieldLocation::Query },
     ],
     auth: &[
         AuthApply { secret_key: "key", kind: AuthKind::ApiKeyQuery("key") },
@@ -1682,14 +3265,14 @@ const OP_HOURLY_HISTORICAL_WEATHER_DATA_GET_HISTORY_HOURLY_POSTAL_CODE_POSTAL_CO
     method: "GET",
     path_template: "/history/hourly?postal_code={postal_code}",
     fields: &[
-        FieldSpec { snake: "postal_code", location: FieldLocation::Path },
-        FieldSpec { snake: "country", location: FieldLocation::Query },
-        FieldSpec { snake: "start_date", location: FieldLocation::Query },
-        FieldSpec { snake: "end_date", location: FieldLocation::Query },
-        FieldSpec { snake: "units", location: FieldLocation::Query },
-        FieldSpec { snake: "lang", location: FieldLocation::Query },
-        FieldSpec { snake: "tz", location: FieldLocation::Query },
-        FieldSpec { snake: "callback", location: FieldLocation::Query },
+        FieldSpec { snake: "postal_code", wire: "postal_code", location: FieldLocation::Path },
+        FieldSpec { snake: "country", wire: "country", location: FieldLocation::Query },
+        FieldSpec { snake: "start_date", wire: "start_date", location: FieldLocation::Query },
+        FieldSpec { snake: "end_date", wire: "end_date", location: FieldLocation::Query },
+        FieldSpec { snake: "units", wire: "units", location: FieldLocation::Query },
+        FieldSpec { snake: "lang", wire: "lang", location: FieldLocation::Query },
+        FieldSpec { snake: "tz", wire: "tz", location: FieldLocation::Query },
+        FieldSpec { snake: "callback", wire: "callback", location: FieldLocation::Query },
     ],
     auth: &[
         AuthApply { secret_key: "key", kind: AuthKind::ApiKeyQuery("key") },
@@ -1700,13 +3283,13 @@ const OP_HOURLY_HISTORICAL_WEATHER_DATA_GET_HISTORY_HOURLY_STATION_STATION: OpSp
     method: "GET",
     path_template: "/history/hourly?station={station}",
     fields: &[
-        FieldSpec { snake: "station", location: FieldLocation::Path },
-        FieldSpec { snake: "start_date", location: FieldLocation::Query },
-        FieldSpec { snake: "end_date", location: FieldLocation::Query },
-        FieldSpec { snake: "units", location: FieldLocation::Query },
-        FieldSpec { snake: "lang", location: FieldLocation::Query },
-        FieldSpec { snake: "tz", location: FieldLocation::Query },
-        FieldSpec { snake: "callback", location: FieldLocation::Query },
+        FieldSpec { snake: "station", wire: "station", location: FieldLocation::Path },
+        FieldSpec { snake: "start_date", wire: "start_date", location: FieldLocation::Query },
+        FieldSpec { snake: "end_date", wire: "end_date", location: FieldLocation::Query },
+        FieldSpec { snake: "units", wire: "units", location: FieldLocation::Query },
+        FieldSpec { snake: "lang", wire: "lang", location: FieldLocation::Query },
+        FieldSpec { snake: "tz", wire: "tz", location: FieldLocation::Query },
+        FieldSpec { snake: "callback", wire: "callback", location: FieldLocation::Query },
     ],
     auth: &[
         AuthApply { secret_key: "key", kind: AuthKind::ApiKeyQuery("key") },
@@ -1763,6 +3346,60 @@ fn iface_hourly_historical_weather_data__get_history_hourly_city_city_country_co
         iface_hourly_historical_weather_data::GetHistoryHourlyCityCityCountryCountryTzEnum::Local => "local",
         iface_hourly_historical_weather_data::GetHistoryHourlyCityCityCountryCountryTzEnum::Utc => "utc",
     }
+}
+
+fn iface_hourly_historical_weather_data__history__to_json(p: &iface_hourly_historical_weather_data::History) -> Value {
+    let mut m = Map::new();
+    m.insert("city_name".into(), match (&p.city_name) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("country_code".into(), match (&p.country_code) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("data".into(), match (&p.data) { Some(v) => Value::Array((v).iter().map(|v| iface_hourly_historical_weather_data__history_obj__to_json(v)).collect()), None => Value::Null });
+    m.insert("lat".into(), match (&p.lat) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("lon".into(), match (&p.lon) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("sources".into(), match (&p.sources) { Some(v) => Value::Array((v).iter().map(|v| Value::String((v).clone())).collect()), None => Value::Null });
+    m.insert("state_code".into(), match (&p.state_code) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("timezone".into(), match (&p.timezone) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_hourly_historical_weather_data__history_obj__to_json(p: &iface_hourly_historical_weather_data::HistoryObj) -> Value {
+    let mut m = Map::new();
+    m.insert("app_temp".into(), match (&p.app_temp) { Some(v) => serde_json::Number::from_f64(*(v)).map(Value::Number).unwrap_or(Value::Null), None => Value::Null });
+    m.insert("azimuth".into(), match (&p.azimuth) { Some(v) => serde_json::Number::from_f64(*(v)).map(Value::Number).unwrap_or(Value::Null), None => Value::Null });
+    m.insert("clouds".into(), match (&p.clouds) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("datetime".into(), match (&p.datetime) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("dewpt".into(), match (&p.dewpt) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("dhi".into(), match (&p.dhi) { Some(v) => serde_json::Number::from_f64(*(v)).map(Value::Number).unwrap_or(Value::Null), None => Value::Null });
+    m.insert("dni".into(), match (&p.dni) { Some(v) => serde_json::Number::from_f64(*(v)).map(Value::Number).unwrap_or(Value::Null), None => Value::Null });
+    m.insert("elev_angle".into(), match (&p.elev_angle) { Some(v) => serde_json::Number::from_f64(*(v)).map(Value::Number).unwrap_or(Value::Null), None => Value::Null });
+    m.insert("ghi".into(), match (&p.ghi) { Some(v) => serde_json::Number::from_f64(*(v)).map(Value::Number).unwrap_or(Value::Null), None => Value::Null });
+    m.insert("h_angle".into(), match (&p.h_angle) { Some(v) => serde_json::Number::from_f64(*(v)).map(Value::Number).unwrap_or(Value::Null), None => Value::Null });
+    m.insert("pod".into(), match (&p.pod) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("precip".into(), match (&p.precip) { Some(v) => serde_json::Number::from_f64(*(v)).map(Value::Number).unwrap_or(Value::Null), None => Value::Null });
+    m.insert("pres".into(), match (&p.pres) { Some(v) => serde_json::Number::from_f64(*(v)).map(Value::Number).unwrap_or(Value::Null), None => Value::Null });
+    m.insert("revision_status".into(), match (&p.revision_status) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("rh".into(), match (&p.rh) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("slp".into(), match (&p.slp) { Some(v) => serde_json::Number::from_f64(*(v)).map(Value::Number).unwrap_or(Value::Null), None => Value::Null });
+    m.insert("snow".into(), match (&p.snow) { Some(v) => serde_json::Number::from_f64(*(v)).map(Value::Number).unwrap_or(Value::Null), None => Value::Null });
+    m.insert("solar_rad".into(), match (&p.solar_rad) { Some(v) => serde_json::Number::from_f64(*(v)).map(Value::Number).unwrap_or(Value::Null), None => Value::Null });
+    m.insert("temp".into(), match (&p.temp) { Some(v) => serde_json::Number::from_f64(*(v)).map(Value::Number).unwrap_or(Value::Null), None => Value::Null });
+    m.insert("timestamp_local".into(), match (&p.timestamp_local) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("timestamp_utc".into(), match (&p.timestamp_utc) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("ts".into(), match (&p.ts) { Some(v) => serde_json::Number::from_f64(*(v)).map(Value::Number).unwrap_or(Value::Null), None => Value::Null });
+    m.insert("uv".into(), match (&p.uv) { Some(v) => serde_json::Number::from_f64(*(v)).map(Value::Number).unwrap_or(Value::Null), None => Value::Null });
+    m.insert("vis".into(), match (&p.vis) { Some(v) => serde_json::Number::from_f64(*(v)).map(Value::Number).unwrap_or(Value::Null), None => Value::Null });
+    m.insert("weather".into(), match (&p.weather) { Some(v) => iface_hourly_historical_weather_data__history_obj_weather__to_json(v), None => Value::Null });
+    m.insert("wind_dir".into(), match (&p.wind_dir) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("wind_gust_spd".into(), match (&p.wind_gust_spd) { Some(v) => serde_json::Number::from_f64(*(v)).map(Value::Number).unwrap_or(Value::Null), None => Value::Null });
+    m.insert("wind_spd".into(), match (&p.wind_spd) { Some(v) => serde_json::Number::from_f64(*(v)).map(Value::Number).unwrap_or(Value::Null), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_hourly_historical_weather_data__history_obj_weather__to_json(p: &iface_hourly_historical_weather_data::HistoryObjWeather) -> Value {
+    let mut m = Map::new();
+    m.insert("code".into(), match (&p.code) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("description".into(), match (&p.description) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("icon".into(), match (&p.icon) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
 }
 
 fn iface_hourly_historical_weather_data__get_history_hourly_city_city_country_country_params__to_json(p: &iface_hourly_historical_weather_data::GetHistoryHourlyCityCityCountryCountryParams) -> Value {
@@ -1829,26 +3466,188 @@ fn iface_hourly_historical_weather_data__get_history_hourly_station_station_para
     Value::Object(m)
 }
 
+fn iface_hourly_historical_weather_data__history__from_json(v: &Value) -> Option<iface_hourly_historical_weather_data::History> {
+    let m = v.as_object()?;
+    Some(iface_hourly_historical_weather_data::History {
+        city_name: m.get("city_name").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        country_code: m.get("country_code").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| iface_hourly_historical_weather_data__history_obj__from_json(x)).collect())),
+        lat: m.get("lat").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        lon: m.get("lon").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        sources: m.get("sources").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| (x).as_str().map(|s| s.to_string())).collect())),
+        state_code: m.get("state_code").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        timezone: m.get("timezone").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    })
+}
+
+fn iface_hourly_historical_weather_data__history_obj__from_json(v: &Value) -> Option<iface_hourly_historical_weather_data::HistoryObj> {
+    let m = v.as_object()?;
+    Some(iface_hourly_historical_weather_data::HistoryObj {
+        app_temp: m.get("app_temp").filter(|v| !v.is_null()).and_then(|v| (v).as_f64()),
+        azimuth: m.get("azimuth").filter(|v| !v.is_null()).and_then(|v| (v).as_f64()),
+        clouds: m.get("clouds").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        datetime: m.get("datetime").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        dewpt: m.get("dewpt").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        dhi: m.get("dhi").filter(|v| !v.is_null()).and_then(|v| (v).as_f64()),
+        dni: m.get("dni").filter(|v| !v.is_null()).and_then(|v| (v).as_f64()),
+        elev_angle: m.get("elev_angle").filter(|v| !v.is_null()).and_then(|v| (v).as_f64()),
+        ghi: m.get("ghi").filter(|v| !v.is_null()).and_then(|v| (v).as_f64()),
+        h_angle: m.get("h_angle").filter(|v| !v.is_null()).and_then(|v| (v).as_f64()),
+        pod: m.get("pod").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        precip: m.get("precip").filter(|v| !v.is_null()).and_then(|v| (v).as_f64()),
+        pres: m.get("pres").filter(|v| !v.is_null()).and_then(|v| (v).as_f64()),
+        revision_status: m.get("revision_status").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        rh: m.get("rh").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        slp: m.get("slp").filter(|v| !v.is_null()).and_then(|v| (v).as_f64()),
+        snow: m.get("snow").filter(|v| !v.is_null()).and_then(|v| (v).as_f64()),
+        solar_rad: m.get("solar_rad").filter(|v| !v.is_null()).and_then(|v| (v).as_f64()),
+        temp: m.get("temp").filter(|v| !v.is_null()).and_then(|v| (v).as_f64()),
+        timestamp_local: m.get("timestamp_local").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        timestamp_utc: m.get("timestamp_utc").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        ts: m.get("ts").filter(|v| !v.is_null()).and_then(|v| (v).as_f64()),
+        uv: m.get("uv").filter(|v| !v.is_null()).and_then(|v| (v).as_f64()),
+        vis: m.get("vis").filter(|v| !v.is_null()).and_then(|v| (v).as_f64()),
+        weather: m.get("weather").filter(|v| !v.is_null()).and_then(|v| iface_hourly_historical_weather_data__history_obj_weather__from_json(v)),
+        wind_dir: m.get("wind_dir").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        wind_gust_spd: m.get("wind_gust_spd").filter(|v| !v.is_null()).and_then(|v| (v).as_f64()),
+        wind_spd: m.get("wind_spd").filter(|v| !v.is_null()).and_then(|v| (v).as_f64()),
+    })
+}
+
+fn iface_hourly_historical_weather_data__history_obj_weather__from_json(v: &Value) -> Option<iface_hourly_historical_weather_data::HistoryObjWeather> {
+    let m = v.as_object()?;
+    Some(iface_hourly_historical_weather_data::HistoryObjWeather {
+        code: m.get("code").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        description: m.get("description").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        icon: m.get("icon").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    })
+}
+
+fn iface_hourly_historical_weather_data__get_history_hourly_city_city_country_country__ok(body: String) -> Result<iface_hourly_historical_weather_data::History, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match iface_hourly_historical_weather_data__history__from_json(&v) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_hourly_historical_weather_data__get_history_hourly_city_city_country_country__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
+fn iface_hourly_historical_weather_data__get_history_hourly_city_id_city_id__ok(body: String) -> Result<iface_hourly_historical_weather_data::History, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match iface_hourly_historical_weather_data__history__from_json(&v) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_hourly_historical_weather_data__get_history_hourly_city_id_city_id__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
+fn iface_hourly_historical_weather_data__get_history_hourly_lat_lat_lon_lon__ok(body: String) -> Result<iface_hourly_historical_weather_data::History, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match iface_hourly_historical_weather_data__history__from_json(&v) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_hourly_historical_weather_data__get_history_hourly_lat_lat_lon_lon__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
+fn iface_hourly_historical_weather_data__get_history_hourly_postal_code_postal_code__ok(body: String) -> Result<iface_hourly_historical_weather_data::History, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match iface_hourly_historical_weather_data__history__from_json(&v) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_hourly_historical_weather_data__get_history_hourly_postal_code_postal_code__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
+fn iface_hourly_historical_weather_data__get_history_hourly_station_station__ok(body: String) -> Result<iface_hourly_historical_weather_data::History, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match iface_hourly_historical_weather_data__history__from_json(&v) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_hourly_historical_weather_data__get_history_hourly_station_station__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
 impl iface_hourly_historical_weather_data::Guest for crate::Component {
-    fn get_history_hourly_city_city_country_country(params: iface_hourly_historical_weather_data::GetHistoryHourlyCityCityCountryCountryParams) -> Result<String, String> {
+    fn get_history_hourly_city_city_country_country(params: iface_hourly_historical_weather_data::GetHistoryHourlyCityCityCountryCountryParams) -> Result<iface_hourly_historical_weather_data::History, String> {
         let json = iface_hourly_historical_weather_data__get_history_hourly_city_city_country_country_params__to_json(&params);
-        dispatch(&OP_HOURLY_HISTORICAL_WEATHER_DATA_GET_HISTORY_HOURLY_CITY_CITY_COUNTRY_COUNTRY, json)
+        match dispatch(&OP_HOURLY_HISTORICAL_WEATHER_DATA_GET_HISTORY_HOURLY_CITY_CITY_COUNTRY_COUNTRY, json).and_then(iface_hourly_historical_weather_data__get_history_hourly_city_city_country_country__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_hourly_historical_weather_data__get_history_hourly_city_city_country_country__err(e)),
+        }
     }
-    fn get_history_hourly_city_id_city_id(params: iface_hourly_historical_weather_data::GetHistoryHourlyCityIdCityIdParams) -> Result<String, String> {
+    fn get_history_hourly_city_id_city_id(params: iface_hourly_historical_weather_data::GetHistoryHourlyCityIdCityIdParams) -> Result<iface_hourly_historical_weather_data::History, String> {
         let json = iface_hourly_historical_weather_data__get_history_hourly_city_id_city_id_params__to_json(&params);
-        dispatch(&OP_HOURLY_HISTORICAL_WEATHER_DATA_GET_HISTORY_HOURLY_CITY_ID_CITY_ID, json)
+        match dispatch(&OP_HOURLY_HISTORICAL_WEATHER_DATA_GET_HISTORY_HOURLY_CITY_ID_CITY_ID, json).and_then(iface_hourly_historical_weather_data__get_history_hourly_city_id_city_id__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_hourly_historical_weather_data__get_history_hourly_city_id_city_id__err(e)),
+        }
     }
-    fn get_history_hourly_lat_lat_lon_lon(params: iface_hourly_historical_weather_data::GetHistoryHourlyLatLatLonLonParams) -> Result<String, String> {
+    fn get_history_hourly_lat_lat_lon_lon(params: iface_hourly_historical_weather_data::GetHistoryHourlyLatLatLonLonParams) -> Result<iface_hourly_historical_weather_data::History, String> {
         let json = iface_hourly_historical_weather_data__get_history_hourly_lat_lat_lon_lon_params__to_json(&params);
-        dispatch(&OP_HOURLY_HISTORICAL_WEATHER_DATA_GET_HISTORY_HOURLY_LAT_LAT_LON_LON, json)
+        match dispatch(&OP_HOURLY_HISTORICAL_WEATHER_DATA_GET_HISTORY_HOURLY_LAT_LAT_LON_LON, json).and_then(iface_hourly_historical_weather_data__get_history_hourly_lat_lat_lon_lon__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_hourly_historical_weather_data__get_history_hourly_lat_lat_lon_lon__err(e)),
+        }
     }
-    fn get_history_hourly_postal_code_postal_code(params: iface_hourly_historical_weather_data::GetHistoryHourlyPostalCodePostalCodeParams) -> Result<String, String> {
+    fn get_history_hourly_postal_code_postal_code(params: iface_hourly_historical_weather_data::GetHistoryHourlyPostalCodePostalCodeParams) -> Result<iface_hourly_historical_weather_data::History, String> {
         let json = iface_hourly_historical_weather_data__get_history_hourly_postal_code_postal_code_params__to_json(&params);
-        dispatch(&OP_HOURLY_HISTORICAL_WEATHER_DATA_GET_HISTORY_HOURLY_POSTAL_CODE_POSTAL_CODE, json)
+        match dispatch(&OP_HOURLY_HISTORICAL_WEATHER_DATA_GET_HISTORY_HOURLY_POSTAL_CODE_POSTAL_CODE, json).and_then(iface_hourly_historical_weather_data__get_history_hourly_postal_code_postal_code__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_hourly_historical_weather_data__get_history_hourly_postal_code_postal_code__err(e)),
+        }
     }
-    fn get_history_hourly_station_station(params: iface_hourly_historical_weather_data::GetHistoryHourlyStationStationParams) -> Result<String, String> {
+    fn get_history_hourly_station_station(params: iface_hourly_historical_weather_data::GetHistoryHourlyStationStationParams) -> Result<iface_hourly_historical_weather_data::History, String> {
         let json = iface_hourly_historical_weather_data__get_history_hourly_station_station_params__to_json(&params);
-        dispatch(&OP_HOURLY_HISTORICAL_WEATHER_DATA_GET_HISTORY_HOURLY_STATION_STATION, json)
+        match dispatch(&OP_HOURLY_HISTORICAL_WEATHER_DATA_GET_HISTORY_HOURLY_STATION_STATION, json).and_then(iface_hourly_historical_weather_data__get_history_hourly_station_station__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_hourly_historical_weather_data__get_history_hourly_station_station__err(e)),
+        }
     }
 }
 use crate::exports::autostamp::weatherbit::sub_hourly_historical_weather_data as iface_sub_hourly_historical_weather_data;
@@ -1857,15 +3656,15 @@ const OP_SUB_HOURLY_HISTORICAL_WEATHER_DATA_GET_HISTORY_SUBHOURLY_CITY_CITY_COUN
     method: "GET",
     path_template: "/history/subhourly?city={city}&country={country}",
     fields: &[
-        FieldSpec { snake: "city", location: FieldLocation::Path },
-        FieldSpec { snake: "state", location: FieldLocation::Query },
-        FieldSpec { snake: "country", location: FieldLocation::Path },
-        FieldSpec { snake: "start_date", location: FieldLocation::Query },
-        FieldSpec { snake: "end_date", location: FieldLocation::Query },
-        FieldSpec { snake: "units", location: FieldLocation::Query },
-        FieldSpec { snake: "lang", location: FieldLocation::Query },
-        FieldSpec { snake: "tz", location: FieldLocation::Query },
-        FieldSpec { snake: "callback", location: FieldLocation::Query },
+        FieldSpec { snake: "city", wire: "city", location: FieldLocation::Path },
+        FieldSpec { snake: "state", wire: "state", location: FieldLocation::Query },
+        FieldSpec { snake: "country", wire: "country", location: FieldLocation::Path },
+        FieldSpec { snake: "start_date", wire: "start_date", location: FieldLocation::Query },
+        FieldSpec { snake: "end_date", wire: "end_date", location: FieldLocation::Query },
+        FieldSpec { snake: "units", wire: "units", location: FieldLocation::Query },
+        FieldSpec { snake: "lang", wire: "lang", location: FieldLocation::Query },
+        FieldSpec { snake: "tz", wire: "tz", location: FieldLocation::Query },
+        FieldSpec { snake: "callback", wire: "callback", location: FieldLocation::Query },
     ],
     auth: &[
         AuthApply { secret_key: "key", kind: AuthKind::ApiKeyQuery("key") },
@@ -1876,13 +3675,13 @@ const OP_SUB_HOURLY_HISTORICAL_WEATHER_DATA_GET_HISTORY_SUBHOURLY_CITY_ID_CITY_I
     method: "GET",
     path_template: "/history/subhourly?city_id={city_id}",
     fields: &[
-        FieldSpec { snake: "city_id", location: FieldLocation::Path },
-        FieldSpec { snake: "start_date", location: FieldLocation::Query },
-        FieldSpec { snake: "end_date", location: FieldLocation::Query },
-        FieldSpec { snake: "units", location: FieldLocation::Query },
-        FieldSpec { snake: "lang", location: FieldLocation::Query },
-        FieldSpec { snake: "tz", location: FieldLocation::Query },
-        FieldSpec { snake: "callback", location: FieldLocation::Query },
+        FieldSpec { snake: "city_id", wire: "city_id", location: FieldLocation::Path },
+        FieldSpec { snake: "start_date", wire: "start_date", location: FieldLocation::Query },
+        FieldSpec { snake: "end_date", wire: "end_date", location: FieldLocation::Query },
+        FieldSpec { snake: "units", wire: "units", location: FieldLocation::Query },
+        FieldSpec { snake: "lang", wire: "lang", location: FieldLocation::Query },
+        FieldSpec { snake: "tz", wire: "tz", location: FieldLocation::Query },
+        FieldSpec { snake: "callback", wire: "callback", location: FieldLocation::Query },
     ],
     auth: &[
         AuthApply { secret_key: "key", kind: AuthKind::ApiKeyQuery("key") },
@@ -1893,14 +3692,14 @@ const OP_SUB_HOURLY_HISTORICAL_WEATHER_DATA_GET_HISTORY_SUBHOURLY_LAT_LAT_LON_LO
     method: "GET",
     path_template: "/history/subhourly?lat={lat}&lon={lon}",
     fields: &[
-        FieldSpec { snake: "lat", location: FieldLocation::Path },
-        FieldSpec { snake: "lon", location: FieldLocation::Path },
-        FieldSpec { snake: "start_date", location: FieldLocation::Query },
-        FieldSpec { snake: "end_date", location: FieldLocation::Query },
-        FieldSpec { snake: "units", location: FieldLocation::Query },
-        FieldSpec { snake: "lang", location: FieldLocation::Query },
-        FieldSpec { snake: "tz", location: FieldLocation::Query },
-        FieldSpec { snake: "callback", location: FieldLocation::Query },
+        FieldSpec { snake: "lat", wire: "lat", location: FieldLocation::Path },
+        FieldSpec { snake: "lon", wire: "lon", location: FieldLocation::Path },
+        FieldSpec { snake: "start_date", wire: "start_date", location: FieldLocation::Query },
+        FieldSpec { snake: "end_date", wire: "end_date", location: FieldLocation::Query },
+        FieldSpec { snake: "units", wire: "units", location: FieldLocation::Query },
+        FieldSpec { snake: "lang", wire: "lang", location: FieldLocation::Query },
+        FieldSpec { snake: "tz", wire: "tz", location: FieldLocation::Query },
+        FieldSpec { snake: "callback", wire: "callback", location: FieldLocation::Query },
     ],
     auth: &[
         AuthApply { secret_key: "key", kind: AuthKind::ApiKeyQuery("key") },
@@ -1911,14 +3710,14 @@ const OP_SUB_HOURLY_HISTORICAL_WEATHER_DATA_GET_HISTORY_SUBHOURLY_POSTAL_CODE_PO
     method: "GET",
     path_template: "/history/subhourly?postal_code={postal_code}",
     fields: &[
-        FieldSpec { snake: "postal_code", location: FieldLocation::Path },
-        FieldSpec { snake: "country", location: FieldLocation::Query },
-        FieldSpec { snake: "start_date", location: FieldLocation::Query },
-        FieldSpec { snake: "end_date", location: FieldLocation::Query },
-        FieldSpec { snake: "units", location: FieldLocation::Query },
-        FieldSpec { snake: "lang", location: FieldLocation::Query },
-        FieldSpec { snake: "tz", location: FieldLocation::Query },
-        FieldSpec { snake: "callback", location: FieldLocation::Query },
+        FieldSpec { snake: "postal_code", wire: "postal_code", location: FieldLocation::Path },
+        FieldSpec { snake: "country", wire: "country", location: FieldLocation::Query },
+        FieldSpec { snake: "start_date", wire: "start_date", location: FieldLocation::Query },
+        FieldSpec { snake: "end_date", wire: "end_date", location: FieldLocation::Query },
+        FieldSpec { snake: "units", wire: "units", location: FieldLocation::Query },
+        FieldSpec { snake: "lang", wire: "lang", location: FieldLocation::Query },
+        FieldSpec { snake: "tz", wire: "tz", location: FieldLocation::Query },
+        FieldSpec { snake: "callback", wire: "callback", location: FieldLocation::Query },
     ],
     auth: &[
         AuthApply { secret_key: "key", kind: AuthKind::ApiKeyQuery("key") },
@@ -1929,13 +3728,13 @@ const OP_SUB_HOURLY_HISTORICAL_WEATHER_DATA_GET_HISTORY_SUBHOURLY_STATION_STATIO
     method: "GET",
     path_template: "/history/subhourly?station={station}",
     fields: &[
-        FieldSpec { snake: "station", location: FieldLocation::Path },
-        FieldSpec { snake: "start_date", location: FieldLocation::Query },
-        FieldSpec { snake: "end_date", location: FieldLocation::Query },
-        FieldSpec { snake: "units", location: FieldLocation::Query },
-        FieldSpec { snake: "lang", location: FieldLocation::Query },
-        FieldSpec { snake: "tz", location: FieldLocation::Query },
-        FieldSpec { snake: "callback", location: FieldLocation::Query },
+        FieldSpec { snake: "station", wire: "station", location: FieldLocation::Path },
+        FieldSpec { snake: "start_date", wire: "start_date", location: FieldLocation::Query },
+        FieldSpec { snake: "end_date", wire: "end_date", location: FieldLocation::Query },
+        FieldSpec { snake: "units", wire: "units", location: FieldLocation::Query },
+        FieldSpec { snake: "lang", wire: "lang", location: FieldLocation::Query },
+        FieldSpec { snake: "tz", wire: "tz", location: FieldLocation::Query },
+        FieldSpec { snake: "callback", wire: "callback", location: FieldLocation::Query },
     ],
     auth: &[
         AuthApply { secret_key: "key", kind: AuthKind::ApiKeyQuery("key") },
@@ -1992,6 +3791,73 @@ fn iface_sub_hourly_historical_weather_data__get_history_subhourly_city_city_cou
         iface_sub_hourly_historical_weather_data::GetHistorySubhourlyCityCityCountryCountryTzEnum::Local => "local",
         iface_sub_hourly_historical_weather_data::GetHistorySubhourlyCityCityCountryCountryTzEnum::Utc => "utc",
     }
+}
+
+fn iface_sub_hourly_historical_weather_data__history__to_json(p: &iface_sub_hourly_historical_weather_data::History) -> Value {
+    let mut m = Map::new();
+    m.insert("city_name".into(), match (&p.city_name) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("country_code".into(), match (&p.country_code) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("data".into(), match (&p.data) { Some(v) => Value::Array((v).iter().map(|v| iface_sub_hourly_historical_weather_data__history_obj__to_json(v)).collect()), None => Value::Null });
+    m.insert("lat".into(), match (&p.lat) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("lon".into(), match (&p.lon) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("sources".into(), match (&p.sources) { Some(v) => Value::Array((v).iter().map(|v| Value::String((v).clone())).collect()), None => Value::Null });
+    m.insert("state_code".into(), match (&p.state_code) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("timezone".into(), match (&p.timezone) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_sub_hourly_historical_weather_data__history_obj__to_json(p: &iface_sub_hourly_historical_weather_data::HistoryObj) -> Value {
+    let mut m = Map::new();
+    m.insert("app_temp".into(), match (&p.app_temp) { Some(v) => serde_json::Number::from_f64(*(v)).map(Value::Number).unwrap_or(Value::Null), None => Value::Null });
+    m.insert("azimuth".into(), match (&p.azimuth) { Some(v) => serde_json::Number::from_f64(*(v)).map(Value::Number).unwrap_or(Value::Null), None => Value::Null });
+    m.insert("clouds".into(), match (&p.clouds) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("datetime".into(), match (&p.datetime) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("dewpt".into(), match (&p.dewpt) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("dhi".into(), match (&p.dhi) { Some(v) => serde_json::Number::from_f64(*(v)).map(Value::Number).unwrap_or(Value::Null), None => Value::Null });
+    m.insert("dni".into(), match (&p.dni) { Some(v) => serde_json::Number::from_f64(*(v)).map(Value::Number).unwrap_or(Value::Null), None => Value::Null });
+    m.insert("elev_angle".into(), match (&p.elev_angle) { Some(v) => serde_json::Number::from_f64(*(v)).map(Value::Number).unwrap_or(Value::Null), None => Value::Null });
+    m.insert("ghi".into(), match (&p.ghi) { Some(v) => serde_json::Number::from_f64(*(v)).map(Value::Number).unwrap_or(Value::Null), None => Value::Null });
+    m.insert("h_angle".into(), match (&p.h_angle) { Some(v) => serde_json::Number::from_f64(*(v)).map(Value::Number).unwrap_or(Value::Null), None => Value::Null });
+    m.insert("pod".into(), match (&p.pod) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("precip".into(), match (&p.precip) { Some(v) => serde_json::Number::from_f64(*(v)).map(Value::Number).unwrap_or(Value::Null), None => Value::Null });
+    m.insert("pres".into(), match (&p.pres) { Some(v) => serde_json::Number::from_f64(*(v)).map(Value::Number).unwrap_or(Value::Null), None => Value::Null });
+    m.insert("revision_status".into(), match (&p.revision_status) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("rh".into(), match (&p.rh) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("slp".into(), match (&p.slp) { Some(v) => serde_json::Number::from_f64(*(v)).map(Value::Number).unwrap_or(Value::Null), None => Value::Null });
+    m.insert("snow".into(), match (&p.snow) { Some(v) => serde_json::Number::from_f64(*(v)).map(Value::Number).unwrap_or(Value::Null), None => Value::Null });
+    m.insert("solar_rad".into(), match (&p.solar_rad) { Some(v) => serde_json::Number::from_f64(*(v)).map(Value::Number).unwrap_or(Value::Null), None => Value::Null });
+    m.insert("temp".into(), match (&p.temp) { Some(v) => serde_json::Number::from_f64(*(v)).map(Value::Number).unwrap_or(Value::Null), None => Value::Null });
+    m.insert("timestamp_local".into(), match (&p.timestamp_local) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("timestamp_utc".into(), match (&p.timestamp_utc) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("ts".into(), match (&p.ts) { Some(v) => serde_json::Number::from_f64(*(v)).map(Value::Number).unwrap_or(Value::Null), None => Value::Null });
+    m.insert("uv".into(), match (&p.uv) { Some(v) => serde_json::Number::from_f64(*(v)).map(Value::Number).unwrap_or(Value::Null), None => Value::Null });
+    m.insert("vis".into(), match (&p.vis) { Some(v) => serde_json::Number::from_f64(*(v)).map(Value::Number).unwrap_or(Value::Null), None => Value::Null });
+    m.insert("weather".into(), match (&p.weather) { Some(v) => iface_sub_hourly_historical_weather_data__history_obj_weather__to_json(v), None => Value::Null });
+    m.insert("wind_dir".into(), match (&p.wind_dir) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("wind_gust_spd".into(), match (&p.wind_gust_spd) { Some(v) => serde_json::Number::from_f64(*(v)).map(Value::Number).unwrap_or(Value::Null), None => Value::Null });
+    m.insert("wind_spd".into(), match (&p.wind_spd) { Some(v) => serde_json::Number::from_f64(*(v)).map(Value::Number).unwrap_or(Value::Null), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_sub_hourly_historical_weather_data__history_obj_weather__to_json(p: &iface_sub_hourly_historical_weather_data::HistoryObjWeather) -> Value {
+    let mut m = Map::new();
+    m.insert("code".into(), match (&p.code) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("description".into(), match (&p.description) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("icon".into(), match (&p.icon) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_sub_hourly_historical_weather_data__history_subhourly__to_json(p: &iface_sub_hourly_historical_weather_data::HistorySubhourly) -> Value {
+    let mut m = Map::new();
+    m.insert("city_name".into(), match (&p.city_name) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("country_code".into(), match (&p.country_code) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("data".into(), match (&p.data) { Some(v) => Value::Array((v).iter().map(|v| iface_sub_hourly_historical_weather_data__history_obj__to_json(v)).collect()), None => Value::Null });
+    m.insert("lat".into(), match (&p.lat) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("lon".into(), match (&p.lon) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("sources".into(), match (&p.sources) { Some(v) => Value::Array((v).iter().map(|v| Value::String((v).clone())).collect()), None => Value::Null });
+    m.insert("state_code".into(), match (&p.state_code) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("timezone".into(), match (&p.timezone) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
 }
 
 fn iface_sub_hourly_historical_weather_data__get_history_subhourly_city_city_country_country_params__to_json(p: &iface_sub_hourly_historical_weather_data::GetHistorySubhourlyCityCityCountryCountryParams) -> Value {
@@ -2058,26 +3924,202 @@ fn iface_sub_hourly_historical_weather_data__get_history_subhourly_station_stati
     Value::Object(m)
 }
 
+fn iface_sub_hourly_historical_weather_data__history__from_json(v: &Value) -> Option<iface_sub_hourly_historical_weather_data::History> {
+    let m = v.as_object()?;
+    Some(iface_sub_hourly_historical_weather_data::History {
+        city_name: m.get("city_name").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        country_code: m.get("country_code").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| iface_sub_hourly_historical_weather_data__history_obj__from_json(x)).collect())),
+        lat: m.get("lat").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        lon: m.get("lon").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        sources: m.get("sources").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| (x).as_str().map(|s| s.to_string())).collect())),
+        state_code: m.get("state_code").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        timezone: m.get("timezone").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    })
+}
+
+fn iface_sub_hourly_historical_weather_data__history_obj__from_json(v: &Value) -> Option<iface_sub_hourly_historical_weather_data::HistoryObj> {
+    let m = v.as_object()?;
+    Some(iface_sub_hourly_historical_weather_data::HistoryObj {
+        app_temp: m.get("app_temp").filter(|v| !v.is_null()).and_then(|v| (v).as_f64()),
+        azimuth: m.get("azimuth").filter(|v| !v.is_null()).and_then(|v| (v).as_f64()),
+        clouds: m.get("clouds").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        datetime: m.get("datetime").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        dewpt: m.get("dewpt").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        dhi: m.get("dhi").filter(|v| !v.is_null()).and_then(|v| (v).as_f64()),
+        dni: m.get("dni").filter(|v| !v.is_null()).and_then(|v| (v).as_f64()),
+        elev_angle: m.get("elev_angle").filter(|v| !v.is_null()).and_then(|v| (v).as_f64()),
+        ghi: m.get("ghi").filter(|v| !v.is_null()).and_then(|v| (v).as_f64()),
+        h_angle: m.get("h_angle").filter(|v| !v.is_null()).and_then(|v| (v).as_f64()),
+        pod: m.get("pod").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        precip: m.get("precip").filter(|v| !v.is_null()).and_then(|v| (v).as_f64()),
+        pres: m.get("pres").filter(|v| !v.is_null()).and_then(|v| (v).as_f64()),
+        revision_status: m.get("revision_status").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        rh: m.get("rh").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        slp: m.get("slp").filter(|v| !v.is_null()).and_then(|v| (v).as_f64()),
+        snow: m.get("snow").filter(|v| !v.is_null()).and_then(|v| (v).as_f64()),
+        solar_rad: m.get("solar_rad").filter(|v| !v.is_null()).and_then(|v| (v).as_f64()),
+        temp: m.get("temp").filter(|v| !v.is_null()).and_then(|v| (v).as_f64()),
+        timestamp_local: m.get("timestamp_local").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        timestamp_utc: m.get("timestamp_utc").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        ts: m.get("ts").filter(|v| !v.is_null()).and_then(|v| (v).as_f64()),
+        uv: m.get("uv").filter(|v| !v.is_null()).and_then(|v| (v).as_f64()),
+        vis: m.get("vis").filter(|v| !v.is_null()).and_then(|v| (v).as_f64()),
+        weather: m.get("weather").filter(|v| !v.is_null()).and_then(|v| iface_sub_hourly_historical_weather_data__history_obj_weather__from_json(v)),
+        wind_dir: m.get("wind_dir").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        wind_gust_spd: m.get("wind_gust_spd").filter(|v| !v.is_null()).and_then(|v| (v).as_f64()),
+        wind_spd: m.get("wind_spd").filter(|v| !v.is_null()).and_then(|v| (v).as_f64()),
+    })
+}
+
+fn iface_sub_hourly_historical_weather_data__history_obj_weather__from_json(v: &Value) -> Option<iface_sub_hourly_historical_weather_data::HistoryObjWeather> {
+    let m = v.as_object()?;
+    Some(iface_sub_hourly_historical_weather_data::HistoryObjWeather {
+        code: m.get("code").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        description: m.get("description").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        icon: m.get("icon").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    })
+}
+
+fn iface_sub_hourly_historical_weather_data__history_subhourly__from_json(v: &Value) -> Option<iface_sub_hourly_historical_weather_data::HistorySubhourly> {
+    let m = v.as_object()?;
+    Some(iface_sub_hourly_historical_weather_data::HistorySubhourly {
+        city_name: m.get("city_name").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        country_code: m.get("country_code").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| iface_sub_hourly_historical_weather_data__history_obj__from_json(x)).collect())),
+        lat: m.get("lat").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        lon: m.get("lon").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        sources: m.get("sources").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| (x).as_str().map(|s| s.to_string())).collect())),
+        state_code: m.get("state_code").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        timezone: m.get("timezone").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    })
+}
+
+fn iface_sub_hourly_historical_weather_data__get_history_subhourly_city_city_country_country__ok(body: String) -> Result<iface_sub_hourly_historical_weather_data::History, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match iface_sub_hourly_historical_weather_data__history__from_json(&v) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_sub_hourly_historical_weather_data__get_history_subhourly_city_city_country_country__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
+fn iface_sub_hourly_historical_weather_data__get_history_subhourly_city_id_city_id__ok(body: String) -> Result<iface_sub_hourly_historical_weather_data::HistorySubhourly, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match iface_sub_hourly_historical_weather_data__history_subhourly__from_json(&v) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_sub_hourly_historical_weather_data__get_history_subhourly_city_id_city_id__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
+fn iface_sub_hourly_historical_weather_data__get_history_subhourly_lat_lat_lon_lon__ok(body: String) -> Result<iface_sub_hourly_historical_weather_data::HistorySubhourly, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match iface_sub_hourly_historical_weather_data__history_subhourly__from_json(&v) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_sub_hourly_historical_weather_data__get_history_subhourly_lat_lat_lon_lon__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
+fn iface_sub_hourly_historical_weather_data__get_history_subhourly_postal_code_postal_code__ok(body: String) -> Result<iface_sub_hourly_historical_weather_data::HistorySubhourly, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match iface_sub_hourly_historical_weather_data__history_subhourly__from_json(&v) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_sub_hourly_historical_weather_data__get_history_subhourly_postal_code_postal_code__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
+fn iface_sub_hourly_historical_weather_data__get_history_subhourly_station_station__ok(body: String) -> Result<iface_sub_hourly_historical_weather_data::HistorySubhourly, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match iface_sub_hourly_historical_weather_data__history_subhourly__from_json(&v) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_sub_hourly_historical_weather_data__get_history_subhourly_station_station__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
 impl iface_sub_hourly_historical_weather_data::Guest for crate::Component {
-    fn get_history_subhourly_city_city_country_country(params: iface_sub_hourly_historical_weather_data::GetHistorySubhourlyCityCityCountryCountryParams) -> Result<String, String> {
+    fn get_history_subhourly_city_city_country_country(params: iface_sub_hourly_historical_weather_data::GetHistorySubhourlyCityCityCountryCountryParams) -> Result<iface_sub_hourly_historical_weather_data::History, String> {
         let json = iface_sub_hourly_historical_weather_data__get_history_subhourly_city_city_country_country_params__to_json(&params);
-        dispatch(&OP_SUB_HOURLY_HISTORICAL_WEATHER_DATA_GET_HISTORY_SUBHOURLY_CITY_CITY_COUNTRY_COUNTRY, json)
+        match dispatch(&OP_SUB_HOURLY_HISTORICAL_WEATHER_DATA_GET_HISTORY_SUBHOURLY_CITY_CITY_COUNTRY_COUNTRY, json).and_then(iface_sub_hourly_historical_weather_data__get_history_subhourly_city_city_country_country__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_sub_hourly_historical_weather_data__get_history_subhourly_city_city_country_country__err(e)),
+        }
     }
-    fn get_history_subhourly_city_id_city_id(params: iface_sub_hourly_historical_weather_data::GetHistorySubhourlyCityIdCityIdParams) -> Result<String, String> {
+    fn get_history_subhourly_city_id_city_id(params: iface_sub_hourly_historical_weather_data::GetHistorySubhourlyCityIdCityIdParams) -> Result<iface_sub_hourly_historical_weather_data::HistorySubhourly, String> {
         let json = iface_sub_hourly_historical_weather_data__get_history_subhourly_city_id_city_id_params__to_json(&params);
-        dispatch(&OP_SUB_HOURLY_HISTORICAL_WEATHER_DATA_GET_HISTORY_SUBHOURLY_CITY_ID_CITY_ID, json)
+        match dispatch(&OP_SUB_HOURLY_HISTORICAL_WEATHER_DATA_GET_HISTORY_SUBHOURLY_CITY_ID_CITY_ID, json).and_then(iface_sub_hourly_historical_weather_data__get_history_subhourly_city_id_city_id__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_sub_hourly_historical_weather_data__get_history_subhourly_city_id_city_id__err(e)),
+        }
     }
-    fn get_history_subhourly_lat_lat_lon_lon(params: iface_sub_hourly_historical_weather_data::GetHistorySubhourlyLatLatLonLonParams) -> Result<String, String> {
+    fn get_history_subhourly_lat_lat_lon_lon(params: iface_sub_hourly_historical_weather_data::GetHistorySubhourlyLatLatLonLonParams) -> Result<iface_sub_hourly_historical_weather_data::HistorySubhourly, String> {
         let json = iface_sub_hourly_historical_weather_data__get_history_subhourly_lat_lat_lon_lon_params__to_json(&params);
-        dispatch(&OP_SUB_HOURLY_HISTORICAL_WEATHER_DATA_GET_HISTORY_SUBHOURLY_LAT_LAT_LON_LON, json)
+        match dispatch(&OP_SUB_HOURLY_HISTORICAL_WEATHER_DATA_GET_HISTORY_SUBHOURLY_LAT_LAT_LON_LON, json).and_then(iface_sub_hourly_historical_weather_data__get_history_subhourly_lat_lat_lon_lon__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_sub_hourly_historical_weather_data__get_history_subhourly_lat_lat_lon_lon__err(e)),
+        }
     }
-    fn get_history_subhourly_postal_code_postal_code(params: iface_sub_hourly_historical_weather_data::GetHistorySubhourlyPostalCodePostalCodeParams) -> Result<String, String> {
+    fn get_history_subhourly_postal_code_postal_code(params: iface_sub_hourly_historical_weather_data::GetHistorySubhourlyPostalCodePostalCodeParams) -> Result<iface_sub_hourly_historical_weather_data::HistorySubhourly, String> {
         let json = iface_sub_hourly_historical_weather_data__get_history_subhourly_postal_code_postal_code_params__to_json(&params);
-        dispatch(&OP_SUB_HOURLY_HISTORICAL_WEATHER_DATA_GET_HISTORY_SUBHOURLY_POSTAL_CODE_POSTAL_CODE, json)
+        match dispatch(&OP_SUB_HOURLY_HISTORICAL_WEATHER_DATA_GET_HISTORY_SUBHOURLY_POSTAL_CODE_POSTAL_CODE, json).and_then(iface_sub_hourly_historical_weather_data__get_history_subhourly_postal_code_postal_code__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_sub_hourly_historical_weather_data__get_history_subhourly_postal_code_postal_code__err(e)),
+        }
     }
-    fn get_history_subhourly_station_station(params: iface_sub_hourly_historical_weather_data::GetHistorySubhourlyStationStationParams) -> Result<String, String> {
+    fn get_history_subhourly_station_station(params: iface_sub_hourly_historical_weather_data::GetHistorySubhourlyStationStationParams) -> Result<iface_sub_hourly_historical_weather_data::HistorySubhourly, String> {
         let json = iface_sub_hourly_historical_weather_data__get_history_subhourly_station_station_params__to_json(&params);
-        dispatch(&OP_SUB_HOURLY_HISTORICAL_WEATHER_DATA_GET_HISTORY_SUBHOURLY_STATION_STATION, json)
+        match dispatch(&OP_SUB_HOURLY_HISTORICAL_WEATHER_DATA_GET_HISTORY_SUBHOURLY_STATION_STATION, json).and_then(iface_sub_hourly_historical_weather_data__get_history_subhourly_station_station__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_sub_hourly_historical_weather_data__get_history_subhourly_station_station__err(e)),
+        }
     }
 }
 

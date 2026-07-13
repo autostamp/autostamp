@@ -44,10 +44,15 @@ pub(crate) enum FieldLocation {
     Body,
 }
 
-/// A single operation parameter: the snake-case key it carries in the params JSON and where
-/// it belongs in the request.
+/// A single operation parameter. `snake` keys the field in the internal params JSON (and, for a
+/// path field, matches the `{snake}` placeholder in the path template); `wire` is the verbatim name
+/// the field takes on the HTTP wire (query key, header name, or body property). The two differ
+/// whenever the source name isn't already snake_case (e.g. `dryRun` → snake `dry_run`, wire
+/// `dryRun`), and let distinct inputs that share a snake key (`DateCreated`, `DateCreated<`) still
+/// travel under their true names.
 pub(crate) struct FieldSpec {
     pub(crate) snake: &'static str,
+    pub(crate) wire: &'static str,
     pub(crate) location: FieldLocation,
 }
 
@@ -71,6 +76,16 @@ pub(crate) struct AuthApply {
     pub(crate) kind: AuthKind,
 }
 
+/// The failure modes of [`dispatch`], kept structured so each generated operation can map them
+/// onto its own typed error: an `Http` failure carries the response status and body (routed to
+/// the matching error-variant case), while a `Transport` failure carries a message for the
+/// catch-all case (a secret lookup, connection, or decode failure that never produced an HTTP
+/// status).
+pub(crate) enum DispatchError {
+    Http { status: u16, body: String },
+    Transport(String),
+}
+
 /// A single API operation: HTTP method, path template (with `{snake}` placeholders), the
 /// parameter fields, and the security schemes to apply.
 pub(crate) struct OpSpec {
@@ -81,8 +96,9 @@ pub(crate) struct OpSpec {
 }
 
 /// Execute `op` with the supplied `params` (a JSON object keyed by snake-case field names)
-/// and return the response body as a string, or an error message.
-pub(crate) fn dispatch(op: &OpSpec, params: Value) -> Result<String, String> {
+/// and return the raw 2xx response body, or a structured [`DispatchError`] the caller maps
+/// onto the operation's typed error.
+pub(crate) fn dispatch(op: &OpSpec, params: Value) -> Result<String, DispatchError> {
     let obj = match &params {
         Value::Object(map) => Some(map),
         _ => None,
@@ -105,10 +121,10 @@ pub(crate) fn dispatch(op: &OpSpec, params: Value) -> Result<String, String> {
                 let placeholder = format!("{{{}}}", field.snake);
                 path = path.replace(&placeholder, &percent_encode(&scalar(value)));
             }
-            FieldLocation::Query => query.push((field.snake.to_string(), scalar(value))),
-            FieldLocation::Header => headers.push((field.snake.to_string(), scalar(value))),
+            FieldLocation::Query => query.push((field.wire.to_string(), scalar(value))),
+            FieldLocation::Header => headers.push((field.wire.to_string(), scalar(value))),
             FieldLocation::Body => {
-                body.insert(field.snake.to_string(), value.clone());
+                body.insert(field.wire.to_string(), value.clone());
             }
         }
     }
@@ -116,7 +132,7 @@ pub(crate) fn dispatch(op: &OpSpec, params: Value) -> Result<String, String> {
     // Apply each resolved security scheme, sourcing its value from wasmcloud:secrets.
     let mut cookies: Vec<String> = Vec::new();
     for apply in op.auth {
-        let secret = fetch_secret(apply.secret_key)?;
+        let secret = fetch_secret(apply.secret_key).map_err(DispatchError::Transport)?;
         match &apply.kind {
             AuthKind::Bearer => headers.push(("authorization".into(), format!("Bearer {secret}"))),
             AuthKind::Basic => {
@@ -177,17 +193,18 @@ fn fetch_secret(key: &str) -> Result<String, String> {
 }
 
 /// Build and send the outgoing request with `wstd`, returning the response body on a 2xx
-/// status. The generated guest exports are synchronous, so the async `wstd` client is driven
-/// to completion on a local reactor via `wstd::runtime::block_on`.
+/// status and a structured [`DispatchError`] otherwise. The generated guest exports are
+/// synchronous, so the async `wstd` client is driven to completion on a local reactor via
+/// `wstd::runtime::block_on`.
 fn perform(
     method: &str,
     path_with_query: &str,
     headers: &[(String, String)],
     body: &[u8],
-) -> Result<String, String> {
+) -> Result<String, DispatchError> {
     let url = join_url(crate::BASE_URL, path_with_query);
     let method = Method::from_bytes(method.as_bytes())
-        .map_err(|err| format!("invalid HTTP method `{method}`: {err}"))?;
+        .map_err(|err| DispatchError::Transport(format!("invalid HTTP method `{method}`: {err}")))?;
 
     let mut builder = Request::builder().method(method).uri(url);
     for (name, value) in headers {
@@ -199,27 +216,29 @@ fn perform(
         } else {
             Body::from(body.to_vec())
         })
-        .map_err(|err| format!("failed to build request: {err}"))?;
+        .map_err(|err| DispatchError::Transport(format!("failed to build request: {err}")))?;
 
     wstd::runtime::block_on(async move {
         let client = Client::new();
         let response = client
             .send(request)
             .await
-            .map_err(|err| format!("request failed: {err:#}"))?;
+            .map_err(|err| DispatchError::Transport(format!("request failed: {err:#}")))?;
 
         let status = response.status().as_u16();
         let mut response_body = response.into_body();
-        let bytes = response_body
-            .contents()
-            .await
-            .map_err(|err| format!("failed to read response body: {err:#}"))?;
+        let bytes = response_body.contents().await.map_err(|err| {
+            DispatchError::Transport(format!("failed to read response body: {err:#}"))
+        })?;
         let body_text = String::from_utf8_lossy(bytes).into_owned();
 
         if (200..300).contains(&status) {
             Ok(body_text)
         } else {
-            Err(format!("HTTP {status}: {body_text}"))
+            Err(DispatchError::Http {
+                status,
+                body: body_text,
+            })
         }
     })
 }
@@ -288,11 +307,41 @@ const OP_ACCIDENT_STATS_GET: OpSpec = OpSpec {
     method: "GET",
     path_template: "/AccidentStats/{year}",
     fields: &[
-        FieldSpec { snake: "year", location: FieldLocation::Path },
+        FieldSpec { snake: "year", wire: "year", location: FieldLocation::Path },
     ],
     auth: &[
     ],
 };
+
+fn iface_accident_stats__tfl_api_presentation_entities_accident_stats_accident_detail__to_json(p: &iface_accident_stats::TflApiPresentationEntitiesAccidentStatsAccidentDetail) -> Value {
+    let mut m = Map::new();
+    m.insert("borough".into(), match (&p.borough) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("casualties".into(), match (&p.casualties) { Some(v) => Value::Array((v).iter().map(|v| iface_accident_stats__tfl_api_presentation_entities_accident_stats_casualty__to_json(v)).collect()), None => Value::Null });
+    m.insert("date".into(), match (&p.date) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("id".into(), match (&p.id) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("lat".into(), match (&p.lat) { Some(v) => serde_json::Number::from_f64(*(v)).map(Value::Number).unwrap_or(Value::Null), None => Value::Null });
+    m.insert("location".into(), match (&p.location) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("lon".into(), match (&p.lon) { Some(v) => serde_json::Number::from_f64(*(v)).map(Value::Number).unwrap_or(Value::Null), None => Value::Null });
+    m.insert("severity".into(), match (&p.severity) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("vehicles".into(), match (&p.vehicles) { Some(v) => Value::Array((v).iter().map(|v| iface_accident_stats__tfl_api_presentation_entities_accident_stats_vehicle__to_json(v)).collect()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_accident_stats__tfl_api_presentation_entities_accident_stats_casualty__to_json(p: &iface_accident_stats::TflApiPresentationEntitiesAccidentStatsCasualty) -> Value {
+    let mut m = Map::new();
+    m.insert("age".into(), match (&p.age) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("ageBand".into(), match (&p.age_band) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("class".into(), match (&p.class) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("mode".into(), match (&p.mode) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("severity".into(), match (&p.severity) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_accident_stats__tfl_api_presentation_entities_accident_stats_vehicle__to_json(p: &iface_accident_stats::TflApiPresentationEntitiesAccidentStatsVehicle) -> Value {
+    let mut m = Map::new();
+    m.insert("type".into(), match (&p.type_op) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
 
 fn iface_accident_stats__get_params__to_json(p: &iface_accident_stats::GetParams) -> Value {
     let mut m = Map::new();
@@ -300,10 +349,64 @@ fn iface_accident_stats__get_params__to_json(p: &iface_accident_stats::GetParams
     Value::Object(m)
 }
 
+fn iface_accident_stats__tfl_api_presentation_entities_accident_stats_accident_detail__from_json(v: &Value) -> Option<iface_accident_stats::TflApiPresentationEntitiesAccidentStatsAccidentDetail> {
+    let m = v.as_object()?;
+    Some(iface_accident_stats::TflApiPresentationEntitiesAccidentStatsAccidentDetail {
+        borough: m.get("borough").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        casualties: m.get("casualties").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| iface_accident_stats__tfl_api_presentation_entities_accident_stats_casualty__from_json(x)).collect())),
+        date: m.get("date").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        id: m.get("id").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        lat: m.get("lat").filter(|v| !v.is_null()).and_then(|v| (v).as_f64()),
+        location: m.get("location").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        lon: m.get("lon").filter(|v| !v.is_null()).and_then(|v| (v).as_f64()),
+        severity: m.get("severity").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        vehicles: m.get("vehicles").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| iface_accident_stats__tfl_api_presentation_entities_accident_stats_vehicle__from_json(x)).collect())),
+    })
+}
+
+fn iface_accident_stats__tfl_api_presentation_entities_accident_stats_casualty__from_json(v: &Value) -> Option<iface_accident_stats::TflApiPresentationEntitiesAccidentStatsCasualty> {
+    let m = v.as_object()?;
+    Some(iface_accident_stats::TflApiPresentationEntitiesAccidentStatsCasualty {
+        age: m.get("age").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        age_band: m.get("ageBand").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        class: m.get("class").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        mode: m.get("mode").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        severity: m.get("severity").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    })
+}
+
+fn iface_accident_stats__tfl_api_presentation_entities_accident_stats_vehicle__from_json(v: &Value) -> Option<iface_accident_stats::TflApiPresentationEntitiesAccidentStatsVehicle> {
+    let m = v.as_object()?;
+    Some(iface_accident_stats::TflApiPresentationEntitiesAccidentStatsVehicle {
+        type_op: m.get("type").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    })
+}
+
+fn iface_accident_stats__get__ok(body: String) -> Result<Vec<iface_accident_stats::TflApiPresentationEntitiesAccidentStatsAccidentDetail>, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match (&v).as_array().map(|a| a.iter().filter_map(|x| iface_accident_stats__tfl_api_presentation_entities_accident_stats_accident_detail__from_json(x)).collect()) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_accident_stats__get__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
 impl iface_accident_stats::Guest for crate::Component {
-    fn get(params: iface_accident_stats::GetParams) -> Result<String, String> {
+    fn get(params: iface_accident_stats::GetParams) -> Result<Vec<iface_accident_stats::TflApiPresentationEntitiesAccidentStatsAccidentDetail>, String> {
         let json = iface_accident_stats__get_params__to_json(&params);
-        dispatch(&OP_ACCIDENT_STATS_GET, json)
+        match dispatch(&OP_ACCIDENT_STATS_GET, json).and_then(iface_accident_stats__get__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_accident_stats__get__err(e)),
+        }
     }
 }
 use crate::exports::autostamp::tfl::air_quality as iface_air_quality;
@@ -317,9 +420,43 @@ const OP_AIR_QUALITY_GET: OpSpec = OpSpec {
     ],
 };
 
+fn iface_air_quality__system_object__to_json(p: &iface_air_quality::SystemObject) -> Value {
+    let mut m = Map::new();
+    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_air_quality__system_object__from_json(v: &Value) -> Option<iface_air_quality::SystemObject> {
+    let m = v.as_object()?;
+    Some(iface_air_quality::SystemObject {
+        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    })
+}
+
+fn iface_air_quality__get__ok(body: String) -> Result<iface_air_quality::SystemObject, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match iface_air_quality__system_object__from_json(&v) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_air_quality__get__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
 impl iface_air_quality::Guest for crate::Component {
-    fn get() -> Result<String, String> {
-        dispatch(&OP_AIR_QUALITY_GET, Value::Object(Map::new()))
+    fn get() -> Result<iface_air_quality::SystemObject, String> {
+        match dispatch(&OP_AIR_QUALITY_GET, Value::Object(Map::new())).and_then(iface_air_quality__get__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_air_quality__get__err(e)),
+        }
     }
 }
 use crate::exports::autostamp::tfl::bike_point as iface_bike_point;
@@ -337,7 +474,7 @@ const OP_BIKE_POINT_SEARCH: OpSpec = OpSpec {
     method: "GET",
     path_template: "/BikePoint/Search",
     fields: &[
-        FieldSpec { snake: "query", location: FieldLocation::Query },
+        FieldSpec { snake: "query", wire: "query", location: FieldLocation::Query },
     ],
     auth: &[
     ],
@@ -347,11 +484,36 @@ const OP_BIKE_POINT_GET: OpSpec = OpSpec {
     method: "GET",
     path_template: "/BikePoint/{id}",
     fields: &[
-        FieldSpec { snake: "id", location: FieldLocation::Path },
+        FieldSpec { snake: "id", wire: "id", location: FieldLocation::Path },
     ],
     auth: &[
     ],
 };
+
+fn iface_bike_point__tfl_api_presentation_entities_place__to_json(p: &iface_bike_point::TflApiPresentationEntitiesPlace) -> Value {
+    let mut m = Map::new();
+    m.insert("additionalProperties".into(), match (&p.additional_properties) { Some(v) => Value::Array((v).iter().map(|v| iface_bike_point__tfl_api_presentation_entities_additional_properties__to_json(v)).collect()), None => Value::Null });
+    m.insert("children".into(), match (&p.children) { Some(v) => Value::Array((v).iter().map(|v| Value::String((v).clone())).collect()), None => Value::Null });
+    m.insert("childrenUrls".into(), match (&p.children_urls) { Some(v) => Value::Array((v).iter().map(|v| Value::String((v).clone())).collect()), None => Value::Null });
+    m.insert("commonName".into(), match (&p.common_name) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("distance".into(), match (&p.distance) { Some(v) => serde_json::Number::from_f64(*(v)).map(Value::Number).unwrap_or(Value::Null), None => Value::Null });
+    m.insert("id".into(), match (&p.id) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("lat".into(), match (&p.lat) { Some(v) => serde_json::Number::from_f64(*(v)).map(Value::Number).unwrap_or(Value::Null), None => Value::Null });
+    m.insert("lon".into(), match (&p.lon) { Some(v) => serde_json::Number::from_f64(*(v)).map(Value::Number).unwrap_or(Value::Null), None => Value::Null });
+    m.insert("placeType".into(), match (&p.place_type) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("url".into(), match (&p.url) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_bike_point__tfl_api_presentation_entities_additional_properties__to_json(p: &iface_bike_point::TflApiPresentationEntitiesAdditionalProperties) -> Value {
+    let mut m = Map::new();
+    m.insert("category".into(), match (&p.category) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("key".into(), match (&p.key) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("modified".into(), match (&p.modified) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("sourceSystemKey".into(), match (&p.source_system_key) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("value".into(), match (&p.value) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
 
 fn iface_bike_point__search_params__to_json(p: &iface_bike_point::SearchParams) -> Value {
     let mut m = Map::new();
@@ -365,17 +527,107 @@ fn iface_bike_point__get_params__to_json(p: &iface_bike_point::GetParams) -> Val
     Value::Object(m)
 }
 
+fn iface_bike_point__tfl_api_presentation_entities_place__from_json(v: &Value) -> Option<iface_bike_point::TflApiPresentationEntitiesPlace> {
+    let m = v.as_object()?;
+    Some(iface_bike_point::TflApiPresentationEntitiesPlace {
+        additional_properties: m.get("additionalProperties").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| iface_bike_point__tfl_api_presentation_entities_additional_properties__from_json(x)).collect())),
+        children: m.get("children").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| (x).as_str().map(|s| s.to_string())).collect())),
+        children_urls: m.get("childrenUrls").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| (x).as_str().map(|s| s.to_string())).collect())),
+        common_name: m.get("commonName").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        distance: m.get("distance").filter(|v| !v.is_null()).and_then(|v| (v).as_f64()),
+        id: m.get("id").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        lat: m.get("lat").filter(|v| !v.is_null()).and_then(|v| (v).as_f64()),
+        lon: m.get("lon").filter(|v| !v.is_null()).and_then(|v| (v).as_f64()),
+        place_type: m.get("placeType").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        url: m.get("url").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    })
+}
+
+fn iface_bike_point__tfl_api_presentation_entities_additional_properties__from_json(v: &Value) -> Option<iface_bike_point::TflApiPresentationEntitiesAdditionalProperties> {
+    let m = v.as_object()?;
+    Some(iface_bike_point::TflApiPresentationEntitiesAdditionalProperties {
+        category: m.get("category").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        key: m.get("key").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        modified: m.get("modified").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        source_system_key: m.get("sourceSystemKey").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        value: m.get("value").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    })
+}
+
+fn iface_bike_point__get_all__ok(body: String) -> Result<Vec<iface_bike_point::TflApiPresentationEntitiesPlace>, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match (&v).as_array().map(|a| a.iter().filter_map(|x| iface_bike_point__tfl_api_presentation_entities_place__from_json(x)).collect()) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_bike_point__get_all__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
+fn iface_bike_point__search__ok(body: String) -> Result<Vec<iface_bike_point::TflApiPresentationEntitiesPlace>, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match (&v).as_array().map(|a| a.iter().filter_map(|x| iface_bike_point__tfl_api_presentation_entities_place__from_json(x)).collect()) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_bike_point__search__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
+fn iface_bike_point__get__ok(body: String) -> Result<iface_bike_point::TflApiPresentationEntitiesPlace, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match iface_bike_point__tfl_api_presentation_entities_place__from_json(&v) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_bike_point__get__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
 impl iface_bike_point::Guest for crate::Component {
-    fn get_all() -> Result<String, String> {
-        dispatch(&OP_BIKE_POINT_GET_ALL, Value::Object(Map::new()))
+    fn get_all() -> Result<Vec<iface_bike_point::TflApiPresentationEntitiesPlace>, String> {
+        match dispatch(&OP_BIKE_POINT_GET_ALL, Value::Object(Map::new())).and_then(iface_bike_point__get_all__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_bike_point__get_all__err(e)),
+        }
     }
-    fn search(params: iface_bike_point::SearchParams) -> Result<String, String> {
+    fn search(params: iface_bike_point::SearchParams) -> Result<Vec<iface_bike_point::TflApiPresentationEntitiesPlace>, String> {
         let json = iface_bike_point__search_params__to_json(&params);
-        dispatch(&OP_BIKE_POINT_SEARCH, json)
+        match dispatch(&OP_BIKE_POINT_SEARCH, json).and_then(iface_bike_point__search__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_bike_point__search__err(e)),
+        }
     }
-    fn get(params: iface_bike_point::GetParams) -> Result<String, String> {
+    fn get(params: iface_bike_point::GetParams) -> Result<iface_bike_point::TflApiPresentationEntitiesPlace, String> {
         let json = iface_bike_point__get_params__to_json(&params);
-        dispatch(&OP_BIKE_POINT_GET, json)
+        match dispatch(&OP_BIKE_POINT_GET, json).and_then(iface_bike_point__get__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_bike_point__get__err(e)),
+        }
     }
 }
 use crate::exports::autostamp::tfl::cabwise as iface_cabwise;
@@ -384,20 +636,26 @@ const OP_CABWISE_GET: OpSpec = OpSpec {
     method: "GET",
     path_template: "/Cabwise/search",
     fields: &[
-        FieldSpec { snake: "lat", location: FieldLocation::Query },
-        FieldSpec { snake: "lon", location: FieldLocation::Query },
-        FieldSpec { snake: "optype", location: FieldLocation::Query },
-        FieldSpec { snake: "wc", location: FieldLocation::Query },
-        FieldSpec { snake: "radius", location: FieldLocation::Query },
-        FieldSpec { snake: "name", location: FieldLocation::Query },
-        FieldSpec { snake: "max_results", location: FieldLocation::Query },
-        FieldSpec { snake: "legacy_format", location: FieldLocation::Query },
-        FieldSpec { snake: "force_xml", location: FieldLocation::Query },
-        FieldSpec { snake: "twenty_four_seven_only", location: FieldLocation::Query },
+        FieldSpec { snake: "lat", wire: "lat", location: FieldLocation::Query },
+        FieldSpec { snake: "lon", wire: "lon", location: FieldLocation::Query },
+        FieldSpec { snake: "optype", wire: "optype", location: FieldLocation::Query },
+        FieldSpec { snake: "wc", wire: "wc", location: FieldLocation::Query },
+        FieldSpec { snake: "radius", wire: "radius", location: FieldLocation::Query },
+        FieldSpec { snake: "name", wire: "name", location: FieldLocation::Query },
+        FieldSpec { snake: "max_results", wire: "maxResults", location: FieldLocation::Query },
+        FieldSpec { snake: "legacy_format", wire: "legacyFormat", location: FieldLocation::Query },
+        FieldSpec { snake: "force_xml", wire: "forceXml", location: FieldLocation::Query },
+        FieldSpec { snake: "twenty_four_seven_only", wire: "twentyFourSevenOnly", location: FieldLocation::Query },
     ],
     auth: &[
     ],
 };
+
+fn iface_cabwise__system_object__to_json(p: &iface_cabwise::SystemObject) -> Value {
+    let mut m = Map::new();
+    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
 
 fn iface_cabwise__get_params__to_json(p: &iface_cabwise::GetParams) -> Value {
     let mut m = Map::new();
@@ -414,10 +672,38 @@ fn iface_cabwise__get_params__to_json(p: &iface_cabwise::GetParams) -> Value {
     Value::Object(m)
 }
 
+fn iface_cabwise__system_object__from_json(v: &Value) -> Option<iface_cabwise::SystemObject> {
+    let m = v.as_object()?;
+    Some(iface_cabwise::SystemObject {
+        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    })
+}
+
+fn iface_cabwise__get__ok(body: String) -> Result<iface_cabwise::SystemObject, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match iface_cabwise__system_object__from_json(&v) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_cabwise__get__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
 impl iface_cabwise::Guest for crate::Component {
-    fn get(params: iface_cabwise::GetParams) -> Result<String, String> {
+    fn get(params: iface_cabwise::GetParams) -> Result<iface_cabwise::SystemObject, String> {
         let json = iface_cabwise__get_params__to_json(&params);
-        dispatch(&OP_CABWISE_GET, json)
+        match dispatch(&OP_CABWISE_GET, json).and_then(iface_cabwise__get__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_cabwise__get__err(e)),
+        }
     }
 }
 use crate::exports::autostamp::tfl::journey as iface_journey;
@@ -426,34 +712,34 @@ const OP_JOURNEY_JOURNEY_RESULTS: OpSpec = OpSpec {
     method: "GET",
     path_template: "/Journey/JourneyResults/{from}/to/{to}",
     fields: &[
-        FieldSpec { snake: "from", location: FieldLocation::Path },
-        FieldSpec { snake: "to", location: FieldLocation::Path },
-        FieldSpec { snake: "via", location: FieldLocation::Query },
-        FieldSpec { snake: "national_search", location: FieldLocation::Query },
-        FieldSpec { snake: "date", location: FieldLocation::Query },
-        FieldSpec { snake: "time", location: FieldLocation::Query },
-        FieldSpec { snake: "time_is", location: FieldLocation::Query },
-        FieldSpec { snake: "journey_preference", location: FieldLocation::Query },
-        FieldSpec { snake: "mode", location: FieldLocation::Query },
-        FieldSpec { snake: "accessibility_preference", location: FieldLocation::Query },
-        FieldSpec { snake: "from_name", location: FieldLocation::Query },
-        FieldSpec { snake: "to_name", location: FieldLocation::Query },
-        FieldSpec { snake: "via_name", location: FieldLocation::Query },
-        FieldSpec { snake: "max_transfer_minutes", location: FieldLocation::Query },
-        FieldSpec { snake: "max_walking_minutes", location: FieldLocation::Query },
-        FieldSpec { snake: "walking_speed", location: FieldLocation::Query },
-        FieldSpec { snake: "cycle_preference", location: FieldLocation::Query },
-        FieldSpec { snake: "adjustment", location: FieldLocation::Query },
-        FieldSpec { snake: "bike_proficiency", location: FieldLocation::Query },
-        FieldSpec { snake: "alternative_cycle", location: FieldLocation::Query },
-        FieldSpec { snake: "alternative_walking", location: FieldLocation::Query },
-        FieldSpec { snake: "apply_html_markup", location: FieldLocation::Query },
-        FieldSpec { snake: "use_multi_modal_call", location: FieldLocation::Query },
-        FieldSpec { snake: "walking_optimization", location: FieldLocation::Query },
-        FieldSpec { snake: "taxi_only_trip", location: FieldLocation::Query },
-        FieldSpec { snake: "route_between_entrances", location: FieldLocation::Query },
-        FieldSpec { snake: "use_real_time_live_arrivals", location: FieldLocation::Query },
-        FieldSpec { snake: "calc_one_direction", location: FieldLocation::Query },
+        FieldSpec { snake: "from", wire: "from", location: FieldLocation::Path },
+        FieldSpec { snake: "to", wire: "to", location: FieldLocation::Path },
+        FieldSpec { snake: "via", wire: "via", location: FieldLocation::Query },
+        FieldSpec { snake: "national_search", wire: "nationalSearch", location: FieldLocation::Query },
+        FieldSpec { snake: "date", wire: "date", location: FieldLocation::Query },
+        FieldSpec { snake: "time", wire: "time", location: FieldLocation::Query },
+        FieldSpec { snake: "time_is", wire: "timeIs", location: FieldLocation::Query },
+        FieldSpec { snake: "journey_preference", wire: "journeyPreference", location: FieldLocation::Query },
+        FieldSpec { snake: "mode", wire: "mode", location: FieldLocation::Query },
+        FieldSpec { snake: "accessibility_preference", wire: "accessibilityPreference", location: FieldLocation::Query },
+        FieldSpec { snake: "from_name", wire: "fromName", location: FieldLocation::Query },
+        FieldSpec { snake: "to_name", wire: "toName", location: FieldLocation::Query },
+        FieldSpec { snake: "via_name", wire: "viaName", location: FieldLocation::Query },
+        FieldSpec { snake: "max_transfer_minutes", wire: "maxTransferMinutes", location: FieldLocation::Query },
+        FieldSpec { snake: "max_walking_minutes", wire: "maxWalkingMinutes", location: FieldLocation::Query },
+        FieldSpec { snake: "walking_speed", wire: "walkingSpeed", location: FieldLocation::Query },
+        FieldSpec { snake: "cycle_preference", wire: "cyclePreference", location: FieldLocation::Query },
+        FieldSpec { snake: "adjustment", wire: "adjustment", location: FieldLocation::Query },
+        FieldSpec { snake: "bike_proficiency", wire: "bikeProficiency", location: FieldLocation::Query },
+        FieldSpec { snake: "alternative_cycle", wire: "alternativeCycle", location: FieldLocation::Query },
+        FieldSpec { snake: "alternative_walking", wire: "alternativeWalking", location: FieldLocation::Query },
+        FieldSpec { snake: "apply_html_markup", wire: "applyHtmlMarkup", location: FieldLocation::Query },
+        FieldSpec { snake: "use_multi_modal_call", wire: "useMultiModalCall", location: FieldLocation::Query },
+        FieldSpec { snake: "walking_optimization", wire: "walkingOptimization", location: FieldLocation::Query },
+        FieldSpec { snake: "taxi_only_trip", wire: "taxiOnlyTrip", location: FieldLocation::Query },
+        FieldSpec { snake: "route_between_entrances", wire: "routeBetweenEntrances", location: FieldLocation::Query },
+        FieldSpec { snake: "use_real_time_live_arrivals", wire: "useRealTimeLiveArrivals", location: FieldLocation::Query },
+        FieldSpec { snake: "calc_one_direction", wire: "calcOneDirection", location: FieldLocation::Query },
     ],
     auth: &[
     ],
@@ -520,6 +806,522 @@ fn iface_journey__journey_results_bike_proficiency_item_enum__to_str(e: &iface_j
     }
 }
 
+fn iface_journey__tfl_api_presentation_entities_identifier_route_type_enum__to_str(e: &iface_journey::TflApiPresentationEntitiesIdentifierRouteTypeEnum) -> &'static str {
+    match e {
+        iface_journey::TflApiPresentationEntitiesIdentifierRouteTypeEnum::Unknown => "Unknown",
+        iface_journey::TflApiPresentationEntitiesIdentifierRouteTypeEnum::All => "All",
+        iface_journey::TflApiPresentationEntitiesIdentifierRouteTypeEnum::CycleSuperhighways => "Cycle Superhighways",
+        iface_journey::TflApiPresentationEntitiesIdentifierRouteTypeEnum::Quietways => "Quietways",
+        iface_journey::TflApiPresentationEntitiesIdentifierRouteTypeEnum::Cycleways => "Cycleways",
+        iface_journey::TflApiPresentationEntitiesIdentifierRouteTypeEnum::MiniHollands => "Mini-Hollands",
+        iface_journey::TflApiPresentationEntitiesIdentifierRouteTypeEnum::CentralLondonGrid => "Central London Grid",
+        iface_journey::TflApiPresentationEntitiesIdentifierRouteTypeEnum::StreetspaceRoute => "Streetspace Route",
+    }
+}
+
+fn iface_journey__tfl_api_presentation_entities_identifier_status_enum__to_str(e: &iface_journey::TflApiPresentationEntitiesIdentifierStatusEnum) -> &'static str {
+    match e {
+        iface_journey::TflApiPresentationEntitiesIdentifierStatusEnum::Unknown => "Unknown",
+        iface_journey::TflApiPresentationEntitiesIdentifierStatusEnum::All => "All",
+        iface_journey::TflApiPresentationEntitiesIdentifierStatusEnum::Open => "Open",
+        iface_journey::TflApiPresentationEntitiesIdentifierStatusEnum::InProgress => "In Progress",
+        iface_journey::TflApiPresentationEntitiesIdentifierStatusEnum::Planned => "Planned",
+        iface_journey::TflApiPresentationEntitiesIdentifierStatusEnum::PlannedSubjectToFeasibilityAndConsultation => "Planned - Subject to feasibility and consultation.",
+        iface_journey::TflApiPresentationEntitiesIdentifierStatusEnum::NotOpen => "Not Open",
+    }
+}
+
+fn iface_journey__tfl_api_presentation_entities_disruption_category_enum__to_str(e: &iface_journey::TflApiPresentationEntitiesDisruptionCategoryEnum) -> &'static str {
+    match e {
+        iface_journey::TflApiPresentationEntitiesDisruptionCategoryEnum::Undefined => "Undefined",
+        iface_journey::TflApiPresentationEntitiesDisruptionCategoryEnum::RealTime => "RealTime",
+        iface_journey::TflApiPresentationEntitiesDisruptionCategoryEnum::PlannedWork => "PlannedWork",
+        iface_journey::TflApiPresentationEntitiesDisruptionCategoryEnum::Information => "Information",
+        iface_journey::TflApiPresentationEntitiesDisruptionCategoryEnum::Event => "Event",
+        iface_journey::TflApiPresentationEntitiesDisruptionCategoryEnum::Crowding => "Crowding",
+        iface_journey::TflApiPresentationEntitiesDisruptionCategoryEnum::StatusAlert => "StatusAlert",
+    }
+}
+
+fn iface_journey__tfl_api_presentation_entities_instruction_step_sky_direction_description_enum__to_str(e: &iface_journey::TflApiPresentationEntitiesInstructionStepSkyDirectionDescriptionEnum) -> &'static str {
+    match e {
+        iface_journey::TflApiPresentationEntitiesInstructionStepSkyDirectionDescriptionEnum::North => "North",
+        iface_journey::TflApiPresentationEntitiesInstructionStepSkyDirectionDescriptionEnum::NorthEast => "NorthEast",
+        iface_journey::TflApiPresentationEntitiesInstructionStepSkyDirectionDescriptionEnum::East => "East",
+        iface_journey::TflApiPresentationEntitiesInstructionStepSkyDirectionDescriptionEnum::SouthEast => "SouthEast",
+        iface_journey::TflApiPresentationEntitiesInstructionStepSkyDirectionDescriptionEnum::South => "South",
+        iface_journey::TflApiPresentationEntitiesInstructionStepSkyDirectionDescriptionEnum::SouthWest => "SouthWest",
+        iface_journey::TflApiPresentationEntitiesInstructionStepSkyDirectionDescriptionEnum::West => "West",
+        iface_journey::TflApiPresentationEntitiesInstructionStepSkyDirectionDescriptionEnum::NorthWest => "NorthWest",
+    }
+}
+
+fn iface_journey__tfl_api_presentation_entities_instruction_step_track_type_enum__to_str(e: &iface_journey::TflApiPresentationEntitiesInstructionStepTrackTypeEnum) -> &'static str {
+    match e {
+        iface_journey::TflApiPresentationEntitiesInstructionStepTrackTypeEnum::CycleSuperHighway => "CycleSuperHighway",
+        iface_journey::TflApiPresentationEntitiesInstructionStepTrackTypeEnum::CanalTowpath => "CanalTowpath",
+        iface_journey::TflApiPresentationEntitiesInstructionStepTrackTypeEnum::QuietRoad => "QuietRoad",
+        iface_journey::TflApiPresentationEntitiesInstructionStepTrackTypeEnum::ProvisionForCyclists => "ProvisionForCyclists",
+        iface_journey::TflApiPresentationEntitiesInstructionStepTrackTypeEnum::BusyRoads => "BusyRoads",
+        iface_journey::TflApiPresentationEntitiesInstructionStepTrackTypeEnum::None => "None",
+        iface_journey::TflApiPresentationEntitiesInstructionStepTrackTypeEnum::PushBike => "PushBike",
+        iface_journey::TflApiPresentationEntitiesInstructionStepTrackTypeEnum::Quietway => "Quietway",
+    }
+}
+
+fn iface_journey__tfl_api_presentation_entities_journey_planner_itinerary_result__to_json(p: &iface_journey::TflApiPresentationEntitiesJourneyPlannerItineraryResult) -> Value {
+    let mut m = Map::new();
+    m.insert("cycleHireDockingStationData".into(), match (&p.cycle_hire_docking_station_data) { Some(v) => iface_journey__tfl_api_presentation_entities_journey_planner_journey_planner_cycle_hire_docking_station_data__to_json(v), None => Value::Null });
+    m.insert("journeyVector".into(), match (&p.journey_vector) { Some(v) => iface_journey__tfl_api_presentation_entities_journey_planner_journey_vector__to_json(v), None => Value::Null });
+    m.insert("journeys".into(), match (&p.journeys) { Some(v) => Value::Array((v).iter().map(|v| iface_journey__tfl_api_presentation_entities_journey_planner_journey__to_json(v)).collect()), None => Value::Null });
+    m.insert("lines".into(), match (&p.lines) { Some(v) => Value::Array((v).iter().map(|v| iface_journey__tfl_api_presentation_entities_line__to_json(v)).collect()), None => Value::Null });
+    m.insert("recommendedMaxAgeMinutes".into(), match (&p.recommended_max_age_minutes) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("searchCriteria".into(), match (&p.search_criteria) { Some(v) => iface_journey__tfl_api_presentation_entities_journey_planner_search_criteria__to_json(v), None => Value::Null });
+    m.insert("stopMessages".into(), match (&p.stop_messages) { Some(v) => Value::Array((v).iter().map(|v| Value::String((v).clone())).collect()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_journey__tfl_api_presentation_entities_journey_planner_journey_planner_cycle_hire_docking_station_data__to_json(p: &iface_journey::TflApiPresentationEntitiesJourneyPlannerJourneyPlannerCycleHireDockingStationData) -> Value {
+    let mut m = Map::new();
+    m.insert("destinationId".into(), match (&p.destination_id) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("destinationNumberOfBikes".into(), match (&p.destination_number_of_bikes) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("destinationNumberOfEmptySlots".into(), match (&p.destination_number_of_empty_slots) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("originId".into(), match (&p.origin_id) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("originNumberOfBikes".into(), match (&p.origin_number_of_bikes) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("originNumberOfEmptySlots".into(), match (&p.origin_number_of_empty_slots) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_journey__tfl_api_presentation_entities_journey_planner_journey_vector__to_json(p: &iface_journey::TflApiPresentationEntitiesJourneyPlannerJourneyVector) -> Value {
+    let mut m = Map::new();
+    m.insert("from".into(), match (&p.from_op) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("to".into(), match (&p.to) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("uri".into(), match (&p.uri) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("via".into(), match (&p.via) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_journey__tfl_api_presentation_entities_journey_planner_journey__to_json(p: &iface_journey::TflApiPresentationEntitiesJourneyPlannerJourney) -> Value {
+    let mut m = Map::new();
+    m.insert("arrivalDateTime".into(), match (&p.arrival_date_time) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("duration".into(), match (&p.duration) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("fare".into(), match (&p.fare) { Some(v) => iface_journey__tfl_api_presentation_entities_journey_planner_journey_fare__to_json(v), None => Value::Null });
+    m.insert("legs".into(), match (&p.legs) { Some(v) => Value::Array((v).iter().map(|v| iface_journey__tfl_api_presentation_entities_journey_planner_leg__to_json(v)).collect()), None => Value::Null });
+    m.insert("startDateTime".into(), match (&p.start_date_time) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_journey__tfl_api_presentation_entities_journey_planner_journey_fare__to_json(p: &iface_journey::TflApiPresentationEntitiesJourneyPlannerJourneyFare) -> Value {
+    let mut m = Map::new();
+    m.insert("caveats".into(), match (&p.caveats) { Some(v) => Value::Array((v).iter().map(|v| iface_journey__tfl_api_presentation_entities_journey_planner_fare_caveat__to_json(v)).collect()), None => Value::Null });
+    m.insert("fares".into(), match (&p.fares) { Some(v) => Value::Array((v).iter().map(|v| iface_journey__tfl_api_presentation_entities_journey_planner_fare__to_json(v)).collect()), None => Value::Null });
+    m.insert("totalCost".into(), match (&p.total_cost) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_journey__tfl_api_presentation_entities_journey_planner_fare_caveat__to_json(p: &iface_journey::TflApiPresentationEntitiesJourneyPlannerFareCaveat) -> Value {
+    let mut m = Map::new();
+    m.insert("text".into(), match (&p.text) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("type".into(), match (&p.type_op) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_journey__tfl_api_presentation_entities_journey_planner_fare__to_json(p: &iface_journey::TflApiPresentationEntitiesJourneyPlannerFare) -> Value {
+    let mut m = Map::new();
+    m.insert("chargeLevel".into(), match (&p.charge_level) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("chargeProfileName".into(), match (&p.charge_profile_name) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("cost".into(), match (&p.cost) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("highZone".into(), match (&p.high_zone) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("isHopperFare".into(), match (&p.is_hopper_fare) { Some(v) => Value::Bool(*(v)), None => Value::Null });
+    m.insert("lowZone".into(), match (&p.low_zone) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("offPeak".into(), match (&p.off_peak) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("peak".into(), match (&p.peak) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("taps".into(), match (&p.taps) { Some(v) => Value::Array((v).iter().map(|v| iface_journey__tfl_api_presentation_entities_journey_planner_fare_tap__to_json(v)).collect()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_journey__tfl_api_presentation_entities_journey_planner_fare_tap__to_json(p: &iface_journey::TflApiPresentationEntitiesJourneyPlannerFareTap) -> Value {
+    let mut m = Map::new();
+    m.insert("atcoCode".into(), match (&p.atco_code) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("tapDetails".into(), match (&p.tap_details) { Some(v) => iface_journey__tfl_api_presentation_entities_journey_planner_fare_tap_details__to_json(v), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_journey__tfl_api_presentation_entities_journey_planner_fare_tap_details__to_json(p: &iface_journey::TflApiPresentationEntitiesJourneyPlannerFareTapDetails) -> Value {
+    let mut m = Map::new();
+    m.insert("busRouteId".into(), match (&p.bus_route_id) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("hostDeviceType".into(), match (&p.host_device_type) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("modeType".into(), match (&p.mode_type) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("nationalLocationCode".into(), match (&p.national_location_code) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("tapTimestamp".into(), match (&p.tap_timestamp) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("validationType".into(), match (&p.validation_type) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_journey__tfl_api_presentation_entities_journey_planner_leg__to_json(p: &iface_journey::TflApiPresentationEntitiesJourneyPlannerLeg) -> Value {
+    let mut m = Map::new();
+    m.insert("arrivalPoint".into(), match (&p.arrival_point) { Some(v) => iface_journey__tfl_api_presentation_entities_point__to_json(v), None => Value::Null });
+    m.insert("arrivalTime".into(), match (&p.arrival_time) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("departurePoint".into(), match (&p.departure_point) { Some(v) => iface_journey__tfl_api_presentation_entities_point__to_json(v), None => Value::Null });
+    m.insert("departureTime".into(), match (&p.departure_time) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("disruptions".into(), match (&p.disruptions) { Some(v) => Value::Array((v).iter().map(|v| iface_journey__tfl_api_presentation_entities_disruption__to_json(v)).collect()), None => Value::Null });
+    m.insert("distance".into(), match (&p.distance) { Some(v) => serde_json::Number::from_f64(*(v)).map(Value::Number).unwrap_or(Value::Null), None => Value::Null });
+    m.insert("duration".into(), match (&p.duration) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("hasFixedLocations".into(), match (&p.has_fixed_locations) { Some(v) => Value::Bool(*(v)), None => Value::Null });
+    m.insert("instruction".into(), match (&p.instruction) { Some(v) => iface_journey__tfl_api_presentation_entities_instruction__to_json(v), None => Value::Null });
+    m.insert("interChangeDuration".into(), match (&p.inter_change_duration) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("interChangePosition".into(), match (&p.inter_change_position) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("isDisrupted".into(), match (&p.is_disrupted) { Some(v) => Value::Bool(*(v)), None => Value::Null });
+    m.insert("mode".into(), match (&p.mode) { Some(v) => iface_journey__tfl_api_presentation_entities_identifier__to_json(v), None => Value::Null });
+    m.insert("obstacles".into(), match (&p.obstacles) { Some(v) => Value::Array((v).iter().map(|v| iface_journey__tfl_api_presentation_entities_journey_planner_obstacle__to_json(v)).collect()), None => Value::Null });
+    m.insert("path".into(), match (&p.path) { Some(v) => iface_journey__tfl_api_presentation_entities_journey_planner_path__to_json(v), None => Value::Null });
+    m.insert("plannedWorks".into(), match (&p.planned_works) { Some(v) => Value::Array((v).iter().map(|v| iface_journey__tfl_api_presentation_entities_journey_planner_planned_work__to_json(v)).collect()), None => Value::Null });
+    m.insert("routeOptions".into(), match (&p.route_options) { Some(v) => Value::Array((v).iter().map(|v| iface_journey__tfl_api_presentation_entities_journey_planner_route_option__to_json(v)).collect()), None => Value::Null });
+    m.insert("scheduledArrivalTime".into(), match (&p.scheduled_arrival_time) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("scheduledDepartureTime".into(), match (&p.scheduled_departure_time) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("speed".into(), match (&p.speed) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_journey__tfl_api_presentation_entities_point__to_json(p: &iface_journey::TflApiPresentationEntitiesPoint) -> Value {
+    let mut m = Map::new();
+    m.insert("lat".into(), match (&p.lat) { Some(v) => serde_json::Number::from_f64(*(v)).map(Value::Number).unwrap_or(Value::Null), None => Value::Null });
+    m.insert("lon".into(), match (&p.lon) { Some(v) => serde_json::Number::from_f64(*(v)).map(Value::Number).unwrap_or(Value::Null), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_journey__tfl_api_presentation_entities_disruption__to_json(p: &iface_journey::TflApiPresentationEntitiesDisruption) -> Value {
+    let mut m = Map::new();
+    m.insert("additionalInfo".into(), match (&p.additional_info) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("affectedRoutes".into(), match (&p.affected_routes) { Some(v) => Value::Array((v).iter().map(|v| iface_journey__tfl_api_presentation_entities_disrupted_route__to_json(v)).collect()), None => Value::Null });
+    m.insert("affectedStops".into(), match (&p.affected_stops) { Some(v) => Value::Array((v).iter().map(|v| iface_journey__tfl_api_presentation_entities_stop_point__to_json(v)).collect()), None => Value::Null });
+    m.insert("category".into(), match (&p.category) { Some(v) => Value::String(iface_journey__tfl_api_presentation_entities_disruption_category_enum__to_str(v).into()), None => Value::Null });
+    m.insert("categoryDescription".into(), match (&p.category_description) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("closureText".into(), match (&p.closure_text) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("created".into(), match (&p.created) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("description".into(), match (&p.description) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("lastUpdate".into(), match (&p.last_update) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("summary".into(), match (&p.summary) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("type".into(), match (&p.type_op) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_journey__tfl_api_presentation_entities_disrupted_route__to_json(p: &iface_journey::TflApiPresentationEntitiesDisruptedRoute) -> Value {
+    let mut m = Map::new();
+    m.insert("destinationName".into(), match (&p.destination_name) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("direction".into(), match (&p.direction) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("id".into(), match (&p.id) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("isEntireRouteSection".into(), match (&p.is_entire_route_section) { Some(v) => Value::Bool(*(v)), None => Value::Null });
+    m.insert("lineId".into(), match (&p.line_id) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("lineString".into(), match (&p.line_string) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("name".into(), match (&p.name) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("originationName".into(), match (&p.origination_name) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("routeCode".into(), match (&p.route_code) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("routeSectionNaptanEntrySequence".into(), match (&p.route_section_naptan_entry_sequence) { Some(v) => Value::Array((v).iter().map(|v| iface_journey__tfl_api_presentation_entities_route_section_naptan_entry_sequence__to_json(v)).collect()), None => Value::Null });
+    m.insert("validFrom".into(), match (&p.valid_from) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("validTo".into(), match (&p.valid_to) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("via".into(), match (&p.via) { Some(v) => iface_journey__tfl_api_presentation_entities_route_section_naptan_entry_sequence__to_json(v), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_journey__tfl_api_presentation_entities_route_section_naptan_entry_sequence__to_json(p: &iface_journey::TflApiPresentationEntitiesRouteSectionNaptanEntrySequence) -> Value {
+    let mut m = Map::new();
+    m.insert("ordinal".into(), match (&p.ordinal) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("stopPoint".into(), match (&p.stop_point) { Some(v) => iface_journey__tfl_api_presentation_entities_stop_point__to_json(v), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_journey__tfl_api_presentation_entities_stop_point__to_json(p: &iface_journey::TflApiPresentationEntitiesStopPoint) -> Value {
+    let mut m = Map::new();
+    m.insert("accessibilitySummary".into(), match (&p.accessibility_summary) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("additionalProperties".into(), match (&p.additional_properties) { Some(v) => Value::Array((v).iter().map(|v| iface_journey__tfl_api_presentation_entities_additional_properties__to_json(v)).collect()), None => Value::Null });
+    m.insert("children".into(), match (&p.children) { Some(v) => Value::Array((v).iter().map(|v| iface_journey__tfl_api_presentation_entities_place__to_json(v)).collect()), None => Value::Null });
+    m.insert("childrenUrls".into(), match (&p.children_urls) { Some(v) => Value::Array((v).iter().map(|v| Value::String((v).clone())).collect()), None => Value::Null });
+    m.insert("commonName".into(), match (&p.common_name) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("distance".into(), match (&p.distance) { Some(v) => serde_json::Number::from_f64(*(v)).map(Value::Number).unwrap_or(Value::Null), None => Value::Null });
+    m.insert("fullName".into(), match (&p.full_name) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("hubNaptanCode".into(), match (&p.hub_naptan_code) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("icsCode".into(), match (&p.ics_code) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("id".into(), match (&p.id) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("indicator".into(), match (&p.indicator) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("individualStopId".into(), match (&p.individual_stop_id) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("lat".into(), match (&p.lat) { Some(v) => serde_json::Number::from_f64(*(v)).map(Value::Number).unwrap_or(Value::Null), None => Value::Null });
+    m.insert("lineGroup".into(), match (&p.line_group) { Some(v) => Value::Array((v).iter().map(|v| iface_journey__tfl_api_presentation_entities_line_group__to_json(v)).collect()), None => Value::Null });
+    m.insert("lineModeGroups".into(), match (&p.line_mode_groups) { Some(v) => Value::Array((v).iter().map(|v| iface_journey__tfl_api_presentation_entities_line_mode_group__to_json(v)).collect()), None => Value::Null });
+    m.insert("lines".into(), match (&p.lines) { Some(v) => Value::Array((v).iter().map(|v| iface_journey__tfl_api_presentation_entities_identifier__to_json(v)).collect()), None => Value::Null });
+    m.insert("lon".into(), match (&p.lon) { Some(v) => serde_json::Number::from_f64(*(v)).map(Value::Number).unwrap_or(Value::Null), None => Value::Null });
+    m.insert("modes".into(), match (&p.modes) { Some(v) => Value::Array((v).iter().map(|v| Value::String((v).clone())).collect()), None => Value::Null });
+    m.insert("naptanId".into(), match (&p.naptan_id) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("naptanMode".into(), match (&p.naptan_mode) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("placeType".into(), match (&p.place_type) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("platformName".into(), match (&p.platform_name) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("smsCode".into(), match (&p.sms_code) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("stationNaptan".into(), match (&p.station_naptan) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("status".into(), match (&p.status) { Some(v) => Value::Bool(*(v)), None => Value::Null });
+    m.insert("stopLetter".into(), match (&p.stop_letter) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("stopType".into(), match (&p.stop_type) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("url".into(), match (&p.url) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_journey__tfl_api_presentation_entities_additional_properties__to_json(p: &iface_journey::TflApiPresentationEntitiesAdditionalProperties) -> Value {
+    let mut m = Map::new();
+    m.insert("category".into(), match (&p.category) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("key".into(), match (&p.key) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("modified".into(), match (&p.modified) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("sourceSystemKey".into(), match (&p.source_system_key) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("value".into(), match (&p.value) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_journey__tfl_api_presentation_entities_place__to_json(p: &iface_journey::TflApiPresentationEntitiesPlace) -> Value {
+    let mut m = Map::new();
+    m.insert("additionalProperties".into(), match (&p.additional_properties) { Some(v) => Value::Array((v).iter().map(|v| iface_journey__tfl_api_presentation_entities_additional_properties__to_json(v)).collect()), None => Value::Null });
+    m.insert("children".into(), match (&p.children) { Some(v) => Value::Array((v).iter().map(|v| Value::String((v).clone())).collect()), None => Value::Null });
+    m.insert("childrenUrls".into(), match (&p.children_urls) { Some(v) => Value::Array((v).iter().map(|v| Value::String((v).clone())).collect()), None => Value::Null });
+    m.insert("commonName".into(), match (&p.common_name) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("distance".into(), match (&p.distance) { Some(v) => serde_json::Number::from_f64(*(v)).map(Value::Number).unwrap_or(Value::Null), None => Value::Null });
+    m.insert("id".into(), match (&p.id) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("lat".into(), match (&p.lat) { Some(v) => serde_json::Number::from_f64(*(v)).map(Value::Number).unwrap_or(Value::Null), None => Value::Null });
+    m.insert("lon".into(), match (&p.lon) { Some(v) => serde_json::Number::from_f64(*(v)).map(Value::Number).unwrap_or(Value::Null), None => Value::Null });
+    m.insert("placeType".into(), match (&p.place_type) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("url".into(), match (&p.url) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_journey__tfl_api_presentation_entities_line_group__to_json(p: &iface_journey::TflApiPresentationEntitiesLineGroup) -> Value {
+    let mut m = Map::new();
+    m.insert("lineIdentifier".into(), match (&p.line_identifier) { Some(v) => Value::Array((v).iter().map(|v| Value::String((v).clone())).collect()), None => Value::Null });
+    m.insert("naptanIdReference".into(), match (&p.naptan_id_reference) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("stationAtcoCode".into(), match (&p.station_atco_code) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_journey__tfl_api_presentation_entities_line_mode_group__to_json(p: &iface_journey::TflApiPresentationEntitiesLineModeGroup) -> Value {
+    let mut m = Map::new();
+    m.insert("lineIdentifier".into(), match (&p.line_identifier) { Some(v) => Value::Array((v).iter().map(|v| Value::String((v).clone())).collect()), None => Value::Null });
+    m.insert("modeName".into(), match (&p.mode_name) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_journey__tfl_api_presentation_entities_identifier__to_json(p: &iface_journey::TflApiPresentationEntitiesIdentifier) -> Value {
+    let mut m = Map::new();
+    m.insert("crowding".into(), match (&p.crowding) { Some(v) => iface_journey__tfl_api_presentation_entities_crowding__to_json(v), None => Value::Null });
+    m.insert("fullName".into(), match (&p.full_name) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("id".into(), match (&p.id) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("motType".into(), match (&p.mot_type) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("name".into(), match (&p.name) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("network".into(), match (&p.network) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("routeType".into(), match (&p.route_type) { Some(v) => Value::String(iface_journey__tfl_api_presentation_entities_identifier_route_type_enum__to_str(v).into()), None => Value::Null });
+    m.insert("status".into(), match (&p.status) { Some(v) => Value::String(iface_journey__tfl_api_presentation_entities_identifier_status_enum__to_str(v).into()), None => Value::Null });
+    m.insert("type".into(), match (&p.type_op) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("uri".into(), match (&p.uri) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_journey__tfl_api_presentation_entities_crowding__to_json(p: &iface_journey::TflApiPresentationEntitiesCrowding) -> Value {
+    let mut m = Map::new();
+    m.insert("passengerFlows".into(), match (&p.passenger_flows) { Some(v) => Value::Array((v).iter().map(|v| iface_journey__tfl_api_presentation_entities_passenger_flow__to_json(v)).collect()), None => Value::Null });
+    m.insert("trainLoadings".into(), match (&p.train_loadings) { Some(v) => Value::Array((v).iter().map(|v| iface_journey__tfl_api_presentation_entities_train_loading__to_json(v)).collect()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_journey__tfl_api_presentation_entities_passenger_flow__to_json(p: &iface_journey::TflApiPresentationEntitiesPassengerFlow) -> Value {
+    let mut m = Map::new();
+    m.insert("timeSlice".into(), match (&p.time_slice) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("value".into(), match (&p.value) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_journey__tfl_api_presentation_entities_train_loading__to_json(p: &iface_journey::TflApiPresentationEntitiesTrainLoading) -> Value {
+    let mut m = Map::new();
+    m.insert("direction".into(), match (&p.direction) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("line".into(), match (&p.line) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("lineDirection".into(), match (&p.line_direction) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("naptanTo".into(), match (&p.naptan_to) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("platformDirection".into(), match (&p.platform_direction) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("timeSlice".into(), match (&p.time_slice) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("value".into(), match (&p.value) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_journey__tfl_api_presentation_entities_instruction__to_json(p: &iface_journey::TflApiPresentationEntitiesInstruction) -> Value {
+    let mut m = Map::new();
+    m.insert("detailed".into(), match (&p.detailed) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("steps".into(), match (&p.steps) { Some(v) => Value::Array((v).iter().map(|v| iface_journey__tfl_api_presentation_entities_instruction_step__to_json(v)).collect()), None => Value::Null });
+    m.insert("summary".into(), match (&p.summary) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_journey__tfl_api_presentation_entities_instruction_step__to_json(p: &iface_journey::TflApiPresentationEntitiesInstructionStep) -> Value {
+    let mut m = Map::new();
+    m.insert("cumulativeDistance".into(), match (&p.cumulative_distance) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("cumulativeTravelTime".into(), match (&p.cumulative_travel_time) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("description".into(), match (&p.description) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("descriptionHeading".into(), match (&p.description_heading) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("distance".into(), match (&p.distance) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("latitude".into(), match (&p.latitude) { Some(v) => serde_json::Number::from_f64(*(v)).map(Value::Number).unwrap_or(Value::Null), None => Value::Null });
+    m.insert("longitude".into(), match (&p.longitude) { Some(v) => serde_json::Number::from_f64(*(v)).map(Value::Number).unwrap_or(Value::Null), None => Value::Null });
+    m.insert("pathAttribute".into(), match (&p.path_attribute) { Some(v) => iface_journey__tfl_api_presentation_entities_path_attribute__to_json(v), None => Value::Null });
+    m.insert("skyDirection".into(), match (&p.sky_direction) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("skyDirectionDescription".into(), match (&p.sky_direction_description) { Some(v) => Value::String(iface_journey__tfl_api_presentation_entities_instruction_step_sky_direction_description_enum__to_str(v).into()), None => Value::Null });
+    m.insert("streetName".into(), match (&p.street_name) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("trackType".into(), match (&p.track_type) { Some(v) => Value::String(iface_journey__tfl_api_presentation_entities_instruction_step_track_type_enum__to_str(v).into()), None => Value::Null });
+    m.insert("turnDirection".into(), match (&p.turn_direction) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_journey__tfl_api_presentation_entities_path_attribute__to_json(p: &iface_journey::TflApiPresentationEntitiesPathAttribute) -> Value {
+    let mut m = Map::new();
+    m.insert("name".into(), match (&p.name) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("value".into(), match (&p.value) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_journey__tfl_api_presentation_entities_journey_planner_obstacle__to_json(p: &iface_journey::TflApiPresentationEntitiesJourneyPlannerObstacle) -> Value {
+    let mut m = Map::new();
+    m.insert("incline".into(), match (&p.incline) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("position".into(), match (&p.position) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("stopId".into(), match (&p.stop_id) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("type".into(), match (&p.type_op) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_journey__tfl_api_presentation_entities_journey_planner_path__to_json(p: &iface_journey::TflApiPresentationEntitiesJourneyPlannerPath) -> Value {
+    let mut m = Map::new();
+    m.insert("elevation".into(), match (&p.elevation) { Some(v) => Value::Array((v).iter().map(|v| iface_journey__tfl_api_common_journey_planner_jp_elevation__to_json(v)).collect()), None => Value::Null });
+    m.insert("lineString".into(), match (&p.line_string) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("stopPoints".into(), match (&p.stop_points) { Some(v) => Value::Array((v).iter().map(|v| iface_journey__tfl_api_presentation_entities_identifier__to_json(v)).collect()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_journey__tfl_api_common_journey_planner_jp_elevation__to_json(p: &iface_journey::TflApiCommonJourneyPlannerJpElevation) -> Value {
+    let mut m = Map::new();
+    m.insert("distance".into(), match (&p.distance) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("endLat".into(), match (&p.end_lat) { Some(v) => serde_json::Number::from_f64(*(v)).map(Value::Number).unwrap_or(Value::Null), None => Value::Null });
+    m.insert("endLon".into(), match (&p.end_lon) { Some(v) => serde_json::Number::from_f64(*(v)).map(Value::Number).unwrap_or(Value::Null), None => Value::Null });
+    m.insert("gradient".into(), match (&p.gradient) { Some(v) => serde_json::Number::from_f64(*(v)).map(Value::Number).unwrap_or(Value::Null), None => Value::Null });
+    m.insert("heightFromPreviousPoint".into(), match (&p.height_from_previous_point) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("startLat".into(), match (&p.start_lat) { Some(v) => serde_json::Number::from_f64(*(v)).map(Value::Number).unwrap_or(Value::Null), None => Value::Null });
+    m.insert("startLon".into(), match (&p.start_lon) { Some(v) => serde_json::Number::from_f64(*(v)).map(Value::Number).unwrap_or(Value::Null), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_journey__tfl_api_presentation_entities_journey_planner_planned_work__to_json(p: &iface_journey::TflApiPresentationEntitiesJourneyPlannerPlannedWork) -> Value {
+    let mut m = Map::new();
+    m.insert("createdDateTime".into(), match (&p.created_date_time) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("description".into(), match (&p.description) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("id".into(), match (&p.id) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("lastUpdateDateTime".into(), match (&p.last_update_date_time) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_journey__tfl_api_presentation_entities_journey_planner_route_option__to_json(p: &iface_journey::TflApiPresentationEntitiesJourneyPlannerRouteOption) -> Value {
+    let mut m = Map::new();
+    m.insert("direction".into(), match (&p.direction) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("directions".into(), match (&p.directions) { Some(v) => Value::Array((v).iter().map(|v| Value::String((v).clone())).collect()), None => Value::Null });
+    m.insert("id".into(), match (&p.id) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("lineIdentifier".into(), match (&p.line_identifier) { Some(v) => iface_journey__tfl_api_presentation_entities_identifier__to_json(v), None => Value::Null });
+    m.insert("name".into(), match (&p.name) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_journey__tfl_api_presentation_entities_line__to_json(p: &iface_journey::TflApiPresentationEntitiesLine) -> Value {
+    let mut m = Map::new();
+    m.insert("created".into(), match (&p.created) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("crowding".into(), match (&p.crowding) { Some(v) => iface_journey__tfl_api_presentation_entities_crowding__to_json(v), None => Value::Null });
+    m.insert("disruptions".into(), match (&p.disruptions) { Some(v) => Value::Array((v).iter().map(|v| iface_journey__tfl_api_presentation_entities_disruption__to_json(v)).collect()), None => Value::Null });
+    m.insert("id".into(), match (&p.id) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("lineStatuses".into(), match (&p.line_statuses) { Some(v) => Value::Array((v).iter().map(|v| iface_journey__tfl_api_presentation_entities_line_status__to_json(v)).collect()), None => Value::Null });
+    m.insert("modeName".into(), match (&p.mode_name) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("modified".into(), match (&p.modified) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("name".into(), match (&p.name) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("routeSections".into(), match (&p.route_sections) { Some(v) => Value::Array((v).iter().map(|v| iface_journey__tfl_api_presentation_entities_matched_route__to_json(v)).collect()), None => Value::Null });
+    m.insert("serviceTypes".into(), match (&p.service_types) { Some(v) => Value::Array((v).iter().map(|v| iface_journey__tfl_api_presentation_entities_line_service_type_info__to_json(v)).collect()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_journey__tfl_api_presentation_entities_line_status__to_json(p: &iface_journey::TflApiPresentationEntitiesLineStatus) -> Value {
+    let mut m = Map::new();
+    m.insert("created".into(), match (&p.created) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("disruption".into(), match (&p.disruption) { Some(v) => iface_journey__tfl_api_presentation_entities_disruption__to_json(v), None => Value::Null });
+    m.insert("id".into(), match (&p.id) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("lineId".into(), match (&p.line_id) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("modified".into(), match (&p.modified) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("reason".into(), match (&p.reason) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("statusSeverity".into(), match (&p.status_severity) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("statusSeverityDescription".into(), match (&p.status_severity_description) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("validityPeriods".into(), match (&p.validity_periods) { Some(v) => Value::Array((v).iter().map(|v| iface_journey__tfl_api_presentation_entities_validity_period__to_json(v)).collect()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_journey__tfl_api_presentation_entities_validity_period__to_json(p: &iface_journey::TflApiPresentationEntitiesValidityPeriod) -> Value {
+    let mut m = Map::new();
+    m.insert("fromDate".into(), match (&p.from_date) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("isNow".into(), match (&p.is_now) { Some(v) => Value::Bool(*(v)), None => Value::Null });
+    m.insert("toDate".into(), match (&p.to_date) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_journey__tfl_api_presentation_entities_matched_route__to_json(p: &iface_journey::TflApiPresentationEntitiesMatchedRoute) -> Value {
+    let mut m = Map::new();
+    m.insert("destination".into(), match (&p.destination) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("destinationName".into(), match (&p.destination_name) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("direction".into(), match (&p.direction) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("name".into(), match (&p.name) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("originationName".into(), match (&p.origination_name) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("originator".into(), match (&p.originator) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("routeCode".into(), match (&p.route_code) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("serviceType".into(), match (&p.service_type) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("validFrom".into(), match (&p.valid_from) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("validTo".into(), match (&p.valid_to) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_journey__tfl_api_presentation_entities_line_service_type_info__to_json(p: &iface_journey::TflApiPresentationEntitiesLineServiceTypeInfo) -> Value {
+    let mut m = Map::new();
+    m.insert("name".into(), match (&p.name) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("uri".into(), match (&p.uri) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_journey__tfl_api_presentation_entities_journey_planner_search_criteria__to_json(p: &iface_journey::TflApiPresentationEntitiesJourneyPlannerSearchCriteria) -> Value {
+    let mut m = Map::new();
+    m.insert("dateTime".into(), match (&p.date_time) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("dateTimeType".into(), match (&p.date_time_type) { Some(v) => Value::String(iface_journey__journey_results_time_is_enum__to_str(v).into()), None => Value::Null });
+    m.insert("timeAdjustments".into(), match (&p.time_adjustments) { Some(v) => iface_journey__tfl_api_presentation_entities_journey_planner_time_adjustments__to_json(v), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_journey__tfl_api_presentation_entities_journey_planner_time_adjustments__to_json(p: &iface_journey::TflApiPresentationEntitiesJourneyPlannerTimeAdjustments) -> Value {
+    let mut m = Map::new();
+    m.insert("earlier".into(), match (&p.earlier) { Some(v) => iface_journey__tfl_api_presentation_entities_journey_planner_time_adjustment__to_json(v), None => Value::Null });
+    m.insert("earliest".into(), match (&p.earliest) { Some(v) => iface_journey__tfl_api_presentation_entities_journey_planner_time_adjustment__to_json(v), None => Value::Null });
+    m.insert("later".into(), match (&p.later) { Some(v) => iface_journey__tfl_api_presentation_entities_journey_planner_time_adjustment__to_json(v), None => Value::Null });
+    m.insert("latest".into(), match (&p.latest) { Some(v) => iface_journey__tfl_api_presentation_entities_journey_planner_time_adjustment__to_json(v), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_journey__tfl_api_presentation_entities_journey_planner_time_adjustment__to_json(p: &iface_journey::TflApiPresentationEntitiesJourneyPlannerTimeAdjustment) -> Value {
+    let mut m = Map::new();
+    m.insert("date".into(), match (&p.date) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("time".into(), match (&p.time) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("timeIs".into(), match (&p.time_is) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("uri".into(), match (&p.uri) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_journey__tfl_api_presentation_entities_mode__to_json(p: &iface_journey::TflApiPresentationEntitiesMode) -> Value {
+    let mut m = Map::new();
+    m.insert("isFarePaying".into(), match (&p.is_fare_paying) { Some(v) => Value::Bool(*(v)), None => Value::Null });
+    m.insert("isScheduledService".into(), match (&p.is_scheduled_service) { Some(v) => Value::Bool(*(v)), None => Value::Null });
+    m.insert("isTflService".into(), match (&p.is_tfl_service) { Some(v) => Value::Bool(*(v)), None => Value::Null });
+    m.insert("modeName".into(), match (&p.mode_name) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("motType".into(), match (&p.mot_type) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("network".into(), match (&p.network) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
 fn iface_journey__journey_results_params__to_json(p: &iface_journey::JourneyResultsParams) -> Value {
     let mut m = Map::new();
     m.insert("from".into(), Value::String((&p.from_op).clone()));
@@ -553,13 +1355,624 @@ fn iface_journey__journey_results_params__to_json(p: &iface_journey::JourneyResu
     Value::Object(m)
 }
 
-impl iface_journey::Guest for crate::Component {
-    fn journey_results(params: iface_journey::JourneyResultsParams) -> Result<String, String> {
-        let json = iface_journey__journey_results_params__to_json(&params);
-        dispatch(&OP_JOURNEY_JOURNEY_RESULTS, json)
+fn iface_journey__tfl_api_presentation_entities_journey_planner_itinerary_result__from_json(v: &Value) -> Option<iface_journey::TflApiPresentationEntitiesJourneyPlannerItineraryResult> {
+    let m = v.as_object()?;
+    Some(iface_journey::TflApiPresentationEntitiesJourneyPlannerItineraryResult {
+        cycle_hire_docking_station_data: m.get("cycleHireDockingStationData").filter(|v| !v.is_null()).and_then(|v| iface_journey__tfl_api_presentation_entities_journey_planner_journey_planner_cycle_hire_docking_station_data__from_json(v)),
+        journey_vector: m.get("journeyVector").filter(|v| !v.is_null()).and_then(|v| iface_journey__tfl_api_presentation_entities_journey_planner_journey_vector__from_json(v)),
+        journeys: m.get("journeys").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| iface_journey__tfl_api_presentation_entities_journey_planner_journey__from_json(x)).collect())),
+        lines: m.get("lines").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| iface_journey__tfl_api_presentation_entities_line__from_json(x)).collect())),
+        recommended_max_age_minutes: m.get("recommendedMaxAgeMinutes").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        search_criteria: m.get("searchCriteria").filter(|v| !v.is_null()).and_then(|v| iface_journey__tfl_api_presentation_entities_journey_planner_search_criteria__from_json(v)),
+        stop_messages: m.get("stopMessages").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| (x).as_str().map(|s| s.to_string())).collect())),
+    })
+}
+
+fn iface_journey__tfl_api_presentation_entities_journey_planner_journey_planner_cycle_hire_docking_station_data__from_json(v: &Value) -> Option<iface_journey::TflApiPresentationEntitiesJourneyPlannerJourneyPlannerCycleHireDockingStationData> {
+    let m = v.as_object()?;
+    Some(iface_journey::TflApiPresentationEntitiesJourneyPlannerJourneyPlannerCycleHireDockingStationData {
+        destination_id: m.get("destinationId").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        destination_number_of_bikes: m.get("destinationNumberOfBikes").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        destination_number_of_empty_slots: m.get("destinationNumberOfEmptySlots").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        origin_id: m.get("originId").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        origin_number_of_bikes: m.get("originNumberOfBikes").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        origin_number_of_empty_slots: m.get("originNumberOfEmptySlots").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+    })
+}
+
+fn iface_journey__tfl_api_presentation_entities_journey_planner_journey_vector__from_json(v: &Value) -> Option<iface_journey::TflApiPresentationEntitiesJourneyPlannerJourneyVector> {
+    let m = v.as_object()?;
+    Some(iface_journey::TflApiPresentationEntitiesJourneyPlannerJourneyVector {
+        from_op: m.get("from").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        to: m.get("to").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        uri: m.get("uri").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        via: m.get("via").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    })
+}
+
+fn iface_journey__tfl_api_presentation_entities_journey_planner_journey__from_json(v: &Value) -> Option<iface_journey::TflApiPresentationEntitiesJourneyPlannerJourney> {
+    let m = v.as_object()?;
+    Some(iface_journey::TflApiPresentationEntitiesJourneyPlannerJourney {
+        arrival_date_time: m.get("arrivalDateTime").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        duration: m.get("duration").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        fare: m.get("fare").filter(|v| !v.is_null()).and_then(|v| iface_journey__tfl_api_presentation_entities_journey_planner_journey_fare__from_json(v)),
+        legs: m.get("legs").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| iface_journey__tfl_api_presentation_entities_journey_planner_leg__from_json(x)).collect())),
+        start_date_time: m.get("startDateTime").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    })
+}
+
+fn iface_journey__tfl_api_presentation_entities_journey_planner_journey_fare__from_json(v: &Value) -> Option<iface_journey::TflApiPresentationEntitiesJourneyPlannerJourneyFare> {
+    let m = v.as_object()?;
+    Some(iface_journey::TflApiPresentationEntitiesJourneyPlannerJourneyFare {
+        caveats: m.get("caveats").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| iface_journey__tfl_api_presentation_entities_journey_planner_fare_caveat__from_json(x)).collect())),
+        fares: m.get("fares").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| iface_journey__tfl_api_presentation_entities_journey_planner_fare__from_json(x)).collect())),
+        total_cost: m.get("totalCost").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+    })
+}
+
+fn iface_journey__tfl_api_presentation_entities_journey_planner_fare_caveat__from_json(v: &Value) -> Option<iface_journey::TflApiPresentationEntitiesJourneyPlannerFareCaveat> {
+    let m = v.as_object()?;
+    Some(iface_journey::TflApiPresentationEntitiesJourneyPlannerFareCaveat {
+        text: m.get("text").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        type_op: m.get("type").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    })
+}
+
+fn iface_journey__tfl_api_presentation_entities_journey_planner_fare__from_json(v: &Value) -> Option<iface_journey::TflApiPresentationEntitiesJourneyPlannerFare> {
+    let m = v.as_object()?;
+    Some(iface_journey::TflApiPresentationEntitiesJourneyPlannerFare {
+        charge_level: m.get("chargeLevel").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        charge_profile_name: m.get("chargeProfileName").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        cost: m.get("cost").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        high_zone: m.get("highZone").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        is_hopper_fare: m.get("isHopperFare").filter(|v| !v.is_null()).and_then(|v| (v).as_bool()),
+        low_zone: m.get("lowZone").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        off_peak: m.get("offPeak").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        peak: m.get("peak").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        taps: m.get("taps").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| iface_journey__tfl_api_presentation_entities_journey_planner_fare_tap__from_json(x)).collect())),
+    })
+}
+
+fn iface_journey__tfl_api_presentation_entities_journey_planner_fare_tap__from_json(v: &Value) -> Option<iface_journey::TflApiPresentationEntitiesJourneyPlannerFareTap> {
+    let m = v.as_object()?;
+    Some(iface_journey::TflApiPresentationEntitiesJourneyPlannerFareTap {
+        atco_code: m.get("atcoCode").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        tap_details: m.get("tapDetails").filter(|v| !v.is_null()).and_then(|v| iface_journey__tfl_api_presentation_entities_journey_planner_fare_tap_details__from_json(v)),
+    })
+}
+
+fn iface_journey__tfl_api_presentation_entities_journey_planner_fare_tap_details__from_json(v: &Value) -> Option<iface_journey::TflApiPresentationEntitiesJourneyPlannerFareTapDetails> {
+    let m = v.as_object()?;
+    Some(iface_journey::TflApiPresentationEntitiesJourneyPlannerFareTapDetails {
+        bus_route_id: m.get("busRouteId").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        host_device_type: m.get("hostDeviceType").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        mode_type: m.get("modeType").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        national_location_code: m.get("nationalLocationCode").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        tap_timestamp: m.get("tapTimestamp").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        validation_type: m.get("validationType").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    })
+}
+
+fn iface_journey__tfl_api_presentation_entities_journey_planner_leg__from_json(v: &Value) -> Option<iface_journey::TflApiPresentationEntitiesJourneyPlannerLeg> {
+    let m = v.as_object()?;
+    Some(iface_journey::TflApiPresentationEntitiesJourneyPlannerLeg {
+        arrival_point: m.get("arrivalPoint").filter(|v| !v.is_null()).and_then(|v| iface_journey__tfl_api_presentation_entities_point__from_json(v)),
+        arrival_time: m.get("arrivalTime").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        departure_point: m.get("departurePoint").filter(|v| !v.is_null()).and_then(|v| iface_journey__tfl_api_presentation_entities_point__from_json(v)),
+        departure_time: m.get("departureTime").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        disruptions: m.get("disruptions").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| iface_journey__tfl_api_presentation_entities_disruption__from_json(x)).collect())),
+        distance: m.get("distance").filter(|v| !v.is_null()).and_then(|v| (v).as_f64()),
+        duration: m.get("duration").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        has_fixed_locations: m.get("hasFixedLocations").filter(|v| !v.is_null()).and_then(|v| (v).as_bool()),
+        instruction: m.get("instruction").filter(|v| !v.is_null()).and_then(|v| iface_journey__tfl_api_presentation_entities_instruction__from_json(v)),
+        inter_change_duration: m.get("interChangeDuration").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        inter_change_position: m.get("interChangePosition").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        is_disrupted: m.get("isDisrupted").filter(|v| !v.is_null()).and_then(|v| (v).as_bool()),
+        mode: m.get("mode").filter(|v| !v.is_null()).and_then(|v| iface_journey__tfl_api_presentation_entities_identifier__from_json(v)),
+        obstacles: m.get("obstacles").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| iface_journey__tfl_api_presentation_entities_journey_planner_obstacle__from_json(x)).collect())),
+        path: m.get("path").filter(|v| !v.is_null()).and_then(|v| iface_journey__tfl_api_presentation_entities_journey_planner_path__from_json(v)),
+        planned_works: m.get("plannedWorks").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| iface_journey__tfl_api_presentation_entities_journey_planner_planned_work__from_json(x)).collect())),
+        route_options: m.get("routeOptions").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| iface_journey__tfl_api_presentation_entities_journey_planner_route_option__from_json(x)).collect())),
+        scheduled_arrival_time: m.get("scheduledArrivalTime").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        scheduled_departure_time: m.get("scheduledDepartureTime").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        speed: m.get("speed").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    })
+}
+
+fn iface_journey__tfl_api_presentation_entities_point__from_json(v: &Value) -> Option<iface_journey::TflApiPresentationEntitiesPoint> {
+    let m = v.as_object()?;
+    Some(iface_journey::TflApiPresentationEntitiesPoint {
+        lat: m.get("lat").filter(|v| !v.is_null()).and_then(|v| (v).as_f64()),
+        lon: m.get("lon").filter(|v| !v.is_null()).and_then(|v| (v).as_f64()),
+    })
+}
+
+fn iface_journey__tfl_api_presentation_entities_disruption__from_json(v: &Value) -> Option<iface_journey::TflApiPresentationEntitiesDisruption> {
+    let m = v.as_object()?;
+    Some(iface_journey::TflApiPresentationEntitiesDisruption {
+        additional_info: m.get("additionalInfo").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        affected_routes: m.get("affectedRoutes").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| iface_journey__tfl_api_presentation_entities_disrupted_route__from_json(x)).collect())),
+        affected_stops: m.get("affectedStops").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| iface_journey__tfl_api_presentation_entities_stop_point__from_json(x)).collect())),
+        category: m.get("category").filter(|v| !v.is_null()).and_then(|v| (v).as_str().and_then(iface_journey__tfl_api_presentation_entities_disruption_category_enum__from_str)),
+        category_description: m.get("categoryDescription").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        closure_text: m.get("closureText").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        created: m.get("created").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        description: m.get("description").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        last_update: m.get("lastUpdate").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        summary: m.get("summary").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        type_op: m.get("type").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    })
+}
+
+fn iface_journey__tfl_api_presentation_entities_disrupted_route__from_json(v: &Value) -> Option<iface_journey::TflApiPresentationEntitiesDisruptedRoute> {
+    let m = v.as_object()?;
+    Some(iface_journey::TflApiPresentationEntitiesDisruptedRoute {
+        destination_name: m.get("destinationName").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        direction: m.get("direction").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        id: m.get("id").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        is_entire_route_section: m.get("isEntireRouteSection").filter(|v| !v.is_null()).and_then(|v| (v).as_bool()),
+        line_id: m.get("lineId").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        line_string: m.get("lineString").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        name: m.get("name").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        origination_name: m.get("originationName").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        route_code: m.get("routeCode").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        route_section_naptan_entry_sequence: m.get("routeSectionNaptanEntrySequence").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| iface_journey__tfl_api_presentation_entities_route_section_naptan_entry_sequence__from_json(x)).collect())),
+        valid_from: m.get("validFrom").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        valid_to: m.get("validTo").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        via: m.get("via").filter(|v| !v.is_null()).and_then(|v| iface_journey__tfl_api_presentation_entities_route_section_naptan_entry_sequence__from_json(v)),
+    })
+}
+
+fn iface_journey__tfl_api_presentation_entities_route_section_naptan_entry_sequence__from_json(v: &Value) -> Option<iface_journey::TflApiPresentationEntitiesRouteSectionNaptanEntrySequence> {
+    let m = v.as_object()?;
+    Some(iface_journey::TflApiPresentationEntitiesRouteSectionNaptanEntrySequence {
+        ordinal: m.get("ordinal").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        stop_point: m.get("stopPoint").filter(|v| !v.is_null()).and_then(|v| iface_journey__tfl_api_presentation_entities_stop_point__from_json(v)),
+    })
+}
+
+fn iface_journey__tfl_api_presentation_entities_stop_point__from_json(v: &Value) -> Option<iface_journey::TflApiPresentationEntitiesStopPoint> {
+    let m = v.as_object()?;
+    Some(iface_journey::TflApiPresentationEntitiesStopPoint {
+        accessibility_summary: m.get("accessibilitySummary").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        additional_properties: m.get("additionalProperties").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| iface_journey__tfl_api_presentation_entities_additional_properties__from_json(x)).collect())),
+        children: m.get("children").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| iface_journey__tfl_api_presentation_entities_place__from_json(x)).collect())),
+        children_urls: m.get("childrenUrls").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| (x).as_str().map(|s| s.to_string())).collect())),
+        common_name: m.get("commonName").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        distance: m.get("distance").filter(|v| !v.is_null()).and_then(|v| (v).as_f64()),
+        full_name: m.get("fullName").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        hub_naptan_code: m.get("hubNaptanCode").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        ics_code: m.get("icsCode").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        id: m.get("id").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        indicator: m.get("indicator").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        individual_stop_id: m.get("individualStopId").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        lat: m.get("lat").filter(|v| !v.is_null()).and_then(|v| (v).as_f64()),
+        line_group: m.get("lineGroup").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| iface_journey__tfl_api_presentation_entities_line_group__from_json(x)).collect())),
+        line_mode_groups: m.get("lineModeGroups").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| iface_journey__tfl_api_presentation_entities_line_mode_group__from_json(x)).collect())),
+        lines: m.get("lines").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| iface_journey__tfl_api_presentation_entities_identifier__from_json(x)).collect())),
+        lon: m.get("lon").filter(|v| !v.is_null()).and_then(|v| (v).as_f64()),
+        modes: m.get("modes").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| (x).as_str().map(|s| s.to_string())).collect())),
+        naptan_id: m.get("naptanId").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        naptan_mode: m.get("naptanMode").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        place_type: m.get("placeType").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        platform_name: m.get("platformName").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        sms_code: m.get("smsCode").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        station_naptan: m.get("stationNaptan").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        status: m.get("status").filter(|v| !v.is_null()).and_then(|v| (v).as_bool()),
+        stop_letter: m.get("stopLetter").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        stop_type: m.get("stopType").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        url: m.get("url").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    })
+}
+
+fn iface_journey__tfl_api_presentation_entities_additional_properties__from_json(v: &Value) -> Option<iface_journey::TflApiPresentationEntitiesAdditionalProperties> {
+    let m = v.as_object()?;
+    Some(iface_journey::TflApiPresentationEntitiesAdditionalProperties {
+        category: m.get("category").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        key: m.get("key").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        modified: m.get("modified").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        source_system_key: m.get("sourceSystemKey").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        value: m.get("value").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    })
+}
+
+fn iface_journey__tfl_api_presentation_entities_place__from_json(v: &Value) -> Option<iface_journey::TflApiPresentationEntitiesPlace> {
+    let m = v.as_object()?;
+    Some(iface_journey::TflApiPresentationEntitiesPlace {
+        additional_properties: m.get("additionalProperties").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| iface_journey__tfl_api_presentation_entities_additional_properties__from_json(x)).collect())),
+        children: m.get("children").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| (x).as_str().map(|s| s.to_string())).collect())),
+        children_urls: m.get("childrenUrls").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| (x).as_str().map(|s| s.to_string())).collect())),
+        common_name: m.get("commonName").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        distance: m.get("distance").filter(|v| !v.is_null()).and_then(|v| (v).as_f64()),
+        id: m.get("id").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        lat: m.get("lat").filter(|v| !v.is_null()).and_then(|v| (v).as_f64()),
+        lon: m.get("lon").filter(|v| !v.is_null()).and_then(|v| (v).as_f64()),
+        place_type: m.get("placeType").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        url: m.get("url").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    })
+}
+
+fn iface_journey__tfl_api_presentation_entities_line_group__from_json(v: &Value) -> Option<iface_journey::TflApiPresentationEntitiesLineGroup> {
+    let m = v.as_object()?;
+    Some(iface_journey::TflApiPresentationEntitiesLineGroup {
+        line_identifier: m.get("lineIdentifier").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| (x).as_str().map(|s| s.to_string())).collect())),
+        naptan_id_reference: m.get("naptanIdReference").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        station_atco_code: m.get("stationAtcoCode").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    })
+}
+
+fn iface_journey__tfl_api_presentation_entities_line_mode_group__from_json(v: &Value) -> Option<iface_journey::TflApiPresentationEntitiesLineModeGroup> {
+    let m = v.as_object()?;
+    Some(iface_journey::TflApiPresentationEntitiesLineModeGroup {
+        line_identifier: m.get("lineIdentifier").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| (x).as_str().map(|s| s.to_string())).collect())),
+        mode_name: m.get("modeName").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    })
+}
+
+fn iface_journey__tfl_api_presentation_entities_identifier__from_json(v: &Value) -> Option<iface_journey::TflApiPresentationEntitiesIdentifier> {
+    let m = v.as_object()?;
+    Some(iface_journey::TflApiPresentationEntitiesIdentifier {
+        crowding: m.get("crowding").filter(|v| !v.is_null()).and_then(|v| iface_journey__tfl_api_presentation_entities_crowding__from_json(v)),
+        full_name: m.get("fullName").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        id: m.get("id").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        mot_type: m.get("motType").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        name: m.get("name").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        network: m.get("network").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        route_type: m.get("routeType").filter(|v| !v.is_null()).and_then(|v| (v).as_str().and_then(iface_journey__tfl_api_presentation_entities_identifier_route_type_enum__from_str)),
+        status: m.get("status").filter(|v| !v.is_null()).and_then(|v| (v).as_str().and_then(iface_journey__tfl_api_presentation_entities_identifier_status_enum__from_str)),
+        type_op: m.get("type").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        uri: m.get("uri").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    })
+}
+
+fn iface_journey__tfl_api_presentation_entities_crowding__from_json(v: &Value) -> Option<iface_journey::TflApiPresentationEntitiesCrowding> {
+    let m = v.as_object()?;
+    Some(iface_journey::TflApiPresentationEntitiesCrowding {
+        passenger_flows: m.get("passengerFlows").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| iface_journey__tfl_api_presentation_entities_passenger_flow__from_json(x)).collect())),
+        train_loadings: m.get("trainLoadings").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| iface_journey__tfl_api_presentation_entities_train_loading__from_json(x)).collect())),
+    })
+}
+
+fn iface_journey__tfl_api_presentation_entities_passenger_flow__from_json(v: &Value) -> Option<iface_journey::TflApiPresentationEntitiesPassengerFlow> {
+    let m = v.as_object()?;
+    Some(iface_journey::TflApiPresentationEntitiesPassengerFlow {
+        time_slice: m.get("timeSlice").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        value: m.get("value").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+    })
+}
+
+fn iface_journey__tfl_api_presentation_entities_train_loading__from_json(v: &Value) -> Option<iface_journey::TflApiPresentationEntitiesTrainLoading> {
+    let m = v.as_object()?;
+    Some(iface_journey::TflApiPresentationEntitiesTrainLoading {
+        direction: m.get("direction").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        line: m.get("line").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        line_direction: m.get("lineDirection").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        naptan_to: m.get("naptanTo").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        platform_direction: m.get("platformDirection").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        time_slice: m.get("timeSlice").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        value: m.get("value").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+    })
+}
+
+fn iface_journey__tfl_api_presentation_entities_instruction__from_json(v: &Value) -> Option<iface_journey::TflApiPresentationEntitiesInstruction> {
+    let m = v.as_object()?;
+    Some(iface_journey::TflApiPresentationEntitiesInstruction {
+        detailed: m.get("detailed").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        steps: m.get("steps").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| iface_journey__tfl_api_presentation_entities_instruction_step__from_json(x)).collect())),
+        summary: m.get("summary").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    })
+}
+
+fn iface_journey__tfl_api_presentation_entities_instruction_step__from_json(v: &Value) -> Option<iface_journey::TflApiPresentationEntitiesInstructionStep> {
+    let m = v.as_object()?;
+    Some(iface_journey::TflApiPresentationEntitiesInstructionStep {
+        cumulative_distance: m.get("cumulativeDistance").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        cumulative_travel_time: m.get("cumulativeTravelTime").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        description: m.get("description").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        description_heading: m.get("descriptionHeading").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        distance: m.get("distance").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        latitude: m.get("latitude").filter(|v| !v.is_null()).and_then(|v| (v).as_f64()),
+        longitude: m.get("longitude").filter(|v| !v.is_null()).and_then(|v| (v).as_f64()),
+        path_attribute: m.get("pathAttribute").filter(|v| !v.is_null()).and_then(|v| iface_journey__tfl_api_presentation_entities_path_attribute__from_json(v)),
+        sky_direction: m.get("skyDirection").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        sky_direction_description: m.get("skyDirectionDescription").filter(|v| !v.is_null()).and_then(|v| (v).as_str().and_then(iface_journey__tfl_api_presentation_entities_instruction_step_sky_direction_description_enum__from_str)),
+        street_name: m.get("streetName").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        track_type: m.get("trackType").filter(|v| !v.is_null()).and_then(|v| (v).as_str().and_then(iface_journey__tfl_api_presentation_entities_instruction_step_track_type_enum__from_str)),
+        turn_direction: m.get("turnDirection").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    })
+}
+
+fn iface_journey__tfl_api_presentation_entities_path_attribute__from_json(v: &Value) -> Option<iface_journey::TflApiPresentationEntitiesPathAttribute> {
+    let m = v.as_object()?;
+    Some(iface_journey::TflApiPresentationEntitiesPathAttribute {
+        name: m.get("name").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        value: m.get("value").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    })
+}
+
+fn iface_journey__tfl_api_presentation_entities_journey_planner_obstacle__from_json(v: &Value) -> Option<iface_journey::TflApiPresentationEntitiesJourneyPlannerObstacle> {
+    let m = v.as_object()?;
+    Some(iface_journey::TflApiPresentationEntitiesJourneyPlannerObstacle {
+        incline: m.get("incline").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        position: m.get("position").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        stop_id: m.get("stopId").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        type_op: m.get("type").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    })
+}
+
+fn iface_journey__tfl_api_presentation_entities_journey_planner_path__from_json(v: &Value) -> Option<iface_journey::TflApiPresentationEntitiesJourneyPlannerPath> {
+    let m = v.as_object()?;
+    Some(iface_journey::TflApiPresentationEntitiesJourneyPlannerPath {
+        elevation: m.get("elevation").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| iface_journey__tfl_api_common_journey_planner_jp_elevation__from_json(x)).collect())),
+        line_string: m.get("lineString").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        stop_points: m.get("stopPoints").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| iface_journey__tfl_api_presentation_entities_identifier__from_json(x)).collect())),
+    })
+}
+
+fn iface_journey__tfl_api_common_journey_planner_jp_elevation__from_json(v: &Value) -> Option<iface_journey::TflApiCommonJourneyPlannerJpElevation> {
+    let m = v.as_object()?;
+    Some(iface_journey::TflApiCommonJourneyPlannerJpElevation {
+        distance: m.get("distance").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        end_lat: m.get("endLat").filter(|v| !v.is_null()).and_then(|v| (v).as_f64()),
+        end_lon: m.get("endLon").filter(|v| !v.is_null()).and_then(|v| (v).as_f64()),
+        gradient: m.get("gradient").filter(|v| !v.is_null()).and_then(|v| (v).as_f64()),
+        height_from_previous_point: m.get("heightFromPreviousPoint").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        start_lat: m.get("startLat").filter(|v| !v.is_null()).and_then(|v| (v).as_f64()),
+        start_lon: m.get("startLon").filter(|v| !v.is_null()).and_then(|v| (v).as_f64()),
+    })
+}
+
+fn iface_journey__tfl_api_presentation_entities_journey_planner_planned_work__from_json(v: &Value) -> Option<iface_journey::TflApiPresentationEntitiesJourneyPlannerPlannedWork> {
+    let m = v.as_object()?;
+    Some(iface_journey::TflApiPresentationEntitiesJourneyPlannerPlannedWork {
+        created_date_time: m.get("createdDateTime").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        description: m.get("description").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        id: m.get("id").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        last_update_date_time: m.get("lastUpdateDateTime").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    })
+}
+
+fn iface_journey__tfl_api_presentation_entities_journey_planner_route_option__from_json(v: &Value) -> Option<iface_journey::TflApiPresentationEntitiesJourneyPlannerRouteOption> {
+    let m = v.as_object()?;
+    Some(iface_journey::TflApiPresentationEntitiesJourneyPlannerRouteOption {
+        direction: m.get("direction").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        directions: m.get("directions").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| (x).as_str().map(|s| s.to_string())).collect())),
+        id: m.get("id").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        line_identifier: m.get("lineIdentifier").filter(|v| !v.is_null()).and_then(|v| iface_journey__tfl_api_presentation_entities_identifier__from_json(v)),
+        name: m.get("name").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    })
+}
+
+fn iface_journey__tfl_api_presentation_entities_line__from_json(v: &Value) -> Option<iface_journey::TflApiPresentationEntitiesLine> {
+    let m = v.as_object()?;
+    Some(iface_journey::TflApiPresentationEntitiesLine {
+        created: m.get("created").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        crowding: m.get("crowding").filter(|v| !v.is_null()).and_then(|v| iface_journey__tfl_api_presentation_entities_crowding__from_json(v)),
+        disruptions: m.get("disruptions").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| iface_journey__tfl_api_presentation_entities_disruption__from_json(x)).collect())),
+        id: m.get("id").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        line_statuses: m.get("lineStatuses").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| iface_journey__tfl_api_presentation_entities_line_status__from_json(x)).collect())),
+        mode_name: m.get("modeName").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        modified: m.get("modified").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        name: m.get("name").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        route_sections: m.get("routeSections").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| iface_journey__tfl_api_presentation_entities_matched_route__from_json(x)).collect())),
+        service_types: m.get("serviceTypes").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| iface_journey__tfl_api_presentation_entities_line_service_type_info__from_json(x)).collect())),
+    })
+}
+
+fn iface_journey__tfl_api_presentation_entities_line_status__from_json(v: &Value) -> Option<iface_journey::TflApiPresentationEntitiesLineStatus> {
+    let m = v.as_object()?;
+    Some(iface_journey::TflApiPresentationEntitiesLineStatus {
+        created: m.get("created").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        disruption: m.get("disruption").filter(|v| !v.is_null()).and_then(|v| iface_journey__tfl_api_presentation_entities_disruption__from_json(v)),
+        id: m.get("id").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        line_id: m.get("lineId").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        modified: m.get("modified").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        reason: m.get("reason").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        status_severity: m.get("statusSeverity").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        status_severity_description: m.get("statusSeverityDescription").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        validity_periods: m.get("validityPeriods").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| iface_journey__tfl_api_presentation_entities_validity_period__from_json(x)).collect())),
+    })
+}
+
+fn iface_journey__tfl_api_presentation_entities_validity_period__from_json(v: &Value) -> Option<iface_journey::TflApiPresentationEntitiesValidityPeriod> {
+    let m = v.as_object()?;
+    Some(iface_journey::TflApiPresentationEntitiesValidityPeriod {
+        from_date: m.get("fromDate").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        is_now: m.get("isNow").filter(|v| !v.is_null()).and_then(|v| (v).as_bool()),
+        to_date: m.get("toDate").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    })
+}
+
+fn iface_journey__tfl_api_presentation_entities_matched_route__from_json(v: &Value) -> Option<iface_journey::TflApiPresentationEntitiesMatchedRoute> {
+    let m = v.as_object()?;
+    Some(iface_journey::TflApiPresentationEntitiesMatchedRoute {
+        destination: m.get("destination").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        destination_name: m.get("destinationName").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        direction: m.get("direction").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        name: m.get("name").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        origination_name: m.get("originationName").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        originator: m.get("originator").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        route_code: m.get("routeCode").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        service_type: m.get("serviceType").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        valid_from: m.get("validFrom").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        valid_to: m.get("validTo").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    })
+}
+
+fn iface_journey__tfl_api_presentation_entities_line_service_type_info__from_json(v: &Value) -> Option<iface_journey::TflApiPresentationEntitiesLineServiceTypeInfo> {
+    let m = v.as_object()?;
+    Some(iface_journey::TflApiPresentationEntitiesLineServiceTypeInfo {
+        name: m.get("name").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        uri: m.get("uri").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    })
+}
+
+fn iface_journey__tfl_api_presentation_entities_journey_planner_search_criteria__from_json(v: &Value) -> Option<iface_journey::TflApiPresentationEntitiesJourneyPlannerSearchCriteria> {
+    let m = v.as_object()?;
+    Some(iface_journey::TflApiPresentationEntitiesJourneyPlannerSearchCriteria {
+        date_time: m.get("dateTime").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        date_time_type: m.get("dateTimeType").filter(|v| !v.is_null()).and_then(|v| (v).as_str().and_then(iface_journey__journey_results_time_is_enum__from_str)),
+        time_adjustments: m.get("timeAdjustments").filter(|v| !v.is_null()).and_then(|v| iface_journey__tfl_api_presentation_entities_journey_planner_time_adjustments__from_json(v)),
+    })
+}
+
+fn iface_journey__tfl_api_presentation_entities_journey_planner_time_adjustments__from_json(v: &Value) -> Option<iface_journey::TflApiPresentationEntitiesJourneyPlannerTimeAdjustments> {
+    let m = v.as_object()?;
+    Some(iface_journey::TflApiPresentationEntitiesJourneyPlannerTimeAdjustments {
+        earlier: m.get("earlier").filter(|v| !v.is_null()).and_then(|v| iface_journey__tfl_api_presentation_entities_journey_planner_time_adjustment__from_json(v)),
+        earliest: m.get("earliest").filter(|v| !v.is_null()).and_then(|v| iface_journey__tfl_api_presentation_entities_journey_planner_time_adjustment__from_json(v)),
+        later: m.get("later").filter(|v| !v.is_null()).and_then(|v| iface_journey__tfl_api_presentation_entities_journey_planner_time_adjustment__from_json(v)),
+        latest: m.get("latest").filter(|v| !v.is_null()).and_then(|v| iface_journey__tfl_api_presentation_entities_journey_planner_time_adjustment__from_json(v)),
+    })
+}
+
+fn iface_journey__tfl_api_presentation_entities_journey_planner_time_adjustment__from_json(v: &Value) -> Option<iface_journey::TflApiPresentationEntitiesJourneyPlannerTimeAdjustment> {
+    let m = v.as_object()?;
+    Some(iface_journey::TflApiPresentationEntitiesJourneyPlannerTimeAdjustment {
+        date: m.get("date").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        time: m.get("time").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        time_is: m.get("timeIs").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        uri: m.get("uri").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    })
+}
+
+fn iface_journey__tfl_api_presentation_entities_mode__from_json(v: &Value) -> Option<iface_journey::TflApiPresentationEntitiesMode> {
+    let m = v.as_object()?;
+    Some(iface_journey::TflApiPresentationEntitiesMode {
+        is_fare_paying: m.get("isFarePaying").filter(|v| !v.is_null()).and_then(|v| (v).as_bool()),
+        is_scheduled_service: m.get("isScheduledService").filter(|v| !v.is_null()).and_then(|v| (v).as_bool()),
+        is_tfl_service: m.get("isTflService").filter(|v| !v.is_null()).and_then(|v| (v).as_bool()),
+        mode_name: m.get("modeName").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        mot_type: m.get("motType").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        network: m.get("network").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    })
+}
+
+fn iface_journey__journey_results_time_is_enum__from_str(s: &str) -> Option<iface_journey::JourneyResultsTimeIsEnum> {
+    match s {
+        "Arriving" => Some(iface_journey::JourneyResultsTimeIsEnum::Arriving),
+        "Departing" => Some(iface_journey::JourneyResultsTimeIsEnum::Departing),
+        _ => None,
     }
-    fn meta() -> Result<String, String> {
-        dispatch(&OP_JOURNEY_META, Value::Object(Map::new()))
+}
+
+fn iface_journey__tfl_api_presentation_entities_identifier_route_type_enum__from_str(s: &str) -> Option<iface_journey::TflApiPresentationEntitiesIdentifierRouteTypeEnum> {
+    match s {
+        "Unknown" => Some(iface_journey::TflApiPresentationEntitiesIdentifierRouteTypeEnum::Unknown),
+        "All" => Some(iface_journey::TflApiPresentationEntitiesIdentifierRouteTypeEnum::All),
+        "Cycle Superhighways" => Some(iface_journey::TflApiPresentationEntitiesIdentifierRouteTypeEnum::CycleSuperhighways),
+        "Quietways" => Some(iface_journey::TflApiPresentationEntitiesIdentifierRouteTypeEnum::Quietways),
+        "Cycleways" => Some(iface_journey::TflApiPresentationEntitiesIdentifierRouteTypeEnum::Cycleways),
+        "Mini-Hollands" => Some(iface_journey::TflApiPresentationEntitiesIdentifierRouteTypeEnum::MiniHollands),
+        "Central London Grid" => Some(iface_journey::TflApiPresentationEntitiesIdentifierRouteTypeEnum::CentralLondonGrid),
+        "Streetspace Route" => Some(iface_journey::TflApiPresentationEntitiesIdentifierRouteTypeEnum::StreetspaceRoute),
+        _ => None,
+    }
+}
+
+fn iface_journey__tfl_api_presentation_entities_identifier_status_enum__from_str(s: &str) -> Option<iface_journey::TflApiPresentationEntitiesIdentifierStatusEnum> {
+    match s {
+        "Unknown" => Some(iface_journey::TflApiPresentationEntitiesIdentifierStatusEnum::Unknown),
+        "All" => Some(iface_journey::TflApiPresentationEntitiesIdentifierStatusEnum::All),
+        "Open" => Some(iface_journey::TflApiPresentationEntitiesIdentifierStatusEnum::Open),
+        "In Progress" => Some(iface_journey::TflApiPresentationEntitiesIdentifierStatusEnum::InProgress),
+        "Planned" => Some(iface_journey::TflApiPresentationEntitiesIdentifierStatusEnum::Planned),
+        "Planned - Subject to feasibility and consultation." => Some(iface_journey::TflApiPresentationEntitiesIdentifierStatusEnum::PlannedSubjectToFeasibilityAndConsultation),
+        "Not Open" => Some(iface_journey::TflApiPresentationEntitiesIdentifierStatusEnum::NotOpen),
+        _ => None,
+    }
+}
+
+fn iface_journey__tfl_api_presentation_entities_disruption_category_enum__from_str(s: &str) -> Option<iface_journey::TflApiPresentationEntitiesDisruptionCategoryEnum> {
+    match s {
+        "Undefined" => Some(iface_journey::TflApiPresentationEntitiesDisruptionCategoryEnum::Undefined),
+        "RealTime" => Some(iface_journey::TflApiPresentationEntitiesDisruptionCategoryEnum::RealTime),
+        "PlannedWork" => Some(iface_journey::TflApiPresentationEntitiesDisruptionCategoryEnum::PlannedWork),
+        "Information" => Some(iface_journey::TflApiPresentationEntitiesDisruptionCategoryEnum::Information),
+        "Event" => Some(iface_journey::TflApiPresentationEntitiesDisruptionCategoryEnum::Event),
+        "Crowding" => Some(iface_journey::TflApiPresentationEntitiesDisruptionCategoryEnum::Crowding),
+        "StatusAlert" => Some(iface_journey::TflApiPresentationEntitiesDisruptionCategoryEnum::StatusAlert),
+        _ => None,
+    }
+}
+
+fn iface_journey__tfl_api_presentation_entities_instruction_step_sky_direction_description_enum__from_str(s: &str) -> Option<iface_journey::TflApiPresentationEntitiesInstructionStepSkyDirectionDescriptionEnum> {
+    match s {
+        "North" => Some(iface_journey::TflApiPresentationEntitiesInstructionStepSkyDirectionDescriptionEnum::North),
+        "NorthEast" => Some(iface_journey::TflApiPresentationEntitiesInstructionStepSkyDirectionDescriptionEnum::NorthEast),
+        "East" => Some(iface_journey::TflApiPresentationEntitiesInstructionStepSkyDirectionDescriptionEnum::East),
+        "SouthEast" => Some(iface_journey::TflApiPresentationEntitiesInstructionStepSkyDirectionDescriptionEnum::SouthEast),
+        "South" => Some(iface_journey::TflApiPresentationEntitiesInstructionStepSkyDirectionDescriptionEnum::South),
+        "SouthWest" => Some(iface_journey::TflApiPresentationEntitiesInstructionStepSkyDirectionDescriptionEnum::SouthWest),
+        "West" => Some(iface_journey::TflApiPresentationEntitiesInstructionStepSkyDirectionDescriptionEnum::West),
+        "NorthWest" => Some(iface_journey::TflApiPresentationEntitiesInstructionStepSkyDirectionDescriptionEnum::NorthWest),
+        _ => None,
+    }
+}
+
+fn iface_journey__tfl_api_presentation_entities_instruction_step_track_type_enum__from_str(s: &str) -> Option<iface_journey::TflApiPresentationEntitiesInstructionStepTrackTypeEnum> {
+    match s {
+        "CycleSuperHighway" => Some(iface_journey::TflApiPresentationEntitiesInstructionStepTrackTypeEnum::CycleSuperHighway),
+        "CanalTowpath" => Some(iface_journey::TflApiPresentationEntitiesInstructionStepTrackTypeEnum::CanalTowpath),
+        "QuietRoad" => Some(iface_journey::TflApiPresentationEntitiesInstructionStepTrackTypeEnum::QuietRoad),
+        "ProvisionForCyclists" => Some(iface_journey::TflApiPresentationEntitiesInstructionStepTrackTypeEnum::ProvisionForCyclists),
+        "BusyRoads" => Some(iface_journey::TflApiPresentationEntitiesInstructionStepTrackTypeEnum::BusyRoads),
+        "None" => Some(iface_journey::TflApiPresentationEntitiesInstructionStepTrackTypeEnum::None),
+        "PushBike" => Some(iface_journey::TflApiPresentationEntitiesInstructionStepTrackTypeEnum::PushBike),
+        "Quietway" => Some(iface_journey::TflApiPresentationEntitiesInstructionStepTrackTypeEnum::Quietway),
+        _ => None,
+    }
+}
+
+fn iface_journey__journey_results__ok(body: String) -> Result<iface_journey::TflApiPresentationEntitiesJourneyPlannerItineraryResult, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match iface_journey__tfl_api_presentation_entities_journey_planner_itinerary_result__from_json(&v) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_journey__journey_results__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
+fn iface_journey__meta__ok(body: String) -> Result<Vec<iface_journey::TflApiPresentationEntitiesMode>, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match (&v).as_array().map(|a| a.iter().filter_map(|x| iface_journey__tfl_api_presentation_entities_mode__from_json(x)).collect()) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_journey__meta__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
+impl iface_journey::Guest for crate::Component {
+    fn journey_results(params: iface_journey::JourneyResultsParams) -> Result<iface_journey::TflApiPresentationEntitiesJourneyPlannerItineraryResult, String> {
+        let json = iface_journey__journey_results_params__to_json(&params);
+        match dispatch(&OP_JOURNEY_JOURNEY_RESULTS, json).and_then(iface_journey__journey_results__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_journey__journey_results__err(e)),
+        }
+    }
+    fn meta() -> Result<Vec<iface_journey::TflApiPresentationEntitiesMode>, String> {
+        match dispatch(&OP_JOURNEY_META, Value::Object(Map::new())).and_then(iface_journey__meta__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_journey__meta__err(e)),
+        }
     }
 }
 use crate::exports::autostamp::tfl::line as iface_line;
@@ -604,7 +2017,7 @@ const OP_LINE_GET_BY_MODE: OpSpec = OpSpec {
     method: "GET",
     path_template: "/Line/Mode/{modes}",
     fields: &[
-        FieldSpec { snake: "modes", location: FieldLocation::Path },
+        FieldSpec { snake: "modes", wire: "modes", location: FieldLocation::Path },
     ],
     auth: &[
     ],
@@ -614,7 +2027,7 @@ const OP_LINE_DISRUPTION_BY_MODE: OpSpec = OpSpec {
     method: "GET",
     path_template: "/Line/Mode/{modes}/Disruption",
     fields: &[
-        FieldSpec { snake: "modes", location: FieldLocation::Path },
+        FieldSpec { snake: "modes", wire: "modes", location: FieldLocation::Path },
     ],
     auth: &[
     ],
@@ -624,8 +2037,8 @@ const OP_LINE_ROUTE_BY_MODE: OpSpec = OpSpec {
     method: "GET",
     path_template: "/Line/Mode/{modes}/Route",
     fields: &[
-        FieldSpec { snake: "modes", location: FieldLocation::Path },
-        FieldSpec { snake: "service_types", location: FieldLocation::Query },
+        FieldSpec { snake: "modes", wire: "modes", location: FieldLocation::Path },
+        FieldSpec { snake: "service_types", wire: "serviceTypes", location: FieldLocation::Query },
     ],
     auth: &[
     ],
@@ -635,9 +2048,9 @@ const OP_LINE_STATUS_BY_MODE: OpSpec = OpSpec {
     method: "GET",
     path_template: "/Line/Mode/{modes}/Status",
     fields: &[
-        FieldSpec { snake: "modes", location: FieldLocation::Path },
-        FieldSpec { snake: "detail", location: FieldLocation::Query },
-        FieldSpec { snake: "severity_level", location: FieldLocation::Query },
+        FieldSpec { snake: "modes", wire: "modes", location: FieldLocation::Path },
+        FieldSpec { snake: "detail", wire: "detail", location: FieldLocation::Query },
+        FieldSpec { snake: "severity_level", wire: "severityLevel", location: FieldLocation::Query },
     ],
     auth: &[
     ],
@@ -647,7 +2060,7 @@ const OP_LINE_ROUTE: OpSpec = OpSpec {
     method: "GET",
     path_template: "/Line/Route",
     fields: &[
-        FieldSpec { snake: "service_types", location: FieldLocation::Query },
+        FieldSpec { snake: "service_types", wire: "serviceTypes", location: FieldLocation::Query },
     ],
     auth: &[
     ],
@@ -657,9 +2070,9 @@ const OP_LINE_SEARCH: OpSpec = OpSpec {
     method: "GET",
     path_template: "/Line/Search/{query}",
     fields: &[
-        FieldSpec { snake: "query", location: FieldLocation::Path },
-        FieldSpec { snake: "modes", location: FieldLocation::Query },
-        FieldSpec { snake: "service_types", location: FieldLocation::Query },
+        FieldSpec { snake: "query", wire: "query", location: FieldLocation::Path },
+        FieldSpec { snake: "modes", wire: "modes", location: FieldLocation::Query },
+        FieldSpec { snake: "service_types", wire: "serviceTypes", location: FieldLocation::Query },
     ],
     auth: &[
     ],
@@ -669,7 +2082,7 @@ const OP_LINE_STATUS_BY_SEVERITY: OpSpec = OpSpec {
     method: "GET",
     path_template: "/Line/Status/{severity}",
     fields: &[
-        FieldSpec { snake: "severity", location: FieldLocation::Path },
+        FieldSpec { snake: "severity", wire: "severity", location: FieldLocation::Path },
     ],
     auth: &[
     ],
@@ -679,7 +2092,7 @@ const OP_LINE_GET: OpSpec = OpSpec {
     method: "GET",
     path_template: "/Line/{ids}",
     fields: &[
-        FieldSpec { snake: "ids", location: FieldLocation::Path },
+        FieldSpec { snake: "ids", wire: "ids", location: FieldLocation::Path },
     ],
     auth: &[
     ],
@@ -689,10 +2102,10 @@ const OP_LINE_ARRIVALS: OpSpec = OpSpec {
     method: "GET",
     path_template: "/Line/{ids}/Arrivals/{stop_point_id}",
     fields: &[
-        FieldSpec { snake: "ids", location: FieldLocation::Path },
-        FieldSpec { snake: "stop_point_id", location: FieldLocation::Path },
-        FieldSpec { snake: "direction", location: FieldLocation::Query },
-        FieldSpec { snake: "destination_station_id", location: FieldLocation::Query },
+        FieldSpec { snake: "ids", wire: "ids", location: FieldLocation::Path },
+        FieldSpec { snake: "stop_point_id", wire: "stopPointId", location: FieldLocation::Path },
+        FieldSpec { snake: "direction", wire: "direction", location: FieldLocation::Query },
+        FieldSpec { snake: "destination_station_id", wire: "destinationStationId", location: FieldLocation::Query },
     ],
     auth: &[
     ],
@@ -702,7 +2115,7 @@ const OP_LINE_DISRUPTION: OpSpec = OpSpec {
     method: "GET",
     path_template: "/Line/{ids}/Disruption",
     fields: &[
-        FieldSpec { snake: "ids", location: FieldLocation::Path },
+        FieldSpec { snake: "ids", wire: "ids", location: FieldLocation::Path },
     ],
     auth: &[
     ],
@@ -712,8 +2125,8 @@ const OP_LINE_LINE_ROUTES_BY_IDS: OpSpec = OpSpec {
     method: "GET",
     path_template: "/Line/{ids}/Route",
     fields: &[
-        FieldSpec { snake: "ids", location: FieldLocation::Path },
-        FieldSpec { snake: "service_types", location: FieldLocation::Query },
+        FieldSpec { snake: "ids", wire: "ids", location: FieldLocation::Path },
+        FieldSpec { snake: "service_types", wire: "serviceTypes", location: FieldLocation::Query },
     ],
     auth: &[
     ],
@@ -723,8 +2136,8 @@ const OP_LINE_STATUS_BY_IDS: OpSpec = OpSpec {
     method: "GET",
     path_template: "/Line/{ids}/Status",
     fields: &[
-        FieldSpec { snake: "ids", location: FieldLocation::Path },
-        FieldSpec { snake: "detail", location: FieldLocation::Query },
+        FieldSpec { snake: "ids", wire: "ids", location: FieldLocation::Path },
+        FieldSpec { snake: "detail", wire: "detail", location: FieldLocation::Query },
     ],
     auth: &[
     ],
@@ -734,12 +2147,14 @@ const OP_LINE_STATUS: OpSpec = OpSpec {
     method: "GET",
     path_template: "/Line/{ids}/Status/{start_date}/to/{end_date}",
     fields: &[
-        FieldSpec { snake: "ids", location: FieldLocation::Path },
-        FieldSpec { snake: "detail", location: FieldLocation::Query },
-        FieldSpec { snake: "start_date", location: FieldLocation::Query },
-        FieldSpec { snake: "end_date", location: FieldLocation::Query },
-        FieldSpec { snake: "date_range_start_date", location: FieldLocation::Query },
-        FieldSpec { snake: "date_range_end_date", location: FieldLocation::Query },
+        FieldSpec { snake: "ids", wire: "ids", location: FieldLocation::Path },
+        FieldSpec { snake: "detail", wire: "detail", location: FieldLocation::Query },
+        FieldSpec { snake: "start_date_v2", wire: "startDate", location: FieldLocation::Query },
+        FieldSpec { snake: "end_date_v2", wire: "endDate", location: FieldLocation::Query },
+        FieldSpec { snake: "date_range_start_date", wire: "dateRange.startDate", location: FieldLocation::Query },
+        FieldSpec { snake: "date_range_end_date", wire: "dateRange.endDate", location: FieldLocation::Query },
+        FieldSpec { snake: "start_date", wire: "StartDate", location: FieldLocation::Path },
+        FieldSpec { snake: "end_date", wire: "EndDate", location: FieldLocation::Path },
     ],
     auth: &[
     ],
@@ -749,10 +2164,10 @@ const OP_LINE_ROUTE_SEQUENCE: OpSpec = OpSpec {
     method: "GET",
     path_template: "/Line/{id}/Route/Sequence/{direction}",
     fields: &[
-        FieldSpec { snake: "id", location: FieldLocation::Path },
-        FieldSpec { snake: "direction", location: FieldLocation::Path },
-        FieldSpec { snake: "service_types", location: FieldLocation::Query },
-        FieldSpec { snake: "exclude_crowding", location: FieldLocation::Query },
+        FieldSpec { snake: "id", wire: "id", location: FieldLocation::Path },
+        FieldSpec { snake: "direction", wire: "direction", location: FieldLocation::Path },
+        FieldSpec { snake: "service_types", wire: "serviceTypes", location: FieldLocation::Query },
+        FieldSpec { snake: "exclude_crowding", wire: "excludeCrowding", location: FieldLocation::Query },
     ],
     auth: &[
     ],
@@ -762,8 +2177,8 @@ const OP_LINE_STOP_POINTS: OpSpec = OpSpec {
     method: "GET",
     path_template: "/Line/{id}/StopPoints",
     fields: &[
-        FieldSpec { snake: "id", location: FieldLocation::Path },
-        FieldSpec { snake: "tfl_operated_national_rail_stations_only", location: FieldLocation::Query },
+        FieldSpec { snake: "id", wire: "id", location: FieldLocation::Path },
+        FieldSpec { snake: "tfl_operated_national_rail_stations_only", wire: "tflOperatedNationalRailStationsOnly", location: FieldLocation::Query },
     ],
     auth: &[
     ],
@@ -773,8 +2188,8 @@ const OP_LINE_TIMETABLE: OpSpec = OpSpec {
     method: "GET",
     path_template: "/Line/{id}/Timetable/{from_stop_point_id}",
     fields: &[
-        FieldSpec { snake: "from_stop_point_id", location: FieldLocation::Path },
-        FieldSpec { snake: "id", location: FieldLocation::Path },
+        FieldSpec { snake: "from_stop_point_id", wire: "fromStopPointId", location: FieldLocation::Path },
+        FieldSpec { snake: "id", wire: "id", location: FieldLocation::Path },
     ],
     auth: &[
     ],
@@ -784,13 +2199,50 @@ const OP_LINE_TIMETABLE_TO: OpSpec = OpSpec {
     method: "GET",
     path_template: "/Line/{id}/Timetable/{from_stop_point_id}/to/{to_stop_point_id}",
     fields: &[
-        FieldSpec { snake: "from_stop_point_id", location: FieldLocation::Path },
-        FieldSpec { snake: "id", location: FieldLocation::Path },
-        FieldSpec { snake: "to_stop_point_id", location: FieldLocation::Path },
+        FieldSpec { snake: "from_stop_point_id", wire: "fromStopPointId", location: FieldLocation::Path },
+        FieldSpec { snake: "id", wire: "id", location: FieldLocation::Path },
+        FieldSpec { snake: "to_stop_point_id", wire: "toStopPointId", location: FieldLocation::Path },
     ],
     auth: &[
     ],
 };
+
+fn iface_line__tfl_api_presentation_entities_identifier_route_type_enum__to_str(e: &iface_line::TflApiPresentationEntitiesIdentifierRouteTypeEnum) -> &'static str {
+    match e {
+        iface_line::TflApiPresentationEntitiesIdentifierRouteTypeEnum::Unknown => "Unknown",
+        iface_line::TflApiPresentationEntitiesIdentifierRouteTypeEnum::All => "All",
+        iface_line::TflApiPresentationEntitiesIdentifierRouteTypeEnum::CycleSuperhighways => "Cycle Superhighways",
+        iface_line::TflApiPresentationEntitiesIdentifierRouteTypeEnum::Quietways => "Quietways",
+        iface_line::TflApiPresentationEntitiesIdentifierRouteTypeEnum::Cycleways => "Cycleways",
+        iface_line::TflApiPresentationEntitiesIdentifierRouteTypeEnum::MiniHollands => "Mini-Hollands",
+        iface_line::TflApiPresentationEntitiesIdentifierRouteTypeEnum::CentralLondonGrid => "Central London Grid",
+        iface_line::TflApiPresentationEntitiesIdentifierRouteTypeEnum::StreetspaceRoute => "Streetspace Route",
+    }
+}
+
+fn iface_line__tfl_api_presentation_entities_identifier_status_enum__to_str(e: &iface_line::TflApiPresentationEntitiesIdentifierStatusEnum) -> &'static str {
+    match e {
+        iface_line::TflApiPresentationEntitiesIdentifierStatusEnum::Unknown => "Unknown",
+        iface_line::TflApiPresentationEntitiesIdentifierStatusEnum::All => "All",
+        iface_line::TflApiPresentationEntitiesIdentifierStatusEnum::Open => "Open",
+        iface_line::TflApiPresentationEntitiesIdentifierStatusEnum::InProgress => "In Progress",
+        iface_line::TflApiPresentationEntitiesIdentifierStatusEnum::Planned => "Planned",
+        iface_line::TflApiPresentationEntitiesIdentifierStatusEnum::PlannedSubjectToFeasibilityAndConsultation => "Planned - Subject to feasibility and consultation.",
+        iface_line::TflApiPresentationEntitiesIdentifierStatusEnum::NotOpen => "Not Open",
+    }
+}
+
+fn iface_line__tfl_api_presentation_entities_disruption_category_enum__to_str(e: &iface_line::TflApiPresentationEntitiesDisruptionCategoryEnum) -> &'static str {
+    match e {
+        iface_line::TflApiPresentationEntitiesDisruptionCategoryEnum::Undefined => "Undefined",
+        iface_line::TflApiPresentationEntitiesDisruptionCategoryEnum::RealTime => "RealTime",
+        iface_line::TflApiPresentationEntitiesDisruptionCategoryEnum::PlannedWork => "PlannedWork",
+        iface_line::TflApiPresentationEntitiesDisruptionCategoryEnum::Information => "Information",
+        iface_line::TflApiPresentationEntitiesDisruptionCategoryEnum::Event => "Event",
+        iface_line::TflApiPresentationEntitiesDisruptionCategoryEnum::Crowding => "Crowding",
+        iface_line::TflApiPresentationEntitiesDisruptionCategoryEnum::StatusAlert => "StatusAlert",
+    }
+}
 
 fn iface_line__route_by_mode_service_types_item_enum__to_str(e: &iface_line::RouteByModeServiceTypesItemEnum) -> &'static str {
     match e {
@@ -805,6 +2257,481 @@ fn iface_line__arrivals_direction_enum__to_str(e: &iface_line::ArrivalsDirection
         iface_line::ArrivalsDirectionEnum::Outbound => "outbound",
         iface_line::ArrivalsDirectionEnum::All => "all",
     }
+}
+
+fn iface_line__tfl_api_presentation_entities_period_type_op_enum__to_str(e: &iface_line::TflApiPresentationEntitiesPeriodTypeOpEnum) -> &'static str {
+    match e {
+        iface_line::TflApiPresentationEntitiesPeriodTypeOpEnum::Normal => "Normal",
+        iface_line::TflApiPresentationEntitiesPeriodTypeOpEnum::FrequencyHours => "FrequencyHours",
+        iface_line::TflApiPresentationEntitiesPeriodTypeOpEnum::FrequencyMinutes => "FrequencyMinutes",
+        iface_line::TflApiPresentationEntitiesPeriodTypeOpEnum::Unknown => "Unknown",
+    }
+}
+
+fn iface_line__tfl_api_presentation_entities_mode__to_json(p: &iface_line::TflApiPresentationEntitiesMode) -> Value {
+    let mut m = Map::new();
+    m.insert("isFarePaying".into(), match (&p.is_fare_paying) { Some(v) => Value::Bool(*(v)), None => Value::Null });
+    m.insert("isScheduledService".into(), match (&p.is_scheduled_service) { Some(v) => Value::Bool(*(v)), None => Value::Null });
+    m.insert("isTflService".into(), match (&p.is_tfl_service) { Some(v) => Value::Bool(*(v)), None => Value::Null });
+    m.insert("modeName".into(), match (&p.mode_name) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("motType".into(), match (&p.mot_type) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("network".into(), match (&p.network) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_line__tfl_api_presentation_entities_status_severity__to_json(p: &iface_line::TflApiPresentationEntitiesStatusSeverity) -> Value {
+    let mut m = Map::new();
+    m.insert("description".into(), match (&p.description) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("modeName".into(), match (&p.mode_name) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("severityLevel".into(), match (&p.severity_level) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_line__tfl_api_presentation_entities_line__to_json(p: &iface_line::TflApiPresentationEntitiesLine) -> Value {
+    let mut m = Map::new();
+    m.insert("created".into(), match (&p.created) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("crowding".into(), match (&p.crowding) { Some(v) => iface_line__tfl_api_presentation_entities_crowding__to_json(v), None => Value::Null });
+    m.insert("disruptions".into(), match (&p.disruptions) { Some(v) => Value::Array((v).iter().map(|v| iface_line__tfl_api_presentation_entities_disruption__to_json(v)).collect()), None => Value::Null });
+    m.insert("id".into(), match (&p.id) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("lineStatuses".into(), match (&p.line_statuses) { Some(v) => Value::Array((v).iter().map(|v| iface_line__tfl_api_presentation_entities_line_status__to_json(v)).collect()), None => Value::Null });
+    m.insert("modeName".into(), match (&p.mode_name) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("modified".into(), match (&p.modified) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("name".into(), match (&p.name) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("routeSections".into(), match (&p.route_sections) { Some(v) => Value::Array((v).iter().map(|v| iface_line__tfl_api_presentation_entities_matched_route__to_json(v)).collect()), None => Value::Null });
+    m.insert("serviceTypes".into(), match (&p.service_types) { Some(v) => Value::Array((v).iter().map(|v| iface_line__tfl_api_presentation_entities_line_service_type_info__to_json(v)).collect()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_line__tfl_api_presentation_entities_crowding__to_json(p: &iface_line::TflApiPresentationEntitiesCrowding) -> Value {
+    let mut m = Map::new();
+    m.insert("passengerFlows".into(), match (&p.passenger_flows) { Some(v) => Value::Array((v).iter().map(|v| iface_line__tfl_api_presentation_entities_passenger_flow__to_json(v)).collect()), None => Value::Null });
+    m.insert("trainLoadings".into(), match (&p.train_loadings) { Some(v) => Value::Array((v).iter().map(|v| iface_line__tfl_api_presentation_entities_train_loading__to_json(v)).collect()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_line__tfl_api_presentation_entities_passenger_flow__to_json(p: &iface_line::TflApiPresentationEntitiesPassengerFlow) -> Value {
+    let mut m = Map::new();
+    m.insert("timeSlice".into(), match (&p.time_slice) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("value".into(), match (&p.value) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_line__tfl_api_presentation_entities_train_loading__to_json(p: &iface_line::TflApiPresentationEntitiesTrainLoading) -> Value {
+    let mut m = Map::new();
+    m.insert("direction".into(), match (&p.direction) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("line".into(), match (&p.line) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("lineDirection".into(), match (&p.line_direction) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("naptanTo".into(), match (&p.naptan_to) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("platformDirection".into(), match (&p.platform_direction) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("timeSlice".into(), match (&p.time_slice) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("value".into(), match (&p.value) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_line__tfl_api_presentation_entities_disruption__to_json(p: &iface_line::TflApiPresentationEntitiesDisruption) -> Value {
+    let mut m = Map::new();
+    m.insert("additionalInfo".into(), match (&p.additional_info) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("affectedRoutes".into(), match (&p.affected_routes) { Some(v) => Value::Array((v).iter().map(|v| iface_line__tfl_api_presentation_entities_disrupted_route__to_json(v)).collect()), None => Value::Null });
+    m.insert("affectedStops".into(), match (&p.affected_stops) { Some(v) => Value::Array((v).iter().map(|v| iface_line__tfl_api_presentation_entities_stop_point__to_json(v)).collect()), None => Value::Null });
+    m.insert("category".into(), match (&p.category) { Some(v) => Value::String(iface_line__tfl_api_presentation_entities_disruption_category_enum__to_str(v).into()), None => Value::Null });
+    m.insert("categoryDescription".into(), match (&p.category_description) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("closureText".into(), match (&p.closure_text) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("created".into(), match (&p.created) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("description".into(), match (&p.description) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("lastUpdate".into(), match (&p.last_update) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("summary".into(), match (&p.summary) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("type".into(), match (&p.type_op) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_line__tfl_api_presentation_entities_disrupted_route__to_json(p: &iface_line::TflApiPresentationEntitiesDisruptedRoute) -> Value {
+    let mut m = Map::new();
+    m.insert("destinationName".into(), match (&p.destination_name) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("direction".into(), match (&p.direction) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("id".into(), match (&p.id) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("isEntireRouteSection".into(), match (&p.is_entire_route_section) { Some(v) => Value::Bool(*(v)), None => Value::Null });
+    m.insert("lineId".into(), match (&p.line_id) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("lineString".into(), match (&p.line_string) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("name".into(), match (&p.name) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("originationName".into(), match (&p.origination_name) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("routeCode".into(), match (&p.route_code) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("routeSectionNaptanEntrySequence".into(), match (&p.route_section_naptan_entry_sequence) { Some(v) => Value::Array((v).iter().map(|v| iface_line__tfl_api_presentation_entities_route_section_naptan_entry_sequence__to_json(v)).collect()), None => Value::Null });
+    m.insert("validFrom".into(), match (&p.valid_from) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("validTo".into(), match (&p.valid_to) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("via".into(), match (&p.via) { Some(v) => iface_line__tfl_api_presentation_entities_route_section_naptan_entry_sequence__to_json(v), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_line__tfl_api_presentation_entities_route_section_naptan_entry_sequence__to_json(p: &iface_line::TflApiPresentationEntitiesRouteSectionNaptanEntrySequence) -> Value {
+    let mut m = Map::new();
+    m.insert("ordinal".into(), match (&p.ordinal) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("stopPoint".into(), match (&p.stop_point) { Some(v) => iface_line__tfl_api_presentation_entities_stop_point__to_json(v), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_line__tfl_api_presentation_entities_stop_point__to_json(p: &iface_line::TflApiPresentationEntitiesStopPoint) -> Value {
+    let mut m = Map::new();
+    m.insert("accessibilitySummary".into(), match (&p.accessibility_summary) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("additionalProperties".into(), match (&p.additional_properties) { Some(v) => Value::Array((v).iter().map(|v| iface_line__tfl_api_presentation_entities_additional_properties__to_json(v)).collect()), None => Value::Null });
+    m.insert("children".into(), match (&p.children) { Some(v) => Value::Array((v).iter().map(|v| iface_line__tfl_api_presentation_entities_place__to_json(v)).collect()), None => Value::Null });
+    m.insert("childrenUrls".into(), match (&p.children_urls) { Some(v) => Value::Array((v).iter().map(|v| Value::String((v).clone())).collect()), None => Value::Null });
+    m.insert("commonName".into(), match (&p.common_name) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("distance".into(), match (&p.distance) { Some(v) => serde_json::Number::from_f64(*(v)).map(Value::Number).unwrap_or(Value::Null), None => Value::Null });
+    m.insert("fullName".into(), match (&p.full_name) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("hubNaptanCode".into(), match (&p.hub_naptan_code) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("icsCode".into(), match (&p.ics_code) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("id".into(), match (&p.id) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("indicator".into(), match (&p.indicator) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("individualStopId".into(), match (&p.individual_stop_id) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("lat".into(), match (&p.lat) { Some(v) => serde_json::Number::from_f64(*(v)).map(Value::Number).unwrap_or(Value::Null), None => Value::Null });
+    m.insert("lineGroup".into(), match (&p.line_group) { Some(v) => Value::Array((v).iter().map(|v| iface_line__tfl_api_presentation_entities_line_group__to_json(v)).collect()), None => Value::Null });
+    m.insert("lineModeGroups".into(), match (&p.line_mode_groups) { Some(v) => Value::Array((v).iter().map(|v| iface_line__tfl_api_presentation_entities_line_mode_group__to_json(v)).collect()), None => Value::Null });
+    m.insert("lines".into(), match (&p.lines) { Some(v) => Value::Array((v).iter().map(|v| iface_line__tfl_api_presentation_entities_identifier__to_json(v)).collect()), None => Value::Null });
+    m.insert("lon".into(), match (&p.lon) { Some(v) => serde_json::Number::from_f64(*(v)).map(Value::Number).unwrap_or(Value::Null), None => Value::Null });
+    m.insert("modes".into(), match (&p.modes) { Some(v) => Value::Array((v).iter().map(|v| Value::String((v).clone())).collect()), None => Value::Null });
+    m.insert("naptanId".into(), match (&p.naptan_id) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("naptanMode".into(), match (&p.naptan_mode) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("placeType".into(), match (&p.place_type) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("platformName".into(), match (&p.platform_name) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("smsCode".into(), match (&p.sms_code) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("stationNaptan".into(), match (&p.station_naptan) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("status".into(), match (&p.status) { Some(v) => Value::Bool(*(v)), None => Value::Null });
+    m.insert("stopLetter".into(), match (&p.stop_letter) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("stopType".into(), match (&p.stop_type) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("url".into(), match (&p.url) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_line__tfl_api_presentation_entities_additional_properties__to_json(p: &iface_line::TflApiPresentationEntitiesAdditionalProperties) -> Value {
+    let mut m = Map::new();
+    m.insert("category".into(), match (&p.category) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("key".into(), match (&p.key) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("modified".into(), match (&p.modified) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("sourceSystemKey".into(), match (&p.source_system_key) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("value".into(), match (&p.value) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_line__tfl_api_presentation_entities_place__to_json(p: &iface_line::TflApiPresentationEntitiesPlace) -> Value {
+    let mut m = Map::new();
+    m.insert("additionalProperties".into(), match (&p.additional_properties) { Some(v) => Value::Array((v).iter().map(|v| iface_line__tfl_api_presentation_entities_additional_properties__to_json(v)).collect()), None => Value::Null });
+    m.insert("children".into(), match (&p.children) { Some(v) => Value::Array((v).iter().map(|v| Value::String((v).clone())).collect()), None => Value::Null });
+    m.insert("childrenUrls".into(), match (&p.children_urls) { Some(v) => Value::Array((v).iter().map(|v| Value::String((v).clone())).collect()), None => Value::Null });
+    m.insert("commonName".into(), match (&p.common_name) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("distance".into(), match (&p.distance) { Some(v) => serde_json::Number::from_f64(*(v)).map(Value::Number).unwrap_or(Value::Null), None => Value::Null });
+    m.insert("id".into(), match (&p.id) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("lat".into(), match (&p.lat) { Some(v) => serde_json::Number::from_f64(*(v)).map(Value::Number).unwrap_or(Value::Null), None => Value::Null });
+    m.insert("lon".into(), match (&p.lon) { Some(v) => serde_json::Number::from_f64(*(v)).map(Value::Number).unwrap_or(Value::Null), None => Value::Null });
+    m.insert("placeType".into(), match (&p.place_type) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("url".into(), match (&p.url) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_line__tfl_api_presentation_entities_line_group__to_json(p: &iface_line::TflApiPresentationEntitiesLineGroup) -> Value {
+    let mut m = Map::new();
+    m.insert("lineIdentifier".into(), match (&p.line_identifier) { Some(v) => Value::Array((v).iter().map(|v| Value::String((v).clone())).collect()), None => Value::Null });
+    m.insert("naptanIdReference".into(), match (&p.naptan_id_reference) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("stationAtcoCode".into(), match (&p.station_atco_code) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_line__tfl_api_presentation_entities_line_mode_group__to_json(p: &iface_line::TflApiPresentationEntitiesLineModeGroup) -> Value {
+    let mut m = Map::new();
+    m.insert("lineIdentifier".into(), match (&p.line_identifier) { Some(v) => Value::Array((v).iter().map(|v| Value::String((v).clone())).collect()), None => Value::Null });
+    m.insert("modeName".into(), match (&p.mode_name) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_line__tfl_api_presentation_entities_identifier__to_json(p: &iface_line::TflApiPresentationEntitiesIdentifier) -> Value {
+    let mut m = Map::new();
+    m.insert("crowding".into(), match (&p.crowding) { Some(v) => iface_line__tfl_api_presentation_entities_crowding__to_json(v), None => Value::Null });
+    m.insert("fullName".into(), match (&p.full_name) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("id".into(), match (&p.id) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("motType".into(), match (&p.mot_type) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("name".into(), match (&p.name) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("network".into(), match (&p.network) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("routeType".into(), match (&p.route_type) { Some(v) => Value::String(iface_line__tfl_api_presentation_entities_identifier_route_type_enum__to_str(v).into()), None => Value::Null });
+    m.insert("status".into(), match (&p.status) { Some(v) => Value::String(iface_line__tfl_api_presentation_entities_identifier_status_enum__to_str(v).into()), None => Value::Null });
+    m.insert("type".into(), match (&p.type_op) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("uri".into(), match (&p.uri) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_line__tfl_api_presentation_entities_line_status__to_json(p: &iface_line::TflApiPresentationEntitiesLineStatus) -> Value {
+    let mut m = Map::new();
+    m.insert("created".into(), match (&p.created) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("disruption".into(), match (&p.disruption) { Some(v) => iface_line__tfl_api_presentation_entities_disruption__to_json(v), None => Value::Null });
+    m.insert("id".into(), match (&p.id) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("lineId".into(), match (&p.line_id) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("modified".into(), match (&p.modified) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("reason".into(), match (&p.reason) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("statusSeverity".into(), match (&p.status_severity) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("statusSeverityDescription".into(), match (&p.status_severity_description) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("validityPeriods".into(), match (&p.validity_periods) { Some(v) => Value::Array((v).iter().map(|v| iface_line__tfl_api_presentation_entities_validity_period__to_json(v)).collect()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_line__tfl_api_presentation_entities_validity_period__to_json(p: &iface_line::TflApiPresentationEntitiesValidityPeriod) -> Value {
+    let mut m = Map::new();
+    m.insert("fromDate".into(), match (&p.from_date) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("isNow".into(), match (&p.is_now) { Some(v) => Value::Bool(*(v)), None => Value::Null });
+    m.insert("toDate".into(), match (&p.to_date) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_line__tfl_api_presentation_entities_matched_route__to_json(p: &iface_line::TflApiPresentationEntitiesMatchedRoute) -> Value {
+    let mut m = Map::new();
+    m.insert("destination".into(), match (&p.destination) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("destinationName".into(), match (&p.destination_name) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("direction".into(), match (&p.direction) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("name".into(), match (&p.name) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("originationName".into(), match (&p.origination_name) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("originator".into(), match (&p.originator) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("routeCode".into(), match (&p.route_code) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("serviceType".into(), match (&p.service_type) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("validFrom".into(), match (&p.valid_from) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("validTo".into(), match (&p.valid_to) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_line__tfl_api_presentation_entities_line_service_type_info__to_json(p: &iface_line::TflApiPresentationEntitiesLineServiceTypeInfo) -> Value {
+    let mut m = Map::new();
+    m.insert("name".into(), match (&p.name) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("uri".into(), match (&p.uri) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_line__tfl_api_presentation_entities_route_search_response__to_json(p: &iface_line::TflApiPresentationEntitiesRouteSearchResponse) -> Value {
+    let mut m = Map::new();
+    m.insert("input".into(), match (&p.input) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("searchMatches".into(), match (&p.search_matches) { Some(v) => Value::Array((v).iter().map(|v| iface_line__tfl_api_presentation_entities_route_search_match__to_json(v)).collect()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_line__tfl_api_presentation_entities_route_search_match__to_json(p: &iface_line::TflApiPresentationEntitiesRouteSearchMatch) -> Value {
+    let mut m = Map::new();
+    m.insert("id".into(), match (&p.id) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("lat".into(), match (&p.lat) { Some(v) => serde_json::Number::from_f64(*(v)).map(Value::Number).unwrap_or(Value::Null), None => Value::Null });
+    m.insert("lineId".into(), match (&p.line_id) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("lineName".into(), match (&p.line_name) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("lineRouteSection".into(), match (&p.line_route_section) { Some(v) => Value::Array((v).iter().map(|v| iface_line__tfl_api_presentation_entities_line_route_section__to_json(v)).collect()), None => Value::Null });
+    m.insert("lon".into(), match (&p.lon) { Some(v) => serde_json::Number::from_f64(*(v)).map(Value::Number).unwrap_or(Value::Null), None => Value::Null });
+    m.insert("matchedRouteSections".into(), match (&p.matched_route_sections) { Some(v) => Value::Array((v).iter().map(|v| iface_line__tfl_api_presentation_entities_matched_route_sections__to_json(v)).collect()), None => Value::Null });
+    m.insert("matchedStops".into(), match (&p.matched_stops) { Some(v) => Value::Array((v).iter().map(|v| iface_line__tfl_api_presentation_entities_matched_stop__to_json(v)).collect()), None => Value::Null });
+    m.insert("mode".into(), match (&p.mode) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("name".into(), match (&p.name) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("url".into(), match (&p.url) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_line__tfl_api_presentation_entities_line_route_section__to_json(p: &iface_line::TflApiPresentationEntitiesLineRouteSection) -> Value {
+    let mut m = Map::new();
+    m.insert("destination".into(), match (&p.destination) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("direction".into(), match (&p.direction) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("fromStation".into(), match (&p.from_station) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("routeId".into(), match (&p.route_id) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("serviceType".into(), match (&p.service_type) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("toStation".into(), match (&p.to_station) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("vehicleDestinationText".into(), match (&p.vehicle_destination_text) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_line__tfl_api_presentation_entities_matched_route_sections__to_json(p: &iface_line::TflApiPresentationEntitiesMatchedRouteSections) -> Value {
+    let mut m = Map::new();
+    m.insert("id".into(), match (&p.id) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_line__tfl_api_presentation_entities_matched_stop__to_json(p: &iface_line::TflApiPresentationEntitiesMatchedStop) -> Value {
+    let mut m = Map::new();
+    m.insert("accessibilitySummary".into(), match (&p.accessibility_summary) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("direction".into(), match (&p.direction) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("hasDisruption".into(), match (&p.has_disruption) { Some(v) => Value::Bool(*(v)), None => Value::Null });
+    m.insert("icsId".into(), match (&p.ics_id) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("id".into(), match (&p.id) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("lat".into(), match (&p.lat) { Some(v) => serde_json::Number::from_f64(*(v)).map(Value::Number).unwrap_or(Value::Null), None => Value::Null });
+    m.insert("lines".into(), match (&p.lines) { Some(v) => Value::Array((v).iter().map(|v| iface_line__tfl_api_presentation_entities_identifier__to_json(v)).collect()), None => Value::Null });
+    m.insert("lon".into(), match (&p.lon) { Some(v) => serde_json::Number::from_f64(*(v)).map(Value::Number).unwrap_or(Value::Null), None => Value::Null });
+    m.insert("modes".into(), match (&p.modes) { Some(v) => Value::Array((v).iter().map(|v| Value::String((v).clone())).collect()), None => Value::Null });
+    m.insert("name".into(), match (&p.name) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("parentId".into(), match (&p.parent_id) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("routeId".into(), match (&p.route_id) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("stationId".into(), match (&p.station_id) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("status".into(), match (&p.status) { Some(v) => Value::Bool(*(v)), None => Value::Null });
+    m.insert("stopLetter".into(), match (&p.stop_letter) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("stopType".into(), match (&p.stop_type) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("topMostParentId".into(), match (&p.top_most_parent_id) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("towards".into(), match (&p.towards) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("url".into(), match (&p.url) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("zone".into(), match (&p.zone) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_line__tfl_api_presentation_entities_prediction__to_json(p: &iface_line::TflApiPresentationEntitiesPrediction) -> Value {
+    let mut m = Map::new();
+    m.insert("bearing".into(), match (&p.bearing) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("currentLocation".into(), match (&p.current_location) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("destinationName".into(), match (&p.destination_name) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("destinationNaptanId".into(), match (&p.destination_naptan_id) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("direction".into(), match (&p.direction) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("expectedArrival".into(), match (&p.expected_arrival) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("id".into(), match (&p.id) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("lineId".into(), match (&p.line_id) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("lineName".into(), match (&p.line_name) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("modeName".into(), match (&p.mode_name) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("naptanId".into(), match (&p.naptan_id) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("operationType".into(), match (&p.operation_type) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("platformName".into(), match (&p.platform_name) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("stationName".into(), match (&p.station_name) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("timeToLive".into(), match (&p.time_to_live) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("timeToStation".into(), match (&p.time_to_station) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("timestamp".into(), match (&p.timestamp) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("timing".into(), match (&p.timing) { Some(v) => iface_line__tfl_api_presentation_entities_prediction_timing__to_json(v), None => Value::Null });
+    m.insert("towards".into(), match (&p.towards) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("vehicleId".into(), match (&p.vehicle_id) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_line__tfl_api_presentation_entities_prediction_timing__to_json(p: &iface_line::TflApiPresentationEntitiesPredictionTiming) -> Value {
+    let mut m = Map::new();
+    m.insert("countdownServerAdjustment".into(), match (&p.countdown_server_adjustment) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("insert".into(), match (&p.insert) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("read".into(), match (&p.read) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("received".into(), match (&p.received) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("sent".into(), match (&p.sent) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("source".into(), match (&p.source) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_line__tfl_api_presentation_entities_route_sequence__to_json(p: &iface_line::TflApiPresentationEntitiesRouteSequence) -> Value {
+    let mut m = Map::new();
+    m.insert("direction".into(), match (&p.direction) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("isOutboundOnly".into(), match (&p.is_outbound_only) { Some(v) => Value::Bool(*(v)), None => Value::Null });
+    m.insert("lineId".into(), match (&p.line_id) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("lineName".into(), match (&p.line_name) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("lineStrings".into(), match (&p.line_strings) { Some(v) => Value::Array((v).iter().map(|v| Value::String((v).clone())).collect()), None => Value::Null });
+    m.insert("mode".into(), match (&p.mode) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("orderedLineRoutes".into(), match (&p.ordered_line_routes) { Some(v) => Value::Array((v).iter().map(|v| iface_line__tfl_api_presentation_entities_ordered_route__to_json(v)).collect()), None => Value::Null });
+    m.insert("stations".into(), match (&p.stations) { Some(v) => Value::Array((v).iter().map(|v| iface_line__tfl_api_presentation_entities_matched_stop__to_json(v)).collect()), None => Value::Null });
+    m.insert("stopPointSequences".into(), match (&p.stop_point_sequences) { Some(v) => Value::Array((v).iter().map(|v| iface_line__tfl_api_presentation_entities_stop_point_sequence__to_json(v)).collect()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_line__tfl_api_presentation_entities_ordered_route__to_json(p: &iface_line::TflApiPresentationEntitiesOrderedRoute) -> Value {
+    let mut m = Map::new();
+    m.insert("name".into(), match (&p.name) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("naptanIds".into(), match (&p.naptan_ids) { Some(v) => Value::Array((v).iter().map(|v| Value::String((v).clone())).collect()), None => Value::Null });
+    m.insert("serviceType".into(), match (&p.service_type) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_line__tfl_api_presentation_entities_stop_point_sequence__to_json(p: &iface_line::TflApiPresentationEntitiesStopPointSequence) -> Value {
+    let mut m = Map::new();
+    m.insert("branchId".into(), match (&p.branch_id) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("direction".into(), match (&p.direction) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("lineId".into(), match (&p.line_id) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("lineName".into(), match (&p.line_name) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("nextBranchIds".into(), match (&p.next_branch_ids) { Some(v) => Value::Array((v).iter().map(|v| Value::Number(serde_json::Number::from(*(v)))).collect()), None => Value::Null });
+    m.insert("prevBranchIds".into(), match (&p.prev_branch_ids) { Some(v) => Value::Array((v).iter().map(|v| Value::Number(serde_json::Number::from(*(v)))).collect()), None => Value::Null });
+    m.insert("serviceType".into(), match (&p.service_type) { Some(v) => Value::String(iface_line__route_by_mode_service_types_item_enum__to_str(v).into()), None => Value::Null });
+    m.insert("stopPoint".into(), match (&p.stop_point) { Some(v) => Value::Array((v).iter().map(|v| iface_line__tfl_api_presentation_entities_matched_stop__to_json(v)).collect()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_line__tfl_api_presentation_entities_timetable_response__to_json(p: &iface_line::TflApiPresentationEntitiesTimetableResponse) -> Value {
+    let mut m = Map::new();
+    m.insert("direction".into(), match (&p.direction) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("disambiguation".into(), match (&p.disambiguation) { Some(v) => iface_line__tfl_api_presentation_entities_timetables_disambiguation__to_json(v), None => Value::Null });
+    m.insert("lineId".into(), match (&p.line_id) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("lineName".into(), match (&p.line_name) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("pdfUrl".into(), match (&p.pdf_url) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("stations".into(), match (&p.stations) { Some(v) => Value::Array((v).iter().map(|v| iface_line__tfl_api_presentation_entities_matched_stop__to_json(v)).collect()), None => Value::Null });
+    m.insert("statusErrorMessage".into(), match (&p.status_error_message) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("stops".into(), match (&p.stops) { Some(v) => Value::Array((v).iter().map(|v| iface_line__tfl_api_presentation_entities_matched_stop__to_json(v)).collect()), None => Value::Null });
+    m.insert("timetable".into(), match (&p.timetable) { Some(v) => iface_line__tfl_api_presentation_entities_timetable__to_json(v), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_line__tfl_api_presentation_entities_timetables_disambiguation__to_json(p: &iface_line::TflApiPresentationEntitiesTimetablesDisambiguation) -> Value {
+    let mut m = Map::new();
+    m.insert("disambiguationOptions".into(), match (&p.disambiguation_options) { Some(v) => Value::Array((v).iter().map(|v| iface_line__tfl_api_presentation_entities_timetables_disambiguation_option__to_json(v)).collect()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_line__tfl_api_presentation_entities_timetables_disambiguation_option__to_json(p: &iface_line::TflApiPresentationEntitiesTimetablesDisambiguationOption) -> Value {
+    let mut m = Map::new();
+    m.insert("description".into(), match (&p.description) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("uri".into(), match (&p.uri) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_line__tfl_api_presentation_entities_timetable__to_json(p: &iface_line::TflApiPresentationEntitiesTimetable) -> Value {
+    let mut m = Map::new();
+    m.insert("departureStopId".into(), match (&p.departure_stop_id) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("routes".into(), match (&p.routes) { Some(v) => Value::Array((v).iter().map(|v| iface_line__tfl_api_presentation_entities_timetable_route__to_json(v)).collect()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_line__tfl_api_presentation_entities_timetable_route__to_json(p: &iface_line::TflApiPresentationEntitiesTimetableRoute) -> Value {
+    let mut m = Map::new();
+    m.insert("schedules".into(), match (&p.schedules) { Some(v) => Value::Array((v).iter().map(|v| iface_line__tfl_api_presentation_entities_schedule__to_json(v)).collect()), None => Value::Null });
+    m.insert("stationIntervals".into(), match (&p.station_intervals) { Some(v) => Value::Array((v).iter().map(|v| iface_line__tfl_api_presentation_entities_station_interval__to_json(v)).collect()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_line__tfl_api_presentation_entities_schedule__to_json(p: &iface_line::TflApiPresentationEntitiesSchedule) -> Value {
+    let mut m = Map::new();
+    m.insert("firstJourney".into(), match (&p.first_journey) { Some(v) => iface_line__tfl_api_presentation_entities_known_journey__to_json(v), None => Value::Null });
+    m.insert("knownJourneys".into(), match (&p.known_journeys) { Some(v) => Value::Array((v).iter().map(|v| iface_line__tfl_api_presentation_entities_known_journey__to_json(v)).collect()), None => Value::Null });
+    m.insert("lastJourney".into(), match (&p.last_journey) { Some(v) => iface_line__tfl_api_presentation_entities_known_journey__to_json(v), None => Value::Null });
+    m.insert("name".into(), match (&p.name) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("periods".into(), match (&p.periods) { Some(v) => Value::Array((v).iter().map(|v| iface_line__tfl_api_presentation_entities_period__to_json(v)).collect()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_line__tfl_api_presentation_entities_known_journey__to_json(p: &iface_line::TflApiPresentationEntitiesKnownJourney) -> Value {
+    let mut m = Map::new();
+    m.insert("hour".into(), match (&p.hour) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("intervalId".into(), match (&p.interval_id) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("minute".into(), match (&p.minute) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_line__tfl_api_presentation_entities_period__to_json(p: &iface_line::TflApiPresentationEntitiesPeriod) -> Value {
+    let mut m = Map::new();
+    m.insert("frequency".into(), match (&p.frequency) { Some(v) => iface_line__tfl_api_presentation_entities_service_frequency__to_json(v), None => Value::Null });
+    m.insert("fromTime".into(), match (&p.from_time) { Some(v) => iface_line__tfl_api_presentation_entities_twenty_four_hour_clock_time__to_json(v), None => Value::Null });
+    m.insert("toTime".into(), match (&p.to_time) { Some(v) => iface_line__tfl_api_presentation_entities_twenty_four_hour_clock_time__to_json(v), None => Value::Null });
+    m.insert("type".into(), match (&p.type_op) { Some(v) => Value::String(iface_line__tfl_api_presentation_entities_period_type_op_enum__to_str(v).into()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_line__tfl_api_presentation_entities_service_frequency__to_json(p: &iface_line::TflApiPresentationEntitiesServiceFrequency) -> Value {
+    let mut m = Map::new();
+    m.insert("highestFrequency".into(), match (&p.highest_frequency) { Some(v) => serde_json::Number::from_f64(*(v)).map(Value::Number).unwrap_or(Value::Null), None => Value::Null });
+    m.insert("lowestFrequency".into(), match (&p.lowest_frequency) { Some(v) => serde_json::Number::from_f64(*(v)).map(Value::Number).unwrap_or(Value::Null), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_line__tfl_api_presentation_entities_twenty_four_hour_clock_time__to_json(p: &iface_line::TflApiPresentationEntitiesTwentyFourHourClockTime) -> Value {
+    let mut m = Map::new();
+    m.insert("hour".into(), match (&p.hour) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("minute".into(), match (&p.minute) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_line__tfl_api_presentation_entities_station_interval__to_json(p: &iface_line::TflApiPresentationEntitiesStationInterval) -> Value {
+    let mut m = Map::new();
+    m.insert("id".into(), match (&p.id) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("intervals".into(), match (&p.intervals) { Some(v) => Value::Array((v).iter().map(|v| iface_line__tfl_api_presentation_entities_interval__to_json(v)).collect()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_line__tfl_api_presentation_entities_interval__to_json(p: &iface_line::TflApiPresentationEntitiesInterval) -> Value {
+    let mut m = Map::new();
+    m.insert("stopId".into(), match (&p.stop_id) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("timeToArrival".into(), match (&p.time_to_arrival) { Some(v) => serde_json::Number::from_f64(*(v)).map(Value::Number).unwrap_or(Value::Null), None => Value::Null });
+    Value::Object(m)
 }
 
 fn iface_line__get_by_mode_params__to_json(p: &iface_line::GetByModeParams) -> Value {
@@ -893,10 +2820,12 @@ fn iface_line__status_params__to_json(p: &iface_line::StatusParams) -> Value {
     let mut m = Map::new();
     m.insert("ids".into(), Value::String((&p.ids).clone()));
     m.insert("detail".into(), match (&p.detail) { Some(v) => Value::Bool(*(v)), None => Value::Null });
-    m.insert("start_date".into(), Value::String((&p.start_date).clone()));
-    m.insert("end_date".into(), Value::String((&p.end_date).clone()));
+    m.insert("start_date_v2".into(), Value::String((&p.start_date).clone()));
+    m.insert("end_date_v2".into(), Value::String((&p.end_date).clone()));
     m.insert("date_range_start_date".into(), match (&p.date_range_start_date) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("date_range_end_date".into(), match (&p.date_range_end_date) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("start_date".into(), Value::String((&p.start_date_v2).clone()));
+    m.insert("end_date".into(), Value::String((&p.end_date_v2).clone()));
     Value::Object(m)
 }
 
@@ -931,86 +2860,1092 @@ fn iface_line__timetable_to_params__to_json(p: &iface_line::TimetableToParams) -
     Value::Object(m)
 }
 
+fn iface_line__tfl_api_presentation_entities_mode__from_json(v: &Value) -> Option<iface_line::TflApiPresentationEntitiesMode> {
+    let m = v.as_object()?;
+    Some(iface_line::TflApiPresentationEntitiesMode {
+        is_fare_paying: m.get("isFarePaying").filter(|v| !v.is_null()).and_then(|v| (v).as_bool()),
+        is_scheduled_service: m.get("isScheduledService").filter(|v| !v.is_null()).and_then(|v| (v).as_bool()),
+        is_tfl_service: m.get("isTflService").filter(|v| !v.is_null()).and_then(|v| (v).as_bool()),
+        mode_name: m.get("modeName").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        mot_type: m.get("motType").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        network: m.get("network").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    })
+}
+
+fn iface_line__tfl_api_presentation_entities_status_severity__from_json(v: &Value) -> Option<iface_line::TflApiPresentationEntitiesStatusSeverity> {
+    let m = v.as_object()?;
+    Some(iface_line::TflApiPresentationEntitiesStatusSeverity {
+        description: m.get("description").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        mode_name: m.get("modeName").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        severity_level: m.get("severityLevel").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+    })
+}
+
+fn iface_line__tfl_api_presentation_entities_line__from_json(v: &Value) -> Option<iface_line::TflApiPresentationEntitiesLine> {
+    let m = v.as_object()?;
+    Some(iface_line::TflApiPresentationEntitiesLine {
+        created: m.get("created").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        crowding: m.get("crowding").filter(|v| !v.is_null()).and_then(|v| iface_line__tfl_api_presentation_entities_crowding__from_json(v)),
+        disruptions: m.get("disruptions").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| iface_line__tfl_api_presentation_entities_disruption__from_json(x)).collect())),
+        id: m.get("id").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        line_statuses: m.get("lineStatuses").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| iface_line__tfl_api_presentation_entities_line_status__from_json(x)).collect())),
+        mode_name: m.get("modeName").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        modified: m.get("modified").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        name: m.get("name").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        route_sections: m.get("routeSections").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| iface_line__tfl_api_presentation_entities_matched_route__from_json(x)).collect())),
+        service_types: m.get("serviceTypes").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| iface_line__tfl_api_presentation_entities_line_service_type_info__from_json(x)).collect())),
+    })
+}
+
+fn iface_line__tfl_api_presentation_entities_crowding__from_json(v: &Value) -> Option<iface_line::TflApiPresentationEntitiesCrowding> {
+    let m = v.as_object()?;
+    Some(iface_line::TflApiPresentationEntitiesCrowding {
+        passenger_flows: m.get("passengerFlows").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| iface_line__tfl_api_presentation_entities_passenger_flow__from_json(x)).collect())),
+        train_loadings: m.get("trainLoadings").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| iface_line__tfl_api_presentation_entities_train_loading__from_json(x)).collect())),
+    })
+}
+
+fn iface_line__tfl_api_presentation_entities_passenger_flow__from_json(v: &Value) -> Option<iface_line::TflApiPresentationEntitiesPassengerFlow> {
+    let m = v.as_object()?;
+    Some(iface_line::TflApiPresentationEntitiesPassengerFlow {
+        time_slice: m.get("timeSlice").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        value: m.get("value").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+    })
+}
+
+fn iface_line__tfl_api_presentation_entities_train_loading__from_json(v: &Value) -> Option<iface_line::TflApiPresentationEntitiesTrainLoading> {
+    let m = v.as_object()?;
+    Some(iface_line::TflApiPresentationEntitiesTrainLoading {
+        direction: m.get("direction").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        line: m.get("line").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        line_direction: m.get("lineDirection").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        naptan_to: m.get("naptanTo").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        platform_direction: m.get("platformDirection").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        time_slice: m.get("timeSlice").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        value: m.get("value").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+    })
+}
+
+fn iface_line__tfl_api_presentation_entities_disruption__from_json(v: &Value) -> Option<iface_line::TflApiPresentationEntitiesDisruption> {
+    let m = v.as_object()?;
+    Some(iface_line::TflApiPresentationEntitiesDisruption {
+        additional_info: m.get("additionalInfo").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        affected_routes: m.get("affectedRoutes").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| iface_line__tfl_api_presentation_entities_disrupted_route__from_json(x)).collect())),
+        affected_stops: m.get("affectedStops").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| iface_line__tfl_api_presentation_entities_stop_point__from_json(x)).collect())),
+        category: m.get("category").filter(|v| !v.is_null()).and_then(|v| (v).as_str().and_then(iface_line__tfl_api_presentation_entities_disruption_category_enum__from_str)),
+        category_description: m.get("categoryDescription").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        closure_text: m.get("closureText").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        created: m.get("created").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        description: m.get("description").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        last_update: m.get("lastUpdate").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        summary: m.get("summary").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        type_op: m.get("type").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    })
+}
+
+fn iface_line__tfl_api_presentation_entities_disrupted_route__from_json(v: &Value) -> Option<iface_line::TflApiPresentationEntitiesDisruptedRoute> {
+    let m = v.as_object()?;
+    Some(iface_line::TflApiPresentationEntitiesDisruptedRoute {
+        destination_name: m.get("destinationName").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        direction: m.get("direction").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        id: m.get("id").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        is_entire_route_section: m.get("isEntireRouteSection").filter(|v| !v.is_null()).and_then(|v| (v).as_bool()),
+        line_id: m.get("lineId").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        line_string: m.get("lineString").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        name: m.get("name").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        origination_name: m.get("originationName").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        route_code: m.get("routeCode").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        route_section_naptan_entry_sequence: m.get("routeSectionNaptanEntrySequence").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| iface_line__tfl_api_presentation_entities_route_section_naptan_entry_sequence__from_json(x)).collect())),
+        valid_from: m.get("validFrom").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        valid_to: m.get("validTo").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        via: m.get("via").filter(|v| !v.is_null()).and_then(|v| iface_line__tfl_api_presentation_entities_route_section_naptan_entry_sequence__from_json(v)),
+    })
+}
+
+fn iface_line__tfl_api_presentation_entities_route_section_naptan_entry_sequence__from_json(v: &Value) -> Option<iface_line::TflApiPresentationEntitiesRouteSectionNaptanEntrySequence> {
+    let m = v.as_object()?;
+    Some(iface_line::TflApiPresentationEntitiesRouteSectionNaptanEntrySequence {
+        ordinal: m.get("ordinal").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        stop_point: m.get("stopPoint").filter(|v| !v.is_null()).and_then(|v| iface_line__tfl_api_presentation_entities_stop_point__from_json(v)),
+    })
+}
+
+fn iface_line__tfl_api_presentation_entities_stop_point__from_json(v: &Value) -> Option<iface_line::TflApiPresentationEntitiesStopPoint> {
+    let m = v.as_object()?;
+    Some(iface_line::TflApiPresentationEntitiesStopPoint {
+        accessibility_summary: m.get("accessibilitySummary").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        additional_properties: m.get("additionalProperties").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| iface_line__tfl_api_presentation_entities_additional_properties__from_json(x)).collect())),
+        children: m.get("children").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| iface_line__tfl_api_presentation_entities_place__from_json(x)).collect())),
+        children_urls: m.get("childrenUrls").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| (x).as_str().map(|s| s.to_string())).collect())),
+        common_name: m.get("commonName").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        distance: m.get("distance").filter(|v| !v.is_null()).and_then(|v| (v).as_f64()),
+        full_name: m.get("fullName").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        hub_naptan_code: m.get("hubNaptanCode").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        ics_code: m.get("icsCode").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        id: m.get("id").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        indicator: m.get("indicator").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        individual_stop_id: m.get("individualStopId").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        lat: m.get("lat").filter(|v| !v.is_null()).and_then(|v| (v).as_f64()),
+        line_group: m.get("lineGroup").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| iface_line__tfl_api_presentation_entities_line_group__from_json(x)).collect())),
+        line_mode_groups: m.get("lineModeGroups").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| iface_line__tfl_api_presentation_entities_line_mode_group__from_json(x)).collect())),
+        lines: m.get("lines").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| iface_line__tfl_api_presentation_entities_identifier__from_json(x)).collect())),
+        lon: m.get("lon").filter(|v| !v.is_null()).and_then(|v| (v).as_f64()),
+        modes: m.get("modes").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| (x).as_str().map(|s| s.to_string())).collect())),
+        naptan_id: m.get("naptanId").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        naptan_mode: m.get("naptanMode").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        place_type: m.get("placeType").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        platform_name: m.get("platformName").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        sms_code: m.get("smsCode").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        station_naptan: m.get("stationNaptan").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        status: m.get("status").filter(|v| !v.is_null()).and_then(|v| (v).as_bool()),
+        stop_letter: m.get("stopLetter").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        stop_type: m.get("stopType").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        url: m.get("url").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    })
+}
+
+fn iface_line__tfl_api_presentation_entities_additional_properties__from_json(v: &Value) -> Option<iface_line::TflApiPresentationEntitiesAdditionalProperties> {
+    let m = v.as_object()?;
+    Some(iface_line::TflApiPresentationEntitiesAdditionalProperties {
+        category: m.get("category").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        key: m.get("key").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        modified: m.get("modified").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        source_system_key: m.get("sourceSystemKey").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        value: m.get("value").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    })
+}
+
+fn iface_line__tfl_api_presentation_entities_place__from_json(v: &Value) -> Option<iface_line::TflApiPresentationEntitiesPlace> {
+    let m = v.as_object()?;
+    Some(iface_line::TflApiPresentationEntitiesPlace {
+        additional_properties: m.get("additionalProperties").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| iface_line__tfl_api_presentation_entities_additional_properties__from_json(x)).collect())),
+        children: m.get("children").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| (x).as_str().map(|s| s.to_string())).collect())),
+        children_urls: m.get("childrenUrls").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| (x).as_str().map(|s| s.to_string())).collect())),
+        common_name: m.get("commonName").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        distance: m.get("distance").filter(|v| !v.is_null()).and_then(|v| (v).as_f64()),
+        id: m.get("id").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        lat: m.get("lat").filter(|v| !v.is_null()).and_then(|v| (v).as_f64()),
+        lon: m.get("lon").filter(|v| !v.is_null()).and_then(|v| (v).as_f64()),
+        place_type: m.get("placeType").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        url: m.get("url").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    })
+}
+
+fn iface_line__tfl_api_presentation_entities_line_group__from_json(v: &Value) -> Option<iface_line::TflApiPresentationEntitiesLineGroup> {
+    let m = v.as_object()?;
+    Some(iface_line::TflApiPresentationEntitiesLineGroup {
+        line_identifier: m.get("lineIdentifier").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| (x).as_str().map(|s| s.to_string())).collect())),
+        naptan_id_reference: m.get("naptanIdReference").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        station_atco_code: m.get("stationAtcoCode").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    })
+}
+
+fn iface_line__tfl_api_presentation_entities_line_mode_group__from_json(v: &Value) -> Option<iface_line::TflApiPresentationEntitiesLineModeGroup> {
+    let m = v.as_object()?;
+    Some(iface_line::TflApiPresentationEntitiesLineModeGroup {
+        line_identifier: m.get("lineIdentifier").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| (x).as_str().map(|s| s.to_string())).collect())),
+        mode_name: m.get("modeName").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    })
+}
+
+fn iface_line__tfl_api_presentation_entities_identifier__from_json(v: &Value) -> Option<iface_line::TflApiPresentationEntitiesIdentifier> {
+    let m = v.as_object()?;
+    Some(iface_line::TflApiPresentationEntitiesIdentifier {
+        crowding: m.get("crowding").filter(|v| !v.is_null()).and_then(|v| iface_line__tfl_api_presentation_entities_crowding__from_json(v)),
+        full_name: m.get("fullName").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        id: m.get("id").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        mot_type: m.get("motType").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        name: m.get("name").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        network: m.get("network").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        route_type: m.get("routeType").filter(|v| !v.is_null()).and_then(|v| (v).as_str().and_then(iface_line__tfl_api_presentation_entities_identifier_route_type_enum__from_str)),
+        status: m.get("status").filter(|v| !v.is_null()).and_then(|v| (v).as_str().and_then(iface_line__tfl_api_presentation_entities_identifier_status_enum__from_str)),
+        type_op: m.get("type").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        uri: m.get("uri").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    })
+}
+
+fn iface_line__tfl_api_presentation_entities_line_status__from_json(v: &Value) -> Option<iface_line::TflApiPresentationEntitiesLineStatus> {
+    let m = v.as_object()?;
+    Some(iface_line::TflApiPresentationEntitiesLineStatus {
+        created: m.get("created").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        disruption: m.get("disruption").filter(|v| !v.is_null()).and_then(|v| iface_line__tfl_api_presentation_entities_disruption__from_json(v)),
+        id: m.get("id").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        line_id: m.get("lineId").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        modified: m.get("modified").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        reason: m.get("reason").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        status_severity: m.get("statusSeverity").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        status_severity_description: m.get("statusSeverityDescription").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        validity_periods: m.get("validityPeriods").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| iface_line__tfl_api_presentation_entities_validity_period__from_json(x)).collect())),
+    })
+}
+
+fn iface_line__tfl_api_presentation_entities_validity_period__from_json(v: &Value) -> Option<iface_line::TflApiPresentationEntitiesValidityPeriod> {
+    let m = v.as_object()?;
+    Some(iface_line::TflApiPresentationEntitiesValidityPeriod {
+        from_date: m.get("fromDate").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        is_now: m.get("isNow").filter(|v| !v.is_null()).and_then(|v| (v).as_bool()),
+        to_date: m.get("toDate").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    })
+}
+
+fn iface_line__tfl_api_presentation_entities_matched_route__from_json(v: &Value) -> Option<iface_line::TflApiPresentationEntitiesMatchedRoute> {
+    let m = v.as_object()?;
+    Some(iface_line::TflApiPresentationEntitiesMatchedRoute {
+        destination: m.get("destination").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        destination_name: m.get("destinationName").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        direction: m.get("direction").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        name: m.get("name").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        origination_name: m.get("originationName").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        originator: m.get("originator").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        route_code: m.get("routeCode").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        service_type: m.get("serviceType").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        valid_from: m.get("validFrom").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        valid_to: m.get("validTo").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    })
+}
+
+fn iface_line__tfl_api_presentation_entities_line_service_type_info__from_json(v: &Value) -> Option<iface_line::TflApiPresentationEntitiesLineServiceTypeInfo> {
+    let m = v.as_object()?;
+    Some(iface_line::TflApiPresentationEntitiesLineServiceTypeInfo {
+        name: m.get("name").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        uri: m.get("uri").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    })
+}
+
+fn iface_line__tfl_api_presentation_entities_route_search_response__from_json(v: &Value) -> Option<iface_line::TflApiPresentationEntitiesRouteSearchResponse> {
+    let m = v.as_object()?;
+    Some(iface_line::TflApiPresentationEntitiesRouteSearchResponse {
+        input: m.get("input").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        search_matches: m.get("searchMatches").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| iface_line__tfl_api_presentation_entities_route_search_match__from_json(x)).collect())),
+    })
+}
+
+fn iface_line__tfl_api_presentation_entities_route_search_match__from_json(v: &Value) -> Option<iface_line::TflApiPresentationEntitiesRouteSearchMatch> {
+    let m = v.as_object()?;
+    Some(iface_line::TflApiPresentationEntitiesRouteSearchMatch {
+        id: m.get("id").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        lat: m.get("lat").filter(|v| !v.is_null()).and_then(|v| (v).as_f64()),
+        line_id: m.get("lineId").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        line_name: m.get("lineName").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        line_route_section: m.get("lineRouteSection").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| iface_line__tfl_api_presentation_entities_line_route_section__from_json(x)).collect())),
+        lon: m.get("lon").filter(|v| !v.is_null()).and_then(|v| (v).as_f64()),
+        matched_route_sections: m.get("matchedRouteSections").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| iface_line__tfl_api_presentation_entities_matched_route_sections__from_json(x)).collect())),
+        matched_stops: m.get("matchedStops").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| iface_line__tfl_api_presentation_entities_matched_stop__from_json(x)).collect())),
+        mode: m.get("mode").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        name: m.get("name").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        url: m.get("url").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    })
+}
+
+fn iface_line__tfl_api_presentation_entities_line_route_section__from_json(v: &Value) -> Option<iface_line::TflApiPresentationEntitiesLineRouteSection> {
+    let m = v.as_object()?;
+    Some(iface_line::TflApiPresentationEntitiesLineRouteSection {
+        destination: m.get("destination").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        direction: m.get("direction").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        from_station: m.get("fromStation").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        route_id: m.get("routeId").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        service_type: m.get("serviceType").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        to_station: m.get("toStation").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        vehicle_destination_text: m.get("vehicleDestinationText").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    })
+}
+
+fn iface_line__tfl_api_presentation_entities_matched_route_sections__from_json(v: &Value) -> Option<iface_line::TflApiPresentationEntitiesMatchedRouteSections> {
+    let m = v.as_object()?;
+    Some(iface_line::TflApiPresentationEntitiesMatchedRouteSections {
+        id: m.get("id").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+    })
+}
+
+fn iface_line__tfl_api_presentation_entities_matched_stop__from_json(v: &Value) -> Option<iface_line::TflApiPresentationEntitiesMatchedStop> {
+    let m = v.as_object()?;
+    Some(iface_line::TflApiPresentationEntitiesMatchedStop {
+        accessibility_summary: m.get("accessibilitySummary").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        direction: m.get("direction").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        has_disruption: m.get("hasDisruption").filter(|v| !v.is_null()).and_then(|v| (v).as_bool()),
+        ics_id: m.get("icsId").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        id: m.get("id").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        lat: m.get("lat").filter(|v| !v.is_null()).and_then(|v| (v).as_f64()),
+        lines: m.get("lines").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| iface_line__tfl_api_presentation_entities_identifier__from_json(x)).collect())),
+        lon: m.get("lon").filter(|v| !v.is_null()).and_then(|v| (v).as_f64()),
+        modes: m.get("modes").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| (x).as_str().map(|s| s.to_string())).collect())),
+        name: m.get("name").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        parent_id: m.get("parentId").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        route_id: m.get("routeId").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        station_id: m.get("stationId").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        status: m.get("status").filter(|v| !v.is_null()).and_then(|v| (v).as_bool()),
+        stop_letter: m.get("stopLetter").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        stop_type: m.get("stopType").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        top_most_parent_id: m.get("topMostParentId").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        towards: m.get("towards").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        url: m.get("url").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        zone: m.get("zone").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    })
+}
+
+fn iface_line__tfl_api_presentation_entities_prediction__from_json(v: &Value) -> Option<iface_line::TflApiPresentationEntitiesPrediction> {
+    let m = v.as_object()?;
+    Some(iface_line::TflApiPresentationEntitiesPrediction {
+        bearing: m.get("bearing").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        current_location: m.get("currentLocation").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        destination_name: m.get("destinationName").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        destination_naptan_id: m.get("destinationNaptanId").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        direction: m.get("direction").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        expected_arrival: m.get("expectedArrival").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        id: m.get("id").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        line_id: m.get("lineId").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        line_name: m.get("lineName").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        mode_name: m.get("modeName").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        naptan_id: m.get("naptanId").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        operation_type: m.get("operationType").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        platform_name: m.get("platformName").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        station_name: m.get("stationName").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        time_to_live: m.get("timeToLive").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        time_to_station: m.get("timeToStation").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        timestamp: m.get("timestamp").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        timing: m.get("timing").filter(|v| !v.is_null()).and_then(|v| iface_line__tfl_api_presentation_entities_prediction_timing__from_json(v)),
+        towards: m.get("towards").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        vehicle_id: m.get("vehicleId").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    })
+}
+
+fn iface_line__tfl_api_presentation_entities_prediction_timing__from_json(v: &Value) -> Option<iface_line::TflApiPresentationEntitiesPredictionTiming> {
+    let m = v.as_object()?;
+    Some(iface_line::TflApiPresentationEntitiesPredictionTiming {
+        countdown_server_adjustment: m.get("countdownServerAdjustment").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        insert: m.get("insert").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        read: m.get("read").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        received: m.get("received").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        sent: m.get("sent").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        source: m.get("source").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    })
+}
+
+fn iface_line__tfl_api_presentation_entities_route_sequence__from_json(v: &Value) -> Option<iface_line::TflApiPresentationEntitiesRouteSequence> {
+    let m = v.as_object()?;
+    Some(iface_line::TflApiPresentationEntitiesRouteSequence {
+        direction: m.get("direction").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        is_outbound_only: m.get("isOutboundOnly").filter(|v| !v.is_null()).and_then(|v| (v).as_bool()),
+        line_id: m.get("lineId").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        line_name: m.get("lineName").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        line_strings: m.get("lineStrings").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| (x).as_str().map(|s| s.to_string())).collect())),
+        mode: m.get("mode").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        ordered_line_routes: m.get("orderedLineRoutes").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| iface_line__tfl_api_presentation_entities_ordered_route__from_json(x)).collect())),
+        stations: m.get("stations").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| iface_line__tfl_api_presentation_entities_matched_stop__from_json(x)).collect())),
+        stop_point_sequences: m.get("stopPointSequences").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| iface_line__tfl_api_presentation_entities_stop_point_sequence__from_json(x)).collect())),
+    })
+}
+
+fn iface_line__tfl_api_presentation_entities_ordered_route__from_json(v: &Value) -> Option<iface_line::TflApiPresentationEntitiesOrderedRoute> {
+    let m = v.as_object()?;
+    Some(iface_line::TflApiPresentationEntitiesOrderedRoute {
+        name: m.get("name").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        naptan_ids: m.get("naptanIds").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| (x).as_str().map(|s| s.to_string())).collect())),
+        service_type: m.get("serviceType").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    })
+}
+
+fn iface_line__tfl_api_presentation_entities_stop_point_sequence__from_json(v: &Value) -> Option<iface_line::TflApiPresentationEntitiesStopPointSequence> {
+    let m = v.as_object()?;
+    Some(iface_line::TflApiPresentationEntitiesStopPointSequence {
+        branch_id: m.get("branchId").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        direction: m.get("direction").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        line_id: m.get("lineId").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        line_name: m.get("lineName").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        next_branch_ids: m.get("nextBranchIds").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| (x).as_i64().map(|n| n as i32)).collect())),
+        prev_branch_ids: m.get("prevBranchIds").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| (x).as_i64().map(|n| n as i32)).collect())),
+        service_type: m.get("serviceType").filter(|v| !v.is_null()).and_then(|v| (v).as_str().and_then(iface_line__route_by_mode_service_types_item_enum__from_str)),
+        stop_point: m.get("stopPoint").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| iface_line__tfl_api_presentation_entities_matched_stop__from_json(x)).collect())),
+    })
+}
+
+fn iface_line__tfl_api_presentation_entities_timetable_response__from_json(v: &Value) -> Option<iface_line::TflApiPresentationEntitiesTimetableResponse> {
+    let m = v.as_object()?;
+    Some(iface_line::TflApiPresentationEntitiesTimetableResponse {
+        direction: m.get("direction").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        disambiguation: m.get("disambiguation").filter(|v| !v.is_null()).and_then(|v| iface_line__tfl_api_presentation_entities_timetables_disambiguation__from_json(v)),
+        line_id: m.get("lineId").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        line_name: m.get("lineName").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        pdf_url: m.get("pdfUrl").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        stations: m.get("stations").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| iface_line__tfl_api_presentation_entities_matched_stop__from_json(x)).collect())),
+        status_error_message: m.get("statusErrorMessage").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        stops: m.get("stops").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| iface_line__tfl_api_presentation_entities_matched_stop__from_json(x)).collect())),
+        timetable: m.get("timetable").filter(|v| !v.is_null()).and_then(|v| iface_line__tfl_api_presentation_entities_timetable__from_json(v)),
+    })
+}
+
+fn iface_line__tfl_api_presentation_entities_timetables_disambiguation__from_json(v: &Value) -> Option<iface_line::TflApiPresentationEntitiesTimetablesDisambiguation> {
+    let m = v.as_object()?;
+    Some(iface_line::TflApiPresentationEntitiesTimetablesDisambiguation {
+        disambiguation_options: m.get("disambiguationOptions").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| iface_line__tfl_api_presentation_entities_timetables_disambiguation_option__from_json(x)).collect())),
+    })
+}
+
+fn iface_line__tfl_api_presentation_entities_timetables_disambiguation_option__from_json(v: &Value) -> Option<iface_line::TflApiPresentationEntitiesTimetablesDisambiguationOption> {
+    let m = v.as_object()?;
+    Some(iface_line::TflApiPresentationEntitiesTimetablesDisambiguationOption {
+        description: m.get("description").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        uri: m.get("uri").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    })
+}
+
+fn iface_line__tfl_api_presentation_entities_timetable__from_json(v: &Value) -> Option<iface_line::TflApiPresentationEntitiesTimetable> {
+    let m = v.as_object()?;
+    Some(iface_line::TflApiPresentationEntitiesTimetable {
+        departure_stop_id: m.get("departureStopId").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        routes: m.get("routes").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| iface_line__tfl_api_presentation_entities_timetable_route__from_json(x)).collect())),
+    })
+}
+
+fn iface_line__tfl_api_presentation_entities_timetable_route__from_json(v: &Value) -> Option<iface_line::TflApiPresentationEntitiesTimetableRoute> {
+    let m = v.as_object()?;
+    Some(iface_line::TflApiPresentationEntitiesTimetableRoute {
+        schedules: m.get("schedules").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| iface_line__tfl_api_presentation_entities_schedule__from_json(x)).collect())),
+        station_intervals: m.get("stationIntervals").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| iface_line__tfl_api_presentation_entities_station_interval__from_json(x)).collect())),
+    })
+}
+
+fn iface_line__tfl_api_presentation_entities_schedule__from_json(v: &Value) -> Option<iface_line::TflApiPresentationEntitiesSchedule> {
+    let m = v.as_object()?;
+    Some(iface_line::TflApiPresentationEntitiesSchedule {
+        first_journey: m.get("firstJourney").filter(|v| !v.is_null()).and_then(|v| iface_line__tfl_api_presentation_entities_known_journey__from_json(v)),
+        known_journeys: m.get("knownJourneys").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| iface_line__tfl_api_presentation_entities_known_journey__from_json(x)).collect())),
+        last_journey: m.get("lastJourney").filter(|v| !v.is_null()).and_then(|v| iface_line__tfl_api_presentation_entities_known_journey__from_json(v)),
+        name: m.get("name").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        periods: m.get("periods").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| iface_line__tfl_api_presentation_entities_period__from_json(x)).collect())),
+    })
+}
+
+fn iface_line__tfl_api_presentation_entities_known_journey__from_json(v: &Value) -> Option<iface_line::TflApiPresentationEntitiesKnownJourney> {
+    let m = v.as_object()?;
+    Some(iface_line::TflApiPresentationEntitiesKnownJourney {
+        hour: m.get("hour").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        interval_id: m.get("intervalId").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        minute: m.get("minute").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    })
+}
+
+fn iface_line__tfl_api_presentation_entities_period__from_json(v: &Value) -> Option<iface_line::TflApiPresentationEntitiesPeriod> {
+    let m = v.as_object()?;
+    Some(iface_line::TflApiPresentationEntitiesPeriod {
+        frequency: m.get("frequency").filter(|v| !v.is_null()).and_then(|v| iface_line__tfl_api_presentation_entities_service_frequency__from_json(v)),
+        from_time: m.get("fromTime").filter(|v| !v.is_null()).and_then(|v| iface_line__tfl_api_presentation_entities_twenty_four_hour_clock_time__from_json(v)),
+        to_time: m.get("toTime").filter(|v| !v.is_null()).and_then(|v| iface_line__tfl_api_presentation_entities_twenty_four_hour_clock_time__from_json(v)),
+        type_op: m.get("type").filter(|v| !v.is_null()).and_then(|v| (v).as_str().and_then(iface_line__tfl_api_presentation_entities_period_type_op_enum__from_str)),
+    })
+}
+
+fn iface_line__tfl_api_presentation_entities_service_frequency__from_json(v: &Value) -> Option<iface_line::TflApiPresentationEntitiesServiceFrequency> {
+    let m = v.as_object()?;
+    Some(iface_line::TflApiPresentationEntitiesServiceFrequency {
+        highest_frequency: m.get("highestFrequency").filter(|v| !v.is_null()).and_then(|v| (v).as_f64()),
+        lowest_frequency: m.get("lowestFrequency").filter(|v| !v.is_null()).and_then(|v| (v).as_f64()),
+    })
+}
+
+fn iface_line__tfl_api_presentation_entities_twenty_four_hour_clock_time__from_json(v: &Value) -> Option<iface_line::TflApiPresentationEntitiesTwentyFourHourClockTime> {
+    let m = v.as_object()?;
+    Some(iface_line::TflApiPresentationEntitiesTwentyFourHourClockTime {
+        hour: m.get("hour").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        minute: m.get("minute").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    })
+}
+
+fn iface_line__tfl_api_presentation_entities_station_interval__from_json(v: &Value) -> Option<iface_line::TflApiPresentationEntitiesStationInterval> {
+    let m = v.as_object()?;
+    Some(iface_line::TflApiPresentationEntitiesStationInterval {
+        id: m.get("id").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        intervals: m.get("intervals").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| iface_line__tfl_api_presentation_entities_interval__from_json(x)).collect())),
+    })
+}
+
+fn iface_line__tfl_api_presentation_entities_interval__from_json(v: &Value) -> Option<iface_line::TflApiPresentationEntitiesInterval> {
+    let m = v.as_object()?;
+    Some(iface_line::TflApiPresentationEntitiesInterval {
+        stop_id: m.get("stopId").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        time_to_arrival: m.get("timeToArrival").filter(|v| !v.is_null()).and_then(|v| (v).as_f64()),
+    })
+}
+
+fn iface_line__tfl_api_presentation_entities_identifier_route_type_enum__from_str(s: &str) -> Option<iface_line::TflApiPresentationEntitiesIdentifierRouteTypeEnum> {
+    match s {
+        "Unknown" => Some(iface_line::TflApiPresentationEntitiesIdentifierRouteTypeEnum::Unknown),
+        "All" => Some(iface_line::TflApiPresentationEntitiesIdentifierRouteTypeEnum::All),
+        "Cycle Superhighways" => Some(iface_line::TflApiPresentationEntitiesIdentifierRouteTypeEnum::CycleSuperhighways),
+        "Quietways" => Some(iface_line::TflApiPresentationEntitiesIdentifierRouteTypeEnum::Quietways),
+        "Cycleways" => Some(iface_line::TflApiPresentationEntitiesIdentifierRouteTypeEnum::Cycleways),
+        "Mini-Hollands" => Some(iface_line::TflApiPresentationEntitiesIdentifierRouteTypeEnum::MiniHollands),
+        "Central London Grid" => Some(iface_line::TflApiPresentationEntitiesIdentifierRouteTypeEnum::CentralLondonGrid),
+        "Streetspace Route" => Some(iface_line::TflApiPresentationEntitiesIdentifierRouteTypeEnum::StreetspaceRoute),
+        _ => None,
+    }
+}
+
+fn iface_line__tfl_api_presentation_entities_identifier_status_enum__from_str(s: &str) -> Option<iface_line::TflApiPresentationEntitiesIdentifierStatusEnum> {
+    match s {
+        "Unknown" => Some(iface_line::TflApiPresentationEntitiesIdentifierStatusEnum::Unknown),
+        "All" => Some(iface_line::TflApiPresentationEntitiesIdentifierStatusEnum::All),
+        "Open" => Some(iface_line::TflApiPresentationEntitiesIdentifierStatusEnum::Open),
+        "In Progress" => Some(iface_line::TflApiPresentationEntitiesIdentifierStatusEnum::InProgress),
+        "Planned" => Some(iface_line::TflApiPresentationEntitiesIdentifierStatusEnum::Planned),
+        "Planned - Subject to feasibility and consultation." => Some(iface_line::TflApiPresentationEntitiesIdentifierStatusEnum::PlannedSubjectToFeasibilityAndConsultation),
+        "Not Open" => Some(iface_line::TflApiPresentationEntitiesIdentifierStatusEnum::NotOpen),
+        _ => None,
+    }
+}
+
+fn iface_line__tfl_api_presentation_entities_disruption_category_enum__from_str(s: &str) -> Option<iface_line::TflApiPresentationEntitiesDisruptionCategoryEnum> {
+    match s {
+        "Undefined" => Some(iface_line::TflApiPresentationEntitiesDisruptionCategoryEnum::Undefined),
+        "RealTime" => Some(iface_line::TflApiPresentationEntitiesDisruptionCategoryEnum::RealTime),
+        "PlannedWork" => Some(iface_line::TflApiPresentationEntitiesDisruptionCategoryEnum::PlannedWork),
+        "Information" => Some(iface_line::TflApiPresentationEntitiesDisruptionCategoryEnum::Information),
+        "Event" => Some(iface_line::TflApiPresentationEntitiesDisruptionCategoryEnum::Event),
+        "Crowding" => Some(iface_line::TflApiPresentationEntitiesDisruptionCategoryEnum::Crowding),
+        "StatusAlert" => Some(iface_line::TflApiPresentationEntitiesDisruptionCategoryEnum::StatusAlert),
+        _ => None,
+    }
+}
+
+fn iface_line__route_by_mode_service_types_item_enum__from_str(s: &str) -> Option<iface_line::RouteByModeServiceTypesItemEnum> {
+    match s {
+        "Regular" => Some(iface_line::RouteByModeServiceTypesItemEnum::Regular),
+        "Night" => Some(iface_line::RouteByModeServiceTypesItemEnum::Night),
+        _ => None,
+    }
+}
+
+fn iface_line__tfl_api_presentation_entities_period_type_op_enum__from_str(s: &str) -> Option<iface_line::TflApiPresentationEntitiesPeriodTypeOpEnum> {
+    match s {
+        "Normal" => Some(iface_line::TflApiPresentationEntitiesPeriodTypeOpEnum::Normal),
+        "FrequencyHours" => Some(iface_line::TflApiPresentationEntitiesPeriodTypeOpEnum::FrequencyHours),
+        "FrequencyMinutes" => Some(iface_line::TflApiPresentationEntitiesPeriodTypeOpEnum::FrequencyMinutes),
+        "Unknown" => Some(iface_line::TflApiPresentationEntitiesPeriodTypeOpEnum::Unknown),
+        _ => None,
+    }
+}
+
+fn iface_line__meta_disruption_categories__ok(body: String) -> Result<Vec<String>, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match (&v).as_array().map(|a| a.iter().filter_map(|x| (x).as_str().map(|s| s.to_string())).collect()) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_line__meta_disruption_categories__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
+fn iface_line__meta_modes__ok(body: String) -> Result<Vec<iface_line::TflApiPresentationEntitiesMode>, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match (&v).as_array().map(|a| a.iter().filter_map(|x| iface_line__tfl_api_presentation_entities_mode__from_json(x)).collect()) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_line__meta_modes__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
+fn iface_line__meta_service_types__ok(body: String) -> Result<Vec<String>, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match (&v).as_array().map(|a| a.iter().filter_map(|x| (x).as_str().map(|s| s.to_string())).collect()) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_line__meta_service_types__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
+fn iface_line__meta_severity__ok(body: String) -> Result<Vec<iface_line::TflApiPresentationEntitiesStatusSeverity>, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match (&v).as_array().map(|a| a.iter().filter_map(|x| iface_line__tfl_api_presentation_entities_status_severity__from_json(x)).collect()) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_line__meta_severity__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
+fn iface_line__get_by_mode__ok(body: String) -> Result<Vec<iface_line::TflApiPresentationEntitiesLine>, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match (&v).as_array().map(|a| a.iter().filter_map(|x| iface_line__tfl_api_presentation_entities_line__from_json(x)).collect()) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_line__get_by_mode__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
+fn iface_line__disruption_by_mode__ok(body: String) -> Result<Vec<iface_line::TflApiPresentationEntitiesDisruption>, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match (&v).as_array().map(|a| a.iter().filter_map(|x| iface_line__tfl_api_presentation_entities_disruption__from_json(x)).collect()) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_line__disruption_by_mode__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
+fn iface_line__route_by_mode__ok(body: String) -> Result<Vec<iface_line::TflApiPresentationEntitiesLine>, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match (&v).as_array().map(|a| a.iter().filter_map(|x| iface_line__tfl_api_presentation_entities_line__from_json(x)).collect()) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_line__route_by_mode__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
+fn iface_line__status_by_mode__ok(body: String) -> Result<Vec<iface_line::TflApiPresentationEntitiesLine>, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match (&v).as_array().map(|a| a.iter().filter_map(|x| iface_line__tfl_api_presentation_entities_line__from_json(x)).collect()) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_line__status_by_mode__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
+fn iface_line__route__ok(body: String) -> Result<Vec<iface_line::TflApiPresentationEntitiesLine>, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match (&v).as_array().map(|a| a.iter().filter_map(|x| iface_line__tfl_api_presentation_entities_line__from_json(x)).collect()) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_line__route__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
+fn iface_line__search__ok(body: String) -> Result<iface_line::TflApiPresentationEntitiesRouteSearchResponse, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match iface_line__tfl_api_presentation_entities_route_search_response__from_json(&v) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_line__search__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
+fn iface_line__status_by_severity__ok(body: String) -> Result<Vec<iface_line::TflApiPresentationEntitiesLine>, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match (&v).as_array().map(|a| a.iter().filter_map(|x| iface_line__tfl_api_presentation_entities_line__from_json(x)).collect()) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_line__status_by_severity__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
+fn iface_line__get__ok(body: String) -> Result<Vec<iface_line::TflApiPresentationEntitiesLine>, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match (&v).as_array().map(|a| a.iter().filter_map(|x| iface_line__tfl_api_presentation_entities_line__from_json(x)).collect()) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_line__get__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
+fn iface_line__arrivals__ok(body: String) -> Result<Vec<iface_line::TflApiPresentationEntitiesPrediction>, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match (&v).as_array().map(|a| a.iter().filter_map(|x| iface_line__tfl_api_presentation_entities_prediction__from_json(x)).collect()) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_line__arrivals__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
+fn iface_line__disruption__ok(body: String) -> Result<Vec<iface_line::TflApiPresentationEntitiesDisruption>, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match (&v).as_array().map(|a| a.iter().filter_map(|x| iface_line__tfl_api_presentation_entities_disruption__from_json(x)).collect()) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_line__disruption__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
+fn iface_line__line_routes_by_ids__ok(body: String) -> Result<Vec<iface_line::TflApiPresentationEntitiesLine>, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match (&v).as_array().map(|a| a.iter().filter_map(|x| iface_line__tfl_api_presentation_entities_line__from_json(x)).collect()) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_line__line_routes_by_ids__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
+fn iface_line__status_by_ids__ok(body: String) -> Result<Vec<iface_line::TflApiPresentationEntitiesLine>, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match (&v).as_array().map(|a| a.iter().filter_map(|x| iface_line__tfl_api_presentation_entities_line__from_json(x)).collect()) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_line__status_by_ids__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
+fn iface_line__status__ok(body: String) -> Result<Vec<iface_line::TflApiPresentationEntitiesLine>, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match (&v).as_array().map(|a| a.iter().filter_map(|x| iface_line__tfl_api_presentation_entities_line__from_json(x)).collect()) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_line__status__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
+fn iface_line__route_sequence__ok(body: String) -> Result<iface_line::TflApiPresentationEntitiesRouteSequence, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match iface_line__tfl_api_presentation_entities_route_sequence__from_json(&v) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_line__route_sequence__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
+fn iface_line__stop_points__ok(body: String) -> Result<Vec<iface_line::TflApiPresentationEntitiesStopPoint>, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match (&v).as_array().map(|a| a.iter().filter_map(|x| iface_line__tfl_api_presentation_entities_stop_point__from_json(x)).collect()) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_line__stop_points__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
+fn iface_line__timetable__ok(body: String) -> Result<iface_line::TflApiPresentationEntitiesTimetableResponse, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match iface_line__tfl_api_presentation_entities_timetable_response__from_json(&v) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_line__timetable__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
+fn iface_line__timetable_to__ok(body: String) -> Result<iface_line::TflApiPresentationEntitiesTimetableResponse, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match iface_line__tfl_api_presentation_entities_timetable_response__from_json(&v) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_line__timetable_to__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
 impl iface_line::Guest for crate::Component {
-    fn meta_disruption_categories() -> Result<String, String> {
-        dispatch(&OP_LINE_META_DISRUPTION_CATEGORIES, Value::Object(Map::new()))
+    fn meta_disruption_categories() -> Result<Vec<String>, String> {
+        match dispatch(&OP_LINE_META_DISRUPTION_CATEGORIES, Value::Object(Map::new())).and_then(iface_line__meta_disruption_categories__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_line__meta_disruption_categories__err(e)),
+        }
     }
-    fn meta_modes() -> Result<String, String> {
-        dispatch(&OP_LINE_META_MODES, Value::Object(Map::new()))
+    fn meta_modes() -> Result<Vec<iface_line::TflApiPresentationEntitiesMode>, String> {
+        match dispatch(&OP_LINE_META_MODES, Value::Object(Map::new())).and_then(iface_line__meta_modes__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_line__meta_modes__err(e)),
+        }
     }
-    fn meta_service_types() -> Result<String, String> {
-        dispatch(&OP_LINE_META_SERVICE_TYPES, Value::Object(Map::new()))
+    fn meta_service_types() -> Result<Vec<String>, String> {
+        match dispatch(&OP_LINE_META_SERVICE_TYPES, Value::Object(Map::new())).and_then(iface_line__meta_service_types__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_line__meta_service_types__err(e)),
+        }
     }
-    fn meta_severity() -> Result<String, String> {
-        dispatch(&OP_LINE_META_SEVERITY, Value::Object(Map::new()))
+    fn meta_severity() -> Result<Vec<iface_line::TflApiPresentationEntitiesStatusSeverity>, String> {
+        match dispatch(&OP_LINE_META_SEVERITY, Value::Object(Map::new())).and_then(iface_line__meta_severity__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_line__meta_severity__err(e)),
+        }
     }
-    fn get_by_mode(params: iface_line::GetByModeParams) -> Result<String, String> {
+    fn get_by_mode(params: iface_line::GetByModeParams) -> Result<Vec<iface_line::TflApiPresentationEntitiesLine>, String> {
         let json = iface_line__get_by_mode_params__to_json(&params);
-        dispatch(&OP_LINE_GET_BY_MODE, json)
+        match dispatch(&OP_LINE_GET_BY_MODE, json).and_then(iface_line__get_by_mode__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_line__get_by_mode__err(e)),
+        }
     }
-    fn disruption_by_mode(params: iface_line::DisruptionByModeParams) -> Result<String, String> {
+    fn disruption_by_mode(params: iface_line::DisruptionByModeParams) -> Result<Vec<iface_line::TflApiPresentationEntitiesDisruption>, String> {
         let json = iface_line__disruption_by_mode_params__to_json(&params);
-        dispatch(&OP_LINE_DISRUPTION_BY_MODE, json)
+        match dispatch(&OP_LINE_DISRUPTION_BY_MODE, json).and_then(iface_line__disruption_by_mode__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_line__disruption_by_mode__err(e)),
+        }
     }
-    fn route_by_mode(params: iface_line::RouteByModeParams) -> Result<String, String> {
+    fn route_by_mode(params: iface_line::RouteByModeParams) -> Result<Vec<iface_line::TflApiPresentationEntitiesLine>, String> {
         let json = iface_line__route_by_mode_params__to_json(&params);
-        dispatch(&OP_LINE_ROUTE_BY_MODE, json)
+        match dispatch(&OP_LINE_ROUTE_BY_MODE, json).and_then(iface_line__route_by_mode__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_line__route_by_mode__err(e)),
+        }
     }
-    fn status_by_mode(params: iface_line::StatusByModeParams) -> Result<String, String> {
+    fn status_by_mode(params: iface_line::StatusByModeParams) -> Result<Vec<iface_line::TflApiPresentationEntitiesLine>, String> {
         let json = iface_line__status_by_mode_params__to_json(&params);
-        dispatch(&OP_LINE_STATUS_BY_MODE, json)
+        match dispatch(&OP_LINE_STATUS_BY_MODE, json).and_then(iface_line__status_by_mode__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_line__status_by_mode__err(e)),
+        }
     }
-    fn route(params: iface_line::RouteParams) -> Result<String, String> {
+    fn route(params: iface_line::RouteParams) -> Result<Vec<iface_line::TflApiPresentationEntitiesLine>, String> {
         let json = iface_line__route_params__to_json(&params);
-        dispatch(&OP_LINE_ROUTE, json)
+        match dispatch(&OP_LINE_ROUTE, json).and_then(iface_line__route__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_line__route__err(e)),
+        }
     }
-    fn search(params: iface_line::SearchParams) -> Result<String, String> {
+    fn search(params: iface_line::SearchParams) -> Result<iface_line::TflApiPresentationEntitiesRouteSearchResponse, String> {
         let json = iface_line__search_params__to_json(&params);
-        dispatch(&OP_LINE_SEARCH, json)
+        match dispatch(&OP_LINE_SEARCH, json).and_then(iface_line__search__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_line__search__err(e)),
+        }
     }
-    fn status_by_severity(params: iface_line::StatusBySeverityParams) -> Result<String, String> {
+    fn status_by_severity(params: iface_line::StatusBySeverityParams) -> Result<Vec<iface_line::TflApiPresentationEntitiesLine>, String> {
         let json = iface_line__status_by_severity_params__to_json(&params);
-        dispatch(&OP_LINE_STATUS_BY_SEVERITY, json)
+        match dispatch(&OP_LINE_STATUS_BY_SEVERITY, json).and_then(iface_line__status_by_severity__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_line__status_by_severity__err(e)),
+        }
     }
-    fn get(params: iface_line::GetParams) -> Result<String, String> {
+    fn get(params: iface_line::GetParams) -> Result<Vec<iface_line::TflApiPresentationEntitiesLine>, String> {
         let json = iface_line__get_params__to_json(&params);
-        dispatch(&OP_LINE_GET, json)
+        match dispatch(&OP_LINE_GET, json).and_then(iface_line__get__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_line__get__err(e)),
+        }
     }
-    fn arrivals(params: iface_line::ArrivalsParams) -> Result<String, String> {
+    fn arrivals(params: iface_line::ArrivalsParams) -> Result<Vec<iface_line::TflApiPresentationEntitiesPrediction>, String> {
         let json = iface_line__arrivals_params__to_json(&params);
-        dispatch(&OP_LINE_ARRIVALS, json)
+        match dispatch(&OP_LINE_ARRIVALS, json).and_then(iface_line__arrivals__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_line__arrivals__err(e)),
+        }
     }
-    fn disruption(params: iface_line::DisruptionParams) -> Result<String, String> {
+    fn disruption(params: iface_line::DisruptionParams) -> Result<Vec<iface_line::TflApiPresentationEntitiesDisruption>, String> {
         let json = iface_line__disruption_params__to_json(&params);
-        dispatch(&OP_LINE_DISRUPTION, json)
+        match dispatch(&OP_LINE_DISRUPTION, json).and_then(iface_line__disruption__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_line__disruption__err(e)),
+        }
     }
-    fn line_routes_by_ids(params: iface_line::LineRoutesByIdsParams) -> Result<String, String> {
+    fn line_routes_by_ids(params: iface_line::LineRoutesByIdsParams) -> Result<Vec<iface_line::TflApiPresentationEntitiesLine>, String> {
         let json = iface_line__line_routes_by_ids_params__to_json(&params);
-        dispatch(&OP_LINE_LINE_ROUTES_BY_IDS, json)
+        match dispatch(&OP_LINE_LINE_ROUTES_BY_IDS, json).and_then(iface_line__line_routes_by_ids__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_line__line_routes_by_ids__err(e)),
+        }
     }
-    fn status_by_ids(params: iface_line::StatusByIdsParams) -> Result<String, String> {
+    fn status_by_ids(params: iface_line::StatusByIdsParams) -> Result<Vec<iface_line::TflApiPresentationEntitiesLine>, String> {
         let json = iface_line__status_by_ids_params__to_json(&params);
-        dispatch(&OP_LINE_STATUS_BY_IDS, json)
+        match dispatch(&OP_LINE_STATUS_BY_IDS, json).and_then(iface_line__status_by_ids__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_line__status_by_ids__err(e)),
+        }
     }
-    fn status(params: iface_line::StatusParams) -> Result<String, String> {
+    fn status(params: iface_line::StatusParams) -> Result<Vec<iface_line::TflApiPresentationEntitiesLine>, String> {
         let json = iface_line__status_params__to_json(&params);
-        dispatch(&OP_LINE_STATUS, json)
+        match dispatch(&OP_LINE_STATUS, json).and_then(iface_line__status__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_line__status__err(e)),
+        }
     }
-    fn route_sequence(params: iface_line::RouteSequenceParams) -> Result<String, String> {
+    fn route_sequence(params: iface_line::RouteSequenceParams) -> Result<iface_line::TflApiPresentationEntitiesRouteSequence, String> {
         let json = iface_line__route_sequence_params__to_json(&params);
-        dispatch(&OP_LINE_ROUTE_SEQUENCE, json)
+        match dispatch(&OP_LINE_ROUTE_SEQUENCE, json).and_then(iface_line__route_sequence__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_line__route_sequence__err(e)),
+        }
     }
-    fn stop_points(params: iface_line::StopPointsParams) -> Result<String, String> {
+    fn stop_points(params: iface_line::StopPointsParams) -> Result<Vec<iface_line::TflApiPresentationEntitiesStopPoint>, String> {
         let json = iface_line__stop_points_params__to_json(&params);
-        dispatch(&OP_LINE_STOP_POINTS, json)
+        match dispatch(&OP_LINE_STOP_POINTS, json).and_then(iface_line__stop_points__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_line__stop_points__err(e)),
+        }
     }
-    fn timetable(params: iface_line::TimetableParams) -> Result<String, String> {
+    fn timetable(params: iface_line::TimetableParams) -> Result<iface_line::TflApiPresentationEntitiesTimetableResponse, String> {
         let json = iface_line__timetable_params__to_json(&params);
-        dispatch(&OP_LINE_TIMETABLE, json)
+        match dispatch(&OP_LINE_TIMETABLE, json).and_then(iface_line__timetable__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_line__timetable__err(e)),
+        }
     }
-    fn timetable_to(params: iface_line::TimetableToParams) -> Result<String, String> {
+    fn timetable_to(params: iface_line::TimetableToParams) -> Result<iface_line::TflApiPresentationEntitiesTimetableResponse, String> {
         let json = iface_line__timetable_to_params__to_json(&params);
-        dispatch(&OP_LINE_TIMETABLE_TO, json)
+        match dispatch(&OP_LINE_TIMETABLE_TO, json).and_then(iface_line__timetable_to__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_line__timetable_to__err(e)),
+        }
     }
 }
 use crate::exports::autostamp::tfl::mode as iface_mode;
@@ -1028,12 +3963,55 @@ const OP_MODE_ARRIVALS: OpSpec = OpSpec {
     method: "GET",
     path_template: "/Mode/{mode}/Arrivals",
     fields: &[
-        FieldSpec { snake: "mode", location: FieldLocation::Path },
-        FieldSpec { snake: "count", location: FieldLocation::Query },
+        FieldSpec { snake: "mode", wire: "mode", location: FieldLocation::Path },
+        FieldSpec { snake: "count", wire: "count", location: FieldLocation::Query },
     ],
     auth: &[
     ],
 };
+
+fn iface_mode__tfl_api_presentation_entities_active_service_type__to_json(p: &iface_mode::TflApiPresentationEntitiesActiveServiceType) -> Value {
+    let mut m = Map::new();
+    m.insert("mode".into(), match (&p.mode) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("serviceType".into(), match (&p.service_type) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_mode__tfl_api_presentation_entities_prediction__to_json(p: &iface_mode::TflApiPresentationEntitiesPrediction) -> Value {
+    let mut m = Map::new();
+    m.insert("bearing".into(), match (&p.bearing) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("currentLocation".into(), match (&p.current_location) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("destinationName".into(), match (&p.destination_name) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("destinationNaptanId".into(), match (&p.destination_naptan_id) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("direction".into(), match (&p.direction) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("expectedArrival".into(), match (&p.expected_arrival) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("id".into(), match (&p.id) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("lineId".into(), match (&p.line_id) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("lineName".into(), match (&p.line_name) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("modeName".into(), match (&p.mode_name) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("naptanId".into(), match (&p.naptan_id) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("operationType".into(), match (&p.operation_type) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("platformName".into(), match (&p.platform_name) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("stationName".into(), match (&p.station_name) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("timeToLive".into(), match (&p.time_to_live) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("timeToStation".into(), match (&p.time_to_station) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("timestamp".into(), match (&p.timestamp) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("timing".into(), match (&p.timing) { Some(v) => iface_mode__tfl_api_presentation_entities_prediction_timing__to_json(v), None => Value::Null });
+    m.insert("towards".into(), match (&p.towards) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("vehicleId".into(), match (&p.vehicle_id) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_mode__tfl_api_presentation_entities_prediction_timing__to_json(p: &iface_mode::TflApiPresentationEntitiesPredictionTiming) -> Value {
+    let mut m = Map::new();
+    m.insert("countdownServerAdjustment".into(), match (&p.countdown_server_adjustment) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("insert".into(), match (&p.insert) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("read".into(), match (&p.read) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("received".into(), match (&p.received) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("sent".into(), match (&p.sent) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("source".into(), match (&p.source) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
 
 fn iface_mode__arrivals_params__to_json(p: &iface_mode::ArrivalsParams) -> Value {
     let mut m = Map::new();
@@ -1042,13 +4020,101 @@ fn iface_mode__arrivals_params__to_json(p: &iface_mode::ArrivalsParams) -> Value
     Value::Object(m)
 }
 
-impl iface_mode::Guest for crate::Component {
-    fn get_active_service_types() -> Result<String, String> {
-        dispatch(&OP_MODE_GET_ACTIVE_SERVICE_TYPES, Value::Object(Map::new()))
+fn iface_mode__tfl_api_presentation_entities_active_service_type__from_json(v: &Value) -> Option<iface_mode::TflApiPresentationEntitiesActiveServiceType> {
+    let m = v.as_object()?;
+    Some(iface_mode::TflApiPresentationEntitiesActiveServiceType {
+        mode: m.get("mode").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        service_type: m.get("serviceType").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    })
+}
+
+fn iface_mode__tfl_api_presentation_entities_prediction__from_json(v: &Value) -> Option<iface_mode::TflApiPresentationEntitiesPrediction> {
+    let m = v.as_object()?;
+    Some(iface_mode::TflApiPresentationEntitiesPrediction {
+        bearing: m.get("bearing").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        current_location: m.get("currentLocation").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        destination_name: m.get("destinationName").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        destination_naptan_id: m.get("destinationNaptanId").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        direction: m.get("direction").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        expected_arrival: m.get("expectedArrival").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        id: m.get("id").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        line_id: m.get("lineId").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        line_name: m.get("lineName").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        mode_name: m.get("modeName").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        naptan_id: m.get("naptanId").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        operation_type: m.get("operationType").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        platform_name: m.get("platformName").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        station_name: m.get("stationName").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        time_to_live: m.get("timeToLive").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        time_to_station: m.get("timeToStation").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        timestamp: m.get("timestamp").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        timing: m.get("timing").filter(|v| !v.is_null()).and_then(|v| iface_mode__tfl_api_presentation_entities_prediction_timing__from_json(v)),
+        towards: m.get("towards").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        vehicle_id: m.get("vehicleId").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    })
+}
+
+fn iface_mode__tfl_api_presentation_entities_prediction_timing__from_json(v: &Value) -> Option<iface_mode::TflApiPresentationEntitiesPredictionTiming> {
+    let m = v.as_object()?;
+    Some(iface_mode::TflApiPresentationEntitiesPredictionTiming {
+        countdown_server_adjustment: m.get("countdownServerAdjustment").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        insert: m.get("insert").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        read: m.get("read").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        received: m.get("received").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        sent: m.get("sent").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        source: m.get("source").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    })
+}
+
+fn iface_mode__get_active_service_types__ok(body: String) -> Result<Vec<iface_mode::TflApiPresentationEntitiesActiveServiceType>, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match (&v).as_array().map(|a| a.iter().filter_map(|x| iface_mode__tfl_api_presentation_entities_active_service_type__from_json(x)).collect()) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
     }
-    fn arrivals(params: iface_mode::ArrivalsParams) -> Result<String, String> {
+}
+
+fn iface_mode__get_active_service_types__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
+fn iface_mode__arrivals__ok(body: String) -> Result<Vec<iface_mode::TflApiPresentationEntitiesPrediction>, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match (&v).as_array().map(|a| a.iter().filter_map(|x| iface_mode__tfl_api_presentation_entities_prediction__from_json(x)).collect()) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_mode__arrivals__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
+impl iface_mode::Guest for crate::Component {
+    fn get_active_service_types() -> Result<Vec<iface_mode::TflApiPresentationEntitiesActiveServiceType>, String> {
+        match dispatch(&OP_MODE_GET_ACTIVE_SERVICE_TYPES, Value::Object(Map::new())).and_then(iface_mode__get_active_service_types__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_mode__get_active_service_types__err(e)),
+        }
+    }
+    fn arrivals(params: iface_mode::ArrivalsParams) -> Result<Vec<iface_mode::TflApiPresentationEntitiesPrediction>, String> {
         let json = iface_mode__arrivals_params__to_json(&params);
-        dispatch(&OP_MODE_ARRIVALS, json)
+        match dispatch(&OP_MODE_ARRIVALS, json).and_then(iface_mode__arrivals__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_mode__arrivals__err(e)),
+        }
     }
 }
 use crate::exports::autostamp::tfl::occupancy as iface_occupancy;
@@ -1057,7 +4123,7 @@ const OP_OCCUPANCY_GET_BIKE_POINTS_OCCUPANCIES: OpSpec = OpSpec {
     method: "GET",
     path_template: "/Occupancy/BikePoints/{ids}",
     fields: &[
-        FieldSpec { snake: "ids", location: FieldLocation::Path },
+        FieldSpec { snake: "ids", wire: "ids", location: FieldLocation::Path },
     ],
     auth: &[
     ],
@@ -1076,7 +4142,7 @@ const OP_OCCUPANCY_GET: OpSpec = OpSpec {
     method: "GET",
     path_template: "/Occupancy/CarPark/{id}",
     fields: &[
-        FieldSpec { snake: "id", location: FieldLocation::Path },
+        FieldSpec { snake: "id", wire: "id", location: FieldLocation::Path },
     ],
     auth: &[
     ],
@@ -1095,11 +4161,49 @@ const OP_OCCUPANCY_GET_CHARGE_CONNECTOR_STATUS: OpSpec = OpSpec {
     method: "GET",
     path_template: "/Occupancy/ChargeConnector/{ids}",
     fields: &[
-        FieldSpec { snake: "ids", location: FieldLocation::Path },
+        FieldSpec { snake: "ids", wire: "ids", location: FieldLocation::Path },
     ],
     auth: &[
     ],
 };
+
+fn iface_occupancy__tfl_api_presentation_entities_bike_point_occupancy__to_json(p: &iface_occupancy::TflApiPresentationEntitiesBikePointOccupancy) -> Value {
+    let mut m = Map::new();
+    m.insert("bikesCount".into(), match (&p.bikes_count) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("eBikesCount".into(), match (&p.e_bikes_count) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("emptyDocks".into(), match (&p.empty_docks) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("id".into(), match (&p.id) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("name".into(), match (&p.name) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("standardBikesCount".into(), match (&p.standard_bikes_count) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("totalDocks".into(), match (&p.total_docks) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_occupancy__tfl_api_presentation_entities_car_park_occupancy__to_json(p: &iface_occupancy::TflApiPresentationEntitiesCarParkOccupancy) -> Value {
+    let mut m = Map::new();
+    m.insert("bays".into(), match (&p.bays) { Some(v) => Value::Array((v).iter().map(|v| iface_occupancy__tfl_api_presentation_entities_bay__to_json(v)).collect()), None => Value::Null });
+    m.insert("carParkDetailsUrl".into(), match (&p.car_park_details_url) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("id".into(), match (&p.id) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("name".into(), match (&p.name) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_occupancy__tfl_api_presentation_entities_bay__to_json(p: &iface_occupancy::TflApiPresentationEntitiesBay) -> Value {
+    let mut m = Map::new();
+    m.insert("bayCount".into(), match (&p.bay_count) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("bayType".into(), match (&p.bay_type) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("free".into(), match (&p.free) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("occupied".into(), match (&p.occupied) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_occupancy__tfl_api_presentation_entities_charge_connector_occupancy__to_json(p: &iface_occupancy::TflApiPresentationEntitiesChargeConnectorOccupancy) -> Value {
+    let mut m = Map::new();
+    m.insert("id".into(), match (&p.id) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("sourceSystemPlaceId".into(), match (&p.source_system_place_id) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("status".into(), match (&p.status) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
 
 fn iface_occupancy__get_bike_points_occupancies_params__to_json(p: &iface_occupancy::GetBikePointsOccupanciesParams) -> Value {
     let mut m = Map::new();
@@ -1119,24 +4223,171 @@ fn iface_occupancy__get_charge_connector_status_params__to_json(p: &iface_occupa
     Value::Object(m)
 }
 
+fn iface_occupancy__tfl_api_presentation_entities_bike_point_occupancy__from_json(v: &Value) -> Option<iface_occupancy::TflApiPresentationEntitiesBikePointOccupancy> {
+    let m = v.as_object()?;
+    Some(iface_occupancy::TflApiPresentationEntitiesBikePointOccupancy {
+        bikes_count: m.get("bikesCount").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        e_bikes_count: m.get("eBikesCount").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        empty_docks: m.get("emptyDocks").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        id: m.get("id").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        name: m.get("name").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        standard_bikes_count: m.get("standardBikesCount").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        total_docks: m.get("totalDocks").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+    })
+}
+
+fn iface_occupancy__tfl_api_presentation_entities_car_park_occupancy__from_json(v: &Value) -> Option<iface_occupancy::TflApiPresentationEntitiesCarParkOccupancy> {
+    let m = v.as_object()?;
+    Some(iface_occupancy::TflApiPresentationEntitiesCarParkOccupancy {
+        bays: m.get("bays").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| iface_occupancy__tfl_api_presentation_entities_bay__from_json(x)).collect())),
+        car_park_details_url: m.get("carParkDetailsUrl").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        id: m.get("id").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        name: m.get("name").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    })
+}
+
+fn iface_occupancy__tfl_api_presentation_entities_bay__from_json(v: &Value) -> Option<iface_occupancy::TflApiPresentationEntitiesBay> {
+    let m = v.as_object()?;
+    Some(iface_occupancy::TflApiPresentationEntitiesBay {
+        bay_count: m.get("bayCount").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        bay_type: m.get("bayType").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        free: m.get("free").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        occupied: m.get("occupied").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+    })
+}
+
+fn iface_occupancy__tfl_api_presentation_entities_charge_connector_occupancy__from_json(v: &Value) -> Option<iface_occupancy::TflApiPresentationEntitiesChargeConnectorOccupancy> {
+    let m = v.as_object()?;
+    Some(iface_occupancy::TflApiPresentationEntitiesChargeConnectorOccupancy {
+        id: m.get("id").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        source_system_place_id: m.get("sourceSystemPlaceId").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        status: m.get("status").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    })
+}
+
+fn iface_occupancy__get_bike_points_occupancies__ok(body: String) -> Result<Vec<iface_occupancy::TflApiPresentationEntitiesBikePointOccupancy>, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match (&v).as_array().map(|a| a.iter().filter_map(|x| iface_occupancy__tfl_api_presentation_entities_bike_point_occupancy__from_json(x)).collect()) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_occupancy__get_bike_points_occupancies__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
+fn iface_occupancy__get_occupancy_car_park__ok(body: String) -> Result<Vec<iface_occupancy::TflApiPresentationEntitiesCarParkOccupancy>, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match (&v).as_array().map(|a| a.iter().filter_map(|x| iface_occupancy__tfl_api_presentation_entities_car_park_occupancy__from_json(x)).collect()) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_occupancy__get_occupancy_car_park__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
+fn iface_occupancy__get__ok(body: String) -> Result<iface_occupancy::TflApiPresentationEntitiesCarParkOccupancy, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match iface_occupancy__tfl_api_presentation_entities_car_park_occupancy__from_json(&v) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_occupancy__get__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
+fn iface_occupancy__get_all_charge_connector_status__ok(body: String) -> Result<Vec<iface_occupancy::TflApiPresentationEntitiesChargeConnectorOccupancy>, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match (&v).as_array().map(|a| a.iter().filter_map(|x| iface_occupancy__tfl_api_presentation_entities_charge_connector_occupancy__from_json(x)).collect()) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_occupancy__get_all_charge_connector_status__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
+fn iface_occupancy__get_charge_connector_status__ok(body: String) -> Result<Vec<iface_occupancy::TflApiPresentationEntitiesChargeConnectorOccupancy>, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match (&v).as_array().map(|a| a.iter().filter_map(|x| iface_occupancy__tfl_api_presentation_entities_charge_connector_occupancy__from_json(x)).collect()) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_occupancy__get_charge_connector_status__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
 impl iface_occupancy::Guest for crate::Component {
-    fn get_bike_points_occupancies(params: iface_occupancy::GetBikePointsOccupanciesParams) -> Result<String, String> {
+    fn get_bike_points_occupancies(params: iface_occupancy::GetBikePointsOccupanciesParams) -> Result<Vec<iface_occupancy::TflApiPresentationEntitiesBikePointOccupancy>, String> {
         let json = iface_occupancy__get_bike_points_occupancies_params__to_json(&params);
-        dispatch(&OP_OCCUPANCY_GET_BIKE_POINTS_OCCUPANCIES, json)
+        match dispatch(&OP_OCCUPANCY_GET_BIKE_POINTS_OCCUPANCIES, json).and_then(iface_occupancy__get_bike_points_occupancies__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_occupancy__get_bike_points_occupancies__err(e)),
+        }
     }
-    fn get_occupancy_car_park() -> Result<String, String> {
-        dispatch(&OP_OCCUPANCY_GET_OCCUPANCY_CAR_PARK, Value::Object(Map::new()))
+    fn get_occupancy_car_park() -> Result<Vec<iface_occupancy::TflApiPresentationEntitiesCarParkOccupancy>, String> {
+        match dispatch(&OP_OCCUPANCY_GET_OCCUPANCY_CAR_PARK, Value::Object(Map::new())).and_then(iface_occupancy__get_occupancy_car_park__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_occupancy__get_occupancy_car_park__err(e)),
+        }
     }
-    fn get(params: iface_occupancy::GetParams) -> Result<String, String> {
+    fn get(params: iface_occupancy::GetParams) -> Result<iface_occupancy::TflApiPresentationEntitiesCarParkOccupancy, String> {
         let json = iface_occupancy__get_params__to_json(&params);
-        dispatch(&OP_OCCUPANCY_GET, json)
+        match dispatch(&OP_OCCUPANCY_GET, json).and_then(iface_occupancy__get__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_occupancy__get__err(e)),
+        }
     }
-    fn get_all_charge_connector_status() -> Result<String, String> {
-        dispatch(&OP_OCCUPANCY_GET_ALL_CHARGE_CONNECTOR_STATUS, Value::Object(Map::new()))
+    fn get_all_charge_connector_status() -> Result<Vec<iface_occupancy::TflApiPresentationEntitiesChargeConnectorOccupancy>, String> {
+        match dispatch(&OP_OCCUPANCY_GET_ALL_CHARGE_CONNECTOR_STATUS, Value::Object(Map::new())).and_then(iface_occupancy__get_all_charge_connector_status__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_occupancy__get_all_charge_connector_status__err(e)),
+        }
     }
-    fn get_charge_connector_status(params: iface_occupancy::GetChargeConnectorStatusParams) -> Result<String, String> {
+    fn get_charge_connector_status(params: iface_occupancy::GetChargeConnectorStatusParams) -> Result<Vec<iface_occupancy::TflApiPresentationEntitiesChargeConnectorOccupancy>, String> {
         let json = iface_occupancy__get_charge_connector_status_params__to_json(&params);
-        dispatch(&OP_OCCUPANCY_GET_CHARGE_CONNECTOR_STATUS, json)
+        match dispatch(&OP_OCCUPANCY_GET_CHARGE_CONNECTOR_STATUS, json).and_then(iface_occupancy__get_charge_connector_status__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_occupancy__get_charge_connector_status__err(e)),
+        }
     }
 }
 use crate::exports::autostamp::tfl::place as iface_place;
@@ -1145,18 +4396,18 @@ const OP_PLACE_GET_BY_GEO: OpSpec = OpSpec {
     method: "GET",
     path_template: "/Place",
     fields: &[
-        FieldSpec { snake: "radius", location: FieldLocation::Query },
-        FieldSpec { snake: "categories", location: FieldLocation::Query },
-        FieldSpec { snake: "include_children", location: FieldLocation::Query },
-        FieldSpec { snake: "type", location: FieldLocation::Query },
-        FieldSpec { snake: "active_only", location: FieldLocation::Query },
-        FieldSpec { snake: "number_of_places_to_return", location: FieldLocation::Query },
-        FieldSpec { snake: "place_geo_sw_lat", location: FieldLocation::Query },
-        FieldSpec { snake: "place_geo_sw_lon", location: FieldLocation::Query },
-        FieldSpec { snake: "place_geo_ne_lat", location: FieldLocation::Query },
-        FieldSpec { snake: "place_geo_ne_lon", location: FieldLocation::Query },
-        FieldSpec { snake: "place_geo_lat", location: FieldLocation::Query },
-        FieldSpec { snake: "place_geo_lon", location: FieldLocation::Query },
+        FieldSpec { snake: "radius", wire: "radius", location: FieldLocation::Query },
+        FieldSpec { snake: "categories", wire: "categories", location: FieldLocation::Query },
+        FieldSpec { snake: "include_children", wire: "includeChildren", location: FieldLocation::Query },
+        FieldSpec { snake: "type", wire: "type", location: FieldLocation::Query },
+        FieldSpec { snake: "active_only", wire: "activeOnly", location: FieldLocation::Query },
+        FieldSpec { snake: "number_of_places_to_return", wire: "numberOfPlacesToReturn", location: FieldLocation::Query },
+        FieldSpec { snake: "place_geo_sw_lat", wire: "placeGeo.swLat", location: FieldLocation::Query },
+        FieldSpec { snake: "place_geo_sw_lon", wire: "placeGeo.swLon", location: FieldLocation::Query },
+        FieldSpec { snake: "place_geo_ne_lat", wire: "placeGeo.neLat", location: FieldLocation::Query },
+        FieldSpec { snake: "place_geo_ne_lon", wire: "placeGeo.neLon", location: FieldLocation::Query },
+        FieldSpec { snake: "place_geo_lat", wire: "placeGeo.lat", location: FieldLocation::Query },
+        FieldSpec { snake: "place_geo_lon", wire: "placeGeo.lon", location: FieldLocation::Query },
     ],
     auth: &[
     ],
@@ -1166,8 +4417,9 @@ const OP_PLACE_GET_STREETS_BY_POST_CODE: OpSpec = OpSpec {
     method: "GET",
     path_template: "/Place/Address/Streets/{postcode}",
     fields: &[
-        FieldSpec { snake: "postcode", location: FieldLocation::Query },
-        FieldSpec { snake: "postcode_input_postcode", location: FieldLocation::Query },
+        FieldSpec { snake: "postcode_v2", wire: "postcode", location: FieldLocation::Query },
+        FieldSpec { snake: "postcode_input_postcode", wire: "postcodeInput.postcode", location: FieldLocation::Query },
+        FieldSpec { snake: "postcode", wire: "Postcode", location: FieldLocation::Path },
     ],
     auth: &[
     ],
@@ -1195,8 +4447,8 @@ const OP_PLACE_SEARCH: OpSpec = OpSpec {
     method: "GET",
     path_template: "/Place/Search",
     fields: &[
-        FieldSpec { snake: "name", location: FieldLocation::Query },
-        FieldSpec { snake: "types", location: FieldLocation::Query },
+        FieldSpec { snake: "name", wire: "name", location: FieldLocation::Query },
+        FieldSpec { snake: "types", wire: "types", location: FieldLocation::Query },
     ],
     auth: &[
     ],
@@ -1206,8 +4458,8 @@ const OP_PLACE_GET_BY_TYPE: OpSpec = OpSpec {
     method: "GET",
     path_template: "/Place/Type/{types}",
     fields: &[
-        FieldSpec { snake: "types", location: FieldLocation::Path },
-        FieldSpec { snake: "active_only", location: FieldLocation::Query },
+        FieldSpec { snake: "types", wire: "types", location: FieldLocation::Path },
+        FieldSpec { snake: "active_only", wire: "activeOnly", location: FieldLocation::Query },
     ],
     auth: &[
     ],
@@ -1217,8 +4469,8 @@ const OP_PLACE_GET: OpSpec = OpSpec {
     method: "GET",
     path_template: "/Place/{id}",
     fields: &[
-        FieldSpec { snake: "id", location: FieldLocation::Path },
-        FieldSpec { snake: "include_children", location: FieldLocation::Query },
+        FieldSpec { snake: "id", wire: "id", location: FieldLocation::Path },
+        FieldSpec { snake: "include_children", wire: "includeChildren", location: FieldLocation::Query },
     ],
     auth: &[
     ],
@@ -1228,11 +4480,13 @@ const OP_PLACE_GET_AT: OpSpec = OpSpec {
     method: "GET",
     path_template: "/Place/{type}/At/{lat}/{lon}",
     fields: &[
-        FieldSpec { snake: "type", location: FieldLocation::Path },
-        FieldSpec { snake: "lat", location: FieldLocation::Query },
-        FieldSpec { snake: "lon", location: FieldLocation::Query },
-        FieldSpec { snake: "location_lat", location: FieldLocation::Query },
-        FieldSpec { snake: "location_lon", location: FieldLocation::Query },
+        FieldSpec { snake: "type", wire: "type", location: FieldLocation::Path },
+        FieldSpec { snake: "lat_v2", wire: "lat", location: FieldLocation::Query },
+        FieldSpec { snake: "lon_v2", wire: "lon", location: FieldLocation::Query },
+        FieldSpec { snake: "location_lat", wire: "location.lat", location: FieldLocation::Query },
+        FieldSpec { snake: "location_lon", wire: "location.lon", location: FieldLocation::Query },
+        FieldSpec { snake: "lat", wire: "Lat", location: FieldLocation::Path },
+        FieldSpec { snake: "lon", wire: "Lon", location: FieldLocation::Path },
     ],
     auth: &[
     ],
@@ -1242,18 +4496,172 @@ const OP_PLACE_GET_OVERLAY: OpSpec = OpSpec {
     method: "GET",
     path_template: "/Place/{type}/overlay/{z}/{lat}/{lon}/{width}/{height}",
     fields: &[
-        FieldSpec { snake: "z", location: FieldLocation::Path },
-        FieldSpec { snake: "type", location: FieldLocation::Path },
-        FieldSpec { snake: "width", location: FieldLocation::Path },
-        FieldSpec { snake: "height", location: FieldLocation::Path },
-        FieldSpec { snake: "lat", location: FieldLocation::Query },
-        FieldSpec { snake: "lon", location: FieldLocation::Query },
-        FieldSpec { snake: "location_lat", location: FieldLocation::Query },
-        FieldSpec { snake: "location_lon", location: FieldLocation::Query },
+        FieldSpec { snake: "z", wire: "z", location: FieldLocation::Path },
+        FieldSpec { snake: "type", wire: "type", location: FieldLocation::Path },
+        FieldSpec { snake: "width", wire: "width", location: FieldLocation::Path },
+        FieldSpec { snake: "height", wire: "height", location: FieldLocation::Path },
+        FieldSpec { snake: "lat_v2", wire: "lat", location: FieldLocation::Query },
+        FieldSpec { snake: "lon_v2", wire: "lon", location: FieldLocation::Query },
+        FieldSpec { snake: "location_lat", wire: "location.lat", location: FieldLocation::Query },
+        FieldSpec { snake: "location_lon", wire: "location.lon", location: FieldLocation::Query },
+        FieldSpec { snake: "lat", wire: "Lat", location: FieldLocation::Path },
+        FieldSpec { snake: "lon", wire: "Lon", location: FieldLocation::Path },
     ],
     auth: &[
     ],
 };
+
+fn iface_place__tfl_api_presentation_entities_identifier_route_type_enum__to_str(e: &iface_place::TflApiPresentationEntitiesIdentifierRouteTypeEnum) -> &'static str {
+    match e {
+        iface_place::TflApiPresentationEntitiesIdentifierRouteTypeEnum::Unknown => "Unknown",
+        iface_place::TflApiPresentationEntitiesIdentifierRouteTypeEnum::All => "All",
+        iface_place::TflApiPresentationEntitiesIdentifierRouteTypeEnum::CycleSuperhighways => "Cycle Superhighways",
+        iface_place::TflApiPresentationEntitiesIdentifierRouteTypeEnum::Quietways => "Quietways",
+        iface_place::TflApiPresentationEntitiesIdentifierRouteTypeEnum::Cycleways => "Cycleways",
+        iface_place::TflApiPresentationEntitiesIdentifierRouteTypeEnum::MiniHollands => "Mini-Hollands",
+        iface_place::TflApiPresentationEntitiesIdentifierRouteTypeEnum::CentralLondonGrid => "Central London Grid",
+        iface_place::TflApiPresentationEntitiesIdentifierRouteTypeEnum::StreetspaceRoute => "Streetspace Route",
+    }
+}
+
+fn iface_place__tfl_api_presentation_entities_identifier_status_enum__to_str(e: &iface_place::TflApiPresentationEntitiesIdentifierStatusEnum) -> &'static str {
+    match e {
+        iface_place::TflApiPresentationEntitiesIdentifierStatusEnum::Unknown => "Unknown",
+        iface_place::TflApiPresentationEntitiesIdentifierStatusEnum::All => "All",
+        iface_place::TflApiPresentationEntitiesIdentifierStatusEnum::Open => "Open",
+        iface_place::TflApiPresentationEntitiesIdentifierStatusEnum::InProgress => "In Progress",
+        iface_place::TflApiPresentationEntitiesIdentifierStatusEnum::Planned => "Planned",
+        iface_place::TflApiPresentationEntitiesIdentifierStatusEnum::PlannedSubjectToFeasibilityAndConsultation => "Planned - Subject to feasibility and consultation.",
+        iface_place::TflApiPresentationEntitiesIdentifierStatusEnum::NotOpen => "Not Open",
+    }
+}
+
+fn iface_place__tfl_api_presentation_entities_stop_point__to_json(p: &iface_place::TflApiPresentationEntitiesStopPoint) -> Value {
+    let mut m = Map::new();
+    m.insert("accessibilitySummary".into(), match (&p.accessibility_summary) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("additionalProperties".into(), match (&p.additional_properties) { Some(v) => Value::Array((v).iter().map(|v| iface_place__tfl_api_presentation_entities_additional_properties__to_json(v)).collect()), None => Value::Null });
+    m.insert("children".into(), match (&p.children) { Some(v) => Value::Array((v).iter().map(|v| iface_place__tfl_api_presentation_entities_place__to_json(v)).collect()), None => Value::Null });
+    m.insert("childrenUrls".into(), match (&p.children_urls) { Some(v) => Value::Array((v).iter().map(|v| Value::String((v).clone())).collect()), None => Value::Null });
+    m.insert("commonName".into(), match (&p.common_name) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("distance".into(), match (&p.distance) { Some(v) => serde_json::Number::from_f64(*(v)).map(Value::Number).unwrap_or(Value::Null), None => Value::Null });
+    m.insert("fullName".into(), match (&p.full_name) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("hubNaptanCode".into(), match (&p.hub_naptan_code) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("icsCode".into(), match (&p.ics_code) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("id".into(), match (&p.id) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("indicator".into(), match (&p.indicator) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("individualStopId".into(), match (&p.individual_stop_id) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("lat".into(), match (&p.lat) { Some(v) => serde_json::Number::from_f64(*(v)).map(Value::Number).unwrap_or(Value::Null), None => Value::Null });
+    m.insert("lineGroup".into(), match (&p.line_group) { Some(v) => Value::Array((v).iter().map(|v| iface_place__tfl_api_presentation_entities_line_group__to_json(v)).collect()), None => Value::Null });
+    m.insert("lineModeGroups".into(), match (&p.line_mode_groups) { Some(v) => Value::Array((v).iter().map(|v| iface_place__tfl_api_presentation_entities_line_mode_group__to_json(v)).collect()), None => Value::Null });
+    m.insert("lines".into(), match (&p.lines) { Some(v) => Value::Array((v).iter().map(|v| iface_place__tfl_api_presentation_entities_identifier__to_json(v)).collect()), None => Value::Null });
+    m.insert("lon".into(), match (&p.lon) { Some(v) => serde_json::Number::from_f64(*(v)).map(Value::Number).unwrap_or(Value::Null), None => Value::Null });
+    m.insert("modes".into(), match (&p.modes) { Some(v) => Value::Array((v).iter().map(|v| Value::String((v).clone())).collect()), None => Value::Null });
+    m.insert("naptanId".into(), match (&p.naptan_id) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("naptanMode".into(), match (&p.naptan_mode) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("placeType".into(), match (&p.place_type) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("platformName".into(), match (&p.platform_name) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("smsCode".into(), match (&p.sms_code) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("stationNaptan".into(), match (&p.station_naptan) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("status".into(), match (&p.status) { Some(v) => Value::Bool(*(v)), None => Value::Null });
+    m.insert("stopLetter".into(), match (&p.stop_letter) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("stopType".into(), match (&p.stop_type) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("url".into(), match (&p.url) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_place__tfl_api_presentation_entities_additional_properties__to_json(p: &iface_place::TflApiPresentationEntitiesAdditionalProperties) -> Value {
+    let mut m = Map::new();
+    m.insert("category".into(), match (&p.category) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("key".into(), match (&p.key) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("modified".into(), match (&p.modified) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("sourceSystemKey".into(), match (&p.source_system_key) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("value".into(), match (&p.value) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_place__tfl_api_presentation_entities_place__to_json(p: &iface_place::TflApiPresentationEntitiesPlace) -> Value {
+    let mut m = Map::new();
+    m.insert("additionalProperties".into(), match (&p.additional_properties) { Some(v) => Value::Array((v).iter().map(|v| iface_place__tfl_api_presentation_entities_additional_properties__to_json(v)).collect()), None => Value::Null });
+    m.insert("children".into(), match (&p.children) { Some(v) => Value::Array((v).iter().map(|v| Value::String((v).clone())).collect()), None => Value::Null });
+    m.insert("childrenUrls".into(), match (&p.children_urls) { Some(v) => Value::Array((v).iter().map(|v| Value::String((v).clone())).collect()), None => Value::Null });
+    m.insert("commonName".into(), match (&p.common_name) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("distance".into(), match (&p.distance) { Some(v) => serde_json::Number::from_f64(*(v)).map(Value::Number).unwrap_or(Value::Null), None => Value::Null });
+    m.insert("id".into(), match (&p.id) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("lat".into(), match (&p.lat) { Some(v) => serde_json::Number::from_f64(*(v)).map(Value::Number).unwrap_or(Value::Null), None => Value::Null });
+    m.insert("lon".into(), match (&p.lon) { Some(v) => serde_json::Number::from_f64(*(v)).map(Value::Number).unwrap_or(Value::Null), None => Value::Null });
+    m.insert("placeType".into(), match (&p.place_type) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("url".into(), match (&p.url) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_place__tfl_api_presentation_entities_line_group__to_json(p: &iface_place::TflApiPresentationEntitiesLineGroup) -> Value {
+    let mut m = Map::new();
+    m.insert("lineIdentifier".into(), match (&p.line_identifier) { Some(v) => Value::Array((v).iter().map(|v| Value::String((v).clone())).collect()), None => Value::Null });
+    m.insert("naptanIdReference".into(), match (&p.naptan_id_reference) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("stationAtcoCode".into(), match (&p.station_atco_code) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_place__tfl_api_presentation_entities_line_mode_group__to_json(p: &iface_place::TflApiPresentationEntitiesLineModeGroup) -> Value {
+    let mut m = Map::new();
+    m.insert("lineIdentifier".into(), match (&p.line_identifier) { Some(v) => Value::Array((v).iter().map(|v| Value::String((v).clone())).collect()), None => Value::Null });
+    m.insert("modeName".into(), match (&p.mode_name) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_place__tfl_api_presentation_entities_identifier__to_json(p: &iface_place::TflApiPresentationEntitiesIdentifier) -> Value {
+    let mut m = Map::new();
+    m.insert("crowding".into(), match (&p.crowding) { Some(v) => iface_place__tfl_api_presentation_entities_crowding__to_json(v), None => Value::Null });
+    m.insert("fullName".into(), match (&p.full_name) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("id".into(), match (&p.id) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("motType".into(), match (&p.mot_type) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("name".into(), match (&p.name) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("network".into(), match (&p.network) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("routeType".into(), match (&p.route_type) { Some(v) => Value::String(iface_place__tfl_api_presentation_entities_identifier_route_type_enum__to_str(v).into()), None => Value::Null });
+    m.insert("status".into(), match (&p.status) { Some(v) => Value::String(iface_place__tfl_api_presentation_entities_identifier_status_enum__to_str(v).into()), None => Value::Null });
+    m.insert("type".into(), match (&p.type_op) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("uri".into(), match (&p.uri) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_place__tfl_api_presentation_entities_crowding__to_json(p: &iface_place::TflApiPresentationEntitiesCrowding) -> Value {
+    let mut m = Map::new();
+    m.insert("passengerFlows".into(), match (&p.passenger_flows) { Some(v) => Value::Array((v).iter().map(|v| iface_place__tfl_api_presentation_entities_passenger_flow__to_json(v)).collect()), None => Value::Null });
+    m.insert("trainLoadings".into(), match (&p.train_loadings) { Some(v) => Value::Array((v).iter().map(|v| iface_place__tfl_api_presentation_entities_train_loading__to_json(v)).collect()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_place__tfl_api_presentation_entities_passenger_flow__to_json(p: &iface_place::TflApiPresentationEntitiesPassengerFlow) -> Value {
+    let mut m = Map::new();
+    m.insert("timeSlice".into(), match (&p.time_slice) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("value".into(), match (&p.value) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_place__tfl_api_presentation_entities_train_loading__to_json(p: &iface_place::TflApiPresentationEntitiesTrainLoading) -> Value {
+    let mut m = Map::new();
+    m.insert("direction".into(), match (&p.direction) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("line".into(), match (&p.line) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("lineDirection".into(), match (&p.line_direction) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("naptanTo".into(), match (&p.naptan_to) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("platformDirection".into(), match (&p.platform_direction) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("timeSlice".into(), match (&p.time_slice) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("value".into(), match (&p.value) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_place__system_object__to_json(p: &iface_place::SystemObject) -> Value {
+    let mut m = Map::new();
+    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_place__tfl_api_presentation_entities_place_category__to_json(p: &iface_place::TflApiPresentationEntitiesPlaceCategory) -> Value {
+    let mut m = Map::new();
+    m.insert("availableKeys".into(), match (&p.available_keys) { Some(v) => Value::Array((v).iter().map(|v| Value::String((v).clone())).collect()), None => Value::Null });
+    m.insert("category".into(), match (&p.category) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
 
 fn iface_place__get_by_geo_params__to_json(p: &iface_place::GetByGeoParams) -> Value {
     let mut m = Map::new();
@@ -1274,8 +4682,9 @@ fn iface_place__get_by_geo_params__to_json(p: &iface_place::GetByGeoParams) -> V
 
 fn iface_place__get_streets_by_post_code_params__to_json(p: &iface_place::GetStreetsByPostCodeParams) -> Value {
     let mut m = Map::new();
-    m.insert("postcode".into(), Value::String((&p.postcode).clone()));
+    m.insert("postcode_v2".into(), Value::String((&p.postcode).clone()));
     m.insert("postcode_input_postcode".into(), match (&p.postcode_input_postcode) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("postcode".into(), Value::String((&p.postcode_v2).clone()));
     Value::Object(m)
 }
 
@@ -1303,10 +4712,12 @@ fn iface_place__get_params__to_json(p: &iface_place::GetParams) -> Value {
 fn iface_place__get_at_params__to_json(p: &iface_place::GetAtParams) -> Value {
     let mut m = Map::new();
     m.insert("type".into(), Value::String((&p.type_op).clone()));
-    m.insert("lat".into(), Value::String((&p.lat).clone()));
-    m.insert("lon".into(), Value::String((&p.lon).clone()));
+    m.insert("lat_v2".into(), Value::String((&p.lat).clone()));
+    m.insert("lon_v2".into(), Value::String((&p.lon).clone()));
     m.insert("location_lat".into(), serde_json::Number::from_f64(*(&p.location_lat)).map(Value::Number).unwrap_or(Value::Null));
     m.insert("location_lon".into(), serde_json::Number::from_f64(*(&p.location_lon)).map(Value::Number).unwrap_or(Value::Null));
+    m.insert("lat".into(), Value::String((&p.lat_v2).clone()));
+    m.insert("lon".into(), Value::String((&p.lon_v2).clone()));
     Value::Object(m)
 }
 
@@ -1316,47 +4727,403 @@ fn iface_place__get_overlay_params__to_json(p: &iface_place::GetOverlayParams) -
     m.insert("type".into(), Value::String((&p.type_op).clone()));
     m.insert("width".into(), Value::String((&p.width).clone()));
     m.insert("height".into(), Value::String((&p.height).clone()));
-    m.insert("lat".into(), Value::String((&p.lat).clone()));
-    m.insert("lon".into(), Value::String((&p.lon).clone()));
+    m.insert("lat_v2".into(), Value::String((&p.lat).clone()));
+    m.insert("lon_v2".into(), Value::String((&p.lon).clone()));
     m.insert("location_lat".into(), serde_json::Number::from_f64(*(&p.location_lat)).map(Value::Number).unwrap_or(Value::Null));
     m.insert("location_lon".into(), serde_json::Number::from_f64(*(&p.location_lon)).map(Value::Number).unwrap_or(Value::Null));
+    m.insert("lat".into(), Value::String((&p.lat_v2).clone()));
+    m.insert("lon".into(), Value::String((&p.lon_v2).clone()));
     Value::Object(m)
 }
 
+fn iface_place__tfl_api_presentation_entities_stop_point__from_json(v: &Value) -> Option<iface_place::TflApiPresentationEntitiesStopPoint> {
+    let m = v.as_object()?;
+    Some(iface_place::TflApiPresentationEntitiesStopPoint {
+        accessibility_summary: m.get("accessibilitySummary").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        additional_properties: m.get("additionalProperties").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| iface_place__tfl_api_presentation_entities_additional_properties__from_json(x)).collect())),
+        children: m.get("children").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| iface_place__tfl_api_presentation_entities_place__from_json(x)).collect())),
+        children_urls: m.get("childrenUrls").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| (x).as_str().map(|s| s.to_string())).collect())),
+        common_name: m.get("commonName").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        distance: m.get("distance").filter(|v| !v.is_null()).and_then(|v| (v).as_f64()),
+        full_name: m.get("fullName").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        hub_naptan_code: m.get("hubNaptanCode").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        ics_code: m.get("icsCode").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        id: m.get("id").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        indicator: m.get("indicator").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        individual_stop_id: m.get("individualStopId").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        lat: m.get("lat").filter(|v| !v.is_null()).and_then(|v| (v).as_f64()),
+        line_group: m.get("lineGroup").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| iface_place__tfl_api_presentation_entities_line_group__from_json(x)).collect())),
+        line_mode_groups: m.get("lineModeGroups").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| iface_place__tfl_api_presentation_entities_line_mode_group__from_json(x)).collect())),
+        lines: m.get("lines").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| iface_place__tfl_api_presentation_entities_identifier__from_json(x)).collect())),
+        lon: m.get("lon").filter(|v| !v.is_null()).and_then(|v| (v).as_f64()),
+        modes: m.get("modes").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| (x).as_str().map(|s| s.to_string())).collect())),
+        naptan_id: m.get("naptanId").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        naptan_mode: m.get("naptanMode").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        place_type: m.get("placeType").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        platform_name: m.get("platformName").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        sms_code: m.get("smsCode").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        station_naptan: m.get("stationNaptan").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        status: m.get("status").filter(|v| !v.is_null()).and_then(|v| (v).as_bool()),
+        stop_letter: m.get("stopLetter").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        stop_type: m.get("stopType").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        url: m.get("url").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    })
+}
+
+fn iface_place__tfl_api_presentation_entities_additional_properties__from_json(v: &Value) -> Option<iface_place::TflApiPresentationEntitiesAdditionalProperties> {
+    let m = v.as_object()?;
+    Some(iface_place::TflApiPresentationEntitiesAdditionalProperties {
+        category: m.get("category").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        key: m.get("key").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        modified: m.get("modified").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        source_system_key: m.get("sourceSystemKey").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        value: m.get("value").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    })
+}
+
+fn iface_place__tfl_api_presentation_entities_place__from_json(v: &Value) -> Option<iface_place::TflApiPresentationEntitiesPlace> {
+    let m = v.as_object()?;
+    Some(iface_place::TflApiPresentationEntitiesPlace {
+        additional_properties: m.get("additionalProperties").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| iface_place__tfl_api_presentation_entities_additional_properties__from_json(x)).collect())),
+        children: m.get("children").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| (x).as_str().map(|s| s.to_string())).collect())),
+        children_urls: m.get("childrenUrls").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| (x).as_str().map(|s| s.to_string())).collect())),
+        common_name: m.get("commonName").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        distance: m.get("distance").filter(|v| !v.is_null()).and_then(|v| (v).as_f64()),
+        id: m.get("id").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        lat: m.get("lat").filter(|v| !v.is_null()).and_then(|v| (v).as_f64()),
+        lon: m.get("lon").filter(|v| !v.is_null()).and_then(|v| (v).as_f64()),
+        place_type: m.get("placeType").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        url: m.get("url").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    })
+}
+
+fn iface_place__tfl_api_presentation_entities_line_group__from_json(v: &Value) -> Option<iface_place::TflApiPresentationEntitiesLineGroup> {
+    let m = v.as_object()?;
+    Some(iface_place::TflApiPresentationEntitiesLineGroup {
+        line_identifier: m.get("lineIdentifier").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| (x).as_str().map(|s| s.to_string())).collect())),
+        naptan_id_reference: m.get("naptanIdReference").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        station_atco_code: m.get("stationAtcoCode").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    })
+}
+
+fn iface_place__tfl_api_presentation_entities_line_mode_group__from_json(v: &Value) -> Option<iface_place::TflApiPresentationEntitiesLineModeGroup> {
+    let m = v.as_object()?;
+    Some(iface_place::TflApiPresentationEntitiesLineModeGroup {
+        line_identifier: m.get("lineIdentifier").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| (x).as_str().map(|s| s.to_string())).collect())),
+        mode_name: m.get("modeName").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    })
+}
+
+fn iface_place__tfl_api_presentation_entities_identifier__from_json(v: &Value) -> Option<iface_place::TflApiPresentationEntitiesIdentifier> {
+    let m = v.as_object()?;
+    Some(iface_place::TflApiPresentationEntitiesIdentifier {
+        crowding: m.get("crowding").filter(|v| !v.is_null()).and_then(|v| iface_place__tfl_api_presentation_entities_crowding__from_json(v)),
+        full_name: m.get("fullName").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        id: m.get("id").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        mot_type: m.get("motType").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        name: m.get("name").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        network: m.get("network").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        route_type: m.get("routeType").filter(|v| !v.is_null()).and_then(|v| (v).as_str().and_then(iface_place__tfl_api_presentation_entities_identifier_route_type_enum__from_str)),
+        status: m.get("status").filter(|v| !v.is_null()).and_then(|v| (v).as_str().and_then(iface_place__tfl_api_presentation_entities_identifier_status_enum__from_str)),
+        type_op: m.get("type").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        uri: m.get("uri").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    })
+}
+
+fn iface_place__tfl_api_presentation_entities_crowding__from_json(v: &Value) -> Option<iface_place::TflApiPresentationEntitiesCrowding> {
+    let m = v.as_object()?;
+    Some(iface_place::TflApiPresentationEntitiesCrowding {
+        passenger_flows: m.get("passengerFlows").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| iface_place__tfl_api_presentation_entities_passenger_flow__from_json(x)).collect())),
+        train_loadings: m.get("trainLoadings").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| iface_place__tfl_api_presentation_entities_train_loading__from_json(x)).collect())),
+    })
+}
+
+fn iface_place__tfl_api_presentation_entities_passenger_flow__from_json(v: &Value) -> Option<iface_place::TflApiPresentationEntitiesPassengerFlow> {
+    let m = v.as_object()?;
+    Some(iface_place::TflApiPresentationEntitiesPassengerFlow {
+        time_slice: m.get("timeSlice").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        value: m.get("value").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+    })
+}
+
+fn iface_place__tfl_api_presentation_entities_train_loading__from_json(v: &Value) -> Option<iface_place::TflApiPresentationEntitiesTrainLoading> {
+    let m = v.as_object()?;
+    Some(iface_place::TflApiPresentationEntitiesTrainLoading {
+        direction: m.get("direction").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        line: m.get("line").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        line_direction: m.get("lineDirection").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        naptan_to: m.get("naptanTo").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        platform_direction: m.get("platformDirection").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        time_slice: m.get("timeSlice").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        value: m.get("value").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+    })
+}
+
+fn iface_place__system_object__from_json(v: &Value) -> Option<iface_place::SystemObject> {
+    let m = v.as_object()?;
+    Some(iface_place::SystemObject {
+        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    })
+}
+
+fn iface_place__tfl_api_presentation_entities_place_category__from_json(v: &Value) -> Option<iface_place::TflApiPresentationEntitiesPlaceCategory> {
+    let m = v.as_object()?;
+    Some(iface_place::TflApiPresentationEntitiesPlaceCategory {
+        available_keys: m.get("availableKeys").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| (x).as_str().map(|s| s.to_string())).collect())),
+        category: m.get("category").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    })
+}
+
+fn iface_place__tfl_api_presentation_entities_identifier_route_type_enum__from_str(s: &str) -> Option<iface_place::TflApiPresentationEntitiesIdentifierRouteTypeEnum> {
+    match s {
+        "Unknown" => Some(iface_place::TflApiPresentationEntitiesIdentifierRouteTypeEnum::Unknown),
+        "All" => Some(iface_place::TflApiPresentationEntitiesIdentifierRouteTypeEnum::All),
+        "Cycle Superhighways" => Some(iface_place::TflApiPresentationEntitiesIdentifierRouteTypeEnum::CycleSuperhighways),
+        "Quietways" => Some(iface_place::TflApiPresentationEntitiesIdentifierRouteTypeEnum::Quietways),
+        "Cycleways" => Some(iface_place::TflApiPresentationEntitiesIdentifierRouteTypeEnum::Cycleways),
+        "Mini-Hollands" => Some(iface_place::TflApiPresentationEntitiesIdentifierRouteTypeEnum::MiniHollands),
+        "Central London Grid" => Some(iface_place::TflApiPresentationEntitiesIdentifierRouteTypeEnum::CentralLondonGrid),
+        "Streetspace Route" => Some(iface_place::TflApiPresentationEntitiesIdentifierRouteTypeEnum::StreetspaceRoute),
+        _ => None,
+    }
+}
+
+fn iface_place__tfl_api_presentation_entities_identifier_status_enum__from_str(s: &str) -> Option<iface_place::TflApiPresentationEntitiesIdentifierStatusEnum> {
+    match s {
+        "Unknown" => Some(iface_place::TflApiPresentationEntitiesIdentifierStatusEnum::Unknown),
+        "All" => Some(iface_place::TflApiPresentationEntitiesIdentifierStatusEnum::All),
+        "Open" => Some(iface_place::TflApiPresentationEntitiesIdentifierStatusEnum::Open),
+        "In Progress" => Some(iface_place::TflApiPresentationEntitiesIdentifierStatusEnum::InProgress),
+        "Planned" => Some(iface_place::TflApiPresentationEntitiesIdentifierStatusEnum::Planned),
+        "Planned - Subject to feasibility and consultation." => Some(iface_place::TflApiPresentationEntitiesIdentifierStatusEnum::PlannedSubjectToFeasibilityAndConsultation),
+        "Not Open" => Some(iface_place::TflApiPresentationEntitiesIdentifierStatusEnum::NotOpen),
+        _ => None,
+    }
+}
+
+fn iface_place__get_by_geo__ok(body: String) -> Result<Vec<iface_place::TflApiPresentationEntitiesStopPoint>, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match (&v).as_array().map(|a| a.iter().filter_map(|x| iface_place__tfl_api_presentation_entities_stop_point__from_json(x)).collect()) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_place__get_by_geo__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
+fn iface_place__get_streets_by_post_code__ok(body: String) -> Result<iface_place::SystemObject, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match iface_place__system_object__from_json(&v) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_place__get_streets_by_post_code__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
+fn iface_place__meta_categories__ok(body: String) -> Result<Vec<iface_place::TflApiPresentationEntitiesPlaceCategory>, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match (&v).as_array().map(|a| a.iter().filter_map(|x| iface_place__tfl_api_presentation_entities_place_category__from_json(x)).collect()) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_place__meta_categories__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
+fn iface_place__meta_place_types__ok(body: String) -> Result<Vec<iface_place::TflApiPresentationEntitiesPlaceCategory>, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match (&v).as_array().map(|a| a.iter().filter_map(|x| iface_place__tfl_api_presentation_entities_place_category__from_json(x)).collect()) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_place__meta_place_types__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
+fn iface_place__search__ok(body: String) -> Result<Vec<iface_place::TflApiPresentationEntitiesPlace>, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match (&v).as_array().map(|a| a.iter().filter_map(|x| iface_place__tfl_api_presentation_entities_place__from_json(x)).collect()) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_place__search__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
+fn iface_place__get_by_type__ok(body: String) -> Result<Vec<iface_place::TflApiPresentationEntitiesPlace>, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match (&v).as_array().map(|a| a.iter().filter_map(|x| iface_place__tfl_api_presentation_entities_place__from_json(x)).collect()) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_place__get_by_type__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
+fn iface_place__get__ok(body: String) -> Result<Vec<iface_place::TflApiPresentationEntitiesPlace>, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match (&v).as_array().map(|a| a.iter().filter_map(|x| iface_place__tfl_api_presentation_entities_place__from_json(x)).collect()) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_place__get__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
+fn iface_place__get_at__ok(body: String) -> Result<iface_place::SystemObject, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match iface_place__system_object__from_json(&v) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_place__get_at__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
+fn iface_place__get_overlay__ok(body: String) -> Result<iface_place::SystemObject, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match iface_place__system_object__from_json(&v) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_place__get_overlay__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
 impl iface_place::Guest for crate::Component {
-    fn get_by_geo(params: iface_place::GetByGeoParams) -> Result<String, String> {
+    fn get_by_geo(params: iface_place::GetByGeoParams) -> Result<Vec<iface_place::TflApiPresentationEntitiesStopPoint>, String> {
         let json = iface_place__get_by_geo_params__to_json(&params);
-        dispatch(&OP_PLACE_GET_BY_GEO, json)
+        match dispatch(&OP_PLACE_GET_BY_GEO, json).and_then(iface_place__get_by_geo__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_place__get_by_geo__err(e)),
+        }
     }
-    fn get_streets_by_post_code(params: iface_place::GetStreetsByPostCodeParams) -> Result<String, String> {
+    fn get_streets_by_post_code(params: iface_place::GetStreetsByPostCodeParams) -> Result<iface_place::SystemObject, String> {
         let json = iface_place__get_streets_by_post_code_params__to_json(&params);
-        dispatch(&OP_PLACE_GET_STREETS_BY_POST_CODE, json)
+        match dispatch(&OP_PLACE_GET_STREETS_BY_POST_CODE, json).and_then(iface_place__get_streets_by_post_code__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_place__get_streets_by_post_code__err(e)),
+        }
     }
-    fn meta_categories() -> Result<String, String> {
-        dispatch(&OP_PLACE_META_CATEGORIES, Value::Object(Map::new()))
+    fn meta_categories() -> Result<Vec<iface_place::TflApiPresentationEntitiesPlaceCategory>, String> {
+        match dispatch(&OP_PLACE_META_CATEGORIES, Value::Object(Map::new())).and_then(iface_place__meta_categories__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_place__meta_categories__err(e)),
+        }
     }
-    fn meta_place_types() -> Result<String, String> {
-        dispatch(&OP_PLACE_META_PLACE_TYPES, Value::Object(Map::new()))
+    fn meta_place_types() -> Result<Vec<iface_place::TflApiPresentationEntitiesPlaceCategory>, String> {
+        match dispatch(&OP_PLACE_META_PLACE_TYPES, Value::Object(Map::new())).and_then(iface_place__meta_place_types__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_place__meta_place_types__err(e)),
+        }
     }
-    fn search(params: iface_place::SearchParams) -> Result<String, String> {
+    fn search(params: iface_place::SearchParams) -> Result<Vec<iface_place::TflApiPresentationEntitiesPlace>, String> {
         let json = iface_place__search_params__to_json(&params);
-        dispatch(&OP_PLACE_SEARCH, json)
+        match dispatch(&OP_PLACE_SEARCH, json).and_then(iface_place__search__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_place__search__err(e)),
+        }
     }
-    fn get_by_type(params: iface_place::GetByTypeParams) -> Result<String, String> {
+    fn get_by_type(params: iface_place::GetByTypeParams) -> Result<Vec<iface_place::TflApiPresentationEntitiesPlace>, String> {
         let json = iface_place__get_by_type_params__to_json(&params);
-        dispatch(&OP_PLACE_GET_BY_TYPE, json)
+        match dispatch(&OP_PLACE_GET_BY_TYPE, json).and_then(iface_place__get_by_type__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_place__get_by_type__err(e)),
+        }
     }
-    fn get(params: iface_place::GetParams) -> Result<String, String> {
+    fn get(params: iface_place::GetParams) -> Result<Vec<iface_place::TflApiPresentationEntitiesPlace>, String> {
         let json = iface_place__get_params__to_json(&params);
-        dispatch(&OP_PLACE_GET, json)
+        match dispatch(&OP_PLACE_GET, json).and_then(iface_place__get__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_place__get__err(e)),
+        }
     }
-    fn get_at(params: iface_place::GetAtParams) -> Result<String, String> {
+    fn get_at(params: iface_place::GetAtParams) -> Result<iface_place::SystemObject, String> {
         let json = iface_place__get_at_params__to_json(&params);
-        dispatch(&OP_PLACE_GET_AT, json)
+        match dispatch(&OP_PLACE_GET_AT, json).and_then(iface_place__get_at__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_place__get_at__err(e)),
+        }
     }
-    fn get_overlay(params: iface_place::GetOverlayParams) -> Result<String, String> {
+    fn get_overlay(params: iface_place::GetOverlayParams) -> Result<iface_place::SystemObject, String> {
         let json = iface_place__get_overlay_params__to_json(&params);
-        dispatch(&OP_PLACE_GET_OVERLAY, json)
+        match dispatch(&OP_PLACE_GET_OVERLAY, json).and_then(iface_place__get_overlay__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_place__get_overlay__err(e)),
+        }
     }
 }
 use crate::exports::autostamp::tfl::road as iface_road;
@@ -1392,8 +5159,8 @@ const OP_ROAD_DISRUPTION_BY_ID: OpSpec = OpSpec {
     method: "GET",
     path_template: "/Road/all/Disruption/{disruption_ids}",
     fields: &[
-        FieldSpec { snake: "disruption_ids", location: FieldLocation::Path },
-        FieldSpec { snake: "strip_content", location: FieldLocation::Query },
+        FieldSpec { snake: "disruption_ids", wire: "disruptionIds", location: FieldLocation::Path },
+        FieldSpec { snake: "strip_content", wire: "stripContent", location: FieldLocation::Query },
     ],
     auth: &[
     ],
@@ -1403,8 +5170,8 @@ const OP_ROAD_DISRUPTED_STREETS: OpSpec = OpSpec {
     method: "GET",
     path_template: "/Road/all/Street/Disruption",
     fields: &[
-        FieldSpec { snake: "start_date", location: FieldLocation::Query },
-        FieldSpec { snake: "end_date", location: FieldLocation::Query },
+        FieldSpec { snake: "start_date", wire: "startDate", location: FieldLocation::Query },
+        FieldSpec { snake: "end_date", wire: "endDate", location: FieldLocation::Query },
     ],
     auth: &[
     ],
@@ -1414,7 +5181,7 @@ const OP_ROAD_GET_ROAD_IDS: OpSpec = OpSpec {
     method: "GET",
     path_template: "/Road/{ids}",
     fields: &[
-        FieldSpec { snake: "ids", location: FieldLocation::Path },
+        FieldSpec { snake: "ids", wire: "ids", location: FieldLocation::Path },
     ],
     auth: &[
     ],
@@ -1424,11 +5191,11 @@ const OP_ROAD_DISRUPTION: OpSpec = OpSpec {
     method: "GET",
     path_template: "/Road/{ids}/Disruption",
     fields: &[
-        FieldSpec { snake: "ids", location: FieldLocation::Path },
-        FieldSpec { snake: "strip_content", location: FieldLocation::Query },
-        FieldSpec { snake: "severities", location: FieldLocation::Query },
-        FieldSpec { snake: "categories", location: FieldLocation::Query },
-        FieldSpec { snake: "closures", location: FieldLocation::Query },
+        FieldSpec { snake: "ids", wire: "ids", location: FieldLocation::Path },
+        FieldSpec { snake: "strip_content", wire: "stripContent", location: FieldLocation::Query },
+        FieldSpec { snake: "severities", wire: "severities", location: FieldLocation::Query },
+        FieldSpec { snake: "categories", wire: "categories", location: FieldLocation::Query },
+        FieldSpec { snake: "closures", wire: "closures", location: FieldLocation::Query },
     ],
     auth: &[
     ],
@@ -1438,13 +5205,177 @@ const OP_ROAD_STATUS: OpSpec = OpSpec {
     method: "GET",
     path_template: "/Road/{ids}/Status",
     fields: &[
-        FieldSpec { snake: "ids", location: FieldLocation::Path },
-        FieldSpec { snake: "date_range_nullable_start_date", location: FieldLocation::Query },
-        FieldSpec { snake: "date_range_nullable_end_date", location: FieldLocation::Query },
+        FieldSpec { snake: "ids", wire: "ids", location: FieldLocation::Path },
+        FieldSpec { snake: "date_range_nullable_start_date", wire: "dateRangeNullable.startDate", location: FieldLocation::Query },
+        FieldSpec { snake: "date_range_nullable_end_date", wire: "dateRangeNullable.endDate", location: FieldLocation::Query },
     ],
     auth: &[
     ],
 };
+
+fn iface_road__tfl_api_presentation_entities_road_project_phase_enum__to_str(e: &iface_road::TflApiPresentationEntitiesRoadProjectPhaseEnum) -> &'static str {
+    match e {
+        iface_road::TflApiPresentationEntitiesRoadProjectPhaseEnum::Unscoped => "Unscoped",
+        iface_road::TflApiPresentationEntitiesRoadProjectPhaseEnum::Concept => "Concept",
+        iface_road::TflApiPresentationEntitiesRoadProjectPhaseEnum::ConsultationEnded => "ConsultationEnded",
+        iface_road::TflApiPresentationEntitiesRoadProjectPhaseEnum::Consultation => "Consultation",
+        iface_road::TflApiPresentationEntitiesRoadProjectPhaseEnum::Construction => "Construction",
+        iface_road::TflApiPresentationEntitiesRoadProjectPhaseEnum::Complete => "Complete",
+    }
+}
+
+fn iface_road__tfl_api_presentation_entities_road_corridor__to_json(p: &iface_road::TflApiPresentationEntitiesRoadCorridor) -> Value {
+    let mut m = Map::new();
+    m.insert("bounds".into(), match (&p.bounds) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("displayName".into(), match (&p.display_name) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("envelope".into(), match (&p.envelope) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("group".into(), match (&p.group) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("id".into(), match (&p.id) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("statusAggregationEndDate".into(), match (&p.status_aggregation_end_date) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("statusAggregationStartDate".into(), match (&p.status_aggregation_start_date) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("statusSeverity".into(), match (&p.status_severity) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("statusSeverityDescription".into(), match (&p.status_severity_description) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("url".into(), match (&p.url) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_road__tfl_api_presentation_entities_status_severity__to_json(p: &iface_road::TflApiPresentationEntitiesStatusSeverity) -> Value {
+    let mut m = Map::new();
+    m.insert("description".into(), match (&p.description) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("modeName".into(), match (&p.mode_name) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("severityLevel".into(), match (&p.severity_level) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_road__tfl_api_presentation_entities_road_disruption__to_json(p: &iface_road::TflApiPresentationEntitiesRoadDisruption) -> Value {
+    let mut m = Map::new();
+    m.insert("category".into(), match (&p.category) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("comments".into(), match (&p.comments) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("corridorIds".into(), match (&p.corridor_ids) { Some(v) => Value::Array((v).iter().map(|v| Value::String((v).clone())).collect()), None => Value::Null });
+    m.insert("currentUpdate".into(), match (&p.current_update) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("currentUpdateDateTime".into(), match (&p.current_update_date_time) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("endDateTime".into(), match (&p.end_date_time) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("geography".into(), match (&p.geography) { Some(v) => iface_road__system_data_spatial_db_geography__to_json(v), None => Value::Null });
+    m.insert("geometry".into(), match (&p.geometry) { Some(v) => iface_road__system_data_spatial_db_geography__to_json(v), None => Value::Null });
+    m.insert("hasClosures".into(), match (&p.has_closures) { Some(v) => Value::Bool(*(v)), None => Value::Null });
+    m.insert("id".into(), match (&p.id) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("isProvisional".into(), match (&p.is_provisional) { Some(v) => Value::Bool(*(v)), None => Value::Null });
+    m.insert("lastModifiedTime".into(), match (&p.last_modified_time) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("levelOfInterest".into(), match (&p.level_of_interest) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("linkText".into(), match (&p.link_text) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("linkUrl".into(), match (&p.link_url) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("location".into(), match (&p.location) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("ordinal".into(), match (&p.ordinal) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("point".into(), match (&p.point) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("publishEndDate".into(), match (&p.publish_end_date) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("publishStartDate".into(), match (&p.publish_start_date) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("recurringSchedules".into(), match (&p.recurring_schedules) { Some(v) => Value::Array((v).iter().map(|v| iface_road__tfl_api_presentation_entities_road_disruption_schedule__to_json(v)).collect()), None => Value::Null });
+    m.insert("roadDisruptionImpactAreas".into(), match (&p.road_disruption_impact_areas) { Some(v) => Value::Array((v).iter().map(|v| iface_road__tfl_api_presentation_entities_road_disruption_impact_area__to_json(v)).collect()), None => Value::Null });
+    m.insert("roadDisruptionLines".into(), match (&p.road_disruption_lines) { Some(v) => Value::Array((v).iter().map(|v| iface_road__tfl_api_presentation_entities_road_disruption_line__to_json(v)).collect()), None => Value::Null });
+    m.insert("roadProject".into(), match (&p.road_project) { Some(v) => iface_road__tfl_api_presentation_entities_road_project__to_json(v), None => Value::Null });
+    m.insert("severity".into(), match (&p.severity) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("startDateTime".into(), match (&p.start_date_time) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("status".into(), match (&p.status) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("streets".into(), match (&p.streets) { Some(v) => Value::Array((v).iter().map(|v| iface_road__tfl_api_presentation_entities_street__to_json(v)).collect()), None => Value::Null });
+    m.insert("subCategory".into(), match (&p.sub_category) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("timeFrame".into(), match (&p.time_frame) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("url".into(), match (&p.url) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_road__system_data_spatial_db_geography__to_json(p: &iface_road::SystemDataSpatialDbGeography) -> Value {
+    let mut m = Map::new();
+    m.insert("geography".into(), match (&p.geography) { Some(v) => iface_road__system_data_spatial_db_geography_well_known_value__to_json(v), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_road__system_data_spatial_db_geography_well_known_value__to_json(p: &iface_road::SystemDataSpatialDbGeographyWellKnownValue) -> Value {
+    let mut m = Map::new();
+    m.insert("coordinateSystemId".into(), match (&p.coordinate_system_id) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("wellKnownBinary".into(), match (&p.well_known_binary) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("wellKnownText".into(), match (&p.well_known_text) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_road__tfl_api_presentation_entities_road_disruption_schedule__to_json(p: &iface_road::TflApiPresentationEntitiesRoadDisruptionSchedule) -> Value {
+    let mut m = Map::new();
+    m.insert("endTime".into(), match (&p.end_time) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("startTime".into(), match (&p.start_time) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_road__tfl_api_presentation_entities_road_disruption_impact_area__to_json(p: &iface_road::TflApiPresentationEntitiesRoadDisruptionImpactArea) -> Value {
+    let mut m = Map::new();
+    m.insert("endDate".into(), match (&p.end_date) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("endTime".into(), match (&p.end_time) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("id".into(), match (&p.id) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("polygon".into(), match (&p.polygon) { Some(v) => iface_road__system_data_spatial_db_geography__to_json(v), None => Value::Null });
+    m.insert("roadDisruptionId".into(), match (&p.road_disruption_id) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("startDate".into(), match (&p.start_date) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("startTime".into(), match (&p.start_time) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_road__tfl_api_presentation_entities_road_disruption_line__to_json(p: &iface_road::TflApiPresentationEntitiesRoadDisruptionLine) -> Value {
+    let mut m = Map::new();
+    m.insert("endDate".into(), match (&p.end_date) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("endTime".into(), match (&p.end_time) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("id".into(), match (&p.id) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("isDiversion".into(), match (&p.is_diversion) { Some(v) => Value::Bool(*(v)), None => Value::Null });
+    m.insert("multiLineString".into(), match (&p.multi_line_string) { Some(v) => iface_road__system_data_spatial_db_geography__to_json(v), None => Value::Null });
+    m.insert("roadDisruptionId".into(), match (&p.road_disruption_id) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("startDate".into(), match (&p.start_date) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("startTime".into(), match (&p.start_time) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_road__tfl_api_presentation_entities_road_project__to_json(p: &iface_road::TflApiPresentationEntitiesRoadProject) -> Value {
+    let mut m = Map::new();
+    m.insert("boroughsBenefited".into(), match (&p.boroughs_benefited) { Some(v) => Value::Array((v).iter().map(|v| Value::String((v).clone())).collect()), None => Value::Null });
+    m.insert("constructionEndDate".into(), match (&p.construction_end_date) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("constructionStartDate".into(), match (&p.construction_start_date) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("consultationEndDate".into(), match (&p.consultation_end_date) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("consultationPageUrl".into(), match (&p.consultation_page_url) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("consultationStartDate".into(), match (&p.consultation_start_date) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("contactEmail".into(), match (&p.contact_email) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("contactName".into(), match (&p.contact_name) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("cycleSuperhighwayId".into(), match (&p.cycle_superhighway_id) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("externalPageUrl".into(), match (&p.external_page_url) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("phase".into(), match (&p.phase) { Some(v) => Value::String(iface_road__tfl_api_presentation_entities_road_project_phase_enum__to_str(v).into()), None => Value::Null });
+    m.insert("projectDescription".into(), match (&p.project_description) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("projectId".into(), match (&p.project_id) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("projectName".into(), match (&p.project_name) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("projectPageUrl".into(), match (&p.project_page_url) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("projectSummaryPageUrl".into(), match (&p.project_summary_page_url) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("schemeName".into(), match (&p.scheme_name) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_road__tfl_api_presentation_entities_street__to_json(p: &iface_road::TflApiPresentationEntitiesStreet) -> Value {
+    let mut m = Map::new();
+    m.insert("closure".into(), match (&p.closure) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("directions".into(), match (&p.directions) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("name".into(), match (&p.name) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("segments".into(), match (&p.segments) { Some(v) => Value::Array((v).iter().map(|v| iface_road__tfl_api_presentation_entities_street_segment__to_json(v)).collect()), None => Value::Null });
+    m.insert("sourceSystemId".into(), match (&p.source_system_id) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("sourceSystemKey".into(), match (&p.source_system_key) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_road__tfl_api_presentation_entities_street_segment__to_json(p: &iface_road::TflApiPresentationEntitiesStreetSegment) -> Value {
+    let mut m = Map::new();
+    m.insert("lineString".into(), match (&p.line_string) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("sourceSystemId".into(), match (&p.source_system_id) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("sourceSystemKey".into(), match (&p.source_system_key) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("toid".into(), match (&p.toid) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_road__system_object__to_json(p: &iface_road::SystemObject) -> Value {
+    let mut m = Map::new();
+    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
 
 fn iface_road__disruption_by_id_params__to_json(p: &iface_road::DisruptionByIdParams) -> Value {
     let mut m = Map::new();
@@ -1484,35 +5415,380 @@ fn iface_road__status_params__to_json(p: &iface_road::StatusParams) -> Value {
     Value::Object(m)
 }
 
+fn iface_road__tfl_api_presentation_entities_road_corridor__from_json(v: &Value) -> Option<iface_road::TflApiPresentationEntitiesRoadCorridor> {
+    let m = v.as_object()?;
+    Some(iface_road::TflApiPresentationEntitiesRoadCorridor {
+        bounds: m.get("bounds").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        display_name: m.get("displayName").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        envelope: m.get("envelope").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        group: m.get("group").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        id: m.get("id").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        status_aggregation_end_date: m.get("statusAggregationEndDate").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        status_aggregation_start_date: m.get("statusAggregationStartDate").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        status_severity: m.get("statusSeverity").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        status_severity_description: m.get("statusSeverityDescription").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        url: m.get("url").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    })
+}
+
+fn iface_road__tfl_api_presentation_entities_status_severity__from_json(v: &Value) -> Option<iface_road::TflApiPresentationEntitiesStatusSeverity> {
+    let m = v.as_object()?;
+    Some(iface_road::TflApiPresentationEntitiesStatusSeverity {
+        description: m.get("description").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        mode_name: m.get("modeName").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        severity_level: m.get("severityLevel").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+    })
+}
+
+fn iface_road__tfl_api_presentation_entities_road_disruption__from_json(v: &Value) -> Option<iface_road::TflApiPresentationEntitiesRoadDisruption> {
+    let m = v.as_object()?;
+    Some(iface_road::TflApiPresentationEntitiesRoadDisruption {
+        category: m.get("category").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        comments: m.get("comments").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        corridor_ids: m.get("corridorIds").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| (x).as_str().map(|s| s.to_string())).collect())),
+        current_update: m.get("currentUpdate").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        current_update_date_time: m.get("currentUpdateDateTime").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        end_date_time: m.get("endDateTime").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        geography: m.get("geography").filter(|v| !v.is_null()).and_then(|v| iface_road__system_data_spatial_db_geography__from_json(v)),
+        geometry: m.get("geometry").filter(|v| !v.is_null()).and_then(|v| iface_road__system_data_spatial_db_geography__from_json(v)),
+        has_closures: m.get("hasClosures").filter(|v| !v.is_null()).and_then(|v| (v).as_bool()),
+        id: m.get("id").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        is_provisional: m.get("isProvisional").filter(|v| !v.is_null()).and_then(|v| (v).as_bool()),
+        last_modified_time: m.get("lastModifiedTime").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        level_of_interest: m.get("levelOfInterest").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        link_text: m.get("linkText").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        link_url: m.get("linkUrl").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        location: m.get("location").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        ordinal: m.get("ordinal").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        point: m.get("point").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        publish_end_date: m.get("publishEndDate").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        publish_start_date: m.get("publishStartDate").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        recurring_schedules: m.get("recurringSchedules").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| iface_road__tfl_api_presentation_entities_road_disruption_schedule__from_json(x)).collect())),
+        road_disruption_impact_areas: m.get("roadDisruptionImpactAreas").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| iface_road__tfl_api_presentation_entities_road_disruption_impact_area__from_json(x)).collect())),
+        road_disruption_lines: m.get("roadDisruptionLines").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| iface_road__tfl_api_presentation_entities_road_disruption_line__from_json(x)).collect())),
+        road_project: m.get("roadProject").filter(|v| !v.is_null()).and_then(|v| iface_road__tfl_api_presentation_entities_road_project__from_json(v)),
+        severity: m.get("severity").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        start_date_time: m.get("startDateTime").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        status: m.get("status").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        streets: m.get("streets").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| iface_road__tfl_api_presentation_entities_street__from_json(x)).collect())),
+        sub_category: m.get("subCategory").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        time_frame: m.get("timeFrame").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        url: m.get("url").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    })
+}
+
+fn iface_road__system_data_spatial_db_geography__from_json(v: &Value) -> Option<iface_road::SystemDataSpatialDbGeography> {
+    let m = v.as_object()?;
+    Some(iface_road::SystemDataSpatialDbGeography {
+        geography: m.get("geography").filter(|v| !v.is_null()).and_then(|v| iface_road__system_data_spatial_db_geography_well_known_value__from_json(v)),
+    })
+}
+
+fn iface_road__system_data_spatial_db_geography_well_known_value__from_json(v: &Value) -> Option<iface_road::SystemDataSpatialDbGeographyWellKnownValue> {
+    let m = v.as_object()?;
+    Some(iface_road::SystemDataSpatialDbGeographyWellKnownValue {
+        coordinate_system_id: m.get("coordinateSystemId").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        well_known_binary: m.get("wellKnownBinary").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        well_known_text: m.get("wellKnownText").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    })
+}
+
+fn iface_road__tfl_api_presentation_entities_road_disruption_schedule__from_json(v: &Value) -> Option<iface_road::TflApiPresentationEntitiesRoadDisruptionSchedule> {
+    let m = v.as_object()?;
+    Some(iface_road::TflApiPresentationEntitiesRoadDisruptionSchedule {
+        end_time: m.get("endTime").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        start_time: m.get("startTime").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    })
+}
+
+fn iface_road__tfl_api_presentation_entities_road_disruption_impact_area__from_json(v: &Value) -> Option<iface_road::TflApiPresentationEntitiesRoadDisruptionImpactArea> {
+    let m = v.as_object()?;
+    Some(iface_road::TflApiPresentationEntitiesRoadDisruptionImpactArea {
+        end_date: m.get("endDate").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        end_time: m.get("endTime").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        id: m.get("id").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        polygon: m.get("polygon").filter(|v| !v.is_null()).and_then(|v| iface_road__system_data_spatial_db_geography__from_json(v)),
+        road_disruption_id: m.get("roadDisruptionId").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        start_date: m.get("startDate").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        start_time: m.get("startTime").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    })
+}
+
+fn iface_road__tfl_api_presentation_entities_road_disruption_line__from_json(v: &Value) -> Option<iface_road::TflApiPresentationEntitiesRoadDisruptionLine> {
+    let m = v.as_object()?;
+    Some(iface_road::TflApiPresentationEntitiesRoadDisruptionLine {
+        end_date: m.get("endDate").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        end_time: m.get("endTime").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        id: m.get("id").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        is_diversion: m.get("isDiversion").filter(|v| !v.is_null()).and_then(|v| (v).as_bool()),
+        multi_line_string: m.get("multiLineString").filter(|v| !v.is_null()).and_then(|v| iface_road__system_data_spatial_db_geography__from_json(v)),
+        road_disruption_id: m.get("roadDisruptionId").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        start_date: m.get("startDate").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        start_time: m.get("startTime").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    })
+}
+
+fn iface_road__tfl_api_presentation_entities_road_project__from_json(v: &Value) -> Option<iface_road::TflApiPresentationEntitiesRoadProject> {
+    let m = v.as_object()?;
+    Some(iface_road::TflApiPresentationEntitiesRoadProject {
+        boroughs_benefited: m.get("boroughsBenefited").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| (x).as_str().map(|s| s.to_string())).collect())),
+        construction_end_date: m.get("constructionEndDate").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        construction_start_date: m.get("constructionStartDate").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        consultation_end_date: m.get("consultationEndDate").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        consultation_page_url: m.get("consultationPageUrl").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        consultation_start_date: m.get("consultationStartDate").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        contact_email: m.get("contactEmail").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        contact_name: m.get("contactName").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        cycle_superhighway_id: m.get("cycleSuperhighwayId").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        external_page_url: m.get("externalPageUrl").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        phase: m.get("phase").filter(|v| !v.is_null()).and_then(|v| (v).as_str().and_then(iface_road__tfl_api_presentation_entities_road_project_phase_enum__from_str)),
+        project_description: m.get("projectDescription").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        project_id: m.get("projectId").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        project_name: m.get("projectName").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        project_page_url: m.get("projectPageUrl").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        project_summary_page_url: m.get("projectSummaryPageUrl").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        scheme_name: m.get("schemeName").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    })
+}
+
+fn iface_road__tfl_api_presentation_entities_street__from_json(v: &Value) -> Option<iface_road::TflApiPresentationEntitiesStreet> {
+    let m = v.as_object()?;
+    Some(iface_road::TflApiPresentationEntitiesStreet {
+        closure: m.get("closure").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        directions: m.get("directions").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        name: m.get("name").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        segments: m.get("segments").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| iface_road__tfl_api_presentation_entities_street_segment__from_json(x)).collect())),
+        source_system_id: m.get("sourceSystemId").filter(|v| !v.is_null()).and_then(|v| (v).as_i64()),
+        source_system_key: m.get("sourceSystemKey").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    })
+}
+
+fn iface_road__tfl_api_presentation_entities_street_segment__from_json(v: &Value) -> Option<iface_road::TflApiPresentationEntitiesStreetSegment> {
+    let m = v.as_object()?;
+    Some(iface_road::TflApiPresentationEntitiesStreetSegment {
+        line_string: m.get("lineString").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        source_system_id: m.get("sourceSystemId").filter(|v| !v.is_null()).and_then(|v| (v).as_i64()),
+        source_system_key: m.get("sourceSystemKey").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        toid: m.get("toid").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    })
+}
+
+fn iface_road__system_object__from_json(v: &Value) -> Option<iface_road::SystemObject> {
+    let m = v.as_object()?;
+    Some(iface_road::SystemObject {
+        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    })
+}
+
+fn iface_road__tfl_api_presentation_entities_road_project_phase_enum__from_str(s: &str) -> Option<iface_road::TflApiPresentationEntitiesRoadProjectPhaseEnum> {
+    match s {
+        "Unscoped" => Some(iface_road::TflApiPresentationEntitiesRoadProjectPhaseEnum::Unscoped),
+        "Concept" => Some(iface_road::TflApiPresentationEntitiesRoadProjectPhaseEnum::Concept),
+        "ConsultationEnded" => Some(iface_road::TflApiPresentationEntitiesRoadProjectPhaseEnum::ConsultationEnded),
+        "Consultation" => Some(iface_road::TflApiPresentationEntitiesRoadProjectPhaseEnum::Consultation),
+        "Construction" => Some(iface_road::TflApiPresentationEntitiesRoadProjectPhaseEnum::Construction),
+        "Complete" => Some(iface_road::TflApiPresentationEntitiesRoadProjectPhaseEnum::Complete),
+        _ => None,
+    }
+}
+
+fn iface_road__get__ok(body: String) -> Result<Vec<iface_road::TflApiPresentationEntitiesRoadCorridor>, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match (&v).as_array().map(|a| a.iter().filter_map(|x| iface_road__tfl_api_presentation_entities_road_corridor__from_json(x)).collect()) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_road__get__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
+fn iface_road__meta_categories__ok(body: String) -> Result<Vec<String>, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match (&v).as_array().map(|a| a.iter().filter_map(|x| (x).as_str().map(|s| s.to_string())).collect()) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_road__meta_categories__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
+fn iface_road__meta_severities__ok(body: String) -> Result<Vec<iface_road::TflApiPresentationEntitiesStatusSeverity>, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match (&v).as_array().map(|a| a.iter().filter_map(|x| iface_road__tfl_api_presentation_entities_status_severity__from_json(x)).collect()) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_road__meta_severities__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
+fn iface_road__disruption_by_id__ok(body: String) -> Result<iface_road::TflApiPresentationEntitiesRoadDisruption, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match iface_road__tfl_api_presentation_entities_road_disruption__from_json(&v) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_road__disruption_by_id__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
+fn iface_road__disrupted_streets__ok(body: String) -> Result<iface_road::SystemObject, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match iface_road__system_object__from_json(&v) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_road__disrupted_streets__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
+fn iface_road__get_road_ids__ok(body: String) -> Result<Vec<iface_road::TflApiPresentationEntitiesRoadCorridor>, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match (&v).as_array().map(|a| a.iter().filter_map(|x| iface_road__tfl_api_presentation_entities_road_corridor__from_json(x)).collect()) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_road__get_road_ids__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
+fn iface_road__disruption__ok(body: String) -> Result<Vec<iface_road::TflApiPresentationEntitiesRoadDisruption>, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match (&v).as_array().map(|a| a.iter().filter_map(|x| iface_road__tfl_api_presentation_entities_road_disruption__from_json(x)).collect()) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_road__disruption__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
+fn iface_road__status__ok(body: String) -> Result<Vec<iface_road::TflApiPresentationEntitiesRoadCorridor>, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match (&v).as_array().map(|a| a.iter().filter_map(|x| iface_road__tfl_api_presentation_entities_road_corridor__from_json(x)).collect()) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_road__status__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
 impl iface_road::Guest for crate::Component {
-    fn get() -> Result<String, String> {
-        dispatch(&OP_ROAD_GET, Value::Object(Map::new()))
+    fn get() -> Result<Vec<iface_road::TflApiPresentationEntitiesRoadCorridor>, String> {
+        match dispatch(&OP_ROAD_GET, Value::Object(Map::new())).and_then(iface_road__get__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_road__get__err(e)),
+        }
     }
-    fn meta_categories() -> Result<String, String> {
-        dispatch(&OP_ROAD_META_CATEGORIES, Value::Object(Map::new()))
+    fn meta_categories() -> Result<Vec<String>, String> {
+        match dispatch(&OP_ROAD_META_CATEGORIES, Value::Object(Map::new())).and_then(iface_road__meta_categories__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_road__meta_categories__err(e)),
+        }
     }
-    fn meta_severities() -> Result<String, String> {
-        dispatch(&OP_ROAD_META_SEVERITIES, Value::Object(Map::new()))
+    fn meta_severities() -> Result<Vec<iface_road::TflApiPresentationEntitiesStatusSeverity>, String> {
+        match dispatch(&OP_ROAD_META_SEVERITIES, Value::Object(Map::new())).and_then(iface_road__meta_severities__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_road__meta_severities__err(e)),
+        }
     }
-    fn disruption_by_id(params: iface_road::DisruptionByIdParams) -> Result<String, String> {
+    fn disruption_by_id(params: iface_road::DisruptionByIdParams) -> Result<iface_road::TflApiPresentationEntitiesRoadDisruption, String> {
         let json = iface_road__disruption_by_id_params__to_json(&params);
-        dispatch(&OP_ROAD_DISRUPTION_BY_ID, json)
+        match dispatch(&OP_ROAD_DISRUPTION_BY_ID, json).and_then(iface_road__disruption_by_id__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_road__disruption_by_id__err(e)),
+        }
     }
-    fn disrupted_streets(params: iface_road::DisruptedStreetsParams) -> Result<String, String> {
+    fn disrupted_streets(params: iface_road::DisruptedStreetsParams) -> Result<iface_road::SystemObject, String> {
         let json = iface_road__disrupted_streets_params__to_json(&params);
-        dispatch(&OP_ROAD_DISRUPTED_STREETS, json)
+        match dispatch(&OP_ROAD_DISRUPTED_STREETS, json).and_then(iface_road__disrupted_streets__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_road__disrupted_streets__err(e)),
+        }
     }
-    fn get_road_ids(params: iface_road::GetRoadIdsParams) -> Result<String, String> {
+    fn get_road_ids(params: iface_road::GetRoadIdsParams) -> Result<Vec<iface_road::TflApiPresentationEntitiesRoadCorridor>, String> {
         let json = iface_road__get_road_ids_params__to_json(&params);
-        dispatch(&OP_ROAD_GET_ROAD_IDS, json)
+        match dispatch(&OP_ROAD_GET_ROAD_IDS, json).and_then(iface_road__get_road_ids__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_road__get_road_ids__err(e)),
+        }
     }
-    fn disruption(params: iface_road::DisruptionParams) -> Result<String, String> {
+    fn disruption(params: iface_road::DisruptionParams) -> Result<Vec<iface_road::TflApiPresentationEntitiesRoadDisruption>, String> {
         let json = iface_road__disruption_params__to_json(&params);
-        dispatch(&OP_ROAD_DISRUPTION, json)
+        match dispatch(&OP_ROAD_DISRUPTION, json).and_then(iface_road__disruption__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_road__disruption__err(e)),
+        }
     }
-    fn status(params: iface_road::StatusParams) -> Result<String, String> {
+    fn status(params: iface_road::StatusParams) -> Result<Vec<iface_road::TflApiPresentationEntitiesRoadCorridor>, String> {
         let json = iface_road__status_params__to_json(&params);
-        dispatch(&OP_ROAD_STATUS, json)
+        match dispatch(&OP_ROAD_STATUS, json).and_then(iface_road__status__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_road__status__err(e)),
+        }
     }
 }
 use crate::exports::autostamp::tfl::search as iface_search;
@@ -1521,7 +5797,7 @@ const OP_SEARCH_GET: OpSpec = OpSpec {
     method: "GET",
     path_template: "/Search",
     fields: &[
-        FieldSpec { snake: "query", location: FieldLocation::Query },
+        FieldSpec { snake: "query", wire: "query", location: FieldLocation::Query },
     ],
     auth: &[
     ],
@@ -1531,7 +5807,7 @@ const OP_SEARCH_BUS_SCHEDULES: OpSpec = OpSpec {
     method: "GET",
     path_template: "/Search/BusSchedules",
     fields: &[
-        FieldSpec { snake: "query", location: FieldLocation::Query },
+        FieldSpec { snake: "query", wire: "query", location: FieldLocation::Query },
     ],
     auth: &[
     ],
@@ -1564,6 +5840,29 @@ const OP_SEARCH_META_SORTS: OpSpec = OpSpec {
     ],
 };
 
+fn iface_search__tfl_api_presentation_entities_search_response__to_json(p: &iface_search::TflApiPresentationEntitiesSearchResponse) -> Value {
+    let mut m = Map::new();
+    m.insert("from".into(), match (&p.from_op) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("matches".into(), match (&p.matches) { Some(v) => Value::Array((v).iter().map(|v| iface_search__tfl_api_presentation_entities_search_match__to_json(v)).collect()), None => Value::Null });
+    m.insert("maxScore".into(), match (&p.max_score) { Some(v) => serde_json::Number::from_f64(*(v)).map(Value::Number).unwrap_or(Value::Null), None => Value::Null });
+    m.insert("page".into(), match (&p.page) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("pageSize".into(), match (&p.page_size) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("provider".into(), match (&p.provider) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("query".into(), match (&p.query) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("total".into(), match (&p.total) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_search__tfl_api_presentation_entities_search_match__to_json(p: &iface_search::TflApiPresentationEntitiesSearchMatch) -> Value {
+    let mut m = Map::new();
+    m.insert("id".into(), match (&p.id) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("lat".into(), match (&p.lat) { Some(v) => serde_json::Number::from_f64(*(v)).map(Value::Number).unwrap_or(Value::Null), None => Value::Null });
+    m.insert("lon".into(), match (&p.lon) { Some(v) => serde_json::Number::from_f64(*(v)).map(Value::Number).unwrap_or(Value::Null), None => Value::Null });
+    m.insert("name".into(), match (&p.name) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("url".into(), match (&p.url) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
 fn iface_search__get_params__to_json(p: &iface_search::GetParams) -> Value {
     let mut m = Map::new();
     m.insert("query".into(), Value::String((&p.query).clone()));
@@ -1576,23 +5875,153 @@ fn iface_search__bus_schedules_params__to_json(p: &iface_search::BusSchedulesPar
     Value::Object(m)
 }
 
+fn iface_search__tfl_api_presentation_entities_search_response__from_json(v: &Value) -> Option<iface_search::TflApiPresentationEntitiesSearchResponse> {
+    let m = v.as_object()?;
+    Some(iface_search::TflApiPresentationEntitiesSearchResponse {
+        from_op: m.get("from").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        matches: m.get("matches").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| iface_search__tfl_api_presentation_entities_search_match__from_json(x)).collect())),
+        max_score: m.get("maxScore").filter(|v| !v.is_null()).and_then(|v| (v).as_f64()),
+        page: m.get("page").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        page_size: m.get("pageSize").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        provider: m.get("provider").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        query: m.get("query").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        total: m.get("total").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+    })
+}
+
+fn iface_search__tfl_api_presentation_entities_search_match__from_json(v: &Value) -> Option<iface_search::TflApiPresentationEntitiesSearchMatch> {
+    let m = v.as_object()?;
+    Some(iface_search::TflApiPresentationEntitiesSearchMatch {
+        id: m.get("id").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        lat: m.get("lat").filter(|v| !v.is_null()).and_then(|v| (v).as_f64()),
+        lon: m.get("lon").filter(|v| !v.is_null()).and_then(|v| (v).as_f64()),
+        name: m.get("name").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        url: m.get("url").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    })
+}
+
+fn iface_search__get__ok(body: String) -> Result<iface_search::TflApiPresentationEntitiesSearchResponse, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match iface_search__tfl_api_presentation_entities_search_response__from_json(&v) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_search__get__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
+fn iface_search__bus_schedules__ok(body: String) -> Result<iface_search::TflApiPresentationEntitiesSearchResponse, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match iface_search__tfl_api_presentation_entities_search_response__from_json(&v) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_search__bus_schedules__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
+fn iface_search__meta_categories__ok(body: String) -> Result<Vec<String>, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match (&v).as_array().map(|a| a.iter().filter_map(|x| (x).as_str().map(|s| s.to_string())).collect()) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_search__meta_categories__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
+fn iface_search__meta_search_providers__ok(body: String) -> Result<Vec<String>, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match (&v).as_array().map(|a| a.iter().filter_map(|x| (x).as_str().map(|s| s.to_string())).collect()) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_search__meta_search_providers__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
+fn iface_search__meta_sorts__ok(body: String) -> Result<Vec<String>, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match (&v).as_array().map(|a| a.iter().filter_map(|x| (x).as_str().map(|s| s.to_string())).collect()) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_search__meta_sorts__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
 impl iface_search::Guest for crate::Component {
-    fn get(params: iface_search::GetParams) -> Result<String, String> {
+    fn get(params: iface_search::GetParams) -> Result<iface_search::TflApiPresentationEntitiesSearchResponse, String> {
         let json = iface_search__get_params__to_json(&params);
-        dispatch(&OP_SEARCH_GET, json)
+        match dispatch(&OP_SEARCH_GET, json).and_then(iface_search__get__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_search__get__err(e)),
+        }
     }
-    fn bus_schedules(params: iface_search::BusSchedulesParams) -> Result<String, String> {
+    fn bus_schedules(params: iface_search::BusSchedulesParams) -> Result<iface_search::TflApiPresentationEntitiesSearchResponse, String> {
         let json = iface_search__bus_schedules_params__to_json(&params);
-        dispatch(&OP_SEARCH_BUS_SCHEDULES, json)
+        match dispatch(&OP_SEARCH_BUS_SCHEDULES, json).and_then(iface_search__bus_schedules__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_search__bus_schedules__err(e)),
+        }
     }
-    fn meta_categories() -> Result<String, String> {
-        dispatch(&OP_SEARCH_META_CATEGORIES, Value::Object(Map::new()))
+    fn meta_categories() -> Result<Vec<String>, String> {
+        match dispatch(&OP_SEARCH_META_CATEGORIES, Value::Object(Map::new())).and_then(iface_search__meta_categories__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_search__meta_categories__err(e)),
+        }
     }
-    fn meta_search_providers() -> Result<String, String> {
-        dispatch(&OP_SEARCH_META_SEARCH_PROVIDERS, Value::Object(Map::new()))
+    fn meta_search_providers() -> Result<Vec<String>, String> {
+        match dispatch(&OP_SEARCH_META_SEARCH_PROVIDERS, Value::Object(Map::new())).and_then(iface_search__meta_search_providers__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_search__meta_search_providers__err(e)),
+        }
     }
-    fn meta_sorts() -> Result<String, String> {
-        dispatch(&OP_SEARCH_META_SORTS, Value::Object(Map::new()))
+    fn meta_sorts() -> Result<Vec<String>, String> {
+        match dispatch(&OP_SEARCH_META_SORTS, Value::Object(Map::new())).and_then(iface_search__meta_sorts__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_search__meta_sorts__err(e)),
+        }
     }
 }
 use crate::exports::autostamp::tfl::stop_point as iface_stop_point;
@@ -1601,14 +6030,14 @@ const OP_STOP_POINT_GET_BY_GEO_POINT: OpSpec = OpSpec {
     method: "GET",
     path_template: "/StopPoint",
     fields: &[
-        FieldSpec { snake: "stop_types", location: FieldLocation::Query },
-        FieldSpec { snake: "radius", location: FieldLocation::Query },
-        FieldSpec { snake: "use_stop_point_hierarchy", location: FieldLocation::Query },
-        FieldSpec { snake: "modes", location: FieldLocation::Query },
-        FieldSpec { snake: "categories", location: FieldLocation::Query },
-        FieldSpec { snake: "return_lines", location: FieldLocation::Query },
-        FieldSpec { snake: "location_lat", location: FieldLocation::Query },
-        FieldSpec { snake: "location_lon", location: FieldLocation::Query },
+        FieldSpec { snake: "stop_types", wire: "stopTypes", location: FieldLocation::Query },
+        FieldSpec { snake: "radius", wire: "radius", location: FieldLocation::Query },
+        FieldSpec { snake: "use_stop_point_hierarchy", wire: "useStopPointHierarchy", location: FieldLocation::Query },
+        FieldSpec { snake: "modes", wire: "modes", location: FieldLocation::Query },
+        FieldSpec { snake: "categories", wire: "categories", location: FieldLocation::Query },
+        FieldSpec { snake: "return_lines", wire: "returnLines", location: FieldLocation::Query },
+        FieldSpec { snake: "location_lat", wire: "location.lat", location: FieldLocation::Query },
+        FieldSpec { snake: "location_lon", wire: "location.lon", location: FieldLocation::Query },
     ],
     auth: &[
     ],
@@ -1645,8 +6074,8 @@ const OP_STOP_POINT_GET_BY_MODE: OpSpec = OpSpec {
     method: "GET",
     path_template: "/StopPoint/Mode/{modes}",
     fields: &[
-        FieldSpec { snake: "modes", location: FieldLocation::Path },
-        FieldSpec { snake: "page", location: FieldLocation::Query },
+        FieldSpec { snake: "modes", wire: "modes", location: FieldLocation::Path },
+        FieldSpec { snake: "page", wire: "page", location: FieldLocation::Query },
     ],
     auth: &[
     ],
@@ -1656,8 +6085,8 @@ const OP_STOP_POINT_DISRUPTION_BY_MODE: OpSpec = OpSpec {
     method: "GET",
     path_template: "/StopPoint/Mode/{modes}/Disruption",
     fields: &[
-        FieldSpec { snake: "modes", location: FieldLocation::Path },
-        FieldSpec { snake: "include_route_blocked_stops", location: FieldLocation::Query },
+        FieldSpec { snake: "modes", wire: "modes", location: FieldLocation::Path },
+        FieldSpec { snake: "include_route_blocked_stops", wire: "includeRouteBlockedStops", location: FieldLocation::Query },
     ],
     auth: &[
     ],
@@ -1667,13 +6096,13 @@ const OP_STOP_POINT_GET_STOP_POINT_SEARCH: OpSpec = OpSpec {
     method: "GET",
     path_template: "/StopPoint/Search",
     fields: &[
-        FieldSpec { snake: "query", location: FieldLocation::Query },
-        FieldSpec { snake: "modes", location: FieldLocation::Query },
-        FieldSpec { snake: "fares_only", location: FieldLocation::Query },
-        FieldSpec { snake: "max_results", location: FieldLocation::Query },
-        FieldSpec { snake: "lines", location: FieldLocation::Query },
-        FieldSpec { snake: "include_hubs", location: FieldLocation::Query },
-        FieldSpec { snake: "tfl_operated_national_rail_stations_only", location: FieldLocation::Query },
+        FieldSpec { snake: "query", wire: "query", location: FieldLocation::Query },
+        FieldSpec { snake: "modes", wire: "modes", location: FieldLocation::Query },
+        FieldSpec { snake: "fares_only", wire: "faresOnly", location: FieldLocation::Query },
+        FieldSpec { snake: "max_results", wire: "maxResults", location: FieldLocation::Query },
+        FieldSpec { snake: "lines", wire: "lines", location: FieldLocation::Query },
+        FieldSpec { snake: "include_hubs", wire: "includeHubs", location: FieldLocation::Query },
+        FieldSpec { snake: "tfl_operated_national_rail_stations_only", wire: "tflOperatedNationalRailStationsOnly", location: FieldLocation::Query },
     ],
     auth: &[
     ],
@@ -1683,13 +6112,13 @@ const OP_STOP_POINT_SEARCH: OpSpec = OpSpec {
     method: "GET",
     path_template: "/StopPoint/Search/{query}",
     fields: &[
-        FieldSpec { snake: "query", location: FieldLocation::Path },
-        FieldSpec { snake: "modes", location: FieldLocation::Query },
-        FieldSpec { snake: "fares_only", location: FieldLocation::Query },
-        FieldSpec { snake: "max_results", location: FieldLocation::Query },
-        FieldSpec { snake: "lines", location: FieldLocation::Query },
-        FieldSpec { snake: "include_hubs", location: FieldLocation::Query },
-        FieldSpec { snake: "tfl_operated_national_rail_stations_only", location: FieldLocation::Query },
+        FieldSpec { snake: "query", wire: "query", location: FieldLocation::Path },
+        FieldSpec { snake: "modes", wire: "modes", location: FieldLocation::Query },
+        FieldSpec { snake: "fares_only", wire: "faresOnly", location: FieldLocation::Query },
+        FieldSpec { snake: "max_results", wire: "maxResults", location: FieldLocation::Query },
+        FieldSpec { snake: "lines", wire: "lines", location: FieldLocation::Query },
+        FieldSpec { snake: "include_hubs", wire: "includeHubs", location: FieldLocation::Query },
+        FieldSpec { snake: "tfl_operated_national_rail_stations_only", wire: "tflOperatedNationalRailStationsOnly", location: FieldLocation::Query },
     ],
     auth: &[
     ],
@@ -1699,9 +6128,9 @@ const OP_STOP_POINT_GET_SERVICE_TYPES: OpSpec = OpSpec {
     method: "GET",
     path_template: "/StopPoint/ServiceTypes",
     fields: &[
-        FieldSpec { snake: "id", location: FieldLocation::Query },
-        FieldSpec { snake: "line_ids", location: FieldLocation::Query },
-        FieldSpec { snake: "modes", location: FieldLocation::Query },
+        FieldSpec { snake: "id", wire: "id", location: FieldLocation::Query },
+        FieldSpec { snake: "line_ids", wire: "lineIds", location: FieldLocation::Query },
+        FieldSpec { snake: "modes", wire: "modes", location: FieldLocation::Query },
     ],
     auth: &[
     ],
@@ -1711,8 +6140,8 @@ const OP_STOP_POINT_GET_BY_SMS: OpSpec = OpSpec {
     method: "GET",
     path_template: "/StopPoint/Sms/{id}",
     fields: &[
-        FieldSpec { snake: "id", location: FieldLocation::Path },
-        FieldSpec { snake: "output", location: FieldLocation::Query },
+        FieldSpec { snake: "id", wire: "id", location: FieldLocation::Path },
+        FieldSpec { snake: "output", wire: "output", location: FieldLocation::Query },
     ],
     auth: &[
     ],
@@ -1722,7 +6151,7 @@ const OP_STOP_POINT_GET_BY_TYPE: OpSpec = OpSpec {
     method: "GET",
     path_template: "/StopPoint/Type/{types}",
     fields: &[
-        FieldSpec { snake: "types", location: FieldLocation::Path },
+        FieldSpec { snake: "types", wire: "types", location: FieldLocation::Path },
     ],
     auth: &[
     ],
@@ -1732,8 +6161,8 @@ const OP_STOP_POINT_GET_BY_TYPE_WITH_PAGINATION: OpSpec = OpSpec {
     method: "GET",
     path_template: "/StopPoint/Type/{types}/page/{page}",
     fields: &[
-        FieldSpec { snake: "types", location: FieldLocation::Path },
-        FieldSpec { snake: "page", location: FieldLocation::Path },
+        FieldSpec { snake: "types", wire: "types", location: FieldLocation::Path },
+        FieldSpec { snake: "page", wire: "page", location: FieldLocation::Path },
     ],
     auth: &[
     ],
@@ -1743,8 +6172,8 @@ const OP_STOP_POINT_GET: OpSpec = OpSpec {
     method: "GET",
     path_template: "/StopPoint/{ids}",
     fields: &[
-        FieldSpec { snake: "ids", location: FieldLocation::Path },
-        FieldSpec { snake: "include_crowding_data", location: FieldLocation::Query },
+        FieldSpec { snake: "ids", wire: "ids", location: FieldLocation::Path },
+        FieldSpec { snake: "include_crowding_data", wire: "includeCrowdingData", location: FieldLocation::Query },
     ],
     auth: &[
     ],
@@ -1754,10 +6183,10 @@ const OP_STOP_POINT_DISRUPTION: OpSpec = OpSpec {
     method: "GET",
     path_template: "/StopPoint/{ids}/Disruption",
     fields: &[
-        FieldSpec { snake: "ids", location: FieldLocation::Path },
-        FieldSpec { snake: "get_family", location: FieldLocation::Query },
-        FieldSpec { snake: "include_route_blocked_stops", location: FieldLocation::Query },
-        FieldSpec { snake: "flatten_response", location: FieldLocation::Query },
+        FieldSpec { snake: "ids", wire: "ids", location: FieldLocation::Path },
+        FieldSpec { snake: "get_family", wire: "getFamily", location: FieldLocation::Query },
+        FieldSpec { snake: "include_route_blocked_stops", wire: "includeRouteBlockedStops", location: FieldLocation::Query },
+        FieldSpec { snake: "flatten_response", wire: "flattenResponse", location: FieldLocation::Query },
     ],
     auth: &[
     ],
@@ -1767,8 +6196,8 @@ const OP_STOP_POINT_ARRIVAL_DEPARTURES: OpSpec = OpSpec {
     method: "GET",
     path_template: "/StopPoint/{id}/ArrivalDepartures",
     fields: &[
-        FieldSpec { snake: "id", location: FieldLocation::Path },
-        FieldSpec { snake: "line_ids", location: FieldLocation::Query },
+        FieldSpec { snake: "id", wire: "id", location: FieldLocation::Path },
+        FieldSpec { snake: "line_ids", wire: "lineIds", location: FieldLocation::Query },
     ],
     auth: &[
     ],
@@ -1778,7 +6207,7 @@ const OP_STOP_POINT_ARRIVALS: OpSpec = OpSpec {
     method: "GET",
     path_template: "/StopPoint/{id}/Arrivals",
     fields: &[
-        FieldSpec { snake: "id", location: FieldLocation::Path },
+        FieldSpec { snake: "id", wire: "id", location: FieldLocation::Path },
     ],
     auth: &[
     ],
@@ -1788,9 +6217,9 @@ const OP_STOP_POINT_REACHABLE_FROM: OpSpec = OpSpec {
     method: "GET",
     path_template: "/StopPoint/{id}/CanReachOnLine/{line_id}",
     fields: &[
-        FieldSpec { snake: "id", location: FieldLocation::Path },
-        FieldSpec { snake: "line_id", location: FieldLocation::Path },
-        FieldSpec { snake: "service_types", location: FieldLocation::Query },
+        FieldSpec { snake: "id", wire: "id", location: FieldLocation::Path },
+        FieldSpec { snake: "line_id", wire: "lineId", location: FieldLocation::Path },
+        FieldSpec { snake: "service_types", wire: "serviceTypes", location: FieldLocation::Query },
     ],
     auth: &[
     ],
@@ -1800,9 +6229,9 @@ const OP_STOP_POINT_CROWDING: OpSpec = OpSpec {
     method: "GET",
     path_template: "/StopPoint/{id}/Crowding/{line}",
     fields: &[
-        FieldSpec { snake: "id", location: FieldLocation::Path },
-        FieldSpec { snake: "line", location: FieldLocation::Path },
-        FieldSpec { snake: "direction", location: FieldLocation::Query },
+        FieldSpec { snake: "id", wire: "id", location: FieldLocation::Path },
+        FieldSpec { snake: "line", wire: "line", location: FieldLocation::Path },
+        FieldSpec { snake: "direction", wire: "direction", location: FieldLocation::Query },
     ],
     auth: &[
     ],
@@ -1812,9 +6241,9 @@ const OP_STOP_POINT_DIRECTION: OpSpec = OpSpec {
     method: "GET",
     path_template: "/StopPoint/{id}/DirectionTo/{to_stop_point_id}",
     fields: &[
-        FieldSpec { snake: "id", location: FieldLocation::Path },
-        FieldSpec { snake: "to_stop_point_id", location: FieldLocation::Path },
-        FieldSpec { snake: "line_id", location: FieldLocation::Query },
+        FieldSpec { snake: "id", wire: "id", location: FieldLocation::Path },
+        FieldSpec { snake: "to_stop_point_id", wire: "toStopPointId", location: FieldLocation::Path },
+        FieldSpec { snake: "line_id", wire: "lineId", location: FieldLocation::Query },
     ],
     auth: &[
     ],
@@ -1824,8 +6253,8 @@ const OP_STOP_POINT_ROUTE: OpSpec = OpSpec {
     method: "GET",
     path_template: "/StopPoint/{id}/Route",
     fields: &[
-        FieldSpec { snake: "id", location: FieldLocation::Path },
-        FieldSpec { snake: "service_types", location: FieldLocation::Query },
+        FieldSpec { snake: "id", wire: "id", location: FieldLocation::Path },
+        FieldSpec { snake: "service_types", wire: "serviceTypes", location: FieldLocation::Query },
     ],
     auth: &[
     ],
@@ -1835,8 +6264,8 @@ const OP_STOP_POINT_GET_STOP_POINT_ID_PLACE_TYPES: OpSpec = OpSpec {
     method: "GET",
     path_template: "/StopPoint/{id}/placeTypes",
     fields: &[
-        FieldSpec { snake: "id", location: FieldLocation::Path },
-        FieldSpec { snake: "place_types", location: FieldLocation::Query },
+        FieldSpec { snake: "id", wire: "id", location: FieldLocation::Path },
+        FieldSpec { snake: "place_types", wire: "placeTypes", location: FieldLocation::Query },
     ],
     auth: &[
     ],
@@ -1846,7 +6275,7 @@ const OP_STOP_POINT_GET_CAR_PARKS_BY_ID: OpSpec = OpSpec {
     method: "GET",
     path_template: "/StopPoint/{stop_point_id}/CarParks",
     fields: &[
-        FieldSpec { snake: "stop_point_id", location: FieldLocation::Path },
+        FieldSpec { snake: "stop_point_id", wire: "stopPointId", location: FieldLocation::Path },
     ],
     auth: &[
     ],
@@ -1856,11 +6285,45 @@ const OP_STOP_POINT_GET_TAXI_RANKS_BY_IDS: OpSpec = OpSpec {
     method: "GET",
     path_template: "/StopPoint/{stop_point_id}/TaxiRanks",
     fields: &[
-        FieldSpec { snake: "stop_point_id", location: FieldLocation::Path },
+        FieldSpec { snake: "stop_point_id", wire: "stopPointId", location: FieldLocation::Path },
     ],
     auth: &[
     ],
 };
+
+fn iface_stop_point__tfl_api_presentation_entities_identifier_route_type_enum__to_str(e: &iface_stop_point::TflApiPresentationEntitiesIdentifierRouteTypeEnum) -> &'static str {
+    match e {
+        iface_stop_point::TflApiPresentationEntitiesIdentifierRouteTypeEnum::Unknown => "Unknown",
+        iface_stop_point::TflApiPresentationEntitiesIdentifierRouteTypeEnum::All => "All",
+        iface_stop_point::TflApiPresentationEntitiesIdentifierRouteTypeEnum::CycleSuperhighways => "Cycle Superhighways",
+        iface_stop_point::TflApiPresentationEntitiesIdentifierRouteTypeEnum::Quietways => "Quietways",
+        iface_stop_point::TflApiPresentationEntitiesIdentifierRouteTypeEnum::Cycleways => "Cycleways",
+        iface_stop_point::TflApiPresentationEntitiesIdentifierRouteTypeEnum::MiniHollands => "Mini-Hollands",
+        iface_stop_point::TflApiPresentationEntitiesIdentifierRouteTypeEnum::CentralLondonGrid => "Central London Grid",
+        iface_stop_point::TflApiPresentationEntitiesIdentifierRouteTypeEnum::StreetspaceRoute => "Streetspace Route",
+    }
+}
+
+fn iface_stop_point__tfl_api_presentation_entities_identifier_status_enum__to_str(e: &iface_stop_point::TflApiPresentationEntitiesIdentifierStatusEnum) -> &'static str {
+    match e {
+        iface_stop_point::TflApiPresentationEntitiesIdentifierStatusEnum::Unknown => "Unknown",
+        iface_stop_point::TflApiPresentationEntitiesIdentifierStatusEnum::All => "All",
+        iface_stop_point::TflApiPresentationEntitiesIdentifierStatusEnum::Open => "Open",
+        iface_stop_point::TflApiPresentationEntitiesIdentifierStatusEnum::InProgress => "In Progress",
+        iface_stop_point::TflApiPresentationEntitiesIdentifierStatusEnum::Planned => "Planned",
+        iface_stop_point::TflApiPresentationEntitiesIdentifierStatusEnum::PlannedSubjectToFeasibilityAndConsultation => "Planned - Subject to feasibility and consultation.",
+        iface_stop_point::TflApiPresentationEntitiesIdentifierStatusEnum::NotOpen => "Not Open",
+    }
+}
+
+fn iface_stop_point__tfl_api_presentation_entities_arrival_departure_departure_status_enum__to_str(e: &iface_stop_point::TflApiPresentationEntitiesArrivalDepartureDepartureStatusEnum) -> &'static str {
+    match e {
+        iface_stop_point::TflApiPresentationEntitiesArrivalDepartureDepartureStatusEnum::OnTime => "OnTime",
+        iface_stop_point::TflApiPresentationEntitiesArrivalDepartureDepartureStatusEnum::Delayed => "Delayed",
+        iface_stop_point::TflApiPresentationEntitiesArrivalDepartureDepartureStatusEnum::Cancelled => "Cancelled",
+        iface_stop_point::TflApiPresentationEntitiesArrivalDepartureDepartureStatusEnum::NotStoppingAtStation => "NotStoppingAtStation",
+    }
+}
 
 fn iface_stop_point__reachable_from_service_types_item_enum__to_str(e: &iface_stop_point::ReachableFromServiceTypesItemEnum) -> &'static str {
     match e {
@@ -1875,6 +6338,285 @@ fn iface_stop_point__crowding_direction_enum__to_str(e: &iface_stop_point::Crowd
         iface_stop_point::CrowdingDirectionEnum::Outbound => "outbound",
         iface_stop_point::CrowdingDirectionEnum::All => "all",
     }
+}
+
+fn iface_stop_point__tfl_api_presentation_entities_stop_points_response__to_json(p: &iface_stop_point::TflApiPresentationEntitiesStopPointsResponse) -> Value {
+    let mut m = Map::new();
+    m.insert("centrePoint".into(), match (&p.centre_point) { Some(v) => Value::Array((v).iter().map(|v| serde_json::Number::from_f64(*(v)).map(Value::Number).unwrap_or(Value::Null)).collect()), None => Value::Null });
+    m.insert("page".into(), match (&p.page) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("pageSize".into(), match (&p.page_size) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("stopPoints".into(), match (&p.stop_points) { Some(v) => Value::Array((v).iter().map(|v| iface_stop_point__tfl_api_presentation_entities_stop_point__to_json(v)).collect()), None => Value::Null });
+    m.insert("total".into(), match (&p.total) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_stop_point__tfl_api_presentation_entities_stop_point__to_json(p: &iface_stop_point::TflApiPresentationEntitiesStopPoint) -> Value {
+    let mut m = Map::new();
+    m.insert("accessibilitySummary".into(), match (&p.accessibility_summary) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("additionalProperties".into(), match (&p.additional_properties) { Some(v) => Value::Array((v).iter().map(|v| iface_stop_point__tfl_api_presentation_entities_additional_properties__to_json(v)).collect()), None => Value::Null });
+    m.insert("children".into(), match (&p.children) { Some(v) => Value::Array((v).iter().map(|v| iface_stop_point__tfl_api_presentation_entities_place__to_json(v)).collect()), None => Value::Null });
+    m.insert("childrenUrls".into(), match (&p.children_urls) { Some(v) => Value::Array((v).iter().map(|v| Value::String((v).clone())).collect()), None => Value::Null });
+    m.insert("commonName".into(), match (&p.common_name) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("distance".into(), match (&p.distance) { Some(v) => serde_json::Number::from_f64(*(v)).map(Value::Number).unwrap_or(Value::Null), None => Value::Null });
+    m.insert("fullName".into(), match (&p.full_name) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("hubNaptanCode".into(), match (&p.hub_naptan_code) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("icsCode".into(), match (&p.ics_code) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("id".into(), match (&p.id) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("indicator".into(), match (&p.indicator) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("individualStopId".into(), match (&p.individual_stop_id) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("lat".into(), match (&p.lat) { Some(v) => serde_json::Number::from_f64(*(v)).map(Value::Number).unwrap_or(Value::Null), None => Value::Null });
+    m.insert("lineGroup".into(), match (&p.line_group) { Some(v) => Value::Array((v).iter().map(|v| iface_stop_point__tfl_api_presentation_entities_line_group__to_json(v)).collect()), None => Value::Null });
+    m.insert("lineModeGroups".into(), match (&p.line_mode_groups) { Some(v) => Value::Array((v).iter().map(|v| iface_stop_point__tfl_api_presentation_entities_line_mode_group__to_json(v)).collect()), None => Value::Null });
+    m.insert("lines".into(), match (&p.lines) { Some(v) => Value::Array((v).iter().map(|v| iface_stop_point__tfl_api_presentation_entities_identifier__to_json(v)).collect()), None => Value::Null });
+    m.insert("lon".into(), match (&p.lon) { Some(v) => serde_json::Number::from_f64(*(v)).map(Value::Number).unwrap_or(Value::Null), None => Value::Null });
+    m.insert("modes".into(), match (&p.modes) { Some(v) => Value::Array((v).iter().map(|v| Value::String((v).clone())).collect()), None => Value::Null });
+    m.insert("naptanId".into(), match (&p.naptan_id) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("naptanMode".into(), match (&p.naptan_mode) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("placeType".into(), match (&p.place_type) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("platformName".into(), match (&p.platform_name) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("smsCode".into(), match (&p.sms_code) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("stationNaptan".into(), match (&p.station_naptan) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("status".into(), match (&p.status) { Some(v) => Value::Bool(*(v)), None => Value::Null });
+    m.insert("stopLetter".into(), match (&p.stop_letter) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("stopType".into(), match (&p.stop_type) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("url".into(), match (&p.url) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_stop_point__tfl_api_presentation_entities_additional_properties__to_json(p: &iface_stop_point::TflApiPresentationEntitiesAdditionalProperties) -> Value {
+    let mut m = Map::new();
+    m.insert("category".into(), match (&p.category) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("key".into(), match (&p.key) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("modified".into(), match (&p.modified) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("sourceSystemKey".into(), match (&p.source_system_key) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("value".into(), match (&p.value) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_stop_point__tfl_api_presentation_entities_place__to_json(p: &iface_stop_point::TflApiPresentationEntitiesPlace) -> Value {
+    let mut m = Map::new();
+    m.insert("additionalProperties".into(), match (&p.additional_properties) { Some(v) => Value::Array((v).iter().map(|v| iface_stop_point__tfl_api_presentation_entities_additional_properties__to_json(v)).collect()), None => Value::Null });
+    m.insert("children".into(), match (&p.children) { Some(v) => Value::Array((v).iter().map(|v| Value::String((v).clone())).collect()), None => Value::Null });
+    m.insert("childrenUrls".into(), match (&p.children_urls) { Some(v) => Value::Array((v).iter().map(|v| Value::String((v).clone())).collect()), None => Value::Null });
+    m.insert("commonName".into(), match (&p.common_name) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("distance".into(), match (&p.distance) { Some(v) => serde_json::Number::from_f64(*(v)).map(Value::Number).unwrap_or(Value::Null), None => Value::Null });
+    m.insert("id".into(), match (&p.id) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("lat".into(), match (&p.lat) { Some(v) => serde_json::Number::from_f64(*(v)).map(Value::Number).unwrap_or(Value::Null), None => Value::Null });
+    m.insert("lon".into(), match (&p.lon) { Some(v) => serde_json::Number::from_f64(*(v)).map(Value::Number).unwrap_or(Value::Null), None => Value::Null });
+    m.insert("placeType".into(), match (&p.place_type) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("url".into(), match (&p.url) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_stop_point__tfl_api_presentation_entities_line_group__to_json(p: &iface_stop_point::TflApiPresentationEntitiesLineGroup) -> Value {
+    let mut m = Map::new();
+    m.insert("lineIdentifier".into(), match (&p.line_identifier) { Some(v) => Value::Array((v).iter().map(|v| Value::String((v).clone())).collect()), None => Value::Null });
+    m.insert("naptanIdReference".into(), match (&p.naptan_id_reference) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("stationAtcoCode".into(), match (&p.station_atco_code) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_stop_point__tfl_api_presentation_entities_line_mode_group__to_json(p: &iface_stop_point::TflApiPresentationEntitiesLineModeGroup) -> Value {
+    let mut m = Map::new();
+    m.insert("lineIdentifier".into(), match (&p.line_identifier) { Some(v) => Value::Array((v).iter().map(|v| Value::String((v).clone())).collect()), None => Value::Null });
+    m.insert("modeName".into(), match (&p.mode_name) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_stop_point__tfl_api_presentation_entities_identifier__to_json(p: &iface_stop_point::TflApiPresentationEntitiesIdentifier) -> Value {
+    let mut m = Map::new();
+    m.insert("crowding".into(), match (&p.crowding) { Some(v) => iface_stop_point__tfl_api_presentation_entities_crowding__to_json(v), None => Value::Null });
+    m.insert("fullName".into(), match (&p.full_name) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("id".into(), match (&p.id) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("motType".into(), match (&p.mot_type) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("name".into(), match (&p.name) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("network".into(), match (&p.network) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("routeType".into(), match (&p.route_type) { Some(v) => Value::String(iface_stop_point__tfl_api_presentation_entities_identifier_route_type_enum__to_str(v).into()), None => Value::Null });
+    m.insert("status".into(), match (&p.status) { Some(v) => Value::String(iface_stop_point__tfl_api_presentation_entities_identifier_status_enum__to_str(v).into()), None => Value::Null });
+    m.insert("type".into(), match (&p.type_op) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("uri".into(), match (&p.uri) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_stop_point__tfl_api_presentation_entities_crowding__to_json(p: &iface_stop_point::TflApiPresentationEntitiesCrowding) -> Value {
+    let mut m = Map::new();
+    m.insert("passengerFlows".into(), match (&p.passenger_flows) { Some(v) => Value::Array((v).iter().map(|v| iface_stop_point__tfl_api_presentation_entities_passenger_flow__to_json(v)).collect()), None => Value::Null });
+    m.insert("trainLoadings".into(), match (&p.train_loadings) { Some(v) => Value::Array((v).iter().map(|v| iface_stop_point__tfl_api_presentation_entities_train_loading__to_json(v)).collect()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_stop_point__tfl_api_presentation_entities_passenger_flow__to_json(p: &iface_stop_point::TflApiPresentationEntitiesPassengerFlow) -> Value {
+    let mut m = Map::new();
+    m.insert("timeSlice".into(), match (&p.time_slice) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("value".into(), match (&p.value) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_stop_point__tfl_api_presentation_entities_train_loading__to_json(p: &iface_stop_point::TflApiPresentationEntitiesTrainLoading) -> Value {
+    let mut m = Map::new();
+    m.insert("direction".into(), match (&p.direction) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("line".into(), match (&p.line) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("lineDirection".into(), match (&p.line_direction) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("naptanTo".into(), match (&p.naptan_to) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("platformDirection".into(), match (&p.platform_direction) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("timeSlice".into(), match (&p.time_slice) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("value".into(), match (&p.value) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_stop_point__tfl_api_presentation_entities_stop_point_category__to_json(p: &iface_stop_point::TflApiPresentationEntitiesStopPointCategory) -> Value {
+    let mut m = Map::new();
+    m.insert("availableKeys".into(), match (&p.available_keys) { Some(v) => Value::Array((v).iter().map(|v| Value::String((v).clone())).collect()), None => Value::Null });
+    m.insert("category".into(), match (&p.category) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_stop_point__tfl_api_presentation_entities_mode__to_json(p: &iface_stop_point::TflApiPresentationEntitiesMode) -> Value {
+    let mut m = Map::new();
+    m.insert("isFarePaying".into(), match (&p.is_fare_paying) { Some(v) => Value::Bool(*(v)), None => Value::Null });
+    m.insert("isScheduledService".into(), match (&p.is_scheduled_service) { Some(v) => Value::Bool(*(v)), None => Value::Null });
+    m.insert("isTflService".into(), match (&p.is_tfl_service) { Some(v) => Value::Bool(*(v)), None => Value::Null });
+    m.insert("modeName".into(), match (&p.mode_name) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("motType".into(), match (&p.mot_type) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("network".into(), match (&p.network) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_stop_point__tfl_api_presentation_entities_disrupted_point__to_json(p: &iface_stop_point::TflApiPresentationEntitiesDisruptedPoint) -> Value {
+    let mut m = Map::new();
+    m.insert("additionalInformation".into(), match (&p.additional_information) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("appearance".into(), match (&p.appearance) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("atcoCode".into(), match (&p.atco_code) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("commonName".into(), match (&p.common_name) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("description".into(), match (&p.description) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("fromDate".into(), match (&p.from_date) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("mode".into(), match (&p.mode) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("stationAtcoCode".into(), match (&p.station_atco_code) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("toDate".into(), match (&p.to_date) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("type".into(), match (&p.type_op) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_stop_point__tfl_api_presentation_entities_search_response__to_json(p: &iface_stop_point::TflApiPresentationEntitiesSearchResponse) -> Value {
+    let mut m = Map::new();
+    m.insert("from".into(), match (&p.from_op) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("matches".into(), match (&p.matches) { Some(v) => Value::Array((v).iter().map(|v| iface_stop_point__tfl_api_presentation_entities_search_match__to_json(v)).collect()), None => Value::Null });
+    m.insert("maxScore".into(), match (&p.max_score) { Some(v) => serde_json::Number::from_f64(*(v)).map(Value::Number).unwrap_or(Value::Null), None => Value::Null });
+    m.insert("page".into(), match (&p.page) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("pageSize".into(), match (&p.page_size) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("provider".into(), match (&p.provider) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("query".into(), match (&p.query) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("total".into(), match (&p.total) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_stop_point__tfl_api_presentation_entities_search_match__to_json(p: &iface_stop_point::TflApiPresentationEntitiesSearchMatch) -> Value {
+    let mut m = Map::new();
+    m.insert("id".into(), match (&p.id) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("lat".into(), match (&p.lat) { Some(v) => serde_json::Number::from_f64(*(v)).map(Value::Number).unwrap_or(Value::Null), None => Value::Null });
+    m.insert("lon".into(), match (&p.lon) { Some(v) => serde_json::Number::from_f64(*(v)).map(Value::Number).unwrap_or(Value::Null), None => Value::Null });
+    m.insert("name".into(), match (&p.name) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("url".into(), match (&p.url) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_stop_point__tfl_api_presentation_entities_line_service_type__to_json(p: &iface_stop_point::TflApiPresentationEntitiesLineServiceType) -> Value {
+    let mut m = Map::new();
+    m.insert("lineName".into(), match (&p.line_name) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("lineSpecificServiceTypes".into(), match (&p.line_specific_service_types) { Some(v) => Value::Array((v).iter().map(|v| iface_stop_point__tfl_api_presentation_entities_line_specific_service_type__to_json(v)).collect()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_stop_point__tfl_api_presentation_entities_line_specific_service_type__to_json(p: &iface_stop_point::TflApiPresentationEntitiesLineSpecificServiceType) -> Value {
+    let mut m = Map::new();
+    m.insert("serviceType".into(), match (&p.service_type) { Some(v) => iface_stop_point__tfl_api_presentation_entities_line_service_type_info__to_json(v), None => Value::Null });
+    m.insert("stopServesServiceType".into(), match (&p.stop_serves_service_type) { Some(v) => Value::Bool(*(v)), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_stop_point__tfl_api_presentation_entities_line_service_type_info__to_json(p: &iface_stop_point::TflApiPresentationEntitiesLineServiceTypeInfo) -> Value {
+    let mut m = Map::new();
+    m.insert("name".into(), match (&p.name) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("uri".into(), match (&p.uri) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_stop_point__system_object__to_json(p: &iface_stop_point::SystemObject) -> Value {
+    let mut m = Map::new();
+    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_stop_point__tfl_api_presentation_entities_arrival_departure__to_json(p: &iface_stop_point::TflApiPresentationEntitiesArrivalDeparture) -> Value {
+    let mut m = Map::new();
+    m.insert("cause".into(), match (&p.cause) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("departureStatus".into(), match (&p.departure_status) { Some(v) => Value::String(iface_stop_point__tfl_api_presentation_entities_arrival_departure_departure_status_enum__to_str(v).into()), None => Value::Null });
+    m.insert("destinationName".into(), match (&p.destination_name) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("destinationNaptanId".into(), match (&p.destination_naptan_id) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("estimatedTimeOfArrival".into(), match (&p.estimated_time_of_arrival) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("estimatedTimeOfDeparture".into(), match (&p.estimated_time_of_departure) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("minutesAndSecondsToArrival".into(), match (&p.minutes_and_seconds_to_arrival) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("minutesAndSecondsToDeparture".into(), match (&p.minutes_and_seconds_to_departure) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("naptanId".into(), match (&p.naptan_id) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("platformName".into(), match (&p.platform_name) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("scheduledTimeOfArrival".into(), match (&p.scheduled_time_of_arrival) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("scheduledTimeOfDeparture".into(), match (&p.scheduled_time_of_departure) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("stationName".into(), match (&p.station_name) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("timing".into(), match (&p.timing) { Some(v) => iface_stop_point__tfl_api_presentation_entities_prediction_timing__to_json(v), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_stop_point__tfl_api_presentation_entities_prediction_timing__to_json(p: &iface_stop_point::TflApiPresentationEntitiesPredictionTiming) -> Value {
+    let mut m = Map::new();
+    m.insert("countdownServerAdjustment".into(), match (&p.countdown_server_adjustment) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("insert".into(), match (&p.insert) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("read".into(), match (&p.read) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("received".into(), match (&p.received) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("sent".into(), match (&p.sent) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("source".into(), match (&p.source) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_stop_point__tfl_api_presentation_entities_prediction__to_json(p: &iface_stop_point::TflApiPresentationEntitiesPrediction) -> Value {
+    let mut m = Map::new();
+    m.insert("bearing".into(), match (&p.bearing) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("currentLocation".into(), match (&p.current_location) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("destinationName".into(), match (&p.destination_name) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("destinationNaptanId".into(), match (&p.destination_naptan_id) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("direction".into(), match (&p.direction) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("expectedArrival".into(), match (&p.expected_arrival) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("id".into(), match (&p.id) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("lineId".into(), match (&p.line_id) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("lineName".into(), match (&p.line_name) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("modeName".into(), match (&p.mode_name) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("naptanId".into(), match (&p.naptan_id) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("operationType".into(), match (&p.operation_type) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("platformName".into(), match (&p.platform_name) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("stationName".into(), match (&p.station_name) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("timeToLive".into(), match (&p.time_to_live) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("timeToStation".into(), match (&p.time_to_station) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("timestamp".into(), match (&p.timestamp) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("timing".into(), match (&p.timing) { Some(v) => iface_stop_point__tfl_api_presentation_entities_prediction_timing__to_json(v), None => Value::Null });
+    m.insert("towards".into(), match (&p.towards) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("vehicleId".into(), match (&p.vehicle_id) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_stop_point__tfl_api_presentation_entities_stop_point_route_section__to_json(p: &iface_stop_point::TflApiPresentationEntitiesStopPointRouteSection) -> Value {
+    let mut m = Map::new();
+    m.insert("destinationName".into(), match (&p.destination_name) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("direction".into(), match (&p.direction) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("isActive".into(), match (&p.is_active) { Some(v) => Value::Bool(*(v)), None => Value::Null });
+    m.insert("lineId".into(), match (&p.line_id) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("lineString".into(), match (&p.line_string) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("mode".into(), match (&p.mode) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("naptanId".into(), match (&p.naptan_id) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("routeSectionName".into(), match (&p.route_section_name) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("serviceType".into(), match (&p.service_type) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("validFrom".into(), match (&p.valid_from) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("validTo".into(), match (&p.valid_to) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("vehicleDestinationText".into(), match (&p.vehicle_destination_text) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
 }
 
 fn iface_stop_point__get_by_geo_point_params__to_json(p: &iface_stop_point::GetByGeoPointParams) -> Value {
@@ -2035,95 +6777,910 @@ fn iface_stop_point__get_taxi_ranks_by_ids_params__to_json(p: &iface_stop_point:
     Value::Object(m)
 }
 
+fn iface_stop_point__tfl_api_presentation_entities_stop_points_response__from_json(v: &Value) -> Option<iface_stop_point::TflApiPresentationEntitiesStopPointsResponse> {
+    let m = v.as_object()?;
+    Some(iface_stop_point::TflApiPresentationEntitiesStopPointsResponse {
+        centre_point: m.get("centrePoint").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| (x).as_f64()).collect())),
+        page: m.get("page").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        page_size: m.get("pageSize").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        stop_points: m.get("stopPoints").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| iface_stop_point__tfl_api_presentation_entities_stop_point__from_json(x)).collect())),
+        total: m.get("total").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+    })
+}
+
+fn iface_stop_point__tfl_api_presentation_entities_stop_point__from_json(v: &Value) -> Option<iface_stop_point::TflApiPresentationEntitiesStopPoint> {
+    let m = v.as_object()?;
+    Some(iface_stop_point::TflApiPresentationEntitiesStopPoint {
+        accessibility_summary: m.get("accessibilitySummary").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        additional_properties: m.get("additionalProperties").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| iface_stop_point__tfl_api_presentation_entities_additional_properties__from_json(x)).collect())),
+        children: m.get("children").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| iface_stop_point__tfl_api_presentation_entities_place__from_json(x)).collect())),
+        children_urls: m.get("childrenUrls").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| (x).as_str().map(|s| s.to_string())).collect())),
+        common_name: m.get("commonName").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        distance: m.get("distance").filter(|v| !v.is_null()).and_then(|v| (v).as_f64()),
+        full_name: m.get("fullName").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        hub_naptan_code: m.get("hubNaptanCode").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        ics_code: m.get("icsCode").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        id: m.get("id").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        indicator: m.get("indicator").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        individual_stop_id: m.get("individualStopId").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        lat: m.get("lat").filter(|v| !v.is_null()).and_then(|v| (v).as_f64()),
+        line_group: m.get("lineGroup").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| iface_stop_point__tfl_api_presentation_entities_line_group__from_json(x)).collect())),
+        line_mode_groups: m.get("lineModeGroups").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| iface_stop_point__tfl_api_presentation_entities_line_mode_group__from_json(x)).collect())),
+        lines: m.get("lines").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| iface_stop_point__tfl_api_presentation_entities_identifier__from_json(x)).collect())),
+        lon: m.get("lon").filter(|v| !v.is_null()).and_then(|v| (v).as_f64()),
+        modes: m.get("modes").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| (x).as_str().map(|s| s.to_string())).collect())),
+        naptan_id: m.get("naptanId").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        naptan_mode: m.get("naptanMode").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        place_type: m.get("placeType").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        platform_name: m.get("platformName").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        sms_code: m.get("smsCode").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        station_naptan: m.get("stationNaptan").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        status: m.get("status").filter(|v| !v.is_null()).and_then(|v| (v).as_bool()),
+        stop_letter: m.get("stopLetter").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        stop_type: m.get("stopType").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        url: m.get("url").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    })
+}
+
+fn iface_stop_point__tfl_api_presentation_entities_additional_properties__from_json(v: &Value) -> Option<iface_stop_point::TflApiPresentationEntitiesAdditionalProperties> {
+    let m = v.as_object()?;
+    Some(iface_stop_point::TflApiPresentationEntitiesAdditionalProperties {
+        category: m.get("category").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        key: m.get("key").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        modified: m.get("modified").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        source_system_key: m.get("sourceSystemKey").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        value: m.get("value").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    })
+}
+
+fn iface_stop_point__tfl_api_presentation_entities_place__from_json(v: &Value) -> Option<iface_stop_point::TflApiPresentationEntitiesPlace> {
+    let m = v.as_object()?;
+    Some(iface_stop_point::TflApiPresentationEntitiesPlace {
+        additional_properties: m.get("additionalProperties").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| iface_stop_point__tfl_api_presentation_entities_additional_properties__from_json(x)).collect())),
+        children: m.get("children").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| (x).as_str().map(|s| s.to_string())).collect())),
+        children_urls: m.get("childrenUrls").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| (x).as_str().map(|s| s.to_string())).collect())),
+        common_name: m.get("commonName").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        distance: m.get("distance").filter(|v| !v.is_null()).and_then(|v| (v).as_f64()),
+        id: m.get("id").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        lat: m.get("lat").filter(|v| !v.is_null()).and_then(|v| (v).as_f64()),
+        lon: m.get("lon").filter(|v| !v.is_null()).and_then(|v| (v).as_f64()),
+        place_type: m.get("placeType").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        url: m.get("url").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    })
+}
+
+fn iface_stop_point__tfl_api_presentation_entities_line_group__from_json(v: &Value) -> Option<iface_stop_point::TflApiPresentationEntitiesLineGroup> {
+    let m = v.as_object()?;
+    Some(iface_stop_point::TflApiPresentationEntitiesLineGroup {
+        line_identifier: m.get("lineIdentifier").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| (x).as_str().map(|s| s.to_string())).collect())),
+        naptan_id_reference: m.get("naptanIdReference").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        station_atco_code: m.get("stationAtcoCode").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    })
+}
+
+fn iface_stop_point__tfl_api_presentation_entities_line_mode_group__from_json(v: &Value) -> Option<iface_stop_point::TflApiPresentationEntitiesLineModeGroup> {
+    let m = v.as_object()?;
+    Some(iface_stop_point::TflApiPresentationEntitiesLineModeGroup {
+        line_identifier: m.get("lineIdentifier").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| (x).as_str().map(|s| s.to_string())).collect())),
+        mode_name: m.get("modeName").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    })
+}
+
+fn iface_stop_point__tfl_api_presentation_entities_identifier__from_json(v: &Value) -> Option<iface_stop_point::TflApiPresentationEntitiesIdentifier> {
+    let m = v.as_object()?;
+    Some(iface_stop_point::TflApiPresentationEntitiesIdentifier {
+        crowding: m.get("crowding").filter(|v| !v.is_null()).and_then(|v| iface_stop_point__tfl_api_presentation_entities_crowding__from_json(v)),
+        full_name: m.get("fullName").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        id: m.get("id").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        mot_type: m.get("motType").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        name: m.get("name").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        network: m.get("network").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        route_type: m.get("routeType").filter(|v| !v.is_null()).and_then(|v| (v).as_str().and_then(iface_stop_point__tfl_api_presentation_entities_identifier_route_type_enum__from_str)),
+        status: m.get("status").filter(|v| !v.is_null()).and_then(|v| (v).as_str().and_then(iface_stop_point__tfl_api_presentation_entities_identifier_status_enum__from_str)),
+        type_op: m.get("type").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        uri: m.get("uri").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    })
+}
+
+fn iface_stop_point__tfl_api_presentation_entities_crowding__from_json(v: &Value) -> Option<iface_stop_point::TflApiPresentationEntitiesCrowding> {
+    let m = v.as_object()?;
+    Some(iface_stop_point::TflApiPresentationEntitiesCrowding {
+        passenger_flows: m.get("passengerFlows").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| iface_stop_point__tfl_api_presentation_entities_passenger_flow__from_json(x)).collect())),
+        train_loadings: m.get("trainLoadings").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| iface_stop_point__tfl_api_presentation_entities_train_loading__from_json(x)).collect())),
+    })
+}
+
+fn iface_stop_point__tfl_api_presentation_entities_passenger_flow__from_json(v: &Value) -> Option<iface_stop_point::TflApiPresentationEntitiesPassengerFlow> {
+    let m = v.as_object()?;
+    Some(iface_stop_point::TflApiPresentationEntitiesPassengerFlow {
+        time_slice: m.get("timeSlice").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        value: m.get("value").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+    })
+}
+
+fn iface_stop_point__tfl_api_presentation_entities_train_loading__from_json(v: &Value) -> Option<iface_stop_point::TflApiPresentationEntitiesTrainLoading> {
+    let m = v.as_object()?;
+    Some(iface_stop_point::TflApiPresentationEntitiesTrainLoading {
+        direction: m.get("direction").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        line: m.get("line").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        line_direction: m.get("lineDirection").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        naptan_to: m.get("naptanTo").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        platform_direction: m.get("platformDirection").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        time_slice: m.get("timeSlice").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        value: m.get("value").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+    })
+}
+
+fn iface_stop_point__tfl_api_presentation_entities_stop_point_category__from_json(v: &Value) -> Option<iface_stop_point::TflApiPresentationEntitiesStopPointCategory> {
+    let m = v.as_object()?;
+    Some(iface_stop_point::TflApiPresentationEntitiesStopPointCategory {
+        available_keys: m.get("availableKeys").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| (x).as_str().map(|s| s.to_string())).collect())),
+        category: m.get("category").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    })
+}
+
+fn iface_stop_point__tfl_api_presentation_entities_mode__from_json(v: &Value) -> Option<iface_stop_point::TflApiPresentationEntitiesMode> {
+    let m = v.as_object()?;
+    Some(iface_stop_point::TflApiPresentationEntitiesMode {
+        is_fare_paying: m.get("isFarePaying").filter(|v| !v.is_null()).and_then(|v| (v).as_bool()),
+        is_scheduled_service: m.get("isScheduledService").filter(|v| !v.is_null()).and_then(|v| (v).as_bool()),
+        is_tfl_service: m.get("isTflService").filter(|v| !v.is_null()).and_then(|v| (v).as_bool()),
+        mode_name: m.get("modeName").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        mot_type: m.get("motType").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        network: m.get("network").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    })
+}
+
+fn iface_stop_point__tfl_api_presentation_entities_disrupted_point__from_json(v: &Value) -> Option<iface_stop_point::TflApiPresentationEntitiesDisruptedPoint> {
+    let m = v.as_object()?;
+    Some(iface_stop_point::TflApiPresentationEntitiesDisruptedPoint {
+        additional_information: m.get("additionalInformation").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        appearance: m.get("appearance").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        atco_code: m.get("atcoCode").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        common_name: m.get("commonName").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        description: m.get("description").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        from_date: m.get("fromDate").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        mode: m.get("mode").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        station_atco_code: m.get("stationAtcoCode").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        to_date: m.get("toDate").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        type_op: m.get("type").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    })
+}
+
+fn iface_stop_point__tfl_api_presentation_entities_search_response__from_json(v: &Value) -> Option<iface_stop_point::TflApiPresentationEntitiesSearchResponse> {
+    let m = v.as_object()?;
+    Some(iface_stop_point::TflApiPresentationEntitiesSearchResponse {
+        from_op: m.get("from").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        matches: m.get("matches").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| iface_stop_point__tfl_api_presentation_entities_search_match__from_json(x)).collect())),
+        max_score: m.get("maxScore").filter(|v| !v.is_null()).and_then(|v| (v).as_f64()),
+        page: m.get("page").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        page_size: m.get("pageSize").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        provider: m.get("provider").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        query: m.get("query").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        total: m.get("total").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+    })
+}
+
+fn iface_stop_point__tfl_api_presentation_entities_search_match__from_json(v: &Value) -> Option<iface_stop_point::TflApiPresentationEntitiesSearchMatch> {
+    let m = v.as_object()?;
+    Some(iface_stop_point::TflApiPresentationEntitiesSearchMatch {
+        id: m.get("id").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        lat: m.get("lat").filter(|v| !v.is_null()).and_then(|v| (v).as_f64()),
+        lon: m.get("lon").filter(|v| !v.is_null()).and_then(|v| (v).as_f64()),
+        name: m.get("name").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        url: m.get("url").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    })
+}
+
+fn iface_stop_point__tfl_api_presentation_entities_line_service_type__from_json(v: &Value) -> Option<iface_stop_point::TflApiPresentationEntitiesLineServiceType> {
+    let m = v.as_object()?;
+    Some(iface_stop_point::TflApiPresentationEntitiesLineServiceType {
+        line_name: m.get("lineName").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        line_specific_service_types: m.get("lineSpecificServiceTypes").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| iface_stop_point__tfl_api_presentation_entities_line_specific_service_type__from_json(x)).collect())),
+    })
+}
+
+fn iface_stop_point__tfl_api_presentation_entities_line_specific_service_type__from_json(v: &Value) -> Option<iface_stop_point::TflApiPresentationEntitiesLineSpecificServiceType> {
+    let m = v.as_object()?;
+    Some(iface_stop_point::TflApiPresentationEntitiesLineSpecificServiceType {
+        service_type: m.get("serviceType").filter(|v| !v.is_null()).and_then(|v| iface_stop_point__tfl_api_presentation_entities_line_service_type_info__from_json(v)),
+        stop_serves_service_type: m.get("stopServesServiceType").filter(|v| !v.is_null()).and_then(|v| (v).as_bool()),
+    })
+}
+
+fn iface_stop_point__tfl_api_presentation_entities_line_service_type_info__from_json(v: &Value) -> Option<iface_stop_point::TflApiPresentationEntitiesLineServiceTypeInfo> {
+    let m = v.as_object()?;
+    Some(iface_stop_point::TflApiPresentationEntitiesLineServiceTypeInfo {
+        name: m.get("name").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        uri: m.get("uri").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    })
+}
+
+fn iface_stop_point__system_object__from_json(v: &Value) -> Option<iface_stop_point::SystemObject> {
+    let m = v.as_object()?;
+    Some(iface_stop_point::SystemObject {
+        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    })
+}
+
+fn iface_stop_point__tfl_api_presentation_entities_arrival_departure__from_json(v: &Value) -> Option<iface_stop_point::TflApiPresentationEntitiesArrivalDeparture> {
+    let m = v.as_object()?;
+    Some(iface_stop_point::TflApiPresentationEntitiesArrivalDeparture {
+        cause: m.get("cause").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        departure_status: m.get("departureStatus").filter(|v| !v.is_null()).and_then(|v| (v).as_str().and_then(iface_stop_point__tfl_api_presentation_entities_arrival_departure_departure_status_enum__from_str)),
+        destination_name: m.get("destinationName").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        destination_naptan_id: m.get("destinationNaptanId").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        estimated_time_of_arrival: m.get("estimatedTimeOfArrival").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        estimated_time_of_departure: m.get("estimatedTimeOfDeparture").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        minutes_and_seconds_to_arrival: m.get("minutesAndSecondsToArrival").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        minutes_and_seconds_to_departure: m.get("minutesAndSecondsToDeparture").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        naptan_id: m.get("naptanId").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        platform_name: m.get("platformName").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        scheduled_time_of_arrival: m.get("scheduledTimeOfArrival").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        scheduled_time_of_departure: m.get("scheduledTimeOfDeparture").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        station_name: m.get("stationName").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        timing: m.get("timing").filter(|v| !v.is_null()).and_then(|v| iface_stop_point__tfl_api_presentation_entities_prediction_timing__from_json(v)),
+    })
+}
+
+fn iface_stop_point__tfl_api_presentation_entities_prediction_timing__from_json(v: &Value) -> Option<iface_stop_point::TflApiPresentationEntitiesPredictionTiming> {
+    let m = v.as_object()?;
+    Some(iface_stop_point::TflApiPresentationEntitiesPredictionTiming {
+        countdown_server_adjustment: m.get("countdownServerAdjustment").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        insert: m.get("insert").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        read: m.get("read").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        received: m.get("received").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        sent: m.get("sent").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        source: m.get("source").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    })
+}
+
+fn iface_stop_point__tfl_api_presentation_entities_prediction__from_json(v: &Value) -> Option<iface_stop_point::TflApiPresentationEntitiesPrediction> {
+    let m = v.as_object()?;
+    Some(iface_stop_point::TflApiPresentationEntitiesPrediction {
+        bearing: m.get("bearing").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        current_location: m.get("currentLocation").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        destination_name: m.get("destinationName").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        destination_naptan_id: m.get("destinationNaptanId").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        direction: m.get("direction").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        expected_arrival: m.get("expectedArrival").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        id: m.get("id").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        line_id: m.get("lineId").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        line_name: m.get("lineName").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        mode_name: m.get("modeName").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        naptan_id: m.get("naptanId").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        operation_type: m.get("operationType").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        platform_name: m.get("platformName").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        station_name: m.get("stationName").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        time_to_live: m.get("timeToLive").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        time_to_station: m.get("timeToStation").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        timestamp: m.get("timestamp").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        timing: m.get("timing").filter(|v| !v.is_null()).and_then(|v| iface_stop_point__tfl_api_presentation_entities_prediction_timing__from_json(v)),
+        towards: m.get("towards").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        vehicle_id: m.get("vehicleId").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    })
+}
+
+fn iface_stop_point__tfl_api_presentation_entities_stop_point_route_section__from_json(v: &Value) -> Option<iface_stop_point::TflApiPresentationEntitiesStopPointRouteSection> {
+    let m = v.as_object()?;
+    Some(iface_stop_point::TflApiPresentationEntitiesStopPointRouteSection {
+        destination_name: m.get("destinationName").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        direction: m.get("direction").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        is_active: m.get("isActive").filter(|v| !v.is_null()).and_then(|v| (v).as_bool()),
+        line_id: m.get("lineId").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        line_string: m.get("lineString").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        mode: m.get("mode").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        naptan_id: m.get("naptanId").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        route_section_name: m.get("routeSectionName").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        service_type: m.get("serviceType").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        valid_from: m.get("validFrom").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        valid_to: m.get("validTo").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        vehicle_destination_text: m.get("vehicleDestinationText").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    })
+}
+
+fn iface_stop_point__tfl_api_presentation_entities_identifier_route_type_enum__from_str(s: &str) -> Option<iface_stop_point::TflApiPresentationEntitiesIdentifierRouteTypeEnum> {
+    match s {
+        "Unknown" => Some(iface_stop_point::TflApiPresentationEntitiesIdentifierRouteTypeEnum::Unknown),
+        "All" => Some(iface_stop_point::TflApiPresentationEntitiesIdentifierRouteTypeEnum::All),
+        "Cycle Superhighways" => Some(iface_stop_point::TflApiPresentationEntitiesIdentifierRouteTypeEnum::CycleSuperhighways),
+        "Quietways" => Some(iface_stop_point::TflApiPresentationEntitiesIdentifierRouteTypeEnum::Quietways),
+        "Cycleways" => Some(iface_stop_point::TflApiPresentationEntitiesIdentifierRouteTypeEnum::Cycleways),
+        "Mini-Hollands" => Some(iface_stop_point::TflApiPresentationEntitiesIdentifierRouteTypeEnum::MiniHollands),
+        "Central London Grid" => Some(iface_stop_point::TflApiPresentationEntitiesIdentifierRouteTypeEnum::CentralLondonGrid),
+        "Streetspace Route" => Some(iface_stop_point::TflApiPresentationEntitiesIdentifierRouteTypeEnum::StreetspaceRoute),
+        _ => None,
+    }
+}
+
+fn iface_stop_point__tfl_api_presentation_entities_identifier_status_enum__from_str(s: &str) -> Option<iface_stop_point::TflApiPresentationEntitiesIdentifierStatusEnum> {
+    match s {
+        "Unknown" => Some(iface_stop_point::TflApiPresentationEntitiesIdentifierStatusEnum::Unknown),
+        "All" => Some(iface_stop_point::TflApiPresentationEntitiesIdentifierStatusEnum::All),
+        "Open" => Some(iface_stop_point::TflApiPresentationEntitiesIdentifierStatusEnum::Open),
+        "In Progress" => Some(iface_stop_point::TflApiPresentationEntitiesIdentifierStatusEnum::InProgress),
+        "Planned" => Some(iface_stop_point::TflApiPresentationEntitiesIdentifierStatusEnum::Planned),
+        "Planned - Subject to feasibility and consultation." => Some(iface_stop_point::TflApiPresentationEntitiesIdentifierStatusEnum::PlannedSubjectToFeasibilityAndConsultation),
+        "Not Open" => Some(iface_stop_point::TflApiPresentationEntitiesIdentifierStatusEnum::NotOpen),
+        _ => None,
+    }
+}
+
+fn iface_stop_point__tfl_api_presentation_entities_arrival_departure_departure_status_enum__from_str(s: &str) -> Option<iface_stop_point::TflApiPresentationEntitiesArrivalDepartureDepartureStatusEnum> {
+    match s {
+        "OnTime" => Some(iface_stop_point::TflApiPresentationEntitiesArrivalDepartureDepartureStatusEnum::OnTime),
+        "Delayed" => Some(iface_stop_point::TflApiPresentationEntitiesArrivalDepartureDepartureStatusEnum::Delayed),
+        "Cancelled" => Some(iface_stop_point::TflApiPresentationEntitiesArrivalDepartureDepartureStatusEnum::Cancelled),
+        "NotStoppingAtStation" => Some(iface_stop_point::TflApiPresentationEntitiesArrivalDepartureDepartureStatusEnum::NotStoppingAtStation),
+        _ => None,
+    }
+}
+
+fn iface_stop_point__get_by_geo_point__ok(body: String) -> Result<iface_stop_point::TflApiPresentationEntitiesStopPointsResponse, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match iface_stop_point__tfl_api_presentation_entities_stop_points_response__from_json(&v) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_stop_point__get_by_geo_point__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
+fn iface_stop_point__meta_categories__ok(body: String) -> Result<Vec<iface_stop_point::TflApiPresentationEntitiesStopPointCategory>, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match (&v).as_array().map(|a| a.iter().filter_map(|x| iface_stop_point__tfl_api_presentation_entities_stop_point_category__from_json(x)).collect()) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_stop_point__meta_categories__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
+fn iface_stop_point__meta_modes__ok(body: String) -> Result<Vec<iface_stop_point::TflApiPresentationEntitiesMode>, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match (&v).as_array().map(|a| a.iter().filter_map(|x| iface_stop_point__tfl_api_presentation_entities_mode__from_json(x)).collect()) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_stop_point__meta_modes__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
+fn iface_stop_point__meta_stop_types__ok(body: String) -> Result<Vec<String>, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match (&v).as_array().map(|a| a.iter().filter_map(|x| (x).as_str().map(|s| s.to_string())).collect()) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_stop_point__meta_stop_types__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
+fn iface_stop_point__get_by_mode__ok(body: String) -> Result<iface_stop_point::TflApiPresentationEntitiesStopPointsResponse, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match iface_stop_point__tfl_api_presentation_entities_stop_points_response__from_json(&v) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_stop_point__get_by_mode__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
+fn iface_stop_point__disruption_by_mode__ok(body: String) -> Result<Vec<iface_stop_point::TflApiPresentationEntitiesDisruptedPoint>, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match (&v).as_array().map(|a| a.iter().filter_map(|x| iface_stop_point__tfl_api_presentation_entities_disrupted_point__from_json(x)).collect()) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_stop_point__disruption_by_mode__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
+fn iface_stop_point__get_stop_point_search__ok(body: String) -> Result<iface_stop_point::TflApiPresentationEntitiesSearchResponse, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match iface_stop_point__tfl_api_presentation_entities_search_response__from_json(&v) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_stop_point__get_stop_point_search__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
+fn iface_stop_point__search__ok(body: String) -> Result<iface_stop_point::TflApiPresentationEntitiesSearchResponse, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match iface_stop_point__tfl_api_presentation_entities_search_response__from_json(&v) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_stop_point__search__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
+fn iface_stop_point__get_service_types__ok(body: String) -> Result<Vec<iface_stop_point::TflApiPresentationEntitiesLineServiceType>, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match (&v).as_array().map(|a| a.iter().filter_map(|x| iface_stop_point__tfl_api_presentation_entities_line_service_type__from_json(x)).collect()) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_stop_point__get_service_types__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
+fn iface_stop_point__get_by_sms__ok(body: String) -> Result<iface_stop_point::SystemObject, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match iface_stop_point__system_object__from_json(&v) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_stop_point__get_by_sms__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
+fn iface_stop_point__get_by_type__ok(body: String) -> Result<Vec<iface_stop_point::TflApiPresentationEntitiesStopPoint>, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match (&v).as_array().map(|a| a.iter().filter_map(|x| iface_stop_point__tfl_api_presentation_entities_stop_point__from_json(x)).collect()) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_stop_point__get_by_type__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
+fn iface_stop_point__get_by_type_with_pagination__ok(body: String) -> Result<Vec<iface_stop_point::TflApiPresentationEntitiesStopPoint>, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match (&v).as_array().map(|a| a.iter().filter_map(|x| iface_stop_point__tfl_api_presentation_entities_stop_point__from_json(x)).collect()) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_stop_point__get_by_type_with_pagination__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
+fn iface_stop_point__get__ok(body: String) -> Result<Vec<iface_stop_point::TflApiPresentationEntitiesStopPoint>, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match (&v).as_array().map(|a| a.iter().filter_map(|x| iface_stop_point__tfl_api_presentation_entities_stop_point__from_json(x)).collect()) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_stop_point__get__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
+fn iface_stop_point__disruption__ok(body: String) -> Result<Vec<iface_stop_point::TflApiPresentationEntitiesDisruptedPoint>, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match (&v).as_array().map(|a| a.iter().filter_map(|x| iface_stop_point__tfl_api_presentation_entities_disrupted_point__from_json(x)).collect()) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_stop_point__disruption__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
+fn iface_stop_point__arrival_departures__ok(body: String) -> Result<Vec<iface_stop_point::TflApiPresentationEntitiesArrivalDeparture>, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match (&v).as_array().map(|a| a.iter().filter_map(|x| iface_stop_point__tfl_api_presentation_entities_arrival_departure__from_json(x)).collect()) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_stop_point__arrival_departures__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
+fn iface_stop_point__arrivals__ok(body: String) -> Result<Vec<iface_stop_point::TflApiPresentationEntitiesPrediction>, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match (&v).as_array().map(|a| a.iter().filter_map(|x| iface_stop_point__tfl_api_presentation_entities_prediction__from_json(x)).collect()) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_stop_point__arrivals__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
+fn iface_stop_point__reachable_from__ok(body: String) -> Result<Vec<iface_stop_point::TflApiPresentationEntitiesStopPoint>, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match (&v).as_array().map(|a| a.iter().filter_map(|x| iface_stop_point__tfl_api_presentation_entities_stop_point__from_json(x)).collect()) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_stop_point__reachable_from__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
+fn iface_stop_point__crowding__ok(body: String) -> Result<Vec<iface_stop_point::TflApiPresentationEntitiesStopPoint>, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match (&v).as_array().map(|a| a.iter().filter_map(|x| iface_stop_point__tfl_api_presentation_entities_stop_point__from_json(x)).collect()) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_stop_point__crowding__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
+fn iface_stop_point__direction__ok(body: String) -> Result<String, crate::runtime::DispatchError> {
+    Ok(body)
+}
+
+fn iface_stop_point__direction__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
+fn iface_stop_point__route__ok(body: String) -> Result<Vec<iface_stop_point::TflApiPresentationEntitiesStopPointRouteSection>, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match (&v).as_array().map(|a| a.iter().filter_map(|x| iface_stop_point__tfl_api_presentation_entities_stop_point_route_section__from_json(x)).collect()) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_stop_point__route__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
+fn iface_stop_point__get_stop_point_id_place_types__ok(body: String) -> Result<Vec<iface_stop_point::TflApiPresentationEntitiesPlace>, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match (&v).as_array().map(|a| a.iter().filter_map(|x| iface_stop_point__tfl_api_presentation_entities_place__from_json(x)).collect()) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_stop_point__get_stop_point_id_place_types__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
+fn iface_stop_point__get_car_parks_by_id__ok(body: String) -> Result<Vec<iface_stop_point::TflApiPresentationEntitiesPlace>, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match (&v).as_array().map(|a| a.iter().filter_map(|x| iface_stop_point__tfl_api_presentation_entities_place__from_json(x)).collect()) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_stop_point__get_car_parks_by_id__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
+fn iface_stop_point__get_taxi_ranks_by_ids__ok(body: String) -> Result<Vec<iface_stop_point::TflApiPresentationEntitiesPlace>, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match (&v).as_array().map(|a| a.iter().filter_map(|x| iface_stop_point__tfl_api_presentation_entities_place__from_json(x)).collect()) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_stop_point__get_taxi_ranks_by_ids__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
 impl iface_stop_point::Guest for crate::Component {
-    fn get_by_geo_point(params: iface_stop_point::GetByGeoPointParams) -> Result<String, String> {
+    fn get_by_geo_point(params: iface_stop_point::GetByGeoPointParams) -> Result<iface_stop_point::TflApiPresentationEntitiesStopPointsResponse, String> {
         let json = iface_stop_point__get_by_geo_point_params__to_json(&params);
-        dispatch(&OP_STOP_POINT_GET_BY_GEO_POINT, json)
+        match dispatch(&OP_STOP_POINT_GET_BY_GEO_POINT, json).and_then(iface_stop_point__get_by_geo_point__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_stop_point__get_by_geo_point__err(e)),
+        }
     }
-    fn meta_categories() -> Result<String, String> {
-        dispatch(&OP_STOP_POINT_META_CATEGORIES, Value::Object(Map::new()))
+    fn meta_categories() -> Result<Vec<iface_stop_point::TflApiPresentationEntitiesStopPointCategory>, String> {
+        match dispatch(&OP_STOP_POINT_META_CATEGORIES, Value::Object(Map::new())).and_then(iface_stop_point__meta_categories__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_stop_point__meta_categories__err(e)),
+        }
     }
-    fn meta_modes() -> Result<String, String> {
-        dispatch(&OP_STOP_POINT_META_MODES, Value::Object(Map::new()))
+    fn meta_modes() -> Result<Vec<iface_stop_point::TflApiPresentationEntitiesMode>, String> {
+        match dispatch(&OP_STOP_POINT_META_MODES, Value::Object(Map::new())).and_then(iface_stop_point__meta_modes__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_stop_point__meta_modes__err(e)),
+        }
     }
-    fn meta_stop_types() -> Result<String, String> {
-        dispatch(&OP_STOP_POINT_META_STOP_TYPES, Value::Object(Map::new()))
+    fn meta_stop_types() -> Result<Vec<String>, String> {
+        match dispatch(&OP_STOP_POINT_META_STOP_TYPES, Value::Object(Map::new())).and_then(iface_stop_point__meta_stop_types__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_stop_point__meta_stop_types__err(e)),
+        }
     }
-    fn get_by_mode(params: iface_stop_point::GetByModeParams) -> Result<String, String> {
+    fn get_by_mode(params: iface_stop_point::GetByModeParams) -> Result<iface_stop_point::TflApiPresentationEntitiesStopPointsResponse, String> {
         let json = iface_stop_point__get_by_mode_params__to_json(&params);
-        dispatch(&OP_STOP_POINT_GET_BY_MODE, json)
+        match dispatch(&OP_STOP_POINT_GET_BY_MODE, json).and_then(iface_stop_point__get_by_mode__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_stop_point__get_by_mode__err(e)),
+        }
     }
-    fn disruption_by_mode(params: iface_stop_point::DisruptionByModeParams) -> Result<String, String> {
+    fn disruption_by_mode(params: iface_stop_point::DisruptionByModeParams) -> Result<Vec<iface_stop_point::TflApiPresentationEntitiesDisruptedPoint>, String> {
         let json = iface_stop_point__disruption_by_mode_params__to_json(&params);
-        dispatch(&OP_STOP_POINT_DISRUPTION_BY_MODE, json)
+        match dispatch(&OP_STOP_POINT_DISRUPTION_BY_MODE, json).and_then(iface_stop_point__disruption_by_mode__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_stop_point__disruption_by_mode__err(e)),
+        }
     }
-    fn get_stop_point_search(params: iface_stop_point::GetStopPointSearchParams) -> Result<String, String> {
+    fn get_stop_point_search(params: iface_stop_point::GetStopPointSearchParams) -> Result<iface_stop_point::TflApiPresentationEntitiesSearchResponse, String> {
         let json = iface_stop_point__get_stop_point_search_params__to_json(&params);
-        dispatch(&OP_STOP_POINT_GET_STOP_POINT_SEARCH, json)
+        match dispatch(&OP_STOP_POINT_GET_STOP_POINT_SEARCH, json).and_then(iface_stop_point__get_stop_point_search__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_stop_point__get_stop_point_search__err(e)),
+        }
     }
-    fn search(params: iface_stop_point::SearchParams) -> Result<String, String> {
+    fn search(params: iface_stop_point::SearchParams) -> Result<iface_stop_point::TflApiPresentationEntitiesSearchResponse, String> {
         let json = iface_stop_point__search_params__to_json(&params);
-        dispatch(&OP_STOP_POINT_SEARCH, json)
+        match dispatch(&OP_STOP_POINT_SEARCH, json).and_then(iface_stop_point__search__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_stop_point__search__err(e)),
+        }
     }
-    fn get_service_types(params: iface_stop_point::GetServiceTypesParams) -> Result<String, String> {
+    fn get_service_types(params: iface_stop_point::GetServiceTypesParams) -> Result<Vec<iface_stop_point::TflApiPresentationEntitiesLineServiceType>, String> {
         let json = iface_stop_point__get_service_types_params__to_json(&params);
-        dispatch(&OP_STOP_POINT_GET_SERVICE_TYPES, json)
+        match dispatch(&OP_STOP_POINT_GET_SERVICE_TYPES, json).and_then(iface_stop_point__get_service_types__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_stop_point__get_service_types__err(e)),
+        }
     }
-    fn get_by_sms(params: iface_stop_point::GetBySmsParams) -> Result<String, String> {
+    fn get_by_sms(params: iface_stop_point::GetBySmsParams) -> Result<iface_stop_point::SystemObject, String> {
         let json = iface_stop_point__get_by_sms_params__to_json(&params);
-        dispatch(&OP_STOP_POINT_GET_BY_SMS, json)
+        match dispatch(&OP_STOP_POINT_GET_BY_SMS, json).and_then(iface_stop_point__get_by_sms__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_stop_point__get_by_sms__err(e)),
+        }
     }
-    fn get_by_type(params: iface_stop_point::GetByTypeParams) -> Result<String, String> {
+    fn get_by_type(params: iface_stop_point::GetByTypeParams) -> Result<Vec<iface_stop_point::TflApiPresentationEntitiesStopPoint>, String> {
         let json = iface_stop_point__get_by_type_params__to_json(&params);
-        dispatch(&OP_STOP_POINT_GET_BY_TYPE, json)
+        match dispatch(&OP_STOP_POINT_GET_BY_TYPE, json).and_then(iface_stop_point__get_by_type__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_stop_point__get_by_type__err(e)),
+        }
     }
-    fn get_by_type_with_pagination(params: iface_stop_point::GetByTypeWithPaginationParams) -> Result<String, String> {
+    fn get_by_type_with_pagination(params: iface_stop_point::GetByTypeWithPaginationParams) -> Result<Vec<iface_stop_point::TflApiPresentationEntitiesStopPoint>, String> {
         let json = iface_stop_point__get_by_type_with_pagination_params__to_json(&params);
-        dispatch(&OP_STOP_POINT_GET_BY_TYPE_WITH_PAGINATION, json)
+        match dispatch(&OP_STOP_POINT_GET_BY_TYPE_WITH_PAGINATION, json).and_then(iface_stop_point__get_by_type_with_pagination__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_stop_point__get_by_type_with_pagination__err(e)),
+        }
     }
-    fn get(params: iface_stop_point::GetParams) -> Result<String, String> {
+    fn get(params: iface_stop_point::GetParams) -> Result<Vec<iface_stop_point::TflApiPresentationEntitiesStopPoint>, String> {
         let json = iface_stop_point__get_params__to_json(&params);
-        dispatch(&OP_STOP_POINT_GET, json)
+        match dispatch(&OP_STOP_POINT_GET, json).and_then(iface_stop_point__get__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_stop_point__get__err(e)),
+        }
     }
-    fn disruption(params: iface_stop_point::DisruptionParams) -> Result<String, String> {
+    fn disruption(params: iface_stop_point::DisruptionParams) -> Result<Vec<iface_stop_point::TflApiPresentationEntitiesDisruptedPoint>, String> {
         let json = iface_stop_point__disruption_params__to_json(&params);
-        dispatch(&OP_STOP_POINT_DISRUPTION, json)
+        match dispatch(&OP_STOP_POINT_DISRUPTION, json).and_then(iface_stop_point__disruption__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_stop_point__disruption__err(e)),
+        }
     }
-    fn arrival_departures(params: iface_stop_point::ArrivalDeparturesParams) -> Result<String, String> {
+    fn arrival_departures(params: iface_stop_point::ArrivalDeparturesParams) -> Result<Vec<iface_stop_point::TflApiPresentationEntitiesArrivalDeparture>, String> {
         let json = iface_stop_point__arrival_departures_params__to_json(&params);
-        dispatch(&OP_STOP_POINT_ARRIVAL_DEPARTURES, json)
+        match dispatch(&OP_STOP_POINT_ARRIVAL_DEPARTURES, json).and_then(iface_stop_point__arrival_departures__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_stop_point__arrival_departures__err(e)),
+        }
     }
-    fn arrivals(params: iface_stop_point::ArrivalsParams) -> Result<String, String> {
+    fn arrivals(params: iface_stop_point::ArrivalsParams) -> Result<Vec<iface_stop_point::TflApiPresentationEntitiesPrediction>, String> {
         let json = iface_stop_point__arrivals_params__to_json(&params);
-        dispatch(&OP_STOP_POINT_ARRIVALS, json)
+        match dispatch(&OP_STOP_POINT_ARRIVALS, json).and_then(iface_stop_point__arrivals__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_stop_point__arrivals__err(e)),
+        }
     }
-    fn reachable_from(params: iface_stop_point::ReachableFromParams) -> Result<String, String> {
+    fn reachable_from(params: iface_stop_point::ReachableFromParams) -> Result<Vec<iface_stop_point::TflApiPresentationEntitiesStopPoint>, String> {
         let json = iface_stop_point__reachable_from_params__to_json(&params);
-        dispatch(&OP_STOP_POINT_REACHABLE_FROM, json)
+        match dispatch(&OP_STOP_POINT_REACHABLE_FROM, json).and_then(iface_stop_point__reachable_from__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_stop_point__reachable_from__err(e)),
+        }
     }
-    fn crowding(params: iface_stop_point::CrowdingParams) -> Result<String, String> {
+    fn crowding(params: iface_stop_point::CrowdingParams) -> Result<Vec<iface_stop_point::TflApiPresentationEntitiesStopPoint>, String> {
         let json = iface_stop_point__crowding_params__to_json(&params);
-        dispatch(&OP_STOP_POINT_CROWDING, json)
+        match dispatch(&OP_STOP_POINT_CROWDING, json).and_then(iface_stop_point__crowding__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_stop_point__crowding__err(e)),
+        }
     }
     fn direction(params: iface_stop_point::DirectionParams) -> Result<String, String> {
         let json = iface_stop_point__direction_params__to_json(&params);
-        dispatch(&OP_STOP_POINT_DIRECTION, json)
+        match dispatch(&OP_STOP_POINT_DIRECTION, json).and_then(iface_stop_point__direction__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_stop_point__direction__err(e)),
+        }
     }
-    fn route(params: iface_stop_point::RouteParams) -> Result<String, String> {
+    fn route(params: iface_stop_point::RouteParams) -> Result<Vec<iface_stop_point::TflApiPresentationEntitiesStopPointRouteSection>, String> {
         let json = iface_stop_point__route_params__to_json(&params);
-        dispatch(&OP_STOP_POINT_ROUTE, json)
+        match dispatch(&OP_STOP_POINT_ROUTE, json).and_then(iface_stop_point__route__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_stop_point__route__err(e)),
+        }
     }
-    fn get_stop_point_id_place_types(params: iface_stop_point::GetStopPointIdPlaceTypesParams) -> Result<String, String> {
+    fn get_stop_point_id_place_types(params: iface_stop_point::GetStopPointIdPlaceTypesParams) -> Result<Vec<iface_stop_point::TflApiPresentationEntitiesPlace>, String> {
         let json = iface_stop_point__get_stop_point_id_place_types_params__to_json(&params);
-        dispatch(&OP_STOP_POINT_GET_STOP_POINT_ID_PLACE_TYPES, json)
+        match dispatch(&OP_STOP_POINT_GET_STOP_POINT_ID_PLACE_TYPES, json).and_then(iface_stop_point__get_stop_point_id_place_types__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_stop_point__get_stop_point_id_place_types__err(e)),
+        }
     }
-    fn get_car_parks_by_id(params: iface_stop_point::GetCarParksByIdParams) -> Result<String, String> {
+    fn get_car_parks_by_id(params: iface_stop_point::GetCarParksByIdParams) -> Result<Vec<iface_stop_point::TflApiPresentationEntitiesPlace>, String> {
         let json = iface_stop_point__get_car_parks_by_id_params__to_json(&params);
-        dispatch(&OP_STOP_POINT_GET_CAR_PARKS_BY_ID, json)
+        match dispatch(&OP_STOP_POINT_GET_CAR_PARKS_BY_ID, json).and_then(iface_stop_point__get_car_parks_by_id__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_stop_point__get_car_parks_by_id__err(e)),
+        }
     }
-    fn get_taxi_ranks_by_ids(params: iface_stop_point::GetTaxiRanksByIdsParams) -> Result<String, String> {
+    fn get_taxi_ranks_by_ids(params: iface_stop_point::GetTaxiRanksByIdsParams) -> Result<Vec<iface_stop_point::TflApiPresentationEntitiesPlace>, String> {
         let json = iface_stop_point__get_taxi_ranks_by_ids_params__to_json(&params);
-        dispatch(&OP_STOP_POINT_GET_TAXI_RANKS_BY_IDS, json)
+        match dispatch(&OP_STOP_POINT_GET_TAXI_RANKS_BY_IDS, json).and_then(iface_stop_point__get_taxi_ranks_by_ids__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_stop_point__get_taxi_ranks_by_ids__err(e)),
+        }
     }
 }
 use crate::exports::autostamp::tfl::travel_time as iface_travel_time;
@@ -2132,20 +7689,20 @@ const OP_TRAVEL_TIME_GET_COMPARE_OVERLAY: OpSpec = OpSpec {
     method: "GET",
     path_template: "/TravelTimes/compareOverlay/{z}/mapcenter/{map_center_lat}/{map_center_lon}/pinlocation/{pin_lat}/{pin_lon}/dimensions/{width}/{height}",
     fields: &[
-        FieldSpec { snake: "z", location: FieldLocation::Path },
-        FieldSpec { snake: "pin_lat", location: FieldLocation::Path },
-        FieldSpec { snake: "pin_lon", location: FieldLocation::Path },
-        FieldSpec { snake: "map_center_lat", location: FieldLocation::Path },
-        FieldSpec { snake: "map_center_lon", location: FieldLocation::Path },
-        FieldSpec { snake: "scenario_title", location: FieldLocation::Query },
-        FieldSpec { snake: "time_of_day_id", location: FieldLocation::Query },
-        FieldSpec { snake: "mode_id", location: FieldLocation::Query },
-        FieldSpec { snake: "width", location: FieldLocation::Path },
-        FieldSpec { snake: "height", location: FieldLocation::Path },
-        FieldSpec { snake: "direction", location: FieldLocation::Query },
-        FieldSpec { snake: "travel_time_interval", location: FieldLocation::Query },
-        FieldSpec { snake: "compare_type", location: FieldLocation::Query },
-        FieldSpec { snake: "compare_value", location: FieldLocation::Query },
+        FieldSpec { snake: "z", wire: "z", location: FieldLocation::Path },
+        FieldSpec { snake: "pin_lat", wire: "pinLat", location: FieldLocation::Path },
+        FieldSpec { snake: "pin_lon", wire: "pinLon", location: FieldLocation::Path },
+        FieldSpec { snake: "map_center_lat", wire: "mapCenterLat", location: FieldLocation::Path },
+        FieldSpec { snake: "map_center_lon", wire: "mapCenterLon", location: FieldLocation::Path },
+        FieldSpec { snake: "scenario_title", wire: "scenarioTitle", location: FieldLocation::Query },
+        FieldSpec { snake: "time_of_day_id", wire: "timeOfDayId", location: FieldLocation::Query },
+        FieldSpec { snake: "mode_id", wire: "modeId", location: FieldLocation::Query },
+        FieldSpec { snake: "width", wire: "width", location: FieldLocation::Path },
+        FieldSpec { snake: "height", wire: "height", location: FieldLocation::Path },
+        FieldSpec { snake: "direction", wire: "direction", location: FieldLocation::Query },
+        FieldSpec { snake: "travel_time_interval", wire: "travelTimeInterval", location: FieldLocation::Query },
+        FieldSpec { snake: "compare_type", wire: "compareType", location: FieldLocation::Query },
+        FieldSpec { snake: "compare_value", wire: "compareValue", location: FieldLocation::Query },
     ],
     auth: &[
     ],
@@ -2155,18 +7712,18 @@ const OP_TRAVEL_TIME_GET_OVERLAY: OpSpec = OpSpec {
     method: "GET",
     path_template: "/TravelTimes/overlay/{z}/mapcenter/{map_center_lat}/{map_center_lon}/pinlocation/{pin_lat}/{pin_lon}/dimensions/{width}/{height}",
     fields: &[
-        FieldSpec { snake: "z", location: FieldLocation::Path },
-        FieldSpec { snake: "pin_lat", location: FieldLocation::Path },
-        FieldSpec { snake: "pin_lon", location: FieldLocation::Path },
-        FieldSpec { snake: "map_center_lat", location: FieldLocation::Path },
-        FieldSpec { snake: "map_center_lon", location: FieldLocation::Path },
-        FieldSpec { snake: "scenario_title", location: FieldLocation::Query },
-        FieldSpec { snake: "time_of_day_id", location: FieldLocation::Query },
-        FieldSpec { snake: "mode_id", location: FieldLocation::Query },
-        FieldSpec { snake: "width", location: FieldLocation::Path },
-        FieldSpec { snake: "height", location: FieldLocation::Path },
-        FieldSpec { snake: "direction", location: FieldLocation::Query },
-        FieldSpec { snake: "travel_time_interval", location: FieldLocation::Query },
+        FieldSpec { snake: "z", wire: "z", location: FieldLocation::Path },
+        FieldSpec { snake: "pin_lat", wire: "pinLat", location: FieldLocation::Path },
+        FieldSpec { snake: "pin_lon", wire: "pinLon", location: FieldLocation::Path },
+        FieldSpec { snake: "map_center_lat", wire: "mapCenterLat", location: FieldLocation::Path },
+        FieldSpec { snake: "map_center_lon", wire: "mapCenterLon", location: FieldLocation::Path },
+        FieldSpec { snake: "scenario_title", wire: "scenarioTitle", location: FieldLocation::Query },
+        FieldSpec { snake: "time_of_day_id", wire: "timeOfDayId", location: FieldLocation::Query },
+        FieldSpec { snake: "mode_id", wire: "modeId", location: FieldLocation::Query },
+        FieldSpec { snake: "width", wire: "width", location: FieldLocation::Path },
+        FieldSpec { snake: "height", wire: "height", location: FieldLocation::Path },
+        FieldSpec { snake: "direction", wire: "direction", location: FieldLocation::Query },
+        FieldSpec { snake: "travel_time_interval", wire: "travelTimeInterval", location: FieldLocation::Query },
     ],
     auth: &[
     ],
@@ -2178,6 +7735,12 @@ fn iface_travel_time__get_compare_overlay_direction_enum__to_str(e: &iface_trave
         iface_travel_time::GetCompareOverlayDirectionEnum::FromOp => "From",
         iface_travel_time::GetCompareOverlayDirectionEnum::To => "To",
     }
+}
+
+fn iface_travel_time__system_object__to_json(p: &iface_travel_time::SystemObject) -> Value {
+    let mut m = Map::new();
+    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
 }
 
 fn iface_travel_time__get_compare_overlay_params__to_json(p: &iface_travel_time::GetCompareOverlayParams) -> Value {
@@ -2216,14 +7779,63 @@ fn iface_travel_time__get_overlay_params__to_json(p: &iface_travel_time::GetOver
     Value::Object(m)
 }
 
-impl iface_travel_time::Guest for crate::Component {
-    fn get_compare_overlay(params: iface_travel_time::GetCompareOverlayParams) -> Result<String, String> {
-        let json = iface_travel_time__get_compare_overlay_params__to_json(&params);
-        dispatch(&OP_TRAVEL_TIME_GET_COMPARE_OVERLAY, json)
+fn iface_travel_time__system_object__from_json(v: &Value) -> Option<iface_travel_time::SystemObject> {
+    let m = v.as_object()?;
+    Some(iface_travel_time::SystemObject {
+        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    })
+}
+
+fn iface_travel_time__get_compare_overlay__ok(body: String) -> Result<iface_travel_time::SystemObject, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match iface_travel_time__system_object__from_json(&v) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
     }
-    fn get_overlay(params: iface_travel_time::GetOverlayParams) -> Result<String, String> {
+}
+
+fn iface_travel_time__get_compare_overlay__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
+fn iface_travel_time__get_overlay__ok(body: String) -> Result<iface_travel_time::SystemObject, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match iface_travel_time__system_object__from_json(&v) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_travel_time__get_overlay__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
+impl iface_travel_time::Guest for crate::Component {
+    fn get_compare_overlay(params: iface_travel_time::GetCompareOverlayParams) -> Result<iface_travel_time::SystemObject, String> {
+        let json = iface_travel_time__get_compare_overlay_params__to_json(&params);
+        match dispatch(&OP_TRAVEL_TIME_GET_COMPARE_OVERLAY, json).and_then(iface_travel_time__get_compare_overlay__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_travel_time__get_compare_overlay__err(e)),
+        }
+    }
+    fn get_overlay(params: iface_travel_time::GetOverlayParams) -> Result<iface_travel_time::SystemObject, String> {
         let json = iface_travel_time__get_overlay_params__to_json(&params);
-        dispatch(&OP_TRAVEL_TIME_GET_OVERLAY, json)
+        match dispatch(&OP_TRAVEL_TIME_GET_OVERLAY, json).and_then(iface_travel_time__get_overlay__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_travel_time__get_overlay__err(e)),
+        }
     }
 }
 use crate::exports::autostamp::tfl::vehicle as iface_vehicle;
@@ -2232,11 +7844,47 @@ const OP_VEHICLE_GET: OpSpec = OpSpec {
     method: "GET",
     path_template: "/Vehicle/{ids}/Arrivals",
     fields: &[
-        FieldSpec { snake: "ids", location: FieldLocation::Path },
+        FieldSpec { snake: "ids", wire: "ids", location: FieldLocation::Path },
     ],
     auth: &[
     ],
 };
+
+fn iface_vehicle__tfl_api_presentation_entities_prediction__to_json(p: &iface_vehicle::TflApiPresentationEntitiesPrediction) -> Value {
+    let mut m = Map::new();
+    m.insert("bearing".into(), match (&p.bearing) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("currentLocation".into(), match (&p.current_location) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("destinationName".into(), match (&p.destination_name) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("destinationNaptanId".into(), match (&p.destination_naptan_id) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("direction".into(), match (&p.direction) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("expectedArrival".into(), match (&p.expected_arrival) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("id".into(), match (&p.id) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("lineId".into(), match (&p.line_id) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("lineName".into(), match (&p.line_name) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("modeName".into(), match (&p.mode_name) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("naptanId".into(), match (&p.naptan_id) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("operationType".into(), match (&p.operation_type) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("platformName".into(), match (&p.platform_name) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("stationName".into(), match (&p.station_name) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("timeToLive".into(), match (&p.time_to_live) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("timeToStation".into(), match (&p.time_to_station) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("timestamp".into(), match (&p.timestamp) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("timing".into(), match (&p.timing) { Some(v) => iface_vehicle__tfl_api_presentation_entities_prediction_timing__to_json(v), None => Value::Null });
+    m.insert("towards".into(), match (&p.towards) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("vehicleId".into(), match (&p.vehicle_id) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_vehicle__tfl_api_presentation_entities_prediction_timing__to_json(p: &iface_vehicle::TflApiPresentationEntitiesPredictionTiming) -> Value {
+    let mut m = Map::new();
+    m.insert("countdownServerAdjustment".into(), match (&p.countdown_server_adjustment) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("insert".into(), match (&p.insert) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("read".into(), match (&p.read) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("received".into(), match (&p.received) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("sent".into(), match (&p.sent) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("source".into(), match (&p.source) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
 
 fn iface_vehicle__get_params__to_json(p: &iface_vehicle::GetParams) -> Value {
     let mut m = Map::new();
@@ -2244,10 +7892,69 @@ fn iface_vehicle__get_params__to_json(p: &iface_vehicle::GetParams) -> Value {
     Value::Object(m)
 }
 
+fn iface_vehicle__tfl_api_presentation_entities_prediction__from_json(v: &Value) -> Option<iface_vehicle::TflApiPresentationEntitiesPrediction> {
+    let m = v.as_object()?;
+    Some(iface_vehicle::TflApiPresentationEntitiesPrediction {
+        bearing: m.get("bearing").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        current_location: m.get("currentLocation").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        destination_name: m.get("destinationName").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        destination_naptan_id: m.get("destinationNaptanId").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        direction: m.get("direction").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        expected_arrival: m.get("expectedArrival").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        id: m.get("id").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        line_id: m.get("lineId").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        line_name: m.get("lineName").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        mode_name: m.get("modeName").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        naptan_id: m.get("naptanId").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        operation_type: m.get("operationType").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        platform_name: m.get("platformName").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        station_name: m.get("stationName").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        time_to_live: m.get("timeToLive").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        time_to_station: m.get("timeToStation").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        timestamp: m.get("timestamp").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        timing: m.get("timing").filter(|v| !v.is_null()).and_then(|v| iface_vehicle__tfl_api_presentation_entities_prediction_timing__from_json(v)),
+        towards: m.get("towards").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        vehicle_id: m.get("vehicleId").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    })
+}
+
+fn iface_vehicle__tfl_api_presentation_entities_prediction_timing__from_json(v: &Value) -> Option<iface_vehicle::TflApiPresentationEntitiesPredictionTiming> {
+    let m = v.as_object()?;
+    Some(iface_vehicle::TflApiPresentationEntitiesPredictionTiming {
+        countdown_server_adjustment: m.get("countdownServerAdjustment").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        insert: m.get("insert").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        read: m.get("read").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        received: m.get("received").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        sent: m.get("sent").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        source: m.get("source").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    })
+}
+
+fn iface_vehicle__get__ok(body: String) -> Result<Vec<iface_vehicle::TflApiPresentationEntitiesPrediction>, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match (&v).as_array().map(|a| a.iter().filter_map(|x| iface_vehicle__tfl_api_presentation_entities_prediction__from_json(x)).collect()) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_vehicle__get__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
 impl iface_vehicle::Guest for crate::Component {
-    fn get(params: iface_vehicle::GetParams) -> Result<String, String> {
+    fn get(params: iface_vehicle::GetParams) -> Result<Vec<iface_vehicle::TflApiPresentationEntitiesPrediction>, String> {
         let json = iface_vehicle__get_params__to_json(&params);
-        dispatch(&OP_VEHICLE_GET, json)
+        match dispatch(&OP_VEHICLE_GET, json).and_then(iface_vehicle__get__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_vehicle__get__err(e)),
+        }
     }
 }
 

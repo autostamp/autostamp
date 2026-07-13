@@ -1,58 +1,276 @@
-package autostamp:thetvdb@0.3.0;
+package autostamp:thetvdb@0.5.0;
 
 interface episodes {
+  record episode-record-data {
+    data: option<episode>,
+    errors: option<json-errors>
+  }
+
+  record episode {
+    absolute-number: option<s32>,
+    aired-episode-number: option<s32>,
+    aired-season: option<s32>,
+    airs-after-season: option<s32>,
+    airs-before-episode: option<s32>,
+    airs-before-season: option<s32>,
+    director: option<string>,
+    directors: option<list<string>>,
+    dvd-chapter: option<f64>,
+    dvd-discid: option<string>,
+    dvd-episode-number: option<f64>,
+    dvd-season: option<s32>,
+    episode-name: option<string>,
+    filename: option<string>,
+    first-aired: option<string>,
+    guest-stars: option<list<string>>,
+    id: option<s32>,
+    imdb-id: option<string>,
+    last-updated: option<s32>,
+    last-updated-by: option<string>,
+    overview: option<string>,
+    production-code: option<string>,
+    series-id: option<string>,
+    show-url: option<string>,
+    site-rating: option<f64>,
+    site-rating-count: option<s32>,
+    thumb-added: option<string>,
+    thumb-author: option<s32>,
+    thumb-height: option<string>,
+    thumb-width: option<string>,
+    writers: option<list<string>>
+  }
+
+  record json-errors {
+    /// Invalid filters passed to route
+    invalid-filters: option<list<string>>,
+    /// Invalid language or translation missing
+    invalid-language: option<string>,
+    /// Invalid query params passed to route
+    invalid-query-params: option<list<string>>
+  }
+
+  variant get-episodes-id-error {
+    unauthorized(string),
+    not-found(string),
+    other(string)
+  }
+
   record get-episodes-id-params {
     /// ID of the episode
     id: string,
     /// Records are returned with the some fields in the desired language, if it exists. If there is no translation for the given language, then the record is still returned but with empty values for the translated fields.
     accept-language: option<string>
   }
-  get-episodes-id: func(params: get-episodes-id-params) -> result<string, string>;
+  get-episodes-id: func(params: get-episodes-id-params) -> result<episode-record-data, get-episodes-id-error>;
 
 }
 
 
 interface languages {
-  get-languages: func() -> result<string, string>;
+  record language-data {
+    data: option<list<language>>
+  }
+
+  record language {
+    abbreviation: option<string>,
+    english-name: option<string>,
+    id: option<s32>,
+    name: option<string>
+  }
+
+  variant get-languages-error {
+    unauthorized(string),
+    other(string)
+  }
+
+  variant get-languages-id-error {
+    unauthorized(string),
+    not-found(string),
+    other(string)
+  }
+
+  get-languages: func() -> result<language-data, get-languages-error>;
 
   record get-languages-id-params {
     /// ID of the language
     id: string
   }
-  get-languages-id: func(params: get-languages-id-params) -> result<string, string>;
+  get-languages-id: func(params: get-languages-id-params) -> result<language, get-languages-id-error>;
 
 }
 
 interface authentication {
+  record token {
+    token: option<string>
+  }
+
+  variant post-login-error {
+    unauthorized(string),
+    other(string)
+  }
+
+  variant get-refresh-token-error {
+    unauthorized(string),
+    other(string)
+  }
+
   record post-login-params {
     apikey: option<string>,
     userkey: option<string>,
     username: option<string>
   }
-  post-login: func(params: post-login-params) -> result<string, string>;
+  post-login: func(params: post-login-params) -> result<token, post-login-error>;
 
-  get-refresh-token: func() -> result<string, string>;
+  get-refresh-token: func() -> result<token, get-refresh-token-error>;
 
 }
 
 interface movies {
+  record movie {
+    artworks: option<list<movie-artwork>>,
+    genres: option<list<movie-genre>>,
+    id: option<s32>,
+    people: option<movie-people>,
+    release-dates: option<list<movie-release-date>>,
+    remoteids: option<list<movie-remote-id>>,
+    runtime: option<s32>,
+    trailers: option<list<movie-trailer>>,
+    translations: option<list<movie-translation>>,
+    url: option<string>
+  }
+
+  record movie-artwork {
+    artwork-type: option<string>,
+    height: option<s32>,
+    id: option<string>,
+    is-primary: option<bool>,
+    tags: option<string>,
+    thumb-url: option<string>,
+    url: option<string>,
+    width: option<s32>
+  }
+
+  record movie-genre {
+    id: option<s32>,
+    name: option<string>,
+    url: option<string>
+  }
+
+  record movie-people {
+    actors: option<list<movie-people-v2>>,
+    directors: option<list<movie-people-v2>>,
+    producers: option<list<movie-people-v2>>,
+    writers: option<list<movie-people-v2>>
+  }
+
+  record movie-people-v2 {
+    id: option<string>,
+    imdb-id: option<string>,
+    is-featured: option<bool>,
+    name: option<string>,
+    people-facebook: option<string>,
+    people-id: option<string>,
+    people-image: option<string>,
+    people-instagram: option<string>,
+    people-twitter: option<string>,
+    role: option<string>,
+    role-image: option<string>
+  }
+
+  record movie-release-date {
+    country: option<string>,
+    date: option<string>,
+    type-op: option<string>
+  }
+
+  record movie-remote-id {
+    id: option<string>,
+    source-id: option<s32>,
+    source-name: option<string>,
+    source-url: option<string>,
+    url: option<string>
+  }
+
+  record movie-trailer {
+    name: option<string>,
+    url: option<string>
+  }
+
+  record movie-translation {
+    is-primary: option<bool>,
+    language-code: option<string>,
+    name: option<string>,
+    overview: option<string>,
+    tagline: option<string>
+  }
+
+  record updated-movies {
+    movies: option<list<s32>>
+  }
+
+  variant get-movies-id-error {
+    unauthorized(string),
+    not-found(string),
+    other(string)
+  }
+
+  variant get-movieupdates-error {
+    unauthorized(string),
+    method-not-allowed(string),
+    unprocessable-entity(string),
+    other(string)
+  }
+
   record get-movies-id-params {
     /// ID of the movie
     id: string,
     /// Records are returned with the some fields in the desired language, if it exists. If there is no translation for the given language, then the record is still returned but with empty values for the translated fields.
     accept-language: option<string>
   }
-  get-movies-id: func(params: get-movies-id-params) -> result<string, string>;
+  get-movies-id: func(params: get-movies-id-params) -> result<movie, get-movies-id-error>;
 
   record get-movieupdates-params {
     /// Epoch time to start your date range.
     since: string
   }
-  get-movieupdates: func(params: get-movieupdates-params) -> result<string, string>;
+  get-movieupdates: func(params: get-movieupdates-params) -> result<updated-movies, get-movieupdates-error>;
 
 }
 
 interface search {
+  record series-search-results {
+    data: option<list<series-search-result>>
+  }
+
+  record series-search-result {
+    aliases: option<list<string>>,
+    banner: option<string>,
+    first-aired: option<string>,
+    id: option<s32>,
+    image: option<string>,
+    network: option<string>,
+    overview: option<string>,
+    poster: option<string>,
+    series-name: option<string>,
+    slug: option<string>,
+    status: option<string>
+  }
+
+  record episode-data-query-params {
+    data: option<list<string>>
+  }
+
+  variant get-search-series-error {
+    unauthorized(string),
+    not-found(string),
+    other(string)
+  }
+
+  variant get-search-series-params-v2-error {
+    unauthorized(string),
+    other(string)
+  }
+
   record get-search-series-params {
     /// Name of the series to search for.
     name: option<string>,
@@ -65,26 +283,264 @@ interface search {
     /// Records are returned with the some fields in the desired language, if it exists. If there is no translation for the given language, then the record is still returned but with empty values for the translated fields.
     accept-language: option<string>
   }
-  get-search-series: func(params: get-search-series-params) -> result<string, string>;
+  get-search-series: func(params: get-search-series-params) -> result<series-search-results, get-search-series-error>;
 
-  get-search-series-params-v2: func() -> result<string, string>;
+  get-search-series-params-v2: func() -> result<episode-data-query-params, get-search-series-params-v2-error>;
 
 }
 
 interface series {
+  record data {
+    data: option<series>,
+    errors: option<json-errors>
+  }
+
+  record series {
+    added: option<string>,
+    airs-day-of-week: option<string>,
+    airs-time: option<string>,
+    aliases: option<list<string>>,
+    banner: option<string>,
+    first-aired: option<string>,
+    genre: option<list<string>>,
+    id: option<s32>,
+    imdb-id: option<string>,
+    last-updated: option<s32>,
+    network: option<string>,
+    network-id: option<string>,
+    overview: option<string>,
+    rating: option<string>,
+    runtime: option<string>,
+    series-id: option<string>,
+    series-name: option<string>,
+    site-rating: option<f64>,
+    site-rating-count: option<s32>,
+    slug: option<string>,
+    status: option<string>,
+    zap2it-id: option<string>
+  }
+
+  record json-errors {
+    /// Invalid filters passed to route
+    invalid-filters: option<list<string>>,
+    /// Invalid language or translation missing
+    invalid-language: option<string>,
+    /// Invalid query params passed to route
+    invalid-query-params: option<list<string>>
+  }
+
+  record actors {
+    data: option<list<actors-data>>,
+    errors: option<json-errors>
+  }
+
+  record actors-data {
+    id: option<s32>,
+    image: option<string>,
+    image-added: option<string>,
+    image-author: option<s32>,
+    last-updated: option<string>,
+    name: option<string>,
+    role: option<string>,
+    series-id: option<s32>,
+    sort-order: option<s32>
+  }
+
+  record episodes {
+    data: option<list<episode>>,
+    errors: option<json-errors>,
+    links: option<links>
+  }
+
+  record episode {
+    absolute-number: option<s32>,
+    aired-episode-number: option<s32>,
+    aired-season: option<s32>,
+    airs-after-season: option<s32>,
+    airs-before-episode: option<s32>,
+    airs-before-season: option<s32>,
+    director: option<string>,
+    directors: option<list<string>>,
+    dvd-chapter: option<f64>,
+    dvd-discid: option<string>,
+    dvd-episode-number: option<f64>,
+    dvd-season: option<s32>,
+    episode-name: option<string>,
+    filename: option<string>,
+    first-aired: option<string>,
+    guest-stars: option<list<string>>,
+    id: option<s32>,
+    imdb-id: option<string>,
+    last-updated: option<s32>,
+    last-updated-by: option<string>,
+    overview: option<string>,
+    production-code: option<string>,
+    series-id: option<string>,
+    show-url: option<string>,
+    site-rating: option<f64>,
+    site-rating-count: option<s32>,
+    thumb-added: option<string>,
+    thumb-author: option<s32>,
+    thumb-height: option<string>,
+    thumb-width: option<string>,
+    writers: option<list<string>>
+  }
+
+  record links {
+    first: option<s32>,
+    last: option<s32>,
+    next: option<s32>,
+    previous: option<s32>
+  }
+
+  record episodes-query {
+    data: option<list<episode>>,
+    errors: option<json-errors>,
+    links: option<links>
+  }
+
+  record episodes-query-params {
+    data: option<list<string>>
+  }
+
+  record episodes-summary {
+    /// Number of all aired episodes for this series
+    aired-episodes: option<string>,
+    aired-seasons: option<list<string>>,
+    /// Number of all dvd episodes for this series
+    dvd-episodes: option<string>,
+    dvd-seasons: option<list<string>>
+  }
+
+  record filter-keys {
+    data: option<list<string>>
+  }
+
+  record images-counts {
+    data: option<images-count>
+  }
+
+  record images-count {
+    fanart: option<s32>,
+    poster: option<s32>,
+    season: option<s32>,
+    seasonwide: option<s32>,
+    series: option<s32>
+  }
+
+  record image-query-results {
+    data: option<list<image-query-result>>,
+    errors: option<json-errors>
+  }
+
+  record image-query-result {
+    file-name: option<string>,
+    id: option<s32>,
+    key-type: option<string>,
+    language-id: option<s32>,
+    ratings-info: option<image-query-result-ratings-info>,
+    resolution: option<string>,
+    sub-key: option<string>,
+    thumbnail: option<string>
+  }
+
+  record image-query-result-ratings-info {
+    /// Average rating for the given record.
+    average: option<f64>,
+    /// Number of ratings for the given record.
+    count: option<s32>
+  }
+
+  record images-query-params {
+    data: option<list<images-query-param>>
+  }
+
+  record images-query-param {
+    key-type: option<string>,
+    language-id: option<string>,
+    resolution: option<list<string>>,
+    sub-key: option<list<string>>
+  }
+
+  variant get-series-id-error {
+    unauthorized(string),
+    not-found(string),
+    other(string)
+  }
+
+  variant get-series-id-actors-error {
+    unauthorized(string),
+    not-found(string),
+    other(string)
+  }
+
+  variant get-series-id-episodes-error {
+    unauthorized(string),
+    not-found(string),
+    other(string)
+  }
+
+  variant get-series-id-episodes-query-error {
+    unauthorized(string),
+    not-found(string),
+    other(string)
+  }
+
+  variant get-series-id-episodes-query-params-v2-error {
+    unauthorized(string),
+    not-found(string),
+    other(string)
+  }
+
+  variant get-series-id-episodes-summary-error {
+    unauthorized(string),
+    not-found(string),
+    other(string)
+  }
+
+  variant get-series-id-filter-error {
+    unauthorized(string),
+    not-found(string),
+    other(string)
+  }
+
+  variant get-series-id-filter-params-v2-error {
+    unauthorized(string),
+    not-found(string),
+    other(string)
+  }
+
+  variant get-series-id-images-error {
+    unauthorized(string),
+    not-found(string),
+    other(string)
+  }
+
+  variant get-series-id-images-query-error {
+    unauthorized(string),
+    not-found(string),
+    other(string)
+  }
+
+  variant get-series-id-images-query-params-v2-error {
+    unauthorized(string),
+    not-found(string),
+    other(string)
+  }
+
   record get-series-id-params {
     /// ID of the series
     id: string,
     /// Records are returned with the some fields in the desired language, if it exists. If there is no translation for the given language, then the record is still returned but with empty values for the translated fields.
     accept-language: option<string>
   }
-  get-series-id: func(params: get-series-id-params) -> result<string, string>;
+  get-series-id: func(params: get-series-id-params) -> result<data, get-series-id-error>;
 
   record get-series-id-actors-params {
     /// ID of the series
     id: string
   }
-  get-series-id-actors: func(params: get-series-id-actors-params) -> result<string, string>;
+  get-series-id-actors: func(params: get-series-id-actors-params) -> result<actors, get-series-id-actors-error>;
 
   record get-series-id-episodes-params {
     /// ID of the series
@@ -92,7 +548,7 @@ interface series {
     /// Page of results to fetch. Defaults to page 1 if not provided.
     page: option<string>
   }
-  get-series-id-episodes: func(params: get-series-id-episodes-params) -> result<string, string>;
+  get-series-id-episodes: func(params: get-series-id-episodes-params) -> result<episodes, get-series-id-episodes-error>;
 
   record get-series-id-episodes-query-params {
     /// ID of the series
@@ -114,19 +570,19 @@ interface series {
     /// Records are returned with the some fields in the desired language, if it exists. If there is no translation for the given language, then the record is still returned but with empty values for the translated fields.
     accept-language: option<string>
   }
-  get-series-id-episodes-query: func(params: get-series-id-episodes-query-params) -> result<string, string>;
+  get-series-id-episodes-query: func(params: get-series-id-episodes-query-params) -> result<episodes-query, get-series-id-episodes-query-error>;
 
   record get-series-id-episodes-query-params-v2-params {
     /// ID of the series
     id: string
   }
-  get-series-id-episodes-query-params-v2: func(params: get-series-id-episodes-query-params-v2-params) -> result<string, string>;
+  get-series-id-episodes-query-params-v2: func(params: get-series-id-episodes-query-params-v2-params) -> result<episodes-query-params, get-series-id-episodes-query-params-v2-error>;
 
   record get-series-id-episodes-summary-params {
     /// ID of the series
     id: string
   }
-  get-series-id-episodes-summary: func(params: get-series-id-episodes-summary-params) -> result<string, string>;
+  get-series-id-episodes-summary: func(params: get-series-id-episodes-summary-params) -> result<episodes-summary, get-series-id-episodes-summary-error>;
 
   record get-series-id-filter-params {
     /// ID of the series
@@ -136,7 +592,7 @@ interface series {
     /// Records are returned with the some fields in the desired language, if it exists. If there is no translation for the given language, then the record is still returned but with empty values for the translated fields.
     accept-language: option<string>
   }
-  get-series-id-filter: func(params: get-series-id-filter-params) -> result<string, string>;
+  get-series-id-filter: func(params: get-series-id-filter-params) -> result<data, get-series-id-filter-error>;
 
   record get-series-id-filter-params-v2-params {
     /// ID of the series
@@ -144,7 +600,7 @@ interface series {
     /// Records are returned with the some fields in the desired language, if it exists. If there is no translation for the given language, then the record is still returned but with empty values for the translated fields.
     accept-language: option<string>
   }
-  get-series-id-filter-params-v2: func(params: get-series-id-filter-params-v2-params) -> result<string, string>;
+  get-series-id-filter-params-v2: func(params: get-series-id-filter-params-v2-params) -> result<filter-keys, get-series-id-filter-params-v2-error>;
 
   record get-series-id-images-params {
     /// ID of the series
@@ -152,7 +608,7 @@ interface series {
     /// Records are returned with the some fields in the desired language, if it exists. If there is no translation for the given language, then the record is still returned but with empty values for the translated fields.
     accept-language: option<string>
   }
-  get-series-id-images: func(params: get-series-id-images-params) -> result<string, string>;
+  get-series-id-images: func(params: get-series-id-images-params) -> result<images-counts, get-series-id-images-error>;
 
   record get-series-id-images-query-params {
     /// ID of the series
@@ -166,7 +622,7 @@ interface series {
     /// Records are returned with the some fields in the desired language, if it exists. If there is no translation for the given language, then the record is still returned but with empty values for the translated fields.
     accept-language: option<string>
   }
-  get-series-id-images-query: func(params: get-series-id-images-query-params) -> result<string, string>;
+  get-series-id-images-query: func(params: get-series-id-images-query-params) -> result<image-query-results, get-series-id-images-query-error>;
 
   record get-series-id-images-query-params-v2-params {
     /// ID of the series
@@ -174,11 +630,46 @@ interface series {
     /// Records are returned with the some fields in the desired language, if it exists. If there is no translation for the given language, then the record is still returned but with empty values for the translated fields.
     accept-language: option<string>
   }
-  get-series-id-images-query-params-v2: func(params: get-series-id-images-query-params-v2-params) -> result<string, string>;
+  get-series-id-images-query-params-v2: func(params: get-series-id-images-query-params-v2-params) -> result<images-query-params, get-series-id-images-query-params-v2-error>;
 
 }
 
 interface updates {
+  record update-data {
+    data: option<list<update>>,
+    errors: option<json-errors>
+  }
+
+  record update {
+    id: option<s32>,
+    last-updated: option<s32>
+  }
+
+  record json-errors {
+    /// Invalid filters passed to route
+    invalid-filters: option<list<string>>,
+    /// Invalid language or translation missing
+    invalid-language: option<string>,
+    /// Invalid query params passed to route
+    invalid-query-params: option<list<string>>
+  }
+
+  record update-data-query-params {
+    data: option<list<string>>
+  }
+
+  variant get-updated-query-error {
+    unauthorized(string),
+    not-found(string),
+    other(string)
+  }
+
+  variant get-updated-query-params-v2-error {
+    unauthorized(string),
+    not-found(string),
+    other(string)
+  }
+
   record get-updated-query-params {
     /// Epoch time to start your date range.
     from-time: string,
@@ -187,38 +678,153 @@ interface updates {
     /// Records are returned with the some fields in the desired language, if it exists. If there is no translation for the given language, then the record is still returned but with empty values for the translated fields.
     accept-language: option<string>
   }
-  get-updated-query: func(params: get-updated-query-params) -> result<string, string>;
+  get-updated-query: func(params: get-updated-query-params) -> result<update-data, get-updated-query-error>;
 
-  get-updated-query-params-v2: func() -> result<string, string>;
+  get-updated-query-params-v2: func() -> result<update-data-query-params, get-updated-query-params-v2-error>;
 
 }
 
 interface users {
-  get-user: func() -> result<string, string>;
+  record user-data {
+    data: option<user>
+  }
 
-  get-user-favorites: func() -> result<string, string>;
+  record user {
+    favorites-displaymode: option<string>,
+    language: option<string>,
+    user-name: option<string>
+  }
+
+  record user-favorites-data {
+    data: option<user-favorites>,
+    errors: option<json-errors>
+  }
+
+  record user-favorites {
+    favorites: option<list<string>>
+  }
+
+  record json-errors {
+    /// Invalid filters passed to route
+    invalid-filters: option<list<string>>,
+    /// Invalid language or translation missing
+    invalid-language: option<string>,
+    /// Invalid query params passed to route
+    invalid-query-params: option<list<string>>
+  }
+
+  record user-ratings-data {
+    data: option<list<user-ratings>>,
+    errors: option<json-errors>,
+    links: option<links>
+  }
+
+  record user-ratings {
+    rating: option<s32>,
+    rating-item-id: option<s32>,
+    rating-type: option<string>
+  }
+
+  record links {
+    first: option<s32>,
+    last: option<s32>,
+    next: option<s32>,
+    previous: option<s32>
+  }
+
+  record user-ratings-query-params {
+    data: option<list<string>>
+  }
+
+  record user-ratings-data-no-links-empty-array {
+    data: option<list<string>>
+  }
+
+  record user-ratings-data-no-links {
+    data: option<list<user-ratings>>
+  }
+
+  variant get-user-error {
+    unauthorized(string),
+    not-found(string),
+    other(string)
+  }
+
+  variant get-user-favorites-error {
+    unauthorized(string),
+    not-found(string),
+    other(string)
+  }
+
+  variant put-user-favorites-id-error {
+    unauthorized(string),
+    not-found(string),
+    conflict(string),
+    other(string)
+  }
+
+  variant delete-user-favorites-id-error {
+    unauthorized(string),
+    not-found(string),
+    conflict(string),
+    other(string)
+  }
+
+  variant get-user-ratings-error {
+    unauthorized(string),
+    not-found(string),
+    other(string)
+  }
+
+  variant get-user-ratings-query-error {
+    unauthorized(string),
+    not-found(string),
+    other(string)
+  }
+
+  variant get-user-ratings-query-params-v2-error {
+    unauthorized(string),
+    not-found(string),
+    other(string)
+  }
+
+  variant delete-user-ratings-item-type-item-id-error {
+    unauthorized(string),
+    not-found(string),
+    other(string)
+  }
+
+  variant put-user-ratings-item-type-item-id-item-rating-error {
+    unauthorized(string),
+    not-found(string),
+    other(string)
+  }
+
+  get-user: func() -> result<user-data, get-user-error>;
+
+  get-user-favorites: func() -> result<user-favorites-data, get-user-favorites-error>;
 
   record put-user-favorites-id-params {
     /// ID of the series
     id: string
   }
-  put-user-favorites-id: func(params: put-user-favorites-id-params) -> result<string, string>;
+  put-user-favorites-id: func(params: put-user-favorites-id-params) -> result<user-favorites-data, put-user-favorites-id-error>;
 
   record delete-user-favorites-id-params {
     /// ID of the series
     id: string
   }
-  delete-user-favorites-id: func(params: delete-user-favorites-id-params) -> result<string, string>;
+  delete-user-favorites-id: func(params: delete-user-favorites-id-params) -> result<user-favorites-data, delete-user-favorites-id-error>;
 
-  get-user-ratings: func() -> result<string, string>;
+  get-user-ratings: func() -> result<user-ratings-data, get-user-ratings-error>;
 
   record get-user-ratings-query-params {
     /// Item to query. Can be either 'series', 'episode', or 'banner'
     item-type: option<string>
   }
-  get-user-ratings-query: func(params: get-user-ratings-query-params) -> result<string, string>;
+  get-user-ratings-query: func(params: get-user-ratings-query-params) -> result<user-ratings-data, get-user-ratings-query-error>;
 
-  get-user-ratings-query-params-v2: func() -> result<string, string>;
+  get-user-ratings-query-params-v2: func() -> result<user-ratings-query-params, get-user-ratings-query-params-v2-error>;
 
   record delete-user-ratings-item-type-item-id-params {
     /// Item to update. Can be either 'series', 'episode', or 'image'
@@ -226,7 +832,7 @@ interface users {
     /// ID of the ratings record that you wish to modify
     item-id: string
   }
-  delete-user-ratings-item-type-item-id: func(params: delete-user-ratings-item-type-item-id-params) -> result<string, string>;
+  delete-user-ratings-item-type-item-id: func(params: delete-user-ratings-item-type-item-id-params) -> result<user-ratings-data-no-links-empty-array, delete-user-ratings-item-type-item-id-error>;
 
   record put-user-ratings-item-type-item-id-item-rating-params {
     /// Item to update. Can be either 'series', 'episode', or 'image'
@@ -236,7 +842,7 @@ interface users {
     /// The updated rating number
     item-rating: string
   }
-  put-user-ratings-item-type-item-id-item-rating: func(params: put-user-ratings-item-type-item-id-item-rating-params) -> result<string, string>;
+  put-user-ratings-item-type-item-id-item-rating: func(params: put-user-ratings-item-type-item-id-item-rating-params) -> result<user-ratings-data-no-links, put-user-ratings-item-type-item-id-item-rating-error>;
 
 }
 /// The component world: imports the secrets host capability

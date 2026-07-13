@@ -7,13 +7,26 @@
 /// | --- | --- |
 /// | `basic` | `Authorization: Basic base64(<secret>)` |
 /// | `customer_accessCode` | `Authorization: Bearer <secret>` |
-package autostamp:shutterstock@0.3.0;
+package autostamp:shutterstock@0.5.0;
 
 interface custom-music {
-  enum create-audio-render-preset-enum {
+  enum preview-content-type-enum {
+    audio-mp3,
+  }
+
+  enum audio-render-result-preset-enum {
     master-mp3,
     master-wav,
     stems-wav,
+  }
+
+  enum audio-render-result-status-enum {
+    waiting-compose,
+    running-compose,
+    waiting-render,
+    running-render,
+    created,
+    failed-create,
   }
 
   enum audio-render-timeline-span-instrument-group-status-status-enum {
@@ -73,13 +86,127 @@ interface custom-music {
     unmetered,
   }
 
-  /// Data required to create an audio render
-  record create-audio-render {
-    /// A user-specified file name suggestion; this file name becomes the filename property of the Content-Disposition header when the user downloads the rendered audio file
+  /// List Descriptors results
+  record descriptors-list-result {
+    /// List of descriptors
+    data: option<list<descriptors>>,
+    /// Current page that is returned
+    page: option<s32>,
+    /// Number of results per page
+    per-page: option<s32>
+  }
+
+  /// Information about a descriptor
+  record descriptors {
+    /// The average ratio of the length of the music to the time it takes to render; for example, a render speed of 3.0 generates 30 seconds of music in about 10 seconds
+    average-render-speed: option<f64>,
+    /// The bands that are available to use this descriptor
+    bands: option<list<bands>>,
+    /// The ID of the descriptor
+    id: option<string>,
+    /// The instruments that can play with this descriptor
+    instruments: option<list<instruments>>,
+    /// The maximum beats per minute that the descriptor is intended to be used with
+    max-tempo: option<f64>,
+    /// The minimum beats per minute that the descriptor is intended to be used with
+    min-tempo: option<f64>,
+    /// The name of the descriptor
+    name: option<string>,
+    /// Preview of the descriptor
+    previews: option<list<preview>>,
+    /// Tags that describe the descriptor
+    tags: option<list<string>>
+  }
+
+  /// A band that can be used to generate music
+  record bands {
+    /// The ID of the band
+    id: option<string>,
+    /// The name of the band
+    name: option<string>
+  }
+
+  /// Instruments
+  record instruments {
+    /// The string id of the instrument
+    id: option<string>,
+    /// The string name of the instrument
+    name: option<string>
+  }
+
+  /// Preview information
+  record preview {
+    /// Content type of the preview, currently audio/mp3
+    content-type: option<preview-content-type-enum>,
+    /// Url of the instrument's preview file
+    url: option<string>
+  }
+
+  /// Image search results
+  record instruments-list-result {
+    /// List of instrumnets
+    data: option<list<instrument>>,
+    /// Current page that is returned
+    page: option<s32>,
+    /// Number of results per page
+    per-page: option<s32>
+  }
+
+  /// Information about an musical instrument
+  record instrument {
+    /// The id of the instrument
+    id: option<string>,
+    /// Name of the instrument
+    name: option<string>,
+    /// Preview of the instrument
+    previews: option<list<preview>>,
+    /// List of tags
+    tags: option<list<string>>
+  }
+
+  /// Audio render data
+  record audio-renders-list-results {
+    /// Audio render results
+    audio-renders: list<audio-render-result>
+  }
+
+  /// The output of an audio render in WAV or MP3 format
+  record audio-render-result {
+    /// The time the render was submitted to the API
+    created-date: option<string>,
+    /// The files associated with the render
+    files: option<list<audio-renders-files-list>>,
+    /// The alphanumeric ID of the simple render
+    id: string,
+    /// The file format preset
+    preset: option<audio-render-result-preset-enum>,
+    /// The current progress of the render as a percentage
+    progress-percent: option<s32>,
+    /// A coarse progress indicator
+    status: audio-render-result-status-enum,
+    timeline: audio-render-timeline,
+    /// The time that the audio output was uploaded
+    updated-date: option<string>
+  }
+
+  /// Files associated with the render
+  record audio-renders-files-list {
+    /// The bit depth of the audio files in bits/sample
+    bits-sample: f64,
+    /// The content-type of the file
+    content-type: string,
+    /// The internet-accessible URL from which the file can be downloaded. Any redirects encountered when using this URL must be followed
+    download-url: string,
+    /// The user-specified file name suggestion from the render request; this file name becomes the filename property of the Content-Disposition header when the user downloads the rendered audio file
     filename: string,
-    /// File format, such as MP3 file, combined WAV file, or individual track WAV files
-    preset: create-audio-render-preset-enum,
-    timeline: audio-render-timeline
+    /// The Sample rate of the audio files in Hertz (Hz)
+    frequency-hz: f64,
+    /// The data rate of the audio files in kilobits/second
+    kbits-second: f64,
+    /// Size of the file in bytes
+    size-bytes: f64,
+    /// An array of track names included in the file
+    tracks: list<string>
   }
 
   /// A timeline object that represents either a request for music to be created or an entire music composition
@@ -166,6 +293,45 @@ interface custom-music {
     time: f64
   }
 
+  /// Data required to create an audio render
+  record create-audio-render {
+    /// A user-specified file name suggestion; this file name becomes the filename property of the Content-Disposition header when the user downloads the rendered audio file
+    filename: string,
+    /// File format, such as MP3 file, combined WAV file, or individual track WAV files
+    preset: audio-render-result-preset-enum,
+    timeline: audio-render-timeline
+  }
+
+  variant list-custom-descriptors-error {
+    bad-request(string),
+    unauthorized(string),
+    forbidden(string),
+    not-found(string),
+    other(string)
+  }
+
+  variant list-custom-instruments-error {
+    bad-request(string),
+    unauthorized(string),
+    forbidden(string),
+    other(string)
+  }
+
+  variant fetch-renders-error {
+    bad-request(string),
+    unauthorized(string),
+    forbidden(string),
+    not-found(string),
+    other(string)
+  }
+
+  variant create-audio-renders-error {
+    bad-request(string),
+    unauthorized(string),
+    forbidden(string),
+    other(string)
+  }
+
   /// List computer audio descriptors
   record list-custom-descriptors-params {
     /// Show descriptors with an average render speed that is greater than or equal to the specified value
@@ -195,7 +361,7 @@ interface custom-music {
     /// Show descriptors with the specified tag, such as Cinematic or Roomy (case-sensitive)
     tag: option<string>
   }
-  list-custom-descriptors: func(params: list-custom-descriptors-params) -> result<string, string>;
+  list-custom-descriptors: func(params: list-custom-descriptors-params) -> result<descriptors-list-result, list-custom-descriptors-error>;
 
   /// List computer audio instruments
   record list-custom-instruments-params {
@@ -210,21 +376,21 @@ interface custom-music {
     /// Show instruments with the specified tag, such as Percussion or Strings (case-sensitive)
     tag: option<string>
   }
-  list-custom-instruments: func(params: list-custom-instruments-params) -> result<string, string>;
+  list-custom-instruments: func(params: list-custom-instruments-params) -> result<instruments-list-result, list-custom-instruments-error>;
 
   /// Get details about audio renders
   record fetch-renders-params {
     /// One or more render IDs
     id: list<string>
   }
-  fetch-renders: func(params: fetch-renders-params) -> result<string, string>;
+  fetch-renders: func(params: fetch-renders-params) -> result<audio-renders-list-results, fetch-renders-error>;
 
   /// Create rendered audio
   record create-audio-renders-params {
     /// Parameters to create computer audio renders
     audio-renders: list<create-audio-render>
   }
-  create-audio-renders: func(params: create-audio-renders-params) -> result<string, string>;
+  create-audio-renders: func(params: create-audio-renders-params) -> result<audio-renders-list-results, create-audio-renders-error>;
 
 }
 
@@ -260,6 +426,190 @@ interface audio {
     asset-all-music,
   }
 
+  /// List of tracks
+  record data-list {
+    /// Tracks
+    data: option<list<audio>>,
+    /// Error list; appears only if there was an error
+    errors: option<list<error>>,
+    /// Server-generated message, if any
+    message: option<string>,
+    /// Current page that is returned
+    page: option<s32>,
+    /// Number of results per page
+    per-page: option<s32>,
+    /// Total count of all results across all pages
+    total-count: option<s32>
+  }
+
+  /// Audio metadata
+  record audio {
+    /// Date this track was added to the Shutterstock library
+    added-date: option<string>,
+    /// Affiliate referral link; appears only for registered affiliate partners
+    affiliate-url: option<string>,
+    album: option<album>,
+    /// List of artists
+    artists: option<list<artist>>,
+    assets: option<assets>,
+    /// BPM (beats per minute) of this track
+    bpm: option<s32>,
+    contributor: contributor,
+    deleted-time: option<string>,
+    /// Description of this track
+    description: option<string>,
+    /// Duration of this track in seconds
+    duration: option<f64>,
+    /// List of all genres for this track
+    genres: option<list<string>>,
+    /// Shutterstock ID of this track
+    id: string,
+    /// List of all instruments that appear in this track
+    instruments: option<list<string>>,
+    /// Whether or not this track contains adult content
+    is-adult: option<bool>,
+    /// Whether or not this track is purely instrumental (lacking lyrics)
+    is-instrumental: option<bool>,
+    isrc: option<string>,
+    /// List of all keywords for this track
+    keywords: option<list<string>>,
+    /// Language of this track's lyrics
+    language: option<string>,
+    /// Lyrics of this track
+    lyrics: option<string>,
+    /// Media type of this track; should always be "audio"
+    media-type: string,
+    /// List of all model releases for this track
+    model-releases: option<list<model-release>>,
+    /// List of all moods of this track
+    moods: option<list<string>>,
+    /// Time this track was published
+    published-time: option<string>,
+    /// Recording version of this track
+    recording-version: option<string>,
+    /// List of all releases of this track
+    releases: option<list<string>>,
+    /// List of all similar artists of this track
+    similar-artists: option<list<artist>>,
+    /// Time this track was submitted
+    submitted-time: option<string>,
+    /// Title of this track
+    title: option<string>,
+    /// Time this track was last updated
+    updated-time: option<string>,
+    url: option<string>,
+    /// Vocal description of this track
+    vocal-description: option<string>
+  }
+
+  /// Album metadata
+  record album {
+    /// The album ID
+    id: string,
+    /// The album title
+    title: string
+  }
+
+  /// Metadata about the artist that created the media
+  record artist {
+    /// The artist's name
+    name: string
+  }
+
+  /// Files that are available as part of an audio asset
+  record assets {
+    album-art: option<asset-details>,
+    clean-audio: option<asset-details>,
+    original-audio: option<asset-details>,
+    preview-mp3: option<asset-details>,
+    preview-ogg: option<asset-details>,
+    shorts-loops-stems: option<shorts-loops-stems>,
+    waveform: option<asset-details>
+  }
+
+  /// Information about a file that is part of an audio asset
+  record asset-details {
+    /// File size of the track
+    file-size: option<s32>,
+    /// URL the track is available at
+    url: option<string>
+  }
+
+  /// Links for Shorts, Loops and Stems previews
+  record shorts-loops-stems {
+    loops: option<string>,
+    shorts: option<string>,
+    stems: option<string>
+  }
+
+  /// Information about a contributor
+  record contributor {
+    /// ID of the contributor
+    id: string
+  }
+
+  /// Model and property release metadata
+  record model-release {
+    /// ID of the model or property release
+    id: option<string>
+  }
+
+  /// Error object
+  record error {
+    /// The error code of this error
+    code: option<string>,
+    /// Debugging information about the error
+    data: option<string>,
+    /// A list of items that produced the error
+    items: option<list<error-items-item>>,
+    /// Specific details about this error
+    message: string,
+    /// Internal code reference to the source of the error
+    path: option<string>
+  }
+
+  record error-items-item {
+    /// JSON-encoded free-form object payload
+    data: option<string>
+  }
+
+  /// List of collections
+  record collection-data-list {
+    /// Collections
+    data: option<list<collection>>,
+    /// Error list; appears only if there was an error
+    errors: option<list<error>>,
+    /// Server-generated message, if any
+    message: option<string>,
+    /// The current page of results
+    page: option<s32>,
+    /// The number of results per page
+    per-page: option<s32>,
+    /// The total number of results across all pages
+    total-count: option<s32>
+  }
+
+  /// Metadata about a collection of assets
+  record collection {
+    cover-item: option<collection-item>,
+    /// When the collection was created
+    created-time: option<string>,
+    /// The collection ID
+    id: string,
+    /// The last time this collection's items were updated
+    items-updated-time: option<string>,
+    /// The name of the collection
+    name: string,
+    /// A code that can be used to share the collection (optional)
+    share-code: option<string>,
+    /// The browser URL that can be used to share the collection (optional)
+    share-url: option<string>,
+    /// The number of items in the collection
+    total-item-count: s32,
+    /// The last time the collection was update (other than changes to the items in it)
+    updated-time: option<string>
+  }
+
   /// Metadata about an item that is part of a collection
   record collection-item {
     /// The date the item was added to the collection
@@ -268,6 +618,112 @@ interface audio {
     id: string,
     /// The media type of the item, such as image, video, or audio
     media-type: option<string>
+  }
+
+  /// Collection creation response
+  record collection-create-response {
+    /// ID of the new collection
+    id: string
+  }
+
+  /// List of items in a collection
+  record collection-item-data-list {
+    /// Assets in the collection
+    data: option<list<collection-item>>,
+    /// Error list; appears only if there was an error
+    errors: option<list<error>>,
+    /// Server-generated message, if any
+    message: option<string>,
+    /// The current page of results
+    page: option<s32>,
+    /// The number of results per page
+    per-page: option<s32>,
+    /// The total number of results across all pages
+    total-count: option<s32>
+  }
+
+  /// List of audio genres
+  record genre-list {
+    /// List of genres
+    data: list<string>
+  }
+
+  /// List of instruments
+  record instrument-list {
+    /// List of instruments
+    data: list<string>
+  }
+
+  /// List of download events
+  record download-history-data-list {
+    /// Download events
+    data: option<list<download-history>>,
+    /// Error list; appears only if there was an error
+    errors: option<list<error>>,
+    /// Server-generated message, if any
+    message: option<string>,
+    /// The current page of results
+    page: option<s32>,
+    /// The number of results per page
+    per-page: option<s32>,
+    /// The total number of results across all pages
+    total-count: option<s32>
+  }
+
+  /// Information about a downloaded media item. Applicable for all media types, only one of 'audio', 'image' or 'video' will be in a single DownloadHistory object
+  record download-history {
+    audio: option<download-history-media-details>,
+    /// Date the media was downloaded the first time
+    download-time: string,
+    /// ID of the download
+    id: string,
+    image: option<download-history-media-details>,
+    /// Specifies if the media is downloadable via its respective downloads endpoint
+    is-downloadable: option<bool>,
+    /// The name of the license of this download
+    license: string,
+    /// The metadata that was passed in the original licensing request
+    metadata: option<download-history-metadata>,
+    revshare: option<download-history-revshare-details>,
+    /// ID of the subscription used to perform this download
+    subscription-id: option<string>,
+    user: option<download-history-user-details>,
+    video: option<download-history-media-details>
+  }
+
+  /// Information about the downloaded media
+  record download-history-media-details {
+    format: option<download-history-format-details>,
+    /// ID of the download history media details
+    id: string
+  }
+
+  /// Information about the format of a download
+  record download-history-format-details {
+    /// The format of the downloaded media
+    format: option<string>,
+    /// The size of the downloaded media
+    size: option<string>
+  }
+
+  /// The metadata that was passed in the original licensing request
+  record download-history-metadata {
+    /// JSON-encoded free-form object payload
+    data: option<string>
+  }
+
+  /// Pricing information for revenue-sharing transactions
+  record download-history-revshare-details {
+    /// The amount charged for the license
+    purchase-amount: string,
+    /// The currency the amount was charged in
+    purchase-currency: string
+  }
+
+  /// Information about a user
+  record download-history-user-details {
+    /// The name of the user who downloaded the item
+    username: string
   }
 
   /// An audio track in a licensing request
@@ -280,6 +736,169 @@ interface audio {
     search-id: option<string>
   }
 
+  /// List of audio license results
+  record license-audio-result-data-list {
+    /// License results
+    data: option<list<license-audio-result>>,
+    /// Error list; appears only if there was an error
+    errors: option<list<error>>,
+    /// Server-generated message, if any
+    message: option<string>,
+    /// Current page that is returned
+    page: option<s32>,
+    /// Number of results per page
+    per-page: option<s32>,
+    /// Total count of all results across all pages
+    total-count: option<s32>
+  }
+
+  /// The response to a licensing request for an audio track
+  record license-audio-result {
+    /// Number of credits that this licensing event used
+    allotment-charge: option<f64>,
+    /// ID of the track that was licensed
+    audio-id: string,
+    download: option<url>,
+    /// Error information if applicable
+    error: option<string>,
+    /// ID of the license event
+    license-id: option<string>
+  }
+
+  /// Audio License URL object
+  record url {
+    /// URL that can be used to download the .zip file containing shorts, loops, and stems
+    shorts-loops-stems: option<string>,
+    /// URL that can be used to download the unwatermarked, licensed asset
+    url: string
+  }
+
+  /// List of audio moods
+  record mood-list {
+    /// List of audio moods
+    data: list<string>
+  }
+
+  /// Audio search results
+  record search-results {
+    /// List of tracks
+    data: list<audio>,
+    /// Server-generated message, if any
+    message: option<string>,
+    /// Current page that is returned
+    page: option<s32>,
+    /// Number of results per page
+    per-page: option<s32>,
+    /// ID of the search
+    search-id: string,
+    /// Total count of all results across all pages
+    total-count: s32
+  }
+
+  variant get-track-list-error {
+    bad-request(string),
+    unauthorized(string),
+    forbidden(string),
+    other(string)
+  }
+
+  variant get-track-collection-list-error {
+    bad-request(string),
+    unauthorized(string),
+    forbidden(string),
+    other(string)
+  }
+
+  variant create-track-collection-error {
+    bad-request(string),
+    unauthorized(string),
+    forbidden(string),
+    other(string)
+  }
+
+  variant get-track-collection-error {
+    bad-request(string),
+    unauthorized(string),
+    forbidden(string),
+    not-found(string),
+    other(string)
+  }
+
+  variant rename-track-collection-error {
+    bad-request(string),
+    unauthorized(string),
+    forbidden(string),
+    not-found(string),
+    other(string)
+  }
+
+  variant delete-track-collection-error {
+    bad-request(string),
+    unauthorized(string),
+    forbidden(string),
+    not-found(string),
+    other(string)
+  }
+
+  variant get-track-collection-items-error {
+    bad-request(string),
+    unauthorized(string),
+    forbidden(string),
+    not-found(string),
+    other(string)
+  }
+
+  variant add-track-collection-items-error {
+    bad-request(string),
+    unauthorized(string),
+    forbidden(string),
+    not-found(string),
+    other(string)
+  }
+
+  variant delete-track-collection-items-error {
+    bad-request(string),
+    unauthorized(string),
+    forbidden(string),
+    not-found(string),
+    other(string)
+  }
+
+  variant get-track-license-list-error {
+    bad-request(string),
+    unauthorized(string),
+    forbidden(string),
+    other(string)
+  }
+
+  variant license-track-error {
+    bad-request(string),
+    unauthorized(string),
+    forbidden(string),
+    other(string)
+  }
+
+  variant download-tracks-error {
+    bad-request(string),
+    unauthorized(string),
+    forbidden(string),
+    other(string)
+  }
+
+  variant search-tracks-error {
+    bad-request(string),
+    unauthorized(string),
+    forbidden(string),
+    other(string)
+  }
+
+  variant get-track-error {
+    bad-request(string),
+    unauthorized(string),
+    forbidden(string),
+    other(string)
+  }
+
   /// List audio tracks
   record get-track-list-params {
     /// One or more audio IDs
@@ -289,7 +908,7 @@ interface audio {
     /// The ID of the search that is related to this request
     search-id: option<string>
   }
-  get-track-list: func(params: get-track-list-params) -> result<string, string>;
+  get-track-list: func(params: get-track-list-params) -> result<data-list, get-track-list-error>;
 
   /// List audio collections
   record get-track-collection-list-params {
@@ -300,14 +919,14 @@ interface audio {
     /// Which sharing information to include in the response, such as a URL to the collection
     embed: option<list<get-track-collection-list-embed-item-enum>>
   }
-  get-track-collection-list: func(params: get-track-collection-list-params) -> result<string, string>;
+  get-track-collection-list: func(params: get-track-collection-list-params) -> result<collection-data-list, get-track-collection-list-error>;
 
   /// Create audio collections
   record create-track-collection-params {
     /// The name of the collection
     name: string
   }
-  create-track-collection: func(params: create-track-collection-params) -> result<string, string>;
+  create-track-collection: func(params: create-track-collection-params) -> result<collection-create-response, create-track-collection-error>;
 
   /// Get the details of audio collections
   record get-track-collection-params {
@@ -318,7 +937,7 @@ interface audio {
     /// Code to retrieve a shared collection
     share-code: option<string>
   }
-  get-track-collection: func(params: get-track-collection-params) -> result<string, string>;
+  get-track-collection: func(params: get-track-collection-params) -> result<collection, get-track-collection-error>;
 
   /// Rename audio collections
   record rename-track-collection-params {
@@ -327,14 +946,14 @@ interface audio {
     /// The new name of the collection
     name: string
   }
-  rename-track-collection: func(params: rename-track-collection-params) -> result<string, string>;
+  rename-track-collection: func(params: rename-track-collection-params) -> result<string, rename-track-collection-error>;
 
   /// Delete audio collections
   record delete-track-collection-params {
     /// Collection ID
     id: string
   }
-  delete-track-collection: func(params: delete-track-collection-params) -> result<string, string>;
+  delete-track-collection: func(params: delete-track-collection-params) -> result<string, delete-track-collection-error>;
 
   /// Get the contents of audio collections
   record get-track-collection-items-params {
@@ -349,7 +968,7 @@ interface audio {
     /// Sort order
     sort: option<get-track-collection-items-sort-enum>
   }
-  get-track-collection-items: func(params: get-track-collection-items-params) -> result<string, string>;
+  get-track-collection-items: func(params: get-track-collection-items-params) -> result<collection-item-data-list, get-track-collection-items-error>;
 
   /// Add audio tracks to collections
   record add-track-collection-items-params {
@@ -358,7 +977,7 @@ interface audio {
     /// List of items
     items: list<collection-item>
   }
-  add-track-collection-items: func(params: add-track-collection-items-params) -> result<string, string>;
+  add-track-collection-items: func(params: add-track-collection-items-params) -> result<string, add-track-collection-items-error>;
 
   /// Remove audio tracks from collections
   record delete-track-collection-items-params {
@@ -367,21 +986,21 @@ interface audio {
     /// One or more item IDs to remove from the collection
     item-id: option<list<string>>
   }
-  delete-track-collection-items: func(params: delete-track-collection-items-params) -> result<string, string>;
+  delete-track-collection-items: func(params: delete-track-collection-items-params) -> result<string, delete-track-collection-items-error>;
 
   /// List audio genres
   record list-genres-params {
     /// Which language the genres will be returned
     language: option<string>
   }
-  list-genres: func(params: list-genres-params) -> result<string, string>;
+  list-genres: func(params: list-genres-params) -> result<genre-list, string>;
 
   /// List audio instruments
   record list-instruments-params {
     /// Which language the instruments will be returned in
     language: option<string>
   }
-  list-instruments: func(params: list-instruments-params) -> result<string, string>;
+  list-instruments: func(params: list-instruments-params) -> result<instrument-list, string>;
 
   /// List audio licenses
   record get-track-license-list-params {
@@ -406,7 +1025,7 @@ interface audio {
     /// Set to true to see license history for all members of your team.
     team-history: option<bool>
   }
-  get-track-license-list: func(params: get-track-license-list-params) -> result<string, string>;
+  get-track-license-list: func(params: get-track-license-list-params) -> result<download-history-data-list, get-track-license-list-error>;
 
   /// License audio tracks
   record license-track-params {
@@ -417,21 +1036,21 @@ interface audio {
     /// List of audio tracks to license
     audio: list<license-audio>
   }
-  license-track: func(params: license-track-params) -> result<string, string>;
+  license-track: func(params: license-track-params) -> result<license-audio-result-data-list, license-track-error>;
 
   /// Download audio tracks
   record download-tracks-params {
     /// License ID
     id: string
   }
-  download-tracks: func(params: download-tracks-params) -> result<string, string>;
+  download-tracks: func(params: download-tracks-params) -> result<url, download-tracks-error>;
 
   /// List audio moods
   record list-moods-params {
     /// Which language the moods will be returned in
     language: option<string>
   }
-  list-moods: func(params: list-moods-params) -> result<string, string>;
+  list-moods: func(params: list-moods-params) -> result<mood-list, string>;
 
   /// Search for tracks
   record search-tracks-params {
@@ -478,7 +1097,7 @@ interface audio {
     /// Which language to search in
     language: option<string>
   }
-  search-tracks: func(params: search-tracks-params) -> result<string, string>;
+  search-tracks: func(params: search-tracks-params) -> result<search-results, search-tracks-error>;
 
   /// Get details about audio tracks
   record get-track-params {
@@ -489,7 +1108,7 @@ interface audio {
     /// The ID of the search that is related to this request
     search-id: option<string>
   }
-  get-track: func(params: get-track-params) -> result<string, string>;
+  get-track: func(params: get-track-params) -> result<audio, get-track-error>;
 
 }
 
@@ -653,6 +1272,255 @@ interface images {
     value: string
   }
 
+  /// List of search results for each given query
+  record bulk-image-search-results {
+    /// Unique identifier for the search request
+    bulk-search-id: option<string>,
+    /// List of image search results
+    results: option<list<image-search-results>>
+  }
+
+  /// Image search results
+  record image-search-results {
+    /// List of images
+    data: list<image>,
+    insights: option<insights>,
+    /// Server-generated message, if any
+    message: option<string>,
+    /// Current page that is returned
+    page: option<s32>,
+    /// Number of results per page
+    per-page: option<s32>,
+    /// Unique identifier for the search request
+    search-id: string,
+    /// Returns information if search phrase has potentially been mistyped or another query would lead to better search results
+    spellcheck-info: option<image-search-results-spellcheck-info>,
+    /// Total count of all results across all pages
+    total-count: s32
+  }
+
+  /// Information about an image
+  record image {
+    /// Date that the image was added by the contributor
+    added-date: option<string>,
+    /// Affiliate referral link; appears only for registered affiliate partners
+    affiliate-url: option<string>,
+    /// Aspect ratio of the image in decimal format, such as 0.6667
+    aspect: option<f64>,
+    assets: option<image-assets>,
+    /// Categories that this image is a part of
+    categories: option<list<category>>,
+    contributor: contributor,
+    /// Detailed description of the image
+    description: option<string>,
+    /// Indicates whether there are model releases for the image
+    has-model-release: option<bool>,
+    /// Indicates whether there are property releases for the image
+    has-property-release: option<bool>,
+    /// Image ID
+    id: string,
+    /// Type of image
+    image-type: option<string>,
+    /// AI-powered insights about how the asset will perform for the objective and audience
+    insights: option<image-insights>,
+    /// Whether or not this image contains adult content
+    is-adult: option<bool>,
+    /// Whether or not this image is editorial content
+    is-editorial: option<bool>,
+    /// Whether or not this image is an illustration
+    is-illustration: option<bool>,
+    /// Keywords associated with the content of this image
+    keywords: option<list<string>>,
+    /// Media type of this image, should always be "image"
+    media-type: string,
+    /// List of model releases
+    model-releases: option<list<model-release>>,
+    /// List of models
+    models: option<list<model>>,
+    /// List of all releases of this image
+    releases: option<list<string>>,
+    /// Link to image information page; included only for certain accounts
+    url: option<string>
+  }
+
+  /// Information about the assets that are part of an image
+  record image-assets {
+    huge-jpg: option<image-size-details>,
+    huge-thumb: option<thumbnail>,
+    large-thumb: option<thumbnail>,
+    medium-jpg: option<image-size-details>,
+    preview: option<thumbnail>,
+    preview-v1000: option<thumbnail>,
+    preview-v1500: option<thumbnail>,
+    small-jpg: option<image-size-details>,
+    small-thumb: option<thumbnail>,
+    supersize-jpg: option<image-size-details>,
+    vector-eps: option<image-size-details>
+  }
+
+  /// Image size information
+  record image-size-details {
+    /// Display name of this image size
+    display-name: option<string>,
+    dpi: option<s32>,
+    /// File size (in bytes) of this image size
+    file-size: option<s32>,
+    /// Format of this image size
+    format: option<string>,
+    /// Height of this image size
+    height: option<s32>,
+    /// Whether or not this image can be licensed in this image size
+    is-licensable: option<bool>,
+    /// Width of this image size
+    width: option<s32>
+  }
+
+  /// Image thumbnail information
+  record thumbnail {
+    /// Height in pixels of the image thumbnail
+    height: s32,
+    /// Direct URL to the image
+    url: string,
+    /// Width in pixels of the image thumbnail
+    width: s32
+  }
+
+  /// Category information
+  record category {
+    /// Category ID
+    id: option<string>,
+    /// Category name
+    name: option<string>
+  }
+
+  /// Information about a contributor
+  record contributor {
+    /// ID of the contributor
+    id: string
+  }
+
+  /// AI-powered insights about how the asset will perform for the objective and audience
+  record image-insights {
+    labels: option<list<string>>
+  }
+
+  /// Model and property release metadata
+  record model-release {
+    /// ID of the model or property release
+    id: option<string>
+  }
+
+  /// Information about a human model or property that appears in media; used to search for assets that this model is in
+  record model {
+    /// ID of the model
+    id: string
+  }
+
+  /// AI-powered insights about an asset, based on the specified audience and objective
+  record insights {
+    /// How effective the AI thinks an asset in the category is for the specified audience and objective, expressed as a percentile compared to other images
+    label-performance: list<insights-label-performance-item>
+  }
+
+  record insights-label-performance-item {
+    name: option<string>,
+    percentile-performance: option<f64>
+  }
+
+  /// Returns information if search phrase has potentially been mistyped or another query would lead to better search results
+  record image-search-results-spellcheck-info {
+    /// JSON-encoded free-form object payload
+    data: option<string>
+  }
+
+  /// List of images
+  record image-data-list {
+    /// Images
+    data: option<list<image>>,
+    /// Error list; appears only if there was an error
+    errors: option<list<error>>,
+    /// Server-generated message, if any
+    message: option<string>,
+    /// Current page that is returned
+    page: option<s32>,
+    /// Number of results per page
+    per-page: option<s32>,
+    /// Total count of all results across all pages
+    total-count: option<s32>
+  }
+
+  /// Error object
+  record error {
+    /// The error code of this error
+    code: option<string>,
+    /// Debugging information about the error
+    data: option<string>,
+    /// A list of items that produced the error
+    items: option<list<error-items-item>>,
+    /// Specific details about this error
+    message: string,
+    /// Internal code reference to the source of the error
+    path: option<string>
+  }
+
+  record error-items-item {
+    /// JSON-encoded free-form object payload
+    data: option<string>
+  }
+
+  /// List of categories that images can belong to
+  record category-data-list {
+    /// Categories
+    data: option<list<category>>,
+    /// Error list; appears only if there was an error
+    errors: option<list<error>>,
+    /// Server-generated message, if any
+    message: option<string>,
+    /// The current page of results
+    page: option<s32>,
+    /// The number of results per page
+    per-page: option<s32>,
+    /// The total number of results across all pages
+    total-count: option<s32>
+  }
+
+  /// List of collections
+  record collection-data-list {
+    /// Collections
+    data: option<list<collection>>,
+    /// Error list; appears only if there was an error
+    errors: option<list<error>>,
+    /// Server-generated message, if any
+    message: option<string>,
+    /// The current page of results
+    page: option<s32>,
+    /// The number of results per page
+    per-page: option<s32>,
+    /// The total number of results across all pages
+    total-count: option<s32>
+  }
+
+  /// Metadata about a collection of assets
+  record collection {
+    cover-item: option<collection-item>,
+    /// When the collection was created
+    created-time: option<string>,
+    /// The collection ID
+    id: string,
+    /// The last time this collection's items were updated
+    items-updated-time: option<string>,
+    /// The name of the collection
+    name: string,
+    /// A code that can be used to share the collection (optional)
+    share-code: option<string>,
+    /// The browser URL that can be used to share the collection (optional)
+    share-url: option<string>,
+    /// The number of items in the collection
+    total-item-count: s32,
+    /// The last time the collection was update (other than changes to the items in it)
+    updated-time: option<string>
+  }
+
   /// Metadata about an item that is part of a collection
   record collection-item {
     /// The date the item was added to the collection
@@ -663,12 +1531,421 @@ interface images {
     media-type: option<string>
   }
 
+  /// Collection creation response
+  record collection-create-response {
+    /// ID of the new collection
+    id: string
+  }
+
+  /// List of featured collections
+  record featured-collection-data-list {
+    /// Featured collections
+    data: option<list<featured-collection>>,
+    /// Error list; appears only if there was an error
+    errors: option<list<error>>,
+    /// Server-generated message, if any
+    message: option<string>,
+    /// Current page that is returned
+    page: option<s32>,
+    /// Number of results per page
+    per-page: option<s32>,
+    /// Total count of all results across all pages
+    total-count: option<s32>
+  }
+
+  /// Metadata about a featured collection
+  record featured-collection {
+    cover-item: option<featured-collection-cover-item>,
+    /// Date that the collection was created
+    created-time: option<string>,
+    hero-item: option<featured-collection-cover-item>,
+    /// Collection ID
+    id: string,
+    /// Date that an item in the collection was last added or removed
+    items-updated-time: option<string>,
+    /// Name of the collection
+    name: string,
+    /// Unique share url for the collection
+    share-url: option<string>,
+    /// Total number of items in the collection
+    total-item-count: s32,
+    /// Date that the collection was last modified
+    updated-time: option<string>
+  }
+
+  /// Featured collection cover item metadata
+  record featured-collection-cover-item {
+    /// URL of the collection cover item
+    url: string
+  }
+
+  /// List of items in a collection
+  record collection-item-data-list {
+    /// Assets in the collection
+    data: option<list<collection-item>>,
+    /// Error list; appears only if there was an error
+    errors: option<list<error>>,
+    /// Server-generated message, if any
+    message: option<string>,
+    /// The current page of results
+    page: option<s32>,
+    /// The number of results per page
+    per-page: option<s32>,
+    /// The total number of results across all pages
+    total-count: option<s32>
+  }
+
+  /// List of download events
+  record download-history-data-list {
+    /// Download events
+    data: option<list<download-history>>,
+    /// Error list; appears only if there was an error
+    errors: option<list<error>>,
+    /// Server-generated message, if any
+    message: option<string>,
+    /// The current page of results
+    page: option<s32>,
+    /// The number of results per page
+    per-page: option<s32>,
+    /// The total number of results across all pages
+    total-count: option<s32>
+  }
+
+  /// Information about a downloaded media item. Applicable for all media types, only one of 'audio', 'image' or 'video' will be in a single DownloadHistory object
+  record download-history {
+    audio: option<download-history-media-details>,
+    /// Date the media was downloaded the first time
+    download-time: string,
+    /// ID of the download
+    id: string,
+    image: option<download-history-media-details>,
+    /// Specifies if the media is downloadable via its respective downloads endpoint
+    is-downloadable: option<bool>,
+    /// The name of the license of this download
+    license: string,
+    /// The metadata that was passed in the original licensing request
+    metadata: option<download-history-metadata>,
+    revshare: option<download-history-revshare-details>,
+    /// ID of the subscription used to perform this download
+    subscription-id: option<string>,
+    user: option<download-history-user-details>,
+    video: option<download-history-media-details>
+  }
+
+  /// Information about the downloaded media
+  record download-history-media-details {
+    format: option<download-history-format-details>,
+    /// ID of the download history media details
+    id: string
+  }
+
+  /// Information about the format of a download
+  record download-history-format-details {
+    /// The format of the downloaded media
+    format: option<string>,
+    /// The size of the downloaded media
+    size: option<string>
+  }
+
+  /// The metadata that was passed in the original licensing request
+  record download-history-metadata {
+    /// JSON-encoded free-form object payload
+    data: option<string>
+  }
+
+  /// Pricing information for revenue-sharing transactions
+  record download-history-revshare-details {
+    /// The amount charged for the license
+    purchase-amount: string,
+    /// The currency the amount was charged in
+    purchase-currency: string
+  }
+
+  /// Information about a user
+  record download-history-user-details {
+    /// The name of the user who downloaded the item
+    username: string
+  }
+
+  /// List of information about licensed images
+  record license-image-result-data-list {
+    /// License results
+    data: option<list<license-image-result>>,
+    /// Error list; appears only if there was an error
+    errors: option<list<error>>,
+    /// Server-generated message, if any
+    message: option<string>,
+    /// Current page that is returned
+    page: option<s32>,
+    /// Number of results per page
+    per-page: option<s32>,
+    /// Total count of all results across all pages
+    total-count: option<s32>
+  }
+
+  /// The response to a licensing request for an image
+  record license-image-result {
+    /// Number of credits that this licensing event used
+    allotment-charge: option<s32>,
+    download: option<url>,
+    /// Error message, appears only if there was an error
+    error: option<string>,
+    /// Image ID that was licensed
+    image-id: string,
+    /// ID of the license event
+    license-id: option<string>,
+    price: option<price>
+  }
+
+  /// URL object
+  record url {
+    /// URL that can be used to download the unwatermarked, licensed asset
+    url: string
+  }
+
+  /// Price
+  record price {
+    /// Floating-point amount of the calculated rev-share price in the currency local_currency
+    local-amount: option<f64>,
+    /// Currency of the rev-share price that was calculated
+    local-currency: option<string>
+  }
+
   /// Cookie object
   record cookie {
     /// The name of the cookie
     name: string,
     /// The value of the cookie
     value: string
+  }
+
+  /// List of recommended images
+  record recommendation-data-list {
+    /// Recommended images
+    data: option<list<recommendation>>,
+    /// Error list; appears only if there was an error
+    errors: option<list<error>>,
+    /// Server-generated message, if any
+    message: option<string>,
+    /// Current page that is returned
+    page: option<s32>,
+    /// Number of results per page
+    per-page: option<s32>,
+    /// Total count of all results across all pages
+    total-count: option<s32>
+  }
+
+  /// Media Recommendation
+  record recommendation {
+    /// Media ID
+    id: string
+  }
+
+  /// List of search suggestions
+  record suggestions {
+    /// Search suggestions
+    data: option<list<string>>
+  }
+
+  /// The response to a request for keyword analysis
+  record search-entities-response {
+    /// The top keywords from the submitted text
+    keywords: option<list<string>>
+  }
+
+  /// List of updated media
+  record updated-media-data-list {
+    /// Updated media items
+    data: option<list<updated-media>>,
+    /// Error list; appears only if there was an error
+    errors: option<list<error>>,
+    /// Server-generated message, if any
+    message: option<string>,
+    /// Current page that is returned
+    page: option<s32>,
+    /// Number of results per page
+    per-page: option<s32>,
+    /// Total count of all results across all pages
+    total-count: option<s32>
+  }
+
+  /// Information about a piece of updated media
+  record updated-media {
+    /// ID of the media
+    id: string,
+    /// Date that the media was updated
+    updated-time: string,
+    /// Types of updates that were made to the piece of media
+    updates: list<string>
+  }
+
+  variant bulk-search-images-error {
+    bad-request(string),
+    unauthorized(string),
+    forbidden(string),
+    other(string)
+  }
+
+  variant get-image-list-error {
+    bad-request(string),
+    unauthorized(string),
+    forbidden(string),
+    other(string)
+  }
+
+  variant list-image-categories-error {
+    bad-request(string),
+    unauthorized(string),
+    forbidden(string),
+    other(string)
+  }
+
+  variant get-image-collection-list-error {
+    bad-request(string),
+    unauthorized(string),
+    forbidden(string),
+    other(string)
+  }
+
+  variant create-image-collection-error {
+    bad-request(string),
+    unauthorized(string),
+    forbidden(string),
+    other(string)
+  }
+
+  variant get-featured-image-collection-list-error {
+    bad-request(string),
+    unauthorized(string),
+    forbidden(string),
+    other(string)
+  }
+
+  variant get-featured-image-collection-error {
+    bad-request(string),
+    unauthorized(string),
+    forbidden(string),
+    not-found(string),
+    other(string)
+  }
+
+  variant get-featured-image-collection-items-error {
+    bad-request(string),
+    unauthorized(string),
+    forbidden(string),
+    not-found(string),
+    other(string)
+  }
+
+  variant get-image-collection-error {
+    bad-request(string),
+    unauthorized(string),
+    forbidden(string),
+    not-found(string),
+    other(string)
+  }
+
+  variant rename-image-collection-error {
+    bad-request(string),
+    unauthorized(string),
+    forbidden(string),
+    not-found(string),
+    other(string)
+  }
+
+  variant delete-image-collection-error {
+    bad-request(string),
+    unauthorized(string),
+    forbidden(string),
+    not-found(string),
+    other(string)
+  }
+
+  variant get-image-collection-items-error {
+    bad-request(string),
+    unauthorized(string),
+    forbidden(string),
+    not-found(string),
+    other(string)
+  }
+
+  variant add-image-collection-items-error {
+    bad-request(string),
+    unauthorized(string),
+    forbidden(string),
+    not-found(string),
+    other(string)
+  }
+
+  variant delete-image-collection-items-error {
+    bad-request(string),
+    unauthorized(string),
+    forbidden(string),
+    not-found(string),
+    other(string)
+  }
+
+  variant get-image-license-list-error {
+    bad-request(string),
+    unauthorized(string),
+    forbidden(string),
+    other(string)
+  }
+
+  variant license-images-error {
+    bad-request(string),
+    unauthorized(string),
+    forbidden(string),
+    other(string)
+  }
+
+  variant download-image-error {
+    bad-request(string),
+    unauthorized(string),
+    forbidden(string),
+    other(string)
+  }
+
+  variant get-image-recommendations-error {
+    bad-request(string),
+    unauthorized(string),
+    forbidden(string),
+    other(string)
+  }
+
+  variant search-images-error {
+    bad-request(string),
+    unauthorized(string),
+    forbidden(string),
+    other(string)
+  }
+
+  variant get-image-suggestions-error {
+    bad-request(string),
+    unauthorized(string),
+    forbidden(string),
+    other(string)
+  }
+
+  variant get-image-keyword-suggestions-error {
+    bad-request(string),
+    unauthorized(string),
+    forbidden(string),
+    other(string)
+  }
+
+  variant get-image-error {
+    bad-request(string),
+    unauthorized(string),
+    forbidden(string),
+    other(string)
+  }
+
+  variant list-similar-images-error {
+    bad-request(string),
+    unauthorized(string),
+    forbidden(string),
+    other(string)
   }
 
   /// Run multiple image searches
@@ -746,7 +2023,7 @@ interface images {
     /// opaque schema; raw JSON
     value: string
   }
-  bulk-search-images: func(params: bulk-search-images-params) -> result<string, string>;
+  bulk-search-images: func(params: bulk-search-images-params) -> result<bulk-image-search-results, bulk-search-images-error>;
 
   /// List images
   record get-image-list-params {
@@ -757,14 +2034,14 @@ interface images {
     /// The ID of the search that is related to this request
     search-id: option<string>
   }
-  get-image-list: func(params: get-image-list-params) -> result<string, string>;
+  get-image-list: func(params: get-image-list-params) -> result<image-data-list, get-image-list-error>;
 
   /// List image categories
   record list-image-categories-params {
     /// Language for the keywords and categories in the response
     language: option<language>
   }
-  list-image-categories: func(params: list-image-categories-params) -> result<string, string>;
+  list-image-categories: func(params: list-image-categories-params) -> result<category-data-list, list-image-categories-error>;
 
   /// List image collections
   record get-image-collection-list-params {
@@ -775,14 +2052,14 @@ interface images {
     /// Number of results per page
     per-page: option<s32>
   }
-  get-image-collection-list: func(params: get-image-collection-list-params) -> result<string, string>;
+  get-image-collection-list: func(params: get-image-collection-list-params) -> result<collection-data-list, get-image-collection-list-error>;
 
   /// Create image collections
   record create-image-collection-params {
     /// The name of the collection
     name: string
   }
-  create-image-collection: func(params: create-image-collection-params) -> result<string, string>;
+  create-image-collection: func(params: create-image-collection-params) -> result<collection-create-response, create-image-collection-error>;
 
   /// List featured image collections
   record get-featured-image-collection-list-params {
@@ -793,7 +2070,7 @@ interface images {
     /// Cover image size
     asset-hint: option<get-featured-image-collection-list-asset-hint-enum>
   }
-  get-featured-image-collection-list: func(params: get-featured-image-collection-list-params) -> result<string, string>;
+  get-featured-image-collection-list: func(params: get-featured-image-collection-list-params) -> result<featured-collection-data-list, get-featured-image-collection-list-error>;
 
   /// Get the details of featured image collections
   record get-featured-image-collection-params {
@@ -804,7 +2081,7 @@ interface images {
     /// Cover image size
     asset-hint: option<get-featured-image-collection-list-asset-hint-enum>
   }
-  get-featured-image-collection: func(params: get-featured-image-collection-params) -> result<string, string>;
+  get-featured-image-collection: func(params: get-featured-image-collection-params) -> result<featured-collection, get-featured-image-collection-error>;
 
   /// Get the contents of featured image collections
   record get-featured-image-collection-items-params {
@@ -815,7 +2092,7 @@ interface images {
     /// Number of results per page
     per-page: option<s32>
   }
-  get-featured-image-collection-items: func(params: get-featured-image-collection-items-params) -> result<string, string>;
+  get-featured-image-collection-items: func(params: get-featured-image-collection-items-params) -> result<collection-item-data-list, get-featured-image-collection-items-error>;
 
   /// Get the details of image collections
   record get-image-collection-params {
@@ -826,7 +2103,7 @@ interface images {
     /// Code to retrieve a shared collection
     share-code: option<string>
   }
-  get-image-collection: func(params: get-image-collection-params) -> result<string, string>;
+  get-image-collection: func(params: get-image-collection-params) -> result<collection, get-image-collection-error>;
 
   /// Rename image collections
   record rename-image-collection-params {
@@ -835,14 +2112,14 @@ interface images {
     /// The new name of the collection
     name: string
   }
-  rename-image-collection: func(params: rename-image-collection-params) -> result<string, string>;
+  rename-image-collection: func(params: rename-image-collection-params) -> result<string, rename-image-collection-error>;
 
   /// Delete image collections
   record delete-image-collection-params {
     /// Collection ID
     id: string
   }
-  delete-image-collection: func(params: delete-image-collection-params) -> result<string, string>;
+  delete-image-collection: func(params: delete-image-collection-params) -> result<string, delete-image-collection-error>;
 
   /// Get the contents of image collections
   record get-image-collection-items-params {
@@ -857,7 +2134,7 @@ interface images {
     /// Sort order
     sort: option<get-image-collection-items-sort-enum>
   }
-  get-image-collection-items: func(params: get-image-collection-items-params) -> result<string, string>;
+  get-image-collection-items: func(params: get-image-collection-items-params) -> result<collection-item-data-list, get-image-collection-items-error>;
 
   /// Add images to collections
   record add-image-collection-items-params {
@@ -866,7 +2143,7 @@ interface images {
     /// List of items
     items: list<collection-item>
   }
-  add-image-collection-items: func(params: add-image-collection-items-params) -> result<string, string>;
+  add-image-collection-items: func(params: add-image-collection-items-params) -> result<string, add-image-collection-items-error>;
 
   /// Remove images from collections
   record delete-image-collection-items-params {
@@ -875,7 +2152,7 @@ interface images {
     /// One or more image IDs to remove from the collection
     item-id: option<list<string>>
   }
-  delete-image-collection-items: func(params: delete-image-collection-items-params) -> result<string, string>;
+  delete-image-collection-items: func(params: delete-image-collection-items-params) -> result<string, delete-image-collection-items-error>;
 
   /// List image licenses
   record get-image-license-list-params {
@@ -900,7 +2177,7 @@ interface images {
     /// Set to true to see license history for all members of your team.
     team-history: option<bool>
   }
-  get-image-license-list: func(params: get-image-license-list-params) -> result<string, string>;
+  get-image-license-list: func(params: get-image-license-list-params) -> result<download-history-data-list, get-image-license-list-error>;
 
   /// License images
   record license-images-params {
@@ -915,7 +2192,7 @@ interface images {
     /// Images to create licenses for
     images: list<string>
   }
-  license-images: func(params: license-images-params) -> result<string, string>;
+  license-images: func(params: license-images-params) -> result<license-image-result-data-list, license-images-error>;
 
   /// Download images
   record download-image-params {
@@ -929,7 +2206,7 @@ interface images {
     /// (Deprecated)
     verification-code: option<string>
   }
-  download-image: func(params: download-image-params) -> result<string, string>;
+  download-image: func(params: download-image-params) -> result<url, download-image-error>;
 
   /// List recommended images
   record get-image-recommendations-params {
@@ -940,7 +2217,7 @@ interface images {
     /// Restrict results to safe images
     safe: option<bool>
   }
-  get-image-recommendations: func(params: get-image-recommendations-params) -> result<string, string>;
+  get-image-recommendations: func(params: get-image-recommendations-params) -> result<recommendation-data-list, get-image-recommendations-error>;
 
   /// Search for images
   record search-images-params {
@@ -1025,7 +2302,7 @@ interface images {
     /// Show images with the specified width or smaller, in pixels
     width-to: option<s32>
   }
-  search-images: func(params: search-images-params) -> result<string, string>;
+  search-images: func(params: search-images-params) -> result<image-search-results, search-images-error>;
 
   /// Get suggestions for a search term
   record get-image-suggestions-params {
@@ -1034,14 +2311,14 @@ interface images {
     /// Limit the number of suggestions
     limit: option<s32>
   }
-  get-image-suggestions: func(params: get-image-suggestions-params) -> result<string, string>;
+  get-image-suggestions: func(params: get-image-suggestions-params) -> result<suggestions, get-image-suggestions-error>;
 
   /// Get keywords from text
   record get-image-keyword-suggestions-params {
     /// Plain text to extract keywords from
     text: string
   }
-  get-image-keyword-suggestions: func(params: get-image-keyword-suggestions-params) -> result<string, string>;
+  get-image-keyword-suggestions: func(params: get-image-keyword-suggestions-params) -> result<search-entities-response, get-image-keyword-suggestions-error>;
 
   /// List updated images
   record get-updated-images-params {
@@ -1060,7 +2337,7 @@ interface images {
     /// Sort order
     sort: option<get-image-collection-items-sort-enum>
   }
-  get-updated-images: func(params: get-updated-images-params) -> result<string, string>;
+  get-updated-images: func(params: get-updated-images-params) -> result<updated-media-data-list, string>;
 
   /// Get details about images
   record get-image-params {
@@ -1073,7 +2350,7 @@ interface images {
     /// The ID of the search that is related to this request
     search-id: option<string>
   }
-  get-image: func(params: get-image-params) -> result<string, string>;
+  get-image: func(params: get-image-params) -> result<image, get-image-error>;
 
   /// List similar images
   record list-similar-images-params {
@@ -1088,7 +2365,7 @@ interface images {
     /// Amount of detail to render in the response
     view: option<bulk-search-images-view-enum>
   }
-  list-similar-images: func(params: list-similar-images-params) -> result<string, string>;
+  list-similar-images: func(params: list-similar-images-params) -> result<image-search-results, list-similar-images-error>;
 
 }
 
@@ -1098,7 +2375,19 @@ interface catalog {
     oldest,
   }
 
-  enum create-catalog-collection-visibility-enum {
+  enum collection-item-asset-type-op-enum {
+    image,
+    video,
+    audio,
+    editorial-image,
+    editorial-video,
+  }
+
+  enum collection-role-type-op-enum {
+    user,
+  }
+
+  enum collection-visibility-enum {
     private,
     public,
   }
@@ -1110,6 +2399,61 @@ interface catalog {
     elements,
     editorial-image,
     editorial-video,
+  }
+
+  /// List of catalog collections
+  record collection-data-list {
+    /// List of catalog collections
+    data: list<collection>,
+    page: f64,
+    per-page: f64,
+    total-count: f64
+  }
+
+  /// Catalog collection
+  record collection {
+    cover-asset: option<collection-item>,
+    created-time: string,
+    id: string,
+    name: string,
+    role-assignments: collection-role-assignments,
+    total-item-count: f64,
+    updated-time: string,
+    visibility: collection-visibility-enum
+  }
+
+  /// Metadata about an item that is part of a collection
+  record collection-item {
+    asset: collection-item-asset,
+    /// The collection IDs that this asset belongs to
+    collection-ids: option<list<string>>,
+    created-time: string,
+    id: string
+  }
+
+  record collection-item-asset {
+    id: option<string>,
+    name: option<string>,
+    type-op: collection-item-asset-type-op-enum
+  }
+
+  /// List of role assignments for a catalog collection
+  record collection-role-assignments {
+    collection-id: string,
+    roles: collection-role-assignments-roles
+  }
+
+  record collection-role-assignments-roles {
+    editors: option<list<collection-role>>,
+    owners: option<list<collection-role>>,
+    viewers: option<list<collection-role>>
+  }
+
+  /// A user that has access to a catalog collection
+  record collection-role {
+    email: string,
+    id: string,
+    type-op: collection-role-type-op-enum
   }
 
   record create-catalog-collection-item {
@@ -1129,6 +2473,32 @@ interface catalog {
     id: string
   }
 
+  /// List of catalog collection items
+  record collection-item-data-list {
+    /// List of catalog collection items
+    data: list<collection-item>,
+    page: f64,
+    per-page: f64,
+    total-count: f64
+  }
+
+  variant get-collections-error {
+    bad-request(string),
+    other(string)
+  }
+
+  variant delete-collection-error {
+    not-found(string),
+    other(string)
+  }
+
+  variant search-catalog-error {
+    bad-request(string),
+    unauthorized(string),
+    forbidden(string),
+    other(string)
+  }
+
   /// List catalog collections
   record get-collections-params {
     /// Page number
@@ -1140,15 +2510,15 @@ interface catalog {
     /// Set to true to omit collections that you own and return only collections  that are shared with you
     shared: option<bool>
   }
-  get-collections: func(params: get-collections-params) -> result<string, string>;
+  get-collections: func(params: get-collections-params) -> result<collection-data-list, get-collections-error>;
 
   /// Create catalog collections
   record create-collection-params {
     items: option<list<create-catalog-collection-item>>,
     name: string,
-    visibility: option<create-catalog-collection-visibility-enum>
+    visibility: option<collection-visibility-enum>
   }
-  create-collection: func(params: create-collection-params) -> result<string, string>;
+  create-collection: func(params: create-collection-params) -> result<collection, string>;
 
   /// Update collection metadata
   record update-collection-params {
@@ -1156,16 +2526,16 @@ interface catalog {
     collection-id: string,
     cover-asset: option<update-catalog-collection-cover-asset>,
     name: option<string>,
-    visibility: option<create-catalog-collection-visibility-enum>
+    visibility: option<collection-visibility-enum>
   }
-  update-collection: func(params: update-collection-params) -> result<string, string>;
+  update-collection: func(params: update-collection-params) -> result<collection, string>;
 
   /// Delete catalog collections
   record delete-collection-params {
     /// The ID of the collection to delete
     collection-id: string
   }
-  delete-collection: func(params: delete-collection-params) -> result<string, string>;
+  delete-collection: func(params: delete-collection-params) -> result<string, delete-collection-error>;
 
   /// Add items to catalog collections
   record add-to-collection-params {
@@ -1173,7 +2543,7 @@ interface catalog {
     collection-id: string,
     items: list<create-catalog-collection-item>
   }
-  add-to-collection: func(params: add-to-collection-params) -> result<string, string>;
+  add-to-collection: func(params: add-to-collection-params) -> result<collection, string>;
 
   /// Remove items from catalog collection
   record delete-from-collection-params {
@@ -1181,7 +2551,7 @@ interface catalog {
     collection-id: string,
     items: list<remove-catalog-collection-item>
   }
-  delete-from-collection: func(params: delete-from-collection-params) -> result<string, string>;
+  delete-from-collection: func(params: delete-from-collection-params) -> result<collection, string>;
 
   /// Search catalogs for assets
   record search-catalog-params {
@@ -1198,7 +2568,7 @@ interface catalog {
     /// Filter by asset type
     asset-type: option<list<search-catalog-asset-type-item-enum>>
   }
-  search-catalog: func(params: search-catalog-params) -> result<string, string>;
+  search-catalog: func(params: search-catalog-params) -> result<collection-item-data-list, search-catalog-error>;
 
 }
 
@@ -1214,19 +2584,196 @@ interface contributors {
     oldest,
   }
 
+  /// List of contributor profiles
+  record contributor-profile-data-list {
+    /// Conributor profiles
+    data: option<list<contributor-profile>>,
+    /// Error list; appears only if there was an error
+    errors: option<list<error>>,
+    /// Error message
+    message: option<string>,
+    /// Page of response
+    page: option<s32>,
+    /// Number of contributors per page
+    per-page: option<s32>,
+    /// Total count of contributors for this request
+    total-count: option<s32>
+  }
+
+  /// Contributor profile data
+  record contributor-profile {
+    /// Short description of the contributors' library
+    about: option<string>,
+    /// Type of content that the contributor specializes in (photographer, illustrator, etc)
+    contributor-type: option<list<string>>,
+    /// Preferred name to be displayed for the contributor
+    display-name: option<string>,
+    /// List of equipment used by the contributor (Canon EOS 5D Mark II, etc)
+    equipment: option<list<string>>,
+    /// Contributor ID
+    id: string,
+    /// Country code representing the contributor's locale
+    location: option<string>,
+    /// Web URL for the contributors' profile
+    portfolio-url: option<string>,
+    social-media: option<contributor-profile-social-media>,
+    /// List of styles that the contributor specializes in (lifestyle, mixed media, etc)
+    styles: option<list<string>>,
+    /// Generic list of subjects for contributors' work (food_and_drink, holiday, people, etc)
+    subjects: option<list<string>>,
+    /// Personal website for the contributor
+    website: option<string>
+  }
+
+  /// Contributor profile social media links
+  record contributor-profile-social-media {
+    /// Facebook link for contributor
+    facebook: option<string>,
+    /// Google+ link for contributor
+    google-plus: option<string>,
+    /// LinkedIn link for contributor
+    linkedin: option<string>,
+    /// Pinterest page for contributor
+    pinterest: option<string>,
+    /// Tumblr link for contributor
+    tumblr: option<string>,
+    /// Twitter link for contributor
+    twitter: option<string>
+  }
+
+  /// Error object
+  record error {
+    /// The error code of this error
+    code: option<string>,
+    /// Debugging information about the error
+    data: option<string>,
+    /// A list of items that produced the error
+    items: option<list<error-items-item>>,
+    /// Specific details about this error
+    message: string,
+    /// Internal code reference to the source of the error
+    path: option<string>
+  }
+
+  record error-items-item {
+    /// JSON-encoded free-form object payload
+    data: option<string>
+  }
+
+  /// List of collections
+  record collection-data-list {
+    /// Collections
+    data: option<list<collection>>,
+    /// Error list; appears only if there was an error
+    errors: option<list<error>>,
+    /// Server-generated message, if any
+    message: option<string>,
+    /// The current page of results
+    page: option<s32>,
+    /// The number of results per page
+    per-page: option<s32>,
+    /// The total number of results across all pages
+    total-count: option<s32>
+  }
+
+  /// Metadata about a collection of assets
+  record collection {
+    cover-item: option<collection-item>,
+    /// When the collection was created
+    created-time: option<string>,
+    /// The collection ID
+    id: string,
+    /// The last time this collection's items were updated
+    items-updated-time: option<string>,
+    /// The name of the collection
+    name: string,
+    /// A code that can be used to share the collection (optional)
+    share-code: option<string>,
+    /// The browser URL that can be used to share the collection (optional)
+    share-url: option<string>,
+    /// The number of items in the collection
+    total-item-count: s32,
+    /// The last time the collection was update (other than changes to the items in it)
+    updated-time: option<string>
+  }
+
+  /// Metadata about an item that is part of a collection
+  record collection-item {
+    /// The date the item was added to the collection
+    added-time: option<string>,
+    /// ID of the item
+    id: string,
+    /// The media type of the item, such as image, video, or audio
+    media-type: option<string>
+  }
+
+  /// List of items in a collection
+  record collection-item-data-list {
+    /// Assets in the collection
+    data: option<list<collection-item>>,
+    /// Error list; appears only if there was an error
+    errors: option<list<error>>,
+    /// Server-generated message, if any
+    message: option<string>,
+    /// The current page of results
+    page: option<s32>,
+    /// The number of results per page
+    per-page: option<s32>,
+    /// The total number of results across all pages
+    total-count: option<s32>
+  }
+
+  variant get-contributor-list-error {
+    bad-request(string),
+    unauthorized(string),
+    forbidden(string),
+    other(string)
+  }
+
+  variant get-contributor-error {
+    bad-request(string),
+    unauthorized(string),
+    forbidden(string),
+    other(string)
+  }
+
+  variant get-contributor-collections-list-error {
+    bad-request(string),
+    unauthorized(string),
+    forbidden(string),
+    not-found(string),
+    other(string)
+  }
+
+  variant get-contributor-collections-error {
+    bad-request(string),
+    unauthorized(string),
+    forbidden(string),
+    not-found(string),
+    other(string)
+  }
+
+  variant get-contributor-collection-items-error {
+    bad-request(string),
+    unauthorized(string),
+    forbidden(string),
+    not-found(string),
+    other(string)
+  }
+
   /// Get details about multiple contributors
   record get-contributor-list-params {
     /// One or more contributor IDs
     id: list<string>
   }
-  get-contributor-list: func(params: get-contributor-list-params) -> result<string, string>;
+  get-contributor-list: func(params: get-contributor-list-params) -> result<contributor-profile-data-list, get-contributor-list-error>;
 
   /// Get details about a single contributor
   record get-contributor-params {
     /// Contributor ID
     contributor-id: string
   }
-  get-contributor: func(params: get-contributor-params) -> result<string, string>;
+  get-contributor: func(params: get-contributor-params) -> result<contributor-profile, get-contributor-error>;
 
   /// List contributors' collections
   record get-contributor-collections-list-params {
@@ -1235,7 +2782,7 @@ interface contributors {
     /// Sort order
     sort: option<get-contributor-collections-list-sort-enum>
   }
-  get-contributor-collections-list: func(params: get-contributor-collections-list-params) -> result<string, string>;
+  get-contributor-collections-list: func(params: get-contributor-collections-list-params) -> result<collection-data-list, get-contributor-collections-list-error>;
 
   /// Get details about contributors' collections
   record get-contributor-collections-params {
@@ -1244,7 +2791,7 @@ interface contributors {
     /// Collection ID that belongs to the contributor
     id: string
   }
-  get-contributor-collections: func(params: get-contributor-collections-params) -> result<string, string>;
+  get-contributor-collections: func(params: get-contributor-collections-params) -> result<collection, get-contributor-collections-error>;
 
   /// Get the items in contributors' collections
   record get-contributor-collection-items-params {
@@ -1259,7 +2806,7 @@ interface contributors {
     /// Sort order
     sort: option<get-contributor-collection-items-sort-enum>
   }
-  get-contributor-collection-items: func(params: get-contributor-collection-items-params) -> result<string, string>;
+  get-contributor-collection-items: func(params: get-contributor-collection-items-params) -> result<collection-item-data-list, get-contributor-collection-items-error>;
 
 }
 
@@ -1274,10 +2821,340 @@ interface computer-vision {
     full,
   }
 
+  /// Asset upload information
+  record image-create-response {
+    upload-id: string
+  }
+
+  /// List of keywords
+  record keyword-data-list {
+    /// Keywords
+    data: option<list<string>>,
+    /// Error list; appears only if there was an error
+    errors: option<list<error>>,
+    /// Server-generated message, if any
+    message: option<string>
+  }
+
+  /// Error object
+  record error {
+    /// The error code of this error
+    code: option<string>,
+    /// Debugging information about the error
+    data: option<string>,
+    /// A list of items that produced the error
+    items: option<list<error-items-item>>,
+    /// Specific details about this error
+    message: string,
+    /// Internal code reference to the source of the error
+    path: option<string>
+  }
+
+  record error-items-item {
+    /// JSON-encoded free-form object payload
+    data: option<string>
+  }
+
   /// Language code
   record language {
     /// opaque schema; raw JSON
     value: string
+  }
+
+  /// Image search results
+  record image-search-results {
+    /// List of images
+    data: list<image>,
+    insights: option<insights>,
+    /// Server-generated message, if any
+    message: option<string>,
+    /// Current page that is returned
+    page: option<s32>,
+    /// Number of results per page
+    per-page: option<s32>,
+    /// Unique identifier for the search request
+    search-id: string,
+    /// Returns information if search phrase has potentially been mistyped or another query would lead to better search results
+    spellcheck-info: option<image-search-results-spellcheck-info>,
+    /// Total count of all results across all pages
+    total-count: s32
+  }
+
+  /// Information about an image
+  record image {
+    /// Date that the image was added by the contributor
+    added-date: option<string>,
+    /// Affiliate referral link; appears only for registered affiliate partners
+    affiliate-url: option<string>,
+    /// Aspect ratio of the image in decimal format, such as 0.6667
+    aspect: option<f64>,
+    assets: option<image-assets>,
+    /// Categories that this image is a part of
+    categories: option<list<category>>,
+    contributor: contributor,
+    /// Detailed description of the image
+    description: option<string>,
+    /// Indicates whether there are model releases for the image
+    has-model-release: option<bool>,
+    /// Indicates whether there are property releases for the image
+    has-property-release: option<bool>,
+    /// Image ID
+    id: string,
+    /// Type of image
+    image-type: option<string>,
+    /// AI-powered insights about how the asset will perform for the objective and audience
+    insights: option<image-insights>,
+    /// Whether or not this image contains adult content
+    is-adult: option<bool>,
+    /// Whether or not this image is editorial content
+    is-editorial: option<bool>,
+    /// Whether or not this image is an illustration
+    is-illustration: option<bool>,
+    /// Keywords associated with the content of this image
+    keywords: option<list<string>>,
+    /// Media type of this image, should always be "image"
+    media-type: string,
+    /// List of model releases
+    model-releases: option<list<model-release>>,
+    /// List of models
+    models: option<list<model>>,
+    /// List of all releases of this image
+    releases: option<list<string>>,
+    /// Link to image information page; included only for certain accounts
+    url: option<string>
+  }
+
+  /// Information about the assets that are part of an image
+  record image-assets {
+    huge-jpg: option<image-size-details>,
+    huge-thumb: option<thumbnail>,
+    large-thumb: option<thumbnail>,
+    medium-jpg: option<image-size-details>,
+    preview: option<thumbnail>,
+    preview-v1000: option<thumbnail>,
+    preview-v1500: option<thumbnail>,
+    small-jpg: option<image-size-details>,
+    small-thumb: option<thumbnail>,
+    supersize-jpg: option<image-size-details>,
+    vector-eps: option<image-size-details>
+  }
+
+  /// Image size information
+  record image-size-details {
+    /// Display name of this image size
+    display-name: option<string>,
+    dpi: option<s32>,
+    /// File size (in bytes) of this image size
+    file-size: option<s32>,
+    /// Format of this image size
+    format: option<string>,
+    /// Height of this image size
+    height: option<s32>,
+    /// Whether or not this image can be licensed in this image size
+    is-licensable: option<bool>,
+    /// Width of this image size
+    width: option<s32>
+  }
+
+  /// Image thumbnail information
+  record thumbnail {
+    /// Height in pixels of the image thumbnail
+    height: s32,
+    /// Direct URL to the image
+    url: string,
+    /// Width in pixels of the image thumbnail
+    width: s32
+  }
+
+  /// Category information
+  record category {
+    /// Category ID
+    id: option<string>,
+    /// Category name
+    name: option<string>
+  }
+
+  /// Information about a contributor
+  record contributor {
+    /// ID of the contributor
+    id: string
+  }
+
+  /// AI-powered insights about how the asset will perform for the objective and audience
+  record image-insights {
+    labels: option<list<string>>
+  }
+
+  /// Model and property release metadata
+  record model-release {
+    /// ID of the model or property release
+    id: option<string>
+  }
+
+  /// Information about a human model or property that appears in media; used to search for assets that this model is in
+  record model {
+    /// ID of the model
+    id: string
+  }
+
+  /// AI-powered insights about an asset, based on the specified audience and objective
+  record insights {
+    /// How effective the AI thinks an asset in the category is for the specified audience and objective, expressed as a percentile compared to other images
+    label-performance: list<insights-label-performance-item>
+  }
+
+  record insights-label-performance-item {
+    name: option<string>,
+    percentile-performance: option<f64>
+  }
+
+  /// Returns information if search phrase has potentially been mistyped or another query would lead to better search results
+  record image-search-results-spellcheck-info {
+    /// JSON-encoded free-form object payload
+    data: option<string>
+  }
+
+  /// Video search results
+  record video-search-results {
+    /// List of videos
+    data: list<video>,
+    /// Server-generated message, if any
+    message: option<string>,
+    /// Current page that is returned
+    page: option<s32>,
+    /// Number of results per page
+    per-page: option<s32>,
+    /// Unique identifier for the search request
+    search-id: string,
+    /// Total count of all results across all pages
+    total-count: s32
+  }
+
+  /// Information about a video
+  record video {
+    /// Date this video was added to the Shutterstock library
+    added-date: option<string>,
+    /// Affiliate referral link; appears only for registered affiliate partners
+    affiliate-url: option<string>,
+    /// Aspect ratio of this video in decimal format, such as 0.6667
+    aspect: option<f64>,
+    /// Aspect ratio of the video as a ratio, such as 16:9
+    aspect-ratio: option<string>,
+    assets: option<video-assets>,
+    /// List of categories
+    categories: option<list<category>>,
+    contributor: contributor,
+    /// Description of this video
+    description: option<string>,
+    /// Duration of this video, in seconds
+    duration: option<f64>,
+    /// Whether or not this video has been released for use by the model appearing in it
+    has-model-release: option<bool>,
+    /// Whether or not this video has received a release to show the landmark or property appearing in it
+    has-property-release: option<bool>,
+    /// ID of the video
+    id: string,
+    /// Whether or not this video contains adult content
+    is-adult: option<bool>,
+    /// Whether or not this video is editorial content
+    is-editorial: option<bool>,
+    /// Keywords associated with the content of this video
+    keywords: option<list<string>>,
+    /// Media type of this video, should always be "video"
+    media-type: string,
+    /// List of models in this video
+    models: option<list<model>>,
+    /// Link to video information page; included only for certain accounts
+    url: option<string>
+  }
+
+  /// Video asset information
+  record video-assets {
+    v4k: option<video-size-details>,
+    hd: option<video-size-details>,
+    preview-jpg: option<url>,
+    preview-mp4: option<url>,
+    preview-webm: option<url>,
+    sd: option<video-size-details>,
+    thumb-jpg: option<url>,
+    thumb-jpgs: option<urls>,
+    thumb-mp4: option<url>,
+    thumb-webm: option<url>,
+    web: option<video-size-details>
+  }
+
+  /// Video asset information
+  record video-size-details {
+    /// Display name of this video size
+    display-name: option<string>,
+    /// File size (in bytes) of this video size
+    file-size: option<s32>,
+    /// Format of this video size
+    format: option<string>,
+    /// Frames per second of this video size
+    fps: option<f64>,
+    /// Height of this video size
+    height: option<s32>,
+    /// Whether or not videos can be licensed in this video size
+    is-licensable: option<bool>,
+    /// Width of this video size
+    width: option<s32>
+  }
+
+  /// URL object
+  record url {
+    /// URL that can be used to download the unwatermarked, licensed asset
+    url: string
+  }
+
+  /// List of URLs
+  record urls {
+    /// URLs
+    urls: list<string>
+  }
+
+  /// Image upload information
+  record image-create-response-v2 {
+    id: string
+  }
+
+  variant upload-image-error {
+    bad-request(string),
+    unauthorized(string),
+    forbidden(string),
+    payload-too-large(string),
+    unsupported-media-type(string),
+    other(string)
+  }
+
+  variant get-keywords-error {
+    bad-request(string),
+    unauthorized(string),
+    forbidden(string),
+    unsupported-media-type(string),
+    other(string)
+  }
+
+  variant get-similar-images-error {
+    bad-request(string),
+    unauthorized(string),
+    forbidden(string),
+    other(string)
+  }
+
+  variant get-similar-videos-error {
+    bad-request(string),
+    unauthorized(string),
+    forbidden(string),
+    other(string)
+  }
+
+  variant upload-ephemeral-image-error {
+    bad-request(string),
+    unauthorized(string),
+    forbidden(string),
+    payload-too-large(string),
+    other(string)
   }
 
   /// Upload images
@@ -1285,14 +3162,14 @@ interface computer-vision {
     /// A Base 64 encoded jpeg or png; images can be no larger than 10mb and can be no larger than 10,000 pixels in width or height
     base64-image: string
   }
-  upload-image: func(params: upload-image-params) -> result<string, string>;
+  upload-image: func(params: upload-image-params) -> result<image-create-response, upload-image-error>;
 
   /// List suggested keywords
   record get-keywords-params {
     /// The asset ID or upload ID to suggest keywords for
     asset-id: string
   }
-  get-keywords: func(params: get-keywords-params) -> result<string, string>;
+  get-keywords: func(params: get-keywords-params) -> result<keyword-data-list, get-keywords-error>;
 
   /// List similar images
   record get-similar-images-params {
@@ -1311,7 +3188,7 @@ interface computer-vision {
     /// Amount of detail to render in the response
     view: option<get-similar-images-view-enum>
   }
-  get-similar-images: func(params: get-similar-images-params) -> result<string, string>;
+  get-similar-images: func(params: get-similar-images-params) -> result<image-search-results, get-similar-images-error>;
 
   /// List similar videos
   record get-similar-videos-params {
@@ -1330,14 +3207,14 @@ interface computer-vision {
     /// Amount of detail to render in the response
     view: option<get-similar-images-view-enum>
   }
-  get-similar-videos: func(params: get-similar-videos-params) -> result<string, string>;
+  get-similar-videos: func(params: get-similar-videos-params) -> result<video-search-results, get-similar-videos-error>;
 
   /// Upload ephemeral images
   record upload-ephemeral-image-params {
     /// A Base 64 encoded jpeg or png; images can be no larger than 10mb and can be no larger than 10,000 pixels in width or height
     base64-image: string
   }
-  upload-ephemeral-image: func(params: upload-ephemeral-image-params) -> result<string, string>;
+  upload-ephemeral-image: func(params: upload-ephemeral-image-params) -> result<image-create-response-v2, upload-ephemeral-image-error>;
 
 }
 
@@ -1370,6 +3247,113 @@ interface editorial-images {
     addition,
   }
 
+  /// List of editorial categories
+  record editorial-category-results {
+    /// List of editorial categories
+    data: option<list<editorial-category>>
+  }
+
+  /// Name of an editorial category
+  record editorial-category {
+    name: option<string>
+  }
+
+  /// List of editorial categories
+  record editorial-image-category-results {
+    data: option<list<editorial-category>>
+  }
+
+  /// List of download events
+  record download-history-data-list {
+    /// Download events
+    data: option<list<download-history>>,
+    /// Error list; appears only if there was an error
+    errors: option<list<error>>,
+    /// Server-generated message, if any
+    message: option<string>,
+    /// The current page of results
+    page: option<s32>,
+    /// The number of results per page
+    per-page: option<s32>,
+    /// The total number of results across all pages
+    total-count: option<s32>
+  }
+
+  /// Information about a downloaded media item. Applicable for all media types, only one of 'audio', 'image' or 'video' will be in a single DownloadHistory object
+  record download-history {
+    audio: option<download-history-media-details>,
+    /// Date the media was downloaded the first time
+    download-time: string,
+    /// ID of the download
+    id: string,
+    image: option<download-history-media-details>,
+    /// Specifies if the media is downloadable via its respective downloads endpoint
+    is-downloadable: option<bool>,
+    /// The name of the license of this download
+    license: string,
+    /// The metadata that was passed in the original licensing request
+    metadata: option<download-history-metadata>,
+    revshare: option<download-history-revshare-details>,
+    /// ID of the subscription used to perform this download
+    subscription-id: option<string>,
+    user: option<download-history-user-details>,
+    video: option<download-history-media-details>
+  }
+
+  /// Information about the downloaded media
+  record download-history-media-details {
+    format: option<download-history-format-details>,
+    /// ID of the download history media details
+    id: string
+  }
+
+  /// Information about the format of a download
+  record download-history-format-details {
+    /// The format of the downloaded media
+    format: option<string>,
+    /// The size of the downloaded media
+    size: option<string>
+  }
+
+  /// The metadata that was passed in the original licensing request
+  record download-history-metadata {
+    /// JSON-encoded free-form object payload
+    data: option<string>
+  }
+
+  /// Pricing information for revenue-sharing transactions
+  record download-history-revshare-details {
+    /// The amount charged for the license
+    purchase-amount: string,
+    /// The currency the amount was charged in
+    purchase-currency: string
+  }
+
+  /// Information about a user
+  record download-history-user-details {
+    /// The name of the user who downloaded the item
+    username: string
+  }
+
+  /// Error object
+  record error {
+    /// The error code of this error
+    code: option<string>,
+    /// Debugging information about the error
+    data: option<string>,
+    /// A list of items that produced the error
+    items: option<list<error-items-item>>,
+    /// Specific details about this error
+    message: string,
+    /// Internal code reference to the source of the error
+    path: option<string>
+  }
+
+  record error-items-item {
+    /// JSON-encoded free-form object payload
+    data: option<string>
+  }
+
   /// A valid ISO 3166-1 Alpha-2 or ISO 3166-1 Alpha-3 code.
   record iso-country-code {
     /// opaque schema; raw JSON
@@ -1393,11 +3377,389 @@ interface editorial-images {
     data: option<string>
   }
 
+  /// List of editorial license results
+  record license-editorial-content-results {
+    /// License results
+    data: option<list<license-editorial-content-result>>,
+    /// Error list; appears only if there was an error
+    errors: option<list<error>>,
+    /// Optional error message
+    message: option<string>,
+    /// Current page of the response
+    page: option<s32>,
+    /// Number of results per page
+    per-page: option<s32>,
+    /// Total count of all results
+    total-count: option<s32>
+  }
+
+  /// The response to a licensing request for editorial content
+  record license-editorial-content-result {
+    /// For pre-paid plans, how many credits were used for the item license
+    allotment-charge: option<s32>,
+    download: option<url>,
+    /// Editorial ID
+    editorial-id: string,
+    error: option<string>
+  }
+
+  /// URL object
+  record url {
+    /// URL that can be used to download the unwatermarked, licensed asset
+    url: string
+  }
+
+  /// List of editorial livefeeds
+  record editorial-image-livefeed-list {
+    /// Editorial livefeeds
+    data: list<editorial-livefeed>,
+    /// Optional error message
+    message: option<string>,
+    /// Current page of the response
+    page: option<s32>,
+    /// Number of results per page
+    per-page: option<s32>,
+    /// Total count of all results
+    total-count: s32
+  }
+
+  /// Metadata about editorial livefeed
+  record editorial-livefeed {
+    cover-item: option<editorial-cover-item>,
+    /// When the livefeed was initially created
+    created-time: option<string>,
+    /// Livefeed ID
+    id: string,
+    /// Name of the livefeed
+    name: string,
+    /// Total count of items in the livefeed
+    total-item-count: s32
+  }
+
+  /// Cover image for editorial livefeed
+  record editorial-cover-item {
+    height: option<s32>,
+    id: string,
+    url: string,
+    width: option<s32>
+  }
+
+  /// Metadata about editorial livefeed
+  record editorial-image-livefeed {
+    cover-item: option<editorial-cover-item>,
+    /// When the livefeed was initially created
+    created-time: option<string>,
+    /// Livefeed ID
+    id: string,
+    /// Name of the livefeed
+    name: string,
+    /// Total count of items in the livefeed
+    total-item-count: s32
+  }
+
+  /// List of editorial items
+  record editorial-image-content-data-list {
+    /// Editorial items
+    data: option<list<editorial-content>>,
+    /// Error list; appears only if there was an error
+    errors: option<list<error>>,
+    /// Optional error message
+    message: option<string>,
+    /// Current page of the response
+    page: option<s32>,
+    /// Number of results per page
+    per-page: option<s32>,
+    /// Total count of all results
+    total-count: option<s32>
+  }
+
+  /// Metadata about editorial content
+  record editorial-content {
+    aspect: option<f64>,
+    assets: option<editorial-assets>,
+    byline: option<string>,
+    caption: option<string>,
+    /// List of categories
+    categories: option<list<editorial-category>>,
+    date-taken: option<string>,
+    description: option<string>,
+    id: string,
+    keywords: option<list<string>>,
+    special-instructions: option<string>,
+    title: option<string>
+  }
+
+  /// Asset information, including size and thumbnail URLs
+  record editorial-assets {
+    medium-jpg: option<image-size-details>,
+    original: option<image-size-details>,
+    small-jpg: option<image-size-details>,
+    thumb-v170: option<thumbnail>,
+    thumb-v220: option<thumbnail>,
+    watermark-v1500: option<thumbnail>,
+    watermark-v450: option<thumbnail>
+  }
+
+  /// Image size information
+  record image-size-details {
+    /// Display name of this image size
+    display-name: option<string>,
+    dpi: option<s32>,
+    /// File size (in bytes) of this image size
+    file-size: option<s32>,
+    /// Format of this image size
+    format: option<string>,
+    /// Height of this image size
+    height: option<s32>,
+    /// Whether or not this image can be licensed in this image size
+    is-licensable: option<bool>,
+    /// Width of this image size
+    width: option<s32>
+  }
+
+  /// Image thumbnail information
+  record thumbnail {
+    /// Height in pixels of the image thumbnail
+    height: s32,
+    /// Direct URL to the image
+    url: string,
+    /// Width in pixels of the image thumbnail
+    width: s32
+  }
+
+  /// Editorial search results
+  record editorial-search-results {
+    /// Editorial items
+    data: list<editorial-content>,
+    /// Optional error message
+    message: option<string>,
+    /// Cursor value that represents the next page of results
+    next: option<string>,
+    /// Current page of the response
+    page: option<s32>,
+    /// Number of results per page
+    per-page: option<s32>,
+    /// Cursor value that represents the previous page of results
+    prev: option<string>,
+    /// Unique identifier for the search request
+    search-id: option<string>,
+    /// Total count of all results
+    total-count: s32
+  }
+
+  /// Editorial updated results
+  record editorial-updated-results {
+    /// Editorial updated items
+    data: list<editorial-updated-content>,
+    /// Optional error message
+    message: option<string>,
+    /// Cursor value that represents the next page of results
+    next: option<string>,
+    /// Number of results per page
+    per-page: option<s32>,
+    /// Cursor value that represents the previous page of results
+    prev: option<string>
+  }
+
+  /// Metadata about updated editorial content
+  record editorial-updated-content {
+    aspect: option<f64>,
+    assets: option<editorial-assets>,
+    byline: option<string>,
+    caption: option<string>,
+    /// List of categories
+    categories: option<list<editorial-category>>,
+    commercial-status: option<editorial-updated-content-commercial-status>,
+    created-time: option<string>,
+    date-taken: option<string>,
+    description: option<string>,
+    id: string,
+    keywords: option<list<string>>,
+    rights: option<editorial-updated-content-rights>,
+    special-instructions: option<string>,
+    supplier-code: option<string>,
+    title: option<string>,
+    updated-time: option<string>,
+    updates: option<list<string>>
+  }
+
+  record editorial-updated-content-commercial-status {
+    reason: option<string>,
+    status: option<string>
+  }
+
+  record editorial-updated-content-rights {
+    countries: option<string>
+  }
+
+  /// List of editorial livefeeds
+  record editorial-livefeed-list {
+    /// Editorial livefeeds
+    data: list<editorial-livefeed>,
+    /// Optional error message
+    message: option<string>,
+    /// Current page of the response
+    page: option<s32>,
+    /// Number of results per page
+    per-page: option<s32>,
+    /// Total count of all results
+    total-count: s32
+  }
+
+  /// List of editorial items
+  record editorial-content-data-list {
+    /// Editorial items
+    data: option<list<editorial-content>>,
+    /// Error list; appears only if there was an error
+    errors: option<list<error>>,
+    /// Optional error message
+    message: option<string>,
+    /// Current page of the response
+    page: option<s32>,
+    /// Number of results per page
+    per-page: option<s32>,
+    /// Total count of all results
+    total-count: option<s32>
+  }
+
+  variant get-editorial-categories-error {
+    bad-request(string),
+    unauthorized(string),
+    forbidden(string),
+    other(string)
+  }
+
+  variant list-editorial-image-categories-error {
+    bad-request(string),
+    unauthorized(string),
+    forbidden(string),
+    other(string)
+  }
+
+  variant get-editorial-image-license-list-error {
+    bad-request(string),
+    unauthorized(string),
+    forbidden(string),
+    other(string)
+  }
+
+  variant license-editorial-images-error {
+    bad-request(string),
+    unauthorized(string),
+    forbidden(string),
+    not-acceptable(string),
+    other(string)
+  }
+
+  variant get-editorial-image-livefeed-list-error {
+    bad-request(string),
+    unauthorized(string),
+    forbidden(string),
+    not-found(string),
+    other(string)
+  }
+
+  variant get-editorial-image-livefeed-error {
+    bad-request(string),
+    unauthorized(string),
+    forbidden(string),
+    not-found(string),
+    other(string)
+  }
+
+  variant get-editorial-image-livefeed-items-error {
+    bad-request(string),
+    unauthorized(string),
+    forbidden(string),
+    not-found(string),
+    other(string)
+  }
+
+  variant search-editorial-images-error {
+    bad-request(string),
+    unauthorized(string),
+    forbidden(string),
+    not-acceptable(string),
+    other(string)
+  }
+
+  variant get-updated-editorial-images-error {
+    bad-request(string),
+    unauthorized(string),
+    forbidden(string),
+    not-acceptable(string),
+    other(string)
+  }
+
+  variant get-editorial-image-error {
+    bad-request(string),
+    unauthorized(string),
+    forbidden(string),
+    not-found(string),
+    other(string)
+  }
+
+  variant license-editorial-image-error {
+    bad-request(string),
+    unauthorized(string),
+    forbidden(string),
+    not-acceptable(string),
+    other(string)
+  }
+
+  variant get-editorial-livefeed-list-error {
+    bad-request(string),
+    unauthorized(string),
+    forbidden(string),
+    not-acceptable(string),
+    other(string)
+  }
+
+  variant get-editorial-livefeed-error {
+    bad-request(string),
+    unauthorized(string),
+    forbidden(string),
+    not-acceptable(string),
+    other(string)
+  }
+
+  variant get-editorial-livefeed-items-error {
+    bad-request(string),
+    unauthorized(string),
+    forbidden(string),
+    not-acceptable(string),
+    other(string)
+  }
+
+  variant search-editorial-error {
+    bad-request(string),
+    unauthorized(string),
+    forbidden(string),
+    not-acceptable(string),
+    other(string)
+  }
+
+  variant get-updated-editorial-image-error {
+    bad-request(string),
+    unauthorized(string),
+    forbidden(string),
+    not-acceptable(string),
+    other(string)
+  }
+
+  variant get-v2-editorial-id-error {
+    bad-request(string),
+    unauthorized(string),
+    forbidden(string),
+    not-found(string),
+    other(string)
+  }
+
   /// (Deprecated) List editorial categories
-  get-editorial-categories: func() -> result<string, string>;
+  get-editorial-categories: func() -> result<editorial-category-results, get-editorial-categories-error>;
 
   /// List editorial categories
-  list-editorial-image-categories: func() -> result<string, string>;
+  list-editorial-image-categories: func() -> result<editorial-image-category-results, list-editorial-image-categories-error>;
 
   /// List editorial image licenses
   record get-editorial-image-license-list-params {
@@ -1422,7 +3784,7 @@ interface editorial-images {
     /// Set to true to see license history for all members of your team.
     team-history: option<bool>
   }
-  get-editorial-image-license-list: func(params: get-editorial-image-license-list-params) -> result<string, string>;
+  get-editorial-image-license-list: func(params: get-editorial-image-license-list-params) -> result<download-history-data-list, get-editorial-image-license-list-error>;
 
   /// License editorial content
   record license-editorial-images-params {
@@ -1430,7 +3792,7 @@ interface editorial-images {
     /// Editorial content to license
     editorial: list<license-editorial-content>
   }
-  license-editorial-images: func(params: license-editorial-images-params) -> result<string, string>;
+  license-editorial-images: func(params: license-editorial-images-params) -> result<license-editorial-content-results, license-editorial-images-error>;
 
   /// Get editorial livefeed list
   record get-editorial-image-livefeed-list-params {
@@ -1441,7 +3803,7 @@ interface editorial-images {
     /// Number of results per page
     per-page: option<s32>
   }
-  get-editorial-image-livefeed-list: func(params: get-editorial-image-livefeed-list-params) -> result<string, string>;
+  get-editorial-image-livefeed-list: func(params: get-editorial-image-livefeed-list-params) -> result<editorial-image-livefeed-list, get-editorial-image-livefeed-list-error>;
 
   /// Get editorial livefeed
   record get-editorial-image-livefeed-params {
@@ -1450,7 +3812,7 @@ interface editorial-images {
     /// Returns only if the livefeed is available for distribution in a certain country
     country: string
   }
-  get-editorial-image-livefeed: func(params: get-editorial-image-livefeed-params) -> result<string, string>;
+  get-editorial-image-livefeed: func(params: get-editorial-image-livefeed-params) -> result<editorial-image-livefeed, get-editorial-image-livefeed-error>;
 
   /// Get editorial livefeed items
   record get-editorial-image-livefeed-items-params {
@@ -1459,7 +3821,7 @@ interface editorial-images {
     /// Returns only if the livefeed items are available for distribution in a certain country
     country: string
   }
-  get-editorial-image-livefeed-items: func(params: get-editorial-image-livefeed-items-params) -> result<string, string>;
+  get-editorial-image-livefeed-items: func(params: get-editorial-image-livefeed-items-params) -> result<editorial-image-content-data-list, get-editorial-image-livefeed-items-error>;
 
   /// Search editorial images
   record search-editorial-images-params {
@@ -1482,7 +3844,7 @@ interface editorial-images {
     /// The cursor of the page with which to start fetching results; this cursor is returned from previous requests
     cursor: option<string>
   }
-  search-editorial-images: func(params: search-editorial-images-params) -> result<string, string>;
+  search-editorial-images: func(params: search-editorial-images-params) -> result<editorial-search-results, search-editorial-images-error>;
 
   /// List updated content
   record get-updated-editorial-images-params {
@@ -1507,7 +3869,7 @@ interface editorial-images {
     /// Number of results per page
     per-page: option<s32>
   }
-  get-updated-editorial-images: func(params: get-updated-editorial-images-params) -> result<string, string>;
+  get-updated-editorial-images: func(params: get-updated-editorial-images-params) -> result<editorial-updated-results, get-updated-editorial-images-error>;
 
   /// Get editorial content details
   record get-editorial-image-params {
@@ -1516,7 +3878,7 @@ interface editorial-images {
     /// Returns only if the content is available for distribution in a certain country
     country: string
   }
-  get-editorial-image: func(params: get-editorial-image-params) -> result<string, string>;
+  get-editorial-image: func(params: get-editorial-image-params) -> result<editorial-content, get-editorial-image-error>;
 
   /// (Deprecated) License editorial content
   record license-editorial-image-params {
@@ -1524,7 +3886,7 @@ interface editorial-images {
     /// Editorial content to license
     editorial: list<license-editorial-content>
   }
-  license-editorial-image: func(params: license-editorial-image-params) -> result<string, string>;
+  license-editorial-image: func(params: license-editorial-image-params) -> result<license-editorial-content-results, license-editorial-image-error>;
 
   /// (Deprecated) Get editorial livefeed list
   record get-editorial-livefeed-list-params {
@@ -1535,7 +3897,7 @@ interface editorial-images {
     /// Number of results per page
     per-page: option<s32>
   }
-  get-editorial-livefeed-list: func(params: get-editorial-livefeed-list-params) -> result<string, string>;
+  get-editorial-livefeed-list: func(params: get-editorial-livefeed-list-params) -> result<editorial-livefeed-list, get-editorial-livefeed-list-error>;
 
   /// (Deprecated) Get editorial livefeed
   record get-editorial-livefeed-params {
@@ -1544,7 +3906,7 @@ interface editorial-images {
     /// Returns only if the livefeed is available for distribution in a certain country
     country: string
   }
-  get-editorial-livefeed: func(params: get-editorial-livefeed-params) -> result<string, string>;
+  get-editorial-livefeed: func(params: get-editorial-livefeed-params) -> result<editorial-livefeed, get-editorial-livefeed-error>;
 
   /// (Deprecated) Get editorial livefeed items
   record get-editorial-livefeed-items-params {
@@ -1553,7 +3915,7 @@ interface editorial-images {
     /// Returns only if the livefeed items are available for distribution in a certain country
     country: string
   }
-  get-editorial-livefeed-items: func(params: get-editorial-livefeed-items-params) -> result<string, string>;
+  get-editorial-livefeed-items: func(params: get-editorial-livefeed-items-params) -> result<editorial-content-data-list, get-editorial-livefeed-items-error>;
 
   /// (Deprecated) Search editorial content
   record search-editorial-params {
@@ -1576,7 +3938,7 @@ interface editorial-images {
     /// The cursor of the page with which to start fetching results; this cursor is returned from previous requests
     cursor: option<string>
   }
-  search-editorial: func(params: search-editorial-params) -> result<string, string>;
+  search-editorial: func(params: search-editorial-params) -> result<editorial-search-results, search-editorial-error>;
 
   /// (Deprecated) List updated content
   record get-updated-editorial-image-params {
@@ -1601,7 +3963,7 @@ interface editorial-images {
     /// Number of results per page
     per-page: option<s32>
   }
-  get-updated-editorial-image: func(params: get-updated-editorial-image-params) -> result<string, string>;
+  get-updated-editorial-image: func(params: get-updated-editorial-image-params) -> result<editorial-updated-results, get-updated-editorial-image-error>;
 
   /// (Deprecated) Get editorial content details
   record get-v2-editorial-id-params {
@@ -1612,7 +3974,7 @@ interface editorial-images {
     /// The ID of the search that is related to this request
     search-id: option<string>
   }
-  get-v2-editorial-id: func(params: get-v2-editorial-id-params) -> result<string, string>;
+  get-v2-editorial-id: func(params: get-v2-editorial-id-params) -> result<editorial-content, get-v2-editorial-id-error>;
 
 }
 
@@ -1651,6 +4013,107 @@ interface editorial-video {
     standard-definition,
   }
 
+  /// List of editorial video categories
+  record category-results {
+    data: option<list<editorial-category>>
+  }
+
+  /// Name of an editorial category
+  record editorial-category {
+    name: option<string>
+  }
+
+  /// List of download events
+  record download-history-data-list {
+    /// Download events
+    data: option<list<download-history>>,
+    /// Error list; appears only if there was an error
+    errors: option<list<error>>,
+    /// Server-generated message, if any
+    message: option<string>,
+    /// The current page of results
+    page: option<s32>,
+    /// The number of results per page
+    per-page: option<s32>,
+    /// The total number of results across all pages
+    total-count: option<s32>
+  }
+
+  /// Information about a downloaded media item. Applicable for all media types, only one of 'audio', 'image' or 'video' will be in a single DownloadHistory object
+  record download-history {
+    audio: option<download-history-media-details>,
+    /// Date the media was downloaded the first time
+    download-time: string,
+    /// ID of the download
+    id: string,
+    image: option<download-history-media-details>,
+    /// Specifies if the media is downloadable via its respective downloads endpoint
+    is-downloadable: option<bool>,
+    /// The name of the license of this download
+    license: string,
+    /// The metadata that was passed in the original licensing request
+    metadata: option<download-history-metadata>,
+    revshare: option<download-history-revshare-details>,
+    /// ID of the subscription used to perform this download
+    subscription-id: option<string>,
+    user: option<download-history-user-details>,
+    video: option<download-history-media-details>
+  }
+
+  /// Information about the downloaded media
+  record download-history-media-details {
+    format: option<download-history-format-details>,
+    /// ID of the download history media details
+    id: string
+  }
+
+  /// Information about the format of a download
+  record download-history-format-details {
+    /// The format of the downloaded media
+    format: option<string>,
+    /// The size of the downloaded media
+    size: option<string>
+  }
+
+  /// The metadata that was passed in the original licensing request
+  record download-history-metadata {
+    /// JSON-encoded free-form object payload
+    data: option<string>
+  }
+
+  /// Pricing information for revenue-sharing transactions
+  record download-history-revshare-details {
+    /// The amount charged for the license
+    purchase-amount: string,
+    /// The currency the amount was charged in
+    purchase-currency: string
+  }
+
+  /// Information about a user
+  record download-history-user-details {
+    /// The name of the user who downloaded the item
+    username: string
+  }
+
+  /// Error object
+  record error {
+    /// The error code of this error
+    code: option<string>,
+    /// Debugging information about the error
+    data: option<string>,
+    /// A list of items that produced the error
+    items: option<list<error-items-item>>,
+    /// Specific details about this error
+    message: string,
+    /// Internal code reference to the source of the error
+    path: option<string>
+  }
+
+  record error-items-item {
+    /// JSON-encoded free-form object payload
+    data: option<string>
+  }
+
   /// A valid ISO 3166-1 Alpha-2 or ISO 3166-1 Alpha-3 code.
   record iso-country-code {
     /// opaque schema; raw JSON
@@ -1674,8 +4137,144 @@ interface editorial-video {
     data: option<string>
   }
 
+  /// List of editorial license results
+  record license-editorial-content-results {
+    /// License results
+    data: option<list<license-editorial-content-result>>,
+    /// Error list; appears only if there was an error
+    errors: option<list<error>>,
+    /// Optional error message
+    message: option<string>,
+    /// Current page of the response
+    page: option<s32>,
+    /// Number of results per page
+    per-page: option<s32>,
+    /// Total count of all results
+    total-count: option<s32>
+  }
+
+  /// The response to a licensing request for editorial content
+  record license-editorial-content-result {
+    /// For pre-paid plans, how many credits were used for the item license
+    allotment-charge: option<s32>,
+    download: option<url>,
+    /// Editorial ID
+    editorial-id: string,
+    error: option<string>
+  }
+
+  /// URL object
+  record url {
+    /// URL that can be used to download the unwatermarked, licensed asset
+    url: string
+  }
+
+  /// Editorial search results
+  record search-results {
+    /// Editorial items
+    data: list<content>,
+    /// Optional error message
+    message: option<string>,
+    /// Cursor value that represents the next page of results
+    next: option<string>,
+    /// Current page of the response
+    page: option<s32>,
+    /// Number of results per page
+    per-page: option<s32>,
+    /// Cursor value that represents the previous page of results
+    prev: option<string>,
+    /// Unique identifier for the search request
+    search-id: option<string>,
+    /// Total count of all results
+    total-count: s32
+  }
+
+  /// Metadata about editorial content
+  record content {
+    aspect: option<f64>,
+    assets: option<assets>,
+    byline: option<string>,
+    caption: option<string>,
+    /// List of categories
+    categories: option<list<editorial-category>>,
+    date-taken: option<string>,
+    description: option<string>,
+    id: string,
+    keywords: option<list<string>>,
+    title: option<string>
+  }
+
+  /// Asset information, including size and thumbnail URLs
+  record assets {
+    original: option<video-size-details>,
+    preview-mp4: option<video-preview-url>,
+    preview-webm: option<video-preview-url>,
+    thumb-jpg: option<video-preview-url>
+  }
+
+  /// Video asset information
+  record video-size-details {
+    /// Display name of this video size
+    display-name: option<string>,
+    /// File size (in bytes) of this video size
+    file-size: option<s32>,
+    /// Format of this video size
+    format: option<string>,
+    /// Frames per second of this video size
+    fps: option<f64>,
+    /// Height of this video size
+    height: option<s32>,
+    /// Whether or not videos can be licensed in this video size
+    is-licensable: option<bool>,
+    /// Width of this video size
+    width: option<s32>
+  }
+
+  /// Video preview information
+  record video-preview-url {
+    /// Direct URL to the image
+    url: string
+  }
+
+  variant list-editorial-video-categories-error {
+    bad-request(string),
+    unauthorized(string),
+    forbidden(string),
+    other(string)
+  }
+
+  variant get-editorial-video-license-list-error {
+    bad-request(string),
+    unauthorized(string),
+    forbidden(string),
+    other(string)
+  }
+
+  variant license-editorial-video-error {
+    bad-request(string),
+    unauthorized(string),
+    forbidden(string),
+    other(string)
+  }
+
+  variant search-editorial-videos-error {
+    bad-request(string),
+    unauthorized(string),
+    forbidden(string),
+    not-acceptable(string),
+    other(string)
+  }
+
+  variant get-editorial-video-error {
+    bad-request(string),
+    unauthorized(string),
+    forbidden(string),
+    not-acceptable(string),
+    other(string)
+  }
+
   /// List editorial video categories
-  list-editorial-video-categories: func() -> result<string, string>;
+  list-editorial-video-categories: func() -> result<category-results, list-editorial-video-categories-error>;
 
   /// List editorial video licenses
   record get-editorial-video-license-list-params {
@@ -1700,7 +4299,7 @@ interface editorial-video {
     /// Set to true to see license history for all members of your team.
     team-history: option<bool>
   }
-  get-editorial-video-license-list: func(params: get-editorial-video-license-list-params) -> result<string, string>;
+  get-editorial-video-license-list: func(params: get-editorial-video-license-list-params) -> result<download-history-data-list, get-editorial-video-license-list-error>;
 
   /// License editorial video content
   record license-editorial-video-params {
@@ -1708,7 +4307,7 @@ interface editorial-video {
     /// Editorial content to license
     editorial: list<license-editorial-video-content>
   }
-  license-editorial-video: func(params: license-editorial-video-params) -> result<string, string>;
+  license-editorial-video: func(params: license-editorial-video-params) -> result<license-editorial-content-results, license-editorial-video-error>;
 
   /// Search editorial video content
   record search-editorial-videos-params {
@@ -1735,7 +4334,7 @@ interface editorial-video {
     /// The cursor of the page with which to start fetching results; this cursor is returned from previous requests
     cursor: option<string>
   }
-  search-editorial-videos: func(params: search-editorial-videos-params) -> result<string, string>;
+  search-editorial-videos: func(params: search-editorial-videos-params) -> result<search-results, search-editorial-videos-error>;
 
   /// Get editorial video content details
   record get-editorial-video-params {
@@ -1746,7 +4345,7 @@ interface editorial-video {
     /// The ID of the search that is related to this request
     search-id: option<string>
   }
-  get-editorial-video: func(params: get-editorial-video-params) -> result<string, string>;
+  get-editorial-video: func(params: get-editorial-video-params) -> result<content, get-editorial-video-error>;
 
 }
 
@@ -1766,6 +4365,35 @@ interface oauth {
     code,
   }
 
+  /// Access token response to client apps
+  record access-token-response {
+    /// Access token that can be used for future requests
+    access-token: string,
+    /// Number of seconds before token expires, only present for expiring tokens
+    expires-in: option<s32>,
+    /// A refresh token that can be used to renew the access_token when it expires, only present for expiring tokens
+    refresh-token: option<string>,
+    /// Type of token
+    token-type: string,
+    /// Metadata about the access_token, only present for expiring tokens
+    user-token: option<string>
+  }
+
+  variant create-access-token-error {
+    bad-request(string),
+    unauthorized(string),
+    forbidden(string),
+    other(string)
+  }
+
+  variant authorize-error {
+    found(string),
+    bad-request(string),
+    unauthorized(string),
+    forbidden(string),
+    other(string)
+  }
+
   /// Get access tokens
   record create-access-token-params {
     /// Client ID (Consumer Key) of your application
@@ -1783,7 +4411,7 @@ interface oauth {
     /// Pass this along with grant_type=refresh_token to get a fresh access token
     refresh-token: option<string>
   }
-  create-access-token: func(params: create-access-token-params) -> result<string, string>;
+  create-access-token: func(params: create-access-token-params) -> result<access-token-response, create-access-token-error>;
 
   /// Authorize applications
   record authorize-params {
@@ -1800,7 +4428,7 @@ interface oauth {
     /// Unique value used by the calling app to verify the request
     state: string
   }
-  authorize: func(params: authorize-params) -> result<string, string>;
+  authorize: func(params: authorize-params) -> result<string, authorize-error>;
 
 }
 
@@ -1844,6 +4472,152 @@ interface sound-effects {
     value: string
   }
 
+  /// List of sound effects
+  record sfx-data-list {
+    /// Sound Effects
+    data: option<list<sfx>>
+  }
+
+  /// SFX metadata
+  record sfx {
+    /// Date this sound effect was added to the Shutterstock library
+    added-date: option<string>,
+    /// Affiliate referral link; appears only for registered affiliate partners
+    affiliate-url: option<string>,
+    /// Artist of the sound effect
+    artist: option<string>,
+    assets: option<sfx-assets>,
+    contributor: contributor,
+    /// Description of this sound effect
+    description: option<string>,
+    /// Duration of this sound effect in seconds
+    duration: option<f64>,
+    /// Shutterstock ID of this sound effect
+    id: string,
+    /// List of all keywords for this sound effect
+    keywords: option<list<string>>,
+    /// Media type of this track; should always be "sfx"
+    media-type: string,
+    /// List of all releases of this sound effect
+    releases: option<list<string>>,
+    /// Title of this sound effect
+    title: option<string>,
+    /// Time this sound effect was last updated
+    updated-time: option<string>,
+    url: option<string>
+  }
+
+  /// Files that are available as part of an sound effect asset
+  record sfx-assets {
+    preview-mp3: option<sfx-asset-details>,
+    waveform: option<sfx-asset-details>
+  }
+
+  /// Information about a file that is part of an sound effect asset
+  record sfx-asset-details {
+    /// File size of the sound effect
+    file-size: option<s32>,
+    /// URL the sound effect is available at
+    url: option<string>
+  }
+
+  /// Information about a contributor
+  record contributor {
+    /// ID of the contributor
+    id: string
+  }
+
+  /// List of download events
+  record download-history-data-list {
+    /// Download events
+    data: option<list<download-history>>,
+    /// Error list; appears only if there was an error
+    errors: option<list<error>>,
+    /// Server-generated message, if any
+    message: option<string>,
+    /// The current page of results
+    page: option<s32>,
+    /// The number of results per page
+    per-page: option<s32>,
+    /// The total number of results across all pages
+    total-count: option<s32>
+  }
+
+  /// Information about a downloaded media item. Applicable for all media types, only one of 'audio', 'image' or 'video' will be in a single DownloadHistory object
+  record download-history {
+    audio: option<download-history-media-details>,
+    /// Date the media was downloaded the first time
+    download-time: string,
+    /// ID of the download
+    id: string,
+    image: option<download-history-media-details>,
+    /// Specifies if the media is downloadable via its respective downloads endpoint
+    is-downloadable: option<bool>,
+    /// The name of the license of this download
+    license: string,
+    /// The metadata that was passed in the original licensing request
+    metadata: option<download-history-metadata>,
+    revshare: option<download-history-revshare-details>,
+    /// ID of the subscription used to perform this download
+    subscription-id: option<string>,
+    user: option<download-history-user-details>,
+    video: option<download-history-media-details>
+  }
+
+  /// Information about the downloaded media
+  record download-history-media-details {
+    format: option<download-history-format-details>,
+    /// ID of the download history media details
+    id: string
+  }
+
+  /// Information about the format of a download
+  record download-history-format-details {
+    /// The format of the downloaded media
+    format: option<string>,
+    /// The size of the downloaded media
+    size: option<string>
+  }
+
+  /// The metadata that was passed in the original licensing request
+  record download-history-metadata {
+    /// JSON-encoded free-form object payload
+    data: option<string>
+  }
+
+  /// Pricing information for revenue-sharing transactions
+  record download-history-revshare-details {
+    /// The amount charged for the license
+    purchase-amount: string,
+    /// The currency the amount was charged in
+    purchase-currency: string
+  }
+
+  /// Information about a user
+  record download-history-user-details {
+    /// The name of the user who downloaded the item
+    username: string
+  }
+
+  /// Error object
+  record error {
+    /// The error code of this error
+    code: option<string>,
+    /// Debugging information about the error
+    data: option<string>,
+    /// A list of items that produced the error
+    items: option<list<error-items-item>>,
+    /// Specific details about this error
+    message: string,
+    /// Internal code reference to the source of the error
+    path: option<string>
+  }
+
+  record error-items-item {
+    /// JSON-encoded free-form object payload
+    data: option<string>
+  }
+
   record license-sfx {
     audio-layout: option<license-sfx-audio-layout-enum>,
     format: option<license-sfx-format-enum>,
@@ -1853,6 +4627,101 @@ interface sound-effects {
     sfx-id: string,
     /// ID of the subscription to use for the download.
     subscription-id: string
+  }
+
+  /// List of information about licensed sound effects
+  record license-sfx-result-data-list {
+    /// Sound effects license results
+    data: option<list<license-sfx-result>>,
+    /// Error list; appears only if there was an error
+    errors: option<list<error>>,
+    /// Server-generated message, if any
+    message: option<string>
+  }
+
+  /// The response to a licensing request for an sound effects
+  record license-sfx-result {
+    /// Number of credits that this licensing event used
+    allotment-charge: option<s32>,
+    download: option<url>,
+    /// Error message, appears only if there was an error
+    error: option<string>,
+    /// ID of the license event
+    license-id: option<string>,
+    /// Sound effects ID that was licensed
+    sfx-id: string
+  }
+
+  /// URL object
+  record url {
+    /// URL that can be used to download the unwatermarked, licensed asset
+    url: string
+  }
+
+  /// Sound effect license URL object
+  record sfx-url {
+    /// URL that can be used to download the unwatermarked, licensed asset
+    url: string
+  }
+
+  /// Sound effects search results
+  record sfx-search-results {
+    /// List of tracks
+    data: list<sfx>,
+    /// Server-generated message, if any
+    message: option<string>,
+    /// Current page that is returned
+    page: option<s32>,
+    /// Number of results per page
+    per-page: option<s32>,
+    /// ID of the search
+    search-id: string,
+    /// Total count of all results across all pages
+    total-count: s32
+  }
+
+  variant get-sfx-list-details-error {
+    bad-request(string),
+    unauthorized(string),
+    forbidden(string),
+    other(string)
+  }
+
+  variant get-sfx-license-list-error {
+    bad-request(string),
+    unauthorized(string),
+    forbidden(string),
+    other(string)
+  }
+
+  variant licenses-sfx-error {
+    bad-request(string),
+    unauthorized(string),
+    forbidden(string),
+    other(string)
+  }
+
+  variant download-sfx-error {
+    bad-request(string),
+    unauthorized(string),
+    forbidden(string),
+    other(string)
+  }
+
+  variant search-sfx-error {
+    bad-request(string),
+    unauthorized(string),
+    forbidden(string),
+    service-unavailable(string),
+    other(string)
+  }
+
+  variant get-sfx-details-error {
+    bad-request(string),
+    unauthorized(string),
+    forbidden(string),
+    service-unavailable(string),
+    other(string)
   }
 
   /// List details about sound effects
@@ -1868,7 +4737,7 @@ interface sound-effects {
     /// The ID of the search that is related to this request
     search-id: option<string>
   }
-  get-sfx-list-details: func(params: get-sfx-list-details-params) -> result<string, string>;
+  get-sfx-list-details: func(params: get-sfx-list-details-params) -> result<sfx-data-list, get-sfx-list-details-error>;
 
   /// List sound effects licenses
   record get-sfx-license-list-params {
@@ -1895,21 +4764,21 @@ interface sound-effects {
     /// Set to true to see license history for all members of your team.
     team-history: option<bool>
   }
-  get-sfx-license-list: func(params: get-sfx-license-list-params) -> result<string, string>;
+  get-sfx-license-list: func(params: get-sfx-license-list-params) -> result<download-history-data-list, get-sfx-license-list-error>;
 
   /// License sound effects
   record licenses-sfx-params {
     /// Sound effects to license for
     sound-effects: list<license-sfx>
   }
-  licenses-sfx: func(params: licenses-sfx-params) -> result<string, string>;
+  licenses-sfx: func(params: licenses-sfx-params) -> result<license-sfx-result-data-list, licenses-sfx-error>;
 
   /// Download sound effects
   record download-sfx-params {
     /// License ID
     id: string
   }
-  download-sfx: func(params: download-sfx-params) -> result<string, string>;
+  download-sfx: func(params: download-sfx-params) -> result<sfx-url, download-sfx-error>;
 
   /// Search for sound effects
   record search-sfx-params {
@@ -1940,7 +4809,7 @@ interface sound-effects {
     /// Set query and result language (uses Accept-Language header if not set)
     language: option<language>
   }
-  search-sfx: func(params: search-sfx-params) -> result<string, string>;
+  search-sfx: func(params: search-sfx-params) -> result<sfx-search-results, search-sfx-error>;
 
   /// Get details about sound effects
   record get-sfx-details-params {
@@ -1955,17 +4824,56 @@ interface sound-effects {
     /// The ID of the search that is related to this request
     search-id: option<string>
   }
-  get-sfx-details: func(params: get-sfx-details-params) -> result<string, string>;
+  get-sfx-details: func(params: get-sfx-details-params) -> result<sfx, get-sfx-details-error>;
 
 }
 
 interface test {
+  /// Text to echo in the response
+  record echo-v2 {
+    text: option<string>
+  }
+
+  /// Validation results
+  record validate-v2 {
+    header: option<validate-header>,
+    query: option<validate-query>
+  }
+
+  /// Validation results
+  record validate-header {
+    /// User agent to expect in the response
+    user-agent: option<string>
+  }
+
+  /// Validation results
+  record validate-query {
+    /// Integer ID that was passed in the request
+    id: s32,
+    /// List of tags that were passed in the request
+    tag: option<list<string>>
+  }
+
+  variant echo-error {
+    bad-request(string),
+    unauthorized(string),
+    forbidden(string),
+    other(string)
+  }
+
+  variant validate-error {
+    bad-request(string),
+    unauthorized(string),
+    forbidden(string),
+    other(string)
+  }
+
   /// Echo text
   record echo-params {
     /// Text to echo
     text: option<string>
   }
-  echo: func(params: echo-params) -> result<string, string>;
+  echo: func(params: echo-params) -> result<echo-v2, echo-error>;
 
   /// Validate input
   record validate-params {
@@ -1976,19 +4884,202 @@ interface test {
     /// User agent
     user-agent: option<string>
   }
-  validate: func(params: validate-params) -> result<string, string>;
+  validate: func(params: validate-params) -> result<validate-v2, validate-error>;
 
 }
 
 interface users {
+  enum access-token-details-realm-enum {
+    customer,
+    contributor,
+  }
+
+  enum license-format-media-type-enum {
+    image,
+    video,
+    audio,
+    editorial,
+  }
+
+  /// User details
+  record user-details {
+    /// Unique internal identifier of the user, as a contributor
+    contributor-id: option<string>,
+    /// Unique internal identifier of the user, as a purchaser
+    customer-id: option<string>,
+    /// Email address of the user
+    email: option<string>,
+    /// First name of the user
+    first-name: option<string>,
+    /// Full name including first, middle, and last name of the user
+    full-name: option<string>,
+    /// Unique internal identifier for the user, not tied to contributor or purchasing customer
+    id: option<string>,
+    /// True if the user has access to the Premier collection, false otherwise
+    is-premier: option<bool>,
+    /// True if the user has access to the Premier collection and also has child users
+    is-premier-parent: option<bool>,
+    /// Main language of the user account
+    language: option<string>,
+    /// Last name of the user
+    last-name: option<string>,
+    /// True if the user has an enterprise license, false otherwise
+    only-enhanced-license: option<bool>,
+    /// True if the user has access to sensitive use only, false otherwise
+    only-sensitive-use: option<bool>,
+    /// Unique internal identifier for the user's organization, specific to Premier users
+    organization-id: option<string>,
+    /// List of permissions allowed through the Premier client
+    premier-permissions: option<list<string>>,
+    /// User name associated to the user
+    username: option<string>
+  }
+
+  /// Access token details that are currently associated with this user
+  record access-token-details {
+    /// Client ID that is associated with the user
+    client-id: option<string>,
+    /// Contributor ID that is associated with the user
+    contributor-id: option<string>,
+    /// Customer ID that is associated with the user
+    customer-id: option<string>,
+    /// Number of seconds until the access token expires; no expiration if this value is null
+    expires-in: option<s32>,
+    /// Organization ID that is associated with the user
+    organization-id: option<string>,
+    /// Type of access token
+    realm: option<access-token-details-realm-enum>,
+    /// Scopes that this access token provides when used as authentication
+    scopes: option<list<string>>,
+    /// User ID that is associated with the user
+    user-id: option<string>,
+    /// User name that is associated with the user
+    username: option<string>
+  }
+
+  /// List of subscriptions
+  record subscription-data-list {
+    /// Subscriptions retrieved from this user
+    data: option<list<subscription>>,
+    /// Error list; appears only if there was an error
+    errors: option<list<error>>,
+    /// Optional error message
+    message: option<string>,
+    /// Current page that is being queried
+    page: option<s32>,
+    /// Amount of subscriptions to show per page
+    per-page: option<s32>,
+    /// Total number of subscriptions for this user
+    total-count: option<s32>
+  }
+
+  /// Subscription information
+  record subscription {
+    allotment: option<allotment>,
+    /// Identifier for the type of assets associated with this subscription (images, videos, audio, editorial)
+    asset-type: option<string>,
+    /// Description of the subscription
+    description: option<string>,
+    /// Date the subscription ends
+    expiration-time: option<string>,
+    /// List of formats that are licensable for the subscription
+    formats: option<list<license-format>>,
+    /// Unique internal identifier for the subscription
+    id: string,
+    /// Internal identifier for the type of subscription
+    license: option<string>,
+    metadata: option<subscription-metadata>,
+    price-per-download: option<price>
+  }
+
+  /// An allotment of credits as part of a subscription
+  record allotment {
+    /// Number of credits remaining in the subscription
+    downloads-left: option<s32>,
+    /// Total number of credits available to this subscription
+    downloads-limit: option<s32>,
+    /// Date the subscription ends
+    end-time: option<string>,
+    /// Date the subscription started
+    start-time: option<string>
+  }
+
+  /// Description of a license
+  record license-format {
+    /// Description of the license
+    description: option<string>,
+    /// Format or extension of the media, such as mpeg for videos or jpeg for images
+    format: option<string>,
+    /// Media type of the license
+    media-type: option<license-format-media-type-enum>,
+    /// Width of the media, in pixels, allowed by this license
+    min-resolution: option<s32>,
+    /// Keyword that details the size of the media, such as hd or sd for video, huge or vector for images
+    size: option<string>
+  }
+
+  /// Subscription metadata; different for each customer
+  record subscription-metadata {
+    /// JSON-encoded free-form object payload
+    data: option<string>
+  }
+
+  /// Price
+  record price {
+    /// Floating-point amount of the calculated rev-share price in the currency local_currency
+    local-amount: option<f64>,
+    /// Currency of the rev-share price that was calculated
+    local-currency: option<string>
+  }
+
+  /// Error object
+  record error {
+    /// The error code of this error
+    code: option<string>,
+    /// Debugging information about the error
+    data: option<string>,
+    /// A list of items that produced the error
+    items: option<list<error-items-item>>,
+    /// Specific details about this error
+    message: string,
+    /// Internal code reference to the source of the error
+    path: option<string>
+  }
+
+  record error-items-item {
+    /// JSON-encoded free-form object payload
+    data: option<string>
+  }
+
+  variant get-user-error {
+    bad-request(string),
+    unauthorized(string),
+    forbidden(string),
+    other(string)
+  }
+
+  variant get-access-token-error {
+    bad-request(string),
+    unauthorized(string),
+    forbidden(string),
+    other(string)
+  }
+
+  variant get-user-subscription-list-error {
+    bad-request(string),
+    unauthorized(string),
+    forbidden(string),
+    other(string)
+  }
+
   /// Get user details
-  get-user: func() -> result<string, string>;
+  get-user: func() -> result<user-details, get-user-error>;
 
   /// Get access token details
-  get-access-token: func() -> result<string, string>;
+  get-access-token: func() -> result<access-token-details, get-access-token-error>;
 
   /// List user subscriptions
-  get-user-subscription-list: func() -> result<string, string>;
+  get-user-subscription-list: func() -> result<subscription-data-list, get-user-subscription-list-error>;
 
 }
 
@@ -2085,10 +5176,201 @@ interface videos {
     random,
   }
 
+  /// List of videos
+  record video-data-list {
+    /// Videos
+    data: option<list<video>>,
+    /// Error list; appears only if there was an error
+    errors: option<list<error>>,
+    /// Server-generated message, if any
+    message: option<string>,
+    /// Current page that is returned
+    page: option<s32>,
+    /// Number of results per page
+    per-page: option<s32>,
+    /// Total count of all results across all pages
+    total-count: option<s32>
+  }
+
+  /// Information about a video
+  record video {
+    /// Date this video was added to the Shutterstock library
+    added-date: option<string>,
+    /// Affiliate referral link; appears only for registered affiliate partners
+    affiliate-url: option<string>,
+    /// Aspect ratio of this video in decimal format, such as 0.6667
+    aspect: option<f64>,
+    /// Aspect ratio of the video as a ratio, such as 16:9
+    aspect-ratio: option<string>,
+    assets: option<video-assets>,
+    /// List of categories
+    categories: option<list<category>>,
+    contributor: contributor,
+    /// Description of this video
+    description: option<string>,
+    /// Duration of this video, in seconds
+    duration: option<f64>,
+    /// Whether or not this video has been released for use by the model appearing in it
+    has-model-release: option<bool>,
+    /// Whether or not this video has received a release to show the landmark or property appearing in it
+    has-property-release: option<bool>,
+    /// ID of the video
+    id: string,
+    /// Whether or not this video contains adult content
+    is-adult: option<bool>,
+    /// Whether or not this video is editorial content
+    is-editorial: option<bool>,
+    /// Keywords associated with the content of this video
+    keywords: option<list<string>>,
+    /// Media type of this video, should always be "video"
+    media-type: string,
+    /// List of models in this video
+    models: option<list<model>>,
+    /// Link to video information page; included only for certain accounts
+    url: option<string>
+  }
+
+  /// Video asset information
+  record video-assets {
+    v4k: option<video-size-details>,
+    hd: option<video-size-details>,
+    preview-jpg: option<url>,
+    preview-mp4: option<url>,
+    preview-webm: option<url>,
+    sd: option<video-size-details>,
+    thumb-jpg: option<url>,
+    thumb-jpgs: option<urls>,
+    thumb-mp4: option<url>,
+    thumb-webm: option<url>,
+    web: option<video-size-details>
+  }
+
+  /// Video asset information
+  record video-size-details {
+    /// Display name of this video size
+    display-name: option<string>,
+    /// File size (in bytes) of this video size
+    file-size: option<s32>,
+    /// Format of this video size
+    format: option<string>,
+    /// Frames per second of this video size
+    fps: option<f64>,
+    /// Height of this video size
+    height: option<s32>,
+    /// Whether or not videos can be licensed in this video size
+    is-licensable: option<bool>,
+    /// Width of this video size
+    width: option<s32>
+  }
+
+  /// URL object
+  record url {
+    /// URL that can be used to download the unwatermarked, licensed asset
+    url: string
+  }
+
+  /// List of URLs
+  record urls {
+    /// URLs
+    urls: list<string>
+  }
+
+  /// Category information
+  record category {
+    /// Category ID
+    id: option<string>,
+    /// Category name
+    name: option<string>
+  }
+
+  /// Information about a contributor
+  record contributor {
+    /// ID of the contributor
+    id: string
+  }
+
+  /// Information about a human model or property that appears in media; used to search for assets that this model is in
+  record model {
+    /// ID of the model
+    id: string
+  }
+
+  /// Error object
+  record error {
+    /// The error code of this error
+    code: option<string>,
+    /// Debugging information about the error
+    data: option<string>,
+    /// A list of items that produced the error
+    items: option<list<error-items-item>>,
+    /// Specific details about this error
+    message: string,
+    /// Internal code reference to the source of the error
+    path: option<string>
+  }
+
+  record error-items-item {
+    /// JSON-encoded free-form object payload
+    data: option<string>
+  }
+
   /// Language code
   record language {
     /// opaque schema; raw JSON
     value: string
+  }
+
+  /// List of categories that images can belong to
+  record category-data-list {
+    /// Categories
+    data: option<list<category>>,
+    /// Error list; appears only if there was an error
+    errors: option<list<error>>,
+    /// Server-generated message, if any
+    message: option<string>,
+    /// The current page of results
+    page: option<s32>,
+    /// The number of results per page
+    per-page: option<s32>,
+    /// The total number of results across all pages
+    total-count: option<s32>
+  }
+
+  /// List of collections
+  record collection-data-list {
+    /// Collections
+    data: option<list<collection>>,
+    /// Error list; appears only if there was an error
+    errors: option<list<error>>,
+    /// Server-generated message, if any
+    message: option<string>,
+    /// The current page of results
+    page: option<s32>,
+    /// The number of results per page
+    per-page: option<s32>,
+    /// The total number of results across all pages
+    total-count: option<s32>
+  }
+
+  /// Metadata about a collection of assets
+  record collection {
+    cover-item: option<collection-item>,
+    /// When the collection was created
+    created-time: option<string>,
+    /// The collection ID
+    id: string,
+    /// The last time this collection's items were updated
+    items-updated-time: option<string>,
+    /// The name of the collection
+    name: string,
+    /// A code that can be used to share the collection (optional)
+    share-code: option<string>,
+    /// The browser URL that can be used to share the collection (optional)
+    share-url: option<string>,
+    /// The number of items in the collection
+    total-item-count: s32,
+    /// The last time the collection was update (other than changes to the items in it)
+    updated-time: option<string>
   }
 
   /// Metadata about an item that is part of a collection
@@ -2099,6 +5381,158 @@ interface videos {
     id: string,
     /// The media type of the item, such as image, video, or audio
     media-type: option<string>
+  }
+
+  /// Collection creation response
+  record collection-create-response {
+    /// ID of the new collection
+    id: string
+  }
+
+  /// List of featured collections
+  record featured-collection-data-list {
+    /// Featured collections
+    data: option<list<featured-collection>>,
+    /// Error list; appears only if there was an error
+    errors: option<list<error>>,
+    /// Server-generated message, if any
+    message: option<string>,
+    /// Current page that is returned
+    page: option<s32>,
+    /// Number of results per page
+    per-page: option<s32>,
+    /// Total count of all results across all pages
+    total-count: option<s32>
+  }
+
+  /// Metadata about a featured collection
+  record featured-collection {
+    cover-item: option<featured-collection-cover-item>,
+    /// Date that the collection was created
+    created-time: option<string>,
+    hero-item: option<featured-collection-cover-item>,
+    /// Collection ID
+    id: string,
+    /// Date that an item in the collection was last added or removed
+    items-updated-time: option<string>,
+    /// Name of the collection
+    name: string,
+    /// Unique share url for the collection
+    share-url: option<string>,
+    /// Total number of items in the collection
+    total-item-count: s32,
+    /// Date that the collection was last modified
+    updated-time: option<string>
+  }
+
+  /// Featured collection cover item metadata
+  record featured-collection-cover-item {
+    /// URL of the collection cover item
+    url: string
+  }
+
+  /// List of items in a collection
+  record video-collection-item-data-list {
+    /// Assets in the collection
+    data: option<list<collection-item>>,
+    /// Error list; appears only if there was an error
+    errors: option<list<error>>,
+    /// Server-generated message, if any
+    message: option<string>,
+    /// The current page of results
+    page: option<s32>,
+    /// The number of results per page
+    per-page: option<s32>,
+    /// The total number of results across all pages
+    total-count: option<s32>
+  }
+
+  /// List of items in a collection
+  record collection-item-data-list {
+    /// Assets in the collection
+    data: option<list<collection-item>>,
+    /// Error list; appears only if there was an error
+    errors: option<list<error>>,
+    /// Server-generated message, if any
+    message: option<string>,
+    /// The current page of results
+    page: option<s32>,
+    /// The number of results per page
+    per-page: option<s32>,
+    /// The total number of results across all pages
+    total-count: option<s32>
+  }
+
+  /// List of download events
+  record download-history-data-list {
+    /// Download events
+    data: option<list<download-history>>,
+    /// Error list; appears only if there was an error
+    errors: option<list<error>>,
+    /// Server-generated message, if any
+    message: option<string>,
+    /// The current page of results
+    page: option<s32>,
+    /// The number of results per page
+    per-page: option<s32>,
+    /// The total number of results across all pages
+    total-count: option<s32>
+  }
+
+  /// Information about a downloaded media item. Applicable for all media types, only one of 'audio', 'image' or 'video' will be in a single DownloadHistory object
+  record download-history {
+    audio: option<download-history-media-details>,
+    /// Date the media was downloaded the first time
+    download-time: string,
+    /// ID of the download
+    id: string,
+    image: option<download-history-media-details>,
+    /// Specifies if the media is downloadable via its respective downloads endpoint
+    is-downloadable: option<bool>,
+    /// The name of the license of this download
+    license: string,
+    /// The metadata that was passed in the original licensing request
+    metadata: option<download-history-metadata>,
+    revshare: option<download-history-revshare-details>,
+    /// ID of the subscription used to perform this download
+    subscription-id: option<string>,
+    user: option<download-history-user-details>,
+    video: option<download-history-media-details>
+  }
+
+  /// Information about the downloaded media
+  record download-history-media-details {
+    format: option<download-history-format-details>,
+    /// ID of the download history media details
+    id: string
+  }
+
+  /// Information about the format of a download
+  record download-history-format-details {
+    /// The format of the downloaded media
+    format: option<string>,
+    /// The size of the downloaded media
+    size: option<string>
+  }
+
+  /// The metadata that was passed in the original licensing request
+  record download-history-metadata {
+    /// JSON-encoded free-form object payload
+    data: option<string>
+  }
+
+  /// Pricing information for revenue-sharing transactions
+  record download-history-revshare-details {
+    /// The amount charged for the license
+    purchase-amount: string,
+    /// The currency the amount was charged in
+    purchase-currency: string
+  }
+
+  /// Information about a user
+  record download-history-user-details {
+    /// The name of the user who downloaded the item
+    username: string
   }
 
   /// Data required to license a video
@@ -2135,6 +5569,242 @@ interface videos {
     data: option<string>
   }
 
+  /// List of video license results
+  record license-video-result-data-list {
+    /// License results
+    data: option<list<license-video-result>>,
+    /// Error list; appears only if there was an error
+    errors: option<list<error>>,
+    /// Server-generated message, if any
+    message: option<string>,
+    /// Current page that is returned
+    page: option<s32>,
+    /// Number of results per page
+    per-page: option<s32>,
+    /// Total count of all results across all pages
+    total-count: option<s32>
+  }
+
+  /// The response to a licensing request for a video
+  record license-video-result {
+    /// Number of credits that this licensing event used
+    allotment-charge: option<s32>,
+    download: option<url>,
+    /// Potential error that occurred during licensing
+    error: option<string>,
+    /// ID of the license event
+    license-id: option<string>,
+    price: option<price>,
+    /// ID of the video that was licensed
+    video-id: string
+  }
+
+  /// Price
+  record price {
+    /// Floating-point amount of the calculated rev-share price in the currency local_currency
+    local-amount: option<f64>,
+    /// Currency of the rev-share price that was calculated
+    local-currency: option<string>
+  }
+
+  /// Video search results
+  record video-search-results {
+    /// List of videos
+    data: list<video>,
+    /// Server-generated message, if any
+    message: option<string>,
+    /// Current page that is returned
+    page: option<s32>,
+    /// Number of results per page
+    per-page: option<s32>,
+    /// Unique identifier for the search request
+    search-id: string,
+    /// Total count of all results across all pages
+    total-count: s32
+  }
+
+  /// List of search suggestions
+  record suggestions {
+    /// Search suggestions
+    data: option<list<string>>
+  }
+
+  /// List of updated media
+  record updated-media-data-list {
+    /// Updated media items
+    data: option<list<updated-media>>,
+    /// Error list; appears only if there was an error
+    errors: option<list<error>>,
+    /// Server-generated message, if any
+    message: option<string>,
+    /// Current page that is returned
+    page: option<s32>,
+    /// Number of results per page
+    per-page: option<s32>,
+    /// Total count of all results across all pages
+    total-count: option<s32>
+  }
+
+  /// Information about a piece of updated media
+  record updated-media {
+    /// ID of the media
+    id: string,
+    /// Date that the media was updated
+    updated-time: string,
+    /// Types of updates that were made to the piece of media
+    updates: list<string>
+  }
+
+  variant get-video-list-error {
+    bad-request(string),
+    unauthorized(string),
+    forbidden(string),
+    other(string)
+  }
+
+  variant list-video-categories-error {
+    bad-request(string),
+    unauthorized(string),
+    forbidden(string),
+    other(string)
+  }
+
+  variant get-video-collection-list-error {
+    bad-request(string),
+    unauthorized(string),
+    forbidden(string),
+    other(string)
+  }
+
+  variant create-video-collection-error {
+    bad-request(string),
+    unauthorized(string),
+    forbidden(string),
+    other(string)
+  }
+
+  variant get-featured-video-collection-list-error {
+    bad-request(string),
+    unauthorized(string),
+    forbidden(string),
+    other(string)
+  }
+
+  variant get-featured-video-collection-error {
+    bad-request(string),
+    unauthorized(string),
+    forbidden(string),
+    not-found(string),
+    other(string)
+  }
+
+  variant get-featured-video-collection-items-error {
+    bad-request(string),
+    unauthorized(string),
+    forbidden(string),
+    not-found(string),
+    other(string)
+  }
+
+  variant get-video-collection-error {
+    bad-request(string),
+    unauthorized(string),
+    forbidden(string),
+    not-found(string),
+    other(string)
+  }
+
+  variant rename-video-collection-error {
+    bad-request(string),
+    unauthorized(string),
+    forbidden(string),
+    not-found(string),
+    other(string)
+  }
+
+  variant delete-video-collection-error {
+    bad-request(string),
+    unauthorized(string),
+    forbidden(string),
+    not-found(string),
+    other(string)
+  }
+
+  variant get-video-collection-items-error {
+    bad-request(string),
+    unauthorized(string),
+    forbidden(string),
+    not-found(string),
+    other(string)
+  }
+
+  variant add-video-collection-items-error {
+    bad-request(string),
+    unauthorized(string),
+    forbidden(string),
+    not-found(string),
+    other(string)
+  }
+
+  variant delete-video-collection-items-error {
+    bad-request(string),
+    unauthorized(string),
+    forbidden(string),
+    not-found(string),
+    other(string)
+  }
+
+  variant get-video-license-list-error {
+    bad-request(string),
+    unauthorized(string),
+    forbidden(string),
+    other(string)
+  }
+
+  variant license-videos-error {
+    bad-request(string),
+    unauthorized(string),
+    forbidden(string),
+    other(string)
+  }
+
+  variant download-videos-error {
+    bad-request(string),
+    unauthorized(string),
+    forbidden(string),
+    other(string)
+  }
+
+  variant search-videos-error {
+    bad-request(string),
+    unauthorized(string),
+    forbidden(string),
+    not-found(string),
+    other(string)
+  }
+
+  variant get-video-suggestions-error {
+    bad-request(string),
+    unauthorized(string),
+    forbidden(string),
+    other(string)
+  }
+
+  variant get-video-error {
+    bad-request(string),
+    unauthorized(string),
+    forbidden(string),
+    not-found(string),
+    other(string)
+  }
+
+  variant find-similar-videos-error {
+    bad-request(string),
+    unauthorized(string),
+    forbidden(string),
+    other(string)
+  }
+
   /// List videos
   record get-video-list-params {
     /// One or more video IDs
@@ -2144,14 +5814,14 @@ interface videos {
     /// The ID of the search that is related to this request
     search-id: option<string>
   }
-  get-video-list: func(params: get-video-list-params) -> result<string, string>;
+  get-video-list: func(params: get-video-list-params) -> result<video-data-list, get-video-list-error>;
 
   /// List video categories
   record list-video-categories-params {
     /// Language for the keywords and categories in the response
     language: option<language>
   }
-  list-video-categories: func(params: list-video-categories-params) -> result<string, string>;
+  list-video-categories: func(params: list-video-categories-params) -> result<category-data-list, list-video-categories-error>;
 
   /// List video collections
   record get-video-collection-list-params {
@@ -2162,21 +5832,21 @@ interface videos {
     /// Which sharing information to include in the response, such as a URL to the collection
     embed: option<list<get-video-collection-list-embed-item-enum>>
   }
-  get-video-collection-list: func(params: get-video-collection-list-params) -> result<string, string>;
+  get-video-collection-list: func(params: get-video-collection-list-params) -> result<collection-data-list, get-video-collection-list-error>;
 
   /// Create video collections
   record create-video-collection-params {
     /// The name of the collection
     name: string
   }
-  create-video-collection: func(params: create-video-collection-params) -> result<string, string>;
+  create-video-collection: func(params: create-video-collection-params) -> result<collection-create-response, create-video-collection-error>;
 
   /// List featured video collections
   record get-featured-video-collection-list-params {
     /// What information to include in the response, such as a URL to the collection
     embed: option<get-featured-video-collection-list-embed-enum>
   }
-  get-featured-video-collection-list: func(params: get-featured-video-collection-list-params) -> result<string, string>;
+  get-featured-video-collection-list: func(params: get-featured-video-collection-list-params) -> result<featured-collection-data-list, get-featured-video-collection-list-error>;
 
   /// Get the details of featured video collections
   record get-featured-video-collection-params {
@@ -2185,7 +5855,7 @@ interface videos {
     /// What information to include in the response, such as a URL to the collection
     embed: option<get-featured-video-collection-list-embed-enum>
   }
-  get-featured-video-collection: func(params: get-featured-video-collection-params) -> result<string, string>;
+  get-featured-video-collection: func(params: get-featured-video-collection-params) -> result<featured-collection, get-featured-video-collection-error>;
 
   /// Get the contents of featured video collections
   record get-featured-video-collection-items-params {
@@ -2196,7 +5866,7 @@ interface videos {
     /// Number of results per page
     per-page: option<s32>
   }
-  get-featured-video-collection-items: func(params: get-featured-video-collection-items-params) -> result<string, string>;
+  get-featured-video-collection-items: func(params: get-featured-video-collection-items-params) -> result<video-collection-item-data-list, get-featured-video-collection-items-error>;
 
   /// Get the details of video collections
   record get-video-collection-params {
@@ -2207,7 +5877,7 @@ interface videos {
     /// Code to retrieve a shared collection
     share-code: option<string>
   }
-  get-video-collection: func(params: get-video-collection-params) -> result<string, string>;
+  get-video-collection: func(params: get-video-collection-params) -> result<collection, get-video-collection-error>;
 
   /// Rename video collections
   record rename-video-collection-params {
@@ -2216,14 +5886,14 @@ interface videos {
     /// The new name of the collection
     name: string
   }
-  rename-video-collection: func(params: rename-video-collection-params) -> result<string, string>;
+  rename-video-collection: func(params: rename-video-collection-params) -> result<string, rename-video-collection-error>;
 
   /// Delete video collections
   record delete-video-collection-params {
     /// The ID of the collection to delete
     id: string
   }
-  delete-video-collection: func(params: delete-video-collection-params) -> result<string, string>;
+  delete-video-collection: func(params: delete-video-collection-params) -> result<string, delete-video-collection-error>;
 
   /// Get the contents of video collections
   record get-video-collection-items-params {
@@ -2238,7 +5908,7 @@ interface videos {
     /// Sort order
     sort: option<get-video-collection-items-sort-enum>
   }
-  get-video-collection-items: func(params: get-video-collection-items-params) -> result<string, string>;
+  get-video-collection-items: func(params: get-video-collection-items-params) -> result<collection-item-data-list, get-video-collection-items-error>;
 
   /// Add videos to collections
   record add-video-collection-items-params {
@@ -2247,7 +5917,7 @@ interface videos {
     /// List of items
     items: list<collection-item>
   }
-  add-video-collection-items: func(params: add-video-collection-items-params) -> result<string, string>;
+  add-video-collection-items: func(params: add-video-collection-items-params) -> result<string, add-video-collection-items-error>;
 
   /// Remove videos from collections
   record delete-video-collection-items-params {
@@ -2256,7 +5926,7 @@ interface videos {
     /// One or more video IDs to remove from the collection
     item-id: option<list<string>>
   }
-  delete-video-collection-items: func(params: delete-video-collection-items-params) -> result<string, string>;
+  delete-video-collection-items: func(params: delete-video-collection-items-params) -> result<string, delete-video-collection-items-error>;
 
   /// List video licenses
   record get-video-license-list-params {
@@ -2281,7 +5951,7 @@ interface videos {
     /// Set to true to see license history for all members of your team.
     team-history: option<bool>
   }
-  get-video-license-list: func(params: get-video-license-list-params) -> result<string, string>;
+  get-video-license-list: func(params: get-video-license-list-params) -> result<download-history-data-list, get-video-license-list-error>;
 
   /// License videos
   record license-videos-params {
@@ -2294,7 +5964,7 @@ interface videos {
     /// Videos to license
     videos: list<license-video>
   }
-  license-videos: func(params: license-videos-params) -> result<string, string>;
+  license-videos: func(params: license-videos-params) -> result<license-video-result-data-list, license-videos-error>;
 
   /// Download videos
   record download-videos-params {
@@ -2308,7 +5978,7 @@ interface videos {
     /// (Deprecated)
     verification-code: option<string>
   }
-  download-videos: func(params: download-videos-params) -> result<string, string>;
+  download-videos: func(params: download-videos-params) -> result<url, download-videos-error>;
 
   /// Search for videos
   record search-videos-params {
@@ -2371,7 +6041,7 @@ interface videos {
     /// Amount of detail to render in the response
     view: option<get-video-list-view-enum>
   }
-  search-videos: func(params: search-videos-params) -> result<string, string>;
+  search-videos: func(params: search-videos-params) -> result<video-search-results, search-videos-error>;
 
   /// Get suggestions for a search term
   record get-video-suggestions-params {
@@ -2380,7 +6050,7 @@ interface videos {
     /// Limit the number of the suggestions
     limit: option<s32>
   }
-  get-video-suggestions: func(params: get-video-suggestions-params) -> result<string, string>;
+  get-video-suggestions: func(params: get-video-suggestions-params) -> result<suggestions, get-video-suggestions-error>;
 
   /// List updated videos
   record get-updated-videos-params {
@@ -2397,7 +6067,7 @@ interface videos {
     /// Sort by oldest or newest videos first
     sort: option<get-video-collection-items-sort-enum>
   }
-  get-updated-videos: func(params: get-updated-videos-params) -> result<string, string>;
+  get-updated-videos: func(params: get-updated-videos-params) -> result<updated-media-data-list, string>;
 
   /// Get details about videos
   record get-video-params {
@@ -2410,7 +6080,7 @@ interface videos {
     /// The ID of the search that is related to this request
     search-id: option<string>
   }
-  get-video: func(params: get-video-params) -> result<string, string>;
+  get-video: func(params: get-video-params) -> result<video, get-video-error>;
 
   /// List similar videos
   record find-similar-videos-params {
@@ -2425,7 +6095,7 @@ interface videos {
     /// Amount of detail to render in the response
     view: option<get-video-list-view-enum>
   }
-  find-similar-videos: func(params: find-similar-videos-params) -> result<string, string>;
+  find-similar-videos: func(params: find-similar-videos-params) -> result<video-search-results, find-similar-videos-error>;
 
 }
 /// The component world: imports the secrets host capability

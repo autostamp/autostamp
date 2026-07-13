@@ -44,10 +44,15 @@ pub(crate) enum FieldLocation {
     Body,
 }
 
-/// A single operation parameter: the snake-case key it carries in the params JSON and where
-/// it belongs in the request.
+/// A single operation parameter. `snake` keys the field in the internal params JSON (and, for a
+/// path field, matches the `{snake}` placeholder in the path template); `wire` is the verbatim name
+/// the field takes on the HTTP wire (query key, header name, or body property). The two differ
+/// whenever the source name isn't already snake_case (e.g. `dryRun` → snake `dry_run`, wire
+/// `dryRun`), and let distinct inputs that share a snake key (`DateCreated`, `DateCreated<`) still
+/// travel under their true names.
 pub(crate) struct FieldSpec {
     pub(crate) snake: &'static str,
+    pub(crate) wire: &'static str,
     pub(crate) location: FieldLocation,
 }
 
@@ -71,6 +76,16 @@ pub(crate) struct AuthApply {
     pub(crate) kind: AuthKind,
 }
 
+/// The failure modes of [`dispatch`], kept structured so each generated operation can map them
+/// onto its own typed error: an `Http` failure carries the response status and body (routed to
+/// the matching error-variant case), while a `Transport` failure carries a message for the
+/// catch-all case (a secret lookup, connection, or decode failure that never produced an HTTP
+/// status).
+pub(crate) enum DispatchError {
+    Http { status: u16, body: String },
+    Transport(String),
+}
+
 /// A single API operation: HTTP method, path template (with `{snake}` placeholders), the
 /// parameter fields, and the security schemes to apply.
 pub(crate) struct OpSpec {
@@ -81,8 +96,9 @@ pub(crate) struct OpSpec {
 }
 
 /// Execute `op` with the supplied `params` (a JSON object keyed by snake-case field names)
-/// and return the response body as a string, or an error message.
-pub(crate) fn dispatch(op: &OpSpec, params: Value) -> Result<String, String> {
+/// and return the raw 2xx response body, or a structured [`DispatchError`] the caller maps
+/// onto the operation's typed error.
+pub(crate) fn dispatch(op: &OpSpec, params: Value) -> Result<String, DispatchError> {
     let obj = match &params {
         Value::Object(map) => Some(map),
         _ => None,
@@ -105,10 +121,10 @@ pub(crate) fn dispatch(op: &OpSpec, params: Value) -> Result<String, String> {
                 let placeholder = format!("{{{}}}", field.snake);
                 path = path.replace(&placeholder, &percent_encode(&scalar(value)));
             }
-            FieldLocation::Query => query.push((field.snake.to_string(), scalar(value))),
-            FieldLocation::Header => headers.push((field.snake.to_string(), scalar(value))),
+            FieldLocation::Query => query.push((field.wire.to_string(), scalar(value))),
+            FieldLocation::Header => headers.push((field.wire.to_string(), scalar(value))),
             FieldLocation::Body => {
-                body.insert(field.snake.to_string(), value.clone());
+                body.insert(field.wire.to_string(), value.clone());
             }
         }
     }
@@ -116,7 +132,7 @@ pub(crate) fn dispatch(op: &OpSpec, params: Value) -> Result<String, String> {
     // Apply each resolved security scheme, sourcing its value from wasmcloud:secrets.
     let mut cookies: Vec<String> = Vec::new();
     for apply in op.auth {
-        let secret = fetch_secret(apply.secret_key)?;
+        let secret = fetch_secret(apply.secret_key).map_err(DispatchError::Transport)?;
         match &apply.kind {
             AuthKind::Bearer => headers.push(("authorization".into(), format!("Bearer {secret}"))),
             AuthKind::Basic => {
@@ -177,17 +193,18 @@ fn fetch_secret(key: &str) -> Result<String, String> {
 }
 
 /// Build and send the outgoing request with `wstd`, returning the response body on a 2xx
-/// status. The generated guest exports are synchronous, so the async `wstd` client is driven
-/// to completion on a local reactor via `wstd::runtime::block_on`.
+/// status and a structured [`DispatchError`] otherwise. The generated guest exports are
+/// synchronous, so the async `wstd` client is driven to completion on a local reactor via
+/// `wstd::runtime::block_on`.
 fn perform(
     method: &str,
     path_with_query: &str,
     headers: &[(String, String)],
     body: &[u8],
-) -> Result<String, String> {
+) -> Result<String, DispatchError> {
     let url = join_url(crate::BASE_URL, path_with_query);
     let method = Method::from_bytes(method.as_bytes())
-        .map_err(|err| format!("invalid HTTP method `{method}`: {err}"))?;
+        .map_err(|err| DispatchError::Transport(format!("invalid HTTP method `{method}`: {err}")))?;
 
     let mut builder = Request::builder().method(method).uri(url);
     for (name, value) in headers {
@@ -199,27 +216,29 @@ fn perform(
         } else {
             Body::from(body.to_vec())
         })
-        .map_err(|err| format!("failed to build request: {err}"))?;
+        .map_err(|err| DispatchError::Transport(format!("failed to build request: {err}")))?;
 
     wstd::runtime::block_on(async move {
         let client = Client::new();
         let response = client
             .send(request)
             .await
-            .map_err(|err| format!("request failed: {err:#}"))?;
+            .map_err(|err| DispatchError::Transport(format!("request failed: {err:#}")))?;
 
         let status = response.status().as_u16();
         let mut response_body = response.into_body();
-        let bytes = response_body
-            .contents()
-            .await
-            .map_err(|err| format!("failed to read response body: {err:#}"))?;
+        let bytes = response_body.contents().await.map_err(|err| {
+            DispatchError::Transport(format!("failed to read response body: {err:#}"))
+        })?;
         let body_text = String::from_utf8_lossy(bytes).into_owned();
 
         if (200..300).contains(&status) {
             Ok(body_text)
         } else {
-            Err(format!("HTTP {status}: {body_text}"))
+            Err(DispatchError::Http {
+                status,
+                body: body_text,
+            })
         }
     })
 }
@@ -293,9 +312,55 @@ const OP_WELCOME_GET: OpSpec = OpSpec {
     ],
 };
 
+fn iface_welcome__get_response__to_json(p: &iface_welcome::GetResponse) -> Value {
+    let mut m = Map::new();
+    m.insert("developer".into(), match (&p.developer) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("documentation".into(), match (&p.documentation) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("email".into(), match (&p.email) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("linkedin".into(), match (&p.linkedin) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("name".into(), match (&p.name) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("twitter".into(), match (&p.twitter) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("website".into(), match (&p.website) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_welcome__get_response__from_json(v: &Value) -> Option<iface_welcome::GetResponse> {
+    let m = v.as_object()?;
+    Some(iface_welcome::GetResponse {
+        developer: m.get("developer").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        documentation: m.get("documentation").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        email: m.get("email").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        linkedin: m.get("linkedin").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        name: m.get("name").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        twitter: m.get("twitter").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        website: m.get("website").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    })
+}
+
+fn iface_welcome__get__ok(body: String) -> Result<iface_welcome::GetResponse, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match iface_welcome__get_response__from_json(&v) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_welcome__get__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
 impl iface_welcome::Guest for crate::Component {
-    fn get() -> Result<String, String> {
-        dispatch(&OP_WELCOME_GET, Value::Object(Map::new()))
+    fn get() -> Result<iface_welcome::GetResponse, String> {
+        match dispatch(&OP_WELCOME_GET, Value::Object(Map::new())).and_then(iface_welcome__get__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_welcome__get__err(e)),
+        }
     }
 }
 use crate::exports::autostamp::medium::article as iface_article;
@@ -304,7 +369,7 @@ const OP_ARTICLE_GET_ARTICLE_ARTICLE_ID: OpSpec = OpSpec {
     method: "GET",
     path_template: "/article/{article_id}",
     fields: &[
-        FieldSpec { snake: "article_id", location: FieldLocation::Path },
+        FieldSpec { snake: "article_id", wire: "article_id", location: FieldLocation::Path },
     ],
     auth: &[
     ],
@@ -314,7 +379,7 @@ const OP_ARTICLE_GET_ARTICLE_ARTICLE_ID_CONTENT: OpSpec = OpSpec {
     method: "GET",
     path_template: "/article/{article_id}/content",
     fields: &[
-        FieldSpec { snake: "article_id", location: FieldLocation::Path },
+        FieldSpec { snake: "article_id", wire: "article_id", location: FieldLocation::Path },
     ],
     auth: &[
     ],
@@ -324,7 +389,7 @@ const OP_ARTICLE_GET_ARTICLE_ARTICLE_ID_FANS: OpSpec = OpSpec {
     method: "GET",
     path_template: "/article/{article_id}/fans",
     fields: &[
-        FieldSpec { snake: "article_id", location: FieldLocation::Path },
+        FieldSpec { snake: "article_id", wire: "article_id", location: FieldLocation::Path },
     ],
     auth: &[
     ],
@@ -334,7 +399,7 @@ const OP_ARTICLE_GET_ARTICLE_ARTICLE_ID_MARKDOWN: OpSpec = OpSpec {
     method: "GET",
     path_template: "/article/{article_id}/markdown",
     fields: &[
-        FieldSpec { snake: "article_id", location: FieldLocation::Path },
+        FieldSpec { snake: "article_id", wire: "article_id", location: FieldLocation::Path },
     ],
     auth: &[
     ],
@@ -344,7 +409,7 @@ const OP_ARTICLE_GET_ARTICLE_ARTICLE_ID_RELATED: OpSpec = OpSpec {
     method: "GET",
     path_template: "/article/{article_id}/related",
     fields: &[
-        FieldSpec { snake: "article_id", location: FieldLocation::Path },
+        FieldSpec { snake: "article_id", wire: "article_id", location: FieldLocation::Path },
     ],
     auth: &[
     ],
@@ -354,11 +419,69 @@ const OP_ARTICLE_GET_ARTICLE_ARTICLE_ID_RESPONSES: OpSpec = OpSpec {
     method: "GET",
     path_template: "/article/{article_id}/responses",
     fields: &[
-        FieldSpec { snake: "article_id", location: FieldLocation::Path },
+        FieldSpec { snake: "article_id", wire: "article_id", location: FieldLocation::Path },
     ],
     auth: &[
     ],
 };
+
+fn iface_article__get_article_article_id_response__to_json(p: &iface_article::GetArticleArticleIdResponse) -> Value {
+    let mut m = Map::new();
+    m.insert("author".into(), match (&p.author) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("claps".into(), match (&p.claps) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("id".into(), match (&p.id) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("image_url".into(), match (&p.image_url) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("is_locked".into(), match (&p.is_locked) { Some(v) => Value::Bool(*(v)), None => Value::Null });
+    m.insert("is_series".into(), match (&p.is_series) { Some(v) => Value::Bool(*(v)), None => Value::Null });
+    m.insert("lang".into(), match (&p.lang) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("last_modified_at".into(), match (&p.last_modified_at) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("publication_id".into(), match (&p.publication_id) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("published_at".into(), match (&p.published_at) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("reading_time".into(), match (&p.reading_time) { Some(v) => serde_json::Number::from_f64(*(v)).map(Value::Number).unwrap_or(Value::Null), None => Value::Null });
+    m.insert("responses_count".into(), match (&p.responses_count) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("subtitle".into(), match (&p.subtitle) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("tags".into(), match (&p.tags) { Some(v) => Value::Array((v).iter().map(|v| Value::String((v).clone())).collect()), None => Value::Null });
+    m.insert("title".into(), match (&p.title) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("topics".into(), match (&p.topics) { Some(v) => Value::Array((v).iter().map(|v| Value::String((v).clone())).collect()), None => Value::Null });
+    m.insert("url".into(), match (&p.url) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("voters".into(), match (&p.voters) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("word_count".into(), match (&p.word_count) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_article__get_article_article_id_content_response__to_json(p: &iface_article::GetArticleArticleIdContentResponse) -> Value {
+    let mut m = Map::new();
+    m.insert("content".into(), match (&p.content) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_article__get_article_article_id_fans_response__to_json(p: &iface_article::GetArticleArticleIdFansResponse) -> Value {
+    let mut m = Map::new();
+    m.insert("article_id".into(), match (&p.article_id) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("count".into(), match (&p.count) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("voters".into(), match (&p.voters) { Some(v) => Value::Array((v).iter().map(|v| Value::String((v).clone())).collect()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_article__get_article_article_id_markdown_response__to_json(p: &iface_article::GetArticleArticleIdMarkdownResponse) -> Value {
+    let mut m = Map::new();
+    m.insert("markdown".into(), match (&p.markdown) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_article__get_article_article_id_related_response__to_json(p: &iface_article::GetArticleArticleIdRelatedResponse) -> Value {
+    let mut m = Map::new();
+    m.insert("id".into(), match (&p.id) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("related_articles".into(), match (&p.related_articles) { Some(v) => Value::Array((v).iter().map(|v| Value::String((v).clone())).collect()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_article__get_article_article_id_responses_response__to_json(p: &iface_article::GetArticleArticleIdResponsesResponse) -> Value {
+    let mut m = Map::new();
+    m.insert("id".into(), match (&p.id) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("responses".into(), match (&p.responses) { Some(v) => Value::Array((v).iter().map(|v| Value::String((v).clone())).collect()), None => Value::Null });
+    Value::Object(m)
+}
 
 fn iface_article__get_article_article_id_params__to_json(p: &iface_article::GetArticleArticleIdParams) -> Value {
     let mut m = Map::new();
@@ -396,30 +519,220 @@ fn iface_article__get_article_article_id_responses_params__to_json(p: &iface_art
     Value::Object(m)
 }
 
+fn iface_article__get_article_article_id_response__from_json(v: &Value) -> Option<iface_article::GetArticleArticleIdResponse> {
+    let m = v.as_object()?;
+    Some(iface_article::GetArticleArticleIdResponse {
+        author: m.get("author").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        claps: m.get("claps").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        id: m.get("id").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        image_url: m.get("image_url").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        is_locked: m.get("is_locked").filter(|v| !v.is_null()).and_then(|v| (v).as_bool()),
+        is_series: m.get("is_series").filter(|v| !v.is_null()).and_then(|v| (v).as_bool()),
+        lang: m.get("lang").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        last_modified_at: m.get("last_modified_at").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        publication_id: m.get("publication_id").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        published_at: m.get("published_at").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        reading_time: m.get("reading_time").filter(|v| !v.is_null()).and_then(|v| (v).as_f64()),
+        responses_count: m.get("responses_count").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        subtitle: m.get("subtitle").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        tags: m.get("tags").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| (x).as_str().map(|s| s.to_string())).collect())),
+        title: m.get("title").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        topics: m.get("topics").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| (x).as_str().map(|s| s.to_string())).collect())),
+        url: m.get("url").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        voters: m.get("voters").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        word_count: m.get("word_count").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+    })
+}
+
+fn iface_article__get_article_article_id_content_response__from_json(v: &Value) -> Option<iface_article::GetArticleArticleIdContentResponse> {
+    let m = v.as_object()?;
+    Some(iface_article::GetArticleArticleIdContentResponse {
+        content: m.get("content").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    })
+}
+
+fn iface_article__get_article_article_id_fans_response__from_json(v: &Value) -> Option<iface_article::GetArticleArticleIdFansResponse> {
+    let m = v.as_object()?;
+    Some(iface_article::GetArticleArticleIdFansResponse {
+        article_id: m.get("article_id").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        count: m.get("count").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        voters: m.get("voters").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| (x).as_str().map(|s| s.to_string())).collect())),
+    })
+}
+
+fn iface_article__get_article_article_id_markdown_response__from_json(v: &Value) -> Option<iface_article::GetArticleArticleIdMarkdownResponse> {
+    let m = v.as_object()?;
+    Some(iface_article::GetArticleArticleIdMarkdownResponse {
+        markdown: m.get("markdown").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    })
+}
+
+fn iface_article__get_article_article_id_related_response__from_json(v: &Value) -> Option<iface_article::GetArticleArticleIdRelatedResponse> {
+    let m = v.as_object()?;
+    Some(iface_article::GetArticleArticleIdRelatedResponse {
+        id: m.get("id").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        related_articles: m.get("related_articles").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| (x).as_str().map(|s| s.to_string())).collect())),
+    })
+}
+
+fn iface_article__get_article_article_id_responses_response__from_json(v: &Value) -> Option<iface_article::GetArticleArticleIdResponsesResponse> {
+    let m = v.as_object()?;
+    Some(iface_article::GetArticleArticleIdResponsesResponse {
+        id: m.get("id").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        responses: m.get("responses").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| (x).as_str().map(|s| s.to_string())).collect())),
+    })
+}
+
+fn iface_article__get_article_article_id__ok(body: String) -> Result<iface_article::GetArticleArticleIdResponse, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match iface_article__get_article_article_id_response__from_json(&v) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_article__get_article_article_id__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
+fn iface_article__get_article_article_id_content__ok(body: String) -> Result<iface_article::GetArticleArticleIdContentResponse, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match iface_article__get_article_article_id_content_response__from_json(&v) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_article__get_article_article_id_content__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
+fn iface_article__get_article_article_id_fans__ok(body: String) -> Result<iface_article::GetArticleArticleIdFansResponse, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match iface_article__get_article_article_id_fans_response__from_json(&v) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_article__get_article_article_id_fans__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
+fn iface_article__get_article_article_id_markdown__ok(body: String) -> Result<iface_article::GetArticleArticleIdMarkdownResponse, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match iface_article__get_article_article_id_markdown_response__from_json(&v) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_article__get_article_article_id_markdown__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
+fn iface_article__get_article_article_id_related__ok(body: String) -> Result<iface_article::GetArticleArticleIdRelatedResponse, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match iface_article__get_article_article_id_related_response__from_json(&v) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_article__get_article_article_id_related__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
+fn iface_article__get_article_article_id_responses__ok(body: String) -> Result<iface_article::GetArticleArticleIdResponsesResponse, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match iface_article__get_article_article_id_responses_response__from_json(&v) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_article__get_article_article_id_responses__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
 impl iface_article::Guest for crate::Component {
-    fn get_article_article_id(params: iface_article::GetArticleArticleIdParams) -> Result<String, String> {
+    fn get_article_article_id(params: iface_article::GetArticleArticleIdParams) -> Result<iface_article::GetArticleArticleIdResponse, String> {
         let json = iface_article__get_article_article_id_params__to_json(&params);
-        dispatch(&OP_ARTICLE_GET_ARTICLE_ARTICLE_ID, json)
+        match dispatch(&OP_ARTICLE_GET_ARTICLE_ARTICLE_ID, json).and_then(iface_article__get_article_article_id__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_article__get_article_article_id__err(e)),
+        }
     }
-    fn get_article_article_id_content(params: iface_article::GetArticleArticleIdContentParams) -> Result<String, String> {
+    fn get_article_article_id_content(params: iface_article::GetArticleArticleIdContentParams) -> Result<iface_article::GetArticleArticleIdContentResponse, String> {
         let json = iface_article__get_article_article_id_content_params__to_json(&params);
-        dispatch(&OP_ARTICLE_GET_ARTICLE_ARTICLE_ID_CONTENT, json)
+        match dispatch(&OP_ARTICLE_GET_ARTICLE_ARTICLE_ID_CONTENT, json).and_then(iface_article__get_article_article_id_content__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_article__get_article_article_id_content__err(e)),
+        }
     }
-    fn get_article_article_id_fans(params: iface_article::GetArticleArticleIdFansParams) -> Result<String, String> {
+    fn get_article_article_id_fans(params: iface_article::GetArticleArticleIdFansParams) -> Result<iface_article::GetArticleArticleIdFansResponse, String> {
         let json = iface_article__get_article_article_id_fans_params__to_json(&params);
-        dispatch(&OP_ARTICLE_GET_ARTICLE_ARTICLE_ID_FANS, json)
+        match dispatch(&OP_ARTICLE_GET_ARTICLE_ARTICLE_ID_FANS, json).and_then(iface_article__get_article_article_id_fans__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_article__get_article_article_id_fans__err(e)),
+        }
     }
-    fn get_article_article_id_markdown(params: iface_article::GetArticleArticleIdMarkdownParams) -> Result<String, String> {
+    fn get_article_article_id_markdown(params: iface_article::GetArticleArticleIdMarkdownParams) -> Result<iface_article::GetArticleArticleIdMarkdownResponse, String> {
         let json = iface_article__get_article_article_id_markdown_params__to_json(&params);
-        dispatch(&OP_ARTICLE_GET_ARTICLE_ARTICLE_ID_MARKDOWN, json)
+        match dispatch(&OP_ARTICLE_GET_ARTICLE_ARTICLE_ID_MARKDOWN, json).and_then(iface_article__get_article_article_id_markdown__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_article__get_article_article_id_markdown__err(e)),
+        }
     }
-    fn get_article_article_id_related(params: iface_article::GetArticleArticleIdRelatedParams) -> Result<String, String> {
+    fn get_article_article_id_related(params: iface_article::GetArticleArticleIdRelatedParams) -> Result<iface_article::GetArticleArticleIdRelatedResponse, String> {
         let json = iface_article__get_article_article_id_related_params__to_json(&params);
-        dispatch(&OP_ARTICLE_GET_ARTICLE_ARTICLE_ID_RELATED, json)
+        match dispatch(&OP_ARTICLE_GET_ARTICLE_ARTICLE_ID_RELATED, json).and_then(iface_article__get_article_article_id_related__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_article__get_article_article_id_related__err(e)),
+        }
     }
-    fn get_article_article_id_responses(params: iface_article::GetArticleArticleIdResponsesParams) -> Result<String, String> {
+    fn get_article_article_id_responses(params: iface_article::GetArticleArticleIdResponsesParams) -> Result<iface_article::GetArticleArticleIdResponsesResponse, String> {
         let json = iface_article__get_article_article_id_responses_params__to_json(&params);
-        dispatch(&OP_ARTICLE_GET_ARTICLE_ARTICLE_ID_RESPONSES, json)
+        match dispatch(&OP_ARTICLE_GET_ARTICLE_ARTICLE_ID_RESPONSES, json).and_then(iface_article__get_article_article_id_responses__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_article__get_article_article_id_responses__err(e)),
+        }
     }
 }
 use crate::exports::autostamp::medium::misc as iface_misc;
@@ -428,7 +741,7 @@ const OP_MISC_GET_LATESTPOSTS_TOPIC_SLUG: OpSpec = OpSpec {
     method: "GET",
     path_template: "/latestposts/{topic_slug}",
     fields: &[
-        FieldSpec { snake: "topic_slug", location: FieldLocation::Path },
+        FieldSpec { snake: "topic_slug", wire: "topic_slug", location: FieldLocation::Path },
     ],
     auth: &[
     ],
@@ -438,7 +751,7 @@ const OP_MISC_GET_RELATED_TAGS_TAG: OpSpec = OpSpec {
     method: "GET",
     path_template: "/related_tags/{tag}",
     fields: &[
-        FieldSpec { snake: "tag", location: FieldLocation::Path },
+        FieldSpec { snake: "tag", wire: "tag", location: FieldLocation::Path },
     ],
     auth: &[
     ],
@@ -448,8 +761,8 @@ const OP_MISC_GET_TOP_WRITER_TOPIC_SLUG: OpSpec = OpSpec {
     method: "GET",
     path_template: "/top_writer/{topic_slug}",
     fields: &[
-        FieldSpec { snake: "topic_slug", location: FieldLocation::Path },
-        FieldSpec { snake: "count", location: FieldLocation::Query },
+        FieldSpec { snake: "topic_slug", wire: "topic_slug", location: FieldLocation::Path },
+        FieldSpec { snake: "count", wire: "count", location: FieldLocation::Query },
     ],
     auth: &[
     ],
@@ -459,14 +772,39 @@ const OP_MISC_GET_TOPFEEDS_TAG_MODE: OpSpec = OpSpec {
     method: "GET",
     path_template: "/topfeeds/{tag}/{mode}",
     fields: &[
-        FieldSpec { snake: "tag", location: FieldLocation::Path },
-        FieldSpec { snake: "mode", location: FieldLocation::Path },
-        FieldSpec { snake: "after", location: FieldLocation::Query },
-        FieldSpec { snake: "count", location: FieldLocation::Query },
+        FieldSpec { snake: "tag", wire: "tag", location: FieldLocation::Path },
+        FieldSpec { snake: "mode", wire: "mode", location: FieldLocation::Path },
+        FieldSpec { snake: "after", wire: "after", location: FieldLocation::Query },
+        FieldSpec { snake: "count", wire: "count", location: FieldLocation::Query },
     ],
     auth: &[
     ],
 };
+
+fn iface_misc__get_latestposts_topic_slug_response__to_json(p: &iface_misc::GetLatestpostsTopicSlugResponse) -> Value {
+    let mut m = Map::new();
+    m.insert("latestposts".into(), match (&p.latestposts) { Some(v) => Value::Array((v).iter().map(|v| Value::String((v).clone())).collect()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_misc__get_related_tags_tag_response__to_json(p: &iface_misc::GetRelatedTagsTagResponse) -> Value {
+    let mut m = Map::new();
+    m.insert("given_tag".into(), match (&p.given_tag) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("related_tags".into(), match (&p.related_tags) { Some(v) => Value::Array((v).iter().map(|v| Value::String((v).clone())).collect()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_misc__get_top_writer_topic_slug_response__to_json(p: &iface_misc::GetTopWriterTopicSlugResponse) -> Value {
+    let mut m = Map::new();
+    m.insert("top_writers".into(), match (&p.top_writers) { Some(v) => Value::Array((v).iter().map(|v| Value::String((v).clone())).collect()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_misc__get_topfeeds_tag_mode_response__to_json(p: &iface_misc::GetTopfeedsTagModeResponse) -> Value {
+    let mut m = Map::new();
+    m.insert("topfeeds".into(), match (&p.topfeeds) { Some(v) => Value::Array((v).iter().map(|v| Value::String((v).clone())).collect()), None => Value::Null });
+    Value::Object(m)
+}
 
 fn iface_misc__get_latestposts_topic_slug_params__to_json(p: &iface_misc::GetLatestpostsTopicSlugParams) -> Value {
     let mut m = Map::new();
@@ -496,22 +834,135 @@ fn iface_misc__get_topfeeds_tag_mode_params__to_json(p: &iface_misc::GetTopfeeds
     Value::Object(m)
 }
 
+fn iface_misc__get_latestposts_topic_slug_response__from_json(v: &Value) -> Option<iface_misc::GetLatestpostsTopicSlugResponse> {
+    let m = v.as_object()?;
+    Some(iface_misc::GetLatestpostsTopicSlugResponse {
+        latestposts: m.get("latestposts").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| (x).as_str().map(|s| s.to_string())).collect())),
+    })
+}
+
+fn iface_misc__get_related_tags_tag_response__from_json(v: &Value) -> Option<iface_misc::GetRelatedTagsTagResponse> {
+    let m = v.as_object()?;
+    Some(iface_misc::GetRelatedTagsTagResponse {
+        given_tag: m.get("given_tag").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        related_tags: m.get("related_tags").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| (x).as_str().map(|s| s.to_string())).collect())),
+    })
+}
+
+fn iface_misc__get_top_writer_topic_slug_response__from_json(v: &Value) -> Option<iface_misc::GetTopWriterTopicSlugResponse> {
+    let m = v.as_object()?;
+    Some(iface_misc::GetTopWriterTopicSlugResponse {
+        top_writers: m.get("top_writers").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| (x).as_str().map(|s| s.to_string())).collect())),
+    })
+}
+
+fn iface_misc__get_topfeeds_tag_mode_response__from_json(v: &Value) -> Option<iface_misc::GetTopfeedsTagModeResponse> {
+    let m = v.as_object()?;
+    Some(iface_misc::GetTopfeedsTagModeResponse {
+        topfeeds: m.get("topfeeds").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| (x).as_str().map(|s| s.to_string())).collect())),
+    })
+}
+
+fn iface_misc__get_latestposts_topic_slug__ok(body: String) -> Result<iface_misc::GetLatestpostsTopicSlugResponse, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match iface_misc__get_latestposts_topic_slug_response__from_json(&v) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_misc__get_latestposts_topic_slug__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
+fn iface_misc__get_related_tags_tag__ok(body: String) -> Result<iface_misc::GetRelatedTagsTagResponse, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match iface_misc__get_related_tags_tag_response__from_json(&v) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_misc__get_related_tags_tag__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
+fn iface_misc__get_top_writer_topic_slug__ok(body: String) -> Result<iface_misc::GetTopWriterTopicSlugResponse, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match iface_misc__get_top_writer_topic_slug_response__from_json(&v) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_misc__get_top_writer_topic_slug__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
+fn iface_misc__get_topfeeds_tag_mode__ok(body: String) -> Result<iface_misc::GetTopfeedsTagModeResponse, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match iface_misc__get_topfeeds_tag_mode_response__from_json(&v) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_misc__get_topfeeds_tag_mode__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
 impl iface_misc::Guest for crate::Component {
-    fn get_latestposts_topic_slug(params: iface_misc::GetLatestpostsTopicSlugParams) -> Result<String, String> {
+    fn get_latestposts_topic_slug(params: iface_misc::GetLatestpostsTopicSlugParams) -> Result<iface_misc::GetLatestpostsTopicSlugResponse, String> {
         let json = iface_misc__get_latestposts_topic_slug_params__to_json(&params);
-        dispatch(&OP_MISC_GET_LATESTPOSTS_TOPIC_SLUG, json)
+        match dispatch(&OP_MISC_GET_LATESTPOSTS_TOPIC_SLUG, json).and_then(iface_misc__get_latestposts_topic_slug__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_misc__get_latestposts_topic_slug__err(e)),
+        }
     }
-    fn get_related_tags_tag(params: iface_misc::GetRelatedTagsTagParams) -> Result<String, String> {
+    fn get_related_tags_tag(params: iface_misc::GetRelatedTagsTagParams) -> Result<iface_misc::GetRelatedTagsTagResponse, String> {
         let json = iface_misc__get_related_tags_tag_params__to_json(&params);
-        dispatch(&OP_MISC_GET_RELATED_TAGS_TAG, json)
+        match dispatch(&OP_MISC_GET_RELATED_TAGS_TAG, json).and_then(iface_misc__get_related_tags_tag__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_misc__get_related_tags_tag__err(e)),
+        }
     }
-    fn get_top_writer_topic_slug(params: iface_misc::GetTopWriterTopicSlugParams) -> Result<String, String> {
+    fn get_top_writer_topic_slug(params: iface_misc::GetTopWriterTopicSlugParams) -> Result<iface_misc::GetTopWriterTopicSlugResponse, String> {
         let json = iface_misc__get_top_writer_topic_slug_params__to_json(&params);
-        dispatch(&OP_MISC_GET_TOP_WRITER_TOPIC_SLUG, json)
+        match dispatch(&OP_MISC_GET_TOP_WRITER_TOPIC_SLUG, json).and_then(iface_misc__get_top_writer_topic_slug__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_misc__get_top_writer_topic_slug__err(e)),
+        }
     }
-    fn get_topfeeds_tag_mode(params: iface_misc::GetTopfeedsTagModeParams) -> Result<String, String> {
+    fn get_topfeeds_tag_mode(params: iface_misc::GetTopfeedsTagModeParams) -> Result<iface_misc::GetTopfeedsTagModeResponse, String> {
         let json = iface_misc__get_topfeeds_tag_mode_params__to_json(&params);
-        dispatch(&OP_MISC_GET_TOPFEEDS_TAG_MODE, json)
+        match dispatch(&OP_MISC_GET_TOPFEEDS_TAG_MODE, json).and_then(iface_misc__get_topfeeds_tag_mode__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_misc__get_topfeeds_tag_mode__err(e)),
+        }
     }
 }
 use crate::exports::autostamp::medium::list_op as iface_list_op;
@@ -520,7 +971,7 @@ const OP_LIST_OP_GET_LIST_LIST_ID: OpSpec = OpSpec {
     method: "GET",
     path_template: "/list/{list_id}",
     fields: &[
-        FieldSpec { snake: "list_id", location: FieldLocation::Path },
+        FieldSpec { snake: "list_id", wire: "list_id", location: FieldLocation::Path },
     ],
     auth: &[
     ],
@@ -530,7 +981,7 @@ const OP_LIST_OP_GET_LIST_LIST_ID_ARTICLES: OpSpec = OpSpec {
     method: "GET",
     path_template: "/list/{list_id}/articles",
     fields: &[
-        FieldSpec { snake: "list_id", location: FieldLocation::Path },
+        FieldSpec { snake: "list_id", wire: "list_id", location: FieldLocation::Path },
     ],
     auth: &[
     ],
@@ -540,11 +991,41 @@ const OP_LIST_OP_GET_LIST_LIST_ID_RESPONSES: OpSpec = OpSpec {
     method: "GET",
     path_template: "/list/{list_id}/responses",
     fields: &[
-        FieldSpec { snake: "list_id", location: FieldLocation::Path },
+        FieldSpec { snake: "list_id", wire: "list_id", location: FieldLocation::Path },
     ],
     auth: &[
     ],
 };
+
+fn iface_list_op__get_list_list_id_response__to_json(p: &iface_list_op::GetListListIdResponse) -> Value {
+    let mut m = Map::new();
+    m.insert("author".into(), match (&p.author) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("claps".into(), match (&p.claps) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("count".into(), match (&p.count) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("created_at".into(), match (&p.created_at) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("description".into(), match (&p.description) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("id".into(), match (&p.id) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("last_item_inserted_at".into(), match (&p.last_item_inserted_at) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("name".into(), match (&p.name) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("responses_count".into(), match (&p.responses_count) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("thumbnail".into(), match (&p.thumbnail) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("voters".into(), match (&p.voters) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_list_op__get_list_list_id_articles_response__to_json(p: &iface_list_op::GetListListIdArticlesResponse) -> Value {
+    let mut m = Map::new();
+    m.insert("id".into(), match (&p.id) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("list_articles".into(), match (&p.list_articles) { Some(v) => Value::Array((v).iter().map(|v| Value::String((v).clone())).collect()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_list_op__get_list_list_id_responses_response__to_json(p: &iface_list_op::GetListListIdResponsesResponse) -> Value {
+    let mut m = Map::new();
+    m.insert("id".into(), match (&p.id) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("responses".into(), match (&p.responses) { Some(v) => Value::Array((v).iter().map(|v| Value::String((v).clone())).collect()), None => Value::Null });
+    Value::Object(m)
+}
 
 fn iface_list_op__get_list_list_id_params__to_json(p: &iface_list_op::GetListListIdParams) -> Value {
     let mut m = Map::new();
@@ -564,18 +1045,114 @@ fn iface_list_op__get_list_list_id_responses_params__to_json(p: &iface_list_op::
     Value::Object(m)
 }
 
+fn iface_list_op__get_list_list_id_response__from_json(v: &Value) -> Option<iface_list_op::GetListListIdResponse> {
+    let m = v.as_object()?;
+    Some(iface_list_op::GetListListIdResponse {
+        author: m.get("author").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        claps: m.get("claps").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        count: m.get("count").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        created_at: m.get("created_at").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        description: m.get("description").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        id: m.get("id").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        last_item_inserted_at: m.get("last_item_inserted_at").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        name: m.get("name").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        responses_count: m.get("responses_count").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        thumbnail: m.get("thumbnail").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        voters: m.get("voters").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+    })
+}
+
+fn iface_list_op__get_list_list_id_articles_response__from_json(v: &Value) -> Option<iface_list_op::GetListListIdArticlesResponse> {
+    let m = v.as_object()?;
+    Some(iface_list_op::GetListListIdArticlesResponse {
+        id: m.get("id").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        list_articles: m.get("list_articles").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| (x).as_str().map(|s| s.to_string())).collect())),
+    })
+}
+
+fn iface_list_op__get_list_list_id_responses_response__from_json(v: &Value) -> Option<iface_list_op::GetListListIdResponsesResponse> {
+    let m = v.as_object()?;
+    Some(iface_list_op::GetListListIdResponsesResponse {
+        id: m.get("id").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        responses: m.get("responses").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| (x).as_str().map(|s| s.to_string())).collect())),
+    })
+}
+
+fn iface_list_op__get_list_list_id__ok(body: String) -> Result<iface_list_op::GetListListIdResponse, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match iface_list_op__get_list_list_id_response__from_json(&v) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_list_op__get_list_list_id__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
+fn iface_list_op__get_list_list_id_articles__ok(body: String) -> Result<iface_list_op::GetListListIdArticlesResponse, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match iface_list_op__get_list_list_id_articles_response__from_json(&v) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_list_op__get_list_list_id_articles__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
+fn iface_list_op__get_list_list_id_responses__ok(body: String) -> Result<iface_list_op::GetListListIdResponsesResponse, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match iface_list_op__get_list_list_id_responses_response__from_json(&v) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_list_op__get_list_list_id_responses__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
 impl iface_list_op::Guest for crate::Component {
-    fn get_list_list_id(params: iface_list_op::GetListListIdParams) -> Result<String, String> {
+    fn get_list_list_id(params: iface_list_op::GetListListIdParams) -> Result<iface_list_op::GetListListIdResponse, String> {
         let json = iface_list_op__get_list_list_id_params__to_json(&params);
-        dispatch(&OP_LIST_OP_GET_LIST_LIST_ID, json)
+        match dispatch(&OP_LIST_OP_GET_LIST_LIST_ID, json).and_then(iface_list_op__get_list_list_id__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_list_op__get_list_list_id__err(e)),
+        }
     }
-    fn get_list_list_id_articles(params: iface_list_op::GetListListIdArticlesParams) -> Result<String, String> {
+    fn get_list_list_id_articles(params: iface_list_op::GetListListIdArticlesParams) -> Result<iface_list_op::GetListListIdArticlesResponse, String> {
         let json = iface_list_op__get_list_list_id_articles_params__to_json(&params);
-        dispatch(&OP_LIST_OP_GET_LIST_LIST_ID_ARTICLES, json)
+        match dispatch(&OP_LIST_OP_GET_LIST_LIST_ID_ARTICLES, json).and_then(iface_list_op__get_list_list_id_articles__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_list_op__get_list_list_id_articles__err(e)),
+        }
     }
-    fn get_list_list_id_responses(params: iface_list_op::GetListListIdResponsesParams) -> Result<String, String> {
+    fn get_list_list_id_responses(params: iface_list_op::GetListListIdResponsesParams) -> Result<iface_list_op::GetListListIdResponsesResponse, String> {
         let json = iface_list_op__get_list_list_id_responses_params__to_json(&params);
-        dispatch(&OP_LIST_OP_GET_LIST_LIST_ID_RESPONSES, json)
+        match dispatch(&OP_LIST_OP_GET_LIST_LIST_ID_RESPONSES, json).and_then(iface_list_op__get_list_list_id_responses__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_list_op__get_list_list_id_responses__err(e)),
+        }
     }
 }
 use crate::exports::autostamp::medium::publication as iface_publication;
@@ -584,7 +1161,7 @@ const OP_PUBLICATION_GET_PUBLICATION_ID_FOR_PUBLICATION_SLUG: OpSpec = OpSpec {
     method: "GET",
     path_template: "/publication/id_for/{publication_slug}",
     fields: &[
-        FieldSpec { snake: "publication_slug", location: FieldLocation::Path },
+        FieldSpec { snake: "publication_slug", wire: "publication_slug", location: FieldLocation::Path },
     ],
     auth: &[
     ],
@@ -594,7 +1171,7 @@ const OP_PUBLICATION_GET_PUBLICATION_PUBLICATION_ID: OpSpec = OpSpec {
     method: "GET",
     path_template: "/publication/{publication_id}",
     fields: &[
-        FieldSpec { snake: "publication_id", location: FieldLocation::Path },
+        FieldSpec { snake: "publication_id", wire: "publication_id", location: FieldLocation::Path },
     ],
     auth: &[
     ],
@@ -604,8 +1181,8 @@ const OP_PUBLICATION_GET_PUBLICATION_PUBLICATION_ID_ARTICLES: OpSpec = OpSpec {
     method: "GET",
     path_template: "/publication/{publication_id}/articles",
     fields: &[
-        FieldSpec { snake: "publication_id", location: FieldLocation::Path },
-        FieldSpec { snake: "from", location: FieldLocation::Query },
+        FieldSpec { snake: "publication_id", wire: "publication_id", location: FieldLocation::Path },
+        FieldSpec { snake: "from", wire: "from", location: FieldLocation::Query },
     ],
     auth: &[
     ],
@@ -615,11 +1192,54 @@ const OP_PUBLICATION_GET_PUBLICATION_PUBLICATION_ID_NEWSLETTER: OpSpec = OpSpec 
     method: "GET",
     path_template: "/publication/{publication_id}/newsletter",
     fields: &[
-        FieldSpec { snake: "publication_id", location: FieldLocation::Path },
+        FieldSpec { snake: "publication_id", wire: "publication_id", location: FieldLocation::Path },
     ],
     auth: &[
     ],
 };
+
+fn iface_publication__get_publication_id_for_publication_slug_response__to_json(p: &iface_publication::GetPublicationIdForPublicationSlugResponse) -> Value {
+    let mut m = Map::new();
+    m.insert("publication_id".into(), match (&p.publication_id) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("publication_slug".into(), match (&p.publication_slug) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_publication__get_publication_publication_id_response__to_json(p: &iface_publication::GetPublicationPublicationIdResponse) -> Value {
+    let mut m = Map::new();
+    m.insert("creator".into(), match (&p.creator) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("description".into(), match (&p.description) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("editors".into(), match (&p.editors) { Some(v) => Value::Array((v).iter().map(|v| Value::String((v).clone())).collect()), None => Value::Null });
+    m.insert("facebook_pagename".into(), match (&p.facebook_pagename) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("followers".into(), match (&p.followers) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("id".into(), match (&p.id) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("instagram_username".into(), match (&p.instagram_username) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("name".into(), match (&p.name) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("slug".into(), match (&p.slug) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("tagline".into(), match (&p.tagline) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("tags".into(), match (&p.tags) { Some(v) => Value::Array((v).iter().map(|v| Value::String((v).clone())).collect()), None => Value::Null });
+    m.insert("twitter_username".into(), match (&p.twitter_username) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("url".into(), match (&p.url) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_publication__get_publication_publication_id_articles_response__to_json(p: &iface_publication::GetPublicationPublicationIdArticlesResponse) -> Value {
+    let mut m = Map::new();
+    m.insert("publication_articles".into(), match (&p.publication_articles) { Some(v) => Value::Array((v).iter().map(|v| Value::String((v).clone())).collect()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_publication__get_publication_publication_id_newsletter_response__to_json(p: &iface_publication::GetPublicationPublicationIdNewsletterResponse) -> Value {
+    let mut m = Map::new();
+    m.insert("creator_id".into(), match (&p.creator_id) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("description".into(), match (&p.description) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("id".into(), match (&p.id) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("image".into(), match (&p.image) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("name".into(), match (&p.name) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("slug".into(), match (&p.slug) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("subscribers".into(), match (&p.subscribers) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    Value::Object(m)
+}
 
 fn iface_publication__get_publication_id_for_publication_slug_params__to_json(p: &iface_publication::GetPublicationIdForPublicationSlugParams) -> Value {
     let mut m = Map::new();
@@ -646,22 +1266,153 @@ fn iface_publication__get_publication_publication_id_newsletter_params__to_json(
     Value::Object(m)
 }
 
+fn iface_publication__get_publication_id_for_publication_slug_response__from_json(v: &Value) -> Option<iface_publication::GetPublicationIdForPublicationSlugResponse> {
+    let m = v.as_object()?;
+    Some(iface_publication::GetPublicationIdForPublicationSlugResponse {
+        publication_id: m.get("publication_id").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        publication_slug: m.get("publication_slug").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    })
+}
+
+fn iface_publication__get_publication_publication_id_response__from_json(v: &Value) -> Option<iface_publication::GetPublicationPublicationIdResponse> {
+    let m = v.as_object()?;
+    Some(iface_publication::GetPublicationPublicationIdResponse {
+        creator: m.get("creator").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        description: m.get("description").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        editors: m.get("editors").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| (x).as_str().map(|s| s.to_string())).collect())),
+        facebook_pagename: m.get("facebook_pagename").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        followers: m.get("followers").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        id: m.get("id").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        instagram_username: m.get("instagram_username").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        name: m.get("name").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        slug: m.get("slug").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        tagline: m.get("tagline").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        tags: m.get("tags").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| (x).as_str().map(|s| s.to_string())).collect())),
+        twitter_username: m.get("twitter_username").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        url: m.get("url").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    })
+}
+
+fn iface_publication__get_publication_publication_id_articles_response__from_json(v: &Value) -> Option<iface_publication::GetPublicationPublicationIdArticlesResponse> {
+    let m = v.as_object()?;
+    Some(iface_publication::GetPublicationPublicationIdArticlesResponse {
+        publication_articles: m.get("publication_articles").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| (x).as_str().map(|s| s.to_string())).collect())),
+    })
+}
+
+fn iface_publication__get_publication_publication_id_newsletter_response__from_json(v: &Value) -> Option<iface_publication::GetPublicationPublicationIdNewsletterResponse> {
+    let m = v.as_object()?;
+    Some(iface_publication::GetPublicationPublicationIdNewsletterResponse {
+        creator_id: m.get("creator_id").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        description: m.get("description").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        id: m.get("id").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        image: m.get("image").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        name: m.get("name").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        slug: m.get("slug").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        subscribers: m.get("subscribers").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+    })
+}
+
+fn iface_publication__get_publication_id_for_publication_slug__ok(body: String) -> Result<iface_publication::GetPublicationIdForPublicationSlugResponse, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match iface_publication__get_publication_id_for_publication_slug_response__from_json(&v) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_publication__get_publication_id_for_publication_slug__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
+fn iface_publication__get_publication_publication_id__ok(body: String) -> Result<iface_publication::GetPublicationPublicationIdResponse, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match iface_publication__get_publication_publication_id_response__from_json(&v) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_publication__get_publication_publication_id__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
+fn iface_publication__get_publication_publication_id_articles__ok(body: String) -> Result<iface_publication::GetPublicationPublicationIdArticlesResponse, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match iface_publication__get_publication_publication_id_articles_response__from_json(&v) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_publication__get_publication_publication_id_articles__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
+fn iface_publication__get_publication_publication_id_newsletter__ok(body: String) -> Result<iface_publication::GetPublicationPublicationIdNewsletterResponse, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match iface_publication__get_publication_publication_id_newsletter_response__from_json(&v) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_publication__get_publication_publication_id_newsletter__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
 impl iface_publication::Guest for crate::Component {
-    fn get_publication_id_for_publication_slug(params: iface_publication::GetPublicationIdForPublicationSlugParams) -> Result<String, String> {
+    fn get_publication_id_for_publication_slug(params: iface_publication::GetPublicationIdForPublicationSlugParams) -> Result<iface_publication::GetPublicationIdForPublicationSlugResponse, String> {
         let json = iface_publication__get_publication_id_for_publication_slug_params__to_json(&params);
-        dispatch(&OP_PUBLICATION_GET_PUBLICATION_ID_FOR_PUBLICATION_SLUG, json)
+        match dispatch(&OP_PUBLICATION_GET_PUBLICATION_ID_FOR_PUBLICATION_SLUG, json).and_then(iface_publication__get_publication_id_for_publication_slug__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_publication__get_publication_id_for_publication_slug__err(e)),
+        }
     }
-    fn get_publication_publication_id(params: iface_publication::GetPublicationPublicationIdParams) -> Result<String, String> {
+    fn get_publication_publication_id(params: iface_publication::GetPublicationPublicationIdParams) -> Result<iface_publication::GetPublicationPublicationIdResponse, String> {
         let json = iface_publication__get_publication_publication_id_params__to_json(&params);
-        dispatch(&OP_PUBLICATION_GET_PUBLICATION_PUBLICATION_ID, json)
+        match dispatch(&OP_PUBLICATION_GET_PUBLICATION_PUBLICATION_ID, json).and_then(iface_publication__get_publication_publication_id__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_publication__get_publication_publication_id__err(e)),
+        }
     }
-    fn get_publication_publication_id_articles(params: iface_publication::GetPublicationPublicationIdArticlesParams) -> Result<String, String> {
+    fn get_publication_publication_id_articles(params: iface_publication::GetPublicationPublicationIdArticlesParams) -> Result<iface_publication::GetPublicationPublicationIdArticlesResponse, String> {
         let json = iface_publication__get_publication_publication_id_articles_params__to_json(&params);
-        dispatch(&OP_PUBLICATION_GET_PUBLICATION_PUBLICATION_ID_ARTICLES, json)
+        match dispatch(&OP_PUBLICATION_GET_PUBLICATION_PUBLICATION_ID_ARTICLES, json).and_then(iface_publication__get_publication_publication_id_articles__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_publication__get_publication_publication_id_articles__err(e)),
+        }
     }
-    fn get_publication_publication_id_newsletter(params: iface_publication::GetPublicationPublicationIdNewsletterParams) -> Result<String, String> {
+    fn get_publication_publication_id_newsletter(params: iface_publication::GetPublicationPublicationIdNewsletterParams) -> Result<iface_publication::GetPublicationPublicationIdNewsletterResponse, String> {
         let json = iface_publication__get_publication_publication_id_newsletter_params__to_json(&params);
-        dispatch(&OP_PUBLICATION_GET_PUBLICATION_PUBLICATION_ID_NEWSLETTER, json)
+        match dispatch(&OP_PUBLICATION_GET_PUBLICATION_PUBLICATION_ID_NEWSLETTER, json).and_then(iface_publication__get_publication_publication_id_newsletter__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_publication__get_publication_publication_id_newsletter__err(e)),
+        }
     }
 }
 use crate::exports::autostamp::medium::search as iface_search;
@@ -670,7 +1421,7 @@ const OP_SEARCH_GET_SEARCH_ARTICLES_QUERY_QUERY: OpSpec = OpSpec {
     method: "GET",
     path_template: "/search/articles?query={query}",
     fields: &[
-        FieldSpec { snake: "query", location: FieldLocation::Query },
+        FieldSpec { snake: "query", wire: "query", location: FieldLocation::Query },
     ],
     auth: &[
     ],
@@ -680,7 +1431,7 @@ const OP_SEARCH_GET_SEARCH_LISTS_QUERY_QUERY: OpSpec = OpSpec {
     method: "GET",
     path_template: "/search/lists?query={query}",
     fields: &[
-        FieldSpec { snake: "query", location: FieldLocation::Query },
+        FieldSpec { snake: "query", wire: "query", location: FieldLocation::Query },
     ],
     auth: &[
     ],
@@ -690,7 +1441,7 @@ const OP_SEARCH_GET_SEARCH_PUBLICATIONS_QUERY_QUERY: OpSpec = OpSpec {
     method: "GET",
     path_template: "/search/publications?query={query}",
     fields: &[
-        FieldSpec { snake: "query", location: FieldLocation::Query },
+        FieldSpec { snake: "query", wire: "query", location: FieldLocation::Query },
     ],
     auth: &[
     ],
@@ -700,7 +1451,7 @@ const OP_SEARCH_GET_SEARCH_TAGS_QUERY_QUERY: OpSpec = OpSpec {
     method: "GET",
     path_template: "/search/tags?query={query}",
     fields: &[
-        FieldSpec { snake: "query", location: FieldLocation::Query },
+        FieldSpec { snake: "query", wire: "query", location: FieldLocation::Query },
     ],
     auth: &[
     ],
@@ -710,11 +1461,46 @@ const OP_SEARCH_GET_SEARCH_USERS_QUERY_QUERY: OpSpec = OpSpec {
     method: "GET",
     path_template: "/search/users?query={query}",
     fields: &[
-        FieldSpec { snake: "query", location: FieldLocation::Query },
+        FieldSpec { snake: "query", wire: "query", location: FieldLocation::Query },
     ],
     auth: &[
     ],
 };
+
+fn iface_search__get_search_articles_query_query_response__to_json(p: &iface_search::GetSearchArticlesQueryQueryResponse) -> Value {
+    let mut m = Map::new();
+    m.insert("articles".into(), match (&p.articles) { Some(v) => Value::Array((v).iter().map(|v| Value::String((v).clone())).collect()), None => Value::Null });
+    m.insert("search_query".into(), match (&p.search_query) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_search__get_search_lists_query_query_response__to_json(p: &iface_search::GetSearchListsQueryQueryResponse) -> Value {
+    let mut m = Map::new();
+    m.insert("lists".into(), match (&p.lists) { Some(v) => Value::Array((v).iter().map(|v| Value::String((v).clone())).collect()), None => Value::Null });
+    m.insert("search_query".into(), match (&p.search_query) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_search__get_search_publications_query_query_response__to_json(p: &iface_search::GetSearchPublicationsQueryQueryResponse) -> Value {
+    let mut m = Map::new();
+    m.insert("publications".into(), match (&p.publications) { Some(v) => Value::Array((v).iter().map(|v| Value::String((v).clone())).collect()), None => Value::Null });
+    m.insert("search_query".into(), match (&p.search_query) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_search__get_search_tags_query_query_response__to_json(p: &iface_search::GetSearchTagsQueryQueryResponse) -> Value {
+    let mut m = Map::new();
+    m.insert("search_query".into(), match (&p.search_query) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("tags".into(), match (&p.tags) { Some(v) => Value::Array((v).iter().map(|v| Value::String((v).clone())).collect()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_search__get_search_users_query_query_response__to_json(p: &iface_search::GetSearchUsersQueryQueryResponse) -> Value {
+    let mut m = Map::new();
+    m.insert("search_query".into(), match (&p.search_query) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("users".into(), match (&p.users) { Some(v) => Value::Array((v).iter().map(|v| Value::String((v).clone())).collect()), None => Value::Null });
+    Value::Object(m)
+}
 
 fn iface_search__get_search_articles_query_query_params__to_json(p: &iface_search::GetSearchArticlesQueryQueryParams) -> Value {
     let mut m = Map::new();
@@ -746,26 +1532,171 @@ fn iface_search__get_search_users_query_query_params__to_json(p: &iface_search::
     Value::Object(m)
 }
 
+fn iface_search__get_search_articles_query_query_response__from_json(v: &Value) -> Option<iface_search::GetSearchArticlesQueryQueryResponse> {
+    let m = v.as_object()?;
+    Some(iface_search::GetSearchArticlesQueryQueryResponse {
+        articles: m.get("articles").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| (x).as_str().map(|s| s.to_string())).collect())),
+        search_query: m.get("search_query").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    })
+}
+
+fn iface_search__get_search_lists_query_query_response__from_json(v: &Value) -> Option<iface_search::GetSearchListsQueryQueryResponse> {
+    let m = v.as_object()?;
+    Some(iface_search::GetSearchListsQueryQueryResponse {
+        lists: m.get("lists").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| (x).as_str().map(|s| s.to_string())).collect())),
+        search_query: m.get("search_query").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    })
+}
+
+fn iface_search__get_search_publications_query_query_response__from_json(v: &Value) -> Option<iface_search::GetSearchPublicationsQueryQueryResponse> {
+    let m = v.as_object()?;
+    Some(iface_search::GetSearchPublicationsQueryQueryResponse {
+        publications: m.get("publications").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| (x).as_str().map(|s| s.to_string())).collect())),
+        search_query: m.get("search_query").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    })
+}
+
+fn iface_search__get_search_tags_query_query_response__from_json(v: &Value) -> Option<iface_search::GetSearchTagsQueryQueryResponse> {
+    let m = v.as_object()?;
+    Some(iface_search::GetSearchTagsQueryQueryResponse {
+        search_query: m.get("search_query").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        tags: m.get("tags").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| (x).as_str().map(|s| s.to_string())).collect())),
+    })
+}
+
+fn iface_search__get_search_users_query_query_response__from_json(v: &Value) -> Option<iface_search::GetSearchUsersQueryQueryResponse> {
+    let m = v.as_object()?;
+    Some(iface_search::GetSearchUsersQueryQueryResponse {
+        search_query: m.get("search_query").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        users: m.get("users").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| (x).as_str().map(|s| s.to_string())).collect())),
+    })
+}
+
+fn iface_search__get_search_articles_query_query__ok(body: String) -> Result<iface_search::GetSearchArticlesQueryQueryResponse, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match iface_search__get_search_articles_query_query_response__from_json(&v) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_search__get_search_articles_query_query__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
+fn iface_search__get_search_lists_query_query__ok(body: String) -> Result<iface_search::GetSearchListsQueryQueryResponse, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match iface_search__get_search_lists_query_query_response__from_json(&v) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_search__get_search_lists_query_query__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
+fn iface_search__get_search_publications_query_query__ok(body: String) -> Result<iface_search::GetSearchPublicationsQueryQueryResponse, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match iface_search__get_search_publications_query_query_response__from_json(&v) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_search__get_search_publications_query_query__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
+fn iface_search__get_search_tags_query_query__ok(body: String) -> Result<iface_search::GetSearchTagsQueryQueryResponse, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match iface_search__get_search_tags_query_query_response__from_json(&v) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_search__get_search_tags_query_query__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
+fn iface_search__get_search_users_query_query__ok(body: String) -> Result<iface_search::GetSearchUsersQueryQueryResponse, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match iface_search__get_search_users_query_query_response__from_json(&v) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_search__get_search_users_query_query__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
 impl iface_search::Guest for crate::Component {
-    fn get_search_articles_query_query(params: iface_search::GetSearchArticlesQueryQueryParams) -> Result<String, String> {
+    fn get_search_articles_query_query(params: iface_search::GetSearchArticlesQueryQueryParams) -> Result<iface_search::GetSearchArticlesQueryQueryResponse, String> {
         let json = iface_search__get_search_articles_query_query_params__to_json(&params);
-        dispatch(&OP_SEARCH_GET_SEARCH_ARTICLES_QUERY_QUERY, json)
+        match dispatch(&OP_SEARCH_GET_SEARCH_ARTICLES_QUERY_QUERY, json).and_then(iface_search__get_search_articles_query_query__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_search__get_search_articles_query_query__err(e)),
+        }
     }
-    fn get_search_lists_query_query(params: iface_search::GetSearchListsQueryQueryParams) -> Result<String, String> {
+    fn get_search_lists_query_query(params: iface_search::GetSearchListsQueryQueryParams) -> Result<iface_search::GetSearchListsQueryQueryResponse, String> {
         let json = iface_search__get_search_lists_query_query_params__to_json(&params);
-        dispatch(&OP_SEARCH_GET_SEARCH_LISTS_QUERY_QUERY, json)
+        match dispatch(&OP_SEARCH_GET_SEARCH_LISTS_QUERY_QUERY, json).and_then(iface_search__get_search_lists_query_query__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_search__get_search_lists_query_query__err(e)),
+        }
     }
-    fn get_search_publications_query_query(params: iface_search::GetSearchPublicationsQueryQueryParams) -> Result<String, String> {
+    fn get_search_publications_query_query(params: iface_search::GetSearchPublicationsQueryQueryParams) -> Result<iface_search::GetSearchPublicationsQueryQueryResponse, String> {
         let json = iface_search__get_search_publications_query_query_params__to_json(&params);
-        dispatch(&OP_SEARCH_GET_SEARCH_PUBLICATIONS_QUERY_QUERY, json)
+        match dispatch(&OP_SEARCH_GET_SEARCH_PUBLICATIONS_QUERY_QUERY, json).and_then(iface_search__get_search_publications_query_query__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_search__get_search_publications_query_query__err(e)),
+        }
     }
-    fn get_search_tags_query_query(params: iface_search::GetSearchTagsQueryQueryParams) -> Result<String, String> {
+    fn get_search_tags_query_query(params: iface_search::GetSearchTagsQueryQueryParams) -> Result<iface_search::GetSearchTagsQueryQueryResponse, String> {
         let json = iface_search__get_search_tags_query_query_params__to_json(&params);
-        dispatch(&OP_SEARCH_GET_SEARCH_TAGS_QUERY_QUERY, json)
+        match dispatch(&OP_SEARCH_GET_SEARCH_TAGS_QUERY_QUERY, json).and_then(iface_search__get_search_tags_query_query__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_search__get_search_tags_query_query__err(e)),
+        }
     }
-    fn get_search_users_query_query(params: iface_search::GetSearchUsersQueryQueryParams) -> Result<String, String> {
+    fn get_search_users_query_query(params: iface_search::GetSearchUsersQueryQueryParams) -> Result<iface_search::GetSearchUsersQueryQueryResponse, String> {
         let json = iface_search__get_search_users_query_query_params__to_json(&params);
-        dispatch(&OP_SEARCH_GET_SEARCH_USERS_QUERY_QUERY, json)
+        match dispatch(&OP_SEARCH_GET_SEARCH_USERS_QUERY_QUERY, json).and_then(iface_search__get_search_users_query_query__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_search__get_search_users_query_query__err(e)),
+        }
     }
 }
 use crate::exports::autostamp::medium::user as iface_user;
@@ -774,7 +1705,7 @@ const OP_USER_GET_USER_ID_FOR_USERNAME: OpSpec = OpSpec {
     method: "GET",
     path_template: "/user/id_for/{username}",
     fields: &[
-        FieldSpec { snake: "username", location: FieldLocation::Path },
+        FieldSpec { snake: "username", wire: "username", location: FieldLocation::Path },
     ],
     auth: &[
     ],
@@ -784,7 +1715,7 @@ const OP_USER_GET_USER_USER_ID: OpSpec = OpSpec {
     method: "GET",
     path_template: "/user/{user_id}",
     fields: &[
-        FieldSpec { snake: "user_id", location: FieldLocation::Path },
+        FieldSpec { snake: "user_id", wire: "user_id", location: FieldLocation::Path },
     ],
     auth: &[
     ],
@@ -794,7 +1725,7 @@ const OP_USER_GET_USER_USER_ID_ARTICLES: OpSpec = OpSpec {
     method: "GET",
     path_template: "/user/{user_id}/articles",
     fields: &[
-        FieldSpec { snake: "user_id", location: FieldLocation::Path },
+        FieldSpec { snake: "user_id", wire: "user_id", location: FieldLocation::Path },
     ],
     auth: &[
     ],
@@ -804,8 +1735,8 @@ const OP_USER_GET_USER_USER_ID_FOLLOWERS: OpSpec = OpSpec {
     method: "GET",
     path_template: "/user/{user_id}/followers",
     fields: &[
-        FieldSpec { snake: "user_id", location: FieldLocation::Path },
-        FieldSpec { snake: "count", location: FieldLocation::Query },
+        FieldSpec { snake: "user_id", wire: "user_id", location: FieldLocation::Path },
+        FieldSpec { snake: "count", wire: "count", location: FieldLocation::Query },
     ],
     auth: &[
     ],
@@ -815,8 +1746,8 @@ const OP_USER_GET_USER_USER_ID_FOLLOWING: OpSpec = OpSpec {
     method: "GET",
     path_template: "/user/{user_id}/following",
     fields: &[
-        FieldSpec { snake: "user_id", location: FieldLocation::Path },
-        FieldSpec { snake: "count", location: FieldLocation::Query },
+        FieldSpec { snake: "user_id", wire: "user_id", location: FieldLocation::Path },
+        FieldSpec { snake: "count", wire: "count", location: FieldLocation::Query },
     ],
     auth: &[
     ],
@@ -826,7 +1757,7 @@ const OP_USER_GET_USER_USER_ID_INTERESTS: OpSpec = OpSpec {
     method: "GET",
     path_template: "/user/{user_id}/interests",
     fields: &[
-        FieldSpec { snake: "user_id", location: FieldLocation::Path },
+        FieldSpec { snake: "user_id", wire: "user_id", location: FieldLocation::Path },
     ],
     auth: &[
     ],
@@ -836,7 +1767,7 @@ const OP_USER_GET_USER_USER_ID_LISTS: OpSpec = OpSpec {
     method: "GET",
     path_template: "/user/{user_id}/lists",
     fields: &[
-        FieldSpec { snake: "user_id", location: FieldLocation::Path },
+        FieldSpec { snake: "user_id", wire: "user_id", location: FieldLocation::Path },
     ],
     auth: &[
     ],
@@ -846,7 +1777,7 @@ const OP_USER_GET_USER_USER_ID_PUBLICATIONS: OpSpec = OpSpec {
     method: "GET",
     path_template: "/user/{user_id}/publications",
     fields: &[
-        FieldSpec { snake: "user_id", location: FieldLocation::Path },
+        FieldSpec { snake: "user_id", wire: "user_id", location: FieldLocation::Path },
     ],
     auth: &[
     ],
@@ -856,11 +1787,83 @@ const OP_USER_GET_USER_USER_ID_TOP_ARTICLES: OpSpec = OpSpec {
     method: "GET",
     path_template: "/user/{user_id}/top_articles",
     fields: &[
-        FieldSpec { snake: "user_id", location: FieldLocation::Path },
+        FieldSpec { snake: "user_id", wire: "user_id", location: FieldLocation::Path },
     ],
     auth: &[
     ],
 };
+
+fn iface_user__get_user_id_for_username_response__to_json(p: &iface_user::GetUserIdForUsernameResponse) -> Value {
+    let mut m = Map::new();
+    m.insert("id".into(), match (&p.id) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_user__get_user_user_id_response__to_json(p: &iface_user::GetUserUserIdResponse) -> Value {
+    let mut m = Map::new();
+    m.insert("allow_notes".into(), match (&p.allow_notes) { Some(v) => Value::Bool(*(v)), None => Value::Null });
+    m.insert("bio".into(), match (&p.bio) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("followers_count".into(), match (&p.followers_count) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("following_count".into(), match (&p.following_count) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("fullname".into(), match (&p.fullname) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("has_list".into(), match (&p.has_list) { Some(v) => Value::Bool(*(v)), None => Value::Null });
+    m.insert("id".into(), match (&p.id) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("image_url".into(), match (&p.image_url) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("is_book_author".into(), match (&p.is_book_author) { Some(v) => Value::Bool(*(v)), None => Value::Null });
+    m.insert("is_suspended".into(), match (&p.is_suspended) { Some(v) => Value::Bool(*(v)), None => Value::Null });
+    m.insert("is_writer_program_enrolled".into(), match (&p.is_writer_program_enrolled) { Some(v) => Value::Bool(*(v)), None => Value::Null });
+    m.insert("medium_member_at".into(), match (&p.medium_member_at) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("top_writer_in".into(), match (&p.top_writer_in) { Some(v) => Value::Array((v).iter().map(|v| Value::String((v).clone())).collect()), None => Value::Null });
+    m.insert("twitter_username".into(), match (&p.twitter_username) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("username".into(), match (&p.username) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_user__get_user_user_id_articles_response__to_json(p: &iface_user::GetUserUserIdArticlesResponse) -> Value {
+    let mut m = Map::new();
+    m.insert("associated_articles".into(), match (&p.associated_articles) { Some(v) => Value::Array((v).iter().map(|v| Value::String((v).clone())).collect()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_user__get_user_user_id_followers_response__to_json(p: &iface_user::GetUserUserIdFollowersResponse) -> Value {
+    let mut m = Map::new();
+    m.insert("followers".into(), match (&p.followers) { Some(v) => Value::Array((v).iter().map(|v| Value::String((v).clone())).collect()), None => Value::Null });
+    m.insert("id".into(), match (&p.id) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_user__get_user_user_id_following_response__to_json(p: &iface_user::GetUserUserIdFollowingResponse) -> Value {
+    let mut m = Map::new();
+    m.insert("following".into(), match (&p.following) { Some(v) => Value::Array((v).iter().map(|v| Value::String((v).clone())).collect()), None => Value::Null });
+    m.insert("id".into(), match (&p.id) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_user__get_user_user_id_interests_response__to_json(p: &iface_user::GetUserUserIdInterestsResponse) -> Value {
+    let mut m = Map::new();
+    m.insert("tags_followed".into(), match (&p.tags_followed) { Some(v) => Value::Array((v).iter().map(|v| Value::String((v).clone())).collect()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_user__get_user_user_id_lists_response__to_json(p: &iface_user::GetUserUserIdListsResponse) -> Value {
+    let mut m = Map::new();
+    m.insert("lists".into(), match (&p.lists) { Some(v) => Value::Array((v).iter().map(|v| Value::String((v).clone())).collect()), None => Value::Null });
+    m.insert("user_id".into(), match (&p.user_id) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_user__get_user_user_id_publications_response__to_json(p: &iface_user::GetUserUserIdPublicationsResponse) -> Value {
+    let mut m = Map::new();
+    m.insert("publications".into(), match (&p.publications) { Some(v) => Value::Array((v).iter().map(|v| Value::String((v).clone())).collect()), None => Value::Null });
+    m.insert("user_id".into(), match (&p.user_id) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_user__get_user_user_id_top_articles_response__to_json(p: &iface_user::GetUserUserIdTopArticlesResponse) -> Value {
+    let mut m = Map::new();
+    m.insert("associated_articles".into(), match (&p.associated_articles) { Some(v) => Value::Array((v).iter().map(|v| Value::String((v).clone())).collect()), None => Value::Null });
+    Value::Object(m)
+}
 
 fn iface_user__get_user_id_for_username_params__to_json(p: &iface_user::GetUserIdForUsernameParams) -> Value {
     let mut m = Map::new();
@@ -918,42 +1921,312 @@ fn iface_user__get_user_user_id_top_articles_params__to_json(p: &iface_user::Get
     Value::Object(m)
 }
 
+fn iface_user__get_user_id_for_username_response__from_json(v: &Value) -> Option<iface_user::GetUserIdForUsernameResponse> {
+    let m = v.as_object()?;
+    Some(iface_user::GetUserIdForUsernameResponse {
+        id: m.get("id").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    })
+}
+
+fn iface_user__get_user_user_id_response__from_json(v: &Value) -> Option<iface_user::GetUserUserIdResponse> {
+    let m = v.as_object()?;
+    Some(iface_user::GetUserUserIdResponse {
+        allow_notes: m.get("allow_notes").filter(|v| !v.is_null()).and_then(|v| (v).as_bool()),
+        bio: m.get("bio").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        followers_count: m.get("followers_count").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        following_count: m.get("following_count").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        fullname: m.get("fullname").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        has_list: m.get("has_list").filter(|v| !v.is_null()).and_then(|v| (v).as_bool()),
+        id: m.get("id").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        image_url: m.get("image_url").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        is_book_author: m.get("is_book_author").filter(|v| !v.is_null()).and_then(|v| (v).as_bool()),
+        is_suspended: m.get("is_suspended").filter(|v| !v.is_null()).and_then(|v| (v).as_bool()),
+        is_writer_program_enrolled: m.get("is_writer_program_enrolled").filter(|v| !v.is_null()).and_then(|v| (v).as_bool()),
+        medium_member_at: m.get("medium_member_at").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        top_writer_in: m.get("top_writer_in").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| (x).as_str().map(|s| s.to_string())).collect())),
+        twitter_username: m.get("twitter_username").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        username: m.get("username").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    })
+}
+
+fn iface_user__get_user_user_id_articles_response__from_json(v: &Value) -> Option<iface_user::GetUserUserIdArticlesResponse> {
+    let m = v.as_object()?;
+    Some(iface_user::GetUserUserIdArticlesResponse {
+        associated_articles: m.get("associated_articles").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| (x).as_str().map(|s| s.to_string())).collect())),
+    })
+}
+
+fn iface_user__get_user_user_id_followers_response__from_json(v: &Value) -> Option<iface_user::GetUserUserIdFollowersResponse> {
+    let m = v.as_object()?;
+    Some(iface_user::GetUserUserIdFollowersResponse {
+        followers: m.get("followers").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| (x).as_str().map(|s| s.to_string())).collect())),
+        id: m.get("id").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    })
+}
+
+fn iface_user__get_user_user_id_following_response__from_json(v: &Value) -> Option<iface_user::GetUserUserIdFollowingResponse> {
+    let m = v.as_object()?;
+    Some(iface_user::GetUserUserIdFollowingResponse {
+        following: m.get("following").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| (x).as_str().map(|s| s.to_string())).collect())),
+        id: m.get("id").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    })
+}
+
+fn iface_user__get_user_user_id_interests_response__from_json(v: &Value) -> Option<iface_user::GetUserUserIdInterestsResponse> {
+    let m = v.as_object()?;
+    Some(iface_user::GetUserUserIdInterestsResponse {
+        tags_followed: m.get("tags_followed").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| (x).as_str().map(|s| s.to_string())).collect())),
+    })
+}
+
+fn iface_user__get_user_user_id_lists_response__from_json(v: &Value) -> Option<iface_user::GetUserUserIdListsResponse> {
+    let m = v.as_object()?;
+    Some(iface_user::GetUserUserIdListsResponse {
+        lists: m.get("lists").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| (x).as_str().map(|s| s.to_string())).collect())),
+        user_id: m.get("user_id").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    })
+}
+
+fn iface_user__get_user_user_id_publications_response__from_json(v: &Value) -> Option<iface_user::GetUserUserIdPublicationsResponse> {
+    let m = v.as_object()?;
+    Some(iface_user::GetUserUserIdPublicationsResponse {
+        publications: m.get("publications").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| (x).as_str().map(|s| s.to_string())).collect())),
+        user_id: m.get("user_id").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    })
+}
+
+fn iface_user__get_user_user_id_top_articles_response__from_json(v: &Value) -> Option<iface_user::GetUserUserIdTopArticlesResponse> {
+    let m = v.as_object()?;
+    Some(iface_user::GetUserUserIdTopArticlesResponse {
+        associated_articles: m.get("associated_articles").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| (x).as_str().map(|s| s.to_string())).collect())),
+    })
+}
+
+fn iface_user__get_user_id_for_username__ok(body: String) -> Result<iface_user::GetUserIdForUsernameResponse, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match iface_user__get_user_id_for_username_response__from_json(&v) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_user__get_user_id_for_username__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
+fn iface_user__get_user_user_id__ok(body: String) -> Result<iface_user::GetUserUserIdResponse, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match iface_user__get_user_user_id_response__from_json(&v) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_user__get_user_user_id__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
+fn iface_user__get_user_user_id_articles__ok(body: String) -> Result<iface_user::GetUserUserIdArticlesResponse, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match iface_user__get_user_user_id_articles_response__from_json(&v) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_user__get_user_user_id_articles__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
+fn iface_user__get_user_user_id_followers__ok(body: String) -> Result<iface_user::GetUserUserIdFollowersResponse, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match iface_user__get_user_user_id_followers_response__from_json(&v) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_user__get_user_user_id_followers__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
+fn iface_user__get_user_user_id_following__ok(body: String) -> Result<iface_user::GetUserUserIdFollowingResponse, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match iface_user__get_user_user_id_following_response__from_json(&v) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_user__get_user_user_id_following__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
+fn iface_user__get_user_user_id_interests__ok(body: String) -> Result<iface_user::GetUserUserIdInterestsResponse, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match iface_user__get_user_user_id_interests_response__from_json(&v) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_user__get_user_user_id_interests__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
+fn iface_user__get_user_user_id_lists__ok(body: String) -> Result<iface_user::GetUserUserIdListsResponse, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match iface_user__get_user_user_id_lists_response__from_json(&v) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_user__get_user_user_id_lists__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
+fn iface_user__get_user_user_id_publications__ok(body: String) -> Result<iface_user::GetUserUserIdPublicationsResponse, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match iface_user__get_user_user_id_publications_response__from_json(&v) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_user__get_user_user_id_publications__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
+fn iface_user__get_user_user_id_top_articles__ok(body: String) -> Result<iface_user::GetUserUserIdTopArticlesResponse, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match iface_user__get_user_user_id_top_articles_response__from_json(&v) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_user__get_user_user_id_top_articles__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
 impl iface_user::Guest for crate::Component {
-    fn get_user_id_for_username(params: iface_user::GetUserIdForUsernameParams) -> Result<String, String> {
+    fn get_user_id_for_username(params: iface_user::GetUserIdForUsernameParams) -> Result<iface_user::GetUserIdForUsernameResponse, String> {
         let json = iface_user__get_user_id_for_username_params__to_json(&params);
-        dispatch(&OP_USER_GET_USER_ID_FOR_USERNAME, json)
+        match dispatch(&OP_USER_GET_USER_ID_FOR_USERNAME, json).and_then(iface_user__get_user_id_for_username__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_user__get_user_id_for_username__err(e)),
+        }
     }
-    fn get_user_user_id(params: iface_user::GetUserUserIdParams) -> Result<String, String> {
+    fn get_user_user_id(params: iface_user::GetUserUserIdParams) -> Result<iface_user::GetUserUserIdResponse, String> {
         let json = iface_user__get_user_user_id_params__to_json(&params);
-        dispatch(&OP_USER_GET_USER_USER_ID, json)
+        match dispatch(&OP_USER_GET_USER_USER_ID, json).and_then(iface_user__get_user_user_id__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_user__get_user_user_id__err(e)),
+        }
     }
-    fn get_user_user_id_articles(params: iface_user::GetUserUserIdArticlesParams) -> Result<String, String> {
+    fn get_user_user_id_articles(params: iface_user::GetUserUserIdArticlesParams) -> Result<iface_user::GetUserUserIdArticlesResponse, String> {
         let json = iface_user__get_user_user_id_articles_params__to_json(&params);
-        dispatch(&OP_USER_GET_USER_USER_ID_ARTICLES, json)
+        match dispatch(&OP_USER_GET_USER_USER_ID_ARTICLES, json).and_then(iface_user__get_user_user_id_articles__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_user__get_user_user_id_articles__err(e)),
+        }
     }
-    fn get_user_user_id_followers(params: iface_user::GetUserUserIdFollowersParams) -> Result<String, String> {
+    fn get_user_user_id_followers(params: iface_user::GetUserUserIdFollowersParams) -> Result<iface_user::GetUserUserIdFollowersResponse, String> {
         let json = iface_user__get_user_user_id_followers_params__to_json(&params);
-        dispatch(&OP_USER_GET_USER_USER_ID_FOLLOWERS, json)
+        match dispatch(&OP_USER_GET_USER_USER_ID_FOLLOWERS, json).and_then(iface_user__get_user_user_id_followers__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_user__get_user_user_id_followers__err(e)),
+        }
     }
-    fn get_user_user_id_following(params: iface_user::GetUserUserIdFollowingParams) -> Result<String, String> {
+    fn get_user_user_id_following(params: iface_user::GetUserUserIdFollowingParams) -> Result<iface_user::GetUserUserIdFollowingResponse, String> {
         let json = iface_user__get_user_user_id_following_params__to_json(&params);
-        dispatch(&OP_USER_GET_USER_USER_ID_FOLLOWING, json)
+        match dispatch(&OP_USER_GET_USER_USER_ID_FOLLOWING, json).and_then(iface_user__get_user_user_id_following__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_user__get_user_user_id_following__err(e)),
+        }
     }
-    fn get_user_user_id_interests(params: iface_user::GetUserUserIdInterestsParams) -> Result<String, String> {
+    fn get_user_user_id_interests(params: iface_user::GetUserUserIdInterestsParams) -> Result<iface_user::GetUserUserIdInterestsResponse, String> {
         let json = iface_user__get_user_user_id_interests_params__to_json(&params);
-        dispatch(&OP_USER_GET_USER_USER_ID_INTERESTS, json)
+        match dispatch(&OP_USER_GET_USER_USER_ID_INTERESTS, json).and_then(iface_user__get_user_user_id_interests__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_user__get_user_user_id_interests__err(e)),
+        }
     }
-    fn get_user_user_id_lists(params: iface_user::GetUserUserIdListsParams) -> Result<String, String> {
+    fn get_user_user_id_lists(params: iface_user::GetUserUserIdListsParams) -> Result<iface_user::GetUserUserIdListsResponse, String> {
         let json = iface_user__get_user_user_id_lists_params__to_json(&params);
-        dispatch(&OP_USER_GET_USER_USER_ID_LISTS, json)
+        match dispatch(&OP_USER_GET_USER_USER_ID_LISTS, json).and_then(iface_user__get_user_user_id_lists__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_user__get_user_user_id_lists__err(e)),
+        }
     }
-    fn get_user_user_id_publications(params: iface_user::GetUserUserIdPublicationsParams) -> Result<String, String> {
+    fn get_user_user_id_publications(params: iface_user::GetUserUserIdPublicationsParams) -> Result<iface_user::GetUserUserIdPublicationsResponse, String> {
         let json = iface_user__get_user_user_id_publications_params__to_json(&params);
-        dispatch(&OP_USER_GET_USER_USER_ID_PUBLICATIONS, json)
+        match dispatch(&OP_USER_GET_USER_USER_ID_PUBLICATIONS, json).and_then(iface_user__get_user_user_id_publications__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_user__get_user_user_id_publications__err(e)),
+        }
     }
-    fn get_user_user_id_top_articles(params: iface_user::GetUserUserIdTopArticlesParams) -> Result<String, String> {
+    fn get_user_user_id_top_articles(params: iface_user::GetUserUserIdTopArticlesParams) -> Result<iface_user::GetUserUserIdTopArticlesResponse, String> {
         let json = iface_user__get_user_user_id_top_articles_params__to_json(&params);
-        dispatch(&OP_USER_GET_USER_USER_ID_TOP_ARTICLES, json)
+        match dispatch(&OP_USER_GET_USER_USER_ID_TOP_ARTICLES, json).and_then(iface_user__get_user_user_id_top_articles__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_user__get_user_user_id_top_articles__err(e)),
+        }
     }
 }
 

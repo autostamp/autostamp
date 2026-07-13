@@ -44,10 +44,15 @@ pub(crate) enum FieldLocation {
     Body,
 }
 
-/// A single operation parameter: the snake-case key it carries in the params JSON and where
-/// it belongs in the request.
+/// A single operation parameter. `snake` keys the field in the internal params JSON (and, for a
+/// path field, matches the `{snake}` placeholder in the path template); `wire` is the verbatim name
+/// the field takes on the HTTP wire (query key, header name, or body property). The two differ
+/// whenever the source name isn't already snake_case (e.g. `dryRun` → snake `dry_run`, wire
+/// `dryRun`), and let distinct inputs that share a snake key (`DateCreated`, `DateCreated<`) still
+/// travel under their true names.
 pub(crate) struct FieldSpec {
     pub(crate) snake: &'static str,
+    pub(crate) wire: &'static str,
     pub(crate) location: FieldLocation,
 }
 
@@ -71,6 +76,16 @@ pub(crate) struct AuthApply {
     pub(crate) kind: AuthKind,
 }
 
+/// The failure modes of [`dispatch`], kept structured so each generated operation can map them
+/// onto its own typed error: an `Http` failure carries the response status and body (routed to
+/// the matching error-variant case), while a `Transport` failure carries a message for the
+/// catch-all case (a secret lookup, connection, or decode failure that never produced an HTTP
+/// status).
+pub(crate) enum DispatchError {
+    Http { status: u16, body: String },
+    Transport(String),
+}
+
 /// A single API operation: HTTP method, path template (with `{snake}` placeholders), the
 /// parameter fields, and the security schemes to apply.
 pub(crate) struct OpSpec {
@@ -81,8 +96,9 @@ pub(crate) struct OpSpec {
 }
 
 /// Execute `op` with the supplied `params` (a JSON object keyed by snake-case field names)
-/// and return the response body as a string, or an error message.
-pub(crate) fn dispatch(op: &OpSpec, params: Value) -> Result<String, String> {
+/// and return the raw 2xx response body, or a structured [`DispatchError`] the caller maps
+/// onto the operation's typed error.
+pub(crate) fn dispatch(op: &OpSpec, params: Value) -> Result<String, DispatchError> {
     let obj = match &params {
         Value::Object(map) => Some(map),
         _ => None,
@@ -105,10 +121,10 @@ pub(crate) fn dispatch(op: &OpSpec, params: Value) -> Result<String, String> {
                 let placeholder = format!("{{{}}}", field.snake);
                 path = path.replace(&placeholder, &percent_encode(&scalar(value)));
             }
-            FieldLocation::Query => query.push((field.snake.to_string(), scalar(value))),
-            FieldLocation::Header => headers.push((field.snake.to_string(), scalar(value))),
+            FieldLocation::Query => query.push((field.wire.to_string(), scalar(value))),
+            FieldLocation::Header => headers.push((field.wire.to_string(), scalar(value))),
             FieldLocation::Body => {
-                body.insert(field.snake.to_string(), value.clone());
+                body.insert(field.wire.to_string(), value.clone());
             }
         }
     }
@@ -116,7 +132,7 @@ pub(crate) fn dispatch(op: &OpSpec, params: Value) -> Result<String, String> {
     // Apply each resolved security scheme, sourcing its value from wasmcloud:secrets.
     let mut cookies: Vec<String> = Vec::new();
     for apply in op.auth {
-        let secret = fetch_secret(apply.secret_key)?;
+        let secret = fetch_secret(apply.secret_key).map_err(DispatchError::Transport)?;
         match &apply.kind {
             AuthKind::Bearer => headers.push(("authorization".into(), format!("Bearer {secret}"))),
             AuthKind::Basic => {
@@ -177,17 +193,18 @@ fn fetch_secret(key: &str) -> Result<String, String> {
 }
 
 /// Build and send the outgoing request with `wstd`, returning the response body on a 2xx
-/// status. The generated guest exports are synchronous, so the async `wstd` client is driven
-/// to completion on a local reactor via `wstd::runtime::block_on`.
+/// status and a structured [`DispatchError`] otherwise. The generated guest exports are
+/// synchronous, so the async `wstd` client is driven to completion on a local reactor via
+/// `wstd::runtime::block_on`.
 fn perform(
     method: &str,
     path_with_query: &str,
     headers: &[(String, String)],
     body: &[u8],
-) -> Result<String, String> {
+) -> Result<String, DispatchError> {
     let url = join_url(crate::BASE_URL, path_with_query);
     let method = Method::from_bytes(method.as_bytes())
-        .map_err(|err| format!("invalid HTTP method `{method}`: {err}"))?;
+        .map_err(|err| DispatchError::Transport(format!("invalid HTTP method `{method}`: {err}")))?;
 
     let mut builder = Request::builder().method(method).uri(url);
     for (name, value) in headers {
@@ -199,27 +216,29 @@ fn perform(
         } else {
             Body::from(body.to_vec())
         })
-        .map_err(|err| format!("failed to build request: {err}"))?;
+        .map_err(|err| DispatchError::Transport(format!("failed to build request: {err}")))?;
 
     wstd::runtime::block_on(async move {
         let client = Client::new();
         let response = client
             .send(request)
             .await
-            .map_err(|err| format!("request failed: {err:#}"))?;
+            .map_err(|err| DispatchError::Transport(format!("request failed: {err:#}")))?;
 
         let status = response.status().as_u16();
         let mut response_body = response.into_body();
-        let bytes = response_body
-            .contents()
-            .await
-            .map_err(|err| format!("failed to read response body: {err:#}"))?;
+        let bytes = response_body.contents().await.map_err(|err| {
+            DispatchError::Transport(format!("failed to read response body: {err:#}"))
+        })?;
         let body_text = String::from_utf8_lossy(bytes).into_owned();
 
         if (200..300).contains(&status) {
             Ok(body_text)
         } else {
-            Err(format!("HTTP {status}: {body_text}"))
+            Err(DispatchError::Http {
+                status,
+                body: body_text,
+            })
         }
     })
 }
@@ -288,17 +307,89 @@ const OP_DEAL_ITEM_GET_DEAL_ITEMS: OpSpec = OpSpec {
     method: "GET",
     path_template: "/deal_item",
     fields: &[
-        FieldSpec { snake: "category_ids", location: FieldLocation::Query },
-        FieldSpec { snake: "commissionable", location: FieldLocation::Query },
-        FieldSpec { snake: "delivery_country", location: FieldLocation::Query },
-        FieldSpec { snake: "limit", location: FieldLocation::Query },
-        FieldSpec { snake: "offset", location: FieldLocation::Query },
-        FieldSpec { snake: "x_ebay_c_marketplace_id", location: FieldLocation::Header },
+        FieldSpec { snake: "category_ids", wire: "category_ids", location: FieldLocation::Query },
+        FieldSpec { snake: "commissionable", wire: "commissionable", location: FieldLocation::Query },
+        FieldSpec { snake: "delivery_country", wire: "delivery_country", location: FieldLocation::Query },
+        FieldSpec { snake: "limit", wire: "limit", location: FieldLocation::Query },
+        FieldSpec { snake: "offset", wire: "offset", location: FieldLocation::Query },
+        FieldSpec { snake: "x_ebay_c_marketplace_id", wire: "X-EBAY-C-MARKETPLACE-ID", location: FieldLocation::Header },
     ],
     auth: &[
         AuthApply { secret_key: "api_auth", kind: AuthKind::Bearer },
     ],
 };
+
+fn iface_deal_item__search_response__to_json(p: &iface_deal_item::SearchResponse) -> Value {
+    let mut m = Map::new();
+    m.insert("dealItems".into(), match (&p.deal_items) { Some(v) => Value::Array((v).iter().map(|v| iface_deal_item__deal_item__to_json(v)).collect()), None => Value::Null });
+    m.insert("href".into(), match (&p.href) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("limit".into(), match (&p.limit) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("next".into(), match (&p.next) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("offset".into(), match (&p.offset) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("prev".into(), match (&p.prev) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("total".into(), match (&p.total) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_deal_item__deal_item__to_json(p: &iface_deal_item::DealItem) -> Value {
+    let mut m = Map::new();
+    m.insert("additionalImages".into(), match (&p.additional_images) { Some(v) => Value::Array((v).iter().map(|v| iface_deal_item__image__to_json(v)).collect()), None => Value::Null });
+    m.insert("categoryAncestorIds".into(), match (&p.category_ancestor_ids) { Some(v) => Value::Array((v).iter().map(|v| Value::String((v).clone())).collect()), None => Value::Null });
+    m.insert("categoryId".into(), match (&p.category_id) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("commissionable".into(), match (&p.commissionable) { Some(v) => Value::Bool(*(v)), None => Value::Null });
+    m.insert("dealAffiliateWebUrl".into(), match (&p.deal_affiliate_web_url) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("dealEndDate".into(), match (&p.deal_end_date) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("dealStartDate".into(), match (&p.deal_start_date) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("dealWebUrl".into(), match (&p.deal_web_url) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("energyEfficiencyClass".into(), match (&p.energy_efficiency_class) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("image".into(), match (&p.image) { Some(v) => iface_deal_item__image__to_json(v), None => Value::Null });
+    m.insert("itemAffiliateWebUrl".into(), match (&p.item_affiliate_web_url) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("itemGroupId".into(), match (&p.item_group_id) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("itemGroupType".into(), match (&p.item_group_type) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("itemId".into(), match (&p.item_id) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("itemWebUrl".into(), match (&p.item_web_url) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("legacyItemId".into(), match (&p.legacy_item_id) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("marketingPrice".into(), match (&p.marketing_price) { Some(v) => iface_deal_item__marketing_price__to_json(v), None => Value::Null });
+    m.insert("price".into(), match (&p.price) { Some(v) => iface_deal_item__amount__to_json(v), None => Value::Null });
+    m.insert("qualifiedPrograms".into(), match (&p.qualified_programs) { Some(v) => Value::Array((v).iter().map(|v| Value::String((v).clone())).collect()), None => Value::Null });
+    m.insert("shippingOptions".into(), match (&p.shipping_options) { Some(v) => Value::Array((v).iter().map(|v| iface_deal_item__shipping_option__to_json(v)).collect()), None => Value::Null });
+    m.insert("title".into(), match (&p.title) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("unitPrice".into(), match (&p.unit_price) { Some(v) => iface_deal_item__amount__to_json(v), None => Value::Null });
+    m.insert("unitPricingMeasure".into(), match (&p.unit_pricing_measure) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_deal_item__image__to_json(p: &iface_deal_item::Image) -> Value {
+    let mut m = Map::new();
+    m.insert("height".into(), match (&p.height) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("imageUrl".into(), match (&p.image_url) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("text".into(), match (&p.text) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("width".into(), match (&p.width) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_deal_item__marketing_price__to_json(p: &iface_deal_item::MarketingPrice) -> Value {
+    let mut m = Map::new();
+    m.insert("discountAmount".into(), match (&p.discount_amount) { Some(v) => iface_deal_item__amount__to_json(v), None => Value::Null });
+    m.insert("discountPercentage".into(), match (&p.discount_percentage) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("originalPrice".into(), match (&p.original_price) { Some(v) => iface_deal_item__amount__to_json(v), None => Value::Null });
+    m.insert("priceTreatment".into(), match (&p.price_treatment) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_deal_item__amount__to_json(p: &iface_deal_item::Amount) -> Value {
+    let mut m = Map::new();
+    m.insert("currency".into(), match (&p.currency) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("value".into(), match (&p.value) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_deal_item__shipping_option__to_json(p: &iface_deal_item::ShippingOption) -> Value {
+    let mut m = Map::new();
+    m.insert("shippingCost".into(), match (&p.shipping_cost) { Some(v) => iface_deal_item__amount__to_json(v), None => Value::Null });
+    m.insert("shippingCostType".into(), match (&p.shipping_cost_type) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
 
 fn iface_deal_item__get_deal_items_params__to_json(p: &iface_deal_item::GetDealItemsParams) -> Value {
     let mut m = Map::new();
@@ -311,10 +402,114 @@ fn iface_deal_item__get_deal_items_params__to_json(p: &iface_deal_item::GetDealI
     Value::Object(m)
 }
 
+fn iface_deal_item__search_response__from_json(v: &Value) -> Option<iface_deal_item::SearchResponse> {
+    let m = v.as_object()?;
+    Some(iface_deal_item::SearchResponse {
+        deal_items: m.get("dealItems").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| iface_deal_item__deal_item__from_json(x)).collect())),
+        href: m.get("href").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        limit: m.get("limit").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        next: m.get("next").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        offset: m.get("offset").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        prev: m.get("prev").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        total: m.get("total").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+    })
+}
+
+fn iface_deal_item__deal_item__from_json(v: &Value) -> Option<iface_deal_item::DealItem> {
+    let m = v.as_object()?;
+    Some(iface_deal_item::DealItem {
+        additional_images: m.get("additionalImages").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| iface_deal_item__image__from_json(x)).collect())),
+        category_ancestor_ids: m.get("categoryAncestorIds").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| (x).as_str().map(|s| s.to_string())).collect())),
+        category_id: m.get("categoryId").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        commissionable: m.get("commissionable").filter(|v| !v.is_null()).and_then(|v| (v).as_bool()),
+        deal_affiliate_web_url: m.get("dealAffiliateWebUrl").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        deal_end_date: m.get("dealEndDate").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        deal_start_date: m.get("dealStartDate").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        deal_web_url: m.get("dealWebUrl").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        energy_efficiency_class: m.get("energyEfficiencyClass").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        image: m.get("image").filter(|v| !v.is_null()).and_then(|v| iface_deal_item__image__from_json(v)),
+        item_affiliate_web_url: m.get("itemAffiliateWebUrl").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        item_group_id: m.get("itemGroupId").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        item_group_type: m.get("itemGroupType").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        item_id: m.get("itemId").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        item_web_url: m.get("itemWebUrl").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        legacy_item_id: m.get("legacyItemId").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        marketing_price: m.get("marketingPrice").filter(|v| !v.is_null()).and_then(|v| iface_deal_item__marketing_price__from_json(v)),
+        price: m.get("price").filter(|v| !v.is_null()).and_then(|v| iface_deal_item__amount__from_json(v)),
+        qualified_programs: m.get("qualifiedPrograms").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| (x).as_str().map(|s| s.to_string())).collect())),
+        shipping_options: m.get("shippingOptions").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| iface_deal_item__shipping_option__from_json(x)).collect())),
+        title: m.get("title").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        unit_price: m.get("unitPrice").filter(|v| !v.is_null()).and_then(|v| iface_deal_item__amount__from_json(v)),
+        unit_pricing_measure: m.get("unitPricingMeasure").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    })
+}
+
+fn iface_deal_item__image__from_json(v: &Value) -> Option<iface_deal_item::Image> {
+    let m = v.as_object()?;
+    Some(iface_deal_item::Image {
+        height: m.get("height").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        image_url: m.get("imageUrl").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        text: m.get("text").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        width: m.get("width").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    })
+}
+
+fn iface_deal_item__marketing_price__from_json(v: &Value) -> Option<iface_deal_item::MarketingPrice> {
+    let m = v.as_object()?;
+    Some(iface_deal_item::MarketingPrice {
+        discount_amount: m.get("discountAmount").filter(|v| !v.is_null()).and_then(|v| iface_deal_item__amount__from_json(v)),
+        discount_percentage: m.get("discountPercentage").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        original_price: m.get("originalPrice").filter(|v| !v.is_null()).and_then(|v| iface_deal_item__amount__from_json(v)),
+        price_treatment: m.get("priceTreatment").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    })
+}
+
+fn iface_deal_item__amount__from_json(v: &Value) -> Option<iface_deal_item::Amount> {
+    let m = v.as_object()?;
+    Some(iface_deal_item::Amount {
+        currency: m.get("currency").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        value: m.get("value").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    })
+}
+
+fn iface_deal_item__shipping_option__from_json(v: &Value) -> Option<iface_deal_item::ShippingOption> {
+    let m = v.as_object()?;
+    Some(iface_deal_item::ShippingOption {
+        shipping_cost: m.get("shippingCost").filter(|v| !v.is_null()).and_then(|v| iface_deal_item__amount__from_json(v)),
+        shipping_cost_type: m.get("shippingCostType").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    })
+}
+
+fn iface_deal_item__get_deal_items__ok(body: String) -> Result<iface_deal_item::SearchResponse, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match iface_deal_item__search_response__from_json(&v) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_deal_item__get_deal_items__err(e: crate::runtime::DispatchError) -> iface_deal_item::GetDealItemsError {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => match status {
+            400u16 => iface_deal_item::GetDealItemsError::BadRequest(body),
+            403u16 => iface_deal_item::GetDealItemsError::Forbidden(body),
+            500u16 => iface_deal_item::GetDealItemsError::InternalServerError(body),
+            _ => iface_deal_item::GetDealItemsError::Other(body),
+        },
+        crate::runtime::DispatchError::Transport(m) => iface_deal_item::GetDealItemsError::Other(m),
+    }
+}
+
 impl iface_deal_item::Guest for crate::Component {
-    fn get_deal_items(params: iface_deal_item::GetDealItemsParams) -> Result<String, String> {
+    fn get_deal_items(params: iface_deal_item::GetDealItemsParams) -> Result<iface_deal_item::SearchResponse, iface_deal_item::GetDealItemsError> {
         let json = iface_deal_item__get_deal_items_params__to_json(&params);
-        dispatch(&OP_DEAL_ITEM_GET_DEAL_ITEMS, json)
+        match dispatch(&OP_DEAL_ITEM_GET_DEAL_ITEMS, json).and_then(iface_deal_item__get_deal_items__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_deal_item__get_deal_items__err(e)),
+        }
     }
 }
 use crate::exports::autostamp::ebay::event as iface_event;
@@ -323,9 +518,9 @@ const OP_EVENT_GET_EVENTS: OpSpec = OpSpec {
     method: "GET",
     path_template: "/event",
     fields: &[
-        FieldSpec { snake: "limit", location: FieldLocation::Query },
-        FieldSpec { snake: "offset", location: FieldLocation::Query },
-        FieldSpec { snake: "x_ebay_c_marketplace_id", location: FieldLocation::Header },
+        FieldSpec { snake: "limit", wire: "limit", location: FieldLocation::Query },
+        FieldSpec { snake: "offset", wire: "offset", location: FieldLocation::Query },
+        FieldSpec { snake: "x_ebay_c_marketplace_id", wire: "X-EBAY-C-MARKETPLACE-ID", location: FieldLocation::Header },
     ],
     auth: &[
         AuthApply { secret_key: "api_auth", kind: AuthKind::Bearer },
@@ -336,13 +531,63 @@ const OP_EVENT_GET_EVENT: OpSpec = OpSpec {
     method: "GET",
     path_template: "/event/{event_id}",
     fields: &[
-        FieldSpec { snake: "x_ebay_c_marketplace_id", location: FieldLocation::Header },
-        FieldSpec { snake: "event_id", location: FieldLocation::Path },
+        FieldSpec { snake: "x_ebay_c_marketplace_id", wire: "X-EBAY-C-MARKETPLACE-ID", location: FieldLocation::Header },
+        FieldSpec { snake: "event_id", wire: "event_id", location: FieldLocation::Path },
     ],
     auth: &[
         AuthApply { secret_key: "api_auth", kind: AuthKind::Bearer },
     ],
 };
+
+fn iface_event__search_response__to_json(p: &iface_event::SearchResponse) -> Value {
+    let mut m = Map::new();
+    m.insert("events".into(), match (&p.events) { Some(v) => Value::Array((v).iter().map(|v| iface_event__event__to_json(v)).collect()), None => Value::Null });
+    m.insert("href".into(), match (&p.href) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("limit".into(), match (&p.limit) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("next".into(), match (&p.next) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("offset".into(), match (&p.offset) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("prev".into(), match (&p.prev) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("total".into(), match (&p.total) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_event__event__to_json(p: &iface_event::Event) -> Value {
+    let mut m = Map::new();
+    m.insert("applicableCoupons".into(), match (&p.applicable_coupons) { Some(v) => Value::Array((v).iter().map(|v| iface_event__coupon__to_json(v)).collect()), None => Value::Null });
+    m.insert("description".into(), match (&p.description) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("endDate".into(), match (&p.end_date) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("eventAffiliateWebUrl".into(), match (&p.event_affiliate_web_url) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("eventId".into(), match (&p.event_id) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("eventWebUrl".into(), match (&p.event_web_url) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("images".into(), match (&p.images) { Some(v) => Value::Array((v).iter().map(|v| iface_event__image__to_json(v)).collect()), None => Value::Null });
+    m.insert("startDate".into(), match (&p.start_date) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("terms".into(), match (&p.terms) { Some(v) => iface_event__terms__to_json(v), None => Value::Null });
+    m.insert("title".into(), match (&p.title) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_event__coupon__to_json(p: &iface_event::Coupon) -> Value {
+    let mut m = Map::new();
+    m.insert("redemptionCode".into(), match (&p.redemption_code) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("terms".into(), match (&p.terms) { Some(v) => iface_event__terms__to_json(v), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_event__terms__to_json(p: &iface_event::Terms) -> Value {
+    let mut m = Map::new();
+    m.insert("fullText".into(), match (&p.full_text) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("summary".into(), match (&p.summary) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_event__image__to_json(p: &iface_event::Image) -> Value {
+    let mut m = Map::new();
+    m.insert("height".into(), match (&p.height) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("imageUrl".into(), match (&p.image_url) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("text".into(), match (&p.text) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("width".into(), match (&p.width) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
 
 fn iface_event__get_events_params__to_json(p: &iface_event::GetEventsParams) -> Value {
     let mut m = Map::new();
@@ -359,14 +604,122 @@ fn iface_event__get_event_params__to_json(p: &iface_event::GetEventParams) -> Va
     Value::Object(m)
 }
 
-impl iface_event::Guest for crate::Component {
-    fn get_events(params: iface_event::GetEventsParams) -> Result<String, String> {
-        let json = iface_event__get_events_params__to_json(&params);
-        dispatch(&OP_EVENT_GET_EVENTS, json)
+fn iface_event__search_response__from_json(v: &Value) -> Option<iface_event::SearchResponse> {
+    let m = v.as_object()?;
+    Some(iface_event::SearchResponse {
+        events: m.get("events").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| iface_event__event__from_json(x)).collect())),
+        href: m.get("href").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        limit: m.get("limit").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        next: m.get("next").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        offset: m.get("offset").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        prev: m.get("prev").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        total: m.get("total").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+    })
+}
+
+fn iface_event__event__from_json(v: &Value) -> Option<iface_event::Event> {
+    let m = v.as_object()?;
+    Some(iface_event::Event {
+        applicable_coupons: m.get("applicableCoupons").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| iface_event__coupon__from_json(x)).collect())),
+        description: m.get("description").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        end_date: m.get("endDate").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        event_affiliate_web_url: m.get("eventAffiliateWebUrl").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        event_id: m.get("eventId").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        event_web_url: m.get("eventWebUrl").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        images: m.get("images").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| iface_event__image__from_json(x)).collect())),
+        start_date: m.get("startDate").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        terms: m.get("terms").filter(|v| !v.is_null()).and_then(|v| iface_event__terms__from_json(v)),
+        title: m.get("title").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    })
+}
+
+fn iface_event__coupon__from_json(v: &Value) -> Option<iface_event::Coupon> {
+    let m = v.as_object()?;
+    Some(iface_event::Coupon {
+        redemption_code: m.get("redemptionCode").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        terms: m.get("terms").filter(|v| !v.is_null()).and_then(|v| iface_event__terms__from_json(v)),
+    })
+}
+
+fn iface_event__terms__from_json(v: &Value) -> Option<iface_event::Terms> {
+    let m = v.as_object()?;
+    Some(iface_event::Terms {
+        full_text: m.get("fullText").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        summary: m.get("summary").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    })
+}
+
+fn iface_event__image__from_json(v: &Value) -> Option<iface_event::Image> {
+    let m = v.as_object()?;
+    Some(iface_event::Image {
+        height: m.get("height").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        image_url: m.get("imageUrl").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        text: m.get("text").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        width: m.get("width").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    })
+}
+
+fn iface_event__get_events__ok(body: String) -> Result<iface_event::SearchResponse, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match iface_event__search_response__from_json(&v) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
     }
-    fn get_event(params: iface_event::GetEventParams) -> Result<String, String> {
+}
+
+fn iface_event__get_events__err(e: crate::runtime::DispatchError) -> iface_event::GetEventsError {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => match status {
+            400u16 => iface_event::GetEventsError::BadRequest(body),
+            403u16 => iface_event::GetEventsError::Forbidden(body),
+            500u16 => iface_event::GetEventsError::InternalServerError(body),
+            _ => iface_event::GetEventsError::Other(body),
+        },
+        crate::runtime::DispatchError::Transport(m) => iface_event::GetEventsError::Other(m),
+    }
+}
+
+fn iface_event__get_event__ok(body: String) -> Result<iface_event::Event, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match iface_event__event__from_json(&v) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_event__get_event__err(e: crate::runtime::DispatchError) -> iface_event::GetEventError {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => match status {
+            400u16 => iface_event::GetEventError::BadRequest(body),
+            403u16 => iface_event::GetEventError::Forbidden(body),
+            404u16 => iface_event::GetEventError::NotFound(body),
+            500u16 => iface_event::GetEventError::InternalServerError(body),
+            _ => iface_event::GetEventError::Other(body),
+        },
+        crate::runtime::DispatchError::Transport(m) => iface_event::GetEventError::Other(m),
+    }
+}
+
+impl iface_event::Guest for crate::Component {
+    fn get_events(params: iface_event::GetEventsParams) -> Result<iface_event::SearchResponse, iface_event::GetEventsError> {
+        let json = iface_event__get_events_params__to_json(&params);
+        match dispatch(&OP_EVENT_GET_EVENTS, json).and_then(iface_event__get_events__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_event__get_events__err(e)),
+        }
+    }
+    fn get_event(params: iface_event::GetEventParams) -> Result<iface_event::Event, iface_event::GetEventError> {
         let json = iface_event__get_event_params__to_json(&params);
-        dispatch(&OP_EVENT_GET_EVENT, json)
+        match dispatch(&OP_EVENT_GET_EVENT, json).and_then(iface_event__get_event__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_event__get_event__err(e)),
+        }
     }
 }
 use crate::exports::autostamp::ebay::event_item as iface_event_item;
@@ -375,17 +728,85 @@ const OP_EVENT_ITEM_GET_EVENT_ITEMS: OpSpec = OpSpec {
     method: "GET",
     path_template: "/event_item",
     fields: &[
-        FieldSpec { snake: "category_ids", location: FieldLocation::Query },
-        FieldSpec { snake: "delivery_country", location: FieldLocation::Query },
-        FieldSpec { snake: "event_ids", location: FieldLocation::Query },
-        FieldSpec { snake: "limit", location: FieldLocation::Query },
-        FieldSpec { snake: "offset", location: FieldLocation::Query },
-        FieldSpec { snake: "x_ebay_c_marketplace_id", location: FieldLocation::Header },
+        FieldSpec { snake: "category_ids", wire: "category_ids", location: FieldLocation::Query },
+        FieldSpec { snake: "delivery_country", wire: "delivery_country", location: FieldLocation::Query },
+        FieldSpec { snake: "event_ids", wire: "event_ids", location: FieldLocation::Query },
+        FieldSpec { snake: "limit", wire: "limit", location: FieldLocation::Query },
+        FieldSpec { snake: "offset", wire: "offset", location: FieldLocation::Query },
+        FieldSpec { snake: "x_ebay_c_marketplace_id", wire: "X-EBAY-C-MARKETPLACE-ID", location: FieldLocation::Header },
     ],
     auth: &[
         AuthApply { secret_key: "api_auth", kind: AuthKind::Bearer },
     ],
 };
+
+fn iface_event_item__search_response__to_json(p: &iface_event_item::SearchResponse) -> Value {
+    let mut m = Map::new();
+    m.insert("eventItems".into(), match (&p.event_items) { Some(v) => Value::Array((v).iter().map(|v| iface_event_item__event_item__to_json(v)).collect()), None => Value::Null });
+    m.insert("href".into(), match (&p.href) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("limit".into(), match (&p.limit) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("next".into(), match (&p.next) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("offset".into(), match (&p.offset) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("prev".into(), match (&p.prev) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("total".into(), match (&p.total) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_event_item__event_item__to_json(p: &iface_event_item::EventItem) -> Value {
+    let mut m = Map::new();
+    m.insert("additionalImages".into(), match (&p.additional_images) { Some(v) => Value::Array((v).iter().map(|v| iface_event_item__image__to_json(v)).collect()), None => Value::Null });
+    m.insert("categoryAncestorIds".into(), match (&p.category_ancestor_ids) { Some(v) => Value::Array((v).iter().map(|v| Value::String((v).clone())).collect()), None => Value::Null });
+    m.insert("categoryId".into(), match (&p.category_id) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("energyEfficiencyClass".into(), match (&p.energy_efficiency_class) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("eventId".into(), match (&p.event_id) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("image".into(), match (&p.image) { Some(v) => iface_event_item__image__to_json(v), None => Value::Null });
+    m.insert("itemAffiliateWebUrl".into(), match (&p.item_affiliate_web_url) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("itemGroupId".into(), match (&p.item_group_id) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("itemGroupType".into(), match (&p.item_group_type) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("itemId".into(), match (&p.item_id) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("itemWebUrl".into(), match (&p.item_web_url) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("legacyItemId".into(), match (&p.legacy_item_id) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("marketingPrice".into(), match (&p.marketing_price) { Some(v) => iface_event_item__marketing_price__to_json(v), None => Value::Null });
+    m.insert("price".into(), match (&p.price) { Some(v) => iface_event_item__amount__to_json(v), None => Value::Null });
+    m.insert("qualifiedPrograms".into(), match (&p.qualified_programs) { Some(v) => Value::Array((v).iter().map(|v| Value::String((v).clone())).collect()), None => Value::Null });
+    m.insert("shippingOptions".into(), match (&p.shipping_options) { Some(v) => Value::Array((v).iter().map(|v| iface_event_item__shipping_option__to_json(v)).collect()), None => Value::Null });
+    m.insert("title".into(), match (&p.title) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("unitPrice".into(), match (&p.unit_price) { Some(v) => iface_event_item__amount__to_json(v), None => Value::Null });
+    m.insert("unitPricingMeasure".into(), match (&p.unit_pricing_measure) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_event_item__image__to_json(p: &iface_event_item::Image) -> Value {
+    let mut m = Map::new();
+    m.insert("height".into(), match (&p.height) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("imageUrl".into(), match (&p.image_url) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("text".into(), match (&p.text) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("width".into(), match (&p.width) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_event_item__marketing_price__to_json(p: &iface_event_item::MarketingPrice) -> Value {
+    let mut m = Map::new();
+    m.insert("discountAmount".into(), match (&p.discount_amount) { Some(v) => iface_event_item__amount__to_json(v), None => Value::Null });
+    m.insert("discountPercentage".into(), match (&p.discount_percentage) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("originalPrice".into(), match (&p.original_price) { Some(v) => iface_event_item__amount__to_json(v), None => Value::Null });
+    m.insert("priceTreatment".into(), match (&p.price_treatment) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_event_item__amount__to_json(p: &iface_event_item::Amount) -> Value {
+    let mut m = Map::new();
+    m.insert("currency".into(), match (&p.currency) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("value".into(), match (&p.value) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_event_item__shipping_option__to_json(p: &iface_event_item::ShippingOption) -> Value {
+    let mut m = Map::new();
+    m.insert("shippingCost".into(), match (&p.shipping_cost) { Some(v) => iface_event_item__amount__to_json(v), None => Value::Null });
+    m.insert("shippingCostType".into(), match (&p.shipping_cost_type) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
 
 fn iface_event_item__get_event_items_params__to_json(p: &iface_event_item::GetEventItemsParams) -> Value {
     let mut m = Map::new();
@@ -398,10 +819,110 @@ fn iface_event_item__get_event_items_params__to_json(p: &iface_event_item::GetEv
     Value::Object(m)
 }
 
+fn iface_event_item__search_response__from_json(v: &Value) -> Option<iface_event_item::SearchResponse> {
+    let m = v.as_object()?;
+    Some(iface_event_item::SearchResponse {
+        event_items: m.get("eventItems").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| iface_event_item__event_item__from_json(x)).collect())),
+        href: m.get("href").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        limit: m.get("limit").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        next: m.get("next").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        offset: m.get("offset").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        prev: m.get("prev").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        total: m.get("total").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+    })
+}
+
+fn iface_event_item__event_item__from_json(v: &Value) -> Option<iface_event_item::EventItem> {
+    let m = v.as_object()?;
+    Some(iface_event_item::EventItem {
+        additional_images: m.get("additionalImages").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| iface_event_item__image__from_json(x)).collect())),
+        category_ancestor_ids: m.get("categoryAncestorIds").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| (x).as_str().map(|s| s.to_string())).collect())),
+        category_id: m.get("categoryId").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        energy_efficiency_class: m.get("energyEfficiencyClass").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        event_id: m.get("eventId").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        image: m.get("image").filter(|v| !v.is_null()).and_then(|v| iface_event_item__image__from_json(v)),
+        item_affiliate_web_url: m.get("itemAffiliateWebUrl").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        item_group_id: m.get("itemGroupId").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        item_group_type: m.get("itemGroupType").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        item_id: m.get("itemId").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        item_web_url: m.get("itemWebUrl").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        legacy_item_id: m.get("legacyItemId").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        marketing_price: m.get("marketingPrice").filter(|v| !v.is_null()).and_then(|v| iface_event_item__marketing_price__from_json(v)),
+        price: m.get("price").filter(|v| !v.is_null()).and_then(|v| iface_event_item__amount__from_json(v)),
+        qualified_programs: m.get("qualifiedPrograms").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| (x).as_str().map(|s| s.to_string())).collect())),
+        shipping_options: m.get("shippingOptions").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| iface_event_item__shipping_option__from_json(x)).collect())),
+        title: m.get("title").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        unit_price: m.get("unitPrice").filter(|v| !v.is_null()).and_then(|v| iface_event_item__amount__from_json(v)),
+        unit_pricing_measure: m.get("unitPricingMeasure").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    })
+}
+
+fn iface_event_item__image__from_json(v: &Value) -> Option<iface_event_item::Image> {
+    let m = v.as_object()?;
+    Some(iface_event_item::Image {
+        height: m.get("height").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        image_url: m.get("imageUrl").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        text: m.get("text").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        width: m.get("width").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    })
+}
+
+fn iface_event_item__marketing_price__from_json(v: &Value) -> Option<iface_event_item::MarketingPrice> {
+    let m = v.as_object()?;
+    Some(iface_event_item::MarketingPrice {
+        discount_amount: m.get("discountAmount").filter(|v| !v.is_null()).and_then(|v| iface_event_item__amount__from_json(v)),
+        discount_percentage: m.get("discountPercentage").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        original_price: m.get("originalPrice").filter(|v| !v.is_null()).and_then(|v| iface_event_item__amount__from_json(v)),
+        price_treatment: m.get("priceTreatment").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    })
+}
+
+fn iface_event_item__amount__from_json(v: &Value) -> Option<iface_event_item::Amount> {
+    let m = v.as_object()?;
+    Some(iface_event_item::Amount {
+        currency: m.get("currency").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        value: m.get("value").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    })
+}
+
+fn iface_event_item__shipping_option__from_json(v: &Value) -> Option<iface_event_item::ShippingOption> {
+    let m = v.as_object()?;
+    Some(iface_event_item::ShippingOption {
+        shipping_cost: m.get("shippingCost").filter(|v| !v.is_null()).and_then(|v| iface_event_item__amount__from_json(v)),
+        shipping_cost_type: m.get("shippingCostType").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    })
+}
+
+fn iface_event_item__get_event_items__ok(body: String) -> Result<iface_event_item::SearchResponse, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match iface_event_item__search_response__from_json(&v) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_event_item__get_event_items__err(e: crate::runtime::DispatchError) -> iface_event_item::GetEventItemsError {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => match status {
+            400u16 => iface_event_item::GetEventItemsError::BadRequest(body),
+            403u16 => iface_event_item::GetEventItemsError::Forbidden(body),
+            500u16 => iface_event_item::GetEventItemsError::InternalServerError(body),
+            _ => iface_event_item::GetEventItemsError::Other(body),
+        },
+        crate::runtime::DispatchError::Transport(m) => iface_event_item::GetEventItemsError::Other(m),
+    }
+}
+
 impl iface_event_item::Guest for crate::Component {
-    fn get_event_items(params: iface_event_item::GetEventItemsParams) -> Result<String, String> {
+    fn get_event_items(params: iface_event_item::GetEventItemsParams) -> Result<iface_event_item::SearchResponse, iface_event_item::GetEventItemsError> {
         let json = iface_event_item__get_event_items_params__to_json(&params);
-        dispatch(&OP_EVENT_ITEM_GET_EVENT_ITEMS, json)
+        match dispatch(&OP_EVENT_ITEM_GET_EVENT_ITEMS, json).and_then(iface_event_item__get_event_items__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_event_item__get_event_items__err(e)),
+        }
     }
 }
 

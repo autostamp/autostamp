@@ -44,10 +44,15 @@ pub(crate) enum FieldLocation {
     Body,
 }
 
-/// A single operation parameter: the snake-case key it carries in the params JSON and where
-/// it belongs in the request.
+/// A single operation parameter. `snake` keys the field in the internal params JSON (and, for a
+/// path field, matches the `{snake}` placeholder in the path template); `wire` is the verbatim name
+/// the field takes on the HTTP wire (query key, header name, or body property). The two differ
+/// whenever the source name isn't already snake_case (e.g. `dryRun` → snake `dry_run`, wire
+/// `dryRun`), and let distinct inputs that share a snake key (`DateCreated`, `DateCreated<`) still
+/// travel under their true names.
 pub(crate) struct FieldSpec {
     pub(crate) snake: &'static str,
+    pub(crate) wire: &'static str,
     pub(crate) location: FieldLocation,
 }
 
@@ -71,6 +76,16 @@ pub(crate) struct AuthApply {
     pub(crate) kind: AuthKind,
 }
 
+/// The failure modes of [`dispatch`], kept structured so each generated operation can map them
+/// onto its own typed error: an `Http` failure carries the response status and body (routed to
+/// the matching error-variant case), while a `Transport` failure carries a message for the
+/// catch-all case (a secret lookup, connection, or decode failure that never produced an HTTP
+/// status).
+pub(crate) enum DispatchError {
+    Http { status: u16, body: String },
+    Transport(String),
+}
+
 /// A single API operation: HTTP method, path template (with `{snake}` placeholders), the
 /// parameter fields, and the security schemes to apply.
 pub(crate) struct OpSpec {
@@ -81,8 +96,9 @@ pub(crate) struct OpSpec {
 }
 
 /// Execute `op` with the supplied `params` (a JSON object keyed by snake-case field names)
-/// and return the response body as a string, or an error message.
-pub(crate) fn dispatch(op: &OpSpec, params: Value) -> Result<String, String> {
+/// and return the raw 2xx response body, or a structured [`DispatchError`] the caller maps
+/// onto the operation's typed error.
+pub(crate) fn dispatch(op: &OpSpec, params: Value) -> Result<String, DispatchError> {
     let obj = match &params {
         Value::Object(map) => Some(map),
         _ => None,
@@ -105,10 +121,10 @@ pub(crate) fn dispatch(op: &OpSpec, params: Value) -> Result<String, String> {
                 let placeholder = format!("{{{}}}", field.snake);
                 path = path.replace(&placeholder, &percent_encode(&scalar(value)));
             }
-            FieldLocation::Query => query.push((field.snake.to_string(), scalar(value))),
-            FieldLocation::Header => headers.push((field.snake.to_string(), scalar(value))),
+            FieldLocation::Query => query.push((field.wire.to_string(), scalar(value))),
+            FieldLocation::Header => headers.push((field.wire.to_string(), scalar(value))),
             FieldLocation::Body => {
-                body.insert(field.snake.to_string(), value.clone());
+                body.insert(field.wire.to_string(), value.clone());
             }
         }
     }
@@ -116,7 +132,7 @@ pub(crate) fn dispatch(op: &OpSpec, params: Value) -> Result<String, String> {
     // Apply each resolved security scheme, sourcing its value from wasmcloud:secrets.
     let mut cookies: Vec<String> = Vec::new();
     for apply in op.auth {
-        let secret = fetch_secret(apply.secret_key)?;
+        let secret = fetch_secret(apply.secret_key).map_err(DispatchError::Transport)?;
         match &apply.kind {
             AuthKind::Bearer => headers.push(("authorization".into(), format!("Bearer {secret}"))),
             AuthKind::Basic => {
@@ -177,17 +193,18 @@ fn fetch_secret(key: &str) -> Result<String, String> {
 }
 
 /// Build and send the outgoing request with `wstd`, returning the response body on a 2xx
-/// status. The generated guest exports are synchronous, so the async `wstd` client is driven
-/// to completion on a local reactor via `wstd::runtime::block_on`.
+/// status and a structured [`DispatchError`] otherwise. The generated guest exports are
+/// synchronous, so the async `wstd` client is driven to completion on a local reactor via
+/// `wstd::runtime::block_on`.
 fn perform(
     method: &str,
     path_with_query: &str,
     headers: &[(String, String)],
     body: &[u8],
-) -> Result<String, String> {
+) -> Result<String, DispatchError> {
     let url = join_url(crate::BASE_URL, path_with_query);
     let method = Method::from_bytes(method.as_bytes())
-        .map_err(|err| format!("invalid HTTP method `{method}`: {err}"))?;
+        .map_err(|err| DispatchError::Transport(format!("invalid HTTP method `{method}`: {err}")))?;
 
     let mut builder = Request::builder().method(method).uri(url);
     for (name, value) in headers {
@@ -199,27 +216,29 @@ fn perform(
         } else {
             Body::from(body.to_vec())
         })
-        .map_err(|err| format!("failed to build request: {err}"))?;
+        .map_err(|err| DispatchError::Transport(format!("failed to build request: {err}")))?;
 
     wstd::runtime::block_on(async move {
         let client = Client::new();
         let response = client
             .send(request)
             .await
-            .map_err(|err| format!("request failed: {err:#}"))?;
+            .map_err(|err| DispatchError::Transport(format!("request failed: {err:#}")))?;
 
         let status = response.status().as_u16();
         let mut response_body = response.into_body();
-        let bytes = response_body
-            .contents()
-            .await
-            .map_err(|err| format!("failed to read response body: {err:#}"))?;
+        let bytes = response_body.contents().await.map_err(|err| {
+            DispatchError::Transport(format!("failed to read response body: {err:#}"))
+        })?;
         let body_text = String::from_utf8_lossy(bytes).into_owned();
 
         if (200..300).contains(&status) {
             Ok(body_text)
         } else {
-            Err(format!("HTTP {status}: {body_text}"))
+            Err(DispatchError::Http {
+                status,
+                body: body_text,
+            })
         }
     })
 }
@@ -288,11 +307,11 @@ const OP_ACCESS_TOKENS_GET_ACCESS_TOKENS_ACCESS_TOKENS: OpSpec = OpSpec {
     method: "GET",
     path_template: "/access-tokens/{access_tokens}",
     fields: &[
-        FieldSpec { snake: "access_tokens", location: FieldLocation::Path },
-        FieldSpec { snake: "pagesize", location: FieldLocation::Query },
-        FieldSpec { snake: "page", location: FieldLocation::Query },
-        FieldSpec { snake: "filter", location: FieldLocation::Query },
-        FieldSpec { snake: "callback", location: FieldLocation::Query },
+        FieldSpec { snake: "access_tokens", wire: "accessTokens", location: FieldLocation::Path },
+        FieldSpec { snake: "pagesize", wire: "pagesize", location: FieldLocation::Query },
+        FieldSpec { snake: "page", wire: "page", location: FieldLocation::Query },
+        FieldSpec { snake: "filter", wire: "filter", location: FieldLocation::Query },
+        FieldSpec { snake: "callback", wire: "callback", location: FieldLocation::Query },
     ],
     auth: &[
     ],
@@ -302,15 +321,21 @@ const OP_ACCESS_TOKENS_GET_ACCESS_TOKENS_ACCESS_TOKENS_INVALIDATE: OpSpec = OpSp
     method: "GET",
     path_template: "/access-tokens/{access_tokens}/invalidate",
     fields: &[
-        FieldSpec { snake: "access_tokens", location: FieldLocation::Path },
-        FieldSpec { snake: "pagesize", location: FieldLocation::Query },
-        FieldSpec { snake: "page", location: FieldLocation::Query },
-        FieldSpec { snake: "filter", location: FieldLocation::Query },
-        FieldSpec { snake: "callback", location: FieldLocation::Query },
+        FieldSpec { snake: "access_tokens", wire: "accessTokens", location: FieldLocation::Path },
+        FieldSpec { snake: "pagesize", wire: "pagesize", location: FieldLocation::Query },
+        FieldSpec { snake: "page", wire: "page", location: FieldLocation::Query },
+        FieldSpec { snake: "filter", wire: "filter", location: FieldLocation::Query },
+        FieldSpec { snake: "callback", wire: "callback", location: FieldLocation::Query },
     ],
     auth: &[
     ],
 };
+
+fn iface_access_tokens__access_tokens__to_json(p: &iface_access_tokens::AccessTokens) -> Value {
+    let mut m = Map::new();
+    m.insert("value".into(), Value::String((&p.value).clone()));
+    Value::Object(m)
+}
 
 fn iface_access_tokens__get_access_tokens_access_tokens_params__to_json(p: &iface_access_tokens::GetAccessTokensAccessTokensParams) -> Value {
     let mut m = Map::new();
@@ -332,14 +357,87 @@ fn iface_access_tokens__get_access_tokens_access_tokens_invalidate_params__to_js
     Value::Object(m)
 }
 
-impl iface_access_tokens::Guest for crate::Component {
-    fn get_access_tokens_access_tokens(params: iface_access_tokens::GetAccessTokensAccessTokensParams) -> Result<String, String> {
-        let json = iface_access_tokens__get_access_tokens_access_tokens_params__to_json(&params);
-        dispatch(&OP_ACCESS_TOKENS_GET_ACCESS_TOKENS_ACCESS_TOKENS, json)
+fn iface_access_tokens__access_tokens__from_json(v: &Value) -> Option<iface_access_tokens::AccessTokens> {
+    let m = v.as_object()?;
+    Some(iface_access_tokens::AccessTokens {
+        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+    })
+}
+
+fn iface_access_tokens__get_access_tokens_access_tokens__ok(body: String) -> Result<iface_access_tokens::AccessTokens, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match iface_access_tokens__access_tokens__from_json(&v) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
     }
-    fn get_access_tokens_access_tokens_invalidate(params: iface_access_tokens::GetAccessTokensAccessTokensInvalidateParams) -> Result<String, String> {
+}
+
+fn iface_access_tokens__get_access_tokens_access_tokens__err(e: crate::runtime::DispatchError) -> iface_access_tokens::GetAccessTokensAccessTokensError {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => match status {
+            400u16 => iface_access_tokens::GetAccessTokensAccessTokensError::BadRequest(body),
+            401u16 => iface_access_tokens::GetAccessTokensAccessTokensError::Unauthorized(body),
+            402u16 => iface_access_tokens::GetAccessTokensAccessTokensError::PaymentRequired(body),
+            403u16 => iface_access_tokens::GetAccessTokensAccessTokensError::Forbidden(body),
+            404u16 => iface_access_tokens::GetAccessTokensAccessTokensError::NotFound(body),
+            405u16 => iface_access_tokens::GetAccessTokensAccessTokensError::MethodNotAllowed(body),
+            406u16 => iface_access_tokens::GetAccessTokensAccessTokensError::NotAcceptable(body),
+            500u16 => iface_access_tokens::GetAccessTokensAccessTokensError::InternalServerError(body),
+            502u16 => iface_access_tokens::GetAccessTokensAccessTokensError::BadGateway(body),
+            503u16 => iface_access_tokens::GetAccessTokensAccessTokensError::ServiceUnavailable(body),
+            _ => iface_access_tokens::GetAccessTokensAccessTokensError::Other(body),
+        },
+        crate::runtime::DispatchError::Transport(m) => iface_access_tokens::GetAccessTokensAccessTokensError::Other(m),
+    }
+}
+
+fn iface_access_tokens__get_access_tokens_access_tokens_invalidate__ok(body: String) -> Result<iface_access_tokens::AccessTokens, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match iface_access_tokens__access_tokens__from_json(&v) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_access_tokens__get_access_tokens_access_tokens_invalidate__err(e: crate::runtime::DispatchError) -> iface_access_tokens::GetAccessTokensAccessTokensInvalidateError {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => match status {
+            400u16 => iface_access_tokens::GetAccessTokensAccessTokensInvalidateError::BadRequest(body),
+            401u16 => iface_access_tokens::GetAccessTokensAccessTokensInvalidateError::Unauthorized(body),
+            402u16 => iface_access_tokens::GetAccessTokensAccessTokensInvalidateError::PaymentRequired(body),
+            403u16 => iface_access_tokens::GetAccessTokensAccessTokensInvalidateError::Forbidden(body),
+            404u16 => iface_access_tokens::GetAccessTokensAccessTokensInvalidateError::NotFound(body),
+            405u16 => iface_access_tokens::GetAccessTokensAccessTokensInvalidateError::MethodNotAllowed(body),
+            406u16 => iface_access_tokens::GetAccessTokensAccessTokensInvalidateError::NotAcceptable(body),
+            500u16 => iface_access_tokens::GetAccessTokensAccessTokensInvalidateError::InternalServerError(body),
+            502u16 => iface_access_tokens::GetAccessTokensAccessTokensInvalidateError::BadGateway(body),
+            503u16 => iface_access_tokens::GetAccessTokensAccessTokensInvalidateError::ServiceUnavailable(body),
+            _ => iface_access_tokens::GetAccessTokensAccessTokensInvalidateError::Other(body),
+        },
+        crate::runtime::DispatchError::Transport(m) => iface_access_tokens::GetAccessTokensAccessTokensInvalidateError::Other(m),
+    }
+}
+
+impl iface_access_tokens::Guest for crate::Component {
+    fn get_access_tokens_access_tokens(params: iface_access_tokens::GetAccessTokensAccessTokensParams) -> Result<iface_access_tokens::AccessTokens, iface_access_tokens::GetAccessTokensAccessTokensError> {
+        let json = iface_access_tokens__get_access_tokens_access_tokens_params__to_json(&params);
+        match dispatch(&OP_ACCESS_TOKENS_GET_ACCESS_TOKENS_ACCESS_TOKENS, json).and_then(iface_access_tokens__get_access_tokens_access_tokens__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_access_tokens__get_access_tokens_access_tokens__err(e)),
+        }
+    }
+    fn get_access_tokens_access_tokens_invalidate(params: iface_access_tokens::GetAccessTokensAccessTokensInvalidateParams) -> Result<iface_access_tokens::AccessTokens, iface_access_tokens::GetAccessTokensAccessTokensInvalidateError> {
         let json = iface_access_tokens__get_access_tokens_access_tokens_invalidate_params__to_json(&params);
-        dispatch(&OP_ACCESS_TOKENS_GET_ACCESS_TOKENS_ACCESS_TOKENS_INVALIDATE, json)
+        match dispatch(&OP_ACCESS_TOKENS_GET_ACCESS_TOKENS_ACCESS_TOKENS_INVALIDATE, json).and_then(iface_access_tokens__get_access_tokens_access_tokens_invalidate__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_access_tokens__get_access_tokens_access_tokens_invalidate__err(e)),
+        }
     }
 }
 use crate::exports::autostamp::stackexchange::answers as iface_answers;
@@ -348,17 +446,17 @@ const OP_ANSWERS_GET_ANSWERS: OpSpec = OpSpec {
     method: "GET",
     path_template: "/answers",
     fields: &[
-        FieldSpec { snake: "order", location: FieldLocation::Query },
-        FieldSpec { snake: "max", location: FieldLocation::Query },
-        FieldSpec { snake: "min", location: FieldLocation::Query },
-        FieldSpec { snake: "sort", location: FieldLocation::Query },
-        FieldSpec { snake: "fromdate", location: FieldLocation::Query },
-        FieldSpec { snake: "todate", location: FieldLocation::Query },
-        FieldSpec { snake: "pagesize", location: FieldLocation::Query },
-        FieldSpec { snake: "page", location: FieldLocation::Query },
-        FieldSpec { snake: "filter", location: FieldLocation::Query },
-        FieldSpec { snake: "callback", location: FieldLocation::Query },
-        FieldSpec { snake: "site", location: FieldLocation::Query },
+        FieldSpec { snake: "order", wire: "order", location: FieldLocation::Query },
+        FieldSpec { snake: "max", wire: "max", location: FieldLocation::Query },
+        FieldSpec { snake: "min", wire: "min", location: FieldLocation::Query },
+        FieldSpec { snake: "sort", wire: "sort", location: FieldLocation::Query },
+        FieldSpec { snake: "fromdate", wire: "fromdate", location: FieldLocation::Query },
+        FieldSpec { snake: "todate", wire: "todate", location: FieldLocation::Query },
+        FieldSpec { snake: "pagesize", wire: "pagesize", location: FieldLocation::Query },
+        FieldSpec { snake: "page", wire: "page", location: FieldLocation::Query },
+        FieldSpec { snake: "filter", wire: "filter", location: FieldLocation::Query },
+        FieldSpec { snake: "callback", wire: "callback", location: FieldLocation::Query },
+        FieldSpec { snake: "site", wire: "site", location: FieldLocation::Query },
     ],
     auth: &[
     ],
@@ -368,18 +466,18 @@ const OP_ANSWERS_GET_ANSWERS_IDS: OpSpec = OpSpec {
     method: "GET",
     path_template: "/answers/{ids}",
     fields: &[
-        FieldSpec { snake: "ids", location: FieldLocation::Path },
-        FieldSpec { snake: "order", location: FieldLocation::Query },
-        FieldSpec { snake: "max", location: FieldLocation::Query },
-        FieldSpec { snake: "min", location: FieldLocation::Query },
-        FieldSpec { snake: "sort", location: FieldLocation::Query },
-        FieldSpec { snake: "fromdate", location: FieldLocation::Query },
-        FieldSpec { snake: "todate", location: FieldLocation::Query },
-        FieldSpec { snake: "pagesize", location: FieldLocation::Query },
-        FieldSpec { snake: "page", location: FieldLocation::Query },
-        FieldSpec { snake: "filter", location: FieldLocation::Query },
-        FieldSpec { snake: "callback", location: FieldLocation::Query },
-        FieldSpec { snake: "site", location: FieldLocation::Query },
+        FieldSpec { snake: "ids", wire: "ids", location: FieldLocation::Path },
+        FieldSpec { snake: "order", wire: "order", location: FieldLocation::Query },
+        FieldSpec { snake: "max", wire: "max", location: FieldLocation::Query },
+        FieldSpec { snake: "min", wire: "min", location: FieldLocation::Query },
+        FieldSpec { snake: "sort", wire: "sort", location: FieldLocation::Query },
+        FieldSpec { snake: "fromdate", wire: "fromdate", location: FieldLocation::Query },
+        FieldSpec { snake: "todate", wire: "todate", location: FieldLocation::Query },
+        FieldSpec { snake: "pagesize", wire: "pagesize", location: FieldLocation::Query },
+        FieldSpec { snake: "page", wire: "page", location: FieldLocation::Query },
+        FieldSpec { snake: "filter", wire: "filter", location: FieldLocation::Query },
+        FieldSpec { snake: "callback", wire: "callback", location: FieldLocation::Query },
+        FieldSpec { snake: "site", wire: "site", location: FieldLocation::Query },
     ],
     auth: &[
     ],
@@ -389,18 +487,18 @@ const OP_ANSWERS_GET_ANSWERS_IDS_COMMENTS: OpSpec = OpSpec {
     method: "GET",
     path_template: "/answers/{ids}/comments",
     fields: &[
-        FieldSpec { snake: "ids", location: FieldLocation::Path },
-        FieldSpec { snake: "order", location: FieldLocation::Query },
-        FieldSpec { snake: "max", location: FieldLocation::Query },
-        FieldSpec { snake: "min", location: FieldLocation::Query },
-        FieldSpec { snake: "sort", location: FieldLocation::Query },
-        FieldSpec { snake: "fromdate", location: FieldLocation::Query },
-        FieldSpec { snake: "todate", location: FieldLocation::Query },
-        FieldSpec { snake: "pagesize", location: FieldLocation::Query },
-        FieldSpec { snake: "page", location: FieldLocation::Query },
-        FieldSpec { snake: "filter", location: FieldLocation::Query },
-        FieldSpec { snake: "callback", location: FieldLocation::Query },
-        FieldSpec { snake: "site", location: FieldLocation::Query },
+        FieldSpec { snake: "ids", wire: "ids", location: FieldLocation::Path },
+        FieldSpec { snake: "order", wire: "order", location: FieldLocation::Query },
+        FieldSpec { snake: "max", wire: "max", location: FieldLocation::Query },
+        FieldSpec { snake: "min", wire: "min", location: FieldLocation::Query },
+        FieldSpec { snake: "sort", wire: "sort", location: FieldLocation::Query },
+        FieldSpec { snake: "fromdate", wire: "fromdate", location: FieldLocation::Query },
+        FieldSpec { snake: "todate", wire: "todate", location: FieldLocation::Query },
+        FieldSpec { snake: "pagesize", wire: "pagesize", location: FieldLocation::Query },
+        FieldSpec { snake: "page", wire: "page", location: FieldLocation::Query },
+        FieldSpec { snake: "filter", wire: "filter", location: FieldLocation::Query },
+        FieldSpec { snake: "callback", wire: "callback", location: FieldLocation::Query },
+        FieldSpec { snake: "site", wire: "site", location: FieldLocation::Query },
     ],
     auth: &[
     ],
@@ -426,6 +524,18 @@ fn iface_answers__get_answers_ids_comments_sort_enum__to_str(e: &iface_answers::
         iface_answers::GetAnswersIdsCommentsSortEnum::Creation => "creation",
         iface_answers::GetAnswersIdsCommentsSortEnum::Votes => "votes",
     }
+}
+
+fn iface_answers__answers__to_json(p: &iface_answers::Answers) -> Value {
+    let mut m = Map::new();
+    m.insert("value".into(), Value::String((&p.value).clone()));
+    Value::Object(m)
+}
+
+fn iface_answers__comments__to_json(p: &iface_answers::Comments) -> Value {
+    let mut m = Map::new();
+    m.insert("value".into(), Value::String((&p.value).clone()));
+    Value::Object(m)
 }
 
 fn iface_answers__get_answers_params__to_json(p: &iface_answers::GetAnswersParams) -> Value {
@@ -478,18 +588,131 @@ fn iface_answers__get_answers_ids_comments_params__to_json(p: &iface_answers::Ge
     Value::Object(m)
 }
 
+fn iface_answers__answers__from_json(v: &Value) -> Option<iface_answers::Answers> {
+    let m = v.as_object()?;
+    Some(iface_answers::Answers {
+        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+    })
+}
+
+fn iface_answers__comments__from_json(v: &Value) -> Option<iface_answers::Comments> {
+    let m = v.as_object()?;
+    Some(iface_answers::Comments {
+        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+    })
+}
+
+fn iface_answers__get_answers__ok(body: String) -> Result<iface_answers::Answers, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match iface_answers__answers__from_json(&v) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_answers__get_answers__err(e: crate::runtime::DispatchError) -> iface_answers::GetAnswersError {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => match status {
+            400u16 => iface_answers::GetAnswersError::BadRequest(body),
+            401u16 => iface_answers::GetAnswersError::Unauthorized(body),
+            402u16 => iface_answers::GetAnswersError::PaymentRequired(body),
+            403u16 => iface_answers::GetAnswersError::Forbidden(body),
+            404u16 => iface_answers::GetAnswersError::NotFound(body),
+            405u16 => iface_answers::GetAnswersError::MethodNotAllowed(body),
+            406u16 => iface_answers::GetAnswersError::NotAcceptable(body),
+            500u16 => iface_answers::GetAnswersError::InternalServerError(body),
+            502u16 => iface_answers::GetAnswersError::BadGateway(body),
+            503u16 => iface_answers::GetAnswersError::ServiceUnavailable(body),
+            _ => iface_answers::GetAnswersError::Other(body),
+        },
+        crate::runtime::DispatchError::Transport(m) => iface_answers::GetAnswersError::Other(m),
+    }
+}
+
+fn iface_answers__get_answers_ids__ok(body: String) -> Result<iface_answers::Answers, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match iface_answers__answers__from_json(&v) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_answers__get_answers_ids__err(e: crate::runtime::DispatchError) -> iface_answers::GetAnswersIdsError {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => match status {
+            400u16 => iface_answers::GetAnswersIdsError::BadRequest(body),
+            401u16 => iface_answers::GetAnswersIdsError::Unauthorized(body),
+            402u16 => iface_answers::GetAnswersIdsError::PaymentRequired(body),
+            403u16 => iface_answers::GetAnswersIdsError::Forbidden(body),
+            404u16 => iface_answers::GetAnswersIdsError::NotFound(body),
+            405u16 => iface_answers::GetAnswersIdsError::MethodNotAllowed(body),
+            406u16 => iface_answers::GetAnswersIdsError::NotAcceptable(body),
+            500u16 => iface_answers::GetAnswersIdsError::InternalServerError(body),
+            502u16 => iface_answers::GetAnswersIdsError::BadGateway(body),
+            503u16 => iface_answers::GetAnswersIdsError::ServiceUnavailable(body),
+            _ => iface_answers::GetAnswersIdsError::Other(body),
+        },
+        crate::runtime::DispatchError::Transport(m) => iface_answers::GetAnswersIdsError::Other(m),
+    }
+}
+
+fn iface_answers__get_answers_ids_comments__ok(body: String) -> Result<iface_answers::Comments, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match iface_answers__comments__from_json(&v) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_answers__get_answers_ids_comments__err(e: crate::runtime::DispatchError) -> iface_answers::GetAnswersIdsCommentsError {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => match status {
+            400u16 => iface_answers::GetAnswersIdsCommentsError::BadRequest(body),
+            401u16 => iface_answers::GetAnswersIdsCommentsError::Unauthorized(body),
+            402u16 => iface_answers::GetAnswersIdsCommentsError::PaymentRequired(body),
+            403u16 => iface_answers::GetAnswersIdsCommentsError::Forbidden(body),
+            404u16 => iface_answers::GetAnswersIdsCommentsError::NotFound(body),
+            405u16 => iface_answers::GetAnswersIdsCommentsError::MethodNotAllowed(body),
+            406u16 => iface_answers::GetAnswersIdsCommentsError::NotAcceptable(body),
+            500u16 => iface_answers::GetAnswersIdsCommentsError::InternalServerError(body),
+            502u16 => iface_answers::GetAnswersIdsCommentsError::BadGateway(body),
+            503u16 => iface_answers::GetAnswersIdsCommentsError::ServiceUnavailable(body),
+            _ => iface_answers::GetAnswersIdsCommentsError::Other(body),
+        },
+        crate::runtime::DispatchError::Transport(m) => iface_answers::GetAnswersIdsCommentsError::Other(m),
+    }
+}
+
 impl iface_answers::Guest for crate::Component {
-    fn get_answers(params: iface_answers::GetAnswersParams) -> Result<String, String> {
+    fn get_answers(params: iface_answers::GetAnswersParams) -> Result<iface_answers::Answers, iface_answers::GetAnswersError> {
         let json = iface_answers__get_answers_params__to_json(&params);
-        dispatch(&OP_ANSWERS_GET_ANSWERS, json)
+        match dispatch(&OP_ANSWERS_GET_ANSWERS, json).and_then(iface_answers__get_answers__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_answers__get_answers__err(e)),
+        }
     }
-    fn get_answers_ids(params: iface_answers::GetAnswersIdsParams) -> Result<String, String> {
+    fn get_answers_ids(params: iface_answers::GetAnswersIdsParams) -> Result<iface_answers::Answers, iface_answers::GetAnswersIdsError> {
         let json = iface_answers__get_answers_ids_params__to_json(&params);
-        dispatch(&OP_ANSWERS_GET_ANSWERS_IDS, json)
+        match dispatch(&OP_ANSWERS_GET_ANSWERS_IDS, json).and_then(iface_answers__get_answers_ids__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_answers__get_answers_ids__err(e)),
+        }
     }
-    fn get_answers_ids_comments(params: iface_answers::GetAnswersIdsCommentsParams) -> Result<String, String> {
+    fn get_answers_ids_comments(params: iface_answers::GetAnswersIdsCommentsParams) -> Result<iface_answers::Comments, iface_answers::GetAnswersIdsCommentsError> {
         let json = iface_answers__get_answers_ids_comments_params__to_json(&params);
-        dispatch(&OP_ANSWERS_GET_ANSWERS_IDS_COMMENTS, json)
+        match dispatch(&OP_ANSWERS_GET_ANSWERS_IDS_COMMENTS, json).and_then(iface_answers__get_answers_ids_comments__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_answers__get_answers_ids_comments__err(e)),
+        }
     }
 }
 use crate::exports::autostamp::stackexchange::apps as iface_apps;
@@ -498,15 +721,21 @@ const OP_APPS_GET_APPS_ACCESS_TOKENS_DE_AUTHENTICATE: OpSpec = OpSpec {
     method: "GET",
     path_template: "/apps/{access_tokens}/de-authenticate",
     fields: &[
-        FieldSpec { snake: "access_tokens", location: FieldLocation::Path },
-        FieldSpec { snake: "pagesize", location: FieldLocation::Query },
-        FieldSpec { snake: "page", location: FieldLocation::Query },
-        FieldSpec { snake: "filter", location: FieldLocation::Query },
-        FieldSpec { snake: "callback", location: FieldLocation::Query },
+        FieldSpec { snake: "access_tokens", wire: "accessTokens", location: FieldLocation::Path },
+        FieldSpec { snake: "pagesize", wire: "pagesize", location: FieldLocation::Query },
+        FieldSpec { snake: "page", wire: "page", location: FieldLocation::Query },
+        FieldSpec { snake: "filter", wire: "filter", location: FieldLocation::Query },
+        FieldSpec { snake: "callback", wire: "callback", location: FieldLocation::Query },
     ],
     auth: &[
     ],
 };
+
+fn iface_apps__access_tokens__to_json(p: &iface_apps::AccessTokens) -> Value {
+    let mut m = Map::new();
+    m.insert("value".into(), Value::String((&p.value).clone()));
+    Value::Object(m)
+}
 
 fn iface_apps__get_apps_access_tokens_de_authenticate_params__to_json(p: &iface_apps::GetAppsAccessTokensDeAuthenticateParams) -> Value {
     let mut m = Map::new();
@@ -518,10 +747,50 @@ fn iface_apps__get_apps_access_tokens_de_authenticate_params__to_json(p: &iface_
     Value::Object(m)
 }
 
+fn iface_apps__access_tokens__from_json(v: &Value) -> Option<iface_apps::AccessTokens> {
+    let m = v.as_object()?;
+    Some(iface_apps::AccessTokens {
+        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+    })
+}
+
+fn iface_apps__get_apps_access_tokens_de_authenticate__ok(body: String) -> Result<iface_apps::AccessTokens, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match iface_apps__access_tokens__from_json(&v) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_apps__get_apps_access_tokens_de_authenticate__err(e: crate::runtime::DispatchError) -> iface_apps::GetAppsAccessTokensDeAuthenticateError {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => match status {
+            400u16 => iface_apps::GetAppsAccessTokensDeAuthenticateError::BadRequest(body),
+            401u16 => iface_apps::GetAppsAccessTokensDeAuthenticateError::Unauthorized(body),
+            402u16 => iface_apps::GetAppsAccessTokensDeAuthenticateError::PaymentRequired(body),
+            403u16 => iface_apps::GetAppsAccessTokensDeAuthenticateError::Forbidden(body),
+            404u16 => iface_apps::GetAppsAccessTokensDeAuthenticateError::NotFound(body),
+            405u16 => iface_apps::GetAppsAccessTokensDeAuthenticateError::MethodNotAllowed(body),
+            406u16 => iface_apps::GetAppsAccessTokensDeAuthenticateError::NotAcceptable(body),
+            500u16 => iface_apps::GetAppsAccessTokensDeAuthenticateError::InternalServerError(body),
+            502u16 => iface_apps::GetAppsAccessTokensDeAuthenticateError::BadGateway(body),
+            503u16 => iface_apps::GetAppsAccessTokensDeAuthenticateError::ServiceUnavailable(body),
+            _ => iface_apps::GetAppsAccessTokensDeAuthenticateError::Other(body),
+        },
+        crate::runtime::DispatchError::Transport(m) => iface_apps::GetAppsAccessTokensDeAuthenticateError::Other(m),
+    }
+}
+
 impl iface_apps::Guest for crate::Component {
-    fn get_apps_access_tokens_de_authenticate(params: iface_apps::GetAppsAccessTokensDeAuthenticateParams) -> Result<String, String> {
+    fn get_apps_access_tokens_de_authenticate(params: iface_apps::GetAppsAccessTokensDeAuthenticateParams) -> Result<iface_apps::AccessTokens, iface_apps::GetAppsAccessTokensDeAuthenticateError> {
         let json = iface_apps__get_apps_access_tokens_de_authenticate_params__to_json(&params);
-        dispatch(&OP_APPS_GET_APPS_ACCESS_TOKENS_DE_AUTHENTICATE, json)
+        match dispatch(&OP_APPS_GET_APPS_ACCESS_TOKENS_DE_AUTHENTICATE, json).and_then(iface_apps__get_apps_access_tokens_de_authenticate__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_apps__get_apps_access_tokens_de_authenticate__err(e)),
+        }
     }
 }
 use crate::exports::autostamp::stackexchange::badges as iface_badges;
@@ -530,18 +799,18 @@ const OP_BADGES_GET_BADGES: OpSpec = OpSpec {
     method: "GET",
     path_template: "/badges",
     fields: &[
-        FieldSpec { snake: "inname", location: FieldLocation::Query },
-        FieldSpec { snake: "order", location: FieldLocation::Query },
-        FieldSpec { snake: "max", location: FieldLocation::Query },
-        FieldSpec { snake: "min", location: FieldLocation::Query },
-        FieldSpec { snake: "sort", location: FieldLocation::Query },
-        FieldSpec { snake: "fromdate", location: FieldLocation::Query },
-        FieldSpec { snake: "todate", location: FieldLocation::Query },
-        FieldSpec { snake: "pagesize", location: FieldLocation::Query },
-        FieldSpec { snake: "page", location: FieldLocation::Query },
-        FieldSpec { snake: "filter", location: FieldLocation::Query },
-        FieldSpec { snake: "callback", location: FieldLocation::Query },
-        FieldSpec { snake: "site", location: FieldLocation::Query },
+        FieldSpec { snake: "inname", wire: "inname", location: FieldLocation::Query },
+        FieldSpec { snake: "order", wire: "order", location: FieldLocation::Query },
+        FieldSpec { snake: "max", wire: "max", location: FieldLocation::Query },
+        FieldSpec { snake: "min", wire: "min", location: FieldLocation::Query },
+        FieldSpec { snake: "sort", wire: "sort", location: FieldLocation::Query },
+        FieldSpec { snake: "fromdate", wire: "fromdate", location: FieldLocation::Query },
+        FieldSpec { snake: "todate", wire: "todate", location: FieldLocation::Query },
+        FieldSpec { snake: "pagesize", wire: "pagesize", location: FieldLocation::Query },
+        FieldSpec { snake: "page", wire: "page", location: FieldLocation::Query },
+        FieldSpec { snake: "filter", wire: "filter", location: FieldLocation::Query },
+        FieldSpec { snake: "callback", wire: "callback", location: FieldLocation::Query },
+        FieldSpec { snake: "site", wire: "site", location: FieldLocation::Query },
     ],
     auth: &[
     ],
@@ -551,18 +820,18 @@ const OP_BADGES_GET_BADGES_NAME: OpSpec = OpSpec {
     method: "GET",
     path_template: "/badges/name",
     fields: &[
-        FieldSpec { snake: "inname", location: FieldLocation::Query },
-        FieldSpec { snake: "order", location: FieldLocation::Query },
-        FieldSpec { snake: "max", location: FieldLocation::Query },
-        FieldSpec { snake: "min", location: FieldLocation::Query },
-        FieldSpec { snake: "sort", location: FieldLocation::Query },
-        FieldSpec { snake: "fromdate", location: FieldLocation::Query },
-        FieldSpec { snake: "todate", location: FieldLocation::Query },
-        FieldSpec { snake: "pagesize", location: FieldLocation::Query },
-        FieldSpec { snake: "page", location: FieldLocation::Query },
-        FieldSpec { snake: "filter", location: FieldLocation::Query },
-        FieldSpec { snake: "callback", location: FieldLocation::Query },
-        FieldSpec { snake: "site", location: FieldLocation::Query },
+        FieldSpec { snake: "inname", wire: "inname", location: FieldLocation::Query },
+        FieldSpec { snake: "order", wire: "order", location: FieldLocation::Query },
+        FieldSpec { snake: "max", wire: "max", location: FieldLocation::Query },
+        FieldSpec { snake: "min", wire: "min", location: FieldLocation::Query },
+        FieldSpec { snake: "sort", wire: "sort", location: FieldLocation::Query },
+        FieldSpec { snake: "fromdate", wire: "fromdate", location: FieldLocation::Query },
+        FieldSpec { snake: "todate", wire: "todate", location: FieldLocation::Query },
+        FieldSpec { snake: "pagesize", wire: "pagesize", location: FieldLocation::Query },
+        FieldSpec { snake: "page", wire: "page", location: FieldLocation::Query },
+        FieldSpec { snake: "filter", wire: "filter", location: FieldLocation::Query },
+        FieldSpec { snake: "callback", wire: "callback", location: FieldLocation::Query },
+        FieldSpec { snake: "site", wire: "site", location: FieldLocation::Query },
     ],
     auth: &[
     ],
@@ -572,13 +841,13 @@ const OP_BADGES_GET_BADGES_RECIPIENTS: OpSpec = OpSpec {
     method: "GET",
     path_template: "/badges/recipients",
     fields: &[
-        FieldSpec { snake: "fromdate", location: FieldLocation::Query },
-        FieldSpec { snake: "todate", location: FieldLocation::Query },
-        FieldSpec { snake: "pagesize", location: FieldLocation::Query },
-        FieldSpec { snake: "page", location: FieldLocation::Query },
-        FieldSpec { snake: "filter", location: FieldLocation::Query },
-        FieldSpec { snake: "callback", location: FieldLocation::Query },
-        FieldSpec { snake: "site", location: FieldLocation::Query },
+        FieldSpec { snake: "fromdate", wire: "fromdate", location: FieldLocation::Query },
+        FieldSpec { snake: "todate", wire: "todate", location: FieldLocation::Query },
+        FieldSpec { snake: "pagesize", wire: "pagesize", location: FieldLocation::Query },
+        FieldSpec { snake: "page", wire: "page", location: FieldLocation::Query },
+        FieldSpec { snake: "filter", wire: "filter", location: FieldLocation::Query },
+        FieldSpec { snake: "callback", wire: "callback", location: FieldLocation::Query },
+        FieldSpec { snake: "site", wire: "site", location: FieldLocation::Query },
     ],
     auth: &[
     ],
@@ -588,18 +857,18 @@ const OP_BADGES_GET_BADGES_TAGS: OpSpec = OpSpec {
     method: "GET",
     path_template: "/badges/tags",
     fields: &[
-        FieldSpec { snake: "inname", location: FieldLocation::Query },
-        FieldSpec { snake: "order", location: FieldLocation::Query },
-        FieldSpec { snake: "max", location: FieldLocation::Query },
-        FieldSpec { snake: "min", location: FieldLocation::Query },
-        FieldSpec { snake: "sort", location: FieldLocation::Query },
-        FieldSpec { snake: "fromdate", location: FieldLocation::Query },
-        FieldSpec { snake: "todate", location: FieldLocation::Query },
-        FieldSpec { snake: "pagesize", location: FieldLocation::Query },
-        FieldSpec { snake: "page", location: FieldLocation::Query },
-        FieldSpec { snake: "filter", location: FieldLocation::Query },
-        FieldSpec { snake: "callback", location: FieldLocation::Query },
-        FieldSpec { snake: "site", location: FieldLocation::Query },
+        FieldSpec { snake: "inname", wire: "inname", location: FieldLocation::Query },
+        FieldSpec { snake: "order", wire: "order", location: FieldLocation::Query },
+        FieldSpec { snake: "max", wire: "max", location: FieldLocation::Query },
+        FieldSpec { snake: "min", wire: "min", location: FieldLocation::Query },
+        FieldSpec { snake: "sort", wire: "sort", location: FieldLocation::Query },
+        FieldSpec { snake: "fromdate", wire: "fromdate", location: FieldLocation::Query },
+        FieldSpec { snake: "todate", wire: "todate", location: FieldLocation::Query },
+        FieldSpec { snake: "pagesize", wire: "pagesize", location: FieldLocation::Query },
+        FieldSpec { snake: "page", wire: "page", location: FieldLocation::Query },
+        FieldSpec { snake: "filter", wire: "filter", location: FieldLocation::Query },
+        FieldSpec { snake: "callback", wire: "callback", location: FieldLocation::Query },
+        FieldSpec { snake: "site", wire: "site", location: FieldLocation::Query },
     ],
     auth: &[
     ],
@@ -609,18 +878,18 @@ const OP_BADGES_GET_BADGES_IDS: OpSpec = OpSpec {
     method: "GET",
     path_template: "/badges/{ids}",
     fields: &[
-        FieldSpec { snake: "ids", location: FieldLocation::Path },
-        FieldSpec { snake: "order", location: FieldLocation::Query },
-        FieldSpec { snake: "max", location: FieldLocation::Query },
-        FieldSpec { snake: "min", location: FieldLocation::Query },
-        FieldSpec { snake: "sort", location: FieldLocation::Query },
-        FieldSpec { snake: "fromdate", location: FieldLocation::Query },
-        FieldSpec { snake: "todate", location: FieldLocation::Query },
-        FieldSpec { snake: "pagesize", location: FieldLocation::Query },
-        FieldSpec { snake: "page", location: FieldLocation::Query },
-        FieldSpec { snake: "filter", location: FieldLocation::Query },
-        FieldSpec { snake: "callback", location: FieldLocation::Query },
-        FieldSpec { snake: "site", location: FieldLocation::Query },
+        FieldSpec { snake: "ids", wire: "ids", location: FieldLocation::Path },
+        FieldSpec { snake: "order", wire: "order", location: FieldLocation::Query },
+        FieldSpec { snake: "max", wire: "max", location: FieldLocation::Query },
+        FieldSpec { snake: "min", wire: "min", location: FieldLocation::Query },
+        FieldSpec { snake: "sort", wire: "sort", location: FieldLocation::Query },
+        FieldSpec { snake: "fromdate", wire: "fromdate", location: FieldLocation::Query },
+        FieldSpec { snake: "todate", wire: "todate", location: FieldLocation::Query },
+        FieldSpec { snake: "pagesize", wire: "pagesize", location: FieldLocation::Query },
+        FieldSpec { snake: "page", wire: "page", location: FieldLocation::Query },
+        FieldSpec { snake: "filter", wire: "filter", location: FieldLocation::Query },
+        FieldSpec { snake: "callback", wire: "callback", location: FieldLocation::Query },
+        FieldSpec { snake: "site", wire: "site", location: FieldLocation::Query },
     ],
     auth: &[
     ],
@@ -630,14 +899,14 @@ const OP_BADGES_GET_BADGES_IDS_RECIPIENTS: OpSpec = OpSpec {
     method: "GET",
     path_template: "/badges/{ids}/recipients",
     fields: &[
-        FieldSpec { snake: "ids", location: FieldLocation::Path },
-        FieldSpec { snake: "fromdate", location: FieldLocation::Query },
-        FieldSpec { snake: "todate", location: FieldLocation::Query },
-        FieldSpec { snake: "pagesize", location: FieldLocation::Query },
-        FieldSpec { snake: "page", location: FieldLocation::Query },
-        FieldSpec { snake: "filter", location: FieldLocation::Query },
-        FieldSpec { snake: "callback", location: FieldLocation::Query },
-        FieldSpec { snake: "site", location: FieldLocation::Query },
+        FieldSpec { snake: "ids", wire: "ids", location: FieldLocation::Path },
+        FieldSpec { snake: "fromdate", wire: "fromdate", location: FieldLocation::Query },
+        FieldSpec { snake: "todate", wire: "todate", location: FieldLocation::Query },
+        FieldSpec { snake: "pagesize", wire: "pagesize", location: FieldLocation::Query },
+        FieldSpec { snake: "page", wire: "page", location: FieldLocation::Query },
+        FieldSpec { snake: "filter", wire: "filter", location: FieldLocation::Query },
+        FieldSpec { snake: "callback", wire: "callback", location: FieldLocation::Query },
+        FieldSpec { snake: "site", wire: "site", location: FieldLocation::Query },
     ],
     auth: &[
     ],
@@ -663,6 +932,12 @@ fn iface_badges__get_badges_name_sort_enum__to_str(e: &iface_badges::GetBadgesNa
         iface_badges::GetBadgesNameSortEnum::Rank => "rank",
         iface_badges::GetBadgesNameSortEnum::Name => "name",
     }
+}
+
+fn iface_badges__badges__to_json(p: &iface_badges::Badges) -> Value {
+    let mut m = Map::new();
+    m.insert("value".into(), Value::String((&p.value).clone()));
+    Value::Object(m)
 }
 
 fn iface_badges__get_badges_params__to_json(p: &iface_badges::GetBadgesParams) -> Value {
@@ -758,30 +1033,235 @@ fn iface_badges__get_badges_ids_recipients_params__to_json(p: &iface_badges::Get
     Value::Object(m)
 }
 
+fn iface_badges__badges__from_json(v: &Value) -> Option<iface_badges::Badges> {
+    let m = v.as_object()?;
+    Some(iface_badges::Badges {
+        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+    })
+}
+
+fn iface_badges__get_badges__ok(body: String) -> Result<iface_badges::Badges, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match iface_badges__badges__from_json(&v) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_badges__get_badges__err(e: crate::runtime::DispatchError) -> iface_badges::GetBadgesError {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => match status {
+            400u16 => iface_badges::GetBadgesError::BadRequest(body),
+            401u16 => iface_badges::GetBadgesError::Unauthorized(body),
+            402u16 => iface_badges::GetBadgesError::PaymentRequired(body),
+            403u16 => iface_badges::GetBadgesError::Forbidden(body),
+            404u16 => iface_badges::GetBadgesError::NotFound(body),
+            405u16 => iface_badges::GetBadgesError::MethodNotAllowed(body),
+            406u16 => iface_badges::GetBadgesError::NotAcceptable(body),
+            500u16 => iface_badges::GetBadgesError::InternalServerError(body),
+            502u16 => iface_badges::GetBadgesError::BadGateway(body),
+            503u16 => iface_badges::GetBadgesError::ServiceUnavailable(body),
+            _ => iface_badges::GetBadgesError::Other(body),
+        },
+        crate::runtime::DispatchError::Transport(m) => iface_badges::GetBadgesError::Other(m),
+    }
+}
+
+fn iface_badges__get_badges_name__ok(body: String) -> Result<iface_badges::Badges, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match iface_badges__badges__from_json(&v) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_badges__get_badges_name__err(e: crate::runtime::DispatchError) -> iface_badges::GetBadgesNameError {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => match status {
+            400u16 => iface_badges::GetBadgesNameError::BadRequest(body),
+            401u16 => iface_badges::GetBadgesNameError::Unauthorized(body),
+            402u16 => iface_badges::GetBadgesNameError::PaymentRequired(body),
+            403u16 => iface_badges::GetBadgesNameError::Forbidden(body),
+            404u16 => iface_badges::GetBadgesNameError::NotFound(body),
+            405u16 => iface_badges::GetBadgesNameError::MethodNotAllowed(body),
+            406u16 => iface_badges::GetBadgesNameError::NotAcceptable(body),
+            500u16 => iface_badges::GetBadgesNameError::InternalServerError(body),
+            502u16 => iface_badges::GetBadgesNameError::BadGateway(body),
+            503u16 => iface_badges::GetBadgesNameError::ServiceUnavailable(body),
+            _ => iface_badges::GetBadgesNameError::Other(body),
+        },
+        crate::runtime::DispatchError::Transport(m) => iface_badges::GetBadgesNameError::Other(m),
+    }
+}
+
+fn iface_badges__get_badges_recipients__ok(body: String) -> Result<iface_badges::Badges, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match iface_badges__badges__from_json(&v) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_badges__get_badges_recipients__err(e: crate::runtime::DispatchError) -> iface_badges::GetBadgesRecipientsError {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => match status {
+            400u16 => iface_badges::GetBadgesRecipientsError::BadRequest(body),
+            401u16 => iface_badges::GetBadgesRecipientsError::Unauthorized(body),
+            402u16 => iface_badges::GetBadgesRecipientsError::PaymentRequired(body),
+            403u16 => iface_badges::GetBadgesRecipientsError::Forbidden(body),
+            404u16 => iface_badges::GetBadgesRecipientsError::NotFound(body),
+            405u16 => iface_badges::GetBadgesRecipientsError::MethodNotAllowed(body),
+            406u16 => iface_badges::GetBadgesRecipientsError::NotAcceptable(body),
+            500u16 => iface_badges::GetBadgesRecipientsError::InternalServerError(body),
+            502u16 => iface_badges::GetBadgesRecipientsError::BadGateway(body),
+            503u16 => iface_badges::GetBadgesRecipientsError::ServiceUnavailable(body),
+            _ => iface_badges::GetBadgesRecipientsError::Other(body),
+        },
+        crate::runtime::DispatchError::Transport(m) => iface_badges::GetBadgesRecipientsError::Other(m),
+    }
+}
+
+fn iface_badges__get_badges_tags__ok(body: String) -> Result<iface_badges::Badges, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match iface_badges__badges__from_json(&v) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_badges__get_badges_tags__err(e: crate::runtime::DispatchError) -> iface_badges::GetBadgesTagsError {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => match status {
+            400u16 => iface_badges::GetBadgesTagsError::BadRequest(body),
+            401u16 => iface_badges::GetBadgesTagsError::Unauthorized(body),
+            402u16 => iface_badges::GetBadgesTagsError::PaymentRequired(body),
+            403u16 => iface_badges::GetBadgesTagsError::Forbidden(body),
+            404u16 => iface_badges::GetBadgesTagsError::NotFound(body),
+            405u16 => iface_badges::GetBadgesTagsError::MethodNotAllowed(body),
+            406u16 => iface_badges::GetBadgesTagsError::NotAcceptable(body),
+            500u16 => iface_badges::GetBadgesTagsError::InternalServerError(body),
+            502u16 => iface_badges::GetBadgesTagsError::BadGateway(body),
+            503u16 => iface_badges::GetBadgesTagsError::ServiceUnavailable(body),
+            _ => iface_badges::GetBadgesTagsError::Other(body),
+        },
+        crate::runtime::DispatchError::Transport(m) => iface_badges::GetBadgesTagsError::Other(m),
+    }
+}
+
+fn iface_badges__get_badges_ids__ok(body: String) -> Result<iface_badges::Badges, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match iface_badges__badges__from_json(&v) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_badges__get_badges_ids__err(e: crate::runtime::DispatchError) -> iface_badges::GetBadgesIdsError {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => match status {
+            400u16 => iface_badges::GetBadgesIdsError::BadRequest(body),
+            401u16 => iface_badges::GetBadgesIdsError::Unauthorized(body),
+            402u16 => iface_badges::GetBadgesIdsError::PaymentRequired(body),
+            403u16 => iface_badges::GetBadgesIdsError::Forbidden(body),
+            404u16 => iface_badges::GetBadgesIdsError::NotFound(body),
+            405u16 => iface_badges::GetBadgesIdsError::MethodNotAllowed(body),
+            406u16 => iface_badges::GetBadgesIdsError::NotAcceptable(body),
+            500u16 => iface_badges::GetBadgesIdsError::InternalServerError(body),
+            502u16 => iface_badges::GetBadgesIdsError::BadGateway(body),
+            503u16 => iface_badges::GetBadgesIdsError::ServiceUnavailable(body),
+            _ => iface_badges::GetBadgesIdsError::Other(body),
+        },
+        crate::runtime::DispatchError::Transport(m) => iface_badges::GetBadgesIdsError::Other(m),
+    }
+}
+
+fn iface_badges__get_badges_ids_recipients__ok(body: String) -> Result<iface_badges::Badges, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match iface_badges__badges__from_json(&v) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_badges__get_badges_ids_recipients__err(e: crate::runtime::DispatchError) -> iface_badges::GetBadgesIdsRecipientsError {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => match status {
+            400u16 => iface_badges::GetBadgesIdsRecipientsError::BadRequest(body),
+            401u16 => iface_badges::GetBadgesIdsRecipientsError::Unauthorized(body),
+            402u16 => iface_badges::GetBadgesIdsRecipientsError::PaymentRequired(body),
+            403u16 => iface_badges::GetBadgesIdsRecipientsError::Forbidden(body),
+            404u16 => iface_badges::GetBadgesIdsRecipientsError::NotFound(body),
+            405u16 => iface_badges::GetBadgesIdsRecipientsError::MethodNotAllowed(body),
+            406u16 => iface_badges::GetBadgesIdsRecipientsError::NotAcceptable(body),
+            500u16 => iface_badges::GetBadgesIdsRecipientsError::InternalServerError(body),
+            502u16 => iface_badges::GetBadgesIdsRecipientsError::BadGateway(body),
+            503u16 => iface_badges::GetBadgesIdsRecipientsError::ServiceUnavailable(body),
+            _ => iface_badges::GetBadgesIdsRecipientsError::Other(body),
+        },
+        crate::runtime::DispatchError::Transport(m) => iface_badges::GetBadgesIdsRecipientsError::Other(m),
+    }
+}
+
 impl iface_badges::Guest for crate::Component {
-    fn get_badges(params: iface_badges::GetBadgesParams) -> Result<String, String> {
+    fn get_badges(params: iface_badges::GetBadgesParams) -> Result<iface_badges::Badges, iface_badges::GetBadgesError> {
         let json = iface_badges__get_badges_params__to_json(&params);
-        dispatch(&OP_BADGES_GET_BADGES, json)
+        match dispatch(&OP_BADGES_GET_BADGES, json).and_then(iface_badges__get_badges__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_badges__get_badges__err(e)),
+        }
     }
-    fn get_badges_name(params: iface_badges::GetBadgesNameParams) -> Result<String, String> {
+    fn get_badges_name(params: iface_badges::GetBadgesNameParams) -> Result<iface_badges::Badges, iface_badges::GetBadgesNameError> {
         let json = iface_badges__get_badges_name_params__to_json(&params);
-        dispatch(&OP_BADGES_GET_BADGES_NAME, json)
+        match dispatch(&OP_BADGES_GET_BADGES_NAME, json).and_then(iface_badges__get_badges_name__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_badges__get_badges_name__err(e)),
+        }
     }
-    fn get_badges_recipients(params: iface_badges::GetBadgesRecipientsParams) -> Result<String, String> {
+    fn get_badges_recipients(params: iface_badges::GetBadgesRecipientsParams) -> Result<iface_badges::Badges, iface_badges::GetBadgesRecipientsError> {
         let json = iface_badges__get_badges_recipients_params__to_json(&params);
-        dispatch(&OP_BADGES_GET_BADGES_RECIPIENTS, json)
+        match dispatch(&OP_BADGES_GET_BADGES_RECIPIENTS, json).and_then(iface_badges__get_badges_recipients__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_badges__get_badges_recipients__err(e)),
+        }
     }
-    fn get_badges_tags(params: iface_badges::GetBadgesTagsParams) -> Result<String, String> {
+    fn get_badges_tags(params: iface_badges::GetBadgesTagsParams) -> Result<iface_badges::Badges, iface_badges::GetBadgesTagsError> {
         let json = iface_badges__get_badges_tags_params__to_json(&params);
-        dispatch(&OP_BADGES_GET_BADGES_TAGS, json)
+        match dispatch(&OP_BADGES_GET_BADGES_TAGS, json).and_then(iface_badges__get_badges_tags__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_badges__get_badges_tags__err(e)),
+        }
     }
-    fn get_badges_ids(params: iface_badges::GetBadgesIdsParams) -> Result<String, String> {
+    fn get_badges_ids(params: iface_badges::GetBadgesIdsParams) -> Result<iface_badges::Badges, iface_badges::GetBadgesIdsError> {
         let json = iface_badges__get_badges_ids_params__to_json(&params);
-        dispatch(&OP_BADGES_GET_BADGES_IDS, json)
+        match dispatch(&OP_BADGES_GET_BADGES_IDS, json).and_then(iface_badges__get_badges_ids__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_badges__get_badges_ids__err(e)),
+        }
     }
-    fn get_badges_ids_recipients(params: iface_badges::GetBadgesIdsRecipientsParams) -> Result<String, String> {
+    fn get_badges_ids_recipients(params: iface_badges::GetBadgesIdsRecipientsParams) -> Result<iface_badges::Badges, iface_badges::GetBadgesIdsRecipientsError> {
         let json = iface_badges__get_badges_ids_recipients_params__to_json(&params);
-        dispatch(&OP_BADGES_GET_BADGES_IDS_RECIPIENTS, json)
+        match dispatch(&OP_BADGES_GET_BADGES_IDS_RECIPIENTS, json).and_then(iface_badges__get_badges_ids_recipients__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_badges__get_badges_ids_recipients__err(e)),
+        }
     }
 }
 use crate::exports::autostamp::stackexchange::comments as iface_comments;
@@ -790,17 +1270,17 @@ const OP_COMMENTS_GET_COMMENTS: OpSpec = OpSpec {
     method: "GET",
     path_template: "/comments",
     fields: &[
-        FieldSpec { snake: "order", location: FieldLocation::Query },
-        FieldSpec { snake: "max", location: FieldLocation::Query },
-        FieldSpec { snake: "min", location: FieldLocation::Query },
-        FieldSpec { snake: "sort", location: FieldLocation::Query },
-        FieldSpec { snake: "fromdate", location: FieldLocation::Query },
-        FieldSpec { snake: "todate", location: FieldLocation::Query },
-        FieldSpec { snake: "pagesize", location: FieldLocation::Query },
-        FieldSpec { snake: "page", location: FieldLocation::Query },
-        FieldSpec { snake: "filter", location: FieldLocation::Query },
-        FieldSpec { snake: "callback", location: FieldLocation::Query },
-        FieldSpec { snake: "site", location: FieldLocation::Query },
+        FieldSpec { snake: "order", wire: "order", location: FieldLocation::Query },
+        FieldSpec { snake: "max", wire: "max", location: FieldLocation::Query },
+        FieldSpec { snake: "min", wire: "min", location: FieldLocation::Query },
+        FieldSpec { snake: "sort", wire: "sort", location: FieldLocation::Query },
+        FieldSpec { snake: "fromdate", wire: "fromdate", location: FieldLocation::Query },
+        FieldSpec { snake: "todate", wire: "todate", location: FieldLocation::Query },
+        FieldSpec { snake: "pagesize", wire: "pagesize", location: FieldLocation::Query },
+        FieldSpec { snake: "page", wire: "page", location: FieldLocation::Query },
+        FieldSpec { snake: "filter", wire: "filter", location: FieldLocation::Query },
+        FieldSpec { snake: "callback", wire: "callback", location: FieldLocation::Query },
+        FieldSpec { snake: "site", wire: "site", location: FieldLocation::Query },
     ],
     auth: &[
     ],
@@ -810,18 +1290,18 @@ const OP_COMMENTS_GET_COMMENTS_IDS: OpSpec = OpSpec {
     method: "GET",
     path_template: "/comments/{ids}",
     fields: &[
-        FieldSpec { snake: "ids", location: FieldLocation::Path },
-        FieldSpec { snake: "order", location: FieldLocation::Query },
-        FieldSpec { snake: "max", location: FieldLocation::Query },
-        FieldSpec { snake: "min", location: FieldLocation::Query },
-        FieldSpec { snake: "sort", location: FieldLocation::Query },
-        FieldSpec { snake: "fromdate", location: FieldLocation::Query },
-        FieldSpec { snake: "todate", location: FieldLocation::Query },
-        FieldSpec { snake: "pagesize", location: FieldLocation::Query },
-        FieldSpec { snake: "page", location: FieldLocation::Query },
-        FieldSpec { snake: "filter", location: FieldLocation::Query },
-        FieldSpec { snake: "callback", location: FieldLocation::Query },
-        FieldSpec { snake: "site", location: FieldLocation::Query },
+        FieldSpec { snake: "ids", wire: "ids", location: FieldLocation::Path },
+        FieldSpec { snake: "order", wire: "order", location: FieldLocation::Query },
+        FieldSpec { snake: "max", wire: "max", location: FieldLocation::Query },
+        FieldSpec { snake: "min", wire: "min", location: FieldLocation::Query },
+        FieldSpec { snake: "sort", wire: "sort", location: FieldLocation::Query },
+        FieldSpec { snake: "fromdate", wire: "fromdate", location: FieldLocation::Query },
+        FieldSpec { snake: "todate", wire: "todate", location: FieldLocation::Query },
+        FieldSpec { snake: "pagesize", wire: "pagesize", location: FieldLocation::Query },
+        FieldSpec { snake: "page", wire: "page", location: FieldLocation::Query },
+        FieldSpec { snake: "filter", wire: "filter", location: FieldLocation::Query },
+        FieldSpec { snake: "callback", wire: "callback", location: FieldLocation::Query },
+        FieldSpec { snake: "site", wire: "site", location: FieldLocation::Query },
     ],
     auth: &[
     ],
@@ -831,11 +1311,11 @@ const OP_COMMENTS_POST_COMMENTS_ID_DELETE: OpSpec = OpSpec {
     method: "POST",
     path_template: "/comments/{id}/delete",
     fields: &[
-        FieldSpec { snake: "id", location: FieldLocation::Path },
-        FieldSpec { snake: "filter", location: FieldLocation::Query },
-        FieldSpec { snake: "callback", location: FieldLocation::Query },
-        FieldSpec { snake: "site", location: FieldLocation::Query },
-        FieldSpec { snake: "preview", location: FieldLocation::Query },
+        FieldSpec { snake: "id", wire: "id", location: FieldLocation::Path },
+        FieldSpec { snake: "filter", wire: "filter", location: FieldLocation::Query },
+        FieldSpec { snake: "callback", wire: "callback", location: FieldLocation::Query },
+        FieldSpec { snake: "site", wire: "site", location: FieldLocation::Query },
+        FieldSpec { snake: "preview", wire: "preview", location: FieldLocation::Query },
     ],
     auth: &[
     ],
@@ -845,12 +1325,12 @@ const OP_COMMENTS_POST_COMMENTS_ID_EDIT: OpSpec = OpSpec {
     method: "POST",
     path_template: "/comments/{id}/edit",
     fields: &[
-        FieldSpec { snake: "id", location: FieldLocation::Path },
-        FieldSpec { snake: "filter", location: FieldLocation::Query },
-        FieldSpec { snake: "callback", location: FieldLocation::Query },
-        FieldSpec { snake: "site", location: FieldLocation::Query },
-        FieldSpec { snake: "body", location: FieldLocation::Query },
-        FieldSpec { snake: "preview", location: FieldLocation::Query },
+        FieldSpec { snake: "id", wire: "id", location: FieldLocation::Path },
+        FieldSpec { snake: "filter", wire: "filter", location: FieldLocation::Query },
+        FieldSpec { snake: "callback", wire: "callback", location: FieldLocation::Query },
+        FieldSpec { snake: "site", wire: "site", location: FieldLocation::Query },
+        FieldSpec { snake: "body", wire: "body", location: FieldLocation::Query },
+        FieldSpec { snake: "preview", wire: "preview", location: FieldLocation::Query },
     ],
     auth: &[
     ],
@@ -868,6 +1348,72 @@ fn iface_comments__get_comments_sort_enum__to_str(e: &iface_comments::GetComment
         iface_comments::GetCommentsSortEnum::Creation => "creation",
         iface_comments::GetCommentsSortEnum::Votes => "votes",
     }
+}
+
+fn iface_comments__comments__to_json(p: &iface_comments::Comments) -> Value {
+    let mut m = Map::new();
+    m.insert("value".into(), Value::String((&p.value).clone()));
+    Value::Object(m)
+}
+
+fn iface_comments__created_comment__to_json(p: &iface_comments::CreatedComment) -> Value {
+    let mut m = Map::new();
+    m.insert("body".into(), match (&p.body) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("body_markdown".into(), match (&p.body_markdown) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("can_flag".into(), match (&p.can_flag) { Some(v) => Value::Bool(*(v)), None => Value::Null });
+    m.insert("comment_id".into(), match (&p.comment_id) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("creation_date".into(), match (&p.creation_date) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("edited".into(), match (&p.edited) { Some(v) => Value::Bool(*(v)), None => Value::Null });
+    m.insert("link".into(), match (&p.link) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("owner".into(), match (&p.owner) { Some(v) => iface_comments__created_comment_owner__to_json(v), None => Value::Null });
+    m.insert("post_id".into(), match (&p.post_id) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("post_type".into(), match (&p.post_type) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("reply_to_user".into(), match (&p.reply_to_user) { Some(v) => iface_comments__created_comment_reply_to_user__to_json(v), None => Value::Null });
+    m.insert("score".into(), match (&p.score) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("upvoted".into(), match (&p.upvoted) { Some(v) => Value::Bool(*(v)), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_comments__created_comment_owner__to_json(p: &iface_comments::CreatedCommentOwner) -> Value {
+    let mut m = Map::new();
+    m.insert("accept_rate".into(), match (&p.accept_rate) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("badge_counts".into(), match (&p.badge_counts) { Some(v) => iface_comments__created_comment_owner_badge_counts__to_json(v), None => Value::Null });
+    m.insert("display_name".into(), match (&p.display_name) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("link".into(), match (&p.link) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("profile_image".into(), match (&p.profile_image) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("reputation".into(), match (&p.reputation) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("user_id".into(), match (&p.user_id) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("user_type".into(), match (&p.user_type) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_comments__created_comment_owner_badge_counts__to_json(p: &iface_comments::CreatedCommentOwnerBadgeCounts) -> Value {
+    let mut m = Map::new();
+    m.insert("bronze".into(), match (&p.bronze) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("gold".into(), match (&p.gold) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("silver".into(), match (&p.silver) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_comments__created_comment_reply_to_user__to_json(p: &iface_comments::CreatedCommentReplyToUser) -> Value {
+    let mut m = Map::new();
+    m.insert("accept_rate".into(), match (&p.accept_rate) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("badge_counts".into(), match (&p.badge_counts) { Some(v) => iface_comments__created_comment_reply_to_user_badge_counts__to_json(v), None => Value::Null });
+    m.insert("display_name".into(), match (&p.display_name) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("link".into(), match (&p.link) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("profile_image".into(), match (&p.profile_image) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("reputation".into(), match (&p.reputation) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("user_id".into(), match (&p.user_id) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("user_type".into(), match (&p.user_type) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_comments__created_comment_reply_to_user_badge_counts__to_json(p: &iface_comments::CreatedCommentReplyToUserBadgeCounts) -> Value {
+    let mut m = Map::new();
+    m.insert("bronze".into(), match (&p.bronze) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("gold".into(), match (&p.gold) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("silver".into(), match (&p.silver) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    Value::Object(m)
 }
 
 fn iface_comments__get_comments_params__to_json(p: &iface_comments::GetCommentsParams) -> Value {
@@ -924,22 +1470,219 @@ fn iface_comments__post_comments_id_edit_params__to_json(p: &iface_comments::Pos
     Value::Object(m)
 }
 
+fn iface_comments__comments__from_json(v: &Value) -> Option<iface_comments::Comments> {
+    let m = v.as_object()?;
+    Some(iface_comments::Comments {
+        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+    })
+}
+
+fn iface_comments__created_comment__from_json(v: &Value) -> Option<iface_comments::CreatedComment> {
+    let m = v.as_object()?;
+    Some(iface_comments::CreatedComment {
+        body: m.get("body").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        body_markdown: m.get("body_markdown").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        can_flag: m.get("can_flag").filter(|v| !v.is_null()).and_then(|v| (v).as_bool()),
+        comment_id: m.get("comment_id").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        creation_date: m.get("creation_date").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        edited: m.get("edited").filter(|v| !v.is_null()).and_then(|v| (v).as_bool()),
+        link: m.get("link").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        owner: m.get("owner").filter(|v| !v.is_null()).and_then(|v| iface_comments__created_comment_owner__from_json(v)),
+        post_id: m.get("post_id").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        post_type: m.get("post_type").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        reply_to_user: m.get("reply_to_user").filter(|v| !v.is_null()).and_then(|v| iface_comments__created_comment_reply_to_user__from_json(v)),
+        score: m.get("score").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        upvoted: m.get("upvoted").filter(|v| !v.is_null()).and_then(|v| (v).as_bool()),
+    })
+}
+
+fn iface_comments__created_comment_owner__from_json(v: &Value) -> Option<iface_comments::CreatedCommentOwner> {
+    let m = v.as_object()?;
+    Some(iface_comments::CreatedCommentOwner {
+        accept_rate: m.get("accept_rate").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        badge_counts: m.get("badge_counts").filter(|v| !v.is_null()).and_then(|v| iface_comments__created_comment_owner_badge_counts__from_json(v)),
+        display_name: m.get("display_name").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        link: m.get("link").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        profile_image: m.get("profile_image").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        reputation: m.get("reputation").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        user_id: m.get("user_id").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        user_type: m.get("user_type").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    })
+}
+
+fn iface_comments__created_comment_owner_badge_counts__from_json(v: &Value) -> Option<iface_comments::CreatedCommentOwnerBadgeCounts> {
+    let m = v.as_object()?;
+    Some(iface_comments::CreatedCommentOwnerBadgeCounts {
+        bronze: m.get("bronze").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        gold: m.get("gold").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        silver: m.get("silver").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+    })
+}
+
+fn iface_comments__created_comment_reply_to_user__from_json(v: &Value) -> Option<iface_comments::CreatedCommentReplyToUser> {
+    let m = v.as_object()?;
+    Some(iface_comments::CreatedCommentReplyToUser {
+        accept_rate: m.get("accept_rate").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        badge_counts: m.get("badge_counts").filter(|v| !v.is_null()).and_then(|v| iface_comments__created_comment_reply_to_user_badge_counts__from_json(v)),
+        display_name: m.get("display_name").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        link: m.get("link").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        profile_image: m.get("profile_image").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        reputation: m.get("reputation").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        user_id: m.get("user_id").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        user_type: m.get("user_type").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    })
+}
+
+fn iface_comments__created_comment_reply_to_user_badge_counts__from_json(v: &Value) -> Option<iface_comments::CreatedCommentReplyToUserBadgeCounts> {
+    let m = v.as_object()?;
+    Some(iface_comments::CreatedCommentReplyToUserBadgeCounts {
+        bronze: m.get("bronze").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        gold: m.get("gold").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        silver: m.get("silver").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+    })
+}
+
+fn iface_comments__get_comments__ok(body: String) -> Result<iface_comments::Comments, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match iface_comments__comments__from_json(&v) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_comments__get_comments__err(e: crate::runtime::DispatchError) -> iface_comments::GetCommentsError {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => match status {
+            400u16 => iface_comments::GetCommentsError::BadRequest(body),
+            401u16 => iface_comments::GetCommentsError::Unauthorized(body),
+            402u16 => iface_comments::GetCommentsError::PaymentRequired(body),
+            403u16 => iface_comments::GetCommentsError::Forbidden(body),
+            404u16 => iface_comments::GetCommentsError::NotFound(body),
+            405u16 => iface_comments::GetCommentsError::MethodNotAllowed(body),
+            406u16 => iface_comments::GetCommentsError::NotAcceptable(body),
+            500u16 => iface_comments::GetCommentsError::InternalServerError(body),
+            502u16 => iface_comments::GetCommentsError::BadGateway(body),
+            503u16 => iface_comments::GetCommentsError::ServiceUnavailable(body),
+            _ => iface_comments::GetCommentsError::Other(body),
+        },
+        crate::runtime::DispatchError::Transport(m) => iface_comments::GetCommentsError::Other(m),
+    }
+}
+
+fn iface_comments__get_comments_ids__ok(body: String) -> Result<iface_comments::Comments, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match iface_comments__comments__from_json(&v) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_comments__get_comments_ids__err(e: crate::runtime::DispatchError) -> iface_comments::GetCommentsIdsError {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => match status {
+            400u16 => iface_comments::GetCommentsIdsError::BadRequest(body),
+            401u16 => iface_comments::GetCommentsIdsError::Unauthorized(body),
+            402u16 => iface_comments::GetCommentsIdsError::PaymentRequired(body),
+            403u16 => iface_comments::GetCommentsIdsError::Forbidden(body),
+            404u16 => iface_comments::GetCommentsIdsError::NotFound(body),
+            405u16 => iface_comments::GetCommentsIdsError::MethodNotAllowed(body),
+            406u16 => iface_comments::GetCommentsIdsError::NotAcceptable(body),
+            500u16 => iface_comments::GetCommentsIdsError::InternalServerError(body),
+            502u16 => iface_comments::GetCommentsIdsError::BadGateway(body),
+            503u16 => iface_comments::GetCommentsIdsError::ServiceUnavailable(body),
+            _ => iface_comments::GetCommentsIdsError::Other(body),
+        },
+        crate::runtime::DispatchError::Transport(m) => iface_comments::GetCommentsIdsError::Other(m),
+    }
+}
+
+fn iface_comments__post_comments_id_delete__ok(body: String) -> Result<String, crate::runtime::DispatchError> {
+    Ok(body)
+}
+
+fn iface_comments__post_comments_id_delete__err(e: crate::runtime::DispatchError) -> iface_comments::PostCommentsIdDeleteError {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => match status {
+            400u16 => iface_comments::PostCommentsIdDeleteError::BadRequest(body),
+            401u16 => iface_comments::PostCommentsIdDeleteError::Unauthorized(body),
+            402u16 => iface_comments::PostCommentsIdDeleteError::PaymentRequired(body),
+            403u16 => iface_comments::PostCommentsIdDeleteError::Forbidden(body),
+            404u16 => iface_comments::PostCommentsIdDeleteError::NotFound(body),
+            405u16 => iface_comments::PostCommentsIdDeleteError::MethodNotAllowed(body),
+            406u16 => iface_comments::PostCommentsIdDeleteError::NotAcceptable(body),
+            500u16 => iface_comments::PostCommentsIdDeleteError::InternalServerError(body),
+            502u16 => iface_comments::PostCommentsIdDeleteError::BadGateway(body),
+            503u16 => iface_comments::PostCommentsIdDeleteError::ServiceUnavailable(body),
+            _ => iface_comments::PostCommentsIdDeleteError::Other(body),
+        },
+        crate::runtime::DispatchError::Transport(m) => iface_comments::PostCommentsIdDeleteError::Other(m),
+    }
+}
+
+fn iface_comments__post_comments_id_edit__ok(body: String) -> Result<iface_comments::CreatedComment, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match iface_comments__created_comment__from_json(&v) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_comments__post_comments_id_edit__err(e: crate::runtime::DispatchError) -> iface_comments::PostCommentsIdEditError {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => match status {
+            400u16 => iface_comments::PostCommentsIdEditError::BadRequest(body),
+            401u16 => iface_comments::PostCommentsIdEditError::Unauthorized(body),
+            402u16 => iface_comments::PostCommentsIdEditError::PaymentRequired(body),
+            403u16 => iface_comments::PostCommentsIdEditError::Forbidden(body),
+            404u16 => iface_comments::PostCommentsIdEditError::NotFound(body),
+            405u16 => iface_comments::PostCommentsIdEditError::MethodNotAllowed(body),
+            406u16 => iface_comments::PostCommentsIdEditError::NotAcceptable(body),
+            500u16 => iface_comments::PostCommentsIdEditError::InternalServerError(body),
+            502u16 => iface_comments::PostCommentsIdEditError::BadGateway(body),
+            503u16 => iface_comments::PostCommentsIdEditError::ServiceUnavailable(body),
+            _ => iface_comments::PostCommentsIdEditError::Other(body),
+        },
+        crate::runtime::DispatchError::Transport(m) => iface_comments::PostCommentsIdEditError::Other(m),
+    }
+}
+
 impl iface_comments::Guest for crate::Component {
-    fn get_comments(params: iface_comments::GetCommentsParams) -> Result<String, String> {
+    fn get_comments(params: iface_comments::GetCommentsParams) -> Result<iface_comments::Comments, iface_comments::GetCommentsError> {
         let json = iface_comments__get_comments_params__to_json(&params);
-        dispatch(&OP_COMMENTS_GET_COMMENTS, json)
+        match dispatch(&OP_COMMENTS_GET_COMMENTS, json).and_then(iface_comments__get_comments__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_comments__get_comments__err(e)),
+        }
     }
-    fn get_comments_ids(params: iface_comments::GetCommentsIdsParams) -> Result<String, String> {
+    fn get_comments_ids(params: iface_comments::GetCommentsIdsParams) -> Result<iface_comments::Comments, iface_comments::GetCommentsIdsError> {
         let json = iface_comments__get_comments_ids_params__to_json(&params);
-        dispatch(&OP_COMMENTS_GET_COMMENTS_IDS, json)
+        match dispatch(&OP_COMMENTS_GET_COMMENTS_IDS, json).and_then(iface_comments__get_comments_ids__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_comments__get_comments_ids__err(e)),
+        }
     }
-    fn post_comments_id_delete(params: iface_comments::PostCommentsIdDeleteParams) -> Result<String, String> {
+    fn post_comments_id_delete(params: iface_comments::PostCommentsIdDeleteParams) -> Result<String, iface_comments::PostCommentsIdDeleteError> {
         let json = iface_comments__post_comments_id_delete_params__to_json(&params);
-        dispatch(&OP_COMMENTS_POST_COMMENTS_ID_DELETE, json)
+        match dispatch(&OP_COMMENTS_POST_COMMENTS_ID_DELETE, json).and_then(iface_comments__post_comments_id_delete__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_comments__post_comments_id_delete__err(e)),
+        }
     }
-    fn post_comments_id_edit(params: iface_comments::PostCommentsIdEditParams) -> Result<String, String> {
+    fn post_comments_id_edit(params: iface_comments::PostCommentsIdEditParams) -> Result<iface_comments::CreatedComment, iface_comments::PostCommentsIdEditError> {
         let json = iface_comments__post_comments_id_edit_params__to_json(&params);
-        dispatch(&OP_COMMENTS_POST_COMMENTS_ID_EDIT, json)
+        match dispatch(&OP_COMMENTS_POST_COMMENTS_ID_EDIT, json).and_then(iface_comments__post_comments_id_edit__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_comments__post_comments_id_edit__err(e)),
+        }
     }
 }
 use crate::exports::autostamp::stackexchange::errors as iface_errors;
@@ -948,10 +1691,10 @@ const OP_ERRORS_GET_ERRORS: OpSpec = OpSpec {
     method: "GET",
     path_template: "/errors",
     fields: &[
-        FieldSpec { snake: "pagesize", location: FieldLocation::Query },
-        FieldSpec { snake: "page", location: FieldLocation::Query },
-        FieldSpec { snake: "filter", location: FieldLocation::Query },
-        FieldSpec { snake: "callback", location: FieldLocation::Query },
+        FieldSpec { snake: "pagesize", wire: "pagesize", location: FieldLocation::Query },
+        FieldSpec { snake: "page", wire: "page", location: FieldLocation::Query },
+        FieldSpec { snake: "filter", wire: "filter", location: FieldLocation::Query },
+        FieldSpec { snake: "callback", wire: "callback", location: FieldLocation::Query },
     ],
     auth: &[
     ],
@@ -961,11 +1704,25 @@ const OP_ERRORS_GET_ERRORS_ID: OpSpec = OpSpec {
     method: "GET",
     path_template: "/errors/{id}",
     fields: &[
-        FieldSpec { snake: "id", location: FieldLocation::Path },
+        FieldSpec { snake: "id", wire: "id", location: FieldLocation::Path },
     ],
     auth: &[
     ],
 };
+
+fn iface_errors__errors__to_json(p: &iface_errors::Errors) -> Value {
+    let mut m = Map::new();
+    m.insert("value".into(), Value::String((&p.value).clone()));
+    Value::Object(m)
+}
+
+fn iface_errors__error__to_json(p: &iface_errors::Error) -> Value {
+    let mut m = Map::new();
+    m.insert("error_id".into(), match (&p.error_id) { Some(v) => serde_json::Number::from_f64(*(v)).map(Value::Number).unwrap_or(Value::Null), None => Value::Null });
+    m.insert("error_message".into(), match (&p.error_message) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("error_name".into(), match (&p.error_name) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
 
 fn iface_errors__get_errors_params__to_json(p: &iface_errors::GetErrorsParams) -> Value {
     let mut m = Map::new();
@@ -982,14 +1739,96 @@ fn iface_errors__get_errors_id_params__to_json(p: &iface_errors::GetErrorsIdPara
     Value::Object(m)
 }
 
-impl iface_errors::Guest for crate::Component {
-    fn get_errors(params: iface_errors::GetErrorsParams) -> Result<String, String> {
-        let json = iface_errors__get_errors_params__to_json(&params);
-        dispatch(&OP_ERRORS_GET_ERRORS, json)
+fn iface_errors__errors__from_json(v: &Value) -> Option<iface_errors::Errors> {
+    let m = v.as_object()?;
+    Some(iface_errors::Errors {
+        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+    })
+}
+
+fn iface_errors__error__from_json(v: &Value) -> Option<iface_errors::Error> {
+    let m = v.as_object()?;
+    Some(iface_errors::Error {
+        error_id: m.get("error_id").filter(|v| !v.is_null()).and_then(|v| (v).as_f64()),
+        error_message: m.get("error_message").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        error_name: m.get("error_name").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    })
+}
+
+fn iface_errors__get_errors__ok(body: String) -> Result<iface_errors::Errors, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match iface_errors__errors__from_json(&v) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
     }
-    fn get_errors_id(params: iface_errors::GetErrorsIdParams) -> Result<String, String> {
+}
+
+fn iface_errors__get_errors__err(e: crate::runtime::DispatchError) -> iface_errors::GetErrorsError {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => match status {
+            400u16 => iface_errors::GetErrorsError::BadRequest(body),
+            401u16 => iface_errors::GetErrorsError::Unauthorized(body),
+            402u16 => iface_errors::GetErrorsError::PaymentRequired(body),
+            403u16 => iface_errors::GetErrorsError::Forbidden(body),
+            404u16 => iface_errors::GetErrorsError::NotFound(body),
+            405u16 => iface_errors::GetErrorsError::MethodNotAllowed(body),
+            406u16 => iface_errors::GetErrorsError::NotAcceptable(body),
+            500u16 => iface_errors::GetErrorsError::InternalServerError(body),
+            502u16 => iface_errors::GetErrorsError::BadGateway(body),
+            503u16 => iface_errors::GetErrorsError::ServiceUnavailable(body),
+            _ => iface_errors::GetErrorsError::Other(body),
+        },
+        crate::runtime::DispatchError::Transport(m) => iface_errors::GetErrorsError::Other(m),
+    }
+}
+
+fn iface_errors__get_errors_id__ok(body: String) -> Result<iface_errors::Error, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match iface_errors__error__from_json(&v) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_errors__get_errors_id__err(e: crate::runtime::DispatchError) -> iface_errors::GetErrorsIdError {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => match status {
+            400u16 => iface_errors::GetErrorsIdError::BadRequest(body),
+            401u16 => iface_errors::GetErrorsIdError::Unauthorized(body),
+            402u16 => iface_errors::GetErrorsIdError::PaymentRequired(body),
+            403u16 => iface_errors::GetErrorsIdError::Forbidden(body),
+            404u16 => iface_errors::GetErrorsIdError::NotFound(body),
+            405u16 => iface_errors::GetErrorsIdError::MethodNotAllowed(body),
+            406u16 => iface_errors::GetErrorsIdError::NotAcceptable(body),
+            500u16 => iface_errors::GetErrorsIdError::InternalServerError(body),
+            502u16 => iface_errors::GetErrorsIdError::BadGateway(body),
+            503u16 => iface_errors::GetErrorsIdError::ServiceUnavailable(body),
+            _ => iface_errors::GetErrorsIdError::Other(body),
+        },
+        crate::runtime::DispatchError::Transport(m) => iface_errors::GetErrorsIdError::Other(m),
+    }
+}
+
+impl iface_errors::Guest for crate::Component {
+    fn get_errors(params: iface_errors::GetErrorsParams) -> Result<iface_errors::Errors, iface_errors::GetErrorsError> {
+        let json = iface_errors__get_errors_params__to_json(&params);
+        match dispatch(&OP_ERRORS_GET_ERRORS, json).and_then(iface_errors__get_errors__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_errors__get_errors__err(e)),
+        }
+    }
+    fn get_errors_id(params: iface_errors::GetErrorsIdParams) -> Result<iface_errors::Error, iface_errors::GetErrorsIdError> {
         let json = iface_errors__get_errors_id_params__to_json(&params);
-        dispatch(&OP_ERRORS_GET_ERRORS_ID, json)
+        match dispatch(&OP_ERRORS_GET_ERRORS_ID, json).and_then(iface_errors__get_errors_id__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_errors__get_errors_id__err(e)),
+        }
     }
 }
 use crate::exports::autostamp::stackexchange::events as iface_events;
@@ -998,16 +1837,22 @@ const OP_EVENTS_GET_EVENTS: OpSpec = OpSpec {
     method: "GET",
     path_template: "/events",
     fields: &[
-        FieldSpec { snake: "pagesize", location: FieldLocation::Query },
-        FieldSpec { snake: "page", location: FieldLocation::Query },
-        FieldSpec { snake: "filter", location: FieldLocation::Query },
-        FieldSpec { snake: "callback", location: FieldLocation::Query },
-        FieldSpec { snake: "site", location: FieldLocation::Query },
-        FieldSpec { snake: "since", location: FieldLocation::Query },
+        FieldSpec { snake: "pagesize", wire: "pagesize", location: FieldLocation::Query },
+        FieldSpec { snake: "page", wire: "page", location: FieldLocation::Query },
+        FieldSpec { snake: "filter", wire: "filter", location: FieldLocation::Query },
+        FieldSpec { snake: "callback", wire: "callback", location: FieldLocation::Query },
+        FieldSpec { snake: "site", wire: "site", location: FieldLocation::Query },
+        FieldSpec { snake: "since", wire: "since", location: FieldLocation::Query },
     ],
     auth: &[
     ],
 };
+
+fn iface_events__events__to_json(p: &iface_events::Events) -> Value {
+    let mut m = Map::new();
+    m.insert("value".into(), Value::String((&p.value).clone()));
+    Value::Object(m)
+}
 
 fn iface_events__get_events_params__to_json(p: &iface_events::GetEventsParams) -> Value {
     let mut m = Map::new();
@@ -1020,10 +1865,50 @@ fn iface_events__get_events_params__to_json(p: &iface_events::GetEventsParams) -
     Value::Object(m)
 }
 
+fn iface_events__events__from_json(v: &Value) -> Option<iface_events::Events> {
+    let m = v.as_object()?;
+    Some(iface_events::Events {
+        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+    })
+}
+
+fn iface_events__get_events__ok(body: String) -> Result<iface_events::Events, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match iface_events__events__from_json(&v) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_events__get_events__err(e: crate::runtime::DispatchError) -> iface_events::GetEventsError {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => match status {
+            400u16 => iface_events::GetEventsError::BadRequest(body),
+            401u16 => iface_events::GetEventsError::Unauthorized(body),
+            402u16 => iface_events::GetEventsError::PaymentRequired(body),
+            403u16 => iface_events::GetEventsError::Forbidden(body),
+            404u16 => iface_events::GetEventsError::NotFound(body),
+            405u16 => iface_events::GetEventsError::MethodNotAllowed(body),
+            406u16 => iface_events::GetEventsError::NotAcceptable(body),
+            500u16 => iface_events::GetEventsError::InternalServerError(body),
+            502u16 => iface_events::GetEventsError::BadGateway(body),
+            503u16 => iface_events::GetEventsError::ServiceUnavailable(body),
+            _ => iface_events::GetEventsError::Other(body),
+        },
+        crate::runtime::DispatchError::Transport(m) => iface_events::GetEventsError::Other(m),
+    }
+}
+
 impl iface_events::Guest for crate::Component {
-    fn get_events(params: iface_events::GetEventsParams) -> Result<String, String> {
+    fn get_events(params: iface_events::GetEventsParams) -> Result<iface_events::Events, iface_events::GetEventsError> {
         let json = iface_events__get_events_params__to_json(&params);
-        dispatch(&OP_EVENTS_GET_EVENTS, json)
+        match dispatch(&OP_EVENTS_GET_EVENTS, json).and_then(iface_events__get_events__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_events__get_events__err(e)),
+        }
     }
 }
 use crate::exports::autostamp::stackexchange::filters as iface_filters;
@@ -1032,10 +1917,10 @@ const OP_FILTERS_GET_FILTERS_CREATE: OpSpec = OpSpec {
     method: "GET",
     path_template: "/filters/create",
     fields: &[
-        FieldSpec { snake: "base", location: FieldLocation::Query },
-        FieldSpec { snake: "exclude", location: FieldLocation::Query },
-        FieldSpec { snake: "include", location: FieldLocation::Query },
-        FieldSpec { snake: "unsafe", location: FieldLocation::Query },
+        FieldSpec { snake: "base", wire: "base", location: FieldLocation::Query },
+        FieldSpec { snake: "exclude", wire: "exclude", location: FieldLocation::Query },
+        FieldSpec { snake: "include", wire: "include", location: FieldLocation::Query },
+        FieldSpec { snake: "unsafe", wire: "unsafe", location: FieldLocation::Query },
     ],
     auth: &[
     ],
@@ -1045,11 +1930,25 @@ const OP_FILTERS_GET_FILTERS_FILTERS: OpSpec = OpSpec {
     method: "GET",
     path_template: "/filters/{filters}",
     fields: &[
-        FieldSpec { snake: "filters", location: FieldLocation::Path },
+        FieldSpec { snake: "filters", wire: "filters", location: FieldLocation::Path },
     ],
     auth: &[
     ],
 };
+
+fn iface_filters__single_filter__to_json(p: &iface_filters::SingleFilter) -> Value {
+    let mut m = Map::new();
+    m.insert("filter".into(), match (&p.filter) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("filter_type".into(), match (&p.filter_type) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("included_fields".into(), match (&p.included_fields) { Some(v) => Value::Array((v).iter().map(|v| Value::String((v).clone())).collect()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_filters__filters__to_json(p: &iface_filters::Filters) -> Value {
+    let mut m = Map::new();
+    m.insert("value".into(), Value::String((&p.value).clone()));
+    Value::Object(m)
+}
 
 fn iface_filters__get_filters_create_params__to_json(p: &iface_filters::GetFiltersCreateParams) -> Value {
     let mut m = Map::new();
@@ -1066,14 +1965,96 @@ fn iface_filters__get_filters_filters_params__to_json(p: &iface_filters::GetFilt
     Value::Object(m)
 }
 
-impl iface_filters::Guest for crate::Component {
-    fn get_filters_create(params: iface_filters::GetFiltersCreateParams) -> Result<String, String> {
-        let json = iface_filters__get_filters_create_params__to_json(&params);
-        dispatch(&OP_FILTERS_GET_FILTERS_CREATE, json)
+fn iface_filters__single_filter__from_json(v: &Value) -> Option<iface_filters::SingleFilter> {
+    let m = v.as_object()?;
+    Some(iface_filters::SingleFilter {
+        filter: m.get("filter").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        filter_type: m.get("filter_type").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        included_fields: m.get("included_fields").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| (x).as_str().map(|s| s.to_string())).collect())),
+    })
+}
+
+fn iface_filters__filters__from_json(v: &Value) -> Option<iface_filters::Filters> {
+    let m = v.as_object()?;
+    Some(iface_filters::Filters {
+        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+    })
+}
+
+fn iface_filters__get_filters_create__ok(body: String) -> Result<iface_filters::SingleFilter, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match iface_filters__single_filter__from_json(&v) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
     }
-    fn get_filters_filters(params: iface_filters::GetFiltersFiltersParams) -> Result<String, String> {
+}
+
+fn iface_filters__get_filters_create__err(e: crate::runtime::DispatchError) -> iface_filters::GetFiltersCreateError {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => match status {
+            400u16 => iface_filters::GetFiltersCreateError::BadRequest(body),
+            401u16 => iface_filters::GetFiltersCreateError::Unauthorized(body),
+            402u16 => iface_filters::GetFiltersCreateError::PaymentRequired(body),
+            403u16 => iface_filters::GetFiltersCreateError::Forbidden(body),
+            404u16 => iface_filters::GetFiltersCreateError::NotFound(body),
+            405u16 => iface_filters::GetFiltersCreateError::MethodNotAllowed(body),
+            406u16 => iface_filters::GetFiltersCreateError::NotAcceptable(body),
+            500u16 => iface_filters::GetFiltersCreateError::InternalServerError(body),
+            502u16 => iface_filters::GetFiltersCreateError::BadGateway(body),
+            503u16 => iface_filters::GetFiltersCreateError::ServiceUnavailable(body),
+            _ => iface_filters::GetFiltersCreateError::Other(body),
+        },
+        crate::runtime::DispatchError::Transport(m) => iface_filters::GetFiltersCreateError::Other(m),
+    }
+}
+
+fn iface_filters__get_filters_filters__ok(body: String) -> Result<iface_filters::Filters, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match iface_filters__filters__from_json(&v) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_filters__get_filters_filters__err(e: crate::runtime::DispatchError) -> iface_filters::GetFiltersFiltersError {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => match status {
+            400u16 => iface_filters::GetFiltersFiltersError::BadRequest(body),
+            401u16 => iface_filters::GetFiltersFiltersError::Unauthorized(body),
+            402u16 => iface_filters::GetFiltersFiltersError::PaymentRequired(body),
+            403u16 => iface_filters::GetFiltersFiltersError::Forbidden(body),
+            404u16 => iface_filters::GetFiltersFiltersError::NotFound(body),
+            405u16 => iface_filters::GetFiltersFiltersError::MethodNotAllowed(body),
+            406u16 => iface_filters::GetFiltersFiltersError::NotAcceptable(body),
+            500u16 => iface_filters::GetFiltersFiltersError::InternalServerError(body),
+            502u16 => iface_filters::GetFiltersFiltersError::BadGateway(body),
+            503u16 => iface_filters::GetFiltersFiltersError::ServiceUnavailable(body),
+            _ => iface_filters::GetFiltersFiltersError::Other(body),
+        },
+        crate::runtime::DispatchError::Transport(m) => iface_filters::GetFiltersFiltersError::Other(m),
+    }
+}
+
+impl iface_filters::Guest for crate::Component {
+    fn get_filters_create(params: iface_filters::GetFiltersCreateParams) -> Result<iface_filters::SingleFilter, iface_filters::GetFiltersCreateError> {
+        let json = iface_filters__get_filters_create_params__to_json(&params);
+        match dispatch(&OP_FILTERS_GET_FILTERS_CREATE, json).and_then(iface_filters__get_filters_create__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_filters__get_filters_create__err(e)),
+        }
+    }
+    fn get_filters_filters(params: iface_filters::GetFiltersFiltersParams) -> Result<iface_filters::Filters, iface_filters::GetFiltersFiltersError> {
         let json = iface_filters__get_filters_filters_params__to_json(&params);
-        dispatch(&OP_FILTERS_GET_FILTERS_FILTERS, json)
+        match dispatch(&OP_FILTERS_GET_FILTERS_FILTERS, json).and_then(iface_filters__get_filters_filters__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_filters__get_filters_filters__err(e)),
+        }
     }
 }
 use crate::exports::autostamp::stackexchange::inbox as iface_inbox;
@@ -1082,10 +2063,10 @@ const OP_INBOX_GET_INBOX: OpSpec = OpSpec {
     method: "GET",
     path_template: "/inbox",
     fields: &[
-        FieldSpec { snake: "pagesize", location: FieldLocation::Query },
-        FieldSpec { snake: "page", location: FieldLocation::Query },
-        FieldSpec { snake: "filter", location: FieldLocation::Query },
-        FieldSpec { snake: "callback", location: FieldLocation::Query },
+        FieldSpec { snake: "pagesize", wire: "pagesize", location: FieldLocation::Query },
+        FieldSpec { snake: "page", wire: "page", location: FieldLocation::Query },
+        FieldSpec { snake: "filter", wire: "filter", location: FieldLocation::Query },
+        FieldSpec { snake: "callback", wire: "callback", location: FieldLocation::Query },
     ],
     auth: &[
     ],
@@ -1095,15 +2076,21 @@ const OP_INBOX_GET_INBOX_UNREAD: OpSpec = OpSpec {
     method: "GET",
     path_template: "/inbox/unread",
     fields: &[
-        FieldSpec { snake: "pagesize", location: FieldLocation::Query },
-        FieldSpec { snake: "page", location: FieldLocation::Query },
-        FieldSpec { snake: "filter", location: FieldLocation::Query },
-        FieldSpec { snake: "callback", location: FieldLocation::Query },
-        FieldSpec { snake: "since", location: FieldLocation::Query },
+        FieldSpec { snake: "pagesize", wire: "pagesize", location: FieldLocation::Query },
+        FieldSpec { snake: "page", wire: "page", location: FieldLocation::Query },
+        FieldSpec { snake: "filter", wire: "filter", location: FieldLocation::Query },
+        FieldSpec { snake: "callback", wire: "callback", location: FieldLocation::Query },
+        FieldSpec { snake: "since", wire: "since", location: FieldLocation::Query },
     ],
     auth: &[
     ],
 };
+
+fn iface_inbox__items__to_json(p: &iface_inbox::Items) -> Value {
+    let mut m = Map::new();
+    m.insert("value".into(), Value::String((&p.value).clone()));
+    Value::Object(m)
+}
 
 fn iface_inbox__get_inbox_params__to_json(p: &iface_inbox::GetInboxParams) -> Value {
     let mut m = Map::new();
@@ -1124,14 +2111,87 @@ fn iface_inbox__get_inbox_unread_params__to_json(p: &iface_inbox::GetInboxUnread
     Value::Object(m)
 }
 
-impl iface_inbox::Guest for crate::Component {
-    fn get_inbox(params: iface_inbox::GetInboxParams) -> Result<String, String> {
-        let json = iface_inbox__get_inbox_params__to_json(&params);
-        dispatch(&OP_INBOX_GET_INBOX, json)
+fn iface_inbox__items__from_json(v: &Value) -> Option<iface_inbox::Items> {
+    let m = v.as_object()?;
+    Some(iface_inbox::Items {
+        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+    })
+}
+
+fn iface_inbox__get_inbox__ok(body: String) -> Result<iface_inbox::Items, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match iface_inbox__items__from_json(&v) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
     }
-    fn get_inbox_unread(params: iface_inbox::GetInboxUnreadParams) -> Result<String, String> {
+}
+
+fn iface_inbox__get_inbox__err(e: crate::runtime::DispatchError) -> iface_inbox::GetInboxError {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => match status {
+            400u16 => iface_inbox::GetInboxError::BadRequest(body),
+            401u16 => iface_inbox::GetInboxError::Unauthorized(body),
+            402u16 => iface_inbox::GetInboxError::PaymentRequired(body),
+            403u16 => iface_inbox::GetInboxError::Forbidden(body),
+            404u16 => iface_inbox::GetInboxError::NotFound(body),
+            405u16 => iface_inbox::GetInboxError::MethodNotAllowed(body),
+            406u16 => iface_inbox::GetInboxError::NotAcceptable(body),
+            500u16 => iface_inbox::GetInboxError::InternalServerError(body),
+            502u16 => iface_inbox::GetInboxError::BadGateway(body),
+            503u16 => iface_inbox::GetInboxError::ServiceUnavailable(body),
+            _ => iface_inbox::GetInboxError::Other(body),
+        },
+        crate::runtime::DispatchError::Transport(m) => iface_inbox::GetInboxError::Other(m),
+    }
+}
+
+fn iface_inbox__get_inbox_unread__ok(body: String) -> Result<iface_inbox::Items, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match iface_inbox__items__from_json(&v) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_inbox__get_inbox_unread__err(e: crate::runtime::DispatchError) -> iface_inbox::GetInboxUnreadError {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => match status {
+            400u16 => iface_inbox::GetInboxUnreadError::BadRequest(body),
+            401u16 => iface_inbox::GetInboxUnreadError::Unauthorized(body),
+            402u16 => iface_inbox::GetInboxUnreadError::PaymentRequired(body),
+            403u16 => iface_inbox::GetInboxUnreadError::Forbidden(body),
+            404u16 => iface_inbox::GetInboxUnreadError::NotFound(body),
+            405u16 => iface_inbox::GetInboxUnreadError::MethodNotAllowed(body),
+            406u16 => iface_inbox::GetInboxUnreadError::NotAcceptable(body),
+            500u16 => iface_inbox::GetInboxUnreadError::InternalServerError(body),
+            502u16 => iface_inbox::GetInboxUnreadError::BadGateway(body),
+            503u16 => iface_inbox::GetInboxUnreadError::ServiceUnavailable(body),
+            _ => iface_inbox::GetInboxUnreadError::Other(body),
+        },
+        crate::runtime::DispatchError::Transport(m) => iface_inbox::GetInboxUnreadError::Other(m),
+    }
+}
+
+impl iface_inbox::Guest for crate::Component {
+    fn get_inbox(params: iface_inbox::GetInboxParams) -> Result<iface_inbox::Items, iface_inbox::GetInboxError> {
+        let json = iface_inbox__get_inbox_params__to_json(&params);
+        match dispatch(&OP_INBOX_GET_INBOX, json).and_then(iface_inbox__get_inbox__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_inbox__get_inbox__err(e)),
+        }
+    }
+    fn get_inbox_unread(params: iface_inbox::GetInboxUnreadParams) -> Result<iface_inbox::Items, iface_inbox::GetInboxUnreadError> {
         let json = iface_inbox__get_inbox_unread_params__to_json(&params);
-        dispatch(&OP_INBOX_GET_INBOX_UNREAD, json)
+        match dispatch(&OP_INBOX_GET_INBOX_UNREAD, json).and_then(iface_inbox__get_inbox_unread__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_inbox__get_inbox_unread__err(e)),
+        }
     }
 }
 use crate::exports::autostamp::stackexchange::info as iface_info;
@@ -1140,11 +2200,61 @@ const OP_INFO_GET_INFO: OpSpec = OpSpec {
     method: "GET",
     path_template: "/info",
     fields: &[
-        FieldSpec { snake: "site", location: FieldLocation::Query },
+        FieldSpec { snake: "site", wire: "site", location: FieldLocation::Query },
     ],
     auth: &[
     ],
 };
+
+fn iface_info__object__to_json(p: &iface_info::Object) -> Value {
+    let mut m = Map::new();
+    m.insert("answers_per_minute".into(), match (&p.answers_per_minute) { Some(v) => serde_json::Number::from_f64(*(v)).map(Value::Number).unwrap_or(Value::Null), None => Value::Null });
+    m.insert("api_revision".into(), match (&p.api_revision) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("badges_per_minute".into(), match (&p.badges_per_minute) { Some(v) => serde_json::Number::from_f64(*(v)).map(Value::Number).unwrap_or(Value::Null), None => Value::Null });
+    m.insert("new_active_users".into(), match (&p.new_active_users) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("questions_per_minute".into(), match (&p.questions_per_minute) { Some(v) => serde_json::Number::from_f64(*(v)).map(Value::Number).unwrap_or(Value::Null), None => Value::Null });
+    m.insert("site".into(), match (&p.site) { Some(v) => iface_info__object_site__to_json(v), None => Value::Null });
+    m.insert("total_accepted".into(), match (&p.total_accepted) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("total_answers".into(), match (&p.total_answers) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("total_badges".into(), match (&p.total_badges) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("total_comments".into(), match (&p.total_comments) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("total_questions".into(), match (&p.total_questions) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("total_unanswered".into(), match (&p.total_unanswered) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("total_users".into(), match (&p.total_users) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("total_votes".into(), match (&p.total_votes) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_info__object_site__to_json(p: &iface_info::ObjectSite) -> Value {
+    let mut m = Map::new();
+    m.insert("aliases".into(), match (&p.aliases) { Some(v) => Value::Array((v).iter().map(|v| Value::String((v).clone())).collect()), None => Value::Null });
+    m.insert("api_site_parameter".into(), match (&p.api_site_parameter) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("audience".into(), match (&p.audience) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("closed_beta_date".into(), match (&p.closed_beta_date) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("favicon_url".into(), match (&p.favicon_url) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("high_resolution_icon_url".into(), match (&p.high_resolution_icon_url) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("icon_url".into(), match (&p.icon_url) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("launch_date".into(), match (&p.launch_date) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("logo_url".into(), match (&p.logo_url) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("markdown_extensions".into(), match (&p.markdown_extensions) { Some(v) => Value::Array((v).iter().map(|v| Value::String((v).clone())).collect()), None => Value::Null });
+    m.insert("name".into(), match (&p.name) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("open_beta_date".into(), match (&p.open_beta_date) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("related_sites".into(), match (&p.related_sites) { Some(v) => Value::Array((v).iter().map(|v| Value::String((v).clone())).collect()), None => Value::Null });
+    m.insert("site_state".into(), match (&p.site_state) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("site_type".into(), match (&p.site_type) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("site_url".into(), match (&p.site_url) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("styling".into(), match (&p.styling) { Some(v) => iface_info__object_site_styling__to_json(v), None => Value::Null });
+    m.insert("twitter_account".into(), match (&p.twitter_account) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_info__object_site_styling__to_json(p: &iface_info::ObjectSiteStyling) -> Value {
+    let mut m = Map::new();
+    m.insert("link_color".into(), match (&p.link_color) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("tag_background_color".into(), match (&p.tag_background_color) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("tag_foreground_color".into(), match (&p.tag_foreground_color) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
 
 fn iface_info__get_info_params__to_json(p: &iface_info::GetInfoParams) -> Value {
     let mut m = Map::new();
@@ -1152,10 +2262,96 @@ fn iface_info__get_info_params__to_json(p: &iface_info::GetInfoParams) -> Value 
     Value::Object(m)
 }
 
+fn iface_info__object__from_json(v: &Value) -> Option<iface_info::Object> {
+    let m = v.as_object()?;
+    Some(iface_info::Object {
+        answers_per_minute: m.get("answers_per_minute").filter(|v| !v.is_null()).and_then(|v| (v).as_f64()),
+        api_revision: m.get("api_revision").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        badges_per_minute: m.get("badges_per_minute").filter(|v| !v.is_null()).and_then(|v| (v).as_f64()),
+        new_active_users: m.get("new_active_users").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        questions_per_minute: m.get("questions_per_minute").filter(|v| !v.is_null()).and_then(|v| (v).as_f64()),
+        site: m.get("site").filter(|v| !v.is_null()).and_then(|v| iface_info__object_site__from_json(v)),
+        total_accepted: m.get("total_accepted").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        total_answers: m.get("total_answers").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        total_badges: m.get("total_badges").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        total_comments: m.get("total_comments").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        total_questions: m.get("total_questions").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        total_unanswered: m.get("total_unanswered").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        total_users: m.get("total_users").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        total_votes: m.get("total_votes").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+    })
+}
+
+fn iface_info__object_site__from_json(v: &Value) -> Option<iface_info::ObjectSite> {
+    let m = v.as_object()?;
+    Some(iface_info::ObjectSite {
+        aliases: m.get("aliases").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| (x).as_str().map(|s| s.to_string())).collect())),
+        api_site_parameter: m.get("api_site_parameter").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        audience: m.get("audience").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        closed_beta_date: m.get("closed_beta_date").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        favicon_url: m.get("favicon_url").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        high_resolution_icon_url: m.get("high_resolution_icon_url").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        icon_url: m.get("icon_url").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        launch_date: m.get("launch_date").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        logo_url: m.get("logo_url").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        markdown_extensions: m.get("markdown_extensions").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| (x).as_str().map(|s| s.to_string())).collect())),
+        name: m.get("name").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        open_beta_date: m.get("open_beta_date").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        related_sites: m.get("related_sites").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| (x).as_str().map(|s| s.to_string())).collect())),
+        site_state: m.get("site_state").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        site_type: m.get("site_type").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        site_url: m.get("site_url").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        styling: m.get("styling").filter(|v| !v.is_null()).and_then(|v| iface_info__object_site_styling__from_json(v)),
+        twitter_account: m.get("twitter_account").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    })
+}
+
+fn iface_info__object_site_styling__from_json(v: &Value) -> Option<iface_info::ObjectSiteStyling> {
+    let m = v.as_object()?;
+    Some(iface_info::ObjectSiteStyling {
+        link_color: m.get("link_color").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        tag_background_color: m.get("tag_background_color").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        tag_foreground_color: m.get("tag_foreground_color").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    })
+}
+
+fn iface_info__get_info__ok(body: String) -> Result<iface_info::Object, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match iface_info__object__from_json(&v) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_info__get_info__err(e: crate::runtime::DispatchError) -> iface_info::GetInfoError {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => match status {
+            400u16 => iface_info::GetInfoError::BadRequest(body),
+            401u16 => iface_info::GetInfoError::Unauthorized(body),
+            402u16 => iface_info::GetInfoError::PaymentRequired(body),
+            403u16 => iface_info::GetInfoError::Forbidden(body),
+            404u16 => iface_info::GetInfoError::NotFound(body),
+            405u16 => iface_info::GetInfoError::MethodNotAllowed(body),
+            406u16 => iface_info::GetInfoError::NotAcceptable(body),
+            500u16 => iface_info::GetInfoError::InternalServerError(body),
+            502u16 => iface_info::GetInfoError::BadGateway(body),
+            503u16 => iface_info::GetInfoError::ServiceUnavailable(body),
+            _ => iface_info::GetInfoError::Other(body),
+        },
+        crate::runtime::DispatchError::Transport(m) => iface_info::GetInfoError::Other(m),
+    }
+}
+
 impl iface_info::Guest for crate::Component {
-    fn get_info(params: iface_info::GetInfoParams) -> Result<String, String> {
+    fn get_info(params: iface_info::GetInfoParams) -> Result<iface_info::Object, iface_info::GetInfoError> {
         let json = iface_info__get_info_params__to_json(&params);
-        dispatch(&OP_INFO_GET_INFO, json)
+        match dispatch(&OP_INFO_GET_INFO, json).and_then(iface_info__get_info__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_info__get_info__err(e)),
+        }
     }
 }
 use crate::exports::autostamp::stackexchange::me as iface_me;
@@ -1164,17 +2360,17 @@ const OP_ME_GET_ME: OpSpec = OpSpec {
     method: "GET",
     path_template: "/me",
     fields: &[
-        FieldSpec { snake: "order", location: FieldLocation::Query },
-        FieldSpec { snake: "max", location: FieldLocation::Query },
-        FieldSpec { snake: "min", location: FieldLocation::Query },
-        FieldSpec { snake: "sort", location: FieldLocation::Query },
-        FieldSpec { snake: "fromdate", location: FieldLocation::Query },
-        FieldSpec { snake: "todate", location: FieldLocation::Query },
-        FieldSpec { snake: "pagesize", location: FieldLocation::Query },
-        FieldSpec { snake: "page", location: FieldLocation::Query },
-        FieldSpec { snake: "filter", location: FieldLocation::Query },
-        FieldSpec { snake: "callback", location: FieldLocation::Query },
-        FieldSpec { snake: "site", location: FieldLocation::Query },
+        FieldSpec { snake: "order", wire: "order", location: FieldLocation::Query },
+        FieldSpec { snake: "max", wire: "max", location: FieldLocation::Query },
+        FieldSpec { snake: "min", wire: "min", location: FieldLocation::Query },
+        FieldSpec { snake: "sort", wire: "sort", location: FieldLocation::Query },
+        FieldSpec { snake: "fromdate", wire: "fromdate", location: FieldLocation::Query },
+        FieldSpec { snake: "todate", wire: "todate", location: FieldLocation::Query },
+        FieldSpec { snake: "pagesize", wire: "pagesize", location: FieldLocation::Query },
+        FieldSpec { snake: "page", wire: "page", location: FieldLocation::Query },
+        FieldSpec { snake: "filter", wire: "filter", location: FieldLocation::Query },
+        FieldSpec { snake: "callback", wire: "callback", location: FieldLocation::Query },
+        FieldSpec { snake: "site", wire: "site", location: FieldLocation::Query },
     ],
     auth: &[
     ],
@@ -1184,17 +2380,17 @@ const OP_ME_GET_ME_ANSWERS: OpSpec = OpSpec {
     method: "GET",
     path_template: "/me/answers",
     fields: &[
-        FieldSpec { snake: "order", location: FieldLocation::Query },
-        FieldSpec { snake: "max", location: FieldLocation::Query },
-        FieldSpec { snake: "min", location: FieldLocation::Query },
-        FieldSpec { snake: "sort", location: FieldLocation::Query },
-        FieldSpec { snake: "fromdate", location: FieldLocation::Query },
-        FieldSpec { snake: "todate", location: FieldLocation::Query },
-        FieldSpec { snake: "pagesize", location: FieldLocation::Query },
-        FieldSpec { snake: "page", location: FieldLocation::Query },
-        FieldSpec { snake: "filter", location: FieldLocation::Query },
-        FieldSpec { snake: "callback", location: FieldLocation::Query },
-        FieldSpec { snake: "site", location: FieldLocation::Query },
+        FieldSpec { snake: "order", wire: "order", location: FieldLocation::Query },
+        FieldSpec { snake: "max", wire: "max", location: FieldLocation::Query },
+        FieldSpec { snake: "min", wire: "min", location: FieldLocation::Query },
+        FieldSpec { snake: "sort", wire: "sort", location: FieldLocation::Query },
+        FieldSpec { snake: "fromdate", wire: "fromdate", location: FieldLocation::Query },
+        FieldSpec { snake: "todate", wire: "todate", location: FieldLocation::Query },
+        FieldSpec { snake: "pagesize", wire: "pagesize", location: FieldLocation::Query },
+        FieldSpec { snake: "page", wire: "page", location: FieldLocation::Query },
+        FieldSpec { snake: "filter", wire: "filter", location: FieldLocation::Query },
+        FieldSpec { snake: "callback", wire: "callback", location: FieldLocation::Query },
+        FieldSpec { snake: "site", wire: "site", location: FieldLocation::Query },
     ],
     auth: &[
     ],
@@ -1204,10 +2400,10 @@ const OP_ME_GET_ME_ASSOCIATED: OpSpec = OpSpec {
     method: "GET",
     path_template: "/me/associated",
     fields: &[
-        FieldSpec { snake: "pagesize", location: FieldLocation::Query },
-        FieldSpec { snake: "page", location: FieldLocation::Query },
-        FieldSpec { snake: "filter", location: FieldLocation::Query },
-        FieldSpec { snake: "callback", location: FieldLocation::Query },
+        FieldSpec { snake: "pagesize", wire: "pagesize", location: FieldLocation::Query },
+        FieldSpec { snake: "page", wire: "page", location: FieldLocation::Query },
+        FieldSpec { snake: "filter", wire: "filter", location: FieldLocation::Query },
+        FieldSpec { snake: "callback", wire: "callback", location: FieldLocation::Query },
     ],
     auth: &[
     ],
@@ -1217,17 +2413,17 @@ const OP_ME_GET_ME_BADGES: OpSpec = OpSpec {
     method: "GET",
     path_template: "/me/badges",
     fields: &[
-        FieldSpec { snake: "order", location: FieldLocation::Query },
-        FieldSpec { snake: "max", location: FieldLocation::Query },
-        FieldSpec { snake: "min", location: FieldLocation::Query },
-        FieldSpec { snake: "sort", location: FieldLocation::Query },
-        FieldSpec { snake: "fromdate", location: FieldLocation::Query },
-        FieldSpec { snake: "todate", location: FieldLocation::Query },
-        FieldSpec { snake: "pagesize", location: FieldLocation::Query },
-        FieldSpec { snake: "page", location: FieldLocation::Query },
-        FieldSpec { snake: "filter", location: FieldLocation::Query },
-        FieldSpec { snake: "callback", location: FieldLocation::Query },
-        FieldSpec { snake: "site", location: FieldLocation::Query },
+        FieldSpec { snake: "order", wire: "order", location: FieldLocation::Query },
+        FieldSpec { snake: "max", wire: "max", location: FieldLocation::Query },
+        FieldSpec { snake: "min", wire: "min", location: FieldLocation::Query },
+        FieldSpec { snake: "sort", wire: "sort", location: FieldLocation::Query },
+        FieldSpec { snake: "fromdate", wire: "fromdate", location: FieldLocation::Query },
+        FieldSpec { snake: "todate", wire: "todate", location: FieldLocation::Query },
+        FieldSpec { snake: "pagesize", wire: "pagesize", location: FieldLocation::Query },
+        FieldSpec { snake: "page", wire: "page", location: FieldLocation::Query },
+        FieldSpec { snake: "filter", wire: "filter", location: FieldLocation::Query },
+        FieldSpec { snake: "callback", wire: "callback", location: FieldLocation::Query },
+        FieldSpec { snake: "site", wire: "site", location: FieldLocation::Query },
     ],
     auth: &[
     ],
@@ -1237,17 +2433,17 @@ const OP_ME_GET_ME_COMMENTS: OpSpec = OpSpec {
     method: "GET",
     path_template: "/me/comments",
     fields: &[
-        FieldSpec { snake: "order", location: FieldLocation::Query },
-        FieldSpec { snake: "max", location: FieldLocation::Query },
-        FieldSpec { snake: "min", location: FieldLocation::Query },
-        FieldSpec { snake: "sort", location: FieldLocation::Query },
-        FieldSpec { snake: "fromdate", location: FieldLocation::Query },
-        FieldSpec { snake: "todate", location: FieldLocation::Query },
-        FieldSpec { snake: "pagesize", location: FieldLocation::Query },
-        FieldSpec { snake: "page", location: FieldLocation::Query },
-        FieldSpec { snake: "filter", location: FieldLocation::Query },
-        FieldSpec { snake: "callback", location: FieldLocation::Query },
-        FieldSpec { snake: "site", location: FieldLocation::Query },
+        FieldSpec { snake: "order", wire: "order", location: FieldLocation::Query },
+        FieldSpec { snake: "max", wire: "max", location: FieldLocation::Query },
+        FieldSpec { snake: "min", wire: "min", location: FieldLocation::Query },
+        FieldSpec { snake: "sort", wire: "sort", location: FieldLocation::Query },
+        FieldSpec { snake: "fromdate", wire: "fromdate", location: FieldLocation::Query },
+        FieldSpec { snake: "todate", wire: "todate", location: FieldLocation::Query },
+        FieldSpec { snake: "pagesize", wire: "pagesize", location: FieldLocation::Query },
+        FieldSpec { snake: "page", wire: "page", location: FieldLocation::Query },
+        FieldSpec { snake: "filter", wire: "filter", location: FieldLocation::Query },
+        FieldSpec { snake: "callback", wire: "callback", location: FieldLocation::Query },
+        FieldSpec { snake: "site", wire: "site", location: FieldLocation::Query },
     ],
     auth: &[
     ],
@@ -1257,18 +2453,18 @@ const OP_ME_GET_ME_COMMENTS_TO_ID: OpSpec = OpSpec {
     method: "GET",
     path_template: "/me/comments/{to_id}",
     fields: &[
-        FieldSpec { snake: "to_id", location: FieldLocation::Path },
-        FieldSpec { snake: "order", location: FieldLocation::Query },
-        FieldSpec { snake: "max", location: FieldLocation::Query },
-        FieldSpec { snake: "min", location: FieldLocation::Query },
-        FieldSpec { snake: "sort", location: FieldLocation::Query },
-        FieldSpec { snake: "fromdate", location: FieldLocation::Query },
-        FieldSpec { snake: "todate", location: FieldLocation::Query },
-        FieldSpec { snake: "pagesize", location: FieldLocation::Query },
-        FieldSpec { snake: "page", location: FieldLocation::Query },
-        FieldSpec { snake: "filter", location: FieldLocation::Query },
-        FieldSpec { snake: "callback", location: FieldLocation::Query },
-        FieldSpec { snake: "site", location: FieldLocation::Query },
+        FieldSpec { snake: "to_id", wire: "toId", location: FieldLocation::Path },
+        FieldSpec { snake: "order", wire: "order", location: FieldLocation::Query },
+        FieldSpec { snake: "max", wire: "max", location: FieldLocation::Query },
+        FieldSpec { snake: "min", wire: "min", location: FieldLocation::Query },
+        FieldSpec { snake: "sort", wire: "sort", location: FieldLocation::Query },
+        FieldSpec { snake: "fromdate", wire: "fromdate", location: FieldLocation::Query },
+        FieldSpec { snake: "todate", wire: "todate", location: FieldLocation::Query },
+        FieldSpec { snake: "pagesize", wire: "pagesize", location: FieldLocation::Query },
+        FieldSpec { snake: "page", wire: "page", location: FieldLocation::Query },
+        FieldSpec { snake: "filter", wire: "filter", location: FieldLocation::Query },
+        FieldSpec { snake: "callback", wire: "callback", location: FieldLocation::Query },
+        FieldSpec { snake: "site", wire: "site", location: FieldLocation::Query },
     ],
     auth: &[
     ],
@@ -1278,17 +2474,17 @@ const OP_ME_GET_ME_FAVORITES: OpSpec = OpSpec {
     method: "GET",
     path_template: "/me/favorites",
     fields: &[
-        FieldSpec { snake: "order", location: FieldLocation::Query },
-        FieldSpec { snake: "max", location: FieldLocation::Query },
-        FieldSpec { snake: "min", location: FieldLocation::Query },
-        FieldSpec { snake: "sort", location: FieldLocation::Query },
-        FieldSpec { snake: "fromdate", location: FieldLocation::Query },
-        FieldSpec { snake: "todate", location: FieldLocation::Query },
-        FieldSpec { snake: "pagesize", location: FieldLocation::Query },
-        FieldSpec { snake: "page", location: FieldLocation::Query },
-        FieldSpec { snake: "filter", location: FieldLocation::Query },
-        FieldSpec { snake: "callback", location: FieldLocation::Query },
-        FieldSpec { snake: "site", location: FieldLocation::Query },
+        FieldSpec { snake: "order", wire: "order", location: FieldLocation::Query },
+        FieldSpec { snake: "max", wire: "max", location: FieldLocation::Query },
+        FieldSpec { snake: "min", wire: "min", location: FieldLocation::Query },
+        FieldSpec { snake: "sort", wire: "sort", location: FieldLocation::Query },
+        FieldSpec { snake: "fromdate", wire: "fromdate", location: FieldLocation::Query },
+        FieldSpec { snake: "todate", wire: "todate", location: FieldLocation::Query },
+        FieldSpec { snake: "pagesize", wire: "pagesize", location: FieldLocation::Query },
+        FieldSpec { snake: "page", wire: "page", location: FieldLocation::Query },
+        FieldSpec { snake: "filter", wire: "filter", location: FieldLocation::Query },
+        FieldSpec { snake: "callback", wire: "callback", location: FieldLocation::Query },
+        FieldSpec { snake: "site", wire: "site", location: FieldLocation::Query },
     ],
     auth: &[
     ],
@@ -1298,11 +2494,11 @@ const OP_ME_GET_ME_INBOX: OpSpec = OpSpec {
     method: "GET",
     path_template: "/me/inbox",
     fields: &[
-        FieldSpec { snake: "pagesize", location: FieldLocation::Query },
-        FieldSpec { snake: "page", location: FieldLocation::Query },
-        FieldSpec { snake: "filter", location: FieldLocation::Query },
-        FieldSpec { snake: "callback", location: FieldLocation::Query },
-        FieldSpec { snake: "site", location: FieldLocation::Query },
+        FieldSpec { snake: "pagesize", wire: "pagesize", location: FieldLocation::Query },
+        FieldSpec { snake: "page", wire: "page", location: FieldLocation::Query },
+        FieldSpec { snake: "filter", wire: "filter", location: FieldLocation::Query },
+        FieldSpec { snake: "callback", wire: "callback", location: FieldLocation::Query },
+        FieldSpec { snake: "site", wire: "site", location: FieldLocation::Query },
     ],
     auth: &[
     ],
@@ -1312,12 +2508,12 @@ const OP_ME_GET_ME_INBOX_UNREAD: OpSpec = OpSpec {
     method: "GET",
     path_template: "/me/inbox/unread",
     fields: &[
-        FieldSpec { snake: "pagesize", location: FieldLocation::Query },
-        FieldSpec { snake: "page", location: FieldLocation::Query },
-        FieldSpec { snake: "filter", location: FieldLocation::Query },
-        FieldSpec { snake: "callback", location: FieldLocation::Query },
-        FieldSpec { snake: "site", location: FieldLocation::Query },
-        FieldSpec { snake: "since", location: FieldLocation::Query },
+        FieldSpec { snake: "pagesize", wire: "pagesize", location: FieldLocation::Query },
+        FieldSpec { snake: "page", wire: "page", location: FieldLocation::Query },
+        FieldSpec { snake: "filter", wire: "filter", location: FieldLocation::Query },
+        FieldSpec { snake: "callback", wire: "callback", location: FieldLocation::Query },
+        FieldSpec { snake: "site", wire: "site", location: FieldLocation::Query },
+        FieldSpec { snake: "since", wire: "since", location: FieldLocation::Query },
     ],
     auth: &[
     ],
@@ -1327,17 +2523,17 @@ const OP_ME_GET_ME_MENTIONED: OpSpec = OpSpec {
     method: "GET",
     path_template: "/me/mentioned",
     fields: &[
-        FieldSpec { snake: "order", location: FieldLocation::Query },
-        FieldSpec { snake: "max", location: FieldLocation::Query },
-        FieldSpec { snake: "min", location: FieldLocation::Query },
-        FieldSpec { snake: "sort", location: FieldLocation::Query },
-        FieldSpec { snake: "fromdate", location: FieldLocation::Query },
-        FieldSpec { snake: "todate", location: FieldLocation::Query },
-        FieldSpec { snake: "pagesize", location: FieldLocation::Query },
-        FieldSpec { snake: "page", location: FieldLocation::Query },
-        FieldSpec { snake: "filter", location: FieldLocation::Query },
-        FieldSpec { snake: "callback", location: FieldLocation::Query },
-        FieldSpec { snake: "site", location: FieldLocation::Query },
+        FieldSpec { snake: "order", wire: "order", location: FieldLocation::Query },
+        FieldSpec { snake: "max", wire: "max", location: FieldLocation::Query },
+        FieldSpec { snake: "min", wire: "min", location: FieldLocation::Query },
+        FieldSpec { snake: "sort", wire: "sort", location: FieldLocation::Query },
+        FieldSpec { snake: "fromdate", wire: "fromdate", location: FieldLocation::Query },
+        FieldSpec { snake: "todate", wire: "todate", location: FieldLocation::Query },
+        FieldSpec { snake: "pagesize", wire: "pagesize", location: FieldLocation::Query },
+        FieldSpec { snake: "page", wire: "page", location: FieldLocation::Query },
+        FieldSpec { snake: "filter", wire: "filter", location: FieldLocation::Query },
+        FieldSpec { snake: "callback", wire: "callback", location: FieldLocation::Query },
+        FieldSpec { snake: "site", wire: "site", location: FieldLocation::Query },
     ],
     auth: &[
     ],
@@ -1347,10 +2543,10 @@ const OP_ME_GET_ME_MERGES: OpSpec = OpSpec {
     method: "GET",
     path_template: "/me/merges",
     fields: &[
-        FieldSpec { snake: "pagesize", location: FieldLocation::Query },
-        FieldSpec { snake: "page", location: FieldLocation::Query },
-        FieldSpec { snake: "filter", location: FieldLocation::Query },
-        FieldSpec { snake: "callback", location: FieldLocation::Query },
+        FieldSpec { snake: "pagesize", wire: "pagesize", location: FieldLocation::Query },
+        FieldSpec { snake: "page", wire: "page", location: FieldLocation::Query },
+        FieldSpec { snake: "filter", wire: "filter", location: FieldLocation::Query },
+        FieldSpec { snake: "callback", wire: "callback", location: FieldLocation::Query },
     ],
     auth: &[
     ],
@@ -1360,11 +2556,11 @@ const OP_ME_GET_ME_NOTIFICATIONS: OpSpec = OpSpec {
     method: "GET",
     path_template: "/me/notifications",
     fields: &[
-        FieldSpec { snake: "pagesize", location: FieldLocation::Query },
-        FieldSpec { snake: "page", location: FieldLocation::Query },
-        FieldSpec { snake: "filter", location: FieldLocation::Query },
-        FieldSpec { snake: "callback", location: FieldLocation::Query },
-        FieldSpec { snake: "site", location: FieldLocation::Query },
+        FieldSpec { snake: "pagesize", wire: "pagesize", location: FieldLocation::Query },
+        FieldSpec { snake: "page", wire: "page", location: FieldLocation::Query },
+        FieldSpec { snake: "filter", wire: "filter", location: FieldLocation::Query },
+        FieldSpec { snake: "callback", wire: "callback", location: FieldLocation::Query },
+        FieldSpec { snake: "site", wire: "site", location: FieldLocation::Query },
     ],
     auth: &[
     ],
@@ -1374,11 +2570,11 @@ const OP_ME_GET_ME_NOTIFICATIONS_UNREAD: OpSpec = OpSpec {
     method: "GET",
     path_template: "/me/notifications/unread",
     fields: &[
-        FieldSpec { snake: "pagesize", location: FieldLocation::Query },
-        FieldSpec { snake: "page", location: FieldLocation::Query },
-        FieldSpec { snake: "filter", location: FieldLocation::Query },
-        FieldSpec { snake: "callback", location: FieldLocation::Query },
-        FieldSpec { snake: "site", location: FieldLocation::Query },
+        FieldSpec { snake: "pagesize", wire: "pagesize", location: FieldLocation::Query },
+        FieldSpec { snake: "page", wire: "page", location: FieldLocation::Query },
+        FieldSpec { snake: "filter", wire: "filter", location: FieldLocation::Query },
+        FieldSpec { snake: "callback", wire: "callback", location: FieldLocation::Query },
+        FieldSpec { snake: "site", wire: "site", location: FieldLocation::Query },
     ],
     auth: &[
     ],
@@ -1388,11 +2584,11 @@ const OP_ME_GET_ME_PRIVILEGES: OpSpec = OpSpec {
     method: "GET",
     path_template: "/me/privileges",
     fields: &[
-        FieldSpec { snake: "pagesize", location: FieldLocation::Query },
-        FieldSpec { snake: "page", location: FieldLocation::Query },
-        FieldSpec { snake: "filter", location: FieldLocation::Query },
-        FieldSpec { snake: "callback", location: FieldLocation::Query },
-        FieldSpec { snake: "site", location: FieldLocation::Query },
+        FieldSpec { snake: "pagesize", wire: "pagesize", location: FieldLocation::Query },
+        FieldSpec { snake: "page", wire: "page", location: FieldLocation::Query },
+        FieldSpec { snake: "filter", wire: "filter", location: FieldLocation::Query },
+        FieldSpec { snake: "callback", wire: "callback", location: FieldLocation::Query },
+        FieldSpec { snake: "site", wire: "site", location: FieldLocation::Query },
     ],
     auth: &[
     ],
@@ -1402,17 +2598,17 @@ const OP_ME_GET_ME_QUESTIONS: OpSpec = OpSpec {
     method: "GET",
     path_template: "/me/questions",
     fields: &[
-        FieldSpec { snake: "order", location: FieldLocation::Query },
-        FieldSpec { snake: "max", location: FieldLocation::Query },
-        FieldSpec { snake: "min", location: FieldLocation::Query },
-        FieldSpec { snake: "sort", location: FieldLocation::Query },
-        FieldSpec { snake: "fromdate", location: FieldLocation::Query },
-        FieldSpec { snake: "todate", location: FieldLocation::Query },
-        FieldSpec { snake: "pagesize", location: FieldLocation::Query },
-        FieldSpec { snake: "page", location: FieldLocation::Query },
-        FieldSpec { snake: "filter", location: FieldLocation::Query },
-        FieldSpec { snake: "callback", location: FieldLocation::Query },
-        FieldSpec { snake: "site", location: FieldLocation::Query },
+        FieldSpec { snake: "order", wire: "order", location: FieldLocation::Query },
+        FieldSpec { snake: "max", wire: "max", location: FieldLocation::Query },
+        FieldSpec { snake: "min", wire: "min", location: FieldLocation::Query },
+        FieldSpec { snake: "sort", wire: "sort", location: FieldLocation::Query },
+        FieldSpec { snake: "fromdate", wire: "fromdate", location: FieldLocation::Query },
+        FieldSpec { snake: "todate", wire: "todate", location: FieldLocation::Query },
+        FieldSpec { snake: "pagesize", wire: "pagesize", location: FieldLocation::Query },
+        FieldSpec { snake: "page", wire: "page", location: FieldLocation::Query },
+        FieldSpec { snake: "filter", wire: "filter", location: FieldLocation::Query },
+        FieldSpec { snake: "callback", wire: "callback", location: FieldLocation::Query },
+        FieldSpec { snake: "site", wire: "site", location: FieldLocation::Query },
     ],
     auth: &[
     ],
@@ -1422,17 +2618,17 @@ const OP_ME_GET_ME_QUESTIONS_FEATURED: OpSpec = OpSpec {
     method: "GET",
     path_template: "/me/questions/featured",
     fields: &[
-        FieldSpec { snake: "order", location: FieldLocation::Query },
-        FieldSpec { snake: "max", location: FieldLocation::Query },
-        FieldSpec { snake: "min", location: FieldLocation::Query },
-        FieldSpec { snake: "sort", location: FieldLocation::Query },
-        FieldSpec { snake: "fromdate", location: FieldLocation::Query },
-        FieldSpec { snake: "todate", location: FieldLocation::Query },
-        FieldSpec { snake: "pagesize", location: FieldLocation::Query },
-        FieldSpec { snake: "page", location: FieldLocation::Query },
-        FieldSpec { snake: "filter", location: FieldLocation::Query },
-        FieldSpec { snake: "callback", location: FieldLocation::Query },
-        FieldSpec { snake: "site", location: FieldLocation::Query },
+        FieldSpec { snake: "order", wire: "order", location: FieldLocation::Query },
+        FieldSpec { snake: "max", wire: "max", location: FieldLocation::Query },
+        FieldSpec { snake: "min", wire: "min", location: FieldLocation::Query },
+        FieldSpec { snake: "sort", wire: "sort", location: FieldLocation::Query },
+        FieldSpec { snake: "fromdate", wire: "fromdate", location: FieldLocation::Query },
+        FieldSpec { snake: "todate", wire: "todate", location: FieldLocation::Query },
+        FieldSpec { snake: "pagesize", wire: "pagesize", location: FieldLocation::Query },
+        FieldSpec { snake: "page", wire: "page", location: FieldLocation::Query },
+        FieldSpec { snake: "filter", wire: "filter", location: FieldLocation::Query },
+        FieldSpec { snake: "callback", wire: "callback", location: FieldLocation::Query },
+        FieldSpec { snake: "site", wire: "site", location: FieldLocation::Query },
     ],
     auth: &[
     ],
@@ -1442,17 +2638,17 @@ const OP_ME_GET_ME_QUESTIONS_NO_ANSWERS: OpSpec = OpSpec {
     method: "GET",
     path_template: "/me/questions/no-answers",
     fields: &[
-        FieldSpec { snake: "order", location: FieldLocation::Query },
-        FieldSpec { snake: "max", location: FieldLocation::Query },
-        FieldSpec { snake: "min", location: FieldLocation::Query },
-        FieldSpec { snake: "sort", location: FieldLocation::Query },
-        FieldSpec { snake: "fromdate", location: FieldLocation::Query },
-        FieldSpec { snake: "todate", location: FieldLocation::Query },
-        FieldSpec { snake: "pagesize", location: FieldLocation::Query },
-        FieldSpec { snake: "page", location: FieldLocation::Query },
-        FieldSpec { snake: "filter", location: FieldLocation::Query },
-        FieldSpec { snake: "callback", location: FieldLocation::Query },
-        FieldSpec { snake: "site", location: FieldLocation::Query },
+        FieldSpec { snake: "order", wire: "order", location: FieldLocation::Query },
+        FieldSpec { snake: "max", wire: "max", location: FieldLocation::Query },
+        FieldSpec { snake: "min", wire: "min", location: FieldLocation::Query },
+        FieldSpec { snake: "sort", wire: "sort", location: FieldLocation::Query },
+        FieldSpec { snake: "fromdate", wire: "fromdate", location: FieldLocation::Query },
+        FieldSpec { snake: "todate", wire: "todate", location: FieldLocation::Query },
+        FieldSpec { snake: "pagesize", wire: "pagesize", location: FieldLocation::Query },
+        FieldSpec { snake: "page", wire: "page", location: FieldLocation::Query },
+        FieldSpec { snake: "filter", wire: "filter", location: FieldLocation::Query },
+        FieldSpec { snake: "callback", wire: "callback", location: FieldLocation::Query },
+        FieldSpec { snake: "site", wire: "site", location: FieldLocation::Query },
     ],
     auth: &[
     ],
@@ -1462,17 +2658,17 @@ const OP_ME_GET_ME_QUESTIONS_UNACCEPTED: OpSpec = OpSpec {
     method: "GET",
     path_template: "/me/questions/unaccepted",
     fields: &[
-        FieldSpec { snake: "order", location: FieldLocation::Query },
-        FieldSpec { snake: "max", location: FieldLocation::Query },
-        FieldSpec { snake: "min", location: FieldLocation::Query },
-        FieldSpec { snake: "sort", location: FieldLocation::Query },
-        FieldSpec { snake: "fromdate", location: FieldLocation::Query },
-        FieldSpec { snake: "todate", location: FieldLocation::Query },
-        FieldSpec { snake: "pagesize", location: FieldLocation::Query },
-        FieldSpec { snake: "page", location: FieldLocation::Query },
-        FieldSpec { snake: "filter", location: FieldLocation::Query },
-        FieldSpec { snake: "callback", location: FieldLocation::Query },
-        FieldSpec { snake: "site", location: FieldLocation::Query },
+        FieldSpec { snake: "order", wire: "order", location: FieldLocation::Query },
+        FieldSpec { snake: "max", wire: "max", location: FieldLocation::Query },
+        FieldSpec { snake: "min", wire: "min", location: FieldLocation::Query },
+        FieldSpec { snake: "sort", wire: "sort", location: FieldLocation::Query },
+        FieldSpec { snake: "fromdate", wire: "fromdate", location: FieldLocation::Query },
+        FieldSpec { snake: "todate", wire: "todate", location: FieldLocation::Query },
+        FieldSpec { snake: "pagesize", wire: "pagesize", location: FieldLocation::Query },
+        FieldSpec { snake: "page", wire: "page", location: FieldLocation::Query },
+        FieldSpec { snake: "filter", wire: "filter", location: FieldLocation::Query },
+        FieldSpec { snake: "callback", wire: "callback", location: FieldLocation::Query },
+        FieldSpec { snake: "site", wire: "site", location: FieldLocation::Query },
     ],
     auth: &[
     ],
@@ -1482,17 +2678,17 @@ const OP_ME_GET_ME_QUESTIONS_UNANSWERED: OpSpec = OpSpec {
     method: "GET",
     path_template: "/me/questions/unanswered",
     fields: &[
-        FieldSpec { snake: "order", location: FieldLocation::Query },
-        FieldSpec { snake: "max", location: FieldLocation::Query },
-        FieldSpec { snake: "min", location: FieldLocation::Query },
-        FieldSpec { snake: "sort", location: FieldLocation::Query },
-        FieldSpec { snake: "fromdate", location: FieldLocation::Query },
-        FieldSpec { snake: "todate", location: FieldLocation::Query },
-        FieldSpec { snake: "pagesize", location: FieldLocation::Query },
-        FieldSpec { snake: "page", location: FieldLocation::Query },
-        FieldSpec { snake: "filter", location: FieldLocation::Query },
-        FieldSpec { snake: "callback", location: FieldLocation::Query },
-        FieldSpec { snake: "site", location: FieldLocation::Query },
+        FieldSpec { snake: "order", wire: "order", location: FieldLocation::Query },
+        FieldSpec { snake: "max", wire: "max", location: FieldLocation::Query },
+        FieldSpec { snake: "min", wire: "min", location: FieldLocation::Query },
+        FieldSpec { snake: "sort", wire: "sort", location: FieldLocation::Query },
+        FieldSpec { snake: "fromdate", wire: "fromdate", location: FieldLocation::Query },
+        FieldSpec { snake: "todate", wire: "todate", location: FieldLocation::Query },
+        FieldSpec { snake: "pagesize", wire: "pagesize", location: FieldLocation::Query },
+        FieldSpec { snake: "page", wire: "page", location: FieldLocation::Query },
+        FieldSpec { snake: "filter", wire: "filter", location: FieldLocation::Query },
+        FieldSpec { snake: "callback", wire: "callback", location: FieldLocation::Query },
+        FieldSpec { snake: "site", wire: "site", location: FieldLocation::Query },
     ],
     auth: &[
     ],
@@ -1502,9 +2698,9 @@ const OP_ME_GET_ME_REPUTATION: OpSpec = OpSpec {
     method: "GET",
     path_template: "/me/reputation",
     fields: &[
-        FieldSpec { snake: "filter", location: FieldLocation::Query },
-        FieldSpec { snake: "callback", location: FieldLocation::Query },
-        FieldSpec { snake: "site", location: FieldLocation::Query },
+        FieldSpec { snake: "filter", wire: "filter", location: FieldLocation::Query },
+        FieldSpec { snake: "callback", wire: "callback", location: FieldLocation::Query },
+        FieldSpec { snake: "site", wire: "site", location: FieldLocation::Query },
     ],
     auth: &[
     ],
@@ -1514,11 +2710,11 @@ const OP_ME_GET_ME_REPUTATION_HISTORY: OpSpec = OpSpec {
     method: "GET",
     path_template: "/me/reputation-history",
     fields: &[
-        FieldSpec { snake: "pagesize", location: FieldLocation::Query },
-        FieldSpec { snake: "page", location: FieldLocation::Query },
-        FieldSpec { snake: "filter", location: FieldLocation::Query },
-        FieldSpec { snake: "callback", location: FieldLocation::Query },
-        FieldSpec { snake: "site", location: FieldLocation::Query },
+        FieldSpec { snake: "pagesize", wire: "pagesize", location: FieldLocation::Query },
+        FieldSpec { snake: "page", wire: "page", location: FieldLocation::Query },
+        FieldSpec { snake: "filter", wire: "filter", location: FieldLocation::Query },
+        FieldSpec { snake: "callback", wire: "callback", location: FieldLocation::Query },
+        FieldSpec { snake: "site", wire: "site", location: FieldLocation::Query },
     ],
     auth: &[
     ],
@@ -1528,11 +2724,11 @@ const OP_ME_GET_ME_REPUTATION_HISTORY_FULL: OpSpec = OpSpec {
     method: "GET",
     path_template: "/me/reputation-history/full",
     fields: &[
-        FieldSpec { snake: "pagesize", location: FieldLocation::Query },
-        FieldSpec { snake: "page", location: FieldLocation::Query },
-        FieldSpec { snake: "filter", location: FieldLocation::Query },
-        FieldSpec { snake: "callback", location: FieldLocation::Query },
-        FieldSpec { snake: "site", location: FieldLocation::Query },
+        FieldSpec { snake: "pagesize", wire: "pagesize", location: FieldLocation::Query },
+        FieldSpec { snake: "page", wire: "page", location: FieldLocation::Query },
+        FieldSpec { snake: "filter", wire: "filter", location: FieldLocation::Query },
+        FieldSpec { snake: "callback", wire: "callback", location: FieldLocation::Query },
+        FieldSpec { snake: "site", wire: "site", location: FieldLocation::Query },
     ],
     auth: &[
     ],
@@ -1542,17 +2738,17 @@ const OP_ME_GET_ME_SUGGESTED_EDITS: OpSpec = OpSpec {
     method: "GET",
     path_template: "/me/suggested-edits",
     fields: &[
-        FieldSpec { snake: "order", location: FieldLocation::Query },
-        FieldSpec { snake: "max", location: FieldLocation::Query },
-        FieldSpec { snake: "min", location: FieldLocation::Query },
-        FieldSpec { snake: "sort", location: FieldLocation::Query },
-        FieldSpec { snake: "fromdate", location: FieldLocation::Query },
-        FieldSpec { snake: "todate", location: FieldLocation::Query },
-        FieldSpec { snake: "pagesize", location: FieldLocation::Query },
-        FieldSpec { snake: "page", location: FieldLocation::Query },
-        FieldSpec { snake: "filter", location: FieldLocation::Query },
-        FieldSpec { snake: "callback", location: FieldLocation::Query },
-        FieldSpec { snake: "site", location: FieldLocation::Query },
+        FieldSpec { snake: "order", wire: "order", location: FieldLocation::Query },
+        FieldSpec { snake: "max", wire: "max", location: FieldLocation::Query },
+        FieldSpec { snake: "min", wire: "min", location: FieldLocation::Query },
+        FieldSpec { snake: "sort", wire: "sort", location: FieldLocation::Query },
+        FieldSpec { snake: "fromdate", wire: "fromdate", location: FieldLocation::Query },
+        FieldSpec { snake: "todate", wire: "todate", location: FieldLocation::Query },
+        FieldSpec { snake: "pagesize", wire: "pagesize", location: FieldLocation::Query },
+        FieldSpec { snake: "page", wire: "page", location: FieldLocation::Query },
+        FieldSpec { snake: "filter", wire: "filter", location: FieldLocation::Query },
+        FieldSpec { snake: "callback", wire: "callback", location: FieldLocation::Query },
+        FieldSpec { snake: "site", wire: "site", location: FieldLocation::Query },
     ],
     auth: &[
     ],
@@ -1562,17 +2758,17 @@ const OP_ME_GET_ME_TAGS: OpSpec = OpSpec {
     method: "GET",
     path_template: "/me/tags",
     fields: &[
-        FieldSpec { snake: "order", location: FieldLocation::Query },
-        FieldSpec { snake: "max", location: FieldLocation::Query },
-        FieldSpec { snake: "min", location: FieldLocation::Query },
-        FieldSpec { snake: "sort", location: FieldLocation::Query },
-        FieldSpec { snake: "fromdate", location: FieldLocation::Query },
-        FieldSpec { snake: "todate", location: FieldLocation::Query },
-        FieldSpec { snake: "pagesize", location: FieldLocation::Query },
-        FieldSpec { snake: "page", location: FieldLocation::Query },
-        FieldSpec { snake: "filter", location: FieldLocation::Query },
-        FieldSpec { snake: "callback", location: FieldLocation::Query },
-        FieldSpec { snake: "site", location: FieldLocation::Query },
+        FieldSpec { snake: "order", wire: "order", location: FieldLocation::Query },
+        FieldSpec { snake: "max", wire: "max", location: FieldLocation::Query },
+        FieldSpec { snake: "min", wire: "min", location: FieldLocation::Query },
+        FieldSpec { snake: "sort", wire: "sort", location: FieldLocation::Query },
+        FieldSpec { snake: "fromdate", wire: "fromdate", location: FieldLocation::Query },
+        FieldSpec { snake: "todate", wire: "todate", location: FieldLocation::Query },
+        FieldSpec { snake: "pagesize", wire: "pagesize", location: FieldLocation::Query },
+        FieldSpec { snake: "page", wire: "page", location: FieldLocation::Query },
+        FieldSpec { snake: "filter", wire: "filter", location: FieldLocation::Query },
+        FieldSpec { snake: "callback", wire: "callback", location: FieldLocation::Query },
+        FieldSpec { snake: "site", wire: "site", location: FieldLocation::Query },
     ],
     auth: &[
     ],
@@ -1582,18 +2778,18 @@ const OP_ME_GET_ME_TAGS_TAGS_TOP_ANSWERS: OpSpec = OpSpec {
     method: "GET",
     path_template: "/me/tags/{tags}/top-answers",
     fields: &[
-        FieldSpec { snake: "tags", location: FieldLocation::Path },
-        FieldSpec { snake: "order", location: FieldLocation::Query },
-        FieldSpec { snake: "max", location: FieldLocation::Query },
-        FieldSpec { snake: "min", location: FieldLocation::Query },
-        FieldSpec { snake: "sort", location: FieldLocation::Query },
-        FieldSpec { snake: "fromdate", location: FieldLocation::Query },
-        FieldSpec { snake: "todate", location: FieldLocation::Query },
-        FieldSpec { snake: "pagesize", location: FieldLocation::Query },
-        FieldSpec { snake: "page", location: FieldLocation::Query },
-        FieldSpec { snake: "filter", location: FieldLocation::Query },
-        FieldSpec { snake: "callback", location: FieldLocation::Query },
-        FieldSpec { snake: "site", location: FieldLocation::Query },
+        FieldSpec { snake: "tags", wire: "tags", location: FieldLocation::Path },
+        FieldSpec { snake: "order", wire: "order", location: FieldLocation::Query },
+        FieldSpec { snake: "max", wire: "max", location: FieldLocation::Query },
+        FieldSpec { snake: "min", wire: "min", location: FieldLocation::Query },
+        FieldSpec { snake: "sort", wire: "sort", location: FieldLocation::Query },
+        FieldSpec { snake: "fromdate", wire: "fromdate", location: FieldLocation::Query },
+        FieldSpec { snake: "todate", wire: "todate", location: FieldLocation::Query },
+        FieldSpec { snake: "pagesize", wire: "pagesize", location: FieldLocation::Query },
+        FieldSpec { snake: "page", wire: "page", location: FieldLocation::Query },
+        FieldSpec { snake: "filter", wire: "filter", location: FieldLocation::Query },
+        FieldSpec { snake: "callback", wire: "callback", location: FieldLocation::Query },
+        FieldSpec { snake: "site", wire: "site", location: FieldLocation::Query },
     ],
     auth: &[
     ],
@@ -1603,18 +2799,18 @@ const OP_ME_GET_ME_TAGS_TAGS_TOP_QUESTIONS: OpSpec = OpSpec {
     method: "GET",
     path_template: "/me/tags/{tags}/top-questions",
     fields: &[
-        FieldSpec { snake: "tags", location: FieldLocation::Path },
-        FieldSpec { snake: "order", location: FieldLocation::Query },
-        FieldSpec { snake: "max", location: FieldLocation::Query },
-        FieldSpec { snake: "min", location: FieldLocation::Query },
-        FieldSpec { snake: "sort", location: FieldLocation::Query },
-        FieldSpec { snake: "fromdate", location: FieldLocation::Query },
-        FieldSpec { snake: "todate", location: FieldLocation::Query },
-        FieldSpec { snake: "pagesize", location: FieldLocation::Query },
-        FieldSpec { snake: "page", location: FieldLocation::Query },
-        FieldSpec { snake: "filter", location: FieldLocation::Query },
-        FieldSpec { snake: "callback", location: FieldLocation::Query },
-        FieldSpec { snake: "site", location: FieldLocation::Query },
+        FieldSpec { snake: "tags", wire: "tags", location: FieldLocation::Path },
+        FieldSpec { snake: "order", wire: "order", location: FieldLocation::Query },
+        FieldSpec { snake: "max", wire: "max", location: FieldLocation::Query },
+        FieldSpec { snake: "min", wire: "min", location: FieldLocation::Query },
+        FieldSpec { snake: "sort", wire: "sort", location: FieldLocation::Query },
+        FieldSpec { snake: "fromdate", wire: "fromdate", location: FieldLocation::Query },
+        FieldSpec { snake: "todate", wire: "todate", location: FieldLocation::Query },
+        FieldSpec { snake: "pagesize", wire: "pagesize", location: FieldLocation::Query },
+        FieldSpec { snake: "page", wire: "page", location: FieldLocation::Query },
+        FieldSpec { snake: "filter", wire: "filter", location: FieldLocation::Query },
+        FieldSpec { snake: "callback", wire: "callback", location: FieldLocation::Query },
+        FieldSpec { snake: "site", wire: "site", location: FieldLocation::Query },
     ],
     auth: &[
     ],
@@ -1624,13 +2820,13 @@ const OP_ME_GET_ME_TIMELINE: OpSpec = OpSpec {
     method: "GET",
     path_template: "/me/timeline",
     fields: &[
-        FieldSpec { snake: "fromdate", location: FieldLocation::Query },
-        FieldSpec { snake: "todate", location: FieldLocation::Query },
-        FieldSpec { snake: "pagesize", location: FieldLocation::Query },
-        FieldSpec { snake: "page", location: FieldLocation::Query },
-        FieldSpec { snake: "filter", location: FieldLocation::Query },
-        FieldSpec { snake: "callback", location: FieldLocation::Query },
-        FieldSpec { snake: "site", location: FieldLocation::Query },
+        FieldSpec { snake: "fromdate", wire: "fromdate", location: FieldLocation::Query },
+        FieldSpec { snake: "todate", wire: "todate", location: FieldLocation::Query },
+        FieldSpec { snake: "pagesize", wire: "pagesize", location: FieldLocation::Query },
+        FieldSpec { snake: "page", wire: "page", location: FieldLocation::Query },
+        FieldSpec { snake: "filter", wire: "filter", location: FieldLocation::Query },
+        FieldSpec { snake: "callback", wire: "callback", location: FieldLocation::Query },
+        FieldSpec { snake: "site", wire: "site", location: FieldLocation::Query },
     ],
     auth: &[
     ],
@@ -1640,11 +2836,11 @@ const OP_ME_GET_ME_TOP_ANSWER_TAGS: OpSpec = OpSpec {
     method: "GET",
     path_template: "/me/top-answer-tags",
     fields: &[
-        FieldSpec { snake: "pagesize", location: FieldLocation::Query },
-        FieldSpec { snake: "page", location: FieldLocation::Query },
-        FieldSpec { snake: "filter", location: FieldLocation::Query },
-        FieldSpec { snake: "callback", location: FieldLocation::Query },
-        FieldSpec { snake: "site", location: FieldLocation::Query },
+        FieldSpec { snake: "pagesize", wire: "pagesize", location: FieldLocation::Query },
+        FieldSpec { snake: "page", wire: "page", location: FieldLocation::Query },
+        FieldSpec { snake: "filter", wire: "filter", location: FieldLocation::Query },
+        FieldSpec { snake: "callback", wire: "callback", location: FieldLocation::Query },
+        FieldSpec { snake: "site", wire: "site", location: FieldLocation::Query },
     ],
     auth: &[
     ],
@@ -1654,11 +2850,11 @@ const OP_ME_GET_ME_TOP_QUESTION_TAGS: OpSpec = OpSpec {
     method: "GET",
     path_template: "/me/top-question-tags",
     fields: &[
-        FieldSpec { snake: "pagesize", location: FieldLocation::Query },
-        FieldSpec { snake: "page", location: FieldLocation::Query },
-        FieldSpec { snake: "filter", location: FieldLocation::Query },
-        FieldSpec { snake: "callback", location: FieldLocation::Query },
-        FieldSpec { snake: "site", location: FieldLocation::Query },
+        FieldSpec { snake: "pagesize", wire: "pagesize", location: FieldLocation::Query },
+        FieldSpec { snake: "page", wire: "page", location: FieldLocation::Query },
+        FieldSpec { snake: "filter", wire: "filter", location: FieldLocation::Query },
+        FieldSpec { snake: "callback", wire: "callback", location: FieldLocation::Query },
+        FieldSpec { snake: "site", wire: "site", location: FieldLocation::Query },
     ],
     auth: &[
     ],
@@ -1668,11 +2864,11 @@ const OP_ME_GET_ME_WRITE_PERMISSIONS: OpSpec = OpSpec {
     method: "GET",
     path_template: "/me/write-permissions",
     fields: &[
-        FieldSpec { snake: "pagesize", location: FieldLocation::Query },
-        FieldSpec { snake: "page", location: FieldLocation::Query },
-        FieldSpec { snake: "filter", location: FieldLocation::Query },
-        FieldSpec { snake: "callback", location: FieldLocation::Query },
-        FieldSpec { snake: "site", location: FieldLocation::Query },
+        FieldSpec { snake: "pagesize", wire: "pagesize", location: FieldLocation::Query },
+        FieldSpec { snake: "page", wire: "page", location: FieldLocation::Query },
+        FieldSpec { snake: "filter", wire: "filter", location: FieldLocation::Query },
+        FieldSpec { snake: "callback", wire: "callback", location: FieldLocation::Query },
+        FieldSpec { snake: "site", wire: "site", location: FieldLocation::Query },
     ],
     auth: &[
     ],
@@ -1752,6 +2948,143 @@ fn iface_me__get_me_tags_tags_top_questions_sort_enum__to_str(e: &iface_me::GetM
         iface_me::GetMeTagsTagsTopQuestionsSortEnum::Month => "month",
         iface_me::GetMeTagsTagsTopQuestionsSortEnum::Relevance => "relevance",
     }
+}
+
+fn iface_me__user__to_json(p: &iface_me::User) -> Value {
+    let mut m = Map::new();
+    m.insert("about_me".into(), match (&p.about_me) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("accept_rate".into(), match (&p.accept_rate) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("account_id".into(), match (&p.account_id) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("age".into(), match (&p.age) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("answer_count".into(), match (&p.answer_count) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("badge_counts".into(), match (&p.badge_counts) { Some(v) => iface_me__user_badge_counts__to_json(v), None => Value::Null });
+    m.insert("creation_date".into(), match (&p.creation_date) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("display_name".into(), match (&p.display_name) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("down_vote_count".into(), match (&p.down_vote_count) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("is_employee".into(), match (&p.is_employee) { Some(v) => Value::Bool(*(v)), None => Value::Null });
+    m.insert("last_access_date".into(), match (&p.last_access_date) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("last_modified_date".into(), match (&p.last_modified_date) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("link".into(), match (&p.link) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("location".into(), match (&p.location) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("profile_image".into(), match (&p.profile_image) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("question_count".into(), match (&p.question_count) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("reputation".into(), match (&p.reputation) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("reputation_change_day".into(), match (&p.reputation_change_day) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("reputation_change_month".into(), match (&p.reputation_change_month) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("reputation_change_quarter".into(), match (&p.reputation_change_quarter) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("reputation_change_week".into(), match (&p.reputation_change_week) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("reputation_change_year".into(), match (&p.reputation_change_year) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("timed_penalty_date".into(), match (&p.timed_penalty_date) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("up_vote_count".into(), match (&p.up_vote_count) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("user_id".into(), match (&p.user_id) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("user_type".into(), match (&p.user_type) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("view_count".into(), match (&p.view_count) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("website_url".into(), match (&p.website_url) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_me__user_badge_counts__to_json(p: &iface_me::UserBadgeCounts) -> Value {
+    let mut m = Map::new();
+    m.insert("bronze".into(), match (&p.bronze) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("gold".into(), match (&p.gold) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("silver".into(), match (&p.silver) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_me__answers__to_json(p: &iface_me::Answers) -> Value {
+    let mut m = Map::new();
+    m.insert("value".into(), Value::String((&p.value).clone()));
+    Value::Object(m)
+}
+
+fn iface_me__network_users__to_json(p: &iface_me::NetworkUsers) -> Value {
+    let mut m = Map::new();
+    m.insert("value".into(), Value::String((&p.value).clone()));
+    Value::Object(m)
+}
+
+fn iface_me__badges__to_json(p: &iface_me::Badges) -> Value {
+    let mut m = Map::new();
+    m.insert("value".into(), Value::String((&p.value).clone()));
+    Value::Object(m)
+}
+
+fn iface_me__comments__to_json(p: &iface_me::Comments) -> Value {
+    let mut m = Map::new();
+    m.insert("value".into(), Value::String((&p.value).clone()));
+    Value::Object(m)
+}
+
+fn iface_me__questions__to_json(p: &iface_me::Questions) -> Value {
+    let mut m = Map::new();
+    m.insert("value".into(), Value::String((&p.value).clone()));
+    Value::Object(m)
+}
+
+fn iface_me__inbox_items__to_json(p: &iface_me::InboxItems) -> Value {
+    let mut m = Map::new();
+    m.insert("value".into(), Value::String((&p.value).clone()));
+    Value::Object(m)
+}
+
+fn iface_me__account_merge__to_json(p: &iface_me::AccountMerge) -> Value {
+    let mut m = Map::new();
+    m.insert("value".into(), Value::String((&p.value).clone()));
+    Value::Object(m)
+}
+
+fn iface_me__notifications__to_json(p: &iface_me::Notifications) -> Value {
+    let mut m = Map::new();
+    m.insert("value".into(), Value::String((&p.value).clone()));
+    Value::Object(m)
+}
+
+fn iface_me__privileges__to_json(p: &iface_me::Privileges) -> Value {
+    let mut m = Map::new();
+    m.insert("value".into(), Value::String((&p.value).clone()));
+    Value::Object(m)
+}
+
+fn iface_me__reputation_changes__to_json(p: &iface_me::ReputationChanges) -> Value {
+    let mut m = Map::new();
+    m.insert("value".into(), Value::String((&p.value).clone()));
+    Value::Object(m)
+}
+
+fn iface_me__reputation_history__to_json(p: &iface_me::ReputationHistory) -> Value {
+    let mut m = Map::new();
+    m.insert("value".into(), Value::String((&p.value).clone()));
+    Value::Object(m)
+}
+
+fn iface_me__suggested_edits__to_json(p: &iface_me::SuggestedEdits) -> Value {
+    let mut m = Map::new();
+    m.insert("value".into(), Value::String((&p.value).clone()));
+    Value::Object(m)
+}
+
+fn iface_me__tags__to_json(p: &iface_me::Tags) -> Value {
+    let mut m = Map::new();
+    m.insert("value".into(), Value::String((&p.value).clone()));
+    Value::Object(m)
+}
+
+fn iface_me__user_timeline_objects__to_json(p: &iface_me::UserTimelineObjects) -> Value {
+    let mut m = Map::new();
+    m.insert("value".into(), Value::String((&p.value).clone()));
+    Value::Object(m)
+}
+
+fn iface_me__top_tag_objects__to_json(p: &iface_me::TopTagObjects) -> Value {
+    let mut m = Map::new();
+    m.insert("value".into(), Value::String((&p.value).clone()));
+    Value::Object(m)
+}
+
+fn iface_me__write_permissions__to_json(p: &iface_me::WritePermissions) -> Value {
+    let mut m = Map::new();
+    m.insert("value".into(), Value::String((&p.value).clone()));
+    Value::Object(m)
 }
 
 fn iface_me__get_me_params__to_json(p: &iface_me::GetMeParams) -> Value {
@@ -2152,126 +3485,1271 @@ fn iface_me__get_me_write_permissions_params__to_json(p: &iface_me::GetMeWritePe
     Value::Object(m)
 }
 
+fn iface_me__user__from_json(v: &Value) -> Option<iface_me::User> {
+    let m = v.as_object()?;
+    Some(iface_me::User {
+        about_me: m.get("about_me").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        accept_rate: m.get("accept_rate").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        account_id: m.get("account_id").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        age: m.get("age").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        answer_count: m.get("answer_count").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        badge_counts: m.get("badge_counts").filter(|v| !v.is_null()).and_then(|v| iface_me__user_badge_counts__from_json(v)),
+        creation_date: m.get("creation_date").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        display_name: m.get("display_name").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        down_vote_count: m.get("down_vote_count").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        is_employee: m.get("is_employee").filter(|v| !v.is_null()).and_then(|v| (v).as_bool()),
+        last_access_date: m.get("last_access_date").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        last_modified_date: m.get("last_modified_date").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        link: m.get("link").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        location: m.get("location").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        profile_image: m.get("profile_image").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        question_count: m.get("question_count").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        reputation: m.get("reputation").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        reputation_change_day: m.get("reputation_change_day").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        reputation_change_month: m.get("reputation_change_month").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        reputation_change_quarter: m.get("reputation_change_quarter").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        reputation_change_week: m.get("reputation_change_week").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        reputation_change_year: m.get("reputation_change_year").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        timed_penalty_date: m.get("timed_penalty_date").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        up_vote_count: m.get("up_vote_count").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        user_id: m.get("user_id").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        user_type: m.get("user_type").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        view_count: m.get("view_count").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        website_url: m.get("website_url").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    })
+}
+
+fn iface_me__user_badge_counts__from_json(v: &Value) -> Option<iface_me::UserBadgeCounts> {
+    let m = v.as_object()?;
+    Some(iface_me::UserBadgeCounts {
+        bronze: m.get("bronze").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        gold: m.get("gold").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        silver: m.get("silver").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+    })
+}
+
+fn iface_me__answers__from_json(v: &Value) -> Option<iface_me::Answers> {
+    let m = v.as_object()?;
+    Some(iface_me::Answers {
+        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+    })
+}
+
+fn iface_me__network_users__from_json(v: &Value) -> Option<iface_me::NetworkUsers> {
+    let m = v.as_object()?;
+    Some(iface_me::NetworkUsers {
+        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+    })
+}
+
+fn iface_me__badges__from_json(v: &Value) -> Option<iface_me::Badges> {
+    let m = v.as_object()?;
+    Some(iface_me::Badges {
+        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+    })
+}
+
+fn iface_me__comments__from_json(v: &Value) -> Option<iface_me::Comments> {
+    let m = v.as_object()?;
+    Some(iface_me::Comments {
+        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+    })
+}
+
+fn iface_me__questions__from_json(v: &Value) -> Option<iface_me::Questions> {
+    let m = v.as_object()?;
+    Some(iface_me::Questions {
+        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+    })
+}
+
+fn iface_me__inbox_items__from_json(v: &Value) -> Option<iface_me::InboxItems> {
+    let m = v.as_object()?;
+    Some(iface_me::InboxItems {
+        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+    })
+}
+
+fn iface_me__account_merge__from_json(v: &Value) -> Option<iface_me::AccountMerge> {
+    let m = v.as_object()?;
+    Some(iface_me::AccountMerge {
+        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+    })
+}
+
+fn iface_me__notifications__from_json(v: &Value) -> Option<iface_me::Notifications> {
+    let m = v.as_object()?;
+    Some(iface_me::Notifications {
+        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+    })
+}
+
+fn iface_me__privileges__from_json(v: &Value) -> Option<iface_me::Privileges> {
+    let m = v.as_object()?;
+    Some(iface_me::Privileges {
+        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+    })
+}
+
+fn iface_me__reputation_changes__from_json(v: &Value) -> Option<iface_me::ReputationChanges> {
+    let m = v.as_object()?;
+    Some(iface_me::ReputationChanges {
+        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+    })
+}
+
+fn iface_me__reputation_history__from_json(v: &Value) -> Option<iface_me::ReputationHistory> {
+    let m = v.as_object()?;
+    Some(iface_me::ReputationHistory {
+        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+    })
+}
+
+fn iface_me__suggested_edits__from_json(v: &Value) -> Option<iface_me::SuggestedEdits> {
+    let m = v.as_object()?;
+    Some(iface_me::SuggestedEdits {
+        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+    })
+}
+
+fn iface_me__tags__from_json(v: &Value) -> Option<iface_me::Tags> {
+    let m = v.as_object()?;
+    Some(iface_me::Tags {
+        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+    })
+}
+
+fn iface_me__user_timeline_objects__from_json(v: &Value) -> Option<iface_me::UserTimelineObjects> {
+    let m = v.as_object()?;
+    Some(iface_me::UserTimelineObjects {
+        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+    })
+}
+
+fn iface_me__top_tag_objects__from_json(v: &Value) -> Option<iface_me::TopTagObjects> {
+    let m = v.as_object()?;
+    Some(iface_me::TopTagObjects {
+        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+    })
+}
+
+fn iface_me__write_permissions__from_json(v: &Value) -> Option<iface_me::WritePermissions> {
+    let m = v.as_object()?;
+    Some(iface_me::WritePermissions {
+        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+    })
+}
+
+fn iface_me__get_me__ok(body: String) -> Result<iface_me::User, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match iface_me__user__from_json(&v) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_me__get_me__err(e: crate::runtime::DispatchError) -> iface_me::GetMeError {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => match status {
+            400u16 => iface_me::GetMeError::BadRequest(body),
+            401u16 => iface_me::GetMeError::Unauthorized(body),
+            402u16 => iface_me::GetMeError::PaymentRequired(body),
+            403u16 => iface_me::GetMeError::Forbidden(body),
+            404u16 => iface_me::GetMeError::NotFound(body),
+            405u16 => iface_me::GetMeError::MethodNotAllowed(body),
+            406u16 => iface_me::GetMeError::NotAcceptable(body),
+            500u16 => iface_me::GetMeError::InternalServerError(body),
+            502u16 => iface_me::GetMeError::BadGateway(body),
+            503u16 => iface_me::GetMeError::ServiceUnavailable(body),
+            _ => iface_me::GetMeError::Other(body),
+        },
+        crate::runtime::DispatchError::Transport(m) => iface_me::GetMeError::Other(m),
+    }
+}
+
+fn iface_me__get_me_answers__ok(body: String) -> Result<iface_me::Answers, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match iface_me__answers__from_json(&v) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_me__get_me_answers__err(e: crate::runtime::DispatchError) -> iface_me::GetMeAnswersError {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => match status {
+            400u16 => iface_me::GetMeAnswersError::BadRequest(body),
+            401u16 => iface_me::GetMeAnswersError::Unauthorized(body),
+            402u16 => iface_me::GetMeAnswersError::PaymentRequired(body),
+            403u16 => iface_me::GetMeAnswersError::Forbidden(body),
+            404u16 => iface_me::GetMeAnswersError::NotFound(body),
+            405u16 => iface_me::GetMeAnswersError::MethodNotAllowed(body),
+            406u16 => iface_me::GetMeAnswersError::NotAcceptable(body),
+            500u16 => iface_me::GetMeAnswersError::InternalServerError(body),
+            502u16 => iface_me::GetMeAnswersError::BadGateway(body),
+            503u16 => iface_me::GetMeAnswersError::ServiceUnavailable(body),
+            _ => iface_me::GetMeAnswersError::Other(body),
+        },
+        crate::runtime::DispatchError::Transport(m) => iface_me::GetMeAnswersError::Other(m),
+    }
+}
+
+fn iface_me__get_me_associated__ok(body: String) -> Result<iface_me::NetworkUsers, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match iface_me__network_users__from_json(&v) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_me__get_me_associated__err(e: crate::runtime::DispatchError) -> iface_me::GetMeAssociatedError {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => match status {
+            400u16 => iface_me::GetMeAssociatedError::BadRequest(body),
+            401u16 => iface_me::GetMeAssociatedError::Unauthorized(body),
+            402u16 => iface_me::GetMeAssociatedError::PaymentRequired(body),
+            403u16 => iface_me::GetMeAssociatedError::Forbidden(body),
+            404u16 => iface_me::GetMeAssociatedError::NotFound(body),
+            405u16 => iface_me::GetMeAssociatedError::MethodNotAllowed(body),
+            406u16 => iface_me::GetMeAssociatedError::NotAcceptable(body),
+            500u16 => iface_me::GetMeAssociatedError::InternalServerError(body),
+            502u16 => iface_me::GetMeAssociatedError::BadGateway(body),
+            503u16 => iface_me::GetMeAssociatedError::ServiceUnavailable(body),
+            _ => iface_me::GetMeAssociatedError::Other(body),
+        },
+        crate::runtime::DispatchError::Transport(m) => iface_me::GetMeAssociatedError::Other(m),
+    }
+}
+
+fn iface_me__get_me_badges__ok(body: String) -> Result<iface_me::Badges, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match iface_me__badges__from_json(&v) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_me__get_me_badges__err(e: crate::runtime::DispatchError) -> iface_me::GetMeBadgesError {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => match status {
+            400u16 => iface_me::GetMeBadgesError::BadRequest(body),
+            401u16 => iface_me::GetMeBadgesError::Unauthorized(body),
+            402u16 => iface_me::GetMeBadgesError::PaymentRequired(body),
+            403u16 => iface_me::GetMeBadgesError::Forbidden(body),
+            404u16 => iface_me::GetMeBadgesError::NotFound(body),
+            405u16 => iface_me::GetMeBadgesError::MethodNotAllowed(body),
+            406u16 => iface_me::GetMeBadgesError::NotAcceptable(body),
+            500u16 => iface_me::GetMeBadgesError::InternalServerError(body),
+            502u16 => iface_me::GetMeBadgesError::BadGateway(body),
+            503u16 => iface_me::GetMeBadgesError::ServiceUnavailable(body),
+            _ => iface_me::GetMeBadgesError::Other(body),
+        },
+        crate::runtime::DispatchError::Transport(m) => iface_me::GetMeBadgesError::Other(m),
+    }
+}
+
+fn iface_me__get_me_comments__ok(body: String) -> Result<iface_me::Comments, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match iface_me__comments__from_json(&v) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_me__get_me_comments__err(e: crate::runtime::DispatchError) -> iface_me::GetMeCommentsError {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => match status {
+            400u16 => iface_me::GetMeCommentsError::BadRequest(body),
+            401u16 => iface_me::GetMeCommentsError::Unauthorized(body),
+            402u16 => iface_me::GetMeCommentsError::PaymentRequired(body),
+            403u16 => iface_me::GetMeCommentsError::Forbidden(body),
+            404u16 => iface_me::GetMeCommentsError::NotFound(body),
+            405u16 => iface_me::GetMeCommentsError::MethodNotAllowed(body),
+            406u16 => iface_me::GetMeCommentsError::NotAcceptable(body),
+            500u16 => iface_me::GetMeCommentsError::InternalServerError(body),
+            502u16 => iface_me::GetMeCommentsError::BadGateway(body),
+            503u16 => iface_me::GetMeCommentsError::ServiceUnavailable(body),
+            _ => iface_me::GetMeCommentsError::Other(body),
+        },
+        crate::runtime::DispatchError::Transport(m) => iface_me::GetMeCommentsError::Other(m),
+    }
+}
+
+fn iface_me__get_me_comments_to_id__ok(body: String) -> Result<iface_me::Comments, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match iface_me__comments__from_json(&v) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_me__get_me_comments_to_id__err(e: crate::runtime::DispatchError) -> iface_me::GetMeCommentsToIdError {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => match status {
+            400u16 => iface_me::GetMeCommentsToIdError::BadRequest(body),
+            401u16 => iface_me::GetMeCommentsToIdError::Unauthorized(body),
+            402u16 => iface_me::GetMeCommentsToIdError::PaymentRequired(body),
+            403u16 => iface_me::GetMeCommentsToIdError::Forbidden(body),
+            404u16 => iface_me::GetMeCommentsToIdError::NotFound(body),
+            405u16 => iface_me::GetMeCommentsToIdError::MethodNotAllowed(body),
+            406u16 => iface_me::GetMeCommentsToIdError::NotAcceptable(body),
+            500u16 => iface_me::GetMeCommentsToIdError::InternalServerError(body),
+            502u16 => iface_me::GetMeCommentsToIdError::BadGateway(body),
+            503u16 => iface_me::GetMeCommentsToIdError::ServiceUnavailable(body),
+            _ => iface_me::GetMeCommentsToIdError::Other(body),
+        },
+        crate::runtime::DispatchError::Transport(m) => iface_me::GetMeCommentsToIdError::Other(m),
+    }
+}
+
+fn iface_me__get_me_favorites__ok(body: String) -> Result<iface_me::Questions, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match iface_me__questions__from_json(&v) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_me__get_me_favorites__err(e: crate::runtime::DispatchError) -> iface_me::GetMeFavoritesError {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => match status {
+            400u16 => iface_me::GetMeFavoritesError::BadRequest(body),
+            401u16 => iface_me::GetMeFavoritesError::Unauthorized(body),
+            402u16 => iface_me::GetMeFavoritesError::PaymentRequired(body),
+            403u16 => iface_me::GetMeFavoritesError::Forbidden(body),
+            404u16 => iface_me::GetMeFavoritesError::NotFound(body),
+            405u16 => iface_me::GetMeFavoritesError::MethodNotAllowed(body),
+            406u16 => iface_me::GetMeFavoritesError::NotAcceptable(body),
+            500u16 => iface_me::GetMeFavoritesError::InternalServerError(body),
+            502u16 => iface_me::GetMeFavoritesError::BadGateway(body),
+            503u16 => iface_me::GetMeFavoritesError::ServiceUnavailable(body),
+            _ => iface_me::GetMeFavoritesError::Other(body),
+        },
+        crate::runtime::DispatchError::Transport(m) => iface_me::GetMeFavoritesError::Other(m),
+    }
+}
+
+fn iface_me__get_me_inbox__ok(body: String) -> Result<iface_me::InboxItems, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match iface_me__inbox_items__from_json(&v) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_me__get_me_inbox__err(e: crate::runtime::DispatchError) -> iface_me::GetMeInboxError {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => match status {
+            400u16 => iface_me::GetMeInboxError::BadRequest(body),
+            401u16 => iface_me::GetMeInboxError::Unauthorized(body),
+            402u16 => iface_me::GetMeInboxError::PaymentRequired(body),
+            403u16 => iface_me::GetMeInboxError::Forbidden(body),
+            404u16 => iface_me::GetMeInboxError::NotFound(body),
+            405u16 => iface_me::GetMeInboxError::MethodNotAllowed(body),
+            406u16 => iface_me::GetMeInboxError::NotAcceptable(body),
+            500u16 => iface_me::GetMeInboxError::InternalServerError(body),
+            502u16 => iface_me::GetMeInboxError::BadGateway(body),
+            503u16 => iface_me::GetMeInboxError::ServiceUnavailable(body),
+            _ => iface_me::GetMeInboxError::Other(body),
+        },
+        crate::runtime::DispatchError::Transport(m) => iface_me::GetMeInboxError::Other(m),
+    }
+}
+
+fn iface_me__get_me_inbox_unread__ok(body: String) -> Result<iface_me::InboxItems, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match iface_me__inbox_items__from_json(&v) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_me__get_me_inbox_unread__err(e: crate::runtime::DispatchError) -> iface_me::GetMeInboxUnreadError {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => match status {
+            400u16 => iface_me::GetMeInboxUnreadError::BadRequest(body),
+            401u16 => iface_me::GetMeInboxUnreadError::Unauthorized(body),
+            402u16 => iface_me::GetMeInboxUnreadError::PaymentRequired(body),
+            403u16 => iface_me::GetMeInboxUnreadError::Forbidden(body),
+            404u16 => iface_me::GetMeInboxUnreadError::NotFound(body),
+            405u16 => iface_me::GetMeInboxUnreadError::MethodNotAllowed(body),
+            406u16 => iface_me::GetMeInboxUnreadError::NotAcceptable(body),
+            500u16 => iface_me::GetMeInboxUnreadError::InternalServerError(body),
+            502u16 => iface_me::GetMeInboxUnreadError::BadGateway(body),
+            503u16 => iface_me::GetMeInboxUnreadError::ServiceUnavailable(body),
+            _ => iface_me::GetMeInboxUnreadError::Other(body),
+        },
+        crate::runtime::DispatchError::Transport(m) => iface_me::GetMeInboxUnreadError::Other(m),
+    }
+}
+
+fn iface_me__get_me_mentioned__ok(body: String) -> Result<iface_me::Comments, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match iface_me__comments__from_json(&v) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_me__get_me_mentioned__err(e: crate::runtime::DispatchError) -> iface_me::GetMeMentionedError {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => match status {
+            400u16 => iface_me::GetMeMentionedError::BadRequest(body),
+            401u16 => iface_me::GetMeMentionedError::Unauthorized(body),
+            402u16 => iface_me::GetMeMentionedError::PaymentRequired(body),
+            403u16 => iface_me::GetMeMentionedError::Forbidden(body),
+            404u16 => iface_me::GetMeMentionedError::NotFound(body),
+            405u16 => iface_me::GetMeMentionedError::MethodNotAllowed(body),
+            406u16 => iface_me::GetMeMentionedError::NotAcceptable(body),
+            500u16 => iface_me::GetMeMentionedError::InternalServerError(body),
+            502u16 => iface_me::GetMeMentionedError::BadGateway(body),
+            503u16 => iface_me::GetMeMentionedError::ServiceUnavailable(body),
+            _ => iface_me::GetMeMentionedError::Other(body),
+        },
+        crate::runtime::DispatchError::Transport(m) => iface_me::GetMeMentionedError::Other(m),
+    }
+}
+
+fn iface_me__get_me_merges__ok(body: String) -> Result<iface_me::AccountMerge, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match iface_me__account_merge__from_json(&v) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_me__get_me_merges__err(e: crate::runtime::DispatchError) -> iface_me::GetMeMergesError {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => match status {
+            400u16 => iface_me::GetMeMergesError::BadRequest(body),
+            401u16 => iface_me::GetMeMergesError::Unauthorized(body),
+            402u16 => iface_me::GetMeMergesError::PaymentRequired(body),
+            403u16 => iface_me::GetMeMergesError::Forbidden(body),
+            404u16 => iface_me::GetMeMergesError::NotFound(body),
+            405u16 => iface_me::GetMeMergesError::MethodNotAllowed(body),
+            406u16 => iface_me::GetMeMergesError::NotAcceptable(body),
+            500u16 => iface_me::GetMeMergesError::InternalServerError(body),
+            502u16 => iface_me::GetMeMergesError::BadGateway(body),
+            503u16 => iface_me::GetMeMergesError::ServiceUnavailable(body),
+            _ => iface_me::GetMeMergesError::Other(body),
+        },
+        crate::runtime::DispatchError::Transport(m) => iface_me::GetMeMergesError::Other(m),
+    }
+}
+
+fn iface_me__get_me_notifications__ok(body: String) -> Result<iface_me::Notifications, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match iface_me__notifications__from_json(&v) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_me__get_me_notifications__err(e: crate::runtime::DispatchError) -> iface_me::GetMeNotificationsError {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => match status {
+            400u16 => iface_me::GetMeNotificationsError::BadRequest(body),
+            401u16 => iface_me::GetMeNotificationsError::Unauthorized(body),
+            402u16 => iface_me::GetMeNotificationsError::PaymentRequired(body),
+            403u16 => iface_me::GetMeNotificationsError::Forbidden(body),
+            404u16 => iface_me::GetMeNotificationsError::NotFound(body),
+            405u16 => iface_me::GetMeNotificationsError::MethodNotAllowed(body),
+            406u16 => iface_me::GetMeNotificationsError::NotAcceptable(body),
+            500u16 => iface_me::GetMeNotificationsError::InternalServerError(body),
+            502u16 => iface_me::GetMeNotificationsError::BadGateway(body),
+            503u16 => iface_me::GetMeNotificationsError::ServiceUnavailable(body),
+            _ => iface_me::GetMeNotificationsError::Other(body),
+        },
+        crate::runtime::DispatchError::Transport(m) => iface_me::GetMeNotificationsError::Other(m),
+    }
+}
+
+fn iface_me__get_me_notifications_unread__ok(body: String) -> Result<iface_me::Notifications, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match iface_me__notifications__from_json(&v) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_me__get_me_notifications_unread__err(e: crate::runtime::DispatchError) -> iface_me::GetMeNotificationsUnreadError {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => match status {
+            400u16 => iface_me::GetMeNotificationsUnreadError::BadRequest(body),
+            401u16 => iface_me::GetMeNotificationsUnreadError::Unauthorized(body),
+            402u16 => iface_me::GetMeNotificationsUnreadError::PaymentRequired(body),
+            403u16 => iface_me::GetMeNotificationsUnreadError::Forbidden(body),
+            404u16 => iface_me::GetMeNotificationsUnreadError::NotFound(body),
+            405u16 => iface_me::GetMeNotificationsUnreadError::MethodNotAllowed(body),
+            406u16 => iface_me::GetMeNotificationsUnreadError::NotAcceptable(body),
+            500u16 => iface_me::GetMeNotificationsUnreadError::InternalServerError(body),
+            502u16 => iface_me::GetMeNotificationsUnreadError::BadGateway(body),
+            503u16 => iface_me::GetMeNotificationsUnreadError::ServiceUnavailable(body),
+            _ => iface_me::GetMeNotificationsUnreadError::Other(body),
+        },
+        crate::runtime::DispatchError::Transport(m) => iface_me::GetMeNotificationsUnreadError::Other(m),
+    }
+}
+
+fn iface_me__get_me_privileges__ok(body: String) -> Result<iface_me::Privileges, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match iface_me__privileges__from_json(&v) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_me__get_me_privileges__err(e: crate::runtime::DispatchError) -> iface_me::GetMePrivilegesError {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => match status {
+            400u16 => iface_me::GetMePrivilegesError::BadRequest(body),
+            401u16 => iface_me::GetMePrivilegesError::Unauthorized(body),
+            402u16 => iface_me::GetMePrivilegesError::PaymentRequired(body),
+            403u16 => iface_me::GetMePrivilegesError::Forbidden(body),
+            404u16 => iface_me::GetMePrivilegesError::NotFound(body),
+            405u16 => iface_me::GetMePrivilegesError::MethodNotAllowed(body),
+            406u16 => iface_me::GetMePrivilegesError::NotAcceptable(body),
+            500u16 => iface_me::GetMePrivilegesError::InternalServerError(body),
+            502u16 => iface_me::GetMePrivilegesError::BadGateway(body),
+            503u16 => iface_me::GetMePrivilegesError::ServiceUnavailable(body),
+            _ => iface_me::GetMePrivilegesError::Other(body),
+        },
+        crate::runtime::DispatchError::Transport(m) => iface_me::GetMePrivilegesError::Other(m),
+    }
+}
+
+fn iface_me__get_me_questions__ok(body: String) -> Result<iface_me::Questions, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match iface_me__questions__from_json(&v) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_me__get_me_questions__err(e: crate::runtime::DispatchError) -> iface_me::GetMeQuestionsError {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => match status {
+            400u16 => iface_me::GetMeQuestionsError::BadRequest(body),
+            401u16 => iface_me::GetMeQuestionsError::Unauthorized(body),
+            402u16 => iface_me::GetMeQuestionsError::PaymentRequired(body),
+            403u16 => iface_me::GetMeQuestionsError::Forbidden(body),
+            404u16 => iface_me::GetMeQuestionsError::NotFound(body),
+            405u16 => iface_me::GetMeQuestionsError::MethodNotAllowed(body),
+            406u16 => iface_me::GetMeQuestionsError::NotAcceptable(body),
+            500u16 => iface_me::GetMeQuestionsError::InternalServerError(body),
+            502u16 => iface_me::GetMeQuestionsError::BadGateway(body),
+            503u16 => iface_me::GetMeQuestionsError::ServiceUnavailable(body),
+            _ => iface_me::GetMeQuestionsError::Other(body),
+        },
+        crate::runtime::DispatchError::Transport(m) => iface_me::GetMeQuestionsError::Other(m),
+    }
+}
+
+fn iface_me__get_me_questions_featured__ok(body: String) -> Result<iface_me::Questions, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match iface_me__questions__from_json(&v) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_me__get_me_questions_featured__err(e: crate::runtime::DispatchError) -> iface_me::GetMeQuestionsFeaturedError {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => match status {
+            400u16 => iface_me::GetMeQuestionsFeaturedError::BadRequest(body),
+            401u16 => iface_me::GetMeQuestionsFeaturedError::Unauthorized(body),
+            402u16 => iface_me::GetMeQuestionsFeaturedError::PaymentRequired(body),
+            403u16 => iface_me::GetMeQuestionsFeaturedError::Forbidden(body),
+            404u16 => iface_me::GetMeQuestionsFeaturedError::NotFound(body),
+            405u16 => iface_me::GetMeQuestionsFeaturedError::MethodNotAllowed(body),
+            406u16 => iface_me::GetMeQuestionsFeaturedError::NotAcceptable(body),
+            500u16 => iface_me::GetMeQuestionsFeaturedError::InternalServerError(body),
+            502u16 => iface_me::GetMeQuestionsFeaturedError::BadGateway(body),
+            503u16 => iface_me::GetMeQuestionsFeaturedError::ServiceUnavailable(body),
+            _ => iface_me::GetMeQuestionsFeaturedError::Other(body),
+        },
+        crate::runtime::DispatchError::Transport(m) => iface_me::GetMeQuestionsFeaturedError::Other(m),
+    }
+}
+
+fn iface_me__get_me_questions_no_answers__ok(body: String) -> Result<iface_me::Questions, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match iface_me__questions__from_json(&v) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_me__get_me_questions_no_answers__err(e: crate::runtime::DispatchError) -> iface_me::GetMeQuestionsNoAnswersError {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => match status {
+            400u16 => iface_me::GetMeQuestionsNoAnswersError::BadRequest(body),
+            401u16 => iface_me::GetMeQuestionsNoAnswersError::Unauthorized(body),
+            402u16 => iface_me::GetMeQuestionsNoAnswersError::PaymentRequired(body),
+            403u16 => iface_me::GetMeQuestionsNoAnswersError::Forbidden(body),
+            404u16 => iface_me::GetMeQuestionsNoAnswersError::NotFound(body),
+            405u16 => iface_me::GetMeQuestionsNoAnswersError::MethodNotAllowed(body),
+            406u16 => iface_me::GetMeQuestionsNoAnswersError::NotAcceptable(body),
+            500u16 => iface_me::GetMeQuestionsNoAnswersError::InternalServerError(body),
+            502u16 => iface_me::GetMeQuestionsNoAnswersError::BadGateway(body),
+            503u16 => iface_me::GetMeQuestionsNoAnswersError::ServiceUnavailable(body),
+            _ => iface_me::GetMeQuestionsNoAnswersError::Other(body),
+        },
+        crate::runtime::DispatchError::Transport(m) => iface_me::GetMeQuestionsNoAnswersError::Other(m),
+    }
+}
+
+fn iface_me__get_me_questions_unaccepted__ok(body: String) -> Result<iface_me::Questions, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match iface_me__questions__from_json(&v) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_me__get_me_questions_unaccepted__err(e: crate::runtime::DispatchError) -> iface_me::GetMeQuestionsUnacceptedError {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => match status {
+            400u16 => iface_me::GetMeQuestionsUnacceptedError::BadRequest(body),
+            401u16 => iface_me::GetMeQuestionsUnacceptedError::Unauthorized(body),
+            402u16 => iface_me::GetMeQuestionsUnacceptedError::PaymentRequired(body),
+            403u16 => iface_me::GetMeQuestionsUnacceptedError::Forbidden(body),
+            404u16 => iface_me::GetMeQuestionsUnacceptedError::NotFound(body),
+            405u16 => iface_me::GetMeQuestionsUnacceptedError::MethodNotAllowed(body),
+            406u16 => iface_me::GetMeQuestionsUnacceptedError::NotAcceptable(body),
+            500u16 => iface_me::GetMeQuestionsUnacceptedError::InternalServerError(body),
+            502u16 => iface_me::GetMeQuestionsUnacceptedError::BadGateway(body),
+            503u16 => iface_me::GetMeQuestionsUnacceptedError::ServiceUnavailable(body),
+            _ => iface_me::GetMeQuestionsUnacceptedError::Other(body),
+        },
+        crate::runtime::DispatchError::Transport(m) => iface_me::GetMeQuestionsUnacceptedError::Other(m),
+    }
+}
+
+fn iface_me__get_me_questions_unanswered__ok(body: String) -> Result<iface_me::Questions, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match iface_me__questions__from_json(&v) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_me__get_me_questions_unanswered__err(e: crate::runtime::DispatchError) -> iface_me::GetMeQuestionsUnansweredError {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => match status {
+            400u16 => iface_me::GetMeQuestionsUnansweredError::BadRequest(body),
+            401u16 => iface_me::GetMeQuestionsUnansweredError::Unauthorized(body),
+            402u16 => iface_me::GetMeQuestionsUnansweredError::PaymentRequired(body),
+            403u16 => iface_me::GetMeQuestionsUnansweredError::Forbidden(body),
+            404u16 => iface_me::GetMeQuestionsUnansweredError::NotFound(body),
+            405u16 => iface_me::GetMeQuestionsUnansweredError::MethodNotAllowed(body),
+            406u16 => iface_me::GetMeQuestionsUnansweredError::NotAcceptable(body),
+            500u16 => iface_me::GetMeQuestionsUnansweredError::InternalServerError(body),
+            502u16 => iface_me::GetMeQuestionsUnansweredError::BadGateway(body),
+            503u16 => iface_me::GetMeQuestionsUnansweredError::ServiceUnavailable(body),
+            _ => iface_me::GetMeQuestionsUnansweredError::Other(body),
+        },
+        crate::runtime::DispatchError::Transport(m) => iface_me::GetMeQuestionsUnansweredError::Other(m),
+    }
+}
+
+fn iface_me__get_me_reputation__ok(body: String) -> Result<iface_me::ReputationChanges, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match iface_me__reputation_changes__from_json(&v) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_me__get_me_reputation__err(e: crate::runtime::DispatchError) -> iface_me::GetMeReputationError {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => match status {
+            400u16 => iface_me::GetMeReputationError::BadRequest(body),
+            401u16 => iface_me::GetMeReputationError::Unauthorized(body),
+            402u16 => iface_me::GetMeReputationError::PaymentRequired(body),
+            403u16 => iface_me::GetMeReputationError::Forbidden(body),
+            404u16 => iface_me::GetMeReputationError::NotFound(body),
+            405u16 => iface_me::GetMeReputationError::MethodNotAllowed(body),
+            406u16 => iface_me::GetMeReputationError::NotAcceptable(body),
+            500u16 => iface_me::GetMeReputationError::InternalServerError(body),
+            502u16 => iface_me::GetMeReputationError::BadGateway(body),
+            503u16 => iface_me::GetMeReputationError::ServiceUnavailable(body),
+            _ => iface_me::GetMeReputationError::Other(body),
+        },
+        crate::runtime::DispatchError::Transport(m) => iface_me::GetMeReputationError::Other(m),
+    }
+}
+
+fn iface_me__get_me_reputation_history__ok(body: String) -> Result<iface_me::ReputationHistory, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match iface_me__reputation_history__from_json(&v) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_me__get_me_reputation_history__err(e: crate::runtime::DispatchError) -> iface_me::GetMeReputationHistoryError {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => match status {
+            400u16 => iface_me::GetMeReputationHistoryError::BadRequest(body),
+            401u16 => iface_me::GetMeReputationHistoryError::Unauthorized(body),
+            402u16 => iface_me::GetMeReputationHistoryError::PaymentRequired(body),
+            403u16 => iface_me::GetMeReputationHistoryError::Forbidden(body),
+            404u16 => iface_me::GetMeReputationHistoryError::NotFound(body),
+            405u16 => iface_me::GetMeReputationHistoryError::MethodNotAllowed(body),
+            406u16 => iface_me::GetMeReputationHistoryError::NotAcceptable(body),
+            500u16 => iface_me::GetMeReputationHistoryError::InternalServerError(body),
+            502u16 => iface_me::GetMeReputationHistoryError::BadGateway(body),
+            503u16 => iface_me::GetMeReputationHistoryError::ServiceUnavailable(body),
+            _ => iface_me::GetMeReputationHistoryError::Other(body),
+        },
+        crate::runtime::DispatchError::Transport(m) => iface_me::GetMeReputationHistoryError::Other(m),
+    }
+}
+
+fn iface_me__get_me_reputation_history_full__ok(body: String) -> Result<iface_me::ReputationHistory, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match iface_me__reputation_history__from_json(&v) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_me__get_me_reputation_history_full__err(e: crate::runtime::DispatchError) -> iface_me::GetMeReputationHistoryFullError {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => match status {
+            400u16 => iface_me::GetMeReputationHistoryFullError::BadRequest(body),
+            401u16 => iface_me::GetMeReputationHistoryFullError::Unauthorized(body),
+            402u16 => iface_me::GetMeReputationHistoryFullError::PaymentRequired(body),
+            403u16 => iface_me::GetMeReputationHistoryFullError::Forbidden(body),
+            404u16 => iface_me::GetMeReputationHistoryFullError::NotFound(body),
+            405u16 => iface_me::GetMeReputationHistoryFullError::MethodNotAllowed(body),
+            406u16 => iface_me::GetMeReputationHistoryFullError::NotAcceptable(body),
+            500u16 => iface_me::GetMeReputationHistoryFullError::InternalServerError(body),
+            502u16 => iface_me::GetMeReputationHistoryFullError::BadGateway(body),
+            503u16 => iface_me::GetMeReputationHistoryFullError::ServiceUnavailable(body),
+            _ => iface_me::GetMeReputationHistoryFullError::Other(body),
+        },
+        crate::runtime::DispatchError::Transport(m) => iface_me::GetMeReputationHistoryFullError::Other(m),
+    }
+}
+
+fn iface_me__get_me_suggested_edits__ok(body: String) -> Result<iface_me::SuggestedEdits, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match iface_me__suggested_edits__from_json(&v) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_me__get_me_suggested_edits__err(e: crate::runtime::DispatchError) -> iface_me::GetMeSuggestedEditsError {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => match status {
+            400u16 => iface_me::GetMeSuggestedEditsError::BadRequest(body),
+            401u16 => iface_me::GetMeSuggestedEditsError::Unauthorized(body),
+            402u16 => iface_me::GetMeSuggestedEditsError::PaymentRequired(body),
+            403u16 => iface_me::GetMeSuggestedEditsError::Forbidden(body),
+            404u16 => iface_me::GetMeSuggestedEditsError::NotFound(body),
+            405u16 => iface_me::GetMeSuggestedEditsError::MethodNotAllowed(body),
+            406u16 => iface_me::GetMeSuggestedEditsError::NotAcceptable(body),
+            500u16 => iface_me::GetMeSuggestedEditsError::InternalServerError(body),
+            502u16 => iface_me::GetMeSuggestedEditsError::BadGateway(body),
+            503u16 => iface_me::GetMeSuggestedEditsError::ServiceUnavailable(body),
+            _ => iface_me::GetMeSuggestedEditsError::Other(body),
+        },
+        crate::runtime::DispatchError::Transport(m) => iface_me::GetMeSuggestedEditsError::Other(m),
+    }
+}
+
+fn iface_me__get_me_tags__ok(body: String) -> Result<iface_me::Tags, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match iface_me__tags__from_json(&v) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_me__get_me_tags__err(e: crate::runtime::DispatchError) -> iface_me::GetMeTagsError {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => match status {
+            400u16 => iface_me::GetMeTagsError::BadRequest(body),
+            401u16 => iface_me::GetMeTagsError::Unauthorized(body),
+            402u16 => iface_me::GetMeTagsError::PaymentRequired(body),
+            403u16 => iface_me::GetMeTagsError::Forbidden(body),
+            404u16 => iface_me::GetMeTagsError::NotFound(body),
+            405u16 => iface_me::GetMeTagsError::MethodNotAllowed(body),
+            406u16 => iface_me::GetMeTagsError::NotAcceptable(body),
+            500u16 => iface_me::GetMeTagsError::InternalServerError(body),
+            502u16 => iface_me::GetMeTagsError::BadGateway(body),
+            503u16 => iface_me::GetMeTagsError::ServiceUnavailable(body),
+            _ => iface_me::GetMeTagsError::Other(body),
+        },
+        crate::runtime::DispatchError::Transport(m) => iface_me::GetMeTagsError::Other(m),
+    }
+}
+
+fn iface_me__get_me_tags_tags_top_answers__ok(body: String) -> Result<iface_me::Answers, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match iface_me__answers__from_json(&v) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_me__get_me_tags_tags_top_answers__err(e: crate::runtime::DispatchError) -> iface_me::GetMeTagsTagsTopAnswersError {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => match status {
+            400u16 => iface_me::GetMeTagsTagsTopAnswersError::BadRequest(body),
+            401u16 => iface_me::GetMeTagsTagsTopAnswersError::Unauthorized(body),
+            402u16 => iface_me::GetMeTagsTagsTopAnswersError::PaymentRequired(body),
+            403u16 => iface_me::GetMeTagsTagsTopAnswersError::Forbidden(body),
+            404u16 => iface_me::GetMeTagsTagsTopAnswersError::NotFound(body),
+            405u16 => iface_me::GetMeTagsTagsTopAnswersError::MethodNotAllowed(body),
+            406u16 => iface_me::GetMeTagsTagsTopAnswersError::NotAcceptable(body),
+            500u16 => iface_me::GetMeTagsTagsTopAnswersError::InternalServerError(body),
+            502u16 => iface_me::GetMeTagsTagsTopAnswersError::BadGateway(body),
+            503u16 => iface_me::GetMeTagsTagsTopAnswersError::ServiceUnavailable(body),
+            _ => iface_me::GetMeTagsTagsTopAnswersError::Other(body),
+        },
+        crate::runtime::DispatchError::Transport(m) => iface_me::GetMeTagsTagsTopAnswersError::Other(m),
+    }
+}
+
+fn iface_me__get_me_tags_tags_top_questions__ok(body: String) -> Result<iface_me::Questions, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match iface_me__questions__from_json(&v) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_me__get_me_tags_tags_top_questions__err(e: crate::runtime::DispatchError) -> iface_me::GetMeTagsTagsTopQuestionsError {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => match status {
+            400u16 => iface_me::GetMeTagsTagsTopQuestionsError::BadRequest(body),
+            401u16 => iface_me::GetMeTagsTagsTopQuestionsError::Unauthorized(body),
+            402u16 => iface_me::GetMeTagsTagsTopQuestionsError::PaymentRequired(body),
+            403u16 => iface_me::GetMeTagsTagsTopQuestionsError::Forbidden(body),
+            404u16 => iface_me::GetMeTagsTagsTopQuestionsError::NotFound(body),
+            405u16 => iface_me::GetMeTagsTagsTopQuestionsError::MethodNotAllowed(body),
+            406u16 => iface_me::GetMeTagsTagsTopQuestionsError::NotAcceptable(body),
+            500u16 => iface_me::GetMeTagsTagsTopQuestionsError::InternalServerError(body),
+            502u16 => iface_me::GetMeTagsTagsTopQuestionsError::BadGateway(body),
+            503u16 => iface_me::GetMeTagsTagsTopQuestionsError::ServiceUnavailable(body),
+            _ => iface_me::GetMeTagsTagsTopQuestionsError::Other(body),
+        },
+        crate::runtime::DispatchError::Transport(m) => iface_me::GetMeTagsTagsTopQuestionsError::Other(m),
+    }
+}
+
+fn iface_me__get_me_timeline__ok(body: String) -> Result<iface_me::UserTimelineObjects, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match iface_me__user_timeline_objects__from_json(&v) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_me__get_me_timeline__err(e: crate::runtime::DispatchError) -> iface_me::GetMeTimelineError {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => match status {
+            400u16 => iface_me::GetMeTimelineError::BadRequest(body),
+            401u16 => iface_me::GetMeTimelineError::Unauthorized(body),
+            402u16 => iface_me::GetMeTimelineError::PaymentRequired(body),
+            403u16 => iface_me::GetMeTimelineError::Forbidden(body),
+            404u16 => iface_me::GetMeTimelineError::NotFound(body),
+            405u16 => iface_me::GetMeTimelineError::MethodNotAllowed(body),
+            406u16 => iface_me::GetMeTimelineError::NotAcceptable(body),
+            500u16 => iface_me::GetMeTimelineError::InternalServerError(body),
+            502u16 => iface_me::GetMeTimelineError::BadGateway(body),
+            503u16 => iface_me::GetMeTimelineError::ServiceUnavailable(body),
+            _ => iface_me::GetMeTimelineError::Other(body),
+        },
+        crate::runtime::DispatchError::Transport(m) => iface_me::GetMeTimelineError::Other(m),
+    }
+}
+
+fn iface_me__get_me_top_answer_tags__ok(body: String) -> Result<iface_me::TopTagObjects, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match iface_me__top_tag_objects__from_json(&v) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_me__get_me_top_answer_tags__err(e: crate::runtime::DispatchError) -> iface_me::GetMeTopAnswerTagsError {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => match status {
+            400u16 => iface_me::GetMeTopAnswerTagsError::BadRequest(body),
+            401u16 => iface_me::GetMeTopAnswerTagsError::Unauthorized(body),
+            402u16 => iface_me::GetMeTopAnswerTagsError::PaymentRequired(body),
+            403u16 => iface_me::GetMeTopAnswerTagsError::Forbidden(body),
+            404u16 => iface_me::GetMeTopAnswerTagsError::NotFound(body),
+            405u16 => iface_me::GetMeTopAnswerTagsError::MethodNotAllowed(body),
+            406u16 => iface_me::GetMeTopAnswerTagsError::NotAcceptable(body),
+            500u16 => iface_me::GetMeTopAnswerTagsError::InternalServerError(body),
+            502u16 => iface_me::GetMeTopAnswerTagsError::BadGateway(body),
+            503u16 => iface_me::GetMeTopAnswerTagsError::ServiceUnavailable(body),
+            _ => iface_me::GetMeTopAnswerTagsError::Other(body),
+        },
+        crate::runtime::DispatchError::Transport(m) => iface_me::GetMeTopAnswerTagsError::Other(m),
+    }
+}
+
+fn iface_me__get_me_top_question_tags__ok(body: String) -> Result<iface_me::TopTagObjects, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match iface_me__top_tag_objects__from_json(&v) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_me__get_me_top_question_tags__err(e: crate::runtime::DispatchError) -> iface_me::GetMeTopQuestionTagsError {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => match status {
+            400u16 => iface_me::GetMeTopQuestionTagsError::BadRequest(body),
+            401u16 => iface_me::GetMeTopQuestionTagsError::Unauthorized(body),
+            402u16 => iface_me::GetMeTopQuestionTagsError::PaymentRequired(body),
+            403u16 => iface_me::GetMeTopQuestionTagsError::Forbidden(body),
+            404u16 => iface_me::GetMeTopQuestionTagsError::NotFound(body),
+            405u16 => iface_me::GetMeTopQuestionTagsError::MethodNotAllowed(body),
+            406u16 => iface_me::GetMeTopQuestionTagsError::NotAcceptable(body),
+            500u16 => iface_me::GetMeTopQuestionTagsError::InternalServerError(body),
+            502u16 => iface_me::GetMeTopQuestionTagsError::BadGateway(body),
+            503u16 => iface_me::GetMeTopQuestionTagsError::ServiceUnavailable(body),
+            _ => iface_me::GetMeTopQuestionTagsError::Other(body),
+        },
+        crate::runtime::DispatchError::Transport(m) => iface_me::GetMeTopQuestionTagsError::Other(m),
+    }
+}
+
+fn iface_me__get_me_write_permissions__ok(body: String) -> Result<iface_me::WritePermissions, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match iface_me__write_permissions__from_json(&v) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_me__get_me_write_permissions__err(e: crate::runtime::DispatchError) -> iface_me::GetMeWritePermissionsError {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => match status {
+            400u16 => iface_me::GetMeWritePermissionsError::BadRequest(body),
+            401u16 => iface_me::GetMeWritePermissionsError::Unauthorized(body),
+            402u16 => iface_me::GetMeWritePermissionsError::PaymentRequired(body),
+            403u16 => iface_me::GetMeWritePermissionsError::Forbidden(body),
+            404u16 => iface_me::GetMeWritePermissionsError::NotFound(body),
+            405u16 => iface_me::GetMeWritePermissionsError::MethodNotAllowed(body),
+            406u16 => iface_me::GetMeWritePermissionsError::NotAcceptable(body),
+            500u16 => iface_me::GetMeWritePermissionsError::InternalServerError(body),
+            502u16 => iface_me::GetMeWritePermissionsError::BadGateway(body),
+            503u16 => iface_me::GetMeWritePermissionsError::ServiceUnavailable(body),
+            _ => iface_me::GetMeWritePermissionsError::Other(body),
+        },
+        crate::runtime::DispatchError::Transport(m) => iface_me::GetMeWritePermissionsError::Other(m),
+    }
+}
+
 impl iface_me::Guest for crate::Component {
-    fn get_me(params: iface_me::GetMeParams) -> Result<String, String> {
+    fn get_me(params: iface_me::GetMeParams) -> Result<iface_me::User, iface_me::GetMeError> {
         let json = iface_me__get_me_params__to_json(&params);
-        dispatch(&OP_ME_GET_ME, json)
+        match dispatch(&OP_ME_GET_ME, json).and_then(iface_me__get_me__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_me__get_me__err(e)),
+        }
     }
-    fn get_me_answers(params: iface_me::GetMeAnswersParams) -> Result<String, String> {
+    fn get_me_answers(params: iface_me::GetMeAnswersParams) -> Result<iface_me::Answers, iface_me::GetMeAnswersError> {
         let json = iface_me__get_me_answers_params__to_json(&params);
-        dispatch(&OP_ME_GET_ME_ANSWERS, json)
+        match dispatch(&OP_ME_GET_ME_ANSWERS, json).and_then(iface_me__get_me_answers__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_me__get_me_answers__err(e)),
+        }
     }
-    fn get_me_associated(params: iface_me::GetMeAssociatedParams) -> Result<String, String> {
+    fn get_me_associated(params: iface_me::GetMeAssociatedParams) -> Result<iface_me::NetworkUsers, iface_me::GetMeAssociatedError> {
         let json = iface_me__get_me_associated_params__to_json(&params);
-        dispatch(&OP_ME_GET_ME_ASSOCIATED, json)
+        match dispatch(&OP_ME_GET_ME_ASSOCIATED, json).and_then(iface_me__get_me_associated__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_me__get_me_associated__err(e)),
+        }
     }
-    fn get_me_badges(params: iface_me::GetMeBadgesParams) -> Result<String, String> {
+    fn get_me_badges(params: iface_me::GetMeBadgesParams) -> Result<iface_me::Badges, iface_me::GetMeBadgesError> {
         let json = iface_me__get_me_badges_params__to_json(&params);
-        dispatch(&OP_ME_GET_ME_BADGES, json)
+        match dispatch(&OP_ME_GET_ME_BADGES, json).and_then(iface_me__get_me_badges__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_me__get_me_badges__err(e)),
+        }
     }
-    fn get_me_comments(params: iface_me::GetMeCommentsParams) -> Result<String, String> {
+    fn get_me_comments(params: iface_me::GetMeCommentsParams) -> Result<iface_me::Comments, iface_me::GetMeCommentsError> {
         let json = iface_me__get_me_comments_params__to_json(&params);
-        dispatch(&OP_ME_GET_ME_COMMENTS, json)
+        match dispatch(&OP_ME_GET_ME_COMMENTS, json).and_then(iface_me__get_me_comments__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_me__get_me_comments__err(e)),
+        }
     }
-    fn get_me_comments_to_id(params: iface_me::GetMeCommentsToIdParams) -> Result<String, String> {
+    fn get_me_comments_to_id(params: iface_me::GetMeCommentsToIdParams) -> Result<iface_me::Comments, iface_me::GetMeCommentsToIdError> {
         let json = iface_me__get_me_comments_to_id_params__to_json(&params);
-        dispatch(&OP_ME_GET_ME_COMMENTS_TO_ID, json)
+        match dispatch(&OP_ME_GET_ME_COMMENTS_TO_ID, json).and_then(iface_me__get_me_comments_to_id__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_me__get_me_comments_to_id__err(e)),
+        }
     }
-    fn get_me_favorites(params: iface_me::GetMeFavoritesParams) -> Result<String, String> {
+    fn get_me_favorites(params: iface_me::GetMeFavoritesParams) -> Result<iface_me::Questions, iface_me::GetMeFavoritesError> {
         let json = iface_me__get_me_favorites_params__to_json(&params);
-        dispatch(&OP_ME_GET_ME_FAVORITES, json)
+        match dispatch(&OP_ME_GET_ME_FAVORITES, json).and_then(iface_me__get_me_favorites__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_me__get_me_favorites__err(e)),
+        }
     }
-    fn get_me_inbox(params: iface_me::GetMeInboxParams) -> Result<String, String> {
+    fn get_me_inbox(params: iface_me::GetMeInboxParams) -> Result<iface_me::InboxItems, iface_me::GetMeInboxError> {
         let json = iface_me__get_me_inbox_params__to_json(&params);
-        dispatch(&OP_ME_GET_ME_INBOX, json)
+        match dispatch(&OP_ME_GET_ME_INBOX, json).and_then(iface_me__get_me_inbox__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_me__get_me_inbox__err(e)),
+        }
     }
-    fn get_me_inbox_unread(params: iface_me::GetMeInboxUnreadParams) -> Result<String, String> {
+    fn get_me_inbox_unread(params: iface_me::GetMeInboxUnreadParams) -> Result<iface_me::InboxItems, iface_me::GetMeInboxUnreadError> {
         let json = iface_me__get_me_inbox_unread_params__to_json(&params);
-        dispatch(&OP_ME_GET_ME_INBOX_UNREAD, json)
+        match dispatch(&OP_ME_GET_ME_INBOX_UNREAD, json).and_then(iface_me__get_me_inbox_unread__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_me__get_me_inbox_unread__err(e)),
+        }
     }
-    fn get_me_mentioned(params: iface_me::GetMeMentionedParams) -> Result<String, String> {
+    fn get_me_mentioned(params: iface_me::GetMeMentionedParams) -> Result<iface_me::Comments, iface_me::GetMeMentionedError> {
         let json = iface_me__get_me_mentioned_params__to_json(&params);
-        dispatch(&OP_ME_GET_ME_MENTIONED, json)
+        match dispatch(&OP_ME_GET_ME_MENTIONED, json).and_then(iface_me__get_me_mentioned__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_me__get_me_mentioned__err(e)),
+        }
     }
-    fn get_me_merges(params: iface_me::GetMeMergesParams) -> Result<String, String> {
+    fn get_me_merges(params: iface_me::GetMeMergesParams) -> Result<iface_me::AccountMerge, iface_me::GetMeMergesError> {
         let json = iface_me__get_me_merges_params__to_json(&params);
-        dispatch(&OP_ME_GET_ME_MERGES, json)
+        match dispatch(&OP_ME_GET_ME_MERGES, json).and_then(iface_me__get_me_merges__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_me__get_me_merges__err(e)),
+        }
     }
-    fn get_me_notifications(params: iface_me::GetMeNotificationsParams) -> Result<String, String> {
+    fn get_me_notifications(params: iface_me::GetMeNotificationsParams) -> Result<iface_me::Notifications, iface_me::GetMeNotificationsError> {
         let json = iface_me__get_me_notifications_params__to_json(&params);
-        dispatch(&OP_ME_GET_ME_NOTIFICATIONS, json)
+        match dispatch(&OP_ME_GET_ME_NOTIFICATIONS, json).and_then(iface_me__get_me_notifications__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_me__get_me_notifications__err(e)),
+        }
     }
-    fn get_me_notifications_unread(params: iface_me::GetMeNotificationsUnreadParams) -> Result<String, String> {
+    fn get_me_notifications_unread(params: iface_me::GetMeNotificationsUnreadParams) -> Result<iface_me::Notifications, iface_me::GetMeNotificationsUnreadError> {
         let json = iface_me__get_me_notifications_unread_params__to_json(&params);
-        dispatch(&OP_ME_GET_ME_NOTIFICATIONS_UNREAD, json)
+        match dispatch(&OP_ME_GET_ME_NOTIFICATIONS_UNREAD, json).and_then(iface_me__get_me_notifications_unread__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_me__get_me_notifications_unread__err(e)),
+        }
     }
-    fn get_me_privileges(params: iface_me::GetMePrivilegesParams) -> Result<String, String> {
+    fn get_me_privileges(params: iface_me::GetMePrivilegesParams) -> Result<iface_me::Privileges, iface_me::GetMePrivilegesError> {
         let json = iface_me__get_me_privileges_params__to_json(&params);
-        dispatch(&OP_ME_GET_ME_PRIVILEGES, json)
+        match dispatch(&OP_ME_GET_ME_PRIVILEGES, json).and_then(iface_me__get_me_privileges__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_me__get_me_privileges__err(e)),
+        }
     }
-    fn get_me_questions(params: iface_me::GetMeQuestionsParams) -> Result<String, String> {
+    fn get_me_questions(params: iface_me::GetMeQuestionsParams) -> Result<iface_me::Questions, iface_me::GetMeQuestionsError> {
         let json = iface_me__get_me_questions_params__to_json(&params);
-        dispatch(&OP_ME_GET_ME_QUESTIONS, json)
+        match dispatch(&OP_ME_GET_ME_QUESTIONS, json).and_then(iface_me__get_me_questions__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_me__get_me_questions__err(e)),
+        }
     }
-    fn get_me_questions_featured(params: iface_me::GetMeQuestionsFeaturedParams) -> Result<String, String> {
+    fn get_me_questions_featured(params: iface_me::GetMeQuestionsFeaturedParams) -> Result<iface_me::Questions, iface_me::GetMeQuestionsFeaturedError> {
         let json = iface_me__get_me_questions_featured_params__to_json(&params);
-        dispatch(&OP_ME_GET_ME_QUESTIONS_FEATURED, json)
+        match dispatch(&OP_ME_GET_ME_QUESTIONS_FEATURED, json).and_then(iface_me__get_me_questions_featured__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_me__get_me_questions_featured__err(e)),
+        }
     }
-    fn get_me_questions_no_answers(params: iface_me::GetMeQuestionsNoAnswersParams) -> Result<String, String> {
+    fn get_me_questions_no_answers(params: iface_me::GetMeQuestionsNoAnswersParams) -> Result<iface_me::Questions, iface_me::GetMeQuestionsNoAnswersError> {
         let json = iface_me__get_me_questions_no_answers_params__to_json(&params);
-        dispatch(&OP_ME_GET_ME_QUESTIONS_NO_ANSWERS, json)
+        match dispatch(&OP_ME_GET_ME_QUESTIONS_NO_ANSWERS, json).and_then(iface_me__get_me_questions_no_answers__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_me__get_me_questions_no_answers__err(e)),
+        }
     }
-    fn get_me_questions_unaccepted(params: iface_me::GetMeQuestionsUnacceptedParams) -> Result<String, String> {
+    fn get_me_questions_unaccepted(params: iface_me::GetMeQuestionsUnacceptedParams) -> Result<iface_me::Questions, iface_me::GetMeQuestionsUnacceptedError> {
         let json = iface_me__get_me_questions_unaccepted_params__to_json(&params);
-        dispatch(&OP_ME_GET_ME_QUESTIONS_UNACCEPTED, json)
+        match dispatch(&OP_ME_GET_ME_QUESTIONS_UNACCEPTED, json).and_then(iface_me__get_me_questions_unaccepted__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_me__get_me_questions_unaccepted__err(e)),
+        }
     }
-    fn get_me_questions_unanswered(params: iface_me::GetMeQuestionsUnansweredParams) -> Result<String, String> {
+    fn get_me_questions_unanswered(params: iface_me::GetMeQuestionsUnansweredParams) -> Result<iface_me::Questions, iface_me::GetMeQuestionsUnansweredError> {
         let json = iface_me__get_me_questions_unanswered_params__to_json(&params);
-        dispatch(&OP_ME_GET_ME_QUESTIONS_UNANSWERED, json)
+        match dispatch(&OP_ME_GET_ME_QUESTIONS_UNANSWERED, json).and_then(iface_me__get_me_questions_unanswered__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_me__get_me_questions_unanswered__err(e)),
+        }
     }
-    fn get_me_reputation(params: iface_me::GetMeReputationParams) -> Result<String, String> {
+    fn get_me_reputation(params: iface_me::GetMeReputationParams) -> Result<iface_me::ReputationChanges, iface_me::GetMeReputationError> {
         let json = iface_me__get_me_reputation_params__to_json(&params);
-        dispatch(&OP_ME_GET_ME_REPUTATION, json)
+        match dispatch(&OP_ME_GET_ME_REPUTATION, json).and_then(iface_me__get_me_reputation__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_me__get_me_reputation__err(e)),
+        }
     }
-    fn get_me_reputation_history(params: iface_me::GetMeReputationHistoryParams) -> Result<String, String> {
+    fn get_me_reputation_history(params: iface_me::GetMeReputationHistoryParams) -> Result<iface_me::ReputationHistory, iface_me::GetMeReputationHistoryError> {
         let json = iface_me__get_me_reputation_history_params__to_json(&params);
-        dispatch(&OP_ME_GET_ME_REPUTATION_HISTORY, json)
+        match dispatch(&OP_ME_GET_ME_REPUTATION_HISTORY, json).and_then(iface_me__get_me_reputation_history__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_me__get_me_reputation_history__err(e)),
+        }
     }
-    fn get_me_reputation_history_full(params: iface_me::GetMeReputationHistoryFullParams) -> Result<String, String> {
+    fn get_me_reputation_history_full(params: iface_me::GetMeReputationHistoryFullParams) -> Result<iface_me::ReputationHistory, iface_me::GetMeReputationHistoryFullError> {
         let json = iface_me__get_me_reputation_history_full_params__to_json(&params);
-        dispatch(&OP_ME_GET_ME_REPUTATION_HISTORY_FULL, json)
+        match dispatch(&OP_ME_GET_ME_REPUTATION_HISTORY_FULL, json).and_then(iface_me__get_me_reputation_history_full__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_me__get_me_reputation_history_full__err(e)),
+        }
     }
-    fn get_me_suggested_edits(params: iface_me::GetMeSuggestedEditsParams) -> Result<String, String> {
+    fn get_me_suggested_edits(params: iface_me::GetMeSuggestedEditsParams) -> Result<iface_me::SuggestedEdits, iface_me::GetMeSuggestedEditsError> {
         let json = iface_me__get_me_suggested_edits_params__to_json(&params);
-        dispatch(&OP_ME_GET_ME_SUGGESTED_EDITS, json)
+        match dispatch(&OP_ME_GET_ME_SUGGESTED_EDITS, json).and_then(iface_me__get_me_suggested_edits__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_me__get_me_suggested_edits__err(e)),
+        }
     }
-    fn get_me_tags(params: iface_me::GetMeTagsParams) -> Result<String, String> {
+    fn get_me_tags(params: iface_me::GetMeTagsParams) -> Result<iface_me::Tags, iface_me::GetMeTagsError> {
         let json = iface_me__get_me_tags_params__to_json(&params);
-        dispatch(&OP_ME_GET_ME_TAGS, json)
+        match dispatch(&OP_ME_GET_ME_TAGS, json).and_then(iface_me__get_me_tags__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_me__get_me_tags__err(e)),
+        }
     }
-    fn get_me_tags_tags_top_answers(params: iface_me::GetMeTagsTagsTopAnswersParams) -> Result<String, String> {
+    fn get_me_tags_tags_top_answers(params: iface_me::GetMeTagsTagsTopAnswersParams) -> Result<iface_me::Answers, iface_me::GetMeTagsTagsTopAnswersError> {
         let json = iface_me__get_me_tags_tags_top_answers_params__to_json(&params);
-        dispatch(&OP_ME_GET_ME_TAGS_TAGS_TOP_ANSWERS, json)
+        match dispatch(&OP_ME_GET_ME_TAGS_TAGS_TOP_ANSWERS, json).and_then(iface_me__get_me_tags_tags_top_answers__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_me__get_me_tags_tags_top_answers__err(e)),
+        }
     }
-    fn get_me_tags_tags_top_questions(params: iface_me::GetMeTagsTagsTopQuestionsParams) -> Result<String, String> {
+    fn get_me_tags_tags_top_questions(params: iface_me::GetMeTagsTagsTopQuestionsParams) -> Result<iface_me::Questions, iface_me::GetMeTagsTagsTopQuestionsError> {
         let json = iface_me__get_me_tags_tags_top_questions_params__to_json(&params);
-        dispatch(&OP_ME_GET_ME_TAGS_TAGS_TOP_QUESTIONS, json)
+        match dispatch(&OP_ME_GET_ME_TAGS_TAGS_TOP_QUESTIONS, json).and_then(iface_me__get_me_tags_tags_top_questions__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_me__get_me_tags_tags_top_questions__err(e)),
+        }
     }
-    fn get_me_timeline(params: iface_me::GetMeTimelineParams) -> Result<String, String> {
+    fn get_me_timeline(params: iface_me::GetMeTimelineParams) -> Result<iface_me::UserTimelineObjects, iface_me::GetMeTimelineError> {
         let json = iface_me__get_me_timeline_params__to_json(&params);
-        dispatch(&OP_ME_GET_ME_TIMELINE, json)
+        match dispatch(&OP_ME_GET_ME_TIMELINE, json).and_then(iface_me__get_me_timeline__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_me__get_me_timeline__err(e)),
+        }
     }
-    fn get_me_top_answer_tags(params: iface_me::GetMeTopAnswerTagsParams) -> Result<String, String> {
+    fn get_me_top_answer_tags(params: iface_me::GetMeTopAnswerTagsParams) -> Result<iface_me::TopTagObjects, iface_me::GetMeTopAnswerTagsError> {
         let json = iface_me__get_me_top_answer_tags_params__to_json(&params);
-        dispatch(&OP_ME_GET_ME_TOP_ANSWER_TAGS, json)
+        match dispatch(&OP_ME_GET_ME_TOP_ANSWER_TAGS, json).and_then(iface_me__get_me_top_answer_tags__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_me__get_me_top_answer_tags__err(e)),
+        }
     }
-    fn get_me_top_question_tags(params: iface_me::GetMeTopQuestionTagsParams) -> Result<String, String> {
+    fn get_me_top_question_tags(params: iface_me::GetMeTopQuestionTagsParams) -> Result<iface_me::TopTagObjects, iface_me::GetMeTopQuestionTagsError> {
         let json = iface_me__get_me_top_question_tags_params__to_json(&params);
-        dispatch(&OP_ME_GET_ME_TOP_QUESTION_TAGS, json)
+        match dispatch(&OP_ME_GET_ME_TOP_QUESTION_TAGS, json).and_then(iface_me__get_me_top_question_tags__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_me__get_me_top_question_tags__err(e)),
+        }
     }
-    fn get_me_write_permissions(params: iface_me::GetMeWritePermissionsParams) -> Result<String, String> {
+    fn get_me_write_permissions(params: iface_me::GetMeWritePermissionsParams) -> Result<iface_me::WritePermissions, iface_me::GetMeWritePermissionsError> {
         let json = iface_me__get_me_write_permissions_params__to_json(&params);
-        dispatch(&OP_ME_GET_ME_WRITE_PERMISSIONS, json)
+        match dispatch(&OP_ME_GET_ME_WRITE_PERMISSIONS, json).and_then(iface_me__get_me_write_permissions__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_me__get_me_write_permissions__err(e)),
+        }
     }
 }
 use crate::exports::autostamp::stackexchange::notifications as iface_notifications;
@@ -2280,10 +4758,10 @@ const OP_NOTIFICATIONS_GET_NOTIFICATIONS: OpSpec = OpSpec {
     method: "GET",
     path_template: "/notifications",
     fields: &[
-        FieldSpec { snake: "pagesize", location: FieldLocation::Query },
-        FieldSpec { snake: "page", location: FieldLocation::Query },
-        FieldSpec { snake: "filter", location: FieldLocation::Query },
-        FieldSpec { snake: "callback", location: FieldLocation::Query },
+        FieldSpec { snake: "pagesize", wire: "pagesize", location: FieldLocation::Query },
+        FieldSpec { snake: "page", wire: "page", location: FieldLocation::Query },
+        FieldSpec { snake: "filter", wire: "filter", location: FieldLocation::Query },
+        FieldSpec { snake: "callback", wire: "callback", location: FieldLocation::Query },
     ],
     auth: &[
     ],
@@ -2293,14 +4771,20 @@ const OP_NOTIFICATIONS_GET_NOTIFICATIONS_UNREAD: OpSpec = OpSpec {
     method: "GET",
     path_template: "/notifications/unread",
     fields: &[
-        FieldSpec { snake: "pagesize", location: FieldLocation::Query },
-        FieldSpec { snake: "page", location: FieldLocation::Query },
-        FieldSpec { snake: "filter", location: FieldLocation::Query },
-        FieldSpec { snake: "callback", location: FieldLocation::Query },
+        FieldSpec { snake: "pagesize", wire: "pagesize", location: FieldLocation::Query },
+        FieldSpec { snake: "page", wire: "page", location: FieldLocation::Query },
+        FieldSpec { snake: "filter", wire: "filter", location: FieldLocation::Query },
+        FieldSpec { snake: "callback", wire: "callback", location: FieldLocation::Query },
     ],
     auth: &[
     ],
 };
+
+fn iface_notifications__notifications__to_json(p: &iface_notifications::Notifications) -> Value {
+    let mut m = Map::new();
+    m.insert("value".into(), Value::String((&p.value).clone()));
+    Value::Object(m)
+}
 
 fn iface_notifications__get_notifications_params__to_json(p: &iface_notifications::GetNotificationsParams) -> Value {
     let mut m = Map::new();
@@ -2320,14 +4804,87 @@ fn iface_notifications__get_notifications_unread_params__to_json(p: &iface_notif
     Value::Object(m)
 }
 
-impl iface_notifications::Guest for crate::Component {
-    fn get_notifications(params: iface_notifications::GetNotificationsParams) -> Result<String, String> {
-        let json = iface_notifications__get_notifications_params__to_json(&params);
-        dispatch(&OP_NOTIFICATIONS_GET_NOTIFICATIONS, json)
+fn iface_notifications__notifications__from_json(v: &Value) -> Option<iface_notifications::Notifications> {
+    let m = v.as_object()?;
+    Some(iface_notifications::Notifications {
+        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+    })
+}
+
+fn iface_notifications__get_notifications__ok(body: String) -> Result<iface_notifications::Notifications, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match iface_notifications__notifications__from_json(&v) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
     }
-    fn get_notifications_unread(params: iface_notifications::GetNotificationsUnreadParams) -> Result<String, String> {
+}
+
+fn iface_notifications__get_notifications__err(e: crate::runtime::DispatchError) -> iface_notifications::GetNotificationsError {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => match status {
+            400u16 => iface_notifications::GetNotificationsError::BadRequest(body),
+            401u16 => iface_notifications::GetNotificationsError::Unauthorized(body),
+            402u16 => iface_notifications::GetNotificationsError::PaymentRequired(body),
+            403u16 => iface_notifications::GetNotificationsError::Forbidden(body),
+            404u16 => iface_notifications::GetNotificationsError::NotFound(body),
+            405u16 => iface_notifications::GetNotificationsError::MethodNotAllowed(body),
+            406u16 => iface_notifications::GetNotificationsError::NotAcceptable(body),
+            500u16 => iface_notifications::GetNotificationsError::InternalServerError(body),
+            502u16 => iface_notifications::GetNotificationsError::BadGateway(body),
+            503u16 => iface_notifications::GetNotificationsError::ServiceUnavailable(body),
+            _ => iface_notifications::GetNotificationsError::Other(body),
+        },
+        crate::runtime::DispatchError::Transport(m) => iface_notifications::GetNotificationsError::Other(m),
+    }
+}
+
+fn iface_notifications__get_notifications_unread__ok(body: String) -> Result<iface_notifications::Notifications, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match iface_notifications__notifications__from_json(&v) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_notifications__get_notifications_unread__err(e: crate::runtime::DispatchError) -> iface_notifications::GetNotificationsUnreadError {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => match status {
+            400u16 => iface_notifications::GetNotificationsUnreadError::BadRequest(body),
+            401u16 => iface_notifications::GetNotificationsUnreadError::Unauthorized(body),
+            402u16 => iface_notifications::GetNotificationsUnreadError::PaymentRequired(body),
+            403u16 => iface_notifications::GetNotificationsUnreadError::Forbidden(body),
+            404u16 => iface_notifications::GetNotificationsUnreadError::NotFound(body),
+            405u16 => iface_notifications::GetNotificationsUnreadError::MethodNotAllowed(body),
+            406u16 => iface_notifications::GetNotificationsUnreadError::NotAcceptable(body),
+            500u16 => iface_notifications::GetNotificationsUnreadError::InternalServerError(body),
+            502u16 => iface_notifications::GetNotificationsUnreadError::BadGateway(body),
+            503u16 => iface_notifications::GetNotificationsUnreadError::ServiceUnavailable(body),
+            _ => iface_notifications::GetNotificationsUnreadError::Other(body),
+        },
+        crate::runtime::DispatchError::Transport(m) => iface_notifications::GetNotificationsUnreadError::Other(m),
+    }
+}
+
+impl iface_notifications::Guest for crate::Component {
+    fn get_notifications(params: iface_notifications::GetNotificationsParams) -> Result<iface_notifications::Notifications, iface_notifications::GetNotificationsError> {
+        let json = iface_notifications__get_notifications_params__to_json(&params);
+        match dispatch(&OP_NOTIFICATIONS_GET_NOTIFICATIONS, json).and_then(iface_notifications__get_notifications__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_notifications__get_notifications__err(e)),
+        }
+    }
+    fn get_notifications_unread(params: iface_notifications::GetNotificationsUnreadParams) -> Result<iface_notifications::Notifications, iface_notifications::GetNotificationsUnreadError> {
         let json = iface_notifications__get_notifications_unread_params__to_json(&params);
-        dispatch(&OP_NOTIFICATIONS_GET_NOTIFICATIONS_UNREAD, json)
+        match dispatch(&OP_NOTIFICATIONS_GET_NOTIFICATIONS_UNREAD, json).and_then(iface_notifications__get_notifications_unread__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_notifications__get_notifications_unread__err(e)),
+        }
     }
 }
 use crate::exports::autostamp::stackexchange::posts as iface_posts;
@@ -2336,17 +4893,17 @@ const OP_POSTS_GET_POSTS: OpSpec = OpSpec {
     method: "GET",
     path_template: "/posts",
     fields: &[
-        FieldSpec { snake: "order", location: FieldLocation::Query },
-        FieldSpec { snake: "max", location: FieldLocation::Query },
-        FieldSpec { snake: "min", location: FieldLocation::Query },
-        FieldSpec { snake: "sort", location: FieldLocation::Query },
-        FieldSpec { snake: "fromdate", location: FieldLocation::Query },
-        FieldSpec { snake: "todate", location: FieldLocation::Query },
-        FieldSpec { snake: "pagesize", location: FieldLocation::Query },
-        FieldSpec { snake: "page", location: FieldLocation::Query },
-        FieldSpec { snake: "filter", location: FieldLocation::Query },
-        FieldSpec { snake: "callback", location: FieldLocation::Query },
-        FieldSpec { snake: "site", location: FieldLocation::Query },
+        FieldSpec { snake: "order", wire: "order", location: FieldLocation::Query },
+        FieldSpec { snake: "max", wire: "max", location: FieldLocation::Query },
+        FieldSpec { snake: "min", wire: "min", location: FieldLocation::Query },
+        FieldSpec { snake: "sort", wire: "sort", location: FieldLocation::Query },
+        FieldSpec { snake: "fromdate", wire: "fromdate", location: FieldLocation::Query },
+        FieldSpec { snake: "todate", wire: "todate", location: FieldLocation::Query },
+        FieldSpec { snake: "pagesize", wire: "pagesize", location: FieldLocation::Query },
+        FieldSpec { snake: "page", wire: "page", location: FieldLocation::Query },
+        FieldSpec { snake: "filter", wire: "filter", location: FieldLocation::Query },
+        FieldSpec { snake: "callback", wire: "callback", location: FieldLocation::Query },
+        FieldSpec { snake: "site", wire: "site", location: FieldLocation::Query },
     ],
     auth: &[
     ],
@@ -2356,18 +4913,18 @@ const OP_POSTS_GET_POSTS_IDS: OpSpec = OpSpec {
     method: "GET",
     path_template: "/posts/{ids}",
     fields: &[
-        FieldSpec { snake: "ids", location: FieldLocation::Path },
-        FieldSpec { snake: "order", location: FieldLocation::Query },
-        FieldSpec { snake: "max", location: FieldLocation::Query },
-        FieldSpec { snake: "min", location: FieldLocation::Query },
-        FieldSpec { snake: "sort", location: FieldLocation::Query },
-        FieldSpec { snake: "fromdate", location: FieldLocation::Query },
-        FieldSpec { snake: "todate", location: FieldLocation::Query },
-        FieldSpec { snake: "pagesize", location: FieldLocation::Query },
-        FieldSpec { snake: "page", location: FieldLocation::Query },
-        FieldSpec { snake: "filter", location: FieldLocation::Query },
-        FieldSpec { snake: "callback", location: FieldLocation::Query },
-        FieldSpec { snake: "site", location: FieldLocation::Query },
+        FieldSpec { snake: "ids", wire: "ids", location: FieldLocation::Path },
+        FieldSpec { snake: "order", wire: "order", location: FieldLocation::Query },
+        FieldSpec { snake: "max", wire: "max", location: FieldLocation::Query },
+        FieldSpec { snake: "min", wire: "min", location: FieldLocation::Query },
+        FieldSpec { snake: "sort", wire: "sort", location: FieldLocation::Query },
+        FieldSpec { snake: "fromdate", wire: "fromdate", location: FieldLocation::Query },
+        FieldSpec { snake: "todate", wire: "todate", location: FieldLocation::Query },
+        FieldSpec { snake: "pagesize", wire: "pagesize", location: FieldLocation::Query },
+        FieldSpec { snake: "page", wire: "page", location: FieldLocation::Query },
+        FieldSpec { snake: "filter", wire: "filter", location: FieldLocation::Query },
+        FieldSpec { snake: "callback", wire: "callback", location: FieldLocation::Query },
+        FieldSpec { snake: "site", wire: "site", location: FieldLocation::Query },
     ],
     auth: &[
     ],
@@ -2377,18 +4934,18 @@ const OP_POSTS_GET_POSTS_IDS_COMMENTS: OpSpec = OpSpec {
     method: "GET",
     path_template: "/posts/{ids}/comments",
     fields: &[
-        FieldSpec { snake: "ids", location: FieldLocation::Path },
-        FieldSpec { snake: "order", location: FieldLocation::Query },
-        FieldSpec { snake: "max", location: FieldLocation::Query },
-        FieldSpec { snake: "min", location: FieldLocation::Query },
-        FieldSpec { snake: "sort", location: FieldLocation::Query },
-        FieldSpec { snake: "fromdate", location: FieldLocation::Query },
-        FieldSpec { snake: "todate", location: FieldLocation::Query },
-        FieldSpec { snake: "pagesize", location: FieldLocation::Query },
-        FieldSpec { snake: "page", location: FieldLocation::Query },
-        FieldSpec { snake: "filter", location: FieldLocation::Query },
-        FieldSpec { snake: "callback", location: FieldLocation::Query },
-        FieldSpec { snake: "site", location: FieldLocation::Query },
+        FieldSpec { snake: "ids", wire: "ids", location: FieldLocation::Path },
+        FieldSpec { snake: "order", wire: "order", location: FieldLocation::Query },
+        FieldSpec { snake: "max", wire: "max", location: FieldLocation::Query },
+        FieldSpec { snake: "min", wire: "min", location: FieldLocation::Query },
+        FieldSpec { snake: "sort", wire: "sort", location: FieldLocation::Query },
+        FieldSpec { snake: "fromdate", wire: "fromdate", location: FieldLocation::Query },
+        FieldSpec { snake: "todate", wire: "todate", location: FieldLocation::Query },
+        FieldSpec { snake: "pagesize", wire: "pagesize", location: FieldLocation::Query },
+        FieldSpec { snake: "page", wire: "page", location: FieldLocation::Query },
+        FieldSpec { snake: "filter", wire: "filter", location: FieldLocation::Query },
+        FieldSpec { snake: "callback", wire: "callback", location: FieldLocation::Query },
+        FieldSpec { snake: "site", wire: "site", location: FieldLocation::Query },
     ],
     auth: &[
     ],
@@ -2398,14 +4955,14 @@ const OP_POSTS_GET_POSTS_IDS_REVISIONS: OpSpec = OpSpec {
     method: "GET",
     path_template: "/posts/{ids}/revisions",
     fields: &[
-        FieldSpec { snake: "ids", location: FieldLocation::Path },
-        FieldSpec { snake: "fromdate", location: FieldLocation::Query },
-        FieldSpec { snake: "todate", location: FieldLocation::Query },
-        FieldSpec { snake: "pagesize", location: FieldLocation::Query },
-        FieldSpec { snake: "page", location: FieldLocation::Query },
-        FieldSpec { snake: "filter", location: FieldLocation::Query },
-        FieldSpec { snake: "callback", location: FieldLocation::Query },
-        FieldSpec { snake: "site", location: FieldLocation::Query },
+        FieldSpec { snake: "ids", wire: "ids", location: FieldLocation::Path },
+        FieldSpec { snake: "fromdate", wire: "fromdate", location: FieldLocation::Query },
+        FieldSpec { snake: "todate", wire: "todate", location: FieldLocation::Query },
+        FieldSpec { snake: "pagesize", wire: "pagesize", location: FieldLocation::Query },
+        FieldSpec { snake: "page", wire: "page", location: FieldLocation::Query },
+        FieldSpec { snake: "filter", wire: "filter", location: FieldLocation::Query },
+        FieldSpec { snake: "callback", wire: "callback", location: FieldLocation::Query },
+        FieldSpec { snake: "site", wire: "site", location: FieldLocation::Query },
     ],
     auth: &[
     ],
@@ -2415,18 +4972,18 @@ const OP_POSTS_GET_POSTS_IDS_SUGGESTED_EDITS: OpSpec = OpSpec {
     method: "GET",
     path_template: "/posts/{ids}/suggested-edits",
     fields: &[
-        FieldSpec { snake: "ids", location: FieldLocation::Path },
-        FieldSpec { snake: "order", location: FieldLocation::Query },
-        FieldSpec { snake: "max", location: FieldLocation::Query },
-        FieldSpec { snake: "min", location: FieldLocation::Query },
-        FieldSpec { snake: "sort", location: FieldLocation::Query },
-        FieldSpec { snake: "fromdate", location: FieldLocation::Query },
-        FieldSpec { snake: "todate", location: FieldLocation::Query },
-        FieldSpec { snake: "pagesize", location: FieldLocation::Query },
-        FieldSpec { snake: "page", location: FieldLocation::Query },
-        FieldSpec { snake: "filter", location: FieldLocation::Query },
-        FieldSpec { snake: "callback", location: FieldLocation::Query },
-        FieldSpec { snake: "site", location: FieldLocation::Query },
+        FieldSpec { snake: "ids", wire: "ids", location: FieldLocation::Path },
+        FieldSpec { snake: "order", wire: "order", location: FieldLocation::Query },
+        FieldSpec { snake: "max", wire: "max", location: FieldLocation::Query },
+        FieldSpec { snake: "min", wire: "min", location: FieldLocation::Query },
+        FieldSpec { snake: "sort", wire: "sort", location: FieldLocation::Query },
+        FieldSpec { snake: "fromdate", wire: "fromdate", location: FieldLocation::Query },
+        FieldSpec { snake: "todate", wire: "todate", location: FieldLocation::Query },
+        FieldSpec { snake: "pagesize", wire: "pagesize", location: FieldLocation::Query },
+        FieldSpec { snake: "page", wire: "page", location: FieldLocation::Query },
+        FieldSpec { snake: "filter", wire: "filter", location: FieldLocation::Query },
+        FieldSpec { snake: "callback", wire: "callback", location: FieldLocation::Query },
+        FieldSpec { snake: "site", wire: "site", location: FieldLocation::Query },
     ],
     auth: &[
     ],
@@ -2436,12 +4993,12 @@ const OP_POSTS_POST_POSTS_ID_COMMENTS_ADD: OpSpec = OpSpec {
     method: "POST",
     path_template: "/posts/{id}/comments/add",
     fields: &[
-        FieldSpec { snake: "id", location: FieldLocation::Path },
-        FieldSpec { snake: "filter", location: FieldLocation::Query },
-        FieldSpec { snake: "callback", location: FieldLocation::Query },
-        FieldSpec { snake: "site", location: FieldLocation::Query },
-        FieldSpec { snake: "body", location: FieldLocation::Query },
-        FieldSpec { snake: "preview", location: FieldLocation::Query },
+        FieldSpec { snake: "id", wire: "id", location: FieldLocation::Path },
+        FieldSpec { snake: "filter", wire: "filter", location: FieldLocation::Query },
+        FieldSpec { snake: "callback", wire: "callback", location: FieldLocation::Query },
+        FieldSpec { snake: "site", wire: "site", location: FieldLocation::Query },
+        FieldSpec { snake: "body", wire: "body", location: FieldLocation::Query },
+        FieldSpec { snake: "preview", wire: "preview", location: FieldLocation::Query },
     ],
     auth: &[
     ],
@@ -2475,6 +5032,90 @@ fn iface_posts__get_posts_ids_suggested_edits_sort_enum__to_str(e: &iface_posts:
         iface_posts::GetPostsIdsSuggestedEditsSortEnum::Approval => "approval",
         iface_posts::GetPostsIdsSuggestedEditsSortEnum::Rejection => "rejection",
     }
+}
+
+fn iface_posts__posts__to_json(p: &iface_posts::Posts) -> Value {
+    let mut m = Map::new();
+    m.insert("value".into(), Value::String((&p.value).clone()));
+    Value::Object(m)
+}
+
+fn iface_posts__comments__to_json(p: &iface_posts::Comments) -> Value {
+    let mut m = Map::new();
+    m.insert("value".into(), Value::String((&p.value).clone()));
+    Value::Object(m)
+}
+
+fn iface_posts__revisions__to_json(p: &iface_posts::Revisions) -> Value {
+    let mut m = Map::new();
+    m.insert("value".into(), Value::String((&p.value).clone()));
+    Value::Object(m)
+}
+
+fn iface_posts__suggested_edits__to_json(p: &iface_posts::SuggestedEdits) -> Value {
+    let mut m = Map::new();
+    m.insert("value".into(), Value::String((&p.value).clone()));
+    Value::Object(m)
+}
+
+fn iface_posts__created_comment__to_json(p: &iface_posts::CreatedComment) -> Value {
+    let mut m = Map::new();
+    m.insert("body".into(), match (&p.body) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("body_markdown".into(), match (&p.body_markdown) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("can_flag".into(), match (&p.can_flag) { Some(v) => Value::Bool(*(v)), None => Value::Null });
+    m.insert("comment_id".into(), match (&p.comment_id) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("creation_date".into(), match (&p.creation_date) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("edited".into(), match (&p.edited) { Some(v) => Value::Bool(*(v)), None => Value::Null });
+    m.insert("link".into(), match (&p.link) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("owner".into(), match (&p.owner) { Some(v) => iface_posts__created_comment_owner__to_json(v), None => Value::Null });
+    m.insert("post_id".into(), match (&p.post_id) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("post_type".into(), match (&p.post_type) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("reply_to_user".into(), match (&p.reply_to_user) { Some(v) => iface_posts__created_comment_reply_to_user__to_json(v), None => Value::Null });
+    m.insert("score".into(), match (&p.score) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("upvoted".into(), match (&p.upvoted) { Some(v) => Value::Bool(*(v)), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_posts__created_comment_owner__to_json(p: &iface_posts::CreatedCommentOwner) -> Value {
+    let mut m = Map::new();
+    m.insert("accept_rate".into(), match (&p.accept_rate) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("badge_counts".into(), match (&p.badge_counts) { Some(v) => iface_posts__created_comment_owner_badge_counts__to_json(v), None => Value::Null });
+    m.insert("display_name".into(), match (&p.display_name) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("link".into(), match (&p.link) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("profile_image".into(), match (&p.profile_image) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("reputation".into(), match (&p.reputation) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("user_id".into(), match (&p.user_id) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("user_type".into(), match (&p.user_type) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_posts__created_comment_owner_badge_counts__to_json(p: &iface_posts::CreatedCommentOwnerBadgeCounts) -> Value {
+    let mut m = Map::new();
+    m.insert("bronze".into(), match (&p.bronze) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("gold".into(), match (&p.gold) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("silver".into(), match (&p.silver) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_posts__created_comment_reply_to_user__to_json(p: &iface_posts::CreatedCommentReplyToUser) -> Value {
+    let mut m = Map::new();
+    m.insert("accept_rate".into(), match (&p.accept_rate) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("badge_counts".into(), match (&p.badge_counts) { Some(v) => iface_posts__created_comment_reply_to_user_badge_counts__to_json(v), None => Value::Null });
+    m.insert("display_name".into(), match (&p.display_name) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("link".into(), match (&p.link) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("profile_image".into(), match (&p.profile_image) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("reputation".into(), match (&p.reputation) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("user_id".into(), match (&p.user_id) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("user_type".into(), match (&p.user_type) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_posts__created_comment_reply_to_user_badge_counts__to_json(p: &iface_posts::CreatedCommentReplyToUserBadgeCounts) -> Value {
+    let mut m = Map::new();
+    m.insert("bronze".into(), match (&p.bronze) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("gold".into(), match (&p.gold) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("silver".into(), match (&p.silver) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    Value::Object(m)
 }
 
 fn iface_posts__get_posts_params__to_json(p: &iface_posts::GetPostsParams) -> Value {
@@ -2568,30 +5209,321 @@ fn iface_posts__post_posts_id_comments_add_params__to_json(p: &iface_posts::Post
     Value::Object(m)
 }
 
+fn iface_posts__posts__from_json(v: &Value) -> Option<iface_posts::Posts> {
+    let m = v.as_object()?;
+    Some(iface_posts::Posts {
+        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+    })
+}
+
+fn iface_posts__comments__from_json(v: &Value) -> Option<iface_posts::Comments> {
+    let m = v.as_object()?;
+    Some(iface_posts::Comments {
+        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+    })
+}
+
+fn iface_posts__revisions__from_json(v: &Value) -> Option<iface_posts::Revisions> {
+    let m = v.as_object()?;
+    Some(iface_posts::Revisions {
+        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+    })
+}
+
+fn iface_posts__suggested_edits__from_json(v: &Value) -> Option<iface_posts::SuggestedEdits> {
+    let m = v.as_object()?;
+    Some(iface_posts::SuggestedEdits {
+        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+    })
+}
+
+fn iface_posts__created_comment__from_json(v: &Value) -> Option<iface_posts::CreatedComment> {
+    let m = v.as_object()?;
+    Some(iface_posts::CreatedComment {
+        body: m.get("body").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        body_markdown: m.get("body_markdown").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        can_flag: m.get("can_flag").filter(|v| !v.is_null()).and_then(|v| (v).as_bool()),
+        comment_id: m.get("comment_id").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        creation_date: m.get("creation_date").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        edited: m.get("edited").filter(|v| !v.is_null()).and_then(|v| (v).as_bool()),
+        link: m.get("link").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        owner: m.get("owner").filter(|v| !v.is_null()).and_then(|v| iface_posts__created_comment_owner__from_json(v)),
+        post_id: m.get("post_id").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        post_type: m.get("post_type").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        reply_to_user: m.get("reply_to_user").filter(|v| !v.is_null()).and_then(|v| iface_posts__created_comment_reply_to_user__from_json(v)),
+        score: m.get("score").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        upvoted: m.get("upvoted").filter(|v| !v.is_null()).and_then(|v| (v).as_bool()),
+    })
+}
+
+fn iface_posts__created_comment_owner__from_json(v: &Value) -> Option<iface_posts::CreatedCommentOwner> {
+    let m = v.as_object()?;
+    Some(iface_posts::CreatedCommentOwner {
+        accept_rate: m.get("accept_rate").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        badge_counts: m.get("badge_counts").filter(|v| !v.is_null()).and_then(|v| iface_posts__created_comment_owner_badge_counts__from_json(v)),
+        display_name: m.get("display_name").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        link: m.get("link").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        profile_image: m.get("profile_image").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        reputation: m.get("reputation").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        user_id: m.get("user_id").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        user_type: m.get("user_type").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    })
+}
+
+fn iface_posts__created_comment_owner_badge_counts__from_json(v: &Value) -> Option<iface_posts::CreatedCommentOwnerBadgeCounts> {
+    let m = v.as_object()?;
+    Some(iface_posts::CreatedCommentOwnerBadgeCounts {
+        bronze: m.get("bronze").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        gold: m.get("gold").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        silver: m.get("silver").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+    })
+}
+
+fn iface_posts__created_comment_reply_to_user__from_json(v: &Value) -> Option<iface_posts::CreatedCommentReplyToUser> {
+    let m = v.as_object()?;
+    Some(iface_posts::CreatedCommentReplyToUser {
+        accept_rate: m.get("accept_rate").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        badge_counts: m.get("badge_counts").filter(|v| !v.is_null()).and_then(|v| iface_posts__created_comment_reply_to_user_badge_counts__from_json(v)),
+        display_name: m.get("display_name").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        link: m.get("link").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        profile_image: m.get("profile_image").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        reputation: m.get("reputation").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        user_id: m.get("user_id").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        user_type: m.get("user_type").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    })
+}
+
+fn iface_posts__created_comment_reply_to_user_badge_counts__from_json(v: &Value) -> Option<iface_posts::CreatedCommentReplyToUserBadgeCounts> {
+    let m = v.as_object()?;
+    Some(iface_posts::CreatedCommentReplyToUserBadgeCounts {
+        bronze: m.get("bronze").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        gold: m.get("gold").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        silver: m.get("silver").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+    })
+}
+
+fn iface_posts__get_posts__ok(body: String) -> Result<iface_posts::Posts, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match iface_posts__posts__from_json(&v) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_posts__get_posts__err(e: crate::runtime::DispatchError) -> iface_posts::GetPostsError {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => match status {
+            400u16 => iface_posts::GetPostsError::BadRequest(body),
+            401u16 => iface_posts::GetPostsError::Unauthorized(body),
+            402u16 => iface_posts::GetPostsError::PaymentRequired(body),
+            403u16 => iface_posts::GetPostsError::Forbidden(body),
+            404u16 => iface_posts::GetPostsError::NotFound(body),
+            405u16 => iface_posts::GetPostsError::MethodNotAllowed(body),
+            406u16 => iface_posts::GetPostsError::NotAcceptable(body),
+            500u16 => iface_posts::GetPostsError::InternalServerError(body),
+            502u16 => iface_posts::GetPostsError::BadGateway(body),
+            503u16 => iface_posts::GetPostsError::ServiceUnavailable(body),
+            _ => iface_posts::GetPostsError::Other(body),
+        },
+        crate::runtime::DispatchError::Transport(m) => iface_posts::GetPostsError::Other(m),
+    }
+}
+
+fn iface_posts__get_posts_ids__ok(body: String) -> Result<iface_posts::Posts, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match iface_posts__posts__from_json(&v) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_posts__get_posts_ids__err(e: crate::runtime::DispatchError) -> iface_posts::GetPostsIdsError {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => match status {
+            400u16 => iface_posts::GetPostsIdsError::BadRequest(body),
+            401u16 => iface_posts::GetPostsIdsError::Unauthorized(body),
+            402u16 => iface_posts::GetPostsIdsError::PaymentRequired(body),
+            403u16 => iface_posts::GetPostsIdsError::Forbidden(body),
+            404u16 => iface_posts::GetPostsIdsError::NotFound(body),
+            405u16 => iface_posts::GetPostsIdsError::MethodNotAllowed(body),
+            406u16 => iface_posts::GetPostsIdsError::NotAcceptable(body),
+            500u16 => iface_posts::GetPostsIdsError::InternalServerError(body),
+            502u16 => iface_posts::GetPostsIdsError::BadGateway(body),
+            503u16 => iface_posts::GetPostsIdsError::ServiceUnavailable(body),
+            _ => iface_posts::GetPostsIdsError::Other(body),
+        },
+        crate::runtime::DispatchError::Transport(m) => iface_posts::GetPostsIdsError::Other(m),
+    }
+}
+
+fn iface_posts__get_posts_ids_comments__ok(body: String) -> Result<iface_posts::Comments, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match iface_posts__comments__from_json(&v) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_posts__get_posts_ids_comments__err(e: crate::runtime::DispatchError) -> iface_posts::GetPostsIdsCommentsError {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => match status {
+            400u16 => iface_posts::GetPostsIdsCommentsError::BadRequest(body),
+            401u16 => iface_posts::GetPostsIdsCommentsError::Unauthorized(body),
+            402u16 => iface_posts::GetPostsIdsCommentsError::PaymentRequired(body),
+            403u16 => iface_posts::GetPostsIdsCommentsError::Forbidden(body),
+            404u16 => iface_posts::GetPostsIdsCommentsError::NotFound(body),
+            405u16 => iface_posts::GetPostsIdsCommentsError::MethodNotAllowed(body),
+            406u16 => iface_posts::GetPostsIdsCommentsError::NotAcceptable(body),
+            500u16 => iface_posts::GetPostsIdsCommentsError::InternalServerError(body),
+            502u16 => iface_posts::GetPostsIdsCommentsError::BadGateway(body),
+            503u16 => iface_posts::GetPostsIdsCommentsError::ServiceUnavailable(body),
+            _ => iface_posts::GetPostsIdsCommentsError::Other(body),
+        },
+        crate::runtime::DispatchError::Transport(m) => iface_posts::GetPostsIdsCommentsError::Other(m),
+    }
+}
+
+fn iface_posts__get_posts_ids_revisions__ok(body: String) -> Result<iface_posts::Revisions, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match iface_posts__revisions__from_json(&v) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_posts__get_posts_ids_revisions__err(e: crate::runtime::DispatchError) -> iface_posts::GetPostsIdsRevisionsError {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => match status {
+            400u16 => iface_posts::GetPostsIdsRevisionsError::BadRequest(body),
+            401u16 => iface_posts::GetPostsIdsRevisionsError::Unauthorized(body),
+            402u16 => iface_posts::GetPostsIdsRevisionsError::PaymentRequired(body),
+            403u16 => iface_posts::GetPostsIdsRevisionsError::Forbidden(body),
+            404u16 => iface_posts::GetPostsIdsRevisionsError::NotFound(body),
+            405u16 => iface_posts::GetPostsIdsRevisionsError::MethodNotAllowed(body),
+            406u16 => iface_posts::GetPostsIdsRevisionsError::NotAcceptable(body),
+            500u16 => iface_posts::GetPostsIdsRevisionsError::InternalServerError(body),
+            502u16 => iface_posts::GetPostsIdsRevisionsError::BadGateway(body),
+            503u16 => iface_posts::GetPostsIdsRevisionsError::ServiceUnavailable(body),
+            _ => iface_posts::GetPostsIdsRevisionsError::Other(body),
+        },
+        crate::runtime::DispatchError::Transport(m) => iface_posts::GetPostsIdsRevisionsError::Other(m),
+    }
+}
+
+fn iface_posts__get_posts_ids_suggested_edits__ok(body: String) -> Result<iface_posts::SuggestedEdits, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match iface_posts__suggested_edits__from_json(&v) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_posts__get_posts_ids_suggested_edits__err(e: crate::runtime::DispatchError) -> iface_posts::GetPostsIdsSuggestedEditsError {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => match status {
+            400u16 => iface_posts::GetPostsIdsSuggestedEditsError::BadRequest(body),
+            401u16 => iface_posts::GetPostsIdsSuggestedEditsError::Unauthorized(body),
+            402u16 => iface_posts::GetPostsIdsSuggestedEditsError::PaymentRequired(body),
+            403u16 => iface_posts::GetPostsIdsSuggestedEditsError::Forbidden(body),
+            404u16 => iface_posts::GetPostsIdsSuggestedEditsError::NotFound(body),
+            405u16 => iface_posts::GetPostsIdsSuggestedEditsError::MethodNotAllowed(body),
+            406u16 => iface_posts::GetPostsIdsSuggestedEditsError::NotAcceptable(body),
+            500u16 => iface_posts::GetPostsIdsSuggestedEditsError::InternalServerError(body),
+            502u16 => iface_posts::GetPostsIdsSuggestedEditsError::BadGateway(body),
+            503u16 => iface_posts::GetPostsIdsSuggestedEditsError::ServiceUnavailable(body),
+            _ => iface_posts::GetPostsIdsSuggestedEditsError::Other(body),
+        },
+        crate::runtime::DispatchError::Transport(m) => iface_posts::GetPostsIdsSuggestedEditsError::Other(m),
+    }
+}
+
+fn iface_posts__post_posts_id_comments_add__ok(body: String) -> Result<iface_posts::CreatedComment, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match iface_posts__created_comment__from_json(&v) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_posts__post_posts_id_comments_add__err(e: crate::runtime::DispatchError) -> iface_posts::PostPostsIdCommentsAddError {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => match status {
+            400u16 => iface_posts::PostPostsIdCommentsAddError::BadRequest(body),
+            401u16 => iface_posts::PostPostsIdCommentsAddError::Unauthorized(body),
+            402u16 => iface_posts::PostPostsIdCommentsAddError::PaymentRequired(body),
+            403u16 => iface_posts::PostPostsIdCommentsAddError::Forbidden(body),
+            404u16 => iface_posts::PostPostsIdCommentsAddError::NotFound(body),
+            405u16 => iface_posts::PostPostsIdCommentsAddError::MethodNotAllowed(body),
+            406u16 => iface_posts::PostPostsIdCommentsAddError::NotAcceptable(body),
+            500u16 => iface_posts::PostPostsIdCommentsAddError::InternalServerError(body),
+            502u16 => iface_posts::PostPostsIdCommentsAddError::BadGateway(body),
+            503u16 => iface_posts::PostPostsIdCommentsAddError::ServiceUnavailable(body),
+            _ => iface_posts::PostPostsIdCommentsAddError::Other(body),
+        },
+        crate::runtime::DispatchError::Transport(m) => iface_posts::PostPostsIdCommentsAddError::Other(m),
+    }
+}
+
 impl iface_posts::Guest for crate::Component {
-    fn get_posts(params: iface_posts::GetPostsParams) -> Result<String, String> {
+    fn get_posts(params: iface_posts::GetPostsParams) -> Result<iface_posts::Posts, iface_posts::GetPostsError> {
         let json = iface_posts__get_posts_params__to_json(&params);
-        dispatch(&OP_POSTS_GET_POSTS, json)
+        match dispatch(&OP_POSTS_GET_POSTS, json).and_then(iface_posts__get_posts__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_posts__get_posts__err(e)),
+        }
     }
-    fn get_posts_ids(params: iface_posts::GetPostsIdsParams) -> Result<String, String> {
+    fn get_posts_ids(params: iface_posts::GetPostsIdsParams) -> Result<iface_posts::Posts, iface_posts::GetPostsIdsError> {
         let json = iface_posts__get_posts_ids_params__to_json(&params);
-        dispatch(&OP_POSTS_GET_POSTS_IDS, json)
+        match dispatch(&OP_POSTS_GET_POSTS_IDS, json).and_then(iface_posts__get_posts_ids__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_posts__get_posts_ids__err(e)),
+        }
     }
-    fn get_posts_ids_comments(params: iface_posts::GetPostsIdsCommentsParams) -> Result<String, String> {
+    fn get_posts_ids_comments(params: iface_posts::GetPostsIdsCommentsParams) -> Result<iface_posts::Comments, iface_posts::GetPostsIdsCommentsError> {
         let json = iface_posts__get_posts_ids_comments_params__to_json(&params);
-        dispatch(&OP_POSTS_GET_POSTS_IDS_COMMENTS, json)
+        match dispatch(&OP_POSTS_GET_POSTS_IDS_COMMENTS, json).and_then(iface_posts__get_posts_ids_comments__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_posts__get_posts_ids_comments__err(e)),
+        }
     }
-    fn get_posts_ids_revisions(params: iface_posts::GetPostsIdsRevisionsParams) -> Result<String, String> {
+    fn get_posts_ids_revisions(params: iface_posts::GetPostsIdsRevisionsParams) -> Result<iface_posts::Revisions, iface_posts::GetPostsIdsRevisionsError> {
         let json = iface_posts__get_posts_ids_revisions_params__to_json(&params);
-        dispatch(&OP_POSTS_GET_POSTS_IDS_REVISIONS, json)
+        match dispatch(&OP_POSTS_GET_POSTS_IDS_REVISIONS, json).and_then(iface_posts__get_posts_ids_revisions__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_posts__get_posts_ids_revisions__err(e)),
+        }
     }
-    fn get_posts_ids_suggested_edits(params: iface_posts::GetPostsIdsSuggestedEditsParams) -> Result<String, String> {
+    fn get_posts_ids_suggested_edits(params: iface_posts::GetPostsIdsSuggestedEditsParams) -> Result<iface_posts::SuggestedEdits, iface_posts::GetPostsIdsSuggestedEditsError> {
         let json = iface_posts__get_posts_ids_suggested_edits_params__to_json(&params);
-        dispatch(&OP_POSTS_GET_POSTS_IDS_SUGGESTED_EDITS, json)
+        match dispatch(&OP_POSTS_GET_POSTS_IDS_SUGGESTED_EDITS, json).and_then(iface_posts__get_posts_ids_suggested_edits__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_posts__get_posts_ids_suggested_edits__err(e)),
+        }
     }
-    fn post_posts_id_comments_add(params: iface_posts::PostPostsIdCommentsAddParams) -> Result<String, String> {
+    fn post_posts_id_comments_add(params: iface_posts::PostPostsIdCommentsAddParams) -> Result<iface_posts::CreatedComment, iface_posts::PostPostsIdCommentsAddError> {
         let json = iface_posts__post_posts_id_comments_add_params__to_json(&params);
-        dispatch(&OP_POSTS_POST_POSTS_ID_COMMENTS_ADD, json)
+        match dispatch(&OP_POSTS_POST_POSTS_ID_COMMENTS_ADD, json).and_then(iface_posts__post_posts_id_comments_add__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_posts__post_posts_id_comments_add__err(e)),
+        }
     }
 }
 use crate::exports::autostamp::stackexchange::privileges as iface_privileges;
@@ -2600,15 +5532,21 @@ const OP_PRIVILEGES_GET_PRIVILEGES: OpSpec = OpSpec {
     method: "GET",
     path_template: "/privileges",
     fields: &[
-        FieldSpec { snake: "pagesize", location: FieldLocation::Query },
-        FieldSpec { snake: "page", location: FieldLocation::Query },
-        FieldSpec { snake: "filter", location: FieldLocation::Query },
-        FieldSpec { snake: "callback", location: FieldLocation::Query },
-        FieldSpec { snake: "site", location: FieldLocation::Query },
+        FieldSpec { snake: "pagesize", wire: "pagesize", location: FieldLocation::Query },
+        FieldSpec { snake: "page", wire: "page", location: FieldLocation::Query },
+        FieldSpec { snake: "filter", wire: "filter", location: FieldLocation::Query },
+        FieldSpec { snake: "callback", wire: "callback", location: FieldLocation::Query },
+        FieldSpec { snake: "site", wire: "site", location: FieldLocation::Query },
     ],
     auth: &[
     ],
 };
+
+fn iface_privileges__privileges__to_json(p: &iface_privileges::Privileges) -> Value {
+    let mut m = Map::new();
+    m.insert("value".into(), Value::String((&p.value).clone()));
+    Value::Object(m)
+}
 
 fn iface_privileges__get_privileges_params__to_json(p: &iface_privileges::GetPrivilegesParams) -> Value {
     let mut m = Map::new();
@@ -2620,10 +5558,50 @@ fn iface_privileges__get_privileges_params__to_json(p: &iface_privileges::GetPri
     Value::Object(m)
 }
 
+fn iface_privileges__privileges__from_json(v: &Value) -> Option<iface_privileges::Privileges> {
+    let m = v.as_object()?;
+    Some(iface_privileges::Privileges {
+        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+    })
+}
+
+fn iface_privileges__get_privileges__ok(body: String) -> Result<iface_privileges::Privileges, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match iface_privileges__privileges__from_json(&v) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_privileges__get_privileges__err(e: crate::runtime::DispatchError) -> iface_privileges::GetPrivilegesError {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => match status {
+            400u16 => iface_privileges::GetPrivilegesError::BadRequest(body),
+            401u16 => iface_privileges::GetPrivilegesError::Unauthorized(body),
+            402u16 => iface_privileges::GetPrivilegesError::PaymentRequired(body),
+            403u16 => iface_privileges::GetPrivilegesError::Forbidden(body),
+            404u16 => iface_privileges::GetPrivilegesError::NotFound(body),
+            405u16 => iface_privileges::GetPrivilegesError::MethodNotAllowed(body),
+            406u16 => iface_privileges::GetPrivilegesError::NotAcceptable(body),
+            500u16 => iface_privileges::GetPrivilegesError::InternalServerError(body),
+            502u16 => iface_privileges::GetPrivilegesError::BadGateway(body),
+            503u16 => iface_privileges::GetPrivilegesError::ServiceUnavailable(body),
+            _ => iface_privileges::GetPrivilegesError::Other(body),
+        },
+        crate::runtime::DispatchError::Transport(m) => iface_privileges::GetPrivilegesError::Other(m),
+    }
+}
+
 impl iface_privileges::Guest for crate::Component {
-    fn get_privileges(params: iface_privileges::GetPrivilegesParams) -> Result<String, String> {
+    fn get_privileges(params: iface_privileges::GetPrivilegesParams) -> Result<iface_privileges::Privileges, iface_privileges::GetPrivilegesError> {
         let json = iface_privileges__get_privileges_params__to_json(&params);
-        dispatch(&OP_PRIVILEGES_GET_PRIVILEGES, json)
+        match dispatch(&OP_PRIVILEGES_GET_PRIVILEGES, json).and_then(iface_privileges__get_privileges__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_privileges__get_privileges__err(e)),
+        }
     }
 }
 use crate::exports::autostamp::stackexchange::questions as iface_questions;
@@ -2632,18 +5610,18 @@ const OP_QUESTIONS_GET_QUESTIONS: OpSpec = OpSpec {
     method: "GET",
     path_template: "/questions",
     fields: &[
-        FieldSpec { snake: "tagged", location: FieldLocation::Query },
-        FieldSpec { snake: "order", location: FieldLocation::Query },
-        FieldSpec { snake: "max", location: FieldLocation::Query },
-        FieldSpec { snake: "min", location: FieldLocation::Query },
-        FieldSpec { snake: "sort", location: FieldLocation::Query },
-        FieldSpec { snake: "fromdate", location: FieldLocation::Query },
-        FieldSpec { snake: "todate", location: FieldLocation::Query },
-        FieldSpec { snake: "pagesize", location: FieldLocation::Query },
-        FieldSpec { snake: "page", location: FieldLocation::Query },
-        FieldSpec { snake: "filter", location: FieldLocation::Query },
-        FieldSpec { snake: "callback", location: FieldLocation::Query },
-        FieldSpec { snake: "site", location: FieldLocation::Query },
+        FieldSpec { snake: "tagged", wire: "tagged", location: FieldLocation::Query },
+        FieldSpec { snake: "order", wire: "order", location: FieldLocation::Query },
+        FieldSpec { snake: "max", wire: "max", location: FieldLocation::Query },
+        FieldSpec { snake: "min", wire: "min", location: FieldLocation::Query },
+        FieldSpec { snake: "sort", wire: "sort", location: FieldLocation::Query },
+        FieldSpec { snake: "fromdate", wire: "fromdate", location: FieldLocation::Query },
+        FieldSpec { snake: "todate", wire: "todate", location: FieldLocation::Query },
+        FieldSpec { snake: "pagesize", wire: "pagesize", location: FieldLocation::Query },
+        FieldSpec { snake: "page", wire: "page", location: FieldLocation::Query },
+        FieldSpec { snake: "filter", wire: "filter", location: FieldLocation::Query },
+        FieldSpec { snake: "callback", wire: "callback", location: FieldLocation::Query },
+        FieldSpec { snake: "site", wire: "site", location: FieldLocation::Query },
     ],
     auth: &[
     ],
@@ -2653,18 +5631,18 @@ const OP_QUESTIONS_GET_QUESTIONS_FEATURED: OpSpec = OpSpec {
     method: "GET",
     path_template: "/questions/featured",
     fields: &[
-        FieldSpec { snake: "tagged", location: FieldLocation::Query },
-        FieldSpec { snake: "order", location: FieldLocation::Query },
-        FieldSpec { snake: "max", location: FieldLocation::Query },
-        FieldSpec { snake: "min", location: FieldLocation::Query },
-        FieldSpec { snake: "sort", location: FieldLocation::Query },
-        FieldSpec { snake: "fromdate", location: FieldLocation::Query },
-        FieldSpec { snake: "todate", location: FieldLocation::Query },
-        FieldSpec { snake: "pagesize", location: FieldLocation::Query },
-        FieldSpec { snake: "page", location: FieldLocation::Query },
-        FieldSpec { snake: "filter", location: FieldLocation::Query },
-        FieldSpec { snake: "callback", location: FieldLocation::Query },
-        FieldSpec { snake: "site", location: FieldLocation::Query },
+        FieldSpec { snake: "tagged", wire: "tagged", location: FieldLocation::Query },
+        FieldSpec { snake: "order", wire: "order", location: FieldLocation::Query },
+        FieldSpec { snake: "max", wire: "max", location: FieldLocation::Query },
+        FieldSpec { snake: "min", wire: "min", location: FieldLocation::Query },
+        FieldSpec { snake: "sort", wire: "sort", location: FieldLocation::Query },
+        FieldSpec { snake: "fromdate", wire: "fromdate", location: FieldLocation::Query },
+        FieldSpec { snake: "todate", wire: "todate", location: FieldLocation::Query },
+        FieldSpec { snake: "pagesize", wire: "pagesize", location: FieldLocation::Query },
+        FieldSpec { snake: "page", wire: "page", location: FieldLocation::Query },
+        FieldSpec { snake: "filter", wire: "filter", location: FieldLocation::Query },
+        FieldSpec { snake: "callback", wire: "callback", location: FieldLocation::Query },
+        FieldSpec { snake: "site", wire: "site", location: FieldLocation::Query },
     ],
     auth: &[
     ],
@@ -2674,18 +5652,18 @@ const OP_QUESTIONS_GET_QUESTIONS_NO_ANSWERS: OpSpec = OpSpec {
     method: "GET",
     path_template: "/questions/no-answers",
     fields: &[
-        FieldSpec { snake: "tagged", location: FieldLocation::Query },
-        FieldSpec { snake: "order", location: FieldLocation::Query },
-        FieldSpec { snake: "max", location: FieldLocation::Query },
-        FieldSpec { snake: "min", location: FieldLocation::Query },
-        FieldSpec { snake: "sort", location: FieldLocation::Query },
-        FieldSpec { snake: "fromdate", location: FieldLocation::Query },
-        FieldSpec { snake: "todate", location: FieldLocation::Query },
-        FieldSpec { snake: "pagesize", location: FieldLocation::Query },
-        FieldSpec { snake: "page", location: FieldLocation::Query },
-        FieldSpec { snake: "filter", location: FieldLocation::Query },
-        FieldSpec { snake: "callback", location: FieldLocation::Query },
-        FieldSpec { snake: "site", location: FieldLocation::Query },
+        FieldSpec { snake: "tagged", wire: "tagged", location: FieldLocation::Query },
+        FieldSpec { snake: "order", wire: "order", location: FieldLocation::Query },
+        FieldSpec { snake: "max", wire: "max", location: FieldLocation::Query },
+        FieldSpec { snake: "min", wire: "min", location: FieldLocation::Query },
+        FieldSpec { snake: "sort", wire: "sort", location: FieldLocation::Query },
+        FieldSpec { snake: "fromdate", wire: "fromdate", location: FieldLocation::Query },
+        FieldSpec { snake: "todate", wire: "todate", location: FieldLocation::Query },
+        FieldSpec { snake: "pagesize", wire: "pagesize", location: FieldLocation::Query },
+        FieldSpec { snake: "page", wire: "page", location: FieldLocation::Query },
+        FieldSpec { snake: "filter", wire: "filter", location: FieldLocation::Query },
+        FieldSpec { snake: "callback", wire: "callback", location: FieldLocation::Query },
+        FieldSpec { snake: "site", wire: "site", location: FieldLocation::Query },
     ],
     auth: &[
     ],
@@ -2695,18 +5673,18 @@ const OP_QUESTIONS_GET_QUESTIONS_UNANSWERED: OpSpec = OpSpec {
     method: "GET",
     path_template: "/questions/unanswered",
     fields: &[
-        FieldSpec { snake: "tagged", location: FieldLocation::Query },
-        FieldSpec { snake: "order", location: FieldLocation::Query },
-        FieldSpec { snake: "max", location: FieldLocation::Query },
-        FieldSpec { snake: "min", location: FieldLocation::Query },
-        FieldSpec { snake: "sort", location: FieldLocation::Query },
-        FieldSpec { snake: "fromdate", location: FieldLocation::Query },
-        FieldSpec { snake: "todate", location: FieldLocation::Query },
-        FieldSpec { snake: "pagesize", location: FieldLocation::Query },
-        FieldSpec { snake: "page", location: FieldLocation::Query },
-        FieldSpec { snake: "filter", location: FieldLocation::Query },
-        FieldSpec { snake: "callback", location: FieldLocation::Query },
-        FieldSpec { snake: "site", location: FieldLocation::Query },
+        FieldSpec { snake: "tagged", wire: "tagged", location: FieldLocation::Query },
+        FieldSpec { snake: "order", wire: "order", location: FieldLocation::Query },
+        FieldSpec { snake: "max", wire: "max", location: FieldLocation::Query },
+        FieldSpec { snake: "min", wire: "min", location: FieldLocation::Query },
+        FieldSpec { snake: "sort", wire: "sort", location: FieldLocation::Query },
+        FieldSpec { snake: "fromdate", wire: "fromdate", location: FieldLocation::Query },
+        FieldSpec { snake: "todate", wire: "todate", location: FieldLocation::Query },
+        FieldSpec { snake: "pagesize", wire: "pagesize", location: FieldLocation::Query },
+        FieldSpec { snake: "page", wire: "page", location: FieldLocation::Query },
+        FieldSpec { snake: "filter", wire: "filter", location: FieldLocation::Query },
+        FieldSpec { snake: "callback", wire: "callback", location: FieldLocation::Query },
+        FieldSpec { snake: "site", wire: "site", location: FieldLocation::Query },
     ],
     auth: &[
     ],
@@ -2716,18 +5694,18 @@ const OP_QUESTIONS_GET_QUESTIONS_IDS: OpSpec = OpSpec {
     method: "GET",
     path_template: "/questions/{ids}",
     fields: &[
-        FieldSpec { snake: "ids", location: FieldLocation::Path },
-        FieldSpec { snake: "order", location: FieldLocation::Query },
-        FieldSpec { snake: "max", location: FieldLocation::Query },
-        FieldSpec { snake: "min", location: FieldLocation::Query },
-        FieldSpec { snake: "sort", location: FieldLocation::Query },
-        FieldSpec { snake: "fromdate", location: FieldLocation::Query },
-        FieldSpec { snake: "todate", location: FieldLocation::Query },
-        FieldSpec { snake: "pagesize", location: FieldLocation::Query },
-        FieldSpec { snake: "page", location: FieldLocation::Query },
-        FieldSpec { snake: "filter", location: FieldLocation::Query },
-        FieldSpec { snake: "callback", location: FieldLocation::Query },
-        FieldSpec { snake: "site", location: FieldLocation::Query },
+        FieldSpec { snake: "ids", wire: "ids", location: FieldLocation::Path },
+        FieldSpec { snake: "order", wire: "order", location: FieldLocation::Query },
+        FieldSpec { snake: "max", wire: "max", location: FieldLocation::Query },
+        FieldSpec { snake: "min", wire: "min", location: FieldLocation::Query },
+        FieldSpec { snake: "sort", wire: "sort", location: FieldLocation::Query },
+        FieldSpec { snake: "fromdate", wire: "fromdate", location: FieldLocation::Query },
+        FieldSpec { snake: "todate", wire: "todate", location: FieldLocation::Query },
+        FieldSpec { snake: "pagesize", wire: "pagesize", location: FieldLocation::Query },
+        FieldSpec { snake: "page", wire: "page", location: FieldLocation::Query },
+        FieldSpec { snake: "filter", wire: "filter", location: FieldLocation::Query },
+        FieldSpec { snake: "callback", wire: "callback", location: FieldLocation::Query },
+        FieldSpec { snake: "site", wire: "site", location: FieldLocation::Query },
     ],
     auth: &[
     ],
@@ -2737,18 +5715,18 @@ const OP_QUESTIONS_GET_QUESTIONS_IDS_ANSWERS: OpSpec = OpSpec {
     method: "GET",
     path_template: "/questions/{ids}/answers",
     fields: &[
-        FieldSpec { snake: "ids", location: FieldLocation::Path },
-        FieldSpec { snake: "order", location: FieldLocation::Query },
-        FieldSpec { snake: "max", location: FieldLocation::Query },
-        FieldSpec { snake: "min", location: FieldLocation::Query },
-        FieldSpec { snake: "sort", location: FieldLocation::Query },
-        FieldSpec { snake: "fromdate", location: FieldLocation::Query },
-        FieldSpec { snake: "todate", location: FieldLocation::Query },
-        FieldSpec { snake: "pagesize", location: FieldLocation::Query },
-        FieldSpec { snake: "page", location: FieldLocation::Query },
-        FieldSpec { snake: "filter", location: FieldLocation::Query },
-        FieldSpec { snake: "callback", location: FieldLocation::Query },
-        FieldSpec { snake: "site", location: FieldLocation::Query },
+        FieldSpec { snake: "ids", wire: "ids", location: FieldLocation::Path },
+        FieldSpec { snake: "order", wire: "order", location: FieldLocation::Query },
+        FieldSpec { snake: "max", wire: "max", location: FieldLocation::Query },
+        FieldSpec { snake: "min", wire: "min", location: FieldLocation::Query },
+        FieldSpec { snake: "sort", wire: "sort", location: FieldLocation::Query },
+        FieldSpec { snake: "fromdate", wire: "fromdate", location: FieldLocation::Query },
+        FieldSpec { snake: "todate", wire: "todate", location: FieldLocation::Query },
+        FieldSpec { snake: "pagesize", wire: "pagesize", location: FieldLocation::Query },
+        FieldSpec { snake: "page", wire: "page", location: FieldLocation::Query },
+        FieldSpec { snake: "filter", wire: "filter", location: FieldLocation::Query },
+        FieldSpec { snake: "callback", wire: "callback", location: FieldLocation::Query },
+        FieldSpec { snake: "site", wire: "site", location: FieldLocation::Query },
     ],
     auth: &[
     ],
@@ -2758,18 +5736,18 @@ const OP_QUESTIONS_GET_QUESTIONS_IDS_COMMENTS: OpSpec = OpSpec {
     method: "GET",
     path_template: "/questions/{ids}/comments",
     fields: &[
-        FieldSpec { snake: "ids", location: FieldLocation::Path },
-        FieldSpec { snake: "order", location: FieldLocation::Query },
-        FieldSpec { snake: "max", location: FieldLocation::Query },
-        FieldSpec { snake: "min", location: FieldLocation::Query },
-        FieldSpec { snake: "sort", location: FieldLocation::Query },
-        FieldSpec { snake: "fromdate", location: FieldLocation::Query },
-        FieldSpec { snake: "todate", location: FieldLocation::Query },
-        FieldSpec { snake: "pagesize", location: FieldLocation::Query },
-        FieldSpec { snake: "page", location: FieldLocation::Query },
-        FieldSpec { snake: "filter", location: FieldLocation::Query },
-        FieldSpec { snake: "callback", location: FieldLocation::Query },
-        FieldSpec { snake: "site", location: FieldLocation::Query },
+        FieldSpec { snake: "ids", wire: "ids", location: FieldLocation::Path },
+        FieldSpec { snake: "order", wire: "order", location: FieldLocation::Query },
+        FieldSpec { snake: "max", wire: "max", location: FieldLocation::Query },
+        FieldSpec { snake: "min", wire: "min", location: FieldLocation::Query },
+        FieldSpec { snake: "sort", wire: "sort", location: FieldLocation::Query },
+        FieldSpec { snake: "fromdate", wire: "fromdate", location: FieldLocation::Query },
+        FieldSpec { snake: "todate", wire: "todate", location: FieldLocation::Query },
+        FieldSpec { snake: "pagesize", wire: "pagesize", location: FieldLocation::Query },
+        FieldSpec { snake: "page", wire: "page", location: FieldLocation::Query },
+        FieldSpec { snake: "filter", wire: "filter", location: FieldLocation::Query },
+        FieldSpec { snake: "callback", wire: "callback", location: FieldLocation::Query },
+        FieldSpec { snake: "site", wire: "site", location: FieldLocation::Query },
     ],
     auth: &[
     ],
@@ -2779,18 +5757,18 @@ const OP_QUESTIONS_GET_QUESTIONS_IDS_LINKED: OpSpec = OpSpec {
     method: "GET",
     path_template: "/questions/{ids}/linked",
     fields: &[
-        FieldSpec { snake: "ids", location: FieldLocation::Path },
-        FieldSpec { snake: "order", location: FieldLocation::Query },
-        FieldSpec { snake: "max", location: FieldLocation::Query },
-        FieldSpec { snake: "min", location: FieldLocation::Query },
-        FieldSpec { snake: "sort", location: FieldLocation::Query },
-        FieldSpec { snake: "fromdate", location: FieldLocation::Query },
-        FieldSpec { snake: "todate", location: FieldLocation::Query },
-        FieldSpec { snake: "pagesize", location: FieldLocation::Query },
-        FieldSpec { snake: "page", location: FieldLocation::Query },
-        FieldSpec { snake: "filter", location: FieldLocation::Query },
-        FieldSpec { snake: "callback", location: FieldLocation::Query },
-        FieldSpec { snake: "site", location: FieldLocation::Query },
+        FieldSpec { snake: "ids", wire: "ids", location: FieldLocation::Path },
+        FieldSpec { snake: "order", wire: "order", location: FieldLocation::Query },
+        FieldSpec { snake: "max", wire: "max", location: FieldLocation::Query },
+        FieldSpec { snake: "min", wire: "min", location: FieldLocation::Query },
+        FieldSpec { snake: "sort", wire: "sort", location: FieldLocation::Query },
+        FieldSpec { snake: "fromdate", wire: "fromdate", location: FieldLocation::Query },
+        FieldSpec { snake: "todate", wire: "todate", location: FieldLocation::Query },
+        FieldSpec { snake: "pagesize", wire: "pagesize", location: FieldLocation::Query },
+        FieldSpec { snake: "page", wire: "page", location: FieldLocation::Query },
+        FieldSpec { snake: "filter", wire: "filter", location: FieldLocation::Query },
+        FieldSpec { snake: "callback", wire: "callback", location: FieldLocation::Query },
+        FieldSpec { snake: "site", wire: "site", location: FieldLocation::Query },
     ],
     auth: &[
     ],
@@ -2800,18 +5778,18 @@ const OP_QUESTIONS_GET_QUESTIONS_IDS_RELATED: OpSpec = OpSpec {
     method: "GET",
     path_template: "/questions/{ids}/related",
     fields: &[
-        FieldSpec { snake: "ids", location: FieldLocation::Path },
-        FieldSpec { snake: "order", location: FieldLocation::Query },
-        FieldSpec { snake: "max", location: FieldLocation::Query },
-        FieldSpec { snake: "min", location: FieldLocation::Query },
-        FieldSpec { snake: "sort", location: FieldLocation::Query },
-        FieldSpec { snake: "fromdate", location: FieldLocation::Query },
-        FieldSpec { snake: "todate", location: FieldLocation::Query },
-        FieldSpec { snake: "pagesize", location: FieldLocation::Query },
-        FieldSpec { snake: "page", location: FieldLocation::Query },
-        FieldSpec { snake: "filter", location: FieldLocation::Query },
-        FieldSpec { snake: "callback", location: FieldLocation::Query },
-        FieldSpec { snake: "site", location: FieldLocation::Query },
+        FieldSpec { snake: "ids", wire: "ids", location: FieldLocation::Path },
+        FieldSpec { snake: "order", wire: "order", location: FieldLocation::Query },
+        FieldSpec { snake: "max", wire: "max", location: FieldLocation::Query },
+        FieldSpec { snake: "min", wire: "min", location: FieldLocation::Query },
+        FieldSpec { snake: "sort", wire: "sort", location: FieldLocation::Query },
+        FieldSpec { snake: "fromdate", wire: "fromdate", location: FieldLocation::Query },
+        FieldSpec { snake: "todate", wire: "todate", location: FieldLocation::Query },
+        FieldSpec { snake: "pagesize", wire: "pagesize", location: FieldLocation::Query },
+        FieldSpec { snake: "page", wire: "page", location: FieldLocation::Query },
+        FieldSpec { snake: "filter", wire: "filter", location: FieldLocation::Query },
+        FieldSpec { snake: "callback", wire: "callback", location: FieldLocation::Query },
+        FieldSpec { snake: "site", wire: "site", location: FieldLocation::Query },
     ],
     auth: &[
     ],
@@ -2821,14 +5799,14 @@ const OP_QUESTIONS_GET_QUESTIONS_IDS_TIMELINE: OpSpec = OpSpec {
     method: "GET",
     path_template: "/questions/{ids}/timeline",
     fields: &[
-        FieldSpec { snake: "ids", location: FieldLocation::Path },
-        FieldSpec { snake: "fromdate", location: FieldLocation::Query },
-        FieldSpec { snake: "todate", location: FieldLocation::Query },
-        FieldSpec { snake: "pagesize", location: FieldLocation::Query },
-        FieldSpec { snake: "page", location: FieldLocation::Query },
-        FieldSpec { snake: "filter", location: FieldLocation::Query },
-        FieldSpec { snake: "callback", location: FieldLocation::Query },
-        FieldSpec { snake: "site", location: FieldLocation::Query },
+        FieldSpec { snake: "ids", wire: "ids", location: FieldLocation::Path },
+        FieldSpec { snake: "fromdate", wire: "fromdate", location: FieldLocation::Query },
+        FieldSpec { snake: "todate", wire: "todate", location: FieldLocation::Query },
+        FieldSpec { snake: "pagesize", wire: "pagesize", location: FieldLocation::Query },
+        FieldSpec { snake: "page", wire: "page", location: FieldLocation::Query },
+        FieldSpec { snake: "filter", wire: "filter", location: FieldLocation::Query },
+        FieldSpec { snake: "callback", wire: "callback", location: FieldLocation::Query },
+        FieldSpec { snake: "site", wire: "site", location: FieldLocation::Query },
     ],
     auth: &[
     ],
@@ -2875,6 +5853,30 @@ fn iface_questions__get_questions_ids_linked_sort_enum__to_str(e: &iface_questio
         iface_questions::GetQuestionsIdsLinkedSortEnum::Votes => "votes",
         iface_questions::GetQuestionsIdsLinkedSortEnum::Rank => "rank",
     }
+}
+
+fn iface_questions__questions__to_json(p: &iface_questions::Questions) -> Value {
+    let mut m = Map::new();
+    m.insert("value".into(), Value::String((&p.value).clone()));
+    Value::Object(m)
+}
+
+fn iface_questions__answers__to_json(p: &iface_questions::Answers) -> Value {
+    let mut m = Map::new();
+    m.insert("value".into(), Value::String((&p.value).clone()));
+    Value::Object(m)
+}
+
+fn iface_questions__comments__to_json(p: &iface_questions::Comments) -> Value {
+    let mut m = Map::new();
+    m.insert("value".into(), Value::String((&p.value).clone()));
+    Value::Object(m)
+}
+
+fn iface_questions__question_timeline_events__to_json(p: &iface_questions::QuestionTimelineEvents) -> Value {
+    let mut m = Map::new();
+    m.insert("value".into(), Value::String((&p.value).clone()));
+    Value::Object(m)
 }
 
 fn iface_questions__get_questions_params__to_json(p: &iface_questions::GetQuestionsParams) -> Value {
@@ -3043,46 +6045,404 @@ fn iface_questions__get_questions_ids_timeline_params__to_json(p: &iface_questio
     Value::Object(m)
 }
 
+fn iface_questions__questions__from_json(v: &Value) -> Option<iface_questions::Questions> {
+    let m = v.as_object()?;
+    Some(iface_questions::Questions {
+        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+    })
+}
+
+fn iface_questions__answers__from_json(v: &Value) -> Option<iface_questions::Answers> {
+    let m = v.as_object()?;
+    Some(iface_questions::Answers {
+        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+    })
+}
+
+fn iface_questions__comments__from_json(v: &Value) -> Option<iface_questions::Comments> {
+    let m = v.as_object()?;
+    Some(iface_questions::Comments {
+        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+    })
+}
+
+fn iface_questions__question_timeline_events__from_json(v: &Value) -> Option<iface_questions::QuestionTimelineEvents> {
+    let m = v.as_object()?;
+    Some(iface_questions::QuestionTimelineEvents {
+        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+    })
+}
+
+fn iface_questions__get_questions__ok(body: String) -> Result<iface_questions::Questions, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match iface_questions__questions__from_json(&v) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_questions__get_questions__err(e: crate::runtime::DispatchError) -> iface_questions::GetQuestionsError {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => match status {
+            400u16 => iface_questions::GetQuestionsError::BadRequest(body),
+            401u16 => iface_questions::GetQuestionsError::Unauthorized(body),
+            402u16 => iface_questions::GetQuestionsError::PaymentRequired(body),
+            403u16 => iface_questions::GetQuestionsError::Forbidden(body),
+            404u16 => iface_questions::GetQuestionsError::NotFound(body),
+            405u16 => iface_questions::GetQuestionsError::MethodNotAllowed(body),
+            406u16 => iface_questions::GetQuestionsError::NotAcceptable(body),
+            500u16 => iface_questions::GetQuestionsError::InternalServerError(body),
+            502u16 => iface_questions::GetQuestionsError::BadGateway(body),
+            503u16 => iface_questions::GetQuestionsError::ServiceUnavailable(body),
+            _ => iface_questions::GetQuestionsError::Other(body),
+        },
+        crate::runtime::DispatchError::Transport(m) => iface_questions::GetQuestionsError::Other(m),
+    }
+}
+
+fn iface_questions__get_questions_featured__ok(body: String) -> Result<iface_questions::Questions, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match iface_questions__questions__from_json(&v) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_questions__get_questions_featured__err(e: crate::runtime::DispatchError) -> iface_questions::GetQuestionsFeaturedError {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => match status {
+            400u16 => iface_questions::GetQuestionsFeaturedError::BadRequest(body),
+            401u16 => iface_questions::GetQuestionsFeaturedError::Unauthorized(body),
+            402u16 => iface_questions::GetQuestionsFeaturedError::PaymentRequired(body),
+            403u16 => iface_questions::GetQuestionsFeaturedError::Forbidden(body),
+            404u16 => iface_questions::GetQuestionsFeaturedError::NotFound(body),
+            405u16 => iface_questions::GetQuestionsFeaturedError::MethodNotAllowed(body),
+            406u16 => iface_questions::GetQuestionsFeaturedError::NotAcceptable(body),
+            500u16 => iface_questions::GetQuestionsFeaturedError::InternalServerError(body),
+            502u16 => iface_questions::GetQuestionsFeaturedError::BadGateway(body),
+            503u16 => iface_questions::GetQuestionsFeaturedError::ServiceUnavailable(body),
+            _ => iface_questions::GetQuestionsFeaturedError::Other(body),
+        },
+        crate::runtime::DispatchError::Transport(m) => iface_questions::GetQuestionsFeaturedError::Other(m),
+    }
+}
+
+fn iface_questions__get_questions_no_answers__ok(body: String) -> Result<iface_questions::Questions, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match iface_questions__questions__from_json(&v) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_questions__get_questions_no_answers__err(e: crate::runtime::DispatchError) -> iface_questions::GetQuestionsNoAnswersError {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => match status {
+            400u16 => iface_questions::GetQuestionsNoAnswersError::BadRequest(body),
+            401u16 => iface_questions::GetQuestionsNoAnswersError::Unauthorized(body),
+            402u16 => iface_questions::GetQuestionsNoAnswersError::PaymentRequired(body),
+            403u16 => iface_questions::GetQuestionsNoAnswersError::Forbidden(body),
+            404u16 => iface_questions::GetQuestionsNoAnswersError::NotFound(body),
+            405u16 => iface_questions::GetQuestionsNoAnswersError::MethodNotAllowed(body),
+            406u16 => iface_questions::GetQuestionsNoAnswersError::NotAcceptable(body),
+            500u16 => iface_questions::GetQuestionsNoAnswersError::InternalServerError(body),
+            502u16 => iface_questions::GetQuestionsNoAnswersError::BadGateway(body),
+            503u16 => iface_questions::GetQuestionsNoAnswersError::ServiceUnavailable(body),
+            _ => iface_questions::GetQuestionsNoAnswersError::Other(body),
+        },
+        crate::runtime::DispatchError::Transport(m) => iface_questions::GetQuestionsNoAnswersError::Other(m),
+    }
+}
+
+fn iface_questions__get_questions_unanswered__ok(body: String) -> Result<iface_questions::Questions, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match iface_questions__questions__from_json(&v) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_questions__get_questions_unanswered__err(e: crate::runtime::DispatchError) -> iface_questions::GetQuestionsUnansweredError {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => match status {
+            400u16 => iface_questions::GetQuestionsUnansweredError::BadRequest(body),
+            401u16 => iface_questions::GetQuestionsUnansweredError::Unauthorized(body),
+            402u16 => iface_questions::GetQuestionsUnansweredError::PaymentRequired(body),
+            403u16 => iface_questions::GetQuestionsUnansweredError::Forbidden(body),
+            404u16 => iface_questions::GetQuestionsUnansweredError::NotFound(body),
+            405u16 => iface_questions::GetQuestionsUnansweredError::MethodNotAllowed(body),
+            406u16 => iface_questions::GetQuestionsUnansweredError::NotAcceptable(body),
+            500u16 => iface_questions::GetQuestionsUnansweredError::InternalServerError(body),
+            502u16 => iface_questions::GetQuestionsUnansweredError::BadGateway(body),
+            503u16 => iface_questions::GetQuestionsUnansweredError::ServiceUnavailable(body),
+            _ => iface_questions::GetQuestionsUnansweredError::Other(body),
+        },
+        crate::runtime::DispatchError::Transport(m) => iface_questions::GetQuestionsUnansweredError::Other(m),
+    }
+}
+
+fn iface_questions__get_questions_ids__ok(body: String) -> Result<iface_questions::Questions, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match iface_questions__questions__from_json(&v) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_questions__get_questions_ids__err(e: crate::runtime::DispatchError) -> iface_questions::GetQuestionsIdsError {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => match status {
+            400u16 => iface_questions::GetQuestionsIdsError::BadRequest(body),
+            401u16 => iface_questions::GetQuestionsIdsError::Unauthorized(body),
+            402u16 => iface_questions::GetQuestionsIdsError::PaymentRequired(body),
+            403u16 => iface_questions::GetQuestionsIdsError::Forbidden(body),
+            404u16 => iface_questions::GetQuestionsIdsError::NotFound(body),
+            405u16 => iface_questions::GetQuestionsIdsError::MethodNotAllowed(body),
+            406u16 => iface_questions::GetQuestionsIdsError::NotAcceptable(body),
+            500u16 => iface_questions::GetQuestionsIdsError::InternalServerError(body),
+            502u16 => iface_questions::GetQuestionsIdsError::BadGateway(body),
+            503u16 => iface_questions::GetQuestionsIdsError::ServiceUnavailable(body),
+            _ => iface_questions::GetQuestionsIdsError::Other(body),
+        },
+        crate::runtime::DispatchError::Transport(m) => iface_questions::GetQuestionsIdsError::Other(m),
+    }
+}
+
+fn iface_questions__get_questions_ids_answers__ok(body: String) -> Result<iface_questions::Answers, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match iface_questions__answers__from_json(&v) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_questions__get_questions_ids_answers__err(e: crate::runtime::DispatchError) -> iface_questions::GetQuestionsIdsAnswersError {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => match status {
+            400u16 => iface_questions::GetQuestionsIdsAnswersError::BadRequest(body),
+            401u16 => iface_questions::GetQuestionsIdsAnswersError::Unauthorized(body),
+            402u16 => iface_questions::GetQuestionsIdsAnswersError::PaymentRequired(body),
+            403u16 => iface_questions::GetQuestionsIdsAnswersError::Forbidden(body),
+            404u16 => iface_questions::GetQuestionsIdsAnswersError::NotFound(body),
+            405u16 => iface_questions::GetQuestionsIdsAnswersError::MethodNotAllowed(body),
+            406u16 => iface_questions::GetQuestionsIdsAnswersError::NotAcceptable(body),
+            500u16 => iface_questions::GetQuestionsIdsAnswersError::InternalServerError(body),
+            502u16 => iface_questions::GetQuestionsIdsAnswersError::BadGateway(body),
+            503u16 => iface_questions::GetQuestionsIdsAnswersError::ServiceUnavailable(body),
+            _ => iface_questions::GetQuestionsIdsAnswersError::Other(body),
+        },
+        crate::runtime::DispatchError::Transport(m) => iface_questions::GetQuestionsIdsAnswersError::Other(m),
+    }
+}
+
+fn iface_questions__get_questions_ids_comments__ok(body: String) -> Result<iface_questions::Comments, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match iface_questions__comments__from_json(&v) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_questions__get_questions_ids_comments__err(e: crate::runtime::DispatchError) -> iface_questions::GetQuestionsIdsCommentsError {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => match status {
+            400u16 => iface_questions::GetQuestionsIdsCommentsError::BadRequest(body),
+            401u16 => iface_questions::GetQuestionsIdsCommentsError::Unauthorized(body),
+            402u16 => iface_questions::GetQuestionsIdsCommentsError::PaymentRequired(body),
+            403u16 => iface_questions::GetQuestionsIdsCommentsError::Forbidden(body),
+            404u16 => iface_questions::GetQuestionsIdsCommentsError::NotFound(body),
+            405u16 => iface_questions::GetQuestionsIdsCommentsError::MethodNotAllowed(body),
+            406u16 => iface_questions::GetQuestionsIdsCommentsError::NotAcceptable(body),
+            500u16 => iface_questions::GetQuestionsIdsCommentsError::InternalServerError(body),
+            502u16 => iface_questions::GetQuestionsIdsCommentsError::BadGateway(body),
+            503u16 => iface_questions::GetQuestionsIdsCommentsError::ServiceUnavailable(body),
+            _ => iface_questions::GetQuestionsIdsCommentsError::Other(body),
+        },
+        crate::runtime::DispatchError::Transport(m) => iface_questions::GetQuestionsIdsCommentsError::Other(m),
+    }
+}
+
+fn iface_questions__get_questions_ids_linked__ok(body: String) -> Result<iface_questions::Questions, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match iface_questions__questions__from_json(&v) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_questions__get_questions_ids_linked__err(e: crate::runtime::DispatchError) -> iface_questions::GetQuestionsIdsLinkedError {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => match status {
+            400u16 => iface_questions::GetQuestionsIdsLinkedError::BadRequest(body),
+            401u16 => iface_questions::GetQuestionsIdsLinkedError::Unauthorized(body),
+            402u16 => iface_questions::GetQuestionsIdsLinkedError::PaymentRequired(body),
+            403u16 => iface_questions::GetQuestionsIdsLinkedError::Forbidden(body),
+            404u16 => iface_questions::GetQuestionsIdsLinkedError::NotFound(body),
+            405u16 => iface_questions::GetQuestionsIdsLinkedError::MethodNotAllowed(body),
+            406u16 => iface_questions::GetQuestionsIdsLinkedError::NotAcceptable(body),
+            500u16 => iface_questions::GetQuestionsIdsLinkedError::InternalServerError(body),
+            502u16 => iface_questions::GetQuestionsIdsLinkedError::BadGateway(body),
+            503u16 => iface_questions::GetQuestionsIdsLinkedError::ServiceUnavailable(body),
+            _ => iface_questions::GetQuestionsIdsLinkedError::Other(body),
+        },
+        crate::runtime::DispatchError::Transport(m) => iface_questions::GetQuestionsIdsLinkedError::Other(m),
+    }
+}
+
+fn iface_questions__get_questions_ids_related__ok(body: String) -> Result<iface_questions::Questions, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match iface_questions__questions__from_json(&v) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_questions__get_questions_ids_related__err(e: crate::runtime::DispatchError) -> iface_questions::GetQuestionsIdsRelatedError {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => match status {
+            400u16 => iface_questions::GetQuestionsIdsRelatedError::BadRequest(body),
+            401u16 => iface_questions::GetQuestionsIdsRelatedError::Unauthorized(body),
+            402u16 => iface_questions::GetQuestionsIdsRelatedError::PaymentRequired(body),
+            403u16 => iface_questions::GetQuestionsIdsRelatedError::Forbidden(body),
+            404u16 => iface_questions::GetQuestionsIdsRelatedError::NotFound(body),
+            405u16 => iface_questions::GetQuestionsIdsRelatedError::MethodNotAllowed(body),
+            406u16 => iface_questions::GetQuestionsIdsRelatedError::NotAcceptable(body),
+            500u16 => iface_questions::GetQuestionsIdsRelatedError::InternalServerError(body),
+            502u16 => iface_questions::GetQuestionsIdsRelatedError::BadGateway(body),
+            503u16 => iface_questions::GetQuestionsIdsRelatedError::ServiceUnavailable(body),
+            _ => iface_questions::GetQuestionsIdsRelatedError::Other(body),
+        },
+        crate::runtime::DispatchError::Transport(m) => iface_questions::GetQuestionsIdsRelatedError::Other(m),
+    }
+}
+
+fn iface_questions__get_questions_ids_timeline__ok(body: String) -> Result<iface_questions::QuestionTimelineEvents, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match iface_questions__question_timeline_events__from_json(&v) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_questions__get_questions_ids_timeline__err(e: crate::runtime::DispatchError) -> iface_questions::GetQuestionsIdsTimelineError {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => match status {
+            400u16 => iface_questions::GetQuestionsIdsTimelineError::BadRequest(body),
+            401u16 => iface_questions::GetQuestionsIdsTimelineError::Unauthorized(body),
+            402u16 => iface_questions::GetQuestionsIdsTimelineError::PaymentRequired(body),
+            403u16 => iface_questions::GetQuestionsIdsTimelineError::Forbidden(body),
+            404u16 => iface_questions::GetQuestionsIdsTimelineError::NotFound(body),
+            405u16 => iface_questions::GetQuestionsIdsTimelineError::MethodNotAllowed(body),
+            406u16 => iface_questions::GetQuestionsIdsTimelineError::NotAcceptable(body),
+            500u16 => iface_questions::GetQuestionsIdsTimelineError::InternalServerError(body),
+            502u16 => iface_questions::GetQuestionsIdsTimelineError::BadGateway(body),
+            503u16 => iface_questions::GetQuestionsIdsTimelineError::ServiceUnavailable(body),
+            _ => iface_questions::GetQuestionsIdsTimelineError::Other(body),
+        },
+        crate::runtime::DispatchError::Transport(m) => iface_questions::GetQuestionsIdsTimelineError::Other(m),
+    }
+}
+
 impl iface_questions::Guest for crate::Component {
-    fn get_questions(params: iface_questions::GetQuestionsParams) -> Result<String, String> {
+    fn get_questions(params: iface_questions::GetQuestionsParams) -> Result<iface_questions::Questions, iface_questions::GetQuestionsError> {
         let json = iface_questions__get_questions_params__to_json(&params);
-        dispatch(&OP_QUESTIONS_GET_QUESTIONS, json)
+        match dispatch(&OP_QUESTIONS_GET_QUESTIONS, json).and_then(iface_questions__get_questions__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_questions__get_questions__err(e)),
+        }
     }
-    fn get_questions_featured(params: iface_questions::GetQuestionsFeaturedParams) -> Result<String, String> {
+    fn get_questions_featured(params: iface_questions::GetQuestionsFeaturedParams) -> Result<iface_questions::Questions, iface_questions::GetQuestionsFeaturedError> {
         let json = iface_questions__get_questions_featured_params__to_json(&params);
-        dispatch(&OP_QUESTIONS_GET_QUESTIONS_FEATURED, json)
+        match dispatch(&OP_QUESTIONS_GET_QUESTIONS_FEATURED, json).and_then(iface_questions__get_questions_featured__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_questions__get_questions_featured__err(e)),
+        }
     }
-    fn get_questions_no_answers(params: iface_questions::GetQuestionsNoAnswersParams) -> Result<String, String> {
+    fn get_questions_no_answers(params: iface_questions::GetQuestionsNoAnswersParams) -> Result<iface_questions::Questions, iface_questions::GetQuestionsNoAnswersError> {
         let json = iface_questions__get_questions_no_answers_params__to_json(&params);
-        dispatch(&OP_QUESTIONS_GET_QUESTIONS_NO_ANSWERS, json)
+        match dispatch(&OP_QUESTIONS_GET_QUESTIONS_NO_ANSWERS, json).and_then(iface_questions__get_questions_no_answers__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_questions__get_questions_no_answers__err(e)),
+        }
     }
-    fn get_questions_unanswered(params: iface_questions::GetQuestionsUnansweredParams) -> Result<String, String> {
+    fn get_questions_unanswered(params: iface_questions::GetQuestionsUnansweredParams) -> Result<iface_questions::Questions, iface_questions::GetQuestionsUnansweredError> {
         let json = iface_questions__get_questions_unanswered_params__to_json(&params);
-        dispatch(&OP_QUESTIONS_GET_QUESTIONS_UNANSWERED, json)
+        match dispatch(&OP_QUESTIONS_GET_QUESTIONS_UNANSWERED, json).and_then(iface_questions__get_questions_unanswered__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_questions__get_questions_unanswered__err(e)),
+        }
     }
-    fn get_questions_ids(params: iface_questions::GetQuestionsIdsParams) -> Result<String, String> {
+    fn get_questions_ids(params: iface_questions::GetQuestionsIdsParams) -> Result<iface_questions::Questions, iface_questions::GetQuestionsIdsError> {
         let json = iface_questions__get_questions_ids_params__to_json(&params);
-        dispatch(&OP_QUESTIONS_GET_QUESTIONS_IDS, json)
+        match dispatch(&OP_QUESTIONS_GET_QUESTIONS_IDS, json).and_then(iface_questions__get_questions_ids__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_questions__get_questions_ids__err(e)),
+        }
     }
-    fn get_questions_ids_answers(params: iface_questions::GetQuestionsIdsAnswersParams) -> Result<String, String> {
+    fn get_questions_ids_answers(params: iface_questions::GetQuestionsIdsAnswersParams) -> Result<iface_questions::Answers, iface_questions::GetQuestionsIdsAnswersError> {
         let json = iface_questions__get_questions_ids_answers_params__to_json(&params);
-        dispatch(&OP_QUESTIONS_GET_QUESTIONS_IDS_ANSWERS, json)
+        match dispatch(&OP_QUESTIONS_GET_QUESTIONS_IDS_ANSWERS, json).and_then(iface_questions__get_questions_ids_answers__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_questions__get_questions_ids_answers__err(e)),
+        }
     }
-    fn get_questions_ids_comments(params: iface_questions::GetQuestionsIdsCommentsParams) -> Result<String, String> {
+    fn get_questions_ids_comments(params: iface_questions::GetQuestionsIdsCommentsParams) -> Result<iface_questions::Comments, iface_questions::GetQuestionsIdsCommentsError> {
         let json = iface_questions__get_questions_ids_comments_params__to_json(&params);
-        dispatch(&OP_QUESTIONS_GET_QUESTIONS_IDS_COMMENTS, json)
+        match dispatch(&OP_QUESTIONS_GET_QUESTIONS_IDS_COMMENTS, json).and_then(iface_questions__get_questions_ids_comments__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_questions__get_questions_ids_comments__err(e)),
+        }
     }
-    fn get_questions_ids_linked(params: iface_questions::GetQuestionsIdsLinkedParams) -> Result<String, String> {
+    fn get_questions_ids_linked(params: iface_questions::GetQuestionsIdsLinkedParams) -> Result<iface_questions::Questions, iface_questions::GetQuestionsIdsLinkedError> {
         let json = iface_questions__get_questions_ids_linked_params__to_json(&params);
-        dispatch(&OP_QUESTIONS_GET_QUESTIONS_IDS_LINKED, json)
+        match dispatch(&OP_QUESTIONS_GET_QUESTIONS_IDS_LINKED, json).and_then(iface_questions__get_questions_ids_linked__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_questions__get_questions_ids_linked__err(e)),
+        }
     }
-    fn get_questions_ids_related(params: iface_questions::GetQuestionsIdsRelatedParams) -> Result<String, String> {
+    fn get_questions_ids_related(params: iface_questions::GetQuestionsIdsRelatedParams) -> Result<iface_questions::Questions, iface_questions::GetQuestionsIdsRelatedError> {
         let json = iface_questions__get_questions_ids_related_params__to_json(&params);
-        dispatch(&OP_QUESTIONS_GET_QUESTIONS_IDS_RELATED, json)
+        match dispatch(&OP_QUESTIONS_GET_QUESTIONS_IDS_RELATED, json).and_then(iface_questions__get_questions_ids_related__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_questions__get_questions_ids_related__err(e)),
+        }
     }
-    fn get_questions_ids_timeline(params: iface_questions::GetQuestionsIdsTimelineParams) -> Result<String, String> {
+    fn get_questions_ids_timeline(params: iface_questions::GetQuestionsIdsTimelineParams) -> Result<iface_questions::QuestionTimelineEvents, iface_questions::GetQuestionsIdsTimelineError> {
         let json = iface_questions__get_questions_ids_timeline_params__to_json(&params);
-        dispatch(&OP_QUESTIONS_GET_QUESTIONS_IDS_TIMELINE, json)
+        match dispatch(&OP_QUESTIONS_GET_QUESTIONS_IDS_TIMELINE, json).and_then(iface_questions__get_questions_ids_timeline__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_questions__get_questions_ids_timeline__err(e)),
+        }
     }
 }
 use crate::exports::autostamp::stackexchange::revisions as iface_revisions;
@@ -3091,18 +6451,24 @@ const OP_REVISIONS_GET_REVISIONS_IDS: OpSpec = OpSpec {
     method: "GET",
     path_template: "/revisions/{ids}",
     fields: &[
-        FieldSpec { snake: "ids", location: FieldLocation::Path },
-        FieldSpec { snake: "fromdate", location: FieldLocation::Query },
-        FieldSpec { snake: "todate", location: FieldLocation::Query },
-        FieldSpec { snake: "pagesize", location: FieldLocation::Query },
-        FieldSpec { snake: "page", location: FieldLocation::Query },
-        FieldSpec { snake: "filter", location: FieldLocation::Query },
-        FieldSpec { snake: "callback", location: FieldLocation::Query },
-        FieldSpec { snake: "site", location: FieldLocation::Query },
+        FieldSpec { snake: "ids", wire: "ids", location: FieldLocation::Path },
+        FieldSpec { snake: "fromdate", wire: "fromdate", location: FieldLocation::Query },
+        FieldSpec { snake: "todate", wire: "todate", location: FieldLocation::Query },
+        FieldSpec { snake: "pagesize", wire: "pagesize", location: FieldLocation::Query },
+        FieldSpec { snake: "page", wire: "page", location: FieldLocation::Query },
+        FieldSpec { snake: "filter", wire: "filter", location: FieldLocation::Query },
+        FieldSpec { snake: "callback", wire: "callback", location: FieldLocation::Query },
+        FieldSpec { snake: "site", wire: "site", location: FieldLocation::Query },
     ],
     auth: &[
     ],
 };
+
+fn iface_revisions__revisions__to_json(p: &iface_revisions::Revisions) -> Value {
+    let mut m = Map::new();
+    m.insert("value".into(), Value::String((&p.value).clone()));
+    Value::Object(m)
+}
 
 fn iface_revisions__get_revisions_ids_params__to_json(p: &iface_revisions::GetRevisionsIdsParams) -> Value {
     let mut m = Map::new();
@@ -3117,10 +6483,50 @@ fn iface_revisions__get_revisions_ids_params__to_json(p: &iface_revisions::GetRe
     Value::Object(m)
 }
 
+fn iface_revisions__revisions__from_json(v: &Value) -> Option<iface_revisions::Revisions> {
+    let m = v.as_object()?;
+    Some(iface_revisions::Revisions {
+        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+    })
+}
+
+fn iface_revisions__get_revisions_ids__ok(body: String) -> Result<iface_revisions::Revisions, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match iface_revisions__revisions__from_json(&v) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_revisions__get_revisions_ids__err(e: crate::runtime::DispatchError) -> iface_revisions::GetRevisionsIdsError {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => match status {
+            400u16 => iface_revisions::GetRevisionsIdsError::BadRequest(body),
+            401u16 => iface_revisions::GetRevisionsIdsError::Unauthorized(body),
+            402u16 => iface_revisions::GetRevisionsIdsError::PaymentRequired(body),
+            403u16 => iface_revisions::GetRevisionsIdsError::Forbidden(body),
+            404u16 => iface_revisions::GetRevisionsIdsError::NotFound(body),
+            405u16 => iface_revisions::GetRevisionsIdsError::MethodNotAllowed(body),
+            406u16 => iface_revisions::GetRevisionsIdsError::NotAcceptable(body),
+            500u16 => iface_revisions::GetRevisionsIdsError::InternalServerError(body),
+            502u16 => iface_revisions::GetRevisionsIdsError::BadGateway(body),
+            503u16 => iface_revisions::GetRevisionsIdsError::ServiceUnavailable(body),
+            _ => iface_revisions::GetRevisionsIdsError::Other(body),
+        },
+        crate::runtime::DispatchError::Transport(m) => iface_revisions::GetRevisionsIdsError::Other(m),
+    }
+}
+
 impl iface_revisions::Guest for crate::Component {
-    fn get_revisions_ids(params: iface_revisions::GetRevisionsIdsParams) -> Result<String, String> {
+    fn get_revisions_ids(params: iface_revisions::GetRevisionsIdsParams) -> Result<iface_revisions::Revisions, iface_revisions::GetRevisionsIdsError> {
         let json = iface_revisions__get_revisions_ids_params__to_json(&params);
-        dispatch(&OP_REVISIONS_GET_REVISIONS_IDS, json)
+        match dispatch(&OP_REVISIONS_GET_REVISIONS_IDS, json).and_then(iface_revisions__get_revisions_ids__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_revisions__get_revisions_ids__err(e)),
+        }
     }
 }
 use crate::exports::autostamp::stackexchange::search as iface_search;
@@ -3129,20 +6535,20 @@ const OP_SEARCH_GET_SEARCH: OpSpec = OpSpec {
     method: "GET",
     path_template: "/search",
     fields: &[
-        FieldSpec { snake: "tagged", location: FieldLocation::Query },
-        FieldSpec { snake: "order", location: FieldLocation::Query },
-        FieldSpec { snake: "max", location: FieldLocation::Query },
-        FieldSpec { snake: "min", location: FieldLocation::Query },
-        FieldSpec { snake: "sort", location: FieldLocation::Query },
-        FieldSpec { snake: "fromdate", location: FieldLocation::Query },
-        FieldSpec { snake: "todate", location: FieldLocation::Query },
-        FieldSpec { snake: "pagesize", location: FieldLocation::Query },
-        FieldSpec { snake: "page", location: FieldLocation::Query },
-        FieldSpec { snake: "filter", location: FieldLocation::Query },
-        FieldSpec { snake: "callback", location: FieldLocation::Query },
-        FieldSpec { snake: "site", location: FieldLocation::Query },
-        FieldSpec { snake: "intitle", location: FieldLocation::Query },
-        FieldSpec { snake: "nottagged", location: FieldLocation::Query },
+        FieldSpec { snake: "tagged", wire: "tagged", location: FieldLocation::Query },
+        FieldSpec { snake: "order", wire: "order", location: FieldLocation::Query },
+        FieldSpec { snake: "max", wire: "max", location: FieldLocation::Query },
+        FieldSpec { snake: "min", wire: "min", location: FieldLocation::Query },
+        FieldSpec { snake: "sort", wire: "sort", location: FieldLocation::Query },
+        FieldSpec { snake: "fromdate", wire: "fromdate", location: FieldLocation::Query },
+        FieldSpec { snake: "todate", wire: "todate", location: FieldLocation::Query },
+        FieldSpec { snake: "pagesize", wire: "pagesize", location: FieldLocation::Query },
+        FieldSpec { snake: "page", wire: "page", location: FieldLocation::Query },
+        FieldSpec { snake: "filter", wire: "filter", location: FieldLocation::Query },
+        FieldSpec { snake: "callback", wire: "callback", location: FieldLocation::Query },
+        FieldSpec { snake: "site", wire: "site", location: FieldLocation::Query },
+        FieldSpec { snake: "intitle", wire: "intitle", location: FieldLocation::Query },
+        FieldSpec { snake: "nottagged", wire: "nottagged", location: FieldLocation::Query },
     ],
     auth: &[
     ],
@@ -3152,31 +6558,31 @@ const OP_SEARCH_GET_SEARCH_ADVANCED: OpSpec = OpSpec {
     method: "GET",
     path_template: "/search/advanced",
     fields: &[
-        FieldSpec { snake: "tagged", location: FieldLocation::Query },
-        FieldSpec { snake: "order", location: FieldLocation::Query },
-        FieldSpec { snake: "max", location: FieldLocation::Query },
-        FieldSpec { snake: "min", location: FieldLocation::Query },
-        FieldSpec { snake: "sort", location: FieldLocation::Query },
-        FieldSpec { snake: "fromdate", location: FieldLocation::Query },
-        FieldSpec { snake: "todate", location: FieldLocation::Query },
-        FieldSpec { snake: "pagesize", location: FieldLocation::Query },
-        FieldSpec { snake: "page", location: FieldLocation::Query },
-        FieldSpec { snake: "filter", location: FieldLocation::Query },
-        FieldSpec { snake: "callback", location: FieldLocation::Query },
-        FieldSpec { snake: "site", location: FieldLocation::Query },
-        FieldSpec { snake: "accepted", location: FieldLocation::Query },
-        FieldSpec { snake: "answers", location: FieldLocation::Query },
-        FieldSpec { snake: "body", location: FieldLocation::Query },
-        FieldSpec { snake: "closed", location: FieldLocation::Query },
-        FieldSpec { snake: "migrated", location: FieldLocation::Query },
-        FieldSpec { snake: "notice", location: FieldLocation::Query },
-        FieldSpec { snake: "nottagged", location: FieldLocation::Query },
-        FieldSpec { snake: "q", location: FieldLocation::Query },
-        FieldSpec { snake: "title", location: FieldLocation::Query },
-        FieldSpec { snake: "url", location: FieldLocation::Query },
-        FieldSpec { snake: "user", location: FieldLocation::Query },
-        FieldSpec { snake: "views", location: FieldLocation::Query },
-        FieldSpec { snake: "wiki", location: FieldLocation::Query },
+        FieldSpec { snake: "tagged", wire: "tagged", location: FieldLocation::Query },
+        FieldSpec { snake: "order", wire: "order", location: FieldLocation::Query },
+        FieldSpec { snake: "max", wire: "max", location: FieldLocation::Query },
+        FieldSpec { snake: "min", wire: "min", location: FieldLocation::Query },
+        FieldSpec { snake: "sort", wire: "sort", location: FieldLocation::Query },
+        FieldSpec { snake: "fromdate", wire: "fromdate", location: FieldLocation::Query },
+        FieldSpec { snake: "todate", wire: "todate", location: FieldLocation::Query },
+        FieldSpec { snake: "pagesize", wire: "pagesize", location: FieldLocation::Query },
+        FieldSpec { snake: "page", wire: "page", location: FieldLocation::Query },
+        FieldSpec { snake: "filter", wire: "filter", location: FieldLocation::Query },
+        FieldSpec { snake: "callback", wire: "callback", location: FieldLocation::Query },
+        FieldSpec { snake: "site", wire: "site", location: FieldLocation::Query },
+        FieldSpec { snake: "accepted", wire: "accepted", location: FieldLocation::Query },
+        FieldSpec { snake: "answers", wire: "answers", location: FieldLocation::Query },
+        FieldSpec { snake: "body", wire: "body", location: FieldLocation::Query },
+        FieldSpec { snake: "closed", wire: "closed", location: FieldLocation::Query },
+        FieldSpec { snake: "migrated", wire: "migrated", location: FieldLocation::Query },
+        FieldSpec { snake: "notice", wire: "notice", location: FieldLocation::Query },
+        FieldSpec { snake: "nottagged", wire: "nottagged", location: FieldLocation::Query },
+        FieldSpec { snake: "q", wire: "q", location: FieldLocation::Query },
+        FieldSpec { snake: "title", wire: "title", location: FieldLocation::Query },
+        FieldSpec { snake: "url", wire: "url", location: FieldLocation::Query },
+        FieldSpec { snake: "user", wire: "user", location: FieldLocation::Query },
+        FieldSpec { snake: "views", wire: "views", location: FieldLocation::Query },
+        FieldSpec { snake: "wiki", wire: "wiki", location: FieldLocation::Query },
     ],
     auth: &[
     ],
@@ -3196,6 +6602,12 @@ fn iface_search__get_search_sort_enum__to_str(e: &iface_search::GetSearchSortEnu
         iface_search::GetSearchSortEnum::Votes => "votes",
         iface_search::GetSearchSortEnum::Relevance => "relevance",
     }
+}
+
+fn iface_search__questions__to_json(p: &iface_search::Questions) -> Value {
+    let mut m = Map::new();
+    m.insert("value".into(), Value::String((&p.value).clone()));
+    Value::Object(m)
 }
 
 fn iface_search__get_search_params__to_json(p: &iface_search::GetSearchParams) -> Value {
@@ -3247,14 +6659,87 @@ fn iface_search__get_search_advanced_params__to_json(p: &iface_search::GetSearch
     Value::Object(m)
 }
 
-impl iface_search::Guest for crate::Component {
-    fn get_search(params: iface_search::GetSearchParams) -> Result<String, String> {
-        let json = iface_search__get_search_params__to_json(&params);
-        dispatch(&OP_SEARCH_GET_SEARCH, json)
+fn iface_search__questions__from_json(v: &Value) -> Option<iface_search::Questions> {
+    let m = v.as_object()?;
+    Some(iface_search::Questions {
+        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+    })
+}
+
+fn iface_search__get_search__ok(body: String) -> Result<iface_search::Questions, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match iface_search__questions__from_json(&v) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
     }
-    fn get_search_advanced(params: iface_search::GetSearchAdvancedParams) -> Result<String, String> {
+}
+
+fn iface_search__get_search__err(e: crate::runtime::DispatchError) -> iface_search::GetSearchError {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => match status {
+            400u16 => iface_search::GetSearchError::BadRequest(body),
+            401u16 => iface_search::GetSearchError::Unauthorized(body),
+            402u16 => iface_search::GetSearchError::PaymentRequired(body),
+            403u16 => iface_search::GetSearchError::Forbidden(body),
+            404u16 => iface_search::GetSearchError::NotFound(body),
+            405u16 => iface_search::GetSearchError::MethodNotAllowed(body),
+            406u16 => iface_search::GetSearchError::NotAcceptable(body),
+            500u16 => iface_search::GetSearchError::InternalServerError(body),
+            502u16 => iface_search::GetSearchError::BadGateway(body),
+            503u16 => iface_search::GetSearchError::ServiceUnavailable(body),
+            _ => iface_search::GetSearchError::Other(body),
+        },
+        crate::runtime::DispatchError::Transport(m) => iface_search::GetSearchError::Other(m),
+    }
+}
+
+fn iface_search__get_search_advanced__ok(body: String) -> Result<iface_search::Questions, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match iface_search__questions__from_json(&v) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_search__get_search_advanced__err(e: crate::runtime::DispatchError) -> iface_search::GetSearchAdvancedError {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => match status {
+            400u16 => iface_search::GetSearchAdvancedError::BadRequest(body),
+            401u16 => iface_search::GetSearchAdvancedError::Unauthorized(body),
+            402u16 => iface_search::GetSearchAdvancedError::PaymentRequired(body),
+            403u16 => iface_search::GetSearchAdvancedError::Forbidden(body),
+            404u16 => iface_search::GetSearchAdvancedError::NotFound(body),
+            405u16 => iface_search::GetSearchAdvancedError::MethodNotAllowed(body),
+            406u16 => iface_search::GetSearchAdvancedError::NotAcceptable(body),
+            500u16 => iface_search::GetSearchAdvancedError::InternalServerError(body),
+            502u16 => iface_search::GetSearchAdvancedError::BadGateway(body),
+            503u16 => iface_search::GetSearchAdvancedError::ServiceUnavailable(body),
+            _ => iface_search::GetSearchAdvancedError::Other(body),
+        },
+        crate::runtime::DispatchError::Transport(m) => iface_search::GetSearchAdvancedError::Other(m),
+    }
+}
+
+impl iface_search::Guest for crate::Component {
+    fn get_search(params: iface_search::GetSearchParams) -> Result<iface_search::Questions, iface_search::GetSearchError> {
+        let json = iface_search__get_search_params__to_json(&params);
+        match dispatch(&OP_SEARCH_GET_SEARCH, json).and_then(iface_search__get_search__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_search__get_search__err(e)),
+        }
+    }
+    fn get_search_advanced(params: iface_search::GetSearchAdvancedParams) -> Result<iface_search::Questions, iface_search::GetSearchAdvancedError> {
         let json = iface_search__get_search_advanced_params__to_json(&params);
-        dispatch(&OP_SEARCH_GET_SEARCH_ADVANCED, json)
+        match dispatch(&OP_SEARCH_GET_SEARCH_ADVANCED, json).and_then(iface_search__get_search_advanced__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_search__get_search_advanced__err(e)),
+        }
     }
 }
 use crate::exports::autostamp::stackexchange::similar as iface_similar;
@@ -3263,20 +6748,20 @@ const OP_SIMILAR_GET_SIMILAR: OpSpec = OpSpec {
     method: "GET",
     path_template: "/similar",
     fields: &[
-        FieldSpec { snake: "tagged", location: FieldLocation::Query },
-        FieldSpec { snake: "order", location: FieldLocation::Query },
-        FieldSpec { snake: "max", location: FieldLocation::Query },
-        FieldSpec { snake: "min", location: FieldLocation::Query },
-        FieldSpec { snake: "sort", location: FieldLocation::Query },
-        FieldSpec { snake: "fromdate", location: FieldLocation::Query },
-        FieldSpec { snake: "todate", location: FieldLocation::Query },
-        FieldSpec { snake: "pagesize", location: FieldLocation::Query },
-        FieldSpec { snake: "page", location: FieldLocation::Query },
-        FieldSpec { snake: "filter", location: FieldLocation::Query },
-        FieldSpec { snake: "callback", location: FieldLocation::Query },
-        FieldSpec { snake: "site", location: FieldLocation::Query },
-        FieldSpec { snake: "nottagged", location: FieldLocation::Query },
-        FieldSpec { snake: "title", location: FieldLocation::Query },
+        FieldSpec { snake: "tagged", wire: "tagged", location: FieldLocation::Query },
+        FieldSpec { snake: "order", wire: "order", location: FieldLocation::Query },
+        FieldSpec { snake: "max", wire: "max", location: FieldLocation::Query },
+        FieldSpec { snake: "min", wire: "min", location: FieldLocation::Query },
+        FieldSpec { snake: "sort", wire: "sort", location: FieldLocation::Query },
+        FieldSpec { snake: "fromdate", wire: "fromdate", location: FieldLocation::Query },
+        FieldSpec { snake: "todate", wire: "todate", location: FieldLocation::Query },
+        FieldSpec { snake: "pagesize", wire: "pagesize", location: FieldLocation::Query },
+        FieldSpec { snake: "page", wire: "page", location: FieldLocation::Query },
+        FieldSpec { snake: "filter", wire: "filter", location: FieldLocation::Query },
+        FieldSpec { snake: "callback", wire: "callback", location: FieldLocation::Query },
+        FieldSpec { snake: "site", wire: "site", location: FieldLocation::Query },
+        FieldSpec { snake: "nottagged", wire: "nottagged", location: FieldLocation::Query },
+        FieldSpec { snake: "title", wire: "title", location: FieldLocation::Query },
     ],
     auth: &[
     ],
@@ -3298,6 +6783,12 @@ fn iface_similar__get_similar_sort_enum__to_str(e: &iface_similar::GetSimilarSor
     }
 }
 
+fn iface_similar__questions__to_json(p: &iface_similar::Questions) -> Value {
+    let mut m = Map::new();
+    m.insert("value".into(), Value::String((&p.value).clone()));
+    Value::Object(m)
+}
+
 fn iface_similar__get_similar_params__to_json(p: &iface_similar::GetSimilarParams) -> Value {
     let mut m = Map::new();
     m.insert("tagged".into(), match (&p.tagged) { Some(v) => Value::String((v).clone()), None => Value::Null });
@@ -3317,10 +6808,50 @@ fn iface_similar__get_similar_params__to_json(p: &iface_similar::GetSimilarParam
     Value::Object(m)
 }
 
+fn iface_similar__questions__from_json(v: &Value) -> Option<iface_similar::Questions> {
+    let m = v.as_object()?;
+    Some(iface_similar::Questions {
+        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+    })
+}
+
+fn iface_similar__get_similar__ok(body: String) -> Result<iface_similar::Questions, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match iface_similar__questions__from_json(&v) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_similar__get_similar__err(e: crate::runtime::DispatchError) -> iface_similar::GetSimilarError {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => match status {
+            400u16 => iface_similar::GetSimilarError::BadRequest(body),
+            401u16 => iface_similar::GetSimilarError::Unauthorized(body),
+            402u16 => iface_similar::GetSimilarError::PaymentRequired(body),
+            403u16 => iface_similar::GetSimilarError::Forbidden(body),
+            404u16 => iface_similar::GetSimilarError::NotFound(body),
+            405u16 => iface_similar::GetSimilarError::MethodNotAllowed(body),
+            406u16 => iface_similar::GetSimilarError::NotAcceptable(body),
+            500u16 => iface_similar::GetSimilarError::InternalServerError(body),
+            502u16 => iface_similar::GetSimilarError::BadGateway(body),
+            503u16 => iface_similar::GetSimilarError::ServiceUnavailable(body),
+            _ => iface_similar::GetSimilarError::Other(body),
+        },
+        crate::runtime::DispatchError::Transport(m) => iface_similar::GetSimilarError::Other(m),
+    }
+}
+
 impl iface_similar::Guest for crate::Component {
-    fn get_similar(params: iface_similar::GetSimilarParams) -> Result<String, String> {
+    fn get_similar(params: iface_similar::GetSimilarParams) -> Result<iface_similar::Questions, iface_similar::GetSimilarError> {
         let json = iface_similar__get_similar_params__to_json(&params);
-        dispatch(&OP_SIMILAR_GET_SIMILAR, json)
+        match dispatch(&OP_SIMILAR_GET_SIMILAR, json).and_then(iface_similar__get_similar__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_similar__get_similar__err(e)),
+        }
     }
 }
 use crate::exports::autostamp::stackexchange::sites as iface_sites;
@@ -3329,14 +6860,20 @@ const OP_SITES_GET_SITES: OpSpec = OpSpec {
     method: "GET",
     path_template: "/sites",
     fields: &[
-        FieldSpec { snake: "pagesize", location: FieldLocation::Query },
-        FieldSpec { snake: "page", location: FieldLocation::Query },
-        FieldSpec { snake: "filter", location: FieldLocation::Query },
-        FieldSpec { snake: "callback", location: FieldLocation::Query },
+        FieldSpec { snake: "pagesize", wire: "pagesize", location: FieldLocation::Query },
+        FieldSpec { snake: "page", wire: "page", location: FieldLocation::Query },
+        FieldSpec { snake: "filter", wire: "filter", location: FieldLocation::Query },
+        FieldSpec { snake: "callback", wire: "callback", location: FieldLocation::Query },
     ],
     auth: &[
     ],
 };
+
+fn iface_sites__sites__to_json(p: &iface_sites::Sites) -> Value {
+    let mut m = Map::new();
+    m.insert("value".into(), Value::String((&p.value).clone()));
+    Value::Object(m)
+}
 
 fn iface_sites__get_sites_params__to_json(p: &iface_sites::GetSitesParams) -> Value {
     let mut m = Map::new();
@@ -3347,10 +6884,50 @@ fn iface_sites__get_sites_params__to_json(p: &iface_sites::GetSitesParams) -> Va
     Value::Object(m)
 }
 
+fn iface_sites__sites__from_json(v: &Value) -> Option<iface_sites::Sites> {
+    let m = v.as_object()?;
+    Some(iface_sites::Sites {
+        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+    })
+}
+
+fn iface_sites__get_sites__ok(body: String) -> Result<iface_sites::Sites, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match iface_sites__sites__from_json(&v) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_sites__get_sites__err(e: crate::runtime::DispatchError) -> iface_sites::GetSitesError {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => match status {
+            400u16 => iface_sites::GetSitesError::BadRequest(body),
+            401u16 => iface_sites::GetSitesError::Unauthorized(body),
+            402u16 => iface_sites::GetSitesError::PaymentRequired(body),
+            403u16 => iface_sites::GetSitesError::Forbidden(body),
+            404u16 => iface_sites::GetSitesError::NotFound(body),
+            405u16 => iface_sites::GetSitesError::MethodNotAllowed(body),
+            406u16 => iface_sites::GetSitesError::NotAcceptable(body),
+            500u16 => iface_sites::GetSitesError::InternalServerError(body),
+            502u16 => iface_sites::GetSitesError::BadGateway(body),
+            503u16 => iface_sites::GetSitesError::ServiceUnavailable(body),
+            _ => iface_sites::GetSitesError::Other(body),
+        },
+        crate::runtime::DispatchError::Transport(m) => iface_sites::GetSitesError::Other(m),
+    }
+}
+
 impl iface_sites::Guest for crate::Component {
-    fn get_sites(params: iface_sites::GetSitesParams) -> Result<String, String> {
+    fn get_sites(params: iface_sites::GetSitesParams) -> Result<iface_sites::Sites, iface_sites::GetSitesError> {
         let json = iface_sites__get_sites_params__to_json(&params);
-        dispatch(&OP_SITES_GET_SITES, json)
+        match dispatch(&OP_SITES_GET_SITES, json).and_then(iface_sites__get_sites__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_sites__get_sites__err(e)),
+        }
     }
 }
 use crate::exports::autostamp::stackexchange::suggested_edits as iface_suggested_edits;
@@ -3359,17 +6936,17 @@ const OP_SUGGESTED_EDITS_GET_SUGGESTED_EDITS: OpSpec = OpSpec {
     method: "GET",
     path_template: "/suggested-edits",
     fields: &[
-        FieldSpec { snake: "order", location: FieldLocation::Query },
-        FieldSpec { snake: "max", location: FieldLocation::Query },
-        FieldSpec { snake: "min", location: FieldLocation::Query },
-        FieldSpec { snake: "sort", location: FieldLocation::Query },
-        FieldSpec { snake: "fromdate", location: FieldLocation::Query },
-        FieldSpec { snake: "todate", location: FieldLocation::Query },
-        FieldSpec { snake: "pagesize", location: FieldLocation::Query },
-        FieldSpec { snake: "page", location: FieldLocation::Query },
-        FieldSpec { snake: "filter", location: FieldLocation::Query },
-        FieldSpec { snake: "callback", location: FieldLocation::Query },
-        FieldSpec { snake: "site", location: FieldLocation::Query },
+        FieldSpec { snake: "order", wire: "order", location: FieldLocation::Query },
+        FieldSpec { snake: "max", wire: "max", location: FieldLocation::Query },
+        FieldSpec { snake: "min", wire: "min", location: FieldLocation::Query },
+        FieldSpec { snake: "sort", wire: "sort", location: FieldLocation::Query },
+        FieldSpec { snake: "fromdate", wire: "fromdate", location: FieldLocation::Query },
+        FieldSpec { snake: "todate", wire: "todate", location: FieldLocation::Query },
+        FieldSpec { snake: "pagesize", wire: "pagesize", location: FieldLocation::Query },
+        FieldSpec { snake: "page", wire: "page", location: FieldLocation::Query },
+        FieldSpec { snake: "filter", wire: "filter", location: FieldLocation::Query },
+        FieldSpec { snake: "callback", wire: "callback", location: FieldLocation::Query },
+        FieldSpec { snake: "site", wire: "site", location: FieldLocation::Query },
     ],
     auth: &[
     ],
@@ -3379,18 +6956,18 @@ const OP_SUGGESTED_EDITS_GET_SUGGESTED_EDITS_IDS: OpSpec = OpSpec {
     method: "GET",
     path_template: "/suggested-edits/{ids}",
     fields: &[
-        FieldSpec { snake: "ids", location: FieldLocation::Path },
-        FieldSpec { snake: "order", location: FieldLocation::Query },
-        FieldSpec { snake: "max", location: FieldLocation::Query },
-        FieldSpec { snake: "min", location: FieldLocation::Query },
-        FieldSpec { snake: "sort", location: FieldLocation::Query },
-        FieldSpec { snake: "fromdate", location: FieldLocation::Query },
-        FieldSpec { snake: "todate", location: FieldLocation::Query },
-        FieldSpec { snake: "pagesize", location: FieldLocation::Query },
-        FieldSpec { snake: "page", location: FieldLocation::Query },
-        FieldSpec { snake: "filter", location: FieldLocation::Query },
-        FieldSpec { snake: "callback", location: FieldLocation::Query },
-        FieldSpec { snake: "site", location: FieldLocation::Query },
+        FieldSpec { snake: "ids", wire: "ids", location: FieldLocation::Path },
+        FieldSpec { snake: "order", wire: "order", location: FieldLocation::Query },
+        FieldSpec { snake: "max", wire: "max", location: FieldLocation::Query },
+        FieldSpec { snake: "min", wire: "min", location: FieldLocation::Query },
+        FieldSpec { snake: "sort", wire: "sort", location: FieldLocation::Query },
+        FieldSpec { snake: "fromdate", wire: "fromdate", location: FieldLocation::Query },
+        FieldSpec { snake: "todate", wire: "todate", location: FieldLocation::Query },
+        FieldSpec { snake: "pagesize", wire: "pagesize", location: FieldLocation::Query },
+        FieldSpec { snake: "page", wire: "page", location: FieldLocation::Query },
+        FieldSpec { snake: "filter", wire: "filter", location: FieldLocation::Query },
+        FieldSpec { snake: "callback", wire: "callback", location: FieldLocation::Query },
+        FieldSpec { snake: "site", wire: "site", location: FieldLocation::Query },
     ],
     auth: &[
     ],
@@ -3409,6 +6986,12 @@ fn iface_suggested_edits__get_suggested_edits_sort_enum__to_str(e: &iface_sugges
         iface_suggested_edits::GetSuggestedEditsSortEnum::Approval => "approval",
         iface_suggested_edits::GetSuggestedEditsSortEnum::Rejection => "rejection",
     }
+}
+
+fn iface_suggested_edits__suggested_edits__to_json(p: &iface_suggested_edits::SuggestedEdits) -> Value {
+    let mut m = Map::new();
+    m.insert("value".into(), Value::String((&p.value).clone()));
+    Value::Object(m)
 }
 
 fn iface_suggested_edits__get_suggested_edits_params__to_json(p: &iface_suggested_edits::GetSuggestedEditsParams) -> Value {
@@ -3444,14 +7027,87 @@ fn iface_suggested_edits__get_suggested_edits_ids_params__to_json(p: &iface_sugg
     Value::Object(m)
 }
 
-impl iface_suggested_edits::Guest for crate::Component {
-    fn get_suggested_edits(params: iface_suggested_edits::GetSuggestedEditsParams) -> Result<String, String> {
-        let json = iface_suggested_edits__get_suggested_edits_params__to_json(&params);
-        dispatch(&OP_SUGGESTED_EDITS_GET_SUGGESTED_EDITS, json)
+fn iface_suggested_edits__suggested_edits__from_json(v: &Value) -> Option<iface_suggested_edits::SuggestedEdits> {
+    let m = v.as_object()?;
+    Some(iface_suggested_edits::SuggestedEdits {
+        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+    })
+}
+
+fn iface_suggested_edits__get_suggested_edits__ok(body: String) -> Result<iface_suggested_edits::SuggestedEdits, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match iface_suggested_edits__suggested_edits__from_json(&v) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
     }
-    fn get_suggested_edits_ids(params: iface_suggested_edits::GetSuggestedEditsIdsParams) -> Result<String, String> {
+}
+
+fn iface_suggested_edits__get_suggested_edits__err(e: crate::runtime::DispatchError) -> iface_suggested_edits::GetSuggestedEditsError {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => match status {
+            400u16 => iface_suggested_edits::GetSuggestedEditsError::BadRequest(body),
+            401u16 => iface_suggested_edits::GetSuggestedEditsError::Unauthorized(body),
+            402u16 => iface_suggested_edits::GetSuggestedEditsError::PaymentRequired(body),
+            403u16 => iface_suggested_edits::GetSuggestedEditsError::Forbidden(body),
+            404u16 => iface_suggested_edits::GetSuggestedEditsError::NotFound(body),
+            405u16 => iface_suggested_edits::GetSuggestedEditsError::MethodNotAllowed(body),
+            406u16 => iface_suggested_edits::GetSuggestedEditsError::NotAcceptable(body),
+            500u16 => iface_suggested_edits::GetSuggestedEditsError::InternalServerError(body),
+            502u16 => iface_suggested_edits::GetSuggestedEditsError::BadGateway(body),
+            503u16 => iface_suggested_edits::GetSuggestedEditsError::ServiceUnavailable(body),
+            _ => iface_suggested_edits::GetSuggestedEditsError::Other(body),
+        },
+        crate::runtime::DispatchError::Transport(m) => iface_suggested_edits::GetSuggestedEditsError::Other(m),
+    }
+}
+
+fn iface_suggested_edits__get_suggested_edits_ids__ok(body: String) -> Result<iface_suggested_edits::SuggestedEdits, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match iface_suggested_edits__suggested_edits__from_json(&v) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_suggested_edits__get_suggested_edits_ids__err(e: crate::runtime::DispatchError) -> iface_suggested_edits::GetSuggestedEditsIdsError {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => match status {
+            400u16 => iface_suggested_edits::GetSuggestedEditsIdsError::BadRequest(body),
+            401u16 => iface_suggested_edits::GetSuggestedEditsIdsError::Unauthorized(body),
+            402u16 => iface_suggested_edits::GetSuggestedEditsIdsError::PaymentRequired(body),
+            403u16 => iface_suggested_edits::GetSuggestedEditsIdsError::Forbidden(body),
+            404u16 => iface_suggested_edits::GetSuggestedEditsIdsError::NotFound(body),
+            405u16 => iface_suggested_edits::GetSuggestedEditsIdsError::MethodNotAllowed(body),
+            406u16 => iface_suggested_edits::GetSuggestedEditsIdsError::NotAcceptable(body),
+            500u16 => iface_suggested_edits::GetSuggestedEditsIdsError::InternalServerError(body),
+            502u16 => iface_suggested_edits::GetSuggestedEditsIdsError::BadGateway(body),
+            503u16 => iface_suggested_edits::GetSuggestedEditsIdsError::ServiceUnavailable(body),
+            _ => iface_suggested_edits::GetSuggestedEditsIdsError::Other(body),
+        },
+        crate::runtime::DispatchError::Transport(m) => iface_suggested_edits::GetSuggestedEditsIdsError::Other(m),
+    }
+}
+
+impl iface_suggested_edits::Guest for crate::Component {
+    fn get_suggested_edits(params: iface_suggested_edits::GetSuggestedEditsParams) -> Result<iface_suggested_edits::SuggestedEdits, iface_suggested_edits::GetSuggestedEditsError> {
+        let json = iface_suggested_edits__get_suggested_edits_params__to_json(&params);
+        match dispatch(&OP_SUGGESTED_EDITS_GET_SUGGESTED_EDITS, json).and_then(iface_suggested_edits__get_suggested_edits__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_suggested_edits__get_suggested_edits__err(e)),
+        }
+    }
+    fn get_suggested_edits_ids(params: iface_suggested_edits::GetSuggestedEditsIdsParams) -> Result<iface_suggested_edits::SuggestedEdits, iface_suggested_edits::GetSuggestedEditsIdsError> {
         let json = iface_suggested_edits__get_suggested_edits_ids_params__to_json(&params);
-        dispatch(&OP_SUGGESTED_EDITS_GET_SUGGESTED_EDITS_IDS, json)
+        match dispatch(&OP_SUGGESTED_EDITS_GET_SUGGESTED_EDITS_IDS, json).and_then(iface_suggested_edits__get_suggested_edits_ids__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_suggested_edits__get_suggested_edits_ids__err(e)),
+        }
     }
 }
 use crate::exports::autostamp::stackexchange::tags as iface_tags;
@@ -3460,18 +7116,18 @@ const OP_TAGS_GET_TAGS: OpSpec = OpSpec {
     method: "GET",
     path_template: "/tags",
     fields: &[
-        FieldSpec { snake: "inname", location: FieldLocation::Query },
-        FieldSpec { snake: "order", location: FieldLocation::Query },
-        FieldSpec { snake: "max", location: FieldLocation::Query },
-        FieldSpec { snake: "min", location: FieldLocation::Query },
-        FieldSpec { snake: "sort", location: FieldLocation::Query },
-        FieldSpec { snake: "fromdate", location: FieldLocation::Query },
-        FieldSpec { snake: "todate", location: FieldLocation::Query },
-        FieldSpec { snake: "pagesize", location: FieldLocation::Query },
-        FieldSpec { snake: "page", location: FieldLocation::Query },
-        FieldSpec { snake: "filter", location: FieldLocation::Query },
-        FieldSpec { snake: "callback", location: FieldLocation::Query },
-        FieldSpec { snake: "site", location: FieldLocation::Query },
+        FieldSpec { snake: "inname", wire: "inname", location: FieldLocation::Query },
+        FieldSpec { snake: "order", wire: "order", location: FieldLocation::Query },
+        FieldSpec { snake: "max", wire: "max", location: FieldLocation::Query },
+        FieldSpec { snake: "min", wire: "min", location: FieldLocation::Query },
+        FieldSpec { snake: "sort", wire: "sort", location: FieldLocation::Query },
+        FieldSpec { snake: "fromdate", wire: "fromdate", location: FieldLocation::Query },
+        FieldSpec { snake: "todate", wire: "todate", location: FieldLocation::Query },
+        FieldSpec { snake: "pagesize", wire: "pagesize", location: FieldLocation::Query },
+        FieldSpec { snake: "page", wire: "page", location: FieldLocation::Query },
+        FieldSpec { snake: "filter", wire: "filter", location: FieldLocation::Query },
+        FieldSpec { snake: "callback", wire: "callback", location: FieldLocation::Query },
+        FieldSpec { snake: "site", wire: "site", location: FieldLocation::Query },
     ],
     auth: &[
     ],
@@ -3481,18 +7137,18 @@ const OP_TAGS_GET_TAGS_MODERATOR_ONLY: OpSpec = OpSpec {
     method: "GET",
     path_template: "/tags/moderator-only",
     fields: &[
-        FieldSpec { snake: "inname", location: FieldLocation::Query },
-        FieldSpec { snake: "order", location: FieldLocation::Query },
-        FieldSpec { snake: "max", location: FieldLocation::Query },
-        FieldSpec { snake: "min", location: FieldLocation::Query },
-        FieldSpec { snake: "sort", location: FieldLocation::Query },
-        FieldSpec { snake: "fromdate", location: FieldLocation::Query },
-        FieldSpec { snake: "todate", location: FieldLocation::Query },
-        FieldSpec { snake: "pagesize", location: FieldLocation::Query },
-        FieldSpec { snake: "page", location: FieldLocation::Query },
-        FieldSpec { snake: "filter", location: FieldLocation::Query },
-        FieldSpec { snake: "callback", location: FieldLocation::Query },
-        FieldSpec { snake: "site", location: FieldLocation::Query },
+        FieldSpec { snake: "inname", wire: "inname", location: FieldLocation::Query },
+        FieldSpec { snake: "order", wire: "order", location: FieldLocation::Query },
+        FieldSpec { snake: "max", wire: "max", location: FieldLocation::Query },
+        FieldSpec { snake: "min", wire: "min", location: FieldLocation::Query },
+        FieldSpec { snake: "sort", wire: "sort", location: FieldLocation::Query },
+        FieldSpec { snake: "fromdate", wire: "fromdate", location: FieldLocation::Query },
+        FieldSpec { snake: "todate", wire: "todate", location: FieldLocation::Query },
+        FieldSpec { snake: "pagesize", wire: "pagesize", location: FieldLocation::Query },
+        FieldSpec { snake: "page", wire: "page", location: FieldLocation::Query },
+        FieldSpec { snake: "filter", wire: "filter", location: FieldLocation::Query },
+        FieldSpec { snake: "callback", wire: "callback", location: FieldLocation::Query },
+        FieldSpec { snake: "site", wire: "site", location: FieldLocation::Query },
     ],
     auth: &[
     ],
@@ -3502,18 +7158,18 @@ const OP_TAGS_GET_TAGS_REQUIRED: OpSpec = OpSpec {
     method: "GET",
     path_template: "/tags/required",
     fields: &[
-        FieldSpec { snake: "inname", location: FieldLocation::Query },
-        FieldSpec { snake: "order", location: FieldLocation::Query },
-        FieldSpec { snake: "max", location: FieldLocation::Query },
-        FieldSpec { snake: "min", location: FieldLocation::Query },
-        FieldSpec { snake: "sort", location: FieldLocation::Query },
-        FieldSpec { snake: "fromdate", location: FieldLocation::Query },
-        FieldSpec { snake: "todate", location: FieldLocation::Query },
-        FieldSpec { snake: "pagesize", location: FieldLocation::Query },
-        FieldSpec { snake: "page", location: FieldLocation::Query },
-        FieldSpec { snake: "filter", location: FieldLocation::Query },
-        FieldSpec { snake: "callback", location: FieldLocation::Query },
-        FieldSpec { snake: "site", location: FieldLocation::Query },
+        FieldSpec { snake: "inname", wire: "inname", location: FieldLocation::Query },
+        FieldSpec { snake: "order", wire: "order", location: FieldLocation::Query },
+        FieldSpec { snake: "max", wire: "max", location: FieldLocation::Query },
+        FieldSpec { snake: "min", wire: "min", location: FieldLocation::Query },
+        FieldSpec { snake: "sort", wire: "sort", location: FieldLocation::Query },
+        FieldSpec { snake: "fromdate", wire: "fromdate", location: FieldLocation::Query },
+        FieldSpec { snake: "todate", wire: "todate", location: FieldLocation::Query },
+        FieldSpec { snake: "pagesize", wire: "pagesize", location: FieldLocation::Query },
+        FieldSpec { snake: "page", wire: "page", location: FieldLocation::Query },
+        FieldSpec { snake: "filter", wire: "filter", location: FieldLocation::Query },
+        FieldSpec { snake: "callback", wire: "callback", location: FieldLocation::Query },
+        FieldSpec { snake: "site", wire: "site", location: FieldLocation::Query },
     ],
     auth: &[
     ],
@@ -3523,17 +7179,17 @@ const OP_TAGS_GET_TAGS_SYNONYMS: OpSpec = OpSpec {
     method: "GET",
     path_template: "/tags/synonyms",
     fields: &[
-        FieldSpec { snake: "order", location: FieldLocation::Query },
-        FieldSpec { snake: "max", location: FieldLocation::Query },
-        FieldSpec { snake: "min", location: FieldLocation::Query },
-        FieldSpec { snake: "sort", location: FieldLocation::Query },
-        FieldSpec { snake: "fromdate", location: FieldLocation::Query },
-        FieldSpec { snake: "todate", location: FieldLocation::Query },
-        FieldSpec { snake: "pagesize", location: FieldLocation::Query },
-        FieldSpec { snake: "page", location: FieldLocation::Query },
-        FieldSpec { snake: "filter", location: FieldLocation::Query },
-        FieldSpec { snake: "callback", location: FieldLocation::Query },
-        FieldSpec { snake: "site", location: FieldLocation::Query },
+        FieldSpec { snake: "order", wire: "order", location: FieldLocation::Query },
+        FieldSpec { snake: "max", wire: "max", location: FieldLocation::Query },
+        FieldSpec { snake: "min", wire: "min", location: FieldLocation::Query },
+        FieldSpec { snake: "sort", wire: "sort", location: FieldLocation::Query },
+        FieldSpec { snake: "fromdate", wire: "fromdate", location: FieldLocation::Query },
+        FieldSpec { snake: "todate", wire: "todate", location: FieldLocation::Query },
+        FieldSpec { snake: "pagesize", wire: "pagesize", location: FieldLocation::Query },
+        FieldSpec { snake: "page", wire: "page", location: FieldLocation::Query },
+        FieldSpec { snake: "filter", wire: "filter", location: FieldLocation::Query },
+        FieldSpec { snake: "callback", wire: "callback", location: FieldLocation::Query },
+        FieldSpec { snake: "site", wire: "site", location: FieldLocation::Query },
     ],
     auth: &[
     ],
@@ -3543,12 +7199,12 @@ const OP_TAGS_GET_TAGS_TAGS_FAQ: OpSpec = OpSpec {
     method: "GET",
     path_template: "/tags/{tags}/faq",
     fields: &[
-        FieldSpec { snake: "tags", location: FieldLocation::Path },
-        FieldSpec { snake: "pagesize", location: FieldLocation::Query },
-        FieldSpec { snake: "page", location: FieldLocation::Query },
-        FieldSpec { snake: "filter", location: FieldLocation::Query },
-        FieldSpec { snake: "callback", location: FieldLocation::Query },
-        FieldSpec { snake: "site", location: FieldLocation::Query },
+        FieldSpec { snake: "tags", wire: "tags", location: FieldLocation::Path },
+        FieldSpec { snake: "pagesize", wire: "pagesize", location: FieldLocation::Query },
+        FieldSpec { snake: "page", wire: "page", location: FieldLocation::Query },
+        FieldSpec { snake: "filter", wire: "filter", location: FieldLocation::Query },
+        FieldSpec { snake: "callback", wire: "callback", location: FieldLocation::Query },
+        FieldSpec { snake: "site", wire: "site", location: FieldLocation::Query },
     ],
     auth: &[
     ],
@@ -3558,18 +7214,18 @@ const OP_TAGS_GET_TAGS_TAGS_INFO: OpSpec = OpSpec {
     method: "GET",
     path_template: "/tags/{tags}/info",
     fields: &[
-        FieldSpec { snake: "tags", location: FieldLocation::Path },
-        FieldSpec { snake: "order", location: FieldLocation::Query },
-        FieldSpec { snake: "max", location: FieldLocation::Query },
-        FieldSpec { snake: "min", location: FieldLocation::Query },
-        FieldSpec { snake: "sort", location: FieldLocation::Query },
-        FieldSpec { snake: "fromdate", location: FieldLocation::Query },
-        FieldSpec { snake: "todate", location: FieldLocation::Query },
-        FieldSpec { snake: "pagesize", location: FieldLocation::Query },
-        FieldSpec { snake: "page", location: FieldLocation::Query },
-        FieldSpec { snake: "filter", location: FieldLocation::Query },
-        FieldSpec { snake: "callback", location: FieldLocation::Query },
-        FieldSpec { snake: "site", location: FieldLocation::Query },
+        FieldSpec { snake: "tags", wire: "tags", location: FieldLocation::Path },
+        FieldSpec { snake: "order", wire: "order", location: FieldLocation::Query },
+        FieldSpec { snake: "max", wire: "max", location: FieldLocation::Query },
+        FieldSpec { snake: "min", wire: "min", location: FieldLocation::Query },
+        FieldSpec { snake: "sort", wire: "sort", location: FieldLocation::Query },
+        FieldSpec { snake: "fromdate", wire: "fromdate", location: FieldLocation::Query },
+        FieldSpec { snake: "todate", wire: "todate", location: FieldLocation::Query },
+        FieldSpec { snake: "pagesize", wire: "pagesize", location: FieldLocation::Query },
+        FieldSpec { snake: "page", wire: "page", location: FieldLocation::Query },
+        FieldSpec { snake: "filter", wire: "filter", location: FieldLocation::Query },
+        FieldSpec { snake: "callback", wire: "callback", location: FieldLocation::Query },
+        FieldSpec { snake: "site", wire: "site", location: FieldLocation::Query },
     ],
     auth: &[
     ],
@@ -3579,12 +7235,12 @@ const OP_TAGS_GET_TAGS_TAGS_RELATED: OpSpec = OpSpec {
     method: "GET",
     path_template: "/tags/{tags}/related",
     fields: &[
-        FieldSpec { snake: "tags", location: FieldLocation::Path },
-        FieldSpec { snake: "pagesize", location: FieldLocation::Query },
-        FieldSpec { snake: "page", location: FieldLocation::Query },
-        FieldSpec { snake: "filter", location: FieldLocation::Query },
-        FieldSpec { snake: "callback", location: FieldLocation::Query },
-        FieldSpec { snake: "site", location: FieldLocation::Query },
+        FieldSpec { snake: "tags", wire: "tags", location: FieldLocation::Path },
+        FieldSpec { snake: "pagesize", wire: "pagesize", location: FieldLocation::Query },
+        FieldSpec { snake: "page", wire: "page", location: FieldLocation::Query },
+        FieldSpec { snake: "filter", wire: "filter", location: FieldLocation::Query },
+        FieldSpec { snake: "callback", wire: "callback", location: FieldLocation::Query },
+        FieldSpec { snake: "site", wire: "site", location: FieldLocation::Query },
     ],
     auth: &[
     ],
@@ -3594,18 +7250,18 @@ const OP_TAGS_GET_TAGS_TAGS_SYNONYMS: OpSpec = OpSpec {
     method: "GET",
     path_template: "/tags/{tags}/synonyms",
     fields: &[
-        FieldSpec { snake: "tags", location: FieldLocation::Path },
-        FieldSpec { snake: "order", location: FieldLocation::Query },
-        FieldSpec { snake: "max", location: FieldLocation::Query },
-        FieldSpec { snake: "min", location: FieldLocation::Query },
-        FieldSpec { snake: "sort", location: FieldLocation::Query },
-        FieldSpec { snake: "fromdate", location: FieldLocation::Query },
-        FieldSpec { snake: "todate", location: FieldLocation::Query },
-        FieldSpec { snake: "pagesize", location: FieldLocation::Query },
-        FieldSpec { snake: "page", location: FieldLocation::Query },
-        FieldSpec { snake: "filter", location: FieldLocation::Query },
-        FieldSpec { snake: "callback", location: FieldLocation::Query },
-        FieldSpec { snake: "site", location: FieldLocation::Query },
+        FieldSpec { snake: "tags", wire: "tags", location: FieldLocation::Path },
+        FieldSpec { snake: "order", wire: "order", location: FieldLocation::Query },
+        FieldSpec { snake: "max", wire: "max", location: FieldLocation::Query },
+        FieldSpec { snake: "min", wire: "min", location: FieldLocation::Query },
+        FieldSpec { snake: "sort", wire: "sort", location: FieldLocation::Query },
+        FieldSpec { snake: "fromdate", wire: "fromdate", location: FieldLocation::Query },
+        FieldSpec { snake: "todate", wire: "todate", location: FieldLocation::Query },
+        FieldSpec { snake: "pagesize", wire: "pagesize", location: FieldLocation::Query },
+        FieldSpec { snake: "page", wire: "page", location: FieldLocation::Query },
+        FieldSpec { snake: "filter", wire: "filter", location: FieldLocation::Query },
+        FieldSpec { snake: "callback", wire: "callback", location: FieldLocation::Query },
+        FieldSpec { snake: "site", wire: "site", location: FieldLocation::Query },
     ],
     auth: &[
     ],
@@ -3615,12 +7271,12 @@ const OP_TAGS_GET_TAGS_TAGS_WIKIS: OpSpec = OpSpec {
     method: "GET",
     path_template: "/tags/{tags}/wikis",
     fields: &[
-        FieldSpec { snake: "tags", location: FieldLocation::Path },
-        FieldSpec { snake: "pagesize", location: FieldLocation::Query },
-        FieldSpec { snake: "page", location: FieldLocation::Query },
-        FieldSpec { snake: "filter", location: FieldLocation::Query },
-        FieldSpec { snake: "callback", location: FieldLocation::Query },
-        FieldSpec { snake: "site", location: FieldLocation::Query },
+        FieldSpec { snake: "tags", wire: "tags", location: FieldLocation::Path },
+        FieldSpec { snake: "pagesize", wire: "pagesize", location: FieldLocation::Query },
+        FieldSpec { snake: "page", wire: "page", location: FieldLocation::Query },
+        FieldSpec { snake: "filter", wire: "filter", location: FieldLocation::Query },
+        FieldSpec { snake: "callback", wire: "callback", location: FieldLocation::Query },
+        FieldSpec { snake: "site", wire: "site", location: FieldLocation::Query },
     ],
     auth: &[
     ],
@@ -3630,13 +7286,13 @@ const OP_TAGS_GET_TAGS_TAG_TOP_ANSWERERS_PERIOD: OpSpec = OpSpec {
     method: "GET",
     path_template: "/tags/{tag}/top-answerers/{period}",
     fields: &[
-        FieldSpec { snake: "tag", location: FieldLocation::Path },
-        FieldSpec { snake: "period", location: FieldLocation::Path },
-        FieldSpec { snake: "pagesize", location: FieldLocation::Query },
-        FieldSpec { snake: "page", location: FieldLocation::Query },
-        FieldSpec { snake: "filter", location: FieldLocation::Query },
-        FieldSpec { snake: "callback", location: FieldLocation::Query },
-        FieldSpec { snake: "site", location: FieldLocation::Query },
+        FieldSpec { snake: "tag", wire: "tag", location: FieldLocation::Path },
+        FieldSpec { snake: "period", wire: "period", location: FieldLocation::Path },
+        FieldSpec { snake: "pagesize", wire: "pagesize", location: FieldLocation::Query },
+        FieldSpec { snake: "page", wire: "page", location: FieldLocation::Query },
+        FieldSpec { snake: "filter", wire: "filter", location: FieldLocation::Query },
+        FieldSpec { snake: "callback", wire: "callback", location: FieldLocation::Query },
+        FieldSpec { snake: "site", wire: "site", location: FieldLocation::Query },
     ],
     auth: &[
     ],
@@ -3646,13 +7302,13 @@ const OP_TAGS_GET_TAGS_TAG_TOP_ASKERS_PERIOD: OpSpec = OpSpec {
     method: "GET",
     path_template: "/tags/{tag}/top-askers/{period}",
     fields: &[
-        FieldSpec { snake: "tag", location: FieldLocation::Path },
-        FieldSpec { snake: "period", location: FieldLocation::Path },
-        FieldSpec { snake: "pagesize", location: FieldLocation::Query },
-        FieldSpec { snake: "page", location: FieldLocation::Query },
-        FieldSpec { snake: "filter", location: FieldLocation::Query },
-        FieldSpec { snake: "callback", location: FieldLocation::Query },
-        FieldSpec { snake: "site", location: FieldLocation::Query },
+        FieldSpec { snake: "tag", wire: "tag", location: FieldLocation::Path },
+        FieldSpec { snake: "period", wire: "period", location: FieldLocation::Path },
+        FieldSpec { snake: "pagesize", wire: "pagesize", location: FieldLocation::Query },
+        FieldSpec { snake: "page", wire: "page", location: FieldLocation::Query },
+        FieldSpec { snake: "filter", wire: "filter", location: FieldLocation::Query },
+        FieldSpec { snake: "callback", wire: "callback", location: FieldLocation::Query },
+        FieldSpec { snake: "site", wire: "site", location: FieldLocation::Query },
     ],
     auth: &[
     ],
@@ -3679,6 +7335,36 @@ fn iface_tags__get_tags_synonyms_sort_enum__to_str(e: &iface_tags::GetTagsSynony
         iface_tags::GetTagsSynonymsSortEnum::Applied => "applied",
         iface_tags::GetTagsSynonymsSortEnum::Activity => "activity",
     }
+}
+
+fn iface_tags__tags__to_json(p: &iface_tags::Tags) -> Value {
+    let mut m = Map::new();
+    m.insert("value".into(), Value::String((&p.value).clone()));
+    Value::Object(m)
+}
+
+fn iface_tags__tag_synonyms__to_json(p: &iface_tags::TagSynonyms) -> Value {
+    let mut m = Map::new();
+    m.insert("value".into(), Value::String((&p.value).clone()));
+    Value::Object(m)
+}
+
+fn iface_tags__questions__to_json(p: &iface_tags::Questions) -> Value {
+    let mut m = Map::new();
+    m.insert("value".into(), Value::String((&p.value).clone()));
+    Value::Object(m)
+}
+
+fn iface_tags__tag_wikis__to_json(p: &iface_tags::TagWikis) -> Value {
+    let mut m = Map::new();
+    m.insert("value".into(), Value::String((&p.value).clone()));
+    Value::Object(m)
+}
+
+fn iface_tags__tag_score_objects__to_json(p: &iface_tags::TagScoreObjects) -> Value {
+    let mut m = Map::new();
+    m.insert("value".into(), Value::String((&p.value).clone()));
+    Value::Object(m)
 }
 
 fn iface_tags__get_tags_params__to_json(p: &iface_tags::GetTagsParams) -> Value {
@@ -3839,50 +7525,448 @@ fn iface_tags__get_tags_tag_top_askers_period_params__to_json(p: &iface_tags::Ge
     Value::Object(m)
 }
 
+fn iface_tags__tags__from_json(v: &Value) -> Option<iface_tags::Tags> {
+    let m = v.as_object()?;
+    Some(iface_tags::Tags {
+        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+    })
+}
+
+fn iface_tags__tag_synonyms__from_json(v: &Value) -> Option<iface_tags::TagSynonyms> {
+    let m = v.as_object()?;
+    Some(iface_tags::TagSynonyms {
+        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+    })
+}
+
+fn iface_tags__questions__from_json(v: &Value) -> Option<iface_tags::Questions> {
+    let m = v.as_object()?;
+    Some(iface_tags::Questions {
+        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+    })
+}
+
+fn iface_tags__tag_wikis__from_json(v: &Value) -> Option<iface_tags::TagWikis> {
+    let m = v.as_object()?;
+    Some(iface_tags::TagWikis {
+        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+    })
+}
+
+fn iface_tags__tag_score_objects__from_json(v: &Value) -> Option<iface_tags::TagScoreObjects> {
+    let m = v.as_object()?;
+    Some(iface_tags::TagScoreObjects {
+        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+    })
+}
+
+fn iface_tags__get_tags__ok(body: String) -> Result<iface_tags::Tags, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match iface_tags__tags__from_json(&v) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_tags__get_tags__err(e: crate::runtime::DispatchError) -> iface_tags::GetTagsError {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => match status {
+            400u16 => iface_tags::GetTagsError::BadRequest(body),
+            401u16 => iface_tags::GetTagsError::Unauthorized(body),
+            402u16 => iface_tags::GetTagsError::PaymentRequired(body),
+            403u16 => iface_tags::GetTagsError::Forbidden(body),
+            404u16 => iface_tags::GetTagsError::NotFound(body),
+            405u16 => iface_tags::GetTagsError::MethodNotAllowed(body),
+            406u16 => iface_tags::GetTagsError::NotAcceptable(body),
+            500u16 => iface_tags::GetTagsError::InternalServerError(body),
+            502u16 => iface_tags::GetTagsError::BadGateway(body),
+            503u16 => iface_tags::GetTagsError::ServiceUnavailable(body),
+            _ => iface_tags::GetTagsError::Other(body),
+        },
+        crate::runtime::DispatchError::Transport(m) => iface_tags::GetTagsError::Other(m),
+    }
+}
+
+fn iface_tags__get_tags_moderator_only__ok(body: String) -> Result<iface_tags::Tags, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match iface_tags__tags__from_json(&v) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_tags__get_tags_moderator_only__err(e: crate::runtime::DispatchError) -> iface_tags::GetTagsModeratorOnlyError {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => match status {
+            400u16 => iface_tags::GetTagsModeratorOnlyError::BadRequest(body),
+            401u16 => iface_tags::GetTagsModeratorOnlyError::Unauthorized(body),
+            402u16 => iface_tags::GetTagsModeratorOnlyError::PaymentRequired(body),
+            403u16 => iface_tags::GetTagsModeratorOnlyError::Forbidden(body),
+            404u16 => iface_tags::GetTagsModeratorOnlyError::NotFound(body),
+            405u16 => iface_tags::GetTagsModeratorOnlyError::MethodNotAllowed(body),
+            406u16 => iface_tags::GetTagsModeratorOnlyError::NotAcceptable(body),
+            500u16 => iface_tags::GetTagsModeratorOnlyError::InternalServerError(body),
+            502u16 => iface_tags::GetTagsModeratorOnlyError::BadGateway(body),
+            503u16 => iface_tags::GetTagsModeratorOnlyError::ServiceUnavailable(body),
+            _ => iface_tags::GetTagsModeratorOnlyError::Other(body),
+        },
+        crate::runtime::DispatchError::Transport(m) => iface_tags::GetTagsModeratorOnlyError::Other(m),
+    }
+}
+
+fn iface_tags__get_tags_required__ok(body: String) -> Result<iface_tags::Tags, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match iface_tags__tags__from_json(&v) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_tags__get_tags_required__err(e: crate::runtime::DispatchError) -> iface_tags::GetTagsRequiredError {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => match status {
+            400u16 => iface_tags::GetTagsRequiredError::BadRequest(body),
+            401u16 => iface_tags::GetTagsRequiredError::Unauthorized(body),
+            402u16 => iface_tags::GetTagsRequiredError::PaymentRequired(body),
+            403u16 => iface_tags::GetTagsRequiredError::Forbidden(body),
+            404u16 => iface_tags::GetTagsRequiredError::NotFound(body),
+            405u16 => iface_tags::GetTagsRequiredError::MethodNotAllowed(body),
+            406u16 => iface_tags::GetTagsRequiredError::NotAcceptable(body),
+            500u16 => iface_tags::GetTagsRequiredError::InternalServerError(body),
+            502u16 => iface_tags::GetTagsRequiredError::BadGateway(body),
+            503u16 => iface_tags::GetTagsRequiredError::ServiceUnavailable(body),
+            _ => iface_tags::GetTagsRequiredError::Other(body),
+        },
+        crate::runtime::DispatchError::Transport(m) => iface_tags::GetTagsRequiredError::Other(m),
+    }
+}
+
+fn iface_tags__get_tags_synonyms__ok(body: String) -> Result<iface_tags::TagSynonyms, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match iface_tags__tag_synonyms__from_json(&v) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_tags__get_tags_synonyms__err(e: crate::runtime::DispatchError) -> iface_tags::GetTagsSynonymsError {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => match status {
+            400u16 => iface_tags::GetTagsSynonymsError::BadRequest(body),
+            401u16 => iface_tags::GetTagsSynonymsError::Unauthorized(body),
+            402u16 => iface_tags::GetTagsSynonymsError::PaymentRequired(body),
+            403u16 => iface_tags::GetTagsSynonymsError::Forbidden(body),
+            404u16 => iface_tags::GetTagsSynonymsError::NotFound(body),
+            405u16 => iface_tags::GetTagsSynonymsError::MethodNotAllowed(body),
+            406u16 => iface_tags::GetTagsSynonymsError::NotAcceptable(body),
+            500u16 => iface_tags::GetTagsSynonymsError::InternalServerError(body),
+            502u16 => iface_tags::GetTagsSynonymsError::BadGateway(body),
+            503u16 => iface_tags::GetTagsSynonymsError::ServiceUnavailable(body),
+            _ => iface_tags::GetTagsSynonymsError::Other(body),
+        },
+        crate::runtime::DispatchError::Transport(m) => iface_tags::GetTagsSynonymsError::Other(m),
+    }
+}
+
+fn iface_tags__get_tags_tags_faq__ok(body: String) -> Result<iface_tags::Questions, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match iface_tags__questions__from_json(&v) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_tags__get_tags_tags_faq__err(e: crate::runtime::DispatchError) -> iface_tags::GetTagsTagsFaqError {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => match status {
+            400u16 => iface_tags::GetTagsTagsFaqError::BadRequest(body),
+            401u16 => iface_tags::GetTagsTagsFaqError::Unauthorized(body),
+            402u16 => iface_tags::GetTagsTagsFaqError::PaymentRequired(body),
+            403u16 => iface_tags::GetTagsTagsFaqError::Forbidden(body),
+            404u16 => iface_tags::GetTagsTagsFaqError::NotFound(body),
+            405u16 => iface_tags::GetTagsTagsFaqError::MethodNotAllowed(body),
+            406u16 => iface_tags::GetTagsTagsFaqError::NotAcceptable(body),
+            500u16 => iface_tags::GetTagsTagsFaqError::InternalServerError(body),
+            502u16 => iface_tags::GetTagsTagsFaqError::BadGateway(body),
+            503u16 => iface_tags::GetTagsTagsFaqError::ServiceUnavailable(body),
+            _ => iface_tags::GetTagsTagsFaqError::Other(body),
+        },
+        crate::runtime::DispatchError::Transport(m) => iface_tags::GetTagsTagsFaqError::Other(m),
+    }
+}
+
+fn iface_tags__get_tags_tags_info__ok(body: String) -> Result<iface_tags::Tags, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match iface_tags__tags__from_json(&v) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_tags__get_tags_tags_info__err(e: crate::runtime::DispatchError) -> iface_tags::GetTagsTagsInfoError {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => match status {
+            400u16 => iface_tags::GetTagsTagsInfoError::BadRequest(body),
+            401u16 => iface_tags::GetTagsTagsInfoError::Unauthorized(body),
+            402u16 => iface_tags::GetTagsTagsInfoError::PaymentRequired(body),
+            403u16 => iface_tags::GetTagsTagsInfoError::Forbidden(body),
+            404u16 => iface_tags::GetTagsTagsInfoError::NotFound(body),
+            405u16 => iface_tags::GetTagsTagsInfoError::MethodNotAllowed(body),
+            406u16 => iface_tags::GetTagsTagsInfoError::NotAcceptable(body),
+            500u16 => iface_tags::GetTagsTagsInfoError::InternalServerError(body),
+            502u16 => iface_tags::GetTagsTagsInfoError::BadGateway(body),
+            503u16 => iface_tags::GetTagsTagsInfoError::ServiceUnavailable(body),
+            _ => iface_tags::GetTagsTagsInfoError::Other(body),
+        },
+        crate::runtime::DispatchError::Transport(m) => iface_tags::GetTagsTagsInfoError::Other(m),
+    }
+}
+
+fn iface_tags__get_tags_tags_related__ok(body: String) -> Result<iface_tags::Tags, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match iface_tags__tags__from_json(&v) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_tags__get_tags_tags_related__err(e: crate::runtime::DispatchError) -> iface_tags::GetTagsTagsRelatedError {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => match status {
+            400u16 => iface_tags::GetTagsTagsRelatedError::BadRequest(body),
+            401u16 => iface_tags::GetTagsTagsRelatedError::Unauthorized(body),
+            402u16 => iface_tags::GetTagsTagsRelatedError::PaymentRequired(body),
+            403u16 => iface_tags::GetTagsTagsRelatedError::Forbidden(body),
+            404u16 => iface_tags::GetTagsTagsRelatedError::NotFound(body),
+            405u16 => iface_tags::GetTagsTagsRelatedError::MethodNotAllowed(body),
+            406u16 => iface_tags::GetTagsTagsRelatedError::NotAcceptable(body),
+            500u16 => iface_tags::GetTagsTagsRelatedError::InternalServerError(body),
+            502u16 => iface_tags::GetTagsTagsRelatedError::BadGateway(body),
+            503u16 => iface_tags::GetTagsTagsRelatedError::ServiceUnavailable(body),
+            _ => iface_tags::GetTagsTagsRelatedError::Other(body),
+        },
+        crate::runtime::DispatchError::Transport(m) => iface_tags::GetTagsTagsRelatedError::Other(m),
+    }
+}
+
+fn iface_tags__get_tags_tags_synonyms__ok(body: String) -> Result<iface_tags::TagSynonyms, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match iface_tags__tag_synonyms__from_json(&v) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_tags__get_tags_tags_synonyms__err(e: crate::runtime::DispatchError) -> iface_tags::GetTagsTagsSynonymsError {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => match status {
+            400u16 => iface_tags::GetTagsTagsSynonymsError::BadRequest(body),
+            401u16 => iface_tags::GetTagsTagsSynonymsError::Unauthorized(body),
+            402u16 => iface_tags::GetTagsTagsSynonymsError::PaymentRequired(body),
+            403u16 => iface_tags::GetTagsTagsSynonymsError::Forbidden(body),
+            404u16 => iface_tags::GetTagsTagsSynonymsError::NotFound(body),
+            405u16 => iface_tags::GetTagsTagsSynonymsError::MethodNotAllowed(body),
+            406u16 => iface_tags::GetTagsTagsSynonymsError::NotAcceptable(body),
+            500u16 => iface_tags::GetTagsTagsSynonymsError::InternalServerError(body),
+            502u16 => iface_tags::GetTagsTagsSynonymsError::BadGateway(body),
+            503u16 => iface_tags::GetTagsTagsSynonymsError::ServiceUnavailable(body),
+            _ => iface_tags::GetTagsTagsSynonymsError::Other(body),
+        },
+        crate::runtime::DispatchError::Transport(m) => iface_tags::GetTagsTagsSynonymsError::Other(m),
+    }
+}
+
+fn iface_tags__get_tags_tags_wikis__ok(body: String) -> Result<iface_tags::TagWikis, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match iface_tags__tag_wikis__from_json(&v) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_tags__get_tags_tags_wikis__err(e: crate::runtime::DispatchError) -> iface_tags::GetTagsTagsWikisError {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => match status {
+            400u16 => iface_tags::GetTagsTagsWikisError::BadRequest(body),
+            401u16 => iface_tags::GetTagsTagsWikisError::Unauthorized(body),
+            402u16 => iface_tags::GetTagsTagsWikisError::PaymentRequired(body),
+            403u16 => iface_tags::GetTagsTagsWikisError::Forbidden(body),
+            404u16 => iface_tags::GetTagsTagsWikisError::NotFound(body),
+            405u16 => iface_tags::GetTagsTagsWikisError::MethodNotAllowed(body),
+            406u16 => iface_tags::GetTagsTagsWikisError::NotAcceptable(body),
+            500u16 => iface_tags::GetTagsTagsWikisError::InternalServerError(body),
+            502u16 => iface_tags::GetTagsTagsWikisError::BadGateway(body),
+            503u16 => iface_tags::GetTagsTagsWikisError::ServiceUnavailable(body),
+            _ => iface_tags::GetTagsTagsWikisError::Other(body),
+        },
+        crate::runtime::DispatchError::Transport(m) => iface_tags::GetTagsTagsWikisError::Other(m),
+    }
+}
+
+fn iface_tags__get_tags_tag_top_answerers_period__ok(body: String) -> Result<iface_tags::TagScoreObjects, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match iface_tags__tag_score_objects__from_json(&v) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_tags__get_tags_tag_top_answerers_period__err(e: crate::runtime::DispatchError) -> iface_tags::GetTagsTagTopAnswerersPeriodError {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => match status {
+            400u16 => iface_tags::GetTagsTagTopAnswerersPeriodError::BadRequest(body),
+            401u16 => iface_tags::GetTagsTagTopAnswerersPeriodError::Unauthorized(body),
+            402u16 => iface_tags::GetTagsTagTopAnswerersPeriodError::PaymentRequired(body),
+            403u16 => iface_tags::GetTagsTagTopAnswerersPeriodError::Forbidden(body),
+            404u16 => iface_tags::GetTagsTagTopAnswerersPeriodError::NotFound(body),
+            405u16 => iface_tags::GetTagsTagTopAnswerersPeriodError::MethodNotAllowed(body),
+            406u16 => iface_tags::GetTagsTagTopAnswerersPeriodError::NotAcceptable(body),
+            500u16 => iface_tags::GetTagsTagTopAnswerersPeriodError::InternalServerError(body),
+            502u16 => iface_tags::GetTagsTagTopAnswerersPeriodError::BadGateway(body),
+            503u16 => iface_tags::GetTagsTagTopAnswerersPeriodError::ServiceUnavailable(body),
+            _ => iface_tags::GetTagsTagTopAnswerersPeriodError::Other(body),
+        },
+        crate::runtime::DispatchError::Transport(m) => iface_tags::GetTagsTagTopAnswerersPeriodError::Other(m),
+    }
+}
+
+fn iface_tags__get_tags_tag_top_askers_period__ok(body: String) -> Result<iface_tags::TagScoreObjects, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match iface_tags__tag_score_objects__from_json(&v) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_tags__get_tags_tag_top_askers_period__err(e: crate::runtime::DispatchError) -> iface_tags::GetTagsTagTopAskersPeriodError {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => match status {
+            400u16 => iface_tags::GetTagsTagTopAskersPeriodError::BadRequest(body),
+            401u16 => iface_tags::GetTagsTagTopAskersPeriodError::Unauthorized(body),
+            402u16 => iface_tags::GetTagsTagTopAskersPeriodError::PaymentRequired(body),
+            403u16 => iface_tags::GetTagsTagTopAskersPeriodError::Forbidden(body),
+            404u16 => iface_tags::GetTagsTagTopAskersPeriodError::NotFound(body),
+            405u16 => iface_tags::GetTagsTagTopAskersPeriodError::MethodNotAllowed(body),
+            406u16 => iface_tags::GetTagsTagTopAskersPeriodError::NotAcceptable(body),
+            500u16 => iface_tags::GetTagsTagTopAskersPeriodError::InternalServerError(body),
+            502u16 => iface_tags::GetTagsTagTopAskersPeriodError::BadGateway(body),
+            503u16 => iface_tags::GetTagsTagTopAskersPeriodError::ServiceUnavailable(body),
+            _ => iface_tags::GetTagsTagTopAskersPeriodError::Other(body),
+        },
+        crate::runtime::DispatchError::Transport(m) => iface_tags::GetTagsTagTopAskersPeriodError::Other(m),
+    }
+}
+
 impl iface_tags::Guest for crate::Component {
-    fn get_tags(params: iface_tags::GetTagsParams) -> Result<String, String> {
+    fn get_tags(params: iface_tags::GetTagsParams) -> Result<iface_tags::Tags, iface_tags::GetTagsError> {
         let json = iface_tags__get_tags_params__to_json(&params);
-        dispatch(&OP_TAGS_GET_TAGS, json)
+        match dispatch(&OP_TAGS_GET_TAGS, json).and_then(iface_tags__get_tags__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_tags__get_tags__err(e)),
+        }
     }
-    fn get_tags_moderator_only(params: iface_tags::GetTagsModeratorOnlyParams) -> Result<String, String> {
+    fn get_tags_moderator_only(params: iface_tags::GetTagsModeratorOnlyParams) -> Result<iface_tags::Tags, iface_tags::GetTagsModeratorOnlyError> {
         let json = iface_tags__get_tags_moderator_only_params__to_json(&params);
-        dispatch(&OP_TAGS_GET_TAGS_MODERATOR_ONLY, json)
+        match dispatch(&OP_TAGS_GET_TAGS_MODERATOR_ONLY, json).and_then(iface_tags__get_tags_moderator_only__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_tags__get_tags_moderator_only__err(e)),
+        }
     }
-    fn get_tags_required(params: iface_tags::GetTagsRequiredParams) -> Result<String, String> {
+    fn get_tags_required(params: iface_tags::GetTagsRequiredParams) -> Result<iface_tags::Tags, iface_tags::GetTagsRequiredError> {
         let json = iface_tags__get_tags_required_params__to_json(&params);
-        dispatch(&OP_TAGS_GET_TAGS_REQUIRED, json)
+        match dispatch(&OP_TAGS_GET_TAGS_REQUIRED, json).and_then(iface_tags__get_tags_required__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_tags__get_tags_required__err(e)),
+        }
     }
-    fn get_tags_synonyms(params: iface_tags::GetTagsSynonymsParams) -> Result<String, String> {
+    fn get_tags_synonyms(params: iface_tags::GetTagsSynonymsParams) -> Result<iface_tags::TagSynonyms, iface_tags::GetTagsSynonymsError> {
         let json = iface_tags__get_tags_synonyms_params__to_json(&params);
-        dispatch(&OP_TAGS_GET_TAGS_SYNONYMS, json)
+        match dispatch(&OP_TAGS_GET_TAGS_SYNONYMS, json).and_then(iface_tags__get_tags_synonyms__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_tags__get_tags_synonyms__err(e)),
+        }
     }
-    fn get_tags_tags_faq(params: iface_tags::GetTagsTagsFaqParams) -> Result<String, String> {
+    fn get_tags_tags_faq(params: iface_tags::GetTagsTagsFaqParams) -> Result<iface_tags::Questions, iface_tags::GetTagsTagsFaqError> {
         let json = iface_tags__get_tags_tags_faq_params__to_json(&params);
-        dispatch(&OP_TAGS_GET_TAGS_TAGS_FAQ, json)
+        match dispatch(&OP_TAGS_GET_TAGS_TAGS_FAQ, json).and_then(iface_tags__get_tags_tags_faq__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_tags__get_tags_tags_faq__err(e)),
+        }
     }
-    fn get_tags_tags_info(params: iface_tags::GetTagsTagsInfoParams) -> Result<String, String> {
+    fn get_tags_tags_info(params: iface_tags::GetTagsTagsInfoParams) -> Result<iface_tags::Tags, iface_tags::GetTagsTagsInfoError> {
         let json = iface_tags__get_tags_tags_info_params__to_json(&params);
-        dispatch(&OP_TAGS_GET_TAGS_TAGS_INFO, json)
+        match dispatch(&OP_TAGS_GET_TAGS_TAGS_INFO, json).and_then(iface_tags__get_tags_tags_info__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_tags__get_tags_tags_info__err(e)),
+        }
     }
-    fn get_tags_tags_related(params: iface_tags::GetTagsTagsRelatedParams) -> Result<String, String> {
+    fn get_tags_tags_related(params: iface_tags::GetTagsTagsRelatedParams) -> Result<iface_tags::Tags, iface_tags::GetTagsTagsRelatedError> {
         let json = iface_tags__get_tags_tags_related_params__to_json(&params);
-        dispatch(&OP_TAGS_GET_TAGS_TAGS_RELATED, json)
+        match dispatch(&OP_TAGS_GET_TAGS_TAGS_RELATED, json).and_then(iface_tags__get_tags_tags_related__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_tags__get_tags_tags_related__err(e)),
+        }
     }
-    fn get_tags_tags_synonyms(params: iface_tags::GetTagsTagsSynonymsParams) -> Result<String, String> {
+    fn get_tags_tags_synonyms(params: iface_tags::GetTagsTagsSynonymsParams) -> Result<iface_tags::TagSynonyms, iface_tags::GetTagsTagsSynonymsError> {
         let json = iface_tags__get_tags_tags_synonyms_params__to_json(&params);
-        dispatch(&OP_TAGS_GET_TAGS_TAGS_SYNONYMS, json)
+        match dispatch(&OP_TAGS_GET_TAGS_TAGS_SYNONYMS, json).and_then(iface_tags__get_tags_tags_synonyms__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_tags__get_tags_tags_synonyms__err(e)),
+        }
     }
-    fn get_tags_tags_wikis(params: iface_tags::GetTagsTagsWikisParams) -> Result<String, String> {
+    fn get_tags_tags_wikis(params: iface_tags::GetTagsTagsWikisParams) -> Result<iface_tags::TagWikis, iface_tags::GetTagsTagsWikisError> {
         let json = iface_tags__get_tags_tags_wikis_params__to_json(&params);
-        dispatch(&OP_TAGS_GET_TAGS_TAGS_WIKIS, json)
+        match dispatch(&OP_TAGS_GET_TAGS_TAGS_WIKIS, json).and_then(iface_tags__get_tags_tags_wikis__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_tags__get_tags_tags_wikis__err(e)),
+        }
     }
-    fn get_tags_tag_top_answerers_period(params: iface_tags::GetTagsTagTopAnswerersPeriodParams) -> Result<String, String> {
+    fn get_tags_tag_top_answerers_period(params: iface_tags::GetTagsTagTopAnswerersPeriodParams) -> Result<iface_tags::TagScoreObjects, iface_tags::GetTagsTagTopAnswerersPeriodError> {
         let json = iface_tags__get_tags_tag_top_answerers_period_params__to_json(&params);
-        dispatch(&OP_TAGS_GET_TAGS_TAG_TOP_ANSWERERS_PERIOD, json)
+        match dispatch(&OP_TAGS_GET_TAGS_TAG_TOP_ANSWERERS_PERIOD, json).and_then(iface_tags__get_tags_tag_top_answerers_period__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_tags__get_tags_tag_top_answerers_period__err(e)),
+        }
     }
-    fn get_tags_tag_top_askers_period(params: iface_tags::GetTagsTagTopAskersPeriodParams) -> Result<String, String> {
+    fn get_tags_tag_top_askers_period(params: iface_tags::GetTagsTagTopAskersPeriodParams) -> Result<iface_tags::TagScoreObjects, iface_tags::GetTagsTagTopAskersPeriodError> {
         let json = iface_tags__get_tags_tag_top_askers_period_params__to_json(&params);
-        dispatch(&OP_TAGS_GET_TAGS_TAG_TOP_ASKERS_PERIOD, json)
+        match dispatch(&OP_TAGS_GET_TAGS_TAG_TOP_ASKERS_PERIOD, json).and_then(iface_tags__get_tags_tag_top_askers_period__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_tags__get_tags_tag_top_askers_period__err(e)),
+        }
     }
 }
 use crate::exports::autostamp::stackexchange::users as iface_users;
@@ -3891,18 +7975,18 @@ const OP_USERS_GET_USERS: OpSpec = OpSpec {
     method: "GET",
     path_template: "/users",
     fields: &[
-        FieldSpec { snake: "inname", location: FieldLocation::Query },
-        FieldSpec { snake: "order", location: FieldLocation::Query },
-        FieldSpec { snake: "max", location: FieldLocation::Query },
-        FieldSpec { snake: "min", location: FieldLocation::Query },
-        FieldSpec { snake: "sort", location: FieldLocation::Query },
-        FieldSpec { snake: "fromdate", location: FieldLocation::Query },
-        FieldSpec { snake: "todate", location: FieldLocation::Query },
-        FieldSpec { snake: "pagesize", location: FieldLocation::Query },
-        FieldSpec { snake: "page", location: FieldLocation::Query },
-        FieldSpec { snake: "filter", location: FieldLocation::Query },
-        FieldSpec { snake: "callback", location: FieldLocation::Query },
-        FieldSpec { snake: "site", location: FieldLocation::Query },
+        FieldSpec { snake: "inname", wire: "inname", location: FieldLocation::Query },
+        FieldSpec { snake: "order", wire: "order", location: FieldLocation::Query },
+        FieldSpec { snake: "max", wire: "max", location: FieldLocation::Query },
+        FieldSpec { snake: "min", wire: "min", location: FieldLocation::Query },
+        FieldSpec { snake: "sort", wire: "sort", location: FieldLocation::Query },
+        FieldSpec { snake: "fromdate", wire: "fromdate", location: FieldLocation::Query },
+        FieldSpec { snake: "todate", wire: "todate", location: FieldLocation::Query },
+        FieldSpec { snake: "pagesize", wire: "pagesize", location: FieldLocation::Query },
+        FieldSpec { snake: "page", wire: "page", location: FieldLocation::Query },
+        FieldSpec { snake: "filter", wire: "filter", location: FieldLocation::Query },
+        FieldSpec { snake: "callback", wire: "callback", location: FieldLocation::Query },
+        FieldSpec { snake: "site", wire: "site", location: FieldLocation::Query },
     ],
     auth: &[
     ],
@@ -3912,17 +7996,17 @@ const OP_USERS_GET_USERS_MODERATORS: OpSpec = OpSpec {
     method: "GET",
     path_template: "/users/moderators",
     fields: &[
-        FieldSpec { snake: "order", location: FieldLocation::Query },
-        FieldSpec { snake: "max", location: FieldLocation::Query },
-        FieldSpec { snake: "min", location: FieldLocation::Query },
-        FieldSpec { snake: "sort", location: FieldLocation::Query },
-        FieldSpec { snake: "fromdate", location: FieldLocation::Query },
-        FieldSpec { snake: "todate", location: FieldLocation::Query },
-        FieldSpec { snake: "pagesize", location: FieldLocation::Query },
-        FieldSpec { snake: "page", location: FieldLocation::Query },
-        FieldSpec { snake: "filter", location: FieldLocation::Query },
-        FieldSpec { snake: "callback", location: FieldLocation::Query },
-        FieldSpec { snake: "site", location: FieldLocation::Query },
+        FieldSpec { snake: "order", wire: "order", location: FieldLocation::Query },
+        FieldSpec { snake: "max", wire: "max", location: FieldLocation::Query },
+        FieldSpec { snake: "min", wire: "min", location: FieldLocation::Query },
+        FieldSpec { snake: "sort", wire: "sort", location: FieldLocation::Query },
+        FieldSpec { snake: "fromdate", wire: "fromdate", location: FieldLocation::Query },
+        FieldSpec { snake: "todate", wire: "todate", location: FieldLocation::Query },
+        FieldSpec { snake: "pagesize", wire: "pagesize", location: FieldLocation::Query },
+        FieldSpec { snake: "page", wire: "page", location: FieldLocation::Query },
+        FieldSpec { snake: "filter", wire: "filter", location: FieldLocation::Query },
+        FieldSpec { snake: "callback", wire: "callback", location: FieldLocation::Query },
+        FieldSpec { snake: "site", wire: "site", location: FieldLocation::Query },
     ],
     auth: &[
     ],
@@ -3932,17 +8016,17 @@ const OP_USERS_GET_USERS_MODERATORS_ELECTED: OpSpec = OpSpec {
     method: "GET",
     path_template: "/users/moderators/elected",
     fields: &[
-        FieldSpec { snake: "order", location: FieldLocation::Query },
-        FieldSpec { snake: "max", location: FieldLocation::Query },
-        FieldSpec { snake: "min", location: FieldLocation::Query },
-        FieldSpec { snake: "sort", location: FieldLocation::Query },
-        FieldSpec { snake: "fromdate", location: FieldLocation::Query },
-        FieldSpec { snake: "todate", location: FieldLocation::Query },
-        FieldSpec { snake: "pagesize", location: FieldLocation::Query },
-        FieldSpec { snake: "page", location: FieldLocation::Query },
-        FieldSpec { snake: "filter", location: FieldLocation::Query },
-        FieldSpec { snake: "callback", location: FieldLocation::Query },
-        FieldSpec { snake: "site", location: FieldLocation::Query },
+        FieldSpec { snake: "order", wire: "order", location: FieldLocation::Query },
+        FieldSpec { snake: "max", wire: "max", location: FieldLocation::Query },
+        FieldSpec { snake: "min", wire: "min", location: FieldLocation::Query },
+        FieldSpec { snake: "sort", wire: "sort", location: FieldLocation::Query },
+        FieldSpec { snake: "fromdate", wire: "fromdate", location: FieldLocation::Query },
+        FieldSpec { snake: "todate", wire: "todate", location: FieldLocation::Query },
+        FieldSpec { snake: "pagesize", wire: "pagesize", location: FieldLocation::Query },
+        FieldSpec { snake: "page", wire: "page", location: FieldLocation::Query },
+        FieldSpec { snake: "filter", wire: "filter", location: FieldLocation::Query },
+        FieldSpec { snake: "callback", wire: "callback", location: FieldLocation::Query },
+        FieldSpec { snake: "site", wire: "site", location: FieldLocation::Query },
     ],
     auth: &[
     ],
@@ -3952,18 +8036,18 @@ const OP_USERS_GET_USERS_IDS: OpSpec = OpSpec {
     method: "GET",
     path_template: "/users/{ids}",
     fields: &[
-        FieldSpec { snake: "ids", location: FieldLocation::Path },
-        FieldSpec { snake: "order", location: FieldLocation::Query },
-        FieldSpec { snake: "max", location: FieldLocation::Query },
-        FieldSpec { snake: "min", location: FieldLocation::Query },
-        FieldSpec { snake: "sort", location: FieldLocation::Query },
-        FieldSpec { snake: "fromdate", location: FieldLocation::Query },
-        FieldSpec { snake: "todate", location: FieldLocation::Query },
-        FieldSpec { snake: "pagesize", location: FieldLocation::Query },
-        FieldSpec { snake: "page", location: FieldLocation::Query },
-        FieldSpec { snake: "filter", location: FieldLocation::Query },
-        FieldSpec { snake: "callback", location: FieldLocation::Query },
-        FieldSpec { snake: "site", location: FieldLocation::Query },
+        FieldSpec { snake: "ids", wire: "ids", location: FieldLocation::Path },
+        FieldSpec { snake: "order", wire: "order", location: FieldLocation::Query },
+        FieldSpec { snake: "max", wire: "max", location: FieldLocation::Query },
+        FieldSpec { snake: "min", wire: "min", location: FieldLocation::Query },
+        FieldSpec { snake: "sort", wire: "sort", location: FieldLocation::Query },
+        FieldSpec { snake: "fromdate", wire: "fromdate", location: FieldLocation::Query },
+        FieldSpec { snake: "todate", wire: "todate", location: FieldLocation::Query },
+        FieldSpec { snake: "pagesize", wire: "pagesize", location: FieldLocation::Query },
+        FieldSpec { snake: "page", wire: "page", location: FieldLocation::Query },
+        FieldSpec { snake: "filter", wire: "filter", location: FieldLocation::Query },
+        FieldSpec { snake: "callback", wire: "callback", location: FieldLocation::Query },
+        FieldSpec { snake: "site", wire: "site", location: FieldLocation::Query },
     ],
     auth: &[
     ],
@@ -3973,18 +8057,18 @@ const OP_USERS_GET_USERS_IDS_ANSWERS: OpSpec = OpSpec {
     method: "GET",
     path_template: "/users/{ids}/answers",
     fields: &[
-        FieldSpec { snake: "ids", location: FieldLocation::Path },
-        FieldSpec { snake: "order", location: FieldLocation::Query },
-        FieldSpec { snake: "max", location: FieldLocation::Query },
-        FieldSpec { snake: "min", location: FieldLocation::Query },
-        FieldSpec { snake: "sort", location: FieldLocation::Query },
-        FieldSpec { snake: "fromdate", location: FieldLocation::Query },
-        FieldSpec { snake: "todate", location: FieldLocation::Query },
-        FieldSpec { snake: "pagesize", location: FieldLocation::Query },
-        FieldSpec { snake: "page", location: FieldLocation::Query },
-        FieldSpec { snake: "filter", location: FieldLocation::Query },
-        FieldSpec { snake: "callback", location: FieldLocation::Query },
-        FieldSpec { snake: "site", location: FieldLocation::Query },
+        FieldSpec { snake: "ids", wire: "ids", location: FieldLocation::Path },
+        FieldSpec { snake: "order", wire: "order", location: FieldLocation::Query },
+        FieldSpec { snake: "max", wire: "max", location: FieldLocation::Query },
+        FieldSpec { snake: "min", wire: "min", location: FieldLocation::Query },
+        FieldSpec { snake: "sort", wire: "sort", location: FieldLocation::Query },
+        FieldSpec { snake: "fromdate", wire: "fromdate", location: FieldLocation::Query },
+        FieldSpec { snake: "todate", wire: "todate", location: FieldLocation::Query },
+        FieldSpec { snake: "pagesize", wire: "pagesize", location: FieldLocation::Query },
+        FieldSpec { snake: "page", wire: "page", location: FieldLocation::Query },
+        FieldSpec { snake: "filter", wire: "filter", location: FieldLocation::Query },
+        FieldSpec { snake: "callback", wire: "callback", location: FieldLocation::Query },
+        FieldSpec { snake: "site", wire: "site", location: FieldLocation::Query },
     ],
     auth: &[
     ],
@@ -3994,11 +8078,11 @@ const OP_USERS_GET_USERS_IDS_ASSOCIATED: OpSpec = OpSpec {
     method: "GET",
     path_template: "/users/{ids}/associated",
     fields: &[
-        FieldSpec { snake: "ids", location: FieldLocation::Path },
-        FieldSpec { snake: "pagesize", location: FieldLocation::Query },
-        FieldSpec { snake: "page", location: FieldLocation::Query },
-        FieldSpec { snake: "filter", location: FieldLocation::Query },
-        FieldSpec { snake: "callback", location: FieldLocation::Query },
+        FieldSpec { snake: "ids", wire: "ids", location: FieldLocation::Path },
+        FieldSpec { snake: "pagesize", wire: "pagesize", location: FieldLocation::Query },
+        FieldSpec { snake: "page", wire: "page", location: FieldLocation::Query },
+        FieldSpec { snake: "filter", wire: "filter", location: FieldLocation::Query },
+        FieldSpec { snake: "callback", wire: "callback", location: FieldLocation::Query },
     ],
     auth: &[
     ],
@@ -4008,18 +8092,18 @@ const OP_USERS_GET_USERS_IDS_BADGES: OpSpec = OpSpec {
     method: "GET",
     path_template: "/users/{ids}/badges",
     fields: &[
-        FieldSpec { snake: "ids", location: FieldLocation::Path },
-        FieldSpec { snake: "order", location: FieldLocation::Query },
-        FieldSpec { snake: "max", location: FieldLocation::Query },
-        FieldSpec { snake: "min", location: FieldLocation::Query },
-        FieldSpec { snake: "sort", location: FieldLocation::Query },
-        FieldSpec { snake: "fromdate", location: FieldLocation::Query },
-        FieldSpec { snake: "todate", location: FieldLocation::Query },
-        FieldSpec { snake: "pagesize", location: FieldLocation::Query },
-        FieldSpec { snake: "page", location: FieldLocation::Query },
-        FieldSpec { snake: "filter", location: FieldLocation::Query },
-        FieldSpec { snake: "callback", location: FieldLocation::Query },
-        FieldSpec { snake: "site", location: FieldLocation::Query },
+        FieldSpec { snake: "ids", wire: "ids", location: FieldLocation::Path },
+        FieldSpec { snake: "order", wire: "order", location: FieldLocation::Query },
+        FieldSpec { snake: "max", wire: "max", location: FieldLocation::Query },
+        FieldSpec { snake: "min", wire: "min", location: FieldLocation::Query },
+        FieldSpec { snake: "sort", wire: "sort", location: FieldLocation::Query },
+        FieldSpec { snake: "fromdate", wire: "fromdate", location: FieldLocation::Query },
+        FieldSpec { snake: "todate", wire: "todate", location: FieldLocation::Query },
+        FieldSpec { snake: "pagesize", wire: "pagesize", location: FieldLocation::Query },
+        FieldSpec { snake: "page", wire: "page", location: FieldLocation::Query },
+        FieldSpec { snake: "filter", wire: "filter", location: FieldLocation::Query },
+        FieldSpec { snake: "callback", wire: "callback", location: FieldLocation::Query },
+        FieldSpec { snake: "site", wire: "site", location: FieldLocation::Query },
     ],
     auth: &[
     ],
@@ -4029,18 +8113,18 @@ const OP_USERS_GET_USERS_IDS_COMMENTS: OpSpec = OpSpec {
     method: "GET",
     path_template: "/users/{ids}/comments",
     fields: &[
-        FieldSpec { snake: "ids", location: FieldLocation::Path },
-        FieldSpec { snake: "order", location: FieldLocation::Query },
-        FieldSpec { snake: "max", location: FieldLocation::Query },
-        FieldSpec { snake: "min", location: FieldLocation::Query },
-        FieldSpec { snake: "sort", location: FieldLocation::Query },
-        FieldSpec { snake: "fromdate", location: FieldLocation::Query },
-        FieldSpec { snake: "todate", location: FieldLocation::Query },
-        FieldSpec { snake: "pagesize", location: FieldLocation::Query },
-        FieldSpec { snake: "page", location: FieldLocation::Query },
-        FieldSpec { snake: "filter", location: FieldLocation::Query },
-        FieldSpec { snake: "callback", location: FieldLocation::Query },
-        FieldSpec { snake: "site", location: FieldLocation::Query },
+        FieldSpec { snake: "ids", wire: "ids", location: FieldLocation::Path },
+        FieldSpec { snake: "order", wire: "order", location: FieldLocation::Query },
+        FieldSpec { snake: "max", wire: "max", location: FieldLocation::Query },
+        FieldSpec { snake: "min", wire: "min", location: FieldLocation::Query },
+        FieldSpec { snake: "sort", wire: "sort", location: FieldLocation::Query },
+        FieldSpec { snake: "fromdate", wire: "fromdate", location: FieldLocation::Query },
+        FieldSpec { snake: "todate", wire: "todate", location: FieldLocation::Query },
+        FieldSpec { snake: "pagesize", wire: "pagesize", location: FieldLocation::Query },
+        FieldSpec { snake: "page", wire: "page", location: FieldLocation::Query },
+        FieldSpec { snake: "filter", wire: "filter", location: FieldLocation::Query },
+        FieldSpec { snake: "callback", wire: "callback", location: FieldLocation::Query },
+        FieldSpec { snake: "site", wire: "site", location: FieldLocation::Query },
     ],
     auth: &[
     ],
@@ -4050,19 +8134,19 @@ const OP_USERS_GET_USERS_IDS_COMMENTS_TOID: OpSpec = OpSpec {
     method: "GET",
     path_template: "/users/{ids}/comments/{toid}",
     fields: &[
-        FieldSpec { snake: "ids", location: FieldLocation::Path },
-        FieldSpec { snake: "toid", location: FieldLocation::Path },
-        FieldSpec { snake: "order", location: FieldLocation::Query },
-        FieldSpec { snake: "max", location: FieldLocation::Query },
-        FieldSpec { snake: "min", location: FieldLocation::Query },
-        FieldSpec { snake: "sort", location: FieldLocation::Query },
-        FieldSpec { snake: "fromdate", location: FieldLocation::Query },
-        FieldSpec { snake: "todate", location: FieldLocation::Query },
-        FieldSpec { snake: "pagesize", location: FieldLocation::Query },
-        FieldSpec { snake: "page", location: FieldLocation::Query },
-        FieldSpec { snake: "filter", location: FieldLocation::Query },
-        FieldSpec { snake: "callback", location: FieldLocation::Query },
-        FieldSpec { snake: "site", location: FieldLocation::Query },
+        FieldSpec { snake: "ids", wire: "ids", location: FieldLocation::Path },
+        FieldSpec { snake: "toid", wire: "toid", location: FieldLocation::Path },
+        FieldSpec { snake: "order", wire: "order", location: FieldLocation::Query },
+        FieldSpec { snake: "max", wire: "max", location: FieldLocation::Query },
+        FieldSpec { snake: "min", wire: "min", location: FieldLocation::Query },
+        FieldSpec { snake: "sort", wire: "sort", location: FieldLocation::Query },
+        FieldSpec { snake: "fromdate", wire: "fromdate", location: FieldLocation::Query },
+        FieldSpec { snake: "todate", wire: "todate", location: FieldLocation::Query },
+        FieldSpec { snake: "pagesize", wire: "pagesize", location: FieldLocation::Query },
+        FieldSpec { snake: "page", wire: "page", location: FieldLocation::Query },
+        FieldSpec { snake: "filter", wire: "filter", location: FieldLocation::Query },
+        FieldSpec { snake: "callback", wire: "callback", location: FieldLocation::Query },
+        FieldSpec { snake: "site", wire: "site", location: FieldLocation::Query },
     ],
     auth: &[
     ],
@@ -4072,18 +8156,18 @@ const OP_USERS_GET_USERS_IDS_FAVORITES: OpSpec = OpSpec {
     method: "GET",
     path_template: "/users/{ids}/favorites",
     fields: &[
-        FieldSpec { snake: "ids", location: FieldLocation::Path },
-        FieldSpec { snake: "order", location: FieldLocation::Query },
-        FieldSpec { snake: "max", location: FieldLocation::Query },
-        FieldSpec { snake: "min", location: FieldLocation::Query },
-        FieldSpec { snake: "sort", location: FieldLocation::Query },
-        FieldSpec { snake: "fromdate", location: FieldLocation::Query },
-        FieldSpec { snake: "todate", location: FieldLocation::Query },
-        FieldSpec { snake: "pagesize", location: FieldLocation::Query },
-        FieldSpec { snake: "page", location: FieldLocation::Query },
-        FieldSpec { snake: "filter", location: FieldLocation::Query },
-        FieldSpec { snake: "callback", location: FieldLocation::Query },
-        FieldSpec { snake: "site", location: FieldLocation::Query },
+        FieldSpec { snake: "ids", wire: "ids", location: FieldLocation::Path },
+        FieldSpec { snake: "order", wire: "order", location: FieldLocation::Query },
+        FieldSpec { snake: "max", wire: "max", location: FieldLocation::Query },
+        FieldSpec { snake: "min", wire: "min", location: FieldLocation::Query },
+        FieldSpec { snake: "sort", wire: "sort", location: FieldLocation::Query },
+        FieldSpec { snake: "fromdate", wire: "fromdate", location: FieldLocation::Query },
+        FieldSpec { snake: "todate", wire: "todate", location: FieldLocation::Query },
+        FieldSpec { snake: "pagesize", wire: "pagesize", location: FieldLocation::Query },
+        FieldSpec { snake: "page", wire: "page", location: FieldLocation::Query },
+        FieldSpec { snake: "filter", wire: "filter", location: FieldLocation::Query },
+        FieldSpec { snake: "callback", wire: "callback", location: FieldLocation::Query },
+        FieldSpec { snake: "site", wire: "site", location: FieldLocation::Query },
     ],
     auth: &[
     ],
@@ -4093,18 +8177,18 @@ const OP_USERS_GET_USERS_IDS_MENTIONED: OpSpec = OpSpec {
     method: "GET",
     path_template: "/users/{ids}/mentioned",
     fields: &[
-        FieldSpec { snake: "ids", location: FieldLocation::Path },
-        FieldSpec { snake: "order", location: FieldLocation::Query },
-        FieldSpec { snake: "max", location: FieldLocation::Query },
-        FieldSpec { snake: "min", location: FieldLocation::Query },
-        FieldSpec { snake: "sort", location: FieldLocation::Query },
-        FieldSpec { snake: "fromdate", location: FieldLocation::Query },
-        FieldSpec { snake: "todate", location: FieldLocation::Query },
-        FieldSpec { snake: "pagesize", location: FieldLocation::Query },
-        FieldSpec { snake: "page", location: FieldLocation::Query },
-        FieldSpec { snake: "filter", location: FieldLocation::Query },
-        FieldSpec { snake: "callback", location: FieldLocation::Query },
-        FieldSpec { snake: "site", location: FieldLocation::Query },
+        FieldSpec { snake: "ids", wire: "ids", location: FieldLocation::Path },
+        FieldSpec { snake: "order", wire: "order", location: FieldLocation::Query },
+        FieldSpec { snake: "max", wire: "max", location: FieldLocation::Query },
+        FieldSpec { snake: "min", wire: "min", location: FieldLocation::Query },
+        FieldSpec { snake: "sort", wire: "sort", location: FieldLocation::Query },
+        FieldSpec { snake: "fromdate", wire: "fromdate", location: FieldLocation::Query },
+        FieldSpec { snake: "todate", wire: "todate", location: FieldLocation::Query },
+        FieldSpec { snake: "pagesize", wire: "pagesize", location: FieldLocation::Query },
+        FieldSpec { snake: "page", wire: "page", location: FieldLocation::Query },
+        FieldSpec { snake: "filter", wire: "filter", location: FieldLocation::Query },
+        FieldSpec { snake: "callback", wire: "callback", location: FieldLocation::Query },
+        FieldSpec { snake: "site", wire: "site", location: FieldLocation::Query },
     ],
     auth: &[
     ],
@@ -4114,11 +8198,11 @@ const OP_USERS_GET_USERS_IDS_MERGES: OpSpec = OpSpec {
     method: "GET",
     path_template: "/users/{ids}/merges",
     fields: &[
-        FieldSpec { snake: "ids", location: FieldLocation::Path },
-        FieldSpec { snake: "pagesize", location: FieldLocation::Query },
-        FieldSpec { snake: "page", location: FieldLocation::Query },
-        FieldSpec { snake: "filter", location: FieldLocation::Query },
-        FieldSpec { snake: "callback", location: FieldLocation::Query },
+        FieldSpec { snake: "ids", wire: "ids", location: FieldLocation::Path },
+        FieldSpec { snake: "pagesize", wire: "pagesize", location: FieldLocation::Query },
+        FieldSpec { snake: "page", wire: "page", location: FieldLocation::Query },
+        FieldSpec { snake: "filter", wire: "filter", location: FieldLocation::Query },
+        FieldSpec { snake: "callback", wire: "callback", location: FieldLocation::Query },
     ],
     auth: &[
     ],
@@ -4128,18 +8212,18 @@ const OP_USERS_GET_USERS_IDS_QUESTIONS: OpSpec = OpSpec {
     method: "GET",
     path_template: "/users/{ids}/questions",
     fields: &[
-        FieldSpec { snake: "ids", location: FieldLocation::Path },
-        FieldSpec { snake: "order", location: FieldLocation::Query },
-        FieldSpec { snake: "max", location: FieldLocation::Query },
-        FieldSpec { snake: "min", location: FieldLocation::Query },
-        FieldSpec { snake: "sort", location: FieldLocation::Query },
-        FieldSpec { snake: "fromdate", location: FieldLocation::Query },
-        FieldSpec { snake: "todate", location: FieldLocation::Query },
-        FieldSpec { snake: "pagesize", location: FieldLocation::Query },
-        FieldSpec { snake: "page", location: FieldLocation::Query },
-        FieldSpec { snake: "filter", location: FieldLocation::Query },
-        FieldSpec { snake: "callback", location: FieldLocation::Query },
-        FieldSpec { snake: "site", location: FieldLocation::Query },
+        FieldSpec { snake: "ids", wire: "ids", location: FieldLocation::Path },
+        FieldSpec { snake: "order", wire: "order", location: FieldLocation::Query },
+        FieldSpec { snake: "max", wire: "max", location: FieldLocation::Query },
+        FieldSpec { snake: "min", wire: "min", location: FieldLocation::Query },
+        FieldSpec { snake: "sort", wire: "sort", location: FieldLocation::Query },
+        FieldSpec { snake: "fromdate", wire: "fromdate", location: FieldLocation::Query },
+        FieldSpec { snake: "todate", wire: "todate", location: FieldLocation::Query },
+        FieldSpec { snake: "pagesize", wire: "pagesize", location: FieldLocation::Query },
+        FieldSpec { snake: "page", wire: "page", location: FieldLocation::Query },
+        FieldSpec { snake: "filter", wire: "filter", location: FieldLocation::Query },
+        FieldSpec { snake: "callback", wire: "callback", location: FieldLocation::Query },
+        FieldSpec { snake: "site", wire: "site", location: FieldLocation::Query },
     ],
     auth: &[
     ],
@@ -4149,18 +8233,18 @@ const OP_USERS_GET_USERS_IDS_QUESTIONS_FEATURED: OpSpec = OpSpec {
     method: "GET",
     path_template: "/users/{ids}/questions/featured",
     fields: &[
-        FieldSpec { snake: "ids", location: FieldLocation::Path },
-        FieldSpec { snake: "order", location: FieldLocation::Query },
-        FieldSpec { snake: "max", location: FieldLocation::Query },
-        FieldSpec { snake: "min", location: FieldLocation::Query },
-        FieldSpec { snake: "sort", location: FieldLocation::Query },
-        FieldSpec { snake: "fromdate", location: FieldLocation::Query },
-        FieldSpec { snake: "todate", location: FieldLocation::Query },
-        FieldSpec { snake: "pagesize", location: FieldLocation::Query },
-        FieldSpec { snake: "page", location: FieldLocation::Query },
-        FieldSpec { snake: "filter", location: FieldLocation::Query },
-        FieldSpec { snake: "callback", location: FieldLocation::Query },
-        FieldSpec { snake: "site", location: FieldLocation::Query },
+        FieldSpec { snake: "ids", wire: "ids", location: FieldLocation::Path },
+        FieldSpec { snake: "order", wire: "order", location: FieldLocation::Query },
+        FieldSpec { snake: "max", wire: "max", location: FieldLocation::Query },
+        FieldSpec { snake: "min", wire: "min", location: FieldLocation::Query },
+        FieldSpec { snake: "sort", wire: "sort", location: FieldLocation::Query },
+        FieldSpec { snake: "fromdate", wire: "fromdate", location: FieldLocation::Query },
+        FieldSpec { snake: "todate", wire: "todate", location: FieldLocation::Query },
+        FieldSpec { snake: "pagesize", wire: "pagesize", location: FieldLocation::Query },
+        FieldSpec { snake: "page", wire: "page", location: FieldLocation::Query },
+        FieldSpec { snake: "filter", wire: "filter", location: FieldLocation::Query },
+        FieldSpec { snake: "callback", wire: "callback", location: FieldLocation::Query },
+        FieldSpec { snake: "site", wire: "site", location: FieldLocation::Query },
     ],
     auth: &[
     ],
@@ -4170,18 +8254,18 @@ const OP_USERS_GET_USERS_IDS_QUESTIONS_NO_ANSWERS: OpSpec = OpSpec {
     method: "GET",
     path_template: "/users/{ids}/questions/no-answers",
     fields: &[
-        FieldSpec { snake: "ids", location: FieldLocation::Path },
-        FieldSpec { snake: "order", location: FieldLocation::Query },
-        FieldSpec { snake: "max", location: FieldLocation::Query },
-        FieldSpec { snake: "min", location: FieldLocation::Query },
-        FieldSpec { snake: "sort", location: FieldLocation::Query },
-        FieldSpec { snake: "fromdate", location: FieldLocation::Query },
-        FieldSpec { snake: "todate", location: FieldLocation::Query },
-        FieldSpec { snake: "pagesize", location: FieldLocation::Query },
-        FieldSpec { snake: "page", location: FieldLocation::Query },
-        FieldSpec { snake: "filter", location: FieldLocation::Query },
-        FieldSpec { snake: "callback", location: FieldLocation::Query },
-        FieldSpec { snake: "site", location: FieldLocation::Query },
+        FieldSpec { snake: "ids", wire: "ids", location: FieldLocation::Path },
+        FieldSpec { snake: "order", wire: "order", location: FieldLocation::Query },
+        FieldSpec { snake: "max", wire: "max", location: FieldLocation::Query },
+        FieldSpec { snake: "min", wire: "min", location: FieldLocation::Query },
+        FieldSpec { snake: "sort", wire: "sort", location: FieldLocation::Query },
+        FieldSpec { snake: "fromdate", wire: "fromdate", location: FieldLocation::Query },
+        FieldSpec { snake: "todate", wire: "todate", location: FieldLocation::Query },
+        FieldSpec { snake: "pagesize", wire: "pagesize", location: FieldLocation::Query },
+        FieldSpec { snake: "page", wire: "page", location: FieldLocation::Query },
+        FieldSpec { snake: "filter", wire: "filter", location: FieldLocation::Query },
+        FieldSpec { snake: "callback", wire: "callback", location: FieldLocation::Query },
+        FieldSpec { snake: "site", wire: "site", location: FieldLocation::Query },
     ],
     auth: &[
     ],
@@ -4191,18 +8275,18 @@ const OP_USERS_GET_USERS_IDS_QUESTIONS_UNACCEPTED: OpSpec = OpSpec {
     method: "GET",
     path_template: "/users/{ids}/questions/unaccepted",
     fields: &[
-        FieldSpec { snake: "ids", location: FieldLocation::Path },
-        FieldSpec { snake: "order", location: FieldLocation::Query },
-        FieldSpec { snake: "max", location: FieldLocation::Query },
-        FieldSpec { snake: "min", location: FieldLocation::Query },
-        FieldSpec { snake: "sort", location: FieldLocation::Query },
-        FieldSpec { snake: "fromdate", location: FieldLocation::Query },
-        FieldSpec { snake: "todate", location: FieldLocation::Query },
-        FieldSpec { snake: "pagesize", location: FieldLocation::Query },
-        FieldSpec { snake: "page", location: FieldLocation::Query },
-        FieldSpec { snake: "filter", location: FieldLocation::Query },
-        FieldSpec { snake: "callback", location: FieldLocation::Query },
-        FieldSpec { snake: "site", location: FieldLocation::Query },
+        FieldSpec { snake: "ids", wire: "ids", location: FieldLocation::Path },
+        FieldSpec { snake: "order", wire: "order", location: FieldLocation::Query },
+        FieldSpec { snake: "max", wire: "max", location: FieldLocation::Query },
+        FieldSpec { snake: "min", wire: "min", location: FieldLocation::Query },
+        FieldSpec { snake: "sort", wire: "sort", location: FieldLocation::Query },
+        FieldSpec { snake: "fromdate", wire: "fromdate", location: FieldLocation::Query },
+        FieldSpec { snake: "todate", wire: "todate", location: FieldLocation::Query },
+        FieldSpec { snake: "pagesize", wire: "pagesize", location: FieldLocation::Query },
+        FieldSpec { snake: "page", wire: "page", location: FieldLocation::Query },
+        FieldSpec { snake: "filter", wire: "filter", location: FieldLocation::Query },
+        FieldSpec { snake: "callback", wire: "callback", location: FieldLocation::Query },
+        FieldSpec { snake: "site", wire: "site", location: FieldLocation::Query },
     ],
     auth: &[
     ],
@@ -4212,18 +8296,18 @@ const OP_USERS_GET_USERS_IDS_QUESTIONS_UNANSWERED: OpSpec = OpSpec {
     method: "GET",
     path_template: "/users/{ids}/questions/unanswered",
     fields: &[
-        FieldSpec { snake: "ids", location: FieldLocation::Path },
-        FieldSpec { snake: "order", location: FieldLocation::Query },
-        FieldSpec { snake: "max", location: FieldLocation::Query },
-        FieldSpec { snake: "min", location: FieldLocation::Query },
-        FieldSpec { snake: "sort", location: FieldLocation::Query },
-        FieldSpec { snake: "fromdate", location: FieldLocation::Query },
-        FieldSpec { snake: "todate", location: FieldLocation::Query },
-        FieldSpec { snake: "pagesize", location: FieldLocation::Query },
-        FieldSpec { snake: "page", location: FieldLocation::Query },
-        FieldSpec { snake: "filter", location: FieldLocation::Query },
-        FieldSpec { snake: "callback", location: FieldLocation::Query },
-        FieldSpec { snake: "site", location: FieldLocation::Query },
+        FieldSpec { snake: "ids", wire: "ids", location: FieldLocation::Path },
+        FieldSpec { snake: "order", wire: "order", location: FieldLocation::Query },
+        FieldSpec { snake: "max", wire: "max", location: FieldLocation::Query },
+        FieldSpec { snake: "min", wire: "min", location: FieldLocation::Query },
+        FieldSpec { snake: "sort", wire: "sort", location: FieldLocation::Query },
+        FieldSpec { snake: "fromdate", wire: "fromdate", location: FieldLocation::Query },
+        FieldSpec { snake: "todate", wire: "todate", location: FieldLocation::Query },
+        FieldSpec { snake: "pagesize", wire: "pagesize", location: FieldLocation::Query },
+        FieldSpec { snake: "page", wire: "page", location: FieldLocation::Query },
+        FieldSpec { snake: "filter", wire: "filter", location: FieldLocation::Query },
+        FieldSpec { snake: "callback", wire: "callback", location: FieldLocation::Query },
+        FieldSpec { snake: "site", wire: "site", location: FieldLocation::Query },
     ],
     auth: &[
     ],
@@ -4233,14 +8317,14 @@ const OP_USERS_GET_USERS_IDS_REPUTATION: OpSpec = OpSpec {
     method: "GET",
     path_template: "/users/{ids}/reputation",
     fields: &[
-        FieldSpec { snake: "ids", location: FieldLocation::Path },
-        FieldSpec { snake: "fromdate", location: FieldLocation::Query },
-        FieldSpec { snake: "todate", location: FieldLocation::Query },
-        FieldSpec { snake: "pagesize", location: FieldLocation::Query },
-        FieldSpec { snake: "page", location: FieldLocation::Query },
-        FieldSpec { snake: "filter", location: FieldLocation::Query },
-        FieldSpec { snake: "callback", location: FieldLocation::Query },
-        FieldSpec { snake: "site", location: FieldLocation::Query },
+        FieldSpec { snake: "ids", wire: "ids", location: FieldLocation::Path },
+        FieldSpec { snake: "fromdate", wire: "fromdate", location: FieldLocation::Query },
+        FieldSpec { snake: "todate", wire: "todate", location: FieldLocation::Query },
+        FieldSpec { snake: "pagesize", wire: "pagesize", location: FieldLocation::Query },
+        FieldSpec { snake: "page", wire: "page", location: FieldLocation::Query },
+        FieldSpec { snake: "filter", wire: "filter", location: FieldLocation::Query },
+        FieldSpec { snake: "callback", wire: "callback", location: FieldLocation::Query },
+        FieldSpec { snake: "site", wire: "site", location: FieldLocation::Query },
     ],
     auth: &[
     ],
@@ -4250,12 +8334,12 @@ const OP_USERS_GET_USERS_IDS_REPUTATION_HISTORY: OpSpec = OpSpec {
     method: "GET",
     path_template: "/users/{ids}/reputation-history",
     fields: &[
-        FieldSpec { snake: "ids", location: FieldLocation::Path },
-        FieldSpec { snake: "pagesize", location: FieldLocation::Query },
-        FieldSpec { snake: "page", location: FieldLocation::Query },
-        FieldSpec { snake: "filter", location: FieldLocation::Query },
-        FieldSpec { snake: "callback", location: FieldLocation::Query },
-        FieldSpec { snake: "site", location: FieldLocation::Query },
+        FieldSpec { snake: "ids", wire: "ids", location: FieldLocation::Path },
+        FieldSpec { snake: "pagesize", wire: "pagesize", location: FieldLocation::Query },
+        FieldSpec { snake: "page", wire: "page", location: FieldLocation::Query },
+        FieldSpec { snake: "filter", wire: "filter", location: FieldLocation::Query },
+        FieldSpec { snake: "callback", wire: "callback", location: FieldLocation::Query },
+        FieldSpec { snake: "site", wire: "site", location: FieldLocation::Query },
     ],
     auth: &[
     ],
@@ -4265,18 +8349,18 @@ const OP_USERS_GET_USERS_IDS_SUGGESTED_EDITS: OpSpec = OpSpec {
     method: "GET",
     path_template: "/users/{ids}/suggested-edits",
     fields: &[
-        FieldSpec { snake: "ids", location: FieldLocation::Path },
-        FieldSpec { snake: "order", location: FieldLocation::Query },
-        FieldSpec { snake: "max", location: FieldLocation::Query },
-        FieldSpec { snake: "min", location: FieldLocation::Query },
-        FieldSpec { snake: "sort", location: FieldLocation::Query },
-        FieldSpec { snake: "fromdate", location: FieldLocation::Query },
-        FieldSpec { snake: "todate", location: FieldLocation::Query },
-        FieldSpec { snake: "pagesize", location: FieldLocation::Query },
-        FieldSpec { snake: "page", location: FieldLocation::Query },
-        FieldSpec { snake: "filter", location: FieldLocation::Query },
-        FieldSpec { snake: "callback", location: FieldLocation::Query },
-        FieldSpec { snake: "site", location: FieldLocation::Query },
+        FieldSpec { snake: "ids", wire: "ids", location: FieldLocation::Path },
+        FieldSpec { snake: "order", wire: "order", location: FieldLocation::Query },
+        FieldSpec { snake: "max", wire: "max", location: FieldLocation::Query },
+        FieldSpec { snake: "min", wire: "min", location: FieldLocation::Query },
+        FieldSpec { snake: "sort", wire: "sort", location: FieldLocation::Query },
+        FieldSpec { snake: "fromdate", wire: "fromdate", location: FieldLocation::Query },
+        FieldSpec { snake: "todate", wire: "todate", location: FieldLocation::Query },
+        FieldSpec { snake: "pagesize", wire: "pagesize", location: FieldLocation::Query },
+        FieldSpec { snake: "page", wire: "page", location: FieldLocation::Query },
+        FieldSpec { snake: "filter", wire: "filter", location: FieldLocation::Query },
+        FieldSpec { snake: "callback", wire: "callback", location: FieldLocation::Query },
+        FieldSpec { snake: "site", wire: "site", location: FieldLocation::Query },
     ],
     auth: &[
     ],
@@ -4286,18 +8370,18 @@ const OP_USERS_GET_USERS_IDS_TAGS: OpSpec = OpSpec {
     method: "GET",
     path_template: "/users/{ids}/tags",
     fields: &[
-        FieldSpec { snake: "ids", location: FieldLocation::Path },
-        FieldSpec { snake: "order", location: FieldLocation::Query },
-        FieldSpec { snake: "max", location: FieldLocation::Query },
-        FieldSpec { snake: "min", location: FieldLocation::Query },
-        FieldSpec { snake: "sort", location: FieldLocation::Query },
-        FieldSpec { snake: "fromdate", location: FieldLocation::Query },
-        FieldSpec { snake: "todate", location: FieldLocation::Query },
-        FieldSpec { snake: "pagesize", location: FieldLocation::Query },
-        FieldSpec { snake: "page", location: FieldLocation::Query },
-        FieldSpec { snake: "filter", location: FieldLocation::Query },
-        FieldSpec { snake: "callback", location: FieldLocation::Query },
-        FieldSpec { snake: "site", location: FieldLocation::Query },
+        FieldSpec { snake: "ids", wire: "ids", location: FieldLocation::Path },
+        FieldSpec { snake: "order", wire: "order", location: FieldLocation::Query },
+        FieldSpec { snake: "max", wire: "max", location: FieldLocation::Query },
+        FieldSpec { snake: "min", wire: "min", location: FieldLocation::Query },
+        FieldSpec { snake: "sort", wire: "sort", location: FieldLocation::Query },
+        FieldSpec { snake: "fromdate", wire: "fromdate", location: FieldLocation::Query },
+        FieldSpec { snake: "todate", wire: "todate", location: FieldLocation::Query },
+        FieldSpec { snake: "pagesize", wire: "pagesize", location: FieldLocation::Query },
+        FieldSpec { snake: "page", wire: "page", location: FieldLocation::Query },
+        FieldSpec { snake: "filter", wire: "filter", location: FieldLocation::Query },
+        FieldSpec { snake: "callback", wire: "callback", location: FieldLocation::Query },
+        FieldSpec { snake: "site", wire: "site", location: FieldLocation::Query },
     ],
     auth: &[
     ],
@@ -4307,14 +8391,14 @@ const OP_USERS_GET_USERS_IDS_TIMELINE: OpSpec = OpSpec {
     method: "GET",
     path_template: "/users/{ids}/timeline",
     fields: &[
-        FieldSpec { snake: "ids", location: FieldLocation::Path },
-        FieldSpec { snake: "fromdate", location: FieldLocation::Query },
-        FieldSpec { snake: "todate", location: FieldLocation::Query },
-        FieldSpec { snake: "pagesize", location: FieldLocation::Query },
-        FieldSpec { snake: "page", location: FieldLocation::Query },
-        FieldSpec { snake: "filter", location: FieldLocation::Query },
-        FieldSpec { snake: "callback", location: FieldLocation::Query },
-        FieldSpec { snake: "site", location: FieldLocation::Query },
+        FieldSpec { snake: "ids", wire: "ids", location: FieldLocation::Path },
+        FieldSpec { snake: "fromdate", wire: "fromdate", location: FieldLocation::Query },
+        FieldSpec { snake: "todate", wire: "todate", location: FieldLocation::Query },
+        FieldSpec { snake: "pagesize", wire: "pagesize", location: FieldLocation::Query },
+        FieldSpec { snake: "page", wire: "page", location: FieldLocation::Query },
+        FieldSpec { snake: "filter", wire: "filter", location: FieldLocation::Query },
+        FieldSpec { snake: "callback", wire: "callback", location: FieldLocation::Query },
+        FieldSpec { snake: "site", wire: "site", location: FieldLocation::Query },
     ],
     auth: &[
     ],
@@ -4324,12 +8408,12 @@ const OP_USERS_GET_USERS_ID_INBOX: OpSpec = OpSpec {
     method: "GET",
     path_template: "/users/{id}/inbox",
     fields: &[
-        FieldSpec { snake: "id", location: FieldLocation::Path },
-        FieldSpec { snake: "pagesize", location: FieldLocation::Query },
-        FieldSpec { snake: "page", location: FieldLocation::Query },
-        FieldSpec { snake: "filter", location: FieldLocation::Query },
-        FieldSpec { snake: "callback", location: FieldLocation::Query },
-        FieldSpec { snake: "site", location: FieldLocation::Query },
+        FieldSpec { snake: "id", wire: "id", location: FieldLocation::Path },
+        FieldSpec { snake: "pagesize", wire: "pagesize", location: FieldLocation::Query },
+        FieldSpec { snake: "page", wire: "page", location: FieldLocation::Query },
+        FieldSpec { snake: "filter", wire: "filter", location: FieldLocation::Query },
+        FieldSpec { snake: "callback", wire: "callback", location: FieldLocation::Query },
+        FieldSpec { snake: "site", wire: "site", location: FieldLocation::Query },
     ],
     auth: &[
     ],
@@ -4339,13 +8423,13 @@ const OP_USERS_GET_USERS_ID_INBOX_UNREAD: OpSpec = OpSpec {
     method: "GET",
     path_template: "/users/{id}/inbox/unread",
     fields: &[
-        FieldSpec { snake: "id", location: FieldLocation::Path },
-        FieldSpec { snake: "pagesize", location: FieldLocation::Query },
-        FieldSpec { snake: "page", location: FieldLocation::Query },
-        FieldSpec { snake: "filter", location: FieldLocation::Query },
-        FieldSpec { snake: "callback", location: FieldLocation::Query },
-        FieldSpec { snake: "site", location: FieldLocation::Query },
-        FieldSpec { snake: "since", location: FieldLocation::Query },
+        FieldSpec { snake: "id", wire: "id", location: FieldLocation::Path },
+        FieldSpec { snake: "pagesize", wire: "pagesize", location: FieldLocation::Query },
+        FieldSpec { snake: "page", wire: "page", location: FieldLocation::Query },
+        FieldSpec { snake: "filter", wire: "filter", location: FieldLocation::Query },
+        FieldSpec { snake: "callback", wire: "callback", location: FieldLocation::Query },
+        FieldSpec { snake: "site", wire: "site", location: FieldLocation::Query },
+        FieldSpec { snake: "since", wire: "since", location: FieldLocation::Query },
     ],
     auth: &[
     ],
@@ -4355,12 +8439,12 @@ const OP_USERS_GET_USERS_ID_NOTIFICATIONS: OpSpec = OpSpec {
     method: "GET",
     path_template: "/users/{id}/notifications",
     fields: &[
-        FieldSpec { snake: "id", location: FieldLocation::Path },
-        FieldSpec { snake: "pagesize", location: FieldLocation::Query },
-        FieldSpec { snake: "page", location: FieldLocation::Query },
-        FieldSpec { snake: "filter", location: FieldLocation::Query },
-        FieldSpec { snake: "callback", location: FieldLocation::Query },
-        FieldSpec { snake: "site", location: FieldLocation::Query },
+        FieldSpec { snake: "id", wire: "id", location: FieldLocation::Path },
+        FieldSpec { snake: "pagesize", wire: "pagesize", location: FieldLocation::Query },
+        FieldSpec { snake: "page", wire: "page", location: FieldLocation::Query },
+        FieldSpec { snake: "filter", wire: "filter", location: FieldLocation::Query },
+        FieldSpec { snake: "callback", wire: "callback", location: FieldLocation::Query },
+        FieldSpec { snake: "site", wire: "site", location: FieldLocation::Query },
     ],
     auth: &[
     ],
@@ -4370,12 +8454,12 @@ const OP_USERS_GET_USERS_ID_NOTIFICATIONS_UNREAD: OpSpec = OpSpec {
     method: "GET",
     path_template: "/users/{id}/notifications/unread",
     fields: &[
-        FieldSpec { snake: "id", location: FieldLocation::Path },
-        FieldSpec { snake: "pagesize", location: FieldLocation::Query },
-        FieldSpec { snake: "page", location: FieldLocation::Query },
-        FieldSpec { snake: "filter", location: FieldLocation::Query },
-        FieldSpec { snake: "callback", location: FieldLocation::Query },
-        FieldSpec { snake: "site", location: FieldLocation::Query },
+        FieldSpec { snake: "id", wire: "id", location: FieldLocation::Path },
+        FieldSpec { snake: "pagesize", wire: "pagesize", location: FieldLocation::Query },
+        FieldSpec { snake: "page", wire: "page", location: FieldLocation::Query },
+        FieldSpec { snake: "filter", wire: "filter", location: FieldLocation::Query },
+        FieldSpec { snake: "callback", wire: "callback", location: FieldLocation::Query },
+        FieldSpec { snake: "site", wire: "site", location: FieldLocation::Query },
     ],
     auth: &[
     ],
@@ -4385,12 +8469,12 @@ const OP_USERS_GET_USERS_ID_PRIVILEGES: OpSpec = OpSpec {
     method: "GET",
     path_template: "/users/{id}/privileges",
     fields: &[
-        FieldSpec { snake: "id", location: FieldLocation::Path },
-        FieldSpec { snake: "pagesize", location: FieldLocation::Query },
-        FieldSpec { snake: "page", location: FieldLocation::Query },
-        FieldSpec { snake: "filter", location: FieldLocation::Query },
-        FieldSpec { snake: "callback", location: FieldLocation::Query },
-        FieldSpec { snake: "site", location: FieldLocation::Query },
+        FieldSpec { snake: "id", wire: "id", location: FieldLocation::Path },
+        FieldSpec { snake: "pagesize", wire: "pagesize", location: FieldLocation::Query },
+        FieldSpec { snake: "page", wire: "page", location: FieldLocation::Query },
+        FieldSpec { snake: "filter", wire: "filter", location: FieldLocation::Query },
+        FieldSpec { snake: "callback", wire: "callback", location: FieldLocation::Query },
+        FieldSpec { snake: "site", wire: "site", location: FieldLocation::Query },
     ],
     auth: &[
     ],
@@ -4400,12 +8484,12 @@ const OP_USERS_GET_USERS_ID_REPUTATION_HISTORY_FULL: OpSpec = OpSpec {
     method: "GET",
     path_template: "/users/{id}/reputation-history/full",
     fields: &[
-        FieldSpec { snake: "id", location: FieldLocation::Path },
-        FieldSpec { snake: "pagesize", location: FieldLocation::Query },
-        FieldSpec { snake: "page", location: FieldLocation::Query },
-        FieldSpec { snake: "filter", location: FieldLocation::Query },
-        FieldSpec { snake: "callback", location: FieldLocation::Query },
-        FieldSpec { snake: "site", location: FieldLocation::Query },
+        FieldSpec { snake: "id", wire: "id", location: FieldLocation::Path },
+        FieldSpec { snake: "pagesize", wire: "pagesize", location: FieldLocation::Query },
+        FieldSpec { snake: "page", wire: "page", location: FieldLocation::Query },
+        FieldSpec { snake: "filter", wire: "filter", location: FieldLocation::Query },
+        FieldSpec { snake: "callback", wire: "callback", location: FieldLocation::Query },
+        FieldSpec { snake: "site", wire: "site", location: FieldLocation::Query },
     ],
     auth: &[
     ],
@@ -4415,19 +8499,19 @@ const OP_USERS_GET_USERS_ID_TAGS_TAGS_TOP_ANSWERS: OpSpec = OpSpec {
     method: "GET",
     path_template: "/users/{id}/tags/{tags}/top-answers",
     fields: &[
-        FieldSpec { snake: "id", location: FieldLocation::Path },
-        FieldSpec { snake: "tags", location: FieldLocation::Path },
-        FieldSpec { snake: "order", location: FieldLocation::Query },
-        FieldSpec { snake: "max", location: FieldLocation::Query },
-        FieldSpec { snake: "min", location: FieldLocation::Query },
-        FieldSpec { snake: "sort", location: FieldLocation::Query },
-        FieldSpec { snake: "fromdate", location: FieldLocation::Query },
-        FieldSpec { snake: "todate", location: FieldLocation::Query },
-        FieldSpec { snake: "pagesize", location: FieldLocation::Query },
-        FieldSpec { snake: "page", location: FieldLocation::Query },
-        FieldSpec { snake: "filter", location: FieldLocation::Query },
-        FieldSpec { snake: "callback", location: FieldLocation::Query },
-        FieldSpec { snake: "site", location: FieldLocation::Query },
+        FieldSpec { snake: "id", wire: "id", location: FieldLocation::Path },
+        FieldSpec { snake: "tags", wire: "tags", location: FieldLocation::Path },
+        FieldSpec { snake: "order", wire: "order", location: FieldLocation::Query },
+        FieldSpec { snake: "max", wire: "max", location: FieldLocation::Query },
+        FieldSpec { snake: "min", wire: "min", location: FieldLocation::Query },
+        FieldSpec { snake: "sort", wire: "sort", location: FieldLocation::Query },
+        FieldSpec { snake: "fromdate", wire: "fromdate", location: FieldLocation::Query },
+        FieldSpec { snake: "todate", wire: "todate", location: FieldLocation::Query },
+        FieldSpec { snake: "pagesize", wire: "pagesize", location: FieldLocation::Query },
+        FieldSpec { snake: "page", wire: "page", location: FieldLocation::Query },
+        FieldSpec { snake: "filter", wire: "filter", location: FieldLocation::Query },
+        FieldSpec { snake: "callback", wire: "callback", location: FieldLocation::Query },
+        FieldSpec { snake: "site", wire: "site", location: FieldLocation::Query },
     ],
     auth: &[
     ],
@@ -4437,19 +8521,19 @@ const OP_USERS_GET_USERS_ID_TAGS_TAGS_TOP_QUESTIONS: OpSpec = OpSpec {
     method: "GET",
     path_template: "/users/{id}/tags/{tags}/top-questions",
     fields: &[
-        FieldSpec { snake: "id", location: FieldLocation::Path },
-        FieldSpec { snake: "tags", location: FieldLocation::Path },
-        FieldSpec { snake: "order", location: FieldLocation::Query },
-        FieldSpec { snake: "max", location: FieldLocation::Query },
-        FieldSpec { snake: "min", location: FieldLocation::Query },
-        FieldSpec { snake: "sort", location: FieldLocation::Query },
-        FieldSpec { snake: "fromdate", location: FieldLocation::Query },
-        FieldSpec { snake: "todate", location: FieldLocation::Query },
-        FieldSpec { snake: "pagesize", location: FieldLocation::Query },
-        FieldSpec { snake: "page", location: FieldLocation::Query },
-        FieldSpec { snake: "filter", location: FieldLocation::Query },
-        FieldSpec { snake: "callback", location: FieldLocation::Query },
-        FieldSpec { snake: "site", location: FieldLocation::Query },
+        FieldSpec { snake: "id", wire: "id", location: FieldLocation::Path },
+        FieldSpec { snake: "tags", wire: "tags", location: FieldLocation::Path },
+        FieldSpec { snake: "order", wire: "order", location: FieldLocation::Query },
+        FieldSpec { snake: "max", wire: "max", location: FieldLocation::Query },
+        FieldSpec { snake: "min", wire: "min", location: FieldLocation::Query },
+        FieldSpec { snake: "sort", wire: "sort", location: FieldLocation::Query },
+        FieldSpec { snake: "fromdate", wire: "fromdate", location: FieldLocation::Query },
+        FieldSpec { snake: "todate", wire: "todate", location: FieldLocation::Query },
+        FieldSpec { snake: "pagesize", wire: "pagesize", location: FieldLocation::Query },
+        FieldSpec { snake: "page", wire: "page", location: FieldLocation::Query },
+        FieldSpec { snake: "filter", wire: "filter", location: FieldLocation::Query },
+        FieldSpec { snake: "callback", wire: "callback", location: FieldLocation::Query },
+        FieldSpec { snake: "site", wire: "site", location: FieldLocation::Query },
     ],
     auth: &[
     ],
@@ -4459,12 +8543,12 @@ const OP_USERS_GET_USERS_ID_TOP_ANSWER_TAGS: OpSpec = OpSpec {
     method: "GET",
     path_template: "/users/{id}/top-answer-tags",
     fields: &[
-        FieldSpec { snake: "id", location: FieldLocation::Path },
-        FieldSpec { snake: "pagesize", location: FieldLocation::Query },
-        FieldSpec { snake: "page", location: FieldLocation::Query },
-        FieldSpec { snake: "filter", location: FieldLocation::Query },
-        FieldSpec { snake: "callback", location: FieldLocation::Query },
-        FieldSpec { snake: "site", location: FieldLocation::Query },
+        FieldSpec { snake: "id", wire: "id", location: FieldLocation::Path },
+        FieldSpec { snake: "pagesize", wire: "pagesize", location: FieldLocation::Query },
+        FieldSpec { snake: "page", wire: "page", location: FieldLocation::Query },
+        FieldSpec { snake: "filter", wire: "filter", location: FieldLocation::Query },
+        FieldSpec { snake: "callback", wire: "callback", location: FieldLocation::Query },
+        FieldSpec { snake: "site", wire: "site", location: FieldLocation::Query },
     ],
     auth: &[
     ],
@@ -4474,12 +8558,12 @@ const OP_USERS_GET_USERS_ID_TOP_QUESTION_TAGS: OpSpec = OpSpec {
     method: "GET",
     path_template: "/users/{id}/top-question-tags",
     fields: &[
-        FieldSpec { snake: "id", location: FieldLocation::Path },
-        FieldSpec { snake: "pagesize", location: FieldLocation::Query },
-        FieldSpec { snake: "page", location: FieldLocation::Query },
-        FieldSpec { snake: "filter", location: FieldLocation::Query },
-        FieldSpec { snake: "callback", location: FieldLocation::Query },
-        FieldSpec { snake: "site", location: FieldLocation::Query },
+        FieldSpec { snake: "id", wire: "id", location: FieldLocation::Path },
+        FieldSpec { snake: "pagesize", wire: "pagesize", location: FieldLocation::Query },
+        FieldSpec { snake: "page", wire: "page", location: FieldLocation::Query },
+        FieldSpec { snake: "filter", wire: "filter", location: FieldLocation::Query },
+        FieldSpec { snake: "callback", wire: "callback", location: FieldLocation::Query },
+        FieldSpec { snake: "site", wire: "site", location: FieldLocation::Query },
     ],
     auth: &[
     ],
@@ -4489,12 +8573,12 @@ const OP_USERS_GET_USERS_ID_WRITE_PERMISSIONS: OpSpec = OpSpec {
     method: "GET",
     path_template: "/users/{id}/write-permissions",
     fields: &[
-        FieldSpec { snake: "id", location: FieldLocation::Path },
-        FieldSpec { snake: "pagesize", location: FieldLocation::Query },
-        FieldSpec { snake: "page", location: FieldLocation::Query },
-        FieldSpec { snake: "filter", location: FieldLocation::Query },
-        FieldSpec { snake: "callback", location: FieldLocation::Query },
-        FieldSpec { snake: "site", location: FieldLocation::Query },
+        FieldSpec { snake: "id", wire: "id", location: FieldLocation::Path },
+        FieldSpec { snake: "pagesize", wire: "pagesize", location: FieldLocation::Query },
+        FieldSpec { snake: "page", wire: "page", location: FieldLocation::Query },
+        FieldSpec { snake: "filter", wire: "filter", location: FieldLocation::Query },
+        FieldSpec { snake: "callback", wire: "callback", location: FieldLocation::Query },
+        FieldSpec { snake: "site", wire: "site", location: FieldLocation::Query },
     ],
     auth: &[
     ],
@@ -4563,6 +8647,108 @@ fn iface_users__get_users_ids_tags_sort_enum__to_str(e: &iface_users::GetUsersId
         iface_users::GetUsersIdsTagsSortEnum::Activity => "activity",
         iface_users::GetUsersIdsTagsSortEnum::Name => "name",
     }
+}
+
+fn iface_users__users__to_json(p: &iface_users::Users) -> Value {
+    let mut m = Map::new();
+    m.insert("value".into(), Value::String((&p.value).clone()));
+    Value::Object(m)
+}
+
+fn iface_users__answers__to_json(p: &iface_users::Answers) -> Value {
+    let mut m = Map::new();
+    m.insert("value".into(), Value::String((&p.value).clone()));
+    Value::Object(m)
+}
+
+fn iface_users__network_users__to_json(p: &iface_users::NetworkUsers) -> Value {
+    let mut m = Map::new();
+    m.insert("value".into(), Value::String((&p.value).clone()));
+    Value::Object(m)
+}
+
+fn iface_users__badges__to_json(p: &iface_users::Badges) -> Value {
+    let mut m = Map::new();
+    m.insert("value".into(), Value::String((&p.value).clone()));
+    Value::Object(m)
+}
+
+fn iface_users__comments__to_json(p: &iface_users::Comments) -> Value {
+    let mut m = Map::new();
+    m.insert("value".into(), Value::String((&p.value).clone()));
+    Value::Object(m)
+}
+
+fn iface_users__questions__to_json(p: &iface_users::Questions) -> Value {
+    let mut m = Map::new();
+    m.insert("value".into(), Value::String((&p.value).clone()));
+    Value::Object(m)
+}
+
+fn iface_users__account_merge__to_json(p: &iface_users::AccountMerge) -> Value {
+    let mut m = Map::new();
+    m.insert("value".into(), Value::String((&p.value).clone()));
+    Value::Object(m)
+}
+
+fn iface_users__reputation_changes__to_json(p: &iface_users::ReputationChanges) -> Value {
+    let mut m = Map::new();
+    m.insert("value".into(), Value::String((&p.value).clone()));
+    Value::Object(m)
+}
+
+fn iface_users__reputation_history__to_json(p: &iface_users::ReputationHistory) -> Value {
+    let mut m = Map::new();
+    m.insert("value".into(), Value::String((&p.value).clone()));
+    Value::Object(m)
+}
+
+fn iface_users__suggested_edits__to_json(p: &iface_users::SuggestedEdits) -> Value {
+    let mut m = Map::new();
+    m.insert("value".into(), Value::String((&p.value).clone()));
+    Value::Object(m)
+}
+
+fn iface_users__tags__to_json(p: &iface_users::Tags) -> Value {
+    let mut m = Map::new();
+    m.insert("value".into(), Value::String((&p.value).clone()));
+    Value::Object(m)
+}
+
+fn iface_users__user_timeline_objects__to_json(p: &iface_users::UserTimelineObjects) -> Value {
+    let mut m = Map::new();
+    m.insert("value".into(), Value::String((&p.value).clone()));
+    Value::Object(m)
+}
+
+fn iface_users__inbox_items__to_json(p: &iface_users::InboxItems) -> Value {
+    let mut m = Map::new();
+    m.insert("value".into(), Value::String((&p.value).clone()));
+    Value::Object(m)
+}
+
+fn iface_users__notifications__to_json(p: &iface_users::Notifications) -> Value {
+    let mut m = Map::new();
+    m.insert("value".into(), Value::String((&p.value).clone()));
+    Value::Object(m)
+}
+
+fn iface_users__privileges__to_json(p: &iface_users::Privileges) -> Value {
+    let mut m = Map::new();
+    m.insert("value".into(), Value::String((&p.value).clone()));
+    Value::Object(m)
+}
+
+fn iface_users__top_tag_objects__to_json(p: &iface_users::TopTagObjects) -> Value {
+    let mut m = Map::new();
+    m.insert("value".into(), Value::String((&p.value).clone()));
+    Value::Object(m)
+}
+
+fn iface_users__write_permissions__to_json(p: &iface_users::WritePermissions) -> Value {
+    let mut m = Map::new();
+    m.insert("value".into(), Value::String((&p.value).clone()));
+    Value::Object(m)
 }
 
 fn iface_users__get_users_params__to_json(p: &iface_users::GetUsersParams) -> Value {
@@ -5046,138 +9232,1346 @@ fn iface_users__get_users_id_write_permissions_params__to_json(p: &iface_users::
     Value::Object(m)
 }
 
+fn iface_users__users__from_json(v: &Value) -> Option<iface_users::Users> {
+    let m = v.as_object()?;
+    Some(iface_users::Users {
+        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+    })
+}
+
+fn iface_users__answers__from_json(v: &Value) -> Option<iface_users::Answers> {
+    let m = v.as_object()?;
+    Some(iface_users::Answers {
+        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+    })
+}
+
+fn iface_users__network_users__from_json(v: &Value) -> Option<iface_users::NetworkUsers> {
+    let m = v.as_object()?;
+    Some(iface_users::NetworkUsers {
+        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+    })
+}
+
+fn iface_users__badges__from_json(v: &Value) -> Option<iface_users::Badges> {
+    let m = v.as_object()?;
+    Some(iface_users::Badges {
+        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+    })
+}
+
+fn iface_users__comments__from_json(v: &Value) -> Option<iface_users::Comments> {
+    let m = v.as_object()?;
+    Some(iface_users::Comments {
+        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+    })
+}
+
+fn iface_users__questions__from_json(v: &Value) -> Option<iface_users::Questions> {
+    let m = v.as_object()?;
+    Some(iface_users::Questions {
+        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+    })
+}
+
+fn iface_users__account_merge__from_json(v: &Value) -> Option<iface_users::AccountMerge> {
+    let m = v.as_object()?;
+    Some(iface_users::AccountMerge {
+        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+    })
+}
+
+fn iface_users__reputation_changes__from_json(v: &Value) -> Option<iface_users::ReputationChanges> {
+    let m = v.as_object()?;
+    Some(iface_users::ReputationChanges {
+        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+    })
+}
+
+fn iface_users__reputation_history__from_json(v: &Value) -> Option<iface_users::ReputationHistory> {
+    let m = v.as_object()?;
+    Some(iface_users::ReputationHistory {
+        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+    })
+}
+
+fn iface_users__suggested_edits__from_json(v: &Value) -> Option<iface_users::SuggestedEdits> {
+    let m = v.as_object()?;
+    Some(iface_users::SuggestedEdits {
+        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+    })
+}
+
+fn iface_users__tags__from_json(v: &Value) -> Option<iface_users::Tags> {
+    let m = v.as_object()?;
+    Some(iface_users::Tags {
+        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+    })
+}
+
+fn iface_users__user_timeline_objects__from_json(v: &Value) -> Option<iface_users::UserTimelineObjects> {
+    let m = v.as_object()?;
+    Some(iface_users::UserTimelineObjects {
+        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+    })
+}
+
+fn iface_users__inbox_items__from_json(v: &Value) -> Option<iface_users::InboxItems> {
+    let m = v.as_object()?;
+    Some(iface_users::InboxItems {
+        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+    })
+}
+
+fn iface_users__notifications__from_json(v: &Value) -> Option<iface_users::Notifications> {
+    let m = v.as_object()?;
+    Some(iface_users::Notifications {
+        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+    })
+}
+
+fn iface_users__privileges__from_json(v: &Value) -> Option<iface_users::Privileges> {
+    let m = v.as_object()?;
+    Some(iface_users::Privileges {
+        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+    })
+}
+
+fn iface_users__top_tag_objects__from_json(v: &Value) -> Option<iface_users::TopTagObjects> {
+    let m = v.as_object()?;
+    Some(iface_users::TopTagObjects {
+        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+    })
+}
+
+fn iface_users__write_permissions__from_json(v: &Value) -> Option<iface_users::WritePermissions> {
+    let m = v.as_object()?;
+    Some(iface_users::WritePermissions {
+        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+    })
+}
+
+fn iface_users__get_users__ok(body: String) -> Result<iface_users::Users, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match iface_users__users__from_json(&v) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_users__get_users__err(e: crate::runtime::DispatchError) -> iface_users::GetUsersError {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => match status {
+            400u16 => iface_users::GetUsersError::BadRequest(body),
+            401u16 => iface_users::GetUsersError::Unauthorized(body),
+            402u16 => iface_users::GetUsersError::PaymentRequired(body),
+            403u16 => iface_users::GetUsersError::Forbidden(body),
+            404u16 => iface_users::GetUsersError::NotFound(body),
+            405u16 => iface_users::GetUsersError::MethodNotAllowed(body),
+            406u16 => iface_users::GetUsersError::NotAcceptable(body),
+            500u16 => iface_users::GetUsersError::InternalServerError(body),
+            502u16 => iface_users::GetUsersError::BadGateway(body),
+            503u16 => iface_users::GetUsersError::ServiceUnavailable(body),
+            _ => iface_users::GetUsersError::Other(body),
+        },
+        crate::runtime::DispatchError::Transport(m) => iface_users::GetUsersError::Other(m),
+    }
+}
+
+fn iface_users__get_users_moderators__ok(body: String) -> Result<iface_users::Users, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match iface_users__users__from_json(&v) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_users__get_users_moderators__err(e: crate::runtime::DispatchError) -> iface_users::GetUsersModeratorsError {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => match status {
+            400u16 => iface_users::GetUsersModeratorsError::BadRequest(body),
+            401u16 => iface_users::GetUsersModeratorsError::Unauthorized(body),
+            402u16 => iface_users::GetUsersModeratorsError::PaymentRequired(body),
+            403u16 => iface_users::GetUsersModeratorsError::Forbidden(body),
+            404u16 => iface_users::GetUsersModeratorsError::NotFound(body),
+            405u16 => iface_users::GetUsersModeratorsError::MethodNotAllowed(body),
+            406u16 => iface_users::GetUsersModeratorsError::NotAcceptable(body),
+            500u16 => iface_users::GetUsersModeratorsError::InternalServerError(body),
+            502u16 => iface_users::GetUsersModeratorsError::BadGateway(body),
+            503u16 => iface_users::GetUsersModeratorsError::ServiceUnavailable(body),
+            _ => iface_users::GetUsersModeratorsError::Other(body),
+        },
+        crate::runtime::DispatchError::Transport(m) => iface_users::GetUsersModeratorsError::Other(m),
+    }
+}
+
+fn iface_users__get_users_moderators_elected__ok(body: String) -> Result<iface_users::Users, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match iface_users__users__from_json(&v) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_users__get_users_moderators_elected__err(e: crate::runtime::DispatchError) -> iface_users::GetUsersModeratorsElectedError {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => match status {
+            400u16 => iface_users::GetUsersModeratorsElectedError::BadRequest(body),
+            401u16 => iface_users::GetUsersModeratorsElectedError::Unauthorized(body),
+            402u16 => iface_users::GetUsersModeratorsElectedError::PaymentRequired(body),
+            403u16 => iface_users::GetUsersModeratorsElectedError::Forbidden(body),
+            404u16 => iface_users::GetUsersModeratorsElectedError::NotFound(body),
+            405u16 => iface_users::GetUsersModeratorsElectedError::MethodNotAllowed(body),
+            406u16 => iface_users::GetUsersModeratorsElectedError::NotAcceptable(body),
+            500u16 => iface_users::GetUsersModeratorsElectedError::InternalServerError(body),
+            502u16 => iface_users::GetUsersModeratorsElectedError::BadGateway(body),
+            503u16 => iface_users::GetUsersModeratorsElectedError::ServiceUnavailable(body),
+            _ => iface_users::GetUsersModeratorsElectedError::Other(body),
+        },
+        crate::runtime::DispatchError::Transport(m) => iface_users::GetUsersModeratorsElectedError::Other(m),
+    }
+}
+
+fn iface_users__get_users_ids__ok(body: String) -> Result<iface_users::Users, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match iface_users__users__from_json(&v) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_users__get_users_ids__err(e: crate::runtime::DispatchError) -> iface_users::GetUsersIdsError {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => match status {
+            400u16 => iface_users::GetUsersIdsError::BadRequest(body),
+            401u16 => iface_users::GetUsersIdsError::Unauthorized(body),
+            402u16 => iface_users::GetUsersIdsError::PaymentRequired(body),
+            403u16 => iface_users::GetUsersIdsError::Forbidden(body),
+            404u16 => iface_users::GetUsersIdsError::NotFound(body),
+            405u16 => iface_users::GetUsersIdsError::MethodNotAllowed(body),
+            406u16 => iface_users::GetUsersIdsError::NotAcceptable(body),
+            500u16 => iface_users::GetUsersIdsError::InternalServerError(body),
+            502u16 => iface_users::GetUsersIdsError::BadGateway(body),
+            503u16 => iface_users::GetUsersIdsError::ServiceUnavailable(body),
+            _ => iface_users::GetUsersIdsError::Other(body),
+        },
+        crate::runtime::DispatchError::Transport(m) => iface_users::GetUsersIdsError::Other(m),
+    }
+}
+
+fn iface_users__get_users_ids_answers__ok(body: String) -> Result<iface_users::Answers, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match iface_users__answers__from_json(&v) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_users__get_users_ids_answers__err(e: crate::runtime::DispatchError) -> iface_users::GetUsersIdsAnswersError {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => match status {
+            400u16 => iface_users::GetUsersIdsAnswersError::BadRequest(body),
+            401u16 => iface_users::GetUsersIdsAnswersError::Unauthorized(body),
+            402u16 => iface_users::GetUsersIdsAnswersError::PaymentRequired(body),
+            403u16 => iface_users::GetUsersIdsAnswersError::Forbidden(body),
+            404u16 => iface_users::GetUsersIdsAnswersError::NotFound(body),
+            405u16 => iface_users::GetUsersIdsAnswersError::MethodNotAllowed(body),
+            406u16 => iface_users::GetUsersIdsAnswersError::NotAcceptable(body),
+            500u16 => iface_users::GetUsersIdsAnswersError::InternalServerError(body),
+            502u16 => iface_users::GetUsersIdsAnswersError::BadGateway(body),
+            503u16 => iface_users::GetUsersIdsAnswersError::ServiceUnavailable(body),
+            _ => iface_users::GetUsersIdsAnswersError::Other(body),
+        },
+        crate::runtime::DispatchError::Transport(m) => iface_users::GetUsersIdsAnswersError::Other(m),
+    }
+}
+
+fn iface_users__get_users_ids_associated__ok(body: String) -> Result<iface_users::NetworkUsers, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match iface_users__network_users__from_json(&v) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_users__get_users_ids_associated__err(e: crate::runtime::DispatchError) -> iface_users::GetUsersIdsAssociatedError {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => match status {
+            400u16 => iface_users::GetUsersIdsAssociatedError::BadRequest(body),
+            401u16 => iface_users::GetUsersIdsAssociatedError::Unauthorized(body),
+            402u16 => iface_users::GetUsersIdsAssociatedError::PaymentRequired(body),
+            403u16 => iface_users::GetUsersIdsAssociatedError::Forbidden(body),
+            404u16 => iface_users::GetUsersIdsAssociatedError::NotFound(body),
+            405u16 => iface_users::GetUsersIdsAssociatedError::MethodNotAllowed(body),
+            406u16 => iface_users::GetUsersIdsAssociatedError::NotAcceptable(body),
+            500u16 => iface_users::GetUsersIdsAssociatedError::InternalServerError(body),
+            502u16 => iface_users::GetUsersIdsAssociatedError::BadGateway(body),
+            503u16 => iface_users::GetUsersIdsAssociatedError::ServiceUnavailable(body),
+            _ => iface_users::GetUsersIdsAssociatedError::Other(body),
+        },
+        crate::runtime::DispatchError::Transport(m) => iface_users::GetUsersIdsAssociatedError::Other(m),
+    }
+}
+
+fn iface_users__get_users_ids_badges__ok(body: String) -> Result<iface_users::Badges, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match iface_users__badges__from_json(&v) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_users__get_users_ids_badges__err(e: crate::runtime::DispatchError) -> iface_users::GetUsersIdsBadgesError {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => match status {
+            400u16 => iface_users::GetUsersIdsBadgesError::BadRequest(body),
+            401u16 => iface_users::GetUsersIdsBadgesError::Unauthorized(body),
+            402u16 => iface_users::GetUsersIdsBadgesError::PaymentRequired(body),
+            403u16 => iface_users::GetUsersIdsBadgesError::Forbidden(body),
+            404u16 => iface_users::GetUsersIdsBadgesError::NotFound(body),
+            405u16 => iface_users::GetUsersIdsBadgesError::MethodNotAllowed(body),
+            406u16 => iface_users::GetUsersIdsBadgesError::NotAcceptable(body),
+            500u16 => iface_users::GetUsersIdsBadgesError::InternalServerError(body),
+            502u16 => iface_users::GetUsersIdsBadgesError::BadGateway(body),
+            503u16 => iface_users::GetUsersIdsBadgesError::ServiceUnavailable(body),
+            _ => iface_users::GetUsersIdsBadgesError::Other(body),
+        },
+        crate::runtime::DispatchError::Transport(m) => iface_users::GetUsersIdsBadgesError::Other(m),
+    }
+}
+
+fn iface_users__get_users_ids_comments__ok(body: String) -> Result<iface_users::Comments, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match iface_users__comments__from_json(&v) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_users__get_users_ids_comments__err(e: crate::runtime::DispatchError) -> iface_users::GetUsersIdsCommentsError {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => match status {
+            400u16 => iface_users::GetUsersIdsCommentsError::BadRequest(body),
+            401u16 => iface_users::GetUsersIdsCommentsError::Unauthorized(body),
+            402u16 => iface_users::GetUsersIdsCommentsError::PaymentRequired(body),
+            403u16 => iface_users::GetUsersIdsCommentsError::Forbidden(body),
+            404u16 => iface_users::GetUsersIdsCommentsError::NotFound(body),
+            405u16 => iface_users::GetUsersIdsCommentsError::MethodNotAllowed(body),
+            406u16 => iface_users::GetUsersIdsCommentsError::NotAcceptable(body),
+            500u16 => iface_users::GetUsersIdsCommentsError::InternalServerError(body),
+            502u16 => iface_users::GetUsersIdsCommentsError::BadGateway(body),
+            503u16 => iface_users::GetUsersIdsCommentsError::ServiceUnavailable(body),
+            _ => iface_users::GetUsersIdsCommentsError::Other(body),
+        },
+        crate::runtime::DispatchError::Transport(m) => iface_users::GetUsersIdsCommentsError::Other(m),
+    }
+}
+
+fn iface_users__get_users_ids_comments_toid__ok(body: String) -> Result<iface_users::Comments, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match iface_users__comments__from_json(&v) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_users__get_users_ids_comments_toid__err(e: crate::runtime::DispatchError) -> iface_users::GetUsersIdsCommentsToidError {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => match status {
+            400u16 => iface_users::GetUsersIdsCommentsToidError::BadRequest(body),
+            401u16 => iface_users::GetUsersIdsCommentsToidError::Unauthorized(body),
+            402u16 => iface_users::GetUsersIdsCommentsToidError::PaymentRequired(body),
+            403u16 => iface_users::GetUsersIdsCommentsToidError::Forbidden(body),
+            404u16 => iface_users::GetUsersIdsCommentsToidError::NotFound(body),
+            405u16 => iface_users::GetUsersIdsCommentsToidError::MethodNotAllowed(body),
+            406u16 => iface_users::GetUsersIdsCommentsToidError::NotAcceptable(body),
+            500u16 => iface_users::GetUsersIdsCommentsToidError::InternalServerError(body),
+            502u16 => iface_users::GetUsersIdsCommentsToidError::BadGateway(body),
+            503u16 => iface_users::GetUsersIdsCommentsToidError::ServiceUnavailable(body),
+            _ => iface_users::GetUsersIdsCommentsToidError::Other(body),
+        },
+        crate::runtime::DispatchError::Transport(m) => iface_users::GetUsersIdsCommentsToidError::Other(m),
+    }
+}
+
+fn iface_users__get_users_ids_favorites__ok(body: String) -> Result<iface_users::Questions, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match iface_users__questions__from_json(&v) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_users__get_users_ids_favorites__err(e: crate::runtime::DispatchError) -> iface_users::GetUsersIdsFavoritesError {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => match status {
+            400u16 => iface_users::GetUsersIdsFavoritesError::BadRequest(body),
+            401u16 => iface_users::GetUsersIdsFavoritesError::Unauthorized(body),
+            402u16 => iface_users::GetUsersIdsFavoritesError::PaymentRequired(body),
+            403u16 => iface_users::GetUsersIdsFavoritesError::Forbidden(body),
+            404u16 => iface_users::GetUsersIdsFavoritesError::NotFound(body),
+            405u16 => iface_users::GetUsersIdsFavoritesError::MethodNotAllowed(body),
+            406u16 => iface_users::GetUsersIdsFavoritesError::NotAcceptable(body),
+            500u16 => iface_users::GetUsersIdsFavoritesError::InternalServerError(body),
+            502u16 => iface_users::GetUsersIdsFavoritesError::BadGateway(body),
+            503u16 => iface_users::GetUsersIdsFavoritesError::ServiceUnavailable(body),
+            _ => iface_users::GetUsersIdsFavoritesError::Other(body),
+        },
+        crate::runtime::DispatchError::Transport(m) => iface_users::GetUsersIdsFavoritesError::Other(m),
+    }
+}
+
+fn iface_users__get_users_ids_mentioned__ok(body: String) -> Result<iface_users::Comments, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match iface_users__comments__from_json(&v) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_users__get_users_ids_mentioned__err(e: crate::runtime::DispatchError) -> iface_users::GetUsersIdsMentionedError {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => match status {
+            400u16 => iface_users::GetUsersIdsMentionedError::BadRequest(body),
+            401u16 => iface_users::GetUsersIdsMentionedError::Unauthorized(body),
+            402u16 => iface_users::GetUsersIdsMentionedError::PaymentRequired(body),
+            403u16 => iface_users::GetUsersIdsMentionedError::Forbidden(body),
+            404u16 => iface_users::GetUsersIdsMentionedError::NotFound(body),
+            405u16 => iface_users::GetUsersIdsMentionedError::MethodNotAllowed(body),
+            406u16 => iface_users::GetUsersIdsMentionedError::NotAcceptable(body),
+            500u16 => iface_users::GetUsersIdsMentionedError::InternalServerError(body),
+            502u16 => iface_users::GetUsersIdsMentionedError::BadGateway(body),
+            503u16 => iface_users::GetUsersIdsMentionedError::ServiceUnavailable(body),
+            _ => iface_users::GetUsersIdsMentionedError::Other(body),
+        },
+        crate::runtime::DispatchError::Transport(m) => iface_users::GetUsersIdsMentionedError::Other(m),
+    }
+}
+
+fn iface_users__get_users_ids_merges__ok(body: String) -> Result<iface_users::AccountMerge, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match iface_users__account_merge__from_json(&v) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_users__get_users_ids_merges__err(e: crate::runtime::DispatchError) -> iface_users::GetUsersIdsMergesError {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => match status {
+            400u16 => iface_users::GetUsersIdsMergesError::BadRequest(body),
+            401u16 => iface_users::GetUsersIdsMergesError::Unauthorized(body),
+            402u16 => iface_users::GetUsersIdsMergesError::PaymentRequired(body),
+            403u16 => iface_users::GetUsersIdsMergesError::Forbidden(body),
+            404u16 => iface_users::GetUsersIdsMergesError::NotFound(body),
+            405u16 => iface_users::GetUsersIdsMergesError::MethodNotAllowed(body),
+            406u16 => iface_users::GetUsersIdsMergesError::NotAcceptable(body),
+            500u16 => iface_users::GetUsersIdsMergesError::InternalServerError(body),
+            502u16 => iface_users::GetUsersIdsMergesError::BadGateway(body),
+            503u16 => iface_users::GetUsersIdsMergesError::ServiceUnavailable(body),
+            _ => iface_users::GetUsersIdsMergesError::Other(body),
+        },
+        crate::runtime::DispatchError::Transport(m) => iface_users::GetUsersIdsMergesError::Other(m),
+    }
+}
+
+fn iface_users__get_users_ids_questions__ok(body: String) -> Result<iface_users::Questions, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match iface_users__questions__from_json(&v) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_users__get_users_ids_questions__err(e: crate::runtime::DispatchError) -> iface_users::GetUsersIdsQuestionsError {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => match status {
+            400u16 => iface_users::GetUsersIdsQuestionsError::BadRequest(body),
+            401u16 => iface_users::GetUsersIdsQuestionsError::Unauthorized(body),
+            402u16 => iface_users::GetUsersIdsQuestionsError::PaymentRequired(body),
+            403u16 => iface_users::GetUsersIdsQuestionsError::Forbidden(body),
+            404u16 => iface_users::GetUsersIdsQuestionsError::NotFound(body),
+            405u16 => iface_users::GetUsersIdsQuestionsError::MethodNotAllowed(body),
+            406u16 => iface_users::GetUsersIdsQuestionsError::NotAcceptable(body),
+            500u16 => iface_users::GetUsersIdsQuestionsError::InternalServerError(body),
+            502u16 => iface_users::GetUsersIdsQuestionsError::BadGateway(body),
+            503u16 => iface_users::GetUsersIdsQuestionsError::ServiceUnavailable(body),
+            _ => iface_users::GetUsersIdsQuestionsError::Other(body),
+        },
+        crate::runtime::DispatchError::Transport(m) => iface_users::GetUsersIdsQuestionsError::Other(m),
+    }
+}
+
+fn iface_users__get_users_ids_questions_featured__ok(body: String) -> Result<iface_users::Questions, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match iface_users__questions__from_json(&v) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_users__get_users_ids_questions_featured__err(e: crate::runtime::DispatchError) -> iface_users::GetUsersIdsQuestionsFeaturedError {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => match status {
+            400u16 => iface_users::GetUsersIdsQuestionsFeaturedError::BadRequest(body),
+            401u16 => iface_users::GetUsersIdsQuestionsFeaturedError::Unauthorized(body),
+            402u16 => iface_users::GetUsersIdsQuestionsFeaturedError::PaymentRequired(body),
+            403u16 => iface_users::GetUsersIdsQuestionsFeaturedError::Forbidden(body),
+            404u16 => iface_users::GetUsersIdsQuestionsFeaturedError::NotFound(body),
+            405u16 => iface_users::GetUsersIdsQuestionsFeaturedError::MethodNotAllowed(body),
+            406u16 => iface_users::GetUsersIdsQuestionsFeaturedError::NotAcceptable(body),
+            500u16 => iface_users::GetUsersIdsQuestionsFeaturedError::InternalServerError(body),
+            502u16 => iface_users::GetUsersIdsQuestionsFeaturedError::BadGateway(body),
+            503u16 => iface_users::GetUsersIdsQuestionsFeaturedError::ServiceUnavailable(body),
+            _ => iface_users::GetUsersIdsQuestionsFeaturedError::Other(body),
+        },
+        crate::runtime::DispatchError::Transport(m) => iface_users::GetUsersIdsQuestionsFeaturedError::Other(m),
+    }
+}
+
+fn iface_users__get_users_ids_questions_no_answers__ok(body: String) -> Result<iface_users::Questions, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match iface_users__questions__from_json(&v) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_users__get_users_ids_questions_no_answers__err(e: crate::runtime::DispatchError) -> iface_users::GetUsersIdsQuestionsNoAnswersError {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => match status {
+            400u16 => iface_users::GetUsersIdsQuestionsNoAnswersError::BadRequest(body),
+            401u16 => iface_users::GetUsersIdsQuestionsNoAnswersError::Unauthorized(body),
+            402u16 => iface_users::GetUsersIdsQuestionsNoAnswersError::PaymentRequired(body),
+            403u16 => iface_users::GetUsersIdsQuestionsNoAnswersError::Forbidden(body),
+            404u16 => iface_users::GetUsersIdsQuestionsNoAnswersError::NotFound(body),
+            405u16 => iface_users::GetUsersIdsQuestionsNoAnswersError::MethodNotAllowed(body),
+            406u16 => iface_users::GetUsersIdsQuestionsNoAnswersError::NotAcceptable(body),
+            500u16 => iface_users::GetUsersIdsQuestionsNoAnswersError::InternalServerError(body),
+            502u16 => iface_users::GetUsersIdsQuestionsNoAnswersError::BadGateway(body),
+            503u16 => iface_users::GetUsersIdsQuestionsNoAnswersError::ServiceUnavailable(body),
+            _ => iface_users::GetUsersIdsQuestionsNoAnswersError::Other(body),
+        },
+        crate::runtime::DispatchError::Transport(m) => iface_users::GetUsersIdsQuestionsNoAnswersError::Other(m),
+    }
+}
+
+fn iface_users__get_users_ids_questions_unaccepted__ok(body: String) -> Result<iface_users::Questions, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match iface_users__questions__from_json(&v) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_users__get_users_ids_questions_unaccepted__err(e: crate::runtime::DispatchError) -> iface_users::GetUsersIdsQuestionsUnacceptedError {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => match status {
+            400u16 => iface_users::GetUsersIdsQuestionsUnacceptedError::BadRequest(body),
+            401u16 => iface_users::GetUsersIdsQuestionsUnacceptedError::Unauthorized(body),
+            402u16 => iface_users::GetUsersIdsQuestionsUnacceptedError::PaymentRequired(body),
+            403u16 => iface_users::GetUsersIdsQuestionsUnacceptedError::Forbidden(body),
+            404u16 => iface_users::GetUsersIdsQuestionsUnacceptedError::NotFound(body),
+            405u16 => iface_users::GetUsersIdsQuestionsUnacceptedError::MethodNotAllowed(body),
+            406u16 => iface_users::GetUsersIdsQuestionsUnacceptedError::NotAcceptable(body),
+            500u16 => iface_users::GetUsersIdsQuestionsUnacceptedError::InternalServerError(body),
+            502u16 => iface_users::GetUsersIdsQuestionsUnacceptedError::BadGateway(body),
+            503u16 => iface_users::GetUsersIdsQuestionsUnacceptedError::ServiceUnavailable(body),
+            _ => iface_users::GetUsersIdsQuestionsUnacceptedError::Other(body),
+        },
+        crate::runtime::DispatchError::Transport(m) => iface_users::GetUsersIdsQuestionsUnacceptedError::Other(m),
+    }
+}
+
+fn iface_users__get_users_ids_questions_unanswered__ok(body: String) -> Result<iface_users::Questions, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match iface_users__questions__from_json(&v) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_users__get_users_ids_questions_unanswered__err(e: crate::runtime::DispatchError) -> iface_users::GetUsersIdsQuestionsUnansweredError {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => match status {
+            400u16 => iface_users::GetUsersIdsQuestionsUnansweredError::BadRequest(body),
+            401u16 => iface_users::GetUsersIdsQuestionsUnansweredError::Unauthorized(body),
+            402u16 => iface_users::GetUsersIdsQuestionsUnansweredError::PaymentRequired(body),
+            403u16 => iface_users::GetUsersIdsQuestionsUnansweredError::Forbidden(body),
+            404u16 => iface_users::GetUsersIdsQuestionsUnansweredError::NotFound(body),
+            405u16 => iface_users::GetUsersIdsQuestionsUnansweredError::MethodNotAllowed(body),
+            406u16 => iface_users::GetUsersIdsQuestionsUnansweredError::NotAcceptable(body),
+            500u16 => iface_users::GetUsersIdsQuestionsUnansweredError::InternalServerError(body),
+            502u16 => iface_users::GetUsersIdsQuestionsUnansweredError::BadGateway(body),
+            503u16 => iface_users::GetUsersIdsQuestionsUnansweredError::ServiceUnavailable(body),
+            _ => iface_users::GetUsersIdsQuestionsUnansweredError::Other(body),
+        },
+        crate::runtime::DispatchError::Transport(m) => iface_users::GetUsersIdsQuestionsUnansweredError::Other(m),
+    }
+}
+
+fn iface_users__get_users_ids_reputation__ok(body: String) -> Result<iface_users::ReputationChanges, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match iface_users__reputation_changes__from_json(&v) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_users__get_users_ids_reputation__err(e: crate::runtime::DispatchError) -> iface_users::GetUsersIdsReputationError {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => match status {
+            400u16 => iface_users::GetUsersIdsReputationError::BadRequest(body),
+            401u16 => iface_users::GetUsersIdsReputationError::Unauthorized(body),
+            402u16 => iface_users::GetUsersIdsReputationError::PaymentRequired(body),
+            403u16 => iface_users::GetUsersIdsReputationError::Forbidden(body),
+            404u16 => iface_users::GetUsersIdsReputationError::NotFound(body),
+            405u16 => iface_users::GetUsersIdsReputationError::MethodNotAllowed(body),
+            406u16 => iface_users::GetUsersIdsReputationError::NotAcceptable(body),
+            500u16 => iface_users::GetUsersIdsReputationError::InternalServerError(body),
+            502u16 => iface_users::GetUsersIdsReputationError::BadGateway(body),
+            503u16 => iface_users::GetUsersIdsReputationError::ServiceUnavailable(body),
+            _ => iface_users::GetUsersIdsReputationError::Other(body),
+        },
+        crate::runtime::DispatchError::Transport(m) => iface_users::GetUsersIdsReputationError::Other(m),
+    }
+}
+
+fn iface_users__get_users_ids_reputation_history__ok(body: String) -> Result<iface_users::ReputationHistory, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match iface_users__reputation_history__from_json(&v) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_users__get_users_ids_reputation_history__err(e: crate::runtime::DispatchError) -> iface_users::GetUsersIdsReputationHistoryError {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => match status {
+            400u16 => iface_users::GetUsersIdsReputationHistoryError::BadRequest(body),
+            401u16 => iface_users::GetUsersIdsReputationHistoryError::Unauthorized(body),
+            402u16 => iface_users::GetUsersIdsReputationHistoryError::PaymentRequired(body),
+            403u16 => iface_users::GetUsersIdsReputationHistoryError::Forbidden(body),
+            404u16 => iface_users::GetUsersIdsReputationHistoryError::NotFound(body),
+            405u16 => iface_users::GetUsersIdsReputationHistoryError::MethodNotAllowed(body),
+            406u16 => iface_users::GetUsersIdsReputationHistoryError::NotAcceptable(body),
+            500u16 => iface_users::GetUsersIdsReputationHistoryError::InternalServerError(body),
+            502u16 => iface_users::GetUsersIdsReputationHistoryError::BadGateway(body),
+            503u16 => iface_users::GetUsersIdsReputationHistoryError::ServiceUnavailable(body),
+            _ => iface_users::GetUsersIdsReputationHistoryError::Other(body),
+        },
+        crate::runtime::DispatchError::Transport(m) => iface_users::GetUsersIdsReputationHistoryError::Other(m),
+    }
+}
+
+fn iface_users__get_users_ids_suggested_edits__ok(body: String) -> Result<iface_users::SuggestedEdits, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match iface_users__suggested_edits__from_json(&v) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_users__get_users_ids_suggested_edits__err(e: crate::runtime::DispatchError) -> iface_users::GetUsersIdsSuggestedEditsError {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => match status {
+            400u16 => iface_users::GetUsersIdsSuggestedEditsError::BadRequest(body),
+            401u16 => iface_users::GetUsersIdsSuggestedEditsError::Unauthorized(body),
+            402u16 => iface_users::GetUsersIdsSuggestedEditsError::PaymentRequired(body),
+            403u16 => iface_users::GetUsersIdsSuggestedEditsError::Forbidden(body),
+            404u16 => iface_users::GetUsersIdsSuggestedEditsError::NotFound(body),
+            405u16 => iface_users::GetUsersIdsSuggestedEditsError::MethodNotAllowed(body),
+            406u16 => iface_users::GetUsersIdsSuggestedEditsError::NotAcceptable(body),
+            500u16 => iface_users::GetUsersIdsSuggestedEditsError::InternalServerError(body),
+            502u16 => iface_users::GetUsersIdsSuggestedEditsError::BadGateway(body),
+            503u16 => iface_users::GetUsersIdsSuggestedEditsError::ServiceUnavailable(body),
+            _ => iface_users::GetUsersIdsSuggestedEditsError::Other(body),
+        },
+        crate::runtime::DispatchError::Transport(m) => iface_users::GetUsersIdsSuggestedEditsError::Other(m),
+    }
+}
+
+fn iface_users__get_users_ids_tags__ok(body: String) -> Result<iface_users::Tags, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match iface_users__tags__from_json(&v) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_users__get_users_ids_tags__err(e: crate::runtime::DispatchError) -> iface_users::GetUsersIdsTagsError {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => match status {
+            400u16 => iface_users::GetUsersIdsTagsError::BadRequest(body),
+            401u16 => iface_users::GetUsersIdsTagsError::Unauthorized(body),
+            402u16 => iface_users::GetUsersIdsTagsError::PaymentRequired(body),
+            403u16 => iface_users::GetUsersIdsTagsError::Forbidden(body),
+            404u16 => iface_users::GetUsersIdsTagsError::NotFound(body),
+            405u16 => iface_users::GetUsersIdsTagsError::MethodNotAllowed(body),
+            406u16 => iface_users::GetUsersIdsTagsError::NotAcceptable(body),
+            500u16 => iface_users::GetUsersIdsTagsError::InternalServerError(body),
+            502u16 => iface_users::GetUsersIdsTagsError::BadGateway(body),
+            503u16 => iface_users::GetUsersIdsTagsError::ServiceUnavailable(body),
+            _ => iface_users::GetUsersIdsTagsError::Other(body),
+        },
+        crate::runtime::DispatchError::Transport(m) => iface_users::GetUsersIdsTagsError::Other(m),
+    }
+}
+
+fn iface_users__get_users_ids_timeline__ok(body: String) -> Result<iface_users::UserTimelineObjects, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match iface_users__user_timeline_objects__from_json(&v) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_users__get_users_ids_timeline__err(e: crate::runtime::DispatchError) -> iface_users::GetUsersIdsTimelineError {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => match status {
+            400u16 => iface_users::GetUsersIdsTimelineError::BadRequest(body),
+            401u16 => iface_users::GetUsersIdsTimelineError::Unauthorized(body),
+            402u16 => iface_users::GetUsersIdsTimelineError::PaymentRequired(body),
+            403u16 => iface_users::GetUsersIdsTimelineError::Forbidden(body),
+            404u16 => iface_users::GetUsersIdsTimelineError::NotFound(body),
+            405u16 => iface_users::GetUsersIdsTimelineError::MethodNotAllowed(body),
+            406u16 => iface_users::GetUsersIdsTimelineError::NotAcceptable(body),
+            500u16 => iface_users::GetUsersIdsTimelineError::InternalServerError(body),
+            502u16 => iface_users::GetUsersIdsTimelineError::BadGateway(body),
+            503u16 => iface_users::GetUsersIdsTimelineError::ServiceUnavailable(body),
+            _ => iface_users::GetUsersIdsTimelineError::Other(body),
+        },
+        crate::runtime::DispatchError::Transport(m) => iface_users::GetUsersIdsTimelineError::Other(m),
+    }
+}
+
+fn iface_users__get_users_id_inbox__ok(body: String) -> Result<iface_users::InboxItems, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match iface_users__inbox_items__from_json(&v) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_users__get_users_id_inbox__err(e: crate::runtime::DispatchError) -> iface_users::GetUsersIdInboxError {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => match status {
+            400u16 => iface_users::GetUsersIdInboxError::BadRequest(body),
+            401u16 => iface_users::GetUsersIdInboxError::Unauthorized(body),
+            402u16 => iface_users::GetUsersIdInboxError::PaymentRequired(body),
+            403u16 => iface_users::GetUsersIdInboxError::Forbidden(body),
+            404u16 => iface_users::GetUsersIdInboxError::NotFound(body),
+            405u16 => iface_users::GetUsersIdInboxError::MethodNotAllowed(body),
+            406u16 => iface_users::GetUsersIdInboxError::NotAcceptable(body),
+            500u16 => iface_users::GetUsersIdInboxError::InternalServerError(body),
+            502u16 => iface_users::GetUsersIdInboxError::BadGateway(body),
+            503u16 => iface_users::GetUsersIdInboxError::ServiceUnavailable(body),
+            _ => iface_users::GetUsersIdInboxError::Other(body),
+        },
+        crate::runtime::DispatchError::Transport(m) => iface_users::GetUsersIdInboxError::Other(m),
+    }
+}
+
+fn iface_users__get_users_id_inbox_unread__ok(body: String) -> Result<iface_users::InboxItems, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match iface_users__inbox_items__from_json(&v) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_users__get_users_id_inbox_unread__err(e: crate::runtime::DispatchError) -> iface_users::GetUsersIdInboxUnreadError {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => match status {
+            400u16 => iface_users::GetUsersIdInboxUnreadError::BadRequest(body),
+            401u16 => iface_users::GetUsersIdInboxUnreadError::Unauthorized(body),
+            402u16 => iface_users::GetUsersIdInboxUnreadError::PaymentRequired(body),
+            403u16 => iface_users::GetUsersIdInboxUnreadError::Forbidden(body),
+            404u16 => iface_users::GetUsersIdInboxUnreadError::NotFound(body),
+            405u16 => iface_users::GetUsersIdInboxUnreadError::MethodNotAllowed(body),
+            406u16 => iface_users::GetUsersIdInboxUnreadError::NotAcceptable(body),
+            500u16 => iface_users::GetUsersIdInboxUnreadError::InternalServerError(body),
+            502u16 => iface_users::GetUsersIdInboxUnreadError::BadGateway(body),
+            503u16 => iface_users::GetUsersIdInboxUnreadError::ServiceUnavailable(body),
+            _ => iface_users::GetUsersIdInboxUnreadError::Other(body),
+        },
+        crate::runtime::DispatchError::Transport(m) => iface_users::GetUsersIdInboxUnreadError::Other(m),
+    }
+}
+
+fn iface_users__get_users_id_notifications__ok(body: String) -> Result<iface_users::Notifications, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match iface_users__notifications__from_json(&v) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_users__get_users_id_notifications__err(e: crate::runtime::DispatchError) -> iface_users::GetUsersIdNotificationsError {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => match status {
+            400u16 => iface_users::GetUsersIdNotificationsError::BadRequest(body),
+            401u16 => iface_users::GetUsersIdNotificationsError::Unauthorized(body),
+            402u16 => iface_users::GetUsersIdNotificationsError::PaymentRequired(body),
+            403u16 => iface_users::GetUsersIdNotificationsError::Forbidden(body),
+            404u16 => iface_users::GetUsersIdNotificationsError::NotFound(body),
+            405u16 => iface_users::GetUsersIdNotificationsError::MethodNotAllowed(body),
+            406u16 => iface_users::GetUsersIdNotificationsError::NotAcceptable(body),
+            500u16 => iface_users::GetUsersIdNotificationsError::InternalServerError(body),
+            502u16 => iface_users::GetUsersIdNotificationsError::BadGateway(body),
+            503u16 => iface_users::GetUsersIdNotificationsError::ServiceUnavailable(body),
+            _ => iface_users::GetUsersIdNotificationsError::Other(body),
+        },
+        crate::runtime::DispatchError::Transport(m) => iface_users::GetUsersIdNotificationsError::Other(m),
+    }
+}
+
+fn iface_users__get_users_id_notifications_unread__ok(body: String) -> Result<iface_users::Notifications, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match iface_users__notifications__from_json(&v) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_users__get_users_id_notifications_unread__err(e: crate::runtime::DispatchError) -> iface_users::GetUsersIdNotificationsUnreadError {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => match status {
+            400u16 => iface_users::GetUsersIdNotificationsUnreadError::BadRequest(body),
+            401u16 => iface_users::GetUsersIdNotificationsUnreadError::Unauthorized(body),
+            402u16 => iface_users::GetUsersIdNotificationsUnreadError::PaymentRequired(body),
+            403u16 => iface_users::GetUsersIdNotificationsUnreadError::Forbidden(body),
+            404u16 => iface_users::GetUsersIdNotificationsUnreadError::NotFound(body),
+            405u16 => iface_users::GetUsersIdNotificationsUnreadError::MethodNotAllowed(body),
+            406u16 => iface_users::GetUsersIdNotificationsUnreadError::NotAcceptable(body),
+            500u16 => iface_users::GetUsersIdNotificationsUnreadError::InternalServerError(body),
+            502u16 => iface_users::GetUsersIdNotificationsUnreadError::BadGateway(body),
+            503u16 => iface_users::GetUsersIdNotificationsUnreadError::ServiceUnavailable(body),
+            _ => iface_users::GetUsersIdNotificationsUnreadError::Other(body),
+        },
+        crate::runtime::DispatchError::Transport(m) => iface_users::GetUsersIdNotificationsUnreadError::Other(m),
+    }
+}
+
+fn iface_users__get_users_id_privileges__ok(body: String) -> Result<iface_users::Privileges, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match iface_users__privileges__from_json(&v) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_users__get_users_id_privileges__err(e: crate::runtime::DispatchError) -> iface_users::GetUsersIdPrivilegesError {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => match status {
+            400u16 => iface_users::GetUsersIdPrivilegesError::BadRequest(body),
+            401u16 => iface_users::GetUsersIdPrivilegesError::Unauthorized(body),
+            402u16 => iface_users::GetUsersIdPrivilegesError::PaymentRequired(body),
+            403u16 => iface_users::GetUsersIdPrivilegesError::Forbidden(body),
+            404u16 => iface_users::GetUsersIdPrivilegesError::NotFound(body),
+            405u16 => iface_users::GetUsersIdPrivilegesError::MethodNotAllowed(body),
+            406u16 => iface_users::GetUsersIdPrivilegesError::NotAcceptable(body),
+            500u16 => iface_users::GetUsersIdPrivilegesError::InternalServerError(body),
+            502u16 => iface_users::GetUsersIdPrivilegesError::BadGateway(body),
+            503u16 => iface_users::GetUsersIdPrivilegesError::ServiceUnavailable(body),
+            _ => iface_users::GetUsersIdPrivilegesError::Other(body),
+        },
+        crate::runtime::DispatchError::Transport(m) => iface_users::GetUsersIdPrivilegesError::Other(m),
+    }
+}
+
+fn iface_users__get_users_id_reputation_history_full__ok(body: String) -> Result<iface_users::ReputationHistory, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match iface_users__reputation_history__from_json(&v) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_users__get_users_id_reputation_history_full__err(e: crate::runtime::DispatchError) -> iface_users::GetUsersIdReputationHistoryFullError {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => match status {
+            400u16 => iface_users::GetUsersIdReputationHistoryFullError::BadRequest(body),
+            401u16 => iface_users::GetUsersIdReputationHistoryFullError::Unauthorized(body),
+            402u16 => iface_users::GetUsersIdReputationHistoryFullError::PaymentRequired(body),
+            403u16 => iface_users::GetUsersIdReputationHistoryFullError::Forbidden(body),
+            404u16 => iface_users::GetUsersIdReputationHistoryFullError::NotFound(body),
+            405u16 => iface_users::GetUsersIdReputationHistoryFullError::MethodNotAllowed(body),
+            406u16 => iface_users::GetUsersIdReputationHistoryFullError::NotAcceptable(body),
+            500u16 => iface_users::GetUsersIdReputationHistoryFullError::InternalServerError(body),
+            502u16 => iface_users::GetUsersIdReputationHistoryFullError::BadGateway(body),
+            503u16 => iface_users::GetUsersIdReputationHistoryFullError::ServiceUnavailable(body),
+            _ => iface_users::GetUsersIdReputationHistoryFullError::Other(body),
+        },
+        crate::runtime::DispatchError::Transport(m) => iface_users::GetUsersIdReputationHistoryFullError::Other(m),
+    }
+}
+
+fn iface_users__get_users_id_tags_tags_top_answers__ok(body: String) -> Result<iface_users::Answers, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match iface_users__answers__from_json(&v) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_users__get_users_id_tags_tags_top_answers__err(e: crate::runtime::DispatchError) -> iface_users::GetUsersIdTagsTagsTopAnswersError {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => match status {
+            400u16 => iface_users::GetUsersIdTagsTagsTopAnswersError::BadRequest(body),
+            401u16 => iface_users::GetUsersIdTagsTagsTopAnswersError::Unauthorized(body),
+            402u16 => iface_users::GetUsersIdTagsTagsTopAnswersError::PaymentRequired(body),
+            403u16 => iface_users::GetUsersIdTagsTagsTopAnswersError::Forbidden(body),
+            404u16 => iface_users::GetUsersIdTagsTagsTopAnswersError::NotFound(body),
+            405u16 => iface_users::GetUsersIdTagsTagsTopAnswersError::MethodNotAllowed(body),
+            406u16 => iface_users::GetUsersIdTagsTagsTopAnswersError::NotAcceptable(body),
+            500u16 => iface_users::GetUsersIdTagsTagsTopAnswersError::InternalServerError(body),
+            502u16 => iface_users::GetUsersIdTagsTagsTopAnswersError::BadGateway(body),
+            503u16 => iface_users::GetUsersIdTagsTagsTopAnswersError::ServiceUnavailable(body),
+            _ => iface_users::GetUsersIdTagsTagsTopAnswersError::Other(body),
+        },
+        crate::runtime::DispatchError::Transport(m) => iface_users::GetUsersIdTagsTagsTopAnswersError::Other(m),
+    }
+}
+
+fn iface_users__get_users_id_tags_tags_top_questions__ok(body: String) -> Result<iface_users::Questions, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match iface_users__questions__from_json(&v) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_users__get_users_id_tags_tags_top_questions__err(e: crate::runtime::DispatchError) -> iface_users::GetUsersIdTagsTagsTopQuestionsError {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => match status {
+            400u16 => iface_users::GetUsersIdTagsTagsTopQuestionsError::BadRequest(body),
+            401u16 => iface_users::GetUsersIdTagsTagsTopQuestionsError::Unauthorized(body),
+            402u16 => iface_users::GetUsersIdTagsTagsTopQuestionsError::PaymentRequired(body),
+            403u16 => iface_users::GetUsersIdTagsTagsTopQuestionsError::Forbidden(body),
+            404u16 => iface_users::GetUsersIdTagsTagsTopQuestionsError::NotFound(body),
+            405u16 => iface_users::GetUsersIdTagsTagsTopQuestionsError::MethodNotAllowed(body),
+            406u16 => iface_users::GetUsersIdTagsTagsTopQuestionsError::NotAcceptable(body),
+            500u16 => iface_users::GetUsersIdTagsTagsTopQuestionsError::InternalServerError(body),
+            502u16 => iface_users::GetUsersIdTagsTagsTopQuestionsError::BadGateway(body),
+            503u16 => iface_users::GetUsersIdTagsTagsTopQuestionsError::ServiceUnavailable(body),
+            _ => iface_users::GetUsersIdTagsTagsTopQuestionsError::Other(body),
+        },
+        crate::runtime::DispatchError::Transport(m) => iface_users::GetUsersIdTagsTagsTopQuestionsError::Other(m),
+    }
+}
+
+fn iface_users__get_users_id_top_answer_tags__ok(body: String) -> Result<iface_users::TopTagObjects, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match iface_users__top_tag_objects__from_json(&v) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_users__get_users_id_top_answer_tags__err(e: crate::runtime::DispatchError) -> iface_users::GetUsersIdTopAnswerTagsError {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => match status {
+            400u16 => iface_users::GetUsersIdTopAnswerTagsError::BadRequest(body),
+            401u16 => iface_users::GetUsersIdTopAnswerTagsError::Unauthorized(body),
+            402u16 => iface_users::GetUsersIdTopAnswerTagsError::PaymentRequired(body),
+            403u16 => iface_users::GetUsersIdTopAnswerTagsError::Forbidden(body),
+            404u16 => iface_users::GetUsersIdTopAnswerTagsError::NotFound(body),
+            405u16 => iface_users::GetUsersIdTopAnswerTagsError::MethodNotAllowed(body),
+            406u16 => iface_users::GetUsersIdTopAnswerTagsError::NotAcceptable(body),
+            500u16 => iface_users::GetUsersIdTopAnswerTagsError::InternalServerError(body),
+            502u16 => iface_users::GetUsersIdTopAnswerTagsError::BadGateway(body),
+            503u16 => iface_users::GetUsersIdTopAnswerTagsError::ServiceUnavailable(body),
+            _ => iface_users::GetUsersIdTopAnswerTagsError::Other(body),
+        },
+        crate::runtime::DispatchError::Transport(m) => iface_users::GetUsersIdTopAnswerTagsError::Other(m),
+    }
+}
+
+fn iface_users__get_users_id_top_question_tags__ok(body: String) -> Result<iface_users::TopTagObjects, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match iface_users__top_tag_objects__from_json(&v) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_users__get_users_id_top_question_tags__err(e: crate::runtime::DispatchError) -> iface_users::GetUsersIdTopQuestionTagsError {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => match status {
+            400u16 => iface_users::GetUsersIdTopQuestionTagsError::BadRequest(body),
+            401u16 => iface_users::GetUsersIdTopQuestionTagsError::Unauthorized(body),
+            402u16 => iface_users::GetUsersIdTopQuestionTagsError::PaymentRequired(body),
+            403u16 => iface_users::GetUsersIdTopQuestionTagsError::Forbidden(body),
+            404u16 => iface_users::GetUsersIdTopQuestionTagsError::NotFound(body),
+            405u16 => iface_users::GetUsersIdTopQuestionTagsError::MethodNotAllowed(body),
+            406u16 => iface_users::GetUsersIdTopQuestionTagsError::NotAcceptable(body),
+            500u16 => iface_users::GetUsersIdTopQuestionTagsError::InternalServerError(body),
+            502u16 => iface_users::GetUsersIdTopQuestionTagsError::BadGateway(body),
+            503u16 => iface_users::GetUsersIdTopQuestionTagsError::ServiceUnavailable(body),
+            _ => iface_users::GetUsersIdTopQuestionTagsError::Other(body),
+        },
+        crate::runtime::DispatchError::Transport(m) => iface_users::GetUsersIdTopQuestionTagsError::Other(m),
+    }
+}
+
+fn iface_users__get_users_id_write_permissions__ok(body: String) -> Result<iface_users::WritePermissions, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match iface_users__write_permissions__from_json(&v) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_users__get_users_id_write_permissions__err(e: crate::runtime::DispatchError) -> iface_users::GetUsersIdWritePermissionsError {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => match status {
+            400u16 => iface_users::GetUsersIdWritePermissionsError::BadRequest(body),
+            401u16 => iface_users::GetUsersIdWritePermissionsError::Unauthorized(body),
+            402u16 => iface_users::GetUsersIdWritePermissionsError::PaymentRequired(body),
+            403u16 => iface_users::GetUsersIdWritePermissionsError::Forbidden(body),
+            404u16 => iface_users::GetUsersIdWritePermissionsError::NotFound(body),
+            405u16 => iface_users::GetUsersIdWritePermissionsError::MethodNotAllowed(body),
+            406u16 => iface_users::GetUsersIdWritePermissionsError::NotAcceptable(body),
+            500u16 => iface_users::GetUsersIdWritePermissionsError::InternalServerError(body),
+            502u16 => iface_users::GetUsersIdWritePermissionsError::BadGateway(body),
+            503u16 => iface_users::GetUsersIdWritePermissionsError::ServiceUnavailable(body),
+            _ => iface_users::GetUsersIdWritePermissionsError::Other(body),
+        },
+        crate::runtime::DispatchError::Transport(m) => iface_users::GetUsersIdWritePermissionsError::Other(m),
+    }
+}
+
 impl iface_users::Guest for crate::Component {
-    fn get_users(params: iface_users::GetUsersParams) -> Result<String, String> {
+    fn get_users(params: iface_users::GetUsersParams) -> Result<iface_users::Users, iface_users::GetUsersError> {
         let json = iface_users__get_users_params__to_json(&params);
-        dispatch(&OP_USERS_GET_USERS, json)
+        match dispatch(&OP_USERS_GET_USERS, json).and_then(iface_users__get_users__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_users__get_users__err(e)),
+        }
     }
-    fn get_users_moderators(params: iface_users::GetUsersModeratorsParams) -> Result<String, String> {
+    fn get_users_moderators(params: iface_users::GetUsersModeratorsParams) -> Result<iface_users::Users, iface_users::GetUsersModeratorsError> {
         let json = iface_users__get_users_moderators_params__to_json(&params);
-        dispatch(&OP_USERS_GET_USERS_MODERATORS, json)
+        match dispatch(&OP_USERS_GET_USERS_MODERATORS, json).and_then(iface_users__get_users_moderators__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_users__get_users_moderators__err(e)),
+        }
     }
-    fn get_users_moderators_elected(params: iface_users::GetUsersModeratorsElectedParams) -> Result<String, String> {
+    fn get_users_moderators_elected(params: iface_users::GetUsersModeratorsElectedParams) -> Result<iface_users::Users, iface_users::GetUsersModeratorsElectedError> {
         let json = iface_users__get_users_moderators_elected_params__to_json(&params);
-        dispatch(&OP_USERS_GET_USERS_MODERATORS_ELECTED, json)
+        match dispatch(&OP_USERS_GET_USERS_MODERATORS_ELECTED, json).and_then(iface_users__get_users_moderators_elected__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_users__get_users_moderators_elected__err(e)),
+        }
     }
-    fn get_users_ids(params: iface_users::GetUsersIdsParams) -> Result<String, String> {
+    fn get_users_ids(params: iface_users::GetUsersIdsParams) -> Result<iface_users::Users, iface_users::GetUsersIdsError> {
         let json = iface_users__get_users_ids_params__to_json(&params);
-        dispatch(&OP_USERS_GET_USERS_IDS, json)
+        match dispatch(&OP_USERS_GET_USERS_IDS, json).and_then(iface_users__get_users_ids__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_users__get_users_ids__err(e)),
+        }
     }
-    fn get_users_ids_answers(params: iface_users::GetUsersIdsAnswersParams) -> Result<String, String> {
+    fn get_users_ids_answers(params: iface_users::GetUsersIdsAnswersParams) -> Result<iface_users::Answers, iface_users::GetUsersIdsAnswersError> {
         let json = iface_users__get_users_ids_answers_params__to_json(&params);
-        dispatch(&OP_USERS_GET_USERS_IDS_ANSWERS, json)
+        match dispatch(&OP_USERS_GET_USERS_IDS_ANSWERS, json).and_then(iface_users__get_users_ids_answers__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_users__get_users_ids_answers__err(e)),
+        }
     }
-    fn get_users_ids_associated(params: iface_users::GetUsersIdsAssociatedParams) -> Result<String, String> {
+    fn get_users_ids_associated(params: iface_users::GetUsersIdsAssociatedParams) -> Result<iface_users::NetworkUsers, iface_users::GetUsersIdsAssociatedError> {
         let json = iface_users__get_users_ids_associated_params__to_json(&params);
-        dispatch(&OP_USERS_GET_USERS_IDS_ASSOCIATED, json)
+        match dispatch(&OP_USERS_GET_USERS_IDS_ASSOCIATED, json).and_then(iface_users__get_users_ids_associated__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_users__get_users_ids_associated__err(e)),
+        }
     }
-    fn get_users_ids_badges(params: iface_users::GetUsersIdsBadgesParams) -> Result<String, String> {
+    fn get_users_ids_badges(params: iface_users::GetUsersIdsBadgesParams) -> Result<iface_users::Badges, iface_users::GetUsersIdsBadgesError> {
         let json = iface_users__get_users_ids_badges_params__to_json(&params);
-        dispatch(&OP_USERS_GET_USERS_IDS_BADGES, json)
+        match dispatch(&OP_USERS_GET_USERS_IDS_BADGES, json).and_then(iface_users__get_users_ids_badges__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_users__get_users_ids_badges__err(e)),
+        }
     }
-    fn get_users_ids_comments(params: iface_users::GetUsersIdsCommentsParams) -> Result<String, String> {
+    fn get_users_ids_comments(params: iface_users::GetUsersIdsCommentsParams) -> Result<iface_users::Comments, iface_users::GetUsersIdsCommentsError> {
         let json = iface_users__get_users_ids_comments_params__to_json(&params);
-        dispatch(&OP_USERS_GET_USERS_IDS_COMMENTS, json)
+        match dispatch(&OP_USERS_GET_USERS_IDS_COMMENTS, json).and_then(iface_users__get_users_ids_comments__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_users__get_users_ids_comments__err(e)),
+        }
     }
-    fn get_users_ids_comments_toid(params: iface_users::GetUsersIdsCommentsToidParams) -> Result<String, String> {
+    fn get_users_ids_comments_toid(params: iface_users::GetUsersIdsCommentsToidParams) -> Result<iface_users::Comments, iface_users::GetUsersIdsCommentsToidError> {
         let json = iface_users__get_users_ids_comments_toid_params__to_json(&params);
-        dispatch(&OP_USERS_GET_USERS_IDS_COMMENTS_TOID, json)
+        match dispatch(&OP_USERS_GET_USERS_IDS_COMMENTS_TOID, json).and_then(iface_users__get_users_ids_comments_toid__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_users__get_users_ids_comments_toid__err(e)),
+        }
     }
-    fn get_users_ids_favorites(params: iface_users::GetUsersIdsFavoritesParams) -> Result<String, String> {
+    fn get_users_ids_favorites(params: iface_users::GetUsersIdsFavoritesParams) -> Result<iface_users::Questions, iface_users::GetUsersIdsFavoritesError> {
         let json = iface_users__get_users_ids_favorites_params__to_json(&params);
-        dispatch(&OP_USERS_GET_USERS_IDS_FAVORITES, json)
+        match dispatch(&OP_USERS_GET_USERS_IDS_FAVORITES, json).and_then(iface_users__get_users_ids_favorites__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_users__get_users_ids_favorites__err(e)),
+        }
     }
-    fn get_users_ids_mentioned(params: iface_users::GetUsersIdsMentionedParams) -> Result<String, String> {
+    fn get_users_ids_mentioned(params: iface_users::GetUsersIdsMentionedParams) -> Result<iface_users::Comments, iface_users::GetUsersIdsMentionedError> {
         let json = iface_users__get_users_ids_mentioned_params__to_json(&params);
-        dispatch(&OP_USERS_GET_USERS_IDS_MENTIONED, json)
+        match dispatch(&OP_USERS_GET_USERS_IDS_MENTIONED, json).and_then(iface_users__get_users_ids_mentioned__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_users__get_users_ids_mentioned__err(e)),
+        }
     }
-    fn get_users_ids_merges(params: iface_users::GetUsersIdsMergesParams) -> Result<String, String> {
+    fn get_users_ids_merges(params: iface_users::GetUsersIdsMergesParams) -> Result<iface_users::AccountMerge, iface_users::GetUsersIdsMergesError> {
         let json = iface_users__get_users_ids_merges_params__to_json(&params);
-        dispatch(&OP_USERS_GET_USERS_IDS_MERGES, json)
+        match dispatch(&OP_USERS_GET_USERS_IDS_MERGES, json).and_then(iface_users__get_users_ids_merges__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_users__get_users_ids_merges__err(e)),
+        }
     }
-    fn get_users_ids_questions(params: iface_users::GetUsersIdsQuestionsParams) -> Result<String, String> {
+    fn get_users_ids_questions(params: iface_users::GetUsersIdsQuestionsParams) -> Result<iface_users::Questions, iface_users::GetUsersIdsQuestionsError> {
         let json = iface_users__get_users_ids_questions_params__to_json(&params);
-        dispatch(&OP_USERS_GET_USERS_IDS_QUESTIONS, json)
+        match dispatch(&OP_USERS_GET_USERS_IDS_QUESTIONS, json).and_then(iface_users__get_users_ids_questions__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_users__get_users_ids_questions__err(e)),
+        }
     }
-    fn get_users_ids_questions_featured(params: iface_users::GetUsersIdsQuestionsFeaturedParams) -> Result<String, String> {
+    fn get_users_ids_questions_featured(params: iface_users::GetUsersIdsQuestionsFeaturedParams) -> Result<iface_users::Questions, iface_users::GetUsersIdsQuestionsFeaturedError> {
         let json = iface_users__get_users_ids_questions_featured_params__to_json(&params);
-        dispatch(&OP_USERS_GET_USERS_IDS_QUESTIONS_FEATURED, json)
+        match dispatch(&OP_USERS_GET_USERS_IDS_QUESTIONS_FEATURED, json).and_then(iface_users__get_users_ids_questions_featured__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_users__get_users_ids_questions_featured__err(e)),
+        }
     }
-    fn get_users_ids_questions_no_answers(params: iface_users::GetUsersIdsQuestionsNoAnswersParams) -> Result<String, String> {
+    fn get_users_ids_questions_no_answers(params: iface_users::GetUsersIdsQuestionsNoAnswersParams) -> Result<iface_users::Questions, iface_users::GetUsersIdsQuestionsNoAnswersError> {
         let json = iface_users__get_users_ids_questions_no_answers_params__to_json(&params);
-        dispatch(&OP_USERS_GET_USERS_IDS_QUESTIONS_NO_ANSWERS, json)
+        match dispatch(&OP_USERS_GET_USERS_IDS_QUESTIONS_NO_ANSWERS, json).and_then(iface_users__get_users_ids_questions_no_answers__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_users__get_users_ids_questions_no_answers__err(e)),
+        }
     }
-    fn get_users_ids_questions_unaccepted(params: iface_users::GetUsersIdsQuestionsUnacceptedParams) -> Result<String, String> {
+    fn get_users_ids_questions_unaccepted(params: iface_users::GetUsersIdsQuestionsUnacceptedParams) -> Result<iface_users::Questions, iface_users::GetUsersIdsQuestionsUnacceptedError> {
         let json = iface_users__get_users_ids_questions_unaccepted_params__to_json(&params);
-        dispatch(&OP_USERS_GET_USERS_IDS_QUESTIONS_UNACCEPTED, json)
+        match dispatch(&OP_USERS_GET_USERS_IDS_QUESTIONS_UNACCEPTED, json).and_then(iface_users__get_users_ids_questions_unaccepted__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_users__get_users_ids_questions_unaccepted__err(e)),
+        }
     }
-    fn get_users_ids_questions_unanswered(params: iface_users::GetUsersIdsQuestionsUnansweredParams) -> Result<String, String> {
+    fn get_users_ids_questions_unanswered(params: iface_users::GetUsersIdsQuestionsUnansweredParams) -> Result<iface_users::Questions, iface_users::GetUsersIdsQuestionsUnansweredError> {
         let json = iface_users__get_users_ids_questions_unanswered_params__to_json(&params);
-        dispatch(&OP_USERS_GET_USERS_IDS_QUESTIONS_UNANSWERED, json)
+        match dispatch(&OP_USERS_GET_USERS_IDS_QUESTIONS_UNANSWERED, json).and_then(iface_users__get_users_ids_questions_unanswered__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_users__get_users_ids_questions_unanswered__err(e)),
+        }
     }
-    fn get_users_ids_reputation(params: iface_users::GetUsersIdsReputationParams) -> Result<String, String> {
+    fn get_users_ids_reputation(params: iface_users::GetUsersIdsReputationParams) -> Result<iface_users::ReputationChanges, iface_users::GetUsersIdsReputationError> {
         let json = iface_users__get_users_ids_reputation_params__to_json(&params);
-        dispatch(&OP_USERS_GET_USERS_IDS_REPUTATION, json)
+        match dispatch(&OP_USERS_GET_USERS_IDS_REPUTATION, json).and_then(iface_users__get_users_ids_reputation__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_users__get_users_ids_reputation__err(e)),
+        }
     }
-    fn get_users_ids_reputation_history(params: iface_users::GetUsersIdsReputationHistoryParams) -> Result<String, String> {
+    fn get_users_ids_reputation_history(params: iface_users::GetUsersIdsReputationHistoryParams) -> Result<iface_users::ReputationHistory, iface_users::GetUsersIdsReputationHistoryError> {
         let json = iface_users__get_users_ids_reputation_history_params__to_json(&params);
-        dispatch(&OP_USERS_GET_USERS_IDS_REPUTATION_HISTORY, json)
+        match dispatch(&OP_USERS_GET_USERS_IDS_REPUTATION_HISTORY, json).and_then(iface_users__get_users_ids_reputation_history__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_users__get_users_ids_reputation_history__err(e)),
+        }
     }
-    fn get_users_ids_suggested_edits(params: iface_users::GetUsersIdsSuggestedEditsParams) -> Result<String, String> {
+    fn get_users_ids_suggested_edits(params: iface_users::GetUsersIdsSuggestedEditsParams) -> Result<iface_users::SuggestedEdits, iface_users::GetUsersIdsSuggestedEditsError> {
         let json = iface_users__get_users_ids_suggested_edits_params__to_json(&params);
-        dispatch(&OP_USERS_GET_USERS_IDS_SUGGESTED_EDITS, json)
+        match dispatch(&OP_USERS_GET_USERS_IDS_SUGGESTED_EDITS, json).and_then(iface_users__get_users_ids_suggested_edits__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_users__get_users_ids_suggested_edits__err(e)),
+        }
     }
-    fn get_users_ids_tags(params: iface_users::GetUsersIdsTagsParams) -> Result<String, String> {
+    fn get_users_ids_tags(params: iface_users::GetUsersIdsTagsParams) -> Result<iface_users::Tags, iface_users::GetUsersIdsTagsError> {
         let json = iface_users__get_users_ids_tags_params__to_json(&params);
-        dispatch(&OP_USERS_GET_USERS_IDS_TAGS, json)
+        match dispatch(&OP_USERS_GET_USERS_IDS_TAGS, json).and_then(iface_users__get_users_ids_tags__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_users__get_users_ids_tags__err(e)),
+        }
     }
-    fn get_users_ids_timeline(params: iface_users::GetUsersIdsTimelineParams) -> Result<String, String> {
+    fn get_users_ids_timeline(params: iface_users::GetUsersIdsTimelineParams) -> Result<iface_users::UserTimelineObjects, iface_users::GetUsersIdsTimelineError> {
         let json = iface_users__get_users_ids_timeline_params__to_json(&params);
-        dispatch(&OP_USERS_GET_USERS_IDS_TIMELINE, json)
+        match dispatch(&OP_USERS_GET_USERS_IDS_TIMELINE, json).and_then(iface_users__get_users_ids_timeline__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_users__get_users_ids_timeline__err(e)),
+        }
     }
-    fn get_users_id_inbox(params: iface_users::GetUsersIdInboxParams) -> Result<String, String> {
+    fn get_users_id_inbox(params: iface_users::GetUsersIdInboxParams) -> Result<iface_users::InboxItems, iface_users::GetUsersIdInboxError> {
         let json = iface_users__get_users_id_inbox_params__to_json(&params);
-        dispatch(&OP_USERS_GET_USERS_ID_INBOX, json)
+        match dispatch(&OP_USERS_GET_USERS_ID_INBOX, json).and_then(iface_users__get_users_id_inbox__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_users__get_users_id_inbox__err(e)),
+        }
     }
-    fn get_users_id_inbox_unread(params: iface_users::GetUsersIdInboxUnreadParams) -> Result<String, String> {
+    fn get_users_id_inbox_unread(params: iface_users::GetUsersIdInboxUnreadParams) -> Result<iface_users::InboxItems, iface_users::GetUsersIdInboxUnreadError> {
         let json = iface_users__get_users_id_inbox_unread_params__to_json(&params);
-        dispatch(&OP_USERS_GET_USERS_ID_INBOX_UNREAD, json)
+        match dispatch(&OP_USERS_GET_USERS_ID_INBOX_UNREAD, json).and_then(iface_users__get_users_id_inbox_unread__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_users__get_users_id_inbox_unread__err(e)),
+        }
     }
-    fn get_users_id_notifications(params: iface_users::GetUsersIdNotificationsParams) -> Result<String, String> {
+    fn get_users_id_notifications(params: iface_users::GetUsersIdNotificationsParams) -> Result<iface_users::Notifications, iface_users::GetUsersIdNotificationsError> {
         let json = iface_users__get_users_id_notifications_params__to_json(&params);
-        dispatch(&OP_USERS_GET_USERS_ID_NOTIFICATIONS, json)
+        match dispatch(&OP_USERS_GET_USERS_ID_NOTIFICATIONS, json).and_then(iface_users__get_users_id_notifications__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_users__get_users_id_notifications__err(e)),
+        }
     }
-    fn get_users_id_notifications_unread(params: iface_users::GetUsersIdNotificationsUnreadParams) -> Result<String, String> {
+    fn get_users_id_notifications_unread(params: iface_users::GetUsersIdNotificationsUnreadParams) -> Result<iface_users::Notifications, iface_users::GetUsersIdNotificationsUnreadError> {
         let json = iface_users__get_users_id_notifications_unread_params__to_json(&params);
-        dispatch(&OP_USERS_GET_USERS_ID_NOTIFICATIONS_UNREAD, json)
+        match dispatch(&OP_USERS_GET_USERS_ID_NOTIFICATIONS_UNREAD, json).and_then(iface_users__get_users_id_notifications_unread__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_users__get_users_id_notifications_unread__err(e)),
+        }
     }
-    fn get_users_id_privileges(params: iface_users::GetUsersIdPrivilegesParams) -> Result<String, String> {
+    fn get_users_id_privileges(params: iface_users::GetUsersIdPrivilegesParams) -> Result<iface_users::Privileges, iface_users::GetUsersIdPrivilegesError> {
         let json = iface_users__get_users_id_privileges_params__to_json(&params);
-        dispatch(&OP_USERS_GET_USERS_ID_PRIVILEGES, json)
+        match dispatch(&OP_USERS_GET_USERS_ID_PRIVILEGES, json).and_then(iface_users__get_users_id_privileges__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_users__get_users_id_privileges__err(e)),
+        }
     }
-    fn get_users_id_reputation_history_full(params: iface_users::GetUsersIdReputationHistoryFullParams) -> Result<String, String> {
+    fn get_users_id_reputation_history_full(params: iface_users::GetUsersIdReputationHistoryFullParams) -> Result<iface_users::ReputationHistory, iface_users::GetUsersIdReputationHistoryFullError> {
         let json = iface_users__get_users_id_reputation_history_full_params__to_json(&params);
-        dispatch(&OP_USERS_GET_USERS_ID_REPUTATION_HISTORY_FULL, json)
+        match dispatch(&OP_USERS_GET_USERS_ID_REPUTATION_HISTORY_FULL, json).and_then(iface_users__get_users_id_reputation_history_full__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_users__get_users_id_reputation_history_full__err(e)),
+        }
     }
-    fn get_users_id_tags_tags_top_answers(params: iface_users::GetUsersIdTagsTagsTopAnswersParams) -> Result<String, String> {
+    fn get_users_id_tags_tags_top_answers(params: iface_users::GetUsersIdTagsTagsTopAnswersParams) -> Result<iface_users::Answers, iface_users::GetUsersIdTagsTagsTopAnswersError> {
         let json = iface_users__get_users_id_tags_tags_top_answers_params__to_json(&params);
-        dispatch(&OP_USERS_GET_USERS_ID_TAGS_TAGS_TOP_ANSWERS, json)
+        match dispatch(&OP_USERS_GET_USERS_ID_TAGS_TAGS_TOP_ANSWERS, json).and_then(iface_users__get_users_id_tags_tags_top_answers__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_users__get_users_id_tags_tags_top_answers__err(e)),
+        }
     }
-    fn get_users_id_tags_tags_top_questions(params: iface_users::GetUsersIdTagsTagsTopQuestionsParams) -> Result<String, String> {
+    fn get_users_id_tags_tags_top_questions(params: iface_users::GetUsersIdTagsTagsTopQuestionsParams) -> Result<iface_users::Questions, iface_users::GetUsersIdTagsTagsTopQuestionsError> {
         let json = iface_users__get_users_id_tags_tags_top_questions_params__to_json(&params);
-        dispatch(&OP_USERS_GET_USERS_ID_TAGS_TAGS_TOP_QUESTIONS, json)
+        match dispatch(&OP_USERS_GET_USERS_ID_TAGS_TAGS_TOP_QUESTIONS, json).and_then(iface_users__get_users_id_tags_tags_top_questions__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_users__get_users_id_tags_tags_top_questions__err(e)),
+        }
     }
-    fn get_users_id_top_answer_tags(params: iface_users::GetUsersIdTopAnswerTagsParams) -> Result<String, String> {
+    fn get_users_id_top_answer_tags(params: iface_users::GetUsersIdTopAnswerTagsParams) -> Result<iface_users::TopTagObjects, iface_users::GetUsersIdTopAnswerTagsError> {
         let json = iface_users__get_users_id_top_answer_tags_params__to_json(&params);
-        dispatch(&OP_USERS_GET_USERS_ID_TOP_ANSWER_TAGS, json)
+        match dispatch(&OP_USERS_GET_USERS_ID_TOP_ANSWER_TAGS, json).and_then(iface_users__get_users_id_top_answer_tags__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_users__get_users_id_top_answer_tags__err(e)),
+        }
     }
-    fn get_users_id_top_question_tags(params: iface_users::GetUsersIdTopQuestionTagsParams) -> Result<String, String> {
+    fn get_users_id_top_question_tags(params: iface_users::GetUsersIdTopQuestionTagsParams) -> Result<iface_users::TopTagObjects, iface_users::GetUsersIdTopQuestionTagsError> {
         let json = iface_users__get_users_id_top_question_tags_params__to_json(&params);
-        dispatch(&OP_USERS_GET_USERS_ID_TOP_QUESTION_TAGS, json)
+        match dispatch(&OP_USERS_GET_USERS_ID_TOP_QUESTION_TAGS, json).and_then(iface_users__get_users_id_top_question_tags__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_users__get_users_id_top_question_tags__err(e)),
+        }
     }
-    fn get_users_id_write_permissions(params: iface_users::GetUsersIdWritePermissionsParams) -> Result<String, String> {
+    fn get_users_id_write_permissions(params: iface_users::GetUsersIdWritePermissionsParams) -> Result<iface_users::WritePermissions, iface_users::GetUsersIdWritePermissionsError> {
         let json = iface_users__get_users_id_write_permissions_params__to_json(&params);
-        dispatch(&OP_USERS_GET_USERS_ID_WRITE_PERMISSIONS, json)
+        match dispatch(&OP_USERS_GET_USERS_ID_WRITE_PERMISSIONS, json).and_then(iface_users__get_users_id_write_permissions__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_users__get_users_id_write_permissions__err(e)),
+        }
     }
 }
 

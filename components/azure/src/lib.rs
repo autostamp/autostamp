@@ -44,10 +44,15 @@ pub(crate) enum FieldLocation {
     Body,
 }
 
-/// A single operation parameter: the snake-case key it carries in the params JSON and where
-/// it belongs in the request.
+/// A single operation parameter. `snake` keys the field in the internal params JSON (and, for a
+/// path field, matches the `{snake}` placeholder in the path template); `wire` is the verbatim name
+/// the field takes on the HTTP wire (query key, header name, or body property). The two differ
+/// whenever the source name isn't already snake_case (e.g. `dryRun` → snake `dry_run`, wire
+/// `dryRun`), and let distinct inputs that share a snake key (`DateCreated`, `DateCreated<`) still
+/// travel under their true names.
 pub(crate) struct FieldSpec {
     pub(crate) snake: &'static str,
+    pub(crate) wire: &'static str,
     pub(crate) location: FieldLocation,
 }
 
@@ -71,6 +76,16 @@ pub(crate) struct AuthApply {
     pub(crate) kind: AuthKind,
 }
 
+/// The failure modes of [`dispatch`], kept structured so each generated operation can map them
+/// onto its own typed error: an `Http` failure carries the response status and body (routed to
+/// the matching error-variant case), while a `Transport` failure carries a message for the
+/// catch-all case (a secret lookup, connection, or decode failure that never produced an HTTP
+/// status).
+pub(crate) enum DispatchError {
+    Http { status: u16, body: String },
+    Transport(String),
+}
+
 /// A single API operation: HTTP method, path template (with `{snake}` placeholders), the
 /// parameter fields, and the security schemes to apply.
 pub(crate) struct OpSpec {
@@ -81,8 +96,9 @@ pub(crate) struct OpSpec {
 }
 
 /// Execute `op` with the supplied `params` (a JSON object keyed by snake-case field names)
-/// and return the response body as a string, or an error message.
-pub(crate) fn dispatch(op: &OpSpec, params: Value) -> Result<String, String> {
+/// and return the raw 2xx response body, or a structured [`DispatchError`] the caller maps
+/// onto the operation's typed error.
+pub(crate) fn dispatch(op: &OpSpec, params: Value) -> Result<String, DispatchError> {
     let obj = match &params {
         Value::Object(map) => Some(map),
         _ => None,
@@ -105,10 +121,10 @@ pub(crate) fn dispatch(op: &OpSpec, params: Value) -> Result<String, String> {
                 let placeholder = format!("{{{}}}", field.snake);
                 path = path.replace(&placeholder, &percent_encode(&scalar(value)));
             }
-            FieldLocation::Query => query.push((field.snake.to_string(), scalar(value))),
-            FieldLocation::Header => headers.push((field.snake.to_string(), scalar(value))),
+            FieldLocation::Query => query.push((field.wire.to_string(), scalar(value))),
+            FieldLocation::Header => headers.push((field.wire.to_string(), scalar(value))),
             FieldLocation::Body => {
-                body.insert(field.snake.to_string(), value.clone());
+                body.insert(field.wire.to_string(), value.clone());
             }
         }
     }
@@ -116,7 +132,7 @@ pub(crate) fn dispatch(op: &OpSpec, params: Value) -> Result<String, String> {
     // Apply each resolved security scheme, sourcing its value from wasmcloud:secrets.
     let mut cookies: Vec<String> = Vec::new();
     for apply in op.auth {
-        let secret = fetch_secret(apply.secret_key)?;
+        let secret = fetch_secret(apply.secret_key).map_err(DispatchError::Transport)?;
         match &apply.kind {
             AuthKind::Bearer => headers.push(("authorization".into(), format!("Bearer {secret}"))),
             AuthKind::Basic => {
@@ -177,17 +193,18 @@ fn fetch_secret(key: &str) -> Result<String, String> {
 }
 
 /// Build and send the outgoing request with `wstd`, returning the response body on a 2xx
-/// status. The generated guest exports are synchronous, so the async `wstd` client is driven
-/// to completion on a local reactor via `wstd::runtime::block_on`.
+/// status and a structured [`DispatchError`] otherwise. The generated guest exports are
+/// synchronous, so the async `wstd` client is driven to completion on a local reactor via
+/// `wstd::runtime::block_on`.
 fn perform(
     method: &str,
     path_with_query: &str,
     headers: &[(String, String)],
     body: &[u8],
-) -> Result<String, String> {
+) -> Result<String, DispatchError> {
     let url = join_url(crate::BASE_URL, path_with_query);
     let method = Method::from_bytes(method.as_bytes())
-        .map_err(|err| format!("invalid HTTP method `{method}`: {err}"))?;
+        .map_err(|err| DispatchError::Transport(format!("invalid HTTP method `{method}`: {err}")))?;
 
     let mut builder = Request::builder().method(method).uri(url);
     for (name, value) in headers {
@@ -199,27 +216,29 @@ fn perform(
         } else {
             Body::from(body.to_vec())
         })
-        .map_err(|err| format!("failed to build request: {err}"))?;
+        .map_err(|err| DispatchError::Transport(format!("failed to build request: {err}")))?;
 
     wstd::runtime::block_on(async move {
         let client = Client::new();
         let response = client
             .send(request)
             .await
-            .map_err(|err| format!("request failed: {err:#}"))?;
+            .map_err(|err| DispatchError::Transport(format!("request failed: {err:#}")))?;
 
         let status = response.status().as_u16();
         let mut response_body = response.into_body();
-        let bytes = response_body
-            .contents()
-            .await
-            .map_err(|err| format!("failed to read response body: {err:#}"))?;
+        let bytes = response_body.contents().await.map_err(|err| {
+            DispatchError::Transport(format!("failed to read response body: {err:#}"))
+        })?;
         let body_text = String::from_utf8_lossy(bytes).into_owned();
 
         if (200..300).contains(&status) {
             Ok(body_text)
         } else {
-            Err(format!("HTTP {status}: {body_text}"))
+            Err(DispatchError::Http {
+                status,
+                body: body_text,
+            })
         }
     })
 }
@@ -286,13 +305,44 @@ use crate::exports::autostamp::azure::operations as iface_operations;
 
 const OP_OPERATIONS_LIST_OP: OpSpec = OpSpec {
     method: "GET",
-    path_template: "/providers/Microsoft.Addons/operations",
+    path_template: "/providers/Microsoft.EnterpriseKnowledgeGraph/operations",
     fields: &[
-        FieldSpec { snake: "api_version", location: FieldLocation::Query },
+        FieldSpec { snake: "api_version", wire: "api-version", location: FieldLocation::Query },
     ],
     auth: &[
     ],
 };
+
+fn iface_operations__operation_entity_list_result__to_json(p: &iface_operations::OperationEntityListResult) -> Value {
+    let mut m = Map::new();
+    m.insert("nextLink".into(), match (&p.next_link) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("value".into(), match (&p.value) { Some(v) => Value::Array((v).iter().map(|v| iface_operations__operation_entity__to_json(v)).collect()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_operations__operation_entity__to_json(p: &iface_operations::OperationEntity) -> Value {
+    let mut m = Map::new();
+    m.insert("display".into(), match (&p.display) { Some(v) => iface_operations__operation_display_info__to_json(v), None => Value::Null });
+    m.insert("name".into(), match (&p.name) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("origin".into(), match (&p.origin) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("properties".into(), match (&p.properties) { Some(v) => iface_operations__operation_entity_properties__to_json(v), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_operations__operation_display_info__to_json(p: &iface_operations::OperationDisplayInfo) -> Value {
+    let mut m = Map::new();
+    m.insert("description".into(), match (&p.description) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("operation".into(), match (&p.operation) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("provider".into(), match (&p.provider) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("resource".into(), match (&p.resource_op) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_operations__operation_entity_properties__to_json(p: &iface_operations::OperationEntityProperties) -> Value {
+    let mut m = Map::new();
+    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
 
 fn iface_operations__list_op_params__to_json(p: &iface_operations::ListOpParams) -> Value {
     let mut m = Map::new();
@@ -300,122 +350,420 @@ fn iface_operations__list_op_params__to_json(p: &iface_operations::ListOpParams)
     Value::Object(m)
 }
 
+fn iface_operations__operation_entity_list_result__from_json(v: &Value) -> Option<iface_operations::OperationEntityListResult> {
+    let m = v.as_object()?;
+    Some(iface_operations::OperationEntityListResult {
+        next_link: m.get("nextLink").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        value: m.get("value").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| iface_operations__operation_entity__from_json(x)).collect())),
+    })
+}
+
+fn iface_operations__operation_entity__from_json(v: &Value) -> Option<iface_operations::OperationEntity> {
+    let m = v.as_object()?;
+    Some(iface_operations::OperationEntity {
+        display: m.get("display").filter(|v| !v.is_null()).and_then(|v| iface_operations__operation_display_info__from_json(v)),
+        name: m.get("name").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        origin: m.get("origin").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        properties: m.get("properties").filter(|v| !v.is_null()).and_then(|v| iface_operations__operation_entity_properties__from_json(v)),
+    })
+}
+
+fn iface_operations__operation_display_info__from_json(v: &Value) -> Option<iface_operations::OperationDisplayInfo> {
+    let m = v.as_object()?;
+    Some(iface_operations::OperationDisplayInfo {
+        description: m.get("description").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        operation: m.get("operation").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        provider: m.get("provider").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        resource_op: m.get("resource").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    })
+}
+
+fn iface_operations__operation_entity_properties__from_json(v: &Value) -> Option<iface_operations::OperationEntityProperties> {
+    let m = v.as_object()?;
+    Some(iface_operations::OperationEntityProperties {
+        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    })
+}
+
+fn iface_operations__list_op__ok(body: String) -> Result<iface_operations::OperationEntityListResult, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match iface_operations__operation_entity_list_result__from_json(&v) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_operations__list_op__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
 impl iface_operations::Guest for crate::Component {
-    fn list_op(params: iface_operations::ListOpParams) -> Result<String, String> {
+    fn list_op(params: iface_operations::ListOpParams) -> Result<iface_operations::OperationEntityListResult, String> {
         let json = iface_operations__list_op_params__to_json(&params);
-        dispatch(&OP_OPERATIONS_LIST_OP, json)
+        match dispatch(&OP_OPERATIONS_LIST_OP, json).and_then(iface_operations__list_op__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_operations__list_op__err(e)),
+        }
     }
 }
-use crate::exports::autostamp::azure::addon_status as iface_addon_status;
+use crate::exports::autostamp::azure::enterprise_knowledge_graph as iface_enterprise_knowledge_graph;
 
-const OP_ADDON_STATUS_SUPPORT_PLAN_TYPES_LIST_INFO: OpSpec = OpSpec {
-    method: "POST",
-    path_template: "/subscriptions/{subscription_id}/providers/Microsoft.Addons/supportProviders/canonical/listSupportPlanInfo",
-    fields: &[
-        FieldSpec { snake: "api_version", location: FieldLocation::Query },
-        FieldSpec { snake: "subscription_id", location: FieldLocation::Path },
-    ],
-    auth: &[
-    ],
-};
-
-fn iface_addon_status__support_plan_types_list_info_params__to_json(p: &iface_addon_status::SupportPlanTypesListInfoParams) -> Value {
-    let mut m = Map::new();
-    m.insert("api_version".into(), Value::String((&p.api_version).clone()));
-    m.insert("subscription_id".into(), Value::String((&p.subscription_id).clone()));
-    Value::Object(m)
-}
-
-impl iface_addon_status::Guest for crate::Component {
-    fn support_plan_types_list_info(params: iface_addon_status::SupportPlanTypesListInfoParams) -> Result<String, String> {
-        let json = iface_addon_status__support_plan_types_list_info_params__to_json(&params);
-        dispatch(&OP_ADDON_STATUS_SUPPORT_PLAN_TYPES_LIST_INFO, json)
-    }
-}
-use crate::exports::autostamp::azure::addon_details as iface_addon_details;
-
-const OP_ADDON_DETAILS_SUPPORT_PLAN_TYPES_GET: OpSpec = OpSpec {
+const OP_ENTERPRISE_KNOWLEDGE_GRAPH_LIST_OP: OpSpec = OpSpec {
     method: "GET",
-    path_template: "/subscriptions/{subscription_id}/providers/Microsoft.Addons/supportProviders/{provider_name}/supportPlanTypes/{plan_type_name}",
+    path_template: "/subscriptions/{subscription_id}/providers/Microsoft.EnterpriseKnowledgeGraph/services",
     fields: &[
-        FieldSpec { snake: "api_version", location: FieldLocation::Query },
-        FieldSpec { snake: "subscription_id", location: FieldLocation::Path },
-        FieldSpec { snake: "provider_name", location: FieldLocation::Path },
-        FieldSpec { snake: "plan_type_name", location: FieldLocation::Path },
+        FieldSpec { snake: "api_version", wire: "api-version", location: FieldLocation::Query },
+        FieldSpec { snake: "subscription_id", wire: "subscriptionId", location: FieldLocation::Path },
     ],
     auth: &[
     ],
 };
 
-const OP_ADDON_DETAILS_SUPPORT_PLAN_TYPES_CREATE_OR_UPDATE: OpSpec = OpSpec {
+const OP_ENTERPRISE_KNOWLEDGE_GRAPH_LIST_BY_RESOURCE_GROUP: OpSpec = OpSpec {
+    method: "GET",
+    path_template: "/subscriptions/{subscription_id}/resourceGroups/{resource_group_name}/providers/Microsoft.EnterpriseKnowledgeGraph/services",
+    fields: &[
+        FieldSpec { snake: "resource_group_name", wire: "resourceGroupName", location: FieldLocation::Path },
+        FieldSpec { snake: "subscription_id", wire: "subscriptionId", location: FieldLocation::Path },
+        FieldSpec { snake: "api_version", wire: "api-version", location: FieldLocation::Query },
+    ],
+    auth: &[
+    ],
+};
+
+const OP_ENTERPRISE_KNOWLEDGE_GRAPH_GET: OpSpec = OpSpec {
+    method: "GET",
+    path_template: "/subscriptions/{subscription_id}/resourceGroups/{resource_group_name}/providers/Microsoft.EnterpriseKnowledgeGraph/services/{resource_name}",
+    fields: &[
+        FieldSpec { snake: "resource_group_name", wire: "resourceGroupName", location: FieldLocation::Path },
+        FieldSpec { snake: "resource_name", wire: "resourceName", location: FieldLocation::Path },
+        FieldSpec { snake: "api_version", wire: "api-version", location: FieldLocation::Query },
+        FieldSpec { snake: "subscription_id", wire: "subscriptionId", location: FieldLocation::Path },
+    ],
+    auth: &[
+    ],
+};
+
+const OP_ENTERPRISE_KNOWLEDGE_GRAPH_CREATE: OpSpec = OpSpec {
     method: "PUT",
-    path_template: "/subscriptions/{subscription_id}/providers/Microsoft.Addons/supportProviders/{provider_name}/supportPlanTypes/{plan_type_name}",
+    path_template: "/subscriptions/{subscription_id}/resourceGroups/{resource_group_name}/providers/Microsoft.EnterpriseKnowledgeGraph/services/{resource_name}",
     fields: &[
-        FieldSpec { snake: "api_version", location: FieldLocation::Query },
-        FieldSpec { snake: "subscription_id", location: FieldLocation::Path },
-        FieldSpec { snake: "provider_name", location: FieldLocation::Path },
-        FieldSpec { snake: "plan_type_name", location: FieldLocation::Path },
+        FieldSpec { snake: "resource_group_name", wire: "resourceGroupName", location: FieldLocation::Path },
+        FieldSpec { snake: "resource_name", wire: "resourceName", location: FieldLocation::Path },
+        FieldSpec { snake: "api_version", wire: "api-version", location: FieldLocation::Query },
+        FieldSpec { snake: "subscription_id", wire: "subscriptionId", location: FieldLocation::Path },
+        FieldSpec { snake: "properties", wire: "properties", location: FieldLocation::Body },
     ],
     auth: &[
     ],
 };
 
-fn iface_addon_details__support_plan_types_get_params__to_json(p: &iface_addon_details::SupportPlanTypesGetParams) -> Value {
-    let mut m = Map::new();
-    m.insert("api_version".into(), Value::String((&p.api_version).clone()));
-    m.insert("subscription_id".into(), Value::String((&p.subscription_id).clone()));
-    m.insert("provider_name".into(), Value::String((&p.provider_name).clone()));
-    m.insert("plan_type_name".into(), Value::String((&p.plan_type_name).clone()));
-    Value::Object(m)
-}
+const OP_ENTERPRISE_KNOWLEDGE_GRAPH_UPDATE: OpSpec = OpSpec {
+    method: "PATCH",
+    path_template: "/subscriptions/{subscription_id}/resourceGroups/{resource_group_name}/providers/Microsoft.EnterpriseKnowledgeGraph/services/{resource_name}",
+    fields: &[
+        FieldSpec { snake: "resource_group_name", wire: "resourceGroupName", location: FieldLocation::Path },
+        FieldSpec { snake: "resource_name", wire: "resourceName", location: FieldLocation::Path },
+        FieldSpec { snake: "api_version", wire: "api-version", location: FieldLocation::Query },
+        FieldSpec { snake: "subscription_id", wire: "subscriptionId", location: FieldLocation::Path },
+        FieldSpec { snake: "properties", wire: "properties", location: FieldLocation::Body },
+    ],
+    auth: &[
+    ],
+};
 
-fn iface_addon_details__support_plan_types_create_or_update_params__to_json(p: &iface_addon_details::SupportPlanTypesCreateOrUpdateParams) -> Value {
-    let mut m = Map::new();
-    m.insert("api_version".into(), Value::String((&p.api_version).clone()));
-    m.insert("subscription_id".into(), Value::String((&p.subscription_id).clone()));
-    m.insert("provider_name".into(), Value::String((&p.provider_name).clone()));
-    m.insert("plan_type_name".into(), Value::String((&p.plan_type_name).clone()));
-    Value::Object(m)
-}
-
-impl iface_addon_details::Guest for crate::Component {
-    fn support_plan_types_get(params: iface_addon_details::SupportPlanTypesGetParams) -> Result<String, String> {
-        let json = iface_addon_details__support_plan_types_get_params__to_json(&params);
-        dispatch(&OP_ADDON_DETAILS_SUPPORT_PLAN_TYPES_GET, json)
-    }
-    fn support_plan_types_create_or_update(params: iface_addon_details::SupportPlanTypesCreateOrUpdateParams) -> Result<String, String> {
-        let json = iface_addon_details__support_plan_types_create_or_update_params__to_json(&params);
-        dispatch(&OP_ADDON_DETAILS_SUPPORT_PLAN_TYPES_CREATE_OR_UPDATE, json)
-    }
-}
-use crate::exports::autostamp::azure::subscriptions as iface_subscriptions;
-
-const OP_SUBSCRIPTIONS_SUPPORT_PLAN_TYPES_DELETE: OpSpec = OpSpec {
+const OP_ENTERPRISE_KNOWLEDGE_GRAPH_DELETE: OpSpec = OpSpec {
     method: "DELETE",
-    path_template: "/subscriptions/{subscription_id}/providers/Microsoft.Addons/supportProviders/{provider_name}/supportPlanTypes/{plan_type_name}",
+    path_template: "/subscriptions/{subscription_id}/resourceGroups/{resource_group_name}/providers/Microsoft.EnterpriseKnowledgeGraph/services/{resource_name}",
     fields: &[
-        FieldSpec { snake: "api_version", location: FieldLocation::Query },
-        FieldSpec { snake: "subscription_id", location: FieldLocation::Path },
-        FieldSpec { snake: "provider_name", location: FieldLocation::Path },
-        FieldSpec { snake: "plan_type_name", location: FieldLocation::Path },
+        FieldSpec { snake: "resource_group_name", wire: "resourceGroupName", location: FieldLocation::Path },
+        FieldSpec { snake: "resource_name", wire: "resourceName", location: FieldLocation::Path },
+        FieldSpec { snake: "api_version", wire: "api-version", location: FieldLocation::Query },
+        FieldSpec { snake: "subscription_id", wire: "subscriptionId", location: FieldLocation::Path },
     ],
     auth: &[
     ],
 };
 
-fn iface_subscriptions__support_plan_types_delete_params__to_json(p: &iface_subscriptions::SupportPlanTypesDeleteParams) -> Value {
+fn iface_enterprise_knowledge_graph__properties_provisioning_state_enum__to_str(e: &iface_enterprise_knowledge_graph::PropertiesProvisioningStateEnum) -> &'static str {
+    match e {
+        iface_enterprise_knowledge_graph::PropertiesProvisioningStateEnum::Creating => "Creating",
+        iface_enterprise_knowledge_graph::PropertiesProvisioningStateEnum::Deleting => "Deleting",
+        iface_enterprise_knowledge_graph::PropertiesProvisioningStateEnum::Failed => "Failed",
+        iface_enterprise_knowledge_graph::PropertiesProvisioningStateEnum::Succeeded => "Succeeded",
+    }
+}
+
+fn iface_enterprise_knowledge_graph__response_list__to_json(p: &iface_enterprise_knowledge_graph::ResponseList) -> Value {
     let mut m = Map::new();
-    m.insert("api_version".into(), Value::String((&p.api_version).clone()));
-    m.insert("subscription_id".into(), Value::String((&p.subscription_id).clone()));
-    m.insert("provider_name".into(), Value::String((&p.provider_name).clone()));
-    m.insert("plan_type_name".into(), Value::String((&p.plan_type_name).clone()));
+    m.insert("nextLink".into(), match (&p.next_link) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("value".into(), match (&p.value) { Some(v) => Value::Array((v).iter().map(|v| iface_enterprise_knowledge_graph__enterprise_knowledge_graph__to_json(v)).collect()), None => Value::Null });
     Value::Object(m)
 }
 
-impl iface_subscriptions::Guest for crate::Component {
-    fn support_plan_types_delete(params: iface_subscriptions::SupportPlanTypesDeleteParams) -> Result<String, String> {
-        let json = iface_subscriptions__support_plan_types_delete_params__to_json(&params);
-        dispatch(&OP_SUBSCRIPTIONS_SUPPORT_PLAN_TYPES_DELETE, json)
+fn iface_enterprise_knowledge_graph__enterprise_knowledge_graph__to_json(p: &iface_enterprise_knowledge_graph::EnterpriseKnowledgeGraph) -> Value {
+    let mut m = Map::new();
+    m.insert("properties".into(), match (&p.properties) { Some(v) => iface_enterprise_knowledge_graph__properties__to_json(v), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_enterprise_knowledge_graph__properties__to_json(p: &iface_enterprise_knowledge_graph::Properties) -> Value {
+    let mut m = Map::new();
+    m.insert("description".into(), match (&p.description) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("metadata".into(), match (&p.metadata) { Some(v) => iface_enterprise_knowledge_graph__properties_metadata__to_json(v), None => Value::Null });
+    m.insert("provisioningState".into(), match (&p.provisioning_state) { Some(v) => Value::String(iface_enterprise_knowledge_graph__properties_provisioning_state_enum__to_str(v).into()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_enterprise_knowledge_graph__properties_metadata__to_json(p: &iface_enterprise_knowledge_graph::PropertiesMetadata) -> Value {
+    let mut m = Map::new();
+    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_enterprise_knowledge_graph__list_op_params__to_json(p: &iface_enterprise_knowledge_graph::ListOpParams) -> Value {
+    let mut m = Map::new();
+    m.insert("api_version".into(), Value::String((&p.api_version).clone()));
+    m.insert("subscription_id".into(), Value::String((&p.subscription_id).clone()));
+    Value::Object(m)
+}
+
+fn iface_enterprise_knowledge_graph__list_by_resource_group_params__to_json(p: &iface_enterprise_knowledge_graph::ListByResourceGroupParams) -> Value {
+    let mut m = Map::new();
+    m.insert("resource_group_name".into(), Value::String((&p.resource_group_name).clone()));
+    m.insert("subscription_id".into(), Value::String((&p.subscription_id).clone()));
+    m.insert("api_version".into(), Value::String((&p.api_version).clone()));
+    Value::Object(m)
+}
+
+fn iface_enterprise_knowledge_graph__get_params__to_json(p: &iface_enterprise_knowledge_graph::GetParams) -> Value {
+    let mut m = Map::new();
+    m.insert("resource_group_name".into(), Value::String((&p.resource_group_name).clone()));
+    m.insert("resource_name".into(), Value::String((&p.resource_name).clone()));
+    m.insert("api_version".into(), Value::String((&p.api_version).clone()));
+    m.insert("subscription_id".into(), Value::String((&p.subscription_id).clone()));
+    Value::Object(m)
+}
+
+fn iface_enterprise_knowledge_graph__create_params__to_json(p: &iface_enterprise_knowledge_graph::CreateParams) -> Value {
+    let mut m = Map::new();
+    m.insert("resource_group_name".into(), Value::String((&p.resource_group_name).clone()));
+    m.insert("resource_name".into(), Value::String((&p.resource_name).clone()));
+    m.insert("api_version".into(), Value::String((&p.api_version).clone()));
+    m.insert("subscription_id".into(), Value::String((&p.subscription_id).clone()));
+    m.insert("properties".into(), match (&p.properties) { Some(v) => iface_enterprise_knowledge_graph__properties__to_json(v), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_enterprise_knowledge_graph__update_params__to_json(p: &iface_enterprise_knowledge_graph::UpdateParams) -> Value {
+    let mut m = Map::new();
+    m.insert("resource_group_name".into(), Value::String((&p.resource_group_name).clone()));
+    m.insert("resource_name".into(), Value::String((&p.resource_name).clone()));
+    m.insert("api_version".into(), Value::String((&p.api_version).clone()));
+    m.insert("subscription_id".into(), Value::String((&p.subscription_id).clone()));
+    m.insert("properties".into(), match (&p.properties) { Some(v) => iface_enterprise_knowledge_graph__properties__to_json(v), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_enterprise_knowledge_graph__delete_params__to_json(p: &iface_enterprise_knowledge_graph::DeleteParams) -> Value {
+    let mut m = Map::new();
+    m.insert("resource_group_name".into(), Value::String((&p.resource_group_name).clone()));
+    m.insert("resource_name".into(), Value::String((&p.resource_name).clone()));
+    m.insert("api_version".into(), Value::String((&p.api_version).clone()));
+    m.insert("subscription_id".into(), Value::String((&p.subscription_id).clone()));
+    Value::Object(m)
+}
+
+fn iface_enterprise_knowledge_graph__response_list__from_json(v: &Value) -> Option<iface_enterprise_knowledge_graph::ResponseList> {
+    let m = v.as_object()?;
+    Some(iface_enterprise_knowledge_graph::ResponseList {
+        next_link: m.get("nextLink").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        value: m.get("value").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| iface_enterprise_knowledge_graph__enterprise_knowledge_graph__from_json(x)).collect())),
+    })
+}
+
+fn iface_enterprise_knowledge_graph__enterprise_knowledge_graph__from_json(v: &Value) -> Option<iface_enterprise_knowledge_graph::EnterpriseKnowledgeGraph> {
+    let m = v.as_object()?;
+    Some(iface_enterprise_knowledge_graph::EnterpriseKnowledgeGraph {
+        properties: m.get("properties").filter(|v| !v.is_null()).and_then(|v| iface_enterprise_knowledge_graph__properties__from_json(v)),
+    })
+}
+
+fn iface_enterprise_knowledge_graph__properties__from_json(v: &Value) -> Option<iface_enterprise_knowledge_graph::Properties> {
+    let m = v.as_object()?;
+    Some(iface_enterprise_knowledge_graph::Properties {
+        description: m.get("description").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        metadata: m.get("metadata").filter(|v| !v.is_null()).and_then(|v| iface_enterprise_knowledge_graph__properties_metadata__from_json(v)),
+        provisioning_state: m.get("provisioningState").filter(|v| !v.is_null()).and_then(|v| (v).as_str().and_then(iface_enterprise_knowledge_graph__properties_provisioning_state_enum__from_str)),
+    })
+}
+
+fn iface_enterprise_knowledge_graph__properties_metadata__from_json(v: &Value) -> Option<iface_enterprise_knowledge_graph::PropertiesMetadata> {
+    let m = v.as_object()?;
+    Some(iface_enterprise_knowledge_graph::PropertiesMetadata {
+        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    })
+}
+
+fn iface_enterprise_knowledge_graph__properties_provisioning_state_enum__from_str(s: &str) -> Option<iface_enterprise_knowledge_graph::PropertiesProvisioningStateEnum> {
+    match s {
+        "Creating" => Some(iface_enterprise_knowledge_graph::PropertiesProvisioningStateEnum::Creating),
+        "Deleting" => Some(iface_enterprise_knowledge_graph::PropertiesProvisioningStateEnum::Deleting),
+        "Failed" => Some(iface_enterprise_knowledge_graph::PropertiesProvisioningStateEnum::Failed),
+        "Succeeded" => Some(iface_enterprise_knowledge_graph::PropertiesProvisioningStateEnum::Succeeded),
+        _ => None,
+    }
+}
+
+fn iface_enterprise_knowledge_graph__list_op__ok(body: String) -> Result<iface_enterprise_knowledge_graph::ResponseList, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match iface_enterprise_knowledge_graph__response_list__from_json(&v) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_enterprise_knowledge_graph__list_op__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
+fn iface_enterprise_knowledge_graph__list_by_resource_group__ok(body: String) -> Result<iface_enterprise_knowledge_graph::ResponseList, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match iface_enterprise_knowledge_graph__response_list__from_json(&v) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_enterprise_knowledge_graph__list_by_resource_group__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
+fn iface_enterprise_knowledge_graph__get__ok(body: String) -> Result<iface_enterprise_knowledge_graph::EnterpriseKnowledgeGraph, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match iface_enterprise_knowledge_graph__enterprise_knowledge_graph__from_json(&v) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_enterprise_knowledge_graph__get__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
+fn iface_enterprise_knowledge_graph__create__ok(body: String) -> Result<iface_enterprise_knowledge_graph::EnterpriseKnowledgeGraph, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match iface_enterprise_knowledge_graph__enterprise_knowledge_graph__from_json(&v) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_enterprise_knowledge_graph__create__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
+fn iface_enterprise_knowledge_graph__update__ok(body: String) -> Result<iface_enterprise_knowledge_graph::EnterpriseKnowledgeGraph, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match iface_enterprise_knowledge_graph__enterprise_knowledge_graph__from_json(&v) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_enterprise_knowledge_graph__update__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
+fn iface_enterprise_knowledge_graph__delete__ok(body: String) -> Result<String, crate::runtime::DispatchError> {
+    Ok(body)
+}
+
+fn iface_enterprise_knowledge_graph__delete__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
+impl iface_enterprise_knowledge_graph::Guest for crate::Component {
+    fn list_op(params: iface_enterprise_knowledge_graph::ListOpParams) -> Result<iface_enterprise_knowledge_graph::ResponseList, String> {
+        let json = iface_enterprise_knowledge_graph__list_op_params__to_json(&params);
+        match dispatch(&OP_ENTERPRISE_KNOWLEDGE_GRAPH_LIST_OP, json).and_then(iface_enterprise_knowledge_graph__list_op__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_enterprise_knowledge_graph__list_op__err(e)),
+        }
+    }
+    fn list_by_resource_group(params: iface_enterprise_knowledge_graph::ListByResourceGroupParams) -> Result<iface_enterprise_knowledge_graph::ResponseList, String> {
+        let json = iface_enterprise_knowledge_graph__list_by_resource_group_params__to_json(&params);
+        match dispatch(&OP_ENTERPRISE_KNOWLEDGE_GRAPH_LIST_BY_RESOURCE_GROUP, json).and_then(iface_enterprise_knowledge_graph__list_by_resource_group__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_enterprise_knowledge_graph__list_by_resource_group__err(e)),
+        }
+    }
+    fn get(params: iface_enterprise_knowledge_graph::GetParams) -> Result<iface_enterprise_knowledge_graph::EnterpriseKnowledgeGraph, String> {
+        let json = iface_enterprise_knowledge_graph__get_params__to_json(&params);
+        match dispatch(&OP_ENTERPRISE_KNOWLEDGE_GRAPH_GET, json).and_then(iface_enterprise_knowledge_graph__get__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_enterprise_knowledge_graph__get__err(e)),
+        }
+    }
+    fn create(params: iface_enterprise_knowledge_graph::CreateParams) -> Result<iface_enterprise_knowledge_graph::EnterpriseKnowledgeGraph, String> {
+        let json = iface_enterprise_knowledge_graph__create_params__to_json(&params);
+        match dispatch(&OP_ENTERPRISE_KNOWLEDGE_GRAPH_CREATE, json).and_then(iface_enterprise_knowledge_graph__create__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_enterprise_knowledge_graph__create__err(e)),
+        }
+    }
+    fn update(params: iface_enterprise_knowledge_graph::UpdateParams) -> Result<iface_enterprise_knowledge_graph::EnterpriseKnowledgeGraph, String> {
+        let json = iface_enterprise_knowledge_graph__update_params__to_json(&params);
+        match dispatch(&OP_ENTERPRISE_KNOWLEDGE_GRAPH_UPDATE, json).and_then(iface_enterprise_knowledge_graph__update__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_enterprise_knowledge_graph__update__err(e)),
+        }
+    }
+    fn delete(params: iface_enterprise_knowledge_graph::DeleteParams) -> Result<String, String> {
+        let json = iface_enterprise_knowledge_graph__delete_params__to_json(&params);
+        match dispatch(&OP_ENTERPRISE_KNOWLEDGE_GRAPH_DELETE, json).and_then(iface_enterprise_knowledge_graph__delete__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_enterprise_knowledge_graph__delete__err(e)),
+        }
     }
 }
 

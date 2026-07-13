@@ -44,10 +44,15 @@ pub(crate) enum FieldLocation {
     Body,
 }
 
-/// A single operation parameter: the snake-case key it carries in the params JSON and where
-/// it belongs in the request.
+/// A single operation parameter. `snake` keys the field in the internal params JSON (and, for a
+/// path field, matches the `{snake}` placeholder in the path template); `wire` is the verbatim name
+/// the field takes on the HTTP wire (query key, header name, or body property). The two differ
+/// whenever the source name isn't already snake_case (e.g. `dryRun` → snake `dry_run`, wire
+/// `dryRun`), and let distinct inputs that share a snake key (`DateCreated`, `DateCreated<`) still
+/// travel under their true names.
 pub(crate) struct FieldSpec {
     pub(crate) snake: &'static str,
+    pub(crate) wire: &'static str,
     pub(crate) location: FieldLocation,
 }
 
@@ -71,6 +76,16 @@ pub(crate) struct AuthApply {
     pub(crate) kind: AuthKind,
 }
 
+/// The failure modes of [`dispatch`], kept structured so each generated operation can map them
+/// onto its own typed error: an `Http` failure carries the response status and body (routed to
+/// the matching error-variant case), while a `Transport` failure carries a message for the
+/// catch-all case (a secret lookup, connection, or decode failure that never produced an HTTP
+/// status).
+pub(crate) enum DispatchError {
+    Http { status: u16, body: String },
+    Transport(String),
+}
+
 /// A single API operation: HTTP method, path template (with `{snake}` placeholders), the
 /// parameter fields, and the security schemes to apply.
 pub(crate) struct OpSpec {
@@ -81,8 +96,9 @@ pub(crate) struct OpSpec {
 }
 
 /// Execute `op` with the supplied `params` (a JSON object keyed by snake-case field names)
-/// and return the response body as a string, or an error message.
-pub(crate) fn dispatch(op: &OpSpec, params: Value) -> Result<String, String> {
+/// and return the raw 2xx response body, or a structured [`DispatchError`] the caller maps
+/// onto the operation's typed error.
+pub(crate) fn dispatch(op: &OpSpec, params: Value) -> Result<String, DispatchError> {
     let obj = match &params {
         Value::Object(map) => Some(map),
         _ => None,
@@ -105,10 +121,10 @@ pub(crate) fn dispatch(op: &OpSpec, params: Value) -> Result<String, String> {
                 let placeholder = format!("{{{}}}", field.snake);
                 path = path.replace(&placeholder, &percent_encode(&scalar(value)));
             }
-            FieldLocation::Query => query.push((field.snake.to_string(), scalar(value))),
-            FieldLocation::Header => headers.push((field.snake.to_string(), scalar(value))),
+            FieldLocation::Query => query.push((field.wire.to_string(), scalar(value))),
+            FieldLocation::Header => headers.push((field.wire.to_string(), scalar(value))),
             FieldLocation::Body => {
-                body.insert(field.snake.to_string(), value.clone());
+                body.insert(field.wire.to_string(), value.clone());
             }
         }
     }
@@ -116,7 +132,7 @@ pub(crate) fn dispatch(op: &OpSpec, params: Value) -> Result<String, String> {
     // Apply each resolved security scheme, sourcing its value from wasmcloud:secrets.
     let mut cookies: Vec<String> = Vec::new();
     for apply in op.auth {
-        let secret = fetch_secret(apply.secret_key)?;
+        let secret = fetch_secret(apply.secret_key).map_err(DispatchError::Transport)?;
         match &apply.kind {
             AuthKind::Bearer => headers.push(("authorization".into(), format!("Bearer {secret}"))),
             AuthKind::Basic => {
@@ -177,17 +193,18 @@ fn fetch_secret(key: &str) -> Result<String, String> {
 }
 
 /// Build and send the outgoing request with `wstd`, returning the response body on a 2xx
-/// status. The generated guest exports are synchronous, so the async `wstd` client is driven
-/// to completion on a local reactor via `wstd::runtime::block_on`.
+/// status and a structured [`DispatchError`] otherwise. The generated guest exports are
+/// synchronous, so the async `wstd` client is driven to completion on a local reactor via
+/// `wstd::runtime::block_on`.
 fn perform(
     method: &str,
     path_with_query: &str,
     headers: &[(String, String)],
     body: &[u8],
-) -> Result<String, String> {
+) -> Result<String, DispatchError> {
     let url = join_url(crate::BASE_URL, path_with_query);
     let method = Method::from_bytes(method.as_bytes())
-        .map_err(|err| format!("invalid HTTP method `{method}`: {err}"))?;
+        .map_err(|err| DispatchError::Transport(format!("invalid HTTP method `{method}`: {err}")))?;
 
     let mut builder = Request::builder().method(method).uri(url);
     for (name, value) in headers {
@@ -199,27 +216,29 @@ fn perform(
         } else {
             Body::from(body.to_vec())
         })
-        .map_err(|err| format!("failed to build request: {err}"))?;
+        .map_err(|err| DispatchError::Transport(format!("failed to build request: {err}")))?;
 
     wstd::runtime::block_on(async move {
         let client = Client::new();
         let response = client
             .send(request)
             .await
-            .map_err(|err| format!("request failed: {err:#}"))?;
+            .map_err(|err| DispatchError::Transport(format!("request failed: {err:#}")))?;
 
         let status = response.status().as_u16();
         let mut response_body = response.into_body();
-        let bytes = response_body
-            .contents()
-            .await
-            .map_err(|err| format!("failed to read response body: {err:#}"))?;
+        let bytes = response_body.contents().await.map_err(|err| {
+            DispatchError::Transport(format!("failed to read response body: {err:#}"))
+        })?;
         let body_text = String::from_utf8_lossy(bytes).into_owned();
 
         if (200..300).contains(&status) {
             Ok(body_text)
         } else {
-            Err(format!("HTTP {status}: {body_text}"))
+            Err(DispatchError::Http {
+                status,
+                body: body_text,
+            })
         }
     })
 }
@@ -288,9 +307,9 @@ const OP_COPYRIGHTS_GET_MAP_VERSION_NUMBER_COPYRIGHTS_FORMAT: OpSpec = OpSpec {
     method: "GET",
     path_template: "/map/{version_number}/copyrights.{format}",
     fields: &[
-        FieldSpec { snake: "version_number", location: FieldLocation::Path },
-        FieldSpec { snake: "format", location: FieldLocation::Path },
-        FieldSpec { snake: "callback", location: FieldLocation::Query },
+        FieldSpec { snake: "version_number", wire: "versionNumber", location: FieldLocation::Path },
+        FieldSpec { snake: "format", wire: "format", location: FieldLocation::Path },
+        FieldSpec { snake: "callback", wire: "callback", location: FieldLocation::Query },
     ],
     auth: &[
         AuthApply { secret_key: "api_key", kind: AuthKind::ApiKeyQuery("key") },
@@ -301,9 +320,9 @@ const OP_COPYRIGHTS_GET_MAP_VERSION_NUMBER_COPYRIGHTS_CAPTION_FORMAT: OpSpec = O
     method: "GET",
     path_template: "/map/{version_number}/copyrights/caption.{format}",
     fields: &[
-        FieldSpec { snake: "version_number", location: FieldLocation::Path },
-        FieldSpec { snake: "format", location: FieldLocation::Path },
-        FieldSpec { snake: "callback", location: FieldLocation::Query },
+        FieldSpec { snake: "version_number", wire: "versionNumber", location: FieldLocation::Path },
+        FieldSpec { snake: "format", wire: "format", location: FieldLocation::Path },
+        FieldSpec { snake: "callback", wire: "callback", location: FieldLocation::Query },
     ],
     auth: &[
         AuthApply { secret_key: "api_key", kind: AuthKind::ApiKeyQuery("key") },
@@ -314,13 +333,13 @@ const OP_COPYRIGHTS_GET_MAP_VERSION_NUMBER_COPYRIGHTS_MIN_LON_MIN_LAT_MAX_LON_MA
     method: "GET",
     path_template: "/map/{version_number}/copyrights/{min_lon}/{min_lat}/{max_lon}/{max_lat}.{format}",
     fields: &[
-        FieldSpec { snake: "version_number", location: FieldLocation::Path },
-        FieldSpec { snake: "format", location: FieldLocation::Path },
-        FieldSpec { snake: "min_lon", location: FieldLocation::Path },
-        FieldSpec { snake: "min_lat", location: FieldLocation::Path },
-        FieldSpec { snake: "max_lon", location: FieldLocation::Path },
-        FieldSpec { snake: "max_lat", location: FieldLocation::Path },
-        FieldSpec { snake: "callback", location: FieldLocation::Query },
+        FieldSpec { snake: "version_number", wire: "versionNumber", location: FieldLocation::Path },
+        FieldSpec { snake: "format", wire: "format", location: FieldLocation::Path },
+        FieldSpec { snake: "min_lon", wire: "minLon", location: FieldLocation::Path },
+        FieldSpec { snake: "min_lat", wire: "minLat", location: FieldLocation::Path },
+        FieldSpec { snake: "max_lon", wire: "maxLon", location: FieldLocation::Path },
+        FieldSpec { snake: "max_lat", wire: "maxLat", location: FieldLocation::Path },
+        FieldSpec { snake: "callback", wire: "callback", location: FieldLocation::Query },
     ],
     auth: &[
         AuthApply { secret_key: "api_key", kind: AuthKind::ApiKeyQuery("key") },
@@ -331,12 +350,12 @@ const OP_COPYRIGHTS_GET_MAP_VERSION_NUMBER_COPYRIGHTS_ZOOM_X_Y_FORMAT: OpSpec = 
     method: "GET",
     path_template: "/map/{version_number}/copyrights/{zoom}/{x}/{y}.{format}",
     fields: &[
-        FieldSpec { snake: "version_number", location: FieldLocation::Path },
-        FieldSpec { snake: "format", location: FieldLocation::Path },
-        FieldSpec { snake: "zoom", location: FieldLocation::Path },
-        FieldSpec { snake: "x", location: FieldLocation::Path },
-        FieldSpec { snake: "y", location: FieldLocation::Path },
-        FieldSpec { snake: "callback", location: FieldLocation::Query },
+        FieldSpec { snake: "version_number", wire: "versionNumber", location: FieldLocation::Path },
+        FieldSpec { snake: "format", wire: "format", location: FieldLocation::Path },
+        FieldSpec { snake: "zoom", wire: "zoom", location: FieldLocation::Path },
+        FieldSpec { snake: "x", wire: "X", location: FieldLocation::Path },
+        FieldSpec { snake: "y", wire: "Y", location: FieldLocation::Path },
+        FieldSpec { snake: "callback", wire: "callback", location: FieldLocation::Query },
     ],
     auth: &[
         AuthApply { secret_key: "api_key", kind: AuthKind::ApiKeyQuery("key") },
@@ -382,22 +401,108 @@ fn iface_copyrights__get_map_version_number_copyrights_zoom_x_y_format_params__t
     Value::Object(m)
 }
 
+fn iface_copyrights__get_map_version_number_copyrights_format__ok(body: String) -> Result<String, crate::runtime::DispatchError> {
+    Ok(body)
+}
+
+fn iface_copyrights__get_map_version_number_copyrights_format__err(e: crate::runtime::DispatchError) -> iface_copyrights::GetMapVersionNumberCopyrightsFormatError {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => match status {
+            304u16 => iface_copyrights::GetMapVersionNumberCopyrightsFormatError::NotModified(body),
+            400u16 => iface_copyrights::GetMapVersionNumberCopyrightsFormatError::BadRequest(body),
+            403u16 => iface_copyrights::GetMapVersionNumberCopyrightsFormatError::Forbidden(body),
+            410u16 => iface_copyrights::GetMapVersionNumberCopyrightsFormatError::Gone(body),
+            500u16 => iface_copyrights::GetMapVersionNumberCopyrightsFormatError::InternalServerError(body),
+            _ => iface_copyrights::GetMapVersionNumberCopyrightsFormatError::Other(body),
+        },
+        crate::runtime::DispatchError::Transport(m) => iface_copyrights::GetMapVersionNumberCopyrightsFormatError::Other(m),
+    }
+}
+
+fn iface_copyrights__get_map_version_number_copyrights_caption_format__ok(body: String) -> Result<String, crate::runtime::DispatchError> {
+    Ok(body)
+}
+
+fn iface_copyrights__get_map_version_number_copyrights_caption_format__err(e: crate::runtime::DispatchError) -> iface_copyrights::GetMapVersionNumberCopyrightsCaptionFormatError {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => match status {
+            304u16 => iface_copyrights::GetMapVersionNumberCopyrightsCaptionFormatError::NotModified(body),
+            400u16 => iface_copyrights::GetMapVersionNumberCopyrightsCaptionFormatError::BadRequest(body),
+            403u16 => iface_copyrights::GetMapVersionNumberCopyrightsCaptionFormatError::Forbidden(body),
+            410u16 => iface_copyrights::GetMapVersionNumberCopyrightsCaptionFormatError::Gone(body),
+            500u16 => iface_copyrights::GetMapVersionNumberCopyrightsCaptionFormatError::InternalServerError(body),
+            _ => iface_copyrights::GetMapVersionNumberCopyrightsCaptionFormatError::Other(body),
+        },
+        crate::runtime::DispatchError::Transport(m) => iface_copyrights::GetMapVersionNumberCopyrightsCaptionFormatError::Other(m),
+    }
+}
+
+fn iface_copyrights__get_map_version_number_copyrights_min_lon_min_lat_max_lon_max_lat_format__ok(body: String) -> Result<String, crate::runtime::DispatchError> {
+    Ok(body)
+}
+
+fn iface_copyrights__get_map_version_number_copyrights_min_lon_min_lat_max_lon_max_lat_format__err(e: crate::runtime::DispatchError) -> iface_copyrights::GetMapVersionNumberCopyrightsMinLonMinLatMaxLonMaxLatFormatError {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => match status {
+            304u16 => iface_copyrights::GetMapVersionNumberCopyrightsMinLonMinLatMaxLonMaxLatFormatError::NotModified(body),
+            400u16 => iface_copyrights::GetMapVersionNumberCopyrightsMinLonMinLatMaxLonMaxLatFormatError::BadRequest(body),
+            401u16 => iface_copyrights::GetMapVersionNumberCopyrightsMinLonMinLatMaxLonMaxLatFormatError::Unauthorized(body),
+            403u16 => iface_copyrights::GetMapVersionNumberCopyrightsMinLonMinLatMaxLonMaxLatFormatError::Forbidden(body),
+            410u16 => iface_copyrights::GetMapVersionNumberCopyrightsMinLonMinLatMaxLonMaxLatFormatError::Gone(body),
+            500u16 => iface_copyrights::GetMapVersionNumberCopyrightsMinLonMinLatMaxLonMaxLatFormatError::InternalServerError(body),
+            _ => iface_copyrights::GetMapVersionNumberCopyrightsMinLonMinLatMaxLonMaxLatFormatError::Other(body),
+        },
+        crate::runtime::DispatchError::Transport(m) => iface_copyrights::GetMapVersionNumberCopyrightsMinLonMinLatMaxLonMaxLatFormatError::Other(m),
+    }
+}
+
+fn iface_copyrights__get_map_version_number_copyrights_zoom_x_y_format__ok(body: String) -> Result<String, crate::runtime::DispatchError> {
+    Ok(body)
+}
+
+fn iface_copyrights__get_map_version_number_copyrights_zoom_x_y_format__err(e: crate::runtime::DispatchError) -> iface_copyrights::GetMapVersionNumberCopyrightsZoomXYFormatError {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => match status {
+            304u16 => iface_copyrights::GetMapVersionNumberCopyrightsZoomXYFormatError::NotModified(body),
+            400u16 => iface_copyrights::GetMapVersionNumberCopyrightsZoomXYFormatError::BadRequest(body),
+            401u16 => iface_copyrights::GetMapVersionNumberCopyrightsZoomXYFormatError::Unauthorized(body),
+            403u16 => iface_copyrights::GetMapVersionNumberCopyrightsZoomXYFormatError::Forbidden(body),
+            410u16 => iface_copyrights::GetMapVersionNumberCopyrightsZoomXYFormatError::Gone(body),
+            500u16 => iface_copyrights::GetMapVersionNumberCopyrightsZoomXYFormatError::InternalServerError(body),
+            _ => iface_copyrights::GetMapVersionNumberCopyrightsZoomXYFormatError::Other(body),
+        },
+        crate::runtime::DispatchError::Transport(m) => iface_copyrights::GetMapVersionNumberCopyrightsZoomXYFormatError::Other(m),
+    }
+}
+
 impl iface_copyrights::Guest for crate::Component {
-    fn get_map_version_number_copyrights_format(params: iface_copyrights::GetMapVersionNumberCopyrightsFormatParams) -> Result<String, String> {
+    fn get_map_version_number_copyrights_format(params: iface_copyrights::GetMapVersionNumberCopyrightsFormatParams) -> Result<String, iface_copyrights::GetMapVersionNumberCopyrightsFormatError> {
         let json = iface_copyrights__get_map_version_number_copyrights_format_params__to_json(&params);
-        dispatch(&OP_COPYRIGHTS_GET_MAP_VERSION_NUMBER_COPYRIGHTS_FORMAT, json)
+        match dispatch(&OP_COPYRIGHTS_GET_MAP_VERSION_NUMBER_COPYRIGHTS_FORMAT, json).and_then(iface_copyrights__get_map_version_number_copyrights_format__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_copyrights__get_map_version_number_copyrights_format__err(e)),
+        }
     }
-    fn get_map_version_number_copyrights_caption_format(params: iface_copyrights::GetMapVersionNumberCopyrightsCaptionFormatParams) -> Result<String, String> {
+    fn get_map_version_number_copyrights_caption_format(params: iface_copyrights::GetMapVersionNumberCopyrightsCaptionFormatParams) -> Result<String, iface_copyrights::GetMapVersionNumberCopyrightsCaptionFormatError> {
         let json = iface_copyrights__get_map_version_number_copyrights_caption_format_params__to_json(&params);
-        dispatch(&OP_COPYRIGHTS_GET_MAP_VERSION_NUMBER_COPYRIGHTS_CAPTION_FORMAT, json)
+        match dispatch(&OP_COPYRIGHTS_GET_MAP_VERSION_NUMBER_COPYRIGHTS_CAPTION_FORMAT, json).and_then(iface_copyrights__get_map_version_number_copyrights_caption_format__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_copyrights__get_map_version_number_copyrights_caption_format__err(e)),
+        }
     }
-    fn get_map_version_number_copyrights_min_lon_min_lat_max_lon_max_lat_format(params: iface_copyrights::GetMapVersionNumberCopyrightsMinLonMinLatMaxLonMaxLatFormatParams) -> Result<String, String> {
+    fn get_map_version_number_copyrights_min_lon_min_lat_max_lon_max_lat_format(params: iface_copyrights::GetMapVersionNumberCopyrightsMinLonMinLatMaxLonMaxLatFormatParams) -> Result<String, iface_copyrights::GetMapVersionNumberCopyrightsMinLonMinLatMaxLonMaxLatFormatError> {
         let json = iface_copyrights__get_map_version_number_copyrights_min_lon_min_lat_max_lon_max_lat_format_params__to_json(&params);
-        dispatch(&OP_COPYRIGHTS_GET_MAP_VERSION_NUMBER_COPYRIGHTS_MIN_LON_MIN_LAT_MAX_LON_MAX_LAT_FORMAT, json)
+        match dispatch(&OP_COPYRIGHTS_GET_MAP_VERSION_NUMBER_COPYRIGHTS_MIN_LON_MIN_LAT_MAX_LON_MAX_LAT_FORMAT, json).and_then(iface_copyrights__get_map_version_number_copyrights_min_lon_min_lat_max_lon_max_lat_format__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_copyrights__get_map_version_number_copyrights_min_lon_min_lat_max_lon_max_lat_format__err(e)),
+        }
     }
-    fn get_map_version_number_copyrights_zoom_x_y_format(params: iface_copyrights::GetMapVersionNumberCopyrightsZoomXYFormatParams) -> Result<String, String> {
+    fn get_map_version_number_copyrights_zoom_x_y_format(params: iface_copyrights::GetMapVersionNumberCopyrightsZoomXYFormatParams) -> Result<String, iface_copyrights::GetMapVersionNumberCopyrightsZoomXYFormatError> {
         let json = iface_copyrights__get_map_version_number_copyrights_zoom_x_y_format_params__to_json(&params);
-        dispatch(&OP_COPYRIGHTS_GET_MAP_VERSION_NUMBER_COPYRIGHTS_ZOOM_X_Y_FORMAT, json)
+        match dispatch(&OP_COPYRIGHTS_GET_MAP_VERSION_NUMBER_COPYRIGHTS_ZOOM_X_Y_FORMAT, json).and_then(iface_copyrights__get_map_version_number_copyrights_zoom_x_y_format__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_copyrights__get_map_version_number_copyrights_zoom_x_y_format__err(e)),
+        }
     }
 }
 use crate::exports::autostamp::tomtom::raster as iface_raster;
@@ -406,16 +511,16 @@ const OP_RASTER_GET_MAP_VERSION_NUMBER_STATICIMAGE: OpSpec = OpSpec {
     method: "GET",
     path_template: "/map/{version_number}/staticimage",
     fields: &[
-        FieldSpec { snake: "version_number", location: FieldLocation::Path },
-        FieldSpec { snake: "layer", location: FieldLocation::Query },
-        FieldSpec { snake: "style", location: FieldLocation::Query },
-        FieldSpec { snake: "format", location: FieldLocation::Query },
-        FieldSpec { snake: "zoom", location: FieldLocation::Query },
-        FieldSpec { snake: "center", location: FieldLocation::Query },
-        FieldSpec { snake: "width", location: FieldLocation::Query },
-        FieldSpec { snake: "height", location: FieldLocation::Query },
-        FieldSpec { snake: "bbox", location: FieldLocation::Query },
-        FieldSpec { snake: "view", location: FieldLocation::Query },
+        FieldSpec { snake: "version_number", wire: "versionNumber", location: FieldLocation::Path },
+        FieldSpec { snake: "layer", wire: "layer", location: FieldLocation::Query },
+        FieldSpec { snake: "style", wire: "style", location: FieldLocation::Query },
+        FieldSpec { snake: "format", wire: "format", location: FieldLocation::Query },
+        FieldSpec { snake: "zoom", wire: "zoom", location: FieldLocation::Query },
+        FieldSpec { snake: "center", wire: "center", location: FieldLocation::Query },
+        FieldSpec { snake: "width", wire: "width", location: FieldLocation::Query },
+        FieldSpec { snake: "height", wire: "height", location: FieldLocation::Query },
+        FieldSpec { snake: "bbox", wire: "bbox", location: FieldLocation::Query },
+        FieldSpec { snake: "view", wire: "view", location: FieldLocation::Query },
     ],
     auth: &[
         AuthApply { secret_key: "api_key", kind: AuthKind::ApiKeyQuery("key") },
@@ -426,15 +531,15 @@ const OP_RASTER_GET_MAP_VERSION_NUMBER_TILE_LAYER_STYLE_ZOOM_X_Y_FORMAT: OpSpec 
     method: "GET",
     path_template: "/map/{version_number}/tile/{layer}/{style}/{zoom}/{x}/{y}.{format}",
     fields: &[
-        FieldSpec { snake: "version_number", location: FieldLocation::Path },
-        FieldSpec { snake: "layer", location: FieldLocation::Path },
-        FieldSpec { snake: "style", location: FieldLocation::Path },
-        FieldSpec { snake: "zoom", location: FieldLocation::Path },
-        FieldSpec { snake: "x", location: FieldLocation::Path },
-        FieldSpec { snake: "y", location: FieldLocation::Path },
-        FieldSpec { snake: "format", location: FieldLocation::Path },
-        FieldSpec { snake: "tile_size", location: FieldLocation::Query },
-        FieldSpec { snake: "view", location: FieldLocation::Query },
+        FieldSpec { snake: "version_number", wire: "versionNumber", location: FieldLocation::Path },
+        FieldSpec { snake: "layer", wire: "layer", location: FieldLocation::Path },
+        FieldSpec { snake: "style", wire: "style", location: FieldLocation::Path },
+        FieldSpec { snake: "zoom", wire: "zoom", location: FieldLocation::Path },
+        FieldSpec { snake: "x", wire: "X", location: FieldLocation::Path },
+        FieldSpec { snake: "y", wire: "Y", location: FieldLocation::Path },
+        FieldSpec { snake: "format", wire: "format", location: FieldLocation::Path },
+        FieldSpec { snake: "tile_size", wire: "tileSize", location: FieldLocation::Query },
+        FieldSpec { snake: "view", wire: "view", location: FieldLocation::Query },
     ],
     auth: &[
         AuthApply { secret_key: "api_key", kind: AuthKind::ApiKeyQuery("key") },
@@ -500,14 +605,55 @@ fn iface_raster__get_map_version_number_tile_layer_style_zoom_x_y_format_params_
     Value::Object(m)
 }
 
-impl iface_raster::Guest for crate::Component {
-    fn get_map_version_number_staticimage(params: iface_raster::GetMapVersionNumberStaticimageParams) -> Result<String, String> {
-        let json = iface_raster__get_map_version_number_staticimage_params__to_json(&params);
-        dispatch(&OP_RASTER_GET_MAP_VERSION_NUMBER_STATICIMAGE, json)
+fn iface_raster__get_map_version_number_staticimage__ok(body: String) -> Result<String, crate::runtime::DispatchError> {
+    Ok(body)
+}
+
+fn iface_raster__get_map_version_number_staticimage__err(e: crate::runtime::DispatchError) -> iface_raster::GetMapVersionNumberStaticimageError {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => match status {
+            400u16 => iface_raster::GetMapVersionNumberStaticimageError::BadRequest(body),
+            403u16 => iface_raster::GetMapVersionNumberStaticimageError::Forbidden(body),
+            500u16 => iface_raster::GetMapVersionNumberStaticimageError::InternalServerError(body),
+            503u16 => iface_raster::GetMapVersionNumberStaticimageError::ServiceUnavailable(body),
+            _ => iface_raster::GetMapVersionNumberStaticimageError::Other(body),
+        },
+        crate::runtime::DispatchError::Transport(m) => iface_raster::GetMapVersionNumberStaticimageError::Other(m),
     }
-    fn get_map_version_number_tile_layer_style_zoom_x_y_format(params: iface_raster::GetMapVersionNumberTileLayerStyleZoomXYFormatParams) -> Result<String, String> {
+}
+
+fn iface_raster__get_map_version_number_tile_layer_style_zoom_x_y_format__ok(body: String) -> Result<String, crate::runtime::DispatchError> {
+    Ok(body)
+}
+
+fn iface_raster__get_map_version_number_tile_layer_style_zoom_x_y_format__err(e: crate::runtime::DispatchError) -> iface_raster::GetMapVersionNumberTileLayerStyleZoomXYFormatError {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => match status {
+            302u16 => iface_raster::GetMapVersionNumberTileLayerStyleZoomXYFormatError::Found(body),
+            400u16 => iface_raster::GetMapVersionNumberTileLayerStyleZoomXYFormatError::BadRequest(body),
+            403u16 => iface_raster::GetMapVersionNumberTileLayerStyleZoomXYFormatError::Forbidden(body),
+            410u16 => iface_raster::GetMapVersionNumberTileLayerStyleZoomXYFormatError::Gone(body),
+            500u16 => iface_raster::GetMapVersionNumberTileLayerStyleZoomXYFormatError::InternalServerError(body),
+            _ => iface_raster::GetMapVersionNumberTileLayerStyleZoomXYFormatError::Other(body),
+        },
+        crate::runtime::DispatchError::Transport(m) => iface_raster::GetMapVersionNumberTileLayerStyleZoomXYFormatError::Other(m),
+    }
+}
+
+impl iface_raster::Guest for crate::Component {
+    fn get_map_version_number_staticimage(params: iface_raster::GetMapVersionNumberStaticimageParams) -> Result<String, iface_raster::GetMapVersionNumberStaticimageError> {
+        let json = iface_raster__get_map_version_number_staticimage_params__to_json(&params);
+        match dispatch(&OP_RASTER_GET_MAP_VERSION_NUMBER_STATICIMAGE, json).and_then(iface_raster__get_map_version_number_staticimage__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_raster__get_map_version_number_staticimage__err(e)),
+        }
+    }
+    fn get_map_version_number_tile_layer_style_zoom_x_y_format(params: iface_raster::GetMapVersionNumberTileLayerStyleZoomXYFormatParams) -> Result<String, iface_raster::GetMapVersionNumberTileLayerStyleZoomXYFormatError> {
         let json = iface_raster__get_map_version_number_tile_layer_style_zoom_x_y_format_params__to_json(&params);
-        dispatch(&OP_RASTER_GET_MAP_VERSION_NUMBER_TILE_LAYER_STYLE_ZOOM_X_Y_FORMAT, json)
+        match dispatch(&OP_RASTER_GET_MAP_VERSION_NUMBER_TILE_LAYER_STYLE_ZOOM_X_Y_FORMAT, json).and_then(iface_raster__get_map_version_number_tile_layer_style_zoom_x_y_format__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_raster__get_map_version_number_tile_layer_style_zoom_x_y_format__err(e)),
+        }
     }
 }
 use crate::exports::autostamp::tomtom::vector as iface_vector;
@@ -516,14 +662,14 @@ const OP_VECTOR_GET_MAP_VERSION_NUMBER_TILE_LAYER_STYLE_ZOOM_X_Y_PBF: OpSpec = O
     method: "GET",
     path_template: "/map/{version_number}/tile/{layer}/{style}/{zoom}/{x}/{y}.pbf",
     fields: &[
-        FieldSpec { snake: "version_number", location: FieldLocation::Path },
-        FieldSpec { snake: "layer", location: FieldLocation::Path },
-        FieldSpec { snake: "style", location: FieldLocation::Path },
-        FieldSpec { snake: "zoom", location: FieldLocation::Path },
-        FieldSpec { snake: "x", location: FieldLocation::Path },
-        FieldSpec { snake: "y", location: FieldLocation::Path },
-        FieldSpec { snake: "view", location: FieldLocation::Query },
-        FieldSpec { snake: "language", location: FieldLocation::Query },
+        FieldSpec { snake: "version_number", wire: "versionNumber", location: FieldLocation::Path },
+        FieldSpec { snake: "layer", wire: "layer", location: FieldLocation::Path },
+        FieldSpec { snake: "style", wire: "style", location: FieldLocation::Path },
+        FieldSpec { snake: "zoom", wire: "zoom", location: FieldLocation::Path },
+        FieldSpec { snake: "x", wire: "X", location: FieldLocation::Path },
+        FieldSpec { snake: "y", wire: "Y", location: FieldLocation::Path },
+        FieldSpec { snake: "view", wire: "view", location: FieldLocation::Query },
+        FieldSpec { snake: "language", wire: "language", location: FieldLocation::Query },
     ],
     auth: &[
         AuthApply { secret_key: "api_key", kind: AuthKind::ApiKeyQuery("key") },
@@ -551,10 +697,30 @@ fn iface_vector__get_map_version_number_tile_layer_style_zoom_x_y_pbf_params__to
     Value::Object(m)
 }
 
+fn iface_vector__get_map_version_number_tile_layer_style_zoom_x_y_pbf__ok(body: String) -> Result<String, crate::runtime::DispatchError> {
+    Ok(body)
+}
+
+fn iface_vector__get_map_version_number_tile_layer_style_zoom_x_y_pbf__err(e: crate::runtime::DispatchError) -> iface_vector::GetMapVersionNumberTileLayerStyleZoomXYPbfError {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => match status {
+            400u16 => iface_vector::GetMapVersionNumberTileLayerStyleZoomXYPbfError::BadRequest(body),
+            403u16 => iface_vector::GetMapVersionNumberTileLayerStyleZoomXYPbfError::Forbidden(body),
+            500u16 => iface_vector::GetMapVersionNumberTileLayerStyleZoomXYPbfError::InternalServerError(body),
+            503u16 => iface_vector::GetMapVersionNumberTileLayerStyleZoomXYPbfError::ServiceUnavailable(body),
+            _ => iface_vector::GetMapVersionNumberTileLayerStyleZoomXYPbfError::Other(body),
+        },
+        crate::runtime::DispatchError::Transport(m) => iface_vector::GetMapVersionNumberTileLayerStyleZoomXYPbfError::Other(m),
+    }
+}
+
 impl iface_vector::Guest for crate::Component {
-    fn get_map_version_number_tile_layer_style_zoom_x_y_pbf(params: iface_vector::GetMapVersionNumberTileLayerStyleZoomXYPbfParams) -> Result<String, String> {
+    fn get_map_version_number_tile_layer_style_zoom_x_y_pbf(params: iface_vector::GetMapVersionNumberTileLayerStyleZoomXYPbfParams) -> Result<String, iface_vector::GetMapVersionNumberTileLayerStyleZoomXYPbfError> {
         let json = iface_vector__get_map_version_number_tile_layer_style_zoom_x_y_pbf_params__to_json(&params);
-        dispatch(&OP_VECTOR_GET_MAP_VERSION_NUMBER_TILE_LAYER_STYLE_ZOOM_X_Y_PBF, json)
+        match dispatch(&OP_VECTOR_GET_MAP_VERSION_NUMBER_TILE_LAYER_STYLE_ZOOM_X_Y_PBF, json).and_then(iface_vector__get_map_version_number_tile_layer_style_zoom_x_y_pbf__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_vector__get_map_version_number_tile_layer_style_zoom_x_y_pbf__err(e)),
+        }
     }
 }
 use crate::exports::autostamp::tomtom::wms_wmts as iface_wms_wmts;
@@ -563,17 +729,17 @@ const OP_WMS_WMTS_GET_MAP: OpSpec = OpSpec {
     method: "GET",
     path_template: "/map/{version_number}/wms/",
     fields: &[
-        FieldSpec { snake: "version_number", location: FieldLocation::Path },
-        FieldSpec { snake: "request", location: FieldLocation::Query },
-        FieldSpec { snake: "srs", location: FieldLocation::Query },
-        FieldSpec { snake: "bbox", location: FieldLocation::Query },
-        FieldSpec { snake: "width", location: FieldLocation::Query },
-        FieldSpec { snake: "height", location: FieldLocation::Query },
-        FieldSpec { snake: "format", location: FieldLocation::Query },
-        FieldSpec { snake: "layers", location: FieldLocation::Query },
-        FieldSpec { snake: "styles", location: FieldLocation::Query },
-        FieldSpec { snake: "service", location: FieldLocation::Query },
-        FieldSpec { snake: "version", location: FieldLocation::Query },
+        FieldSpec { snake: "version_number", wire: "versionNumber", location: FieldLocation::Path },
+        FieldSpec { snake: "request", wire: "request", location: FieldLocation::Query },
+        FieldSpec { snake: "srs", wire: "srs", location: FieldLocation::Query },
+        FieldSpec { snake: "bbox", wire: "bbox", location: FieldLocation::Query },
+        FieldSpec { snake: "width", wire: "width", location: FieldLocation::Query },
+        FieldSpec { snake: "height", wire: "height", location: FieldLocation::Query },
+        FieldSpec { snake: "format", wire: "format", location: FieldLocation::Query },
+        FieldSpec { snake: "layers", wire: "layers", location: FieldLocation::Query },
+        FieldSpec { snake: "styles", wire: "styles", location: FieldLocation::Query },
+        FieldSpec { snake: "service", wire: "service", location: FieldLocation::Query },
+        FieldSpec { snake: "version", wire: "version", location: FieldLocation::Query },
     ],
     auth: &[
         AuthApply { secret_key: "api_key", kind: AuthKind::ApiKeyQuery("key") },
@@ -584,10 +750,10 @@ const OP_WMS_WMTS_GET_CAPABILITIES: OpSpec = OpSpec {
     method: "GET",
     path_template: "/map/{version_number}/wms//",
     fields: &[
-        FieldSpec { snake: "version_number", location: FieldLocation::Path },
-        FieldSpec { snake: "service", location: FieldLocation::Query },
-        FieldSpec { snake: "request", location: FieldLocation::Query },
-        FieldSpec { snake: "version", location: FieldLocation::Query },
+        FieldSpec { snake: "version_number", wire: "versionNumber", location: FieldLocation::Path },
+        FieldSpec { snake: "service", wire: "service", location: FieldLocation::Query },
+        FieldSpec { snake: "request", wire: "request", location: FieldLocation::Query },
+        FieldSpec { snake: "version", wire: "version", location: FieldLocation::Query },
     ],
     auth: &[
         AuthApply { secret_key: "api_key", kind: AuthKind::ApiKeyQuery("key") },
@@ -598,9 +764,9 @@ const OP_WMS_WMTS_GET_MAP_VERSION_NUMBER_WMTS_KEY_WMTS_VERSION_WMTS_CAPABILITIES
     method: "GET",
     path_template: "/map/{version_number}/wmts/{key}/{wmts_version}/WMTSCapabilities.xml",
     fields: &[
-        FieldSpec { snake: "version_number", location: FieldLocation::Path },
-        FieldSpec { snake: "key", location: FieldLocation::Path },
-        FieldSpec { snake: "wmts_version", location: FieldLocation::Path },
+        FieldSpec { snake: "version_number", wire: "versionNumber", location: FieldLocation::Path },
+        FieldSpec { snake: "key", wire: "key", location: FieldLocation::Path },
+        FieldSpec { snake: "wmts_version", wire: "wmtsVersion", location: FieldLocation::Path },
     ],
     auth: &[
     ],
@@ -689,18 +855,73 @@ fn iface_wms_wmts__get_map_version_number_wmts_key_wmts_version_wmts_capabilitie
     Value::Object(m)
 }
 
+fn iface_wms_wmts__get_map__ok(body: String) -> Result<String, crate::runtime::DispatchError> {
+    Ok(body)
+}
+
+fn iface_wms_wmts__get_map__err(e: crate::runtime::DispatchError) -> iface_wms_wmts::GetMapError {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => match status {
+            401u16 => iface_wms_wmts::GetMapError::Unauthorized(body),
+            500u16 => iface_wms_wmts::GetMapError::InternalServerError(body),
+            _ => iface_wms_wmts::GetMapError::Other(body),
+        },
+        crate::runtime::DispatchError::Transport(m) => iface_wms_wmts::GetMapError::Other(m),
+    }
+}
+
+fn iface_wms_wmts__get_capabilities__ok(body: String) -> Result<String, crate::runtime::DispatchError> {
+    Ok(body)
+}
+
+fn iface_wms_wmts__get_capabilities__err(e: crate::runtime::DispatchError) -> iface_wms_wmts::GetCapabilitiesError {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => match status {
+            401u16 => iface_wms_wmts::GetCapabilitiesError::Unauthorized(body),
+            500u16 => iface_wms_wmts::GetCapabilitiesError::InternalServerError(body),
+            _ => iface_wms_wmts::GetCapabilitiesError::Other(body),
+        },
+        crate::runtime::DispatchError::Transport(m) => iface_wms_wmts::GetCapabilitiesError::Other(m),
+    }
+}
+
+fn iface_wms_wmts__get_map_version_number_wmts_key_wmts_version_wmts_capabilities_xml__ok(body: String) -> Result<String, crate::runtime::DispatchError> {
+    Ok(body)
+}
+
+fn iface_wms_wmts__get_map_version_number_wmts_key_wmts_version_wmts_capabilities_xml__err(e: crate::runtime::DispatchError) -> iface_wms_wmts::GetMapVersionNumberWmtsKeyWmtsVersionWmtsCapabilitiesXmlError {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => match status {
+            400u16 => iface_wms_wmts::GetMapVersionNumberWmtsKeyWmtsVersionWmtsCapabilitiesXmlError::BadRequest(body),
+            401u16 => iface_wms_wmts::GetMapVersionNumberWmtsKeyWmtsVersionWmtsCapabilitiesXmlError::Unauthorized(body),
+            500u16 => iface_wms_wmts::GetMapVersionNumberWmtsKeyWmtsVersionWmtsCapabilitiesXmlError::InternalServerError(body),
+            _ => iface_wms_wmts::GetMapVersionNumberWmtsKeyWmtsVersionWmtsCapabilitiesXmlError::Other(body),
+        },
+        crate::runtime::DispatchError::Transport(m) => iface_wms_wmts::GetMapVersionNumberWmtsKeyWmtsVersionWmtsCapabilitiesXmlError::Other(m),
+    }
+}
+
 impl iface_wms_wmts::Guest for crate::Component {
-    fn get_map(params: iface_wms_wmts::GetMapParams) -> Result<String, String> {
+    fn get_map(params: iface_wms_wmts::GetMapParams) -> Result<String, iface_wms_wmts::GetMapError> {
         let json = iface_wms_wmts__get_map_params__to_json(&params);
-        dispatch(&OP_WMS_WMTS_GET_MAP, json)
+        match dispatch(&OP_WMS_WMTS_GET_MAP, json).and_then(iface_wms_wmts__get_map__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_wms_wmts__get_map__err(e)),
+        }
     }
-    fn get_capabilities(params: iface_wms_wmts::GetCapabilitiesParams) -> Result<String, String> {
+    fn get_capabilities(params: iface_wms_wmts::GetCapabilitiesParams) -> Result<String, iface_wms_wmts::GetCapabilitiesError> {
         let json = iface_wms_wmts__get_capabilities_params__to_json(&params);
-        dispatch(&OP_WMS_WMTS_GET_CAPABILITIES, json)
+        match dispatch(&OP_WMS_WMTS_GET_CAPABILITIES, json).and_then(iface_wms_wmts__get_capabilities__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_wms_wmts__get_capabilities__err(e)),
+        }
     }
-    fn get_map_version_number_wmts_key_wmts_version_wmts_capabilities_xml(params: iface_wms_wmts::GetMapVersionNumberWmtsKeyWmtsVersionWmtsCapabilitiesXmlParams) -> Result<String, String> {
+    fn get_map_version_number_wmts_key_wmts_version_wmts_capabilities_xml(params: iface_wms_wmts::GetMapVersionNumberWmtsKeyWmtsVersionWmtsCapabilitiesXmlParams) -> Result<String, iface_wms_wmts::GetMapVersionNumberWmtsKeyWmtsVersionWmtsCapabilitiesXmlError> {
         let json = iface_wms_wmts__get_map_version_number_wmts_key_wmts_version_wmts_capabilities_xml_params__to_json(&params);
-        dispatch(&OP_WMS_WMTS_GET_MAP_VERSION_NUMBER_WMTS_KEY_WMTS_VERSION_WMTS_CAPABILITIES_XML, json)
+        match dispatch(&OP_WMS_WMTS_GET_MAP_VERSION_NUMBER_WMTS_KEY_WMTS_VERSION_WMTS_CAPABILITIES_XML, json).and_then(iface_wms_wmts__get_map_version_number_wmts_key_wmts_version_wmts_capabilities_xml__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_wms_wmts__get_map_version_number_wmts_key_wmts_version_wmts_capabilities_xml__err(e)),
+        }
     }
 }
 

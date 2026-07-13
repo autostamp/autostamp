@@ -44,10 +44,15 @@ pub(crate) enum FieldLocation {
     Body,
 }
 
-/// A single operation parameter: the snake-case key it carries in the params JSON and where
-/// it belongs in the request.
+/// A single operation parameter. `snake` keys the field in the internal params JSON (and, for a
+/// path field, matches the `{snake}` placeholder in the path template); `wire` is the verbatim name
+/// the field takes on the HTTP wire (query key, header name, or body property). The two differ
+/// whenever the source name isn't already snake_case (e.g. `dryRun` → snake `dry_run`, wire
+/// `dryRun`), and let distinct inputs that share a snake key (`DateCreated`, `DateCreated<`) still
+/// travel under their true names.
 pub(crate) struct FieldSpec {
     pub(crate) snake: &'static str,
+    pub(crate) wire: &'static str,
     pub(crate) location: FieldLocation,
 }
 
@@ -71,6 +76,16 @@ pub(crate) struct AuthApply {
     pub(crate) kind: AuthKind,
 }
 
+/// The failure modes of [`dispatch`], kept structured so each generated operation can map them
+/// onto its own typed error: an `Http` failure carries the response status and body (routed to
+/// the matching error-variant case), while a `Transport` failure carries a message for the
+/// catch-all case (a secret lookup, connection, or decode failure that never produced an HTTP
+/// status).
+pub(crate) enum DispatchError {
+    Http { status: u16, body: String },
+    Transport(String),
+}
+
 /// A single API operation: HTTP method, path template (with `{snake}` placeholders), the
 /// parameter fields, and the security schemes to apply.
 pub(crate) struct OpSpec {
@@ -81,8 +96,9 @@ pub(crate) struct OpSpec {
 }
 
 /// Execute `op` with the supplied `params` (a JSON object keyed by snake-case field names)
-/// and return the response body as a string, or an error message.
-pub(crate) fn dispatch(op: &OpSpec, params: Value) -> Result<String, String> {
+/// and return the raw 2xx response body, or a structured [`DispatchError`] the caller maps
+/// onto the operation's typed error.
+pub(crate) fn dispatch(op: &OpSpec, params: Value) -> Result<String, DispatchError> {
     let obj = match &params {
         Value::Object(map) => Some(map),
         _ => None,
@@ -105,10 +121,10 @@ pub(crate) fn dispatch(op: &OpSpec, params: Value) -> Result<String, String> {
                 let placeholder = format!("{{{}}}", field.snake);
                 path = path.replace(&placeholder, &percent_encode(&scalar(value)));
             }
-            FieldLocation::Query => query.push((field.snake.to_string(), scalar(value))),
-            FieldLocation::Header => headers.push((field.snake.to_string(), scalar(value))),
+            FieldLocation::Query => query.push((field.wire.to_string(), scalar(value))),
+            FieldLocation::Header => headers.push((field.wire.to_string(), scalar(value))),
             FieldLocation::Body => {
-                body.insert(field.snake.to_string(), value.clone());
+                body.insert(field.wire.to_string(), value.clone());
             }
         }
     }
@@ -116,7 +132,7 @@ pub(crate) fn dispatch(op: &OpSpec, params: Value) -> Result<String, String> {
     // Apply each resolved security scheme, sourcing its value from wasmcloud:secrets.
     let mut cookies: Vec<String> = Vec::new();
     for apply in op.auth {
-        let secret = fetch_secret(apply.secret_key)?;
+        let secret = fetch_secret(apply.secret_key).map_err(DispatchError::Transport)?;
         match &apply.kind {
             AuthKind::Bearer => headers.push(("authorization".into(), format!("Bearer {secret}"))),
             AuthKind::Basic => {
@@ -177,17 +193,18 @@ fn fetch_secret(key: &str) -> Result<String, String> {
 }
 
 /// Build and send the outgoing request with `wstd`, returning the response body on a 2xx
-/// status. The generated guest exports are synchronous, so the async `wstd` client is driven
-/// to completion on a local reactor via `wstd::runtime::block_on`.
+/// status and a structured [`DispatchError`] otherwise. The generated guest exports are
+/// synchronous, so the async `wstd` client is driven to completion on a local reactor via
+/// `wstd::runtime::block_on`.
 fn perform(
     method: &str,
     path_with_query: &str,
     headers: &[(String, String)],
     body: &[u8],
-) -> Result<String, String> {
+) -> Result<String, DispatchError> {
     let url = join_url(crate::BASE_URL, path_with_query);
     let method = Method::from_bytes(method.as_bytes())
-        .map_err(|err| format!("invalid HTTP method `{method}`: {err}"))?;
+        .map_err(|err| DispatchError::Transport(format!("invalid HTTP method `{method}`: {err}")))?;
 
     let mut builder = Request::builder().method(method).uri(url);
     for (name, value) in headers {
@@ -199,27 +216,29 @@ fn perform(
         } else {
             Body::from(body.to_vec())
         })
-        .map_err(|err| format!("failed to build request: {err}"))?;
+        .map_err(|err| DispatchError::Transport(format!("failed to build request: {err}")))?;
 
     wstd::runtime::block_on(async move {
         let client = Client::new();
         let response = client
             .send(request)
             .await
-            .map_err(|err| format!("request failed: {err:#}"))?;
+            .map_err(|err| DispatchError::Transport(format!("request failed: {err:#}")))?;
 
         let status = response.status().as_u16();
         let mut response_body = response.into_body();
-        let bytes = response_body
-            .contents()
-            .await
-            .map_err(|err| format!("failed to read response body: {err:#}"))?;
+        let bytes = response_body.contents().await.map_err(|err| {
+            DispatchError::Transport(format!("failed to read response body: {err:#}"))
+        })?;
         let body_text = String::from_utf8_lossy(bytes).into_owned();
 
         if (200..300).contains(&status) {
             Ok(body_text)
         } else {
-            Err(format!("HTTP {status}: {body_text}"))
+            Err(DispatchError::Http {
+                status,
+                body: body_text,
+            })
         }
     })
 }
@@ -304,12 +323,82 @@ const OP_API_INFORMATION_GET_API_VERSION: OpSpec = OpSpec {
     ],
 };
 
-impl iface_api_information::Guest for crate::Component {
-    fn get_health() -> Result<String, String> {
-        dispatch(&OP_API_INFORMATION_GET_HEALTH, Value::Object(Map::new()))
+fn iface_api_information__api_health_status__to_json(p: &iface_api_information::ApiHealthStatus) -> Value {
+    let mut m = Map::new();
+    m.insert("status".into(), match (&p.status) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_api_information__api_version__to_json(p: &iface_api_information::ApiVersion) -> Value {
+    let mut m = Map::new();
+    m.insert("apiVersion".into(), match (&p.api_version) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("serviceVersion".into(), match (&p.service_version) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_api_information__api_health_status__from_json(v: &Value) -> Option<iface_api_information::ApiHealthStatus> {
+    let m = v.as_object()?;
+    Some(iface_api_information::ApiHealthStatus {
+        status: m.get("status").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    })
+}
+
+fn iface_api_information__api_version__from_json(v: &Value) -> Option<iface_api_information::ApiVersion> {
+    let m = v.as_object()?;
+    Some(iface_api_information::ApiVersion {
+        api_version: m.get("apiVersion").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        service_version: m.get("serviceVersion").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    })
+}
+
+fn iface_api_information__get_health__ok(body: String) -> Result<iface_api_information::ApiHealthStatus, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match iface_api_information__api_health_status__from_json(&v) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
     }
-    fn get_api_version() -> Result<String, String> {
-        dispatch(&OP_API_INFORMATION_GET_API_VERSION, Value::Object(Map::new()))
+}
+
+fn iface_api_information__get_health__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
+fn iface_api_information__get_api_version__ok(body: String) -> Result<iface_api_information::ApiVersion, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match iface_api_information__api_version__from_json(&v) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_api_information__get_api_version__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
+impl iface_api_information::Guest for crate::Component {
+    fn get_health() -> Result<iface_api_information::ApiHealthStatus, String> {
+        match dispatch(&OP_API_INFORMATION_GET_HEALTH, Value::Object(Map::new())).and_then(iface_api_information__get_health__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_api_information__get_health__err(e)),
+        }
+    }
+    fn get_api_version() -> Result<iface_api_information::ApiVersion, String> {
+        match dispatch(&OP_API_INFORMATION_GET_API_VERSION, Value::Object(Map::new())).and_then(iface_api_information__get_api_version__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_api_information__get_api_version__err(e)),
+        }
     }
 }
 use crate::exports::autostamp::here::location as iface_location;
@@ -318,19 +407,19 @@ const OP_LOCATION_POST_LOCATE: OpSpec = OpSpec {
     method: "POST",
     path_template: "/locate",
     fields: &[
-        FieldSpec { snake: "confidence", location: FieldLocation::Query },
-        FieldSpec { snake: "content_encoding", location: FieldLocation::Header },
-        FieldSpec { snake: "fallback", location: FieldLocation::Query },
-        FieldSpec { snake: "desired", location: FieldLocation::Query },
-        FieldSpec { snake: "x_request_id", location: FieldLocation::Header },
-        FieldSpec { snake: "required", location: FieldLocation::Query },
-        FieldSpec { snake: "cdma", location: FieldLocation::Body },
-        FieldSpec { snake: "client", location: FieldLocation::Body },
-        FieldSpec { snake: "gsm", location: FieldLocation::Body },
-        FieldSpec { snake: "lte", location: FieldLocation::Body },
-        FieldSpec { snake: "tdscdma", location: FieldLocation::Body },
-        FieldSpec { snake: "wcdma", location: FieldLocation::Body },
-        FieldSpec { snake: "wlan", location: FieldLocation::Body },
+        FieldSpec { snake: "confidence", wire: "confidence", location: FieldLocation::Query },
+        FieldSpec { snake: "content_encoding", wire: "Content-Encoding", location: FieldLocation::Header },
+        FieldSpec { snake: "fallback", wire: "fallback", location: FieldLocation::Query },
+        FieldSpec { snake: "desired", wire: "desired", location: FieldLocation::Query },
+        FieldSpec { snake: "x_request_id", wire: "X-Request-ID", location: FieldLocation::Header },
+        FieldSpec { snake: "required", wire: "required", location: FieldLocation::Query },
+        FieldSpec { snake: "cdma", wire: "cdma", location: FieldLocation::Body },
+        FieldSpec { snake: "client", wire: "client", location: FieldLocation::Body },
+        FieldSpec { snake: "gsm", wire: "gsm", location: FieldLocation::Body },
+        FieldSpec { snake: "lte", wire: "lte", location: FieldLocation::Body },
+        FieldSpec { snake: "tdscdma", wire: "tdscdma", location: FieldLocation::Body },
+        FieldSpec { snake: "wcdma", wire: "wcdma", location: FieldLocation::Body },
+        FieldSpec { snake: "wlan", wire: "wlan", location: FieldLocation::Body },
     ],
     auth: &[
         AuthApply { secret_key: "APIKey", kind: AuthKind::ApiKeyQuery("apiKey") },
@@ -359,13 +448,13 @@ fn iface_location__post_locate_desired_item_enum__to_str(e: &iface_location::Pos
 
 fn iface_location__cdma__to_json(p: &iface_location::Cdma) -> Value {
     let mut m = Map::new();
-    m.insert("base_lat".into(), match (&p.base_lat) { Some(v) => iface_location__base_lat__to_json(v), None => Value::Null });
-    m.insert("base_lng".into(), match (&p.base_lng) { Some(v) => iface_location__base_lng__to_json(v), None => Value::Null });
+    m.insert("baseLat".into(), match (&p.base_lat) { Some(v) => iface_location__base_lat__to_json(v), None => Value::Null });
+    m.insert("baseLng".into(), match (&p.base_lng) { Some(v) => iface_location__base_lng__to_json(v), None => Value::Null });
     m.insert("bsid".into(), iface_location__bsid__to_json(&p.bsid));
-    m.insert("local_id".into(), match (&p.local_id) { Some(v) => iface_location__cdma_local_id__to_json(v), None => Value::Null });
+    m.insert("localId".into(), match (&p.local_id) { Some(v) => iface_location__cdma_local_id__to_json(v), None => Value::Null });
     m.insert("nid".into(), iface_location__nid__to_json(&p.nid));
     m.insert("nmr".into(), match (&p.nmr) { Some(v) => iface_location__cdma_nmr_array__to_json(v), None => Value::Null });
-    m.insert("pilot_power".into(), match (&p.pilot_power) { Some(v) => iface_location__pilot_power__to_json(v), None => Value::Null });
+    m.insert("pilotPower".into(), match (&p.pilot_power) { Some(v) => iface_location__pilot_power__to_json(v), None => Value::Null });
     m.insert("rz".into(), match (&p.rz) { Some(v) => iface_location__registration_zone__to_json(v), None => Value::Null });
     m.insert("sid".into(), iface_location__sid__to_json(&p.sid));
     Value::Object(m)
@@ -392,7 +481,7 @@ fn iface_location__bsid__to_json(p: &iface_location::Bsid) -> Value {
 fn iface_location__cdma_local_id__to_json(p: &iface_location::CdmaLocalId) -> Value {
     let mut m = Map::new();
     m.insert("channel".into(), iface_location__channel__to_json(&p.channel));
-    m.insert("pn_offset".into(), iface_location__pn_offset__to_json(&p.pn_offset));
+    m.insert("pnOffset".into(), iface_location__pn_offset__to_json(&p.pn_offset));
     Value::Object(m)
 }
 
@@ -453,11 +542,11 @@ fn iface_location__gsm__to_json(p: &iface_location::Gsm) -> Value {
     let mut m = Map::new();
     m.insert("cid".into(), iface_location__geran_cid__to_json(&p.cid));
     m.insert("lac".into(), iface_location__lac__to_json(&p.lac));
-    m.insert("local_id".into(), match (&p.local_id) { Some(v) => iface_location__gsm_local_id__to_json(v), None => Value::Null });
+    m.insert("localId".into(), match (&p.local_id) { Some(v) => iface_location__gsm_local_id__to_json(v), None => Value::Null });
     m.insert("mcc".into(), iface_location__mcc__to_json(&p.mcc));
     m.insert("mnc".into(), iface_location__mnc__to_json(&p.mnc));
     m.insert("nmr".into(), match (&p.nmr) { Some(v) => iface_location__gsm_nmr_array__to_json(v), None => Value::Null });
-    m.insert("rx_level".into(), match (&p.rx_level) { Some(v) => iface_location__rx_level__to_json(v), None => Value::Null });
+    m.insert("rxLevel".into(), match (&p.rx_level) { Some(v) => iface_location__rx_level__to_json(v), None => Value::Null });
     m.insert("ta".into(), match (&p.ta) { Some(v) => iface_location__gsm_timing_advance__to_json(v), None => Value::Null });
     Value::Object(m)
 }
@@ -526,7 +615,7 @@ fn iface_location__gsm_timing_advance__to_json(p: &iface_location::GsmTimingAdva
 fn iface_location__lte__to_json(p: &iface_location::Lte) -> Value {
     let mut m = Map::new();
     m.insert("cid".into(), iface_location__eutran_cid__to_json(&p.cid));
-    m.insert("local_id".into(), match (&p.local_id) { Some(v) => iface_location__lte_local_id__to_json(v), None => Value::Null });
+    m.insert("localId".into(), match (&p.local_id) { Some(v) => iface_location__lte_local_id__to_json(v), None => Value::Null });
     m.insert("mcc".into(), iface_location__mcc__to_json(&p.mcc));
     m.insert("mnc".into(), iface_location__mnc__to_json(&p.mnc));
     m.insert("nmr".into(), match (&p.nmr) { Some(v) => iface_location__lte_nmr_array__to_json(v), None => Value::Null });
@@ -596,7 +685,7 @@ fn iface_location__tdscdma__to_json(p: &iface_location::Tdscdma) -> Value {
     let mut m = Map::new();
     m.insert("cid".into(), iface_location__utran_cid__to_json(&p.cid));
     m.insert("lac".into(), match (&p.lac) { Some(v) => iface_location__lac__to_json(v), None => Value::Null });
-    m.insert("local_id".into(), match (&p.local_id) { Some(v) => iface_location__tdscdma_local_id__to_json(v), None => Value::Null });
+    m.insert("localId".into(), match (&p.local_id) { Some(v) => iface_location__tdscdma_local_id__to_json(v), None => Value::Null });
     m.insert("mcc".into(), iface_location__mcc__to_json(&p.mcc));
     m.insert("mnc".into(), iface_location__mnc__to_json(&p.mnc));
     m.insert("nmr".into(), match (&p.nmr) { Some(v) => iface_location__tdscdma_nmr_array__to_json(v), None => Value::Null });
@@ -614,7 +703,7 @@ fn iface_location__utran_cid__to_json(p: &iface_location::UtranCid) -> Value {
 
 fn iface_location__tdscdma_local_id__to_json(p: &iface_location::TdscdmaLocalId) -> Value {
     let mut m = Map::new();
-    m.insert("cell_params".into(), iface_location__cell_params__to_json(&p.cell_params));
+    m.insert("cellParams".into(), iface_location__cell_params__to_json(&p.cell_params));
     m.insert("uarfcn".into(), iface_location__uarfcn__to_json(&p.uarfcn));
     Value::Object(m)
 }
@@ -659,7 +748,7 @@ fn iface_location__wcdma__to_json(p: &iface_location::Wcdma) -> Value {
     let mut m = Map::new();
     m.insert("cid".into(), iface_location__utran_cid__to_json(&p.cid));
     m.insert("lac".into(), match (&p.lac) { Some(v) => iface_location__lac__to_json(v), None => Value::Null });
-    m.insert("local_id".into(), match (&p.local_id) { Some(v) => iface_location__wcdma_local_id__to_json(v), None => Value::Null });
+    m.insert("localId".into(), match (&p.local_id) { Some(v) => iface_location__wcdma_local_id__to_json(v), None => Value::Null });
     m.insert("mcc".into(), iface_location__mcc__to_json(&p.mcc));
     m.insert("mnc".into(), iface_location__mnc__to_json(&p.mnc));
     m.insert("nmr".into(), match (&p.nmr) { Some(v) => iface_location__wcdma_nmr_array__to_json(v), None => Value::Null });
@@ -706,6 +795,34 @@ fn iface_location__rss__to_json(p: &iface_location::Rss) -> Value {
     Value::Object(m)
 }
 
+fn iface_location__post_locate_response__to_json(p: &iface_location::PostLocateResponse) -> Value {
+    let mut m = Map::new();
+    m.insert("location".into(), iface_location__position_locate__to_json(&p.location));
+    Value::Object(m)
+}
+
+fn iface_location__position_locate__to_json(p: &iface_location::PositionLocate) -> Value {
+    let mut m = Map::new();
+    m.insert("accuracy".into(), serde_json::Number::from_f64(*(&p.accuracy)).map(Value::Number).unwrap_or(Value::Null));
+    m.insert("alt".into(), match (&p.alt) { Some(v) => serde_json::Number::from_f64(*(v)).map(Value::Number).unwrap_or(Value::Null), None => Value::Null });
+    m.insert("altAccuracy".into(), match (&p.alt_accuracy) { Some(v) => serde_json::Number::from_f64(*(v)).map(Value::Number).unwrap_or(Value::Null), None => Value::Null });
+    m.insert("lat".into(), iface_location__latitude__to_json(&p.lat));
+    m.insert("lng".into(), iface_location__longitude__to_json(&p.lng));
+    Value::Object(m)
+}
+
+fn iface_location__latitude__to_json(p: &iface_location::Latitude) -> Value {
+    let mut m = Map::new();
+    m.insert("value".into(), Value::String((&p.value).clone()));
+    Value::Object(m)
+}
+
+fn iface_location__longitude__to_json(p: &iface_location::Longitude) -> Value {
+    let mut m = Map::new();
+    m.insert("value".into(), Value::String((&p.value).clone()));
+    Value::Object(m)
+}
+
 fn iface_location__post_locate_params__to_json(p: &iface_location::PostLocateParams) -> Value {
     let mut m = Map::new();
     m.insert("confidence".into(), match (&p.confidence) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
@@ -724,10 +841,75 @@ fn iface_location__post_locate_params__to_json(p: &iface_location::PostLocatePar
     Value::Object(m)
 }
 
+fn iface_location__post_locate_response__from_json(v: &Value) -> Option<iface_location::PostLocateResponse> {
+    let m = v.as_object()?;
+    Some(iface_location::PostLocateResponse {
+        location: match m.get("location").and_then(|v| iface_location__position_locate__from_json(v)) { Some(x) => x, None => return None },
+    })
+}
+
+fn iface_location__position_locate__from_json(v: &Value) -> Option<iface_location::PositionLocate> {
+    let m = v.as_object()?;
+    Some(iface_location::PositionLocate {
+        accuracy: m.get("accuracy").and_then(|v| (v).as_f64()).unwrap_or_default(),
+        alt: m.get("alt").filter(|v| !v.is_null()).and_then(|v| (v).as_f64()),
+        alt_accuracy: m.get("altAccuracy").filter(|v| !v.is_null()).and_then(|v| (v).as_f64()),
+        lat: match m.get("lat").and_then(|v| iface_location__latitude__from_json(v)) { Some(x) => x, None => return None },
+        lng: match m.get("lng").and_then(|v| iface_location__longitude__from_json(v)) { Some(x) => x, None => return None },
+    })
+}
+
+fn iface_location__latitude__from_json(v: &Value) -> Option<iface_location::Latitude> {
+    let m = v.as_object()?;
+    Some(iface_location::Latitude {
+        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+    })
+}
+
+fn iface_location__longitude__from_json(v: &Value) -> Option<iface_location::Longitude> {
+    let m = v.as_object()?;
+    Some(iface_location::Longitude {
+        value: m.get("value").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+    })
+}
+
+fn iface_location__post_locate__ok(body: String) -> Result<iface_location::PostLocateResponse, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match iface_location__post_locate_response__from_json(&v) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_location__post_locate__err(e: crate::runtime::DispatchError) -> iface_location::PostLocateError {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => match status {
+            400u16 => iface_location::PostLocateError::BadRequest(body),
+            401u16 => iface_location::PostLocateError::Unauthorized(body),
+            403u16 => iface_location::PostLocateError::Forbidden(body),
+            404u16 => iface_location::PostLocateError::NotFound(body),
+            405u16 => iface_location::PostLocateError::MethodNotAllowed(body),
+            413u16 => iface_location::PostLocateError::PayloadTooLarge(body),
+            414u16 => iface_location::PostLocateError::UriTooLong(body),
+            415u16 => iface_location::PostLocateError::UnsupportedMediaType(body),
+            500u16 => iface_location::PostLocateError::InternalServerError(body),
+            503u16 => iface_location::PostLocateError::ServiceUnavailable(body),
+            _ => iface_location::PostLocateError::Other(body),
+        },
+        crate::runtime::DispatchError::Transport(m) => iface_location::PostLocateError::Other(m),
+    }
+}
+
 impl iface_location::Guest for crate::Component {
-    fn post_locate(params: iface_location::PostLocateParams) -> Result<String, String> {
+    fn post_locate(params: iface_location::PostLocateParams) -> Result<iface_location::PostLocateResponse, iface_location::PostLocateError> {
         let json = iface_location__post_locate_params__to_json(&params);
-        dispatch(&OP_LOCATION_POST_LOCATE, json)
+        match dispatch(&OP_LOCATION_POST_LOCATE, json).and_then(iface_location__post_locate__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_location__post_locate__err(e)),
+        }
     }
 }
 

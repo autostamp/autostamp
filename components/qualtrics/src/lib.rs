@@ -44,10 +44,15 @@ pub(crate) enum FieldLocation {
     Body,
 }
 
-/// A single operation parameter: the snake-case key it carries in the params JSON and where
-/// it belongs in the request.
+/// A single operation parameter. `snake` keys the field in the internal params JSON (and, for a
+/// path field, matches the `{snake}` placeholder in the path template); `wire` is the verbatim name
+/// the field takes on the HTTP wire (query key, header name, or body property). The two differ
+/// whenever the source name isn't already snake_case (e.g. `dryRun` → snake `dry_run`, wire
+/// `dryRun`), and let distinct inputs that share a snake key (`DateCreated`, `DateCreated<`) still
+/// travel under their true names.
 pub(crate) struct FieldSpec {
     pub(crate) snake: &'static str,
+    pub(crate) wire: &'static str,
     pub(crate) location: FieldLocation,
 }
 
@@ -71,6 +76,16 @@ pub(crate) struct AuthApply {
     pub(crate) kind: AuthKind,
 }
 
+/// The failure modes of [`dispatch`], kept structured so each generated operation can map them
+/// onto its own typed error: an `Http` failure carries the response status and body (routed to
+/// the matching error-variant case), while a `Transport` failure carries a message for the
+/// catch-all case (a secret lookup, connection, or decode failure that never produced an HTTP
+/// status).
+pub(crate) enum DispatchError {
+    Http { status: u16, body: String },
+    Transport(String),
+}
+
 /// A single API operation: HTTP method, path template (with `{snake}` placeholders), the
 /// parameter fields, and the security schemes to apply.
 pub(crate) struct OpSpec {
@@ -81,8 +96,9 @@ pub(crate) struct OpSpec {
 }
 
 /// Execute `op` with the supplied `params` (a JSON object keyed by snake-case field names)
-/// and return the response body as a string, or an error message.
-pub(crate) fn dispatch(op: &OpSpec, params: Value) -> Result<String, String> {
+/// and return the raw 2xx response body, or a structured [`DispatchError`] the caller maps
+/// onto the operation's typed error.
+pub(crate) fn dispatch(op: &OpSpec, params: Value) -> Result<String, DispatchError> {
     let obj = match &params {
         Value::Object(map) => Some(map),
         _ => None,
@@ -105,10 +121,10 @@ pub(crate) fn dispatch(op: &OpSpec, params: Value) -> Result<String, String> {
                 let placeholder = format!("{{{}}}", field.snake);
                 path = path.replace(&placeholder, &percent_encode(&scalar(value)));
             }
-            FieldLocation::Query => query.push((field.snake.to_string(), scalar(value))),
-            FieldLocation::Header => headers.push((field.snake.to_string(), scalar(value))),
+            FieldLocation::Query => query.push((field.wire.to_string(), scalar(value))),
+            FieldLocation::Header => headers.push((field.wire.to_string(), scalar(value))),
             FieldLocation::Body => {
-                body.insert(field.snake.to_string(), value.clone());
+                body.insert(field.wire.to_string(), value.clone());
             }
         }
     }
@@ -116,7 +132,7 @@ pub(crate) fn dispatch(op: &OpSpec, params: Value) -> Result<String, String> {
     // Apply each resolved security scheme, sourcing its value from wasmcloud:secrets.
     let mut cookies: Vec<String> = Vec::new();
     for apply in op.auth {
-        let secret = fetch_secret(apply.secret_key)?;
+        let secret = fetch_secret(apply.secret_key).map_err(DispatchError::Transport)?;
         match &apply.kind {
             AuthKind::Bearer => headers.push(("authorization".into(), format!("Bearer {secret}"))),
             AuthKind::Basic => {
@@ -177,17 +193,18 @@ fn fetch_secret(key: &str) -> Result<String, String> {
 }
 
 /// Build and send the outgoing request with `wstd`, returning the response body on a 2xx
-/// status. The generated guest exports are synchronous, so the async `wstd` client is driven
-/// to completion on a local reactor via `wstd::runtime::block_on`.
+/// status and a structured [`DispatchError`] otherwise. The generated guest exports are
+/// synchronous, so the async `wstd` client is driven to completion on a local reactor via
+/// `wstd::runtime::block_on`.
 fn perform(
     method: &str,
     path_with_query: &str,
     headers: &[(String, String)],
     body: &[u8],
-) -> Result<String, String> {
+) -> Result<String, DispatchError> {
     let url = join_url(crate::BASE_URL, path_with_query);
     let method = Method::from_bytes(method.as_bytes())
-        .map_err(|err| format!("invalid HTTP method `{method}`: {err}"))?;
+        .map_err(|err| DispatchError::Transport(format!("invalid HTTP method `{method}`: {err}")))?;
 
     let mut builder = Request::builder().method(method).uri(url);
     for (name, value) in headers {
@@ -199,27 +216,29 @@ fn perform(
         } else {
             Body::from(body.to_vec())
         })
-        .map_err(|err| format!("failed to build request: {err}"))?;
+        .map_err(|err| DispatchError::Transport(format!("failed to build request: {err}")))?;
 
     wstd::runtime::block_on(async move {
         let client = Client::new();
         let response = client
             .send(request)
             .await
-            .map_err(|err| format!("request failed: {err:#}"))?;
+            .map_err(|err| DispatchError::Transport(format!("request failed: {err:#}")))?;
 
         let status = response.status().as_u16();
         let mut response_body = response.into_body();
-        let bytes = response_body
-            .contents()
-            .await
-            .map_err(|err| format!("failed to read response body: {err:#}"))?;
+        let bytes = response_body.contents().await.map_err(|err| {
+            DispatchError::Transport(format!("failed to read response body: {err:#}"))
+        })?;
         let body_text = String::from_utf8_lossy(bytes).into_owned();
 
         if (200..300).contains(&status) {
             Ok(body_text)
         } else {
-            Err(format!("HTTP {status}: {body_text}"))
+            Err(DispatchError::Http {
+                status,
+                body: body_text,
+            })
         }
     })
 }
@@ -288,12 +307,12 @@ const OP_DIRECTORIES_CREATE_CONTACT_IN_MAILINGLIST: OpSpec = OpSpec {
     method: "POST",
     path_template: "/directories/{directory_id}/mailinglists/{mailing_list_id}/contacts",
     fields: &[
-        FieldSpec { snake: "directory_id", location: FieldLocation::Path },
-        FieldSpec { snake: "mailing_list_id", location: FieldLocation::Path },
-        FieldSpec { snake: "email", location: FieldLocation::Body },
-        FieldSpec { snake: "first_name", location: FieldLocation::Body },
-        FieldSpec { snake: "last_name", location: FieldLocation::Body },
-        FieldSpec { snake: "unsubscribed", location: FieldLocation::Body },
+        FieldSpec { snake: "directory_id", wire: "DirectoryId", location: FieldLocation::Path },
+        FieldSpec { snake: "mailing_list_id", wire: "MailingListId", location: FieldLocation::Path },
+        FieldSpec { snake: "email", wire: "email", location: FieldLocation::Body },
+        FieldSpec { snake: "first_name", wire: "firstName", location: FieldLocation::Body },
+        FieldSpec { snake: "last_name", wire: "lastName", location: FieldLocation::Body },
+        FieldSpec { snake: "unsubscribed", wire: "unsubscribed", location: FieldLocation::Body },
     ],
     auth: &[
     ],
@@ -310,10 +329,24 @@ fn iface_directories__create_contact_in_mailinglist_params__to_json(p: &iface_di
     Value::Object(m)
 }
 
+fn iface_directories__create_contact_in_mailinglist__ok(body: String) -> Result<String, crate::runtime::DispatchError> {
+    Ok(body)
+}
+
+fn iface_directories__create_contact_in_mailinglist__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
 impl iface_directories::Guest for crate::Component {
     fn create_contact_in_mailinglist(params: iface_directories::CreateContactInMailinglistParams) -> Result<String, String> {
         let json = iface_directories__create_contact_in_mailinglist_params__to_json(&params);
-        dispatch(&OP_DIRECTORIES_CREATE_CONTACT_IN_MAILINGLIST, json)
+        match dispatch(&OP_DIRECTORIES_CREATE_CONTACT_IN_MAILINGLIST, json).and_then(iface_directories__create_contact_in_mailinglist__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_directories__create_contact_in_mailinglist__err(e)),
+        }
     }
 }
 use crate::exports::autostamp::qualtrics::distributions as iface_distributions;
@@ -322,7 +355,7 @@ const OP_DISTRIBUTIONS_GET_DISTRIBUTIONS: OpSpec = OpSpec {
     method: "GET",
     path_template: "/distributions",
     fields: &[
-        FieldSpec { snake: "survey_id", location: FieldLocation::Query },
+        FieldSpec { snake: "survey_id", wire: "surveyId", location: FieldLocation::Query },
     ],
     auth: &[
     ],
@@ -332,12 +365,12 @@ const OP_DISTRIBUTIONS_GENERATE_DISTRIBUTION_LINKS: OpSpec = OpSpec {
     method: "POST",
     path_template: "/distributions",
     fields: &[
-        FieldSpec { snake: "action", location: FieldLocation::Body },
-        FieldSpec { snake: "description", location: FieldLocation::Body },
-        FieldSpec { snake: "expiration_date", location: FieldLocation::Body },
-        FieldSpec { snake: "link_type", location: FieldLocation::Body },
-        FieldSpec { snake: "mailing_list_id", location: FieldLocation::Body },
-        FieldSpec { snake: "survey_id", location: FieldLocation::Body },
+        FieldSpec { snake: "action", wire: "action", location: FieldLocation::Body },
+        FieldSpec { snake: "description", wire: "description", location: FieldLocation::Body },
+        FieldSpec { snake: "expiration_date", wire: "expirationDate", location: FieldLocation::Body },
+        FieldSpec { snake: "link_type", wire: "linkType", location: FieldLocation::Body },
+        FieldSpec { snake: "mailing_list_id", wire: "mailingListId", location: FieldLocation::Body },
+        FieldSpec { snake: "survey_id", wire: "surveyId", location: FieldLocation::Body },
     ],
     auth: &[
     ],
@@ -347,12 +380,144 @@ const OP_DISTRIBUTIONS_RETRIEVEDISTRIBUTIONLINKS: OpSpec = OpSpec {
     method: "GET",
     path_template: "/distributions/{distribution_id}/links",
     fields: &[
-        FieldSpec { snake: "survey_id", location: FieldLocation::Query },
-        FieldSpec { snake: "distribution_id", location: FieldLocation::Path },
+        FieldSpec { snake: "survey_id", wire: "surveyId", location: FieldLocation::Query },
+        FieldSpec { snake: "distribution_id", wire: "DistributionId", location: FieldLocation::Path },
     ],
     auth: &[
     ],
 };
+
+fn iface_distributions__response__to_json(p: &iface_distributions::Response) -> Value {
+    let mut m = Map::new();
+    m.insert("meta".into(), match (&p.meta) { Some(v) => iface_distributions__response_meta__to_json(v), None => Value::Null });
+    m.insert("result".into(), match (&p.result_op) { Some(v) => iface_distributions__response_result_op__to_json(v), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_distributions__response_meta__to_json(p: &iface_distributions::ResponseMeta) -> Value {
+    let mut m = Map::new();
+    m.insert("httpStatus".into(), match (&p.http_status) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("requestId".into(), match (&p.request_id) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_distributions__response_result_op__to_json(p: &iface_distributions::ResponseResultOp) -> Value {
+    let mut m = Map::new();
+    m.insert("elements".into(), match (&p.elements) { Some(v) => Value::Array((v).iter().map(|v| iface_distributions__response_result_op_elements_item__to_json(v)).collect()), None => Value::Null });
+    m.insert("nextPage".into(), match (&p.next_page) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_distributions__response_result_op_elements_item__to_json(p: &iface_distributions::ResponseResultOpElementsItem) -> Value {
+    let mut m = Map::new();
+    m.insert("createdDate".into(), Value::String((&p.created_date).clone()));
+    m.insert("customHeaders".into(), iface_distributions__response_result_op_elements_item_custom_headers__to_json(&p.custom_headers));
+    m.insert("embeddedData".into(), Value::String((&p.embedded_data).clone()));
+    m.insert("headers".into(), iface_distributions__response_result_op_elements_item_headers__to_json(&p.headers));
+    m.insert("id".into(), Value::String((&p.id).clone()));
+    m.insert("message".into(), iface_distributions__response_result_op_elements_item_message__to_json(&p.message));
+    m.insert("modifiedDate".into(), Value::String((&p.modified_date).clone()));
+    m.insert("organizationId".into(), Value::String((&p.organization_id).clone()));
+    m.insert("ownerId".into(), Value::String((&p.owner_id).clone()));
+    m.insert("parentDistributionId".into(), Value::String((&p.parent_distribution_id).clone()));
+    m.insert("recipients".into(), iface_distributions__response_result_op_elements_item_recipients__to_json(&p.recipients));
+    m.insert("requestStatus".into(), Value::String((&p.request_status).clone()));
+    m.insert("requestType".into(), Value::String((&p.request_type).clone()));
+    m.insert("sendDate".into(), Value::String((&p.send_date).clone()));
+    m.insert("stats".into(), iface_distributions__response_result_op_elements_item_stats__to_json(&p.stats));
+    m.insert("surveyLink".into(), iface_distributions__response_result_op_elements_item_survey_link__to_json(&p.survey_link));
+    Value::Object(m)
+}
+
+fn iface_distributions__response_result_op_elements_item_custom_headers__to_json(p: &iface_distributions::ResponseResultOpElementsItemCustomHeaders) -> Value {
+    let mut m = Map::new();
+    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_distributions__response_result_op_elements_item_headers__to_json(p: &iface_distributions::ResponseResultOpElementsItemHeaders) -> Value {
+    let mut m = Map::new();
+    m.insert("fromEmail".into(), match (&p.from_email) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("fromName".into(), match (&p.from_name) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("replyToEmail".into(), match (&p.reply_to_email) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_distributions__response_result_op_elements_item_message__to_json(p: &iface_distributions::ResponseResultOpElementsItemMessage) -> Value {
+    let mut m = Map::new();
+    m.insert("libraryId".into(), match (&p.library_id) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("messageId".into(), match (&p.message_id) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("messageText".into(), match (&p.message_text) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_distributions__response_result_op_elements_item_recipients__to_json(p: &iface_distributions::ResponseResultOpElementsItemRecipients) -> Value {
+    let mut m = Map::new();
+    m.insert("contactId".into(), match (&p.contact_id) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("libraryId".into(), match (&p.library_id) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("mailingListId".into(), match (&p.mailing_list_id) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("sampleId".into(), match (&p.sample_id) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_distributions__response_result_op_elements_item_stats__to_json(p: &iface_distributions::ResponseResultOpElementsItemStats) -> Value {
+    let mut m = Map::new();
+    m.insert("blocked".into(), match (&p.blocked) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("bounced".into(), match (&p.bounced) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("complaints".into(), match (&p.complaints) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("failed".into(), match (&p.failed) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("finished".into(), match (&p.finished) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("opened".into(), match (&p.opened) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("sent".into(), match (&p.sent) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("skipped".into(), match (&p.skipped) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    m.insert("started".into(), match (&p.started) { Some(v) => Value::Number(serde_json::Number::from(*(v))), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_distributions__response_result_op_elements_item_survey_link__to_json(p: &iface_distributions::ResponseResultOpElementsItemSurveyLink) -> Value {
+    let mut m = Map::new();
+    m.insert("expirationDate".into(), match (&p.expiration_date) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("linkType".into(), match (&p.link_type) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("surveyId".into(), match (&p.survey_id) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_distributions__retrieve_distribution_links_response__to_json(p: &iface_distributions::RetrieveDistributionLinksResponse) -> Value {
+    let mut m = Map::new();
+    m.insert("meta".into(), match (&p.meta) { Some(v) => iface_distributions__retrieve_distribution_links_response_meta__to_json(v), None => Value::Null });
+    m.insert("result".into(), match (&p.result_op) { Some(v) => iface_distributions__retrieve_distribution_links_response_result_op__to_json(v), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_distributions__retrieve_distribution_links_response_meta__to_json(p: &iface_distributions::RetrieveDistributionLinksResponseMeta) -> Value {
+    let mut m = Map::new();
+    m.insert("httpStatus".into(), match (&p.http_status) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("requestId".into(), match (&p.request_id) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_distributions__retrieve_distribution_links_response_result_op__to_json(p: &iface_distributions::RetrieveDistributionLinksResponseResultOp) -> Value {
+    let mut m = Map::new();
+    m.insert("elements".into(), match (&p.elements) { Some(v) => Value::Array((v).iter().map(|v| iface_distributions__retrieve_distribution_links_response_result_op_elements_item__to_json(v)).collect()), None => Value::Null });
+    m.insert("nextPage".into(), match (&p.next_page) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_distributions__retrieve_distribution_links_response_result_op_elements_item__to_json(p: &iface_distributions::RetrieveDistributionLinksResponseResultOpElementsItem) -> Value {
+    let mut m = Map::new();
+    m.insert("contactId".into(), Value::String((&p.contact_id).clone()));
+    m.insert("email".into(), Value::String((&p.email).clone()));
+    m.insert("exceededContactFrequency".into(), Value::Bool(*(&p.exceeded_contact_frequency)));
+    m.insert("externalDataReference".into(), Value::String((&p.external_data_reference).clone()));
+    m.insert("firstName".into(), Value::String((&p.first_name).clone()));
+    m.insert("lastName".into(), Value::String((&p.last_name).clone()));
+    m.insert("link".into(), Value::String((&p.link).clone()));
+    m.insert("linkExpiration".into(), Value::String((&p.link_expiration).clone()));
+    m.insert("status".into(), Value::String((&p.status).clone()));
+    m.insert("transactionId".into(), Value::String((&p.transaction_id).clone()));
+    m.insert("unsubscribed".into(), Value::Bool(*(&p.unsubscribed)));
+    Value::Object(m)
+}
 
 fn iface_distributions__get_distributions_params__to_json(p: &iface_distributions::GetDistributionsParams) -> Value {
     let mut m = Map::new();
@@ -378,18 +543,220 @@ fn iface_distributions__retrievedistributionlinks_params__to_json(p: &iface_dist
     Value::Object(m)
 }
 
+fn iface_distributions__response__from_json(v: &Value) -> Option<iface_distributions::Response> {
+    let m = v.as_object()?;
+    Some(iface_distributions::Response {
+        meta: m.get("meta").filter(|v| !v.is_null()).and_then(|v| iface_distributions__response_meta__from_json(v)),
+        result_op: m.get("result").filter(|v| !v.is_null()).and_then(|v| iface_distributions__response_result_op__from_json(v)),
+    })
+}
+
+fn iface_distributions__response_meta__from_json(v: &Value) -> Option<iface_distributions::ResponseMeta> {
+    let m = v.as_object()?;
+    Some(iface_distributions::ResponseMeta {
+        http_status: m.get("httpStatus").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        request_id: m.get("requestId").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    })
+}
+
+fn iface_distributions__response_result_op__from_json(v: &Value) -> Option<iface_distributions::ResponseResultOp> {
+    let m = v.as_object()?;
+    Some(iface_distributions::ResponseResultOp {
+        elements: m.get("elements").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| iface_distributions__response_result_op_elements_item__from_json(x)).collect())),
+        next_page: m.get("nextPage").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    })
+}
+
+fn iface_distributions__response_result_op_elements_item__from_json(v: &Value) -> Option<iface_distributions::ResponseResultOpElementsItem> {
+    let m = v.as_object()?;
+    Some(iface_distributions::ResponseResultOpElementsItem {
+        created_date: m.get("createdDate").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        custom_headers: match m.get("customHeaders").and_then(|v| iface_distributions__response_result_op_elements_item_custom_headers__from_json(v)) { Some(x) => x, None => return None },
+        embedded_data: m.get("embeddedData").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        headers: match m.get("headers").and_then(|v| iface_distributions__response_result_op_elements_item_headers__from_json(v)) { Some(x) => x, None => return None },
+        id: m.get("id").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        message: match m.get("message").and_then(|v| iface_distributions__response_result_op_elements_item_message__from_json(v)) { Some(x) => x, None => return None },
+        modified_date: m.get("modifiedDate").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        organization_id: m.get("organizationId").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        owner_id: m.get("ownerId").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        parent_distribution_id: m.get("parentDistributionId").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        recipients: match m.get("recipients").and_then(|v| iface_distributions__response_result_op_elements_item_recipients__from_json(v)) { Some(x) => x, None => return None },
+        request_status: m.get("requestStatus").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        request_type: m.get("requestType").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        send_date: m.get("sendDate").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        stats: match m.get("stats").and_then(|v| iface_distributions__response_result_op_elements_item_stats__from_json(v)) { Some(x) => x, None => return None },
+        survey_link: match m.get("surveyLink").and_then(|v| iface_distributions__response_result_op_elements_item_survey_link__from_json(v)) { Some(x) => x, None => return None },
+    })
+}
+
+fn iface_distributions__response_result_op_elements_item_custom_headers__from_json(v: &Value) -> Option<iface_distributions::ResponseResultOpElementsItemCustomHeaders> {
+    let m = v.as_object()?;
+    Some(iface_distributions::ResponseResultOpElementsItemCustomHeaders {
+        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    })
+}
+
+fn iface_distributions__response_result_op_elements_item_headers__from_json(v: &Value) -> Option<iface_distributions::ResponseResultOpElementsItemHeaders> {
+    let m = v.as_object()?;
+    Some(iface_distributions::ResponseResultOpElementsItemHeaders {
+        from_email: m.get("fromEmail").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        from_name: m.get("fromName").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        reply_to_email: m.get("replyToEmail").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    })
+}
+
+fn iface_distributions__response_result_op_elements_item_message__from_json(v: &Value) -> Option<iface_distributions::ResponseResultOpElementsItemMessage> {
+    let m = v.as_object()?;
+    Some(iface_distributions::ResponseResultOpElementsItemMessage {
+        library_id: m.get("libraryId").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        message_id: m.get("messageId").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        message_text: m.get("messageText").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    })
+}
+
+fn iface_distributions__response_result_op_elements_item_recipients__from_json(v: &Value) -> Option<iface_distributions::ResponseResultOpElementsItemRecipients> {
+    let m = v.as_object()?;
+    Some(iface_distributions::ResponseResultOpElementsItemRecipients {
+        contact_id: m.get("contactId").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        library_id: m.get("libraryId").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        mailing_list_id: m.get("mailingListId").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        sample_id: m.get("sampleId").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    })
+}
+
+fn iface_distributions__response_result_op_elements_item_stats__from_json(v: &Value) -> Option<iface_distributions::ResponseResultOpElementsItemStats> {
+    let m = v.as_object()?;
+    Some(iface_distributions::ResponseResultOpElementsItemStats {
+        blocked: m.get("blocked").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        bounced: m.get("bounced").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        complaints: m.get("complaints").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        failed: m.get("failed").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        finished: m.get("finished").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        opened: m.get("opened").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        sent: m.get("sent").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        skipped: m.get("skipped").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+        started: m.get("started").filter(|v| !v.is_null()).and_then(|v| (v).as_i64().map(|n| n as i32)),
+    })
+}
+
+fn iface_distributions__response_result_op_elements_item_survey_link__from_json(v: &Value) -> Option<iface_distributions::ResponseResultOpElementsItemSurveyLink> {
+    let m = v.as_object()?;
+    Some(iface_distributions::ResponseResultOpElementsItemSurveyLink {
+        expiration_date: m.get("expirationDate").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        link_type: m.get("linkType").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        survey_id: m.get("surveyId").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    })
+}
+
+fn iface_distributions__retrieve_distribution_links_response__from_json(v: &Value) -> Option<iface_distributions::RetrieveDistributionLinksResponse> {
+    let m = v.as_object()?;
+    Some(iface_distributions::RetrieveDistributionLinksResponse {
+        meta: m.get("meta").filter(|v| !v.is_null()).and_then(|v| iface_distributions__retrieve_distribution_links_response_meta__from_json(v)),
+        result_op: m.get("result").filter(|v| !v.is_null()).and_then(|v| iface_distributions__retrieve_distribution_links_response_result_op__from_json(v)),
+    })
+}
+
+fn iface_distributions__retrieve_distribution_links_response_meta__from_json(v: &Value) -> Option<iface_distributions::RetrieveDistributionLinksResponseMeta> {
+    let m = v.as_object()?;
+    Some(iface_distributions::RetrieveDistributionLinksResponseMeta {
+        http_status: m.get("httpStatus").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        request_id: m.get("requestId").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    })
+}
+
+fn iface_distributions__retrieve_distribution_links_response_result_op__from_json(v: &Value) -> Option<iface_distributions::RetrieveDistributionLinksResponseResultOp> {
+    let m = v.as_object()?;
+    Some(iface_distributions::RetrieveDistributionLinksResponseResultOp {
+        elements: m.get("elements").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| iface_distributions__retrieve_distribution_links_response_result_op_elements_item__from_json(x)).collect())),
+        next_page: m.get("nextPage").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    })
+}
+
+fn iface_distributions__retrieve_distribution_links_response_result_op_elements_item__from_json(v: &Value) -> Option<iface_distributions::RetrieveDistributionLinksResponseResultOpElementsItem> {
+    let m = v.as_object()?;
+    Some(iface_distributions::RetrieveDistributionLinksResponseResultOpElementsItem {
+        contact_id: m.get("contactId").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        email: m.get("email").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        exceeded_contact_frequency: m.get("exceededContactFrequency").and_then(|v| (v).as_bool()).unwrap_or_default(),
+        external_data_reference: m.get("externalDataReference").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        first_name: m.get("firstName").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        last_name: m.get("lastName").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        link: m.get("link").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        link_expiration: m.get("linkExpiration").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        status: m.get("status").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        transaction_id: m.get("transactionId").and_then(|v| (v).as_str().map(|s| s.to_string())).unwrap_or_default(),
+        unsubscribed: m.get("unsubscribed").and_then(|v| (v).as_bool()).unwrap_or_default(),
+    })
+}
+
+fn iface_distributions__get_distributions__ok(body: String) -> Result<iface_distributions::Response, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match iface_distributions__response__from_json(&v) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_distributions__get_distributions__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
+fn iface_distributions__generate_distribution_links__ok(body: String) -> Result<String, crate::runtime::DispatchError> {
+    Ok(body)
+}
+
+fn iface_distributions__generate_distribution_links__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
+fn iface_distributions__retrievedistributionlinks__ok(body: String) -> Result<iface_distributions::RetrieveDistributionLinksResponse, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match iface_distributions__retrieve_distribution_links_response__from_json(&v) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_distributions__retrievedistributionlinks__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
 impl iface_distributions::Guest for crate::Component {
-    fn get_distributions(params: iface_distributions::GetDistributionsParams) -> Result<String, String> {
+    fn get_distributions(params: iface_distributions::GetDistributionsParams) -> Result<iface_distributions::Response, String> {
         let json = iface_distributions__get_distributions_params__to_json(&params);
-        dispatch(&OP_DISTRIBUTIONS_GET_DISTRIBUTIONS, json)
+        match dispatch(&OP_DISTRIBUTIONS_GET_DISTRIBUTIONS, json).and_then(iface_distributions__get_distributions__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_distributions__get_distributions__err(e)),
+        }
     }
     fn generate_distribution_links(params: iface_distributions::GenerateDistributionLinksParams) -> Result<String, String> {
         let json = iface_distributions__generate_distribution_links_params__to_json(&params);
-        dispatch(&OP_DISTRIBUTIONS_GENERATE_DISTRIBUTION_LINKS, json)
+        match dispatch(&OP_DISTRIBUTIONS_GENERATE_DISTRIBUTION_LINKS, json).and_then(iface_distributions__generate_distribution_links__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_distributions__generate_distribution_links__err(e)),
+        }
     }
-    fn retrievedistributionlinks(params: iface_distributions::RetrievedistributionlinksParams) -> Result<String, String> {
+    fn retrievedistributionlinks(params: iface_distributions::RetrievedistributionlinksParams) -> Result<iface_distributions::RetrieveDistributionLinksResponse, String> {
         let json = iface_distributions__retrievedistributionlinks_params__to_json(&params);
-        dispatch(&OP_DISTRIBUTIONS_RETRIEVEDISTRIBUTIONLINKS, json)
+        match dispatch(&OP_DISTRIBUTIONS_RETRIEVEDISTRIBUTIONLINKS, json).and_then(iface_distributions__retrievedistributionlinks__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_distributions__retrievedistributionlinks__err(e)),
+        }
     }
 }
 use crate::exports::autostamp::qualtrics::eventsubscriptions as iface_eventsubscriptions;
@@ -398,9 +765,9 @@ const OP_EVENTSUBSCRIPTIONS_WHEN_A_RESPONSE_IS_RECEIVED: OpSpec = OpSpec {
     method: "POST",
     path_template: "/eventsubscriptions/",
     fields: &[
-        FieldSpec { snake: "encrypt", location: FieldLocation::Body },
-        FieldSpec { snake: "publication_url", location: FieldLocation::Body },
-        FieldSpec { snake: "topics", location: FieldLocation::Body },
+        FieldSpec { snake: "encrypt", wire: "encrypt", location: FieldLocation::Body },
+        FieldSpec { snake: "publication_url", wire: "publicationUrl", location: FieldLocation::Body },
+        FieldSpec { snake: "topics", wire: "topics", location: FieldLocation::Body },
     ],
     auth: &[
     ],
@@ -410,9 +777,9 @@ const OP_EVENTSUBSCRIPTIONS_WEBHOOK_DELETE: OpSpec = OpSpec {
     method: "DELETE",
     path_template: "/eventsubscriptions/",
     fields: &[
-        FieldSpec { snake: "encrypt", location: FieldLocation::Body },
-        FieldSpec { snake: "publication_url", location: FieldLocation::Body },
-        FieldSpec { snake: "topics", location: FieldLocation::Body },
+        FieldSpec { snake: "encrypt", wire: "encrypt", location: FieldLocation::Body },
+        FieldSpec { snake: "publication_url", wire: "publicationUrl", location: FieldLocation::Body },
+        FieldSpec { snake: "topics", wire: "topics", location: FieldLocation::Body },
     ],
     auth: &[
     ],
@@ -422,11 +789,44 @@ const OP_EVENTSUBSCRIPTIONS_GET_EVENT_SUBSCRIPTIONS: OpSpec = OpSpec {
     method: "GET",
     path_template: "/eventsubscriptions/{subscription_id}",
     fields: &[
-        FieldSpec { snake: "subscription_id", location: FieldLocation::Path },
+        FieldSpec { snake: "subscription_id", wire: "SubscriptionId", location: FieldLocation::Path },
     ],
     auth: &[
     ],
 };
+
+fn iface_eventsubscriptions__event_subscriptions_response__to_json(p: &iface_eventsubscriptions::EventSubscriptionsResponse) -> Value {
+    let mut m = Map::new();
+    m.insert("meta".into(), match (&p.meta) { Some(v) => iface_eventsubscriptions__event_subscriptions_response_meta__to_json(v), None => Value::Null });
+    m.insert("result".into(), match (&p.result_op) { Some(v) => iface_eventsubscriptions__event_subscriptions_response_result_op__to_json(v), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_eventsubscriptions__event_subscriptions_response_meta__to_json(p: &iface_eventsubscriptions::EventSubscriptionsResponseMeta) -> Value {
+    let mut m = Map::new();
+    m.insert("httpStatus".into(), match (&p.http_status) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("requestId".into(), match (&p.request_id) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_eventsubscriptions__event_subscriptions_response_result_op__to_json(p: &iface_eventsubscriptions::EventSubscriptionsResponseResultOp) -> Value {
+    let mut m = Map::new();
+    m.insert("meta".into(), match (&p.meta) { Some(v) => iface_eventsubscriptions__event_subscriptions_response_result_op_meta__to_json(v), None => Value::Null });
+    m.insert("result".into(), match (&p.result_op) { Some(v) => iface_eventsubscriptions__event_subscriptions_response_result_op_result_op__to_json(v), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_eventsubscriptions__event_subscriptions_response_result_op_meta__to_json(p: &iface_eventsubscriptions::EventSubscriptionsResponseResultOpMeta) -> Value {
+    let mut m = Map::new();
+    m.insert("httpStatus".into(), match (&p.http_status) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_eventsubscriptions__event_subscriptions_response_result_op_result_op__to_json(p: &iface_eventsubscriptions::EventSubscriptionsResponseResultOpResultOp) -> Value {
+    let mut m = Map::new();
+    m.insert("id".into(), match (&p.id) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
 
 fn iface_eventsubscriptions__when_a_response_is_received_params__to_json(p: &iface_eventsubscriptions::WhenAResponseIsReceivedParams) -> Value {
     let mut m = Map::new();
@@ -450,18 +850,119 @@ fn iface_eventsubscriptions__get_event_subscriptions_params__to_json(p: &iface_e
     Value::Object(m)
 }
 
+fn iface_eventsubscriptions__event_subscriptions_response__from_json(v: &Value) -> Option<iface_eventsubscriptions::EventSubscriptionsResponse> {
+    let m = v.as_object()?;
+    Some(iface_eventsubscriptions::EventSubscriptionsResponse {
+        meta: m.get("meta").filter(|v| !v.is_null()).and_then(|v| iface_eventsubscriptions__event_subscriptions_response_meta__from_json(v)),
+        result_op: m.get("result").filter(|v| !v.is_null()).and_then(|v| iface_eventsubscriptions__event_subscriptions_response_result_op__from_json(v)),
+    })
+}
+
+fn iface_eventsubscriptions__event_subscriptions_response_meta__from_json(v: &Value) -> Option<iface_eventsubscriptions::EventSubscriptionsResponseMeta> {
+    let m = v.as_object()?;
+    Some(iface_eventsubscriptions::EventSubscriptionsResponseMeta {
+        http_status: m.get("httpStatus").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        request_id: m.get("requestId").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    })
+}
+
+fn iface_eventsubscriptions__event_subscriptions_response_result_op__from_json(v: &Value) -> Option<iface_eventsubscriptions::EventSubscriptionsResponseResultOp> {
+    let m = v.as_object()?;
+    Some(iface_eventsubscriptions::EventSubscriptionsResponseResultOp {
+        meta: m.get("meta").filter(|v| !v.is_null()).and_then(|v| iface_eventsubscriptions__event_subscriptions_response_result_op_meta__from_json(v)),
+        result_op: m.get("result").filter(|v| !v.is_null()).and_then(|v| iface_eventsubscriptions__event_subscriptions_response_result_op_result_op__from_json(v)),
+    })
+}
+
+fn iface_eventsubscriptions__event_subscriptions_response_result_op_meta__from_json(v: &Value) -> Option<iface_eventsubscriptions::EventSubscriptionsResponseResultOpMeta> {
+    let m = v.as_object()?;
+    Some(iface_eventsubscriptions::EventSubscriptionsResponseResultOpMeta {
+        http_status: m.get("httpStatus").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    })
+}
+
+fn iface_eventsubscriptions__event_subscriptions_response_result_op_result_op__from_json(v: &Value) -> Option<iface_eventsubscriptions::EventSubscriptionsResponseResultOpResultOp> {
+    let m = v.as_object()?;
+    Some(iface_eventsubscriptions::EventSubscriptionsResponseResultOpResultOp {
+        id: m.get("id").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    })
+}
+
+fn iface_eventsubscriptions__when_a_response_is_received__ok(body: String) -> Result<iface_eventsubscriptions::EventSubscriptionsResponse, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match iface_eventsubscriptions__event_subscriptions_response__from_json(&v) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_eventsubscriptions__when_a_response_is_received__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
+fn iface_eventsubscriptions__webhook_delete__ok(body: String) -> Result<iface_eventsubscriptions::EventSubscriptionsResponse, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match iface_eventsubscriptions__event_subscriptions_response__from_json(&v) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_eventsubscriptions__webhook_delete__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
+fn iface_eventsubscriptions__get_event_subscriptions__ok(body: String) -> Result<iface_eventsubscriptions::EventSubscriptionsResponse, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match iface_eventsubscriptions__event_subscriptions_response__from_json(&v) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_eventsubscriptions__get_event_subscriptions__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
 impl iface_eventsubscriptions::Guest for crate::Component {
-    fn when_a_response_is_received(params: iface_eventsubscriptions::WhenAResponseIsReceivedParams) -> Result<String, String> {
+    fn when_a_response_is_received(params: iface_eventsubscriptions::WhenAResponseIsReceivedParams) -> Result<iface_eventsubscriptions::EventSubscriptionsResponse, String> {
         let json = iface_eventsubscriptions__when_a_response_is_received_params__to_json(&params);
-        dispatch(&OP_EVENTSUBSCRIPTIONS_WHEN_A_RESPONSE_IS_RECEIVED, json)
+        match dispatch(&OP_EVENTSUBSCRIPTIONS_WHEN_A_RESPONSE_IS_RECEIVED, json).and_then(iface_eventsubscriptions__when_a_response_is_received__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_eventsubscriptions__when_a_response_is_received__err(e)),
+        }
     }
-    fn webhook_delete(params: iface_eventsubscriptions::WebhookDeleteParams) -> Result<String, String> {
+    fn webhook_delete(params: iface_eventsubscriptions::WebhookDeleteParams) -> Result<iface_eventsubscriptions::EventSubscriptionsResponse, String> {
         let json = iface_eventsubscriptions__webhook_delete_params__to_json(&params);
-        dispatch(&OP_EVENTSUBSCRIPTIONS_WEBHOOK_DELETE, json)
+        match dispatch(&OP_EVENTSUBSCRIPTIONS_WEBHOOK_DELETE, json).and_then(iface_eventsubscriptions__webhook_delete__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_eventsubscriptions__webhook_delete__err(e)),
+        }
     }
-    fn get_event_subscriptions(params: iface_eventsubscriptions::GetEventSubscriptionsParams) -> Result<String, String> {
+    fn get_event_subscriptions(params: iface_eventsubscriptions::GetEventSubscriptionsParams) -> Result<iface_eventsubscriptions::EventSubscriptionsResponse, String> {
         let json = iface_eventsubscriptions__get_event_subscriptions_params__to_json(&params);
-        dispatch(&OP_EVENTSUBSCRIPTIONS_GET_EVENT_SUBSCRIPTIONS, json)
+        match dispatch(&OP_EVENTSUBSCRIPTIONS_GET_EVENT_SUBSCRIPTIONS, json).and_then(iface_eventsubscriptions__get_event_subscriptions__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_eventsubscriptions__get_event_subscriptions__err(e)),
+        }
     }
 }
 use crate::exports::autostamp::qualtrics::survey_definitions as iface_survey_definitions;
@@ -470,11 +971,17 @@ const OP_SURVEY_DEFINITIONS_GET_SURVEY: OpSpec = OpSpec {
     method: "GET",
     path_template: "/survey-definitions/{survey_id}",
     fields: &[
-        FieldSpec { snake: "survey_id", location: FieldLocation::Path },
+        FieldSpec { snake: "survey_id", wire: "SurveyId", location: FieldLocation::Path },
     ],
     auth: &[
     ],
 };
+
+fn iface_survey_definitions__survey_response__to_json(p: &iface_survey_definitions::SurveyResponse) -> Value {
+    let mut m = Map::new();
+    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
 
 fn iface_survey_definitions__get_survey_params__to_json(p: &iface_survey_definitions::GetSurveyParams) -> Value {
     let mut m = Map::new();
@@ -482,10 +989,38 @@ fn iface_survey_definitions__get_survey_params__to_json(p: &iface_survey_definit
     Value::Object(m)
 }
 
+fn iface_survey_definitions__survey_response__from_json(v: &Value) -> Option<iface_survey_definitions::SurveyResponse> {
+    let m = v.as_object()?;
+    Some(iface_survey_definitions::SurveyResponse {
+        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    })
+}
+
+fn iface_survey_definitions__get_survey__ok(body: String) -> Result<iface_survey_definitions::SurveyResponse, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match iface_survey_definitions__survey_response__from_json(&v) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_survey_definitions__get_survey__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
 impl iface_survey_definitions::Guest for crate::Component {
-    fn get_survey(params: iface_survey_definitions::GetSurveyParams) -> Result<String, String> {
+    fn get_survey(params: iface_survey_definitions::GetSurveyParams) -> Result<iface_survey_definitions::SurveyResponse, String> {
         let json = iface_survey_definitions__get_survey_params__to_json(&params);
-        dispatch(&OP_SURVEY_DEFINITIONS_GET_SURVEY, json)
+        match dispatch(&OP_SURVEY_DEFINITIONS_GET_SURVEY, json).and_then(iface_survey_definitions__get_survey__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_survey_definitions__get_survey__err(e)),
+        }
     }
 }
 

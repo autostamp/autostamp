@@ -44,10 +44,15 @@ pub(crate) enum FieldLocation {
     Body,
 }
 
-/// A single operation parameter: the snake-case key it carries in the params JSON and where
-/// it belongs in the request.
+/// A single operation parameter. `snake` keys the field in the internal params JSON (and, for a
+/// path field, matches the `{snake}` placeholder in the path template); `wire` is the verbatim name
+/// the field takes on the HTTP wire (query key, header name, or body property). The two differ
+/// whenever the source name isn't already snake_case (e.g. `dryRun` → snake `dry_run`, wire
+/// `dryRun`), and let distinct inputs that share a snake key (`DateCreated`, `DateCreated<`) still
+/// travel under their true names.
 pub(crate) struct FieldSpec {
     pub(crate) snake: &'static str,
+    pub(crate) wire: &'static str,
     pub(crate) location: FieldLocation,
 }
 
@@ -71,6 +76,16 @@ pub(crate) struct AuthApply {
     pub(crate) kind: AuthKind,
 }
 
+/// The failure modes of [`dispatch`], kept structured so each generated operation can map them
+/// onto its own typed error: an `Http` failure carries the response status and body (routed to
+/// the matching error-variant case), while a `Transport` failure carries a message for the
+/// catch-all case (a secret lookup, connection, or decode failure that never produced an HTTP
+/// status).
+pub(crate) enum DispatchError {
+    Http { status: u16, body: String },
+    Transport(String),
+}
+
 /// A single API operation: HTTP method, path template (with `{snake}` placeholders), the
 /// parameter fields, and the security schemes to apply.
 pub(crate) struct OpSpec {
@@ -81,8 +96,9 @@ pub(crate) struct OpSpec {
 }
 
 /// Execute `op` with the supplied `params` (a JSON object keyed by snake-case field names)
-/// and return the response body as a string, or an error message.
-pub(crate) fn dispatch(op: &OpSpec, params: Value) -> Result<String, String> {
+/// and return the raw 2xx response body, or a structured [`DispatchError`] the caller maps
+/// onto the operation's typed error.
+pub(crate) fn dispatch(op: &OpSpec, params: Value) -> Result<String, DispatchError> {
     let obj = match &params {
         Value::Object(map) => Some(map),
         _ => None,
@@ -105,10 +121,10 @@ pub(crate) fn dispatch(op: &OpSpec, params: Value) -> Result<String, String> {
                 let placeholder = format!("{{{}}}", field.snake);
                 path = path.replace(&placeholder, &percent_encode(&scalar(value)));
             }
-            FieldLocation::Query => query.push((field.snake.to_string(), scalar(value))),
-            FieldLocation::Header => headers.push((field.snake.to_string(), scalar(value))),
+            FieldLocation::Query => query.push((field.wire.to_string(), scalar(value))),
+            FieldLocation::Header => headers.push((field.wire.to_string(), scalar(value))),
             FieldLocation::Body => {
-                body.insert(field.snake.to_string(), value.clone());
+                body.insert(field.wire.to_string(), value.clone());
             }
         }
     }
@@ -116,7 +132,7 @@ pub(crate) fn dispatch(op: &OpSpec, params: Value) -> Result<String, String> {
     // Apply each resolved security scheme, sourcing its value from wasmcloud:secrets.
     let mut cookies: Vec<String> = Vec::new();
     for apply in op.auth {
-        let secret = fetch_secret(apply.secret_key)?;
+        let secret = fetch_secret(apply.secret_key).map_err(DispatchError::Transport)?;
         match &apply.kind {
             AuthKind::Bearer => headers.push(("authorization".into(), format!("Bearer {secret}"))),
             AuthKind::Basic => {
@@ -177,17 +193,18 @@ fn fetch_secret(key: &str) -> Result<String, String> {
 }
 
 /// Build and send the outgoing request with `wstd`, returning the response body on a 2xx
-/// status. The generated guest exports are synchronous, so the async `wstd` client is driven
-/// to completion on a local reactor via `wstd::runtime::block_on`.
+/// status and a structured [`DispatchError`] otherwise. The generated guest exports are
+/// synchronous, so the async `wstd` client is driven to completion on a local reactor via
+/// `wstd::runtime::block_on`.
 fn perform(
     method: &str,
     path_with_query: &str,
     headers: &[(String, String)],
     body: &[u8],
-) -> Result<String, String> {
+) -> Result<String, DispatchError> {
     let url = join_url(crate::BASE_URL, path_with_query);
     let method = Method::from_bytes(method.as_bytes())
-        .map_err(|err| format!("invalid HTTP method `{method}`: {err}"))?;
+        .map_err(|err| DispatchError::Transport(format!("invalid HTTP method `{method}`: {err}")))?;
 
     let mut builder = Request::builder().method(method).uri(url);
     for (name, value) in headers {
@@ -199,27 +216,29 @@ fn perform(
         } else {
             Body::from(body.to_vec())
         })
-        .map_err(|err| format!("failed to build request: {err}"))?;
+        .map_err(|err| DispatchError::Transport(format!("failed to build request: {err}")))?;
 
     wstd::runtime::block_on(async move {
         let client = Client::new();
         let response = client
             .send(request)
             .await
-            .map_err(|err| format!("request failed: {err:#}"))?;
+            .map_err(|err| DispatchError::Transport(format!("request failed: {err:#}")))?;
 
         let status = response.status().as_u16();
         let mut response_body = response.into_body();
-        let bytes = response_body
-            .contents()
-            .await
-            .map_err(|err| format!("failed to read response body: {err:#}"))?;
+        let bytes = response_body.contents().await.map_err(|err| {
+            DispatchError::Transport(format!("failed to read response body: {err:#}"))
+        })?;
         let body_text = String::from_utf8_lossy(bytes).into_owned();
 
         if (200..300).contains(&status) {
             Ok(body_text)
         } else {
-            Err(format!("HTTP {status}: {body_text}"))
+            Err(DispatchError::Http {
+                status,
+                body: body_text,
+            })
         }
     })
 }
@@ -288,7 +307,8 @@ const OP_BLOCKS_RETRIEVE_A_BLOCK: OpSpec = OpSpec {
     method: "GET",
     path_template: "/v1/blocks/{id}",
     fields: &[
-        FieldSpec { snake: "notion_version", location: FieldLocation::Header },
+        FieldSpec { snake: "id", wire: "id", location: FieldLocation::Path },
+        FieldSpec { snake: "notion_version", wire: "Notion-Version", location: FieldLocation::Header },
     ],
     auth: &[
     ],
@@ -298,8 +318,9 @@ const OP_BLOCKS_UPDATE_A_BLOCK: OpSpec = OpSpec {
     method: "PATCH",
     path_template: "/v1/blocks/{id}",
     fields: &[
-        FieldSpec { snake: "notion_version", location: FieldLocation::Header },
-        FieldSpec { snake: "paragraph", location: FieldLocation::Body },
+        FieldSpec { snake: "id", wire: "id", location: FieldLocation::Path },
+        FieldSpec { snake: "notion_version", wire: "Notion-Version", location: FieldLocation::Header },
+        FieldSpec { snake: "paragraph", wire: "paragraph", location: FieldLocation::Body },
     ],
     auth: &[
     ],
@@ -309,7 +330,8 @@ const OP_BLOCKS_DELETE_A_BLOCK: OpSpec = OpSpec {
     method: "DELETE",
     path_template: "/v1/blocks/{id}",
     fields: &[
-        FieldSpec { snake: "notion_version", location: FieldLocation::Header },
+        FieldSpec { snake: "id", wire: "id", location: FieldLocation::Path },
+        FieldSpec { snake: "notion_version", wire: "Notion-Version", location: FieldLocation::Header },
     ],
     auth: &[
     ],
@@ -319,8 +341,9 @@ const OP_BLOCKS_RETRIEVE_BLOCK_CHILDREN: OpSpec = OpSpec {
     method: "GET",
     path_template: "/v1/blocks/{id}/children",
     fields: &[
-        FieldSpec { snake: "page_size", location: FieldLocation::Query },
-        FieldSpec { snake: "notion_version", location: FieldLocation::Header },
+        FieldSpec { snake: "id", wire: "id", location: FieldLocation::Path },
+        FieldSpec { snake: "page_size", wire: "page_size", location: FieldLocation::Query },
+        FieldSpec { snake: "notion_version", wire: "Notion-Version", location: FieldLocation::Header },
     ],
     auth: &[
     ],
@@ -330,12 +353,59 @@ const OP_BLOCKS_APPEND_BLOCK_CHILDREN: OpSpec = OpSpec {
     method: "PATCH",
     path_template: "/v1/blocks/{id}/children",
     fields: &[
-        FieldSpec { snake: "notion_version", location: FieldLocation::Header },
-        FieldSpec { snake: "children", location: FieldLocation::Body },
+        FieldSpec { snake: "id", wire: "id", location: FieldLocation::Path },
+        FieldSpec { snake: "notion_version", wire: "Notion-Version", location: FieldLocation::Header },
+        FieldSpec { snake: "children", wire: "children", location: FieldLocation::Body },
     ],
     auth: &[
     ],
 };
+
+fn iface_blocks__retrieve_a_block_response__to_json(p: &iface_blocks::RetrieveABlockResponse) -> Value {
+    let mut m = Map::new();
+    m.insert("created_time".into(), match (&p.created_time) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("has_children".into(), match (&p.has_children) { Some(v) => Value::Bool(*(v)), None => Value::Null });
+    m.insert("id".into(), match (&p.id) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("last_edited_time".into(), match (&p.last_edited_time) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("object".into(), match (&p.object) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("paragraph".into(), match (&p.paragraph) { Some(v) => iface_blocks__retrieve_a_block_response_paragraph__to_json(v), None => Value::Null });
+    m.insert("type".into(), match (&p.type_op) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_blocks__retrieve_a_block_response_paragraph__to_json(p: &iface_blocks::RetrieveABlockResponseParagraph) -> Value {
+    let mut m = Map::new();
+    m.insert("text".into(), match (&p.text) { Some(v) => Value::Array((v).iter().map(|v| iface_blocks__retrieve_a_block_response_paragraph_text_item__to_json(v)).collect()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_blocks__retrieve_a_block_response_paragraph_text_item__to_json(p: &iface_blocks::RetrieveABlockResponseParagraphTextItem) -> Value {
+    let mut m = Map::new();
+    m.insert("annotations".into(), match (&p.annotations) { Some(v) => iface_blocks__retrieve_a_block_response_paragraph_text_item_annotations__to_json(v), None => Value::Null });
+    m.insert("href".into(), match (&p.href) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("plain_text".into(), match (&p.plain_text) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("text".into(), match (&p.text) { Some(v) => iface_blocks__retrieve_a_block_response_paragraph_text_item_text__to_json(v), None => Value::Null });
+    m.insert("type".into(), match (&p.type_op) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_blocks__retrieve_a_block_response_paragraph_text_item_annotations__to_json(p: &iface_blocks::RetrieveABlockResponseParagraphTextItemAnnotations) -> Value {
+    let mut m = Map::new();
+    m.insert("bold".into(), match (&p.bold) { Some(v) => Value::Bool(*(v)), None => Value::Null });
+    m.insert("code".into(), match (&p.code) { Some(v) => Value::Bool(*(v)), None => Value::Null });
+    m.insert("color".into(), match (&p.color) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("italic".into(), match (&p.italic) { Some(v) => Value::Bool(*(v)), None => Value::Null });
+    m.insert("strikethrough".into(), match (&p.strikethrough) { Some(v) => Value::Bool(*(v)), None => Value::Null });
+    m.insert("underline".into(), match (&p.underline) { Some(v) => Value::Bool(*(v)), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_blocks__retrieve_a_block_response_paragraph_text_item_text__to_json(p: &iface_blocks::RetrieveABlockResponseParagraphTextItemText) -> Value {
+    let mut m = Map::new();
+    m.insert("content".into(), match (&p.content) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("link".into(), match (&p.link) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
 
 fn iface_blocks__update_a_block_body_paragraph__to_json(p: &iface_blocks::UpdateABlockBodyParagraph) -> Value {
     let mut m = Map::new();
@@ -353,6 +423,177 @@ fn iface_blocks__update_a_block_body_paragraph_rich_text_item__to_json(p: &iface
 fn iface_blocks__update_a_block_body_paragraph_rich_text_item_text__to_json(p: &iface_blocks::UpdateABlockBodyParagraphRichTextItemText) -> Value {
     let mut m = Map::new();
     m.insert("content".into(), match (&p.content) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_blocks__update_a_block_response__to_json(p: &iface_blocks::UpdateABlockResponse) -> Value {
+    let mut m = Map::new();
+    m.insert("created_time".into(), match (&p.created_time) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("has_children".into(), match (&p.has_children) { Some(v) => Value::Bool(*(v)), None => Value::Null });
+    m.insert("id".into(), match (&p.id) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("last_edited_time".into(), match (&p.last_edited_time) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("object".into(), match (&p.object) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("paragraph".into(), match (&p.paragraph) { Some(v) => iface_blocks__update_a_block_response_paragraph__to_json(v), None => Value::Null });
+    m.insert("type".into(), match (&p.type_op) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_blocks__update_a_block_response_paragraph__to_json(p: &iface_blocks::UpdateABlockResponseParagraph) -> Value {
+    let mut m = Map::new();
+    m.insert("text".into(), match (&p.text) { Some(v) => Value::Array((v).iter().map(|v| iface_blocks__update_a_block_response_paragraph_text_item__to_json(v)).collect()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_blocks__update_a_block_response_paragraph_text_item__to_json(p: &iface_blocks::UpdateABlockResponseParagraphTextItem) -> Value {
+    let mut m = Map::new();
+    m.insert("annotations".into(), match (&p.annotations) { Some(v) => iface_blocks__update_a_block_response_paragraph_text_item_annotations__to_json(v), None => Value::Null });
+    m.insert("href".into(), match (&p.href) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("plain_text".into(), match (&p.plain_text) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("text".into(), match (&p.text) { Some(v) => iface_blocks__update_a_block_response_paragraph_text_item_text__to_json(v), None => Value::Null });
+    m.insert("type".into(), match (&p.type_op) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_blocks__update_a_block_response_paragraph_text_item_annotations__to_json(p: &iface_blocks::UpdateABlockResponseParagraphTextItemAnnotations) -> Value {
+    let mut m = Map::new();
+    m.insert("bold".into(), match (&p.bold) { Some(v) => Value::Bool(*(v)), None => Value::Null });
+    m.insert("code".into(), match (&p.code) { Some(v) => Value::Bool(*(v)), None => Value::Null });
+    m.insert("color".into(), match (&p.color) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("italic".into(), match (&p.italic) { Some(v) => Value::Bool(*(v)), None => Value::Null });
+    m.insert("strikethrough".into(), match (&p.strikethrough) { Some(v) => Value::Bool(*(v)), None => Value::Null });
+    m.insert("underline".into(), match (&p.underline) { Some(v) => Value::Bool(*(v)), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_blocks__update_a_block_response_paragraph_text_item_text__to_json(p: &iface_blocks::UpdateABlockResponseParagraphTextItemText) -> Value {
+    let mut m = Map::new();
+    m.insert("content".into(), match (&p.content) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("link".into(), match (&p.link) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_blocks__delete_a_block_response__to_json(p: &iface_blocks::DeleteABlockResponse) -> Value {
+    let mut m = Map::new();
+    m.insert("archived".into(), match (&p.archived) { Some(v) => Value::Bool(*(v)), None => Value::Null });
+    m.insert("created_by".into(), match (&p.created_by) { Some(v) => iface_blocks__delete_a_block_response_created_by__to_json(v), None => Value::Null });
+    m.insert("created_time".into(), match (&p.created_time) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("has_children".into(), match (&p.has_children) { Some(v) => Value::Bool(*(v)), None => Value::Null });
+    m.insert("id".into(), match (&p.id) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("last_edited_by".into(), match (&p.last_edited_by) { Some(v) => iface_blocks__delete_a_block_response_last_edited_by__to_json(v), None => Value::Null });
+    m.insert("last_edited_time".into(), match (&p.last_edited_time) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("object".into(), match (&p.object) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("paragraph".into(), match (&p.paragraph) { Some(v) => iface_blocks__delete_a_block_response_paragraph__to_json(v), None => Value::Null });
+    m.insert("type".into(), match (&p.type_op) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_blocks__delete_a_block_response_created_by__to_json(p: &iface_blocks::DeleteABlockResponseCreatedBy) -> Value {
+    let mut m = Map::new();
+    m.insert("id".into(), match (&p.id) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("object".into(), match (&p.object) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_blocks__delete_a_block_response_last_edited_by__to_json(p: &iface_blocks::DeleteABlockResponseLastEditedBy) -> Value {
+    let mut m = Map::new();
+    m.insert("id".into(), match (&p.id) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("object".into(), match (&p.object) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_blocks__delete_a_block_response_paragraph__to_json(p: &iface_blocks::DeleteABlockResponseParagraph) -> Value {
+    let mut m = Map::new();
+    m.insert("text".into(), match (&p.text) { Some(v) => Value::Array((v).iter().map(|v| iface_blocks__delete_a_block_response_paragraph_text_item__to_json(v)).collect()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_blocks__delete_a_block_response_paragraph_text_item__to_json(p: &iface_blocks::DeleteABlockResponseParagraphTextItem) -> Value {
+    let mut m = Map::new();
+    m.insert("annotations".into(), match (&p.annotations) { Some(v) => iface_blocks__delete_a_block_response_paragraph_text_item_annotations__to_json(v), None => Value::Null });
+    m.insert("href".into(), match (&p.href) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("plain_text".into(), match (&p.plain_text) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("text".into(), match (&p.text) { Some(v) => iface_blocks__delete_a_block_response_paragraph_text_item_text__to_json(v), None => Value::Null });
+    m.insert("type".into(), match (&p.type_op) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_blocks__delete_a_block_response_paragraph_text_item_annotations__to_json(p: &iface_blocks::DeleteABlockResponseParagraphTextItemAnnotations) -> Value {
+    let mut m = Map::new();
+    m.insert("bold".into(), match (&p.bold) { Some(v) => Value::Bool(*(v)), None => Value::Null });
+    m.insert("code".into(), match (&p.code) { Some(v) => Value::Bool(*(v)), None => Value::Null });
+    m.insert("color".into(), match (&p.color) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("italic".into(), match (&p.italic) { Some(v) => Value::Bool(*(v)), None => Value::Null });
+    m.insert("strikethrough".into(), match (&p.strikethrough) { Some(v) => Value::Bool(*(v)), None => Value::Null });
+    m.insert("underline".into(), match (&p.underline) { Some(v) => Value::Bool(*(v)), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_blocks__delete_a_block_response_paragraph_text_item_text__to_json(p: &iface_blocks::DeleteABlockResponseParagraphTextItemText) -> Value {
+    let mut m = Map::new();
+    m.insert("content".into(), match (&p.content) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("link".into(), match (&p.link) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_blocks__retrieve_block_children_response__to_json(p: &iface_blocks::RetrieveBlockChildrenResponse) -> Value {
+    let mut m = Map::new();
+    m.insert("has_more".into(), match (&p.has_more) { Some(v) => Value::Bool(*(v)), None => Value::Null });
+    m.insert("next_cursor".into(), match (&p.next_cursor) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("object".into(), match (&p.object) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("results".into(), match (&p.results) { Some(v) => Value::Array((v).iter().map(|v| iface_blocks__retrieve_block_children_response_results_item__to_json(v)).collect()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_blocks__retrieve_block_children_response_results_item__to_json(p: &iface_blocks::RetrieveBlockChildrenResponseResultsItem) -> Value {
+    let mut m = Map::new();
+    m.insert("created_time".into(), match (&p.created_time) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("has_children".into(), match (&p.has_children) { Some(v) => Value::Bool(*(v)), None => Value::Null });
+    m.insert("id".into(), match (&p.id) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("last_edited_time".into(), match (&p.last_edited_time) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("object".into(), match (&p.object) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("paragraph".into(), match (&p.paragraph) { Some(v) => iface_blocks__retrieve_block_children_response_results_item_paragraph__to_json(v), None => Value::Null });
+    m.insert("type".into(), match (&p.type_op) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("unsupported".into(), match (&p.unsupported) { Some(v) => iface_blocks__retrieve_block_children_response_results_item_unsupported__to_json(v), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_blocks__retrieve_block_children_response_results_item_paragraph__to_json(p: &iface_blocks::RetrieveBlockChildrenResponseResultsItemParagraph) -> Value {
+    let mut m = Map::new();
+    m.insert("text".into(), match (&p.text) { Some(v) => Value::Array((v).iter().map(|v| iface_blocks__retrieve_block_children_response_results_item_paragraph_text_item__to_json(v)).collect()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_blocks__retrieve_block_children_response_results_item_paragraph_text_item__to_json(p: &iface_blocks::RetrieveBlockChildrenResponseResultsItemParagraphTextItem) -> Value {
+    let mut m = Map::new();
+    m.insert("annotations".into(), match (&p.annotations) { Some(v) => iface_blocks__retrieve_block_children_response_results_item_paragraph_text_item_annotations__to_json(v), None => Value::Null });
+    m.insert("href".into(), match (&p.href) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("plain_text".into(), match (&p.plain_text) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("text".into(), match (&p.text) { Some(v) => iface_blocks__retrieve_block_children_response_results_item_paragraph_text_item_text__to_json(v), None => Value::Null });
+    m.insert("type".into(), match (&p.type_op) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_blocks__retrieve_block_children_response_results_item_paragraph_text_item_annotations__to_json(p: &iface_blocks::RetrieveBlockChildrenResponseResultsItemParagraphTextItemAnnotations) -> Value {
+    let mut m = Map::new();
+    m.insert("bold".into(), match (&p.bold) { Some(v) => Value::Bool(*(v)), None => Value::Null });
+    m.insert("code".into(), match (&p.code) { Some(v) => Value::Bool(*(v)), None => Value::Null });
+    m.insert("color".into(), match (&p.color) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("italic".into(), match (&p.italic) { Some(v) => Value::Bool(*(v)), None => Value::Null });
+    m.insert("strikethrough".into(), match (&p.strikethrough) { Some(v) => Value::Bool(*(v)), None => Value::Null });
+    m.insert("underline".into(), match (&p.underline) { Some(v) => Value::Bool(*(v)), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_blocks__retrieve_block_children_response_results_item_paragraph_text_item_text__to_json(p: &iface_blocks::RetrieveBlockChildrenResponseResultsItemParagraphTextItemText) -> Value {
+    let mut m = Map::new();
+    m.insert("content".into(), match (&p.content) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("link".into(), match (&p.link) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_blocks__retrieve_block_children_response_results_item_unsupported__to_json(p: &iface_blocks::RetrieveBlockChildrenResponseResultsItemUnsupported) -> Value {
+    let mut m = Map::new();
+    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
     Value::Object(m)
 }
 
@@ -410,14 +651,34 @@ fn iface_blocks__append_block_children_body_children_item_paragraph_rich_text_it
     Value::Object(m)
 }
 
+fn iface_blocks__append_block_children_response__to_json(p: &iface_blocks::AppendBlockChildrenResponse) -> Value {
+    let mut m = Map::new();
+    m.insert("child_page".into(), match (&p.child_page) { Some(v) => iface_blocks__append_block_children_response_child_page__to_json(v), None => Value::Null });
+    m.insert("created_time".into(), match (&p.created_time) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("has_children".into(), match (&p.has_children) { Some(v) => Value::Bool(*(v)), None => Value::Null });
+    m.insert("id".into(), match (&p.id) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("last_edited_time".into(), match (&p.last_edited_time) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("object".into(), match (&p.object) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("type".into(), match (&p.type_op) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_blocks__append_block_children_response_child_page__to_json(p: &iface_blocks::AppendBlockChildrenResponseChildPage) -> Value {
+    let mut m = Map::new();
+    m.insert("title".into(), match (&p.title) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
 fn iface_blocks__retrieve_a_block_params__to_json(p: &iface_blocks::RetrieveABlockParams) -> Value {
     let mut m = Map::new();
+    m.insert("id".into(), Value::String((&p.id).clone()));
     m.insert("notion_version".into(), match (&p.notion_version) { Some(v) => Value::String((v).clone()), None => Value::Null });
     Value::Object(m)
 }
 
 fn iface_blocks__update_a_block_params__to_json(p: &iface_blocks::UpdateABlockParams) -> Value {
     let mut m = Map::new();
+    m.insert("id".into(), Value::String((&p.id).clone()));
     m.insert("notion_version".into(), match (&p.notion_version) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("paragraph".into(), match (&p.paragraph) { Some(v) => iface_blocks__update_a_block_body_paragraph__to_json(v), None => Value::Null });
     Value::Object(m)
@@ -425,12 +686,14 @@ fn iface_blocks__update_a_block_params__to_json(p: &iface_blocks::UpdateABlockPa
 
 fn iface_blocks__delete_a_block_params__to_json(p: &iface_blocks::DeleteABlockParams) -> Value {
     let mut m = Map::new();
+    m.insert("id".into(), Value::String((&p.id).clone()));
     m.insert("notion_version".into(), match (&p.notion_version) { Some(v) => Value::String((v).clone()), None => Value::Null });
     Value::Object(m)
 }
 
 fn iface_blocks__retrieve_block_children_params__to_json(p: &iface_blocks::RetrieveBlockChildrenParams) -> Value {
     let mut m = Map::new();
+    m.insert("id".into(), Value::String((&p.id).clone()));
     m.insert("page_size".into(), match (&p.page_size) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("notion_version".into(), match (&p.notion_version) { Some(v) => Value::String((v).clone()), None => Value::Null });
     Value::Object(m)
@@ -438,31 +701,398 @@ fn iface_blocks__retrieve_block_children_params__to_json(p: &iface_blocks::Retri
 
 fn iface_blocks__append_block_children_params__to_json(p: &iface_blocks::AppendBlockChildrenParams) -> Value {
     let mut m = Map::new();
+    m.insert("id".into(), Value::String((&p.id).clone()));
     m.insert("notion_version".into(), match (&p.notion_version) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("children".into(), match (&p.children) { Some(v) => Value::Array((v).iter().map(|v| iface_blocks__append_block_children_body_children_item__to_json(v)).collect()), None => Value::Null });
     Value::Object(m)
 }
 
+fn iface_blocks__retrieve_a_block_response__from_json(v: &Value) -> Option<iface_blocks::RetrieveABlockResponse> {
+    let m = v.as_object()?;
+    Some(iface_blocks::RetrieveABlockResponse {
+        created_time: m.get("created_time").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        has_children: m.get("has_children").filter(|v| !v.is_null()).and_then(|v| (v).as_bool()),
+        id: m.get("id").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        last_edited_time: m.get("last_edited_time").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        object: m.get("object").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        paragraph: m.get("paragraph").filter(|v| !v.is_null()).and_then(|v| iface_blocks__retrieve_a_block_response_paragraph__from_json(v)),
+        type_op: m.get("type").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    })
+}
+
+fn iface_blocks__retrieve_a_block_response_paragraph__from_json(v: &Value) -> Option<iface_blocks::RetrieveABlockResponseParagraph> {
+    let m = v.as_object()?;
+    Some(iface_blocks::RetrieveABlockResponseParagraph {
+        text: m.get("text").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| iface_blocks__retrieve_a_block_response_paragraph_text_item__from_json(x)).collect())),
+    })
+}
+
+fn iface_blocks__retrieve_a_block_response_paragraph_text_item__from_json(v: &Value) -> Option<iface_blocks::RetrieveABlockResponseParagraphTextItem> {
+    let m = v.as_object()?;
+    Some(iface_blocks::RetrieveABlockResponseParagraphTextItem {
+        annotations: m.get("annotations").filter(|v| !v.is_null()).and_then(|v| iface_blocks__retrieve_a_block_response_paragraph_text_item_annotations__from_json(v)),
+        href: m.get("href").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        plain_text: m.get("plain_text").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        text: m.get("text").filter(|v| !v.is_null()).and_then(|v| iface_blocks__retrieve_a_block_response_paragraph_text_item_text__from_json(v)),
+        type_op: m.get("type").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    })
+}
+
+fn iface_blocks__retrieve_a_block_response_paragraph_text_item_annotations__from_json(v: &Value) -> Option<iface_blocks::RetrieveABlockResponseParagraphTextItemAnnotations> {
+    let m = v.as_object()?;
+    Some(iface_blocks::RetrieveABlockResponseParagraphTextItemAnnotations {
+        bold: m.get("bold").filter(|v| !v.is_null()).and_then(|v| (v).as_bool()),
+        code: m.get("code").filter(|v| !v.is_null()).and_then(|v| (v).as_bool()),
+        color: m.get("color").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        italic: m.get("italic").filter(|v| !v.is_null()).and_then(|v| (v).as_bool()),
+        strikethrough: m.get("strikethrough").filter(|v| !v.is_null()).and_then(|v| (v).as_bool()),
+        underline: m.get("underline").filter(|v| !v.is_null()).and_then(|v| (v).as_bool()),
+    })
+}
+
+fn iface_blocks__retrieve_a_block_response_paragraph_text_item_text__from_json(v: &Value) -> Option<iface_blocks::RetrieveABlockResponseParagraphTextItemText> {
+    let m = v.as_object()?;
+    Some(iface_blocks::RetrieveABlockResponseParagraphTextItemText {
+        content: m.get("content").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        link: m.get("link").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    })
+}
+
+fn iface_blocks__update_a_block_response__from_json(v: &Value) -> Option<iface_blocks::UpdateABlockResponse> {
+    let m = v.as_object()?;
+    Some(iface_blocks::UpdateABlockResponse {
+        created_time: m.get("created_time").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        has_children: m.get("has_children").filter(|v| !v.is_null()).and_then(|v| (v).as_bool()),
+        id: m.get("id").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        last_edited_time: m.get("last_edited_time").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        object: m.get("object").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        paragraph: m.get("paragraph").filter(|v| !v.is_null()).and_then(|v| iface_blocks__update_a_block_response_paragraph__from_json(v)),
+        type_op: m.get("type").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    })
+}
+
+fn iface_blocks__update_a_block_response_paragraph__from_json(v: &Value) -> Option<iface_blocks::UpdateABlockResponseParagraph> {
+    let m = v.as_object()?;
+    Some(iface_blocks::UpdateABlockResponseParagraph {
+        text: m.get("text").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| iface_blocks__update_a_block_response_paragraph_text_item__from_json(x)).collect())),
+    })
+}
+
+fn iface_blocks__update_a_block_response_paragraph_text_item__from_json(v: &Value) -> Option<iface_blocks::UpdateABlockResponseParagraphTextItem> {
+    let m = v.as_object()?;
+    Some(iface_blocks::UpdateABlockResponseParagraphTextItem {
+        annotations: m.get("annotations").filter(|v| !v.is_null()).and_then(|v| iface_blocks__update_a_block_response_paragraph_text_item_annotations__from_json(v)),
+        href: m.get("href").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        plain_text: m.get("plain_text").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        text: m.get("text").filter(|v| !v.is_null()).and_then(|v| iface_blocks__update_a_block_response_paragraph_text_item_text__from_json(v)),
+        type_op: m.get("type").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    })
+}
+
+fn iface_blocks__update_a_block_response_paragraph_text_item_annotations__from_json(v: &Value) -> Option<iface_blocks::UpdateABlockResponseParagraphTextItemAnnotations> {
+    let m = v.as_object()?;
+    Some(iface_blocks::UpdateABlockResponseParagraphTextItemAnnotations {
+        bold: m.get("bold").filter(|v| !v.is_null()).and_then(|v| (v).as_bool()),
+        code: m.get("code").filter(|v| !v.is_null()).and_then(|v| (v).as_bool()),
+        color: m.get("color").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        italic: m.get("italic").filter(|v| !v.is_null()).and_then(|v| (v).as_bool()),
+        strikethrough: m.get("strikethrough").filter(|v| !v.is_null()).and_then(|v| (v).as_bool()),
+        underline: m.get("underline").filter(|v| !v.is_null()).and_then(|v| (v).as_bool()),
+    })
+}
+
+fn iface_blocks__update_a_block_response_paragraph_text_item_text__from_json(v: &Value) -> Option<iface_blocks::UpdateABlockResponseParagraphTextItemText> {
+    let m = v.as_object()?;
+    Some(iface_blocks::UpdateABlockResponseParagraphTextItemText {
+        content: m.get("content").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        link: m.get("link").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    })
+}
+
+fn iface_blocks__delete_a_block_response__from_json(v: &Value) -> Option<iface_blocks::DeleteABlockResponse> {
+    let m = v.as_object()?;
+    Some(iface_blocks::DeleteABlockResponse {
+        archived: m.get("archived").filter(|v| !v.is_null()).and_then(|v| (v).as_bool()),
+        created_by: m.get("created_by").filter(|v| !v.is_null()).and_then(|v| iface_blocks__delete_a_block_response_created_by__from_json(v)),
+        created_time: m.get("created_time").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        has_children: m.get("has_children").filter(|v| !v.is_null()).and_then(|v| (v).as_bool()),
+        id: m.get("id").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        last_edited_by: m.get("last_edited_by").filter(|v| !v.is_null()).and_then(|v| iface_blocks__delete_a_block_response_last_edited_by__from_json(v)),
+        last_edited_time: m.get("last_edited_time").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        object: m.get("object").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        paragraph: m.get("paragraph").filter(|v| !v.is_null()).and_then(|v| iface_blocks__delete_a_block_response_paragraph__from_json(v)),
+        type_op: m.get("type").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    })
+}
+
+fn iface_blocks__delete_a_block_response_created_by__from_json(v: &Value) -> Option<iface_blocks::DeleteABlockResponseCreatedBy> {
+    let m = v.as_object()?;
+    Some(iface_blocks::DeleteABlockResponseCreatedBy {
+        id: m.get("id").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        object: m.get("object").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    })
+}
+
+fn iface_blocks__delete_a_block_response_last_edited_by__from_json(v: &Value) -> Option<iface_blocks::DeleteABlockResponseLastEditedBy> {
+    let m = v.as_object()?;
+    Some(iface_blocks::DeleteABlockResponseLastEditedBy {
+        id: m.get("id").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        object: m.get("object").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    })
+}
+
+fn iface_blocks__delete_a_block_response_paragraph__from_json(v: &Value) -> Option<iface_blocks::DeleteABlockResponseParagraph> {
+    let m = v.as_object()?;
+    Some(iface_blocks::DeleteABlockResponseParagraph {
+        text: m.get("text").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| iface_blocks__delete_a_block_response_paragraph_text_item__from_json(x)).collect())),
+    })
+}
+
+fn iface_blocks__delete_a_block_response_paragraph_text_item__from_json(v: &Value) -> Option<iface_blocks::DeleteABlockResponseParagraphTextItem> {
+    let m = v.as_object()?;
+    Some(iface_blocks::DeleteABlockResponseParagraphTextItem {
+        annotations: m.get("annotations").filter(|v| !v.is_null()).and_then(|v| iface_blocks__delete_a_block_response_paragraph_text_item_annotations__from_json(v)),
+        href: m.get("href").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        plain_text: m.get("plain_text").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        text: m.get("text").filter(|v| !v.is_null()).and_then(|v| iface_blocks__delete_a_block_response_paragraph_text_item_text__from_json(v)),
+        type_op: m.get("type").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    })
+}
+
+fn iface_blocks__delete_a_block_response_paragraph_text_item_annotations__from_json(v: &Value) -> Option<iface_blocks::DeleteABlockResponseParagraphTextItemAnnotations> {
+    let m = v.as_object()?;
+    Some(iface_blocks::DeleteABlockResponseParagraphTextItemAnnotations {
+        bold: m.get("bold").filter(|v| !v.is_null()).and_then(|v| (v).as_bool()),
+        code: m.get("code").filter(|v| !v.is_null()).and_then(|v| (v).as_bool()),
+        color: m.get("color").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        italic: m.get("italic").filter(|v| !v.is_null()).and_then(|v| (v).as_bool()),
+        strikethrough: m.get("strikethrough").filter(|v| !v.is_null()).and_then(|v| (v).as_bool()),
+        underline: m.get("underline").filter(|v| !v.is_null()).and_then(|v| (v).as_bool()),
+    })
+}
+
+fn iface_blocks__delete_a_block_response_paragraph_text_item_text__from_json(v: &Value) -> Option<iface_blocks::DeleteABlockResponseParagraphTextItemText> {
+    let m = v.as_object()?;
+    Some(iface_blocks::DeleteABlockResponseParagraphTextItemText {
+        content: m.get("content").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        link: m.get("link").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    })
+}
+
+fn iface_blocks__retrieve_block_children_response__from_json(v: &Value) -> Option<iface_blocks::RetrieveBlockChildrenResponse> {
+    let m = v.as_object()?;
+    Some(iface_blocks::RetrieveBlockChildrenResponse {
+        has_more: m.get("has_more").filter(|v| !v.is_null()).and_then(|v| (v).as_bool()),
+        next_cursor: m.get("next_cursor").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        object: m.get("object").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        results: m.get("results").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| iface_blocks__retrieve_block_children_response_results_item__from_json(x)).collect())),
+    })
+}
+
+fn iface_blocks__retrieve_block_children_response_results_item__from_json(v: &Value) -> Option<iface_blocks::RetrieveBlockChildrenResponseResultsItem> {
+    let m = v.as_object()?;
+    Some(iface_blocks::RetrieveBlockChildrenResponseResultsItem {
+        created_time: m.get("created_time").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        has_children: m.get("has_children").filter(|v| !v.is_null()).and_then(|v| (v).as_bool()),
+        id: m.get("id").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        last_edited_time: m.get("last_edited_time").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        object: m.get("object").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        paragraph: m.get("paragraph").filter(|v| !v.is_null()).and_then(|v| iface_blocks__retrieve_block_children_response_results_item_paragraph__from_json(v)),
+        type_op: m.get("type").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        unsupported: m.get("unsupported").filter(|v| !v.is_null()).and_then(|v| iface_blocks__retrieve_block_children_response_results_item_unsupported__from_json(v)),
+    })
+}
+
+fn iface_blocks__retrieve_block_children_response_results_item_paragraph__from_json(v: &Value) -> Option<iface_blocks::RetrieveBlockChildrenResponseResultsItemParagraph> {
+    let m = v.as_object()?;
+    Some(iface_blocks::RetrieveBlockChildrenResponseResultsItemParagraph {
+        text: m.get("text").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| iface_blocks__retrieve_block_children_response_results_item_paragraph_text_item__from_json(x)).collect())),
+    })
+}
+
+fn iface_blocks__retrieve_block_children_response_results_item_paragraph_text_item__from_json(v: &Value) -> Option<iface_blocks::RetrieveBlockChildrenResponseResultsItemParagraphTextItem> {
+    let m = v.as_object()?;
+    Some(iface_blocks::RetrieveBlockChildrenResponseResultsItemParagraphTextItem {
+        annotations: m.get("annotations").filter(|v| !v.is_null()).and_then(|v| iface_blocks__retrieve_block_children_response_results_item_paragraph_text_item_annotations__from_json(v)),
+        href: m.get("href").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        plain_text: m.get("plain_text").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        text: m.get("text").filter(|v| !v.is_null()).and_then(|v| iface_blocks__retrieve_block_children_response_results_item_paragraph_text_item_text__from_json(v)),
+        type_op: m.get("type").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    })
+}
+
+fn iface_blocks__retrieve_block_children_response_results_item_paragraph_text_item_annotations__from_json(v: &Value) -> Option<iface_blocks::RetrieveBlockChildrenResponseResultsItemParagraphTextItemAnnotations> {
+    let m = v.as_object()?;
+    Some(iface_blocks::RetrieveBlockChildrenResponseResultsItemParagraphTextItemAnnotations {
+        bold: m.get("bold").filter(|v| !v.is_null()).and_then(|v| (v).as_bool()),
+        code: m.get("code").filter(|v| !v.is_null()).and_then(|v| (v).as_bool()),
+        color: m.get("color").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        italic: m.get("italic").filter(|v| !v.is_null()).and_then(|v| (v).as_bool()),
+        strikethrough: m.get("strikethrough").filter(|v| !v.is_null()).and_then(|v| (v).as_bool()),
+        underline: m.get("underline").filter(|v| !v.is_null()).and_then(|v| (v).as_bool()),
+    })
+}
+
+fn iface_blocks__retrieve_block_children_response_results_item_paragraph_text_item_text__from_json(v: &Value) -> Option<iface_blocks::RetrieveBlockChildrenResponseResultsItemParagraphTextItemText> {
+    let m = v.as_object()?;
+    Some(iface_blocks::RetrieveBlockChildrenResponseResultsItemParagraphTextItemText {
+        content: m.get("content").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        link: m.get("link").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    })
+}
+
+fn iface_blocks__retrieve_block_children_response_results_item_unsupported__from_json(v: &Value) -> Option<iface_blocks::RetrieveBlockChildrenResponseResultsItemUnsupported> {
+    let m = v.as_object()?;
+    Some(iface_blocks::RetrieveBlockChildrenResponseResultsItemUnsupported {
+        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    })
+}
+
+fn iface_blocks__append_block_children_response__from_json(v: &Value) -> Option<iface_blocks::AppendBlockChildrenResponse> {
+    let m = v.as_object()?;
+    Some(iface_blocks::AppendBlockChildrenResponse {
+        child_page: m.get("child_page").filter(|v| !v.is_null()).and_then(|v| iface_blocks__append_block_children_response_child_page__from_json(v)),
+        created_time: m.get("created_time").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        has_children: m.get("has_children").filter(|v| !v.is_null()).and_then(|v| (v).as_bool()),
+        id: m.get("id").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        last_edited_time: m.get("last_edited_time").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        object: m.get("object").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        type_op: m.get("type").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    })
+}
+
+fn iface_blocks__append_block_children_response_child_page__from_json(v: &Value) -> Option<iface_blocks::AppendBlockChildrenResponseChildPage> {
+    let m = v.as_object()?;
+    Some(iface_blocks::AppendBlockChildrenResponseChildPage {
+        title: m.get("title").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    })
+}
+
+fn iface_blocks__retrieve_a_block__ok(body: String) -> Result<iface_blocks::RetrieveABlockResponse, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match iface_blocks__retrieve_a_block_response__from_json(&v) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_blocks__retrieve_a_block__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
+fn iface_blocks__update_a_block__ok(body: String) -> Result<iface_blocks::UpdateABlockResponse, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match iface_blocks__update_a_block_response__from_json(&v) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_blocks__update_a_block__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
+fn iface_blocks__delete_a_block__ok(body: String) -> Result<iface_blocks::DeleteABlockResponse, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match iface_blocks__delete_a_block_response__from_json(&v) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_blocks__delete_a_block__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
+fn iface_blocks__retrieve_block_children__ok(body: String) -> Result<iface_blocks::RetrieveBlockChildrenResponse, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match iface_blocks__retrieve_block_children_response__from_json(&v) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_blocks__retrieve_block_children__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
+fn iface_blocks__append_block_children__ok(body: String) -> Result<iface_blocks::AppendBlockChildrenResponse, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match iface_blocks__append_block_children_response__from_json(&v) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_blocks__append_block_children__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
 impl iface_blocks::Guest for crate::Component {
-    fn retrieve_a_block(params: iface_blocks::RetrieveABlockParams) -> Result<String, String> {
+    fn retrieve_a_block(params: iface_blocks::RetrieveABlockParams) -> Result<iface_blocks::RetrieveABlockResponse, String> {
         let json = iface_blocks__retrieve_a_block_params__to_json(&params);
-        dispatch(&OP_BLOCKS_RETRIEVE_A_BLOCK, json)
+        match dispatch(&OP_BLOCKS_RETRIEVE_A_BLOCK, json).and_then(iface_blocks__retrieve_a_block__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_blocks__retrieve_a_block__err(e)),
+        }
     }
-    fn update_a_block(params: iface_blocks::UpdateABlockParams) -> Result<String, String> {
+    fn update_a_block(params: iface_blocks::UpdateABlockParams) -> Result<iface_blocks::UpdateABlockResponse, String> {
         let json = iface_blocks__update_a_block_params__to_json(&params);
-        dispatch(&OP_BLOCKS_UPDATE_A_BLOCK, json)
+        match dispatch(&OP_BLOCKS_UPDATE_A_BLOCK, json).and_then(iface_blocks__update_a_block__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_blocks__update_a_block__err(e)),
+        }
     }
-    fn delete_a_block(params: iface_blocks::DeleteABlockParams) -> Result<String, String> {
+    fn delete_a_block(params: iface_blocks::DeleteABlockParams) -> Result<iface_blocks::DeleteABlockResponse, String> {
         let json = iface_blocks__delete_a_block_params__to_json(&params);
-        dispatch(&OP_BLOCKS_DELETE_A_BLOCK, json)
+        match dispatch(&OP_BLOCKS_DELETE_A_BLOCK, json).and_then(iface_blocks__delete_a_block__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_blocks__delete_a_block__err(e)),
+        }
     }
-    fn retrieve_block_children(params: iface_blocks::RetrieveBlockChildrenParams) -> Result<String, String> {
+    fn retrieve_block_children(params: iface_blocks::RetrieveBlockChildrenParams) -> Result<iface_blocks::RetrieveBlockChildrenResponse, String> {
         let json = iface_blocks__retrieve_block_children_params__to_json(&params);
-        dispatch(&OP_BLOCKS_RETRIEVE_BLOCK_CHILDREN, json)
+        match dispatch(&OP_BLOCKS_RETRIEVE_BLOCK_CHILDREN, json).and_then(iface_blocks__retrieve_block_children__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_blocks__retrieve_block_children__err(e)),
+        }
     }
-    fn append_block_children(params: iface_blocks::AppendBlockChildrenParams) -> Result<String, String> {
+    fn append_block_children(params: iface_blocks::AppendBlockChildrenParams) -> Result<iface_blocks::AppendBlockChildrenResponse, String> {
         let json = iface_blocks__append_block_children_params__to_json(&params);
-        dispatch(&OP_BLOCKS_APPEND_BLOCK_CHILDREN, json)
+        match dispatch(&OP_BLOCKS_APPEND_BLOCK_CHILDREN, json).and_then(iface_blocks__append_block_children__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_blocks__append_block_children__err(e)),
+        }
     }
 }
 use crate::exports::autostamp::notion::comments as iface_comments;
@@ -471,26 +1101,201 @@ const OP_COMMENTS_RETRIEVE_COMMENTS: OpSpec = OpSpec {
     method: "GET",
     path_template: "/v1/comments",
     fields: &[
-        FieldSpec { snake: "block_id", location: FieldLocation::Query },
-        FieldSpec { snake: "page_size", location: FieldLocation::Query },
-        FieldSpec { snake: "notion_version", location: FieldLocation::Header },
+        FieldSpec { snake: "block_id", wire: "block_id", location: FieldLocation::Query },
+        FieldSpec { snake: "page_size", wire: "page_size", location: FieldLocation::Query },
+        FieldSpec { snake: "notion_version", wire: "Notion-Version", location: FieldLocation::Header },
+        FieldSpec { snake: "data", wire: "data", location: FieldLocation::Body },
     ],
     auth: &[
     ],
 };
+
+fn iface_comments__retrieve_comments_response__to_json(p: &iface_comments::RetrieveCommentsResponse) -> Value {
+    let mut m = Map::new();
+    m.insert("comment".into(), match (&p.comment) { Some(v) => iface_comments__retrieve_comments_response_comment__to_json(v), None => Value::Null });
+    m.insert("has_more".into(), match (&p.has_more) { Some(v) => Value::Bool(*(v)), None => Value::Null });
+    m.insert("next_cursor".into(), match (&p.next_cursor) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("object".into(), match (&p.object) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("results".into(), match (&p.results) { Some(v) => Value::Array((v).iter().map(|v| iface_comments__retrieve_comments_response_results_item__to_json(v)).collect()), None => Value::Null });
+    m.insert("type".into(), match (&p.type_op) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_comments__retrieve_comments_response_comment__to_json(p: &iface_comments::RetrieveCommentsResponseComment) -> Value {
+    let mut m = Map::new();
+    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_comments__retrieve_comments_response_results_item__to_json(p: &iface_comments::RetrieveCommentsResponseResultsItem) -> Value {
+    let mut m = Map::new();
+    m.insert("created_by".into(), match (&p.created_by) { Some(v) => iface_comments__retrieve_comments_response_results_item_created_by__to_json(v), None => Value::Null });
+    m.insert("created_time".into(), match (&p.created_time) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("discussion_id".into(), match (&p.discussion_id) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("id".into(), match (&p.id) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("last_edited_time".into(), match (&p.last_edited_time) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("object".into(), match (&p.object) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("parent".into(), match (&p.parent) { Some(v) => iface_comments__retrieve_comments_response_results_item_parent__to_json(v), None => Value::Null });
+    m.insert("rich_text".into(), match (&p.rich_text) { Some(v) => Value::Array((v).iter().map(|v| iface_comments__retrieve_comments_response_results_item_rich_text_item__to_json(v)).collect()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_comments__retrieve_comments_response_results_item_created_by__to_json(p: &iface_comments::RetrieveCommentsResponseResultsItemCreatedBy) -> Value {
+    let mut m = Map::new();
+    m.insert("id".into(), match (&p.id) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("object".into(), match (&p.object) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_comments__retrieve_comments_response_results_item_parent__to_json(p: &iface_comments::RetrieveCommentsResponseResultsItemParent) -> Value {
+    let mut m = Map::new();
+    m.insert("block_id".into(), match (&p.block_id) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("type".into(), match (&p.type_op) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_comments__retrieve_comments_response_results_item_rich_text_item__to_json(p: &iface_comments::RetrieveCommentsResponseResultsItemRichTextItem) -> Value {
+    let mut m = Map::new();
+    m.insert("annotations".into(), match (&p.annotations) { Some(v) => iface_comments__retrieve_comments_response_results_item_rich_text_item_annotations__to_json(v), None => Value::Null });
+    m.insert("href".into(), match (&p.href) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("plain_text".into(), match (&p.plain_text) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("text".into(), match (&p.text) { Some(v) => iface_comments__retrieve_comments_response_results_item_rich_text_item_text__to_json(v), None => Value::Null });
+    m.insert("type".into(), match (&p.type_op) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_comments__retrieve_comments_response_results_item_rich_text_item_annotations__to_json(p: &iface_comments::RetrieveCommentsResponseResultsItemRichTextItemAnnotations) -> Value {
+    let mut m = Map::new();
+    m.insert("bold".into(), match (&p.bold) { Some(v) => Value::Bool(*(v)), None => Value::Null });
+    m.insert("code".into(), match (&p.code) { Some(v) => Value::Bool(*(v)), None => Value::Null });
+    m.insert("color".into(), match (&p.color) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("italic".into(), match (&p.italic) { Some(v) => Value::Bool(*(v)), None => Value::Null });
+    m.insert("strikethrough".into(), match (&p.strikethrough) { Some(v) => Value::Bool(*(v)), None => Value::Null });
+    m.insert("underline".into(), match (&p.underline) { Some(v) => Value::Bool(*(v)), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_comments__retrieve_comments_response_results_item_rich_text_item_text__to_json(p: &iface_comments::RetrieveCommentsResponseResultsItemRichTextItemText) -> Value {
+    let mut m = Map::new();
+    m.insert("content".into(), match (&p.content) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("link".into(), match (&p.link) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
 
 fn iface_comments__retrieve_comments_params__to_json(p: &iface_comments::RetrieveCommentsParams) -> Value {
     let mut m = Map::new();
     m.insert("block_id".into(), match (&p.block_id) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("page_size".into(), match (&p.page_size) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("notion_version".into(), match (&p.notion_version) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
     Value::Object(m)
 }
 
+fn iface_comments__retrieve_comments_response__from_json(v: &Value) -> Option<iface_comments::RetrieveCommentsResponse> {
+    let m = v.as_object()?;
+    Some(iface_comments::RetrieveCommentsResponse {
+        comment: m.get("comment").filter(|v| !v.is_null()).and_then(|v| iface_comments__retrieve_comments_response_comment__from_json(v)),
+        has_more: m.get("has_more").filter(|v| !v.is_null()).and_then(|v| (v).as_bool()),
+        next_cursor: m.get("next_cursor").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        object: m.get("object").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        results: m.get("results").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| iface_comments__retrieve_comments_response_results_item__from_json(x)).collect())),
+        type_op: m.get("type").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    })
+}
+
+fn iface_comments__retrieve_comments_response_comment__from_json(v: &Value) -> Option<iface_comments::RetrieveCommentsResponseComment> {
+    let m = v.as_object()?;
+    Some(iface_comments::RetrieveCommentsResponseComment {
+        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    })
+}
+
+fn iface_comments__retrieve_comments_response_results_item__from_json(v: &Value) -> Option<iface_comments::RetrieveCommentsResponseResultsItem> {
+    let m = v.as_object()?;
+    Some(iface_comments::RetrieveCommentsResponseResultsItem {
+        created_by: m.get("created_by").filter(|v| !v.is_null()).and_then(|v| iface_comments__retrieve_comments_response_results_item_created_by__from_json(v)),
+        created_time: m.get("created_time").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        discussion_id: m.get("discussion_id").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        id: m.get("id").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        last_edited_time: m.get("last_edited_time").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        object: m.get("object").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        parent: m.get("parent").filter(|v| !v.is_null()).and_then(|v| iface_comments__retrieve_comments_response_results_item_parent__from_json(v)),
+        rich_text: m.get("rich_text").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| iface_comments__retrieve_comments_response_results_item_rich_text_item__from_json(x)).collect())),
+    })
+}
+
+fn iface_comments__retrieve_comments_response_results_item_created_by__from_json(v: &Value) -> Option<iface_comments::RetrieveCommentsResponseResultsItemCreatedBy> {
+    let m = v.as_object()?;
+    Some(iface_comments::RetrieveCommentsResponseResultsItemCreatedBy {
+        id: m.get("id").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        object: m.get("object").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    })
+}
+
+fn iface_comments__retrieve_comments_response_results_item_parent__from_json(v: &Value) -> Option<iface_comments::RetrieveCommentsResponseResultsItemParent> {
+    let m = v.as_object()?;
+    Some(iface_comments::RetrieveCommentsResponseResultsItemParent {
+        block_id: m.get("block_id").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        type_op: m.get("type").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    })
+}
+
+fn iface_comments__retrieve_comments_response_results_item_rich_text_item__from_json(v: &Value) -> Option<iface_comments::RetrieveCommentsResponseResultsItemRichTextItem> {
+    let m = v.as_object()?;
+    Some(iface_comments::RetrieveCommentsResponseResultsItemRichTextItem {
+        annotations: m.get("annotations").filter(|v| !v.is_null()).and_then(|v| iface_comments__retrieve_comments_response_results_item_rich_text_item_annotations__from_json(v)),
+        href: m.get("href").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        plain_text: m.get("plain_text").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        text: m.get("text").filter(|v| !v.is_null()).and_then(|v| iface_comments__retrieve_comments_response_results_item_rich_text_item_text__from_json(v)),
+        type_op: m.get("type").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    })
+}
+
+fn iface_comments__retrieve_comments_response_results_item_rich_text_item_annotations__from_json(v: &Value) -> Option<iface_comments::RetrieveCommentsResponseResultsItemRichTextItemAnnotations> {
+    let m = v.as_object()?;
+    Some(iface_comments::RetrieveCommentsResponseResultsItemRichTextItemAnnotations {
+        bold: m.get("bold").filter(|v| !v.is_null()).and_then(|v| (v).as_bool()),
+        code: m.get("code").filter(|v| !v.is_null()).and_then(|v| (v).as_bool()),
+        color: m.get("color").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        italic: m.get("italic").filter(|v| !v.is_null()).and_then(|v| (v).as_bool()),
+        strikethrough: m.get("strikethrough").filter(|v| !v.is_null()).and_then(|v| (v).as_bool()),
+        underline: m.get("underline").filter(|v| !v.is_null()).and_then(|v| (v).as_bool()),
+    })
+}
+
+fn iface_comments__retrieve_comments_response_results_item_rich_text_item_text__from_json(v: &Value) -> Option<iface_comments::RetrieveCommentsResponseResultsItemRichTextItemText> {
+    let m = v.as_object()?;
+    Some(iface_comments::RetrieveCommentsResponseResultsItemRichTextItemText {
+        content: m.get("content").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        link: m.get("link").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    })
+}
+
+fn iface_comments__retrieve_comments__ok(body: String) -> Result<iface_comments::RetrieveCommentsResponse, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match iface_comments__retrieve_comments_response__from_json(&v) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_comments__retrieve_comments__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
 impl iface_comments::Guest for crate::Component {
-    fn retrieve_comments(params: iface_comments::RetrieveCommentsParams) -> Result<String, String> {
+    fn retrieve_comments(params: iface_comments::RetrieveCommentsParams) -> Result<iface_comments::RetrieveCommentsResponse, String> {
         let json = iface_comments__retrieve_comments_params__to_json(&params);
-        dispatch(&OP_COMMENTS_RETRIEVE_COMMENTS, json)
+        match dispatch(&OP_COMMENTS_RETRIEVE_COMMENTS, json).and_then(iface_comments__retrieve_comments__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_comments__retrieve_comments__err(e)),
+        }
     }
 }
 use crate::exports::autostamp::notion::databases as iface_databases;
@@ -499,7 +1304,8 @@ const OP_DATABASES_RETRIEVE_A_DATABASE: OpSpec = OpSpec {
     method: "GET",
     path_template: "/v1/databases/{id}",
     fields: &[
-        FieldSpec { snake: "notion_version", location: FieldLocation::Header },
+        FieldSpec { snake: "id", wire: "id", location: FieldLocation::Path },
+        FieldSpec { snake: "notion_version", wire: "Notion-Version", location: FieldLocation::Header },
     ],
     auth: &[
     ],
@@ -509,9 +1315,10 @@ const OP_DATABASES_UPDATE_A_DATABASE: OpSpec = OpSpec {
     method: "PATCH",
     path_template: "/v1/databases/{id}",
     fields: &[
-        FieldSpec { snake: "notion_version", location: FieldLocation::Header },
-        FieldSpec { snake: "properties", location: FieldLocation::Body },
-        FieldSpec { snake: "title", location: FieldLocation::Body },
+        FieldSpec { snake: "id", wire: "id", location: FieldLocation::Path },
+        FieldSpec { snake: "notion_version", wire: "Notion-Version", location: FieldLocation::Header },
+        FieldSpec { snake: "properties", wire: "properties", location: FieldLocation::Body },
+        FieldSpec { snake: "title", wire: "title", location: FieldLocation::Body },
     ],
     auth: &[
     ],
@@ -521,16 +1328,289 @@ const OP_DATABASES_QUERY_A_DATABASE: OpSpec = OpSpec {
     method: "POST",
     path_template: "/v1/databases/{id}/query",
     fields: &[
-        FieldSpec { snake: "notion_version", location: FieldLocation::Header },
-        FieldSpec { snake: "filter", location: FieldLocation::Body },
+        FieldSpec { snake: "id", wire: "id", location: FieldLocation::Path },
+        FieldSpec { snake: "notion_version", wire: "Notion-Version", location: FieldLocation::Header },
+        FieldSpec { snake: "filter", wire: "filter", location: FieldLocation::Body },
     ],
     auth: &[
     ],
 };
 
+fn iface_databases__retrieve_a_database_response__to_json(p: &iface_databases::RetrieveADatabaseResponse) -> Value {
+    let mut m = Map::new();
+    m.insert("archived".into(), match (&p.archived) { Some(v) => Value::Bool(*(v)), None => Value::Null });
+    m.insert("cover".into(), match (&p.cover) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("created_by".into(), match (&p.created_by) { Some(v) => iface_databases__retrieve_a_database_response_created_by__to_json(v), None => Value::Null });
+    m.insert("created_time".into(), match (&p.created_time) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("icon".into(), match (&p.icon) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("id".into(), match (&p.id) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("last_edited_by".into(), match (&p.last_edited_by) { Some(v) => iface_databases__retrieve_a_database_response_last_edited_by__to_json(v), None => Value::Null });
+    m.insert("last_edited_time".into(), match (&p.last_edited_time) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("object".into(), match (&p.object) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("parent".into(), match (&p.parent) { Some(v) => iface_databases__retrieve_a_database_response_parent__to_json(v), None => Value::Null });
+    m.insert("properties".into(), match (&p.properties) { Some(v) => iface_databases__retrieve_a_database_response_properties__to_json(v), None => Value::Null });
+    m.insert("title".into(), match (&p.title) { Some(v) => Value::Array((v).iter().map(|v| iface_databases__retrieve_a_database_response_title_item__to_json(v)).collect()), None => Value::Null });
+    m.insert("url".into(), match (&p.url) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_databases__retrieve_a_database_response_created_by__to_json(p: &iface_databases::RetrieveADatabaseResponseCreatedBy) -> Value {
+    let mut m = Map::new();
+    m.insert("id".into(), match (&p.id) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("object".into(), match (&p.object) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_databases__retrieve_a_database_response_last_edited_by__to_json(p: &iface_databases::RetrieveADatabaseResponseLastEditedBy) -> Value {
+    let mut m = Map::new();
+    m.insert("id".into(), match (&p.id) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("object".into(), match (&p.object) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_databases__retrieve_a_database_response_parent__to_json(p: &iface_databases::RetrieveADatabaseResponseParent) -> Value {
+    let mut m = Map::new();
+    m.insert("page_id".into(), match (&p.page_id) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("type".into(), match (&p.type_op) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_databases__retrieve_a_database_response_properties__to_json(p: &iface_databases::RetrieveADatabaseResponseProperties) -> Value {
+    let mut m = Map::new();
+    m.insert("Author".into(), match (&p.author) { Some(v) => iface_databases__retrieve_a_database_response_properties_author__to_json(v), None => Value::Null });
+    m.insert("Link".into(), match (&p.link) { Some(v) => iface_databases__retrieve_a_database_response_properties_link__to_json(v), None => Value::Null });
+    m.insert("Name".into(), match (&p.name) { Some(v) => iface_databases__retrieve_a_database_response_properties_name__to_json(v), None => Value::Null });
+    m.insert("Publisher".into(), match (&p.publisher) { Some(v) => iface_databases__retrieve_a_database_response_properties_publisher__to_json(v), None => Value::Null });
+    m.insert("Publishing/Release Date".into(), match (&p.publishing_release_date) { Some(v) => iface_databases__retrieve_a_database_response_properties_publishing_release_date__to_json(v), None => Value::Null });
+    m.insert("Read".into(), match (&p.read) { Some(v) => iface_databases__retrieve_a_database_response_properties_read__to_json(v), None => Value::Null });
+    m.insert("Score /5".into(), match (&p.score_v5) { Some(v) => iface_databases__retrieve_a_database_response_properties_score_v5__to_json(v), None => Value::Null });
+    m.insert("Status".into(), match (&p.status) { Some(v) => iface_databases__retrieve_a_database_response_properties_status__to_json(v), None => Value::Null });
+    m.insert("Summary".into(), match (&p.summary) { Some(v) => iface_databases__retrieve_a_database_response_properties_summary__to_json(v), None => Value::Null });
+    m.insert("Type".into(), match (&p.type_op) { Some(v) => iface_databases__retrieve_a_database_response_properties_type_op__to_json(v), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_databases__retrieve_a_database_response_properties_author__to_json(p: &iface_databases::RetrieveADatabaseResponsePropertiesAuthor) -> Value {
+    let mut m = Map::new();
+    m.insert("id".into(), match (&p.id) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("multi_select".into(), match (&p.multi_select) { Some(v) => iface_databases__retrieve_a_database_response_properties_author_multi_select__to_json(v), None => Value::Null });
+    m.insert("name".into(), match (&p.name) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("type".into(), match (&p.type_op) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_databases__retrieve_a_database_response_properties_author_multi_select__to_json(p: &iface_databases::RetrieveADatabaseResponsePropertiesAuthorMultiSelect) -> Value {
+    let mut m = Map::new();
+    m.insert("options".into(), match (&p.options) { Some(v) => Value::Array((v).iter().map(|v| iface_databases__retrieve_a_database_response_properties_author_multi_select_options_item__to_json(v)).collect()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_databases__retrieve_a_database_response_properties_author_multi_select_options_item__to_json(p: &iface_databases::RetrieveADatabaseResponsePropertiesAuthorMultiSelectOptionsItem) -> Value {
+    let mut m = Map::new();
+    m.insert("color".into(), match (&p.color) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("id".into(), match (&p.id) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("name".into(), match (&p.name) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_databases__retrieve_a_database_response_properties_link__to_json(p: &iface_databases::RetrieveADatabaseResponsePropertiesLink) -> Value {
+    let mut m = Map::new();
+    m.insert("id".into(), match (&p.id) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("name".into(), match (&p.name) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("type".into(), match (&p.type_op) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("url".into(), match (&p.url) { Some(v) => iface_databases__retrieve_a_database_response_properties_link_url__to_json(v), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_databases__retrieve_a_database_response_properties_link_url__to_json(p: &iface_databases::RetrieveADatabaseResponsePropertiesLinkUrl) -> Value {
+    let mut m = Map::new();
+    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_databases__retrieve_a_database_response_properties_name__to_json(p: &iface_databases::RetrieveADatabaseResponsePropertiesName) -> Value {
+    let mut m = Map::new();
+    m.insert("id".into(), match (&p.id) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("name".into(), match (&p.name) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("title".into(), match (&p.title) { Some(v) => iface_databases__retrieve_a_database_response_properties_name_title__to_json(v), None => Value::Null });
+    m.insert("type".into(), match (&p.type_op) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_databases__retrieve_a_database_response_properties_name_title__to_json(p: &iface_databases::RetrieveADatabaseResponsePropertiesNameTitle) -> Value {
+    let mut m = Map::new();
+    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_databases__retrieve_a_database_response_properties_publisher__to_json(p: &iface_databases::RetrieveADatabaseResponsePropertiesPublisher) -> Value {
+    let mut m = Map::new();
+    m.insert("id".into(), match (&p.id) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("name".into(), match (&p.name) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("select".into(), match (&p.select) { Some(v) => iface_databases__retrieve_a_database_response_properties_publisher_select__to_json(v), None => Value::Null });
+    m.insert("type".into(), match (&p.type_op) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_databases__retrieve_a_database_response_properties_publisher_select__to_json(p: &iface_databases::RetrieveADatabaseResponsePropertiesPublisherSelect) -> Value {
+    let mut m = Map::new();
+    m.insert("options".into(), match (&p.options) { Some(v) => Value::Array((v).iter().map(|v| iface_databases__retrieve_a_database_response_properties_publisher_select_options_item__to_json(v)).collect()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_databases__retrieve_a_database_response_properties_publisher_select_options_item__to_json(p: &iface_databases::RetrieveADatabaseResponsePropertiesPublisherSelectOptionsItem) -> Value {
+    let mut m = Map::new();
+    m.insert("color".into(), match (&p.color) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("id".into(), match (&p.id) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("name".into(), match (&p.name) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_databases__retrieve_a_database_response_properties_publishing_release_date__to_json(p: &iface_databases::RetrieveADatabaseResponsePropertiesPublishingReleaseDate) -> Value {
+    let mut m = Map::new();
+    m.insert("date".into(), match (&p.date) { Some(v) => iface_databases__retrieve_a_database_response_properties_publishing_release_date_date__to_json(v), None => Value::Null });
+    m.insert("id".into(), match (&p.id) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("name".into(), match (&p.name) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("type".into(), match (&p.type_op) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_databases__retrieve_a_database_response_properties_publishing_release_date_date__to_json(p: &iface_databases::RetrieveADatabaseResponsePropertiesPublishingReleaseDateDate) -> Value {
+    let mut m = Map::new();
+    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_databases__retrieve_a_database_response_properties_read__to_json(p: &iface_databases::RetrieveADatabaseResponsePropertiesRead) -> Value {
+    let mut m = Map::new();
+    m.insert("checkbox".into(), match (&p.checkbox) { Some(v) => iface_databases__retrieve_a_database_response_properties_read_checkbox__to_json(v), None => Value::Null });
+    m.insert("id".into(), match (&p.id) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("name".into(), match (&p.name) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("type".into(), match (&p.type_op) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_databases__retrieve_a_database_response_properties_read_checkbox__to_json(p: &iface_databases::RetrieveADatabaseResponsePropertiesReadCheckbox) -> Value {
+    let mut m = Map::new();
+    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_databases__retrieve_a_database_response_properties_score_v5__to_json(p: &iface_databases::RetrieveADatabaseResponsePropertiesScoreV5) -> Value {
+    let mut m = Map::new();
+    m.insert("id".into(), match (&p.id) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("name".into(), match (&p.name) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("select".into(), match (&p.select) { Some(v) => iface_databases__retrieve_a_database_response_properties_score_v5_select__to_json(v), None => Value::Null });
+    m.insert("type".into(), match (&p.type_op) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_databases__retrieve_a_database_response_properties_score_v5_select__to_json(p: &iface_databases::RetrieveADatabaseResponsePropertiesScoreV5Select) -> Value {
+    let mut m = Map::new();
+    m.insert("options".into(), match (&p.options) { Some(v) => Value::Array((v).iter().map(|v| iface_databases__retrieve_a_database_response_properties_score_v5_select_options_item__to_json(v)).collect()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_databases__retrieve_a_database_response_properties_score_v5_select_options_item__to_json(p: &iface_databases::RetrieveADatabaseResponsePropertiesScoreV5SelectOptionsItem) -> Value {
+    let mut m = Map::new();
+    m.insert("color".into(), match (&p.color) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("id".into(), match (&p.id) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("name".into(), match (&p.name) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_databases__retrieve_a_database_response_properties_status__to_json(p: &iface_databases::RetrieveADatabaseResponsePropertiesStatus) -> Value {
+    let mut m = Map::new();
+    m.insert("id".into(), match (&p.id) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("name".into(), match (&p.name) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("select".into(), match (&p.select) { Some(v) => iface_databases__retrieve_a_database_response_properties_status_select__to_json(v), None => Value::Null });
+    m.insert("type".into(), match (&p.type_op) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_databases__retrieve_a_database_response_properties_status_select__to_json(p: &iface_databases::RetrieveADatabaseResponsePropertiesStatusSelect) -> Value {
+    let mut m = Map::new();
+    m.insert("options".into(), match (&p.options) { Some(v) => Value::Array((v).iter().map(|v| iface_databases__retrieve_a_database_response_properties_status_select_options_item__to_json(v)).collect()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_databases__retrieve_a_database_response_properties_status_select_options_item__to_json(p: &iface_databases::RetrieveADatabaseResponsePropertiesStatusSelectOptionsItem) -> Value {
+    let mut m = Map::new();
+    m.insert("color".into(), match (&p.color) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("id".into(), match (&p.id) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("name".into(), match (&p.name) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_databases__retrieve_a_database_response_properties_summary__to_json(p: &iface_databases::RetrieveADatabaseResponsePropertiesSummary) -> Value {
+    let mut m = Map::new();
+    m.insert("id".into(), match (&p.id) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("name".into(), match (&p.name) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("rich_text".into(), match (&p.rich_text) { Some(v) => iface_databases__retrieve_a_database_response_properties_summary_rich_text__to_json(v), None => Value::Null });
+    m.insert("type".into(), match (&p.type_op) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_databases__retrieve_a_database_response_properties_summary_rich_text__to_json(p: &iface_databases::RetrieveADatabaseResponsePropertiesSummaryRichText) -> Value {
+    let mut m = Map::new();
+    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_databases__retrieve_a_database_response_properties_type_op__to_json(p: &iface_databases::RetrieveADatabaseResponsePropertiesTypeOp) -> Value {
+    let mut m = Map::new();
+    m.insert("id".into(), match (&p.id) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("name".into(), match (&p.name) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("select".into(), match (&p.select) { Some(v) => iface_databases__retrieve_a_database_response_properties_type_op_select__to_json(v), None => Value::Null });
+    m.insert("type".into(), match (&p.type_op) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_databases__retrieve_a_database_response_properties_type_op_select__to_json(p: &iface_databases::RetrieveADatabaseResponsePropertiesTypeOpSelect) -> Value {
+    let mut m = Map::new();
+    m.insert("options".into(), match (&p.options) { Some(v) => Value::Array((v).iter().map(|v| iface_databases__retrieve_a_database_response_properties_type_op_select_options_item__to_json(v)).collect()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_databases__retrieve_a_database_response_properties_type_op_select_options_item__to_json(p: &iface_databases::RetrieveADatabaseResponsePropertiesTypeOpSelectOptionsItem) -> Value {
+    let mut m = Map::new();
+    m.insert("color".into(), match (&p.color) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("id".into(), match (&p.id) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("name".into(), match (&p.name) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_databases__retrieve_a_database_response_title_item__to_json(p: &iface_databases::RetrieveADatabaseResponseTitleItem) -> Value {
+    let mut m = Map::new();
+    m.insert("annotations".into(), match (&p.annotations) { Some(v) => iface_databases__retrieve_a_database_response_title_item_annotations__to_json(v), None => Value::Null });
+    m.insert("href".into(), match (&p.href) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("plain_text".into(), match (&p.plain_text) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("text".into(), match (&p.text) { Some(v) => iface_databases__retrieve_a_database_response_title_item_text__to_json(v), None => Value::Null });
+    m.insert("type".into(), match (&p.type_op) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_databases__retrieve_a_database_response_title_item_annotations__to_json(p: &iface_databases::RetrieveADatabaseResponseTitleItemAnnotations) -> Value {
+    let mut m = Map::new();
+    m.insert("bold".into(), match (&p.bold) { Some(v) => Value::Bool(*(v)), None => Value::Null });
+    m.insert("code".into(), match (&p.code) { Some(v) => Value::Bool(*(v)), None => Value::Null });
+    m.insert("color".into(), match (&p.color) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("italic".into(), match (&p.italic) { Some(v) => Value::Bool(*(v)), None => Value::Null });
+    m.insert("strikethrough".into(), match (&p.strikethrough) { Some(v) => Value::Bool(*(v)), None => Value::Null });
+    m.insert("underline".into(), match (&p.underline) { Some(v) => Value::Bool(*(v)), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_databases__retrieve_a_database_response_title_item_text__to_json(p: &iface_databases::RetrieveADatabaseResponseTitleItemText) -> Value {
+    let mut m = Map::new();
+    m.insert("content".into(), match (&p.content) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("link".into(), match (&p.link) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
 fn iface_databases__update_a_database_body_properties__to_json(p: &iface_databases::UpdateADatabaseBodyProperties) -> Value {
     let mut m = Map::new();
-    m.insert("wine_pairing".into(), match (&p.wine_pairing) { Some(v) => iface_databases__update_a_database_body_properties_wine_pairing__to_json(v), None => Value::Null });
+    m.insert("Wine Pairing".into(), match (&p.wine_pairing) { Some(v) => iface_databases__update_a_database_body_properties_wine_pairing__to_json(v), None => Value::Null });
     Value::Object(m)
 }
 
@@ -558,6 +1638,294 @@ fn iface_databases__update_a_database_body_title_item_text__to_json(p: &iface_da
     Value::Object(m)
 }
 
+fn iface_databases__update_a_database_response__to_json(p: &iface_databases::UpdateADatabaseResponse) -> Value {
+    let mut m = Map::new();
+    m.insert("archived".into(), match (&p.archived) { Some(v) => Value::Bool(*(v)), None => Value::Null });
+    m.insert("cover".into(), match (&p.cover) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("created_by".into(), match (&p.created_by) { Some(v) => iface_databases__update_a_database_response_created_by__to_json(v), None => Value::Null });
+    m.insert("created_time".into(), match (&p.created_time) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("icon".into(), match (&p.icon) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("id".into(), match (&p.id) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("last_edited_by".into(), match (&p.last_edited_by) { Some(v) => iface_databases__update_a_database_response_last_edited_by__to_json(v), None => Value::Null });
+    m.insert("last_edited_time".into(), match (&p.last_edited_time) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("object".into(), match (&p.object) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("parent".into(), match (&p.parent) { Some(v) => iface_databases__update_a_database_response_parent__to_json(v), None => Value::Null });
+    m.insert("properties".into(), match (&p.properties) { Some(v) => iface_databases__update_a_database_response_properties__to_json(v), None => Value::Null });
+    m.insert("title".into(), match (&p.title) { Some(v) => Value::Array((v).iter().map(|v| iface_databases__update_a_database_response_title_item__to_json(v)).collect()), None => Value::Null });
+    m.insert("url".into(), match (&p.url) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_databases__update_a_database_response_created_by__to_json(p: &iface_databases::UpdateADatabaseResponseCreatedBy) -> Value {
+    let mut m = Map::new();
+    m.insert("id".into(), match (&p.id) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("object".into(), match (&p.object) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_databases__update_a_database_response_last_edited_by__to_json(p: &iface_databases::UpdateADatabaseResponseLastEditedBy) -> Value {
+    let mut m = Map::new();
+    m.insert("id".into(), match (&p.id) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("object".into(), match (&p.object) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_databases__update_a_database_response_parent__to_json(p: &iface_databases::UpdateADatabaseResponseParent) -> Value {
+    let mut m = Map::new();
+    m.insert("page_id".into(), match (&p.page_id) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("type".into(), match (&p.type_op) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_databases__update_a_database_response_properties__to_json(p: &iface_databases::UpdateADatabaseResponseProperties) -> Value {
+    let mut m = Map::new();
+    m.insert("Author".into(), match (&p.author) { Some(v) => iface_databases__update_a_database_response_properties_author__to_json(v), None => Value::Null });
+    m.insert("Link".into(), match (&p.link) { Some(v) => iface_databases__update_a_database_response_properties_link__to_json(v), None => Value::Null });
+    m.insert("Name".into(), match (&p.name) { Some(v) => iface_databases__update_a_database_response_properties_name__to_json(v), None => Value::Null });
+    m.insert("Publisher".into(), match (&p.publisher) { Some(v) => iface_databases__update_a_database_response_properties_publisher__to_json(v), None => Value::Null });
+    m.insert("Publishing/Release Date".into(), match (&p.publishing_release_date) { Some(v) => iface_databases__update_a_database_response_properties_publishing_release_date__to_json(v), None => Value::Null });
+    m.insert("Read".into(), match (&p.read) { Some(v) => iface_databases__update_a_database_response_properties_read__to_json(v), None => Value::Null });
+    m.insert("Score /5".into(), match (&p.score_v5) { Some(v) => iface_databases__update_a_database_response_properties_score_v5__to_json(v), None => Value::Null });
+    m.insert("Status".into(), match (&p.status) { Some(v) => iface_databases__update_a_database_response_properties_status__to_json(v), None => Value::Null });
+    m.insert("Summary".into(), match (&p.summary) { Some(v) => iface_databases__update_a_database_response_properties_summary__to_json(v), None => Value::Null });
+    m.insert("Type".into(), match (&p.type_op) { Some(v) => iface_databases__update_a_database_response_properties_type_op__to_json(v), None => Value::Null });
+    m.insert("Wine Pairing".into(), match (&p.wine_pairing) { Some(v) => iface_databases__update_a_database_response_properties_wine_pairing__to_json(v), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_databases__update_a_database_response_properties_author__to_json(p: &iface_databases::UpdateADatabaseResponsePropertiesAuthor) -> Value {
+    let mut m = Map::new();
+    m.insert("id".into(), match (&p.id) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("multi_select".into(), match (&p.multi_select) { Some(v) => iface_databases__update_a_database_response_properties_author_multi_select__to_json(v), None => Value::Null });
+    m.insert("name".into(), match (&p.name) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("type".into(), match (&p.type_op) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_databases__update_a_database_response_properties_author_multi_select__to_json(p: &iface_databases::UpdateADatabaseResponsePropertiesAuthorMultiSelect) -> Value {
+    let mut m = Map::new();
+    m.insert("options".into(), match (&p.options) { Some(v) => Value::Array((v).iter().map(|v| iface_databases__update_a_database_response_properties_author_multi_select_options_item__to_json(v)).collect()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_databases__update_a_database_response_properties_author_multi_select_options_item__to_json(p: &iface_databases::UpdateADatabaseResponsePropertiesAuthorMultiSelectOptionsItem) -> Value {
+    let mut m = Map::new();
+    m.insert("color".into(), match (&p.color) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("id".into(), match (&p.id) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("name".into(), match (&p.name) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_databases__update_a_database_response_properties_link__to_json(p: &iface_databases::UpdateADatabaseResponsePropertiesLink) -> Value {
+    let mut m = Map::new();
+    m.insert("id".into(), match (&p.id) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("name".into(), match (&p.name) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("type".into(), match (&p.type_op) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("url".into(), match (&p.url) { Some(v) => iface_databases__update_a_database_response_properties_link_url__to_json(v), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_databases__update_a_database_response_properties_link_url__to_json(p: &iface_databases::UpdateADatabaseResponsePropertiesLinkUrl) -> Value {
+    let mut m = Map::new();
+    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_databases__update_a_database_response_properties_name__to_json(p: &iface_databases::UpdateADatabaseResponsePropertiesName) -> Value {
+    let mut m = Map::new();
+    m.insert("id".into(), match (&p.id) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("name".into(), match (&p.name) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("title".into(), match (&p.title) { Some(v) => iface_databases__update_a_database_response_properties_name_title__to_json(v), None => Value::Null });
+    m.insert("type".into(), match (&p.type_op) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_databases__update_a_database_response_properties_name_title__to_json(p: &iface_databases::UpdateADatabaseResponsePropertiesNameTitle) -> Value {
+    let mut m = Map::new();
+    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_databases__update_a_database_response_properties_publisher__to_json(p: &iface_databases::UpdateADatabaseResponsePropertiesPublisher) -> Value {
+    let mut m = Map::new();
+    m.insert("id".into(), match (&p.id) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("name".into(), match (&p.name) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("select".into(), match (&p.select) { Some(v) => iface_databases__update_a_database_response_properties_publisher_select__to_json(v), None => Value::Null });
+    m.insert("type".into(), match (&p.type_op) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_databases__update_a_database_response_properties_publisher_select__to_json(p: &iface_databases::UpdateADatabaseResponsePropertiesPublisherSelect) -> Value {
+    let mut m = Map::new();
+    m.insert("options".into(), match (&p.options) { Some(v) => Value::Array((v).iter().map(|v| iface_databases__update_a_database_response_properties_publisher_select_options_item__to_json(v)).collect()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_databases__update_a_database_response_properties_publisher_select_options_item__to_json(p: &iface_databases::UpdateADatabaseResponsePropertiesPublisherSelectOptionsItem) -> Value {
+    let mut m = Map::new();
+    m.insert("color".into(), match (&p.color) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("id".into(), match (&p.id) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("name".into(), match (&p.name) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_databases__update_a_database_response_properties_publishing_release_date__to_json(p: &iface_databases::UpdateADatabaseResponsePropertiesPublishingReleaseDate) -> Value {
+    let mut m = Map::new();
+    m.insert("date".into(), match (&p.date) { Some(v) => iface_databases__update_a_database_response_properties_publishing_release_date_date__to_json(v), None => Value::Null });
+    m.insert("id".into(), match (&p.id) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("name".into(), match (&p.name) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("type".into(), match (&p.type_op) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_databases__update_a_database_response_properties_publishing_release_date_date__to_json(p: &iface_databases::UpdateADatabaseResponsePropertiesPublishingReleaseDateDate) -> Value {
+    let mut m = Map::new();
+    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_databases__update_a_database_response_properties_read__to_json(p: &iface_databases::UpdateADatabaseResponsePropertiesRead) -> Value {
+    let mut m = Map::new();
+    m.insert("checkbox".into(), match (&p.checkbox) { Some(v) => iface_databases__update_a_database_response_properties_read_checkbox__to_json(v), None => Value::Null });
+    m.insert("id".into(), match (&p.id) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("name".into(), match (&p.name) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("type".into(), match (&p.type_op) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_databases__update_a_database_response_properties_read_checkbox__to_json(p: &iface_databases::UpdateADatabaseResponsePropertiesReadCheckbox) -> Value {
+    let mut m = Map::new();
+    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_databases__update_a_database_response_properties_score_v5__to_json(p: &iface_databases::UpdateADatabaseResponsePropertiesScoreV5) -> Value {
+    let mut m = Map::new();
+    m.insert("id".into(), match (&p.id) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("name".into(), match (&p.name) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("select".into(), match (&p.select) { Some(v) => iface_databases__update_a_database_response_properties_score_v5_select__to_json(v), None => Value::Null });
+    m.insert("type".into(), match (&p.type_op) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_databases__update_a_database_response_properties_score_v5_select__to_json(p: &iface_databases::UpdateADatabaseResponsePropertiesScoreV5Select) -> Value {
+    let mut m = Map::new();
+    m.insert("options".into(), match (&p.options) { Some(v) => Value::Array((v).iter().map(|v| iface_databases__update_a_database_response_properties_score_v5_select_options_item__to_json(v)).collect()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_databases__update_a_database_response_properties_score_v5_select_options_item__to_json(p: &iface_databases::UpdateADatabaseResponsePropertiesScoreV5SelectOptionsItem) -> Value {
+    let mut m = Map::new();
+    m.insert("color".into(), match (&p.color) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("id".into(), match (&p.id) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("name".into(), match (&p.name) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_databases__update_a_database_response_properties_status__to_json(p: &iface_databases::UpdateADatabaseResponsePropertiesStatus) -> Value {
+    let mut m = Map::new();
+    m.insert("id".into(), match (&p.id) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("name".into(), match (&p.name) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("select".into(), match (&p.select) { Some(v) => iface_databases__update_a_database_response_properties_status_select__to_json(v), None => Value::Null });
+    m.insert("type".into(), match (&p.type_op) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_databases__update_a_database_response_properties_status_select__to_json(p: &iface_databases::UpdateADatabaseResponsePropertiesStatusSelect) -> Value {
+    let mut m = Map::new();
+    m.insert("options".into(), match (&p.options) { Some(v) => Value::Array((v).iter().map(|v| iface_databases__update_a_database_response_properties_status_select_options_item__to_json(v)).collect()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_databases__update_a_database_response_properties_status_select_options_item__to_json(p: &iface_databases::UpdateADatabaseResponsePropertiesStatusSelectOptionsItem) -> Value {
+    let mut m = Map::new();
+    m.insert("color".into(), match (&p.color) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("id".into(), match (&p.id) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("name".into(), match (&p.name) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_databases__update_a_database_response_properties_summary__to_json(p: &iface_databases::UpdateADatabaseResponsePropertiesSummary) -> Value {
+    let mut m = Map::new();
+    m.insert("id".into(), match (&p.id) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("name".into(), match (&p.name) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("rich_text".into(), match (&p.rich_text) { Some(v) => iface_databases__update_a_database_response_properties_summary_rich_text__to_json(v), None => Value::Null });
+    m.insert("type".into(), match (&p.type_op) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_databases__update_a_database_response_properties_summary_rich_text__to_json(p: &iface_databases::UpdateADatabaseResponsePropertiesSummaryRichText) -> Value {
+    let mut m = Map::new();
+    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_databases__update_a_database_response_properties_type_op__to_json(p: &iface_databases::UpdateADatabaseResponsePropertiesTypeOp) -> Value {
+    let mut m = Map::new();
+    m.insert("id".into(), match (&p.id) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("name".into(), match (&p.name) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("select".into(), match (&p.select) { Some(v) => iface_databases__update_a_database_response_properties_type_op_select__to_json(v), None => Value::Null });
+    m.insert("type".into(), match (&p.type_op) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_databases__update_a_database_response_properties_type_op_select__to_json(p: &iface_databases::UpdateADatabaseResponsePropertiesTypeOpSelect) -> Value {
+    let mut m = Map::new();
+    m.insert("options".into(), match (&p.options) { Some(v) => Value::Array((v).iter().map(|v| iface_databases__update_a_database_response_properties_type_op_select_options_item__to_json(v)).collect()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_databases__update_a_database_response_properties_type_op_select_options_item__to_json(p: &iface_databases::UpdateADatabaseResponsePropertiesTypeOpSelectOptionsItem) -> Value {
+    let mut m = Map::new();
+    m.insert("color".into(), match (&p.color) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("id".into(), match (&p.id) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("name".into(), match (&p.name) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_databases__update_a_database_response_properties_wine_pairing__to_json(p: &iface_databases::UpdateADatabaseResponsePropertiesWinePairing) -> Value {
+    let mut m = Map::new();
+    m.insert("id".into(), match (&p.id) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("name".into(), match (&p.name) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("rich_text".into(), match (&p.rich_text) { Some(v) => iface_databases__update_a_database_response_properties_wine_pairing_rich_text__to_json(v), None => Value::Null });
+    m.insert("type".into(), match (&p.type_op) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_databases__update_a_database_response_properties_wine_pairing_rich_text__to_json(p: &iface_databases::UpdateADatabaseResponsePropertiesWinePairingRichText) -> Value {
+    let mut m = Map::new();
+    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_databases__update_a_database_response_title_item__to_json(p: &iface_databases::UpdateADatabaseResponseTitleItem) -> Value {
+    let mut m = Map::new();
+    m.insert("annotations".into(), match (&p.annotations) { Some(v) => iface_databases__update_a_database_response_title_item_annotations__to_json(v), None => Value::Null });
+    m.insert("href".into(), match (&p.href) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("plain_text".into(), match (&p.plain_text) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("text".into(), match (&p.text) { Some(v) => iface_databases__update_a_database_response_title_item_text__to_json(v), None => Value::Null });
+    m.insert("type".into(), match (&p.type_op) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_databases__update_a_database_response_title_item_annotations__to_json(p: &iface_databases::UpdateADatabaseResponseTitleItemAnnotations) -> Value {
+    let mut m = Map::new();
+    m.insert("bold".into(), match (&p.bold) { Some(v) => Value::Bool(*(v)), None => Value::Null });
+    m.insert("code".into(), match (&p.code) { Some(v) => Value::Bool(*(v)), None => Value::Null });
+    m.insert("color".into(), match (&p.color) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("italic".into(), match (&p.italic) { Some(v) => Value::Bool(*(v)), None => Value::Null });
+    m.insert("strikethrough".into(), match (&p.strikethrough) { Some(v) => Value::Bool(*(v)), None => Value::Null });
+    m.insert("underline".into(), match (&p.underline) { Some(v) => Value::Bool(*(v)), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_databases__update_a_database_response_title_item_text__to_json(p: &iface_databases::UpdateADatabaseResponseTitleItemText) -> Value {
+    let mut m = Map::new();
+    m.insert("content".into(), match (&p.content) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("link".into(), match (&p.link) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
 fn iface_databases__query_a_database_body_filter__to_json(p: &iface_databases::QueryADatabaseBodyFilter) -> Value {
     let mut m = Map::new();
     m.insert("property".into(), match (&p.property) { Some(v) => Value::String((v).clone()), None => Value::Null });
@@ -571,14 +1939,234 @@ fn iface_databases__query_a_database_body_filter_select__to_json(p: &iface_datab
     Value::Object(m)
 }
 
+fn iface_databases__query_a_database_response__to_json(p: &iface_databases::QueryADatabaseResponse) -> Value {
+    let mut m = Map::new();
+    m.insert("has_more".into(), match (&p.has_more) { Some(v) => Value::Bool(*(v)), None => Value::Null });
+    m.insert("next_cursor".into(), match (&p.next_cursor) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("object".into(), match (&p.object) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("results".into(), match (&p.results) { Some(v) => Value::Array((v).iter().map(|v| iface_databases__query_a_database_response_results_item__to_json(v)).collect()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_databases__query_a_database_response_results_item__to_json(p: &iface_databases::QueryADatabaseResponseResultsItem) -> Value {
+    let mut m = Map::new();
+    m.insert("archived".into(), match (&p.archived) { Some(v) => Value::Bool(*(v)), None => Value::Null });
+    m.insert("cover".into(), match (&p.cover) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("created_by".into(), match (&p.created_by) { Some(v) => iface_databases__query_a_database_response_results_item_created_by__to_json(v), None => Value::Null });
+    m.insert("created_time".into(), match (&p.created_time) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("icon".into(), match (&p.icon) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("id".into(), match (&p.id) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("last_edited_by".into(), match (&p.last_edited_by) { Some(v) => iface_databases__query_a_database_response_results_item_last_edited_by__to_json(v), None => Value::Null });
+    m.insert("last_edited_time".into(), match (&p.last_edited_time) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("object".into(), match (&p.object) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("parent".into(), match (&p.parent) { Some(v) => iface_databases__query_a_database_response_results_item_parent__to_json(v), None => Value::Null });
+    m.insert("properties".into(), match (&p.properties) { Some(v) => iface_databases__query_a_database_response_results_item_properties__to_json(v), None => Value::Null });
+    m.insert("url".into(), match (&p.url) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_databases__query_a_database_response_results_item_created_by__to_json(p: &iface_databases::QueryADatabaseResponseResultsItemCreatedBy) -> Value {
+    let mut m = Map::new();
+    m.insert("id".into(), match (&p.id) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("object".into(), match (&p.object) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_databases__query_a_database_response_results_item_last_edited_by__to_json(p: &iface_databases::QueryADatabaseResponseResultsItemLastEditedBy) -> Value {
+    let mut m = Map::new();
+    m.insert("id".into(), match (&p.id) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("object".into(), match (&p.object) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_databases__query_a_database_response_results_item_parent__to_json(p: &iface_databases::QueryADatabaseResponseResultsItemParent) -> Value {
+    let mut m = Map::new();
+    m.insert("database_id".into(), match (&p.database_id) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("type".into(), match (&p.type_op) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_databases__query_a_database_response_results_item_properties__to_json(p: &iface_databases::QueryADatabaseResponseResultsItemProperties) -> Value {
+    let mut m = Map::new();
+    m.insert("Author".into(), match (&p.author) { Some(v) => iface_databases__query_a_database_response_results_item_properties_author__to_json(v), None => Value::Null });
+    m.insert("Link".into(), match (&p.link) { Some(v) => iface_databases__query_a_database_response_results_item_properties_link__to_json(v), None => Value::Null });
+    m.insert("Name".into(), match (&p.name) { Some(v) => iface_databases__query_a_database_response_results_item_properties_name__to_json(v), None => Value::Null });
+    m.insert("Publisher".into(), match (&p.publisher) { Some(v) => iface_databases__query_a_database_response_results_item_properties_publisher__to_json(v), None => Value::Null });
+    m.insert("Publishing/Release Date".into(), match (&p.publishing_release_date) { Some(v) => iface_databases__query_a_database_response_results_item_properties_publishing_release_date__to_json(v), None => Value::Null });
+    m.insert("Read".into(), match (&p.read) { Some(v) => iface_databases__query_a_database_response_results_item_properties_read__to_json(v), None => Value::Null });
+    m.insert("Score /5".into(), match (&p.score_v5) { Some(v) => iface_databases__query_a_database_response_results_item_properties_score_v5__to_json(v), None => Value::Null });
+    m.insert("Status".into(), match (&p.status) { Some(v) => iface_databases__query_a_database_response_results_item_properties_status__to_json(v), None => Value::Null });
+    m.insert("Summary".into(), match (&p.summary) { Some(v) => iface_databases__query_a_database_response_results_item_properties_summary__to_json(v), None => Value::Null });
+    m.insert("Type".into(), match (&p.type_op) { Some(v) => iface_databases__query_a_database_response_results_item_properties_type_op__to_json(v), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_databases__query_a_database_response_results_item_properties_author__to_json(p: &iface_databases::QueryADatabaseResponseResultsItemPropertiesAuthor) -> Value {
+    let mut m = Map::new();
+    m.insert("id".into(), match (&p.id) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("multi_select".into(), match (&p.multi_select) { Some(v) => Value::Array((v).iter().map(|v| iface_databases__query_a_database_response_results_item_properties_author_multi_select_item__to_json(v)).collect()), None => Value::Null });
+    m.insert("type".into(), match (&p.type_op) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_databases__query_a_database_response_results_item_properties_author_multi_select_item__to_json(p: &iface_databases::QueryADatabaseResponseResultsItemPropertiesAuthorMultiSelectItem) -> Value {
+    let mut m = Map::new();
+    m.insert("color".into(), match (&p.color) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("id".into(), match (&p.id) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("name".into(), match (&p.name) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_databases__query_a_database_response_results_item_properties_link__to_json(p: &iface_databases::QueryADatabaseResponseResultsItemPropertiesLink) -> Value {
+    let mut m = Map::new();
+    m.insert("id".into(), match (&p.id) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("type".into(), match (&p.type_op) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("url".into(), match (&p.url) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_databases__query_a_database_response_results_item_properties_name__to_json(p: &iface_databases::QueryADatabaseResponseResultsItemPropertiesName) -> Value {
+    let mut m = Map::new();
+    m.insert("id".into(), match (&p.id) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("title".into(), match (&p.title) { Some(v) => Value::Array((v).iter().map(|v| iface_databases__query_a_database_response_results_item_properties_name_title_item__to_json(v)).collect()), None => Value::Null });
+    m.insert("type".into(), match (&p.type_op) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_databases__query_a_database_response_results_item_properties_name_title_item__to_json(p: &iface_databases::QueryADatabaseResponseResultsItemPropertiesNameTitleItem) -> Value {
+    let mut m = Map::new();
+    m.insert("annotations".into(), match (&p.annotations) { Some(v) => iface_databases__query_a_database_response_results_item_properties_name_title_item_annotations__to_json(v), None => Value::Null });
+    m.insert("href".into(), match (&p.href) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("plain_text".into(), match (&p.plain_text) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("text".into(), match (&p.text) { Some(v) => iface_databases__query_a_database_response_results_item_properties_name_title_item_text__to_json(v), None => Value::Null });
+    m.insert("type".into(), match (&p.type_op) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_databases__query_a_database_response_results_item_properties_name_title_item_annotations__to_json(p: &iface_databases::QueryADatabaseResponseResultsItemPropertiesNameTitleItemAnnotations) -> Value {
+    let mut m = Map::new();
+    m.insert("bold".into(), match (&p.bold) { Some(v) => Value::Bool(*(v)), None => Value::Null });
+    m.insert("code".into(), match (&p.code) { Some(v) => Value::Bool(*(v)), None => Value::Null });
+    m.insert("color".into(), match (&p.color) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("italic".into(), match (&p.italic) { Some(v) => Value::Bool(*(v)), None => Value::Null });
+    m.insert("strikethrough".into(), match (&p.strikethrough) { Some(v) => Value::Bool(*(v)), None => Value::Null });
+    m.insert("underline".into(), match (&p.underline) { Some(v) => Value::Bool(*(v)), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_databases__query_a_database_response_results_item_properties_name_title_item_text__to_json(p: &iface_databases::QueryADatabaseResponseResultsItemPropertiesNameTitleItemText) -> Value {
+    let mut m = Map::new();
+    m.insert("content".into(), match (&p.content) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("link".into(), match (&p.link) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_databases__query_a_database_response_results_item_properties_publisher__to_json(p: &iface_databases::QueryADatabaseResponseResultsItemPropertiesPublisher) -> Value {
+    let mut m = Map::new();
+    m.insert("id".into(), match (&p.id) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("select".into(), match (&p.select) { Some(v) => iface_databases__query_a_database_response_results_item_properties_publisher_select__to_json(v), None => Value::Null });
+    m.insert("type".into(), match (&p.type_op) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_databases__query_a_database_response_results_item_properties_publisher_select__to_json(p: &iface_databases::QueryADatabaseResponseResultsItemPropertiesPublisherSelect) -> Value {
+    let mut m = Map::new();
+    m.insert("color".into(), match (&p.color) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("id".into(), match (&p.id) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("name".into(), match (&p.name) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_databases__query_a_database_response_results_item_properties_publishing_release_date__to_json(p: &iface_databases::QueryADatabaseResponseResultsItemPropertiesPublishingReleaseDate) -> Value {
+    let mut m = Map::new();
+    m.insert("date".into(), match (&p.date) { Some(v) => iface_databases__query_a_database_response_results_item_properties_publishing_release_date_date__to_json(v), None => Value::Null });
+    m.insert("id".into(), match (&p.id) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("type".into(), match (&p.type_op) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_databases__query_a_database_response_results_item_properties_publishing_release_date_date__to_json(p: &iface_databases::QueryADatabaseResponseResultsItemPropertiesPublishingReleaseDateDate) -> Value {
+    let mut m = Map::new();
+    m.insert("end".into(), match (&p.end) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("start".into(), match (&p.start) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("time_zone".into(), match (&p.time_zone) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_databases__query_a_database_response_results_item_properties_read__to_json(p: &iface_databases::QueryADatabaseResponseResultsItemPropertiesRead) -> Value {
+    let mut m = Map::new();
+    m.insert("checkbox".into(), match (&p.checkbox) { Some(v) => Value::Bool(*(v)), None => Value::Null });
+    m.insert("id".into(), match (&p.id) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("type".into(), match (&p.type_op) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_databases__query_a_database_response_results_item_properties_score_v5__to_json(p: &iface_databases::QueryADatabaseResponseResultsItemPropertiesScoreV5) -> Value {
+    let mut m = Map::new();
+    m.insert("id".into(), match (&p.id) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("select".into(), match (&p.select) { Some(v) => iface_databases__query_a_database_response_results_item_properties_score_v5_select__to_json(v), None => Value::Null });
+    m.insert("type".into(), match (&p.type_op) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_databases__query_a_database_response_results_item_properties_score_v5_select__to_json(p: &iface_databases::QueryADatabaseResponseResultsItemPropertiesScoreV5Select) -> Value {
+    let mut m = Map::new();
+    m.insert("color".into(), match (&p.color) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("id".into(), match (&p.id) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("name".into(), match (&p.name) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_databases__query_a_database_response_results_item_properties_status__to_json(p: &iface_databases::QueryADatabaseResponseResultsItemPropertiesStatus) -> Value {
+    let mut m = Map::new();
+    m.insert("id".into(), match (&p.id) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("select".into(), match (&p.select) { Some(v) => iface_databases__query_a_database_response_results_item_properties_status_select__to_json(v), None => Value::Null });
+    m.insert("type".into(), match (&p.type_op) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_databases__query_a_database_response_results_item_properties_status_select__to_json(p: &iface_databases::QueryADatabaseResponseResultsItemPropertiesStatusSelect) -> Value {
+    let mut m = Map::new();
+    m.insert("color".into(), match (&p.color) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("id".into(), match (&p.id) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("name".into(), match (&p.name) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_databases__query_a_database_response_results_item_properties_summary__to_json(p: &iface_databases::QueryADatabaseResponseResultsItemPropertiesSummary) -> Value {
+    let mut m = Map::new();
+    m.insert("id".into(), match (&p.id) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("rich_text".into(), match (&p.rich_text) { Some(v) => Value::Array((v).iter().map(|v| Value::String((v).clone())).collect()), None => Value::Null });
+    m.insert("type".into(), match (&p.type_op) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_databases__query_a_database_response_results_item_properties_type_op__to_json(p: &iface_databases::QueryADatabaseResponseResultsItemPropertiesTypeOp) -> Value {
+    let mut m = Map::new();
+    m.insert("id".into(), match (&p.id) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("select".into(), match (&p.select) { Some(v) => iface_databases__query_a_database_response_results_item_properties_type_op_select__to_json(v), None => Value::Null });
+    m.insert("type".into(), match (&p.type_op) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_databases__query_a_database_response_results_item_properties_type_op_select__to_json(p: &iface_databases::QueryADatabaseResponseResultsItemPropertiesTypeOpSelect) -> Value {
+    let mut m = Map::new();
+    m.insert("color".into(), match (&p.color) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("id".into(), match (&p.id) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("name".into(), match (&p.name) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
 fn iface_databases__retrieve_a_database_params__to_json(p: &iface_databases::RetrieveADatabaseParams) -> Value {
     let mut m = Map::new();
+    m.insert("id".into(), Value::String((&p.id).clone()));
     m.insert("notion_version".into(), match (&p.notion_version) { Some(v) => Value::String((v).clone()), None => Value::Null });
     Value::Object(m)
 }
 
 fn iface_databases__update_a_database_params__to_json(p: &iface_databases::UpdateADatabaseParams) -> Value {
     let mut m = Map::new();
+    m.insert("id".into(), Value::String((&p.id).clone()));
     m.insert("notion_version".into(), match (&p.notion_version) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("properties".into(), match (&p.properties) { Some(v) => iface_databases__update_a_database_body_properties__to_json(v), None => Value::Null });
     m.insert("title".into(), match (&p.title) { Some(v) => Value::Array((v).iter().map(|v| iface_databases__update_a_database_body_title_item__to_json(v)).collect()), None => Value::Null });
@@ -587,23 +2175,958 @@ fn iface_databases__update_a_database_params__to_json(p: &iface_databases::Updat
 
 fn iface_databases__query_a_database_params__to_json(p: &iface_databases::QueryADatabaseParams) -> Value {
     let mut m = Map::new();
+    m.insert("id".into(), Value::String((&p.id).clone()));
     m.insert("notion_version".into(), match (&p.notion_version) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("filter".into(), match (&p.filter) { Some(v) => iface_databases__query_a_database_body_filter__to_json(v), None => Value::Null });
     Value::Object(m)
 }
 
+fn iface_databases__retrieve_a_database_response__from_json(v: &Value) -> Option<iface_databases::RetrieveADatabaseResponse> {
+    let m = v.as_object()?;
+    Some(iface_databases::RetrieveADatabaseResponse {
+        archived: m.get("archived").filter(|v| !v.is_null()).and_then(|v| (v).as_bool()),
+        cover: m.get("cover").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        created_by: m.get("created_by").filter(|v| !v.is_null()).and_then(|v| iface_databases__retrieve_a_database_response_created_by__from_json(v)),
+        created_time: m.get("created_time").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        icon: m.get("icon").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        id: m.get("id").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        last_edited_by: m.get("last_edited_by").filter(|v| !v.is_null()).and_then(|v| iface_databases__retrieve_a_database_response_last_edited_by__from_json(v)),
+        last_edited_time: m.get("last_edited_time").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        object: m.get("object").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        parent: m.get("parent").filter(|v| !v.is_null()).and_then(|v| iface_databases__retrieve_a_database_response_parent__from_json(v)),
+        properties: m.get("properties").filter(|v| !v.is_null()).and_then(|v| iface_databases__retrieve_a_database_response_properties__from_json(v)),
+        title: m.get("title").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| iface_databases__retrieve_a_database_response_title_item__from_json(x)).collect())),
+        url: m.get("url").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    })
+}
+
+fn iface_databases__retrieve_a_database_response_created_by__from_json(v: &Value) -> Option<iface_databases::RetrieveADatabaseResponseCreatedBy> {
+    let m = v.as_object()?;
+    Some(iface_databases::RetrieveADatabaseResponseCreatedBy {
+        id: m.get("id").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        object: m.get("object").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    })
+}
+
+fn iface_databases__retrieve_a_database_response_last_edited_by__from_json(v: &Value) -> Option<iface_databases::RetrieveADatabaseResponseLastEditedBy> {
+    let m = v.as_object()?;
+    Some(iface_databases::RetrieveADatabaseResponseLastEditedBy {
+        id: m.get("id").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        object: m.get("object").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    })
+}
+
+fn iface_databases__retrieve_a_database_response_parent__from_json(v: &Value) -> Option<iface_databases::RetrieveADatabaseResponseParent> {
+    let m = v.as_object()?;
+    Some(iface_databases::RetrieveADatabaseResponseParent {
+        page_id: m.get("page_id").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        type_op: m.get("type").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    })
+}
+
+fn iface_databases__retrieve_a_database_response_properties__from_json(v: &Value) -> Option<iface_databases::RetrieveADatabaseResponseProperties> {
+    let m = v.as_object()?;
+    Some(iface_databases::RetrieveADatabaseResponseProperties {
+        author: m.get("Author").filter(|v| !v.is_null()).and_then(|v| iface_databases__retrieve_a_database_response_properties_author__from_json(v)),
+        link: m.get("Link").filter(|v| !v.is_null()).and_then(|v| iface_databases__retrieve_a_database_response_properties_link__from_json(v)),
+        name: m.get("Name").filter(|v| !v.is_null()).and_then(|v| iface_databases__retrieve_a_database_response_properties_name__from_json(v)),
+        publisher: m.get("Publisher").filter(|v| !v.is_null()).and_then(|v| iface_databases__retrieve_a_database_response_properties_publisher__from_json(v)),
+        publishing_release_date: m.get("Publishing/Release Date").filter(|v| !v.is_null()).and_then(|v| iface_databases__retrieve_a_database_response_properties_publishing_release_date__from_json(v)),
+        read: m.get("Read").filter(|v| !v.is_null()).and_then(|v| iface_databases__retrieve_a_database_response_properties_read__from_json(v)),
+        score_v5: m.get("Score /5").filter(|v| !v.is_null()).and_then(|v| iface_databases__retrieve_a_database_response_properties_score_v5__from_json(v)),
+        status: m.get("Status").filter(|v| !v.is_null()).and_then(|v| iface_databases__retrieve_a_database_response_properties_status__from_json(v)),
+        summary: m.get("Summary").filter(|v| !v.is_null()).and_then(|v| iface_databases__retrieve_a_database_response_properties_summary__from_json(v)),
+        type_op: m.get("Type").filter(|v| !v.is_null()).and_then(|v| iface_databases__retrieve_a_database_response_properties_type_op__from_json(v)),
+    })
+}
+
+fn iface_databases__retrieve_a_database_response_properties_author__from_json(v: &Value) -> Option<iface_databases::RetrieveADatabaseResponsePropertiesAuthor> {
+    let m = v.as_object()?;
+    Some(iface_databases::RetrieveADatabaseResponsePropertiesAuthor {
+        id: m.get("id").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        multi_select: m.get("multi_select").filter(|v| !v.is_null()).and_then(|v| iface_databases__retrieve_a_database_response_properties_author_multi_select__from_json(v)),
+        name: m.get("name").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        type_op: m.get("type").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    })
+}
+
+fn iface_databases__retrieve_a_database_response_properties_author_multi_select__from_json(v: &Value) -> Option<iface_databases::RetrieveADatabaseResponsePropertiesAuthorMultiSelect> {
+    let m = v.as_object()?;
+    Some(iface_databases::RetrieveADatabaseResponsePropertiesAuthorMultiSelect {
+        options: m.get("options").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| iface_databases__retrieve_a_database_response_properties_author_multi_select_options_item__from_json(x)).collect())),
+    })
+}
+
+fn iface_databases__retrieve_a_database_response_properties_author_multi_select_options_item__from_json(v: &Value) -> Option<iface_databases::RetrieveADatabaseResponsePropertiesAuthorMultiSelectOptionsItem> {
+    let m = v.as_object()?;
+    Some(iface_databases::RetrieveADatabaseResponsePropertiesAuthorMultiSelectOptionsItem {
+        color: m.get("color").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        id: m.get("id").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        name: m.get("name").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    })
+}
+
+fn iface_databases__retrieve_a_database_response_properties_link__from_json(v: &Value) -> Option<iface_databases::RetrieveADatabaseResponsePropertiesLink> {
+    let m = v.as_object()?;
+    Some(iface_databases::RetrieveADatabaseResponsePropertiesLink {
+        id: m.get("id").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        name: m.get("name").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        type_op: m.get("type").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        url: m.get("url").filter(|v| !v.is_null()).and_then(|v| iface_databases__retrieve_a_database_response_properties_link_url__from_json(v)),
+    })
+}
+
+fn iface_databases__retrieve_a_database_response_properties_link_url__from_json(v: &Value) -> Option<iface_databases::RetrieveADatabaseResponsePropertiesLinkUrl> {
+    let m = v.as_object()?;
+    Some(iface_databases::RetrieveADatabaseResponsePropertiesLinkUrl {
+        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    })
+}
+
+fn iface_databases__retrieve_a_database_response_properties_name__from_json(v: &Value) -> Option<iface_databases::RetrieveADatabaseResponsePropertiesName> {
+    let m = v.as_object()?;
+    Some(iface_databases::RetrieveADatabaseResponsePropertiesName {
+        id: m.get("id").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        name: m.get("name").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        title: m.get("title").filter(|v| !v.is_null()).and_then(|v| iface_databases__retrieve_a_database_response_properties_name_title__from_json(v)),
+        type_op: m.get("type").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    })
+}
+
+fn iface_databases__retrieve_a_database_response_properties_name_title__from_json(v: &Value) -> Option<iface_databases::RetrieveADatabaseResponsePropertiesNameTitle> {
+    let m = v.as_object()?;
+    Some(iface_databases::RetrieveADatabaseResponsePropertiesNameTitle {
+        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    })
+}
+
+fn iface_databases__retrieve_a_database_response_properties_publisher__from_json(v: &Value) -> Option<iface_databases::RetrieveADatabaseResponsePropertiesPublisher> {
+    let m = v.as_object()?;
+    Some(iface_databases::RetrieveADatabaseResponsePropertiesPublisher {
+        id: m.get("id").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        name: m.get("name").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        select: m.get("select").filter(|v| !v.is_null()).and_then(|v| iface_databases__retrieve_a_database_response_properties_publisher_select__from_json(v)),
+        type_op: m.get("type").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    })
+}
+
+fn iface_databases__retrieve_a_database_response_properties_publisher_select__from_json(v: &Value) -> Option<iface_databases::RetrieveADatabaseResponsePropertiesPublisherSelect> {
+    let m = v.as_object()?;
+    Some(iface_databases::RetrieveADatabaseResponsePropertiesPublisherSelect {
+        options: m.get("options").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| iface_databases__retrieve_a_database_response_properties_publisher_select_options_item__from_json(x)).collect())),
+    })
+}
+
+fn iface_databases__retrieve_a_database_response_properties_publisher_select_options_item__from_json(v: &Value) -> Option<iface_databases::RetrieveADatabaseResponsePropertiesPublisherSelectOptionsItem> {
+    let m = v.as_object()?;
+    Some(iface_databases::RetrieveADatabaseResponsePropertiesPublisherSelectOptionsItem {
+        color: m.get("color").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        id: m.get("id").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        name: m.get("name").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    })
+}
+
+fn iface_databases__retrieve_a_database_response_properties_publishing_release_date__from_json(v: &Value) -> Option<iface_databases::RetrieveADatabaseResponsePropertiesPublishingReleaseDate> {
+    let m = v.as_object()?;
+    Some(iface_databases::RetrieveADatabaseResponsePropertiesPublishingReleaseDate {
+        date: m.get("date").filter(|v| !v.is_null()).and_then(|v| iface_databases__retrieve_a_database_response_properties_publishing_release_date_date__from_json(v)),
+        id: m.get("id").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        name: m.get("name").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        type_op: m.get("type").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    })
+}
+
+fn iface_databases__retrieve_a_database_response_properties_publishing_release_date_date__from_json(v: &Value) -> Option<iface_databases::RetrieveADatabaseResponsePropertiesPublishingReleaseDateDate> {
+    let m = v.as_object()?;
+    Some(iface_databases::RetrieveADatabaseResponsePropertiesPublishingReleaseDateDate {
+        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    })
+}
+
+fn iface_databases__retrieve_a_database_response_properties_read__from_json(v: &Value) -> Option<iface_databases::RetrieveADatabaseResponsePropertiesRead> {
+    let m = v.as_object()?;
+    Some(iface_databases::RetrieveADatabaseResponsePropertiesRead {
+        checkbox: m.get("checkbox").filter(|v| !v.is_null()).and_then(|v| iface_databases__retrieve_a_database_response_properties_read_checkbox__from_json(v)),
+        id: m.get("id").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        name: m.get("name").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        type_op: m.get("type").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    })
+}
+
+fn iface_databases__retrieve_a_database_response_properties_read_checkbox__from_json(v: &Value) -> Option<iface_databases::RetrieveADatabaseResponsePropertiesReadCheckbox> {
+    let m = v.as_object()?;
+    Some(iface_databases::RetrieveADatabaseResponsePropertiesReadCheckbox {
+        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    })
+}
+
+fn iface_databases__retrieve_a_database_response_properties_score_v5__from_json(v: &Value) -> Option<iface_databases::RetrieveADatabaseResponsePropertiesScoreV5> {
+    let m = v.as_object()?;
+    Some(iface_databases::RetrieveADatabaseResponsePropertiesScoreV5 {
+        id: m.get("id").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        name: m.get("name").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        select: m.get("select").filter(|v| !v.is_null()).and_then(|v| iface_databases__retrieve_a_database_response_properties_score_v5_select__from_json(v)),
+        type_op: m.get("type").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    })
+}
+
+fn iface_databases__retrieve_a_database_response_properties_score_v5_select__from_json(v: &Value) -> Option<iface_databases::RetrieveADatabaseResponsePropertiesScoreV5Select> {
+    let m = v.as_object()?;
+    Some(iface_databases::RetrieveADatabaseResponsePropertiesScoreV5Select {
+        options: m.get("options").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| iface_databases__retrieve_a_database_response_properties_score_v5_select_options_item__from_json(x)).collect())),
+    })
+}
+
+fn iface_databases__retrieve_a_database_response_properties_score_v5_select_options_item__from_json(v: &Value) -> Option<iface_databases::RetrieveADatabaseResponsePropertiesScoreV5SelectOptionsItem> {
+    let m = v.as_object()?;
+    Some(iface_databases::RetrieveADatabaseResponsePropertiesScoreV5SelectOptionsItem {
+        color: m.get("color").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        id: m.get("id").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        name: m.get("name").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    })
+}
+
+fn iface_databases__retrieve_a_database_response_properties_status__from_json(v: &Value) -> Option<iface_databases::RetrieveADatabaseResponsePropertiesStatus> {
+    let m = v.as_object()?;
+    Some(iface_databases::RetrieveADatabaseResponsePropertiesStatus {
+        id: m.get("id").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        name: m.get("name").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        select: m.get("select").filter(|v| !v.is_null()).and_then(|v| iface_databases__retrieve_a_database_response_properties_status_select__from_json(v)),
+        type_op: m.get("type").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    })
+}
+
+fn iface_databases__retrieve_a_database_response_properties_status_select__from_json(v: &Value) -> Option<iface_databases::RetrieveADatabaseResponsePropertiesStatusSelect> {
+    let m = v.as_object()?;
+    Some(iface_databases::RetrieveADatabaseResponsePropertiesStatusSelect {
+        options: m.get("options").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| iface_databases__retrieve_a_database_response_properties_status_select_options_item__from_json(x)).collect())),
+    })
+}
+
+fn iface_databases__retrieve_a_database_response_properties_status_select_options_item__from_json(v: &Value) -> Option<iface_databases::RetrieveADatabaseResponsePropertiesStatusSelectOptionsItem> {
+    let m = v.as_object()?;
+    Some(iface_databases::RetrieveADatabaseResponsePropertiesStatusSelectOptionsItem {
+        color: m.get("color").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        id: m.get("id").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        name: m.get("name").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    })
+}
+
+fn iface_databases__retrieve_a_database_response_properties_summary__from_json(v: &Value) -> Option<iface_databases::RetrieveADatabaseResponsePropertiesSummary> {
+    let m = v.as_object()?;
+    Some(iface_databases::RetrieveADatabaseResponsePropertiesSummary {
+        id: m.get("id").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        name: m.get("name").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        rich_text: m.get("rich_text").filter(|v| !v.is_null()).and_then(|v| iface_databases__retrieve_a_database_response_properties_summary_rich_text__from_json(v)),
+        type_op: m.get("type").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    })
+}
+
+fn iface_databases__retrieve_a_database_response_properties_summary_rich_text__from_json(v: &Value) -> Option<iface_databases::RetrieveADatabaseResponsePropertiesSummaryRichText> {
+    let m = v.as_object()?;
+    Some(iface_databases::RetrieveADatabaseResponsePropertiesSummaryRichText {
+        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    })
+}
+
+fn iface_databases__retrieve_a_database_response_properties_type_op__from_json(v: &Value) -> Option<iface_databases::RetrieveADatabaseResponsePropertiesTypeOp> {
+    let m = v.as_object()?;
+    Some(iface_databases::RetrieveADatabaseResponsePropertiesTypeOp {
+        id: m.get("id").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        name: m.get("name").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        select: m.get("select").filter(|v| !v.is_null()).and_then(|v| iface_databases__retrieve_a_database_response_properties_type_op_select__from_json(v)),
+        type_op: m.get("type").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    })
+}
+
+fn iface_databases__retrieve_a_database_response_properties_type_op_select__from_json(v: &Value) -> Option<iface_databases::RetrieveADatabaseResponsePropertiesTypeOpSelect> {
+    let m = v.as_object()?;
+    Some(iface_databases::RetrieveADatabaseResponsePropertiesTypeOpSelect {
+        options: m.get("options").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| iface_databases__retrieve_a_database_response_properties_type_op_select_options_item__from_json(x)).collect())),
+    })
+}
+
+fn iface_databases__retrieve_a_database_response_properties_type_op_select_options_item__from_json(v: &Value) -> Option<iface_databases::RetrieveADatabaseResponsePropertiesTypeOpSelectOptionsItem> {
+    let m = v.as_object()?;
+    Some(iface_databases::RetrieveADatabaseResponsePropertiesTypeOpSelectOptionsItem {
+        color: m.get("color").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        id: m.get("id").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        name: m.get("name").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    })
+}
+
+fn iface_databases__retrieve_a_database_response_title_item__from_json(v: &Value) -> Option<iface_databases::RetrieveADatabaseResponseTitleItem> {
+    let m = v.as_object()?;
+    Some(iface_databases::RetrieveADatabaseResponseTitleItem {
+        annotations: m.get("annotations").filter(|v| !v.is_null()).and_then(|v| iface_databases__retrieve_a_database_response_title_item_annotations__from_json(v)),
+        href: m.get("href").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        plain_text: m.get("plain_text").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        text: m.get("text").filter(|v| !v.is_null()).and_then(|v| iface_databases__retrieve_a_database_response_title_item_text__from_json(v)),
+        type_op: m.get("type").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    })
+}
+
+fn iface_databases__retrieve_a_database_response_title_item_annotations__from_json(v: &Value) -> Option<iface_databases::RetrieveADatabaseResponseTitleItemAnnotations> {
+    let m = v.as_object()?;
+    Some(iface_databases::RetrieveADatabaseResponseTitleItemAnnotations {
+        bold: m.get("bold").filter(|v| !v.is_null()).and_then(|v| (v).as_bool()),
+        code: m.get("code").filter(|v| !v.is_null()).and_then(|v| (v).as_bool()),
+        color: m.get("color").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        italic: m.get("italic").filter(|v| !v.is_null()).and_then(|v| (v).as_bool()),
+        strikethrough: m.get("strikethrough").filter(|v| !v.is_null()).and_then(|v| (v).as_bool()),
+        underline: m.get("underline").filter(|v| !v.is_null()).and_then(|v| (v).as_bool()),
+    })
+}
+
+fn iface_databases__retrieve_a_database_response_title_item_text__from_json(v: &Value) -> Option<iface_databases::RetrieveADatabaseResponseTitleItemText> {
+    let m = v.as_object()?;
+    Some(iface_databases::RetrieveADatabaseResponseTitleItemText {
+        content: m.get("content").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        link: m.get("link").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    })
+}
+
+fn iface_databases__update_a_database_response__from_json(v: &Value) -> Option<iface_databases::UpdateADatabaseResponse> {
+    let m = v.as_object()?;
+    Some(iface_databases::UpdateADatabaseResponse {
+        archived: m.get("archived").filter(|v| !v.is_null()).and_then(|v| (v).as_bool()),
+        cover: m.get("cover").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        created_by: m.get("created_by").filter(|v| !v.is_null()).and_then(|v| iface_databases__update_a_database_response_created_by__from_json(v)),
+        created_time: m.get("created_time").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        icon: m.get("icon").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        id: m.get("id").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        last_edited_by: m.get("last_edited_by").filter(|v| !v.is_null()).and_then(|v| iface_databases__update_a_database_response_last_edited_by__from_json(v)),
+        last_edited_time: m.get("last_edited_time").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        object: m.get("object").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        parent: m.get("parent").filter(|v| !v.is_null()).and_then(|v| iface_databases__update_a_database_response_parent__from_json(v)),
+        properties: m.get("properties").filter(|v| !v.is_null()).and_then(|v| iface_databases__update_a_database_response_properties__from_json(v)),
+        title: m.get("title").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| iface_databases__update_a_database_response_title_item__from_json(x)).collect())),
+        url: m.get("url").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    })
+}
+
+fn iface_databases__update_a_database_response_created_by__from_json(v: &Value) -> Option<iface_databases::UpdateADatabaseResponseCreatedBy> {
+    let m = v.as_object()?;
+    Some(iface_databases::UpdateADatabaseResponseCreatedBy {
+        id: m.get("id").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        object: m.get("object").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    })
+}
+
+fn iface_databases__update_a_database_response_last_edited_by__from_json(v: &Value) -> Option<iface_databases::UpdateADatabaseResponseLastEditedBy> {
+    let m = v.as_object()?;
+    Some(iface_databases::UpdateADatabaseResponseLastEditedBy {
+        id: m.get("id").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        object: m.get("object").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    })
+}
+
+fn iface_databases__update_a_database_response_parent__from_json(v: &Value) -> Option<iface_databases::UpdateADatabaseResponseParent> {
+    let m = v.as_object()?;
+    Some(iface_databases::UpdateADatabaseResponseParent {
+        page_id: m.get("page_id").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        type_op: m.get("type").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    })
+}
+
+fn iface_databases__update_a_database_response_properties__from_json(v: &Value) -> Option<iface_databases::UpdateADatabaseResponseProperties> {
+    let m = v.as_object()?;
+    Some(iface_databases::UpdateADatabaseResponseProperties {
+        author: m.get("Author").filter(|v| !v.is_null()).and_then(|v| iface_databases__update_a_database_response_properties_author__from_json(v)),
+        link: m.get("Link").filter(|v| !v.is_null()).and_then(|v| iface_databases__update_a_database_response_properties_link__from_json(v)),
+        name: m.get("Name").filter(|v| !v.is_null()).and_then(|v| iface_databases__update_a_database_response_properties_name__from_json(v)),
+        publisher: m.get("Publisher").filter(|v| !v.is_null()).and_then(|v| iface_databases__update_a_database_response_properties_publisher__from_json(v)),
+        publishing_release_date: m.get("Publishing/Release Date").filter(|v| !v.is_null()).and_then(|v| iface_databases__update_a_database_response_properties_publishing_release_date__from_json(v)),
+        read: m.get("Read").filter(|v| !v.is_null()).and_then(|v| iface_databases__update_a_database_response_properties_read__from_json(v)),
+        score_v5: m.get("Score /5").filter(|v| !v.is_null()).and_then(|v| iface_databases__update_a_database_response_properties_score_v5__from_json(v)),
+        status: m.get("Status").filter(|v| !v.is_null()).and_then(|v| iface_databases__update_a_database_response_properties_status__from_json(v)),
+        summary: m.get("Summary").filter(|v| !v.is_null()).and_then(|v| iface_databases__update_a_database_response_properties_summary__from_json(v)),
+        type_op: m.get("Type").filter(|v| !v.is_null()).and_then(|v| iface_databases__update_a_database_response_properties_type_op__from_json(v)),
+        wine_pairing: m.get("Wine Pairing").filter(|v| !v.is_null()).and_then(|v| iface_databases__update_a_database_response_properties_wine_pairing__from_json(v)),
+    })
+}
+
+fn iface_databases__update_a_database_response_properties_author__from_json(v: &Value) -> Option<iface_databases::UpdateADatabaseResponsePropertiesAuthor> {
+    let m = v.as_object()?;
+    Some(iface_databases::UpdateADatabaseResponsePropertiesAuthor {
+        id: m.get("id").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        multi_select: m.get("multi_select").filter(|v| !v.is_null()).and_then(|v| iface_databases__update_a_database_response_properties_author_multi_select__from_json(v)),
+        name: m.get("name").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        type_op: m.get("type").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    })
+}
+
+fn iface_databases__update_a_database_response_properties_author_multi_select__from_json(v: &Value) -> Option<iface_databases::UpdateADatabaseResponsePropertiesAuthorMultiSelect> {
+    let m = v.as_object()?;
+    Some(iface_databases::UpdateADatabaseResponsePropertiesAuthorMultiSelect {
+        options: m.get("options").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| iface_databases__update_a_database_response_properties_author_multi_select_options_item__from_json(x)).collect())),
+    })
+}
+
+fn iface_databases__update_a_database_response_properties_author_multi_select_options_item__from_json(v: &Value) -> Option<iface_databases::UpdateADatabaseResponsePropertiesAuthorMultiSelectOptionsItem> {
+    let m = v.as_object()?;
+    Some(iface_databases::UpdateADatabaseResponsePropertiesAuthorMultiSelectOptionsItem {
+        color: m.get("color").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        id: m.get("id").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        name: m.get("name").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    })
+}
+
+fn iface_databases__update_a_database_response_properties_link__from_json(v: &Value) -> Option<iface_databases::UpdateADatabaseResponsePropertiesLink> {
+    let m = v.as_object()?;
+    Some(iface_databases::UpdateADatabaseResponsePropertiesLink {
+        id: m.get("id").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        name: m.get("name").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        type_op: m.get("type").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        url: m.get("url").filter(|v| !v.is_null()).and_then(|v| iface_databases__update_a_database_response_properties_link_url__from_json(v)),
+    })
+}
+
+fn iface_databases__update_a_database_response_properties_link_url__from_json(v: &Value) -> Option<iface_databases::UpdateADatabaseResponsePropertiesLinkUrl> {
+    let m = v.as_object()?;
+    Some(iface_databases::UpdateADatabaseResponsePropertiesLinkUrl {
+        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    })
+}
+
+fn iface_databases__update_a_database_response_properties_name__from_json(v: &Value) -> Option<iface_databases::UpdateADatabaseResponsePropertiesName> {
+    let m = v.as_object()?;
+    Some(iface_databases::UpdateADatabaseResponsePropertiesName {
+        id: m.get("id").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        name: m.get("name").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        title: m.get("title").filter(|v| !v.is_null()).and_then(|v| iface_databases__update_a_database_response_properties_name_title__from_json(v)),
+        type_op: m.get("type").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    })
+}
+
+fn iface_databases__update_a_database_response_properties_name_title__from_json(v: &Value) -> Option<iface_databases::UpdateADatabaseResponsePropertiesNameTitle> {
+    let m = v.as_object()?;
+    Some(iface_databases::UpdateADatabaseResponsePropertiesNameTitle {
+        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    })
+}
+
+fn iface_databases__update_a_database_response_properties_publisher__from_json(v: &Value) -> Option<iface_databases::UpdateADatabaseResponsePropertiesPublisher> {
+    let m = v.as_object()?;
+    Some(iface_databases::UpdateADatabaseResponsePropertiesPublisher {
+        id: m.get("id").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        name: m.get("name").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        select: m.get("select").filter(|v| !v.is_null()).and_then(|v| iface_databases__update_a_database_response_properties_publisher_select__from_json(v)),
+        type_op: m.get("type").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    })
+}
+
+fn iface_databases__update_a_database_response_properties_publisher_select__from_json(v: &Value) -> Option<iface_databases::UpdateADatabaseResponsePropertiesPublisherSelect> {
+    let m = v.as_object()?;
+    Some(iface_databases::UpdateADatabaseResponsePropertiesPublisherSelect {
+        options: m.get("options").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| iface_databases__update_a_database_response_properties_publisher_select_options_item__from_json(x)).collect())),
+    })
+}
+
+fn iface_databases__update_a_database_response_properties_publisher_select_options_item__from_json(v: &Value) -> Option<iface_databases::UpdateADatabaseResponsePropertiesPublisherSelectOptionsItem> {
+    let m = v.as_object()?;
+    Some(iface_databases::UpdateADatabaseResponsePropertiesPublisherSelectOptionsItem {
+        color: m.get("color").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        id: m.get("id").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        name: m.get("name").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    })
+}
+
+fn iface_databases__update_a_database_response_properties_publishing_release_date__from_json(v: &Value) -> Option<iface_databases::UpdateADatabaseResponsePropertiesPublishingReleaseDate> {
+    let m = v.as_object()?;
+    Some(iface_databases::UpdateADatabaseResponsePropertiesPublishingReleaseDate {
+        date: m.get("date").filter(|v| !v.is_null()).and_then(|v| iface_databases__update_a_database_response_properties_publishing_release_date_date__from_json(v)),
+        id: m.get("id").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        name: m.get("name").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        type_op: m.get("type").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    })
+}
+
+fn iface_databases__update_a_database_response_properties_publishing_release_date_date__from_json(v: &Value) -> Option<iface_databases::UpdateADatabaseResponsePropertiesPublishingReleaseDateDate> {
+    let m = v.as_object()?;
+    Some(iface_databases::UpdateADatabaseResponsePropertiesPublishingReleaseDateDate {
+        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    })
+}
+
+fn iface_databases__update_a_database_response_properties_read__from_json(v: &Value) -> Option<iface_databases::UpdateADatabaseResponsePropertiesRead> {
+    let m = v.as_object()?;
+    Some(iface_databases::UpdateADatabaseResponsePropertiesRead {
+        checkbox: m.get("checkbox").filter(|v| !v.is_null()).and_then(|v| iface_databases__update_a_database_response_properties_read_checkbox__from_json(v)),
+        id: m.get("id").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        name: m.get("name").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        type_op: m.get("type").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    })
+}
+
+fn iface_databases__update_a_database_response_properties_read_checkbox__from_json(v: &Value) -> Option<iface_databases::UpdateADatabaseResponsePropertiesReadCheckbox> {
+    let m = v.as_object()?;
+    Some(iface_databases::UpdateADatabaseResponsePropertiesReadCheckbox {
+        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    })
+}
+
+fn iface_databases__update_a_database_response_properties_score_v5__from_json(v: &Value) -> Option<iface_databases::UpdateADatabaseResponsePropertiesScoreV5> {
+    let m = v.as_object()?;
+    Some(iface_databases::UpdateADatabaseResponsePropertiesScoreV5 {
+        id: m.get("id").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        name: m.get("name").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        select: m.get("select").filter(|v| !v.is_null()).and_then(|v| iface_databases__update_a_database_response_properties_score_v5_select__from_json(v)),
+        type_op: m.get("type").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    })
+}
+
+fn iface_databases__update_a_database_response_properties_score_v5_select__from_json(v: &Value) -> Option<iface_databases::UpdateADatabaseResponsePropertiesScoreV5Select> {
+    let m = v.as_object()?;
+    Some(iface_databases::UpdateADatabaseResponsePropertiesScoreV5Select {
+        options: m.get("options").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| iface_databases__update_a_database_response_properties_score_v5_select_options_item__from_json(x)).collect())),
+    })
+}
+
+fn iface_databases__update_a_database_response_properties_score_v5_select_options_item__from_json(v: &Value) -> Option<iface_databases::UpdateADatabaseResponsePropertiesScoreV5SelectOptionsItem> {
+    let m = v.as_object()?;
+    Some(iface_databases::UpdateADatabaseResponsePropertiesScoreV5SelectOptionsItem {
+        color: m.get("color").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        id: m.get("id").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        name: m.get("name").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    })
+}
+
+fn iface_databases__update_a_database_response_properties_status__from_json(v: &Value) -> Option<iface_databases::UpdateADatabaseResponsePropertiesStatus> {
+    let m = v.as_object()?;
+    Some(iface_databases::UpdateADatabaseResponsePropertiesStatus {
+        id: m.get("id").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        name: m.get("name").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        select: m.get("select").filter(|v| !v.is_null()).and_then(|v| iface_databases__update_a_database_response_properties_status_select__from_json(v)),
+        type_op: m.get("type").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    })
+}
+
+fn iface_databases__update_a_database_response_properties_status_select__from_json(v: &Value) -> Option<iface_databases::UpdateADatabaseResponsePropertiesStatusSelect> {
+    let m = v.as_object()?;
+    Some(iface_databases::UpdateADatabaseResponsePropertiesStatusSelect {
+        options: m.get("options").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| iface_databases__update_a_database_response_properties_status_select_options_item__from_json(x)).collect())),
+    })
+}
+
+fn iface_databases__update_a_database_response_properties_status_select_options_item__from_json(v: &Value) -> Option<iface_databases::UpdateADatabaseResponsePropertiesStatusSelectOptionsItem> {
+    let m = v.as_object()?;
+    Some(iface_databases::UpdateADatabaseResponsePropertiesStatusSelectOptionsItem {
+        color: m.get("color").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        id: m.get("id").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        name: m.get("name").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    })
+}
+
+fn iface_databases__update_a_database_response_properties_summary__from_json(v: &Value) -> Option<iface_databases::UpdateADatabaseResponsePropertiesSummary> {
+    let m = v.as_object()?;
+    Some(iface_databases::UpdateADatabaseResponsePropertiesSummary {
+        id: m.get("id").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        name: m.get("name").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        rich_text: m.get("rich_text").filter(|v| !v.is_null()).and_then(|v| iface_databases__update_a_database_response_properties_summary_rich_text__from_json(v)),
+        type_op: m.get("type").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    })
+}
+
+fn iface_databases__update_a_database_response_properties_summary_rich_text__from_json(v: &Value) -> Option<iface_databases::UpdateADatabaseResponsePropertiesSummaryRichText> {
+    let m = v.as_object()?;
+    Some(iface_databases::UpdateADatabaseResponsePropertiesSummaryRichText {
+        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    })
+}
+
+fn iface_databases__update_a_database_response_properties_type_op__from_json(v: &Value) -> Option<iface_databases::UpdateADatabaseResponsePropertiesTypeOp> {
+    let m = v.as_object()?;
+    Some(iface_databases::UpdateADatabaseResponsePropertiesTypeOp {
+        id: m.get("id").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        name: m.get("name").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        select: m.get("select").filter(|v| !v.is_null()).and_then(|v| iface_databases__update_a_database_response_properties_type_op_select__from_json(v)),
+        type_op: m.get("type").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    })
+}
+
+fn iface_databases__update_a_database_response_properties_type_op_select__from_json(v: &Value) -> Option<iface_databases::UpdateADatabaseResponsePropertiesTypeOpSelect> {
+    let m = v.as_object()?;
+    Some(iface_databases::UpdateADatabaseResponsePropertiesTypeOpSelect {
+        options: m.get("options").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| iface_databases__update_a_database_response_properties_type_op_select_options_item__from_json(x)).collect())),
+    })
+}
+
+fn iface_databases__update_a_database_response_properties_type_op_select_options_item__from_json(v: &Value) -> Option<iface_databases::UpdateADatabaseResponsePropertiesTypeOpSelectOptionsItem> {
+    let m = v.as_object()?;
+    Some(iface_databases::UpdateADatabaseResponsePropertiesTypeOpSelectOptionsItem {
+        color: m.get("color").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        id: m.get("id").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        name: m.get("name").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    })
+}
+
+fn iface_databases__update_a_database_response_properties_wine_pairing__from_json(v: &Value) -> Option<iface_databases::UpdateADatabaseResponsePropertiesWinePairing> {
+    let m = v.as_object()?;
+    Some(iface_databases::UpdateADatabaseResponsePropertiesWinePairing {
+        id: m.get("id").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        name: m.get("name").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        rich_text: m.get("rich_text").filter(|v| !v.is_null()).and_then(|v| iface_databases__update_a_database_response_properties_wine_pairing_rich_text__from_json(v)),
+        type_op: m.get("type").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    })
+}
+
+fn iface_databases__update_a_database_response_properties_wine_pairing_rich_text__from_json(v: &Value) -> Option<iface_databases::UpdateADatabaseResponsePropertiesWinePairingRichText> {
+    let m = v.as_object()?;
+    Some(iface_databases::UpdateADatabaseResponsePropertiesWinePairingRichText {
+        data: m.get("data").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    })
+}
+
+fn iface_databases__update_a_database_response_title_item__from_json(v: &Value) -> Option<iface_databases::UpdateADatabaseResponseTitleItem> {
+    let m = v.as_object()?;
+    Some(iface_databases::UpdateADatabaseResponseTitleItem {
+        annotations: m.get("annotations").filter(|v| !v.is_null()).and_then(|v| iface_databases__update_a_database_response_title_item_annotations__from_json(v)),
+        href: m.get("href").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        plain_text: m.get("plain_text").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        text: m.get("text").filter(|v| !v.is_null()).and_then(|v| iface_databases__update_a_database_response_title_item_text__from_json(v)),
+        type_op: m.get("type").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    })
+}
+
+fn iface_databases__update_a_database_response_title_item_annotations__from_json(v: &Value) -> Option<iface_databases::UpdateADatabaseResponseTitleItemAnnotations> {
+    let m = v.as_object()?;
+    Some(iface_databases::UpdateADatabaseResponseTitleItemAnnotations {
+        bold: m.get("bold").filter(|v| !v.is_null()).and_then(|v| (v).as_bool()),
+        code: m.get("code").filter(|v| !v.is_null()).and_then(|v| (v).as_bool()),
+        color: m.get("color").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        italic: m.get("italic").filter(|v| !v.is_null()).and_then(|v| (v).as_bool()),
+        strikethrough: m.get("strikethrough").filter(|v| !v.is_null()).and_then(|v| (v).as_bool()),
+        underline: m.get("underline").filter(|v| !v.is_null()).and_then(|v| (v).as_bool()),
+    })
+}
+
+fn iface_databases__update_a_database_response_title_item_text__from_json(v: &Value) -> Option<iface_databases::UpdateADatabaseResponseTitleItemText> {
+    let m = v.as_object()?;
+    Some(iface_databases::UpdateADatabaseResponseTitleItemText {
+        content: m.get("content").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        link: m.get("link").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    })
+}
+
+fn iface_databases__query_a_database_response__from_json(v: &Value) -> Option<iface_databases::QueryADatabaseResponse> {
+    let m = v.as_object()?;
+    Some(iface_databases::QueryADatabaseResponse {
+        has_more: m.get("has_more").filter(|v| !v.is_null()).and_then(|v| (v).as_bool()),
+        next_cursor: m.get("next_cursor").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        object: m.get("object").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        results: m.get("results").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| iface_databases__query_a_database_response_results_item__from_json(x)).collect())),
+    })
+}
+
+fn iface_databases__query_a_database_response_results_item__from_json(v: &Value) -> Option<iface_databases::QueryADatabaseResponseResultsItem> {
+    let m = v.as_object()?;
+    Some(iface_databases::QueryADatabaseResponseResultsItem {
+        archived: m.get("archived").filter(|v| !v.is_null()).and_then(|v| (v).as_bool()),
+        cover: m.get("cover").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        created_by: m.get("created_by").filter(|v| !v.is_null()).and_then(|v| iface_databases__query_a_database_response_results_item_created_by__from_json(v)),
+        created_time: m.get("created_time").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        icon: m.get("icon").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        id: m.get("id").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        last_edited_by: m.get("last_edited_by").filter(|v| !v.is_null()).and_then(|v| iface_databases__query_a_database_response_results_item_last_edited_by__from_json(v)),
+        last_edited_time: m.get("last_edited_time").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        object: m.get("object").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        parent: m.get("parent").filter(|v| !v.is_null()).and_then(|v| iface_databases__query_a_database_response_results_item_parent__from_json(v)),
+        properties: m.get("properties").filter(|v| !v.is_null()).and_then(|v| iface_databases__query_a_database_response_results_item_properties__from_json(v)),
+        url: m.get("url").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    })
+}
+
+fn iface_databases__query_a_database_response_results_item_created_by__from_json(v: &Value) -> Option<iface_databases::QueryADatabaseResponseResultsItemCreatedBy> {
+    let m = v.as_object()?;
+    Some(iface_databases::QueryADatabaseResponseResultsItemCreatedBy {
+        id: m.get("id").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        object: m.get("object").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    })
+}
+
+fn iface_databases__query_a_database_response_results_item_last_edited_by__from_json(v: &Value) -> Option<iface_databases::QueryADatabaseResponseResultsItemLastEditedBy> {
+    let m = v.as_object()?;
+    Some(iface_databases::QueryADatabaseResponseResultsItemLastEditedBy {
+        id: m.get("id").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        object: m.get("object").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    })
+}
+
+fn iface_databases__query_a_database_response_results_item_parent__from_json(v: &Value) -> Option<iface_databases::QueryADatabaseResponseResultsItemParent> {
+    let m = v.as_object()?;
+    Some(iface_databases::QueryADatabaseResponseResultsItemParent {
+        database_id: m.get("database_id").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        type_op: m.get("type").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    })
+}
+
+fn iface_databases__query_a_database_response_results_item_properties__from_json(v: &Value) -> Option<iface_databases::QueryADatabaseResponseResultsItemProperties> {
+    let m = v.as_object()?;
+    Some(iface_databases::QueryADatabaseResponseResultsItemProperties {
+        author: m.get("Author").filter(|v| !v.is_null()).and_then(|v| iface_databases__query_a_database_response_results_item_properties_author__from_json(v)),
+        link: m.get("Link").filter(|v| !v.is_null()).and_then(|v| iface_databases__query_a_database_response_results_item_properties_link__from_json(v)),
+        name: m.get("Name").filter(|v| !v.is_null()).and_then(|v| iface_databases__query_a_database_response_results_item_properties_name__from_json(v)),
+        publisher: m.get("Publisher").filter(|v| !v.is_null()).and_then(|v| iface_databases__query_a_database_response_results_item_properties_publisher__from_json(v)),
+        publishing_release_date: m.get("Publishing/Release Date").filter(|v| !v.is_null()).and_then(|v| iface_databases__query_a_database_response_results_item_properties_publishing_release_date__from_json(v)),
+        read: m.get("Read").filter(|v| !v.is_null()).and_then(|v| iface_databases__query_a_database_response_results_item_properties_read__from_json(v)),
+        score_v5: m.get("Score /5").filter(|v| !v.is_null()).and_then(|v| iface_databases__query_a_database_response_results_item_properties_score_v5__from_json(v)),
+        status: m.get("Status").filter(|v| !v.is_null()).and_then(|v| iface_databases__query_a_database_response_results_item_properties_status__from_json(v)),
+        summary: m.get("Summary").filter(|v| !v.is_null()).and_then(|v| iface_databases__query_a_database_response_results_item_properties_summary__from_json(v)),
+        type_op: m.get("Type").filter(|v| !v.is_null()).and_then(|v| iface_databases__query_a_database_response_results_item_properties_type_op__from_json(v)),
+    })
+}
+
+fn iface_databases__query_a_database_response_results_item_properties_author__from_json(v: &Value) -> Option<iface_databases::QueryADatabaseResponseResultsItemPropertiesAuthor> {
+    let m = v.as_object()?;
+    Some(iface_databases::QueryADatabaseResponseResultsItemPropertiesAuthor {
+        id: m.get("id").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        multi_select: m.get("multi_select").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| iface_databases__query_a_database_response_results_item_properties_author_multi_select_item__from_json(x)).collect())),
+        type_op: m.get("type").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    })
+}
+
+fn iface_databases__query_a_database_response_results_item_properties_author_multi_select_item__from_json(v: &Value) -> Option<iface_databases::QueryADatabaseResponseResultsItemPropertiesAuthorMultiSelectItem> {
+    let m = v.as_object()?;
+    Some(iface_databases::QueryADatabaseResponseResultsItemPropertiesAuthorMultiSelectItem {
+        color: m.get("color").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        id: m.get("id").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        name: m.get("name").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    })
+}
+
+fn iface_databases__query_a_database_response_results_item_properties_link__from_json(v: &Value) -> Option<iface_databases::QueryADatabaseResponseResultsItemPropertiesLink> {
+    let m = v.as_object()?;
+    Some(iface_databases::QueryADatabaseResponseResultsItemPropertiesLink {
+        id: m.get("id").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        type_op: m.get("type").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        url: m.get("url").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    })
+}
+
+fn iface_databases__query_a_database_response_results_item_properties_name__from_json(v: &Value) -> Option<iface_databases::QueryADatabaseResponseResultsItemPropertiesName> {
+    let m = v.as_object()?;
+    Some(iface_databases::QueryADatabaseResponseResultsItemPropertiesName {
+        id: m.get("id").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        title: m.get("title").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| iface_databases__query_a_database_response_results_item_properties_name_title_item__from_json(x)).collect())),
+        type_op: m.get("type").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    })
+}
+
+fn iface_databases__query_a_database_response_results_item_properties_name_title_item__from_json(v: &Value) -> Option<iface_databases::QueryADatabaseResponseResultsItemPropertiesNameTitleItem> {
+    let m = v.as_object()?;
+    Some(iface_databases::QueryADatabaseResponseResultsItemPropertiesNameTitleItem {
+        annotations: m.get("annotations").filter(|v| !v.is_null()).and_then(|v| iface_databases__query_a_database_response_results_item_properties_name_title_item_annotations__from_json(v)),
+        href: m.get("href").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        plain_text: m.get("plain_text").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        text: m.get("text").filter(|v| !v.is_null()).and_then(|v| iface_databases__query_a_database_response_results_item_properties_name_title_item_text__from_json(v)),
+        type_op: m.get("type").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    })
+}
+
+fn iface_databases__query_a_database_response_results_item_properties_name_title_item_annotations__from_json(v: &Value) -> Option<iface_databases::QueryADatabaseResponseResultsItemPropertiesNameTitleItemAnnotations> {
+    let m = v.as_object()?;
+    Some(iface_databases::QueryADatabaseResponseResultsItemPropertiesNameTitleItemAnnotations {
+        bold: m.get("bold").filter(|v| !v.is_null()).and_then(|v| (v).as_bool()),
+        code: m.get("code").filter(|v| !v.is_null()).and_then(|v| (v).as_bool()),
+        color: m.get("color").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        italic: m.get("italic").filter(|v| !v.is_null()).and_then(|v| (v).as_bool()),
+        strikethrough: m.get("strikethrough").filter(|v| !v.is_null()).and_then(|v| (v).as_bool()),
+        underline: m.get("underline").filter(|v| !v.is_null()).and_then(|v| (v).as_bool()),
+    })
+}
+
+fn iface_databases__query_a_database_response_results_item_properties_name_title_item_text__from_json(v: &Value) -> Option<iface_databases::QueryADatabaseResponseResultsItemPropertiesNameTitleItemText> {
+    let m = v.as_object()?;
+    Some(iface_databases::QueryADatabaseResponseResultsItemPropertiesNameTitleItemText {
+        content: m.get("content").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        link: m.get("link").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    })
+}
+
+fn iface_databases__query_a_database_response_results_item_properties_publisher__from_json(v: &Value) -> Option<iface_databases::QueryADatabaseResponseResultsItemPropertiesPublisher> {
+    let m = v.as_object()?;
+    Some(iface_databases::QueryADatabaseResponseResultsItemPropertiesPublisher {
+        id: m.get("id").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        select: m.get("select").filter(|v| !v.is_null()).and_then(|v| iface_databases__query_a_database_response_results_item_properties_publisher_select__from_json(v)),
+        type_op: m.get("type").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    })
+}
+
+fn iface_databases__query_a_database_response_results_item_properties_publisher_select__from_json(v: &Value) -> Option<iface_databases::QueryADatabaseResponseResultsItemPropertiesPublisherSelect> {
+    let m = v.as_object()?;
+    Some(iface_databases::QueryADatabaseResponseResultsItemPropertiesPublisherSelect {
+        color: m.get("color").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        id: m.get("id").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        name: m.get("name").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    })
+}
+
+fn iface_databases__query_a_database_response_results_item_properties_publishing_release_date__from_json(v: &Value) -> Option<iface_databases::QueryADatabaseResponseResultsItemPropertiesPublishingReleaseDate> {
+    let m = v.as_object()?;
+    Some(iface_databases::QueryADatabaseResponseResultsItemPropertiesPublishingReleaseDate {
+        date: m.get("date").filter(|v| !v.is_null()).and_then(|v| iface_databases__query_a_database_response_results_item_properties_publishing_release_date_date__from_json(v)),
+        id: m.get("id").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        type_op: m.get("type").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    })
+}
+
+fn iface_databases__query_a_database_response_results_item_properties_publishing_release_date_date__from_json(v: &Value) -> Option<iface_databases::QueryADatabaseResponseResultsItemPropertiesPublishingReleaseDateDate> {
+    let m = v.as_object()?;
+    Some(iface_databases::QueryADatabaseResponseResultsItemPropertiesPublishingReleaseDateDate {
+        end: m.get("end").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        start: m.get("start").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        time_zone: m.get("time_zone").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    })
+}
+
+fn iface_databases__query_a_database_response_results_item_properties_read__from_json(v: &Value) -> Option<iface_databases::QueryADatabaseResponseResultsItemPropertiesRead> {
+    let m = v.as_object()?;
+    Some(iface_databases::QueryADatabaseResponseResultsItemPropertiesRead {
+        checkbox: m.get("checkbox").filter(|v| !v.is_null()).and_then(|v| (v).as_bool()),
+        id: m.get("id").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        type_op: m.get("type").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    })
+}
+
+fn iface_databases__query_a_database_response_results_item_properties_score_v5__from_json(v: &Value) -> Option<iface_databases::QueryADatabaseResponseResultsItemPropertiesScoreV5> {
+    let m = v.as_object()?;
+    Some(iface_databases::QueryADatabaseResponseResultsItemPropertiesScoreV5 {
+        id: m.get("id").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        select: m.get("select").filter(|v| !v.is_null()).and_then(|v| iface_databases__query_a_database_response_results_item_properties_score_v5_select__from_json(v)),
+        type_op: m.get("type").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    })
+}
+
+fn iface_databases__query_a_database_response_results_item_properties_score_v5_select__from_json(v: &Value) -> Option<iface_databases::QueryADatabaseResponseResultsItemPropertiesScoreV5Select> {
+    let m = v.as_object()?;
+    Some(iface_databases::QueryADatabaseResponseResultsItemPropertiesScoreV5Select {
+        color: m.get("color").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        id: m.get("id").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        name: m.get("name").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    })
+}
+
+fn iface_databases__query_a_database_response_results_item_properties_status__from_json(v: &Value) -> Option<iface_databases::QueryADatabaseResponseResultsItemPropertiesStatus> {
+    let m = v.as_object()?;
+    Some(iface_databases::QueryADatabaseResponseResultsItemPropertiesStatus {
+        id: m.get("id").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        select: m.get("select").filter(|v| !v.is_null()).and_then(|v| iface_databases__query_a_database_response_results_item_properties_status_select__from_json(v)),
+        type_op: m.get("type").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    })
+}
+
+fn iface_databases__query_a_database_response_results_item_properties_status_select__from_json(v: &Value) -> Option<iface_databases::QueryADatabaseResponseResultsItemPropertiesStatusSelect> {
+    let m = v.as_object()?;
+    Some(iface_databases::QueryADatabaseResponseResultsItemPropertiesStatusSelect {
+        color: m.get("color").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        id: m.get("id").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        name: m.get("name").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    })
+}
+
+fn iface_databases__query_a_database_response_results_item_properties_summary__from_json(v: &Value) -> Option<iface_databases::QueryADatabaseResponseResultsItemPropertiesSummary> {
+    let m = v.as_object()?;
+    Some(iface_databases::QueryADatabaseResponseResultsItemPropertiesSummary {
+        id: m.get("id").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        rich_text: m.get("rich_text").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| (x).as_str().map(|s| s.to_string())).collect())),
+        type_op: m.get("type").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    })
+}
+
+fn iface_databases__query_a_database_response_results_item_properties_type_op__from_json(v: &Value) -> Option<iface_databases::QueryADatabaseResponseResultsItemPropertiesTypeOp> {
+    let m = v.as_object()?;
+    Some(iface_databases::QueryADatabaseResponseResultsItemPropertiesTypeOp {
+        id: m.get("id").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        select: m.get("select").filter(|v| !v.is_null()).and_then(|v| iface_databases__query_a_database_response_results_item_properties_type_op_select__from_json(v)),
+        type_op: m.get("type").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    })
+}
+
+fn iface_databases__query_a_database_response_results_item_properties_type_op_select__from_json(v: &Value) -> Option<iface_databases::QueryADatabaseResponseResultsItemPropertiesTypeOpSelect> {
+    let m = v.as_object()?;
+    Some(iface_databases::QueryADatabaseResponseResultsItemPropertiesTypeOpSelect {
+        color: m.get("color").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        id: m.get("id").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        name: m.get("name").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    })
+}
+
+fn iface_databases__retrieve_a_database__ok(body: String) -> Result<iface_databases::RetrieveADatabaseResponse, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match iface_databases__retrieve_a_database_response__from_json(&v) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_databases__retrieve_a_database__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
+fn iface_databases__update_a_database__ok(body: String) -> Result<iface_databases::UpdateADatabaseResponse, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match iface_databases__update_a_database_response__from_json(&v) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_databases__update_a_database__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
+fn iface_databases__query_a_database__ok(body: String) -> Result<iface_databases::QueryADatabaseResponse, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match iface_databases__query_a_database_response__from_json(&v) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_databases__query_a_database__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
 impl iface_databases::Guest for crate::Component {
-    fn retrieve_a_database(params: iface_databases::RetrieveADatabaseParams) -> Result<String, String> {
+    fn retrieve_a_database(params: iface_databases::RetrieveADatabaseParams) -> Result<iface_databases::RetrieveADatabaseResponse, String> {
         let json = iface_databases__retrieve_a_database_params__to_json(&params);
-        dispatch(&OP_DATABASES_RETRIEVE_A_DATABASE, json)
+        match dispatch(&OP_DATABASES_RETRIEVE_A_DATABASE, json).and_then(iface_databases__retrieve_a_database__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_databases__retrieve_a_database__err(e)),
+        }
     }
-    fn update_a_database(params: iface_databases::UpdateADatabaseParams) -> Result<String, String> {
+    fn update_a_database(params: iface_databases::UpdateADatabaseParams) -> Result<iface_databases::UpdateADatabaseResponse, String> {
         let json = iface_databases__update_a_database_params__to_json(&params);
-        dispatch(&OP_DATABASES_UPDATE_A_DATABASE, json)
+        match dispatch(&OP_DATABASES_UPDATE_A_DATABASE, json).and_then(iface_databases__update_a_database__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_databases__update_a_database__err(e)),
+        }
     }
-    fn query_a_database(params: iface_databases::QueryADatabaseParams) -> Result<String, String> {
+    fn query_a_database(params: iface_databases::QueryADatabaseParams) -> Result<iface_databases::QueryADatabaseResponse, String> {
         let json = iface_databases__query_a_database_params__to_json(&params);
-        dispatch(&OP_DATABASES_QUERY_A_DATABASE, json)
+        match dispatch(&OP_DATABASES_QUERY_A_DATABASE, json).and_then(iface_databases__query_a_database__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_databases__query_a_database__err(e)),
+        }
     }
 }
 use crate::exports::autostamp::notion::pages as iface_pages;
@@ -612,8 +3135,9 @@ const OP_PAGES_RETRIEVE_A_PAGE: OpSpec = OpSpec {
     method: "GET",
     path_template: "/v1/pages/{id}",
     fields: &[
-        FieldSpec { snake: "notion_version", location: FieldLocation::Header },
-        FieldSpec { snake: "", location: FieldLocation::Header },
+        FieldSpec { snake: "id", wire: "id", location: FieldLocation::Path },
+        FieldSpec { snake: "notion_version", wire: "Notion-Version", location: FieldLocation::Header },
+        FieldSpec { snake: "", wire: "", location: FieldLocation::Header },
     ],
     auth: &[
     ],
@@ -623,8 +3147,9 @@ const OP_PAGES_UPDATE_PAGE_PROPERTIES: OpSpec = OpSpec {
     method: "PATCH",
     path_template: "/v1/pages/{id}",
     fields: &[
-        FieldSpec { snake: "notion_version", location: FieldLocation::Header },
-        FieldSpec { snake: "properties", location: FieldLocation::Body },
+        FieldSpec { snake: "id", wire: "id", location: FieldLocation::Path },
+        FieldSpec { snake: "notion_version", wire: "Notion-Version", location: FieldLocation::Header },
+        FieldSpec { snake: "properties", wire: "properties", location: FieldLocation::Body },
     ],
     auth: &[
     ],
@@ -634,14 +3159,103 @@ const OP_PAGES_RETRIEVE_A_PAGE_PROPERTY_ITEM: OpSpec = OpSpec {
     method: "GET",
     path_template: "/v1/pages/{page_id}/properties/{property_id}",
     fields: &[
+        FieldSpec { snake: "page_id", wire: "page_id", location: FieldLocation::Path },
+        FieldSpec { snake: "property_id", wire: "property_id", location: FieldLocation::Path },
     ],
     auth: &[
     ],
 };
 
+fn iface_pages__retrieve_a_page_response__to_json(p: &iface_pages::RetrieveAPageResponse) -> Value {
+    let mut m = Map::new();
+    m.insert("archived".into(), match (&p.archived) { Some(v) => Value::Bool(*(v)), None => Value::Null });
+    m.insert("cover".into(), match (&p.cover) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("created_by".into(), match (&p.created_by) { Some(v) => iface_pages__retrieve_a_page_response_created_by__to_json(v), None => Value::Null });
+    m.insert("created_time".into(), match (&p.created_time) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("icon".into(), match (&p.icon) { Some(v) => iface_pages__retrieve_a_page_response_icon__to_json(v), None => Value::Null });
+    m.insert("id".into(), match (&p.id) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("last_edited_by".into(), match (&p.last_edited_by) { Some(v) => iface_pages__retrieve_a_page_response_last_edited_by__to_json(v), None => Value::Null });
+    m.insert("last_edited_time".into(), match (&p.last_edited_time) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("object".into(), match (&p.object) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("parent".into(), match (&p.parent) { Some(v) => iface_pages__retrieve_a_page_response_parent__to_json(v), None => Value::Null });
+    m.insert("properties".into(), match (&p.properties) { Some(v) => iface_pages__retrieve_a_page_response_properties__to_json(v), None => Value::Null });
+    m.insert("url".into(), match (&p.url) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_pages__retrieve_a_page_response_created_by__to_json(p: &iface_pages::RetrieveAPageResponseCreatedBy) -> Value {
+    let mut m = Map::new();
+    m.insert("id".into(), match (&p.id) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("object".into(), match (&p.object) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_pages__retrieve_a_page_response_icon__to_json(p: &iface_pages::RetrieveAPageResponseIcon) -> Value {
+    let mut m = Map::new();
+    m.insert("emoji".into(), match (&p.emoji) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("type".into(), match (&p.type_op) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_pages__retrieve_a_page_response_last_edited_by__to_json(p: &iface_pages::RetrieveAPageResponseLastEditedBy) -> Value {
+    let mut m = Map::new();
+    m.insert("id".into(), match (&p.id) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("object".into(), match (&p.object) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_pages__retrieve_a_page_response_parent__to_json(p: &iface_pages::RetrieveAPageResponseParent) -> Value {
+    let mut m = Map::new();
+    m.insert("page_id".into(), match (&p.page_id) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("type".into(), match (&p.type_op) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_pages__retrieve_a_page_response_properties__to_json(p: &iface_pages::RetrieveAPageResponseProperties) -> Value {
+    let mut m = Map::new();
+    m.insert("title".into(), match (&p.title) { Some(v) => iface_pages__retrieve_a_page_response_properties_title__to_json(v), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_pages__retrieve_a_page_response_properties_title__to_json(p: &iface_pages::RetrieveAPageResponsePropertiesTitle) -> Value {
+    let mut m = Map::new();
+    m.insert("id".into(), match (&p.id) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("title".into(), match (&p.title) { Some(v) => Value::Array((v).iter().map(|v| iface_pages__retrieve_a_page_response_properties_title_title_item__to_json(v)).collect()), None => Value::Null });
+    m.insert("type".into(), match (&p.type_op) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_pages__retrieve_a_page_response_properties_title_title_item__to_json(p: &iface_pages::RetrieveAPageResponsePropertiesTitleTitleItem) -> Value {
+    let mut m = Map::new();
+    m.insert("annotations".into(), match (&p.annotations) { Some(v) => iface_pages__retrieve_a_page_response_properties_title_title_item_annotations__to_json(v), None => Value::Null });
+    m.insert("href".into(), match (&p.href) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("plain_text".into(), match (&p.plain_text) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("text".into(), match (&p.text) { Some(v) => iface_pages__retrieve_a_page_response_properties_title_title_item_text__to_json(v), None => Value::Null });
+    m.insert("type".into(), match (&p.type_op) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_pages__retrieve_a_page_response_properties_title_title_item_annotations__to_json(p: &iface_pages::RetrieveAPageResponsePropertiesTitleTitleItemAnnotations) -> Value {
+    let mut m = Map::new();
+    m.insert("bold".into(), match (&p.bold) { Some(v) => Value::Bool(*(v)), None => Value::Null });
+    m.insert("code".into(), match (&p.code) { Some(v) => Value::Bool(*(v)), None => Value::Null });
+    m.insert("color".into(), match (&p.color) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("italic".into(), match (&p.italic) { Some(v) => Value::Bool(*(v)), None => Value::Null });
+    m.insert("strikethrough".into(), match (&p.strikethrough) { Some(v) => Value::Bool(*(v)), None => Value::Null });
+    m.insert("underline".into(), match (&p.underline) { Some(v) => Value::Bool(*(v)), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_pages__retrieve_a_page_response_properties_title_title_item_text__to_json(p: &iface_pages::RetrieveAPageResponsePropertiesTitleTitleItemText) -> Value {
+    let mut m = Map::new();
+    m.insert("content".into(), match (&p.content) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("link".into(), match (&p.link) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
 fn iface_pages__update_page_properties_body_properties__to_json(p: &iface_pages::UpdatePagePropertiesBodyProperties) -> Value {
     let mut m = Map::new();
-    m.insert("status".into(), match (&p.status) { Some(v) => iface_pages__update_page_properties_body_properties_status__to_json(v), None => Value::Null });
+    m.insert("Status".into(), match (&p.status) { Some(v) => iface_pages__update_page_properties_body_properties_status__to_json(v), None => Value::Null });
     Value::Object(m)
 }
 
@@ -657,8 +3271,242 @@ fn iface_pages__update_page_properties_body_properties_status_select__to_json(p:
     Value::Object(m)
 }
 
+fn iface_pages__update_page_properties_response__to_json(p: &iface_pages::UpdatePagePropertiesResponse) -> Value {
+    let mut m = Map::new();
+    m.insert("archived".into(), match (&p.archived) { Some(v) => Value::Bool(*(v)), None => Value::Null });
+    m.insert("created_time".into(), match (&p.created_time) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("id".into(), match (&p.id) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("last_edited_time".into(), match (&p.last_edited_time) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("object".into(), match (&p.object) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("parent".into(), match (&p.parent) { Some(v) => iface_pages__update_page_properties_response_parent__to_json(v), None => Value::Null });
+    m.insert("properties".into(), match (&p.properties) { Some(v) => iface_pages__update_page_properties_response_properties__to_json(v), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_pages__update_page_properties_response_parent__to_json(p: &iface_pages::UpdatePagePropertiesResponseParent) -> Value {
+    let mut m = Map::new();
+    m.insert("database_id".into(), match (&p.database_id) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("type".into(), match (&p.type_op) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_pages__update_page_properties_response_properties__to_json(p: &iface_pages::UpdatePagePropertiesResponseProperties) -> Value {
+    let mut m = Map::new();
+    m.insert("Author".into(), match (&p.author) { Some(v) => iface_pages__update_page_properties_response_properties_author__to_json(v), None => Value::Null });
+    m.insert("Link".into(), match (&p.link) { Some(v) => iface_pages__update_page_properties_response_properties_link__to_json(v), None => Value::Null });
+    m.insert("Name".into(), match (&p.name) { Some(v) => iface_pages__update_page_properties_response_properties_name__to_json(v), None => Value::Null });
+    m.insert("Publisher".into(), match (&p.publisher) { Some(v) => iface_pages__update_page_properties_response_properties_publisher__to_json(v), None => Value::Null });
+    m.insert("Publishing/Release Date".into(), match (&p.publishing_release_date) { Some(v) => iface_pages__update_page_properties_response_properties_publishing_release_date__to_json(v), None => Value::Null });
+    m.insert("Read".into(), match (&p.read) { Some(v) => iface_pages__update_page_properties_response_properties_read__to_json(v), None => Value::Null });
+    m.insert("Score /5".into(), match (&p.score_v5) { Some(v) => iface_pages__update_page_properties_response_properties_score_v5__to_json(v), None => Value::Null });
+    m.insert("Status".into(), match (&p.status) { Some(v) => iface_pages__update_page_properties_response_properties_status__to_json(v), None => Value::Null });
+    m.insert("Summary".into(), match (&p.summary) { Some(v) => iface_pages__update_page_properties_response_properties_summary__to_json(v), None => Value::Null });
+    m.insert("Type".into(), match (&p.type_op) { Some(v) => iface_pages__update_page_properties_response_properties_type_op__to_json(v), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_pages__update_page_properties_response_properties_author__to_json(p: &iface_pages::UpdatePagePropertiesResponsePropertiesAuthor) -> Value {
+    let mut m = Map::new();
+    m.insert("id".into(), match (&p.id) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("multi_select".into(), match (&p.multi_select) { Some(v) => Value::Array((v).iter().map(|v| iface_pages__update_page_properties_response_properties_author_multi_select_item__to_json(v)).collect()), None => Value::Null });
+    m.insert("type".into(), match (&p.type_op) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_pages__update_page_properties_response_properties_author_multi_select_item__to_json(p: &iface_pages::UpdatePagePropertiesResponsePropertiesAuthorMultiSelectItem) -> Value {
+    let mut m = Map::new();
+    m.insert("color".into(), match (&p.color) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("id".into(), match (&p.id) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("name".into(), match (&p.name) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_pages__update_page_properties_response_properties_link__to_json(p: &iface_pages::UpdatePagePropertiesResponsePropertiesLink) -> Value {
+    let mut m = Map::new();
+    m.insert("id".into(), match (&p.id) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("type".into(), match (&p.type_op) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("url".into(), match (&p.url) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_pages__update_page_properties_response_properties_name__to_json(p: &iface_pages::UpdatePagePropertiesResponsePropertiesName) -> Value {
+    let mut m = Map::new();
+    m.insert("id".into(), match (&p.id) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("title".into(), match (&p.title) { Some(v) => Value::Array((v).iter().map(|v| iface_pages__update_page_properties_response_properties_name_title_item__to_json(v)).collect()), None => Value::Null });
+    m.insert("type".into(), match (&p.type_op) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_pages__update_page_properties_response_properties_name_title_item__to_json(p: &iface_pages::UpdatePagePropertiesResponsePropertiesNameTitleItem) -> Value {
+    let mut m = Map::new();
+    m.insert("annotations".into(), match (&p.annotations) { Some(v) => iface_pages__update_page_properties_response_properties_name_title_item_annotations__to_json(v), None => Value::Null });
+    m.insert("href".into(), match (&p.href) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("plain_text".into(), match (&p.plain_text) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("text".into(), match (&p.text) { Some(v) => iface_pages__update_page_properties_response_properties_name_title_item_text__to_json(v), None => Value::Null });
+    m.insert("type".into(), match (&p.type_op) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_pages__update_page_properties_response_properties_name_title_item_annotations__to_json(p: &iface_pages::UpdatePagePropertiesResponsePropertiesNameTitleItemAnnotations) -> Value {
+    let mut m = Map::new();
+    m.insert("bold".into(), match (&p.bold) { Some(v) => Value::Bool(*(v)), None => Value::Null });
+    m.insert("code".into(), match (&p.code) { Some(v) => Value::Bool(*(v)), None => Value::Null });
+    m.insert("color".into(), match (&p.color) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("italic".into(), match (&p.italic) { Some(v) => Value::Bool(*(v)), None => Value::Null });
+    m.insert("strikethrough".into(), match (&p.strikethrough) { Some(v) => Value::Bool(*(v)), None => Value::Null });
+    m.insert("underline".into(), match (&p.underline) { Some(v) => Value::Bool(*(v)), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_pages__update_page_properties_response_properties_name_title_item_text__to_json(p: &iface_pages::UpdatePagePropertiesResponsePropertiesNameTitleItemText) -> Value {
+    let mut m = Map::new();
+    m.insert("content".into(), match (&p.content) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("link".into(), match (&p.link) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_pages__update_page_properties_response_properties_publisher__to_json(p: &iface_pages::UpdatePagePropertiesResponsePropertiesPublisher) -> Value {
+    let mut m = Map::new();
+    m.insert("id".into(), match (&p.id) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("select".into(), match (&p.select) { Some(v) => iface_pages__update_page_properties_response_properties_publisher_select__to_json(v), None => Value::Null });
+    m.insert("type".into(), match (&p.type_op) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_pages__update_page_properties_response_properties_publisher_select__to_json(p: &iface_pages::UpdatePagePropertiesResponsePropertiesPublisherSelect) -> Value {
+    let mut m = Map::new();
+    m.insert("color".into(), match (&p.color) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("id".into(), match (&p.id) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("name".into(), match (&p.name) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_pages__update_page_properties_response_properties_publishing_release_date__to_json(p: &iface_pages::UpdatePagePropertiesResponsePropertiesPublishingReleaseDate) -> Value {
+    let mut m = Map::new();
+    m.insert("date".into(), match (&p.date) { Some(v) => iface_pages__update_page_properties_response_properties_publishing_release_date_date__to_json(v), None => Value::Null });
+    m.insert("id".into(), match (&p.id) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("type".into(), match (&p.type_op) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_pages__update_page_properties_response_properties_publishing_release_date_date__to_json(p: &iface_pages::UpdatePagePropertiesResponsePropertiesPublishingReleaseDateDate) -> Value {
+    let mut m = Map::new();
+    m.insert("end".into(), match (&p.end) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("start".into(), match (&p.start) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_pages__update_page_properties_response_properties_read__to_json(p: &iface_pages::UpdatePagePropertiesResponsePropertiesRead) -> Value {
+    let mut m = Map::new();
+    m.insert("checkbox".into(), match (&p.checkbox) { Some(v) => Value::Bool(*(v)), None => Value::Null });
+    m.insert("id".into(), match (&p.id) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("type".into(), match (&p.type_op) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_pages__update_page_properties_response_properties_score_v5__to_json(p: &iface_pages::UpdatePagePropertiesResponsePropertiesScoreV5) -> Value {
+    let mut m = Map::new();
+    m.insert("id".into(), match (&p.id) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("select".into(), match (&p.select) { Some(v) => iface_pages__update_page_properties_response_properties_score_v5_select__to_json(v), None => Value::Null });
+    m.insert("type".into(), match (&p.type_op) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_pages__update_page_properties_response_properties_score_v5_select__to_json(p: &iface_pages::UpdatePagePropertiesResponsePropertiesScoreV5Select) -> Value {
+    let mut m = Map::new();
+    m.insert("color".into(), match (&p.color) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("id".into(), match (&p.id) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("name".into(), match (&p.name) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_pages__update_page_properties_response_properties_status__to_json(p: &iface_pages::UpdatePagePropertiesResponsePropertiesStatus) -> Value {
+    let mut m = Map::new();
+    m.insert("id".into(), match (&p.id) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("select".into(), match (&p.select) { Some(v) => iface_pages__update_page_properties_response_properties_status_select__to_json(v), None => Value::Null });
+    m.insert("type".into(), match (&p.type_op) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_pages__update_page_properties_response_properties_status_select__to_json(p: &iface_pages::UpdatePagePropertiesResponsePropertiesStatusSelect) -> Value {
+    let mut m = Map::new();
+    m.insert("color".into(), match (&p.color) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("id".into(), match (&p.id) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("name".into(), match (&p.name) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_pages__update_page_properties_response_properties_summary__to_json(p: &iface_pages::UpdatePagePropertiesResponsePropertiesSummary) -> Value {
+    let mut m = Map::new();
+    m.insert("id".into(), match (&p.id) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("rich_text".into(), match (&p.rich_text) { Some(v) => Value::Array((v).iter().map(|v| iface_pages__update_page_properties_response_properties_summary_rich_text_item__to_json(v)).collect()), None => Value::Null });
+    m.insert("type".into(), match (&p.type_op) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_pages__update_page_properties_response_properties_summary_rich_text_item__to_json(p: &iface_pages::UpdatePagePropertiesResponsePropertiesSummaryRichTextItem) -> Value {
+    let mut m = Map::new();
+    m.insert("annotations".into(), match (&p.annotations) { Some(v) => iface_pages__update_page_properties_response_properties_summary_rich_text_item_annotations__to_json(v), None => Value::Null });
+    m.insert("href".into(), match (&p.href) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("plain_text".into(), match (&p.plain_text) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("text".into(), match (&p.text) { Some(v) => iface_pages__update_page_properties_response_properties_summary_rich_text_item_text__to_json(v), None => Value::Null });
+    m.insert("type".into(), match (&p.type_op) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_pages__update_page_properties_response_properties_summary_rich_text_item_annotations__to_json(p: &iface_pages::UpdatePagePropertiesResponsePropertiesSummaryRichTextItemAnnotations) -> Value {
+    let mut m = Map::new();
+    m.insert("bold".into(), match (&p.bold) { Some(v) => Value::Bool(*(v)), None => Value::Null });
+    m.insert("code".into(), match (&p.code) { Some(v) => Value::Bool(*(v)), None => Value::Null });
+    m.insert("color".into(), match (&p.color) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("italic".into(), match (&p.italic) { Some(v) => Value::Bool(*(v)), None => Value::Null });
+    m.insert("strikethrough".into(), match (&p.strikethrough) { Some(v) => Value::Bool(*(v)), None => Value::Null });
+    m.insert("underline".into(), match (&p.underline) { Some(v) => Value::Bool(*(v)), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_pages__update_page_properties_response_properties_summary_rich_text_item_text__to_json(p: &iface_pages::UpdatePagePropertiesResponsePropertiesSummaryRichTextItemText) -> Value {
+    let mut m = Map::new();
+    m.insert("content".into(), match (&p.content) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("link".into(), match (&p.link) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_pages__update_page_properties_response_properties_type_op__to_json(p: &iface_pages::UpdatePagePropertiesResponsePropertiesTypeOp) -> Value {
+    let mut m = Map::new();
+    m.insert("id".into(), match (&p.id) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("select".into(), match (&p.select) { Some(v) => iface_pages__update_page_properties_response_properties_type_op_select__to_json(v), None => Value::Null });
+    m.insert("type".into(), match (&p.type_op) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_pages__update_page_properties_response_properties_type_op_select__to_json(p: &iface_pages::UpdatePagePropertiesResponsePropertiesTypeOpSelect) -> Value {
+    let mut m = Map::new();
+    m.insert("color".into(), match (&p.color) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("id".into(), match (&p.id) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("name".into(), match (&p.name) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_pages__retrieve_a_page_property_item_response__to_json(p: &iface_pages::RetrieveAPagePropertyItemResponse) -> Value {
+    let mut m = Map::new();
+    m.insert("object".into(), match (&p.object) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("select".into(), match (&p.select) { Some(v) => iface_pages__retrieve_a_page_property_item_response_select__to_json(v), None => Value::Null });
+    m.insert("type".into(), match (&p.type_op) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_pages__retrieve_a_page_property_item_response_select__to_json(p: &iface_pages::RetrieveAPagePropertyItemResponseSelect) -> Value {
+    let mut m = Map::new();
+    m.insert("color".into(), match (&p.color) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("id".into(), match (&p.id) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("name".into(), match (&p.name) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
 fn iface_pages__retrieve_a_page_params__to_json(p: &iface_pages::RetrieveAPageParams) -> Value {
     let mut m = Map::new();
+    m.insert("id".into(), Value::String((&p.id).clone()));
     m.insert("notion_version".into(), match (&p.notion_version) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("".into(), match (&p.x) { Some(v) => Value::String((v).clone()), None => Value::Null });
     Value::Object(m)
@@ -666,22 +3514,451 @@ fn iface_pages__retrieve_a_page_params__to_json(p: &iface_pages::RetrieveAPagePa
 
 fn iface_pages__update_page_properties_params__to_json(p: &iface_pages::UpdatePagePropertiesParams) -> Value {
     let mut m = Map::new();
+    m.insert("id".into(), Value::String((&p.id).clone()));
     m.insert("notion_version".into(), match (&p.notion_version) { Some(v) => Value::String((v).clone()), None => Value::Null });
     m.insert("properties".into(), match (&p.properties) { Some(v) => iface_pages__update_page_properties_body_properties__to_json(v), None => Value::Null });
     Value::Object(m)
 }
 
+fn iface_pages__retrieve_a_page_property_item_params__to_json(p: &iface_pages::RetrieveAPagePropertyItemParams) -> Value {
+    let mut m = Map::new();
+    m.insert("page_id".into(), Value::String((&p.page_id).clone()));
+    m.insert("property_id".into(), Value::String((&p.property_id).clone()));
+    Value::Object(m)
+}
+
+fn iface_pages__retrieve_a_page_response__from_json(v: &Value) -> Option<iface_pages::RetrieveAPageResponse> {
+    let m = v.as_object()?;
+    Some(iface_pages::RetrieveAPageResponse {
+        archived: m.get("archived").filter(|v| !v.is_null()).and_then(|v| (v).as_bool()),
+        cover: m.get("cover").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        created_by: m.get("created_by").filter(|v| !v.is_null()).and_then(|v| iface_pages__retrieve_a_page_response_created_by__from_json(v)),
+        created_time: m.get("created_time").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        icon: m.get("icon").filter(|v| !v.is_null()).and_then(|v| iface_pages__retrieve_a_page_response_icon__from_json(v)),
+        id: m.get("id").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        last_edited_by: m.get("last_edited_by").filter(|v| !v.is_null()).and_then(|v| iface_pages__retrieve_a_page_response_last_edited_by__from_json(v)),
+        last_edited_time: m.get("last_edited_time").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        object: m.get("object").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        parent: m.get("parent").filter(|v| !v.is_null()).and_then(|v| iface_pages__retrieve_a_page_response_parent__from_json(v)),
+        properties: m.get("properties").filter(|v| !v.is_null()).and_then(|v| iface_pages__retrieve_a_page_response_properties__from_json(v)),
+        url: m.get("url").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    })
+}
+
+fn iface_pages__retrieve_a_page_response_created_by__from_json(v: &Value) -> Option<iface_pages::RetrieveAPageResponseCreatedBy> {
+    let m = v.as_object()?;
+    Some(iface_pages::RetrieveAPageResponseCreatedBy {
+        id: m.get("id").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        object: m.get("object").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    })
+}
+
+fn iface_pages__retrieve_a_page_response_icon__from_json(v: &Value) -> Option<iface_pages::RetrieveAPageResponseIcon> {
+    let m = v.as_object()?;
+    Some(iface_pages::RetrieveAPageResponseIcon {
+        emoji: m.get("emoji").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        type_op: m.get("type").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    })
+}
+
+fn iface_pages__retrieve_a_page_response_last_edited_by__from_json(v: &Value) -> Option<iface_pages::RetrieveAPageResponseLastEditedBy> {
+    let m = v.as_object()?;
+    Some(iface_pages::RetrieveAPageResponseLastEditedBy {
+        id: m.get("id").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        object: m.get("object").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    })
+}
+
+fn iface_pages__retrieve_a_page_response_parent__from_json(v: &Value) -> Option<iface_pages::RetrieveAPageResponseParent> {
+    let m = v.as_object()?;
+    Some(iface_pages::RetrieveAPageResponseParent {
+        page_id: m.get("page_id").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        type_op: m.get("type").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    })
+}
+
+fn iface_pages__retrieve_a_page_response_properties__from_json(v: &Value) -> Option<iface_pages::RetrieveAPageResponseProperties> {
+    let m = v.as_object()?;
+    Some(iface_pages::RetrieveAPageResponseProperties {
+        title: m.get("title").filter(|v| !v.is_null()).and_then(|v| iface_pages__retrieve_a_page_response_properties_title__from_json(v)),
+    })
+}
+
+fn iface_pages__retrieve_a_page_response_properties_title__from_json(v: &Value) -> Option<iface_pages::RetrieveAPageResponsePropertiesTitle> {
+    let m = v.as_object()?;
+    Some(iface_pages::RetrieveAPageResponsePropertiesTitle {
+        id: m.get("id").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        title: m.get("title").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| iface_pages__retrieve_a_page_response_properties_title_title_item__from_json(x)).collect())),
+        type_op: m.get("type").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    })
+}
+
+fn iface_pages__retrieve_a_page_response_properties_title_title_item__from_json(v: &Value) -> Option<iface_pages::RetrieveAPageResponsePropertiesTitleTitleItem> {
+    let m = v.as_object()?;
+    Some(iface_pages::RetrieveAPageResponsePropertiesTitleTitleItem {
+        annotations: m.get("annotations").filter(|v| !v.is_null()).and_then(|v| iface_pages__retrieve_a_page_response_properties_title_title_item_annotations__from_json(v)),
+        href: m.get("href").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        plain_text: m.get("plain_text").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        text: m.get("text").filter(|v| !v.is_null()).and_then(|v| iface_pages__retrieve_a_page_response_properties_title_title_item_text__from_json(v)),
+        type_op: m.get("type").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    })
+}
+
+fn iface_pages__retrieve_a_page_response_properties_title_title_item_annotations__from_json(v: &Value) -> Option<iface_pages::RetrieveAPageResponsePropertiesTitleTitleItemAnnotations> {
+    let m = v.as_object()?;
+    Some(iface_pages::RetrieveAPageResponsePropertiesTitleTitleItemAnnotations {
+        bold: m.get("bold").filter(|v| !v.is_null()).and_then(|v| (v).as_bool()),
+        code: m.get("code").filter(|v| !v.is_null()).and_then(|v| (v).as_bool()),
+        color: m.get("color").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        italic: m.get("italic").filter(|v| !v.is_null()).and_then(|v| (v).as_bool()),
+        strikethrough: m.get("strikethrough").filter(|v| !v.is_null()).and_then(|v| (v).as_bool()),
+        underline: m.get("underline").filter(|v| !v.is_null()).and_then(|v| (v).as_bool()),
+    })
+}
+
+fn iface_pages__retrieve_a_page_response_properties_title_title_item_text__from_json(v: &Value) -> Option<iface_pages::RetrieveAPageResponsePropertiesTitleTitleItemText> {
+    let m = v.as_object()?;
+    Some(iface_pages::RetrieveAPageResponsePropertiesTitleTitleItemText {
+        content: m.get("content").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        link: m.get("link").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    })
+}
+
+fn iface_pages__update_page_properties_response__from_json(v: &Value) -> Option<iface_pages::UpdatePagePropertiesResponse> {
+    let m = v.as_object()?;
+    Some(iface_pages::UpdatePagePropertiesResponse {
+        archived: m.get("archived").filter(|v| !v.is_null()).and_then(|v| (v).as_bool()),
+        created_time: m.get("created_time").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        id: m.get("id").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        last_edited_time: m.get("last_edited_time").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        object: m.get("object").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        parent: m.get("parent").filter(|v| !v.is_null()).and_then(|v| iface_pages__update_page_properties_response_parent__from_json(v)),
+        properties: m.get("properties").filter(|v| !v.is_null()).and_then(|v| iface_pages__update_page_properties_response_properties__from_json(v)),
+    })
+}
+
+fn iface_pages__update_page_properties_response_parent__from_json(v: &Value) -> Option<iface_pages::UpdatePagePropertiesResponseParent> {
+    let m = v.as_object()?;
+    Some(iface_pages::UpdatePagePropertiesResponseParent {
+        database_id: m.get("database_id").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        type_op: m.get("type").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    })
+}
+
+fn iface_pages__update_page_properties_response_properties__from_json(v: &Value) -> Option<iface_pages::UpdatePagePropertiesResponseProperties> {
+    let m = v.as_object()?;
+    Some(iface_pages::UpdatePagePropertiesResponseProperties {
+        author: m.get("Author").filter(|v| !v.is_null()).and_then(|v| iface_pages__update_page_properties_response_properties_author__from_json(v)),
+        link: m.get("Link").filter(|v| !v.is_null()).and_then(|v| iface_pages__update_page_properties_response_properties_link__from_json(v)),
+        name: m.get("Name").filter(|v| !v.is_null()).and_then(|v| iface_pages__update_page_properties_response_properties_name__from_json(v)),
+        publisher: m.get("Publisher").filter(|v| !v.is_null()).and_then(|v| iface_pages__update_page_properties_response_properties_publisher__from_json(v)),
+        publishing_release_date: m.get("Publishing/Release Date").filter(|v| !v.is_null()).and_then(|v| iface_pages__update_page_properties_response_properties_publishing_release_date__from_json(v)),
+        read: m.get("Read").filter(|v| !v.is_null()).and_then(|v| iface_pages__update_page_properties_response_properties_read__from_json(v)),
+        score_v5: m.get("Score /5").filter(|v| !v.is_null()).and_then(|v| iface_pages__update_page_properties_response_properties_score_v5__from_json(v)),
+        status: m.get("Status").filter(|v| !v.is_null()).and_then(|v| iface_pages__update_page_properties_response_properties_status__from_json(v)),
+        summary: m.get("Summary").filter(|v| !v.is_null()).and_then(|v| iface_pages__update_page_properties_response_properties_summary__from_json(v)),
+        type_op: m.get("Type").filter(|v| !v.is_null()).and_then(|v| iface_pages__update_page_properties_response_properties_type_op__from_json(v)),
+    })
+}
+
+fn iface_pages__update_page_properties_response_properties_author__from_json(v: &Value) -> Option<iface_pages::UpdatePagePropertiesResponsePropertiesAuthor> {
+    let m = v.as_object()?;
+    Some(iface_pages::UpdatePagePropertiesResponsePropertiesAuthor {
+        id: m.get("id").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        multi_select: m.get("multi_select").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| iface_pages__update_page_properties_response_properties_author_multi_select_item__from_json(x)).collect())),
+        type_op: m.get("type").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    })
+}
+
+fn iface_pages__update_page_properties_response_properties_author_multi_select_item__from_json(v: &Value) -> Option<iface_pages::UpdatePagePropertiesResponsePropertiesAuthorMultiSelectItem> {
+    let m = v.as_object()?;
+    Some(iface_pages::UpdatePagePropertiesResponsePropertiesAuthorMultiSelectItem {
+        color: m.get("color").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        id: m.get("id").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        name: m.get("name").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    })
+}
+
+fn iface_pages__update_page_properties_response_properties_link__from_json(v: &Value) -> Option<iface_pages::UpdatePagePropertiesResponsePropertiesLink> {
+    let m = v.as_object()?;
+    Some(iface_pages::UpdatePagePropertiesResponsePropertiesLink {
+        id: m.get("id").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        type_op: m.get("type").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        url: m.get("url").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    })
+}
+
+fn iface_pages__update_page_properties_response_properties_name__from_json(v: &Value) -> Option<iface_pages::UpdatePagePropertiesResponsePropertiesName> {
+    let m = v.as_object()?;
+    Some(iface_pages::UpdatePagePropertiesResponsePropertiesName {
+        id: m.get("id").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        title: m.get("title").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| iface_pages__update_page_properties_response_properties_name_title_item__from_json(x)).collect())),
+        type_op: m.get("type").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    })
+}
+
+fn iface_pages__update_page_properties_response_properties_name_title_item__from_json(v: &Value) -> Option<iface_pages::UpdatePagePropertiesResponsePropertiesNameTitleItem> {
+    let m = v.as_object()?;
+    Some(iface_pages::UpdatePagePropertiesResponsePropertiesNameTitleItem {
+        annotations: m.get("annotations").filter(|v| !v.is_null()).and_then(|v| iface_pages__update_page_properties_response_properties_name_title_item_annotations__from_json(v)),
+        href: m.get("href").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        plain_text: m.get("plain_text").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        text: m.get("text").filter(|v| !v.is_null()).and_then(|v| iface_pages__update_page_properties_response_properties_name_title_item_text__from_json(v)),
+        type_op: m.get("type").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    })
+}
+
+fn iface_pages__update_page_properties_response_properties_name_title_item_annotations__from_json(v: &Value) -> Option<iface_pages::UpdatePagePropertiesResponsePropertiesNameTitleItemAnnotations> {
+    let m = v.as_object()?;
+    Some(iface_pages::UpdatePagePropertiesResponsePropertiesNameTitleItemAnnotations {
+        bold: m.get("bold").filter(|v| !v.is_null()).and_then(|v| (v).as_bool()),
+        code: m.get("code").filter(|v| !v.is_null()).and_then(|v| (v).as_bool()),
+        color: m.get("color").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        italic: m.get("italic").filter(|v| !v.is_null()).and_then(|v| (v).as_bool()),
+        strikethrough: m.get("strikethrough").filter(|v| !v.is_null()).and_then(|v| (v).as_bool()),
+        underline: m.get("underline").filter(|v| !v.is_null()).and_then(|v| (v).as_bool()),
+    })
+}
+
+fn iface_pages__update_page_properties_response_properties_name_title_item_text__from_json(v: &Value) -> Option<iface_pages::UpdatePagePropertiesResponsePropertiesNameTitleItemText> {
+    let m = v.as_object()?;
+    Some(iface_pages::UpdatePagePropertiesResponsePropertiesNameTitleItemText {
+        content: m.get("content").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        link: m.get("link").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    })
+}
+
+fn iface_pages__update_page_properties_response_properties_publisher__from_json(v: &Value) -> Option<iface_pages::UpdatePagePropertiesResponsePropertiesPublisher> {
+    let m = v.as_object()?;
+    Some(iface_pages::UpdatePagePropertiesResponsePropertiesPublisher {
+        id: m.get("id").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        select: m.get("select").filter(|v| !v.is_null()).and_then(|v| iface_pages__update_page_properties_response_properties_publisher_select__from_json(v)),
+        type_op: m.get("type").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    })
+}
+
+fn iface_pages__update_page_properties_response_properties_publisher_select__from_json(v: &Value) -> Option<iface_pages::UpdatePagePropertiesResponsePropertiesPublisherSelect> {
+    let m = v.as_object()?;
+    Some(iface_pages::UpdatePagePropertiesResponsePropertiesPublisherSelect {
+        color: m.get("color").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        id: m.get("id").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        name: m.get("name").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    })
+}
+
+fn iface_pages__update_page_properties_response_properties_publishing_release_date__from_json(v: &Value) -> Option<iface_pages::UpdatePagePropertiesResponsePropertiesPublishingReleaseDate> {
+    let m = v.as_object()?;
+    Some(iface_pages::UpdatePagePropertiesResponsePropertiesPublishingReleaseDate {
+        date: m.get("date").filter(|v| !v.is_null()).and_then(|v| iface_pages__update_page_properties_response_properties_publishing_release_date_date__from_json(v)),
+        id: m.get("id").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        type_op: m.get("type").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    })
+}
+
+fn iface_pages__update_page_properties_response_properties_publishing_release_date_date__from_json(v: &Value) -> Option<iface_pages::UpdatePagePropertiesResponsePropertiesPublishingReleaseDateDate> {
+    let m = v.as_object()?;
+    Some(iface_pages::UpdatePagePropertiesResponsePropertiesPublishingReleaseDateDate {
+        end: m.get("end").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        start: m.get("start").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    })
+}
+
+fn iface_pages__update_page_properties_response_properties_read__from_json(v: &Value) -> Option<iface_pages::UpdatePagePropertiesResponsePropertiesRead> {
+    let m = v.as_object()?;
+    Some(iface_pages::UpdatePagePropertiesResponsePropertiesRead {
+        checkbox: m.get("checkbox").filter(|v| !v.is_null()).and_then(|v| (v).as_bool()),
+        id: m.get("id").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        type_op: m.get("type").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    })
+}
+
+fn iface_pages__update_page_properties_response_properties_score_v5__from_json(v: &Value) -> Option<iface_pages::UpdatePagePropertiesResponsePropertiesScoreV5> {
+    let m = v.as_object()?;
+    Some(iface_pages::UpdatePagePropertiesResponsePropertiesScoreV5 {
+        id: m.get("id").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        select: m.get("select").filter(|v| !v.is_null()).and_then(|v| iface_pages__update_page_properties_response_properties_score_v5_select__from_json(v)),
+        type_op: m.get("type").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    })
+}
+
+fn iface_pages__update_page_properties_response_properties_score_v5_select__from_json(v: &Value) -> Option<iface_pages::UpdatePagePropertiesResponsePropertiesScoreV5Select> {
+    let m = v.as_object()?;
+    Some(iface_pages::UpdatePagePropertiesResponsePropertiesScoreV5Select {
+        color: m.get("color").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        id: m.get("id").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        name: m.get("name").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    })
+}
+
+fn iface_pages__update_page_properties_response_properties_status__from_json(v: &Value) -> Option<iface_pages::UpdatePagePropertiesResponsePropertiesStatus> {
+    let m = v.as_object()?;
+    Some(iface_pages::UpdatePagePropertiesResponsePropertiesStatus {
+        id: m.get("id").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        select: m.get("select").filter(|v| !v.is_null()).and_then(|v| iface_pages__update_page_properties_response_properties_status_select__from_json(v)),
+        type_op: m.get("type").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    })
+}
+
+fn iface_pages__update_page_properties_response_properties_status_select__from_json(v: &Value) -> Option<iface_pages::UpdatePagePropertiesResponsePropertiesStatusSelect> {
+    let m = v.as_object()?;
+    Some(iface_pages::UpdatePagePropertiesResponsePropertiesStatusSelect {
+        color: m.get("color").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        id: m.get("id").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        name: m.get("name").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    })
+}
+
+fn iface_pages__update_page_properties_response_properties_summary__from_json(v: &Value) -> Option<iface_pages::UpdatePagePropertiesResponsePropertiesSummary> {
+    let m = v.as_object()?;
+    Some(iface_pages::UpdatePagePropertiesResponsePropertiesSummary {
+        id: m.get("id").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        rich_text: m.get("rich_text").filter(|v| !v.is_null()).and_then(|v| (v).as_array().map(|a| a.iter().filter_map(|x| iface_pages__update_page_properties_response_properties_summary_rich_text_item__from_json(x)).collect())),
+        type_op: m.get("type").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    })
+}
+
+fn iface_pages__update_page_properties_response_properties_summary_rich_text_item__from_json(v: &Value) -> Option<iface_pages::UpdatePagePropertiesResponsePropertiesSummaryRichTextItem> {
+    let m = v.as_object()?;
+    Some(iface_pages::UpdatePagePropertiesResponsePropertiesSummaryRichTextItem {
+        annotations: m.get("annotations").filter(|v| !v.is_null()).and_then(|v| iface_pages__update_page_properties_response_properties_summary_rich_text_item_annotations__from_json(v)),
+        href: m.get("href").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        plain_text: m.get("plain_text").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        text: m.get("text").filter(|v| !v.is_null()).and_then(|v| iface_pages__update_page_properties_response_properties_summary_rich_text_item_text__from_json(v)),
+        type_op: m.get("type").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    })
+}
+
+fn iface_pages__update_page_properties_response_properties_summary_rich_text_item_annotations__from_json(v: &Value) -> Option<iface_pages::UpdatePagePropertiesResponsePropertiesSummaryRichTextItemAnnotations> {
+    let m = v.as_object()?;
+    Some(iface_pages::UpdatePagePropertiesResponsePropertiesSummaryRichTextItemAnnotations {
+        bold: m.get("bold").filter(|v| !v.is_null()).and_then(|v| (v).as_bool()),
+        code: m.get("code").filter(|v| !v.is_null()).and_then(|v| (v).as_bool()),
+        color: m.get("color").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        italic: m.get("italic").filter(|v| !v.is_null()).and_then(|v| (v).as_bool()),
+        strikethrough: m.get("strikethrough").filter(|v| !v.is_null()).and_then(|v| (v).as_bool()),
+        underline: m.get("underline").filter(|v| !v.is_null()).and_then(|v| (v).as_bool()),
+    })
+}
+
+fn iface_pages__update_page_properties_response_properties_summary_rich_text_item_text__from_json(v: &Value) -> Option<iface_pages::UpdatePagePropertiesResponsePropertiesSummaryRichTextItemText> {
+    let m = v.as_object()?;
+    Some(iface_pages::UpdatePagePropertiesResponsePropertiesSummaryRichTextItemText {
+        content: m.get("content").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        link: m.get("link").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    })
+}
+
+fn iface_pages__update_page_properties_response_properties_type_op__from_json(v: &Value) -> Option<iface_pages::UpdatePagePropertiesResponsePropertiesTypeOp> {
+    let m = v.as_object()?;
+    Some(iface_pages::UpdatePagePropertiesResponsePropertiesTypeOp {
+        id: m.get("id").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        select: m.get("select").filter(|v| !v.is_null()).and_then(|v| iface_pages__update_page_properties_response_properties_type_op_select__from_json(v)),
+        type_op: m.get("type").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    })
+}
+
+fn iface_pages__update_page_properties_response_properties_type_op_select__from_json(v: &Value) -> Option<iface_pages::UpdatePagePropertiesResponsePropertiesTypeOpSelect> {
+    let m = v.as_object()?;
+    Some(iface_pages::UpdatePagePropertiesResponsePropertiesTypeOpSelect {
+        color: m.get("color").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        id: m.get("id").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        name: m.get("name").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    })
+}
+
+fn iface_pages__retrieve_a_page_property_item_response__from_json(v: &Value) -> Option<iface_pages::RetrieveAPagePropertyItemResponse> {
+    let m = v.as_object()?;
+    Some(iface_pages::RetrieveAPagePropertyItemResponse {
+        object: m.get("object").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        select: m.get("select").filter(|v| !v.is_null()).and_then(|v| iface_pages__retrieve_a_page_property_item_response_select__from_json(v)),
+        type_op: m.get("type").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    })
+}
+
+fn iface_pages__retrieve_a_page_property_item_response_select__from_json(v: &Value) -> Option<iface_pages::RetrieveAPagePropertyItemResponseSelect> {
+    let m = v.as_object()?;
+    Some(iface_pages::RetrieveAPagePropertyItemResponseSelect {
+        color: m.get("color").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        id: m.get("id").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        name: m.get("name").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    })
+}
+
+fn iface_pages__retrieve_a_page__ok(body: String) -> Result<iface_pages::RetrieveAPageResponse, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match iface_pages__retrieve_a_page_response__from_json(&v) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_pages__retrieve_a_page__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
+fn iface_pages__update_page_properties__ok(body: String) -> Result<iface_pages::UpdatePagePropertiesResponse, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match iface_pages__update_page_properties_response__from_json(&v) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_pages__update_page_properties__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
+fn iface_pages__retrieve_a_page_property_item__ok(body: String) -> Result<iface_pages::RetrieveAPagePropertyItemResponse, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match iface_pages__retrieve_a_page_property_item_response__from_json(&v) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_pages__retrieve_a_page_property_item__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
 impl iface_pages::Guest for crate::Component {
-    fn retrieve_a_page(params: iface_pages::RetrieveAPageParams) -> Result<String, String> {
+    fn retrieve_a_page(params: iface_pages::RetrieveAPageParams) -> Result<iface_pages::RetrieveAPageResponse, String> {
         let json = iface_pages__retrieve_a_page_params__to_json(&params);
-        dispatch(&OP_PAGES_RETRIEVE_A_PAGE, json)
+        match dispatch(&OP_PAGES_RETRIEVE_A_PAGE, json).and_then(iface_pages__retrieve_a_page__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_pages__retrieve_a_page__err(e)),
+        }
     }
-    fn update_page_properties(params: iface_pages::UpdatePagePropertiesParams) -> Result<String, String> {
+    fn update_page_properties(params: iface_pages::UpdatePagePropertiesParams) -> Result<iface_pages::UpdatePagePropertiesResponse, String> {
         let json = iface_pages__update_page_properties_params__to_json(&params);
-        dispatch(&OP_PAGES_UPDATE_PAGE_PROPERTIES, json)
+        match dispatch(&OP_PAGES_UPDATE_PAGE_PROPERTIES, json).and_then(iface_pages__update_page_properties__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_pages__update_page_properties__err(e)),
+        }
     }
-    fn retrieve_a_page_property_item() -> Result<String, String> {
-        dispatch(&OP_PAGES_RETRIEVE_A_PAGE_PROPERTY_ITEM, Value::Object(Map::new()))
+    fn retrieve_a_page_property_item(params: iface_pages::RetrieveAPagePropertyItemParams) -> Result<iface_pages::RetrieveAPagePropertyItemResponse, String> {
+        let json = iface_pages__retrieve_a_page_property_item_params__to_json(&params);
+        match dispatch(&OP_PAGES_RETRIEVE_A_PAGE_PROPERTY_ITEM, json).and_then(iface_pages__retrieve_a_page_property_item__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_pages__retrieve_a_page_property_item__err(e)),
+        }
     }
 }
 use crate::exports::autostamp::notion::users as iface_users;
@@ -690,22 +3967,83 @@ const OP_USERS_RETRIEVE_A_USER: OpSpec = OpSpec {
     method: "GET",
     path_template: "/v1/users/{id}",
     fields: &[
-        FieldSpec { snake: "notion_version", location: FieldLocation::Header },
+        FieldSpec { snake: "id", wire: "id", location: FieldLocation::Path },
+        FieldSpec { snake: "notion_version", wire: "Notion-Version", location: FieldLocation::Header },
+        FieldSpec { snake: "data", wire: "data", location: FieldLocation::Body },
     ],
     auth: &[
     ],
 };
 
-fn iface_users__retrieve_a_user_params__to_json(p: &iface_users::RetrieveAUserParams) -> Value {
+fn iface_users__retrieve_a_user_response__to_json(p: &iface_users::RetrieveAUserResponse) -> Value {
     let mut m = Map::new();
-    m.insert("notion_version".into(), match (&p.notion_version) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("avatar_url".into(), match (&p.avatar_url) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("id".into(), match (&p.id) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("name".into(), match (&p.name) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("object".into(), match (&p.object) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("person".into(), match (&p.person) { Some(v) => iface_users__retrieve_a_user_response_person__to_json(v), None => Value::Null });
+    m.insert("type".into(), match (&p.type_op) { Some(v) => Value::String((v).clone()), None => Value::Null });
     Value::Object(m)
 }
 
+fn iface_users__retrieve_a_user_response_person__to_json(p: &iface_users::RetrieveAUserResponsePerson) -> Value {
+    let mut m = Map::new();
+    m.insert("email".into(), match (&p.email) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_users__retrieve_a_user_params__to_json(p: &iface_users::RetrieveAUserParams) -> Value {
+    let mut m = Map::new();
+    m.insert("id".into(), Value::String((&p.id).clone()));
+    m.insert("notion_version".into(), match (&p.notion_version) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    m.insert("data".into(), match (&p.data) { Some(v) => Value::String((v).clone()), None => Value::Null });
+    Value::Object(m)
+}
+
+fn iface_users__retrieve_a_user_response__from_json(v: &Value) -> Option<iface_users::RetrieveAUserResponse> {
+    let m = v.as_object()?;
+    Some(iface_users::RetrieveAUserResponse {
+        avatar_url: m.get("avatar_url").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        id: m.get("id").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        name: m.get("name").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        object: m.get("object").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+        person: m.get("person").filter(|v| !v.is_null()).and_then(|v| iface_users__retrieve_a_user_response_person__from_json(v)),
+        type_op: m.get("type").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    })
+}
+
+fn iface_users__retrieve_a_user_response_person__from_json(v: &Value) -> Option<iface_users::RetrieveAUserResponsePerson> {
+    let m = v.as_object()?;
+    Some(iface_users::RetrieveAUserResponsePerson {
+        email: m.get("email").filter(|v| !v.is_null()).and_then(|v| (v).as_str().map(|s| s.to_string())),
+    })
+}
+
+fn iface_users__retrieve_a_user__ok(body: String) -> Result<iface_users::RetrieveAUserResponse, crate::runtime::DispatchError> {
+    let v: Value = match serde_json::from_str(&body) {
+        Ok(v) => v,
+        Err(e) => return Err(crate::runtime::DispatchError::Transport(format!("failed to decode response body as JSON: {e}"))),
+    };
+    match iface_users__retrieve_a_user_response__from_json(&v) {
+        Some(x) => Ok(x),
+        None => Err(crate::runtime::DispatchError::Transport("response body did not match the expected schema".to_string())),
+    }
+}
+
+fn iface_users__retrieve_a_user__err(e: crate::runtime::DispatchError) -> String {
+    match e {
+        crate::runtime::DispatchError::Http { status, body } => format!("HTTP {status}: {body}"),
+        crate::runtime::DispatchError::Transport(m) => m,
+    }
+}
+
 impl iface_users::Guest for crate::Component {
-    fn retrieve_a_user(params: iface_users::RetrieveAUserParams) -> Result<String, String> {
+    fn retrieve_a_user(params: iface_users::RetrieveAUserParams) -> Result<iface_users::RetrieveAUserResponse, String> {
         let json = iface_users__retrieve_a_user_params__to_json(&params);
-        dispatch(&OP_USERS_RETRIEVE_A_USER, json)
+        match dispatch(&OP_USERS_RETRIEVE_A_USER, json).and_then(iface_users__retrieve_a_user__ok) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(iface_users__retrieve_a_user__err(e)),
+        }
     }
 }
 
